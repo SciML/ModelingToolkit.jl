@@ -16,7 +16,9 @@ D*x
 D*x == -σ*(y-x)
 D*y == x*(ρ-z)-y
 
-@test D*t === Constant(1)
+@test isequal(D*t,Constant(1))
+null_op = 0*t
+@test isequal(simplify_constants(null_op),Constant(0))
 
 # Define a differential equation
 eqs = [D*x == σ*(y-x),

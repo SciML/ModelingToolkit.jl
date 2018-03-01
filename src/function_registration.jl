@@ -1,6 +1,3 @@
-import MacroTools: splitdef, combinedef
-import IterTools: product
-
 # Literals treated as constants
 function Base.convert(::Type{Expression}, n::Number)
     if !(typeof(n) <: Variable)
