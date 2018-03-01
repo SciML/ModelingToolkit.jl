@@ -13,13 +13,13 @@ D = Differential(t) # Default of first derivative, Derivative(t,1)
 c = Constant(0)
 σ*(y-x)
 D*x
-D*x == σ*(y-x)
+D*x == -σ*(y-x)
 D*y == x*(ρ-z)-y
 
 # Define a differential equation
 eqs = [D*x == σ*(y-x),
        D*y == x*(ρ-z)-y,
-       D*z == x*y - β*z]
+       D*z == x*y - β*sin(z)]
 de = DiffEqSystem(eqs)
 
 # Define a nonlinear system
