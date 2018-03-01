@@ -14,7 +14,7 @@ c = Constant(0)
 σ*(y-x)
 D*x
 D*x == -σ*(y-x)
-D*y == x*(ρ-z)-y
+D*y == x*(ρ-z)-sin(y)
 
 @test isequal(D*t,Constant(1))
 null_op = 0*t
@@ -23,8 +23,10 @@ null_op = 0*t
 # Define a differential equation
 eqs = [D*x == σ*(y-x),
        D*y == x*(ρ-z)-y,
-       D*z == x*y - β*sin(z)]
-de = DiffEqSystem(eqs)
+       D*z == x*y - β*z]
+de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
+SciCompDSL.generate_ode_function(de)
+f = DiffEqFunction(de)
 
 # Define a nonlinear system
 eqs = [0 == σ*(y-x),
