@@ -25,9 +25,7 @@ eqs = [D*x == σ*(y-x),
        D*y == x*(ρ-z)-y,
        D*z == x*y - β*z]
 de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
-sys = de
-
-SciCompDSL.generate_ode_function(sys)
+SciCompDSL.generate_ode_function(de)
 f = DiffEqFunction(de)
 
 # Define a nonlinear system
