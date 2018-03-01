@@ -27,3 +27,8 @@ eqs = [Constant(0) == σ*(y-x),
        Constant(0) == x*(ρ-z)-y,
        Constant(0) == x*y - β*z]
 ns = NonlinearSystem(eqs)
+
+
+# Default values
+p = Parameter(:p, 1)
+u = DependentVariable(:u, [1])
