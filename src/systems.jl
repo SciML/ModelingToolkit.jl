@@ -15,3 +15,9 @@ end
 NonlinearSystem(eqs) = NonlinearSystem(eqs,Variable[],Variable[])
 
 export DiffEqSystem,NonlinearSystem
+
+function DiffEqBase.DiffEqFunction(sys::DiffEqSystem)
+    for eq in sys.eqs
+        
+    end
+end

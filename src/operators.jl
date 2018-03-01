@@ -4,6 +4,9 @@ struct Differential <: AbstractOperator
 end
 Differential(x) = Differential(x,1)
 
+Base.show(io::IO, D::Differential) = print(io,"($(D.x),$(D.order))")
+Base.Expr(D::Differential) = :($(Symbol("D_$(D.x.name)_$(D.order)")))
+
 function Derivative end
 Base.:*(D::Differential,x::Operation) = Operation(Derivative,Expression[x,D])
 function Base.:*(D::Differential,x::Variable)

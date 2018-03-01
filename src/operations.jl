@@ -8,3 +8,9 @@ end
 function Base.isequal(x::Operation,y::Operation)
     x.op == y.op && all(isequal.(x.args,y.args))
 end
+
+function Base.Expr(O::Operation)
+    :($(Symbol(O.op))($((Expr(x) for x in O.args)...)))
+end
+
+Base.show(io::IO,O::Operation) = print(io,string(Expr(O)))

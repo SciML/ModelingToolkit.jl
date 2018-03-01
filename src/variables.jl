@@ -21,3 +21,28 @@ function Base.isequal(x::Variable,y::Variable)
     x.name == y.name && x.subtype == y.subtype && x.value == y.value &&
     x.value_type == y.value_type && x.diff == y.diff
 end
+
+function Base.Expr(x::Variable)
+    if x.diff == nothing
+        return :($(x.name))
+    else
+        return :($(Symbol("$(x.name)_$(x.diff.x.name)")))
+    end
+end
+
+function Base.show(io::IO, A::Variable)
+    if A.subtype == :Constant
+        print(io,"Constant($(A.value))")
+    else
+        str = "$(A.subtype)($(A.name))"
+        if A.value != nothing
+            str *= ", value = " * string(A.value)
+        end
+
+        if A.diff != nothing
+            str *= ", diff = " * string(A.diff)
+        end
+
+        print(io,str)
+    end
+end
