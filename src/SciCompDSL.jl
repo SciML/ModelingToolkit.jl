@@ -18,5 +18,6 @@ include("operators.jl")
 include("systems.jl")
 include("function_registration.jl")
 include("simplify.jl")
+include("utils.jl")
 export @register
 end # module
