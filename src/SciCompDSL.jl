@@ -15,5 +15,5 @@ export Operation, Expression
 include("operators.jl")
 include("equations.jl")
 include("function_registration.jl")
-
+export @register
 end # module
