@@ -24,6 +24,7 @@ null_op = 0*t
 eqs = [D*x == σ*(y-x),
        D*y == x*(ρ-z)-y,
        D*z == x*y - β*z]
+map(eq->:($(eq.args[1].name) = $(eq.args[2])),de.eqs)
 de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
 SciCompDSL.generate_ode_function(de)
 f = DiffEqFunction(de)

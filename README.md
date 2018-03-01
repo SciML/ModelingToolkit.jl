@@ -64,9 +64,9 @@ SciCompDSL.generate_ode_function(de)
                 σ = p[1]
                 ρ = p[2]
                 β = p[3]
-                x_t == σ * (y - x)
-                y_t == x * (ρ - z) - y
-                z_t == x * y - β * z
+                x_t = σ * (y - x)
+                y_t = x * (ρ - z) - y
+                z_t = x * y - β * z
                 du[1] = x_t
                 du[2] = y_t
                 du[3] = z_t
