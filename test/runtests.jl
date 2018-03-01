@@ -23,9 +23,9 @@ eqs = [D*x == σ*(y-x),
 de = DiffEqSystem(eqs)
 
 # Define a nonlinear system
-eqs = [Constant(0) == σ*(y-x),
-       Constant(0) == x*(ρ-z)-y,
-       Constant(0) == x*y - β*z]
+eqs = [0 == σ*(y-x),
+       0 == x*(ρ-z)-y,
+       0 == x*y - β*z]
 ns = NonlinearSystem(eqs)
 
 
