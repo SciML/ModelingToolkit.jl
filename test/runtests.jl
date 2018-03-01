@@ -16,6 +16,8 @@ D*x
 D*x == -σ*(y-x)
 D*y == x*(ρ-z)-y
 
+@test D*t === Constant(1)
+
 # Define a differential equation
 eqs = [D*x == σ*(y-x),
        D*y == x*(ρ-z)-y,
@@ -32,3 +34,7 @@ ns = NonlinearSystem(eqs)
 # Default values
 p = Parameter(:p, 1)
 u = DependentVariable(:u, [1])
+
+# Derivatives
+dsin = D*sin(t)
+isequal(expand_derivatives(dsin),cos(t))

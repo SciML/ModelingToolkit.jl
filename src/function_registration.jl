@@ -2,7 +2,14 @@ import MacroTools: splitdef, combinedef
 import IterTools: product
 
 # Literals treated as constants
-Base.convert(::Type{Expression}, n::Number) = Constant(n)
+function Base.convert(::Type{Expression}, n::Number)
+    if !(typeof(n) <: Variable)
+        return Constant(n)
+    else
+        return n
+    end
+end
+
 # Register functions and handle literals
 macro register(sig)
     splitsig = splitdef(:($sig = nothing))
