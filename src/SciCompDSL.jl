@@ -1,24 +1,18 @@
 module SciCompDSL
 
-abstract type AbstractVariable <: Real end
-abstract type AbstractStatement end
 abstract type AbstractSystem end
-const Expression = Union{AbstractVariable,AbstractStatement}
 
-struct Operation <: AbstractStatement
+# Parameterize by T so that way it can be Vector{Expression} which is defined after
+struct Operation{T}
     op::Function
-    args::Vector{Expression}
+    args::Vector{T}
 end
-struct Statement <: AbstractStatement
-    lhs::Expression
-    rhs::Expression
-end
-
-export AbstractVariable, AbstractStatement, AbstractSystem, Expression,
-       Operation, Statement
-
 include("variables.jl")
-include("derivatives.jl")
+const Expression = Union{Variable,Operation}
+
+export Operation, Expression
+
+include("operators.jl")
 include("equations.jl")
 include("function_registration.jl")
 
