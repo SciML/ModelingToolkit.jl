@@ -5,14 +5,26 @@ struct DiffEqSystem <: AbstractSystem
     vs::Vector{Variable}
     ps::Vector{Variable}
 end
-DiffEqSystem(eqs) = DiffEqSystem(eqs,Variable[],Variable[],Variable[],Variable[])
+function DiffEqSystem(eqs)
+    ivs, dvs, vs, ps = extract_elements(eqs, (:IndependentVariable, :DependentVariable, :Variable, :Parameter))
+    DiffEqSystem(eqs, ivs, dvs, vs, ps)
+end
+function DiffEqSystem(eqs, ivs)
+    dvs, vs, ps = extract_elements(eqs, (:DependentVariable, :Variable, :Parameter))
+    DiffEqSystem(eqs, ivs, dvs, vs, ps)
+end
+
+
 
 struct NonlinearSystem <: AbstractSystem
     eqs::Vector{Operation}
     vs::Vector{Variable}
     ps::Vector{Variable}
 end
-NonlinearSystem(eqs) = NonlinearSystem(eqs,Variable[],Variable[])
+function NonlinearSystem(eqs)
+    vs, ps = extract_elements(eqs, (:DependentVariable, :Parameter))
+    NonlinearSystem(eqs, vs, ps)
+end
 
 function generate_ode_function(sys::DiffEqSystem)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.dvs)]

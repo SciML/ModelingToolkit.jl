@@ -46,3 +46,29 @@ function Base.show(io::IO, A::Variable)
         print(io,str)
     end
 end
+
+
+function extract_elements(ops, eltypes)
+    elems = Dict{Symbol, Vector{Variable}}()
+    names = Dict{Symbol, Set{Symbol}}()
+    for el in eltypes
+        elems[el] = Vector{Variable}()
+        names[el] = Set{Symbol}()
+    end
+    for op in ops
+        extract_elements!(op, elems, names)
+    end
+    Tuple(elems[el] for el in eltypes)
+end
+# Walk the tree recursively and push variables into the right set
+function extract_elements!(op::Operation, elems, names)
+    for arg in op.args
+        if arg isa Operation
+            extract_elements!(arg, elems, names)
+        elseif arg isa Variable && haskey(elems, arg.subtype) && !in(arg.name, names[arg.subtype])
+            arg.subtype == :DependentVariable && arg.diff != nothing && continue
+            push!(names[arg.subtype], arg.name)
+            push!(elems[arg.subtype], arg)
+        end
+    end
+end
