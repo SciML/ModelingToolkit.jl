@@ -15,6 +15,8 @@ c = Constant(0)
 D*x
 D*x == -σ*(y-x)
 D*y == x*(ρ-z)-sin(y)
+s = JumpVariable(:s,3)
+n = NoiseVariable(:n)
 
 @test isequal(D*t,Constant(1))
 null_op = 0*t

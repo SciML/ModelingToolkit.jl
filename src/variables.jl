@@ -13,8 +13,10 @@ Parameter(name,args...) = Variable(name,:Parameter,args...)
 Constant(value) = Variable(:None,:Constant,value,typeof(value))
 DependentVariable(name,args...) = Variable(name,:DependentVariable,args...)
 IndependentVariable(name,args...) = Variable(name,:IndependentVariable,args...)
+JumpVariable(name,rate,args...) = Variable(name,:JumpVariable,rate,typeof(rate),args...)
+NoiseVariable(name,args...) = Variable(name,:NoiseVariable,args...)
 
-export Variable,Parameter,Constant,DependentVariable,IndependentVariable
+export Variable,Parameter,Constant,DependentVariable,IndependentVariable,JumpVariable,NoiseVariable
 
 # Variables use isequal for equality since == is an Operation
 function Base.isequal(x::Variable,y::Variable)
