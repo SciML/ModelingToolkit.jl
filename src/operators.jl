@@ -1,5 +1,5 @@
 struct Differential <: AbstractOperator
-    x::Variable
+    x::Union{Variable,Operation}
     order::Int
 end
 Differential(x) = Differential(x,1)
@@ -19,8 +19,13 @@ end
 
 function expand_derivatives(O::Operation)
     if O.op == Derivative
-        @assert length(O.args) == 2
-        Derivative(O.args[1],O.args[2])
+        if typeof(O.args[1].args[1]) == typeof(O.args[2].x) && isequal(O.args[1].args[1],O.args[2].x)
+            Derivative(O.args[1],O.args[2])
+        else
+            D = Differential(O.args[2].x)
+            cr_exp = D*O.args[1].args[1]
+            Derivative(O.args[1],Differential(O.args[1].args[1])) * expand_derivatives(cr_exp)
+        end
     else
         for i in 1:length(O.args)
             O.args[i] = expand_derivatives(O.args[i])
