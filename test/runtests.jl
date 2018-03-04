@@ -4,7 +4,7 @@ using Base.Test
 # Define some variables
 @dvars x y z
 @idvars t
-@diffs D=t # Default of first derivative, Derivative(t,1)
+@diffs D'~t # Default of first derivative, Derivative(t,1)
 @paras σ ρ β
 @cons c=0
 σ*(y-x)
