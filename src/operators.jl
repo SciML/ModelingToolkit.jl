@@ -45,9 +45,18 @@ function Derivative(O::Operation,idx)
     Derivative(O.op,O.args,Val{idx})
 end
 
-## Pre-defined derivatives
-function Derivative(::typeof(sin),args,::Type{Val{1}})
-    Operation(Base.cos,args)
+# Pre-defined derivatives
+import DiffRules, SpecialFunctions, NaNMath
+for (modu, fun, arity) in DiffRules.diffrules()
+    if arity ==  1
+        @eval begin
+            function Derivative(::typeof($modu.$fun), arg, ::Type{Val{1}})
+                M, f = $(modu, fun)
+                dx = DiffRules.diffrule(M, f, arg[1])
+                Operation(dx)
+            end
+        end
+    end
 end
 
 function count_order(x)

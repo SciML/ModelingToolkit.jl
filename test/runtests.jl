@@ -79,7 +79,12 @@ p = Parameter(:p, 1)
 u = DependentVariable(:u, [1])
 
 # Derivatives
-dsin = D*sin(t)
-@test isequal(expand_derivatives(dsin),cos(t))
-dsinsin = D*sin(sin(t))
-@test isequal(expand_derivatives(dsinsin),cos(sin(t))*cos(t))
+@testset "Derivatives Test" begin
+    dsin = D*sin(t)
+    @test isequal(expand_derivatives(dsin),cos(t))
+    dcsch = D*csch(t)
+    @test isequal(expand_derivatives(dcsch),Operation(-coth(t)*csch(t)))
+    # Chain rule
+    dsinsin = D*sin(sin(t))
+    @test isequal(expand_derivatives(dsinsin),cos(sin(t))*cos(t))
+end
