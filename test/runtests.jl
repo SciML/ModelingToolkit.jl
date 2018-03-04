@@ -1,16 +1,38 @@
 using SciCompDSL
 using Base.Test
 
+@testset "Parsing Test" begin
+    @DVar x y=sin(1)+exp(1) z
+    x1 = DependentVariable(:x)
+    y1 = DependentVariable(:y, sin(1) + exp(1))
+    z1 = DependentVariable(:z)
+    @test isequal(x1, x)
+    @test isequal(y1, y)
+    @test isequal(z1, z)
+    @IVar begin
+        t
+        s = cos(2.5)
+    end
+    t1 = IndependentVariable(:t)
+    s1 = IndependentVariable(:s, cos(2.5))
+    @test isequal(t1, t)
+    @test isequal(s1, s)
+    @Deriv D''~t
+    D1 = Differential(t, 2)
+    @test isequal(D1, D)
+    @Const c=0 v=2
+    c1 = Constant(0)
+    v1 = Constant(2)
+    @test isequal(c1, c)
+    @test isequal(v1, v)
+end
+
 # Define some variables
-x = DependentVariable(:x)
-y = DependentVariable(:y)
-z = DependentVariable(:z)
-t = IndependentVariable(:t)
-D = Differential(t) # Default of first derivative, Derivative(t,1)
-σ = Parameter(:σ)
-ρ = Parameter(:ρ)
-β = Parameter(:β)
-c = Constant(0)
+@DVar x y z
+@IVar t
+@Deriv D'~t # Default of first derivative, Derivative(t,1)
+@Param σ ρ β
+@Const c=0
 σ*(y-x)
 D*x
 D*x == -σ*(y-x)
