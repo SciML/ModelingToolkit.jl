@@ -21,7 +21,7 @@ function expand_derivatives(O::Operation)
     if O.op == Derivative
         #=
         diff_idxs = find(x->isequal(x,by.x),O.args)
-        @assert diff_idxs != nothing && length(diff_idxs) == 1
+        (diff_idxs != nothing || length(diff_idxs) > 1) && error("Derivatives of multi-argument functions require matching a unique argument.")
         idx = first(diff_idxs)
         =#
         i = 1
