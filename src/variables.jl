@@ -77,18 +77,47 @@ function extract_elements!(op::Operation, elems, names)
 end
 
 # Build variables more easily
+function _parse_vars(macroname, fun, x)
+    ex = Expr(:block)
+    lhss = Symbol[]
+    # if parsing things in the form of
+    # begin
+    #     x
+    #     y
+    #     z = exp(2)
+    # end
+    isblock = length(x) == 1 && x[1].head == :block
+    if isblock
+        x = x[1]
+        filter!(z->z isa Symbol || z.head != :line, x.args)
+        x = (x.args...)
+    end
+    for var in x
+        issym    = var isa Symbol
+        isassign = issym ? false : var.head == :(=)
+        @assert issym || isassign "@$macroname expects a tuple of expressions!\nE.g. `@$macroname x y z=1`"
+        if issym
+            lhs = var
+            push!(lhss, lhs)
+            expr = :( $lhs = $fun( Symbol($(String(lhs))) ) )
+        end
+        if isassign
+            lhs = var.args[1]
+            rhs = var.args[2]
+            push!(lhss, lhs)
+            expr = :( $lhs = $fun( Symbol($(String(lhs))) , $rhs) )
+        end
+        push!(ex.args, expr)
+    end
+    push!(ex.args, Expr(:tuple, lhss...))
+    ex
+end
+
 for funs in ((:DVar, :DependentVariable), (:IVar, :IndependentVariable),
              (:Param, :Parameter))
     @eval begin
         macro ($(funs[1]))(x...)
-            ex = Expr(:block)
-            for var in x
-                @assert var isa Symbol "@$($funs[1]) expects a tuple of symbols!\nE.g. `@$($funs[1]) x y z`"
-                expr = :( $(esc(var)) = $($funs[2])( Symbol($(String(var))) ) )
-                push!(ex.args, expr)
-            end
-            push!(ex.args, Expr(:tuple, esc.(x)...))
-            ex
+            esc(_parse_vars(String($funs[1]), $funs[2], x))
         end
     end
 end
