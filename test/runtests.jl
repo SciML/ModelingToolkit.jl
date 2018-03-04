@@ -58,6 +58,6 @@ u = DependentVariable(:u, [1])
 
 # Derivatives
 dsin = D*sin(t)
-isequal(expand_derivatives(dsin),cos(t))
+@test isequal(expand_derivatives(dsin),cos(t))
 dsinsin = D*sin(sin(t))
-isequal(expand_derivatives(dsin),cos(sin(t))*cos(t))
+@test isequal(expand_derivatives(dsinsin),cos(sin(t))*cos(t))
