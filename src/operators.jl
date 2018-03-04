@@ -16,6 +16,7 @@ function Base.:*(D::Differential,x::Variable)
         Variable(x.name,x.subtype,x.value,x.value_type,D)
     end
 end
+Base.isequal(D1::Differential, D2::Differential) = isequal(D1.order, D2.order) && isequal(D1.x, D2.x)
 
 function expand_derivatives(O::Operation)
     if O.op == Derivative
