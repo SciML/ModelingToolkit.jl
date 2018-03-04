@@ -62,6 +62,7 @@ end
 function _differetial_macro(x)
     ex = Expr(:block)
     lhss = Symbol[]
+    x = flatten_expr!(x)
     for di in x
         @assert di isa Expr && di.args[1] == :~ "@Deriv expects a form that looks like `@Deriv D''~t E'~t`"
         lhs = di.args[2]

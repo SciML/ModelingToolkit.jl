@@ -86,12 +86,7 @@ function _parse_vars(macroname, fun, x)
     #     y
     #     z = exp(2)
     # end
-    isblock = length(x) == 1 && x[1].head == :block
-    if isblock
-        x = x[1]
-        filter!(z->z isa Symbol || z.head != :line, x.args)
-        x = (x.args...)
-    end
+    x = flatten_expr!(x)
     for var in x
         issym    = var isa Symbol
         isassign = issym ? false : var.head == :(=)
@@ -125,6 +120,7 @@ end
 function _const_assign(x)
     ex = Expr(:block)
     lhss = Symbol[]
+    x = flatten_expr!(x)
     for eq in x
         @assert eq isa Expr && eq.head == :(=) "@Const expects a tuple of assignments!\nE.g. `@Const D=t W=g`"
         lhs = eq.args[1]
