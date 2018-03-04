@@ -4,9 +4,9 @@ using Base.Test
 # Define some variables
 @dvars x y z
 @idvars t
-D = Differential(t) # Default of first derivative, Derivative(t,1)
+@diffs D=t # Default of first derivative, Derivative(t,1)
 @paras σ ρ β
-c = Constant(0)
+@cons c=0
 σ*(y-x)
 D*x
 D*x == -σ*(y-x)
