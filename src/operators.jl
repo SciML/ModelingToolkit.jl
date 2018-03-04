@@ -49,4 +49,34 @@ function Derivative(::typeof(sin),args,::Type{Val{1}})
     Operation(Base.cos,args)
 end
 
-export Differential, Derivative, expand_derivatives
+function count_order(x)
+    @assert !(x isa Symbol) "The variable $x must have a order of differentiation that is greater or equal to 1!"
+    n = 1
+    while !(x.args[1] isa Symbol)
+        n = n+1
+        x = x.args[1]
+    end
+    n, x.args[1]
+end
+
+function _differetial_macro(x)
+    ex = Expr(:block)
+    lhss = Symbol[]
+    for di in x
+        @assert di isa Expr && di.args[1] == :~ "@Deriv expects a form that looks like `@Deriv D''~t E'~t`"
+        lhs = di.args[2]
+        rhs = di.args[3]
+        order, lhs = count_order(lhs)
+        push!(lhss, lhs)
+        expr = :($lhs = Differential($rhs, $order))
+        push!(ex.args,  expr)
+    end
+    push!(ex.args, Expr(:tuple, lhss...))
+    ex
+end
+
+macro Deriv(x...)
+    esc(_differetial_macro(x))
+end
+
+export Differential, Derivative, expand_derivatives, @Deriv

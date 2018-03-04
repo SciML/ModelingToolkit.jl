@@ -2,11 +2,11 @@ using SciCompDSL
 using Base.Test
 
 # Define some variables
-@dvars x y z
-@idvars t
-@diffs D'~t # Default of first derivative, Derivative(t,1)
-@params σ ρ β
-@consts c=0
+@DVar x y z
+@IVar t
+@Deriv D'~t # Default of first derivative, Derivative(t,1)
+@Param σ ρ β
+@Const c=0
 σ*(y-x)
 D*x
 D*x == -σ*(y-x)

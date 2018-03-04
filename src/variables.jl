@@ -16,7 +16,8 @@ IndependentVariable(name,args...) = Variable(name,:IndependentVariable,args...)
 JumpVariable(name,rate,args...) = Variable(name,:JumpVariable,rate,typeof(rate),args...)
 NoiseVariable(name,args...) = Variable(name,:NoiseVariable,args...)
 
-export Variable,Parameter,Constant,DependentVariable,IndependentVariable,JumpVariable,NoiseVariable
+export Variable,Parameter,Constant,DependentVariable,IndependentVariable,JumpVariable,NoiseVariable,
+       @DVar, @IVar, @Param, @Const
 
 # Variables use isequal for equality since == is an Operation
 function Base.isequal(x::Variable,y::Variable)
@@ -73,4 +74,40 @@ function extract_elements!(op::Operation, elems, names)
             push!(elems[arg.subtype], arg)
         end
     end
+end
+
+# Build variables more easily
+for funs in ((:DVar, :DependentVariable), (:IVar, :IndependentVariable),
+             (:Param, :Parameter))
+    @eval begin
+        macro ($(funs[1]))(x...)
+            ex = Expr(:block)
+            for var in x
+                @assert var isa Symbol "@$($funs[1]) expects a tuple of symbols!\nE.g. `@$($funs[1]) x y z`"
+                expr = :( $(esc(var)) = $($funs[2])( Symbol($(String(var))) ) )
+                push!(ex.args, expr)
+            end
+            push!(ex.args, Expr(:tuple, esc.(x)...))
+            ex
+        end
+    end
+end
+
+function _const_assign(x)
+    ex = Expr(:block)
+    lhss = Symbol[]
+    for eq in x
+        @assert eq isa Expr && eq.head == :(=) "@Const expects a tuple of assignments!\nE.g. `@Const D=t W=g`"
+        lhs = eq.args[1]
+        push!(lhss, lhs)
+        rhs = eq.args[2]
+        expr = :($lhs = Constant($rhs))
+        push!(ex.args,  expr)
+    end
+    push!(ex.args, Expr(:tuple, lhss...))
+    ex
+end
+
+macro Const(x...)
+    esc(_const_assign(x))
 end
