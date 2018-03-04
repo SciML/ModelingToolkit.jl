@@ -25,6 +25,15 @@ using Base.Test
     v1 = Constant(2)
     @test isequal(c1, c)
     @test isequal(v1, v)
+    # `Expr`, `Number` -> `Operation`
+    @test isequal(Operation(2), Constant(2))
+    expr = :(-inv(2sqrt(+(a, b))))
+    op   = Operation(-, [Operation(inv,
+                    [Operation(*, [Constant(2), Operation(sqrt,
+                                  [Operation(+, [:a, :b])])])])])
+    expr_post = Expr(:call, :-, op.args...)
+    @test isequal(Operation(expr), op)
+    @test isequal(Expr(Operation(expr)), expr_post)
 end
 
 # Define some variables
