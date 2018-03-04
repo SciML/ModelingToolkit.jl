@@ -1,5 +1,5 @@
 struct Differential <: AbstractOperator
-    x::Variable
+    x::Union{Variable,Operation}
     order::Int
 end
 Differential(x) = Differential(x,1)
@@ -19,8 +19,19 @@ end
 
 function expand_derivatives(O::Operation)
     if O.op == Derivative
-        @assert length(O.args) == 2
-        Derivative(O.args[1],O.args[2])
+        #=
+        diff_idxs = find(x->isequal(x,by.x),O.args)
+        (diff_idxs != nothing || length(diff_idxs) > 1) && error("Derivatives of multi-argument functions require matching a unique argument.")
+        idx = first(diff_idxs)
+        =#
+        i = 1
+        if typeof(O.args[1].args[i]) == typeof(O.args[2].x) && isequal(O.args[1].args[i],O.args[2].x)
+            Derivative(O.args[1],i)
+        else
+            D = Differential(O.args[2].x)
+            cr_exp = D*O.args[1].args[i]
+            Derivative(O.args[1],i) * expand_derivatives(cr_exp)
+        end
     else
         for i in 1:length(O.args)
             O.args[i] = expand_derivatives(O.args[i])
@@ -29,15 +40,12 @@ function expand_derivatives(O::Operation)
 end
 
 # Don't specialize on the function here
-function Derivative(O::Operation,by::Differential)
-    diff_idxs = find(x->isequal(x,by.x),O.args)
-    @assert diff_idxs != nothing && length(diff_idxs) == 1
-    idx = first(diff_idxs)
-    Derivative(O.op,O.args,idx)
+function Derivative(O::Operation,idx)
+    Derivative(O.op,O.args,Val{idx})
 end
 
 ## Pre-defined derivatives
-function Derivative(::typeof(sin),args,idx)
+function Derivative(::typeof(sin),args,::Type{Val{1}})
     Operation(Base.cos,args)
 end
 
