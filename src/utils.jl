@@ -1,4 +1,4 @@
-export @dvars, @idvars, @paras, @diffs, @cons
+export @dvars, @idvars, @params, @diffs, @consts
 
 function expr_arr_to_block(exprs)
   block = :(begin end)
@@ -8,7 +8,7 @@ end
 
 # Build variables more easily
 for funs in ((:dvars, :DependentVariable), (:idvars, :IndependentVariable),
-             (:paras, :Parameter))
+             (:params, :Parameter))
     @eval begin
         macro ($(funs[1]))(x...)
             ex = Expr(:block)
@@ -38,7 +38,7 @@ function _const_assign(x)
     ex
 end
 
-macro cons(x...)
+macro consts(x...)
     esc(_const_assign(x))
 end
 
