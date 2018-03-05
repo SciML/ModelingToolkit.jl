@@ -44,3 +44,18 @@ end
 Base.parse(::Type{Operation},x::Expression) = x
 Base.parse(::Type{Operation},sym::Symbol,args) = Operation(eval(sym), args)
 Base.parse(::Type{Operation},x::Union{Symbol, Number}) = x
+
+"""
+find_replace(O::Operation,x::Variable,y::Expression)
+
+Finds the variable `x` in Operation `O` and replaces it with the Expression `y`
+"""
+function find_replace!(O::Operation,x::Variable,y::Expression)
+    for i in eachindex(O.args)
+        if isequal(O.args[i],x)
+            O.args[i] = y
+        elseif typeof(O.args[i]) <: Operation
+            find_replace!(O.args[i],x,y)
+        end
+    end
+end

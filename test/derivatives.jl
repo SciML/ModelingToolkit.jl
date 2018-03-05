@@ -25,8 +25,8 @@ dpow2 = Derivative(^,[x, y],Val{2})
 eqs = [D*x == σ*(y-x),
        D*y == x*(ρ-z)-y,
        D*z == x*y - β*z]
-de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
-jac = SciCompDSL.generate_ode_jacobian(de)
+de = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
+jac = SciCompDSL.generate_nlsys_jacobian(de)
 @test_broken isequal(jac[1,1],-σ)
 @test_broken isequal(jac[1,2],σ)
 @test_broken isequal(jac[1,3],0)
