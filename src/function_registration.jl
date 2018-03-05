@@ -32,23 +32,18 @@ function typed_args(args)
     typargs[1:end-1] # Last case is all Numbers but that should be specialized
 end
 
-# Binary operators and functions
-for fun = (:+, :-, :*, :/, :\, :%, :^, :<, :>, :(==), :!, :&, :|, :div, :atan2,
-           :max, :min)
-    basefun = Expr(:., Base, QuoteNode(fun))
-    sig = :($basefun(x,y))
+# Binary & unary operators and functions
+import DiffRules, SpecialFunctions, NaNMath
+for (M, f, arity) in DiffRules.diffrules()
+    fun = :($M.$f)
+    sig = arity == 1 ? :($fun(x)) :
+          arity == 2 && :($fun(x,y))
     @eval @register $sig
 end
 
-
-# Unary operators and functions
-for fun = (:-, :sin,:sind,:sinh,:asin,:asind,:asinh,:cos,:cosd,:cosh,:acos,
-           :acosd,:acosh,:cot,:cotd,:coth,:acot,:acotd,:acoth,:csc,:cscd,:csch,
-           :acsc,:acscd,:acsch,:tan,:tand,:tanh,:atan,:atand,:atanh,:sec,
-           :secd,:sech,:asec,:asecd,:asech,:hypot,:sqrt,:cbrt,:exp,:exp2,:expm1,
-           :log,:log10,:log1p,:log2,:abs,:abs2)
+for fun = (:<, :>, :(==), :!, :&, :|, :div, :max, :min)
     basefun = Expr(:., Base, QuoteNode(fun))
-    sig = :($basefun(x))
+    sig = :($basefun(x,y))
     @eval @register $sig
 end
 
