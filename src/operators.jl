@@ -43,6 +43,7 @@ expand_derivatives(x::Variable) = x
 
 # Don't specialize on the function here
 function Derivative(O::Operation,idx)
+    # This calls the Derivative dispatch from the user or pre-defined code
     Derivative(O.op,O.args,Val{idx})
 end
 
