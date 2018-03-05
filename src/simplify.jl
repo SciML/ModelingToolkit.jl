@@ -1,4 +1,17 @@
 function simplify_constants(O::Operation)
+    O_last = nothing
+    _O = O
+    while !isequal(_O,O_last)
+        O_last = _O
+        _O = _simplify_constants(_O)
+        if typeof(_O) <: Operation
+            _O = Operation(_O.op,simplify_constants.(_O.args))
+        end
+    end
+    _O
+end
+
+function _simplify_constants(O)
     if Symbol(O.op) == :*
         # If any variable is `Constant(0)`, zero the whole thing
         # If any variable is `Constant(1)`, remove that `Constant(1)` unless
@@ -34,5 +47,6 @@ function simplify_constants(O::Operation)
     end
 end
 simplify_constants(x::Variable) = x
+_simplify_constants(x::Variable) = x
 
 export simplify_constants

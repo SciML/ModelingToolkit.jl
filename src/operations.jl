@@ -8,10 +8,10 @@ end
 function Base.isequal(x::Operation,y::Operation)
     x.op == y.op && all(isequal.(x.args,y.args))
 end
-function Base.isequal(x::Operation,y::Number)
-    # Should have a good check for trivial operations
-    false
-end
+Base.isequal(x::Operation,y::Number) = false
+Base.isequal(x::Number,y::Operation) = false
+Base.isequal(x::Operation,y::Void) = false
+Base.isequal(x::Void,y::Operation) = false
 
 # This might be a bad idea
 function Base.:(!=)(x::Operation,y)

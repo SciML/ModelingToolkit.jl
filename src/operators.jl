@@ -11,9 +11,11 @@ function Derivative end
 Base.:*(D::Differential,x::Operation) = Operation(Derivative,Expression[x,D])
 function Base.:*(D::Differential,x::Variable)
     if D.x === x
-        Constant(1)
+        return Constant(1)
+    elseif x.subtype != :DependentVariable || D.x.subtype != :IndependentVariable
+        return Constant(0)
     else
-        Variable(x.name,x.subtype,x.value,x.value_type,D)
+        return Variable(x.name,x.subtype,x.value,x.value_type,D)
     end
 end
 Base.isequal(D1::Differential, D2::Differential) = isequal(D1.order, D2.order) && isequal(D1.x, D2.x)
