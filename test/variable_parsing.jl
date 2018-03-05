@@ -5,6 +5,11 @@ using Base.Test
 a1 = Variable(:a,1.0)
 @test isequal(a1,a)
 
+@Var begin
+    a = 1.0
+    b
+end
+
 @DVar x y=sin(1)+exp(1) z
 x1 = DependentVariable(:x)
 y1 = DependentVariable(:y, sin(1) + exp(1))
