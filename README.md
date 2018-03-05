@@ -128,6 +128,19 @@ f2 = (du,u) -> f(du,u,(10.0,26.0,2.33))
 
 ## Details
 
+### Function Registration
+
+A function is registered into the operation system via:
+
+```julia
+@register f(x)
+@register g(x,y)
+```
+
+etc. where each macro call registers the function with the given signature. This
+will cause operations to stop recursing at this function, building `Operation(g,args)`
+nodes into the graph instead of tracing calls of `g` itself into `Operation`s.
+
 ### Adding Derivatives
 
 There is a large amount of derivatives pre-defined by
@@ -188,3 +201,40 @@ D = Differential(t) # Default of first derivative, Derivative(t,1)
 ρ = Parameter(:ρ)
 β = Parameter(:β)
 ```
+
+### Intermediate Calculations
+
+The system building functions can handle intermediate calculations. For example,
+
+```julia
+@Var a x y z
+@Param σ ρ β
+eqs = [a == y-x,
+       0 == σ*a,
+       0 == x*(ρ-z)-y,
+       0 == x*y - β*z]
+ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
+nlsys_func = SciCompDSL.generate_nlsys_function(ns)
+```
+
+expands to:
+
+```julia
+:((du, u, p)->begin  # C:\Users\Chris\.julia\v0.6\SciCompDSL\src\systems.jl, line 85:
+            begin  # C:\Users\Chris\.julia\v0.6\SciCompDSL\src\utils.jl, line 2:
+                x = u[1]
+                y = u[2]
+                z = u[3]
+                σ = p[1]
+                ρ = p[2]
+                β = p[3]
+                a = y - x
+                resid[1] = σ * a
+                resid[2] = x * (ρ - z) - y
+                resid[3] = x * y - β * z
+            end
+        end)
+```
+
+In addition, the Jacobian calculations take into account intermediate variables
+to appropriately handle them.
