@@ -16,7 +16,7 @@ end
 Base.show(io::IO,O::Operation) = print(io,string(Expr(O)))
 
 Operation(sym::Symbol, args) = Operation(eval(sym), args)
-Operation(num::Number) = Constant(num)
+Operation(x::Union{Symbol, Number}) = x
 
 function Operation(ex::Expr)
     f = ex.args[1]
