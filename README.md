@@ -86,7 +86,12 @@ f = DiffEqFunction(de)
 
 ### Example: Nonlinear System
 
-We can also build nonlinear systems. For compatibility with the
+We can also build nonlinear systems. Let's say we wanted to solve for the steady
+state of the previous ODE. This is the nonlinear system defined by where the
+derivatives are zero. We could use dependent variables for our nonlinear system
+(for direct compatibility with the above ODE code), or we can use non-tagged
+variables. Here we will show the latter. We write:
+
 ```julia
 @Var x y z
 @Param σ ρ β
