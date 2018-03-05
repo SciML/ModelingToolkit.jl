@@ -25,14 +25,10 @@ variables, and parameters. Therefore we label them as follows:
 using SciCompDSL
 
 # Define some variables
-x = DependentVariable(:x)
-y = DependentVariable(:y)
-z = DependentVariable(:z)
-t = IndependentVariable(:t)
-D = Differential(t) # Default of first derivative, Derivative(t,1)
-σ = Parameter(:σ)
-ρ = Parameter(:ρ)
-β = Parameter(:β)
+@DVar x y z
+@IVar t
+@Deriv D'~t
+@Param σ ρ β
 ```
 
 Then we build the system:
@@ -165,4 +161,30 @@ For example, `sin(t)`'s derivative (by `t`) is given by the following:
 
 ```julia
 SciCompDSL.Derivative(::typeof(sin),args,::Type{Val{1}}) = cos(args[1])
+```
+
+### Macro-free Usage
+
+Given the insistence on being programming friendly, all of the functionality
+is accessible via a function-based interface. This means that all macros are
+syntactic sugar in some form. For example, the variable construction:
+
+```julia
+@DVar x y z
+@IVar t
+@Deriv D'~t
+@Param σ ρ β
+```
+
+is syntactic sugar for:
+
+```julia
+x = DependentVariable(:x)
+y = DependentVariable(:y)
+z = DependentVariable(:z)
+t = IndependentVariable(:t)
+D = Differential(t) # Default of first derivative, Derivative(t,1)
+σ = Parameter(:σ)
+ρ = Parameter(:ρ)
+β = Parameter(:β)
 ```
