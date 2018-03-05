@@ -39,6 +39,7 @@ function expand_derivatives(O::Operation)
         end
     end
 end
+expand_derivatives(x::Variable) = x
 
 # Don't specialize on the function here
 function Derivative(O::Operation,idx)
@@ -106,4 +107,8 @@ macro Deriv(x...)
     esc(_differetial_macro(x))
 end
 
-export Differential, Derivative, expand_derivatives, @Deriv
+function calculate_jacobian(eqs,vars)
+    [Differential(vars[j])*eqs[i] for i in 1:length(eqs), j in 1:length(vars)]
+end
+
+export Differential, Derivative, expand_derivatives, @Deriv, calculate_jacobian

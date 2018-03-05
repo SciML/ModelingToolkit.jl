@@ -24,6 +24,18 @@ function generate_ode_function(sys::DiffEqSystem)
     :((du,u,p,t)->$(block))
 end
 
+function generate_ode_jacobian(sys::DiffEqSystem,simplify=true)
+    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.dvs)]
+    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
+    rhs = [eq.args[2] for eq in sys.eqs]
+    sys_exprs = calculate_jacobian(rhs,sys.dvs)
+    sys_exprs = expand_derivatives.(sys_exprs)
+    if simplify
+        sys_exprs = simplify_constants.(sys_exprs)
+    end
+    sys_exprs
+end
+
 function DiffEqBase.DiffEqFunction(sys::DiffEqSystem)
     expr = generate_ode_function(sys)
     DiffEqFunction{true}(eval(expr))

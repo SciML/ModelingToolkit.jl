@@ -10,7 +10,7 @@ function Base.isequal(x::Operation,y::Operation)
 end
 
 function Base.Expr(O::Operation)
-    Expr(:call, Symbol(O.op), O.args...)
+    Expr(:call, Symbol(O.op), Expr.(O.args)...)
 end
 
 Base.show(io::IO,O::Operation) = print(io,string(Expr(O)))
@@ -18,6 +18,9 @@ Base.show(io::IO,O::Operation) = print(io,string(Expr(O)))
 Operation(sym::Symbol, args) = Operation(eval(sym), args)
 Operation(x::Union{Symbol, Number}) = x
 
+#=
+# Bigger printing
+# Is there a way to just not have this as the default?
 function Operation(ex::Expr)
     f = ex.args[1]
     operands = ex.args[2:end]
@@ -28,3 +31,4 @@ function Operation(ex::Expr)
         Operation(f, operands)
     end
 end
+=#
