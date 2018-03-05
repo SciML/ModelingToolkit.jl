@@ -134,7 +134,24 @@ f2 = (du,u) -> f(du,u,(10.0,26.0,2.33))
 
 ### Adding Derivatives
 
-You can define derivatives for your own function via the dispatch:
+There is a large amount of derivatives pre-defined by
+[DiffRules.jl](https://github.com/JuliaDiff/DiffRules.jl). Note that the `Variable`
+type is defined as `<:Real`, and thus any functions which allow the use of real
+numbers can automatically be traced by the derivative mechanism. Thus for example:
+
+```julia
+f(x,y,z) = x^2 + sin(x+y) - z
+```
+
+automatically has the derivatives defined via the tracing mechanism. It will do
+this by directly building the operation the internals of your function and
+differentiating that.
+
+However, in many cases you may want to define your own derivatives so that way
+automatic Jacobian etc. calculations can utilize this information. This can
+allow for more succinct versions of the derivatives to be calculated in order
+to better scale to larger systems. You can define derivatives for your own
+function via the dispatch:
 
 ```julia
 SciCompDSL.Derivative(::typeof(my_function),args,::Type{Val{i}})
