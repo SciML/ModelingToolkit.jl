@@ -10,7 +10,21 @@ function Base.isequal(x::Operation,y::Operation)
 end
 
 function Base.Expr(O::Operation)
-    :($(Symbol(O.op))($((Expr(x) for x in O.args)...)))
+    Expr(:call, Symbol(O.op), O.args...)
 end
 
 Base.show(io::IO,O::Operation) = print(io,string(Expr(O)))
+
+Operation(sym::Symbol, args) = Operation(eval(sym), args)
+Operation(x::Union{Symbol, Number}) = x
+
+function Operation(ex::Expr)
+    f = ex.args[1]
+    operands = ex.args[2:end]
+    if ex.head == :call && any(x -> x isa Expr, ex.args)
+        args = [map(Operation, operands)]
+        Operation(f, args...)
+    else
+        Operation(f, operands)
+    end
+end
