@@ -13,7 +13,6 @@ eqs = [D*x == σ*(y-x),
        D*y == x*(ρ-z)-y,
        D*z == x*y - β*z]
 de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
-map(eq->:($(eq.args[1].name) = $(eq.args[2])),de.eqs)
 SciCompDSL.generate_ode_function(de)
 jac = SciCompDSL.generate_ode_jacobian(de,false)
 jac = SciCompDSL.generate_ode_jacobian(de)
