@@ -55,7 +55,7 @@ for (modu, fun, arity) in DiffRules.diffrules()
                 M, f = $(modu, fun)
                 @assert length(arg) == 1 "$M.$f is a unary function!"
                 dx = DiffRules.diffrule(M, f, arg[1])
-                Operation(dx)
+                parse(Operation,dx)
             end
         end
     elseif arity ==  2
@@ -69,7 +69,7 @@ for (modu, fun, arity) in DiffRules.diffrules()
                         @assert length(args) == 2 "$M.$f is a binary function!"
                     end
                     dx = DiffRules.diffrule(M, f, args[1], args[2])[$i]
-                    Operation(dx)
+                    parse(Operation,dx)
                 end
             end
         end

@@ -63,5 +63,17 @@ function generate_nlsys_function(sys::NonlinearSystem)
     :((du,u,p)->$(block))
 end
 
+function generate_nlsys_jacobian(sys::NonlinearSystem,simplify=true)
+    var_exprs = [:($(sys.vs[i].name) = u[$i]) for i in 1:length(sys.vs)]
+    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
+    rhs = [eq.args[2] for eq in sys.eqs]
+    sys_exprs = calculate_jacobian(rhs,sys.vs)
+    sys_exprs = expand_derivatives.(sys_exprs)
+    if simplify
+        sys_exprs = simplify_constants.(sys_exprs)
+    end
+    sys_exprs
+end
+
 export DiffEqSystem, NonlinearSystem, DiffEqFunction
 export generate_ode_function, generate_nlsys_function

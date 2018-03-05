@@ -65,7 +65,7 @@ function extract_elements(ops, eltypes)
     Tuple(elems[el] for el in eltypes)
 end
 # Walk the tree recursively and push variables into the right set
-function extract_elements!(op::Operation, elems, names)
+function extract_elements!(op::AbstractOperation, elems, names)
     for arg in op.args
         if arg isa Operation
             extract_elements!(arg, elems, names)

@@ -7,16 +7,6 @@ using Base.Test
 @Deriv D'~t # Default of first derivative, Derivative(t,1)
 @Param σ ρ β
 @Const c=0
-σ*(y-x)
-D*x
-D*x == -σ*(y-x)
-D*y == x*(ρ-z)-sin(y)
-s = JumpVariable(:s,3)
-n = NoiseVariable(:n)
-
-@test isequal(D*t,Constant(1))
-null_op = 0*t
-@test isequal(simplify_constants(null_op),Constant(0))
 
 # Define a differential equation
 eqs = [D*x == σ*(y-x),
@@ -25,6 +15,7 @@ eqs = [D*x == σ*(y-x),
 de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
 map(eq->:($(eq.args[1].name) = $(eq.args[2])),de.eqs)
 SciCompDSL.generate_ode_function(de)
+jac = SciCompDSL.generate_ode_jacobian(de,false)
 jac = SciCompDSL.generate_ode_jacobian(de)
 f = DiffEqFunction(de)
 
@@ -60,4 +51,6 @@ eqs = [0 == σ*(y-x),
        0 == x*y - β*z]
 ns = NonlinearSystem(eqs)
 nlsys_func = SciCompDSL.generate_nlsys_function(ns)
+jac = SciCompDSL.generate_nlsys_jacobian(ns,false)
+jac = SciCompDSL.generate_nlsys_jacobian(ns)
 f = @eval eval(nlsys_func)
