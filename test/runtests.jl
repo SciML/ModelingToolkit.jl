@@ -26,14 +26,17 @@ using Base.Test
     @test isequal(c1, c)
     @test isequal(v1, v)
     # `Expr`, `Number` -> `Operation`
-    @test isequal(Operation(2), Constant(2))
+    @test isequal(Operation(2), 2)
     expr = :(-inv(2sqrt(+(a, b))))
     op   = Operation(-, [Operation(inv,
-                    [Operation(*, [Constant(2), Operation(sqrt,
+                    [Operation(*, [2, Operation(sqrt,
                                   [Operation(+, [:a, :b])])])])])
     expr_post = Expr(:call, :-, op.args...)
     @test isequal(Operation(expr), op)
     @test isequal(Expr(Operation(expr)), expr_post)
+    expr1 = :(x^(y-1))
+    op1   = Operation(:^, [:x, Operation(-, [:y, 1])])
+    @test isequal(Operation(expr1), op1)
 end
 
 # Define some variables
@@ -96,4 +99,8 @@ u = DependentVariable(:u, [1])
     # Chain rule
     dsinsin = D*sin(sin(t))
     @test isequal(expand_derivatives(dsinsin),cos(sin(t))*cos(t))
+    dpow1 = Derivative(^,[:x, :y],Val{1})
+    dpow2 = Derivative(^,[:x, :y],Val{2})
+    @test isequal(dpow1, Operation( :(y*x^(y-1)) ) )
+    @test isequal(dpow2, Operation( :(x^y*log(x)) ) )
 end

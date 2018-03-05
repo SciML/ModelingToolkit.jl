@@ -48,19 +48,35 @@ end
 # Pre-defined derivatives
 import DiffRules, SpecialFunctions, NaNMath
 for (modu, fun, arity) in DiffRules.diffrules()
-    if arity ==  1
+    if arity ==  1 && !(fun in (:-, :+)) # :+ and :- are both unary and binary operators
         @eval begin
             function Derivative(::typeof($modu.$fun), arg, ::Type{Val{1}})
                 M, f = $(modu, fun)
+                @assert length(arg) == 1 "$M.$f is a unary function!"
                 dx = DiffRules.diffrule(M, f, arg[1])
                 Operation(dx)
+            end
+        end
+    elseif arity ==  2
+        for i in 1:2
+            @eval begin
+                function Derivative(::typeof($modu.$fun), args, ::Type{Val{$i}})
+                    M, f =  $(modu, fun)
+                    if f in (:-, :+)
+                        @assert length(args) in (1, 2) "$M.$f is a unary or a binary function!"
+                    else
+                        @assert length(args) == 2 "$M.$f is a binary function!"
+                    end
+                    dx = DiffRules.diffrule(M, f, args[1], args[2])[$i]
+                    Operation(dx)
+                end
             end
         end
     end
 end
 
 function count_order(x)
-    @assert !(x isa Symbol) "The variable $x must have a order of differentiation that is greater or equal to 1!"
+    @assert !(x isa Symbol) "The variable $x must have an order of differentiation that is greater or equal to 1!"
     n = 1
     while !(x.args[1] isa Symbol)
         n = n+1
