@@ -129,3 +129,23 @@ f = @eval eval(nlsys_func)
 # Make a closure over the parameters for for NLsolve.jl
 f2 = (du,u) -> f(du,u,(10.0,26.0,2.33))
 ```
+
+## Details
+
+### Adding Derivatives
+
+You can define derivatives for your own function via the dispatch:
+
+```julia
+SciCompDSL.Derivative(::typeof(my_function),args,::Type{Val{i}})
+```
+
+where `i` means that it's the derivative of the `i`th argument. `args` is the
+array of arguments, so for example if your function is `f(x,t)` then `args = [x,t]`.
+You should return an `Operation` for the derivative of your function.
+
+For example, `sin(t)`'s derivative (by `t`) is given by the following:
+
+```julia
+SciCompDSL.Derivative(::typeof(sin),args,::Type{Val{1}}) = cos(args[1])
+```
