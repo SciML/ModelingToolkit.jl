@@ -29,9 +29,9 @@ function generate_ode_jacobian(sys::DiffEqSystem,simplify=true)
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
     rhs = [eq.args[2] for eq in sys.eqs]
     sys_exprs = calculate_jacobian(rhs,sys.dvs)
-    sys_exprs = expand_derivatives.(sys_exprs)
+    sys_exprs = Expression[expand_derivatives(expr) for expr in sys_exprs]
     if simplify
-        sys_exprs = simplify_constants.(sys_exprs)
+        sys_exprs = Expression[simplify_constants(expr) for expr in sys_exprs]
     end
     sys_exprs
 end
@@ -68,9 +68,9 @@ function generate_nlsys_jacobian(sys::NonlinearSystem,simplify=true)
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
     rhs = [eq.args[2] for eq in sys.eqs]
     sys_exprs = calculate_jacobian(rhs,sys.vs)
-    sys_exprs = expand_derivatives.(sys_exprs)
+    sys_exprs = Expression[expand_derivatives(expr) for expr in sys_exprs]
     if simplify
-        sys_exprs = simplify_constants.(sys_exprs)
+        sys_exprs = Expression[simplify_constants(expr) for expr in sys_exprs]
     end
     sys_exprs
 end

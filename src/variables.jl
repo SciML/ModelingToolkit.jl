@@ -1,5 +1,5 @@
 # <: Real to make tracing easier. Maybe a bad idea?
-struct Variable <: Real
+struct Variable <: Expression
     name::Symbol
     subtype::Symbol
     value
@@ -11,7 +11,8 @@ Variable(name,subtype::Symbol=:Variable,value = nothing,value_type = typeof(valu
                                  Variable(name,subtype,value,value_type,nothing)
 Variable(name,args...) = Variable(name,:Variable,args...)
 Parameter(name,args...) = Variable(name,:Parameter,args...)
-Constant(value) = Variable(:None,:Constant,value,typeof(value))
+Constant(value::Number) = Variable(Symbol(value),:Constant,value,typeof(value))
+Constant(name,value,args...) = Variable(name,:Constant,value,typeof(value))
 DependentVariable(name,args...) = Variable(name,:DependentVariable,args...)
 IndependentVariable(name,args...) = Variable(name,:IndependentVariable,args...)
 JumpVariable(name,rate,args...) = Variable(name,:JumpVariable,rate,typeof(rate),args...)

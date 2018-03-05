@@ -17,6 +17,8 @@ SciCompDSL.generate_ode_function(de)
 jac = SciCompDSL.generate_ode_jacobian(de,false)
 jac = SciCompDSL.generate_ode_jacobian(de)
 f = DiffEqFunction(de)
+I - jac
+@test_broken inv(jac)
 
 # Differential equation with automatic extraction of variables on rhs
 de2 = DiffEqSystem(eqs, [t])

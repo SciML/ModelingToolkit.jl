@@ -4,13 +4,16 @@ using DiffEqBase
 import MacroTools: splitdef, combinedef
 import IterTools: product
 
-abstract type AbstractOperation end
+abstract type Expression <: Number end
+abstract type AbstractOperation <: Expression end
+abstract type AbstractOperator <: Expression end
 abstract type AbstractSystem end
-abstract type AbstractOperator end
 
 include("variables.jl")
 
-const Expression = Union{Variable,AbstractOperation,AbstractOperator}
+Base.promote_rule(::Type{T},::Type{T2}) where {T<:Number,T2<:Expression} = Expression
+Base.one(::Type{T}) where T<:Expression = Constant(1)
+Base.zero(::Type{T}) where T<:Expression = Constant(0)
 
 include("operations.jl")
 include("operators.jl")

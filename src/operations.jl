@@ -8,6 +8,20 @@ end
 function Base.isequal(x::Operation,y::Operation)
     x.op == y.op && all(isequal.(x.args,y.args))
 end
+function Base.isequal(x::Operation,y::Number)
+    # Should have a good check for trivial operations
+    false
+end
+
+# This might be a bad idea
+function Base.:(!=)(x::Operation,y)
+    !isequal(x,y)
+end
+Base.convert(::Type{Operation},x::Variable) = Operation(identity,x)
+
+
+# Don't recurse inversion for Jacobians
+Base.inv(x::Operation) = x
 
 function Base.Expr(O::Operation)
     Expr(:call, Symbol(O.op), Expr.(O.args)...)

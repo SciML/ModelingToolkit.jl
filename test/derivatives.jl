@@ -26,13 +26,13 @@ eqs = [D*x == σ*(y-x),
        D*y == x*(ρ-z)-y,
        D*z == x*y - β*z]
 de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
-jac = SciCompDSL.generate_ode_jacobian(de,false)
+jac = SciCompDSL.generate_ode_jacobian(de)
 @test_broken isequal(jac[1,1],-σ)
 @test_broken isequal(jac[1,2],σ)
 @test_broken isequal(jac[1,3],0)
-@test_broken isequal(jac[2,1],ρ)
+@test isequal(jac[2,1],ρ-z)
 @test_broken isequal(jac[2,2],-1)
 @test_broken isequal(jac[2,3],-x)
-@test_broken isequal(jac[3,1],y)
+@test isequal(jac[3,1],y)
 @test_broken isequal(jac[3,2],x)
 @test_broken isequal(jac[3,3],-β)

@@ -1,6 +1,6 @@
 # Literals treated as constants
 function Base.convert(::Type{Expression}, n::Number)
-    if !(typeof(n) <: Variable)
+    if !(typeof(n) <: Expression)
         return Constant(n)
     else
         return n

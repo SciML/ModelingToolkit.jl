@@ -15,6 +15,8 @@ function simplify_constants(O::Operation)
             else
                 return _O
             end
+        else
+            return O
         end
     elseif Symbol(O.op) == :+ && any(x->typeof(x)<:Variable && isequal(x,Constant(0)),O.args)
         # If there are Constant(0)s in a big `+` expression, get rid of them
