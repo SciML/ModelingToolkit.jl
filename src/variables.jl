@@ -7,8 +7,9 @@ struct Variable <: Real
     diff::Union{AbstractOperator,Void}
 end
 
-Variable(name,subtype,value = nothing,value_type = typeof(value)) =
+Variable(name,subtype::Symbol=:Variable,value = nothing,value_type = typeof(value)) =
                                  Variable(name,subtype,value,value_type,nothing)
+Variable(name,args...) = Variable(name,:Variable,args...)
 Parameter(name,args...) = Variable(name,:Parameter,args...)
 Constant(value) = Variable(:None,:Constant,value,typeof(value))
 DependentVariable(name,args...) = Variable(name,:DependentVariable,args...)
@@ -17,7 +18,7 @@ JumpVariable(name,rate,args...) = Variable(name,:JumpVariable,rate,typeof(rate),
 NoiseVariable(name,args...) = Variable(name,:NoiseVariable,args...)
 
 export Variable,Parameter,Constant,DependentVariable,IndependentVariable,JumpVariable,NoiseVariable,
-       @DVar, @IVar, @Param, @Const
+       @Var, @DVar, @IVar, @Param, @Const
 
 # Variables use isequal for equality since == is an Operation
 function Base.isequal(x::Variable,y::Variable)
@@ -109,6 +110,7 @@ function _parse_vars(macroname, fun, x)
 end
 
 for funs in ((:DVar, :DependentVariable), (:IVar, :IndependentVariable),
+             (:Var, :Variable),
              (:Param, :Parameter))
     @eval begin
         macro ($(funs[1]))(x...)

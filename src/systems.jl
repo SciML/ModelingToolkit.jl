@@ -43,9 +43,9 @@ function NonlinearSystem(eqs)
 end
 
 function generate_nlsys_function(sys::NonlinearSystem)
-    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.vs)]
+    var_exprs = [:($(sys.vs[i].name) = u[$i]) for i in 1:length(sys.vs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
-    sys_exprs = [:($(Symbol("resid[i]")) = $(eq[i].args[2])) for i in eachindex(sys.eqs)]
+    sys_exprs = [:($(Symbol("resid[$i]")) = $(sys.eqs[i].args[2])) for i in eachindex(sys.eqs)]
     exprs = vcat(var_exprs,param_exprs,sys_exprs)
     block = expr_arr_to_block(exprs)
     :((du,u,p)->$(block))

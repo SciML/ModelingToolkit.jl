@@ -46,3 +46,17 @@ for el in (:vs, :ps)
     names = sort(collect(var.name for var in getfield(ns,el)))
     @test names2 == names
 end
+
+SciCompDSL.generate_nlsys_function(ns)
+
+# Now nonlinear system with only variables
+@Var x y z
+@Param σ ρ β
+
+# Define a nonlinear system
+eqs = [0 == σ*(y-x),
+       0 == x*(ρ-z)-y,
+       0 == x*y - β*z]
+ns = NonlinearSystem(eqs)
+nlsys_func = SciCompDSL.generate_nlsys_function(ns)
+f = @eval eval(nlsys_func)
