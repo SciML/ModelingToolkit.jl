@@ -2,7 +2,10 @@ using SciCompDSL
 using Base.Test
 
 # `Expr`, `Number` -> `Operation`
-@IVar a b x y
+@IVar a
+@Param b
+@DVar x
+@Var y
 @test isequal(parse(Operation, 2), 2)
 expr = :(-inv(2sqrt(+($a, $b))))
 op   = Operation(-, [Operation(inv,
