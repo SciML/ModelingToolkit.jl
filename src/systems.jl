@@ -22,10 +22,12 @@ end
 
 ode_order_lowering(eqs; naming_scheme = "_") = ode_order_lowering!(deepcopy(eqs), naming_scheme)
 function ode_order_lowering!(eqs, naming_scheme)
-    idv = extract_idv(eqs[1])
+    ind = findfirst(x->!(isintermediate(x)), eqs)
+    idv = extract_idv(eqs[ind])
     D   = Differential(idv, 1)
     sym_order = Dict{Symbol, Int}()
     for eq in eqs
+        isintermediate(eq) && continue
         sym, maxorder = extract_symbol_order(eq)
         maxorder == 1 && continue
         if maxorder > get(sym_order, sym, 0)
@@ -47,12 +49,12 @@ function ode_order_lowering!(eqs, naming_scheme)
 end
 
 function lhs_renaming!(eq, D, naming_scheme)
-    isntermediate(eq) && return eq
+    isintermediate(eq) && return eq
     eq.args[1] = D*varname(eq.args[1], naming_scheme, lower=true)
     return eq
 end
 function rhs_renaming!(eq, naming_scheme)
-    # isntermediate(eq) && return eq
+    # isintermediate(eq) && return eq
     rhs = eq.args[2]
     _rec_renaming!(rhs, naming_scheme)
 end
@@ -85,11 +87,11 @@ function generate_ode_function(sys::DiffEqSystem)
     :((du,u,p,t)->$(block))
 end
 
-isntermediate(eq) = eq.args[1].diff == nothing
+isintermediate(eq) = eq.args[1].diff == nothing
 
 function build_equals_expr(eq)
     @assert typeof(eq.args[1]) <: Variable
-    if !(isntermediate(eq))
+    if !(isintermediate(eq))
         # Differential statement
         :($(Symbol("$(eq.args[1].name)_$(eq.args[1].diff.x.name)")) = $(eq.args[2]))
     else
