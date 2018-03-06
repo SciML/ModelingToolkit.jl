@@ -23,11 +23,25 @@ I - jac
 
 # Differential equation with automatic extraction of variables on rhs
 de2 = DiffEqSystem(eqs, [t])
-for el in (:ivs, :dvs, :vs, :ps)
-    names2 = sort(collect(var.name for var in getfield(de2,el)))
-    names = sort(collect(var.name for var in getfield(de,el)))
-    @test names2 == names
+function test_vars_extraction(de, de2)
+    for el in (:ivs, :dvs, :vs, :ps)
+        names2 = sort(collect(var.name for var in getfield(de2,el)))
+        names = sort(collect(var.name for var in getfield(de,el)))
+        @test names2 == names
+    end
 end
+test_vars_extraction(de, de2)
+
+# Conversion to first-order ODEs #17
+@Deriv D3'''~t
+@Deriv D2''~t
+@DVar u
+eqs = [D3*u == 2(D2*u) + D*u + D*x + 1
+       D2*x == D*x + 2]
+de  = DiffEqSystem(eqs, [t], [u,x], Variable[], Variable[])
+de2 = DiffEqSystem(eqs, [t])
+test_vars_extraction(de, de2)
+
 
 # Internal calculations
 eqs = [a ~ y-x,

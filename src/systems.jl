@@ -1,3 +1,5 @@
+const naming_scheme = "_"
+
 struct DiffEqSystem <: AbstractSystem
     eqs::Vector{Operation}
     ivs::Vector{Variable}
