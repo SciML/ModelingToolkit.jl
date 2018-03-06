@@ -4,6 +4,10 @@ struct DiffEqSystem <: AbstractSystem
     dvs::Vector{Variable}
     vs::Vector{Variable}
     ps::Vector{Variable}
+    function DiffEqSystem(eqs, idvs, dvs, vs, ps; naming_scheme = "_")
+        lowered_eqs = ode_order_lowering(eqs, naming_scheme)
+        new(lowered_eqs, idvs, dvs, vs, ps)
+    end
 end
 function DiffEqSystem(eqs; kwargs...)
     ivs, dvs, vs, ps = extract_elements(eqs, (:IndependentVariable, :DependentVariable, :Variable, :Parameter))
@@ -12,10 +16,6 @@ end
 function DiffEqSystem(eqs, ivs; kwargs...)
     dvs, vs, ps = extract_elements(eqs, (:DependentVariable, :Variable, :Parameter))
     DiffEqSystem(eqs, ivs, dvs, vs, ps; kwargs...)
-end
-function DiffEqSystem(eqs, idvs, dvs, vs, ps; naming_scheme = "_")
-     lowered_eqs = ode_order(eqs, naming_scheme)
-     DiffEqSystem(lowered_eqs, naming_scheme)
 end
 
 ode_order_lowering(eqs, naming_scheme) = ode_order_lowering!(deepcopy(eqs), naming_scheme)

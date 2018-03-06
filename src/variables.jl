@@ -65,7 +65,7 @@ function varname(var::Variable, naming_scheme; lower=false)
     D = var.diff
     D == nothing && return var
     order = lower ? D.order-1 : D.order
-    varname(var, D.x, order, naming_scheme)
+    _varname(var, D.x, order, naming_scheme)
 end
 function _varname(var, idv, order, naming_scheme)
     name = String(var.name)*naming_scheme*String(idv.name)^order
