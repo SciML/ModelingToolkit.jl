@@ -91,7 +91,9 @@ function extract_elements!(op::AbstractOperation, elems, names)
         if arg isa Operation
             extract_elements!(arg, elems, names)
         elseif arg isa Variable && haskey(elems, arg.subtype) && !in(arg.name, names[arg.subtype])
-            arg.subtype == :DependentVariable && arg.diff != nothing && continue
+            if arg.subtype == :DependentVariable && arg.diff != nothing
+                arg = Variable(arg.name, arg.subtype)
+            end
             push!(names[arg.subtype], arg.name)
             push!(elems[arg.subtype], arg)
         end

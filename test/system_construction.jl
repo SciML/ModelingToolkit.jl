@@ -35,10 +35,10 @@ test_vars_extraction(de, de2)
 # Conversion to first-order ODEs #17
 @Deriv D3'''~t
 @Deriv D2''~t
-@DVar u
+@DVar u u_tt u_t x_t
 eqs = [D3*u == 2(D2*u) + D*u + D*x + 1
        D2*x == D*x + 2]
-de  = DiffEqSystem(eqs, [t], [u,x], Variable[], Variable[])
+de  = DiffEqSystem(eqs, [t], [u,x,u_tt,u_t,x_t], Variable[], Variable[])
 de2 = DiffEqSystem(eqs, [t])
 test_vars_extraction(de, de2)
 
