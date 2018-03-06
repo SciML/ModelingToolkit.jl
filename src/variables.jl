@@ -65,11 +65,12 @@ function varname(var::Variable, naming_scheme; lower=false)
     D = var.diff
     D == nothing && return var
     order = lower ? D.order-1 : D.order
-    _varname(var, D.x, order, naming_scheme)
+    varname(var.name, D.x, order, naming_scheme)
 end
-function _varname(var, idv, order, naming_scheme)
-    name = String(var.name)*naming_scheme*String(idv.name)^order
-    Variable(name, var.subtype)
+function varname(sym::Symbol, idv, order::Int, naming_scheme)
+    order == 0 && return Variable(sym, :DependentVariable)
+    name = String(sym)*naming_scheme*String(idv.name)^order
+    Variable(name, :DependentVariable)
 end
 
 function extract_elements(ops, eltypes)

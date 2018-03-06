@@ -4,29 +4,44 @@ struct DiffEqSystem <: AbstractSystem
     dvs::Vector{Variable}
     vs::Vector{Variable}
     ps::Vector{Variable}
-    function DiffEqSystem(eqs, idvs, dvs, vs, ps; naming_scheme = "_")
-        lowered_eqs = ode_order_lowering(eqs, naming_scheme)
+    function DiffEqSystem(eqs, idvs, dvs, vs, ps; lowered = false, kwargs...)
+        lowered_eqs = lowered ? eqs : ode_order_lowering(eqs; kwargs...)
         new(lowered_eqs, idvs, dvs, vs, ps)
     end
 end
 function DiffEqSystem(eqs; kwargs...)
+    eqs = ode_order_lowering(eqs; kwargs...)
     ivs, dvs, vs, ps = extract_elements(eqs, (:IndependentVariable, :DependentVariable, :Variable, :Parameter))
-    DiffEqSystem(eqs, ivs, dvs, vs, ps; kwargs...)
+    DiffEqSystem(eqs, ivs, dvs, vs, ps; lowered = true, kwargs...)
 end
 function DiffEqSystem(eqs, ivs; kwargs...)
+    eqs = ode_order_lowering(eqs; kwargs...)
     dvs, vs, ps = extract_elements(eqs, (:DependentVariable, :Variable, :Parameter))
-    DiffEqSystem(eqs, ivs, dvs, vs, ps; kwargs...)
+    DiffEqSystem(eqs, ivs, dvs, vs, ps; lowered = true, kwargs...)
 end
 
-ode_order_lowering(eqs, naming_scheme) = ode_order_lowering!(deepcopy(eqs), naming_scheme)
+ode_order_lowering(eqs; naming_scheme = "_") = ode_order_lowering!(deepcopy(eqs), naming_scheme)
 function ode_order_lowering!(eqs, naming_scheme)
     idv = extract_idv(eqs[1])
     D   = Differential(idv, 1)
+    sym_order = Dict{Symbol, Int}()
     for eq in eqs
         sym, maxorder = extract_symbol_order(eq)
         maxorder == 1 && continue
+        if maxorder > get(sym_order, sym, 0)
+            sym_order[sym] = maxorder
+        end
         eq = lhs_renaming!(eq, D, naming_scheme)
         eq = rhs_renaming!(eq, naming_scheme)
+    end
+    for sym in keys(sym_order)
+        order = sym_order[sym]
+        for o in (order-1):-1:1
+            lhs = D*varname(sym, idv, o-1, naming_scheme)
+            rhs = varname(sym, idv, o, naming_scheme)
+            eq = Operation(==, [lhs, rhs])
+            push!(eqs, eq)
+        end
     end
     eqs
 end
