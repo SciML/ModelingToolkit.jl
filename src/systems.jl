@@ -49,32 +49,31 @@ function ode_order_lowering!(eqs, naming_scheme)
 end
 
 function lhs_renaming!(eq, D, naming_scheme)
-    isintermediate(eq) && return eq
     eq.args[1] = D*varname(eq.args[1], naming_scheme, lower=true)
     return eq
 end
 function rhs_renaming!(eq, naming_scheme)
-    # isintermediate(eq) && return eq
     rhs = eq.args[2]
     _rec_renaming!(rhs, naming_scheme)
 end
 
 function _rec_renaming!(rhs, naming_scheme)
-    rhs isa Variable && return rhs
-    args = rhs.args
-    if any(x->x isa Operation, args)
-        # filter(x->x isa Operation, rhs)
-        for arg in args
-            arg isa Operation && _rec_renaming!(arg, naming_scheme)
-        end
-    else
+    rhs isa Variable && rhs.diff != nothing && return varname(rhs, naming_scheme)
+    if rhs isa Operation
+        args = rhs.args
         for i in eachindex(args)
-            if args[i] isa Variable && args[i].subtype == :DependentVariable && args[i].diff != nothing
-                args[i] = varname(args[i], naming_scheme)
-            end
+            args[i] = _rec_renaming!(args[i], naming_scheme)
         end
     end
-    return rhs
+    rhs
+end
+
+function extract_symbol_order(eq)
+    # We assume that the differential with the highest order is always going to be in the LHS
+    dv = eq.args[1]
+    sym = dv.name
+    order = dv.diff.order
+    sym, order
 end
 
 function generate_ode_function(sys::DiffEqSystem)

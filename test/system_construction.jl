@@ -41,7 +41,19 @@ eqs = [D3*u == 2(D2*u) + D*u + D*x + 1
 de  = DiffEqSystem(eqs, [t], [u,x,u_tt,u_t,x_t], Variable[], Variable[])
 de2 = DiffEqSystem(eqs, [t])
 test_vars_extraction(de, de2)
-
+neweqs = de.eqs
+lowered_eqs = [D*u_tt == 2u_tt + u_t + x_t + 1
+               D*x_t  == x_t + 2
+               D*u_t  == u_tt
+               D*u    == u_t
+               D*x    == x_t]
+for i in eachindex(neweqs)
+    lhsnew, lhslowered = neweqs[i].args[1], lowered_eqs[i].args[1]
+    for f in fieldnames(typeof(lhsnew))
+        @test isequal(getfield(lhsnew, f), getfield(lhslowered, f))
+    end
+    @test isequal(neweqs[i].args[2], lowered_eqs[i].args[2])
+end
 
 # Internal calculations
 eqs = [a ~ y-x,

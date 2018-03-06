@@ -53,13 +53,6 @@ function Base.show(io::IO, A::Variable)
 end
 
 extract_idv(eq) = eq.args[1].diff.x
-function extract_symbol_order(eq)
-    # We assume that the differential with the highest order is always going to be in the LHS
-    dv = eq.args[1]
-    sym = dv.name
-    order = dv.diff.order
-    sym, order
-end
 
 function varname(var::Variable, naming_scheme; lower=false)
     D = var.diff
