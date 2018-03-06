@@ -52,6 +52,25 @@ function Base.show(io::IO, A::Variable)
     end
 end
 
+extract_idv(eq) = eq.args[1].diff.x
+function extract_symbol_order(eq)
+    # We assume that the differential with the highest order is always going to be in the LHS
+    dv = eq.args[1]
+    sym = dv.name
+    order = dv.diff.order
+    sym, order
+end
+
+function varname(var::Variable, naming_scheme; lower=false)
+    D = var.diff
+    D == nothing && return var
+    order = lower ? D.order-1 : D.order
+    varname(var, D.x, order, naming_scheme)
+end
+function _varname(var, idv, order, naming_scheme)
+    name = String(var.name)*naming_scheme*String(idv.name)^order
+    Variable(name, var.subtype)
+end
 
 function extract_elements(ops, eltypes)
     elems = Dict{Symbol, Vector{Variable}}()
@@ -71,8 +90,7 @@ function extract_elements!(op::AbstractOperation, elems, names)
         if arg isa Operation
             extract_elements!(arg, elems, names)
         elseif arg isa Variable && haskey(elems, arg.subtype) && !in(arg.name, names[arg.subtype])
-            # arg.subtype == :DependentVariable && arg.diff != nothing && continue
-            # This breaks, if a system only has differentials of dependent variables
+            arg.subtype == :DependentVariable && arg.diff != nothing && continue
             push!(names[arg.subtype], arg.name)
             push!(elems[arg.subtype], arg)
         end

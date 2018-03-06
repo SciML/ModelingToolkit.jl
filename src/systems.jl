@@ -1,5 +1,3 @@
-const naming_scheme = "_"
-
 struct DiffEqSystem <: AbstractSystem
     eqs::Vector{Operation}
     ivs::Vector{Variable}
@@ -7,13 +5,59 @@ struct DiffEqSystem <: AbstractSystem
     vs::Vector{Variable}
     ps::Vector{Variable}
 end
-function DiffEqSystem(eqs)
+function DiffEqSystem(eqs; kwargs...)
     ivs, dvs, vs, ps = extract_elements(eqs, (:IndependentVariable, :DependentVariable, :Variable, :Parameter))
-    DiffEqSystem(eqs, ivs, dvs, vs, ps)
+    DiffEqSystem(eqs, ivs, dvs, vs, ps; kwargs...)
 end
-function DiffEqSystem(eqs, ivs)
+function DiffEqSystem(eqs, ivs; kwargs...)
     dvs, vs, ps = extract_elements(eqs, (:DependentVariable, :Variable, :Parameter))
-    DiffEqSystem(eqs, ivs, dvs, vs, ps)
+    DiffEqSystem(eqs, ivs, dvs, vs, ps; kwargs...)
+end
+function DiffEqSystem(eqs, idvs, dvs, vs, ps; naming_scheme = "_")
+     lowered_eqs = ode_order(eqs, naming_scheme)
+     DiffEqSystem(lowered_eqs, naming_scheme)
+end
+
+ode_order_lowering(eqs, naming_scheme) = ode_order_lowering!(deepcopy(eqs), naming_scheme)
+function ode_order_lowering!(eqs, naming_scheme)
+    idv = extract_idv(eqs[1])
+    D   = Differential(idv, 1)
+    for eq in eqs
+        sym, maxorder = extract_symbol_order(eq)
+        maxorder == 1 && continue
+        eq = lhs_renaming!(eq, D, naming_scheme)
+        eq = rhs_renaming!(eq, naming_scheme)
+    end
+    eqs
+end
+
+function lhs_renaming!(eq, D, naming_scheme)
+    isntermediate(eq) && return eq
+    eq.args[1] = D*varname(eq.args[1], naming_scheme, lower=true)
+    return eq
+end
+function rhs_renaming!(eq, naming_scheme)
+    # isntermediate(eq) && return eq
+    rhs = eq.args[2]
+    _rec_renaming!(rhs, naming_scheme)
+end
+
+function _rec_renaming!(rhs, naming_scheme)
+    rhs isa Variable && return rhs
+    args = rhs.args
+    if any(x->x isa Operation, args)
+        # filter(x->x isa Operation, rhs)
+        for arg in args
+            arg isa Operation && _rec_renaming!(arg, naming_scheme)
+        end
+    else
+        for i in eachindex(args)
+            if args[i] isa Variable && args[i].subtype == :DependentVariable && args[i].diff != nothing
+                args[i] = varname(args[i], naming_scheme)
+            end
+        end
+    end
+    return rhs
 end
 
 function generate_ode_function(sys::DiffEqSystem)
@@ -26,9 +70,11 @@ function generate_ode_function(sys::DiffEqSystem)
     :((du,u,p,t)->$(block))
 end
 
+isntermediate(eq) = eq.args[1].diff == nothing
+
 function build_equals_expr(eq)
     @assert typeof(eq.args[1]) <: Variable
-    if eq.args[1].diff != nothing
+    if !(isntermediate(eq))
         # Differential statement
         :($(Symbol("$(eq.args[1].name)_$(eq.args[1].diff.x.name)")) = $(eq.args[2]))
     else
