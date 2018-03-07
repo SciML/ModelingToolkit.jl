@@ -47,13 +47,18 @@ lowered_eqs = [D*u_tt == 2u_tt + u_t + x_t + 1
                D*u_t  == u_tt
                D*u    == u_t
                D*x    == x_t]
-for i in eachindex(neweqs)
-    lhsnew, lhslowered = neweqs[i].args[1], lowered_eqs[i].args[1]
-    for f in fieldnames(typeof(lhsnew))
-        @test isequal(getfield(lhsnew, f), getfield(lhslowered, f))
+function test_eqs(eqs1, eqs2)
+    eq = true
+    for i in eachindex(eqs1)
+        lhs1, lhs2 = eqs1[i].args[1], eqs2[i].args[1]
+        for f in fieldnames(typeof(lhs1))
+            eq = eq && isequal(getfield(lhs1, f), getfield(lhs2, f))
+        end
+        eq = eq && isequal(eqs1[i].args[2], eqs2[i].args[2])
     end
-    @test isequal(neweqs[i].args[2], lowered_eqs[i].args[2])
+    @test eq
 end
+test_eqs(neweqs, lowered_eqs)
 
 # Internal calculations
 eqs = [a ~ y-x,
