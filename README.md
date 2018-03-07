@@ -34,9 +34,9 @@ using SciCompDSL
 Then we build the system:
 
 ```julia
-eqs = [D*x == σ*(y-x),
-       D*y == x*(ρ-z)-y,
-       D*z == x*y - β*z]
+eqs = [D*x ~ σ*(y-x),
+       D*y ~ x*(ρ-z)-y,
+       D*z ~ x*y - β*z]
 ```
 
 Each operation builds an `Operation` type, and thus `eqs` is an array of
@@ -93,9 +93,9 @@ variables. Here we will show the latter. We write:
 @Param σ ρ β
 
 # Define a nonlinear system
-eqs = [0 == σ*(y-x),
-       0 == x*(ρ-z)-y,
-       0 == x*y - β*z]
+eqs = [0 ~ σ*(y-x),
+       0 ~ x*(ρ-z)-y,
+       0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs)
 nlsys_func = SciCompDSL.generate_nlsys_function(ns)
 ```
@@ -209,10 +209,10 @@ The system building functions can handle intermediate calculations. For example,
 ```julia
 @Var a x y z
 @Param σ ρ β
-eqs = [a == y-x,
-       0 == σ*a,
-       0 == x*(ρ-z)-y,
-       0 == x*y - β*z]
+eqs = [a ~ y-x,
+       0 ~ σ*a,
+       0 ~ x*(ρ-z)-y,
+       0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
 nlsys_func = SciCompDSL.generate_nlsys_function(ns)
 ```
