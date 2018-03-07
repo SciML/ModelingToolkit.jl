@@ -4,20 +4,20 @@ struct DiffEqSystem <: AbstractSystem
     dvs::Vector{Variable}
     vs::Vector{Variable}
     ps::Vector{Variable}
-    function DiffEqSystem(eqs, idvs, dvs, vs, ps; lowered = false, kwargs...)
-        lowered_eqs = lowered ? eqs : ode_order_lowering(eqs; kwargs...)
+    function DiffEqSystem(eqs, idvs, dvs, vs, ps)
+        lowered_eqs = ode_order_lowering(eqs)
         new(lowered_eqs, idvs, dvs, vs, ps)
     end
 end
 function DiffEqSystem(eqs; kwargs...)
     eqs = ode_order_lowering(eqs; kwargs...)
     ivs, dvs, vs, ps = extract_elements(eqs, (:IndependentVariable, :DependentVariable, :Variable, :Parameter))
-    DiffEqSystem(eqs, ivs, dvs, vs, ps; lowered = true, kwargs...)
+    DiffEqSystem(eqs, ivs, dvs, vs, ps)
 end
 function DiffEqSystem(eqs, ivs; kwargs...)
     eqs = ode_order_lowering(eqs; kwargs...)
     dvs, vs, ps = extract_elements(eqs, (:DependentVariable, :Variable, :Parameter))
-    DiffEqSystem(eqs, ivs, dvs, vs, ps; lowered = true, kwargs...)
+    DiffEqSystem(eqs, ivs, dvs, vs, ps)
 end
 
 ode_order_lowering(eqs; naming_scheme = "_") = ode_order_lowering!(deepcopy(eqs), naming_scheme)
@@ -29,7 +29,7 @@ function ode_order_lowering!(eqs, naming_scheme)
     for eq in eqs
         isintermediate(eq) && continue
         sym, maxorder = extract_symbol_order(eq)
-        maxorder == 1 && continue
+        maxorder == 1 && continue # fast pass
         if maxorder > get(sym_order, sym, 0)
             sym_order[sym] = maxorder
         end
