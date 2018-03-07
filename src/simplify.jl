@@ -1,7 +1,7 @@
 function simplify_constants(O::Operation)
     O_last = nothing
     _O = O
-    while !isequal(_O,O_last)
+    while _O != O_last
         O_last = _O
         _O = _simplify_constants(_O)
         if typeof(_O) <: Operation

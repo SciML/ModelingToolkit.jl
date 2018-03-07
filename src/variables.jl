@@ -22,7 +22,7 @@ export Variable,Parameter,Constant,DependentVariable,IndependentVariable,JumpVar
        @Var, @DVar, @IVar, @Param, @Const
 
 # Variables use isequal for equality since == is an Operation
-function Base.isequal(x::Variable,y::Variable)
+function Base.:(==)(x::Variable,y::Variable)
     x.name == y.name && x.subtype == y.subtype && x.value == y.value &&
     x.value_type == y.value_type && x.diff == y.diff
 end

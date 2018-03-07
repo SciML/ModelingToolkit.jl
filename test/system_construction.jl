@@ -10,9 +10,9 @@ using Base.Test
 @Var a
 
 # Define a differential equation
-eqs = [D*x == σ*(y-x),
-       D*y == x*(ρ-z)-y,
-       D*z == x*y - β*z]
+eqs = [D*x ~ σ*(y-x),
+       D*y ~ x*(ρ-z)-y,
+       D*z ~ x*y - β*z]
 de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
 SciCompDSL.generate_ode_function(de)
 jac = SciCompDSL.generate_ode_jacobian(de,false)
@@ -30,10 +30,10 @@ for el in (:ivs, :dvs, :vs, :ps)
 end
 
 # Internal calculations
-eqs = [a == y-x,
-       D*x == σ*a,
-       D*y == x*(ρ-z)-y,
-       D*z == x*y - β*z]
+eqs = [a ~ y-x,
+       D*x ~ σ*a,
+       D*y ~ x*(ρ-z)-y,
+       D*z ~ x*y - β*z]
 de = DiffEqSystem(eqs,[t],[x,y,z],[a],[σ,ρ,β])
 SciCompDSL.generate_ode_function(de)
 jac = SciCompDSL.generate_ode_jacobian(de,false)
@@ -43,9 +43,9 @@ f = DiffEqFunction(de)
 de.eqs[1]
 
 # Define a nonlinear system
-eqs = [0 == σ*(y-x),
-       0 == x*(ρ-z)-y,
-       0 == x*y - β*z]
+eqs = [0 ~ σ*(y-x),
+       0 ~ x*(ρ-z)-y,
+       0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
 ns2 = NonlinearSystem(eqs)
 for el in (:vs, :ps)
@@ -61,9 +61,9 @@ SciCompDSL.generate_nlsys_function(ns)
 @Param σ ρ β
 
 # Define a nonlinear system
-eqs = [0 == σ*(y-x),
-       0 == x*(ρ-z)-y,
-       0 == x*y - β*z]
+eqs = [0 ~ σ*(y-x),
+       0 ~ x*(ρ-z)-y,
+       0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs)
 nlsys_func = SciCompDSL.generate_nlsys_function(ns)
 jac = SciCompDSL.generate_nlsys_jacobian(ns,false)
@@ -72,10 +72,10 @@ f = @eval eval(nlsys_func)
 
 # Intermediate calculations
 # Define a nonlinear system
-eqs = [a == y-x,
-       0 == σ*a,
-       0 == x*(ρ-z)-y,
-       0 == x*y - β*z]
+eqs = [a ~ y-x,
+       0 ~ σ*a,
+       0 ~ x*(ρ-z)-y,
+       0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
 nlsys_func = SciCompDSL.generate_nlsys_function(ns)
 jac = SciCompDSL.generate_nlsys_jacobian(ns,false)

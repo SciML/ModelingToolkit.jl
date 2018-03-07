@@ -16,9 +16,9 @@ n = NoiseVariable(:n)
 
 σ*(y-x)
 D*x
-D*x == -σ*(y-x)
-D*y == x*(ρ-z)-sin(y)
+D*x ~ -σ*(y-x)
+D*y ~ x*(ρ-z)-sin(y)
 
-@test isequal(D*t,Constant(1))
+@test D*t == Constant(1)
 null_op = 0*t
-@test isequal(simplify_constants(null_op),Constant(0))
+@test simplify_constants(null_op) == Constant(0)

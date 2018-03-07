@@ -4,19 +4,17 @@ struct Operation <: AbstractOperation
     args::Vector{Expression}
 end
 
-# Operations use isequal for equality since == is an Operation
-function Base.isequal(x::Operation,y::Operation)
+# Recursive ==
+function Base.:(==)(x::Operation,y::Operation)
     x.op == y.op && all(isequal.(x.args,y.args))
 end
-Base.isequal(x::Operation,y::Number) = false
-Base.isequal(x::Number,y::Operation) = false
-Base.isequal(x::Operation,y::Void) = false
-Base.isequal(x::Void,y::Operation) = false
+Base.:(==)(x::Operation,y::Number) = false
+Base.:(==)(x::Number,y::Operation) = false
+Base.:(==)(x::Operation,y::Void) = false
+Base.:(==)(x::Void,y::Operation) = false
+Base.:(==)(x::Variable,y::Operation) = y == Operation(identity,Expression[x])
+Base.:(==)(x::Operation,y::Variable) = x == Operation(identity,Expression[y])
 
-# This might be a bad idea
-function Base.:(!=)(x::Operation,y)
-    !isequal(x,y)
-end
 Base.convert(::Type{Operation},x::Variable) = Operation(identity,x)
 
 
