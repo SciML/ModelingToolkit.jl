@@ -4,18 +4,12 @@ struct DiffEqSystem <: AbstractSystem
     dvs::Vector{Variable}
     vs::Vector{Variable}
     ps::Vector{Variable}
-    function DiffEqSystem(eqs, idvs, dvs, vs, ps)
-        lowered_eqs = ode_order_lowering(eqs)
-        new(lowered_eqs, idvs, dvs, vs, ps)
-    end
 end
-function DiffEqSystem(eqs; kwargs...)
-    eqs = ode_order_lowering(eqs; kwargs...)
+function DiffEqSystem(eqs)
     ivs, dvs, vs, ps = extract_elements(eqs, (:IndependentVariable, :DependentVariable, :Variable, :Parameter))
     DiffEqSystem(eqs, ivs, dvs, vs, ps)
 end
-function DiffEqSystem(eqs, ivs; kwargs...)
-    eqs = ode_order_lowering(eqs; kwargs...)
+function DiffEqSystem(eqs, ivs)
     dvs, vs, ps = extract_elements(eqs, (:DependentVariable, :Variable, :Parameter))
     DiffEqSystem(eqs, ivs, dvs, vs, ps)
 end
@@ -172,4 +166,4 @@ function generate_nlsys_jacobian(sys::NonlinearSystem,simplify=true)
 end
 
 export DiffEqSystem, NonlinearSystem, DiffEqFunction
-export generate_ode_function, generate_nlsys_function
+export generate_ode_function, generate_nlsys_function, ode_order_lowering
