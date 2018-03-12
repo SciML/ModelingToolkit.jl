@@ -52,6 +52,19 @@ function Base.show(io::IO, A::Variable)
     end
 end
 
+extract_idv(eq) = eq.args[1].diff.x
+
+function varname(var::Variable, naming_scheme; lower=false)
+    D = var.diff
+    D == nothing && return var
+    order = lower ? D.order-1 : D.order
+    varname(var.name, D.x, order, naming_scheme)
+end
+function varname(sym::Symbol, idv, order::Int, naming_scheme)
+    order == 0 && return Variable(sym, :DependentVariable)
+    name = String(sym)*naming_scheme*String(idv.name)^order
+    Variable(name, :DependentVariable)
+end
 
 function extract_elements(ops, eltypes)
     elems = Dict{Symbol, Vector{Variable}}()
@@ -71,7 +84,9 @@ function extract_elements!(op::AbstractOperation, elems, names)
         if arg isa Operation
             extract_elements!(arg, elems, names)
         elseif arg isa Variable && haskey(elems, arg.subtype) && !in(arg.name, names[arg.subtype])
-            arg.subtype == :DependentVariable && arg.diff != nothing && continue
+            if arg.subtype == :DependentVariable && arg.diff != nothing
+                arg = Variable(arg.name, arg.subtype)
+            end
             push!(names[arg.subtype], arg.name)
             push!(elems[arg.subtype], arg)
         end

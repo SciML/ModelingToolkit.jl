@@ -23,11 +23,42 @@ I - jac
 
 # Differential equation with automatic extraction of variables on rhs
 de2 = DiffEqSystem(eqs, [t])
-for el in (:ivs, :dvs, :vs, :ps)
-    names2 = sort(collect(var.name for var in getfield(de2,el)))
-    names = sort(collect(var.name for var in getfield(de,el)))
-    @test names2 == names
+function test_vars_extraction(de, de2)
+    for el in (:ivs, :dvs, :vs, :ps)
+        names2 = sort(collect(var.name for var in getfield(de2,el)))
+        names = sort(collect(var.name for var in getfield(de,el)))
+        @test names2 == names
+    end
 end
+test_vars_extraction(de, de2)
+
+# Conversion to first-order ODEs #17
+@Deriv D3'''~t
+@Deriv D2''~t
+@DVar u u_tt u_t x_t
+eqs = [D3*u ~ 2(D2*u) + D*u + D*x + 1
+       D2*x ~ D*x + 2]
+neweqs = ode_order_lowering(eqs)
+de  = DiffEqSystem(neweqs, [t], [u,x,u_tt,u_t,x_t], Variable[], Variable[])
+de2 = DiffEqSystem(neweqs, [t])
+test_vars_extraction(de, de2)
+lowered_eqs = [D*u_tt ~ 2u_tt + u_t + x_t + 1
+               D*x_t  ~ x_t + 2
+               D*u_t  ~ u_tt
+               D*u    ~ u_t
+               D*x    ~ x_t]
+function test_eqs(eqs1, eqs2)
+    eq = true
+    for i in eachindex(eqs1)
+        lhs1, lhs2 = eqs1[i].args[1], eqs2[i].args[1]
+        for f in fieldnames(typeof(lhs1))
+            eq = eq && isequal(getfield(lhs1, f), getfield(lhs2, f))
+        end
+        eq = eq && isequal(eqs1[i].args[2], eqs2[i].args[2])
+    end
+    @test eq
+end
+test_eqs(neweqs, lowered_eqs)
 
 # Internal calculations
 eqs = [a ~ y-x,
