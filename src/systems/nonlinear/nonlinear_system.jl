@@ -4,9 +4,12 @@ struct NonlinearSystem <: AbstractSystem
     ps::Vector{Variable}
 end
 
-function NonlinearSystem(eqs)
+function NonlinearSystem(eqs;
+                         v_name = :Variable,
+                         dv_name = :DependentVariable,
+                         p_name = :Parameter)
     # Allow the use of :DependentVariable to make it seamless with DE use
-    dvs, vs, ps = extract_elements(eqs, (:DependentVariable, :Variable, :Parameter))
+    dvs, vs, ps = extract_elements(eqs, (dv_name, v_name, p_name))
     vs = [dvs;vs]
     NonlinearSystem(eqs, vs, ps)
 end

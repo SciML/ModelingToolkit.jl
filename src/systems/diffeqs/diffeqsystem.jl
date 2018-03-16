@@ -5,12 +5,20 @@ struct DiffEqSystem <: AbstractSystem
     vs::Vector{Variable}
     ps::Vector{Variable}
 end
-function DiffEqSystem(eqs)
-    ivs, dvs, vs, ps = extract_elements(eqs, (:IndependentVariable, :DependentVariable, :Variable, :Parameter))
+
+function DiffEqSystem(eqs; iv_name = :IndependentVariable,
+                           dv_name = :DependentVariable,
+                           v_name = :Variable,
+                           p_name = :Parameter)
+    ivs, dvs, vs, ps = extract_elements(eqs, (iv_name, dv_name, v_name, p_name))
     DiffEqSystem(eqs, ivs, dvs, vs, ps)
 end
-function DiffEqSystem(eqs, ivs)
-    dvs, vs, ps = extract_elements(eqs, (:DependentVariable, :Variable, :Parameter))
+
+function DiffEqSystem(eqs, ivs;
+                      dv_name = :DependentVariable,
+                      v_name = :Variable,
+                      p_name = :Parameter)
+    dvs, vs, ps = extract_elements(eqs, (dv_name, v_name, p_name))
     DiffEqSystem(eqs, ivs, dvs, vs, ps)
 end
 
