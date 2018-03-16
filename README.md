@@ -4,8 +4,8 @@
 [![Coverage Status](https://coveralls.io/repos/JuliaDiffEq/SciCompDSL.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/JuliaDiffEq/SciCompDSL.jl?branch=master)
 [![codecov.io](http://codecov.io/github/JuliaDiffEq/SciCompDSL.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaDiffEq/SciCompDSL.jl?branch=master)
 
-SciCompDSL.jl is an intermediate representation (IR) for computational graphs
-of scientific computing problems. Its purpose is to be a common target for
+SciCompDSL.jl is an intermediate representation (IR) of computational graphs
+for scientific computing problems. Its purpose is to be a common target for
 modeling DSLs in order to allow for a common platform for model inspection and
 transformation. It uses a tagged variable IR in order to allow specification of
 complex models and allow for transformations of models. Together, this is an
