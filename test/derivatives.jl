@@ -22,11 +22,11 @@ dpow2 = Derivative(^,[x, y],Val{2})
 @test dpow2 == x^y*log(x)
 
 
-eqs = [D*x ~ σ*(y-x),
-       D*y ~ x*(ρ-z)-y,
-       D*z ~ x*y - β*z]
-de = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
-jac = SciCompDSL.generate_nlsys_jacobian(de)
+eqs = [0 ~ σ*(y-x),
+       0 ~ x*(ρ-z)-y,
+       0 ~ x*y - β*z]
+sys = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
+jac = SciCompDSL.generate_nlsys_jacobian(sys)
 @test_broken jac[1,1] == -σ
 @test_broken jac[1,2] == σ
 @test_broken jac[1,3] == 0
