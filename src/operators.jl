@@ -12,14 +12,18 @@ Base.:*(D::Differential,x::Operation) = Operation(Derivative,Expression[x,D])
 function Base.:*(D::Differential,x::Variable)
     if D.x === x
         return Constant(1)
-    elseif x.subtype != :DependentVariable || D.x.subtype != :IndependentVariable
-        return Constant(0)
     else
         return Variable(x.name,x.subtype,x.value,x.value_type,D)
     end
 end
 Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x == D2.x
 
+"""
+expand_derivatives(O::Operation,constant_vars=[:DependentVariable])
+
+Expands the derivative operation on the operation, applying the chain rule
+and symbolically transforming the operation recrusively.
+"""
 function expand_derivatives(O::Operation)
     if O.op == Derivative
         #=

@@ -5,15 +5,19 @@ struct Variable <: Expression
     value
     value_type::DataType
     diff::Union{AbstractOperator,Void}
+    dependents::Vector{Variable}
 end
 
-Variable(name,subtype::Symbol=:Variable,value = nothing,value_type = typeof(value)) =
-                                 Variable(name,subtype,value,value_type,nothing)
+Variable(name,subtype::Symbol=:Variable,value = nothing,
+         value_type = typeof(value);dependents = Variable[]) =
+                                 Variable(name,subtype,value,value_type,nothing,dependents)
 Variable(name,args...) = Variable(name,:Variable,args...)
 Parameter(name,args...) = Variable(name,:Parameter,args...)
 Constant(value::Number) = Variable(Symbol(value),:Constant,value,typeof(value))
 Constant(name,value,args...) = Variable(name,:Constant,value,typeof(value))
-DependentVariable(name,args...) = Variable(name,:DependentVariable,args...)
+DependentVariable(name,args...;
+                  dependents=error("A dependence must be specified for a DependentVariable")) =
+                  Variable(name,:DependentVariable,args...;dependents=dependents)
 IndependentVariable(name,args...) = Variable(name,:IndependentVariable,args...)
 JumpVariable(name,rate,args...) = Variable(name,:JumpVariable,rate,typeof(rate),args...)
 NoiseVariable(name,args...) = Variable(name,:NoiseVariable,args...)
