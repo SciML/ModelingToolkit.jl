@@ -4,11 +4,12 @@
 [![Coverage Status](https://coveralls.io/repos/JuliaDiffEq/SciCompDSL.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/JuliaDiffEq/SciCompDSL.jl?branch=master)
 [![codecov.io](http://codecov.io/github/JuliaDiffEq/SciCompDSL.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaDiffEq/SciCompDSL.jl?branch=master)
 
-SciCompDSL.jl is a domain-specific language for scientific computing. It is used
-to build computational graphs as an intermediate representation (IR) of
-scientific computing problems. It uses a tagged variable IR in order to allow
-specification of complex models and allow for transformations of models. Together,
-this is an abstract form of a scientific model that is easy for humans to generate
+SciCompDSL.jl is an intermediate representation (IR) for computational graphs
+of scientific computing problems. Its purpose is to be a common target for
+modeling DSLs in order to allow for a common platform for model inspection and
+transformation. It uses a tagged variable IR in order to allow specification of
+complex models and allow for transformations of models. Together, this is an
+abstract form of a scientific model that is easy for humans to generate
 but also easy for programs to manipulate.
 
 #### Warning: This repository is a work-in-progress
