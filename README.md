@@ -4,16 +4,19 @@
 [![Coverage Status](https://coveralls.io/repos/JuliaDiffEq/SciCompDSL.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/JuliaDiffEq/SciCompDSL.jl?branch=master)
 [![codecov.io](http://codecov.io/github/JuliaDiffEq/SciCompDSL.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaDiffEq/SciCompDSL.jl?branch=master)
 
-SciCompDSL.jl is a domain-specific language for scientific computing. It is used
-to build computational graphs as an intermediate representation (IR) of
-scientific computing problems. It uses a tagged variable IR in order to allow
-specification of complex models and allow for transformations of models. Together,
-this is an abstract form of a scientific model that is easy for humans to generate
-but also easy for programs to manipulate.
+SciCompDSL.jl is an intermediate representation (IR) of computational graphs
+for scientific computing problems. Its purpose is to be a common target for
+modeling DSLs in order to allow for a common platform for model inspection and
+transformation. It uses a tagged variable IR in order to allow specification of
+complex models and allow for transformations of models. It has ways to plug into
+its function registration and derivative system so that way it can interact
+nicely with user-defined routines. Together, this is an abstract form of a
+scientific model that is easy for humans to generate but also easy for programs
+to manipulate.
 
 #### Warning: This repository is a work-in-progress
 
-## Introduction
+## Introduction by Examples
 
 ### Example: ODE
 
@@ -126,6 +129,95 @@ f = @eval eval(nlsys_func)
 f2 = (du,u) -> f(du,u,(10.0,26.0,2.33))
 ```
 
+## Core Principles
+
+The core idea behind SciCompDSL.jl is that mathematical equations require
+context, and thus any symbolic manipulations and full model specifications
+requires the ability to handle such context. When writing DSLs, this fact
+comes to light very quickly. Every DSL seems to lower to some intermediate
+representation from which the final result is computed, but this process means
+there's a lot of repeated ideas for every DSL that creates scientific computing
+objects like differential equations and nonlinear systems. By having a single
+common contexualized IR, this gives DSLs a target to write to so that way
+lower-level details like computation of system Jacobians can be disconnected
+from the DSL and its syntax, allowing for code-reuse between modeling packages
+and languages.
+
+In this section we define the core pieces of the IR and what they mean.
+
+### Variables
+
+The simplest piece of the IR is the `Variable`. The `Variable` is the
+context-aware single variable of the IR. Its fields are described as follows:
+
+- `name`: the name of the `Variable`. Note that this is not necessarily
+  the same as the name of the Julia variable. But this symbol itself is considered
+  the core identifier of the `Variable` in the sense of equality.
+- `value`: the value of the `Variable`. The meaning of the value can be
+  interpreted differently for different systems, but in most cases it's tied to
+  whatever value information would be required for the system to be well-defined
+  such as the initial condition of a differential equation.
+- `value_type`: the type that the values have to be. It's disconnected
+  from the `value` because in many cases the `value` may not be able to be
+  specified in advance even when we may already know the type. This can be used
+  to set units or denote a variable as being of higher precision.
+- `subtype`: the main denotation of context. Variables within systems
+  are grouped according to their `subtype`.
+- `diff`: the operator objects attached to the variable
+- `dependents`: the vector of variables on which the current variable
+  is dependent. For example, `u(t,x)` has dependents `[t,x]`. Derivatives thus
+  require this information in order to simplify down.
+- `flow`: a boolean that describes the connection behavior between systems,
+  whether it should connect to have summation to zero or equality.
+- `description`: a string description of the variable used for building
+  printouts and other descriptive outputs.
+- `domain`: a type which describes the domain in which the values of the variable
+  lives.
+- `size`: the size of the variable. By default it's `nothing`, denoting that the
+  variable is a scalar. Otherwise it's a tuple of numbers which describes the
+  size of the array for the variable.
+- `context`: this is an open field for DSLs to carry along more context
+  in the variables, but is not used in the systems themselves.
+
+### Operations
+
+Operations are the basic composition of variables and puts together the pieces
+with a function. The operator `~` is a special operator which denotes equality
+between the arguments.
+
+### Operators
+
+An operator is an object which modifies variables via `*`. It adds the operator
+to the `diff` field of the variable and changes the interpretation of the variable.
+The current operators are:
+
+- `Differential`: a differential denotes the derivative with respect to a given
+  variable. It can be expanded via `expand_derivatives` which symbolically
+  differentiates expressions recursively and cancels out appropriate constant
+  variables.
+
+### Systems
+
+A system is a collection of operations with expanded context. While different
+systems can have different constructors and interpretations, the general
+structure is as follows:
+
+- `eqs` is the first argument which is an array of `Operation` which describe
+  the system of equations.
+- Name to subtype mappings: these describe how variable `subtype`s are mapped
+  to the contexts of the system. For example, for a differential equation,
+  the dependent variable corresponds to given subtypes and then the `eqs` can
+  be analyzed knowing what the state variables are.
+- Variable names which do not fall into one of the system's core subtypes are
+  treated as intermediates which can be used for holding subcalculations and
+  other pieces like that.
+
+### Transformations
+
+Transformation functions send IR objects to like IR objects. These utilize the
+contextual information in a given `Operation`/`System` to build another
+`Operation`/`System`.
+
 ## Details
 
 ### Function Registration
@@ -144,8 +236,8 @@ nodes into the graph instead of tracing calls of `g` itself into `Operation`s.
 ### Adding Derivatives
 
 There is a large amount of derivatives pre-defined by
-[DiffRules.jl](https://github.com/JuliaDiff/DiffRules.jl). Note that the `Variable`
-type is defined as `<:Real`, and thus any functions which allow the use of real
+[DiffRules.jl](https://github.com/JuliaDiff/DiffRules.jl). Note that `Expression`
+types are defined as `<:Real`, and thus any functions which allow the use of real
 numbers can automatically be traced by the derivative mechanism. Thus for example:
 
 ```julia

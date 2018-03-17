@@ -15,10 +15,14 @@ function Base.:*(D::Differential,x::Variable)
     elseif x.subtype != :DependentVariable || D.x.subtype != :IndependentVariable
         return Constant(0)
     else
-        return Variable(x.name,x.subtype,x.value,x.value_type,D)
+        return Variable(x,D)
     end
 end
 Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x == D2.x
+
+Variable(x::Variable,D::Differential) = Variable(x.name,x.value,x.value_type,
+                x.subtype,D,x.dependents,x.description,x.flow,x.domain,
+                x.size,x.context)
 
 function expand_derivatives(O::Operation)
     if O.op == Derivative
