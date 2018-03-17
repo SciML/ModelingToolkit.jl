@@ -30,6 +30,8 @@ Parameter(name,args...;kwargs...) = Variable(name,args...;subtype=:Parameter,kwa
 Constant(value::Number) = Variable(Symbol(value),value,typeof(value);subtype=:Constant)
 Constant(name,args...;kwargs...) = Variable(name,args...;subtype=:Constant,kwargs...)
 DependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:DependentVariable,kwargs...)
+StateVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:StateVariable,kwargs...)
+ControlVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:ControlVariable,kwargs...)
 IndependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:IndependentVariable,kwargs...)
 JumpVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:JumpVariable,kwargs...)
 NoiseVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:NoiseVariable,kwargs...)
