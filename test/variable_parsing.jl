@@ -10,10 +10,13 @@ a1 = Variable(:a,1.0)
     b
 end
 
-@DVar x y=sin(1)+exp(1) z
-x1 = DependentVariable(:x)
-y1 = DependentVariable(:y, sin(1) + exp(1))
-z1 = DependentVariable(:z)
+@IVar t
+@DVar x(t)
+@DVar y(t)=sin(1)+exp(1)
+@DVar z(t)
+x1 = DependentVariable(:x,dependents = [t])
+y1 = DependentVariable(:y, sin(1) + exp(1),dependents = [t])
+z1 = DependentVariable(:z,dependents = [t])
 @test x1 == x
 @test y1 == y
 @test z1 == z

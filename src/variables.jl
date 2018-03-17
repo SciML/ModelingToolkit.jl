@@ -29,12 +29,32 @@ Variable(name,args...;kwargs...) = Variable(name,args...;subtype=:Variable,kwarg
 Parameter(name,args...;kwargs...) = Variable(name,args...;subtype=:Parameter,kwargs...)
 Constant(value::Number) = Variable(Symbol(value),value,typeof(value);subtype=:Constant)
 Constant(name,args...;kwargs...) = Variable(name,args...;subtype=:Constant,kwargs...)
-DependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:DependentVariable,kwargs...)
-StateVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:StateVariable,kwargs...)
-ControlVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:ControlVariable,kwargs...)
 IndependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:IndependentVariable,kwargs...)
-JumpVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:JumpVariable,kwargs...)
-NoiseVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:NoiseVariable,kwargs...)
+
+function DependentVariable(name,args...;dependents = [],kwargs...)
+    @assert !isempty(dependents)
+    Variable(name,args...;subtype=:DependentVariable,dependents=dependents,kwargs...)
+end
+
+function StateVariable(name,args...;dependents = [],kwargs...)
+    @assert !isempty(dependents)
+    Variable(name,args...;subtype=:StateVariable,dependents=dependents,kwargs...)
+end
+
+function ControlVariable(name,args...;dependents = [],kwargs...)
+    @assert !isempty(dependents)
+    Variable(name,args...;subtype=:ControlVariable,dependents=dependents,kwargs...)
+end
+
+function JumpVariable(name,args...;dependents = [],kwargs...)
+    @assert !isempty(dependents)
+    Variable(name,args...;subtype=:JumpVariable,dependents=dependents,kwargs...)
+end
+
+function NoiseVariable(name,args...;dependents = [],kwargs...)
+    @assert !isempty(dependents)
+    Variable(name,args...;subtype=:NoiseVariable,dependents=dependents,kwargs...)
+end
 
 export Variable,Parameter,Constant,DependentVariable,IndependentVariable,JumpVariable,NoiseVariable,
        @Var, @DVar, @IVar, @Param, @Const
@@ -109,28 +129,35 @@ function _parse_vars(macroname, fun, x)
     x = flatten_expr!(x)
     for _var in x
         iscall = typeof(_var) <: Expr && _var.head == :call
-        @show iscall
-        if iscall
-            dependents = Variable[:($(esc(d))) for d in _var.args[2:end]]
-            var = _var.args[1]
-        else
-            dependents = Variable[]
-            var = _var
-        end
-        issym    = var isa Symbol
-        isassign = issym ? false : var.head == :(=)
-        @assert issym || isassign "@$macroname expects a tuple of expressions!\nE.g. `@$macroname x y z=1`"
-        if issym
+        issym    = _var isa Symbol
+        isassign = issym ? false : _var.head == :(=)
+        @assert iscall || issym || isassign "@$macroname expects a tuple of expressions!\nE.g. `@$macroname x y z=1`"
+        if iscall || issym
+            if iscall
+                dependents = :([$(_var.args[2:end]...)])
+                var = _var.args[1]
+            else
+                dependents = Variable[]
+                var = _var
+            end
             lhs = var
             push!(lhss, lhs)
             expr = :( $lhs = $fun( Symbol($(String(lhs))) ,
                       dependents = $dependents))
         end
         if isassign
-            lhs = var.args[1]
-            rhs = var.args[2]
+            iscall = typeof(_var.args[1]) <: Expr && _var.args[1].head == :call
+            if iscall
+                dependents = :([$(_var.args[1].args[2:end]...)])
+                lhs = _var.args[1].args[1]
+            else
+                dependents = Variable[]
+                lhs = _var.args[1]
+            end
+            rhs = _var.args[2]
             push!(lhss, lhs)
-            expr = :( $lhs = $fun( Symbol($(String(lhs))) , $rhs))
+            expr = :( $lhs = $fun( Symbol($(String(lhs))) , $rhs,
+                      dependents = $dependents))
         end
         push!(ex.args, expr)
     end

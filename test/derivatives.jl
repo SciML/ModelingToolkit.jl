@@ -3,7 +3,7 @@ using Base.Test
 
 # Derivatives
 @IVar t
-@Var x y z
+@Var x(t) y(t) z(t)
 @Param σ ρ β
 @Deriv D'~t
 dsin = D*sin(t)

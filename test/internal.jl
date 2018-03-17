@@ -4,7 +4,7 @@ using Base.Test
 # `Expr`, `Number` -> `Operation`
 @IVar a
 @Param b
-@DVar x
+@DVar x(t)
 @Var y
 @test parse(Operation, 2) == 2
 expr = :(-inv(2sqrt(+($a, $b))))

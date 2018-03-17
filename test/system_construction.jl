@@ -2,8 +2,8 @@ using SciCompDSL
 using Base.Test
 
 # Define some variables
-@DVar x y z
 @IVar t
+@DVar x(t) y(t) z(t)
 @Deriv D'~t # Default of first derivative, Derivative(t,1)
 @Param σ ρ β
 @Const c=0
@@ -37,7 +37,7 @@ test_vars_extraction(de, de2)
 # Conversion to first-order ODEs #17
 @Deriv D3'''~t
 @Deriv D2''~t
-@DVar u u_tt u_t x_t
+@DVar u(t) u_tt(t) u_t(t) x_t(t)
 eqs = [D3*u ~ 2(D2*u) + D*u + D*x + 1
        D2*x ~ D*x + 2]
 de = DiffEqSystem(eqs, [t])

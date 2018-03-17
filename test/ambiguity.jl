@@ -1,8 +1,8 @@
 using SciCompDSL
 using Base.Test
 
-@DVar x y z
 @IVar t
+@DVar x(t) y(t) z(t)
 
 struct __MyType__ end
 Base.:~(::__MyType__,::Number) = 2
