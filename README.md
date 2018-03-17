@@ -28,8 +28,8 @@ variables, and parameters. Therefore we label them as follows:
 using SciCompDSL
 
 # Define some variables
-@DVar x y z
 @IVar t
+@DVar x(t) y(t) z(t)
 @Deriv D'~t
 @Param σ ρ β
 ```
@@ -275,8 +275,8 @@ is accessible via a function-based interface. This means that all macros are
 syntactic sugar in some form. For example, the variable construction:
 
 ```julia
-@DVar x y z
 @IVar t
+@DVar x(t) y(t) z(t)
 @Deriv D'~t
 @Param σ ρ β
 ```
@@ -284,10 +284,10 @@ syntactic sugar in some form. For example, the variable construction:
 is syntactic sugar for:
 
 ```julia
-x = DependentVariable(:x)
-y = DependentVariable(:y)
-z = DependentVariable(:z)
 t = IndependentVariable(:t)
+x = DependentVariable(:x,dependents = [t])
+y = DependentVariable(:y,dependents = [t])
+z = DependentVariable(:z,dependents = [t])
 D = Differential(t) # Default of first derivative, Derivative(t,1)
 σ = Parameter(:σ)
 ρ = Parameter(:ρ)
