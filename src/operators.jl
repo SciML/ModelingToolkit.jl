@@ -23,14 +23,34 @@ Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x ==
 Variable(x::Variable,D::Differential) = Variable(x.name,x.value,x.value_type,
                 x.subtype,D,x.dependents,x.description,x.flow,x.domain,
                 x.size,x.context)
-
-function expand_derivatives(O::Operation)
+function expand_derivatives(O::Operation, init_var=nothing)
     if O.op == Derivative
         #=
         diff_idxs = find(x->isequal(x,by.x),O.args)
         (diff_idxs != nothing || length(diff_idxs) > 1) && error("Derivatives of multi-argument functions require matching a unique argument.")
         idx = first(diff_idxs)
         =#
+        if O.args[1].op == +
+            D = Differential(init_var)
+            u1 = expand_derivatives(O.args[1].args[1], D) 
+            u2 = expand_derivatives(O.args[1].args[2], D)    
+            return u1+u2
+        elseif O.args[1].op == -
+            D = Differential(init_var)
+            u1 = expand_derivatives(O.args[1].args[1], D) 
+            u2 = expand_derivatives(O.args[1].args[2], D)
+            return u1-u2
+        elseif O.args[1].op == *
+            D = Differential(init_var)
+            u1 = expand_derivatives(O.args[1].args[1], D) 
+            u2 = expand_derivatives(O.args[1].args[2], D)
+            return u1*O.args[1].args[2]+u2*O.args[1].args[1]
+        elseif O.args[1].op == /
+            D = Differential(init_var)
+            u1 = expand_derivatives(O.args[1].args[1], D) 
+            u2 = expand_derivatives(O.args[1].args[2], D)
+            return (u1*O.args[1].args[2]-u2*O.args[1].args[1])/(O.args[1].args[2]*O.args[1].args[2])
+        end 
         i = 1
         if typeof(O.args[1].args[i]) == typeof(O.args[2].x) && isequal(O.args[1].args[i],O.args[2].x)
             Derivative(O.args[1],i)
@@ -45,6 +65,12 @@ function expand_derivatives(O::Operation)
         end
     end
 end
+
+function expand_derivatives(O::Operation, D::Differential)
+    exp_diff = D*O
+    expand_derivatives(exp_diff)
+end
+
 expand_derivatives(x::Variable) = x
 
 # Don't specialize on the function here
