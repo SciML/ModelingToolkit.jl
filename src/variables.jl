@@ -107,20 +107,30 @@ function _parse_vars(macroname, fun, x)
     #     z = exp(2)
     # end
     x = flatten_expr!(x)
-    for var in x
+    for _var in x
+        iscall = typeof(_var) <: Expr && _var.head == :call
+        @show iscall
+        if iscall
+            dependents = Variable[:($(esc(d))) for d in _var.args[2:end]]
+            var = _var.args[1]
+        else
+            dependents = Variable[]
+            var = _var
+        end
         issym    = var isa Symbol
         isassign = issym ? false : var.head == :(=)
         @assert issym || isassign "@$macroname expects a tuple of expressions!\nE.g. `@$macroname x y z=1`"
         if issym
             lhs = var
             push!(lhss, lhs)
-            expr = :( $lhs = $fun( Symbol($(String(lhs))) ) )
+            expr = :( $lhs = $fun( Symbol($(String(lhs))) ,
+                      dependents = $dependents))
         end
         if isassign
             lhs = var.args[1]
             rhs = var.args[2]
             push!(lhss, lhs)
-            expr = :( $lhs = $fun( Symbol($(String(lhs))) , $rhs) )
+            expr = :( $lhs = $fun( Symbol($(String(lhs))) , $rhs))
         end
         push!(ex.args, expr)
     end
