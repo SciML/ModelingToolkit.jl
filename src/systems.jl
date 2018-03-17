@@ -14,6 +14,12 @@ function DiffEqSystem(eqs, ivs)
     DiffEqSystem(eqs, ivs, dvs, vs, ps)
 end
 
+function ode_order_lowering(sys::DiffEqSystem; kwargs...)
+    eqs = sys.eqs
+    ivs = sys.ivs
+    eqs_lowered = ode_order_lowering(eqs; kwargs...)
+    DiffEqSystem(eqs_lowered, ivs)
+end
 ode_order_lowering(eqs; naming_scheme = "_") = ode_order_lowering!(deepcopy(eqs), naming_scheme)
 function ode_order_lowering!(eqs, naming_scheme)
     ind = findfirst(x->!(isintermediate(x)), eqs)

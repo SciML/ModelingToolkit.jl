@@ -38,10 +38,8 @@ test_vars_extraction(de, de2)
 @DVar u u_tt u_t x_t
 eqs = [D3*u ~ 2(D2*u) + D*u + D*x + 1
        D2*x ~ D*x + 2]
-neweqs = ode_order_lowering(eqs)
-de  = DiffEqSystem(neweqs, [t], [u,x,u_tt,u_t,x_t], Variable[], Variable[])
-de2 = DiffEqSystem(neweqs, [t])
-test_vars_extraction(de, de2)
+de = DiffEqSystem(eqs, [t])
+de = ode_order_lowering(de)
 lowered_eqs = [D*u_tt ~ 2u_tt + u_t + x_t + 1
                D*x_t  ~ x_t + 2
                D*u_t  ~ u_tt
@@ -58,7 +56,7 @@ function test_eqs(eqs1, eqs2)
     end
     @test eq
 end
-test_eqs(neweqs, lowered_eqs)
+test_eqs(de.eqs, lowered_eqs)
 
 # Internal calculations
 eqs = [a ~ y-x,
