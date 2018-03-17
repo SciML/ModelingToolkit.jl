@@ -1,9 +1,22 @@
+function lower_varname(var::Variable, naming_scheme; lower=false)
+    D = var.diff
+    D == nothing && return var
+    order = lower ? D.order-1 : D.order
+    lower_varname(var.name, D.x, order, var.subtype, naming_scheme)
+end
+function lower_varname(sym::Symbol, idv, order::Int, subtype::Symbol, naming_scheme)
+    order == 0 && return Variable(sym, subtype)
+    name = String(sym)*naming_scheme*String(idv.name)^order
+    Variable(name, subtype=subtype)
+end
+
 ode_order_lowering(eqs; naming_scheme = "_") = ode_order_lowering!(deepcopy(eqs), naming_scheme)
 function ode_order_lowering!(eqs, naming_scheme)
     ind = findfirst(x->!(isintermediate(x)), eqs)
     idv = extract_idv(eqs[ind])
     D   = Differential(idv, 1)
     sym_order = Dict{Symbol, Int}()
+    dv_name = eqs[1].args[1].subtype
     for eq in eqs
         isintermediate(eq) && continue
         sym, maxorder = extract_symbol_order(eq)
@@ -17,8 +30,8 @@ function ode_order_lowering!(eqs, naming_scheme)
     for sym in keys(sym_order)
         order = sym_order[sym]
         for o in (order-1):-1:1
-            lhs = D*varname(sym, idv, o-1, naming_scheme)
-            rhs = varname(sym, idv, o, naming_scheme)
+            lhs = D*lower_varname(sym, idv, o-1, dv_name, naming_scheme)
+            rhs = lower_varname(sym, idv, o, dv_name, naming_scheme)
             eq = Operation(==, [lhs, rhs])
             push!(eqs, eq)
         end
@@ -27,7 +40,7 @@ function ode_order_lowering!(eqs, naming_scheme)
 end
 
 function lhs_renaming!(eq, D, naming_scheme)
-    eq.args[1] = D*varname(eq.args[1], naming_scheme, lower=true)
+    eq.args[1] = D*lower_varname(eq.args[1], naming_scheme, lower=true)
     return eq
 end
 function rhs_renaming!(eq, naming_scheme)
@@ -36,7 +49,7 @@ function rhs_renaming!(eq, naming_scheme)
 end
 
 function _rec_renaming!(rhs, naming_scheme)
-    rhs isa Variable && rhs.diff != nothing && return varname(rhs, naming_scheme)
+    rhs isa Variable && rhs.diff != nothing && return lower_varname(rhs, naming_scheme)
     if rhs isa Operation
         args = rhs.args
         for i in eachindex(args)

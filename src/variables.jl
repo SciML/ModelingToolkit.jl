@@ -1,22 +1,36 @@
 # <: Real to make tracing easier. Maybe a bad idea?
 struct Variable <: Expression
     name::Symbol
-    subtype::Symbol
     value
     value_type::DataType
+    subtype::Symbol
     diff::Union{AbstractOperator,Void}
+    dependents::Vector{Variable}
+    description::String
+    flow::Bool
+    domain
+    context
 end
 
-Variable(name,subtype::Symbol=:Variable,value = nothing,value_type = typeof(value)) =
-                                 Variable(name,subtype,value,value_type,nothing)
-Variable(name,args...) = Variable(name,:Variable,args...)
-Parameter(name,args...) = Variable(name,:Parameter,args...)
-Constant(value::Number) = Variable(Symbol(value),:Constant,value,typeof(value))
-Constant(name,value,args...) = Variable(name,:Constant,value,typeof(value))
-DependentVariable(name,args...) = Variable(name,:DependentVariable,args...)
-IndependentVariable(name,args...) = Variable(name,:IndependentVariable,args...)
-JumpVariable(name,rate,args...) = Variable(name,:JumpVariable,rate,typeof(rate),args...)
-NoiseVariable(name,args...) = Variable(name,:NoiseVariable,args...)
+Variable(name,
+         value = nothing,
+         value_type = typeof(value);
+         subtype::Symbol=:Variable,
+         dependents::Vector{Variable} = Variable[],
+         flow::Bool = false,
+         description::String = "",
+         domain = nothing,
+         context = nothing) =
+         Variable(name,value,value_type,subtype,nothing,
+                  dependents,description,flow,domain,context)
+Variable(name,args...;kwargs...) = Variable(name,args...;subtype=:Variable,kwargs...)
+Parameter(name,args...;kwargs...) = Variable(name,args...;subtype=:Parameter,kwargs...)
+Constant(value::Number) = Variable(Symbol(value),value,typeof(value);subtype=:Constant)
+Constant(name,args...;kwargs...) = Variable(name,args...;subtype=:Constant,kwargs...)
+DependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:DependentVariable,kwargs...)
+IndependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:IndependentVariable,kwargs...)
+JumpVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:JumpVariable,kwargs...)
+NoiseVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:NoiseVariable,kwargs...)
 
 export Variable,Parameter,Constant,DependentVariable,IndependentVariable,JumpVariable,NoiseVariable,
        @Var, @DVar, @IVar, @Param, @Const
@@ -54,18 +68,6 @@ end
 
 extract_idv(eq) = eq.args[1].diff.x
 
-function varname(var::Variable, naming_scheme; lower=false)
-    D = var.diff
-    D == nothing && return var
-    order = lower ? D.order-1 : D.order
-    varname(var.name, D.x, order, naming_scheme)
-end
-function varname(sym::Symbol, idv, order::Int, naming_scheme)
-    order == 0 && return Variable(sym, :DependentVariable)
-    name = String(sym)*naming_scheme*String(idv.name)^order
-    Variable(name, :DependentVariable)
-end
-
 function extract_elements(ops, eltypes)
     elems = Dict{Symbol, Vector{Variable}}()
     names = Dict{Symbol, Set{Symbol}}()
@@ -84,9 +86,6 @@ function extract_elements!(op::AbstractOperation, elems, names)
         if arg isa Operation
             extract_elements!(arg, elems, names)
         elseif arg isa Variable && haskey(elems, arg.subtype) && !in(arg.name, names[arg.subtype])
-            if arg.subtype == :DependentVariable && arg.diff != nothing
-                arg = Variable(arg.name, arg.subtype)
-            end
             push!(names[arg.subtype], arg.name)
             push!(elems[arg.subtype], arg)
         end
