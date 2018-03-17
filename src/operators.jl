@@ -12,7 +12,7 @@ Base.:*(D::Differential,x::Operation) = Operation(Derivative,Expression[x,D])
 function Base.:*(D::Differential,x::Variable)
     if D.x === x
         return Constant(1)
-    elseif x.subtype != :DependentVariable || D.x.subtype != :IndependentVariable
+    elseif D.x ∉ x.dependents
         return Constant(0)
     else
         return Variable(x,D)
