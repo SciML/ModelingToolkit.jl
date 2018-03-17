@@ -208,6 +208,9 @@ structure is as follows:
   to the contexts of the system. For example, for a differential equation,
   the dependent variable corresponds to given subtypes and then the `eqs` can
   be analyzed knowing what the state variables are.
+- Variable names which do not fall into one of the system's core subtypes are
+  treated as intermediates which can be used for holding subcalculations and
+  other pieces like that.
 
 ### Transformations
 
@@ -233,8 +236,8 @@ nodes into the graph instead of tracing calls of `g` itself into `Operation`s.
 ### Adding Derivatives
 
 There is a large amount of derivatives pre-defined by
-[DiffRules.jl](https://github.com/JuliaDiff/DiffRules.jl). Note that the `Variable`
-type is defined as `<:Real`, and thus any functions which allow the use of real
+[DiffRules.jl](https://github.com/JuliaDiff/DiffRules.jl). Note that `Expression`
+types are defined as `<:Real`, and thus any functions which allow the use of real
 numbers can automatically be traced by the derivative mechanism. Thus for example:
 
 ```julia
