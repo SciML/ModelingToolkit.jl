@@ -4,6 +4,16 @@ struct DiffEqSystem <: AbstractSystem
     dvs::Vector{Variable}
     vs::Vector{Variable}
     ps::Vector{Variable}
+    iv_name::Symbol
+    dv_name::Symbol
+    p_name::Symbol
+end
+
+function DiffEqSystem(eqs, ivs, dvs, vs, ps)
+    iv_name = ivs[1].subtype
+    dv_name = dvs[1].subtype
+    p_name = isempty(ps) ? :Parameter : ps[1].subtype
+    DiffEqSystem(eqs, ivs, dvs, vs, ps, iv_name, dv_name, p_name)
 end
 
 function DiffEqSystem(eqs; iv_name = :IndependentVariable,
@@ -11,7 +21,7 @@ function DiffEqSystem(eqs; iv_name = :IndependentVariable,
                            v_name = :Variable,
                            p_name = :Parameter)
     ivs, dvs, vs, ps = extract_elements(eqs, (iv_name, dv_name, v_name, p_name))
-    DiffEqSystem(eqs, ivs, dvs, vs, ps)
+    DiffEqSystem(eqs, ivs, dvs, vs, ps, iv_name, dv_name, p_name)
 end
 
 function DiffEqSystem(eqs, ivs;
@@ -19,7 +29,7 @@ function DiffEqSystem(eqs, ivs;
                       v_name = :Variable,
                       p_name = :Parameter)
     dvs, vs, ps = extract_elements(eqs, (dv_name, v_name, p_name))
-    DiffEqSystem(eqs, ivs, dvs, vs, ps)
+    DiffEqSystem(eqs, ivs, dvs, vs, ps, ivs[1].subtype, dv_name, p_name)
 end
 
 function generate_ode_function(sys::DiffEqSystem)

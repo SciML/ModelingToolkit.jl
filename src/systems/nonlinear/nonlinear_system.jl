@@ -2,6 +2,15 @@ struct NonlinearSystem <: AbstractSystem
     eqs::Vector{Operation}
     vs::Vector{Variable}
     ps::Vector{Variable}
+    v_name::Vector{Symbol}
+    p_name::Symbol
+end
+
+function NonlinearSystem(eqs, vs, ps;
+                         v_name = :Variable,
+                         dv_name = :DependentVariable,
+                         p_name = :Parameter)
+    NonlinearSystem(eqs, vs, ps, [v_name,dv_name], p_name)
 end
 
 function NonlinearSystem(eqs;
@@ -11,7 +20,7 @@ function NonlinearSystem(eqs;
     # Allow the use of :DependentVariable to make it seamless with DE use
     dvs, vs, ps = extract_elements(eqs, (dv_name, v_name, p_name))
     vs = [dvs;vs]
-    NonlinearSystem(eqs, vs, ps)
+    NonlinearSystem(eqs, vs, ps, [v_name,dv_name], p_name)
 end
 
 function generate_nlsys_function(sys::NonlinearSystem)
