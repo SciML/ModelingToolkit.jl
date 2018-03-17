@@ -16,7 +16,7 @@ function Base.:*(D::Differential,x::Variable)
         return Constant(0)
     else
         return Variable(x.name,x.value,x.value_type,x.subtype,D,
-                        x.dependents,x.description,x.flow,x.domain,x.context)
+                        x.dependents,x.description,x.flow,x.domain,x.size,x.context)
     end
 end
 Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x == D2.x

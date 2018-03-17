@@ -9,6 +9,7 @@ struct Variable <: Expression
     description::String
     flow::Bool
     domain
+    size
     context
 end
 
@@ -20,9 +21,10 @@ Variable(name,
          flow::Bool = false,
          description::String = "",
          domain = nothing,
+         size = nothing,
          context = nothing) =
          Variable(name,value,value_type,subtype,nothing,
-                  dependents,description,flow,domain,context)
+                  dependents,description,flow,domain,size,context)
 Variable(name,args...;kwargs...) = Variable(name,args...;subtype=:Variable,kwargs...)
 Parameter(name,args...;kwargs...) = Variable(name,args...;subtype=:Parameter,kwargs...)
 Constant(value::Number) = Variable(Symbol(value),value,typeof(value);subtype=:Constant)
