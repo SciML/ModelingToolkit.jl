@@ -10,6 +10,12 @@ function lower_varname(sym::Symbol, idv, order::Int, subtype::Symbol, naming_sch
     Variable(name, subtype=subtype)
 end
 
+function ode_order_lowering(sys::DiffEqSystem; kwargs...)
+    eqs = sys.eqs
+    ivs = sys.ivs
+    eqs_lowered = ode_order_lowering(eqs; kwargs...)
+    DiffEqSystem(eqs_lowered, ivs)
+end
 ode_order_lowering(eqs; naming_scheme = "_") = ode_order_lowering!(deepcopy(eqs), naming_scheme)
 function ode_order_lowering!(eqs, naming_scheme)
     ind = findfirst(x->!(isintermediate(x)), eqs)
