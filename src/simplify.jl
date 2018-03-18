@@ -36,7 +36,7 @@ function _simplify_constants(O)
         idxs = find(x->typeof(x)<:Variable && isequal(x,Constant(0)),O.args)
         _O = Operation(O.op,O.args[1:length(O.args) .∉ (idxs,)])
         if isempty(_O.args)
-            return _O
+            return Constant(0)
         elseif length(_O.args) == 1
             return _O.args[1]
         else

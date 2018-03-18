@@ -21,18 +21,22 @@ dpow2 = Derivative(^,[x, y],Val{2})
 @test dpow1 == y*x^(y-1)
 @test dpow2 == x^y*log(x)
 
+d1 = D*(sin(t)*t)
+d2 = D*(sin(t)*cos(t))
+@test expand_derivatives(d1) == t*cos(t)+sin(t)
+@test expand_derivatives(d2) == cos(t)*cos(t)+sin(t)*-sin(t)
 
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 sys = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
 jac = SciCompDSL.generate_nlsys_jacobian(sys)
-@test_broken jac[1,1] == -σ
-@test_broken jac[1,2] == σ
-@test_broken jac[1,3] == 0
+@test jac[1,1] == σ*-1
+@test jac[1,2] == σ
+@test jac[1,3] == 0
 @test jac[2,1] == ρ-z
-@test_broken jac[2,2] == -1
-@test_broken jac[2,3] == -x
+@test jac[2,2] == -1
+@test jac[2,3] == x*-1
 @test jac[3,1] == y
-@test_broken jac[3,2] == x
-@test_broken jac[3,3] == -β
+@test jac[3,2] == x
+@test jac[3,3] == -1*β

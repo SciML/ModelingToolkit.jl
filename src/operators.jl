@@ -26,19 +26,9 @@ Variable(x::Variable,D::Differential) = Variable(x.name,x.value,x.value_type,
 
 function expand_derivatives(O::Operation)
     if O.op == Derivative
-        #=
-        diff_idxs = find(x->isequal(x,by.x),O.args)
-        (diff_idxs != nothing || length(diff_idxs) > 1) && error("Derivatives of multi-argument functions require matching a unique argument.")
-        idx = first(diff_idxs)
-        =#
-        i = 1
-        if typeof(O.args[1].args[i]) == typeof(O.args[2].x) && isequal(O.args[1].args[i],O.args[2].x)
-            Derivative(O.args[1],i)
-        else
-            D = Differential(O.args[2].x)
-            cr_exp = D*O.args[1].args[i]
-            Derivative(O.args[1],i) * expand_derivatives(cr_exp)
-        end
+        D = O.args[2]
+        o = O.args[1]
+        simplify_constants(sum(i->Derivative(o,i)*expand_derivatives(D*o.args[i]),1:length(o.args)))
     else
         for i in 1:length(O.args)
             O.args[i] = expand_derivatives(O.args[i])

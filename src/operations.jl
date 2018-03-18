@@ -6,7 +6,7 @@ end
 
 # Recursive ==
 function Base.:(==)(x::Operation,y::Operation)
-    x.op == y.op && all(isequal.(x.args,y.args))
+    x.op == y.op && length(x.args) == length(y.args) && all(isequal.(x.args,y.args))
 end
 Base.:(==)(x::Operation,y::Number) = false
 Base.:(==)(x::Number,y::Operation) = false

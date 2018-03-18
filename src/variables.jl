@@ -65,6 +65,14 @@ function Base.:(==)(x::Variable,y::Variable)
     x.value_type == y.value_type && x.diff == y.diff
 end
 
+function Base.:(==)(x::Variable,y::Number)
+    x == Constant(y)
+end
+
+function Base.:(==)(x::Number,y::Variable)
+    Constant(x) == y
+end
+
 function Base.Expr(x::Variable)
     if x.diff == nothing
         return :($(x.name))
