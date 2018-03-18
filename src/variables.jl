@@ -8,7 +8,7 @@ struct Variable <: Expression
     dependents::Vector{Variable}
     description::String
     flow::Bool
-    domain
+    domain::AbstractDomain
     size
     context
 end
