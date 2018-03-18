@@ -15,15 +15,14 @@ eqs = [D*x ~ σ*(y-x),
        D*z ~ x*y - β*z]
 de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
 SciCompDSL.generate_ode_function(de)
-jac = SciCompDSL.generate_ode_jacobian(de,false)
-jac = SciCompDSL.generate_ode_jacobian(de)
+jac_expr = SciCompDSL.generate_ode_jacobian(de)
+jac = SciCompDSL.calculate_jacobian(de)
 f = DiffEqFunction(de)
 I - jac
-@test_broken inv(jac)
+@test_broken inv(I - jac)
 
 # Differential equation with automatic extraction of variables on rhs
 de2 = DiffEqSystem(eqs, [t])
-
 
 function test_vars_extraction(de, de2)
     for el in (:ivs, :dvs, :vs, :ps)
@@ -67,8 +66,7 @@ eqs = [a ~ y-x,
        D*z ~ x*y - β*z]
 de = DiffEqSystem(eqs,[t],[x,y,z],[a],[σ,ρ,β])
 SciCompDSL.generate_ode_function(de)
-jac = SciCompDSL.generate_ode_jacobian(de,false)
-jac = SciCompDSL.generate_ode_jacobian(de)
+jac = SciCompDSL.calculate_jacobian(de)
 f = DiffEqFunction(de)
 
 # Define a nonlinear system
@@ -95,7 +93,6 @@ eqs = [0 ~ σ*(y-x),
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs)
 nlsys_func = SciCompDSL.generate_nlsys_function(ns)
-jac = SciCompDSL.generate_nlsys_jacobian(ns,false)
 jac = SciCompDSL.generate_nlsys_jacobian(ns)
 f = @eval eval(nlsys_func)
 
@@ -107,5 +104,4 @@ eqs = [a ~ y-x,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
 nlsys_func = SciCompDSL.generate_nlsys_function(ns)
-jac = SciCompDSL.generate_nlsys_jacobian(ns,false)
 jac = SciCompDSL.generate_nlsys_jacobian(ns)

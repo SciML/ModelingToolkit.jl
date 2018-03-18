@@ -55,12 +55,11 @@ function build_equals_expr(eq)
     end
 end
 
-function generate_ode_jacobian(sys::DiffEqSystem,simplify=true)
-    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.dvs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
+function calculate_jacobian(sys::DiffEqSystem,simplify=true)
     diff_idxs = map(eq->eq.args[1].diff !=nothing,sys.eqs)
     diff_exprs = sys.eqs[diff_idxs]
     rhs = [eq.args[2] for eq in diff_exprs]
+    # Handle intermediate calculations by substitution
     calcs = sys.eqs[.!(diff_idxs)]
     for i in 1:length(calcs)
         find_replace!.(rhs,calcs[i].args[1],calcs[i].args[2])
@@ -71,6 +70,18 @@ function generate_ode_jacobian(sys::DiffEqSystem,simplify=true)
         sys_exprs = Expression[simplify_constants(expr) for expr in sys_exprs]
     end
     sys_exprs
+end
+
+function generate_ode_jacobian(sys::DiffEqSystem,simplify=true)
+    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.dvs)]
+    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
+    diff_idxs = map(eq->eq.args[1].diff !=nothing,sys.eqs)
+    diff_exprs = sys.eqs[diff_idxs]
+    jac = calculate_jacobian(sys,simplify)
+    jac_exprs = [:(J[$i,$j] = $(Expr(jac[i,j]))) for i in 1:size(jac,1), j in 1:size(jac,2)]
+    exprs = vcat(var_exprs,param_exprs,vec(jac_exprs))
+    block = expr_arr_to_block(exprs)
+    :((J,u,p,t)->$(block))
 end
 
 function DiffEqBase.DiffEqFunction(sys::DiffEqSystem)
