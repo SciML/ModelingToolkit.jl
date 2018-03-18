@@ -8,6 +8,7 @@ abstract type Expression <: Number end
 abstract type AbstractOperation <: Expression end
 abstract type AbstractOperator <: Expression end
 abstract type AbstractSystem end
+abstract type AbstractDomain end
 
 include("variables.jl")
 
@@ -23,6 +24,7 @@ include("systems/diffeqs/diffeqsystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
 include("systems/nonlinear/nonlinear_system.jl")
 include("function_registration.jl")
+include("domains.jl")
 include("simplify.jl")
 include("utils.jl")
 
