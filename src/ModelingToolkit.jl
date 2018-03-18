@@ -1,4 +1,4 @@
-module SciCompDSL
+module ModelingToolkit
 
 using DiffEqBase
 import MacroTools: splitdef, combinedef

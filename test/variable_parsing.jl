@@ -1,4 +1,4 @@
-using SciCompDSL
+using ModelingToolkit
 using Base.Test
 
 @Var a=1.0 b

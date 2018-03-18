@@ -1,4 +1,4 @@
-using SciCompDSL
+using ModelingToolkit
 using Base.Test
 
 # Define some variables
@@ -14,9 +14,9 @@ eqs = [D*x ~ σ*(y-x),
        D*y ~ x*(ρ-z)-y,
        D*z ~ x*y - β*z]
 de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
-SciCompDSL.generate_ode_function(de)
-jac_expr = SciCompDSL.generate_ode_jacobian(de)
-jac = SciCompDSL.calculate_jacobian(de)
+ModelingToolkit.generate_ode_function(de)
+jac_expr = ModelingToolkit.generate_ode_jacobian(de)
+jac = ModelingToolkit.calculate_jacobian(de)
 f = DiffEqFunction(de)
 W = I - jac
 simplify_constants.(inv(W))
@@ -65,8 +65,8 @@ eqs = [a ~ y-x,
        D*y ~ x*(ρ-z)-y,
        D*z ~ x*y - β*z]
 de = DiffEqSystem(eqs,[t],[x,y,z],[a],[σ,ρ,β])
-SciCompDSL.generate_ode_function(de)
-jac = SciCompDSL.calculate_jacobian(de)
+ModelingToolkit.generate_ode_function(de)
+jac = ModelingToolkit.calculate_jacobian(de)
 f = DiffEqFunction(de)
 
 # Define a nonlinear system
@@ -81,7 +81,7 @@ for el in (:vs, :ps)
     @test names2 == names
 end
 
-SciCompDSL.generate_nlsys_function(ns)
+ModelingToolkit.generate_nlsys_function(ns)
 
 # Now nonlinear system with only variables
 @Var x y z
@@ -92,8 +92,8 @@ eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs)
-nlsys_func = SciCompDSL.generate_nlsys_function(ns)
-jac = SciCompDSL.generate_nlsys_jacobian(ns)
+nlsys_func = ModelingToolkit.generate_nlsys_function(ns)
+jac = ModelingToolkit.generate_nlsys_jacobian(ns)
 f = @eval eval(nlsys_func)
 
 # Intermediate calculations
@@ -103,6 +103,6 @@ eqs = [a ~ y-x,
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
-nlsys_func = SciCompDSL.generate_nlsys_function(ns)
-jac = SciCompDSL.calculate_jacobian(ns)
-jac = SciCompDSL.generate_nlsys_jacobian(ns)
+nlsys_func = ModelingToolkit.generate_nlsys_function(ns)
+jac = ModelingToolkit.calculate_jacobian(ns)
+jac = ModelingToolkit.generate_nlsys_jacobian(ns)

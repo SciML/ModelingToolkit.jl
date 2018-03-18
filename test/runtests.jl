@@ -1,4 +1,4 @@
-using SciCompDSL, Base.Test
+using ModelingToolkit, Base.Test
 
 @testset "Parsing Test" begin include("variable_parsing.jl") end
 @testset "Basic Variables and Operations" begin include("basic_variables_and_operations.jl") end

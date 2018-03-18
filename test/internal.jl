@@ -1,4 +1,4 @@
-using SciCompDSL
+using ModelingToolkit
 using Base.Test
 
 # `Expr`, `Number` -> `Operation`

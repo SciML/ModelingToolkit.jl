@@ -1,4 +1,4 @@
-The SciCompDSL.jl package is licensed under the MIT "Expat" License:
+The ModelingToolkit.jl package is licensed under the MIT "Expat" License:
 
 > Copyright (c) 2018: Christopher Rackauckas.
 >

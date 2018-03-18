@@ -1,10 +1,10 @@
-# SciCompDSL.jl
+# ModelingToolkit.jl
 
-[![Build Status](https://travis-ci.org/JuliaDiffEq/SciCompDSL.jl.svg?branch=master)](https://travis-ci.org/JuliaDiffEq/SciCompDSL.jl)
-[![Coverage Status](https://coveralls.io/repos/JuliaDiffEq/SciCompDSL.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/JuliaDiffEq/SciCompDSL.jl?branch=master)
-[![codecov.io](http://codecov.io/github/JuliaDiffEq/SciCompDSL.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaDiffEq/SciCompDSL.jl?branch=master)
+[![Build Status](https://travis-ci.org/JuliaDiffEq/ModelingToolkit.jl.svg?branch=master)](https://travis-ci.org/JuliaDiffEq/ModelingToolkit.jl)
+[![Coverage Status](https://coveralls.io/repos/JuliaDiffEq/ModelingToolkit.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/JuliaDiffEq/ModelingToolkit.jl?branch=master)
+[![codecov.io](http://codecov.io/github/JuliaDiffEq/ModelingToolkit.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaDiffEq/ModelingToolkit.jl?branch=master)
 
-SciCompDSL.jl is an intermediate representation (IR) of computational graphs
+ModelingToolkit.jl is an intermediate representation (IR) of computational graphs
 for scientific computing problems. Its purpose is to be a common target for
 modeling DSLs in order to allow for a common platform for model inspection and
 transformation. It uses a tagged variable IR in order to allow specification of
@@ -25,7 +25,7 @@ system, we need to differentiate between our dependent variables, independent
 variables, and parameters. Therefore we label them as follows:
 
 ```julia
-using SciCompDSL
+using ModelingToolkit
 
 # Define some variables
 @IVar t
@@ -57,7 +57,7 @@ This can then generate the function. For example, we can see the
 generated code via:
 
 ```julia
-SciCompDSL.generate_ode_function(de)
+ModelingToolkit.generate_ode_function(de)
 
 ## Which returns:
 :((du, u, p, t)->begin
@@ -100,14 +100,14 @@ eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs)
-nlsys_func = SciCompDSL.generate_nlsys_function(ns)
+nlsys_func = ModelingToolkit.generate_nlsys_function(ns)
 ```
 
 which generates:
 
 ```julia
-(du, u, p)->begin  # C:\Users\Chris\.julia\v0.6\SciCompDSL\src\systems.jl, line 51:
-        begin  # C:\Users\Chris\.julia\v0.6\SciCompDSL\src\utils.jl, line 2:
+(du, u, p)->begin  # C:\Users\Chris\.julia\v0.6\ModelingToolkit\src\systems.jl, line 51:
+        begin  # C:\Users\Chris\.julia\v0.6\ModelingToolkit\src\utils.jl, line 2:
             y = u[1]
             x = u[2]
             z = u[3]
@@ -131,7 +131,7 @@ f2 = (du,u) -> f(du,u,(10.0,26.0,2.33))
 
 ## Core Principles
 
-The core idea behind SciCompDSL.jl is that mathematical equations require
+The core idea behind ModelingToolkit.jl is that mathematical equations require
 context, and thus any symbolic manipulations and full model specifications
 requires the ability to handle such context. When writing DSLs, this fact
 comes to light very quickly. Every DSL seems to lower to some intermediate
@@ -255,7 +255,7 @@ to better scale to larger systems. You can define derivatives for your own
 function via the dispatch:
 
 ```julia
-SciCompDSL.Derivative(::typeof(my_function),args,::Type{Val{i}})
+ModelingToolkit.Derivative(::typeof(my_function),args,::Type{Val{i}})
 ```
 
 where `i` means that it's the derivative of the `i`th argument. `args` is the
@@ -265,7 +265,7 @@ You should return an `Operation` for the derivative of your function.
 For example, `sin(t)`'s derivative (by `t`) is given by the following:
 
 ```julia
-SciCompDSL.Derivative(::typeof(sin),args,::Type{Val{1}}) = cos(args[1])
+ModelingToolkit.Derivative(::typeof(sin),args,::Type{Val{1}}) = cos(args[1])
 ```
 
 ### Macro-free Usage
@@ -306,14 +306,14 @@ eqs = [a ~ y-x,
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
-nlsys_func = SciCompDSL.generate_nlsys_function(ns)
+nlsys_func = ModelingToolkit.generate_nlsys_function(ns)
 ```
 
 expands to:
 
 ```julia
-:((du, u, p)->begin  # C:\Users\Chris\.julia\v0.6\SciCompDSL\src\systems.jl, line 85:
-            begin  # C:\Users\Chris\.julia\v0.6\SciCompDSL\src\utils.jl, line 2:
+:((du, u, p)->begin  # C:\Users\Chris\.julia\v0.6\ModelingToolkit\src\systems.jl, line 85:
+            begin  # C:\Users\Chris\.julia\v0.6\ModelingToolkit\src\utils.jl, line 2:
                 x = u[1]
                 y = u[2]
                 z = u[3]
