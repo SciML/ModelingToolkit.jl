@@ -37,14 +37,10 @@ function generate_nlsys_function(sys::NonlinearSystem)
     :((du,u,p)->$(block))
 end
 
-function generate_nlsys_jacobian(sys::NonlinearSystem,simplify=true)
-    var_exprs = [:($(sys.vs[i].name) = u[$i]) for i in 1:length(sys.vs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
-
+function calculate_jacobian(sys::NonlinearSystem,simplify=true)
     sys_idxs = map(eq->isequal(eq.args[1],Constant(0)),sys.eqs)
     sys_eqs = sys.eqs[sys_idxs]
     calc_eqs = sys.eqs[.!(sys_idxs)]
-    sys_exprs = [:($(Symbol("resid[$i]")) = $(sys_eqs[i].args[2])) for i in eachindex(sys_eqs)]
     rhs = [eq.args[2] for eq in sys_eqs]
 
     for i in 1:length(calc_eqs)
@@ -57,6 +53,16 @@ function generate_nlsys_jacobian(sys::NonlinearSystem,simplify=true)
         sys_exprs = Expression[simplify_constants(expr) for expr in sys_exprs]
     end
     sys_exprs
+end
+
+function generate_nlsys_jacobian(sys::NonlinearSystem,simplify=true)
+    var_exprs = [:($(sys.vs[i].name) = u[$i]) for i in 1:length(sys.vs)]
+    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
+    jac = calculate_jacobian(sys,simplify)
+    jac_exprs = [:(J[$i,$j] = $(Expr(jac[i,j]))) for i in 1:size(jac,1), j in 1:size(jac,2)]
+    exprs = vcat(var_exprs,param_exprs,vec(jac_exprs))
+    block = expr_arr_to_block(exprs)
+    :((J,u,p,t)->$(block))
 end
 
 export NonlinearSystem

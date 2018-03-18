@@ -104,4 +104,5 @@ eqs = [a ~ y-x,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
 nlsys_func = SciCompDSL.generate_nlsys_function(ns)
+jac = SciCompDSL.calculate_jacobian(ns)
 jac = SciCompDSL.generate_nlsys_jacobian(ns)

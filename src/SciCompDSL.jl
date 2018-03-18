@@ -15,6 +15,8 @@ Base.promote_rule(::Type{T},::Type{T2}) where {T<:Number,T2<:Expression} = Expre
 Base.one(::Type{T}) where T<:Expression = Constant(1)
 Base.zero(::Type{T}) where T<:Expression = Constant(0)
 
+function caclulate_jacobian end
+
 include("operations.jl")
 include("operators.jl")
 include("systems/diffeqs/diffeqsystem.jl")
