@@ -4,6 +4,8 @@ struct DiscreteDomain <: AbstractDomain
     length::Int
 end
 
+struct Reals <: AbstractDomain end
+
 struct Interval{T} <: AbstractDomain
   start::T
   stop::T
@@ -15,4 +17,4 @@ end
 
 Base.:*(x::AbstractDomain...) = ProductDomain((x...))
 
-export DiscreteDomain, Interval, ProductDomain
+export Reals, DiscreteDomain, Interval, ProductDomain
