@@ -57,3 +57,7 @@ function find_replace!(O::Operation,x::Variable,y::Expression)
         end
     end
 end
+
+# For inv
+Base.convert(::Type{Operation},x::Int) = Operation(identity,Expression[Constant(x)])
+Base.convert(::Type{Operation},x::Variable) = Operation(identity,Expression[x])
