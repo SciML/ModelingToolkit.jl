@@ -100,26 +100,38 @@ end
 
 extract_idv(eq) = eq.args[1].diff.x
 
-function extract_elements(ops, eltypes)
+function extract_elements(ops, targetmap, default = nothing)
     elems = Dict{Symbol, Vector{Variable}}()
     names = Dict{Symbol, Set{Symbol}}()
-    for el in eltypes
-        elems[el] = Vector{Variable}()
-        names[el] = Set{Symbol}()
+    if default == nothing
+        targets =  unique(collect(values(targetmap)))
+    else
+        targets = [unique(collect(values(targetmap))), default]
+    end
+    for target in targets
+        elems[target] = Vector{Variable}()
+        names[target] = Set{Symbol}()
     end
     for op in ops
-        extract_elements!(op, elems, names)
+        extract_elements!(op, elems, names, targetmap, default)
     end
-    Tuple(elems[el] for el in eltypes)
+    Tuple(elems[target] for target in targets)
 end
 # Walk the tree recursively and push variables into the right set
-function extract_elements!(op::AbstractOperation, elems, names)
+function extract_elements!(op::AbstractOperation, elems, names, targetmap, default)
     for arg in op.args
         if arg isa Operation
-            extract_elements!(arg, elems, names)
-        elseif arg isa Variable && haskey(elems, arg.subtype) && !in(arg.name, names[arg.subtype])
-            push!(names[arg.subtype], arg.name)
-            push!(elems[arg.subtype], arg)
+                extract_elements!(arg, elems, names, targetmap, default)
+        elseif arg isa Variable
+            if default == nothing
+                target = haskey(targetmap, arg.subtype) ? targetmap[arg.subtype] : continue
+            else
+                target = haskey(targetmap, arg.subtype) ? targetmap[arg.subtype] : default
+            end
+            if !in(arg.name, names[target])
+                push!(names[target], arg.name)
+                push!(elems[target], arg)
+            end
         end
     end
 end

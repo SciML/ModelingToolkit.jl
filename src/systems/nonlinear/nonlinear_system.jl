@@ -18,8 +18,8 @@ function NonlinearSystem(eqs;
                          dv_name = :DependentVariable,
                          p_name = :Parameter)
     # Allow the use of :DependentVariable to make it seamless with DE use
-    dvs, vs, ps = extract_elements(eqs, (dv_name, v_name, p_name))
-    vs = [dvs;vs]
+    targetmap = Dict(v_name => v_name, dv_name => v_name, p_name => p_name)
+    vs, ps = extract_elements(eqs, targetmap)
     NonlinearSystem(eqs, vs, ps, [v_name,dv_name], p_name)
 end
 
