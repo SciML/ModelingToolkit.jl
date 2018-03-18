@@ -26,6 +26,11 @@ Variable(name,
          Variable(name,value,value_type,subtype,nothing,
                   dependents,description,flow,domain,size,context)
 Variable(name,args...;kwargs...) = Variable(name,args...;subtype=:Variable,kwargs...)
+
+Variable(name,x::Variable) = Variable(name,x.value,x.value_type,
+                x.subtype,D,x.dependents,x.description,x.flow,x.domain,
+                x.size,x.context)
+
 Parameter(name,args...;kwargs...) = Variable(name,args...;subtype=:Parameter,kwargs...)
 Constant(value::Number) = Variable(Symbol(value),value,typeof(value);subtype=:Constant)
 Constant(name,args...;kwargs...) = Variable(name,args...;subtype=:Constant,kwargs...)
