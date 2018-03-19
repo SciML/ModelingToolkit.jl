@@ -15,9 +15,6 @@ Base.:(==)(x::Void,y::Operation) = false
 Base.:(==)(x::Variable,y::Operation) = y == Operation(identity,Expression[x])
 Base.:(==)(x::Operation,y::Variable) = x == Operation(identity,Expression[y])
 
-Base.convert(::Type{Operation},x::Variable) = Operation(identity,x)
-
-
 # Don't recurse inversion for Jacobians
 Base.inv(x::Operation) = x
 
