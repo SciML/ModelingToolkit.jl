@@ -20,7 +20,7 @@ Variable(name,
          dependents::Vector{Variable} = Variable[],
          flow::Bool = false,
          description::String = "",
-         domain = nothing,
+         domain = Reals(),
          size = nothing,
          context = nothing) =
          Variable(name,value,value_type,subtype,nothing,
