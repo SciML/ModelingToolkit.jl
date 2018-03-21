@@ -7,6 +7,8 @@ import IterTools: product
 abstract type Expression <: Number end
 abstract type AbstractOperation <: Expression end
 abstract type AbstractOperator <: Expression end
+abstract type AbstractComponent <: Expression end
+abstract type AbstractConnection <: Expression end
 abstract type AbstractSystem end
 abstract type AbstractDomain end
 
@@ -25,9 +27,10 @@ include("systems/diffeqs/diffeqsystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
 include("systems/nonlinear/nonlinear_system.jl")
 include("function_registration.jl")
+include("connections.jl")
 include("simplify.jl")
 include("utils.jl")
 
-export Operation, Expression, AbstractOperator
+export Operation, Expression, AbstractOperator, AbstractComponent, AbstractDomain
 export @register
 end # module
