@@ -44,6 +44,8 @@ function _simplify_constants(O)
         end
     elseif O.op == identity
         return O.args[1]
+    elseif Symbol(O.op) == :- && length(O.args) == 1
+        return Operation(*,Expression[-1,O.args[1]])
     else
         return O
     end

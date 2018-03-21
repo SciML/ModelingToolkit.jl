@@ -11,7 +11,7 @@ expand_derivatives(dsin)
 
 @test expand_derivatives(dsin) == cos(t)
 dcsch = D*csch(t)
-@test expand_derivatives(dcsch) == Operation(-coth(t)*csch(t))
+@test expand_derivatives(dcsch) == Operation(-1*coth(t)*csch(t))
 # Chain rule
 dsinsin = D*sin(sin(t))
 @test expand_derivatives(dsinsin) == cos(sin(t))*cos(t)
@@ -24,7 +24,7 @@ dpow2 = Derivative(^,[x, y],Val{2})
 d1 = D*(sin(t)*t)
 d2 = D*(sin(t)*cos(t))
 @test expand_derivatives(d1) == t*cos(t)+sin(t)
-@test expand_derivatives(d2) == cos(t)*cos(t)+sin(t)*-sin(t)
+@test expand_derivatives(d2) == cos(t)*cos(t)+sin(t)*(-1*sin(t))
 
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,

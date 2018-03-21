@@ -22,5 +22,3 @@ D*x ~ -σ*(y-x)
 D*y ~ x*(ρ-z)-sin(y)
 
 @test D*t == Constant(1)
-null_op = 0*t
-@test simplify_constants(null_op) == Constant(0)
