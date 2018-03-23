@@ -5,7 +5,7 @@ using Base.Test
 @IVar t
 @DVar x(t) y(t) z(t)
 @Deriv D'~t # Default of first derivative, Derivative(t,1)
-@Param σ ρ β
+@Param σ ρ β a b c d
 @Const c=0
 @Var a
 
@@ -37,12 +37,12 @@ test_vars_extraction(de, de2)
 
 #Lotka Volterra test for jacobians
 eqs = [D*x ~ a*x-b*x*y,
-       D*y ~c*x*y-d*y]
+       D*y ~ c*x*y-d*y]
 sys = DiffEqSystem(eqs,[t],[x,y],Variable[],[a,b,c,d])
-param_jac = ModelingToolkit.calculate_jacobian(de,de.ps)
-dvars_jac = ModelingToolkit.calculate_jacobian(de,de.dvs)
-@test param_jac == [y - x  Constant(0)  Constant(0); Constant(0)  DependentVariable(x)  Constant(0);Constant(0) Constant(0) -1 * z]
-@test dvars_jac == [σ * -1 Parameter(σ)  Constant(0);ρ - z Constant(-1) x * -1;DependentVariable(y)  DependentVariable(x) -1 * β]
+param_jac = ModelingToolkit.calculate_jacobian(sys,sys.ps)
+dvars_jac = ModelingToolkit.calculate_jacobian(sys,sys.dvs)
+@test param_jac == [x -1 * (y * x) Constant(0) Constant(0); Constant(0) Constant(0) y * x -1 * y]
+@test dvars_jac == [a + -1 * (y * b) -1 * (b * x); y * c c * x + -1 * d]
 
 
 # Conversion to first-order ODEs #17
