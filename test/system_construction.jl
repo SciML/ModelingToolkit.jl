@@ -17,12 +17,14 @@ de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
 ModelingToolkit.generate_ode_function(de)
 jac_expr = ModelingToolkit.generate_ode_jacobian(de)
 jac = ModelingToolkit.calculate_jacobian(de)
+jac_dvars = ModelingToolkit.calculate_jacobian(de,de.dvs)
 f = DiffEqFunction(de)
 W = I - jac
 simplify_constants.(inv(W))
 
 # Differential equation with automatic extraction of variables on rhs
 de2 = DiffEqSystem(eqs, [t])
+@test jac == jac_dvars
 
 function test_vars_extraction(de, de2)
     for el in (:ivs, :dvs, :vs, :ps)
@@ -32,6 +34,16 @@ function test_vars_extraction(de, de2)
     end
 end
 test_vars_extraction(de, de2)
+
+#Lotka Volterra test for jacobians
+eqs = [D*x ~ a*x-b*x*y,
+       D*y ~c*x*y-d*y]
+sys = DiffEqSystem(eqs,[t],[x,y],Variable[],[a,b,c,d])
+param_jac = ModelingToolkit.calculate_jacobian(de,de.ps)
+dvars_jac = ModelingToolkit.calculate_jacobian(de,de.dvs)
+@test param_jac == [y - x  Constant(0)  Constant(0); Constant(0)  DependentVariable(x)  Constant(0);Constant(0) Constant(0) -1 * z]
+@test dvars_jac == [σ * -1 Parameter(σ)  Constant(0);ρ - z Constant(-1) x * -1;DependentVariable(y)  DependentVariable(x) -1 * β]
+
 
 # Conversion to first-order ODEs #17
 @Deriv D3'''~t
