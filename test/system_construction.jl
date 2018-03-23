@@ -6,8 +6,6 @@ using Base.Test
 @DVar x(t) y(t) z(t)
 @Deriv D'~t # Default of first derivative, Derivative(t,1)
 @Param σ ρ β a b c d
-@Const c=0
-@Var a
 
 # Define a differential equation
 eqs = [D*x ~ σ*(y-x),
