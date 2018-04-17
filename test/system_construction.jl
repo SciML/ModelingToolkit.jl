@@ -5,9 +5,7 @@ using Base.Test
 @IVar t
 @DVar x(t) y(t) z(t)
 @Deriv D'~t # Default of first derivative, Derivative(t,1)
-@Param σ ρ β
-@Const c=0
-@Var a
+@Param σ ρ β a b c d
 
 # Define a differential equation
 eqs = [D*x ~ σ*(y-x),
@@ -17,12 +15,14 @@ de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
 ModelingToolkit.generate_ode_function(de)
 jac_expr = ModelingToolkit.generate_ode_jacobian(de)
 jac = ModelingToolkit.calculate_jacobian(de)
+jac_dvars = ModelingToolkit.calculate_jacobian(de,de.dvs)
 f = DiffEqFunction(de)
 W = I - jac
 iW = simplify_constants.(inv(W))
 
 # Differential equation with automatic extraction of variables on rhs
 de2 = DiffEqSystem(eqs, [t])
+@test jac == jac_dvars
 
 function test_vars_extraction(de, de2)
     for el in (:ivs, :dvs, :vs, :ps)
@@ -32,6 +32,16 @@ function test_vars_extraction(de, de2)
     end
 end
 test_vars_extraction(de, de2)
+
+#Lotka Volterra test for jacobians
+eqs = [D*x ~ a*x-b*x*y,
+       D*y ~ c*x*y-d*y]
+sys = DiffEqSystem(eqs,[t],[x,y],Variable[],[a,b,c,d])
+param_jac = ModelingToolkit.calculate_jacobian(sys,sys.ps)
+dvars_jac = ModelingToolkit.calculate_jacobian(sys,sys.dvs)
+@test param_jac == [x -1 * (y * x) Constant(0) Constant(0); Constant(0) Constant(0) y * x -1 * y]
+@test dvars_jac == [a + -1 * (y * b) -1 * (b * x); y * c c * x + -1 * d]
+
 
 # Conversion to first-order ODEs #17
 @Deriv D3'''~t
