@@ -18,8 +18,7 @@ ModelingToolkit.generate_ode_function(de)
 jac_expr = ModelingToolkit.generate_ode_jacobian(de)
 jac = ModelingToolkit.calculate_jacobian(de)
 f = DiffEqFunction(de)
-W = I - jac
-iW = simplify_constants.(inv(W))
+ModelingToolkit.generate_ode_iW(de)
 
 # Differential equation with automatic extraction of variables on rhs
 de2 = DiffEqSystem(eqs, [t])

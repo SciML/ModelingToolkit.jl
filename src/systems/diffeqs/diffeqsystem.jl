@@ -1,4 +1,4 @@
-struct DiffEqSystem <: AbstractSystem
+mutable struct DiffEqSystem <: AbstractSystem
     eqs::Vector{Operation}
     ivs::Vector{Variable}
     dvs::Vector{Variable}
@@ -7,13 +7,14 @@ struct DiffEqSystem <: AbstractSystem
     iv_name::Symbol
     dv_name::Symbol
     p_name::Symbol
+    jac::Matrix{Expression}
 end
 
 function DiffEqSystem(eqs, ivs, dvs, vs, ps)
     iv_name = ivs[1].subtype
     dv_name = dvs[1].subtype
     p_name = isempty(ps) ? :Parameter : ps[1].subtype
-    DiffEqSystem(eqs, ivs, dvs, vs, ps, iv_name, dv_name, p_name)
+    DiffEqSystem(eqs, ivs, dvs, vs, ps, iv_name, dv_name, p_name, Matrix{Expression}(0,0))
 end
 
 function DiffEqSystem(eqs; iv_name = :IndependentVariable,
@@ -23,7 +24,7 @@ function DiffEqSystem(eqs; iv_name = :IndependentVariable,
     targetmap =  Dict(iv_name => iv_name, dv_name => dv_name, v_name => v_name,
                        p_name => p_name)
     ivs, dvs, vs, ps = extract_elements(eqs, targetmap)
-    DiffEqSystem(eqs, ivs, dvs, vs, ps, iv_name, dv_name, p_name)
+    DiffEqSystem(eqs, ivs, dvs, vs, ps, iv_name, dv_name, p_name, Matrix{Expression}(0,0))
 end
 
 function DiffEqSystem(eqs, ivs;
@@ -32,7 +33,7 @@ function DiffEqSystem(eqs, ivs;
                       p_name = :Parameter)
     targetmap =  Dict(dv_name => dv_name, v_name => v_name, p_name => p_name)
     dvs, vs, ps = extract_elements(eqs, targetmap)
-    DiffEqSystem(eqs, ivs, dvs, vs, ps, ivs[1].subtype, dv_name, p_name)
+    DiffEqSystem(eqs, ivs, dvs, vs, ps, ivs[1].subtype, dv_name, p_name, Matrix{Expression}(0,0))
 end
 
 function generate_ode_function(sys::DiffEqSystem)
@@ -81,10 +82,40 @@ function generate_ode_jacobian(sys::DiffEqSystem,simplify=true)
     diff_idxs = map(eq->eq.args[1].diff !=nothing,sys.eqs)
     diff_exprs = sys.eqs[diff_idxs]
     jac = calculate_jacobian(sys,simplify)
+    sys.jac = jac
     jac_exprs = [:(J[$i,$j] = $(Expr(jac[i,j]))) for i in 1:size(jac,1), j in 1:size(jac,2)]
     exprs = vcat(var_exprs,param_exprs,vec(jac_exprs))
     block = expr_arr_to_block(exprs)
     :((J,u,p,t)->$(block))
+end
+
+const _γ_ = Variable(:_γ_)
+
+function generate_ode_iW(sys::DiffEqSystem,simplify=true)
+    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.dvs)]
+    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
+    diff_idxs = map(eq->eq.args[1].diff !=nothing,sys.eqs)
+    diff_exprs = sys.eqs[diff_idxs]
+    jac = sys.jac
+    iW = inv(I - _γ_*jac)
+
+    if simplify
+        iW = simplify_constants.(iW)
+    end
+
+    iW_t = inv(I/_γ_ - jac)
+    if simplify
+        iW_t = simplify_constants.(iW_t)
+    end
+
+    iW_exprs = [:(iW[$i,$j] = $(Expr(iW[i,j]))) for i in 1:size(iW,1), j in 1:size(iW,2)]
+    exprs = vcat(var_exprs,param_exprs,vec(iW_exprs))
+    block = expr_arr_to_block(exprs)
+
+    iW_t_exprs = [:(iW[$i,$j] = $(Expr(iW_t[i,j]))) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]
+    exprs = vcat(var_exprs,param_exprs,vec(iW_t_exprs))
+    block2 = expr_arr_to_block(exprs)
+    :((iW,u,p,_γ_,t)->$(block)),:((iW,u,p,_γ_,t)->$(block2))
 end
 
 function DiffEqBase.DiffEqFunction(sys::DiffEqSystem)
