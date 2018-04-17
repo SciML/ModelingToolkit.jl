@@ -11,7 +11,39 @@ function simplify_constants(O::Operation)
     _O
 end
 
+const TREE_SHRINK_OPS = [:*,:+]
+
 function _simplify_constants(O)
+    # Tree shrinking
+    for cur_op in TREE_SHRINK_OPS
+      if Symbol(O.op) == cur_op
+        # Shrink tree
+        if any(x->typeof(x)<:Operation && Symbol(x.op) == cur_op ,O.args)
+            idxs = find(x->typeof(x)<:Operation && Symbol(x.op) == cur_op,O.args)
+            keep_idxs = 1:length(O.args) .∉ (idxs,)
+            args = Vector{Expression}[O.args[i].args for i in idxs]
+            push!(args,O.args[keep_idxs])
+            return Operation(O.op,vcat(args...))
+        # Collapse constants
+        elseif length(find(x->typeof(x)<:Variable && x.subtype == :Constant ,O.args)) > 1
+            idxs = find(x->typeof(x)<:Variable && x.subtype == :Constant ,O.args)
+            other_idxs = 1:length(O.args) .∉ (idxs,)
+            if cur_op == :*
+              new_var = Constant(prod(x->x.value,O.args[idxs]))
+            elseif cur_op == :+
+              new_var = Constant(sum(x->x.value,O.args[idxs]))
+            end
+            new_args = O.args[other_idxs]
+            push!(new_args,new_var)
+            if length(new_args) > 1
+              return Operation(O.op,new_args)
+            else
+              return new_args[1]
+            end
+        end
+      end
+    end
+
     if Symbol(O.op) == :*
         # If any variable is `Constant(0)`, zero the whole thing
         # If any variable is `Constant(1)`, remove that `Constant(1)` unless
@@ -31,7 +63,9 @@ function _simplify_constants(O)
         else
             return O
         end
-    elseif Symbol(O.op) == :+ && any(x->typeof(x)<:Variable && (isequal(x,Constant(0)) || isequal(x,Constant(-0))),O.args)
+    elseif (Symbol(O.op) == :+ || Symbol(O.op) == :-)  &&
+           any(x->typeof(x)<:Variable && (isequal(x,Constant(0)) ||
+           isequal(x,Constant(-0))),O.args)
         # If there are Constant(0)s in a big `+` expression, get rid of them
         idxs = find(x->typeof(x)<:Variable && (isequal(x,Constant(0)) || isequal(x,Constant(-0))),O.args)
         _O = Operation(O.op,O.args[1:length(O.args) .∉ (idxs,)])
