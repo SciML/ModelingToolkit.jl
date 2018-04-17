@@ -79,7 +79,9 @@ function Base.:(==)(x::Number,y::Variable)
 end
 
 function Base.Expr(x::Variable)
-    if x.diff == nothing
+    if x.subtype == :Constant
+        return x.value
+    elseif x.diff == nothing
         return :($(x.name))
     else
         return :($(Symbol("$(x.name)_$(x.diff.x.name)")))
