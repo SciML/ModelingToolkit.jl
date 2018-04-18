@@ -88,7 +88,7 @@ function _simplify_constants(O,shorten_tree = true)
     end
     return O
 end
-simplify_constants(x::Variable,y) = x
-_simplify_constants(x::Variable,y) = x
+simplify_constants(x::Variable,y=false) = x
+_simplify_constants(x::Variable,y=false) = x
 
 export simplify_constants
