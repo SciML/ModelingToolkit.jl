@@ -12,11 +12,8 @@ Base.:(==)(x::Operation,y::Number) = false
 Base.:(==)(x::Number,y::Operation) = false
 Base.:(==)(x::Operation,y::Void) = false
 Base.:(==)(x::Void,y::Operation) = false
-Base.:(==)(x::Variable,y::Operation) = y == Operation(identity,Expression[x])
-Base.:(==)(x::Operation,y::Variable) = x == Operation(identity,Expression[y])
-
-# Don't recurse inversion for Jacobians
-Base.inv(x::Operation) = x
+Base.:(==)(x::Variable,y::Operation) = false
+Base.:(==)(x::Operation,y::Variable) = false
 
 function Base.Expr(O::Operation)
     Expr(:call, Symbol(O.op), Expr.(O.args)...)
