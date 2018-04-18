@@ -1,5 +1,4 @@
-# <: Real to make tracing easier. Maybe a bad idea?
-struct Variable <: Expression
+mutable struct Variable <: Expression
     name::Symbol
     value
     value_type::DataType

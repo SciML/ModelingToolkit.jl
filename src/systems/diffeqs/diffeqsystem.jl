@@ -89,21 +89,26 @@ function generate_ode_jacobian(sys::DiffEqSystem,simplify=true)
     :((J,u,p,t)->$(block))
 end
 
-const _γ_ = Variable(:_γ_)
-
 function generate_ode_iW(sys::DiffEqSystem,simplify=true)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.dvs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
     diff_idxs = map(eq->eq.args[1].diff !=nothing,sys.eqs)
     diff_exprs = sys.eqs[diff_idxs]
     jac = sys.jac
-    iW = inv(I - _γ_*jac)
+
+    gam = Variable(:gam)
+
+    W = I - gam*jac
+    W = SMatrix{size(W,1),size(W,2)}(W)
+    iW = inv(W)
 
     if simplify
         iW = simplify_constants.(iW)
     end
 
-    iW_t = inv(I/_γ_ - jac)
+    W = inv(I/gam - jac)
+    W = SMatrix{size(W,1),size(W,2)}(W)
+    iW_t = inv(W)
     if simplify
         iW_t = simplify_constants.(iW_t)
     end
@@ -115,7 +120,7 @@ function generate_ode_iW(sys::DiffEqSystem,simplify=true)
     iW_t_exprs = [:(iW[$i,$j] = $(Expr(iW_t[i,j]))) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]
     exprs = vcat(var_exprs,param_exprs,vec(iW_t_exprs))
     block2 = expr_arr_to_block(exprs)
-    :((iW,u,p,_γ_,t)->$(block)),:((iW,u,p,_γ_,t)->$(block2))
+    :((iW,u,p,gam,t)->$(block)),:((iW,u,p,gam,t)->$(block2))
 end
 
 function DiffEqBase.DiffEqFunction(sys::DiffEqSystem)

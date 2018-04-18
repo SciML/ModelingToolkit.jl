@@ -1,6 +1,8 @@
 module ModelingToolkit
 
 using DiffEqBase
+using StaticArrays
+
 import MacroTools: splitdef, combinedef
 import IterTools: product
 
