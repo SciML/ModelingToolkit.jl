@@ -103,21 +103,26 @@ function generate_ode_iW(sys::DiffEqSystem,simplify=true)
     iW = inv(W)
 
     if simplify
-        iW = simplify_constants.(iW)
+        #iW = simplify_constants.(iW)
+        iW = horner.(Expr.(iW))
     end
 
-    W = inv(I/gam - jac)
-    W = SMatrix{size(W,1),size(W,2)}(W)
-    iW_t = inv(W)
+    W = I/gam - jac
+    #W = SMatrix{size(W,1),size(W,2)}(W)
+    #iW_t = inv(W)
+    iW_t = Algebra.inv(Expr.(W))
     if simplify
-        iW_t = simplify_constants.(iW_t)
+        #iW_t = simplify_constants.(iW_t)
+        iW_t = horner.(iW_t)
     end
 
-    iW_exprs = [:(iW[$i,$j] = $(Expr(iW[i,j]))) for i in 1:size(iW,1), j in 1:size(iW,2)]
+    #iW_exprs = [:(iW[$i,$j] = $(Expr(iW[i,j]))) for i in 1:size(iW,1), j in 1:size(iW,2)]
+    iW_exprs = [:(iW[$i,$j] = $(iW[i,j])) for i in 1:size(iW,1), j in 1:size(iW,2)]
     exprs = vcat(var_exprs,param_exprs,vec(iW_exprs))
     block = expr_arr_to_block(exprs)
 
-    iW_t_exprs = [:(iW[$i,$j] = $(Expr(iW_t[i,j]))) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]
+    #iW_t_exprs = [:(iW[$i,$j] = $(Expr(iW_t[i,j]))) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]
+    iW_t_exprs = [:(iW[$i,$j] = $(iW_t[i,j])) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]
     exprs = vcat(var_exprs,param_exprs,vec(iW_t_exprs))
     block2 = expr_arr_to_block(exprs)
     :((iW,u,p,gam,t)->$(block)),:((iW,u,p,gam,t)->$(block2))

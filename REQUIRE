@@ -5,3 +5,4 @@ DiffEqBase
 DiffRules
 SpecialFunctions
 NaNMath
+Reduce

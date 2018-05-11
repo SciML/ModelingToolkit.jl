@@ -19,6 +19,10 @@ function Base.Expr(O::Operation)
     Expr(:call, Symbol(O.op), Expr.(O.args)...)
 end
 
+function Reduce.RExpr(O::Operation)
+    RExpr(Expr(O))
+end
+
 Base.show(io::IO,O::Operation) = print(io,string(Expr(O)))
 
 # Bigger printing

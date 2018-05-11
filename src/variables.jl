@@ -87,6 +87,10 @@ function Base.Expr(x::Variable)
     end
 end
 
+function Reduce.RExpr(x::Variable)
+    return RExpr(Expr(x))
+end
+
 function Base.show(io::IO, A::Variable)
     if A.subtype == :Constant
         print(io,"Constant($(A.value))")

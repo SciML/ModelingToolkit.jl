@@ -2,9 +2,15 @@ module ModelingToolkit
 
 using DiffEqBase
 using StaticArrays
+using Reduce
 
 import MacroTools: splitdef, combinedef
 import IterTools: product
+import Reduce: RExpr
+
+Algebra.operator(:\,:inv,:identity)
+Algebra.rlet(:(identity(~x))=>:x)
+Algebra.rlet(:(inv(~x))=>:(x^(-1)))
 
 abstract type Expression <: Number end
 abstract type AbstractOperation <: Expression end
