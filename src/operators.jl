@@ -7,6 +7,10 @@ Differential(x) = Differential(x,1)
 Base.show(io::IO, D::Differential) = print(io,"($(D.x),$(D.order))")
 Base.Expr(D::Differential) = :($(Symbol("D_$(D.x.name)_$(D.order)")))
 
+@require Reduce begin
+    Reduce.RExpr(D::Differential) = RExpr(Expr(D))
+end
+
 function Derivative end
 Base.:*(D::Differential,x::Operation) = Operation(Derivative,Expression[x,D])
 function Base.:*(D::Differential,x::Variable)

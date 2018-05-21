@@ -95,29 +95,37 @@ function generate_ode_iW(sys::DiffEqSystem,simplify=true)
     diff_idxs = map(eq->eq.args[1].diff !=nothing,sys.eqs)
     diff_exprs = sys.eqs[diff_idxs]
     jac = sys.jac
-
     gam = Variable(:gam)
-
     W = I - gam*jac
-    W = SMatrix{size(W,1),size(W,2)}(W)
-    iW = inv(W)
-
-    if simplify
-        iW = simplify_constants.(iW)
+    iW = if Requires.loaded(:Reduce)
+        horner.(Algebra.inv(Expr.(W)))
+    else
+        W = SMatrix{size(W,1),size(W,2)}(W)
+        inv(W)
+        simplify ? simplify_constants.(inv(W)) : inv(W)
+    end
+    
+    W = I/gam - jac
+    iW_t = if Requires.loaded(:Reduce)
+        horner.(Algebra.inv(Expr.(W)))
+    else
+        W = SMatrix{size(W,1),size(W,2)}(W)
+        simplify ? simplify_constants.(inv(W)) : inv(W)
     end
 
-    W = inv(I/gam - jac)
-    W = SMatrix{size(W,1),size(W,2)}(W)
-    iW_t = inv(W)
-    if simplify
-        iW_t = simplify_constants.(iW_t)
+    iW_exprs = if Requires.loaded(:Reduce)
+        [:(iW[$i,$j] = $(iW[i,j])) for i in 1:size(iW,1), j in 1:size(iW,2)]
+    else
+        [:(iW[$i,$j] = $(Expr(iW[i,j]))) for i in 1:size(iW,1), j in 1:size(iW,2)]
     end
-
-    iW_exprs = [:(iW[$i,$j] = $(Expr(iW[i,j]))) for i in 1:size(iW,1), j in 1:size(iW,2)]
     exprs = vcat(var_exprs,param_exprs,vec(iW_exprs))
     block = expr_arr_to_block(exprs)
 
-    iW_t_exprs = [:(iW[$i,$j] = $(Expr(iW_t[i,j]))) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]
+    iW_t_exprs = if Requires.loaded(:Reduce)
+        [:(iW[$i,$j] = $(iW_t[i,j])) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]
+    else
+        [:(iW[$i,$j] = $(Expr(iW_t[i,j]))) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]
+    end
     exprs = vcat(var_exprs,param_exprs,vec(iW_t_exprs))
     block2 = expr_arr_to_block(exprs)
     :((iW,u,p,gam,t)->$(block)),:((iW,u,p,gam,t)->$(block2))
