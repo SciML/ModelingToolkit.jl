@@ -59,6 +59,15 @@ function build_equals_expr(eq)
     end
 end
 
+"""
+    expr2mk(sys::DiffEqSystem,expr)
+
+Takes an `Expr` AST and converts it to a `ModelingToolkit.Operation` with variables from the corresponding `DiffEqSystem` provided.
+"""
+function expr2mk(sys::DiffEqSystem,expr)
+    eval(Expr(:block,[:($(Expr(v))=$v) for v ∈ [sys.ivs;sys.dvs;sys.vs;sys.ps]]...,expr))
+end
+
 function calculate_jacobian(sys::DiffEqSystem,simplify=true)
     diff_idxs = map(eq->eq.args[1].diff !=nothing,sys.eqs)
     diff_exprs = sys.eqs[diff_idxs]
@@ -68,10 +77,16 @@ function calculate_jacobian(sys::DiffEqSystem,simplify=true)
     for i in 1:length(calcs)
         find_replace!.(rhs,calcs[i].args[1],calcs[i].args[2])
     end
-    sys_exprs = calculate_jacobian(rhs,sys.dvs)
-    sys_exprs = Expression[expand_derivatives(expr) for expr in sys_exprs]
-    if simplify
-        sys_exprs = Expression[simplify_constants(expr) for expr in sys_exprs]
+    sys_exprs = if Requires.loaded(:Reduce)
+        expr2mk.(sys,mat_jacobian(Expr.(rhs),Expr.(sys.dvs)))
+    else
+        calculate_jacobian(rhs,sys.dvs)
+    end
+    if !Requires.loaded(:Reduce)
+        sys_exprs = Expression[expand_derivatives(expr) for expr in sys_exprs]
+        if simplify
+            sys_exprs = Expression[simplify_constants(expr) for expr in sys_exprs]
+        end
     end
     sys_exprs
 end
@@ -94,26 +109,35 @@ function generate_ode_iW(sys::DiffEqSystem,simplify=true)
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
     diff_idxs = map(eq->eq.args[1].diff !=nothing,sys.eqs)
     diff_exprs = sys.eqs[diff_idxs]
-    jac = sys.jac
+    red = Requires.loaded(:Reduce)
+    jac = red ? RExpr.(sys.jac) : sys.jac
     gam = Variable(:gam)
-    W = I - gam*jac
-    iW = if Requires.loaded(:Reduce)
-        horner.(Algebra.inv(Expr.(W)))
+    RI = red ? RExpr(eye(Any,length(jac[:,1]))) : I
+    W = if red
+        Algebra.:-(RI,Algebra.:*(:gam,jac))
+    else
+        I - gam*jac
+    end
+    iW = if red
+        horner.(mat(parse(Algebra.inv(W))))
     else
         W = SMatrix{size(W,1),size(W,2)}(W)
-        inv(W)
         simplify ? simplify_constants.(inv(W)) : inv(W)
     end
     
-    W = I/gam - jac
-    iW_t = if Requires.loaded(:Reduce)
-        horner.(Algebra.inv(Expr.(W)))
+    W = if red
+        Algebra.:-(Algebra.:/(RI,:gam),jac)
+    else
+        I/gam - jac
+    end
+    iW_t = if red
+        horner.(mat(parse(Algebra.inv(W))))
     else
         W = SMatrix{size(W,1),size(W,2)}(W)
         simplify ? simplify_constants.(inv(W)) : inv(W)
     end
 
-    iW_exprs = if Requires.loaded(:Reduce)
+    iW_exprs = if red
         [:(iW[$i,$j] = $(iW[i,j])) for i in 1:size(iW,1), j in 1:size(iW,2)]
     else
         [:(iW[$i,$j] = $(Expr(iW[i,j]))) for i in 1:size(iW,1), j in 1:size(iW,2)]
@@ -121,7 +145,7 @@ function generate_ode_iW(sys::DiffEqSystem,simplify=true)
     exprs = vcat(var_exprs,param_exprs,vec(iW_exprs))
     block = expr_arr_to_block(exprs)
 
-    iW_t_exprs = if Requires.loaded(:Reduce)
+    iW_t_exprs = if red
         [:(iW[$i,$j] = $(iW_t[i,j])) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]
     else
         [:(iW[$i,$j] = $(Expr(iW_t[i,j]))) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]

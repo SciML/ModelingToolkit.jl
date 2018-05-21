@@ -9,7 +9,9 @@ import IterTools: product
 
 @require Reduce begin
     using Reduce
+    using ReduceLinAlg
     import Reduce: RExpr
+    Reduce.Rational(false)
     Algebra.operator(:\,:inv,:identity)
     Algebra.rlet(:(identity(~x))=>:x)
     Algebra.rlet(:(inv(~x))=>:(x^(-1)))

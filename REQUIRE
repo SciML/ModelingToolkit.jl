@@ -6,4 +6,5 @@ DiffRules
 SpecialFunctions
 NaNMath
 Reduce
+ReduceLinAlg
 Requires
