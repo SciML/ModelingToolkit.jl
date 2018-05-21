@@ -87,8 +87,10 @@ function Base.Expr(x::Variable)
     end
 end
 
-function Reduce.RExpr(x::Variable)
-    return RExpr(Expr(x))
+@require Reduce begin
+    function Reduce.RExpr(x::Variable)
+        return RExpr(Expr(x))
+    end
 end
 
 function Base.show(io::IO, A::Variable)
