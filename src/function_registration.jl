@@ -49,3 +49,5 @@ end
 
 # ifelse
 @register Base.ifelse(cond,t,f)
+
+^(a::Expresion,b::T) where T <: Number = NaNMath.pow(a,b)
