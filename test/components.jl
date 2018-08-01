@@ -1,5 +1,5 @@
 using ModelingToolkit
-using Base.Test
+using Test
 
 struct Lorenz <: AbstractComponent
   x::Variable

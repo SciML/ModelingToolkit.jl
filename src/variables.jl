@@ -3,7 +3,7 @@ mutable struct Variable <: Expression
     value
     value_type::DataType
     subtype::Symbol
-    diff::Union{AbstractOperator,Void}
+    diff::Union{AbstractOperator,Nothing}
     dependents::Vector{Variable}
     description::String
     flow::Bool

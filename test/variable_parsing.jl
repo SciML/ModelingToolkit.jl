@@ -1,5 +1,5 @@
 using ModelingToolkit
-using Base.Test
+using Test
 
 @Var a=1.0 b
 a1 = Variable(:a,1.0)

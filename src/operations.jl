@@ -10,8 +10,8 @@ function Base.:(==)(x::Operation,y::Operation)
 end
 Base.:(==)(x::Operation,y::Number) = false
 Base.:(==)(x::Number,y::Operation) = false
-Base.:(==)(x::Operation,y::Void) = false
-Base.:(==)(x::Void,y::Operation) = false
+Base.:(==)(x::Operation,y::Nothing) = false
+Base.:(==)(x::Nothing,y::Operation) = false
 Base.:(==)(x::Variable,y::Operation) = false
 Base.:(==)(x::Operation,y::Variable) = false
 

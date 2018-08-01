@@ -1,5 +1,5 @@
 using ModelingToolkit
-using Base.Test
+using Test
 
 @IVar t
 @DVar x(t) y(t) z(t)

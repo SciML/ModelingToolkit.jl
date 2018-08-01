@@ -1,5 +1,5 @@
 using ModelingToolkit
-using Base.Test
+using Test
 
 # Derivatives
 @IVar t

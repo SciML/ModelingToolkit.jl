@@ -1,5 +1,5 @@
 using ModelingToolkit
-using Base.Test
+using Test
 
 d = DiscreteDomain(5) * Interval(0.0,5.0)
 typeof(d) <: ProductDomain

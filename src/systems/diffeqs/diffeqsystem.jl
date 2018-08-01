@@ -14,7 +14,7 @@ function DiffEqSystem(eqs, ivs, dvs, vs, ps)
     iv_name = ivs[1].subtype
     dv_name = dvs[1].subtype
     p_name = isempty(ps) ? :Parameter : ps[1].subtype
-    DiffEqSystem(eqs, ivs, dvs, vs, ps, iv_name, dv_name, p_name, Matrix{Expression}(0,0))
+    DiffEqSystem(eqs, ivs, dvs, vs, ps, iv_name, dv_name, p_name, Matrix{Expression}(undef,0,0))
 end
 
 function DiffEqSystem(eqs; iv_name = :IndependentVariable,
@@ -98,7 +98,7 @@ function generate_ode_iW(sys::DiffEqSystem,simplify=true)
 
     gam = Variable(:gam)
 
-    W = I - gam*jac
+    W = LinearAlgebra.I - gam*jac
     W = SMatrix{size(W,1),size(W,2)}(W)
     iW = inv(W)
 
@@ -106,7 +106,7 @@ function generate_ode_iW(sys::DiffEqSystem,simplify=true)
         iW = simplify_constants.(iW)
     end
 
-    W = inv(I/gam - jac)
+    W = inv(LinearAlgebra.I/gam - jac)
     W = SMatrix{size(W,1),size(W,2)}(W)
     iW_t = inv(W)
     if simplify
@@ -123,10 +123,10 @@ function generate_ode_iW(sys::DiffEqSystem,simplify=true)
     :((iW,u,p,gam,t)->$(block)),:((iW,u,p,gam,t)->$(block2))
 end
 
-function DiffEqBase.DiffEqFunction(sys::DiffEqSystem)
+function DiffEqBase.ODEFunction(sys::DiffEqSystem)
     expr = generate_ode_function(sys)
-    DiffEqFunction{true}(eval(expr))
+    ODEFunction{true}(eval(expr))
 end
 
-export DiffEqSystem, DiffEqFunction
+export DiffEqSystem, ODEFunction
 export generate_ode_function

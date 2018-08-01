@@ -15,6 +15,6 @@ struct ProductDomain{T} <: AbstractDomain
     domains::T
 end
 
-Base.:*(x::AbstractDomain...) = ProductDomain((x...))
+Base.:*(x::AbstractDomain...) = ProductDomain((x...,))
 
 export Reals, DiscreteDomain, Interval, ProductDomain

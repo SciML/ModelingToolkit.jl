@@ -1,7 +1,7 @@
-julia 0.6
+julia 0.7-beta2
 MacroTools
-IterTools
 DiffEqBase
 DiffRules
 SpecialFunctions
 NaNMath
+StaticArrays

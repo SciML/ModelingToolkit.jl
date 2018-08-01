@@ -20,14 +20,14 @@ function _simplify_constants(O,shorten_tree = true)
         if Symbol(O.op) == cur_op
           # Shrink tree
           if any(x->typeof(x)<:Operation && Symbol(x.op) == cur_op ,O.args)
-              idxs = find(x->typeof(x)<:Operation && Symbol(x.op) == cur_op,O.args)
+              idxs = findall(x->typeof(x)<:Operation && Symbol(x.op) == cur_op,O.args)
               keep_idxs = 1:length(O.args) .∉ (idxs,)
               args = Vector{Expression}[O.args[i].args for i in idxs]
               push!(args,O.args[keep_idxs])
               return Operation(O.op,vcat(args...))
           # Collapse constants
-          elseif length(find(x->typeof(x)<:Variable && x.subtype == :Constant ,O.args)) > 1
-              idxs = find(x->typeof(x)<:Variable && x.subtype == :Constant ,O.args)
+          elseif length(findall(x->typeof(x)<:Variable && x.subtype == :Constant ,O.args)) > 1
+              idxs = findall(x->typeof(x)<:Variable && x.subtype == :Constant ,O.args)
               other_idxs = 1:length(O.args) .∉ (idxs,)
               if cur_op == :*
                 new_var = Constant(prod(x->x.value,O.args[idxs]))
@@ -53,7 +53,7 @@ function _simplify_constants(O,shorten_tree = true)
         if any(x->typeof(x)<:Variable && (isequal(x,Constant(0)) || isequal(x,Constant(-0))),O.args)
             return Constant(0)
         elseif any(x->typeof(x)<:Variable && isequal(x,Constant(1)),O.args)
-            idxs = find(x->typeof(x)<:Variable && isequal(x,Constant(1)),O.args)
+            idxs = findall(x->typeof(x)<:Variable && isequal(x,Constant(1)),O.args)
             _O = Operation(O.op,O.args[1:length(O.args) .∉ (idxs,)])
             if isempty(_O.args)
                 return Constant(1)
@@ -68,7 +68,7 @@ function _simplify_constants(O,shorten_tree = true)
     elseif Symbol(O.op) == :+ && any(x->typeof(x)<:Variable &&
            (isequal(x,Constant(0)) || isequal(x,Constant(-0))),O.args)
         # If there are Constant(0)s in a big `+` expression, get rid of them
-        idxs = find(x->typeof(x)<:Variable && (isequal(x,Constant(0)) || isequal(x,Constant(-0))),O.args)
+        idxs = findall(x->typeof(x)<:Variable && (isequal(x,Constant(0)) || isequal(x,Constant(-0))),O.args)
         _O = Operation(O.op,O.args[1:length(O.args) .∉ (idxs,)])
         if isempty(_O.args)
             return Constant(0)

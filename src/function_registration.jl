@@ -23,7 +23,7 @@ macro register(sig)
 end
 # Create all valid combinations of Expression,Number for function signature
 function typed_args(args)
-    cases = product(Tuple((:Expression, :Number) for i = 1:length(args))...)
+    cases = Iterators.product(Tuple((:Expression, :Number) for i = 1:length(args))...)
     typargs = Vector{Any}[]
     for case in cases
         typarg = [Expr(:(::), args[i], case[i]) for i = 1:length(args)]
@@ -48,4 +48,4 @@ for fun = (:<, :>, :(==), :~, :!, :&, :|, :div, :max, :min)
 end
 
 # ifelse
-@register Base.ifelse(cond,t,f)
+#@register Base.ifelse(cond,t,f)

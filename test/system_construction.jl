@@ -1,5 +1,5 @@
 using ModelingToolkit
-using Base.Test
+using Test
 
 # Define some variables
 @IVar t
@@ -17,7 +17,7 @@ de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
 ModelingToolkit.generate_ode_function(de)
 jac_expr = ModelingToolkit.generate_ode_jacobian(de)
 jac = ModelingToolkit.calculate_jacobian(de)
-f = DiffEqFunction(de)
+f = ODEFunction(de)
 ModelingToolkit.generate_ode_iW(de)
 
 # Differential equation with automatic extraction of variables on rhs
@@ -66,7 +66,7 @@ eqs = [a ~ y-x,
 de = DiffEqSystem(eqs,[t],[x,y,z],[a],[σ,ρ,β])
 ModelingToolkit.generate_ode_function(de)
 jac = ModelingToolkit.calculate_jacobian(de)
-f = DiffEqFunction(de)
+f = ODEFunction(de)
 
 # Define a nonlinear system
 eqs = [0 ~ σ*(y-x),

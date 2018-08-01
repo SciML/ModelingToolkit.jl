@@ -1,10 +1,10 @@
 module ModelingToolkit
 
 using DiffEqBase
-using StaticArrays
+using StaticArrays, LinearAlgebra
 
+using MacroTools
 import MacroTools: splitdef, combinedef
-import IterTools: product
 
 abstract type Expression <: Number end
 abstract type AbstractOperation <: Expression end

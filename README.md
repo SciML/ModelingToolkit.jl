@@ -80,7 +80,7 @@ ModelingToolkit.generate_ode_function(de)
 and get the generated function via:
 
 ```julia
-f = DiffEqFunction(de)
+f = ODEFunction(de)
 ```
 
 ### Example: Nonlinear System
