@@ -54,4 +54,7 @@ end
 
 # For inv
 Base.convert(::Type{Operation},x::Int) = Operation(identity,Expression[Constant(x)])
+Base.convert(::Type{Operation},x::Bool) = Operation(identity,Expression[Constant(x)])
 Base.convert(::Type{Operation},x::Variable) = Operation(identity,Expression[x])
+Operation(x) = convert(Operation,x)
+Operation(x::Operation) = x

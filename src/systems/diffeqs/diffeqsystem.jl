@@ -33,7 +33,7 @@ function DiffEqSystem(eqs, ivs;
                       p_name = :Parameter)
     targetmap =  Dict(dv_name => dv_name, v_name => v_name, p_name => p_name)
     dvs, vs, ps = extract_elements(eqs, targetmap)
-    DiffEqSystem(eqs, ivs, dvs, vs, ps, ivs[1].subtype, dv_name, p_name, Matrix{Expression}(0,0))
+    DiffEqSystem(eqs, ivs, dvs, vs, ps, ivs[1].subtype, dv_name, p_name, Matrix{Expression}(undef,0,0))
 end
 
 function generate_ode_function(sys::DiffEqSystem)
