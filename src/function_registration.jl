@@ -41,7 +41,7 @@ for (M, f, arity) in DiffRules.diffrules()
     @eval @register $sig
 end
 
-for fun = (:<, :>, :(==), :~, :!, :&, :|, :div, :max, :min)
+for fun = (:<, :>, :(==), :~, :!, :&, :|, :div)
     basefun = Expr(:., Base, QuoteNode(fun))
     sig = :($basefun(x,y))
     @eval @register $sig
@@ -49,3 +49,6 @@ end
 
 # ifelse
 #@register Base.ifelse(cond,t,f)
+
+# special cases
+Base.:^(x::Expression,y::T) where T <: Integer = Operation(Base.:^, Expression[x, y])
