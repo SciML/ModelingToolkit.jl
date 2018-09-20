@@ -10,7 +10,6 @@ abstract type Expression <: Number end
 abstract type AbstractOperation <: Expression end
 abstract type AbstractOperator <: Expression end
 abstract type AbstractComponent <: Expression end
-abstract type AbstractConnection <: Expression end
 abstract type AbstractSystem end
 abstract type AbstractDomain end
 
