@@ -1,4 +1,4 @@
-julia 0.7-beta2
+julia 0.7
 MacroTools
 DiffEqBase
 DiffRules
