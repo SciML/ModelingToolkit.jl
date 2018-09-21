@@ -23,6 +23,8 @@ Base.convert(::Type{Variable},x::Int64) = Constant(x)
 
 function caclulate_jacobian end
 
+@enum FunctionVersions ArrayFunction=1 SArrayFunction=2
+
 include("operations.jl")
 include("operators.jl")
 include("systems/diffeqs/diffeqsystem.jl")

@@ -15,6 +15,7 @@ eqs = [D*x ~ σ*(y-x),
        D*z ~ x*y - β*z]
 de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
 ModelingToolkit.generate_ode_function(de)
+ModelingToolkit.generate_ode_function(de;version=ModelingToolkit.SArrayFunction)
 jac_expr = ModelingToolkit.generate_ode_jacobian(de)
 jac = ModelingToolkit.calculate_jacobian(de)
 f = ODEFunction(de)
