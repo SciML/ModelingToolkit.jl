@@ -132,9 +132,13 @@ function generate_ode_iW(sys::DiffEqSystem,simplify=true)
     :((iW,u,p,gam,t)->$(block)),:((iW,u,p,gam,t)->$(block2))
 end
 
-function DiffEqBase.ODEFunction(sys::DiffEqSystem)
-    expr = generate_ode_function(sys)
-    ODEFunction{true}(eval(expr))
+function DiffEqBase.ODEFunction(sys::DiffEqSystem;version = ArrayFunction,kwargs...)
+    expr = generate_ode_function(sys;kwargs...)
+    if version == ArrayFunction
+      ODEFunction{true}(eval(expr))
+    elseif version == SArrayFunction
+      ODEFunction{false}(eval(expr))
+    end
 end
 
 export DiffEqSystem, ODEFunction
