@@ -43,7 +43,7 @@ function generate_ode_function(sys::DiffEqSystem)
     dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in 1:length(sys.dvs)]
     exprs = vcat(var_exprs,param_exprs,sys_exprs,dvar_exprs)
     block = expr_arr_to_block(exprs)
-    :((du,u,p,t)->$(block))
+    :((du,u,p,t)->$(toexpr(block)))
 end
 
 isintermediate(eq) = eq.args[1].diff == nothing

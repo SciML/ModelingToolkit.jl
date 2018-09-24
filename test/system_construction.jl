@@ -82,6 +82,15 @@ end
 
 ModelingToolkit.generate_nlsys_function(ns)
 
+@Var _x
+@Deriv D'~t
+@Param A B C
+eqs = [_x ~ y/C,
+       D*x ~ -A*x,
+       D*y ~ A*x - B*_x]
+de = DiffEqSystem(eqs,[t],[x,y],Variable[_x],[A,B,C])
+@test eval(ModelingToolkit.generate_ode_function(de))([0.0,0.0],[1.0,2.0],[1,2,3],0.0) ≈ -1/3
+
 # Now nonlinear system with only variables
 @Var x y z
 @Param σ ρ β

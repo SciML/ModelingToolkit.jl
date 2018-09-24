@@ -1,3 +1,4 @@
+using MacroTools
 function expr_arr_to_block(exprs)
   block = :(begin end)
   foreach(expr -> push!(block.args, expr), exprs)
@@ -15,3 +16,5 @@ function flatten_expr!(x)
     end
     x
 end
+
+toexpr(ex) = MacroTools.postwalk(x->x isa Union{Expression,Operation} ? Expr(x) : x, ex)
