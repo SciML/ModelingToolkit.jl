@@ -36,14 +36,22 @@ function DiffEqSystem(eqs, ivs;
     DiffEqSystem(eqs, ivs, dvs, vs, ps, ivs[1].subtype, dv_name, p_name, Matrix{Expression}(undef,0,0))
 end
 
-function generate_ode_function(sys::DiffEqSystem)
+function generate_ode_function(sys::DiffEqSystem;version = ArrayFunction)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.dvs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
     sys_exprs = build_equals_expr.(sys.eqs)
-    dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in 1:length(sys.dvs)]
-    exprs = vcat(var_exprs,param_exprs,sys_exprs,dvar_exprs)
-    block = expr_arr_to_block(exprs)
-    :((du,u,p,t)->$(toexpr(block)))
+    if version == ArrayFunction
+      dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in 1:length(sys.dvs)]
+      exprs = vcat(var_exprs,param_exprs,sys_exprs,dvar_exprs)
+      block = expr_arr_to_block(exprs)
+      :((du,u,p,t)->$(toexpr(block)))
+    elseif version == SArrayFunction
+      dvar_exprs = [:($(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in 1:length(sys.dvs)]
+      svector_expr = :(typeof(u)($(dvar_exprs...)))
+      exprs = vcat(var_exprs,param_exprs,sys_exprs,svector_expr)
+      block = expr_arr_to_block(exprs)
+      :((u,p,t)->$(toexpr(block)))
+    end
 end
 
 isintermediate(eq) = eq.args[1].diff == nothing
@@ -123,9 +131,13 @@ function generate_ode_iW(sys::DiffEqSystem,simplify=true)
     :((iW,u,p,gam,t)->$(block)),:((iW,u,p,gam,t)->$(block2))
 end
 
-function DiffEqBase.ODEFunction(sys::DiffEqSystem)
-    expr = generate_ode_function(sys)
-    ODEFunction{true}(eval(expr))
+function DiffEqBase.ODEFunction(sys::DiffEqSystem;version = ArrayFunction,kwargs...)
+    expr = generate_ode_function(sys;kwargs...)
+    if version == ArrayFunction
+      ODEFunction{true}(eval(expr))
+    elseif version == SArrayFunction
+      ODEFunction{false}(eval(expr))
+    end
 end
 
 export DiffEqSystem, ODEFunction
