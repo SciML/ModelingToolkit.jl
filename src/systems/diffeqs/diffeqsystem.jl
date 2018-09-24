@@ -132,7 +132,7 @@ function generate_ode_iW(sys::DiffEqSystem,simplify=true)
 end
 
 function DiffEqBase.ODEFunction(sys::DiffEqSystem;version = ArrayFunction,kwargs...)
-    expr = generate_ode_function(sys;kwargs...)
+    expr = generate_ode_function(sys;version=version,kwargs...)
     if version == ArrayFunction
       ODEFunction{true}(eval(expr))
     elseif version == SArrayFunction
