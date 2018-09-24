@@ -40,18 +40,17 @@ function generate_ode_function(sys::DiffEqSystem;version = ArrayFunction)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.dvs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
     sys_exprs = build_equals_expr.(sys.eqs)
-
     if version == ArrayFunction
       dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in 1:length(sys.dvs)]
       exprs = vcat(var_exprs,param_exprs,sys_exprs,dvar_exprs)
       block = expr_arr_to_block(exprs)
-      :((du,u,p,t)->$(block))
+      :((du,u,p,t)->$(toexpr(block)))
     elseif version == SArrayFunction
       dvar_exprs = [:($(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in 1:length(sys.dvs)]
       svector_expr = :(typeof(u)($(dvar_exprs...)))
       exprs = vcat(var_exprs,param_exprs,sys_exprs,svector_expr)
       block = expr_arr_to_block(exprs)
-      :((u,p,t)->$(block))
+      :((u,p,t)->$(toexpr(block)))
     end
 end
 
