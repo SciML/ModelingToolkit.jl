@@ -47,7 +47,11 @@ function generate_ode_function(sys::DiffEqSystem;version = ArrayFunction)
       :((du,u,p,t)->$(toexpr(block)))
     elseif version == SArrayFunction
       dvar_exprs = [:($(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in 1:length(sys.dvs)]
-      svector_expr = :(typeof(u)($(dvar_exprs...)))
+      svector_expr = quote
+        E = eltype(tuple($(dvar_exprs...)))
+        T = StaticArrays.similar_type(typeof(u), E)
+        T($(dvar_exprs...))
+      end
       exprs = vcat(var_exprs,param_exprs,sys_exprs,svector_expr)
       block = expr_arr_to_block(exprs)
       :((u,p,t)->$(toexpr(block)))
