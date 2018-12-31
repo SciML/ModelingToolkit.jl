@@ -36,7 +36,7 @@ function ode_order_lowering!(eqs, naming_scheme)
     for sym in keys(sym_order)
         order = sym_order[sym]
         for o in (order-1):-1:1
-            lhs = D*lower_varname(sym, idv, o-1, dv_name, naming_scheme)
+            lhs = D(lower_varname(sym, idv, o-1, dv_name, naming_scheme))
             rhs = lower_varname(sym, idv, o, dv_name, naming_scheme)
             eq = Operation(==, [lhs, rhs])
             push!(eqs, eq)
@@ -46,7 +46,7 @@ function ode_order_lowering!(eqs, naming_scheme)
 end
 
 function lhs_renaming!(eq, D, naming_scheme)
-    eq.args[1] = D*lower_varname(eq.args[1], naming_scheme, lower=true)
+    eq.args[1] = D(lower_varname(eq.args[1], naming_scheme, lower=true))
     return eq
 end
 function rhs_renaming!(eq, naming_scheme)

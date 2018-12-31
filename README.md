@@ -37,9 +37,9 @@ using ModelingToolkit
 Then we build the system:
 
 ```julia
-eqs = [D*x ~ σ*(y-x),
-       D*y ~ x*(ρ-z)-y,
-       D*z ~ x*y - β*z]
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
 ```
 
 Each operation builds an `Operation` type, and thus `eqs` is an array of
@@ -255,7 +255,7 @@ to better scale to larger systems. You can define derivatives for your own
 function via the dispatch:
 
 ```julia
-ModelingToolkit.Derivative(::typeof(my_function),args,::Type{Val{i}})
+ModelingToolkit.Derivative(::typeof(my_function),args,::Val{i})
 ```
 
 where `i` means that it's the derivative of the `i`th argument. `args` is the
@@ -265,7 +265,7 @@ You should return an `Operation` for the derivative of your function.
 For example, `sin(t)`'s derivative (by `t`) is given by the following:
 
 ```julia
-ModelingToolkit.Derivative(::typeof(sin),args,::Type{Val{1}}) = cos(args[1])
+ModelingToolkit.Derivative(::typeof(sin),args,::Val{1}) = cos(args[1])
 ```
 
 ### Macro-free Usage

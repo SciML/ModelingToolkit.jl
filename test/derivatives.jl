@@ -6,24 +6,24 @@ using Test
 @Var x(t) y(t) z(t)
 @Param σ ρ β
 @Deriv D'~t
-dsin = D*sin(t)
+dsin = D(sin(t))
 expand_derivatives(dsin)
 
 @test expand_derivatives(dsin) == cos(t)
-dcsch = D*csch(t)
+dcsch = D(csch(t))
 @test expand_derivatives(dcsch) == simplify_constants(Operation(coth(t)*csch(t)*-1))
 
 # Chain rule
-dsinsin = D*sin(sin(t))
+dsinsin = D(sin(sin(t)))
 @test expand_derivatives(dsinsin) == cos(sin(t))*cos(t)
 # Binary
-dpow1 = Derivative(^,[x, y],Val{1})
-dpow2 = Derivative(^,[x, y],Val{2})
+dpow1 = Derivative(^,[x, y],Val(1))
+dpow2 = Derivative(^,[x, y],Val(2))
 @test dpow1 == y*x^(y-1)
 @test dpow2 == x^y*log(x)
 
-d1 = D*(sin(t)*t)
-d2 = D*(sin(t)*cos(t))
+d1 = D(sin(t)*t)
+d2 = D(sin(t)*cos(t))
 @test expand_derivatives(d1) == t*cos(t)+sin(t)
 @test expand_derivatives(d2) == simplify_constants(cos(t)*cos(t)+sin(t)*(-1*sin(t)))
 

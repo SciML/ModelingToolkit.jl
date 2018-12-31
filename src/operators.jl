@@ -8,15 +8,11 @@ Base.show(io::IO, D::Differential) = print(io,"($(D.x),$(D.order))")
 Base.Expr(D::Differential) = :($(Symbol("D_$(D.x.name)_$(D.order)")))
 
 function Derivative end
-Base.:*(D::Differential,x::Operation) = Operation(Derivative,Expression[x,D])
-function Base.:*(D::Differential,x::Variable)
-    if D.x === x
-        return Constant(1)
-    elseif D.x ∉ x.dependents
-        return Constant(0)
-    else
-        return Variable(x,D)
-    end
+(D::Differential)(x::Operation) = Operation(Derivative,Expression[x,D])
+function (D::Differential)(x::Variable)
+    D.x === x          && return Constant(1)
+    D.x ∉ x.dependents && return Constant(0)  # FIXME
+    return Variable(x,D)
 end
 Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x == D2.x
 
@@ -25,22 +21,23 @@ Variable(x::Variable,D::Differential) = Variable(x.name,x.value,x.value_type,
                 x.size,x.context)
 
 function expand_derivatives(O::Operation)
+    @. O.args = expand_derivatives(O.args)
+
     if O.op == Derivative
         D = O.args[2]
         o = O.args[1]
-        simplify_constants(sum(i->Derivative(o,i)*expand_derivatives(D*o.args[i]),1:length(o.args)))
-    else
-        for i in 1:length(O.args)
-            O.args[i] = expand_derivatives(O.args[i])
-        end
+        return simplify_constants(sum(i->Derivative(o,i)*expand_derivatives(D(o.args[i])),1:length(o.args)))
     end
+
+    return O
 end
 expand_derivatives(x::Variable) = x
+expand_derivatives(D::Differential) = D
 
 # Don't specialize on the function here
 function Derivative(O::Operation,idx)
     # This calls the Derivative dispatch from the user or pre-defined code
-    Derivative(O.op,O.args,Val{idx})
+    Derivative(O.op, O.args, Val(idx))
 end
 
 # Pre-defined derivatives
@@ -83,7 +80,7 @@ function count_order(x)
     n, x.args[1]
 end
 
-function _differetial_macro(x)
+function _differential_macro(x)
     ex = Expr(:block)
     lhss = Symbol[]
     x = flatten_expr!(x)
@@ -101,11 +98,11 @@ function _differetial_macro(x)
 end
 
 macro Deriv(x...)
-    esc(_differetial_macro(x))
+    esc(_differential_macro(x))
 end
 
 function calculate_jacobian(eqs,vars)
-    Expression[Differential(vars[j])*eqs[i] for i in 1:length(eqs), j in 1:length(vars)]
+    Expression[Differential(vars[j])(eqs[i]) for i in 1:length(eqs), j in 1:length(vars)]
 end
 
 export Differential, Derivative, expand_derivatives, @Deriv, calculate_jacobian
