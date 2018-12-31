@@ -10,8 +10,8 @@ Base.Expr(D::Differential) = :($(Symbol("D_$(D.x.name)_$(D.order)")))
 function Derivative end
 (D::Differential)(x::Operation) = Operation(Derivative,Expression[x,D])
 function (D::Differential)(x::Variable)
-    D.x === x          && return Constant(1)
-    D.x ∉ x.dependents && return Constant(0)  # FIXME
+    D.x === x             && return Constant(1)
+    has_dependent(x, D.x) || return Constant(0)
     return Variable(x,D)
 end
 Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x == D2.x

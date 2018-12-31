@@ -41,3 +41,7 @@ jac = ModelingToolkit.calculate_jacobian(sys)
 @test jac[3,1] == y
 @test jac[3,2] == x
 @test jac[3,3] == -1*β
+
+# Variable dependence checking in differentiation
+@Var a(t) b(a)
+@test D(b) ≠ Constant(0)

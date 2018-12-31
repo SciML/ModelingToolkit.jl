@@ -18,3 +18,7 @@ function flatten_expr!(x)
 end
 
 toexpr(ex) = MacroTools.postwalk(x->x isa Union{Expression,Operation} ? Expr(x) : x, ex)
+
+has_dependent(t::Variable) = Base.Fix2(has_dependent, t)
+has_dependent(x::Variable, t::Variable) =
+    t ∈ x.dependents || any(has_dependent(t), x.dependents)
