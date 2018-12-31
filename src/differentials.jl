@@ -1,5 +1,5 @@
-struct Differential
-    x::Union{Variable,Operation}
+struct Differential <: Expression
+    x::Expression
     order::Int
 end
 Differential(x) = Differential(x,1)

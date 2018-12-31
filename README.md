@@ -182,8 +182,7 @@ context-aware single variable of the IR. Its fields are described as follows:
 ### Operations
 
 Operations are the basic composition of variables and puts together the pieces
-with a function. The `~` function denotes equality
-between the arguments.
+with a function. The `~` function denotes equality between the arguments.
 
 ### Differentials
 
