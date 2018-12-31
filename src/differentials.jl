@@ -1,4 +1,4 @@
-struct Differential <: AbstractOperator
+struct Differential
     x::Union{Variable,Operation}
     order::Int
 end

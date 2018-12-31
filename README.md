@@ -163,7 +163,7 @@ context-aware single variable of the IR. Its fields are described as follows:
   to set units or denote a variable as being of higher precision.
 - `subtype`: the main denotation of context. Variables within systems
   are grouped according to their `subtype`.
-- `diff`: the operator objects attached to the variable
+- `diff`: the `Differential` object representing the quantity the variable is differentiated with respect to, or `nothing`
 - `dependents`: the vector of variables on which the current variable
   is dependent. For example, `u(t,x)` has dependents `[t,x]`. Derivatives thus
   require this information in order to simplify down.
@@ -182,19 +182,14 @@ context-aware single variable of the IR. Its fields are described as follows:
 ### Operations
 
 Operations are the basic composition of variables and puts together the pieces
-with a function. The operator `~` is a special operator which denotes equality
+with a function. The `~` function denotes equality
 between the arguments.
 
-### Operators
+### Differentials
 
-An operator is an object which modifies variables via `*`. It adds the operator
-to the `diff` field of the variable and changes the interpretation of the variable.
-The current operators are:
-
-- `Differential`: a differential denotes the derivative with respect to a given
-  variable. It can be expanded via `expand_derivatives` which symbolically
-  differentiates expressions recursively and cancels out appropriate constant
-  variables.
+A `Differential` denotes the derivative with respect to a given variable. It can
+be expanded via `expand_derivatives`, which symbolically differentiates
+expressions recursively and cancels out appropriate constant variables.
 
 ### Systems
 
