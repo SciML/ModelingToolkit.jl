@@ -39,33 +39,17 @@ function Derivative(O::Operation,idx)
     # This calls the Derivative dispatch from the user or pre-defined code
     Derivative(O.op, O.args, Val(idx))
 end
+Derivative(op, args, idx) = Derivative(op, (args...,), idx)
 
 # Pre-defined derivatives
 import DiffRules, SpecialFunctions, NaNMath
-for (modu, fun, arity) in DiffRules.diffrules()
-    if arity ==  1 && !(fun in (:-, :+)) # :+ and :- are both unary and binary operators
-        @eval begin
-            function Derivative(::typeof($modu.$fun), arg, ::Type{Val{1}})
-                M, f = $(modu, fun)
-                @assert length(arg) == 1 "$M.$f is a unary function!"
-                dx = DiffRules.diffrule(M, f, arg[1])
-                parse(Operation,dx)
-            end
-        end
-    elseif arity ==  2
-        for i in 1:2
-            @eval begin
-                function Derivative(::typeof($modu.$fun), args, ::Type{Val{$i}})
-                    M, f =  $(modu, fun)
-                    if f in (:-, :+)
-                        @assert length(args) in (1, 2) "$M.$f is a unary or a binary function!"
-                    else
-                        @assert length(args) == 2 "$M.$f is a binary function!"
-                    end
-                    dx = DiffRules.diffrule(M, f, args[1], args[2])[$i]
-                    parse(Operation,dx)
-                end
-            end
+for (modu, fun, arity) ∈ DiffRules.diffrules()
+    for i ∈ 1:arity
+        @eval function Derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i})
+            M, f = $(modu, fun)
+            partials = DiffRules.diffrule(M, f, args...)
+            dx = @static $arity == 1 ? partials : partials[$i]
+            parse(Operation,dx)
         end
     end
 end
