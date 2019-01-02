@@ -17,7 +17,7 @@ function _simplify_constants(O, shorten_tree = true)
         # Flatten tree
         idxs = findall(x -> is_operation(x) && x.op === O.op, O.args)
         if !isempty(idxs)
-            keep_idxs = eachindex(O.args) .∉ Ref(idxs)
+            keep_idxs = eachindex(O.args) .∉ (idxs,)
             args = Vector{Expression}[O.args[i].args for i in idxs]
             push!(args, O.args[keep_idxs])
             return Operation(O.op, vcat(args...))
@@ -26,7 +26,7 @@ function _simplify_constants(O, shorten_tree = true)
         # Collapse constants
         idxs = findall(is_constant, O.args)
         if length(idxs) > 1
-            other_idxs = eachindex(O.args) .∉ Ref(idxs)
+            other_idxs = eachindex(O.args) .∉ (idxs,)
             new_const = Constant(mapreduce(get, O.op, O.args[idxs]))
             args = push!(O.args[other_idxs], new_const)
 
