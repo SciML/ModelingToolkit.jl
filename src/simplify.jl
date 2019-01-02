@@ -15,7 +15,7 @@ function _simplify_constants(O, shorten_tree = true)
     # Tree shrinking
     if shorten_tree && O.op ∈ AC_OPERATORS
         # Flatten tree
-        idxs = findall(x -> is_operation(x) && x.op == O.op, O.args)
+        idxs = findall(x -> is_operation(x) && x.op === O.op, O.args)
         if !isempty(idxs)
             keep_idxs = eachindex(O.args) .∉ Ref(idxs)
             args = Vector{Expression}[O.args[i].args for i in idxs]
@@ -26,12 +26,12 @@ function _simplify_constants(O, shorten_tree = true)
         # Collapse constants
         idxs = findall(is_constant, O.args)
         if length(idxs) > 1
-            other_idxs = eachindex(O.args) .∉ (idxs,)
-            new_var = Constant(mapreduce(get, O.op, O.args[idxs]))
-            new_args = O.args[other_idxs]
-            push!(new_args,new_var)
+            other_idxs = eachindex(O.args) .∉ Ref(idxs)
+            new_const = Constant(mapreduce(get, O.op, O.args[idxs]))
+            args = push!(O.args[other_idxs], new_const)
 
-            return length(new_args) > 1 ? Operation(O.op, new_args) : first(new_args)
+            length(args) == 1 && return first(args)
+            return Operation(O.op, args)
         end
     end
 
@@ -67,7 +67,7 @@ function _simplify_constants(O, shorten_tree = true)
 
     return O
 end
-simplify_constants(x::Variable,y=false) = x
-_simplify_constants(x::Variable,y=false) = x
+simplify_constants(x::Variable, y=false) = x
+_simplify_constants(x::Variable, y=false) = x
 
 export simplify_constants
