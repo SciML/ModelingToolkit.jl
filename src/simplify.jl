@@ -1,14 +1,12 @@
 function simplify_constants(O::Operation, shorten_tree = true)
-    O_last = nothing
-    _O = O
-    while _O != O_last
-        O_last = _O
-        _O = _simplify_constants(_O,shorten_tree)
-        if is_operation(_O)
-            _O = Operation(_O.op,simplify_constants.(_O.args,shorten_tree))
+    while true
+        O′ = _simplify_constants(O, shorten_tree)
+        if is_operation(O′)
+            O′ = Operation(O′.op, simplify_constants.(O′.args, shorten_tree))
         end
+        O == O′ && return O
+        O = O′
     end
-    _O
 end
 
 const AC_OPERATORS = [*, +]
