@@ -21,3 +21,6 @@ toexpr(ex) = MacroTools.postwalk(x->x isa Union{Expression,Operation} ? Expr(x) 
 
 is_constant(x::Variable) = x.subtype === :Constant
 is_constant(::Any) = false
+
+is_operation(::Operation) = true
+is_operation(::Any) = false
