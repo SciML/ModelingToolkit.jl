@@ -63,6 +63,15 @@ end
 export Variable,Parameter,Constant,DependentVariable,IndependentVariable,JumpVariable,NoiseVariable,
        @Var, @DVar, @IVar, @Param, @Const
 
+
+Base.get(x::Variable) = x.value
+
+Base.iszero(::Expression) = false
+Base.iszero(c::Variable) = get(c) isa Number && iszero(get(c))
+Base.isone(::Expression) = false
+Base.isone(c::Variable) = get(c) isa Number && isone(get(c))
+
+
 # Variables use isequal for equality since == is an Operation
 function Base.:(==)(x::Variable,y::Variable)
     x.name == y.name && x.subtype == y.subtype && x.value == y.value &&

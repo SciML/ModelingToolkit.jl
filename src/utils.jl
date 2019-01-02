@@ -18,3 +18,6 @@ function flatten_expr!(x)
 end
 
 toexpr(ex) = MacroTools.postwalk(x->x isa Union{Expression,Operation} ? Expr(x) : x, ex)
+
+is_constant(x::Variable) = x.subtype === :Constant
+is_constant(::Any) = false
