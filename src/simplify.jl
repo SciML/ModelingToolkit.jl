@@ -16,35 +16,35 @@ const TREE_SHRINK_OPS = [*, +]
 function _simplify_constants(O,shorten_tree = true)
     # Tree shrinking
     if shorten_tree
-      for cur_op in TREE_SHRINK_OPS
-        if O.op == cur_op
-          # Shrink tree
-          if any(x -> is_operation(x) && x.op == cur_op, O.args)
-              idxs = findall(x -> is_operation(x) && x.op == cur_op, O.args)
-              keep_idxs = 1:length(O.args) .∉ (idxs,)
-              args = Vector{Expression}[O.args[i].args for i in idxs]
-              push!(args,O.args[keep_idxs])
-              return Operation(O.op, vcat(args...))
-          end
-          # Collapse constants
-          idxs = findall(is_constant, O.args)
-          if length(idxs) > 1
-              other_idxs = 1:length(O.args) .∉ (idxs,)
-              if cur_op == (*)
-                new_var = Constant(prod(get, O.args[idxs]))
-              elseif cur_op == (+)
-                new_var = Constant(sum(get, O.args[idxs]))
-              end
-              new_args = O.args[other_idxs]
-              push!(new_args,new_var)
-              if length(new_args) > 1
-                return Operation(O.op,new_args)
-              else
-                return new_args[1]
-              end
-          end
+        for cur_op in TREE_SHRINK_OPS
+            if O.op == cur_op
+                # Shrink tree
+                if any(x -> is_operation(x) && x.op == cur_op, O.args)
+                    idxs = findall(x -> is_operation(x) && x.op == cur_op, O.args)
+                    keep_idxs = 1:length(O.args) .∉ (idxs,)
+                    args = Vector{Expression}[O.args[i].args for i in idxs]
+                    push!(args,O.args[keep_idxs])
+                    return Operation(O.op, vcat(args...))
+                end
+                # Collapse constants
+                idxs = findall(is_constant, O.args)
+                if length(idxs) > 1
+                    other_idxs = 1:length(O.args) .∉ (idxs,)
+                    if cur_op == (*)
+                        new_var = Constant(prod(get, O.args[idxs]))
+                    elseif cur_op == (+)
+                        new_var = Constant(sum(get, O.args[idxs]))
+                    end
+                    new_args = O.args[other_idxs]
+                    push!(new_args,new_var)
+                    if length(new_args) > 1
+                        return Operation(O.op,new_args)
+                    else
+                        return new_args[1]
+                    end
+                end
+            end
         end
-      end
     end
 
     if O.op == (*)
