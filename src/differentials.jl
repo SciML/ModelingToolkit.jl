@@ -5,7 +5,7 @@ end
 Differential(x) = Differential(x,1)
 
 Base.show(io::IO, D::Differential) = print(io,"($(D.x),$(D.order))")
-Base.Expr(D::Differential) = :($(Symbol("D_$(D.x.name)_$(D.order)")))
+Base.Expr(D::Differential) = D
 
 function Derivative end
 (D::Differential)(x::Operation) = Operation(D, Expression[x])
