@@ -9,7 +9,7 @@ function simplify_constants(O::Operation, shorten_tree = true)
     end
 end
 
-const AC_OPERATORS = [*, +]
+const AC_OPERATORS = (*, +)
 
 function _simplify_constants(O, shorten_tree = true)
     # Tree shrinking
