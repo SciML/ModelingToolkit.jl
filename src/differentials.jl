@@ -1,4 +1,4 @@
-struct Differential <: Expression
+struct Differential <: Function
     x::Expression
     order::Int
 end
@@ -8,7 +8,7 @@ Base.show(io::IO, D::Differential) = print(io,"($(D.x),$(D.order))")
 Base.Expr(D::Differential) = :($(Symbol("D_$(D.x.name)_$(D.order)")))
 
 function Derivative end
-(D::Differential)(x::Operation) = Operation(Derivative,Expression[x,D])
+(D::Differential)(x::Operation) = Operation(D, Expression[x])
 function (D::Differential)(x::Variable)
     D.x === x             && return Constant(1)
     has_dependent(x, D.x) || return Constant(0)
@@ -16,15 +16,15 @@ function (D::Differential)(x::Variable)
 end
 Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x == D2.x
 
-Variable(x::Variable,D::Differential) = Variable(x.name,x.value,x.value_type,
+Variable(x::Variable, D::Differential) = Variable(x.name,x.value,x.value_type,
                 x.subtype,D,x.dependents,x.description,x.flow,x.domain,
                 x.size,x.context)
 
 function expand_derivatives(O::Operation)
     @. O.args = expand_derivatives(O.args)
 
-    if O.op == Derivative
-        D = O.args[2]
+    if O.op isa Differential
+        D = O.op
         o = O.args[1]
         return simplify_constants(sum(i->Derivative(o,i)*expand_derivatives(D(o.args[i])),1:length(o.args)))
     end
@@ -32,7 +32,6 @@ function expand_derivatives(O::Operation)
     return O
 end
 expand_derivatives(x::Variable) = x
-expand_derivatives(D::Differential) = D
 
 # Don't specialize on the function here
 function Derivative(O::Operation,idx)
