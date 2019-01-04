@@ -37,9 +37,9 @@ using ModelingToolkit
 Then we build the system:
 
 ```julia
-eqs = [D*x ~ σ*(y-x),
-       D*y ~ x*(ρ-z)-y,
-       D*z ~ x*y - β*z]
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
 ```
 
 Each operation builds an `Operation` type, and thus `eqs` is an array of
@@ -163,7 +163,7 @@ context-aware single variable of the IR. Its fields are described as follows:
   to set units or denote a variable as being of higher precision.
 - `subtype`: the main denotation of context. Variables within systems
   are grouped according to their `subtype`.
-- `diff`: the operator objects attached to the variable
+- `diff`: the `Differential` object representing the quantity the variable is differentiated with respect to, or `nothing`
 - `dependents`: the vector of variables on which the current variable
   is dependent. For example, `u(t,x)` has dependents `[t,x]`. Derivatives thus
   require this information in order to simplify down.
@@ -182,19 +182,13 @@ context-aware single variable of the IR. Its fields are described as follows:
 ### Operations
 
 Operations are the basic composition of variables and puts together the pieces
-with a function. The operator `~` is a special operator which denotes equality
-between the arguments.
+with a function. The `~` function denotes equality between the arguments.
 
-### Operators
+### Differentials
 
-An operator is an object which modifies variables via `*`. It adds the operator
-to the `diff` field of the variable and changes the interpretation of the variable.
-The current operators are:
-
-- `Differential`: a differential denotes the derivative with respect to a given
-  variable. It can be expanded via `expand_derivatives` which symbolically
-  differentiates expressions recursively and cancels out appropriate constant
-  variables.
+A `Differential` denotes the derivative with respect to a given variable. It can
+be expanded via `expand_derivatives`, which symbolically differentiates
+expressions recursively and cancels out appropriate constant variables.
 
 ### Systems
 
@@ -255,7 +249,7 @@ to better scale to larger systems. You can define derivatives for your own
 function via the dispatch:
 
 ```julia
-ModelingToolkit.Derivative(::typeof(my_function),args,::Type{Val{i}})
+ModelingToolkit.Derivative(::typeof(my_function),args,::Val{i})
 ```
 
 where `i` means that it's the derivative of the `i`th argument. `args` is the
@@ -265,7 +259,7 @@ You should return an `Operation` for the derivative of your function.
 For example, `sin(t)`'s derivative (by `t`) is given by the following:
 
 ```julia
-ModelingToolkit.Derivative(::typeof(sin),args,::Type{Val{1}}) = cos(args[1])
+ModelingToolkit.Derivative(::typeof(sin),args,::Val{1}) = cos(args[1])
 ```
 
 ### Macro-free Usage
