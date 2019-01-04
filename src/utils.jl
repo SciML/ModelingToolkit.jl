@@ -19,6 +19,12 @@ end
 
 toexpr(ex) = MacroTools.postwalk(x->x isa Union{Expression,Operation} ? Expr(x) : x, ex)
 
+is_constant(x::Variable) = x.subtype === :Constant
+is_constant(::Any) = false
+
+is_operation(::Operation) = true
+is_operation(::Any) = false
+
 has_dependent(t::Variable) = Base.Fix2(has_dependent, t)
 has_dependent(x::Variable, t::Variable) =
     t ∈ x.dependents || any(has_dependent(t), x.dependents)
