@@ -10,9 +10,9 @@ using Test
 @Var a
 
 # Define a differential equation
-eqs = [D*x ~ σ*(y-x),
-       D*y ~ x*(ρ-z)-y,
-       D*z ~ x*y - β*z]
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
 de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
 ModelingToolkit.generate_ode_function(de)
 ModelingToolkit.generate_ode_function(de;version=ModelingToolkit.SArrayFunction)
@@ -37,15 +37,15 @@ test_vars_extraction(de, de2)
 @Deriv D3'''~t
 @Deriv D2''~t
 @DVar u(t) u_tt(t) u_t(t) x_t(t)
-eqs = [D3*u ~ 2(D2*u) + D*u + D*x + 1
-       D2*x ~ D*x + 2]
+eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
+       D2(x) ~ D(x) + 2]
 de = DiffEqSystem(eqs, [t])
 de1 = ode_order_lowering(de)
-lowered_eqs = [D*u_tt ~ 2u_tt + u_t + x_t + 1
-               D*x_t  ~ x_t + 2
-               D*u_t  ~ u_tt
-               D*u    ~ u_t
-               D*x    ~ x_t]
+lowered_eqs = [D(u_tt) ~ 2u_tt + u_t + x_t + 1
+               D(x_t)  ~ x_t + 2
+               D(u_t)  ~ u_tt
+               D(u)    ~ u_t
+               D(x)    ~ x_t]
 function test_eqs(eqs1, eqs2)
     eq = true
     for i in eachindex(eqs1)
@@ -61,9 +61,9 @@ test_eqs(de1.eqs, lowered_eqs)
 
 # Internal calculations
 eqs = [a ~ y-x,
-       D*x ~ σ*a,
-       D*y ~ x*(ρ-z)-y,
-       D*z ~ x*y - β*z]
+       D(x) ~ σ*a,
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
 de = DiffEqSystem(eqs,[t],[x,y,z],[a],[σ,ρ,β])
 ModelingToolkit.generate_ode_function(de)
 jac = ModelingToolkit.calculate_jacobian(de)
@@ -87,8 +87,8 @@ ModelingToolkit.generate_nlsys_function(ns)
 @Deriv D'~t
 @Param A B C
 eqs = [_x ~ y/C,
-       D*x ~ -A*x,
-       D*y ~ A*x - B*_x]
+       D(x) ~ -A*x,
+       D(y) ~ A*x - B*_x]
 de = DiffEqSystem(eqs,[t],[x,y],Variable[_x],[A,B,C])
 @test eval(ModelingToolkit.generate_ode_function(de))([0.0,0.0],[1.0,2.0],[1,2,3],0.0) ≈ -1/3
 

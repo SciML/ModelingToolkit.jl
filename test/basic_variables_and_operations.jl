@@ -17,8 +17,8 @@ s = JumpVariable(:s,3,dependents=[t])
 n = NoiseVariable(:n,dependents=[t])
 
 σ*(y-x)
-D*x
-D*x ~ -σ*(y-x)
-D*y ~ x*(ρ-z)-sin(y)
+D(x)
+D(x) ~ -σ*(y-x)
+D(y) ~ x*(ρ-z)-sin(y)
 
-@test D*t == Constant(1)
+@test D(t) == Constant(1)
