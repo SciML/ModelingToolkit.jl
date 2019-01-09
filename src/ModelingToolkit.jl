@@ -7,7 +7,6 @@ using MacroTools
 import MacroTools: splitdef, combinedef
 
 abstract type Expression <: Number end
-abstract type AbstractOperation <: Expression end
 abstract type AbstractComponent <: Expression end
 abstract type AbstractSystem end
 abstract type AbstractDomain end
