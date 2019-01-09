@@ -1,4 +1,18 @@
 using MacroTools
+
+
+function Base.convert(::Type{Expression}, ex::Expr)
+    f = ex.args[1]
+    operands = ex.args[2:end]
+    ex.head === :call || throw(ArgumentError("internal representation does not support non-call Expr"))
+    return convert(Expression, f, convert.(Expression, operands))
+end
+Base.convert(::Type{Expression}, x::Expression) = x
+Base.convert(::Type{Expression}, sym::Symbol, args) = Operation(eval(sym), args)
+Base.convert(::Type{Expression}, x::Variable) = x
+Base.convert(::Type{Expression}, x::Number) = Constant(x)
+
+
 function expr_arr_to_block(exprs)
   block = :(begin end)
   foreach(expr -> push!(block.args, expr), exprs)
@@ -17,7 +31,7 @@ function flatten_expr!(x)
     x
 end
 
-toexpr(ex) = MacroTools.postwalk(x->x isa Union{Expression,Operation} ? Expr(x) : x, ex)
+toexpr(ex) = MacroTools.postwalk(x -> isa(x, Expression) ? convert(Expr, x) : x, ex)
 
 is_constant(x::Variable) = x.subtype === :Constant
 is_constant(::Any) = false

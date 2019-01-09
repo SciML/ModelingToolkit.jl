@@ -95,7 +95,7 @@ function generate_ode_jacobian(sys::DiffEqSystem,simplify=true)
     diff_exprs = sys.eqs[diff_idxs]
     jac = calculate_jacobian(sys,simplify)
     sys.jac = jac
-    jac_exprs = [:(J[$i,$j] = $(Expr(jac[i,j]))) for i in 1:size(jac,1), j in 1:size(jac,2)]
+    jac_exprs = [:(J[$i,$j] = $(convert(Expr, jac[i,j]))) for i in 1:size(jac,1), j in 1:size(jac,2)]
     exprs = vcat(var_exprs,param_exprs,vec(jac_exprs))
     block = expr_arr_to_block(exprs)
     :((J,u,p,t)->$(block))
@@ -125,11 +125,11 @@ function generate_ode_iW(sys::DiffEqSystem,simplify=true)
         iW_t = simplify_constants.(iW_t)
     end
 
-    iW_exprs = [:(iW[$i,$j] = $(Expr(iW[i,j]))) for i in 1:size(iW,1), j in 1:size(iW,2)]
+    iW_exprs = [:(iW[$i,$j] = $(convert(Expr, iW[i,j]))) for i in 1:size(iW,1), j in 1:size(iW,2)]
     exprs = vcat(var_exprs,param_exprs,vec(iW_exprs))
     block = expr_arr_to_block(exprs)
 
-    iW_t_exprs = [:(iW[$i,$j] = $(Expr(iW_t[i,j]))) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]
+    iW_t_exprs = [:(iW[$i,$j] = $(convert(Expr, iW_t[i,j]))) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]
     exprs = vcat(var_exprs,param_exprs,vec(iW_t_exprs))
     block2 = expr_arr_to_block(exprs)
     :((iW,u,p,gam,t)->$(block)),:((iW,u,p,gam,t)->$(block2))

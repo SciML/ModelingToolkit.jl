@@ -5,7 +5,7 @@ end
 Differential(x) = Differential(x,1)
 
 Base.show(io::IO, D::Differential) = print(io,"($(D.x),$(D.order))")
-Base.Expr(D::Differential) = D
+Base.convert(::Type{Expr}, D::Differential) = D
 
 function Derivative end
 (D::Differential)(x::Operation) = Operation(D, Expression[x])
@@ -48,7 +48,7 @@ for (modu, fun, arity) ∈ DiffRules.diffrules()
             M, f = $(modu, fun)
             partials = DiffRules.diffrule(M, f, args...)
             dx = @static $arity == 1 ? partials : partials[$i]
-            parse(Operation,dx)
+            convert(Expression, dx)
         end
     end
 end
