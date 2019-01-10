@@ -65,17 +65,14 @@ Derivative(fn, args, idx) = Derivative(fn, (args...,), idx)
 import DiffRules, SpecialFunctions, NaNMath
 for (modu, fun, arity) ∈ DiffRules.diffrules()
     for i ∈ 1:arity
-        mc = :(@eval @term)
-        push!(mc.args[3].args, Expr(:$, :dx))
         @eval function Derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i})
             M, f = $(modu, fun)
             partials = DiffRules.diffrule(M, f, args...)
             dx = @static $arity == 1 ? partials : partials[$i]
-            $mc
+            @eval @term $(Expr(:$, :dx))
         end
     end
 end
-# _eval(t)
 
 function count_order(x)
     @assert !(x isa Symbol) "The variable $x must have an order of differentiation that is greater or equal to 1!"
