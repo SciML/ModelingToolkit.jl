@@ -15,7 +15,8 @@ Base.:(==)(x::Nothing,y::Operation) = false
 Base.:(==)(x::Variable,y::Operation) = false
 Base.:(==)(x::Operation,y::Variable) = false
 
-Base.convert(::Type{Expr}, O::Operation) = Expr(:call, Symbol(O.op), convert.(Expr, O.args)...)
+Base.convert(::Type{Expr}, O::Operation) =
+    build_expr(:call, Any[Symbol(O.op); convert.(Expr, O.args)])
 Base.show(io::IO, O::Operation) = print(io, convert(Expr, O))
 
 

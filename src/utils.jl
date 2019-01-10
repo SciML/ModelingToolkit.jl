@@ -3,20 +3,21 @@ using MacroTools
 
 function Base.convert(::Type{Expression}, ex::Expr)
     ex.head === :call || throw(ArgumentError("internal representation does not support non-call Expr"))
-    f = ex.args[1]
-    operands = ex.args[2:end]
-    return convert(Expression, f, convert.(Expression, operands))
+
+    op = eval(ex.args[1])  # HACK
+    args = convert.(Expression, ex.args[2:end])
+
+    return Operation(op, args)
 end
-Base.convert(::Type{Expression}, sym::Symbol, args) = Operation(eval(sym), args)
 Base.convert(::Type{Expression}, x::Expression) = x
 Base.convert(::Type{Expression}, x::Number) = Constant(x)
 
-
-function expr_arr_to_block(exprs)
-  block = :(begin end)
-  foreach(expr -> push!(block.args, expr), exprs)
-  block
+function build_expr(head::Symbol, args)
+    ex = Expr(head)
+    append!(ex.args, args)
+    ex
 end
+expr_arr_to_block(exprs) = build_expr(:block, exprs)
 
 # used in parsing
 isblock(x) = length(x) == 1 && x[1] isa Expr && x[1].head == :block
