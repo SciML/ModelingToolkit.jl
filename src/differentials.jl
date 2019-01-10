@@ -105,7 +105,7 @@ macro Deriv(x...)
     esc(_differential_macro(x))
 end
 
-function calculate_jacobian(eqs,vars)
+function calculate_jacobian(eqs, vars)
     Term[Differential(vars[j])(eqs[i]) for i ∈ eachindex(eqs), j ∈ eachindex(vars)]
 end
 
