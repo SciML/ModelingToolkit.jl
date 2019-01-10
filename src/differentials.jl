@@ -8,11 +8,11 @@ Base.show(io::IO, D::Differential) = print(io,"($(D.x),$(D.order))")
 Base.convert(::Type{Expr}, D::Differential) = D
 
 function Derivative end
-(D::Differential)(x::Operation) = Operation(D, Expression[x])
+(D::Differential)(x) = @term(D(x))
 function (D::Differential)(x::Variable)
-    D.x === x             && return Constant(1)
-    has_dependent(x, D.x) || return Constant(0)
-    return Variable(x,D)
+    D.x === x             && return @term(1)
+    has_dependent(x, D.x) || return @term(0)
+    return Term(Variable(x, D))
 end
 Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x == D2.x
 
@@ -20,38 +20,62 @@ Variable(x::Variable, D::Differential) = Variable(x.name,x.value,x.value_type,
                 x.subtype,D,x.dependents,x.description,x.flow,x.domain,
                 x.size,x.context)
 
-function expand_derivatives(O::Operation)
-    @. O.args = expand_derivatives(O.args)
+function expand_derivatives(t::Term)
+    is_branch(t) || return t
 
-    if O.op isa Differential
-        D = O.op
-        o = O.args[1]
-        return simplify_constants(sum(i->Derivative(o,i)*expand_derivatives(D(o.args[i])),1:length(o.args)))
+    head = root(t)
+    args = expand_derivatives.(children(t))
+
+    if head === :call && length(args) === 2 && isa(root(args[1]), Differential)
+        D = root(args[1])::Differential
+        o = args[2]
+        o_root = root(o)
+        # @info "test" o_root typeof(o_root)
+        isa(o_root, Variable) && return D(o_root)
+        o_args = children(o)[2:end]
+        # @info "expand_derivatives" D o o_root o_args
+        args = map(eachindex(o_args)) do i
+            @term($(Derivative(o, i)) * $(expand_derivatives(D(o_args[i])))).x
+        end
+
+        if length(args) == 1
+            ex = first(args)
+        else
+            ex = Expr(:call)
+            push!(ex.args, +)
+            append!(ex.args, args)
+        end
+
+        return convert(Term, ex) |> simplify_constants
     end
 
-    return O
+    return t
 end
 expand_derivatives(x::Variable) = x
 
 # Don't specialize on the function here
-function Derivative(O::Operation,idx)
+function Derivative(t::Term, idx)
     # This calls the Derivative dispatch from the user or pre-defined code
-    Derivative(O.op, O.args, Val(idx))
+    fn, args = unpack(t)
+    Derivative(fn, (args...,), Val(idx))
 end
-Derivative(op, args, idx) = Derivative(op, (args...,), idx)
+Derivative(fn, args, idx) = Derivative(fn, (args...,), idx)
 
 # Pre-defined derivatives
 import DiffRules, SpecialFunctions, NaNMath
 for (modu, fun, arity) ∈ DiffRules.diffrules()
     for i ∈ 1:arity
+        mc = :(@eval @term)
+        push!(mc.args[3].args, Expr(:$, :dx))
         @eval function Derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i})
             M, f = $(modu, fun)
             partials = DiffRules.diffrule(M, f, args...)
             dx = @static $arity == 1 ? partials : partials[$i]
-            convert(Expression, dx)
+            $mc
         end
     end
 end
+# _eval(t)
 
 function count_order(x)
     @assert !(x isa Symbol) "The variable $x must have an order of differentiation that is greater or equal to 1!"
@@ -85,7 +109,7 @@ macro Deriv(x...)
 end
 
 function calculate_jacobian(eqs,vars)
-    Expression[Differential(vars[j])(eqs[i]) for i in 1:length(eqs), j in 1:length(vars)]
+    Term[Differential(vars[j])(eqs[i]) for i ∈ eachindex(eqs), j ∈ eachindex(vars)]
 end
 
 export Differential, Derivative, expand_derivatives, @Deriv, calculate_jacobian

@@ -31,8 +31,6 @@ Variable(name,x::Variable) = Variable(name,x.value,x.value_type,
                 x.size,x.context)
 
 Parameter(name,args...;kwargs...) = Variable(name,args...;subtype=:Parameter,kwargs...)
-Constant(value::Number) = Variable(Symbol(value),value,typeof(value);subtype=:Constant)
-Constant(name,args...;kwargs...) = Variable(name,args...;subtype=:Constant,kwargs...)
 IndependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:IndependentVariable,kwargs...)
 
 function DependentVariable(name,args...;dependents = [],kwargs...)
@@ -60,7 +58,7 @@ function NoiseVariable(name,args...;dependents = [],kwargs...)
     Variable(name,args...;subtype=:NoiseVariable,dependents=dependents,kwargs...)
 end
 
-export Variable,Parameter,Constant,DependentVariable,IndependentVariable,JumpVariable,NoiseVariable,
+export Variable,Parameter,DependentVariable,IndependentVariable,JumpVariable,NoiseVariable,
        @Var, @DVar, @IVar, @Param, @Const
 
 
@@ -78,39 +76,25 @@ function Base.:(==)(x::Variable,y::Variable)
     x.value_type == y.value_type && x.diff == y.diff
 end
 
-function Base.:(==)(x::Variable,y::Number)
-    x == Constant(y)
-end
-
-function Base.:(==)(x::Number,y::Variable)
-    Constant(x) == y
-end
+Base.:(==)(x::Variable, y::Number) = x.value == y
+Base.:(==)(x::Number,y::Variable) = x == y.value
 
 function Base.convert(::Type{Expr}, x::Variable)
-    if x.subtype == :Constant
-        return x.value
-    elseif x.diff == nothing
-        return :($(x.name))
-    else
-        return :($(Symbol("$(x.name)_$(x.diff.x.name)")))
-    end
+    x.diff == nothing && return :($(x.name))
+    return :($(Symbol("$(x.name)_$(x.diff.x.name)")))
 end
 
 function Base.show(io::IO, A::Variable)
-    if A.subtype == :Constant
-        print(io,"Constant($(A.value))")
-    else
-        str = "$(A.subtype)($(A.name))"
-        if A.value != nothing
-            str *= ", value = " * string(A.value)
-        end
-
-        if A.diff != nothing
-            str *= ", diff = " * string(A.diff)
-        end
-
-        print(io,str)
+    str = "$(A.subtype)($(A.name))"
+    if A.value != nothing
+        str *= ", value = " * string(A.value)
     end
+
+    if A.diff != nothing
+        str *= ", diff = " * string(A.diff)
+    end
+
+    print(io,str)
 end
 
 # Build variables more easily
@@ -181,7 +165,7 @@ function _const_assign(x)
         lhs = eq.args[1]
         push!(lhss, lhs)
         rhs = eq.args[2]
-        expr = :($lhs = Constant($rhs))
+        expr = :($lhs = convert(Term, $rhs))
         push!(ex.args,  expr)
     end
     push!(ex.args, Expr(:tuple, lhss...))

@@ -35,7 +35,7 @@ s1 = IndependentVariable(:s, cos(2.5))
 @test s1 == s
 @test convert(Expr, t) == :t
 @test convert(Expr, s) == :s
-@test convert(Expr, cos(t + sin(s))) == :(cos(t + sin(s)))
+@test convert(Expr, @term(cos(t + sin(s)))) == :($cos(($+)($t, $sin($s))))
 
 @Deriv D''~t
 D1 = Differential(t, 2)
@@ -43,8 +43,8 @@ D1 = Differential(t, 2)
 @test convert(Expr, D) == D
 
 @Const c=0 v=2
-c1 = Constant(0)
-v1 = Constant(2)
+c1 = @term(0)
+v1 = @term(2)
 @test c1 == c
 @test v1 == v
 @test convert(Expr, c) == 0

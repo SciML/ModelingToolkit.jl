@@ -4,15 +4,19 @@ using Test
 @IVar t
 @DVar x(t) y(t) z(t)
 
-null_op = 0*t
-@test simplify_constants(null_op) == Constant(0)
+null_op = @term(0*t)
+@test simplify_constants(null_op) == @term(0)
 
-one_op = 1*t
-@test simplify_constants(one_op) == t
+one_op = @term(1*t)
+@test simplify_constants(one_op) == @term(t)
 
-identity_op = Operation(identity,[x])
-@test simplify_constants(identity_op) == x
+identity_op = @term(identity(x))
+@test simplify_constants(identity_op) == @term(x)
 
-minus_op = -x
-@test simplify_constants(minus_op) == -1*x
-simplify_constants(minus_op)
+minus_op = @term(-x)
+@test simplify_constants(minus_op) == @term(-1*x)
+
+fold_const_op = @term(x * 2 * 3 * y)
+@test simplify_constants(fold_const_op) == simplify_constants(@term(x * y * 6))
+
+@test_broken simplify_constants(@term(x * 2)) == simplify_constants(@term(2 * x))

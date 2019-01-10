@@ -10,10 +10,12 @@ using Test
 @Var a
 
 # Define a differential equation
-eqs = [D(x) ~ σ*(y-x),
-       D(y) ~ x*(ρ-z)-y,
-       D(z) ~ x*y - β*z]
-de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
+eqs = [
+    @term D(x) ~ σ*(y-x)
+    @term D(y) ~ x*(ρ-z)-y
+    @term D(z) ~ x*y - β*z
+]
+de = DiffEqSystem(eqs, [t], [x,y,z], Variable[], [σ,ρ,β])
 ModelingToolkit.generate_ode_function(de)
 ModelingToolkit.generate_ode_function(de;version=ModelingToolkit.SArrayFunction)
 jac_expr = ModelingToolkit.generate_ode_jacobian(de)

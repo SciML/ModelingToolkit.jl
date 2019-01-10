@@ -1,5 +1,5 @@
 mutable struct DiffEqSystem <: AbstractSystem
-    eqs::Vector{Operation}
+    eqs::Vector{Term}
     ivs::Vector{Variable}
     dvs::Vector{Variable}
     vs::Vector{Variable}

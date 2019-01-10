@@ -1,73 +1,81 @@
-function simplify_constants(O::Operation, shorten_tree = true)
+function simplify_constants(t::Term, shorten_tree = true)
     while true
-        O′ = _simplify_constants(O, shorten_tree)
-        if is_operation(O′)
-            O′ = Operation(O′.op, simplify_constants.(O′.args, shorten_tree))
+        t′ = _simplify_constants(t, shorten_tree)
+        if is_branch(t′)
+            t′ = map(x -> simplify_constants(x, shorten_tree), t′)
         end
-        O == O′ && return O
-        O = O′
+        t == t′ && return t
+        t = t′
     end
 end
 
 const AC_OPERATORS = (*, +)
 
-function _simplify_constants(O, shorten_tree = true)
+function _simplify_constants(t::Term, shorten_tree = true)
+    is_branch(t) || return t
+
+    head = root(t)
+    head === :call || return t
+
+    fn, args = unpack(t)
+
     # Tree shrinking
-    if shorten_tree && O.op ∈ AC_OPERATORS
+    if shorten_tree && fn ∈ AC_OPERATORS
         # Flatten tree
-        idxs = findall(x -> is_operation(x) && x.op === O.op, O.args)
+        idxs = findall(x -> is_branch(x) && unpack(x)[1] === fn, args)
         if !isempty(idxs)
-            keep_idxs = eachindex(O.args) .∉ (idxs,)
-            args = Vector{Expression}[O.args[i].args for i in idxs]
-            push!(args, O.args[keep_idxs])
-            return Operation(O.op, vcat(args...))
+            keep_idxs = eachindex(args) .∉ (idxs,)
+            new_args = Vector{Term}[unpack(args[i])[2] for i in idxs]
+            push!(new_args, args[keep_idxs])
+            return pack(fn, vcat(new_args...))
         end
 
         # Collapse constants
-        idxs = findall(is_constant, O.args)
+        idxs = findall(is_constant, args)
         if length(idxs) > 1
-            other_idxs = eachindex(O.args) .∉ (idxs,)
-            new_const = Constant(mapreduce(get, O.op, O.args[idxs]))
-            args = push!(O.args[other_idxs], new_const)
+            other_idxs = eachindex(args) .∉ (idxs,)
+            new_const = mapreduce(root, fn, args[idxs])
+            new_args = push!(args[other_idxs], new_const)
 
-            length(args) == 1 && return first(args)
-            return Operation(O.op, args)
+            length(new_args) == 1 && return first(new_args)
+            return pack(fn, new_args)
         end
     end
 
-    if O.op === (*)
-        # If any variable is `Constant(0)`, zero the whole thing
-        any(iszero, O.args) && return Constant(0)
+    if fn === (*)
+        # If any variable is `0`, zero the whole thing
+        any(_iszero, args) && return @term(0)
 
-        # If any variable is `Constant(1)`, remove that `Constant(1)` unless
-        # they are all `Constant(1)`, in which case simplify to a single variable
-        if any(isone, O.args)
-            args = filter(!isone, O.args)
+        # If any variable is `1`, remove that `1` unless they are all `1`,
+        # in which case simplify to a single variable
+        if any(_isone, args)
+            args = filter(!_isone, args)
 
-            isempty(args)     && return Constant(1)
+            isempty(args)     && return @term(1)
             length(args) == 1 && return first(args)
-            return Operation(O.op, args)
+            return pack(fn, args)
         end
 
-        return O
+        return t
     end
 
-    if O.op === (+) && any(iszero, O.args)
-        # If there are Constant(0)s in a big `+` expression, get rid of them
-        args = filter(!iszero, O.args)
+    if fn === (+) && any(_iszero, args)
+        # If there are `0`s in a big `+` expression, get rid of them
+        args = filter(!_iszero, args)
 
-        isempty(args)     && return Constant(0)
+        isempty(args)     && return @term(0)
         length(args) == 1 && return first(args)
-        return Operation(O.op, args)
+        return pack(fn, args)
     end
 
-    (O.op, length(O.args)) === (identity, 1) && return O.args[1]
+    (fn, length(args)) === (identity, 1) && return args[1]
 
-    (O.op, length(O.args)) === (-, 1) && return Operation(*, Expression[-1, O.args[1]])
+    (fn, length(args)) === (-, 1) && return @term(-1 * $(args[1]))
 
-    return O
+    return t
 end
-simplify_constants(x::Variable, y=false) = x
-_simplify_constants(x::Variable, y=false) = x
+
+_iszero(t::Term) = !is_branch(t) && iszero(root(t))
+_isone(t::Term) = !is_branch(t) && isone(root(t))
 
 export simplify_constants

@@ -1,5 +1,5 @@
 struct NonlinearSystem <: AbstractSystem
-    eqs::Vector{Operation}
+    eqs::Vector{Term}
     vs::Vector{Variable}
     ps::Vector{Variable}
     v_name::Vector{Symbol}
@@ -26,7 +26,7 @@ end
 function generate_nlsys_function(sys::NonlinearSystem)
     var_exprs = [:($(sys.vs[i].name) = u[$i]) for i in 1:length(sys.vs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
-    sys_idxs = map(eq->isequal(eq.args[1],Constant(0)),sys.eqs)
+    sys_idxs = map(eq->isequal(unpack(eq)[2][1], @term(0)), sys.eqs)
     sys_eqs = sys.eqs[sys_idxs]
     calc_eqs = sys.eqs[.!(sys_idxs)]
     calc_exprs = [:($(Symbol("$(eq.args[1].name)")) = $(eq.args[2])) for eq in calc_eqs]
@@ -38,20 +38,18 @@ function generate_nlsys_function(sys::NonlinearSystem)
 end
 
 function calculate_jacobian(sys::NonlinearSystem,simplify=true)
-    sys_idxs = map(eq->isequal(eq.args[1],Constant(0)),sys.eqs)
+    sys_idxs = map(eq->isequal(unpack(eq)[2][1], @term(0)),sys.eqs)
     sys_eqs = sys.eqs[sys_idxs]
     calc_eqs = sys.eqs[.!(sys_idxs)]
-    rhs = [eq.args[2] for eq in sys_eqs]
+    rhs = [unpack(eq)[2][2] for eq in sys_eqs]
 
     for i in 1:length(calc_eqs)
-        find_replace!.(rhs,calc_eqs[i].args[1],calc_eqs[i].args[2])
+        l, r = unpack(calc_eqs[i])[2]
+        find_replace!.(rhs, l, r)
     end
 
     sys_exprs = calculate_jacobian(rhs,sys.vs)
-    sys_exprs = Expression[expand_derivatives(expr) for expr in sys_exprs]
-    if simplify
-        sys_exprs = Expression[simplify_constants(expr) for expr in sys_exprs]
-    end
+    sys_exprs = Term[expand_derivatives(expr) for expr in sys_exprs]
     sys_exprs
 end
 

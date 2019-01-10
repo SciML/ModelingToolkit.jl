@@ -1,22 +1,17 @@
 using MacroTools
 
 
-function Base.convert(::Type{Expression}, ex::Expr)
-    f = ex.args[1]
-    operands = ex.args[2:end]
-    ex.head === :call || throw(ArgumentError("internal representation does not support non-call Expr"))
-    return convert(Expression, f, convert.(Expression, operands))
-end
+Base.convert(::Type{Expression}, ex::Expr) = convert(Term, ex)
 Base.convert(::Type{Expression}, x::Expression) = x
-Base.convert(::Type{Expression}, sym::Symbol, args) = Operation(eval(sym), args)
+Base.convert(::Type{Expression}, sym::Symbol, args) = convert(Term, Expr(:call, eval(sym), args...))
 Base.convert(::Type{Expression}, x::Variable) = x
-Base.convert(::Type{Expression}, x::Number) = Constant(x)
+Base.convert(::Type{Expression}, x::Number) = convert(Term, x)
 
 
 function expr_arr_to_block(exprs)
-  block = :(begin end)
-  foreach(expr -> push!(block.args, expr), exprs)
-  block
+    block = :(begin end)
+    foreach(expr -> push!(block.args, expr), exprs)
+    block
 end
 
 # used in parsing
@@ -33,11 +28,17 @@ end
 
 toexpr(ex) = MacroTools.postwalk(x -> isa(x, Expression) ? convert(Expr, x) : x, ex)
 
-is_constant(x::Variable) = x.subtype === :Constant
-is_constant(::Any) = false
+function unpack(t::Term)
+    @assert root(t) === :call
+    _children = children(t)
+    fn, args = root(_children[1]), _children[2:end]
+    return (fn, args)
+end
 
-is_operation(::Operation) = true
-is_operation(::Any) = false
+pack(fn, args) = convert(Term, :($fn($(args...))))
+
+is_constant(t::Term) = !is_branch(t) && !isa(root(t), Variable)
+is_constant(::Any) = false
 
 has_dependent(t::Variable) = Base.Fix2(has_dependent, t)
 has_dependent(x::Variable, t::Variable) =
@@ -63,8 +64,9 @@ function extract_elements(ops, targetmap, default = nothing)
     end
     Tuple(elems[target] for target in targets)
 end
+
 # Walk the tree recursively and push variables into the right set
-function extract_elements!(op::Operation, elems, names, targetmap, default)
+function extract_elements!(op::Term, elems, names, targetmap, default)  # FIXME
     for arg in op.args
         if arg isa Operation
                 extract_elements!(arg, elems, names, targetmap, default)
