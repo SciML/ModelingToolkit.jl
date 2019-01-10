@@ -1,12 +1,3 @@
-# Literals treated as constants
-function Base.convert(::Type{Expression}, n::Number)
-    if !(typeof(n) <: Expression)
-        return Constant(n)
-    else
-        return n
-    end
-end
-
 # Register functions and handle literals
 macro register(sig)
     splitsig = splitdef(:($sig = nothing))
