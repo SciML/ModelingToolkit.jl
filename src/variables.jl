@@ -86,7 +86,7 @@ function Base.:(==)(x::Number,y::Variable)
     Constant(x) == y
 end
 
-function Base.Expr(x::Variable)
+function Base.convert(::Type{Expr}, x::Variable)
     if x.subtype == :Constant
         return x.value
     elseif x.diff == nothing
