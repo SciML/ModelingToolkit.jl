@@ -13,9 +13,6 @@ using Test
 p = Parameter(:p)
 u = DependentVariable(:u, dependents = [t])
 
-s = JumpVariable(:s, dependents=[t])
-n = NoiseVariable(:n, dependents=[t])
-
 σ*(y-x)
 D(x)
 D(x) ~ -σ*(y-x)

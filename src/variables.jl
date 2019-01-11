@@ -17,28 +17,8 @@ function DependentVariable(name,args...;dependents = [],kwargs...)
     Variable(name,args...;subtype=:DependentVariable,dependents=dependents,kwargs...)
 end
 
-function StateVariable(name,args...;dependents = [],kwargs...)
-    @assert !isempty(dependents)
-    Variable(name,args...;subtype=:StateVariable,dependents=dependents,kwargs...)
-end
-
-function ControlVariable(name,args...;dependents = [],kwargs...)
-    @assert !isempty(dependents)
-    Variable(name,args...;subtype=:ControlVariable,dependents=dependents,kwargs...)
-end
-
-function JumpVariable(name,args...;dependents = [],kwargs...)
-    @assert !isempty(dependents)
-    Variable(name,args...;subtype=:JumpVariable,dependents=dependents,kwargs...)
-end
-
-function NoiseVariable(name,args...;dependents = [],kwargs...)
-    @assert !isempty(dependents)
-    Variable(name,args...;subtype=:NoiseVariable,dependents=dependents,kwargs...)
-end
-
-export Variable,Parameter,Constant,DependentVariable,IndependentVariable,JumpVariable,NoiseVariable,
-       @Var, @DVar, @IVar, @Param, @Const
+export Variable,Parameter,Constant,DependentVariable,IndependentVariable,
+       @Var, @Param, @Const, @DVar, @IVar
 
 
 Base.copy(x::Variable) = Variable(x.name, x.subtype, x.diff, x.dependents)
