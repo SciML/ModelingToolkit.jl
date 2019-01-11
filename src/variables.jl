@@ -7,11 +7,7 @@ end
 
 Variable(name; subtype::Symbol=:Variable, dependents::Vector{Variable} = Variable[]) =
     Variable(name, subtype, nothing, dependents)
-Variable(name,args...;kwargs...) = Variable(name,args...;subtype=:Variable,kwargs...)
-
-Variable(name,x::Variable) = Variable(name,x.value_type,
-                x.subtype,D,x.dependents,x.description,x.flow,x.domain,
-                x.size,x.context)
+Variable(name, args...; kwargs...) = Variable(name, args...; subtype=:Variable, kwargs...)
 
 Parameter(name,args...;kwargs...) = Variable(name,args...;subtype=:Parameter,kwargs...)
 IndependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:IndependentVariable,kwargs...)
@@ -43,6 +39,9 @@ end
 
 export Variable,Parameter,Constant,DependentVariable,IndependentVariable,JumpVariable,NoiseVariable,
        @Var, @DVar, @IVar, @Param, @Const
+
+
+Base.copy(x::Variable) = Variable(x.name, x.subtype, x.diff, x.dependents)
 
 
 struct Constant <: Expression
