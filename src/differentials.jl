@@ -16,7 +16,7 @@ function (D::Differential)(x::Variable)
 end
 Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x == D2.x
 
-Variable(x::Variable, D::Differential) = Variable(x.name,x.value,x.value_type,
+Variable(x::Variable, D::Differential) = Variable(x.name,x.value_type,
                 x.subtype,D,x.dependents,x.description,x.flow,x.domain,
                 x.size,x.context)
 

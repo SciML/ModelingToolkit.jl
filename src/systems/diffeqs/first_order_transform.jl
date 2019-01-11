@@ -5,7 +5,7 @@ function lower_varname(var::Variable, naming_scheme; lower=false)
     lower_varname(var.name, D.x, order, var.subtype, naming_scheme)
 end
 function lower_varname(sym::Symbol, idv, order::Int, subtype::Symbol, naming_scheme)
-    order == 0 && return Variable(sym, subtype)
+    order == 0 && return Variable(sym, subtype=subtype)
     name = Symbol(String(sym)*naming_scheme*String(idv.name)^order)
     Variable(name, subtype=subtype)
 end

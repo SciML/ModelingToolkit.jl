@@ -1,6 +1,5 @@
 mutable struct Variable <: Expression
     name::Symbol
-    value
     value_type::DataType
     subtype::Symbol
     diff::Union{Function,Nothing}  # FIXME
@@ -13,8 +12,7 @@ mutable struct Variable <: Expression
 end
 
 Variable(name,
-         value = nothing,
-         value_type = typeof(value);
+         value_type = Any;
          subtype::Symbol=:Variable,
          dependents::Vector{Variable} = Variable[],
          flow::Bool = false,
@@ -22,11 +20,11 @@ Variable(name,
          domain = Reals(),
          size = nothing,
          context = nothing) =
-         Variable(name,value,value_type,subtype,nothing,
+         Variable(name,value_type,subtype,nothing,
                   dependents,description,flow,domain,size,context)
 Variable(name,args...;kwargs...) = Variable(name,args...;subtype=:Variable,kwargs...)
 
-Variable(name,x::Variable) = Variable(name,x.value,x.value_type,
+Variable(name,x::Variable) = Variable(name,x.value_type,
                 x.subtype,D,x.dependents,x.description,x.flow,x.domain,
                 x.size,x.context)
 
@@ -73,8 +71,8 @@ Base.isone(ex::Expression)  = isa(ex, Constant) && isone(ex.value)
 
 
 # Variables use isequal for equality since == is an Operation
-function Base.:(==)(x::Variable,y::Variable)
-    x.name == y.name && x.subtype == y.subtype && x.value == y.value &&
+function Base.:(==)(x::Variable, y::Variable)
+    x.name == y.name && x.subtype == y.subtype &&
     x.value_type == y.value_type && x.diff == y.diff
 end
 Base.:(==)(::Variable, ::Number) = false
@@ -142,45 +140,29 @@ function _parse_vars(macroname, fun, x)
     # begin
     #     x
     #     y
-    #     z = exp(2)
+    #     z
     # end
     x = flatten_expr!(x)
     for _var in x
         iscall = typeof(_var) <: Expr && _var.head == :call
         issym    = _var isa Symbol
-        isassign = issym ? false : _var.head == :(=)
-        @assert iscall || issym || isassign "@$macroname expects a tuple of expressions!\nE.g. `@$macroname x y z=1`"
-        if iscall || issym
-            if iscall
-                dependents = :([$(_var.args[2:end]...)])
-                var = _var.args[1]
-            else
-                dependents = Variable[]
-                var = _var
-            end
-            lhs = var
-            push!(lhss, lhs)
-            expr = :( $lhs = $fun( Symbol($(String(lhs))) ,
-                      dependents = $dependents))
+        @assert iscall || issym "@$macroname expects a tuple of expressions!\nE.g. `@$macroname x y z`"
+
+        if iscall
+            dependents = :([$(_var.args[2:end]...)])
+            lhs = _var.args[1]
+        else
+            dependents = Variable[]
+            lhs = _var
         end
-        if isassign
-            iscall = typeof(_var.args[1]) <: Expr && _var.args[1].head == :call
-            if iscall
-                dependents = :([$(_var.args[1].args[2:end]...)])
-                lhs = _var.args[1].args[1]
-            else
-                dependents = Variable[]
-                lhs = _var.args[1]
-            end
-            rhs = _var.args[2]
-            push!(lhss, lhs)
-            expr = :( $lhs = $fun( Symbol($(String(lhs))) , $rhs,
-                      dependents = $dependents))
-        end
+
+        push!(lhss, lhs)
+        expr = :( $lhs = $fun( Symbol($(String(lhs))) ,
+                  dependents = $dependents))
         push!(ex.args, expr)
     end
-    push!(ex.args, Expr(:tuple, lhss...))
-    ex
+    push!(ex.args, build_expr(:tuple, lhss))
+    return ex
 end
 
 for funs in ((:DVar, :DependentVariable), (:IVar, :IndependentVariable),

@@ -50,14 +50,15 @@ function test_eqs(eqs1, eqs2)
     eq = true
     for i in eachindex(eqs1)
         lhs1, lhs2 = eqs1[i].args[1], eqs2[i].args[1]
+        typeof(lhs1) === typeof(lhs2) || return false
         for f in fieldnames(typeof(lhs1))
             eq = eq && isequal(getfield(lhs1, f), getfield(lhs2, f))
         end
         eq = eq && isequal(eqs1[i].args[2], eqs2[i].args[2])
     end
-    @test_broken eq
+    eq
 end
-test_eqs(de1.eqs, lowered_eqs)
+@test_broken test_eqs(de1.eqs, lowered_eqs)
 
 # Internal calculations
 eqs = [a ~ y-x,
