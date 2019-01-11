@@ -31,7 +31,7 @@ function expand_derivatives(O::Operation)
 
     return O
 end
-expand_derivatives(x::Variable) = x
+expand_derivatives(x) = x
 
 # Don't specialize on the function here
 function Derivative(O::Operation,idx)

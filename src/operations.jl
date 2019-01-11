@@ -8,12 +8,12 @@ end
 function Base.:(==)(x::Operation,y::Operation)
     x.op == y.op && length(x.args) == length(y.args) && all(isequal.(x.args,y.args))
 end
-Base.:(==)(x::Operation,y::Number) = false
-Base.:(==)(x::Number,y::Operation) = false
-Base.:(==)(x::Operation,y::Nothing) = false
-Base.:(==)(x::Nothing,y::Operation) = false
-Base.:(==)(x::Variable,y::Operation) = false
-Base.:(==)(x::Operation,y::Variable) = false
+Base.:(==)(::Operation, ::Number   ) = false
+Base.:(==)(::Number   , ::Operation) = false
+Base.:(==)(::Operation, ::Variable ) = false
+Base.:(==)(::Variable , ::Operation) = false
+Base.:(==)(::Operation, ::Constant ) = false
+Base.:(==)(::Constant , ::Operation) = false
 
 Base.convert(::Type{Expr}, O::Operation) =
     build_expr(:call, Any[Symbol(O.op); convert.(Expr, O.args)])
@@ -36,8 +36,8 @@ function find_replace!(O::Operation,x::Variable,y::Expression)
 end
 
 # For inv
-Base.convert(::Type{Operation},x::Int) = Operation(identity,Expression[Constant(x)])
-Base.convert(::Type{Operation},x::Bool) = Operation(identity,Expression[Constant(x)])
-Base.convert(::Type{Operation},x::Variable) = Operation(identity,Expression[x])
-Operation(x) = convert(Operation,x)
-Operation(x::Operation) = x
+Base.convert(::Type{Operation}, x::Int) = Operation(identity, Expression[Constant(x)])
+Base.convert(::Type{Operation}, x::Bool) = Operation(identity, Expression[Constant(x)])
+Base.convert(::Type{Operation}, x::Operation) = x
+Base.convert(::Type{Operation}, x::Expression) = Operation(identity, Expression[x])
+Operation(x) = convert(Operation, x)

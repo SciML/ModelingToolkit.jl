@@ -31,8 +31,6 @@ Variable(name,x::Variable) = Variable(name,x.value,x.value_type,
                 x.size,x.context)
 
 Parameter(name,args...;kwargs...) = Variable(name,args...;subtype=:Parameter,kwargs...)
-Constant(value::Number) = Variable(Symbol(value),value,typeof(value);subtype=:Constant)
-Constant(name,args...;kwargs...) = Variable(name,args...;subtype=:Constant,kwargs...)
 IndependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:IndependentVariable,kwargs...)
 
 function DependentVariable(name,args...;dependents = [],kwargs...)
@@ -64,12 +62,14 @@ export Variable,Parameter,Constant,DependentVariable,IndependentVariable,JumpVar
        @Var, @DVar, @IVar, @Param, @Const
 
 
-Base.get(x::Variable) = x.value
+struct Constant <: Expression
+    value::Number
+end
+Base.get(c::Constant) = c.value
 
-Base.iszero(::Expression) = false
-Base.iszero(c::Variable) = get(c) isa Number && iszero(get(c))
-Base.isone(::Expression) = false
-Base.isone(c::Variable) = get(c) isa Number && isone(get(c))
+
+Base.iszero(ex::Expression) = isa(ex, Constant) && iszero(ex.value)
+Base.isone(ex::Expression)  = isa(ex, Constant) && isone(ex.value)
 
 
 # Variables use isequal for equality since == is an Operation
@@ -77,40 +77,23 @@ function Base.:(==)(x::Variable,y::Variable)
     x.name == y.name && x.subtype == y.subtype && x.value == y.value &&
     x.value_type == y.value_type && x.diff == y.diff
 end
-
-function Base.:(==)(x::Variable,y::Number)
-    x == Constant(y)
-end
-
-function Base.:(==)(x::Number,y::Variable)
-    Constant(x) == y
-end
+Base.:(==)(::Variable, ::Number) = false
+Base.:(==)(::Number, ::Variable) = false
+Base.:(==)(::Variable, ::Constant) = false
+Base.:(==)(::Constant, ::Variable) = false
+Base.:(==)(c::Constant, n::Number) = c.value == n
+Base.:(==)(n::Number, c::Constant) = c.value == n
+Base.:(==)(a::Constant, b::Constant) = a.value == b.value
 
 function Base.convert(::Type{Expr}, x::Variable)
-    if x.subtype == :Constant
-        return x.value
-    elseif x.diff == nothing
-        return :($(x.name))
-    else
-        return :($(Symbol("$(x.name)_$(x.diff.x.name)")))
-    end
+    x.diff === nothing && return x.name
+    return Symbol("$(x.name)_$(x.diff.x.name)")
 end
+Base.convert(::Type{Expr}, c::Constant) = c.value
 
-function Base.show(io::IO, A::Variable)
-    if A.subtype == :Constant
-        print(io,"Constant($(A.value))")
-    else
-        str = "$(A.subtype)($(A.name))"
-        if A.value != nothing
-            str *= ", value = " * string(A.value)
-        end
-
-        if A.diff != nothing
-            str *= ", diff = " * string(A.diff)
-        end
-
-        print(io,str)
-    end
+function Base.show(io::IO, x::Variable)
+    print(io, x.subtype, '(', x.name, ')')
+    x.diff === nothing || print(io, ", diff = ", x.diff)
 end
 
 extract_idv(eq) = eq.args[1].diff.x
