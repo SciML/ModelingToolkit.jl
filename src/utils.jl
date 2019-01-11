@@ -33,6 +33,12 @@ end
 
 toexpr(ex) = MacroTools.postwalk(x -> isa(x, Expression) ? convert(Expr, x) : x, ex)
 
+function partition(f, xs)
+    idxs = map(f, xs)
+    not_idxs = eachindex(xs) .∉ (idxs,)
+    return (xs[idxs], xs[not_idxs])
+end
+
 is_constant(x::Variable) = x.subtype === :Constant
 is_constant(::Any) = false
 

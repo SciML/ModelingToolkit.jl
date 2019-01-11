@@ -1,3 +1,5 @@
+extract_idv(eq::Equation) = eq.lhs.diff.x
+
 function lower_varname(var::Variable, naming_scheme; lower=false)
     D = var.diff
     D == nothing && return var
@@ -22,7 +24,7 @@ function ode_order_lowering!(eqs, naming_scheme)
     idv = extract_idv(eqs[ind])
     D   = Differential(idv, 1)
     sym_order = Dict{Symbol, Int}()
-    dv_name = eqs[1].args[1].subtype
+    dv_name = eqs[1].lhs.subtype
     for eq in eqs
         isintermediate(eq) && continue
         sym, maxorder = extract_symbol_order(eq)
@@ -38,7 +40,7 @@ function ode_order_lowering!(eqs, naming_scheme)
         for o in (order-1):-1:1
             lhs = D(lower_varname(sym, idv, o-1, dv_name, naming_scheme))
             rhs = lower_varname(sym, idv, o, dv_name, naming_scheme)
-            eq = Operation(==, [lhs, rhs])
+            eq = Equation(lhs, rhs)
             push!(eqs, eq)
         end
     end
@@ -46,13 +48,10 @@ function ode_order_lowering!(eqs, naming_scheme)
 end
 
 function lhs_renaming!(eq, D, naming_scheme)
-    eq.args[1] = D(lower_varname(eq.args[1], naming_scheme, lower=true))
+    eq.lhs = D(lower_varname(eq.lhs, naming_scheme, lower=true))
     return eq
 end
-function rhs_renaming!(eq, naming_scheme)
-    rhs = eq.args[2]
-    _rec_renaming!(rhs, naming_scheme)
-end
+rhs_renaming!(eq, naming_scheme) = _rec_renaming!(eq.rhs, naming_scheme)
 
 function _rec_renaming!(rhs, naming_scheme)
     rhs isa Variable && rhs.diff != nothing && return lower_varname(rhs, naming_scheme)
@@ -67,7 +66,7 @@ end
 
 function extract_symbol_order(eq)
     # We assume that the differential with the highest order is always going to be in the LHS
-    dv = eq.args[1]
+    dv = eq.lhs
     sym = dv.name
     order = dv.diff.order
     sym, order
