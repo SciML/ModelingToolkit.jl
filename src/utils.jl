@@ -39,7 +39,7 @@ function partition(f, xs)
     return (xs[idxs], xs[not_idxs])
 end
 
-is_constant(x::Variable) = x.subtype === :Constant
+is_constant(::Constant) = true
 is_constant(::Any) = false
 
 is_operation(::Operation) = true

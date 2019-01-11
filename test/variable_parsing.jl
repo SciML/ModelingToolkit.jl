@@ -1,23 +1,23 @@
 using ModelingToolkit
 using Test
 
-@Var a=1.0 b
-a1 = Variable(:a,1.0)
+@Var a b
+a1 = Variable(:a)
 @test a1 == a
 @test convert(Expr, a) == :a
 
 @Var begin
-    a = 1.0
+    a
     b
 end
 
 @IVar t
 @DVar x(t)
-@DVar y(t)=sin(1)+exp(1)
+@DVar y(t)
 @DVar z(t)
-x1 = DependentVariable(:x,dependents = [t])
-y1 = DependentVariable(:y, sin(1) + exp(1),dependents = [t])
-z1 = DependentVariable(:z,dependents = [t])
+x1 = DependentVariable(:x ,dependents = [t])
+y1 = DependentVariable(:y ,dependents = [t])
+z1 = DependentVariable(:z ,dependents = [t])
 @test x1 == x
 @test y1 == y
 @test z1 == z
@@ -27,10 +27,10 @@ z1 = DependentVariable(:z,dependents = [t])
 
 @IVar begin
     t
-    s = cos(2.5)
+    s
 end
 t1 = IndependentVariable(:t)
-s1 = IndependentVariable(:s, cos(2.5))
+s1 = IndependentVariable(:s)
 @test t1 == t
 @test s1 == s
 @test convert(Expr, t) == :t

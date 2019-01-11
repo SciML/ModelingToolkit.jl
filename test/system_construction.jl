@@ -51,14 +51,15 @@ function test_eqs(eqs1, eqs2)
     eq = true
     for (eq1, eq2) in zip(eqs1, eqs2)
         lhs1, lhs2 = eq1.lhs, eq2.lhs
+        typeof(lhs1) === typeof(lhs2) || return false
         for f in fieldnames(typeof(lhs1))
             eq = eq & isequal(getfield(lhs1, f), getfield(lhs2, f))
         end
         eq = eq & isequal(eq1.rhs, eq2.rhs)
     end
-    @test_broken eq
+    eq
 end
-test_eqs(de1.eqs, lowered_eqs)
+@test_broken test_eqs(de1.eqs, lowered_eqs)
 
 # Internal calculations
 eqs = [a ~ y-x,

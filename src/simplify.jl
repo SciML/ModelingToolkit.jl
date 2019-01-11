@@ -1,4 +1,4 @@
-function simplify_constants(O::Operation, shorten_tree = true)
+function simplify_constants(O::Operation, shorten_tree)
     while true
         O′ = _simplify_constants(O, shorten_tree)
         if is_operation(O′)
@@ -8,10 +8,13 @@ function simplify_constants(O::Operation, shorten_tree = true)
         O = O′
     end
 end
+simplify_constants(x, shorten_tree) = x
+simplify_constants(x) = simplify_constants(x, true)
+
 
 const AC_OPERATORS = (*, +)
 
-function _simplify_constants(O, shorten_tree = true)
+function _simplify_constants(O::Operation, shorten_tree)
     # Tree shrinking
     if shorten_tree && O.op ∈ AC_OPERATORS
         # Flatten tree
@@ -67,7 +70,7 @@ function _simplify_constants(O, shorten_tree = true)
 
     return O
 end
-simplify_constants(x::Variable, y=false) = x
-_simplify_constants(x::Variable, y=false) = x
+_simplify_constants(x, shorten_tree) = x
+_simplify_constants(x) = _simplify_constants(x, true)
 
 export simplify_constants

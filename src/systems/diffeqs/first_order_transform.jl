@@ -2,14 +2,13 @@ extract_idv(eq::Equation) = eq.lhs.diff.x
 
 function lower_varname(var::Variable, naming_scheme; lower=false)
     D = var.diff
-    D == nothing && return var
+    D === nothing && return var
     order = lower ? D.order-1 : D.order
     lower_varname(var.name, D.x, order, var.subtype, naming_scheme)
 end
 function lower_varname(sym::Symbol, idv, order::Int, subtype::Symbol, naming_scheme)
-    order == 0 && return Variable(sym, subtype)
-    name = Symbol(String(sym)*naming_scheme*String(idv.name)^order)
-    Variable(name, subtype=subtype)
+    name = order == 0 ? sym : Symbol(sym, naming_scheme, string(idv.name)^order)
+    return Variable(name, subtype=subtype)
 end
 
 function ode_order_lowering(sys::DiffEqSystem; kwargs...)

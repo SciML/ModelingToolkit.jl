@@ -147,16 +147,12 @@ In this section we define the core pieces of the IR and what they mean.
 
 ### Variables
 
-The simplest piece of the IR is the `Variable`. The `Variable` is the
+The most fundamental part of the IR is the `Variable`. The `Variable` is the
 context-aware single variable of the IR. Its fields are described as follows:
 
 - `name`: the name of the `Variable`. Note that this is not necessarily
   the same as the name of the Julia variable. But this symbol itself is considered
   the core identifier of the `Variable` in the sense of equality.
-- `value`: the value of the `Variable`. The meaning of the value can be
-  interpreted differently for different systems, but in most cases it's tied to
-  whatever value information would be required for the system to be well-defined
-  such as the initial condition of a differential equation.
 - `value_type`: the type that the values have to be. It's disconnected
   from the `value` because in many cases the `value` may not be able to be
   specified in advance even when we may already know the type. This can be used
@@ -178,6 +174,10 @@ context-aware single variable of the IR. Its fields are described as follows:
   size of the array for the variable.
 - `context`: this is an open field for DSLs to carry along more context
   in the variables, but is not used in the systems themselves.
+
+### Constants
+
+`Constant` is a simple wrapper type to store numerical Julia constants.
 
 ### Operations
 
