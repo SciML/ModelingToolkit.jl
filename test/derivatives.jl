@@ -17,8 +17,8 @@ dcsch = D(csch(t))
 dsinsin = D(sin(sin(t)))
 @test expand_derivatives(dsinsin) == cos(sin(t))*cos(t)
 # Binary
-dpow1 = Derivative(^,[x, y],Val(1))
-dpow2 = Derivative(^,[x, y],Val(2))
+dpow1 = Derivative(^, (x, y), Val(1))
+dpow2 = Derivative(^, (x, y), Val(2))
 @test dpow1 == y*x^(y-1)
 @test dpow2 == x^y*log(x)
 

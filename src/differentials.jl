@@ -7,7 +7,6 @@ Differential(x) = Differential(x,1)
 Base.show(io::IO, D::Differential) = print(io,"($(D.x),$(D.order))")
 Base.convert(::Type{Expr}, D::Differential) = D
 
-function Derivative end
 (D::Differential)(x::Operation) = Operation(D, Expression[x])
 function (D::Differential)(x::Variable)
     D.x === x             && return Constant(1)
@@ -34,11 +33,7 @@ end
 expand_derivatives(x) = x
 
 # Don't specialize on the function here
-function Derivative(O::Operation,idx)
-    # This calls the Derivative dispatch from the user or pre-defined code
-    Derivative(O.op, O.args, Val(idx))
-end
-Derivative(op, args, idx) = Derivative(op, (args...,), idx)
+Derivative(O::Operation, idx) = Derivative(O.op, (O.args...,), Val(idx))
 
 # Pre-defined derivatives
 import DiffRules, SpecialFunctions, NaNMath
