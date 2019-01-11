@@ -10,11 +10,11 @@ using Test
 @Const c=0
 
 # Default values
-p = Parameter(:p, 1)
-u = DependentVariable(:u, [1], dependents = [t])
+p = Parameter(:p)
+u = DependentVariable(:u, dependents = [t])
 
-s = JumpVariable(:s,3,dependents=[t])
-n = NoiseVariable(:n,dependents=[t])
+s = JumpVariable(:s, dependents=[t])
+n = NoiseVariable(:n, dependents=[t])
 
 σ*(y-x)
 D(x)

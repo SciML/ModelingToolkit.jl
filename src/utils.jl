@@ -33,7 +33,7 @@ end
 
 toexpr(ex) = MacroTools.postwalk(x -> isa(x, Expression) ? convert(Expr, x) : x, ex)
 
-is_constant(x::Variable) = x.subtype === :Constant
+is_constant(::Constant) = true
 is_constant(::Any) = false
 
 is_operation(::Operation) = true
