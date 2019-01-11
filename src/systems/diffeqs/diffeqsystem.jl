@@ -63,7 +63,7 @@ isintermediate(eq::Equation) = eq.lhs.diff === nothing
 function build_equals_expr(eq::Equation)
     @assert typeof(eq.lhs) <: Variable
 
-    lhs = Symbol("$(eq.lhs.name)")
+    lhs = eq.lhs.name
     isintermediate(eq) || (lhs = Symbol(lhs, :_, "$(eq.lhs.diff.x.name)"))
 
     return :($lhs = $(convert(Expr, eq.rhs)))

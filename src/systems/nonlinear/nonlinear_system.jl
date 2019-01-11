@@ -27,7 +27,7 @@ function generate_nlsys_function(sys::NonlinearSystem)
     var_exprs = [:($(sys.vs[i].name) = u[$i]) for i in 1:length(sys.vs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
     sys_eqs, calc_eqs = partition(eq -> isequal(eq.lhs, Constant(0)), sys.eqs)
-    calc_exprs = [:($(Symbol("$(eq.lhs.name)")) = $(eq.rhs)) for eq in calc_eqs]
+    calc_exprs = [:($(eq.lhs.name) = $(eq.rhs)) for eq in calc_eqs if isa(eq.lhs, Variable)]
     sys_exprs = [:($(Symbol("resid[$i]")) = $(sys_eqs[i].rhs)) for i in eachindex(sys_eqs)]
 
     exprs = vcat(var_exprs,param_exprs,calc_exprs,sys_exprs)
