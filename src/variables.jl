@@ -1,27 +1,12 @@
 mutable struct Variable <: Expression
     name::Symbol
-    value_type::DataType
     subtype::Symbol
     diff::Union{Function,Nothing}  # FIXME
     dependents::Vector{Variable}
-    description::String
-    flow::Bool
-    domain::AbstractDomain
-    size
-    context
 end
 
-Variable(name,
-         value_type = Any;
-         subtype::Symbol=:Variable,
-         dependents::Vector{Variable} = Variable[],
-         flow::Bool = false,
-         description::String = "",
-         domain = Reals(),
-         size = nothing,
-         context = nothing) =
-         Variable(name,value_type,subtype,nothing,
-                  dependents,description,flow,domain,size,context)
+Variable(name; subtype::Symbol=:Variable, dependents::Vector{Variable} = Variable[]) =
+    Variable(name, subtype, nothing, dependents)
 Variable(name,args...;kwargs...) = Variable(name,args...;subtype=:Variable,kwargs...)
 
 Variable(name,x::Variable) = Variable(name,x.value_type,
@@ -71,10 +56,7 @@ Base.isone(ex::Expression)  = isa(ex, Constant) && isone(ex.value)
 
 
 # Variables use isequal for equality since == is an Operation
-function Base.:(==)(x::Variable, y::Variable)
-    x.name == y.name && x.subtype == y.subtype &&
-    x.value_type == y.value_type && x.diff == y.diff
-end
+Base.:(==)(x::Variable, y::Variable) = (x.name, x.subtype, x.diff) == (y.name, y.subtype, y.diff)
 Base.:(==)(::Variable, ::Number) = false
 Base.:(==)(::Number, ::Variable) = false
 Base.:(==)(::Variable, ::Constant) = false
