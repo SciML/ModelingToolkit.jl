@@ -12,13 +12,12 @@ function Derivative end
 function (D::Differential)(x::Variable)
     D.x === x             && return Constant(1)
     has_dependent(x, D.x) || return Constant(0)
-    return Variable(x,D)
+
+    x′ = copy(x)
+    x′.diff = D
+    return x′
 end
 Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x == D2.x
-
-Variable(x::Variable, D::Differential) = Variable(x.name,x.value_type,
-                x.subtype,D,x.dependents,x.description,x.flow,x.domain,
-                x.size,x.context)
 
 function expand_derivatives(O::Operation)
     @. O.args = expand_derivatives(O.args)

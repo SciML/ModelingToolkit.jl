@@ -153,27 +153,12 @@ context-aware single variable of the IR. Its fields are described as follows:
 - `name`: the name of the `Variable`. Note that this is not necessarily
   the same as the name of the Julia variable. But this symbol itself is considered
   the core identifier of the `Variable` in the sense of equality.
-- `value_type`: the type that the values have to be. It's disconnected
-  from the `value` because in many cases the `value` may not be able to be
-  specified in advance even when we may already know the type. This can be used
-  to set units or denote a variable as being of higher precision.
 - `subtype`: the main denotation of context. Variables within systems
   are grouped according to their `subtype`.
 - `diff`: the `Differential` object representing the quantity the variable is differentiated with respect to, or `nothing`
 - `dependents`: the vector of variables on which the current variable
   is dependent. For example, `u(t,x)` has dependents `[t,x]`. Derivatives thus
   require this information in order to simplify down.
-- `flow`: a boolean that describes the connection behavior between systems,
-  whether it should connect to have summation to zero or equality.
-- `description`: a string description of the variable used for building
-  printouts and other descriptive outputs.
-- `domain`: a type which describes the domain in which the values of the variable
-  lives.
-- `size`: the size of the variable. By default it's `nothing`, denoting that the
-  variable is a scalar. Otherwise it's a tuple of numbers which describes the
-  size of the array for the variable.
-- `context`: this is an open field for DSLs to carry along more context
-  in the variables, but is not used in the systems themselves.
 
 ### Constants
 

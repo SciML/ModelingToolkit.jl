@@ -10,9 +10,7 @@ abstract type Expression <: Number end
 abstract type AbstractOperation <: Expression end
 abstract type AbstractComponent <: Expression end
 abstract type AbstractSystem end
-abstract type AbstractDomain end
 
-include("domains.jl")
 include("variables.jl")
 
 Base.promote_rule(::Type{T},::Type{T2}) where {T<:Number,T2<:Expression} = Expression
