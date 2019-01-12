@@ -33,9 +33,14 @@ function vars!(vars, op)
     args = isa(op, Equation) ? Expression[op.lhs, op.rhs] : op.args
 
     for arg ∈ args
-        isa(arg, Operation) ? vars!(vars, arg) :
-        isa(arg, Variable)  ? push!(vars, arg) :
-        nothing
+        if isa(arg, Operation)
+            vars!(vars, arg)
+        elseif isa(arg, Variable)
+            push!(vars, arg)
+            for dep ∈ arg.dependents
+                push!(vars, dep)
+            end
+        end
     end
 
     return vars
