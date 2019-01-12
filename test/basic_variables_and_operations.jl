@@ -3,7 +3,6 @@ using Test
 
 @IVar t
 @DVar x(t) y(t) z(t)
-@test_throws AssertionError @DVar w
 
 @Deriv D'~t # Default of first derivative, Derivative(t,1)
 @Param σ ρ β

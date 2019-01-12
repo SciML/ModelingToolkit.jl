@@ -11,11 +11,7 @@ Variable(name, args...; kwargs...) = Variable(name, args...; subtype=:Variable, 
 
 Parameter(name,args...;kwargs...) = Variable(name,args...;subtype=:Parameter,kwargs...)
 IndependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:IndependentVariable,kwargs...)
-
-function DependentVariable(name,args...;dependents = [],kwargs...)
-    @assert !isempty(dependents)
-    Variable(name,args...;subtype=:DependentVariable,dependents=dependents,kwargs...)
-end
+DependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:DependentVariable,kwargs...)
 
 export Variable,Parameter,Constant,DependentVariable,IndependentVariable,
        @Var, @Param, @Const, @DVar, @IVar
