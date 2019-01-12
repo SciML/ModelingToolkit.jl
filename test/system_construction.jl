@@ -47,14 +47,15 @@ lowered_eqs = [D(u_tt) ~ 2u_tt + u_t + x_t + 1
                D(u)    ~ u_t
                D(x)    ~ x_t]
 function test_eqs(eqs1, eqs2)
+    length(eqs1) == length(eqs2) || return false
     eq = true
-    for i in eachindex(eqs1)
-        lhs1, lhs2 = eqs1[i].args[1], eqs2[i].args[1]
+    for (eq1, eq2) in zip(eqs1, eqs2)
+        lhs1, lhs2 = eq1.lhs, eq2.lhs
         typeof(lhs1) === typeof(lhs2) || return false
         for f in fieldnames(typeof(lhs1))
-            eq = eq && isequal(getfield(lhs1, f), getfield(lhs2, f))
+            eq = eq & isequal(getfield(lhs1, f), getfield(lhs2, f))
         end
-        eq = eq && isequal(eqs1[i].args[2], eqs2[i].args[2])
+        eq = eq & isequal(eq1.rhs, eq2.rhs)
     end
     eq
 end

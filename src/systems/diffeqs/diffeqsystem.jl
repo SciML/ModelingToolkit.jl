@@ -1,5 +1,5 @@
 mutable struct DiffEqSystem <: AbstractSystem
-    eqs::Vector{Operation}
+    eqs::Vector{Equation}
     ivs::Vector{Variable}
     dvs::Vector{Variable}
     vs::Vector{Variable}
@@ -41,59 +41,53 @@ function generate_ode_function(sys::DiffEqSystem;version = ArrayFunction)
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
     sys_exprs = build_equals_expr.(sys.eqs)
     if version == ArrayFunction
-      dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in 1:length(sys.dvs)]
-      exprs = vcat(var_exprs,param_exprs,sys_exprs,dvar_exprs)
-      block = expr_arr_to_block(exprs)
-      :((du,u,p,t)->$(toexpr(block)))
+        dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in 1:length(sys.dvs)]
+        exprs = vcat(var_exprs,param_exprs,sys_exprs,dvar_exprs)
+        block = expr_arr_to_block(exprs)
+        :((du,u,p,t)->$(toexpr(block)))
     elseif version == SArrayFunction
-      dvar_exprs = [:($(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in 1:length(sys.dvs)]
-      svector_expr = quote
-        E = eltype(tuple($(dvar_exprs...)))
-        T = StaticArrays.similar_type(typeof(u), E)
-        T($(dvar_exprs...))
-      end
-      exprs = vcat(var_exprs,param_exprs,sys_exprs,svector_expr)
-      block = expr_arr_to_block(exprs)
-      :((u,p,t)->$(toexpr(block)))
+        dvar_exprs = [:($(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in 1:length(sys.dvs)]
+        svector_expr = quote
+            E = eltype(tuple($(dvar_exprs...)))
+            T = StaticArrays.similar_type(typeof(u), E)
+            T($(dvar_exprs...))
+        end
+        exprs = vcat(var_exprs,param_exprs,sys_exprs,svector_expr)
+        block = expr_arr_to_block(exprs)
+        :((u,p,t)->$(toexpr(block)))
     end
 end
 
-isintermediate(eq) = eq.args[1].diff == nothing
+isintermediate(eq::Equation) = eq.lhs.diff === nothing
 
-function build_equals_expr(eq)
-    @assert typeof(eq.args[1]) <: Variable
-    if !(isintermediate(eq))
-        # Differential statement
-        :($(Symbol("$(eq.args[1].name)_$(eq.args[1].diff.x.name)")) = $(eq.args[2]))
-    else
-        # Intermediate calculation
-        :($(Symbol("$(eq.args[1].name)")) = $(eq.args[2]))
-    end
+function build_equals_expr(eq::Equation)
+    @assert typeof(eq.lhs) <: Variable
+
+    lhs = eq.lhs.name
+    isintermediate(eq) || (lhs = Symbol(lhs, :_, "$(eq.lhs.diff.x.name)"))
+
+    return :($lhs = $(convert(Expr, eq.rhs)))
 end
 
-function calculate_jacobian(sys::DiffEqSystem,simplify=true)
-    diff_idxs = map(eq->eq.args[1].diff !=nothing,sys.eqs)
-    diff_exprs = sys.eqs[diff_idxs]
-    rhs = [eq.args[2] for eq in diff_exprs]
+function calculate_jacobian(sys::DiffEqSystem, simplify=true)
+    calcs, diff_exprs = partition(isintermediate, sys.eqs)
+    rhs = [eq.rhs for eq in diff_exprs]
+
     # Handle intermediate calculations by substitution
-    calcs = sys.eqs[.!(diff_idxs)]
-    for i in 1:length(calcs)
-        find_replace!.(rhs,calcs[i].args[1],calcs[i].args[2])
+    for calc ∈ calcs
+        find_replace!.(rhs, calc.lhs, calc.rhs)
     end
-    sys_exprs = calculate_jacobian(rhs,sys.dvs)
+
+    sys_exprs = calculate_jacobian(rhs, sys.dvs)
     sys_exprs = Expression[expand_derivatives(expr) for expr in sys_exprs]
-    if simplify
-        sys_exprs = Expression[simplify_constants(expr) for expr in sys_exprs]
-    end
     sys_exprs
 end
 
-function generate_ode_jacobian(sys::DiffEqSystem,simplify=true)
+function generate_ode_jacobian(sys::DiffEqSystem, simplify=true)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.dvs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
-    diff_idxs = map(eq->eq.args[1].diff !=nothing,sys.eqs)
-    diff_exprs = sys.eqs[diff_idxs]
-    jac = calculate_jacobian(sys,simplify)
+    diff_exprs = filter(!isintermediate, sys.eqs)
+    jac = calculate_jacobian(sys, simplify)
     sys.jac = jac
     jac_exprs = [:(J[$i,$j] = $(convert(Expr, jac[i,j]))) for i in 1:size(jac,1), j in 1:size(jac,2)]
     exprs = vcat(var_exprs,param_exprs,vec(jac_exprs))
@@ -101,11 +95,10 @@ function generate_ode_jacobian(sys::DiffEqSystem,simplify=true)
     :((J,u,p,t)->$(block))
 end
 
-function generate_ode_iW(sys::DiffEqSystem,simplify=true)
+function generate_ode_iW(sys::DiffEqSystem, simplify=true)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.dvs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
-    diff_idxs = map(eq->eq.args[1].diff !=nothing,sys.eqs)
-    diff_exprs = sys.eqs[diff_idxs]
+    diff_exprs = filter(!isintermediate, sys.eqs)
     jac = sys.jac
 
     gam = Variable(:gam)
@@ -143,6 +136,7 @@ function DiffEqBase.ODEFunction(sys::DiffEqSystem;version = ArrayFunction,kwargs
       ODEFunction{false}(eval(expr))
     end
 end
+
 
 export DiffEqSystem, ODEFunction
 export generate_ode_function

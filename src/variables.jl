@@ -55,44 +55,6 @@ function Base.show(io::IO, x::Variable)
     x.diff === nothing || print(io, ", diff = ", x.diff)
 end
 
-extract_idv(eq) = eq.args[1].diff.x
-
-function extract_elements(ops, targetmap, default = nothing)
-    elems = Dict{Symbol, Vector{Variable}}()
-    names = Dict{Symbol, Set{Symbol}}()
-    if default == nothing
-        targets =  unique(collect(values(targetmap)))
-    else
-        targets = [unique(collect(values(targetmap))), default]
-    end
-    for target in targets
-        elems[target] = Vector{Variable}()
-        names[target] = Set{Symbol}()
-    end
-    for op in ops
-        extract_elements!(op, elems, names, targetmap, default)
-    end
-    Tuple(elems[target] for target in targets)
-end
-# Walk the tree recursively and push variables into the right set
-function extract_elements!(op::AbstractOperation, elems, names, targetmap, default)
-    for arg in op.args
-        if arg isa Operation
-                extract_elements!(arg, elems, names, targetmap, default)
-        elseif arg isa Variable
-            if default == nothing
-                target = haskey(targetmap, arg.subtype) ? targetmap[arg.subtype] : continue
-            else
-                target = haskey(targetmap, arg.subtype) ? targetmap[arg.subtype] : default
-            end
-            if !in(arg.name, names[target])
-                push!(names[target], arg.name)
-                push!(elems[target], arg)
-            end
-        end
-    end
-end
-
 # Build variables more easily
 function _parse_vars(macroname, fun, x)
     ex = Expr(:block)
