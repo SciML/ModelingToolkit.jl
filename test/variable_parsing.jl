@@ -1,16 +1,6 @@
 using ModelingToolkit
 using Test
 
-@Var a b
-a1 = Variable(:a)
-@test a1 == a
-@test convert(Expr, a) == :a
-
-@Var begin
-    a
-    b
-end
-
 @IVar t
 @DVar x(t)
 @DVar y(t)

@@ -3,11 +3,10 @@ using Test
 
 # Define some variables
 @IVar t
-@DVar x(t) y(t) z(t)
+@DVar x(t) y(t) z(t) a()
 @Deriv D'~t # Default of first derivative, Derivative(t,1)
 @Param σ ρ β
 @Const c=0
-@Var a
 
 # Define a differential equation
 eqs = [D(x) ~ σ*(y-x),
@@ -85,7 +84,7 @@ end
 
 ModelingToolkit.generate_nlsys_function(ns)
 
-@Var _x
+@DVar _x
 @Deriv D'~t
 @Param A B C
 eqs = [_x ~ y/C,
@@ -95,7 +94,7 @@ de = DiffEqSystem(eqs,[t],[x,y],Variable[_x],[A,B,C])
 @test eval(ModelingToolkit.generate_ode_function(de))([0.0,0.0],[1.0,2.0],[1,2,3],0.0) ≈ -1/3
 
 # Now nonlinear system with only variables
-@Var x y z
+@DVar x y z
 @Param σ ρ β
 
 # Define a nonlinear system

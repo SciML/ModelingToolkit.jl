@@ -92,7 +92,7 @@ derivatives are zero. We could use dependent variables for our nonlinear system
 variables. Here we will show the latter. We write:
 
 ```julia
-@Var x y z
+@DVar x y z
 @Param σ ρ β
 
 # Define a nonlinear system
@@ -285,7 +285,7 @@ D = Differential(t) # Default of first derivative, Derivative(t,1)
 The system building functions can handle intermediate calculations. For example,
 
 ```julia
-@Var a x y z
+@DVar a x y z
 @Param σ ρ β
 eqs = [a ~ y-x,
        0 ~ σ*a,
