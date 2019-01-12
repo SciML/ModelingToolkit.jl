@@ -3,7 +3,7 @@ using Test
 
 # Define some variables
 @IVar t
-@DVar x(t) y(t) z(t) a()
+@Unknown x(t) y(t) z(t) a()
 @Deriv D'~t # Default of first derivative, Derivative(t,1)
 @Param σ ρ β
 @Const c=0
@@ -35,7 +35,7 @@ test_vars_extraction(de, de2)
 # Conversion to first-order ODEs #17
 @Deriv D3'''~t
 @Deriv D2''~t
-@DVar u(t) u_tt(t) u_t(t) x_t(t)
+@Unknown u(t) u_tt(t) u_t(t) x_t(t)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
        D2(x) ~ D(x) + 2]
 de = DiffEqSystem(eqs, [t])
@@ -84,7 +84,7 @@ end
 
 ModelingToolkit.generate_nlsys_function(ns)
 
-@DVar _x
+@Unknown _x
 @Deriv D'~t
 @Param A B C
 eqs = [_x ~ y/C,
@@ -96,7 +96,7 @@ test_vars_extraction(de, de2)
 @test eval(ModelingToolkit.generate_ode_function(de))([0.0,0.0],[1.0,2.0],[1,2,3],0.0) ≈ -1/3
 
 # Now nonlinear system with only variables
-@DVar x y z
+@Unknown x y z
 @Param σ ρ β
 
 # Define a nonlinear system

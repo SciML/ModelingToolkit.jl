@@ -10,10 +10,10 @@ Variable(name; subtype::Symbol, dependents::Vector{Variable} = Variable[]) =
 
 Parameter(name,args...;kwargs...) = Variable(name,args...;subtype=:Parameter,kwargs...)
 IndependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:IndependentVariable,kwargs...)
-DependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:DependentVariable,kwargs...)
+Unknown(name,args...;kwargs...) = Variable(name,args...;subtype=:Unknown,kwargs...)
 
-export Variable,Parameter,Constant,DependentVariable,IndependentVariable,
-       @Param, @Const, @DVar, @IVar
+export Variable,Parameter,Constant,Unknown,IndependentVariable,
+       @Param, @Const, @Unknown, @IVar
 
 
 Base.copy(x::Variable) = Variable(x.name, x.subtype, x.diff, x.dependents)
@@ -83,7 +83,7 @@ function _parse_vars(macroname, fun, x)
     return ex
 end
 
-for funs in [(:DVar, :DependentVariable), (:IVar, :IndependentVariable), (:Param, :Parameter)]
+for funs in [(:Unknown, :Unknown), (:IVar, :IndependentVariable), (:Param, :Parameter)]
     @eval begin
         macro ($(funs[1]))(x...)
             esc(_parse_vars(String($funs[1]), $funs[2], x))

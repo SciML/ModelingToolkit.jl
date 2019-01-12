@@ -7,13 +7,13 @@ struct NonlinearSystem <: AbstractSystem
 end
 
 function NonlinearSystem(eqs, vs, ps;
-                         v_name = :DependentVariable,
+                         v_name = :Unknown,
                          p_name = :Parameter)
     NonlinearSystem(eqs, vs, ps, [v_name], p_name)
 end
 
 function NonlinearSystem(eqs;
-                         v_name = :DependentVariable,
+                         v_name = :Unknown,
                          p_name = :Parameter)
     vs, ps = extract_elements(eqs, [_subtype(v_name), _subtype(p_name)])
     NonlinearSystem(eqs, vs, ps, [v_name], p_name)

@@ -2,7 +2,7 @@ using ModelingToolkit
 using Test
 
 @IVar t
-@DVar x(t) y(t) z(t)
+@Unknown x(t) y(t) z(t)
 
 null_op = 0*t
 @test simplify_constants(null_op) == Constant(0)

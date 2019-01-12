@@ -21,7 +21,7 @@ to manipulate.
 ### Example: ODE
 
 Let's build an ODE. First we define some variables. In a differential equation
-system, we need to differentiate between our dependent variables, independent
+system, we need to differentiate between our unknown variables, independent
 variables, and parameters. Therefore we label them as follows:
 
 ```julia
@@ -29,7 +29,7 @@ using ModelingToolkit
 
 # Define some variables
 @IVar t
-@DVar x(t) y(t) z(t)
+@Unknown x(t) y(t) z(t)
 @Deriv D'~t
 @Param σ ρ β
 ```
@@ -87,12 +87,12 @@ f = ODEFunction(de)
 
 We can also build nonlinear systems. Let's say we wanted to solve for the steady
 state of the previous ODE. This is the nonlinear system defined by where the
-derivatives are zero. We could use dependent variables for our nonlinear system
+derivatives are zero. We could use unknown variables for our nonlinear system
 (for direct compatibility with the above ODE code), or we can use non-tagged
 variables. Here we will show the latter. We write:
 
 ```julia
-@DVar x y z
+@Unknown x y z
 @Param σ ρ β
 
 # Define a nonlinear system
@@ -191,7 +191,7 @@ structure is as follows:
   the system of equations.
 - Name to subtype mappings: these describe how variable `subtype`s are mapped
   to the contexts of the system. For example, for a differential equation,
-  the dependent variable corresponds to given subtypes and then the `eqs` can
+  the unknown variable corresponds to given subtypes and then the `eqs` can
   be analyzed knowing what the state variables are.
 - Variable names which do not fall into one of the system's core subtypes are
   treated as intermediates which can be used for holding subcalculations and
@@ -262,7 +262,7 @@ syntactic sugar in some form. For example, the variable construction:
 
 ```julia
 @IVar t
-@DVar x(t) y(t) z(t)
+@Unknown x(t) y(t) z(t)
 @Deriv D'~t
 @Param σ ρ β
 ```
@@ -271,9 +271,9 @@ is syntactic sugar for:
 
 ```julia
 t = IndependentVariable(:t)
-x = DependentVariable(:x,dependents = [t])
-y = DependentVariable(:y,dependents = [t])
-z = DependentVariable(:z,dependents = [t])
+x = Unknown(:x, dependents = [t])
+y = Unknown(:y, dependents = [t])
+z = Unknown(:z, dependents = [t])
 D = Differential(t) # Default of first derivative, Derivative(t,1)
 σ = Parameter(:σ)
 ρ = Parameter(:ρ)
@@ -285,7 +285,7 @@ D = Differential(t) # Default of first derivative, Derivative(t,1)
 The system building functions can handle intermediate calculations. For example,
 
 ```julia
-@DVar a x y z
+@Unknown a x y z
 @Param σ ρ β
 eqs = [a ~ y-x,
        0 ~ σ*a,

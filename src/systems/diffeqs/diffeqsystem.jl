@@ -18,7 +18,7 @@ function DiffEqSystem(eqs, ivs, dvs, vs, ps)
 end
 
 function DiffEqSystem(eqs; iv_name = :IndependentVariable,
-                           dv_name = :DependentVariable,
+                           dv_name = :Unknown,
                            p_name = :Parameter)
     predicates = [_is_derivative, _subtype(iv_name), _is_dependent, _subtype(dv_name), _subtype(p_name)]
     _, ivs, dvs, vs, ps = extract_elements(eqs, predicates)
@@ -26,7 +26,7 @@ function DiffEqSystem(eqs; iv_name = :IndependentVariable,
 end
 
 function DiffEqSystem(eqs, ivs;
-                      dv_name = :DependentVariable,
+                      dv_name = :Unknown,
                       p_name = :Parameter)
     predicates = [_is_derivative, _is_dependent, _subtype(dv_name), _subtype(p_name)]
     _, dvs, vs, ps = extract_elements(eqs, predicates)
@@ -98,7 +98,7 @@ function generate_ode_iW(sys::DiffEqSystem, simplify=true)
     diff_exprs = filter(!isintermediate, sys.eqs)
     jac = sys.jac
 
-    gam = DependentVariable(:gam)
+    gam = Unknown(:gam)
 
     W = LinearAlgebra.I - gam*jac
     W = SMatrix{size(W,1),size(W,2)}(W)

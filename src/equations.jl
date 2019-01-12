@@ -13,7 +13,7 @@ Base.:~(lhs::Number    , rhs::Expression) = Equation(lhs, rhs)
 
 
 _is_derivative(x::Variable) = x.diff !== nothing
-_is_dependent(x::Variable) = x.subtype === :DependentVariable && !isempty(x.dependents)
+_is_dependent(x::Variable) = x.subtype === :Unknown && !isempty(x.dependents)
 _subtype(subtype::Symbol) = x -> x.subtype === subtype
 
 function extract_elements(eqs, predicates)

@@ -3,7 +3,7 @@ using Test
 
 # Derivatives
 @IVar t
-@DVar x(t) y(t) z(t)
+@Unknown x(t) y(t) z(t)
 @Param σ ρ β
 @Deriv D'~t
 dsin = D(sin(t))
@@ -43,5 +43,5 @@ jac = ModelingToolkit.calculate_jacobian(sys)
 @test jac[3,3] == -1*β
 
 # Variable dependence checking in differentiation
-@DVar a(t) b(a)
+@Unknown a(t) b(a)
 @test D(b) ≠ Constant(0)

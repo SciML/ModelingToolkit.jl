@@ -4,7 +4,7 @@ using Test
 # `Expr`, `Number` -> `Operation`
 @IVar a
 @Param b
-@DVar x(t) y()
+@Unknown x(t) y()
 @test convert(Expression, 2) == 2
 expr = :(-inv(2sqrt(+($a, $b))))
 op   = Operation(-, [Operation(inv,
