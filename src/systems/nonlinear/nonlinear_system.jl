@@ -15,8 +15,7 @@ end
 function NonlinearSystem(eqs;
                          v_name = :DependentVariable,
                          p_name = :Parameter)
-    targetmap = Dict(v_name => v_name, p_name => p_name)
-    vs, ps = extract_elements(eqs, targetmap)
+    vs, ps = extract_elements(eqs, [_subtype(v_name), _subtype(p_name)])
     NonlinearSystem(eqs, vs, ps, [v_name], p_name)
 end
 

@@ -20,7 +20,7 @@ jac = ModelingToolkit.calculate_jacobian(de)
 f = ODEFunction(de)
 ModelingToolkit.generate_ode_iW(de)
 
-# Differential equation with automatic extraction of variables on rhs
+# Differential equation with automatic extraction of variables
 de2 = DiffEqSystem(eqs, [t])
 
 function test_vars_extraction(de, de2)
