@@ -4,33 +4,21 @@ mutable struct DiffEqSystem <: AbstractSystem
     dvs::Vector{Variable}
     vs::Vector{Variable}
     ps::Vector{Variable}
-    iv_name::Symbol
-    dv_name::Symbol
-    p_name::Symbol
     jac::Matrix{Expression}
 end
 
-function DiffEqSystem(eqs, ivs, dvs, vs, ps)
-    iv_name = ivs[1].subtype
-    dv_name = dvs[1].subtype
-    p_name = isempty(ps) ? :Parameter : ps[1].subtype
-    DiffEqSystem(eqs, ivs, dvs, vs, ps, iv_name, dv_name, p_name, Matrix{Expression}(undef,0,0))
-end
+DiffEqSystem(eqs, ivs, dvs, vs, ps) = DiffEqSystem(eqs, ivs, dvs, vs, ps, Matrix{Expression}(undef,0,0))
 
-function DiffEqSystem(eqs; iv_name = :IndependentVariable,
-                           dv_name = :Unknown,
-                           p_name = :Parameter)
-    predicates = [_is_derivative, _subtype(iv_name), _is_dependent, _subtype(dv_name), _subtype(p_name)]
+function DiffEqSystem(eqs)
+    predicates = [_is_derivative, _subtype(:IndependentVariable), _is_dependent, _subtype(:Unknown), _subtype(:Parameter)]
     _, ivs, dvs, vs, ps = extract_elements(eqs, predicates)
-    DiffEqSystem(eqs, ivs, dvs, vs, ps, iv_name, dv_name, p_name, Matrix{Expression}(undef,0,0))
+    DiffEqSystem(eqs, ivs, dvs, vs, ps, Matrix{Expression}(undef,0,0))
 end
 
-function DiffEqSystem(eqs, ivs;
-                      dv_name = :Unknown,
-                      p_name = :Parameter)
-    predicates = [_is_derivative, _is_dependent, _subtype(dv_name), _subtype(p_name)]
+function DiffEqSystem(eqs, ivs)
+    predicates = [_is_derivative, _is_dependent, _subtype(:Unknown), _subtype(:Parameter)]
     _, dvs, vs, ps = extract_elements(eqs, predicates)
-    DiffEqSystem(eqs, ivs, dvs, vs, ps, ivs[1].subtype, dv_name, p_name, Matrix{Expression}(undef,0,0))
+    DiffEqSystem(eqs, ivs, dvs, vs, ps, Matrix{Expression}(undef,0,0))
 end
 
 function generate_ode_function(sys::DiffEqSystem;version = ArrayFunction)

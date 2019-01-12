@@ -2,21 +2,11 @@ struct NonlinearSystem <: AbstractSystem
     eqs::Vector{Equation}
     vs::Vector{Variable}
     ps::Vector{Variable}
-    v_name::Vector{Symbol}
-    p_name::Symbol
 end
 
-function NonlinearSystem(eqs, vs, ps;
-                         v_name = :Unknown,
-                         p_name = :Parameter)
-    NonlinearSystem(eqs, vs, ps, [v_name], p_name)
-end
-
-function NonlinearSystem(eqs;
-                         v_name = :Unknown,
-                         p_name = :Parameter)
-    vs, ps = extract_elements(eqs, [_subtype(v_name), _subtype(p_name)])
-    NonlinearSystem(eqs, vs, ps, [v_name], p_name)
+function NonlinearSystem(eqs)
+    vs, ps = extract_elements(eqs, [_subtype(:Unknown), _subtype(:Parameter)])
+    NonlinearSystem(eqs, vs, ps)
 end
 
 function generate_nlsys_function(sys::NonlinearSystem)
