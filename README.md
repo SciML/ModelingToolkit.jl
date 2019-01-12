@@ -234,7 +234,8 @@ to better scale to larger systems. You can define derivatives for your own
 function via the dispatch:
 
 ```julia
-ModelingToolkit.Derivative(::typeof(my_function),args,::Val{i})
+# `N` arguments are accepted by the relevant method of `my_function`
+ModelingToolkit.Derivative(::typeof(my_function), args::NTuple{N,Any}, ::Val{i})
 ```
 
 where `i` means that it's the derivative of the `i`th argument. `args` is the
@@ -244,7 +245,7 @@ You should return an `Operation` for the derivative of your function.
 For example, `sin(t)`'s derivative (by `t`) is given by the following:
 
 ```julia
-ModelingToolkit.Derivative(::typeof(sin),args,::Val{1}) = cos(args[1])
+ModelingToolkit.Derivative(::typeof(sin), args::NTuple{1,Any}, ::Val{1}) = cos(args[1])
 ```
 
 ### Macro-free Usage
