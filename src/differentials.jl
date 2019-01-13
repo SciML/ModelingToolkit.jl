@@ -11,10 +11,7 @@ Base.convert(::Type{Expr}, D::Differential) = D
 function (D::Differential)(x::Variable)
     D.x === x             && return Constant(1)
     has_dependent(x, D.x) || return Constant(0)
-
-    x′ = copy(x)
-    x′.diff = D
-    return x′
+    return Operation(D, Expression[x])
 end
 Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x == D2.x
 

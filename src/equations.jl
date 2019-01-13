@@ -12,7 +12,6 @@ Base.:~(lhs::Expression, rhs::Number    ) = Equation(lhs, rhs)
 Base.:~(lhs::Number    , rhs::Expression) = Equation(lhs, rhs)
 
 
-_is_derivative(x::Variable) = x.diff !== nothing
 _is_dependent(x::Variable) = x.subtype === :Unknown && !isempty(x.dependents)
 _is_parameter(ivs) = x -> x.subtype === :Parameter && x ∉ ivs
 _subtype(subtype::Symbol) = x -> x.subtype === subtype

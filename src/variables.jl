@@ -1,20 +1,13 @@
-mutable struct Variable <: Expression
+struct Variable <: Expression
     name::Symbol
     subtype::Symbol
-    diff::Union{Function,Nothing}  # FIXME
     dependents::Vector{Variable}
 end
 
-Variable(name; subtype::Symbol, dependents::Vector{Variable} = Variable[]) =
-    Variable(name, subtype, nothing, dependents)
-
-Parameter(name; kwargs...) = Variable(name; subtype=:Parameter, kwargs...)
-Unknown(name, ;kwargs...) = Variable(name; subtype=:Unknown, kwargs...)
+Parameter(name; dependents = Variable[]) = Variable(name, :Parameter, dependents)
+Unknown(name; dependents = Variable[]) = Variable(name, :Unknown, dependents)
 
 export Variable, Unknown, Parameter, Constant, @Unknown, @Param, @Const
-
-
-Base.copy(x::Variable) = Variable(x.name, x.subtype, x.diff, x.dependents)
 
 
 struct Constant <: Expression
@@ -28,7 +21,7 @@ Base.isone(ex::Expression)  = isa(ex, Constant) && isone(ex.value)
 
 
 # Variables use isequal for equality since == is an Operation
-Base.:(==)(x::Variable, y::Variable) = (x.name, x.subtype, x.diff) == (y.name, y.subtype, y.diff)
+Base.:(==)(x::Variable, y::Variable) = (x.name, x.subtype) == (y.name, y.subtype)
 Base.:(==)(::Variable, ::Number) = false
 Base.:(==)(::Number, ::Variable) = false
 Base.:(==)(::Variable, ::Constant) = false
@@ -37,16 +30,10 @@ Base.:(==)(c::Constant, n::Number) = c.value == n
 Base.:(==)(n::Number, c::Constant) = c.value == n
 Base.:(==)(a::Constant, b::Constant) = a.value == b.value
 
-function Base.convert(::Type{Expr}, x::Variable)
-    x.diff === nothing && return x.name
-    return Symbol("$(x.name)_$(x.diff.x.name)")
-end
+Base.convert(::Type{Expr}, x::Variable) = x.name
 Base.convert(::Type{Expr}, c::Constant) = c.value
 
-function Base.show(io::IO, x::Variable)
-    print(io, x.subtype, '(', x.name, ')')
-    x.diff === nothing || print(io, ", diff = ", x.diff)
-end
+Base.show(io::IO, x::Variable) = print(io, x.subtype, '(', x.name, ')')
 
 # Build variables more easily
 function _parse_vars(macroname, fun, x)

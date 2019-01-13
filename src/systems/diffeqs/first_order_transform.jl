@@ -1,4 +1,4 @@
-extract_idv(eq::Equation) = eq.lhs.diff.x
+extract_idv(eq::Equation) = eq.lhs.op.x
 
 function lower_varname(var::Variable, naming_scheme; lower=false)
     D = var.diff

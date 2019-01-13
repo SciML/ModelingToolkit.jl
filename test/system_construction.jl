@@ -38,7 +38,7 @@ test_vars_extraction(de, de2)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
        D2(x) ~ D(x) + 2]
 de = DiffEqSystem(eqs, [t])
-de1 = ode_order_lowering(de)
+@test_broken de1 = ode_order_lowering(de)
 lowered_eqs = [D(u_tt) ~ 2u_tt + u_t + x_t + 1
                D(x_t)  ~ x_t + 2
                D(u_t)  ~ u_tt

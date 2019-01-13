@@ -9,16 +9,14 @@ end
 DiffEqSystem(eqs, ivs, dvs, ps) = DiffEqSystem(eqs, ivs, dvs, ps, Matrix{Expression}(undef,0,0))
 
 function DiffEqSystem(eqs)
-    predicates = [_is_derivative, _is_dependent]
-    _, dvs = extract_elements(eqs, predicates)
+    dvs, = extract_elements(eqs, [_is_dependent])
     ivs = unique(vcat((dv.dependents for dv ∈ dvs)...))
     ps, = extract_elements(eqs, [_is_parameter(ivs)])
     DiffEqSystem(eqs, ivs, dvs, ps, Matrix{Expression}(undef,0,0))
 end
 
 function DiffEqSystem(eqs, ivs)
-    predicates = [_is_derivative, _is_dependent, _is_parameter(ivs)]
-    _, dvs, ps = extract_elements(eqs, predicates)
+    dvs, ps = extract_elements(eqs, [_is_dependent, _is_parameter(ivs)])
     DiffEqSystem(eqs, ivs, dvs, ps, Matrix{Expression}(undef,0,0))
 end
 
@@ -44,13 +42,18 @@ function generate_ode_function(sys::DiffEqSystem;version = ArrayFunction)
     end
 end
 
-isintermediate(eq::Equation) = eq.lhs.diff === nothing
+isintermediate(eq::Equation) = !(isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential))
 
 function build_equals_expr(eq::Equation)
-    @assert typeof(eq.lhs) <: Variable
+    @assert !isa(eq.lhs, Constant)
 
-    lhs = eq.lhs.name
-    isintermediate(eq) || (lhs = Symbol(lhs, :_, "$(eq.lhs.diff.x.name)"))
+    if isintermediate(eq)
+        @assert isa(eq.lhs, Variable)
+        lhs = eq.lhs.name
+    else
+        @assert isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential)
+        lhs = Symbol(eq.lhs.args[1].name, :_, eq.lhs.op.x.name)
+    end
 
     return :($lhs = $(convert(Expr, eq.rhs)))
 end
