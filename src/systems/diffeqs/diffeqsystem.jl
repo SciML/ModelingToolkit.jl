@@ -87,7 +87,7 @@ function generate_ode_iW(sys::DiffEqSystem, simplify=true)
     diff_exprs = filter(!isintermediate, sys.eqs)
     jac = sys.jac
 
-    gam = Unknown(:gam)
+    gam = Parameter(:gam)
 
     W = LinearAlgebra.I - gam*jac
     W = SMatrix{size(W,1),size(W,2)}(W)
