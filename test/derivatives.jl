@@ -2,9 +2,8 @@ using ModelingToolkit
 using Test
 
 # Derivatives
-@IVar t
+@Param t σ ρ β
 @Unknown x(t) y(t) z(t)
-@Param σ ρ β
 @Deriv D'~t
 dsin = D(sin(t))
 expand_derivatives(dsin)

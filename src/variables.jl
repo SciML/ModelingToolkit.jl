@@ -8,12 +8,10 @@ end
 Variable(name; subtype::Symbol, dependents::Vector{Variable} = Variable[]) =
     Variable(name, subtype, nothing, dependents)
 
-Parameter(name,args...;kwargs...) = Variable(name,args...;subtype=:Parameter,kwargs...)
-IndependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:IndependentVariable,kwargs...)
-Unknown(name,args...;kwargs...) = Variable(name,args...;subtype=:Unknown,kwargs...)
+Parameter(name; kwargs...) = Variable(name; subtype=:Parameter, kwargs...)
+Unknown(name, ;kwargs...) = Variable(name; subtype=:Unknown, kwargs...)
 
-export Variable,Parameter,Constant,Unknown,IndependentVariable,
-       @Param, @Const, @Unknown, @IVar
+export Variable, Unknown, Parameter, Constant, @Unknown, @Param, @Const
 
 
 Base.copy(x::Variable) = Variable(x.name, x.subtype, x.diff, x.dependents)
@@ -53,7 +51,7 @@ end
 # Build variables more easily
 function _parse_vars(macroname, fun, x)
     ex = Expr(:block)
-    lhss = Symbol[]
+    var_names = Symbol[]
     # if parsing things in the form of
     # begin
     #     x
@@ -62,33 +60,30 @@ function _parse_vars(macroname, fun, x)
     # end
     x = flatten_expr!(x)
     for _var in x
-        iscall = typeof(_var) <: Expr && _var.head == :call
+        iscall = isa(_var, Expr) && _var.head == :call
         issym    = _var isa Symbol
-        @assert iscall || issym "@$macroname expects a tuple of expressions!\nE.g. `@$macroname x y z`"
+        @assert iscall || issym "@$macroname expects a tuple of expressions (`@$macroname x y z(t)`)"
 
         if iscall
             dependents = :(Variable[$(_var.args[2:end]...)])
-            lhs = _var.args[1]
+            var_name = _var.args[1]
         else
             dependents = Variable[]
-            lhs = _var
+            var_name = _var
         end
 
-        push!(lhss, lhs)
-        expr = :( $lhs = $fun( Symbol($(String(lhs))) ,
-                  dependents = $dependents))
+        push!(var_names, var_name)
+        expr = :($var_name = $fun($(Meta.quot(var_name)), dependents = $dependents))
         push!(ex.args, expr)
     end
-    push!(ex.args, build_expr(:tuple, lhss))
+    push!(ex.args, build_expr(:tuple, var_names))
     return ex
 end
-
-for funs in [(:Unknown, :Unknown), (:IVar, :IndependentVariable), (:Param, :Parameter)]
-    @eval begin
-        macro ($(funs[1]))(x...)
-            esc(_parse_vars(String($funs[1]), $funs[2], x))
-        end
-    end
+macro Unknown(xs...)
+    esc(_parse_vars(:Unknown, Unknown, xs))
+end
+macro Param(xs...)
+    esc(_parse_vars(:Param, Parameter, xs))
 end
 
 function _const_assign(x)

@@ -21,17 +21,16 @@ to manipulate.
 ### Example: ODE
 
 Let's build an ODE. First we define some variables. In a differential equation
-system, we need to differentiate between our unknown (dependent) variables, independent
-variables, and parameters. Therefore we label them as follows:
+system, we need to differentiate between our unknown (dependent) variables
+and parameters. Therefore we label them as follows:
 
 ```julia
 using ModelingToolkit
 
 # Define some variables
-@IVar t
+@Param t σ ρ β
 @Unknown x(t) y(t) z(t)
 @Deriv D'~t
-@Param σ ρ β
 ```
 
 Then we build the system:
@@ -259,16 +258,15 @@ is accessible via a function-based interface. This means that all macros are
 syntactic sugar in some form. For example, the variable construction:
 
 ```julia
-@IVar t
+@Param t σ ρ β
 @Unknown x(t) y(t) z(t)
 @Deriv D'~t
-@Param σ ρ β
 ```
 
 is syntactic sugar for:
 
 ```julia
-t = IndependentVariable(:t)
+t = Parameter(:t)
 x = Unknown(:x, dependents = [t])
 y = Unknown(:y, dependents = [t])
 z = Unknown(:z, dependents = [t])

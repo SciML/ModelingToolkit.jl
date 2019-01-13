@@ -1,7 +1,7 @@
 using ModelingToolkit
 using Test
 
-@IVar t
+@Param t
 @Unknown x(t) y(t) z(t)
 
 struct __MyType__ end
