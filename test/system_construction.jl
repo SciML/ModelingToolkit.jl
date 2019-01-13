@@ -3,7 +3,7 @@ using Test
 
 # Define some variables
 @IVar t
-@Unknown x(t) y(t) z(t) a()
+@Unknown x(t) y(t) z(t)
 @Deriv D'~t # Default of first derivative, Derivative(t,1)
 @Param σ ρ β
 @Const c=0
@@ -12,7 +12,7 @@ using Test
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
-de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
+de = DiffEqSystem(eqs,[t],[x,y,z],[σ,ρ,β])
 ModelingToolkit.generate_ode_function(de)
 ModelingToolkit.generate_ode_function(de;version=ModelingToolkit.SArrayFunction)
 jac_expr = ModelingToolkit.generate_ode_jacobian(de)
@@ -24,7 +24,7 @@ ModelingToolkit.generate_ode_iW(de)
 de2 = DiffEqSystem(eqs, [t])
 
 function test_vars_extraction(de, de2)
-    for el in (:ivs, :dvs, :vs, :ps)
+    for el in (:ivs, :dvs, :ps)
         names2 = sort(collect(var.name for var in getfield(de2,el)))
         names = sort(collect(var.name for var in getfield(de,el)))
         @test names2 == names
@@ -61,11 +61,11 @@ end
 @test_broken test_eqs(de1.eqs, lowered_eqs)
 
 # Internal calculations
-eqs = [a ~ y-x,
-       D(x) ~ σ*a,
+a = y - x
+eqs = [D(x) ~ σ*a,
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
-de = DiffEqSystem(eqs,[t],[x,y,z],[a],[σ,ρ,β])
+de = DiffEqSystem(eqs,[t],[x,y,z],[σ,ρ,β])
 ModelingToolkit.generate_ode_function(de)
 jac = ModelingToolkit.calculate_jacobian(de)
 f = ODEFunction(de)
@@ -84,13 +84,12 @@ end
 
 ModelingToolkit.generate_nlsys_function(ns)
 
-@Unknown _x
 @Deriv D'~t
 @Param A B C
-eqs = [_x ~ y/C,
-       D(x) ~ -A*x,
+_x = y / C
+eqs = [D(x) ~ -A*x,
        D(y) ~ A*x - B*_x]
-de = DiffEqSystem(eqs,[t],[x,y],Variable[_x],[A,B,C])
+de = DiffEqSystem(eqs,[t],[x,y],[A,B,C])
 test_vars_extraction(de, DiffEqSystem(eqs,[t]))
 test_vars_extraction(de, DiffEqSystem(eqs))
 @test eval(ModelingToolkit.generate_ode_function(de))([0.0,0.0],[1.0,2.0],[1,2,3],0.0) ≈ -1/3

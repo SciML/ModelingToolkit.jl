@@ -47,7 +47,7 @@ Each operation builds an `Operation` type, and thus `eqs` is an array of
 analyzed by other programs. We can turn this into a `DiffEqSystem` via:
 
 ```julia
-de = DiffEqSystem(eqs,[t],[x,y,z],Variable[],[σ,ρ,β])
+de = DiffEqSystem(eqs,[t],[x,y,z],[σ,ρ,β])
 de = DiffEqSystem(eqs)
 ```
 
@@ -285,10 +285,10 @@ D = Differential(t) # Default of first derivative, Derivative(t,1)
 The system building functions can handle intermediate calculations. For example,
 
 ```julia
-@Unknown a x y z
+@Unknown x y z
 @Param σ ρ β
-eqs = [a ~ y-x,
-       0 ~ σ*a,
+a = y - x
+eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
