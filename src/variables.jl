@@ -8,10 +8,10 @@ end
 Variable(name; subtype::Symbol, dependents::Vector{Variable} = Variable[]) =
     Variable(name, subtype, nothing, dependents)
 
-Parameter(name,args...;kwargs...) = Variable(name,args...;subtype=:Parameter,kwargs...)
-Unknown(name,args...;kwargs...) = Variable(name,args...;subtype=:Unknown,kwargs...)
+Parameter(name; kwargs...) = Variable(name; subtype=:Parameter, kwargs...)
+Unknown(name, ;kwargs...) = Variable(name; subtype=:Unknown, kwargs...)
 
-export Variable, Parameter, Constant, Unknown, @Param, @Const, @Unknown
+export Variable, Unknown, Parameter, Constant, @Unknown, @Param, @Const
 
 
 Base.copy(x::Variable) = Variable(x.name, x.subtype, x.diff, x.dependents)

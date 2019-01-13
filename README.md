@@ -28,10 +28,9 @@ and parameters. Therefore we label them as follows:
 using ModelingToolkit
 
 # Define some variables
-@Param t
+@Param t σ ρ β
 @Unknown x(t) y(t) z(t)
 @Deriv D'~t
-@Param σ ρ β
 ```
 
 Then we build the system:
@@ -259,10 +258,9 @@ is accessible via a function-based interface. This means that all macros are
 syntactic sugar in some form. For example, the variable construction:
 
 ```julia
-@Param t
+@Param t σ ρ β
 @Unknown x(t) y(t) z(t)
 @Deriv D'~t
-@Param σ ρ β
 ```
 
 is syntactic sugar for:

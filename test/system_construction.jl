@@ -2,10 +2,9 @@ using ModelingToolkit
 using Test
 
 # Define some variables
-@Param t
+@Param t σ ρ β
 @Unknown x(t) y(t) z(t)
 @Deriv D'~t # Default of first derivative, Derivative(t,1)
-@Param σ ρ β
 @Const c=0
 
 # Define a differential equation
