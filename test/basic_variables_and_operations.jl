@@ -2,8 +2,7 @@ using ModelingToolkit
 using Test
 
 @IVar t
-@DVar x(t) y(t) z(t)
-@test_throws AssertionError @DVar w
+@Unknown x(t) y(t) z(t)
 
 @Deriv D'~t # Default of first derivative, Derivative(t,1)
 @Param σ ρ β
@@ -11,7 +10,7 @@ using Test
 
 # Default values
 p = Parameter(:p)
-u = DependentVariable(:u, dependents = [t])
+u = Unknown(:u, dependents = [t])
 
 σ*(y-x)
 D(x)

@@ -17,7 +17,7 @@ function generate_lorenz_eqs(t,x,y,z,σ,ρ,β)
      D(z) ~ x*y - β*z]
 end
 function Lorenz(t)
-    @DVar x(t) y(t) z(t)
+    @Unknown x(t) y(t) z(t)
     @Param σ ρ β
     Lorenz(x, y, z, σ, ρ, β, generate_lorenz_eqs(t, x, y, z, σ, ρ, β))
 end

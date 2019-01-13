@@ -2,7 +2,7 @@ using ModelingToolkit
 using Test
 
 @IVar t
-@DVar x(t) y(t) z(t)
+@Unknown x(t) y(t) z(t)
 
 struct __MyType__ end
 Base.:~(::__MyType__,::Number) = 2

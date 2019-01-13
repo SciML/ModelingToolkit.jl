@@ -2,51 +2,35 @@ mutable struct DiffEqSystem <: AbstractSystem
     eqs::Vector{Equation}
     ivs::Vector{Variable}
     dvs::Vector{Variable}
-    vs::Vector{Variable}
     ps::Vector{Variable}
-    iv_name::Symbol
-    dv_name::Symbol
-    p_name::Symbol
     jac::Matrix{Expression}
 end
 
-function DiffEqSystem(eqs, ivs, dvs, vs, ps)
-    iv_name = ivs[1].subtype
-    dv_name = dvs[1].subtype
-    p_name = isempty(ps) ? :Parameter : ps[1].subtype
-    DiffEqSystem(eqs, ivs, dvs, vs, ps, iv_name, dv_name, p_name, Matrix{Expression}(undef,0,0))
+DiffEqSystem(eqs, ivs, dvs, ps) = DiffEqSystem(eqs, ivs, dvs, ps, Matrix{Expression}(undef,0,0))
+
+function DiffEqSystem(eqs)
+    predicates = [_is_derivative, _subtype(:IndependentVariable), _is_dependent, _subtype(:Parameter)]
+    _, ivs, dvs, ps = extract_elements(eqs, predicates)
+    DiffEqSystem(eqs, ivs, dvs, ps, Matrix{Expression}(undef,0,0))
 end
 
-function DiffEqSystem(eqs; iv_name = :IndependentVariable,
-                           dv_name = :DependentVariable,
-                           v_name = :Variable,
-                           p_name = :Parameter)
-    targetmap =  Dict(iv_name => iv_name, dv_name => dv_name, v_name => v_name,
-                       p_name => p_name)
-    ivs, dvs, vs, ps = extract_elements(eqs, targetmap)
-    DiffEqSystem(eqs, ivs, dvs, vs, ps, iv_name, dv_name, p_name, Matrix{Expression}(0,0))
-end
-
-function DiffEqSystem(eqs, ivs;
-                      dv_name = :DependentVariable,
-                      v_name = :Variable,
-                      p_name = :Parameter)
-    targetmap =  Dict(dv_name => dv_name, v_name => v_name, p_name => p_name)
-    dvs, vs, ps = extract_elements(eqs, targetmap)
-    DiffEqSystem(eqs, ivs, dvs, vs, ps, ivs[1].subtype, dv_name, p_name, Matrix{Expression}(undef,0,0))
+function DiffEqSystem(eqs, ivs)
+    predicates = [_is_derivative, _is_dependent, _subtype(:Parameter)]
+    _, dvs, ps = extract_elements(eqs, predicates)
+    DiffEqSystem(eqs, ivs, dvs, ps, Matrix{Expression}(undef,0,0))
 end
 
 function generate_ode_function(sys::DiffEqSystem;version = ArrayFunction)
-    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.dvs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
+    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
+    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
     sys_exprs = build_equals_expr.(sys.eqs)
     if version == ArrayFunction
-        dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in 1:length(sys.dvs)]
+        dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in eachindex(sys.dvs)]
         exprs = vcat(var_exprs,param_exprs,sys_exprs,dvar_exprs)
         block = expr_arr_to_block(exprs)
         :((du,u,p,t)->$(toexpr(block)))
     elseif version == SArrayFunction
-        dvar_exprs = [:($(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in 1:length(sys.dvs)]
+        dvar_exprs = [:($(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in eachindex(sys.dvs)]
         svector_expr = quote
             E = eltype(tuple($(dvar_exprs...)))
             T = StaticArrays.similar_type(typeof(u), E)
@@ -84,8 +68,8 @@ function calculate_jacobian(sys::DiffEqSystem, simplify=true)
 end
 
 function generate_ode_jacobian(sys::DiffEqSystem, simplify=true)
-    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.dvs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
+    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
+    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
     diff_exprs = filter(!isintermediate, sys.eqs)
     jac = calculate_jacobian(sys, simplify)
     sys.jac = jac
@@ -96,12 +80,12 @@ function generate_ode_jacobian(sys::DiffEqSystem, simplify=true)
 end
 
 function generate_ode_iW(sys::DiffEqSystem, simplify=true)
-    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in 1:length(sys.dvs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
+    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
+    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
     diff_exprs = filter(!isintermediate, sys.eqs)
     jac = sys.jac
 
-    gam = Variable(:gam)
+    gam = Unknown(:gam)
 
     W = LinearAlgebra.I - gam*jac
     W = SMatrix{size(W,1),size(W,2)}(W)

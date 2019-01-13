@@ -5,20 +5,15 @@ mutable struct Variable <: Expression
     dependents::Vector{Variable}
 end
 
-Variable(name; subtype::Symbol=:Variable, dependents::Vector{Variable} = Variable[]) =
+Variable(name; subtype::Symbol, dependents::Vector{Variable} = Variable[]) =
     Variable(name, subtype, nothing, dependents)
-Variable(name, args...; kwargs...) = Variable(name, args...; subtype=:Variable, kwargs...)
 
 Parameter(name,args...;kwargs...) = Variable(name,args...;subtype=:Parameter,kwargs...)
 IndependentVariable(name,args...;kwargs...) = Variable(name,args...;subtype=:IndependentVariable,kwargs...)
+Unknown(name,args...;kwargs...) = Variable(name,args...;subtype=:Unknown,kwargs...)
 
-function DependentVariable(name,args...;dependents = [],kwargs...)
-    @assert !isempty(dependents)
-    Variable(name,args...;subtype=:DependentVariable,dependents=dependents,kwargs...)
-end
-
-export Variable,Parameter,Constant,DependentVariable,IndependentVariable,
-       @Var, @Param, @Const, @DVar, @IVar
+export Variable,Parameter,Constant,Unknown,IndependentVariable,
+       @Param, @Const, @Unknown, @IVar
 
 
 Base.copy(x::Variable) = Variable(x.name, x.subtype, x.diff, x.dependents)
@@ -72,7 +67,7 @@ function _parse_vars(macroname, fun, x)
         @assert iscall || issym "@$macroname expects a tuple of expressions!\nE.g. `@$macroname x y z`"
 
         if iscall
-            dependents = :([$(_var.args[2:end]...)])
+            dependents = :(Variable[$(_var.args[2:end]...)])
             lhs = _var.args[1]
         else
             dependents = Variable[]
@@ -88,9 +83,7 @@ function _parse_vars(macroname, fun, x)
     return ex
 end
 
-for funs in ((:DVar, :DependentVariable), (:IVar, :IndependentVariable),
-             (:Var, :Variable),
-             (:Param, :Parameter))
+for funs in [(:Unknown, :Unknown), (:IVar, :IndependentVariable), (:Param, :Parameter)]
     @eval begin
         macro ($(funs[1]))(x...)
             esc(_parse_vars(String($funs[1]), $funs[2], x))

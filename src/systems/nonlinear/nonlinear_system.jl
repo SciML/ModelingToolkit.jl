@@ -2,25 +2,11 @@ struct NonlinearSystem <: AbstractSystem
     eqs::Vector{Equation}
     vs::Vector{Variable}
     ps::Vector{Variable}
-    v_name::Vector{Symbol}
-    p_name::Symbol
 end
 
-function NonlinearSystem(eqs, vs, ps;
-                         v_name = :Variable,
-                         dv_name = :DependentVariable,
-                         p_name = :Parameter)
-    NonlinearSystem(eqs, vs, ps, [v_name,dv_name], p_name)
-end
-
-function NonlinearSystem(eqs;
-                         v_name = :Variable,
-                         dv_name = :DependentVariable,
-                         p_name = :Parameter)
-    # Allow the use of :DependentVariable to make it seamless with DE use
-    targetmap = Dict(v_name => v_name, dv_name => v_name, p_name => p_name)
-    vs, ps = extract_elements(eqs, targetmap)
-    NonlinearSystem(eqs, vs, ps, [v_name,dv_name], p_name)
+function NonlinearSystem(eqs)
+    vs, ps = extract_elements(eqs, [_subtype(:Unknown), _subtype(:Parameter)])
+    NonlinearSystem(eqs, vs, ps)
 end
 
 function generate_nlsys_function(sys::NonlinearSystem)

@@ -1,23 +1,13 @@
 using ModelingToolkit
 using Test
 
-@Var a b
-a1 = Variable(:a)
-@test a1 == a
-@test convert(Expr, a) == :a
-
-@Var begin
-    a
-    b
-end
-
 @IVar t
-@DVar x(t)
-@DVar y(t)
-@DVar z(t)
-x1 = DependentVariable(:x ,dependents = [t])
-y1 = DependentVariable(:y ,dependents = [t])
-z1 = DependentVariable(:z ,dependents = [t])
+@Unknown x(t)
+@Unknown y(t)
+@Unknown z(t)
+x1 = Unknown(:x ,dependents = [t])
+y1 = Unknown(:y ,dependents = [t])
+z1 = Unknown(:z ,dependents = [t])
 @test x1 == x
 @test y1 == y
 @test z1 == z
