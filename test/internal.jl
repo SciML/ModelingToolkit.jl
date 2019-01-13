@@ -2,7 +2,7 @@ using ModelingToolkit
 using Test
 
 # `Expr`, `Number` -> `Operation`
-@IVar a
+@Param a
 @Param b
 @Unknown x(t) y()
 @test convert(Expression, 2) == 2

@@ -2,7 +2,7 @@ using ModelingToolkit
 using Test
 
 # Derivatives
-@IVar t
+@Param t
 @Unknown x(t) y(t) z(t)
 @Param σ ρ β
 @Deriv D'~t

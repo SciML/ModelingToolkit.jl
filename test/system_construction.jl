@@ -2,7 +2,7 @@ using ModelingToolkit
 using Test
 
 # Define some variables
-@IVar t
+@Param t
 @Unknown x(t) y(t) z(t)
 @Deriv D'~t # Default of first derivative, Derivative(t,1)
 @Param σ ρ β
@@ -74,7 +74,7 @@ f = ODEFunction(de)
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
+ns = NonlinearSystem(eqs,[x,y,z],[t,σ,ρ,β])
 ns2 = NonlinearSystem(eqs)
 for el in (:vs, :ps)
     names2 = sort(collect(var.name for var in getfield(ns2,el)))

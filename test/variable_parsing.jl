@@ -1,7 +1,7 @@
 using ModelingToolkit
 using Test
 
-@IVar t
+@Param t
 @Unknown x(t)
 @Unknown y(t)
 @Unknown z(t)
@@ -15,12 +15,12 @@ z1 = Unknown(:z ,dependents = [t])
 @test convert(Expr, y) == :y
 @test convert(Expr, z) == :z
 
-@IVar begin
+@Param begin
     t
     s
 end
-t1 = IndependentVariable(:t)
-s1 = IndependentVariable(:s)
+t1 = Parameter(:t)
+s1 = Parameter(:s)
 @test t1 == t
 @test s1 == s
 @test convert(Expr, t) == :t

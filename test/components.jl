@@ -22,7 +22,7 @@ function Lorenz(t)
     Lorenz(x, y, z, σ, ρ, β, generate_lorenz_eqs(t, x, y, z, σ, ρ, β))
 end
 
-@IVar t
+@Param t
 lz1 = Lorenz(t)
 lz2 = Lorenz(t)
 lz1.x ~ lz2.x
