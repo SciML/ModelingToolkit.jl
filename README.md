@@ -21,7 +21,7 @@ to manipulate.
 ### Example: ODE
 
 Let's build an ODE. First we define some variables. In a differential equation
-system, we need to differentiate between our unknown variables, independent
+system, we need to differentiate between our unknown (dependent) variables, independent
 variables, and parameters. Therefore we label them as follows:
 
 ```julia
@@ -87,9 +87,7 @@ f = ODEFunction(de)
 
 We can also build nonlinear systems. Let's say we wanted to solve for the steady
 state of the previous ODE. This is the nonlinear system defined by where the
-derivatives are zero. We could use unknown variables for our nonlinear system
-(for direct compatibility with the above ODE code), or we can use non-tagged
-variables. Here we will show the latter. We write:
+derivatives are zero. We use unknown variables for our nonlinear system.
 
 ```julia
 @Unknown x y z
