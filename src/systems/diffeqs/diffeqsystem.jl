@@ -45,16 +45,9 @@ end
 isintermediate(eq::Equation) = !(isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential))
 
 function build_equals_expr(eq::Equation)
-    @assert !isa(eq.lhs, Constant)
+    @assert !isintermediate(eq)
 
-    if isintermediate(eq)
-        @assert isa(eq.lhs, Variable)
-        lhs = eq.lhs.name
-    else
-        @assert isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential)
-        lhs = Symbol(eq.lhs.args[1].name, :_, eq.lhs.op.x.name)
-    end
-
+    lhs = Symbol(eq.lhs.args[1].name, :_, eq.lhs.op.x.name)
     return :($lhs = $(convert(Expr, eq.rhs)))
 end
 
