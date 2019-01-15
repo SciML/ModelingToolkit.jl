@@ -19,13 +19,11 @@ function ode_order_lowering(sys::DiffEqSystem; kwargs...)
 end
 ode_order_lowering(eqs; naming_scheme = "_") = ode_order_lowering!(deepcopy(eqs), naming_scheme)
 function ode_order_lowering!(eqs, naming_scheme)
-    ind = findfirst(x->!(isintermediate(x)), eqs)
-    idv = extract_idv(eqs[ind])
+    idv = extract_idv(eqs[1])
     D   = Differential(idv, 1)
     sym_order = Dict{Symbol, Int}()
     dv_name = eqs[1].lhs.subtype
     for eq in eqs
-        isintermediate(eq) && continue
         sym, maxorder = extract_symbol_order(eq)
         maxorder == 1 && continue # fast pass
         if maxorder > get(sym_order, sym, 0)
