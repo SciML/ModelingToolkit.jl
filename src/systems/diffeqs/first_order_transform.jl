@@ -28,6 +28,7 @@ function ode_order_lowering!(eqs, naming_scheme)
     idv = extract_idv(eqs[1])
     D   = Differential(idv, 1)
     var_order = Dict{Variable,Int}()
+    vars = Variable[]
     dv_name = eqs[1].lhs.args[1].subtype
 
     for eq in eqs
@@ -35,12 +36,13 @@ function ode_order_lowering!(eqs, naming_scheme)
         maxorder == 1 && continue # fast pass
         if maxorder > get(var_order, var, 0)
             var_order[var] = maxorder
+            var ∈ vars || push!(vars, var)
         end
         lhs_renaming!(eq, D, naming_scheme)
         rhs_renaming!(eq, naming_scheme)
     end
 
-    for var ∈ keys(var_order)
+    for var ∈ vars
         order = var_order[var]
         for o in (order-1):-1:1
             lhs = D(lower_varname(var, idv, o-1, naming_scheme))
