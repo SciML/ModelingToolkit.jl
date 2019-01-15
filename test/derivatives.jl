@@ -44,3 +44,19 @@ jac = ModelingToolkit.calculate_jacobian(sys)
 # Variable dependence checking in differentiation
 @Unknown a(t) b(a)
 @test D(b) ≠ Constant(0)
+
+
+# Regression test for PR #84
+let
+    # Define some variables
+    @Param t σ ρ β
+    @Unknown x(t) y(t) z(t)
+
+    f(x,y,z) = z*x+y
+    # This used to  seg fault, now raises MethodError
+    @test_throws MethodError Derivative(f, x, 1)
+    @Deriv D'~t
+    op = expand_derivatives(D(f(x,y,z)))
+    op.args[1].args[2].name == :z
+    op.args[1].args[2].diff.x.name == :t
+end
