@@ -4,23 +4,30 @@ mutable struct DiffEqSystem <: AbstractSystem
     dvs::Vector{Variable}
     ps::Vector{Variable}
     jac::Matrix{Expression}
+    function DiffEqSystem(eqs, ivs, dvs, ps, jac)
+        all(!isintermediate, eqs) ||
+            throw(ArgumentError("no intermediate equations permitted in DiffEqSystem"))
+
+        new(eqs, ivs, dvs, ps, jac)
+    end
 end
 
 DiffEqSystem(eqs, ivs, dvs, ps) = DiffEqSystem(eqs, ivs, dvs, ps, Matrix{Expression}(undef,0,0))
 
 function DiffEqSystem(eqs)
-    predicates = [_is_derivative, _is_dependent]
-    _, dvs = extract_elements(eqs, predicates)
+    dvs, = extract_elements(eqs, [_is_dependent])
     ivs = unique(vcat((dv.dependents for dv ∈ dvs)...))
     ps, = extract_elements(eqs, [_is_parameter(ivs)])
     DiffEqSystem(eqs, ivs, dvs, ps, Matrix{Expression}(undef,0,0))
 end
 
 function DiffEqSystem(eqs, ivs)
-    predicates = [_is_derivative, _is_dependent, _is_parameter(ivs)]
-    _, dvs, ps = extract_elements(eqs, predicates)
+    dvs, ps = extract_elements(eqs, [_is_dependent, _is_parameter(ivs)])
     DiffEqSystem(eqs, ivs, dvs, ps, Matrix{Expression}(undef,0,0))
 end
+
+isintermediate(eq::Equation) = !(isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential))
+
 
 function generate_ode_function(sys::DiffEqSystem;version = ArrayFunction)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
@@ -44,25 +51,15 @@ function generate_ode_function(sys::DiffEqSystem;version = ArrayFunction)
     end
 end
 
-isintermediate(eq::Equation) = eq.lhs.diff === nothing
-
 function build_equals_expr(eq::Equation)
-    @assert typeof(eq.lhs) <: Variable
+    @assert !isintermediate(eq)
 
-    lhs = eq.lhs.name
-    isintermediate(eq) || (lhs = Symbol(lhs, :_, "$(eq.lhs.diff.x.name)"))
-
+    lhs = Symbol(eq.lhs.args[1].name, :_, eq.lhs.op.x.name)
     return :($lhs = $(convert(Expr, eq.rhs)))
 end
 
 function calculate_jacobian(sys::DiffEqSystem, simplify=true)
-    calcs, diff_exprs = partition(isintermediate, sys.eqs)
-    rhs = [eq.rhs for eq in diff_exprs]
-
-    # Handle intermediate calculations by substitution
-    for calc ∈ calcs
-        find_replace!.(rhs, calc.lhs, calc.rhs)
-    end
+    rhs = [eq.rhs for eq in sys.eqs]
 
     sys_exprs = calculate_jacobian(rhs, sys.dvs)
     sys_exprs = Expression[expand_derivatives(expr) for expr in sys_exprs]
@@ -72,7 +69,6 @@ end
 function generate_ode_jacobian(sys::DiffEqSystem, simplify=true)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
-    diff_exprs = filter(!isintermediate, sys.eqs)
     jac = calculate_jacobian(sys, simplify)
     sys.jac = jac
     jac_exprs = [:(J[$i,$j] = $(convert(Expr, jac[i,j]))) for i in 1:size(jac,1), j in 1:size(jac,2)]
@@ -84,7 +80,6 @@ end
 function generate_ode_iW(sys::DiffEqSystem, simplify=true)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
-    diff_exprs = filter(!isintermediate, sys.eqs)
     jac = sys.jac
 
     gam = Parameter(:gam)

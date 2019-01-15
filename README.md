@@ -152,7 +152,6 @@ context-aware single variable of the IR. Its fields are described as follows:
   the core identifier of the `Variable` in the sense of equality.
 - `subtype`: the main denotation of context. Variables within systems
   are grouped according to their `subtype`.
-- `diff`: the `Differential` object representing the quantity the variable is differentiated with respect to, or `nothing`
 - `dependents`: the vector of variables on which the current variable
   is dependent. For example, `u(t,x)` has dependents `[t,x]`. Derivatives thus
   require this information in order to simplify down.

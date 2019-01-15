@@ -57,7 +57,7 @@ function test_eqs(eqs1, eqs2)
     end
     eq
 end
-@test_broken test_eqs(de1.eqs, lowered_eqs)
+@test test_eqs(de1.eqs, lowered_eqs)
 
 # Internal calculations
 a = y - x
