@@ -6,10 +6,7 @@ function lower_varname(O::Operation, naming_scheme; lower=false)
     D, x = O.op, O.args[1]
     order = lower ? D.order-1 : D.order
 
-    sym = x.name
-    name = order == 0 ? sym : Symbol(sym, naming_scheme, string(D.x.name)^order)
-
-    Variable(name, x.subtype, x.dependents)
+    lower_varname(x, D.x, order, naming_scheme)
 end
 function lower_varname(var::Variable, idv, order::Int, naming_scheme)
     sym = var.name
