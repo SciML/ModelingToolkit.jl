@@ -13,6 +13,7 @@ function (D::Differential)(x::Variable)
     has_dependent(x, D.x) || return Constant(0)
     return Operation(D, Expression[x])
 end
+(::Differential)(::Constant) = Constant(0)
 Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x == D2.x
 
 function expand_derivatives(O::Operation)
@@ -21,7 +22,7 @@ function expand_derivatives(O::Operation)
     if O.op isa Differential
         D = O.op
         o = O.args[1]
-        isa(o, Variable) && return O
+        isa(o, Operation) || return O
         return simplify_constants(sum(i->Derivative(o,i)*expand_derivatives(D(o.args[i])),1:length(o.args)))
     end
 

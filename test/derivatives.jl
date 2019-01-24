@@ -42,3 +42,6 @@ jac = ModelingToolkit.calculate_jacobian(sys)
 
 @test expand_derivatives(D(x * y)) == simplify_constants(y*D(x) + x*D(y))
 @test_broken expand_derivatives(D(x * y)) == simplify_constants(D(x)*y + x*D(y))
+
+@test expand_derivatives(D(2t)) == 2
+@test expand_derivatives(D(2x)) == 2D(x)
