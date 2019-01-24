@@ -40,3 +40,5 @@ jac = ModelingToolkit.calculate_jacobian(sys)
 @Unknown a(t) b(a)
 @test D(b) ≠ Constant(0)
 
+@test expand_derivatives(D(x * y)) == simplify_constants(y*D(x) + x*D(y))
+@test_broken expand_derivatives(D(x * y)) == simplify_constants(D(x)*y + x*D(y))

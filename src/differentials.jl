@@ -21,6 +21,7 @@ function expand_derivatives(O::Operation)
     if O.op isa Differential
         D = O.op
         o = O.args[1]
+        isa(o, Variable) && return O
         return simplify_constants(sum(i->Derivative(o,i)*expand_derivatives(D(o.args[i])),1:length(o.args)))
     end
 
