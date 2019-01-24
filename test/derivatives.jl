@@ -15,11 +15,6 @@ dcsch = D(csch(t))
 # Chain rule
 dsinsin = D(sin(sin(t)))
 @test expand_derivatives(dsinsin) == cos(sin(t))*cos(t)
-# Binary
-dpow1 = Derivative(^, (x, y), Val(1))
-dpow2 = Derivative(^, (x, y), Val(2))
-@test dpow1 == y*x^(y-1)
-@test dpow2 == x^y*log(x)
 
 d1 = D(sin(t)*t)
 d2 = D(sin(t)*cos(t))
@@ -45,18 +40,8 @@ jac = ModelingToolkit.calculate_jacobian(sys)
 @Unknown a(t) b(a)
 @test D(b) ≠ Constant(0)
 
+@test expand_derivatives(D(x * y)) == simplify_constants(y*D(x) + x*D(y))
+@test_broken expand_derivatives(D(x * y)) == simplify_constants(D(x)*y + x*D(y))
 
-# Regression test for PR #84
-let
-    # Define some variables
-    @Param t σ ρ β
-    @Unknown x(t) y(t) z(t)
-
-    f(x,y,z) = z*x+y
-    # This used to  seg fault, now raises MethodError
-    @test_throws MethodError Derivative(f, x, 1)
-    @Deriv D'~t
-    op = expand_derivatives(D(f(x,y,z)))
-    op.args[1].args[2].name == :z
-    op.args[1].args[2].diff.x.name == :t
-end
+@test expand_derivatives(D(2t)) == 2
+@test expand_derivatives(D(2x)) == 2D(x)
