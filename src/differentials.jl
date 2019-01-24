@@ -79,4 +79,4 @@ function calculate_jacobian(eqs,vars)
     Expression[Differential(vars[j])(eqs[i]) for i in 1:length(eqs), j in 1:length(vars)]
 end
 
-export Differential, Derivative, expand_derivatives, @Deriv, calculate_jacobian
+export Differential, expand_derivatives, @Deriv, calculate_jacobian

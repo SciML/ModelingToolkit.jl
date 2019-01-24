@@ -3,7 +3,7 @@ using Test
 
 @Param t σ ρ β
 @Unknown x(t) y(t) z(t)
-@Deriv D'~t # Default of first derivative, Derivative(t,1)
+@Deriv D'~t
 @Const c=0
 
 # Default values
