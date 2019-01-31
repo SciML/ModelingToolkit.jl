@@ -30,16 +30,16 @@ function ode_order_lowering!(eqs, naming_scheme)
             var_order[var] = maxorder
             var ∈ vars || push!(vars, var)
         end
-        lhs_renaming!(eq, naming_scheme)
+        lhs_renaming!(eq, D, naming_scheme)
         rhs_renaming!(eq, naming_scheme)
     end
 
     for var ∈ vars
         order = var_order[var]
         for o in (order-1):-1:1
-            lhs = D(lower_varname(var, idv, o-1, naming_scheme))
+            lvar = lower_varname(var, idv, o-1, naming_scheme)
             rhs = lower_varname(var, idv, o, naming_scheme)
-            eq = Equation(lhs, rhs)
+            eq = DiffEq(D, lvar, rhs)
             push!(eqs, eq)
         end
     end
@@ -47,8 +47,9 @@ function ode_order_lowering!(eqs, naming_scheme)
     return eqs
 end
 
-function lhs_renaming!(eq::DiffEq, naming_scheme)
+function lhs_renaming!(eq::DiffEq, D, naming_scheme)
     eq.var = lower_varname(eq.D, eq.var, naming_scheme, lower=true)
+    eq.D = D
     return eq
 end
 rhs_renaming!(eq::DiffEq, naming_scheme) = _rec_renaming!(eq.rhs, naming_scheme)

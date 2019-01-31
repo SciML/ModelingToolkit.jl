@@ -12,6 +12,7 @@ function Base.convert(::Type{DiffEq}, eq::Equation)
     isintermediate(eq) && throw(ArgumentError("intermediate equation received"))
     return DiffEq(eq.lhs.op, eq.lhs.args[1], eq.rhs)
 end
+Base.:(==)(a::DiffEq, b::DiffEq) = (a.D, a.var, a.rhs) == (b.D, b.var, b.rhs)
 get_args(eq::DiffEq) = Expression[eq.var, eq.rhs]
 
 struct DiffEqSystem <: AbstractSystem

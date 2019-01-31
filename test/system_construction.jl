@@ -45,7 +45,7 @@ lowered_eqs = [D(u_tt) ~ 2u_tt + u_t + x_t + 1
                D(u_t)  ~ u_tt
                D(u)    ~ u_t
                D(x)    ~ x_t]
-@test_broken de1.eqs == lowered_eqs
+@test de1.eqs == convert.(ModelingToolkit.DiffEq, lowered_eqs)
 
 # Internal calculations
 a = y - x

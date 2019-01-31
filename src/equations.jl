@@ -6,6 +6,7 @@ mutable struct Equation
     rhs::Expression
 end
 Base.broadcastable(eq::Equation) = Ref(eq)
+Base.:(==)(a::Equation, b::Equation) = (a.lhs, a.rhs) == (b.lhs, b.rhs)
 
 Base.:~(lhs::Expression, rhs::Expression) = Equation(lhs, rhs)
 Base.:~(lhs::Expression, rhs::Number    ) = Equation(lhs, rhs)
