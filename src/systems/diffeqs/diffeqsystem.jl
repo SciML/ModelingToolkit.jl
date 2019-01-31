@@ -1,14 +1,17 @@
-mutable struct DiffEqSystem <: AbstractSystem
+using Base: RefValue
+
+
+struct DiffEqSystem <: AbstractSystem
     eqs::Vector{Equation}
     ivs::Vector{Variable}
     dvs::Vector{Variable}
     ps::Vector{Variable}
-    jac::Matrix{Expression}
+    jac::RefValue{Matrix{Expression}}
     function DiffEqSystem(eqs, ivs, dvs, ps)
         all(!isintermediate, eqs) ||
             throw(ArgumentError("no intermediate equations permitted in DiffEqSystem"))
 
-        jac = Matrix{Expression}(undef, 0, 0)
+        jac = RefValue(Matrix{Expression}(undef, 0, 0))
         new(eqs, ivs, dvs, ps, jac)
     end
 end
@@ -58,18 +61,18 @@ function build_equals_expr(eq::Equation)
 end
 
 function calculate_jacobian(sys::DiffEqSystem, simplify=true)
+    isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
     rhs = [eq.rhs for eq in sys.eqs]
 
-    sys_exprs = calculate_jacobian(rhs, sys.dvs)
-    sys_exprs = Expression[expand_derivatives(expr) for expr in sys_exprs]
-    sys_exprs
+    jac = expand_derivatives.(calculate_jacobian(rhs, sys.dvs))
+    sys.jac[] = jac  # cache Jacobian
+    return jac
 end
 
 function generate_ode_jacobian(sys::DiffEqSystem, simplify=true)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
     jac = calculate_jacobian(sys, simplify)
-    sys.jac = jac
     jac_exprs = [:(J[$i,$j] = $(convert(Expr, jac[i,j]))) for i in 1:size(jac,1), j in 1:size(jac,2)]
     exprs = vcat(var_exprs,param_exprs,vec(jac_exprs))
     block = expr_arr_to_block(exprs)
@@ -79,7 +82,7 @@ end
 function generate_ode_iW(sys::DiffEqSystem, simplify=true)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
-    jac = sys.jac
+    jac = calculate_jacobian(sys, simplify)
 
     gam = Parameter(:gam)
 
