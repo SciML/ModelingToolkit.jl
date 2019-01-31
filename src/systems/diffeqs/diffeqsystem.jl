@@ -16,26 +16,28 @@ get_args(eq::DiffEq) = Expression[eq.var, eq.rhs]
 
 struct DiffEqSystem <: AbstractSystem
     eqs::Vector{DiffEq}
-    ivs::Vector{Variable}
+    iv::Variable
     dvs::Vector{Variable}
     ps::Vector{Variable}
     jac::RefValue{Matrix{Expression}}
-    function DiffEqSystem(eqs, ivs, dvs, ps)
+    function DiffEqSystem(eqs, iv, dvs, ps)
         jac = RefValue(Matrix{Expression}(undef, 0, 0))
-        new(eqs, ivs, dvs, ps, jac)
+        new(eqs, iv, dvs, ps, jac)
     end
 end
 
 function DiffEqSystem(eqs)
     dvs, = extract_elements(eqs, [_is_dependent])
     ivs = unique(vcat((dv.dependents for dv ∈ dvs)...))
-    ps, = extract_elements(eqs, [_is_parameter(ivs)])
-    DiffEqSystem(eqs, ivs, dvs, ps)
+    length(ivs) == 1 || throw(ArgumentError("one independent variable currently supported"))
+    iv = first(ivs)
+    ps, = extract_elements(eqs, [_is_parameter(iv)])
+    DiffEqSystem(eqs, iv, dvs, ps)
 end
 
-function DiffEqSystem(eqs, ivs)
-    dvs, ps = extract_elements(eqs, [_is_dependent, _is_parameter(ivs)])
-    DiffEqSystem(eqs, ivs, dvs, ps)
+function DiffEqSystem(eqs, iv)
+    dvs, ps = extract_elements(eqs, [_is_dependent, _is_parameter(iv)])
+    DiffEqSystem(eqs, iv, dvs, ps)
 end
 
 
@@ -44,12 +46,12 @@ function generate_ode_function(sys::DiffEqSystem; version::FunctionVersion = Arr
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
     sys_exprs = build_equals_expr.(sys.eqs)
     if version === ArrayFunction
-        dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in eachindex(sys.dvs)]
+        dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.iv.name)"))) for i in eachindex(sys.dvs)]
         exprs = vcat(var_exprs,param_exprs,sys_exprs,dvar_exprs)
         block = expr_arr_to_block(exprs)
         :((du,u,p,t)->$(toexpr(block)))
     elseif version === SArrayFunction
-        dvar_exprs = [:($(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in eachindex(sys.dvs)]
+        dvar_exprs = [:($(Symbol("$(sys.dvs[i].name)_$(sys.iv.name)"))) for i in eachindex(sys.dvs)]
         svector_expr = quote
             E = eltype(tuple($(dvar_exprs...)))
             T = StaticArrays.similar_type(typeof(u), E)

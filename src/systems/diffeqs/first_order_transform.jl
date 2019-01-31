@@ -12,9 +12,8 @@ end
 
 function ode_order_lowering(sys::DiffEqSystem; kwargs...)
     eqs = sys.eqs
-    ivs = sys.ivs
     eqs_lowered = ode_order_lowering(eqs; kwargs...)
-    DiffEqSystem(eqs_lowered, ivs)
+    DiffEqSystem(eqs_lowered, sys.iv)
 end
 ode_order_lowering(eqs; naming_scheme = "_") = ode_order_lowering!(deepcopy(eqs), naming_scheme)
 function ode_order_lowering!(eqs, naming_scheme)

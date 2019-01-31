@@ -46,7 +46,7 @@ Each operation builds an `Operation` type, and thus `eqs` is an array of
 analyzed by other programs. We can turn this into a `DiffEqSystem` via:
 
 ```julia
-de = DiffEqSystem(eqs,[t],[x,y,z],[σ,ρ,β])
+de = DiffEqSystem(eqs,t,[x,y,z],[σ,ρ,β])
 de = DiffEqSystem(eqs)
 ```
 

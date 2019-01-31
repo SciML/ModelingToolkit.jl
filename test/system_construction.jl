@@ -11,7 +11,7 @@ using Test
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
-de = DiffEqSystem(eqs,[t],[x,y,z],[σ,ρ,β])
+de = DiffEqSystem(eqs,t,[x,y,z],[σ,ρ,β])
 ModelingToolkit.generate_ode_function(de)
 ModelingToolkit.generate_ode_function(de;version=ModelingToolkit.SArrayFunction)
 jac_expr = ModelingToolkit.generate_ode_jacobian(de)
@@ -20,10 +20,11 @@ f = ODEFunction(de)
 ModelingToolkit.generate_ode_iW(de)
 
 # Differential equation with automatic extraction of variables
-de2 = DiffEqSystem(eqs, [t])
+de2 = DiffEqSystem(eqs, t)
 
 function test_vars_extraction(de, de2)
-    for el in (:ivs, :dvs, :ps)
+    @test de.iv == de2.iv
+    for el in (:dvs, :ps)
         names2 = sort(collect(var.name for var in getfield(de2,el)))
         names = sort(collect(var.name for var in getfield(de,el)))
         @test names2 == names
@@ -37,7 +38,7 @@ test_vars_extraction(de, de2)
 @Unknown u(t) u_tt(t) u_t(t) x_t(t)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
        D2(x) ~ D(x) + 2]
-de = DiffEqSystem(eqs, [t])
+de = DiffEqSystem(eqs, t)
 de1 = ode_order_lowering(de)
 lowered_eqs = [D(u_tt) ~ 2u_tt + u_t + x_t + 1
                D(x_t)  ~ x_t + 2
@@ -51,7 +52,7 @@ a = y - x
 eqs = [D(x) ~ σ*a,
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
-de = DiffEqSystem(eqs,[t],[x,y,z],[σ,ρ,β])
+de = DiffEqSystem(eqs,t,[x,y,z],[σ,ρ,β])
 ModelingToolkit.generate_ode_function(de)
 jac = ModelingToolkit.calculate_jacobian(de)
 f = ODEFunction(de)
@@ -75,8 +76,8 @@ ModelingToolkit.generate_nlsys_function(ns)
 _x = y / C
 eqs = [D(x) ~ -A*x,
        D(y) ~ A*x - B*_x]
-de = DiffEqSystem(eqs,[t],[x,y],[A,B,C])
-test_vars_extraction(de, DiffEqSystem(eqs,[t]))
+de = DiffEqSystem(eqs,t,[x,y],[A,B,C])
+test_vars_extraction(de, DiffEqSystem(eqs,t))
 test_vars_extraction(de, DiffEqSystem(eqs))
 @test eval(ModelingToolkit.generate_ode_function(de))([0.0,0.0],[1.0,2.0],[1,2,3],0.0) ≈ -1/3
 
