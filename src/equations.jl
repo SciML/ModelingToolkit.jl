@@ -1,7 +1,7 @@
 export Equation
 
 
-mutable struct Equation
+struct Equation
     lhs::Expression
     rhs::Expression
 end

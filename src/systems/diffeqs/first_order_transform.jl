@@ -10,60 +10,48 @@ function lower_varname(var::Variable, idv, order::Int)
     return Variable(name, var.subtype, var.dependents)
 end
 
-function ode_order_lowering(sys::DiffEqSystem; kwargs...)
-    eqs = sys.eqs
-    eqs_lowered = ode_order_lowering(eqs; kwargs...)
+function ode_order_lowering(sys::DiffEqSystem)
+    eqs_lowered = ode_order_lowering(sys.eqs, sys.iv)
     DiffEqSystem(eqs_lowered, sys.iv)
 end
-ode_order_lowering(eqs) = ode_order_lowering!(deepcopy(eqs))
-function ode_order_lowering!(eqs)
-    idv = extract_idv(eqs[1])
-    D   = Differential(idv, 1)
+function ode_order_lowering(eqs, iv)
+    D = Differential(iv, 1)
     var_order = Dict{Variable,Int}()
     vars = Variable[]
-    dv_name = eqs[1].var.subtype
+    new_eqs = similar(eqs, DiffEq)
 
-    for eq in eqs
+    for (i, eq) ∈ enumerate(eqs)
         var, maxorder = extract_var_order(eq)
         maxorder == 1 && continue # fast pass
         if maxorder > get(var_order, var, 0)
             var_order[var] = maxorder
             var ∈ vars || push!(vars, var)
         end
-        lhs_renaming!(eq, D)
-        rhs_renaming!(eq)
+        eq = lhs_renaming(eq, D)
+        eq = rhs_renaming(eq)
+        new_eqs[i] = eq
     end
 
     for var ∈ vars
         order = var_order[var]
         for o in (order-1):-1:1
-            lvar = lower_varname(var, idv, o-1)
-            rhs = lower_varname(var, idv, o)
+            lvar = lower_varname(var, iv, o-1)
+            rhs = lower_varname(var, iv, o)
             eq = DiffEq(D, lvar, rhs)
-            push!(eqs, eq)
+            push!(new_eqs, eq)
         end
     end
 
-    return eqs
+    return new_eqs
 end
 
-function lhs_renaming!(eq::DiffEq, D)
-    eq.var = lower_varname(eq.D, eq.var, lower=true)
-    eq.D = D
-    return eq
-end
-rhs_renaming!(eq::DiffEq) = _rec_renaming!(eq.rhs)
+lhs_renaming(eq::DiffEq, D) = DiffEq(D, lower_varname(eq.D, eq.var, lower=true), eq.rhs)
+rhs_renaming(eq::DiffEq) = DiffEq(eq.D, eq.var, _rec_renaming(eq.rhs))
 
-function _rec_renaming!(rhs)
-    isa(rhs, Operation) && isa(rhs.op, Differential) &&
-        return lower_varname(rhs.op, rhs.args[1])
-    if rhs isa Operation
-        args = rhs.args
-        for i in eachindex(args)
-            args[i] = _rec_renaming!(args[i])
-        end
-    end
-    rhs
+function _rec_renaming(rhs)
+    isa(rhs, Operation) || return rhs
+    isa(rhs.op, Differential) && return lower_varname(rhs.op, rhs.args[1])
+    return Operation(rhs.op, _rec_renaming.(rhs.args))
 end
 
 extract_var_order(eq::DiffEq) = (eq.var, eq.D.order)

@@ -3,7 +3,7 @@ using Base: RefValue
 
 isintermediate(eq::Equation) = !(isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential))
 
-mutable struct DiffEq  # D(x) = t
+struct DiffEq  # D(x) = t
     D::Differential  # D
     var::Variable    # x
     rhs::Expression  # t
