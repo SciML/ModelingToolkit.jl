@@ -27,9 +27,9 @@ function ode_order_lowering(eqs, iv)
             var_order[var] = maxorder
             var ∈ vars || push!(vars, var)
         end
-        eq = lhs_renaming(eq, D)
-        eq = rhs_renaming(eq)
-        new_eqs[i] = eq
+        var′ = lower_varname(eq.D, eq.var, lower = true)
+        rhs′ = rename(eq.rhs)
+        new_eqs[i] = DiffEq(D, var′, rhs′)
     end
 
     for var ∈ vars
@@ -45,13 +45,10 @@ function ode_order_lowering(eqs, iv)
     return new_eqs
 end
 
-lhs_renaming(eq::DiffEq, D) = DiffEq(D, lower_varname(eq.D, eq.var, lower=true), eq.rhs)
-rhs_renaming(eq::DiffEq) = DiffEq(eq.D, eq.var, _rec_renaming(eq.rhs))
-
-function _rec_renaming(rhs)
-    isa(rhs, Operation) || return rhs
-    isa(rhs.op, Differential) && return lower_varname(rhs.op, rhs.args[1])
-    return Operation(rhs.op, _rec_renaming.(rhs.args))
+function rename(O::Expression)
+    isa(O, Operation) || return O
+    isa(O.op, Differential) && return lower_varname(O.op, O.args[1])
+    return Operation(O.op, rename.(O.args))
 end
 
 extract_var_order(eq::DiffEq) = (eq.var, eq.D.order)
