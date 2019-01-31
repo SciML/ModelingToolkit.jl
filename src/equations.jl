@@ -29,10 +29,10 @@ function extract_elements(eqs, predicates)
     return result
 end
 
+get_args(O::Operation) = O.args
+get_args(eq::Equation) = Expression[eq.lhs, eq.rhs]
 function vars!(vars, op)
-    args = isa(op, Equation) ? Expression[op.lhs, op.rhs] : op.args
-
-    for arg ∈ args
+    for arg ∈ get_args(op)
         if isa(arg, Operation)
             vars!(vars, arg)
         elseif isa(arg, Variable)

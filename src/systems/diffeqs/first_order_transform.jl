@@ -1,12 +1,8 @@
-extract_idv(eq::Equation) = eq.lhs.op.x
+extract_idv(eq::DiffEq) = eq.D.x
 
-function lower_varname(O::Operation, naming_scheme; lower=false)
-    @assert isa(O.op, Differential)
-
-    D, x = O.op, O.args[1]
+function lower_varname(D::Differential, x, naming_scheme; lower=false)
     order = lower ? D.order-1 : D.order
-
-    lower_varname(x, D.x, order, naming_scheme)
+    return lower_varname(x, D.x, order, naming_scheme)
 end
 function lower_varname(var::Variable, idv, order::Int, naming_scheme)
     sym = var.name
@@ -26,7 +22,7 @@ function ode_order_lowering!(eqs, naming_scheme)
     D   = Differential(idv, 1)
     var_order = Dict{Variable,Int}()
     vars = Variable[]
-    dv_name = eqs[1].lhs.args[1].subtype
+    dv_name = eqs[1].var.subtype
 
     for eq in eqs
         var, maxorder = extract_var_order(eq)
@@ -35,7 +31,7 @@ function ode_order_lowering!(eqs, naming_scheme)
             var_order[var] = maxorder
             var ∈ vars || push!(vars, var)
         end
-        lhs_renaming!(eq, D, naming_scheme)
+        lhs_renaming!(eq, naming_scheme)
         rhs_renaming!(eq, naming_scheme)
     end
 
@@ -52,14 +48,15 @@ function ode_order_lowering!(eqs, naming_scheme)
     return eqs
 end
 
-function lhs_renaming!(eq, D, naming_scheme)
-    eq.lhs = D(lower_varname(eq.lhs, naming_scheme, lower=true))
+function lhs_renaming!(eq::DiffEq, naming_scheme)
+    eq.var = lower_varname(eq.D, eq.var, naming_scheme, lower=true)
     return eq
 end
-rhs_renaming!(eq, naming_scheme) = _rec_renaming!(eq.rhs, naming_scheme)
+rhs_renaming!(eq::DiffEq, naming_scheme) = _rec_renaming!(eq.rhs, naming_scheme)
 
 function _rec_renaming!(rhs, naming_scheme)
-    isa(rhs, Operation) && isa(rhs.op, Differential) && return lower_varname(rhs, naming_scheme)
+    isa(rhs, Operation) && isa(rhs.op, Differential) &&
+        return lower_varname(rhs.op, rhs.args[1], naming_scheme)
     if rhs isa Operation
         args = rhs.args
         for i in eachindex(args)
@@ -69,12 +66,6 @@ function _rec_renaming!(rhs, naming_scheme)
     rhs
 end
 
-function extract_var_order(eq)
-    # We assume that the differential with the highest order is always going to be in the LHS
-    dv = eq.lhs
-    var = dv.args[1]
-    order = dv.op.order
-    return (var, order)
-end
+extract_var_order(eq::DiffEq) = (eq.var, eq.D.order)
 
 export ode_order_lowering

@@ -1,16 +1,26 @@
 using Base: RefValue
 
 
+isintermediate(eq::Equation) = !(isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential))
+
+mutable struct DiffEq  # D(x) = t
+    D::Differential  # D
+    var::Variable    # x
+    rhs::Expression  # t
+end
+function Base.convert(::Type{DiffEq}, eq::Equation)
+    isintermediate(eq) && throw(ArgumentError("intermediate equation received"))
+    return DiffEq(eq.lhs.op, eq.lhs.args[1], eq.rhs)
+end
+get_args(eq::DiffEq) = Expression[eq.var, eq.rhs]
+
 struct DiffEqSystem <: AbstractSystem
-    eqs::Vector{Equation}
+    eqs::Vector{DiffEq}
     ivs::Vector{Variable}
     dvs::Vector{Variable}
     ps::Vector{Variable}
     jac::RefValue{Matrix{Expression}}
     function DiffEqSystem(eqs, ivs, dvs, ps)
-        all(!isintermediate, eqs) ||
-            throw(ArgumentError("no intermediate equations permitted in DiffEqSystem"))
-
         jac = RefValue(Matrix{Expression}(undef, 0, 0))
         new(eqs, ivs, dvs, ps, jac)
     end
@@ -27,8 +37,6 @@ function DiffEqSystem(eqs, ivs)
     dvs, ps = extract_elements(eqs, [_is_dependent, _is_parameter(ivs)])
     DiffEqSystem(eqs, ivs, dvs, ps)
 end
-
-isintermediate(eq::Equation) = !(isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential))
 
 
 function generate_ode_function(sys::DiffEqSystem;version = ArrayFunction)
@@ -53,10 +61,8 @@ function generate_ode_function(sys::DiffEqSystem;version = ArrayFunction)
     end
 end
 
-function build_equals_expr(eq::Equation)
-    @assert !isintermediate(eq)
-
-    lhs = Symbol(eq.lhs.args[1].name, :_, eq.lhs.op.x.name)
+function build_equals_expr(eq::DiffEq)
+    lhs = Symbol(eq.var.name, :_, eq.D.x.name)
     return :($lhs = $(convert(Expr, eq.rhs)))
 end
 
