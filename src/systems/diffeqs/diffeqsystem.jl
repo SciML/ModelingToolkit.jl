@@ -4,26 +4,25 @@ mutable struct DiffEqSystem <: AbstractSystem
     dvs::Vector{Variable}
     ps::Vector{Variable}
     jac::Matrix{Expression}
-    function DiffEqSystem(eqs, ivs, dvs, ps, jac)
+    function DiffEqSystem(eqs, ivs, dvs, ps)
         all(!isintermediate, eqs) ||
             throw(ArgumentError("no intermediate equations permitted in DiffEqSystem"))
 
+        jac = Matrix{Expression}(undef, 0, 0)
         new(eqs, ivs, dvs, ps, jac)
     end
 end
-
-DiffEqSystem(eqs, ivs, dvs, ps) = DiffEqSystem(eqs, ivs, dvs, ps, Matrix{Expression}(undef,0,0))
 
 function DiffEqSystem(eqs)
     dvs, = extract_elements(eqs, [_is_dependent])
     ivs = unique(vcat((dv.dependents for dv ∈ dvs)...))
     ps, = extract_elements(eqs, [_is_parameter(ivs)])
-    DiffEqSystem(eqs, ivs, dvs, ps, Matrix{Expression}(undef,0,0))
+    DiffEqSystem(eqs, ivs, dvs, ps)
 end
 
 function DiffEqSystem(eqs, ivs)
     dvs, ps = extract_elements(eqs, [_is_dependent, _is_parameter(ivs)])
-    DiffEqSystem(eqs, ivs, dvs, ps, Matrix{Expression}(undef,0,0))
+    DiffEqSystem(eqs, ivs, dvs, ps)
 end
 
 isintermediate(eq::Equation) = !(isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential))
