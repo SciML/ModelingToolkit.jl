@@ -39,16 +39,16 @@ function DiffEqSystem(eqs, ivs)
 end
 
 
-function generate_ode_function(sys::DiffEqSystem;version = ArrayFunction)
+function generate_ode_function(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
     sys_exprs = build_equals_expr.(sys.eqs)
-    if version == ArrayFunction
+    if version === ArrayFunction
         dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in eachindex(sys.dvs)]
         exprs = vcat(var_exprs,param_exprs,sys_exprs,dvar_exprs)
         block = expr_arr_to_block(exprs)
         :((du,u,p,t)->$(toexpr(block)))
-    elseif version == SArrayFunction
+    elseif version === SArrayFunction
         dvar_exprs = [:($(Symbol("$(sys.dvs[i].name)_$(sys.ivs[1].name)"))) for i in eachindex(sys.dvs)]
         svector_expr = quote
             E = eltype(tuple($(dvar_exprs...)))
@@ -117,12 +117,12 @@ function generate_ode_iW(sys::DiffEqSystem, simplify=true)
     :((iW,u,p,gam,t)->$(block)),:((iW,u,p,gam,t)->$(block2))
 end
 
-function DiffEqBase.ODEFunction(sys::DiffEqSystem;version = ArrayFunction,kwargs...)
-    expr = generate_ode_function(sys;version=version,kwargs...)
-    if version == ArrayFunction
-      ODEFunction{true}(eval(expr))
-    elseif version == SArrayFunction
-      ODEFunction{false}(eval(expr))
+function DiffEqBase.ODEFunction(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
+    expr = generate_ode_function(sys; version = version)
+    if version === ArrayFunction
+        ODEFunction{true}(eval(expr))
+    elseif version === SArrayFunction
+        ODEFunction{false}(eval(expr))
     end
 end
 
