@@ -7,11 +7,11 @@ Differential(x) = Differential(x,1)
 Base.show(io::IO, D::Differential) = print(io,"($(D.x),$(D.order))")
 Base.convert(::Type{Expr}, D::Differential) = D
 
-(D::Differential)(x::Operation) = Operation(D, Expression[x])
-function (D::Differential)(x::Variable)
-    D.x === x             && return Constant(1)
-    has_dependent(x, D.x) || return Constant(0)
-    return Operation(D, Expression[x])
+function (D::Differential)(O::Operation)
+    D.x == O              && return Constant(1)
+    has_dependent(O, D.x) || return Constant(0)
+
+    return Operation(D, Expression[O])
 end
 (::Differential)(::Constant) = Constant(0)
 Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x == D2.x
@@ -22,7 +22,8 @@ function expand_derivatives(O::Operation)
     if O.op isa Differential
         D = O.op
         o = O.args[1]
-        isa(o, Operation) || return O
+        isa(o, Operation)   || return O
+        isa(o.op, Variable) && return O
         return simplify_constants(sum(i->Derivative(o,i)*expand_derivatives(D(o.args[i])),1:length(o.args)))
     end
 
@@ -77,7 +78,7 @@ macro Deriv(x...)
     esc(_differential_macro(x))
 end
 
-function calculate_jacobian(eqs,vars)
+function calculate_jacobian(eqs, vars)
     Expression[Differential(vars[j])(eqs[i]) for i in 1:length(eqs), j in 1:length(vars)]
 end
 

@@ -2,13 +2,13 @@ using ModelingToolkit
 using Test
 
 # Derivatives
-@Param t σ ρ β
+@Param t() σ() ρ() β()
 @Unknown x(t) y(t) z(t)
 @Deriv D'~t
-dsin = D(sin(t))
-expand_derivatives(dsin)
 
+dsin = D(sin(t))
 @test expand_derivatives(dsin) == cos(t)
+
 dcsch = D(csch(t))
 @test expand_derivatives(dcsch) == simplify_constants(coth(t) * csch(t) * -1)
 
@@ -24,7 +24,7 @@ d2 = D(sin(t)*cos(t))
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-sys = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
+sys = NonlinearSystem(eqs)
 jac = ModelingToolkit.calculate_jacobian(sys)
 @test jac[1,1] == σ*-1
 @test jac[1,2] == σ
@@ -45,3 +45,6 @@ jac = ModelingToolkit.calculate_jacobian(sys)
 
 @test expand_derivatives(D(2t)) == 2
 @test expand_derivatives(D(2x)) == 2D(x)
+
+@Deriv D2''~t
+@test expand_derivatives(D2(t)) == 0

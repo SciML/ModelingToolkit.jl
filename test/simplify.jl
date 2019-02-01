@@ -1,7 +1,7 @@
 using ModelingToolkit
 using Test
 
-@Param t
+@Param t()
 @Unknown x(t) y(t) z(t)
 
 null_op = 0*t

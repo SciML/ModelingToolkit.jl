@@ -257,7 +257,7 @@ is accessible via a function-based interface. This means that all macros are
 syntactic sugar in some form. For example, the variable construction:
 
 ```julia
-@Param t σ ρ β
+@Param t() σ() ρ() β()
 @Unknown x(t) y(t) z(t)
 @Deriv D'~t
 ```
@@ -265,14 +265,14 @@ syntactic sugar in some form. For example, the variable construction:
 is syntactic sugar for:
 
 ```julia
-t = Parameter(:t)
-x = Unknown(:x, dependents = [t])
-y = Unknown(:y, dependents = [t])
-z = Unknown(:z, dependents = [t])
+t = Parameter(:t)()
+σ = Parameter(:σ)()
+ρ = Parameter(:ρ)()
+β = Parameter(:β)()
+x = Unknown(:x)(t)
+y = Unknown(:y)(t)
+z = Unknown(:z)(t)
 D = Differential(t)
-σ = Parameter(:σ)
-ρ = Parameter(:ρ)
-β = Parameter(:β)
 ```
 
 ### Intermediate Calculations

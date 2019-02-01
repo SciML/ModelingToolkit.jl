@@ -2,12 +2,12 @@ using ModelingToolkit
 using Test
 
 struct Lorenz <: AbstractComponent
-    x::Variable
-    y::Variable
-    z::Variable
-    σ::Variable
-    ρ::Variable
-    β::Variable
+    x::Expression
+    y::Expression
+    z::Expression
+    σ::Expression
+    ρ::Expression
+    β::Expression
     eqs::Vector{Equation}
 end
 function generate_lorenz_eqs(t,x,y,z,σ,ρ,β)
@@ -18,11 +18,11 @@ function generate_lorenz_eqs(t,x,y,z,σ,ρ,β)
 end
 function Lorenz(t)
     @Unknown x(t) y(t) z(t)
-    @Param σ ρ β
+    @Param σ() ρ() β()
     Lorenz(x, y, z, σ, ρ, β, generate_lorenz_eqs(t, x, y, z, σ, ρ, β))
 end
 
-@Param t
+@Param t()
 lz1 = Lorenz(t)
 lz2 = Lorenz(t)
 lz1.x ~ lz2.x

@@ -2,8 +2,8 @@ using ModelingToolkit
 using Test
 
 # `Expr`, `Number` -> `Operation`
-@Param a
-@Param b
+@Param a()
+@Param b()
 @Unknown x(t) y()
 @test convert(Expression, 2) == 2
 expr = :(-inv(2sqrt(+($a, $b))))

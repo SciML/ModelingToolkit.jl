@@ -1,14 +1,14 @@
 using ModelingToolkit
 using Test
 
-@Param t σ ρ β
+@Param t() σ() ρ() β()
 @Unknown x(t) y(t) z(t)
 @Deriv D'~t
 @Const c=0
 
 # Default values
-p = Parameter(:p)
-u = Unknown(:u, dependents = [t])
+p = Parameter(:p)()
+u = Unknown(:u)(t)
 
 σ*(y-x)
 D(x)

@@ -34,12 +34,7 @@ function vars!(vars, op)
 
     for arg ∈ args
         if isa(arg, Operation)
-            vars!(vars, arg)
-        elseif isa(arg, Variable)
-            push!(vars, arg)
-            for dep ∈ arg.dependents
-                push!(vars, dep)
-            end
+            isa(arg.op, Variable) ? push!(vars, arg.op) : vars!(vars, arg)
         end
     end
 

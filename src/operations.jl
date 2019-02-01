@@ -16,7 +16,9 @@ Base.:(==)(::Operation, ::Constant ) = false
 Base.:(==)(::Constant , ::Operation) = false
 
 Base.convert(::Type{Expr}, O::Operation) =
-    build_expr(:call, Any[Symbol(O.op); convert.(Expr, O.args)])
+    build_expr(:call, Any[get_name(O.op); convert.(Expr, O.args)])
+get_name(f) = Symbol(f)
+
 Base.show(io::IO, O::Operation) = print(io, convert(Expr, O))
 
 

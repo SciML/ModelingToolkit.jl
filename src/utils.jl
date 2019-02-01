@@ -45,6 +45,6 @@ is_constant(::Any) = false
 is_operation(::Operation) = true
 is_operation(::Any) = false
 
-has_dependent(t::Variable) = Base.Fix2(has_dependent, t)
-has_dependent(x::Variable, t::Variable) =
-    t ∈ x.dependents || any(has_dependent(t), x.dependents)
+has_dependent(t::Operation) = Base.Fix2(has_dependent, t)
+has_dependent(x::Operation, t::Operation) = x == t || any(has_dependent(t), x.args)
+has_dependent(::Expression, ::Expression) = false
