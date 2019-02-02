@@ -56,7 +56,7 @@ This can then generate the function. For example, we can see the
 generated code via:
 
 ```julia
-ModelingToolkit.generate_ode_function(de)
+generate_function(de)
 
 ## Which returns:
 :((du, u, p, t)->begin
@@ -88,7 +88,7 @@ eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs)
-nlsys_func = ModelingToolkit.generate_nlsys_function(ns)
+nlsys_func = generate_function(ns)
 ```
 
 which generates:
@@ -270,7 +270,7 @@ eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
-nlsys_func = ModelingToolkit.generate_nlsys_function(ns)
+nlsys_func = generate_function(ns)
 ```
 
 expands to:

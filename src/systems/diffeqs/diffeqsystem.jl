@@ -1,3 +1,6 @@
+export DiffEqSystem, ODEFunction
+
+
 using Base: RefValue
 
 
@@ -12,6 +15,7 @@ function Base.convert(::Type{DiffEq}, eq::Equation)
     isintermediate(eq) && throw(ArgumentError("intermediate equation received"))
     return DiffEq(eq.lhs.op, eq.lhs.args[1], eq.rhs)
 end
+Base.convert(::Type{Equation}, eq::DiffEq) = Equation(eq.D(eq.var), eq.rhs)
 Base.:(==)(a::DiffEq, b::DiffEq) = (a.D, a.var, a.rhs) == (b.D, b.var, b.rhs)
 get_args(eq::DiffEq) = Expression[eq.var, eq.rhs]
 
@@ -42,26 +46,6 @@ function DiffEqSystem(eqs, iv)
 end
 
 
-function generate_ode_function(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
-    var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(sys.dvs)]
-    param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(sys.ps )]
-    (ls, rs) = collect(zip(var_pairs..., param_pairs...))
-
-    var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, rs))
-    sys_exprs = build_expr(:tuple, [convert(Expr, eq.rhs) for eq ∈ sys.eqs])
-    let_expr = Expr(:let, var_eqs, sys_exprs)
-
-    if version === ArrayFunction
-        :((du,u,p,t) -> du .= $let_expr)
-    elseif version === SArrayFunction
-        :((u,p,t) -> begin
-            du = $let_expr
-            T = StaticArrays.similar_type(typeof(u), eltype(du))
-            T(du)
-        end)
-    end
-end
-
 function calculate_jacobian(sys::DiffEqSystem, simplify=true)
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
     rhs = [eq.rhs for eq in sys.eqs]
@@ -71,6 +55,8 @@ function calculate_jacobian(sys::DiffEqSystem, simplify=true)
     return jac
 end
 
+system_eqs(sys::DiffEqSystem) = collect(Equation, sys.eqs)
+system_extras(::DiffEqSystem) = Equation[]
 system_vars(sys::DiffEqSystem) = sys.dvs
 system_params(sys::DiffEqSystem) = sys.ps
 
@@ -108,14 +94,10 @@ function generate_ode_iW(sys::DiffEqSystem, simplify=true)
 end
 
 function DiffEqBase.ODEFunction(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
-    expr = generate_ode_function(sys; version = version)
+    expr = generate_function(sys; version = version)
     if version === ArrayFunction
         ODEFunction{true}(eval(expr))
     elseif version === SArrayFunction
         ODEFunction{false}(eval(expr))
     end
 end
-
-
-export DiffEqSystem, ODEFunction
-export generate_ode_function

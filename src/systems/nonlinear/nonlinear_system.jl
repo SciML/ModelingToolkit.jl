@@ -1,3 +1,6 @@
+export NonlinearSystem
+
+
 struct NonlinearSystem <: AbstractSystem
     eqs::Vector{Equation}
     vs::Vector{Variable}
@@ -9,25 +12,9 @@ function NonlinearSystem(eqs)
     NonlinearSystem(eqs, vs, ps)
 end
 
-iscalc(eq) = isequal(eq.lhs, Constant(0))
 
-function generate_nlsys_function(sys::NonlinearSystem)
-    sys_eqs, calc_eqs = partition(iscalc, sys.eqs)
-
-    var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(sys.vs)]
-    param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(sys.ps)]
-    calc_pairs  = [(eq.lhs.name, convert(Expr, eq.rhs)) for eq ∈ calc_eqs if isa(eq.lhs, Variable)]
-    (ls, rs) = collect(zip(var_pairs..., param_pairs..., calc_pairs...))
-
-    var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, rs))
-    sys_exprs = build_expr(:tuple, [convert(Expr, eq.rhs) for eq ∈ sys_eqs])
-    let_expr = Expr(:let, var_eqs, sys_exprs)
-
-    :((du,u,p) -> du .= $let_expr)
-end
-
-function calculate_jacobian(sys::NonlinearSystem,simplify=true)
-    sys_eqs, calc_eqs = partition(iscalc, sys.eqs)
+function calculate_jacobian(sys::NonlinearSystem, simplify=true)
+    sys_eqs, calc_eqs = system_eqs(sys), filter(iscalc, sys.eqs)
     rhs = [eq.rhs for eq in sys_eqs]
 
     for calc_eq ∈ calc_eqs
@@ -39,8 +26,9 @@ function calculate_jacobian(sys::NonlinearSystem,simplify=true)
     sys_exprs
 end
 
+iscalc(eq) = !isequal(eq.lhs, Constant(0))
+
+system_eqs(sys::NonlinearSystem) = filter(!iscalc, sys.eqs)
+system_extras(sys::NonlinearSystem) = filter(eq -> isa(eq.lhs, Variable), sys.eqs)
 system_vars(sys::NonlinearSystem) = sys.vs
 system_params(sys::NonlinearSystem) = sys.ps
-
-export NonlinearSystem
-export generate_nlsys_function

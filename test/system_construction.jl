@@ -12,8 +12,8 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 de = DiffEqSystem(eqs,t,[x,y,z],[σ,ρ,β])
-ModelingToolkit.generate_ode_function(de)
-ModelingToolkit.generate_ode_function(de;version=ModelingToolkit.SArrayFunction)
+generate_function(de)
+generate_function(de;version=ModelingToolkit.SArrayFunction)
 jac_expr = generate_jacobian(de)
 jac = ModelingToolkit.calculate_jacobian(de)
 f = ODEFunction(de)
@@ -39,7 +39,7 @@ test_vars_extraction(de, de2)
            D(y) ~ x*(ρ-z)-y,
            D(z) ~ x*y - β*z]
     de = DiffEqSystem(eqs,[t],[x,y,z],[σ,ρ,β])
-    ModelingToolkit.generate_ode_function(de)
+    generate_function(de)
 
     #=
     ```julia
@@ -83,7 +83,7 @@ eqs = [D(x) ~ σ*a,
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 de = DiffEqSystem(eqs,t,[x,y,z],[σ,ρ,β])
-ModelingToolkit.generate_ode_function(de)
+generate_function(de)
 jac = ModelingToolkit.calculate_jacobian(de)
 f = ODEFunction(de)
 
@@ -99,7 +99,7 @@ for el in (:vs, :ps)
     @test names2 == names
 end
 
-ModelingToolkit.generate_nlsys_function(ns)
+generate_function(ns)
 
 @Deriv D'~t
 @Param A B C
@@ -110,7 +110,7 @@ de = DiffEqSystem(eqs,t,[x,y],[A,B,C])
 test_vars_extraction(de, DiffEqSystem(eqs,t))
 test_vars_extraction(de, DiffEqSystem(eqs))
 @test begin
-    f = eval(ModelingToolkit.generate_ode_function(de))
+    f = eval(generate_function(de))
     du = [0.0,0.0]
     f(du, [1.0,2.0], [1,2,3], 0.0)
     du ≈ [-1, -1/3]
@@ -137,7 +137,7 @@ jac = ModelingToolkit.calculate_jacobian(ns)
     @test jac[3,2] == x
     @test jac[3,3] == -1 * β
 end
-nlsys_func = ModelingToolkit.generate_nlsys_function(ns)
+nlsys_func = generate_function(ns)
 jac_func = generate_jacobian(ns)
 f = @eval eval(nlsys_func)
 
@@ -148,6 +148,6 @@ eqs = [a ~ y-x,
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
-nlsys_func = ModelingToolkit.generate_nlsys_function(ns)
+nlsys_func = generate_function(ns)
 jac = ModelingToolkit.calculate_jacobian(ns)
 jac = generate_jacobian(ns)
