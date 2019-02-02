@@ -1,11 +1,12 @@
 export Equation
 
 
-mutable struct Equation
+struct Equation
     lhs::Expression
     rhs::Expression
 end
 Base.broadcastable(eq::Equation) = Ref(eq)
+Base.:(==)(a::Equation, b::Equation) = (a.lhs, a.rhs) == (b.lhs, b.rhs)
 
 Base.:~(lhs::Expression, rhs::Expression) = Equation(lhs, rhs)
 Base.:~(lhs::Expression, rhs::Number    ) = Equation(lhs, rhs)
@@ -13,7 +14,7 @@ Base.:~(lhs::Number    , rhs::Expression) = Equation(lhs, rhs)
 
 
 _is_dependent(x::Variable) = x.subtype === :Unknown && !isempty(x.dependents)
-_is_parameter(ivs) = x -> x.subtype === :Parameter && x ∉ ivs
+_is_parameter(iv) = x -> x.subtype === :Parameter && x ≠ iv
 _subtype(subtype::Symbol) = x -> x.subtype === subtype
 
 function extract_elements(eqs, predicates)
@@ -29,10 +30,10 @@ function extract_elements(eqs, predicates)
     return result
 end
 
+get_args(O::Operation) = O.args
+get_args(eq::Equation) = Expression[eq.lhs, eq.rhs]
 function vars!(vars, op)
-    args = isa(op, Equation) ? Expression[op.lhs, op.rhs] : op.args
-
-    for arg ∈ args
+    for arg ∈ get_args(op)
         if isa(arg, Operation)
             vars!(vars, arg)
         elseif isa(arg, Variable)
