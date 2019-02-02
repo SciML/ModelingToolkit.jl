@@ -46,7 +46,7 @@ function DiffEqSystem(eqs, iv)
 end
 
 
-function calculate_jacobian(sys::DiffEqSystem, simplify=true)
+function calculate_jacobian(sys::DiffEqSystem)
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
     rhs = [eq.rhs for eq in sys.eqs]
 
@@ -56,7 +56,6 @@ function calculate_jacobian(sys::DiffEqSystem, simplify=true)
 end
 
 system_eqs(sys::DiffEqSystem) = collect(Equation, sys.eqs)
-system_extras(::DiffEqSystem) = Equation[]
 system_vars(sys::DiffEqSystem) = sys.dvs
 system_params(sys::DiffEqSystem) = sys.ps
 
@@ -64,7 +63,7 @@ system_params(sys::DiffEqSystem) = sys.ps
 function generate_ode_iW(sys::DiffEqSystem, simplify=true)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
-    jac = calculate_jacobian(sys, simplify)
+    jac = calculate_jacobian(sys)
 
     gam = Parameter(:gam)
 

@@ -143,8 +143,7 @@ f = @eval eval(nlsys_func)
 
 # Intermediate calculations
 # Define a nonlinear system
-eqs = [a ~ y-x,
-       0 ~ σ*a,
+eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])

@@ -1,8 +1,17 @@
 export NonlinearSystem
 
 
+struct NLEq
+    rhs::Expression
+end
+function Base.convert(::Type{NLEq}, eq::Equation)
+    isequal(eq.lhs, Constant(0)) || throw(ArgumentError("nonzero lhs received"))
+    return NLEq(eq.rhs)
+end
+Base.convert(::Type{Equation}, eq::NLEq) = Equation(0, eq.rhs)
+
 struct NonlinearSystem <: AbstractSystem
-    eqs::Vector{Equation}
+    eqs::Vector{NLEq}
     vs::Vector{Variable}
     ps::Vector{Variable}
 end
@@ -13,22 +22,12 @@ function NonlinearSystem(eqs)
 end
 
 
-function calculate_jacobian(sys::NonlinearSystem, simplify=true)
-    sys_eqs, calc_eqs = system_eqs(sys), filter(iscalc, sys.eqs)
-    rhs = [eq.rhs for eq in sys_eqs]
-
-    for calc_eq ∈ calc_eqs
-        find_replace!.(rhs, calc_eq.lhs, calc_eq.rhs)
-    end
-
-    sys_exprs = calculate_jacobian(rhs,sys.vs)
-    sys_exprs = Expression[expand_derivatives(expr) for expr in sys_exprs]
-    sys_exprs
+function calculate_jacobian(sys::NonlinearSystem)
+    rhs = [eq.rhs for eq in sys.eqs]
+    jac = expand_derivatives.(calculate_jacobian(rhs, sys.vs))
+    return jac
 end
 
-iscalc(eq) = !isequal(eq.lhs, Constant(0))
-
-system_eqs(sys::NonlinearSystem) = filter(!iscalc, sys.eqs)
-system_extras(sys::NonlinearSystem) = filter(eq -> isa(eq.lhs, Variable), sys.eqs)
+system_eqs(sys::NonlinearSystem) = collect(Equation, sys.eqs)
 system_vars(sys::NonlinearSystem) = sys.vs
 system_params(sys::NonlinearSystem) = sys.ps
