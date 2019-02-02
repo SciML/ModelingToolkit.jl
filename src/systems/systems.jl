@@ -21,22 +21,28 @@ end
 function generate_function(sys::AbstractSystem; version::FunctionVersion = ArrayFunction)
     sys_eqs = system_eqs(sys)
     vs, ps = system_vars(sys), system_params(sys)
+    return build_function([eq.rhs for eq ∈ sys_eqs], vs, ps; version = version)
+end
 
+function build_function(rhss, vs, ps; version::FunctionVersion)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(vs)]
     param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(ps)]
     (ls, rs) = collect(zip(var_pairs..., param_pairs...))
 
     var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, rs))
-    sys_exprs = build_expr(:tuple, [convert(Expr, eq.rhs) for eq ∈ sys_eqs])
-    let_expr = Expr(:let, var_eqs, sys_exprs)
 
     if version === ArrayFunction
-        :((du,u,p,t) -> du .= $let_expr)
+        X = gensym()
+        sys_exprs = [:($X[$i] = $(convert(Expr, rhs))) for (i, rhs) ∈ enumerate(rhss)]
+        let_expr = Expr(:let, var_eqs, build_expr(:block, sys_exprs))
+        :(($X,u,p,t) -> $let_expr)
     elseif version === SArrayFunction
+        sys_expr = build_expr(:tuple, [convert(Expr, rhs) for rhs ∈ rhss])
+        let_expr = Expr(:let, var_eqs, sys_expr)
         :((u,p,t) -> begin
-            du = $let_expr
-            T = StaticArrays.similar_type(typeof(u), eltype(du))
-            T(du)
+            X = $let_expr
+            T = StaticArrays.similar_type(typeof(u), eltype(X))
+            T(X)
         end)
     end
 end
