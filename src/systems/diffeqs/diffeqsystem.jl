@@ -43,24 +43,22 @@ end
 
 
 function generate_ode_function(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
-    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
+    var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(sys.dvs)]
+    param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(sys.ps )]
+    (ls, rs) = collect(zip(var_pairs..., param_pairs...))
+
+    var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, rs))
     sys_exprs = build_expr(:tuple, [convert(Expr, eq.rhs) for eq ∈ sys.eqs])
+    let_expr = Expr(:let, var_eqs, sys_exprs)
+
     if version === ArrayFunction
-        dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.iv.name)"))) for i in eachindex(sys.dvs)]
-        du_expr = :(du .= $sys_exprs)
-        exprs = vcat(var_exprs,param_exprs,du_expr)
-        block = expr_arr_to_block(exprs)
-        :((du,u,p,t)->$(toexpr(block)))
+        :((du,u,p,t) -> du .= $let_expr)
     elseif version === SArrayFunction
-        svector_expr = quote
-            du = $sys_exprs
+        :((u,p,t) -> begin
+            du = $let_expr
             T = StaticArrays.similar_type(typeof(u), eltype(du))
             T(du)
-        end
-        exprs = vcat(var_exprs,param_exprs,svector_expr)
-        block = expr_arr_to_block(exprs)
-        :((u,p,t)->$(toexpr(block)))
+        end)
     end
 end
 

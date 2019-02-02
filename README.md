@@ -60,20 +60,11 @@ ModelingToolkit.generate_ode_function(de)
 
 ## Which returns:
 :((du, u, p, t)->begin
-                x = u[1]
-                y = u[2]
-                z = u[3]
-                σ = p[1]
-                ρ = p[2]
-                β = p[3]
-                x_t = σ * (y - x)
-                y_t = x * (ρ - z) - y
-                z_t = x * y - β * z
-                du[1] = x_t
-                du[2] = y_t
-                du[3] = z_t
-            end
-        end)
+          du .= let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+                  (σ * (y - x), x * (ρ - z) - y, x * y - β * z)
+              end
+      end)
+
 ```
 
 and get the generated function via:
@@ -103,19 +94,11 @@ nlsys_func = ModelingToolkit.generate_nlsys_function(ns)
 which generates:
 
 ```julia
-(du, u, p)->begin  # C:\Users\Chris\.julia\v0.6\ModelingToolkit\src\systems.jl, line 51:
-        begin  # C:\Users\Chris\.julia\v0.6\ModelingToolkit\src\utils.jl, line 2:
-            y = u[1]
-            x = u[2]
-            z = u[3]
-            σ = p[1]
-            ρ = p[2]
-            β = p[3]
-            resid[1] = σ * (y - x)
-            resid[2] = x * (ρ - z) - y
-            resid[3] = x * y - β * z
-        end
-    end
+:((du, u, p)->begin
+          du .= let (y, x, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+                  (σ * (y - x), x * (ρ - z) - y, x * y - β * z)
+              end
+      end)
 ```
 
 We can use this to build a nonlinear function for use with NLsolve.jl:
@@ -293,20 +276,12 @@ nlsys_func = ModelingToolkit.generate_nlsys_function(ns)
 expands to:
 
 ```julia
-:((du, u, p)->begin  # C:\Users\Chris\.julia\v0.6\ModelingToolkit\src\systems.jl, line 85:
-            begin  # C:\Users\Chris\.julia\v0.6\ModelingToolkit\src\utils.jl, line 2:
-                x = u[1]
-                y = u[2]
-                z = u[3]
-                σ = p[1]
-                ρ = p[2]
-                β = p[3]
-                a = y - x
-                resid[1] = σ * a
-                resid[2] = x * (ρ - z) - y
-                resid[3] = x * y - β * z
-            end
-        end)
+:((du, u, p)->begin
+          du .= let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+                  (σ * (y - x), x * (ρ - z) - y, x * y - β * z)
+              end
+      end)
+
 ```
 
 In addition, the Jacobian calculations take into account intermediate variables
