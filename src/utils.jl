@@ -35,8 +35,7 @@ toexpr(ex) = MacroTools.postwalk(x -> isa(x, Expression) ? convert(Expr, x) : x,
 
 function partition(f, xs)
     idxs = map(f, xs)
-    not_idxs = eachindex(xs) .∉ (idxs,)
-    return (xs[idxs], xs[not_idxs])
+    return (xs[idxs], xs[(!).(idxs)])
 end
 
 is_constant(::Constant) = true

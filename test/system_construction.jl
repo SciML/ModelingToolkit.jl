@@ -119,9 +119,21 @@ test_vars_extraction(de, DiffEqSystem(eqs))
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs)
+ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
+jac = ModelingToolkit.calculate_jacobian(ns)
+@testset "nlsys jacobian" begin
+    @test jac[1,1] == σ * -1
+    @test jac[1,2] == σ
+    @test jac[1,3] == 0
+    @test jac[2,1] == ρ - z
+    @test jac[2,2] == -1
+    @test jac[2,3] == x * -1
+    @test jac[3,1] == y
+    @test jac[3,2] == x
+    @test jac[3,3] == -1 * β
+end
 nlsys_func = ModelingToolkit.generate_nlsys_function(ns)
-jac = generate_jacobian(ns)
+jac_func = generate_jacobian(ns)
 f = @eval eval(nlsys_func)
 
 # Intermediate calculations
