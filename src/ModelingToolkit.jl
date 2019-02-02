@@ -9,7 +9,6 @@ import MacroTools: splitdef, combinedef
 abstract type Expression <: Number end
 abstract type AbstractOperation <: Expression end
 abstract type AbstractComponent <: Expression end
-abstract type AbstractSystem end
 
 include("variables.jl")
 
@@ -25,6 +24,7 @@ function caclulate_jacobian end
 include("operations.jl")
 include("differentials.jl")
 include("equations.jl")
+include("systems/systems.jl")
 include("systems/diffeqs/diffeqsystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
 include("systems/nonlinear/nonlinear_system.jl")

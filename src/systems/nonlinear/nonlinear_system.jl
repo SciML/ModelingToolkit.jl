@@ -34,15 +34,8 @@ function calculate_jacobian(sys::NonlinearSystem,simplify=true)
     sys_exprs
 end
 
-function generate_nlsys_jacobian(sys::NonlinearSystem,simplify=true)
-    var_exprs = [:($(sys.vs[i].name) = u[$i]) for i in 1:length(sys.vs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
-    jac = calculate_jacobian(sys,simplify)
-    jac_exprs = [:(J[$i,$j] = $(convert(Expr, jac[i,j]))) for i in 1:size(jac,1), j in 1:size(jac,2)]
-    exprs = vcat(var_exprs,param_exprs,vec(jac_exprs))
-    block = expr_arr_to_block(exprs)
-    :((J,u,p,t)->$(block))
-end
+system_vars(sys::NonlinearSystem) = sys.vs
+system_params(sys::NonlinearSystem) = sys.ps
 
 export NonlinearSystem
 export generate_nlsys_function

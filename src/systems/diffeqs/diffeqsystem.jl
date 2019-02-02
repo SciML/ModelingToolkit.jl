@@ -78,15 +78,9 @@ function calculate_jacobian(sys::DiffEqSystem, simplify=true)
     return jac
 end
 
-function generate_ode_jacobian(sys::DiffEqSystem, simplify=true)
-    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
-    jac = calculate_jacobian(sys, simplify)
-    jac_exprs = [:(J[$i,$j] = $(convert(Expr, jac[i,j]))) for i in 1:size(jac,1), j in 1:size(jac,2)]
-    exprs = vcat(var_exprs,param_exprs,vec(jac_exprs))
-    block = expr_arr_to_block(exprs)
-    :((J,u,p,t)->$(block))
-end
+system_vars(sys::DiffEqSystem) = sys.dvs
+system_params(sys::DiffEqSystem) = sys.ps
+
 
 function generate_ode_iW(sys::DiffEqSystem, simplify=true)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
