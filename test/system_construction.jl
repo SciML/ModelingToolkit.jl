@@ -109,7 +109,12 @@ eqs = [D(x) ~ -A*x,
 de = DiffEqSystem(eqs,t,[x,y],[A,B,C])
 test_vars_extraction(de, DiffEqSystem(eqs,t))
 test_vars_extraction(de, DiffEqSystem(eqs))
-@test eval(ModelingToolkit.generate_ode_function(de))([0.0,0.0],[1.0,2.0],[1,2,3],0.0) ≈ -1/3
+@test begin
+    f = eval(ModelingToolkit.generate_ode_function(de))
+    du = [0.0,0.0]
+    f(du, [1.0,2.0], [1,2,3], 0.0)
+    du ≈ [-1, -1/3]
+end
 
 # Now nonlinear system with only variables
 @Unknown x y z

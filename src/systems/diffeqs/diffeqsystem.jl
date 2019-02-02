@@ -45,28 +45,23 @@ end
 function generate_ode_function(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
     var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
     param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
-    sys_exprs = build_equals_expr.(sys.eqs)
+    sys_exprs = build_expr(:tuple, [convert(Expr, eq.rhs) for eq ∈ sys.eqs])
     if version === ArrayFunction
         dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.iv.name)"))) for i in eachindex(sys.dvs)]
-        exprs = vcat(var_exprs,param_exprs,sys_exprs,dvar_exprs)
+        du_expr = :(du .= $sys_exprs)
+        exprs = vcat(var_exprs,param_exprs,du_expr)
         block = expr_arr_to_block(exprs)
         :((du,u,p,t)->$(toexpr(block)))
     elseif version === SArrayFunction
-        dvar_exprs = [:($(Symbol("$(sys.dvs[i].name)_$(sys.iv.name)"))) for i in eachindex(sys.dvs)]
         svector_expr = quote
-            E = eltype(tuple($(dvar_exprs...)))
-            T = StaticArrays.similar_type(typeof(u), E)
-            T($(dvar_exprs...))
+            du = $sys_exprs
+            T = StaticArrays.similar_type(typeof(u), eltype(du))
+            T(du)
         end
-        exprs = vcat(var_exprs,param_exprs,sys_exprs,svector_expr)
+        exprs = vcat(var_exprs,param_exprs,svector_expr)
         block = expr_arr_to_block(exprs)
         :((u,p,t)->$(toexpr(block)))
     end
-end
-
-function build_equals_expr(eq::DiffEq)
-    lhs = Symbol(eq.var.name, :_, eq.D.x.name)
-    return :($lhs = $(convert(Expr, eq.rhs)))
 end
 
 function calculate_jacobian(sys::DiffEqSystem, simplify=true)
