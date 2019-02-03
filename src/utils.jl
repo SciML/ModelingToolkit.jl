@@ -17,7 +17,6 @@ function build_expr(head::Symbol, args)
     append!(ex.args, args)
     ex
 end
-expr_arr_to_block(exprs) = build_expr(:block, exprs)
 
 # used in parsing
 isblock(x) = length(x) == 1 && x[1] isa Expr && x[1].head == :block
@@ -29,11 +28,6 @@ function flatten_expr!(x)
         x = (x.args...,)
     end
     x
-end
-
-function partition(f, xs)
-    idxs = map(f, xs)
-    return (xs[idxs], xs[(!).(idxs)])
 end
 
 is_constant(::Constant) = true

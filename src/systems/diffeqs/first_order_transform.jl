@@ -1,5 +1,3 @@
-extract_idv(eq::DiffEq) = eq.D.x
-
 function lower_varname(D::Differential, x; lower=false)
     order = lower ? D.order-1 : D.order
     return lower_varname(x, D.x, order)
@@ -21,7 +19,7 @@ function ode_order_lowering(eqs, iv)
     new_eqs = similar(eqs, DiffEq)
 
     for (i, eq) ∈ enumerate(eqs)
-        var, maxorder = extract_var_order(eq)
+        var, maxorder = eq.var, eq.D.order
         maxorder == 1 && continue # fast pass
         if maxorder > get(var_order, var, 0)
             var_order[var] = maxorder
@@ -50,7 +48,5 @@ function rename(O::Expression)
     isa(O.op, Differential) && return lower_varname(O.op, O.args[1])
     return Operation(O.op, rename.(O.args))
 end
-
-extract_var_order(eq::DiffEq) = (eq.var, eq.D.order)
 
 export ode_order_lowering

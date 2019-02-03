@@ -15,7 +15,6 @@ include("variables.jl")
 Base.promote_rule(::Type{T},::Type{T2}) where {T<:Number,T2<:Expression} = Expression
 Base.zero(::Type{<:Expression}) = Constant(0)
 Base.one(::Type{<:Expression}) = Constant(1)
-Base.convert(::Type{Variable},x::Int64) = Constant(x)
 
 function caclulate_jacobian end
 
