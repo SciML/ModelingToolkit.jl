@@ -7,7 +7,7 @@ using Test
 
 # Default values
 p = Parameter(:p)
-u = Unknown(:u, dependents = [t])
+u = Unknown(:u, [t])
 
 σ*(y-x)
 D(x)

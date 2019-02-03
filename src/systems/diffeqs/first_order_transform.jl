@@ -5,7 +5,7 @@ end
 function lower_varname(var::Variable, idv, order::Int)
     sym = var.name
     name = order == 0 ? sym : Symbol(sym, :_, string(idv.name)^order)
-    return Variable(name, var.subtype, var.dependents)
+    return Variable(name, var.known, var.dependents)
 end
 
 function ode_order_lowering(sys::DiffEqSystem)

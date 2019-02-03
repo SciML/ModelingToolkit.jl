@@ -5,9 +5,9 @@ using Test
 @Unknown x(t)
 @Unknown y(t)
 @Unknown z(t)
-x1 = Unknown(:x ,dependents = [t])
-y1 = Unknown(:y ,dependents = [t])
-z1 = Unknown(:z ,dependents = [t])
+x1 = Unknown(:x, [t])
+y1 = Unknown(:y, [t])
+z1 = Unknown(:z, [t])
 @test x1 == x
 @test y1 == y
 @test z1 == z

@@ -136,8 +136,8 @@ context-aware single variable of the IR. Its fields are described as follows:
 - `name`: the name of the `Variable`. Note that this is not necessarily
   the same as the name of the Julia variable. But this symbol itself is considered
   the core identifier of the `Variable` in the sense of equality.
-- `subtype`: the main denotation of context. Variables within systems
-  are grouped according to their `subtype`.
+- `known`: the main denotation of context, storing whether or not the value of
+  the variable is known.
 - `dependents`: the vector of variables on which the current variable
   is dependent. For example, `u(t,x)` has dependents `[t,x]`. Derivatives thus
   require this information in order to simplify down.
@@ -252,9 +252,9 @@ is syntactic sugar for:
 
 ```julia
 t = Parameter(:t)
-x = Unknown(:x, dependents = [t])
-y = Unknown(:y, dependents = [t])
-z = Unknown(:z, dependents = [t])
+x = Unknown(:x, [t])
+y = Unknown(:y, [t])
+z = Unknown(:z, [t])
 D = Differential(t)
 σ = Parameter(:σ)
 ρ = Parameter(:ρ)

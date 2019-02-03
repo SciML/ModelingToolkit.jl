@@ -3,12 +3,12 @@ export Variable, Unknown, Parameter, @Unknown, @Param
 
 struct Variable <: Expression
     name::Symbol
-    subtype::Symbol
+    known::Bool
     dependents::Vector{Variable}
 end
 
-Parameter(name; dependents = Variable[]) = Variable(name, :Parameter, dependents)
-Unknown(name; dependents = Variable[]) = Variable(name, :Unknown, dependents)
+Parameter(name, dependents = Variable[]) = Variable(name, true, dependents)
+Unknown(name, dependents = Variable[]) = Variable(name, false, dependents)
 
 
 struct Constant <: Expression
@@ -22,7 +22,7 @@ Base.isone(ex::Expression)  = isa(ex, Constant) && isone(ex.value)
 
 
 # Variables use isequal for equality since == is an Operation
-Base.:(==)(x::Variable, y::Variable) = (x.name, x.subtype) == (y.name, y.subtype)
+Base.:(==)(x::Variable, y::Variable) = (x.name, x.known) == (y.name, y.known)
 Base.:(==)(::Variable, ::Number) = false
 Base.:(==)(::Number, ::Variable) = false
 Base.:(==)(::Variable, ::Constant) = false
@@ -32,13 +32,18 @@ Base.:(==)(n::Number, c::Constant) = c.value == n
 Base.:(==)(a::Constant, b::Constant) = a.value == b.value
 
 function Base.convert(::Type{Expr}, x::Variable)
-    x.subtype === :Parameter || return x.name
-    isempty(x.dependents)    && return x.name
+    x.known               || return x.name
+    isempty(x.dependents) && return x.name
     return :($(x.name)($(convert.(Expr, x.dependents)...)))
 end
 Base.convert(::Type{Expr}, c::Constant) = c.value
 
-Base.show(io::IO, x::Variable) = print(io, x.subtype, '(', x.name, ')')
+function Base.show(io::IO, x::Variable)
+    subtype = x.known ? :Parameter : :Unknown
+    print(io, subtype, '(', repr(x.name))
+    isempty(x.dependents) || print(io, ", ", x.dependents)
+    print(io, ')')
+end
 
 # Build variables more easily
 function _parse_vars(macroname, fun, x)
@@ -65,7 +70,7 @@ function _parse_vars(macroname, fun, x)
         end
 
         push!(var_names, var_name)
-        expr = :($var_name = $fun($(Meta.quot(var_name)), dependents = $dependents))
+        expr = :($var_name = $fun($(Meta.quot(var_name)), $dependents))
         push!(ex.args, expr)
     end
     push!(ex.args, build_expr(:tuple, var_names))
