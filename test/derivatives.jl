@@ -25,7 +25,7 @@ eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 sys = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
-jac = ModelingToolkit.calculate_jacobian(sys)
+jac = calculate_jacobian(sys)
 @test jac[1,1] == σ*-1
 @test jac[1,2] == σ
 @test jac[1,3] == 0

@@ -1,5 +1,4 @@
-# Parameterize by T so that way it can be Vector{Expression} which is defined after
-struct Operation <: AbstractOperation
+struct Operation <: Expression
     op::Function
     args::Vector{Expression}
 end
