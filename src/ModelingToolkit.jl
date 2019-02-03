@@ -7,7 +7,6 @@ using MacroTools
 import MacroTools: splitdef, combinedef
 
 abstract type Expression <: Number end
-abstract type AbstractComponent end
 abstract type AbstractSystem end
 
 Base.promote_rule(::Type{<:Number},::Type{<:Expression}) = Expression
