@@ -60,9 +60,7 @@ system_vars(sys::DiffEqSystem) = sys.dvs
 system_params(sys::DiffEqSystem) = sys.ps
 
 
-function generate_ode_iW(sys::DiffEqSystem, simplify=true)
-    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
+function generate_ode_iW(sys::DiffEqSystem, simplify=true; version::FunctionVersion = ArrayFunction)
     jac = calculate_jacobian(sys)
 
     gam = Parameter(:gam)
@@ -82,14 +80,11 @@ function generate_ode_iW(sys::DiffEqSystem, simplify=true)
         iW_t = simplify_constants.(iW_t)
     end
 
-    iW_exprs = [:(iW[$i,$j] = $(convert(Expr, iW[i,j]))) for i in 1:size(iW,1), j in 1:size(iW,2)]
-    exprs = vcat(var_exprs,param_exprs,vec(iW_exprs))
-    block = expr_arr_to_block(exprs)
+    vs, ps = system_vars(sys), system_params(sys)
+    iW_func   = build_function(iW  , vs, ps, (:gam,:t); version = version)
+    iW_t_func = build_function(iW_t, vs, ps, (:gam,:t); version = version)
 
-    iW_t_exprs = [:(iW[$i,$j] = $(convert(Expr, iW_t[i,j]))) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]
-    exprs = vcat(var_exprs,param_exprs,vec(iW_t_exprs))
-    block2 = expr_arr_to_block(exprs)
-    :((iW,u,p,gam,t)->$(block)),:((iW,u,p,gam,t)->$(block2))
+    return (iW_func, iW_t_func)
 end
 
 function DiffEqBase.ODEFunction(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
