@@ -59,12 +59,13 @@ generated code via:
 generate_function(de)
 
 ## Which returns:
-:((du, u, p, t)->begin
-          du .= let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-                  (σ * (y - x), x * (ρ - z) - y, x * y - β * z)
-              end
+:((##363, u, p, t)->begin
+          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+              ##363[1] = σ * (y - x)
+              ##363[2] = x * (ρ - z) - y
+              ##363[3] = x * y - β * z
+          end
       end)
-
 ```
 
 and get the generated function via:
@@ -94,10 +95,12 @@ nlsys_func = generate_function(ns)
 which generates:
 
 ```julia
-:((du, u, p)->begin
-          du .= let (y, x, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-                  (σ * (y - x), x * (ρ - z) - y, x * y - β * z)
-              end
+:((##366, u, p, t)->begin
+          let (y, z, x, ρ, σ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+              ##366[1] = σ * (y - x)
+              ##366[2] = x * (ρ - z) - y
+              ##366[3] = x * y - β * z
+          end
       end)
 ```
 
@@ -276,12 +279,13 @@ nlsys_func = generate_function(ns)
 expands to:
 
 ```julia
-:((du, u, p)->begin
-          du .= let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-                  (σ * (y - x), x * (ρ - z) - y, x * y - β * z)
-              end
+:((##367, u, p, t)->begin
+          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+              ##367[1] = σ * (y - x)
+              ##367[2] = x * (ρ - z) - y
+              ##367[3] = x * y - β * z
+          end
       end)
-
 ```
 
 In addition, the Jacobian calculations take into account intermediate variables
