@@ -5,7 +5,7 @@ using Test
 @Unknown x(t) y(t) z(t)
 
 null_op = 0*t
-@test simplify_constants(null_op) == Constant(0)
+@test simplify_constants(null_op) == 0
 
 one_op = 1*t
 @test simplify_constants(one_op) == t

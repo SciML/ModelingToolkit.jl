@@ -5,7 +5,6 @@ using Test
 @Param t σ ρ β
 @Unknown x(t) y(t) z(t)
 @Deriv D'~t
-@Const c=0
 
 # Define a differential equation
 eqs = [D(x) ~ σ*(y-x),
