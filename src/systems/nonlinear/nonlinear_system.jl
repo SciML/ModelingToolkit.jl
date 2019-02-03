@@ -5,10 +5,12 @@ struct NLEq
     rhs::Expression
 end
 function Base.convert(::Type{NLEq}, eq::Equation)
-    isequal(eq.lhs, Constant(0)) || throw(ArgumentError("nonzero lhs received"))
+    isequal(eq.lhs, Constant(0)) || return NLEq(eq.rhs - eq.lhs)
     return NLEq(eq.rhs)
 end
 Base.convert(::Type{Equation}, eq::NLEq) = Equation(0, eq.rhs)
+Base.:(==)(a::NLEq, b::NLEq) = a.rhs == b.rhs
+get_args(eq::NLEq) = Expression[eq.rhs]
 
 struct NonlinearSystem <: AbstractSystem
     eqs::Vector{NLEq}
