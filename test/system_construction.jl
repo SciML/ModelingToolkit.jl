@@ -32,34 +32,18 @@ function test_vars_extraction(de, de2)
 end
 test_vars_extraction(de, de2)
 
-# Time-varying parameters
-
-@test_broken begin
-    eqs = [D(x) ~ σ(t)*(y-x),
+@testset "time-varying parameters" begin
+    @Param σ′(t)
+    eqs = [D(x) ~ σ′*(y-x),
            D(y) ~ x*(ρ-z)-y,
            D(z) ~ x*y - β*z]
-    de = DiffEqSystem(eqs,[t],[x,y,z],[σ,ρ,β])
-    generate_function(de)
-
-    #=
-    ```julia
-    :((du, u, p, t)->begin
-                  x = u[1]
-                  y = u[2]
-                  z = u[3]
-                  σ = p[1]
-                  ρ = p[2]
-                  β = p[3]
-                  x_t = σ(t) * (y - x)
-                  y_t = x * (ρ - z) - y
-                  z_t = x * y - β * z
-                  du[1] = x_t
-                  du[2] = y_t
-                  du[3] = z_t
-              end
-          end)
-    ```
-    =#
+    de = DiffEqSystem(eqs,t,[x,y,z],[σ′,ρ,β])
+    @test begin
+        f = eval(generate_function(de))
+        du = [0.0,0.0,0.0]
+        f(du, [1.0,2.0,3.0], [x->x+7,2,3], 5.0)
+        du ≈ [12, -3, -7]
+    end
 end
 
 # Conversion to first-order ODEs #17

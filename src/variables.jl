@@ -30,7 +30,11 @@ Base.:(==)(c::Constant, n::Number) = c.value == n
 Base.:(==)(n::Number, c::Constant) = c.value == n
 Base.:(==)(a::Constant, b::Constant) = a.value == b.value
 
-Base.convert(::Type{Expr}, x::Variable) = x.name
+function Base.convert(::Type{Expr}, x::Variable)
+    x.subtype === :Parameter || return x.name
+    isempty(x.dependents)    && return x.name
+    return :($(x.name)($(convert.(Expr, x.dependents)...)))
+end
 Base.convert(::Type{Expr}, c::Constant) = c.value
 
 Base.show(io::IO, x::Variable) = print(io, x.subtype, '(', x.name, ')')
