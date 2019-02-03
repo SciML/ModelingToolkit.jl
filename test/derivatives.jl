@@ -4,11 +4,14 @@ using Test
 # Derivatives
 @Param t σ ρ β
 @Unknown x(t) y(t) z(t)
-@Deriv D'~t
-dsin = D(sin(t))
-expand_derivatives(dsin)
+@Deriv D'~t D2''~t
 
+@test expand_derivatives(D(t)) == 1
+@test expand_derivatives(D(D(t))) == 0
+
+dsin = D(sin(t))
 @test expand_derivatives(dsin) == cos(t)
+
 dcsch = D(csch(t))
 @test expand_derivatives(dcsch) == simplify_constants(coth(t) * csch(t) * -1)
 
