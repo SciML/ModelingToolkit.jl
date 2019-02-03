@@ -15,7 +15,6 @@ function Base.convert(::Type{DiffEq}, eq::Equation)
     isintermediate(eq) && throw(ArgumentError("intermediate equation received"))
     return DiffEq(eq.lhs.op, eq.lhs.args[1], eq.rhs)
 end
-Base.convert(::Type{Equation}, eq::DiffEq) = Equation(eq.D(eq.var), eq.rhs)
 Base.:(==)(a::DiffEq, b::DiffEq) = (a.D, a.var, a.rhs) == (b.D, b.var, b.rhs)
 get_args(eq::DiffEq) = Expression[eq.var, eq.rhs]
 
@@ -55,9 +54,15 @@ function calculate_jacobian(sys::DiffEqSystem)
     return jac
 end
 
-system_eqs(sys::DiffEqSystem) = collect(Equation, sys.eqs)
-system_vars(sys::DiffEqSystem) = sys.dvs
-system_params(sys::DiffEqSystem) = sys.ps
+function generate_jacobian(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
+    jac = calculate_jacobian(sys)
+    return build_function(jac, sys.dvs, sys.ps, (sys.iv.name,); version = version)
+end
+
+function generate_function(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
+    rhss = [eq.rhs for eq ∈ sys.eqs]
+    return build_function(rhss, sys.dvs, sys.ps, (sys.iv.name,); version = version)
+end
 
 
 function generate_ode_iW(sys::DiffEqSystem, simplify=true; version::FunctionVersion = ArrayFunction)
@@ -80,7 +85,7 @@ function generate_ode_iW(sys::DiffEqSystem, simplify=true; version::FunctionVers
         iW_t = simplify_constants.(iW_t)
     end
 
-    vs, ps = system_vars(sys), system_params(sys)
+    vs, ps = sys.dvs, sys.ps
     iW_func   = build_function(iW  , vs, ps, (:gam,:t); version = version)
     iW_t_func = build_function(iW_t, vs, ps, (:gam,:t); version = version)
 

@@ -95,11 +95,11 @@ nlsys_func = generate_function(ns)
 which generates:
 
 ```julia
-:((##366, u, p, t)->begin
-          let (y, z, x, ρ, σ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-              ##366[1] = σ * (y - x)
-              ##366[2] = x * (ρ - z) - y
-              ##366[3] = x * y - β * z
+:((##364, u, p)->begin
+          let (x, z, y, ρ, σ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+              ##364[1] = σ * (y - x)
+              ##364[2] = x * (ρ - z) - y
+              ##364[3] = x * y - β * z
           end
       end)
 ```
@@ -279,11 +279,11 @@ nlsys_func = generate_function(ns)
 expands to:
 
 ```julia
-:((##367, u, p, t)->begin
+:((##365, u, p)->begin
           let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-              ##367[1] = σ * (y - x)
-              ##367[2] = x * (ρ - z) - y
-              ##367[3] = x * y - β * z
+              ##365[1] = σ * (y - x)
+              ##365[2] = x * (ρ - z) - y
+              ##365[3] = x * y - β * z
           end
       end)
 ```

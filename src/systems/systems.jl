@@ -3,26 +3,13 @@ export generate_jacobian, generate_function
 
 abstract type AbstractSystem end
 
-function system_eqs    end
-function system_vars   end
-function system_params end
+function generate_jacobian end
+function generate_function end
 
-function generate_jacobian(sys::AbstractSystem; version = ArrayFunction)
-    vs, ps = system_vars(sys), system_params(sys)
-    jac = calculate_jacobian(sys)
-    return build_function(jac, vs, ps, (:t,); version = version)
-end
-
-function generate_function(sys::AbstractSystem; version::FunctionVersion = ArrayFunction)
-    sys_eqs = system_eqs(sys)
-    vs, ps = system_vars(sys), system_params(sys)
-    return build_function([eq.rhs for eq ∈ sys_eqs], vs, ps, (:t,); version = version)
-end
-
-function build_function(rhss, vs, ps, args; version::FunctionVersion)
+function build_function(rhss, vs, ps, args = (); version::FunctionVersion)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(vs)]
     param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(ps)]
-    (ls, rs) = collect(zip(var_pairs..., param_pairs...))
+    (ls, rs) = zip(var_pairs..., param_pairs...)
 
     var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, rs))
 
