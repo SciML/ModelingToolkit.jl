@@ -1,3 +1,6 @@
+export DiffEqSystem, ODEFunction
+
+
 using Base: RefValue
 
 
@@ -42,34 +45,7 @@ function DiffEqSystem(eqs, iv)
 end
 
 
-function generate_ode_function(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
-    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
-    sys_exprs = build_equals_expr.(sys.eqs)
-    if version === ArrayFunction
-        dvar_exprs = [:(du[$i] = $(Symbol("$(sys.dvs[i].name)_$(sys.iv.name)"))) for i in eachindex(sys.dvs)]
-        exprs = vcat(var_exprs,param_exprs,sys_exprs,dvar_exprs)
-        block = expr_arr_to_block(exprs)
-        :((du,u,p,t)->$(toexpr(block)))
-    elseif version === SArrayFunction
-        dvar_exprs = [:($(Symbol("$(sys.dvs[i].name)_$(sys.iv.name)"))) for i in eachindex(sys.dvs)]
-        svector_expr = quote
-            E = eltype(tuple($(dvar_exprs...)))
-            T = StaticArrays.similar_type(typeof(u), E)
-            T($(dvar_exprs...))
-        end
-        exprs = vcat(var_exprs,param_exprs,sys_exprs,svector_expr)
-        block = expr_arr_to_block(exprs)
-        :((u,p,t)->$(toexpr(block)))
-    end
-end
-
-function build_equals_expr(eq::DiffEq)
-    lhs = Symbol(eq.var.name, :_, eq.D.x.name)
-    return :($lhs = $(convert(Expr, eq.rhs)))
-end
-
-function calculate_jacobian(sys::DiffEqSystem, simplify=true)
+function calculate_jacobian(sys::DiffEqSystem)
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
     rhs = [eq.rhs for eq in sys.eqs]
 
@@ -78,20 +54,19 @@ function calculate_jacobian(sys::DiffEqSystem, simplify=true)
     return jac
 end
 
-function generate_ode_jacobian(sys::DiffEqSystem, simplify=true)
-    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
-    jac = calculate_jacobian(sys, simplify)
-    jac_exprs = [:(J[$i,$j] = $(convert(Expr, jac[i,j]))) for i in 1:size(jac,1), j in 1:size(jac,2)]
-    exprs = vcat(var_exprs,param_exprs,vec(jac_exprs))
-    block = expr_arr_to_block(exprs)
-    :((J,u,p,t)->$(block))
+function generate_jacobian(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
+    jac = calculate_jacobian(sys)
+    return build_function(jac, sys.dvs, sys.ps, (sys.iv.name,); version = version)
 end
 
-function generate_ode_iW(sys::DiffEqSystem, simplify=true)
-    var_exprs = [:($(sys.dvs[i].name) = u[$i]) for i in eachindex(sys.dvs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in eachindex(sys.ps)]
-    jac = calculate_jacobian(sys, simplify)
+function generate_function(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
+    rhss = [eq.rhs for eq ∈ sys.eqs]
+    return build_function(rhss, sys.dvs, sys.ps, (sys.iv.name,); version = version)
+end
+
+
+function generate_ode_iW(sys::DiffEqSystem, simplify=true; version::FunctionVersion = ArrayFunction)
+    jac = calculate_jacobian(sys)
 
     gam = Parameter(:gam)
 
@@ -110,25 +85,18 @@ function generate_ode_iW(sys::DiffEqSystem, simplify=true)
         iW_t = simplify_constants.(iW_t)
     end
 
-    iW_exprs = [:(iW[$i,$j] = $(convert(Expr, iW[i,j]))) for i in 1:size(iW,1), j in 1:size(iW,2)]
-    exprs = vcat(var_exprs,param_exprs,vec(iW_exprs))
-    block = expr_arr_to_block(exprs)
+    vs, ps = sys.dvs, sys.ps
+    iW_func   = build_function(iW  , vs, ps, (:gam,:t); version = version)
+    iW_t_func = build_function(iW_t, vs, ps, (:gam,:t); version = version)
 
-    iW_t_exprs = [:(iW[$i,$j] = $(convert(Expr, iW_t[i,j]))) for i in 1:size(iW_t,1), j in 1:size(iW_t,2)]
-    exprs = vcat(var_exprs,param_exprs,vec(iW_t_exprs))
-    block2 = expr_arr_to_block(exprs)
-    :((iW,u,p,gam,t)->$(block)),:((iW,u,p,gam,t)->$(block2))
+    return (iW_func, iW_t_func)
 end
 
 function DiffEqBase.ODEFunction(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
-    expr = generate_ode_function(sys; version = version)
+    expr = generate_function(sys; version = version)
     if version === ArrayFunction
         ODEFunction{true}(eval(expr))
     elseif version === SArrayFunction
         ODEFunction{false}(eval(expr))
     end
 end
-
-
-export DiffEqSystem, ODEFunction
-export generate_ode_function

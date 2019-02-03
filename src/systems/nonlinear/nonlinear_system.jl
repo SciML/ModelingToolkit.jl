@@ -1,5 +1,18 @@
+export NonlinearSystem
+
+
+struct NLEq
+    rhs::Expression
+end
+function Base.convert(::Type{NLEq}, eq::Equation)
+    isequal(eq.lhs, Constant(0)) || return NLEq(eq.rhs - eq.lhs)
+    return NLEq(eq.rhs)
+end
+Base.:(==)(a::NLEq, b::NLEq) = a.rhs == b.rhs
+get_args(eq::NLEq) = Expression[eq.rhs]
+
 struct NonlinearSystem <: AbstractSystem
-    eqs::Vector{Equation}
+    eqs::Vector{NLEq}
     vs::Vector{Variable}
     ps::Vector{Variable}
 end
@@ -9,40 +22,19 @@ function NonlinearSystem(eqs)
     NonlinearSystem(eqs, vs, ps)
 end
 
-function generate_nlsys_function(sys::NonlinearSystem)
-    var_exprs = [:($(sys.vs[i].name) = u[$i]) for i in 1:length(sys.vs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
-    sys_eqs, calc_eqs = partition(eq -> isequal(eq.lhs, Constant(0)), sys.eqs)
-    calc_exprs = [:($(eq.lhs.name) = $(eq.rhs)) for eq in calc_eqs if isa(eq.lhs, Variable)]
-    sys_exprs = [:($(Symbol("resid[$i]")) = $(sys_eqs[i].rhs)) for i in eachindex(sys_eqs)]
 
-    exprs = vcat(var_exprs,param_exprs,calc_exprs,sys_exprs)
-    block = expr_arr_to_block(exprs)
-    :((du,u,p)->$(block))
+function calculate_jacobian(sys::NonlinearSystem)
+    rhs = [eq.rhs for eq in sys.eqs]
+    jac = expand_derivatives.(calculate_jacobian(rhs, sys.vs))
+    return jac
 end
 
-function calculate_jacobian(sys::NonlinearSystem,simplify=true)
-    sys_eqs, calc_eqs = partition(eq -> isequal(eq.lhs, Constant(0)), sys.eqs)
-    rhs = [eq.rhs for eq in sys_eqs]
-
-    for calc_eq ∈ calc_eqs
-        find_replace!.(rhs, calc_eq.lhs, calc_eq.rhs)
-    end
-
-    sys_exprs = calculate_jacobian(rhs,sys.vs)
-    sys_exprs = Expression[expand_derivatives(expr) for expr in sys_exprs]
-    sys_exprs
+function generate_jacobian(sys::NonlinearSystem; version::FunctionVersion = ArrayFunction)
+    jac = calculate_jacobian(sys)
+    return build_function(jac, sys.vs, sys.ps; version = version)
 end
 
-function generate_nlsys_jacobian(sys::NonlinearSystem,simplify=true)
-    var_exprs = [:($(sys.vs[i].name) = u[$i]) for i in 1:length(sys.vs)]
-    param_exprs = [:($(sys.ps[i].name) = p[$i]) for i in 1:length(sys.ps)]
-    jac = calculate_jacobian(sys,simplify)
-    jac_exprs = [:(J[$i,$j] = $(convert(Expr, jac[i,j]))) for i in 1:size(jac,1), j in 1:size(jac,2)]
-    exprs = vcat(var_exprs,param_exprs,vec(jac_exprs))
-    block = expr_arr_to_block(exprs)
-    :((J,u,p,t)->$(block))
+function generate_function(sys::NonlinearSystem; version::FunctionVersion = ArrayFunction)
+    rhss = [eq.rhs for eq ∈ sys.eqs]
+    return build_function(rhss, sys.vs, sys.ps; version = version)
 end
-
-export NonlinearSystem
-export generate_nlsys_function

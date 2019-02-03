@@ -56,24 +56,16 @@ This can then generate the function. For example, we can see the
 generated code via:
 
 ```julia
-ModelingToolkit.generate_ode_function(de)
+generate_function(de)
 
 ## Which returns:
-:((du, u, p, t)->begin
-                x = u[1]
-                y = u[2]
-                z = u[3]
-                σ = p[1]
-                ρ = p[2]
-                β = p[3]
-                x_t = σ * (y - x)
-                y_t = x * (ρ - z) - y
-                z_t = x * y - β * z
-                du[1] = x_t
-                du[2] = y_t
-                du[3] = z_t
-            end
-        end)
+:((##363, u, p, t)->begin
+          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+              ##363[1] = σ * (y - x)
+              ##363[2] = x * (ρ - z) - y
+              ##363[3] = x * y - β * z
+          end
+      end)
 ```
 
 and get the generated function via:
@@ -97,25 +89,19 @@ eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs)
-nlsys_func = ModelingToolkit.generate_nlsys_function(ns)
+nlsys_func = generate_function(ns)
 ```
 
 which generates:
 
 ```julia
-(du, u, p)->begin  # C:\Users\Chris\.julia\v0.6\ModelingToolkit\src\systems.jl, line 51:
-        begin  # C:\Users\Chris\.julia\v0.6\ModelingToolkit\src\utils.jl, line 2:
-            y = u[1]
-            x = u[2]
-            z = u[3]
-            σ = p[1]
-            ρ = p[2]
-            β = p[3]
-            resid[1] = σ * (y - x)
-            resid[2] = x * (ρ - z) - y
-            resid[3] = x * y - β * z
-        end
-    end
+:((##364, u, p)->begin
+          let (x, z, y, ρ, σ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+              ##364[1] = σ * (y - x)
+              ##364[2] = x * (ρ - z) - y
+              ##364[3] = x * y - β * z
+          end
+      end)
 ```
 
 We can use this to build a nonlinear function for use with NLsolve.jl:
@@ -287,26 +273,19 @@ eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
-nlsys_func = ModelingToolkit.generate_nlsys_function(ns)
+nlsys_func = generate_function(ns)
 ```
 
 expands to:
 
 ```julia
-:((du, u, p)->begin  # C:\Users\Chris\.julia\v0.6\ModelingToolkit\src\systems.jl, line 85:
-            begin  # C:\Users\Chris\.julia\v0.6\ModelingToolkit\src\utils.jl, line 2:
-                x = u[1]
-                y = u[2]
-                z = u[3]
-                σ = p[1]
-                ρ = p[2]
-                β = p[3]
-                a = y - x
-                resid[1] = σ * a
-                resid[2] = x * (ρ - z) - y
-                resid[3] = x * y - β * z
-            end
-        end)
+:((##365, u, p)->begin
+          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+              ##365[1] = σ * (y - x)
+              ##365[2] = x * (ρ - z) - y
+              ##365[3] = x * y - β * z
+          end
+      end)
 ```
 
 In addition, the Jacobian calculations take into account intermediate variables
