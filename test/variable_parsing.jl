@@ -31,11 +31,3 @@ s1 = Parameter(:s)
 D1 = Differential(t, 2)
 @test D1 == D
 @test convert(Expr, D) == D
-
-@Const c=0 v=2
-c1 = Constant(0)
-v1 = Constant(2)
-@test c1 == c
-@test v1 == v
-@test convert(Expr, c) == 0
-@test convert(Expr, v) == 2

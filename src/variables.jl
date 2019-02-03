@@ -1,3 +1,6 @@
+export Variable, Unknown, Parameter, @Unknown, @Param
+
+
 struct Variable <: Expression
     name::Symbol
     subtype::Symbol
@@ -6,8 +9,6 @@ end
 
 Parameter(name; dependents = Variable[]) = Variable(name, :Parameter, dependents)
 Unknown(name; dependents = Variable[]) = Variable(name, :Unknown, dependents)
-
-export Variable, Unknown, Parameter, Constant, @Unknown, @Param, @Const
 
 
 struct Constant <: Expression
@@ -71,24 +72,4 @@ macro Unknown(xs...)
 end
 macro Param(xs...)
     esc(_parse_vars(:Param, Parameter, xs))
-end
-
-function _const_assign(x)
-    ex = Expr(:block)
-    lhss = Symbol[]
-    x = flatten_expr!(x)
-    for eq in x
-        @assert eq isa Expr && eq.head == :(=) "@Const expects a tuple of assignments!\nE.g. `@Const D=t W=g`"
-        lhs = eq.args[1]
-        push!(lhss, lhs)
-        rhs = eq.args[2]
-        expr = :($lhs = Constant($rhs))
-        push!(ex.args,  expr)
-    end
-    push!(ex.args, Expr(:tuple, lhss...))
-    ex
-end
-
-macro Const(x...)
-    esc(_const_assign(x))
 end
