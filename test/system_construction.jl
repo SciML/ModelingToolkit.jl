@@ -14,7 +14,7 @@ de = DiffEqSystem(eqs,t,[x,y,z],[σ,ρ,β])
 generate_function(de)
 generate_function(de;version=ModelingToolkit.SArrayFunction)
 jac_expr = generate_jacobian(de)
-jac = ModelingToolkit.calculate_jacobian(de)
+jac = calculate_jacobian(de)
 f = ODEFunction(de)
 ModelingToolkit.generate_ode_iW(de)
 
@@ -67,7 +67,7 @@ eqs = [D(x) ~ σ*a,
        D(z) ~ x*y - β*z]
 de = DiffEqSystem(eqs,t,[x,y,z],[σ,ρ,β])
 generate_function(de)
-jac = ModelingToolkit.calculate_jacobian(de)
+jac = calculate_jacobian(de)
 f = ODEFunction(de)
 
 # Define a nonlinear system
@@ -108,7 +108,7 @@ eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
-jac = ModelingToolkit.calculate_jacobian(ns)
+jac = calculate_jacobian(ns)
 @testset "nlsys jacobian" begin
     @test jac[1,1] == σ * -1
     @test jac[1,2] == σ
@@ -131,5 +131,5 @@ eqs = [0 ~ σ*a,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
 nlsys_func = generate_function(ns)
-jac = ModelingToolkit.calculate_jacobian(ns)
+jac = calculate_jacobian(ns)
 jac = generate_jacobian(ns)

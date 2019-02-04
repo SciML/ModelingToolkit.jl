@@ -18,7 +18,7 @@ struct NonlinearSystem <: AbstractSystem
 end
 
 function NonlinearSystem(eqs)
-    vs, ps = extract_elements(eqs, [_subtype(:Unknown), _subtype(:Parameter)])
+    vs, ps = extract_elements(eqs, [_is_unknown, _is_known])
     NonlinearSystem(eqs, vs, ps)
 end
 

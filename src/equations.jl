@@ -5,7 +5,6 @@ struct Equation
     lhs::Expression
     rhs::Expression
 end
-Base.broadcastable(eq::Equation) = Ref(eq)
 Base.:(==)(a::Equation, b::Equation) = (a.lhs, a.rhs) == (b.lhs, b.rhs)
 
 Base.:~(lhs::Expression, rhs::Expression) = Equation(lhs, rhs)
@@ -13,9 +12,10 @@ Base.:~(lhs::Expression, rhs::Number    ) = Equation(lhs, rhs)
 Base.:~(lhs::Number    , rhs::Expression) = Equation(lhs, rhs)
 
 
-_is_dependent(x::Variable) = x.subtype === :Unknown && !isempty(x.dependents)
-_is_parameter(iv) = x -> x.subtype === :Parameter && x ≠ iv
-_subtype(subtype::Symbol) = x -> x.subtype === subtype
+_is_dependent(x::Variable) = !x.known && !isempty(x.dependents)
+_is_parameter(iv) = x -> x.known && x ≠ iv
+_is_known(x::Variable) = x.known
+_is_unknown(x::Variable) = !x.known
 
 function extract_elements(eqs, predicates)
     result = [Variable[] for p ∈ predicates]

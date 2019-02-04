@@ -1,5 +1,4 @@
-# Parameterize by T so that way it can be Vector{Expression} which is defined after
-struct Operation <: AbstractOperation
+struct Operation <: Expression
     op::Function
     args::Vector{Expression}
 end
@@ -18,22 +17,6 @@ Base.:(==)(::Constant , ::Operation) = false
 Base.convert(::Type{Expr}, O::Operation) =
     build_expr(:call, Any[Symbol(O.op); convert.(Expr, O.args)])
 Base.show(io::IO, O::Operation) = print(io, convert(Expr, O))
-
-
-"""
-find_replace(O::Operation, x::Expression, y::Expression)
-
-Finds the expression `x` in Operation `O` and replaces it with the Expression `y`
-"""
-function find_replace!(O::Operation, x::Expression, y::Expression)
-    for i in eachindex(O.args)
-        if isequal(O.args[i], x)
-            O.args[i] = y
-        elseif typeof(O.args[i]) <: Operation
-            find_replace!(O.args[i],x,y)
-        end
-    end
-end
 
 # For inv
 Base.convert(::Type{Operation}, x::Number) = Operation(identity, Expression[Constant(x)])
