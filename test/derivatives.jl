@@ -15,6 +15,13 @@ dsin = D(sin(t))
 dcsch = D(csch(t))
 @test expand_derivatives(dcsch) == simplify_constants(coth(t) * csch(t) * -1)
 
+@test expand_derivatives(D(-7)) == 0
+@test expand_derivatives(D(sin(2t))) == simplify_constants(cos(2t) * 2)
+@test expand_derivatives(D2(sin(t))) == simplify_constants(-sin(t))
+@test expand_derivatives(D2(sin(2t))) == simplify_constants(sin(2t) * -4)
+@test expand_derivatives(D2(t)) == 0
+@test expand_derivatives(D2(5)) == 0
+
 # Chain rule
 dsinsin = D(sin(sin(t)))
 @test expand_derivatives(dsinsin) == cos(sin(t))*cos(t)
