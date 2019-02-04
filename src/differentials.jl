@@ -1,10 +1,7 @@
 struct Differential <: Function
     x::Expression
-    order::Int
 end
-Differential(x) = Differential(x,1)
 
-Base.show(io::IO, D::Differential) = print(io,"($(D.x),$(D.order))")
 Base.convert(::Type{Expr}, D::Differential) = D
 
 (D::Differential)(x::Operation) = Operation(D, Expression[x])
@@ -13,8 +10,8 @@ function (D::Differential)(x::Variable)
     has_dependent(x, D.x) || return Constant(0)
     return Operation(D, Expression[x])
 end
-(::Differential)(::Constant) = Constant(0)
-Base.:(==)(D1::Differential, D2::Differential) = D1.order == D2.order && D1.x == D2.x
+(::Differential)(::Any) = Constant(0)
+Base.:(==)(D1::Differential, D2::Differential) = D1.x == D2.x
 
 function expand_derivatives(O::Operation)
     @. O.args = expand_derivatives(O.args)
@@ -56,6 +53,7 @@ function count_order(x)
     n, x.args[1]
 end
 
+_repeat_apply(f, n) = n == 1 ? f : f ∘ _repeat_apply(f, n-1)
 function _differential_macro(x)
     ex = Expr(:block)
     lhss = Symbol[]
@@ -66,7 +64,7 @@ function _differential_macro(x)
         rhs = di.args[3]
         order, lhs = count_order(lhs)
         push!(lhss, lhs)
-        expr = :($lhs = Differential($rhs, $order))
+        expr = :($lhs = $_repeat_apply(Differential($rhs), $order))
         push!(ex.args,  expr)
     end
     push!(ex.args, Expr(:tuple, lhss...))
