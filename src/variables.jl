@@ -38,12 +38,7 @@ function Base.convert(::Type{Expr}, x::Variable)
 end
 Base.convert(::Type{Expr}, c::Constant) = c.value
 
-function Base.show(io::IO, x::Variable)
-    subtype = x.known ? :Parameter : :Unknown
-    print(io, subtype, '(', repr(x.name))
-    isempty(x.dependents) || print(io, ", ", x.dependents)
-    print(io, ')')
-end
+Base.show(io::IO, x::Variable) = print(io, x.name)
 
 # Build variables more easily
 function _parse_vars(macroname, fun, x)

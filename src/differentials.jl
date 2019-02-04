@@ -2,6 +2,7 @@ struct Differential <: Function
     x::Expression
 end
 
+Base.show(io::IO, D::Differential) = print(io, "(D'~", D.x, ")")
 Base.convert(::Type{Expr}, D::Differential) = D
 
 (D::Differential)(x::Operation) = Operation(D, Expression[x])

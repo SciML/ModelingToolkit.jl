@@ -1,4 +1,4 @@
-function lower_varname(var::Variable, idv, order = 0)
+function lower_varname(var::Variable, idv, order)
     order == 0 && return var
     name = Symbol(var.name, :_, string(idv.name)^order)
     return Variable(name, var.known, var.dependents)
@@ -39,8 +39,8 @@ end
 
 function rename(O::Expression)
     isa(O, Operation) || return O
-    if isa(O.op, Differential)
-        (x, t, order) = _unwrap_differenital(O)
+    if is_derivative(O)
+        (x, t, order) = flatten_differential(O)
         return lower_varname(x, t, order)
     end
     return Operation(O.op, rename.(O.args))

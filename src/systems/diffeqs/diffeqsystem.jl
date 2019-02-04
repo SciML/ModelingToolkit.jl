@@ -6,12 +6,11 @@ using Base: RefValue
 
 isintermediate(eq::Equation) = !(isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential))
 
-function _unwrap_differenital(O)
-    isa(O, Operation)       || return (O, nothing, 0)
-    isa(O.op, Differential) || return (O, nothing, 0)
-    (x, t, order) = _unwrap_differenital(O.args[1])
-    t === nothing && (t = O.op.x)
-    t == O.op.x || throw(ArgumentError("non-matching differentials on lhs"))
+function flatten_differential(O::Operation)
+    @assert is_derivative(O) "invalid differential: $O"
+    is_derivative(O.args[1]) || return (O.args[1], O.op.x, 1)
+    (x, t, order) = flatten_differential(O.args[1])
+    t == O.op.x || throw(ArgumentError("non-matching differentials on lhs: $t, $(O.op.x)"))
     return (x, t, order + 1)
 end
 
@@ -24,7 +23,7 @@ struct DiffEq  # dⁿx/dtⁿ = rhs
 end
 function Base.convert(::Type{DiffEq}, eq::Equation)
     isintermediate(eq) && throw(ArgumentError("intermediate equation received"))
-    (x, t, n) = _unwrap_differenital(eq.lhs)
+    (x, t, n) = flatten_differential(eq.lhs)
     return DiffEq(x, t, n, eq.rhs)
 end
 Base.:(==)(a::DiffEq, b::DiffEq) = (a.x, a.t, a.n, a.rhs) == (b.x, b.t, b.n, b.rhs)

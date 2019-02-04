@@ -60,6 +60,9 @@ is_constant(::Any) = false
 is_operation(::Operation) = true
 is_operation(::Any) = false
 
+is_derivative(O::Operation) = isa(O.op, Differential)
+is_derivative(::Any) = false
+
 has_dependent(t::Variable) = Base.Fix2(has_dependent, t)
 has_dependent(x::Variable, t::Variable) =
     t ∈ x.dependents || any(has_dependent(t), x.dependents)
