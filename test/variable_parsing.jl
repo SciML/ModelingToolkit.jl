@@ -27,7 +27,7 @@ s1 = Parameter(:s)
 @test convert(Expr, s) == :s
 @test convert(Expr, cos(t + sin(s))) == :(cos(t + sin(s)))
 
-@Deriv D''~t
-D1 = Differential(t, 2)
+@Deriv D'~t
+D1 = Differential(t)
 @test D1 == D
 @test convert(Expr, D) == D

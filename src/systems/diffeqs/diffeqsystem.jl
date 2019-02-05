@@ -6,17 +6,28 @@ using Base: RefValue
 
 isintermediate(eq::Equation) = !(isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential))
 
-struct DiffEq  # D(x) = t
-    D::Differential  # D
-    var::Variable    # x
-    rhs::Expression  # t
+function flatten_differential(O::Operation)
+    @assert is_derivative(O) "invalid differential: $O"
+    is_derivative(O.args[1]) || return (O.args[1], O.op.x, 1)
+    (x, t, order) = flatten_differential(O.args[1])
+    t == O.op.x || throw(ArgumentError("non-matching differentials on lhs: $t, $(O.op.x)"))
+    return (x, t, order + 1)
+end
+
+
+struct DiffEq  # dⁿx/dtⁿ = rhs
+    x::Expression
+    t::Variable
+    n::Int
+    rhs::Expression
 end
 function Base.convert(::Type{DiffEq}, eq::Equation)
     isintermediate(eq) && throw(ArgumentError("intermediate equation received"))
-    return DiffEq(eq.lhs.op, eq.lhs.args[1], eq.rhs)
+    (x, t, n) = flatten_differential(eq.lhs)
+    return DiffEq(x, t, n, eq.rhs)
 end
-Base.:(==)(a::DiffEq, b::DiffEq) = (a.D, a.var, a.rhs) == (b.D, b.var, b.rhs)
-get_args(eq::DiffEq) = Expression[eq.var, eq.rhs]
+Base.:(==)(a::DiffEq, b::DiffEq) = (a.x, a.t, a.n, a.rhs) == (b.x, b.t, b.n, b.rhs)
+get_args(eq::DiffEq) = Expression[eq.x, eq.t, eq.rhs]
 
 struct DiffEqSystem <: AbstractSystem
     eqs::Vector{DiffEq}
