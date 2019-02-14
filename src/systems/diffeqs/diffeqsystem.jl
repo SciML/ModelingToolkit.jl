@@ -79,7 +79,7 @@ end
 function generate_ode_iW(sys::DiffEqSystem, simplify=true; version::FunctionVersion = ArrayFunction)
     jac = calculate_jacobian(sys)
 
-    gam = Parameter(:gam)
+    gam = Variable(:gam; known = true)
 
     W = LinearAlgebra.I - gam*jac
     W = SMatrix{size(W,1),size(W,2)}(W)

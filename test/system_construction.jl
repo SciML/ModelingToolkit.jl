@@ -3,7 +3,7 @@ using Test
 
 # Define some variables
 @Param t σ ρ β
-@Unknown x(t) y(t) z(t)
+@Variable x(t) y(t) z(t)
 @Deriv D'~t
 
 # Define a differential equation
@@ -48,7 +48,7 @@ end
 # Conversion to first-order ODEs #17
 @Deriv D3'''~t
 @Deriv D2''~t
-@Unknown u(t) u_tt(t) u_t(t) x_t(t)
+@Variable u(t) u_tt(t) u_t(t) x_t(t)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
        D2(x) ~ D(x) + 2]
 de = DiffEqSystem(eqs, t)
@@ -100,7 +100,7 @@ test_vars_extraction(de, DiffEqSystem(eqs))
 end
 
 # Now nonlinear system with only variables
-@Unknown x y z
+@Variable x y z
 @Param σ ρ β
 
 # Define a nonlinear system

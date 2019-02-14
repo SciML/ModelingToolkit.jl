@@ -2,7 +2,7 @@ using ModelingToolkit
 using Test
 
 @Param t
-@Unknown x(t) y(t) z(t)
+@Variable x(t) y(t) z(t)
 
 null_op = 0*t
 @test isequal(simplify_constants(null_op), 0)

@@ -2,12 +2,12 @@ using ModelingToolkit
 using Test
 
 @Param t
-@Unknown x(t)
-@Unknown y(t)
-@Unknown z(t)
-x1 = Unknown(:x, [t])
-y1 = Unknown(:y, [t])
-z1 = Unknown(:z, [t])
+@Variable x(t)
+@Variable y(t)
+@Variable z(t)
+x1 = Variable(:x, [t])
+y1 = Variable(:y, [t])
+z1 = Variable(:z, [t])
 @test isequal(x1, x)
 @test isequal(y1, y)
 @test isequal(z1, z)
@@ -19,8 +19,8 @@ z1 = Unknown(:z, [t])
     t
     s
 end
-t1 = Parameter(:t)
-s1 = Parameter(:s)
+t1 = Variable(:t; known = true)
+s1 = Variable(:s; known = true)
 @test isequal(t1, t)
 @test isequal(s1, s)
 @test convert(Expr, t) == :t

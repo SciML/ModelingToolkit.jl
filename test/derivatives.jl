@@ -3,7 +3,7 @@ using Test
 
 # Derivatives
 @Param t σ ρ β
-@Unknown x(t) y(t) z(t)
+@Variable x(t) y(t) z(t)
 @Deriv D'~t D2''~t
 
 @test isequal(expand_derivatives(D(t)), 1)
@@ -47,7 +47,7 @@ jac = calculate_jacobian(sys)
 @test isequal(jac[3,3], -1*β)
 
 # Variable dependence checking in differentiation
-@Unknown a(t) b(a)
+@Variable a(t) b(a)
 @test !isequal(D(b), 0)
 
 @test isequal(expand_derivatives(D(x * y)), simplify_constants(y*D(x) + x*D(y)))

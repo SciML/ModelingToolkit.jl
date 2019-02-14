@@ -1,14 +1,13 @@
-export Variable, Unknown, Parameter, @Unknown, @Param
+export Variable, @Variable, @Param
 
 
 struct Variable <: Expression
     name::Symbol
-    known::Bool
     dependents::Vector{Variable}
+    known::Bool
+    Variable(name, dependents = Variable[]; known = false) =
+        new(name, dependents, known)
 end
-
-Parameter(name, dependents = Variable[]) = Variable(name, true, dependents)
-Unknown(name, dependents = Variable[]) = Variable(name, false, dependents)
 
 
 struct Constant <: Expression
@@ -41,7 +40,7 @@ Base.convert(::Type{Expr}, c::Constant) = c.value
 Base.show(io::IO, x::Variable) = print(io, x.name)
 
 # Build variables more easily
-function _parse_vars(macroname, fun, x)
+function _parse_vars(macroname, known, x)
     ex = Expr(:block)
     var_names = Symbol[]
     # if parsing things in the form of
@@ -65,15 +64,15 @@ function _parse_vars(macroname, fun, x)
         end
 
         push!(var_names, var_name)
-        expr = :($var_name = $fun($(Meta.quot(var_name)), $dependents))
+        expr = :($var_name = $Variable($(Meta.quot(var_name)), $dependents; known = $known))
         push!(ex.args, expr)
     end
     push!(ex.args, build_expr(:tuple, var_names))
     return ex
 end
-macro Unknown(xs...)
-    esc(_parse_vars(:Unknown, Unknown, xs))
+macro Variable(xs...)
+    esc(_parse_vars(:Variable, false, xs))
 end
 macro Param(xs...)
-    esc(_parse_vars(:Param, Parameter, xs))
+    esc(_parse_vars(:Param, true, xs))
 end
