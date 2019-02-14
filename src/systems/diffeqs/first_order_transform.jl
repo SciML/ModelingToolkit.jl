@@ -17,7 +17,7 @@ function ode_order_lowering(eqs, iv)
         var, maxorder = eq.x, eq.n
         if maxorder > get(var_order, var, 0)
             var_order[var] = maxorder
-            var ∈ vars || push!(vars, var)
+            any(isequal(var), vars) || push!(vars, var)
         end
         var′ = lower_varname(eq.x, eq.t, eq.n - 1)
         rhs′ = rename(eq.rhs)

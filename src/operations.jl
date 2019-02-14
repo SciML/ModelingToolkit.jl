@@ -4,15 +4,15 @@ struct Operation <: Expression
 end
 
 # Recursive ==
-function Base.:(==)(x::Operation,y::Operation)
+function Base.isequal(x::Operation,y::Operation)
     x.op == y.op && length(x.args) == length(y.args) && all(isequal.(x.args,y.args))
 end
-Base.:(==)(::Operation, ::Number   ) = false
-Base.:(==)(::Number   , ::Operation) = false
-Base.:(==)(::Operation, ::Variable ) = false
-Base.:(==)(::Variable , ::Operation) = false
-Base.:(==)(::Operation, ::Constant ) = false
-Base.:(==)(::Constant , ::Operation) = false
+Base.isequal(::Operation, ::Number   ) = false
+Base.isequal(::Number   , ::Operation) = false
+Base.isequal(::Operation, ::Variable ) = false
+Base.isequal(::Variable , ::Operation) = false
+Base.isequal(::Operation, ::Constant ) = false
+Base.isequal(::Constant , ::Operation) = false
 
 Base.convert(::Type{Expr}, O::Operation) =
     build_expr(:call, Any[Symbol(O.op); convert.(Expr, O.args)])

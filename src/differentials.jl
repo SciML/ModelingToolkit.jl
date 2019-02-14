@@ -12,7 +12,7 @@ function (D::Differential)(x::Variable)
     return Operation(D, Expression[x])
 end
 (::Differential)(::Any) = Constant(0)
-Base.:(==)(D1::Differential, D2::Differential) = D1.x == D2.x
+Base.:(==)(D1::Differential, D2::Differential) = isequal(D1.x, D2.x)
 
 function expand_derivatives(O::Operation)
     @. O.args = expand_derivatives(O.args)

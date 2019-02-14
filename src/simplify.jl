@@ -4,7 +4,7 @@ function simplify_constants(O::Operation, shorten_tree)
         if is_operation(O′)
             O′ = Operation(O′.op, simplify_constants.(O′.args, shorten_tree))
         end
-        O == O′ && return O
+        isequal(O, O′) && return O
         O = O′
     end
 end

@@ -22,7 +22,7 @@ ModelingToolkit.generate_ode_iW(de)
 de2 = DiffEqSystem(eqs, t)
 
 function test_vars_extraction(de, de2)
-    @test de.iv == de2.iv
+    @test isequal(de.iv, de2.iv)
     for el in (:dvs, :ps)
         names2 = sort(collect(var.name for var in getfield(de2,el)))
         names = sort(collect(var.name for var in getfield(de,el)))
@@ -110,15 +110,15 @@ eqs = [0 ~ σ*(y-x),
 ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(ns)
 @testset "nlsys jacobian" begin
-    @test jac[1,1] == σ * -1
-    @test jac[1,2] == σ
-    @test jac[1,3] == 0
-    @test jac[2,1] == ρ - z
-    @test jac[2,2] == -1
-    @test jac[2,3] == x * -1
-    @test jac[3,1] == y
-    @test jac[3,2] == x
-    @test jac[3,3] == -1 * β
+    @test isequal(jac[1,1], σ * -1)
+    @test isequal(jac[1,2], σ)
+    @test isequal(jac[1,3], 0)
+    @test isequal(jac[2,1], ρ - z)
+    @test isequal(jac[2,2], -1)
+    @test isequal(jac[2,3], x * -1)
+    @test isequal(jac[3,1], y)
+    @test isequal(jac[3,2], x)
+    @test isequal(jac[3,3], -1 * β)
 end
 nlsys_func = generate_function(ns)
 jac_func = generate_jacobian(ns)

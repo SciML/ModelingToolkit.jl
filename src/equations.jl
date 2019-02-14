@@ -5,7 +5,7 @@ struct Equation
     lhs::Expression
     rhs::Expression
 end
-Base.:(==)(a::Equation, b::Equation) = (a.lhs, a.rhs) == (b.lhs, b.rhs)
+Base.:(==)(a::Equation, b::Equation) = isequal((a.lhs, a.rhs), (b.lhs, b.rhs))
 
 Base.:~(lhs::Expression, rhs::Expression) = Equation(lhs, rhs)
 Base.:~(lhs::Expression, rhs::Number    ) = Equation(lhs, rhs)
@@ -13,7 +13,7 @@ Base.:~(lhs::Number    , rhs::Expression) = Equation(lhs, rhs)
 
 
 _is_dependent(x::Variable) = !x.known && !isempty(x.dependents)
-_is_parameter(iv) = x -> x.known && x ≠ iv
+_is_parameter(iv) = x -> x.known && !isequal(x, iv)
 _is_known(x::Variable) = x.known
 _is_unknown(x::Variable) = !x.known
 

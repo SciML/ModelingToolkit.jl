@@ -22,14 +22,14 @@ Base.isone(ex::Expression)  = isa(ex, Constant) && isone(ex.value)
 
 
 # Variables use isequal for equality since == is an Operation
-Base.:(==)(x::Variable, y::Variable) = (x.name, x.known) == (y.name, y.known)
-Base.:(==)(::Variable, ::Number) = false
-Base.:(==)(::Number, ::Variable) = false
-Base.:(==)(::Variable, ::Constant) = false
-Base.:(==)(::Constant, ::Variable) = false
-Base.:(==)(c::Constant, n::Number) = c.value == n
-Base.:(==)(n::Number, c::Constant) = c.value == n
-Base.:(==)(a::Constant, b::Constant) = a.value == b.value
+Base.isequal(x::Variable, y::Variable) = (x.name, x.known) == (y.name, y.known)
+Base.isequal(::Variable, ::Number) = false
+Base.isequal(::Number, ::Variable) = false
+Base.isequal(::Variable, ::Constant) = false
+Base.isequal(::Constant, ::Variable) = false
+Base.isequal(c::Constant, n::Number) = c.value == n
+Base.isequal(n::Number, c::Constant) = c.value == n
+Base.isequal(a::Constant, b::Constant) = a.value == b.value
 
 function Base.convert(::Type{Expr}, x::Variable)
     x.known               || return x.name

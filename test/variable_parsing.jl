@@ -8,9 +8,9 @@ using Test
 x1 = Unknown(:x, [t])
 y1 = Unknown(:y, [t])
 z1 = Unknown(:z, [t])
-@test x1 == x
-@test y1 == y
-@test z1 == z
+@test isequal(x1, x)
+@test isequal(y1, y)
+@test isequal(z1, z)
 @test convert(Expr, x) == :x
 @test convert(Expr, y) == :y
 @test convert(Expr, z) == :z
@@ -21,8 +21,8 @@ z1 = Unknown(:z, [t])
 end
 t1 = Parameter(:t)
 s1 = Parameter(:s)
-@test t1 == t
-@test s1 == s
+@test isequal(t1, t)
+@test isequal(s1, s)
 @test convert(Expr, t) == :t
 @test convert(Expr, s) == :s
 @test convert(Expr, cos(t + sin(s))) == :(cos(t + sin(s)))
@@ -31,3 +31,5 @@ s1 = Parameter(:s)
 D1 = Differential(t)
 @test D1 == D
 @test convert(Expr, D) == D
+
+@test isequal(x ≤ y + 1, (x < y + 1) | (x == y + 1))
