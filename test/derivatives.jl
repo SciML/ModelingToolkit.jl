@@ -2,9 +2,9 @@ using ModelingToolkit
 using Test
 
 # Derivatives
-@Param t σ ρ β
-@Variable x(t) y(t) z(t)
-@Deriv D'~t D2''~t
+@param t σ ρ β
+@variable x(t) y(t) z(t)
+@deriv D'~t D2''~t
 
 @test isequal(expand_derivatives(D(t)), 1)
 @test isequal(expand_derivatives(D(D(t))), 0)
@@ -47,7 +47,7 @@ jac = calculate_jacobian(sys)
 @test isequal(jac[3,3], -1*β)
 
 # Variable dependence checking in differentiation
-@Variable a(t) b(a)
+@variable a(t) b(a)
 @test !isequal(D(b), 0)
 
 @test isequal(expand_derivatives(D(x * y)), simplify_constants(y*D(x) + x*D(y)))

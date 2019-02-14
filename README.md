@@ -28,9 +28,9 @@ and parameters. Therefore we label them as follows:
 using ModelingToolkit
 
 # Define some variables
-@Param t σ ρ β
-@Variable x(t) y(t) z(t)
-@Deriv D'~t
+@param t σ ρ β
+@variable x(t) y(t) z(t)
+@deriv D'~t
 ```
 
 Then we build the system:
@@ -81,8 +81,8 @@ state of the previous ODE. This is the nonlinear system defined by where the
 derivatives are zero. We use (unknown) variables for our nonlinear system.
 
 ```julia
-@Variable x y z
-@Param σ ρ β
+@variable x y z
+@param σ ρ β
 
 # Define a nonlinear system
 eqs = [0 ~ σ*(y-x),
@@ -223,7 +223,7 @@ function via the dispatch:
 
 ```julia
 # `N` arguments are accepted by the relevant method of `my_function`
-ModelingToolkit.Derivative(::typeof(my_function), args::NTuple{N,Any}, ::Val{i})
+ModelingToolkit.derivative(::typeof(my_function), args::NTuple{N,Any}, ::Val{i})
 ```
 
 where `i` means that it's the derivative of the `i`th argument. `args` is the
@@ -233,7 +233,7 @@ You should return an `Operation` for the derivative of your function.
 For example, `sin(t)`'s derivative (by `t`) is given by the following:
 
 ```julia
-ModelingToolkit.Derivative(::typeof(sin), args::NTuple{1,Any}, ::Val{1}) = cos(args[1])
+ModelingToolkit.derivative(::typeof(sin), args::NTuple{1,Any}, ::Val{1}) = cos(args[1])
 ```
 
 ### Macro-free Usage
@@ -243,9 +243,9 @@ is accessible via a function-based interface. This means that all macros are
 syntactic sugar in some form. For example, the variable construction:
 
 ```julia
-@Param t σ ρ β
-@Variable x(t) y(t) z(t)
-@Deriv D'~t
+@param t σ ρ β
+@variable x(t) y(t) z(t)
+@deriv D'~t
 ```
 
 is syntactic sugar for:
@@ -266,8 +266,8 @@ D = Differential(t)
 The system building functions can handle intermediate calculations. For example,
 
 ```julia
-@Variable x y z
-@Param σ ρ β
+@variable x y z
+@param σ ρ β
 a = y - x
 eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,

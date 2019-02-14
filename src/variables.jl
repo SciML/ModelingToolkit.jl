@@ -1,4 +1,4 @@
-export Variable, @Variable, @Param
+export Variable, @variable, @param
 
 
 struct Variable <: Expression
@@ -70,9 +70,9 @@ function _parse_vars(macroname, known, x)
     push!(ex.args, build_expr(:tuple, var_names))
     return ex
 end
-macro Variable(xs...)
+macro variable(xs...)
     esc(_parse_vars(:Variable, false, xs))
 end
-macro Param(xs...)
+macro param(xs...)
     esc(_parse_vars(:Param, true, xs))
 end
