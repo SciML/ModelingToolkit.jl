@@ -1,3 +1,6 @@
+export ode_order_lowering
+
+
 function lower_varname(var::Variable, idv, order)
     order == 0 && return var
     name = Symbol(var.name, :_, string(idv.name)^order)
@@ -45,5 +48,3 @@ function rename(O::Expression)
     end
     return Operation(O.op, rename.(O.args))
 end
-
-export ode_order_lowering

@@ -1,3 +1,6 @@
+export simplify_constants
+
+
 function simplify_constants(O::Operation, shorten_tree)
     while true
         O′ = _simplify_constants(O, shorten_tree)
@@ -72,5 +75,3 @@ function _simplify_constants(O::Operation, shorten_tree)
 end
 _simplify_constants(x, shorten_tree) = x
 _simplify_constants(x) = _simplify_constants(x, true)
-
-export simplify_constants
