@@ -1,4 +1,4 @@
-export Differential, expand_derivatives, @deriv
+export Differential, expand_derivatives, @derivatives
 
 
 struct Differential <: Function
@@ -63,7 +63,7 @@ function _differential_macro(x)
     lhss = Symbol[]
     x = flatten_expr!(x)
     for di in x
-        @assert di isa Expr && di.args[1] == :~ "@deriv expects a form that looks like `@deriv D''~t E'~t`"
+        @assert di isa Expr && di.args[1] == :~ "@derivatives expects a form that looks like `@derivatives D''~t E'~t`"
         lhs = di.args[2]
         rhs = di.args[3]
         order, lhs = count_order(lhs)
@@ -75,7 +75,7 @@ function _differential_macro(x)
     ex
 end
 
-macro deriv(x...)
+macro derivatives(x...)
     esc(_differential_macro(x))
 end
 

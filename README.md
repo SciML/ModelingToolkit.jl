@@ -28,9 +28,9 @@ and parameters. Therefore we label them as follows:
 using ModelingToolkit
 
 # Define some variables
-@param t σ ρ β
-@variable x(t) y(t) z(t)
-@deriv D'~t
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
 ```
 
 Then we build the system:
@@ -81,8 +81,8 @@ state of the previous ODE. This is the nonlinear system defined by where the
 derivatives are zero. We use (unknown) variables for our nonlinear system.
 
 ```julia
-@variable x y z
-@param σ ρ β
+@variables x y z
+@parameters σ ρ β
 
 # Define a nonlinear system
 eqs = [0 ~ σ*(y-x),
@@ -243,9 +243,9 @@ is accessible via a function-based interface. This means that all macros are
 syntactic sugar in some form. For example, the variable construction:
 
 ```julia
-@param t σ ρ β
-@variable x(t) y(t) z(t)
-@deriv D'~t
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
 ```
 
 is syntactic sugar for:
@@ -266,8 +266,8 @@ D = Differential(t)
 The system building functions can handle intermediate calculations. For example,
 
 ```julia
-@variable x y z
-@param σ ρ β
+@variables x y z
+@parameters σ ρ β
 a = y - x
 eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,

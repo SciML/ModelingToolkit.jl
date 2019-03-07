@@ -2,9 +2,9 @@ using ModelingToolkit
 using Test
 
 # Define some variables
-@param t σ ρ β
-@variable x(t) y(t) z(t)
-@deriv D'~t
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
 
 # Define a differential equation
 eqs = [D(x) ~ σ*(y-x),
@@ -32,7 +32,7 @@ end
 test_vars_extraction(de, de2)
 
 @testset "time-varying parameters" begin
-    @param σ′(t)
+    @parameters σ′(t)
     eqs = [D(x) ~ σ′*(y-x),
            D(y) ~ x*(ρ-z)-y,
            D(z) ~ x*y - β*z]
@@ -46,9 +46,9 @@ test_vars_extraction(de, de2)
 end
 
 # Conversion to first-order ODEs #17
-@deriv D3'''~t
-@deriv D2''~t
-@variable u(t) u_tt(t) u_t(t) x_t(t)
+@derivatives D3'''~t
+@derivatives D2''~t
+@variables u(t) u_tt(t) u_t(t) x_t(t)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
        D2(x) ~ D(x) + 2]
 de = DiffEqSystem(eqs, t)
@@ -84,8 +84,8 @@ end
 
 generate_function(ns)
 
-@deriv D'~t
-@param A B C
+@derivatives D'~t
+@parameters A B C
 _x = y / C
 eqs = [D(x) ~ -A*x,
        D(y) ~ A*x - B*_x]
@@ -100,8 +100,8 @@ test_vars_extraction(de, DiffEqSystem(eqs))
 end
 
 # Now nonlinear system with only variables
-@variable x y z
-@param σ ρ β
+@variables x y z
+@parameters σ ρ β
 
 # Define a nonlinear system
 eqs = [0 ~ σ*(y-x),

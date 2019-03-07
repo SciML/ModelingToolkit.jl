@@ -1,10 +1,10 @@
 using ModelingToolkit
 using Test
 
-@param t
-@variable x(t)
-@variable y(t)
-@variable z(t)
+@parameters t
+@variables x(t)
+@variables y(t)
+@variables z(t)
 x1 = Variable(:x, [t])
 y1 = Variable(:y, [t])
 z1 = Variable(:z, [t])
@@ -15,7 +15,7 @@ z1 = Variable(:z, [t])
 @test convert(Expr, y) == :y
 @test convert(Expr, z) == :z
 
-@param begin
+@parameters begin
     t
     s
 end
@@ -27,7 +27,7 @@ s1 = Variable(:s; known = true)
 @test convert(Expr, s) == :s
 @test convert(Expr, cos(t + sin(s))) == :(cos(t + sin(s)))
 
-@deriv D'~t
+@derivatives D'~t
 D1 = Differential(t)
 @test D1 == D
 @test convert(Expr, D) == D

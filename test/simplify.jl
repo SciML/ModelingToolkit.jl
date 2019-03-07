@@ -1,8 +1,8 @@
 using ModelingToolkit
 using Test
 
-@param t
-@variable x(t) y(t) z(t)
+@parameters t
+@variables x(t) y(t) z(t)
 
 null_op = 0*t
 @test isequal(simplify_constants(null_op), 0)
