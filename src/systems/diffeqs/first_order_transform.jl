@@ -1,7 +1,10 @@
+export ode_order_lowering
+
+
 function lower_varname(var::Variable, idv, order)
     order == 0 && return var
     name = Symbol(var.name, :_, string(idv.name)^order)
-    return Variable(name, var.known, var.dependents)
+    return Variable(name, var.dependents; known = var.known)
 end
 
 function ode_order_lowering(sys::DiffEqSystem)
@@ -17,7 +20,7 @@ function ode_order_lowering(eqs, iv)
         var, maxorder = eq.x, eq.n
         if maxorder > get(var_order, var, 0)
             var_order[var] = maxorder
-            var ∈ vars || push!(vars, var)
+            any(isequal(var), vars) || push!(vars, var)
         end
         var′ = lower_varname(eq.x, eq.t, eq.n - 1)
         rhs′ = rename(eq.rhs)
@@ -45,5 +48,3 @@ function rename(O::Expression)
     end
     return Operation(O.op, rename.(O.args))
 end
-
-export ode_order_lowering

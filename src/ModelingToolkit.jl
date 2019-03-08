@@ -1,5 +1,10 @@
 module ModelingToolkit
 
+export Operation, Expression
+export calculate_jacobian, generate_jacobian, generate_function
+export @register
+
+
 using DiffEqBase
 using StaticArrays, LinearAlgebra
 
@@ -29,10 +34,5 @@ include("systems/nonlinear/nonlinear_system.jl")
 include("function_registration.jl")
 include("simplify.jl")
 include("utils.jl")
-
-export Operation, Expression, AbstractComponent
-export calculate_jacobian, generate_jacobian, generate_function
-export ArrayFunction, SArrayFunction
-export @register
 
 end # module

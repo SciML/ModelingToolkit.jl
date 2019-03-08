@@ -10,7 +10,7 @@ function flatten_differential(O::Operation)
     @assert is_derivative(O) "invalid differential: $O"
     is_derivative(O.args[1]) || return (O.args[1], O.op.x, 1)
     (x, t, order) = flatten_differential(O.args[1])
-    t == O.op.x || throw(ArgumentError("non-matching differentials on lhs: $t, $(O.op.x)"))
+    isequal(t, O.op.x) || throw(ArgumentError("non-matching differentials on lhs: $t, $(O.op.x)"))
     return (x, t, order + 1)
 end
 
@@ -26,7 +26,7 @@ function Base.convert(::Type{DiffEq}, eq::Equation)
     (x, t, n) = flatten_differential(eq.lhs)
     return DiffEq(x, t, n, eq.rhs)
 end
-Base.:(==)(a::DiffEq, b::DiffEq) = (a.x, a.t, a.n, a.rhs) == (b.x, b.t, b.n, b.rhs)
+Base.:(==)(a::DiffEq, b::DiffEq) = isequal((a.x, a.t, a.n, a.rhs), (b.x, b.t, b.n, b.rhs))
 get_args(eq::DiffEq) = Expression[eq.x, eq.t, eq.rhs]
 
 struct DiffEqSystem <: AbstractSystem
@@ -79,7 +79,7 @@ end
 function generate_ode_iW(sys::DiffEqSystem, simplify=true; version::FunctionVersion = ArrayFunction)
     jac = calculate_jacobian(sys)
 
-    gam = Parameter(:gam)
+    gam = Variable(:gam; known = true)
 
     W = LinearAlgebra.I - gam*jac
     W = SMatrix{size(W,1),size(W,2)}(W)

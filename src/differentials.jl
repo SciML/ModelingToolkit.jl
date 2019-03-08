@@ -1,3 +1,6 @@
+export Differential, expand_derivatives, @derivatives
+
+
 struct Differential <: Function
     x::Expression
 end
@@ -12,7 +15,7 @@ function (D::Differential)(x::Variable)
     return Operation(D, Expression[x])
 end
 (::Differential)(::Any) = Constant(0)
-Base.:(==)(D1::Differential, D2::Differential) = D1.x == D2.x
+Base.:(==)(D1::Differential, D2::Differential) = isequal(D1.x, D2.x)
 
 function expand_derivatives(O::Operation)
     @. O.args = expand_derivatives(O.args)
@@ -21,7 +24,7 @@ function expand_derivatives(O::Operation)
         D = O.op
         o = O.args[1]
         isa(o, Operation) || return O
-        return simplify_constants(sum(i->Derivative(o,i)*expand_derivatives(D(o.args[i])),1:length(o.args)))
+        return simplify_constants(sum(i->derivative(o,i)*expand_derivatives(D(o.args[i])),1:length(o.args)))
     end
 
     return O
@@ -29,13 +32,13 @@ end
 expand_derivatives(x) = x
 
 # Don't specialize on the function here
-Derivative(O::Operation, idx) = Derivative(O.op, (O.args...,), Val(idx))
+derivative(O::Operation, idx) = derivative(O.op, (O.args...,), Val(idx))
 
 # Pre-defined derivatives
 import DiffRules, SpecialFunctions, NaNMath
 for (modu, fun, arity) ∈ DiffRules.diffrules()
     for i ∈ 1:arity
-        @eval function Derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i})
+        @eval function derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i})
             M, f = $(modu, fun)
             partials = DiffRules.diffrule(M, f, args...)
             dx = @static $arity == 1 ? partials : partials[$i]
@@ -60,7 +63,7 @@ function _differential_macro(x)
     lhss = Symbol[]
     x = flatten_expr!(x)
     for di in x
-        @assert di isa Expr && di.args[1] == :~ "@Deriv expects a form that looks like `@Deriv D''~t E'~t`"
+        @assert di isa Expr && di.args[1] == :~ "@derivatives expects a form that looks like `@derivatives D''~t E'~t`"
         lhs = di.args[2]
         rhs = di.args[3]
         order, lhs = count_order(lhs)
@@ -72,12 +75,10 @@ function _differential_macro(x)
     ex
 end
 
-macro Deriv(x...)
+macro derivatives(x...)
     esc(_differential_macro(x))
 end
 
 function calculate_jacobian(eqs,vars)
     Expression[Differential(vars[j])(eqs[i]) for i in 1:length(eqs), j in 1:length(vars)]
 end
-
-export Differential, expand_derivatives, @Deriv, calculate_jacobian

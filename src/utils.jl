@@ -65,4 +65,4 @@ is_derivative(::Any) = false
 
 has_dependent(t::Variable) = Base.Fix2(has_dependent, t)
 has_dependent(x::Variable, t::Variable) =
-    t ∈ x.dependents || any(has_dependent(t), x.dependents)
+    any(isequal(t), x.dependents) || any(has_dependent(t), x.dependents)

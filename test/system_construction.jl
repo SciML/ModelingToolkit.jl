@@ -2,9 +2,9 @@ using ModelingToolkit
 using Test
 
 # Define some variables
-@Param t σ ρ β
-@Unknown x(t) y(t) z(t)
-@Deriv D'~t
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
 
 # Define a differential equation
 eqs = [D(x) ~ σ*(y-x),
@@ -22,7 +22,7 @@ ModelingToolkit.generate_ode_iW(de)
 de2 = DiffEqSystem(eqs, t)
 
 function test_vars_extraction(de, de2)
-    @test de.iv == de2.iv
+    @test isequal(de.iv, de2.iv)
     for el in (:dvs, :ps)
         names2 = sort(collect(var.name for var in getfield(de2,el)))
         names = sort(collect(var.name for var in getfield(de,el)))
@@ -32,7 +32,7 @@ end
 test_vars_extraction(de, de2)
 
 @testset "time-varying parameters" begin
-    @Param σ′(t)
+    @parameters σ′(t)
     eqs = [D(x) ~ σ′*(y-x),
            D(y) ~ x*(ρ-z)-y,
            D(z) ~ x*y - β*z]
@@ -46,9 +46,9 @@ test_vars_extraction(de, de2)
 end
 
 # Conversion to first-order ODEs #17
-@Deriv D3'''~t
-@Deriv D2''~t
-@Unknown u(t) u_tt(t) u_t(t) x_t(t)
+@derivatives D3'''~t
+@derivatives D2''~t
+@variables u(t) u_tt(t) u_t(t) x_t(t)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
        D2(x) ~ D(x) + 2]
 de = DiffEqSystem(eqs, t)
@@ -84,8 +84,8 @@ end
 
 generate_function(ns)
 
-@Deriv D'~t
-@Param A B C
+@derivatives D'~t
+@parameters A B C
 _x = y / C
 eqs = [D(x) ~ -A*x,
        D(y) ~ A*x - B*_x]
@@ -100,8 +100,8 @@ test_vars_extraction(de, DiffEqSystem(eqs))
 end
 
 # Now nonlinear system with only variables
-@Unknown x y z
-@Param σ ρ β
+@variables x y z
+@parameters σ ρ β
 
 # Define a nonlinear system
 eqs = [0 ~ σ*(y-x),
@@ -110,15 +110,15 @@ eqs = [0 ~ σ*(y-x),
 ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(ns)
 @testset "nlsys jacobian" begin
-    @test jac[1,1] == σ * -1
-    @test jac[1,2] == σ
-    @test jac[1,3] == 0
-    @test jac[2,1] == ρ - z
-    @test jac[2,2] == -1
-    @test jac[2,3] == x * -1
-    @test jac[3,1] == y
-    @test jac[3,2] == x
-    @test jac[3,3] == -1 * β
+    @test isequal(jac[1,1], σ * -1)
+    @test isequal(jac[1,2], σ)
+    @test isequal(jac[1,3], 0)
+    @test isequal(jac[2,1], ρ - z)
+    @test isequal(jac[2,2], -1)
+    @test isequal(jac[2,3], x * -1)
+    @test isequal(jac[3,1], y)
+    @test isequal(jac[3,2], x)
+    @test isequal(jac[3,3], -1 * β)
 end
 nlsys_func = generate_function(ns)
 jac_func = generate_jacobian(ns)

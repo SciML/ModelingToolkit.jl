@@ -21,16 +21,16 @@ to manipulate.
 ### Example: ODE
 
 Let's build an ODE. First we define some variables. In a differential equation
-system, we need to differentiate between our unknown (dependent) variables
+system, we need to differentiate between our (dependent) variables
 and parameters. Therefore we label them as follows:
 
 ```julia
 using ModelingToolkit
 
 # Define some variables
-@Param t σ ρ β
-@Unknown x(t) y(t) z(t)
-@Deriv D'~t
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
 ```
 
 Then we build the system:
@@ -78,11 +78,11 @@ f = ODEFunction(de)
 
 We can also build nonlinear systems. Let's say we wanted to solve for the steady
 state of the previous ODE. This is the nonlinear system defined by where the
-derivatives are zero. We use unknown variables for our nonlinear system.
+derivatives are zero. We use (unknown) variables for our nonlinear system.
 
 ```julia
-@Unknown x y z
-@Param σ ρ β
+@variables x y z
+@parameters σ ρ β
 
 # Define a nonlinear system
 eqs = [0 ~ σ*(y-x),
@@ -173,7 +173,7 @@ structure is as follows:
   the system of equations.
 - Name to subtype mappings: these describe how variable `subtype`s are mapped
   to the contexts of the system. For example, for a differential equation,
-  the unknown variable corresponds to given subtypes and then the `eqs` can
+  the variable corresponds to given subtypes and then the `eqs` can
   be analyzed knowing what the state variables are.
 - Variable names which do not fall into one of the system's core subtypes are
   treated as intermediates which can be used for holding subcalculations and
@@ -223,7 +223,7 @@ function via the dispatch:
 
 ```julia
 # `N` arguments are accepted by the relevant method of `my_function`
-ModelingToolkit.Derivative(::typeof(my_function), args::NTuple{N,Any}, ::Val{i})
+ModelingToolkit.derivative(::typeof(my_function), args::NTuple{N,Any}, ::Val{i})
 ```
 
 where `i` means that it's the derivative of the `i`th argument. `args` is the
@@ -233,7 +233,7 @@ You should return an `Operation` for the derivative of your function.
 For example, `sin(t)`'s derivative (by `t`) is given by the following:
 
 ```julia
-ModelingToolkit.Derivative(::typeof(sin), args::NTuple{1,Any}, ::Val{1}) = cos(args[1])
+ModelingToolkit.derivative(::typeof(sin), args::NTuple{1,Any}, ::Val{1}) = cos(args[1])
 ```
 
 ### Macro-free Usage
@@ -243,22 +243,22 @@ is accessible via a function-based interface. This means that all macros are
 syntactic sugar in some form. For example, the variable construction:
 
 ```julia
-@Param t σ ρ β
-@Unknown x(t) y(t) z(t)
-@Deriv D'~t
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
 ```
 
 is syntactic sugar for:
 
 ```julia
-t = Parameter(:t)
-x = Unknown(:x, [t])
-y = Unknown(:y, [t])
-z = Unknown(:z, [t])
+t = Variable(:t; known = true)
+x = Variable(:x, [t])
+y = Variable(:y, [t])
+z = Variable(:z, [t])
 D = Differential(t)
-σ = Parameter(:σ)
-ρ = Parameter(:ρ)
-β = Parameter(:β)
+σ = Variable(:σ; known = true)
+ρ = Variable(:ρ; known = true)
+β = Variable(:β; known = true)
 ```
 
 ### Intermediate Calculations
@@ -266,8 +266,8 @@ D = Differential(t)
 The system building functions can handle intermediate calculations. For example,
 
 ```julia
-@Unknown x y z
-@Param σ ρ β
+@variables x y z
+@parameters σ ρ β
 a = y - x
 eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,
