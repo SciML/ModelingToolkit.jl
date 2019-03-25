@@ -38,7 +38,7 @@ for fun ∈ [:!]
     @eval @register $sig
 end
 
-for fun ∈ [:<, :>, :(==), :&, :|, :div]
+for fun ∈ [:<, :>, :(<=), :(>=), :(==), :&, :|, :div]
     basefun = Expr(:., Base, QuoteNode(fun))
     sig = :($basefun(x,y))
     @eval @register $sig
