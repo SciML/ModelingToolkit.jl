@@ -8,12 +8,13 @@ function lower_varname(var::Variable, idv, order)
 end
 
 function ode_order_lowering(sys::DiffEqSystem)
-    eqs_lowered = ode_order_lowering(sys.eqs, sys.iv)
-    DiffEqSystem(eqs_lowered, sys.iv, sys.dvs, sys.ps)
+    eqs_lowered, vars_lowered = ode_order_lowering(sys.eqs, sys.iv)
+    DiffEqSystem(eqs_lowered, sys.iv, vars_lowered, sys.ps)
 end
 function ode_order_lowering(eqs, iv)
     var_order = Dict{Variable,Int}()
     vars = Variable[]
+    new_vars = Variable[]
     new_eqs = similar(eqs, DiffEq)
 
     for (i, eq) ∈ enumerate(eqs)
@@ -23,6 +24,7 @@ function ode_order_lowering(eqs, iv)
             any(isequal(var), vars) || push!(vars, var)
         end
         var′ = lower_varname(eq.x, eq.t, eq.n - 1)
+        push!(new_vars, var′)
         rhs′ = rename(eq.rhs)
         new_eqs[i] = DiffEq(var′, iv, 1, rhs′)
     end
@@ -31,13 +33,14 @@ function ode_order_lowering(eqs, iv)
         order = var_order[var]
         for o in (order-1):-1:1
             lvar = lower_varname(var, iv, o-1)
+            push!(new_vars, lvar)
             rhs = lower_varname(var, iv, o)
             eq = DiffEq(lvar, iv, 1, rhs)
             push!(new_eqs, eq)
         end
     end
 
-    return new_eqs
+    return new_eqs, new_vars
 end
 
 function rename(O::Expression)

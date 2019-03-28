@@ -59,6 +59,11 @@ lowered_eqs = [D(u_tt) ~ 2u_tt + u_t + x_t + 1
                D(u)    ~ u_t
                D(x)    ~ x_t]
 @test de1.eqs == convert.(ModelingToolkit.DiffEq, lowered_eqs)
+@test isequal(de1.dvs, [u_tt, x_t, u_t, u, x])
+@test isequal(de1.iv, t)
+du = zeros(5)
+ODEFunction(de1)(du, ones(5), nothing, 0.1)
+@test du == [5.0, 3.0, 1.0, 1.0, 1.0]
 
 # Internal calculations
 a = y - x
