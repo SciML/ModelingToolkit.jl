@@ -2,9 +2,8 @@ using ModelingToolkit
 using Test
 
 @parameters t
-@variables x(t)
-@variables y(t)
-@variables z(t)
+@variables x(t) y(t) # test multi-arg
+@variables z(t) # test single-arg
 x1 = Variable(:x, [t])
 y1 = Variable(:y, [t])
 z1 = Variable(:z, [t])
@@ -33,3 +32,6 @@ D1 = Differential(t)
 @test convert(Expr, D) == D
 
 @test isequal(x ≤ y + 1, (x < y + 1) | (x == y + 1))
+
+@test @macroexpand(@parameters x, y, z(t)) == @macroexpand(@parameters x y z(t))
+@test @macroexpand(@variables x, y, z(t)) == @macroexpand(@variables x y z(t))

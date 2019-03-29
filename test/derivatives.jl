@@ -6,6 +6,8 @@ using Test
 @variables x(t) y(t) z(t)
 @derivatives D'~t D2''~t
 
+@test @macroexpand(@derivatives D'~t D2''~t) == @macroexpand(@derivatives (D'~t), (D2''~t))
+
 @test isequal(expand_derivatives(D(t)), 1)
 @test isequal(expand_derivatives(D(D(t))), 0)
 
