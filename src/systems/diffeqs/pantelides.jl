@@ -13,19 +13,12 @@ function init_assign(G)
     return assign
 end
 
-function has_vnode(i, j, edges)
-    for edge in edges
-        (edge == ( i=>j ) ) && return true
-    end
-    return false
-end
-
 function augmentpath!(i, pathfound, color, assign, vars, edges)
     union!(color, i)
     idx = -1
     for j in vars
         assign[j] === nothing || continue
-        has_vnode(i, j, edges) && (idx = j; break)
+        (i => j) in edges && (idx = j; break)
     end
     if idx != -1
         pathfound[] = true
@@ -33,7 +26,7 @@ function augmentpath!(i, pathfound, color, assign, vars, edges)
         return nothing
     end
     for j in vars
-        !(has_vnode(i, j, edges) && !(j in color)) && continue
+        !((i => j) in edges && !(j in color)) && continue
         union!(color, j)
         k = assign[j]
         augmentpath!(k, pathfound, color, assign, vars, edges)
