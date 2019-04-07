@@ -7,7 +7,7 @@ using Test
 @derivatives D'~t
 
 function test_diffeq_inference(name, de, iv, dvs, ps)
-    @testset "DiffEqSystem construction: $name" begin
+    @testset "ODESystem construction: $name" begin
         @test de.iv.name == :t
         @test Set([dv.name for dv ∈ de.dvs]) == Set(dvs)
         @test Set([p.name  for p  ∈ de.ps ]) == Set(ps)
@@ -18,7 +18,7 @@ end
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
-de = DiffEqSystem(eqs)
+de = ODESystem(eqs)
 test_diffeq_inference("standard", de, :t, (:x, :y, :z), (:σ, :ρ, :β))
 generate_function(de, [x,y,z], [σ,ρ,β])
 generate_function(de, [x,y,z], [σ,ρ,β]; version=ModelingToolkit.SArrayFunction)
@@ -34,7 +34,7 @@ ModelingToolkit.generate_ode_iW(de)
     eqs = [D(x) ~ σ′*(y-x),
            D(y) ~ x*(ρ-z)-y,
            D(z) ~ x*y - β*z]
-    de = DiffEqSystem(eqs)
+    de = ODESystem(eqs)
     test_diffeq_inference("global iv-varying", de, :t, (:x, :y, :z), (:σ′, :ρ, :β))
     @test begin
         f = eval(generate_function(de, [x,y,z], [σ′,ρ,β]))
@@ -47,7 +47,7 @@ ModelingToolkit.generate_ode_iW(de)
     eqs = [D(x) ~ σ(t-1)*(y-x),
            D(y) ~ x*(ρ-z)-y,
            D(z) ~ x*y - β*z]
-    de = DiffEqSystem(eqs)
+    de = ODESystem(eqs)
     test_diffeq_inference("single internal iv-varying", de, :t, (:x, :y, :z), (:σ, :ρ, :β))
     @test begin
         f = eval(generate_function(de, [x,y,z], [σ,ρ,β]))
@@ -57,7 +57,7 @@ ModelingToolkit.generate_ode_iW(de)
     end
 
     eqs = [D(x) ~ x + 10σ(t-1) + 100σ(t-2) + 1000σ(t^2)]
-    de = DiffEqSystem(eqs)
+    de = ODESystem(eqs)
     test_diffeq_inference("many internal iv-varying", de, :t, (:x,), (:σ,))
     @test begin
         f = eval(generate_function(de, [x], [σ]))
@@ -74,7 +74,7 @@ end
 @variables u(t) u_tt(t) u_t(t) x_t(t)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
        D2(x) ~ D(x) + 2]
-de = DiffEqSystem(eqs, t)
+de = ODESystem(eqs, t)
 de1 = ode_order_lowering(de)
 lowered_eqs = [D(u_tt) ~ 2u_tt + u_t + x_t + 1
                D(x_t)  ~ x_t + 2
@@ -89,7 +89,7 @@ a = y - x
 eqs = [D(x) ~ σ*a,
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
-de = DiffEqSystem(eqs)
+de = ODESystem(eqs)
 generate_function(de, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(de)
 @test_broken begin
@@ -117,7 +117,7 @@ end
 _x = y / C
 eqs = [D(x) ~ -A*x,
        D(y) ~ A*x - B*_x]
-de = DiffEqSystem(eqs)
+de = ODESystem(eqs)
 @test begin
     f = eval(generate_function(de, [x,y], [A,B,C]))
     du = [0.0,0.0]

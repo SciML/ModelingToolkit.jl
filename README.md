@@ -43,11 +43,11 @@ eqs = [D(x) ~ σ*(y-x),
 
 Each operation builds an `Operation` type, and thus `eqs` is an array of
 `Operation` and `Variable`s. This holds a tree of the full system that can be
-analyzed by other programs. We can turn this into a `DiffEqSystem` via:
+analyzed by other programs. We can turn this into a `ODESystem` via:
 
 ```julia
-de = DiffEqSystem(eqs,t,[x,y,z],[σ,ρ,β])
-de = DiffEqSystem(eqs)
+de = ODESystem(eqs,t,[x,y,z],[σ,ρ,β])
+de = ODESystem(eqs)
 ```
 
 where we tell it the variable types and ordering in the first version, or let it

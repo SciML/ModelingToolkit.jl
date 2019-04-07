@@ -1,4 +1,4 @@
-export DiffEqSystem, ODEFunction
+export ODESystem, ODEFunction
 
 
 using Base: RefValue
@@ -31,13 +31,13 @@ function to_diffeq(eq::Equation)
 end
 Base.:(==)(a::DiffEq, b::DiffEq) = isequal((a.x, a.t, a.n, a.rhs), (b.x, b.t, b.n, b.rhs))
 
-struct DiffEqSystem <: AbstractSystem
+struct ODESystem <: AbstractSystem
     eqs::Vector{DiffEq}
     iv::Variable
     dvs::Vector{Variable}
     ps::Vector{Variable}
     jac::RefValue{Matrix{Expression}}
-    function DiffEqSystem(eqs)
+    function ODESystem(eqs)
         reformatted = to_diffeq.(eqs)
 
         ivs = unique(r[1] for r ∈ reformatted)
@@ -58,7 +58,7 @@ struct DiffEqSystem <: AbstractSystem
 end
 
 
-function calculate_jacobian(sys::DiffEqSystem)
+function calculate_jacobian(sys::ODESystem)
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
     rhs = [eq.rhs for eq ∈ sys.eqs]
 
@@ -67,13 +67,13 @@ function calculate_jacobian(sys::DiffEqSystem)
     return jac
 end
 
-function generate_jacobian(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
+function generate_jacobian(sys::ODESystem; version::FunctionVersion = ArrayFunction)
     jac = calculate_jacobian(sys)
     return build_function(jac, sys.dvs, sys.ps, (sys.iv.name,); version = version)
 end
 
 struct DiffEqToExpr
-    sys::DiffEqSystem
+    sys::ODESystem
 end
 function (f::DiffEqToExpr)(O::Operation)
     if isa(O.op, Variable)
@@ -86,7 +86,7 @@ function (f::DiffEqToExpr)(O::Operation)
 end
 (f::DiffEqToExpr)(x) = convert(Expr, x)
 
-function generate_function(sys::DiffEqSystem, vs, ps; version::FunctionVersion = ArrayFunction)
+function generate_function(sys::ODESystem, vs, ps; version::FunctionVersion = ArrayFunction)
     rhss = [deq.rhs for deq ∈ sys.eqs]
     vs′ = [clean(v) for v ∈ vs]
     ps′ = [clean(p) for p ∈ ps]
@@ -94,7 +94,7 @@ function generate_function(sys::DiffEqSystem, vs, ps; version::FunctionVersion =
 end
 
 
-function generate_ode_iW(sys::DiffEqSystem, simplify=true; version::FunctionVersion = ArrayFunction)
+function generate_ode_iW(sys::ODESystem, simplify=true; version::FunctionVersion = ArrayFunction)
     jac = calculate_jacobian(sys)
 
     gam = Variable(:gam; known = true)()
@@ -121,7 +121,7 @@ function generate_ode_iW(sys::DiffEqSystem, simplify=true; version::FunctionVers
     return (iW_func, iW_t_func)
 end
 
-function DiffEqBase.ODEFunction(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
+function DiffEqBase.ODEFunction(sys::ODESystem; version::FunctionVersion = ArrayFunction)
     expr = generate_function(sys; version = version)
     if version === ArrayFunction
         ODEFunction{true}(eval(expr))
