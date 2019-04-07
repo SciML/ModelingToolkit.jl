@@ -2,9 +2,9 @@ using ModelingToolkit
 using Test
 
 # Derivatives
-@parameters t σ ρ β
+@parameters t() σ() ρ() β()
 @variables x(t) y(t) z(t)
-@derivatives D'~t D2''~t
+@derivatives D'~t D2''~t Dx'~x
 
 @test isequal(expand_derivatives(D(t)), 1)
 @test isequal(expand_derivatives(D(D(t))), 0)
@@ -31,6 +31,7 @@ d2 = D(sin(t)*cos(t))
 @test isequal(expand_derivatives(d1), t*cos(t)+sin(t))
 @test isequal(expand_derivatives(d2), simplify_constants(cos(t)*cos(t)+sin(t)*(-1*sin(t))))
 
+@test_broken begin
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
@@ -45,13 +46,17 @@ jac = calculate_jacobian(sys)
 @test isequal(jac[3,1], y)
 @test isequal(jac[3,2], x)
 @test isequal(jac[3,3], -1*β)
+end
 
 # Variable dependence checking in differentiation
 @variables a(t) b(a)
 @test !isequal(D(b), 0)
+@test isequal(expand_derivatives(D(t)), 1)
+@test isequal(expand_derivatives(Dx(x)), 1)
 
 @test isequal(expand_derivatives(D(x * y)), simplify_constants(y*D(x) + x*D(y)))
 @test_broken isequal(expand_derivatives(D(x * y)), simplify_constants(D(x)*y + x*D(y)))
 
 @test isequal(expand_derivatives(D(2t)), 2)
 @test isequal(expand_derivatives(D(2x)), 2D(x))
+@test_broken isequal(expand_derivatives(D(x^2)), simplify_constants(2 * x * D(x)))

@@ -16,18 +16,20 @@ end
 
 
 struct DiffEq  # dⁿx/dtⁿ = rhs
-    x::Expression
-    t::Variable
+    x::Variable
     n::Int
     rhs::Expression
 end
-function Base.convert(::Type{DiffEq}, eq::Equation)
+function to_diffeq(eq::Equation)
     isintermediate(eq) && throw(ArgumentError("intermediate equation received"))
     (x, t, n) = flatten_differential(eq.lhs)
-    return DiffEq(x, t, n, eq.rhs)
+    (isa(t, Operation) && isa(t.op, Variable) && isempty(t.args)) ||
+        throw(ArgumentError("invalid independent variable $t"))
+    (isa(x, Operation) && isa(x.op, Variable) && length(x.args) == 1 && isequal(first(x.args), t)) ||
+        throw(ArgumentError("invalid dependent variable $x"))
+    return t.op, DiffEq(x.op, n, eq.rhs)
 end
 Base.:(==)(a::DiffEq, b::DiffEq) = isequal((a.x, a.t, a.n, a.rhs), (b.x, b.t, b.n, b.rhs))
-get_args(eq::DiffEq) = Expression[eq.x, eq.t, eq.rhs]
 
 struct DiffEqSystem <: AbstractSystem
     eqs::Vector{DiffEq}
@@ -35,32 +37,32 @@ struct DiffEqSystem <: AbstractSystem
     dvs::Vector{Variable}
     ps::Vector{Variable}
     jac::RefValue{Matrix{Expression}}
-    function DiffEqSystem(eqs, iv, dvs, ps)
+    function DiffEqSystem(eqs)
+        reformatted = to_diffeq.(eqs)
+
+        ivs = unique(r[1] for r ∈ reformatted)
+        length(ivs) == 1 || throw(ArgumentError("one independent variable currently supported"))
+        iv = first(ivs)
+
+        deqs = [r[2] for r ∈ reformatted]
+
+        dvs = [deq.x for deq ∈ deqs]
+        ps = filter(vars(deq.rhs for deq ∈ deqs)) do x
+            x.known & !isequal(x, iv)
+        end |> collect
+
         jac = RefValue(Matrix{Expression}(undef, 0, 0))
-        new(eqs, iv, dvs, ps, jac)
+
+        new(deqs, iv, dvs, ps, jac)
     end
-end
-
-function DiffEqSystem(eqs)
-    dvs, = extract_elements(eqs, [_is_dependent])
-    ivs = unique(vcat((dv.dependents for dv ∈ dvs)...))
-    length(ivs) == 1 || throw(ArgumentError("one independent variable currently supported"))
-    iv = first(ivs)
-    ps, = extract_elements(eqs, [_is_parameter(iv)])
-    DiffEqSystem(eqs, iv, dvs, ps)
-end
-
-function DiffEqSystem(eqs, iv)
-    dvs, ps = extract_elements(eqs, [_is_dependent, _is_parameter(iv)])
-    DiffEqSystem(eqs, iv, dvs, ps)
 end
 
 
 function calculate_jacobian(sys::DiffEqSystem)
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
-    rhs = [eq.rhs for eq in sys.eqs]
+    rhs = [eq.rhs for eq ∈ sys.eqs]
 
-    jac = expand_derivatives.(calculate_jacobian(rhs, sys.dvs))
+    jac = expand_derivatives.(calculate_jacobian(rhs, sys.dvs, sys.iv))
     sys.jac[] = jac  # cache Jacobian
     return jac
 end
@@ -70,16 +72,30 @@ function generate_jacobian(sys::DiffEqSystem; version::FunctionVersion = ArrayFu
     return build_function(jac, sys.dvs, sys.ps, (sys.iv.name,); version = version)
 end
 
+struct DiffEqToExpr
+    sys::DiffEqSystem
+end
+function (f::DiffEqToExpr)(O::Operation)
+    if isa(O.op, Variable)
+        isequal(O.op, f.sys.iv) && return O.op.name  # independent variable
+        O.op ∈ f.sys.dvs        && return O.op.name  # dependent variables
+        isempty(O.args)         && return O.op.name  # 0-ary parameters
+        return build_expr(:call, Any[O.op.name; f.(O.args)])
+    end
+    return build_expr(:call, Any[O.op; f.(O.args)])
+end
+(f::DiffEqToExpr)(x) = convert(Expr, x)
+
 function generate_function(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
-    rhss = [eq.rhs for eq ∈ sys.eqs]
-    return build_function(rhss, sys.dvs, sys.ps, (sys.iv.name,); version = version)
+    rhss = [deq.rhs for deq ∈ sys.eqs]
+    return build_function(rhss, sys.dvs, sys.ps, (sys.iv.name,), DiffEqToExpr(sys); version = version)
 end
 
 
 function generate_ode_iW(sys::DiffEqSystem, simplify=true; version::FunctionVersion = ArrayFunction)
     jac = calculate_jacobian(sys)
 
-    gam = Variable(:gam; known = true)
+    gam = Variable(:gam; known = true)()
 
     W = LinearAlgebra.I - gam*jac
     W = SMatrix{size(W,1),size(W,2)}(W)

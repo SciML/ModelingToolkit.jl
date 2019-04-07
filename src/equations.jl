@@ -11,11 +11,9 @@ Base.:~(lhs::Expression, rhs::Expression) = Equation(lhs, rhs)
 Base.:~(lhs::Expression, rhs::Number    ) = Equation(lhs, rhs)
 Base.:~(lhs::Number    , rhs::Expression) = Equation(lhs, rhs)
 
-
-_is_dependent(x::Variable) = !x.known && !isempty(x.dependents)
-_is_parameter(iv) = x -> x.known && !isequal(x, iv)
-_is_known(x::Variable) = x.known
-_is_unknown(x::Variable) = !x.known
+_is_parameter(iv) = (O::Operation) -> O.op.known && !isequal(O, iv)
+_is_known(O::Operation) = O.op.known
+_is_unknown(O::Operation) = !O.op.known
 
 function extract_elements(eqs, predicates)
     result = [Variable[] for p ∈ predicates]
@@ -32,15 +30,13 @@ end
 
 get_args(O::Operation) = O.args
 get_args(eq::Equation) = Expression[eq.lhs, eq.rhs]
-function vars!(vars, op)
-    for arg ∈ get_args(op)
+vars(exprs) = foldl(vars!, exprs; init = Set{Variable}())
+function vars!(vars, O)
+    isa(O, Operation) || return vars
+    for arg ∈ O.args
         if isa(arg, Operation)
+            isa(arg.op, Variable) && push!(vars, arg.op)
             vars!(vars, arg)
-        elseif isa(arg, Variable)
-            push!(vars, arg)
-            for dep ∈ arg.dependents
-                push!(vars, dep)
-            end
         end
     end
 

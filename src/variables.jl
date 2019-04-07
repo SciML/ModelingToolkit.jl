@@ -1,13 +1,12 @@
 export Variable, @variables, @parameters
 
 
-struct Variable <: Expression
+struct Variable <: Function
     name::Symbol
-    dependents::Vector{Variable}
     known::Bool
-    Variable(name, dependents = Variable[]; known = false) =
-        new(name, dependents, known)
+    Variable(name; known = false) = new(name, known)
 end
+(x::Variable)(args...) = Operation(x, collect(Expression, args))
 
 
 struct Constant <: Expression
@@ -30,11 +29,7 @@ Base.isequal(c::Constant, n::Number) = c.value == n
 Base.isequal(n::Number, c::Constant) = c.value == n
 Base.isequal(a::Constant, b::Constant) = a.value == b.value
 
-function Base.convert(::Type{Expr}, x::Variable)
-    x.known               || return x.name
-    isempty(x.dependents) && return x.name
-    return :($(x.name)($(convert.(Expr, x.dependents)...)))
-end
+Base.convert(::Type{Expr}, x::Variable) = x
 Base.convert(::Type{Expr}, c::Constant) = c.value
 
 Base.show(io::IO, x::Variable) = print(io, x.name)
@@ -56,15 +51,14 @@ function _parse_vars(macroname, known, x)
         @assert iscall || issym "@$macroname expects a tuple of expressions (`@$macroname x y z(t)`)"
 
         if iscall
-            dependents = :(Variable[$(_var.args[2:end]...)])
             var_name = _var.args[1]
+            expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known)($(_var.args[2:end]...)))
         else
-            dependents = Variable[]
             var_name = _var
+            expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known))
         end
 
         push!(var_names, var_name)
-        expr = :($var_name = $Variable($(Meta.quot(var_name)), $dependents; known = $known))
         push!(ex.args, expr)
     end
     push!(ex.args, build_expr(:tuple, var_names))
