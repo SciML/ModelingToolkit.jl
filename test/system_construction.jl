@@ -16,7 +16,15 @@ generate_function(de;version=ModelingToolkit.SArrayFunction)
 jac_expr = generate_jacobian(de)
 jac = calculate_jacobian(de)
 f = ODEFunction(de)
-ModelingToolkit.generate_ode_iW(de)
+fw, fwt = map(eval, ModelingToolkit.generate_factorized_W(de))
+du = zeros(3)
+u  = collect(1:3)
+p  = collect(4:6)
+f(du, u, p, 0.1)
+@test du == [4, 0, -16]
+FW = zeros(3, 3)
+fw(FW, u, p, 0.2, 0.1)
+fwt(FW, u, p, 0.2, 0.1)
 
 # Differential equation with automatic extraction of variables
 de2 = DiffEqSystem(eqs, t)

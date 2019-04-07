@@ -76,31 +76,29 @@ function generate_function(sys::DiffEqSystem; version::FunctionVersion = ArrayFu
 end
 
 
-function generate_ode_iW(sys::DiffEqSystem, simplify=true; version::FunctionVersion = ArrayFunction)
+function generate_factorized_W(sys::DiffEqSystem, simplify=true; version::FunctionVersion = ArrayFunction)
     jac = calculate_jacobian(sys)
 
     gam = Variable(:gam; known = true)
 
     W = LinearAlgebra.I - gam*jac
-    W = SMatrix{size(W,1),size(W,2)}(W)
-    iW = inv(W)
+    Wfact = lu(W, Val(false), check=false).factors
 
     if simplify
-        iW = simplify_constants.(iW)
+        Wfact = simplify_constants.(Wfact)
     end
 
-    W = inv(LinearAlgebra.I/gam - jac)
-    W = SMatrix{size(W,1),size(W,2)}(W)
-    iW_t = inv(W)
+    W_t = LinearAlgebra.I/gam - jac
+    Wfact_t = lu(W_t, Val(false), check=false).factors
     if simplify
-        iW_t = simplify_constants.(iW_t)
+        Wfact_t = simplify_constants.(Wfact_t)
     end
 
     vs, ps = sys.dvs, sys.ps
-    iW_func   = build_function(iW  , vs, ps, (:gam,:t); version = version)
-    iW_t_func = build_function(iW_t, vs, ps, (:gam,:t); version = version)
+    Wfact_func   = build_function(Wfact  , vs, ps, (:gam,:t); version = version)
+    Wfact_t_func = build_function(Wfact_t, vs, ps, (:gam,:t); version = version)
 
-    return (iW_func, iW_t_func)
+    return (Wfact_func, Wfact_t_func)
 end
 
 function DiffEqBase.ODEFunction(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
