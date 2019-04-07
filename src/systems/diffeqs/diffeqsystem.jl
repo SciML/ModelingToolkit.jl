@@ -86,9 +86,11 @@ function (f::DiffEqToExpr)(O::Operation)
 end
 (f::DiffEqToExpr)(x) = convert(Expr, x)
 
-function generate_function(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
+function generate_function(sys::DiffEqSystem, vs, ps; version::FunctionVersion = ArrayFunction)
     rhss = [deq.rhs for deq ∈ sys.eqs]
-    return build_function(rhss, sys.dvs, sys.ps, (sys.iv.name,), DiffEqToExpr(sys); version = version)
+    vs′ = [clean(v) for v ∈ vs]
+    ps′ = [clean(p) for p ∈ ps]
+    return build_function(rhss, vs′, ps′, (sys.iv.name,), DiffEqToExpr(sys); version = version)
 end
 
 

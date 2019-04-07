@@ -11,7 +11,6 @@ Base.:~(lhs::Expression, rhs::Expression) = Equation(lhs, rhs)
 Base.:~(lhs::Expression, rhs::Number    ) = Equation(lhs, rhs)
 Base.:~(lhs::Number    , rhs::Expression) = Equation(lhs, rhs)
 
-_is_parameter(iv) = (O::Operation) -> O.op.known && !isequal(O, iv)
 _is_known(O::Operation) = O.op.known
 _is_unknown(O::Operation) = !O.op.known
 
@@ -28,8 +27,6 @@ function extract_elements(eqs, predicates)
     return result
 end
 
-get_args(O::Operation) = O.args
-get_args(eq::Equation) = Expression[eq.lhs, eq.rhs]
 vars(exprs) = foldl(vars!, exprs; init = Set{Variable}())
 function vars!(vars, O)
     isa(O, Operation) || return vars
