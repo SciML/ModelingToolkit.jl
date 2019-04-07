@@ -8,31 +8,25 @@ struct Variable <: Function
 end
 (x::Variable)(args...) = Operation(x, collect(Expression, args))
 
+Base.isequal(x::Variable, y::Variable) = (x.name, x.known) == (y.name, y.known)
+Base.show(io::IO, x::Variable) = print(io, x.name)
+
 
 struct Constant <: Expression
     value::Number
 end
 Base.get(c::Constant) = c.value
 
-
 Base.iszero(ex::Expression) = isa(ex, Constant) && iszero(ex.value)
 Base.isone(ex::Expression)  = isa(ex, Constant) && isone(ex.value)
 
-
 # Variables use isequal for equality since == is an Operation
-Base.isequal(x::Variable, y::Variable) = (x.name, x.known) == (y.name, y.known)
-Base.isequal(::Variable, ::Number) = false
-Base.isequal(::Number, ::Variable) = false
-Base.isequal(::Variable, ::Constant) = false
-Base.isequal(::Constant, ::Variable) = false
 Base.isequal(c::Constant, n::Number) = c.value == n
 Base.isequal(n::Number, c::Constant) = c.value == n
 Base.isequal(a::Constant, b::Constant) = a.value == b.value
 
-Base.convert(::Type{Expr}, x::Variable) = x
 Base.convert(::Type{Expr}, c::Constant) = c.value
 
-Base.show(io::IO, x::Variable) = print(io, x.name)
 
 # Build variables more easily
 function _parse_vars(macroname, known, x)
