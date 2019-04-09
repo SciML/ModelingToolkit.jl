@@ -13,6 +13,12 @@ function test_diffeq_inference(name, de, iv, dvs, ps)
         @test Set([p.name  for p  ∈ de.ps ]) == Set(ps)
     end
 end
+function test_nlsys_inference(name, de, vs, ps)
+    @testset "NonlinearSystem construction: $name" begin
+        @test Set(vs) == Set(vs)
+        @test Set([p.name for p ∈ de.ps]) == Set(ps)
+    end
+end
 
 # Define a differential equation
 eqs = [D(x) ~ σ*(y-x),
@@ -96,21 +102,14 @@ jac = calculate_jacobian(de)
     f = ODEFunction(de)
 end
 
-@test_broken begin
 # Define a nonlinear system
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs,[x,y,z],[t,σ,ρ,β])
-ns2 = NonlinearSystem(eqs)
-for el in (:vs, :ps)
-    names2 = sort(collect(var.name for var in getfield(ns2,el)))
-    names = sort(collect(var.name for var in getfield(ns,el)))
-    @test names2 == names
-end
+ns = NonlinearSystem(eqs, [x,y,z])
+test_nlsys_inference("standard", ns, (x, y, z), (:σ, :ρ, :β))
 
 generate_function(ns, [x,y,z], [σ,ρ,β])
-end
 
 @derivatives D'~t
 @parameters A() B() C()
@@ -125,16 +124,15 @@ de = ODESystem(eqs)
     du ≈ [-1, -1/3]
 end
 
-@test_broken begin
 # Now nonlinear system with only variables
-@variables x y z
+@variables x() y() z()
 @parameters σ() ρ() β()
 
 # Define a nonlinear system
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
+ns = NonlinearSystem(eqs, [x,y,z])
 jac = calculate_jacobian(ns)
 @testset "nlsys jacobian" begin
     @test isequal(jac[1,1], σ * -1)
@@ -156,8 +154,7 @@ f = @eval eval(nlsys_func)
 eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
+ns = NonlinearSystem(eqs, [x,y,z])
 nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(ns)
 jac = generate_jacobian(ns)
-end

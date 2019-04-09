@@ -31,11 +31,10 @@ d2 = D(sin(t)*cos(t))
 @test isequal(expand_derivatives(d1), t*cos(t)+sin(t))
 @test isequal(expand_derivatives(d2), simplify_constants(cos(t)*cos(t)+sin(t)*(-1*sin(t))))
 
-@test_broken begin
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-sys = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
+sys = NonlinearSystem(eqs, [x,y,z])
 jac = calculate_jacobian(sys)
 @test isequal(jac[1,1], σ*-1)
 @test isequal(jac[1,2], σ)
@@ -46,7 +45,6 @@ jac = calculate_jacobian(sys)
 @test isequal(jac[3,1], y)
 @test isequal(jac[3,2], x)
 @test isequal(jac[3,3], -1*β)
-end
 
 # Variable dependence checking in differentiation
 @variables a(t) b(a)

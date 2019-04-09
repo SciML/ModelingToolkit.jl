@@ -88,7 +88,7 @@ derivatives are zero. We use (unknown) variables for our nonlinear system.
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs)
+ns = NonlinearSystem(eqs, [x,y,z])
 nlsys_func = generate_function(ns)
 ```
 
@@ -272,7 +272,7 @@ a = y - x
 eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
+ns = NonlinearSystem(eqs, [x,y,z])
 nlsys_func = generate_function(ns)
 ```
 
