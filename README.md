@@ -70,7 +70,7 @@ generate_function(de, [x,y,z], [σ,ρ,β])
 and get the generated function via:
 
 ```julia
-f = ODEFunction(de)
+f = ODEFunction(de, [x,y,z], [σ,ρ,β])
 ```
 
 ### Example: Nonlinear System
