@@ -28,7 +28,7 @@ and parameters. Therefore we label them as follows:
 using ModelingToolkit
 
 # Define some variables
-@parameters t σ ρ β
+@parameters t() σ() ρ() β()
 @variables x(t) y(t) z(t)
 @derivatives D'~t
 ```
@@ -80,22 +80,22 @@ state of the previous ODE. This is the nonlinear system defined by where the
 derivatives are zero. We use (unknown) variables for our nonlinear system.
 
 ```julia
-@variables x y z
-@parameters σ ρ β
+@variables x() y() z()
+@parameters σ() ρ() β()
 
 # Define a nonlinear system
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs, [x,y,z])
-nlsys_func = generate_function(ns, [x,y,z], [ρ,σ,β])
+nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β])
 ```
 
 which generates:
 
 ```julia
 :((##364, u, p)->begin
-          let (x, z, y, ρ, σ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
               ##364[1] = σ * (y - x)
               ##364[2] = x * (ρ - z) - y
               ##364[3] = x * y - β * z
