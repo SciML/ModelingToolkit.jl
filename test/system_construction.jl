@@ -73,22 +73,20 @@ ModelingToolkit.generate_ode_iW(de)
     end
 end
 
-@test_broken begin
 # Conversion to first-order ODEs #17
 @derivatives D3'''~t
 @derivatives D2''~t
 @variables u(t) u_tt(t) u_t(t) x_t(t)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
        D2(x) ~ D(x) + 2]
-de = ODESystem(eqs, t)
+de = ODESystem(eqs)
 de1 = ode_order_lowering(de)
 lowered_eqs = [D(u_tt) ~ 2u_tt + u_t + x_t + 1
                D(x_t)  ~ x_t + 2
                D(u_t)  ~ u_tt
                D(u)    ~ u_t
                D(x)    ~ x_t]
-@test de1.eqs == convert.(ModelingToolkit.DiffEq, lowered_eqs)
-end
+@test de1 == ODESystem(lowered_eqs)
 
 # Internal calculations
 a = y - x

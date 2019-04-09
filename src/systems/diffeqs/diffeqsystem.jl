@@ -29,7 +29,7 @@ function to_diffeq(eq::Equation)
         throw(ArgumentError("invalid dependent variable $x"))
     return t.op, DiffEq(x.op, n, eq.rhs)
 end
-Base.:(==)(a::DiffEq, b::DiffEq) = isequal((a.x, a.t, a.n, a.rhs), (b.x, b.t, b.n, b.rhs))
+Base.:(==)(a::DiffEq, b::DiffEq) = isequal((a.x, a.n, a.rhs), (b.x, b.n, b.rhs))
 
 struct ODESystem <: AbstractSystem
     eqs::Vector{DiffEq}
@@ -37,25 +37,45 @@ struct ODESystem <: AbstractSystem
     dvs::Vector{Variable}
     ps::Vector{Variable}
     jac::RefValue{Matrix{Expression}}
-    function ODESystem(eqs)
-        reformatted = to_diffeq.(eqs)
-
-        ivs = unique(r[1] for r ∈ reformatted)
-        length(ivs) == 1 || throw(ArgumentError("one independent variable currently supported"))
-        iv = first(ivs)
-
-        deqs = [r[2] for r ∈ reformatted]
-
-        dvs = [deq.x for deq ∈ deqs]
-        ps = filter(vars(deq.rhs for deq ∈ deqs)) do x
-            x.known & !isequal(x, iv)
-        end |> collect
-
-        jac = RefValue(Matrix{Expression}(undef, 0, 0))
-
-        new(deqs, iv, dvs, ps, jac)
-    end
 end
+
+function ODESystem(eqs)
+    reformatted = to_diffeq.(eqs)
+
+    ivs = unique(r[1] for r ∈ reformatted)
+    length(ivs) == 1 || throw(ArgumentError("one independent variable currently supported"))
+    iv = first(ivs)
+
+    deqs = [r[2] for r ∈ reformatted]
+
+    dvs = [deq.x for deq ∈ deqs]
+    ps = filter(vars(deq.rhs for deq ∈ deqs)) do x
+        x.known & !isequal(x, iv)
+    end |> collect
+
+    ODESystem(deqs, iv, dvs, ps)
+end
+function ODESystem(deqs, iv, dvs, ps)
+    jac = RefValue(Matrix{Expression}(undef, 0, 0))
+    ODESystem(deqs, iv, dvs, ps, jac)
+end
+
+function _eq_unordered(a, b)
+    length(a) === length(b) || return false
+    n = length(a)
+    idxs = Set(1:n)
+    for x ∈ a
+        idx = findfirst(isequal(x), b)
+        idx === nothing && return false
+        idx ∈ idxs      || return false
+        delete!(idxs, idx)
+    end
+    return true
+end
+Base.:(==)(sys1::ODESystem, sys2::ODESystem) =
+    _eq_unordered(sys1.eqs, sys2.eqs) && isequal(sys1.iv, sys2.iv) &&
+    _eq_unordered(sys1.dvs, sys2.dvs) && _eq_unordered(sys1.ps, sys2.ps)
+# NOTE: equality does not check cached Jacobian
 
 
 function calculate_jacobian(sys::ODESystem)
