@@ -79,6 +79,6 @@ macro derivatives(x...)
     esc(_differential_macro(x))
 end
 
-function calculate_jacobian(eqs, dvs, iv)
-    Expression[Differential(dv(iv()))(eq) for eq ∈ eqs, dv ∈ dvs]
+function calculate_jacobian(eqs, dvs)
+    Expression[Differential(dv)(eq) for eq ∈ eqs, dv ∈ dvs]
 end

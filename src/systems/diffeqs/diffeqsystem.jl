@@ -62,7 +62,10 @@ function calculate_jacobian(sys::ODESystem)
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
     rhs = [eq.rhs for eq ∈ sys.eqs]
 
-    jac = expand_derivatives.(calculate_jacobian(rhs, sys.dvs, sys.iv))
+    iv = sys.iv()
+    dvs = [dv(iv) for dv ∈ sys.dvs]
+
+    jac = expand_derivatives.(calculate_jacobian(rhs, dvs))
     sys.jac[] = jac  # cache Jacobian
     return jac
 end
