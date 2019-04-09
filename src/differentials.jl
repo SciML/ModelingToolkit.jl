@@ -4,27 +4,27 @@ export Differential, expand_derivatives, @derivatives
 struct Differential <: Function
     x::Expression
 end
+(D::Differential)(x) = Operation(D, Expression[x])
 
 Base.show(io::IO, D::Differential) = print(io, "(D'~", D.x, ")")
 Base.convert(::Type{Expr}, D::Differential) = D
 
-(D::Differential)(x::Operation) = Operation(D, Expression[x])
-function (D::Differential)(x::Variable)
-    D.x === x             && return Constant(1)
-    has_dependent(x, D.x) || return Constant(0)
-    return Operation(D, Expression[x])
-end
-(::Differential)(::Any) = Constant(0)
 Base.:(==)(D1::Differential, D2::Differential) = isequal(D1.x, D2.x)
 
 function expand_derivatives(O::Operation)
     @. O.args = expand_derivatives(O.args)
 
-    if O.op isa Differential
-        D = O.op
-        o = O.args[1]
-        isa(o, Operation) || return O
-        return simplify_constants(sum(i->derivative(o,i)*expand_derivatives(D(o.args[i])),1:length(o.args)))
+    if isa(O.op, Differential)
+        (D, o) = (O.op, O.args[1])
+
+        isequal(o, D.x)     && return Constant(1)
+        occursin(D.x, o)    || return Constant(0)
+        isa(o, Operation)   || return O
+        isa(o.op, Variable) && return O
+
+        return sum(1:length(o.args)) do i
+            derivative(o, i) * expand_derivatives(D(o.args[i]))
+        end |> simplify_constants
     end
 
     return O
@@ -80,6 +80,6 @@ macro derivatives(x...)
     esc(_differential_macro(x))
 end
 
-function calculate_jacobian(eqs,vars)
-    Expression[Differential(vars[j])(eqs[i]) for i in 1:length(eqs), j in 1:length(vars)]
+function calculate_jacobian(eqs, dvs)
+    Expression[Differential(dv)(eq) for eq ∈ eqs, dv ∈ dvs]
 end

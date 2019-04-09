@@ -43,11 +43,10 @@ eqs = [D(x) ~ σ*(y-x),
 
 Each operation builds an `Operation` type, and thus `eqs` is an array of
 `Operation` and `Variable`s. This holds a tree of the full system that can be
-analyzed by other programs. We can turn this into a `DiffEqSystem` via:
+analyzed by other programs. We can turn this into a `ODESystem` via:
 
 ```julia
-de = DiffEqSystem(eqs,t,[x,y,z],[σ,ρ,β])
-de = DiffEqSystem(eqs)
+de = ODESystem(eqs)
 ```
 
 where we tell it the variable types and ordering in the first version, or let it
@@ -56,7 +55,7 @@ This can then generate the function. For example, we can see the
 generated code via:
 
 ```julia
-generate_function(de)
+generate_function(de, [x,y,z], [σ,ρ,β])
 
 ## Which returns:
 :((##363, u, p, t)->begin
@@ -71,7 +70,7 @@ generate_function(de)
 and get the generated function via:
 
 ```julia
-f = ODEFunction(de)
+f = ODEFunction(de, [x,y,z], [σ,ρ,β])
 ```
 
 ### Example: Nonlinear System
@@ -88,8 +87,8 @@ derivatives are zero. We use (unknown) variables for our nonlinear system.
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs)
-nlsys_func = generate_function(ns)
+ns = NonlinearSystem(eqs, [x,y,z])
+nlsys_func = generate_function(ns, [x,y,z], [ρ,σ,β])
 ```
 
 which generates:
@@ -130,7 +129,14 @@ In this section we define the core pieces of the IR and what they mean.
 
 ### Variables
 
-The most fundamental part of the IR is the `Variable`. The `Variable` is the
+The most fundamental part of the IR is the `Variable`. In order to mirror the
+intention of solving for variables and representing function-like parameters,
+we treat each instance of `Variable` as a function which is called on its
+arguments using the natural syntax. Rather than having additional mechanisms
+for handling constant variables and parameters, we simply represent them as
+constant functions.
+
+The `Variable` is the
 context-aware single variable of the IR. Its fields are described as follows:
 
 - `name`: the name of the `Variable`. Note that this is not necessarily
@@ -138,9 +144,34 @@ context-aware single variable of the IR. Its fields are described as follows:
   the core identifier of the `Variable` in the sense of equality.
 - `known`: the main denotation of context, storing whether or not the value of
   the variable is known.
-- `dependents`: the vector of variables on which the current variable
-  is dependent. For example, `u(t,x)` has dependents `[t,x]`. Derivatives thus
-  require this information in order to simplify down.
+
+For example, the following code defines an independent variable `t`, a parameter
+`α`, a function parameter `σ`, a variable `x` which depends on `t`, a variable
+`y` with no dependents, and a variable `z` which depends on `t`, `α`, and `x(t)`.
+
+```julia
+t = Variable(:t; known = true)()  # independent variables are treated as known
+α = Variable(:α; known = true)()  # parameters are known
+σ = Variable(:σ; known = true)    # left uncalled, since it is used as a function
+w = Variable(:w; known = false)   # unknown, left uncalled
+x = Variable(:x; known = false)(t)  # unknown, depends on `t`
+y = Variable(:y; known = false)()   # unknown, no dependents
+z = Variable(:z; known = false)(t, α, x)  # unknown, multiple arguments
+
+expr = x + y^α + σ(3) * (z - t) - w(t - 1)
+```
+
+We can rewrite this more concisely using macros. Note the difference between
+including and excluding empty parentheses. When in call format, variables are
+aliased to the given call, allowing implicit use of dependents for convenience.
+
+```julia
+@parameters t() α() σ
+@variables w x(t) y() z(t, α, x)
+
+expr = x + y^α + σ(3) * (z - t) - w(t - 1)
+```
+
 
 ### Constants
 
@@ -243,7 +274,7 @@ is accessible via a function-based interface. This means that all macros are
 syntactic sugar in some form. For example, the variable construction:
 
 ```julia
-@parameters t σ ρ β
+@parameters t() σ ρ() β()
 @variables x(t) y(t) z(t)
 @derivatives D'~t
 ```
@@ -251,14 +282,14 @@ syntactic sugar in some form. For example, the variable construction:
 is syntactic sugar for:
 
 ```julia
-t = Variable(:t; known = true)
-x = Variable(:x, [t])
-y = Variable(:y, [t])
-z = Variable(:z, [t])
-D = Differential(t)
+t = Variable(:t; known = true)()
 σ = Variable(:σ; known = true)
-ρ = Variable(:ρ; known = true)
-β = Variable(:β; known = true)
+ρ = Variable(:ρ; known = true)()
+β = Variable(:β; known = true)()
+x = Variable(:x)(t)
+y = Variable(:y)(t)
+z = Variable(:z)(t)
+D = Differential(t)
 ```
 
 ### Intermediate Calculations
@@ -266,14 +297,14 @@ D = Differential(t)
 The system building functions can handle intermediate calculations. For example,
 
 ```julia
-@variables x y z
-@parameters σ ρ β
+@variables x() y() z()
+@parameters σ() ρ() β()
 a = y - x
 eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
-nlsys_func = generate_function(ns)
+ns = NonlinearSystem(eqs, [x,y,z])
+nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β])
 ```
 
 expands to:

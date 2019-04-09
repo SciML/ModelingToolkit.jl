@@ -3,10 +3,8 @@ struct Operation <: Expression
     args::Vector{Expression}
 end
 
-# Recursive ==
-function Base.isequal(x::Operation,y::Operation)
+Base.isequal(x::Operation,y::Operation) =
     x.op == y.op && length(x.args) == length(y.args) && all(isequal.(x.args,y.args))
-end
 Base.isequal(::Operation, ::Number   ) = false
 Base.isequal(::Number   , ::Operation) = false
 Base.isequal(::Operation, ::Variable ) = false

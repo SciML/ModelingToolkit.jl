@@ -30,7 +30,7 @@ function flatten_expr!(x)
     x
 end
 
-function build_function(rhss, vs, ps, args = (); version::FunctionVersion)
+function build_function(rhss, vs, ps, args = (), conv = rhs -> convert(Expr, rhs); version::FunctionVersion)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(vs)]
     param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(ps)]
     (ls, rs) = zip(var_pairs..., param_pairs...)
@@ -39,11 +39,11 @@ function build_function(rhss, vs, ps, args = (); version::FunctionVersion)
 
     if version === ArrayFunction
         X = gensym()
-        sys_exprs = [:($X[$i] = $(convert(Expr, rhs))) for (i, rhs) ∈ enumerate(rhss)]
+        sys_exprs = [:($X[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
         let_expr = Expr(:let, var_eqs, build_expr(:block, sys_exprs))
         :(($X,u,p,$(args...)) -> $let_expr)
     elseif version === SArrayFunction
-        sys_expr = build_expr(:tuple, [convert(Expr, rhs) for rhs ∈ rhss])
+        sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
         let_expr = Expr(:let, var_eqs, sys_expr)
         :((u,p,$(args...)) -> begin
             X = $let_expr
@@ -63,6 +63,23 @@ is_operation(::Any) = false
 is_derivative(O::Operation) = isa(O.op, Differential)
 is_derivative(::Any) = false
 
-has_dependent(t::Variable) = Base.Fix2(has_dependent, t)
-has_dependent(x::Variable, t::Variable) =
-    any(isequal(t), x.dependents) || any(has_dependent(t), x.dependents)
+Base.occursin(t::Expression) = Base.Fix1(occursin, t)
+Base.occursin(t::Expression, x::Operation ) = isequal(x, t) || any(occursin(t), x.args)
+Base.occursin(t::Expression, x::Expression) = isequal(x, t)
+
+clean(x::Variable) = x
+clean(O::Operation) = isa(O.op, Variable) ? O.op : throw(ArgumentError("invalid variable: $(O.op)"))
+
+
+vars(exprs) = foldl(vars!, exprs; init = Set{Variable}())
+function vars!(vars, O)
+    isa(O, Operation) || return vars
+    for arg ∈ O.args
+        if isa(arg, Operation)
+            isa(arg.op, Variable) && push!(vars, arg.op)
+            vars!(vars, arg)
+        end
+    end
+
+    return vars
+end

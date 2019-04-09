@@ -1,4 +1,4 @@
-export DiffEqSystem, ODEFunction
+export ODESystem, ODEFunction
 
 
 using Base: RefValue
@@ -16,70 +16,115 @@ end
 
 
 struct DiffEq  # dⁿx/dtⁿ = rhs
-    x::Expression
-    t::Variable
+    x::Variable
     n::Int
     rhs::Expression
 end
-function Base.convert(::Type{DiffEq}, eq::Equation)
+function to_diffeq(eq::Equation)
     isintermediate(eq) && throw(ArgumentError("intermediate equation received"))
     (x, t, n) = flatten_differential(eq.lhs)
-    return DiffEq(x, t, n, eq.rhs)
+    (isa(t, Operation) && isa(t.op, Variable) && isempty(t.args)) ||
+        throw(ArgumentError("invalid independent variable $t"))
+    (isa(x, Operation) && isa(x.op, Variable) && length(x.args) == 1 && isequal(first(x.args), t)) ||
+        throw(ArgumentError("invalid dependent variable $x"))
+    return t.op, DiffEq(x.op, n, eq.rhs)
 end
-Base.:(==)(a::DiffEq, b::DiffEq) = isequal((a.x, a.t, a.n, a.rhs), (b.x, b.t, b.n, b.rhs))
-get_args(eq::DiffEq) = Expression[eq.x, eq.t, eq.rhs]
+Base.:(==)(a::DiffEq, b::DiffEq) = isequal((a.x, a.n, a.rhs), (b.x, b.n, b.rhs))
 
-struct DiffEqSystem <: AbstractSystem
+struct ODESystem <: AbstractSystem
     eqs::Vector{DiffEq}
     iv::Variable
     dvs::Vector{Variable}
     ps::Vector{Variable}
     jac::RefValue{Matrix{Expression}}
-    function DiffEqSystem(eqs, iv, dvs, ps)
-        jac = RefValue(Matrix{Expression}(undef, 0, 0))
-        new(eqs, iv, dvs, ps, jac)
-    end
 end
 
-function DiffEqSystem(eqs)
-    dvs, = extract_elements(eqs, [_is_dependent])
-    ivs = unique(vcat((dv.dependents for dv ∈ dvs)...))
+function ODESystem(eqs)
+    reformatted = to_diffeq.(eqs)
+
+    ivs = unique(r[1] for r ∈ reformatted)
     length(ivs) == 1 || throw(ArgumentError("one independent variable currently supported"))
     iv = first(ivs)
-    ps, = extract_elements(eqs, [_is_parameter(iv)])
-    DiffEqSystem(eqs, iv, dvs, ps)
+
+    deqs = [r[2] for r ∈ reformatted]
+
+    dvs = [deq.x for deq ∈ deqs]
+    ps = filter(vars(deq.rhs for deq ∈ deqs)) do x
+        x.known & !isequal(x, iv)
+    end |> collect
+
+    ODESystem(deqs, iv, dvs, ps)
+end
+function ODESystem(deqs, iv, dvs, ps)
+    jac = RefValue(Matrix{Expression}(undef, 0, 0))
+    ODESystem(deqs, iv, dvs, ps, jac)
 end
 
-function DiffEqSystem(eqs, iv)
-    dvs, ps = extract_elements(eqs, [_is_dependent, _is_parameter(iv)])
-    DiffEqSystem(eqs, iv, dvs, ps)
+function _eq_unordered(a, b)
+    length(a) === length(b) || return false
+    n = length(a)
+    idxs = Set(1:n)
+    for x ∈ a
+        idx = findfirst(isequal(x), b)
+        idx === nothing && return false
+        idx ∈ idxs      || return false
+        delete!(idxs, idx)
+    end
+    return true
 end
+Base.:(==)(sys1::ODESystem, sys2::ODESystem) =
+    _eq_unordered(sys1.eqs, sys2.eqs) && isequal(sys1.iv, sys2.iv) &&
+    _eq_unordered(sys1.dvs, sys2.dvs) && _eq_unordered(sys1.ps, sys2.ps)
+# NOTE: equality does not check cached Jacobian
+
+independent_variables(sys::ODESystem) = Set{Variable}([sys.iv])
+dependent_variables(sys::ODESystem) = Set{Variable}(sys.dvs)
+parameters(sys::ODESystem) = Set{Variable}(sys.ps)
 
 
-function calculate_jacobian(sys::DiffEqSystem)
+function calculate_jacobian(sys::ODESystem)
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
-    rhs = [eq.rhs for eq in sys.eqs]
+    rhs = [eq.rhs for eq ∈ sys.eqs]
 
-    jac = expand_derivatives.(calculate_jacobian(rhs, sys.dvs))
+    iv = sys.iv()
+    dvs = [dv(iv) for dv ∈ sys.dvs]
+
+    jac = expand_derivatives.(calculate_jacobian(rhs, dvs))
     sys.jac[] = jac  # cache Jacobian
     return jac
 end
 
-function generate_jacobian(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
+function generate_jacobian(sys::ODESystem; version::FunctionVersion = ArrayFunction)
     jac = calculate_jacobian(sys)
     return build_function(jac, sys.dvs, sys.ps, (sys.iv.name,); version = version)
 end
 
-function generate_function(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
-    rhss = [eq.rhs for eq ∈ sys.eqs]
-    return build_function(rhss, sys.dvs, sys.ps, (sys.iv.name,); version = version)
+struct ODEToExpr
+    sys::ODESystem
+end
+function (f::ODEToExpr)(O::Operation)
+    if isa(O.op, Variable)
+        isequal(O.op, f.sys.iv) && return O.op.name  # independent variable
+        O.op ∈ f.sys.dvs        && return O.op.name  # dependent variables
+        isempty(O.args)         && return O.op.name  # 0-ary parameters
+        return build_expr(:call, Any[O.op.name; f.(O.args)])
+    end
+    return build_expr(:call, Any[O.op; f.(O.args)])
+end
+(f::ODEToExpr)(x) = convert(Expr, x)
+
+function generate_function(sys::ODESystem, dvs, ps; version::FunctionVersion = ArrayFunction)
+    rhss = [deq.rhs for deq ∈ sys.eqs]
+    dvs′ = [clean(dv) for dv ∈ dvs]
+    ps′ = [clean(p) for p ∈ ps]
+    return build_function(rhss, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys); version = version)
 end
 
 
-function generate_factorized_W(sys::DiffEqSystem, simplify=true; version::FunctionVersion = ArrayFunction)
+function generate_factorized_W(sys::ODESystem, simplify=true; version::FunctionVersion = ArrayFunction)
     jac = calculate_jacobian(sys)
 
-    gam = Variable(:gam; known = true)
+    gam = Variable(:gam; known = true)()
 
     W = LinearAlgebra.I - gam*jac
     Wfact = lu(W, Val(false), check=false).factors
@@ -95,14 +140,14 @@ function generate_factorized_W(sys::DiffEqSystem, simplify=true; version::Functi
     end
 
     vs, ps = sys.dvs, sys.ps
-    Wfact_func   = build_function(Wfact  , vs, ps, (:gam,:t); version = version)
-    Wfact_t_func = build_function(Wfact_t, vs, ps, (:gam,:t); version = version)
+    Wfact_func   = build_function(Wfact  , vs, ps, (:gam,:t), ODEToExpr(sys); version = version)
+    Wfact_t_func = build_function(Wfact_t, vs, ps, (:gam,:t), ODEToExpr(sys); version = version)
 
     return (Wfact_func, Wfact_t_func)
 end
 
-function DiffEqBase.ODEFunction(sys::DiffEqSystem; version::FunctionVersion = ArrayFunction)
-    expr = generate_function(sys; version = version)
+function DiffEqBase.ODEFunction(sys::ODESystem, dvs, ps; version::FunctionVersion = ArrayFunction)
+    expr = generate_function(sys, dvs, ps; version = version)
     if version === ArrayFunction
         ODEFunction{true}(eval(expr))
     elseif version === SArrayFunction

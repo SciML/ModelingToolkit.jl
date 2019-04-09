@@ -9,18 +9,32 @@ function Base.convert(::Type{NLEq}, eq::Equation)
     return NLEq(eq.rhs)
 end
 Base.:(==)(a::NLEq, b::NLEq) = a.rhs == b.rhs
-get_args(eq::NLEq) = Expression[eq.rhs]
 
 struct NonlinearSystem <: AbstractSystem
     eqs::Vector{NLEq}
-    vs::Vector{Variable}
+    vs::Vector{Expression}
     ps::Vector{Variable}
+    function NonlinearSystem(eqs, vs)
+        rhss = [eq.rhs for eq ∈ eqs]
+        ps = reduce(∪, map(_find_params(vs), rhss); init = vnil())
+        new(eqs, vs, collect(ps))
+    end
 end
 
-function NonlinearSystem(eqs)
-    vs, ps = extract_elements(eqs, [_is_unknown, _is_known])
-    NonlinearSystem(eqs, vs, ps)
+vnil() = Set{Variable}()
+_find_params(vs) = Base.Fix2(_find_params, vs)
+function _find_params(O, vs)
+    isa(O, Operation) || return vnil()
+    any(isequal(O), vs) && return vnil()
+    ps = reduce(∪, map(_find_params(vs), O.args); init = vnil())
+    isa(O.op, Variable) && push!(ps, O.op)
+    return ps
 end
+
+
+independent_variables(sys::NonlinearSystem) = Set{Variable}()
+dependent_variables(sys::NonlinearSystem) = Set{Expression}(sys.vs)
+parameters(sys::NonlinearSystem) = Set{Variable}(sys.ps)
 
 
 function calculate_jacobian(sys::NonlinearSystem)
@@ -31,10 +45,12 @@ end
 
 function generate_jacobian(sys::NonlinearSystem; version::FunctionVersion = ArrayFunction)
     jac = calculate_jacobian(sys)
-    return build_function(jac, sys.vs, sys.ps; version = version)
+    return build_function(jac, clean.(sys.vs), sys.ps; version = version)
 end
 
-function generate_function(sys::NonlinearSystem; version::FunctionVersion = ArrayFunction)
+function generate_function(sys::NonlinearSystem, vs, ps; version::FunctionVersion = ArrayFunction)
     rhss = [eq.rhs for eq ∈ sys.eqs]
-    return build_function(rhss, sys.vs, sys.ps; version = version)
+    vs′ = [clean(v) for v ∈ vs]
+    ps′ = [clean(p) for p ∈ ps]
+    return build_function(rhss, vs′, ps′; version = version)
 end

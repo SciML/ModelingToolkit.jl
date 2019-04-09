@@ -2,9 +2,9 @@ using ModelingToolkit
 using Test
 
 # Derivatives
-@parameters t σ ρ β
+@parameters t() σ() ρ() β()
 @variables x(t) y(t) z(t)
-@derivatives D'~t D2''~t
+@derivatives D'~t D2''~t Dx'~x
 
 @test @macroexpand(@derivatives D'~t D2''~t) == @macroexpand(@derivatives (D'~t), (D2''~t))
 
@@ -36,7 +36,7 @@ d2 = D(sin(t)*cos(t))
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-sys = NonlinearSystem(eqs,[x,y,z],[σ,ρ,β])
+sys = NonlinearSystem(eqs, [x,y,z])
 jac = calculate_jacobian(sys)
 @test isequal(jac[1,1], σ*-1)
 @test isequal(jac[1,2], σ)
@@ -51,9 +51,12 @@ jac = calculate_jacobian(sys)
 # Variable dependence checking in differentiation
 @variables a(t) b(a)
 @test !isequal(D(b), 0)
+@test isequal(expand_derivatives(D(t)), 1)
+@test isequal(expand_derivatives(Dx(x)), 1)
 
 @test isequal(expand_derivatives(D(x * y)), simplify_constants(y*D(x) + x*D(y)))
 @test_broken isequal(expand_derivatives(D(x * y)), simplify_constants(D(x)*y + x*D(y)))
 
 @test isequal(expand_derivatives(D(2t)), 2)
 @test isequal(expand_derivatives(D(2x)), 2D(x))
+@test_broken isequal(expand_derivatives(D(x^2)), simplify_constants(2 * x * D(x)))
