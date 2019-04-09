@@ -113,11 +113,11 @@ function (f::DiffEqToExpr)(O::Operation)
 end
 (f::DiffEqToExpr)(x) = convert(Expr, x)
 
-function generate_function(sys::ODESystem, vs, ps; version::FunctionVersion = ArrayFunction)
+function generate_function(sys::ODESystem, dvs, ps; version::FunctionVersion = ArrayFunction)
     rhss = [deq.rhs for deq ∈ sys.eqs]
-    vs′ = [clean(v) for v ∈ vs]
+    dvs′ = [clean(dv) for dv ∈ dvs]
     ps′ = [clean(p) for p ∈ ps]
-    return build_function(rhss, vs′, ps′, (sys.iv.name,), DiffEqToExpr(sys); version = version)
+    return build_function(rhss, dvs′, ps′, (sys.iv.name,), DiffEqToExpr(sys); version = version)
 end
 
 
@@ -148,8 +148,8 @@ function generate_ode_iW(sys::ODESystem, simplify=true; version::FunctionVersion
     return (iW_func, iW_t_func)
 end
 
-function DiffEqBase.ODEFunction(sys::ODESystem; version::FunctionVersion = ArrayFunction)
-    expr = generate_function(sys; version = version)
+function DiffEqBase.ODEFunction(sys::ODESystem, dvs, ps; version::FunctionVersion = ArrayFunction)
+    expr = generate_function(sys, dvs, ps; version = version)
     if version === ArrayFunction
         ODEFunction{true}(eval(expr))
     elseif version === SArrayFunction

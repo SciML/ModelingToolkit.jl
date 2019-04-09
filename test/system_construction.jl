@@ -35,9 +35,7 @@ generate_function(de, [x,y,z], [σ,ρ,β])
 generate_function(de, [x,y,z], [σ,ρ,β]; version=ModelingToolkit.SArrayFunction)
 jac_expr = generate_jacobian(de)
 jac = calculate_jacobian(de)
-@test_broken begin
-    f = ODEFunction(de)
-end
+f = ODEFunction(de, [x,y,z], [σ,ρ,β])
 ModelingToolkit.generate_ode_iW(de)
 
 @testset "time-varying parameters" begin
@@ -101,9 +99,7 @@ eqs = [D(x) ~ σ*a,
 de = ODESystem(eqs)
 generate_function(de, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(de)
-@test_broken begin
-    f = ODEFunction(de)
-end
+f = ODEFunction(de, [x,y,z], [σ,ρ,β])
 
 # Define a nonlinear system
 eqs = [0 ~ σ*(y-x),
