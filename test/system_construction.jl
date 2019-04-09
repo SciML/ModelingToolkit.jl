@@ -119,8 +119,12 @@ eqs = [0 ~ σ*(y-x),
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs, [x,y,z])
 test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β))
-
-generate_function(ns, [x,y,z], [σ,ρ,β])
+@test begin
+    f = eval(generate_function(ns, [x,y,z], [σ,ρ,β]))
+    du = [0.0, 0.0, 0.0]
+    f(du, [1,2,3], [1,2,3])
+    du ≈ [1, -3, -7]
+end
 
 @derivatives D'~t
 @parameters A() B() C()
