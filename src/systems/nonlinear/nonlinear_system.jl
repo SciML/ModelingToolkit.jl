@@ -45,12 +45,26 @@ end
 
 function generate_jacobian(sys::NonlinearSystem; version::FunctionVersion = ArrayFunction)
     jac = calculate_jacobian(sys)
-    return build_function(jac, clean.(sys.vs), sys.ps; version = version)
+    return build_function(jac, clean.(sys.vs), sys.ps, (), NLSysToExpr(sys); version = version)
 end
+
+struct NLSysToExpr
+    sys::NonlinearSystem
+end
+function (f::NLSysToExpr)(O::Operation)
+    any(isequal(O), f.sys.vs) && return O.op.name  # variables
+    if isa(O.op, Variable)
+        isempty(O.args) && return O.op.name  # 0-ary parameters
+        return build_expr(:call, Any[O.op.name; f.(O.args)])
+    end
+    return build_expr(:call, Any[O.op; f.(O.args)])
+end
+(f::NLSysToExpr)(x) = convert(Expr, x)
+
 
 function generate_function(sys::NonlinearSystem, vs, ps; version::FunctionVersion = ArrayFunction)
     rhss = [eq.rhs for eq ∈ sys.eqs]
     vs′ = [clean(v) for v ∈ vs]
     ps′ = [clean(p) for p ∈ ps]
-    return build_function(rhss, vs′, ps′; version = version)
+    return build_function(rhss, vs′, ps′, (), NLSysToExpr(sys); version = version)
 end

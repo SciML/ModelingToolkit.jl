@@ -94,11 +94,6 @@ function calculate_jacobian(sys::ODESystem)
     return jac
 end
 
-function generate_jacobian(sys::ODESystem; version::FunctionVersion = ArrayFunction)
-    jac = calculate_jacobian(sys)
-    return build_function(jac, sys.dvs, sys.ps, (sys.iv.name,); version = version)
-end
-
 struct ODEToExpr
     sys::ODESystem
 end
@@ -112,6 +107,11 @@ function (f::ODEToExpr)(O::Operation)
     return build_expr(:call, Any[O.op; f.(O.args)])
 end
 (f::ODEToExpr)(x) = convert(Expr, x)
+
+function generate_jacobian(sys::ODESystem; version::FunctionVersion = ArrayFunction)
+    jac = calculate_jacobian(sys)
+    return build_function(jac, sys.dvs, sys.ps, (sys.iv.name,), ODEToExpr(sys); version = version)
+end
 
 function generate_function(sys::ODESystem, dvs, ps; version::FunctionVersion = ArrayFunction)
     rhss = [deq.rhs for deq ∈ sys.eqs]
