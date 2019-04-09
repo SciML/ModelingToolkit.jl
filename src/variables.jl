@@ -38,11 +38,12 @@ function _parse_vars(macroname, known, x)
     #     y
     #     z
     # end
+    x = x isa Tuple && first(x) isa Expr && first(x).head == :tuple ? first(x).args : x # tuple handling
     x = flatten_expr!(x)
     for _var in x
         iscall = isa(_var, Expr) && _var.head == :call
         issym    = _var isa Symbol
-        @assert iscall || issym "@$macroname expects a tuple of expressions (`@$macroname x y z(t)`)"
+        @assert iscall || issym "@$macroname expects a tuple of expressions or an expression of a tuple (`@$macroname x y z(t)` or `@$macroname x, y, z(t)`)"
 
         if iscall
             var_name = _var.args[1]
@@ -59,8 +60,8 @@ function _parse_vars(macroname, known, x)
     return ex
 end
 macro variables(xs...)
-    esc(_parse_vars(:Variable, false, xs))
+    esc(_parse_vars(:variables, false, xs))
 end
 macro parameters(xs...)
-    esc(_parse_vars(:Param, true, xs))
+    esc(_parse_vars(:parameters, true, xs))
 end

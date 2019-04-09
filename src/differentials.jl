@@ -61,9 +61,10 @@ _repeat_apply(f, n) = n == 1 ? f : f ∘ _repeat_apply(f, n-1)
 function _differential_macro(x)
     ex = Expr(:block)
     lhss = Symbol[]
+    x = x isa Tuple && first(x).head == :tuple ? first(x).args : x # tuple handling
     x = flatten_expr!(x)
     for di in x
-        @assert di isa Expr && di.args[1] == :~ "@derivatives expects a form that looks like `@derivatives D''~t E'~t`"
+        @assert di isa Expr && di.args[1] == :~ "@derivatives expects a form that looks like `@derivatives D''~t E'~t` or `@derivatives (D''~t), (E'~t)`"
         lhs = di.args[2]
         rhs = di.args[3]
         order, lhs = count_order(lhs)

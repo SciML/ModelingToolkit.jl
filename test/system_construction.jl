@@ -36,7 +36,15 @@ generate_function(de, [x,y,z], [σ,ρ,β]; version=ModelingToolkit.SArrayFunctio
 jac_expr = generate_jacobian(de)
 jac = calculate_jacobian(de)
 f = ODEFunction(de, [x,y,z], [σ,ρ,β])
-ModelingToolkit.generate_ode_iW(de)
+fw, fwt = map(eval, ModelingToolkit.generate_factorized_W(de))
+du = zeros(3)
+u  = collect(1:3)
+p  = collect(4:6)
+f(du, u, p, 0.1)
+@test du == [4, 0, -16]
+FW = zeros(3, 3)
+fw(FW, u, p, 0.2, 0.1)
+fwt(FW, u, p, 0.2, 0.1)
 
 @testset "time-varying parameters" begin
     @parameters σ′(t-1)
@@ -90,6 +98,10 @@ lowered_eqs = [D(u_tt) ~ 2u_tt + u_t + x_t + 1
                D(u)    ~ u_t
                D(x)    ~ x_t]
 @test de1 == ODESystem(lowered_eqs)
+test_diffeq_inference("first-order transform", de1, t, [u_tt, x_t, u_t, u, x], [])
+du = zeros(5)
+ODEFunction(de1, [u_tt, x_t, u_t, u, x], [])(du, ones(5), nothing, 0.1)
+@test du == [5.0, 3.0, 1.0, 1.0, 1.0]
 
 # Internal calculations
 a = y - x
