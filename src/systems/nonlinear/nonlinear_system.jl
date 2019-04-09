@@ -32,6 +32,11 @@ function _find_params(O, vs)
 end
 
 
+independent_variables(sys::NonlinearSystem) = Set{Variable}()
+dependent_variables(sys::NonlinearSystem) = Set{Expression}(sys.vs)
+parameters(sys::NonlinearSystem) = Set{Variable}(sys.ps)
+
+
 function calculate_jacobian(sys::NonlinearSystem)
     rhs = [eq.rhs for eq in sys.eqs]
     jac = expand_derivatives.(calculate_jacobian(rhs, sys.vs))

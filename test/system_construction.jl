@@ -6,17 +6,22 @@ using Test
 @variables x(t) y(t) z(t)
 @derivatives D'~t
 
-function test_diffeq_inference(name, de, iv, dvs, ps)
+function _clean(O::Operation)
+    @assert isa(O.op, Variable)
+    return O.op
+end
+_clean(x::Variable) = x
+function test_diffeq_inference(name, sys, iv, dvs, ps)
     @testset "ODESystem construction: $name" begin
-        @test de.iv.name == :t
-        @test Set([dv.name for dv ∈ de.dvs]) == Set(dvs)
-        @test Set([p.name  for p  ∈ de.ps ]) == Set(ps)
+        @test independent_variables(sys) == Set([_clean(iv)])
+        @test dependent_variables(sys)   == Set(_clean.(dvs))
+        @test parameters(sys)            == Set(_clean.(ps))
     end
 end
-function test_nlsys_inference(name, de, vs, ps)
+function test_nlsys_inference(name, sys, vs, ps)
     @testset "NonlinearSystem construction: $name" begin
-        @test Set(vs) == Set(vs)
-        @test Set([p.name for p ∈ de.ps]) == Set(ps)
+        @test dependent_variables(sys) == Set(vs)
+        @test parameters(sys)          == Set(_clean.(ps))
     end
 end
 
@@ -25,7 +30,7 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 de = ODESystem(eqs)
-test_diffeq_inference("standard", de, :t, (:x, :y, :z), (:σ, :ρ, :β))
+test_diffeq_inference("standard", de, t, (x, y, z), (σ, ρ, β))
 generate_function(de, [x,y,z], [σ,ρ,β])
 generate_function(de, [x,y,z], [σ,ρ,β]; version=ModelingToolkit.SArrayFunction)
 jac_expr = generate_jacobian(de)
@@ -41,7 +46,7 @@ ModelingToolkit.generate_ode_iW(de)
            D(y) ~ x*(ρ-z)-y,
            D(z) ~ x*y - β*z]
     de = ODESystem(eqs)
-    test_diffeq_inference("global iv-varying", de, :t, (:x, :y, :z), (:σ′, :ρ, :β))
+    test_diffeq_inference("global iv-varying", de, t, (x, y, z), (σ′, ρ, β))
     @test begin
         f = eval(generate_function(de, [x,y,z], [σ′,ρ,β]))
         du = [0.0,0.0,0.0]
@@ -54,7 +59,7 @@ ModelingToolkit.generate_ode_iW(de)
            D(y) ~ x*(ρ-z)-y,
            D(z) ~ x*y - β*z]
     de = ODESystem(eqs)
-    test_diffeq_inference("single internal iv-varying", de, :t, (:x, :y, :z), (:σ, :ρ, :β))
+    test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ, ρ, β))
     @test begin
         f = eval(generate_function(de, [x,y,z], [σ,ρ,β]))
         du = [0.0,0.0,0.0]
@@ -64,7 +69,7 @@ ModelingToolkit.generate_ode_iW(de)
 
     eqs = [D(x) ~ x + 10σ(t-1) + 100σ(t-2) + 1000σ(t^2)]
     de = ODESystem(eqs)
-    test_diffeq_inference("many internal iv-varying", de, :t, (:x,), (:σ,))
+    test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ,))
     @test begin
         f = eval(generate_function(de, [x], [σ]))
         du = [0.0]
@@ -105,7 +110,7 @@ eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs, [x,y,z])
-test_nlsys_inference("standard", ns, (x, y, z), (:σ, :ρ, :β))
+test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β))
 
 generate_function(ns, [x,y,z], [σ,ρ,β])
 

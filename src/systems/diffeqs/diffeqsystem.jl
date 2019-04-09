@@ -77,6 +77,10 @@ Base.:(==)(sys1::ODESystem, sys2::ODESystem) =
     _eq_unordered(sys1.dvs, sys2.dvs) && _eq_unordered(sys1.ps, sys2.ps)
 # NOTE: equality does not check cached Jacobian
 
+independent_variables(sys::ODESystem) = Set{Variable}([sys.iv])
+dependent_variables(sys::ODESystem) = Set{Variable}(sys.dvs)
+parameters(sys::ODESystem) = Set{Variable}(sys.ps)
+
 
 function calculate_jacobian(sys::ODESystem)
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
