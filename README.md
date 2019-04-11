@@ -28,7 +28,7 @@ and parameters. Therefore we label them as follows:
 using ModelingToolkit
 
 # Define some variables
-@parameters t() σ() ρ() β()
+@parameters t σ ρ β
 @variables x(t) y(t) z(t)
 @derivatives D'~t
 ```
@@ -80,8 +80,8 @@ state of the previous ODE. This is the nonlinear system defined by where the
 derivatives are zero. We use (unknown) variables for our nonlinear system.
 
 ```julia
-@variables x() y() z()
-@parameters σ() ρ() β()
+@variables x y z
+@parameters σ ρ β
 
 # Define a nonlinear system
 eqs = [0 ~ σ*(y-x),
@@ -166,12 +166,14 @@ including and excluding empty parentheses. When in call format, variables are
 aliased to the given call, allowing implicit use of dependents for convenience.
 
 ```julia
-@parameters t() α() σ
+@dependent_parameters t() α() σ
 @variables w x(t) y() z(t, α, x)
 
 expr = x + y^α + σ(3) * (z - t) - w(t - 1)
 ```
 
+`@parameters` is a simplified tool for defining constant parameters, meaning
+`@parameters t`  is the same as `@dependent_parameters t()`
 
 ### Constants
 
@@ -274,7 +276,7 @@ is accessible via a function-based interface. This means that all macros are
 syntactic sugar in some form. For example, the variable construction:
 
 ```julia
-@parameters t() σ ρ() β()
+@parameters t σ ρ β
 @variables x(t) y(t) z(t)
 @derivatives D'~t
 ```
@@ -297,8 +299,8 @@ D = Differential(t)
 The system building functions can handle intermediate calculations. For example,
 
 ```julia
-@variables x() y() z()
-@parameters σ() ρ() β()
+@variables x y z
+@parameters σ ρ β
 a = y - x
 eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,

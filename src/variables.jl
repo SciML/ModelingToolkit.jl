@@ -1,4 +1,4 @@
-export Variable, @variables, @parameters
+export Variable, @variables, @parameters, @dependent_parameters
 
 
 struct Variable <: Function
@@ -29,7 +29,7 @@ Base.convert(::Type{Expr}, c::Constant) = c.value
 
 
 # Build variables more easily
-function _parse_vars(macroname, known, x)
+function _parse_vars(macroname, known, x, add_call = true)
     ex = Expr(:block)
     var_names = Symbol[]
     # if parsing things in the form of
@@ -50,7 +50,11 @@ function _parse_vars(macroname, known, x)
             expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known)($(_var.args[2:end]...)))
         else
             var_name = _var
-            expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known))
+            if add_call
+                expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known)())
+            else
+                expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known))
+            end
         end
 
         push!(var_names, var_name)
@@ -64,4 +68,7 @@ macro variables(xs...)
 end
 macro parameters(xs...)
     esc(_parse_vars(:parameters, true, xs))
+end
+macro dependent_parameters(xs...)
+    esc(_parse_vars(:parameters, true, xs, false))
 end
