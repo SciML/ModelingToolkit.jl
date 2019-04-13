@@ -2,7 +2,7 @@ using ModelingToolkit
 using Test
 
 # Define some variables
-@parameters t σ ρ β, α(..)
+@parameters t σ ρ β α(..)
 @variables x(t) y(t) z(t)
 @derivatives D'~t
 
