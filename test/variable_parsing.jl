@@ -1,7 +1,7 @@
 using ModelingToolkit
 using Test
 
-@parameters t()
+@parameters t
 @variables x(t) y(t) # test multi-arg
 @variables z(t) # test single-arg
 x1 = Variable(:x)(t)
@@ -12,10 +12,11 @@ z1 = Variable(:z)(t)
 @test isequal(z1, z)
 
 @parameters begin
-    t()
-    s()
-    σ
+    t
+    s
 end
+@parameters σ(..)
+
 t1 = Variable(:t; known = true)()
 s1 = Variable(:s; known = true)()
 σ1 = Variable(:σ; known = true)

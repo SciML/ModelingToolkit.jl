@@ -47,10 +47,15 @@ function _parse_vars(macroname, known, x)
 
         if iscall
             var_name = _var.args[1]
-            expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known)($(_var.args[2:end]...)))
+            if _var.args[end] == :..
+                expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known))
+            else
+                expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known)($(_var.args[2:end]...)))
+            end
         else
+            # Implicit 0-args call
             var_name = _var
-            expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known))
+            expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known)())
         end
 
         push!(var_names, var_name)

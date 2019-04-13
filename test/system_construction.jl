@@ -2,7 +2,7 @@ using ModelingToolkit
 using Test
 
 # Define some variables
-@parameters t() σ() ρ() β()
+@parameters t σ ρ β
 @variables x(t) y(t) z(t)
 @derivatives D'~t
 
@@ -60,7 +60,7 @@ fwt(FW, u, p, 0.2, 0.1)
         du ≈ [11, -3, -7]
     end
 
-    @parameters σ
+    @parameters σ(..)
     eqs = [D(x) ~ σ(t-1)*(y-x),
            D(y) ~ x*(ρ-z)-y,
            D(z) ~ x*y - β*z]
@@ -127,7 +127,7 @@ test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β))
 end
 
 @derivatives D'~t
-@parameters A() B() C()
+@parameters A B C
 _x = y / C
 eqs = [D(x) ~ -A*x,
        D(y) ~ A*x - B*_x]
@@ -140,8 +140,8 @@ de = ODESystem(eqs)
 end
 
 # Now nonlinear system with only variables
-@variables x() y() z()
-@parameters σ() ρ() β()
+@variables x y z
+@parameters σ ρ β
 
 # Define a nonlinear system
 eqs = [0 ~ σ*(y-x),

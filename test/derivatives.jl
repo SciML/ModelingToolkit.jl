@@ -2,7 +2,7 @@ using ModelingToolkit
 using Test
 
 # Derivatives
-@parameters t() σ() ρ() β()
+@parameters t σ ρ β
 @variables x(t) y(t) z(t)
 @derivatives D'~t D2''~t Dx'~x
 
