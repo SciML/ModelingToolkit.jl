@@ -1,4 +1,4 @@
-export Variable, @variables, @parameters, @dependent_parameters
+export Variable, @variables, @parameters
 
 
 struct Variable <: Function
