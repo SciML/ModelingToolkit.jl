@@ -3,7 +3,6 @@ module ModelingToolkit
 export Operation, Expression
 export calculate_jacobian, generate_jacobian, generate_function
 export independent_variables, dependent_variables, parameters
-export find_parameter_calls
 export @register
 
 
