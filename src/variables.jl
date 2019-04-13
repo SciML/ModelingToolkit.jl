@@ -29,7 +29,7 @@ Base.convert(::Type{Expr}, c::Constant) = c.value
 
 
 # Build variables more easily
-function _parse_vars(macroname, known, x, add_call = true)
+function _parse_vars(macroname, known, x)
     ex = Expr(:block)
     var_names = Symbol[]
     # if parsing things in the form of
@@ -47,14 +47,15 @@ function _parse_vars(macroname, known, x, add_call = true)
 
         if iscall
             var_name = _var.args[1]
-            expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known)($(_var.args[2:end]...)))
-        else
-            var_name = _var
-            if add_call
-                expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known)())
-            else
+            if _var.args[end] == :..
                 expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known))
+            else
+                expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known)($(_var.args[2:end]...)))
             end
+        else
+            # Implicit 0-args call
+            var_name = _var
+            expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known)())
         end
 
         push!(var_names, var_name)
@@ -68,7 +69,4 @@ macro variables(xs...)
 end
 macro parameters(xs...)
     esc(_parse_vars(:parameters, true, xs))
-end
-macro dependent_parameters(xs...)
-    esc(_parse_vars(:parameters, true, xs, false))
 end

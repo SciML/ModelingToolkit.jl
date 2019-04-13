@@ -60,7 +60,7 @@ fwt(FW, u, p, 0.2, 0.1)
         du ≈ [11, -3, -7]
     end
 
-    @dependent_parameters σ
+    @parameters σ(..)
     eqs = [D(x) ~ σ(t-1)*(y-x),
            D(y) ~ x*(ρ-z)-y,
            D(z) ~ x*y - β*z]

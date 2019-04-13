@@ -15,7 +15,7 @@ z1 = Variable(:z)(t)
     t
     s
 end
-@dependent_parameters σ
+@parameters σ(..)
 
 t1 = Variable(:t; known = true)()
 s1 = Variable(:s; known = true)()

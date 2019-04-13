@@ -166,14 +166,16 @@ including and excluding empty parentheses. When in call format, variables are
 aliased to the given call, allowing implicit use of dependents for convenience.
 
 ```julia
-@dependent_parameters t() α() σ
-@variables w x(t) y() z(t, α, x)
+@parameters t α σ(..)
+@variables w(..) x(t) y() z(t, α, x)
 
 expr = x + y^α + σ(3) * (z - t) - w(t - 1)
 ```
 
-`@parameters` is a simplified tool for defining constant parameters, meaning
-`@parameters t`  is the same as `@dependent_parameters t()`
+Note that `@parameters` and `@variables` implicitly add `()` to values that
+are not given a call. The former specifies the values as known, while the
+latter specifies it as unknown. `(..)` signifies that the value should be
+left uncalled.
 
 ### Constants
 
