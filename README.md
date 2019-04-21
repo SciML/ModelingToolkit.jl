@@ -14,8 +14,6 @@ nicely with user-defined routines. Together, this is an abstract form of a
 scientific model that is easy for humans to generate but also easy for programs
 to manipulate.
 
-#### Warning: This repository is a work-in-progress
-
 ## Introduction by Examples
 
 ### Example: ODE
