@@ -1,8 +1,21 @@
 export Variable, @variables, @parameters
 
 
+"""
+$(TYPEDEF)
+
+A named variable which represents a numerical value. The variable's value may
+be known (parameters, independent variables) or unknown (dependent variables).
+
+# Fields
+$(FIELDS)
+"""
 struct Variable <: Function
+    """The variable's unique name."""
     name::Symbol
+    """
+    Whether the variable's value is known.
+    """
     known::Bool
     Variable(name; known = false) = new(name, known)
 end
@@ -17,9 +30,23 @@ function Base.show(io::IO, ::MIME"text/plain", x::Variable)
 end
 
 
+"""
+$(TYPEDEF)
+
+An expression which wraps a constant numerical value.
+
+The value of the constant can be extracted with [`Base.get`](@ref).
+"""
 struct Constant <: Expression
+    """The constant's numerical value"""
     value::Number
 end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get the value of a [`ModelingToolkit.Constant`](@ref).
+"""
 Base.get(c::Constant) = c.value
 
 Base.iszero(ex::Expression) = isa(ex, Constant) && iszero(ex.value)
@@ -69,9 +96,22 @@ function _parse_vars(macroname, known, x)
     push!(ex.args, build_expr(:tuple, var_names))
     return ex
 end
+
+
+"""
+$(SIGNATURES)
+
+Define one or more unknown variables.
+"""
 macro variables(xs...)
     esc(_parse_vars(:variables, false, xs))
 end
+
+"""
+$(SIGNATURES)
+
+Define one or more known variables.
+"""
 macro parameters(xs...)
     esc(_parse_vars(:parameters, true, xs))
 end

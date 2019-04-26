@@ -10,9 +10,32 @@ function Base.convert(::Type{NLEq}, eq::Equation)
 end
 Base.:(==)(a::NLEq, b::NLEq) = a.rhs == b.rhs
 
+"""
+$(TYPEDEF)
+
+A nonlinear system of equations.
+
+# Fields
+* `eqs` - Vector of equations defining the system.
+
+# Examples
+
+```
+@variables x y z
+@parameters σ ρ β
+
+eqs = [0 ~ σ*(y-x),
+       0 ~ x*(ρ-z)-y,
+       0 ~ x*y - β*z]
+ns = NonlinearSystem(eqs, [x,y,z])
+```
+"""
 struct NonlinearSystem <: AbstractSystem
+    """Vector of equations defining the system."""
     eqs::Vector{NLEq}
+    """Unknown variables."""
     vs::Vector{Expression}
+    """Parameters."""
     ps::Vector{Variable}
     function NonlinearSystem(eqs, vs)
         rhss = [eq.rhs for eq ∈ eqs]

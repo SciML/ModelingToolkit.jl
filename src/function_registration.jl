@@ -1,4 +1,9 @@
 # Register functions and handle literals
+"""
+$(SIGNATURES)
+
+TODO
+"""
 macro register(sig)
     splitsig = splitdef(:($sig = nothing))
     name = splitsig[:name]

@@ -1,7 +1,30 @@
 export Differential, expand_derivatives, @derivatives
 
 
+"""
+$(TYPEDEF)
+
+Represents a differential operator.
+
+# Fields
+$(FIELDS)
+
+# Examples
+
+```jldoctest
+julia> using ModelingToolkit
+
+julia> @variables x y;
+
+julia> D = Differential(x)
+(D'~x())
+
+julia> D(y)  # Differentiate y wrt. x
+(D'~x())(y())
+```
+"""
 struct Differential <: Function
+    """The variable or expression to differentiate with respect to."""
     x::Expression
 end
 (D::Differential)(x) = Operation(D, Expression[x])
@@ -11,6 +34,11 @@ Base.convert(::Type{Expr}, D::Differential) = D
 
 Base.:(==)(D1::Differential, D2::Differential) = isequal(D1.x, D2.x)
 
+"""
+$(SIGNATURES)
+
+TODO
+"""
 function expand_derivatives(O::Operation)
     @. O.args = expand_derivatives(O.args)
 
@@ -32,6 +60,40 @@ end
 expand_derivatives(x) = x
 
 # Don't specialize on the function here
+"""
+$(SIGNATURES)
+
+Calculate the derivative of the op `O` with respect to its argument with index
+`idx`.
+
+# Examples
+
+```jldoctest label1
+julia> using ModelingToolkit
+
+julia> @variables x y;
+
+julia> ModelingToolkit.derivative(sin(x), 1)
+cos(x())
+```
+
+Note that the function does not recurse into the operation's arguments, i.e. the
+chain rule is not applied:
+
+```jldoctest label1
+julia> myop = sin(x) * y^2
+sin(x()) * y() ^ 2
+
+julia> typeof(myop.op)  # Op is multiplication function
+typeof(*)
+
+julia> ModelingToolkit.derivative(myop, 1)  # wrt. sin(x)
+y() ^ 2
+
+julia> ModelingToolkit.derivative(myop, 2)  # wrt. y^2
+sin(x())
+```
+"""
 derivative(O::Operation, idx) = derivative(O.op, (O.args...,), Val(idx))
 
 # Pre-defined derivatives
@@ -76,9 +138,32 @@ function _differential_macro(x)
     ex
 end
 
+"""
+$(SIGNATURES)
+
+Define one or more differentials.
+
+# Examples
+
+```jldoctest
+julia> using ModelingToolkit
+
+julia> @variables x y z;
+
+julia> @derivatives Dx'~x Dy'~y  # Create differentials wrt. x and y
+((D'~x()), (D'~y()))
+
+julia> Dx(z)  # Differentiate z wrt. x
+(D'~x())(z())
+
+julia> Dy(z)  # Differentiate z wrt. y
+(D'~y())(z())
+```
+"""
 macro derivatives(x...)
     esc(_differential_macro(x))
 end
+
 
 function calculate_jacobian(eqs, dvs)
     Expression[Differential(dv)(eq) for eq ∈ eqs, dv ∈ dvs]
