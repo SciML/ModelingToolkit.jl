@@ -1,4 +1,4 @@
-using Documenter, ModelingToolkit
+using Documenter, ModelingToolkit, DiffEqBase
 
 
 makedocs(
@@ -6,5 +6,6 @@ makedocs(
     modules=[ModelingToolkit],
     pages=[
         "Home" => "index.md",
+        "api.md",
     ]
 )
