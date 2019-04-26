@@ -6,6 +6,7 @@ version = "0.3.0"
 [deps]
 DiffEqBase = "2b5f629d-d688-5b77-993f-72d75c75574e"
 DiffRules = "b552c78f-8df3-52c6-915a-8e097449b14b"
+DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 NaNMath = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
