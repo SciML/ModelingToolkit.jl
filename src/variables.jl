@@ -9,7 +9,12 @@ end
 (x::Variable)(args...) = Operation(x, collect(Expression, args))
 
 Base.isequal(x::Variable, y::Variable) = (x.name, x.known) == (y.name, y.known)
+Base.print(io::IO, x::Variable) = show(io, x)
 Base.show(io::IO, x::Variable) = print(io, x.name)
+function Base.show(io::IO, ::MIME"text/plain", x::Variable)
+    known = x.known ? "known" : "unknown"
+    print(io, x.name, " (callable ", known, " variable)")
+end
 
 
 struct Constant <: Expression
