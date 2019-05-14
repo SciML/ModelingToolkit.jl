@@ -2,6 +2,7 @@ using MacroTools
 
 
 function Base.convert(::Type{Expression}, ex::Expr)
+    ex.head === :if && (ex = Expr(:call, ifelse, ex.args...))
     ex.head === :call || throw(ArgumentError("internal representation does not support non-call Expr"))
 
     op = eval(ex.args[1])  # HACK

@@ -32,3 +32,5 @@ D1 = Differential(t)
 
 @test @macroexpand(@parameters x, y, z(t)) == @macroexpand(@parameters x y z(t))
 @test @macroexpand(@variables x, y, z(t)) == @macroexpand(@variables x y z(t))
+
+convert(Expression, :($x == 0 ? $y : $x))
