@@ -1,3 +1,8 @@
+name = "ModelingToolkit"
+uuid = "961ee093-0014-501f-94e3-6117800e7a78"
+authors = ["Chris Rackauckas <accounts@chrisrackauckas.com>"]
+version = "v0.3.0"
+
 [deps]
 DiffEqBase = "2b5f629d-d688-5b77-993f-72d75c75574e"
 DiffRules = "b552c78f-8df3-52c6-915a-8e097449b14b"
@@ -5,3 +10,6 @@ MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 NaNMath = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
+[compat]
+julia = "1"
