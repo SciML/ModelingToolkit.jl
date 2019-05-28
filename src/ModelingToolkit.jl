@@ -3,7 +3,7 @@ module ModelingToolkit
 export Operation, Expression
 export calculate_jacobian, generate_jacobian, generate_function
 export independent_variables, dependent_variables, parameters
-export @register
+export @register, @mt_setup
 
 
 using DiffEqBase
@@ -39,5 +39,6 @@ include("systems/nonlinear/nonlinear_system.jl")
 include("function_registration.jl")
 include("simplify.jl")
 include("utils.jl")
+include("mt_setup.jl")
 
 end # module
