@@ -17,3 +17,4 @@ du = zeros(3)
 u  = collect(1:3)
 p  = collect(4:6)
 f(du, u, p, 0.1)
+@test du == [4, 0, -16]
