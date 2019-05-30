@@ -139,7 +139,6 @@ function generate_factorized_W(sys::ODESystem, simplify=true; version::FunctionV
         Wfact_t = simplify_constants.(Wfact_t)
     end
 
-        @show Wfact
     if version === SArrayFunction
         siz = size(Wfact)
         constructor = :(x -> begin

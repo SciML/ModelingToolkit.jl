@@ -1,4 +1,4 @@
-using ModelingToolkit, StaticArrays
+using ModelingToolkit, StaticArrays, LinearAlgebra
 using Test
 
 # Define some variables
