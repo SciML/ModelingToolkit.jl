@@ -1,4 +1,4 @@
-using ModelingToolkit
+using ModelingToolkit, StaticArrays, LinearAlgebra
 using Test
 
 # Define some variables
@@ -35,6 +35,8 @@ generate_function(de, [x,y,z], [σ,ρ,β])
 generate_function(de, [x,y,z], [σ,ρ,β]; version=ModelingToolkit.SArrayFunction)
 jac_expr = generate_jacobian(de)
 jac = calculate_jacobian(de)
+jacfun = eval(jac_expr)
+# iip
 f = ODEFunction(de, [x,y,z], [σ,ρ,β])
 fw, fwt = map(eval, ModelingToolkit.generate_factorized_W(de))
 du = zeros(3)
@@ -42,9 +44,31 @@ u  = collect(1:3)
 p  = collect(4:6)
 f(du, u, p, 0.1)
 @test du == [4, 0, -16]
+J = zeros(3, 3)
+jacfun(J, u, p, t)
 FW = zeros(3, 3)
+FWt = zeros(3, 3)
 fw(FW, u, p, 0.2, 0.1)
-fwt(FW, u, p, 0.2, 0.1)
+fwt(FWt, u, p, 0.2, 0.1)
+# oop
+f = ODEFunction(de, [x,y,z], [σ,ρ,β]; version=ModelingToolkit.SArrayFunction)
+fw, fwt = map(eval, ModelingToolkit.generate_factorized_W(de; version=ModelingToolkit.SArrayFunction))
+du = @SArray zeros(3)
+u  = SVector(1:3...)
+p  = SVector(4:6...)
+@test f(u, p, 0.1) === @SArray [4, 0, -16]
+Sfw = fw(u, p, 0.2, 0.1)
+@test Sfw.L ≈ UnitLowerTriangular(FW)
+@test Sfw.U ≈ UpperTriangular(FW)
+sol = Sfw \ @SArray ones(3)
+@test sol isa SArray
+@test sol ≈ -(I - 0.2*J)\ones(3)
+Sfw_t = fwt(u, p, 0.2, 0.1)
+@test Sfw_t.L ≈ UnitLowerTriangular(FWt)
+@test Sfw_t.U ≈ UpperTriangular(FWt)
+sol = Sfw_t \ @SArray ones(3)
+@test sol isa SArray
+@test sol ≈ -(I/0.2 - J)\ones(3)
 
 @testset "time-varying parameters" begin
     @parameters σ′(t-1)
