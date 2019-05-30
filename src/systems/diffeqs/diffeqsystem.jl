@@ -139,9 +139,20 @@ function generate_factorized_W(sys::ODESystem, simplify=true; version::FunctionV
         Wfact_t = simplify_constants.(Wfact_t)
     end
 
+        @show Wfact
+    if version === SArrayFunction
+        siz = size(Wfact)
+        constructor = :(x -> begin
+                            A = SMatrix{$siz...}(x)
+                            StaticArrays.LU(LowerTriangular( SMatrix{$siz...}(UnitLowerTriangular(A)) ), UpperTriangular(A), SVector(ntuple(n->n, max($siz...))))
+                        end)
+    else
+        constructor = nothing
+    end
+
     vs, ps = sys.dvs, sys.ps
-    Wfact_func   = build_function(Wfact  , vs, ps, (:gam,:t), ODEToExpr(sys); version = version)
-    Wfact_t_func = build_function(Wfact_t, vs, ps, (:gam,:t), ODEToExpr(sys); version = version)
+    Wfact_func   = build_function(Wfact  , vs, ps, (:gam,:t), ODEToExpr(sys); version = version, constructor=constructor)
+    Wfact_t_func = build_function(Wfact_t, vs, ps, (:gam,:t), ODEToExpr(sys); version = version, constructor=constructor)
 
     return (Wfact_func, Wfact_t_func)
 end

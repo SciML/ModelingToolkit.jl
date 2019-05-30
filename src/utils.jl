@@ -31,7 +31,7 @@ function flatten_expr!(x)
     x
 end
 
-function build_function(rhss, vs, ps, args = (), conv = rhs -> convert(Expr, rhs); version::FunctionVersion)
+function build_function(rhss, vs, ps, args = (), conv = rhs -> convert(Expr, rhs); version::FunctionVersion, constructor=nothing)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(vs)]
     param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(ps)]
     (ls, rs) = zip(var_pairs..., param_pairs...)
@@ -48,7 +48,7 @@ function build_function(rhss, vs, ps, args = (), conv = rhs -> convert(Expr, rhs
         let_expr = Expr(:let, var_eqs, sys_expr)
         :((u,p,$(args...)) -> begin
             X = $let_expr
-            T = StaticArrays.similar_type(typeof(u), eltype(X))
+            T = $(constructor === nothing ? :(StaticArrays.similar_type(typeof(u), eltype(X))) : constructor)
             T(X)
         end)
     end
