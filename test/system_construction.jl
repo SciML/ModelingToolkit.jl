@@ -62,13 +62,13 @@ Sfw = fw(u, p, 0.2, 0.1)
 @test Sfw.U ≈ UpperTriangular(FW)
 sol = Sfw \ @SArray ones(3)
 @test sol isa SArray
-@test sol ≈ (I - 0.2*J)\ones(3)
+@test sol ≈ -(I - 0.2*J)\ones(3)
 Sfw_t = fwt(u, p, 0.2, 0.1)
 @test Sfw_t.L ≈ UnitLowerTriangular(FWt)
 @test Sfw_t.U ≈ UpperTriangular(FWt)
 sol = Sfw_t \ @SArray ones(3)
 @test sol isa SArray
-@test sol ≈ (I/0.2 - J)\ones(3)
+@test sol ≈ -(I/0.2 - J)\ones(3)
 
 @testset "time-varying parameters" begin
     @parameters σ′(t-1)

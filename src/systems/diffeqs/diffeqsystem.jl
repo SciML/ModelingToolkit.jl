@@ -126,14 +126,14 @@ function generate_factorized_W(sys::ODESystem, simplify=true; version::FunctionV
 
     gam = Variable(:gam; known = true)()
 
-    W = LinearAlgebra.I - gam*jac
+    W = - LinearAlgebra.I + gam*jac
     Wfact = lu(W, Val(false), check=false).factors
 
     if simplify
         Wfact = simplify_constants.(Wfact)
     end
 
-    W_t = LinearAlgebra.I/gam - jac
+    W_t = - LinearAlgebra.I/gam + jac
     Wfact_t = lu(W_t, Val(false), check=false).factors
     if simplify
         Wfact_t = simplify_constants.(Wfact_t)
