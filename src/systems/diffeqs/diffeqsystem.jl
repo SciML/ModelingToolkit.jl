@@ -31,11 +31,43 @@ function to_diffeq(eq::Equation)
 end
 Base.:(==)(a::DiffEq, b::DiffEq) = isequal((a.x, a.n, a.rhs), (b.x, b.n, b.rhs))
 
+"""
+$(TYPEDEF)
+
+A system of ordinary differential equations.
+
+# Fields
+* `eqs` - The ODEs defining the system.
+
+# Examples
+
+```
+using ModelingToolkit
+
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
+
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
+
+de = ODESystem(eqs)
+```
+"""
 struct ODESystem <: AbstractSystem
+    """The ODEs defining the system."""
     eqs::Vector{DiffEq}
+    """Independent variable."""
     iv::Variable
+    """Dependent (state) variables."""
     dvs::Vector{Variable}
+    """Parameter variables."""
     ps::Vector{Variable}
+    """
+    Jacobian matrix. Note: this field will not be defined until
+    [`calculate_jacobian`](@ref) is called on the system.
+    """
     jac::RefValue{Matrix{Expression}}
 end
 
@@ -156,6 +188,13 @@ function generate_factorized_W(sys::ODESystem, simplify=true; version::FunctionV
     return (Wfact_func, Wfact_t_func)
 end
 
+"""
+$(SIGNATURES)
+
+Create an `ODEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `ps`
+are used to set the order of the dependent variable and parameter vectors,
+respectively.
+"""
 function DiffEqBase.ODEFunction(sys::ODESystem, dvs, ps; version::FunctionVersion = ArrayFunction)
     expr = generate_function(sys, dvs, ps; version = version)
     if version === ArrayFunction
