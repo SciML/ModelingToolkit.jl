@@ -215,10 +215,11 @@ Create an `ODEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `p
 are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
-function DiffEqBase.ODEFunction(sys::ODESystem, dvs, ps; version::FunctionVersion = ArrayFunction)
+function DiffEqBase.ODEFunction(sys::ODESystem, dvs, ps; version::FunctionVersion = ArrayFunction,
+                                                         jac = false, Wfact = false)
     expr = eval(generate_function(sys, dvs, ps; version = version))
-    jac_expr = isempty(sys.jac[]) ? nothing : eval(generate_jacobian(sys))
-    Wfact_expr,Wfact_t_expr = isempty(sys.Wfact[]) ? (nothing,nothing) : eval.(calculate_factorized_W(sys))
+    jac_expr = jac ? nothing : eval(generate_jacobian(sys))
+    Wfact_expr,Wfact_t_expr = Wfact ? (nothing,nothing) : eval.(calculate_factorized_W(sys))
     if version === ArrayFunction
         ODEFunction{true}(eval(expr),jac=jac_expr,
                           Wfact = Wfact_expr, Wfact_t = Wfact_t_expr)
