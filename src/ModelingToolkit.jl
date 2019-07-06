@@ -4,6 +4,7 @@ export Operation, Expression
 export calculate_jacobian, generate_jacobian, generate_function
 export independent_variables, dependent_variables, parameters
 export @register
+export modelingtoolkitize
 
 
 using DiffEqBase
