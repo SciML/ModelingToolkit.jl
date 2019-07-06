@@ -196,10 +196,11 @@ are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
 function DiffEqBase.ODEFunction(sys::ODESystem, dvs, ps; version::FunctionVersion = ArrayFunction)
-    expr = generate_function(sys, dvs, ps; version = version)
+    expr = eval(generate_function(sys, dvs, ps; version = version))
+    jac_expr = isempty(sys.jac[]) ? nothing : eval(sys.jac[])
     if version === ArrayFunction
-        ODEFunction{true}(eval(expr))
+        ODEFunction{true}(eval(expr),jac=jac_expr)
     elseif version === SArrayFunction
-        ODEFunction{false}(eval(expr))
+        ODEFunction{false}(eval(expr),jac=jac_expr)
     end
 end
