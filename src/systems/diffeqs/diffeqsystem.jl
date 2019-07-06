@@ -197,7 +197,7 @@ respectively.
 """
 function DiffEqBase.ODEFunction(sys::ODESystem, dvs, ps; version::FunctionVersion = ArrayFunction)
     expr = eval(generate_function(sys, dvs, ps; version = version))
-    jac_expr = isempty(sys.jac[]) ? nothing : eval(sys.jac[])
+    jac_expr = isempty(sys.jac[]) ? nothing : eval(generate_jacobian(sys))
     if version === ArrayFunction
         ODEFunction{true}(expr,jac=jac_expr)
     elseif version === SArrayFunction
