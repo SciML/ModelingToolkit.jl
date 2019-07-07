@@ -38,6 +38,7 @@ jac = calculate_jacobian(de)
 jacfun = eval(jac_expr)
 # iip
 f = ODEFunction(de, [x,y,z], [σ,ρ,β])
+Wfact, Wfact_t = ModelingToolkit.calculate_factorized_W(de)
 fw, fwt = map(eval, ModelingToolkit.generate_factorized_W(de))
 du = zeros(3)
 u  = collect(1:3)

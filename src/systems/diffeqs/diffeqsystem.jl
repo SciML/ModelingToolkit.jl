@@ -69,6 +69,16 @@ struct ODESystem <: AbstractSystem
     [`calculate_jacobian`](@ref) is called on the system.
     """
     jac::RefValue{Matrix{Expression}}
+    """
+    Wfact matrix. Note: this field will not be defined until
+    [`generate_factorized_W`](@ref) is called on the system.
+    """
+    Wfact::RefValue{Matrix{Expression}}
+    """
+    Wfact_t matrix. Note: this field will not be defined until
+    [`generate_factorized_W`](@ref) is called on the system.
+    """
+    Wfact_t::RefValue{Matrix{Expression}}
 end
 
 function ODESystem(eqs)
@@ -89,7 +99,9 @@ function ODESystem(eqs)
 end
 function ODESystem(deqs, iv, dvs, ps)
     jac = RefValue(Matrix{Expression}(undef, 0, 0))
-    ODESystem(deqs, iv, dvs, ps, jac)
+    Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
+    Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
+    ODESystem(deqs, iv, dvs, ps, jac, Wfact, Wfact_t)
 end
 
 function _eq_unordered(a, b)
@@ -152,10 +164,10 @@ function generate_function(sys::ODESystem, dvs, ps; version::FunctionVersion = A
     return build_function(rhss, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys); version = version)
 end
 
+function calculate_factorized_W(sys::ODESystem, simplify=true)
+    isempty(sys.Wfact[]) || return (sys.Wfact[],sys.Wfact_t[])
 
-function generate_factorized_W(sys::ODESystem, simplify=true; version::FunctionVersion = ArrayFunction)
     jac = calculate_jacobian(sys)
-
     gam = Variable(:gam; known = true)()
 
     W = - LinearAlgebra.I + gam*jac
@@ -170,6 +182,14 @@ function generate_factorized_W(sys::ODESystem, simplify=true; version::FunctionV
     if simplify
         Wfact_t = simplify_constants.(Wfact_t)
     end
+    sys.Wfact[] = Wfact
+    sys.Wfact_t[] = Wfact_t
+
+    (Wfact,Wfact_t)
+end
+
+function generate_factorized_W(sys::ODESystem, simplify=true; version::FunctionVersion = ArrayFunction)
+    (Wfact,Wfact_t) = calculate_factorized_W(sys,simplify)
 
     if version === SArrayFunction
         siz = size(Wfact)
@@ -195,11 +215,16 @@ Create an `ODEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `p
 are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
-function DiffEqBase.ODEFunction(sys::ODESystem, dvs, ps; version::FunctionVersion = ArrayFunction)
-    expr = generate_function(sys, dvs, ps; version = version)
+function DiffEqBase.ODEFunction(sys::ODESystem, dvs, ps; version::FunctionVersion = ArrayFunction,
+                                                         jac = false, Wfact = false)
+    expr = eval(generate_function(sys, dvs, ps; version = version))
+    jac_expr = jac ? nothing : eval(generate_jacobian(sys))
+    Wfact_expr,Wfact_t_expr = Wfact ? (nothing,nothing) : eval.(calculate_factorized_W(sys))
     if version === ArrayFunction
-        ODEFunction{true}(eval(expr))
+        ODEFunction{true}(eval(expr),jac=jac_expr,
+                          Wfact = Wfact_expr, Wfact_t = Wfact_t_expr)
     elseif version === SArrayFunction
-        ODEFunction{false}(eval(expr))
+        ODEFunction{false}(eval(expr),jac=jac_expr,
+                           Wfact = Wfact_expr, Wfact_t = Wfact_t_expr)
     end
 end
