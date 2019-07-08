@@ -31,26 +31,31 @@ function flatten_expr!(x)
     x
 end
 
-function build_function(rhss, vs, ps, args = (), conv = rhs -> convert(Expr, rhs); version::FunctionVersion, constructor=nothing)
+function build_function(rhss, vs, ps, args = (), conv = rhs -> convert(Expr, rhs); version::FunctionVersion=nothing, constructor=nothing)
+    version != nothing && @warn("version is deprecated. Both dispatches are now constructed in the same function by defualt.")
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(vs)]
     param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(ps)]
     (ls, rs) = zip(var_pairs..., param_pairs...)
 
     var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, rs))
 
-    if version === ArrayFunction
-        X = gensym()
-        sys_exprs = [:($X[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
-        let_expr = Expr(:let, var_eqs, build_expr(:block, sys_exprs))
-        :(($X,u,p,$(args...)) -> $let_expr)
-    elseif version === SArrayFunction
-        sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
-        let_expr = Expr(:let, var_eqs, sys_expr)
-        :((u,p,$(args...)) -> begin
+    fname = gensym()
+
+    X = gensym()
+    ip_sys_exprs = [:($X[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
+    ip_let_expr = Expr(:let, var_eqs, build_expr(:block, ip_sys_exprs))
+
+    sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
+    let_expr = Expr(:let, var_eqs, sys_expr)
+    quote
+        function $fname($X,u,p,$(args...))
+            $ip_let_expr
+        end
+        function $fname(u,p,$(args...))
             X = $let_expr
             T = $(constructor === nothing ? :(StaticArrays.similar_type(typeof(u), eltype(X))) : constructor)
             T(X)
-        end)
+        end
     end
 end
 
