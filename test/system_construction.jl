@@ -1,4 +1,5 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
+using DiffEqBase
 using Test
 
 # Define some variables
@@ -198,3 +199,26 @@ ns = NonlinearSystem(eqs, [x,y,z])
 nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(ns)
 jac = generate_jacobian(ns)
+
+function lotka(u,p,t)
+  x = u[1]
+  y = u[2]
+  [p[1]*x - p[2]*x*y,
+  -p[3]*y + p[4]*x*y]
+end
+
+prob = ODEProblem(ODEFunction{false}(lotka),[1.0,1.0],(0.0,1.0),[1.5,1.0,3.0,1.0])
+de, vars, params = modelingtoolkitize(prob)
+ODEFunction(de, vars, params)(similar(prob.u0), prob.u0, prob.p, 0.1)
+
+function lotka(du,u,p,t)
+  x = u[1]
+  y = u[2]
+  du[1] = p[1]*x - p[2]*x*y
+  du[2] = -p[3]*y + p[4]*x*y
+end
+
+prob = ODEProblem(lotka,[1.0,1.0],(0.0,1.0),[1.5,1.0,3.0,1.0])
+
+de, vars, params = modelingtoolkitize(prob)
+ODEFunction(de, vars, params)(similar(prob.u0), prob.u0, prob.p, 0.1)
