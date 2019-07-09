@@ -54,7 +54,7 @@ function build_function(rhss, vs, ps, args = (), conv = rhs -> convert(Expr, rhs
         end
         function $fname(u,p,$(args...))
             X = $let_expr
-            T = $(constructor === nothing ? :(StaticArrays.similar_type(typeof(u), eltype(X))) : constructor)
+            T = $(constructor === nothing ? :(u isa StaticArrays.StaticArray ? StaticArrays.similar_type(typeof(u), eltype(X)) : x->(du=similar(u, eltype(X)); du .= x)) : constructor)
             T(X)
         end
     end
