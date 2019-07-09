@@ -31,10 +31,11 @@ function flatten_expr!(x)
     x
 end
 
-function build_function(rhss, vs, ps, args = (), conv = rhs -> convert(Expr, rhs); version::FunctionVersion=nothing, constructor=nothing)
-    version != nothing && @warn("version is deprecated. Both dispatches are now constructed in the same function by defualt.")
-    var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(vs)]
-    param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(ps)]
+function build_function(rhss, vs, ps, args = (), conv = rhs -> convert(Expr, rhs); constructor=nothing)
+    _vs = map(x-> x isa Operation ? x.op : x, vs)
+    _ps = map(x-> x isa Operation ? x.op : x, ps)
+    var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
+    param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(_ps)]
     (ls, rs) = zip(var_pairs..., param_pairs...)
 
     var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, rs))

@@ -66,9 +66,9 @@ function calculate_jacobian(sys::NonlinearSystem)
     return jac
 end
 
-function generate_jacobian(sys::NonlinearSystem; version::FunctionVersion = ArrayFunction)
+function generate_jacobian(sys::NonlinearSystem)
     jac = calculate_jacobian(sys)
-    return build_function(jac, clean.(sys.vs), sys.ps, (), NLSysToExpr(sys); version = version)
+    return build_function(jac, clean.(sys.vs), sys.ps, (), NLSysToExpr(sys))
 end
 
 struct NLSysToExpr
@@ -85,9 +85,9 @@ end
 (f::NLSysToExpr)(x) = convert(Expr, x)
 
 
-function generate_function(sys::NonlinearSystem, vs, ps; version::FunctionVersion = ArrayFunction)
+function generate_function(sys::NonlinearSystem, vs, ps; version = nothing)
     rhss = [eq.rhs for eq ∈ sys.eqs]
     vs′ = [clean(v) for v ∈ vs]
     ps′ = [clean(p) for p ∈ ps]
-    return build_function(rhss, vs′, ps′, (), NLSysToExpr(sys); version = version)
+    return build_function(rhss, vs′, ps′, (), NLSysToExpr(sys))
 end
