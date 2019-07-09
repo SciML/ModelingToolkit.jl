@@ -161,6 +161,7 @@ de = ODESystem(eqs)
     du = [0.0,0.0]
     f(du, [1.0,2.0], [1,2,3], 0.0)
     du ≈ [-1, -1/3]
+    du ≈ f([1.0,2.0], [1,2,3], 0.0)
 end
 
 # Now nonlinear system with only variables
