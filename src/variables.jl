@@ -19,6 +19,11 @@ struct Variable <: Function
     known::Bool
     Variable(name; known = false) = new(name, known)
 end
+function Variable(name, indices...; known = false)
+    var_name = Symbol("$name[$(join(indices, ","))]")
+    Variable(var_name; known=known)
+end
+
 (x::Variable)(args...) = Operation(x, collect(Expression, args))
 
 Base.isequal(x::Variable, y::Variable) = (x.name, x.known) == (y.name, y.known)
@@ -74,27 +79,62 @@ function _parse_vars(macroname, known, x)
     x = flatten_expr!(x)
     for _var in x
         iscall = isa(_var, Expr) && _var.head == :call
-        issym    = _var isa Symbol
-        @assert iscall || issym "@$macroname expects a tuple of expressions or an expression of a tuple (`@$macroname x y z(t)` or `@$macroname x, y, z(t)`)"
+        isarray = isa(_var, Expr) && _var.head == :ref
+        issym  = _var isa Symbol
+        @assert iscall || isarray || issym "@$macroname expects a tuple of expressions or an expression of a tuple (`@$macroname x y z(t) v[1:3] w[1:2,1:4]` or `@$macroname x, y, z(t) v[1:3] w[1:2,1:4]`)"
 
         if iscall
-            var_name = _var.args[1]
-            if _var.args[end] == :..
-                expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known))
-            else
-                expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known)($(_var.args[2:end]...)))
-            end
+            var_name, expr = _construct_vars(_var.args[1], known, _var.args[2:end])
         else
-            # Implicit 0-args call
-            var_name = _var
-            expr = :($var_name = $Variable($(Meta.quot(var_name)); known = $known)())
+            var_name, expr = _construct_vars(_var, known, nothing)
         end
-
         push!(var_names, var_name)
         push!(ex.args, expr)
     end
     push!(ex.args, build_expr(:tuple, var_names))
     return ex
+end
+
+function _construct_vars(_var, known, call_args)
+    issym  = _var isa Symbol
+    isarray = isa(_var, Expr) && _var.head == :ref
+    if isarray
+        var_name = _var.args[1]
+        indices = _var.args[2:end]
+        expr = _construct_array_vars(var_name, known, call_args, indices...)
+    else
+        # Implicit 0-args call
+        var_name = _var
+        expr = _construct_var(var_name, known, call_args)
+    end
+    var_name, :($var_name = $expr)
+end
+
+function _construct_var(var_name, known, call_args)
+    if call_args === nothing
+        :(Variable($(Meta.quot(var_name)); known = $known)())
+    elseif call_args[end] == :..
+        :(Variable($(Meta.quot(var_name)); known = $known))
+    else
+        :(Variable($(Meta.quot(var_name)); known = $known)($(call_args...)))
+    end
+end
+
+function _construct_var(var_name, known, call_args, ind)
+    if call_args === nothing
+        :(Variable($(Meta.quot(var_name)), $ind...; known = $known)())
+    elseif call_args[end] == :..
+        :(Variable($(Meta.quot(var_name)), $ind...; known = $known))
+    else
+        :(Variable($(Meta.quot(var_name)), $ind...; known = $known)($(call_args...)))
+    end
+end
+
+
+function _construct_array_vars(var_name, known, call_args, indices...)
+    :(map(Iterators.product($(indices...))) do ind
+        $(_construct_var(var_name, known, call_args, :ind))
+    end)
 end
 
 
