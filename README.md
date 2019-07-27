@@ -109,6 +109,36 @@ f = @eval eval(nlsys_func)
 f2 = (du,u) -> f(du,u,(10.0,26.0,2.33))
 ```
 
+### Example: Arrays of variables
+
+Sometimes it is convenient to define arrays of variables to model things like `x₁,…,x₃`.
+The `@variables` and `@parameters` macros support this with the following syntax:
+
+```julia
+julia> @variables x[1:3];
+julia> x
+3-element Array{Operation,1}:
+ x[1]()
+ x[2]()
+ x[3]()
+
+# support for arbitrary ranges and tensors
+julia> @variables y[2:3,1:5:6];
+julia> y
+2×2 Array{Operation,2}:
+ y[2,1]()  y[2,6]()
+ y[3,1]()  y[3,6]()
+
+
+# also works for dependent variables
+julia> @parameters t; @variables z[1:3](t);
+julia> z
+3-element Array{Operation,1}:
+ z[1](t())
+ z[2](t())
+ z[3](t())
+ ```
+
 ## Core Principles
 
 The core idea behind ModelingToolkit.jl is that mathematical equations require
@@ -145,7 +175,9 @@ context-aware single variable of the IR. Its fields are described as follows:
 
 For example, the following code defines an independent variable `t`, a parameter
 `α`, a function parameter `σ`, a variable `x` which depends on `t`, a variable
-`y` with no dependents, and a variable `z` which depends on `t`, `α`, and `x(t)`.
+`y` with no dependents, a variable `z` which depends on `t`, `α`, and `x(t)`
+and a parameters `β₁` and `β₂`.
+
 
 ```julia
 t = Variable(:t; known = true)()  # independent variables are treated as known
@@ -155,8 +187,10 @@ w = Variable(:w; known = false)   # unknown, left uncalled
 x = Variable(:x; known = false)(t)  # unknown, depends on `t`
 y = Variable(:y; known = false)()   # unknown, no dependents
 z = Variable(:z; known = false)(t, α, x)  # unknown, multiple arguments
+β₁ = Variable(:β, 1; known = true)() # with index 1
+β₂ = Variable(:β, 2; known = true)() # with index 2
 
-expr = x + y^α + σ(3) * (z - t) - w(t - 1)
+expr = β₁ * x + y^α + σ(3) * (z - t) - β₂ * w(t - 1)
 ```
 
 We can rewrite this more concisely using macros. Note the difference between
@@ -164,10 +198,10 @@ including and excluding empty parentheses. When in call format, variables are
 aliased to the given call, allowing implicit use of dependents for convenience.
 
 ```julia
-@parameters t α σ(..)
+@parameters t α σ(..) β[1:2]
 @variables w(..) x(t) y() z(t, α, x)
 
-expr = x + y^α + σ(3) * (z - t) - w(t - 1)
+expr = β[1] * x + y^α + σ(3) * (z - t) - β[2] * w(t - 1)
 ```
 
 Note that `@parameters` and `@variables` implicitly add `()` to values that
@@ -276,7 +310,7 @@ is accessible via a function-based interface. This means that all macros are
 syntactic sugar in some form. For example, the variable construction:
 
 ```julia
-@parameters t σ ρ β
+@parameters t σ ρ β[1:3]
 @variables x(t) y(t) z(t)
 @derivatives D'~t
 ```
@@ -287,7 +321,7 @@ is syntactic sugar for:
 t = Variable(:t; known = true)()
 σ = Variable(:σ; known = true)
 ρ = Variable(:ρ; known = true)()
-β = Variable(:β; known = true)()
+β = [Variable(:β, i; known = true)() for i in 1:3]
 x = Variable(:x)(t)
 y = Variable(:y)(t)
 z = Variable(:z)(t)
