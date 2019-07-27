@@ -97,7 +97,9 @@ $(SIGNATURES)
 Generate `ODESystem`, dependent variables, and parameters from an `ODEProblem`.
 """
 function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
-    t, = @parameters t; vars = [Variable(Symbol(:x, i))(t) for i in eachindex(prob.u0)]; params = [Variable(Symbol(:α, i); known = true)() for i in eachindex(prob.p)];
+    t, = @parameters t;
+    vars = [Variable(:x, i)(t) for i in eachindex(prob.u0)]
+    params = [Variable(:α,i; known = true)() for i in eachindex(prob.p)]
     D, = @derivatives D'~t
 
     rhs = [D(var) for var in vars]

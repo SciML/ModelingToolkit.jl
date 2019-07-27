@@ -118,25 +118,24 @@ The `@variables` and `@parameters` macros support this with the following syntax
 julia> @variables x[1:3];
 julia> x
 3-element Array{Operation,1}:
- x[1]()
- x[2]()
- x[3]()
+ x₁()
+ x₂()
+ x₃()
 
 # support for arbitrary ranges and tensors
 julia> @variables y[2:3,1:5:6];
 julia> y
 2×2 Array{Operation,2}:
- y[2,1]()  y[2,6]()
- y[3,1]()  y[3,6]()
-
+    y₂̒₁() y₂̒₆()
+    y₃̒₁() y₃̒₆()
 
 # also works for dependent variables
 julia> @parameters t; @variables z[1:3](t);
 julia> z
 3-element Array{Operation,1}:
- z[1](t())
- z[2](t())
- z[3](t())
+ z₁(t())
+ z₂(t())
+ z₃(t())
  ```
 
 ## Core Principles
@@ -201,7 +200,7 @@ aliased to the given call, allowing implicit use of dependents for convenience.
 @parameters t α σ(..) β[1:2]
 @variables w(..) x(t) y() z(t, α, x)
 
-expr = β[1] * x + y^α + σ(3) * (z - t) - β[2] * w(t - 1)
+expr = β₁* x + y^α + σ(3) * (z - t) - β₂ * w(t - 1)
 ```
 
 Note that `@parameters` and `@variables` implicitly add `()` to values that
