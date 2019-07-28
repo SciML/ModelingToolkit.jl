@@ -1,16 +1,20 @@
 export Variable, @variables, @parameters
 
-const IndexMap = Dict{Int,Char}(
-            0 => '₀',
-            1 => '₁',
-            2 => '₂',
-            3 => '₃',
-            4 => '₄',
-            5 => '₅',
-            6 => '₆',
-            7 => '₇',
-            8 => '₈',
-            9 => '₉')
+const IndexMap = Dict{Char,Char}(
+            '0' => '₀',
+            '1' => '₁',
+            '2' => '₂',
+            '3' => '₃',
+            '4' => '₄',
+            '5' => '₅',
+            '6' => '₆',
+            '7' => '₇',
+            '8' => '₈',
+            '9' => '₉')
+function map_subscripts(indices)
+    str = string(indices)
+    join(IndexMap[c] for c in str)
+end
 
 """
 $(TYPEDEF)
@@ -31,7 +35,7 @@ struct Variable <: Function
     Variable(name; known = false) = new(name, known)
 end
 function Variable(name, indices...; known = false)
-    var_name = Symbol("$(name)$(join(getindex.((IndexMap,),indices), "̒"))")
+    var_name = Symbol("$(name)$(join(map_subscripts.(indices), "̒"))")
     Variable(var_name; known=known)
 end
 
