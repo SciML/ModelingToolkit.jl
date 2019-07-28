@@ -56,3 +56,6 @@ s1 = [Variable(:s, 1, 1; known = true)() Variable(:s, 1, 2; known = true)()
 @variables x[1:2](t)
 x1 = [Variable(:x, 1)(t), Variable(:x, 2)(t)]
 @test isequal(x1, x)
+
+@variables a[1:11,1:2]
+@variables a()

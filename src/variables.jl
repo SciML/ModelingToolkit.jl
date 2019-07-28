@@ -1,5 +1,20 @@
 export Variable, @variables, @parameters
 
+const IndexMap = Dict{Char,Char}(
+            '0' => '₀',
+            '1' => '₁',
+            '2' => '₂',
+            '3' => '₃',
+            '4' => '₄',
+            '5' => '₅',
+            '6' => '₆',
+            '7' => '₇',
+            '8' => '₈',
+            '9' => '₉')
+function map_subscripts(indices)
+    str = string(indices)
+    join(IndexMap[c] for c in str)
+end
 
 """
 $(TYPEDEF)
@@ -20,7 +35,7 @@ struct Variable <: Function
     Variable(name; known = false) = new(name, known)
 end
 function Variable(name, indices...; known = false)
-    var_name = Symbol("$name[$(join(indices, ","))]")
+    var_name = Symbol("$(name)$(join(map_subscripts.(indices), "̒"))")
     Variable(var_name; known=known)
 end
 
@@ -113,7 +128,7 @@ end
 function _construct_var(var_name, known, call_args)
     if call_args === nothing
         :(Variable($(Meta.quot(var_name)); known = $known)())
-    elseif call_args[end] == :..
+    elseif !isempty(call_args) && call_args[end] == :..
         :(Variable($(Meta.quot(var_name)); known = $known))
     else
         :(Variable($(Meta.quot(var_name)); known = $known)($(call_args...)))
@@ -123,7 +138,7 @@ end
 function _construct_var(var_name, known, call_args, ind)
     if call_args === nothing
         :(Variable($(Meta.quot(var_name)), $ind...; known = $known)())
-    elseif call_args[end] == :..
+    elseif !isempty(call_args) && call_args[end] == :..
         :(Variable($(Meta.quot(var_name)), $ind...; known = $known))
     else
         :(Variable($(Meta.quot(var_name)), $ind...; known = $known)($(call_args...)))

@@ -209,15 +209,82 @@ Create an `ODEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `p
 are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
-function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps;
+function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps,
+                                     safe = Val{true};
                                      version = nothing,
-                                     jac = false, Wfact = false) where iip
-    expr = eval(generate_function(sys, dvs, ps))
-    jac_expr = jac ? nothing : eval(generate_jacobian(sys, dvs, ps))
-    Wfact_expr,Wfact_t_expr = Wfact ? (nothing,nothing) : eval.(generate_factorized_W(sys, dvs, ps))
-    ODEFunction{iip}(eval(expr),jac=jac_expr,
-                      Wfact = Wfact_expr, Wfact_t = Wfact_t_expr)
+                                     jac = false, Wfact = false) where {iip}
+    _f = eval(generate_function(sys, dvs, ps))
+    out_f_safe(u,p,t) = ModelingToolkit.fast_invokelatest(_f,typeof(u),u,p,t)
+    out_f_safe(du,u,p,t) = ModelingToolkit.fast_invokelatest(_f,Nothing,du,u,p,t)
+    out_f(u,p,t) = _f(u,p,t)
+    out_f(du,u,p,t) = _f(du,u,p,t)
+
+    if jac
+        @show generate_jacobian(sys, dvs, ps)
+        _jac = eval(generate_jacobian(sys, dvs, ps))
+        jac_f_safe(u,p,t) = ModelingToolkit.fast_invokelatest(_jac,Matrix{eltype(u)},u,p,t)
+        jac_f_safe(J,u,p,t) = ModelingToolkit.fast_invokelatest(_jac,Nothing,J,u,p,t)
+        jac_f(u,p,t) = _jac(u,p,t)
+        jac_f(J,u,p,t) = _jac(J,u,p,t)
+    else
+        jac_f_safe = nothing
+        jac_f = nothing
+    end
+
+    if Wfact
+        _Wfact,_Wfact_t = eval.(generate_factorized_W(sys, dvs, ps))
+        Wfact_f_safe(u,p,t) = ModelingToolkit.fast_invokelatest(_Wfact,Matrix{eltype(u)},u,p,t)
+        Wfact_f_safe(J,u,p,t) = ModelingToolkit.fast_invokelatest(_Wfact,Nothing,J,u,p,t)
+        Wfact_f_t_safe(u,p,t) = ModelingToolkit.fast_invokelatest(_Wfact,Matrix{eltype(u)},u,p,t)
+        Wfact_f_t_safe(J,u,p,t) = ModelingToolkit.fast_invokelatest(_Wfact,Nothing,J,u,p,t)
+        Wfact_f(u,p,t) = _Wfact(u,p,t)
+        Wfact_f(J,u,p,t) = _Wfact(J,u,p,t)
+        Wfact_f_t(u,p,t) = _Wfact_t(u,p,t)
+        Wfact_f_t(J,u,p,t) = _Wfact_t(J,u,p,t)
+    else
+        Wfact_f_safe = nothing
+        Wfact_f_t_safe = nothing
+        Wfact_f = nothing
+        Wfact_t_f = nothing
+    end
+
+    if safe === Val{true}
+        ODEFunction{iip}(out_f_safe,jac=jac_f_safe,
+                          Wfact = Wfact_f_safe,
+                          Wfact_t = Wfact_f_t_safe)
+    else
+        ODEFunction{iip}(out_f,jac=jac_f,
+                          Wfact = Wfact_f,
+                          Wfact_t = Wfact_t_f)
+    end
 end
+
 function DiffEqBase.ODEFunction(sys::ODESystem, args...; kwargs...)
     ODEFunction{true}(sys, args...; kwargs...)
+end
+
+"""
+$(SIGNATURES)
+
+Generate `ODESystem`, dependent variables, and parameters from an `ODEProblem`.
+"""
+function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
+    @parameters t
+    vars = [Variable(:x, i)(t) for i in eachindex(prob.u0)]
+    params = [Variable(:α,i; known = true)() for i in eachindex(prob.p)]
+    @derivatives D'~t
+
+    rhs = [D(var) for var in vars]
+
+    if DiffEqBase.isinplace(prob)
+        lhs = similar(vars, Any)
+        prob.f(lhs, vars, params, t)
+    else
+        lhs = prob.f(vars, params, t)
+    end
+
+    eqs = vcat([rhs[i] ~ lhs[i] for i in eachindex(prob.u0)]...)
+    de = ODESystem(eqs)
+
+    de, vars, params
 end
