@@ -30,6 +30,9 @@ end
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
+
+ModelingToolkit.simplified_expr.(eqs)[1]
+:(derivative(x(t), t) = σ * (y(t) - x(t))).args
 de = ODESystem(eqs)
 test_diffeq_inference("standard", de, t, (x, y, z), (σ, ρ, β))
 generate_function(de, [x,y,z], [σ,ρ,β])
