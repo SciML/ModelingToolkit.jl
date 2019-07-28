@@ -31,17 +31,6 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-simpexpr = [
-    :(derivative(x(t), t) = σ * (y(t) - x(t)))
-    :(derivative(y(t), t) = x(t) * (ρ - z(t)) - y(t))
-    :(derivative(z(t), t) = x(t) * y(t) - β * z(t))
-    ]
-
-for i in 1:3
-    @test ModelingToolkit.simplified_expr.(eqs)[i].args[1] == simpexpr[i].args[1]
-    @test ModelingToolkit.simplified_expr.(eqs)[i].args[2] == simpexpr[i].args[2].args[2]
-end
-
 ModelingToolkit.simplified_expr.(eqs)[1]
 :(derivative(x(t), t) = σ * (y(t) - x(t))).args
 de = ODESystem(eqs)
