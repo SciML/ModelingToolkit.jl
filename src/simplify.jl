@@ -75,19 +75,3 @@ function _simplify_constants(O::Operation, shorten_tree)
 end
 _simplify_constants(x, shorten_tree) = x
 _simplify_constants(x) = _simplify_constants(x, true)
-
-function simplified_expr(O::Operation)
-  if O isa Constant
-    return O.value
-  elseif isa(O.op, Differential)
-    return :(derivative($(simplified_expr(O.args[1])),$(simplified_expr(O.op.x))))
-  elseif isa(O.op, Variable)
-    isempty(O.args) && return O.op.name
-    return Expr(:call, Symbol(O.op), simplified_expr.(O.args)...)
-  end
-  return Expr(:call, Symbol(O.op), simplified_expr.(O.args)...)
-end
-
-function simplified_expr(eq::Equation)
-    Expr(:(=), simplified_expr(eq.lhs), simplified_expr(eq.rhs))
-end
