@@ -25,6 +25,19 @@ function simplified_expr(O::Operation)
   return Expr(:call, Symbol(O.op), simplified_expr.(O.args)...)
 end
 
+function simplified_expr(c::Constant)
+    c.value
+end
+
 function simplified_expr(eq::Equation)
     Expr(:(=), simplified_expr(eq.lhs), simplified_expr(eq.rhs))
+end
+
+macro I(ex)
+    name = :ICompile
+    ret = return quote
+        macro $(esc(name))()
+            esc($ex)
+        end
+    end
 end

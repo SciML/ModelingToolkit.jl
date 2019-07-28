@@ -28,3 +28,43 @@ for i in 1:3
 end
 @test all(isequal.(ModelingToolkit.gradient(eqs[1],[x,y,z]),[σ * -1,σ,0]))
 @test all(isequal.(ModelingToolkit.hessian(eqs[1],[x,y,z]),0))
+
+@parameters σ() ρ() β()
+@variables x y z
+
+eqs = [σ*(y-x),
+       x*(ρ-z)-y,
+       x*y - β*z]
+
+ModelingToolkit.build_function(eqs,[x,y,z],[σ,ρ,β])
+
+mac = @I begin
+   @parameters σ() ρ() β()
+   @variables x() y() z()
+
+   eqs = [σ*(y-x),
+          x*(ρ-z)-y,
+          x*y - β*z]
+
+   ModelingToolkit.build_function(eqs,[x,y,z],[σ,ρ,β])
+end
+f = @ICompile
+out = [1.0,2,3]
+f([1.0,2,3],[1.0,2,3])
+f(out,[1.0,2,3],[1.0,2,3])
+
+mac = @I begin
+   @parameters σ() ρ() β()
+   @variables x() y() z()
+
+   eqs = [σ*(y-x),
+          x*(ρ-z)-y,
+          x*y - β*z]
+   ∂ = ModelingToolkit.jacobian(eqs,[x,y,z])
+   ModelingToolkit.build_function(∂,[x,y,z],[σ,ρ,β])
+end
+f = @ICompile
+out = zeros(3,3)
+f([1.0,2,3],[1.0,2,3])
+f(out,[1.0,2,3],[1.0,2,3])
+out

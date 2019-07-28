@@ -31,7 +31,7 @@ function flatten_expr!(x)
     x
 end
 
-function build_function(rhss, vs, ps, args = (), conv = rhs -> convert(Expr, rhs); constructor=nothing)
+function build_function(rhss, vs, ps, args = (), conv = simplified_expr; constructor=nothing)
     _vs = map(x-> x isa Operation ? x.op : x, vs)
     _ps = map(x-> x isa Operation ? x.op : x, ps)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
