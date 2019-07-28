@@ -55,8 +55,10 @@ function build_function(rhss, vs, ps, args = (), conv = simplified_expr; constru
         end
         function $fname(u,p,$(args...))
             X = $let_expr
-            T = $(constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->(du=similar(u, eltype(X)); du .= x)) : constructor)
-            T(X)
+            T = promote_type(map(typeof,X)...)
+            convert.(T,X)
+            construct = $(constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->(du=similar(u, T, $(size(rhss)...)); vec(du) .= x; du)) : constructor)
+            construct(X)
         end
     end
 end
