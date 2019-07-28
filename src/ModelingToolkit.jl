@@ -3,7 +3,7 @@ module ModelingToolkit
 export Operation, Expression
 export calculate_jacobian, generate_jacobian, generate_function
 export independent_variables, dependent_variables, parameters
-export simplified_expr
+export simplified_expr, eval_function
 export @register, @I
 export modelingtoolkitize
 

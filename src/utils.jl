@@ -31,7 +31,7 @@ function flatten_expr!(x)
     x
 end
 
-function build_function(rhss, vs, ps, args = (), conv = simplified_expr; constructor=nothing)
+function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr; constructor=nothing)
     _vs = map(x-> x isa Operation ? x.op : x, vs)
     _ps = map(x-> x isa Operation ? x.op : x, ps)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
@@ -48,12 +48,14 @@ function build_function(rhss, vs, ps, args = (), conv = simplified_expr; constru
 
     sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
     let_expr = Expr(:let, var_eqs, sys_expr)
+
+    fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
     quote
-        function $fname($X,u,p,$(args...))
+        function $fname($X,$(fargs.args...))
             $ip_let_expr
             nothing
         end
-        function $fname(u,p,$(args...))
+        function $fname($(fargs.args...))
             X = $let_expr
             T = promote_type(map(typeof,X)...)
             convert.(T,X)
@@ -62,7 +64,6 @@ function build_function(rhss, vs, ps, args = (), conv = simplified_expr; constru
         end
     end
 end
-
 
 is_constant(::Constant) = true
 is_constant(::Any) = false
