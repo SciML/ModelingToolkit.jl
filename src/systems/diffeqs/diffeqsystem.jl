@@ -220,7 +220,6 @@ function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps,
     out_f(du,u,p,t) = _f(du,u,p,t)
 
     if jac
-        @show generate_jacobian(sys, dvs, ps)
         _jac = eval(generate_jacobian(sys, dvs, ps))
         jac_f_safe(u,p,t) = ModelingToolkit.fast_invokelatest(_jac,Matrix{eltype(u)},u,p,t)
         jac_f_safe(J,u,p,t) = ModelingToolkit.fast_invokelatest(_jac,Nothing,J,u,p,t)
