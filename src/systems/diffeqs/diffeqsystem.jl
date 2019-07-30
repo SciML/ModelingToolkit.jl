@@ -232,14 +232,14 @@ function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps,
 
     if Wfact
         _Wfact,_Wfact_t = eval.(generate_factorized_W(sys, dvs, ps))
-        Wfact_f_safe(u,p,t) = ModelingToolkit.fast_invokelatest(_Wfact,Matrix{eltype(u)},u,p,t)
-        Wfact_f_safe(J,u,p,t) = ModelingToolkit.fast_invokelatest(_Wfact,Nothing,J,u,p,t)
-        Wfact_f_t_safe(u,p,t) = ModelingToolkit.fast_invokelatest(_Wfact,Matrix{eltype(u)},u,p,t)
-        Wfact_f_t_safe(J,u,p,t) = ModelingToolkit.fast_invokelatest(_Wfact,Nothing,J,u,p,t)
-        Wfact_f(u,p,t) = _Wfact(u,p,t)
-        Wfact_f(J,u,p,t) = _Wfact(J,u,p,t)
-        Wfact_f_t(u,p,t) = _Wfact_t(u,p,t)
-        Wfact_f_t(J,u,p,t) = _Wfact_t(J,u,p,t)
+        Wfact_f_safe(u,p,gam,t) = ModelingToolkit.fast_invokelatest(_Wfact,Matrix{eltype(u)},u,p,gam,t)
+        Wfact_f_safe(J,u,p,gam,t) = ModelingToolkit.fast_invokelatest(_Wfact,Nothing,J,u,p,gam,t)
+        Wfact_f_t_safe(u,p,gam,t) = ModelingToolkit.fast_invokelatest(_Wfact,Matrix{eltype(u)},u,p,gam,t)
+        Wfact_f_t_safe(J,u,p,gam,t) = ModelingToolkit.fast_invokelatest(_Wfact,Nothing,J,u,p,gam,t)
+        Wfact_f(u,p,gam,t) = _Wfact(u,p,gam,t)
+        Wfact_f(J,u,p,gam,t) = _Wfact(J,u,p,gam,t)
+        Wfact_f_t(u,p,gam,t) = _Wfact_t(u,p,gam,t)
+        Wfact_f_t(J,u,p,gam,t) = _Wfact_t(J,u,p,gam,t)
     else
         Wfact_f_safe = nothing
         Wfact_f_t_safe = nothing
@@ -254,7 +254,7 @@ function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps,
     else
         ODEFunction{iip}(out_f,jac=jac_f,
                           Wfact = Wfact_f,
-                          Wfact_t = Wfact_t_f)
+                          Wfact_t = Wfact_f_t)
     end
 end
 
