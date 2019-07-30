@@ -81,7 +81,7 @@ struct ODESystem <: AbstractSystem
     Wfact_t::RefValue{Matrix{Expression}}
 end
 
-function ODESystem(eqs)
+function ODESystem(eqs::AbstractArray{<:Equation}, ps=nothing)
     reformatted = to_diffeq.(eqs)
 
     ivs = unique(r[1] for r ∈ reformatted)
@@ -91,9 +91,13 @@ function ODESystem(eqs)
     deqs = [r[2] for r ∈ reformatted]
 
     dvs = [deq.x for deq ∈ deqs]
-    ps = filter(vars(deq.rhs for deq ∈ deqs)) do x
-        x.known & !isequal(x, iv)
-    end |> collect
+    if ps === nothing
+        ps = filter(vars(deq.rhs for deq ∈ deqs)) do x
+            x.known & !isequal(x, iv)
+        end |> collect
+    else
+        ps = [p.op for p in ps]
+    end
 
     ODESystem(deqs, iv, dvs, ps)
 end
@@ -284,7 +288,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     end
 
     eqs = vcat([rhs[i] ~ lhs[i] for i in eachindex(prob.u0)]...)
-    de = ODESystem(eqs)
+    de = ODESystem(eqs, params)
 
     de, vars, params
 end
