@@ -97,11 +97,19 @@ function ODESystem(eqs)
 
     ODESystem(deqs, iv, dvs, ps)
 end
-function ODESystem(deqs, iv, dvs, ps)
+
+function ODESystem(deqs::AbstractVector{DiffEq}, iv, dvs, ps)
     jac = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
     ODESystem(deqs, iv, dvs, ps, jac, Wfact, Wfact_t)
+end
+
+function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps)
+    _dvs = [deq.op for deq ∈ dvs]
+    _iv = iv.op
+    _ps = [p.op for p ∈ ps]
+    ODESystem(getindex.(to_diffeq.(deqs),2), _iv, _dvs, _ps)
 end
 
 function _eq_unordered(a, b)
@@ -244,7 +252,7 @@ function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps,
         Wfact_f_safe = nothing
         Wfact_f_t_safe = nothing
         Wfact_f = nothing
-        Wfact_t_f = nothing
+        Wfact_f_t = nothing
     end
 
     if safe === Val{true}
