@@ -90,7 +90,7 @@ function ODESystem(eqs)
 
     deqs = [r[2] for r ∈ reformatted]
 
-    dvs = [deq.x for deq ∈ deqs]
+    dvs = unique(deq.x for deq ∈ deqs)
     ps = filter(vars(deq.rhs for deq ∈ deqs)) do x
         x.known & !isequal(x, iv)
     end |> collect
