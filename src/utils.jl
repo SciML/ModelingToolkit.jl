@@ -40,7 +40,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr; co
 
     var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, rs))
 
-    fname = gensym()
+    fname = gensym(:ModelingToolkitFunction)
 
     X = gensym()
     ip_sys_exprs = [:($X[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
@@ -51,11 +51,11 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr; co
 
     fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
     quote
-        function $fname($X,$(fargs.args...))
+        @everywhere function $fname($X,$(fargs.args...))
             $ip_let_expr
             nothing
         end
-        function $fname($(fargs.args...))
+        @everywhere function $fname($(fargs.args...))
             X = $let_expr
             T = promote_type(map(typeof,X)...)
             convert.(T,X)

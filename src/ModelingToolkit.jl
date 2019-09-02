@@ -8,7 +8,7 @@ export @register, @I
 export modelingtoolkitize
 
 
-using DiffEqBase
+using DiffEqBase, Distributed
 using StaticArrays, LinearAlgebra
 
 using MacroTools
