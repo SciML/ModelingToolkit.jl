@@ -38,7 +38,7 @@ mk_function(args, kwargs, body) =
         GG.RuntimeFn{Args, Kwargs, Body}()
     end
 
-function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr; constructor=nothing)
+function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, expression = Val{true}; constructor=nothing)
     _vs = map(x-> x isa Operation ? x.op : x, vs)
     _ps = map(x-> x isa Operation ? x.op : x, ps)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
@@ -57,7 +57,24 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr; co
     let_expr = Expr(:let, var_eqs, sys_expr)
 
     fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
-    mk_function(fargs,:(),let_expr), mk_function(:($X,$(fargs.args...)),:(),ip_let_expr)
+
+    if expression == Val{true}
+        return quote
+            function $fname($X,$(fargs.args...))
+                $ip_let_expr
+                nothing
+            end
+            function $fname($(fargs.args...))
+                X = $let_expr
+                T = promote_type(map(typeof,X)...)
+                convert.(T,X)
+                construct = $(constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->(du=similar(u, T, $(size(rhss)...)); vec(du) .= x; du)) : constructor)
+                construct(X)
+            end
+        end
+    else
+        return mk_function(fargs,:(),let_expr), mk_function(:($X,$(fargs.args...)),:(),ip_let_expr)
+    end
 end
 
 is_constant(::Constant) = true

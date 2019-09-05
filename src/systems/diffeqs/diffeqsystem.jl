@@ -160,16 +160,16 @@ function (f::ODEToExpr)(O::Operation)
 end
 (f::ODEToExpr)(x) = convert(Expr, x)
 
-function generate_jacobian(sys::ODESystem, dvs = sys.dvs, ps = sys.ps)
+function generate_jacobian(sys::ODESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true})
     jac = calculate_jacobian(sys)
-    return build_function(jac, dvs, ps, (sys.iv.name,), ODEToExpr(sys))
+    return build_function(jac, dvs, ps, (sys.iv.name,), ODEToExpr(sys), expression)
 end
 
-function generate_function(sys::ODESystem, dvs = sys.dvs, ps = sys.ps)
+function generate_function(sys::ODESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true})
     rhss = [deq.rhs for deq ∈ sys.eqs]
     dvs′ = [clean(dv) for dv ∈ dvs]
     ps′ = [clean(p) for p ∈ ps]
-    return build_function(rhss, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys))
+    return build_function(rhss, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys), expression)
 end
 
 function calculate_factorized_W(sys::ODESystem, simplify=true)
@@ -196,7 +196,7 @@ function calculate_factorized_W(sys::ODESystem, simplify=true)
     (Wfact,Wfact_t)
 end
 
-function generate_factorized_W(sys::ODESystem, vs = sys.dvs, ps = sys.ps, simplify=true)
+function generate_factorized_W(sys::ODESystem, vs = sys.dvs, ps = sys.ps, simplify=true, expression = Val{true})
     (Wfact,Wfact_t) = calculate_factorized_W(sys,simplify)
     siz = size(Wfact)
     constructor = :(x -> begin
@@ -204,8 +204,8 @@ function generate_factorized_W(sys::ODESystem, vs = sys.dvs, ps = sys.ps, simpli
                         StaticArrays.LU(LowerTriangular( SMatrix{$siz...}(UnitLowerTriangular(A)) ), UpperTriangular(A), SVector(ntuple(n->n, max($siz...))))
                     end)
 
-    Wfact_func   = build_function(Wfact  , vs, ps, (:gam,:t), ODEToExpr(sys);constructor=constructor)
-    Wfact_t_func = build_function(Wfact_t, vs, ps, (:gam,:t), ODEToExpr(sys);constructor=constructor)
+    Wfact_func   = build_function(Wfact  , vs, ps, (:gam,:t), ODEToExpr(sys), expression;constructor=constructor)
+    Wfact_t_func = build_function(Wfact_t, vs, ps, (:gam,:t), ODEToExpr(sys), expression;constructor=constructor)
 
     return (Wfact_func, Wfact_t_func)
 end
@@ -220,13 +220,13 @@ respectively.
 function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps;
                                      version = nothing,
                                      jac = false, Wfact = false) where {iip}
-    f_oop,f_iip = generate_function(sys, dvs, ps)
+    f_oop,f_iip = generate_function(sys, dvs, ps, Val{false})
 
     f(u,p,t) = f_oop(u,p,t)
     f(du,u,p,t) = f_iip(du,u,p,t)
 
     if jac
-        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps)
+        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps, Val{false})
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else
@@ -234,7 +234,7 @@ function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps;
     end
 
     if Wfact
-        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps)
+        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, Val{false})
         Wfact_oop, Wfact_iip = tmp_Wfact
         Wfact_oop_t, Wfact_iip_t = tmp_Wfact_t
         _Wfact(u,p,t) = Wfact_oop(u,p,t)
