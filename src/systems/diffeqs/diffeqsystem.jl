@@ -217,53 +217,26 @@ Create an `ODEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `p
 are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
-function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps,
-                                     safe = Val{true};
+function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps;
                                      version = nothing,
                                      jac = false, Wfact = false) where {iip}
-    _f = eval(generate_function(sys, dvs, ps))
-    out_f_safe(u,p,t) = ModelingToolkit.fast_invokelatest(_f,typeof(u),u,p,t)
-    out_f_safe(du,u,p,t) = ModelingToolkit.fast_invokelatest(_f,Nothing,du,u,p,t)
-    out_f(u,p,t) = _f(u,p,t)
-    out_f(du,u,p,t) = _f(du,u,p,t)
+    _f = generate_function(sys, dvs, ps)
 
     if jac
-        _jac = eval(generate_jacobian(sys, dvs, ps))
-        jac_f_safe(u,p,t) = ModelingToolkit.fast_invokelatest(_jac,Matrix{eltype(u)},u,p,t)
-        jac_f_safe(J,u,p,t) = ModelingToolkit.fast_invokelatest(_jac,Nothing,J,u,p,t)
-        jac_f(u,p,t) = _jac(u,p,t)
-        jac_f(J,u,p,t) = _jac(J,u,p,t)
+        _jac = generate_jacobian(sys, dvs, ps)
     else
-        jac_f_safe = nothing
-        jac_f = nothing
+        _jac = nothing
     end
 
     if Wfact
-        _Wfact,_Wfact_t = eval.(generate_factorized_W(sys, dvs, ps))
-        Wfact_f_safe(u,p,gam,t) = ModelingToolkit.fast_invokelatest(_Wfact,Matrix{eltype(u)},u,p,gam,t)
-        Wfact_f_safe(J,u,p,gam,t) = ModelingToolkit.fast_invokelatest(_Wfact,Nothing,J,u,p,gam,t)
-        Wfact_f_t_safe(u,p,gam,t) = ModelingToolkit.fast_invokelatest(_Wfact_t,Matrix{eltype(u)},u,p,gam,t)
-        Wfact_f_t_safe(J,u,p,gam,t) = ModelingToolkit.fast_invokelatest(_Wfact_t,Nothing,J,u,p,gam,t)
-        Wfact_f(u,p,gam,t) = _Wfact(u,p,gam,t)
-        Wfact_f(J,u,p,gam,t) = _Wfact(J,u,p,gam,t)
-        Wfact_f_t(u,p,gam,t) = _Wfact_t(u,p,gam,t)
-        Wfact_f_t(J,u,p,gam,t) = _Wfact_t(J,u,p,gam,t)
+        _Wfact,_Wfact_t = generate_factorized_W(sys, dvs, ps)
     else
-        Wfact_f_safe = nothing
-        Wfact_f_t_safe = nothing
-        Wfact_f = nothing
-        Wfact_f_t = nothing
+        _Wfact,_Wfact_t = nothing,nothing
     end
 
-    if safe === Val{true}
-        ODEFunction{iip}(out_f_safe,jac=jac_f_safe,
-                          Wfact = Wfact_f_safe,
-                          Wfact_t = Wfact_f_t_safe)
-    else
-        ODEFunction{iip}(out_f,jac=jac_f,
-                          Wfact = Wfact_f,
-                          Wfact_t = Wfact_f_t)
-    end
+    ODEFunction{iip}(_f,jac=_jac,
+                      Wfact = _Wfact,
+                      Wfact_t = _Wfact_t)
 end
 
 function DiffEqBase.ODEFunction(sys::ODESystem, args...; kwargs...)

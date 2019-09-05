@@ -31,6 +31,13 @@ function flatten_expr!(x)
     x
 end
 
+mk_function(args, kwargs, body) =
+    let Args   = args |> GG.expr2typelevel,
+        Kwargs = kwargs |> GG.expr2typelevel,
+        Body   = body |> GG.expr2typelevel
+        GG.RuntimeFn{Args, Kwargs, Body}()
+    end
+
 function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr; constructor=nothing)
     _vs = map(x-> x isa Operation ? x.op : x, vs)
     _ps = map(x-> x isa Operation ? x.op : x, ps)
@@ -50,19 +57,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr; co
     let_expr = Expr(:let, var_eqs, sys_expr)
 
     fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
-    quote
-        @everywhere function $fname($X,$(fargs.args...))
-            $ip_let_expr
-            nothing
-        end
-        @everywhere function $fname($(fargs.args...))
-            X = $let_expr
-            T = promote_type(map(typeof,X)...)
-            convert.(T,X)
-            construct = $(constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->(du=similar(u, T, $(size(rhss)...)); vec(du) .= x; du)) : constructor)
-            construct(X)
-        end
-    end
+    mk_function(fargs,:(),let_expr)
 end
 
 is_constant(::Constant) = true

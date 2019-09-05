@@ -14,6 +14,7 @@ NaNMath = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+GG = "6b9d7cbe-bcb9-11e9-073f-15a7a543e2eb"
 
 [compat]
 julia = "1"
