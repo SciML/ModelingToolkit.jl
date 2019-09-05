@@ -1,0 +1,23 @@
+title: "ModelingToolkit.jl: An Intermediate Representation for Scientific Domain-Specific Languages"
+keywords:
+  - Julia
+  - Symbolic Computation
+  - Differential Equations
+  - Pharmacometrics
+authors:
+  - name: Harrison Grodin
+    affiliation: 1
+  - name: Yingbo Ma
+    affiliation: 1, 2
+  - name: Christopher Rackauckas
+    orcid: 0000-0001-5850-0663
+    affiliation: 3
+affiliations:
+  - name: School of Computer Science, Carnegie Mellon University
+    index: 1
+  - name: Department of Mathematics, University of California Irvine
+    index: 2
+  - name: Department of Mathematics, Massachusetts Institute of Technology
+    index: 3
+date: 21 August 2019
+bibliography: ref.bib

@@ -1,0 +1,414 @@
+%%
+%% Julia definition (c) 2018 by wg030
+%%
+%%
+%%
+% keywords, literals and built-ins from:
+% https://github.com/isagalaev/highlight.js/blob/master/src/languages/julia.js
+% colors from:
+% https://docs.julialang.org/en/stable/assets/highlightjs/default.css
+% https://docs.julialang.org/en/stable/assets/documenter.css
+% special unicode characters from:
+% https://docs.julialang.org/en/stable/manual/unicode-input/
+
+
+
+
+
+% defining the jlcode package
+\def\fileversion{2.1}
+\def\filedate{2018/03/06}
+
+\typeout{-- Package: `jlcode' \fileversion\space <\filedate> --}
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{jlcode}[\filedate\space\fileversion]
+
+
+
+
+
+% loading required packages
+\RequirePackage{listings}
+\RequirePackage{xcolor}              % for coloring
+\RequirePackage{textcomp}            % for upright single quotes
+\RequirePackage{amssymb}             % for the ϰ symbol
+\RequirePackage{eurosym}             % for the € symbol
+\PassOptionsToPackage{T1}{fontenc}
+\RequirePackage{fontenc}             % for the « and » symbols
+\RequirePackage{calc}                % for the creation of the code box
+
+
+
+
+
+% julia language definition
+\lstdefinelanguage{julia}
+{%
+%
+% julia's keywords:
+%
+morekeywords=[1]
+{%
+in,isa,where,baremodule,begin,break,catch,ccall,const,continue,do,else,elseif,%
+end,export,finally,for,function,global,if,import,importall,let,local,macro,%
+module,quote,return,try,using,while,struct,mutable,primitive,%
+% legacy, to be deprecated in the next release
+type,immutable,abstract,bitstype,typealias%
+},%
+%
+% julia's literals:
+%
+morekeywords=[2]
+{%
+true,false,ARGS,C_NULL,DevNull,ENDIAN_BOM,ENV,I,Inf,Inf16,Inf32,Inf64,%
+InsertionSort,JULIA_HOME,LOAD_PATH,MergeSort,NaN,NaN16,NaN32,NaN64,%
+PROGRAM_FILE,QuickSort,RoundDown,RoundFromZero,RoundNearest,%
+RoundNearestTiesAway,RoundNearestTiesUp,RoundToZero,RoundUp,STDERR,STDIN,%
+STDOUT,VERSION,catalan,e,eu,eulergamma,golden,im,nothing,pi,γ,π,φ%
+},%
+%
+% julia's built-ins:
+%
+morekeywords=[3]
+{%
+ANY,AbstractArray,AbstractChannel,AbstractFloat,AbstractMatrix,AbstractRNG,%
+AbstractSerializer,AbstractSet,AbstractSparseArray,AbstractSparseMatrix,%
+AbstractSparseVector,AbstractString,AbstractUnitRange,AbstractVecOrMat,%
+AbstractVector,Any,ArgumentError,Array,AssertionError,Associative,%
+Base64DecodePipe,Base64EncodePipe,Bidiagonal,BigFloat,BigInt,BitArray,%
+BitMatrix,BitVector,Bool,BoundsError,BufferStream,CachingPool,%
+CapturedException,CartesianIndex,CartesianRange,Cchar,Cdouble,Cfloat,Channel,%
+Char,Cint,Cintmax_t,Clong,Clonglong,ClusterManager,Cmd,CodeInfo,Colon,Complex,%
+Complex128,Complex32,Complex64,CompositeException,Condition,ConjArray,%
+ConjMatrix,ConjVector,Cptrdiff_t,Cshort,Csize_t,Cssize_t,Cstring,Cuchar,Cuint,%
+Cuintmax_t,Culong,Culonglong,Cushort,Cwchar_t,Cwstring,DataType,Date,%
+DateFormat,DateTime,DenseArray,DenseMatrix,DenseVecOrMat,DenseVector,Diagonal,%
+Dict,DimensionMismatch,Dims,DirectIndexString,Display,DivideError,DomainError,%
+EOFError,EachLine,Enum,Enumerate,ErrorException,Exception,ExponentialBackOff,%
+Expr,Factorization,FileMonitor,Float16,Float32,Float64,Function,Future,%
+GlobalRef,GotoNode,HTML,Hermitian,IO,IOBuffer,IOContext,IOStream,IPAddr,IPv4,%
+IPv6,IndexCartesian,IndexLinear,IndexStyle,InexactError,InitError,Int,Int128,%
+Int16,Int32,Int64,Int8,IntSet,Integer,InterruptException,InvalidStateException,%
+Irrational,KeyError,LabelNode,LinSpace,LineNumberNode,LoadError,%
+LowerTriangular,MIME,Matrix,MersenneTwister,Method,MethodError,MethodTable,%
+Module,NTuple,NewvarNode,NullException,Nullable,Number,ObjectIdDict,%
+OrdinalRange,OutOfMemoryError,OverflowError,Pair,ParseError,PartialQuickSort,%
+PermutedDimsArray,Pipe,PollingFileWatcher,ProcessExitedException,Ptr,QuoteNode,%
+RandomDevice,Range,RangeIndex,Rational,RawFD,ReadOnlyMemoryError,Real,%
+ReentrantLock,Ref,Regex,RegexMatch,RemoteChannel,RemoteException,RevString,%
+RoundingMode,RowVector,SSAValue,SegmentationFault,SerializationState,Set,%
+SharedArray,SharedMatrix,SharedVector,Signed,SimpleVector,Slot,SlotNumber,%
+SparseMatrixCSC,SparseVector,StackFrame,StackOverflowError,StackTrace,%
+StepRange,StepRangeLen,StridedArray,StridedMatrix,StridedVecOrMat,%
+StridedVector,String,SubArray,SubString,SymTridiagonal,Symbol,Symmetric,%
+SystemError,TCPSocket,Task,Text,TextDisplay,Timer,Tridiagonal,Tuple,Type,%
+TypeError,TypeMapEntry,TypeMapLevel,TypeName,TypeVar,TypedSlot,UDPSocket,UInt,%
+UInt128,UInt16,UInt32,UInt64,UInt8,UndefRefError,UndefVarError,UnicodeError,%
+UniformScaling,Union,UnionAll,UnitRange,Unsigned,UpperTriangular,Val,Vararg,%
+VecElement,VecOrMat,Vector,VersionNumber,Void,WeakKeyDict,WeakRef,WorkerConfig,%
+WorkerPool%
+},%
+%
+%
+sensitive=true,%
+%
+alsoother={$},%$
+%
+morecomment=[l]{\#},%
+morecomment=[n]{\#=}{=\#},%
+%
+morestring=[b]{"},%
+morestring=[m]{'},%
+morestring=[s]{"""}{"""},%
+morestring=[s]{r"}{"},%
+morestring=[s]{b"}{"},%
+morestring=[s]{v"}{"},%
+morestring=[s]{raw"}{"},%
+morestring=[s]{L"}{"},%
+%
+}[keywords,comments,strings]
+
+
+% defining the colors for
+\definecolor{jlbase}{rgb}{.28,.28,.28}            % julia's base color
+\definecolor{jlkeyword}{rgb}{0.4, 0.0, 0.3}         % julia's keywords
+\definecolor{jlliteral}{HTML}{78A960}         % julia's literals
+\definecolor{jlbuiltin}{HTML}{397300}         % julia's built-ins
+\definecolor{jlcomment}{HTML}{888888}         % julia's comments
+\definecolor{jlstring}{HTML}{880000}          % julia's strings
+\definecolor{jlbackground}{HTML}{F5F5F5}      % the background of the code block
+\definecolor{jlrule}{HTML}{DDDDDD}            % the rule of the code block
+
+
+% defining the ucc and the ucclit command
+% for literating special unicode characters
+\newcommand{\ucc}[1]{%
+\ifnum\lst@mode=\lst@Pmode\relax%
+{\color{jlbase}#1}%
+\else%
+#1%
+\fi%
+}
+
+\newcommand{\ucclit}[1]{%
+\ifnum\lst@mode=\lst@Pmode\relax%
+{\color{jlliteral}#1}%
+\else%
+#1%
+\fi%
+}
+
+
+% defining a new opliterate key
+\def\lst@OpLiteratekey#1\@nil@{\let\lst@ifxopliterate\lst@if
+                             \def\lst@opliterate{#1}}
+\lst@Key{opliterate}{}{\@ifstar{\lst@true \lst@OpLiteratekey}
+                             {\lst@false\lst@OpLiteratekey}#1\@nil@}
+\lst@AddToHook{SelectCharTable}
+    {\ifx\lst@opliterate\@empty\else
+         \expandafter\lst@OpLiterate\lst@opliterate{}\relax\z@
+     \fi}
+\def\lst@OpLiterate#1#2#3{%
+    \ifx\relax#2\@empty\else
+        \lst@CArgX #1\relax\lst@CDef
+            {}
+            {\let\lst@next\@empty
+             \lst@ifxopliterate
+                \lst@ifmode \let\lst@next\lst@CArgEmpty \fi
+             \fi
+             \ifx\lst@next\@empty
+                 \ifx\lst@OutputBox\@gobble\else
+                   \lst@XPrintToken \let\lst@scanmode\lst@scan@m
+                   \lst@token{#2}\lst@length#3\relax
+                   \lst@XPrintToken
+                 \fi
+                 \let\lst@next\lst@CArgEmptyGobble
+             \fi
+             \lst@next}%
+            \@empty
+        \expandafter\lst@OpLiterate
+    \fi}
+
+
+% defining the \addlitjlbase and \addlitjlstring commands,
+% which help a user to fix some of the known managable issues
+\def\addToLiterate#1{%
+\protected@edef\lst@literate{%
+\unexpanded\expandafter{\lst@literate}\unexpanded{#1}}}
+\lst@Key{expandliterate}{}{\addToLiterate{#1}}
+\newcommand{\addlitjlbase}[3]{%
+\lstset{expandliterate={#1}{{{\color{jlbase}#2}}}{#3}}}
+\newcommand{\addlitjlstring}[3]{%
+\lstset{expandliterate={#1}{{{\color{jlstring}#2}}}{#3}}}
+
+
+
+
+
+% defining the styles for
+\lstset{keywordstyle={[1]\color{jlkeyword}\bfseries}}      % julia's keywords
+\lstset{keywordstyle={[2]\color{jlliteral}}}               % julia's literals
+\lstset{keywordstyle={[3]\color{jlbuiltin}}}               % julia's built-ins
+\lstset{commentstyle={\color{jlcomment}}}                  % julia's comments
+\lstset{stringstyle={\color{jlstring}}}                    % julia's strings
+\lstset{identifierstyle={\color{jlbase}}}                  % julia's identifiers
+
+
+\lstset{opliterate=*
+%
+% julia's operators
+%
+{\\}{{{\color{jlbase}\lstum@backslash}}}{1} {\{}{{{\color{jlbase}\{}}}{1}
+{\}}{{{\color{jlbase}\}}}}{1} {!}{{{\color{jlbase}!}}}{1}
+{\%}{{{\color{jlbase}\%}}}{1} {&}{{{\color{jlbase}\&}}}{1}
+{(}{{{\color{jlbase}(}}}{1} {)}{{{\color{jlbase})}}}{1}
+{*}{{{\color{jlbase}*}}}{1} {+}{{{\color{jlbase}+}}}{1}
+{,}{{{\color{jlbase},}}}{1} {-}{{{\color{jlbase}-}}}{1}
+{.}{{{\color{jlbase}.}}}{1} {/}{{{\color{jlbase}/}}}{1}
+{:}{{{\color{jlbase}:}}}{1} {;}{{{\color{jlbase};}}}{1}
+{<}{{{\color{jlbase}<}}}{1} {=}{{{\color{jlbase}=}}}{1}
+{>}{{{\color{jlbase}>}}}{1} {?}{{{\color{jlbase}?}}}{1}
+{[}{{{\color{jlbase}[}}}{1} {]}{{{\color{jlbase}]}}}{1}
+{^}{{{\color{jlbase}\^{}}}}{1} {|}{{{\color{jlbase}|}}}{1}
+{~}{{{\color{jlbase}\textasciitilde{}}}}{1}
+%
+% julia's numbers
+%
+{.0}{{{\color{jlstring}.0}}}{2} {.1}{{{\color{jlstring}.1}}}{2}
+{.2}{{{\color{jlstring}.2}}}{2} {.3}{{{\color{jlstring}.3}}}{2}
+{.4}{{{\color{jlstring}.4}}}{2} {.5}{{{\color{jlstring}.5}}}{2}
+{.6}{{{\color{jlstring}.6}}}{2} {.7}{{{\color{jlstring}.7}}}{2}
+{.8}{{{\color{jlstring}.8}}}{2} {.9}{{{\color{jlstring}.9}}}{2}
+%
+{e+0}{{{\color{jlstring}e+0}}}{3} {e+1}{{{\color{jlstring}e+1}}}{3}
+{e+2}{{{\color{jlstring}e+2}}}{3} {e+3}{{{\color{jlstring}e+3}}}{3}
+{e+4}{{{\color{jlstring}e+4}}}{3} {e+5}{{{\color{jlstring}e+5}}}{3}
+{e+6}{{{\color{jlstring}e+6}}}{3} {e+7}{{{\color{jlstring}e+7}}}{3}
+{e+8}{{{\color{jlstring}e+8}}}{3} {e+9}{{{\color{jlstring}e+9}}}{3}
+%
+{0E+}{{{\color{jlstring}0E+}}}{3} {1E+}{{{\color{jlstring}1E+}}}{3}
+{2E+}{{{\color{jlstring}2E+}}}{3} {3E+}{{{\color{jlstring}3E+}}}{3}
+{4E+}{{{\color{jlstring}4E+}}}{3} {5E+}{{{\color{jlstring}5E+}}}{3}
+{6E+}{{{\color{jlstring}6E+}}}{3} {7E+}{{{\color{jlstring}7E+}}}{3}
+{8E+}{{{\color{jlstring}8E+}}}{3} {9E+}{{{\color{jlstring}9E+}}}{3}
+%
+{e-0}{{{\color{jlstring}e-0}}}{3} {e-1}{{{\color{jlstring}e-1}}}{3}
+{e-2}{{{\color{jlstring}e-2}}}{3} {e-3}{{{\color{jlstring}e-3}}}{3}
+{e-4}{{{\color{jlstring}e-4}}}{3} {e-5}{{{\color{jlstring}e-5}}}{3}
+{e-6}{{{\color{jlstring}e-6}}}{3} {e-7}{{{\color{jlstring}e-7}}}{3}
+{e-8}{{{\color{jlstring}e-8}}}{3} {e-9}{{{\color{jlstring}e-9}}}{3}
+%
+{0E-}{{{\color{jlstring}0E-}}}{3} {1E-}{{{\color{jlstring}1E-}}}{3}
+{2E-}{{{\color{jlstring}2E-}}}{3} {3E-}{{{\color{jlstring}3E-}}}{3}
+{4E-}{{{\color{jlstring}4E-}}}{3} {5E-}{{{\color{jlstring}5E-}}}{3}
+{6E-}{{{\color{jlstring}6E-}}}{3} {7E-}{{{\color{jlstring}7E-}}}{3}
+{8E-}{{{\color{jlstring}8E-}}}{3} {9E-}{{{\color{jlstring}9E-}}}{3}
+}
+
+
+% special unicode characters
+%\lstset{inputencoding=utf8}
+%\DeclareUnicodeCharacter{0391}{A}
+\lstset{extendedchars=true}
+\lstset{literate=
+%
+% characters that appear in latin languages
+%
+{á}{{\'a}}{1} {é}{{\'e}}{1} {í}{{\'i}}{1} {ó}{{\'o}}{1} {ú}{{\'u}}{1}
+{Á}{{\'A}}{1} {É}{{\'E}}{1} {Í}{{\'I}}{1} {Ó}{{\'O}}{1} {Ú}{{\'U}}{1}
+{à}{{\`a}}{1} {è}{{\`e}}{1} {ì}{{\`i}}{1} {ò}{{\`o}}{1} {ù}{{\`u}}{1}
+{À}{{\`A}}{1} {È}{{\'E}}{1} {Ì}{{\`I}}{1} {Ò}{{\`O}}{1} {Ù}{{\`U}}{1}
+{ä}{{\"a}}{1} {ë}{{\"e}}{1} {ï}{{\"i}}{1} {ö}{{\"o}}{1} {ü}{{\"u}}{1}
+{Ä}{{\"A}}{1} {Ë}{{\"E}}{1} {Ï}{{\"I}}{1} {Ö}{{\"O}}{1} {Ü}{{\"U}}{1}
+{â}{{\^a}}{1} {ê}{{\^e}}{1} {î}{{\^i}}{1} {ô}{{\^o}}{1} {û}{{\^u}}{1}
+{Â}{{\^A}}{1} {Ê}{{\^E}}{1} {Î}{{\^I}}{1} {Ô}{{\^O}}{1} {Û}{{\^U}}{1}
+{œ}{{\oe}}{1} {Œ}{{\OE}}{1} {æ}{{\ae}}{1} {Æ}{{\AE}}{1} {ß}{{\ss}}{1}
+{ű}{{\H{u}}}{1} {Ű}{{\H{U}}}{1} {ő}{{\H{o}}}{1} {Ő}{{\H{O}}}{1}
+{ç}{{\c c}}{1} {Ç}{{\c C}}{1} {ø}{{\o}}{1} {å}{{\r a}}{1} {Å}{{\r A}}{1}
+{€}{{\euro}}{1} {£}{{\pounds}}{1} {«}{{\guillemotleft}}{1}
+{»}{{\guillemotright}}{1} {ñ}{{\~n}}{1} {Ñ}{{\~N}}1 {¿}{{?`}}{1}
+%
+% greek capital letters
+%
+{Α}{{\ucc{A}}}{1} {Β}{{\ucc{B}}}{1} {Γ}{{\ucc{$\Gamma$}}}{1}
+{Δ}{{\ucc{$\Delta$}}}{1} {Ε}{{\ucc{E}}}{1} {Ζ}{{\ucc{Z}}}{1}
+{Η}{{\ucc{H}}}{1} {Θ}{{\ucc{$\Theta$}}}{1} {Ι}{{\ucc{I}}}{1}
+{Κ}{{\ucc{K}}}{1} {Λ}{{\ucc{$\Lambda$}}}{1} {Μ}{{\ucc{M}}}{1}
+{Ν}{{\ucc{N}}}{1} {Ξ}{{\ucc{$\Xi$}}}{1} {Ο}{{\ucc{O}}}{1}
+{Π}{{\ucc{$\Pi$}}}{1} {Ρ}{{\ucc{P}}}{1} {Σ}{{\ucc{$\Sigma$}}}{1}
+{Τ}{{\ucc{T}}}{1} {Υ}{{\ucc{$\Upsilon$}}}{1} {Φ}{{\ucc{$\Phi$}}}{1}
+{Χ}{{\ucc{X}}}{1} {Ψ}{{\ucc{$\Psi$}}}{1} {Ω}{{\ucc{$\Omega$}}}{1}
+%
+% mircro sign + latin small letter open e
+%
+{µ}{{\ucc{$\mu$}}}{1} {ɛ}{{\ucc{$\varepsilon$}}}{1}
+%
+% greek small letters
+%
+{α}{{\ucc{$\alpha$}}}{1} {β}{{\ucc{$\beta$}}}{1} {γ}{{\ucclit{$\gamma$}}}{1}
+{δ}{{\ucc{$\delta$}}}{1} {ε}{{\ucc{$\varepsilon$}}}{1}
+{ϵ}{{\ucc{$\epsilon$}}}{1} {ζ}{{\ucc{$\zeta$}}}{1} {η}{{\ucc{$\eta$}}}{1}
+{θ}{{\ucc{$\theta$}}}{1} {ϑ}{{\ucc{$\vartheta$}}}{1} {ι}{{\ucc{$\iota$}}}{1}
+{κ}{{\ucc{$\kappa$}}}{1} {ϰ}{{\ucc{$\varkappa$}}}{1} {λ}{{\ucc{$\lambda$}}}{1}
+{μ}{{\ucc{$\mu$}}}{1} {ν}{{\ucc{$\nu$}}}{1} {ξ}{{\ucc{$\xi$}}}{1}
+{ο}{{\ucc{o}}}{1} {π}{{\ucclit{$\pi$}}}{1} {ϖ}{{\ucc{$\varpi$}}}{1}
+{ρ}{{\ucc{$\rho$}}}{1} {ϱ}{{\ucc{$\varrho$}}}{1} {σ}{{\ucc{$\sigma$}}}{1}
+{ς}{{\ucc{$\varsigma$}}}{1} {τ}{{\ucc{$\tau$}}}{1} {υ}{{\ucc{$\upsilon$}}}{1}
+{φ}{{\ucclit{$\phi$}}}{1} {ϕ}{{\ucc{$\varphi$}}}{1} {χ}{{\ucc{$\chi$}}}{1}
+{ψ}{{\ucc{$\psi$}}}{1} {ω}{{\ucc{$\omega$}}}{1}
+%
+% superscripts
+%
+{⁽}{{\ucc{${\scriptstyle {}^{(}}$}}}{1} {⁾}{{\ucc{${\scriptstyle {}^{)}}$}}}{1}
+{⁺}{{\ucc{${\scriptstyle {}^{+}}$}}}{1} {⁻}{{\ucc{${\scriptstyle {}^{-}}$}}}{1}
+{⁰}{{\ucc{${\scriptstyle {}^{0}}$}}}{1} {¹}{{\ucc{${\scriptstyle {}^{1}}$}}}{1}
+{²}{{\ucc{${\scriptstyle {}^{2}}$}}}{1} {³}{{\ucc{${\scriptstyle {}^{3}}$}}}{1}
+{⁴}{{\ucc{${\scriptstyle {}^{4}}$}}}{1} {⁵}{{\ucc{${\scriptstyle {}^{5}}$}}}{1}
+{⁶}{{\ucc{${\scriptstyle {}^{6}}$}}}{1} {⁷}{{\ucc{${\scriptstyle {}^{7}}$}}}{1}
+{⁸}{{\ucc{${\scriptstyle {}^{8}}$}}}{1} {⁹}{{\ucc{${\scriptstyle {}^{9}}$}}}{1}
+{⁼}{{\ucc{${\scriptstyle {}^{=}}$}}}{1} {ᴬ}{{\ucc{${\scriptstyle {}^{A}}$}}}{1}
+{ᴮ}{{\ucc{${\scriptstyle {}^{B}}$}}}{1} {ᴰ}{{\ucc{${\scriptstyle {}^{D}}$}}}{1}
+{ᴱ}{{\ucc{${\scriptstyle {}^{E}}$}}}{1} {ᴳ}{{\ucc{${\scriptstyle {}^{G}}$}}}{1}
+{ᴴ}{{\ucc{${\scriptstyle {}^{H}}$}}}{1} {ᴵ}{{\ucc{${\scriptstyle {}^{I}}$}}}{1}
+{ᴶ}{{\ucc{${\scriptstyle {}^{J}}$}}}{1} {ᴷ}{{\ucc{${\scriptstyle {}^{K}}$}}}{1}
+{ᴸ}{{\ucc{${\scriptstyle {}^{L}}$}}}{1} {ᴹ}{{\ucc{${\scriptstyle {}^{M}}$}}}{1}
+{ᴺ}{{\ucc{${\scriptstyle {}^{N}}$}}}{1} {ᴼ}{{\ucc{${\scriptstyle {}^{O}}$}}}{1}
+{ᴾ}{{\ucc{${\scriptstyle {}^{P}}$}}}{1} {ᴿ}{{\ucc{${\scriptstyle {}^{R}}$}}}{1}
+{ᵀ}{{\ucc{${\scriptstyle {}^{T}}$}}}{1} {ᵁ}{{\ucc{${\scriptstyle {}^{U}}$}}}{1}
+{ⱽ}{{\ucc{${\scriptstyle {}^{V}}$}}}{1} {ᵂ}{{\ucc{${\scriptstyle {}^{W}}$}}}{1}
+{ᵃ}{{\ucc{${\scriptstyle {}^{a}}$}}}{1} {ᵇ}{{\ucc{${\scriptstyle {}^{b}}$}}}{1}
+{ᶜ}{{\ucc{${\scriptstyle {}^{c}}$}}}{1} {ᵈ}{{\ucc{${\scriptstyle {}^{d}}$}}}{1}
+{ᵉ}{{\ucc{${\scriptstyle {}^{e}}$}}}{1} {ᶠ}{{\ucc{${\scriptstyle {}^{f}}$}}}{1}
+{ᵍ}{{\ucc{${\scriptstyle {}^{g}}$}}}{1} {ʰ}{{\ucc{${\scriptstyle {}^{h}}$}}}{1}
+{ⁱ}{{\ucc{${\scriptstyle {}^{i}}$}}}{1} {ʲ}{{\ucc{${\scriptstyle {}^{j}}$}}}{1}
+{ᵏ}{{\ucc{${\scriptstyle {}^{k}}$}}}{1} {ˡ}{{\ucc{${\scriptstyle {}^{l}}$}}}{1}
+{ᵐ}{{\ucc{${\scriptstyle {}^{m}}$}}}{1} {ⁿ}{{\ucc{${\scriptstyle {}^{n}}$}}}{1}
+{ᵒ}{{\ucc{${\scriptstyle {}^{o}}$}}}{1} {ᵖ}{{\ucc{${\scriptstyle {}^{p}}$}}}{1}
+{ʳ}{{\ucc{${\scriptstyle {}^{r}}$}}}{1} {ˢ}{{\ucc{${\scriptstyle {}^{s}}$}}}{1}
+{ᵗ}{{\ucc{${\scriptstyle {}^{t}}$}}}{1} {ᵘ}{{\ucc{${\scriptstyle {}^{u}}$}}}{1}
+{ᵛ}{{\ucc{${\scriptstyle {}^{v}}$}}}{1} {ʷ}{{\ucc{${\scriptstyle {}^{w}}$}}}{1}
+{ˣ}{{\ucc{${\scriptstyle {}^{x}}$}}}{1} {ʸ}{{\ucc{${\scriptstyle {}^{y}}$}}}{1}
+{ᶻ}{{\ucc{${\scriptstyle {}^{z}}$}}}{1}
+{ᵅ}{{\ucc{${\scriptstyle {}^{\alpha}}$}}}{1}
+{ᵝ}{{\ucc{${\scriptstyle {}^{\beta}}$}}}{1}
+{ᵞ}{{\ucc{${\scriptstyle {}^{\gamma}}$}}}{1}
+{ᵟ}{{\ucc{${\scriptstyle {}^{\delta}}$}}}{1}
+{ᵋ}{{\ucc{${\scriptstyle {}^{\varepsilon}}$}}}{1}
+{ᶿ}{{\ucc{${\scriptstyle {}^{\theta}}$}}}{1}
+{ᶥ}{{\ucc{${\scriptstyle {}^{\iota}}$}}}{1}
+{ᶲ}{{\ucc{${\scriptstyle {}^{\phi}}$}}}{1}
+{ᵡ}{{\ucc{${\scriptstyle {}^{\chi}}$}}}{1}
+{ᵠ}{{\ucc{${\scriptstyle {}^{\psi}}$}}}{1}
+%
+% subscripts
+%
+{₍}{{\ucc{${\scriptstyle {}_{(}}$}}}{1} {₎}{{\ucc{${\scriptstyle {}_{)}}$}}}{1}
+{₊}{{\ucc{${\scriptstyle {}_{+}}$}}}{1} {₋}{{\ucc{${\scriptstyle {}_{-}}$}}}{1}
+{₀}{{\ucc{${\scriptstyle {}_{0}}$}}}{1} {₁}{{\ucc{${\scriptstyle {}_{1}}$}}}{1}
+{₂}{{\ucc{${\scriptstyle {}_{2}}$}}}{1} {₃}{{\ucc{${\scriptstyle {}_{3}}$}}}{1}
+{₄}{{\ucc{${\scriptstyle {}_{4}}$}}}{1} {₅}{{\ucc{${\scriptstyle {}_{5}}$}}}{1}
+{₆}{{\ucc{${\scriptstyle {}_{6}}$}}}{1} {₇}{{\ucc{${\scriptstyle {}_{7}}$}}}{1}
+{₈}{{\ucc{${\scriptstyle {}_{8}}$}}}{1} {₉}{{\ucc{${\scriptstyle {}_{9}}$}}}{1}
+{₌}{{\ucc{${\scriptstyle {}_{=}}$}}}{1} {ₐ}{{\ucc{${\scriptstyle {}_{a}}$}}}{1}
+{ₑ}{{\ucc{${\scriptstyle {}_{e}}$}}}{1} {ₕ}{{\ucc{${\scriptstyle {}_{h}}$}}}{1}
+{ᵢ}{{\ucc{${\scriptstyle {}_{i}}$}}}{1} {ⱼ}{{\ucc{${\scriptstyle {}_{j}}$}}}{1}
+{ₖ}{{\ucc{${\scriptstyle {}_{k}}$}}}{1} {ₗ}{{\ucc{${\scriptstyle {}_{l}}$}}}{1}
+{ₘ}{{\ucc{${\scriptstyle {}_{m}}$}}}{1} {ₙ}{{\ucc{${\scriptstyle {}_{n}}$}}}{1}
+{ₒ}{{\ucc{${\scriptstyle {}_{o}}$}}}{1} {ₚ}{{\ucc{${\scriptstyle {}_{p}}$}}}{1}
+{ᵣ}{{\ucc{${\scriptstyle {}_{r}}$}}}{1} {ₛ}{{\ucc{${\scriptstyle {}_{s}}$}}}{1}
+{ₜ}{{\ucc{${\scriptstyle {}_{t}}$}}}{1} {ᵤ}{{\ucc{${\scriptstyle {}_{u}}$}}}{1}
+{ᵥ}{{\ucc{${\scriptstyle {}_{v}}$}}}{1} {ₓ}{{\ucc{${\scriptstyle {}_{x}}$}}}{1}
+{ᵦ}{{\ucc{${\scriptstyle {}_{\beta}}$}}}{1}
+{ᵧ}{{\ucc{${\scriptstyle {}_{\gamma}}$}}}{1}
+{ᵨ}{{\ucc{${\scriptstyle {}_{\rho}}$}}}{1}
+{ᵪ}{{\ucc{${\scriptstyle {}_{\chi}}$}}}{1}
+{ᵩ}{{\ucc{${\scriptstyle {}_{\psi}}$}}}{1}
+%
+}
+
+
+
+
+
+% basic font
+\def\lstbasicfont{\color{jlstring}\ttfamily\scriptsize\selectfont}
+
+% gerneral style of the code block
+\lstset{basicstyle={\lstbasicfont}}
+\lstset{showstringspaces=false}
+\lstset{upquote=true}
+\lstset{tabsize=4}
+\lstset{aboveskip={1.5\baselineskip},belowskip={1.5\baselineskip}}
+
+% creating the code box
+\lstset{backgroundcolor=\color{jlbackground}, rulecolor=\color{jlrule}}
+\lstset{frame=single, frameround=tttt}
+\lstset{columns=fixed}
+\newlength{\bfem}
+\settowidth{\bfem}{\lstbasicfont{m}}
+\newlength{\xmrgn}
+\setlength{\xmrgn}{(\textwidth - 80\bfem)*\real{0.5}}
+\lstset{basewidth=\bfem}
+
+% activating the julia style
+\lstset{language=julia}
