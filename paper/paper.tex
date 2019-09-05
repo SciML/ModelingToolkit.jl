@@ -4,6 +4,7 @@
 
 \usepackage{amsmath}
 \usepackage{tikz}
+\usepackage{subcaption}
 
 \lstdefinelanguage{Julia}%
   {morekeywords={abstract,break,case,catch,const,continue,do,else,elseif,%
@@ -53,7 +54,7 @@ While the distinct tools achieve the goals of the end user, the internal mathema
 The Julia programming language \cite{bezanson_julia:_2017} is a high-level dynamic language for scientific computing which is able to generate compiled code with performance on par with C and Fortran. Julia is notably homoiconic, with macros that allow users to manipulate Julia expressions without writing a custom parser. This abstraction greatly simplifies the construction of domain-specific languages (DSLs) which has led to the proliferation of DSLs throughout the Julia package ecosystem. For example, the differential equation solvers of DifferentialEquations.jl \cite{christopher_rackauckas_differentialequations.jl_2017} has an {\verb @ode_def } macro which converts simple differential equation expressions into Julia functions usable by numerical methods. DiffEqBiological.jl \cite{diffeqbiological} includes the {\verb @reaction_network } DSL that describes a system of chemical reactions and creates Julia functions for the ordinary differential equation, stochastic differential equation, and jump equation solvers. An example of the reaction network DSL is shown in Figure \ref{code:reaction}, taking in a description of the reactions and generating the chemical kinetics expressions corresponding to the included system.
 
 \begin{figure}
-\begin{subfigure}%[h]{0.45\textwidth}
+\begin{subfigure}[h]{0.45\textwidth}
 \begin{lstlisting}
 rn = @reaction_network begin
   2.0, X + Y --> XY               
@@ -62,7 +63,7 @@ end
 \end{lstlisting}
 \end{subfigure}
 \quad
-\begin{subfigure}%[h]{0.45\textwidth}
+\begin{subfigure}[h]{0.45\textwidth}
 \begin{align*}
 \begin{split}
     \frac{d[X]}{dt} &= -2 [X] [Y]\\
