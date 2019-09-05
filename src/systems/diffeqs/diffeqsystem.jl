@@ -220,21 +220,32 @@ respectively.
 function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps;
                                      version = nothing,
                                      jac = false, Wfact = false) where {iip}
-    _f = generate_function(sys, dvs, ps)
+    f_oop,f_iip = generate_function(sys, dvs, ps)
+
+    f(u,p,t) = f_oop(u,p,t)
+    f(du,u,p,t) = f_iip(du,u,p,t)
 
     if jac
-        _jac = generate_jacobian(sys, dvs, ps)
+        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps)
+        _jac(u,p,t) = jac_oop(u,p,t)
+        _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else
         _jac = nothing
     end
 
     if Wfact
-        _Wfact,_Wfact_t = generate_factorized_W(sys, dvs, ps)
+        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps)
+        Wfact_oop, Wfact_iip = tmp_Wfact
+        Wfact_oop_t, Wfact_iip_t = tmp_Wfact_t
+        _Wfact(u,p,t) = Wfact_oop(u,p,t)
+        _Wfact(W,u,p,t) = Wfact_iip(W,u,p,t)
+        _Wfact_t(u,p,t) = Wfact_oop_t(u,p,t)
+        _Wfact_t(W,u,p,t) = Wfact_iip_t(W,u,p,t)
     else
         _Wfact,_Wfact_t = nothing,nothing
     end
 
-    ODEFunction{iip}(_f,jac=_jac,
+    ODEFunction{iip}(f,jac=_jac,
                       Wfact = _Wfact,
                       Wfact_t = _Wfact_t)
 end

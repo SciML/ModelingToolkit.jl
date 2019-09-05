@@ -49,7 +49,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr; co
 
     fname = gensym(:ModelingToolkitFunction)
 
-    X = gensym()
+    X = gensym(:MTIIPVar)
     ip_sys_exprs = [:($X[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
     ip_let_expr = Expr(:let, var_eqs, build_expr(:block, ip_sys_exprs))
 
@@ -57,7 +57,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr; co
     let_expr = Expr(:let, var_eqs, sys_expr)
 
     fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
-    mk_function(fargs,:(),let_expr)
+    mk_function(fargs,:(),let_expr), mk_function(:($X,$(fargs.args...)),:(),ip_let_expr)
 end
 
 is_constant(::Constant) = true
