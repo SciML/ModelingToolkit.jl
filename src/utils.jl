@@ -32,10 +32,10 @@ function flatten_expr!(x)
 end
 
 mk_function(args, kwargs, body) =
-    let Args   = args |> GG.expr2typelevel,
-        Kwargs = kwargs |> GG.expr2typelevel,
-        Body   = body |> GG.expr2typelevel
-        GG.RuntimeFn{Args, Kwargs, Body}()
+    let Args   = args |> GeneralizedGenerated.expr2typelevel,
+        Kwargs = kwargs |> GeneralizedGenerated.expr2typelevel,
+        Body   = body |> GeneralizedGenerated.expr2typelevel
+        GeneralizedGenerated.RuntimeFn{Args, Kwargs, Body}()
     end
 
 function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, expression = Val{true}; constructor=nothing)
@@ -105,12 +105,4 @@ function vars!(vars, O)
     end
 
     return vars
-end
-
-@inline @generated function fast_invokelatest(f, ::Type{rt}, args...) where rt
-  tupargs = Expr(:tuple,(a==Nothing ? Int : a for a in args)...)
-  quote
-    _f = $(Expr(:cfunction, Base.CFunction, :f, rt, :((Core.svec)($((a==Nothing ? Int : a for a in args)...))), :(:ccall)))
-    return ccall(_f.ptr,rt,$tupargs,$((:(getindex(args,$i) === nothing ? 0 : getindex(args,$i)) for i in 1:length(args))...))
-  end
 end

@@ -13,7 +13,7 @@ using StaticArrays, LinearAlgebra
 
 using MacroTools
 import MacroTools: splitdef, combinedef
-import GG
+import GeneralizedGenerated
 using DocStringExtensions
 
 """
