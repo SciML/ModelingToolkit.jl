@@ -48,7 +48,7 @@ function test_worldage()
    eqs = [σ*(y-x),
           x*(ρ-z)-y,
           x*y - β*z]
-   f, f_iip = ModelingToolkit.build_function(eqs,[x,y,z],[σ,ρ,β],ModelingToolkit.simplified_expr,Val{false})
+   f, f_iip = ModelingToolkit.build_function(eqs,[x,y,z],[σ,ρ,β],(),ModelingToolkit.simplified_expr,Val{false})
    out = [1.0,2,3]
    o1 = f([1.0,2,3],[1.0,2,3])
    f_iip(out,[1.0,2,3],[1.0,2,3])
@@ -102,7 +102,7 @@ function test_worldage()
    eqs = [(y-x)^2,
           x*(x-z)-y,
           x*y - y*z]
-   f, f_iip = ModelingToolkit.build_function(eqs,[x,y,z],(),ModelingToolkit.simplified_expr,Val{false})
+   f, f_iip = ModelingToolkit.build_function(eqs,[x,y,z],(),(),ModelingToolkit.simplified_expr,Val{false})
    out = zeros(3)
    o1 = f([1.0,2,3])
    f_iip(out,[1.0,2,3])
