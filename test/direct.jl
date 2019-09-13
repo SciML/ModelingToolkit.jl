@@ -48,12 +48,10 @@ function test_worldage()
    eqs = [σ*(y-x),
           x*(ρ-z)-y,
           x*y - β*z]
-   _f = eval(ModelingToolkit.build_function(eqs,[x,y,z],[σ,ρ,β]))
-   f(u,p) = ModelingToolkit.fast_invokelatest(_f,typeof(u),u,p)
-   f(du,u,p) = ModelingToolkit.fast_invokelatest(_f,Nothing,du,u,p)
+   f, f_iip = ModelingToolkit.build_function(eqs,[x,y,z],[σ,ρ,β],ModelingToolkit.simplified_expr,Val{false})
    out = [1.0,2,3]
    o1 = f([1.0,2,3],[1.0,2,3])
-   f(out,[1.0,2,3],[1.0,2,3])
+   f_iip(out,[1.0,2,3],[1.0,2,3])
 end
 test_worldage()
 
@@ -104,12 +102,10 @@ function test_worldage()
    eqs = [(y-x)^2,
           x*(x-z)-y,
           x*y - y*z]
-   _f = eval(ModelingToolkit.build_function(eqs,[x,y,z]))
-   f(u) = ModelingToolkit.fast_invokelatest(_f,typeof(u),u)
-   f(du,u) = ModelingToolkit.fast_invokelatest(_f,Nothing,du,u)
+   f, f_iip = ModelingToolkit.build_function(eqs,[x,y,z],(),ModelingToolkit.simplified_expr,Val{false})
    out = zeros(3)
    o1 = f([1.0,2,3])
-   f(out,[1.0,2,3])
+   f_iip(out,[1.0,2,3])
 end
 test_worldage()
 
