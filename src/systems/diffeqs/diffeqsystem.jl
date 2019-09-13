@@ -156,7 +156,7 @@ function (f::ODEToExpr)(O::Operation)
         isempty(O.args)         && return O.op.name  # 0-ary parameters
         return build_expr(:call, Any[O.op.name; f.(O.args)])
     end
-    return build_expr(:call, Any[O.op; f.(O.args)])
+    return build_expr(:call, Any[Symbol(O.op); f.(O.args)])
 end
 (f::ODEToExpr)(x) = convert(Expr, x)
 

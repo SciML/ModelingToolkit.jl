@@ -31,13 +31,6 @@ function flatten_expr!(x)
     x
 end
 
-mk_function(args, kwargs, body) =
-    let Args   = args |> GeneralizedGenerated.expr2typelevel,
-        Kwargs = kwargs |> GeneralizedGenerated.expr2typelevel,
-        Body   = body |> GeneralizedGenerated.expr2typelevel
-        GeneralizedGenerated.RuntimeFn{Args, Kwargs, Body}()
-    end
-
 function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, expression = Val{true}; constructor=nothing)
     _vs = map(x-> x isa Operation ? x.op : x, vs)
     _ps = map(x-> x isa Operation ? x.op : x, ps)
@@ -58,22 +51,30 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
 
     fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
 
+    oop_ex = :(
+        function $fname($(fargs.args...))
+            X = $let_expr
+            T = promote_type(map(typeof,X)...)
+            convert.(T,X)
+            construct = $(constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->(du=similar(u, T, $(size(rhss)...)); vec(du) .= x; du)) : constructor)
+            construct(X)
+        end
+    )
+
+    iip_ex = :(
+        function $fname($X,$(fargs.args...))
+            $ip_let_expr
+            nothing
+        end
+    )
+
     if expression == Val{true}
         return quote
-            function $fname($X,$(fargs.args...))
-                $ip_let_expr
-                nothing
-            end
-            function $fname($(fargs.args...))
-                X = $let_expr
-                T = promote_type(map(typeof,X)...)
-                convert.(T,X)
-                construct = $(constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->(du=similar(u, T, $(size(rhss)...)); vec(du) .= x; du)) : constructor)
-                construct(X)
-            end
+            $oop_ex
+            $iip_ex
         end
     else
-        return mk_function(fargs,:(),let_expr), mk_function(:($X,$(fargs.args...)),:(),ip_let_expr)
+        return GeneralizedGenerated.mk_function(oop_ex), GeneralizedGenerated.mk_function(iip_ex)
     end
 end
 
