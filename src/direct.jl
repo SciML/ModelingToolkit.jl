@@ -32,12 +32,3 @@ end
 function simplified_expr(eq::Equation)
     Expr(:(=), simplified_expr(eq.lhs), simplified_expr(eq.rhs))
 end
-
-macro I(ex)
-    name = :ICompile
-    ret = return quote
-        macro $(esc(name))()
-            esc($ex)
-        end
-    end
-end

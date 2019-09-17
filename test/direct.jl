@@ -36,9 +36,11 @@ end
 eqs = [σ*(y-x),
        x*(ρ-z)-y,
        x*y - β*z]
-f = eval(ModelingToolkit.build_function(eqs,[x,y,z],[σ,ρ,β]))
+f1,f2 = ModelingToolkit.build_function(eqs,[x,y,z],[σ,ρ,β])
+f = eval(f1)
 out = [1.0,2,3]
 o1 = f([1.0,2,3],[1.0,2,3])
+f = eval(f2)
 f(out,[1.0,2,3],[1.0,2,3])
 @test all(o1 .== out)
 
@@ -48,54 +50,23 @@ function test_worldage()
    eqs = [σ*(y-x),
           x*(ρ-z)-y,
           x*y - β*z]
-   _f = eval(ModelingToolkit.build_function(eqs,[x,y,z],[σ,ρ,β]))
-   f(u,p) = ModelingToolkit.fast_invokelatest(_f,typeof(u),u,p)
-   f(du,u,p) = ModelingToolkit.fast_invokelatest(_f,Nothing,du,u,p)
+   f, f_iip = ModelingToolkit.build_function(eqs,[x,y,z],[σ,ρ,β],(),ModelingToolkit.simplified_expr,Val{false})
    out = [1.0,2,3]
    o1 = f([1.0,2,3],[1.0,2,3])
-   f(out,[1.0,2,3],[1.0,2,3])
+   f_iip(out,[1.0,2,3],[1.0,2,3])
 end
 test_worldage()
-
-mac = @I begin
-   @parameters σ() ρ() β()
-   @variables x() y() z()
-
-   eqs = [σ*(y-x),
-          x*(ρ-z)-y,
-          x*y - β*z]
-   ModelingToolkit.build_function(eqs,[x,y,z],[σ,ρ,β])
-end
-f = @ICompile
-out = [1.0,2,3]
-o1 = f([1.0,2,3],[1.0,2,3])
-f(out,[1.0,2,3],[1.0,2,3])
-@test all(o1 .== out)
-
-mac = @I begin
-   @parameters σ ρ β
-   @variables x y z
-
-   eqs = [σ*(y-x),
-          x*(ρ-z)-y,
-          x*y - β*z]
-   ∂ = ModelingToolkit.jacobian(eqs,[x,y,z])
-   ModelingToolkit.build_function(∂,[x,y,z],[σ,ρ,β])
-end
-f = @ICompile
-out = zeros(3,3)
-o1 = f([1.0,2,3],[1.0,2,3])
-f(out,[1.0,2,3],[1.0,2,3])
-@test all(out .== o1)
 
 ## No parameters
 @variables x y z
 eqs = [(y-x)^2,
        x*(x-z)-y,
        x*y - y*z]
-f = eval(ModelingToolkit.build_function(eqs,[x,y,z]))
+f1,f2 = ModelingToolkit.build_function(eqs,[x,y,z])
+f = eval(f1)
 out = zeros(3)
 o1 = f([1.0,2,3])
+f = eval(f2)
 f(out,[1.0,2,3])
 @test all(out .== o1)
 
@@ -104,24 +75,9 @@ function test_worldage()
    eqs = [(y-x)^2,
           x*(x-z)-y,
           x*y - y*z]
-   _f = eval(ModelingToolkit.build_function(eqs,[x,y,z]))
-   f(u) = ModelingToolkit.fast_invokelatest(_f,typeof(u),u)
-   f(du,u) = ModelingToolkit.fast_invokelatest(_f,Nothing,du,u)
+   f, f_iip = ModelingToolkit.build_function(eqs,[x,y,z],(),(),ModelingToolkit.simplified_expr,Val{false})
    out = zeros(3)
    o1 = f([1.0,2,3])
-   f(out,[1.0,2,3])
+   f_iip(out,[1.0,2,3])
 end
 test_worldage()
-
-mac = @I begin
-   @variables x y z
-   eqs = [(y-x)^2,
-          x*(x-z)-y,
-          x*y - y*z]
-   ModelingToolkit.build_function(eqs,[x,y,z])
-end
-f = @ICompile
-out = zeros(3)
-o1 = f([1.0,2,3])
-f(out,[1.0,2,3])
-@test all(out .== o1)

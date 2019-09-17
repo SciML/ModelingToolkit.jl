@@ -38,7 +38,7 @@ test_diffeq_inference("standard", de, t, (x, y, z), (σ, ρ, β))
 generate_function(de, [x,y,z], [σ,ρ,β])
 jac_expr = generate_jacobian(de)
 jac = calculate_jacobian(de)
-jacfun = eval(jac_expr)
+jacfun = eval(jac_expr[2])
 # iip
 f = ODEFunction(de, [x,y,z], [σ,ρ,β])
 Wfact, Wfact_t = ModelingToolkit.calculate_factorized_W(de)
@@ -52,8 +52,8 @@ J = zeros(3, 3)
 jacfun(J, u, p, t)
 FW = zeros(3, 3)
 FWt = zeros(3, 3)
-fw(FW, u, p, 0.2, 0.1)
-fwt(FWt, u, p, 0.2, 0.1)
+eval(fw[2])(FW, u, p, 0.2, 0.1)
+eval(fwt[2])(FWt, u, p, 0.2, 0.1)
 # oop
 f = ODEFunction(de, [x,y,z], [σ,ρ,β])
 fw, fwt = map(eval, ModelingToolkit.generate_factorized_W(de))
@@ -61,13 +61,13 @@ du = @SArray zeros(3)
 u  = SVector(1:3...)
 p  = SVector(4:6...)
 @test f(u, p, 0.1) === @SArray [4, 0, -16]
-Sfw = fw(u, p, 0.2, 0.1)
+Sfw = eval(fw[1])(u, p, 0.2, 0.1)
 @test Sfw.L ≈ UnitLowerTriangular(FW)
 @test Sfw.U ≈ UpperTriangular(FW)
 sol = Sfw \ @SArray ones(3)
 @test sol isa SArray
 @test sol ≈ -(I - 0.2*J)\ones(3)
-Sfw_t = fwt(u, p, 0.2, 0.1)
+Sfw_t = eval(fwt[1])(u, p, 0.2, 0.1)
 @test Sfw_t.L ≈ UnitLowerTriangular(FWt)
 @test Sfw_t.U ≈ UpperTriangular(FWt)
 sol = Sfw_t \ @SArray ones(3)
@@ -82,7 +82,7 @@ sol = Sfw_t \ @SArray ones(3)
     de = ODESystem(eqs)
     test_diffeq_inference("global iv-varying", de, t, (x, y, z), (σ′, ρ, β))
     @test begin
-        f = eval(generate_function(de, [x,y,z], [σ′,ρ,β]))
+        f = eval(generate_function(de, [x,y,z], [σ′,ρ,β])[2])
         du = [0.0,0.0,0.0]
         f(du, [1.0,2.0,3.0], [x->x+7,2,3], 5.0)
         du ≈ [11, -3, -7]
@@ -95,7 +95,7 @@ sol = Sfw_t \ @SArray ones(3)
     de = ODESystem(eqs)
     test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ, ρ, β))
     @test begin
-        f = eval(generate_function(de, [x,y,z], [σ,ρ,β]))
+        f = eval(generate_function(de, [x,y,z], [σ,ρ,β])[2])
         du = [0.0,0.0,0.0]
         f(du, [1.0,2.0,3.0], [x->x+7,2,3], 5.0)
         du ≈ [11, -3, -7]
@@ -105,7 +105,7 @@ sol = Sfw_t \ @SArray ones(3)
     de = ODESystem(eqs)
     test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ,))
     @test begin
-        f = eval(generate_function(de, [x], [σ]))
+        f = eval(generate_function(de, [x], [σ])[2])
         du = [0.0]
         f(du, [1.0], [t -> t + 2], 5.0)
         du ≈ [27561]
@@ -148,7 +148,7 @@ eqs = [0 ~ σ*(y-x),
 ns = NonlinearSystem(eqs, [x,y,z])
 test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β))
 @test begin
-    f = eval(generate_function(ns, [x,y,z], [σ,ρ,β]))
+    f = eval(generate_function(ns, [x,y,z], [σ,ρ,β])[2])
     du = [0.0, 0.0, 0.0]
     f(du, [1,2,3], [1,2,3])
     du ≈ [1, -3, -7]
@@ -161,10 +161,11 @@ eqs = [D(x) ~ -A*x,
        D(y) ~ A*x - B*_x]
 de = ODESystem(eqs)
 @test begin
-    f = eval(generate_function(de, [x,y], [A,B,C]))
+    f = eval(generate_function(de, [x,y], [A,B,C])[2])
     du = [0.0,0.0]
     f(du, [1.0,2.0], [1,2,3], 0.0)
     du ≈ [-1, -1/3]
+    f = eval(generate_function(de, [x,y], [A,B,C])[1])
     du ≈ f([1.0,2.0], [1,2,3], 0.0)
 end
 

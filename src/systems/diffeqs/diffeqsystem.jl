@@ -156,20 +156,20 @@ function (f::ODEToExpr)(O::Operation)
         isempty(O.args)         && return O.op.name  # 0-ary parameters
         return build_expr(:call, Any[O.op.name; f.(O.args)])
     end
-    return build_expr(:call, Any[O.op; f.(O.args)])
+    return build_expr(:call, Any[Symbol(O.op); f.(O.args)])
 end
 (f::ODEToExpr)(x) = convert(Expr, x)
 
-function generate_jacobian(sys::ODESystem, dvs = sys.dvs, ps = sys.ps)
+function generate_jacobian(sys::ODESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true})
     jac = calculate_jacobian(sys)
-    return build_function(jac, dvs, ps, (sys.iv.name,), ODEToExpr(sys))
+    return build_function(jac, dvs, ps, (sys.iv.name,), ODEToExpr(sys), expression)
 end
 
-function generate_function(sys::ODESystem, dvs = sys.dvs, ps = sys.ps)
+function generate_function(sys::ODESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true})
     rhss = [deq.rhs for deq ∈ sys.eqs]
     dvs′ = [clean(dv) for dv ∈ dvs]
     ps′ = [clean(p) for p ∈ ps]
-    return build_function(rhss, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys))
+    return build_function(rhss, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys), expression)
 end
 
 function calculate_factorized_W(sys::ODESystem, simplify=true)
@@ -196,7 +196,7 @@ function calculate_factorized_W(sys::ODESystem, simplify=true)
     (Wfact,Wfact_t)
 end
 
-function generate_factorized_W(sys::ODESystem, vs = sys.dvs, ps = sys.ps, simplify=true)
+function generate_factorized_W(sys::ODESystem, vs = sys.dvs, ps = sys.ps, simplify=true, expression = Val{true})
     (Wfact,Wfact_t) = calculate_factorized_W(sys,simplify)
     siz = size(Wfact)
     constructor = :(x -> begin
@@ -204,8 +204,8 @@ function generate_factorized_W(sys::ODESystem, vs = sys.dvs, ps = sys.ps, simpli
                         StaticArrays.LU(LowerTriangular( SMatrix{$siz...}(UnitLowerTriangular(A)) ), UpperTriangular(A), SVector(ntuple(n->n, max($siz...))))
                     end)
 
-    Wfact_func   = build_function(Wfact  , vs, ps, (:gam,:t), ODEToExpr(sys);constructor=constructor)
-    Wfact_t_func = build_function(Wfact_t, vs, ps, (:gam,:t), ODEToExpr(sys);constructor=constructor)
+    Wfact_func   = build_function(Wfact  , vs, ps, (:gam,:t), ODEToExpr(sys), expression;constructor=constructor)
+    Wfact_t_func = build_function(Wfact_t, vs, ps, (:gam,:t), ODEToExpr(sys), expression;constructor=constructor)
 
     return (Wfact_func, Wfact_t_func)
 end
@@ -217,53 +217,37 @@ Create an `ODEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `p
 are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
-function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps,
-                                     safe = Val{true};
+function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps;
                                      version = nothing,
                                      jac = false, Wfact = false) where {iip}
-    _f = eval(generate_function(sys, dvs, ps))
-    out_f_safe(u,p,t) = ModelingToolkit.fast_invokelatest(_f,typeof(u),u,p,t)
-    out_f_safe(du,u,p,t) = ModelingToolkit.fast_invokelatest(_f,Nothing,du,u,p,t)
-    out_f(u,p,t) = _f(u,p,t)
-    out_f(du,u,p,t) = _f(du,u,p,t)
+    f_oop,f_iip = generate_function(sys, dvs, ps, Val{false})
+
+    f(u,p,t) = f_oop(u,p,t)
+    f(du,u,p,t) = f_iip(du,u,p,t)
 
     if jac
-        _jac = eval(generate_jacobian(sys, dvs, ps))
-        jac_f_safe(u,p,t) = ModelingToolkit.fast_invokelatest(_jac,Matrix{eltype(u)},u,p,t)
-        jac_f_safe(J,u,p,t) = ModelingToolkit.fast_invokelatest(_jac,Nothing,J,u,p,t)
-        jac_f(u,p,t) = _jac(u,p,t)
-        jac_f(J,u,p,t) = _jac(J,u,p,t)
+        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps, Val{false})
+        _jac(u,p,t) = jac_oop(u,p,t)
+        _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else
-        jac_f_safe = nothing
-        jac_f = nothing
+        _jac = nothing
     end
 
     if Wfact
-        _Wfact,_Wfact_t = eval.(generate_factorized_W(sys, dvs, ps))
-        Wfact_f_safe(u,p,gam,t) = ModelingToolkit.fast_invokelatest(_Wfact,Matrix{eltype(u)},u,p,gam,t)
-        Wfact_f_safe(J,u,p,gam,t) = ModelingToolkit.fast_invokelatest(_Wfact,Nothing,J,u,p,gam,t)
-        Wfact_f_t_safe(u,p,gam,t) = ModelingToolkit.fast_invokelatest(_Wfact_t,Matrix{eltype(u)},u,p,gam,t)
-        Wfact_f_t_safe(J,u,p,gam,t) = ModelingToolkit.fast_invokelatest(_Wfact_t,Nothing,J,u,p,gam,t)
-        Wfact_f(u,p,gam,t) = _Wfact(u,p,gam,t)
-        Wfact_f(J,u,p,gam,t) = _Wfact(J,u,p,gam,t)
-        Wfact_f_t(u,p,gam,t) = _Wfact_t(u,p,gam,t)
-        Wfact_f_t(J,u,p,gam,t) = _Wfact_t(J,u,p,gam,t)
+        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, Val{false})
+        Wfact_oop, Wfact_iip = tmp_Wfact
+        Wfact_oop_t, Wfact_iip_t = tmp_Wfact_t
+        _Wfact(u,p,t) = Wfact_oop(u,p,t)
+        _Wfact(W,u,p,t) = Wfact_iip(W,u,p,t)
+        _Wfact_t(u,p,t) = Wfact_oop_t(u,p,t)
+        _Wfact_t(W,u,p,t) = Wfact_iip_t(W,u,p,t)
     else
-        Wfact_f_safe = nothing
-        Wfact_f_t_safe = nothing
-        Wfact_f = nothing
-        Wfact_f_t = nothing
+        _Wfact,_Wfact_t = nothing,nothing
     end
 
-    if safe === Val{true}
-        ODEFunction{iip}(out_f_safe,jac=jac_f_safe,
-                          Wfact = Wfact_f_safe,
-                          Wfact_t = Wfact_f_t_safe)
-    else
-        ODEFunction{iip}(out_f,jac=jac_f,
-                          Wfact = Wfact_f,
-                          Wfact_t = Wfact_f_t)
-    end
+    ODEFunction{iip}(f,jac=_jac,
+                      Wfact = _Wfact,
+                      Wfact_t = _Wfact_t)
 end
 
 function DiffEqBase.ODEFunction(sys::ODESystem, args...; kwargs...)

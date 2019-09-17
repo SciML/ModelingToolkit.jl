@@ -8,12 +8,12 @@ export @register, @I
 export modelingtoolkitize
 
 
-using DiffEqBase
+using DiffEqBase, Distributed
 using StaticArrays, LinearAlgebra
 
 using MacroTools
 import MacroTools: splitdef, combinedef
-
+import GeneralizedGenerated
 using DocStringExtensions
 
 """

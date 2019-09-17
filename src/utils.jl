@@ -31,7 +31,7 @@ function flatten_expr!(x)
     x
 end
 
-function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr; constructor=nothing)
+function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, expression = Val{true}; constructor=nothing)
     _vs = map(x-> x isa Operation ? x.op : x, vs)
     _ps = map(x-> x isa Operation ? x.op : x, ps)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
@@ -40,9 +40,9 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr; co
 
     var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, rs))
 
-    fname = gensym()
+    fname = gensym(:ModelingToolkitFunction)
 
-    X = gensym()
+    X = gensym(:MTIIPVar)
     ip_sys_exprs = [:($X[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
     ip_let_expr = Expr(:let, var_eqs, build_expr(:block, ip_sys_exprs))
 
@@ -50,18 +50,28 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr; co
     let_expr = Expr(:let, var_eqs, sys_expr)
 
     fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
-    quote
-        function $fname($X,$(fargs.args...))
-            $ip_let_expr
-            nothing
-        end
-        function $fname($(fargs.args...))
+
+    oop_ex = :(
+        ($(fargs.args...),) -> begin
             X = $let_expr
             T = promote_type(map(typeof,X)...)
             convert.(T,X)
             construct = $(constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->(du=similar(u, T, $(size(rhss)...)); vec(du) .= x; du)) : constructor)
             construct(X)
         end
+    )
+
+    iip_ex = :(
+        ($X,$(fargs.args...)) -> begin
+            $ip_let_expr
+            nothing
+        end
+    )
+
+    if expression == Val{true}
+        return oop_ex, iip_ex
+    else
+        return GeneralizedGenerated.mk_function(@__MODULE__,oop_ex), GeneralizedGenerated.mk_function(@__MODULE__,iip_ex)
     end
 end
 
@@ -93,12 +103,4 @@ function vars!(vars, O)
     end
 
     return vars
-end
-
-@inline @generated function fast_invokelatest(f, ::Type{rt}, args...) where rt
-  tupargs = Expr(:tuple,(a==Nothing ? Int : a for a in args)...)
-  quote
-    _f = $(Expr(:cfunction, Base.CFunction, :f, rt, :((Core.svec)($((a==Nothing ? Int : a for a in args)...))), :(:ccall)))
-    return ccall(_f.ptr,rt,$tupargs,$((:(getindex(args,$i) === nothing ? 0 : getindex(args,$i)) for i in 1:length(args))...))
-  end
 end
