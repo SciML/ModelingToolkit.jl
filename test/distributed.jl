@@ -2,8 +2,8 @@ using Distributed
 # add processes to workspace
 addprocs(2)
 
-using ModelingToolkit
-using OrdinaryDiffEq
+@everywhere using ModelingToolkit, OrdinaryDiffEq
+using
 
 # create the Lorenz system
 @parameters t σ ρ β
@@ -24,7 +24,7 @@ ode_prob = ODEProblem(ode_func, u0, (0., 10.),params)
 
 @everywhere begin
 
-    using DifferentialEquations
+    using OrdinaryDiffEq
     using ModelingToolkit
 
     function solve_lorenz(ode_problem)

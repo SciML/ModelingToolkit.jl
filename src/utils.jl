@@ -52,7 +52,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
     fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
 
     oop_ex = :(
-        ($(fargs.args...)) -> begin
+        ($(fargs.args...),) -> begin
             X = $let_expr
             T = promote_type(map(typeof,X)...)
             convert.(T,X)
@@ -71,7 +71,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
     if expression == Val{true}
         return oop_ex, iip_ex
     else
-        return GeneralizedGenerated.mk_function(oop_ex), GeneralizedGenerated.mk_function(iip_ex)
+        return GeneralizedGenerated.mk_function(@__MODULE__,oop_ex), GeneralizedGenerated.mk_function(@__MODULE__,iip_ex)
     end
 end
 
