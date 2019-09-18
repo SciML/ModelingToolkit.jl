@@ -234,7 +234,7 @@ function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps;
     end
 
     if Wfact
-        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, Val{false})
+        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, true, Val{false})
         Wfact_oop, Wfact_iip = tmp_Wfact
         Wfact_oop_t, Wfact_iip_t = tmp_Wfact_t
         _Wfact(u,p,t) = Wfact_oop(u,p,t)
