@@ -237,10 +237,10 @@ function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps;
         tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, true, Val{false})
         Wfact_oop, Wfact_iip = tmp_Wfact
         Wfact_oop_t, Wfact_iip_t = tmp_Wfact_t
-        _Wfact(u,p,t) = Wfact_oop(u,p,t)
-        _Wfact(W,u,p,t) = Wfact_iip(W,u,p,t)
-        _Wfact_t(u,p,t) = Wfact_oop_t(u,p,t)
-        _Wfact_t(W,u,p,t) = Wfact_iip_t(W,u,p,t)
+        _Wfact(u,p,dtgamma,t) = Wfact_oop(u,p,dtgamma,t)
+        _Wfact(W,u,p,dtgamma,t) = Wfact_iip(W,u,p,dtgamma,t)
+        _Wfact_t(u,p,dtgamma,t) = Wfact_oop_t(u,p,dtgamma,t)
+        _Wfact_t(W,u,p,dtgamma,t) = Wfact_iip_t(W,u,p,dtgamma,t)
     else
         _Wfact,_Wfact_t = nothing,nothing
     end
