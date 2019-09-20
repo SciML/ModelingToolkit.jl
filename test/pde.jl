@@ -14,15 +14,7 @@ domains = [t ∈ IntervalDomain(0.0,1.0),
 
 pdesys = PDESystem(eq,bcs,domains,[t,x],[u])
 discretization = MOLFiniteDifference(0.1)
-prob = discretize(pdesys,discretization)
+prob = discretize(pdesys,discretization) # This gives an ODEProblem since it's time-dependent
 
 using OrdinaryDiffEq
 sol = solve(prob,Tsit5(),saveat=0.1)
-
-#=
-using Plots
-plot(prob.space,Array(prob.extrapolation*sol[1]))
-plot!(prob.space,Array(prob.extrapolation*sol[2]))
-plot!(prob.space,Array(prob.extrapolation*sol[3]))
-plot!(prob.space,Array(prob.extrapolation*sol[4]))
-=#

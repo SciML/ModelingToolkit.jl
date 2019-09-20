@@ -1,4 +1,4 @@
-export Equation
+export Equation, ConstrainedEquation
 
 
 """

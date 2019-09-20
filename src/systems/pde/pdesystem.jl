@@ -1,3 +1,5 @@
+export PDESystem
+
 struct PDESystem <: ModelingToolkit.AbstractSystem
   eq
   bcs
