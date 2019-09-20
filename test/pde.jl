@@ -1,4 +1,4 @@
-using ModelingToolkit, DiffEqOperators, DiffEqBase, LinearAlgebra
+using ModelingToolkit, DiffEqBase, LinearAlgebra
 
 # Define some variables
 @parameters t x
@@ -13,8 +13,3 @@ domains = [t ∈ IntervalDomain(0.0,1.0),
            x ∈ IntervalDomain(0.0,1.0)]
 
 pdesys = PDESystem(eq,bcs,domains,[t,x],[u])
-discretization = MOLFiniteDifference(0.1)
-prob = discretize(pdesys,discretization) # This gives an ODEProblem since it's time-dependent
-
-using OrdinaryDiffEq
-sol = solve(prob,Tsit5(),saveat=0.1)
