@@ -1,4 +1,4 @@
-using ModelingToolkit, DiffEqOperators, DiffEqBase, LinearAlgebra
+using ModelingToolkit, DiffEqBase, LinearAlgebra
 
 # Define some variables
 @parameters t x y
