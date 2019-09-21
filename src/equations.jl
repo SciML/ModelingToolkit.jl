@@ -1,4 +1,4 @@
-export Equation
+export Equation, ConstrainedEquation
 
 
 """
@@ -40,3 +40,8 @@ Equation(x() - y(), ModelingToolkit.Constant(0))
 Base.:~(lhs::Expression, rhs::Expression) = Equation(lhs, rhs)
 Base.:~(lhs::Expression, rhs::Number    ) = Equation(lhs, rhs)
 Base.:~(lhs::Number    , rhs::Expression) = Equation(lhs, rhs)
+
+struct ConstrainedEquation
+  constraints
+  eq
+end
