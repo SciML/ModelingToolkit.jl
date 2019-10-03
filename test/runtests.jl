@@ -9,3 +9,4 @@ using ModelingToolkit, Test
 @testset "Constraints Test" begin include("constraints.jl") end
 @testset "PDE Construction Test" begin include("pde.jl") end
 @testset "Distributed Test" begin include("distributed.jl") end
+#@testset "Latexify recipes Test" begin include("latexify.jl") end

@@ -10,9 +10,10 @@ export modelingtoolkitize
 
 using DiffEqBase, Distributed
 using StaticArrays, LinearAlgebra
+using Latexify
 
 using MacroTools
-import MacroTools: splitdef, combinedef
+import MacroTools: splitdef, combinedef, postwalk
 import GeneralizedGenerated
 using DocStringExtensions
 
@@ -90,6 +91,7 @@ include("simplify.jl")
 include("utils.jl")
 include("direct.jl")
 include("domains.jl")
+include("latexify_recipes.jl")
 include("systems/diffeqs/diffeqsystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
 include("systems/nonlinear/nonlinear_system.jl")
