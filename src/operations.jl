@@ -68,4 +68,3 @@ Operation(x) = convert(Operation, x)
 Base.Expr(op::Operation) = 
     op.op isa Variable ? op.op.name : Expr(:call, Symbol(op.op), Expr.(op.args)...)
 Base.convert(::Type{Expr},x::Operation) = Expr(x)
-end
