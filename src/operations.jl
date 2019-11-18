@@ -54,8 +54,6 @@ Base.isequal(::Variable , ::Operation) = false
 Base.isequal(::Operation, ::Constant ) = false
 Base.isequal(::Constant , ::Operation) = false
 
-Base.convert(::Type{Expr}, O::Operation) =
-    build_expr(:call, Any[Symbol(O.op); convert.(Expr, O.args)])
 Base.show(io::IO, O::Operation) = print(io, convert(Expr, O))
 
 # For inv
