@@ -20,6 +20,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 [compat]
 julia = "1"
 Latexify = "0.11, 2"
+GeneralizedGenerated = "0.1.4"
 
 [extras]
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
