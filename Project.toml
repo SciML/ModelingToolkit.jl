@@ -18,16 +18,16 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
-julia = "1"
 DiffEqBase = "6"
 DiffRules = "0.1"
 DocStringExtensions = "0.7, 0.8"
+GeneralizedGenerated = "0.1.4, 0.2"
 Latexify = "0.11, 0.12"
-GeneralizedGenerated = "0.1.4"
 MacroTools = "0.5"
 NaNMath = "0.3"
 SpecialFunctions = "0.7, 0.8"
 StaticArrays = "0.10, 0.11, 0.12"
+julia = "1"
 
 [extras]
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
