@@ -31,7 +31,8 @@ function flatten_expr!(x)
     x
 end
 
-function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, expression = Val{true}; constructor=nothing)
+function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, expression = Val{true}; 
+                        checkbounds = false, constructor=nothing)
     _vs = map(x-> x isa Operation ? x.op : x, vs)
     _ps = map(x-> x isa Operation ? x.op : x, ps)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
@@ -48,12 +49,16 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
 
     sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
     let_expr = Expr(:let, var_eqs, sys_expr)
-
+    bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
+    ip_bounds_block = checkbounds ? ip_let_expr : :(@inbounds begin $ip_let_expr end)
+    
     fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
 
     oop_ex = :(
         ($(fargs.args...),) -> begin
-            X = $let_expr
+            @inbounds begin
+                X = $bounds_block
+            end
             T = promote_type(map(typeof,X)...)
             convert.(T,X)
             construct = $(constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->(du=similar(u, T, $(size(rhss)...)); vec(du) .= x; du)) : constructor)
@@ -63,7 +68,9 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
 
     iip_ex = :(
         ($X,$(fargs.args...)) -> begin
-            $ip_let_expr
+            @inbounds begin
+                $ip_bounds_block
+            end
             nothing
         end
     )
