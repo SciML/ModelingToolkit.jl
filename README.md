@@ -106,6 +106,13 @@ or directly get the generated ODE function via:
 f = ODEFunction(de, [x,y,z], [σ,ρ,β])
 ```
 
+Here already you can see some advantages of the ModelingToolkit.jl compilation system. As an
+IR to target, this output can compile to multiple different forms, including ones specific
+to static arrays and in-place functions. Forms which automatically parallelize the calculations
+based on internal cost models are a work-in-progress as well. This means DSLs built on top of
+this as a model compiler can write domain-specific languages without having to write complex
+optimized Julia function compilers.
+
 ### Example: Nonlinear System
 
 We can also build nonlinear systems. Let's say we wanted to solve for the steady
