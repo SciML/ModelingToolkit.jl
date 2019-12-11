@@ -53,7 +53,9 @@ This can then generate the function. For example, we can see the
 generated code via:
 
 ```julia
-generate_function(de, [x,y,z], [σ,ρ,β])
+using MacroTools
+MacroTools.striplines(generate_function(de, [x,y,z], [σ,ρ,β])[2]) # second one is the in-place function
+
 
 ## Which returns:
 :((##363, u, p, t)->begin
@@ -86,27 +88,40 @@ eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs, [x,y,z])
-nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β])
+nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β])[2] # second is the inplace version
 ```
 
 which generates:
 
 ```julia
-:((##364, u, p)->begin
-          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-              ##364[1] = σ * (y - x)
-              ##364[2] = x * (ρ - z) - y
-              ##364[3] = x * y - β * z
-          end
-      end)
+(var"##MTIIPVar#405", u, p)->begin
+        @inbounds begin
+                @inbounds begin
+                        let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+                            var"##MTIIPVar#405"[1] = (*)(σ, (-)(y, x))
+                            var"##MTIIPVar#405"[2] = (-)((*)(x, (-)(ρ, z)), y)
+                            var"##MTIIPVar#405"[3] = (-)((*)(x, y), (*)(β, z))
+                        end
+                    end
+            end
+        nothing
+    end
 ```
 
 We can use this to build a nonlinear function for use with NLsolve.jl:
 
 ```julia
-f = @eval eval(nlsys_func)
-# Make a closure over the parameters for for NLsolve.jl
-f2 = (du,u) -> f(du,u,(10.0,26.0,2.33))
+f = eval(nlsys_func)
+du = zeros(3); u = ones(3)
+f(du,u,(10.0,26.0,2.33))
+du
+
+#=
+3-element Array{Float64,1}:
+  0.0 
+ 24.0
+ -1.33
+ =#
 ```
 
 ### Example: Arrays of variables
