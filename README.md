@@ -124,6 +124,16 @@ du
  =#
 ```
 
+If one would like the generated function to be a Julia function instead of an expression, and allow this
+function to be used from within the same world-age, one simply needs to pass `Val{false}` to tell it to
+generate the function, i.e.:
+
+```julia
+nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β], Val{false})[2]
+```
+
+which uses GeneralizedGenerated.jl to build a same world-age function on the fly without eval.
+
 ### Example: Arrays of variables
 
 Sometimes it is convenient to define arrays of variables to model things like `x₁,…,x₃`.
