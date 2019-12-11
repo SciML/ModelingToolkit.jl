@@ -84,7 +84,7 @@ end
 (f::NLSysToExpr)(x) = convert(Expr, x)
 
 
-function generate_function(sys::NonlinearSystem, vs, ps; version = nothing)
+function generate_function(sys::NonlinearSystem, vs, ps, expression = Val{true}; version = nothing)
     rhss = [eq.rhs for eq ∈ sys.eqs]
     vs′ = [clean(v) for v ∈ vs]
     ps′ = [clean(p) for p ∈ ps]
