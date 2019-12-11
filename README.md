@@ -54,20 +54,53 @@ generated code via:
 
 ```julia
 using MacroTools
-MacroTools.striplines(generate_function(de, [x,y,z], [σ,ρ,β])[2]) # second one is the in-place function
+myode_oop = generate_function(de, [x,y,z], [σ,ρ,β])[2] # first one is the out-of-place function
+MacroTools.striplines(myode_oop) # print without line numbers
 
-
-## Which returns:
-:((##363, u, p, t)->begin
-          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-              ##363[1] = σ * (y - x)
-              ##363[2] = x * (ρ - z) - y
-              ##363[3] = x * y - β * z
-          end
+#=
+:((u, p, t)->begin
+          @inbounds begin
+                  X = @inbounds(begin
+                              let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+                                  (σ * (y - x), x * (ρ - z) - y, x * y - β * z)
+                              end
+                          end)
+              end
+          T = promote_type(map(typeof, X)...)
+          convert.(T, X)
+          construct = if u isa ModelingToolkit.StaticArrays.StaticArray
+                  ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X))
+              else
+                  x->begin
+                          du = similar(u, T, 3)
+                          vec(du) .= x
+                          du
+                      end
+              end
+          construct(X)
       end)
+=#
+
+myode_iip = generate_function(de, [x,y,z], [σ,ρ,β])[2] # second one is the in-place function
+MacroTools.striplines(myode_iip) # print without line numbers
+
+#=
+(var"##MTIIPVar#409", u, p, t)->begin
+        @inbounds begin
+                @inbounds begin
+                        let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+                            var"##MTIIPVar#409"[1] = σ * (y - x)
+                            var"##MTIIPVar#409"[2] = x * (ρ - z) - y
+                            var"##MTIIPVar#409"[3] = x * y - β * z
+                        end
+                    end
+            end
+        nothing
+    end
+=#
 ```
 
-and get the generated function via:
+or directly get the generated ODE function via:
 
 ```julia
 f = ODEFunction(de, [x,y,z], [σ,ρ,β])
