@@ -13,7 +13,7 @@ using StaticArrays, LinearAlgebra
 using Latexify
 
 using MacroTools
-import MacroTools: splitdef, combinedef, postwalk
+import MacroTools: splitdef, combinedef, postwalk, striplines
 import GeneralizedGenerated
 using DocStringExtensions
 

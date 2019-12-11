@@ -31,8 +31,8 @@ function flatten_expr!(x)
     x
 end
 
-function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, expression = Val{true}; 
-                        checkbounds = false, constructor=nothing)
+function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, expression = Val{true};
+                        checkbounds = false, constructor=nothing, linenumbers = true)
     _vs = map(x-> x isa Operation ? x.op : x, vs)
     _ps = map(x-> x isa Operation ? x.op : x, ps)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
@@ -51,7 +51,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
     let_expr = Expr(:let, var_eqs, sys_expr)
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
     ip_bounds_block = checkbounds ? ip_let_expr : :(@inbounds begin $ip_let_expr end)
-    
+
     fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
 
     oop_ex = :(
@@ -74,6 +74,11 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
             nothing
         end
     )
+
+    if !linenumbers
+        oop_ex = striplines(oop_ex)
+        iip_ex = striplines(iip_ex)
+    end
 
     if expression == Val{true}
         return oop_ex, iip_ex

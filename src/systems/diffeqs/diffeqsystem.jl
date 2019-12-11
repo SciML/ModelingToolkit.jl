@@ -160,16 +160,16 @@ function (f::ODEToExpr)(O::Operation)
 end
 (f::ODEToExpr)(x) = convert(Expr, x)
 
-function generate_jacobian(sys::ODESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true})
+function generate_jacobian(sys::ODESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true}; kwargs...)
     jac = calculate_jacobian(sys)
-    return build_function(jac, dvs, ps, (sys.iv.name,), ODEToExpr(sys), expression)
+    return build_function(jac, dvs, ps, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
 end
 
-function generate_function(sys::ODESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true})
+function generate_function(sys::ODESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true}; kwargs...)
     rhss = [deq.rhs for deq ∈ sys.eqs]
     dvs′ = [clean(dv) for dv ∈ dvs]
     ps′ = [clean(p) for p ∈ ps]
-    return build_function(rhss, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys), expression)
+    return build_function(rhss, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
 end
 
 function calculate_factorized_W(sys::ODESystem, simplify=true)
@@ -196,7 +196,7 @@ function calculate_factorized_W(sys::ODESystem, simplify=true)
     (Wfact,Wfact_t)
 end
 
-function generate_factorized_W(sys::ODESystem, vs = sys.dvs, ps = sys.ps, simplify=true, expression = Val{true})
+function generate_factorized_W(sys::ODESystem, vs = sys.dvs, ps = sys.ps, simplify=true, expression = Val{true}; kwargs...)
     (Wfact,Wfact_t) = calculate_factorized_W(sys,simplify)
     siz = size(Wfact)
     constructor = :(x -> begin
@@ -204,8 +204,8 @@ function generate_factorized_W(sys::ODESystem, vs = sys.dvs, ps = sys.ps, simpli
                         StaticArrays.LU(LowerTriangular( SMatrix{$siz...}(UnitLowerTriangular(A)) ), UpperTriangular(A), SVector(ntuple(n->n, max($siz...))))
                     end)
 
-    Wfact_func   = build_function(Wfact  , vs, ps, (:gam,:t), ODEToExpr(sys), expression;constructor=constructor)
-    Wfact_t_func = build_function(Wfact_t, vs, ps, (:gam,:t), ODEToExpr(sys), expression;constructor=constructor)
+    Wfact_func   = build_function(Wfact  , vs, ps, (:gam,:t), ODEToExpr(sys), expression;constructor=constructor,kwargs...)
+    Wfact_t_func = build_function(Wfact_t, vs, ps, (:gam,:t), ODEToExpr(sys), expression;constructor=constructor,kwargs...)
 
     return (Wfact_func, Wfact_t_func)
 end
