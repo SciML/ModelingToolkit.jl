@@ -54,7 +54,7 @@ generated code via:
 
 ```julia
 using MacroTools
-myode_oop = generate_function(de, [x,y,z], [σ,ρ,β])[2] # first one is the out-of-place function
+myode_oop = generate_function(de, [x,y,z], [σ,ρ,β])[1] # first one is the out-of-place function
 MacroTools.striplines(myode_oop) # print without line numbers
 
 #=
