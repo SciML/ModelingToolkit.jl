@@ -41,7 +41,14 @@ struct NonlinearSystem <: AbstractSystem
         ps = reduce(∪, map(_find_params(vs), rhss); init = vnil())
         new(eqs, vs, collect(ps))
     end
+
+    function NonlinearSystem(eqs, vs, ps)
+        rhss = [eq.rhs for eq ∈ eqs]
+        new(eqs, vs, [p.op for p in ps])
+    end
 end
+
+
 
 vnil() = Set{Variable}()
 _find_params(vs) = Base.Fix2(_find_params, vs)
@@ -65,9 +72,9 @@ function calculate_jacobian(sys::NonlinearSystem)
     return jac
 end
 
-function generate_jacobian(sys::NonlinearSystem)
+function generate_jacobian(sys::NonlinearSystem, vs = sys.vs, ps = sys.ps, expression = Val{true}; kwargs...)
     jac = calculate_jacobian(sys)
-    return build_function(jac, clean.(sys.vs), sys.ps, (), NLSysToExpr(sys))
+    return build_function(jac, clean.(vs), clean.(ps), (), NLSysToExpr(sys))
 end
 
 struct NLSysToExpr
@@ -84,7 +91,7 @@ end
 (f::NLSysToExpr)(x) = convert(Expr, x)
 
 
-function generate_function(sys::NonlinearSystem, vs, ps, expression = Val{true}; kwargs...)
+function generate_function(sys::NonlinearSystem, vs = sys.vs, ps = sys.ps, expression = Val{true}; kwargs...)
     rhss = [eq.rhs for eq ∈ sys.eqs]
     vs′ = [clean(v) for v ∈ vs]
     ps′ = [clean(p) for p ∈ ps]
