@@ -61,4 +61,4 @@ jac = calculate_jacobian(sys)
 @test isequal(expand_derivatives(D(2x)), 2D(x))
 @test isequal(expand_derivatives(D(x^2)), simplify_constants(2 * x * D(x)))
 
-@test isequal(ModelingToolkit.gradient(ModelingToolkit.constant(5), [1., 2., 3.,]), fill(ModelingToolkit.Constant(0), 3))
+@test isequal(ModelingToolkit.gradient(ModelingToolkit.Constant(5), [1., 2., 3.,]), fill(ModelingToolkit.Constant(0), 3))
