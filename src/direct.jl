@@ -3,6 +3,8 @@ function gradient(O::Operation, vars::AbstractVector{Operation}; simplify = true
     simplify ? simplify_constants.(out) : out
 end
 
+gradient(c::ModelingToolkit.Constant, x) = fill(ModelingToolkit.Constant(0), length(x))
+
 function jacobian(ops::AbstractVector{Operation}, vars::AbstractVector{Operation}; simplify = true)
     out = [expand_derivatives(Differential(v)(O)) for O in ops, v in vars]
     simplify ? simplify_constants.(out) : out
