@@ -47,21 +47,26 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
     ip_sys_exprs = [:($X[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
     ip_let_expr = Expr(:let, var_eqs, build_expr(:block, ip_sys_exprs))
 
-    sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
-    let_expr = Expr(:let, var_eqs, sys_expr)
+    tuple_sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
+    vector_sys_expr = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
+    let_expr = Expr(:let, var_eqs, tuple_sys_expr)
+    vector_let_expr = Expr(:let, var_eqs, vector_sys_expr)
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
+    vector_bounds_block = checkbounds ? vector_let_expr : :(@inbounds begin $vector_let_expr end)
     ip_bounds_block = checkbounds ? ip_let_expr : :(@inbounds begin $ip_let_expr end)
 
     fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
 
     oop_ex = :(
         ($(fargs.args...),) -> begin
-            @inbounds begin
+            if $(fargs.args[1]) isa Array
+                return $vector_bounds_block
+            else
                 X = $bounds_block
             end
             T = promote_type(map(typeof,X)...)
-            convert.(T,X)
-            construct = $(constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->(du=similar(u, T, $(size(rhss)...)); vec(du) .= x; du)) : constructor)
+            map(T,X)
+            construct = $(constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->convert(typeof(u),x)) : constructor)
             construct(X)
         end
     )
