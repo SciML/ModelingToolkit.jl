@@ -65,7 +65,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
                 X = $bounds_block
             end
             T = promote_type(map(typeof,X)...)
-            convert.(T,X)
+            map(T,X)
             construct = $(constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->convert(typeof(u),x)) : constructor)
             construct(X)
         end

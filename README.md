@@ -44,7 +44,7 @@ Each operation builds an `Operation` type, and thus `eqs` is an array of
 analyzed by other programs. We can turn this into a `ODESystem` via:
 
 ```julia
-de = ODESystem(eqs)
+de = ODESystem(eqs, t, [x,y,z], [σ,ρ,β])
 ```
 
 where we tell it the variable types and ordering in the first version, or let it
@@ -54,49 +54,53 @@ generated code via:
 
 ```julia
 using MacroTools
-myode_oop = generate_function(de, [x,y,z], [σ,ρ,β])[1] # first one is the out-of-place function
+myode_oop = generate_function(de)[1] # first one is the out-of-place function
 MacroTools.striplines(myode_oop) # print without line numbers
 
 #=
 :((u, p, t)->begin
-          @inbounds begin
-                  X = @inbounds(begin
-                              let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-                                  (σ * (y - x), x * (ρ - z) - y, x * y - β * z)
-                              end
-                          end)
-              end
+          if u isa Array
+              return @inbounds(begin
+                          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+                              [σ * (y - x), x * (ρ - z) - y, x * y - β * z]
+                          end
+                      end)
+          else
+              X = @inbounds(begin
+                          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+                              (σ * (y - x), x * (ρ - z) - y, x * y - β * z)
+                          end
+                      end)
+          end
           T = promote_type(map(typeof, X)...)
-          convert.(T, X)
+          map(T, X)
           construct = if u isa ModelingToolkit.StaticArrays.StaticArray
                   ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X))
               else
                   x->begin
-                          du = similar(u, T, 3)
-                          vec(du) .= x
-                          du
+                          convert(typeof(u), x)
                       end
               end
           construct(X)
       end)
 =#
 
-myode_iip = generate_function(de, [x,y,z], [σ,ρ,β])[2] # second one is the in-place function
+myode_iip = generate_function(de)[2] # second one is the in-place function
 MacroTools.striplines(myode_iip) # print without line numbers
 
 #=
-(var"##MTIIPVar#409", u, p, t)->begin
-        @inbounds begin
-                @inbounds begin
-                        let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-                            var"##MTIIPVar#409"[1] = σ * (y - x)
-                            var"##MTIIPVar#409"[2] = x * (ρ - z) - y
-                            var"##MTIIPVar#409"[3] = x * y - β * z
-                        end
-                    end
-            end
-        nothing
-    end
+:((var"##MTIIPVar#793", u, p, t)->begin
+          @inbounds begin
+                  @inbounds begin
+                          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+                              var"##MTIIPVar#793"[1] = σ * (y - x)
+                              var"##MTIIPVar#793"[2] = x * (ρ - z) - y
+                              var"##MTIIPVar#793"[3] = x * y - β * z
+                          end
+                      end
+              end
+          nothing
+      end)
 =#
 ```
 
