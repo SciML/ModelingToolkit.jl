@@ -57,6 +57,7 @@ Base.isequal(::Constant , ::Operation) = false
 Base.show(io::IO, O::Operation) = print(io, convert(Expr, O))
 
 # For inv
+Base.convert(::Type{Operation}, x::Bool) = Operation(identity, Expression[Constant(x)])
 Base.convert(::Type{Operation}, x::Number) = Operation(identity, Expression[Constant(x)])
 Base.convert(::Type{Operation}, x::Operation) = x
 Base.convert(::Type{Operation}, x::Expression) = Operation(identity, Expression[x])

@@ -12,6 +12,8 @@ function Base.convert(::Type{Expression}, ex::Expr)
 end
 Base.convert(::Type{Expression}, x::Expression) = x
 Base.convert(::Type{Expression}, x::Number) = Constant(x)
+Base.convert(::Type{Expression}, x::Bool) = Constant(x)
+Expression(x::Bool) = Constant(x)
 
 function build_expr(head::Symbol, args)
     ex = Expr(head)
