@@ -17,7 +17,7 @@ to manipulate.
 ## Tutorial
 
 For an introductory tutorial to using ModelingToolkit.jl, please checkout
-[ModelingToolkit.jl, An IR and Compiler for Scientific Models](file:///C:/Users/accou/.julia/dev/DiffEqTutorials/html/ode_extras/01-ModelingToolkit.html).
+[ModelingToolkit.jl, An IR and Compiler for Scientific Models](https://tutorials.juliadiffeq.org/html/ode_extras/01-ModelingToolkit.html).
 
 ## Introduction by Examples
 
