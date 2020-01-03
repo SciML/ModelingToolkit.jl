@@ -8,8 +8,8 @@ function lower_varname(var::Variable, idv, order)
 end
 
 function ode_order_lowering(sys::ODESystem)
-    (eqs_lowered, new_vars) = ode_order_lowering(sys.eqs, sys.iv)
-    ODESystem(eqs_lowered, sys.iv, [sys.dvs; new_vars], sys.ps)
+    eqs_lowered, _ = ode_order_lowering(sys.eqs, sys.iv)
+    ODESystem(eqs_lowered, sys.iv, [eq.x for eq in eqs_lowered], sys.ps)
 end
 function ode_order_lowering(eqs, iv)
     var_order = Dict{Variable,Int}()
