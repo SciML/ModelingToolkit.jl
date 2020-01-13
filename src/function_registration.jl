@@ -55,6 +55,7 @@ end
 # special cases
 Base.:^(x::Expression,y::T) where T <: Integer = Operation(Base.:^, Expression[x, y])
 Base.:^(x::Expression,y::T) where T <: Rational = Operation(Base.:^, Expression[x, y])
+Base.conj(x::Expression) = Operation(Base.conj, [x])
 Base.muladd(a::Expression, b::Expression, c::Expression) = a * b + c
 
 @register Base.getindex(x,i)
