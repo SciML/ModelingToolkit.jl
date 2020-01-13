@@ -81,3 +81,5 @@ function test_worldage()
    f_iip(out,[1.0,2,3])
 end
 test_worldage()
+
+@test muladd(x, y, z) == x * y + z
