@@ -82,5 +82,5 @@ function test_worldage()
 end
 test_worldage()
 
-@test muladd(x, y, z) == x * y + z
+@test_nowarn muladd(x, y, z)
 @test_nowarn [x, y, z]'

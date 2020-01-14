@@ -66,3 +66,7 @@ Operation(x) = convert(Operation, x)
 #convert to Expr
 Base.Expr(op::Operation) = simplified_expr(op)
 Base.convert(::Type{Expr},x::Operation) = Expr(x)
+
+# promotion
+Base.promote_rule(::Type{<:Constant}, ::Type{<:Operation}) = Operation
+Base.promote_rule(::Type{<:Operation}, ::Type{<:Constant}) = Operation
