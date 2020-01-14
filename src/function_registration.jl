@@ -56,5 +56,6 @@ end
 Base.:^(x::Expression,y::T) where T <: Integer = Operation(Base.:^, Expression[x, y])
 Base.:^(x::Expression,y::T) where T <: Rational = Operation(Base.:^, Expression[x, y])
 
+@register Base.conj(x)
 @register Base.getindex(x,i)
 Base.getindex(x::Operation,i::Int64) = Operation(getindex,[x,i])
