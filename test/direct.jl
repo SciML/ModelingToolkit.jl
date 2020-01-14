@@ -82,5 +82,6 @@ function test_worldage()
 end
 test_worldage()
 
-@test_nowarn muladd(x, y, z)
+@test_nowarn muladd(x, y, ModelingToolkit.Constant(0))
+@test promote(x, ModelingToolkit.Constant(0)) == (x, identity(0))
 @test_nowarn [x, y, z]'
