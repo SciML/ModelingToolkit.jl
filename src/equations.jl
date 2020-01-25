@@ -45,3 +45,6 @@ struct ConstrainedEquation
   constraints
   eq
 end
+
+
+Base.Expr(op::Equation) = simplified_expr(op)
