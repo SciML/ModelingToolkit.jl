@@ -36,6 +36,13 @@ J2 = copy(J)
 Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test J2 == J
 
+Joop,Jiip = eval.(ModelingToolkit.build_function(∂,[x,y,z],[σ,ρ,β],[t.op.name],parallel=true))
+J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+@test J isa Matrix
+J2 = copy(J)
+Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+@test J2 == J
+
 ∂3 = cat(∂,∂,dims=3)
 Joop,Jiip = eval.(ModelingToolkit.build_function(∂3,[x,y,z],[σ,ρ,β],[t.op.name]))
 J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
