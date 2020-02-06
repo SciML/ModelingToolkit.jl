@@ -8,7 +8,7 @@ export @register, @I
 export modelingtoolkitize
 
 
-using DiffEqBase, Distributed
+using DiffEqBase, Distributed, Base.Threads
 using StaticArrays, LinearAlgebra, SparseArrays
 using Latexify
 

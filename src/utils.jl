@@ -34,7 +34,8 @@ function flatten_expr!(x)
 end
 
 function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, expression = Val{true};
-                        checkbounds = false, constructor=nothing, linenumbers = true)
+                        checkbounds = false, constructor=nothing, linenumbers = true,
+                        parallel = false)
     _vs = map(x-> x isa Operation ? x.op : x, vs)
     _ps = map(x-> x isa Operation ? x.op : x, ps)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
@@ -45,27 +46,29 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
 
     fname = gensym(:ModelingToolkitFunction)
 
+    _conv(x) = parallel ? :(Threads.@spawn($(conv(x)))) : conv(x)
+
     X = gensym(:MTIIPVar)
     if rhss isa SparseMatrixCSC
-        ip_sys_exprs = [:($X.nzval[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss.nzval)]
+        ip_sys_exprs = [:($X.nzval[$i] = $(_conv(rhs))) for (i, rhs) ∈ enumerate(rhss.nzval)]
     else
-        ip_sys_exprs = [:($X[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
+        ip_sys_exprs = [:($X[$i] = $(_conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
     end
 
     ip_let_expr = Expr(:let, var_eqs, build_expr(:block, ip_sys_exprs))
 
-    tuple_sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
+    tuple_sys_expr = build_expr(:tuple, [_conv(rhs) for rhs ∈ rhss])
 
     if rhss isa Matrix
-        arr_sys_expr = build_expr(:vcat, [build_expr(:row,[conv(rhs) for rhs ∈ rhss[i,:]]) for i in 1:size(rhss,2)])
+        arr_sys_expr = build_expr(:vcat, [build_expr(:row,[_conv(rhs) for rhs ∈ rhss[i,:]]) for i in 1:size(rhss,2)])
     elseif typeof(rhss) <: Array && !(typeof(rhss) <: Vector)
-        vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
+        vector_form = build_expr(:vect, [_conv(rhs) for rhs ∈ rhss])
         arr_sys_expr = :(reshape($vector_form,$(size(rhss)...)))
     elseif rhss isa SparseMatrixCSC
-        vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ nonzeros(rhss)])
+        vector_form = build_expr(:vect, [_conv(rhs) for rhs ∈ nonzeros(rhss)])
         arr_sys_expr = :(SparseMatrixCSC{eltype(u),Int}($(size(rhss)...), $(rhss.colptr), $(rhss.rowval), $vector_form))
     else # Vector
-        arr_sys_expr = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
+        arr_sys_expr = build_expr(:vect, [_conv(rhs) for rhs ∈ rhss])
     end
 
     let_expr = Expr(:let, var_eqs, tuple_sys_expr)
@@ -78,7 +81,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
 
     oop_ex = :(
         ($(fargs.args...),) -> begin
-            if $(fargs.args[1]) isa Array
+            @sync if $(fargs.args[1]) isa Array
                 return $arr_bounds_block
             else
                 X = $bounds_block
@@ -92,7 +95,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
 
     iip_ex = :(
         ($X,$(fargs.args...)) -> begin
-            @inbounds begin
+            @sync @inbounds begin
                 $ip_bounds_block
             end
             nothing
