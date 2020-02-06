@@ -48,7 +48,7 @@ s∂ = sparse(∂)
 @test nnz(s∂) == 8
 Joop,Jiip = eval.(ModelingToolkit.build_function(s∂,[x,y,z],[σ,ρ,β],[t.op.name]))
 J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
-length(nonzeros(s∂)) == 8
+@test length(nonzeros(s∂)) == 8
 J2 = copy(J)
 Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test J2 == J
