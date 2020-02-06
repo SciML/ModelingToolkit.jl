@@ -50,11 +50,20 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
     ip_let_expr = Expr(:let, var_eqs, build_expr(:block, ip_sys_exprs))
 
     tuple_sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
-    vector_sys_expr = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
+
+    if rhss isa Matrix
+        arr_sys_expr = build_expr(:vcat, [build_expr(:row,[conv(rhs) for rhs ∈ rhss[i,:]]) for i in 1:size(rhss,2)])
+    elseif typeof(rhss) <: Array && !(typeof(rhss) <: Vector)
+        vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
+        arr_sys_expr = :(reshape($vector_form,$(size(rhss)...)))
+    else # Vector
+        arr_sys_expr = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
+    end
+
     let_expr = Expr(:let, var_eqs, tuple_sys_expr)
-    vector_let_expr = Expr(:let, var_eqs, vector_sys_expr)
+    arr_let_expr = Expr(:let, var_eqs, arr_sys_expr)
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
-    vector_bounds_block = checkbounds ? vector_let_expr : :(@inbounds begin $vector_let_expr end)
+    arr_bounds_block = checkbounds ? arr_let_expr : :(@inbounds begin $arr_let_expr end)
     ip_bounds_block = checkbounds ? ip_let_expr : :(@inbounds begin $ip_let_expr end)
 
     fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
@@ -62,7 +71,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
     oop_ex = :(
         ($(fargs.args...),) -> begin
             if $(fargs.args[1]) isa Array
-                return $vector_bounds_block
+                return $arr_bounds_block
             else
                 X = $bounds_block
             end
