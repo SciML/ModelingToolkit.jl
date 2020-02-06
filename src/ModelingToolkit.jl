@@ -9,7 +9,7 @@ export modelingtoolkitize
 
 
 using DiffEqBase, Distributed
-using StaticArrays, LinearAlgebra
+using StaticArrays, LinearAlgebra, SparseArrays
 using Latexify
 
 using MacroTools

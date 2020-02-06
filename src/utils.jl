@@ -46,7 +46,12 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
     fname = gensym(:ModelingToolkitFunction)
 
     X = gensym(:MTIIPVar)
-    ip_sys_exprs = [:($X[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
+    if rhss isa SparseMatrixCSC
+        ip_sys_exprs = [:($X.nzval[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss.nzval)]
+    else
+        ip_sys_exprs = [:($X[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
+    end
+
     ip_let_expr = Expr(:let, var_eqs, build_expr(:block, ip_sys_exprs))
 
     tuple_sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
@@ -56,6 +61,9 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
     elseif typeof(rhss) <: Array && !(typeof(rhss) <: Vector)
         vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
         arr_sys_expr = :(reshape($vector_form,$(size(rhss)...)))
+    elseif rhss isa SparseMatrixCSC
+        vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ nonzeros(rhss)])
+        arr_sys_expr = :(SparseMatrixCSC{eltype(u),Int}($(size(rhss)...), $(rhss.colptr), $(rhss.rowval), $vector_form))
     else # Vector
         arr_sys_expr = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
     end

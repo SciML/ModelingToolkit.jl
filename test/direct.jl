@@ -1,4 +1,4 @@
-using ModelingToolkit, StaticArrays, LinearAlgebra
+using ModelingToolkit, StaticArrays, LinearAlgebra, SparseArrays
 using DiffEqBase
 using Test
 
@@ -40,6 +40,15 @@ Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 Joop,Jiip = eval.(ModelingToolkit.build_function(∂3,[x,y,z],[σ,ρ,β],[t.op.name]))
 J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test size(J) == (3,3,2)
+J2 = copy(J)
+Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+@test J2 == J
+
+s∂ = sparse(∂)
+@test nnz(s∂) == 8
+Joop,Jiip = eval.(ModelingToolkit.build_function(s∂,[x,y,z],[σ,ρ,β],[t.op.name]))
+J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+length(nonzeros(s∂)) == 8
 J2 = copy(J)
 Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test J2 == J
