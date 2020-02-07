@@ -57,7 +57,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
     tuple_sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
 
     if rhss isa Matrix
-        arr_sys_expr = build_expr(:vcat, [build_expr(:row,[conv(rhs) for rhs ∈ rhss[i,:]]) for i in 1:size(rhss,2)])
+        arr_sys_expr = build_expr(:vcat, [build_expr(:row,[conv(rhs) for rhs ∈ rhss[i,:]]) for i in 1:size(rhss,1)])
     elseif typeof(rhss) <: Array && !(typeof(rhss) <: Vector)
         vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
         arr_sys_expr = :(reshape($vector_form,$(size(rhss)...)))
