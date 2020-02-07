@@ -109,9 +109,8 @@ for (modu, fun, arity) ∈ DiffRules.diffrules()
     end
 end
 
-derivative(::typeof(+), args::NTuple{T,Operation}, ::Val{i}) where {T,i} = args[i]
-derivative(::typeof(+), args::Tuple{Operation,Operation}, ::Val{1}) = args[1]
-derivative(::typeof(+), args::Tuple{Operation,Operation}, ::Val{2}) = args[2]
+derivative(::typeof(+), args::NTuple{N,Operation}, ::Val) where {N} = 1
+derivative(::typeof(*), args::NTuple{N,Operation}, ::Val{i}) where {N,i} = Operation(*, deleteat!(collect(args), i))
 
 function count_order(x)
     @assert !(x isa Symbol) "The variable $x must have an order of differentiation that is greater or equal to 1!"

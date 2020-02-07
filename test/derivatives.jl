@@ -60,3 +60,7 @@ jac = calculate_jacobian(sys)
 @test isequal(expand_derivatives(D(2t)), 2)
 @test isequal(expand_derivatives(D(2x)), 2D(x))
 @test isequal(expand_derivatives(D(x^2)), simplify_constants(2 * x * D(x)))
+
+# n-ary * and +
+isequal(ModelingToolkit.derivative(Operation(*, [x, y, z*ρ]), 1), y*(z*ρ))
+isequal(ModelingToolkit.derivative(Operation(+, [x*y, y, z]), 1), 1)
