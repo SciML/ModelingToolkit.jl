@@ -31,7 +31,7 @@ dsinsin = D(sin(sin(t)))
 d1 = D(sin(t)*t)
 d2 = D(sin(t)*cos(t))
 @test isequal(expand_derivatives(d1), t*cos(t)+sin(t))
-@test isequal(expand_derivatives(d2), simplify_constants(cos(t)*cos(t)+sin(t)*(-1*sin(t))))
+@test isequal(expand_derivatives(d2), simplify_constants(cos(t)*cos(t)+(sin(t)*-1)*sin(t)))
 
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,

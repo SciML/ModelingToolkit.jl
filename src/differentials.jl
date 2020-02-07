@@ -99,6 +99,7 @@ derivative(O::Operation, idx) = derivative(O.op, (O.args...,), Val(idx))
 # Pre-defined derivatives
 import DiffRules, SpecialFunctions, NaNMath
 for (modu, fun, arity) ∈ DiffRules.diffrules()
+    fun in [:*, :+] && continue # special
     for i ∈ 1:arity
         @eval function derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i})
             M, f = $(modu, fun)
@@ -109,8 +110,8 @@ for (modu, fun, arity) ∈ DiffRules.diffrules()
     end
 end
 
-derivative(::typeof(+), args::NTuple{N,Operation}, ::Val) where {N} = 1
-derivative(::typeof(*), args::NTuple{N,Operation}, ::Val{i}) where {N,i} = Operation(*, deleteat!(collect(args), i))
+derivative(::typeof(+), args::NTuple{N,Any}, ::Val) where {N} = 1
+derivative(::typeof(*), args::NTuple{N,Any}, ::Val{i}) where {N,i} = Operation(*, deleteat!(collect(args), i))
 
 function count_order(x)
     @assert !(x isa Symbol) "The variable $x must have an order of differentiation that is greater or equal to 1!"
