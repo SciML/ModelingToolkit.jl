@@ -88,7 +88,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
     oop_ex = :(
         ($(fargs.args...),) -> begin
             # If u is a weird non-StaticArray type and we want a sparse matrix, just do the optimized sparse anyways
-            if $(fargs.args[1]) isa Array || (!($(fargs.args[1]) <: StaticArray) && $(rhss isa SparseMatrixCSC))
+            if $(fargs.args[1]) isa Array || (!(typeof($(fargs.args[1])) <: StaticArray) && $(rhss isa SparseMatrixCSC))
                 return $arr_bounds_block
             else
                 X = $bounds_block
