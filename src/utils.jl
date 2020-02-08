@@ -58,14 +58,21 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
 
     if rhss isa Matrix
         arr_sys_expr = build_expr(:vcat, [build_expr(:row,[conv(rhs) for rhs ∈ rhss[i,:]]) for i in 1:size(rhss,1)])
+        # : x because ??? what to do in the general case?
+        _constructor = constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SMatrix{$(size(rhss)...)} : x->x) : constructor
     elseif typeof(rhss) <: Array && !(typeof(rhss) <: Vector)
         vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
         arr_sys_expr = :(reshape($vector_form,$(size(rhss)...)))
+        _constructor = constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SArray{$(size(rhss)...)} : x->x) : constructor
     elseif rhss isa SparseMatrixCSC
         vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ nonzeros(rhss)])
         arr_sys_expr = :(SparseMatrixCSC{eltype(u),Int}($(size(rhss)...), $(rhss.colptr), $(rhss.rowval), $vector_form))
+        # Static and sparse? Probably not a combo that will actually be hit, but give a default anyways
+        _constructor = constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SMatrix{$(size(rhss)...)} : x->x) : constructor
     else # Vector
         arr_sys_expr = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
+        # Handle vector constructor separately using `typeof(u)` to support things like LabelledArrays
+        _constructor = constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->convert(typeof(u),x)) : constructor
     end
 
     let_expr = Expr(:let, var_eqs, tuple_sys_expr)
@@ -85,7 +92,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
             end
             T = promote_type(map(typeof,X)...)
             map(T,X)
-            construct = $(constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->convert(typeof(u),x)) : constructor)
+            construct = $_constructor
             construct(X)
         end
     )
