@@ -57,6 +57,7 @@ function expand_derivatives(O::Operation)
 
     return O
 end
+expand_derivatives(::Constant) = Constant(0)
 expand_derivatives(x) = x
 
 # Don't specialize on the function here
@@ -95,6 +96,7 @@ sin(x())
 ```
 """
 derivative(O::Operation, idx) = derivative(O.op, (O.args...,), Val(idx))
+derivative(O::Constant, _) = Constant(0)
 
 # Pre-defined derivatives
 import DiffRules, SpecialFunctions, NaNMath

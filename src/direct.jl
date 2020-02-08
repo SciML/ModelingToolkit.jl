@@ -1,14 +1,14 @@
-function gradient(O::Operation, vars::AbstractVector{Operation}; simplify = true)
+function gradient(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
     out = [expand_derivatives(Differential(v)(O)) for v in vars]
     simplify ? simplify_constants.(out) : out
 end
 
-function jacobian(ops::AbstractVector{Operation}, vars::AbstractVector{Operation}; simplify = true)
+function jacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
     out = [expand_derivatives(Differential(v)(O)) for O in ops, v in vars]
     simplify ? simplify_constants.(out) : out
 end
 
-function hessian(O::Operation, vars::AbstractVector{Operation}; simplify = true)
+function hessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
     out = [expand_derivatives(Differential(v2)(Differential(v1)(O))) for v1 in vars, v2 in vars]
     simplify ? simplify_constants.(out) : out
 end
@@ -25,9 +25,7 @@ function simplified_expr(O::Operation)
   return Expr(:call, Symbol(O.op), simplified_expr.(O.args)...)
 end
 
-function simplified_expr(c::Constant)
-    c.value
-end
+simplified_expr(c::Constant) = c.value
 
 function simplified_expr(eq::Equation)
     Expr(:(=), simplified_expr(eq.lhs), simplified_expr(eq.rhs))
