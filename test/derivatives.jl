@@ -31,7 +31,7 @@ dsinsin = D(sin(sin(t)))
 d1 = D(sin(t)*t)
 d2 = D(sin(t)*cos(t))
 @test isequal(expand_derivatives(d1), t*cos(t)+sin(t))
-@test isequal(expand_derivatives(d2), simplify_constants(cos(t)*cos(t)+sin(t)*(-1*sin(t))))
+@test isequal(expand_derivatives(d2), simplify_constants(cos(t)*cos(t)+(sin(t)*-1)*sin(t)))
 
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
@@ -62,3 +62,7 @@ jac = calculate_jacobian(sys)
 @test isequal(expand_derivatives(D(x^2)), simplify_constants(2 * x * D(x)))
 
 @test isequal(ModelingToolkit.gradient(ModelingToolkit.Constant(5), [1., 2., 3.,]), fill(ModelingToolkit.Constant(0), 3))
+
+# n-ary * and +
+isequal(ModelingToolkit.derivative(Operation(*, [x, y, z*ρ]), 1), y*(z*ρ))
+isequal(ModelingToolkit.derivative(Operation(+, [x*y, y, z]), 1), 1)

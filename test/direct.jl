@@ -1,4 +1,4 @@
-using ModelingToolkit, StaticArrays, LinearAlgebra
+using ModelingToolkit, StaticArrays, LinearAlgebra, SparseArrays
 using DiffEqBase
 using Test
 
@@ -28,6 +28,44 @@ for i in 1:3
 end
 @test all(isequal.(ModelingToolkit.gradient(eqs[1],[x,y,z]),[σ * -1,σ,0]))
 @test all(isequal.(ModelingToolkit.hessian(eqs[1],[x,y,z]),0))
+
+Joop,Jiip = eval.(ModelingToolkit.build_function(∂,[x,y,z],[σ,ρ,β],[t.op.name]))
+J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+@test J isa Matrix
+J2 = copy(J)
+Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+@test J2 == J
+
+Joop,Jiip = eval.(ModelingToolkit.build_function(vcat(∂,∂),[x,y,z],[σ,ρ,β],[t.op.name]))
+J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+@test J isa Matrix
+J2 = copy(J)
+Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+@test J2 == J
+
+Joop,Jiip = eval.(ModelingToolkit.build_function(hcat(∂,∂),[x,y,z],[σ,ρ,β],[t.op.name]))
+J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+@test J isa Matrix
+J2 = copy(J)
+Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+@test J2 == J
+
+∂3 = cat(∂,∂,dims=3)
+Joop,Jiip = eval.(ModelingToolkit.build_function(∂3,[x,y,z],[σ,ρ,β],[t.op.name]))
+J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+@test size(J) == (3,3,2)
+J2 = copy(J)
+Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+@test J2 == J
+
+s∂ = sparse(∂)
+@test nnz(s∂) == 8
+Joop,Jiip = eval.(ModelingToolkit.build_function(s∂,[x,y,z],[σ,ρ,β],[t.op.name]))
+J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+@test length(nonzeros(s∂)) == 8
+J2 = copy(J)
+Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
+@test J2 == J
 
 # Function building
 
@@ -81,3 +119,7 @@ function test_worldage()
    f_iip(out,[1.0,2,3])
 end
 test_worldage()
+
+@test_nowarn muladd(x, y, ModelingToolkit.Constant(0))
+@test promote(x, ModelingToolkit.Constant(0)) == (x, identity(0))
+@test_nowarn [x, y, z]'

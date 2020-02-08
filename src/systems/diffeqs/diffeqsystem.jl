@@ -217,7 +217,7 @@ Create an `ODEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `p
 are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
-function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps;
+function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs = sys.dvs, ps = sys.ps;
                                      version = nothing,
                                      jac = false, Wfact = false) where {iip}
     f_oop,f_iip = generate_function(sys, dvs, ps, Val{false})
@@ -247,7 +247,8 @@ function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs, ps;
 
     ODEFunction{iip}(f,jac=_jac,
                       Wfact = _Wfact,
-                      Wfact_t = _Wfact_t)
+                      Wfact_t = _Wfact_t,
+                      syms = string.(sys.dvs))
 end
 
 function DiffEqBase.ODEFunction(sys::ODESystem, args...; kwargs...)
