@@ -95,6 +95,7 @@ sin(x())
 ```
 """
 derivative(O::Operation, idx) = derivative(O.op, (O.args...,), Val(idx))
+derivative(O::Constant, ::Any) = Constant(0)
 
 # Pre-defined derivatives
 import DiffRules, SpecialFunctions, NaNMath

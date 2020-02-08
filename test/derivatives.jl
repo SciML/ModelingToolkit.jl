@@ -64,3 +64,11 @@ jac = calculate_jacobian(sys)
 # n-ary * and +
 isequal(ModelingToolkit.derivative(Operation(*, [x, y, z*ρ]), 1), y*(z*ρ))
 isequal(ModelingToolkit.derivative(Operation(+, [x*y, y, z]), 1), 1)
+
+@test iszero(ModelingToolkit.derivative(ModelingToolkit.Constant(42), x))
+@test all(iszero, ModelingToolkit.gradient(ModelingToolkit.Constant(42), [t, x, y, z]))
+@test all(iszero, ModelingToolkit.hessian(ModelingToolkit.Constant(42), [t, x, y, z]))
+@test isequal(ModelingToolkit.jacobian([t, x, ModelingToolkit.Constant(42)], [t, x]),
+              Expression[ModelingToolkit.Constant(1)  ModelingToolkit.Constant(0)
+                         Differential(t)(x)           ModelingToolkit.Constant(1)
+                         ModelingToolkit.Constant(0)  ModelingToolkit.Constant(0)])
