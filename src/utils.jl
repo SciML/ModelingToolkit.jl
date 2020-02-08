@@ -33,8 +33,6 @@ function flatten_expr!(x)
     x
 end
 
-default_tensor_constructor(x) = x->(out = similar(typeof(u),$(size(rhss)...)); out .= x)
-
 function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, expression = Val{true};
                         checkbounds = false, constructor=nothing, linenumbers = true)
     _vs = map(x-> x isa Operation ? x.op : x, vs)
@@ -61,11 +59,11 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
     if rhss isa Matrix
         arr_sys_expr = build_expr(:vcat, [build_expr(:row,[conv(rhs) for rhs ∈ rhss[i,:]]) for i in 1:size(rhss,1)])
         # : x because ??? what to do in the general case?
-        _constructor = constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SMatrix{$(size(rhss)...)} : default_tensor_constructor) : constructor
+        _constructor = constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SMatrix{$(size(rhss)...)} :  x->(out = similar(typeof(u),$(size(rhss)...)); out .= x)) : constructor
     elseif typeof(rhss) <: Array && !(typeof(rhss) <: Vector)
         vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
         arr_sys_expr = :(reshape($vector_form,$(size(rhss)...)))
-        _constructor = constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SArray{$(size(rhss)...)} : default_tensor_constructor) : constructor
+        _constructor = constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SArray{$(size(rhss)...)} :  x->(out = similar(typeof(u),$(size(rhss)...)); out .= x)) : constructor
     elseif rhss isa SparseMatrixCSC
         vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ nonzeros(rhss)])
         arr_sys_expr = :(SparseMatrixCSC{eltype(u),Int}($(size(rhss)...), $(rhss.colptr), $(rhss.rowval), $vector_form))
