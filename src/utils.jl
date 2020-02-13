@@ -100,9 +100,7 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
 
     iip_ex = :(
         ($X,$(fargs.args...)) -> begin
-            @inbounds begin
-                $ip_bounds_block
-            end
+            $ip_bounds_block
             nothing
         end
     )
