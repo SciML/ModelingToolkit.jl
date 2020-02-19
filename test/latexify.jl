@@ -34,3 +34,20 @@ raw"\begin{align}
 \mathrm{derivative}\left( \mathrm{z}\left( t \right), t \right) =& \mathrm{x}\left( t \right) \cdot \left( \mathrm{y}\left( t \right) \right)^{\frac{2}{3}} - \beta \cdot \mathrm{z}\left( t \right)
 \end{align}
 "
+
+@parameters t p[1:3]
+@variables u[1:3](t)
+@derivatives D'~t
+
+eqs = [D(u[1]) ~ p[3]*(u[2]-u[1]),
+       0 ~ p[2]*p[3]*u[1]*(p[1]-u[1])/10-u[2],
+       D(u[3]) ~ u[1]*u[2]^(2//3) - p[3]*u[3]]
+
+latexify(eqs)
+
+eqs = [D(u[1]) ~ p[3]*(u[2]-u[1]),
+       D(u[2]) ~ p[2]*p[3]*u[1]*(p[1]-u[1])/10-u[2],
+       D(u[3]) ~ u[1]*u[2]^(2//3) - p[3]*u[3]]
+
+sys = ODESystem(eqs)
+latexify(sys)
