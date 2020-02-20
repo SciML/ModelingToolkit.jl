@@ -43,5 +43,5 @@ end
 end
 
 @latexrecipe function f(sys::ModelingToolkit.ODESystem; iv=:t)
-    sys.eqs
+    return latexify(sys.eqs; iv=iv)
 end

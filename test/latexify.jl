@@ -65,4 +65,10 @@ raw"\begin{align}
 \end{align}
 "
 
-latexify(sys)
+@test latexify(sys) ==
+raw"$\begin{align}
+\frac{du_{1}}{dt} =& p_3 \cdot \left( \mathrm{u_2}\left( t \right) - \mathrm{u_1}\left( t \right) \right) \\
+\frac{du_{2}}{dt} =& \frac{p_2 \cdot p_3 \cdot \mathrm{u_1}\left( t \right) \cdot \left( p_1 - \mathrm{u_1}\left( t \right) \right)}{10} - \mathrm{u_2}\left( t \right) \\
+\frac{du_{3}}{dt} =& \mathrm{u_1}\left( t \right) \cdot \left( \mathrm{u_2}\left( t \right) \right)^{\frac{2}{3}} - p_3 \cdot \mathrm{u_3}\left( t \right)
+\end{align}
+$"
