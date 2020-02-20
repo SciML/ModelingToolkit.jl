@@ -43,11 +43,26 @@ eqs = [D(u[1]) ~ p[3]*(u[2]-u[1]),
        0 ~ p[2]*p[3]*u[1]*(p[1]-u[1])/10-u[2],
        D(u[3]) ~ u[1]*u[2]^(2//3) - p[3]*u[3]]
 
-latexify(eqs)
+@test latexify(eqs) ==
+raw"\begin{align}
+\mathrm{derivative}\left( \mathrm{u_1}\left( t \right), t \right) =& p_3 \cdot \left( \mathrm{u_2}\left( t \right) - \mathrm{u_1}\left( t \right) \right) \\
+0 =& \frac{p_2 \cdot p_3 \cdot \mathrm{u_1}\left( t \right) \cdot \left( p_1 - \mathrm{u_1}\left( t \right) \right)}{10} - \mathrm{u_2}\left( t \right) \\
+\mathrm{derivative}\left( \mathrm{u_3}\left( t \right), t \right) =& \mathrm{u_1}\left( t \right) \cdot \left( \mathrm{u_2}\left( t \right) \right)^{\frac{2}{3}} - p_3 \cdot \mathrm{u_3}\left( t \right)
+\end{align}
+"
 
 eqs = [D(u[1]) ~ p[3]*(u[2]-u[1]),
        D(u[2]) ~ p[2]*p[3]*u[1]*(p[1]-u[1])/10-u[2],
        D(u[3]) ~ u[1]*u[2]^(2//3) - p[3]*u[3]]
 
 sys = ODESystem(eqs)
+
+@test latexify(sys.eqs) ==
+raw"\begin{align}
+\frac{du_{1}}{dt} =& p_3 \cdot \left( \mathrm{u_2}\left( t \right) - \mathrm{u_1}\left( t \right) \right) \\
+\frac{du_{2}}{dt} =& \frac{p_2 \cdot p_3 \cdot \mathrm{u_1}\left( t \right) \cdot \left( p_1 - \mathrm{u_1}\left( t \right) \right)}{10} - \mathrm{u_2}\left( t \right) \\
+\frac{du_{3}}{dt} =& \mathrm{u_1}\left( t \right) \cdot \left( \mathrm{u_2}\left( t \right) \right)^{\frac{2}{3}} - p_3 \cdot \mathrm{u_3}\left( t \right)
+\end{align}
+"
+
 latexify(sys)

@@ -38,10 +38,10 @@ end
 
     var = getfield.(getfield.(eqs, :x),:name)
     ns  = getfield.(eqs, :n)
-    lhs = [ns[i] == 1 ? "\\frac{d$(Latexify.latexraw(var[i]))}{d$iv}" : "\\frac{d^{$(ns[i])}$(Latexify.latexraw(var[i]))}{d$iv^{$(ns[i])}}" for i in 1:length(var)]
+    lhs = [ns[i] == 1 ? Latexify.LaTeXString("\\frac{d$(Latexify.latexraw(var[i]))}{d$iv}") : LaTeXString("\\frac{d^{$(ns[i])}$(Latexify.latexraw(var[i]))}{d$iv^{$(ns[i])}}") for i in 1:length(var)]
     return lhs, rhs
 end
 
 @latexrecipe function f(sys::ModelingToolkit.ODESystem; iv=:t)
-    latexify(sys.eqs)
+    sys.eqs
 end
