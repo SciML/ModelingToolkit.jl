@@ -14,7 +14,7 @@ end
 simplify_constants(x, shorten_tree) = x
 simplify_constants(x) = simplify_constants(x, true)
 
-
+Base.isone(x::Operation) = x.op == one || x.op == Constant && isone(x.args)
 const AC_OPERATORS = (*, +)
 
 function _simplify_constants(O::Operation, shorten_tree)

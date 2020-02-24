@@ -59,3 +59,4 @@ Base.:^(x::Expression,y::T) where T <: Rational = Operation(Base.:^, Expression[
 @register Base.conj(x)
 @register Base.getindex(x,i)
 Base.getindex(x::Operation,i::Int64) = Operation(getindex,[x,i])
+Base.one(::Operation) = 1

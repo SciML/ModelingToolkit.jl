@@ -26,6 +26,7 @@ for i in 1:3
     ∇ = ModelingToolkit.gradient(eqs[i],[x,y,z])
     @test isequal(∂[i,:],∇)
 end
+                   
 @test all(isequal.(ModelingToolkit.gradient(eqs[1],[x,y,z]),[σ * -1,σ,0]))
 @test all(isequal.(ModelingToolkit.hessian(eqs[1],[x,y,z]),0))
 
