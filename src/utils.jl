@@ -90,8 +90,6 @@ function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, ex
                 return $arr_bounds_block
             else
                 X = $bounds_block
-                T = promote_type(map(typeof,X)...)
-                map(T,X)
                 construct = $_constructor
                 return construct(X)
             end
