@@ -35,7 +35,7 @@ struct Variable <: Function
     Variable(name; known = false) = new(name, known)
 end
 function Variable(name, indices...; known = false)
-    var_name = Symbol("$(name)$(join(map_subscripts.(indices), "̒"))")
+    var_name = Symbol("$(name)$(join(map_subscripts.(indices), "ˏ"))")
     Variable(var_name; known=known)
 end
 
