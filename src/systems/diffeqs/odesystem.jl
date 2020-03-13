@@ -1,9 +1,5 @@
 export ODESystem, ODEFunction
 
-
-using Base: RefValue
-
-
 isintermediate(eq::Equation) = !(isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential))
 
 function flatten_differential(O::Operation)
@@ -14,21 +10,25 @@ function flatten_differential(O::Operation)
     return (x, t, order + 1)
 end
 
+<<<<<<< master:src/systems/diffeqs/diffeqsystem.jl
 struct DiffEq  # dⁿx/dtⁿ = rhs
+=======
+struct ODEExpr  # dⁿx/dtⁿ = rhs
+>>>>>>> add ReactionSystem and start SDESystem components:src/systems/diffeqs/odesystem.jl
     x::Variable
     n::Int
     rhs::Expression
 end
-function to_diffeq(eq::Equation)
+function Base.convert(::Type{ODEExpr},eq::Equation)
     isintermediate(eq) && throw(ArgumentError("intermediate equation received"))
     (x, t, n) = flatten_differential(eq.lhs)
     (isa(t, Operation) && isa(t.op, Variable) && isempty(t.args)) ||
         throw(ArgumentError("invalid independent variable $t"))
     (isa(x, Operation) && isa(x.op, Variable) && length(x.args) == 1 && isequal(first(x.args), t)) ||
         throw(ArgumentError("invalid dependent variable $x"))
-    return t.op, DiffEq(x.op, n, eq.rhs)
+    return t.op, ODEExpr(x.op, n, eq.rhs)
 end
-Base.:(==)(a::DiffEq, b::DiffEq) = isequal((a.x, a.n, a.rhs), (b.x, b.n, b.rhs))
+Base.:(==)(a::ODEExpr, b::ODEExpr) = isequal((a.x, a.n, a.rhs), (b.x, b.n, b.rhs))
 
 """
 $(TYPEDEF)
@@ -56,7 +56,7 @@ de = ODESystem(eqs)
 """
 struct ODESystem <: AbstractSystem
     """The ODEs defining the system."""
-    eqs::Vector{DiffEq}
+    eqs::Vector{ODEExpr}
     """Independent variable."""
     iv::Variable
     """Dependent (state) variables."""
@@ -86,7 +86,7 @@ struct ODESystem <: AbstractSystem
 end
 
 function ODESystem(eqs)
-    reformatted = to_diffeq.(eqs)
+    reformatted = convert.(ODEExpr,eqs)
 
     ivs = unique(r[1] for r ∈ reformatted)
     length(ivs) == 1 || throw(ArgumentError("one independent variable currently supported"))
@@ -102,8 +102,12 @@ function ODESystem(eqs)
     ODESystem(deqs, iv, dvs, ps)
 end
 
+<<<<<<< master:src/systems/diffeqs/diffeqsystem.jl
 function ODESystem(deqs::AbstractVector{DiffEq}, iv, dvs, ps)
     tgrad = RefValue(Vector{Expression}(undef, 0))
+=======
+function ODESystem(deqs::AbstractVector{ODEExpr}, iv, dvs, ps)
+>>>>>>> add ReactionSystem and start SDESystem components:src/systems/diffeqs/odesystem.jl
     jac = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
@@ -114,7 +118,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps)
     _dvs = [deq.op for deq ∈ dvs]
     _iv = iv.op
     _ps = [p.op for p ∈ ps]
-    ODESystem(getindex.(to_diffeq.(deqs),2), _iv, _dvs, _ps)
+    ODESystem(getindex.(convert.(ODEExpr,deqs),2), _iv, _dvs, _ps)
 end
 
 function _eq_unordered(a, b)
