@@ -113,6 +113,7 @@ end
 
 derivative(::typeof(+), args::NTuple{N,Any}, ::Val) where {N} = 1
 derivative(::typeof(*), args::NTuple{N,Any}, ::Val{i}) where {N,i} = Operation(*, deleteat!(collect(args), i))
+derivative(::typeof(one), args::Tuple{<:Any}, ::Val) = 0
 
 function count_order(x)
     @assert !(x isa Symbol) "The variable $x must have an order of differentiation that is greater or equal to 1!"
