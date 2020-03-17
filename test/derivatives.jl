@@ -72,3 +72,13 @@ isequal(ModelingToolkit.derivative(Operation(+, [x*y, y, z]), 1), 1)
               Expression[ModelingToolkit.Constant(1)  ModelingToolkit.Constant(0)
                          Differential(t)(x)           ModelingToolkit.Constant(1)
                          ModelingToolkit.Constant(0)  ModelingToolkit.Constant(0)])
+
+# issue 252
+@variables beta, alpha, delta
+@variables x1, x2, x3
+
+# expression
+tmp = beta * (alpha * exp(x1) * x2 ^ (alpha - 1) + 1 - delta) / x3
+# derivative w.r.t. x1 and x2
+t1 = ModelingToolkit.gradient(tmp, [x1, x2])
+@test_nowarn ModelingToolkit.gradient(t1[1], [beta])
