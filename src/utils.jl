@@ -1,6 +1,5 @@
 using MacroTools
 
-
 function Base.convert(::Type{Expression}, ex::Expr)
     ex.head === :if && (ex = Expr(:call, ifelse, ex.args...))
     ex.head === :call || throw(ArgumentError("internal representation does not support non-call Expr"))
@@ -13,6 +12,9 @@ end
 Base.convert(::Type{Expression}, x::Expression) = x
 Base.convert(::Type{Expression}, x::Number) = Constant(x)
 Base.convert(::Type{Expression}, x::Bool) = Constant(x)
+Base.convert(::Type{Expression}, x::Variable) = convert(Operation,x)
+Base.convert(::Type{Expression}, x::Operation) = x
+Base.convert(::Type{Expression}, x::Symbol) = Base.convert(Expression,eval(x))
 Expression(x::Bool) = Constant(x)
 
 function build_expr(head::Symbol, args)
@@ -32,6 +34,24 @@ function flatten_expr!(x)
     end
     x
 end
+
+function detime_dvs(op::Operation)
+  if op.op isa Variable
+    Operation(Variable(op.op.name),Expression[])
+  else
+    Operation(op.op,detime_dvs.(op.args))
+  end
+end
+detime_dvs(op::Constant) = op
+
+function retime_dvs(op::Operation,dvs,iv)
+  if op.op isa Variable && op.op ∈ dvs
+    Operation(Variable(op.op.name),Expression[iv])
+  else
+    Operation(op.op,retime_dvs.(op.args,(dvs,),iv))
+  end
+end
+retime_dvs(op::Constant,dvs,iv) = op
 
 function build_function(rhss, vs, ps = (), args = (), conv = simplified_expr, expression = Val{true};
                         checkbounds = false, constructor=nothing, linenumbers = true)
