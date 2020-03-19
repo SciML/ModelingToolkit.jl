@@ -37,7 +37,7 @@ end
 
 function detime_dvs(op::Operation)
   if op.op isa Variable
-    Operation(Variable(op.op.name),Expression[])
+    Operation(Variable(op.op.name,known=op.op.known),Expression[])
   else
     Operation(op.op,detime_dvs.(op.args))
   end

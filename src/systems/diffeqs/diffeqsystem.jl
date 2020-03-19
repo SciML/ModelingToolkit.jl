@@ -144,7 +144,9 @@ function calculate_tgrad(sys::ODESystem)
   rhs = [detime_dvs(eq.rhs) for eq ∈ sys.eqs]
   iv = sys.iv()
   notime_tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r)) for r in rhs]
+  @show notime_tgrad
   tgrad = retime_dvs.(notime_tgrad,(sys.dvs,),iv)
+  @show tgrad
   sys.tgrad[] = tgrad
   return tgrad
 end
