@@ -154,5 +154,5 @@ function get_variables(e::Expression, vars = nothing)
   elseif hasproperty(e, :args) # because it can sometimes be 0
     foreach(x -> get_variables(x, vars), e.args)
   end
-  return vars
+  return unique(vars)
 end
