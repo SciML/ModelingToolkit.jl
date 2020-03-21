@@ -59,3 +59,9 @@ x1 = [Variable(:x, 1)(t), Variable(:x, 2)(t)]
 
 @variables a[1:11,1:2]
 @variables a()
+
+@parameters α β δ
+expr = (((1 / β - 1) + δ) / α) ^ (1 / (α - 1))
+ref = [β, δ, α]
+sol = ModelingToolkit.get_variables(expr)
+@test all([sol[i].op.name == ref[i].op.name for i in 1:3])
