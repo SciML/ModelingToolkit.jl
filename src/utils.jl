@@ -150,13 +150,15 @@ is_singleton(e) = false
 is_singleton(e::Operation) = e.op isa Variable
 
 function get_variables(e::Expression, vars = nothing)
-  vars = isnothing(vars) ? Operation[] : vars
-  if is_singleton(e)
-    push!(vars, e)
-  elseif hasproperty(e, :args) # because it can sometimes be 0
-    foreach(x -> get_variables(x, vars), e.args)
-  end
-  return unique(vars)
+    vars = isnothing(vars) ? Operation[] : vars
+    if e isa ModelingToolkit.Constant
+        # do nothing 
+    elseif is_singleton(e)
+        push!(vars, e)
+    else
+        foreach(x -> get_variables(x, vars), e.args)
+    end
+    return unique(vars)
 end
 
 # variable substitution
