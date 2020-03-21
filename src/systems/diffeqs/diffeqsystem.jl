@@ -65,6 +65,11 @@ struct ODESystem <: AbstractSystem
     """Parameter variables."""
     ps::Vector{Variable}
     """
+    Time-derivative matrix. Note: this field will not be defined until
+    [`calculate_tgrad`](@ref) is called on the system.
+    """
+    tgrad::RefValue{Vector{Expression}}
+    """
     Jacobian matrix. Note: this field will not be defined until
     [`calculate_jacobian`](@ref) is called on the system.
     """
@@ -99,10 +104,11 @@ function ODESystem(eqs)
 end
 
 function ODESystem(deqs::AbstractVector{DiffEq}, iv, dvs, ps)
+    tgrad = RefValue(Vector{Expression}(undef, 0))
     jac = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
-    ODESystem(deqs, iv, dvs, ps, jac, Wfact, Wfact_t)
+    ODESystem(deqs, iv, dvs, ps, tgrad, jac, Wfact, Wfact_t)
 end
 
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps)
@@ -133,6 +139,17 @@ independent_variables(sys::ODESystem) = Set{Variable}([sys.iv])
 dependent_variables(sys::ODESystem) = Set{Variable}(sys.dvs)
 parameters(sys::ODESystem) = Set{Variable}(sys.ps)
 
+function calculate_tgrad(sys::ODESystem)
+  isempty(sys.tgrad[]) || return sys.tgrad[]  # use cached tgrad, if possible
+  rhs = [detime_dvs(eq.rhs) for eq ∈ sys.eqs]
+  iv = sys.iv()
+  notime_tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r)) for r in rhs]
+  @show notime_tgrad
+  tgrad = retime_dvs.(notime_tgrad,(sys.dvs,),iv)
+  @show tgrad
+  sys.tgrad[] = tgrad
+  return tgrad
+end
 
 function calculate_jacobian(sys::ODESystem)
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
@@ -159,6 +176,11 @@ function (f::ODEToExpr)(O::Operation)
     return build_expr(:call, Any[Symbol(O.op); f.(O.args)])
 end
 (f::ODEToExpr)(x) = convert(Expr, x)
+
+function generate_tgrad(sys::ODESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true}; kwargs...)
+    tgrad = calculate_tgrad(sys)
+    return build_function(tgrad, dvs, ps, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
+end
 
 function generate_jacobian(sys::ODESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true}; kwargs...)
     jac = calculate_jacobian(sys)
@@ -218,12 +240,20 @@ are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
 function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs = sys.dvs, ps = sys.ps;
-                                     version = nothing,
+                                     version = nothing, tgrad=false,
                                      jac = false, Wfact = false) where {iip}
     f_oop,f_iip = generate_function(sys, dvs, ps, Val{false})
 
     f(u,p,t) = f_oop(u,p,t)
     f(du,u,p,t) = f_iip(du,u,p,t)
+
+    if tgrad
+        tgrad_oop,tgrad_iip = generate_tgrad(sys, dvs, ps, Val{false})
+        _tgrad(u,p,t) = tgrad_oop(u,p,t)
+        _tgrad(J,u,p,t) = tgrad_iip(J,u,p,t)
+    else
+        _tgrad = nothing
+    end
 
     if jac
         jac_oop,jac_iip = generate_jacobian(sys, dvs, ps, Val{false})
@@ -246,6 +276,7 @@ function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs = sys.dvs, ps = sys.ps;
     end
 
     ODEFunction{iip}(f,jac=_jac,
+                      tgrad = _tgrad,
                       Wfact = _Wfact,
                       Wfact_t = _Wfact_t,
                       syms = string.(sys.dvs))

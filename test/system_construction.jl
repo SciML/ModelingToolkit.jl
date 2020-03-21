@@ -74,6 +74,18 @@ sol = Sfw_t \ @SArray ones(3)
 @test sol isa SArray
 @test sol ≈ -(I/0.2 - J)\ones(3)
 
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y*t,
+       D(z) ~ x*y - β*z]
+de = ODESystem(eqs)
+ModelingToolkit.calculate_tgrad(de)
+
+tgrad_oop, tgrad_iip = eval.(ModelingToolkit.generate_tgrad(de))
+@test tgrad_oop(u,p,t) == [0.0,-u[2],0.0]
+du = zeros(3)
+tgrad_iip(du,u,p,t)
+@test du == [0.0,-u[2],0.0]
+
 @testset "time-varying parameters" begin
     @parameters σ′(t-1)
     eqs = [D(x) ~ σ′*(y-x),
