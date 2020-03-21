@@ -145,8 +145,9 @@ function vars!(vars, O)
     return vars
 end
 
-
+# variable extraction
 is_singleton(e) = hasproperty(e, :name) || hasproperty(e, :op) && hasproperty(e.op, :name)
+
 function get_variables(e::Expression, vars = nothing)
   vars = isnothing(vars) ? [] : vars
   if is_singleton(e)
@@ -155,4 +156,14 @@ function get_variables(e::Expression, vars = nothing)
     foreach(x -> get_variables(x, vars), e.args)
   end
   return unique(vars)
+end
+
+# variable substitution
+function substitute_expr!(expr::Expression, s::Pair{Operation, Operation})
+    if hasproperty(expr, :args)
+        expr.args .= replace(expr.args, s)
+    end
+    good_args = filter(x -> hasproperty(x, :args) && !(is_singleton(x) || x isa ModelingToolkit.Constant), expr.args)
+    [substitute_expr!(arg, s) for arg in good_args] # iterate where there is more to go
+    return nothing 
 end
