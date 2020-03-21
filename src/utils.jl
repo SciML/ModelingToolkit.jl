@@ -146,6 +146,7 @@ function vars!(vars, O)
 end
 
 # variable extraction
+is_singleton(e) = false
 is_singleton(e::Operation) = e.op isa Variable
 
 function get_variables(e::Expression, vars = nothing)
