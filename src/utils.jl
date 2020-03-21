@@ -152,7 +152,7 @@ is_singleton(e::Operation) = e.op isa Variable
 function get_variables(e::Expression, vars = nothing)
     vars = isnothing(vars) ? Operation[] : vars
     if e isa ModelingToolkit.Constant
-        # do nothing 
+        # do nothing
     elseif is_singleton(e)
         push!(vars, e)
     else
@@ -163,10 +163,11 @@ end
 
 # variable substitution
 function substitute_expr!(expr::Expression, s::Pair{Operation, Operation})
-    if hasproperty(expr, :args)
+    if is_singleton(expr) || expr isa ModelingToolkit.Constant
+        # do nothing
+    else
         expr.args .= replace(expr.args, s)
+        [substitute_expr!(arg, s) for arg in expr.args if !is_singleton(arg)]
     end
-    good_args = filter(x -> hasproperty(x, :args) && !(is_singleton(x) || x isa ModelingToolkit.Constant), expr.args)
-    [substitute_expr!(arg, s) for arg in good_args] # iterate where there is more to go
     return nothing
 end
