@@ -149,7 +149,7 @@ end
 is_singleton(e) = hasproperty(e, :name) || hasproperty(e, :op) && hasproperty(e.op, :name)
 
 function get_variables(e::Expression, vars = nothing)
-  vars = isnothing(vars) ? [] : vars
+  vars = isnothing(vars) ? Operation[] : vars
   if is_singleton(e)
     push!(vars, e)
   elseif hasproperty(e, :args) # because it can sometimes be 0
