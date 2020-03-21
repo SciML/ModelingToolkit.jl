@@ -149,8 +149,7 @@ end
 is_singleton(e) = false
 is_singleton(e::Operation) = e.op isa Variable
 
-function get_variables(e::Expression, vars = nothing)
-    vars = isnothing(vars) ? Operation[] : vars
+function get_variables(e::Expression, vars = Operation[])
     if e isa ModelingToolkit.Constant
         # do nothing
     elseif is_singleton(e)
