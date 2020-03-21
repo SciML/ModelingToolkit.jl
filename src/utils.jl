@@ -149,10 +149,9 @@ end
 is_singleton(e) = false
 is_singleton(e::Operation) = e.op isa Variable
 
+get_variables(e::ModelingToolkit.Constant, vars) = nothing
 function get_variables(e::Expression, vars = Operation[])
-    if e isa ModelingToolkit.Constant
-        # do nothing
-    elseif is_singleton(e)
+    if is_singleton(e)
         push!(vars, e)
     else
         foreach(x -> get_variables(x, vars), e.args)
