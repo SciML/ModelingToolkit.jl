@@ -144,3 +144,29 @@ function vars!(vars, O)
 
     return vars
 end
+
+# variable extraction
+is_singleton(e) = false
+is_singleton(e::Operation) = e.op isa Variable
+
+get_variables(e::Constant, vars = Operation[]) = vars
+function get_variables(e::Operation, vars = Operation[])
+    if is_singleton(e)
+        push!(vars, e)
+    else
+        foreach(x -> get_variables(x, vars), e.args)
+    end
+    return unique(vars)
+end
+
+# variable substitution
+substitute_expr!(expr::Constant, s::Pair{Operation, Operation}) = nothing
+function substitute_expr!(expr::Operation, s::Pair{Operation, Operation})
+    if !is_singleton(expr)
+        expr.args .= replace(expr.args, s)
+        for arg in expr.args
+            substitute_expr!(arg, s)
+        end
+    end
+    return nothing
+end
