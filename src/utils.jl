@@ -146,7 +146,7 @@ function vars!(vars, O)
 end
 
 # variable extraction
-is_singleton(e) = hasproperty(e, :name) || hasproperty(e, :op) && hasproperty(e.op, :name)
+is_singleton(e::Operation) = e.op isa Variable
 
 function get_variables(e::Expression, vars = nothing)
   vars = isnothing(vars) ? Operation[] : vars
