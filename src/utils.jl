@@ -165,5 +165,5 @@ function substitute_expr!(expr::Expression, s::Pair{Operation, Operation})
     end
     good_args = filter(x -> hasproperty(x, :args) && !(is_singleton(x) || x isa ModelingToolkit.Constant), expr.args)
     [substitute_expr!(arg, s) for arg in good_args] # iterate where there is more to go
-    return nothing 
+    return nothing
 end
