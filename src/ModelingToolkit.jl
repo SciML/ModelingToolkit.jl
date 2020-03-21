@@ -96,5 +96,6 @@ include("systems/diffeqs/first_order_transform.jl")
 include("systems/nonlinear/nonlinear_system.jl")
 include("systems/pde/pdesystem.jl")
 include("latexify_recipes.jl")
+include("build_function.jl")
 
 end # module
