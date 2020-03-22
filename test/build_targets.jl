@@ -36,3 +36,12 @@ sys = ODESystem(eqs,t,[x,y],[a])
 
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.MATLABTarget()) ==
       ModelingToolkit.build_function(sys.eqs,[x,y],[a],t,target = ModelingToolkit.MATLABTarget())
+
+@test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.CTarget()) ==
+      ModelingToolkit.build_function(sys.eqs,sys.dvs,sys.ps,sys.iv,target = ModelingToolkit.CTarget())
+
+@test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.StanTarget()) ==
+      ModelingToolkit.build_function(sys.eqs,sys.dvs,sys.ps,sys.iv,target = ModelingToolkit.StanTarget())
+
+@test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.MATLABTarget()) ==
+      ModelingToolkit.build_function(sys.eqs,sys.dvs,sys.ps,sys.iv,target = ModelingToolkit.MATLABTarget())

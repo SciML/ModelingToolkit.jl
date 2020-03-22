@@ -92,6 +92,9 @@ function _build_function(target::JuliaTarget, rhss, vs, ps = (), args = (),
     end
 end
 
+get_varnumber(varop::Operation,vars::Vector{Operation}) =  findfirst(x->isequal(x,varop),vars)
+get_varnumber(varop::Operation,vars::Vector{Variable})  =  findfirst(x->isequal(x,varop.op),vars)
+
 function numbered_expr(O::Equation,args...;kwargs...)
   :($(numbered_expr(O.lhs,args...;kwargs...)) = $(numbered_expr(O.rhs,args...;kwargs...)))
 end
@@ -101,12 +104,12 @@ function numbered_expr(O::Operation,vars,parameters;
                        varname=:u,paramname=:p)
   if isa(O.op, ModelingToolkit.Differential)
     varop = O.args[1]
-    i = findfirst(x->isequal(x,varop),vars)
+    i = get_varnumber(varop,vars)
     return :($derivname[$i])
   elseif isa(O.op, ModelingToolkit.Variable)
-    i = findfirst(x->isequal(x,O),vars)
+    i = get_varnumber(O,vars)
     if i == nothing
-      i = findfirst(x->isequal(x,O),parameters)
+      i = get_varnumber(O,parameters)
       return :($paramname[$i])
     else
       return :($varname[$i])
@@ -116,7 +119,15 @@ function numbered_expr(O::Operation,vars,parameters;
          [numbered_expr(x,vars,parameters;derivname=derivname,
                         varname=varname,paramname=paramname) for x in O.args]...)
 end
-function numbered_expr(de::ModelingToolkit.DiffEq,vars,parameters;
+
+function numbered_expr(de::ModelingToolkit.DiffEq,vars::Vector{Variable},parameters;
+                       derivname=:du,varname=:u,paramname=:p)
+    i = findfirst(x->isequal(x.name,de.x.name),vars)
+    :($derivname[$i] = $(numbered_expr(de.rhs,vars,parameters;
+                                     derivname=derivname,
+                                     varname=varname,paramname=paramname)))
+end
+function numbered_expr(de::ModelingToolkit.DiffEq,vars::Vector{Operation},parameters;
                        derivname=:du,varname=:u,paramname=:p)
     i = findfirst(x->isequal(x.op.name,de.x.name),vars)
     :($derivname[$i] = $(numbered_expr(de.rhs,vars,parameters;
