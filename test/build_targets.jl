@@ -25,3 +25,14 @@ eqs = [D(x) ~ a*x - x*y,
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.MATLABTarget()) ==
   """
   diffeqf = @(t,internal_var___u) [internal_var___p(1) * internal_var___u(1) - internal_var___u(1) * internal_var___u(2); -3 * internal_var___u(2) + internal_var___u(1) * internal_var___u(2)];"""
+
+sys = ODESystem(eqs,t,[x,y],[a])
+
+@test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.CTarget()) ==
+      ModelingToolkit.build_function(sys.eqs,[x,y],[a],t,target = ModelingToolkit.CTarget())
+
+@test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.StanTarget()) ==
+      ModelingToolkit.build_function(sys.eqs,[x,y],[a],t,target = ModelingToolkit.StanTarget())
+
+@test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.MATLABTarget()) ==
+      ModelingToolkit.build_function(sys.eqs,[x,y],[a],t,target = ModelingToolkit.MATLABTarget())

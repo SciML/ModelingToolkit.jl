@@ -14,7 +14,6 @@ function flatten_differential(O::Operation)
     return (x, t, order + 1)
 end
 
-
 struct DiffEq  # dⁿx/dtⁿ = rhs
     x::Variable
     n::Int

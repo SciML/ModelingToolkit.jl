@@ -116,7 +116,13 @@ function numbered_expr(O::Operation,vars,parameters;
          [numbered_expr(x,vars,parameters;derivname=derivname,
                         varname=varname,paramname=paramname) for x in O.args]...)
 end
-
+function numbered_expr(de::ModelingToolkit.DiffEq,vars,parameters;
+                       derivname=:du,varname=:u,paramname=:p)
+    i = findfirst(x->isequal(x.op.name,de.x.name),vars)
+    :($derivname[$i] = $(numbered_expr(de.rhs,vars,parameters;
+                                     derivname=derivname,
+                                     varname=varname,paramname=paramname)))
+end
 numbered_expr(c::ModelingToolkit.Constant,args...;kwargs...) = c.value
 
 function _build_function(target::StanTarget, eqs, vs, ps, iv,
