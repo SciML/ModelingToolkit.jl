@@ -78,3 +78,7 @@ Base.:*(A::SparseMatrixCSC{Tx,S}, x::StridedVector{Operation}) where {Tx,S} =
     (T = LinearAlgebra.promote_op(LinearAlgebra.matprod, Operation, Tx); mul!(similar(x, T, A.m), A, x, true, false))
 Base.:*(A::SparseMatrixCSC{Operation,S}, x::StridedVector{Tx}) where {Tx,S} =
     (T = LinearAlgebra.promote_op(LinearAlgebra.matprod, Operation, Tx); mul!(similar(x, T, A.m), A, x, true, false))
+
+function det(O::Operation)
+    det(lu(O,Val(false)))
+end
