@@ -276,7 +276,7 @@ function DiffEqBase.ODEFunction{iip}(sys::ODESystem, dvs = sys.dvs, ps = sys.ps;
                       tgrad = _tgrad,
                       Wfact = _Wfact,
                       Wfact_t = _Wfact_t,
-                      syms = string.(sys.dvs))
+                      syms = Symbol.(sys.dvs))
 end
 
 function DiffEqBase.ODEFunction(sys::ODESystem, args...; kwargs...)
