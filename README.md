@@ -1,8 +1,8 @@
 # ModelingToolkit.jl
 
-[![Build Status](https://travis-ci.org/JuliaDiffEq/ModelingToolkit.jl.svg?branch=master)](https://travis-ci.org/JuliaDiffEq/ModelingToolkit.jl)
-[![Coverage Status](https://coveralls.io/repos/JuliaDiffEq/ModelingToolkit.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/JuliaDiffEq/ModelingToolkit.jl?branch=master)
-[![codecov.io](http://codecov.io/github/JuliaDiffEq/ModelingToolkit.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaDiffEq/ModelingToolkit.jl?branch=master)
+[![Build Status](https://travis-ci.org/SciML/ModelingToolkit.jl.svg?branch=master)](https://travis-ci.org/SciML/ModelingToolkit.jl)
+[![Coverage Status](https://coveralls.io/repos/SciML/ModelingToolkit.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/JuliaDiffEq/ModelingToolkit.jl?branch=master)
+[![codecov.io](http://codecov.io/github/SciML/ModelingToolkit.jl/coverage.svg?branch=master)](http://codecov.io/github/SciML/ModelingToolkit.jl?branch=master)
 
 ModelingToolkit.jl is an intermediate representation (IR) of computational graphs
 for scientific computing problems. Its purpose is to be a common target for
