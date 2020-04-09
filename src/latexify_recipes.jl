@@ -22,7 +22,7 @@
     return lhs, rhs
 end
 
-@latexrecipe function f(eqs::Vector{ModelingToolkit.DiffEq}; iv=:t)
+@latexrecipe function f(eqs::Vector{ModelingToolkit.ODEExpr}; iv=:t)
     # Set default option values.
     env --> :align
 

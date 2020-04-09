@@ -1,6 +1,3 @@
-export Equation, ConstrainedEquation
-
-
 """
 $(TYPEDEF)
 

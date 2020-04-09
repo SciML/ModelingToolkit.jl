@@ -1,6 +1,3 @@
-export ode_order_lowering
-
-
 function lower_varname(var::Variable, idv, order)
     order == 0 && return var
     name = Symbol(var.name, :_, string(idv.name)^order)
@@ -14,7 +11,7 @@ end
 function ode_order_lowering(eqs, iv)
     var_order = Dict{Variable,Int}()
     vars = Variable[]
-    new_eqs = similar(eqs, DiffEq)
+    new_eqs = similar(eqs, ODEExpr)
     new_vars = Variable[]
 
     for (i, eq) ∈ enumerate(eqs)
@@ -25,7 +22,7 @@ function ode_order_lowering(eqs, iv)
         end
         var′ = lower_varname(eq.x, iv, eq.n - 1)
         rhs′ = rename(eq.rhs)
-        new_eqs[i] = DiffEq(var′, 1, rhs′)
+        new_eqs[i] = ODEExpr(var′, 1, rhs′)
     end
 
     for var ∈ vars
@@ -36,7 +33,7 @@ function ode_order_lowering(eqs, iv)
             push!(new_vars, rvar)
 
             rhs = rvar(iv())
-            eq = DiffEq(lvar, 1, rhs)
+            eq = ODEExpr(lvar, 1, rhs)
             push!(new_eqs, eq)
         end
     end

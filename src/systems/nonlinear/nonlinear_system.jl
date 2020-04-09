@@ -1,5 +1,3 @@
-export NonlinearSystem
-
 struct NLEq
     rhs::Expression
 end

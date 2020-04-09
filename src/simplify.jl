@@ -1,6 +1,3 @@
-export simplify_constants
-
-
 function simplify_constants(O::Operation, shorten_tree)
     while true
         O′ = _simplify_constants(O, shorten_tree)

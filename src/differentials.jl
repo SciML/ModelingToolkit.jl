@@ -1,6 +1,3 @@
-export Differential, expand_derivatives, @derivatives
-
-
 """
 $(TYPEDEF)
 
