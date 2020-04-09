@@ -10,7 +10,7 @@ function flatten_differential(O::Operation)
     return (x, t, order + 1)
 end
 
-struct DiffEq  # dⁿx/dtⁿ = rhs
+struct ODEExpr  # dⁿx/dtⁿ = rhs
     x::Variable
     n::Int
     rhs::Expression
@@ -98,7 +98,7 @@ function ODESystem(eqs)
     ODESystem(deqs, iv, dvs, ps)
 end
 
-function ODESystem(deqs::AbstractVector{DiffEq}, iv, dvs, ps)
+function ODESystem(deqs::AbstractVector{ODEExpr}, iv, dvs, ps)
     tgrad = RefValue(Vector{Expression}(undef, 0))
     jac = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
