@@ -10,11 +10,7 @@ function flatten_differential(O::Operation)
     return (x, t, order + 1)
 end
 
-<<<<<<< master:src/systems/diffeqs/diffeqsystem.jl
 struct DiffEq  # dⁿx/dtⁿ = rhs
-=======
-struct ODEExpr  # dⁿx/dtⁿ = rhs
->>>>>>> add ReactionSystem and start SDESystem components:src/systems/diffeqs/odesystem.jl
     x::Variable
     n::Int
     rhs::Expression
@@ -102,12 +98,8 @@ function ODESystem(eqs)
     ODESystem(deqs, iv, dvs, ps)
 end
 
-<<<<<<< master:src/systems/diffeqs/diffeqsystem.jl
 function ODESystem(deqs::AbstractVector{DiffEq}, iv, dvs, ps)
     tgrad = RefValue(Vector{Expression}(undef, 0))
-=======
-function ODESystem(deqs::AbstractVector{ODEExpr}, iv, dvs, ps)
->>>>>>> add ReactionSystem and start SDESystem components:src/systems/diffeqs/odesystem.jl
     jac = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
