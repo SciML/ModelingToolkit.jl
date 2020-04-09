@@ -31,6 +31,7 @@ $(TYPEDEF)
 TODO
 """
 abstract type AbstractSystem end
+abstract type AbstractODESystem <: AbstractSystem end
 
 Base.promote_rule(::Type{<:Number},::Type{<:Expression}) = Expression
 Base.zero(::Type{<:Expression}) = Constant(0)
@@ -81,8 +82,6 @@ Get the set of parameters variables for the given system.
 """
 function parameters end
 
-@enum FunctionVersion ArrayFunction=1 SArrayFunction=2
-
 include("variables.jl")
 include("operations.jl")
 include("differentials.jl")
@@ -93,7 +92,9 @@ include("utils.jl")
 include("direct.jl")
 include("domains.jl")
 include("systems/diffeqs/odesystem.jl")
+include("systems/diffeqs/abstractodesystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
+include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/nonlinear/nonlinear_system.jl")
 include("systems/pde/pdesystem.jl")
 include("latexify_recipes.jl")
