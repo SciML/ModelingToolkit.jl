@@ -11,17 +11,17 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-noiseeqs = [0.01*x,
-            0.01*y,
-            0.01*z]
+noiseeqs = [0.1*x,
+            0.1*y,
+            0.1*z]
 
 de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β])
 f = eval(generate_diffusion_function(de)[1])
-@test f(ones(3),rand(3),nothing) == 0.01ones(3)
+@test f(ones(3),rand(3),nothing) == 0.1ones(3)
 
 f = SDEFunction(de)
 prob = SDEProblem(SDEFunction(de),f.g,[1.0,0.0,0.0],(0.0,100.0),(10.0,26.0,2.33))
-sol = solve(prob,SOSRI())
+sol = solve(prob,SRIW1())
 
 noiseeqs_nd = [0.01*x 0.01*x*y 0.02*x*z
                σ      0.01*y   0.02*x*z
@@ -42,4 +42,4 @@ f(du,[1,2,3.0],[0.1,0.2,0.3],nothing)
 f = SDEFunction(de)
 prob = SDEProblem(SDEFunction(de),f.g,[1.0,0.0,0.0],(0.0,100.0),(10.0,26.0,2.33),
                   noise_rate_prototype = zeros(3,3))
-sol = solve(prob,EM(),dt=0.1)
+sol = solve(prob,EM(),dt=0.001)
