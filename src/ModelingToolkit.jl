@@ -1,16 +1,9 @@
 module ModelingToolkit
 
-export Operation, Expression
-export calculate_jacobian, generate_jacobian, generate_function
-export independent_variables, dependent_variables, parameters
-export simplified_expr, eval_function
-export @register, @I
-export modelingtoolkitize
-
-
 using DiffEqBase, Distributed
 using StaticArrays, LinearAlgebra, SparseArrays
 using Latexify
+using MacroTools
 
 using MacroTools
 import MacroTools: splitdef, combinedef, postwalk, striplines
@@ -92,6 +85,7 @@ include("utils.jl")
 include("direct.jl")
 include("domains.jl")
 include("systems/diffeqs/odesystem.jl")
+include("systems/diffeqs/sdesystem.jl")
 include("systems/diffeqs/abstractodesystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
 include("systems/diffeqs/modelingtoolkitize.jl")
@@ -99,5 +93,23 @@ include("systems/nonlinear/nonlinear_system.jl")
 include("systems/pde/pdesystem.jl")
 include("latexify_recipes.jl")
 include("build_function.jl")
+
+export ODESystem, ODEFunction
+export SDESystem, SDEFunction
+export NonlinearSystem
+export ode_order_lowering
+export PDESystem
+export Differential, expand_derivatives, @derivatives
+export IntervalDomain, ProductDomain, ⊗, CircleDomain
+export Equation, ConstrainedEquation
+export simplify_constants
+
+export Operation, Expression
+export calculate_jacobian, generate_jacobian, generate_function, generate_diffusion_function
+export independent_variables, dependent_variables, parameters
+export simplified_expr, eval_function
+export @register, @I
+export modelingtoolkitize
+export Variable, @variables, @parameters
 
 end # module

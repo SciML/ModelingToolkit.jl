@@ -1,5 +1,3 @@
-export Variable, @variables, @parameters
-
 const IndexMap = Dict{Char,Char}(
             '0' => '₀',
             '1' => '₁',

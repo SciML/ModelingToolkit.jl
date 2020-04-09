@@ -1,5 +1,3 @@
-export IntervalDomain, ProductDomain, ⊗, CircleDomain
-
 abstract type AbstractDomain{T,N} end
 
 struct VarDomainPairing

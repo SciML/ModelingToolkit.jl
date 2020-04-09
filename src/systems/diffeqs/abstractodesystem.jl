@@ -21,7 +21,7 @@ function calculate_jacobian(sys::AbstractODESystem)
 end
 
 struct ODEToExpr
-    sys::ODESystem
+    sys::AbstractODESystem
 end
 function (f::ODEToExpr)(O::Operation)
     if isa(O.op, Variable)

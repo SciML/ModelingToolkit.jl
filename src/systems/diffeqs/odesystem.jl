@@ -1,5 +1,3 @@
-export ODESystem, ODEFunction
-
 isintermediate(eq::Equation) = !(isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential))
 
 function flatten_differential(O::Operation)

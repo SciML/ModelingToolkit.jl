@@ -1,6 +1,3 @@
-export ode_order_lowering
-
-
 function lower_varname(var::Variable, idv, order)
     order == 0 && return var
     name = Symbol(var.name, :_, string(idv.name)^order)
