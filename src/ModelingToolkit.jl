@@ -91,6 +91,7 @@ include("systems/diffeqs/first_order_transform.jl")
 include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/nonlinear/nonlinear_system.jl")
 include("systems/pde/pdesystem.jl")
+include("systems/reaction/reactionsystem.jl")
 include("latexify_recipes.jl")
 include("build_function.jl")
 
@@ -99,6 +100,7 @@ export SDESystem, SDEFunction
 export NonlinearSystem
 export ode_order_lowering
 export PDESystem
+export Reaction, ReactionSystem
 export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
