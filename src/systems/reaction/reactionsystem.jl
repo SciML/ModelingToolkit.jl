@@ -34,17 +34,16 @@ end
 
 function essemble_diffusion(rs)
     eqs = Expression[Constant(0) for x in rs.dvs, y in rs.rxs]
-    @show size(eqs)
 
     for (j,rx) in enumerate(rs.rxs)
         for reactant in rx.reactants
             i = findfirst(x->x.op == reactant.op,rs.dvs)
-            eqs[i,j] -= sqrt(rx.rate) * reaction_expr(rx.reactants)
+            eqs[i,j] = -sqrt(rx.rate) * reaction_expr(rx.reactants)
         end
 
         for product in rx.products
             i = findfirst(x->x.op == product.op,rs.dvs)
-            eqs[i,j] += sqrt(rx.rate) * reaction_expr(rx.reactants)
+            eqs[i,j] = sqrt(rx.rate) * reaction_expr(rx.reactants)
         end
     end
     eqs
