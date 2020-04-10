@@ -137,10 +137,11 @@ lowered_eqs = [D(u_tt) ~ 2u_tt + u_t + x_t + 1
                D(u_t)  ~ u_tt
                D(u)    ~ u_t
                D(x)    ~ x_t]
+
 @test de1 == ODESystem(lowered_eqs)
 
 # issue #219
-@test de1.dvs == [eq.x for eq in de1.eqs] == ODESystem(lowered_eqs).dvs
+@test de1.dvs == [ModelingToolkit.var_from_nested_derivative(eq.lhs)[1] for eq in de1.eqs] == ODESystem(lowered_eqs).dvs
 
 test_diffeq_inference("first-order transform", de1, t, [u_tt, x_t, u_t, u, x], [])
 du = zeros(5)

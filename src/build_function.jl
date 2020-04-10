@@ -120,16 +120,16 @@ function numbered_expr(O::Operation,vars,parameters;
                         varname=varname,paramname=paramname) for x in O.args]...)
 end
 
-function numbered_expr(de::ModelingToolkit.ODEExpr,vars::Vector{Variable},parameters;
+function numbered_expr(de::ModelingToolkit.Equation,vars::Vector{Variable},parameters;
                        derivname=:du,varname=:u,paramname=:p)
-    i = findfirst(x->isequal(x.name,de.x.name),vars)
+    i = findfirst(x->isequal(x.name,var_from_nested_derivative(de.lhs)[1].name),vars)
     :($derivname[$i] = $(numbered_expr(de.rhs,vars,parameters;
                                      derivname=derivname,
                                      varname=varname,paramname=paramname)))
 end
-function numbered_expr(de::ModelingToolkit.ODEExpr,vars::Vector{Operation},parameters;
+function numbered_expr(de::ModelingToolkit.Equation,vars::Vector{Operation},parameters;
                        derivname=:du,varname=:u,paramname=:p)
-    i = findfirst(x->isequal(x.op.name,de.x.name),vars)
+    i = findfirst(x->isequal(x.op.name,var_from_nested_derivative(de.lhs)[1].name),vars)
     :($derivname[$i] = $(numbered_expr(de.rhs,vars,parameters;
                                      derivname=derivname,
                                      varname=varname,paramname=paramname)))
