@@ -98,10 +98,13 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.dvs, ps = sys.ps;
         _Wfact,_Wfact_t = nothing,nothing
     end
 
+    M = calculate_massmatrix(sys)
+
     SDEFunction{iip}(f,g,jac=_jac,
                       tgrad = _tgrad,
                       Wfact = _Wfact,
                       Wfact_t = _Wfact_t,
+                      mass_matrix = M,
                       syms = Symbol.(sys.dvs))
 end
 

@@ -6,6 +6,7 @@ using ModelingToolkit, Test
 @testset "Operation Overloads Test" begin include("operation_overloads.jl") end
 @testset "Direct Usage Test" begin include("direct.jl") end
 @testset "ODESystem Test" begin include("odesystem.jl") end
+@testset "Mass Matrix Test" begin include("odesystem.jl") end
 @testset "SDESystem Test" begin include("sdesystem.jl") end
 @testset "Build Targets Test" begin include("build_targets.jl") end
 @testset "Domain Test" begin include("domains.jl") end

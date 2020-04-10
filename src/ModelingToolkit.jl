@@ -107,7 +107,8 @@ export Equation, ConstrainedEquation
 export simplify_constants
 
 export Operation, Expression
-export calculate_jacobian, generate_jacobian, generate_function, generate_diffusion_function
+export calculate_jacobian, generate_jacobian, generate_function
+export calculate_massmatrix, generate_diffusion_function
 export independent_variables, dependent_variables, parameters
 export simplified_expr, eval_function
 export @register, @I
