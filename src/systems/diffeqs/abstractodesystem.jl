@@ -89,6 +89,23 @@ function generate_factorized_W(sys::AbstractODESystem, vs = sys.dvs, ps = sys.ps
     return (Wfact_func, Wfact_t_func)
 end
 
+function calculate_massmatrix(sys::AbstractODESystem, simplify=true)
+    eqs = sys.eqs
+    M = zeros(length(eqs),length(eqs))
+    for (i,eq) in enumerate(eqs)
+        if eq.lhs isa Constant
+            @assert eq.lhs.value == 0
+        elseif eq.lhs.op isa Differential
+            j = findfirst(x->isequal(x.name,var_from_nested_derivative(eq.lhs)[1].name),sys.dvs)
+            M[i,j] = 1
+        else
+            error("Only semi-explicit mass matrices are currently supported")
+        end
+    end
+    M = simplify ? simplify_constants.(M) : M
+    M == I ? I : M
+end
+
 """
 $(SIGNATURES)
 
@@ -132,10 +149,13 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = sys.dvs, ps =
         _Wfact,_Wfact_t = nothing,nothing
     end
 
+    M = calculate_massmatrix(sys)
+
     ODEFunction{iip}(f,jac=_jac,
                       tgrad = _tgrad,
                       Wfact = _Wfact,
                       Wfact_t = _Wfact_t,
+                      mass_matrix = M,
                       syms = Symbol.(sys.dvs))
 end
 

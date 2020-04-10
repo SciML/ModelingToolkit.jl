@@ -7,6 +7,16 @@ using Test
 @variables x(t) y(t) z(t)
 @derivatives D'~t
 
+# Define a differential equation
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
+
+ModelingToolkit.simplified_expr.(eqs)[1]
+:(derivative(x(t), t) = σ * (y(t) - x(t))).args
+de = ODESystem(eqs)
+
+
 function _clean(O::Operation)
     @assert isa(O.op, Variable)
     return O.op
@@ -26,14 +36,6 @@ function test_nlsys_inference(name, sys, vs, ps)
     end
 end
 
-# Define a differential equation
-eqs = [D(x) ~ σ*(y-x),
-       D(y) ~ x*(ρ-z)-y,
-       D(z) ~ x*y - β*z]
-
-ModelingToolkit.simplified_expr.(eqs)[1]
-:(derivative(x(t), t) = σ * (y(t) - x(t))).args
-de = ODESystem(eqs)
 test_diffeq_inference("standard", de, t, (x, y, z), (σ, ρ, β))
 generate_function(de, [x,y,z], [σ,ρ,β])
 jac_expr = generate_jacobian(de)
