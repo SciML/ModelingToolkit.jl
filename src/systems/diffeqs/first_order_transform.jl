@@ -4,25 +4,34 @@ function lower_varname(var::Variable, idv, order)
     return Variable(name; known = var.known)
 end
 
+function flatten_differential(O::Operation)
+    @assert is_derivative(O) "invalid differential: $O"
+    is_derivative(O.args[1]) || return (O.args[1], O.op.x, 1)
+    (x, t, order) = flatten_differential(O.args[1])
+    isequal(t, O.op.x) || throw(ArgumentError("non-matching differentials on lhs: $t, $(O.op.x)"))
+    return (x, t, order + 1)
+end
+
 function ode_order_lowering(sys::ODESystem)
     eqs_lowered, _ = ode_order_lowering(sys.eqs, sys.iv)
-    ODESystem(eqs_lowered, sys.iv, [eq.x for eq in eqs_lowered], sys.ps)
+    ODESystem(eqs_lowered, sys.iv, [var_from_nested_derivative(eq.lhs)[1] for eq in eqs_lowered], sys.ps)
 end
+
 function ode_order_lowering(eqs, iv)
     var_order = Dict{Variable,Int}()
     vars = Variable[]
-    new_eqs = similar(eqs, ODEExpr)
+    new_eqs = Equation[]
     new_vars = Variable[]
 
     for (i, eq) ∈ enumerate(eqs)
-        var, maxorder = eq.x, eq.n
+        var, maxorder = var_from_nested_derivative(eq.lhs)
         if maxorder > get(var_order, var, 0)
             var_order[var] = maxorder
             any(isequal(var), vars) || push!(vars, var)
         end
-        var′ = lower_varname(eq.x, iv, eq.n - 1)
+        var′ = lower_varname(var, iv, maxorder - 1)
         rhs′ = rename(eq.rhs)
-        new_eqs[i] = ODEExpr(var′, 1, rhs′)
+        push!(new_eqs,Differential(iv())(var′(iv())) ~ rhs′)
     end
 
     for var ∈ vars
@@ -33,7 +42,7 @@ function ode_order_lowering(eqs, iv)
             push!(new_vars, rvar)
 
             rhs = rvar(iv())
-            eq = ODEExpr(lvar, 1, rhs)
+            eq = Differential(iv())(lvar(iv())) ~ rhs
             push!(new_eqs, eq)
         end
     end

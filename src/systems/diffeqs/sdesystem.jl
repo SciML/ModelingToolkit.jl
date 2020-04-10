@@ -1,6 +1,6 @@
 struct SDESystem <: AbstractODESystem
     """The expressions defining the drift term."""
-    eqs::Vector{ODEExpr}
+    eqs::Vector{Equation}
     """The expressions defining the diffusion term."""
     noiseeqs
     """Independent variable."""
@@ -35,19 +35,15 @@ struct SDESystem <: AbstractODESystem
     name::Symbol
 end
 
-function SDESystem(deqs::AbstractVector{ODEExpr}, neqs, iv, dvs, ps; name = gensym(:SDESystem))
+function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps; name = gensym(:SDESystem))
+    dvs′ = [clean(dv) for dv ∈ dvs]
+    ps′ = [clean(p) for p ∈ ps]
+    iv′ = clean(iv)
     tgrad = RefValue(Vector{Expression}(undef, 0))
     jac = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
-    SDESystem(deqs, neqs, iv, dvs, ps, tgrad, jac, Wfact, Wfact_t, name)
-end
-
-function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps; kwargs...)
-    _dvs = [deq.op for deq ∈ dvs]
-    _iv = iv.op
-    _ps = [p.op for p ∈ ps]
-    SDESystem(getindex.(convert.(ODEExpr,deqs),2), neqs, _iv, _dvs, _ps; kwargs...)
+    SDESystem(deqs, neqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true}; kwargs...)

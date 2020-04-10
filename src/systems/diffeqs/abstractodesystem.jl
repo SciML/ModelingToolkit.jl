@@ -142,3 +142,20 @@ end
 function DiffEqBase.ODEFunction(sys::AbstractODESystem, args...; kwargs...)
     ODEFunction{true}(sys, args...; kwargs...)
 end
+
+independent_variables(sys::AbstractODESystem) = Set{Variable}([sys.iv])
+dependent_variables(sys::AbstractODESystem) = Set{Variable}(sys.dvs)
+parameters(sys::AbstractODESystem) = Set{Variable}(sys.ps)
+
+function _eq_unordered(a, b)
+    length(a) === length(b) || return false
+    n = length(a)
+    idxs = Set(1:n)
+    for x ∈ a
+        idx = findfirst(isequal(x), b)
+        idx === nothing && return false
+        idx ∈ idxs      || return false
+        delete!(idxs, idx)
+    end
+    return true
+end
