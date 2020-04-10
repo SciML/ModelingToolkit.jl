@@ -77,9 +77,21 @@ struct ODESystem <: AbstractODESystem
     [`generate_factorized_W`](@ref) is called on the system.
     """
     Wfact_t::RefValue{Matrix{Expression}}
+    """
+    Name: the name of the system
+    """
+    name::Symbol
 end
 
-function ODESystem(eqs)
+function ODESystem(deqs::AbstractVector{ODEExpr}, iv, dvs, ps; name=gensym(:ODESystem))
+    tgrad = RefValue(Vector{Expression}(undef, 0))
+    jac = RefValue(Matrix{Expression}(undef, 0, 0))
+    Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
+    Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
+    ODESystem(deqs, iv, dvs, ps, tgrad, jac, Wfact, Wfact_t, name)
+end
+
+function ODESystem(eqs; kwargs...)
     reformatted = convert.(ODEExpr,eqs)
 
     ivs = unique(r[1] for r ∈ reformatted)
@@ -93,22 +105,14 @@ function ODESystem(eqs)
         x.known & !isequal(x, iv)
     end |> collect
 
-    ODESystem(deqs, iv, dvs, ps)
+    ODESystem(deqs, iv, dvs, ps; kwargs...)
 end
 
-function ODESystem(deqs::AbstractVector{ODEExpr}, iv, dvs, ps)
-    tgrad = RefValue(Vector{Expression}(undef, 0))
-    jac = RefValue(Matrix{Expression}(undef, 0, 0))
-    Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
-    Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
-    ODESystem(deqs, iv, dvs, ps, tgrad, jac, Wfact, Wfact_t)
-end
-
-function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps)
+function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps; kwargs...)
     _dvs = [deq.op for deq ∈ dvs]
     _iv = iv.op
     _ps = [p.op for p ∈ ps]
-    ODESystem(getindex.(convert.(ODEExpr,deqs),2), _iv, _dvs, _ps)
+    ODESystem(getindex.(convert.(ODEExpr,deqs),2), _iv, _dvs, _ps; kwargs...)
 end
 
 function _eq_unordered(a, b)

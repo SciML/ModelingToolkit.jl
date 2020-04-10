@@ -29,21 +29,25 @@ struct SDESystem <: AbstractODESystem
     [`generate_factorized_W`](@ref) is called on the system.
     """
     Wfact_t::RefValue{Matrix{Expression}}
+    """
+    Name: the name of the system
+    """
+    name::Symbol
 end
 
-function SDESystem(deqs::AbstractVector{ODEExpr}, neqs, iv, dvs, ps)
+function SDESystem(deqs::AbstractVector{ODEExpr}, neqs, iv, dvs, ps; name = gensym(:SDESystem))
     tgrad = RefValue(Vector{Expression}(undef, 0))
     jac = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
-    SDESystem(deqs, neqs, iv, dvs, ps, tgrad, jac, Wfact, Wfact_t)
+    SDESystem(deqs, neqs, iv, dvs, ps, tgrad, jac, Wfact, Wfact_t, name)
 end
 
-function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps)
+function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps; kwargs...)
     _dvs = [deq.op for deq ∈ dvs]
     _iv = iv.op
     _ps = [p.op for p ∈ ps]
-    SDESystem(getindex.(convert.(ODEExpr,deqs),2), neqs, _iv, _dvs, _ps)
+    SDESystem(getindex.(convert.(ODEExpr,deqs),2), neqs, _iv, _dvs, _ps; kwargs...)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true}; kwargs...)
