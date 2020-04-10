@@ -34,15 +34,19 @@ struct NonlinearSystem <: AbstractSystem
     vs::Vector{Expression}
     """Parameters."""
     ps::Vector{Variable}
-    function NonlinearSystem(eqs, vs)
+    """
+    Name: the name of the system
+    """
+    name::Symbol
+    function NonlinearSystem(eqs, vs; name = gensym(:NonlinearSystem))
         rhss = [eq.rhs for eq ∈ eqs]
         ps = reduce(∪, map(_find_params(vs), rhss); init = vnil())
-        new(eqs, vs, collect(ps))
+        new(eqs, vs, collect(ps), name)
     end
 
-    function NonlinearSystem(eqs, vs, ps)
+    function NonlinearSystem(eqs, vs, ps; name = gensym(:NonlinearSystem))
         rhss = [eq.rhs for eq ∈ eqs]
-        new(eqs, vs, [p.op for p in ps])
+        new(eqs, vs, [p.op for p in ps], name)
     end
 end
 
