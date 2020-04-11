@@ -27,16 +27,10 @@ struct Variable{T} <: Function
     name::Symbol
     Variable(name) = new{Number}(name)
     Variable{T}(name) where T = new{T}(name)
-    function Variable{T}(name, indices...) where T
-        var_name = Symbol("$(name)$(join(map_subscripts.(indices), "ˏ"))")
-        Variable{T}(var_name)
-    end
 end
 
-function Variable(name, indices...)
-    var_name = Symbol("$(name)$(join(map_subscripts.(indices), "ˏ"))")
-    Variable(var_name)
-end
+getindex(x::Variable{<:Number},idxs...) = error("Variable $(x.name) is a scalar quantity. No indexing allowed")
+getindex(x::Variable{T},idxs...) where T = Variable{eltype(T)}(varSymbol("$(x.name)$(join(map_subscripts.(idxs), "ˏ"))"))
 
 vartype(::Variable{T}) where T = T
 (x::Variable)(args...) = Operation(x, collect(Expression, args))
@@ -146,9 +140,9 @@ end
 
 
 function _construct_array_vars(var_name, type, call_args, indices...)
-    :(map(Iterators.product($(indices...))) do ind
-        $(_construct_var(var_name, type, call_args, :ind))
-    end)
+    T = :(SizedArray{Tuple{length.($(indices))...},$type})
+    @show T
+    _construct_var(var_name, T, call_args)
 end
 
 

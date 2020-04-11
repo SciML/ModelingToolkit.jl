@@ -2,7 +2,7 @@ module ModelingToolkit
 
 using DiffEqBase, Distributed
 using StaticArrays, LinearAlgebra, SparseArrays
-using Latexify, Unitful
+using Latexify, Unitful, StaticArrays
 using MacroTools
 
 using MacroTools
