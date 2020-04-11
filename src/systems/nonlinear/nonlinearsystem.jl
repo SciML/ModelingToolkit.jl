@@ -22,7 +22,7 @@ struct NonlinearSystem <: AbstractSystem
     """Vector of equations defining the system."""
     eqs::Vector{Equation}
     """Unknown variables."""
-    states::Vector{Expression}
+    states::Vector{Variable}
     """Parameters."""
     ps::Vector{Variable}
     """
@@ -38,16 +38,16 @@ end
 function NonlinearSystem(eqs, states, ps;
                          name = gensym(:NonlinearSystem),
                          systems = NonlinearSystem[])
-    NonlinearSystem(eqs, states, convert.(Variable,ps), name, systems)
+    NonlinearSystem(eqs, convert.(Variable,states), convert.(Variable,ps), name, systems)
 end
 
 function calculate_jacobian(sys::NonlinearSystem)
     rhs = [eq.rhs for eq in sys.eqs]
-    jac = expand_derivatives.(calculate_jacobian(rhs, sys.states))
+    jac = expand_derivatives.(calculate_jacobian(rhs, [dv() for dv in states(sys)]))
     return jac
 end
 
-function generate_jacobian(sys::NonlinearSystem, vs = sys.states, ps = sys.ps, expression = Val{true}; kwargs...)
+function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
     jac = calculate_jacobian(sys)
     return build_function(jac, convert.(Variable,vs), convert.(Variable,ps), (), NLSysToExpr(sys))
 end
@@ -65,7 +65,7 @@ function (f::NLSysToExpr)(O::Operation)
 end
 (f::NLSysToExpr)(x) = convert(Expr, x)
 
-function generate_function(sys::NonlinearSystem, vs = sys.states, ps = sys.ps, expression = Val{true}; kwargs...)
+function generate_function(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
     rhss = [eq.rhs for eq ∈ sys.eqs]
     vs′ = convert.(Variable,vs)
     ps′ = convert.(Variable,ps)

@@ -20,7 +20,7 @@ struct OptimizationSystem <: AbstractSystem
     """Vector of equations defining the system."""
     op::Operation
     """Unknown variables."""
-    states::Vector{Expression}
+    states::Vector{Variable}
     """Parameters."""
     ps::Vector{Variable}
     """
@@ -30,42 +30,29 @@ struct OptimizationSystem <: AbstractSystem
     """
     systems: The internal systems
     """
-    systems::Vector{NonlinearSystem}
+    systems::Vector{OptimizationSystem}
 end
 
-function NonlinearSystem(eqs, states, ps;
-                         name = gensym(:NonlinearSystem),
-                         systems = NonlinearSystem[])
-    NonlinearSystem(eqs, states, convert.(Variable,ps), name, systems)
+function OptimizationSystem(op, states, ps;
+                            name = gensym(:OptimizationSystem),
+                            systems = OptimizationSystem[])
+    OptimizationSystem(op, convert.(Variable,states), convert.(Variable,ps), name, systems)
 end
 
-function calculate_jacobian(sys::NonlinearSystem)
-    rhs = [eq.rhs for eq in sys.eqs]
-    jac = expand_derivatives.(calculate_jacobian(rhs, sys.states))
-    return jac
+function calculate_hessian(sys::OptimizationSystem)
+    expand_derivatives.(hessian(equations(sys), [dv() for dv in states(sys)]))
 end
 
-function generate_jacobian(sys::NonlinearSystem, vs = sys.states, ps = sys.ps, expression = Val{true}; kwargs...)
-    jac = calculate_jacobian(sys)
-    return build_function(jac, convert.(Variable,vs), convert.(Variable,ps), (), NLSysToExpr(sys))
+function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+    hes = calculate_hessian(sys)
+    return build_function(hes, convert.(Variable,vs), convert.(Variable,ps), (), x->convert(Expr, x))
 end
 
-struct NLSysToExpr
-    sys::NonlinearSystem
-end
-function (f::NLSysToExpr)(O::Operation)
-    any(isequal(O), f.sys.states) && return O.op.name  # variables
-    if isa(O.op, Variable)
-        isempty(O.args) && return O.op.name  # 0-ary parameters
-        return build_expr(:call, Any[O.op.name; f.(O.args)])
-    end
-    return build_expr(:call, Any[O.op; f.(O.args)])
-end
-(f::NLSysToExpr)(x) = convert(Expr, x)
-
-function generate_function(sys::NonlinearSystem, vs = sys.states, ps = sys.ps, expression = Val{true}; kwargs...)
-    rhss = [eq.rhs for eq ∈ sys.eqs]
+function generate_function(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
     vs′ = convert.(Variable,vs)
     ps′ = convert.(Variable,ps)
-    return build_function(rhss, vs′, ps′, (), NLSysToExpr(sys), expression; kwargs...)
+    return build_function(equations(sys), vs′, ps′, (), x->convert(Expr, x), expression; kwargs...)
 end
+
+equations(sys::OptimizationSystem) = isempty(sys.systems) ? sys.op : sys.op + reduce(+,namespace_operation.(sys.systems))
+namespace_operation(sys::OptimizationSystem) = namespace_operation(sys.op,sys.name,nothing)

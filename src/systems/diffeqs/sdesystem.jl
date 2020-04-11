@@ -42,9 +42,9 @@ end
 function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    systems = SDESystem[],
                    name = gensym(:SDESystem))
-    dvs′ = [clean(dv) for dv ∈ dvs]
-    ps′ = [clean(p) for p ∈ ps]
-    iv′ = clean(iv)
+    iv′ = convert(Variable,iv)
+    dvs′ = convert.(Variable,dvs)
+    ps′ = convert.(Variable,ps)
     tgrad = RefValue(Vector{Expression}(undef, 0))
     jac = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
@@ -53,8 +53,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = sys.states, ps = sys.ps, expression = Val{true}; kwargs...)
-    dvs′ = [clean(dv) for dv ∈ dvs]
-    ps′ = [clean(p) for p ∈ ps]
+    dvs′ = convert.(Variable,dvs)
+    ps′ = convert.(Variable,ps)
     return build_function(sys.noiseeqs, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
 end
 

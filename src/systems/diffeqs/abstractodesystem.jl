@@ -46,7 +46,7 @@ end
 
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
     rhss = [deq.rhs for deq ∈ equations(sys)]
-    dvs′ = convert.(Variable,states)
+    dvs′ = convert.(Variable,dvs)
     ps′ = convert.(Variable,ps)
     return build_function(rhss, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
 end

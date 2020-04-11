@@ -64,9 +64,9 @@ end
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    systems = ODESystem[],
                    name=gensym(:ODESystem))
-    iv′ = clean(iv)
-    dvs′ = [clean(dv) for dv ∈ dvs]
-    ps′ = [clean(p) for p ∈ ps]
+    iv′ = convert(Variable,iv)
+    dvs′ = convert.(Variable,dvs)
+    ps′ = convert.(Variable,ps)
     tgrad = RefValue(Vector{Expression}(undef, 0))
     jac = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
@@ -92,7 +92,7 @@ end
 
 Base.:(==)(sys1::ODESystem, sys2::ODESystem) =
     _eq_unordered(sys1.eqs, sys2.eqs) && isequal(sys1.iv, sys2.iv) &&
-    _eq_unordered(sys1.dvs, sys2.dvs) && _eq_unordered(sys1.ps, sys2.ps)
+    _eq_unordered(sys1.states, sys2.states) && _eq_unordered(sys1.ps, sys2.ps)
 # NOTE: equality does not check cached Jacobian
 
 function rename(sys::ODESystem,name)

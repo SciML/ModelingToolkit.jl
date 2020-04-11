@@ -99,7 +99,7 @@ include("systems/diffeqs/validation.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
 
-#include("systems/optimization/optimizationsystem.jl")
+include("systems/optimization/optimizationsystem.jl")
 
 include("systems/pde/pdesystem.jl")
 
@@ -110,7 +110,7 @@ include("build_function.jl")
 
 export ODESystem, ODEFunction
 export SDESystem, SDEFunction
-export NonlinearSystem
+export NonlinearSystem, OptimizationSystem
 export ode_order_lowering
 export PDESystem
 export Reaction, ReactionSystem
@@ -119,12 +119,14 @@ export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
 export simplify_constants
 
-export Operation, Expression
+export Operation, Expression, Variable
 export calculate_jacobian, generate_jacobian, generate_function
+export calculate_tgrad, generate_tgrad
+export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
 export independent_variable, states, parameters, equations
-export simplified_expr, eval_function
-export @register, @I
+export simplified_expr
+export @register
 export modelingtoolkitize
-export Variable, @variables, @parameters
+export @variables, @parameters
 end # module

@@ -10,7 +10,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
     i = findfirst(x->x.name==name,sys.states)
     if i !== nothing
         x = rename(sys.states[i],renamespace(sys.name,name))
-        if iv ∈ fieldnames(typeof(sys))
+        if :iv ∈ fieldnames(typeof(sys))
             return x(getfield(sys,:iv)())
         else
             return x()
@@ -22,7 +22,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
             return rename(sys.ps[i],renamespace(sys.name,name))()
         end
     end
-    throw(error("Variable name does not exist"))
+    throw(error("Variable $name does not exist"))
 end
 
 renamespace(namespace,name) = Symbol(string(namespace)*"′"*string(name))
