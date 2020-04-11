@@ -64,10 +64,6 @@ Base.occursin(t::Expression) = Base.Fix1(occursin, t)
 Base.occursin(t::Expression, x::Operation ) = isequal(x, t) || any(occursin(t), x.args)
 Base.occursin(t::Expression, x::Expression) = isequal(x, t)
 
-clean(x::Variable) = x
-clean(O::Operation) = isa(O.op, Variable) ? O.op : throw(ArgumentError("invalid variable: $(O.op)"))
-
-
 vars(exprs) = foldl(vars!, exprs; init = Set{Variable}())
 function vars!(vars, O)
     isa(O, Operation) || return vars

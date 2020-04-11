@@ -8,6 +8,42 @@ function build_function(args...;target = JuliaTarget(),kwargs...)
   _build_function(target,args...;kwargs...)
 end
 
+# Scalar output
+function _build_function(target::JuliaTarget, op::Operation, vs, ps = (), args = (),
+                         conv = simplified_expr, expression = Val{true};
+                         checkbounds = false, constructor=nothing,
+                         linenumbers = true)
+    _vs = map(x-> x isa Operation ? x.op : x, vs)
+    _ps = map(x-> x isa Operation ? x.op : x, ps)
+    var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
+    param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(_ps)]
+    (ls, rs) = zip(var_pairs..., param_pairs...)
+    var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, rs))
+
+    fname = gensym(:ModelingToolkitFunction)
+    out_expr = conv(op)
+    let_expr = Expr(:let, var_eqs, out_expr)
+    bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
+
+    fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
+
+    oop_ex = :(
+        ($(fargs.args...),) -> begin
+            $bounds_block
+        end
+    )
+
+    if !linenumbers
+        oop_ex = striplines(oop_ex)
+    end
+
+    if expression == Val{true}
+        return oop_ex
+    else
+        return GeneralizedGenerated.mk_function(@__MODULE__,oop_ex)
+    end
+end
+
 function _build_function(target::JuliaTarget, rhss, vs, ps = (), args = (),
                          conv = simplified_expr, expression = Val{true};
                          checkbounds = false, constructor=nothing,

@@ -3,7 +3,7 @@ using Test
 
 # Derivatives
 @parameters t σ ρ β
-@variables x(t) y(t) z(t)
+@variables x y z
 @derivatives D'~t D2''~t Dx'~x
 
 @test @macroexpand(@derivatives D'~t D2''~t) == @macroexpand(@derivatives (D'~t), (D2''~t))
@@ -36,7 +36,7 @@ d2 = D(sin(t)*cos(t))
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-sys = NonlinearSystem(eqs, [x,y,z])
+sys = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(sys)
 @test isequal(jac[1,1], σ*-1)
 @test isequal(jac[1,2], σ)
@@ -53,6 +53,8 @@ jac = calculate_jacobian(sys)
 @test !isequal(D(b), 0)
 @test isequal(expand_derivatives(D(t)), 1)
 @test isequal(expand_derivatives(Dx(x)), 1)
+
+@variables x(t) y(t) z(t)
 
 @test isequal(expand_derivatives(D(x * y)), simplify_constants(y*D(x) + x*D(y)))
 @test_broken isequal(expand_derivatives(D(x * y)), simplify_constants(D(x)*y + x*D(y)))
