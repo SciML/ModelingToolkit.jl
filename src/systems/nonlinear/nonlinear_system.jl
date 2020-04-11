@@ -62,10 +62,8 @@ function _find_params(O, vs)
     return ps
 end
 
-
-independent_variables(sys::NonlinearSystem) = Set{Variable}()
-dependent_variables(sys::NonlinearSystem) = Set{Expression}(sys.vs)
-parameters(sys::NonlinearSystem) = Set{Variable}(sys.ps)
+states(sys::NonlinearSystem) = sys.vs
+parameters(sys::NonlinearSystem) = sys.ps
 
 
 function calculate_jacobian(sys::NonlinearSystem)
