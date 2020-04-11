@@ -8,7 +8,7 @@ const β₂ = 1.0
 const β₃ = 1.0
 const r₁ = 1.0
 const r₂ = 1.0
-const D = 100.0
+const D2 = 100.0
 const γ₁ = 0.1
 const γ₂ = 0.1
 const γ₃ = 0.1
@@ -37,7 +37,7 @@ function f(du,u,p,t)
   dC = @view du[:,:,3]
   mul!(MyA,My,A)
   mul!(AMx,A,Mx)
-  @. DA = D*(MyA + AMx)
+  @. DA = D2*(MyA + AMx)
   @. dA = DA + α₁ - β₁*A - r₁*A*B + r₂*C
   @. dB = α₂ - β₂*B - r₁*A*B + r₂*C
   @. dC = α₃ - β₃*C + r₁*A*B - r₂*C
