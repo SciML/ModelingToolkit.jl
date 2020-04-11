@@ -168,3 +168,13 @@ Define one or more known variables.
 macro parameters(xs...)
     esc(_parse_vars(:parameters, true, xs))
 end
+
+function rename(x::Variable,name::Symbol)
+    Variable(name,known=x.known)
+end
+
+TreeViews.hastreeview(x::Variable) = true
+function TreeViews.treelabel(io::IO,x::Variable,
+                             mime::MIME"text/plain" = MIME"text/plain"())
+  show(io,mime,Text(x.name))
+end

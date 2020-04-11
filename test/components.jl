@@ -9,29 +9,28 @@ using Test
 
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
-       0 ~ x + y + z]
+       0 ~ x + y + β*z]
 
-de1 = ODESystem(eqs,t,[x,y,z],[σ,ρ,β],name=:lorenz1)
-de2 = ODESystem(eqs,t,[x,y,z],[σ,ρ,β],name=:lorenz2)
+lorenz1 = ODESystem(eqs,t,[x,y,z],[σ,ρ,β],name=:lorenz1)
+lorenz2 = ODESystem(eqs,t,[x,y,z],[σ,ρ,β],name=:lorenz2)
 
 @parameters α
 @variables a(t)
-for
+connnectedeqs = [D(a) ~ a*states(lorenz1,:x)]
 
-convert(DAESystem,sys)
-convert(ODESystem,sys)
+connected = ODESystem(connnectedeqs,t,[a],[α],systems=[lorenz1,lorenz2],name=:connectedlorenz)
 
-connected = ODESystems(connnectedeqs,[a],[α],systems=[de1,de2],name=:connectedlorenz)
+@variables lorenz1′x(t) lorenz1′y(t) lorenz1′z(t) lorenz2′x(t) lorenz2′y(t) lorenz2′z(t)
+@parameters lorenz1′σ lorenz1′ρ lorenz1′β lorenz2′σ lorenz2′ρ lorenz2′β
 
-deleteat!(de2.eqs,3)
-de2
-push!(de2.eqs,convert(ModelingToolkit.ODEExpr,D(z) ~ z^2)[2])
+eqs_flat = [D(a) ~ a*lorenz1′x,
+            D(lorenz1′x) ~ lorenz1′σ*(lorenz1′y-lorenz1′x),
+            D(lorenz1′y) ~ lorenz1′x*(lorenz1′ρ-lorenz1′z)-lorenz1′y,
+            0 ~ lorenz1′x + lorenz1′y + lorenz1′β*lorenz1′z,
+            D(lorenz2′x) ~ lorenz2′σ*(lorenz2′y-lorenz2′x),
+            D(lorenz2′y) ~ lorenz2′x*(lorenz2′ρ-lorenz2′z)-lorenz2′y,
+            0 ~ lorenz2′x + lorenz2′y + lorenz2′β*lorenz2′z]
 
-check_consistency(de2)
-
-b = a*z
-           [states(de1,:x) ~ α*states(de2,:z),
-            D(a) ~ b*states(de1,:x)]
-
-states(states) == [lorenz1′x,lorenz1′y,lorenz1′z,lorenz2′x,lorenz2′y,lorenz2′z,a]
-parameters(connected) == [lorenz1′σ,lorenz1′ρ,lorenz1′β,lorenz2′σ,lorenz2′ρ,lorenz2′β,α]
+@test [x.name for x in states(connected)] == [:a,:lorenz1′x,:lorenz1′y,:lorenz1′z,:lorenz2′x,:lorenz2′y,:lorenz2′z]
+@test [x.name for x in parameters(connected)] == [:α,:lorenz1′σ,:lorenz1′ρ,:lorenz1′β,:lorenz2′σ,:lorenz2′ρ,:lorenz2′β]
+@test eqs_flat == equations(connected)

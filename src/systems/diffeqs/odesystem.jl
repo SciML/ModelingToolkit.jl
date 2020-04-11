@@ -55,9 +55,14 @@ struct ODESystem <: AbstractODESystem
     Name: the name of the system
     """
     name::Symbol
+    """
+    systems: The internal systems
+    """
+    systems::Vector{ODESystem}
 end
 
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
+                   systems = ODESystem[],
                    name=gensym(:ODESystem))
     iv′ = clean(iv)
     dvs′ = [clean(dv) for dv ∈ dvs]
@@ -66,7 +71,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     jac = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
-    ODESystem(deqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name)
+    ODESystem(deqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name, systems)
 end
 
 var_from_nested_derivative(x) = var_from_nested_derivative(x,0)

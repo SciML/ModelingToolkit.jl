@@ -159,13 +159,54 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = sys.dvs, ps =
                       syms = Symbol.(sys.dvs))
 end
 
+renamespace(namespace,name) = Symbol(string(namespace)*"′"*string(name))
+
 function DiffEqBase.ODEFunction(sys::AbstractODESystem, args...; kwargs...)
     ODEFunction{true}(sys, args...; kwargs...)
 end
 
-independent_variables(sys::AbstractODESystem) = Set{Variable}([sys.iv])
-dependent_variables(sys::AbstractODESystem) = Set{Variable}(sys.dvs)
-parameters(sys::AbstractODESystem) = Set{Variable}(sys.ps)
+function namespace_variables(sys::AbstractODESystem)
+    [rename(x,renamespace(sys.name,x.name)) for x in sys.dvs]
+end
+
+function namespace_parameters(sys::AbstractODESystem)
+    [rename(x,renamespace(sys.name,x.name)) for x in sys.ps]
+end
+
+namespace_equations(sys::AbstractODESystem) = namespace_equation.(sys.eqs,sys.name,sys.iv.name)
+
+function namespace_equation(eq::Equation,name,ivname)
+    _lhs = namespace_operation(eq.lhs,name,ivname)
+    _rhs = namespace_operation(eq.rhs,name,ivname)
+    _lhs ~ _rhs
+end
+
+function namespace_operation(O::Operation,name,ivname)
+    if O.op isa Variable && O.op.name != ivname
+        Operation(rename(O.op,renamespace(name,O.op.name)),namespace_operation.(O.args,name,ivname))
+    else
+        Operation(O.op,namespace_operation.(O.args,name,ivname))
+    end
+end
+namespace_operation(O::Constant,name,ivname) = O
+
+independent_variable(sys::AbstractODESystem) = sys.iv
+states(sys::AbstractODESystem) = [sys.dvs;reduce(vcat,namespace_variables.(sys.systems))]
+parameters(sys::AbstractODESystem) = [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]
+
+function equations(sys::AbstractODESystem)
+    [sys.eqs;reduce(vcat,namespace_equations.(sys.systems))]
+end
+
+function states(sys::AbstractODESystem,name::Symbol)
+    x = sys.dvs[findfirst(x->x.name==name,sys.dvs)]
+    Variable(Symbol(string(sys.name)*"′"*string(x.name)),known=x.known)(sys.iv())
+end
+
+function parameters(sys::AbstractODESystem,name::Symbol)
+    x = sys.ps[findfirst(x->x.name==name,sys.ps)]
+    Variable(Symbol(string(sys.name)*"′"*string(x.name)),known=x.known)(sys.iv())
+end
 
 function _eq_unordered(a, b)
     length(a) === length(b) || return false

@@ -33,9 +33,15 @@ struct SDESystem <: AbstractODESystem
     Name: the name of the system
     """
     name::Symbol
+    """
+    Systems: the internal systems
+    """
+    systems::Vector{SDESystem}
 end
 
-function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps; name = gensym(:SDESystem))
+function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
+                   systems = SDESystem[],
+                   name = gensym(:SDESystem))
     dvs′ = [clean(dv) for dv ∈ dvs]
     ps′ = [clean(p) for p ∈ ps]
     iv′ = clean(iv)
@@ -43,7 +49,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps; name = g
     jac = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
-    SDESystem(deqs, neqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name)
+    SDESystem(deqs, neqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name, systems)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true}; kwargs...)
