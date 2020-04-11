@@ -2,7 +2,7 @@ module ModelingToolkit
 
 using DiffEqBase, Distributed
 using StaticArrays, LinearAlgebra, SparseArrays
-using Latexify
+using Latexify, Unitful
 using MacroTools
 
 using MacroTools
@@ -92,6 +92,7 @@ include("systems/diffeqs/sdesystem.jl")
 include("systems/diffeqs/abstractodesystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
 include("systems/diffeqs/modelingtoolkitize.jl")
+include("systems/diffeqs/validation.jl")
 include("systems/nonlinear/nonlinear_system.jl")
 include("systems/pde/pdesystem.jl")
 include("systems/reaction/reactionsystem.jl")
