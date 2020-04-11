@@ -117,3 +117,7 @@ end
 function DiffEqBase.SDEFunction(sys::SDESystem, args...; kwargs...)
     SDEFunction{true}(sys, args...; kwargs...)
 end
+
+function rename(sys::SDESystem,name)
+    ODESystem(sys.eqs, sys.noiseeqs, sys.iv, sys.dvs, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
+end

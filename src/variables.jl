@@ -40,6 +40,7 @@ end
 
 vartype(::Variable{T}) where T = T
 (x::Variable)(args...) = Operation(x, collect(Expression, args))
+rename(x::Variable{T},name) where T = Variable{T}(name)
 
 Base.isequal(x::Variable, y::Variable) = x.name == y.name
 Base.print(io::IO, x::Variable) = show(io, x)

@@ -94,3 +94,7 @@ Base.:(==)(sys1::ODESystem, sys2::ODESystem) =
     _eq_unordered(sys1.eqs, sys2.eqs) && isequal(sys1.iv, sys2.iv) &&
     _eq_unordered(sys1.dvs, sys2.dvs) && _eq_unordered(sys1.ps, sys2.ps)
 # NOTE: equality does not check cached Jacobian
+
+function rename(sys::ODESystem,name)
+    ODESystem(sys.eqs, sys.iv, sys.dvs, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
+end

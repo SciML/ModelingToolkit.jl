@@ -16,14 +16,26 @@ lorenz2 = ODESystem(eqs,t,[x,y,z],[σ,ρ,β],name=:lorenz2)
 
 @parameters α
 @variables a(t)
-connnectedeqs = [D(a) ~ a*states(lorenz1,:x)]
+connnectedeqs = [D(a) ~ a*lorenz1.x]
 
 connected1 = ODESystem(connnectedeqs,t,[a],[α],systems=[lorenz1,lorenz2],name=:connected1)
+
+eqs_flat = [D(a) ~ a*lorenz1.x,
+            D(lorenz1.x) ~ lorenz1.σ*(lorenz1.y-lorenz1.x),
+            D(lorenz1.y) ~ lorenz1.x*(lorenz1.ρ-lorenz1.z)-lorenz1.y,
+            0 ~ lorenz1.x + lorenz1.y + lorenz1.β*lorenz1.z,
+            D(lorenz2.x) ~ lorenz2.σ*(lorenz2.y-lorenz2.x),
+            D(lorenz2.y) ~ lorenz2.x*(lorenz2.ρ-lorenz2.z)-lorenz2.y,
+            0 ~ lorenz2.x + lorenz2.y + lorenz2.β*lorenz2.z]
+
+@test states(connected1) == convert.(Variable,[a,lorenz1.x,lorenz1.y,lorenz1.z,lorenz2.x,lorenz2.y,lorenz2.z])
+@test parameters(connected1) == convert.(Variable,[α,lorenz1.σ,lorenz1.ρ,lorenz1.β,lorenz2.σ,lorenz2.ρ,lorenz2.β])
+@test eqs_flat == equations(connected1)
 
 @variables lorenz1′x(t) lorenz1′y(t) lorenz1′z(t) lorenz2′x(t) lorenz2′y(t) lorenz2′z(t)
 @parameters lorenz1′σ lorenz1′ρ lorenz1′β lorenz2′σ lorenz2′ρ lorenz2′β
 
-eqs_flat = [D(a) ~ a*lorenz1′x,
+eqs_flat2 = [D(a) ~ a*lorenz1′x,
             D(lorenz1′x) ~ lorenz1′σ*(lorenz1′y-lorenz1′x),
             D(lorenz1′y) ~ lorenz1′x*(lorenz1′ρ-lorenz1′z)-lorenz1′y,
             0 ~ lorenz1′x + lorenz1′y + lorenz1′β*lorenz1′z,
@@ -39,8 +51,33 @@ connected2 = ODESystem(connnectedeqs,t,[a],[α],systems=[lorenz1,lorenz2],name=:
 
 @parameters γ
 @variables g(t)
-connnectedeqs2 = [D(g) ~ g*states(connected1,lorenz1,:x)]
+connnectedeqs2 = [D(g) ~ g*connected1.lorenz1.x]
 doublelevel = ODESystem(connnectedeqs2,t,[g],[γ],systems=[connected1,connected2],name=:doublelevel)
+
+@test states(doublelevel) == convert.(Variable,[g,connected1.a,connected1.lorenz1.x,connected1.lorenz1.y,connected1.lorenz1.z,connected1.lorenz2.x,connected1.lorenz2.y,connected1.lorenz2.z,
+                                          connected2.a,connected2.lorenz1.x,connected2.lorenz1.y,connected2.lorenz1.z,connected2.lorenz2.x,connected2.lorenz2.y,connected2.lorenz2.z])
+
+@test parameters(doublelevel) == convert.(Variable,[γ,
+                                             connected1.α,connected1.lorenz1.σ,connected1.lorenz1.ρ,connected1.lorenz1.β,connected1.lorenz2.σ,connected1.lorenz2.ρ,connected1.lorenz2.β,
+                                             connected2.α,connected2.lorenz1.σ,connected2.lorenz1.ρ,connected2.lorenz1.β,connected2.lorenz2.σ,connected2.lorenz2.ρ,connected2.lorenz2.β])
+
+eqs_flat = [D(g) ~ g*connected1.lorenz1.x,
+             D(connected1.a) ~ connected1.a*connected1.lorenz1.x,
+             D(connected1.lorenz1.x) ~ connected1.lorenz1.σ*(connected1.lorenz1.y-connected1.lorenz1.x),
+             D(connected1.lorenz1.y) ~ connected1.lorenz1.x*(connected1.lorenz1.ρ-connected1.lorenz1.z)-connected1.lorenz1.y,
+             0 ~ connected1.lorenz1.x + connected1.lorenz1.y + connected1.lorenz1.β*connected1.lorenz1.z,
+             D(connected1.lorenz2.x) ~ connected1.lorenz2.σ*(connected1.lorenz2.y-connected1.lorenz2.x),
+             D(connected1.lorenz2.y) ~ connected1.lorenz2.x*(connected1.lorenz2.ρ-connected1.lorenz2.z)-connected1.lorenz2.y,
+             0 ~ connected1.lorenz2.x + connected1.lorenz2.y + connected1.lorenz2.β*connected1.lorenz2.z,
+             D(connected2.a) ~ connected2.a*connected2.lorenz1.x,
+             D(connected2.lorenz1.x) ~ connected2.lorenz1.σ*(connected2.lorenz1.y-connected2.lorenz1.x),
+             D(connected2.lorenz1.y) ~ connected2.lorenz1.x*(connected2.lorenz1.ρ-connected2.lorenz1.z)-connected2.lorenz1.y,
+             0 ~ connected2.lorenz1.x + connected2.lorenz1.y + connected2.lorenz1.β*connected2.lorenz1.z,
+             D(connected2.lorenz2.x) ~ connected2.lorenz2.σ*(connected2.lorenz2.y-connected2.lorenz2.x),
+             D(connected2.lorenz2.y) ~ connected2.lorenz2.x*(connected2.lorenz2.ρ-connected2.lorenz2.z)-connected2.lorenz2.y,
+             0 ~ connected2.lorenz2.x + connected2.lorenz2.y + connected2.lorenz2.β*connected2.lorenz2.z]
+
+@test eqs_flat == equations(doublelevel)
 
 @test [x.name for x in states(doublelevel)] == [:g,
                                                 :connected1′a,:connected1′lorenz1′x,:connected1′lorenz1′y,:connected1′lorenz1′z,:connected1′lorenz2′x,:connected1′lorenz2′y,:connected1′lorenz2′z,
