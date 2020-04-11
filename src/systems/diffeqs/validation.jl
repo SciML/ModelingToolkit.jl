@@ -1,17 +1,26 @@
-isintermediate(eq::Equation) = !(isa(eq.lhs, Operation) && isa(eq.lhs.op, Differential))
+Base.:*(x::Expression,y::Unitful.AbstractQuantity) = x * ModelingToolkit.Constant(y)
 
-struct ODEExpr  # dⁿx/dtⁿ = rhs
-    x::Variable
-    n::Int
-    rhs::Expression
+instantiate(x::ModelingToolkit.Constant) = x.value
+instantiate(x::ModelingToolkit.Variable{Number}) = 1.0
+instantiate(x::ModelingToolkit.Variable) = oneunit(1*ModelingToolkit.vartype(x))
+function instantiate(x::ModelingToolkit.Operation)
+    if x.op isa Variable
+        return instantiate(x.op)
+    elseif x.op isa Differential
+        instantiate(x.args[1])/instantiate(x.args[1].args[1])
+    else
+        x.op(instantiate.(x.args)...)
+    end
 end
-function Base.convert(::Type{ODEExpr},eq::Equation)
-    isintermediate(eq) && throw(ArgumentError("intermediate equation received"))
-    (x, t, n) = flatten_differential(eq.lhs)
-    (isa(t, Operation) && isa(t.op, Variable) && isempty(t.args)) ||
-        throw(ArgumentError("invalid independent variable $t"))
-    (isa(x, Operation) && isa(x.op, Variable) && length(x.args) == 1 && isequal(first(x.args), t)) ||
-        throw(ArgumentError("invalid dependent variable $x"))
-    return t.op, ODEExpr(x.op, n, eq.rhs)
+
+function validate(eq::ModelingToolkit.Equation)
+    try
+        return typeof(instantiate(eq.lhs)) == typeof(instantiate(eq.rhs))
+    catch
+        return false
+    end
 end
-Base.:(==)(a::ODEExpr, b::ODEExpr) = isequal((a.x, a.n, a.rhs), (b.x, b.n, b.rhs))
+
+function validate(sys::AbstractODESystem)
+    all(validate.(equations(sys)))
+end
