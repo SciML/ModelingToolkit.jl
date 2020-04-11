@@ -66,6 +66,9 @@ Operation(x) = convert(Operation, x)
 #convert to Expr
 Base.Expr(op::Operation) = simplified_expr(op)
 Base.convert(::Type{Expr},x::Operation) = Expr(x)
+function Base.convert(::Type{Variable},x::Operation)
+    x.op isa Variable ? x.op : throw(error("This Operation is not a Variable"))
+end
 
 # promotion
 Base.promote_rule(::Type{<:Constant}, ::Type{<:Operation}) = Operation

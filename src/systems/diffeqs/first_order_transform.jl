@@ -30,7 +30,7 @@ function ode_order_lowering(eqs, iv)
             any(isequal(var), vars) || push!(vars, var)
         end
         var′ = lower_varname(var, iv, maxorder - 1)
-        rhs′ = rename(eq.rhs)
+        rhs′ = rename_lower_order(eq.rhs)
         push!(new_eqs,Differential(iv())(var′(iv())) ~ rhs′)
     end
 
@@ -50,11 +50,11 @@ function ode_order_lowering(eqs, iv)
     return (new_eqs, new_vars)
 end
 
-function rename(O::Expression)
+function rename_lower_order(O::Expression)
     isa(O, Operation) || return O
     if is_derivative(O)
         (x, t, order) = flatten_differential(O)
         return lower_varname(x.op, t.op, order)(x.args...)
     end
-    return Operation(O.op, rename.(O.args))
+    return Operation(O.op, rename_lower_order.(O.args))
 end
