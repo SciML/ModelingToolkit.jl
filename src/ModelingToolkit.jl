@@ -87,15 +87,24 @@ include("simplify.jl")
 include("utils.jl")
 include("direct.jl")
 include("domains.jl")
+
+include("systems/abstractsystem.jl")
+
 include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")
 include("systems/diffeqs/abstractodesystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
 include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/diffeqs/validation.jl")
-include("systems/nonlinear/nonlinear_system.jl")
+
+include("systems/nonlinear/nonlinearsystem.jl")
+
+#include("systems/optimization/optimizationsystem.jl")
+
 include("systems/pde/pdesystem.jl")
+
 include("systems/reaction/reactionsystem.jl")
+
 include("latexify_recipes.jl")
 include("build_function.jl")
 

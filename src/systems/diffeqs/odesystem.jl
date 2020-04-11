@@ -28,7 +28,7 @@ struct ODESystem <: AbstractODESystem
     """Independent variable."""
     iv::Variable
     """Dependent (state) variables."""
-    dvs::Vector{Variable}
+    states::Vector{Variable}
     """Parameter variables."""
     ps::Vector{Variable}
     """
@@ -96,5 +96,5 @@ Base.:(==)(sys1::ODESystem, sys2::ODESystem) =
 # NOTE: equality does not check cached Jacobian
 
 function rename(sys::ODESystem,name)
-    ODESystem(sys.eqs, sys.iv, sys.dvs, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
+    ODESystem(sys.eqs, sys.iv, sys.states, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
 end

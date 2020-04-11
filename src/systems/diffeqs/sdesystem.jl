@@ -6,7 +6,7 @@ struct SDESystem <: AbstractODESystem
     """Independent variable."""
     iv::Variable
     """Dependent (state) variables."""
-    dvs::Vector{Variable}
+    states::Vector{Variable}
     """Parameter variables."""
     ps::Vector{Variable}
     """
@@ -52,7 +52,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     SDESystem(deqs, neqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name, systems)
 end
 
-function generate_diffusion_function(sys::SDESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true}; kwargs...)
+function generate_diffusion_function(sys::SDESystem, dvs = sys.states, ps = sys.ps, expression = Val{true}; kwargs...)
     dvs′ = [clean(dv) for dv ∈ dvs]
     ps′ = [clean(p) for p ∈ ps]
     return build_function(sys.noiseeqs, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
@@ -65,7 +65,7 @@ Create an `SDEFunction` from the [`SDESystem`](@ref). The arguments `dvs` and `p
 are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
-function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.dvs, ps = sys.ps;
+function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
                                      version = nothing, tgrad=false,
                                      jac = false, Wfact = false) where {iip}
     f_oop,f_iip = generate_function(sys, dvs, ps, Val{false})
@@ -111,7 +111,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.dvs, ps = sys.ps;
                       Wfact = _Wfact,
                       Wfact_t = _Wfact_t,
                       mass_matrix = M,
-                      syms = Symbol.(sys.dvs))
+                      syms = Symbol.(sys.states))
 end
 
 function DiffEqBase.SDEFunction(sys::SDESystem, args...; kwargs...)
@@ -119,5 +119,5 @@ function DiffEqBase.SDEFunction(sys::SDESystem, args...; kwargs...)
 end
 
 function rename(sys::SDESystem,name)
-    ODESystem(sys.eqs, sys.noiseeqs, sys.iv, sys.dvs, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
+    ODESystem(sys.eqs, sys.noiseeqs, sys.iv, sys.states, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
 end

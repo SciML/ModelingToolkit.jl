@@ -29,12 +29,6 @@ function test_diffeq_inference(name, sys, iv, dvs, ps)
         @test Set(parameters(sys))      == Set(_clean.(ps))
     end
 end
-function test_nlsys_inference(name, sys, vs, ps)
-    @testset "NonlinearSystem construction: $name" begin
-        @test Set(states(sys))     == Set(vs)
-        @test Set(parameters(sys)) == Set(_clean.(ps))
-    end
-end
 
 test_diffeq_inference("standard", de, t, [x, y, z], [ρ, σ, β])
 generate_function(de, [x,y,z], [σ,ρ,β])
@@ -159,19 +153,6 @@ de = ODESystem(eqs)
 generate_function(de, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(de)
 f = ODEFunction(de, [x,y,z], [σ,ρ,β])
-
-# Define a nonlinear system
-eqs = [0 ~ σ*(y-x),
-       0 ~ x*(ρ-z)-y,
-       0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs, [x,y,z])
-test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β))
-@test begin
-    f = eval(generate_function(ns, [x,y,z], [σ,ρ,β])[2])
-    du = [0.0, 0.0, 0.0]
-    f(du, [1,2,3], [1,2,3])
-    du ≈ [1, -3, -7]
-end
 
 @derivatives D'~t
 @parameters A B C

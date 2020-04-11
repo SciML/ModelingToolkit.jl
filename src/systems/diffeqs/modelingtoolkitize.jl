@@ -5,7 +5,7 @@ Generate `ODESystem`, dependent variables, and parameters from an `ODEProblem`.
 """
 function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
-                            return (prob.f.sys, prob.f.sys.dvs, prob.f.sys.ps)
+                            return (prob.f.sys, prob.f.sys.states, prob.f.sys.ps)
     @parameters t
     vars = [Variable(:x, i)(t) for i in eachindex(prob.u0)]
     params = prob.p isa DiffEqBase.NullParameters ? [] :
