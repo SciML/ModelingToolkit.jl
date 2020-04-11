@@ -55,7 +55,7 @@ function calculate_factorized_W(sys::AbstractODESystem, simplify=true)
     isempty(sys.Wfact[]) || return (sys.Wfact[],sys.Wfact_t[])
 
     jac = calculate_jacobian(sys)
-    gam = Variable(:gam; known = true)()
+    gam = Variable(:__MTKWgamma)()
 
     W = - LinearAlgebra.I + gam*jac
     Wfact = lu(W, Val(false), check=false).factors
@@ -76,15 +76,15 @@ function calculate_factorized_W(sys::AbstractODESystem, simplify=true)
 end
 
 function generate_factorized_W(sys::AbstractODESystem, vs = states(sys), ps = parameters(sys), simplify=true, expression = Val{true}; kwargs...)
-    (Wfact,Wfact_t) = calculate_factorized_W(sys,simplify)
+    Wfact,Wfact_t = calculate_factorized_W(sys,simplify)
     siz = size(Wfact)
     constructor = :(x -> begin
                         A = SMatrix{$siz...}(x)
                         StaticArrays.LU(LowerTriangular( SMatrix{$siz...}(UnitLowerTriangular(A)) ), UpperTriangular(A), SVector(ntuple(n->n, max($siz...))))
                     end)
 
-    Wfact_func   = build_function(Wfact  , vs, ps, (:gam,:t), ODEToExpr(sys), expression;constructor=constructor,kwargs...)
-    Wfact_t_func = build_function(Wfact_t, vs, ps, (:gam,:t), ODEToExpr(sys), expression;constructor=constructor,kwargs...)
+    Wfact_func   = build_function(Wfact  , vs, ps, (:__MTKWgamma,:t), ODEToExpr(sys), expression;constructor=constructor,kwargs...)
+    Wfact_t_func = build_function(Wfact_t, vs, ps, (:__MTKWgamma,:t), ODEToExpr(sys), expression;constructor=constructor,kwargs...)
 
     return (Wfact_func, Wfact_t_func)
 end

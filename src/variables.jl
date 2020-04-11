@@ -17,34 +17,35 @@ end
 """
 $(TYPEDEF)
 
-A named variable which represents a numerical value. The variable's value may
-be known (parameters, independent variables) or unknown (dependent variables).
+A named variable which represents a numerical value.
 
 # Fields
 $(FIELDS)
 """
-struct Variable <: Function
+struct Variable{T} <: Function
     """The variable's unique name."""
     name::Symbol
-    """
-    Whether the variable's value is known.
-    """
-    known::Bool
-    Variable(name; known = false) = new(name, known)
-end
-function Variable(name, indices...; known = false)
-    var_name = Symbol("$(name)$(join(map_subscripts.(indices), "ˏ"))")
-    Variable(var_name; known=known)
+    Variable(name) = new{Number}(name)
+    Variable{T}(name) where T = new{T}(name)
+    function Variable{T}(name, indices...) where T
+        var_name = Symbol("$(name)$(join(map_subscripts.(indices), "ˏ"))")
+        Variable{T}(var_name)
+    end
 end
 
+function Variable(name, indices...)
+    var_name = Symbol("$(name)$(join(map_subscripts.(indices), "ˏ"))")
+    Variable(var_name)
+end
+
+vartype(::Variable{T}) where T = T
 (x::Variable)(args...) = Operation(x, collect(Expression, args))
 
-Base.isequal(x::Variable, y::Variable) = (x.name, x.known) == (y.name, y.known)
+Base.isequal(x::Variable, y::Variable) = x.name == y.name
 Base.print(io::IO, x::Variable) = show(io, x)
 Base.show(io::IO, x::Variable) = print(io, x.name)
 function Base.show(io::IO, ::MIME"text/plain", x::Variable)
-    known = x.known ? "known" : "unknown"
-    print(io, x.name, " (callable ", known, " variable)")
+    print(io, x.name)
 end
 
 
@@ -79,7 +80,7 @@ Base.convert(::Type{Expr}, c::Constant) = c.value
 
 
 # Build variables more easily
-function _parse_vars(macroname, known, x)
+function _parse_vars(macroname, type, x)
     ex = Expr(:block)
     var_names = Symbol[]
     # if parsing things in the form of
@@ -97,9 +98,9 @@ function _parse_vars(macroname, known, x)
         @assert iscall || isarray || issym "@$macroname expects a tuple of expressions or an expression of a tuple (`@$macroname x y z(t) v[1:3] w[1:2,1:4]` or `@$macroname x, y, z(t) v[1:3] w[1:2,1:4]`)"
 
         if iscall
-            var_name, expr = _construct_vars(_var.args[1], known, _var.args[2:end])
+            var_name, expr = _construct_vars(_var.args[1], type, _var.args[2:end])
         else
-            var_name, expr = _construct_vars(_var, known, nothing)
+            var_name, expr = _construct_vars(_var, type, nothing)
         end
         push!(var_names, var_name)
         push!(ex.args, expr)
@@ -108,45 +109,45 @@ function _parse_vars(macroname, known, x)
     return ex
 end
 
-function _construct_vars(_var, known, call_args)
+function _construct_vars(_var, type, call_args)
     issym  = _var isa Symbol
     isarray = isa(_var, Expr) && _var.head == :ref
     if isarray
         var_name = _var.args[1]
         indices = _var.args[2:end]
-        expr = _construct_array_vars(var_name, known, call_args, indices...)
+        expr = _construct_array_vars(var_name, type, call_args, indices...)
     else
         # Implicit 0-args call
         var_name = _var
-        expr = _construct_var(var_name, known, call_args)
+        expr = _construct_var(var_name, type, call_args)
     end
     var_name, :($var_name = $expr)
 end
 
-function _construct_var(var_name, known, call_args)
+function _construct_var(var_name, type, call_args)
     if call_args === nothing
-        :(Variable($(Meta.quot(var_name)); known = $known)())
+        :(Variable{$type}($(Meta.quot(var_name)))())
     elseif !isempty(call_args) && call_args[end] == :..
-        :(Variable($(Meta.quot(var_name)); known = $known))
+        :(Variable{$type}($(Meta.quot(var_name))))
     else
-        :(Variable($(Meta.quot(var_name)); known = $known)($(call_args...)))
+        :(Variable{$type}($(Meta.quot(var_name)))($(call_args...)))
     end
 end
 
-function _construct_var(var_name, known, call_args, ind)
+function _construct_var(var_name, type, call_args, ind)
     if call_args === nothing
-        :(Variable($(Meta.quot(var_name)), $ind...; known = $known)())
+        :(Variable{$type}($(Meta.quot(var_name)), $ind...)())
     elseif !isempty(call_args) && call_args[end] == :..
-        :(Variable($(Meta.quot(var_name)), $ind...; known = $known))
+        :(Variable{$type}($(Meta.quot(var_name)), $ind...))
     else
-        :(Variable($(Meta.quot(var_name)), $ind...; known = $known)($(call_args...)))
+        :(Variable{$type}($(Meta.quot(var_name)), $ind...)($(call_args...)))
     end
 end
 
 
-function _construct_array_vars(var_name, known, call_args, indices...)
+function _construct_array_vars(var_name, type, call_args, indices...)
     :(map(Iterators.product($(indices...))) do ind
-        $(_construct_var(var_name, known, call_args, :ind))
+        $(_construct_var(var_name, type, call_args, :ind))
     end)
 end
 
@@ -157,20 +158,11 @@ $(SIGNATURES)
 Define one or more unknown variables.
 """
 macro variables(xs...)
-    esc(_parse_vars(:variables, false, xs))
-end
-
-"""
-$(SIGNATURES)
-
-Define one or more known variables.
-"""
-macro parameters(xs...)
-    esc(_parse_vars(:parameters, true, xs))
+    esc(_parse_vars(:variables, Number, xs))
 end
 
 function rename(x::Variable,name::Symbol)
-    Variable(name,known=x.known)
+    Variable{vartype(x)}(name)
 end
 
 TreeViews.hastreeview(x::Variable) = true

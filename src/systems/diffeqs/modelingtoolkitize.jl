@@ -9,7 +9,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     @parameters t
     vars = [Variable(:x, i)(t) for i in eachindex(prob.u0)]
     params = prob.p isa DiffEqBase.NullParameters ? [] :
-             [Variable(:α,i; known = true)() for i in eachindex(prob.p)]
+             [Variable(:α,i)() for i in eachindex(prob.p)]
     @derivatives D'~t
 
     rhs = [D(var) for var in vars]
@@ -22,7 +22,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     end
 
     eqs = vcat([rhs[i] ~ lhs[i] for i in eachindex(prob.u0)]...)
-    de = ODESystem(eqs)
+    de = ODESystem(eqs,t,vars,params)
 
     de, vars, params
 end

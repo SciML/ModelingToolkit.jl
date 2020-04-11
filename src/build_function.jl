@@ -93,7 +93,7 @@ function _build_function(target::JuliaTarget, rhss, vs, ps = (), args = (),
 end
 
 get_varnumber(varop::Operation,vars::Vector{Operation}) =  findfirst(x->isequal(x,varop),vars)
-get_varnumber(varop::Operation,vars::Vector{Variable})  =  findfirst(x->isequal(x,varop.op),vars)
+get_varnumber(varop::Operation,vars::Vector{<:Variable})  =  findfirst(x->isequal(x,varop.op),vars)
 
 function numbered_expr(O::Equation,args...;kwargs...)
   :($(numbered_expr(O.lhs,args...;kwargs...)) = $(numbered_expr(O.rhs,args...;kwargs...)))
@@ -120,7 +120,7 @@ function numbered_expr(O::Operation,vars,parameters;
                         varname=varname,paramname=paramname) for x in O.args]...)
 end
 
-function numbered_expr(de::ModelingToolkit.Equation,vars::Vector{Variable},parameters;
+function numbered_expr(de::ModelingToolkit.Equation,vars::Vector{<:Variable},parameters;
                        derivname=:du,varname=:u,paramname=:p)
     i = findfirst(x->isequal(x.name,var_from_nested_derivative(de.lhs)[1].name),vars)
     :($derivname[$i] = $(numbered_expr(de.rhs,vars,parameters;
