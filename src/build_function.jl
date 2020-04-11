@@ -47,7 +47,7 @@ end
 function _build_function(target::JuliaTarget, rhss, vs, ps = (), args = (),
                          conv = simplified_expr, expression = Val{true};
                          checkbounds = false, constructor=nothing,
-                         linenumbers = true, multithread=true)
+                         linenumbers = true, multithread=false)
     _vs = map(x-> x isa Operation ? x.op : x, vs)
     _ps = map(x-> x isa Operation ? x.op : x, ps)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
