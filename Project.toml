@@ -28,6 +28,7 @@ MacroTools = "0.5"
 NaNMath = "0.3"
 SpecialFunctions = "0.7, 0.8, 0.9, 0.10"
 StaticArrays = "0.10, 0.11, 0.12"
+TreeViews = "0.3"
 julia = "1.2"
 
 [extras]
