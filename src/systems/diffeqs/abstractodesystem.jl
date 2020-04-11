@@ -1,19 +1,19 @@
 function calculate_tgrad(sys::AbstractODESystem)
   isempty(sys.tgrad[]) || return sys.tgrad[]  # use cached tgrad, if possible
-  rhs = [detime_dvs(eq.rhs) for eq ∈ sys.eqs]
+  rhs = [detime_dvs(eq.rhs) for eq ∈ equations(sys)]
   iv = sys.iv()
   notime_tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r)) for r in rhs]
-  tgrad = retime_dvs.(notime_tgrad,(sys.dvs,),iv)
+  tgrad = retime_dvs.(notime_tgrad,(states(sys),),iv)
   sys.tgrad[] = tgrad
   return tgrad
 end
 
 function calculate_jacobian(sys::AbstractODESystem)
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
-    rhs = [eq.rhs for eq ∈ sys.eqs]
+    rhs = [eq.rhs for eq ∈ equations(sys)]
 
     iv = sys.iv()
-    dvs = [dv(iv) for dv ∈ sys.dvs]
+    dvs = [dv(iv) for dv ∈ states(sys)]
 
     jac = expand_derivatives.(calculate_jacobian(rhs, dvs))
     sys.jac[] = jac  # cache Jacobian
@@ -34,18 +34,18 @@ function (f::ODEToExpr)(O::Operation)
 end
 (f::ODEToExpr)(x) = convert(Expr, x)
 
-function generate_tgrad(sys::AbstractODESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true}; kwargs...)
+function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
     tgrad = calculate_tgrad(sys)
     return build_function(tgrad, dvs, ps, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
 end
 
-function generate_jacobian(sys::AbstractODESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true}; kwargs...)
+function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
     jac = calculate_jacobian(sys)
     return build_function(jac, dvs, ps, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
 end
 
-function generate_function(sys::AbstractODESystem, dvs = sys.dvs, ps = sys.ps, expression = Val{true}; kwargs...)
-    rhss = [deq.rhs for deq ∈ sys.eqs]
+function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+    rhss = [deq.rhs for deq ∈ equations(sys)]
     dvs′ = [clean(dv) for dv ∈ dvs]
     ps′ = [clean(p) for p ∈ ps]
     return build_function(rhss, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
@@ -75,7 +75,7 @@ function calculate_factorized_W(sys::AbstractODESystem, simplify=true)
     (Wfact,Wfact_t)
 end
 
-function generate_factorized_W(sys::AbstractODESystem, vs = sys.dvs, ps = sys.ps, simplify=true, expression = Val{true}; kwargs...)
+function generate_factorized_W(sys::AbstractODESystem, vs = states(sys), ps = parameters(sys), simplify=true, expression = Val{true}; kwargs...)
     (Wfact,Wfact_t) = calculate_factorized_W(sys,simplify)
     siz = size(Wfact)
     constructor = :(x -> begin
@@ -90,13 +90,14 @@ function generate_factorized_W(sys::AbstractODESystem, vs = sys.dvs, ps = sys.ps
 end
 
 function calculate_massmatrix(sys::AbstractODESystem, simplify=true)
-    eqs = sys.eqs
+    eqs = equations(sys)
+    dvs = states(sys)
     M = zeros(length(eqs),length(eqs))
     for (i,eq) in enumerate(eqs)
         if eq.lhs isa Constant
             @assert eq.lhs.value == 0
         elseif eq.lhs.op isa Differential
-            j = findfirst(x->isequal(x.name,var_from_nested_derivative(eq.lhs)[1].name),sys.dvs)
+            j = findfirst(x->isequal(x.name,var_from_nested_derivative(eq.lhs)[1].name),dvs)
             M[i,j] = 1
         else
             error("Only semi-explicit mass matrices are currently supported")
@@ -113,7 +114,8 @@ Create an `ODEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `p
 are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
-function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = sys.dvs, ps = sys.ps;
+function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                     ps = parameters(sys);
                                      version = nothing, tgrad=false,
                                      jac = false, Wfact = false) where {iip}
     f_oop,f_iip = generate_function(sys, dvs, ps, Val{false})
@@ -166,14 +168,14 @@ function DiffEqBase.ODEFunction(sys::AbstractODESystem, args...; kwargs...)
 end
 
 function namespace_variables(sys::AbstractODESystem)
-    [rename(x,renamespace(sys.name,x.name)) for x in sys.dvs]
+    [rename(x,renamespace(sys.name,x.name)) for x in states(sys)]
 end
 
 function namespace_parameters(sys::AbstractODESystem)
-    [rename(x,renamespace(sys.name,x.name)) for x in sys.ps]
+    [rename(x,renamespace(sys.name,x.name)) for x in parameters(sys)]
 end
 
-namespace_equations(sys::AbstractODESystem) = namespace_equation.(sys.eqs,sys.name,sys.iv.name)
+namespace_equations(sys::AbstractODESystem) = namespace_equation.(equations(sys),sys.name,sys.iv.name)
 
 function namespace_equation(eq::Equation,name,ivname)
     _lhs = namespace_operation(eq.lhs,name,ivname)
@@ -191,11 +193,11 @@ end
 namespace_operation(O::Constant,name,ivname) = O
 
 independent_variable(sys::AbstractODESystem) = sys.iv
-states(sys::AbstractODESystem) = [sys.dvs;reduce(vcat,namespace_variables.(sys.systems))]
-parameters(sys::AbstractODESystem) = [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]
+states(sys::AbstractODESystem) = isempty(sys.systems) ? sys.dvs : [sys.dvs;reduce(vcat,namespace_variables.(sys.systems))]
+parameters(sys::AbstractODESystem) = isempty(sys.systems) ? sys.ps : [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]
 
 function equations(sys::AbstractODESystem)
-    [sys.eqs;reduce(vcat,namespace_equations.(sys.systems))]
+    isempty(sys.systems) ? sys.eqs : [sys.eqs;reduce(vcat,namespace_equations.(sys.systems))]
 end
 
 function states(sys::AbstractODESystem,name::Symbol)
@@ -206,6 +208,18 @@ end
 function parameters(sys::AbstractODESystem,name::Symbol)
     x = sys.ps[findfirst(x->x.name==name,sys.ps)]
     Variable(Symbol(string(sys.name)*"′"*string(x.name)),known=x.known)(sys.iv())
+end
+
+function states(sys::AbstractODESystem,args...)
+    name = last(args)
+    extra_names = reduce(*,["′$(x.name)" for x in args[1:end-1]])
+    Variable(Symbol(string(sys.name)*extra_names*"′"*string(name)))(sys.iv())
+end
+
+function parameters(sys::AbstractODESystem,args...)
+    name = last(args)
+    extra_names = reduce(*,["′$(x.name)" for x in args[1:end-1]])
+    Variable(Symbol(string(sys.name)*extra_names*"′"*string(name)))(sys.iv())
 end
 
 function _eq_unordered(a, b)
