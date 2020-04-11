@@ -24,19 +24,19 @@ end
 _clean(x::Variable) = x
 function test_diffeq_inference(name, sys, iv, dvs, ps)
     @testset "ODESystem construction: $name" begin
-        @test independent_variables(sys) == Set([_clean(iv)])
-        @test dependent_variables(sys)   == Set(_clean.(dvs))
-        @test parameters(sys)            == Set(_clean.(ps))
+        @test independent_variable(sys) ==  _clean(iv)
+        @test Set(states(sys))          == Set(_clean.(dvs))
+        @test Set(parameters(sys))      == Set(_clean.(ps))
     end
 end
 function test_nlsys_inference(name, sys, vs, ps)
     @testset "NonlinearSystem construction: $name" begin
-        @test dependent_variables(sys) == Set(vs)
-        @test parameters(sys)          == Set(_clean.(ps))
+        @test Set(states(sys))     == Set(vs)
+        @test Set(parameters(sys)) == Set(_clean.(ps))
     end
 end
 
-test_diffeq_inference("standard", de, t, (x, y, z), (σ, ρ, β))
+test_diffeq_inference("standard", de, t, [x, y, z], [ρ, σ, β])
 generate_function(de, [x,y,z], [σ,ρ,β])
 jac_expr = generate_jacobian(de)
 jac = calculate_jacobian(de)
