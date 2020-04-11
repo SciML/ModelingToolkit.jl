@@ -85,7 +85,7 @@ function ODESystem(eqs; kwargs...)
 
     dvs = unique(var_from_nested_derivative(eq.lhs)[1] for eq ∈ eqs)
     ps = filter(vars(eq.rhs for eq ∈ eqs)) do x
-        x.known & !isequal(x, iv)
+        isparameter(x) & !isequal(x, iv)
     end |> collect
     ODESystem(eqs, iv, dvs, ps; kwargs...)
 end

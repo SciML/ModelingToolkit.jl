@@ -1,7 +1,7 @@
 function lower_varname(var::Variable, idv, order)
     order == 0 && return var
     name = Symbol(var.name, :_, string(idv.name)^order)
-    return Variable(name; known = var.known)
+    return Variable{vartype(var)}(name)
 end
 
 function flatten_differential(O::Operation)

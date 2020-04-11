@@ -1,6 +1,8 @@
 using ModelingToolkit
 using Test
 
+const PType = ModelingToolkit.Parameter{Number}
+
 @parameters t
 @variables x(t) y(t) # test multi-arg
 @variables z(t) # test single-arg
@@ -17,8 +19,8 @@ z1 = Variable(:z)(t)
 end
 @parameters σ(..)
 
-t1 = Variable(:t)()
-s1 = Variable(:s)()
+t1 = Variable{PType}(:t)()
+s1 = Variable{PType}(:s)()
 σ1 = Variable(:σ)
 @test isequal(t1, t)
 @test isequal(s1, s)
@@ -42,10 +44,10 @@ convert(Expression, :($x == 0 ? $y : $x))
 end
 @parameters σ[1:2](..)
 
-t1 = [Variable(:t, 1)(),
-      Variable(:t, 2)()]
-s1 = [Variable(:s, 1, 1)() Variable(:s, 1, 2)()
-      Variable(:s, 3, 1)() Variable(:s, 3, 2)()]
+t1 = [Variable{PType}(:t, 1)(),
+      Variable{PType}(:t, 2)()]
+s1 = [Variable{PType}(:s, 1, 1)() Variable{PType}(:s, 1, 2)()
+      Variable{PType}(:s, 3, 1)() Variable{PType}(:s, 3, 2)()]
 σ1 = [Variable(:σ, 1),
       Variable(:σ, 2)]
 @test isequal(t1, t)

@@ -35,7 +35,7 @@ end
 
 function detime_dvs(op::Operation)
   if op.op isa Variable
-    Operation(Variable(op.op.name,known=op.op.known),Expression[])
+    Operation(Variable{vartype(op.op)}(op.op.name),Expression[])
   else
     Operation(op.op,detime_dvs.(op.args))
   end
@@ -44,7 +44,7 @@ detime_dvs(op::Constant) = op
 
 function retime_dvs(op::Operation,dvs,iv)
   if op.op isa Variable && op.op ∈ dvs
-    Operation(Variable(op.op.name),Expression[iv])
+    Operation(Variable{vartype(op.op)}(op.op.name),Expression[iv])
   else
     Operation(op.op,retime_dvs.(op.args,(dvs,),iv))
   end

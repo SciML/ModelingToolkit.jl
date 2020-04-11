@@ -78,6 +78,7 @@ Get the set of parameters variables for the given system.
 function parameters end
 
 include("variables.jl")
+include("context_dsl.jl")
 include("operations.jl")
 include("differentials.jl")
 include("equations.jl")
