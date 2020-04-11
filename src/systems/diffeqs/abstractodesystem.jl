@@ -55,7 +55,7 @@ function calculate_factorized_W(sys::AbstractODESystem, simplify=true)
     isempty(sys.Wfact[]) || return (sys.Wfact[],sys.Wfact_t[])
 
     jac = calculate_jacobian(sys)
-    gam = Variable(:gam; known = true)()
+    gam = Variable(gensym(:gamma))()
 
     W = - LinearAlgebra.I + gam*jac
     Wfact = lu(W, Val(false), check=false).factors
