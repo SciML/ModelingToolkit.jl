@@ -30,7 +30,7 @@ eqs = [D(x) ~ σ*(y-x)*D(x-y)/D(z),
 raw"\begin{align}
 \frac{dx(t)}{dt} =& \frac{\sigma \left( \mathrm{y}\left( t \right) - \mathrm{x}\left( t \right) \right) \frac{d\left(\mathrm{x}\left( t \right) - \mathrm{y}\left( t \right)\right)}{dt}}{\frac{dz(t)}{dt}} \\
 0 =& \frac{\sigma \mathrm{x}\left( t \right) \left( \rho - \mathrm{z}\left( t \right) \right)}{10} - \mathrm{y}\left( t \right) \\
-\frac{dz(t)}{dt} =& \mathrm{x}\left( t \right) \mathrm{y}\left( t \right)^{\frac{2}{3}} - \beta \mathrm{z}\left( t \right)
+\frac{dz(t)}{dt} =& \mathrm{x}\left( t \right) \left( \mathrm{y}\left( t \right) \right)^{\frac{2}{3}} - \beta \mathrm{z}\left( t \right)
 \end{align}
 "
 
@@ -46,7 +46,7 @@ eqs = [D(u[1]) ~ p[3]*(u[2]-u[1]),
 raw"\begin{align}
 \frac{du_1(t)}{dt} =& p_3 \left( \mathrm{u_2}\left( t \right) - \mathrm{u_1}\left( t \right) \right) \\
 0 =& \frac{p_2 p_3 \mathrm{u_1}\left( t \right) \left( p_1 - \mathrm{u_1}\left( t \right) \right)}{10} - \mathrm{u_2}\left( t \right) \\
-\frac{du_3(t)}{dt} =& \mathrm{u_1}\left( t \right) \mathrm{u_2}\left( t \right)^{\frac{2}{3}} - p_3 \mathrm{u_3}\left( t \right)
+\frac{du_3(t)}{dt} =& \mathrm{u_1}\left( t \right) \left( \mathrm{u_2}\left( t \right) \right)^{\frac{2}{3}} - p_3 \mathrm{u_3}\left( t \right)
 \end{align}
 "
 
@@ -60,7 +60,7 @@ sys = ODESystem(eqs)
 raw"\begin{align}
 \frac{du_1(t)}{dt} =& p_3 \left( \mathrm{u_2}\left( t \right) - \mathrm{u_1}\left( t \right) \right) \\
 \frac{du_2(t)}{dt} =& \frac{p_2 p_3 \mathrm{u_1}\left( t \right) \left( p_1 - \mathrm{u_1}\left( t \right) \right)}{10} - \mathrm{u_2}\left( t \right) \\
-\frac{du_3(t)}{dt} =& \mathrm{u_1}\left( t \right) \mathrm{u_2}\left( t \right)^{\frac{2}{3}} - p_3 \mathrm{u_3}\left( t \right)
+\frac{du_3(t)}{dt} =& \mathrm{u_1}\left( t \right) \left( \mathrm{u_2}\left( t \right) \right)^{\frac{2}{3}} - p_3 \mathrm{u_3}\left( t \right)
 \end{align}
 "
 
@@ -68,6 +68,6 @@ raw"\begin{align}
 raw"$\begin{align}
 \frac{du_1(t)}{dt} =& p_3 \left( \mathrm{u_2}\left( t \right) - \mathrm{u_1}\left( t \right) \right) \\
 \frac{du_2(t)}{dt} =& \frac{p_2 p_3 \mathrm{u_1}\left( t \right) \left( p_1 - \mathrm{u_1}\left( t \right) \right)}{10} - \mathrm{u_2}\left( t \right) \\
-\frac{du_3(t)}{dt} =& \mathrm{u_1}\left( t \right) \mathrm{u_2}\left( t \right)^{\frac{2}{3}} - p_3 \mathrm{u_3}\left( t \right)
+\frac{du_3(t)}{dt} =& \mathrm{u_1}\left( t \right) \left( \mathrm{u_2}\left( t \right) \right)^{\frac{2}{3}} - p_3 \mathrm{u_3}\left( t \right)
 \end{align}
 $"
