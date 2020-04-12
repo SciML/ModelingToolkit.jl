@@ -1,4 +1,4 @@
-@latexrecipe function f(eqs::Vector{ModelingToolkit.Equation}; iv=:t)
+@latexrecipe function f(eqs::Vector{ModelingToolkit.Equation})
     # Set default option values.
     env --> :align
     cdot --> false
@@ -11,18 +11,18 @@
     rhs = [postwalk(x -> x isa ModelingToolkit.Constant ? x.value : x, eq) for eq in rhs]
     rhs = [postwalk(x -> x isa Expr && length(x.args) == 1 ? x.args[1] : x, eq) for eq in rhs]
     rhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative && length(x.args[2].args) == 2 ? :($(Symbol(:d, x.args[2]))/($(Symbol(:d, x.args[2].args[2])))) : x, eq) for eq in rhs]
-    rhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative ? "\\frac{d\\left($(Latexify.latexraw(x.args[2]))\\right)}{d$iv}" : x, eq) for eq in rhs]
+    rhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative ? "\\frac{d\\left($(Latexify.latexraw(x.args[2]))\\right)}{d$(Latexify.latexraw(x.args[3]))}" : x, eq) for eq in rhs]
 
     lhs = getfield.(eqs, :lhs)
     lhs = convert.(Expr, lhs)
     lhs = [postwalk(x -> x isa ModelingToolkit.Constant ? x.value : x, eq) for eq in lhs]
     lhs = [postwalk(x -> x isa Expr && length(x.args) == 1 ? x.args[1] : x, eq) for eq in lhs]
     lhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative && length(x.args[2].args) == 2 ? :($(Symbol(:d, x.args[2]))/($(Symbol(:d, x.args[2].args[2])))) : x, eq) for eq in lhs]
-    lhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative ? "\\frac{d\\left($(Latexify.latexraw(x.args[2]))\\right)}{d$iv}" : x, eq) for eq in lhs]
+    lhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative ? "\\frac{d\\left($(Latexify.latexraw(x.args[2]))\\right)}{d$(Latexify.latexraw(x.args[3]))}" : x, eq) for eq in lhs]
 
     return lhs, rhs
 end
 
-@latexrecipe function f(sys::ModelingToolkit.ODESystem; iv=:t)
-    return latexify(sys.eqs; iv=iv)
+@latexrecipe function f(sys::ModelingToolkit.AbstractSystem)
+    return latexify(equations(sys))
 end
