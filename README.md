@@ -296,15 +296,15 @@ and a parameters `β₁` and `β₂`.
 
 
 ```julia
-t = Variable(:t; known = true)()  # independent variables are treated as known
-α = Variable(:α; known = true)()  # parameters are known
-σ = Variable(:σ; known = true)    # left uncalled, since it is used as a function
-w = Variable(:w; known = false)   # unknown, left uncalled
-x = Variable(:x; known = false)(t)  # unknown, depends on `t`
-y = Variable(:y; known = false)()   # unknown, no dependents
-z = Variable(:z; known = false)(t, α, x)  # unknown, multiple arguments
-β₁ = Variable(:β, 1; known = true)() # with index 1
-β₂ = Variable(:β, 2; known = true)() # with index 2
+t = Variable(:t)()  # independent variables are treated as known
+α = Variable(:α)()  # parameters are known
+σ = Variable(:σ)    # left uncalled, since it is used as a function
+w = Variable(:w)   # unknown, left uncalled
+x = Variable(:x)(t)  # unknown, depends on `t`
+y = Variable(:y)()   # unknown, no dependents
+z = Variable(:z)(t, α, x)  # unknown, multiple arguments
+β₁ = Variable(:β, 1)() # with index 1
+β₂ = Variable(:β, 2)() # with index 2
 
 expr = β₁ * x + y^α + σ(3) * (z - t) - β₂ * w(t - 1)
 ```
