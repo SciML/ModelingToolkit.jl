@@ -15,5 +15,5 @@ using SafeTestsets, Test
 @safetestset "Constraints Test" begin include("constraints.jl") end
 @safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "Test Big System Usage" begin include("bigsystem.jl") end
-#@testset "Latexify recipes Test" begin include("latexify.jl") end
+@testset "Latexify recipes Test" begin include("latexify.jl") end
 @testset "Distributed Test" begin include("distributed.jl") end
