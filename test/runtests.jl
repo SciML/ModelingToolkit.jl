@@ -1,4 +1,4 @@
-using SafeTestsets
+using SafeTestsets, Test
 
 @safetestset "Parsing Test" begin include("variable_parsing.jl") end
 @safetestset "Differentiation Test" begin include("derivatives.jl") end
@@ -14,6 +14,6 @@ using SafeTestsets
 @safetestset "Domain Test" begin include("domains.jl") end
 @safetestset "Constraints Test" begin include("constraints.jl") end
 @safetestset "PDE Construction Test" begin include("pde.jl") end
-@safetestset "Distributed Test" begin include("distributed.jl") end
 @safetestset "Test Big System Usage" begin include("bigsystem.jl") end
 #@testset "Latexify recipes Test" begin include("latexify.jl") end
+@testset "Distributed Test" begin include("distributed.jl") end
