@@ -5,7 +5,7 @@ using StaticArrays, LinearAlgebra, SparseArrays
 using Latexify, Unitful
 using MacroTools
 
-using MacroTools
+using Base.Threads
 import MacroTools: splitdef, combinedef, postwalk, striplines
 import GeneralizedGenerated
 using DocStringExtensions

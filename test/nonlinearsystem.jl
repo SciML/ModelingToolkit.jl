@@ -52,6 +52,7 @@ jac_func = generate_jacobian(ns)
 f = @eval eval(nlsys_func)
 
 # Intermediate calculations
+a = y - x
 # Define a nonlinear system
 eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,

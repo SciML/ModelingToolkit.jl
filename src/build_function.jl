@@ -47,7 +47,7 @@ end
 function _build_function(target::JuliaTarget, rhss, vs, ps = (), args = (),
                          conv = simplified_expr, expression = Val{true};
                          checkbounds = false, constructor=nothing,
-                         linenumbers = true)
+                         linenumbers = true, multithread=false)
     _vs = map(x-> x isa Operation ? x.op : x, vs)
     _ps = map(x-> x isa Operation ? x.op : x, ps)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
@@ -66,6 +66,21 @@ function _build_function(target::JuliaTarget, rhss, vs, ps = (), args = (),
     end
 
     ip_let_expr = Expr(:let, var_eqs, build_expr(:block, ip_sys_exprs))
+
+    if multithread
+        lens = Int(ceil(length(ip_let_expr.args[2].args)/Threads.nthreads()))
+        threaded_exprs = vcat([quote
+           Threads.@spawn begin
+              $(ip_let_expr.args[2].args[((i-1)*lens+1):i*lens]...)
+           end
+        end for i in 1:Threads.nthreads()-1],
+           quote
+              Threads.@spawn begin
+                 $(ip_let_expr.args[2].args[((Threads.nthreads()-1)*lens+1):end]...)
+              end
+           end)
+        ip_let_expr.args[2] =  ModelingToolkit.build_expr(:block, threaded_exprs)
+    end
 
     tuple_sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
 
