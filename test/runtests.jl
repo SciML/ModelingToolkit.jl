@@ -9,7 +9,7 @@ using SafeTestsets, Test
 @safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
 @safetestset "SDESystem Test" begin include("sdesystem.jl") end
 @safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
-@safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") en
+@safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 @safetestset "ReactionSystem Test" begin include("reactionsystem.jl") end
 @safetestset "Build Targets Test" begin include("build_targets.jl") end
 @safetestset "Domain Test" begin include("domains.jl") end
