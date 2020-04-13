@@ -56,15 +56,16 @@ end
 
 # Calculate the ODE rate law
 function oderatelaw(rx)
-    @unpack rate, substrates, substoich = rx    
-    rl   = rate
-    coef = one(eltype(substoich))
-    for (i,stoich) in enumerate(substoich)
-        coef *= factorial(stoich)        
-        rl   *= (stoich != one(stoich)) ? substrates[i]^stoich : substrates[i]
+    @unpack rate, substrates, substoich, only_use_rate = rx    
+    rl = rate
+    if !only_use_rate
+        coef = one(eltype(substoich))
+        for (i,stoich) in enumerate(substoich)
+            coef *= factorial(stoich)        
+            rl   *= (stoich != one(stoich)) ? substrates[i]^stoich : substrates[i]
+        end
+        (coef != one(coef)) && (rl /= coef)
     end
-    (coef != one(coef)) && (rl /= coef)
-
     rl
 end
 
