@@ -81,6 +81,18 @@ include("variables.jl")
 include("context_dsl.jl")
 include("operations.jl")
 include("differentials.jl")
+
+function Base.convert(::Type{Variable},x::Operation)
+    if x.op isa Variable
+        x.op
+    elseif x.op isa Differential
+        var = x.args[1].op
+        rename(var,Symbol(var.name,:ˍ,x.args[1].args[1].op.name))
+    else
+        throw(error("This Operation is not a Variable"))
+    end
+end
+
 include("equations.jl")
 include("function_registration.jl")
 include("simplify.jl")

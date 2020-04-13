@@ -25,7 +25,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
     throw(error("Variable $name does not exist"))
 end
 
-renamespace(namespace,name) = Symbol(string(namespace)*"₊"*string(name))
+renamespace(namespace,name) = Symbol(namespace,:₊,name)
 
 function namespace_variables(sys::AbstractSystem)
     [rename(x,renamespace(sys.name,x.name)) for x in states(sys)]
@@ -62,22 +62,24 @@ end
 
 function states(sys::AbstractSystem,name::Symbol)
     x = sys.states[findfirst(x->x.name==name,sys.states)]
-    Variable(Symbol(string(sys.name)*"₊"*string(x.name)))(sys.iv())
+    rename(x,renamespace(sys.name,x.name))(sys.iv())
 end
 
 function parameters(sys::AbstractSystem,name::Symbol)
     x = sys.ps[findfirst(x->x.name==name,sys.ps)]
-    Variable(Symbol(string(sys.name)*"₊"*string(x.name)))(sys.iv())
+    rename(x,renamespace(sys.name,x.name))()
 end
 
 function states(sys::AbstractSystem,args...)
     name = last(args)
-    extra_names = reduce(*,["₊$(x.name)" for x in args[1:end-1]])
-    Variable(Symbol(string(sys.name)*extra_names*"₊"*string(name)))(sys.iv())
+    extra_names = reduce(Symbol,[Symbol(:₊,x.name) for x in args[1:end-1]])
+    newname = renamespace(extra_names,name)
+    rename(x,renamespace(sys.name,newname))(sys.iv())
 end
 
 function parameters(sys::AbstractSystem,args...)
     name = last(args)
-    extra_names = reduce(*,["₊$(x.name)" for x in args[1:end-1]])
-    Variable(Symbol(string(sys.name)*extra_names*"₊"*string(name)))(sys.iv())
+    extra_names = reduce(Symbol,[Symbol(:₊,x.name) for x in args[1:end-1]])
+    newname = renamespace(extra_names,name)
+    rename(x,renamespace(sys.name,newname))()
 end

@@ -123,25 +123,25 @@ end
 # Conversion to first-order ODEs #17
 @derivatives D3'''~t
 @derivatives D2''~t
-@variables u(t) u_tt(t) u_t(t) x_t(t)
+@variables u(t) uˍtt(t) uˍt(t) xˍt(t)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
        D2(x) ~ D(x) + 2]
 de = ODESystem(eqs)
 de1 = ode_order_lowering(de)
-lowered_eqs = [D(u_tt) ~ 2u_tt + u_t + x_t + 1
-               D(x_t)  ~ x_t + 2
-               D(u_t)  ~ u_tt
-               D(u)    ~ u_t
-               D(x)    ~ x_t]
+lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
+               D(xˍt)  ~ xˍt + 2
+               D(uˍt)  ~ uˍtt
+               D(u)    ~ uˍt
+               D(x)    ~ xˍt]
 
 @test de1 == ODESystem(lowered_eqs)
 
 # issue #219
 @test de1.states == [ModelingToolkit.var_from_nested_derivative(eq.lhs)[1] for eq in de1.eqs] == ODESystem(lowered_eqs).states
 
-test_diffeq_inference("first-order transform", de1, t, [u_tt, x_t, u_t, u, x], [])
+test_diffeq_inference("first-order transform", de1, t, [uˍtt, xˍt, uˍt, u, x], [])
 du = zeros(5)
-ODEFunction(de1, [u_tt, x_t, u_t, u, x], [])(du, ones(5), nothing, 0.1)
+ODEFunction(de1, [uˍtt, xˍt, uˍt, u, x], [])(du, ones(5), nothing, 0.1)
 @test du == [5.0, 3.0, 1.0, 1.0, 1.0]
 
 # Internal calculations
