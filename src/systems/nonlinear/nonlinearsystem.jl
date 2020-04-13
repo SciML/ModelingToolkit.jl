@@ -51,7 +51,7 @@ function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = paramete
                            sparse = false, kwargs...)
     jac = calculate_jacobian(sys)
     if sparse
-        jac = sparse(jac)
+        jac = SparseArrays.sparse(jac)
     end
     return build_function(jac, convert.(Variable,vs), convert.(Variable,ps), (), NLSysToExpr(sys))
 end
