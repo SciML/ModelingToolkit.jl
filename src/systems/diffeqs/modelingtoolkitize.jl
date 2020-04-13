@@ -1,5 +1,5 @@
 """
-$(SIGNATURES)
+$(TYPEDSIGNATURES)
 
 Generate `ODESystem`, dependent variables, and parameters from an `ODEProblem`.
 """

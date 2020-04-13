@@ -18,9 +18,9 @@ SDESystem
 ## Function Calculation and Generation
 
 ```@docs
-calculate_jacobian
-calculate_tgrad
-calculate_factorized_W
+calculate_jacobian(sys::ModelingToolkit.AbstractODESystem)
+calculate_tgrad(sys::ModelingToolkit.AbstractODESystem)
+calculate_factorized_W(sys::ModelingToolkit.AbstractODESystem, simplify)
 generate_jacobian
 generate_tgrad
 generate_factorized_W
