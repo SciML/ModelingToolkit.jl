@@ -6,5 +6,5 @@ rxs = [Reaction(a,[x],[y]),
        Reaction(b,[y],[x]),
        Reaction(c,[x,y],[x])]
 rs = ReactionSystem(rxs,t,[x,y],[a,b])
-sys = convert(ODESystem,rs)
-sys = convert(SDESystem,rs)
+odesys = convert(ODESystem,rs)
+sdesys = convert(SDESystem,rs)
