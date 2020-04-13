@@ -54,3 +54,5 @@ simplified_expr(c::Constant) = c.value
 function simplified_expr(eq::Equation)
     Expr(:(=), simplified_expr(eq.lhs), simplified_expr(eq.rhs))
 end
+
+simplified_expr(eq::AbstractArray) = simplified_expr.(eq)

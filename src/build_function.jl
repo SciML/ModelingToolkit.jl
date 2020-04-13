@@ -107,7 +107,15 @@ function _build_function(target::JuliaTarget, rhss, args...;
     fargs = Expr(:tuple,argnames...)
 
     X = gensym(:MTIIPVar)
-    if rhss isa SparseMatrixCSC
+	if eltype(eltype(rhss)) <: AbstractArray # Array of arrays of arrays
+		ip_sys_exprs = reduce(vcat,[vec(reduce(vcat,[vec([:($X[$i][$j][$k] = $(conv(rhs))) for (k, rhs) ∈ enumerate(rhsel2)]) for (j, rhsel2) ∈ enumerate(rhsel)],init=Expr[])) for (i,rhsel) ∈ enumerate(rhss)],init=Expr[])
+	elseif eltype(eltype(rhss)) <: SparseMatrixCSC # Array of arrays of arrays
+		ip_sys_exprs = reduce(vcat,[vec(reduce(vcat,[vec([:($X[$i][$j].nzval[$k] = $(conv(rhs))) for (k, rhs) ∈ enumerate(rhsel2)]) for (j, rhsel2) ∈ enumerate(rhsel)])) for (i,rhsel) ∈ enumerate(rhss)])
+	elseif eltype(rhss) <: SparseMatrixCSC # Array of sparse matrices
+		ip_sys_exprs = reduce(vcat,[vec([:($X[$i].nzval[$j] = $(conv(rhs))) for (j, rhs) ∈ enumerate(rhsel)]) for (i,rhsel) ∈ enumerate(rhss)])
+    elseif eltype(rhss) <: AbstractArray # Array of arrays
+		ip_sys_exprs = reduce(vcat,[vec([:($X[$i][$j] = $(conv(rhs))) for (j, rhs) ∈ enumerate(rhsel)]) for (i,rhsel) ∈ enumerate(rhss)])
+    elseif rhss isa SparseMatrixCSC
         ip_sys_exprs = [:($X.nzval[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss.nzval)]
     else
         ip_sys_exprs = [:($X[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
