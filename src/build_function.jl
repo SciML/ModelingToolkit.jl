@@ -13,8 +13,8 @@ function _build_function(target::JuliaTarget, op::Operation, vs, ps = (), args =
                          conv = simplified_expr, expression = Val{true};
                          checkbounds = false, constructor=nothing,
                          linenumbers = true)
-    _vs = map(x-> x isa Operation ? x.op : x, vs)
-    _ps = map(x-> x isa Operation ? x.op : x, ps)
+    _vs = convert.(Variable,vs)
+    _ps = convert.(Variable,ps)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
     param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(_ps)]
     (ls, rs) = zip(var_pairs..., param_pairs...)
@@ -48,8 +48,8 @@ function _build_function(target::JuliaTarget, rhss, vs, ps = (), args = (),
                          conv = simplified_expr, expression = Val{true};
                          checkbounds = false, constructor=nothing,
                          linenumbers = true, multithread=false)
-    _vs = map(x-> x isa Operation ? x.op : x, vs)
-    _ps = map(x-> x isa Operation ? x.op : x, ps)
+    _vs = convert.(Variable,vs)
+    _ps = convert.(Variable,ps)
     var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
     param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(_ps)]
     (ls, rs) = zip(var_pairs..., param_pairs...)

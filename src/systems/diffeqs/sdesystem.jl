@@ -66,7 +66,7 @@ are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
 function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
-                                     version = nothing, tgrad=false,
+                                     version = nothing, tgrad=false, sparse = false,
                                      jac = false, Wfact = false, kwargs...) where {iip}
     f_oop,f_iip = generate_function(sys, dvs, ps, Val{false}; kwargs...)
     g_oop,g_iip = generate_diffusion_function(sys, dvs, ps, Val{false}; kwargs...)
@@ -85,7 +85,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
     end
 
     if jac
-        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps, Val{false}; kwargs...)
+        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps, Val{false}; sparse=sparse, kwargs...)
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else
@@ -131,7 +131,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
 
     f = SDEFunction(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
                         linenumbers=linenumbers,multithread=multithread,
-                        sparse=false)
+                        sparse=sparse)
     u0 = varmap_to_vars(u0map,states(sys))
     p = varmap_to_vars(parammap,parameters(sys))
     SDEProblem(f,f.g,u0,tspan,p;kwargs...)

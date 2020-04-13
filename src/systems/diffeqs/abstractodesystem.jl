@@ -42,7 +42,7 @@ end
 function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
     jac = calculate_jacobian(sys)
     if sparse
-        jac = sparse(jac)
+        jac = SparseArrays.sparse(jac)
     end
     return build_function(jac, dvs, ps, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
 end
@@ -125,6 +125,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing, tgrad=false,
                                      jac = false, Wfact = false,
+                                     sparse = false,
                                      kwargs...) where {iip}
     f_oop,f_iip = generate_function(sys, dvs, ps, Val{false}; kwargs...)
 
@@ -140,7 +141,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     if jac
-        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps, Val{false}; kwargs...)
+        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps, Val{false}; sparse = sparse, kwargs...)
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else

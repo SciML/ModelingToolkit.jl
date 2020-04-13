@@ -81,7 +81,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
     ps = parameters(sys)
 
     f = generate_function(sys,checkbounds=checkbounds,linenumbers=linenumbers,
-                              multithread=multithread,sparse=sparse)
+                              multithread=multithread)
     u0 = varmap_to_vars(u0,dvs)
     p = varmap_to_vars(parammap,ps)
     lb = varmap_to_vars(lb,dvs)
