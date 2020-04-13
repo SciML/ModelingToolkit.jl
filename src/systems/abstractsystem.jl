@@ -9,14 +9,14 @@ call will be cached in the system object.
 function calculate_tgrad end
 
 """
-calculate_grad(sys::AbstractSystem)
+calculate_gradient(sys::AbstractSystem)
 
 Calculate the gradient of a scalar system.
 
 Returns a vector of [`Expression`](@ref) instances. The result from the first
 call will be cached in the system object.
 """
-function calculate_grad end
+function calculate_gradient end
 
 """
 calculate_jacobian(sys::AbstractSystem)
@@ -57,12 +57,12 @@ the arguments to the internal [`build_function`](@ref) call.
 function generate_tgrad end
 
 """
-generate_grad(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+generate_gradient(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
 
 Generates a function for the gradient of a system. Extra arguments control
 the arguments to the internal [`build_function`](@ref) call.
 """
-function generate_grad end
+function generate_gradient end
 
 """
 generate_jacobian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)

@@ -17,10 +17,10 @@ OptimizationSystem
 ## Applicable Calculation and Generation Functions
 
 ```julia
-calculate_grad
-calculate_hes
-generate_grad
-generate_hes
+calculate_gradient
+calculate_hessian
+generate_gradient
+generate_hessian
 ```
 
 ## Problem Constructors

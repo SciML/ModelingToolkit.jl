@@ -45,13 +45,13 @@ Below are the possible calculation and generation functions:
 
 ```@docs
 calculate_tgrad
-calculate_grad
+calculate_gradient
 calculate_jacobian
 calculate_factorized_W
 calculate_hessian
-generate_jacobian
-generate_grad
 generate_tgrad
+generate_gradient
+generate_jacobian
 generate_factorized_W
 generate_hessian
 ```
