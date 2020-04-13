@@ -11,7 +11,6 @@ makedocs(
     pages=[
         "Home" => "index.md",
         "highlevel.md",
-        "tracing.md",
         "Systems" => Any[
             "systems/AbstractSystem.md",
             "systems/ODESystem.md",

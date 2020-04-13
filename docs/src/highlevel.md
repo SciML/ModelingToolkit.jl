@@ -16,7 +16,6 @@ and parameters. Therefore we label them as follows:
 ```julia
 using ModelingToolkit
 
-# Define some variables
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
 @derivatives D'~t
