@@ -84,18 +84,18 @@ connected = ODESystem(connections,t,[α],[γ],systems=[lorenz1,lorenz2])
 u0 = [lorenz1.x => 1.0,
       lorenz1.y => 0.0,
       lorenz1.z => 0.0,
-	  lorenz2.x => 0.0,
-	  lorenz2.y => 1.0,
-	  lorenz2.z => 0.0,
-	  α => 2.0]
+      lorenz2.x => 0.0,
+      lorenz2.y => 1.0,
+      lorenz2.z => 0.0,
+      α => 2.0]
 
 p  = [lorenz1.σ => 10.0,
       lorenz1.ρ => 28.0,
       lorenz1.β => 8/3,
-	  lorenz2.σ => 10.0,
-	  lorenz2.ρ => 28.0,
-	  lorenz2.β => 8/3,
-	  γ => 2.0]
+      lorenz2.σ => 10.0,
+      lorenz2.ρ => 28.0,
+      lorenz2.β => 8/3,
+      γ => 2.0]
 
 tspan = (0.0,100.0)
 prob = ODEProblem(connected,u0,tspan,p)

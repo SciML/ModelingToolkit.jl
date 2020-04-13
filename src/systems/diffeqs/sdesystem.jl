@@ -80,10 +80,11 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     SDESystem(deqs, neqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name, systems)
 end
 
-function generate_diffusion_function(sys::SDESystem, dvs = sys.states, ps = sys.ps, expression = Val{true}; kwargs...)
+function generate_diffusion_function(sys::SDESystem, dvs = sys.states, ps = sys.ps; kwargs...)
     dvs′ = convert.(Variable,dvs)
     ps′ = convert.(Variable,ps)
-    return build_function(sys.noiseeqs, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
+    return build_function(sys.noiseeqs, dvs′, ps′, sys.iv;
+                          conv = ODEToExpr(sys),kwargs...)
 end
 
 """
@@ -100,8 +101,8 @@ respectively.
 function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
                                      version = nothing, tgrad=false, sparse = false,
                                      jac = false, Wfact = false, kwargs...) where {iip}
-    f_oop,f_iip = generate_function(sys, dvs, ps, Val{false}; kwargs...)
-    g_oop,g_iip = generate_diffusion_function(sys, dvs, ps, Val{false}; kwargs...)
+    f_oop,f_iip = generate_function(sys, dvs, ps; expression=Val{false}, kwargs...)
+    g_oop,g_iip = generate_diffusion_function(sys, dvs, ps; expression=Val{false}, kwargs...)
 
     f(u,p,t) = f_oop(u,p,t)
     f(du,u,p,t) = f_iip(du,u,p,t)
@@ -109,7 +110,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
     g(du,u,p,t) = g_iip(du,u,p,t)
 
     if tgrad
-        tgrad_oop,tgrad_iip = generate_tgrad(sys, dvs, ps, Val{false}; kwargs...)
+        tgrad_oop,tgrad_iip = generate_tgrad(sys, dvs, ps; expression=Val{false}, kwargs...)
         _tgrad(u,p,t) = tgrad_oop(u,p,t)
         _tgrad(J,u,p,t) = tgrad_iip(J,u,p,t)
     else
@@ -117,7 +118,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
     end
 
     if jac
-        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps, Val{false}; sparse=sparse, kwargs...)
+        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps; expression=Val{false}, sparse=sparse, kwargs...)
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else
@@ -125,7 +126,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
     end
 
     if Wfact
-        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, true, Val{false}; kwargs...)
+        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, true; expression=Val{false}, kwargs...)
         Wfact_oop, Wfact_iip = tmp_Wfact
         Wfact_oop_t, Wfact_iip_t = tmp_Wfact_t
         _Wfact(u,p,dtgamma,t) = Wfact_oop(u,p,dtgamma,t)

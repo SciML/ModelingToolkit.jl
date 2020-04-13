@@ -36,24 +36,27 @@ function (f::ODEToExpr)(O::Operation)
 end
 (f::ODEToExpr)(x) = convert(Expr, x)
 
-function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     tgrad = calculate_tgrad(sys)
-    return build_function(tgrad, dvs, ps, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
+    return build_function(tgrad, dvs, ps, sys.iv;
+                          conv = ODEToExpr(sys), kwargs...)
 end
 
-function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
+function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); sparse = false, kwargs...)
     jac = calculate_jacobian(sys)
     if sparse
         jac = SparseArrays.sparse(jac)
     end
-    return build_function(jac, dvs, ps, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
+    return build_function(jac, dvs, ps, sys.iv;
+                          conv = ODEToExpr(sys), kwargs...)
 end
 
-function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     rhss = [deq.rhs for deq ∈ equations(sys)]
     dvs′ = convert.(Variable,dvs)
     ps′ = convert.(Variable,ps)
-    return build_function(rhss, dvs′, ps′, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
+    return build_function(rhss, dvs′, ps′, sys.iv;
+                          conv = ODEToExpr(sys),kwargs...)
 end
 
 function calculate_factorized_W(sys::AbstractODESystem, simplify=true)
@@ -88,8 +91,10 @@ function generate_factorized_W(sys::AbstractODESystem, vs = states(sys), ps = pa
                         StaticArrays.LU(LowerTriangular( SMatrix{$siz...}(UnitLowerTriangular(A)) ), UpperTriangular(A), SVector(ntuple(n->n, max($siz...))))
                     end)
 
-    Wfact_func   = build_function(Wfact  , vs, ps, (:__MTKWgamma,:t), ODEToExpr(sys), expression;constructor=constructor,kwargs...)
-    Wfact_t_func = build_function(Wfact_t, vs, ps, (:__MTKWgamma,:t), ODEToExpr(sys), expression;constructor=constructor,kwargs...)
+    Wfact_func   = build_function(Wfact  , vs, ps, Variable(:__MTKWgamma), sys.iv;
+                                  conv = ODEToExpr(sys), expression = expression, constructor=constructor,kwargs...)
+    Wfact_t_func = build_function(Wfact_t, vs, ps, Variable(:__MTKWgamma), sys.iv;
+                                  conv = ODEToExpr(sys), expression = expression, constructor=constructor,kwargs...)
 
     return (Wfact_func, Wfact_t_func)
 end
@@ -136,13 +141,13 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      jac = false, Wfact = false,
                                      sparse = false,
                                      kwargs...) where {iip}
-    f_oop,f_iip = generate_function(sys, dvs, ps, Val{false}; kwargs...)
+    f_oop,f_iip = generate_function(sys, dvs, ps; expression=Val{false}, kwargs...)
 
     f(u,p,t) = f_oop(u,p,t)
     f(du,u,p,t) = f_iip(du,u,p,t)
 
     if tgrad
-        tgrad_oop,tgrad_iip = generate_tgrad(sys, dvs, ps, Val{false}; kwargs...)
+        tgrad_oop,tgrad_iip = generate_tgrad(sys, dvs, ps; expression=Val{false}, kwargs...)
         _tgrad(u,p,t) = tgrad_oop(u,p,t)
         _tgrad(J,u,p,t) = tgrad_iip(J,u,p,t)
     else
@@ -150,7 +155,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     if jac
-        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps, Val{false}; sparse = sparse, kwargs...)
+        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps; sparse = sparse, expression=Val{false}, kwargs...)
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else
@@ -158,7 +163,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     if Wfact
-        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, true, Val{false}; kwargs...)
+        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps; expression=Val{false}, kwargs...)
         Wfact_oop, Wfact_iip = tmp_Wfact
         Wfact_oop_t, Wfact_iip_t = tmp_Wfact_t
         _Wfact(u,p,dtgamma,t) = Wfact_oop(u,p,dtgamma,t)

@@ -16,6 +16,7 @@ ModelingToolkit.simplified_expr.(eqs)[1]
 :(derivative(x(t), t) = σ * (y(t) - x(t))).args
 de = ODESystem(eqs)
 
+generate_function(de)
 
 function _clean(O::Operation)
     @assert isa(O.op, Variable)

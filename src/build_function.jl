@@ -16,10 +16,10 @@ i.e. f(u,p,args...) for the out-of-place and scalar functions and
 `f!(du,u,p,args..)` for the in-place version.
 
 ```julia
-build_function(ex vs, ps = (), args = (),
-               conv = simplified_expr, expression = Val{true};
+build_function(ex, args...;
+               conv = simplified_expr, expression = Val{true},
                checkbounds = false, constructor=nothing,
-               linenumbers = true, target = JuliaTarget())
+               linenumbers = false, target = JuliaTarget())
 ```
 
 Arguments:
@@ -57,23 +57,23 @@ function build_function(args...;target = JuliaTarget(),kwargs...)
 end
 
 # Scalar output
-function _build_function(target::JuliaTarget, op::Operation, vs, ps = (), args = (),
-                         conv = simplified_expr, expression = Val{true};
+function _build_function(target::JuliaTarget, op::Operation, args...;
+                         conv = simplified_expr, expression = Val{true},
                          checkbounds = false, constructor=nothing,
                          linenumbers = true)
-    _vs = convert.(Variable,vs)
-    _ps = convert.(Variable,ps)
-    var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
-    param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(_ps)]
-    (ls, rs) = zip(var_pairs..., param_pairs...)
-    var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, rs))
+
+    argnames = [gensym(:MTKArg) for i in 1:length(args)]
+    arg_pairs = map(vars_to_pairs,zip(argnames,args))
+    ls = reduce(vcat,first.(arg_pairs))
+    rs = reduce(vcat,last.(arg_pairs))
+    var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, rs))
 
     fname = gensym(:ModelingToolkitFunction)
     out_expr = conv(op)
     let_expr = Expr(:let, var_eqs, out_expr)
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
 
-    fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
+    fargs = Expr(:tuple,argnames...)
 
     oop_ex = :(
         ($(fargs.args...),) -> begin
@@ -92,19 +92,19 @@ function _build_function(target::JuliaTarget, op::Operation, vs, ps = (), args =
     end
 end
 
-function _build_function(target::JuliaTarget, rhss, vs, ps = (), args = (),
-                         conv = simplified_expr, expression = Val{true};
+function _build_function(target::JuliaTarget, rhss, args...;
+                         conv = simplified_expr, expression = Val{true},
                          checkbounds = false, constructor=nothing,
-                         linenumbers = true, multithread=false)
-    _vs = convert.(Variable,vs)
-    _ps = convert.(Variable,ps)
-    var_pairs   = [(u.name, :(u[$i])) for (i, u) ∈ enumerate(_vs)]
-    param_pairs = [(p.name, :(p[$i])) for (i, p) ∈ enumerate(_ps)]
-    (ls, rs) = zip(var_pairs..., param_pairs...)
+                         linenumbers = false, multithread=false)
 
-    var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, rs))
+    argnames = [gensym(:MTKArg) for i in 1:length(args)]
+    arg_pairs = map(vars_to_pairs,zip(argnames,args))
+    ls = reduce(vcat,first.(arg_pairs))
+    rs = reduce(vcat,last.(arg_pairs))
+    var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, rs))
 
     fname = gensym(:ModelingToolkitFunction)
+    fargs = Expr(:tuple,argnames...)
 
     X = gensym(:MTIIPVar)
     if rhss isa SparseMatrixCSC
@@ -135,20 +135,20 @@ function _build_function(target::JuliaTarget, rhss, vs, ps = (), args = (),
     if rhss isa Matrix
         arr_sys_expr = build_expr(:vcat, [build_expr(:row,[conv(rhs) for rhs ∈ rhss[i,:]]) for i in 1:size(rhss,1)])
         # : x because ??? what to do in the general case?
-        _constructor = constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SMatrix{$(size(rhss)...)} :  x->(out = similar(typeof(u),$(size(rhss)...)); out .= x)) : constructor
+        _constructor = constructor === nothing ? :($(first(argnames)) isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SMatrix{$(size(rhss)...)} :  x->(out = similar(typeof($(fargs.args[1])),$(size(rhss)...)); out .= x)) : constructor
     elseif typeof(rhss) <: Array && !(typeof(rhss) <: Vector)
         vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
         arr_sys_expr = :(reshape($vector_form,$(size(rhss)...)))
-        _constructor = constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SArray{$(size(rhss)...)} :  x->(out = similar(typeof(u),$(size(rhss)...)); out .= x)) : constructor
+        _constructor = constructor === nothing ? :($(first(argnames)) isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SArray{$(size(rhss)...)} :  x->(out = similar(typeof($(fargs.args[1])),$(size(rhss)...)); out .= x)) : constructor
     elseif rhss isa SparseMatrixCSC
         vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ nonzeros(rhss)])
-        arr_sys_expr = :(SparseMatrixCSC{eltype(u),Int}($(size(rhss)...), $(rhss.colptr), $(rhss.rowval), $vector_form))
+        arr_sys_expr = :(SparseMatrixCSC{eltype($(first(argnames))),Int}($(size(rhss)...), $(rhss.colptr), $(rhss.rowval), $vector_form))
         # Static and sparse? Probably not a combo that will actually be hit, but give a default anyways
-        _constructor = constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SMatrix{$(size(rhss)...)} : x->x) : constructor
+        _constructor = constructor === nothing ? :($(first(argnames)) isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SMatrix{$(size(rhss)...)} : x->x) : constructor
     else # Vector
         arr_sys_expr = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
         # Handle vector constructor separately using `typeof(u)` to support things like LabelledArrays
-        _constructor = constructor === nothing ? :(u isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X)) : x->convert(typeof(u),x)) : constructor
+        _constructor = constructor === nothing ? :($(first(argnames)) isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof($(fargs.args[1])), eltype(X)) : x->convert(typeof($(fargs.args[1])),x)) : constructor
     end
 
     let_expr = Expr(:let, var_eqs, tuple_sys_expr)
@@ -156,8 +156,6 @@ function _build_function(target::JuliaTarget, rhss, vs, ps = (), args = (),
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
     arr_bounds_block = checkbounds ? arr_let_expr : :(@inbounds begin $arr_let_expr end)
     ip_bounds_block = checkbounds ? ip_let_expr : :(@inbounds begin $ip_let_expr end)
-
-    fargs = ps == () ? :(u,$(args...)) : :(u,p,$(args...))
 
     oop_ex = :(
         ($(fargs.args...),) -> begin
@@ -189,6 +187,21 @@ function _build_function(target::JuliaTarget, rhss, vs, ps = (), args = (),
     else
         return GeneralizedGenerated.mk_function(@__MODULE__,oop_ex), GeneralizedGenerated.mk_function(@__MODULE__,iip_ex)
     end
+end
+
+vars_to_pairs(args) = vars_to_pairs(args[1],args[2])
+function vars_to_pairs(name,vs::AbstractArray)
+	_vs = convert.(Variable,vs)
+	names = [Symbol(u) for u ∈ _vs]
+	exs = [:($name[$i]) for (i, u) ∈ enumerate(_vs)]
+	names,exs
+end
+
+function vars_to_pairs(name,vs)
+	_vs = convert(Variable,vs)
+	names = [Symbol(_vs)]
+	exs = [name]
+	names,exs
 end
 
 get_varnumber(varop::Operation,vars::Vector{Operation}) =  findfirst(x->isequal(x,varop),vars)
@@ -251,8 +264,8 @@ function _build_function(target::StanTarget, eqs, vs, ps, iv,
     """
 end
 
-function _build_function(target::CTarget, eqs, vs, ps, iv,
-                         conv = simplified_expr, expression = Val{true};
+function _build_function(target::CTarget, eqs, vs, ps, iv;
+                         conv = simplified_expr, expression = Val{true},
                          fname = :diffeqf, derivname=:internal_var___du,
                          varname=:internal_var___u,paramname=:internal_var___p)
     differential_equation = string(join([numbered_expr(eq,vs,ps,derivname=derivname,
@@ -265,8 +278,8 @@ function _build_function(target::CTarget, eqs, vs, ps, iv,
     """
 end
 
-function _build_function(target::MATLABTarget, eqs, vs, ps, iv,
-                         conv = simplified_expr, expression = Val{true};
+function _build_function(target::MATLABTarget, eqs, vs, ps, iv;
+                         conv = simplified_expr, expression = Val{true},
                          fname = :diffeqf, derivname=:internal_var___du,
                          varname=:internal_var___u,paramname=:internal_var___p)
     matstr = join([numbered_expr(eq.rhs,vs,ps,derivname=derivname,

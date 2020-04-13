@@ -47,20 +47,22 @@ function calculate_jacobian(sys::NonlinearSystem)
     return jac
 end
 
-function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys), expression = Val{true};
+function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys);
                            sparse = false, kwargs...)
     jac = calculate_jacobian(sys)
     if sparse
         jac = SparseArrays.sparse(jac)
     end
-    return build_function(jac, convert.(Variable,vs), convert.(Variable,ps), (), AbstractSysToExpr(sys))
+    return build_function(jac, convert.(Variable,vs), convert.(Variable,ps),
+                          conv = AbstractSysToExpr(sys))
 end
 
-function generate_function(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+function generate_function(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys); kwargs...)
     rhss = [eq.rhs for eq ∈ sys.eqs]
     vs′ = convert.(Variable,vs)
     ps′ = convert.(Variable,ps)
-    return build_function(rhss, vs′, ps′, (), AbstractSysToExpr(sys), expression; kwargs...)
+    return build_function(rhss, vs′, ps′;
+                          conv = AbstractSysToExpr(sys), kwargs...)
 end
 
 """
@@ -86,7 +88,7 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,tspan,
     ps = parameters(sys)
 
     f = generate_function(sys;checkbounds=checkbounds,linenumbers=linenumbers,
-                              multithread=multithread,sparse=sparse)
+                              multithread=multithread,sparse=sparse,expression=Val{false})
     u0 = varmap_to_vars(u0map,dvs)
     p = varmap_to_vars(parammap,ps)
     NonlinearProblem(f,u0,tspan,p;kwargs...)
