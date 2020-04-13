@@ -22,7 +22,7 @@ TreeViews = "a2a6695c-b41b-5b7d-aed9-dbfdeacea5d7"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
-DiffEqBase = "6"
+DiffEqBase = "6.28"
 DiffRules = "0.1, 1.0"
 DocStringExtensions = "0.7, 0.8"
 GeneralizedGenerated = "0.1.4, 0.2"

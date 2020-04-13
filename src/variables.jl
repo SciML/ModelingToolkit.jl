@@ -192,3 +192,4 @@ function varmap_to_vars(varmap,varlist)
 end
 
 varmap_to_vars(varmap::DiffEqBase.NullParameters,varlist) = varmap
+varmap_to_vars(varmap::Nothing,varlist) = varmap

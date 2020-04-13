@@ -74,8 +74,7 @@ end
 
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,tspan,
                                           parammap=DiffEqBase.NullParameters();
-                                          version = nothing, jac = false,
-                                          kwargs...) where iip
+                                          jac = false,kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
 
