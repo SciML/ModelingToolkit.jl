@@ -21,15 +21,49 @@ For information on using the package,
 [in-development documentation](https://mtk.sciml.ai/dev/) for the version of
 the documentation which contains the un-released features.
 
-## High Level Example
+## High Level Examples
 
-Let's define the Lorenz equations for numerically solving with DifferentialEquations.jl,
-but tell the symbolic system to automatically generate code for efficiently
-handling the sparse Jacobian.
+First let's define a second order riff on the Lorenz equations, symbolically
+lower it to a first order system, symbolically generate the Jacobian function
+for the numerical integrator, and solve it.
 
 ```julia
-using ModelingToolkit
+using ModelingToolkit, OrdinaryDiffEq
 
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
+
+eqs = [D(D(x)) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
+
+sys = ODESystem(eqs)
+sys = ode_order_lowering(sys)
+
+u0 = [D(x) => 2.0,
+	  x => 1.0,
+      y => 0.0,
+      z => 0.0]
+
+p  = [σ => 28.0,
+      ρ => 10.0,
+      β => 8/3]
+
+tspan = (0.0,100.0)
+prob = ODEProblem(sys,u0,tspan,p,jac=true)
+sol = solve(prob,Tsit5())
+```
+
+![Lorenz2](https://user-images.githubusercontent.com/1814174/79118645-744eb580-7d5c-11ea-9c37-13c4efd585ca.png)
+
+This automatically will have generated fast Jacobian functions, making
+it more optimized than directly building a function. In addition, we can then
+use ModelingToolkit to compose multiple ODE subsystems. Now let's define two
+interacting Lorenz equations and simulate the resulting Differential-Algebriac
+Equation (DAE):
+
+```julia
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
 @derivatives D'~t
@@ -38,36 +72,31 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-sys = ODESystem(eqs)
-
-u0 = [x => 1.0,
-      y => 0.0,
-      z => 0.0]
-
-p  = [σ => 28.0,
-      ρ => 10.0,
-      β => 8/3]
-
-tspan = (0.0,100.0)      
-prob = ODEProblem(sys,u0,tspan,p,jac=true,sparse=true)
-```
-
-This automatically will have generated fast sparse Jacobian functions, making
-it more optimized than directly building a function. In addition, we can then
-use ModelingToolkit to compose multiple ODE subsystems. Let's define two
-interacting Lorenz equations:
-
-```julia
 lorenz1 = ODESystem(eqs,name=:lorenz1)
 lorenz2 = ODESystem(eqs,name=:lorenz2)
 
 @variables α
 @parameters γ
 connections = [0 ~ lorenz1.x + lorenz2.y + sin(α*γ)]
-connected = ODESystem(connections,[α],[γ],systems=[lorenz1,lorenz2])
-```
+connected = ODESystem(connections,t,[α],[γ],systems=[lorenz1,lorenz2])
 
-which is now a differential-algebraic equation (DAE) of 7 variables which has
-two independent Lorenz systems and an algebraic equation that determines `α`
-such that an implicit constraint holds. We can then define the resulting
-`ODEProblem` and send it over to DifferentialEquations.jl.
+u0 = [lorenz1.x => 1.0,
+      lorenz1.y => 0.0,
+      lorenz1.z => 0.0,
+	lorenz2.x => 1.0,
+	lorenz2.y => 0.0,
+	lorenz2.z => 0.0,
+	α => 2.0]
+
+p  = [lorenz1.σ => 28.0,
+      lorenz1.ρ => 10.0,
+      lorenz1.β => 8/3,
+	lorenz2.σ => 28.0,
+	lorenz2.ρ => 10.0,
+	lorenz2.β => 8/3,
+	γ => 2.0]
+
+tspan = (0.0,100.0)
+prob = ODEProblem(connected,u0,tspan,p)
+sol = solve(prob,Rodas5())
+```
