@@ -3,6 +3,8 @@
 [![Build Status](https://travis-ci.org/SciML/ModelingToolkit.jl.svg?branch=master)](https://travis-ci.org/SciML/ModelingToolkit.jl)
 [![Coverage Status](https://coveralls.io/repos/SciML/ModelingToolkit.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/JuliaDiffEq/ModelingToolkit.jl?branch=master)
 [![codecov.io](http://codecov.io/github/SciML/ModelingToolkit.jl/coverage.svg?branch=master)](http://codecov.io/github/SciML/ModelingToolkit.jl?branch=master)
+[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](http://mtk.sciml.ai/stable/)
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](http://mtk.sciml.ai/dev/)
 
 ModelingToolkit.jl is an intermediate representation (IR) of computational graphs
 for scientific computing problems. Its purpose is to be a common target for
@@ -14,462 +16,87 @@ nicely with user-defined routines. Together, this is an abstract form of a
 scientific model that is easy for humans to generate but also easy for programs
 to manipulate.
 
-## Tutorial
+For information on using the package,
+[see the stable documentation](https://mtk.sciml.ai/stable/). Use the
+[in-development documentation](https://mtk.sciml.ai/dev/) for the version of
+the documentation which contains the un-released features.
 
-For an introductory tutorial to using ModelingToolkit.jl, please checkout
-[ModelingToolkit.jl, An IR and Compiler for Scientific Models](https://tutorials.juliadiffeq.org/html/ode_extras/01-ModelingToolkit.html).
+## High Level Examples
 
-## Introduction by Examples
-
-### Example: ODE
-
-Let's build an ODE. First we define some variables. In a differential equation
-system, we need to differentiate between our (dependent) variables
-and parameters. Therefore we label them as follows:
+First let's define a second order riff on the Lorenz equations, symbolically
+lower it to a first order system, symbolically generate the Jacobian function
+for the numerical integrator, and solve it.
 
 ```julia
-using ModelingToolkit
+using ModelingToolkit, OrdinaryDiffEq
 
-# Define some variables
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
 @derivatives D'~t
+
+eqs = [D(D(x)) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
+
+sys = ODESystem(eqs)
+sys = ode_order_lowering(sys)
+
+u0 = [D(x) => 2.0,
+	  x => 1.0,
+      y => 0.0,
+      z => 0.0]
+
+p  = [σ => 28.0,
+      ρ => 10.0,
+      β => 8/3]
+
+tspan = (0.0,100.0)
+prob = ODEProblem(sys,u0,tspan,p,jac=true)
+sol = solve(prob,Tsit5())
 ```
 
-Then we build the system:
+![Lorenz2](https://user-images.githubusercontent.com/1814174/79118645-744eb580-7d5c-11ea-9c37-13c4efd585ca.png)
+
+This automatically will have generated fast Jacobian functions, making
+it more optimized than directly building a function. In addition, we can then
+use ModelingToolkit to compose multiple ODE subsystems. Now let's define two
+interacting Lorenz equations and simulate the resulting Differential-Algebriac
+Equation (DAE):
 
 ```julia
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
+
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
+
+lorenz1 = ODESystem(eqs,name=:lorenz1)
+lorenz2 = ODESystem(eqs,name=:lorenz2)
+
+@variables α
+@parameters γ
+connections = [0 ~ lorenz1.x + lorenz2.y + sin(α*γ)]
+connected = ODESystem(connections,t,[α],[γ],systems=[lorenz1,lorenz2])
+
+u0 = [lorenz1.x => 1.0,
+      lorenz1.y => 0.0,
+      lorenz1.z => 0.0,
+	lorenz2.x => 1.0,
+	lorenz2.y => 0.0,
+	lorenz2.z => 0.0,
+	α => 2.0]
+
+p  = [lorenz1.σ => 28.0,
+      lorenz1.ρ => 10.0,
+      lorenz1.β => 8/3,
+	lorenz2.σ => 28.0,
+	lorenz2.ρ => 10.0,
+	lorenz2.β => 8/3,
+	γ => 2.0]
+
+tspan = (0.0,100.0)
+prob = ODEProblem(connected,u0,tspan,p)
+sol = solve(prob,Rodas5())
 ```
-
-Each operation builds an `Operation` type, and thus `eqs` is an array of
-`Operation` and `Variable`s. This holds a tree of the full system that can be
-analyzed by other programs. We can turn this into a `ODESystem` via:
-
-```julia
-de = ODESystem(eqs, t, [x,y,z], [σ,ρ,β])
-```
-
-where we tell it the variable types and ordering in the first version, or let it
-automatically determine the variable types in the second version.
-This can then generate the function. For example, we can see the
-generated code via:
-
-```julia
-using MacroTools
-myode_oop = generate_function(de)[1] # first one is the out-of-place function
-MacroTools.striplines(myode_oop) # print without line numbers
-
-#=
-:((u, p, t)->begin
-          if u isa Array
-              return @inbounds(begin
-                          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-                              [σ * (y - x), x * (ρ - z) - y, x * y - β * z]
-                          end
-                      end)
-          else
-              X = @inbounds(begin
-                          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-                              (σ * (y - x), x * (ρ - z) - y, x * y - β * z)
-                          end
-                      end)
-          end
-          T = promote_type(map(typeof, X)...)
-          map(T, X)
-          construct = if u isa ModelingToolkit.StaticArrays.StaticArray
-                  ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X))
-              else
-                  x->begin
-                          convert(typeof(u), x)
-                      end
-              end
-          construct(X)
-      end)
-=#
-
-myode_iip = generate_function(de)[2] # second one is the in-place function
-MacroTools.striplines(myode_iip) # print without line numbers
-
-#=
-:((var"##MTIIPVar#793", u, p, t)->begin
-          @inbounds begin
-                  @inbounds begin
-                          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-                              var"##MTIIPVar#793"[1] = σ * (y - x)
-                              var"##MTIIPVar#793"[2] = x * (ρ - z) - y
-                              var"##MTIIPVar#793"[3] = x * y - β * z
-                          end
-                      end
-              end
-          nothing
-      end)
-=#
-```
-
-or directly get the generated ODE function via:
-
-```julia
-f = ODEFunction(de, [x,y,z], [σ,ρ,β])
-```
-
-Here already you can see some advantages of the ModelingToolkit.jl compilation system. As an
-IR to target, this output can compile to multiple different forms, including ones specific
-to static arrays and in-place functions. Forms which automatically parallelize the calculations
-based on internal cost models are a work-in-progress as well. This means DSLs built on top of
-this as a model compiler can write domain-specific languages without having to write complex
-optimized Julia function compilers.
-
-### Example: Nonlinear System with NLsolve.jl
-
-We can also build nonlinear systems. Let's say we wanted to solve for the steady
-state of the previous ODE. This is the nonlinear system defined by where the
-derivatives are zero. We use (unknown) variables for our nonlinear system.
-
-```julia
-using ModelingToolkit
-
-@variables x y z
-@parameters σ ρ β
-
-# Define a nonlinear system
-eqs = [0 ~ σ*(y-x),
-       0 ~ x*(ρ-z)-y,
-       0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
-nlsys_func = generate_function(ns)[2] # second is the inplace version
-```
-
-which generates:
-
-```julia
-(var"##MTIIPVar#405", u, p)->begin
-        @inbounds begin
-                @inbounds begin
-                        let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-                            var"##MTIIPVar#405"[1] = (*)(σ, (-)(y, x))
-                            var"##MTIIPVar#405"[2] = (-)((*)(x, (-)(ρ, z)), y)
-                            var"##MTIIPVar#405"[3] = (-)((*)(x, y), (*)(β, z))
-                        end
-                    end
-            end
-        nothing
-    end
-```
-
-We can use this to build a nonlinear function for use with NLsolve.jl:
-
-```julia
-f = eval(nlsys_func)
-du = zeros(3); u = ones(3)
-f(du,u,(10.0,26.0,2.33))
-du
-
-#=
-3-element Array{Float64,1}:
-  0.0
- 24.0
- -1.33
- =#
-```
-
-We can similarly ask to generate the in-place Jacobian function:
-
-```julia
-j_func = generate_jacobian(ns)[2] # second is in-place
-j! = eval(j_func)
-```
-
-which gives:
-
-```julia
-:((var"##MTIIPVar#582", u, p)->begin
-          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:70 =#
-          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:71 =#
-          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:71 =# @inbounds begin
-                  #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:72 =#
-                  #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:53 =# @inbounds begin
-                          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:53 =#
-                          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-                              var"##MTIIPVar#582"[1] = (*)(σ, -1)
-                              var"##MTIIPVar#582"[2] = (-)(ρ, z)
-                              var"##MTIIPVar#582"[3] = y
-                              var"##MTIIPVar#582"[4] = σ
-                              var"##MTIIPVar#582"[5] = -1
-                              var"##MTIIPVar#582"[6] = x
-                              var"##MTIIPVar#582"[7] = 0
-                              var"##MTIIPVar#582"[8] = (*)(x, -1)
-                              var"##MTIIPVar#582"[9] = (*)(-1, β)
-                          end
-                      end
-              end
-          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:74 =#
-          nothing
-      end)
-```
-
-Now we can call `nlsolve` by enclosing our parameters into the functions:
-
-```julia
-nlsolve((out, x) -> f(out, x, params), (out, x) -> j!(out, x, params), ones(3))
-```
-
-If one would like the generated function to be a Julia function instead of an expression, and allow this
-function to be used from within the same world-age, one simply needs to pass `Val{false}` to tell it to
-generate the function, i.e.:
-
-```julia
-nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β], Val{false})[2]
-```
-
-which uses GeneralizedGenerated.jl to build a same world-age function on the fly without eval.
-
-### Example: Arrays of variables
-
-Sometimes it is convenient to define arrays of variables to model things like `x₁,…,x₃`.
-The `@variables` and `@parameters` macros support this with the following syntax:
-
-```julia
-julia> @variables x[1:3];
-julia> x
-3-element Array{Operation,1}:
- x₁()
- x₂()
- x₃()
-
-# support for arbitrary ranges and tensors
-julia> @variables y[2:3,1:5:6];
-julia> y
-2×2 Array{Operation,2}:
-    y₂̒₁() y₂̒₆()
-    y₃̒₁() y₃̒₆()
-
-# also works for dependent variables
-julia> @parameters t; @variables z[1:3](t);
-julia> z
-3-element Array{Operation,1}:
- z₁(t())
- z₂(t())
- z₃(t())
- ```
-
-## Core Principles
-
-The core idea behind ModelingToolkit.jl is that mathematical equations require
-context, and thus any symbolic manipulations and full model specifications
-requires the ability to handle such context. When writing DSLs, this fact
-comes to light very quickly. Every DSL seems to lower to some intermediate
-representation from which the final result is computed, but this process means
-there's a lot of repeated ideas for every DSL that creates scientific computing
-objects like differential equations and nonlinear systems. By having a single
-common contexualized IR, this gives DSLs a target to write to so that way
-lower-level details like computation of system Jacobians can be disconnected
-from the DSL and its syntax, allowing for code-reuse between modeling packages
-and languages.
-
-In this section we define the core pieces of the IR and what they mean.
-
-### Variables
-
-The most fundamental part of the IR is the `Variable`. In order to mirror the
-intention of solving for variables and representing function-like parameters,
-we treat each instance of `Variable` as a function which is called on its
-arguments using the natural syntax. Rather than having additional mechanisms
-for handling constant variables and parameters, we simply represent them as
-constant functions.
-
-The `Variable` is the
-context-aware single variable of the IR. Its fields are described as follows:
-
-- `name`: the name of the `Variable`. Note that this is not necessarily
-  the same as the name of the Julia variable. But this symbol itself is considered
-  the core identifier of the `Variable` in the sense of equality.
-- `known`: the main denotation of context, storing whether or not the value of
-  the variable is known.
-
-For example, the following code defines an independent variable `t`, a parameter
-`α`, a function parameter `σ`, a variable `x` which depends on `t`, a variable
-`y` with no dependents, a variable `z` which depends on `t`, `α`, and `x(t)`
-and a parameters `β₁` and `β₂`.
-
-
-```julia
-t = Variable(:t)()  # independent variables are treated as known
-α = Variable(:α)()  # parameters are known
-σ = Variable(:σ)    # left uncalled, since it is used as a function
-w = Variable(:w)   # unknown, left uncalled
-x = Variable(:x)(t)  # unknown, depends on `t`
-y = Variable(:y)()   # unknown, no dependents
-z = Variable(:z)(t, α, x)  # unknown, multiple arguments
-β₁ = Variable(:β, 1)() # with index 1
-β₂ = Variable(:β, 2)() # with index 2
-
-expr = β₁ * x + y^α + σ(3) * (z - t) - β₂ * w(t - 1)
-```
-
-We can rewrite this more concisely using macros. Note the difference between
-including and excluding empty parentheses. When in call format, variables are
-aliased to the given call, allowing implicit use of dependents for convenience.
-
-```julia
-@parameters t α σ(..) β[1:2]
-@variables w(..) x(t) y() z(t, α, x)
-
-expr = β₁* x + y^α + σ(3) * (z - t) - β₂ * w(t - 1)
-```
-
-Note that `@parameters` and `@variables` implicitly add `()` to values that
-are not given a call. The former specifies the values as known, while the
-latter specifies it as unknown. `(..)` signifies that the value should be
-left uncalled.
-
-### Constants
-
-`Constant` is a simple wrapper type to store numerical Julia constants.
-
-### Operations
-
-Operations are the basic composition of variables and puts together the pieces
-with a function.
-
-### Equations
-
-Equations are stored using the `Equation` datatype. Given expressions for the
-left-hand and right-hand sides, an equation is constructed as `Equation(lhs, rhs)`,
-or equivalently `lhs ~ rhs`.
-
-### Differentials
-
-A `Differential` denotes the derivative with respect to a given variable. It can
-be expanded via `expand_derivatives`, which symbolically differentiates
-expressions recursively and cancels out appropriate constant variables.
-
-### Systems
-
-A system is a collection of operations with expanded context. While different
-systems can have different constructors and interpretations, the general
-structure is as follows:
-
-- `eqs` is the first argument which is an array of `Operation` which describe
-  the system of equations.
-- Name to subtype mappings: these describe how variable `subtype`s are mapped
-  to the contexts of the system. For example, for a differential equation,
-  the variable corresponds to given subtypes and then the `eqs` can
-  be analyzed knowing what the state variables are.
-- Variable names which do not fall into one of the system's core subtypes are
-  treated as intermediates which can be used for holding subcalculations and
-  other pieces like that.
-
-### Transformations
-
-Transformation functions send IR objects to like IR objects. These utilize the
-contextual information in a given `Operation`/`System` to build another
-`Operation`/`System`.
-
-## Details
-
-### Function Registration
-
-A function is registered into the operation system via:
-
-```julia
-@register f(x)
-@register g(x,y)
-```
-
-etc. where each macro call registers the function with the given signature. This
-will cause operations to stop recursing at this function, building `Operation(g,args)`
-nodes into the graph instead of tracing calls of `g` itself into `Operation`s.
-
-### Adding Derivatives
-
-There is a large amount of derivatives pre-defined by
-[DiffRules.jl](https://github.com/JuliaDiff/DiffRules.jl). Note that `Expression`
-types are defined as `<:Real`, and thus any functions which allow the use of real
-numbers can automatically be traced by the derivative mechanism. Thus for example:
-
-```julia
-f(x,y,z) = x^2 + sin(x+y) - z
-```
-
-automatically has the derivatives defined via the tracing mechanism. It will do
-this by directly building the operation the internals of your function and
-differentiating that.
-
-However, in many cases you may want to define your own derivatives so that way
-automatic Jacobian etc. calculations can utilize this information. This can
-allow for more succinct versions of the derivatives to be calculated in order
-to better scale to larger systems. You can define derivatives for your own
-function via the dispatch:
-
-```julia
-# `N` arguments are accepted by the relevant method of `my_function`
-ModelingToolkit.derivative(::typeof(my_function), args::NTuple{N,Any}, ::Val{i})
-```
-
-where `i` means that it's the derivative of the `i`th argument. `args` is the
-array of arguments, so for example if your function is `f(x,t)` then `args = [x,t]`.
-You should return an `Operation` for the derivative of your function.
-
-For example, `sin(t)`'s derivative (by `t`) is given by the following:
-
-```julia
-ModelingToolkit.derivative(::typeof(sin), args::NTuple{1,Any}, ::Val{1}) = cos(args[1])
-```
-
-### Macro-free Usage
-
-Given the insistence on being programming friendly, all of the functionality
-is accessible via a function-based interface. This means that all macros are
-syntactic sugar in some form. For example, the variable construction:
-
-```julia
-@parameters t σ ρ β[1:3]
-@variables x(t) y(t) z(t)
-@derivatives D'~t
-```
-
-is syntactic sugar for:
-
-```julia
-t = Variable(:t)()
-σ = Variable(:σ)()
-ρ = Variable(:ρ)()
-β = [Variable(:β, i)() for i in 1:3]
-x = Variable(:x)(t)
-y = Variable(:y)(t)
-z = Variable(:z)(t)
-D = Differential(t)
-```
-
-### Intermediate Calculations
-
-The system building functions can handle intermediate calculations. For example,
-
-```julia
-@variables x y z
-@parameters σ ρ β
-a = y - x
-eqs = [0 ~ σ*a,
-       0 ~ x*(ρ-z)-y,
-       0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs, [x,y,z])
-nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β])
-```
-
-expands to:
-
-```julia
-:((##365, u, p)->begin
-          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-              ##365[1] = σ * (y - x)
-              ##365[2] = x * (ρ - z) - y
-              ##365[3] = x * y - β * z
-          end
-      end)
-```
-
-In addition, the Jacobian calculations take into account intermediate variables
-to appropriately handle them.

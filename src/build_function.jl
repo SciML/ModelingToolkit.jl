@@ -4,6 +4,54 @@ struct StanTarget <: BuildTargets end
 struct CTarget <: BuildTargets end
 struct MATLABTarget <: BuildTargets end
 
+"""
+`build_function`
+
+Generates a numerically-usable function from a ModelingToolkit `Expression`.
+If the `Expression` is an `Operation`, the generated function is a function
+with a scalar output, otherwise if it's an `AbstractArray{Operation}` the output
+is two functions, one for out-of-place AbstractArray output and a second which
+is a mutating function. The outputted functions match the given argument order,
+i.e. f(u,p,args...) for the out-of-place and scalar functions and
+`f!(du,u,p,args..)` for the in-place version.
+
+```julia
+build_function(ex vs, ps = (), args = (),
+               conv = simplified_expr, expression = Val{true};
+               checkbounds = false, constructor=nothing,
+               linenumbers = true, target = JuliaTarget())
+```
+
+Arguments:
+
+- `ex`: The `Expression` to compile
+- `vs`: The variables of the expression
+- `ps`: The parameters of the expression
+- `args`: Extra arguments to the function
+- `conv`: The conversion function of the Operation to Expr. By default this uses
+  the `simplified_expr` function utilized in `convert(Expr,x)`.
+- `expression`: Whether to generate code or whether to generate the compiled form.
+  By default, `expression = Val{true}`, which means that the code for the
+  function is returned. If `Val{false}`, then the returned value is a compiled
+  Julia function which utilizes GeneralizedGenerated.jl in order to world-age
+  free.
+
+Keyword Arguments:
+
+- `checkbounds`: For whether to enable bounds checking inside of the generated
+  function. Defaults to false, meaning that `@inbounds` is applied.
+- `constructor`: Allows for an arbitrary constructor function to be passed in
+  for handling expressions of "weird" types. Defaults to nothing.
+- `linenumbers`: Determines whether the generated function expression retains
+  the line numbers. Defaults to true.
+- `target`: The output target of the compilation process. Possible options are:
+    - `JuliaTarget`: Generates a Julia function
+    - `CTarget`: Generates a C function
+    - `StanTarget`: Generates a function for compiling with the Stan probabilistic
+      programming language
+    - `MATLABTarget`: Generates an anonymous function for use in MATLAB and Octave
+      environments
+"""
 function build_function(args...;target = JuliaTarget(),kwargs...)
   _build_function(target,args...;kwargs...)
 end

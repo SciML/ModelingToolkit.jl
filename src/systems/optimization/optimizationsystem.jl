@@ -4,7 +4,7 @@ $(TYPEDEF)
 A scalar equation for optimization.
 
 # Fields
-* `op` - The objective function
+$(FIELDS)
 
 # Examples
 
@@ -70,6 +70,12 @@ end
 equations(sys::OptimizationSystem) = isempty(sys.systems) ? sys.op : sys.op + reduce(+,namespace_operation.(sys.systems))
 namespace_operation(sys::OptimizationSystem) = namespace_operation(sys.op,sys.name,nothing)
 
+"""
+$(TYPEDEF)
+
+Generates an OptimizationProblem from an OptimizationSystem and allows for automatically
+symbolically calculating numerical enhancements.
+"""
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
                                           parammap=DiffEqBase.NullParameters();
                                           u0=nothing, lb=nothing, ub=nothing,

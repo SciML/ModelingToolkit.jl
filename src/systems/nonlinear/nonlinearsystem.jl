@@ -4,7 +4,7 @@ $(TYPEDEF)
 A nonlinear system of equations.
 
 # Fields
-* `eqs` - Vector of equations defining the system.
+$(FIELDS)
 
 # Examples
 
@@ -76,6 +76,12 @@ function generate_function(sys::NonlinearSystem, vs = states(sys), ps = paramete
     return build_function(rhss, vs′, ps′, (), NLSysToExpr(sys), expression; kwargs...)
 end
 
+"""
+$(TYPEDEF)
+
+Generates an NonlinearProblem from a NonlinearSystem and allows for automatically
+symbolically calculating numerical enhancements.
+"""
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,tspan,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,

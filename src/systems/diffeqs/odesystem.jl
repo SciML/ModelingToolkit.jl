@@ -4,9 +4,9 @@ $(TYPEDEF)
 A system of ordinary differential equations.
 
 # Fields
-* `eqs` - The ODEs defining the system.
+$(FIELDS)
 
-# Examples
+# Example
 
 ```
 using ModelingToolkit
@@ -19,7 +19,7 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-de = ODESystem(eqs)
+de = ODESystem(eqs,[x,y,z],[σ,ρ,β])
 ```
 """
 struct ODESystem <: AbstractODESystem

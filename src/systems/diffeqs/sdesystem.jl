@@ -1,8 +1,36 @@
+"""
+$(TYPEDEF)
+
+A system of stochastic differential equations.
+
+# Fields
+$(FIELDS)
+
+# Example
+
+```
+using ModelingToolkit
+
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
+
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
+
+noiseeqs = [0.1*x,
+            0.1*y,
+            0.1*z]
+
+de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β])
+```
+"""
 struct SDESystem <: AbstractODESystem
     """The expressions defining the drift term."""
     eqs::Vector{Equation}
     """The expressions defining the diffusion term."""
-    noiseeqs
+    noiseeqs::AbstractArray{Operation}
     """Independent variable."""
     iv::Variable
     """Dependent (state) variables."""
@@ -122,6 +150,12 @@ function rename(sys::SDESystem,name)
     ODESystem(sys.eqs, sys.noiseeqs, sys.iv, sys.states, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
 end
 
+"""
+$(TYPEDEF)
+
+Generates an SDEProblem from an SDESystem and allows for automatically
+symbolically calculating numerical enhancements.
+"""
 function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,

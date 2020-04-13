@@ -174,6 +174,12 @@ function DiffEqBase.ODEProblem(sys::AbstractODESystem, args...; kwargs...)
     ODEProblem{true}(sys, args...; kwargs...)
 end
 
+"""
+$(TYPEDEF)
+
+Generates an ODEProblem from an ODESystem and allows for automatically
+symbolically calculating numerical enhancements.
+"""
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,

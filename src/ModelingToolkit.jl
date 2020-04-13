@@ -66,9 +66,9 @@ function independent_variables end
 """
 $(TYPEDSIGNATURES)
 
-Get the set of dependent variables for the given system.
+Get the set of states for the given system.
 """
-function dependent_variables end
+function states end
 
 """
 $(TYPEDSIGNATURES)
