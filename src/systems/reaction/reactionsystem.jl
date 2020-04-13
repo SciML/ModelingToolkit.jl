@@ -79,7 +79,8 @@ function assemble_drift(rs)
         for (spec,stoich) in rx.netstoich
             i = species_to_idx[spec]
             if iszero(eqs[i].rhs)
-                rhs = isone(stoich) ? rl : stoich * rl                
+                signedrl = (stoich > zero(stoich)) ? rl : -rl
+                rhs      = isone(abs(stoich)) ? signedrl : stoich * rl                
             else
                 Δspec = isone(abs(stoich)) ? rl : abs(stoich) * rl            
                 rhs   = (stoich > zero(stoich)) ? (eqs[i].rhs + Δspec) : (eqs[i].rhs - Δspec)
@@ -97,8 +98,9 @@ function assemble_diffusion(rs)
     for (j,rx) in enumerate(rs.eqs)
         rlsqrt = sqrt(oderatelaw(rx))
         for (spec,stoich) in rx.netstoich
-            i        = species_to_idx[spec]
-            eqs[i,j] = isone(stoich) ? rlsqrt : stoich * rlsqrt            
+            i            = species_to_idx[spec]
+            signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
+            eqs[i,j]     = isone(abs(stoich)) ? signedrlsqrt : stoich * rlsqrt            
         end
     end
     eqs
