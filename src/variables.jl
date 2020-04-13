@@ -218,7 +218,7 @@ z
  z₁(t())
  z₂(t())
  z₃(t())
- ```
+```
 """
 macro variables(xs...)
     esc(_parse_vars(:variables, Number, xs))

@@ -42,12 +42,12 @@ struct ODESystem <: AbstractODESystem
     """
     jac::RefValue{Matrix{Expression}}
     """
-    Wfact matrix. Note: this field will not be defined until
+    `Wfact` matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
     """
     Wfact::RefValue{Matrix{Expression}}
     """
-    Wfact_t matrix. Note: this field will not be defined until
+    `Wfact_t` matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
     """
     Wfact_t::RefValue{Matrix{Expression}}
