@@ -79,16 +79,12 @@ function assemble_drift(rs)
         for (spec,stoich) in rx.netstoich
             i = species_to_idx[spec]
             if iszero(eqs[i].rhs)
-                Δspec  = isone(stoich) ? rl : stoich * rl            
-                eqs[i] = Equation(eqs[i].lhs, Δspec)
+                rhs = isone(stoich) ? rl : stoich * rl                
             else
                 Δspec = isone(abs(stoich)) ? rl : abs(stoich) * rl            
-                if stoich > zero(stoich)
-                    eqs[i] = Equation(eqs[i].lhs, eqs[i].rhs + Δspec)
-                else
-                    eqs[i] = Equation(eqs[i].lhs, eqs[i].rhs - Δspec)
-                end
+                rhs   = (stoich > zero(stoich)) ? (eqs[i].rhs + Δspec) : (eqs[i].rhs - Δspec)
             end
+            eqs[i] = Equation(eqs[i].lhs, rhs)
         end
     end
     eqs
