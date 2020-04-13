@@ -53,27 +53,14 @@ function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = paramete
     if sparse
         jac = SparseArrays.sparse(jac)
     end
-    return build_function(jac, convert.(Variable,vs), convert.(Variable,ps), (), NLSysToExpr(sys))
+    return build_function(jac, convert.(Variable,vs), convert.(Variable,ps), (), AbstractSysToExpr(sys))
 end
-
-struct NLSysToExpr
-    sys::NonlinearSystem
-end
-function (f::NLSysToExpr)(O::Operation)
-    any(isequal(O), f.sys.states) && return O.op.name  # variables
-    if isa(O.op, Variable)
-        isempty(O.args) && return O.op.name  # 0-ary parameters
-        return build_expr(:call, Any[O.op.name; f.(O.args)])
-    end
-    return build_expr(:call, Any[O.op; f.(O.args)])
-end
-(f::NLSysToExpr)(x) = convert(Expr, x)
 
 function generate_function(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
     rhss = [eq.rhs for eq ∈ sys.eqs]
     vs′ = convert.(Variable,vs)
     ps′ = convert.(Variable,ps)
-    return build_function(rhss, vs′, ps′, (), NLSysToExpr(sys), expression; kwargs...)
+    return build_function(rhss, vs′, ps′, (), AbstractSysToExpr(sys), expression; kwargs...)
 end
 
 """

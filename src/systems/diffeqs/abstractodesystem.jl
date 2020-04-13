@@ -22,11 +22,13 @@ end
 
 struct ODEToExpr
     sys::AbstractODESystem
+    states::Vector{Variable}
 end
+ODEToExpr(sys) = ODEToExpr(sys,states(sys))
 function (f::ODEToExpr)(O::Operation)
     if isa(O.op, Variable)
         isequal(O.op, f.sys.iv) && return O.op.name  # independent variable
-        O.op ∈ f.sys.states        && return O.op.name  # dependent variables
+        O.op ∈ f.states         && return O.op.name  # dependent variables
         isempty(O.args)         && return O.op.name  # 0-ary parameters
         return build_expr(:call, Any[O.op.name; f.(O.args)])
     end
