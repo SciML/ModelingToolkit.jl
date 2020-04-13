@@ -1,5 +1,4 @@
-using Documenter, ModelingToolkit, DiffEqBase
-
+using Documenter, ModelingToolkit
 
 makedocs(
     sitename="ModelingToolkit.jl",

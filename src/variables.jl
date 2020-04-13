@@ -17,10 +17,32 @@ end
 """
 $(TYPEDEF)
 
-A named variable which represents a numerical value.
+A named variable which represents a numerical value. The variable is uniquely
+identified by its `name`, and all variables with the same `name` are treated
+as equal.
 
 # Fields
 $(FIELDS)
+
+For example, the following code defines an independent variable `t`, a parameter
+`α`, a function parameter `σ`, a variable `x` which depends on `t`, a variable
+`y` with no dependents, a variable `z` which depends on `t`, `α`, and `x(t)`
+and a parameters `β₁` and `β₂`.
+
+
+```julia
+t = Variable(:t)()  # independent variables are treated as known
+α = Variable(:α)()  # parameters are known
+σ = Variable(:σ)    # left uncalled, since it is used as a function
+w = Variable(:w)   # unknown, left uncalled
+x = Variable(:x)(t)  # unknown, depends on `t`
+y = Variable(:y)()   # unknown, no dependents
+z = Variable(:z)(t, α, x)  # unknown, multiple arguments
+β₁ = Variable(:β, 1)() # with index 1
+β₂ = Variable(:β, 2)() # with index 2
+
+expr = β₁ * x + y^α + σ(3) * (z - t) - β₂ * w(t - 1)
+```
 """
 struct Variable{T} <: Function
     """The variable's unique name."""
@@ -157,6 +179,48 @@ end
 $(SIGNATURES)
 
 Define one or more unknown variables.
+
+```julia
+@parameters t α σ(..) β[1:2]
+@variables w(..) x(t) y() z(t, α, x)
+
+expr = β₁* x + y^α + σ(3) * (z - t) - β₂ * w(t - 1)
+```
+
+Note that `@parameters` and `@variables` implicitly add `()` to values that
+are not given a call. The former specifies the values as known, while the
+latter specifies it as unknown. `(..)` signifies that the value should be
+left uncalled.
+
+Sometimes it is convenient to define arrays of variables to model things like `x₁,…,x₃`.
+The `@variables` and `@parameters` macros support this with the following syntax:
+
+```julia
+@variables x[1:3];
+x
+
+3-element Array{Operation,1}:
+ x₁()
+ x₂()
+ x₃()
+
+# support for arbitrary ranges and tensors
+@variables y[2:3,1:5:6];
+y
+
+2×2 Array{Operation,2}:
+    y₂̒₁() y₂̒₆()
+    y₃̒₁() y₃̒₆()
+
+# also works for dependent variables
+@parameters t; @variables z[1:3](t);
+z
+
+3-element Array{Operation,1}:
+ z₁(t())
+ z₂(t())
+ z₃(t())
+ ```
 """
 macro variables(xs...)
     esc(_parse_vars(:variables, Number, xs))

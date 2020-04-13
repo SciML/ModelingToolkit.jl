@@ -12,6 +12,12 @@ function flatten_differential(O::Operation)
     return (x, t, order + 1)
 end
 
+"""
+ode_order_lowering(sys::ODESystem)
+
+Takes a Nth order ODESystem and returns a new ODESystem written in first order
+form by defining new variables which represent the N-1 derivatives.
+"""
 function ode_order_lowering(sys::ODESystem)
     eqs_lowered, _ = ode_order_lowering(sys.eqs, sys.iv)
     ODESystem(eqs_lowered, sys.iv, [var_from_nested_derivative(eq.lhs)[1] for eq in eqs_lowered], sys.ps)

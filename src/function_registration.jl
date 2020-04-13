@@ -2,7 +2,14 @@
 """
 $(SIGNATURES)
 
-TODO
+Registers a function call as a primative for the `Operation` graph of the
+ModelingToolkit IR. Example:
+
+```julia
+@register f(x,y)
+```
+
+registers `f` as a possible two-argument function.
 """
 macro register(sig)
     splitsig = splitdef(:($sig = nothing))
