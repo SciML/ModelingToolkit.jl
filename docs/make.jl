@@ -4,7 +4,7 @@ makedocs(
     sitename="ModelingToolkit.jl",
     authors="Chris Rackauckas",
     modules=[ModelingToolkit],
-    clean=true,
+    clean=true,doctest=false,
     format = Documenter.HTML(#analytics = "UA-90474609-3",
                              assets = ["assets/favicon.ico"],
                              canonical="https://docs.sciml.ai/stable/"),
