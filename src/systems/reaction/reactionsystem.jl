@@ -11,20 +11,24 @@ end
 function Reaction(rate, subs, prods, substoich, prodstoich; 
                   netstoich=nothing, only_use_rate=false, kwargs...)
 
-    ns = isnothing(netstoich) ? get_netstoich(subs, prods, substoich, prodstoich) : netstoich
-    Reaction(rate, subs, prods, substoich, prodstoich, ns, only_use_rate)
+    subsv  = isnothing(subs) ? Vector{Operation}() : subs
+    prodsv = isnothing(prods) ? Vector{Operation}() : prods
+    ns = isnothing(netstoich) ? get_netstoich(subsv, prodsv, substoich, prodstoich) : netstoich
+    Reaction(rate, subsv, prodsv, substoich, prodstoich, ns, only_use_rate)
 end
 
 # three argument constructor assumes stoichiometric coefs are one and integers
-Reaction(rate, subs, prods; kwargs...) = Reaction(rate, subs, prods,
-                                                  ones(Int,length(subs)),
-                                                  ones(Int,length(prods)); 
-                                                  kwargs...)
+function Reaction(rate, subs, prods; kwargs...) 
+
+    sstoich = isnothing(subs) ? Int[] : ones(Int,length(subs))
+    pstoich = isnothing(prods) ? Int[] : ones(Int,length(prods))
+    Reaction(rate, subs, prods, sstoich, pstoich; kwargs...)
+end
 
 # calculates the net stoichiometry of a reaction as a vector of pairs (sub,substoich)
 function get_netstoich(subs, prods, sstoich, pstoich)
     # stoichiometry as a Dictionary
-    nsdict = Dict(sub.op => -sstoich[i] for (i,sub) in enumerate(subs))
+    nsdict = Dict{Variable,eltype(sstoich)}(sub.op => -sstoich[i] for (i,sub) in enumerate(subs))
     for (i,p) in enumerate(prods)
         coef = pstoich[i]
         prod = p.op
