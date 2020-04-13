@@ -125,9 +125,13 @@ end
 function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
+                                    checkbounds = false,
+                                    linenumbers = true, multithread=false,
                                     kwargs...) where iip
-    f = SDEFunction(sys)
+
+    f = SDEFunction(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
+                        linenumbers=linenumbers,multithread=multithread)
     u0 = varmap_to_vars(u0map,states(sys))
     p = varmap_to_vars(parammap,parameters(sys))
-    SDEProblem(f,g,u0,tspan,p;kwargs...)
+    SDEProblem(f,f.g,u0,tspan,p;kwargs...)
 end
