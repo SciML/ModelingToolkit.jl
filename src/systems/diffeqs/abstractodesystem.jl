@@ -39,8 +39,11 @@ function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = paramete
     return build_function(tgrad, dvs, ps, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
 end
 
-function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
     jac = calculate_jacobian(sys)
+    if sparse
+        jac = sparse(jac)
+    end
     return build_function(jac, dvs, ps, (sys.iv.name,), ODEToExpr(sys), expression; kwargs...)
 end
 
@@ -121,7 +124,8 @@ respectively.
 function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing, tgrad=false,
-                                     jac = false, Wfact = false, kwargs...) where {iip}
+                                     jac = false, Wfact = false,
+                                     kwargs...) where {iip}
     f_oop,f_iip = generate_function(sys, dvs, ps, Val{false}; kwargs...)
 
     f(u,p,t) = f_oop(u,p,t)
@@ -173,11 +177,12 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
-                                    checkbounds = false,
+                                    checkbounds = false, sparse = false,
                                     linenumbers = true, multithread=false,
                                     kwargs...) where iip
     f = ODEFunction(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
-                        linenumbers=linenumbers,multithread=multithread)
+                        linenumbers=linenumbers,multithread=multithread,
+                        sparse=sparse)
     u0 = varmap_to_vars(u0map,states(sys))
     p = varmap_to_vars(parammap,parameters(sys))
     ODEProblem(f,u0,tspan,p;kwargs...)

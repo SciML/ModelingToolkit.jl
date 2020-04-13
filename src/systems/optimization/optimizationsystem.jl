@@ -52,8 +52,12 @@ function calculate_hessian(sys::OptimizationSystem)
     expand_derivatives.(hessian(equations(sys), [dv() for dv in states(sys)]))
 end
 
-function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys), expression = Val{true};
+                          sparse = false, kwargs...)
     hes = calculate_hessian(sys)
+    if sparse
+        hes = sparse(hes)
+    end
     return build_function(hes, convert.(Variable,vs), convert.(Variable,ps), (), x->convert(Expr, x); kwargs...)
 end
 
@@ -69,7 +73,7 @@ namespace_operation(sys::OptimizationSystem) = namespace_operation(sys.op,sys.na
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
                                           parammap=DiffEqBase.NullParameters();
                                           u0=nothing, lb=nothing, ub=nothing,
-                                          hes = false,
+                                          hes = false, sparse = false,
                                           checkbounds = false,
                                           linenumbers = true, multithread=false,
                                           kwargs...) where iip
@@ -77,7 +81,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
     ps = parameters(sys)
 
     f = generate_function(sys,checkbounds=checkbounds,linenumbers=linenumbers,
-                              multithread=multithread)
+                              multithread=multithread,sparse=sparse)
     u0 = varmap_to_vars(u0,dvs)
     p = varmap_to_vars(parammap,ps)
     lb = varmap_to_vars(lb,dvs)
