@@ -434,10 +434,10 @@ syntactic sugar in some form. For example, the variable construction:
 is syntactic sugar for:
 
 ```julia
-t = Variable(:t; known = true)()
-σ = Variable(:σ; known = true)()
-ρ = Variable(:ρ; known = true)()
-β = [Variable(:β, i; known = true)() for i in 1:3]
+t = Variable(:t)()
+σ = Variable(:σ)()
+ρ = Variable(:ρ)()
+β = [Variable(:β, i)() for i in 1:3]
 x = Variable(:x)(t)
 y = Variable(:y)(t)
 z = Variable(:z)(t)
