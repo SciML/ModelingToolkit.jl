@@ -4,6 +4,7 @@ using DiffEqBase, Distributed
 using StaticArrays, LinearAlgebra, SparseArrays
 using Latexify, Unitful, ArrayInterface
 using MacroTools
+using UnPack: @unpack
 
 using Base.Threads
 import MacroTools: splitdef, combinedef, postwalk, striplines

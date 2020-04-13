@@ -1,8 +1,46 @@
-struct Reaction
+struct Reaction{S <: Variable, T <: Number}
     rate
-    reactants::Vector{Operation}
+    substrates::Vector{Operation}
     products::Vector{Operation}
+    substoich::Vector{T}
+    prodstoich::Vector{T}    
+    netstoich::Vector{Pair{S,T}}
+    only_use_rate::Bool
 end
+
+function Reaction(rate, subs, prods, substoich, prodstoich; 
+                  netstoich=nothing, only_use_rate=false, kwargs...)
+
+    subsv  = isnothing(subs) ? Vector{Operation}() : subs
+    prodsv = isnothing(prods) ? Vector{Operation}() : prods
+    ns = isnothing(netstoich) ? get_netstoich(subsv, prodsv, substoich, prodstoich) : netstoich
+    Reaction(rate, subsv, prodsv, substoich, prodstoich, ns, only_use_rate)
+end
+
+# three argument constructor assumes stoichiometric coefs are one and integers
+function Reaction(rate, subs, prods; kwargs...) 
+
+    sstoich = isnothing(subs) ? Int[] : ones(Int,length(subs))
+    pstoich = isnothing(prods) ? Int[] : ones(Int,length(prods))
+    Reaction(rate, subs, prods, sstoich, pstoich; kwargs...)
+end
+
+# calculates the net stoichiometry of a reaction as a vector of pairs (sub,substoich)
+function get_netstoich(subs, prods, sstoich, pstoich)
+    # stoichiometry as a Dictionary
+    nsdict = Dict{Variable,eltype(sstoich)}(sub.op => -sstoich[i] for (i,sub) in enumerate(subs))
+    for (i,p) in enumerate(prods)
+        coef = pstoich[i]
+        prod = p.op
+        @inbounds nsdict[prod] = haskey(nsdict, prod) ? nsdict[prod] + coef : coef
+    end
+
+    # stoichiometry as a vector
+    ns = [el for el in nsdict if el[2] != zero(el[2])]
+
+    ns
+end
+
 
 struct ReactionSystem <: AbstractSystem
     eqs::Vector{Reaction}
@@ -13,59 +51,74 @@ struct ReactionSystem <: AbstractSystem
     systems::Vector{ReactionSystem}
 end
 
-function ReactionSystem(eqs,iv,dvs,ps;
-                        systems = ReactionSystem[],
-                        name=gensym(:ReactionSystem))
-    ReactionSystem(eqs,iv,convert.(Variable,dvs),convert.(Variable,ps),name,systems)
+function ReactionSystem(eqs, iv, species, params; systems = ReactionSystem[],
+                                                  name = gensym(:ReactionSystem))
+
+    ReactionSystem(eqs, iv, convert.(Variable,species), convert.(Variable,params), 
+                   name, systems)
 end
 
-# TODO: Make it do the combinatorics stuff
-reaction_expr(reactants) = *(reactants...)
-
-function essemble_drift(rs)
-    D = Differential(rs.iv())
-    eqs = [D(x(rs.iv())) ~ 0 for x in rs.states]
-
-    for rx in rs.eqs
-        for reactant in rx.reactants
-            i = findfirst(x->x == reactant.op,rs.states)
-            eqs[i] = Equation(eqs[i].lhs,eqs[i].rhs - rx.rate * reaction_expr(rx.reactants))
+# Calculate the ODE rate law
+function oderatelaw(rx)
+    @unpack rate, substrates, substoich, only_use_rate = rx    
+    rl = rate
+    if !only_use_rate
+        coef = one(eltype(substoich))
+        for (i,stoich) in enumerate(substoich)
+            coef *= factorial(stoich)        
+            rl   *= isone(stoich) ? substrates[i] : substrates[i]^stoich
         end
+        (!isone(coef)) && (rl /= coef)
+    end
+    rl
+end
 
-        for product in rx.products
-            i = findfirst(x->x == product.op,rs.states)
-            eqs[i] = Equation(eqs[i].lhs,eqs[i].rhs + rx.rate * reaction_expr(rx.reactants))
+function assemble_drift(rs)
+    D   = Differential(rs.iv())
+    eqs = [D(x(rs.iv())) ~ 0 for x in rs.states]
+    species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
+
+    for rx in rs.eqs        
+        rl = oderatelaw(rx)
+        for (spec,stoich) in rx.netstoich
+            i = species_to_idx[spec]
+            if iszero(eqs[i].rhs)
+                signedrl = (stoich > zero(stoich)) ? rl : -rl
+                rhs      = isone(abs(stoich)) ? signedrl : stoich * rl                
+            else
+                Δspec = isone(abs(stoich)) ? rl : abs(stoich) * rl            
+                rhs   = (stoich > zero(stoich)) ? (eqs[i].rhs + Δspec) : (eqs[i].rhs - Δspec)
+            end
+            eqs[i] = Equation(eqs[i].lhs, rhs)
         end
     end
     eqs
 end
 
-function essemble_diffusion(rs)
+function assemble_diffusion(rs)
     eqs = Expression[Constant(0) for x in rs.states, y in rs.eqs]
+    species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for (j,rx) in enumerate(rs.eqs)
-        for reactant in rx.reactants
-            i = findfirst(x->x == reactant.op,rs.states)
-            eqs[i,j] = -sqrt(rx.rate) * reaction_expr(rx.reactants)
-        end
-
-        for product in rx.products
-            i = findfirst(x->x == product.op,rs.states)
-            eqs[i,j] = sqrt(rx.rate) * reaction_expr(rx.reactants)
+        rlsqrt = sqrt(oderatelaw(rx))
+        for (spec,stoich) in rx.netstoich
+            i            = species_to_idx[spec]
+            signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
+            eqs[i,j]     = isone(abs(stoich)) ? signedrlsqrt : stoich * rlsqrt            
         end
     end
     eqs
 end
 
 function Base.convert(::Type{<:ODESystem},rs::ReactionSystem)
-    eqs = essemble_drift(rs)
+    eqs = assemble_drift(rs)
     ODESystem(eqs,rs.iv,rs.states,rs.ps,name=rs.name,
               systems=convert.(ODESystem,rs.systems))
 end
 
 function Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
-    eqs = essemble_drift(rs)
-    noiseeqs = essemble_diffusion(rs)
+    eqs = assemble_drift(rs)
+    noiseeqs = assemble_diffusion(rs)
     SDESystem(eqs,noiseeqs,rs.iv,rs.states,rs.ps,
               name=rs.name,systems=convert.(SDESystem,rs.systems))
 end
