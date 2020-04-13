@@ -42,7 +42,7 @@ sys = ODESystem(eqs)
 sys = ode_order_lowering(sys)
 
 u0 = [D(x) => 2.0,
-	  x => 1.0,
+      x => 1.0,
       y => 0.0,
       z => 0.0]
 
@@ -53,6 +53,7 @@ p  = [σ => 28.0,
 tspan = (0.0,100.0)
 prob = ODEProblem(sys,u0,tspan,p,jac=true)
 sol = solve(prob,Tsit5())
+using Plots; plot(sol,vars=(:x,:y))
 ```
 
 ![Lorenz2](https://user-images.githubusercontent.com/1814174/79118645-744eb580-7d5c-11ea-9c37-13c4efd585ca.png)
@@ -77,26 +78,28 @@ lorenz2 = ODESystem(eqs,name=:lorenz2)
 
 @variables α
 @parameters γ
-connections = [0 ~ lorenz1.x + lorenz2.y + sin(α*γ)]
+connections = [0 ~ lorenz1.x + lorenz2.y + α*γ]
 connected = ODESystem(connections,t,[α],[γ],systems=[lorenz1,lorenz2])
 
 u0 = [lorenz1.x => 1.0,
       lorenz1.y => 0.0,
       lorenz1.z => 0.0,
-	lorenz2.x => 1.0,
-	lorenz2.y => 0.0,
-	lorenz2.z => 0.0,
-	α => 2.0]
+	  lorenz2.x => 0.0,
+	  lorenz2.y => 1.0,
+	  lorenz2.z => 0.0,
+	  α => 2.0]
 
-p  = [lorenz1.σ => 28.0,
-      lorenz1.ρ => 10.0,
+p  = [lorenz1.σ => 10.0,
+      lorenz1.ρ => 28.0,
       lorenz1.β => 8/3,
-	lorenz2.σ => 28.0,
-	lorenz2.ρ => 10.0,
-	lorenz2.β => 8/3,
-	γ => 2.0]
+	  lorenz2.σ => 10.0,
+	  lorenz2.ρ => 28.0,
+	  lorenz2.β => 8/3,
+	  γ => 2.0]
 
 tspan = (0.0,100.0)
 prob = ODEProblem(connected,u0,tspan,p)
 sol = solve(prob,Rodas5())
+
+using Plots; plot(sol,vars=(:α,Symbol(lorenz1.x),Symbol(lorenz2.y)))
 ```
