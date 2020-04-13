@@ -1,13 +1,37 @@
+"""
+```julia
+gradient(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+```
+
+A helper function for computing the gradient of an expression with respect to
+an array of variable expressions.
+"""
 function gradient(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
     out = [expand_derivatives(Differential(v)(O)) for v in vars]
     simplify ? simplify_constants.(out) : out
 end
 
+"""
+```julia
+jacobian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+```
+
+A helper function for computing the Jacobian of an array of expressions with respect to
+an array of variable expressions.
+"""
 function jacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
     out = [expand_derivatives(Differential(v)(O)) for O in ops, v in vars]
     simplify ? simplify_constants.(out) : out
 end
 
+"""
+```julia
+hessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+```
+
+A helper function for computing the Hessian of an expression with respect to
+an array of variable expressions.
+"""
 function hessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
     out = [expand_derivatives(Differential(v2)(Differential(v1)(O))) for v1 in vars, v2 in vars]
     simplify ? simplify_constants.(out) : out

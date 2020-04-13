@@ -50,7 +50,15 @@ of the differentials down to basic one-variable expressions.
 Differential
 expand_derivatives
 ModelingToolkit.derivative
+ModelingToolkit.gradient
+ModelingToolkit.jacobian
+ModelingToolkit.hessian
 ```
+
+Note that generation of sparse matrices simply follows from the Julian semantics
+imbued on the IR, so `sparse(jac)` changes a dense Jacobian to a sparse Jacobian
+matrix.
+
 ### Adding Derivatives
 
 There is a large amount of derivatives pre-defined by
