@@ -26,25 +26,25 @@ for i in 1:3
     ∇ = ModelingToolkit.gradient(eqs[i],[x,y,z])
     @test isequal(∂[i,:],∇)
 end
-                   
+
 @test all(isequal.(ModelingToolkit.gradient(eqs[1],[x,y,z]),[σ * -1,σ,0]))
 @test all(isequal.(ModelingToolkit.hessian(eqs[1],[x,y,z]),0))
 
-Joop,Jiip = eval.(ModelingToolkit.build_function(∂,[x,y,z],[σ,ρ,β],[t.op.name]))
+Joop,Jiip = eval.(ModelingToolkit.build_function(∂,[x,y,z],[σ,ρ,β],t))
 J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test J isa Matrix
 J2 = copy(J)
 Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test J2 == J
 
-Joop,Jiip = eval.(ModelingToolkit.build_function(vcat(∂,∂),[x,y,z],[σ,ρ,β],[t.op.name]))
+Joop,Jiip = eval.(ModelingToolkit.build_function(vcat(∂,∂),[x,y,z],[σ,ρ,β],t))
 J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test J isa Matrix
 J2 = copy(J)
 Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test J2 == J
 
-Joop,Jiip = eval.(ModelingToolkit.build_function(hcat(∂,∂),[x,y,z],[σ,ρ,β],[t.op.name]))
+Joop,Jiip = eval.(ModelingToolkit.build_function(hcat(∂,∂),[x,y,z],[σ,ρ,β],t))
 J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test J isa Matrix
 J2 = copy(J)
@@ -52,7 +52,7 @@ Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test J2 == J
 
 ∂3 = cat(∂,∂,dims=3)
-Joop,Jiip = eval.(ModelingToolkit.build_function(∂3,[x,y,z],[σ,ρ,β],[t.op.name]))
+Joop,Jiip = eval.(ModelingToolkit.build_function(∂3,[x,y,z],[σ,ρ,β],t))
 J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test size(J) == (3,3,2)
 J2 = copy(J)
@@ -61,7 +61,7 @@ Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 
 s∂ = sparse(∂)
 @test nnz(s∂) == 8
-Joop,Jiip = eval.(ModelingToolkit.build_function(s∂,[x,y,z],[σ,ρ,β],[t.op.name]))
+Joop,Jiip = eval.(ModelingToolkit.build_function(s∂,[x,y,z],[σ,ρ,β],t,linenumbers=true))
 J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test length(nonzeros(s∂)) == 8
 J2 = copy(J)
@@ -89,7 +89,7 @@ function test_worldage()
    eqs = [σ*(y-x),
           x*(ρ-z)-y,
           x*y - β*z]
-   f, f_iip = ModelingToolkit.build_function(eqs,[x,y,z],[σ,ρ,β],(),ModelingToolkit.simplified_expr,Val{false})
+   f, f_iip = ModelingToolkit.build_function(eqs,[x,y,z],[σ,ρ,β];expression=Val{false})
    out = [1.0,2,3]
    o1 = f([1.0,2,3],[1.0,2,3])
    f_iip(out,[1.0,2,3],[1.0,2,3])
@@ -114,7 +114,7 @@ function test_worldage()
    eqs = [(y-x)^2,
           x*(x-z)-y,
           x*y - y*z]
-   f, f_iip = ModelingToolkit.build_function(eqs,[x,y,z],(),(),ModelingToolkit.simplified_expr,Val{false})
+   f, f_iip = ModelingToolkit.build_function(eqs,[x,y,z];expression=Val{false})
    out = zeros(3)
    o1 = f([1.0,2,3])
    f_iip(out,[1.0,2,3])
