@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit, OrdinaryDiffEq, Test
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
@@ -60,5 +60,5 @@ p  = [lorenz1.σ => 10.0,
 tspan = (0.0,100.0)
 prob = ODEProblem(connected,u0,tspan,p)
 sol = solve(prob,Rodas5())
-
+@test maximum(sol[2,:] + sol[6,:] + 2sol[1,:]) < 1e-12
 #using Plots; plot(sol,vars=(:α,Symbol(lorenz1.x),Symbol(lorenz2.y)))
