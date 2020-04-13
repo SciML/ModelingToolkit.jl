@@ -1,4 +1,4 @@
-using ModelingToolkit, LinearAlgebra
+using ModelingToolkit, LinearAlgebra, Test
 
 @parameters t k[1:13]
 @variables A(t) B(t) C(t) D(t)
