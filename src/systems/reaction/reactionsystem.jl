@@ -62,9 +62,9 @@ function oderatelaw(rx)
         coef = one(eltype(substoich))
         for (i,stoich) in enumerate(substoich)
             coef *= factorial(stoich)        
-            rl   *= (stoich != one(stoich)) ? substrates[i]^stoich : substrates[i]
+            rl   *= isone(stoich) ? substrates[i] : substrates[i]^stoich
         end
-        (coef != one(coef)) && (rl /= coef)
+        (!isone(coef)) && (rl /= coef)
     end
     rl
 end
@@ -79,10 +79,10 @@ function assemble_drift(rs)
         for (spec,stoich) in rx.netstoich
             i = species_to_idx[spec]
             if iszero(eqs[i].rhs)
-                Δspec  = (stoich == one(stoich)) ? rl : stoich * rl            
+                Δspec  = isone(stoich) ? rl : stoich * rl            
                 eqs[i] = Equation(eqs[i].lhs, Δspec)
             else
-                Δspec = (abs(stoich) == one(stoich)) ? rl : abs(stoich) * rl            
+                Δspec = isone(abs(stoich)) ? rl : abs(stoich) * rl            
                 if stoich > zero(stoich)
                     eqs[i] = Equation(eqs[i].lhs, eqs[i].rhs + Δspec)
                 else
@@ -102,7 +102,7 @@ function assemble_diffusion(rs)
         rlsqrt = sqrt(oderatelaw(rx))
         for (spec,stoich) in rx.netstoich
             i        = species_to_idx[spec]
-            eqs[i,j] = (stoich == one(stoich)) ? rlsqrt : stoich * rlsqrt            
+            eqs[i,j] = isone(stoich) ? rlsqrt : stoich * rlsqrt            
         end
     end
     eqs
