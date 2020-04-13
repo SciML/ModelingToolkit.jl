@@ -171,3 +171,24 @@ function TreeViews.treelabel(io::IO,x::Variable,
                              mime::MIME"text/plain" = MIME"text/plain"())
   show(io,mime,Text(x.name))
 end
+
+"""
+varmap_to_vars(varmap,varlist)
+
+Takes a list of pairs of variables=>values and an ordered list of variables and
+creates the array of values in the correct order
+"""
+function varmap_to_vars(varmap,varlist)
+    out = similar(varmap,typeof(last(first(varmap))))
+    for i in 1:length(varmap)
+        ivar = convert(Variable,varmap[i][1])
+        j = findfirst(x->ivar.name == convert(Variable,x).name,varlist)
+        out[j] = varmap[i][2]
+    end
+
+    # Make output match varmap in type and shape
+    # Does things like MArray->SArray
+    ArrayInterface.restructure(varmap,out)
+end
+
+varmap_to_vars(varmap::DiffEqBase.NullParameters,varlist) = varmap

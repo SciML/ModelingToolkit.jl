@@ -162,5 +162,20 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                       Wfact = _Wfact,
                       Wfact_t = _Wfact_t,
                       mass_matrix = M,
-                      syms = Symbol.(sys.states))
+                      syms = Symbol.(states(sys)))
+end
+
+function DiffEqBase.ODEProblem(sys::AbstractODESystem, args...; kwargs...)
+    ODEProblem{true}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
+                                    parammap=DiffEqBase.NullParameters();
+                                    version = nothing, tgrad=false,
+                                    jac = false, Wfact = false,
+                                    kwargs...) where iip
+    f = ODEFunction(sys)
+    u0 = varmap_to_vars(u0map,states(sys))
+    p = varmap_to_vars(parammap,parameters(sys))
+    ODEProblem(f,u0,tspan,p;kwargs...)
 end

@@ -121,3 +121,13 @@ end
 function rename(sys::SDESystem,name)
     ODESystem(sys.eqs, sys.noiseeqs, sys.iv, sys.states, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
 end
+
+function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
+                                    version = nothing, tgrad=false,
+                                    jac = false, Wfact = false,
+                                    kwargs...) where iip
+    f = SDEFunction(sys)
+    u0 = varmap_to_vars(u0map,states(sys))
+    p = varmap_to_vars(parammap,parameters(sys))
+    SDEProblem(f,g,u0,tspan,p;kwargs...)
+end
