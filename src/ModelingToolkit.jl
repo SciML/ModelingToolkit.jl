@@ -35,30 +35,6 @@ Base.one(::Type{<:Expression}) = Constant(1)
 """
 $(TYPEDSIGNATURES)
 
-Calculate the jacobian matrix of a system.
-
-Returns a matrix of [`Expression`](@ref) instances. The result from the first
-call will be cached in the system object.
-"""
-function calculate_jacobian end
-
-"""
-$(TYPEDSIGNATURES)
-
-Generate a function to calculate the Jacobian of the system.
-"""
-function generate_jacobian end
-
-"""
-$(TYPEDSIGNATURES)
-
-Generate a function to evaluate the system's equations.
-"""
-function generate_function end
-
-"""
-$(TYPEDSIGNATURES)
-
 Get the set of independent variables for the given system.
 """
 function independent_variables end

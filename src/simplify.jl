@@ -9,6 +9,13 @@ function simplify_constants(O::Operation, shorten_tree)
     end
 end
 simplify_constants(x, shorten_tree) = x
+
+"""
+simplify_constants(x::Operation)
+
+Simplifies the constants within an expression, for example removing equations
+multiplied by a zero and summing constant values.
+"""
 simplify_constants(x) = simplify_constants(x, true)
 
 Base.isone(x::Operation) = x.op == one || x.op == Constant && isone(x.args)

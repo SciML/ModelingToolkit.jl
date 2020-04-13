@@ -14,9 +14,9 @@ OptimizationSystem
 
 ## Transformations
 
-## Function Calculation and Generation
+## Applicable Calculation and Generation Functions
 
-```@docs
+```julia
 calculate_grad
 calculate_hes
 generate_grad

@@ -1,3 +1,100 @@
+"""
+calculate_tgrad(sys::AbstractSystem)
+
+Calculate the time gradient of a system.
+
+Returns a vector of [`Expression`](@ref) instances. The result from the first
+call will be cached in the system object.
+"""
+function calculate_tgrad end
+
+"""
+calculate_grad(sys::AbstractSystem)
+
+Calculate the gradient of a scalar system.
+
+Returns a vector of [`Expression`](@ref) instances. The result from the first
+call will be cached in the system object.
+"""
+function calculate_grad end
+
+"""
+calculate_jacobian(sys::AbstractSystem)
+
+Calculate the jacobian matrix of a system.
+
+Returns a matrix of [`Expression`](@ref) instances. The result from the first
+call will be cached in the system object.
+"""
+function calculate_jacobian end
+
+"""
+calculate_factorized_W(sys::AbstractSystem)
+
+Calculate the factorized W-matrix of a system.
+
+Returns a matrix of [`Expression`](@ref) instances. The result from the first
+call will be cached in the system object.
+"""
+function calculate_factorized_W end
+
+"""
+calculate_hessian(sys::AbstractSystem)
+
+Calculate the hessian matrix of a scalar system.
+
+Returns a matrix of [`Expression`](@ref) instances. The result from the first
+call will be cached in the system object.
+"""
+function calculate_hessian end
+
+"""
+generate_tgrad(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+
+Generates a function for the time gradient of a system. Extra arguments control
+the arguments to the internal [`build_function`](@ref) call.
+"""
+function generate_tgrad end
+
+"""
+generate_grad(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+
+Generates a function for the gradient of a system. Extra arguments control
+the arguments to the internal [`build_function`](@ref) call.
+"""
+function generate_grad end
+
+"""
+generate_jacobian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
+
+Generates a function for the jacobian matrix matrix of a system. Extra arguments control
+the arguments to the internal [`build_function`](@ref) call.
+"""
+function generate_jacobian end
+
+"""
+generate_factorized_W(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
+
+Generates a function for the factorized W-matrix matrix of a system. Extra arguments control
+the arguments to the internal [`build_function`](@ref) call.
+"""
+function generate_factorized_W end
+
+"""
+generate_hessian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
+
+Generates a function for the hessian matrix matrix of a system. Extra arguments control
+the arguments to the internal [`build_function`](@ref) call.
+"""
+function generate_hessian end
+
+"""
+generate_function(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+
+Generate a function to evaluate the system's equations.
+"""
+function generate_function end
+
 function Base.getproperty(sys::AbstractSystem, name::Symbol)
     if name ∈ fieldnames(typeof(sys))
         return getfield(sys,name)

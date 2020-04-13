@@ -41,6 +41,21 @@ which cobble together the generation functionality for a system, for example
 `ODEFunction` can be used to generate a DifferentialEquations-based `ODEFunction`
 with compiled version of the ODE itself, the Jacobian, the mass matrix, etc.
 
+Below are the possible calculation and generation functions:
+
+```@docs
+calculate_tgrad
+calculate_grad
+calculate_jacobian
+calculate_factorized_W
+calculate_hessian
+generate_jacobian
+generate_grad
+generate_tgrad
+generate_factorized_W
+generate_hessian
+```
+
 ## Problem Constructors
 
 At the end, the system types have `DEProblem` constructors, like `ODEProblem`,

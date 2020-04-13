@@ -81,6 +81,11 @@ end
 is_singleton(e) = false
 is_singleton(e::Operation) = e.op isa Variable
 
+"""
+get_variables(O::Operation)
+
+Returns the variables in the Operation
+"""
 get_variables(e::Constant, vars = Operation[]) = vars
 function get_variables(e::Operation, vars = Operation[])
     if is_singleton(e)
@@ -92,6 +97,11 @@ function get_variables(e::Operation, vars = Operation[])
 end
 
 # variable substitution
+"""
+substitute_expr!(expr::Operation, s::Pair{Operation, Operation})
+
+Performs the substitution `Operation => Operation` on the `expr` Operation.
+"""
 substitute_expr!(expr::Constant, s::Pair{Operation, Operation}) = nothing
 function substitute_expr!(expr::Operation, s::Pair{Operation, Operation})
     if !is_singleton(expr)

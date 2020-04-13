@@ -151,7 +151,7 @@ function rename(sys::SDESystem,name)
 end
 
 """
-$(TYPEDEF)
+$(SIGNATURES)
 
 Generates an SDEProblem from an SDESystem and allows for automatically
 symbolically calculating numerical enhancements.

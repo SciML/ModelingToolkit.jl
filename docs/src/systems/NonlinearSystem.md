@@ -14,9 +14,9 @@ NonlinearSystem
 
 ## Transformations
 
-## Function Calculation and Generation
+## Applicable Calculation and Generation Functions
 
-```@docs
+```julia
 calculate_jacobian
 generate_jacobian
 ```

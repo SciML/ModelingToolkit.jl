@@ -19,20 +19,20 @@ ODESystem
 ode_order_lowering
 ```
 
-## Function Calculation and Generation
+## Applicable Calculation and Generation Functions
 
-```@docs
+```julia
 calculate_jacobian
 calculate_tgrad
 calculate_factorized_W
 generate_jacobian
 generate_tgrad
 generate_factorized_W
-ODEFunction
 ```
 
 ## Problem Constructors
 
 ```@docs
+ODEFunction
 ODEProblem
 ```

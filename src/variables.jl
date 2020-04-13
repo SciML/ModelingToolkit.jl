@@ -226,6 +226,11 @@ macro variables(xs...)
     esc(_parse_vars(:variables, Number, xs))
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Renames the variable `x` to have `name`.
+"""
 function rename(x::Variable,name::Symbol)
     Variable{vartype(x)}(name)
 end

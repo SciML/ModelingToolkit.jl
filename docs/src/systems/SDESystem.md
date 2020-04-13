@@ -15,20 +15,20 @@ SDESystem
 
 ## Transformations
 
-## Function Calculation and Generation
+## Applicable Calculation and Generation Functions
 
-```@docs
-calculate_jacobian(sys::ModelingToolkit.AbstractODESystem)
-calculate_tgrad(sys::ModelingToolkit.AbstractODESystem)
-calculate_factorized_W(sys::ModelingToolkit.AbstractODESystem, simplify)
+```julia
+calculate_jacobian
+calculate_tgrad
+calculate_factorized_W
 generate_jacobian
 generate_tgrad
 generate_factorized_W
-SDEFunction
 ```
 
 ## Problem Constructors
 
 ```@docs
+SDEFunction
 SDEProblem
 ```
