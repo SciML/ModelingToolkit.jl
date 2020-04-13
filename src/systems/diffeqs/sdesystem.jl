@@ -87,7 +87,11 @@ function generate_diffusion_function(sys::SDESystem, dvs = sys.states, ps = sys.
 end
 
 """
-$(SIGNATURES)
+```julia
+function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
+                                     version = nothing, tgrad=false, sparse = false,
+                                     jac = false, Wfact = false, kwargs...) where {iip}
+```
 
 Create an `SDEFunction` from the [`SDESystem`](@ref). The arguments `dvs` and `ps`
 are used to set the order of the dependent variable and parameter vectors,
@@ -151,7 +155,14 @@ function rename(sys::SDESystem,name)
 end
 
 """
-$(SIGNATURES)
+```julia
+function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
+                                    version = nothing, tgrad=false,
+                                    jac = false, Wfact = false,
+                                    checkbounds = false, sparse = false,
+                                    linenumbers = true, multithread=false,
+                                    kwargs...)
+```
 
 Generates an SDEProblem from an SDESystem and allows for automatically
 symbolically calculating numerical enhancements.

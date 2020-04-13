@@ -64,7 +64,14 @@ function generate_function(sys::NonlinearSystem, vs = states(sys), ps = paramete
 end
 
 """
-$(TYPEDEF)
+```julia
+function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,tspan,
+                                          parammap=DiffEqBase.NullParameters();
+                                          jac = false, sparse=false,
+                                          checkbounds = false,
+                                          linenumbers = true, multithread=false,
+                                          kwargs...) where iip
+```
 
 Generates an NonlinearProblem from a NonlinearSystem and allows for automatically
 symbolically calculating numerical enhancements.

@@ -76,8 +76,6 @@ end
 $(TYPEDEF)
 
 An expression which wraps a constant numerical value.
-
-The value of the constant can be extracted with [`Base.get`](@ref).
 """
 struct Constant <: Expression
     """The constant's numerical value"""

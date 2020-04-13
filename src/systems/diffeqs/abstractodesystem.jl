@@ -117,7 +117,14 @@ function DiffEqBase.ODEFunction(sys::AbstractODESystem, args...; kwargs...)
 end
 
 """
-$(SIGNATURES)
+```julia
+function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                     ps = parameters(sys);
+                                     version = nothing, tgrad=false,
+                                     jac = false, Wfact = false,
+                                     sparse = false,
+                                     kwargs...) where {iip}
+```
 
 Create an `ODEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `ps`
 are used to set the order of the dependent variable and parameter vectors,
@@ -177,7 +184,15 @@ function DiffEqBase.ODEProblem(sys::AbstractODESystem, args...; kwargs...)
 end
 
 """
-$(TYPEDEF)
+```julia
+function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
+                                    parammap=DiffEqBase.NullParameters();
+                                    version = nothing, tgrad=false,
+                                    jac = false, Wfact = false,
+                                    checkbounds = false, sparse = false,
+                                    linenumbers = true, multithread=false,
+                                    kwargs...) where iip
+```
 
 Generates an ODEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.

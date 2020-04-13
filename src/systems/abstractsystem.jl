@@ -1,5 +1,7 @@
 """
+```julia
 calculate_tgrad(sys::AbstractSystem)
+```
 
 Calculate the time gradient of a system.
 
@@ -9,7 +11,9 @@ call will be cached in the system object.
 function calculate_tgrad end
 
 """
+```julia
 calculate_gradient(sys::AbstractSystem)
+```
 
 Calculate the gradient of a scalar system.
 
@@ -19,7 +23,9 @@ call will be cached in the system object.
 function calculate_gradient end
 
 """
+```julia
 calculate_jacobian(sys::AbstractSystem)
+```
 
 Calculate the jacobian matrix of a system.
 
@@ -29,7 +35,9 @@ call will be cached in the system object.
 function calculate_jacobian end
 
 """
+```julia
 calculate_factorized_W(sys::AbstractSystem)
+```
 
 Calculate the factorized W-matrix of a system.
 
@@ -39,7 +47,9 @@ call will be cached in the system object.
 function calculate_factorized_W end
 
 """
+```julia
 calculate_hessian(sys::AbstractSystem)
+```
 
 Calculate the hessian matrix of a scalar system.
 
@@ -49,7 +59,9 @@ call will be cached in the system object.
 function calculate_hessian end
 
 """
+```julia
 generate_tgrad(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+```
 
 Generates a function for the time gradient of a system. Extra arguments control
 the arguments to the internal [`build_function`](@ref) call.
@@ -57,7 +69,9 @@ the arguments to the internal [`build_function`](@ref) call.
 function generate_tgrad end
 
 """
+```julia
 generate_gradient(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+```
 
 Generates a function for the gradient of a system. Extra arguments control
 the arguments to the internal [`build_function`](@ref) call.
@@ -65,7 +79,9 @@ the arguments to the internal [`build_function`](@ref) call.
 function generate_gradient end
 
 """
+```julia
 generate_jacobian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
+```
 
 Generates a function for the jacobian matrix matrix of a system. Extra arguments control
 the arguments to the internal [`build_function`](@ref) call.
@@ -73,7 +89,9 @@ the arguments to the internal [`build_function`](@ref) call.
 function generate_jacobian end
 
 """
+```julia
 generate_factorized_W(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
+```
 
 Generates a function for the factorized W-matrix matrix of a system. Extra arguments control
 the arguments to the internal [`build_function`](@ref) call.
@@ -81,7 +99,9 @@ the arguments to the internal [`build_function`](@ref) call.
 function generate_factorized_W end
 
 """
+```julia
 generate_hessian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
+```
 
 Generates a function for the hessian matrix matrix of a system. Extra arguments control
 the arguments to the internal [`build_function`](@ref) call.
@@ -89,7 +109,9 @@ the arguments to the internal [`build_function`](@ref) call.
 function generate_hessian end
 
 """
+```julia
 generate_function(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+```
 
 Generate a function to evaluate the system's equations.
 """

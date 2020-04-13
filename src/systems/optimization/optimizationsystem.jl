@@ -71,7 +71,15 @@ equations(sys::OptimizationSystem) = isempty(sys.systems) ? sys.op : sys.op + re
 namespace_operation(sys::OptimizationSystem) = namespace_operation(sys.op,sys.name,nothing)
 
 """
-$(TYPEDEF)
+```julia
+function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
+                                          parammap=DiffEqBase.NullParameters();
+                                          u0=nothing, lb=nothing, ub=nothing,
+                                          hes = false, sparse = false,
+                                          checkbounds = false,
+                                          linenumbers = true, multithread=false,
+                                          kwargs...) where iip
+```
 
 Generates an OptimizationProblem from an OptimizationSystem and allows for automatically
 symbolically calculating numerical enhancements.

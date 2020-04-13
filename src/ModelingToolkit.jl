@@ -98,6 +98,7 @@ include("build_function.jl")
 
 export ODESystem, ODEFunction
 export SDESystem, SDEFunction
+export ODEProblem, SDEProblem, NonlinearProblem, OptimizationProblem
 export NonlinearSystem, OptimizationSystem
 export ode_order_lowering
 export PDESystem
@@ -111,10 +112,12 @@ export Operation, Expression, Variable
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad
 export calculate_gradient, generate_gradient
+export calculate_factorized_W, generate_factorized_W
 export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
 export independent_variable, states, parameters, equations
-export simplified_expr
+export simplified_expr, rename, get_variables, substitute_expr!
+export build_function
 export @register
 export modelingtoolkitize
 export @variables, @parameters
