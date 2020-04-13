@@ -103,3 +103,5 @@ sol = solve(prob,Rodas5())
 
 using Plots; plot(sol,vars=(:α,Symbol(lorenz1.x),Symbol(lorenz2.y)))
 ```
+
+![](https://user-images.githubusercontent.com/1814174/79122361-6fdaca80-7d65-11ea-87fd-0f6c4a85cd0d.png)
