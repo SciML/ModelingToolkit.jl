@@ -12,19 +12,18 @@ generate but also easy for programs to manipulate.
 
 ## Package Overview
 
-ModelingToolkit has 4 layers:
+ModelingToolkit has 3 layers:
 
-1. The high level. This level has syntactic sugar for easily generating
-   ModelingToolkit models. It can be used directly like a DSL for advanced
-   users who want flexibility, and for easily generating DSLs.
-2. The tracing level. This level allows for easily generating ModelingToolkit
-   models directly from Julia code by tracing existing functions and turning
-   them into ModelingToolkit IR and `AbstractSystem`s for symbolic manipulation.
-3. The `AbstractSystem` level. This is the level where content-dependent functionality
+1. The model definition level. This is a high level of syntactic sugar for
+   easily generating ModelingToolkit models. It can be used directly like a DSL
+   for advanced users who want a lot of flexibility in a modeling language.
+   Additionally, automatic tracing functionality allows for easily generating
+   ModelingToolkit models directly from Julia code.
+2. The `AbstractSystem` level. This is the level where content-dependent functionality
    is added, where models such an ordinary differential equation are represented.
    At the system level there are *transformations* which take one system to
    another, and *targets* which output code for numerical solvers.
-4. The IR level, also referred to as the direct level. At this level, one
+3. The IR level, also referred to as the direct level. At this level, one
    directly acts on arrays of `Equation`, `Operation` and `Variable` types to
    generate functions.
 

@@ -51,19 +51,41 @@ p  = [σ => 10.0
       ρ => 28.0
       β => 8/3]
 tspan = (0.0,100.0)
-prob = ODEProblem(sys,u0,tspan,p;jac=true)
+prob = ODEProblem(sys,u0,tspan,p;jac=true,sparse=true)
 ```
 
 Note that the additional `jac=true` tells the system to symbolically generate
-an optimized Jacobian function to enhance the differential equation solvers.
+an optimized Jacobian function to enhance the differential equation solvers,
+and `sparse` tells it to build the ODEProblem with all of the enhancements
+setup for sparse Jacobians.
 
-### Example 2: Building a Component-Based ODEProblem with Sparse Jacobians
+### Example 2: Building a Component-Based ODEProblem
+
+In addition, we can then use ModelingToolkit to compose multiple ODE subsystems.
+Let's define two interacting Lorenz equations:
+
+```julia
+lorenz1 = ODESystem(eqs,name=:lorenz1)
+lorenz2 = ODESystem(eqs,name=:lorenz2)
+
+@variables α
+@parameters γ
+connections = [0 ~ lorenz1.x + lorenz2.y + sin(α*γ)]
+connected = ODESystem(connections,[α],[γ],systems=[lorenz1,lorenz2])
+```
+
+which is now a differential-algebraic equation (DAE) of 7 variables which has
+two independent Lorenz systems and an algebraic equation that determines `α`
+such that an implicit constraint holds. We can then define the resulting
+`ODEProblem` and send it over to DifferentialEquations.jl.
 
 ### Example 3: Building Nonlinear Systems to Solve with NLsolve.jl
 
-We can also build nonlinear systems. Let's say we wanted to solve for the steady
-state of the previous ODE. This is the nonlinear system defined by where the
-derivatives are zero. We use (unknown) variables for our nonlinear system.
+In this example we will go one step deeper and showcase the direct function
+generation capabilities in ModelingToolkit.jl to build nonlinear systems.
+Let's say we wanted to solve for the steady state of the previous ODE. This is
+the nonlinear system defined by where the derivatives are zero. We use (unknown)
+variables for our nonlinear system.
 
 ```julia
 using ModelingToolkit
@@ -150,6 +172,7 @@ which gives:
 Now we can call `nlsolve` by enclosing our parameters into the functions:
 
 ```julia
+using NLsolve
 nlsolve((out, x) -> f(out, x, params), (out, x) -> j!(out, x, params), ones(3))
 ```
 
@@ -174,7 +197,7 @@ Base.:~(::Expression, ::Expression)
 
 ## Additional High Level Explanations and Tips
 
-## The Auto-Detecting System Constructors
+### The Auto-Detecting System Constructors
 
 For the high level interface, the system constructors such as `ODESystem` have
 high level constructors which just take in the required equations and automatically
@@ -184,6 +207,114 @@ The following high level constructors exist:
 ```julia
 ODESystem(eqs)
 NonlinearSystem(eqs)
+```
+
+### Direct Tracing
+
+Because the ModelingToolkit `Expression` types obey Julia-semantics, one can
+directly transform existing Julia functions into ModelingToolkit symbolic
+representations of the function by simply inputting the symbolic values into
+the function and using what is returned. For example, let's take the following
+numerical PDE discretization:
+
+```julia
+using ModelingToolkit, LinearAlgebra, SparseArrays
+
+# Define the constants for the PDE
+const α₂ = 1.0
+const α₃ = 1.0
+const β₁ = 1.0
+const β₂ = 1.0
+const β₃ = 1.0
+const r₁ = 1.0
+const r₂ = 1.0
+const _DD = 100.0
+const γ₁ = 0.1
+const γ₂ = 0.1
+const γ₃ = 0.1
+const N = 8
+const X = reshape([i for i in 1:N for j in 1:N],N,N)
+const Y = reshape([j for i in 1:N for j in 1:N],N,N)
+const α₁ = 1.0.*(X.>=4*N/5)
+
+const Mx = Tridiagonal([1.0 for i in 1:N-1],[-2.0 for i in 1:N],[1.0 for i in 1:N-1])
+const My = copy(Mx)
+Mx[2,1] = 2.0
+Mx[end-1,end] = 2.0
+My[1,2] = 2.0
+My[end,end-1] = 2.0
+
+# Define the discretized PDE as an ODE function
+function f!(du,u,p,t)
+   A = @view  u[:,:,1]
+   B = @view  u[:,:,2]
+   C = @view  u[:,:,3]
+  dA = @view du[:,:,1]
+  dB = @view du[:,:,2]
+  dC = @view du[:,:,3]
+  mul!(MyA,My,A)
+  mul!(AMx,A,Mx)
+  @. DA = _DD*(MyA + AMx)
+  @. dA = DA + α₁ - β₁*A - r₁*A*B + r₂*C
+  @. dB = α₂ - β₂*B - r₁*A*B + r₂*C
+  @. dC = α₃ - β₃*C + r₁*A*B - r₂*C
+end
+```
+
+We can then define the corresponding arrays as ModelingToolkit variables:
+
+```julia
+# Define the initial condition as normal arrays
+@variables du[1:N,1:N,1:3] u[1:N,1:N,1:3] MyA[1:N,1:N] AMx[1:N,1:N] DA[1:N,1:N]
+f!(du,u,nothing,0.0)
+```
+
+The output, here the in-place modified `du`, is a symbolic representation of
+each output of the function. We can then utilize this in the ModelingToolkit
+functionality. For example, let's compute the sparse Jacobian function and
+compile a fast multithreaded version:
+
+```julia
+jac = sparse(ModelingToolkit.jacobian(vec(du),vec(u),simplify=false))
+multithreadedjac = eval(ModelingToolkit.build_function(vec(jac),u,multithread=true)[2])
+```
+
+### modelingtoolkitize
+
+For some `DEProblem` types, automatic tracing functionality is already included
+via the `modelingtoolkitize` function. Take for example the Robertson ODE
+defined as an `ODEProblem` for DifferentialEquations.jl:
+
+```julia
+using DifferentialEquations
+function rober(du,u,p,t)
+  y₁,y₂,y₃ = u
+  k₁,k₂,k₃ = p
+  du[1] = -k₁*y₁+k₃*y₂*y₃
+  du[2] =  k₁*y₁-k₂*y₂^2-k₃*y₂*y₃
+  du[3] =  k₂*y₂^2
+  nothing
+end
+prob = ODEProblem(rober,[1.0,0.0,0.0],(0.0,1e5),(0.04,3e7,1e4))
+```
+
+If we want to get a symbolic representation, we can simply call `modelingtoolkitize`
+on the `prob` which will return an `ODESystem`:
+
+```julia
+sys = modelingtoolkitize(prob)
+```
+
+Using this, we can symbolically build the Jacobian and then rebuild the ODEProblem:
+
+```julia
+jac = eval(ModelingToolkit.generate_jacobian(de...)[2])
+f = ODEFunction(rober, jac=jac)
+prob_jac = ODEProblem(f,[1.0,0.0,0.0],(0.0,1e5),(0.04,3e7,1e4))
+```
+
+```@docs
+modelingtoolkitize
 ```
 
 ### Intermediate Calculations

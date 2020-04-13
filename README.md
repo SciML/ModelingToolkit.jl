@@ -23,103 +23,51 @@ the documentation which contains the un-released features.
 
 ## High Level Example
 
-First we define some variables. In a differential equation
-system, we need to differentiate between our (dependent) variables
-and parameters. Therefore we label them as follows:
+Let's define the Lorenz equations for numerically solving with DifferentialEquations.jl,
+but tell the symbolic system to automatically generate code for efficiently
+handling the sparse Jacobian.
 
 ```julia
 using ModelingToolkit
 
-# Define some variables
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
 @derivatives D'~t
-```
 
-Then we build the system:
-
-```julia
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
+
+sys = ODESystem(eqs)
+
+u0 = [x => 1.0,
+      y => 0.0,
+      z => 0.0]
+
+p  = [σ => 28.0,
+      ρ => 10.0,
+      β => 8/3]
+
+tspan = (0.0,100.0)      
+prob = ODEProblem(sys,u0,tspan,p,jac=true,sparse=true)
 ```
 
-Each operation builds an `Operation` type, and thus `eqs` is an array of
-`Operation` and `Variable`s. This holds a tree of the full system that can be
-analyzed by other programs. We can turn this into a `ODESystem` via:
+This automatically will have generated fast sparse Jacobian functions, making
+it more optimized than directly building a function. In addition, we can then
+use ModelingToolkit to compose multiple ODE subsystems. Let's define two
+interacting Lorenz equations:
 
 ```julia
-de = ODESystem(eqs, t, [x,y,z], [σ,ρ,β])
+lorenz1 = ODESystem(eqs,name=:lorenz1)
+lorenz2 = ODESystem(eqs,name=:lorenz2)
+
+@variables α
+@parameters γ
+connections = [0 ~ lorenz1.x + lorenz2.y + sin(α*γ)]
+connected = ODESystem(connections,[α],[γ],systems=[lorenz1,lorenz2])
 ```
 
-where we tell it the variable types and ordering in the first version, or let it
-automatically determine the variable types in the second version.
-This can then generate the function. For example, we can see the
-generated code via:
-
-```julia
-myode_oop = generate_function(de,linenumbers=false)[1] # first one is the out-of-place function
-
-#=
-:((u, p, t)->begin
-          if u isa Array
-              return @inbounds(begin
-                          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-                              [σ * (y - x), x * (ρ - z) - y, x * y - β * z]
-                          end
-                      end)
-          else
-              X = @inbounds(begin
-                          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-                              (σ * (y - x), x * (ρ - z) - y, x * y - β * z)
-                          end
-                      end)
-          end
-          T = promote_type(map(typeof, X)...)
-          map(T, X)
-          construct = if u isa ModelingToolkit.StaticArrays.StaticArray
-                  ModelingToolkit.StaticArrays.similar_type(typeof(u), eltype(X))
-              else
-                  x->begin
-                          convert(typeof(u), x)
-                      end
-              end
-          construct(X)
-      end)
-=#
-
-myode_iip = generate_function(de,linenumbers=false)[2] # second one is the in-place function
-
-#=
-:((var"##MTIIPVar#793", u, p, t)->begin
-          @inbounds begin
-                  @inbounds begin
-                          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-                              var"##MTIIPVar#793"[1] = σ * (y - x)
-                              var"##MTIIPVar#793"[2] = x * (ρ - z) - y
-                              var"##MTIIPVar#793"[3] = x * y - β * z
-                          end
-                      end
-              end
-          nothing
-      end)
-=#
-```
-
-or directly get the generated ODE function via:
-
-```julia
-f = ODEFunction(de, [x,y,z], [σ,ρ,β])
-```
-
-Here already you can see some advantages of the ModelingToolkit.jl compilation system. As an
-IR to target, this output can compile to multiple different forms, including ones specific
-to static arrays and in-place functions. Forms which automatically parallelize the calculations
-based on internal cost models are a work-in-progress as well. This means DSLs built on top of
-this as a model compiler can write domain-specific languages without having to write complex
-optimized Julia function compilers.
-
-## Tutorial
-
-For an introductory tutorial to using ModelingToolkit.jl, please checkout
-[ModelingToolkit.jl, An IR and Compiler for Scientific Models](https://tutorials.juliadiffeq.org/html/ode_extras/01-ModelingToolkit.html).
+which is now a differential-algebraic equation (DAE) of 7 variables which has
+two independent Lorenz systems and an algebraic equation that determines `α`
+such that an implicit constraint holds. We can then define the resulting
+`ODEProblem` and send it over to DifferentialEquations.jl.
