@@ -47,7 +47,7 @@ struct ODESystem <: AbstractODESystem
     """
     Wfact::RefValue{Matrix{Expression}}
     """
-    Wfact\_t matrix. Note: this field will not be defined until
+    Wfact_t matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
     """
     Wfact_t::RefValue{Matrix{Expression}}
