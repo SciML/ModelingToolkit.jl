@@ -71,3 +71,19 @@ function generate_function(sys::NonlinearSystem, vs = states(sys), ps = paramete
     ps′ = convert.(Variable,ps)
     return build_function(rhss, vs′, ps′, (), NLSysToExpr(sys), expression; kwargs...)
 end
+
+function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,tspan,
+                                          parammap=DiffEqBase.NullParameters();
+                                          jac = false,
+                                          checkbounds = false,
+                                          linenumbers = true, multithread=false,
+                                          kwargs...) where iip
+    dvs = states(sys)
+    ps = parameters(sys)
+
+    f = generate_function(sys;checkbounds=checkbounds,linenumbers=linenumbers,
+                              multithread=multithread)
+    u0 = varmap_to_vars(u0map,dvs)
+    p = varmap_to_vars(parammap,ps)
+    NonlinearProblem(f,u0,tspan,p;kwargs...)
+end

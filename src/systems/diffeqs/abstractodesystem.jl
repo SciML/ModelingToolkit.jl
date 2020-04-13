@@ -100,7 +100,7 @@ function calculate_massmatrix(sys::AbstractODESystem, simplify=true)
             j = findfirst(x->isequal(x.name,var_from_nested_derivative(eq.lhs)[1].name),dvs)
             M[i,j] = 1
         else
-            error("Only semi-explicit mass matrices are currently supported")
+            error("Only semi-explicit constant mass matrices are currently supported")
         end
     end
     M = simplify ? simplify_constants.(M) : M
@@ -121,14 +121,14 @@ respectively.
 function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing, tgrad=false,
-                                     jac = false, Wfact = false) where {iip}
-    f_oop,f_iip = generate_function(sys, dvs, ps, Val{false})
+                                     jac = false, Wfact = false, kwargs...) where {iip}
+    f_oop,f_iip = generate_function(sys, dvs, ps, Val{false}; kwargs...)
 
     f(u,p,t) = f_oop(u,p,t)
     f(du,u,p,t) = f_iip(du,u,p,t)
 
     if tgrad
-        tgrad_oop,tgrad_iip = generate_tgrad(sys, dvs, ps, Val{false})
+        tgrad_oop,tgrad_iip = generate_tgrad(sys, dvs, ps, Val{false}; kwargs...)
         _tgrad(u,p,t) = tgrad_oop(u,p,t)
         _tgrad(J,u,p,t) = tgrad_iip(J,u,p,t)
     else
@@ -136,7 +136,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     if jac
-        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps, Val{false})
+        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps, Val{false}; kwargs...)
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else
@@ -144,7 +144,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     if Wfact
-        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, true, Val{false})
+        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, true, Val{false}; kwargs...)
         Wfact_oop, Wfact_iip = tmp_Wfact
         Wfact_oop_t, Wfact_iip_t = tmp_Wfact_t
         _Wfact(u,p,dtgamma,t) = Wfact_oop(u,p,dtgamma,t)
@@ -162,5 +162,23 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                       Wfact = _Wfact,
                       Wfact_t = _Wfact_t,
                       mass_matrix = M,
-                      syms = Symbol.(sys.states))
+                      syms = Symbol.(states(sys)))
+end
+
+function DiffEqBase.ODEProblem(sys::AbstractODESystem, args...; kwargs...)
+    ODEProblem{true}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
+                                    parammap=DiffEqBase.NullParameters();
+                                    version = nothing, tgrad=false,
+                                    jac = false, Wfact = false,
+                                    checkbounds = false,
+                                    linenumbers = true, multithread=false,
+                                    kwargs...) where iip
+    f = ODEFunction(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
+                        linenumbers=linenumbers,multithread=multithread)
+    u0 = varmap_to_vars(u0map,states(sys))
+    p = varmap_to_vars(parammap,parameters(sys))
+    ODEProblem(f,u0,tspan,p;kwargs...)
 end

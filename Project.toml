@@ -4,6 +4,7 @@ authors = ["Chris Rackauckas <accounts@chrisrackauckas.com>"]
 version = "2.0.0"
 
 [deps]
+ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 DiffEqBase = "2b5f629d-d688-5b77-993f-72d75c75574e"
 DiffRules = "b552c78f-8df3-52c6-915a-8e097449b14b"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
@@ -21,7 +22,7 @@ TreeViews = "a2a6695c-b41b-5b7d-aed9-dbfdeacea5d7"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
-DiffEqBase = "6"
+DiffEqBase = "6.28"
 DiffRules = "0.1, 1.0"
 DocStringExtensions = "0.7, 0.8"
 GeneralizedGenerated = "0.1.4, 0.2"

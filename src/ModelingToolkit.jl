@@ -2,7 +2,7 @@ module ModelingToolkit
 
 using DiffEqBase, Distributed
 using StaticArrays, LinearAlgebra, SparseArrays
-using Latexify, Unitful
+using Latexify, Unitful, ArrayInterface
 using MacroTools
 
 using Base.Threads
@@ -122,6 +122,7 @@ export simplify_constants
 export Operation, Expression, Variable
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad
+export calculate_gradient, generate_gradient
 export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
 export independent_variable, states, parameters, equations

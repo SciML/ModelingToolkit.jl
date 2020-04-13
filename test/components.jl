@@ -20,6 +20,30 @@ connnectedeqs = [D(a) ~ a*lorenz1.x]
 
 connected1 = ODESystem(connnectedeqs,t,[a],[α],systems=[lorenz1,lorenz2],name=:connected1)
 
+u0map = [lorenz1.x => 1.0,
+         lorenz2.x => 2.0,
+         lorenz1.y => 3.0,
+         lorenz2.y => 4.0,
+         lorenz1.z => 5.0,
+         lorenz2.z => 6.0,
+         a => 7.0]
+
+parammap = SA[lorenz1.σ => 1.0,
+              lorenz1.ρ => 2.0,
+              lorenz1.β => 3.0,
+              lorenz2.σ => 4.0,
+              lorenz2.ρ => 5.0,
+              lorenz2.β => 6.0,
+              α => 7.0]
+
+prob = ODEProblem(connected1,u0map,(0.0,100.0),parammap,jac=true)
+
+@test prob.u0 == [7.0,1.0,3.0,5.0,2.0,4.0,6.0]
+@test prob.p == [7.0,1.0,2.0,3.0,4.0,5.0,6.0]
+@test prob.u0 isa Vector
+@test prob.p isa SVector
+@test prob.f.syms == [:a,:lorenz1′x,:lorenz1′y,:lorenz1′z,:lorenz2′x,:lorenz2′y,:lorenz2′z]
+
 eqs_flat = [D(a) ~ a*lorenz1.x,
             D(lorenz1.x) ~ lorenz1.σ*(lorenz1.y-lorenz1.x),
             D(lorenz1.y) ~ lorenz1.x*(lorenz1.ρ-lorenz1.z)-lorenz1.y,

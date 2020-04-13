@@ -39,13 +39,22 @@ function OptimizationSystem(op, states, ps;
     OptimizationSystem(op, convert.(Variable,states), convert.(Variable,ps), name, systems)
 end
 
+function calculate_gradient(sys::OptimizationSystem)
+    expand_derivatives.(gradient(equations(sys), [dv() for dv in states(sys)]))
+end
+
+function generate_gradient(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+    grad = calculate_gradient(sys)
+    return build_function(grad, convert.(Variable,vs), convert.(Variable,ps), (), x->convert(Expr, x); kwargs...)
+end
+
 function calculate_hessian(sys::OptimizationSystem)
     expand_derivatives.(hessian(equations(sys), [dv() for dv in states(sys)]))
 end
 
 function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
     hes = calculate_hessian(sys)
-    return build_function(hes, convert.(Variable,vs), convert.(Variable,ps), (), x->convert(Expr, x))
+    return build_function(hes, convert.(Variable,vs), convert.(Variable,ps), (), x->convert(Expr, x); kwargs...)
 end
 
 function generate_function(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
@@ -56,3 +65,22 @@ end
 
 equations(sys::OptimizationSystem) = isempty(sys.systems) ? sys.op : sys.op + reduce(+,namespace_operation.(sys.systems))
 namespace_operation(sys::OptimizationSystem) = namespace_operation(sys.op,sys.name,nothing)
+
+function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
+                                          parammap=DiffEqBase.NullParameters();
+                                          u0=nothing, lb=nothing, ub=nothing,
+                                          hes = false,
+                                          checkbounds = false,
+                                          linenumbers = true, multithread=false,
+                                          kwargs...) where iip
+    dvs = states(sys)
+    ps = parameters(sys)
+
+    f = generate_function(sys,checkbounds=checkbounds,linenumbers=linenumbers,
+                              multithread=multithread)
+    u0 = varmap_to_vars(u0,dvs)
+    p = varmap_to_vars(parammap,ps)
+    lb = varmap_to_vars(lb,dvs)
+    ub = varmap_to_vars(ub,dvs)
+    OptimizationProblem(f,p;u0=u0,lb=lb,ub=ub,kwargs...)
+end

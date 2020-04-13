@@ -8,12 +8,14 @@ sys2 = OptimizationSystem(loss,[x,y],[a,b],name=:sys2)
 @variables z
 @parameters β
 loss2 = sys1.x - sys2.y + z*β
-combinedsys = OptimizationSystem(loss,[z],[β],systems=[sys1,sys2],name=:combinedsys)
+combinedsys = OptimizationSystem(loss2,[z],[β],systems=[sys1,sys2],name=:combinedsys)
 
 equations(combinedsys)
 states(combinedsys)
 parameters(combinedsys)
 
+calculate_gradient(combinedsys)
 calculate_hessian(combinedsys)
 generate_function(combinedsys)
+generate_gradient(combinedsys)
 generate_hessian(combinedsys)
