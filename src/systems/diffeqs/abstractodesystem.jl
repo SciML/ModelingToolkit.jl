@@ -121,7 +121,7 @@ respectively.
 function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing, tgrad=false,
-                                     jac = false, Wfact = false; kwargs...) where {iip}
+                                     jac = false, Wfact = false, kwargs...) where {iip}
     f_oop,f_iip = generate_function(sys, dvs, ps, Val{false}; kwargs...)
 
     f(u,p,t) = f_oop(u,p,t)
