@@ -1,3 +1,5 @@
+# V-nodes `[x_1, x_2, x_3, ..., dx_1, dx_2, ..., y_1, y_2, ...]` where `x`s are
+# differential variables and `y`s are algebraic variables.
 function get_vnodes(sys)
     diffnodes = Operation[]
     edges = map(_->Int[], 1:length(sys.eqs))
@@ -48,18 +50,18 @@ function print_bigraph(io::IO, sys, vars, edges)
 end
 
 
-function matching_equation!(edges, i, assignments, active, vcolor=falses(length(active)), ecolor=falses(length(edges)))
+function matching_equation!(edges, i, assign, active, vcolor=falses(length(active)), ecolor=falses(length(edges)))
     # `edge[active]` are active edges
-    # i: variables
-    # j: equations
-    # assignments: assignments[j] == i means (i-j) is assigned
+    # i: equations
+    # j: variables
+    # assign: assign[j] == i means (i-j) is assigned
     #
     # color the equation
     ecolor[i] = true
-    # if a V-node j exists s.t. edge (i-j) exists and assignments[j] == 0
+    # if a V-node j exists s.t. edge (i-j) exists and assign[j] == 0
     for j in edges[i]
-        if active[j] && assignments[j] == 0
-            assignments[j] = i
+        if active[j] && assign[j] == 0
+            assign[j] = i
             return true
         end
     end
@@ -68,8 +70,8 @@ function matching_equation!(edges, i, assignments, active, vcolor=falses(length(
         (active[j] && !vcolor[j]) || continue
         # color the variable
         vcolor[j] = true
-        if match_equation!(edges, assignments[j], assignments, active, vcolor, ecolor)
-            assignments[v] = i
+        if match_equation!(edges, assign[j], assign, active, vcolor, ecolor)
+            assign[v] = i
             return true
         end
     end
@@ -77,9 +79,9 @@ function matching_equation!(edges, i, assignments, active, vcolor=falses(length(
 end
 
 function matching(edges, nvars, active=trues(nvars))
-    assignments = zeros(Int, nvars)
+    assign = zeros(Int, nvars)
     for i in 1:length(edges)
-        matching_equation!(edges, i, assignments, active)
+        matching_equation!(edges, i, assign, active)
     end
-    return assignments
+    return assign
 end
