@@ -33,4 +33,31 @@ pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
 edges, vars, vars_asso = sys2bigraph(pendulum)
 @test ModelingToolkit.matching(edges, length(vars), vars_asso .== 0) == [0, 0, 0, 0, 1, 2, 3, 4, 0]
 
-@test ModelingToolkit.pantelides(pendulum) == ([0, 0, 0, 0, 1, 2, 3, 8, 4, 7, 9], [5, 6, 7, 8, 10, 11, 0, 0, 0, 0, 0], [7, 8, 0, 0, 6, 9, 0, 0, 0])
+edges, assign, vars_asso, eqs_asso = ModelingToolkit.pantelides(pendulum)
+
+@test edges == [
+ [5, 3],               # 1
+ [6, 4],               # 2
+ [7, 9, 1],            # 3
+ [8, 9, 2],            # 4
+ [2, 1],               # 5
+ [2, 1, 6, 5],         # 6
+ [5, 3, 10, 7],        # 7
+ [6, 4, 11, 8],        # 8
+ [2, 1, 6, 5, 11, 10], # 9
+]
+#                  [1, 2, 3, 4, 5,  6,  7,  8,  9, 10,   11]
+#                  [x, y, w, z, x', y', w', z', T, x'', y'']
+@test vars_asso == [5, 6, 7, 8, 10, 11, 0,  0,  0,  0,    0]
+#1: D(x) ~ w
+#2: D(y) ~ z
+#3: D(w) ~ T*x
+#4: D(z) ~ T*y - g
+#5: 0 ~ x^2 + y^2 - L^2
+# ----
+#6: D(5) -> 0 ~ 2xx'+ 2yy'
+#7: D(1) -> D(D(x)) ~ D(w)
+#8: D(2) -> D(D(y)) ~ D(z)
+#9: D(6) -> 0 ~ 2xx'' + 2x'x' + 2yy'' + 2y'y'
+#                 [1, 2, 3, 4, 5, 6, 7, 8, 9]
+@test eqs_asso == [7, 8, 0, 0, 6, 9, 0, 0, 0]

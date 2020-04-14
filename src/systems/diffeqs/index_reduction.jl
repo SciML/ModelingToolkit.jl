@@ -158,5 +158,5 @@ function pantelides!(edges, vars, vars_asso)
             end # if !pathfound
         end # while !pathfound
     end # for k in 1:neqs′
-    return assign, vars_asso, eqs_asso
+    return edges, assign, vars_asso, eqs_asso
 end
