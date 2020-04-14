@@ -34,7 +34,7 @@ Each operation builds an `Operation` type, and thus `eqs` is an array of
 analyzed by other programs. We can turn this into a `ODESystem` via:
 
 ```julia
-de = ODESystem(eqs)
+sys = ODESystem(eqs)
 ```
 
 This `ODESystem` can then be used to generate an `ODEProblem` by supplying the
@@ -122,7 +122,8 @@ We can use this to build a nonlinear function for use with NLsolve.jl:
 ```julia
 f = eval(nlsys_func)
 du = zeros(3); u = ones(3)
-f(du,u,(10.0,26.0,2.33))
+params = (10.0,26.0,2.33)
+f(du,u,params)
 du
 
 #=
@@ -307,7 +308,8 @@ sys = modelingtoolkitize(prob)
 Using this, we can symbolically build the Jacobian and then rebuild the ODEProblem:
 
 ```julia
-jac = eval(ModelingToolkit.generate_jacobian(de...)[2])
+jac = eval(ModelingToolkit.generate_jacobian(sys)[2])
+
 f = ODEFunction(rober, jac=jac)
 prob_jac = ODEProblem(f,[1.0,0.0,0.0],(0.0,1e5),(0.04,3e7,1e4))
 ```
