@@ -2,17 +2,6 @@ struct BiGraph{T}
     data::Vector{Vector{T}}
 end
 
-function sys2bigraph(sys)
-    ss = states(sys)
-    data = Operation[]
-    for eq in sys.eqs
-        es = []
-        lhs = eq.lhs
-        lhs.op isa Differential && push!(eq, lhs)
-        push!(data, es)
-    end
-end
-
 function get_vnodes(sys)
     diffnodes = []
     diffedges = Tuple{Int, Int}[]
@@ -33,7 +22,7 @@ function get_vnodes(sys)
     return diffnodes, diffedges, algvars
 end
 
-function sys2bigraph2(sys)
+function sys2bigraph(sys)
     diffvars, edges, algvars = get_vnodes(sys)
     varnumber_offset = length(diffvars)
 
@@ -60,4 +49,37 @@ function print_bigraph(io::IO, sys, vars, edges)
     for (i, j) in edges
         println(io, "Eq $i has $(vars[j])")
     end
+end
+
+
+function matching_equation!(edges, i, assignments=Dict{Int, Int}(), colored=Set{Int}())
+    push!(colored, i)
+    # select a v
+    vars = unique(last.(filter(isequal(i)∘first, edges)))
+    for v in vars
+        if !haskey(assignments, v)# && !(v in colored)
+            # v found
+            assignments[v] = i
+            return true
+        end
+    end
+    # Else
+    remaining = setdiff(vars, colored)
+    for v in remaining
+        push!(colored, v)
+        if match_equation!(edges, assignments[v], colored, assignments)
+            assignments[v] = i
+            return true
+        end
+    end
+    return false
+end
+
+function matching(sys, vars, edges)
+    assignments=Dict{Int, Int}()
+    colored=Set{Int}()
+    for i in 1:length(sys.eqs)
+        @show matching_equation!(edges, i, assignments, colored)
+    end
+    assignments
 end
