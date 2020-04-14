@@ -12,7 +12,7 @@ Base.convert(::Type{Expression}, x::Number) = Constant(x)
 Base.convert(::Type{Expression}, x::Bool) = Constant(x)
 Base.convert(::Type{Expression}, x::Variable) = convert(Operation,x)
 Base.convert(::Type{Expression}, x::Operation) = x
-Base.convert(::Type{Expression}, x::Symbol) = Base.convert(Expression,eval(x))
+Base.convert(::Type{Expression}, x::Symbol) = Operation(Variable(x),[])
 Expression(x::Bool) = Constant(x)
 
 function build_expr(head::Symbol, args)
