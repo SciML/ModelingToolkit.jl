@@ -104,4 +104,4 @@ sol = solve(prob,Rodas5())
 using Plots; plot(sol,vars=(α,lorenz1.x,lorenz2.y))
 ```
 
-![](https://user-images.githubusercontent.com/1814174/79122361-6fdaca80-7d65-11ea-87fd-0f6c4a85cd0d.png)
+![](https://user-images.githubusercontent.com/1814174/79222641-eb9c4c00-7e25-11ea-9a76-256f132ca7aa.png)
