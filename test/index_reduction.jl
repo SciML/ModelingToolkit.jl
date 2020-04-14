@@ -30,8 +30,7 @@ eqs = [D(x) ~ w,
        0 ~ x^2 + y^2 - L^2]
 pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
 
-# V-nodes D(x), D(y), D(w), D(z), T
-# E-nodes
-vars, edges = sys2bigraph(pendulum)
+edges, vars, vars_asso = sys2bigraph(pendulum)
+@test ModelingToolkit.matching(edges, length(vars), vars_asso .== 0) == [0, 0, 0, 0, 1, 2, 3, 4, 0]
 
-@test ModelingToolkit.matching(edges, length(vars)) == [1, 2, 3, 4, 0]
+@test ModelingToolkit.pantelides(pendulum) == ([0, 0, 0, 0, 1, 2, 3, 8, 4, 7, 9], [5, 6, 7, 8, 10, 11, 0, 0, 0, 0, 0], [7, 8, 0, 0, 6, 9, 0, 0, 0])
