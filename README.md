@@ -76,10 +76,10 @@ eqs = [D(x) ~ σ*(y-x),
 lorenz1 = ODESystem(eqs,name=:lorenz1)
 lorenz2 = ODESystem(eqs,name=:lorenz2)
 
-@variables α
+@variables a
 @parameters γ
-connections = [0 ~ lorenz1.x + lorenz2.y + α*γ]
-connected = ODESystem(connections,t,[α],[γ],systems=[lorenz1,lorenz2])
+connections = [0 ~ lorenz1.x + lorenz2.y + a*γ]
+connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])
 
 u0 = [lorenz1.x => 1.0,
       lorenz1.y => 0.0,
@@ -87,7 +87,7 @@ u0 = [lorenz1.x => 1.0,
       lorenz2.x => 0.0,
       lorenz2.y => 1.0,
       lorenz2.z => 0.0,
-      α => 2.0]
+      a => 2.0]
 
 p  = [lorenz1.σ => 10.0,
       lorenz1.ρ => 28.0,
@@ -101,7 +101,7 @@ tspan = (0.0,100.0)
 prob = ODEProblem(connected,u0,tspan,p)
 sol = solve(prob,Rodas5())
 
-using Plots; plot(sol,vars=(α,lorenz1.x,lorenz2.y))
+using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.y))
 ```
 
 ![](https://user-images.githubusercontent.com/1814174/79222641-eb9c4c00-7e25-11ea-9a76-256f132ca7aa.png)
