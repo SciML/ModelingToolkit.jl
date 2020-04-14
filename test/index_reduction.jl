@@ -30,4 +30,6 @@ eqs = [D(x) ~ w,
        0 ~ x^2 + y^2 - L^2]
 pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
 
+# V-nodes D(x), D(y), D(w), D(z), T
+# E-nodes
 sys2bigraph(pendulum)
