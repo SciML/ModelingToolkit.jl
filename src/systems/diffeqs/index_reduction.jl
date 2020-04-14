@@ -55,10 +55,15 @@ print_bigraph(sys, vars, edges) = print_bigraph(stdout, sys, vars, edges)
 function print_bigraph(io::IO, sys, vars, edges)
     println(io, "Equations:")
     foreach(x->println(io, x), [i => sys.eqs[i] for i in 1:length(sys.eqs)])
-    println(io)
-    for (i, j) in edges
-        println(io, "Eq $i has $(vars[j])")
+    for (i, edge) in enumerate(edges)
+        println(io, "\nEq $i has:")
+        print(io, '[')
+        for e in edge
+            print(io, "$(vars[e]), ")
+        end
+        print(io, ']')
     end
+    return nothing
 end
 
 
