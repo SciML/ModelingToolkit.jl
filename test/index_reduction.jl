@@ -5,7 +5,7 @@ using Test
 
 # Define some variables
 @parameters t L g
-@variables x(t) y(t) w(t) z(t) T(t) x_t(t) y_t(t)
+@variables x(t) y(t) w(t) z(t) T(t) xˍt(t) yˍt(t)
 @derivatives D'~t
 
 eqs2 = [D(D(x)) ~ T*x,
@@ -14,13 +14,13 @@ eqs2 = [D(D(x)) ~ T*x,
 pendulum2 = ODESystem(eqs2, t, [x, y, T], [L, g], name=:pendulum)
 lowered_sys = ModelingToolkit.ode_order_lowering(pendulum2)
 
-lowered_eqs = [D(x_t) ~ T*x,
-               D(y_t) ~ T*y - g,
+lowered_eqs = [D(xˍt) ~ T*x,
+               D(yˍt) ~ T*y - g,
                0 ~ x^2 + y^2 - L^2,
-               D(x) ~ x_t,
-               D(y) ~ x_t]
-@test_skip ODESystem(lowered_eqs) == lowered_sys # not gonna work
-@test_broken isequal(lowered_sys.eqs, lowered_eqs)
+               D(x) ~ xˍt,
+               D(y) ~ yˍt]
+@test ODESystem(lowered_eqs, t, [xˍt, yˍt, x, y, T], [L, g]) == lowered_sys
+@test isequal(lowered_sys.eqs, lowered_eqs)
 
 # Simple pendulum in cartesian coordinates
 eqs = [D(x) ~ w,
@@ -35,7 +35,7 @@ edges, vars, vars_asso = sys2bigraph(pendulum)
 
 edges, assign, vars_asso, eqs_asso = ModelingToolkit.pantelides(pendulum)
 
-@test edges == [
+@test sort.(edges) == sort.([
  [5, 3],               # 1
  [6, 4],               # 2
  [7, 9, 1],            # 3
@@ -45,7 +45,7 @@ edges, assign, vars_asso, eqs_asso = ModelingToolkit.pantelides(pendulum)
  [5, 3, 10, 7],        # 7
  [6, 4, 11, 8],        # 8
  [2, 1, 6, 5, 11, 10], # 9
-]
+])
 #                  [1, 2, 3, 4, 5,  6,  7,  8,  9, 10,   11]
 #                  [x, y, w, z, x', y', w', z', T, x'', y'']
 @test vars_asso == [5, 6, 7, 8, 10, 11, 0,  0,  0,  0,    0]
