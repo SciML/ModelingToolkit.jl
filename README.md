@@ -53,7 +53,7 @@ p  = [σ => 28.0,
 tspan = (0.0,100.0)
 prob = ODEProblem(sys,u0,tspan,p,jac=true)
 sol = solve(prob,Tsit5())
-using Plots; plot(sol,vars=(:x,:y))
+using Plots; plot(sol,vars=(x,y))
 ```
 
 ![Lorenz2](https://user-images.githubusercontent.com/1814174/79118645-744eb580-7d5c-11ea-9c37-13c4efd585ca.png)
@@ -101,7 +101,7 @@ tspan = (0.0,100.0)
 prob = ODEProblem(connected,u0,tspan,p)
 sol = solve(prob,Rodas5())
 
-using Plots; plot(sol,vars=(:α,Symbol(lorenz1.x),Symbol(lorenz2.y)))
+using Plots; plot(sol,vars=(α,lorenz1.x,lorenz2.y))
 ```
 
 ![](https://user-images.githubusercontent.com/1814174/79122361-6fdaca80-7d65-11ea-87fd-0f6c4a85cd0d.png)
