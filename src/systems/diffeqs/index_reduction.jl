@@ -102,12 +102,12 @@ function matching(edges, nvars, active=trues(nvars))
     return assign
 end
 
-function pantelides(sys::ODESystem)
+function pantelides(sys::ODESystem; kwargs...)
     edges, fullvars, vars_asso = sys2bigraph(sys)
-    return pantelides!(edges, fullvars, vars_asso)
+    return pantelides!(edges, fullvars, vars_asso; kwargs...)
 end
 
-function pantelides!(edges, vars, vars_asso; maxiter = 100_000_000)
+function pantelides!(edges, vars, vars_asso; maxiter = 8000)
     neqs = length(edges)
     nvars = length(vars)
     assign = zeros(Int, nvars)
@@ -116,13 +116,15 @@ function pantelides!(edges, vars, vars_asso; maxiter = 100_000_000)
     for k in 1:neqs′
         i = k
         pathfound = false
+        # In practice, `maxiter=8000` should never be reached, otherwise, the
+        # index would be on the order of thousands.
         for _ in 1:maxiter
             # run matching on (dx, y) variables
             active = vars_asso .== 0
             vcolor = falses(nvars)
             ecolor = falses(neqs)
             pathfound = match_equation!(edges, i, assign, active, vcolor, ecolor)
-            pathfound && break
+            pathfound && break # terminating condition
             # for every colored V-node j
             for j in eachindex(vcolor); vcolor[j] || continue
                 # introduce a new variable
@@ -154,6 +156,7 @@ function pantelides!(edges, vars, vars_asso; maxiter = 100_000_000)
             end
             i = eqs_asso[i]
         end # for _ in 1:maxiter
+        pathfound || error("maxiter=$maxiter reached! File a bug report if your system has a reasonable index (<100), and you are using the default `maxiter`. Try to increase the maxiter by `pantelides(sys::ODESystem; maxiter=1_000_000)` if your system has an incredibly high index and it is truly extremely large.")
     end # for k in 1:neqs′
     return edges, assign, vars_asso, eqs_asso
 end
