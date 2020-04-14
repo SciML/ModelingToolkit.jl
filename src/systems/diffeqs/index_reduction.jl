@@ -107,7 +107,7 @@ function pantelides(sys::ODESystem)
     return pantelides!(edges, fullvars, vars_asso)
 end
 
-function pantelides!(edges, vars, vars_asso)
+function pantelides!(edges, vars, vars_asso; maxiter = 100_000_000)
     neqs = length(edges)
     nvars = length(vars)
     assign = zeros(Int, nvars)
@@ -116,47 +116,44 @@ function pantelides!(edges, vars, vars_asso)
     for k in 1:neqs′
         i = k
         pathfound = false
-        iter = 0
-        while !pathfound && iter < 3
-            iter += 1
+        for _ in 1:maxiter
             # run matching on (dx, y) variables
             active = vars_asso .== 0
             vcolor = falses(nvars)
             ecolor = falses(neqs)
             pathfound = match_equation!(edges, i, assign, active, vcolor, ecolor)
-            if !pathfound
-                # for every colored V-node j
-                for j in eachindex(vcolor); vcolor[j] || continue
-                    # introduce a new variable
-                    nvars += 1
-                    push!(vars_asso, 0)
-                    vars_asso[j] = nvars
-                    push!(assign, 0)
-                end
+            pathfound && break
+            # for every colored V-node j
+            for j in eachindex(vcolor); vcolor[j] || continue
+                # introduce a new variable
+                nvars += 1
+                push!(vars_asso, 0)
+                vars_asso[j] = nvars
+                push!(assign, 0)
+            end
 
-                # for every colored E-node l
-                for l in eachindex(ecolor); ecolor[l] || continue
-                    neqs += 1
-                    # create new E-node
-                    push!(edges, copy(edges[l]))
-                    # create edges from E-node `neqs` to all V-nodes `j` and
-                    # `vars_asso[j]` s.t. edge `(l-j)` exists
-                    for j in edges[l]
-                        if !(vars_asso[j] in edges[neqs])
-                            push!(edges[neqs], vars_asso[j])
-                        end
+            # for every colored E-node l
+            for l in eachindex(ecolor); ecolor[l] || continue
+                neqs += 1
+                # create new E-node
+                push!(edges, copy(edges[l]))
+                # create edges from E-node `neqs` to all V-nodes `j` and
+                # `vars_asso[j]` s.t. edge `(l-j)` exists
+                for j in edges[l]
+                    if !(vars_asso[j] in edges[neqs])
+                        push!(edges[neqs], vars_asso[j])
                     end
-                    push!(eqs_asso, 0)
-                    eqs_asso[l] = neqs
                 end
+                push!(eqs_asso, 0)
+                eqs_asso[l] = neqs
+            end
 
-                # for every colored V-node j
-                for j in eachindex(vcolor); vcolor[j] || continue
-                    assign[vars_asso[j]] = eqs_asso[assign[j]]
-                end
-                i = eqs_asso[i]
-            end # if !pathfound
-        end # while !pathfound
+            # for every colored V-node j
+            for j in eachindex(vcolor); vcolor[j] || continue
+                assign[vars_asso[j]] = eqs_asso[assign[j]]
+            end
+            i = eqs_asso[i]
+        end # for _ in 1:maxiter
     end # for k in 1:neqs′
     return edges, assign, vars_asso, eqs_asso
 end
