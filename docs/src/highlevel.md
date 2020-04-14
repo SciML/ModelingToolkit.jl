@@ -122,7 +122,8 @@ We can use this to build a nonlinear function for use with NLsolve.jl:
 ```julia
 f = eval(nlsys_func)
 du = zeros(3); u = ones(3)
-f(du,u,(10.0,26.0,2.33))
+params = (10.0,26.0,2.33)
+f(du,u,params)
 du
 
 #=
