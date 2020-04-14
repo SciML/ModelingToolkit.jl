@@ -67,6 +67,7 @@ Base.occursin(t::Expression, x::Expression) = isequal(x, t)
 vars(exprs) = foldl(vars!, exprs; init = Set{Variable}())
 function vars!(vars, O)
     isa(O, Operation) || return vars
+    O.op isa Variable && push!(vars, O.op)
     for arg ∈ O.args
         if isa(arg, Operation)
             isa(arg.op, Variable) && push!(vars, arg.op)
