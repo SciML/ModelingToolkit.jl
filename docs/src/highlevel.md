@@ -34,7 +34,7 @@ Each operation builds an `Operation` type, and thus `eqs` is an array of
 analyzed by other programs. We can turn this into a `ODESystem` via:
 
 ```julia
-de = ODESystem(eqs)
+sys = ODESystem(eqs)
 ```
 
 This `ODESystem` can then be used to generate an `ODEProblem` by supplying the
