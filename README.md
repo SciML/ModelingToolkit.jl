@@ -103,7 +103,7 @@ tspan = (0.0,100.0)
 prob = ODEProblem(connected,u0,tspan,p)
 sol = solve(prob,Rodas5())
 
-using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.y))
+using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.z))
 ```
 
 ![](https://user-images.githubusercontent.com/1814174/79222641-eb9c4c00-7e25-11ea-9a76-256f132ca7aa.png)
