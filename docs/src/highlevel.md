@@ -181,7 +181,7 @@ function to be used from within the same world-age, one simply needs to pass `Va
 generate the function, i.e.:
 
 ```julia
-nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β], Val{false})[2]
+nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β], expression=Val{false})[2]
 ```
 
 which uses GeneralizedGenerated.jl to build a same world-age function on the fly without eval.
@@ -330,19 +330,22 @@ a = y - x
 eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs, [x,y,z])
-nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β])
+ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
+nlsys_func = generate_function(ns)[2] # second is the inplace version
 ```
 
 expands to:
 
 ```julia
-:((##365, u, p)->begin
-          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
-              ##365[1] = σ * (y - x)
-              ##365[2] = x * (ρ - z) - y
-              ##365[3] = x * y - β * z
-          end
+:((var"##MTIIPVar#368", var"##MTKArg#365", var"##MTKArg#366")->begin
+          @inbounds begin
+                  let (x, y, z, σ, ρ, β) = (var"##MTKArg#365"[1], var"##MTKArg#365"[2], var"##MTKArg#365"[3], var"##MTKArg#366"[1], var"##MTKArg#366"[2], var"##MTKArg#366"[3])
+                      var"##MTIIPVar#368"[1] = (*)(σ, (-)(y, x))
+                      var"##MTIIPVar#368"[2] = (-)((*)(x, (-)(ρ, z)), y)
+                      var"##MTIIPVar#368"[3] = (-)((*)(x, y), (*)(β, z))
+                  end
+              end
+          nothing
       end)
 ```
 
