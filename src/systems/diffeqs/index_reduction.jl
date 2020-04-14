@@ -1,7 +1,7 @@
 # V-nodes `[x_1, x_2, x_3, ..., dx_1, dx_2, ..., y_1, y_2, ...]` where `x`s are
 # differential variables and `y`s are algebraic variables.
 function get_vnodes(sys)
-    diffnodes = Operation[]
+    dxvars = Operation[]
     edges = map(_->Int[], 1:length(sys.eqs))
     for (i, eq) in enumerate(sys.eqs)
         if !(eq.lhs isa Constant)
@@ -9,34 +9,46 @@ function get_vnodes(sys)
             @assert eq.lhs.op isa Differential
             @assert !(eq.lhs.args[1] isa Differential) # first order
 
-            push!(diffnodes, eq.lhs)
+            push!(dxvars, eq.lhs)
             # For efficiency we note down the diff edges here
-            push!(edges[i], length(diffnodes))
+            push!(edges[i], length(dxvars))
         end
     end
 
-    diffvars = (first ∘ var_from_nested_derivative).(diffnodes)
-    algvars  = setdiff(states(sys), diffvars)
-    return diffnodes, edges, algvars
+    xvars = (first ∘ var_from_nested_derivative).(dxvars)
+    algvars  = setdiff(states(sys), xvars)
+    return xvars, dxvars, edges, algvars
 end
 
 function sys2bigraph(sys)
-    diffvars, edges, algvars = get_vnodes(sys)
-    varnumber_offset = length(diffvars)
+    xvars, dxvars, edges, algvars = get_vnodes(sys)
+    xvar_offset = length(xvars)
+    algvar_offset = 2xvar_offset
+    for edge in edges
+        isempty(edge) || (edge .+= xvar_offset)
+    end
 
     for (i, eq) in enumerate(sys.eqs)
         # T or D(x):
         # We assume no derivatives appear on the RHS at this point
         vs = vars(eq.rhs)
         for v in vs
+            for (j, target_v) in enumerate(xvars)
+                if v == target_v
+                    push!(edges[i], j)
+                end
+            end
             for (j, target_v) in enumerate(algvars)
                 if v == target_v
-                    push!(edges[i], j+varnumber_offset)
+                    push!(edges[i], j+algvar_offset)
                 end
             end
         end
     end
-    vcat(diffvars, algvars), edges
+
+    fullvars = [xvars; dxvars; algvars] # full list of variables
+    vars_asso = [(1:xvar_offset) .+ xvar_offset; zeros(Int, length(fullvars) - xvar_offset)] # variable association list
+    return edges, fullvars, vars_asso
 end
 
 print_bigraph(sys, vars, edges) = print_bigraph(stdout, sys, vars, edges)
