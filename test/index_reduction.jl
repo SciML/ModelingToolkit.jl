@@ -32,4 +32,6 @@ pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
 
 # V-nodes D(x), D(y), D(w), D(z), T
 # E-nodes
-sys2bigraph(pendulum)
+vars, edges = sys2bigraph(pendulum)
+
+@test ModelingToolkit.matching(edges, length(vars)) == [1, 2, 3, 4, 0]

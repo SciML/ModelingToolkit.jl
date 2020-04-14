@@ -1,10 +1,6 @@
-struct BiGraph{T}
-    data::Vector{Vector{T}}
-end
-
 function get_vnodes(sys)
-    diffnodes = []
-    diffedges = Tuple{Int, Int}[]
+    diffnodes = Operation[]
+    edges = map(_->Int[], 1:length(sys.eqs))
     for (i, eq) in enumerate(sys.eqs)
         if !(eq.lhs isa Constant)
             # Make sure that the LHS is a first order derivative of a var.
@@ -13,13 +9,13 @@ function get_vnodes(sys)
 
             push!(diffnodes, eq.lhs)
             # For efficiency we note down the diff edges here
-            push!(diffedges, (i, length(diffnodes)))
+            push!(edges[i], length(diffnodes))
         end
     end
 
     diffvars = (first ∘ var_from_nested_derivative).(diffnodes)
     algvars  = setdiff(states(sys), diffvars)
-    return diffnodes, diffedges, algvars
+    return diffnodes, edges, algvars
 end
 
 function sys2bigraph(sys)
@@ -33,7 +29,7 @@ function sys2bigraph(sys)
         for v in vs
             for (j, target_v) in enumerate(algvars)
                 if v == target_v
-                    push!(edges, (i, j+varnumber_offset))
+                    push!(edges[i], j+varnumber_offset)
                 end
             end
         end
@@ -52,22 +48,27 @@ function print_bigraph(io::IO, sys, vars, edges)
 end
 
 
-function matching_equation!(edges, i, assignments=Dict{Int, Int}(), colored=Set{Int}())
-    push!(colored, i)
-    # select a v
-    vars = unique(last.(filter(isequal(i)∘first, edges)))
-    for v in vars
-        if !haskey(assignments, v)# && !(v in colored)
-            # v found
-            assignments[v] = i
+function matching_equation!(edges, i, assignments, active, vcolor=falses(length(active)), ecolor=falses(length(edges)))
+    # `edge[active]` are active edges
+    # i: variables
+    # j: equations
+    # assignments: assignments[j] == i means (i-j) is assigned
+    #
+    # color the equation
+    ecolor[i] = true
+    # if a V-node j exists s.t. edge (i-j) exists and assignments[j] == 0
+    for j in edges[i]
+        if active[j] && assignments[j] == 0
+            assignments[j] = i
             return true
         end
     end
-    # Else
-    remaining = setdiff(vars, colored)
-    for v in remaining
-        push!(colored, v)
-        if match_equation!(edges, assignments[v], colored, assignments)
+    # for every j such that edge (i-j) exists and j is uncolored
+    for j in edges[i]
+        (active[j] && !vcolor[j]) || continue
+        # color the variable
+        vcolor[j] = true
+        if match_equation!(edges, assignments[j], assignments, active, vcolor, ecolor)
             assignments[v] = i
             return true
         end
@@ -75,11 +76,10 @@ function matching_equation!(edges, i, assignments=Dict{Int, Int}(), colored=Set{
     return false
 end
 
-function matching(sys, vars, edges)
-    assignments=Dict{Int, Int}()
-    colored=Set{Int}()
-    for i in 1:length(sys.eqs)
-        @show matching_equation!(edges, i, assignments, colored)
+function matching(edges, nvars, active=trues(nvars))
+    assignments = zeros(Int, nvars)
+    for i in 1:length(edges)
+        matching_equation!(edges, i, assignments, active)
     end
-    assignments
+    return assignments
 end
