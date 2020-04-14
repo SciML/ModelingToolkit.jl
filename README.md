@@ -65,6 +65,8 @@ interacting Lorenz equations and simulate the resulting Differential-Algebriac
 Equation (DAE):
 
 ```julia
+using ModelingToolkit, OrdinaryDiffEq
+
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
 @derivatives D'~t
