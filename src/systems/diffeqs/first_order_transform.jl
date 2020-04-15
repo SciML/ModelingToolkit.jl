@@ -19,18 +19,20 @@ Takes a Nth order ODESystem and returns a new ODESystem written in first order
 form by defining new variables which represent the N-1 derivatives.
 """
 function ode_order_lowering(sys::ODESystem)
-    eqs_lowered, new_vars = ode_order_lowering(sys.eqs, sys.iv)
-    ODESystem(eqs_lowered, sys.iv, vcat(new_vars, states(sys)), sys.ps)
+    eqs_lowered, new_vars = ode_order_lowering(equations(sys), sys.iv, states(sys))
+    return ODESystem(eqs_lowered, sys.iv, new_vars, sys.ps)
 end
 
-function ode_order_lowering(eqs, iv)
+function ode_order_lowering(eqs, iv, states)
     var_order = Dict{Variable,Int}()
     vars = Variable[]
     new_eqs = Equation[]
     new_vars = Variable[]
+    D = Differential(iv())
 
-    for (i, eq) ∈ enumerate(eqs)
+    for (i, (eq, ss)) ∈ enumerate(zip(eqs, states))
         if isequal(eq.lhs, Constant(0))
+            push!(new_vars, ss)
             push!(new_eqs, eq)
         else
             var, maxorder = var_from_nested_derivative(eq.lhs)
@@ -40,7 +42,8 @@ function ode_order_lowering(eqs, iv)
             end
             var′ = lower_varname(var, iv, maxorder - 1)
             rhs′ = rename_lower_order(eq.rhs)
-            push!(new_eqs,Differential(iv())(var′(iv())) ~ rhs′)
+            push!(new_vars, var′)
+            push!(new_eqs, D(var′(iv())) ~ rhs′)
         end
     end
 
@@ -49,7 +52,7 @@ function ode_order_lowering(eqs, iv)
         for o in (order-1):-1:1
             lvar = lower_varname(var, iv, o-1)
             rvar = lower_varname(var, iv, o)
-            push!(new_vars, rvar)
+            push!(new_vars, lvar)
 
             rhs = rvar(iv())
             eq = Differential(iv())(lvar(iv())) ~ rhs
