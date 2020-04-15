@@ -1,8 +1,9 @@
-function Base.convert(::Type{Expression}, ex::Expr)
+Base.convert(::Type{Expression}, ex::Expr) = Expression(ex)
+function Expression(ex;mod=Main)
     ex.head === :if && (ex = Expr(:call, ifelse, ex.args...))
     ex.head === :call || throw(ArgumentError("internal representation does not support non-call Expr"))
 
-    op = eval(ex.args[1])  # HACK
+    op = getproperty(mod,Symbol(ex.args[1]))
     args = convert.(Expression, ex.args[2:end])
 
     return Operation(op, args)
