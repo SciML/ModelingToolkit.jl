@@ -1,14 +1,12 @@
 # ModelingToolkit.jl
 
-ModelingToolkit.jl is an intermediate representation (IR) of computational graphs
-for scientific computing problems. Its purpose is to be a common target for
-modeling domain-specific languages (DSLs) in order to allow for a common
-platform for model inspection and transformation. It uses a tagged variable IR
-in order to allow specification of complex models and allow for transformations
-of models. It has ways to plug into its function registration and derivative
-system so that way it can interact nicely with user-defined routines. Together,
-this is an abstract form of a scientific model that is easy for humans to
-generate but also easy for programs to manipulate.
+ModelingToolkit.jl is a modeling language for scientific computing problems.
+It allows for users to give a high-level description of a model for
+symbolic preprocessing to analyze and enhance the model. ModelingToolkit can
+automatically generate fast functions for model components like Jacobians
+and Hessians, along with automatically sparsifying and parallelizing the
+computations. Automatic transformations, such as index reduction, can be applied
+to the model to make it easier for numerical solvers to handle.
 
 ## Package Overview
 
