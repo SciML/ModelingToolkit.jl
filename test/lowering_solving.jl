@@ -11,10 +11,10 @@ eqs = [D(D(x)) ~ σ*(y-x),
 sys = ODESystem(eqs)
 sys = ode_order_lowering(sys)
 
-u0 = [D(x) => 2.0,
-	  x => 1.0,
-      y => 0.0,
-      z => 0.0]
+u0 = Dict([D(x) => 2.0,
+			  x => 1.0,
+		      y => 0.0,
+		      z => 0.0])
 
 p  = [σ => 28.0,
       ρ => 10.0,

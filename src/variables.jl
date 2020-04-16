@@ -258,5 +258,13 @@ function varmap_to_vars(varmap,varlist)
     ArrayInterface.restructure(varmap,out)
 end
 
+function varmap_to_vars(varmap::Dict,varlist)
+    out = zeros(typeof(last(first(varmap))),2)
+    for (i,x) in enumerate(varlist)
+        out[i] = varmap[convert(Variable,x)]
+    end
+    out
+end
+
 varmap_to_vars(varmap::DiffEqBase.NullParameters,varlist) = varmap
 varmap_to_vars(varmap::Nothing,varlist) = varmap
