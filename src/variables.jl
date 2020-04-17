@@ -99,6 +99,10 @@ Base.isequal(a::Constant, b::Constant) = a.value == b.value
 
 Base.convert(::Type{Expr}, c::Constant) = c.value
 
+# For dictionary lookup
+Base.hash(v::Variable,h) = hash(Symbol(v),h)
+
+
 
 # Build variables more easily
 function _parse_vars(macroname, type, x)

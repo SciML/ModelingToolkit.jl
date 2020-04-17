@@ -49,8 +49,8 @@ Base.isequal(x::Operation,y::Operation) =
     x.op == y.op && length(x.args) == length(y.args) && all(isequal.(x.args,y.args))
 Base.isequal(::Operation, ::Number   ) = false
 Base.isequal(::Number   , ::Operation) = false
-Base.isequal(::Operation, ::Variable ) = false
-Base.isequal(::Variable , ::Operation) = false
+Base.isequal(O::Operation, v::Variable ) = isequal(convert(Variable,O),v)
+Base.isequal(v::Variable , O::Operation) = isequal(O,v)
 Base.isequal(::Operation, ::Constant ) = false
 Base.isequal(::Constant , ::Operation) = false
 
