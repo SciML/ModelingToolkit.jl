@@ -25,5 +25,6 @@ makedocs(
 )
 
 deploydocs(
-   repo = "github.com/SciML/ModelingToolkit.jl.git"
+   repo = "github.com/SciML/ModelingToolkit.jl.git";
+   push_preview = true
 )
