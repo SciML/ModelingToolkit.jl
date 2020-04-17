@@ -5,6 +5,7 @@ using StaticArrays, LinearAlgebra, SparseArrays
 using Latexify, Unitful, ArrayInterface
 using MacroTools
 using UnPack: @unpack
+using DiffEqJump: VariableRateJump, ConstantRateJump, MassActionJump
 
 using Base.Threads
 import MacroTools: splitdef, combinedef, postwalk, striplines
@@ -86,6 +87,8 @@ include("systems/diffeqs/first_order_transform.jl")
 include("systems/diffeqs/index_reduction.jl")
 include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/diffeqs/validation.jl")
+
+include("systems/jumps/jumpsystem.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
 

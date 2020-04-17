@@ -6,6 +6,7 @@ version = "3.0.2"
 [deps]
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 DiffEqBase = "2b5f629d-d688-5b77-993f-72d75c75574e"
+DiffEqJump = "c894b116-72e5-5b58-be3c-e6d8d4ac2b12"
 DiffRules = "b552c78f-8df3-52c6-915a-8e097449b14b"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
