@@ -101,7 +101,7 @@ Base.convert(::Type{Expr}, c::Constant) = c.value
 
 # For dictionary lookup
 Base.hash(v::Variable,h) = hash(Symbol(v),h)
-
+Base.hash(v::Variable, u::UInt64) = hash(Symbol(v), u)
 
 
 # Build variables more easily
