@@ -53,8 +53,8 @@ function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = paramete
     if sparse
         jac = SparseArrays.sparse(jac)
     end
-    return build_function(jac, convert.(Variable,vs), convert.(Variable,ps),
-                          conv = AbstractSysToExpr(sys))
+    return build_function(jac, convert.(Variable,vs), convert.(Variable,ps);
+                          conv = AbstractSysToExpr(sys), kwargs...)
 end
 
 function generate_function(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys); kwargs...)
