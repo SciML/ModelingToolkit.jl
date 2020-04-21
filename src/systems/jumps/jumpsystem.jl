@@ -14,23 +14,24 @@ function JumpSystem(eqs, iv, states, ps; systems = JumpSystem[],
     JumpSystem(eqs, iv, convert.(Variable, states), convert.(Variable, ps), name, systems)
 end
 
-function generate_rate_function(js, rate)
-    f = striplines(build_function(rate, states(js), parameters(js), independent_variable(js)))
-end
+generate_rate_function(js, rate) = build_function(rate, states(js), parameters(js), 
+                                                  independent_variable(js), 
+                                                  expression=Val{false})
 
-function generate_affect_function(js, affect)
-    # waiting on integrator build_function form
-end
-
+generate_affect_function(js, affect) = build_function(affect, states(js), 
+                                                      parameters(js), 
+                                                      independent_variable(js),
+                                                      expression=Val{false},
+                                                      integrator_args=true)[2]
 function assemble_vrj(js, vrj)
     rate   = generate_rate_function(js, vrj.rate)
-    affect = generate_affect_function(js, vrj.affect)
+    affect = generate_affect_function(js, vrj.affect!)
     VariableRateJump(rate, affect)
 end
 
 function assemble_crj(js, crj)
-    rate   = generate_rate_function(js, vrj.rate)
-    affect = generate_affect_function(js, vrj.affect)
+    rate   = generate_rate_function(js, crj.rate)
+    affect = generate_affect_function(js, crj.affect!)
     ConstantRateJump(rate, affect)
 end
 

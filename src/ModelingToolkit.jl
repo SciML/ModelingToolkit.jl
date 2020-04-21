@@ -103,6 +103,7 @@ include("build_function.jl")
 
 export ODESystem, ODEFunction
 export SDESystem, SDEFunction
+export JumpSystem
 export ODEProblem, SDEProblem, NonlinearProblem, OptimizationProblem
 export NonlinearSystem, OptimizationSystem
 export ode_order_lowering
