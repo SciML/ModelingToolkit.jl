@@ -60,7 +60,7 @@ end
 function _build_function(target::JuliaTarget, op::Operation, args...;
                          conv = simplified_expr, expression = Val{true},
                          checkbounds = false, constructor=nothing,
-                         linenumbers = true)
+                         linenumbers = true, integrator_args=false)
 
     argnames = [gensym(:MTKArg) for i in 1:length(args)]
     arg_pairs = map(vars_to_pairs,zip(argnames,args))
@@ -75,12 +75,23 @@ function _build_function(target::JuliaTarget, op::Operation, args...;
 
     fargs = Expr(:tuple,argnames...)
 
-    oop_ex = :(
+    integrator = gensym(:MTKIntegrator)
+    (integrator_args && !(length(args) == 3)) && error("Too many extra arguments given to build an integrator-based function; expected 3, i.e. (u,p,t), but received $(length(args)).")
+    if integrator_args 
+      oop_ex = :(
+        $integrator -> begin 
+        ($(fargs.args...),) = (($integrator).u,($integrator).p,($integrator).t)
+              $bounds_block
+          end
+      )
+    else
+      oop_ex = :( 
         ($(fargs.args...),) -> begin
-            $bounds_block
+          $bounds_block
         end
-    )
-
+      )
+    end
+        
     if !linenumbers
         oop_ex = striplines(oop_ex)
     end
@@ -95,8 +106,7 @@ end
 function _build_function(target::JuliaTarget, rhss, args...;
                          conv = simplified_expr, expression = Val{true},
                          checkbounds = false, constructor=nothing,
-                         linenumbers = false, multithread=false)
-
+                         linenumbers = false, multithread=false, integrator_args=false)
     argnames = [gensym(:MTKArg) for i in 1:length(args)]
     arg_pairs = map(vars_to_pairs,zip(argnames,args))
     ls = reduce(vcat,first.(arg_pairs))
@@ -165,25 +175,45 @@ function _build_function(target::JuliaTarget, rhss, args...;
     arr_bounds_block = checkbounds ? arr_let_expr : :(@inbounds begin $arr_let_expr end)
     ip_bounds_block = checkbounds ? ip_let_expr : :(@inbounds begin $ip_let_expr end)
 
-    oop_ex = :(
-        ($(fargs.args...),) -> begin
-            # If u is a weird non-StaticArray type and we want a sparse matrix, just do the optimized sparse anyways
-            if $(fargs.args[1]) isa Array || (!(typeof($(fargs.args[1])) <: StaticArray) && $(rhss isa SparseMatrixCSC))
-                return $arr_bounds_block
-            else
-                X = $bounds_block
-                construct = $_constructor
-                return construct(X)
-            end
-        end
+    oop_body_block = :(
+      # If u is a weird non-StaticArray type and we want a sparse matrix, just do the optimized sparse anyways
+      if $(fargs.args[1]) isa Array || (!(typeof($(fargs.args[1])) <: StaticArray) && $(rhss isa SparseMatrixCSC))
+          return $arr_bounds_block
+      else
+          X = $bounds_block
+          construct = $_constructor
+          return construct(X)
+      end
     )
-
-    iip_ex = :(
+    integrator = gensym(:MTKIntegrator)
+    (integrator_args && !(length(args) == 3)) && error("Too many extra arguments given to build an integrator-based function; expected 3, i.e. (u,p,t), but received $(length(args)).")
+    if integrator_args 
+      oop_ex = :(
+        $integrator -> begin 
+          ($(fargs.args...),) = (($integrator).u,($integrator).p,($integrator).t)
+          $oop_body_block
+        end
+      )
+      iip_ex = :(
+        $integrator -> begin 
+          ($X,$(fargs.args...),) = (($integrator).u,($integrator).u,($integrator).p,($integrator).t)
+          $ip_bounds_block
+          nothing
+        end
+      )
+    else
+      oop_ex = :(
+        ($(fargs.args...),) -> begin
+          $oop_body_block
+        end
+      )
+      iip_ex = :(
         ($X,$(fargs.args...)) -> begin
             $ip_bounds_block
             nothing
         end
-    )
+      )
+    end
 
     if !linenumbers
         oop_ex = striplines(oop_ex)
