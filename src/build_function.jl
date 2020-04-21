@@ -56,11 +56,50 @@ function build_function(args...;target = JuliaTarget(),kwargs...)
   _build_function(target,args...;kwargs...)
 end
 
+function addheader(ex, fargs, iip; X=gensym(:MTIIPVar))
+  if iip  
+    wrappedex = :(
+        ($X,$(fargs.args...)) -> begin
+        $ex
+        nothing
+      end
+    )
+  else
+    wrappedex = :(
+      ($(fargs.args...),) -> begin
+        $ex
+      end
+    )  
+  end
+  wrappedex
+end
+
+function add_integrator_header(ex, fargs, iip; X=gensym(:MTIIPVar))
+  integrator = gensym(:MTKIntegrator)
+  if iip  
+    wrappedex = :(
+        $integrator -> begin 
+        ($X,$(fargs.args...)) = (($integrator).u,($integrator).u,($integrator).p,($integrator).t)
+        $ex
+        nothing
+      end
+    )
+  else
+    wrappedex = :(
+      $integrator -> begin 
+      ($(fargs.args...),) = (($integrator).u,($integrator).p,($integrator).t)
+        $ex
+      end
+    )  
+  end
+  wrappedex
+end
+
 # Scalar output
 function _build_function(target::JuliaTarget, op::Operation, args...;
                          conv = simplified_expr, expression = Val{true},
                          checkbounds = false, constructor=nothing,
-                         linenumbers = true, integrator_args=false)
+                         linenumbers = true, headerfun=addheader)
 
     argnames = [gensym(:MTKArg) for i in 1:length(args)]
     arg_pairs = map(vars_to_pairs,zip(argnames,args))
@@ -74,23 +113,7 @@ function _build_function(target::JuliaTarget, op::Operation, args...;
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
 
     fargs = Expr(:tuple,argnames...)
-
-    integrator = gensym(:MTKIntegrator)
-    (integrator_args && !(length(args) == 3)) && error("Too many extra arguments given to build an integrator-based function; expected 3, i.e. (u,p,t), but received $(length(args)).")
-    if integrator_args 
-      oop_ex = :(
-        $integrator -> begin 
-        ($(fargs.args...),) = (($integrator).u,($integrator).p,($integrator).t)
-              $bounds_block
-          end
-      )
-    else
-      oop_ex = :( 
-        ($(fargs.args...),) -> begin
-          $bounds_block
-        end
-      )
-    end
+    oop_ex = headerfun(bounds_block, fargs, false)
         
     if !linenumbers
         oop_ex = striplines(oop_ex)
@@ -106,7 +129,7 @@ end
 function _build_function(target::JuliaTarget, rhss, args...;
                          conv = simplified_expr, expression = Val{true},
                          checkbounds = false, constructor=nothing,
-                         linenumbers = false, multithread=false, integrator_args=false)
+                         linenumbers = false, multithread=false, headerfun=addheader)
     argnames = [gensym(:MTKArg) for i in 1:length(args)]
     arg_pairs = map(vars_to_pairs,zip(argnames,args))
     ls = reduce(vcat,first.(arg_pairs))
@@ -185,36 +208,10 @@ function _build_function(target::JuliaTarget, rhss, args...;
           return construct(X)
       end
     )
-    integrator = gensym(:MTKIntegrator)
-    (integrator_args && !(length(args) == 3)) && error("Too many extra arguments given to build an integrator-based function; expected 3, i.e. (u,p,t), but received $(length(args)).")
-    if integrator_args 
-      oop_ex = :(
-        $integrator -> begin 
-          ($(fargs.args...),) = (($integrator).u,($integrator).p,($integrator).t)
-          $oop_body_block
-        end
-      )
-      iip_ex = :(
-        $integrator -> begin 
-          ($X,$(fargs.args...),) = (($integrator).u,($integrator).u,($integrator).p,($integrator).t)
-          $ip_bounds_block
-          nothing
-        end
-      )
-    else
-      oop_ex = :(
-        ($(fargs.args...),) -> begin
-          $oop_body_block
-        end
-      )
-      iip_ex = :(
-        ($X,$(fargs.args...)) -> begin
-            $ip_bounds_block
-            nothing
-        end
-      )
-    end
 
+    oop_ex = headerfun(oop_body_block, fargs, false)
+    iip_ex = headerfun(ip_bounds_block, fargs, true; X=X)
+    
     if !linenumbers
         oop_ex = striplines(oop_ex)
         iip_ex = striplines(iip_ex)

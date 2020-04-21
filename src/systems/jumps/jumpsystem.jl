@@ -14,6 +14,8 @@ function JumpSystem(eqs, iv, states, ps; systems = JumpSystem[],
     JumpSystem(eqs, iv, convert.(Variable, states), convert.(Variable, ps), name, systems)
 end
 
+
+
 generate_rate_function(js, rate) = build_function(rate, states(js), parameters(js), 
                                                   independent_variable(js), 
                                                   expression=Val{false})
@@ -22,7 +24,7 @@ generate_affect_function(js, affect) = build_function(affect, states(js),
                                                       parameters(js), 
                                                       independent_variable(js),
                                                       expression=Val{false},
-                                                      integrator_args=true)[2]
+                                                      headerfun=add_integrator_header)[2]
 function assemble_vrj(js, vrj)
     rate   = generate_rate_function(js, vrj.rate)
     affect = generate_affect_function(js, vrj.affect!)
