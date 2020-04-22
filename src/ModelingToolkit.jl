@@ -5,7 +5,7 @@ using StaticArrays, LinearAlgebra, SparseArrays
 using Latexify, Unitful, ArrayInterface
 using MacroTools
 using UnPack: @unpack
-using DiffEqJump: VariableRateJump, ConstantRateJump, MassActionJump
+using DiffEqJump
 
 using Base.Threads
 import MacroTools: splitdef, combinedef, postwalk, striplines
@@ -104,7 +104,7 @@ include("build_function.jl")
 export ODESystem, ODEFunction
 export SDESystem, SDEFunction
 export JumpSystem
-export ODEProblem, SDEProblem, NonlinearProblem, OptimizationProblem
+export ODEProblem, SDEProblem, NonlinearProblem, OptimizationProblem, JumpProblem
 export NonlinearSystem, OptimizationSystem
 export ode_order_lowering
 export PDESystem

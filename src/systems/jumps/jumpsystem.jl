@@ -25,7 +25,7 @@ generate_affect_function(js, affect) = build_function(affect, states(js),
                                                       independent_variable(js),
                                                       expression=Val{false},
                                                       headerfun=add_integrator_header)[2]
-function assemble_vrj(js, vrj)
+function assemble_vrj(js, vrj) 
     rate   = generate_rate_function(js, vrj.rate)
     affect = generate_affect_function(js, vrj.affect!)
     VariableRateJump(rate, affect)
@@ -37,23 +37,26 @@ function assemble_crj(js, crj)
     ConstantRateJump(rate, affect)
 end
 
-function assemble_maj(maj, states_to_idxs, ps_to_idxs; scale_rate=false)
+"""
+```julia
+function DiffEqBase.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
+```
 
-    # mass action scaled_rates need to be a Number, but 
-    # operations are numbers, so can't check the type directly
-    @assert !isa(maj.scaled_rates, Union{Operation,Variable})
-
-    rstype = fieldtypes(eltype(maj.reactant_stoch))[2]
-    rs     = Vector{Pair{valtype(states_to_idxs),rstype}}()
-    for (spec,stoich) in maj.reactant_stoch
-        push!(rs, states_to_idxs[spec] => stoich)
+Generates a JumpProblem from a JumpSystem.
+"""
+function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
+    vrjs = Vector{VariableRateJump}()
+    crjs = Vector{ConstantRateJump}()
+    for j in equations(js)
+        if j isa ConstantRateJump
+            push!(crjs, assemble_crj(js, j))
+        elseif j isa VariableRateJump
+            push!(vrjs, assemble_vrj(js, j))
+        else
+            (j isa MassActionJump) && error("Generation of JumpProblems with MassActionJumps is not yet supported.")
+        end
     end
-
-    nstype = fieldtypes(eltype(maj.net_stoch))[2]
-    ns     = Vector{Pair{valtype(states_to_idxs),nstype}}()
-    for (spec,stoich) in maj.net_stoch
-        push!(ns, states_to_idxs[spec] => stoich)
-    end
-
-    MassActionJump(maj.scaled_rates, rs, ns, scale_rates=scale_rate)
+    ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")    
+    jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, nothing)
+    JumpProblem(prob, aggregator, jset)
 end
