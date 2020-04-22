@@ -83,7 +83,6 @@ include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")
 include("systems/diffeqs/abstractodesystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
-include("systems/diffeqs/index_reduction.jl")
 include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/diffeqs/validation.jl")
 
