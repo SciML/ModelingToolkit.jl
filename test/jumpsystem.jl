@@ -51,9 +51,9 @@ jump2.affect!(integrator)
 
 
 # test can make and solve a jump problem
-rate₂   = γ*I
-affect₂ = [I ~ I - 1, R ~ R + 1]
-j₃ = ConstantRateJump(rate₂,affect₂)
+rate₃   = γ*I
+affect₃ = [I ~ I - 1, R ~ R + 1]
+j₃ = ConstantRateJump(rate₃,affect₃)
 js2 = JumpSystem([j₁,j₃], t, [S,I,R], [β,γ])
 u₀ = [999,1,0]; p = (0.1/1000,0.01); tspan = (0.,250.)
 dprob = DiscreteProblem(u₀,tspan,p)
