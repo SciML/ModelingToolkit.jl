@@ -216,4 +216,4 @@ function (f::AbstractSysToExpr)(O::Operation)
     end
     return build_expr(:call, Any[O.op; f.(O.args)])
 end
-(f::AbstractSysToExpr)(x) = convert(Expr, x)
+(f::AbstractSysToExpr)(x) = to_Expr(x)

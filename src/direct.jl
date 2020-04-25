@@ -50,6 +50,7 @@ function simplified_expr(O::Operation)
 end
 
 simplified_expr(c::Constant) = c.value
+simplified_expr(c) = c
 
 function simplified_expr(eq::Equation)
     Expr(:(=), simplified_expr(eq.lhs), simplified_expr(eq.rhs))

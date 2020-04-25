@@ -114,3 +114,6 @@ function substitute_expr!(expr::Operation, s::Pair{Operation, Operation})
     end
     return nothing
 end
+
+to_Expr(x::Expression) = convert(Expr, x)
+to_Expr(x::Number) = to_Expr(Constant(x))
