@@ -34,7 +34,7 @@ function (f::ODEToExpr)(O::Operation)
     end
     return build_expr(:call, Any[Symbol(O.op); f.(O.args)])
 end
-(f::ODEToExpr)(x) = to_Expr(x)
+(f::ODEToExpr)(x) = convert(Expr, x)
 
 function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     tgrad = calculate_tgrad(sys)
