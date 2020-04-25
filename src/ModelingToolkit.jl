@@ -58,7 +58,6 @@ include("variables.jl")
 include("context_dsl.jl")
 include("operations.jl")
 include("differentials.jl")
-include("symutils.jl")
 
 function Base.convert(::Type{Variable},x::Operation)
     if x.op isa Variable
