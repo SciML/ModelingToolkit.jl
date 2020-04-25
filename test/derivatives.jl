@@ -6,6 +6,8 @@ using Test
 @variables x y z
 @derivatives D'~t D2''~t Dx'~x
 
+test_equal(a, b) = @test isequal(simplify_constants(a), simplify_constants(b))
+
 @test @macroexpand(@derivatives D'~t D2''~t) == @macroexpand(@derivatives (D'~t), (D2''~t))
 
 @test isequal(expand_derivatives(D(t)), 1)
@@ -38,15 +40,15 @@ eqs = [0 ~ σ*(y-x),
        0 ~ x*y - β*z]
 sys = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(sys)
-@test isequal(jac[1,1], -1σ)
-@test isequal(jac[1,2], σ)
-@test isequal(jac[1,3], 0)
-@test isequal(jac[2,1], -1z + ρ) # FIXME
-@test isequal(jac[2,2], -1)
-@test isequal(jac[2,3], -1x)
-@test isequal(jac[3,1], y)
-@test isequal(jac[3,2], x)
-@test isequal(jac[3,3], -1*β)
+test_equal(jac[1,1], -1σ)
+test_equal(jac[1,2], σ)
+test_equal(jac[1,3], 0)
+test_equal(jac[2,1], -1z + ρ) # FIXME
+test_equal(jac[2,2], -1)
+test_equal(jac[2,3], -1x)
+test_equal(jac[3,1], y)
+test_equal(jac[3,2], x)
+test_equal(jac[3,3], -1β)
 
 # Variable dependence checking in differentiation
 @variables a(t) b(a)

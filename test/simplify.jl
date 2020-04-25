@@ -28,4 +28,4 @@ d2 = Differential(x)(d1)
 d3 = Differential(x)(d2)
 
 @test simplified_expr(expand_derivatives(d3)) == :(0)
-#@test simplify_constants(x^0) == 1
+@test simplified_expr(simplify_constants(x^0)) == :(1)

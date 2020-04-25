@@ -43,6 +43,7 @@ function simplify_constants(expr)
 end
 
 to_mtk(x) = x
+to_mtk(x::Number) = Constant(x)
 to_mtk(v::SymbolicUtils.Variable{T}) where {T} = Variable{T}(nameof(v))
 to_mtk(v::SymbolicUtils.Variable{FnType{X,Y}}) where {X,Y} = Variable{Y}(nameof(v))
 function to_mtk(expr::SymbolicUtils.Term)
