@@ -43,7 +43,7 @@ jac = calculate_jacobian(sys)
 test_equal(jac[1,1], -1σ)
 test_equal(jac[1,2], σ)
 test_equal(jac[1,3], 0)
-test_equal(jac[2,1], -1z + ρ) # FIXME
+test_equal(jac[2,1],  ρ - z)
 test_equal(jac[2,2], -1)
 test_equal(jac[2,3], -1x)
 test_equal(jac[3,1], y)
