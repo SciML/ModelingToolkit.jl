@@ -3,22 +3,22 @@ struct Reaction{S <: Variable, T <: Number}
     substrates::Vector{Operation}
     products::Vector{Operation}
     substoich::Vector{T}
-    prodstoich::Vector{T}    
+    prodstoich::Vector{T}
     netstoich::Vector{Pair{S,T}}
     only_use_rate::Bool
 end
 
-function Reaction(rate, subs, prods, substoich, prodstoich; 
+function Reaction(rate, subs, prods, substoich, prodstoich;
                   netstoich=nothing, only_use_rate=false, kwargs...)
 
-    subsv  = isnothing(subs) ? Vector{Operation}() : subs
-    prodsv = isnothing(prods) ? Vector{Operation}() : prods
+    subsv  = (isempty(subs)||isnothing(subs)) ? Vector{Operation}() : subs
+    prodsv = (isempty(prods)||isnothing(prods)) ? Vector{Operation}() : prods
     ns = isnothing(netstoich) ? get_netstoich(subsv, prodsv, substoich, prodstoich) : netstoich
     Reaction(rate, subsv, prodsv, substoich, prodstoich, ns, only_use_rate)
 end
 
 # three argument constructor assumes stoichiometric coefs are one and integers
-function Reaction(rate, subs, prods; kwargs...) 
+function Reaction(rate, subs, prods; kwargs...)
 
     sstoich = isnothing(subs) ? Int[] : ones(Int,length(subs))
     pstoich = isnothing(prods) ? Int[] : ones(Int,length(prods))
@@ -54,18 +54,18 @@ end
 function ReactionSystem(eqs, iv, species, params; systems = ReactionSystem[],
                                                   name = gensym(:ReactionSystem))
 
-    ReactionSystem(eqs, iv, convert.(Variable,species), convert.(Variable,params), 
+    ReactionSystem(eqs, iv, convert.(Variable,species), convert.(Variable,params),
                    name, systems)
 end
 
 # Calculate the ODE rate law
 function oderatelaw(rx)
-    @unpack rate, substrates, substoich, only_use_rate = rx    
+    @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
     if !only_use_rate
         coef = one(eltype(substoich))
         for (i,stoich) in enumerate(substoich)
-            coef *= factorial(stoich)        
+            coef *= factorial(stoich)
             rl   *= isone(stoich) ? substrates[i] : substrates[i]^stoich
         end
         (!isone(coef)) && (rl /= coef)
@@ -78,15 +78,15 @@ function assemble_drift(rs)
     eqs = [D(x(rs.iv())) ~ 0 for x in rs.states]
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
-    for rx in rs.eqs        
+    for rx in rs.eqs
         rl = oderatelaw(rx)
         for (spec,stoich) in rx.netstoich
             i = species_to_idx[spec]
             if iszero(eqs[i].rhs)
                 signedrl = (stoich > zero(stoich)) ? rl : -rl
-                rhs      = isone(abs(stoich)) ? signedrl : stoich * rl                
+                rhs      = isone(abs(stoich)) ? signedrl : stoich * rl
             else
-                Δspec = isone(abs(stoich)) ? rl : abs(stoich) * rl            
+                Δspec = isone(abs(stoich)) ? rl : abs(stoich) * rl
                 rhs   = (stoich > zero(stoich)) ? (eqs[i].rhs + Δspec) : (eqs[i].rhs - Δspec)
             end
             eqs[i] = Equation(eqs[i].lhs, rhs)
@@ -104,7 +104,7 @@ function assemble_diffusion(rs)
         for (spec,stoich) in rx.netstoich
             i            = species_to_idx[spec]
             signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
-            eqs[i,j]     = isone(abs(stoich)) ? signedrlsqrt : stoich * rlsqrt            
+            eqs[i,j]     = isone(abs(stoich)) ? signedrlsqrt : stoich * rlsqrt
         end
     end
     eqs
