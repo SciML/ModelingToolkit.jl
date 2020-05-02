@@ -14,8 +14,8 @@ rxs = [Reaction(k[1], nothing, [A]),            # 0 -> A
        Reaction(k[10], [A], [C,D], [2], [1,1]), # 2A -> C + D
        Reaction(k[11], [A], [A,B], [2], [1,1]), # 2A -> A + B
        Reaction(k[12], [A,B,C], [C,D], [1,3,4], [2, 3]), # A+3B+4C -> 2C + 3D
-       Reaction(k[13], [A,B], nothing, [3,1], nothing), # 2A+B -> 0
-       Reaction(k[14], nothing, [A], nothing, [2]), # 0 -> 3A
+       Reaction(k[13], [A,B], nothing, [3,1], nothing), # 3A+B -> 0
+       Reaction(k[14], nothing, [A], nothing, [2]), # 0 -> 2A
        Reaction(k[15]*A/(2+A), [A], nothing; only_use_rate=true)  # A -> 0 with custom rate
        ]
 rs = ReactionSystem(rxs,t,[A,B,C,D],k)
