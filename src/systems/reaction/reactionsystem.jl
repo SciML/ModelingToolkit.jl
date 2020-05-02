@@ -11,17 +11,29 @@ end
 function Reaction(rate, subs, prods, substoich, prodstoich;
                   netstoich=nothing, only_use_rate=false, kwargs...)
 
-    subsv,substoichv  = isnothing(subs) ? (Vector{Operation}(),Int[]) : (subs,substoich)
-    prodsv,prodstoichv = isnothing(prods) ? (Vector{Operation}(),Int[]) : (prods,prodstoich)
-    ns = isnothing(netstoich) ? get_netstoich(subsv, prodsv, substoichv, prodstoichv) : netstoich
-    Reaction(rate, subsv, prodsv, substoichv, prodstoichv, ns, only_use_rate)
+    (isnothing(prods)&&isnothing(subs)) && error("A reaction requires a non-nothing substrate or product vector.")
+    if isnothing(subs)
+        subs = Vector{Operation}()
+        (substoich!=nothing) && error("If substrates are nothing, substrate stiocihometries have to be so too.")
+        substoich = (prodstoich == nothing) ? nothing : typeof(prodstoich)()
+    end
+    if isnothing(prods)
+        prods = Vector{Operation}()
+        (prodstoich!=nothing) && error("If products are nothing, product stiocihometries have to be so too.")
+        prodstoich = (substoich == nothing) ? nothing : typeof(substoich)()
+    end
+    ns = isnothing(netstoich) ? get_netstoich(subs, prods, substoich, prodstoich) : netstoich
+    Reaction(rate, subs, prods, substoich, prodstoich, ns, only_use_rate)
 end
+
+a =[1.,2.3,4.]
+typeof(a)()
 
 # three argument constructor assumes stoichiometric coefs are one and integers
 function Reaction(rate, subs, prods; kwargs...)
 
-    sstoich = isnothing(subs) ? Int[] : ones(Int,length(subs))
-    pstoich = isnothing(prods) ? Int[] : ones(Int,length(prods))
+    sstoich = isnothing(subs) ? nothing : ones(Int,length(subs))
+    pstoich = isnothing(prods) ? nothing : ones(Int,length(prods))
     Reaction(rate, subs, prods, sstoich, pstoich; kwargs...)
 end
 
