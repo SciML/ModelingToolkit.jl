@@ -11,8 +11,9 @@ end
 function Reaction(rate, subs, prods, substoich, prodstoich;
                   netstoich=nothing, only_use_rate=false, kwargs...)
 
-    (isnothing(prods)&&isnothing(subs)) && error("A reaction requires a non-nothing substrate or product vector.")
-    if isnothing(subs)
+      (isnothing(prods)&&isnothing(subs)) && error("A reaction requires a non-nothing substrate or product vector.")
+      (isnothing(prodstoich)&&isnothing(substoich)) && error("Both substrate and product stochiometry inputs cannot be nothing.")
+      if isnothing(subs)
         subs = Vector{Operation}()
         (substoich!=nothing) && error("If substrates are nothing, substrate stiocihometries have to be so too.")
         substoich = (prodstoich == nothing) ? nothing : typeof(prodstoich)()
