@@ -16,12 +16,12 @@ function Reaction(rate, subs, prods, substoich, prodstoich;
       if isnothing(subs)
         subs = Vector{Operation}()
         (substoich!=nothing) && error("If substrates are nothing, substrate stiocihometries have to be so too.")
-        substoich = (prodstoich == nothing) ? nothing : typeof(prodstoich)()
+        substoich = typeof(prodstoich)()
     end
     if isnothing(prods)
         prods = Vector{Operation}()
         (prodstoich!=nothing) && error("If products are nothing, product stiocihometries have to be so too.")
-        prodstoich = (substoich == nothing) ? nothing : typeof(substoich)()
+        prodstoich = typeof(substoich)()
     end
     ns = isnothing(netstoich) ? get_netstoich(subs, prods, substoich, prodstoich) : netstoich
     Reaction(rate, subs, prods, substoich, prodstoich, ns, only_use_rate)
