@@ -129,7 +129,8 @@ end
 function _build_function(target::JuliaTarget, rhss, args...;
                          conv = simplified_expr, expression = Val{true},
                          checkbounds = false, constructor=nothing,
-                         linenumbers = false, multithread=false, headerfun=addheader)
+                         linenumbers = false, multithread=false, 
+                         headerfun=addheader, outputidxs=nothing)
     argnames = [gensym(:MTKArg) for i in 1:length(args)]
     arg_pairs = map(vars_to_pairs,zip(argnames,args))
     ls = reduce(vcat,first.(arg_pairs))
@@ -139,6 +140,8 @@ function _build_function(target::JuliaTarget, rhss, args...;
     fname = gensym(:ModelingToolkitFunction)
     fargs = Expr(:tuple,argnames...)
 
+
+    oidx = isnothing(outputidxs) ? (i -> i) : (i -> outputidxs[i])
     X = gensym(:MTIIPVar)
 	if eltype(eltype(rhss)) <: AbstractArray # Array of arrays of arrays
 		ip_sys_exprs = reduce(vcat,[vec(reduce(vcat,[vec([:($X[$i][$j][$k] = $(conv(rhs))) for (k, rhs) ∈ enumerate(rhsel2)]) for (j, rhsel2) ∈ enumerate(rhsel)],init=Expr[])) for (i,rhsel) ∈ enumerate(rhss)],init=Expr[])
@@ -151,7 +154,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
     elseif rhss isa SparseMatrixCSC
         ip_sys_exprs = [:($X.nzval[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss.nzval)]
     else
-        ip_sys_exprs = [:($X[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
+        ip_sys_exprs = [:($X[$(oidx(i))] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
     end
 
     ip_let_expr = Expr(:let, var_eqs, build_expr(:block, ip_sys_exprs))

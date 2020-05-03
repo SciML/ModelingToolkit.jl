@@ -20,20 +20,25 @@ generate_rate_function(js, rate) = build_function(rate, states(js), parameters(j
                                                   independent_variable(js), 
                                                   expression=Val{false})
 
-generate_affect_function(js, affect) = build_function(affect, states(js), 
+generate_affect_function(js, affect, outputidxs) = build_function(affect, states(js), 
                                                       parameters(js), 
                                                       independent_variable(js),
                                                       expression=Val{false},
-                                                      headerfun=add_integrator_header)[2]
-function assemble_vrj(js, vrj) 
+                                                      headerfun=add_integrator_header, 
+                                                      outputidxs=outputidxs)[2]
+function assemble_vrj(js, vrj, statetoid) 
     rate   = generate_rate_function(js, vrj.rate)
-    affect = generate_affect_function(js, vrj.affect!)
+    outputvars = (convert(Variable,affect.lhs) for affect in vrj.affect!)
+    outputidxs = ((statetoid[var] for var in outputvars)...,)
+    affect = generate_affect_function(js, vrj.affect!, outputidxs)
     VariableRateJump(rate, affect)
 end
 
-function assemble_crj(js, crj)
+function assemble_crj(js, crj, statetoid)
     rate   = generate_rate_function(js, crj.rate)
-    affect = generate_affect_function(js, crj.affect!)
+    outputvars = (convert(Variable,affect.lhs) for affect in crj.affect!)
+    outputidxs = ((statetoid[var] for var in outputvars)...,)
+    affect = generate_affect_function(js, crj.affect!, outputidxs)
     ConstantRateJump(rate, affect)
 end
 
@@ -47,16 +52,17 @@ Generates a JumpProblem from a JumpSystem.
 function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     vrjs = Vector{VariableRateJump}()
     crjs = Vector{ConstantRateJump}()
+    statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
     for j in equations(js)
         if j isa ConstantRateJump
-            push!(crjs, assemble_crj(js, j))
+            push!(crjs, assemble_crj(js, j, statetoid))
         elseif j isa VariableRateJump
-            push!(vrjs, assemble_vrj(js, j))
+            push!(vrjs, assemble_vrj(js, j, statetoid))
         else
             (j isa MassActionJump) && error("Generation of JumpProblems with MassActionJumps is not yet supported.")
         end
     end
     ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")    
-    jset = JumpSet(Tuple(vrjs...), Tuple(crjs...), nothing, nothing)
+    jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, nothing)
     JumpProblem(prob, aggregator, jset)
 end
