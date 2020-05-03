@@ -182,3 +182,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
     p = varmap_to_vars(parammap,parameters(sys))
     SDEProblem(f,f.g,u0,tspan,p;kwargs...)
 end
+
+function DiffEqBase.SDEProblem(sys::SDESystem, args...; kwargs...)
+    SDEProblem{true}(sys, args...; kwargs...)
+end
