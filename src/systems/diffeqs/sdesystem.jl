@@ -179,6 +179,6 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
                         linenumbers=linenumbers,multithread=multithread,
                         sparse=sparse)
     u0 = varmap_to_vars(u0map,states(sys))
-    p = varmap_to_vars(parammap,parameters(sys))
+    p = varmap_to_vars(p,parameters(sys))
     SDEProblem(f,f.g,u0,tspan,p;kwargs...)
 end
