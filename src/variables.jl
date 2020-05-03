@@ -249,7 +249,17 @@ function varmap_to_vars(varmap,varlist)
     out = similar(varmap,typeof(last(first(varmap))))
     for i in 1:length(varmap)
         ivar = convert(Variable,varmap[i][1])
-        j = findfirst(x->ivar.name == convert(Variable,x).name,varlist)
+        strname = String(ivar.name)
+        # The first test checks whether the name was gensym'ed,
+        # and the second tests whether we need to account for 
+        # '₊', as well as assigning `ind` to its value, so that 
+        # have to `findfirst` again.
+        name = if first(strname) == '#' && (ind = findfirst(==('₊'), strname)) !== nothing
+            Symbol(collect(strname)[(ind+1):end]...)
+        else
+            Symbol(strname)
+        end
+        j = findfirst(x-> name == convert(Variable,x).name,varlist)
         out[j] = varmap[i][2]
     end
 
