@@ -27,8 +27,6 @@ function Reaction(rate, subs, prods, substoich, prodstoich;
     Reaction(rate, subs, prods, substoich, prodstoich, ns, only_use_rate)
 end
 
-a =[1.,2.3,4.]
-typeof(a)()
 
 # three argument constructor assumes stoichiometric coefs are one and integers
 function Reaction(rate, subs, prods; kwargs...)
