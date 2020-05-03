@@ -52,7 +52,7 @@ function expand_derivatives(O::Operation)
         end |> simplify_constants
     end
 
-    return O
+    return simplify_constants(O)
 end
 expand_derivatives(x) = x
 

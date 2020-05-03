@@ -10,9 +10,9 @@ eqs = [D(y[1]) ~ -k[1]*y[1] + k[3]*y[2]*y[3],
 
 sys = ODESystem(eqs,t,y,k)
 M = calculate_massmatrix(sys)
-M == [1 0 0
-      0 1 0
-      0 0 0]
+@test M == [1 0 0
+            0 1 0
+            0 0 0]
 
 f = ODEFunction(sys)
 prob_mm = ODEProblem(f,[1.0,0.0,0.0],(0.0,1e5),(0.04,3e7,1e4))

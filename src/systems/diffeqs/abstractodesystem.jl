@@ -114,6 +114,8 @@ function calculate_massmatrix(sys::AbstractODESystem, simplify=true)
         end
     end
     M = simplify ? simplify_constants.(M) : M
+    # M should only contain concrete numbers
+    M = map(x->x isa Constant ? x.value : x, M)
     M == I ? I : M
 end
 
