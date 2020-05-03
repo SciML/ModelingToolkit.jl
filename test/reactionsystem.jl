@@ -1,11 +1,11 @@
 using ModelingToolkit, LinearAlgebra, Test
 
-@parameters t k[1:13]
+@parameters t k[1:15]
 @variables A(t) B(t) C(t) D(t)
 rxs = [Reaction(k[1], nothing, [A]),            # 0 -> A
        Reaction(k[2], [B], nothing),            # B -> 0
        Reaction(k[3],[A],[C]),                  # A -> C
-       Reaction(k[4], [C], [A,B]),              # C -> A + B        
+       Reaction(k[4], [C], [A,B]),              # C -> A + B
        Reaction(k[5], [C], [A], [1], [2]),      # C -> A + A
        Reaction(k[6], [A,B], [C]),              # A + B -> C
        Reaction(k[7], [B], [A], [2], [1]),      # 2B -> A
@@ -14,8 +14,10 @@ rxs = [Reaction(k[1], nothing, [A]),            # 0 -> A
        Reaction(k[10], [A], [C,D], [2], [1,1]), # 2A -> C + D
        Reaction(k[11], [A], [A,B], [2], [1,1]), # 2A -> A + B
        Reaction(k[12], [A,B,C], [C,D], [1,3,4], [2, 3]), # A+3B+4C -> 2C + 3D
-       Reaction(k[13]*A/(2+A), [A], nothing; only_use_rate=true)  # A -> 0 with custom rate 
-       ]  
+       Reaction(k[13], [A,B], nothing, [3,1], nothing), # 3A+B -> 0
+       Reaction(k[14], nothing, [A], nothing, [2]), # 0 -> 2A
+       Reaction(k[15]*A/(2+A), [A], nothing; only_use_rate=true)  # A -> 0 with custom rate
+       ]
 rs = ReactionSystem(rxs,t,[A,B,C,D],k)
 odesys = convert(ODESystem,rs)
 sdesys = convert(SDESystem,rs)
@@ -24,8 +26,8 @@ sdesys = convert(SDESystem,rs)
 function oderhs(u,k,t)
        A = u[1]; B = u[2]; C = u[3]; D = u[4];
        du = zeros(eltype(u),4)
-       du[1] = k[1] - k[3]*A + k[4]*C + 2*k[5]*C - k[6]*A*B + k[7]*B^2/2 - k[9]*A*B - k[10]*A^2 - k[11]*A^2/2 - k[12]*A*B^3*C^4/144 - k[13]*A/(2+A)
-       du[2] = -k[2]*B + k[4]*C - k[6]*A*B - k[7]*B^2 - k[8]*A*B - k[9]*A*B + k[11]*A^2/2 - 3*k[12]*A*B^3*C^4/144
+       du[1] = k[1] - k[3]*A + k[4]*C + 2*k[5]*C - k[6]*A*B + k[7]*B^2/2 - k[9]*A*B - k[10]*A^2 - k[11]*A^2/2 - k[12]*A*B^3*C^4/144 - 3*k[13]*A^3*B/6 + 2*k[14] - k[15]*A/(2+A)
+       du[2] = -k[2]*B + k[4]*C - k[6]*A*B - k[7]*B^2 - k[8]*A*B - k[9]*A*B + k[11]*A^2/2 - 3*k[12]*A*B^3*C^4/144 - k[13]*A^3*B/6
        du[3] = k[3]*A - k[4]*C - k[5]*C  + k[6]*A*B + k[8]*A*B + k[9]*A*B + k[10]*A^2/2 - 2*k[12]*A*B^3*C^4/144
        du[4] = k[9]*A*B + k[10]*A^2/2 + 3*k[12]*A*B^3*C^4/144
        du
@@ -49,8 +51,10 @@ function sdenoise(u,k,t)
             -2*sqrt(k[10]*A^2/2) z sqrt(k[10]*A^2/2) sqrt(k[10]*A^2/2);
             -sqrt(k[11]*A^2/2) sqrt(k[11]*A^2/2) z z;
             -sqrt(k[12]*A*B^3*C^4/144) -3*sqrt(k[12]*A*B^3*C^4/144) -2*sqrt(k[12]*A*B^3*C^4/144) 3*sqrt(k[12]*A*B^3*C^4/144);
-            -sqrt(k[13]*A/(2+A)) z z z]'
-       
+            -3*sqrt(k[13]*A^3*B/6) -sqrt(k[13]*A^3*B/6) z z
+            2*sqrt(k[14]) z z z;
+            -sqrt(k[15]*A/(2+A)) z z z]'
+
        return G
 end
 
