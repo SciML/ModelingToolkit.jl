@@ -57,6 +57,6 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
         end
     end
     ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")    
-    jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, nothing)
+    jset = JumpSet(Tuple(vrjs...), Tuple(crjs...), nothing, nothing)
     JumpProblem(prob, aggregator, jset)
 end
