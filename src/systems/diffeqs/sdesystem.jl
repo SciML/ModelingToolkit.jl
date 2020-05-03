@@ -168,7 +168,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
 Generates an SDEProblem from an SDESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
-function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
+function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap;
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
@@ -179,6 +179,6 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
                         linenumbers=linenumbers,multithread=multithread,
                         sparse=sparse)
     u0 = varmap_to_vars(u0map,states(sys))
-    p = varmap_to_vars(p,parameters(sys))
+    p = varmap_to_vars(parammap,parameters(sys))
     SDEProblem(f,f.g,u0,tspan,p;kwargs...)
 end
