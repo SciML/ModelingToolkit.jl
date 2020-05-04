@@ -5,6 +5,7 @@ using StaticArrays, LinearAlgebra, SparseArrays
 using Latexify, Unitful, ArrayInterface
 using MacroTools
 using UnPack: @unpack
+using DiffEqJump
 
 using Base.Threads
 import MacroTools: splitdef, combinedef, postwalk, striplines
@@ -86,6 +87,8 @@ include("systems/diffeqs/first_order_transform.jl")
 include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/diffeqs/validation.jl")
 
+include("systems/jumps/jumpsystem.jl")
+
 include("systems/nonlinear/nonlinearsystem.jl")
 
 include("systems/optimization/optimizationsystem.jl")
@@ -99,7 +102,8 @@ include("build_function.jl")
 
 export ODESystem, ODEFunction
 export SDESystem, SDEFunction
-export ODEProblem, SDEProblem, NonlinearProblem, OptimizationProblem
+export JumpSystem
+export ODEProblem, SDEProblem, NonlinearProblem, OptimizationProblem, JumpProblem
 export NonlinearSystem, OptimizationSystem
 export ode_order_lowering
 export PDESystem
