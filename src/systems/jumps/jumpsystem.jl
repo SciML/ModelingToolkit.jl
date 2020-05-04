@@ -42,6 +42,22 @@ function assemble_crj(js, crj, statetoid)
     ConstantRateJump(rate, affect)
 end
 
+
+"""
+```julia
+function DiffEqBase.DiscreteProblem(sys::AbstractSystem, u0map, tspan, 
+                                    parammap=DiffEqBase.NullParameters; kwargs...)
+```
+
+Generates a DiscreteProblem from an AbstractSystem
+"""
+function DiffEqBase.DiscreteProblem(sys::AbstractSystem, u0map, tspan::Tuple, 
+                                    parammap=DiffEqBase.NullParameters(); kwargs...)
+    u0 = varmap_to_vars(u0map, states(sys))
+    p = varmap_to_vars(parammap, parameters(sys))
+    DiscreteProblem(u0, tspan, p; kwargs...)
+end
+
 """
 ```julia
 function DiffEqBase.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)

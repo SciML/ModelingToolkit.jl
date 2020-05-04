@@ -56,7 +56,9 @@ affect₃ = [I ~ I - 1, R ~ R + 1]
 j₃ = ConstantRateJump(rate₃,affect₃)
 js2 = JumpSystem([j₁,j₃], t, [S,I,R], [β,γ])
 u₀ = [999,1,0]; p = (0.1/1000,0.01); tspan = (0.,250.)
-dprob = DiscreteProblem(u₀,tspan,p)
+u₀map = [S => 999, I => 1, R => 0]
+parammap = [β => .1/1000, γ => .01]
+dprob = DiscreteProblem(js2, u₀map, tspan, parammap)
 jprob = JumpProblem(js2, dprob, Direct(), save_positions=(false,false))
 Nsims = 10000
 function getmean(jprob,Nsims)
