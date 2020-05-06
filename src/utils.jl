@@ -100,32 +100,24 @@ end
 
 # variable substitution
 """
-substitute(expr::Operation, s::Pair{Operation, Operation})
-substitute(expr::Operation, s::Dict{Operation, Operation})
-substitute(expr::Operation, s::Vector{Pair{Operation, Operation}})
+substitute(expr::Operation, s::Pair)
+substitute(expr::Operation, s::Dict)
+substitute(expr::Operation, s::Vector)
 
-Performs the substitution `Operation => Operation` on the `expr` Operation.
+Performs the substitution `Operation => val` on the `expr` Operation.
 """
-substitute(expr::Constant, s) = nothing
+substitute(expr::Constant, s) = expr
+substitute(expr::Operation, s::Pair) = _substitute(expr, [s[1]], [s[2]])
+substitute(expr::Operation, dict::Dict) = _substitute(expr, keys(dict), values(dict))
+substitute(expr::Operation, s::Vector) = _substitute(expr, first.(s), last.(s))
 
-function substitute(expr::Operation, s::Pair{Operation, Operation})
-    substitute(expr,Dict(to_symbolic(s[1]) => to_symbolic(s[2])))
+function _substitute(expr, ks, vs)
+    _substitute(expr, Dict(map(Pair, map(to_symbolic, ks), map(to_symbolic, vs))))
 end
 
-function substitute(expr::Operation, dict::Dict{Operation,Operation})
-    substitute(expr,Dict(map(Pair,
-                         map(to_symbolic, keys(dict)),
-                         map(to_symbolic, values(dict)))))
-end
-
-function substitute(expr::Operation, s::Vector)
-    substitute(expr,Dict(map(Pair,
-                         map(to_symbolic, first.(s)),
-                         map(to_symbolic, last.(s)))))
-end
-
-function substitute(expr::Operation, s::Dict{<:SymbolicUtils.Term,<:SymbolicUtils.Term})
-    SymbolicUtils.RuleSet([SymbolicUtils.@rule(~x::(x->haskey(s, x)) => s[~x])])(expr) |> to_mtk
+function _substitute(expr, dict::Dict)
+    sub = SymbolicUtils.RuleSet([SymbolicUtils.@rule(~x::(x->haskey(dict, x)) => dict[~x])])
+    to_mtk(simplify(sub(expr)))
 end
 
 @deprecate substitute_expr!(expr,s) substitute(expr,s)
