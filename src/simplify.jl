@@ -1,6 +1,3 @@
-import SymbolicUtils
-import SymbolicUtils: FnType
-
 # ModelingToolkit -> SymbolicUtils
 SymbolicUtils.istree(x::Operation) = true
 function SymbolicUtils.operation(x::Operation)
@@ -38,9 +35,11 @@ SymbolicUtils.symtype(x::Expression) = Number
 
 # SymbolicUtils -> ModelingToolkit
 
-function simplify_constants(expr)
+function SymbolicUtils.simplify(expr::Expression)
     SymbolicUtils.simplify(expr) |> to_mtk
 end
+
+@deprecate simplify_constants(ex) simplify(ex)
 
 to_mtk(x) = x
 to_mtk(x::Number) = Constant(x)

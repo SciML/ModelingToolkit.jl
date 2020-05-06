@@ -49,10 +49,10 @@ function expand_derivatives(O::Operation)
 
         return sum(1:length(o.args)) do i
             derivative(o, i) * expand_derivatives(D(o.args[i]))
-        end |> simplify_constants
+        end |> simplify
     end
 
-    return simplify_constants(O)
+    return simplify(O)
 end
 expand_derivatives(x) = x
 

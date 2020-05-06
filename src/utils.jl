@@ -100,17 +100,32 @@ end
 
 # variable substitution
 """
-substitute_expr!(expr::Operation, s::Pair{Operation, Operation})
+substitute(expr::Operation, s::Pair{Operation, Operation})
+substitute(expr::Operation, s::Dict{Operation, Operation})
+substitute(expr::Operation, s::Vector{Pair{Operation, Operation}})
 
 Performs the substitution `Operation => Operation` on the `expr` Operation.
 """
-substitute_expr!(expr::Constant, s::Pair{Operation, Operation}) = nothing
-function substitute_expr!(expr::Operation, s::Pair{Operation, Operation})
-    if !is_singleton(expr)
-        expr.args .= replace(expr.args, s)
-        for arg in expr.args
-            substitute_expr!(arg, s)
-        end
-    end
-    return nothing
+substitute(expr::Constant, s) = nothing
+
+function substitute(expr::Operation, s::Pair{Operation, Operation})
+    substitute(expr,Dict(to_symbolic(s[1]) => to_symbolic(s[2])))
 end
+
+function substitute(expr::Operation, dict::Dict{Operation,Operation})
+    substitute(expr,Dict(map(Pair,
+                         map(to_symbolic, keys(dict)),
+                         map(to_symbolic, values(dict)))))
+end
+
+function substitute(expr::Operation, s::Vector)
+    substitute(expr,Dict(map(Pair,
+                         map(to_symbolic, first.(s)),
+                         map(to_symbolic, last.(s)))))
+end
+
+function substitute(expr::Operation, s::Dict{<:SymbolicUtils.Term,<:SymbolicUtils.Term})
+    SymbolicUtils.RuleSet([SymbolicUtils.@rule(~x::(x->haskey(s, x)) => s[~x])])(expr) |> to_mtk
+end
+
+@deprecate substitute_expr!(expr,s) substitute(expr,s)
