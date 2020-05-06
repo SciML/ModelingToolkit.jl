@@ -6,7 +6,8 @@
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](http://mtk.sciml.ai/stable/)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](http://mtk.sciml.ai/dev/)
 
-ModelingToolkit.jl is a modeling language for scientific computing problems.
+ModelingToolkit.jl is a modeling language for high performance symbolic-numeric computation 
+in scientific computing  and scientific machine learning.
 It allows for users to give a high-level description of a model for
 symbolic preprocessing to analyze and enhance the model. ModelingToolkit can
 automatically generate fast functions for model components like Jacobians
