@@ -8,7 +8,7 @@ an array of variable expressions.
 """
 function gradient(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
     out = [expand_derivatives(Differential(v)(O)) for v in vars]
-    simplify ? simplify.(out) : out
+    simplify ? ModelingToolkit.simplify.(out) : out
 end
 
 """
@@ -21,7 +21,7 @@ an array of variable expressions.
 """
 function jacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
     out = [expand_derivatives(Differential(v)(O)) for O in ops, v in vars]
-    simplify ? simplify.(out) : out
+    simplify ? ModelingToolkit.simplify.(out) : out
 end
 
 """
@@ -34,7 +34,7 @@ an array of variable expressions.
 """
 function hessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
     out = [expand_derivatives(Differential(v2)(Differential(v1)(O))) for v1 in vars, v2 in vars]
-    simplify ? simplify.(out) : out
+    simplify ? ModelingToolkit.simplify.(out) : out
 end
 
 function simplified_expr(O::Operation)
