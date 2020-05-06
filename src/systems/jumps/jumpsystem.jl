@@ -42,6 +42,34 @@ function assemble_crj(js, crj, statetoid)
     ConstantRateJump(rate, affect)
 end
 
+function assemble_maj(js, maj::MassActionJump{U,Vector{Pair{V,W}},Vector{Pair{V2,W2}}}, 
+                      statetoid, ptoid, p, pcontext) where {U,V,W,V2,W2}
+    sr = maj.scaled_rates
+    if sr isa Operation || sr isa Variable
+        pval = Base.eval(pcontext, Expr(maj.scaled_rates))
+    else   
+        pval = maj.scaled_rates
+    end
+    
+    rs = Vector{Pair{Int,W}}()
+    for (spec,stoich) in maj.reactant_stoch
+        if iszero(spec) 
+            push!(rs, 0 => stoich)
+        else
+            push!(rs, statetoid[convert(Variable,spec)] => stoich)
+        end
+    end
+    sort!(rs)
+
+    ns = Vector{Pair{Int,W2}}()
+    for (spec,stoich) in maj.net_stoch
+        iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
+        push!(ns, statetoid[convert(Variable,spec)] => stoich)
+    end
+    sort!(ns)
+
+    MassActionJump(pval, rs, ns, scale_rates = false)
+end
 
 """
 ```julia
@@ -68,17 +96,32 @@ Generates a JumpProblem from a JumpSystem.
 function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     vrjs = Vector{VariableRateJump}()
     crjs = Vector{ConstantRateJump}()
+    majs = Vector{MassActionJump}()
+    pvars = parameters(js)
     statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
+    ptoid     = Dict(convert(Variable,par) => i for (i,par) in enumerate(parameters(js)))
+    
+    # for mass action jumps might need to evaluate parameter expressions
+    # populate dummy module with params as local variables
+    # (for eval-ing parameter expressions)
+    param_context = Module()
+    for (i, pval) in enumerate(prob.p)        
+        psym = Symbol(pvars[i])
+        Base.eval(param_context, :($psym = $pval))
+    end
+
     for j in equations(js)
         if j isa ConstantRateJump
             push!(crjs, assemble_crj(js, j, statetoid))
         elseif j isa VariableRateJump
             push!(vrjs, assemble_vrj(js, j, statetoid))
+        elseif j isa MassActionJump
+            push!(majs, assemble_maj(js, j, statetoid, ptoid, prob.p, param_context))
         else
-            (j isa MassActionJump) && error("Generation of JumpProblems with MassActionJumps is not yet supported.")
+            error("JumpSystems should only contain Constant, Variable or Mass Action Jumps.")
         end
     end
     ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")    
-    jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, nothing)
+    jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, isempty(majs) ? nothing : majs)
     JumpProblem(prob, aggregator, jset)
 end
