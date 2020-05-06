@@ -44,8 +44,13 @@ end
 
 function assemble_maj(js, maj::MassActionJump{U,Vector{Pair{V,W}},Vector{Pair{V2,W2}}}, 
                       statetoid, ptoid, p, pcontext) where {U,V,W,V2,W2}
-    pval = Base.eval(pcontext, Expr(maj.scaled_rates))
-
+    sr = maj.scaled_rates
+    if sr isa Operation || sr isa Variable
+        pval = Base.eval(pcontext, Expr(maj.scaled_rates))
+    else   
+        pval = maj.scaled_rates
+    end
+    
     rs = Vector{Pair{Int,W}}()
     for (spec,stoich) in maj.reactant_stoch
         if iszero(spec) 
