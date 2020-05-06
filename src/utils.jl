@@ -116,8 +116,7 @@ function _substitute(expr, ks, vs)
 end
 
 function _substitute(expr, dict::Dict)
-    sub = SymbolicUtils.RuleSet([SymbolicUtils.@rule(~x::(x->haskey(dict, x)) => dict[~x])])
-    to_mtk(simplify(sub(expr)))
+    to_mtk(simplify(SymbolicUtils.substitute(expr, dict)))
 end
 
 @deprecate substitute_expr!(expr,s) substitute(expr,s)
