@@ -122,7 +122,43 @@ function assemble_diffusion(rs)
 end
 
 function assemble_jumps(rs)
+    eqs = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}()
 
+    for rx in rs.eqs
+        rl = jumpratelaw(rx)
+        affect = Vector{Equation}()
+        for (spec,stoich) in rx.netstoich
+            push!(affect,var2op(spec) ~ var2op(spec) + stoich)
+        end
+        if any(isequal.(var2op(rs.iv),get_variables(rx.rate)))
+            push!(eqs,VariableRateJump(rl,affect))
+        elseif any([isequal(state,r_op) for state in rs.states, r_op in getfield.(get_variables(rx.rate),:op)])
+            push!(eqs,ConstantRateJump(rl,affect))
+        else
+            push!(eqs,ConstantRateJump(rl,affect))
+        end
+    end
+    eqs
+end
+
+# Calculate the Jump rate law (like ODE, but uses X instead of X(t).
+# The former geenrates a "MethodError: objects of type Int64 are not callable" when trying to solve the problem.
+function jumpratelaw(rx)
+    @unpack rate, substrates, substoich, only_use_rate = rx
+    rl = rate
+    if !only_use_rate
+        coef = one(eltype(substoich))
+        for (i,stoich) in enumerate(substoich)
+            coef *= factorial(stoich)
+            rl   *= isone(stoich) ? var2op(substrates[i].op) : var2op(substrates[i].op)^stoich
+        end
+        (!isone(coef)) && (rl /= coef)
+    end
+    rl
+end
+
+function var2op(var)
+    Operation(var,Vector{Expression}())
 end
 
 function Base.convert(::Type{<:ODESystem},rs::ReactionSystem)
