@@ -14,7 +14,7 @@ using DocStringExtensions
 using Base: RefValue
 
 import SymbolicUtils
-import SymbolicUtils: to_symbolic, FnType, simplify
+import SymbolicUtils: to_symbolic, FnType
 
 import TreeViews
 
