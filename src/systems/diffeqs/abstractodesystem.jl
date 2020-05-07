@@ -69,13 +69,13 @@ function calculate_factorized_W(sys::AbstractODESystem, simplify=true)
     Wfact = lu(W, Val(false), check=false).factors
 
     if simplify
-        Wfact = simplify.(Wfact)
+        Wfact = ModelingToolkit.simplify.(Wfact)
     end
 
     W_t = - LinearAlgebra.I/gam + jac
     Wfact_t = lu(W_t, Val(false), check=false).factors
     if simplify
-        Wfact_t = simplify.(Wfact_t)
+        Wfact_t = ModelingToolkit.simplify.(Wfact_t)
     end
     sys.Wfact[] = Wfact
     sys.Wfact_t[] = Wfact_t
@@ -113,7 +113,7 @@ function calculate_massmatrix(sys::AbstractODESystem, simplify=true)
             error("Only semi-explicit constant mass matrices are currently supported")
         end
     end
-    M = simplify ? simplify.(M) : M
+    M = simplify ? ModelingToolkit.simplify.(M) : M
     # M should only contain concrete numbers
     M = map(x->x isa Constant ? x.value : x, M)
     M == I ? I : M
