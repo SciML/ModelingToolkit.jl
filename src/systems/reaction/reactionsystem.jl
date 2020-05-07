@@ -121,6 +121,10 @@ function assemble_diffusion(rs)
     eqs
 end
 
+function assemble_jumps(rs)
+
+end
+
 function Base.convert(::Type{<:ODESystem},rs::ReactionSystem)
     eqs = assemble_drift(rs)
     ODESystem(eqs,rs.iv,rs.states,rs.ps,name=rs.name,
@@ -132,4 +136,10 @@ function Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
     noiseeqs = assemble_diffusion(rs)
     SDESystem(eqs,noiseeqs,rs.iv,rs.states,rs.ps,
               name=rs.name,systems=convert.(SDESystem,rs.systems))
+end
+
+function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem)
+    eqs = assemble_jumps(rs)
+    JumpSystem(eqs,rs.iv,rs.states,rs.ps,name=rs.name,
+              systems=convert.(JumpSystem,rs.systems))
 end
