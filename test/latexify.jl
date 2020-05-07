@@ -71,3 +71,33 @@ raw"$\begin{align}
 \frac{du_3(t)}{dt} =& \mathrm{u_1}\left( t \right) \left( \mathrm{u_2}\left( t \right) \right)^{\frac{2}{3}} - p_3 \mathrm{u_3}\left( t \right)
 \end{align}
 $"
+
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
+
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
+
+lorenz1 = ODESystem(eqs,name=:lorenz1)
+lorenz2 = ODESystem(eqs,name=:lorenz2)
+
+@variables a
+@parameters γ
+connections = [0 ~ lorenz1.x + lorenz2.y + a*γ]
+connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])
+
+Latexify.@generate_test latexify(connected)
+
+@test latexify(connected) ==
+raw"$\begin{align}
+0 =& \mathrm{lorenz1.x}\left( t \right) + \mathrm{lorenz2.y}\left( t \right) + a \gamma \\
+\frac{dlorenz1_+x(t)}{dt} =& lorenz1.\sigma \left( \mathrm{lorenz1.y}\left( t \right) - \mathrm{lorenz1.x}\left( t \right) \right) \\
+\frac{dlorenz1_+y(t)}{dt} =& \mathrm{lorenz1.x}\left( t \right) \left( lorenz1.\rho - \mathrm{lorenz1.z}\left( t \right) \right) - \mathrm{lorenz1.y}\left( t \right) \\
+\frac{dlorenz1_+z(t)}{dt} =& \mathrm{lorenz1.x}\left( t \right) \mathrm{lorenz1.y}\left( t \right) - lorenz1.\beta \mathrm{lorenz1.z}\left( t \right) \\
+\frac{dlorenz2_+x(t)}{dt} =& lorenz2.\sigma \left( \mathrm{lorenz2.y}\left( t \right) - \mathrm{lorenz2.x}\left( t \right) \right) \\
+\frac{dlorenz2_+y(t)}{dt} =& \mathrm{lorenz2.x}\left( t \right) \left( lorenz2.\rho - \mathrm{lorenz2.z}\left( t \right) \right) - \mathrm{lorenz2.y}\left( t \right) \\
+\frac{dlorenz2_+z(t)}{dt} =& \mathrm{lorenz2.x}\left( t \right) \mathrm{lorenz2.y}\left( t \right) - lorenz2.\beta \mathrm{lorenz2.z}\left( t \right)
+\end{align}
+$"
