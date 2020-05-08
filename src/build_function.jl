@@ -4,6 +4,11 @@ struct StanTarget <: BuildTargets end
 struct CTarget <: BuildTargets end
 struct MATLABTarget <: BuildTargets end
 
+abstract type ParallelForm end
+struct SerialForm <: ParallelForm end
+struct MultithreadedForm <: ParallelForm end
+struct DistributedForm <: ParallelForm end
+
 """
 `build_function`
 
@@ -57,7 +62,7 @@ function build_function(args...;target = JuliaTarget(),kwargs...)
 end
 
 function addheader(ex, fargs, iip; X=gensym(:MTIIPVar))
-  if iip  
+  if iip
     wrappedex = :(
         ($X,$(fargs.args...)) -> begin
         $ex
@@ -69,16 +74,16 @@ function addheader(ex, fargs, iip; X=gensym(:MTIIPVar))
       ($(fargs.args...),) -> begin
         $ex
       end
-    )  
+    )
   end
   wrappedex
 end
 
 function add_integrator_header(ex, fargs, iip; X=gensym(:MTIIPVar))
   integrator = gensym(:MTKIntegrator)
-  if iip  
+  if iip
     wrappedex = :(
-        $integrator -> begin 
+        $integrator -> begin
         ($X,$(fargs.args...)) = (($integrator).u,($integrator).u,($integrator).p,($integrator).t)
         $ex
         nothing
@@ -86,11 +91,11 @@ function add_integrator_header(ex, fargs, iip; X=gensym(:MTIIPVar))
     )
   else
     wrappedex = :(
-      $integrator -> begin 
+      $integrator -> begin
       ($(fargs.args...),) = (($integrator).u,($integrator).p,($integrator).t)
         $ex
       end
-    )  
+    )
   end
   wrappedex
 end
@@ -114,7 +119,7 @@ function _build_function(target::JuliaTarget, op::Operation, args...;
 
     fargs = Expr(:tuple,argnames...)
     oop_ex = headerfun(bounds_block, fargs, false)
-        
+
     if !linenumbers
         oop_ex = striplines(oop_ex)
     end
@@ -129,8 +134,15 @@ end
 function _build_function(target::JuliaTarget, rhss, args...;
                          conv = simplified_expr, expression = Val{true},
                          checkbounds = false, constructor=nothing,
-                         linenumbers = false, multithread=false, 
-                         headerfun=addheader, outputidxs=nothing)
+                         linenumbers = false, multithread=nothing,
+                         headerfun=addheader, outputidxs=nothing,
+						 parallel=SerialForm())
+
+	if multithread isa Bool
+		@warn("multithraded is deprecated for the parallel argument. See the documentation.")
+		parallel = multithread ? MultithreadedForm() : SerialForm()
+	end
+
     argnames = [gensym(:MTKArg) for i in 1:length(args)]
     arg_pairs = map(vars_to_pairs,zip(argnames,args))
     ls = reduce(vcat,first.(arg_pairs))
@@ -143,23 +155,39 @@ function _build_function(target::JuliaTarget, rhss, args...;
 
     oidx = isnothing(outputidxs) ? (i -> i) : (i -> outputidxs[i])
     X = gensym(:MTIIPVar)
+
+	rhs_length = rhss isa SparseMatrixCSC ? length(rhss.nzval) : length(rhss)
+
+	if parallel isa DistributedForm
+		numworks = Distributed.nworkers()
+		reducevars = [Variable(gensym(:MTReduceVar))() for i in 1:numworks]
+		lens = Int(ceil(rhs_length/numworks))
+		finalsize = rhs_length - (numworks-1)*lens
+		_rhss = vcat(reduce(vcat,[[getindex(reducevars[i],j) for j in 1:lens] for i in 1:numworks-1],init=Expr[]),
+						 [getindex(reducevars[end],j) for j in 1:finalsize])
+	elseif rhss isa SparseMatrixCSC
+		_rhss = rhss.nzval
+	else
+		_rhss = rhss
+	end
+
 	if eltype(eltype(rhss)) <: AbstractArray # Array of arrays of arrays
-		ip_sys_exprs = reduce(vcat,[vec(reduce(vcat,[vec([:($X[$i][$j][$k] = $(conv(rhs))) for (k, rhs) ∈ enumerate(rhsel2)]) for (j, rhsel2) ∈ enumerate(rhsel)],init=Expr[])) for (i,rhsel) ∈ enumerate(rhss)],init=Expr[])
+		ip_sys_exprs = reduce(vcat,[vec(reduce(vcat,[vec([:($X[$i][$j][$k] = $(conv(rhs))) for (k, rhs) ∈ enumerate(rhsel2)]) for (j, rhsel2) ∈ enumerate(rhsel)],init=Expr[])) for (i,rhsel) ∈ enumerate(_rhss)],init=Expr[])
 	elseif eltype(eltype(rhss)) <: SparseMatrixCSC # Array of arrays of arrays
-		ip_sys_exprs = reduce(vcat,[vec(reduce(vcat,[vec([:($X[$i][$j].nzval[$k] = $(conv(rhs))) for (k, rhs) ∈ enumerate(rhsel2)]) for (j, rhsel2) ∈ enumerate(rhsel)])) for (i,rhsel) ∈ enumerate(rhss)])
+		ip_sys_exprs = reduce(vcat,[vec(reduce(vcat,[vec([:($X[$i][$j].nzval[$k] = $(conv(rhs))) for (k, rhs) ∈ enumerate(rhsel2)]) for (j, rhsel2) ∈ enumerate(rhsel)])) for (i,rhsel) ∈ enumerate(_rhss)])
 	elseif eltype(rhss) <: SparseMatrixCSC # Array of sparse matrices
-		ip_sys_exprs = reduce(vcat,[vec([:($X[$i].nzval[$j] = $(conv(rhs))) for (j, rhs) ∈ enumerate(rhsel)]) for (i,rhsel) ∈ enumerate(rhss)])
+		ip_sys_exprs = reduce(vcat,[vec([:($X[$i].nzval[$j] = $(conv(rhs))) for (j, rhs) ∈ enumerate(rhsel)]) for (i,rhsel) ∈ enumerate(_rhss)])
     elseif eltype(rhss) <: AbstractArray # Array of arrays
-		ip_sys_exprs = reduce(vcat,[vec([:($X[$i][$j] = $(conv(rhs))) for (j, rhs) ∈ enumerate(rhsel)]) for (i,rhsel) ∈ enumerate(rhss)], init = Expr[])
+		ip_sys_exprs = reduce(vcat,[vec([:($X[$i][$j] = $(conv(rhs))) for (j, rhs) ∈ enumerate(rhsel)]) for (i,rhsel) ∈ enumerate(_rhss)], init = Expr[])
     elseif rhss isa SparseMatrixCSC
-        ip_sys_exprs = [:($X.nzval[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss.nzval)]
+        ip_sys_exprs = [:($X.nzval[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(_rhss)]
     else
-        ip_sys_exprs = [:($X[$(oidx(i))] = $(conv(rhs))) for (i, rhs) ∈ enumerate(rhss)]
+        ip_sys_exprs = [:($X[$(oidx(i))] = $(conv(rhs))) for (i, rhs) ∈ enumerate(_rhss)]
     end
 
     ip_let_expr = Expr(:let, var_eqs, build_expr(:block, ip_sys_exprs))
 
-    if multithread
+    if parallel isa MultithreadedForm
         lens = Int(ceil(length(ip_let_expr.args[2].args)/Threads.nthreads()))
         threaded_exprs = vcat([quote
            Threads.@spawn begin
@@ -172,7 +200,29 @@ function _build_function(target::JuliaTarget, rhss, args...;
               end
            end)
         ip_let_expr.args[2] =  ModelingToolkit.build_expr(:block, threaded_exprs)
-    end
+    elseif parallel isa DistributedForm
+		numworks = Distributed.nworkers()
+		lens = Int(ceil(length(ip_let_expr.args[2].args)/numworks))
+		spawnvars = [gensym(:MTSpawnVar) for i in 1:numworks]
+		rhss_flat = rhss isa SparseMatrixCSC ? rhss.nzval : rhss
+		spawnvectors = vcat(
+					   [build_expr(:vect, [conv(rhs) for rhs ∈ rhss_flat[((i-1)*lens+1):i*lens]]) for i in 1:numworks-1],
+					   build_expr(:vect, [conv(rhs) for rhs ∈ rhss_flat[((numworks-1)*lens+1):end]]))
+
+        spawn_exprs = [quote
+           $(spawnvars[i]) = Distributed.@spawnat $(i+1) begin
+              $(spawnvectors[i])
+           end
+        end for i in 1:numworks]
+        spawn_exprs = ModelingToolkit.build_expr(:block, spawn_exprs)
+		resunpack_exprs = [:($(Symbol(reducevars[iter])) = fetch($(spawnvars[iter]))) for iter in 1:numworks]
+
+		ip_let_expr.args[2] = quote
+			$spawn_exprs
+			$(resunpack_exprs...)
+			$(ip_let_expr.args[2])
+		end
+	end
 
     tuple_sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
 
@@ -214,7 +264,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
 
     oop_ex = headerfun(oop_body_block, fargs, false)
     iip_ex = headerfun(ip_bounds_block, fargs, true; X=X)
-    
+
     if !linenumbers
         oop_ex = striplines(oop_ex)
         iip_ex = striplines(iip_ex)
