@@ -80,7 +80,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
                                           u0=nothing, lb=nothing, ub=nothing,
                                           hes = false, sparse = false,
                                           checkbounds = false,
-                                          linenumbers = true, multithread=false,
+                                          linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
 ```
 
@@ -92,13 +92,13 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
                                           u0=nothing, lb=nothing, ub=nothing,
                                           hes = false, sparse = false,
                                           checkbounds = false,
-                                          linenumbers = true, multithread=false,
+                                          linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
 
     f = generate_function(sys,checkbounds=checkbounds,linenumbers=linenumbers,
-                              multithread=multithread,expression=Val{false})
+                              parallel=parallel,expression=Val{false})
     u0 = varmap_to_vars(u0,dvs)
     p = varmap_to_vars(parammap,ps)
     lb = varmap_to_vars(lb,dvs)

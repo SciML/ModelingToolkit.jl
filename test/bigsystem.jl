@@ -45,13 +45,13 @@ end
 
 f(du,u,nothing,0.0)
 
-multithreadedf = eval(ModelingToolkit.build_function(du,u,multithread=true)[2])
+multithreadedf = eval(ModelingToolkit.build_function(du,u,parallel=MultithreadedForm())[2])
 _du = rand(N,N,3)
 _u = rand(N,N,3)
 multithreadedf(_du,_u)
 
 jac = sparse(ModelingToolkit.jacobian(vec(du),vec(u),simplify=false))
-multithreadedjac = eval(ModelingToolkit.build_function(vec(jac),u,multithread=true)[2])
+multithreadedjac = eval(ModelingToolkit.build_function(vec(jac),u,parallel=MultithreadedForm())[2])
 
 #_jac = similar(jac,Float64)
 #multithreadedjac(_jac,_u)

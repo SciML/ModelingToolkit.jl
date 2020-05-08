@@ -71,7 +71,7 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,tspan,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,
                                           checkbounds = false,
-                                          linenumbers = true, multithread=false,
+                                          linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
 ```
 
@@ -82,13 +82,13 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,tspan,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,
                                           checkbounds = false,
-                                          linenumbers = true, multithread=false,
+                                          linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
 
     f = generate_function(sys;checkbounds=checkbounds,linenumbers=linenumbers,
-                              multithread=multithread,sparse=sparse,expression=Val{false})
+                              parallel=parallel,sparse=sparse,expression=Val{false})
     u0 = varmap_to_vars(u0map,dvs)
     p = varmap_to_vars(parammap,ps)
     NonlinearProblem(f,u0,tspan,p;kwargs...)

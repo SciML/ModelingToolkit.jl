@@ -197,7 +197,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, multithread=false,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 ```
 
@@ -209,10 +209,10 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, multithread=false,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
     f = ODEFunction(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
-                        linenumbers=linenumbers,multithread=multithread,
+                        linenumbers=linenumbers,parallel=parallel,
                         sparse=sparse)
     u0 = varmap_to_vars(u0map,states(sys))
     p = varmap_to_vars(parammap,parameters(sys))

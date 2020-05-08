@@ -161,7 +161,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, multithread=false,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...)
 ```
 
@@ -172,11 +172,11 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, multithread=false,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 
     f = SDEFunction(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
-                        linenumbers=linenumbers,multithread=multithread,
+                        linenumbers=linenumbers,parallel=parallel,
                         sparse=sparse)
     u0 = varmap_to_vars(u0map,states(sys))
     p = varmap_to_vars(parammap,parameters(sys))
