@@ -210,7 +210,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
 					   build_expr(:vect, [conv(rhs) for rhs ∈ rhss_flat[((numworks-1)*lens+1):end]]))
 
         spawn_exprs = [quote
-           $(spawnvars[i]) = Distributed.@spawnat $(i+1) begin
+           $(spawnvars[i]) = ModelingToolkit.Distributed.remotecall($(i+1)) do
               $(spawnvectors[i])
            end
         end for i in 1:numworks]

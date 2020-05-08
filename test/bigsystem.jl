@@ -59,10 +59,15 @@ serialjac = eval(ModelingToolkit.build_function(vec(jac),u)[2])
 multithreadedjac = eval(ModelingToolkit.build_function(vec(jac),u,parallel=ModelingToolkit.MultithreadedForm())[2])
 distributedjac = eval(ModelingToolkit.build_function(vec(jac),u,parallel=ModelingToolkit.DistributedForm())[2])
 
-#=
 MyA = zeros(N,N)
 AMx = zeros(N,N)
 DA  = zeros(N,N)
+
+f(_du,_u,nothing,0.0)
+multithreadedf(_du,_u)
+distributedf(_du,_u)
+
+#=
 using BenchmarkTools
 @btime f(_du,_u,nothing,0.0)
 @btime multithreadedf(_du,_u)
