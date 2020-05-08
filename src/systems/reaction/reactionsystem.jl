@@ -131,11 +131,16 @@ function assemble_jumps(rs)
             push!(affect,var2op(spec) ~ var2op(spec) + stoich)
         end
         if any(isequal.(var2op(rs.iv),get_variables(rx.rate)))
+            println("Var Jump")
             push!(eqs,VariableRateJump(rl,affect))
         elseif any([isequal(state,r_op) for state in rs.states, r_op in getfield.(get_variables(rx.rate),:op)])
+            println("Const")
             push!(eqs,ConstantRateJump(rl,affect))
         else
-            push!(eqs,ConstantRateJump(rl,affect))
+            reactant_stoch = Pair.(var2op.(getfield.(rx.substrates,:op)),rx.substoich)
+                println("MA Jump")
+            net_stoch = isempty(rx.substoich) ? [0 => 1]  : map(p -> Pair(var2op(p[1]),p[2]),rx.netstoich)
+            push!(eqs,MassActionJump(rx.rate, reactant_stoch, net_stoch))
         end
     end
     eqs
@@ -145,7 +150,8 @@ end
 # The former geenrates a "MethodError: objects of type Int64 are not callable" when trying to solve the problem.
 function jumpratelaw(rx)
     @unpack rate, substrates, substoich, only_use_rate = rx
-    rl = rate
+    rl = deepcopy(rate)
+    foreach(op -> substitute_expr!(rl,op=>var2op(op.op)), get_variables(rx.rate))
     if !only_use_rate
         coef = one(eltype(substoich))
         for (i,stoich) in enumerate(substoich)
