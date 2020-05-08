@@ -116,7 +116,7 @@ function _substitute(expr, ks, vs)
 end
 
 function _substitute(expr, dict::Dict)
-    to_mtk(simplify(SymbolicUtils.substitute(expr, dict)))
+    simplify(SymbolicUtils.substitute(expr, dict))
 end
 
 @deprecate substitute_expr!(expr,s) substitute(expr,s)
