@@ -14,7 +14,7 @@ identity_op = Operation(identity,[x])
 @test isequal(simplify(identity_op), x)
 
 minus_op = -x
-@test isequal(simplify(minus_op), -x)
+@test isequal(simplify(minus_op), -1x)
 simplify(minus_op)
 
 @variables x
