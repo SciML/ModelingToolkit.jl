@@ -147,7 +147,7 @@ function assemble_jumps(rs)
 end
 
 # Calculate the Jump rate law (like ODE, but uses X instead of X(t).
-# The former geenrates a "MethodError: objects of type Int64 are not callable" when trying to solve the problem.
+# The former generates a "MethodError: objects of type Int64 are not callable" when trying to solve the problem.
 function jumpratelaw(rx)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = deepcopy(rate)
