@@ -29,16 +29,14 @@ SymbolicUtils.symtype(x::Variable) = _vartype(x) # needed for a()
 SymbolicUtils.symtype(x::SymbolicUtils.Sym{<:Parameter{T}}) where {T} = T
 
 # returning Any causes SymbolicUtils to infer the type using `promote_symtype`
-# But we are OK with Number here for now I guess
-SymbolicUtils.symtype(x::Expression) = Number
-
-
-# SymbolicUtils -> ModelingToolkit
+SymbolicUtils.symtype(x::Expression) = Any
 
 simplify(expr::Expression) = SymbolicUtils.simplify(expr) |> to_mtk
 simplify(expr) = expr |> to_mtk
 
 @deprecate simplify_constants(ex) simplify(ex)
+
+# SymbolicUtils -> ModelingToolkit
 
 to_mtk(x) = x
 to_mtk(x::Number) = Constant(x)
