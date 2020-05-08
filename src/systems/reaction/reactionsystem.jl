@@ -131,14 +131,11 @@ function assemble_jumps(rs)
             push!(affect,var2op(spec) ~ var2op(spec) + stoich)
         end
         if any(isequal.(var2op(rs.iv),get_variables(rx.rate)))
-            println("Var Jump")
             push!(eqs,VariableRateJump(rl,affect))
-        elseif any([isequal(state,r_op) for state in rs.states, r_op in getfield.(get_variables(rx.rate),:op)])
-            println("Const")
+        elseif rx.only_use_rate || any([isequal(state,r_op) for state in rs.states, r_op in getfield.(get_variables(rx.rate),:op)])
             push!(eqs,ConstantRateJump(rl,affect))
         else
             reactant_stoch = Pair.(var2op.(getfield.(rx.substrates,:op)),rx.substoich)
-                println("MA Jump")
             net_stoch = isempty(rx.substoich) ? [0 => 1]  : map(p -> Pair(var2op(p[1]),p[2]),rx.netstoich)
             push!(eqs,MassActionJump(rx.rate, reactant_stoch, net_stoch))
         end
