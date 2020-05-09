@@ -65,7 +65,7 @@ DA  = zeros(N,N)
 
 f(_du,_u,nothing,0.0)
 multithreadedf(_du,_u)
-distributedf(_du,_u)
+#distributedf(_du,_u)
 
 #=
 using BenchmarkTools
