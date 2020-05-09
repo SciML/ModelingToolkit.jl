@@ -118,3 +118,42 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, isempty(majs) ? nothing : majs)
     JumpProblem(prob, aggregator, jset)
 end
+
+
+### Functions to determine which jumps depend on a given state
+
+function ratevars!(dep, jump::Union{ConstantRateJump,VariableRateJump}, sts)
+    foreach(st -> (convert(Variable,st) in sts) && push!(dep,st), vars(jump.rate))
+end
+
+function ratevars!(dep, jump::MassActionJump, args...)    
+    foreach(st -> push!(dep,convert(Variable,st[1])), jump.reactant_stoch)
+end
+
+function ratevars(jump, sts)
+    dep = Set{Variable}()
+    ratevars!(dep,jump,sts)
+    dep
+end
+
+# map each state (as an Int index) to the jumps with a rate that depend on it 
+function jumptostate_depgraph(js::JumpSystem, statestoids = nothing)
+    sts   = states(js)
+    stoi  = isnothing(statestoids) ? Dict(convert(Variable,state) => i for (i,state) in enumerate(sts)) : statestoids
+
+    # map from jump to states (as Variables) it depends on through the rate
+    deps  = [ratevars(eq,sts) for eq in equations(js)]    
+
+    # reverse map and switch to integer indices of states
+    dg = [Vector{Int}() for i = 1:length(sts)]
+    for (k,dep) in enumerate(deps)
+        for state in dep
+            push!(dg[stoi[state]],k)
+        end
+    end
+    foreach(dep -> sort!(dep), dg)
+
+    dg
+end
+
+### Functions to determine which states are modified by a given jump
