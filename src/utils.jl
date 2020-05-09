@@ -100,17 +100,23 @@ end
 
 # variable substitution
 """
-substitute_expr!(expr::Operation, s::Pair{Operation, Operation})
+substitute(expr::Operation, s::Pair)
+substitute(expr::Operation, s::Dict)
+substitute(expr::Operation, s::Vector)
 
-Performs the substitution `Operation => Operation` on the `expr` Operation.
+Performs the substitution `Operation => val` on the `expr` Operation.
 """
-substitute_expr!(expr::Constant, s::Pair{Operation, Operation}) = nothing
-function substitute_expr!(expr::Operation, s::Pair{Operation, Operation})
-    if !is_singleton(expr)
-        expr.args .= replace(expr.args, s)
-        for arg in expr.args
-            substitute_expr!(arg, s)
-        end
-    end
-    return nothing
+substitute(expr::Constant, s) = expr
+substitute(expr::Operation, s::Pair) = _substitute(expr, [s[1]], [s[2]])
+substitute(expr::Operation, dict::Dict) = _substitute(expr, keys(dict), values(dict))
+substitute(expr::Operation, s::Vector) = _substitute(expr, first.(s), last.(s))
+
+function _substitute(expr, ks, vs)
+    _substitute(expr, Dict(map(Pair, map(to_symbolic, ks), map(to_symbolic, vs))))
 end
+
+function _substitute(expr, dict::Dict)
+    simplify(SymbolicUtils.substitute(expr, dict))
+end
+
+@deprecate substitute_expr!(expr,s) substitute(expr,s)

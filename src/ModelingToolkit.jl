@@ -13,6 +13,9 @@ import GeneralizedGenerated
 using DocStringExtensions
 using Base: RefValue
 
+import SymbolicUtils
+import SymbolicUtils: to_symbolic, FnType
+
 import TreeViews
 
 """
@@ -112,17 +115,18 @@ export Reaction, ReactionSystem
 export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
-export simplify_constants
-
 export Operation, Expression, Variable
+export independent_variable, states, parameters, equations
+
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad
 export calculate_gradient, generate_gradient
 export calculate_factorized_W, generate_factorized_W
 export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
-export independent_variable, states, parameters, equations
-export simplified_expr, rename, get_variables, substitute_expr!
+
+export simplified_expr, rename, get_variables
+export simplify, substitute
 export build_function
 export @register
 export modelingtoolkitize
