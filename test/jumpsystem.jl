@@ -107,7 +107,6 @@ m2 = getmean(jprob,Nsims)
 # test JumpSystem solution agrees with direct version
 @test abs(m-m2)/m < .01
 
-
 # mass action jump tests for SIR model
 maj1 = MassActionJump(2*β/2, [S => 1, I => 1], [S => -1, I => 1])
 maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])

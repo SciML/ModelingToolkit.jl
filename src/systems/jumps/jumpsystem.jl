@@ -43,7 +43,7 @@ function assemble_crj(js, crj, statetoid)
 end
 
 function assemble_maj(js, maj::MassActionJump{U,Vector{Pair{V,W}},Vector{Pair{V2,W2}}},
-                      statetoid, ptoid, parammap) where {U,V,W,V2,W2}
+                      statetoid, parammap) where {U,V,W,V2,W2}
     sr = maj.scaled_rates
     if sr isa Operation
         pval = substitute(sr,parammap)
@@ -52,7 +52,7 @@ function assemble_maj(js, maj::MassActionJump{U,Vector{Pair{V,W}},Vector{Pair{V2
     else
         pval = maj.scaled_rates
     end
-
+    
     rs = Vector{Pair{Int,W}}()
     for (spec,stoich) in maj.reactant_stoch
         if iszero(spec)
@@ -109,6 +109,7 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
         elseif j isa VariableRateJump
             push!(vrjs, assemble_vrj(js, j, statetoid))
         elseif j isa MassActionJump
+            println("here")
             push!(majs, assemble_maj(js, j, statetoid, parammap))
         else
             error("JumpSystems should only contain Constant, Variable or Mass Action Jumps.")
