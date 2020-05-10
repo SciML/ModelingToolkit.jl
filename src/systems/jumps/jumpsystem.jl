@@ -14,6 +14,15 @@ function JumpSystem(eqs, iv, states, ps; systems = JumpSystem[],
     JumpSystem(eqs, iv, convert.(Variable, states), convert.(Variable, ps), name, systems)
 end
 
+# functions for sorting jumps in equation Vector
+# we define a partial
+jumpless(x,y) = true
+jumpless(x::MassActionJump, y::ConstantRateJump) = true
+jumpless(x::ConstantRateJump, y::MassActionJump) = false
+jumpless(x::MassActionJump, y::VariableRateJump) = true
+jumpless(x::VariableRateJump, y::MassActionJump) = false
+jumpless(x::ConstantRateJump, y::VariableRateJump) = true
+jumpless(x::VariableRateJump, y::ConstantRateJump) = false
 
 
 generate_rate_function(js, rate) = build_function(rate, states(js), parameters(js),
@@ -137,7 +146,7 @@ function ratevars(jump, sts)
 end
 
 # map each state (as an Int index) to the jumps with a rate that depend on it 
-function jumptostate_depgraph(js::JumpSystem, statestoids = nothing)
+function statetojump_depgraph(js::JumpSystem, statestoids = nothing)
     sts   = states(js)
     stoi  = isnothing(statestoids) ? Dict(convert(Variable,state) => i for (i,state) in enumerate(sts)) : statestoids
 
@@ -157,3 +166,4 @@ function jumptostate_depgraph(js::JumpSystem, statestoids = nothing)
 end
 
 ### Functions to determine which states are modified by a given jump
+
