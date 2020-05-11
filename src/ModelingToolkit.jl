@@ -13,6 +13,8 @@ import GeneralizedGenerated
 using DocStringExtensions
 using Base: RefValue
 
+using RecursiveArrayTools
+
 import SymbolicUtils
 import SymbolicUtils: to_symbolic, FnType
 

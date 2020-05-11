@@ -12,6 +12,7 @@ using SafeTestsets, Test
 @safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 @safetestset "ReactionSystem Test" begin include("reactionsystem.jl") end
+@safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
 @safetestset "Build Targets Test" begin include("build_targets.jl") end
 @safetestset "Domain Test" begin include("domains.jl") end
 @safetestset "Constraints Test" begin include("constraints.jl") end
