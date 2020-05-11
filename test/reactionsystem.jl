@@ -1,4 +1,5 @@
-using ModelingToolkit, LinearAlgebra, Test
+using ModelingToolkit, LinearAlgebra, DiffEqJump, Test
+MT = ModelingToolkit
 
 @parameters t k[1:20]
 @variables A(t) B(t) C(t) D(t)
@@ -79,3 +80,60 @@ du2 = sf.f(u,p,t)
 @test norm(du-du2) < 100*eps()
 G2 = sf.g(u,p,t)
 @test norm(G-G2) < 100*eps()
+
+# test with JumpSystem
+js = convert(JumpSystem, rs)
+
+@test all(map(type -> type <: DiffEqJump.MassActionJump, typeof.(js.eqs[1:14])))
+@test all(map(type -> type <: DiffEqJump.ConstantRateJump, typeof.(js.eqs[15:18])))
+@test all(map(type -> type <: DiffEqJump.VariableRateJump, typeof.(js.eqs[19:20])))
+
+pars = rand(length(k)); u0 = rand(1:100,4); time = rand();
+jumps = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}(undef,length(js.eqs))
+
+jumps[1] = MassActionJump(pars[1], Vector{Pair{Int,Int}}(), [1 => 1]);
+jumps[2] = MassActionJump(pars[2], [2 => 1], [2 => -1]);
+jumps[3] = MassActionJump(pars[3], [1 => 1], [1 => -1, 3 => 1]);
+jumps[4] = MassActionJump(pars[4], [3 => 1], [1 => 1, 2 => 1, 3 => -1]);
+jumps[5] = MassActionJump(pars[5], [3 => 1], [1 => 2, 3 => -1]);
+jumps[6] = MassActionJump(pars[6], [1 => 1, 2 => 1], [1 => -1, 2 => -1, 3 => 1]);
+jumps[7] = MassActionJump(pars[7], [2 => 2], [1 => 1, 2 => -2]);
+jumps[8] = MassActionJump(pars[8], [1 => 1, 2 => 1], [2 => -1, 3 => 1]);
+jumps[9] = MassActionJump(pars[9], [1 => 1, 2 => 1], [1 => -1, 2 => -1, 3 => 1, 4 => 1]);
+jumps[10] = MassActionJump(pars[10], [1 => 2], [1 => -2, 3 => 1, 4 => 1]);
+jumps[11] = MassActionJump(pars[11], [1 => 2], [1 => -1, 2 => 1]);
+jumps[12] = MassActionJump(pars[12], [1 => 1, 2 => 3, 3 => 4], [1 => -1, 2 => -3, 3 => -2, 4 => 3]);
+jumps[13] = MassActionJump(pars[13], [1 => 3, 2 => 1], [1 => -3, 2 => -1]);
+jumps[14] = MassActionJump(pars[14], Vector{Pair{Int,Int}}(), [1 => 2]);
+
+jumps[15] = ConstantRateJump((u,p,t) -> p[15]*u[1]/(2+u[1]), integrator -> (integrator.u[1] -= 1))
+jumps[16] = ConstantRateJump((u,p,t) -> p[16], integrator -> (integrator.u[1] -= 1; integrator.u[2] += 1;))
+jumps[17] = ConstantRateJump((u,p,t) -> p[17]*u[1]*exp(u[2])*binomial(u[3],2), integrator -> (integrator.u[3] -= 2; integrator.u[4] += 1))
+jumps[18] = ConstantRateJump((u,p,t) -> p[18]*u[2], integrator -> (integrator.u[2] += 2))
+
+jumps[19] = VariableRateJump((u,p,t) -> p[19]*u[1]*t, integrator -> (integrator.u[1] -= 1; integrator.u[2] += 1))
+jumps[20] = VariableRateJump((u,p,t) -> p[20]*t*u[1]*binomial(u[2],2)*u[3], integrator -> (integrator.u[2] -= 2; integrator.u[3] -= 1; integrator.u[4] += 2))
+
+statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
+parammap = map((x,y)->Pair(x(),y),parameters(js),pars)
+for i = 1:14
+  maj = MT.assemble_maj(js, js.eqs[i], statetoid,parammap)
+  @test abs(jumps[i].scaled_rates - maj.scaled_rates) < 10*eps()
+  @test jumps[i].reactant_stoch == maj.reactant_stoch
+  @test jumps[i].net_stoch == maj.net_stoch
+end
+for i = 15:18
+  (i==16) && continue
+  crj = MT.assemble_crj(js, js.eqs[i], statetoid)
+  @test abs(crj.rate(u0,p,time) - jumps[i].rate(u0,p,time)) < 10*eps()
+  fake_integrator1 = (u=zeros(4),p=p,t=0); fake_integrator2 = deepcopy(fake_integrator1);
+  crj.affect!(fake_integrator1); jumps[i].affect!(fake_integrator2);
+  @test fake_integrator1 == fake_integrator2
+end
+for i = 19:20
+  crj = MT.assemble_vrj(js, js.eqs[i], statetoid)
+  @test abs(crj.rate(u0,p,time) - jumps[i].rate(u0,p,time)) < 10*eps()
+  fake_integrator1 = (u=zeros(4),p=p,t=0.); fake_integrator2 = deepcopy(fake_integrator1);
+  crj.affect!(fake_integrator1); jumps[i].affect!(fake_integrator2);
+  @test fake_integrator1 == fake_integrator2
+end
