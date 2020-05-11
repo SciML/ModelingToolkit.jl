@@ -148,14 +148,13 @@ end
 function jumpratelaw(rx)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = deepcopy(rate)
-    foreach(op -> substitute_expr!(rl,op=>var2op(op.op)), get_variables(rx.rate))
+    for op in get_variables(rx.rate)
+        rl = substitute_expr!(rl,op=>var2op(op.op))
+    end
     if !only_use_rate
-        coef = one(eltype(substoich))
         for (i,stoich) in enumerate(substoich)
-            coef *= factorial(stoich)
-            rl   *= isone(stoich) ? var2op(substrates[i].op) : var2op(substrates[i].op)^stoich
+            rl   *= isone(stoich) ? var2op(substrates[i].op) : Operation(binomial,[var2op(substrates[i].op),stoich])
         end
-        (!isone(coef)) && (rl /= coef)
     end
     rl
 end
