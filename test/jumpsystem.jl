@@ -44,7 +44,7 @@ integrator   = TestInt(u,p,tf)
 @test abs(mtjump2.rate(u,p,tf) - jump2.rate(u,p,tf)) < 10*eps()
 mtjump1.affect!(mtintegrator)
 jump1.affect!(integrator)
-@test all(integrator.u .== mtintegrator.u) 
+@test all(integrator.u .== mtintegrator.u)
 mtintegrator.u .= u; integrator.u .= u
 mtjump2.affect!(mtintegrator)
 jump2.affect!(integrator)
@@ -79,7 +79,7 @@ mtjumps = jprob.discrete_jump_aggregation
 @test abs(mtjumps.rates[2](u,p,tf) - jump2.rate(u,p,tf)) < 10*eps()
 mtjumps.affects![1](mtintegrator)
 jump1.affect!(integrator)
-@test all(integrator.u .== mtintegrator.u) 
+@test all(integrator.u .== mtintegrator.u)
 mtintegrator.u .= u; integrator.u .= u
 mtjumps.affects![2](mtintegrator)
 jump2.affect!(integrator)
@@ -129,7 +129,7 @@ jprob = JumpProblem(js4, dprob, Direct())
 m4 = getmean(jprob,Nsims)
 @test abs(m4 - 2.0/.01)*.01/2.0 < .01
 
-# test second order rx runs 
+# test second order rx runs
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 2], [S => -1])
 js4   = JumpSystem([maj1,maj2], t, [S], [β,γ])

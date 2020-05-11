@@ -46,7 +46,7 @@ function assemble_maj(js, maj::MassActionJump{U,Vector{Pair{V,W}},Vector{Pair{V2
                       statetoid, parammap) where {U,V,W,V2,W2}
     sr = maj.scaled_rates
     if sr isa Operation
-        pval = substitute(sr,parammap)
+        pval = simplify(substitute(sr,parammap)).value
     elseif sr isa Variable
         pval = Dict(parammap)[sr()]
     else
@@ -101,7 +101,7 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     majs = Vector{MassActionJump}()
     pvars = parameters(js)
     statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
-    parammap = map(Pair,pvars,prob.p)
+    parammap = map((x,y)->Pair(x(),y),pvars,prob.p)
 
     for j in equations(js)
         if j isa ConstantRateJump
