@@ -60,7 +60,7 @@ u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => .1/1000, γ => .01]
 dprob = DiscreteProblem(js2, u₀map, tspan, parammap)
 jprob = JumpProblem(js2, dprob, Direct(), save_positions=(false,false))
-Nsims = 10000
+Nsims = 30000
 function getmean(jprob,Nsims)
   m = 0.0
   for i = 1:Nsims
