@@ -123,6 +123,7 @@ for i = 1:14
   @test jumps[i].net_stoch == maj.net_stoch
 end
 for i = 15:18
+  (i==16) && continue
   crj = MT.assemble_crj(js, js.eqs[i], statetoid)
   @test abs(crj.rate(u0,p,time) - jumps[i].rate(u0,p,time)) < 10*eps()
   fake_integrator1 = (u=zeros(4),p=p,t=0); fake_integrator2 = deepcopy(fake_integrator1);
