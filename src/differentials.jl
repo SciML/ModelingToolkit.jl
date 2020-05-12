@@ -37,7 +37,7 @@ $(SIGNATURES)
 TODO
 """
 function expand_derivatives(O::Operation,simplify=true)
-    @. O.args = expand_derivatives(O.args,simplify)
+    @. O.args = expand_derivatives(O.args,false)
 
     if isa(O.op, Differential)
         (D, o) = (O.op, O.args[1])
@@ -48,7 +48,7 @@ function expand_derivatives(O::Operation,simplify=true)
         isa(o.op, Variable) && return O
 
         x = sum(1:length(o.args)) do i
-            derivative(o, i) * expand_derivatives(D(o.args[i]),simplify)
+            derivative(o, i) * expand_derivatives(D(o.args[i]),false)
         end
 
         return simplify ? ModelingToolkit.simplify(x) : x

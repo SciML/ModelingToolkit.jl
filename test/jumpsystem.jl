@@ -44,7 +44,7 @@ integrator   = TestInt(u,p,tf)
 @test abs(mtjump2.rate(u,p,tf) - jump2.rate(u,p,tf)) < 10*eps()
 mtjump1.affect!(mtintegrator)
 jump1.affect!(integrator)
-@test all(integrator.u .== mtintegrator.u) 
+@test all(integrator.u .== mtintegrator.u)
 mtintegrator.u .= u; integrator.u .= u
 mtjump2.affect!(mtintegrator)
 jump2.affect!(integrator)
@@ -60,7 +60,7 @@ u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => .1/1000, γ => .01]
 dprob = DiscreteProblem(js2, u₀map, tspan, parammap)
 jprob = JumpProblem(js2, dprob, Direct(), save_positions=(false,false))
-Nsims = 10000
+Nsims = 30000
 function getmean(jprob,Nsims)
   m = 0.0
   for i = 1:Nsims
@@ -79,7 +79,7 @@ mtjumps = jprob.discrete_jump_aggregation
 @test abs(mtjumps.rates[2](u,p,tf) - jump2.rate(u,p,tf)) < 10*eps()
 mtjumps.affects![1](mtintegrator)
 jump1.affect!(integrator)
-@test all(integrator.u .== mtintegrator.u) 
+@test all(integrator.u .== mtintegrator.u)
 mtintegrator.u .= u; integrator.u .= u
 mtjumps.affects![2](mtintegrator)
 jump2.affect!(integrator)
@@ -107,7 +107,6 @@ m2 = getmean(jprob,Nsims)
 # test JumpSystem solution agrees with direct version
 @test abs(m-m2)/m < .01
 
-
 # mass action jump tests for SIR model
 maj1 = MassActionJump(2*β/2, [S => 1, I => 1], [S => -1, I => 1])
 maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
@@ -130,7 +129,7 @@ jprob = JumpProblem(js4, dprob, Direct())
 m4 = getmean(jprob,Nsims)
 @test abs(m4 - 2.0/.01)*.01/2.0 < .01
 
-# test second order rx runs 
+# test second order rx runs
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 2], [S => -1])
 js4   = JumpSystem([maj1,maj2], t, [S], [β,γ])
