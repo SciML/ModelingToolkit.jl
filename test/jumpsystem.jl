@@ -137,4 +137,4 @@ statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(
 ptoid     = Dict(convert(Variable,par) => i for (i,par) in enumerate(parameters(js)))
 dprob = DiscreteProblem(js4, [S => 999], (0,1000.), [β => 100.,γ => .01])
 jprob = JumpProblem(js4, dprob, Direct())
-sol = solve(jprob, SSAStepper())
+sol = solve(jprob, SSAStepper());

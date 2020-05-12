@@ -1,7 +1,7 @@
 JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
 
-struct JumpSystem <: AbstractSystem
-    eqs::Vector{JumpType}
+struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
+    eqs::U
     iv::Variable
     states::Vector{Variable}
     ps::Vector{Variable}
@@ -11,18 +11,22 @@ end
 
 function JumpSystem(eqs, iv, states, ps; systems = JumpSystem[],
                                           name = gensym(:JumpSystem))
-    JumpSystem(eqs, iv, convert.(Variable, states), convert.(Variable, ps), name, systems)
-end
 
-# functions for sorting jumps in equation Vector
-# we define a partial
-jumpless(x,y) = true
-jumpless(x::MassActionJump, y::ConstantRateJump) = true
-jumpless(x::ConstantRateJump, y::MassActionJump) = false
-jumpless(x::MassActionJump, y::VariableRateJump) = true
-jumpless(x::VariableRateJump, y::MassActionJump) = false
-jumpless(x::ConstantRateJump, y::VariableRateJump) = true
-jumpless(x::VariableRateJump, y::ConstantRateJump) = false
+    ap = ArrayPartition(MassActionJump[], ConstantRateJump[], VariableRateJump[])
+    for eq in eqs
+        if eq isa MassActionJump 
+            push!(ap.x[1], eq)
+        elseif eq isa ConstantRateJump
+            push!(ap.x[2], eq)
+        elseif eq isa VariableRateJump
+            push!(ap.x[3], eq)
+        else
+            error("JumpSystem equations must contain MassActionJumps, ConstantRateJumps, or VariableRateJumps.")
+        end
+    end
+
+    JumpSystem{typeof(ap)}(ap, convert(Variable,iv), convert.(Variable, states), convert.(Variable, ps), name, systems)
+end
 
 
 generate_rate_function(js, rate) = build_function(rate, states(js), parameters(js),
