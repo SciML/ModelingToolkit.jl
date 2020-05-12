@@ -97,8 +97,10 @@ Generates a DiscreteProblem from an AbstractSystem
 function DiffEqBase.DiscreteProblem(sys::AbstractSystem, u0map, tspan::Tuple,
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
     u0 = varmap_to_vars(u0map, states(sys))
-    p = varmap_to_vars(parammap, parameters(sys))
-    DiscreteProblem(u0, tspan, p; kwargs...)
+    p  = varmap_to_vars(parammap, parameters(sys))
+    f  = (du,u,p,t) -> du.=u    # identity function to make syms works
+    df = DiscreteFunction(f, syms=Symbol.(states(sys)))
+    DiscreteProblem(df, u0, tspan, p; kwargs...)
 end
 
 """
@@ -115,18 +117,12 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     pvars = parameters(js)
     statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
     parammap = map((x,y)->Pair(x(),y),pvars,prob.p)
+    eqs      = equations(js)
 
-    for j in equations(js)
-        if j isa ConstantRateJump
-            push!(crjs, assemble_crj(js, j, statetoid))
-        elseif j isa VariableRateJump
-            push!(vrjs, assemble_vrj(js, j, statetoid))
-        elseif j isa MassActionJump
-            push!(majs, assemble_maj(js, j, statetoid, parammap))
-        else
-            error("JumpSystems should only contain Constant, Variable or Mass Action Jumps.")
-        end
-    end
+    foreach(j -> push!(majs, assemble_maj(js, j, statetoid, parammap)), eqs.x[1]) 
+    foreach(j -> push!(crjs, assemble_crj(js, j, statetoid)), eqs.x[2]) 
+    foreach(j -> push!(vrjs, assemble_vrj(js, j, statetoid)), eqs.x[3]) 
+
     ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, isempty(majs) ? nothing : majs)
     JumpProblem(prob, aggregator, jset)
