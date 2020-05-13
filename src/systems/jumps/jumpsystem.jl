@@ -103,6 +103,7 @@ function DiffEqBase.DiscreteProblem(sys::AbstractSystem, u0map, tspan::Tuple,
     DiscreteProblem(df, u0, tspan, p; kwargs...)
 end
 
+
 """
 ```julia
 function DiffEqBase.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
@@ -111,59 +112,34 @@ function DiffEqBase.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
 Generates a JumpProblem from a JumpSystem.
 """
 function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
-    vrjs = Vector{VariableRateJump}()
-    crjs = Vector{ConstantRateJump}()
-    majs = Vector{MassActionJump}()
-    pvars = parameters(js)
+
     statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
-    parammap = map((x,y)->Pair(x(),y),pvars,prob.p)
-    eqs      = equations(js)
+    parammap  = map((x,y)->Pair(x(),y), parameters(js), prob.p)
+    eqs       = equations(js)
 
-    foreach(j -> push!(majs, assemble_maj(js, j, statetoid, parammap)), eqs.x[1]) 
-    foreach(j -> push!(crjs, assemble_crj(js, j, statetoid)), eqs.x[2]) 
-    foreach(j -> push!(vrjs, assemble_vrj(js, j, statetoid)), eqs.x[3]) 
-
+    majs = MassActionJump[assemble_maj(js, j, statetoid, parammap) for j in eqs.x[1]]
+    crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
+    vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]
     ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
+    
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, isempty(majs) ? nothing : majs)
     JumpProblem(prob, aggregator, jset)
 end
 
 
-### Functions to determine which jumps depend on a given state
+### Functions to determine which states a jump depends on
 
-function ratevars!(dep, jump::Union{ConstantRateJump,VariableRateJump}, sts)
+function extract_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, sts)
     foreach(st -> (convert(Variable,st) in sts) && push!(dep,st), vars(jump.rate))
-end
-
-function ratevars!(dep, jump::MassActionJump, args...)    
-    foreach(st -> push!(dep,convert(Variable,st[1])), jump.reactant_stoch)
-end
-
-function ratevars(jump, sts)
-    dep = Set{Variable}()
-    ratevars!(dep,jump,sts)
     dep
 end
 
-# map each state (as an Int index) to the jumps with a rate that depend on it 
-function statetojump_depgraph(js::JumpSystem, statestoids = nothing)
-    sts   = states(js)
-    stoi  = isnothing(statestoids) ? Dict(convert(Variable,state) => i for (i,state) in enumerate(sts)) : statestoids
-
-    # map from jump to states (as Variables) it depends on through the rate
-    deps  = [ratevars(eq,sts) for eq in equations(js)]    
-
-    # reverse map and switch to integer indices of states
-    dg = [Vector{Int}() for i = 1:length(sts)]
-    for (k,dep) in enumerate(deps)
-        for state in dep
-            push!(dg[stoi[state]],k)
-        end
-    end
-    foreach(dep -> sort!(dep), dg)
-
-    dg
+function extract_variables!(dep, jump::MassActionJump, args...)    
+    foreach(st -> push!(dep,convert(Variable,st[1])), jump.reactant_stoch)    
+    dep
 end
+
+
 
 ### Functions to determine which states are modified by a given jump
 
