@@ -70,34 +70,20 @@ end
 
 # convert BipartiteGraph to LightGraph.SimpleDiGraph
 function digraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys), equationsfirst = true)
-    neqs  = length(equations(sys))
-    nvars = length(variables)
-
+    neqs     = length(equations(sys))
+    nvars    = length(variables)
     fadjlist = deepcopy(g.fadjlist)
     badjlist = deepcopy(g.badjlist)
-    if equationsfirst
-        # variable indices must be incremented by neqs
-        for i = 1:neqs
-            fadjlist[i] .+= neqs
-        end
 
-        # variables do not connect to anything
-        append!(fadjlist, [Vector{Int}() for i=1:nvars])
-
-        # eqs have nothing that mapped to them
-        prepend!(badjlist, [Vector{Int}() for i=1:neqs])
-    else
-        # equation indices must be incremented by nvars
-        for i = 1:nvars
-            fadjlist[i] .+= nvars
-        end
-
-        # equations do not connect to anything
-        append!(fadjlist, [Vector{Int}() for i=1:neqs])
-
-        # vars have nothing that mapped to them
-        prepend!(badjlist, [Vector{Int}() for i=1:nvars])
+    # offset is for determining indices for the second set of vertices
+    offset = equationsfirst ? neqs : nvars
+    for i = 1:offset
+        fadjlist[i] .+= offset
     end
+
+    # add empty rows for vertices without connections
+    append!(fadjlist, [Vector{Int}() for i=1:(equationsfirst ? nvars : neqs)])
+    prepend!(badjlist, [Vector{Int}() for i=1:(equationsfirst ? neqs : nvars)])
 
     SimpleDiGraph(g.ne, fadjlist, badjlist)
 end
