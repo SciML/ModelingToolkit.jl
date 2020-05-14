@@ -128,12 +128,12 @@ end
 
 
 ### Functions to determine which states a jump depends on
-function extract_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables)
+function get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables)
     foreach(var -> (var in variables) && push!(dep, var), vars(jump.rate))
     dep
 end
 
-function extract_variables!(dep, jump::MassActionJump, variables)
+function get_variables!(dep, jump::MassActionJump, variables)
     jsr = jump.scaled_rates
 
     if jsr isa Variable
@@ -149,7 +149,6 @@ function extract_variables!(dep, jump::MassActionJump, variables)
 
     dep
 end
-
 
 
 ### Functions to determine which states are modified by a given jump

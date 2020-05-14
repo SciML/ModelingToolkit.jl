@@ -203,10 +203,6 @@ function parameters(sys::AbstractSystem,args...)
     rename(x,renamespace(sys.name,newname))()
 end
 
-numstates(sys::AbstractSystem)     = length(states(sys))
-numparameters(sys::AbstractSystem) = length(parameters(sys))
-numequations(sys::AbstractSystem)  = length(equations(sys))
-
 struct AbstractSysToExpr
     sys::AbstractSystem
     states::Vector{Variable}
