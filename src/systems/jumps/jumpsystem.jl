@@ -128,14 +128,25 @@ end
 
 
 ### Functions to determine which states a jump depends on
-
-function extract_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, sts)
-    foreach(st -> (convert(Variable,st) in sts) && push!(dep,st), vars(jump.rate))
+function extract_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables)
+    foreach(var -> (var in variables) && push!(dep, var), vars(jump.rate))
     dep
 end
 
-function extract_variables!(dep, jump::MassActionJump, args...)    
-    foreach(st -> push!(dep,convert(Variable,st[1])), jump.reactant_stoch)    
+function extract_variables!(dep, jump::MassActionJump, variables)
+    jsr = jump.scaled_rates
+
+    if jsr isa Variable
+        (jsr in variables) && push!(dep, jsr)
+    elseif jsr isa Operation
+        foreach(var -> (var in variables) && push!(dep, var),  vars(jsr))            
+    end
+
+    for varasop in jump.reactant_stoch
+        var = convert(Variable, varasop[1])
+        (var in variables) && push!(dep, var)
+    end
+
     dep
 end
 
