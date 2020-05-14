@@ -18,6 +18,8 @@ using RecursiveArrayTools
 import SymbolicUtils
 import SymbolicUtils: to_symbolic, FnType
 
+import LightGraphs: SimpleDiGraph
+
 import TreeViews
 
 """
