@@ -128,12 +128,12 @@ end
 
 
 ### Functions to determine which states a jump depends on
-function get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables)
+function equation_dependencies!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables)
     foreach(var -> (var in variables) && push!(dep, var), vars(jump.rate))
     dep
 end
 
-function get_variables!(dep, jump::MassActionJump, variables)
+function equation_dependencies!(dep, jump::MassActionJump, variables)
     jsr = jump.scaled_rates
 
     if jsr isa Variable
@@ -150,6 +150,17 @@ function get_variables!(dep, jump::MassActionJump, variables)
     dep
 end
 
-
 ### Functions to determine which states are modified by a given jump
+function modified_states!(mstates, jump::Union{ConstantRateJump,VariableRateJump}, sts)
+    for eq in jump.affect!
+        st = convert(Variable, eq.lhs)
+        (st in sts) && push!(mstates, st)
+    end
+end
 
+function modified_states!(mstates, jump::MassActionJump, sts)
+    for (state,stoich) in jump.net_stoch
+        st = convert(Variable, state)
+        (st in sts) && push!(mstates, st)
+    end
+end

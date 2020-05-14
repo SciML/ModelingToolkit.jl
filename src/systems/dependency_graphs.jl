@@ -6,7 +6,7 @@ function equation_dependencies(sys::AbstractSystem; variables=states(sys))
     depeqs_to_vars = Vector{Vector{Variable}}(undef,length(eqs))
 
     for (i,eq) in enumerate(eqs)      
-        depeqs_to_vars[i] = collect(get_variables!(deps, eq, variables))
+        depeqs_to_vars[i] = collect(equation_dependencies!(deps, eq, variables))
         empty!(deps)
     end
 
