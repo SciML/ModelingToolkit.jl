@@ -15,7 +15,7 @@ end
 equation_dependencies(sys::AbstractSystem; variables=states(sys)) = extract_variables(equations(sys), variables)
 
 # modeled on LightGraphs SimpleGraph
-mutable struct BiPartiteGraph{T <: Integer}
+mutable struct BipartiteGraph{T <: Integer}
     ne::Int
     fadjlist::Vector{Vector{T}}  # fadjlist[src] = [dest1,dest2,...]
     badjlist::Vector{Vector{T}}  # badjlist[dst] = [src1,src2,...]
@@ -35,7 +35,7 @@ function asgraph(eqdeps, vtois)
         ne += 1
     end
 
-    BiPartiteGraph(ne, fadjlist, badjlist)
+    BipartiteGraph(ne, fadjlist, badjlist)
 end
 
 # could be made to directly generate graph and save memory
