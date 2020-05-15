@@ -121,8 +121,7 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     majs = MassActionJump[assemble_maj(js, j, statetoid, parammap) for j in eqs.x[1]]
     crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]
-    ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
-    
+    ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps") 
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, isempty(majs) ? nothing : majs)
 
     if needs_vartojumps_map(aggregator) || needs_depgraph(aggregator)
@@ -130,7 +129,6 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
         vdeps = variable_dependencies(js)
         vtoj = jdeps.badjlist
         jtov = vdeps.badjlist
-
         jtoj = needs_depgraph(aggregator) ? eqeq_dependencies(jdeps, vdeps).fadjlist : nothing
     else
         vtoj = nothing; jtov = nothing; jtoj = nothing
