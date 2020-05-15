@@ -59,7 +59,7 @@ end
 dg3 = eqeq_dependencies(depsbg,deps2)
 @test dg == dg3
 
-# var to vars they depend on
+# var to vars that depend on them
 var_vardeps = [[1,2,3],[1,2,3],[3]]
 ne = 7
 dg = SimpleDiGraph(3)
