@@ -69,7 +69,7 @@ function variable_dependencies(sys::AbstractSystem; variables=states(sys), varia
 end
 
 # convert BipartiteGraph to LightGraph.SimpleDiGraph
-function digraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys), equationsfirst = true)
+function asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys), equationsfirst = true)
     neqs     = length(equations(sys))
     nvars    = length(variables)
     fadjlist = deepcopy(g.fadjlist)
@@ -86,4 +86,34 @@ function digraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys)
     prepend!(badjlist, [Vector{Int}() for i=1:(equationsfirst ? neqs : nvars)])
 
     SimpleDiGraph(g.ne, fadjlist, badjlist)
+end
+
+# maps the i'th eq to equations that depend on it
+function eqeq_dendencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {T <: Integer}
+    g = SimpleDiGraph{T}(length(eqdeps.fadjlist))
+    
+    for (eqidx,sidxs) in enumerate(vardeps.badjlist)
+        # states modified by eqidx
+        for sidx in sidxs
+            # equations depending on sidx
+            foreach(v -> add_edge!(g, eqidx, v), eqdeps.badjlist[sidx])
+        end
+    end
+
+    g
+end
+
+# maps the i'th variable to variables that depend on it
+function varvar_dependencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {T <: Integer}
+    g = SimpleDiGraph{T}(length(vardeps.fadjlist))
+    
+    for (sidx,eqidxs) in enumerate(eqdeps.badjlist)
+        # eqs modified by eqidx
+        for eqidx in eqidxs
+            # states depending on eqidx
+            foreach(v -> add_edge!(g, sidx, v), vardeps.badjlist[eqidx])
+        end
+    end
+
+    g
 end

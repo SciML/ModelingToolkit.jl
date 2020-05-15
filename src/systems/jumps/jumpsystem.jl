@@ -39,6 +39,7 @@ generate_affect_function(js, affect, outputidxs) = build_function(affect, states
                                                       expression=Val{false},
                                                       headerfun=add_integrator_header,
                                                       outputidxs=outputidxs)[2]
+                                                      
 function assemble_vrj(js, vrj, statetoid)
     rate   = generate_rate_function(js, vrj.rate)
     outputvars = (convert(Variable,affect.lhs) for affect in vrj.affect!)
