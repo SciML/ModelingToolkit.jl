@@ -131,7 +131,7 @@ export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
 
 export BipartiteGraph, equation_dependencies, variable_dependencies
-export eqeq_dendencies, varvar_dependencies
+export eqeq_dependencies, varvar_dependencies
 export asgraph, asdigraph
 
 export simplified_expr, rename, get_variables

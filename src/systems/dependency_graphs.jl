@@ -37,6 +37,13 @@ function asgraph(eqdeps, vtois)
     BipartiteGraph(ne, fadjlist, badjlist)
 end
 
+function Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T<:Integer} 
+    iseq = (bg1.ne == bg2.ne)
+    iseq &= (bg1.fadjlist == bg2.fadjlist) 
+    iseq &= (bg1.badjlist == bg2.badjlist) 
+    iseq
+end
+
 # could be made to directly generate graph and save memory
 function asgraph(sys::AbstractSystem; variables=nothing, variablestoids=nothing)
     vs     = isnothing(variables) ? states(sys) : variables    
@@ -89,7 +96,7 @@ function asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sy
 end
 
 # maps the i'th eq to equations that depend on it
-function eqeq_dendencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {T <: Integer}
+function eqeq_dependencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {T <: Integer}
     g = SimpleDiGraph{T}(length(eqdeps.fadjlist))
     
     for (eqidx,sidxs) in enumerate(vardeps.badjlist)
@@ -104,4 +111,4 @@ function eqeq_dendencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) 
 end
 
 # maps the i'th variable to variables that depend on it
-varvar_dependencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {T <: Integer} = eqeq_dendencies(vardeps, eqdeps)
+varvar_dependencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {T <: Integer} = eqeq_dependencies(vardeps, eqdeps)
