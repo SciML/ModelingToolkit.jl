@@ -149,7 +149,7 @@ function jumpratelaw(rx)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = deepcopy(rate)
     for op in get_variables(rx.rate)
-        rl = substitute_expr!(rl,op=>var2op(op.op))
+        rl = substitute(rl,op=>var2op(op.op))
     end
     if !only_use_rate
         for (i,stoich) in enumerate(substoich)
