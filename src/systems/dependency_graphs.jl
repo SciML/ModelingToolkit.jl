@@ -104,16 +104,4 @@ function eqeq_dendencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) 
 end
 
 # maps the i'th variable to variables that depend on it
-function varvar_dependencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {T <: Integer}
-    g = SimpleDiGraph{T}(length(vardeps.fadjlist))
-    
-    for (sidx,eqidxs) in enumerate(eqdeps.badjlist)
-        # eqs modified by eqidx
-        for eqidx in eqidxs
-            # states depending on eqidx
-            foreach(v -> add_edge!(g, sidx, v), vardeps.badjlist[eqidx])
-        end
-    end
-
-    g
-end
+varvar_dependencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {T <: Integer} = eqeq_dendencies(vardeps, eqdeps)
