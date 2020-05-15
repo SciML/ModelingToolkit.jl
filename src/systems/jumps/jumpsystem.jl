@@ -124,7 +124,19 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
     
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, isempty(majs) ? nothing : majs)
-    JumpProblem(prob, aggregator, jset)
+
+    if needs_vartojumps_map(aggregator) || needs_depgraph(aggregator)
+        jdeps = asgraph(js)
+        vdeps = variable_dependencies(js)
+        vtoj = jdeps.badjlist
+        jtov = vdeps.badjlist
+
+        jtoj = needs_depgraph(aggregator) ? eqeq_dependencies(jdeps, vdeps).fadjlist : nothing
+    else
+        vtoj = nothing; jtov = nothing; jtoj = nothing
+    end
+
+    JumpProblem(prob, aggregator, jset; dep_graph=jtoj, vartojumps_map=vtoj, jumptovars_map=jtov)
 end
 
 
