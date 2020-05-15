@@ -7,7 +7,7 @@ makedocs(
     clean=true,doctest=false,
     format = Documenter.HTML(#analytics = "UA-90474609-3",
                              assets = ["assets/favicon.ico"],
-                             canonical="https://docs.sciml.ai/stable/"),
+                             canonical="https://mtk.sciml.ai/stable/"),
     pages=[
         "Home" => "index.md",
         "highlevel.md",
