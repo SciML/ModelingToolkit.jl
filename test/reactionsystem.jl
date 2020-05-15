@@ -84,9 +84,9 @@ G2 = sf.g(u,p,t)
 # test with JumpSystem
 js = convert(JumpSystem, rs)
 
-@test all(map(type -> type <: DiffEqJump.MassActionJump, typeof.(js.eqs[1:14])))
-@test all(map(type -> type <: DiffEqJump.ConstantRateJump, typeof.(js.eqs[15:18])))
-@test all(map(type -> type <: DiffEqJump.VariableRateJump, typeof.(js.eqs[19:20])))
+@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.MassActionJump, 1:14))
+@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.ConstantRateJump, 15:18))
+@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.VariableRateJump, 19:20))
 
 pars = rand(length(k)); u0 = rand(1:100,4); time = rand();
 jumps = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}(undef,length(js.eqs))

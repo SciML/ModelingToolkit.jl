@@ -18,6 +18,8 @@ using RecursiveArrayTools
 import SymbolicUtils
 import SymbolicUtils: to_symbolic, FnType
 
+import LightGraphs: SimpleDiGraph, add_edge!
+
 import TreeViews
 
 """
@@ -101,6 +103,7 @@ include("systems/optimization/optimizationsystem.jl")
 include("systems/pde/pdesystem.jl")
 
 include("systems/reaction/reactionsystem.jl")
+include("systems/dependency_graphs.jl")
 
 include("latexify_recipes.jl")
 include("build_function.jl")
@@ -118,7 +121,7 @@ export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
 export Operation, Expression, Variable
-export independent_variable, states, parameters, equations
+export independent_variable, states, parameters, equations 
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad
@@ -126,6 +129,10 @@ export calculate_gradient, generate_gradient
 export calculate_factorized_W, generate_factorized_W
 export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
+
+export BipartiteGraph, equation_dependencies, variable_dependencies
+export eqeq_dependencies, varvar_dependencies
+export asgraph, asdigraph
 
 export simplified_expr, rename, get_variables
 export simplify, substitute
