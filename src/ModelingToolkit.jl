@@ -130,7 +130,8 @@ export calculate_factorized_W, generate_factorized_W
 export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
 
-export BipartiteGraph, equation_dependencies, variable_dependencies, eqeq_dendencies, varvar_dependencies
+export BipartiteGraph, equation_dependencies, variable_dependencies
+export eqeq_dendencies, varvar_dependencies
 export asgraph, asdigraph
 
 export simplified_expr, rename, get_variables
