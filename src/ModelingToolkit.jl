@@ -116,7 +116,7 @@ export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
 export ode_order_lowering
 export PDESystem
-export Reaction, ReactionSystem
+export Reaction, ReactionSystem, ismassaction
 export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
