@@ -140,7 +140,7 @@ function jumpratelaw(rx; rxvars=get_variables(rx.rate))
     rl
 end
 
-# if haveivdep=true then time dependent rates will still be classified as mass action
+# if haveivdep=false then time dependent rates will still be classified as mass action
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate), 
                               haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))    
     return !(haveivdep || rx.only_use_rate || any((isequal(state,convert(Variable,rxv)) for state in states(rs), rxv in rxvars)))
