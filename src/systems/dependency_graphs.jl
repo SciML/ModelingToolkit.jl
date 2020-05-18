@@ -2,11 +2,12 @@
 # each system type should define extract_variables! for a single equation
 function equation_dependencies(sys::AbstractSystem; variables=states(sys))
     eqs  = equations(sys)
-    deps = Set{Variable}()
+    deps = Set{Operation}()
     depeqs_to_vars = Vector{Vector{Variable}}(undef,length(eqs))
 
     for (i,eq) in enumerate(eqs)      
-        depeqs_to_vars[i] = collect(get_variables!(deps, eq, variables))
+        get_variables!(deps, eq, variables)
+        depeqs_to_vars[i] = [convert(Variable,v) for v in deps]
         empty!(deps)
     end
 
@@ -57,11 +58,11 @@ function variable_dependencies(sys::AbstractSystem; variables=states(sys), varia
     eqs   = equations(sys)
     vtois = isnothing(variablestoids) ? Dict(convert(Variable, v) => i for (i,v) in enumerate(variables)) : variablestoids
 
-    deps = Set{Variable}()
+    deps = Set{Operation}()
     badjlist = Vector{Vector{Int}}(undef, length(eqs))    
     for (eidx,eq) in enumerate(eqs)
         modified_states!(deps, eq, variables)
-        badjlist[eidx] = sort!([vtois[var] for var in deps])
+        badjlist[eidx] = sort!([vtois[convert(Variable,var)] for var in deps])
         empty!(deps)
     end
 
