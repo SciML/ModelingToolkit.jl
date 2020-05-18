@@ -24,5 +24,5 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     eqs = vcat([rhs[i] ~ lhs[i] for i in eachindex(prob.u0)]...)
     de = ODESystem(eqs,t,vars,params)
 
-    de, vars, params
+    de
 end
