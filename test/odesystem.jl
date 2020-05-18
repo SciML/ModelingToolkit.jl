@@ -178,8 +178,8 @@ function lotka(u,p,t)
 end
 
 prob = ODEProblem(ODEFunction{false}(lotka),[1.0,1.0],(0.0,1.0),[1.5,1.0,3.0,1.0])
-de, vars, params = modelingtoolkitize(prob)
-ODEFunction(de, vars, params)(similar(prob.u0), prob.u0, prob.p, 0.1)
+de = modelingtoolkitize(prob)
+ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
 
 function lotka(du,u,p,t)
   x = u[1]
@@ -190,5 +190,5 @@ end
 
 prob = ODEProblem(lotka,[1.0,1.0],(0.0,1.0),[1.5,1.0,3.0,1.0])
 
-de, vars, params = modelingtoolkitize(prob)
-ODEFunction(de, vars, params)(similar(prob.u0), prob.u0, prob.p, 0.1)
+de = modelingtoolkitize(prob)
+ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
