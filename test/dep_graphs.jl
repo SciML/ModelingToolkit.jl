@@ -79,7 +79,7 @@ deps = equation_dependencies(os)
 eq_sdeps  = [[S,I], [S,I], [S,I,R]]
 @test all(i -> isequal(Set(eq_sdeps[i]),Set(deps[i])), 1:length(deps))
 
-sdes = convert(ODESystem, rs)
+sdes = convert(SDESystem, rs)
 deps = equation_dependencies(sdes)
 @test all(i -> isequal(Set(eq_sdeps[i]),Set(deps[i])), 1:length(deps))
 
