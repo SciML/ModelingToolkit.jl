@@ -106,6 +106,7 @@ function get_variables!(vars, e::Equation, varlist=nothing)
 end
 get_variables(e::Equation, varlist=nothing) = get_variables!(Operation[],e,varlist)
 
+modified_states!(mstates, e::Equation, statelist=nothing) = get_variables!(mstates, e.lhs, statelist)
 
 # variable substitution
 """
