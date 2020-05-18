@@ -1,5 +1,5 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
-using DiffEqBase, StochasticDiffEq
+using DiffEqBase, StochasticDiffEq, SparseArrays
 using Test
 
 # Define some variables
@@ -42,4 +42,26 @@ f(du,[1,2,3.0],[0.1,0.2,0.3],nothing)
 f = SDEFunction(de)
 prob = SDEProblem(SDEFunction(de),f.g,[1.0,0.0,0.0],(0.0,100.0),(10.0,26.0,2.33),
                   noise_rate_prototype = zeros(3,3))
+sol = solve(prob,EM(),dt=0.001)
+
+u0map = [
+    x => 1.0,
+    y => 0.0,
+    z => 0.0
+]
+
+parammap = [
+    σ => 10.0,
+    β => 26.0,
+    ρ => 2.33
+]
+
+prob = SDEProblem(de,u0map,(0.0,100.0),parammap)
+@test size(prob.noise_rate_prototype) == (3,3)
+@test prob.noise_rate_prototype isa Matrix
+sol = solve(prob,EM(),dt=0.001)
+
+prob = SDEProblem(de,u0map,(0.0,100.0),parammap,sparsenoise=true)
+@test size(prob.noise_rate_prototype) == (3,3)
+@test prob.noise_rate_prototype isa SparseMatrixCSC
 sol = solve(prob,EM(),dt=0.001)

@@ -161,6 +161,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
+                                    sparsenoise = sparse,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...)
 ```
@@ -172,6 +173,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
+                                    sparsenoise = sparse,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 
@@ -180,7 +182,16 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
                         sparse=sparse)
     u0 = varmap_to_vars(u0map,states(sys))
     p = varmap_to_vars(parammap,parameters(sys))
-    SDEProblem(f,f.g,u0,tspan,p;kwargs...)
+    if typeof(sys.noiseeqs) <: AbstractVector
+        noise_rate_prototype = nothing
+    elseif sparsenoise
+        I,J,V = findnz(SparseArrays.sparse(sys.noiseeqs))
+        noise_rate_prototype = SparseArrays.sparse(I,J,zero(eltype(u0)))
+    else
+        noise_rate_prototype = zeros(eltype(u0),size(sys.noiseeqs))
+    end
+
+    SDEProblem(f,f.g,u0,tspan,p;noise_rate_prototype=noise_rate_prototype,kwargs...)
 end
 
 function DiffEqBase.SDEProblem(sys::SDESystem, args...; kwargs...)
