@@ -118,21 +118,21 @@ statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(
 parammap = map((x,y)->Pair(x(),y),parameters(js),pars)
 for i = 1:14
   maj = MT.assemble_maj(js, js.eqs[i], statetoid,parammap)
-  @test abs(jumps[i].scaled_rates - maj.scaled_rates) < 10*eps()
+  @test abs(jumps[i].scaled_rates - maj.scaled_rates) < 100*eps()
   @test jumps[i].reactant_stoch == maj.reactant_stoch
   @test jumps[i].net_stoch == maj.net_stoch
 end
 for i = 15:18
   (i==16) && continue
   crj = MT.assemble_crj(js, js.eqs[i], statetoid)
-  @test abs(crj.rate(u0,p,time) - jumps[i].rate(u0,p,time)) < 10*eps()
+  @test abs(crj.rate(u0,p,time) - jumps[i].rate(u0,p,time)) < 100*eps()
   fake_integrator1 = (u=zeros(4),p=p,t=0); fake_integrator2 = deepcopy(fake_integrator1);
   crj.affect!(fake_integrator1); jumps[i].affect!(fake_integrator2);
   @test fake_integrator1 == fake_integrator2
 end
 for i = 19:20
   crj = MT.assemble_vrj(js, js.eqs[i], statetoid)
-  @test abs(crj.rate(u0,p,time) - jumps[i].rate(u0,p,time)) < 10*eps()
+  @test abs(crj.rate(u0,p,time) - jumps[i].rate(u0,p,time)) < 100*eps()
   fake_integrator1 = (u=zeros(4),p=p,t=0.); fake_integrator2 = deepcopy(fake_integrator1);
   crj.affect!(fake_integrator1); jumps[i].affect!(fake_integrator2);
   @test fake_integrator1 == fake_integrator2

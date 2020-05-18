@@ -52,7 +52,6 @@ function get_netstoich(subs, prods, sstoich, pstoich)
     ns
 end
 
-
 struct ReactionSystem <: AbstractSystem
     eqs::Vector{Reaction}
     iv::Variable
@@ -121,46 +120,56 @@ function assemble_diffusion(rs)
     eqs
 end
 
-function assemble_jumps(rs)
-    eqs = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}()
-
-    for rx in rs.eqs
-        rl = jumpratelaw(rx)
-        affect = Vector{Equation}()
-        for (spec,stoich) in rx.netstoich
-            push!(affect,var2op(spec) ~ var2op(spec) + stoich)
-        end
-        if any(isequal.(var2op(rs.iv),get_variables(rx.rate)))
-            push!(eqs,VariableRateJump(rl,affect))
-        elseif rx.only_use_rate || any([isequal(state,r_op) for state in rs.states, r_op in getfield.(get_variables(rx.rate),:op)])
-            push!(eqs,ConstantRateJump(rl,affect))
-        else
-            reactant_stoch = isempty(rx.substoich) ? [0 => 1] : Pair.(var2op.(getfield.(rx.substrates,:op)),rx.substoich)
-            net_stoch = map(p -> Pair(var2op(p[1]),p[2]),rx.netstoich)
-            push!(eqs,MassActionJump(rx.rate, reactant_stoch, net_stoch))
-        end
-    end
-    eqs
+function var2op(var)
+    Operation(var,Vector{Expression}())
 end
 
 # Calculate the Jump rate law (like ODE, but uses X instead of X(t).
 # The former generates a "MethodError: objects of type Int64 are not callable" when trying to solve the problem.
-function jumpratelaw(rx)
+function jumpratelaw(rx; rxvars=get_variables(rx.rate))
     @unpack rate, substrates, substoich, only_use_rate = rx
-    rl = deepcopy(rate)
-    for op in get_variables(rx.rate)
-        rl = substitute(rl,op=>var2op(op.op))
+    rl = rate
+    for op in rxvars
+        rl = substitute(rl, op => var2op(op.op))
     end
     if !only_use_rate
         for (i,stoich) in enumerate(substoich)
-            rl   *= isone(stoich) ? var2op(substrates[i].op) : Operation(binomial,[var2op(substrates[i].op),stoich])
+            rl *= isone(stoich) ? var2op(substrates[i].op) : Operation(binomial,[var2op(substrates[i].op),stoich])
         end
     end
     rl
 end
 
-function var2op(var)
-    Operation(var,Vector{Expression}())
+# if haveivdep=false then time dependent rates will still be classified as mass action
+function ismassaction(rx, rs; rxvars = get_variables(rx.rate), 
+                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))    
+    return !(haveivdep || rx.only_use_rate || any(convert(Variable,rxv) in states(rs) for rxv in rxvars))
+end
+
+function assemble_jumps(rs)
+    eqs = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}()
+
+    for rx in equations(rs)
+        rxvars    = get_variables(rx.rate)
+        haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars)
+        if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep)            
+            reactant_stoch = isempty(rx.substoich) ? [0 => 1] : [var2op(sub.op) => stoich for (sub,stoich) in zip(rx.substrates,rx.substoich)]
+            net_stoch      = [Pair(var2op(p[1]),p[2]) for p in rx.netstoich]
+            push!(eqs, MassActionJump(rx.rate, reactant_stoch, net_stoch))
+        else
+            rl     = jumpratelaw(rx, rxvars=rxvars)
+            affect = Vector{Equation}()
+            for (spec,stoich) in rx.netstoich
+                push!(affect, var2op(spec) ~ var2op(spec) + stoich)
+            end
+            if haveivdep
+                push!(eqs, VariableRateJump(rl,affect))
+            else
+                push!(eqs, ConstantRateJump(rl,affect))
+            end
+        end
+    end
+    eqs
 end
 
 function Base.convert(::Type{<:ODESystem},rs::ReactionSystem)
