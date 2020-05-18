@@ -14,7 +14,7 @@ rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
 
 
 ################################# 
-#      testing for Jumps 
+#  testing for Jumps / all dgs
 #################################
 js = convert(JumpSystem, rs)
 S  = convert(Variable,S); I = convert(Variable,I); R = convert(Variable,R)
@@ -71,4 +71,28 @@ end
 dg4 = varvar_dependencies(depsbg,deps2)
 @test dg == dg4
 
-   
+#####################################
+#       testing for ODE/SDEs
+#####################################
+os = convert(ODESystem, rs)
+deps = equation_dependencies(os)
+eq_sdeps  = [[S,I], [S,I], [S,I,R]]
+@test all(i -> isequal(Set(eq_sdeps[i]),Set(deps[i])), 1:length(deps))
+
+sdes = convert(ODESystem, rs)
+deps = equation_dependencies(sdes)
+@test all(i -> isequal(Set(eq_sdeps[i]),Set(deps[i])), 1:length(deps))
+
+#####################################
+#       testing for nonlin sys
+#####################################
+@variables x y z
+@parameters σ ρ β
+
+eqs = [0 ~ σ*(y-x),
+       0 ~ ρ-y,
+       0 ~ y - β*z]
+ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β])
+deps = equation_dependencies(ns)
+eq_sdeps = [[x,y],[y],[y,z]]
+@test all(i -> isequal(Set(deps[i]),Set(convert.(Variable,eq_sdeps[i]))), 1:length(deps))
