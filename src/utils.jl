@@ -88,15 +88,25 @@ get_variables(O::Operation)
 
 Returns the variables in the Operation
 """
-get_variables(e::Constant, vars = Operation[]) = vars
-function get_variables(e::Operation, vars = Operation[])
+get_variables!(vars, e::Constant, varlist=nothing) = vars
+get_variables(e::Constant, varlist=nothing) = get_variables!(Operation[], e, varlist)
+
+function get_variables!(vars, e::Operation, varlist=nothing)
     if is_singleton(e)
-        push!(vars, e)
+      (isnothing(varlist) ? true : (e.op in varlist)) && push!(vars, e)
     else
-        foreach(x -> get_variables(x, vars), e.args)
+        foreach(x -> get_variables!(vars, x, varlist), e.args)
     end
     return unique(vars)
 end
+get_variables(e::Operation, varlist=nothing) = get_variables!(Operation[], e, varlist)
+
+function get_variables!(vars, e::Equation, varlist=nothing)
+  get_variables!(vars, e.rhs, varlist)
+end
+get_variables(e::Equation, varlist=nothing) = get_variables!(Operation[],e,varlist)
+
+modified_states!(mstates, e::Equation, statelist=nothing) = get_variables!(mstates, e.lhs, statelist)
 
 # variable substitution
 """
