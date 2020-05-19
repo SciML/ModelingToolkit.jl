@@ -1,10 +1,64 @@
+
+"""
+$(TYPEDEF)
+
+One chemical reaction.
+
+# Fields
+$(FIELDS)
+
+# Examples
+
+```
+using ModelingToolkit
+@parameters t k[1:20]
+@variables A(t) B(t) C(t) D(t)
+rxs = [Reaction(k[1], nothing, [A]),            # 0 -> A
+       Reaction(k[2], [B], nothing),            # B -> 0
+       Reaction(k[3],[A],[C]),                  # A -> C
+       Reaction(k[4], [C], [A,B]),              # C -> A + B
+       Reaction(k[5], [C], [A], [1], [2]),      # C -> A + A
+       Reaction(k[6], [A,B], [C]),              # A + B -> C
+       Reaction(k[7], [B], [A], [2], [1]),      # 2B -> A
+       Reaction(k[8], [A,B], [A,C]),            # A + B -> A + C
+       Reaction(k[9], [A,B], [C,D]),            # A + B -> C + D
+       Reaction(k[10], [A], [C,D], [2], [1,1]), # 2A -> C + D
+       Reaction(k[11], [A], [A,B], [2], [1,1]), # 2A -> A + B
+       Reaction(k[12], [A,B,C], [C,D], [1,3,4], [2, 3]),          # A+3B+4C -> 2C + 3D
+       Reaction(k[13], [A,B], nothing, [3,1], nothing),           # 3A+B -> 0
+       Reaction(k[14], nothing, [A], nothing, [2]),               # 0 -> 2A
+       Reaction(k[15]*A/(2+A), [A], nothing; only_use_rate=true), # A -> 0 with custom rate
+       Reaction(k[16], [A], [B]; only_use_rate=true),             # A -> B with custom rate.
+       Reaction(k[17]*A*exp(B), [C], [D], [2], [1]),              # 2C -> D with non constant rate.
+       Reaction(k[18]*B, nothing, [B], nothing, [2]),             # 0 -> 2B with non constant rate.
+       Reaction(k[19]*t, [A], [B]),                                # A -> B with non constant rate.
+       Reaction(k[20]*t*A, [B,C], [D],[2,1],[2])                  # 2A +B -> 2C with non constant rate.
+  ]
+```
+
+Notes:
+- `nothing` can be used to indicate a reaction that has no reactants or no products. 
+  In this case the corresponding stoichiometry vector should also be set to `nothing`.
+- The three-argument form assumes all reactant and product stoichiometric coefficients 
+  are one.
+"""
 struct Reaction{S <: Variable, T <: Number}
+    """The rate function (excluding mass action terms)."""
     rate
+    """Reaction substrates."""
     substrates::Vector{Operation}
+    """Reaction products."""
     products::Vector{Operation}
+    """The stoichiometric coefficients of the reactants."""
     substoich::Vector{T}
+    """The stoichiometric coefficients of the products."""
     prodstoich::Vector{T}
+    """The net stoichiometric coefficients of all species changed by the reaction."""
     netstoich::Vector{Pair{S,T}}
+    """
+    `false` (default) if `rate` should be multiplied by mass action terms to give the rate law.
+    `true` if `rate` represents the full reaction rate law.    
+    """
     only_use_rate::Bool
 end
 
@@ -52,12 +106,32 @@ function get_netstoich(subs, prods, sstoich, pstoich)
     ns
 end
 
+"""
+$(TYPEDEF)
+
+A system of chemical reactions.
+
+# Fields
+$(FIELDS)
+
+# Example
+Continuing from the example in the [`Reaction`](@ref) definition:
+```
+rs = ReactionSystem(rxs, t, [A,B,C,D], k)
+```
+"""
 struct ReactionSystem <: AbstractSystem
+    """The reactions defining the system."""
     eqs::Vector{Reaction}
+    """Independent variable (usually time)."""
     iv::Variable
+    """Dependent (state) variables representing amount of each species."""
     states::Vector{Variable}
+    """Parameter variables."""
     ps::Vector{Variable}
+    """The name of the system"""
     name::Symbol
+    """systems: The internal systems"""
     systems::Vector{ReactionSystem}
 end
 
@@ -141,6 +215,22 @@ function jumpratelaw(rx; rxvars=get_variables(rx.rate))
 end
 
 # if haveivdep=false then time dependent rates will still be classified as mass action
+"""
+```julia
+ismassaction(rx, rs; rxvars = get_variables(rx.rate), 
+                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))    
+```
+
+True if a given reaction is of mass action form, i.e. `rx.rate` does not depend
+on any chemical species that correspond to states of the system, and does not depend 
+explicitly on the independent variable (usually time).
+
+# Arguments
+- `rx`, the [`Reaction`](@ref).
+- `rs`, a [`ReactionSystem`](@ref) containing the reaction.
+- Optional: `rxvars`, the `Variable`s the `rx` depends on.
+- Optional: `haveivdep`, `true` if the [`Reaction`](@ref) `rate` field explicitly depends on the independent variable. 
+"""
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate), 
                               haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))    
     return !(haveivdep || rx.only_use_rate || any(convert(Variable,rxv) in states(rs) for rxv in rxvars))
@@ -172,12 +262,25 @@ function assemble_jumps(rs)
     eqs
 end
 
+"""
+```julia
+Base.convert(::Type{<:ODESystem},rs::ReactionSystem)
+```
+Convert a ReactionSystem to an ODESystem.
+"""
 function Base.convert(::Type{<:ODESystem},rs::ReactionSystem)
     eqs = assemble_drift(rs)
     ODESystem(eqs,rs.iv,rs.states,rs.ps,name=rs.name,
               systems=convert.(ODESystem,rs.systems))
 end
 
+"""
+```julia
+Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
+```
+
+Convert a ReactionSystem to a SDESystem.
+"""
 function Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
     eqs = assemble_drift(rs)
     noiseeqs = assemble_diffusion(rs)
@@ -185,6 +288,13 @@ function Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
               name=rs.name,systems=convert.(SDESystem,rs.systems))
 end
 
+"""
+```julia
+Base.convert(::Type{<:JumpSystem},rs::ReactionSystem)
+```
+
+Convert a ReactionSystem to a JumpSystem.
+"""
 function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem)
     eqs = assemble_jumps(rs)
     JumpSystem(eqs,rs.iv,rs.states,rs.ps,name=rs.name,
