@@ -1,11 +1,45 @@
 JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
 
+"""
+$(TYPEDEF)
+
+A system of jump processes.
+
+# Fields
+$(FIELDS)
+
+# Example
+
+```
+using ModelingToolkit
+
+@parameters β γ t
+@variables S I R
+rate₁   = β*S*I
+affect₁ = [S ~ S - 1, I ~ I + 1]
+rate₂   = γ*I
+affect₂ = [I ~ I - 1, R ~ R + 1]
+j₁      = ConstantRateJump(rate₁,affect₁)
+j₂      = ConstantRateJump(rate₂,affect₂)
+j₃      = MassActionJump(2*β+γ, [R => 1], [S => 1, R => -1])
+js      = JumpSystem([j₁,j₂,j₃], t, [S,I,R], [β,γ])
+```
+"""
 struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
+    """
+    The jumps of the system. Allowable types are `ConstantRateJump`, 
+    `VariableRateJump`, `MassActionJump`.
+    """
     eqs::U
+    """The independent variable, usually time."""
     iv::Variable
+    """The dependent variables, representing the state of the system."""
     states::Vector{Variable}
+    """The parameters of the system."""
     ps::Vector{Variable}
+    """The name of the system."""
     name::Symbol
+    """The internal systems."""
     systems::Vector{JumpSystem}
 end
 
@@ -93,7 +127,16 @@ function DiffEqBase.DiscreteProblem(sys::AbstractSystem, u0map, tspan,
                                     parammap=DiffEqBase.NullParameters; kwargs...)
 ```
 
-Generates a DiscreteProblem from an AbstractSystem
+Generates a DiscreteProblem from an AbstractSystem.
+
+Continuing the example from the [`JumpSystem`](@ref) definition:
+```julia
+using DiffEqBase, DiffEqJump
+u₀map = [S => 999, I => 1, R => 0]
+parammap = [β => .1/1000, γ => .01]
+tspan = (0.0, 250.0)
+dprob = DiscreteProblem(js, u₀map, tspan, parammap)
+```
 """
 function DiffEqBase.DiscreteProblem(sys::AbstractSystem, u0map, tspan::Tuple,
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
@@ -111,6 +154,12 @@ function DiffEqBase.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
 ```
 
 Generates a JumpProblem from a JumpSystem.
+
+Continuing the example from the [`DiscreteProblem`](@ref) definition:
+```julia
+jprob = JumpProblem(js, dprob, Direct())
+sol = solve(jprob, SSAStepper())
+```
 """
 function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
 
