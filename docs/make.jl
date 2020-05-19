@@ -15,6 +15,7 @@ makedocs(
             "systems/AbstractSystem.md",
             "systems/ODESystem.md",
             "systems/SDESystem.md",
+            "systems/JumpSystem.md",
             "systems/NonlinearSystem.md",
             "systems/OptimizationSystem.md",
             "systems/ReactionSystem.md",
