@@ -1,5 +1,35 @@
 JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
 
+"""
+$(TYPEDEF)
+
+A system of jumps processes.
+
+# Fields
+$(FIELDS)
+
+# Example
+
+```
+using ModelingToolKit, DiffEqJump
+
+@parameters β γ t
+@variables S I R
+rate₁   = β*S*I
+affect₁ = [S ~ S - 1, I ~ I + 1]
+rate₂   = γ*I+t
+affect₂ = [I ~ I - 1, R ~ R + 1]
+j₁      = ConstantRateJump(rate₁,affect₁)
+j₂      = VariableRateJump(rate₂,affect₂)
+j₃      = MassActionJump(2*β+γ, [R => 1], [S => 1, R => -1])
+js      = JumpSystem([j₁,j₂,j₃], t, [S,I,R], [β,γ])
+u₀map = [S => 999, I => 1, R => 0]
+parammap = [β => .1/1000, γ => .01]
+dprob = DiscreteProblem(js2, u₀map, tspan, parammap)
+jprob = JumpProblem(js2, dprob, Direct(), save_
+
+```
+"""
 struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
     eqs::U
     iv::Variable
