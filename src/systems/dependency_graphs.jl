@@ -91,6 +91,13 @@ mutable struct BipartiteGraph{T <: Integer}
     badjlist::Vector{Vector{T}}  # badjlist[dst] = [src1,src2,...]
 end
 
+"""
+```julia
+Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T<:Integer} 
+```
+
+Test whether two [`BipartiteGraph`](@ref)s are equal.
+"""
 function Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T<:Integer} 
     iseq = (bg1.ne == bg2.ne)
     iseq &= (bg1.fadjlist == bg2.fadjlist) 
