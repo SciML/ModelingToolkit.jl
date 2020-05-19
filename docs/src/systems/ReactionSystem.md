@@ -27,6 +27,7 @@ sol = solve(sprob, EM(), dt=.01)
 
 # solve as jump process
 jumpsys = convert(JumpSystem, rs)
+u₀map    = [S => 999, I => 1, R => 0]
 dprob = DiscreteProblem(jumpsys, u₀map, tspan, parammap)
 jprob = JumpProblem(jumpsys, dprob, Direct())
 sol = solve(jprob, SSAStepper())
