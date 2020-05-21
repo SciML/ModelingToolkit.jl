@@ -78,8 +78,8 @@ $(TYPEDEF)
 An expression which wraps a constant numerical value.
 """
 struct Constant <: Expression
-    """The constant's numerical value"""
-    value::Number
+    """The constant value"""
+    value
 end
 
 """
