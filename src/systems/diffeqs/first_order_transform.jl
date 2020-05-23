@@ -1,3 +1,4 @@
+using DataStructures: OrderedDict
 function lower_varname(var::Variable, idv, order)
     order == 0 && return var
     name = Symbol(var.name, :ˍ, string(idv.name)^order)
@@ -24,8 +25,7 @@ function ode_order_lowering(sys::ODESystem)
 end
 
 function ode_order_lowering(eqs, iv, states)
-    var_order = Dict{Variable,Int}()
-    vars = Variable[]
+    var_order = OrderedDict{Variable,Int}()
     D = Differential(iv())
     diff_eqs = Equation[]
     diff_vars = Variable[]
@@ -38,10 +38,8 @@ function ode_order_lowering(eqs, iv, states)
             push!(alge_eqs, eq)
         else
             var, maxorder = var_from_nested_derivative(eq.lhs)
-            if maxorder > get(var_order, var, 0)
-                var_order[var] = maxorder
-                any(isequal(var), vars) || push!(vars, var)
-            end
+            # only save to the dict when we need to lower the order to save memory
+            maxorder > get(var_order, var, 1) && (var_order[var] = maxorder)
             var′ = lower_varname(var, iv, maxorder - 1)
             rhs′ = rename_lower_order(eq.rhs)
             push!(diff_vars, var′)
@@ -49,8 +47,7 @@ function ode_order_lowering(eqs, iv, states)
         end
     end
 
-    for var ∈ vars
-        order = var_order[var]
+    for (var, order) ∈ var_order
         for o in (order-1):-1:1
             lvar = lower_varname(var, iv, o-1)
             rvar = lower_varname(var, iv, o)
