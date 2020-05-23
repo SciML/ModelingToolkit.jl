@@ -59,6 +59,7 @@ function ode_order_lowering(eqs, iv, states)
         end
     end
 
+    # we want to order the equations and variables to be `(diff, alge)`
     return (vcat(diff_eqs, alge_eqs), vcat(diff_vars, alge_vars))
 end
 
