@@ -26,14 +26,16 @@ end
 function ode_order_lowering(eqs, iv, states)
     var_order = Dict{Variable,Int}()
     vars = Variable[]
-    new_eqs = Equation[]
-    new_vars = Variable[]
     D = Differential(iv())
+    diff_eqs = Equation[]
+    diff_vars = Variable[]
+    alge_eqs = Equation[]
+    alge_vars = Variable[]
 
     for (i, (eq, ss)) ∈ enumerate(zip(eqs, states))
         if isequal(eq.lhs, Constant(0))
-            push!(new_vars, ss)
-            push!(new_eqs, eq)
+            push!(alge_vars, ss)
+            push!(alge_eqs, eq)
         else
             var, maxorder = var_from_nested_derivative(eq.lhs)
             if maxorder > get(var_order, var, 0)
@@ -42,8 +44,8 @@ function ode_order_lowering(eqs, iv, states)
             end
             var′ = lower_varname(var, iv, maxorder - 1)
             rhs′ = rename_lower_order(eq.rhs)
-            push!(new_vars, var′)
-            push!(new_eqs, D(var′(iv())) ~ rhs′)
+            push!(diff_vars, var′)
+            push!(diff_eqs, D(var′(iv())) ~ rhs′)
         end
     end
 
@@ -52,15 +54,15 @@ function ode_order_lowering(eqs, iv, states)
         for o in (order-1):-1:1
             lvar = lower_varname(var, iv, o-1)
             rvar = lower_varname(var, iv, o)
-            push!(new_vars, lvar)
+            push!(diff_vars, lvar)
 
             rhs = rvar(iv())
             eq = Differential(iv())(lvar(iv())) ~ rhs
-            push!(new_eqs, eq)
+            push!(diff_eqs, eq)
         end
     end
 
-    return (new_eqs, new_vars)
+    return (vcat(diff_eqs, alge_eqs), vcat(diff_vars, alge_vars))
 end
 
 function rename_lower_order(O::Expression)
