@@ -12,7 +12,7 @@ end
 
 """
 ```julia
-jacobian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+jacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
 ```
 
 A helper function for computing the Jacobian of an array of expressions with respect to
