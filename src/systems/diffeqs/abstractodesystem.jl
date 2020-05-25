@@ -63,16 +63,17 @@ function calculate_factorized_W(sys::AbstractODESystem, simplify=true)
     isempty(sys.Wfact[]) || return (sys.Wfact[],sys.Wfact_t[])
 
     jac = calculate_jacobian(sys)
+    M = calculate_massmatrix(sys)
     gam = Variable(:__MTKWgamma)()
 
-    W = - LinearAlgebra.I + gam*jac
+    W = - M + gam*jac
     Wfact = lu(W, Val(false), check=false).factors
 
     if simplify
         Wfact = ModelingToolkit.simplify.(Wfact)
     end
 
-    W_t = - LinearAlgebra.I/gam + jac
+    W_t = - M/gam + jac
     Wfact_t = lu(W_t, Val(false), check=false).factors
     if simplify
         Wfact_t = ModelingToolkit.simplify.(Wfact_t)
