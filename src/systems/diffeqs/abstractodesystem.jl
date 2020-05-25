@@ -179,7 +179,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     M = calculate_massmatrix(sys)
 
-    _M = u0 === nothing ? M : ArrayInterface.restructure(u0 .* u0',M)
+    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
     ODEFunction{iip}(f,jac=_jac,
                       tgrad = _tgrad,

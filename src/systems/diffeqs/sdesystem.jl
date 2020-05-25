@@ -139,7 +139,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
     end
 
     M = calculate_massmatrix(sys)
-    _M = u0 === nothing ? M : ArrayInterface.restructure(u0 .* u0',M)
+    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
     SDEFunction{iip}(f,g,jac=_jac,
                       tgrad = _tgrad,
