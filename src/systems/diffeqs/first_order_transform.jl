@@ -1,4 +1,3 @@
-using DataStructures: OrderedDict
 function lower_varname(var::Variable, idv, order)
     order == 0 && return var
     name = Symbol(var.name, :ˍ, string(idv.name)^order)
