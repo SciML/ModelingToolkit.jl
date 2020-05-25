@@ -212,9 +212,8 @@ p  = [k₁ => 0.04,
 tspan = (0.0,100000.0)
 prob1 = ODEProblem(sys,u0,tspan,p)
 prob2 = ODEProblem(sys,u0,tspan,p,jac=true)
-# Wfact version is not very stable because of the lack of pivoting
 prob3 = ODEProblem(sys,u0,tspan,p,Wfact=true,Wfact_t=true)
-for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 0.1)]
+for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
     sol = solve(prob, Rodas5())
     @test all(x->≈(sum(x), 1.0, atol=atol), sol.u)
 end
