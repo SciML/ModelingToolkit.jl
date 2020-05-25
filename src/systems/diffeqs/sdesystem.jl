@@ -177,7 +177,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 
-    f = SDEFunction(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
+    f = SDEFunction{iip}(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
                         sparse=sparse)
     u0 = varmap_to_vars(u0map,states(sys))
@@ -191,7 +191,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
         noise_rate_prototype = zeros(eltype(u0),size(sys.noiseeqs))
     end
 
-    SDEProblem(f,f.g,u0,tspan,p;noise_rate_prototype=noise_rate_prototype,kwargs...)
+    SDEProblem{iip}(f,f.g,u0,tspan,p;noise_rate_prototype=noise_rate_prototype,kwargs...)
 end
 
 function DiffEqBase.SDEProblem(sys::SDESystem, args...; kwargs...)

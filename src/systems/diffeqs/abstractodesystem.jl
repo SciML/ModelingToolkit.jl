@@ -212,10 +212,10 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     checkbounds = false, sparse = false,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
-    f = ODEFunction(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
+    f = ODEFunction{iip}(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
                         sparse=sparse)
     u0 = varmap_to_vars(u0map,states(sys))
     p = varmap_to_vars(parammap,parameters(sys))
-    ODEProblem(f,u0,tspan,p;kwargs...)
+    ODEProblem{iip}(f,u0,tspan,p;kwargs...)
 end
