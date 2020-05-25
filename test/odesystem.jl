@@ -192,3 +192,23 @@ prob = ODEProblem(lotka,[1.0,1.0],(0.0,1.0),[1.5,1.0,3.0,1.0])
 
 de = modelingtoolkitize(prob)
 ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
+
+# automatic state detection for DAEs
+@parameters t k₁ k₂ k₃
+@variables y₁(t) y₂(t) y₃(t)
+@derivatives D'~t
+# reorder the system just to be a little spicier
+eqs = [D(y₁) ~ -k₁*y₁+k₃*y₂*y₃,
+       0     ~  y₁ + y₂ + y₃ - 1,
+       D(y₂) ~  k₁*y₁-k₂*y₂^2-k₃*y₂*y₃]
+sys = ODESystem(eqs)
+u0 = [y₁ => 1.0,
+      y₂ => 0.0,
+      y₃ => 0.0]
+p  = [k₁ => 0.04,
+      k₂ => 3e7,
+      k₃ => 1e4]
+tspan = (0.0,100000.0)
+prob = ODEProblem(sys,u0,tspan,p)
+sol = solve(prob, Rodas5())
+@test all(x->sum(x) ≈ 1.0, sol.u)
