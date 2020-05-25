@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>High Level API · ModelingToolkit.jl</title><link rel="canonical" href="https://mtk.sciml.ai/stable/highlevel/"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.11.1/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link href="../assets/favicon.ico" rel="icon" type="image/x-icon"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../"><img src="../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit">ModelingToolkit.jl</span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li class="is-active"><a class="tocitem" href>High Level API</a><ul class="internal"><li><a class="tocitem" href="#Examples-1"><span>Examples</span></a></li><li><a class="tocitem" href="#High-Level-API-Documentation-1"><span>High Level API Documentation</span></a></li><li><a class="tocitem" href="#Additional-High-Level-Explanations-and-Tips-1"><span>Additional High Level Explanations and Tips</span></a></li></ul></li><li><span class="tocitem">Systems</span><ul><li><a class="tocitem" href="../systems/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../systems/ReactionSystem/">ReactionSystem</a></li><li><a class="tocitem" href="../systems/PDESystem/">PDESystem</a></li><li><a class="tocitem" href="../systems/DependencyGraphs/">Dependency Graphs</a></li></ul></li><li><a class="tocitem" href="../IR/">ModelingToolkit IR</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>High Level API</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>High Level API</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/highlevel.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="High-Level-API-1"><a class="docs-heading-anchor" href="#High-Level-API-1">High Level API</a><a class="docs-heading-anchor-permalink" href="#High-Level-API-1" title="Permalink"></a></h1><p>The high level API allows modelers to interactively build models in a symbolic manner. It is designed as a semi-DSL for easily building large complex models and manipulating the models to generate optimal forms for utilizing in numerical methods.</p><h2 id="Examples-1"><a class="docs-heading-anchor" href="#Examples-1">Examples</a><a class="docs-heading-anchor-permalink" href="#Examples-1" title="Permalink"></a></h2><h3 id="Example-1:-Symbolically-Building-an-ODEProblem-for-DifferentialEquations.jl-1"><a class="docs-heading-anchor" href="#Example-1:-Symbolically-Building-an-ODEProblem-for-DifferentialEquations.jl-1">Example 1: Symbolically Building an ODEProblem for DifferentialEquations.jl</a><a class="docs-heading-anchor-permalink" href="#Example-1:-Symbolically-Building-an-ODEProblem-for-DifferentialEquations.jl-1" title="Permalink"></a></h3><p>Let&#39;s build an ODE. First we define some variables. In a differential equation system, we need to differentiate between our (dependent) variables and parameters. Therefore we label them as follows:</p><pre><code class="language-julia">using ModelingToolkit
+
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D&#39;~t</code></pre><p>Then we build the system:</p><pre><code class="language-julia">eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]</code></pre><p>Each operation builds an <code>Operation</code> type, and thus <code>eqs</code> is an array of <code>Operation</code> and <code>Variable</code>s. This holds a tree of the full system that can be analyzed by other programs. We can turn this into a <code>ODESystem</code> via:</p><pre><code class="language-julia">sys = ODESystem(eqs)</code></pre><p>This <code>ODESystem</code> can then be used to generate an <code>ODEProblem</code> by supplying the constructor with a map from the states of the system to their initial condition values and from the parameters of the system to their values. For example:</p><pre><code class="language-julia">u0 = [x =&gt; 1.0
+      y =&gt; 0.0
+      z =&gt; 0.0]
+
+p  = [σ =&gt; 10.0
+      ρ =&gt; 28.0
+      β =&gt; 8/3]
+tspan = (0.0,100.0)
+prob = ODEProblem(sys,u0,tspan,p;jac=true,sparse=true)</code></pre><p>Note that the additional <code>jac=true</code> tells the system to symbolically generate an optimized Jacobian function to enhance the differential equation solvers, and <code>sparse</code> tells it to build the ODEProblem with all of the enhancements setup for sparse Jacobians.</p><h3 id="Example-2:-Building-a-Component-Based-ODEProblem-1"><a class="docs-heading-anchor" href="#Example-2:-Building-a-Component-Based-ODEProblem-1">Example 2: Building a Component-Based ODEProblem</a><a class="docs-heading-anchor-permalink" href="#Example-2:-Building-a-Component-Based-ODEProblem-1" title="Permalink"></a></h3><p>In addition, we can then use ModelingToolkit to compose multiple ODE subsystems. Let&#39;s define two interacting Lorenz equations:</p><pre><code class="language-julia">lorenz1 = ODESystem(eqs,name=:lorenz1)
+lorenz2 = ODESystem(eqs,name=:lorenz2)
+
+@variables α
+@parameters γ
+connections = [0 ~ lorenz1.x + lorenz2.y + sin(α*γ)]
+connected = ODESystem(connections,[α],[γ],systems=[lorenz1,lorenz2])</code></pre><p>which is now a differential-algebraic equation (DAE) of 7 variables which has two independent Lorenz systems and an algebraic equation that determines <code>α</code> such that an implicit constraint holds. We can then define the resulting <code>ODEProblem</code> and send it over to DifferentialEquations.jl.</p><h3 id="Example-3:-Building-Nonlinear-Systems-to-Solve-with-NLsolve.jl-1"><a class="docs-heading-anchor" href="#Example-3:-Building-Nonlinear-Systems-to-Solve-with-NLsolve.jl-1">Example 3: Building Nonlinear Systems to Solve with NLsolve.jl</a><a class="docs-heading-anchor-permalink" href="#Example-3:-Building-Nonlinear-Systems-to-Solve-with-NLsolve.jl-1" title="Permalink"></a></h3><p>In this example we will go one step deeper and showcase the direct function generation capabilities in ModelingToolkit.jl to build nonlinear systems. Let&#39;s say we wanted to solve for the steady state of the previous ODE. This is the nonlinear system defined by where the derivatives are zero. We use (unknown) variables for our nonlinear system.</p><pre><code class="language-julia">using ModelingToolkit
+
+@variables x y z
+@parameters σ ρ β
+
+# Define a nonlinear system
+eqs = [0 ~ σ*(y-x),
+       0 ~ x*(ρ-z)-y,
+       0 ~ x*y - β*z]
+ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
+nlsys_func = generate_function(ns)[2] # second is the inplace version</code></pre><p>which generates:</p><pre><code class="language-julia">(var&quot;##MTIIPVar#405&quot;, u, p)-&gt;begin
+        @inbounds begin
+                @inbounds begin
+                        let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+                            var&quot;##MTIIPVar#405&quot;[1] = (*)(σ, (-)(y, x))
+                            var&quot;##MTIIPVar#405&quot;[2] = (-)((*)(x, (-)(ρ, z)), y)
+                            var&quot;##MTIIPVar#405&quot;[3] = (-)((*)(x, y), (*)(β, z))
+                        end
+                    end
+            end
+        nothing
+    end</code></pre><p>We can use this to build a nonlinear function for use with NLsolve.jl:</p><pre><code class="language-julia">f = eval(nlsys_func)
+du = zeros(3); u = ones(3)
+params = (10.0,26.0,2.33)
+f(du,u,params)
+du
+
+#=
+3-element Array{Float64,1}:
+  0.0
+ 24.0
+ -1.33
+ =#</code></pre><p>We can similarly ask to generate the in-place Jacobian function:</p><pre><code class="language-julia">j_func = generate_jacobian(ns)[2] # second is in-place
+j! = eval(j_func)</code></pre><p>which gives:</p><pre><code class="language-julia">:((var&quot;##MTIIPVar#582&quot;, u, p)-&gt;begin
+          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:70 =#
+          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:71 =#
+          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:71 =# @inbounds begin
+                  #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:72 =#
+                  #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:53 =# @inbounds begin
+                          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:53 =#
+                          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+                              var&quot;##MTIIPVar#582&quot;[1] = (*)(σ, -1)
+                              var&quot;##MTIIPVar#582&quot;[2] = (-)(ρ, z)
+                              var&quot;##MTIIPVar#582&quot;[3] = y
+                              var&quot;##MTIIPVar#582&quot;[4] = σ
+                              var&quot;##MTIIPVar#582&quot;[5] = -1
+                              var&quot;##MTIIPVar#582&quot;[6] = x
+                              var&quot;##MTIIPVar#582&quot;[7] = 0
+                              var&quot;##MTIIPVar#582&quot;[8] = (*)(x, -1)
+                              var&quot;##MTIIPVar#582&quot;[9] = (*)(-1, β)
+                          end
+                      end
+              end
+          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:74 =#
+          nothing
+      end)</code></pre><p>Now we can call <code>nlsolve</code> by enclosing our parameters into the functions:</p><pre><code class="language-julia">using NLsolve
+nlsolve((out, x) -&gt; f(out, x, params), (out, x) -&gt; j!(out, x, params), ones(3))</code></pre><p>If one would like the generated function to be a Julia function instead of an expression, and allow this function to be used from within the same world-age, one simply needs to pass <code>Val{false}</code> to tell it to generate the function, i.e.:</p><pre><code class="language-julia">nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β], expression=Val{false})[2]</code></pre><p>which uses GeneralizedGenerated.jl to build a same world-age function on the fly without eval.</p><h2 id="High-Level-API-Documentation-1"><a class="docs-heading-anchor" href="#High-Level-API-Documentation-1">High Level API Documentation</a><a class="docs-heading-anchor-permalink" href="#High-Level-API-Documentation-1" title="Permalink"></a></h2><article class="docstring"><header><a class="docstring-binding" id="ModelingToolkit.@parameters" href="#ModelingToolkit.@parameters"><code>ModelingToolkit.@parameters</code></a> — <span class="docstring-category">Macro</span></header><section><div><p>Define one or more known variables.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/ee794078f8c33916b597454399c296da02b65dcb/src/context_dsl.jl#L5">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="ModelingToolkit.@variables" href="#ModelingToolkit.@variables"><code>ModelingToolkit.@variables</code></a> — <span class="docstring-category">Macro</span></header><section><div><p>Define one or more unknown variables.</p><pre><code class="language-julia">@parameters t α σ(..) β[1:2]
+@variables w(..) x(t) y() z(t, α, x)
+
+expr = β₁* x + y^α + σ(3) * (z - t) - β₂ * w(t - 1)</code></pre><p>Note that <code>@parameters</code> and <code>@variables</code> implicitly add <code>()</code> to values that are not given a call. The former specifies the values as known, while the latter specifies it as unknown. <code>(..)</code> signifies that the value should be left uncalled.</p><p>Sometimes it is convenient to define arrays of variables to model things like <code>x₁,…,x₃</code>. The <code>@variables</code> and <code>@parameters</code> macros support this with the following syntax:</p><pre><code class="language-julia">@variables x[1:3];
+x
+
+3-element Array{Operation,1}:
+ x₁()
+ x₂()
+ x₃()
+
+# support for arbitrary ranges and tensors
+@variables y[2:3,1:5:6];
+y
+
+2×2 Array{Operation,2}:
+    y₂̒₁() y₂̒₆()
+    y₃̒₁() y₃̒₆()
+
+# also works for dependent variables
+@parameters t; @variables z[1:3](t);
+z
+
+3-element Array{Operation,1}:
+ z₁(t())
+ z₂(t())
+ z₃(t())</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/ee794078f8c33916b597454399c296da02b65dcb/src/variables.jl#L176">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="ModelingToolkit.@derivatives" href="#ModelingToolkit.@derivatives"><code>ModelingToolkit.@derivatives</code></a> — <span class="docstring-category">Macro</span></header><section><div><p>Define one or more differentials.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl">julia&gt; using ModelingToolkit
+
+julia&gt; @variables x y z;
+
+julia&gt; @derivatives Dx&#39;~x Dy&#39;~y  # Create differentials wrt. x and y
+((D&#39;~x()), (D&#39;~y()))
+
+julia&gt; Dx(z)  # Differentiate z wrt. x
+(D&#39;~x())(z())
+
+julia&gt; Dy(z)  # Differentiate z wrt. y
+(D&#39;~y())(z())</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/ee794078f8c33916b597454399c296da02b65dcb/src/differentials.jl#L146">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="Base.:~-Tuple{Expression,Expression}" href="#Base.:~-Tuple{Expression,Expression}"><code>Base.:~</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia">~(lhs::Expression, rhs::Expression) -&gt; Equation
+</code></pre><p>Create an <a href="../IR/#ModelingToolkit.Equation"><code>Equation</code></a> out of two <a href="../IR/#ModelingToolkit.Expression"><code>Expression</code></a> instances, or an <code>Expression</code> and a <code>Number</code>.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl">julia&gt; using ModelingToolkit
+
+julia&gt; @variables x y;
+
+julia&gt; x ~ y
+Equation(x(), y())
+
+julia&gt; x - y ~ 0
+Equation(x() - y(), ModelingToolkit.Constant(0))</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/ee794078f8c33916b597454399c296da02b65dcb/src/equations.jl#L17">source</a></section></article><h2 id="Additional-High-Level-Explanations-and-Tips-1"><a class="docs-heading-anchor" href="#Additional-High-Level-Explanations-and-Tips-1">Additional High Level Explanations and Tips</a><a class="docs-heading-anchor-permalink" href="#Additional-High-Level-Explanations-and-Tips-1" title="Permalink"></a></h2><h3 id="The-Auto-Detecting-System-Constructors-1"><a class="docs-heading-anchor" href="#The-Auto-Detecting-System-Constructors-1">The Auto-Detecting System Constructors</a><a class="docs-heading-anchor-permalink" href="#The-Auto-Detecting-System-Constructors-1" title="Permalink"></a></h3><p>For the high level interface, the system constructors such as <code>ODESystem</code> have high level constructors which just take in the required equations and automatically parse the expressions to figure out the states and parameters of the system. The following high level constructors exist:</p><pre><code class="language-julia">ODESystem(eqs)
+NonlinearSystem(eqs)</code></pre><h3 id="Direct-Tracing-1"><a class="docs-heading-anchor" href="#Direct-Tracing-1">Direct Tracing</a><a class="docs-heading-anchor-permalink" href="#Direct-Tracing-1" title="Permalink"></a></h3><p>Because the ModelingToolkit <code>Expression</code> types obey Julia-semantics, one can directly transform existing Julia functions into ModelingToolkit symbolic representations of the function by simply inputting the symbolic values into the function and using what is returned. For example, let&#39;s take the following numerical PDE discretization:</p><pre><code class="language-julia">using ModelingToolkit, LinearAlgebra, SparseArrays
+
+# Define the constants for the PDE
+const α₂ = 1.0
+const α₃ = 1.0
+const β₁ = 1.0
+const β₂ = 1.0
+const β₃ = 1.0
+const r₁ = 1.0
+const r₂ = 1.0
+const _DD = 100.0
+const γ₁ = 0.1
+const γ₂ = 0.1
+const γ₃ = 0.1
+const N = 8
+const X = reshape([i for i in 1:N for j in 1:N],N,N)
+const Y = reshape([j for i in 1:N for j in 1:N],N,N)
+const α₁ = 1.0.*(X.&gt;=4*N/5)
+
+const Mx = Tridiagonal([1.0 for i in 1:N-1],[-2.0 for i in 1:N],[1.0 for i in 1:N-1])
+const My = copy(Mx)
+Mx[2,1] = 2.0
+Mx[end-1,end] = 2.0
+My[1,2] = 2.0
+My[end,end-1] = 2.0
+
+# Define the discretized PDE as an ODE function
+function f!(du,u,p,t)
+   A = @view  u[:,:,1]
+   B = @view  u[:,:,2]
+   C = @view  u[:,:,3]
+  dA = @view du[:,:,1]
+  dB = @view du[:,:,2]
+  dC = @view du[:,:,3]
+  mul!(MyA,My,A)
+  mul!(AMx,A,Mx)
+  @. DA = _DD*(MyA + AMx)
+  @. dA = DA + α₁ - β₁*A - r₁*A*B + r₂*C
+  @. dB = α₂ - β₂*B - r₁*A*B + r₂*C
+  @. dC = α₃ - β₃*C + r₁*A*B - r₂*C
+end</code></pre><p>We can then define the corresponding arrays as ModelingToolkit variables:</p><pre><code class="language-julia"># Define the initial condition as normal arrays
+@variables du[1:N,1:N,1:3] u[1:N,1:N,1:3] MyA[1:N,1:N] AMx[1:N,1:N] DA[1:N,1:N]
+f!(du,u,nothing,0.0)</code></pre><p>The output, here the in-place modified <code>du</code>, is a symbolic representation of each output of the function. We can then utilize this in the ModelingToolkit functionality. For example, let&#39;s compute the sparse Jacobian function and compile a fast multithreaded version:</p><pre><code class="language-julia">jac = sparse(ModelingToolkit.jacobian(vec(du),vec(u),simplify=false))
+multithreadedjac = eval(ModelingToolkit.build_function(vec(jac),u,multithread=true)[2])</code></pre><h3 id="modelingtoolkitize-1"><a class="docs-heading-anchor" href="#modelingtoolkitize-1">modelingtoolkitize</a><a class="docs-heading-anchor-permalink" href="#modelingtoolkitize-1" title="Permalink"></a></h3><p>For some <code>DEProblem</code> types, automatic tracing functionality is already included via the <code>modelingtoolkitize</code> function. Take for example the Robertson ODE defined as an <code>ODEProblem</code> for DifferentialEquations.jl:</p><pre><code class="language-julia">using DifferentialEquations
+function rober(du,u,p,t)
+  y₁,y₂,y₃ = u
+  k₁,k₂,k₃ = p
+  du[1] = -k₁*y₁+k₃*y₂*y₃
+  du[2] =  k₁*y₁-k₂*y₂^2-k₃*y₂*y₃
+  du[3] =  k₂*y₂^2
+  nothing
+end
+prob = ODEProblem(rober,[1.0,0.0,0.0],(0.0,1e5),(0.04,3e7,1e4))</code></pre><p>If we want to get a symbolic representation, we can simply call <code>modelingtoolkitize</code> on the <code>prob</code> which will return an <code>ODESystem</code>:</p><pre><code class="language-julia">sys = modelingtoolkitize(prob)</code></pre><p>Using this, we can symbolically build the Jacobian and then rebuild the ODEProblem:</p><pre><code class="language-julia">jac = eval(ModelingToolkit.generate_jacobian(sys)[2])
+
+f = ODEFunction(rober, jac=jac)
+prob_jac = ODEProblem(f,[1.0,0.0,0.0],(0.0,1e5),(0.04,3e7,1e4))</code></pre><article class="docstring"><header><a class="docstring-binding" id="ModelingToolkit.modelingtoolkitize" href="#ModelingToolkit.modelingtoolkitize"><code>ModelingToolkit.modelingtoolkitize</code></a> — <span class="docstring-category">Function</span></header><section><div><pre><code class="language-julia">modelingtoolkitize(prob::ODEProblem) -&gt; Union{Tuple{Any,Any,Any}, ODESystem}
+</code></pre><p>Generate <code>ODESystem</code>, dependent variables, and parameters from an <code>ODEProblem</code>.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/SciML/ModelingToolkit.jl/blob/ee794078f8c33916b597454399c296da02b65dcb/src/systems/diffeqs/modelingtoolkitize.jl#L1">source</a></section></article><h3 id="Intermediate-Calculations-1"><a class="docs-heading-anchor" href="#Intermediate-Calculations-1">Intermediate Calculations</a><a class="docs-heading-anchor-permalink" href="#Intermediate-Calculations-1" title="Permalink"></a></h3><p>The system building functions can handle intermediate calculations by simply defining and using an <code>Operation</code> of <code>Variable</code>s. For example:</p><pre><code class="language-julia">@variables x y z
+@parameters σ ρ β
+a = y - x
+eqs = [0 ~ σ*a,
+       0 ~ x*(ρ-z)-y,
+       0 ~ x*y - β*z]
+ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
+nlsys_func = generate_function(ns)[2] # second is the inplace version</code></pre><p>expands to:</p><pre><code class="language-julia">:((var&quot;##MTIIPVar#368&quot;, var&quot;##MTKArg#365&quot;, var&quot;##MTKArg#366&quot;)-&gt;begin
+          @inbounds begin
+                  let (x, y, z, σ, ρ, β) = (var&quot;##MTKArg#365&quot;[1], var&quot;##MTKArg#365&quot;[2], var&quot;##MTKArg#365&quot;[3], var&quot;##MTKArg#366&quot;[1], var&quot;##MTKArg#366&quot;[2], var&quot;##MTKArg#366&quot;[3])
+                      var&quot;##MTIIPVar#368&quot;[1] = (*)(σ, (-)(y, x))
+                      var&quot;##MTIIPVar#368&quot;[2] = (-)((*)(x, (-)(ρ, z)), y)
+                      var&quot;##MTIIPVar#368&quot;[3] = (-)((*)(x, y), (*)(β, z))
+                  end
+              end
+          nothing
+      end)</code></pre><p>In addition, the Jacobian calculations take into account intermediate variables to appropriately handle them.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Home</a><a class="docs-footer-nextpage" href="../systems/AbstractSystem/">The AbstractSystem Interface »</a></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Monday 25 May 2020 06:11">Monday 25 May 2020</span>. Using Julia version 1.4.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
