@@ -139,7 +139,7 @@ are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
 function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
-                                     ps = parameters(sys);
+                                     ps = parameters(sys), u0 = nothing;
                                      version = nothing, tgrad=false,
                                      jac = false, Wfact = false,
                                      sparse = false,
@@ -179,11 +179,13 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     M = calculate_massmatrix(sys)
 
+    _M = u0 === nothing ? M : ArrayInterface.restructure(u0 .* u0',M)
+
     ODEFunction{iip}(f,jac=_jac,
                       tgrad = _tgrad,
                       Wfact = _Wfact,
                       Wfact_t = _Wfact_t,
-                      mass_matrix = M,
+                      mass_matrix = _M,
                       syms = Symbol.(states(sys)))
 end
 
@@ -212,10 +214,12 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     checkbounds = false, sparse = false,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
-    f = ODEFunction{iip}(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
+    dvs = states(sys)
+    ps = parameters(sys)
+    u0 = varmap_to_vars(u0map,dvs)
+    p = varmap_to_vars(parammap,ps)
+    f = ODEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
                         sparse=sparse)
-    u0 = varmap_to_vars(u0map,states(sys))
-    p = varmap_to_vars(parammap,parameters(sys))
     ODEProblem{iip}(f,u0,tspan,p;kwargs...)
 end

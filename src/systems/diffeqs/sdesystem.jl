@@ -98,7 +98,8 @@ Create an `SDEFunction` from the [`SDESystem`](@ref). The arguments `dvs` and `p
 are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
-function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
+function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps,
+                                     u0 = nothing;
                                      version = nothing, tgrad=false, sparse = false,
                                      jac = false, Wfact = false, kwargs...) where {iip}
     f_oop,f_iip = generate_function(sys, dvs, ps; expression=Val{false}, kwargs...)
@@ -138,12 +139,13 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
     end
 
     M = calculate_massmatrix(sys)
+    _M = u0 === nothing ? M : ArrayInterface.restructure(u0 .* u0',M)
 
     SDEFunction{iip}(f,g,jac=_jac,
                       tgrad = _tgrad,
                       Wfact = _Wfact,
                       Wfact_t = _Wfact_t,
-                      mass_matrix = M,
+                      mass_matrix = _M,
                       syms = Symbol.(sys.states))
 end
 
@@ -177,11 +179,14 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 
-    f = SDEFunction{iip}(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
-                        linenumbers=linenumbers,parallel=parallel,
-                        sparse=sparse)
-    u0 = varmap_to_vars(u0map,states(sys))
-    p = varmap_to_vars(parammap,parameters(sys))
+    dvs = states(sys)
+    ps = parameters(sys)
+    u0 = varmap_to_vars(u0map,dvs)
+    p = varmap_to_vars(parammap,ps)
+    f = SDEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,
+                         checkbounds=checkbounds,
+                         linenumbers=linenumbers,parallel=parallel,
+                         sparse=sparse)
     if typeof(sys.noiseeqs) <: AbstractVector
         noise_rate_prototype = nothing
     elseif sparsenoise
