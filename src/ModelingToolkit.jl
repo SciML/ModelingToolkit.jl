@@ -6,6 +6,7 @@ using Latexify, Unitful, ArrayInterface
 using MacroTools
 using UnPack: @unpack
 using DiffEqJump
+using DataStructures: OrderedDict, OrderedSet
 
 using Base.Threads
 import MacroTools: splitdef, combinedef, postwalk, striplines
