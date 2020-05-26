@@ -80,27 +80,53 @@ function vars!(vars, O)
 end
 
 # function that moves all diff variable terms to the lhs
-function movediffvars(expr, ops)
-	for arg in expr.args
+function movevars(expr, terms; diff = true)
+    
+    iters = expr.args
+    isempty(expr.args) && (iters = expr)
+    
+	for arg in iters
 		if isa(arg, Constant)
-			continue
-		elseif isa(arg.op, Differential) 
-			if expr.op in (*, /)
-				push!(ops, -expr)
-			elseif expr.op == +
-				push!(ops, -arg)
-			elseif expr.op == -
-				push!(ops, arg)
-			end
+			diff && continue # if you're looking for Differential terms, move on
+            push!(terms, arg) # else, push to nondiff terms queue
+		elseif isa(arg.op, Differential)  # if Differential, push to terms
+            if diff 
+                if expr.op in (*, /)                 # otherwise, move on   
+                    push!(terms, -expr)
+                elseif expr.op == +
+                    push!(terms, -arg)
+                elseif expr.op == -
+                    push!(terms, arg)
+                end
+            else
+                continue
+            end
+        elseif isa(arg.op, Variable)
+            if diff 
+                continue
+            else
+                if expr.op in (*, /)               
+                    push!(terms, -expr)
+                elseif expr.op == +
+                    push!(terms, -arg)
+                elseif expr.op == -
+                    push!(terms, arg)
+                else
+                    push!(terms, -arg)
+                end
+            end
 		elseif isa(arg, Operation)
-			movediffvars(arg, ops)
+			movevars(arg, terms; diff = diff)
 		end
 	end
 end
-function movediffvars(eqn)
-	ops = Vector{Any}()
-	movediffvars(eqn.rhs, ops)
-	Equation(simplify(eqn.lhs + sum(ops)), simplify(eqn.rhs + sum(ops)))
+function movevars(eqn)
+	diffterms = Vector{Any}()
+	nondiffterms = Vector{Any}()
+	movevars(eqn.rhs, diffterms, diff = true)
+	movevars(eqn.lhs, nondiffterms, diff = false)
+    Equation(simplify(eqn.lhs + sum(diffterms) + sum(nondiffterms)), 
+             simplify(eqn.rhs + sum(diffterms) + sum(nondiffterms)))
 end
 
 # variable extraction

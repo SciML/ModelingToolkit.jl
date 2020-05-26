@@ -38,8 +38,8 @@ sol2 = solve(prob_mm2,Rodas5(),reltol=1e-8,abstol=1e-8)
 @derivatives D'~t
 
 eq = x ~ D(x) + Constant(0.5)
-@test simplify(eq) == simplify(ModelingToolkit.movediffvars(eq))
+@test simplify(eq) == simplify(ModelingToolkit.movevars(eq))
 
 eq = x ~ D(x) * Constant(0.5)
-@test simplify(eq) == simplify(ModelingToolkit.movediffvars(eq))
+@test simplify(eq) == simplify(ModelingToolkit.movevars(eq))
 
