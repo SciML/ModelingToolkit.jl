@@ -31,3 +31,15 @@ prob_mm2 = ODEProblem(f,[1.0,0.0,0.0],(0.0,1e5),(0.04,3e7,1e4))
 sol2 = solve(prob_mm2,Rodas5(),reltol=1e-8,abstol=1e-8)
 
 @test Array(sol) == Array(sol2)
+
+# Moving terms to LHS
+@variables x
+@parameters t
+@derivatives D'~t
+
+eq = x ~ D(x) + Constant(0.5)
+@test simplify(eq) == simplify(ModelingToolkit.movediffvars(eq))
+
+eq = x ~ D(x) * Constant(0.5)
+@test simplify(eq) == simplify(ModelingToolkit.movediffvars(eq))
+
