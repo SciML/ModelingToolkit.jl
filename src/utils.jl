@@ -100,7 +100,7 @@ end
 function movediffvars(eqn)
 	ops = Vector{Any}()
 	movediffvars(eqn.rhs, ops)
-	Equation(simplify(eqn.lhs + reduce(+, ops)), simplify(eqn.rhs + reduce(+, ops)))
+	Equation(simplify(eqn.lhs + sum(ops)), simplify(eqn.rhs + sum(ops)))
 end
 
 # variable extraction
