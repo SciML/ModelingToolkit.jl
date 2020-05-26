@@ -79,6 +79,30 @@ function vars!(vars, O)
     return vars
 end
 
+# function that moves all diff variable terms to the lhs
+function movediffvars(expr, ops)
+	for arg in expr.args
+		if isa(arg, Constant)
+			continue
+		elseif isa(arg.op, Differential) 
+			if expr.op in (*, /)
+				push!(ops, -expr)
+			elseif expr.op == +
+				push!(ops, -arg)
+			elseif expr.op == -
+				push!(ops, arg)
+			end
+		elseif isa(arg, Operation)
+			movediffvars(arg, ops)
+		end
+	end
+end
+function movediffvars(eqn)
+	ops = Vector{Any}()
+	movediffvars(eqn.rhs, ops)
+	Equation(simplify(eqn.lhs + reduce(+, ops)), simplify(eqn.rhs + reduce(+, ops)))
+end
+
 # variable extraction
 is_singleton(e) = false
 is_singleton(e::Operation) = e.op isa Variable
