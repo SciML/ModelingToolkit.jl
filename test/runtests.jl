@@ -22,3 +22,4 @@ using SafeTestsets, Test
 @safetestset "Depdendency Graph Test" begin include("dep_graphs.jl") end
 #@testset "Latexify recipes Test" begin include("latexify.jl") end
 @testset "Distributed Test" begin include("distributed.jl") end
+@testset "Array of Array Test" begin include("build_function_arrayofarray.jl") end
