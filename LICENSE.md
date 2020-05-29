@@ -1,6 +1,6 @@
 The ModelingToolkit.jl package is licensed under the MIT "Expat" License:
 
-> Copyright (c) 2018: Christopher Rackauckas.
+> Copyright (c) 2018-20: Christopher Rackauckas, Julia Computing.
 >
 >
 > Permission is hereby granted, free of charge, to any person obtaining a copy
