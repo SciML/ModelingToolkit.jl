@@ -73,7 +73,7 @@ function Base.convert(::Type{Variable},x::Operation)
         x.op
     elseif x.op isa Differential
         var = x.args[1].op
-        rename(var,Symbol(var.name,:ˍ,x.args[1].args[1].op.name))
+        rename(var,Symbol(var.name,:ˍ,x.op.x))
     else
         throw(error("This Operation is not a Variable"))
     end
