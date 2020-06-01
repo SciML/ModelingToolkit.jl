@@ -37,9 +37,9 @@ rxs = [Reaction(k[1], nothing, [A]),            # 0 -> A
 ```
 
 Notes:
-- `nothing` can be used to indicate a reaction that has no reactants or no products. 
+- `nothing` can be used to indicate a reaction that has no reactants or no products.
   In this case the corresponding stoichiometry vector should also be set to `nothing`.
-- The three-argument form assumes all reactant and product stoichiometric coefficients 
+- The three-argument form assumes all reactant and product stoichiometric coefficients
   are one.
 """
 struct Reaction{S <: Variable, T <: Number}
@@ -57,7 +57,7 @@ struct Reaction{S <: Variable, T <: Number}
     netstoich::Vector{Pair{S,T}}
     """
     `false` (default) if `rate` should be multiplied by mass action terms to give the rate law.
-    `true` if `rate` represents the full reaction rate law.    
+    `true` if `rate` represents the full reaction rate law.
     """
     only_use_rate::Bool
 end
@@ -217,22 +217,22 @@ end
 # if haveivdep=false then time dependent rates will still be classified as mass action
 """
 ```julia
-ismassaction(rx, rs; rxvars = get_variables(rx.rate), 
-                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))    
+ismassaction(rx, rs; rxvars = get_variables(rx.rate),
+                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))
 ```
 
 True if a given reaction is of mass action form, i.e. `rx.rate` does not depend
-on any chemical species that correspond to states of the system, and does not depend 
+on any chemical species that correspond to states of the system, and does not depend
 explicitly on the independent variable (usually time).
 
 # Arguments
 - `rx`, the [`Reaction`](@ref).
 - `rs`, a [`ReactionSystem`](@ref) containing the reaction.
 - Optional: `rxvars`, the `Variable`s the `rx` depends on.
-- Optional: `haveivdep`, `true` if the [`Reaction`](@ref) `rate` field explicitly depends on the independent variable. 
+- Optional: `haveivdep`, `true` if the [`Reaction`](@ref) `rate` field explicitly depends on the independent variable.
 """
-function ismassaction(rx, rs; rxvars = get_variables(rx.rate), 
-                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))    
+function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
+                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))
     return !(haveivdep || rx.only_use_rate || any(convert(Variable,rxv) in states(rs) for rxv in rxvars))
 end
 
@@ -242,7 +242,7 @@ function assemble_jumps(rs)
     for rx in equations(rs)
         rxvars    = get_variables(rx.rate)
         haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars)
-        if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep)            
+        if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep)
             reactant_stoch = isempty(rx.substoich) ? [0 => 1] : [var2op(sub.op) => stoich for (sub,stoich) in zip(rx.substrates,rx.substoich)]
             net_stoch      = [Pair(var2op(p[1]),p[2]) for p in rx.netstoich]
             push!(eqs, MassActionJump(rx.rate, reactant_stoch, net_stoch))
@@ -299,4 +299,31 @@ function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem)
     eqs = assemble_jumps(rs)
     JumpSystem(eqs,rs.iv,rs.states,rs.ps,name=rs.name,
               systems=convert.(JumpSystem,rs.systems))
+end
+
+
+"""
+```julia
+Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem)
+```
+
+Convert a ReactionSystem to a  NonlinearSystem.
+"""
+function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem)
+    states_swaps = map(states -> Operation(states,[var2op(rs.iv)]), rs.states)
+    eqs = map(eq -> 0 ~ make_sub!(eq,states_swaps),getproperty.(assemble_drift(rs),:rhs))
+    NonlinearSystem(eqs,rs.states,rs.ps,name=rs.name,
+              systems=convert.(NonlinearSystem,rs.systems))
+end
+
+# Used for Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem) only, should likely be removed.
+function make_sub!(eq,states_swaps)
+	for (i,arg) in enumerate(eq.args)
+		if any(isequal.(states_swaps,arg))
+			eq.args[i] = var2op(arg.op)
+		else
+			make_sub!(arg,states_swaps)
+		end
+	end
+	return eq
 end
