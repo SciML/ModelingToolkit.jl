@@ -7,7 +7,7 @@ makedocs(
     clean=true,doctest=false,
     format = Documenter.HTML(#analytics = "UA-90474609-3",
                              assets = ["assets/favicon.ico"],
-                             canonical="https://docs.sciml.ai/stable/"),
+                             canonical="https://mtk.sciml.ai/stable/"),
     pages=[
         "Home" => "index.md",
         "highlevel.md",
@@ -15,10 +15,12 @@ makedocs(
             "systems/AbstractSystem.md",
             "systems/ODESystem.md",
             "systems/SDESystem.md",
+            "systems/JumpSystem.md",
             "systems/NonlinearSystem.md",
             "systems/OptimizationSystem.md",
             "systems/ReactionSystem.md",
-            "systems/PDESystem.md"
+            "systems/PDESystem.md",
+            "systems/DependencyGraphs.md"
         ],
         "IR.md"
     ]

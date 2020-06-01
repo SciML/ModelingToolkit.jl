@@ -2,7 +2,7 @@ using ModelingToolkit, StaticArrays, LinearAlgebra, SparseArrays
 using DiffEqBase
 using Test
 
-canonequal(a, b) = isequal(simplify_constants(a), simplify_constants(b))
+canonequal(a, b) = isequal(simplify(a), simplify(b))
 
 # Calculus
 @parameters t σ ρ β

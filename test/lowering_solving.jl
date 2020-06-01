@@ -1,15 +1,24 @@
-using ModelingToolkit, OrdinaryDiffEq, Test
+using ModelingToolkit, OrdinaryDiffEq, Test, LinearAlgebra
 
 @parameters t σ ρ β
-@variables x(t) y(t) z(t)
+@variables x(t) y(t) z(t) k(t)
 @derivatives D'~t
 
 eqs = [D(D(x)) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-sys = ODESystem(eqs)
-sys = ode_order_lowering(sys)
+sys′ = ODESystem(eqs)
+sys = ode_order_lowering(sys′)
+
+eqs2 = [0 ~ x*y - k,
+        D(D(x)) ~ σ*(y-x),
+        D(y) ~ x*(ρ-z)-y,
+        D(z) ~ x*y - β*z]
+sys2 = ODESystem(eqs2, t, [x, y, z, k], sys′.ps)
+sys2 = ode_order_lowering(sys2)
+# test equation/varible ordering
+ModelingToolkit.calculate_massmatrix(sys2) == Diagonal([1, 1, 1, 1, 0])
 
 u0 = [D(x) => 2.0,
 	  x => 1.0,

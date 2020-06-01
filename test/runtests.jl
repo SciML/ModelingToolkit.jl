@@ -12,11 +12,14 @@ using SafeTestsets, Test
 @safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 @safetestset "ReactionSystem Test" begin include("reactionsystem.jl") end
+@safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
 @safetestset "Build Targets Test" begin include("build_targets.jl") end
 @safetestset "Domain Test" begin include("domains.jl") end
 @safetestset "Constraints Test" begin include("constraints.jl") end
 @safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "Lowering Integration Test" begin include("lowering_solving.jl") end
 @safetestset "Test Big System Usage" begin include("bigsystem.jl") end
-@testset "Latexify recipes Test" begin include("latexify.jl") end
+@safetestset "Depdendency Graph Test" begin include("dep_graphs.jl") end
+#@testset "Latexify recipes Test" begin include("latexify.jl") end
 @testset "Distributed Test" begin include("distributed.jl") end
+@testset "Array of Array Test" begin include("build_function_arrayofarray.jl") end
