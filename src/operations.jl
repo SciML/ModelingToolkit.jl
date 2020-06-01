@@ -55,7 +55,7 @@ Base.isequal(::Operation, ::Constant ) = false
 Base.isequal(::Constant , ::Operation) = false
 
 # provide iszero for Operations to help sparse addition and multiplication
-# e.g. we want to tell the sparse library that iszero(zero(Operation) + zero(Operation)) == true
+# e.g., we want to tell the sparse library that iszero(zero(Operation) + zero(Operation)) == true
 Base.iszero(x::Operation) = (_x = simplify(x); _x isa Constant && iszero(_x.value))
 
 Base.show(io::IO, O::Operation) = print(io, convert(Expr, O))

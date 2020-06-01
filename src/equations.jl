@@ -7,9 +7,9 @@ An equality relationship between two expressions.
 $(FIELDS)
 """
 struct Equation
-    """The expression on the left hand side of the equation."""
+    """The expression on the left-hand side of the equation."""
     lhs::Expression
-    """The expression on the right hand side of the equation."""
+    """The expression on the right-hand side of the equation."""
     rhs::Expression
 end
 Base.:(==)(a::Equation, b::Equation) = isequal((a.lhs, a.rhs), (b.lhs, b.rhs))

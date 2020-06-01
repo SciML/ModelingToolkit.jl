@@ -1,6 +1,6 @@
 # ReactionSystem
 
-A `ReactionSystem` represents a system of chemical reactions. Conversions are provided to generate corresponding chemical reaction ODE models, chemical Langevin equation SDE models, and stochastic chemical kinetics jump process models. As a simple example, the code below creates a SIR model, and solves the corresponding ODE, SDE and jump process models.
+A `ReactionSystem` represents a system of chemical reactions. Conversions are provided to generate corresponding chemical reaction ODE models, chemical Langevin equation SDE models, and stochastic chemical kinetics jump process models. As a simple example, the code below creates a SIR model, and solves the corresponding ODE, SDE, and jump process models.
 
 ```julia
 using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, DiffEqJump

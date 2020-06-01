@@ -76,7 +76,7 @@ julia> ModelingToolkit.derivative(sin(x), 1)
 cos(x())
 ```
 
-Note that the function does not recurse into the operation's arguments, i.e. the
+Note that the function does not recurse into the operation's arguments, i.e., the
 chain rule is not applied:
 
 ```jldoctest label1

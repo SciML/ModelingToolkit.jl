@@ -2,12 +2,12 @@
 
 ModelingToolkit IR, which falls under the `Expression` abstract type, mirrors
 the Julia AST but allows for easy mathematical manipulation by itself following
-mathematical semantics. The base of the IR is the `Variable` type which defines
+mathematical semantics. The base of the IR is the `Variable` type, which defines
 a symbolic variable. These variables are combined using `Operation`s, which are
 registered functions applied to the various variables. These `Operation`s then
 perform automatic tracing, so normal mathematical functions applied to an `Operation`
 generate a new `Operation`. For example, `op1 = x+y` is one `Operation` and
-`op2 = 2z` is another, and so `op1*op2` is another `Operation`. Then at the top,
+`op2 = 2z` is another, and so `op1*op2` is another `Operation`. Then, at the top,
 an `Equation`, normally written as `op1 ~ op2`, defines the symbolic equality
 between two operations.
 
@@ -24,7 +24,7 @@ Equation
 ### Function Registration
 
 The ModelingToolkit graph only allowed for registered Julia functions for the
-operations. All other functions are automatically traced down to registred
+operations. All other functions are automatically traced down to registered
 functions. By default, ModelingToolkit.jl pre-registers the common functions
 utilized in the AD package ruleset [DiffRules.jl](https://github.com/JuliaDiff/DiffRules.jl)
 and pre-defines their derivatives. However, the user can utilize the `@register`
@@ -36,8 +36,8 @@ macro to add their function to allowed functions of the computation graph.
 
 ### Derivatives and Differentials
 
-A `Differential(op)` is a partial derivative with respect to the operation `op`
-which can then be applied to some other operations. For example `D=Differential(t)`
+A `Differential(op)` is a partial derivative with respect to the operation `op`,
+which can then be applied to some other operations. For example, `D=Differential(t)`
 is what would commonly be referred to as `d/dt`, which can then be applied to
 other operations using its function call, so `D(x+y)` is `d(x+y)/dt`.
 
@@ -55,7 +55,7 @@ ModelingToolkit.jacobian
 ModelingToolkit.hessian
 ```
 
-Note that generation of sparse matrices simply follows from the Julian semantics
+Note that the generation of sparse matrices simply follows from the Julia semantics
 imbued on the IR, so `sparse(jac)` changes a dense Jacobian to a sparse Jacobian
 matrix.
 
@@ -64,7 +64,7 @@ matrix.
 There is a large amount of derivatives pre-defined by
 [DiffRules.jl](https://github.com/JuliaDiff/DiffRules.jl). Note that `Expression`
 types are defined as `<:Real`, and thus any functions which allow the use of real
-numbers can automatically be traced by the derivative mechanism. Thus for example:
+numbers can automatically be traced by the derivative mechanism. Thus, for example:
 
 ```julia
 f(x,y,z) = x^2 + sin(x+y) - z
@@ -86,7 +86,7 @@ ModelingToolkit.derivative(::typeof(my_function), args::NTuple{N,Any}, ::Val{i})
 ```
 
 where `i` means that it's the derivative of the `i`th argument. `args` is the
-array of arguments, so for example if your function is `f(x,t)` then `args = [x,t]`.
+array of arguments, so, for example, if your function is `f(x,t)`, then `args = [x,t]`.
 You should return an `Operation` for the derivative of your function.
 
 For example, `sin(t)`'s derivative (by `t`) is given by the following:
@@ -102,7 +102,7 @@ types. Most of the functionality comes by the `Expression` type obeying the
 standard mathematical semantics. For example, if one has `A` a matrix of
 `Expression`, then `A^2` calculates the `Expression`s for the squared matrix.
 In that sense, it is encouraged that one uses standard Julia for performing a
-lot of the manipulation on the IR, as for example calculating the sparse form
+lot of the manipulation on the IR, as, for example, calculating the sparse form
 of the matrix via `sparse(A)` is valid, legible, and easily understandable
 to all Julia programmers.
 
@@ -124,7 +124,7 @@ like those for differential equation solvers and optimization libraries.
 
 Additionally, the core compilation process of ModelingToolkit IR is `build_function`.
 `build_function` takes an operation or an `AbstractArray` of operations and
-generates a compile-able version of the model for numerical solvers.
+generates a compilable version of the model for numerical solvers.
 
 ```@docs
 build_function

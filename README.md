@@ -6,7 +6,7 @@
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](http://mtk.sciml.ai/stable/)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](http://mtk.sciml.ai/dev/)
 
-ModelingToolkit.jl is a modeling framework for high performance symbolic-numeric computation 
+ModelingToolkit.jl is a modeling framework for high-performance symbolic-numeric computation
 in scientific computing  and scientific machine learning.
 It allows for users to give a high-level description of a model for
 symbolic preprocessing to analyze and enhance the model. ModelingToolkit can
@@ -18,11 +18,11 @@ to the model to make it easier for numerical solvers to handle.
 For information on using the package,
 [see the stable documentation](https://mtk.sciml.ai/stable/). Use the
 [in-development documentation](https://mtk.sciml.ai/dev/) for the version of
-the documentation which contains the un-released features.
+the documentation which contains the unreleased features.
 
-## High Level Examples
+## High-Level Examples
 
-First let's define a second order riff on the Lorenz equations, symbolically
+First, let's define a second order riff on the Lorenz equations, symbolically
 lower it to a first order system, symbolically generate the Jacobian function
 for the numerical integrator, and solve it.
 
@@ -59,8 +59,8 @@ using Plots; plot(sol,vars=(x,y))
 
 This automatically will have generated fast Jacobian functions, making
 it more optimized than directly building a function. In addition, we can then
-use ModelingToolkit to compose multiple ODE subsystems. Now let's define two
-interacting Lorenz equations and simulate the resulting Differential-Algebriac
+use ModelingToolkit to compose multiple ODE subsystems. Now, let's define two
+interacting Lorenz equations and simulate the resulting Differential-Algebraic
 Equation (DAE):
 
 ```julia
