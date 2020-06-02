@@ -228,7 +228,7 @@ explicitly on the independent variable (usually time).
 # Arguments
 - `rx`, the [`Reaction`](@ref).
 - `rs`, a [`ReactionSystem`](@ref) containing the reaction.
-- Optional: `rxvars`, the `Variable`s the `rx` depends on.
+- Optional: `rxvars`, `Variable`s which are not in `rxvars` are ignored as possible dependencies.
 - Optional: `haveivdep`, `true` if the [`Reaction`](@ref) `rate` field explicitly depends on the independent variable.
 """
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
