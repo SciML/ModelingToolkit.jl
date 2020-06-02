@@ -15,6 +15,7 @@ Base.convert(::Type{Expression}, x::Variable) = convert(Operation,x)
 Base.convert(::Type{Expression}, x::Operation) = x
 Base.convert(::Type{Expression}, x::Symbol) = Operation(Variable(x),[])
 Expression(x::Bool) = Constant(x)
+identity(x::Int64) = Constant(x)
 
 function build_expr(head::Symbol, args)
     ex = Expr(head)
