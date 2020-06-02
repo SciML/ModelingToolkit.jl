@@ -10,7 +10,7 @@ $(FIELDS)
 
 # Example
 
-```
+```julia
 using ModelingToolkit
 
 @parameters β γ t

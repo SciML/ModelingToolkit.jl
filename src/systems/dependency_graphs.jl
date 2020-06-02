@@ -87,7 +87,7 @@ mutable struct BipartiteGraph{T <: Integer}
     ne::Int
     """Forward adjacency list mapping index of source vertices to the vertices they depend on."""
     fadjlist::Vector{Vector{T}}  # fadjlist[src] = [dest1,dest2,...]
-    """Backwrad adjacency list mapping index of vertices that are dependencies to the source vertices that depend on them."""
+    """Backward adjacency list mapping index of vertices that are dependencies to the source vertices that depend on them."""
     badjlist::Vector{Vector{T}}  # badjlist[dst] = [src1,src2,...]
 end
 
@@ -114,8 +114,8 @@ Convert a collection of equation dependencies, for example as returned by
 `equation_dependencies`, to a [`BipartiteGraph`](@ref).
 
 Notes:
-- `vtois` should provide `Dict` like mapping from variable dependency in `eqdeps`
-  to the integer idx of the variable to use in the graph.
+- `vtois` should provide a `Dict` like mapping from each `Variable` dependency in 
+  `eqdeps` to the integer idx of the variable to use in the graph.
 
 Example:
 Continuing the example started in [`equation_dependencies`](@ref)
@@ -147,8 +147,8 @@ asgraph(sys::AbstractSystem; variables=states(sys),
                                       variablestoids=Dict(convert(Variable, v) => i for (i,v) in enumerate(variables)))
 ```
 
-Convert an `AbstractSystem` to a [`BipartiteGraph`](@ref) mapping equations
-to variables they depend on.
+Convert an `AbstractSystem` to a [`BipartiteGraph`](@ref) mapping the index of equations
+to the indices of variables they depend on.
 
 Notes:
 - Defaults for kwargs creating a mapping from `equations(sys)` to `states(sys)`
@@ -178,9 +178,9 @@ For each variable determine the equations that modify it and return as a [`Bipar
 
 Notes:
 - Dependencies are returned as a [`BipartiteGraph`](@ref) mapping variable 
-  indices to the indices of equations that map to them.
+  indices to the indices of equations that modify them.
 - `variables` denotes the list of variables to determine dependencies for.
-- `variablestoids` denotes a `Dict` mapping `Variable`s to `Int`s.
+- `variablestoids` denotes a `Dict` mapping `Variable`s to their `Int` index in `variables`.
 
 Example:
 Continuing the example of [`equation_dependencies`](@ref)
