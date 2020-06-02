@@ -98,7 +98,8 @@ Create an `SDEFunction` from the [`SDESystem`](@ref). The arguments `dvs` and `p
 are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
-function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
+function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps,
+                                     u0 = nothing;
                                      version = nothing, tgrad=false, sparse = false,
                                      jac = false, Wfact = false, kwargs...) where {iip}
     f_oop,f_iip = generate_function(sys, dvs, ps; expression=Val{false}, kwargs...)
@@ -138,12 +139,13 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
     end
 
     M = calculate_massmatrix(sys)
+    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
     SDEFunction{iip}(f,g,jac=_jac,
                       tgrad = _tgrad,
                       Wfact = _Wfact,
                       Wfact_t = _Wfact_t,
-                      mass_matrix = M,
+                      mass_matrix = _M,
                       syms = Symbol.(sys.states))
 end
 
@@ -161,24 +163,42 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, multithread=false,
+                                    sparsenoise = sparse,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...)
 ```
 
 Generates an SDEProblem from an SDESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
-function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
+function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, multithread=false,
+                                    sparsenoise = sparse,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 
-    f = SDEFunction(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
-                        linenumbers=linenumbers,multithread=multithread,
-                        sparse=sparse)
-    u0 = varmap_to_vars(u0map,states(sys))
-    p = varmap_to_vars(parammap,parameters(sys))
-    SDEProblem(f,f.g,u0,tspan,p;kwargs...)
+    dvs = states(sys)
+    ps = parameters(sys)
+    u0 = varmap_to_vars(u0map,dvs)
+    p = varmap_to_vars(parammap,ps)
+    f = SDEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,
+                         checkbounds=checkbounds,
+                         linenumbers=linenumbers,parallel=parallel,
+                         sparse=sparse)
+    if typeof(sys.noiseeqs) <: AbstractVector
+        noise_rate_prototype = nothing
+    elseif sparsenoise
+        I,J,V = findnz(SparseArrays.sparse(sys.noiseeqs))
+        noise_rate_prototype = SparseArrays.sparse(I,J,zero(eltype(u0)))
+    else
+        noise_rate_prototype = zeros(eltype(u0),size(sys.noiseeqs))
+    end
+
+    SDEProblem{iip}(f,f.g,u0,tspan,p;noise_rate_prototype=noise_rate_prototype,kwargs...)
+end
+
+function DiffEqBase.SDEProblem(sys::SDESystem, args...; kwargs...)
+    SDEProblem{true}(sys, args...; kwargs...)
 end

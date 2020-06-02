@@ -2,6 +2,8 @@ using ModelingToolkit, StaticArrays, LinearAlgebra
 using DiffEqBase
 using Test
 
+canonequal(a, b) = isequal(simplify(a), simplify(b))
+
 # Define some variables
 @parameters t σ ρ β
 @variables x y z
@@ -37,15 +39,15 @@ eqs = [0 ~ σ*(y-x),
 ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(ns)
 @testset "nlsys jacobian" begin
-    @test isequal(jac[1,1], σ * -1)
-    @test isequal(jac[1,2], σ)
-    @test isequal(jac[1,3], 0)
-    @test isequal(jac[2,1], ρ - z)
-    @test isequal(jac[2,2], -1)
-    @test isequal(jac[2,3], x * -1)
-    @test isequal(jac[3,1], y)
-    @test isequal(jac[3,2], x)
-    @test isequal(jac[3,3], -1 * β)
+    @test canonequal(jac[1,1], σ * -1)
+    @test canonequal(jac[1,2], σ)
+    @test canonequal(jac[1,3], 0)
+    @test canonequal(jac[2,1], ρ - z)
+    @test canonequal(jac[2,2], -1)
+    @test canonequal(jac[2,3], x * -1)
+    @test canonequal(jac[3,1], y)
+    @test canonequal(jac[3,2], x)
+    @test canonequal(jac[3,3], -1 * β)
 end
 nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β])
 jac_func = generate_jacobian(ns)

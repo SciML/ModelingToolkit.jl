@@ -6,6 +6,8 @@ using Test
 @variables x y z
 @derivatives D'~t D2''~t Dx'~x
 
+test_equal(a, b) = @test isequal(simplify(a), simplify(b))
+
 @test @macroexpand(@derivatives D'~t D2''~t) == @macroexpand(@derivatives (D'~t), (D2''~t))
 
 @test isequal(expand_derivatives(D(t)), 1)
@@ -15,12 +17,12 @@ dsin = D(sin(t))
 @test isequal(expand_derivatives(dsin), cos(t))
 
 dcsch = D(csch(t))
-@test isequal(expand_derivatives(dcsch), simplify_constants(coth(t) * csch(t) * -1))
+@test isequal(expand_derivatives(dcsch), simplify(-coth(t) * csch(t)))
 
 @test isequal(expand_derivatives(D(-7)), 0)
-@test isequal(expand_derivatives(D(sin(2t))), simplify_constants(cos(2t) * 2))
-@test isequal(expand_derivatives(D2(sin(t))), simplify_constants(-sin(t)))
-@test isequal(expand_derivatives(D2(sin(2t))), simplify_constants(sin(2t) * -4))
+@test isequal(expand_derivatives(D(sin(2t))), simplify(cos(2t) * 2))
+@test isequal(expand_derivatives(D2(sin(t))), simplify(-sin(t)))
+@test isequal(expand_derivatives(D2(sin(2t))), simplify(-sin(2t) * 4))
 @test isequal(expand_derivatives(D2(t)), 0)
 @test isequal(expand_derivatives(D2(5)), 0)
 
@@ -30,23 +32,23 @@ dsinsin = D(sin(sin(t)))
 
 d1 = D(sin(t)*t)
 d2 = D(sin(t)*cos(t))
-@test isequal(expand_derivatives(d1), t*cos(t)+sin(t))
-@test isequal(expand_derivatives(d2), simplify_constants(cos(t)*cos(t)+(sin(t)*-1)*sin(t)))
+@test isequal(expand_derivatives(d1), simplify(t*cos(t)+sin(t)))
+@test isequal(expand_derivatives(d2), simplify(cos(t)*cos(t)+(-sin(t))*sin(t)))
 
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
 sys = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(sys)
-@test isequal(jac[1,1], σ*-1)
-@test isequal(jac[1,2], σ)
-@test isequal(jac[1,3], 0)
-@test isequal(jac[2,1], ρ-z)
-@test isequal(jac[2,2], -1)
-@test isequal(jac[2,3], x*-1)
-@test isequal(jac[3,1], y)
-@test isequal(jac[3,2], x)
-@test isequal(jac[3,3], -1*β)
+test_equal(jac[1,1], -1σ)
+test_equal(jac[1,2], σ)
+test_equal(jac[1,3], 0)
+test_equal(jac[2,1],  ρ - z)
+test_equal(jac[2,2], -1)
+test_equal(jac[2,3], -1x)
+test_equal(jac[3,1], y)
+test_equal(jac[3,2], x)
+test_equal(jac[3,3], -1β)
 
 # Variable dependence checking in differentiation
 @variables a(t) b(a)
@@ -56,12 +58,12 @@ jac = calculate_jacobian(sys)
 
 @variables x(t) y(t) z(t)
 
-@test isequal(expand_derivatives(D(x * y)), simplify_constants(y*D(x) + x*D(y)))
-@test_broken isequal(expand_derivatives(D(x * y)), simplify_constants(D(x)*y + x*D(y)))
+@test isequal(expand_derivatives(D(x * y)), simplify(y*D(x) + x*D(y)))
+@test isequal(expand_derivatives(D(x * y)), simplify(D(x)*y + x*D(y)))
 
 @test isequal(expand_derivatives(D(2t)), 2)
 @test isequal(expand_derivatives(D(2x)), 2D(x))
-@test isequal(expand_derivatives(D(x^2)), simplify_constants(2 * x * D(x)))
+@test isequal(expand_derivatives(D(x^2)), simplify(2 * x * D(x)))
 
 # n-ary * and +
 isequal(ModelingToolkit.derivative(Operation(*, [x, y, z*ρ]), 1), y*(z*ρ))
@@ -84,3 +86,8 @@ tmp = beta * (alpha * exp(x1) * x2 ^ (alpha - 1) + 1 - delta) / x3
 # derivative w.r.t. x1 and x2
 t1 = ModelingToolkit.gradient(tmp, [x1, x2])
 @test_nowarn ModelingToolkit.gradient(t1[1], [beta])
+
+@parameters t k
+@variables x(t)
+@derivatives D'~k
+@test convert(Variable, D(x)).name === :xˍk

@@ -63,19 +63,20 @@ function calculate_factorized_W(sys::AbstractODESystem, simplify=true)
     isempty(sys.Wfact[]) || return (sys.Wfact[],sys.Wfact_t[])
 
     jac = calculate_jacobian(sys)
+    M = calculate_massmatrix(sys)
     gam = Variable(:__MTKWgamma)()
 
-    W = - LinearAlgebra.I + gam*jac
+    W = - M + gam*jac
     Wfact = lu(W, Val(false), check=false).factors
 
     if simplify
-        Wfact = simplify_constants.(Wfact)
+        Wfact = ModelingToolkit.simplify.(Wfact)
     end
 
-    W_t = - LinearAlgebra.I/gam + jac
+    W_t = - M/gam + jac
     Wfact_t = lu(W_t, Val(false), check=false).factors
     if simplify
-        Wfact_t = simplify_constants.(Wfact_t)
+        Wfact_t = ModelingToolkit.simplify.(Wfact_t)
     end
     sys.Wfact[] = Wfact
     sys.Wfact_t[] = Wfact_t
@@ -113,7 +114,9 @@ function calculate_massmatrix(sys::AbstractODESystem, simplify=true)
             error("Only semi-explicit constant mass matrices are currently supported")
         end
     end
-    M = simplify ? simplify_constants.(M) : M
+    M = simplify ? ModelingToolkit.simplify.(M) : M
+    # M should only contain concrete numbers
+    M = map(x->x isa Constant ? x.value : x, M)
     M == I ? I : M
 end
 
@@ -136,7 +139,7 @@ are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
 function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
-                                     ps = parameters(sys);
+                                     ps = parameters(sys), u0 = nothing;
                                      version = nothing, tgrad=false,
                                      jac = false, Wfact = false,
                                      sparse = false,
@@ -176,11 +179,13 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     M = calculate_massmatrix(sys)
 
+    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
+
     ODEFunction{iip}(f,jac=_jac,
                       tgrad = _tgrad,
                       Wfact = _Wfact,
                       Wfact_t = _Wfact_t,
-                      mass_matrix = M,
+                      mass_matrix = _M,
                       syms = Symbol.(states(sys)))
 end
 
@@ -195,7 +200,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, multithread=false,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 ```
 
@@ -207,12 +212,14 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, multithread=false,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
-    f = ODEFunction(sys;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
-                        linenumbers=linenumbers,multithread=multithread,
+    dvs = states(sys)
+    ps = parameters(sys)
+    u0 = varmap_to_vars(u0map,dvs)
+    p = varmap_to_vars(parammap,ps)
+    f = ODEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
+                        linenumbers=linenumbers,parallel=parallel,
                         sparse=sparse)
-    u0 = varmap_to_vars(u0map,states(sys))
-    p = varmap_to_vars(parammap,parameters(sys))
-    ODEProblem(f,u0,tspan,p;kwargs...)
+    ODEProblem{iip}(f,u0,tspan,p;kwargs...)
 end

@@ -2,6 +2,8 @@ using ModelingToolkit, StaticArrays, LinearAlgebra, SparseArrays
 using DiffEqBase
 using Test
 
+canonequal(a, b) = isequal(simplify(a), simplify(b))
+
 # Calculus
 @parameters t σ ρ β
 @variables x y z
@@ -24,11 +26,11 @@ end
 ∂ = ModelingToolkit.jacobian(eqs,[x,y,z])
 for i in 1:3
     ∇ = ModelingToolkit.gradient(eqs[i],[x,y,z])
-    @test isequal(∂[i,:],∇)
+    @test canonequal(∂[i,:],∇)
 end
 
-@test all(isequal.(ModelingToolkit.gradient(eqs[1],[x,y,z]),[σ * -1,σ,0]))
-@test all(isequal.(ModelingToolkit.hessian(eqs[1],[x,y,z]),0))
+@test all(canonequal.(ModelingToolkit.gradient(eqs[1],[x,y,z]),[σ * -1,σ,0]))
+@test all(canonequal.(ModelingToolkit.hessian(eqs[1],[x,y,z]),0))
 
 Joop,Jiip = eval.(ModelingToolkit.build_function(∂,[x,y,z],[σ,ρ,β],t))
 J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)

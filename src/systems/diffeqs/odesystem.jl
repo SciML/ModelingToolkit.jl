@@ -19,7 +19,7 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-de = ODESystem(eqs,[x,y,z],[σ,ρ,β])
+de = ODESystem(eqs,t,[x,y,z],[σ,ρ,β])
 ```
 """
 struct ODESystem <: AbstractODESystem
@@ -74,22 +74,50 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     ODESystem(deqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name, systems)
 end
 
-var_from_nested_derivative(x) = var_from_nested_derivative(x,0)
 var_from_nested_derivative(x::Constant) = (missing, missing)
-var_from_nested_derivative(x,i) = x.op isa Differential ? var_from_nested_derivative(x.args[1],i+1) : (x.op,i)
+var_from_nested_derivative(x,i=0) = x.op isa Differential ? var_from_nested_derivative(x.args[1],i+1) : (x.op,i)
+
 iv_from_nested_derivative(x) = x.op isa Differential ? iv_from_nested_derivative(x.args[1]) : x.args[1].op
 iv_from_nested_derivative(x::Constant) = missing
 
 function ODESystem(eqs; kwargs...)
-    ivs = unique(skipmissing(iv_from_nested_derivative(eq.lhs) for eq ∈ eqs))
-    length(ivs) == 1 || throw(ArgumentError("one independent variable currently supported"))
-    iv = first(ivs)
-
-    dvs = unique(skipmissing(var_from_nested_derivative(eq.lhs)[1] for eq ∈ eqs))
-    ps = filter(vars(eq.rhs for eq ∈ eqs)) do x
-        isparameter(x) & !isequal(x, iv)
-    end |> collect
-    ODESystem(eqs, iv, dvs, ps; kwargs...)
+    # NOTE: this assumes that the order of algebric equations doesn't matter
+    diffvars = OrderedSet{Variable}()
+    allstates = OrderedSet{Variable}()
+    ps = OrderedSet{Variable}()
+    # reorder equations such that it is in the form of `diffeq, algeeq`
+    diffeq = Equation[]
+    algeeq = Equation[]
+    # initial loop for finding `iv`
+    iv = nothing
+    for eq in eqs
+        if !(eq.lhs isa Constant) # assume eq.lhs is either Differential or Constant
+            iv = iv_from_nested_derivative(eq.lhs)
+        end
+    end
+    iv === nothing && throw(ArgumentError("No differential variable detected."))
+    for eq in eqs
+        for var in vars(eq.rhs for eq ∈ eqs)
+            var isa Variable || continue
+            if isparameter(var)
+                isequal(var, iv) || push!(ps, var)
+            else
+                push!(allstates, var)
+            end
+        end
+        if eq.lhs isa Constant
+            push!(algeeq, eq)
+        else
+            diffvar = first(var_from_nested_derivative(eq.lhs))
+            iv == iv_from_nested_derivative(eq.lhs) || throw(ArgumentError("An ODESystem can only have one independent variable."))
+            diffvar in diffvars && throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
+            push!(diffvars, diffvar)
+            push!(diffeq, eq)
+        end
+    end
+    algevars = setdiff(allstates, diffvars)
+    # the orders here are very important!
+    return ODESystem(append!(diffeq, algeeq), iv, vcat(collect(diffvars), collect(algevars)), ps; kwargs...)
 end
 
 Base.:(==)(sys1::ODESystem, sys2::ODESystem) =

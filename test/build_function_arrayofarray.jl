@@ -114,8 +114,8 @@ julia_sparse_arraymat = h_sparse_arraymat_julia(input)
 mtk_sparse_arraymat = h_sparse_arraymat_oop(input)
 @test_broken julia_sparse_arraymat == mtk_sparse_arraymat
 h_sparse_arraymat_julia!(out_1_arraymat, input)
-h_sparse_arraymat_ip!(out_2_arraymat, input)
-@test out_1_arraymat == out_2_arraymat
+@test_broken h_sparse_arraymat_ip!(out_2_arraymat, input)
+@test_broken out_1_arraymat == out_2_arraymat
 
 # Array of 1D Vectors
 h_sparse_arrayvec = sparse.([[a, 0, c], [0, 0, 0], [1, a, b]])

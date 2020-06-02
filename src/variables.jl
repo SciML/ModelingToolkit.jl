@@ -25,9 +25,9 @@ as equal.
 $(FIELDS)
 
 For example, the following code defines an independent variable `t`, a parameter
-`α`, a function parameter `σ`, a variable `x` which depends on `t`, a variable
-`y` with no dependents, a variable `z` which depends on `t`, `α`, and `x(t)`
-and a parameters `β₁` and `β₂`.
+`α`, a function parameter `σ`, a variable `x`, which depends on `t`, a variable
+`y` with no dependents, a variable `z`, which depends on `t`, `α`, and `x(t)`
+and parameters `β₁` and `β₂`.
 
 
 ```julia
@@ -78,8 +78,8 @@ $(TYPEDEF)
 An expression which wraps a constant numerical value.
 """
 struct Constant <: Expression
-    """The constant's numerical value"""
-    value::Number
+    """The constant value"""
+    value
 end
 
 """
@@ -89,7 +89,8 @@ Get the value of a [`ModelingToolkit.Constant`](@ref).
 """
 Base.get(c::Constant) = c.value
 
-Base.iszero(ex::Expression) = isa(ex, Constant) && iszero(ex.value)
+Base.iszero(c::Constant) = iszero(c.value)
+
 Base.isone(ex::Expression)  = isa(ex, Constant) && isone(ex.value)
 
 # Variables use isequal for equality since == is an Operation

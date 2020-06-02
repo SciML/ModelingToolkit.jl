@@ -2,7 +2,7 @@
 """
 $(SIGNATURES)
 
-Registers a function call as a primative for the `Operation` graph of the
+Registers a function call as a primitive for the `Operation` graph of the
 ModelingToolkit IR. Example:
 
 ```julia
