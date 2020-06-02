@@ -1,7 +1,7 @@
 # ModelingToolkit.jl
 
-ModelingToolkit.jl is a modeling language for high performance 
-symbolic-numeric computation in scientific computing  and scientific machine learning.
+ModelingToolkit.jl is a modeling language for high-performance
+symbolic-numeric computation in scientific computing and scientific machine learning.
 It allows for users to give a high-level description of a model for
 symbolic preprocessing to analyze and enhance the model. ModelingToolkit can
 automatically generate fast functions for model components like Jacobians
@@ -20,10 +20,10 @@ ModelingToolkit has 3 layers:
    ModelingToolkit models directly from Julia code.
 2. The `AbstractSystem` level. This is the level where content-dependent functionality
    is added, where models such an ordinary differential equation are represented.
-   At the system level there are *transformations* which take one system to
+   At the system level, there are *transformations* which take one system to
    another, and *targets* which output code for numerical solvers.
 3. The IR level, also referred to as the direct level. At this level, one
-   directly acts on arrays of `Equation`, `Operation` and `Variable` types to
+   directly acts on arrays of `Equation`, `Operation`, and `Variable` types to
    generate functions.
 
 Each level above is built on the level below, giving more context to allow for

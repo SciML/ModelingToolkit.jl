@@ -25,9 +25,9 @@ as equal.
 $(FIELDS)
 
 For example, the following code defines an independent variable `t`, a parameter
-`α`, a function parameter `σ`, a variable `x` which depends on `t`, a variable
-`y` with no dependents, a variable `z` which depends on `t`, `α`, and `x(t)`
-and a parameters `β₁` and `β₂`.
+`α`, a function parameter `σ`, a variable `x`, which depends on `t`, a variable
+`y` with no dependents, a variable `z`, which depends on `t`, `α`, and `x(t)`
+and parameters `β₁` and `β₂`.
 
 
 ```julia

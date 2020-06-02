@@ -1,17 +1,17 @@
 # High Level API
 
-The high level API allows modelers to interactively build models in a symbolic
+The high-level API allows modelers to interactively build models in a symbolic
 manner. It is designed as a semi-DSL for easily building large complex models
-and manipulating the models to generate optimal forms for utilizing in numerical
+and manipulating the models to generate optimal forms to be used in numerical
 methods.
 
 ## Examples
 
 ### Example 1: Symbolically Building an ODEProblem for DifferentialEquations.jl
 
-Let's build an ODE. First we define some variables. In a differential equation
+Let's build an ODE. First, we define some variables. In a differential equation
 system, we need to differentiate between our (dependent) variables
-and parameters. Therefore we label them as follows:
+and parameters. Therefore, we label them as follows:
 
 ```julia
 using ModelingToolkit
@@ -73,7 +73,7 @@ connections = [0 ~ lorenz1.x + lorenz2.y + sin(α*γ)]
 connected = ODESystem(connections,[α],[γ],systems=[lorenz1,lorenz2])
 ```
 
-which is now a differential-algebraic equation (DAE) of 7 variables which has
+which is now a differential-algebraic equation (DAE) of 7 variables, which has
 two independent Lorenz systems and an algebraic equation that determines `α`
 such that an implicit constraint holds. We can then define the resulting
 `ODEProblem` and send it over to DifferentialEquations.jl.
@@ -169,7 +169,7 @@ which gives:
       end)
 ```
 
-Now we can call `nlsolve` by enclosing our parameters into the functions:
+Now, we can call `nlsolve` by enclosing our parameters into the functions:
 
 ```julia
 using NLsolve
@@ -184,9 +184,9 @@ generate the function, i.e.:
 nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β], expression=Val{false})[2]
 ```
 
-which uses GeneralizedGenerated.jl to build a same world-age function on the fly without eval.
+which uses GeneralizedGenerated.jl to build the same world-age function on the fly without eval.
 
-## High Level API Documentation
+## High-Level API Documentation
 
 ```@docs
 @parameters
@@ -195,14 +195,14 @@ which uses GeneralizedGenerated.jl to build a same world-age function on the fly
 Base.:~(::Expression, ::Expression)
 ```
 
-## Additional High Level Explanations and Tips
+## Additional High-Level Explanations and Tips
 
 ### The Auto-Detecting System Constructors
 
-For the high level interface, the system constructors such as `ODESystem` have
-high level constructors which just take in the required equations and automatically
+For the high-level interface, the system constructors, such as `ODESystem`, have
+high-level constructors, which just take in the required equations and automatically
 parse the expressions to figure out the states and parameters of the system.
-The following high level constructors exist:
+The following high-level constructors exist:
 
 ```julia
 ODESystem(eqs)
@@ -211,7 +211,7 @@ NonlinearSystem(eqs)
 
 ### Direct Tracing
 
-Because the ModelingToolkit `Expression` types obey Julia-semantics, one can
+Because the ModelingToolkit `Expression` types obey Julia semantics, one can
 directly transform existing Julia functions into ModelingToolkit symbolic
 representations of the function by simply inputting the symbolic values into
 the function and using what is returned. For example, let's take the following
@@ -282,7 +282,7 @@ multithreadedjac = eval(ModelingToolkit.build_function(vec(jac),u,multithread=tr
 ### modelingtoolkitize
 
 For some `DEProblem` types, automatic tracing functionality is already included
-via the `modelingtoolkitize` function. Take for example the Robertson ODE
+via the `modelingtoolkitize` function. Take, for example, the Robertson ODE
 defined as an `ODEProblem` for DifferentialEquations.jl:
 
 ```julia
@@ -299,7 +299,7 @@ prob = ODEProblem(rober,[1.0,0.0,0.0],(0.0,1e5),(0.04,3e7,1e4))
 ```
 
 If we want to get a symbolic representation, we can simply call `modelingtoolkitize`
-on the `prob` which will return an `ODESystem`:
+on the `prob`, which will return an `ODESystem`:
 
 ```julia
 sys = modelingtoolkitize(prob)

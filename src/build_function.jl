@@ -14,10 +14,10 @@ struct DistributedForm <: ParallelForm end
 
 Generates a numerically-usable function from a ModelingToolkit `Expression`.
 If the `Expression` is an `Operation`, the generated function is a function
-with a scalar output, otherwise if it's an `AbstractArray{Operation}` the output
+with a scalar output, otherwise if it's an `AbstractArray{Operation}`, the output
 is two functions, one for out-of-place AbstractArray output and a second which
 is a mutating function. The outputted functions match the given argument order,
-i.e. f(u,p,args...) for the out-of-place and scalar functions and
+i.e., f(u,p,args...) for the out-of-place and scalar functions and
 `f!(du,u,p,args..)` for the in-place version.
 
 ```julia
@@ -38,7 +38,7 @@ Arguments:
 - `expression`: Whether to generate code or whether to generate the compiled form.
   By default, `expression = Val{true}`, which means that the code for the
   function is returned. If `Val{false}`, then the returned value is a compiled
-  Julia function which utilizes GeneralizedGenerated.jl in order to world-age
+  Julia function, which utilizes GeneralizedGenerated.jl in order to world-age
   free.
 
 Keyword Arguments:
