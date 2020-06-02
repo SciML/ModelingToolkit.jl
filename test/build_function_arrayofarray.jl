@@ -147,7 +147,7 @@ h_sparse_arrayvec_ip!(out_2_arrayvec, input)
 @test out_1_arrayvec == out_2_arrayvec
 
 # Arrays of Arrays of Matrices
-h_sparse_arrayNestedMat = [[[a 1; b 0], [0 0; 0 0]], [[b 1; a 0], [b c; 0 1]]]
+h_sparse_arrayNestedMat = [[sparse([a 1; b 0]), sparse([0 0; 0 0])], [sparse([b 1; a 0]), sparse([b c; 0 1])]]
 function h_sparse_arrayNestedMat_julia(x)
     a, b, c = x
     return [sparse.([[a[1] 1; b[1] 0], [0 0; 0 0]]), sparse.([[b[1] 1; a[1] 0], [b[1] c[1]; 0 1]])]
