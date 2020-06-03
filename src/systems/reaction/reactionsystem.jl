@@ -332,18 +332,25 @@ end
 
 # ODEProblem from AbstractReactionNetwork
 function DiffEqBase.ODEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args...; kwargs...)
-    return ODEProblem(convert(ODESystem,rs),Pair.(rs.states,u0),tspan,Pair.(rs.ps,p), args...; kwargs...)
+    println("HERE")
+    u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
+    p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
+    return ODEProblem(convert(ODESystem,rs),u0,tspan,p, args...; kwargs...)
 end
 
 # SDEProblem from AbstractReactionNetwork
 function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args...; kwargs...)
+    u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
+    p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
     p_matrix = zeros(length(rs.states), length(rs.eqs))
-    return SDEProblem(convert(SDESystem,rs),Pair.(rs.states,u0),tspan,Pair.(rs.ps,p),args...; noise_rate_prototype=p_matrix,kwargs...)
+    return SDEProblem(convert(SDESystem,rs),u0,tspan,p,args...; noise_rate_prototype=p_matrix,kwargs...)
 end
 
 # DiscreteProblem from AbstractReactionNetwork
-function DiffEqBase.DiscreteProblem(rs::ReactionSystem, u0, tspan::Tuple, p=nothing, args...; kwargs...)
-    return DiscreteProblem(convert(JumpSystem,rs), Pair.(rs.states,u0),tspan,Pair.(rs.ps,p), args...; kwargs...)
+function DiffEqBase.DiscreteProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan::Tuple, p=nothing, args...; kwargs...)
+    u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
+    p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
+    return DiscreteProblem(convert(JumpSystem,rs), u0,tspan,p, args...; kwargs...)
 end
 
 # JumpProblem from AbstractReactionNetwork
