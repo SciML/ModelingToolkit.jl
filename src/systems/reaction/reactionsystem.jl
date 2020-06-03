@@ -327,3 +327,26 @@ function make_sub!(eq,states_swaps)
 	end
 	return eq
 end
+
+### Converts a reaxction system to ODe or SDE problems ###
+
+# ODEProblem from AbstractReactionNetwork
+function DiffEqBase.ODEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args...; kwargs...)
+    return ODEProblem(convert(ODESystem,rs),Pair.(rs.states,u0),tspan,Pair.(rs.ps,p), args...; kwargs...)
+end
+
+# SDEProblem from AbstractReactionNetwork
+function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args...; kwargs...)
+    p_matrix = zeros(length(rs.states), length(rs.eqs))
+    return SDEProblem(convert(SDESystem,rs),Pair.(rs.states,u0),tspan,Pair.(rs.ps,p),args...; noise_rate_prototype=p_matrix,kwargs...)
+end
+
+# DiscreteProblem from AbstractReactionNetwork
+function DiffEqBase.DiscreteProblem(rs::ReactionSystem, u0, tspan::Tuple, p=nothing, args...; kwargs...)
+    return DiscreteProblem(convert(JumpSystem,rs), Pair.(rs.states,u0),tspan,Pair.(rs.ps,p), args...; kwargs...)
+end
+
+# JumpProblem from AbstractReactionNetwork
+function DiffEqJump.JumpProblem(prob, aggregator, rs::ReactionSystem, args...; kwargs...)
+    return JumpProblem(convert(JumpSystem,rs), prob, aggregator, args...; kwargs...)
+end
