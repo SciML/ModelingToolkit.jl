@@ -332,7 +332,6 @@ end
 
 # ODEProblem from AbstractReactionNetwork
 function DiffEqBase.ODEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args...; kwargs...)
-    println("HERE")
     u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
     p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
     return ODEProblem(convert(ODESystem,rs),u0,tspan,p, args...; kwargs...)
