@@ -91,13 +91,18 @@ function assemble_crj(js, crj, statetoid)
 end
 
 function assemble_maj(js, maj::MassActionJump{U,Vector{Pair{V,W}},Vector{Pair{V2,W2}}},
-                      statetoid, parammap) where {U,V,W,V2,W2}
+                      statetoid, parammap, pcontext) where {U,V,W,V2,W2}
+    
     sr = maj.scaled_rates
-    if sr isa Operation
-        pval = simplify(substitute(sr,parammap)).value
+    if sr isa Operation 
+        if isempty(sr.args)
+            pval = parammap[sr.op]
+        else
+            pval = Base.eval(pcontext, Expr(maj.scaled_rates))
+        end
     elseif sr isa Variable
-        pval = Dict(parammap)[sr()]
-    else
+        pval = parammap[sr]
+    else   
         pval = maj.scaled_rates
     end
 
@@ -164,10 +169,20 @@ sol = solve(jprob, SSAStepper())
 function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
 
     statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
-    parammap  = map((x,y)->Pair(x(),y), parameters(js), prob.p)
+    parammap  = Dict(convert(Variable,param) => prob.p[i] for (i,param) in enumerate(parameters(js)))
     eqs       = equations(js)
+    
+    # for mass action jumps might need to evaluate parameter expressions
+    # populate dummy module with params as local variables
+    # (for eval-ing parameter expressions)
+    pvars         = parameters(js)
+    param_context = Module()
+    for (i, pval) in enumerate(prob.p)        
+        psym = Symbol(pvars[i])
+        Base.eval(param_context, :($psym = $pval))
+    end
 
-    majs = MassActionJump[assemble_maj(js, j, statetoid, parammap) for j in eqs.x[1]]
+    majs = MassActionJump[assemble_maj(js, j, statetoid, parammap, param_context) for j in eqs.x[1]]
     crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]
     ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps") 
