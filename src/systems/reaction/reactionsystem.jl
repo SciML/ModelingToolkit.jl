@@ -353,6 +353,6 @@ function DiffEqBase.DiscreteProblem(rs::ReactionSystem, u0::Union{AbstractArray,
 end
 
 # JumpProblem from AbstractReactionNetwork
-function DiffEqJump.JumpProblem(prob, aggregator, rs::ReactionSystem, args...; kwargs...)
+function DiffEqJump.JumpProblem(rs::ReactionSystem, prob, aggregator, args...; kwargs...)
     return JumpProblem(convert(JumpSystem,rs), prob, aggregator, args...; kwargs...)
 end
