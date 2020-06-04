@@ -71,6 +71,11 @@ function getmean(jprob,Nsims)
 end
 m = getmean(jprob,Nsims)
 
+# test save_positions is working
+jprob = JumpProblem(js2, dprob, Direct(), save_positions=(false,false))
+sol = solve(jprob, SSAStepper(), saveat=1.0)
+@test all((sol.t) .== collect(0.:tspan[2]))
+
 #test the MT JumpProblem rates/affects are correct
 rate2(u,p,t) = 0.01u[2]
 jump2 = ConstantRateJump(rate2,affect2!)
