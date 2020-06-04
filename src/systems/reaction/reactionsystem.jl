@@ -328,7 +328,8 @@ function make_sub!(eq,states_swaps)
 	return eq
 end
 
-### Converts a reaxction system to ODe or SDE problems ###
+### Converts a reaction system to ODE or SDE problems ###
+
 
 # ODEProblem from AbstractReactionNetwork
 function DiffEqBase.ODEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args...; kwargs...)
