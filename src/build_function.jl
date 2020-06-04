@@ -8,6 +8,7 @@ abstract type ParallelForm end
 struct SerialForm <: ParallelForm end
 struct MultithreadedForm <: ParallelForm end
 struct DistributedForm <: ParallelForm end
+struct DaggerForm <: ParallelForm end
 
 """
 `build_function`
@@ -165,6 +166,10 @@ function _build_function(target::JuliaTarget, rhss, args...;
 		finalsize = rhs_length - (numworks-1)*lens
 		_rhss = vcat(reduce(vcat,[[getindex(reducevars[i],j) for j in 1:lens] for i in 1:numworks-1],init=Expr[]),
 						 [getindex(reducevars[end],j) for j in 1:finalsize])
+    elseif parallel isa DaggerForm
+		computevars = [Variable(gensym(:MTComputeVar))() for i in axes(rhss,1)]
+        reducevar = Variable(gensym(:MTReduceVar))()
+        _rhss = [getindex(reducevar,i) for i in axes(rhss,1)]
 	elseif rhss isa SparseMatrixCSC
 		_rhss = rhss.nzval
 	else
@@ -222,6 +227,18 @@ function _build_function(target::JuliaTarget, rhss, args...;
 			$(resunpack_exprs...)
 			$(ip_let_expr.args[2])
 		end
+    elseif parallel isa DaggerForm
+        @assert HAS_DAGGER[] "Dagger.jl is not loaded; please do `using Dagger`"
+        delayed_exprs = build_expr(:block, [:($(Symbol(computevars[i])) = Dagger.delayed(identity)($(conv(rhss[i])))) for i in axes(computevars,1)])
+        # TODO: treereduce?
+        reduce_expr = quote
+            $(Symbol(reducevar)) = collect(Dagger.delayed(vcat)($(computevars...)))
+        end
+        ip_let_expr.args[2] = quote
+            $delayed_exprs
+            $reduce_expr
+            $(ip_let_expr.args[2])
+        end
 	end
 
     tuple_sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])

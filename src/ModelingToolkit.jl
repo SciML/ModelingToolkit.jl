@@ -20,6 +20,8 @@ import SymbolicUtils: to_symbolic, FnType
 
 import TreeViews
 
+using Requires
+
 """
 $(TYPEDEF)
 
@@ -133,4 +135,10 @@ export build_function
 export @register
 export modelingtoolkitize
 export @variables, @parameters
+
+const HAS_DAGGER = Ref{Bool}(false)
+function __init__()
+    @require Dagger="d58978e5-989f-55fb-8d15-ea34adc7bf54" include("dagger.jl")
+end
+
 end # module
