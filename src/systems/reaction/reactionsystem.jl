@@ -244,8 +244,10 @@ function assemble_jumps(rs)
         haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars)
         if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep)
             reactant_stoch = isempty(rx.substoich) ? [0 => 1] : [var2op(sub.op) => stoich for (sub,stoich) in zip(rx.substrates,rx.substoich)]
+            coef           = isempty(rx.substoich) ? one(eltype(rx.substoich)) : prod(stoich -> factorial(stoich), rx.substoich)
+            rate           = isone(coef) ? rx.rate : rx.rate/coef
             net_stoch      = [Pair(var2op(p[1]),p[2]) for p in rx.netstoich]
-            push!(eqs, MassActionJump(rx.rate, reactant_stoch, net_stoch))
+            push!(eqs, MassActionJump(rate, reactant_stoch, net_stoch, scale_rates=false))
         else
             rl     = jumpratelaw(rx, rxvars=rxvars)
             affect = Vector{Equation}()

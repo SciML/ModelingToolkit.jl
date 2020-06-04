@@ -115,9 +115,15 @@ jumps[19] = VariableRateJump((u,p,t) -> p[19]*u[1]*t, integrator -> (integrator.
 jumps[20] = VariableRateJump((u,p,t) -> p[20]*t*u[1]*binomial(u[2],2)*u[3], integrator -> (integrator.u[2] -= 2; integrator.u[3] -= 1; integrator.u[4] += 2))
 
 statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
-parammap = map((x,y)->Pair(x(),y),parameters(js),pars)
+parammap  = Dict(convert(Variable,param) => pars[i] for (i,param) in enumerate(parameters(js)))
+pvars = parameters(js)
+param_context = Module()
+for (i, pval) in enumerate(pars)        
+    psym = Symbol(pvars[i])
+    Base.eval(param_context, :($psym = $pval))
+end
 for i = 1:14
-  maj = MT.assemble_maj(js, js.eqs[i], statetoid,parammap)
+  maj = MT.assemble_maj(js, js.eqs[i], statetoid, parammap, param_context)
   @test abs(jumps[i].scaled_rates - maj.scaled_rates) < 100*eps()
   @test jumps[i].reactant_stoch == maj.reactant_stoch
   @test jumps[i].net_stoch == maj.net_stoch
