@@ -131,6 +131,13 @@ function _build_function(target::JuliaTarget, op::Operation, args...;
     end
 end
 
+# Detect heterogeneous element types of "arrays of matrices/sparce matrices"
+function is_array_matrix(F)
+    return isa(F, AbstractVector) && all(isa.(F, AbstractArray))
+end
+function is_array_sparse_matrix(F)
+    return isa(F, AbstractVector) && all(isa.(F, AbstractSparseMatrix))
+end
 # Detect heterogeneous element types of "arrays of arrays of matrices/sparce matrices"
 function is_array_array_matrix(F)
     return isa(F, AbstractVector) && all(isa.(F, AbstractArray{<:AbstractMatrix}))
@@ -183,9 +190,9 @@ function _build_function(target::JuliaTarget, rhss, args...;
 		ip_sys_exprs = reduce(vcat,[vec(reduce(vcat,[vec([:($X[$i][$j].nzval[$k] = $(conv(rhs))) for (k, rhs) ∈ enumerate(rhsel2.nzval)]) for (j, rhsel2) ∈ enumerate(rhsel)], init=Expr[])) for (i,rhsel) ∈ enumerate(_rhss)],init=Expr[])
 	elseif is_array_array_matrix(rhss) # Array of arrays of arrays
 		ip_sys_exprs = reduce(vcat,[vec(reduce(vcat,[vec([:($X[$i][$j][$k] = $(conv(rhs))) for (k, rhs) ∈ enumerate(rhsel2)]) for (j, rhsel2) ∈ enumerate(rhsel)], init=Expr[])) for (i,rhsel) ∈ enumerate(_rhss)], init=Expr[])
-	elseif eltype(rhss) <: SparseMatrixCSC # Array of sparse matrices
+	elseif is_array_sparse_matrix(rhss) # Array of sparse matrices
 		ip_sys_exprs = reduce(vcat,[vec([:($X[$i].nzval[$j] = $(conv(rhs))) for (j, rhs) ∈ enumerate(rhsel.nzval)]) for (i,rhsel) ∈ enumerate(_rhss)], init=Expr[])
-    elseif eltype(rhss) <: AbstractArray # Array of arrays
+    elseif is_array_matrix(rhss) # Array of arrays
 		ip_sys_exprs = reduce(vcat,[vec([:($X[$i][$j] = $(conv(rhs))) for (j, rhs) ∈ enumerate(rhsel)]) for (i,rhsel) ∈ enumerate(_rhss)], init=Expr[])
     elseif rhss isa SparseMatrixCSC
         ip_sys_exprs = [:($X.nzval[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(_rhss)]
