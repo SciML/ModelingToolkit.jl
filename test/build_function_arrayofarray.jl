@@ -26,6 +26,23 @@ h_dense_arraymat_julia!(out_1_arraymat, input)
 h_dense_arraymat_ip!(out_2_arraymat, input)
 @test out_1_arraymat == out_2_arraymat
 
+# Arrays of Matrices, Heterogeneous element types
+test_exp = [exp(a) * exp(b), a]
+h_dense_arraymat_het = [ModelingToolkit.hessian(t, [a, b]) for t in test_exp]
+function h_dense_arraymat_het_julia!(out, x)
+    a, b, c = x
+    out[1] .= [exp(a[1]) * exp(b[1]) exp(a[1]) * exp(b[1]); exp(a[1]) * exp(b[1]) exp(a[1]) * exp(b[1])]
+    out[2] .= [0 0; 0 0]
+end
+
+h_dense_arraymat_het_str = ModelingToolkit.build_function(h_dense_arraymat_het, [a, b, c])
+h_dense_arraymat_het_ip! = eval(h_dense_arraymat_het_str[2])
+out_1_arraymat_het = [Array{Float64}(undef, 2, 2) for i in 1:2]
+out_2_arraymat_het = [similar(x) for x in out_1_arraymat_het]
+h_dense_arraymat_het_julia!(out_1_arraymat_het, input)
+h_dense_arraymat_het_ip!(out_2_arraymat_het, input)
+@test out_1_arraymat_het == out_2_arraymat_het
+
 # Arrays of 1D Vectors
 h_dense_arrayvec = [[a, 0, c], [0, 0, 0], [1, a, b]] # same for empty vectors, etc.
 function h_dense_arrayvec_julia!(out, x)
@@ -60,6 +77,24 @@ out_2_arrayNestedMat = [[rand(Int64, 2, 2), rand(Int64, 2, 2)], [rand(Int64, 2, 
 h_dense_arrayNestedMat_julia!(out_1_arrayNestedMat, input)
 h_dense_arrayNestedMat_ip!(out_2_arrayNestedMat, input)
 @test out_1_arrayNestedMat == out_2_arrayNestedMat
+
+# Arrays of Arrays of Matrices, Heterogeneous element types
+test_exp = [exp(a) * exp(b), a]
+h_dense_arrayNestedMat_het = [[ModelingToolkit.hessian(t, [a, b]) for t in test_exp], [[ModelingToolkit.Constant(0) ModelingToolkit.Constant(0); ModelingToolkit.Constant(0) ModelingToolkit.Constant(0)], [ModelingToolkit.Constant(0) ModelingToolkit.Constant(0); ModelingToolkit.Constant(0) ModelingToolkit.Constant(0)]]]
+function h_dense_arrayNestedMat_het_julia!(out, x)
+    a, b, c = x
+    out[1][1] .= [exp(a[1]) * exp(b[1]) exp(a[1]) * exp(b[1]); exp(a[1]) * exp(b[1]) exp(a[1]) * exp(b[1])]
+    out[1][2] .= [0 0; 0 0]
+    out[2][1] .= [0 0; 0 0]
+    out[2][2] .= [0 0; 0 0]
+end
+h_dense_arrayNestedMat_het_str = ModelingToolkit.build_function(h_dense_arrayNestedMat_het, [a, b, c])
+h_dense_arrayNestedMat_het_ip! = eval(h_dense_arrayNestedMat_het_str[2])
+out_1_arrayNestedMat_het = [[rand(Int64, 2, 2), rand(Int64, 2, 2)], [rand(Int64, 2, 2), rand(Int64, 2, 2)]] # avoid undef broadcasting issue
+out_2_arrayNestedMat_het = [[rand(Int64, 2, 2), rand(Int64, 2, 2)], [rand(Int64, 2, 2), rand(Int64, 2, 2)]]
+h_dense_arrayNestedMat_julia!(out_1_arrayNestedMat_het, input)
+h_dense_arrayNestedMat_ip!(out_2_arrayNestedMat_het, input)
+@test out_1_arrayNestedMat_het == out_2_arrayNestedMat_het
 
 # ===== Sparse tests =====
 # Array of Matrices
