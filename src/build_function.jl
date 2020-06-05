@@ -133,17 +133,17 @@ end
 
 # Detect heterogeneous element types of "arrays of matrices/sparce matrices"
 function is_array_matrix(F)
-    return isa(F, AbstractVector) && all(isa.(F, AbstractArray))
+    return isa(F, AbstractVector) && all(x->isa(x, AbstractArray), F)
 end
 function is_array_sparse_matrix(F)
-    return isa(F, AbstractVector) && all(isa.(F, AbstractSparseMatrix))
+    return isa(F, AbstractVector) && all(x->isa(x, AbstractSparseMatrix), F)
 end
 # Detect heterogeneous element types of "arrays of arrays of matrices/sparce matrices"
 function is_array_array_matrix(F)
-    return isa(F, AbstractVector) && all(isa.(F, AbstractArray{<:AbstractMatrix}))
+    return isa(F, AbstractVector) && all(x->isa(x, AbstractArray{<:AbstractMatrix}), F)
 end
 function is_array_array_sparse_matrix(F)
-    return isa(F, AbstractVector) && all(isa.(F, AbstractArray{<:AbstractSparseMatrix}))
+    return isa(F, AbstractVector) && all(x->isa(x, AbstractArray{<:AbstractSparseMatrix}), F)
 end
 
 function _build_function(target::JuliaTarget, rhss, args...;
