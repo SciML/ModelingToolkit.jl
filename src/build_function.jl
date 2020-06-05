@@ -131,6 +131,14 @@ function _build_function(target::JuliaTarget, op::Operation, args...;
     end
 end
 
+# Detect heterogeneous element types of "arrays of arrays of matrices/sparce matrices"
+function is_array_array_matrix(F)
+    return isa(F, AbstractVector) && all(isa.(F, AbstractArray{<:AbstractMatrix}))
+end
+function is_array_array_sparse_matrix(F)
+    return isa(F, AbstractVector) && all(isa.(F, AbstractArray{<:AbstractSparseMatrix}))
+end
+
 function _build_function(target::JuliaTarget, rhss, args...;
                          conv = simplified_expr, expression = Val{true},
                          checkbounds = false, constructor=nothing,
@@ -171,9 +179,9 @@ function _build_function(target::JuliaTarget, rhss, args...;
 		_rhss = rhss
 	end
 
-	if eltype(eltype(rhss)) <: SparseMatrixCSC # Array of arrays of sparse matrices
+	if is_array_array_sparse_matrix(rhss) # Array of arrays of sparse matrices
 		ip_sys_exprs = reduce(vcat,[vec(reduce(vcat,[vec([:($X[$i][$j].nzval[$k] = $(conv(rhs))) for (k, rhs) ∈ enumerate(rhsel2.nzval)]) for (j, rhsel2) ∈ enumerate(rhsel)], init=Expr[])) for (i,rhsel) ∈ enumerate(_rhss)],init=Expr[])
-	elseif eltype(eltype(rhss)) <: AbstractArray # Array of arrays of arrays
+	elseif is_array_array_matrix(rhss) # Array of arrays of arrays
 		ip_sys_exprs = reduce(vcat,[vec(reduce(vcat,[vec([:($X[$i][$j][$k] = $(conv(rhs))) for (k, rhs) ∈ enumerate(rhsel2)]) for (j, rhsel2) ∈ enumerate(rhsel)], init=Expr[])) for (i,rhsel) ∈ enumerate(_rhss)], init=Expr[])
 	elseif eltype(rhss) <: SparseMatrixCSC # Array of sparse matrices
 		ip_sys_exprs = reduce(vcat,[vec([:($X[$i].nzval[$j] = $(conv(rhs))) for (j, rhs) ∈ enumerate(rhsel.nzval)]) for (i,rhsel) ∈ enumerate(_rhss)], init=Expr[])
