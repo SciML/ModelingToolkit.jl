@@ -138,8 +138,10 @@ end
 function ReactionSystem(eqs, iv, species, params; systems = ReactionSystem[],
                                                   name = gensym(:ReactionSystem))
 
-    ReactionSystem(eqs, iv, convert.(Variable,species), convert.(Variable,params),
-                   name, systems)
+
+    isempty(species) && error("ReactionSystems require at least one species.")
+    paramvars = isempty(params) ? Variable[] : convert.(Variable, params)
+    ReactionSystem(eqs, iv, convert.(Variable,species), paramvars, name, systems)
 end
 
 # Calculate the ODE rate law
@@ -233,14 +235,19 @@ explicitly on the independent variable (usually time).
 """
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
                               haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))
-    return !(haveivdep || rx.only_use_rate || any(convert(Variable,rxv) in states(rs) for rxv in rxvars))
+    # if no dependencies must be zero order
+    if isempty(rxvars) 
+        return true
+    else
+        return !(haveivdep || rx.only_use_rate || any(convert(Variable,rxv) in states(rs) for rxv in rxvars))
+    end
 end
 
 function assemble_jumps(rs)
     eqs = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}()
 
-    for rx in equations(rs)
-        rxvars    = get_variables(rx.rate)
+    for rx in equations(rs)        
+        rxvars    = (rx.rate isa Operation) ? get_variables(rx.rate) : Operation[]
         haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars)
         if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep)
             reactant_stoch = isempty(rx.substoich) ? [0 => 1] : [var2op(sub.op) => stoich for (sub,stoich) in zip(rx.substrates,rx.substoich)]
