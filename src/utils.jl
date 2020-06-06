@@ -121,12 +121,16 @@ substitute(expr::Operation, s::Pair) = _substitute(expr, [s[1]], [s[2]])
 substitute(expr::Operation, dict::Dict) = _substitute(expr, keys(dict), values(dict))
 substitute(expr::Operation, s::Vector) = _substitute(expr, first.(s), last.(s))
 
-function _substitute(expr, ks, vs)
-    _substitute(expr, Dict(map(Pair, map(to_symbolic, ks), map(to_symbolic, vs))))
+function _substitute(ks, vs)
+    expr -> _substitute(expr, Dict(map(Pair, map(to_symbolic, ks), map(to_symbolic, vs))))
 end
 
-function _substitute(expr, dict::Dict)
-    simplify(SymbolicUtils.substitute(expr, dict))
+function substituter(ks, vs)
+    dict = Dict(map(Pair, map(to_symbolic, ks), map(to_symbolic, vs)))
+    expr -> to_mtk(SymbolicUtils.simplify(SymbolicUtils.substitute(expr, dict)))
 end
+
+_substitute(expr, ks, vs) = substituter(ks, vs)(expr)
 
 @deprecate substitute_expr!(expr,s) substitute(expr,s)
+
