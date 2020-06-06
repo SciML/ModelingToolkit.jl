@@ -166,7 +166,7 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
 
     statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))    
     eqs       = equations(js)
-    invttype  = typeof(prob.tspan[2])
+    invttype  = typeof(1 / prob.tspan[2])
 
     # handling parameter substition and empty param vecs
     p = (prob.p == DiffEqBase.NullParameters()) ? Operation[] : prob.p
