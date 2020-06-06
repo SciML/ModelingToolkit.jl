@@ -140,7 +140,7 @@ function ReactionSystem(eqs, iv, species, params; systems = ReactionSystem[],
 
 
     isempty(species) && error("ReactionSystems require at least one species.")
-    paramvars = isempty(params) ? Variable[] : Variable[convert(Variable,p) for p in params]                                              
+    paramvars = isempty(params) ? Variable[] : convert.(Variable, params)
     ReactionSystem(eqs, iv, convert.(Variable,species), paramvars, name, systems)
 end
 
