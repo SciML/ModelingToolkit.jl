@@ -91,7 +91,7 @@ function assemble_crj(js, crj, statetoid)
 end
 
 function assemble_maj(js, maj::MassActionJump{U,Vector{Pair{V,W}},Vector{Pair{V2,W2}}},
-                      statetoid, subber) where {U,V,W,V2,W2}
+                      statetoid, subber, invttype) where {U,V,W,V2,W2}
     sr = maj.scaled_rates
     if sr isa Operation
         pval = subber(sr).value
@@ -118,7 +118,8 @@ function assemble_maj(js, maj::MassActionJump{U,Vector{Pair{V,W}},Vector{Pair{V2
     end
     sort!(ns)
 
-    MassActionJump(pval, rs, ns, scale_rates = false)
+    maj = MassActionJump(convert(invttype, pval), rs, ns, scale_rates = false)
+    return maj
 end
 
 """
@@ -163,12 +164,16 @@ sol = solve(jprob, SSAStepper())
 """
 function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
 
-    statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
-    parammap  = map((x,y)->Pair(x(),y), parameters(js), prob.p)
+    statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))    
     eqs       = equations(js)
+    invttype  = typeof(prob.tspan[2])
 
-    subber = substituter(first.(parammap), last.(parammap))
-    majs = MassActionJump[assemble_maj(js, j, statetoid, subber) for j in eqs.x[1]]
+    # handling parameter substition and empty param vecs
+    p = (prob.p == DiffEqBase.NullParameters()) ? Operation[] : prob.p
+    parammap  = map((x,y)->Pair(x(),y), parameters(js), p)
+    subber    = substituter(first.(parammap), last.(parammap))
+    
+    majs = MassActionJump[assemble_maj(js, j, statetoid, subber, invttype) for j in eqs.x[1]]
     crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]
     ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps") 
