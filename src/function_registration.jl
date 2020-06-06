@@ -36,7 +36,7 @@ function typed_args(args)
 end
 
 # Binary & unary operators and functions
-import DiffRules, SpecialFunctions, NaNMath
+import DiffRules
 for (M, f, arity) in DiffRules.diffrules()
     fun = :($M.$f)
     sig = arity == 1 ? :($fun(x)) :
