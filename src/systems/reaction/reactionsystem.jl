@@ -235,6 +235,7 @@ explicitly on the independent variable (usually time).
 """
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
                               haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))
+    # if no dependencies must be zero order
     if isempty(rxvars) 
         return true
     else
