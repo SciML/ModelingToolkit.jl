@@ -51,8 +51,9 @@ julia = "1.2"
 
 [extras]
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
+SteadyStateDiffEq = "9672c7b4-1e72-59bd-8a11-6ac3964bc41f"
 StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["OrdinaryDiffEq", "Test", "StochasticDiffEq"]
+test = ["OrdinaryDiffEq", "SteadyStateDiffEq", "Test", "StochasticDiffEq"]
