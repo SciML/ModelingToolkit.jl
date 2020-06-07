@@ -237,18 +237,15 @@ function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
                               haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars),
                               stateset = Set(states(rs)))
     # if no dependencies must be zero order
-    if isempty(rxvars) 
-        return true
-    else
-        return !(haveivdep || rx.only_use_rate || any(convert(Variable,rxv) in stateset for rxv in rxvars))
-    end
+    isempty(rxvars) && return true
+    return !(haveivdep || rx.only_use_rate || any(convert(Variable,rxv) in stateset for rxv in rxvars))
 end
 
 function assemble_jumps(rs)
     eqs = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}()
     stateset = Set(states(rs))
 
-    for rx in equations(rs)        
+    for rx in equations(rs)
         rxvars    = (rx.rate isa Operation) ? get_variables(rx.rate) : Operation[]
         haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars)
         if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep, stateset=stateset)
