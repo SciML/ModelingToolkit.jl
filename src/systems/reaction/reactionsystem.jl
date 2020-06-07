@@ -236,7 +236,7 @@ explicitly on the independent variable (usually time).
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
                               haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))
     # if no dependencies must be zero order
-    if isempty(rxvars) 
+    if isempty(rxvars)
         return true
     else
         return !(haveivdep || rx.only_use_rate || any(convert(Variable,rxv) in states(rs) for rxv in rxvars))
@@ -246,7 +246,7 @@ end
 function assemble_jumps(rs)
     eqs = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}()
 
-    for rx in equations(rs)        
+    for rx in equations(rs)
         rxvars    = (rx.rate isa Operation) ? get_variables(rx.rate) : Operation[]
         haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars)
         if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep)
@@ -365,4 +365,11 @@ end
 # JumpProblem from AbstractReactionNetwork
 function DiffEqJump.JumpProblem(rs::ReactionSystem, prob, aggregator, args...; kwargs...)
     return JumpProblem(convert(JumpSystem,rs), prob, aggregator, args...; kwargs...)
+end
+
+# SteadyStateProblem from AbstractReactionNetwork
+function DiffEqBase.SteadyStateProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, p, args...; kwargs...)
+    #u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
+    #p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
+    return SteadyStateProblem(ODEFunction(convert(ODESystem,rs)),u0,p, args...; kwargs...)
 end
