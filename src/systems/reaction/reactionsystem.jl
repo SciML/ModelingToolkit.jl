@@ -234,22 +234,24 @@ explicitly on the independent variable (usually time).
 - Optional: `haveivdep`, `true` if the [`Reaction`](@ref) `rate` field explicitly depends on the independent variable.
 """
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
-                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))
+                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars),
+                              stateset = Set(states(rs)))
     # if no dependencies must be zero order
     if isempty(rxvars) 
         return true
     else
-        return !(haveivdep || rx.only_use_rate || any(convert(Variable,rxv) in states(rs) for rxv in rxvars))
+        return !(haveivdep || rx.only_use_rate || any(convert(Variable,rxv) in stateset for rxv in rxvars))
     end
 end
 
 function assemble_jumps(rs)
     eqs = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}()
+    stateset = Set(states(rs))
 
     for rx in equations(rs)        
         rxvars    = (rx.rate isa Operation) ? get_variables(rx.rate) : Operation[]
         haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars)
-        if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep)
+        if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep, stateset=stateset)
             reactant_stoch = isempty(rx.substoich) ? [0 => 1] : [var2op(sub.op) => stoich for (sub,stoich) in zip(rx.substrates,rx.substoich)]
             coef           = isempty(rx.substoich) ? one(eltype(rx.substoich)) : prod(stoich -> factorial(stoich), rx.substoich)
             rate           = isone(coef) ? rx.rate : rx.rate/coef
