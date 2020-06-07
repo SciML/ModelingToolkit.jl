@@ -84,12 +84,12 @@ G2 = sf.g(u,p,t)
 # test with JumpSystem
 js = convert(JumpSystem, rs)
 
-@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.MassActionJump, 1:14))
-@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.ConstantRateJump, 15:18))
-@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.VariableRateJump, 19:20))
+@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.MassActionJump, [1]))
+@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.ConstantRateJump, 2:5))
+@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.VariableRateJump, 6:7))
 
 pars = rand(length(k)); u0 = rand(1:10,4); time = rand();
-jumps = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}(undef,length(js.eqs))
+jumps = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}(undef,length(rxs))
 
 jumps[1] = MassActionJump(pars[1], Vector{Pair{Int,Int}}(), [1 => 1]);
 jumps[2] = MassActionJump(pars[2], [2 => 1], [2 => -1]);
@@ -116,21 +116,21 @@ jumps[20] = VariableRateJump((u,p,t) -> p[20]*t*u[1]*binomial(u[2],2)*u[3], inte
 
 statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
 parammap = map((x,y)->Pair(x(),y),parameters(js),pars)
+maj = MT.assemble_maj(js.eqs[1], statetoid, ModelingToolkit.substituter(first.(parammap), last.(parammap)),eltype(pars))
 for i = 1:14
-  maj = MT.assemble_maj(js, js.eqs[i], statetoid, ModelingToolkit.substituter(first.(parammap), last.(parammap)),eltype(pars))
-  @test abs(jumps[i].scaled_rates - maj.scaled_rates) < 100*eps()
-  @test jumps[i].reactant_stoch == maj.reactant_stoch
-  @test jumps[i].net_stoch == maj.net_stoch
+  @test abs(jumps[i].scaled_rates - maj.scaled_rates[i]) < 100*eps()
+  @test jumps[i].reactant_stoch == maj.reactant_stoch[i]
+  @test jumps[i].net_stoch == maj.net_stoch[i]
 end
 for i = 15:18
-  crj = MT.assemble_crj(js, js.eqs[i], statetoid)
+  crj = MT.assemble_crj(js, js.eqs[i-13], statetoid)
   @test isapprox(crj.rate(u0,p,time), jumps[i].rate(u0,p,time))
   fake_integrator1 = (u=zeros(4),p=p,t=0); fake_integrator2 = deepcopy(fake_integrator1);
   crj.affect!(fake_integrator1); jumps[i].affect!(fake_integrator2);
   @test fake_integrator1 == fake_integrator2
 end
 for i = 19:20
-  crj = MT.assemble_vrj(js, js.eqs[i], statetoid)
+  crj = MT.assemble_vrj(js, js.eqs[i-13], statetoid)
   @test isapprox(crj.rate(u0,p,time), jumps[i].rate(u0,p,time))
   fake_integrator1 = (u=zeros(4),p=p,t=0.); fake_integrator2 = deepcopy(fake_integrator1);
   crj.affect!(fake_integrator1); jumps[i].affect!(fake_integrator2);

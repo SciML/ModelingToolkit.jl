@@ -242,18 +242,23 @@ function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
 end
 
 function assemble_jumps(rs)
-    eqs = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}()
+    eqs = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}(undef,1)
     stateset = Set(states(rs))
+    rates = [];  rstoich = []; nstoich = []
 
+    isempty(equations(rs)) && error("Must give at least one reaction before constructing a JumpSystem.")
     for rx in equations(rs)
         rxvars    = (rx.rate isa Operation) ? get_variables(rx.rate) : Operation[]
         haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars)
         if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep, stateset=stateset)
             reactant_stoch = isempty(rx.substoich) ? [0 => 1] : [var2op(sub.op) => stoich for (sub,stoich) in zip(rx.substrates,rx.substoich)]
+            push!(rstoich, reactant_stoch)
             coef           = isempty(rx.substoich) ? one(eltype(rx.substoich)) : prod(stoich -> factorial(stoich), rx.substoich)
             rate           = isone(coef) ? rx.rate : rx.rate/coef
+            push!(rates, rate)
             net_stoch      = [Pair(var2op(p[1]),p[2]) for p in rx.netstoich]
-            push!(eqs, MassActionJump(rate, reactant_stoch, net_stoch, scale_rates=false))
+            push!(nstoich, net_stoch)                        
+            #push!(eqs, MassActionJump(rate, reactant_stoch, net_stoch, scale_rates=false))
         else
             rl     = jumpratelaw(rx, rxvars=rxvars)
             affect = Vector{Equation}()
@@ -267,6 +272,7 @@ function assemble_jumps(rs)
             end
         end
     end
+    eqs[1] = MassActionJump(rates, rstoich, nstoich, scale_rates=false)
     eqs
 end
 
