@@ -193,6 +193,10 @@ function DiffEqBase.ODEProblem(sys::AbstractODESystem, args...; kwargs...)
     ODEProblem{true}(sys, args...; kwargs...)
 end
 
+function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem, args...; kwargs...)
+    SteadyStateProblem{true}(sys, args...; kwargs...)
+end
+
 """
 ```julia
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
