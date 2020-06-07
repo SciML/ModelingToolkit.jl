@@ -114,7 +114,7 @@ function _build_function(target::JuliaTarget, op::Operation, args...;
 
     fname = gensym(:ModelingToolkitFunction)
     out_expr = conv(op)
-    let_expr = Expr(:let, var_eqs, out_expr)
+    let_expr = Expr(:let, var_eqs, Expr(:block, out_expr))
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
 
     fargs = Expr(:tuple,argnames...)
