@@ -20,18 +20,31 @@ any generated functions will use your registered method. See
 macro register(sig)
     splitsig = splitdef(:($sig = nothing))
     name = splitsig[:name]
+
+    # Extract the module and function name from the signature
+    if name isa Symbol
+        mod = __module__  # Calling module
+        funcname = name
+    else
+        mod = name.args[1]
+        funcname = name.args[2].value
+    end
+
     args = splitsig[:args]
     typargs = typed_args(args)
     defs = :()
     for typarg in typargs
         splitsig[:args] = typarg
-        splitsig[:body] = :(Operation($name, Expression[$(args...)]))
+        if mod == (@__MODULE__)  # If the calling module is ModelingToolkit itself...
+            splitsig[:body] = :(Operation($name, Expression[$(args...)]))
+        else
+            # Register the function's associated model so we can inject it in later.
+            splitsig[:body] = quote
+                get!(ModelingToolkit.registered_external_functions, Symbol($("$funcname")), $mod)
+                Operation($name, Expression[$(args...)])
+            end
+        end
         defs = :($defs; $(combinedef(splitsig)))
-    end
-    if (@__MODULE__) != ModelingToolkit
-        # Register external module registrations so we can rewrite any generated
-        # functions through JuliaVariables.solve().
-        get!(ModelingToolkit.registered_external_functions, name, @__MODULE__)
     end
     esc(defs)
 end
@@ -95,28 +108,10 @@ function inject_registered_module_functions(expr)
         MacroTools.@capture(x, f_(xs__))  # We need to find all function calls in the expression.
         # If the function call has been converted to a JuliaVariables.Var and matches
         # one of the functions we've registered...
-        if !isnothing(f) && x.args[1] isa JuliaVariables.Var && x.args[1].name in keys(registered_external_functions)
-            # Rewrite it from a Var to a regular function call.
-            x.args[1] = getproperty(registered_external_functions[x.args[1].name], x.args[1].name)
+        if !isnothing(f) && f isa Expr && f.head == :. && f.args[2] isa QuoteNode
+            f_name = f.args[2].value
+            f.args[1] = get(registered_external_functions, f_name, f.args[1])
         end
         return x  # Make sure we rebuild the expression as is.
     end
-end
-
-# TODO: Overwriting this function works, but is quite ugly. Is there a nicer way to inject the module names?
-function GeneralizedGenerated.mk_function(mod::Module, ex)
-    ex = macroexpand(mod, ex)
-    ex = GeneralizedGenerated.simplify_ex(ex)
-    ex = GeneralizedGenerated.solve(ex)
-
-    # We need to modify the expression built by the JuliaVariables.solve(ex)
-    # method, before GeneralizedGenerated.closure_conv(mod, ex) converts it to a
-    # RuntimeFn (as done in GeneralizedGenerated.mk_function(mod, ex)).
-    ex = inject_registered_module_functions(ex)
-
-    fn = GeneralizedGenerated.closure_conv(mod, ex)
-    if !(fn isa GeneralizedGenerated.RuntimeFn)
-        error("Expect an unnamed function expression. ")
-    end
-    fn
 end
