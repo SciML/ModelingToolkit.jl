@@ -10,12 +10,6 @@ ModelingToolkit IR. Example:
 ```
 
 registers `f` as a possible two-argument function.
-
-NOTE: If registering outside of ModelingToolkit (i.e. in your own package),
-this should be done at runtime (e.g. in a package `__init__()`, or inside a
-method that is called at runtime and not during precompile) to ensure that
-any generated functions will use your registered method. See
-`inject_registered_module_functions()`.
 """
 macro register(sig)
     splitsig = splitdef(:($sig = nothing))
@@ -94,24 +88,29 @@ Base.:^(x::Expression,y::T) where T <: Rational = Operation(Base.:^, Expression[
 Base.getindex(x::Operation,i::Int64) = Operation(getindex,[x,i])
 Base.one(::Operation) = 1
 
+# Ensure that Operations that get @registered from outside the ModelingToolkit
+# module can work without having to bring in the associated function into the
+# ModelingToolkit namespace. We basically store information about functions
+# registered at runtime in a ModelingToolkit variable,
+# `registered_external_functions`. It's not pretty, but we are limited by the
+# way GeneralizedGenerated builds a function (adding "ModelingToolkit" to every
+# function call).
 # ---
-# Ensure that Operations that get @registered from outside the ModelingToolkit module can work without
-# having to bring in the associated function into the ModelingToolkit namespace.
-# We basically store information about functions registered at runtime in a ModelingToolkit variable,
-# `registered_external_functions`. It's not pretty, but we are limited by the way GeneralizedGenerated
-# builds a function (adding "ModelingToolkit" to every function call).
-# ---
-import JuliaVariables
 const registered_external_functions = Dict{Symbol,Module}()
 function inject_registered_module_functions(expr)
     MacroTools.postwalk(expr) do x
-        MacroTools.@capture(x, f_(xs__))  # We need to find all function calls in the expression.
-        # If the function call has been converted to a JuliaVariables.Var and matches
-        # one of the functions we've registered...
+        # We need to find all function calls in the expression...
+        MacroTools.@capture(x, f_(xs__))  
+
         if !isnothing(f) && f isa Expr && f.head == :. && f.args[2] isa QuoteNode
-            f_name = f.args[2].value
+            # If the function call matches any of the functions we've
+            # registered, set the calling module (which is probably
+            # "ModelingToolkit") to the module it is registered to.
+            f_name = f.args[2].value  # function name
             f.args[1] = get(registered_external_functions, f_name, f.args[1])
         end
-        return x  # Make sure we rebuild the expression as is.
+
+        # Make sure we rebuild the expression as is.
+        return x
     end
 end
