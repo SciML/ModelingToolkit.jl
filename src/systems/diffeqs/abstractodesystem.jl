@@ -223,3 +223,39 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                         sparse=sparse)
     ODEProblem{iip}(f,u0,tspan,p;kwargs...)
 end
+
+
+### Enables Steady State Problems ###
+function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem, args...; kwargs...)
+    SteadyStateProblem{true}(sys, args...; kwargs...)
+end
+
+"""
+```julia
+function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,tspan,
+                                    parammap=DiffEqBase.NullParameters();
+                                    version = nothing, tgrad=false,
+                                    jac = false, Wfact = false,
+                                    checkbounds = false, sparse = false,
+                                    linenumbers = true, parallel=SerialForm(),
+                                    kwargs...) where iip
+```
+Generates an SteadyStateProblem from an ODESystem and allows for automatically
+symbolically calculating numerical enhancements.
+"""
+function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
+                                    parammap=DiffEqBase.NullParameters();
+                                    version = nothing, tgrad=false,
+                                    jac = false, Wfact = false,
+                                    checkbounds = false, sparse = false,
+                                    linenumbers = true, parallel=SerialForm(),
+                                    kwargs...) where iip
+    dvs = states(sys)
+    ps = parameters(sys)
+    u0 = varmap_to_vars(u0map,dvs)
+    p = varmap_to_vars(parammap,ps)
+    f = ODEFunction(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
+                        linenumbers=linenumbers,parallel=parallel,
+                        sparse=sparse)
+    SteadyStateProblem(f,u0,p;kwargs...)
+end
