@@ -103,8 +103,8 @@ end
 
 function numericrstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     rs = Vector{Pair{Int,W}}()
-    for (spec,stoich) in mtrs
-        if iszero(spec)
+    for (spec,stoich) in mtrs        
+        if !(spec isa Operation) && iszero(spec)
             push!(rs, 0 => stoich)
         else
             push!(rs, statetoid[convert(Variable,spec)] => stoich)
@@ -117,15 +117,14 @@ end
 function numericnstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     ns = Vector{Pair{Int,W}}()
     for (spec,stoich) in mtrs
-        iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
+        !(spec isa Operation) && iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
         push!(ns, statetoid[convert(Variable,spec)] => stoich)
     end
     sort!(ns)
 end
 
 # assemble a numeric MassActionJump from a MT MassActionJump representing one rx.
-function assemble_maj(maj::MassActionJump{U,V,W}, statetoid, subber, 
-                      invttype) where {U,V,W}
+function assemble_maj(maj::MassActionJump, statetoid, subber, invttype)
     rval = numericrate(maj.scaled_rates, subber)
     rs   = numericrstoich(maj.reactant_stoch, statetoid)
     ns   = numericnstoich(maj.net_stoch, statetoid)
@@ -134,14 +133,14 @@ function assemble_maj(maj::MassActionJump{U,V,W}, statetoid, subber,
 end
 
 # For MassActionJumps that contain many reactions
-function assemble_maj(maj::MassActionJump{U,V,W}, statetoid, subber, 
-                      invttype) where {U <: AbstractVector,V,W}
-    rval = [convert(invttype,numericrate(sr, subber)) for sr in maj.scaled_rates]
-    rs   = [numericrstoich(rs, statetoid) for rs in maj.reactant_stoch]
-    ns   = [numericnstoich(ns, statetoid) for ns in maj.net_stoch]
-    maj  = MassActionJump(rval, rs, ns, scale_rates = false)
-    maj
-end
+# function assemble_maj(maj::MassActionJump{U,V,W}, statetoid, subber,
+#                       invttype) where {U <: AbstractVector,V,W}
+#     rval = [convert(invttype,numericrate(sr, subber)) for sr in maj.scaled_rates]
+#     rs   = [numericrstoich(rs, statetoid) for rs in maj.reactant_stoch]
+#     ns   = [numericnstoich(ns, statetoid) for ns in maj.net_stoch]
+#     maj  = MassActionJump(rval, rs, ns, scale_rates = false)
+#     maj
+# end
 """
 ```julia
 function DiffEqBase.DiscreteProblem(sys::AbstractSystem, u0map, tspan,
