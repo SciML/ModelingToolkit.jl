@@ -14,12 +14,30 @@ registers `f` as a possible two-argument function.
 macro register(sig)
     splitsig = splitdef(:($sig = nothing))
     name = splitsig[:name]
+
+    # Extract the module and function name from the signature
+    if name isa Symbol
+        mod = __module__  # Calling module
+        funcname = name
+    else
+        mod = name.args[1]
+        funcname = name.args[2].value
+    end
+
     args = splitsig[:args]
     typargs = typed_args(args)
     defs = :()
     for typarg in typargs
         splitsig[:args] = typarg
-        splitsig[:body] = :(Operation($name, Expression[$(args...)]))
+        if mod == (@__MODULE__)  # If the calling module is ModelingToolkit itself...
+            splitsig[:body] = :(Operation($name, Expression[$(args...)]))
+        else
+            # Register the function's associated model so we can inject it in later.
+            splitsig[:body] = quote
+                get!(ModelingToolkit.registered_external_functions, Symbol($("$funcname")), $mod)
+                Operation($name, Expression[$(args...)])
+            end
+        end
         defs = :($defs; $(combinedef(splitsig)))
     end
     esc(defs)
@@ -69,3 +87,30 @@ Base.:^(x::Expression,y::T) where T <: Rational = Operation(Base.:^, Expression[
 
 Base.getindex(x::Operation,i::Int64) = Operation(getindex,[x,i])
 Base.one(::Operation) = 1
+
+# Ensure that Operations that get @registered from outside the ModelingToolkit
+# module can work without having to bring in the associated function into the
+# ModelingToolkit namespace. We basically store information about functions
+# registered at runtime in a ModelingToolkit variable,
+# `registered_external_functions`. It's not pretty, but we are limited by the
+# way GeneralizedGenerated builds a function (adding "ModelingToolkit" to every
+# function call).
+# ---
+const registered_external_functions = Dict{Symbol,Module}()
+function inject_registered_module_functions(expr)
+    MacroTools.postwalk(expr) do x
+        # We need to find all function calls in the expression...
+        MacroTools.@capture(x, f_(xs__))  
+
+        if !isnothing(f) && f isa Expr && f.head == :. && f.args[2] isa QuoteNode
+            # If the function call matches any of the functions we've
+            # registered, set the calling module (which is probably
+            # "ModelingToolkit") to the module it is registered to.
+            f_name = f.args[2].value  # function name
+            f.args[1] = get(registered_external_functions, f_name, f.args[1])
+        end
+
+        # Make sure we rebuild the expression as is.
+        return x
+    end
+end
