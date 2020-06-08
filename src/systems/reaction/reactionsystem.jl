@@ -220,7 +220,8 @@ end
 """
 ```julia
 ismassaction(rx, rs; rxvars = get_variables(rx.rate),
-                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))
+                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars),
+                              stateset = Set(states(rs)))
 ```
 
 True if a given reaction is of mass action form, i.e. `rx.rate` does not depend
@@ -232,6 +233,7 @@ explicitly on the independent variable (usually time).
 - `rs`, a [`ReactionSystem`](@ref) containing the reaction.
 - Optional: `rxvars`, `Variable`s which are not in `rxvars` are ignored as possible dependencies.
 - Optional: `haveivdep`, `true` if the [`Reaction`](@ref) `rate` field explicitly depends on the independent variable.
+- Optional: `stateset`, set of states which if the rxvars are within mean rx is non-mass action.
 """
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
                               haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars),
@@ -242,10 +244,10 @@ function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
 end
 
 function assemble_jumps(rs)
-    eqs = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}(undef,1)
+    eqs = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}()#(undef,1)
     stateset = Set(states(rs))
     rates = [];  rstoich = []; nstoich = []
-    anyfun = var -> isequal(rs.iv,convert(Variable,var))
+    anyfun = var -> isequal(rs.iv, convert(Variable,var))
     rxvars = Operation[]
 
     isempty(equations(rs)) && error("Must give at least one reaction before constructing a JumpSystem.")
@@ -255,13 +257,13 @@ function assemble_jumps(rs)
         haveivdep = any(anyfun, rxvars)
         if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep, stateset=stateset)
             reactant_stoch = isempty(rx.substoich) ? Vector{Pair{Operation,eltype(rx.substoich)}}() : [var2op(sub.op) => stoich for (sub,stoich) in zip(rx.substrates,rx.substoich)]
-            push!(rstoich, reactant_stoch)
+            #push!(rstoich, reactant_stoch)
             coef           = isempty(rx.substoich) ? one(eltype(rx.substoich)) : prod(stoich -> factorial(stoich), rx.substoich)
             rate           = isone(coef) ? rx.rate : rx.rate/coef
-            push!(rates, rate)
+            #push!(rates, rate)
             net_stoch      = [Pair(var2op(p[1]),p[2]) for p in rx.netstoich]
-            push!(nstoich, net_stoch)
-            #push!(eqs, MassActionJump(rate, reactant_stoch, net_stoch, scale_rates=false))
+            #push!(nstoich, net_stoch)
+            push!(eqs, MassActionJump(rate, reactant_stoch, net_stoch, scale_rates=false, useiszero=false))
         else
             rl     = jumpratelaw(rx, rxvars=rxvars)
             affect = Vector{Equation}()
@@ -275,7 +277,7 @@ function assemble_jumps(rs)
             end
         end
     end
-    eqs[1] = MassActionJump(rates, rstoich, nstoich, scale_rates=false)
+    #eqs[1] = MassActionJump(rates, rstoich, nstoich, scale_rates=false, useiszero=false)
     eqs
 end
 
