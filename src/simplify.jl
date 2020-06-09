@@ -10,7 +10,7 @@ function SymbolicUtils.operation(x::Operation)
 end
 
 # This is required to infer the right type for
-# Operation(Variable{Parameter{Number}}(:foo), [])
+# Operation(Variable{Parameter{Real}}(:foo), [])
 # While keeping the metadata that the variable is a parameter.
 SymbolicUtils.promote_symtype(f::SymbolicUtils.Sym{FnType{X,Parameter{Y}}},
                               xs...) where {X, Y} = Y
@@ -29,8 +29,8 @@ SymbolicUtils.symtype(x::Variable) = _vartype(x) # needed for a()
 SymbolicUtils.symtype(x::SymbolicUtils.Sym{<:Parameter{T}}) where {T} = T
 
 # returning Any causes SymbolicUtils to infer the type using `promote_symtype`
-# But we are OK with Number here for now I guess
-SymbolicUtils.symtype(x::Expression) = Number
+# But we are OK with Real here for now I guess
+SymbolicUtils.symtype(x::Expression) = Real
 
 
 # SymbolicUtils -> ModelingToolkit
@@ -42,7 +42,7 @@ simplify(expr) = expr |> to_mtk
 @deprecate simplify_constants(ex) simplify(ex)
 
 to_mtk(x) = x
-to_mtk(x::Number) = Constant(x)
+to_mtk(x::Real) = Constant(x)
 to_mtk(v::SymbolicUtils.Sym{T}) where {T} = Variable{T}(nameof(v))
 to_mtk(v::SymbolicUtils.Sym{FnType{X,Y}}) where {X,Y} = Variable{Y}(nameof(v))
 function to_mtk(expr::SymbolicUtils.Term)

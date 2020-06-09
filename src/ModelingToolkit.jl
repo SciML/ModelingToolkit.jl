@@ -28,7 +28,7 @@ $(TYPEDEF)
 
 Base type for a symbolic expression.
 """
-abstract type Expression <: Number end
+abstract type Expression <: Real end
 
 """
 $(TYPEDEF)
@@ -38,7 +38,7 @@ TODO
 abstract type AbstractSystem end
 abstract type AbstractODESystem <: AbstractSystem end
 
-Base.promote_rule(::Type{<:Number},::Type{<:Expression}) = Expression
+Base.promote_rule(::Type{<:Real},::Type{<:Expression}) = Expression
 Base.zero(::Type{<:Expression}) = Constant(0)
 Base.zero(::Expression) = Constant(0)
 Base.one(::Type{<:Expression}) = Constant(1)

@@ -9,7 +9,7 @@ function Expression(ex;mod=Main)
     return Operation(op, args)
 end
 Base.convert(::Type{Expression}, x::Expression) = x
-Base.convert(::Type{Expression}, x::Number) = Constant(x)
+Base.convert(::Type{Expression}, x::Real) = Constant(x)
 Base.convert(::Type{Expression}, x::Bool) = Constant(x)
 Base.convert(::Type{Expression}, x::Variable) = convert(Operation,x)
 Base.convert(::Type{Expression}, x::Operation) = x

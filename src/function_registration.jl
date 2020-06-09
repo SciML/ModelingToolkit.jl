@@ -67,15 +67,15 @@ macro register(sig)
     end
     esc(defs)
 end
-# Create all valid combinations of Expression,Number for function signature
+# Create all valid combinations of Expression,Real for function signature
 function typed_args(args)
-    cases = Iterators.product(Tuple((:Expression, :Number) for i = 1:length(args))...)
+    cases = Iterators.product(Tuple((:Expression, :Real) for i = 1:length(args))...)
     typargs = Vector{Any}[]
     for case in cases
         typarg = [Expr(:(::), args[i], case[i]) for i = 1:length(args)]
         push!(typargs, typarg)
     end
-    typargs[1:end-1] # Last case is all Numbers but that should be specialized
+    typargs[1:end-1] # Last case is all Reals but that should be specialized
 end
 
 # Binary & unary operators and functions

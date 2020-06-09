@@ -18,7 +18,7 @@ Base.:(==)(a::Equation, b::Equation) = isequal((a.lhs, a.rhs), (b.lhs, b.rhs))
 $(TYPEDSIGNATURES)
 
 Create an [`Equation`](@ref) out of two [`Expression`](@ref) instances, or an
-`Expression` and a `Number`.
+`Expression` and a `Real`.
 
 # Examples
 
@@ -35,8 +35,8 @@ Equation(x() - y(), ModelingToolkit.Constant(0))
 ```
 """
 Base.:~(lhs::Expression, rhs::Expression) = Equation(lhs, rhs)
-Base.:~(lhs::Expression, rhs::Number    ) = Equation(lhs, rhs)
-Base.:~(lhs::Number    , rhs::Expression) = Equation(lhs, rhs)
+Base.:~(lhs::Expression, rhs::Real      ) = Equation(lhs, rhs)
+Base.:~(lhs::Real      , rhs::Expression) = Equation(lhs, rhs)
 
 struct ConstrainedEquation
   constraints
