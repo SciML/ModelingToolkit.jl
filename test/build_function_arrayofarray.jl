@@ -18,11 +18,16 @@ function h_dense_arraymat_julia!(out, x)
     out[3] .= [a[1] c[1]; 1 0]
 end
 
-h_dense_arraymat_str = ModelingToolkit.build_function(h_dense_arraymat, [a, b, c])
-h_dense_arraymat_ip! = eval(h_dense_arraymat_str[2])
-out_1_arraymat = [Array{Int64}(undef, 2, 2) for i in 1:3]
-out_2_arraymat = [similar(x) for x in out_1_arraymat]
+h_dense_arraymat_ip! = eval(ModelingToolkit.build_function(h_dense_arraymat, [a, b, c])[2])
+h_dense_arraymat_ip_skip! = eval(ModelingToolkit.build_function(h_dense_arraymat, [a, b, c], skipzeros=true)[2])
+out_1_arraymat = [fill(42, 2, 2) for i in 1:3]
+out_2_arraymat = deepcopy(out_1_arraymat)
 h_dense_arraymat_julia!(out_1_arraymat, input)
+h_dense_arraymat_ip_skip!(out_2_arraymat, input)
+@test all(isequal(42), out_2_arraymat[2])
+foreach(mat->fill!(mat, 0), out_2_arraymat)
+h_dense_arraymat_ip_skip!(out_2_arraymat, input)
+@test out_1_arraymat == out_2_arraymat
 h_dense_arraymat_ip!(out_2_arraymat, input)
 @test out_1_arraymat == out_2_arraymat
 
