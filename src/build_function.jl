@@ -167,7 +167,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
                          checkbounds = false, constructor=nothing,
                          linenumbers = false, multithread=nothing,
                          headerfun=addheader, outputidxs=nothing,
-                         parallel=SerialForm())
+                         skipzeros = false, parallel=SerialForm())
 
 	if multithread isa Bool
 		@warn("multithraded is deprecated for the parallel argument. See the documentation.")
@@ -207,7 +207,9 @@ function _build_function(target::JuliaTarget, rhss, args...;
         for (i, rhsel) ∈ enumerate(_rhss)
             for (j, rhsel2) ∈ enumerate(rhsel)
                 for (k, rhs) ∈ enumerate(rhsel2.nzval)
-                    push!(ip_sys_exprs, :($X[$i][$j].nzval[$k] = $(conv(rhs))))
+                    rhs′ = conv(rhs)
+                    (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
+                    push!(ip_sys_exprs, :($X[$i][$j].nzval[$k] = $rhs′))
                 end
             end
         end
@@ -215,29 +217,39 @@ function _build_function(target::JuliaTarget, rhss, args...;
         for (i, rhsel) ∈ enumerate(_rhss)
             for (j, rhsel2) ∈ enumerate(rhsel)
                 for (k, rhs) ∈ enumerate(rhsel2)
-                    push!(ip_sys_exprs, :($X[$i][$j][$k] = $(conv(rhs))))
+                    rhs′ = conv(rhs)
+                    (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
+                    push!(ip_sys_exprs, :($X[$i][$j][$k] = $rhs′))
                 end
             end
         end
     elseif is_array_sparse_matrix(rhss) # Array of sparse matrices
         for (i, rhsel) ∈ enumerate(_rhss)
             for (j, rhs) ∈ enumerate(rhsel.nzval)
-                push!(ip_sys_exprs, :($X[$i].nzval[$j] = $(conv(rhs))))
+                rhs′ = conv(rhs)
+                (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
+                push!(ip_sys_exprs, :($X[$i].nzval[$j] = $rhs′))
             end
         end
     elseif is_array_matrix(rhss) # Array of arrays
         for (i, rhsel) ∈ enumerate(_rhss)
             for (j, rhs) ∈ enumerate(rhsel)
-                push!(ip_sys_exprs, :($X[$i][$j] = $(conv(rhs))))
+                rhs′ = conv(rhs)
+                (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
+                push!(ip_sys_exprs, :($X[$i][$j] = $rhs′))
             end
         end
     elseif rhss isa SparseMatrixCSC
         for (i, rhs) ∈ enumerate(_rhss)
-            push!(ip_sys_exprs, :($X.nzval[$i] = $(conv(rhs))))
+            rhs′ = conv(rhs)
+            (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
+            push!(ip_sys_exprs, :($X.nzval[$i] = $rhs′))
         end
     else
         for (i, rhs) ∈ enumerate(_rhss)
-            push!(ip_sys_exprs, :($X[$i] = $(conv(rhs))))
+            rhs′ = conv(rhs)
+            (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
+            push!(ip_sys_exprs, :($X[$i] = $rhs′))
         end
     end
 
