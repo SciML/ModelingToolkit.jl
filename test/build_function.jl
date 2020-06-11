@@ -2,22 +2,32 @@ using ModelingToolkit, Test
 @variables a b c1 c2 c3 d e g
 
 # Multiple argument matrix
-h = [a + b + c1 + c2; c3 + d + e + g] # uses the same number of arguments as our application
-h_julia(a, b, c, d, e, g) = [a[1] + b[1] + c[1] + c[2]; c[3] + d[1] + e[1] + g[1]]
+h = [a + b + c1 + c2,
+     c3 + d + e + g,
+     0] # uses the same number of arguments as our application
+h_julia(a, b, c, d, e, g) = [a[1] + b[1] + c[1] + c[2],
+                             c[3] + d[1] + e[1] + g[1],
+                             0]
 function h_julia!(out, a, b, c, d, e, g)
-    out .= [a[1] + b[1] + c[1] + c[2]; c[3] + d[1] + e[1] + g[1]]
+    out .= [a[1] + b[1] + c[1] + c[2], c[3] + d[1] + e[1] + g[1], 0]
 end
 
 h_str = ModelingToolkit.build_function(h, [a], [b], [c1, c2, c3], [d], [e], [g])
 h_oop = eval(h_str[1])
 h_ip! = eval(h_str[2])
+h_ip_skip! = eval(ModelingToolkit.build_function(h, [a], [b], [c1, c2, c3], [d], [e], [g], skipzeros=true)[2])
 inputs = ([1], [2], [3, 4, 5], [6], [7], [8])
 
 @test h_oop(inputs...) == h_julia(inputs...)
-out_1 = Array{Int64}(undef, 2)
+out_1 = similar(h, Int)
 out_2 = similar(out_1)
 h_ip!(out_1, inputs...)
 h_julia!(out_2, inputs...)
+@test out_1 == out_2
+fill!(out_1, 10)
+h_ip_skip!(out_1, inputs...)
+@test out_1[3] == 10
+out_1[3] = 0
 @test out_1 == out_2
 
 # Multiple input matrix, some unused arguments
