@@ -249,7 +249,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
         for (i, rhs) ∈ enumerate(_rhss)
             rhs′ = conv(rhs)
             (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
-            push!(ip_sys_exprs, :($X[$i] = $rhs′))
+            push!(ip_sys_exprs, :($X[$(oidx(i))] = $rhs′))
         end
     end
 
