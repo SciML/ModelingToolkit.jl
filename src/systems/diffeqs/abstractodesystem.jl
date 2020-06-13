@@ -144,13 +144,13 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      jac = false, Wfact = false,
                                      sparse = false,
                                      kwargs...) where {iip}
-    f_oop,f_iip = generate_function(sys, dvs, ps; expression=Val{false}, kwargs...)
 
+    f_oop,f_iip = ModelingToolkit.eval.(generate_function(sys, dvs, ps; expression=Val{false}, kwargs...))
     f(u,p,t) = f_oop(u,p,t)
     f(du,u,p,t) = f_iip(du,u,p,t)
 
     if tgrad
-        tgrad_oop,tgrad_iip = generate_tgrad(sys, dvs, ps; expression=Val{false}, kwargs...)
+        tgrad_oop,tgrad_iip = ModelingToolkit.eval.(generate_tgrad(sys, dvs, ps; expression=Val{false}, kwargs...))
         _tgrad(u,p,t) = tgrad_oop(u,p,t)
         _tgrad(J,u,p,t) = tgrad_iip(J,u,p,t)
     else
@@ -158,7 +158,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     if jac
-        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps; sparse = sparse, expression=Val{false}, kwargs...)
+        jac_oop,jac_iip = ModelingToolkit.eval.(generate_jacobian(sys, dvs, ps; sparse = sparse, expression=Val{false}, kwargs...))
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else
@@ -166,7 +166,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     if Wfact
-        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps; expression=Val{false}, kwargs...)
+        tmp_Wfact,tmp_Wfact_t = ModelingToolkit.eval.(generate_factorized_W(sys, dvs, ps; expression=Val{false}, kwargs...))
         Wfact_oop, Wfact_iip = tmp_Wfact
         Wfact_oop_t, Wfact_iip_t = tmp_Wfact_t
         _Wfact(u,p,dtgamma,t) = Wfact_oop(u,p,dtgamma,t)
@@ -181,10 +181,11 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
-    ODEFunction{iip}(f,jac=_jac,
-                      tgrad = _tgrad,
-                      Wfact = _Wfact,
-                      Wfact_t = _Wfact_t,
+    ODEFunction{iip}(DiffEqBase.EvalFunc(f),
+                      jac = _jac === nothing ? nothing : DiffEqBase.EvalFunc(_jac),
+                      tgrad = _tgrad === nothing ? nothing : DiffEqBase.EvalFunc(_tgrad),
+                      Wfact = _Wfact === nothing ? nothing : DiffEqBase.EvalFunc(_Wfact),
+                      Wfact_t = _Wfact_t === nothing ? nothing : DiffEqBase.EvalFunc(_Wfact_t),
                       mass_matrix = _M,
                       syms = Symbol.(states(sys)))
 end
