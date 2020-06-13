@@ -166,9 +166,9 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     if Wfact
-        tmp_Wfact,tmp_Wfact_t = ModelingToolkit.eval.(generate_factorized_W(sys, dvs, ps; expression=Val{true}, kwargs...))
-        Wfact_oop, Wfact_iip = tmp_Wfact
-        Wfact_oop_t, Wfact_iip_t = tmp_Wfact_t
+        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps; expression=Val{true}, kwargs...)
+        Wfact_oop, Wfact_iip =  ModelingToolkit.eval.(tmp_Wfact)
+        Wfact_oop_t, Wfact_iip_t =  ModelingToolkit.eval.(tmp_Wfact_t)
         _Wfact(u,p,dtgamma,t) = Wfact_oop(u,p,dtgamma,t)
         _Wfact(W,u,p,dtgamma,t) = Wfact_iip(W,u,p,dtgamma,t)
         _Wfact_t(u,p,dtgamma,t) = Wfact_oop_t(u,p,dtgamma,t)
