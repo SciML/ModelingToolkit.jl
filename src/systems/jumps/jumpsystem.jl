@@ -27,7 +27,7 @@ js      = JumpSystem([j₁,j₂,j₃], t, [S,I,R], [β,γ])
 """
 struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
     """
-    The jumps of the system. Allowable types are `ConstantRateJump`, 
+    The jumps of the system. Allowable types are `ConstantRateJump`,
     `VariableRateJump`, `MassActionJump`.
     """
     eqs::U
@@ -48,7 +48,7 @@ function JumpSystem(eqs, iv, states, ps; systems = JumpSystem[],
 
     ap = ArrayPartition(MassActionJump[], ConstantRateJump[], VariableRateJump[])
     for eq in eqs
-        if eq isa MassActionJump 
+        if eq isa MassActionJump
             push!(ap.x[1], eq)
         elseif eq isa ConstantRateJump
             push!(ap.x[2], eq)
@@ -63,17 +63,19 @@ function JumpSystem(eqs, iv, states, ps; systems = JumpSystem[],
 end
 
 
-generate_rate_function(js, rate) = build_function(rate, states(js), parameters(js),
-                                                  independent_variable(js),
-                                                  expression=Val{false})
+generate_rate_function(js, rate) = ModelingToolkit.eval(
+                                        build_function(rate, states(js), parameters(js),
+                                        independent_variable(js),
+                                        expression=Val{true}))
 
-generate_affect_function(js, affect, outputidxs) = build_function(affect, states(js),
+generate_affect_function(js, affect, outputidxs) = ModelingToolkit.eval(
+                                                      build_function(affect, states(js),
                                                       parameters(js),
                                                       independent_variable(js),
-                                                      expression=Val{false},
+                                                      expression=Val{true},
                                                       headerfun=add_integrator_header,
-                                                      outputidxs=outputidxs)[2]
-                                                      
+                                                      outputidxs=outputidxs)[2])
+
 function assemble_vrj(js, vrj, statetoid)
     rate   = generate_rate_function(js, vrj.rate)
     outputvars = (convert(Variable,affect.lhs) for affect in vrj.affect!)
@@ -124,11 +126,13 @@ end
 
 """
 ```julia
-function DiffEqBase.DiscreteProblem(sys::AbstractSystem, u0map, tspan,
+function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan,
                                     parammap=DiffEqBase.NullParameters; kwargs...)
 ```
 
-Generates a DiscreteProblem from an AbstractSystem.
+Generates a black DiscreteProblem for a JumpSystem to utilize as its
+solving `prob.prob`. This is used in the case where there are no ODEs
+and no SDEs associated with the system.
 
 Continuing the example from the [`JumpSystem`](@ref) definition:
 ```julia
@@ -139,11 +143,13 @@ tspan = (0.0, 250.0)
 dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 ```
 """
-function DiffEqBase.DiscreteProblem(sys::AbstractSystem, u0map, tspan::Tuple,
+function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Tuple,
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
     u0 = varmap_to_vars(u0map, states(sys))
     p  = varmap_to_vars(parammap, parameters(sys))
-    f  = (du,u,p,t) -> du.=u    # identity function to make syms works
+    # identity function to make syms works
+    # EvalFunc because we know that the jump functions are generated via eval
+    f  = DiffEqBase.EvalFunc(DiffEqBase.DISCRETE_INPLACE_DEFAULT)
     df = DiscreteFunction(f, syms=Symbol.(states(sys)))
     DiscreteProblem(df, u0, tspan, p; kwargs...)
 end
@@ -164,7 +170,7 @@ sol = solve(jprob, SSAStepper())
 """
 function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
 
-    statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))    
+    statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
     eqs       = equations(js)
     invttype  = typeof(1 / prob.tspan[2])
 
@@ -172,11 +178,11 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     p = (prob.p == DiffEqBase.NullParameters()) ? Operation[] : prob.p
     parammap  = map((x,y)->Pair(x(),y), parameters(js), p)
     subber    = substituter(first.(parammap), last.(parammap))
-    
+
     majs = MassActionJump[assemble_maj(js, j, statetoid, subber, invttype) for j in eqs.x[1]]
     crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]
-    ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps") 
+    ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, isempty(majs) ? nothing : majs)
 
     if needs_vartojumps_map(aggregator) || needs_depgraph(aggregator)
@@ -207,7 +213,7 @@ end
 ### Functions to determine which states are modified by a given jump
 function modified_states!(mstates, jump::Union{ConstantRateJump,VariableRateJump}, sts)
     for eq in jump.affect!
-        st = eq.lhs 
+        st = eq.lhs
         (st.op in sts) && push!(mstates, st)
     end
 end
