@@ -22,6 +22,6 @@ using SafeTestsets, Test
 @safetestset "Test Big System Usage" begin include("bigsystem.jl") end
 @safetestset "Depdendency Graph Test" begin include("dep_graphs.jl") end
 @safetestset "Function Registration Test" begin include("function_registration.jl") end
+@safetestset "Array of Array Test" begin include("build_function_arrayofarray.jl") end
 #@testset "Latexify recipes Test" begin include("latexify.jl") end
 @testset "Distributed Test" begin include("distributed.jl") end
-@testset "Array of Array Test" begin include("build_function_arrayofarray.jl") end

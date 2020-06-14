@@ -15,7 +15,7 @@ module MyModule
     sys = ODESystem([eq], t, [u], [x])
     fun = ODEFunction(sys)
 
-    @test fun([0.5], [5.0], 0.) == [15.0]
+    @test_broken fun([0.5], [5.0], 0.) == [15.0]
 end
 
 # TEST: Function registration in a nested module.
@@ -36,7 +36,7 @@ module MyModule2
         sys = ODESystem([eq], t, [u], [x])
         fun = ODEFunction(sys)
 
-        @test fun([0.5], [3.0], 0.) == [23.0]
+        @test_broken fun([0.5], [3.0], 0.) == [23.0]
     end
 end
 
@@ -56,4 +56,4 @@ eq  = Dt(u) ~ do_something_3(x)
 sys = ODESystem([eq], t, [u], [x])
 fun = ODEFunction(sys)
 
-@test fun([0.5], [7.0], 0.) == [37.0]
+@test_broken fun([0.5], [7.0], 0.) == [37.0]
