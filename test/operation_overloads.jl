@@ -46,3 +46,14 @@ J = [Dx(eqs[1].rhs) Dy(eqs[1].rhs) Dz(eqs[1].rhs)
 J = expand_derivatives.(J)
 using LinearAlgebra
 luJ = lu(J,Val(false))
+
+using ModelingToolkit
+@variables M[1:2,1:2]
+inv(M)
+
+@variables b[1:2]
+M = [1 0; 0 2]
+M \ b
+M \ reshape(b,2,1)
+M = [1 1; 0 2]
+M \ reshape(b,2,1)
