@@ -40,7 +40,11 @@ abstract type AbstractODESystem <: AbstractSystem end
 
 Base.promote_rule(::Type{<:Number},::Type{<:Expression}) = Expression
 Base.zero(::Type{<:Expression}) = Constant(0)
+Base.zero(::Expression) = Constant(0)
 Base.one(::Type{<:Expression}) = Constant(1)
+Base.one(::Expression) = Constant(1)
+Base.oneunit(::Expression) = Constant(1)
+Base.oneunit(::Type{<:Expression}) = Constant(1)
 
 """
 $(TYPEDSIGNATURES)
