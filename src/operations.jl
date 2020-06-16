@@ -66,6 +66,7 @@ Base.convert(::Type{Operation}, x::Number) = Operation(identity, Expression[Cons
 Base.convert(::Type{Operation}, x::Operation) = x
 Base.convert(::Type{Operation}, x::Expression) = Operation(identity, Expression[x])
 Operation(x) = convert(Operation, x)
+Operation(x::Operation) = x
 Base.Symbol(O::Operation) = Symbol(convert(Variable,O))
 Base.convert(::Type{Symbol},O::Operation) = Symbol(convert(Variable,O))
 
