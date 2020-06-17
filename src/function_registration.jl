@@ -12,20 +12,28 @@ ModelingToolkit IR. Example:
 registers `f` as a possible two-argument function.
 
 You may also want to tell ModelingToolkit the derivative of the registered
-function. You can achieve this by
+function. Here is an example to do it
 
 ```julia
+julia> using ModelingToolkit
+
 julia> foo(x, y) = sin(x) * cos(y)
 foo (generic function with 1 method)
 
-julia> ModelingToolkit.derivative(::typeof(foo), x, y, ::Val{1}) = cos(x) * cos(y) # derivative w.r.t. the first argument
-
-julia> ModelingToolkit.derivative(::typeof(foo), x, y, ::Val{2}) = -sin(x) * sin(y) # derivative w.r.t. the second argument
-
 julia> @parameters t; @variables x(t) y(t) z(t); @derivatives D'~t;
 
-julia> expand_derivatives(D(foo(x, y) * z))
-z(t) * (derivative(x(t), t) * cos(x(t)) * cos(y(t)) + -1 * sin(x(t)) * derivative(y(t), t) * sin(y(t))) + sin(x(t)) * cos(y(t)) * derivative(z(t), t)
+julia> @register foo(x, y)
+foo (generic function with 4 methods)
+
+julia> foo(x, y)
+foo(x(t), y(t))
+
+julia> ModelingToolkit.derivative(::typeof(foo), (x, y), ::Val{1}) = cos(x) * cos(y) # derivative w.r.t. the first argument
+
+julia> ModelingToolkit.derivative(::typeof(foo), (x, y), ::Val{2}) = -sin(x) * sin(y) # derivative w.r.t. the second argument
+
+julia> isequal(expand_derivatives(D(foo(x, y))), expand_derivatives(D(sin(x) * cos(y))))
+true
 ```
 """
 macro register(sig)

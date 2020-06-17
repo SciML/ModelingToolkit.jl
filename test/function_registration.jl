@@ -62,3 +62,15 @@ sys = ODESystem([eq], t, [u], [x])
 fun = ODEFunction(sys)
 
 @test fun([0.5], [7.0], 0.) == [74.0]
+
+# derivative
+foo(x, y) = sin(x) * cos(y)
+@parameters t; @variables x(t) y(t) z(t); @derivatives D'~t;
+@register foo(x, y)
+expr = foo(x, y)
+@test expr.op === foo
+@test expr.args[1] === x
+@test expr.args[2] === y
+ModelingToolkit.derivative(::typeof(foo), (x, y), ::Val{1}) = cos(x) * cos(y) # derivative w.r.t. the first argument
+ModelingToolkit.derivative(::typeof(foo), (x, y), ::Val{2}) = -sin(x) * sin(y) # derivative w.r.t. the second argument
+@test isequal(expand_derivatives(D(foo(x, y))), expand_derivatives(D(sin(x) * cos(y))))
