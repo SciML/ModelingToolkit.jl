@@ -78,7 +78,7 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,tspan,
 Generates an NonlinearProblem from a NonlinearSystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
-function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,tspan,
+function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,
                                           checkbounds = false,
@@ -91,5 +91,42 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,tspan,
                               parallel=parallel,sparse=sparse,expression=Val{false})
     u0 = varmap_to_vars(u0map,dvs)
     p = varmap_to_vars(parammap,ps)
-    NonlinearProblem(f,u0,tspan,p;kwargs...)
+    NonlinearProblem(f,u0,p;kwargs...)
+end
+
+struct NonlinearProblemExpr end
+
+"""
+```julia
+function DiffEqBase.NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,tspan,
+                                          parammap=DiffEqBase.NullParameters();
+                                          jac = false, sparse=false,
+                                          checkbounds = false,
+                                          linenumbers = true, parallel=SerialForm(),
+                                          kwargs...) where iip
+```
+
+Generates a Julia expression for a NonlinearProblem from a
+NonlinearSystem and allows for automatically symbolically calculating
+numerical enhancements.
+"""
+function DiffEqBase.NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,tspan,
+                                          parammap=DiffEqBase.NullParameters();
+                                          jac = false, sparse=false,
+                                          checkbounds = false,
+                                          linenumbers = false, parallel=SerialForm(),
+                                          kwargs...) where iip
+    dvs = states(sys)
+    ps = parameters(sys)
+
+    f = generate_function(sys;checkbounds=checkbounds,linenumbers=linenumbers,
+                              parallel=parallel,sparse=sparse,expression=Val{true})
+    u0 = varmap_to_vars(u0map,dvs)
+    p = varmap_to_vars(parammap,ps)
+    quote
+        f = $f
+        u0 = $u0
+        p = $p
+        NonlinearProblem(f,u0,p;kwargs...)
+    end
 end
