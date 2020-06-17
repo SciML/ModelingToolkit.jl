@@ -395,7 +395,7 @@ function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,tspan,
 Generates an SteadyStateProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
-function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
+function DiffEqBase.SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
