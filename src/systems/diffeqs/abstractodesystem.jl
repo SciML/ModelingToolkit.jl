@@ -204,7 +204,7 @@ Create a Julia expression for an `ODEFunction` from the [`ODESystem`](@ref).
 The arguments `dvs` and `ps` are used to set the order of the dependent
 variable and parameter vectors, respectively.
 """
-struct ODEFunctionExpr{iip} end
+struct ODEFunctionExpr end
 
 function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
@@ -314,7 +314,7 @@ Generates a Julia expression for constructing an ODEProblem from an
 ODESystem and allows for automatically symbolically calculating
 numerical enhancements.
 """
-struct ODEProblemExpr{iip} end
+struct ODEProblemExpr end
 
 function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
@@ -335,7 +335,7 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
         u0 = $u0
         tspan = $tspan
         p = $p
-        ODEProblem{iip}(f,u0,tspan,p;$(kwargs...))
+        ODEProblem(f,u0,tspan,p;$(kwargs...))
     end
     !linenumbers ? striplines(ex) : ex
 end
@@ -363,7 +363,7 @@ function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,tspan,
 Generates an SteadyStateProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
-function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
+function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
@@ -378,4 +378,47 @@ function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
                         linenumbers=linenumbers,parallel=parallel,
                         sparse=sparse)
     SteadyStateProblem(f,u0,p;kwargs...)
+end
+
+struct SteadyStateProblemExpr end
+
+"""
+```julia
+function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,tspan,
+                                    parammap=DiffEqBase.NullParameters();
+                                    version = nothing, tgrad=false,
+                                    jac = false, Wfact = false,
+                                    checkbounds = false, sparse = false,
+                                    linenumbers = true, parallel=SerialForm(),
+                                    kwargs...) where iip
+```
+Generates an SteadyStateProblem from an ODESystem and allows for automatically
+symbolically calculating numerical enhancements.
+"""
+function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
+                                    parammap=DiffEqBase.NullParameters();
+                                    version = nothing, tgrad=false,
+                                    jac = false, Wfact = false,
+                                    checkbounds = false, sparse = false,
+                                    linenumbers = true, parallel=SerialForm(),
+                                    kwargs...) where iip
+    dvs = states(sys)
+    ps = parameters(sys)
+    u0 = varmap_to_vars(u0map,dvs)
+    p = varmap_to_vars(parammap,ps)
+    f = ODEFunctionExpr(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
+                        linenumbers=linenumbers,parallel=parallel,
+                        sparse=sparse)
+    ex = quote
+        f = $f
+        u0 = $u0
+        tspan = $tspan
+        p = $p
+        SteadyStateProblem(f,u0,tspan,p;$(kwargs...))
+    end
+    !linenumbers ? striplines(ex) : ex
+end
+
+function DiffEqBase.SteadyStateProblemExpr(sys::AbstractODESystem, args...; kwargs...)
+    SteadyStateProblemExpr{true}(sys, args...; kwargs...)
 end
