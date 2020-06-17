@@ -210,7 +210,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
                                      version = nothing, tgrad=false,
                                      jac = false, Wfact = false,
-                                     sparse = false,
+                                     sparse = false,linenumbers = false,
                                      kwargs...) where {iip}
 
     idx = iip ? 2 : 1
@@ -239,7 +239,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
-    quote
+    ex = quote
         f = $f
         tgrad = $_tgrad
         jac = $_jac
@@ -255,6 +255,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                          mass_matrix = M,
                          syms = $(Symbol.(states(sys))))
     end
+    !linenumbers ? striplines(ex) : ex
 end
 
 
@@ -320,7 +321,7 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=SerialForm(),
+                                    linenumbers = false, parallel=SerialForm(),
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
@@ -329,13 +330,14 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
     f = ODEFunctionExpr{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
                         sparse=sparse)
-    quote
+    ex = quote
         f = $f
         u0 = $u0
         tspan = $tspan
         p = $p
         ODEProblem{iip}(f,u0,tspan,p;$(kwargs...))
     end
+    !linenumbers ? striplines(ex) : ex
 end
 
 function ODEProblemExpr(sys::AbstractODESystem, args...; kwargs...)
