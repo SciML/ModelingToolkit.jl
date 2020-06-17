@@ -168,7 +168,7 @@ Create a Julia expression for an `SDEFunction` from the [`SDESystem`](@ref).
 The arguments `dvs` and `ps` are used to set the order of the dependent
 variable and parameter vectors, respectively.
 """
-struct SDEFunctionExpr end
+struct SDEFunctionExpr{iip} end
 
 function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
@@ -294,7 +294,7 @@ Generates a Julia expression for constructing an ODEProblem from an
 ODESystem and allows for automatically symbolically calculating
 numerical enhancements.
 """
-struct SDEProblemExpr end
+struct SDEProblemExpr{iip} end
 
 function SDEProblemExpr{iip}(sys::SDESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
