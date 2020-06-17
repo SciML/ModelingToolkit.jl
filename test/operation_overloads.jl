@@ -10,6 +10,7 @@ X = [a b;c d]
 det(X)
 lu(X)
 inv(X)
+qr(X)
 
 # test operations with sparse arrays and Operations
 # note `isequal` instead of `==` because `==` would give another Operation
