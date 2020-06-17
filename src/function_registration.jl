@@ -10,6 +10,23 @@ ModelingToolkit IR. Example:
 ```
 
 registers `f` as a possible two-argument function.
+
+You may also want to tell ModelingToolkit the derivative of the registered
+function. You can achieve this by
+
+```julia
+julia> foo(x, y) = sin(x) * cos(y)
+foo (generic function with 1 method)
+
+julia> ModelingToolkit.derivative(::typeof(foo), x, y, ::Val{1}) = cos(x) * cos(y) # derivative w.r.t. the first argument
+
+julia> ModelingToolkit.derivative(::typeof(foo), x, y, ::Val{2}) = -sin(x) * sin(y) # derivative w.r.t. the second argument
+
+julia> @parameters t; @variables x(t) y(t) z(t); @derivatives D'~t;
+
+julia> expand_derivatives(D(foo(x, y) * z))
+z(t) * (derivative(x(t), t) * cos(x(t)) * cos(y(t)) + -1 * sin(x(t)) * derivative(y(t), t) * sin(y(t))) + sin(x(t)) * cos(y(t)) * derivative(z(t), t)
+```
 """
 macro register(sig)
     splitsig = splitdef(:($sig = nothing))
