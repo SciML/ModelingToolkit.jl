@@ -125,7 +125,7 @@ function _build_function(target::JuliaTarget, op::Operation, args...;
     end
 
     if expression == Val{true}
-        return oop_ex
+        return ModelingToolkit.inject_registered_module_functions(oop_ex)
     else
         _build_and_inject_function(@__MODULE__, oop_ex)
     end
@@ -133,7 +133,7 @@ end
 
 function _build_and_inject_function(mod::Module, ex)
     # Generate the function, which will process the expression
-    runtimefn = GeneralizedGenerated.mk_function(@__MODULE__, ex)
+    runtimefn = GeneralizedGenerated.mk_function(mod, ex)
 
     # Extract the processed expression of the function body
     params = typeof(runtimefn).parameters
@@ -339,7 +339,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
     end
 
     if expression == Val{true}
-        return oop_ex, iip_ex
+        return ModelingToolkit.inject_registered_module_functions(oop_ex), ModelingToolkit.inject_registered_module_functions(iip_ex)
     else
         return _build_and_inject_function(@__MODULE__, oop_ex), _build_and_inject_function(@__MODULE__, iip_ex)
     end

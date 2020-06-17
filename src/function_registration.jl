@@ -99,18 +99,21 @@ Base.one(::Operation) = 1
 const registered_external_functions = Dict{Symbol,Module}()
 function inject_registered_module_functions(expr)
     MacroTools.postwalk(expr) do x
-        # We need to find all function calls in the expression...
-        MacroTools.@capture(x, f_(xs__))  
-
-        if !isnothing(f) && f isa Expr && f.head == :. && f.args[2] isa QuoteNode
-            # If the function call matches any of the functions we've
-            # registered, set the calling module (which is probably
-            # "ModelingToolkit") to the module it is registered to.
-            f_name = f.args[2].value  # function name
-            f.args[1] = get(registered_external_functions, f_name, f.args[1])
+        # Find all function calls in the expression and extract the function
+        # name and calling module.
+        MacroTools.@capture(x, f_module_.f_name_(xs__))
+        if isnothing(f_module)
+            MacroTools.@capture(x, f_name_(xs__))
         end
 
-        # Make sure we rebuild the expression as is.
+        if !isnothing(f_name)
+            # Set the calling module to the module that registered it.
+            mod = get(registered_external_functions, f_name, f_module)
+            if !isnothing(mod)
+                x.args[1] = :(getproperty($mod, $(Meta.quot(f_name))))
+            end
+        end
+
         return x
     end
 end
