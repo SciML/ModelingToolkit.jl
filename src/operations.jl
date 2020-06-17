@@ -79,3 +79,4 @@ Base.promote_rule(::Type{<:Constant}, ::Type{<:Operation}) = Operation
 Base.promote_rule(::Type{<:Operation}, ::Type{<:Constant}) = Operation
 
 LinearAlgebra.lu(O::AbstractMatrix{<:Operation};kwargs...) = lu(O,Val(false);kwargs...)
+Base.real(x::Operation) = x
