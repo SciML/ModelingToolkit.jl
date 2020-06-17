@@ -146,38 +146,6 @@ function assemble_maj(js, maj::MassActionJump{U,Vector{Pair{V,W}},Vector{Pair{V2
     return maj
 end
 
-function assemble_maj_expr(js, maj::MassActionJump{U,Vector{Pair{V,W}},Vector{Pair{V2,W2}}},
-                      statetoid, subber, invttype) where {U,V,W,V2,W2}
-    sr = maj.scaled_rates
-    if sr isa Operation
-        pval = subber(sr).value
-    elseif sr isa Variable
-        pval = subber(sr()).value
-    else
-        pval = maj.scaled_rates
-    end
-
-    rs = Vector{Pair{Int,W}}()
-    for (spec,stoich) in maj.reactant_stoch
-        if iszero(spec)
-            push!(rs, 0 => stoich)
-        else
-            push!(rs, statetoid[convert(Variable,spec)] => stoich)
-        end
-    end
-    sort!(rs)
-
-    ns = Vector{Pair{Int,W2}}()
-    for (spec,stoich) in maj.net_stoch
-        iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
-        push!(ns, statetoid[convert(Variable,spec)] => stoich)
-    end
-    sort!(ns)
-
-    maj = MassActionJump(convert(invttype, pval), rs, ns, scale_rates = false)
-    return maj
-end
-
 """
 ```julia
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan,
