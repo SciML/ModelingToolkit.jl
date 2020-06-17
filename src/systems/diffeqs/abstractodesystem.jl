@@ -204,7 +204,7 @@ Create a Julia expression for an `ODEFunction` from the [`ODESystem`](@ref).
 The arguments `dvs` and `ps` are used to set the order of the dependent
 variable and parameter vectors, respectively.
 """
-struct ODEFunctionExpr end
+struct ODEFunctionExpr{iip} end
 
 function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
@@ -314,7 +314,7 @@ Generates a Julia expression for constructing an ODEProblem from an
 ODESystem and allows for automatically symbolically calculating
 numerical enhancements.
 """
-struct ODEProblemExpr end
+struct ODEProblemExpr{iip} end
 
 function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
@@ -380,7 +380,7 @@ function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
     SteadyStateProblem(f,u0,p;kwargs...)
 end
 
-struct SteadyStateProblemExpr end
+struct SteadyStateProblemExpr{iip} end
 
 """
 ```julia
