@@ -384,7 +384,7 @@ struct SteadyStateProblemExpr{iip} end
 
 """
 ```julia
-function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,tspan,
+function DiffEqBase.SteadyStateProblemExpr(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
@@ -392,8 +392,9 @@ function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,tspan,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 ```
-Generates an SteadyStateProblem from an ODESystem and allows for automatically
-symbolically calculating numerical enhancements.
+Generates a Julia expression for building a SteadyStateProblem from
+an ODESystem and allows for automatically symbolically calculating
+numerical enhancements.
 """
 function DiffEqBase.SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
