@@ -113,7 +113,7 @@ include("systems/dependency_graphs.jl")
 include("latexify_recipes.jl")
 include("build_function.jl")
 
-export ODESystem, ODEFunction
+export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr
 export SDESystem, SDEFunction
 export JumpSystem
 export ODEProblem, SDEProblem, NonlinearProblem, OptimizationProblem, SteadyStateProblem

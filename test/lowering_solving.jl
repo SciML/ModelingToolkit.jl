@@ -31,7 +31,10 @@ p  = [σ => 28.0,
 
 tspan = (0.0,100.0)
 prob = ODEProblem(sys,u0,tspan,p,jac=true)
+probexpr = ODEProblemExpr(sys,u0,tspan,p,jac=true)
 sol = solve(prob,Tsit5())
+solexpr = solve(eval(prob),Tsit5())
+@test all(x->x==0,Array(sol - solexpr))
 #using Plots; plot(sol,vars=(:x,:y))
 
 @parameters t σ ρ β
