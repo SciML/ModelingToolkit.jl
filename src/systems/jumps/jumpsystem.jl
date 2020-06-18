@@ -130,7 +130,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan,
                                     parammap=DiffEqBase.NullParameters; kwargs...)
 ```
 
-Generates a black DiscreteProblem for a JumpSystem to utilize as its
+Generates a blank DiscreteProblem for a JumpSystem to utilize as its
 solving `prob.prob`. This is used in the case where there are no ODEs
 and no SDEs associated with the system.
 
