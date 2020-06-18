@@ -21,10 +21,10 @@ f = eval(generate_diffusion_function(de)[1])
 
 f = SDEFunction(de)
 prob = SDEProblem(SDEFunction(de),f.g,[1.0,0.0,0.0],(0.0,100.0),(10.0,26.0,2.33))
-sol = solve(prob,SRIW1())
+sol = solve(prob,SRIW1(),seed=1)
 
 probexpr = SDEProblem(SDEFunction(de),f.g,[1.0,0.0,0.0],(0.0,100.0),(10.0,26.0,2.33))
-solexpr = solve(eval(probexpr),SRIW1())
+solexpr = solve(eval(probexpr),SRIW1(),seed=1)
 
 @test all(x->x==0,Array(sol-solexpr))
 
