@@ -247,7 +247,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
         Wfact_t = $_Wfact_t
         M = $_M
 
-        ODEFunction{iip}(f,
+        ODEFunction{$iip}(f,
                          jac = jac,
                          tgrad = tgrad,
                          Wfact = Wfact,

@@ -213,7 +213,7 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
         Wfact_t = $_Wfact_t
         M = $_M
 
-        SDEFunction{iip}(f,g,
+        SDEFunction{$iip}(f,g,
                          jac = jac,
                          tgrad = tgrad,
                          Wfact = Wfact,
