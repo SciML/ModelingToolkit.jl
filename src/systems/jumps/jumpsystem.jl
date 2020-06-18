@@ -195,7 +195,7 @@ tspan = (0.0, 250.0)
 dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 ```
 """
-function DiffEqBase.DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Tuple,
+function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Tuple,
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
     u0 = varmap_to_vars(u0map, states(sys))
     p  = varmap_to_vars(parammap, parameters(sys))

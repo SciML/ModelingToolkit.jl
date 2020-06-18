@@ -380,8 +380,6 @@ function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
     SteadyStateProblem(f,u0,p;kwargs...)
 end
 
-struct SteadyStateProblemExpr{iip} end
-
 """
 ```julia
 function DiffEqBase.SteadyStateProblemExpr(sys::AbstractODESystem,u0map,tspan,
@@ -396,7 +394,9 @@ Generates a Julia expression for building a SteadyStateProblem from
 an ODESystem and allows for automatically symbolically calculating
 numerical enhancements.
 """
-function DiffEqBase.SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
+struct SteadyStateProblemExpr{iip} end
+
+function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
@@ -420,6 +420,6 @@ function DiffEqBase.SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
     !linenumbers ? striplines(ex) : ex
 end
 
-function DiffEqBase.SteadyStateProblemExpr(sys::AbstractODESystem, args...; kwargs...)
+function SteadyStateProblemExpr(sys::AbstractODESystem, args...; kwargs...)
     SteadyStateProblemExpr{true}(sys, args...; kwargs...)
 end

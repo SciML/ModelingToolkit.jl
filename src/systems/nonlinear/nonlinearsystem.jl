@@ -94,8 +94,6 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,
     NonlinearProblem(f,u0,p;kwargs...)
 end
 
-struct NonlinearProblemExpr end
-
 """
 ```julia
 function DiffEqBase.NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,tspan,
@@ -110,7 +108,9 @@ Generates a Julia expression for a NonlinearProblem from a
 NonlinearSystem and allows for automatically symbolically calculating
 numerical enhancements.
 """
-function DiffEqBase.NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,tspan,
+struct NonlinearProblemExpr{iip} end
+
+function NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,tspan,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,
                                           checkbounds = false,

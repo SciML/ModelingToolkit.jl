@@ -106,8 +106,6 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
     OptimizationProblem(f,p;u0=u0,lb=lb,ub=ub,kwargs...)
 end
 
-struct OptimizationProblemExpr end
-
 """
 ```julia
 function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
@@ -123,7 +121,9 @@ Generates a Julia expression for an OptimizationProblem from an
 OptimizationSystem and allows for automatically symbolically
 calculating numerical enhancements.
 """
-function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
+struct OptimizationProblemExpr{iip} end
+
+function OptimizationProblemExpr{iip}(sys::OptimizationSystem,
                                           parammap=DiffEqBase.NullParameters();
                                           u0=nothing, lb=nothing, ub=nothing,
                                           hes = false, sparse = false,
