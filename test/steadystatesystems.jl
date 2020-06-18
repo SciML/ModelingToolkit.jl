@@ -16,5 +16,5 @@ for factor in [1e-1, 1e0, 1e10], u0_p in [(2.34,2.676),(22.34,1.632),(.3,15.676)
     @test abs(sol^2 - factor*u0_p[2]) < 1e-8
     ss_prob = SteadyStateProblemExpr(de,u0,p)
     sol_expr = solve(eval(ss_prob),SSRootfind()).u[1]
-    @test all(x->x==0,Array(sol-sol_expr))
+    @test all(x->x==0,sol.u-sol_expr.u)
 end
