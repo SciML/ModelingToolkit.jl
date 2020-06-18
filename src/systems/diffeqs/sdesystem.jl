@@ -154,8 +154,83 @@ function DiffEqBase.SDEFunction(sys::SDESystem, args...; kwargs...)
     SDEFunction{true}(sys, args...; kwargs...)
 end
 
+"""
+```julia
+function DiffEqBase.SDEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                     ps = parameters(sys);
+                                     version = nothing, tgrad=false,
+                                     jac = false, Wfact = false,
+                                     sparse = false,
+                                     kwargs...) where {iip}
+```
+
+Create a Julia expression for an `SDEFunction` from the [`SDESystem`](@ref).
+The arguments `dvs` and `ps` are used to set the order of the dependent
+variable and parameter vectors, respectively.
+"""
+struct SDEFunctionExpr{iip} end
+
+function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
+                                     ps = parameters(sys), u0 = nothing;
+                                     version = nothing, tgrad=false,
+                                     jac = false, Wfact = false,
+                                     sparse = false,linenumbers = false,
+                                     kwargs...) where {iip}
+
+    idx = iip ? 2 : 1
+    f = generate_function(sys, dvs, ps; expression=Val{true}, kwargs...)[idx]
+    g = generate_diffusion_function(sys, dvs, ps; expression=Val{true}, kwargs...)[idx]
+    if tgrad
+        _tgrad = generate_tgrad(sys, dvs, ps; expression=Val{true}, kwargs...)[idx]
+    else
+        _tgrad = :nothing
+    end
+
+    if jac
+        _jac = generate_jacobian(sys, dvs, ps; sparse = sparse, expression=Val{true}, kwargs...)[idx]
+    else
+        _jac = :nothing
+    end
+
+    if Wfact
+        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps; expression=Val{true}, kwargs...)
+        _Wfact =  tmp_Wfact[idx]
+        _Wfact_t =  tmp_Wfact_t[idx]
+    else
+        _Wfact,_Wfact_t = :nothing,:nothing
+    end
+
+    M = calculate_massmatrix(sys)
+
+    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
+
+    ex = quote
+        f = $f
+        g = $g
+        tgrad = $_tgrad
+        jac = $_jac
+        Wfact = $_Wfact
+        Wfact_t = $_Wfact_t
+        M = $_M
+
+        SDEFunction{$iip}(f,g,
+                         jac = jac,
+                         tgrad = tgrad,
+                         Wfact = Wfact,
+                         Wfact_t = Wfact_t,
+                         mass_matrix = M,
+                         syms = $(Symbol.(states(sys))))
+    end
+    !linenumbers ? striplines(ex) : ex
+end
+
+
+function SDEFunctionExpr(sys::SDESystem, args...; kwargs...)
+    SDEFunctionExpr{true}(sys, args...; kwargs...)
+end
+
 function rename(sys::SDESystem,name)
-    ODESystem(sys.eqs, sys.noiseeqs, sys.iv, sys.states, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
+    SDESystem(sys.eqs, sys.noiseeqs, sys.iv, sys.states, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
 end
 
 """
@@ -202,4 +277,59 @@ end
 
 function DiffEqBase.SDEProblem(sys::SDESystem, args...; kwargs...)
     SDEProblem{true}(sys, args...; kwargs...)
+end
+
+"""
+```julia
+function DiffEqBase.SDEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
+                                    parammap=DiffEqBase.NullParameters();
+                                    version = nothing, tgrad=false,
+                                    jac = false, Wfact = false,
+                                    checkbounds = false, sparse = false,
+                                    linenumbers = true, parallel=SerialForm(),
+                                    kwargs...) where iip
+```
+
+Generates a Julia expression for constructing an ODEProblem from an
+ODESystem and allows for automatically symbolically calculating
+numerical enhancements.
+"""
+struct SDEProblemExpr{iip} end
+
+function SDEProblemExpr{iip}(sys::SDESystem,u0map,tspan,
+                                    parammap=DiffEqBase.NullParameters();
+                                    version = nothing, tgrad=false,
+                                    jac = false, Wfact = false,
+                                    checkbounds = false, sparse = false,
+                                    linenumbers = false, parallel=SerialForm(),
+                                    kwargs...) where iip
+    dvs = states(sys)
+    ps = parameters(sys)
+    u0 = varmap_to_vars(u0map,dvs)
+    p = varmap_to_vars(parammap,ps)
+    f = SDEFunctionExpr{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,
+                        Wfact=Wfact,checkbounds=checkbounds,
+                        linenumbers=linenumbers,parallel=parallel,
+                        sparse=sparse)
+    if typeof(sys.noiseeqs) <: AbstractVector
+        noise_rate_prototype = nothing
+    elseif sparsenoise
+        I,J,V = findnz(SparseArrays.sparse(sys.noiseeqs))
+        noise_rate_prototype = SparseArrays.sparse(I,J,zero(eltype(u0)))
+    else
+        noise_rate_prototype = zeros(eltype(u0),size(sys.noiseeqs))
+    end
+    ex = quote
+        f = $f
+        u0 = $u0
+        tspan = $tspan
+        p = $p
+        noise_rate_prototype = $noise_rate_prototype
+        SDEProblem(f,f.g,u0,tspan,p;noise_rate_prototype=noise_rate_prototype,$(kwargs...))
+    end
+    !linenumbers ? striplines(ex) : ex
+end
+
+function SDEProblemExpr(sys::SDESystem, args...; kwargs...)
+    SDEProblemExpr{true}(sys, args...; kwargs...)
 end

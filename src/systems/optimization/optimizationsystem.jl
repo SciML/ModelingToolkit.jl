@@ -105,3 +105,46 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
     ub = varmap_to_vars(ub,dvs)
     OptimizationProblem(f,p;u0=u0,lb=lb,ub=ub,kwargs...)
 end
+
+"""
+```julia
+function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
+                                          parammap=DiffEqBase.NullParameters();
+                                          u0=nothing, lb=nothing, ub=nothing,
+                                          hes = false, sparse = false,
+                                          checkbounds = false,
+                                          linenumbers = true, parallel=SerialForm(),
+                                          kwargs...) where iip
+```
+
+Generates a Julia expression for an OptimizationProblem from an
+OptimizationSystem and allows for automatically symbolically
+calculating numerical enhancements.
+"""
+struct OptimizationProblemExpr{iip} end
+
+function OptimizationProblemExpr{iip}(sys::OptimizationSystem,
+                                          parammap=DiffEqBase.NullParameters();
+                                          u0=nothing, lb=nothing, ub=nothing,
+                                          hes = false, sparse = false,
+                                          checkbounds = false,
+                                          linenumbers = false, parallel=SerialForm(),
+                                          kwargs...) where iip
+    dvs = states(sys)
+    ps = parameters(sys)
+
+    f = generate_function(sys,checkbounds=checkbounds,linenumbers=linenumbers,
+                              parallel=parallel,expression=Val{true})
+    u0 = varmap_to_vars(u0,dvs)
+    p = varmap_to_vars(parammap,ps)
+    lb = varmap_to_vars(lb,dvs)
+    ub = varmap_to_vars(ub,dvs)
+    quote
+        f = $f
+        p = $p
+        u0 = $u0
+        lb = $lb
+        ub = $ub
+        OptimizationProblem(f,p;u0=u0,lb=lb,ub=ub,kwargs...)
+    end
+end
