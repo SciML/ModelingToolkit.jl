@@ -413,9 +413,8 @@ function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
     ex = quote
         f = $f
         u0 = $u0
-        tspan = $tspan
         p = $p
-        SteadyStateProblem(f,u0,tspan,p;$(kwargs...))
+        SteadyStateProblem(f,u0,p;$(kwargs...))
     end
     !linenumbers ? striplines(ex) : ex
 end
