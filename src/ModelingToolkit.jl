@@ -116,7 +116,7 @@ include("build_function.jl")
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
 export JumpSystem
-export ODEProblem, SDEProblem,
+export ODEProblem, SDEProblem
 export NonlinearProblem, NonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr
 export SteadyStateProblem, SteadyStateProblemExpr
