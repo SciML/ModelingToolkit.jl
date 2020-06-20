@@ -66,6 +66,7 @@ Base.convert(::Type{Operation}, x::Number) = Operation(identity, Expression[Cons
 Base.convert(::Type{Operation}, x::Operation) = x
 Base.convert(::Type{Operation}, x::Expression) = Operation(identity, Expression[x])
 Operation(x) = convert(Operation, x)
+Operation(x::Operation) = x
 Base.Symbol(O::Operation) = Symbol(convert(Variable,O))
 Base.convert(::Type{Symbol},O::Operation) = Symbol(convert(Variable,O))
 
@@ -78,3 +79,4 @@ Base.promote_rule(::Type{<:Constant}, ::Type{<:Operation}) = Operation
 Base.promote_rule(::Type{<:Operation}, ::Type{<:Constant}) = Operation
 
 LinearAlgebra.lu(O::AbstractMatrix{<:Operation};kwargs...) = lu(O,Val(false);kwargs...)
+Base.real(x::Operation) = x

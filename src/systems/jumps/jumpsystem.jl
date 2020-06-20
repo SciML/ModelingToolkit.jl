@@ -64,30 +64,54 @@ end
 
 
 generate_rate_function(js, rate) = build_function(rate, states(js), parameters(js),
-                                                  independent_variable(js),
-                                                  expression=Val{false})
+                                        independent_variable(js),
+                                        expression=Val{true})
 
 generate_affect_function(js, affect, outputidxs) = build_function(affect, states(js),
                                                       parameters(js),
                                                       independent_variable(js),
-                                                      expression=Val{false},
+                                                      expression=Val{true},
                                                       headerfun=add_integrator_header,
                                                       outputidxs=outputidxs)[2]
 
 function assemble_vrj(js, vrj, statetoid)
+    rate   = eval(generate_rate_function(js, vrj.rate))
+    outputvars = (convert(Variable,affect.lhs) for affect in vrj.affect!)
+    outputidxs = ((statetoid[var] for var in outputvars)...,)
+    affect = eval(generate_affect_function(js, vrj.affect!, outputidxs))
+    VariableRateJump(rate, affect)
+end
+
+function assemble_vrj_expr(js, vrj, statetoid)
     rate   = generate_rate_function(js, vrj.rate)
     outputvars = (convert(Variable,affect.lhs) for affect in vrj.affect!)
     outputidxs = ((statetoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, vrj.affect!, outputidxs)
-    VariableRateJump(rate, affect)
+    quote
+        rate = $rate
+        affect = $affect
+        VariableRateJump(rate, affect)
+    end
 end
 
 function assemble_crj(js, crj, statetoid)
+    rate   = eval(generate_rate_function(js, crj.rate))
+    outputvars = (convert(Variable,affect.lhs) for affect in crj.affect!)
+    outputidxs = ((statetoid[var] for var in outputvars)...,)
+    affect = eval(generate_affect_function(js, crj.affect!, outputidxs))
+    ConstantRateJump(rate, affect)
+end
+
+function assemble_crj_expr(js, crj, statetoid)
     rate   = generate_rate_function(js, crj.rate)
     outputvars = (convert(Variable,affect.lhs) for affect in crj.affect!)
     outputidxs = ((statetoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, crj.affect!, outputidxs)
-    ConstantRateJump(rate, affect)
+    quote
+        rate = $rate
+        affect = $affect
+        ConstantRateJump(rate, affect)
+    end
 end
 
 function numericrate(rate, subber)
@@ -143,11 +167,13 @@ end
 # end
 """
 ```julia
-function DiffEqBase.DiscreteProblem(sys::AbstractSystem, u0map, tspan,
+function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan,
                                     parammap=DiffEqBase.NullParameters; kwargs...)
 ```
 
-Generates a DiscreteProblem from an AbstractSystem.
+Generates a blank DiscreteProblem for a pure jump JumpSystem to utilize as 
+its `prob.prob`. This is used in the case where there are no ODEs
+and no SDEs associated with the system.
 
 Continuing the example from the [`JumpSystem`](@ref) definition:
 ```julia
@@ -158,7 +184,7 @@ tspan = (0.0, 250.0)
 dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 ```
 """
-function DiffEqBase.DiscreteProblem(sys::AbstractSystem, u0map, tspan::Tuple,
+function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Tuple,
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
 
     (u0map isa AbstractVector) || error("For DiscreteProblems u0map must be an AbstractVector.")
@@ -171,11 +197,46 @@ function DiffEqBase.DiscreteProblem(sys::AbstractSystem, u0map, tspan::Tuple,
     else
         p = parammap
     end
-    f  = (du,u,p,t) -> du.=u    # identity function to make syms works
+    # EvalFunc because we know that the jump functions are generated via eval
+    f  = DiffEqBase.EvalFunc(DiffEqBase.DISCRETE_INPLACE_DEFAULT)
     df = DiscreteFunction(f, syms=Symbol.(states(sys)))
     DiscreteProblem(df, u0, tspan, p; kwargs...)
 end
 
+"""
+```julia
+function DiffEqBase.DiscreteProblemExpr(sys::JumpSystem, u0map, tspan,
+                                    parammap=DiffEqBase.NullParameters; kwargs...)
+```
+
+Generates a black DiscreteProblem for a JumpSystem to utilize as its
+solving `prob.prob`. This is used in the case where there are no ODEs
+and no SDEs associated with the system.
+
+Continuing the example from the [`JumpSystem`](@ref) definition:
+```julia
+using DiffEqBase, DiffEqJump
+u₀map = [S => 999, I => 1, R => 0]
+parammap = [β => .1/1000, γ => .01]
+tspan = (0.0, 250.0)
+dprob = DiscreteProblem(js, u₀map, tspan, parammap)
+```
+"""
+function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Tuple,
+                                    parammap=DiffEqBase.NullParameters(); kwargs...)
+    u0 = varmap_to_vars(u0map, states(sys))
+    p  = varmap_to_vars(parammap, parameters(sys))
+    # identity function to make syms works
+    # EvalFunc because we know that the jump functions are generated via eval
+    quote
+        f  = DiffEqBase.EvalFunc(DiffEqBase.DISCRETE_INPLACE_DEFAULT)
+        u0 = $u0
+        p = $p
+        tspan = $tspan
+        df = DiscreteFunction(f, syms=$(Symbol.(states(sys))))
+        DiscreteProblem(df, u0, tspan, p; kwargs...)
+    end
+end
 
 """
 ```julia

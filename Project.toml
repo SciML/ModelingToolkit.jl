@@ -1,7 +1,7 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
 authors = ["Chris Rackauckas <accounts@chrisrackauckas.com>"]
-version = "3.8.0"
+version = "3.10.2"
 
 [deps]
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
@@ -30,7 +30,7 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 [compat]
 ArrayInterface = "2.8"
 DataStructures = "0.17"
-DiffEqBase = "6.28"
+DiffEqBase = "6.38"
 DiffEqJump = "6.7.5"
 DiffRules = "0.1, 1.0"
 DocStringExtensions = "0.7, 0.8"
@@ -43,7 +43,7 @@ RecursiveArrayTools = "2.3"
 SafeTestsets = "0.0.1"
 SpecialFunctions = "0.7, 0.8, 0.9, 0.10"
 StaticArrays = "0.10, 0.11, 0.12"
-SymbolicUtils = "0.3.2"
+SymbolicUtils = "0.3.3, 0.4"
 TreeViews = "0.3"
 UnPack = "0.1, 1.0"
 Unitful = "1.1"
@@ -51,8 +51,9 @@ julia = "1.2"
 
 [extras]
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
+SteadyStateDiffEq = "9672c7b4-1e72-59bd-8a11-6ac3964bc41f"
 StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["OrdinaryDiffEq", "Test", "StochasticDiffEq"]
+test = ["OrdinaryDiffEq", "SteadyStateDiffEq", "Test", "StochasticDiffEq"]

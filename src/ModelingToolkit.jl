@@ -40,7 +40,11 @@ abstract type AbstractODESystem <: AbstractSystem end
 
 Base.promote_rule(::Type{<:Number},::Type{<:Expression}) = Expression
 Base.zero(::Type{<:Expression}) = Constant(0)
+Base.zero(::Expression) = Constant(0)
 Base.one(::Type{<:Expression}) = Constant(1)
+Base.one(::Expression) = Constant(1)
+Base.oneunit(::Expression) = Constant(1)
+Base.oneunit(::Type{<:Expression}) = Constant(1)
 
 """
 $(TYPEDSIGNATURES)
@@ -109,10 +113,13 @@ include("systems/dependency_graphs.jl")
 include("latexify_recipes.jl")
 include("build_function.jl")
 
-export ODESystem, ODEFunction
-export SDESystem, SDEFunction
+export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr
+export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
 export JumpSystem
-export ODEProblem, SDEProblem, NonlinearProblem, OptimizationProblem
+export ODEProblem, SDEProblem
+export NonlinearProblem, NonlinearProblemExpr
+export OptimizationProblem, OptimizationProblemExpr
+export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
 export ode_order_lowering

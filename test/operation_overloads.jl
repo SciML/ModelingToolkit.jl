@@ -10,6 +10,7 @@ X = [a b;c d]
 det(X)
 lu(X)
 inv(X)
+qr(X)
 
 # test operations with sparse arrays and Operations
 # note `isequal` instead of `==` because `==` would give another Operation
@@ -32,3 +33,28 @@ C = sparse([1, 2], [2, 1], [c, c])
 D = sparse([1, 2], [2, 1], [d, d])
 
 @test isequal(C * D, sparse([1,2], [1,2], [c * d, c * d]))
+
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t Dx'~x Dy'~y Dz'~z
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
+J = [Dx(eqs[1].rhs) Dy(eqs[1].rhs) Dz(eqs[1].rhs)
+ Dx(eqs[2].rhs) Dy(eqs[2].rhs) Dz(eqs[2].rhs)
+ Dx(eqs[3].rhs) Dy(eqs[3].rhs) Dz(eqs[3].rhs)]
+
+J = expand_derivatives.(J)
+using LinearAlgebra
+luJ = lu(J,Val(false))
+
+using ModelingToolkit
+@variables M[1:2,1:2]
+inv(M)
+
+@variables b[1:2]
+M = [1 0; 0 2]
+M \ b
+M \ reshape(b,2,1)
+M = [1 1; 0 2]
+M \ reshape(b,2,1)

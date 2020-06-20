@@ -8,6 +8,7 @@ using SafeTestsets, Test
 @safetestset "Build Function Test" begin include("build_function.jl") end
 @safetestset "ODESystem Test" begin include("odesystem.jl") end
 @safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
+@safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
 @safetestset "SDESystem Test" begin include("sdesystem.jl") end
 @safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
@@ -20,6 +21,7 @@ using SafeTestsets, Test
 @safetestset "Lowering Integration Test" begin include("lowering_solving.jl") end
 @safetestset "Test Big System Usage" begin include("bigsystem.jl") end
 @safetestset "Depdendency Graph Test" begin include("dep_graphs.jl") end
+@safetestset "Function Registration Test" begin include("function_registration.jl") end
+@safetestset "Array of Array Test" begin include("build_function_arrayofarray.jl") end
 #@testset "Latexify recipes Test" begin include("latexify.jl") end
 @testset "Distributed Test" begin include("distributed.jl") end
-@testset "Array of Array Test" begin include("build_function_arrayofarray.jl") end
