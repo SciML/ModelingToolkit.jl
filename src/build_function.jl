@@ -229,7 +229,12 @@ function _build_function(target::JuliaTarget, rhss, args...;
 		end
     elseif parallel isa DaggerForm
         @assert HAS_DAGGER[] "Dagger.jl is not loaded; please do `using Dagger`"
-        delayed_exprs = build_expr(:block, [:($(Symbol(computevars[i])) = Dagger.delayed(identity)($(conv(rhss[i])))) for i in axes(computevars,1)])
+        dagwrap(x) = x
+        dagwrap(ex::Expr) = dagwrap(ex, Val(ex.head))
+        dagwrap(ex::Expr, ::Val) = ex
+        dagwrap(ex::Expr, ::Val{:call}) = :(Dagger.delayed($(ex.args[1]))($(dagwrap.(ex.args[2:end])...)))
+        new_rhss = dagwrap.(conv.(rhss))
+        delayed_exprs = build_expr(:block, [:($(Symbol(computevars[i])) = Dagger.delayed(identity)($(new_rhss[i]))) for i in axes(computevars,1)])
         # TODO: treereduce?
         reduce_expr = quote
             $(Symbol(reducevar)) = collect(Dagger.delayed(vcat)($(computevars...)))
