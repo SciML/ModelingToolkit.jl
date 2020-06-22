@@ -54,6 +54,8 @@ Base.isequal(::Variable , ::Operation) = false
 Base.isequal(::Operation, ::Constant ) = false
 Base.isequal(::Constant , ::Operation) = false
 
+Base.hash(o::Operation, salt::UInt) = hash(o.args, hash(o.op, salt))
+
 # provide iszero for Operations to help sparse addition and multiplication
 # e.g., we want to tell the sparse library that iszero(zero(Operation) + zero(Operation)) == true
 Base.iszero(x::Operation) = (_x = simplify(x); _x isa Constant && iszero(_x.value))

@@ -5,6 +5,16 @@ using Test
 
 @variables a,b,c,d
 
+# test hashing
+aa = a; # old a
+
+@variables a
+
+@test isequal(a, aa)
+@test hash(a) == hash(aa)
+
+@test isequal(get_variables(a+aa+1), [a])
+
 # test some matrix operations don't throw errors
 X = [a b;c d]
 det(X)
