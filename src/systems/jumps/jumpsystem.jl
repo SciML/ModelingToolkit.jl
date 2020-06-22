@@ -45,7 +45,6 @@ end
 
 function JumpSystem(eqs, iv, states, ps; systems = JumpSystem[],
                                           name = gensym(:JumpSystem))
-
     ap = ArrayPartition(MassActionJump[], ConstantRateJump[], VariableRateJump[])
     for eq in eqs
         if eq isa MassActionJump
@@ -61,6 +60,9 @@ function JumpSystem(eqs, iv, states, ps; systems = JumpSystem[],
 
     JumpSystem{typeof(ap)}(ap, convert(Variable,iv), convert.(Variable, states), convert.(Variable, ps), name, systems)
 end
+
+JumpSystem(eqs::ArrayPartition, iv, states, ps; systems = JumpSystem[], name = gensym(:JumpSystem)) =
+    JumpSystem{typeof(eqs)}(eqs, convert(Variable,iv), convert.(Variable, states), convert.(Variable, ps), name, systems)
 
 
 generate_rate_function(js, rate) = build_function(rate, states(js), parameters(js),
@@ -127,7 +129,7 @@ end
 
 function numericrstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     rs = Vector{Pair{Int,W}}()
-    for (spec,stoich) in mtrs        
+    for (spec,stoich) in mtrs
         if !(spec isa Operation) && iszero(spec)
             push!(rs, 0 => stoich)
         else
@@ -171,7 +173,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan,
                                     parammap=DiffEqBase.NullParameters; kwargs...)
 ```
 
-Generates a blank DiscreteProblem for a pure jump JumpSystem to utilize as 
+Generates a blank DiscreteProblem for a pure jump JumpSystem to utilize as
 its `prob.prob`. This is used in the case where there are no ODEs
 and no SDEs associated with the system.
 
