@@ -47,9 +47,10 @@ Unitful = "1.1"
 julia = "1.2"
 
 [extras]
+Dagger = "d58978e5-989f-55fb-8d15-ea34adc7bf54"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["OrdinaryDiffEq", "Test", "StochasticDiffEq"]
+test = ["Dagger", "OrdinaryDiffEq", "Test", "StochasticDiffEq"]
