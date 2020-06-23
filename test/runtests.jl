@@ -25,3 +25,4 @@ using SafeTestsets, Test
 @safetestset "Array of Array Test" begin include("build_function_arrayofarray.jl") end
 #@testset "Latexify recipes Test" begin include("latexify.jl") end
 @testset "Distributed Test" begin include("distributed.jl") end
+@testset "Variable Utils Test" begin include("variable_utils.jl") end

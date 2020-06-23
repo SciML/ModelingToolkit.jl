@@ -8,6 +8,6 @@ sol = ModelingToolkit.get_variables(expr)
 @parameters γ
 s = α => γ
 expr = (((1 / β - 1) + δ) / α) ^ (1 / (α - 1))
-ModelingToolkit.substitute(expr, s)
+sol = ModelingToolkit.substitute(expr, s)
 new = (((1 / β - 1) + δ) / γ) ^ (1 / (γ - 1))
-@test isequal(expr, new)
+@test iszero(simplify(sol - new))
