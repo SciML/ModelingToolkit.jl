@@ -54,10 +54,14 @@ using Distributed
 addprocs(4)
 distributedf = eval(ModelingToolkit.build_function(du,u,parallel=ModelingToolkit.DistributedForm())[2])
 
+using Dagger
+daggerf = eval(ModelingToolkit.build_function(du,u,parallel=ModelingToolkit.DaggerForm())[2])
+
 jac = sparse(ModelingToolkit.jacobian(vec(du),vec(u),simplify=false))
 serialjac = eval(ModelingToolkit.build_function(vec(jac),u)[2])
 multithreadedjac = eval(ModelingToolkit.build_function(vec(jac),u,parallel=ModelingToolkit.MultithreadedForm())[2])
 distributedjac = eval(ModelingToolkit.build_function(vec(jac),u,parallel=ModelingToolkit.DistributedForm())[2])
+daggerjac = eval(ModelingToolkit.build_function(vec(jac),u,parallel=ModelingToolkit.DaggerForm())[2])
 
 MyA = zeros(N,N)
 AMx = zeros(N,N)
@@ -66,15 +70,18 @@ DA  = zeros(N,N)
 f(_du,_u,nothing,0.0)
 multithreadedf(_du,_u)
 #distributedf(_du,_u)
+#daggerf(_du,_u)
 
 #=
 using BenchmarkTools
 @btime f(_du,_u,nothing,0.0)
 @btime multithreadedf(_du,_u)
 @btime distributedf(_du,_u)
+@btime daggerf(_du,_u)
 
 _jac = similar(jac,Float64)
 @btime serialjac(_jac,_u)
 @btime multithreadedjac(_jac,_u)
 @btime distributedjac(_jac,_u)
+@btime daggerjac(_jac,_u)
 =#

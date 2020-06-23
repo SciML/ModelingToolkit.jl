@@ -18,6 +18,7 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 NaNMath = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 RecursiveArrayTools = "731186ca-8d62-57ce-b412-fbd966d074cd"
+Requires = "ae029012-a4dd-5104-9daa-d747884805df"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
@@ -50,10 +51,11 @@ Unitful = "1.1"
 julia = "1.2"
 
 [extras]
+Dagger = "d58978e5-989f-55fb-8d15-ea34adc7bf54"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 SteadyStateDiffEq = "9672c7b4-1e72-59bd-8a11-6ac3964bc41f"
 StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["OrdinaryDiffEq", "SteadyStateDiffEq", "Test", "StochasticDiffEq"]
+test = ["Dagger", "OrdinaryDiffEq", "SteadyStateDiffEq", "Test", "StochasticDiffEq"]
