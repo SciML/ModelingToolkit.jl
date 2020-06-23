@@ -3,6 +3,7 @@
 # appropriately calls the registered functions, whether the call is
 # qualified (with a module name) or not.
 
+
 # TEST: Function registration in a module.
 # ------------------------------------------------
 module MyModule
@@ -20,8 +21,10 @@ module MyModule
     sys = ODESystem([eq], t, [u], [x])
     fun = ODEFunction(sys)
 
-    @test fun([0.5], [5.0], 0.) == [30.0]
+    u0 = 5.0
+    @test fun([0.5], [u0], 0.) == [do_something(u0) * 2]
 end
+
 
 # TEST: Function registration in a nested module.
 # ------------------------------------------------
@@ -41,9 +44,11 @@ module MyModule2
         sys = ODESystem([eq], t, [u], [x])
         fun = ODEFunction(sys)
 
-        @test fun([0.5], [3.0], 0.) == [46.0]
+        u0 = 3.0
+        @test fun([0.5], [u0], 0.) == [do_something_2(u0) * 2]
     end
 end
+
 
 # TEST: Function registration outside any modules.
 # ------------------------------------------------
@@ -61,9 +66,12 @@ eq  = Dt(u) ~ do_something_3(x) + (@__MODULE__).do_something_3(x)
 sys = ODESystem([eq], t, [u], [x])
 fun = ODEFunction(sys)
 
-@test fun([0.5], [7.0], 0.) == [74.0]
+u0 = 7.0
+@test fun([0.5], [u0], 0.) == [do_something_3(u0) * 2]
 
-# derivative
+
+# TEST: Function registration works with derivatives.
+# ---------------------------------------------------
 foo(x, y) = sin(x) * cos(y)
 @parameters t; @variables x(t) y(t) z(t); @derivatives D'~t;
 @register foo(x, y)
@@ -74,3 +82,29 @@ expr = foo(x, y)
 ModelingToolkit.derivative(::typeof(foo), (x, y), ::Val{1}) = cos(x) * cos(y) # derivative w.r.t. the first argument
 ModelingToolkit.derivative(::typeof(foo), (x, y), ::Val{2}) = -sin(x) * sin(y) # derivative w.r.t. the second argument
 @test isequal(expand_derivatives(D(foo(x, y))), expand_derivatives(D(sin(x) * cos(y))))
+
+
+# TEST: Function registration run from inside a function.
+# -------------------------------------------------------
+# This tests that we can get around the world age issue by falling back to
+# GeneralizedGenerated instead of function expressions.
+# Might be useful in cases where someone wants to define functions that build
+# up and use ODEFunctions given some parameters.
+function do_something_4(a)
+    a + 30
+end
+@register do_something_4(a)
+function build_ode()
+    @parameters t x
+    @variables u(t)
+    @derivatives Dt'~t
+    eq  = Dt(u) ~ do_something_4(x) + (@__MODULE__).do_something_4(x)
+    sys = ODESystem([eq], t, [u], [x])
+    fun = ODEFunction(sys, eval_expression=false)
+end
+function run_test()
+    fun = build_ode()
+    u0 = 10.0
+    @test fun([0.5], [u0], 0.) == [do_something_4(u0) * 2]
+end
+run_test()

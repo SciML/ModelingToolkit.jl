@@ -142,15 +142,17 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
                                      version = nothing, tgrad=false,
                                      jac = false, Wfact = false,
-                                     sparse = false,
+                                     sparse = false, eval_expression=true,
                                      kwargs...) where {iip}
 
-    f_oop,f_iip = ModelingToolkit.eval.(generate_function(sys, dvs, ps; expression=Val{true}, kwargs...))
+    f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
+    f_oop,f_iip = eval_expression ? ModelingToolkit.eval.(f_gen) : f_gen
     f(u,p,t) = f_oop(u,p,t)
     f(du,u,p,t) = f_iip(du,u,p,t)
 
     if tgrad
-        tgrad_oop,tgrad_iip = ModelingToolkit.eval.(generate_tgrad(sys, dvs, ps; expression=Val{true}, kwargs...))
+        tgrad_gen = generate_tgrad(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
+        tgrad_oop,tgrad_iip = eval_expression ? ModelingToolkit.eval.(tgrad_gen) : tgrad_gen
         _tgrad(u,p,t) = tgrad_oop(u,p,t)
         _tgrad(J,u,p,t) = tgrad_iip(J,u,p,t)
     else
@@ -158,7 +160,8 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     if jac
-        jac_oop,jac_iip = ModelingToolkit.eval.(generate_jacobian(sys, dvs, ps; sparse = sparse, expression=Val{true}, kwargs...))
+        jac_gen = generate_jacobian(sys, dvs, ps; sparse = sparse, expression=Val{eval_expression}, kwargs...)
+        jac_oop,jac_iip = eval_expression ? ModelingToolkit.eval.(jac_gen) : jac_gen
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else
@@ -166,9 +169,9 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     if Wfact
-        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps; expression=Val{true}, kwargs...)
-        Wfact_oop, Wfact_iip =  ModelingToolkit.eval.(tmp_Wfact)
-        Wfact_oop_t, Wfact_iip_t =  ModelingToolkit.eval.(tmp_Wfact_t)
+        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
+        Wfact_oop, Wfact_iip =  eval_expression ? ModelingToolkit.eval.(tmp_Wfact) : tmp_Wfact
+        Wfact_oop_t, Wfact_iip_t =  eval_expression ? ModelingToolkit.eval.(tmp_Wfact_t) : tmp_Wfact_t
         _Wfact(u,p,dtgamma,t) = Wfact_oop(u,p,dtgamma,t)
         _Wfact(W,u,p,dtgamma,t) = Wfact_iip(W,u,p,dtgamma,t)
         _Wfact_t(u,p,dtgamma,t) = Wfact_oop_t(u,p,dtgamma,t)
