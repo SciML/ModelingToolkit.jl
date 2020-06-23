@@ -76,7 +76,7 @@ julia> ModelingToolkit.derivative(sin(x), 1)
 cos(x())
 ```
 
-Note that the function does not recurse into the operation's arguments, i.e. the
+Note that the function does not recurse into the operation's arguments, i.e., the
 chain rule is not applied:
 
 ```jldoctest label1
@@ -97,7 +97,7 @@ derivative(O::Operation, idx) = derivative(O.op, (O.args...,), Val(idx))
 derivative(O::Constant, ::Any) = Constant(0)
 
 # Pre-defined derivatives
-import DiffRules, SpecialFunctions, NaNMath
+import DiffRules
 for (modu, fun, arity) ∈ DiffRules.diffrules()
     fun in [:*, :+] && continue # special
     for i ∈ 1:arity

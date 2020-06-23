@@ -84,11 +84,11 @@ G2 = sf.g(u,p,t)
 # test with JumpSystem
 js = convert(JumpSystem, rs)
 
-@test all(map(type -> type <: DiffEqJump.MassActionJump, typeof.(js.eqs[1:14])))
-@test all(map(type -> type <: DiffEqJump.ConstantRateJump, typeof.(js.eqs[15:18])))
-@test all(map(type -> type <: DiffEqJump.VariableRateJump, typeof.(js.eqs[19:20])))
+@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.MassActionJump, 1:14))
+@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.ConstantRateJump, 15:18))
+@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.VariableRateJump, 19:20))
 
-pars = rand(length(k)); u0 = rand(1:100,4); time = rand();
+pars = rand(length(k)); u0 = rand(1:10,4); time = rand();
 jumps = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}(undef,length(js.eqs))
 
 jumps[1] = MassActionJump(pars[1], Vector{Pair{Int,Int}}(), [1 => 1]);
@@ -117,23 +117,35 @@ jumps[20] = VariableRateJump((u,p,t) -> p[20]*t*u[1]*binomial(u[2],2)*u[3], inte
 statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
 parammap = map((x,y)->Pair(x(),y),parameters(js),pars)
 for i = 1:14
-  maj = MT.assemble_maj(js, js.eqs[i], statetoid,parammap)
-  @test abs(jumps[i].scaled_rates - maj.scaled_rates) < 10*eps()
+  maj = MT.assemble_maj(js, js.eqs[i], statetoid, ModelingToolkit.substituter(first.(parammap), last.(parammap)),eltype(pars))
+  @test abs(jumps[i].scaled_rates - maj.scaled_rates) < 100*eps()
   @test jumps[i].reactant_stoch == maj.reactant_stoch
   @test jumps[i].net_stoch == maj.net_stoch
 end
 for i = 15:18
-  (i==16) && continue
   crj = MT.assemble_crj(js, js.eqs[i], statetoid)
-  @test abs(crj.rate(u0,p,time) - jumps[i].rate(u0,p,time)) < 10*eps()
+  @test isapprox(crj.rate(u0,p,time), jumps[i].rate(u0,p,time))
   fake_integrator1 = (u=zeros(4),p=p,t=0); fake_integrator2 = deepcopy(fake_integrator1);
   crj.affect!(fake_integrator1); jumps[i].affect!(fake_integrator2);
   @test fake_integrator1 == fake_integrator2
 end
 for i = 19:20
   crj = MT.assemble_vrj(js, js.eqs[i], statetoid)
-  @test abs(crj.rate(u0,p,time) - jumps[i].rate(u0,p,time)) < 10*eps()
+  @test isapprox(crj.rate(u0,p,time), jumps[i].rate(u0,p,time))
   fake_integrator1 = (u=zeros(4),p=p,t=0.); fake_integrator2 = deepcopy(fake_integrator1);
   crj.affect!(fake_integrator1); jumps[i].affect!(fake_integrator2);
   @test fake_integrator1 == fake_integrator2
 end
+
+
+# test for https://github.com/SciML/ModelingToolkit.jl/issues/436
+@parameters t 
+@variables S I
+rxs = [Reaction(1,[S],[I]), Reaction(1.1,[S],[I])]
+rs = ReactionSystem(rxs, t, [S,I], [])
+js = convert(JumpSystem, rs)
+dprob = DiscreteProblem(js, [S => 1, I => 1], (0.0,10.0))
+jprob = JumpProblem(js, dprob, Direct())
+sol = solve(jprob, SSAStepper())
+
+nothing

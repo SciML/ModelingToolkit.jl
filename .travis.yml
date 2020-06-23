@@ -1,5 +1,8 @@
 # Documentation: http://docs.travis-ci.com/user/languages/julia/
 language: julia
+branches:
+  only:
+    - master
 os:
   - linux
 #  - osx

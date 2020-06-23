@@ -3,7 +3,7 @@
     env --> :align
     cdot --> false
 
-    # Convert both the left and right hand side to expressions of basic types
+    # Convert both the left- and right-hand sides to expressions of basic types
     # that latexify can deal with.
 
     rhs = getfield.(eqs, :rhs)

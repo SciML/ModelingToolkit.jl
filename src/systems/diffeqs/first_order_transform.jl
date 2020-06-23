@@ -24,43 +24,42 @@ function ode_order_lowering(sys::ODESystem)
 end
 
 function ode_order_lowering(eqs, iv, states)
-    var_order = Dict{Variable,Int}()
-    vars = Variable[]
-    new_eqs = Equation[]
-    new_vars = Variable[]
+    var_order = OrderedDict{Variable,Int}()
     D = Differential(iv())
+    diff_eqs = Equation[]
+    diff_vars = Variable[]
+    alge_eqs = Equation[]
+    alge_vars = Variable[]
 
     for (i, (eq, ss)) ∈ enumerate(zip(eqs, states))
         if isequal(eq.lhs, Constant(0))
-            push!(new_vars, ss)
-            push!(new_eqs, eq)
+            push!(alge_vars, ss)
+            push!(alge_eqs, eq)
         else
             var, maxorder = var_from_nested_derivative(eq.lhs)
-            if maxorder > get(var_order, var, 0)
-                var_order[var] = maxorder
-                any(isequal(var), vars) || push!(vars, var)
-            end
+            # only save to the dict when we need to lower the order to save memory
+            maxorder > get(var_order, var, 1) && (var_order[var] = maxorder)
             var′ = lower_varname(var, iv, maxorder - 1)
             rhs′ = rename_lower_order(eq.rhs)
-            push!(new_vars, var′)
-            push!(new_eqs, D(var′(iv())) ~ rhs′)
+            push!(diff_vars, var′)
+            push!(diff_eqs, D(var′(iv())) ~ rhs′)
         end
     end
 
-    for var ∈ vars
-        order = var_order[var]
+    for (var, order) ∈ var_order
         for o in (order-1):-1:1
             lvar = lower_varname(var, iv, o-1)
             rvar = lower_varname(var, iv, o)
-            push!(new_vars, lvar)
+            push!(diff_vars, lvar)
 
             rhs = rvar(iv())
             eq = Differential(iv())(lvar(iv())) ~ rhs
-            push!(new_eqs, eq)
+            push!(diff_eqs, eq)
         end
     end
 
-    return (new_eqs, new_vars)
+    # we want to order the equations and variables to be `(diff, alge)`
+    return (vcat(diff_eqs, alge_eqs), vcat(diff_vars, alge_vars))
 end
 
 function rename_lower_order(O::Expression)

@@ -71,6 +71,11 @@ function getmean(jprob,Nsims)
 end
 m = getmean(jprob,Nsims)
 
+# test save_positions is working
+jprob = JumpProblem(js2, dprob, Direct(), save_positions=(false,false))
+sol = solve(jprob, SSAStepper(), saveat=1.0)
+@test all((sol.t) .== collect(0.:tspan[2]))
+
 #test the MT JumpProblem rates/affects are correct
 rate2(u,p,t) = 0.01u[2]
 jump2 = ConstantRateJump(rate2,affect2!)
@@ -118,6 +123,15 @@ jprob = JumpProblem(js3, dprob, Direct())
 m3 = getmean(jprob,Nsims)
 @test abs(m-m3)/m < .01
 
+# maj jump test with various dep graphs
+js3b = JumpSystem([maj1,maj2], t, [S,I,R], [β,γ])
+jprobb = JumpProblem(js3b, dprob, NRM())
+m4 = getmean(jprobb,Nsims)
+@test abs(m-m4)/m < .01
+jprobc = JumpProblem(js3b, dprob, RSSA())
+m4 = getmean(jprobc,Nsims)
+@test abs(m-m4)/m < .01
+
 # mass action jump tests for other reaction types (zero order, decay)
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
@@ -137,4 +151,5 @@ statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(
 ptoid     = Dict(convert(Variable,par) => i for (i,par) in enumerate(parameters(js)))
 dprob = DiscreteProblem(js4, [S => 999], (0,1000.), [β => 100.,γ => .01])
 jprob = JumpProblem(js4, dprob, Direct())
-sol = solve(jprob, SSAStepper())
+sol = solve(jprob, SSAStepper());
+

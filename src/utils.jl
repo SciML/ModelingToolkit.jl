@@ -88,15 +88,25 @@ get_variables(O::Operation)
 
 Returns the variables in the Operation
 """
-get_variables(e::Constant, vars = Operation[]) = vars
-function get_variables(e::Operation, vars = Operation[])
+get_variables!(vars, e::Constant, varlist=nothing) = vars
+get_variables(e::Constant, varlist=nothing) = get_variables!(Operation[], e, varlist)
+
+function get_variables!(vars, e::Operation, varlist=nothing)
     if is_singleton(e)
-        push!(vars, e)
+      (isnothing(varlist) ? true : (e.op in varlist)) && push!(vars, e)
     else
-        foreach(x -> get_variables(x, vars), e.args)
+        foreach(x -> get_variables!(vars, x, varlist), e.args)
     end
-    return unique(vars)
+    return (vars isa AbstractVector) ? unique!(vars) : vars
 end
+get_variables(e::Operation, varlist=nothing) = get_variables!(Operation[], e, varlist)
+
+function get_variables!(vars, e::Equation, varlist=nothing)
+  get_variables!(vars, e.rhs, varlist)
+end
+get_variables(e::Equation, varlist=nothing) = get_variables!(Operation[],e,varlist)
+
+modified_states!(mstates, e::Equation, statelist=nothing) = get_variables!(mstates, e.lhs, statelist)
 
 # variable substitution
 """
@@ -111,12 +121,15 @@ substitute(expr::Operation, s::Pair) = _substitute(expr, [s[1]], [s[2]])
 substitute(expr::Operation, dict::Dict) = _substitute(expr, keys(dict), values(dict))
 substitute(expr::Operation, s::Vector) = _substitute(expr, first.(s), last.(s))
 
-function _substitute(expr, ks, vs)
-    _substitute(expr, Dict(map(Pair, map(to_symbolic, ks), map(to_symbolic, vs))))
+function _substitute(ks, vs)
+    expr -> _substitute(expr, Dict(map(Pair, map(to_symbolic, ks), map(to_symbolic, vs))))
 end
 
-function _substitute(expr, dict::Dict)
-    simplify(SymbolicUtils.substitute(expr, dict))
+function substituter(ks, vs)
+    dict = Dict(map(Pair, map(to_symbolic, ks), map(to_symbolic, vs)))
+    expr -> to_mtk(SymbolicUtils.simplify(SymbolicUtils.substitute(expr, dict)))
 end
+
+_substitute(expr, ks, vs) = substituter(ks, vs)(expr)
 
 @deprecate substitute_expr!(expr,s) substitute(expr,s)

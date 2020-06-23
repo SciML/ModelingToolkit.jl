@@ -6,7 +6,8 @@ using Latexify, Unitful, ArrayInterface
 using MacroTools
 using UnPack: @unpack
 using DiffEqJump
-
+using DataStructures: OrderedDict, OrderedSet
+using SpecialFunctions, NaNMath
 using Base.Threads
 import MacroTools: splitdef, combinedef, postwalk, striplines
 import GeneralizedGenerated
@@ -17,6 +18,8 @@ using RecursiveArrayTools
 
 import SymbolicUtils
 import SymbolicUtils: to_symbolic, FnType
+
+import LightGraphs: SimpleDiGraph, add_edge!
 
 import TreeViews
 
@@ -39,7 +42,11 @@ abstract type AbstractODESystem <: AbstractSystem end
 
 Base.promote_rule(::Type{<:Number},::Type{<:Expression}) = Expression
 Base.zero(::Type{<:Expression}) = Constant(0)
+Base.zero(::Expression) = Constant(0)
 Base.one(::Type{<:Expression}) = Constant(1)
+Base.one(::Expression) = Constant(1)
+Base.oneunit(::Expression) = Constant(1)
+Base.oneunit(::Type{<:Expression}) = Constant(1)
 
 """
 $(TYPEDSIGNATURES)
@@ -72,7 +79,7 @@ function Base.convert(::Type{Variable},x::Operation)
         x.op
     elseif x.op isa Differential
         var = x.args[1].op
-        rename(var,Symbol(var.name,:ˍ,x.args[1].args[1].op.name))
+        rename(var,Symbol(var.name,:ˍ,x.op.x))
     else
         throw(error("This Operation is not a Variable"))
     end
@@ -103,19 +110,23 @@ include("systems/optimization/optimizationsystem.jl")
 include("systems/pde/pdesystem.jl")
 
 include("systems/reaction/reactionsystem.jl")
+include("systems/dependency_graphs.jl")
 
 include("latexify_recipes.jl")
 include("build_function.jl")
 
-export ODESystem, ODEFunction
-export SDESystem, SDEFunction
+export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr
+export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
 export JumpSystem
-export ODEProblem, SDEProblem, NonlinearProblem, OptimizationProblem
+export ODEProblem, SDEProblem
+export NonlinearProblem, NonlinearProblemExpr
+export OptimizationProblem, OptimizationProblemExpr
+export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
 export ode_order_lowering
 export PDESystem
-export Reaction, ReactionSystem
+export Reaction, ReactionSystem, ismassaction
 export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
@@ -128,6 +139,10 @@ export calculate_gradient, generate_gradient
 export calculate_factorized_W, generate_factorized_W
 export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
+
+export BipartiteGraph, equation_dependencies, variable_dependencies
+export eqeq_dependencies, varvar_dependencies
+export asgraph, asdigraph
 
 export simplified_expr, rename, get_variables
 export simplify, substitute

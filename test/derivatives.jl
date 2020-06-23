@@ -86,3 +86,8 @@ tmp = beta * (alpha * exp(x1) * x2 ^ (alpha - 1) + 1 - delta) / x3
 # derivative w.r.t. x1 and x2
 t1 = ModelingToolkit.gradient(tmp, [x1, x2])
 @test_nowarn ModelingToolkit.gradient(t1[1], [beta])
+
+@parameters t k
+@variables x(t)
+@derivatives D'~k
+@test convert(Variable, D(x)).name === :xˍk

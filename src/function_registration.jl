@@ -2,7 +2,7 @@
 """
 $(SIGNATURES)
 
-Registers a function call as a primative for the `Operation` graph of the
+Registers a function call as a primitive for the `Operation` graph of the
 ModelingToolkit IR. Example:
 
 ```julia
@@ -10,16 +10,59 @@ ModelingToolkit IR. Example:
 ```
 
 registers `f` as a possible two-argument function.
+
+You may also want to tell ModelingToolkit the derivative of the registered
+function. Here is an example to do it
+
+```julia
+julia> using ModelingToolkit
+
+julia> foo(x, y) = sin(x) * cos(y)
+foo (generic function with 1 method)
+
+julia> @parameters t; @variables x(t) y(t) z(t); @derivatives D'~t;
+
+julia> @register foo(x, y)
+foo (generic function with 4 methods)
+
+julia> foo(x, y)
+foo(x(t), y(t))
+
+julia> ModelingToolkit.derivative(::typeof(foo), (x, y), ::Val{1}) = cos(x) * cos(y) # derivative w.r.t. the first argument
+
+julia> ModelingToolkit.derivative(::typeof(foo), (x, y), ::Val{2}) = -sin(x) * sin(y) # derivative w.r.t. the second argument
+
+julia> isequal(expand_derivatives(D(foo(x, y))), expand_derivatives(D(sin(x) * cos(y))))
+true
+```
 """
 macro register(sig)
     splitsig = splitdef(:($sig = nothing))
     name = splitsig[:name]
+
+    # Extract the module and function name from the signature
+    if name isa Symbol
+        mod = __module__  # Calling module
+        funcname = name
+    else
+        mod = name.args[1]
+        funcname = name.args[2].value
+    end
+
     args = splitsig[:args]
     typargs = typed_args(args)
     defs = :()
     for typarg in typargs
         splitsig[:args] = typarg
-        splitsig[:body] = :(Operation($name, Expression[$(args...)]))
+        if mod == (@__MODULE__)  # If the calling module is ModelingToolkit itself...
+            splitsig[:body] = :(Operation($name, Expression[$(args...)]))
+        else
+            # Register the function's associated model so we can inject it in later.
+            splitsig[:body] = quote
+                get!(ModelingToolkit.registered_external_functions, Symbol($("$funcname")), $mod)
+                Operation($name, Expression[$(args...)])
+            end
+        end
         defs = :($defs; $(combinedef(splitsig)))
     end
     esc(defs)
@@ -36,7 +79,7 @@ function typed_args(args)
 end
 
 # Binary & unary operators and functions
-import DiffRules, SpecialFunctions, NaNMath
+import DiffRules
 for (M, f, arity) in DiffRules.diffrules()
     fun = :($M.$f)
     sig = arity == 1 ? :($fun(x)) :
@@ -65,5 +108,38 @@ Base.:^(x::Expression,y::T) where T <: Rational = Operation(Base.:^, Expression[
 
 @register Base.conj(x)
 @register Base.getindex(x,i)
+@register Base.binomial(n,k)
+@register Base.copysign(x,y)
+
 Base.getindex(x::Operation,i::Int64) = Operation(getindex,[x,i])
 Base.one(::Operation) = 1
+
+# Ensure that Operations that get @registered from outside the ModelingToolkit
+# module can work without having to bring in the associated function into the
+# ModelingToolkit namespace. We basically store information about functions
+# registered at runtime in a ModelingToolkit variable,
+# `registered_external_functions`. It's not pretty, but we are limited by the
+# way GeneralizedGenerated builds a function (adding "ModelingToolkit" to every
+# function call).
+# ---
+const registered_external_functions = Dict{Symbol,Module}()
+function inject_registered_module_functions(expr)
+    MacroTools.postwalk(expr) do x
+        # Find all function calls in the expression and extract the function
+        # name and calling module.
+        MacroTools.@capture(x, f_module_.f_name_(xs__))
+        if isnothing(f_module)
+            MacroTools.@capture(x, f_name_(xs__))
+        end
+
+        if !isnothing(f_name)
+            # Set the calling module to the module that registered it.
+            mod = get(registered_external_functions, f_name, f_module)
+            if !isnothing(mod)
+                x.args[1] = :(getproperty($mod, $(Meta.quot(f_name))))
+            end
+        end
+
+        return x
+    end
+end

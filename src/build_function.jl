@@ -15,10 +15,10 @@ struct DaggerForm <: ParallelForm end
 
 Generates a numerically-usable function from a ModelingToolkit `Expression`.
 If the `Expression` is an `Operation`, the generated function is a function
-with a scalar output, otherwise if it's an `AbstractArray{Operation}` the output
+with a scalar output, otherwise if it's an `AbstractArray{Operation}`, the output
 is two functions, one for out-of-place AbstractArray output and a second which
 is a mutating function. The outputted functions match the given argument order,
-i.e. f(u,p,args...) for the out-of-place and scalar functions and
+i.e., f(u,p,args...) for the out-of-place and scalar functions and
 `f!(du,u,p,args..)` for the in-place version.
 
 ```julia
@@ -39,7 +39,7 @@ Arguments:
 - `expression`: Whether to generate code or whether to generate the compiled form.
   By default, `expression = Val{true}`, which means that the code for the
   function is returned. If `Val{false}`, then the returned value is a compiled
-  Julia function which utilizes GeneralizedGenerated.jl in order to world-age
+  Julia function, which utilizes GeneralizedGenerated.jl in order to world-age
   free.
 
 Keyword Arguments:
@@ -115,7 +115,7 @@ function _build_function(target::JuliaTarget, op::Operation, args...;
 
     fname = gensym(:ModelingToolkitFunction)
     out_expr = conv(op)
-    let_expr = Expr(:let, var_eqs, out_expr)
+    let_expr = Expr(:let, var_eqs, Expr(:block, out_expr))
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
 
     fargs = Expr(:tuple,argnames...)
@@ -126,10 +126,41 @@ function _build_function(target::JuliaTarget, op::Operation, args...;
     end
 
     if expression == Val{true}
-        return oop_ex
+        return ModelingToolkit.inject_registered_module_functions(oop_ex)
     else
-        return GeneralizedGenerated.mk_function(@__MODULE__,oop_ex)
+        _build_and_inject_function(@__MODULE__, oop_ex)
     end
+end
+
+function _build_and_inject_function(mod::Module, ex)
+    # Generate the function, which will process the expression
+    runtimefn = GeneralizedGenerated.mk_function(mod, ex)
+
+    # Extract the processed expression of the function body
+    params = typeof(runtimefn).parameters
+    fn_expr = GeneralizedGenerated.NGG.from_type(params[3])
+
+    # Inject our externally registered module functions 
+    new_expr = ModelingToolkit.inject_registered_module_functions(fn_expr)
+
+    # Reconstruct the RuntimeFn's Body
+    new_body = GeneralizedGenerated.NGG.to_type(new_expr)
+    return GeneralizedGenerated.RuntimeFn{params[1:2]..., new_body, params[4]}()
+end
+
+# Detect heterogeneous element types of "arrays of matrices/sparce matrices"
+function is_array_matrix(F)
+    return isa(F, AbstractVector) && all(x->isa(x, AbstractArray), F)
+end
+function is_array_sparse_matrix(F)
+    return isa(F, AbstractVector) && all(x->isa(x, AbstractSparseMatrix), F)
+end
+# Detect heterogeneous element types of "arrays of arrays of matrices/sparce matrices"
+function is_array_array_matrix(F)
+    return isa(F, AbstractVector) && all(x->isa(x, AbstractArray{<:AbstractMatrix}), F)
+end
+function is_array_array_sparse_matrix(F)
+    return isa(F, AbstractVector) && all(x->isa(x, AbstractArray{<:AbstractSparseMatrix}), F)
 end
 
 function _build_function(target::JuliaTarget, rhss, args...;
@@ -137,7 +168,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
                          checkbounds = false, constructor=nothing,
                          linenumbers = false, multithread=nothing,
                          headerfun=addheader, outputidxs=nothing,
-						 parallel=SerialForm())
+                         skipzeros = false, parallel=SerialForm())
 
 	if multithread isa Bool
 		@warn("multithraded is deprecated for the parallel argument. See the documentation.")
@@ -176,18 +207,55 @@ function _build_function(target::JuliaTarget, rhss, args...;
 		_rhss = rhss
 	end
 
-	if eltype(eltype(rhss)) <: AbstractArray # Array of arrays of arrays
-		ip_sys_exprs = reduce(vcat,[vec(reduce(vcat,[vec([:($X[$i][$j][$k] = $(conv(rhs))) for (k, rhs) ∈ enumerate(rhsel2)]) for (j, rhsel2) ∈ enumerate(rhsel)],init=Expr[])) for (i,rhsel) ∈ enumerate(_rhss)],init=Expr[])
-	elseif eltype(eltype(rhss)) <: SparseMatrixCSC # Array of arrays of arrays
-		ip_sys_exprs = reduce(vcat,[vec(reduce(vcat,[vec([:($X[$i][$j].nzval[$k] = $(conv(rhs))) for (k, rhs) ∈ enumerate(rhsel2)]) for (j, rhsel2) ∈ enumerate(rhsel)])) for (i,rhsel) ∈ enumerate(_rhss)])
-	elseif eltype(rhss) <: SparseMatrixCSC # Array of sparse matrices
-		ip_sys_exprs = reduce(vcat,[vec([:($X[$i].nzval[$j] = $(conv(rhs))) for (j, rhs) ∈ enumerate(rhsel)]) for (i,rhsel) ∈ enumerate(_rhss)])
-    elseif eltype(rhss) <: AbstractArray # Array of arrays
-		ip_sys_exprs = reduce(vcat,[vec([:($X[$i][$j] = $(conv(rhs))) for (j, rhs) ∈ enumerate(rhsel)]) for (i,rhsel) ∈ enumerate(_rhss)], init = Expr[])
+    ip_sys_exprs = Expr[]
+    if is_array_array_sparse_matrix(rhss) # Array of arrays of sparse matrices
+        for (i, rhsel) ∈ enumerate(_rhss)
+            for (j, rhsel2) ∈ enumerate(rhsel)
+                for (k, rhs) ∈ enumerate(rhsel2.nzval)
+                    rhs′ = conv(rhs)
+                    (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
+                    push!(ip_sys_exprs, :($X[$i][$j].nzval[$k] = $rhs′))
+                end
+            end
+        end
+    elseif is_array_array_matrix(rhss) # Array of arrays of arrays
+        for (i, rhsel) ∈ enumerate(_rhss)
+            for (j, rhsel2) ∈ enumerate(rhsel)
+                for (k, rhs) ∈ enumerate(rhsel2)
+                    rhs′ = conv(rhs)
+                    (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
+                    push!(ip_sys_exprs, :($X[$i][$j][$k] = $rhs′))
+                end
+            end
+        end
+    elseif is_array_sparse_matrix(rhss) # Array of sparse matrices
+        for (i, rhsel) ∈ enumerate(_rhss)
+            for (j, rhs) ∈ enumerate(rhsel.nzval)
+                rhs′ = conv(rhs)
+                (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
+                push!(ip_sys_exprs, :($X[$i].nzval[$j] = $rhs′))
+            end
+        end
+    elseif is_array_matrix(rhss) # Array of arrays
+        for (i, rhsel) ∈ enumerate(_rhss)
+            for (j, rhs) ∈ enumerate(rhsel)
+                rhs′ = conv(rhs)
+                (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
+                push!(ip_sys_exprs, :($X[$i][$j] = $rhs′))
+            end
+        end
     elseif rhss isa SparseMatrixCSC
-        ip_sys_exprs = [:($X.nzval[$i] = $(conv(rhs))) for (i, rhs) ∈ enumerate(_rhss)]
+        for (i, rhs) ∈ enumerate(_rhss)
+            rhs′ = conv(rhs)
+            (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
+            push!(ip_sys_exprs, :($X.nzval[$i] = $rhs′))
+        end
     else
-        ip_sys_exprs = [:($X[$(oidx(i))] = $(conv(rhs))) for (i, rhs) ∈ enumerate(_rhss)]
+        for (i, rhs) ∈ enumerate(_rhss)
+            rhs′ = conv(rhs)
+            (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
+            push!(ip_sys_exprs, :($X[$(oidx(i))] = $rhs′))
+        end
     end
 
     ip_let_expr = Expr(:let, var_eqs, build_expr(:block, ip_sys_exprs))
@@ -293,9 +361,9 @@ function _build_function(target::JuliaTarget, rhss, args...;
     end
 
     if expression == Val{true}
-        return oop_ex, iip_ex
+        return ModelingToolkit.inject_registered_module_functions(oop_ex), ModelingToolkit.inject_registered_module_functions(iip_ex)
     else
-        return GeneralizedGenerated.mk_function(@__MODULE__,oop_ex), GeneralizedGenerated.mk_function(@__MODULE__,iip_ex)
+        return _build_and_inject_function(@__MODULE__, oop_ex), _build_and_inject_function(@__MODULE__, iip_ex)
     end
 end
 

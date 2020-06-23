@@ -12,7 +12,7 @@ end
 
 """
 ```julia
-jacobian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+jacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
 ```
 
 A helper function for computing the Jacobian of an array of expressions with respect to
@@ -42,6 +42,11 @@ function simplified_expr(O::Operation)
   elseif isa(O.op, Variable)
     isempty(O.args) && return O.op.name
     return Expr(:call, Symbol(O.op), simplified_expr.(O.args)...)
+  end
+  if O.op === (^)
+      if length(O.args) > 1  && O.args[2] isa Constant && O.args[2].value < 0
+          return Expr(:call, :^, Expr(:call, :inv, simplified_expr(O.args[1])), -(O.args[2].value))
+      end
   end
   return Expr(:call, Symbol(O.op), simplified_expr.(O.args)...)
 end

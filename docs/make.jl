@@ -15,10 +15,12 @@ makedocs(
             "systems/AbstractSystem.md",
             "systems/ODESystem.md",
             "systems/SDESystem.md",
+            "systems/JumpSystem.md",
             "systems/NonlinearSystem.md",
             "systems/OptimizationSystem.md",
             "systems/ReactionSystem.md",
-            "systems/PDESystem.md"
+            "systems/PDESystem.md",
+            "systems/DependencyGraphs.md"
         ],
         "IR.md"
     ]

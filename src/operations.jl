@@ -54,6 +54,12 @@ Base.isequal(::Variable , ::Operation) = false
 Base.isequal(::Operation, ::Constant ) = false
 Base.isequal(::Constant , ::Operation) = false
 
+Base.hash(o::Operation, salt::UInt) = hash(o.args, hash(o.op, salt))
+
+# provide iszero for Operations to help sparse addition and multiplication
+# e.g., we want to tell the sparse library that iszero(zero(Operation) + zero(Operation)) == true
+Base.iszero(x::Operation) = (_x = simplify(x); _x isa Constant && iszero(_x.value))
+
 Base.show(io::IO, O::Operation) = print(io, convert(Expr, O))
 
 # For inv
@@ -62,6 +68,7 @@ Base.convert(::Type{Operation}, x::Number) = Operation(identity, Expression[Cons
 Base.convert(::Type{Operation}, x::Operation) = x
 Base.convert(::Type{Operation}, x::Expression) = Operation(identity, Expression[x])
 Operation(x) = convert(Operation, x)
+Operation(x::Operation) = x
 Base.Symbol(O::Operation) = Symbol(convert(Variable,O))
 Base.convert(::Type{Symbol},O::Operation) = Symbol(convert(Variable,O))
 
@@ -73,12 +80,5 @@ Base.convert(::Type{Expr},x::Operation) = Expr(x)
 Base.promote_rule(::Type{<:Constant}, ::Type{<:Operation}) = Operation
 Base.promote_rule(::Type{<:Operation}, ::Type{<:Constant}) = Operation
 
-# Fix Sparse MatMul
-Base.:*(A::SparseMatrixCSC{Operation,S}, x::StridedVector{Operation}) where {S} =
-    (T = Operation; mul!(similar(x, T, A.m), A, x, true, false))
-Base.:*(A::SparseMatrixCSC{Tx,S}, x::StridedVector{Operation}) where {Tx,S} =
-    (T = LinearAlgebra.promote_op(LinearAlgebra.matprod, Operation, Tx); mul!(similar(x, T, A.m), A, x, true, false))
-Base.:*(A::SparseMatrixCSC{Operation,S}, x::StridedVector{Tx}) where {Tx,S} =
-    (T = LinearAlgebra.promote_op(LinearAlgebra.matprod, Operation, Tx); mul!(similar(x, T, A.m), A, x, true, false))
-
 LinearAlgebra.lu(O::AbstractMatrix{<:Operation};kwargs...) = lu(O,Val(false);kwargs...)
+Base.real(x::Operation) = x

@@ -36,6 +36,7 @@ SymbolicUtils.symtype(x::Expression) = Number
 # SymbolicUtils -> ModelingToolkit
 
 simplify(expr::Expression) = SymbolicUtils.simplify(expr) |> to_mtk
+simplify(x::Equation) = simplify(x.lhs) ~ simplify(x.rhs)
 simplify(expr) = expr |> to_mtk
 
 @deprecate simplify_constants(ex) simplify(ex)
