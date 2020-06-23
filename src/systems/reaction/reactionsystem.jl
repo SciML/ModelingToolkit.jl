@@ -120,15 +120,15 @@ Continuing from the example in the [`Reaction`](@ref) definition:
 rs = ReactionSystem(rxs, t, [A,B,C,D], k)
 ```
 """
-struct ReactionSystem <: AbstractSystem
+struct ReactionSystem{U,V,W,X} <: AbstractSystem
     """The reactions defining the system."""
-    eqs::Vector{Reaction}
+    eqs::Vector{Reaction{U,V}}
     """Independent variable (usually time)."""
-    iv::Variable
+    iv::Variable{X}
     """Dependent (state) variables representing amount of each species."""
-    states::Vector{Variable}
+    states::Vector{Variable{W}}
     """Parameter variables."""
-    ps::Vector{Variable}
+    ps::Vector{Variable{X}}
     """The name of the system"""
     name::Symbol
     """systems: The internal systems"""
@@ -142,7 +142,7 @@ function ReactionSystem(eqs, iv, species, params; systems = ReactionSystem[],
     isempty(species) && error("ReactionSystems require at least one species.")
     paramvars = map(v -> convert(Variable,v), params)
     specvars  = map(s -> convert(Variable,s), species)
-    ReactionSystem(eqs, iv, specvars, paramvars, name, systems)
+    ReactionSystem(eqs, convert(Variable,iv), specvars, paramvars, name, systems)
 end
 
 # Calculate the ODE rate law
@@ -248,7 +248,7 @@ function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
     return true
 end
 
-@inline function makemajump(rx, rxvars)
+@inline function makemajump(rx)
     @unpack rate, substrates, substoich, netstoich = rx
     havesubstoich = (length(substoich) == 0)
     reactant_stoch = Vector{Pair{Operation,eltype(substoich)}}(undef, length(substoich))
