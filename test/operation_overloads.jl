@@ -15,6 +15,8 @@ aa = a; # old a
 
 @test isequal(get_variables(a+aa+1), [a])
 
+@test hash(a+b ~ c+d) == hash(a+b ~ c+d)
+
 # test some matrix operations don't throw errors
 X = [a b;c d]
 det(X)
