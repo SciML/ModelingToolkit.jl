@@ -97,7 +97,7 @@ function get_variables!(vars, e::Operation, varlist=nothing)
     else
         foreach(x -> get_variables!(vars, x, varlist), e.args)
     end
-    return unique(vars)
+    return (vars isa AbstractVector) ? unique!(vars) : vars
 end
 get_variables(e::Operation, varlist=nothing) = get_variables!(Operation[], e, varlist)
 
