@@ -142,7 +142,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
                                      version = nothing, tgrad=false,
                                      jac = false, Wfact = false,
-                                     sparse = false, eval_expression=true,
+                                     sparse = false, eval_expression = true,
                                      kwargs...) where {iip}
 
     f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
@@ -291,6 +291,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
                                     linenumbers = true, parallel=SerialForm(),
+                                    eval_expression = true,
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
@@ -298,7 +299,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
     p = varmap_to_vars(parammap,ps)
     f = ODEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
-                        sparse=sparse)
+                        sparse=sparse,eval_expression=eval_expression)
     ODEProblem{iip}(f,u0,tspan,p;kwargs...)
 end
 

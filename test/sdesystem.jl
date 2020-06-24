@@ -70,3 +70,11 @@ prob = SDEProblem(de,u0map,(0.0,100.0),parammap,sparsenoise=true)
 @test size(prob.noise_rate_prototype) == (3,3)
 @test prob.noise_rate_prototype isa SparseMatrixCSC
 sol = solve(prob,EM(),dt=0.001)
+
+# Test eval_expression=false
+function test_SDEFunction_no_eval()
+    # Need to test within a function scope to trigger world age issues
+    f = SDEFunction(de, eval_expression=false)
+    @test f([1.0,0.0,0.0], (10.0,26.0,2.33), (0.0,100.0)) ≈ [-10.0, 26.0, 0.0]
+end
+test_SDEFunction_no_eval()

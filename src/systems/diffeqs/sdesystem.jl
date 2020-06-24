@@ -101,9 +101,11 @@ respectively.
 function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps,
                                      u0 = nothing;
                                      version = nothing, tgrad=false, sparse = false,
-                                     jac = false, Wfact = false, kwargs...) where {iip}
-    f_oop,f_iip = ModelingToolkit.eval.(generate_function(sys, dvs, ps; expression=Val{true}, kwargs...))
-    g_oop,g_iip = ModelingToolkit.eval.(generate_diffusion_function(sys, dvs, ps; expression=Val{true}, kwargs...))
+                                     jac = false, Wfact = false, eval_expression = true, kwargs...) where {iip}
+    f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
+    f_oop,f_iip = eval_expression ? ModelingToolkit.eval.(f_gen) : f_gen
+    g_gen = generate_diffusion_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
+    g_oop,g_iip = eval_expression ? ModelingToolkit.eval.(g_gen) : g_gen
 
     f(u,p,t) = f_oop(u,p,t)
     f(du,u,p,t) = f_iip(du,u,p,t)
@@ -111,7 +113,8 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
     g(du,u,p,t) = g_iip(du,u,p,t)
 
     if tgrad
-        tgrad_oop,tgrad_iip = ModelingToolkit.eval.(generate_tgrad(sys, dvs, ps; expression=Val{true}, kwargs...))
+        tgrad_gen = generate_tgrad(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
+        tgrad_oop,tgrad_iip = eval_expression ? ModelingToolkit.eval.(tgrad_gen) : tgrad_gen
         _tgrad(u,p,t) = tgrad_oop(u,p,t)
         _tgrad(J,u,p,t) = tgrad_iip(J,u,p,t)
     else
@@ -119,7 +122,8 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
     end
 
     if jac
-        jac_oop,jac_iip = ModelingToolkit.eval.(generate_jacobian(sys, dvs, ps; expression=Val{true}, sparse=sparse, kwargs...))
+        jac_gen = generate_jacobian(sys, dvs, ps; expression=Val{eval_expression}, sparse=sparse, kwargs...)
+        jac_oop,jac_iip = eval_expression ? ModelingToolkit.eval.(jac_gen) : jac_gen
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else
@@ -128,8 +132,8 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
 
     if Wfact
         tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, true; expression=Val{true}, kwargs...)
-        Wfact_oop, Wfact_iip =  ModelingToolkit.eval.(tmp_Wfact)
-        Wfact_oop_t, Wfact_iip_t =  ModelingToolkit.eval.(tmp_Wfact_t)
+        Wfact_oop, Wfact_iip = eval_expression ? ModelingToolkit.eval.(tmp_Wfact) : tmp_Wfact
+        Wfact_oop_t, Wfact_iip_t = eval_expression ? ModelingToolkit.eval.(tmp_Wfact_t) : tmp_Wfact_t
         _Wfact(u,p,dtgamma,t) = Wfact_oop(u,p,dtgamma,t)
         _Wfact(W,u,p,dtgamma,t) = Wfact_iip(W,u,p,dtgamma,t)
         _Wfact_t(u,p,dtgamma,t) = Wfact_oop_t(u,p,dtgamma,t)
@@ -253,6 +257,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
                                     checkbounds = false, sparse = false,
                                     sparsenoise = sparse,
                                     linenumbers = true, parallel=SerialForm(),
+                                    eval_expression = true,
                                     kwargs...) where iip
 
     dvs = states(sys)
@@ -262,7 +267,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
     f = SDEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,
                          checkbounds=checkbounds,
                          linenumbers=linenumbers,parallel=parallel,
-                         sparse=sparse)
+                         sparse=sparse, eval_expression=eval_expression)
     if typeof(sys.noiseeqs) <: AbstractVector
         noise_rate_prototype = nothing
     elseif sparsenoise
