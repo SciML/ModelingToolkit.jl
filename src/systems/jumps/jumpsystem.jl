@@ -259,7 +259,7 @@ end
 get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables) = get_variables!(dep, jump.rate, variables)
 
 function get_variables!(dep, jump::MassActionJump, variables)
-    get_variables!(dep, jump.scaled_rates, variables)
+    !(jump.scaled_rates isa Number) && get_variables!(dep, jump.scaled_rates, variables)
     for varasop in jump.reactant_stoch
         (varasop[1].op in variables) && push!(dep, varasop[1])
     end
