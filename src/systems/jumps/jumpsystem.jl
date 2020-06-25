@@ -256,10 +256,14 @@ end
 
 
 ### Functions to determine which states a jump depends on
-get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables) = get_variables!(dep, jump.rate, variables)
+function get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables) 
+    (jump.rate isa Operation) && get_variables!(dep, jump.rate, variables)
+    dep
+end
 
 function get_variables!(dep, jump::MassActionJump, variables)
-    get_variables!(dep, jump.scaled_rates, variables)
+    sr = jump.scaled_rates
+    (sr isa Operation) && get_variables!(dep, sr, variables)
     for varasop in jump.reactant_stoch
         (varasop[1].op in variables) && push!(dep, varasop[1])
     end
