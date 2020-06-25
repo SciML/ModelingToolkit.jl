@@ -258,6 +258,7 @@ end
 ### Functions to determine which states a jump depends on
 function get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables) 
     (jump.rate isa Operation) && get_variables!(dep, jump.rate, variables)
+    dep
 end
 
 function get_variables!(dep, jump::MassActionJump, variables)
