@@ -29,3 +29,6 @@ d3 = Differential(x)(d2)
 
 @test simplified_expr(expand_derivatives(d3)) == :(0)
 @test simplified_expr(simplify(x^0)) == :(1)
+
+@test ModelingToolkit.substitute(2x + y == 1, Dict(x => 0.0, y => 0.0)).value === false
+@test ModelingToolkit.substitute(2x + y == 1, Dict(x => 0.0, y => 1.0)).value === true

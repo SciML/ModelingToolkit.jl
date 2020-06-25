@@ -117,19 +117,12 @@ substitute(expr::Operation, s::Vector)
 Performs the substitution `Operation => val` on the `expr` Operation.
 """
 substitute(expr::Constant, s) = expr
-substitute(expr::Operation, s::Pair) = _substitute(expr, [s[1]], [s[2]])
-substitute(expr::Operation, dict::Dict) = _substitute(expr, keys(dict), values(dict))
-substitute(expr::Operation, s::Vector) = _substitute(expr, first.(s), last.(s))
+substitute(expr::Operation, s::Pair) = substituter([s[1] => s[2]])(expr)
+substitute(expr::Operation, s::Union{Vector, Dict}) = substituter(s)(expr)
 
-function _substitute(ks, vs)
-    expr -> _substitute(expr, Dict(map(Pair, map(to_symbolic, ks), map(to_symbolic, vs))))
-end
-
-function substituter(ks, vs)
-    dict = Dict(map(Pair, map(to_symbolic, ks), map(to_symbolic, vs)))
+function substituter(pairs)
+    dict = Dict(to_symbolic(k) => to_symbolic(v)  for (k, v) in pairs)
     expr -> to_mtk(SymbolicUtils.simplify(SymbolicUtils.substitute(expr, dict)))
 end
-
-_substitute(expr, ks, vs) = substituter(ks, vs)(expr)
 
 @deprecate substitute_expr!(expr,s) substitute(expr,s)
