@@ -233,7 +233,7 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     # handling parameter substition and empty param vecs
     p = (prob.p == DiffEqBase.NullParameters()) ? Operation[] : prob.p
     parammap  = map((x,y)->Pair(x(),y), parameters(js), p)
-    subber    = substituter(first.(parammap), last.(parammap))
+    subber    = substituter(parammap)
 
     majs = MassActionJump[assemble_maj(js, j, statetoid, subber, invttype) for j in eqs.x[1]]
     crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
