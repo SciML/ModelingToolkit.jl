@@ -261,7 +261,6 @@ end
     #push!(rates, rate)
     net_stoch      = [Pair(var2op(p[1]),p[2]) for p in netstoich]
     #push!(nstoich, net_stoch)
-
     MassActionJump(rate, reactant_stoch, net_stoch, scale_rates=false, useiszero=false)
 end
 
@@ -284,7 +283,7 @@ function assemble_jumps(rs)
             end
         end
         if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep, stateset=stateset)
-            push!(meqs, makemajump(rx,rxvars))
+            push!(meqs, makemajump(rx))
         else
             rl     = jumpratelaw(rx, rxvars=rxvars)
             affect = Vector{Equation}()
