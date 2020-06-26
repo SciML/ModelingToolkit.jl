@@ -42,13 +42,22 @@ function expand_derivatives(O::Operation,simplify=true)
     if isa(O.op, Differential)
         (D, o) = (O.op, O.args[1])
 
+        o isa Constant      && return Constant(0)
         isequal(o, D.x)     && return Constant(1)
         occursin(D.x, o)    || return Constant(0)
         isa(o, Operation)   || return O
         isa(o.op, Variable) && return O
 
         x = sum(1:length(o.args)) do i
-            derivative(o, i) * expand_derivatives(D(o.args[i]),false)
+            t2 = expand_derivatives(D(o.args[i]),false)
+
+            if _iszero(t2)
+                return t2
+            elseif _isone(t2)
+                return derivative(o, i)
+            else
+                return derivative(o, i) * t2
+            end
         end
 
         return simplify ? ModelingToolkit.simplify(x) : x
@@ -56,6 +65,11 @@ function expand_derivatives(O::Operation,simplify=true)
 
     return simplify ? ModelingToolkit.simplify(O) : O
 end
+_iszero(x::Constant) = iszero(x.value)
+_isone(x::Constant) = isone(x.value)
+_iszero(x) = false
+_isone(x) = false
+
 expand_derivatives(x,args...) = x
 
 # Don't specialize on the function here
