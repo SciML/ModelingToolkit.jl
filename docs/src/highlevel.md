@@ -51,29 +51,29 @@ du
 
 ```julia
 3-element Array{Operation,1}:
-                     10.0 * (u₂(t) - u₁(t))
-             u₁(t) * (28.0 - u₃(t)) - u₂(t)
- u₁(t) * u₂(t) - 2.6666666666666665 * u₃(t)
- ```
+                 10.0 * (u₂(t) - u₁(t))
+         u₁(t) * (28.0 - u₃(t)) - u₂(t)
+u₁(t) * u₂(t) - 2.6666666666666665 * u₃(t)
+```
 
- Or similarly:
+Or similarly:
 
- ```julia
- @variables t x(t) y(t) z(t) dx(t) dy(t) dz(t)
- @parameters σ ρ β
- du = [dx,dy,dz]
- u = [x,y,z]
- p = [σ,ρ,β]
- lorenz(du,u,p,t)
- du
- ```
+```julia
+@variables t x(t) y(t) z(t) dx(t) dy(t) dz(t)
+@parameters σ ρ β
+du = [dx,dy,dz]
+u = [x,y,z]
+p = [σ,ρ,β]
+lorenz(du,u,p,t)
+du
+```
 
- ```julia
- 3-element Array{Operation,1}:
-                    10.0 * (y(t) - x(t))
-             x(t) * (28.0 - z(t)) - y(t)
- x(t) * y(t) - 2.6666666666666665 * z(t)
- ```
+```julia
+3-element Array{Operation,1}:
+                10.0 * (y(t) - x(t))
+         x(t) * (28.0 - z(t)) - y(t)
+x(t) * y(t) - 2.6666666666666665 * z(t)
+```
 
 ### Intermediate Calculations
 
