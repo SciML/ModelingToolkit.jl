@@ -95,6 +95,8 @@ daggerjac = eval(ModelingToolkit.build_function(vec(jac),u,parallel=ModelingTool
 MyA = zeros(N,N)
 AMx = zeros(N,N)
 DA  = zeros(N,N)
+_du = rand(N,N,3)
+_u = rand(N,N,3)
 
 f(_du,_u,nothing,0.0)
 multithreadedf(_du,_u)
