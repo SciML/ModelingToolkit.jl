@@ -10,7 +10,13 @@ makedocs(
                              canonical="https://mtk.sciml.ai/stable/"),
     pages=[
         "Home" => "index.md",
-        "highlevel.md",
+        "Tutorials" => Any[
+            "tutorials/ode_modeling.md",
+            "tutorials/higher_order.md",
+            "tutorials/nonlinear.md",
+            "tutorials/modelingtoolkitize.md",
+            "tutorials/auto_parallel.md"
+        ],
         "Systems" => Any[
             "systems/AbstractSystem.md",
             "systems/ODESystem.md",
@@ -22,6 +28,7 @@ makedocs(
             "systems/PDESystem.md",
             "systems/DependencyGraphs.md"
         ],
+        "highlevel.md",
         "IR.md"
     ]
 )
