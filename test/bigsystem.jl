@@ -47,6 +47,9 @@ f(du,u,nothing,0.0)
 
 multithreadedf = eval(ModelingToolkit.build_function(du,u,parallel=ModelingToolkit.MultithreadedForm())[2])
 
+MyA = zeros(N,N);
+AMx = zeros(N,N);
+DA = zeros(N,N);
 # Loop to catch syncronization issues
 for i in 1:100
    _du = rand(N,N,3)
