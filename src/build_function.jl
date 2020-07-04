@@ -140,7 +140,7 @@ function _build_and_inject_function(mod::Module, ex)
     params = typeof(runtimefn).parameters
     fn_expr = GeneralizedGenerated.NGG.from_type(params[3])
 
-    # Inject our externally registered module functions 
+    # Inject our externally registered module functions
     new_expr = ModelingToolkit.inject_registered_module_functions(fn_expr)
 
     # Reconstruct the RuntimeFn's Body
@@ -273,6 +273,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
               end
            end)
         ip_let_expr.args[2] =  ModelingToolkit.build_expr(:block, threaded_exprs)
+		ip_let_expr = :(@sync begin $ip_let_expr end)
     elseif parallel isa DistributedForm
 		numworks = Distributed.nworkers()
 		lens = Int(ceil(length(ip_let_expr.args[2].args)/numworks))
@@ -291,9 +292,11 @@ function _build_function(target::JuliaTarget, rhss, args...;
 		resunpack_exprs = [:($(Symbol(reducevars[iter])) = fetch($(spawnvars[iter]))) for iter in 1:numworks]
 
 		ip_let_expr.args[2] = quote
-			$spawn_exprs
-			$(resunpack_exprs...)
-			$(ip_let_expr.args[2])
+			@sync begin
+				$spawn_exprs
+				$(resunpack_exprs...)
+				$(ip_let_expr.args[2])
+			end
 		end
     elseif parallel isa DaggerForm
         @assert HAS_DAGGER[] "Dagger.jl is not loaded; please do `using Dagger`"
@@ -308,9 +311,11 @@ function _build_function(target::JuliaTarget, rhss, args...;
             $(Symbol(reducevar)) = collect(Dagger.delayed(vcat)($(computevars...)))
         end
         ip_let_expr.args[2] = quote
-            $delayed_exprs
-            $reduce_expr
-            $(ip_let_expr.args[2])
+			@sync begin
+	            $delayed_exprs
+	            $reduce_expr
+	            $(ip_let_expr.args[2])
+			end
         end
 	end
 
