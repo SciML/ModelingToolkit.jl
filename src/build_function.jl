@@ -333,7 +333,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
 
 	xname = gensym(:MTK)
 
-	arr_sys_expr = typeof(rhss) <: Vector && typeof(rhss) <: Matrix && !(eltype(rhss) <: AbstractArray) ? quote
+	arr_sys_expr = (typeof(rhss) <: Vector || typeof(rhss) <: Matrix) && !(eltype(rhss) <: AbstractArray) ? quote
 		if typeof($(fargs.args[1])) <: Union{StaticArrays.SArray,ModelingToolkit.LabelledArrays.SLArray}
 			$xname = @SArray $arr_sys_expr
 			convert(typeof($(fargs.args[1])),$xname)
