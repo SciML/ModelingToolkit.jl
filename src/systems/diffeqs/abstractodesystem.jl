@@ -153,7 +153,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                       jac = _jac === nothing ? nothing : DiffEqBase.EvalFunc(_jac),
                       tgrad = _tgrad === nothing ? nothing : DiffEqBase.EvalFunc(_tgrad),
                       mass_matrix = _M,
-                      jac_prototype = sparse ? similar(sys.jac,Float64) : nothing,
+                      jac_prototype = sparse ? similar(sys.jac[],Float64) : nothing,
                       syms = Symbol.(states(sys)))
 end
 
@@ -203,7 +203,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
-    jp_expr = sparse ? :(similar($(sys.jac),Float64)) : :nothing
+    jp_expr = sparse ? :(similar($(sys.jac[]),Float64)) : :nothing
 
     ex = quote
         f = $f
