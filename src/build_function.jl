@@ -332,11 +332,11 @@ function _build_function(target::JuliaTarget, rhss, args...;
     end
 
 	arr_sys_expr = !(typeof(rhss) <: SparseMatrixCSC || eltype(rhss) <: Number) ? quote
-		if typeof($(fargs.args[1])) <: SArray
+		convert(typeof($(fargs.args[1])),if typeof($(fargs.args[1])) <: Union{SArray,SLArray}
 			@SArray $arr_sys_expr
 		else
 			$arr_sys_expr
-		end
+		end)
 	end : arr_sys_expr
 
     let_expr = Expr(:let, var_eqs, tuple_sys_expr)
