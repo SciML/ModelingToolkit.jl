@@ -24,7 +24,7 @@ i.e., f(u,p,args...) for the out-of-place and scalar functions and
 ```julia
 build_function(ex, args...;
                conv = simplified_expr, expression = Val{true},
-               checkbounds = false, constructor=nothing,
+               checkbounds = false,
                linenumbers = false, target = JuliaTarget())
 ```
 
@@ -46,8 +46,6 @@ Keyword Arguments:
 
 - `checkbounds`: For whether to enable bounds checking inside of the generated
   function. Defaults to false, meaning that `@inbounds` is applied.
-- `constructor`: Allows for an arbitrary constructor function to be passed in
-  for handling expressions of "weird" types. Defaults to nothing.
 - `linenumbers`: Determines whether the generated function expression retains
   the line numbers. Defaults to true.
 - `target`: The output target of the compilation process. Possible options are:
@@ -104,7 +102,7 @@ end
 # Scalar output
 function _build_function(target::JuliaTarget, op::Operation, args...;
                          conv = simplified_expr, expression = Val{true},
-                         checkbounds = false, constructor=nothing,
+                         checkbounds = false,
                          linenumbers = true, headerfun=addheader)
 
     argnames = [gensym(:MTKArg) for i in 1:length(args)]
@@ -165,7 +163,7 @@ end
 
 function _build_function(target::JuliaTarget, rhss, args...;
                          conv = simplified_expr, expression = Val{true},
-                         checkbounds = false, constructor=nothing,
+                         checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun=addheader, outputidxs=nothing,
                          skipzeros = false, parallel=SerialForm())
@@ -323,39 +321,21 @@ function _build_function(target::JuliaTarget, rhss, args...;
 
     if rhss isa Matrix
         arr_sys_expr = build_expr(:vcat, [build_expr(:row,[conv(rhs) for rhs ∈ rhss[i,:]]) for i in 1:size(rhss,1)])
-        # : x because ??? what to do in the general case?
-        _constructor = constructor === nothing ? :($(first(argnames)) isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SMatrix{$(size(rhss)...)} :  x->(out = similar(typeof($(fargs.args[1])),$(size(rhss)...)); out .= x)) : constructor
     elseif typeof(rhss) <: Array && !(typeof(rhss) <: Vector)
         vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
         arr_sys_expr = :(reshape($vector_form,$(size(rhss)...)))
-        _constructor = constructor === nothing ? :($(first(argnames)) isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SArray{$(size(rhss)...)} :  x->(out = similar(typeof($(fargs.args[1])),$(size(rhss)...)); out .= x)) : constructor
     elseif rhss isa SparseMatrixCSC
         vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ nonzeros(rhss)])
         arr_sys_expr = :(SparseMatrixCSC{eltype($(first(argnames))),Int}($(size(rhss)...), $(rhss.colptr), $(rhss.rowval), $vector_form))
-        # Static and sparse? Probably not a combo that will actually be hit, but give a default anyways
-        _constructor = constructor === nothing ? :($(first(argnames)) isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.SMatrix{$(size(rhss)...)} : x->x) : constructor
     else # Vector
         arr_sys_expr = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
-        # Handle vector constructor separately using `typeof(u)` to support things like LabelledArrays
-        _constructor = constructor === nothing ? :($(first(argnames)) isa ModelingToolkit.StaticArrays.StaticArray ? ModelingToolkit.StaticArrays.similar_type(typeof($(fargs.args[1])), eltype(X)) : x->convert(typeof($(fargs.args[1])),x)) : constructor
     end
 
     let_expr = Expr(:let, var_eqs, tuple_sys_expr)
     arr_let_expr = Expr(:let, var_eqs, arr_sys_expr)
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
-    arr_bounds_block = checkbounds ? arr_let_expr : :(@inbounds begin $arr_let_expr end)
+    oop_body_block = checkbounds ? arr_let_expr : :(@inbounds begin $arr_let_expr end)
     ip_bounds_block = checkbounds ? ip_let_expr : :(@inbounds begin $ip_let_expr end)
-
-    oop_body_block = :(
-      # If u is a weird non-StaticArray type and we want a sparse matrix, just do the optimized sparse anyways
-      if $(fargs.args[1]) isa Array || (!(typeof($(fargs.args[1])) <: StaticArray) && $(rhss isa SparseMatrixCSC))
-          return $arr_bounds_block
-      else
-          X = $bounds_block
-          construct = $_constructor
-          return construct(X)
-      end
-    )
 
     oop_ex = headerfun(oop_body_block, fargs, false)
     iip_ex = headerfun(ip_bounds_block, fargs, true; X=X)
