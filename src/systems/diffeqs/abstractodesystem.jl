@@ -153,6 +153,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                       jac = _jac === nothing ? nothing : DiffEqBase.EvalFunc(_jac),
                       tgrad = _tgrad === nothing ? nothing : DiffEqBase.EvalFunc(_tgrad),
                       mass_matrix = _M,
+                      jac_prototype = sparse ? similar(sys.jac,Float64) : nothing,
                       syms = Symbol.(states(sys)))
 end
 
@@ -202,6 +203,8 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
+    jp_expr = sparse ? :(similar($(sys.jac),Float64)) : :nothing
+
     ex = quote
         f = $f
         tgrad = $_tgrad
@@ -212,6 +215,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                          jac = jac,
                          tgrad = tgrad,
                          mass_matrix = M,
+                         jac_prototype = $jp_expr,
                          syms = $(Symbol.(states(sys))))
     end
     !linenumbers ? striplines(ex) : ex
@@ -232,7 +236,7 @@ end
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
-                                    jac = false, 
+                                    jac = false,
                                     checkbounds = false, sparse = false,
                                     simplify = true,
                                     linenumbers = true, parallel=SerialForm(),
