@@ -331,10 +331,18 @@ function _build_function(target::JuliaTarget, rhss, args...;
         arr_sys_expr = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
     end
 
+	arr_sys_expr = quote
+		if typeof($(fargs.args[1])) <: SArray && $(!(rhss isa SparseMatrixCSC))
+			@SArray $arr_sys_expr
+		else
+			$arr_sys_expr
+		end
+	end
+
     let_expr = Expr(:let, var_eqs, tuple_sys_expr)
     arr_let_expr = Expr(:let, var_eqs, arr_sys_expr)
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
-    oop_body_block = checkbounds ? arr_let_expr : :(@inbounds begin $arr_let_expr end)
+    arr_bounds_block = checkbounds ? arr_let_expr : :(@inbounds begin $arr_let_expr end)
     ip_bounds_block = checkbounds ? ip_let_expr : :(@inbounds begin $ip_let_expr end)
 
     oop_ex = headerfun(oop_body_block, fargs, false)
