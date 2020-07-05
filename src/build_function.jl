@@ -342,10 +342,10 @@ function _build_function(target::JuliaTarget, rhss, args...;
     let_expr = Expr(:let, var_eqs, tuple_sys_expr)
     arr_let_expr = Expr(:let, var_eqs, arr_sys_expr)
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
-    arr_bounds_block = checkbounds ? arr_let_expr : :(@inbounds begin $arr_let_expr end)
+    oop_bounds_block = checkbounds ? arr_let_expr : :(@inbounds begin $arr_let_expr end)
     ip_bounds_block = checkbounds ? ip_let_expr : :(@inbounds begin $ip_let_expr end)
 
-    oop_ex = headerfun(oop_body_block, fargs, false)
+    oop_ex = headerfun(oop_bounds_block, fargs, false)
     iip_ex = headerfun(ip_bounds_block, fargs, true; X=X)
 
     if !linenumbers

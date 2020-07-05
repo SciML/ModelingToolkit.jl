@@ -52,8 +52,6 @@ du = @SArray zeros(3)
 u  = SVector(1:3...)
 p  = SVector(4:6...)
 @test f(u, p, 0.1) === @SArray [4, 0, -16]
-@test sol isa SArray
-@test sol ≈ -(I/0.2 - J)\ones(3)
 
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y*t,
