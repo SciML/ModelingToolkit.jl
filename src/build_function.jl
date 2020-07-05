@@ -331,8 +331,8 @@ function _build_function(target::JuliaTarget, rhss, args...;
         arr_sys_expr = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
     end
 
-	arr_sys_expr = !(typeof(rhss) <: SparseMatrixCSC || eltype(rhss) <: Number) ? quote
-		convert(typeof($(fargs.args[1])),if typeof($(fargs.args[1])) <: Union{SArray,SLArray}
+	arr_sys_expr = !(typeof(rhss) <: SparseMatrixCSC || eltype(rhss) <: AbstractArray) ? quote
+		convert(typeof($(fargs.args[1])),if typeof($(fargs.args[1])) <: Union{StaticArrays.SArray,ModelingToolkit.LabelledArrays.SLArray}
 			@SArray $arr_sys_expr
 		else
 			$arr_sys_expr
