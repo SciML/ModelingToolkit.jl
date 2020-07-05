@@ -331,13 +331,13 @@ function _build_function(target::JuliaTarget, rhss, args...;
         arr_sys_expr = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
     end
 
-	arr_sys_expr = quote
-		if typeof($(fargs.args[1])) <: SArray && $(!(rhss isa SparseMatrixCSC))
+	arr_sys_expr = !(typeof(rhss) <: SparseMatrixCSC || eltype(rhss) <: Number) ? quote
+		if typeof($(fargs.args[1])) <: SArray
 			@SArray $arr_sys_expr
 		else
 			$arr_sys_expr
 		end
-	end
+	end : arr_sys_expr
 
     let_expr = Expr(:let, var_eqs, tuple_sys_expr)
     arr_let_expr = Expr(:let, var_eqs, arr_sys_expr)
