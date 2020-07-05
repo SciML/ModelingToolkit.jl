@@ -40,7 +40,7 @@ struct ODESystem <: AbstractODESystem
     Jacobian matrix. Note: this field will not be defined until
     [`calculate_jacobian`](@ref) is called on the system.
     """
-    jac::RefValue{Matrix{Expression}}
+    jac::RefValue{Any}
     """
     `Wfact` matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
@@ -68,7 +68,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     dvs′ = convert.(Variable,dvs)
     ps′ = convert.(Variable,ps)
     tgrad = RefValue(Vector{Expression}(undef, 0))
-    jac = RefValue(Matrix{Expression}(undef, 0, 0))
+    jac = RefValue{Any}(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
     ODESystem(deqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name, systems)

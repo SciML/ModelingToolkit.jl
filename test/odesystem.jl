@@ -39,8 +39,6 @@ jac = calculate_jacobian(de)
 jacfun = eval(jac_expr[2])
 # iip
 f = ODEFunction(de, [x,y,z], [σ,ρ,β])
-Wfact, Wfact_t = ModelingToolkit.calculate_factorized_W(de)
-fw, fwt = map(eval, ModelingToolkit.generate_factorized_W(de))
 du = zeros(3)
 u  = collect(1:3)
 p  = collect(4:6)
@@ -48,29 +46,12 @@ f(du, u, p, 0.1)
 @test du == [4, 0, -16]
 J = zeros(3, 3)
 jacfun(J, u, p, t)
-FW = zeros(3, 3)
-FWt = zeros(3, 3)
-eval(fw[2])(FW, u, p, 0.2, 0.1)
-eval(fwt[2])(FWt, u, p, 0.2, 0.1)
 # oop
 f = ODEFunction(de, [x,y,z], [σ,ρ,β])
-fw, fwt = map(eval, ModelingToolkit.generate_factorized_W(de))
 du = @SArray zeros(3)
 u  = SVector(1:3...)
 p  = SVector(4:6...)
 @test f(u, p, 0.1) === @SArray [4, 0, -16]
-Sfw = eval(fw[1])(u, p, 0.2, 0.1)
-@test Sfw.L ≈ UnitLowerTriangular(FW)
-@test Sfw.U ≈ UpperTriangular(FW)
-sol = Sfw \ @SArray ones(3)
-@test sol isa SArray
-@test sol ≈ -(I - 0.2*J)\ones(3)
-Sfw_t = eval(fwt[1])(u, p, 0.2, 0.1)
-@test Sfw_t.L ≈ UnitLowerTriangular(FWt)
-@test Sfw_t.U ≈ UpperTriangular(FWt)
-sol = Sfw_t \ @SArray ones(3)
-@test sol isa SArray
-@test sol ≈ -(I/0.2 - J)\ones(3)
 
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y*t,
@@ -212,8 +193,7 @@ p  = [k₁ => 0.04,
 tspan = (0.0,100000.0)
 prob1 = ODEProblem(sys,u0,tspan,p)
 prob2 = ODEProblem(sys,u0,tspan,p,jac=true)
-prob3 = ODEProblem(sys,u0,tspan,p,Wfact=true,Wfact_t=true)
-for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
+for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12)]
     sol = solve(prob, Rodas5())
     @test all(x->≈(sum(x), 1.0, atol=atol), sol.u)
 end

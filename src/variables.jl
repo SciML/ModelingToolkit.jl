@@ -246,7 +246,7 @@ varmap_to_vars(varmap,varlist)
 Takes a list of pairs of variables=>values and an ordered list of variables and
 creates the array of values in the correct order
 """
-function varmap_to_vars(varmap,varlist)
+function varmap_to_vars(varmap::AbstractArray{<:Pair},varlist)
     out = similar(varmap,typeof(last(first(varmap))))
     for i in 1:length(varmap)
         ivar = convert(Variable,varmap[i][1])
@@ -258,6 +258,6 @@ function varmap_to_vars(varmap,varlist)
     # Does things like MArray->SArray
     ArrayInterface.restructure(varmap,out)
 end
-
+varmap_to_vars(varmap::AbstractArray,varlist) = varmap
 varmap_to_vars(varmap::DiffEqBase.NullParameters,varlist) = varmap
 varmap_to_vars(varmap::Nothing,varlist) = varmap
