@@ -13,6 +13,7 @@ struct Equation
     rhs::Expression
 end
 Base.:(==)(a::Equation, b::Equation) = isequal((a.lhs, a.rhs), (b.lhs, b.rhs))
+Base.hash(a::Equation, salt::UInt) = hash(a.lhs, hash(a.rhs, salt))
 
 """
 $(TYPEDSIGNATURES)

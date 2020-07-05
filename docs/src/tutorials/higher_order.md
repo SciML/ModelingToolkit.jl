@@ -1,0 +1,59 @@
+# Automatic Transformation of Nth Order ODEs to 1st Order ODEs
+
+ModelingToolkit has a system for transformations of mathematical
+systems. These transformations allow for symbolically changing
+the representation of the model to problems that are easier to
+numerically solve. One simple to demonstrate transformation is the
+`ode_order_lowering` transformation that sends an Nth order ODE
+to a 1st order ODE.
+
+To see this, let's define a second order riff on the Lorenz equations.
+We utilize the derivative operator twice here to define the second order:
+
+```julia
+using ModelingToolkit, OrdinaryDiffEq
+
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
+
+eqs = [D(D(x)) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
+
+sys = ODESystem(eqs)
+```
+
+Note that we could've used an alternative syntax for 2nd order, i.e.
+`@derivatives E''~t` and then `E(x)` would be the second derivative,
+and this syntax extends to Nth order.
+
+Now let's transform this into the ODESystem of first order components.
+We do this by simply calling `ode_order_lowering`:
+
+```julia
+sys = ode_order_lowering(sys)
+```
+
+Now we can directly numerically solve the lowered system. Note that,
+following the original problem, the solution requires knowing the
+initial condition for `x'`, and thus we include that in our input
+specification:
+
+```julia
+u0 = [D(x) => 2.0,
+      x => 1.0,
+      y => 0.0,
+      z => 0.0]
+
+p  = [σ => 28.0,
+      ρ => 10.0,
+      β => 8/3]
+
+tspan = (0.0,100.0)
+prob = ODEProblem(sys,u0,tspan,p,jac=true)
+sol = solve(prob,Tsit5())
+using Plots; plot(sol,vars=(x,y))
+```
+
+![Lorenz2](https://user-images.githubusercontent.com/1814174/79118645-744eb580-7d5c-11ea-9c37-13c4efd585ca.png)

@@ -262,7 +262,7 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     # handling parameter substition and empty param vecs
     p = (prob.p == DiffEqBase.NullParameters()) ? Operation[] : prob.p
     parammap  = map((x,y)->Pair(x(),y), parameters(js), p)
-    subber    = substituter(first.(parammap), last.(parammap))
+    subber    = substituter(parammap)
 
     majs = MassActionJump[assemble_maj(j, statetoid, subber, invttype) for j in eqs.x[1]]
     crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
@@ -285,10 +285,14 @@ end
 
 
 ### Functions to determine which states a jump depends on
-get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables) = get_variables!(dep, jump.rate, variables)
+function get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables) 
+    (jump.rate isa Operation) && get_variables!(dep, jump.rate, variables)
+    dep
+end
 
 function get_variables!(dep, jump::MassActionJump, variables)
-    get_variables!(dep, jump.scaled_rates, variables)
+    sr = jump.scaled_rates
+    (sr isa Operation) && get_variables!(dep, sr, variables)
     for varasop in jump.reactant_stoch
         (varasop[1].op in variables) && push!(dep, varasop[1])
     end

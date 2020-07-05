@@ -46,35 +46,73 @@ end
 f(du,u,nothing,0.0)
 
 multithreadedf = eval(ModelingToolkit.build_function(du,u,parallel=ModelingToolkit.MultithreadedForm())[2])
-_du = rand(N,N,3)
-_u = rand(N,N,3)
-multithreadedf(_du,_u)
+
+MyA = zeros(N,N);
+AMx = zeros(N,N);
+DA = zeros(N,N);
+# Loop to catch syncronization issues
+for i in 1:100
+   _du = rand(N,N,3)
+   _u = rand(N,N,3)
+   multithreadedf(_du,_u)
+   _du2 = copy(_du)
+   f(_du2,_u,nothing,0.0)
+   @test _du ≈ _du2
+end
+
+#=
+jac = sparse(ModelingToolkit.jacobian(vec(du),vec(u)))
+fjac = eval(ModelingToolkit.build_function(jac,u,parallel=ModelingToolkit.SerialForm())[2])
+multithreadedfjac = eval(ModelingToolkit.build_function(jac,u,parallel=ModelingToolkit.MultithreadedForm())[2])
+
+u = rand(N,N,3)
+J = similar(jac,Float64)
+fjac(J,u)
+
+J2 = similar(jac,Float64)
+multithreadedfjac(J2,u)
+@test J ≈ J2
+
+using FiniteDiff
+J3 = Array(similar(jac,Float64))
+FiniteDiff.finite_difference_jacobian!(J2,(du,u)->f!(du,u,nothing,nothing),u)
+maximum(J2 .- Array(J)) < 1e-5
+=#
 
 using Distributed
 addprocs(4)
 distributedf = eval(ModelingToolkit.build_function(du,u,parallel=ModelingToolkit.DistributedForm())[2])
 
+using Dagger
+daggerf = eval(ModelingToolkit.build_function(du,u,parallel=ModelingToolkit.DaggerForm())[2])
+
 jac = sparse(ModelingToolkit.jacobian(vec(du),vec(u),simplify=false))
 serialjac = eval(ModelingToolkit.build_function(vec(jac),u)[2])
 multithreadedjac = eval(ModelingToolkit.build_function(vec(jac),u,parallel=ModelingToolkit.MultithreadedForm())[2])
 distributedjac = eval(ModelingToolkit.build_function(vec(jac),u,parallel=ModelingToolkit.DistributedForm())[2])
+daggerjac = eval(ModelingToolkit.build_function(vec(jac),u,parallel=ModelingToolkit.DaggerForm())[2])
 
 MyA = zeros(N,N)
 AMx = zeros(N,N)
 DA  = zeros(N,N)
+_du = rand(N,N,3)
+_u = rand(N,N,3)
 
 f(_du,_u,nothing,0.0)
 multithreadedf(_du,_u)
 #distributedf(_du,_u)
+#daggerf(_du,_u)
 
 #=
 using BenchmarkTools
 @btime f(_du,_u,nothing,0.0)
 @btime multithreadedf(_du,_u)
 @btime distributedf(_du,_u)
+@btime daggerf(_du,_u)
 
 _jac = similar(jac,Float64)
 @btime serialjac(_jac,_u)
 @btime multithreadedjac(_jac,_u)
 @btime distributedjac(_jac,_u)
+@btime daggerjac(_jac,_u)
 =#
