@@ -336,10 +336,14 @@ function _build_function(target::JuliaTarget, rhss, args...;
 	arr_sys_expr = (typeof(rhss) <: Vector || typeof(rhss) <: Matrix) && !(eltype(rhss) <: AbstractArray) ? quote
 		if typeof($(fargs.args[1])) <: Union{ModelingToolkit.StaticArrays.SArray,ModelingToolkit.LabelledArrays.SLArray}
 			$xname = ModelingToolkit.StaticArrays.@SArray $arr_sys_expr
-			convert(typeof($(fargs.args[1])),$xname)
+			if $(typeof(rhss) <: Vector) # Only try converting if it should match `u`
+				convert(typeof($(fargs.args[1])),$xname)
+			else
+				$xname
+			end
 		else
 			$xname = $arr_sys_expr
-			if !(typeof($(fargs.args[1])) <: Array)
+			if !(typeof($(fargs.args[1])) <: Array) && $(typeof(rhss) <: Vector)
 				convert(typeof($(fargs.args[1])),$xname)
 			else
 				$xname
