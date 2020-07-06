@@ -166,6 +166,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun=addheader, outputidxs=nothing,
+						 convert_oop = true,
                          skipzeros = false, parallel=SerialForm())
 
 	if multithread isa Bool
@@ -336,14 +337,14 @@ function _build_function(target::JuliaTarget, rhss, args...;
 	arr_sys_expr = (typeof(rhss) <: Vector || typeof(rhss) <: Matrix) && !(eltype(rhss) <: AbstractArray) ? quote
 		if typeof($(fargs.args[1])) <: Union{ModelingToolkit.StaticArrays.SArray,ModelingToolkit.LabelledArrays.SLArray}
 			$xname = ModelingToolkit.StaticArrays.@SArray $arr_sys_expr
-			if $(typeof(rhss) <: Vector) # Only try converting if it should match `u`
-				convert(typeof($(fargs.args[1])),$xname)
+			if $convert_oop && !(typeof($(fargs.args[1]))) <: Number) && $(typeof(rhss) <: Vector) # Only try converting if it should match `u`
+				similar_type($(fargs.args[1]),eltype($xname))($xname)
 			else
 				$xname
 			end
 		else
 			$xname = $arr_sys_expr
-			if !(typeof($(fargs.args[1])) <: Array) && $(typeof(rhss) <: Vector)
+			if $convert_oop && !(typeof($(fargs.args[1])) <: Array) && !(typeof($(fargs.args[1]))) <: Number) && $(typeof(rhss) <: Vector)
 				convert(typeof($(fargs.args[1])),$xname)
 			else
 				$xname
