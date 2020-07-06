@@ -69,12 +69,12 @@ function Reaction(rate, subs, prods, substoich, prodstoich;
       (isnothing(prodstoich)&&isnothing(substoich)) && error("Both substrate and product stochiometry inputs cannot be nothing.")
       if isnothing(subs)
         subs = Vector{Operation}()
-        isnothing(substoich) && error("If substrates are nothing, substrate stiocihometries have to be so too.")
+        !isnothing(substoich) && error("If substrates are nothing, substrate stiocihometries have to be so too.")
         substoich = typeof(prodstoich)()
     end
     if isnothing(prods)
         prods = Vector{Operation}()
-        isnothing(prodstoich) && error("If products are nothing, product stiocihometries have to be so too.")
+        !isnothing(prodstoich) && error("If products are nothing, product stiocihometries have to be so too.")
         prodstoich = typeof(substoich)()
     end
     ns = isnothing(netstoich) ? get_netstoich(subs, prods, substoich, prodstoich) : netstoich
@@ -120,15 +120,15 @@ Continuing from the example in the [`Reaction`](@ref) definition:
 rs = ReactionSystem(rxs, t, [A,B,C,D], k)
 ```
 """
-struct ReactionSystem{U,V,W,X} <: AbstractSystem
+struct ReactionSystem <: AbstractSystem
     """The reactions defining the system."""
-    eqs::Vector{Reaction{U,V}}
+    eqs::Vector{Reaction}
     """Independent variable (usually time)."""
-    iv::Variable{X}
+    iv::Variable
     """Dependent (state) variables representing amount of each species."""
-    states::Vector{Variable{W}}
+    states::Vector{Variable}
     """Parameter variables."""
-    ps::Vector{Variable{X}}
+    ps::Vector{Variable}
     """The name of the system"""
     name::Symbol
     """systems: The internal systems"""
