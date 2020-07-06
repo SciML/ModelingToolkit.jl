@@ -45,7 +45,6 @@ end
 
 function JumpSystem(eqs, iv, states, ps; systems = JumpSystem[],
                                           name = gensym(:JumpSystem))
-
     ap = ArrayPartition(MassActionJump[], ConstantRateJump[], VariableRateJump[])
     for eq in eqs
         if eq isa MassActionJump
@@ -61,6 +60,9 @@ function JumpSystem(eqs, iv, states, ps; systems = JumpSystem[],
 
     JumpSystem{typeof(ap)}(ap, convert(Variable,iv), convert.(Variable, states), convert.(Variable, ps), name, systems)
 end
+
+JumpSystem(eqs::ArrayPartition, iv, states, ps; systems = JumpSystem[], name = gensym(:JumpSystem)) =
+    JumpSystem{typeof(eqs)}(eqs, convert(Variable,iv), convert.(Variable, states), convert.(Variable, ps), name, systems)
 
 
 generate_rate_function(js, rate) = build_function(rate, states(js), parameters(js),
@@ -114,45 +116,64 @@ function assemble_crj_expr(js, crj, statetoid)
     end
 end
 
-function assemble_maj(js, maj::MassActionJump{U,Vector{Pair{V,W}},Vector{Pair{V2,W2}}},
-                      statetoid, subber, invttype) where {U,V,W,V2,W2}
-    sr = maj.scaled_rates
-    if sr isa Operation
-        pval = subber(sr).value
-    elseif sr isa Variable
-        pval = subber(sr()).value
+function numericrate(rate, subber)
+    if rate isa Operation
+        rval = subber(rate).value
+    elseif rate isa Variable
+        rval = subber(rate()).value
     else
-        pval = maj.scaled_rates
+        rval = rate
     end
+    rval
+end
 
+function numericrstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     rs = Vector{Pair{Int,W}}()
-    for (spec,stoich) in maj.reactant_stoch
-        if iszero(spec)
+    for (spec,stoich) in mtrs
+        if !(spec isa Operation) && iszero(spec)
             push!(rs, 0 => stoich)
         else
             push!(rs, statetoid[convert(Variable,spec)] => stoich)
         end
     end
     sort!(rs)
+    rs
+end
 
-    ns = Vector{Pair{Int,W2}}()
-    for (spec,stoich) in maj.net_stoch
-        iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
+function numericnstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
+    ns = Vector{Pair{Int,W}}()
+    for (spec,stoich) in mtrs
+        !(spec isa Operation) && iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
         push!(ns, statetoid[convert(Variable,spec)] => stoich)
     end
     sort!(ns)
-
-    maj = MassActionJump(convert(invttype, pval), rs, ns, scale_rates = false)
-    return maj
 end
 
+# assemble a numeric MassActionJump from a MT MassActionJump representing one rx.
+function assemble_maj(maj::MassActionJump, statetoid, subber, invttype)
+    rval = numericrate(maj.scaled_rates, subber)
+    rs   = numericrstoich(maj.reactant_stoch, statetoid)
+    ns   = numericnstoich(maj.net_stoch, statetoid)
+    maj  = MassActionJump(convert(invttype, rval), rs, ns, scale_rates = false)
+    maj
+end
+
+# For MassActionJumps that contain many reactions
+# function assemble_maj(maj::MassActionJump{U,V,W}, statetoid, subber,
+#                       invttype) where {U <: AbstractVector,V,W}
+#     rval = [convert(invttype,numericrate(sr, subber)) for sr in maj.scaled_rates]
+#     rs   = [numericrstoich(rs, statetoid) for rs in maj.reactant_stoch]
+#     ns   = [numericnstoich(ns, statetoid) for ns in maj.net_stoch]
+#     maj  = MassActionJump(rval, rs, ns, scale_rates = false)
+#     maj
+# end
 """
 ```julia
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan,
                                     parammap=DiffEqBase.NullParameters; kwargs...)
 ```
 
-Generates a blank DiscreteProblem for a pure jump JumpSystem to utilize as 
+Generates a blank DiscreteProblem for a pure jump JumpSystem to utilize as
 its `prob.prob`. This is used in the case where there are no ODEs
 and no SDEs associated with the system.
 
@@ -167,9 +188,17 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Tuple,
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
-    u0 = varmap_to_vars(u0map, states(sys))
-    p  = varmap_to_vars(parammap, parameters(sys))
-    # identity function to make syms works
+
+    (u0map isa AbstractVector) || error("For DiscreteProblems u0map must be an AbstractVector.")
+    u0d = Dict( convert(Variable,u[1]) => u[2] for u in u0map)
+    u0 = [u0d[u] for u in states(sys)]
+    if parammap != DiffEqBase.NullParameters()
+        (parammap isa AbstractVector) || error("For DiscreteProblems parammap must be an AbstractVector.")
+        pd  = Dict( convert(Variable,u[1]) => u[2] for u in parammap)
+        p  = [pd[u] for u in parameters(sys)]
+    else
+        p = parammap
+    end
     # EvalFunc because we know that the jump functions are generated via eval
     f  = DiffEqBase.EvalFunc(DiffEqBase.DISCRETE_INPLACE_DEFAULT)
     df = DiscreteFunction(f, syms=Symbol.(states(sys)))
@@ -235,7 +264,7 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     parammap  = map((x,y)->Pair(x(),y), parameters(js), p)
     subber    = substituter(parammap)
 
-    majs = MassActionJump[assemble_maj(js, j, statetoid, subber, invttype) for j in eqs.x[1]]
+    majs = MassActionJump[assemble_maj(j, statetoid, subber, invttype) for j in eqs.x[1]]
     crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]
     ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")

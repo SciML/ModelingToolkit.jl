@@ -69,12 +69,12 @@ function Reaction(rate, subs, prods, substoich, prodstoich;
       (isnothing(prodstoich)&&isnothing(substoich)) && error("Both substrate and product stochiometry inputs cannot be nothing.")
       if isnothing(subs)
         subs = Vector{Operation}()
-        (substoich!=nothing) && error("If substrates are nothing, substrate stiocihometries have to be so too.")
+        !isnothing(substoich) && error("If substrates are nothing, substrate stiocihometries have to be so too.")
         substoich = typeof(prodstoich)()
     end
     if isnothing(prods)
         prods = Vector{Operation}()
-        (prodstoich!=nothing) && error("If products are nothing, product stiocihometries have to be so too.")
+        !isnothing(prodstoich) && error("If products are nothing, product stiocihometries have to be so too.")
         prodstoich = typeof(substoich)()
     end
     ns = isnothing(netstoich) ? get_netstoich(subs, prods, substoich, prodstoich) : netstoich
@@ -140,8 +140,9 @@ function ReactionSystem(eqs, iv, species, params; systems = ReactionSystem[],
 
 
     isempty(species) && error("ReactionSystems require at least one species.")
-    paramvars = isempty(params) ? Variable[] : convert.(Variable, params)
-    ReactionSystem(eqs, iv, convert.(Variable,species), paramvars, name, systems)
+    paramvars = map(v -> convert(Variable,v), params)
+    specvars  = map(s -> convert(Variable,s), species)
+    ReactionSystem(eqs, convert(Variable,iv), specvars, paramvars, name, systems)
 end
 
 # Calculate the ODE rate law
@@ -220,7 +221,8 @@ end
 """
 ```julia
 ismassaction(rx, rs; rxvars = get_variables(rx.rate),
-                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))
+                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars),
+                              stateset = Set(states(rs)))
 ```
 
 True if a given reaction is of mass action form, i.e. `rx.rate` does not depend
@@ -232,29 +234,56 @@ explicitly on the independent variable (usually time).
 - `rs`, a [`ReactionSystem`](@ref) containing the reaction.
 - Optional: `rxvars`, `Variable`s which are not in `rxvars` are ignored as possible dependencies.
 - Optional: `haveivdep`, `true` if the [`Reaction`](@ref) `rate` field explicitly depends on the independent variable.
+- Optional: `stateset`, set of states which if the rxvars are within mean rx is non-mass action.
 """
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
-                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars))
+                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars),
+                              stateset = Set(states(rs)))
     # if no dependencies must be zero order
-    if isempty(rxvars)
-        return true
-    else
-        return !(haveivdep || rx.only_use_rate || any(convert(Variable,rxv) in states(rs) for rxv in rxvars))
+    (length(rxvars)==0) && return true
+    (haveivdep || rx.only_use_rate) && return false
+    @inbounds for i = 1:length(rxvars)
+        (rxvars[i].op in stateset) && return false
     end
+    return true
+end
+
+@inline function makemajump(rx)
+    @unpack rate, substrates, substoich, netstoich = rx
+    havesubstoich = (length(substoich) == 0)
+    reactant_stoch = Vector{Pair{Operation,eltype(substoich)}}(undef, length(substoich))
+    @inbounds for i = 1:length(reactant_stoch)
+        reactant_stoch[i] = var2op(substrates[i].op) => substoich[i]
+    end
+    #push!(rstoich, reactant_stoch)
+    coef           = havesubstoich ? one(eltype(substoich)) : prod(stoich -> factorial(stoich), substoich)
+    rate           = isone(coef) ? rate : rate/coef
+    #push!(rates, rate)
+    net_stoch      = [Pair(var2op(p[1]),p[2]) for p in netstoich]
+    #push!(nstoich, net_stoch)
+    MassActionJump(rate, reactant_stoch, net_stoch, scale_rates=false, useiszero=false)
 end
 
 function assemble_jumps(rs)
-    eqs = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}()
+    meqs = MassActionJump[]; ceqs = ConstantRateJump[]; veqs = VariableRateJump[]
+    stateset = Set(states(rs))
+    #rates = [];  rstoich = []; nstoich = []
+    rxvars = Operation[]
+    ivname = rs.iv.name
 
+    isempty(equations(rs)) && error("Must give at least one reaction before constructing a JumpSystem.")
     for rx in equations(rs)
-        rxvars    = (rx.rate isa Operation) ? get_variables(rx.rate) : Operation[]
-        haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars)
-        if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep)
-            reactant_stoch = isempty(rx.substoich) ? [0 => 1] : [var2op(sub.op) => stoich for (sub,stoich) in zip(rx.substrates,rx.substoich)]
-            coef           = isempty(rx.substoich) ? one(eltype(rx.substoich)) : prod(stoich -> factorial(stoich), rx.substoich)
-            rate           = isone(coef) ? rx.rate : rx.rate/coef
-            net_stoch      = [Pair(var2op(p[1]),p[2]) for p in rx.netstoich]
-            push!(eqs, MassActionJump(rate, reactant_stoch, net_stoch, scale_rates=false))
+        empty!(rxvars)
+        (rx.rate isa Operation) && get_variables!(rxvars, rx.rate)
+        haveivdep = false
+        @inbounds for i = 1:length(rxvars)
+            if rxvars[i].op.name == ivname
+                haveivdep = true
+                break
+            end
+        end
+        if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep, stateset=stateset)
+            push!(meqs, makemajump(rx))
         else
             rl     = jumpratelaw(rx, rxvars=rxvars)
             affect = Vector{Equation}()
@@ -262,13 +291,14 @@ function assemble_jumps(rs)
                 push!(affect, var2op(spec) ~ var2op(spec) + stoich)
             end
             if haveivdep
-                push!(eqs, VariableRateJump(rl,affect))
+                push!(veqs, VariableRateJump(rl,affect))
             else
-                push!(eqs, ConstantRateJump(rl,affect))
+                push!(ceqs, ConstantRateJump(rl,affect))
             end
         end
     end
-    eqs
+    #eqs[1] = MassActionJump(rates, rstoich, nstoich, scale_rates=false, useiszero=false)
+    ArrayPartition(meqs,ceqs,veqs)
 end
 
 """
