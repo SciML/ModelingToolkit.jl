@@ -1,5 +1,5 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra, LabelledArrays
-using DiffEqBase
+using DiffEqBase, ForwardDiff
 using Test
 
 # Define some variables
@@ -9,7 +9,7 @@ using Test
 
 # Define a differential equation
 eqs = [D(x) ~ σ*(y-x),
-       D(y) ~ x*(ρ-z)-y,
+       D(y) ~ t*x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
 de = ODESystem(eqs)
@@ -30,3 +30,12 @@ p = SLVector(σ=10.0,ρ=26.0,β=8/3)
 @test ff.jac(c,p,0.0) isa Matrix
 @test ff.jac(a,p,0.0) == ff.jac(b,p,0.0)
 @test ff.jac(a,p,0.0) == ff.jac(c,p,0.0)
+
+# Test similar_type
+@test ff(b,p,ForwardDiff.Dual(0.0,1.0)) isa SLArray
+d = LVector(x=1.0,y=2.0,z=3.0)
+@test ff(d,p,ForwardDiff.Dual(0.0,1.0)) isa LArray
+@test ff.jac(b,p,ForwardDiff.Dual(0.0,1.0)) isa SArray
+@test eltype(ff.jac(b,p,ForwardDiff.Dual(0.0,1.0))) <: ForwardDiff.Dual
+@test ff.jac(d,p,ForwardDiff.Dual(0.0,1.0)) isa Array
+@test eltype(ff.jac(d,p,ForwardDiff.Dual(0.0,1.0))) <: ForwardDiff.Dual

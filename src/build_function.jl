@@ -166,6 +166,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun=addheader, outputidxs=nothing,
+						 convert_oop = true,
                          skipzeros = false, parallel=SerialForm())
 
 	if multithread isa Bool
@@ -336,17 +337,25 @@ function _build_function(target::JuliaTarget, rhss, args...;
 	arr_sys_expr = (typeof(rhss) <: Vector || typeof(rhss) <: Matrix) && !(eltype(rhss) <: AbstractArray) ? quote
 		if typeof($(fargs.args[1])) <: Union{ModelingToolkit.StaticArrays.SArray,ModelingToolkit.LabelledArrays.SLArray}
 			$xname = ModelingToolkit.StaticArrays.@SArray $arr_sys_expr
-			if $(typeof(rhss) <: Vector) # Only try converting if it should match `u`
-				convert(typeof($(fargs.args[1])),$xname)
+			if $convert_oop && !(typeof($(fargs.args[1])) <: Number) && $(typeof(rhss) <: Vector) # Only try converting if it should match `u`
+				return similar_type($(fargs.args[1]),eltype($xname))($xname)
 			else
-				$xname
+				return $xname
 			end
 		else
 			$xname = $arr_sys_expr
-			if !(typeof($(fargs.args[1])) <: Array) && $(typeof(rhss) <: Vector)
-				convert(typeof($(fargs.args[1])),$xname)
+			if $convert_oop && $(typeof(rhss) <: Vector)
+				if !(typeof($(fargs.args[1])) <: Array) && !(typeof($(fargs.args[1])) <: Number) && eltype($(fargs.args[1])) <: eltype($xname)
+					# Last condition: avoid known error because this doesn't change eltypes!
+					return convert(typeof($(fargs.args[1])),$xname)
+				elseif typeof($(fargs.args[1])) <: ModelingToolkit.LabelledArrays.LArray
+					# LArray just needs to add the names back!
+					return ModelingToolkit.LabelledArrays.LArray{ModelingToolkit.LabelledArrays.symnames(typeof($(fargs.args[1])))}($xname)
+				else
+					return $xname
+				end
 			else
-				$xname
+				return $xname
 			end
 		end
 	end : arr_sys_expr
