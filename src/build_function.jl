@@ -24,7 +24,8 @@ i.e., f(u,p,args...) for the out-of-place and scalar functions and
 ```julia
 build_function(ex, args...;
                conv = simplified_expr, expression = Val{true},
-               checkbounds = false,
+               checkbounds = false, convert_oop = true,
+			   force_SA = false,
                linenumbers = false, target = JuliaTarget())
 ```
 
@@ -48,6 +49,13 @@ Keyword Arguments:
   function. Defaults to false, meaning that `@inbounds` is applied.
 - `linenumbers`: Determines whether the generated function expression retains
   the line numbers. Defaults to true.
+- `convert_oop`: Determines whether the OOP version should try to convert
+  the output to match the type of the first input. This is useful for
+  cases like LabelledArrays or other array types that carry extra
+  information. Defaults to true.
+- `force_SA`: Forces the output of the OOP version to be a StaticArray.
+  Defaults to `false`, and outputs a static array when the first argument
+  is a static array.
 - `target`: The output target of the compilation process. Possible options are:
     - `JuliaTarget`: Generates a Julia function
     - `CTarget`: Generates a C function
@@ -166,7 +174,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun=addheader, outputidxs=nothing,
-						 convert_oop = true,
+						 convert_oop = true, force_SA = false,
                          skipzeros = false, parallel=SerialForm())
 
 	if multithread isa Bool
@@ -335,7 +343,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
 	xname = gensym(:MTK)
 
 	arr_sys_expr = (typeof(rhss) <: Vector || typeof(rhss) <: Matrix) && !(eltype(rhss) <: AbstractArray) ? quote
-		if typeof($(fargs.args[1])) <: Union{ModelingToolkit.StaticArrays.SArray,ModelingToolkit.LabelledArrays.SLArray}
+		if $force_SA || typeof($(fargs.args[1])) <: Union{ModelingToolkit.StaticArrays.SArray,ModelingToolkit.LabelledArrays.SLArray}
 			$xname = ModelingToolkit.StaticArrays.@SArray $arr_sys_expr
 			if $convert_oop && !(typeof($(fargs.args[1])) <: Number) && $(typeof(rhss) <: Vector) # Only try converting if it should match `u`
 				return similar_type($(fargs.args[1]),eltype($xname))($xname)
