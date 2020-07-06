@@ -344,10 +344,16 @@ function _build_function(target::JuliaTarget, rhss, args...;
 			end
 		else
 			$xname = $arr_sys_expr
-			if $convert_oop && !(typeof($(fargs.args[1])) <: Array) && !(typeof($(fargs.args[1]))) <: Number) && $(typeof(rhss) <: Vector)
-				convert(typeof($(fargs.args[1])),$xname)
-			else
-				$xname
+			if $convert_oop && $(typeof(rhss) <: Vector)
+				if !(typeof($(fargs.args[1])) <: Array) && !(typeof($(fargs.args[1]))) <: Number) && eltype($(fargs.args[1]))) <: eltype($xname)
+					# Last condition: avoid known error because this doesn't change eltypes!
+					convert(typeof($(fargs.args[1])),$xname)
+				elseif typeof($(fargs.args[1])) <: ModelingToolkit.LabelledArrays.LArray
+					# LArray just needs to add the names back!
+					ModelingToolkit.LabelledArrays.LArray{ModelingToolkit.LabelledArrays.symnames(typeof($(fargs.args[1])))}($xname)
+				else
+					$xname
+				end
 			end
 		end
 	end : arr_sys_expr
