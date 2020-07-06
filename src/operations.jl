@@ -58,9 +58,10 @@ Base.hash(o::Operation, salt::UInt) = hash(o.args, hash(o.op, salt))
 
 # provide iszero for Operations to help sparse addition and multiplication
 # e.g., we want to tell the sparse library that iszero(zero(Operation) + zero(Operation)) == true
+
 function Base.iszero(x::Operation)
     _x = SymbolicUtils.to_mpoly(to_symbolic(x))[1]
-    return iszero(_x)
+    return _x isa Number && iszero(_x)
 end
 
 Base.show(io::IO, O::Operation) = print(io, convert(Expr, O))
