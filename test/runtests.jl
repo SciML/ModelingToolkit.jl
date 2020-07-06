@@ -7,6 +7,7 @@ using SafeTestsets, Test
 @safetestset "Direct Usage Test" begin include("direct.jl") end
 @safetestset "Build Function Test" begin include("build_function.jl") end
 @safetestset "ODESystem Test" begin include("odesystem.jl") end
+@safetestset "LabelledArrays Test" begin include("labelledarrays.jl") end
 @safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
 @safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
 @safetestset "SDESystem Test" begin include("sdesystem.jl") end

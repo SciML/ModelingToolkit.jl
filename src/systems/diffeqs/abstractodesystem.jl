@@ -1,14 +1,19 @@
-function calculate_tgrad(sys::AbstractODESystem)
+function calculate_tgrad(sys::AbstractODESystem;
+                         simplify=true)
   isempty(sys.tgrad[]) || return sys.tgrad[]  # use cached tgrad, if possible
   rhs = [detime_dvs(eq.rhs) for eq ∈ equations(sys)]
   iv = sys.iv()
   notime_tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r)) for r in rhs]
   tgrad = retime_dvs.(notime_tgrad,(states(sys),),iv)
+  if simplify
+      tgrad = ModelingToolkit.simplify.(tgrad)
+  end
   sys.tgrad[] = tgrad
   return tgrad
 end
 
-function calculate_jacobian(sys::AbstractODESystem)
+function calculate_jacobian(sys::AbstractODESystem;
+                            sparse=false, simplify=true)
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
@@ -16,6 +21,15 @@ function calculate_jacobian(sys::AbstractODESystem)
     dvs = [dv(iv) for dv ∈ states(sys)]
 
     jac = expand_derivatives.(calculate_jacobian(rhs, dvs))
+
+    if simplify
+        jac = ModelingToolkit.simplify.(jac)
+    end
+
+    if sparse
+        jac = SparseArrays.sparse(jac)
+    end
+
     sys.jac[] = jac  # cache Jacobian
     return jac
 end
@@ -24,7 +38,7 @@ struct ODEToExpr
     sys::AbstractODESystem
     states::Vector{Variable}
 end
-ODEToExpr(sys) = ODEToExpr(sys,states(sys))
+ODEToExpr(@nospecialize(sys)) = ODEToExpr(sys,states(sys))
 function (f::ODEToExpr)(O::Operation)
     if isa(O.op, Variable)
         isequal(O.op, f.sys.iv) && return O.op.name  # independent variable
@@ -36,17 +50,16 @@ function (f::ODEToExpr)(O::Operation)
 end
 (f::ODEToExpr)(x) = convert(Expr, x)
 
-function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
-    tgrad = calculate_tgrad(sys)
+function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
+                        simplify = true, kwargs...)
+    tgrad = calculate_tgrad(sys,simplify=simplify)
     return build_function(tgrad, dvs, ps, sys.iv;
                           conv = ODEToExpr(sys), kwargs...)
 end
 
-function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); sparse = false, kwargs...)
-    jac = calculate_jacobian(sys)
-    if sparse
-        jac = SparseArrays.sparse(jac)
-    end
+function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
+                           simplify = true, sparse = false, kwargs...)
+    jac = calculate_jacobian(sys;simplify=simplify,sparse=sparse)
     return build_function(jac, dvs, ps, sys.iv;
                           conv = ODEToExpr(sys), kwargs...)
 end
@@ -59,48 +72,7 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
                           conv = ODEToExpr(sys),kwargs...)
 end
 
-function calculate_factorized_W(sys::AbstractODESystem, simplify=true)
-    isempty(sys.Wfact[]) || return (sys.Wfact[],sys.Wfact_t[])
-
-    jac = calculate_jacobian(sys)
-    M = calculate_massmatrix(sys)
-    gam = Variable(:__MTKWgamma)()
-
-    W = - M + gam*jac
-    Wfact = lu(W, Val(false), check=false).factors
-
-    if simplify
-        Wfact = ModelingToolkit.simplify.(Wfact)
-    end
-
-    W_t = - M/gam + jac
-    Wfact_t = lu(W_t, Val(false), check=false).factors
-    if simplify
-        Wfact_t = ModelingToolkit.simplify.(Wfact_t)
-    end
-    sys.Wfact[] = Wfact
-    sys.Wfact_t[] = Wfact_t
-
-    (Wfact,Wfact_t)
-end
-
-function generate_factorized_W(sys::AbstractODESystem, vs = states(sys), ps = parameters(sys), simplify=true, expression = Val{true}; kwargs...)
-    Wfact,Wfact_t = calculate_factorized_W(sys,simplify)
-    siz = size(Wfact)
-    constructor = :(x -> begin
-                        A = SMatrix{$siz...}(x)
-                        StaticArrays.LU(LowerTriangular( SMatrix{$siz...}(UnitLowerTriangular(A)) ), UpperTriangular(A), SVector(ntuple(n->n, max($siz...))))
-                    end)
-
-    Wfact_func   = build_function(Wfact  , vs, ps, Variable(:__MTKWgamma), sys.iv;
-                                  conv = ODEToExpr(sys), expression = expression, constructor=constructor,kwargs...)
-    Wfact_t_func = build_function(Wfact_t, vs, ps, Variable(:__MTKWgamma), sys.iv;
-                                  conv = ODEToExpr(sys), expression = expression, constructor=constructor,kwargs...)
-
-    return (Wfact_func, Wfact_t_func)
-end
-
-function calculate_massmatrix(sys::AbstractODESystem, simplify=true)
+function calculate_massmatrix(sys::AbstractODESystem; simplify=true)
     eqs = equations(sys)
     dvs = states(sys)
     M = zeros(length(eqs),length(eqs))
@@ -129,7 +101,7 @@ end
 function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing, tgrad=false,
-                                     jac = false, Wfact = false,
+                                     jac = false,
                                      sparse = false,
                                      kwargs...) where {iip}
 ```
@@ -141,8 +113,9 @@ respectively.
 function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
                                      version = nothing, tgrad=false,
-                                     jac = false, Wfact = false,
-                                     sparse = false, eval_expression = true,
+                                     jac = false,
+                                     eval_expression = true,
+                                     sparse = false, simplify = true,
                                      kwargs...) where {iip}
 
     f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
@@ -151,7 +124,9 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     f(du,u,p,t) = f_iip(du,u,p,t)
 
     if tgrad
-        tgrad_gen = generate_tgrad(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
+        tgrad_gen = generate_tgrad(sys, dvs, ps;
+                                   simplify=simplify,
+                                   expression=Val{eval_expression}, kwargs...)
         tgrad_oop,tgrad_iip = eval_expression ? ModelingToolkit.eval.(tgrad_gen) : tgrad_gen
         _tgrad(u,p,t) = tgrad_oop(u,p,t)
         _tgrad(J,u,p,t) = tgrad_iip(J,u,p,t)
@@ -160,24 +135,14 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     if jac
-        jac_gen = generate_jacobian(sys, dvs, ps; sparse = sparse, expression=Val{eval_expression}, kwargs...)
+        jac_gen = generate_jacobian(sys, dvs, ps;
+                                    simplify=simplify, sparse = sparse,
+                                    expression=Val{eval_expression}, kwargs...)
         jac_oop,jac_iip = eval_expression ? ModelingToolkit.eval.(jac_gen) : jac_gen
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else
         _jac = nothing
-    end
-
-    if Wfact
-        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
-        Wfact_oop, Wfact_iip =  eval_expression ? ModelingToolkit.eval.(tmp_Wfact) : tmp_Wfact
-        Wfact_oop_t, Wfact_iip_t =  eval_expression ? ModelingToolkit.eval.(tmp_Wfact_t) : tmp_Wfact_t
-        _Wfact(u,p,dtgamma,t) = Wfact_oop(u,p,dtgamma,t)
-        _Wfact(W,u,p,dtgamma,t) = Wfact_iip(W,u,p,dtgamma,t)
-        _Wfact_t(u,p,dtgamma,t) = Wfact_oop_t(u,p,dtgamma,t)
-        _Wfact_t(W,u,p,dtgamma,t) = Wfact_iip_t(W,u,p,dtgamma,t)
-    else
-        _Wfact,_Wfact_t = nothing,nothing
     end
 
     M = calculate_massmatrix(sys)
@@ -187,9 +152,8 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     ODEFunction{iip}(DiffEqBase.EvalFunc(f),
                       jac = _jac === nothing ? nothing : DiffEqBase.EvalFunc(_jac),
                       tgrad = _tgrad === nothing ? nothing : DiffEqBase.EvalFunc(_tgrad),
-                      Wfact = _Wfact === nothing ? nothing : DiffEqBase.EvalFunc(_Wfact),
-                      Wfact_t = _Wfact_t === nothing ? nothing : DiffEqBase.EvalFunc(_Wfact_t),
                       mass_matrix = _M,
+                      jac_prototype = sparse ? similar(sys.jac[],Float64) : nothing,
                       syms = Symbol.(states(sys)))
 end
 
@@ -198,7 +162,7 @@ end
 function DiffEqBase.ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing, tgrad=false,
-                                     jac = false, Wfact = false,
+                                     jac = false,
                                      sparse = false,
                                      kwargs...) where {iip}
 ```
@@ -212,50 +176,46 @@ struct ODEFunctionExpr{iip} end
 function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
                                      version = nothing, tgrad=false,
-                                     jac = false, Wfact = false,
-                                     sparse = false,linenumbers = false,
+                                     jac = false,
+                                     linenumbers = false,
+                                     sparse = false, simplify = true,
                                      kwargs...) where {iip}
 
     idx = iip ? 2 : 1
     f = generate_function(sys, dvs, ps; expression=Val{true}, kwargs...)[idx]
     if tgrad
-        _tgrad = generate_tgrad(sys, dvs, ps; expression=Val{true}, kwargs...)[idx]
+        _tgrad = generate_tgrad(sys, dvs, ps;
+                                simplify=simplify,
+                                expression=Val{true}, kwargs...)[idx]
     else
         _tgrad = :nothing
     end
 
     if jac
-        _jac = generate_jacobian(sys, dvs, ps; sparse = sparse, expression=Val{true}, kwargs...)[idx]
+        _jac = generate_jacobian(sys, dvs, ps;
+                                 sparse=sparse, simplify=simplify,
+                                 expression=Val{true}, kwargs...)[idx]
     else
         _jac = :nothing
-    end
-
-    if Wfact
-        tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps; expression=Val{true}, kwargs...)
-        _Wfact =  tmp_Wfact[idx]
-        _Wfact_t =  tmp_Wfact_t[idx]
-    else
-        _Wfact,_Wfact_t = :nothing,:nothing
     end
 
     M = calculate_massmatrix(sys)
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
+    jp_expr = sparse ? :(similar($(sys.jac[]),Float64)) : :nothing
+
     ex = quote
         f = $f
         tgrad = $_tgrad
         jac = $_jac
-        Wfact = $_Wfact
-        Wfact_t = $_Wfact_t
         M = $_M
 
         ODEFunction{$iip}(f,
                          jac = jac,
                          tgrad = tgrad,
-                         Wfact = Wfact,
-                         Wfact_t = Wfact_t,
                          mass_matrix = M,
+                         jac_prototype = $jp_expr,
                          syms = $(Symbol.(states(sys))))
     end
     !linenumbers ? striplines(ex) : ex
@@ -276,8 +236,9 @@ end
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
+                                    jac = false,
                                     checkbounds = false, sparse = false,
+                                    simplify = true,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 ```
@@ -288,8 +249,9 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
+                                    jac = false,
                                     checkbounds = false, sparse = false,
+                                    simplify = true,
                                     linenumbers = true, parallel=SerialForm(),
                                     eval_expression = true,
                                     kwargs...) where iip
@@ -297,8 +259,8 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
     ps = parameters(sys)
     u0 = varmap_to_vars(u0map,dvs)
     p = varmap_to_vars(parammap,ps)
-    f = ODEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
-                        linenumbers=linenumbers,parallel=parallel,
+    f = ODEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
+                        linenumbers=linenumbers,parallel=parallel,simplify=simplify,
                         sparse=sparse,eval_expression=eval_expression)
     ODEProblem{iip}(f,u0,tspan,p;kwargs...)
 end
@@ -308,9 +270,10 @@ end
 function DiffEqBase.ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
+                                    jac = false,
                                     checkbounds = false, sparse = false,
                                     linenumbers = true, parallel=SerialForm(),
+                                    simplify = true,
                                     kwargs...) where iip
 ```
 
@@ -323,16 +286,18 @@ struct ODEProblemExpr{iip} end
 function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
+                                    jac = false,
                                     checkbounds = false, sparse = false,
+                                    simplify = true,
                                     linenumbers = false, parallel=SerialForm(),
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
     u0 = varmap_to_vars(u0map,dvs)
     p = varmap_to_vars(parammap,ps)
-    f = ODEFunctionExpr{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
+    f = ODEFunctionExpr{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
+                        simplify=simplify,
                         sparse=sparse)
     ex = quote
         f = $f
@@ -359,7 +324,7 @@ end
 function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
+                                    jac = false,
                                     checkbounds = false, sparse = false,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
@@ -370,7 +335,7 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
+                                    jac = false,
                                     checkbounds = false, sparse = false,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
@@ -378,7 +343,7 @@ function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
     ps = parameters(sys)
     u0 = varmap_to_vars(u0map,dvs)
     p = varmap_to_vars(parammap,ps)
-    f = ODEFunction(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
+    f = ODEFunction(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
                         sparse=sparse)
     SteadyStateProblem(f,u0,p;kwargs...)
@@ -389,7 +354,7 @@ end
 function DiffEqBase.SteadyStateProblemExpr(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
+                                    jac = false,
                                     checkbounds = false, sparse = false,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
@@ -403,7 +368,7 @@ struct SteadyStateProblemExpr{iip} end
 function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
+                                    jac = false,
                                     checkbounds = false, sparse = false,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
@@ -411,7 +376,7 @@ function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
     ps = parameters(sys)
     u0 = varmap_to_vars(u0map,dvs)
     p = varmap_to_vars(parammap,ps)
-    f = ODEFunctionExpr(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,checkbounds=checkbounds,
+    f = ODEFunctionExpr(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
                         sparse=sparse)
     ex = quote
