@@ -41,7 +41,7 @@ function sparsejacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{
     exprs = Expression[]
 
     for (i,j) in zip(I, J)
-        push!(exprs, expand_derivatives(Differential(vars[j])(ops[i])))
+        push!(exprs, expand_derivatives(Differential(vars[j])(ops[i]), simplify))
     end
     sparse(I,J, exprs, length(ops), length(vars))
 end
