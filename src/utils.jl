@@ -1,6 +1,6 @@
 function make_operation(op, args...)
     if all(x-> x isa Constant || !(x isa Expression), args)
-        return op(map(x->x isa Constant ? x.value : x, args)...)
+        return Constant(op(map(x->x isa Constant ? x.value : x, args)...))
     else
         return op(args...)
     end

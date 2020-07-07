@@ -89,7 +89,7 @@ function expand_derivatives(O::Operation,simplify=true)
         end
 
         if isempty(exprs)
-            return c
+            return Constant(c)
         elseif length(exprs) == 1
             return simplify ? ModelingToolkit.simplify(exprs[1]) : exprs[1]
         else
