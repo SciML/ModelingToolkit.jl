@@ -1,6 +1,6 @@
 # ModelingToolkit.jl
 
-[![Build Status](https://travis-ci.org/SciML/ModelingToolkit.jl.svg?branch=master)](https://travis-ci.org/SciML/ModelingToolkit.jl)
+[![Build Status](https://travis-ci.com/SciML/ModelingToolkit.jl.svg?branch=master)](https://travis-ci.com/SciML/ModelingToolkit.jl)
 [![Coverage Status](https://coveralls.io/repos/SciML/ModelingToolkit.jl/badge.svg?branch=master&service=github)](https://coveralls.io/github/JuliaDiffEq/ModelingToolkit.jl?branch=master)
 [![codecov.io](http://codecov.io/github/SciML/ModelingToolkit.jl/coverage.svg?branch=master)](http://codecov.io/github/SciML/ModelingToolkit.jl?branch=master)
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](http://mtk.sciml.ai/stable/)
