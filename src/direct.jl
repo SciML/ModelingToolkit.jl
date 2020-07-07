@@ -24,6 +24,55 @@ end
 
 """
 ```julia
+sparsejacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
+```
+
+A helper function for computing the sparse Jacobian of an array of expressions with respect to
+an array of variable expressions.
+"""
+function sparsejacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
+    I = Int[]
+    J = Int[]
+    du = Expression[]
+
+    sp = jacobian_sparsity(ops, vars)
+    I,J,_ = findnz(sp)
+
+    exprs = Expression[]
+
+    for (i,j) in zip(I, J)
+        push!(exprs, expand_derivatives(Differential(vars[j])(ops[i])))
+    end
+    sparse(I,J, exprs, length(ops), length(vars))
+end
+
+using SymbolicUtils: @rule, Rewriters
+
+function jacobian_sparsity(du, u)
+    dict = Dict(zip(to_symbolic.(u), 1:length(u)))
+
+    i = Ref(1)
+    I = Int[]
+    J = Int[]
+
+    # This rewriter notes down which u's appear in a
+    # given du (whose index is stored in the `i` Ref)
+    r = [@rule ~x::(x->haskey(dict, x)) => begin
+        push!(I, i[])
+        push!(J, dict[~x])
+        nothing
+    end] |> Rewriters.Chain |> Rewriters.Postwalk
+
+    for ii = 1:length(du)
+        i[] = ii
+        r(to_symbolic(du[ii]))
+    end
+
+    sparse(I, J, true, length(du), length(u))
+end
+
+"""
+```julia
 hessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
 ```
 
