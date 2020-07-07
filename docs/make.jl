@@ -11,6 +11,7 @@ makedocs(
     pages=[
         "Home" => "index.md",
         "Tutorials" => Any[
+            "tutorials/symbolic_functions.md",
             "tutorials/ode_modeling.md",
             "tutorials/higher_order.md",
             "tutorials/nonlinear.md",
@@ -28,6 +29,7 @@ makedocs(
             "systems/PDESystem.md",
             "systems/DependencyGraphs.md"
         ],
+        "Comparison Against SymPy" => "comparison.md",
         "highlevel.md",
         "IR.md"
     ]

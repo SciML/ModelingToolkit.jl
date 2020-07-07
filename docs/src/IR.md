@@ -47,12 +47,9 @@ out all of the differentials, the `expand_derivatives` function eliminates all
 of the differentials down to basic one-variable expressions.
 
 ```@docs
+ModelingToolkit.derivative
 Differential
 expand_derivatives
-ModelingToolkit.derivative
-ModelingToolkit.gradient
-ModelingToolkit.jacobian
-ModelingToolkit.hessian
 ```
 
 Note that the generation of sparse matrices simply follows from the Julia semantics

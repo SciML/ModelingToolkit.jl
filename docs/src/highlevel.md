@@ -15,6 +15,14 @@ Base.:~(::Expression, ::Expression)
 modelingtoolkitize
 ```
 
+## Differentiation Functions
+
+```@docs
+ModelingToolkit.gradient
+ModelingToolkit.jacobian
+ModelingToolkit.hessian
+```
+
 ## Additional High-Level Explanations and Tips
 
 ### The Auto-Detecting System Constructors
