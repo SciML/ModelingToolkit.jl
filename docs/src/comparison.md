@@ -13,7 +13,7 @@ excels in many areas due to purposeful design decisions:
   slow and SymEngine was far too inflexible for the projects they were
   doing. Performance is key to ModelingToolkit.jl. If you find any
   performance issues, please file an issue.
-- build_function: `lambdify` is "fine" for some people, but if you're building
+- `build_function`: `lambdify` is "fine" for some people, but if you're building
   a super fast MPI-enabled Julia/C/Fortran simulation code, having a
   function that hits the Python interpreter is less than optimal. By
   default, `build_function` builds fast JIT-compiled functions due
