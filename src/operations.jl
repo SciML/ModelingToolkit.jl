@@ -61,7 +61,7 @@ Base.hash(o::Operation, salt::UInt) = hash(o.args, hash(o.op, salt))
 
 function Base.iszero(x::Operation)
     _x = SymbolicUtils.to_mpoly(to_symbolic(x))[1]
-    return _x isa Number && iszero(_x)
+    return (_x isa Number || _x isa SymbolicUtils.MPoly) && iszero(_x)
 end
 
 Base.show(io::IO, O::Operation) = print(io, convert(Expr, O))
