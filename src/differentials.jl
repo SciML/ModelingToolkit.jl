@@ -37,9 +37,8 @@ $(SIGNATURES)
 TODO
 """
 function expand_derivatives(O::Operation,simplify=true)
-    args = expand_derivatives.(O.args,false)
-
     if isa(O.op, Differential)
+        args = [expand_derivatives(a,false) for a in O.args]
         (D, o) = (O.op, args[1])
 
         if o isa Constant
@@ -76,7 +75,8 @@ function expand_derivatives(O::Operation,simplify=true)
             elseif _isone(t2)
                 derivative(o, i)
             else
-                derivative(o, i) * t2
+                t1 = derivative(o, i)
+                make_operation(*, [t1, t2])
             end
 
             if _iszero(x)
@@ -95,7 +95,7 @@ function expand_derivatives(O::Operation,simplify=true)
         elseif length(exprs) == 1
             return simplify ? ModelingToolkit.simplify(exprs[1]) : exprs[1]
         else
-            x = Operation(+, !iszero(c) ? vcat(c, exprs) : exprs)
+            x = make_operation(+, !iszero(c) ? vcat(c, exprs) : exprs)
             return simplify ? ModelingToolkit.simplify(x) : x
         end
     end
@@ -162,7 +162,7 @@ for (modu, fun, arity) ∈ DiffRules.diffrules()
 end
 
 derivative(::typeof(+), args::NTuple{N,Any}, ::Val) where {N} = 1
-derivative(::typeof(*), args::NTuple{N,Any}, ::Val{i}) where {N,i} = make_operation(*, deleteat!(collect(args), i)...)
+derivative(::typeof(*), args::NTuple{N,Any}, ::Val{i}) where {N,i} = make_operation(*, deleteat!(collect(args), i))
 derivative(::typeof(one), args::Tuple{<:Any}, ::Val) = 0
 
 function count_order(x)
