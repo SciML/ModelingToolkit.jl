@@ -74,6 +74,8 @@ function expand_derivatives(O::Operation,simplify=true)
 
         if isempty(exprs)
             return c
+        elseif length(exprs) == 1
+            return simplify ? ModelingToolkit.simplify(exprs[1]) : exprs[1]
         else
             x = Operation(+, !iszero(c) ? vcat(c, exprs) : exprs)
             return simplify ? ModelingToolkit.simplify(x) : x
@@ -142,7 +144,7 @@ for (modu, fun, arity) ∈ DiffRules.diffrules()
 end
 
 derivative(::typeof(+), args::NTuple{N,Any}, ::Val) where {N} = 1
-derivative(::typeof(*), args::NTuple{N,Any}, ::Val{i}) where {N,i} = Operation(*, deleteat!(collect(args), i))
+derivative(::typeof(*), args::NTuple{N,Any}, ::Val{i}) where {N,i} = *(deleteat!(collect(args), i)...)
 derivative(::typeof(one), args::Tuple{<:Any}, ::Val) = 0
 
 function count_order(x)

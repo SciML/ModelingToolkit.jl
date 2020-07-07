@@ -5,8 +5,11 @@ function Expression(ex;mod=Main)
 
     op = getproperty(mod,Symbol(ex.args[1]))
     args = convert.(Expression, ex.args[2:end])
-
-    return op(args...)
+    if all(x-> x isa Constant || !(x isa Expression), args)
+        return op(map(x->x isa Constant ? x.value : x, args)...)
+    else
+        return op(args...)
+    end
 end
 Base.convert(::Type{Expression}, x::Expression) = x
 Base.convert(::Type{Expression}, x::Number) = Constant(x)
