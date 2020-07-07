@@ -48,19 +48,36 @@ function expand_derivatives(O::Operation,simplify=true)
         isa(o, Operation)   || return O
         isa(o.op, Variable) && return O
 
-        x = sum(1:length(o.args)) do i
+        l = length(o.args)
+        exprs = Expression[]
+        c = 0
+
+        for i in 1:l
             t2 = expand_derivatives(D(o.args[i]),false)
 
-            if _iszero(t2)
-                return t2
+            x = if _iszero(t2)
+                t2
             elseif _isone(t2)
-                return derivative(o, i)
+                derivative(o, i)
             else
-                return derivative(o, i) * t2
+                derivative(o, i) * t2
+            end
+
+            if _iszero(x)
+                continue
+            elseif x isa Expression
+                push!(exprs, x)
+            else
+                c += x
             end
         end
 
-        return simplify ? ModelingToolkit.simplify(x) : x
+        if isempty(exprs)
+            return c
+        else
+            x = Operation(+, !iszero(c) ? vcat(c, exprs) : exprs)
+            return simplify ? ModelingToolkit.simplify(x) : x
+        end
     end
 
     return simplify ? ModelingToolkit.simplify(O) : O
