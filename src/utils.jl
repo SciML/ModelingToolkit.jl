@@ -6,7 +6,7 @@ function Expression(ex;mod=Main)
     op = getproperty(mod,Symbol(ex.args[1]))
     args = convert.(Expression, ex.args[2:end])
 
-    return Operation(op, args)
+    return op(args...)
 end
 Base.convert(::Type{Expression}, x::Expression) = x
 Base.convert(::Type{Expression}, x::Number) = Constant(x)
