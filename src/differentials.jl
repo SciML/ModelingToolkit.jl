@@ -37,16 +37,32 @@ $(SIGNATURES)
 TODO
 """
 function expand_derivatives(O::Operation,simplify=true)
-    @. O.args = expand_derivatives(O.args,false)
+    args = expand_derivatives.(O.args,false)
 
     if isa(O.op, Differential)
-        (D, o) = (O.op, O.args[1])
+        (D, o) = (O.op, args[1])
 
-        o isa Constant      && return Constant(0)
-        isequal(o, D.x)     && return Constant(1)
-        occursin(D.x, o)    || return Constant(0)
-        isa(o, Operation)   || return O
-        isa(o.op, Variable) && return O
+        if o isa Constant
+            return Constant(0)
+        elseif isequal(o, D.x)
+            return Constant(1)
+        elseif !occursin(D.x, o)
+            return Constant(0)
+        elseif !isa(o, Operation)
+            return O
+        elseif isa(o.op, Variable)
+            return O
+        elseif isa(o.op, Differential)
+            # The recursive expand_derivatives was not able to remove
+            # a nested Differential. We can attempt to differentiate the
+            # inner expression wrt to the outer iv. And leave the
+            # unexpandable Differential outside.
+            if isequal(o.op.x, D.x)
+                return O
+            else
+                return expand_derivatives(o.op(expand_derivatives(D(o.args[1]), false)), simplify)
+            end
+        end
 
         l = length(o.args)
         exprs = Expression[]
