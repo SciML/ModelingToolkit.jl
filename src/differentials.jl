@@ -49,7 +49,7 @@ function expand_derivatives(O::Operation,simplify=true)
         isa(o.op, Variable) && return O
 
         l = length(o.args)
-        exprs = []
+        exprs = Expression[]
         c = 0
 
         for i in 1:l
@@ -62,7 +62,10 @@ function expand_derivatives(O::Operation,simplify=true)
             else
                 derivative(o, i) * t2
             end
-            if x isa Expression
+
+            if _iszero(x)
+                continue
+            elseif x isa Expression
                 push!(exprs, x)
             else
                 c += x
