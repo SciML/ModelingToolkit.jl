@@ -176,7 +176,7 @@ A = sparse(Tridiagonal([x^i for i in 1:N-1],[x^i * y^(8-i) for i in 1:N], [y^i f
 Now we call `build_function`:
 
 ```julia
-clipboard(build_function(A,[x,y],parallel=ModelingToolkit.MultithreadedForm())[2])
+build_function(A,[x,y],parallel=ModelingToolkit.MultithreadedForm())[2]
 ```
 
 which generates the code:
