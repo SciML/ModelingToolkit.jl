@@ -83,6 +83,8 @@ function expand_derivatives(O::Operation,simplify=true)
                 continue
             elseif x isa Expression
                 push!(exprs, x)
+            elseif x isa Constant
+                c += x.value
             else
                 c += x
             end
