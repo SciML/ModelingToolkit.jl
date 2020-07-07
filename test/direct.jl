@@ -32,6 +32,13 @@ end
 @test all(canonequal.(ModelingToolkit.gradient(eqs[1],[x,y,z]),[σ * -1,σ,0]))
 @test all(canonequal.(ModelingToolkit.hessian(eqs[1],[x,y,z]),0))
 
+du = [x^2, y^3, x^4, sin(y), x+y, x+z^2, z+x, x+y^2+sin(z)]
+reference_jac = sparse(ModelingToolkit.jacobian(du, [x,y,z]))
+
+@test findnz(ModelingToolkit.jacobian_sparsity(du, [x,y,z]))[[1,2]] == findnz(reference_jac)[[1,2]]
+
+@test isequal(ModelingToolkit.sparsejacobian(du, [x,y,z]), reference_jac)
+
 Joop,Jiip = eval.(ModelingToolkit.build_function(∂,[x,y,z],[σ,ρ,β],t))
 J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test J isa Matrix
