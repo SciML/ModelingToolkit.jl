@@ -144,7 +144,7 @@ for (modu, fun, arity) ∈ DiffRules.diffrules()
 end
 
 derivative(::typeof(+), args::NTuple{N,Any}, ::Val) where {N} = 1
-derivative(::typeof(*), args::NTuple{N,Any}, ::Val{i}) where {N,i} = *(deleteat!(collect(args), i)...)
+derivative(::typeof(*), args::NTuple{N,Any}, ::Val{i}) where {N,i} = make_operation(*, deleteat!(collect(args), i)...)
 derivative(::typeof(one), args::Tuple{<:Any}, ::Val) = 0
 
 function count_order(x)
