@@ -37,16 +37,32 @@ $(SIGNATURES)
 TODO
 """
 function expand_derivatives(O::Operation,simplify=true)
-    @. O.args = expand_derivatives(O.args,false)
-
     if isa(O.op, Differential)
-        (D, o) = (O.op, O.args[1])
+        @assert length(O.args) == 1
+        arg = expand_derivatives(O.args[1], false)
+        (D, o) = (O.op, arg)
 
-        o isa Constant      && return Constant(0)
-        isequal(o, D.x)     && return Constant(1)
-        occursin(D.x, o)    || return Constant(0)
-        isa(o, Operation)   || return O
-        isa(o.op, Variable) && return O
+        if o isa Constant
+            return Constant(0)
+        elseif isequal(o, D.x)
+            return Constant(1)
+        elseif !occursin(D.x, o)
+            return Constant(0)
+        elseif !isa(o, Operation)
+            return O
+        elseif isa(o.op, Variable)
+            return O
+        elseif isa(o.op, Differential)
+            # The recursive expand_derivatives was not able to remove
+            # a nested Differential. We can attempt to differentiate the
+            # inner expression wrt to the outer iv. And leave the
+            # unexpandable Differential outside.
+            if isequal(o.op.x, D.x)
+                return O
+            else
+                return expand_derivatives(o.op(expand_derivatives(D(o.args[1]), false)), simplify)
+            end
+        end
 
         l = length(o.args)
         exprs = Expression[]
@@ -60,22 +76,27 @@ function expand_derivatives(O::Operation,simplify=true)
             elseif _isone(t2)
                 derivative(o, i)
             else
-                derivative(o, i) * t2
+                t1 = derivative(o, i)
+                make_operation(*, [t1, t2])
             end
 
             if _iszero(x)
                 continue
             elseif x isa Expression
                 push!(exprs, x)
+            elseif x isa Constant
+                c += x.value
             else
                 c += x
             end
         end
 
         if isempty(exprs)
-            return c
+            return Constant(c)
+        elseif length(exprs) == 1
+            return simplify ? ModelingToolkit.simplify(exprs[1]) : exprs[1]
         else
-            x = Operation(+, !iszero(c) ? vcat(c, exprs) : exprs)
+            x = make_operation(+, !iszero(c) ? vcat(c, exprs) : exprs)
             return simplify ? ModelingToolkit.simplify(x) : x
         end
     end
@@ -142,7 +163,7 @@ for (modu, fun, arity) ∈ DiffRules.diffrules()
 end
 
 derivative(::typeof(+), args::NTuple{N,Any}, ::Val) where {N} = 1
-derivative(::typeof(*), args::NTuple{N,Any}, ::Val{i}) where {N,i} = Operation(*, deleteat!(collect(args), i))
+derivative(::typeof(*), args::NTuple{N,Any}, ::Val{i}) where {N,i} = make_operation(*, deleteat!(collect(args), i))
 derivative(::typeof(one), args::Tuple{<:Any}, ::Val) = 0
 
 function count_order(x)

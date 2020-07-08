@@ -91,3 +91,9 @@ t1 = ModelingToolkit.gradient(tmp, [x1, x2])
 @variables x(t)
 @derivatives D'~k
 @test convert(Variable, D(x)).name === :xˍk
+
+using ModelingToolkit
+@variables t x(t)
+@derivatives ∂ₜ'~t ∂ₓ'~x
+L = .5 * ∂ₜ(x)^2 - .5 * x^2
+@test isequal(expand_derivatives(∂ₓ(L)), -1 * x)
