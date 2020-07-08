@@ -1,6 +1,6 @@
 using Test
-using Latexify
 using ModelingToolkit
+using Latexify
 
 ### Tips for generating latex tests:
 ### Latexify has an unexported macro:
@@ -25,6 +25,10 @@ using ModelingToolkit
 eqs = [D(x) ~ σ*(y-x)*D(x-y)/D(z),
        0 ~ σ*x*(ρ-z)/10-y,
        D(z) ~ x*y^(2//3) - β*z]
+
+latexify(ModelingToolkit.Constant(0))
+latexify(eqs[1].rhs)
+latexify(eqs[1])
 
 @test latexify(eqs) ==
 raw"\begin{align}
