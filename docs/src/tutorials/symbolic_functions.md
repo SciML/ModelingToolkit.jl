@@ -30,6 +30,26 @@ Constant(0)  Constant(0)           2y
   y ^ 2 + x  Constant(0)  Constant(0)
 ```
 
+To better view the results, we can use [Latexify.jl](https://github.com/korsbo/Latexify.jl).
+ModelingToolkit.jl comes with Latexify recipes so it works automatically:
+
+```julia
+using Latexify
+latexify(A)
+```
+
+```math
+L"\begin{equation}
+\left[
+\begin{array}{ccc}
+x ^ 2 + y & ModelingToolkit.Constant(0) & 2x \\
+ModelingToolkit.Constant(0) & ModelingToolkit.Constant(0) & 2y \\
+y ^ 2 + x & ModelingToolkit.Constant(0) & ModelingToolkit.Constant(0) \\
+\end{array}
+\right]
+\end{equation}
+```
+
 Normal Julia functions work on ModelingToolkit expressions, so if we
 want to create the sparse version of `A` we would just call `sparse`:
 
