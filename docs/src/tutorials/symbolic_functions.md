@@ -39,7 +39,7 @@ latexify(A)
 ```
 
 ```math
-L"\begin{equation}
+\begin{equation}
 \left[
 \begin{array}{ccc}
 x ^ 2 + y & ModelingToolkit.Constant(0) & 2x \\
