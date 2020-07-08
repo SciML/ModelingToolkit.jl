@@ -23,6 +23,19 @@ ModelingToolkit.jacobian
 ModelingToolkit.hessian
 ```
 
+## Latexification
+
+ModelingToolkit.jl's expressions support Latexify.jl, and thus
+
+```julia
+using Latexify
+latexify(ex)
+```
+
+will produce LaTeX output from ModelingToolkit models and expressions.
+This works on basics like `Operation` all the way to higher primitives
+like `ODESystem` and `ReactionSystem`.
+
 ## Additional High-Level Explanations and Tips
 
 ### The Auto-Detecting System Constructors
