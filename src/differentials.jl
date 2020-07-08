@@ -38,8 +38,9 @@ TODO
 """
 function expand_derivatives(O::Operation,simplify=true)
     if isa(O.op, Differential)
-        args = [expand_derivatives(a,false) for a in O.args]
-        (D, o) = (O.op, args[1])
+        @assert length(O.args) == 1
+        arg = expand_derivatives(O.args[1], false)
+        (D, o) = (O.op, arg)
 
         if o isa Constant
             return Constant(0)
