@@ -41,14 +41,7 @@ function NonlinearSystem(eqs, states, ps;
     NonlinearSystem(eqs, convert.(Variable,states), convert.(Variable,ps), name, systems)
 end
 
-function calculate_jacobian(sys::NonlinearSystem)
-    rhs = [eq.rhs for eq in sys.eqs]
-    jac = expand_derivatives.(calculate_jacobian(rhs, [dv() for dv in states(sys)]))
-    return jac
-end
-
-function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys);
-                           sparse = false, kwargs...)
+function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=true)
     rhs = [eq.rhs for eq ∈ equations(sys)]
     vals = [dv() for dv in states(sys)]
     if sparse
@@ -56,6 +49,12 @@ function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = paramete
     else
         jac = jacobian(rhs, vals, simplify=simplify)
     end
+    return jac
+end
+
+function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys);
+                           sparse = false, simplify = true, kwargs...)
+    calculate_jacobian(sys,sparse=sparse, simplify=simplify)
     return build_function(jac, convert.(Variable,vs), convert.(Variable,ps);
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
