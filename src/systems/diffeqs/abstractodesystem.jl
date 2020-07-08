@@ -20,14 +20,10 @@ function calculate_jacobian(sys::AbstractODESystem;
     iv = sys.iv()
     dvs = [dv(iv) for dv ∈ states(sys)]
 
-    jac = expand_derivatives.(calculate_jacobian(rhs, dvs))
-
-    if simplify
-        jac = ModelingToolkit.simplify.(jac)
-    end
-
     if sparse
-        jac = SparseArrays.sparse(jac)
+        jac = sparsejacobian(rhs, dvs, simplify=simplify)
+    else
+        jac = jacobian(rhs, dvs, simplify=simplify)
     end
 
     sys.jac[] = jac  # cache Jacobian

@@ -49,9 +49,12 @@ end
 
 function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys);
                            sparse = false, kwargs...)
-    jac = calculate_jacobian(sys)
+    rhs = [eq.rhs for eq ∈ equations(sys)]
+    vals = [dv() for dv in states(sys)]
     if sparse
-        jac = SparseArrays.sparse(jac)
+        jac = sparsejacobian(rhs, vals, simplify=simplify)
+    else
+        jac = jacobian(rhs, vals, simplify=simplify)
     end
     return build_function(jac, convert.(Variable,vs), convert.(Variable,ps);
                           conv = AbstractSysToExpr(sys), kwargs...)
