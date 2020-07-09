@@ -74,7 +74,7 @@ between these two models:
 @variables α(t)
 @parameters γ
 connections = [0 ~ lorenz1.x + lorenz2.y + sin(α*γ)]
-connected = ODESystem(connections,[α],[γ],systems=[lorenz1,lorenz2])
+connected = ODESystem(connections,t,[α],[γ],systems=[lorenz1,lorenz2])
 ```
 
 This `ODESystem` thus connects the two Lorenz systems and defines the
