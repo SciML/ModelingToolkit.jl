@@ -11,7 +11,8 @@ function make_operation(@nospecialize(op), args)
         end
     end
     if !isempty(args) && all(x-> x isa Constant || !(x isa Expression), args)
-        return Constant(op(map(x->x isa Constant ? x.value : x, args)...))
+        x = op(map(x->x isa Constant ? x.value : x, args)...)
+        return x isa Expression ? x : Constant(x)
     else
         return op(args...)
     end
