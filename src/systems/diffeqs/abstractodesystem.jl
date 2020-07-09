@@ -269,7 +269,7 @@ function DiffEqBase.ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     jac = false,
                                     checkbounds = false, sparse = false,
                                     linenumbers = true, parallel=SerialForm(),
-                                    skipzeros=true, fill_zero=true,
+                                    skipzeros=true, fillzeros=true,
                                     simplify = true,
                                     kwargs...) where iip
 ```
@@ -353,7 +353,7 @@ function DiffEqBase.SteadyStateProblemExpr(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false,
                                     checkbounds = false, sparse = false,
-                                    skipzeros=true, fill_zero=true,
+                                    skipzeros=true, fillzeros=true,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 ```

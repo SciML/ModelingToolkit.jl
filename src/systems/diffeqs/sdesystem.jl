@@ -164,7 +164,7 @@ function DiffEqBase.SDEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sy
                                      ps = parameters(sys);
                                      version = nothing, tgrad=false,
                                      jac = false, Wfact = false,
-                                     skipzeros = true, fill_zero = true,
+                                     skipzeros = true, fillzeros = true,
                                      sparse = false,
                                      kwargs...) where {iip}
 ```
@@ -245,7 +245,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
                                     sparsenoise = sparse,
-                                    skipzeros = true, fill_zero = true,
+                                    skipzeros = true, fillzeros = true,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...)
 ```

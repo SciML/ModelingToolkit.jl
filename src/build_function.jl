@@ -184,7 +184,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
                          linenumbers = false, multithread=nothing,
                          headerfun=addheader, outputidxs=nothing,
 						 convert_oop = true, force_SA = false,
-                         skipzeros = true, fill_zero = true, parallel=SerialForm(), kwargs...)
+                         skipzeros = true, fillzeros = true, parallel=SerialForm(), kwargs...)
 
 	if multithread isa Bool
 		@warn("multithraded is deprecated for the parallel argument. See the documentation.")
@@ -224,7 +224,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
 	end
 
     ip_sys_exprs = Expr[]
-    if fill_zero
+    if fillzeros
         push!(ip_sys_exprs, :($fill_array_with_zero!($X)))
     end
     if is_array_array_sparse_matrix(rhss) # Array of arrays of sparse matrices

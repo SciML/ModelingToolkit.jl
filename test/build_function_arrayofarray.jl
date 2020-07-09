@@ -19,7 +19,7 @@ function h_dense_arraymat_julia!(out, x)
 end
 
 h_dense_arraymat_ip! = eval(ModelingToolkit.build_function(h_dense_arraymat, [a, b, c])[2])
-h_dense_arraymat_ip_skip! = eval(ModelingToolkit.build_function(h_dense_arraymat, [a, b, c], skipzeros=true, fill_zero=false)[2])
+h_dense_arraymat_ip_skip! = eval(ModelingToolkit.build_function(h_dense_arraymat, [a, b, c], skipzeros=true, fillzeros=false)[2])
 out_1_arraymat = [fill(42, 2, 2) for i in 1:3]
 out_2_arraymat = deepcopy(out_1_arraymat)
 h_dense_arraymat_julia!(out_1_arraymat, input)
