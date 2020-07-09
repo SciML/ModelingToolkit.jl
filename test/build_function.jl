@@ -15,7 +15,7 @@ end
 h_str = ModelingToolkit.build_function(h, [a], [b], [c1, c2, c3], [d], [e], [g])
 h_oop = eval(h_str[1])
 h_ip! = eval(h_str[2])
-h_ip_skip! = eval(ModelingToolkit.build_function(h, [a], [b], [c1, c2, c3], [d], [e], [g], skipzeros=true)[2])
+h_ip_skip! = eval(ModelingToolkit.build_function(h, [a], [b], [c1, c2, c3], [d], [e], [g], skipzeros=true, fill_zero=false)[2])
 inputs = ([1], [2], [3, 4, 5], [6], [7], [8])
 
 @test h_oop(inputs...) == h_julia(inputs...)

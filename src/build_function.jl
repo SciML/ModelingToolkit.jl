@@ -225,7 +225,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
 
     ip_sys_exprs = Expr[]
     if fill_zero
-        push!(ip_sys_exprs, :(fill_array_with_zero!($X)))
+        push!(ip_sys_exprs, :($fill_array_with_zero!($X)))
     end
     if is_array_array_sparse_matrix(rhss) # Array of arrays of sparse matrices
         for (i, rhsel) ∈ enumerate(_rhss)
