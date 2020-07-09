@@ -1,4 +1,4 @@
-function make_operation(op, args)
+function make_operation(@nospecialize(op), args)
     if op === (*)
         args = filter(!_isone, args)
         if isempty(args)

@@ -77,7 +77,7 @@ function expand_derivatives(O::Operation,simplify=true)
                 derivative(o, i)
             else
                 t1 = derivative(o, i)
-                make_operation(*, [t1, t2])
+                make_operation(*, Expression[t1, t2])
             end
 
             if _iszero(x)
