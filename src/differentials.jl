@@ -99,9 +99,11 @@ function expand_derivatives(O::Operation,simplify=true)
             x = make_operation(+, !iszero(c) ? vcat(c, exprs) : exprs)
             return simplify ? ModelingToolkit.simplify(x) : x
         end
+    else
+        args = map(a->expand_derivatives(a, false), O.args)
+        O1 = make_operation(O.op, args)
+        return simplify ? ModelingToolkit.simplify(O1) : O1
     end
-
-    return simplify ? ModelingToolkit.simplify(O) : O
 end
 _iszero(x::Constant) = iszero(x.value)
 _isone(x::Constant) = isone(x.value)
