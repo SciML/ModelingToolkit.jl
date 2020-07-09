@@ -97,3 +97,4 @@ using ModelingToolkit
 @derivatives ∂ₜ'~t ∂ₓ'~x
 L = .5 * ∂ₜ(x)^2 - .5 * x^2
 @test isequal(expand_derivatives(∂ₓ(L)), -1 * x)
+@test isequal(expand_derivatives(Differential(x)(L) - ∂ₜ(Differential(∂ₜ(x))(L))), -1 * (∂ₜ(∂ₜ(x)) + x))
