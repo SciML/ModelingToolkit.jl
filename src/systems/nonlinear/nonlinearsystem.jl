@@ -54,7 +54,7 @@ end
 
 function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys);
                            sparse = false, simplify = true, kwargs...)
-    calculate_jacobian(sys,sparse=sparse, simplify=simplify)
+    jac = calculate_jacobian(sys,sparse=sparse, simplify=simplify)
     return build_function(jac, convert.(Variable,vs), convert.(Variable,ps);
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
