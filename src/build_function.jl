@@ -169,13 +169,22 @@ function is_array_array_sparse_matrix(F)
     return isa(F, AbstractVector) && all(x->isa(x, AbstractArray{<:AbstractSparseMatrix}), F)
 end
 
+function fill_array_with_zero!(x::AbstractArray)
+    if eltype(x) isa AbstractArray
+        foreach(fill_array_with_zero!, x)
+    else
+        fill!(x, false)
+    end
+    return x
+end
+
 function _build_function(target::JuliaTarget, rhss, args...;
                          conv = simplified_expr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun=addheader, outputidxs=nothing,
 						 convert_oop = true, force_SA = false,
-                         skipzeros = false, parallel=SerialForm())
+                         skipzeros = true, fill_zero = true, parallel=SerialForm(), kwargs...)
 
 	if multithread isa Bool
 		@warn("multithraded is deprecated for the parallel argument. See the documentation.")
@@ -215,6 +224,9 @@ function _build_function(target::JuliaTarget, rhss, args...;
 	end
 
     ip_sys_exprs = Expr[]
+    if fill_zero
+        push!(ip_sys_exprs, :(fill_array_with_zero!($X)))
+    end
     if is_array_array_sparse_matrix(rhss) # Array of arrays of sparse matrices
         for (i, rhsel) ∈ enumerate(_rhss)
             for (j, rhsel2) ∈ enumerate(rhsel)
