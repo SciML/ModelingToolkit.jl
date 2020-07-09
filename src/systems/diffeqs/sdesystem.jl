@@ -164,6 +164,7 @@ function DiffEqBase.SDEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sy
                                      ps = parameters(sys);
                                      version = nothing, tgrad=false,
                                      jac = false, Wfact = false,
+                                     skipzeros = true, fillzeros = true,
                                      sparse = false,
                                      kwargs...) where {iip}
 ```
@@ -223,7 +224,7 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
                          Wfact = Wfact,
                          Wfact_t = Wfact_t,
                          mass_matrix = M,
-                         syms = $(Symbol.(states(sys))))
+                         syms = $(Symbol.(states(sys))),kwargs...)
     end
     !linenumbers ? striplines(ex) : ex
 end
@@ -244,6 +245,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
                                     sparsenoise = sparse,
+                                    skipzeros = true, fillzeros = true,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...)
 ```
@@ -267,7 +269,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
     f = SDEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,
                          checkbounds=checkbounds,
                          linenumbers=linenumbers,parallel=parallel,
-                         sparse=sparse, eval_expression=eval_expression)
+                         sparse=sparse, eval_expression=eval_expression,kwargs...)
     if typeof(sys.noiseeqs) <: AbstractVector
         noise_rate_prototype = nothing
     elseif sparsenoise
@@ -315,7 +317,7 @@ function SDEProblemExpr{iip}(sys::SDESystem,u0map,tspan,
     f = SDEFunctionExpr{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,
                         Wfact=Wfact,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
-                        sparse=sparse)
+                        sparse=sparse,kwargs...)
     if typeof(sys.noiseeqs) <: AbstractVector
         noise_rate_prototype = nothing
     elseif sparsenoise
