@@ -59,3 +59,7 @@ function _eq_unordered(a, b)
     end
     return true
 end
+
+function expand_derivatives(eq::Equation, simplify=true)
+    return Equation(expand_derivatives(eq.lhs, simplify), expand_derivatives(eq.rhs, simplify))
+end
