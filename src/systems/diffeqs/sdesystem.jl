@@ -257,7 +257,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
                                     checkbounds = false, sparse = false,
                                     sparsenoise = sparse,
                                     linenumbers = true, parallel=SerialForm(),
-                                    eval_expression = true,
+                                    eval_expression = true, skipzeros = true,
                                     kwargs...) where iip
 
     dvs = states(sys)
@@ -265,7 +265,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
     u0 = varmap_to_vars(u0map,dvs)
     p = varmap_to_vars(parammap,ps)
     f = SDEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,
-                         checkbounds=checkbounds,
+                         checkbounds=checkbounds, skipzeros=skipzeros,
                          linenumbers=linenumbers,parallel=parallel,
                          sparse=sparse, eval_expression=eval_expression)
     if typeof(sys.noiseeqs) <: AbstractVector
@@ -307,6 +307,7 @@ function SDEProblemExpr{iip}(sys::SDESystem,u0map,tspan,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
                                     linenumbers = false, parallel=SerialForm(),
+                                    skipzeros = true,
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
@@ -315,6 +316,7 @@ function SDEProblemExpr{iip}(sys::SDESystem,u0map,tspan,
     f = SDEFunctionExpr{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,
                         Wfact=Wfact,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
+                        skipzeros=skipzeros,
                         sparse=sparse)
     if typeof(sys.noiseeqs) <: AbstractVector
         noise_rate_prototype = nothing

@@ -249,7 +249,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     checkbounds = false, sparse = false,
                                     simplify = true,
                                     linenumbers = true, parallel=SerialForm(),
-                                    eval_expression = true,
+                                    eval_expression = true, skipzeros = true,
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
@@ -257,7 +257,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
     p = varmap_to_vars(parammap,ps)
     f = ODEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,simplify=simplify,
-                        sparse=sparse,eval_expression=eval_expression)
+                        sparse=sparse,eval_expression=eval_expression,skipzeros=skipzeros)
     ODEProblem{iip}(f,u0,tspan,p;kwargs...)
 end
 
@@ -286,6 +286,7 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     checkbounds = false, sparse = false,
                                     simplify = true,
                                     linenumbers = false, parallel=SerialForm(),
+                                    skipzeros = true,
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
@@ -293,7 +294,7 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
     p = varmap_to_vars(parammap,ps)
     f = ODEFunctionExpr{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
-                        simplify=simplify,
+                        simplify=simplify,skipzeros=skipzeros,
                         sparse=sparse)
     ex = quote
         f = $f
@@ -334,6 +335,7 @@ function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
                                     jac = false,
                                     checkbounds = false, sparse = false,
                                     linenumbers = true, parallel=SerialForm(),
+                                    skipzeros = true,
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
@@ -341,6 +343,7 @@ function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
     p = varmap_to_vars(parammap,ps)
     f = ODEFunction(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
+                        skipzeros=skipzeros,
                         sparse=sparse)
     SteadyStateProblem(f,u0,p;kwargs...)
 end
@@ -366,6 +369,7 @@ function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
                                     version = nothing, tgrad=false,
                                     jac = false,
                                     checkbounds = false, sparse = false,
+                                    skipzeros = true,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
     dvs = states(sys)
@@ -374,6 +378,7 @@ function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
     p = varmap_to_vars(parammap,ps)
     f = ODEFunctionExpr(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
+                        skipzeros=skipzeros,
                         sparse=sparse)
     ex = quote
         f = $f
