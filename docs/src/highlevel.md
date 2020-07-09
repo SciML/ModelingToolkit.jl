@@ -20,6 +20,7 @@ modelingtoolkitize
 ```@docs
 ModelingToolkit.gradient
 ModelingToolkit.jacobian
+ModelingToolkit.sparsejacobian
 ModelingToolkit.hessian
 ```
 

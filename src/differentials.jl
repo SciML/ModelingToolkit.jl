@@ -220,8 +220,3 @@ julia> Dy(z)  # Differentiate z wrt. y
 macro derivatives(x...)
     esc(_differential_macro(x))
 end
-
-
-function calculate_jacobian(eqs, dvs)
-    Expression[Differential(dv)(eq) for eq ∈ eqs, dv ∈ dvs]
-end
