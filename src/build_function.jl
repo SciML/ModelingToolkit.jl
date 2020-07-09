@@ -170,7 +170,7 @@ function is_array_array_sparse_matrix(F)
 end
 
 function fill_array_with_zero!(x::AbstractArray)
-    if eltype(x) isa AbstractArray
+    if eltype(x) <: AbstractArray
         foreach(fill_array_with_zero!, x)
     else
         fill!(x, false)
