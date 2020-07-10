@@ -83,6 +83,38 @@ function hessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = t
     [expand_derivatives(Differential(v2)(Differential(v1)(O)),simplify) for v1 in vars, v2 in vars]
 end
 
+isidx(x) = x isa TermCombination
+
+function hessian_sparsity(f, u)
+    idx(i) = TermCombination(Set([Dict(i=>1)]))
+    dict = Dict(SymbolicUtils.to_symbolic.(u) .=> idx.(1:length(u)))
+    found = []
+    f = Rewriters.Prewalk(Rewriters.Chain([@rule ~x::(x->haskey(dict, x)) => dict[~x]]))(to_symbolic(f))
+
+    # condense
+    z = one(TermCombination)
+    rr = [@rule +(~~xs) => reduce(+, filter(isidx, ~~xs), init=z)
+          @rule *(~~xs) => reduce(*, filter(isidx, ~~xs), init=z)
+          @rule (~f)(~x::(!isidx)) => z
+          @rule (~f)(~x::isidx) => if haslinearity(~f, Val{1}())
+              combine_terms(linearity(~f, Val{1}()), ~x)
+          else
+              error("Donno about ", ~f)
+          end
+          @rule (~f)(~x, ~y) => begin
+              if haslinearity(~f, Val{2}())
+                  a = isidx(~x) ? ~x : z
+                  b = isidx(~y) ? ~y : z
+                  combine_terms(linearity(~f, Val{2}()), a, b)
+              else
+                  error("Donno about ", ~f)
+              end
+          end]
+
+    _sparse(Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain(rr)))(to_symbolic(f)), length(u))
+end
+
+
 function simplified_expr(O::Operation)
   if O isa Constant
     return O.value

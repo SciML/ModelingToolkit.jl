@@ -89,6 +89,7 @@ include("equations.jl")
 include("function_registration.jl")
 include("simplify.jl")
 include("utils.jl")
+include("linearity.jl")
 include("direct.jl")
 include("domains.jl")
 
