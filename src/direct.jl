@@ -46,8 +46,6 @@ function sparsejacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{
     sparse(I,J, exprs, length(ops), length(vars))
 end
 
-using SymbolicUtils: @rule, Rewriters
-
 function jacobian_sparsity(du, u)
     dict = Dict(zip(to_symbolic.(u), 1:length(u)))
 
@@ -80,11 +78,19 @@ A helper function for computing the Hessian of an expression with respect to
 an array of variable expressions.
 """
 function hessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
-    [expand_derivatives(Differential(v2)(Differential(v1)(O)),simplify) for v1 in vars, v2 in vars]
+    jacobian(vec(jacobian([O], vars, simplify=simplify)), vars, simplify=simplify)
 end
 
 isidx(x) = x isa TermCombination
 
+"""
+```julia
+sparsehessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+```
+
+A helper function for computing the sparse Hessian of an expression with respect to
+an array of variable expressions.
+"""
 function hessian_sparsity(f, u)
     idx(i) = TermCombination(Set([Dict(i=>1)]))
     dict = Dict(SymbolicUtils.to_symbolic.(u) .=> idx.(1:length(u)))
@@ -99,7 +105,7 @@ function hessian_sparsity(f, u)
           @rule (~f)(~x::isidx) => if haslinearity(~f, Val{1}())
               combine_terms(linearity(~f, Val{1}()), ~x)
           else
-              error("Donno about ", ~f)
+              error("Function of unknown linearity used ", ~f)
           end
           @rule (~f)(~x, ~y) => begin
               if haslinearity(~f, Val{2}())
@@ -107,13 +113,29 @@ function hessian_sparsity(f, u)
                   b = isidx(~y) ? ~y : z
                   combine_terms(linearity(~f, Val{2}()), a, b)
               else
-                  error("Donno about ", ~f)
+                  error("Function of unknown linearity used ", ~f)
               end
           end]
 
     _sparse(Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain(rr)))(to_symbolic(f)), length(u))
 end
 
+function sparsehessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+    S = hessian_sparsity(O, vars)
+    I, J, _ = findnz(S)
+    exprs = Expression[]
+    prev_j = 0
+    d = nothing
+    for (i, j) in zip(I, J)
+        if j != prev_j
+            d = expand_derivatives(Differential(vars[j])(O), false)
+        end
+        expr = expand_derivatives(Differential(vars[i])(d), simplify)
+        push!(exprs, expr)
+        prev_j = j
+    end
+    sparse(I, J, exprs, length(vars), length(vars))
+end
 
 function simplified_expr(O::Operation)
   if O isa Constant
