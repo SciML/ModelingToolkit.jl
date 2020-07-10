@@ -1,6 +1,6 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
-using DiffEqBase, StochasticDiffEq, SparseArrays
-using Test
+using StochasticDiffEq, SparseArrays
+using Random,Test
 
 # Define some variables
 @parameters t σ ρ β
@@ -78,3 +78,354 @@ function test_SDEFunction_no_eval()
     @test f([1.0,0.0,0.0], (10.0,26.0,2.33), (0.0,100.0)) ≈ [-10.0, 26.0, 0.0]
 end
 test_SDEFunction_no_eval()
+
+
+# modelingtoolkitize and Ito <-> Stratonovich sense
+seed = 10
+Random.seed!(seed)
+
+
+# simple 2D diagonal noise
+u0 = rand(2)
+t =  randn()
+trange = (0.0,100.0)
+p = [1.01,0.87]
+f1!(du,u,p,t) = (du .= p[1]*u)
+σ1!(du,u,p,t) = (du .= p[2]*u)
+
+prob = SDEProblem(f1!,σ1!,u0,trange,p)
+# no correction
+sys = modelingtoolkitize(prob)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == p[1]*u0
+@test fdif(u0,p,t) == p[2]*u0
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == p[1]*u0
+fdif!(du,u0,p,t)
+@test du == p[2]*u0
+
+# Ito -> Strat
+sys = modelingtoolkitize(prob,correction_factor=-1//2)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == p[1]*u0 - 1//2*p[2]^2*u0
+@test fdif(u0,p,t) == p[2]*u0
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == p[1]*u0 - 1//2*p[2]^2*u0
+fdif!(du,u0,p,t)
+@test du == p[2]*u0
+
+# Strat -> Ito
+sys = modelingtoolkitize(prob,correction_factor=1//2)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == p[1]*u0 + 1//2*p[2]^2*u0
+@test fdif(u0,p,t) == p[2]*u0
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == p[1]*u0 + 1//2*p[2]^2*u0
+fdif!(du,u0,p,t)
+@test du == p[2]*u0
+
+# somewhat complicated 1D without explicit parameters but with explicit time-dependence
+f2!(du,u,p,t) = (du[1] = sin(t) + cos(u[1]))
+σ2!(du,u,p,t) = (du[1] = pi + atan(u[1]))
+
+u0 = rand(1)
+prob = SDEProblem(f2!,σ2!,u0,trange)
+# no correction
+sys = modelingtoolkitize(prob)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) ==  @. sin(t) + cos(u0)
+@test fdif(u0,p,t) ==  pi .+ atan.(u0)
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == @. sin(t) + cos(u0)
+fdif!(du,u0,p,t)
+@test du == pi .+ atan.(u0)
+
+# Ito -> Strat
+sys = modelingtoolkitize(prob,correction_factor=-1//2)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) ==  @. sin(t) + cos(u0) - 1//2*1/(1 + u0^2)*(pi + atan(u0))
+@test fdif(u0,p,t) == pi .+ atan.(u0)
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du ==  @. sin(t) + cos(u0) - 1//2*1/(1 + u0^2)*(pi + atan(u0))
+fdif!(du,u0,p,t)
+@test du == pi .+ atan.(u0)
+
+# Strat -> Ito
+sys = modelingtoolkitize(prob,correction_factor=1//2)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) ==  @. sin(t) + cos(u0) + 1//2*1/(1 + u0^2)*(pi + atan(u0))
+@test fdif(u0,p,t) == pi .+ atan.(u0)
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du ==  @. sin(t) + cos(u0) + 1//2*1/(1 + u0^2)*(pi + atan(u0))
+fdif!(du,u0,p,t)
+@test du == pi .+ atan.(u0)
+
+
+# 2D diagonal noise with mixing terms (no parameters, no time-dependence)
+u0 = rand(2)
+t =  randn()
+function f3!(du,u,p,t)
+  du[1] = u[1]/2
+  du[2] = u[2]/2
+  return nothing
+end
+function σ3!(du,u,p,t)
+  du[1] = u[2]
+  du[2] = u[1]
+  return nothing
+end
+
+prob = SDEProblem(f3!,σ3!,u0,trange,p)
+# no correction
+sys = modelingtoolkitize(prob)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == u0/2
+@test fdif(u0,p,t) == reverse(u0)
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == u0/2
+fdif!(du,u0,p,t)
+@test du ==  reverse(u0)
+
+# Ito -> Strat
+sys = modelingtoolkitize(prob,correction_factor=-1//2)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == u0*0
+@test fdif(u0,p,t) == reverse(u0)
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == u0*0
+fdif!(du,u0,p,t)
+@test du == reverse(u0)
+
+# Strat -> Ito
+sys = modelingtoolkitize(prob,correction_factor=1//2)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == u0
+@test fdif(u0,p,t) == reverse(u0)
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == u0
+fdif!(du,u0,p,t)
+@test du == reverse(u0)
+
+
+
+# simple 2D diagonal noise oop
+u0 = rand(2)
+t =  randn()
+p = [1.01,0.87]
+f1(u,p,t) = p[1]*u
+σ1(u,p,t) = p[2]*u
+
+prob = SDEProblem(f1,σ1,u0,trange,p)
+# no correction
+sys = modelingtoolkitize(prob)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == p[1]*u0
+@test fdif(u0,p,t) == p[2]*u0
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == p[1]*u0
+fdif!(du,u0,p,t)
+@test du == p[2]*u0
+
+# Ito -> Strat
+sys = modelingtoolkitize(prob,correction_factor=-1//2)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == p[1]*u0 - 1//2*p[2]^2*u0
+@test fdif(u0,p,t) == p[2]*u0
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == p[1]*u0 - 1//2*p[2]^2*u0
+fdif!(du,u0,p,t)
+@test du == p[2]*u0
+
+# Strat -> Ito
+sys = modelingtoolkitize(prob,correction_factor=1//2)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == p[1]*u0 + 1//2*p[2]^2*u0
+@test fdif(u0,p,t) == p[2]*u0
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == p[1]*u0 + 1//2*p[2]^2*u0
+fdif!(du,u0,p,t)
+@test du == p[2]*u0
+
+
+# non-diagonal noise
+u0 = rand(2)
+t =  randn()
+p = [1.01,0.3,0.6,1.2,0.2]
+f4!(du,u,p,t) = du .= p[1]*u
+function g4!(du,u,p,t)
+  du[1,1] = p[2]*u[1]
+  du[1,2] = p[3]*u[1]
+  du[2,1] = p[4]*u[1]
+  du[2,2] = p[5]*u[2]
+  return nothing
+end
+
+prob = SDEProblem(f4!,g4!,u0,trange,noise_rate_prototype=zeros(2,2),p)
+# no correction
+sys = modelingtoolkitize(prob)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == p[1]*u0
+@test fdif(u0,p,t) == [p[2]*u0[1]   p[3]*u0[1]
+                      p[4]*u0[1]     p[5]*u0[2] ]
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == p[1]*u0
+du = similar(u0, size(prob.noise_rate_prototype))
+fdif!(du,u0,p,t)
+@test du == [p[2]*u0[1]   p[3]*u0[1]
+             p[4]*u0[1]   p[5]*u0[2]  ]
+
+# Ito -> Strat
+sys = modelingtoolkitize(prob,correction_factor=-1//2)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == [p[1]*u0[1] - 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] - 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
+@test fdif(u0,p,t) == [p[2]*u0[1]   p[3]*u0[1]
+                      p[4]*u0[1]     p[5]*u0[2] ]
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == [p[1]*u0[1] - 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] - 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
+du = similar(u0, size(prob.noise_rate_prototype))
+fdif!(du,u0,p,t)
+@test du == [p[2]*u0[1]   p[3]*u0[1]
+            p[4]*u0[1]     p[5]*u0[2] ]
+
+# Strat -> Ito
+sys = modelingtoolkitize(prob,correction_factor=1//2)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == [p[1]*u0[1] + 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] + 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
+@test fdif(u0,p,t) == [p[2]*u0[1]   p[3]*u0[1]
+                      p[4]*u0[1]     p[5]*u0[2] ]
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == [p[1]*u0[1] + 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] + 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
+du = similar(u0, size(prob.noise_rate_prototype))
+fdif!(du,u0,p,t)
+@test du == [p[2]*u0[1]   p[3]*u0[1]
+            p[4]*u0[1]     p[5]*u0[2] ]
+
+
+# non-diagonal noise: Torus -- Strat and Ito are identical
+u0 = rand(2)
+t =  randn()
+p =  rand(1)
+f5!(du,u,p,t) = du .= false
+function g5!(du,u,p,t)
+  du[1,1] = cos(p[1])*sin(u[1])
+  du[1,2] = cos(p[1])*cos(u[1])
+  du[1,3] = -sin(p[1])*sin(u[2])
+  du[1,4] = -sin(p[1])*cos(u[2])
+  du[2,1] = sin(p[1])*sin(u[1])
+  du[2,2] = sin(p[1])*cos(u[1])
+  du[2,3] = cos(p[1])*sin(u[2])
+  du[2,4] = cos(p[1])*cos(u[2])
+  return nothing
+end
+
+prob = SDEProblem(f5!,g5!,u0,trange,noise_rate_prototype=zeros(2,4),p)
+# no correction
+sys = modelingtoolkitize(prob)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == 0*u0
+@test fdif(u0,p,t) == [ cos(p[1])*sin(u0[1])   cos(p[1])*cos(u0[1])   -sin(p[1])*sin(u0[2])   -sin(p[1])*cos(u0[2])
+                        sin(p[1])*sin(u0[1])   sin(p[1])*cos(u0[1])    cos(p[1])*sin(u0[2])    cos(p[1])*cos(u0[2])]
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du == 0*u0
+du = similar(u0, size(prob.noise_rate_prototype))
+fdif!(du,u0,p,t)
+@test du == [ cos(p[1])*sin(u0[1])   cos(p[1])*cos(u0[1])   -sin(p[1])*sin(u0[2])   -sin(p[1])*cos(u0[2])
+                        sin(p[1])*sin(u0[1])   sin(p[1])*cos(u0[1])    cos(p[1])*sin(u0[2])    cos(p[1])*cos(u0[2])]
+
+# Ito -> Strat
+sys = modelingtoolkitize(prob,correction_factor=-1//2)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) == 0*u0
+@test fdif(u0,p,t) == [ cos(p[1])*sin(u0[1])   cos(p[1])*cos(u0[1])   -sin(p[1])*sin(u0[2])   -sin(p[1])*cos(u0[2])
+                        sin(p[1])*sin(u0[1])   sin(p[1])*cos(u0[1])    cos(p[1])*sin(u0[2])    cos(p[1])*cos(u0[2])]
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du ==  0*u0
+du = similar(u0, size(prob.noise_rate_prototype))
+fdif!(du,u0,p,t)
+@test du == [ cos(p[1])*sin(u0[1])   cos(p[1])*cos(u0[1])   -sin(p[1])*sin(u0[2])   -sin(p[1])*cos(u0[2])
+              sin(p[1])*sin(u0[1])   sin(p[1])*cos(u0[1])    cos(p[1])*sin(u0[2])    cos(p[1])*cos(u0[2])]
+
+# Strat -> Ito
+sys = modelingtoolkitize(prob,correction_factor=1//2)
+fdrift = eval(generate_function(sys)[1])
+fdif = eval(generate_diffusion_function(sys)[1])
+@test fdrift(u0,p,t) ==  0*u0
+@test fdif(u0,p,t) ==  [ cos(p[1])*sin(u0[1])   cos(p[1])*cos(u0[1])   -sin(p[1])*sin(u0[2])   -sin(p[1])*cos(u0[2])
+                         sin(p[1])*sin(u0[1])   sin(p[1])*cos(u0[1])    cos(p[1])*sin(u0[2])    cos(p[1])*cos(u0[2])]
+fdrift! = eval(generate_function(sys)[2])
+fdif! = eval(generate_diffusion_function(sys)[2])
+du = similar(u0)
+fdrift!(du,u0,p,t)
+@test  du ==  0*u0
+du = similar(u0, size(prob.noise_rate_prototype))
+fdif!(du,u0,p,t)
+@test du == [ cos(p[1])*sin(u0[1])   cos(p[1])*cos(u0[1])   -sin(p[1])*sin(u0[2])   -sin(p[1])*cos(u0[2])
+              sin(p[1])*sin(u0[1])   sin(p[1])*cos(u0[1])    cos(p[1])*sin(u0[2])    cos(p[1])*cos(u0[2])]
