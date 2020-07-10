@@ -22,6 +22,14 @@ ModelingToolkit.gradient
 ModelingToolkit.jacobian
 ModelingToolkit.sparsejacobian
 ModelingToolkit.hessian
+ModelingToolkit.sparsehessian
+```
+
+## Sparsity Detection
+
+```@docs
+ModelingToolkit.jacobian_sparsity
+ModelingToolkit.hessian_sparsity
 ```
 
 ## Latexification
