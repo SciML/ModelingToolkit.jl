@@ -209,7 +209,7 @@ function islinear(sys::AbstractSystem)
     iv = sys.iv()
     dvs = [dv(iv) for dv ∈ states(sys)]
 
-    all(x->isempty(x.nzval), hessian_sparsity(r, dvs) for r in rhs)
+    all(islinear(r, dvs) for r in rhs)
 end
 
 struct AbstractSysToExpr

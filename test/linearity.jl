@@ -7,11 +7,14 @@ using Test
 @variables x(t) y(t) z(t)
 @derivatives D'~t
 
-# Define a differential equation
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ -z-y,
        D(z) ~ y - β*z]
 
-sys = ODESystem(eqs)
+@test ModelingToolkit.islinear(ODESystem(eqs))
 
-@test ModelingToolkit.islinear(sys)
+eqs2 = [D(x) ~ σ*(y-x),
+       D(y) ~ -z-1/y,
+       D(z) ~ y - β*z]
+
+@test !ModelingToolkit.islinear(ODESystem(eqs2))
