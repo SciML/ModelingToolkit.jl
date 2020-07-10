@@ -203,6 +203,15 @@ function parameters(sys::AbstractSystem,args...)
     rename(x,renamespace(sys.name,newname))()
 end
 
+function islinear(sys::AbstractSystem)
+    rhs = [eq.rhs for eq ∈ equations(sys)]
+
+    iv = sys.iv()
+    dvs = [dv(iv) for dv ∈ states(sys)]
+
+    all(x->isempty(x.nzval), hessian_sparsity(r, dvs) for r in rhs)
+end
+
 struct AbstractSysToExpr
     sys::AbstractSystem
     states::Vector{Variable}
