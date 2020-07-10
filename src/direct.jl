@@ -82,15 +82,6 @@ function hessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = t
 end
 
 isidx(x) = x isa TermCombination
-
-"""
-```julia
-sparsehessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
-```
-
-A helper function for computing the sparse Hessian of an expression with respect to
-an array of variable expressions.
-"""
 function hessian_sparsity(f, u)
     idx(i) = TermCombination(Set([Dict(i=>1)]))
     dict = Dict(SymbolicUtils.to_symbolic.(u) .=> idx.(1:length(u)))
@@ -120,6 +111,14 @@ function hessian_sparsity(f, u)
     _sparse(Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain(rr)))(to_symbolic(f)), length(u))
 end
 
+"""
+```julia
+sparsehessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+```
+
+A helper function for computing the sparse Hessian of an expression with respect to
+an array of variable expressions.
+"""
 function sparsehessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
     S = hessian_sparsity(O, vars)
     I, J, _ = findnz(S)
