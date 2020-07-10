@@ -62,15 +62,15 @@ TODO
 function expand_derivatives(O::Operation, simplify=true; occurances=nothing)
     if isa(O.op, Differential)
         @assert length(O.args) == 1
+        arg = expand_derivatives(O.args[1], false)
 
         if occurances == nothing
-            occurances = occursin_info(O.op.x, O.args[1])
+            occurances = occursin_info(O.op.x, arg)
         end
 
         _isfalse(occurances) && return Constant(0)
         occurances isa Constant && return Constant(1) # means it's a Constant(true)
 
-        arg = expand_derivatives(O.args[1], false)
         (D, o) = (O.op, arg)
 
         if o isa Constant
