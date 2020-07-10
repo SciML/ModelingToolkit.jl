@@ -39,6 +39,24 @@ reference_jac = sparse(ModelingToolkit.jacobian(du, [x,y,z]))
 
 @test isequal(ModelingToolkit.sparsejacobian(du, [x,y,z]), reference_jac)
 
+using ModelingToolkit
+
+rosenbrock(X) = sum(1:length(X)-1) do i
+    100 * (X[i+1] - X[i]^2)^2 + (1 - X[i])^2
+end
+
+@variables X[1:10]
+
+rr = rosenbrock(X)
+
+reference_hes = ModelingToolkit.hessian(rosenbrock(X), X)
+@test findnz(sparse(reference_hes))[1:2] == findnz(ModelingToolkit.hessian_sparsity(rr, X))[1:2]
+
+sp_hess = ModelingToolkit.sparsehessian(rosenbrock(X), X)
+@test findnz(sparse(reference_hes))[1:2] == findnz(sp_hess)[1:2]
+spoly(x) = simplify(x, polynorm=true)
+@test isequal(map(spoly, findnz(sparse(reference_hes))[3]), map(spoly, findnz(sp_hess)[3]))
+
 Joop,Jiip = eval.(ModelingToolkit.build_function(∂,[x,y,z],[σ,ρ,β],t))
 J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 @test J isa Matrix

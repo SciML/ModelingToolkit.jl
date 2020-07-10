@@ -46,8 +46,14 @@ function sparsejacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{
     sparse(I,J, exprs, length(ops), length(vars))
 end
 
-using SymbolicUtils: @rule, Rewriters
+"""
+```julia
+jacobian_sparsity(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression})
+```
 
+Return the sparsity pattern of the Jacobian of an array of expressions with respect to
+an array of variable expressions.
+"""
 function jacobian_sparsity(du, u)
     dict = Dict(zip(to_symbolic.(u), 1:length(u)))
 
@@ -80,7 +86,86 @@ A helper function for computing the Hessian of an expression with respect to
 an array of variable expressions.
 """
 function hessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
-    [expand_derivatives(Differential(v2)(Differential(v1)(O)),simplify) for v1 in vars, v2 in vars]
+    first_derivs = vec(jacobian([O], vars, simplify=simplify))
+    n = length(vars)
+    H = Array{Expression, 2}(undef,(n, n))
+    fill!(H, 0)
+    for i=1:n
+        for j=1:i
+            H[j, i] = H[i, j] = expand_derivatives(Differential(vars[i])(first_derivs[j]))
+        end
+    end
+    H
+end
+
+isidx(x) = x isa TermCombination
+
+"""
+```julia
+jacobian_sparsity(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression})
+```
+
+Return the sparsity pattern of the Hessian of an array of expressions with respect to
+an array of variable expressions.
+"""
+function hessian_sparsity(f, u)
+    idx(i) = TermCombination(Set([Dict(i=>1)]))
+    dict = Dict(SymbolicUtils.to_symbolic.(u) .=> idx.(1:length(u)))
+    found = []
+    f = Rewriters.Prewalk(x->haskey(dict, x) ? dict[x] : x)(to_symbolic(f))
+
+    # condense
+    z = one(TermCombination)
+    rr = [@rule +(~~xs) => reduce(+, filter(isidx, ~~xs), init=z)
+          @rule *(~~xs) => reduce(*, filter(isidx, ~~xs), init=z)
+          @rule (~f)(~x::(!isidx)) => z
+          @rule (~f)(~x::isidx) => if haslinearity(~f, Val{1}())
+              combine_terms(linearity(~f, Val{1}()), ~x)
+          else
+              error("Function of unknown linearity used: ", ~f)
+          end
+          @rule (~f)(~x, ~y) => begin
+              if haslinearity(~f, Val{2}())
+                  a = isidx(~x) ? ~x : z
+                  b = isidx(~y) ? ~y : z
+                  combine_terms(linearity(~f, Val{2}()), a, b)
+              else
+                  error("Function of unknown linearity used: ", ~f)
+              end
+          end]
+
+    _sparse(Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain(rr)))(to_symbolic(f)), length(u))
+end
+
+"""
+```julia
+sparsehessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+```
+
+A helper function for computing the sparse Hessian of an expression with respect to
+an array of variable expressions.
+"""
+function sparsehessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+    S = hessian_sparsity(O, vars)
+    I, J, _ = findnz(S)
+    exprs = Array{Expression}(undef, length(I))
+    fill!(exprs, 0)
+    prev_j = 0
+    d = nothing
+    for (k, (i, j)) in enumerate(zip(I, J))
+        j > i && continue
+        if j != prev_j
+            d = expand_derivatives(Differential(vars[j])(O), false)
+        end
+        expr = expand_derivatives(Differential(vars[i])(d), simplify)
+        exprs[k] = expr
+        prev_j = j
+    end
+    H = sparse(I, J, exprs, length(vars), length(vars))
+    for (i, j) in zip(I, J)
+        j > i && (H[i, j] = H[j, i])
+    end
+    return H
 end
 
 function simplified_expr(O::Operation)

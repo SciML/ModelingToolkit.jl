@@ -17,7 +17,7 @@ using Base: RefValue
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils: to_symbolic, FnType
+import SymbolicUtils: to_symbolic, FnType, @rule, Rewriters
 
 import LightGraphs: SimpleDiGraph, add_edge!
 
@@ -89,6 +89,7 @@ include("equations.jl")
 include("function_registration.jl")
 include("simplify.jl")
 include("utils.jl")
+include("linearity.jl")
 include("direct.jl")
 include("domains.jl")
 
