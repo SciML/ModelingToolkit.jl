@@ -50,7 +50,7 @@ end
 rr = rosenbrock(X)
 
 reference_hes = ModelingToolkit.hessian(rosenbrock(X), X)
-@test findnz(sparse(reference_hes))[1:2] == findnz(hessian_sparsity(rr, X))[1:2]
+@test findnz(sparse(reference_hes))[1:2] == findnz(ModelingToolkit.hessian_sparsity(rr, X))[1:2]
 
 sp_hess = ModelingToolkit.sparsehessian(rosenbrock(X), X)
 @test findnz(sparse(reference_hes))[1:2] == findnz(sp_hess)[1:2]

@@ -17,7 +17,7 @@ using Base: RefValue
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils: to_symbolic, FnType
+import SymbolicUtils: to_symbolic, FnType, @rule, Rewriters
 
 import LightGraphs: SimpleDiGraph, add_edge!
 
