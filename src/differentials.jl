@@ -74,8 +74,6 @@ function expand_derivatives(O::Operation, simplify=true; occurances=nothing)
             return Constant(0)
         elseif isequal(o, D.x)
             return Constant(1)
-        elseif !occursin(D.x, o)
-            return Constant(0)
         elseif !isa(o, Operation)
             return O
         elseif isa(o.op, Variable)
