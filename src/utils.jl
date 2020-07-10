@@ -17,15 +17,6 @@ function make_operation(@nospecialize(op), args)
         return op(args...)
     end
 end
-Base.convert(::Type{Expression}, ex::Expr) = Expression(ex)
-function Expression(ex;mod=Main)
-    ex.head === :if && (ex = Expr(:call, ifelse, ex.args...))
-    ex.head === :call || throw(ArgumentError("internal representation does not support non-call Expr"))
-
-    op = getproperty(mod,Symbol(ex.args[1]))
-    args = convert.(Expression, ex.args[2:end])
-    make_operation(op, args)
-end
 Base.convert(::Type{Expression}, x::Expression) = x
 Base.convert(::Type{Expression}, x::Number) = Constant(x)
 Base.convert(::Type{Expression}, x::Bool) = Constant(x)
