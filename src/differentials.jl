@@ -50,6 +50,9 @@ function occursin_info(x, expr::Operation)
     end
 end
 
+hasderiv(O::Operation) = O.op isa Differential || any(hasderiv, O.args)
+hasderiv(O) = false
+
 occursin_info(x, y) = Constant(false)
 """
 $(SIGNATURES)
@@ -125,6 +128,8 @@ function expand_derivatives(O::Operation, simplify=true; occurances=nothing)
             x = make_operation(+, !iszero(c) ? vcat(c, exprs) : exprs)
             return simplify ? ModelingToolkit.simplify(x) : x
         end
+    elseif !hasderiv(O)
+        return O
     else
         args = map(a->expand_derivatives(a, false), O.args)
         O1 = make_operation(O.op, args)
