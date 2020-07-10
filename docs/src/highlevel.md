@@ -45,9 +45,7 @@ will produce LaTeX output from ModelingToolkit models and expressions.
 This works on basics like `Operation` all the way to higher primitives
 like `ODESystem` and `ReactionSystem`.
 
-## Additional High-Level Explanations and Tips
-
-### The Auto-Detecting System Constructors
+## The Auto-Detecting System Constructors
 
 For the high-level interface, the system constructors, such as `ODESystem`, have
 high-level constructors, which just take in the required equations and automatically
@@ -59,7 +57,7 @@ ODESystem(eqs)
 NonlinearSystem(eqs)
 ```
 
-### Direct Tracing
+## Direct Tracing
 
 Because ModelingToolkit expressions respect Julia semantics, one way
 to generate symbolic expressions is to simply place ModelingToolkit
@@ -105,7 +103,7 @@ du
 x(t) * y(t) - 2.6666666666666665 * z(t)
 ```
 
-### Intermediate Calculations
+## Intermediate Calculations
 
 The system building functions can handle intermediate calculations by simply
 defining and using an `Operation` of `Variable`s. For example:
@@ -138,3 +136,30 @@ expands to:
 
 In addition, the Jacobian calculations take into account intermediate variables
 to appropriately handle them.
+
+## I/O and Saving
+
+Note that Julia's standard I/O functionality can be used to save
+ModelingToolkit expressions out to files. For example, here we will
+generate an in-place version of `f` and save the anonymous function to
+a `.jl` file:
+
+```julia
+using ModelingToolkit
+@variables u[1:3]
+function f(u)
+  [u[1]-u[3],u[1]^2-u[2],u[3]+u[2]]
+end
+ex1, ex2 = build_function(f(u),u)
+write("function.jl", string(ex2))
+```
+
+Now we can do something like:
+
+```julia
+f = include("function.jl")
+```
+
+and that will load the function back in. Note that this can be done
+to save the transformation results of ModelingToolkit.jl so that
+they can be stored and used in a precompiled Julia package.

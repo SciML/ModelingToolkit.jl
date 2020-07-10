@@ -148,6 +148,13 @@ out
  11.0
 ```
 
+To save the symbolic calculations for later, we can take this expression
+and save it out to a file:
+
+```julia
+write("function.jl", string(f_expr[2]))
+```
+
 Note that if we need to avoid `eval`, for example to avoid world-age
 issues, one could do `expression = Val{false}`:
 
@@ -464,5 +471,5 @@ and now it works with the rest of the system:
 ```julia
 @derivatives Dx'~x Dy'~y
 expand_derivatives(Dx(h(x,y) + y^2)) # 2x
-expand_derivatives(Dy(h(x,y) + y^2)) # 1 + 2y 
+expand_derivatives(Dy(h(x,y) + y^2)) # 1 + 2y
 ```
