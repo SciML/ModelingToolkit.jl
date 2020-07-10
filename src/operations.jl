@@ -40,7 +40,7 @@ julia> op2.args
 """
 struct Operation <: Expression
     """The function to be applied."""
-    op::Function
+    op
     """The arguments the function is applied to."""
     args::Vector{Expression}
 end

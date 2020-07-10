@@ -31,14 +31,42 @@ Base.convert(::Type{Expr}, D::Differential) = D
 
 Base.:(==)(D1::Differential, D2::Differential) = isequal(D1.x, D2.x)
 
+
+nodecount(x) = 1
+nodecount(x::Operation) = reduce(+, (nodecount(a) for a in x.args), init=0)
+
+_isfalse(occ::Constant) = occ.value === false
+_isfalse(occ::Operation) = _isfalse(occ.op)
+
+function occursin_info(x, expr::Operation)
+    if isequal(x, expr)
+        Constant(true)
+    else
+        args = map(a->occursin_info(x, a), expr.args)
+        if all(_isfalse, args)
+            return Constant(false)
+        end
+        Operation(Constant(true), args)
+    end
+end
+
+occursin_info(x, y) = Constant(false)
 """
 $(SIGNATURES)
 
 TODO
 """
-function expand_derivatives(O::Operation,simplify=true)
+function expand_derivatives(O::Operation, simplify=true; occurances=nothing)
     if isa(O.op, Differential)
         @assert length(O.args) == 1
+
+        if occurances == nothing
+            occurances = occursin_info(O.op.x, O.args[1])
+        end
+
+        _isfalse(occurances) && return Constant(0)
+        occurances isa Constant && return Constant(1) # means it's a Constant(true)
+
         arg = expand_derivatives(O.args[1], false)
         (D, o) = (O.op, arg)
 
@@ -51,7 +79,7 @@ function expand_derivatives(O::Operation,simplify=true)
         elseif !isa(o, Operation)
             return O
         elseif isa(o.op, Variable)
-            return O
+            return O # This means D.x occurs in o, but o is symbolic function call
         elseif isa(o.op, Differential)
             # The recursive expand_derivatives was not able to remove
             # a nested Differential. We can attempt to differentiate the
@@ -69,7 +97,7 @@ function expand_derivatives(O::Operation,simplify=true)
         c = 0
 
         for i in 1:l
-            t2 = expand_derivatives(D(o.args[i]),false)
+            t2 = expand_derivatives(D(o.args[i]),false, occurances=occurances.args[i])
 
             x = if _iszero(t2)
                 t2
@@ -110,7 +138,7 @@ _isone(x::Constant) = isone(x.value)
 _iszero(x) = false
 _isone(x) = false
 
-expand_derivatives(x,args...) = x
+expand_derivatives(x,args...;occurances=nothing) = x
 
 # Don't specialize on the function here
 """
