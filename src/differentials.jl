@@ -186,12 +186,13 @@ import DiffRules
 for (modu, fun, arity) ∈ DiffRules.diffrules()
     fun in [:*, :+] && continue # special
     for i ∈ 1:arity
-        @eval function derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i})
-            M, f = $(modu, fun)
-            partials = DiffRules.diffrule(M, f, args...)
-            dx = @static $arity == 1 ? partials : partials[$i]
-            convert(Expression, dx)
+
+        expr = if arity == 1
+            DiffRules.diffrule(modu, fun, :(args[1]))
+        else
+            DiffRules.diffrule(modu, fun, ntuple(k->:(args[$k]), arity)...)[i]
         end
+        @eval derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i}) = $expr
     end
 end
 
