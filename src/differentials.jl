@@ -31,27 +31,52 @@ Base.convert(::Type{Expr}, D::Differential) = D
 
 Base.:(==)(D1::Differential, D2::Differential) = isequal(D1.x, D2.x)
 
+_isfalse(occ::Constant) = occ.value === false
+_isfalse(occ::Operation) = _isfalse(occ.op)
+
+function occursin_info(x, expr::Operation)
+    if isequal(x, expr)
+        Constant(true)
+    else
+        args = map(a->occursin_info(x, a), expr.args)
+        if all(_isfalse, args)
+            return Constant(false)
+        end
+        Operation(Constant(true), args)
+    end
+end
+
+hasderiv(O::Operation) = O.op isa Differential || any(hasderiv, O.args)
+hasderiv(O) = false
+
+occursin_info(x, y) = Constant(false)
 """
 $(SIGNATURES)
 
 TODO
 """
-function expand_derivatives(O::Operation,simplify=true)
+function expand_derivatives(O::Operation, simplify=true; occurances=nothing)
     if isa(O.op, Differential)
         @assert length(O.args) == 1
         arg = expand_derivatives(O.args[1], false)
+
+        if occurances == nothing
+            occurances = occursin_info(O.op.x, arg)
+        end
+
+        _isfalse(occurances) && return Constant(0)
+        occurances isa Constant && return Constant(1) # means it's a Constant(true)
+
         (D, o) = (O.op, arg)
 
         if o isa Constant
             return Constant(0)
         elseif isequal(o, D.x)
             return Constant(1)
-        elseif !occursin(D.x, o)
-            return Constant(0)
         elseif !isa(o, Operation)
             return O
         elseif isa(o.op, Variable)
-            return O
+            return O # This means D.x occurs in o, but o is symbolic function call
         elseif isa(o.op, Differential)
             # The recursive expand_derivatives was not able to remove
             # a nested Differential. We can attempt to differentiate the
@@ -69,7 +94,7 @@ function expand_derivatives(O::Operation,simplify=true)
         c = 0
 
         for i in 1:l
-            t2 = expand_derivatives(D(o.args[i]),false)
+            t2 = expand_derivatives(D(o.args[i]),false, occurances=occurances.args[i])
 
             x = if _iszero(t2)
                 t2
@@ -99,6 +124,8 @@ function expand_derivatives(O::Operation,simplify=true)
             x = make_operation(+, !iszero(c) ? vcat(c, exprs) : exprs)
             return simplify ? ModelingToolkit.simplify(x) : x
         end
+    elseif !hasderiv(O)
+        return O
     else
         args = map(a->expand_derivatives(a, false), O.args)
         O1 = make_operation(O.op, args)
@@ -110,7 +137,7 @@ _isone(x::Constant) = isone(x.value)
 _iszero(x) = false
 _isone(x) = false
 
-expand_derivatives(x,args...) = x
+expand_derivatives(x,args...;occurances=nothing) = x
 
 # Don't specialize on the function here
 """
@@ -155,12 +182,13 @@ import DiffRules
 for (modu, fun, arity) ∈ DiffRules.diffrules()
     fun in [:*, :+] && continue # special
     for i ∈ 1:arity
-        @eval function derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i})
-            M, f = $(modu, fun)
-            partials = DiffRules.diffrule(M, f, args...)
-            dx = @static $arity == 1 ? partials : partials[$i]
-            convert(Expression, dx)
+
+        expr = if arity == 1
+            DiffRules.diffrule(modu, fun, :(args[1]))
+        else
+            DiffRules.diffrule(modu, fun, ntuple(k->:(args[$k]), arity)...)[i]
         end
+        @eval derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i}) = $expr
     end
 end
 
