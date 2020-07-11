@@ -31,10 +31,6 @@ Base.convert(::Type{Expr}, D::Differential) = D
 
 Base.:(==)(D1::Differential, D2::Differential) = isequal(D1.x, D2.x)
 
-
-nodecount(x) = 1
-nodecount(x::Operation) = reduce(+, (nodecount(a) for a in x.args), init=0)
-
 _isfalse(occ::Constant) = occ.value === false
 _isfalse(occ::Operation) = _isfalse(occ.op)
 
