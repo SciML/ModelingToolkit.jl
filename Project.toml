@@ -57,9 +57,10 @@ julia = "1.2"
 Dagger = "d58978e5-989f-55fb-8d15-ea34adc7bf54"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SteadyStateDiffEq = "9672c7b4-1e72-59bd-8a11-6ac3964bc41f"
 StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Dagger", "ForwardDiff", "OrdinaryDiffEq", "SteadyStateDiffEq", "Test", "StochasticDiffEq"]
+test = ["Dagger", "ForwardDiff", "OrdinaryDiffEq", "Random", "SteadyStateDiffEq", "Test", "StochasticDiffEq"]

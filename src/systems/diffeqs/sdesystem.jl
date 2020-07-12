@@ -88,6 +88,49 @@ function generate_diffusion_function(sys::SDESystem, dvs = sys.states, ps = sys.
 end
 
 """
+$(TYPEDSIGNATURES)
+
+Choose correction_factor=-1//2 (1//2) to converte Ito -> Stratonovich (Stratonovich->Ito).
+"""
+function stochastic_integral_transform(sys::SDESystem, correction_factor)
+    # use the general interface
+    if typeof(sys.noiseeqs) <: Vector
+        eqs = vcat([sys.eqs[i].lhs ~ sys.noiseeqs[i] for i in eachindex(sys.states)]...)
+        de = ODESystem(eqs,sys.iv,sys.states,sys.ps)
+
+        jac = calculate_jacobian(de, sparse=false, simplify=true)
+        ∇σσ′ = simplify.(jac*sys.noiseeqs)
+
+        deqs = vcat([sys.eqs[i].lhs ~ sys.eqs[i].rhs+ correction_factor*∇σσ′[i] for i in eachindex(sys.states)]...)
+    else
+        dimstate, m = size(sys.noiseeqs)
+        eqs = vcat([sys.eqs[i].lhs ~ sys.noiseeqs[i] for i in eachindex(sys.states)]...)
+        de = ODESystem(eqs,sys.iv,sys.states,sys.ps)
+
+        jac = calculate_jacobian(de, sparse=false, simplify=true)
+        ∇σσ′ = simplify.(jac*sys.noiseeqs[:,1])
+        for k = 2:m
+            eqs = vcat([sys.eqs[i].lhs ~ sys.noiseeqs[Int(i+(k-1)*dimstate)] for i in eachindex(sys.states)]...)
+            de = ODESystem(eqs,sys.iv,sys.states,sys.ps)
+
+            jac = calculate_jacobian(de, sparse=false, simplify=true)
+            ∇σσ′ = ∇σσ′ + simplify.(jac*sys.noiseeqs[:,k])
+        end
+
+        deqs = vcat([sys.eqs[i].lhs ~ sys.eqs[i].rhs + correction_factor*∇σσ′[i] for i in eachindex(sys.states)]...)
+    end
+
+
+    de = SDESystem(deqs,sys.noiseeqs,sys.iv,sys.states,sys.ps)
+
+    de
+end
+
+
+
+
+
+"""
 ```julia
 function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
                                      version = nothing, tgrad=false, sparse = false,
