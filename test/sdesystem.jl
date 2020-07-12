@@ -109,13 +109,13 @@ fdif!(du,u0,p,t)
 @test du == p[2]*u0
 
 # Ito -> Strat
-sys = modelingtoolkitize(prob,correction_factor=-1//2)
-fdrift = eval(generate_function(sys)[1])
-fdif = eval(generate_diffusion_function(sys)[1])
+sys2 = stochastic_integral_transform(sys,-1//2)
+fdrift = eval(generate_function(sys2)[1])
+fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0,p,t) == p[1]*u0 - 1//2*p[2]^2*u0
 @test fdif(u0,p,t) == p[2]*u0
-fdrift! = eval(generate_function(sys)[2])
-fdif! = eval(generate_diffusion_function(sys)[2])
+fdrift! = eval(generate_function(sys2)[2])
+fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
 @test  du == p[1]*u0 - 1//2*p[2]^2*u0
@@ -123,13 +123,13 @@ fdif!(du,u0,p,t)
 @test du == p[2]*u0
 
 # Strat -> Ito
-sys = modelingtoolkitize(prob,correction_factor=1//2)
-fdrift = eval(generate_function(sys)[1])
-fdif = eval(generate_diffusion_function(sys)[1])
+sys2 = stochastic_integral_transform(sys,1//2)
+fdrift = eval(generate_function(sys2)[1])
+fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0,p,t) == p[1]*u0 + 1//2*p[2]^2*u0
 @test fdif(u0,p,t) == p[2]*u0
-fdrift! = eval(generate_function(sys)[2])
-fdif! = eval(generate_diffusion_function(sys)[2])
+fdrift! = eval(generate_function(sys2)[2])
+fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
 @test  du == p[1]*u0 + 1//2*p[2]^2*u0
@@ -157,13 +157,13 @@ fdif!(du,u0,p,t)
 @test du == pi .+ atan.(u0)
 
 # Ito -> Strat
-sys = modelingtoolkitize(prob,correction_factor=-1//2)
-fdrift = eval(generate_function(sys)[1])
-fdif = eval(generate_diffusion_function(sys)[1])
+sys2 = stochastic_integral_transform(sys,-1//2)
+fdrift = eval(generate_function(sys2)[1])
+fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0,p,t) ==  @. sin(t) + cos(u0) - 1//2*1/(1 + u0^2)*(pi + atan(u0))
 @test fdif(u0,p,t) == pi .+ atan.(u0)
-fdrift! = eval(generate_function(sys)[2])
-fdif! = eval(generate_diffusion_function(sys)[2])
+fdrift! = eval(generate_function(sys2)[2])
+fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
 @test  du ==  @. sin(t) + cos(u0) - 1//2*1/(1 + u0^2)*(pi + atan(u0))
@@ -171,13 +171,13 @@ fdif!(du,u0,p,t)
 @test du == pi .+ atan.(u0)
 
 # Strat -> Ito
-sys = modelingtoolkitize(prob,correction_factor=1//2)
-fdrift = eval(generate_function(sys)[1])
-fdif = eval(generate_diffusion_function(sys)[1])
+sys2 = stochastic_integral_transform(sys,1//2)
+fdrift = eval(generate_function(sys2)[1])
+fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0,p,t) ==  @. sin(t) + cos(u0) + 1//2*1/(1 + u0^2)*(pi + atan(u0))
 @test fdif(u0,p,t) == pi .+ atan.(u0)
-fdrift! = eval(generate_function(sys)[2])
-fdif! = eval(generate_diffusion_function(sys)[2])
+fdrift! = eval(generate_function(sys2)[2])
+fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
 @test  du ==  @. sin(t) + cos(u0) + 1//2*1/(1 + u0^2)*(pi + atan(u0))
@@ -215,13 +215,13 @@ fdif!(du,u0,p,t)
 @test du ==  reverse(u0)
 
 # Ito -> Strat
-sys = modelingtoolkitize(prob,correction_factor=-1//2)
-fdrift = eval(generate_function(sys)[1])
-fdif = eval(generate_diffusion_function(sys)[1])
+sys2 = stochastic_integral_transform(sys,-1//2)
+fdrift = eval(generate_function(sys2)[1])
+fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0,p,t) == u0*0
 @test fdif(u0,p,t) == reverse(u0)
-fdrift! = eval(generate_function(sys)[2])
-fdif! = eval(generate_diffusion_function(sys)[2])
+fdrift! = eval(generate_function(sys2)[2])
+fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
 @test  du == u0*0
@@ -229,13 +229,13 @@ fdif!(du,u0,p,t)
 @test du == reverse(u0)
 
 # Strat -> Ito
-sys = modelingtoolkitize(prob,correction_factor=1//2)
-fdrift = eval(generate_function(sys)[1])
-fdif = eval(generate_diffusion_function(sys)[1])
+sys2 = stochastic_integral_transform(sys,1//2)
+fdrift = eval(generate_function(sys2)[1])
+fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0,p,t) == u0
 @test fdif(u0,p,t) == reverse(u0)
-fdrift! = eval(generate_function(sys)[2])
-fdif! = eval(generate_diffusion_function(sys)[2])
+fdrift! = eval(generate_function(sys2)[2])
+fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
 @test  du == u0
@@ -267,13 +267,13 @@ fdif!(du,u0,p,t)
 @test du == p[2]*u0
 
 # Ito -> Strat
-sys = modelingtoolkitize(prob,correction_factor=-1//2)
-fdrift = eval(generate_function(sys)[1])
-fdif = eval(generate_diffusion_function(sys)[1])
+sys2 = stochastic_integral_transform(sys,-1//2)
+fdrift = eval(generate_function(sys2)[1])
+fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0,p,t) == p[1]*u0 - 1//2*p[2]^2*u0
 @test fdif(u0,p,t) == p[2]*u0
-fdrift! = eval(generate_function(sys)[2])
-fdif! = eval(generate_diffusion_function(sys)[2])
+fdrift! = eval(generate_function(sys2)[2])
+fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
 @test  du == p[1]*u0 - 1//2*p[2]^2*u0
@@ -281,13 +281,13 @@ fdif!(du,u0,p,t)
 @test du == p[2]*u0
 
 # Strat -> Ito
-sys = modelingtoolkitize(prob,correction_factor=1//2)
-fdrift = eval(generate_function(sys)[1])
-fdif = eval(generate_diffusion_function(sys)[1])
+sys2 = stochastic_integral_transform(sys,1//2)
+fdrift = eval(generate_function(sys2)[1])
+fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0,p,t) == p[1]*u0 + 1//2*p[2]^2*u0
 @test fdif(u0,p,t) == p[2]*u0
-fdrift! = eval(generate_function(sys)[2])
-fdif! = eval(generate_diffusion_function(sys)[2])
+fdrift! = eval(generate_function(sys2)[2])
+fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
 @test  du == p[1]*u0 + 1//2*p[2]^2*u0
@@ -327,14 +327,14 @@ fdif!(du,u0,p,t)
              p[4]*u0[1]   p[5]*u0[2]  ]
 
 # Ito -> Strat
-sys = modelingtoolkitize(prob,correction_factor=-1//2)
-fdrift = eval(generate_function(sys)[1])
-fdif = eval(generate_diffusion_function(sys)[1])
+sys2 = stochastic_integral_transform(sys,-1//2)
+fdrift = eval(generate_function(sys2)[1])
+fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0,p,t) == [p[1]*u0[1] - 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] - 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
 @test fdif(u0,p,t) == [p[2]*u0[1]   p[3]*u0[1]
                       p[4]*u0[1]     p[5]*u0[2] ]
-fdrift! = eval(generate_function(sys)[2])
-fdif! = eval(generate_diffusion_function(sys)[2])
+fdrift! = eval(generate_function(sys2)[2])
+fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
 @test  du == [p[1]*u0[1] - 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] - 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
@@ -344,14 +344,14 @@ fdif!(du,u0,p,t)
             p[4]*u0[1]     p[5]*u0[2] ]
 
 # Strat -> Ito
-sys = modelingtoolkitize(prob,correction_factor=1//2)
-fdrift = eval(generate_function(sys)[1])
-fdif = eval(generate_diffusion_function(sys)[1])
+sys2 = stochastic_integral_transform(sys,1//2)
+fdrift = eval(generate_function(sys2)[1])
+fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0,p,t) == [p[1]*u0[1] + 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] + 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
 @test fdif(u0,p,t) == [p[2]*u0[1]   p[3]*u0[1]
                       p[4]*u0[1]     p[5]*u0[2] ]
-fdrift! = eval(generate_function(sys)[2])
-fdif! = eval(generate_diffusion_function(sys)[2])
+fdrift! = eval(generate_function(sys2)[2])
+fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
 @test  du == [p[1]*u0[1] + 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] + 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
@@ -397,14 +397,14 @@ fdif!(du,u0,p,t)
                         sin(p[1])*sin(u0[1])   sin(p[1])*cos(u0[1])    cos(p[1])*sin(u0[2])    cos(p[1])*cos(u0[2])]
 
 # Ito -> Strat
-sys = modelingtoolkitize(prob,correction_factor=-1//2)
-fdrift = eval(generate_function(sys)[1])
-fdif = eval(generate_diffusion_function(sys)[1])
+sys2 = stochastic_integral_transform(sys,-1//2)
+fdrift = eval(generate_function(sys2)[1])
+fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0,p,t) == 0*u0
 @test fdif(u0,p,t) == [ cos(p[1])*sin(u0[1])   cos(p[1])*cos(u0[1])   -sin(p[1])*sin(u0[2])   -sin(p[1])*cos(u0[2])
                         sin(p[1])*sin(u0[1])   sin(p[1])*cos(u0[1])    cos(p[1])*sin(u0[2])    cos(p[1])*cos(u0[2])]
-fdrift! = eval(generate_function(sys)[2])
-fdif! = eval(generate_diffusion_function(sys)[2])
+fdrift! = eval(generate_function(sys2)[2])
+fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
 @test  du ==  0*u0
@@ -414,14 +414,14 @@ fdif!(du,u0,p,t)
               sin(p[1])*sin(u0[1])   sin(p[1])*cos(u0[1])    cos(p[1])*sin(u0[2])    cos(p[1])*cos(u0[2])]
 
 # Strat -> Ito
-sys = modelingtoolkitize(prob,correction_factor=1//2)
-fdrift = eval(generate_function(sys)[1])
-fdif = eval(generate_diffusion_function(sys)[1])
+sys2 = stochastic_integral_transform(sys,1//2)
+fdrift = eval(generate_function(sys2)[1])
+fdif = eval(generate_diffusion_function(sys2)[1])
 @test fdrift(u0,p,t) ==  0*u0
 @test fdif(u0,p,t) ==  [ cos(p[1])*sin(u0[1])   cos(p[1])*cos(u0[1])   -sin(p[1])*sin(u0[2])   -sin(p[1])*cos(u0[2])
                          sin(p[1])*sin(u0[1])   sin(p[1])*cos(u0[1])    cos(p[1])*sin(u0[2])    cos(p[1])*cos(u0[2])]
-fdrift! = eval(generate_function(sys)[2])
-fdif! = eval(generate_diffusion_function(sys)[2])
+fdrift! = eval(generate_function(sys2)[2])
+fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
 @test  du ==  0*u0
