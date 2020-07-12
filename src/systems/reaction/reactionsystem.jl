@@ -441,3 +441,19 @@ function DiffEqBase.SteadyStateProblem(rs::ReactionSystem, u0::Union{AbstractArr
     #p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
     return SteadyStateProblem(ODEFunction(convert(ODESystem,rs)),u0,p, args...; kwargs...)
 end
+
+# determine which species a reaction depends on
+function get_variables!(deps::Set{Operation}, rx::Reaction, variables)
+    (rx.rate isa Operation) && get_variables!(deps, rx.rate, variables)
+    for s in rx.substrates
+        push!(deps, s)
+    end
+    deps
+end
+
+# determine which species a reaction modifies
+function modified_states!(mstates, rx::Reaction, sts)
+    for (species,stoich) in rx.netstoich
+        (species in sts) && push!(mstates, species())
+    end
+end
