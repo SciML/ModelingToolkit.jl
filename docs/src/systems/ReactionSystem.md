@@ -49,6 +49,8 @@ ReactionSystem
 
 ## Query Functions
 ```@docs
+oderatelaw
+jumpratelaw
 ismassaction
 ```
 
