@@ -127,7 +127,7 @@ export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
 export ode_order_lowering
 export PDESystem
-export Reaction, ReactionSystem, ismassaction
+export Reaction, ReactionSystem, ismassaction, oderatelaw, jumpratelaw
 export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation

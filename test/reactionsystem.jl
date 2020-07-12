@@ -151,4 +151,17 @@ dprob = DiscreteProblem(js, [S => 1, I => 1], (0.0,10.0))
 jprob = JumpProblem(js, dprob, Direct())
 sol = solve(jprob, SSAStepper())
 
-nothing
+@parameters k1 k2
+@variables R
+rxs = [Reaction(k1*S, [S,I], [I], [2,3], [2]),
+       Reaction(k2*R, [I], [R]) ]
+rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
+@test isequal(ModelingToolkit.oderatelaw(rs.eqs[1]), k1*S*S^2*I^3/(factorial(2)*factorial(3)))
+@test_skip isequal(ModelingToolkit.jumpratelaw(rs.eqs[1]), k1*S*binomial(S,2)*binomial(I,3))
+dep = Set{Operation}()
+ModelingToolkit.get_variables!(dep, rxs[2], states(rs))
+dep2  = Set([R,I])
+@test dep == dep2
+dep = Set{Operation}()
+ModelingToolkit.modified_states!(dep, rxs[2], states(rs))
+@test dep == Set([R,I])

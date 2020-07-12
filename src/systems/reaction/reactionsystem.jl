@@ -145,7 +145,24 @@ function ReactionSystem(eqs, iv, species, params; systems = ReactionSystem[],
     ReactionSystem(eqs, convert(Variable,iv), specvars, paramvars, name, systems)
 end
 
-# Calculate the ODE rate law
+"""
+    oderatelaw(rx)
+
+Given a `Reaction`, return the reaction rate law `Operation` used in
+generated ODEs for the reaction. Note, for a reaction defined by
+
+`k*X*Y, X+Z --> 2X + Y`
+
+the expression that is returned will be `k*X(t)^2*Y(t)*Z(t)`. For a reaction of the
+form 
+
+`k, 2X+3Y --> Z`
+
+the `Operation` that is returned will be `k * (X(t)^2/2) * (Y(t)^3/6)`. 
+
+Notes:
+- Allocates
+""" 
 function oderatelaw(rx)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
@@ -203,6 +220,27 @@ end
 
 # Calculate the Jump rate law (like ODE, but uses X instead of X(t).
 # The former generates a "MethodError: objects of type Int64 are not callable" when trying to solve the problem.
+"""
+    jumpratelaw(rx; rxvars=get_variables(rx.rate))
+
+Given a `Reaction`, return the reaction rate law `Operation` used in
+generated stochastic chemical kinetics model SSAs for the reaction. Note,
+for a reaction defined by
+
+`k*X*Y, X+Z --> 2X + Y`
+
+the expression that is returned will be `k*X^2*Y*Z`. For a reaction of
+the form 
+
+`k, 2X+3Y --> Z`
+
+the `Operation` that is returned will be `k * binomial(X,2) *
+binomial(Y,3)`.
+
+Notes:
+- `rxvars` should give the `Variable`s, i.e. species and parameters, the rate depends on.
+- Allocates
+""" 
 function jumpratelaw(rx; rxvars=get_variables(rx.rate))
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
@@ -402,4 +440,20 @@ function DiffEqBase.SteadyStateProblem(rs::ReactionSystem, u0::Union{AbstractArr
     #u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
     #p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
     return SteadyStateProblem(ODEFunction(convert(ODESystem,rs)),u0,p, args...; kwargs...)
+end
+
+# determine which species a reaction depends on
+function get_variables!(deps::Set{Operation}, rx::Reaction, variables)
+    (rx.rate isa Operation) && get_variables!(deps, rx.rate, variables)
+    for s in rx.substrates
+        push!(deps, s)
+    end
+    deps
+end
+
+# determine which species a reaction modifies
+function modified_states!(mstates, rx::Reaction, sts)
+    for (species,stoich) in rx.netstoich
+        (species in sts) && push!(mstates, species())
+    end
 end
