@@ -418,11 +418,12 @@ function DiffEqBase.ODEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Numb
 end
 
 # SDEProblem from AbstractReactionNetwork
-function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args...; kwargs...)
-    u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
-    p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
-    p_matrix = zeros(length(rs.states), length(rs.eqs))
-    return SDEProblem(convert(SDESystem,rs),u0,tspan,p,args...; noise_rate_prototype=p_matrix,kwargs...)
+function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args... ;noise_scaling_parameter=:internal___no___noise___scalling::Symbol, kwargs...)
+    sde_sys = convert(SDESystem,rs,noise_scaling_parameter=noise_scaling_parameter)
+    u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(sde_sys.states,u0)
+    p = typeof(p) <: Array{<:Pair} ? p : Pair.(sde_sys.ps,p)
+    p_matrix = zeros(length(sde_sys.states), length(sde_sys.eqs))
+    return SDEProblem(sde_sys,u0,tspan,p,args...; noise_rate_prototype=p_matrix,kwargs...)
 end
 
 # DiscreteProblem from AbstractReactionNetwork
