@@ -86,7 +86,7 @@ distributedf = eval(ModelingToolkit.build_function(du,u,parallel=ModelingToolkit
 using Dagger
 daggerf = eval(ModelingToolkit.build_function(du,u,parallel=ModelingToolkit.DaggerForm())[2])
 
-jac = sparse(ModelingToolkit.jacobian(vec(du),vec(u),simplify=false))
+jac = ModelingToolkit.sparsejacobian(vec(du),vec(u))
 serialjac = eval(ModelingToolkit.build_function(vec(jac),u)[2])
 multithreadedjac = eval(ModelingToolkit.build_function(vec(jac),u,parallel=ModelingToolkit.MultithreadedForm())[2])
 distributedjac = eval(ModelingToolkit.build_function(vec(jac),u,parallel=ModelingToolkit.DistributedForm())[2])
