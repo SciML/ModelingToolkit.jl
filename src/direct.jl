@@ -208,3 +208,5 @@ function simplified_expr(eq::Equation)
 end
 
 simplified_expr(eq::AbstractArray) = simplified_expr.(eq)
+simplified_expr(x::Integer) = x
+simplified_expr(x::AbstractFloat) = x
