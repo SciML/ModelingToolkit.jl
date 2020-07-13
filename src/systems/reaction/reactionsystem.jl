@@ -199,13 +199,13 @@ function assemble_drift(rs)
     eqs
 end
 
-function assemble_diffusion(rs,noise_scaling_parameter::Union{Symbol,Nothing})
+function assemble_diffusion(rs,noise_scaling_param)
     eqs = Expression[Constant(0) for x in rs.states, y in rs.eqs]
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for (j,rx) in enumerate(rs.eqs)
         rlsqrt = sqrt(oderatelaw(rx))
-        (noise_scaling_parameter!=nothing) && (rlsqrt *= var2op(Variable(noise_scaling_parameter)))
+        (noise_scaling_param!=nothing) && (rlsqrt *= var2op(Variable(noise_scaling_param[j])))
         for (spec,stoich) in rx.netstoich
             i            = species_to_idx[spec]
             signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
@@ -359,10 +359,11 @@ Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
 
 Convert a ReactionSystem to a SDESystem.
 """
-function Base.convert(::Type{<:SDESystem},rs::ReactionSystem;noise_scaling_parameter=nothing::Union{Symbol,Nothing})
+function Base.convert(::Type{<:SDESystem},rs::ReactionSystem;noise_scaling_param=nothing::Union{Vector{Symbol},Symbol,Nothing})
+    (typeof(noise_scaling_param) <: Symbol) && (noise_scaling_param = fill(noise_scaling_param,length(rs.eqs)));
     eqs = assemble_drift(rs)
-    noiseeqs = assemble_diffusion(rs,noise_scaling_parameter)
-    SDESystem(eqs,noiseeqs,rs.iv,rs.states,(noise_scaling_parameter==nothing) ? rs.ps : vcat(rs.ps,Variable(noise_scaling_parameter)),
+    noiseeqs = assemble_diffusion(rs,noise_scaling_param)
+    SDESystem(eqs,noiseeqs,rs.iv,rs.states,(noise_scaling_param==nothing) ? rs.ps : vcat(rs.ps,Variable.(unique(noise_scaling_param))),
               name=rs.name,systems=convert.(SDESystem,rs.systems))
 end
 
@@ -417,8 +418,8 @@ function DiffEqBase.ODEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Numb
 end
 
 # SDEProblem from AbstractReactionNetwork
-function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args... ;noise_scaling_parameter=nothing::Union{Symbol,Nothing}, kwargs...)
-    sde_sys = convert(SDESystem,rs,noise_scaling_parameter=noise_scaling_parameter)
+function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args... ;noise_scaling_param=nothing::Union{Symbol,Nothing}, kwargs...)
+    sde_sys = convert(SDESystem,rs,noise_scaling_param=noise_scaling_param)
     u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(sde_sys.states,u0)
     p = typeof(p) <: Array{<:Pair} ? p : Pair.(sde_sys.ps,p)
     p_matrix = zeros(length(sde_sys.states), length(sde_sys.eqs))
