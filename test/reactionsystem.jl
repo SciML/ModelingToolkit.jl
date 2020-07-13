@@ -86,8 +86,8 @@ p  = rand(length(k)+1)
 u  = rand(length(k))
 t  = 0.
 G  = p[21]*sdenoise(u,p,t)
-sdesys_noise_scaling = convert(SDESystem,rs;noise_scaling_parameter=η)
-sf = SDEFunction{false}(sdesys, states(rs), parameters(rs))
+sdesys_noise_scaling = convert(SDESystem,rs;noise_scaling_parameter=:η)
+sf = SDEFunction{false}(sdesys_noise_scaling, states(rs), parameters(sdesys_noise_scaling))
 G2 = sf.g(u,p,t)
 @test norm(G-G2) < 100*eps()
 
