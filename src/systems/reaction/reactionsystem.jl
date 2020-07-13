@@ -154,15 +154,15 @@ generated ODEs for the reaction. Note, for a reaction defined by
 `k*X*Y, X+Z --> 2X + Y`
 
 the expression that is returned will be `k*X(t)^2*Y(t)*Z(t)`. For a reaction of the
-form 
+form
 
 `k, 2X+3Y --> Z`
 
-the `Operation` that is returned will be `k * (X(t)^2/2) * (Y(t)^3/6)`. 
+the `Operation` that is returned will be `k * (X(t)^2/2) * (Y(t)^3/6)`.
 
 Notes:
 - Allocates
-""" 
+"""
 function oderatelaw(rx)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
@@ -199,12 +199,13 @@ function assemble_drift(rs)
     eqs
 end
 
-function assemble_diffusion(rs)
+function assemble_diffusion(rs,updated_ps)
     eqs = Expression[Constant(0) for x in rs.states, y in rs.eqs]
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for (j,rx) in enumerate(rs.eqs)
         rlsqrt = sqrt(oderatelaw(rx))
+        (length(updated_ps)!=length(rs.ps)) && (rlsqrt *=var2op(updated_ps[end]))
         for (spec,stoich) in rx.netstoich
             i            = species_to_idx[spec]
             signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
@@ -230,7 +231,7 @@ for a reaction defined by
 `k*X*Y, X+Z --> 2X + Y`
 
 the expression that is returned will be `k*X^2*Y*Z`. For a reaction of
-the form 
+the form
 
 `k, 2X+3Y --> Z`
 
@@ -240,7 +241,7 @@ binomial(Y,3)`.
 Notes:
 - `rxvars` should give the `Variable`s, i.e. species and parameters, the rate depends on.
 - Allocates
-""" 
+"""
 function jumpratelaw(rx; rxvars=get_variables(rx.rate))
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
@@ -358,10 +359,11 @@ Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
 
 Convert a ReactionSystem to a SDESystem.
 """
-function Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
+function Base.convert(::Type{<:SDESystem},rs::ReactionSystem;noise_scaling_parameter=:internal___no___noise___scalling::Symbol)
     eqs = assemble_drift(rs)
-    noiseeqs = assemble_diffusion(rs)
-    SDESystem(eqs,noiseeqs,rs.iv,rs.states,rs.ps,
+    new_ps = (noise_scaling_parameter == :internal___no___noise___scalling) ? rs.ps : [rs.ps..., Variable(noise_scaling_parameter)]
+    noiseeqs = assemble_diffusion(rs,new_ps)
+    SDESystem(eqs,noiseeqs,rs.iv,rs.states,new_ps,
               name=rs.name,systems=convert.(SDESystem,rs.systems))
 end
 
