@@ -205,7 +205,7 @@ function assemble_diffusion(rs,noise_scaling_param)
 
     for (j,rx) in enumerate(rs.eqs)
         rlsqrt = sqrt(oderatelaw(rx))
-        (noise_scaling_param!=nothing) && (rlsqrt *= var2op(Variable(noise_scaling_param[j])))
+        (noise_scaling_param!==nothing) && (rlsqrt *= var2op(Variable(noise_scaling_param[j])))
         for (spec,stoich) in rx.netstoich
             i            = species_to_idx[spec]
             signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
@@ -364,7 +364,7 @@ function Base.convert(::Type{<:SDESystem},rs::ReactionSystem;noise_scaling_param
     (typeof(noise_scaling_param) <: Symbol) && (noise_scaling_param = fill(noise_scaling_param,length(rs.eqs)))
     eqs = assemble_drift(rs)
     noiseeqs = assemble_diffusion(rs,noise_scaling_param)
-    SDESystem(eqs,noiseeqs,rs.iv,rs.states,(noise_scaling_param==nothing) ? rs.ps : vcat(rs.ps,Variable.(unique(noise_scaling_param))),
+    SDESystem(eqs,noiseeqs,rs.iv,rs.states,(noise_scaling_param===nothing) ? rs.ps : vcat(rs.ps,Variable.(unique(noise_scaling_param))),
               name=rs.name,systems=convert.(SDESystem,rs.systems))
 end
 
