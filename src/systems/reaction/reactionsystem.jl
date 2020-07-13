@@ -415,7 +415,7 @@ function DiffEqBase.ODEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Numb
     p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
     return ODEProblem(convert(ODESystem,rs),u0,tspan,p, args...; kwargs...)
 end
-gensym(:no_noise_scalling)
+
 # SDEProblem from AbstractReactionNetwork
 function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args... ;noise_scaling_parameter=nothing::Union{Symbol,Nothing}, kwargs...)
     sde_sys = convert(SDESystem,rs,noise_scaling_parameter=noise_scaling_parameter)
