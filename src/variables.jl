@@ -127,7 +127,8 @@ function _parse_vars(macroname, type, x)
         push!(var_names, var_name)
         push!(ex.args, expr)
     end
-    push!(ex.args, build_expr(:tuple, var_names))
+    rhs = build_expr(:tuple, map(v->:($NumWrap($to_symbolic($v))), var_names))
+    push!(ex.args, :(($(var_names...),) = $rhs))
     return ex
 end
 

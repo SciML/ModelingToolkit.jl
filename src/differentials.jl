@@ -1,3 +1,5 @@
+using SymbolicUtils: Term, symtype
+
 """
 $(TYPEDEF)
 
@@ -24,7 +26,7 @@ struct Differential <: Function
     """The variable or expression to differentiate with respect to."""
     x::Expression
 end
-(D::Differential)(x) = Operation(D, Expression[x])
+(D::Differential)(x) = NumWrap(Term{symtype(value(x))}(D, [value(x)]))
 
 Base.show(io::IO, D::Differential) = print(io, "(D'~", D.x, ")")
 Base.convert(::Type{Expr}, D::Differential) = D
@@ -32,9 +34,9 @@ Base.convert(::Type{Expr}, D::Differential) = D
 Base.:(==)(D1::Differential, D2::Differential) = isequal(D1.x, D2.x)
 
 _isfalse(occ::Constant) = occ.value === false
-_isfalse(occ::Operation) = _isfalse(occ.op)
+_isfalse(occ::Term) = _isfalse(occ.op)
 
-function occursin_info(x, expr::Operation)
+function occursin_info(x, expr::Term)
     if isequal(x, expr)
         Constant(true)
     else
@@ -42,11 +44,11 @@ function occursin_info(x, expr::Operation)
         if all(_isfalse, args)
             return Constant(false)
         end
-        Operation(Constant(true), args)
+        Term(Constant(true), args)
     end
 end
 
-hasderiv(O::Operation) = O.op isa Differential || any(hasderiv, O.args)
+hasderiv(O::Term) = O.op isa Differential || any(hasderiv, O.args)
 hasderiv(O) = false
 
 occursin_info(x, y) = Constant(false)
@@ -55,8 +57,9 @@ $(SIGNATURES)
 
 TODO
 """
-function expand_derivatives(O::Operation, simplify=true; occurances=nothing)
+function expand_derivatives(O::Term, simplify=true; occurances=nothing)
     if isa(O.op, Differential)
+        @show "hi"
         @assert length(O.args) == 1
         arg = expand_derivatives(O.args[1], false)
 
@@ -73,7 +76,7 @@ function expand_derivatives(O::Operation, simplify=true; occurances=nothing)
             return Constant(0)
         elseif isequal(o, D.x)
             return Constant(1)
-        elseif !isa(o, Operation)
+        elseif !isa(o, Term)
             return O
         elseif isa(o.op, Variable)
             return O # This means D.x occurs in o, but o is symbolic function call
@@ -132,6 +135,11 @@ function expand_derivatives(O::Operation, simplify=true; occurances=nothing)
         return simplify ? ModelingToolkit.simplify(O1) : O1
     end
 end
+
+function expand_derivatives(n::NumWrap, simplify=true; occurances=nothing)
+    expand_derivatives(value(n), simplify; occurances=occurances)
+end
+
 _iszero(x::Constant) = iszero(x.value)
 _isone(x::Constant) = isone(x.value)
 _iszero(x) = false
@@ -174,7 +182,7 @@ julia> ModelingToolkit.derivative(myop, 2)  # wrt. y^2
 sin(x())
 ```
 """
-derivative(O::Operation, idx) = derivative(O.op, (O.args...,), Val(idx))
+derivative(O::Term, idx) = derivative(O.op, (O.args...,), Val(idx))
 derivative(O::Constant, ::Any) = Constant(0)
 
 # Pre-defined derivatives
