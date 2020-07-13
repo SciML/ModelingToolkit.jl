@@ -81,6 +81,16 @@ du2 = sf.f(u,p,t)
 G2 = sf.g(u,p,t)
 @test norm(G-G2) < 100*eps()
 
+# tests the noise_scaling_parameter argument.
+p  = rand(length(k)+1)
+u  = rand(length(k))
+t  = 0.
+G  = p[21]*sdenoise(u,p,t)
+sdesys_noise_scaling = convert(SDESystem,rs;noise_scaling_parameter=η)
+sf = SDEFunction{false}(sdesys, states(rs), parameters(rs))
+G2 = sf.g(u,p,t)
+@test norm(G-G2) < 100*eps()
+
 # test with JumpSystem
 js = convert(JumpSystem, rs)
 
@@ -142,7 +152,7 @@ end
 
 
 # test for https://github.com/SciML/ModelingToolkit.jl/issues/436
-@parameters t 
+@parameters t
 @variables S I
 rxs = [Reaction(1,[S],[I]), Reaction(1.1,[S],[I])]
 rs = ReactionSystem(rxs, t, [S,I], [])
