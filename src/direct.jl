@@ -6,8 +6,8 @@ gradient(O::Expression, vars::AbstractVector; simplify = true)
 A helper function for computing the gradient of an expression with respect to
 an array of variable expressions.
 """
-function gradient(O::Expression, vars::AbstractVector; simplify = true)
-    [expand_derivatives(Differential(v)(O),simplify) for v in vars]
+function gradient(O, vars::AbstractVector; simplify = true)
+    Num[expand_derivatives(Differential(v)(value(O)),simplify) for v in vars]
 end
 
 """
@@ -19,7 +19,7 @@ A helper function for computing the Jacobian of an array of expressions with res
 an array of variable expressions.
 """
 function jacobian(ops::AbstractVector, vars::AbstractVector; simplify = true)
-    [expand_derivatives(Differential(v)(O),simplify) for O in ops, v in vars]
+    Num[expand_derivatives(Differential(value(v))(value(O)),simplify) for O in ops, v in vars]
 end
 
 """
@@ -33,12 +33,12 @@ an array of variable expressions.
 function sparsejacobian(ops::AbstractVector, vars::AbstractVector; simplify = true)
     I = Int[]
     J = Int[]
-    du = Expression[]
+    du = Num[]
 
     sp = jacobian_sparsity(ops, vars)
     I,J,_ = findnz(sp)
 
-    exprs = Expression[]
+    exprs = Num[]
 
     for (i,j) in zip(I, J)
         push!(exprs, expand_derivatives(Differential(vars[j])(ops[i]), simplify))
@@ -55,7 +55,9 @@ Return the sparsity pattern of the Jacobian of an array of expressions with resp
 an array of variable expressions.
 """
 function jacobian_sparsity(du, u)
-    dict = Dict(zip(to_symbolic.(u), 1:length(u)))
+    du = map(value, du)
+    u = map(value, u)
+    dict = Dict(zip(u, 1:length(u)))
 
     i = Ref(1)
     I = Int[]
@@ -71,7 +73,7 @@ function jacobian_sparsity(du, u)
 
     for ii = 1:length(du)
         i[] = ii
-        r(to_symbolic(du[ii]))
+        r(du[ii])
     end
 
     sparse(I, J, true, length(du), length(u))
@@ -86,7 +88,8 @@ A helper function for computing the Hessian of an expression with respect to
 an array of variable expressions.
 """
 function hessian(O, vars::AbstractVector; simplify = true)
-    first_derivs = vec(jacobian([O], vars, simplify=simplify))
+    vars = map(value, vars)
+    first_derivs = map(value, vec(jacobian([values(O)], vars, simplify=simplify)))
     n = length(vars)
     H = Array{Num, 2}(undef,(n, n))
     fill!(H, 0)
@@ -212,3 +215,4 @@ end
 toexpr(eq::AbstractArray) = toexpr.(eq)
 toexpr(x::Integer) = x
 toexpr(x::AbstractFloat) = x
+toexpr(x::Num) = toexpr(value(x))

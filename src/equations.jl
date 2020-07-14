@@ -45,8 +45,6 @@ struct ConstrainedEquation
 end
 
 
-Base.Expr(op::Equation) = toexpr(op)
-
 function _eq_unordered(a, b)
     length(a) === length(b) || return false
     n = length(a)

@@ -53,7 +53,7 @@ SymbolicUtils.@number_methods(Num,
                               Num(f(value(a))),
                               Num(f(value(a), value(b))))
 
-SymbolicUtils.simplify(n::Num; kw...) = SymbolicUtils.simplify(value(n); kw...)
+SymbolicUtils.simplify(n::Num; kw...) = Num(SymbolicUtils.simplify(value(n); kw...))
 
 SymbolicUtils.symtype(n::Num) = symtype(n.val)
 
