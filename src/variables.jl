@@ -1,3 +1,5 @@
+using SymbolicUtils: FnType
+
 const IndexMap = Dict{Char,Char}(
             '0' => '₀',
             '1' => '₁',
@@ -149,11 +151,11 @@ end
 
 function _construct_var(var_name, type, call_args)
     expr = if call_args === nothing
-        :(Sym{$type}($(Meta.quot(var_name))))
+        :($Sym{$type}($(Meta.quot(var_name))))
     elseif !isempty(call_args) && call_args[end] == :..
-        :(Sym{FnType{Tuple{Any}, $type}}($(Meta.quot(var_name))))
+        :($Sym{$FnType{Tuple{Any}, Num}}($(Meta.quot(var_name)))) # XXX: using Num as output
     else
-        :(Sym{FnType{NTuple{$(length(call_args))}, $type}}($(Meta.quot(var_name)))($(call_args...)))
+        :($Sym{$FnType{NTuple{$(length(call_args)), Any}, $type}}($(Meta.quot(var_name)))($(map(x->:($value($x)), call_args)...)))
     end
     :($Num($expr))
 end

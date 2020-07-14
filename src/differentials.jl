@@ -79,10 +79,8 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
             return 0
         elseif isequal(o, D.x)
             return 1
-        elseif !isa(o, Term)
-            return O
-        elseif isa(o.op, Sym)
-            return O # This means D.x occurs in o, but o is symbolic function call
+        elseif !isa(o, Term) || isa(o.op, Sym)
+            return O # Cannot expand
         elseif isa(o.op, Differential)
             # The recursive expand_derivatives was not able to remove
             # a nested Differential. We can attempt to differentiate the

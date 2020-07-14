@@ -181,7 +181,7 @@ end
 
 function states(sys::AbstractSystem,name::Symbol)
     x = sys.states[findfirst(x->x.name==name,sys.states)]
-    rename(x,renamespace(sys.name,x.name))(sys.iv())
+    rename(x,renamespace(sys.name,x.name))(sys.iv)
 end
 
 function parameters(sys::AbstractSystem,name::Symbol)
