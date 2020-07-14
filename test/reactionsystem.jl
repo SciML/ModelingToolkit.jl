@@ -165,3 +165,31 @@ dep2  = Set([R,I])
 dep = Set{Operation}()
 ModelingToolkit.modified_states!(dep, rxs[2], states(rs))
 @test dep == Set([R,I])
+
+isequal2(a,b) = isequal(simplify(a), simplify(b))
+
+@test isequal2(ModelingToolkit.jumpratelaw(rxs[1]), k1*S*S*(S-1)*I*(I-1)*(I-2)/12)
+@test isequal2(ModelingToolkit.jumpratelaw(rxs[1]; combinatoric_ratelaw=false), k1*S*S*(S-1)*I*(I-1)*(I-2))
+@test isequal2(ModelingToolkit.oderatelaw(rxs[1]), k1*S*S^2*I^3/12)
+@test isequal2(ModelingToolkit.oderatelaw(rxs[1]; combinatoric_ratelaw=false), k1*S*S^2*I^3)
+
+#test ODE scaling:
+os = convert(ODESystem,rs)
+@test isequal2(os.eqs[1].rhs, -2*k1*S*S^2*I^3/12)
+os = convert(ODESystem,rs; combinatoric_ratelaws=false)
+@test isequal2(os.eqs[1].rhs, -2*k1*S*S^2*I^3)
+
+# test ConstantRateJump rate scaling
+js = convert(JumpSystem,rs)
+@test isequal2(js.eqs[1].rate, k1*S*S*(S-1)*I*(I-1)*(I-2)/12)
+js = convert(JumpSystem,rs;combinatoric_ratelaws=false)
+@test isequal2(js.eqs[1].rate, k1*S*S*(S-1)*I*(I-1)*(I-2))
+
+# test MassActionJump rate scaling
+rxs = [Reaction(k1, [S,I], [I], [2,3], [2]),
+       Reaction(k2, [I], [R]) ]
+rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
+js = convert(JumpSystem, rs)
+@test isequal2(js.eqs[1].scaled_rates, k1/12)
+js = convert(JumpSystem,rs; combinatoric_ratelaws=false)
+@test isequal2(js.eqs[1].scaled_rates, k1)
