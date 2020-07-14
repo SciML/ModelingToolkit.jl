@@ -170,6 +170,12 @@ ModelingToolkit.modified_states!(dep, rxs[2], states(rs))
 @test isequal(ModelingToolkit.oderatelaw(rxs[1]), k1*S*S^2*I^3/12)
 @test isequal(ModelingToolkit.oderatelaw(rxs[1]; scalerate=false), k1*S*S^2*I^3)
 
+#test ODE scaling:
+os = convert(ODESystem,rs)
+@test isequal(simplify(os.eqs[1].rhs),simplify(-2*k1*S*S^2*I^3/12))
+os = convert(ODESystem,rs; scalerates=false)
+@test isequal(simplify(os.eqs[1].rhs),simplify(-2*k1*S*S^2*I^3))
+
 # test ConstantRateJump rate scaling
 js = convert(JumpSystem,rs)
 @test isequal(js.eqs[1].rate, k1*S*S*(S-1)*I*(I-1)*(I-2)/12)

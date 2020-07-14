@@ -146,15 +146,15 @@ function ReactionSystem(eqs, iv, species, params; systems = ReactionSystem[],
 end
 
 """
-    oderatelaw(rx)
+    oderatelaw(rx; scalerate=true)
 
 Given a `Reaction`, return the reaction rate law `Operation` used in
 generated ODEs for the reaction. Note, for a reaction defined by
 
 `k*X*Y, X+Z --> 2X + Y`
 
-the expression that is returned will be `k*X(t)^2*Y(t)*Z(t)`. For a reaction of the
-form 
+the expression that is returned will be `k*X(t)^2*Y(t)*Z(t)`. For a reaction
+of the form 
 
 `k, 2X+3Y --> Z`
 
@@ -162,6 +162,10 @@ the `Operation` that is returned will be `k * (X(t)^2/2) * (Y(t)^3/6)`.
 
 Notes:
 - Allocates
+- `scalerate=true` uses factorial scaling factors in calculating the rate
+law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
+`scalerate=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
+ignored.
 """ 
 function oderatelaw(rx; scalerate=true)
     @unpack rate, substrates, substoich, only_use_rate = rx
@@ -177,13 +181,13 @@ function oderatelaw(rx; scalerate=true)
     rl
 end
 
-function assemble_drift(rs; scalerate=true)
+function assemble_drift(rs; scalerates=true)
     D   = Differential(rs.iv())
     eqs = [D(x(rs.iv())) ~ 0 for x in rs.states]
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for rx in rs.eqs
-        rl = oderatelaw(rx; scalerate=scalerate)
+        rl = oderatelaw(rx; scalerate=scalerates)
         for (spec,stoich) in rx.netstoich
             i = species_to_idx[spec]
             if iszero(eqs[i].rhs)
@@ -199,12 +203,12 @@ function assemble_drift(rs; scalerate=true)
     eqs
 end
 
-function assemble_diffusion(rs; scalerate=true)
+function assemble_diffusion(rs; scalerates=true)
     eqs = Expression[Constant(0) for x in rs.states, y in rs.eqs]
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for (j,rx) in enumerate(rs.eqs)
-        rlsqrt = sqrt(oderatelaw(rx; scalerate=scalerate))
+        rlsqrt = sqrt(oderatelaw(rx; scalerate=scalerates))
         for (spec,stoich) in rx.netstoich
             i            = species_to_idx[spec]
             signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
@@ -357,9 +361,15 @@ end
 Base.convert(::Type{<:ODESystem},rs::ReactionSystem)
 ```
 Convert a ReactionSystem to an ODESystem.
+
+Notes:
+- `scalerates=true` uses factorial scaling factors in calculating the rate
+law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
+`scalerates=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
+ignored.
 """
-function Base.convert(::Type{<:ODESystem},rs::ReactionSystem)
-    eqs = assemble_drift(rs)
+function Base.convert(::Type{<:ODESystem}, rs::ReactionSystem; scalerates=true)
+    eqs = assemble_drift(rs; scalerates=scalerates)
     ODESystem(eqs,rs.iv,rs.states,rs.ps,name=rs.name,
               systems=convert.(ODESystem,rs.systems))
 end
@@ -370,10 +380,16 @@ Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
 ```
 
 Convert a ReactionSystem to a SDESystem.
+
+Notes:
+- `scalerates=true` uses factorial scaling factors in calculating the rate
+law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
+`scalerates=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
+ignored.
 """
-function Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
-    eqs = assemble_drift(rs)
-    noiseeqs = assemble_diffusion(rs)
+function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, scalerates=true)
+    eqs = assemble_drift(rs; scalerates=scalerates)
+    noiseeqs = assemble_diffusion(rs; scalerates=scalerates)
     SDESystem(eqs,noiseeqs,rs.iv,rs.states,rs.ps,
               name=rs.name,systems=convert.(SDESystem,rs.systems))
 end
