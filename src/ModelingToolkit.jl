@@ -40,6 +40,9 @@ Wrap anything in a type that is a subtype of Number
 struct Num <: Number
     val
 end
+
+const show_numwrap = Ref(false)
+
 Num(x::Num) = x # ideally this should never be called
 (f::Num)(args...) = Num(f(args...))
 value(x) = x
@@ -49,6 +52,8 @@ SymbolicUtils.@number_methods(Num,
                               Num(f(value(a), value(b))))
 
 import SymbolicUtils: <ₑ, Symbolic, Term, operation, arguments
+
+Base.show(io::IO, n::Num) = show_numwrap[] ? print(io, :(Num($(value(n))))) : Base.show(io, value(n))
 
 Base.promote_rule(::Type{<:Number}, ::Type{<:Num}) = Num
 Base.promote_rule(::Type{<:Symbolic{<:Number}}, ::Type{<:Num}) = Num
