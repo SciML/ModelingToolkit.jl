@@ -53,6 +53,13 @@ SymbolicUtils.@number_methods(Num,
                               Num(f(value(a))),
                               Num(f(value(a), value(b))))
 
+SymbolicUtils.simplify(n::Num; kw...) = SymbolicUtils.simplify(value(n); kw...)
+
+function Base.iszero(x::Num)
+    _x = SymbolicUtils.to_mpoly(value(x))[1]
+    return (_x isa Number || _x isa SymbolicUtils.MPoly) && iszero(_x)
+end
+
 import SymbolicUtils: <ₑ, Symbolic, Term, operation, arguments
 
 Base.show(io::IO, n::Num) = show_numwrap[] ? print(io, :(Num($(value(n))))) : Base.show(io, value(n))
