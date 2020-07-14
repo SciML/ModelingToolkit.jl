@@ -32,6 +32,8 @@ Base type for a symbolic expression.
 """
 abstract type Expression <: Number end
 
+
+export Num
 """
 $(TYPEDEF)
 
@@ -65,6 +67,15 @@ Base.getproperty(t::Term, f::Symbol) = f === :op ? operation(t) : f === :args ? 
 Base.convert(::Type{Num}, x::Symbolic{<:Number}) = Num(x)
 Base.convert(::Type{Num}, x::Number) = Num(x)
 Base.convert(::Type{Num}, x::Num) = x
+
+#=
+# TODO: use register?
+Base.isless(n::Num, x::Number) = value(n) < value(x)
+Base.isless(n::Num, x::Num) = value(n) < value(x)
+Base.isless(n::Number, x::Num) = value(n) < value(x)
+=#
+
+LinearAlgebra.lu(x::Array{Num}) = lu(x, Val{false}())
 
 """
 $(TYPEDEF)
