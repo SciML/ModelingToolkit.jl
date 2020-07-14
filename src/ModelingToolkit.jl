@@ -37,29 +37,29 @@ $(TYPEDEF)
 
 Wrap anything in a type that is a subtype of Number
 """
-struct NumWrap <: Number
+struct Num <: Number
     val
 end
-NumWrap(x::NumWrap) = x # ideally this should never be called
-(f::NumWrap)(args...) = NumWrap(f(args...))
+Num(x::Num) = x # ideally this should never be called
+(f::Num)(args...) = Num(f(args...))
 value(x) = x
-value(x::NumWrap) = x.val
-SymbolicUtils.@number_methods(NumWrap,
-                              NumWrap(f(value(a))),
-                              NumWrap(f(value(a), value(b))))
+value(x::Num) = x.val
+SymbolicUtils.@number_methods(Num,
+                              Num(f(value(a))),
+                              Num(f(value(a), value(b))))
 
 import SymbolicUtils: <ₑ, Symbolic, Term, operation, arguments
 
-Base.promote_rule(::Type{<:Number}, ::Type{<:NumWrap}) = NumWrap
-Base.promote_rule(::Type{<:Symbolic{<:Number}}, ::Type{<:NumWrap}) = NumWrap
+Base.promote_rule(::Type{<:Number}, ::Type{<:Num}) = Num
+Base.promote_rule(::Type{<:Symbolic{<:Number}}, ::Type{<:Num}) = Num
 Base.getproperty(t::Term, f::Symbol) = f === :op ? operation(t) : f === :args ? arguments(t) : getfield(t, f)
-<ₑ(s::NumWrap, x) = value(s) <ₑ value(x)
-<ₑ(s, x::NumWrap) = value(s) <ₑ value(x)
-<ₑ(s::NumWrap, x::NumWrap) = value(s) <ₑ value(x)
+<ₑ(s::Num, x) = value(s) <ₑ value(x)
+<ₑ(s, x::Num) = value(s) <ₑ value(x)
+<ₑ(s::Num, x::Num) = value(s) <ₑ value(x)
 
-Base.convert(::Type{NumWrap}, x::Symbolic{<:Number}) = NumWrap(x)
-Base.convert(::Type{NumWrap}, x::Number) = NumWrap(x)
-Base.convert(::Type{NumWrap}, x::NumWrap) = x
+Base.convert(::Type{Num}, x::Symbolic{<:Number}) = Num(x)
+Base.convert(::Type{Num}, x::Number) = Num(x)
+Base.convert(::Type{Num}, x::Num) = x
 
 """
 $(TYPEDEF)

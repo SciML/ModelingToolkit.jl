@@ -28,7 +28,7 @@ struct Differential <: Function
     Differential(x) = new(value(x))
 end
 (D::Differential)(x) = Term{symtype(x)}(D, [x])
-(D::Differential)(x::NumWrap) = NumWrap(D(value(x)))
+(D::Differential)(x::Num) = Num(D(value(x)))
 
 Base.show(io::IO, D::Differential) = print(io, "(D'~", D.x, ")")
 
@@ -134,8 +134,8 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
     end
 end
 
-function expand_derivatives(n::NumWrap, simplify=true; occurances=nothing)
-    NumWrap(expand_derivatives(value(n), simplify; occurances=occurances))
+function expand_derivatives(n::Num, simplify=true; occurances=nothing)
+    Num(expand_derivatives(value(n), simplify; occurances=occurances))
 end
 
 _iszero(x::Number) = iszero(x)

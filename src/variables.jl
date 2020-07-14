@@ -51,7 +51,7 @@ struct Variable{T} <: Function
     Variable{T}(name) where T = new{T}(name)
     function Variable{T}(name, indices...) where T
         var_name = Symbol("$(name)$(join(map_subscripts.(indices), "ˏ"))")
-        Variable{T}(var_name)
+        Sym{T}(var_name)
     end
 end
 
@@ -127,7 +127,7 @@ function _parse_vars(macroname, type, x)
         push!(var_names, var_name)
         push!(ex.args, expr)
     end
-    rhs = build_expr(:tuple, map(v->:($NumWrap($to_symbolic($v))), var_names))
+    rhs = build_expr(:tuple, var_names)
     push!(ex.args, :(($(var_names...),) = $rhs))
     return ex
 end
@@ -148,23 +148,26 @@ function _construct_vars(_var, type, call_args)
 end
 
 function _construct_var(var_name, type, call_args)
-    if call_args === nothing
-        :(Variable{$type}($(Meta.quot(var_name)))())
+    expr = if call_args === nothing
+        :(Sym{$type}($(Meta.quot(var_name))))
     elseif !isempty(call_args) && call_args[end] == :..
-        :(Variable{$type}($(Meta.quot(var_name))))
+        :(Sym{FnType{Tuple{Any}, $type}}($(Meta.quot(var_name))))
     else
-        :(Variable{$type}($(Meta.quot(var_name)))($(call_args...)))
+        :(Sym{FnType{NTuple{$(length(call_args))}, $type}}($(Meta.quot(var_name)))($(call_args...)))
     end
+    :($Num($expr))
 end
 
 function _construct_var(var_name, type, call_args, ind)
-    if call_args === nothing
-        :(Variable{$type}($(Meta.quot(var_name)), $ind...)())
+    # TODO: just use Sym here
+    expr = if call_args === nothing
+        :(Variable{$type}($(Meta.quot(var_name)), $ind...))
     elseif !isempty(call_args) && call_args[end] == :..
         :(Variable{$type}($(Meta.quot(var_name)), $ind...))
     else
         :(Variable{$type}($(Meta.quot(var_name)), $ind...)($(call_args...)))
     end
+    :($Num($expr))
 end
 
 
