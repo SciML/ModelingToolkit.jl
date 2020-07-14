@@ -419,10 +419,16 @@ Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem)
 ```
 
 Convert a ReactionSystem to a NonlinearSystem.
+
+Notes:
+- `scalerates=true` uses factorial scaling factors in calculating the rate
+law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
+`scalerates=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
+ignored.
 """
-function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem)
+function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem; scalerates=true)
     states_swaps = map(states -> Operation(states,[var2op(rs.iv)]), rs.states)
-    eqs = map(eq -> 0 ~ make_sub!(eq,states_swaps),getproperty.(assemble_drift(rs),:rhs))
+    eqs = map(eq -> 0 ~ make_sub!(eq,states_swaps),getproperty.(assemble_drift(rs; scalerates=scalerates),:rhs))
     NonlinearSystem(eqs,rs.states,rs.ps,name=rs.name,
               systems=convert.(NonlinearSystem,rs.systems))
 end
@@ -465,8 +471,8 @@ function DiffEqBase.DiscreteProblem(rs::ReactionSystem, u0::Union{AbstractArray,
 end
 
 # JumpProblem from AbstractReactionNetwork
-function DiffEqJump.JumpProblem(rs::ReactionSystem, prob, aggregator, args...; scalerates=true, kwargs...)
-    return JumpProblem(convert(JumpSystem,rs; scalerates=scalerates), prob, aggregator, args...; kwargs...)
+function DiffEqJump.JumpProblem(rs::ReactionSystem, prob, aggregator, args...; kwargs...)
+    return JumpProblem(convert(JumpSystem,rs), prob, aggregator, args...; kwargs...)
 end
 
 # SteadyStateProblem from AbstractReactionNetwork
