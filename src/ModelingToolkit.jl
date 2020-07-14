@@ -50,6 +50,8 @@ SymbolicUtils.@number_methods(NumWrap,
 
 import SymbolicUtils: <ₑ, Symbolic, Term, operation, arguments
 
+Base.promote_rule(::Type{<:Number}, ::Type{<:NumWrap}) = NumWrap
+Base.promote_rule(::Type{<:Symbolic{<:Number}}, ::Type{<:NumWrap}) = NumWrap
 Base.getproperty(t::Term, f::Symbol) = f === :op ? operation(t) : f === :args ? arguments(t) : getfield(t, f)
 <ₑ(s::NumWrap, x) = value(s) <ₑ value(x)
 <ₑ(s, x::NumWrap) = value(s) <ₑ value(x)
