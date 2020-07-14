@@ -19,8 +19,8 @@ simpexpr = [
    ]
 
 for i in 1:3
-   @test ModelingToolkit.simplified_expr.(eqs)[i] == simpexpr[i]
-   @test ModelingToolkit.simplified_expr.(eqs)[i] == simpexpr[i]
+   @test ModelingToolkit.toexpr.(eqs)[i] == simpexpr[i]
+   @test ModelingToolkit.toexpr.(eqs)[i] == simpexpr[i]
 end
 
 ∂ = ModelingToolkit.jacobian(eqs,[x,y,z])

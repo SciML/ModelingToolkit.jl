@@ -189,26 +189,27 @@ function sparsehessian(O, vars::AbstractVector; simplify = true)
     return H
 end
 
-function simplified_expr(O::Term)
+function toexpr(O::Term)
   if isa(O.op, Differential)
-     return :(derivative($(simplified_expr(O.args[1])),$(simplified_expr(O.op.x))))
+     return :(derivative($(toexpr(O.args[1])),$(toexpr(O.op.x))))
   elseif isa(O.op, Sym)
     isempty(O.args) && return O.op.name
-    return Expr(:call, Symbol(O.op), simplified_expr.(O.args)...)
+    return Expr(:call, toexpr(O.op), toexpr.(O.args)...)
   end
   if O.op === (^)
       if length(O.args) > 1  && O.args[2] isa Constant && O.args[2].value < 0
-          return Expr(:call, :^, Expr(:call, :inv, simplified_expr(O.args[1])), -(O.args[2].value))
+          return Expr(:call, :^, Expr(:call, :inv, toexpr(O.args[1])), -(O.args[2].value))
       end
   end
-  return Expr(:call, Symbol(O.op), simplified_expr.(O.args)...)
+  return Expr(:call, Symbol(O.op), toexpr.(O.args)...)
 end
-simplified_expr(s::Sym) = nameof(s)
+toexpr(s::Sym) = nameof(s)
+toexpr(s) = s
 
-function simplified_expr(eq::Equation)
-    Expr(:(=), simplified_expr(eq.lhs), simplified_expr(eq.rhs))
+function toexpr(eq::Equation)
+    Expr(:(=), toexpr(eq.lhs), toexpr(eq.rhs))
 end
 
-simplified_expr(eq::AbstractArray) = simplified_expr.(eq)
-simplified_expr(x::Integer) = x
-simplified_expr(x::AbstractFloat) = x
+toexpr(eq::AbstractArray) = toexpr.(eq)
+toexpr(x::Integer) = x
+toexpr(x::AbstractFloat) = x

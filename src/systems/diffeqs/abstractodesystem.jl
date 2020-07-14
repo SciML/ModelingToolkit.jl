@@ -17,8 +17,10 @@ function calculate_jacobian(sys::AbstractODESystem;
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
-    iv = sys.iv()
+    iv = sys.iv
     dvs = [dv(iv) for dv ∈ states(sys)]
+    @show rhs
+    @show dvs
 
     if sparse
         jac = sparsejacobian(rhs, dvs, simplify=simplify)
@@ -44,7 +46,7 @@ function (f::ODEToExpr)(O::Operation)
     end
     return build_expr(:call, Any[Symbol(O.op); f.(O.args)])
 end
-(f::ODEToExpr)(x) = convert(Expr, x)
+(f::ODEToExpr)(x) = toexpr(x)
 
 function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                         simplify = true, kwargs...)
@@ -60,10 +62,16 @@ function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = param
                           conv = ODEToExpr(sys), kwargs...)
 end
 
+function makesym(t::Term{T}) where {T}
+    t.op isa Sym && return makesym(t.op)
+    t.op isa Differential && return Sym{T}(Symbol(makesym(t.op.x) :ˍ, makesym(t.args[1])))
+end
+makesym(t::Sym{T}) where {T} = t
+
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     rhss = [deq.rhs for deq ∈ equations(sys)]
-    dvs′ = convert.(Sym,dvs)
-    ps′ = convert.(Sym,ps)
+    dvs′ = makesym.(value.(dvs))
+    ps′ = makesym.(value.(ps))
     return build_function(rhss, dvs′, ps′, sys.iv;
                           conv = ODEToExpr(sys),kwargs...)
 end

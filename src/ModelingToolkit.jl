@@ -46,7 +46,6 @@ end
 const show_numwrap = Ref(false)
 
 Num(x::Num) = x # ideally this should never be called
-(f::Num)(args...) = Num(f(args...))
 value(x) = x
 value(x::Num) = x.val
 SymbolicUtils.@number_methods(Num,
@@ -54,6 +53,8 @@ SymbolicUtils.@number_methods(Num,
                               Num(f(value(a), value(b))))
 
 SymbolicUtils.simplify(n::Num; kw...) = SymbolicUtils.simplify(value(n); kw...)
+
+SymbolicUtils.symtype(n::Num) = symtype(n.val)
 
 function Base.iszero(x::Num)
     _x = SymbolicUtils.to_mpoly(value(x))[1]
@@ -132,17 +133,6 @@ include("context_dsl.jl")
 include("operations.jl")
 include("differentials.jl")
 
-function Base.convert(::Type{Variable},x::Operation)
-    if x.op isa Variable
-        x.op
-    elseif x.op isa Differential
-        var = x.args[1].op
-        rename(var,Symbol(var.name,:ˍ,x.op.x))
-    else
-        throw(error("This Operation is not a Variable"))
-    end
-end
-
 include("equations.jl")
 include("function_registration.jl")
 include("utils.jl")
@@ -188,7 +178,7 @@ export Reaction, ReactionSystem, ismassaction, oderatelaw, jumpratelaw
 export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
-export Operation, Expression, Variable
+export Term, Sym, Operation, Expression, Variable
 export independent_variable, states, parameters, equations
 
 export calculate_jacobian, generate_jacobian, generate_function
@@ -203,7 +193,7 @@ export BipartiteGraph, equation_dependencies, variable_dependencies
 export eqeq_dependencies, varvar_dependencies
 export asgraph, asdigraph
 
-export simplified_expr, rename, get_variables
+export toexpr, rename, get_variables
 export simplify, substitute
 export build_function
 export @register

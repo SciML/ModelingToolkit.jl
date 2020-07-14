@@ -35,7 +35,7 @@ struct ODESystem <: AbstractODESystem
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
     """
-    tgrad::RefValue{Vector{Expression}}
+    tgrad::RefValue{Vector{Num}}
     """
     Jacobian matrix. Note: this field will not be defined until
     [`calculate_jacobian`](@ref) is called on the system.
@@ -45,12 +45,12 @@ struct ODESystem <: AbstractODESystem
     `Wfact` matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
     """
-    Wfact::RefValue{Matrix{Expression}}
+    Wfact::RefValue{Matrix{Num}}
     """
     `Wfact_t` matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
     """
-    Wfact_t::RefValue{Matrix{Expression}}
+    Wfact_t::RefValue{Matrix{Num}}
     """
     Name: the name of the system
     """
@@ -67,10 +67,10 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     iv′ = convert(Sym,iv)
     dvs′ = convert.(Sym,dvs)
     ps′ = convert.(Sym,ps)
-    tgrad = RefValue(Vector{Expression}(undef, 0))
-    jac = RefValue{Any}(Matrix{Expression}(undef, 0, 0))
-    Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
-    Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
+    tgrad = RefValue(Vector{Num}(undef, 0))
+    jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
+    Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
+    Wfact_t = RefValue(Matrix{Num}(undef, 1, 0))
     ODESystem(deqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name, systems)
 end
 

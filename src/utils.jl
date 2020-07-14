@@ -58,35 +58,30 @@ is_operation(::Any) = false
 is_derivative(O::Operation) = isa(O.op, Differential)
 is_derivative(::Any) = false
 
-vars(exprs) = foldl(vars!, exprs; init = Set{Variable}())
+vars(exprs::Term) = vars([exprs])
+vars(exprs) = foldl(vars!, exprs; init = Set{Sym}())
 function vars!(vars, O)
-    isa(O, Operation) || return vars
-    O.op isa Variable && push!(vars, O.op)
+    isa(O, Sym) && return push!(vars, O)
+    isa(O, Term) || return O
+
+    O.op isa Sym && push!(vars, O.op)
     for arg ∈ O.args
-        if isa(arg, Operation)
-            isa(arg.op, Variable) && push!(vars, arg.op)
-            vars!(vars, arg)
-        end
+        vars!(vars, arg)
     end
 
     return vars
 end
-
-# variable extraction
-is_singleton(e) = false
-is_singleton(e::Operation) = e.op isa Variable
 
 """
 get_variables(O::Operation)
 
 Returns the variables in the Operation
 """
-get_variables!(vars, e::Constant, varlist=nothing) = vars
-get_variables(e::Constant, varlist=nothing) = get_variables!(Operation[], e, varlist)
+get_variables!(vars, e, varlist=nothing) = vars
 
-function get_variables!(vars, e::Operation, varlist=nothing)
-    if is_singleton(e)
-      (isnothing(varlist) ? true : (e.op in varlist)) && push!(vars, e)
+function get_variables!(vars, e::Term, varlist=nothing)
+    if e isa Sym
+      (isnothing(varlist) ? true : (e in varlist)) && push!(vars, e)
     else
         foreach(x -> get_variables!(vars, x, varlist), e.args)
     end

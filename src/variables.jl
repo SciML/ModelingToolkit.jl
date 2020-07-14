@@ -90,8 +90,6 @@ Base.isequal(c::Constant, n::Number) = c.value == n
 Base.isequal(n::Number, c::Constant) = c.value == n
 Base.isequal(a::Constant, b::Constant) = a.value == b.value
 
-Base.convert(::Type{Expr}, c::Constant) = c.value
-
 
 # Build variables more easily
 function _parse_vars(macroname, type, x)

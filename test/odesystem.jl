@@ -13,17 +13,18 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-ModelingToolkit.simplified_expr.(eqs)[1]
+ModelingToolkit.toexpr.(eqs)[1]
 :(derivative(x(t), t) = σ * (y(t) - x(t))).args
 de = ODESystem(eqs)
 
 generate_function(de)
 
-function _clean(O::Operation)
-    @assert isa(O.op, Variable)
+function _clean(O::Term)
+    @assert isa(O.op, Sym)
     return O.op
 end
-_clean(x::Variable) = x
+_clean(x::Sym) = x
+_clean(x::Num) = _clean(x.val)
 function test_diffeq_inference(name, sys, iv, dvs, ps)
     @testset "ODESystem construction: $name" begin
         @test independent_variable(sys) ==  _clean(iv)

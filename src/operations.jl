@@ -59,8 +59,6 @@ Base.hash(o::Operation, salt::UInt) = hash(o.args, hash(o.op, salt))
 # provide iszero for Operations to help sparse addition and multiplication
 # e.g., we want to tell the sparse library that iszero(zero(Operation) + zero(Operation)) == true
 
-Base.show(io::IO, O::Operation) = print(io, convert(Expr, O))
-
 # For inv
 Base.convert(::Type{Operation}, x::Bool) = Operation(identity, Expression[Constant(x)])
 Base.convert(::Type{Operation}, x::Number) = Operation(identity, Expression[Constant(x)])
@@ -72,9 +70,6 @@ Base.Symbol(O::Operation) = Symbol(convert(Variable,O))
 Base.convert(::Type{Symbol},O::Operation) = Symbol(convert(Variable,O))
 
 #convert to Expr
-Base.Expr(op::Operation) = simplified_expr(op)
-Base.convert(::Type{Expr},x::Operation) = Expr(x)
-
 # promotion
 Base.promote_rule(::Type{<:Constant}, ::Type{<:Operation}) = Operation
 Base.promote_rule(::Type{<:Operation}, ::Type{<:Constant}) = Operation
