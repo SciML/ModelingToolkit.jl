@@ -8,9 +8,9 @@ $(FIELDS)
 """
 struct Equation
     """The expression on the left-hand side of the equation."""
-    lhs::Expression
+    lhs::Num
     """The expression on the right-hand side of the equation."""
-    rhs::Expression
+    rhs::Num
 end
 Base.:(==)(a::Equation, b::Equation) = isequal((a.lhs, a.rhs), (b.lhs, b.rhs))
 Base.hash(a::Equation, salt::UInt) = hash(a.lhs, hash(a.rhs, salt))
@@ -35,9 +35,9 @@ julia> x - y ~ 0
 Equation(x() - y(), ModelingToolkit.Constant(0))
 ```
 """
-Base.:~(lhs::Expression, rhs::Expression) = Equation(lhs, rhs)
-Base.:~(lhs::Expression, rhs::Number    ) = Equation(lhs, rhs)
-Base.:~(lhs::Number    , rhs::Expression) = Equation(lhs, rhs)
+Base.:~(lhs::Num, rhs::Num) = Equation(lhs, rhs)
+Base.:~(lhs::Num, rhs::Number    ) = Equation(lhs, rhs)
+Base.:~(lhs::Number    , rhs::Num) = Equation(lhs, rhs)
 
 struct ConstrainedEquation
   constraints
