@@ -32,7 +32,7 @@ julia> x ~ y
 Equation(x(), y())
 
 julia> x - y ~ 0
-Equation(x() - y(), ModelingToolkit.Constant(0))
+Equation(x() - y(), 0)
 ```
 """
 Base.:~(lhs::Num, rhs::Num) = Equation(lhs, rhs)
