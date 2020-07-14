@@ -49,8 +49,8 @@ expr = β₁ * x + y^α + σ(3) * (z - t) - β₂ * w(t - 1)
 struct Variable{T} <: Function
     """The variable's unique name."""
     name::Symbol
-    Variable(name) = new{Number}(name)
-    Variable{T}(name) where T = new{T}(name)
+    Variable(name) = Sym{Number}(name)
+    Variable{T}(name) where T = Sym{T}(name)
     function Variable{T}(name, indices...) where T
         var_name = Symbol("$(name)$(join(map_subscripts.(indices), "ˏ"))")
         Sym{T}(var_name)
@@ -139,27 +139,24 @@ end
 
 function _construct_var(var_name, type, call_args)
     expr = if call_args === nothing
-        :($Sym{$type}($(Meta.quot(var_name))))
+        :($Num($Sym{$type}($(Meta.quot(var_name)))))
     elseif !isempty(call_args) && call_args[end] == :..
-        :($Sym{$FnType{Tuple{Any}, Num}}($(Meta.quot(var_name)))) # XXX: using Num as output
+        :($Num($Sym{$FnType{Tuple{Any}, $type}}($(Meta.quot(var_name))))) # XXX: using Num as output
     else
-        :($Sym{$FnType{NTuple{$(length(call_args)), Any}, $type}}($(Meta.quot(var_name)))($(map(x->:($value($x)), call_args)...)))
+        :($Num($Sym{$FnType{NTuple{$(length(call_args)), Any}, $type}}($(Meta.quot(var_name)))($(map(x->:($value($x)), call_args)...))))
     end
-    :($Num($expr))
 end
 
 function _construct_var(var_name, type, call_args, ind)
     # TODO: just use Sym here
-    expr = if call_args === nothing
-        :(Variable{$type}($(Meta.quot(var_name)), $ind...))
+    if call_args === nothing
+        :($Num(Variable{$type}($(Meta.quot(var_name)), $ind...)))
     elseif !isempty(call_args) && call_args[end] == :..
-        :(Variable{$type}($(Meta.quot(var_name)), $ind...))
+        :($Num(Variable{$FnType{Tuple{Any}, $type}}($(Meta.quot(var_name)), $ind...))) # XXX: using Num as output
     else
-        :(Variable{$type}($(Meta.quot(var_name)), $ind...)($(call_args...)))
+        :($Num(Variable{$FnType{NTuple{$(length(call_args)), Any}, $type}}($(Meta.quot(var_name)), $ind...)($(map(x->:($value($x)), call_args)...))))
     end
-    :($Num($expr))
 end
-
 
 function _construct_array_vars(var_name, type, call_args, indices...)
     :(map(Iterators.product($(indices...))) do ind

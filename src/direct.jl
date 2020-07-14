@@ -87,7 +87,6 @@ an array of variable expressions.
 """
 function hessian(O, vars::AbstractVector; simplify = true)
     first_derivs = vec(jacobian([O], vars, simplify=simplify))
-    @show first_derivs
     n = length(vars)
     H = Array{Num, 2}(undef,(n, n))
     fill!(H, 0)

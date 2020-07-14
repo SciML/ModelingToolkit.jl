@@ -2,11 +2,14 @@ import SymbolicUtils: symtype
 struct Parameter{T} end
 
 isparameter(::Sym) = false
+
 isparameter(::Sym{<:Parameter}) = true
+
 isparameter(::Sym{<:FnType{<:Any, <:Parameter}}) = true
 
-SymbolicUtils.symtype(s::Sym{Parameter{T}}) where T = T
-SymbolicUtils.symtype(s::Sym{Parameter{<:FnType{<:Any, T}}}) where T = T
+SymbolicUtils.symtype(s::Symbolic{Parameter{T}}) where T = T
+
+Base.convert(::Type{Num}, x::Symbolic{Parameter{T}}) where {T<:Number} = Num(x)
 
 """
 $(SIGNATURES)

@@ -19,8 +19,6 @@ function calculate_jacobian(sys::AbstractODESystem;
 
     iv = sys.iv
     dvs = [dv(iv) for dv ∈ states(sys)]
-    @show rhs
-    @show dvs
 
     if sparse
         jac = sparsejacobian(rhs, dvs, simplify=simplify)

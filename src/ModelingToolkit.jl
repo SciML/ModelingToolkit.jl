@@ -46,6 +46,7 @@ end
 const show_numwrap = Ref(false)
 
 Num(x::Num) = x # ideally this should never be called
+(n::Num)(args...) = value(n)(map(value,args)...)
 value(x) = x
 value(x::Num) = x.val
 SymbolicUtils.@number_methods(Num,
@@ -73,6 +74,17 @@ Base.getproperty(t::Term, f::Symbol) = f === :op ? operation(t) : f === :args ? 
 <ₑ(s::Num, x::Num) = value(s) <ₑ value(x)
 
 Base.:(^)(n::Num, i::Integer) = Num(Term{symtype(n)}(^, [value(n),i]))
+
+macro num_method(f, expr, T=Any)
+    quote
+        $f(a::$Num, b::$Num) = $expr
+        $f(a::$T, b::$Num) = $expr
+        $f(a::$Num, b::$T) = $expr
+    end |> esc
+end
+
+@num_method Base.isless isless(value(a), value(b))
+@num_method Base.isequal isequal(value(a), value(b))
 
 Base.convert(::Type{Num}, x::Symbolic{<:Number}) = Num(x)
 Base.convert(::Type{Num}, x::Number) = Num(x)
