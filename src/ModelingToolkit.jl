@@ -17,7 +17,7 @@ using Base: RefValue
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils: to_symbolic, FnType, @rule, Rewriters
+import SymbolicUtils:Term, Sym, FnType, @rule, Rewriters
 
 import LightGraphs: SimpleDiGraph, add_edge!
 
@@ -79,6 +79,7 @@ Base.convert(::Type{Num}, x::Num) = x
 
 Base.convert(::Type{<:Array{Num}}, x::AbstractArray) = map(Num, x)
 Base.convert(::Type{<:Array{Num}}, x::AbstractArray{Num}) = x
+Base.convert(::Type{Sym}, x::Num) = value(x) isa Sym ? value(x) : error("cannot convert $x to Sym")
 
 #=
 # TODO: use register?

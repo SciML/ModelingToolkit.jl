@@ -163,7 +163,7 @@ function namespace_equation(eq::Equation,name,ivname)
 end
 
 function namespace_operation(O::Operation,name,ivname)
-    if O.op isa Variable && O.op.name != ivname
+    if O.op isa Sym && O.op.name != ivname
         Operation(rename(O.op,renamespace(name,O.op.name)),namespace_operation.(O.args,name,ivname))
     else
         Operation(O.op,namespace_operation.(O.args,name,ivname))
@@ -214,12 +214,12 @@ end
 
 struct AbstractSysToExpr
     sys::AbstractSystem
-    states::Vector{Variable}
+    states::Vector{Sym}
 end
 AbstractSysToExpr(sys) = AbstractSysToExpr(sys,states(sys))
 function (f::AbstractSysToExpr)(O::Operation)
     any(isequal(O), f.states) && return O.op.name  # variables
-    if isa(O.op, Variable)
+    if isa(O.op, Sym)
         isempty(O.args) && return O.op.name  # 0-ary parameters
         return build_expr(:call, Any[O.op.name; f.(O.args)])
     end

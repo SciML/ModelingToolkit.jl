@@ -62,17 +62,7 @@ function Variable(name, indices...)
     Variable(var_name)
 end
 
-vartype(::Variable{T}) where T = T
-(x::Variable)(args...) = Operation(x, collect(Expression, args))
-rename(x::Variable{T},name) where T = Variable{T}(name)
-
-Base.isequal(x::Variable, y::Variable) = x.name == y.name
-Base.print(io::IO, x::Variable) = show(io, x)
-Base.show(io::IO, x::Variable) = print(io, x.name)
-function Base.show(io::IO, ::MIME"text/plain", x::Variable)
-    print(io, x.name)
-end
-
+rename(x::Sym{T},name) where T = Sym{T}(name)
 
 """
 $(TYPEDEF)
@@ -237,7 +227,7 @@ $(TYPEDSIGNATURES)
 Renames the variable `x` to have `name`.
 """
 function rename(x::Variable,name::Symbol)
-    Variable{vartype(x)}(name)
+    Variable{symtype(x)}(name)
 end
 
 TreeViews.hastreeview(x::Variable) = true

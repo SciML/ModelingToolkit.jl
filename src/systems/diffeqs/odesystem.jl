@@ -64,9 +64,9 @@ end
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    systems = ODESystem[],
                    name=gensym(:ODESystem))
-    iv′ = convert(Variable,iv)
-    dvs′ = convert.(Variable,dvs)
-    ps′ = convert.(Variable,ps)
+    iv′ = convert(Sym,iv)
+    dvs′ = convert.(Sym,dvs)
+    ps′ = convert.(Sym,ps)
     tgrad = RefValue(Vector{Expression}(undef, 0))
     jac = RefValue{Any}(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
@@ -82,9 +82,9 @@ iv_from_nested_derivative(x::Constant) = missing
 
 function ODESystem(eqs; kwargs...)
     # NOTE: this assumes that the order of algebric equations doesn't matter
-    diffvars = OrderedSet{Variable}()
-    allstates = OrderedSet{Variable}()
-    ps = OrderedSet{Variable}()
+    diffvars = OrderedSet{Sym}()
+    allstates = OrderedSet{Sym}()
+    ps = OrderedSet{Sym}()
     # reorder equations such that it is in the form of `diffeq, algeeq`
     diffeq = Equation[]
     algeeq = Equation[]
@@ -98,7 +98,7 @@ function ODESystem(eqs; kwargs...)
     iv === nothing && throw(ArgumentError("No differential variable detected."))
     for eq in eqs
         for var in vars(eq.rhs for eq ∈ eqs)
-            var isa Variable || continue
+            var isa Sym || continue
             if isparameter(var)
                 isequal(var, iv) || push!(ps, var)
             else
