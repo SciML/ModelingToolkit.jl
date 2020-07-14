@@ -1,36 +1,36 @@
 """
 ```julia
-gradient(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+gradient(O::Expression, vars::AbstractVector; simplify = true)
 ```
 
 A helper function for computing the gradient of an expression with respect to
 an array of variable expressions.
 """
-function gradient(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+function gradient(O::Expression, vars::AbstractVector; simplify = true)
     [expand_derivatives(Differential(v)(O),simplify) for v in vars]
 end
 
 """
 ```julia
-jacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
+jacobian(ops::AbstractVector, vars::AbstractVector; simplify = true)
 ```
 
 A helper function for computing the Jacobian of an array of expressions with respect to
 an array of variable expressions.
 """
-function jacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
+function jacobian(ops::AbstractVector, vars::AbstractVector; simplify = true)
     [expand_derivatives(Differential(v)(O),simplify) for O in ops, v in vars]
 end
 
 """
 ```julia
-sparsejacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
+sparsejacobian(ops::AbstractVector, vars::AbstractVector; simplify = true)
 ```
 
 A helper function for computing the sparse Jacobian of an array of expressions with respect to
 an array of variable expressions.
 """
-function sparsejacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
+function sparsejacobian(ops::AbstractVector, vars::AbstractVector; simplify = true)
     I = Int[]
     J = Int[]
     du = Expression[]
@@ -48,7 +48,7 @@ end
 
 """
 ```julia
-jacobian_sparsity(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression})
+jacobian_sparsity(ops::AbstractVector, vars::AbstractVector)
 ```
 
 Return the sparsity pattern of the Jacobian of an array of expressions with respect to
@@ -79,13 +79,13 @@ end
 
 """
 ```julia
-hessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+hessian(O::Expression, vars::AbstractVector; simplify = true)
 ```
 
 A helper function for computing the Hessian of an expression with respect to
 an array of variable expressions.
 """
-function hessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+function hessian(O::Expression, vars::AbstractVector; simplify = true)
     first_derivs = vec(jacobian([O], vars, simplify=simplify))
     n = length(vars)
     H = Array{Expression, 2}(undef,(n, n))
@@ -128,7 +128,7 @@ let
 
     """
     ```julia
-    hessian_sparsity(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression})
+    hessian_sparsity(ops::AbstractVector, vars::AbstractVector)
     ```
 
     Return the sparsity pattern of the Hessian of an array of expressions with respect to
@@ -155,13 +155,13 @@ end
 
 """
 ```julia
-sparsehessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+sparsehessian(O::Expression, vars::AbstractVector; simplify = true)
 ```
 
 A helper function for computing the sparse Hessian of an expression with respect to
 an array of variable expressions.
 """
-function sparsehessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+function sparsehessian(O::Expression, vars::AbstractVector; simplify = true)
     S = hessian_sparsity(O, vars)
     I, J, _ = findnz(S)
     exprs = Array{Expression}(undef, length(I))

@@ -25,6 +25,7 @@ julia> D(y)  # Differentiate y wrt. x
 struct Differential <: Function
     """The variable or expression to differentiate with respect to."""
     x
+    Differential(x) = new(value(x))
 end
 (D::Differential)(x) = Term{symtype(x)}(D, [x])
 (D::Differential)(x::NumWrap) = NumWrap(D(value(x)))
