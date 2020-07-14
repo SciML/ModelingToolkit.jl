@@ -146,9 +146,9 @@ function ReactionSystem(eqs, iv, species, params; systems = ReactionSystem[],
 end
 
 """
-    oderatelaw(rx; scalerate=true)
+    oderatelaw(rx; combinatoric_ratelaw=true)
 
-Given a `Reaction`, return the reaction rate law `Operation` used in
+Given a [`Reaction`](@ref), return the reaction rate law [`Operation`](@ref) used in
 generated ODEs for the reaction. Note, for a reaction defined by
 
 `k*X*Y, X+Z --> 2X + Y`
@@ -162,12 +162,12 @@ the `Operation` that is returned will be `k * (X(t)^2/2) * (Y(t)^3/6)`.
 
 Notes:
 - Allocates
-- `scalerate=true` uses factorial scaling factors in calculating the rate
+- `combinatoric_ratelaw=true` uses factorial scaling factors in calculating the rate
 law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
-`scalerate=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
+`combinatoric_ratelaw=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
 ignored.
 """ 
-function oderatelaw(rx; scalerate=true)
+function oderatelaw(rx; combinatoric_ratelaw=true)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
     if !only_use_rate
@@ -176,18 +176,18 @@ function oderatelaw(rx; scalerate=true)
             coef *= factorial(stoich)
             rl   *= isone(stoich) ? substrates[i] : substrates[i]^stoich
         end
-        scalerate && (!isone(coef)) && (rl /= coef)
+        combinatoric_ratelaw && (!isone(coef)) && (rl /= coef)
     end
     rl
 end
 
-function assemble_drift(rs; scalerates=true)
+function assemble_drift(rs; combinatoric_ratelaws=true)
     D   = Differential(rs.iv())
     eqs = [D(x(rs.iv())) ~ 0 for x in rs.states]
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for rx in rs.eqs
-        rl = oderatelaw(rx; scalerate=scalerates)
+        rl = oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)
         for (spec,stoich) in rx.netstoich
             i = species_to_idx[spec]
             if iszero(eqs[i].rhs)
@@ -203,12 +203,12 @@ function assemble_drift(rs; scalerates=true)
     eqs
 end
 
-function assemble_diffusion(rs; scalerates=true)
+function assemble_diffusion(rs; combinatoric_ratelaws=true)
     eqs = Expression[Constant(0) for x in rs.states, y in rs.eqs]
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for (j,rx) in enumerate(rs.eqs)
-        rlsqrt = sqrt(oderatelaw(rx; scalerate=scalerates))
+        rlsqrt = sqrt(oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws))
         for (spec,stoich) in rx.netstoich
             i            = species_to_idx[spec]
             signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
@@ -225,9 +225,9 @@ end
 # Calculate the Jump rate law (like ODE, but uses X instead of X(t).
 # The former generates a "MethodError: objects of type Int64 are not callable" when trying to solve the problem.
 """
-    jumpratelaw(rx; rxvars=get_variables(rx.rate), scalerate=true)
+    jumpratelaw(rx; rxvars=get_variables(rx.rate), combinatoric_ratelaw=true)
 
-Given a `Reaction`, return the reaction rate law `Operation` used in
+Given a [`Reaction`](@ref), return the reaction rate law [`Operation`](@ref) used in
 generated stochastic chemical kinetics model SSAs for the reaction. Note,
 for a reaction defined by
 
@@ -244,12 +244,12 @@ binomial(Y,3)`.
 Notes:
 - `rxvars` should give the `Variable`s, i.e. species and parameters, the rate depends on.
 - Allocates
-- `scalerate=true` uses binomials in calculating the rate law, i.e. for `2S ->
-  0` at rate `k` the ratelaw would be `k*S*(S-1)/2`. If `scalerate=false` then
+- `combinatoric_ratelaw=true` uses binomials in calculating the rate law, i.e. for `2S ->
+  0` at rate `k` the ratelaw would be `k*S*(S-1)/2`. If `combinatoric_ratelaw=false` then
   the ratelaw is `k*S*(S-1)`, i.e. the rate law is not normalized by the scaling
   factor. 
 """ 
-function jumpratelaw(rx; rxvars=get_variables(rx.rate), scalerate=true)
+function jumpratelaw(rx; rxvars=get_variables(rx.rate), combinatoric_ratelaw=true)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
     for op in rxvars
@@ -264,7 +264,7 @@ function jumpratelaw(rx; rxvars=get_variables(rx.rate), scalerate=true)
             for i in one(stoich):(stoich-one(stoich))
                 rl *= (s - i)
             end
-            scalerate && (coef *= factorial(stoich))
+            combinatoric_ratelaw && (coef *= factorial(stoich))
         end
         !isone(coef) && (rl /= coef)
     end
@@ -302,7 +302,7 @@ function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
     return true
 end
 
-@inline function makemajump(rx; scalerate=true)
+@inline function makemajump(rx; combinatoric_ratelaw=true)
     @unpack rate, substrates, substoich, netstoich = rx
     zeroorder = (length(substoich) == 0)
     reactant_stoch = Vector{Pair{Operation,eltype(substoich)}}(undef, length(substoich))
@@ -310,7 +310,7 @@ end
         reactant_stoch[i] = var2op(substrates[i].op) => substoich[i]
     end
     #push!(rstoich, reactant_stoch)
-    coef = (zeroorder || (!scalerate)) ? one(eltype(substoich)) : prod(stoich -> factorial(stoich), substoich)
+    coef = (zeroorder || (!combinatoric_ratelaw)) ? one(eltype(substoich)) : prod(stoich -> factorial(stoich), substoich)
     (!isone(coef)) && (rate /= coef)
     #push!(rates, rate)
     net_stoch      = [Pair(var2op(p[1]),p[2]) for p in netstoich]
@@ -318,7 +318,7 @@ end
     MassActionJump(rate, reactant_stoch, net_stoch, scale_rates=false, useiszero=false)
 end
 
-function assemble_jumps(rs; scalerates=true)
+function assemble_jumps(rs; combinatoric_ratelaws=true)
     meqs = MassActionJump[]; ceqs = ConstantRateJump[]; veqs = VariableRateJump[]
     stateset = Set(states(rs))
     #rates = [];  rstoich = []; nstoich = []
@@ -337,9 +337,9 @@ function assemble_jumps(rs; scalerates=true)
             end
         end
         if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep, stateset=stateset)
-            push!(meqs, makemajump(rx, scalerate=scalerates))
+            push!(meqs, makemajump(rx, combinatoric_ratelaw=combinatoric_ratelaws))
         else
-            rl     = jumpratelaw(rx, rxvars=rxvars, scalerate=scalerates)
+            rl     = jumpratelaw(rx, rxvars=rxvars, combinatoric_ratelaw=combinatoric_ratelaws)
             affect = Vector{Equation}()
             for (spec,stoich) in rx.netstoich
                 push!(affect, var2op(spec) ~ var2op(spec) + stoich)
@@ -359,16 +359,16 @@ end
 ```julia
 Base.convert(::Type{<:ODESystem},rs::ReactionSystem)
 ```
-Convert a ReactionSystem to an ODESystem.
+Convert a [`ReactionSystem`](@ref) to an [`ODESystem`](@ref).
 
 Notes:
-- `scalerates=true` uses factorial scaling factors in calculating the rate
+- `combinatoric_ratelaws=true` uses factorial scaling factors in calculating the rate
 law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
-`scalerates=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
+`combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
 ignored.
 """
-function Base.convert(::Type{<:ODESystem}, rs::ReactionSystem; scalerates=true)
-    eqs = assemble_drift(rs; scalerates=scalerates)
+function Base.convert(::Type{<:ODESystem}, rs::ReactionSystem; combinatoric_ratelaws=true)
+    eqs = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws)
     ODESystem(eqs,rs.iv,rs.states,rs.ps,name=rs.name,
               systems=convert.(ODESystem,rs.systems))
 end
@@ -378,36 +378,36 @@ end
 Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
 ```
 
-Convert a ReactionSystem to a SDESystem.
+Convert a [`ReactionSystem`](@ref) to an [`SDESystem`](@ref).
 
 Notes:
-- `scalerates=true` uses factorial scaling factors in calculating the rate
+- `combinatoric_ratelaws=true` uses factorial scaling factors in calculating the rate
 law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
-`scalerates=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
+`combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
 ignored.
 """
-function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, scalerates=true)
-    eqs = assemble_drift(rs; scalerates=scalerates)
-    noiseeqs = assemble_diffusion(rs; scalerates=scalerates)
+function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, combinatoric_ratelaws=true)
+    eqs = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws)
+    noiseeqs = assemble_diffusion(rs; combinatoric_ratelaws=combinatoric_ratelaws)
     SDESystem(eqs,noiseeqs,rs.iv,rs.states,rs.ps,
               name=rs.name,systems=convert.(SDESystem,rs.systems))
 end
 
 """
 ```julia
-Base.convert(::Type{<:JumpSystem},rs::ReactionSystem; scalerates=true)
+Base.convert(::Type{<:JumpSystem},rs::ReactionSystem; combinatoric_ratelaws=true)
 ```
 
-Convert a ReactionSystem to a JumpSystem.
+Convert a [`ReactionSystem`](@ref) to an [`JumpSystem`](@ref).
 
 Notes:
-- `scalerates=true` uses binomials in calculating the rate law, i.e. for `2S ->
-  0` at rate `k` the ratelaw would be `k*S*(S-1)/2`. If `scalerates=false` then
+- `combinatoric_ratelaws=true` uses binomials in calculating the rate law, i.e. for `2S ->
+  0` at rate `k` the ratelaw would be `k*S*(S-1)/2`. If `combinatoric_ratelaws=false` then
   the ratelaw is `k*S*(S-1)`, i.e. the rate law is not normalized by the scaling
   factor. 
 """
-function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem; scalerates=true)
-    eqs = assemble_jumps(rs; scalerates=scalerates)
+function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem; combinatoric_ratelaws=true)
+    eqs = assemble_jumps(rs; combinatoric_ratelaws=combinatoric_ratelaws)
     JumpSystem(eqs,rs.iv,rs.states,rs.ps,name=rs.name,
               systems=convert.(JumpSystem,rs.systems))
 end
@@ -418,17 +418,17 @@ end
 Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem)
 ```
 
-Convert a ReactionSystem to a NonlinearSystem.
+Convert a [`ReactionSystem`](@ref) to an [`NonlinearSystem`](@ref).
 
 Notes:
-- `scalerates=true` uses factorial scaling factors in calculating the rate
+- `combinatoric_ratelaws=true` uses factorial scaling factors in calculating the rate
 law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
-`scalerates=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
+`combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
 ignored.
 """
-function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem; scalerates=true)
+function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem; combinatoric_ratelaws=true)
     states_swaps = map(states -> Operation(states,[var2op(rs.iv)]), rs.states)
-    eqs = map(eq -> 0 ~ make_sub!(eq,states_swaps),getproperty.(assemble_drift(rs; scalerates=scalerates),:rhs))
+    eqs = map(eq -> 0 ~ make_sub!(eq,states_swaps),getproperty.(assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws),:rhs))
     NonlinearSystem(eqs,rs.states,rs.ps,name=rs.name,
               systems=convert.(NonlinearSystem,rs.systems))
 end
