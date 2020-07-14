@@ -163,7 +163,7 @@ the `Operation` that is returned will be `k * (X(t)^2/2) * (Y(t)^3/6)`.
 Notes:
 - Allocates
 """ 
-function oderatelaw(rx)
+function oderatelaw(rx; scalerate=true)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
     if !only_use_rate
@@ -172,18 +172,18 @@ function oderatelaw(rx)
             coef *= factorial(stoich)
             rl   *= isone(stoich) ? substrates[i] : substrates[i]^stoich
         end
-        (!isone(coef)) && (rl /= coef)
+        scalerate && (!isone(coef)) && (rl /= coef)
     end
     rl
 end
 
-function assemble_drift(rs)
+function assemble_drift(rs; scalerate=true)
     D   = Differential(rs.iv())
     eqs = [D(x(rs.iv())) ~ 0 for x in rs.states]
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for rx in rs.eqs
-        rl = oderatelaw(rx)
+        rl = oderatelaw(rx; scalerate=scalerate)
         for (spec,stoich) in rx.netstoich
             i = species_to_idx[spec]
             if iszero(eqs[i].rhs)
@@ -199,12 +199,12 @@ function assemble_drift(rs)
     eqs
 end
 
-function assemble_diffusion(rs)
+function assemble_diffusion(rs; scalerate=true)
     eqs = Expression[Constant(0) for x in rs.states, y in rs.eqs]
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for (j,rx) in enumerate(rs.eqs)
-        rlsqrt = sqrt(oderatelaw(rx))
+        rlsqrt = sqrt(oderatelaw(rx; scalerate=scalerate))
         for (spec,stoich) in rx.netstoich
             i            = species_to_idx[spec]
             signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
@@ -221,7 +221,7 @@ end
 # Calculate the Jump rate law (like ODE, but uses X instead of X(t).
 # The former generates a "MethodError: objects of type Int64 are not callable" when trying to solve the problem.
 """
-    jumpratelaw(rx; rxvars=get_variables(rx.rate))
+    jumpratelaw(rx; rxvars=get_variables(rx.rate), scalerate=true)
 
 Given a `Reaction`, return the reaction rate law `Operation` used in
 generated stochastic chemical kinetics model SSAs for the reaction. Note,
@@ -240,17 +240,30 @@ binomial(Y,3)`.
 Notes:
 - `rxvars` should give the `Variable`s, i.e. species and parameters, the rate depends on.
 - Allocates
+- `scalerate=true` uses binomials in calculating the rate law, i.e. for `2S ->
+  0` at rate `k` the ratelaw would be `k*S*(S-1)/2`. If `scalerate=false` then
+  the ratelaw is `k*S*(S-1)`, i.e. the rate law is not normalized by the scaling
+  factor. 
 """ 
-function jumpratelaw(rx; rxvars=get_variables(rx.rate))
+function jumpratelaw(rx; rxvars=get_variables(rx.rate), scalerate=true)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
     for op in rxvars
         rl = substitute(rl, op => var2op(op.op))
     end
     if !only_use_rate
+        coef = one(eltype(substoich))
         for (i,stoich) in enumerate(substoich)
-            rl *= isone(stoich) ? var2op(substrates[i].op) : Operation(binomial,[var2op(substrates[i].op),stoich])
+            #rl *= isone(stoich) ? var2op(substrates[i].op) : Operation(binomial,[var2op(substrates[i].op),stoich])
+            s   = var2op(substrates[i].op)
+            rl *= s
+            isone(stoich) && continue
+            for i in one(stoich):(stoich-one(stoich))
+                rl *= (s - i)
+            end
+            scalerate && (coef *= factorial(stoich))
         end
+        !isone(coef) && (rl /= coef)
     end
     rl
 end
@@ -286,23 +299,23 @@ function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
     return true
 end
 
-@inline function makemajump(rx)
+@inline function makemajump(rx; scalerate=true)
     @unpack rate, substrates, substoich, netstoich = rx
-    havesubstoich = (length(substoich) == 0)
+    zeroorder = (length(substoich) == 0)
     reactant_stoch = Vector{Pair{Operation,eltype(substoich)}}(undef, length(substoich))
     @inbounds for i = 1:length(reactant_stoch)
         reactant_stoch[i] = var2op(substrates[i].op) => substoich[i]
     end
     #push!(rstoich, reactant_stoch)
-    coef           = havesubstoich ? one(eltype(substoich)) : prod(stoich -> factorial(stoich), substoich)
-    rate           = isone(coef) ? rate : rate/coef
+    coef = (zeroorder || (!scalerate)) ? one(eltype(substoich)) : prod(stoich -> factorial(stoich), substoich)
+    (!isone(coef)) && (rate /= coef)
     #push!(rates, rate)
     net_stoch      = [Pair(var2op(p[1]),p[2]) for p in netstoich]
     #push!(nstoich, net_stoch)
     MassActionJump(rate, reactant_stoch, net_stoch, scale_rates=false, useiszero=false)
 end
 
-function assemble_jumps(rs)
+function assemble_jumps(rs; scalerates=true)
     meqs = MassActionJump[]; ceqs = ConstantRateJump[]; veqs = VariableRateJump[]
     stateset = Set(states(rs))
     #rates = [];  rstoich = []; nstoich = []
@@ -321,9 +334,9 @@ function assemble_jumps(rs)
             end
         end
         if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep, stateset=stateset)
-            push!(meqs, makemajump(rx))
+            push!(meqs, makemajump(rx, scalerate=scalerates))
         else
-            rl     = jumpratelaw(rx, rxvars=rxvars)
+            rl     = jumpratelaw(rx, rxvars=rxvars, scalerate=scalerates)
             affect = Vector{Equation}()
             for (spec,stoich) in rx.netstoich
                 push!(affect, var2op(spec) ~ var2op(spec) + stoich)
@@ -367,13 +380,19 @@ end
 
 """
 ```julia
-Base.convert(::Type{<:JumpSystem},rs::ReactionSystem)
+Base.convert(::Type{<:JumpSystem},rs::ReactionSystem; scalerates=true)
 ```
 
 Convert a ReactionSystem to a JumpSystem.
+
+Notes:
+- `scalerates=true` uses binomials in calculating the rate law, i.e. for `2S ->
+  0` at rate `k` the ratelaw would be `k*S*(S-1)/2`. If `scalerates=false` then
+  the ratelaw is `k*S*(S-1)`, i.e. the rate law is not normalized by the scaling
+  factor. 
 """
-function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem)
-    eqs = assemble_jumps(rs)
+function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem; scalerates=true)
+    eqs = assemble_jumps(rs; scalerates=scalerates)
     JumpSystem(eqs,rs.iv,rs.states,rs.ps,name=rs.name,
               systems=convert.(JumpSystem,rs.systems))
 end
@@ -384,7 +403,7 @@ end
 Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem)
 ```
 
-Convert a ReactionSystem to a  NonlinearSystem.
+Convert a ReactionSystem to a NonlinearSystem.
 """
 function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem)
     states_swaps = map(states -> Operation(states,[var2op(rs.iv)]), rs.states)
@@ -431,8 +450,8 @@ function DiffEqBase.DiscreteProblem(rs::ReactionSystem, u0::Union{AbstractArray,
 end
 
 # JumpProblem from AbstractReactionNetwork
-function DiffEqJump.JumpProblem(rs::ReactionSystem, prob, aggregator, args...; kwargs...)
-    return JumpProblem(convert(JumpSystem,rs), prob, aggregator, args...; kwargs...)
+function DiffEqJump.JumpProblem(rs::ReactionSystem, prob, aggregator, args...; scalerates=true, kwargs...)
+    return JumpProblem(convert(JumpSystem,rs; scalerates=scalerates), prob, aggregator, args...; kwargs...)
 end
 
 # SteadyStateProblem from AbstractReactionNetwork
