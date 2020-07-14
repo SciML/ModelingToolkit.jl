@@ -64,9 +64,14 @@ Base.getproperty(t::Term, f::Symbol) = f === :op ? operation(t) : f === :args ? 
 <ₑ(s, x::Num) = value(s) <ₑ value(x)
 <ₑ(s::Num, x::Num) = value(s) <ₑ value(x)
 
+Base.:(^)(n::Num, i::Integer) = Num(Term{symtype(n)}(^, [value(n),i]))
+
 Base.convert(::Type{Num}, x::Symbolic{<:Number}) = Num(x)
 Base.convert(::Type{Num}, x::Number) = Num(x)
 Base.convert(::Type{Num}, x::Num) = x
+
+Base.convert(::Type{<:Array{Num}}, x::AbstractArray) = map(Num, x)
+Base.convert(::Type{<:Array{Num}}, x::AbstractArray{Num}) = x
 
 #=
 # TODO: use register?

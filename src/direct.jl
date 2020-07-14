@@ -85,10 +85,11 @@ hessian(O::Expression, vars::AbstractVector; simplify = true)
 A helper function for computing the Hessian of an expression with respect to
 an array of variable expressions.
 """
-function hessian(O::Expression, vars::AbstractVector; simplify = true)
+function hessian(O, vars::AbstractVector; simplify = true)
     first_derivs = vec(jacobian([O], vars, simplify=simplify))
+    @show first_derivs
     n = length(vars)
-    H = Array{Expression, 2}(undef,(n, n))
+    H = Array{Num, 2}(undef,(n, n))
     fill!(H, 0)
     for i=1:n
         for j=1:i
@@ -135,11 +136,13 @@ let
     an array of variable expressions.
     """
     function hessian_sparsity(f, u)
+        f = value(f)
+        u = map(value, u)
         idx(i) = TermCombination(Set([Dict(i=>1)]))
-        dict = Dict(SymbolicUtils.to_symbolic.(u) .=> idx.(1:length(u)))
+        dict = Dict(u .=> idx.(1:length(u)))
         found = []
-        f = Rewriters.Prewalk(x->haskey(dict, x) ? dict[x] : x)(to_symbolic(f))
-        _sparse(linearity_propagator(to_symbolic(f)), length(u))
+        f = Rewriters.Prewalk(x->haskey(dict, x) ? dict[x] : x)(f)
+        _sparse(linearity_propagator(f), length(u))
     end
 end
 
@@ -161,10 +164,12 @@ sparsehessian(O::Expression, vars::AbstractVector; simplify = true)
 A helper function for computing the sparse Hessian of an expression with respect to
 an array of variable expressions.
 """
-function sparsehessian(O::Expression, vars::AbstractVector; simplify = true)
+function sparsehessian(O, vars::AbstractVector; simplify = true)
+    O = value(O)
+    vars = map(value, vars)
     S = hessian_sparsity(O, vars)
     I, J, _ = findnz(S)
-    exprs = Array{Expression}(undef, length(I))
+    exprs = Array{Num}(undef, length(I))
     fill!(exprs, 0)
     prev_j = 0
     d = nothing
