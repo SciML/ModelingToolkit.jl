@@ -26,11 +26,11 @@ struct ODESystem <: AbstractODESystem
     """The ODEs defining the system."""
     eqs::Vector{Equation}
     """Independent variable."""
-    iv::Variable
+    iv::Sym
     """Dependent (state) variables."""
-    states::Vector{Variable}
+    states::Vector{Sym}
     """Parameter variables."""
-    ps::Vector{Variable}
+    ps::Vector{Sym}
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
@@ -77,7 +77,7 @@ end
 var_from_nested_derivative(x::Constant) = (missing, missing)
 var_from_nested_derivative(x,i=0) = x.op isa Differential ? var_from_nested_derivative(x.args[1],i+1) : (x.op,i)
 
-iv_from_nested_derivative(x) = x.op isa Differential ? iv_from_nested_derivative(x.args[1]) : x.args[1].op
+iv_from_nested_derivative(x) = x.op isa Differential ? iv_from_nested_derivative(x.args[1]) : x.args[1]
 iv_from_nested_derivative(x::Constant) = missing
 
 function ODESystem(eqs; kwargs...)

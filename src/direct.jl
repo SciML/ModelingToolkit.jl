@@ -189,12 +189,10 @@ function sparsehessian(O, vars::AbstractVector; simplify = true)
     return H
 end
 
-function simplified_expr(O::Operation)
-  if O isa Constant
-    return O.value
-  elseif isa(O.op, Differential)
-    return :(derivative($(simplified_expr(O.args[1])),$(simplified_expr(O.op.x))))
-  elseif isa(O.op, Variable)
+function simplified_expr(O::Term)
+  if isa(O.op, Differential)
+     return :(derivative($(simplified_expr(O.args[1])),$(simplified_expr(O.op.x))))
+  elseif isa(O.op, Sym)
     isempty(O.args) && return O.op.name
     return Expr(:call, Symbol(O.op), simplified_expr.(O.args)...)
   end
@@ -205,8 +203,7 @@ function simplified_expr(O::Operation)
   end
   return Expr(:call, Symbol(O.op), simplified_expr.(O.args)...)
 end
-
-simplified_expr(c::Constant) = c.value
+simplified_expr(s::Sym) = nameof(s)
 
 function simplified_expr(eq::Equation)
     Expr(:(=), simplified_expr(eq.lhs), simplified_expr(eq.rhs))

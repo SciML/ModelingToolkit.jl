@@ -32,11 +32,11 @@ end
 
 struct ODEToExpr
     sys::AbstractODESystem
-    states::Vector{Variable}
+    states::Vector{Sym}
 end
 ODEToExpr(@nospecialize(sys)) = ODEToExpr(sys,states(sys))
 function (f::ODEToExpr)(O::Operation)
-    if isa(O.op, Variable)
+    if isa(O.op, Sym)
         isequal(O.op, f.sys.iv) && return O.op.name  # independent variable
         O.op ∈ f.states         && return O.op.name  # dependent variables
         isempty(O.args)         && return O.op.name  # 0-ary parameters
@@ -62,8 +62,8 @@ end
 
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     rhss = [deq.rhs for deq ∈ equations(sys)]
-    dvs′ = convert.(Variable,dvs)
-    ps′ = convert.(Variable,ps)
+    dvs′ = convert.(Sym,dvs)
+    ps′ = convert.(Sym,ps)
     return build_function(rhss, dvs′, ps′, sys.iv;
                           conv = ODEToExpr(sys),kwargs...)
 end
