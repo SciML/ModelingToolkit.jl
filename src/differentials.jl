@@ -48,6 +48,9 @@ function occursin_info(x, expr::Term)
         Term(true, args)
     end
 end
+function occursin_info(x, expr::Sym)
+    isequal(x, expr)
+end
 
 hasderiv(O::Term) = O.op isa Differential || any(hasderiv, O.args)
 hasderiv(O) = false
