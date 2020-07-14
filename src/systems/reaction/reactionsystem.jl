@@ -258,7 +258,6 @@ function jumpratelaw(rx; rxvars=get_variables(rx.rate), scalerate=true)
     if !only_use_rate
         coef = one(eltype(substoich))
         for (i,stoich) in enumerate(substoich)
-            #rl *= isone(stoich) ? var2op(substrates[i].op) : Operation(binomial,[var2op(substrates[i].op),stoich])
             s   = var2op(substrates[i].op)
             rl *= s
             isone(stoich) && continue
