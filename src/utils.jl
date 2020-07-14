@@ -2,28 +2,16 @@ function make_operation(@nospecialize(op), args)
     if op === (*)
         args = filter(!_isone, args)
         if isempty(args)
-            return Constant(1)
+            return 1
         end
     elseif op === (+)
         args = filter(!_iszero, args)
         if isempty(args)
-            return Constant(0)
+            return 0
         end
     end
-    if !isempty(args) && all(x-> x isa Constant || !(x isa Expression), args)
-        x = op(map(x->x isa Constant ? x.value : x, args)...)
-        return x isa Expression ? x : Constant(x)
-    else
-        return op(args...)
-    end
+    return op(args...)
 end
-Base.convert(::Type{Expression}, x::Expression) = x
-Base.convert(::Type{Expression}, x::Number) = Constant(x)
-Base.convert(::Type{Expression}, x::Bool) = Constant(x)
-Base.convert(::Type{Expression}, x::Variable) = convert(Operation,x)
-Base.convert(::Type{Expression}, x::Operation) = x
-Base.convert(::Type{Expression}, x::Symbol) = Operation(Variable(x),[])
-Expression(x::Bool) = Constant(x)
 
 function build_expr(head::Symbol, args)
     ex = Expr(head)
@@ -69,10 +57,6 @@ is_operation(::Any) = false
 
 is_derivative(O::Operation) = isa(O.op, Differential)
 is_derivative(::Any) = false
-
-Base.occursin(t::Expression) = Base.Fix1(occursin, t)
-Base.occursin(t::Expression, x::Operation ) = isequal(x, t) || any(occursin(t), x.args)
-Base.occursin(t::Expression, x::Expression) = isequal(x, t)
 
 vars(exprs) = foldl(vars!, exprs; init = Set{Variable}())
 function vars!(vars, O)

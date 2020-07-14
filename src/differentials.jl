@@ -1,4 +1,4 @@
-using SymbolicUtils: Term, symtype
+using SymbolicUtils: Term, symtype, Sym, simplify
 
 """
 $(TYPEDEF)
@@ -24,34 +24,34 @@ julia> D(y)  # Differentiate y wrt. x
 """
 struct Differential <: Function
     """The variable or expression to differentiate with respect to."""
-    x::Expression
+    x
 end
-(D::Differential)(x) = NumWrap(Term{symtype(value(x))}(D, [value(x)]))
+(D::Differential)(x) = Term{symtype(x)}(D, [x])
+(D::Differential)(x::NumWrap) = NumWrap(D(value(x)))
 
 Base.show(io::IO, D::Differential) = print(io, "(D'~", D.x, ")")
-Base.convert(::Type{Expr}, D::Differential) = D
 
 Base.:(==)(D1::Differential, D2::Differential) = isequal(D1.x, D2.x)
 
-_isfalse(occ::Constant) = occ.value === false
+_isfalse(occ::Bool) = occ === false
 _isfalse(occ::Term) = _isfalse(occ.op)
 
 function occursin_info(x, expr::Term)
     if isequal(x, expr)
-        Constant(true)
+        true
     else
         args = map(a->occursin_info(x, a), expr.args)
         if all(_isfalse, args)
-            return Constant(false)
+            return false
         end
-        Term(Constant(true), args)
+        Term(true, args)
     end
 end
 
 hasderiv(O::Term) = O.op isa Differential || any(hasderiv, O.args)
 hasderiv(O) = false
 
-occursin_info(x, y) = Constant(false)
+occursin_info(x, y) = false
 """
 $(SIGNATURES)
 
@@ -59,7 +59,6 @@ TODO
 """
 function expand_derivatives(O::Term, simplify=true; occurances=nothing)
     if isa(O.op, Differential)
-        @show "hi"
         @assert length(O.args) == 1
         arg = expand_derivatives(O.args[1], false)
 
@@ -67,18 +66,18 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
             occurances = occursin_info(O.op.x, arg)
         end
 
-        _isfalse(occurances) && return Constant(0)
-        occurances isa Constant && return Constant(1) # means it's a Constant(true)
+        _isfalse(occurances) && return 0
+        occurances isa Bool && return 1 # means it's a Constant(true)
 
         (D, o) = (O.op, arg)
 
-        if o isa Constant
-            return Constant(0)
+        if o isa Number
+            return 0
         elseif isequal(o, D.x)
-            return Constant(1)
+            return 1
         elseif !isa(o, Term)
             return O
-        elseif isa(o.op, Variable)
+        elseif isa(o.op, Sym)
             return O # This means D.x occurs in o, but o is symbolic function call
         elseif isa(o.op, Differential)
             # The recursive expand_derivatives was not able to remove
@@ -93,7 +92,7 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
         end
 
         l = length(o.args)
-        exprs = Expression[]
+        exprs = []
         c = 0
 
         for i in 1:l
@@ -105,43 +104,41 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
                 derivative(o, i)
             else
                 t1 = derivative(o, i)
-                make_operation(*, Expression[t1, t2])
+                make_operation(*, [t1, t2])
             end
 
             if _iszero(x)
                 continue
-            elseif x isa Expression
+            elseif x isa Symbolic
                 push!(exprs, x)
-            elseif x isa Constant
-                c += x.value
             else
                 c += x
             end
         end
 
         if isempty(exprs)
-            return Constant(c)
+            return c
         elseif length(exprs) == 1
-            return simplify ? ModelingToolkit.simplify(exprs[1]) : exprs[1]
+            return simplify ? SymbolicUtils.simplify(exprs[1]) : exprs[1]
         else
             x = make_operation(+, !iszero(c) ? vcat(c, exprs) : exprs)
-            return simplify ? ModelingToolkit.simplify(x) : x
+            return simplify ? SymbolicUtils.simplify(x) : x
         end
     elseif !hasderiv(O)
         return O
     else
         args = map(a->expand_derivatives(a, false), O.args)
         O1 = make_operation(O.op, args)
-        return simplify ? ModelingToolkit.simplify(O1) : O1
+        return simplify ? SymbolicUtils.simplify(O1) : O1
     end
 end
 
 function expand_derivatives(n::NumWrap, simplify=true; occurances=nothing)
-    expand_derivatives(value(n), simplify; occurances=occurances)
+    NumWrap(expand_derivatives(value(n), simplify; occurances=occurances))
 end
 
-_iszero(x::Constant) = iszero(x.value)
-_isone(x::Constant) = isone(x.value)
+_iszero(x::Number) = iszero(x)
+_isone(x::Number) = isone(x)
 _iszero(x) = false
 _isone(x) = false
 
@@ -183,7 +180,7 @@ sin(x())
 ```
 """
 derivative(O::Term, idx) = derivative(O.op, (O.args...,), Val(idx))
-derivative(O::Constant, ::Any) = Constant(0)
+derivative(O::Constant, ::Any) = 0
 
 # Pre-defined derivatives
 import DiffRules
@@ -226,7 +223,7 @@ function _differential_macro(x)
         rhs = di.args[3]
         order, lhs = count_order(lhs)
         push!(lhss, lhs)
-        expr = :($lhs = $_repeat_apply(Differential($rhs), $order))
+        expr = :($lhs = $_repeat_apply(Differential($value($rhs)), $order))
         push!(ex.args,  expr)
     end
     push!(ex.args, Expr(:tuple, lhss...))

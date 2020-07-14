@@ -47,6 +47,7 @@ value(x::NumWrap) = x.val
 SymbolicUtils.@number_methods(NumWrap,
                               NumWrap(f(value(a))),
                               NumWrap(f(value(a), value(b))))
+
 import SymbolicUtils: <ₑ, Symbolic, Term, operation, arguments
 
 Base.getproperty(t::Term, f::Symbol) = f === :op ? operation(t) : f === :args ? arguments(t) : getfield(t, f)
