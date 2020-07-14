@@ -360,7 +360,7 @@ Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
 Convert a ReactionSystem to a SDESystem.
 """
 function Base.convert(::Type{<:SDESystem},rs::ReactionSystem;noise_scaling=nothing::Union{Vector{Symbol},Symbol,Nothing})
-    (typeof(noise_scaling) <: Vector{Symbol}) && (typeof(noise_scaling)!=length(rs.eqs)) && error("The number of elements in 'noise_scaling' must be equal to the number of reactions in the reaction system.")
+    (typeof(noise_scaling) <: Vector{Symbol}) && (length(noise_scaling)!=length(rs.eqs)) && error("The number of elements in 'noise_scaling' must be equal to the number of reactions in the reaction system.")
     (typeof(noise_scaling) <: Symbol) && (noise_scaling = fill(noise_scaling,length(rs.eqs)))
     eqs = assemble_drift(rs)
     noiseeqs = assemble_diffusion(rs,noise_scaling)
