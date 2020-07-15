@@ -22,9 +22,9 @@ struct NonlinearSystem <: AbstractSystem
     """Vector of equations defining the system."""
     eqs::Vector{Equation}
     """Unknown variables."""
-    states::Vector{Variable}
+    states::Vector
     """Parameters."""
-    ps::Vector{Variable}
+    ps::Vector
     """
     Name: the name of the system
     """
@@ -38,7 +38,7 @@ end
 function NonlinearSystem(eqs, states, ps;
                          name = gensym(:NonlinearSystem),
                          systems = NonlinearSystem[])
-    NonlinearSystem(eqs, convert.(Variable,states), convert.(Variable,ps), name, systems)
+    NonlinearSystem(eqs, value.(states), value.(ps), name, systems)
 end
 
 function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=true)

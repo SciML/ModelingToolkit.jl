@@ -75,11 +75,9 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
 
         (D, o) = (O.op, arg)
 
-        if o isa Number
-            return 0
-        elseif isequal(o, D.x)
-            return 1
-        elseif !isa(o, Term) || isa(o.op, Sym)
+        if !isa(o, Term)
+            return O # Cannot expand
+        elseif isa(o.op, Sym)
             return O # Cannot expand
         elseif isa(o.op, Differential)
             # The recursive expand_derivatives was not able to remove
@@ -144,7 +142,7 @@ _isone(x::Number) = isone(x)
 _iszero(x) = false
 _isone(x) = false
 
-expand_derivatives(x,args...;occurances=nothing) = x
+expand_derivatives(x, simplify=true;occurances=nothing) = x
 
 # Don't specialize on the function here
 """

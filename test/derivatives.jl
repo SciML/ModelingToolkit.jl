@@ -28,7 +28,7 @@ dcsch = D(csch(t))
 
 # Chain rule
 dsinsin = D(sin(sin(t)))
-@test isequal(expand_derivatives(dsinsin), cos(sin(t))*cos(t))
+test_equal(expand_derivatives(dsinsin), cos(sin(t))*cos(t))
 
 d1 = D(sin(t)*t)
 d2 = D(sin(t)*cos(t))
