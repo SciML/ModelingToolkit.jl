@@ -167,8 +167,9 @@ to build Julia functions which avoid world-age issues.
 
 ## Building Non-Allocating Parallel Functions for Sparse Matrices
 
-Now let's show off a little bit. `build_function` is kind of like
-if `lambidfy` ate its spinach. To show this, **let's build a non-allocating
+Now let's show off a little bit. `build_function` is kind of like if 
+[`lambdify`](https://docs.sympy.org/latest/modules/utilities/lambdify.html) 
+ate its spinach. To show this, **let's build a non-allocating
 function that fills sparse matrices in a multithreaded manner**. To do
 this, we just have to reprsent the operation that we're turning into
 a function via a sparse matrix. For example:
