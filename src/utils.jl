@@ -97,6 +97,7 @@ get_variables(e::Equation, varlist=nothing) = get_variables!(Operation[],e,varli
 modified_states!(mstates, e::Equation, statelist=nothing) = get_variables!(mstates, e.lhs, statelist)
 
 # variable substitution
+# Piracy but mild
 """
 substitute(expr::Operation, s::Pair)
 substitute(expr::Operation, s::Dict)
@@ -104,13 +105,8 @@ substitute(expr::Operation, s::Vector)
 
 Performs the substitution `Operation => val` on the `expr` Operation.
 """
-substitute(expr::Constant, s) = expr
-substitute(expr::Operation, s::Pair) = substituter([s[1] => s[2]])(expr)
-substitute(expr::Operation, s::Union{Vector, Dict}) = substituter(s)(expr)
-
-function substituter(pairs)
-    dict = Dict(to_symbolic(k) => to_symbolic(v)  for (k, v) in pairs)
-    expr -> to_mtk(SymbolicUtils.simplify(SymbolicUtils.substitute(expr, dict)))
-end
+substitute(expr::Num, s::Union{Pair, Vector, Dict}; kw...) = Num(substitute(value(expr), s; kw...))
+substitute(expr::Term, s::Pair; kw...) = substitute(expr, Dict(s[1] => s[2]); kw...)
+substitute(expr::Term, s::Vector; kw...) = substitute(expr, Dict(s); kw...)
 
 @deprecate substitute_expr!(expr,s) substitute(expr,s)

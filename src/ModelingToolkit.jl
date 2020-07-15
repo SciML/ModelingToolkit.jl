@@ -17,7 +17,7 @@ using Base: RefValue
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils:Term, Sym, FnType, @rule, Rewriters
+import SymbolicUtils:Term, Sym, FnType, @rule, Rewriters, substitute
 
 import LightGraphs: SimpleDiGraph, add_edge!
 
@@ -49,6 +49,10 @@ Num(x::Num) = x # ideally this should never be called
 (n::Num)(args...) = value(n)(map(value,args)...)
 value(x) = x
 value(x::Num) = x.val
+
+
+using SymbolicUtils: to_symbolic
+SymbolicUtils.to_symbolic(n::Num) = value(n)
 SymbolicUtils.@number_methods(Num,
                               Num(f(value(a))),
                               Num(f(value(a), value(b))))
@@ -75,16 +79,30 @@ Base.getproperty(t::Term, f::Symbol) = f === :op ? operation(t) : f === :args ? 
 
 Base.:(^)(n::Num, i::Integer) = Num(Term{symtype(n)}(^, [value(n),i]))
 
-macro num_method(f, expr, T=Any)
+macro num_method(f, expr, Ts=nothing)
+    if Ts === nothing
+        Ts = [Any]
+    else
+        @assert Ts.head == :tuple
+        # e.g. a tuple or vector
+        Ts = Ts.args
+    end
+
+    ms = [quote
+              $f(a::$T, b::$Num) = $expr
+              $f(a::$Num, b::$T) = $expr
+          end for T in Ts]
     quote
         $f(a::$Num, b::$Num) = $expr
-        $f(a::$T, b::$Num) = $expr
-        $f(a::$Num, b::$T) = $expr
+        $(ms...)
     end |> esc
 end
 
 @num_method Base.isless isless(value(a), value(b))
-@num_method Base.isequal isequal(value(a), value(b))
+@num_method Base.isequal isequal(value(a), value(b)) (Number, Symbolic)
+@num_method Base.:(==) value(a) == value(b) (Number,)
+
+Base.hash(x::Num, h::UInt) = hash(value(x), h)
 
 Base.convert(::Type{Num}, x::Symbolic{<:Number}) = Num(x)
 Base.convert(::Type{Num}, x::Number) = Num(x)

@@ -193,7 +193,7 @@ function states(sys::AbstractSystem,args...)
     name = last(args)
     extra_names = reduce(Symbol,[Symbol(:₊,x.name) for x in args[1:end-1]])
     newname = renamespace(extra_names,name)
-    rename(x,renamespace(sys.name,newname))(sys.iv())
+    rename(x,renamespace(sys.name,newname))(sys.iv)
 end
 
 function parameters(sys::AbstractSystem,args...)
@@ -206,7 +206,7 @@ end
 function islinear(sys::AbstractSystem)
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
-    iv = sys.iv()
+    iv = sys.iv
     dvs = [dv(iv) for dv ∈ states(sys)]
 
     all(islinear(r, dvs) for r in rhs)
