@@ -286,7 +286,7 @@ just like any other function. To build a differential operator, use
 @derivatives D'~t
 ```
 
-This is the differential operator ``D = \frac{d/dt}``: the number of
+This is the differential operator ``D = \frac{\partial}{\partial t}``: the number of
 `'` is the order of the derivative and the second variable is the
 variable we're differentiating by. Now let's write down the derivative
 of some expression:
