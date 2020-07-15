@@ -439,11 +439,11 @@ z = g(x) + g(y)
 
 ## Registering Functions
 
-One of the benefits of a one language Julia symbolic stack is that the
-primatives are all written in Julia, and therefore it's trivially
+One of the benefits of a one-language Julia symbolic stack is that the
+primitives are all written in Julia, and therefore it's trivially
 extendable from Julia itself. By default, new functions are traced
-to the primatives and the symbolic expressions are written on the
-primatives. However, we can instead the allowed primatives by registering
+to the primitives and the symbolic expressions are written on the
+primitives. However, we can instead the allowed primitives by registering
 new functions. For example, let's register a new function `h`:
 
 ```julia
@@ -451,7 +451,7 @@ h(x,y) = x^2 + y
 @register h(x,y)
 ```
 
-Now when we use `h` is a symbolic expression it doesn't expand:
+Now when we use `h(x,y)`, it is a symbolic expression and doesn't expand:
 
 ```julia
 h(x,y) + y^2
