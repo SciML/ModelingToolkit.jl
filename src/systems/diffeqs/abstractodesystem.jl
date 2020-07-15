@@ -62,7 +62,8 @@ end
 
 function makesym(t::Term{T}) where {T}
     t.op isa Sym && return makesym(t.op)
-    t.op isa Differential && return Sym{T}(Symbol(makesym(t.op.x) :ˍ, makesym(t.args[1])))
+    t.op isa Differential && return Sym{T}(Symbol(nameof(makesym(t.args[1])), :ˍ, nameof(makesym(t.op.x))))
+    error("Cannot convert $t to a symbol")
 end
 makesym(t::Sym{T}) where {T} = t
 

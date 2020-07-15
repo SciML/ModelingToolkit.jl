@@ -180,7 +180,7 @@ sin(x())
 ```
 """
 derivative(O::Term, idx) = derivative(O.op, (O.args...,), Val(idx))
-derivative(O::Constant, ::Any) = 0
+derivative(O::Any, ::Any) = 0
 
 # Pre-defined derivatives
 import DiffRules

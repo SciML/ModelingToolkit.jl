@@ -72,6 +72,7 @@ An expression which wraps a constant numerical value.
 struct Constant <: Expression
     """The constant value"""
     value
+    Constant(x) = x
 end
 
 """
