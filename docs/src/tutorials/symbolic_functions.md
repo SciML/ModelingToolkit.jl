@@ -443,7 +443,7 @@ One of the benefits of a one-language Julia symbolic stack is that the
 primitives are all written in Julia, and therefore it's trivially
 extendable from Julia itself. By default, new functions are traced
 to the primitives and the symbolic expressions are written on the
-primitives. However, we can instead the allowed primitives by registering
+primitives. However, we can expand the allowed primitives by registering
 new functions. For example, let's register a new function `h`:
 
 ```julia
