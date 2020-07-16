@@ -14,8 +14,8 @@ struct DaggerForm <: ParallelForm end
 `build_function`
 
 Generates a numerically-usable function from a ModelingToolkit `Expression`.
-If the `Expression` is an `Operation`, the generated function is a function
-with a scalar output, otherwise if it's an `AbstractArray{Operation}`, the output
+If the `Expression` is an `Term`, the generated function is a function
+with a scalar output, otherwise if it's an `AbstractArray{Term}`, the output
 is two functions, one for out-of-place AbstractArray output and a second which
 is a mutating function. The outputted functions match the given argument order,
 i.e., f(u,p,args...) for the out-of-place and scalar functions and
@@ -23,7 +23,7 @@ i.e., f(u,p,args...) for the out-of-place and scalar functions and
 
 ```julia
 build_function(ex, args...;
-               conv = simplified_expr, expression = Val{true},
+               conv = toexpr, expression = Val{true},
                checkbounds = false, convert_oop = true,
 			   force_SA = false,
                linenumbers = false, target = JuliaTarget())
@@ -35,8 +35,8 @@ Arguments:
 - `vs`: The variables of the expression
 - `ps`: The parameters of the expression
 - `args`: Extra arguments to the function
-- `conv`: The conversion function of the Operation to Expr. By default this uses
-  the `simplified_expr` function utilized in `convert(Expr,x)`.
+- `conv`: The conversion function of the Term to Expr. By default this uses
+  the `toexpr` function utilized in `convert(Expr,x)`.
 - `expression`: Whether to generate code or whether to generate the compiled form.
   By default, `expression = Val{true}`, which means that the code for the
   function is returned. If `Val{false}`, then the returned value is a compiled
@@ -65,7 +65,7 @@ Keyword Arguments:
       environments
 """
 function build_function(args...;target = JuliaTarget(),kwargs...)
-  _build_function(target,args...;kwargs...)
+    _build_function(target, map(value, args)...;kwargs...)
 end
 
 function addheader(ex, fargs, iip; X=gensym(:MTIIPVar))
@@ -108,8 +108,8 @@ function add_integrator_header(ex, fargs, iip; X=gensym(:MTIIPVar))
 end
 
 # Scalar output
-function _build_function(target::JuliaTarget, op::Operation, args...;
-                         conv = simplified_expr, expression = Val{true},
+function _build_function(target::JuliaTarget, op::Term, args...;
+                         conv = toexpr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = true, headerfun=addheader)
 
@@ -179,7 +179,7 @@ function fill_array_with_zero!(x::AbstractArray)
 end
 
 function _build_function(target::JuliaTarget, rhss, args...;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun=addheader, outputidxs=nothing,
@@ -403,14 +403,14 @@ end
 
 vars_to_pairs(args) = vars_to_pairs(args[1],args[2])
 function vars_to_pairs(name,vs::AbstractArray)
-	_vs = convert.(Variable,vs)
+    _vs = value.(vs)
 	names = [Symbol(u) for u ∈ _vs]
 	exs = [:($name[$i]) for (i, u) ∈ enumerate(_vs)]
 	names,exs
 end
 
 function vars_to_pairs(name,vs)
-	_vs = convert(Variable,vs)
+    _vs = value(v)
 	names = [Symbol(_vs)]
 	exs = [name]
 	names,exs
@@ -461,7 +461,7 @@ end
 numbered_expr(c::ModelingToolkit.Constant,args...;kwargs...) = c.value
 
 function _build_function(target::StanTarget, eqs, vs, ps, iv,
-                         conv = simplified_expr, expression = Val{true};
+                         conv = toexpr, expression = Val{true};
                          fname = :diffeqf, derivname=:internal_var___du,
                          varname=:internal_var___u,paramname=:internal_var___p)
     differential_equation = string(join([numbered_expr(eq,vs,ps,derivname=derivname,
@@ -477,7 +477,7 @@ function _build_function(target::StanTarget, eqs, vs, ps, iv,
 end
 
 function _build_function(target::CTarget, eqs, vs, ps, iv;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          fname = :diffeqf, derivname=:internal_var___du,
                          varname=:internal_var___u,paramname=:internal_var___p)
     differential_equation = string(join([numbered_expr(eq,vs,ps,derivname=derivname,
@@ -491,7 +491,7 @@ function _build_function(target::CTarget, eqs, vs, ps, iv;
 end
 
 function _build_function(target::MATLABTarget, eqs, vs, ps, iv;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          fname = :diffeqf, derivname=:internal_var___du,
                          varname=:internal_var___u,paramname=:internal_var___p)
     matstr = join([numbered_expr(eq.rhs,vs,ps,derivname=derivname,
