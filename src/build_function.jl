@@ -23,7 +23,7 @@ i.e., f(u,p,args...) for the out-of-place and scalar functions and
 
 ```julia
 build_function(ex, args...;
-               conv = toexpr, expression = Val{true},
+               conv = simplified_expr, expression = Val{true},
                checkbounds = false, convert_oop = true,
 			   force_SA = false,
                linenumbers = false, target = JuliaTarget())
@@ -35,13 +35,13 @@ Arguments:
 - `vs`: The variables of the expression
 - `ps`: The parameters of the expression
 - `args`: Extra arguments to the function
-- `conv`: The conversion function of the Term to Expr. By default this uses
-  the `toexpr` function.
+- `conv`: The conversion function of the Operation to Expr. By default this uses
+  the `simplified_expr` function utilized in `convert(Expr,x)`.
 - `expression`: Whether to generate code or whether to generate the compiled form.
   By default, `expression = Val{true}`, which means that the code for the
   function is returned. If `Val{false}`, then the returned value is a compiled
-  Julia function, which utilizes GeneralizedGenerated.jl in order to be world-age
-  safe.
+  Julia function, which utilizes GeneralizedGenerated.jl in order to world-age
+  free.
 
 Keyword Arguments:
 
@@ -64,8 +64,8 @@ Keyword Arguments:
     - `MATLABTarget`: Generates an anonymous function for use in MATLAB and Octave
       environments
 """
-function build_function(ex, args...;target = JuliaTarget(),kwargs...)
-    _build_function(target, value(ex), args...;kwargs...)
+function build_function(args...;target = JuliaTarget(),kwargs...)
+  _build_function(target,args...;kwargs...)
 end
 
 function addheader(ex, fargs, iip; X=gensym(:MTIIPVar))
@@ -108,14 +108,16 @@ function add_integrator_header(ex, fargs, iip; X=gensym(:MTIIPVar))
 end
 
 # Scalar output
-function _build_function(target::JuliaTarget, op::Term, args...;
-                         conv = toexpr, expression = Val{true},
+function _build_function(target::JuliaTarget, op::Operation, args...;
+                         conv = simplified_expr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = true, headerfun=addheader)
 
-    argnames = [gensym(Symbol(:arg, i)) for i in 1:length(args)]
-    arg_assign = map((name, val) -> :($name = $val), argnames,args)
-    var_eqs = Expr(:block, arg_assign)
+    argnames = [gensym(:MTKArg) for i in 1:length(args)]
+    arg_pairs = map(vars_to_pairs,zip(argnames,args))
+    ls = reduce(vcat,first.(arg_pairs))
+    rs = reduce(vcat,last.(arg_pairs))
+    var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, rs))
 
     fname = gensym(:ModelingToolkitFunction)
     out_expr = conv(op)
@@ -177,30 +179,25 @@ function fill_array_with_zero!(x::AbstractArray)
 end
 
 function _build_function(target::JuliaTarget, rhss, args...;
-                         conv = toexpr,
-                         expression = Val{true},
+                         conv = simplified_expr, expression = Val{true},
                          checkbounds = false,
-                         linenumbers = false,
-                         multithread=nothing,
-                         headerfun=addheader,
-                         outputidxs=nothing,
-                         convert_oop = true,
-                         force_SA = false,
-                         skipzeros = outputidxs===nothing,
-                         fillzeros = skipzeros,
-                         parallel=SerialForm(),
-                         kwargs...)
+                         linenumbers = false, multithread=nothing,
+                         headerfun=addheader, outputidxs=nothing,
+						 convert_oop = true, force_SA = false,
+                         skipzeros = outputidxs===nothing, fillzeros = skipzeros, parallel=SerialForm(), kwargs...)
 	if multithread isa Bool
 		@warn("multithraded is deprecated for the parallel argument. See the documentation.")
 		parallel = multithread ? MultithreadedForm() : SerialForm()
 	end
 
-    argnames = [gensym(Symbol(:arg, i)) for i in 1:length(args)]
-    arg_assign = map((name, val) -> :($name = $val), argnames, args)
-    var_eqs = Expr(:block, arg_assign)
+    argnames = [gensym(:MTKArg) for i in 1:length(args)]
+    arg_pairs = map(vars_to_pairs,zip(argnames,args))
+    ls = reduce(vcat,first.(arg_pairs))
+    rs = reduce(vcat,last.(arg_pairs))
+    var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, rs))
 
-    fname = gensym(:mtk_function)
-    fargs = Expr(:tuple, argnames...)
+    fname = gensym(:ModelingToolkitFunction)
+    fargs = Expr(:tuple,argnames...)
 
 
     oidx = isnothing(outputidxs) ? (i -> i) : (i -> outputidxs[i])
@@ -209,15 +206,15 @@ function _build_function(target::JuliaTarget, rhss, args...;
 	rhs_length = rhss isa SparseMatrixCSC ? length(rhss.nzval) : length(rhss)
 
 	if parallel isa DistributedForm
-		numworks = Distributed.nworkers() # LOLL
-        reducevars = [Sym(gensym(Symbol(:MTReduceVar, i))) for i in 1:numworks]
+		numworks = Distributed.nworkers()
+		reducevars = [Variable(gensym(:MTReduceVar))() for i in 1:numworks]
 		lens = Int(ceil(rhs_length/numworks))
 		finalsize = rhs_length - (numworks-1)*lens
 		_rhss = vcat(reduce(vcat,[[getindex(reducevars[i],j) for j in 1:lens] for i in 1:numworks-1],init=Expr[]),
 						 [getindex(reducevars[end],j) for j in 1:finalsize])
     elseif parallel isa DaggerForm
-		computevars = [Sym(gensym(:MTComputeVar)) for i in axes(rhss,1)]
-        reducevar = Sym(gensym(:MTReduceVar))
+		computevars = [Variable(gensym(:MTComputeVar))() for i in axes(rhss,1)]
+        reducevar = Variable(gensym(:MTReduceVar))()
         _rhss = [getindex(reducevar,i) for i in axes(rhss,1)]
 	elseif rhss isa SparseMatrixCSC
 		_rhss = rhss.nzval
@@ -404,6 +401,21 @@ function _build_function(target::JuliaTarget, rhss, args...;
     end
 end
 
+vars_to_pairs(args) = vars_to_pairs(args[1],args[2])
+function vars_to_pairs(name,vs::AbstractArray)
+	_vs = convert.(Variable,vs)
+	names = [Symbol(u) for u ∈ _vs]
+	exs = [:($name[$i]) for (i, u) ∈ enumerate(_vs)]
+	names,exs
+end
+
+function vars_to_pairs(name,vs)
+	_vs = convert(Variable,vs)
+	names = [Symbol(_vs)]
+	exs = [name]
+	names,exs
+end
+
 get_varnumber(varop::Operation,vars::Vector{Operation}) =  findfirst(x->isequal(x,varop),vars)
 get_varnumber(varop::Operation,vars::Vector{<:Variable})  =  findfirst(x->isequal(x,varop.op),vars)
 
@@ -449,7 +461,7 @@ end
 numbered_expr(c::ModelingToolkit.Constant,args...;kwargs...) = c.value
 
 function _build_function(target::StanTarget, eqs, vs, ps, iv,
-                         conv = toexpr, expression = Val{true};
+                         conv = simplified_expr, expression = Val{true};
                          fname = :diffeqf, derivname=:internal_var___du,
                          varname=:internal_var___u,paramname=:internal_var___p)
     differential_equation = string(join([numbered_expr(eq,vs,ps,derivname=derivname,
@@ -465,7 +477,7 @@ function _build_function(target::StanTarget, eqs, vs, ps, iv,
 end
 
 function _build_function(target::CTarget, eqs, vs, ps, iv;
-                         conv = toexpr, expression = Val{true},
+                         conv = simplified_expr, expression = Val{true},
                          fname = :diffeqf, derivname=:internal_var___du,
                          varname=:internal_var___u,paramname=:internal_var___p)
     differential_equation = string(join([numbered_expr(eq,vs,ps,derivname=derivname,
@@ -479,7 +491,7 @@ function _build_function(target::CTarget, eqs, vs, ps, iv;
 end
 
 function _build_function(target::MATLABTarget, eqs, vs, ps, iv;
-                         conv = toexpr, expression = Val{true},
+                         conv = simplified_expr, expression = Val{true},
                          fname = :diffeqf, derivname=:internal_var___du,
                          varname=:internal_var___u,paramname=:internal_var___p)
     matstr = join([numbered_expr(eq.rhs,vs,ps,derivname=derivname,
