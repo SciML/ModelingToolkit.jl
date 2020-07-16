@@ -138,6 +138,7 @@ let
     an array of variable expressions.
     """
     function hessian_sparsity(f, u)
+        @assert !(f isa AbstractArray)
         f = value(f)
         u = map(value, u)
         idx(i) = TermCombination(Set([Dict(i=>1)]))
@@ -154,7 +155,7 @@ islinear(ex::Expression, u)
 ```
 Check if an expression is linear with respect to a list of variable expressions.
 """
-function islinear(ex::Expression, u)
+function islinear(ex, u)
     isempty(hessian_sparsity(ex, u).nzval)
 end
 

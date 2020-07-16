@@ -101,6 +101,8 @@ end
 @num_method Base.isless isless(value(a), value(b))
 @num_method Base.isequal isequal(value(a), value(b)) (Number, Symbolic)
 @num_method Base.:(==) value(a) == value(b) (Number,)
+@num_method Base.copysign copysign(value(a), value(b)) (Number,)
+Base.real(x::Num) = Num(real(value(x)))
 
 Base.hash(x::Num, h::UInt) = hash(value(x), h)
 
@@ -119,7 +121,7 @@ Base.isless(n::Num, x::Num) = value(n) < value(x)
 Base.isless(n::Number, x::Num) = value(n) < value(x)
 =#
 
-LinearAlgebra.lu(x::Array{Num}) = lu(x, Val{false}())
+LinearAlgebra.lu(x::Array{Num}; kw...) = lu(x, Val{false}(); kw...)
 
 """
 $(TYPEDEF)

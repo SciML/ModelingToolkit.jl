@@ -73,28 +73,26 @@ function vars!(vars, O)
 end
 
 """
-get_variables(O::Operation)
+get_variables(O)
 
-Returns the variables in the Operation
+Returns the variables in the expression
 """
+get_variables(e::Num, varlist=nothing) = get_variables(value(e), varlist)
 get_variables!(vars, e, varlist=nothing) = vars
+get_variables!(vars, e::Sym, varlist=nothing) = push!(vars, e)
 
 function get_variables!(vars, e::Term, varlist=nothing)
-    if e isa Sym
-      (isnothing(varlist) ? true : (e in varlist)) && push!(vars, e)
-    else
-        foreach(x -> get_variables!(vars, x, varlist), e.args)
-    end
+    foreach(x -> get_variables!(vars, x, varlist), e.args)
     return (vars isa AbstractVector) ? unique!(vars) : vars
 end
-get_variables(e::Operation, varlist=nothing) = get_variables!(Operation[], e, varlist)
 
 function get_variables!(vars, e::Equation, varlist=nothing)
   get_variables!(vars, e.rhs, varlist)
 end
-get_variables(e::Equation, varlist=nothing) = get_variables!(Operation[],e,varlist)
 
 modified_states!(mstates, e::Equation, statelist=nothing) = get_variables!(mstates, e.lhs, statelist)
+
+get_variables(e, varlist=nothing) = get_variables!([], e, varlist)
 
 # variable substitution
 # Piracy but mild
