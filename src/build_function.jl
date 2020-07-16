@@ -404,14 +404,14 @@ end
 vars_to_pairs(args) = vars_to_pairs(args[1],args[2])
 function vars_to_pairs(name,vs::AbstractArray)
     _vs = value.(vs)
-	names = [Symbol(u) for u ∈ _vs]
+	names = [nameof(u) for u ∈ _vs]
 	exs = [:($name[$i]) for (i, u) ∈ enumerate(_vs)]
 	names,exs
 end
 
 function vars_to_pairs(name,vs)
-    _vs = value(v)
-	names = [Symbol(_vs)]
+    _vs = value(vs)
+	names = [nameof(_vs)]
 	exs = [name]
 	names,exs
 end

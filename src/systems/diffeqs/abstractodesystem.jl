@@ -9,7 +9,7 @@ function calculate_tgrad(sys::AbstractODESystem;
       tgrad = ModelingToolkit.simplify.(tgrad)
   end
   sys.tgrad[] = tgrad
-  return tgrad
+  return @show(tgrad)
 end
 
 function calculate_jacobian(sys::AbstractODESystem;
@@ -32,7 +32,7 @@ end
 
 struct ODEToExpr
     sys::AbstractODESystem
-    states::Vector{Sym}
+    states::Vector
 end
 ODEToExpr(@nospecialize(sys)) = ODEToExpr(sys,states(sys))
 function (f::ODEToExpr)(O::Operation)
@@ -56,6 +56,8 @@ end
 function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                            simplify = true, sparse = false, kwargs...)
     jac = calculate_jacobian(sys;simplify=simplify,sparse=sparse)
+    sub = Dict(value.(dvs) .=> makesym.(value.(dvs)))
+    jac = map(d->substitute(d, sub), jac)
     return build_function(jac, dvs, ps, sys.iv;
                           conv = ODEToExpr(sys), kwargs...)
 end
@@ -66,11 +68,16 @@ function makesym(t::Term{T}) where {T}
     error("Cannot convert $t to a symbol")
 end
 makesym(t::Sym{T}) where {T} = t
+makesym(t::Sym{FnType{T, S}}) where {T,S} = Sym{S}(nameof(t))
 
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
-    rhss = [deq.rhs for deq ∈ equations(sys)]
+    # optimization
     dvs′ = makesym.(value.(dvs))
     ps′ = makesym.(value.(ps))
+
+    sub = Dict(dvs .=> dvs′)
+    # substitute x(t) by just x
+    rhss = [substitute(deq.rhs, sub) for deq ∈ equations(sys)]
     return build_function(rhss, dvs′, ps′, sys.iv;
                           conv = ODEToExpr(sys),kwargs...)
 end

@@ -1,10 +1,8 @@
 import SymbolicUtils: symtype
 struct Parameter{T} end
 
-isparameter(::Sym) = false
-
+isparameter(x) = false
 isparameter(::Sym{<:Parameter}) = true
-
 isparameter(::Sym{<:FnType{<:Any, <:Parameter}}) = true
 
 SymbolicUtils.symtype(s::Symbolic{Parameter{T}}) where T = T

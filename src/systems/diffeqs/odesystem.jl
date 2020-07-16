@@ -28,9 +28,9 @@ struct ODESystem <: AbstractODESystem
     """Independent variable."""
     iv::Sym
     """Dependent (state) variables."""
-    states::Vector{Sym}
+    states::Vector
     """Parameter variables."""
-    ps::Vector{Sym}
+    ps::Vector
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
@@ -64,9 +64,9 @@ end
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    systems = ODESystem[],
                    name=gensym(:ODESystem))
-    iv′ = convert(Sym,iv)
-    dvs′ = convert.(Sym,dvs)
-    ps′ = convert.(Sym,ps)
+    iv′ = value(iv)
+    dvs′ = value.(dvs)
+    ps′ = value.(ps)
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
@@ -74,16 +74,31 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     ODESystem(deqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name, systems)
 end
 
-var_from_nested_derivative(x::Constant) = (missing, missing)
-var_from_nested_derivative(x,i=0) = x.op isa Differential ? var_from_nested_derivative(x.args[1],i+1) : (x.op,i)
+var_from_nested_derivative(x, i=0) = (missing, missing)
+var_from_nested_derivative(x::Term,i=0) = x.op isa Differential ? var_from_nested_derivative(x.args[1],i+1) : (x,i)
 
 iv_from_nested_derivative(x) = x.op isa Differential ? iv_from_nested_derivative(x.args[1]) : x.args[1]
 iv_from_nested_derivative(x::Constant) = missing
 
+
+vars(exprs::Term) = vars([exprs])
+vars(exprs) = foldl(vars!, exprs; init = Set())
+function vars!(vars, O)
+    isa(O, Sym) && return push!(vars, O)
+    !isa(O, Term) && return vars
+
+    O.op isa Sym && push!(vars, O)
+    for arg ∈ O.args
+        vars!(vars, arg)
+    end
+
+    return vars
+end
+
 function ODESystem(eqs; kwargs...)
     # NOTE: this assumes that the order of algebric equations doesn't matter
-    diffvars = OrderedSet{Sym}()
-    allstates = OrderedSet{Sym}()
+    diffvars = OrderedSet()
+    allstates = OrderedSet()
     ps = OrderedSet{Sym}()
     # reorder equations such that it is in the form of `diffeq, algeeq`
     diffeq = Equation[]
@@ -98,14 +113,13 @@ function ODESystem(eqs; kwargs...)
     iv === nothing && throw(ArgumentError("No differential variable detected."))
     for eq in eqs
         for var in vars(eq.rhs for eq ∈ eqs)
-            var isa Sym || continue
-            if isparameter(var)
+            if isparameter(var) || isparameter(var.op)
                 isequal(var, iv) || push!(ps, var)
             else
                 push!(allstates, var)
             end
         end
-        if eq.lhs isa Constant
+        if !(eq.lhs isa Symbolic)
             push!(algeeq, eq)
         else
             diffvar = first(var_from_nested_derivative(eq.lhs))

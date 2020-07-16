@@ -3,6 +3,8 @@ using OrdinaryDiffEq
 using DiffEqBase
 using Test
 
+using ModelingToolkit: value
+
 # Define some variables
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
@@ -19,17 +21,13 @@ de = ODESystem(eqs)
 
 generate_function(de)
 
-function _clean(O::Term)
-    @assert isa(O.op, Sym)
-    return O.op
-end
-_clean(x::Sym) = x
-_clean(x::Num) = _clean(x.val)
 function test_diffeq_inference(name, sys, iv, dvs, ps)
     @testset "ODESystem construction: $name" begin
-        @test independent_variable(sys) ==  _clean(iv)
-        @test Set(states(sys))          == Set(_clean.(dvs))
-        @test Set(parameters(sys))      == Set(_clean.(ps))
+        @test independent_variable(sys) ==  value(iv)
+        @show sys.states
+        @show @which states(sys)
+        @test Set(states(sys))          == Set(value.(dvs))
+        @test Set(parameters(sys))      == Set(value.(ps))
     end
 end
 

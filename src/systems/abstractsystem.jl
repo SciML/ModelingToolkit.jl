@@ -214,7 +214,7 @@ end
 
 struct AbstractSysToExpr
     sys::AbstractSystem
-    states::Vector{Sym}
+    states::Vector
 end
 AbstractSysToExpr(sys) = AbstractSysToExpr(sys,states(sys))
 function (f::AbstractSysToExpr)(O::Operation)

@@ -58,20 +58,6 @@ is_operation(::Any) = false
 is_derivative(O::Operation) = isa(O.op, Differential)
 is_derivative(::Any) = false
 
-vars(exprs::Term) = vars([exprs])
-vars(exprs) = foldl(vars!, exprs; init = Set{Sym}())
-function vars!(vars, O)
-    isa(O, Sym) && return push!(vars, O)
-    isa(O, Term) || return O
-
-    O.op isa Sym && push!(vars, O.op)
-    for arg ∈ O.args
-        vars!(vars, arg)
-    end
-
-    return vars
-end
-
 """
 get_variables(O)
 
