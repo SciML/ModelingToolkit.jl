@@ -62,7 +62,8 @@ eqs = [0 ~ σ*a,
 ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(ns)
-jac = generate_jacobian(ns)
 
 @test ModelingToolkit.jacobian_sparsity(ns).colptr == sparse(jac).colptr
 @test ModelingToolkit.jacobian_sparsity(ns).rowval == sparse(jac).rowval
+
+jac = generate_jacobian(ns)
