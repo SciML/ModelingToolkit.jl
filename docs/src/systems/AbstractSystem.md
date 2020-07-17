@@ -56,6 +56,10 @@ generate_factorized_W
 generate_hessian
 ```
 
+Additionally, `jacobian_sparsity(sys)` and `hessian_sparsity(sys)`
+exist on the appropriate systems for fast generation of the sparsity
+patterns via an abstract interpretation without requiring differentiation.
+
 ## Problem Constructors
 
 At the end, the system types have `DEProblem` constructors, like `ODEProblem`,

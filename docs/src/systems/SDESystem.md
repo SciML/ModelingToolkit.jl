@@ -24,6 +24,7 @@ calculate_factorized_W
 generate_jacobian
 generate_tgrad
 generate_factorized_W
+jacobian_sparsity
 ```
 
 ## Problem Constructors

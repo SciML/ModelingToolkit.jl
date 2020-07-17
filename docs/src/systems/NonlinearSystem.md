@@ -19,6 +19,7 @@ NonlinearSystem
 ```julia
 calculate_jacobian
 generate_jacobian
+jacobian_sparsity
 ```
 
 ## Problem Constructors

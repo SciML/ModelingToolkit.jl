@@ -67,6 +67,9 @@ function generate_function(sys::NonlinearSystem, vs = states(sys), ps = paramete
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
+jacobian_sparsity(sys::AbstractODESystem) = jacobian_sparsity(equations(sys),states(sys))
+
+
 """
 ```julia
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,tspan,

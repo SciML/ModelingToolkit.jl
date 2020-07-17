@@ -88,6 +88,8 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify=true)
     M == I ? I : M
 end
 
+jacobian_sparsity(sys::AbstractODESystem) = jacobian_sparsity(equations(sys),states(sys))
+
 function DiffEqBase.ODEFunction(sys::AbstractODESystem, args...; kwargs...)
     ODEFunction{true}(sys, args...; kwargs...)
 end
