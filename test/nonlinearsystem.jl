@@ -1,5 +1,5 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
-using DiffEqBase
+using DiffEqBase, SparseArrays
 using Test
 
 canonequal(a, b) = isequal(simplify(a), simplify(b))
@@ -62,4 +62,8 @@ eqs = [0 ~ σ*a,
 ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(ns)
+
+@test ModelingToolkit.jacobian_sparsity(ns).colptr == sparse(jac).colptr
+@test ModelingToolkit.jacobian_sparsity(ns).rowval == sparse(jac).rowval
+
 jac = generate_jacobian(ns)

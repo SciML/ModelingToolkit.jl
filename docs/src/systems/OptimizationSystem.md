@@ -21,6 +21,7 @@ calculate_gradient
 calculate_hessian
 generate_gradient
 generate_hessian
+hessian_sparsity
 ```
 
 ## Problem Constructors
