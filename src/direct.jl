@@ -100,6 +100,16 @@ end
 
 isidx(x) = x isa TermCombination
 
+"""
+```julia
+hessian_sparsity(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression})
+```
+
+Return the sparsity pattern of the Hessian of an array of expressions with respect to
+an array of variable expressions.
+"""
+function hessian_sparsity end
+
 let
     _scalar = one(TermCombination)
 
@@ -124,16 +134,6 @@ let
           end] |> Rewriters.Chain |> Rewriters.Postwalk |> Rewriters.Fixpoint
 
     # we do this in a let block so that Revise works on the list of rules
-    global hessian_sparsity
-
-    """
-    ```julia
-    hessian_sparsity(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression})
-    ```
-
-    Return the sparsity pattern of the Hessian of an array of expressions with respect to
-    an array of variable expressions.
-    """
     function hessian_sparsity(f, u)
         idx(i) = TermCombination(Set([Dict(i=>1)]))
         dict = Dict(SymbolicUtils.to_symbolic.(u) .=> idx.(1:length(u)))
