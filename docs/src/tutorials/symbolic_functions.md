@@ -167,10 +167,11 @@ to build Julia functions which avoid world-age issues.
 
 ## Building Non-Allocating Parallel Functions for Sparse Matrices
 
-Now let's show off a little bit. `build_function` is kind of like
-if `lambidfy` ate its spinach. To show this, **let's build a non-allocating
+Now let's show off a little bit. `build_function` is kind of like if 
+[`lambdify`](https://docs.sympy.org/latest/modules/utilities/lambdify.html) 
+ate its spinach. To show this, **let's build a non-allocating
 function that fills sparse matrices in a multithreaded manner**. To do
-this, we just have to reprsent the operation that we're turning into
+this, we just have to represent the operation that we're turning into
 a function via a sparse matrix. For example:
 
 ```julia
@@ -262,7 +263,7 @@ Let's unpack what that's doing. It's using `A.nzval` in order to linearly
 index through the sparse matrix, avoiding the `A[i,j]` form because that
 is a more expensive way to index a sparse matrix if you know exactly the
 order that the data is stored. Then, it's splitting up the calculation
-into Julia threads so they can be operated on in parallel. It syncronizes
+into Julia threads so they can be operated on in parallel. It synchronizes
 after spawning all of the tasks so the computation is ensured to be
 complete before moving on. And it does this with all in-place operations
 to the original matrix instead of generating arrays. This is the fanciest
@@ -286,7 +287,7 @@ just like any other function. To build a differential operator, use
 @derivatives D'~t
 ```
 
-This is the differential operator ``D = \frac{d/dt}``: the number of
+This is the differential operator ``D = \frac{\partial}{\partial t}``: the number of
 `'` is the order of the derivative and the second variable is the
 variable we're differentiating by. Now let's write down the derivative
 of some expression:
@@ -371,7 +372,7 @@ ModelingToolkit.Constant(2.0).value # 2.0
 
 ## Non-Interactive Development (No Macro Version)
 
-Note that the macros are for the high level case where you're doing
+Note that the macros are for the high-level case where you're doing
 symbolic computation on your own code. If you want to do symbolic
 computation on someone else's code, like in a macro, you may not want
 to do `@variables x` because you might want the name "x" to come from
@@ -438,11 +439,11 @@ z = g(x) + g(y)
 
 ## Registering Functions
 
-One of the benefits of a one language Julia symbolic stack is that the
-primatives are all written in Julia, and therefore it's trivially
+One of the benefits of a one-language Julia symbolic stack is that the
+primitives are all written in Julia, and therefore it's trivially
 extendable from Julia itself. By default, new functions are traced
-to the primatives and the symbolic expressions are written on the
-primatives. However, we can instead the allowed primatives by registering
+to the primitives and the symbolic expressions are written on the
+primitives. However, we can expand the allowed primitives by registering
 new functions. For example, let's register a new function `h`:
 
 ```julia
@@ -450,7 +451,7 @@ h(x,y) = x^2 + y
 @register h(x,y)
 ```
 
-Now when we use `h` is a symbolic expression it doesn't expand:
+Now when we use `h(x,y)`, it is a symbolic expression and doesn't expand:
 
 ```julia
 h(x,y) + y^2
