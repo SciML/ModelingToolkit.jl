@@ -1,6 +1,6 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
 using OrdinaryDiffEq
-using DiffEqBase
+using DiffEqBase, SparseArrays
 using Test
 
 # Define some variables

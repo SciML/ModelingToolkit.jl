@@ -1,5 +1,5 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
-using DiffEqBase
+using DiffEqBase, SparseArrays
 using Test
 
 canonequal(a, b) = isequal(simplify(a), simplify(b))

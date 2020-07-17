@@ -1,4 +1,5 @@
-using ModelingToolkit
+using ModelingToolkit, SparseArrays
+
 @variables x y
 @parameters a b
 loss = (a - x)^2 + b * (y - x^2)^2
