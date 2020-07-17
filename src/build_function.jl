@@ -182,9 +182,11 @@ function _build_function(target::JuliaTarget, rhss, args...;
                          conv = simplified_expr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
-                         headerfun=addheader, outputidxs=nothing,
+                         headerfun = addheader, outputidxs=nothing,
 						 convert_oop = true, force_SA = false,
-                         skipzeros = outputidxs===nothing, fillzeros = skipzeros, parallel=SerialForm(), kwargs...)
+                         skipzeros = outputidxs===nothing,
+						 fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
+						 parallel=SerialForm(), kwargs...)
 	if multithread isa Bool
 		@warn("multithraded is deprecated for the parallel argument. See the documentation.")
 		parallel = multithread ? MultithreadedForm() : SerialForm()
@@ -224,9 +226,6 @@ function _build_function(target::JuliaTarget, rhss, args...;
 
     ip_sys_exprs = Expr[]
     # we cannot reliably fill the array with the presence of index translation
-    if fillzeros && outputidxs === nothing
-        push!(ip_sys_exprs, :($fill_array_with_zero!($X)))
-    end
     if is_array_array_sparse_matrix(rhss) # Array of arrays of sparse matrices
         for (i, rhsel) ∈ enumerate(_rhss)
             for (j, rhsel2) ∈ enumerate(rhsel)
@@ -337,6 +336,14 @@ function _build_function(target::JuliaTarget, rhss, args...;
 			end
         end
 	end
+
+	if fillzeros && outputidxs === nothing
+        ip_let_expr = quote
+			$fill_array_with_zero!($X)
+			$ip_let_expr
+		end
+    end
+
 
     tuple_sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
 
