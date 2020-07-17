@@ -135,7 +135,7 @@ eqs = [D(x) ~ σ*a,
 de = ODESystem(eqs)
 generate_function(de, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(de)
-@test jacobian_sparsity(de) == zero.(sparse(jac))
+@test ModelingToolkit.jacobian_sparsity(de) == zero.(sparse(jac))
 f = ODEFunction(de, [x,y,z], [σ,ρ,β])
 
 @derivatives D'~t
