@@ -104,7 +104,7 @@ G2 = sf.g(u,p,t)
 @test norm(G-G2) < 100*eps()
 
 # tests using previous parameter for noise scaling
-p  = rand(length(k)+3)
+p  = rand(length(k))
 u  = rand(length(k))
 t  = 0.
 G  = [p p p p]' .* sdenoise(u,p,t)
