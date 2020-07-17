@@ -86,7 +86,8 @@ p  = rand(length(k)+1)
 u  = rand(length(k))
 t  = 0.
 G  = p[21]*sdenoise(u,p,t)
-sdesys_noise_scaling = convert(SDESystem,rs;noise_scaling=:η)
+@variables η
+sdesys_noise_scaling = convert(SDESystem,rs;noise_scaling=η)
 sf = SDEFunction{false}(sdesys_noise_scaling, states(rs), parameters(sdesys_noise_scaling))
 G2 = sf.g(u,p,t)
 @test norm(G-G2) < 100*eps()
@@ -96,7 +97,18 @@ p  = rand(length(k)+3)
 u  = rand(length(k))
 t  = 0.
 G  = vcat(fill(p[21],8),fill(p[22],3),fill(p[23],9))' .* sdenoise(u,p,t)
-sdesys_noise_scaling = convert(SDESystem,rs;noise_scaling=vcat(fill(:η1,8),fill(:η2,3),fill(:η3,9)))
+@variables η[1:3]
+sdesys_noise_scaling = convert(SDESystem,rs;noise_scaling=vcat(fill(η[1],8),fill(η[2],3),fill(η[3],9)))
+sf = SDEFunction{false}(sdesys_noise_scaling, states(rs), parameters(sdesys_noise_scaling))
+G2 = sf.g(u,p,t)
+@test norm(G-G2) < 100*eps()
+
+# tests using previous parameter for noise scaling
+p  = rand(length(k)+3)
+u  = rand(length(k))
+t  = 0.
+G  = [p p p p]' .* sdenoise(u,p,t)
+sdesys_noise_scaling = convert(SDESystem,rs;noise_scaling=k)
 sf = SDEFunction{false}(sdesys_noise_scaling, states(rs), parameters(sdesys_noise_scaling))
 G2 = sf.g(u,p,t)
 @test norm(G-G2) < 100*eps()

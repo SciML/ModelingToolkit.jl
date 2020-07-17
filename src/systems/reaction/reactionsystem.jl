@@ -209,7 +209,7 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
 
     for (j,rx) in enumerate(rs.eqs)
         rlsqrt = sqrt(oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws))
-        (noise_scaling!==nothing) && (rlsqrt *= var2op(Variable(noise_scaling[j])))
+        (noise_scaling!==nothing) && (rlsqrt *= noise_scaling[j])
         for (spec,stoich) in rx.netstoich
             i            = species_to_idx[spec]
             signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
@@ -387,12 +387,12 @@ law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
 `combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is
 ignored.
 """
-function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, combinatoric_ratelaws=true; noise_scaling=nothing::Union{Vector{Symbol},Symbol,Nothing})
-    (typeof(noise_scaling) <: Vector{Symbol}) && (length(noise_scaling)!=length(rs.eqs)) && error("The number of elements in 'noise_scaling' must be equal to the number of reactions in the reaction system.")
-    (typeof(noise_scaling) <: Symbol) && (noise_scaling = fill(noise_scaling,length(rs.eqs)))
+function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, combinatoric_ratelaws=true; noise_scaling=nothing::Union{Vector{Operation},Operation,Nothing})
+    (typeof(noise_scaling) <: Vector{Operation}) && (length(noise_scaling)!=length(rs.eqs)) && error("The number of elements in 'noise_scaling' must be equal to the number of reactions in the reaction system.")
+    (typeof(noise_scaling) <: Operation) && (noise_scaling = fill(noise_scaling,length(rs.eqs)))
     eqs = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws)
     noiseeqs = assemble_diffusion(rs,noise_scaling; combinatoric_ratelaws=combinatoric_ratelaws)
-    SDESystem(eqs,noiseeqs,rs.iv,rs.states,(noise_scaling===nothing) ? rs.ps : vcat(rs.ps,Variable.(unique(noise_scaling))),name=rs.name,systems=convert.(SDESystem,rs.systems))
+    SDESystem(eqs,noiseeqs,rs.iv,rs.states,(noise_scaling===nothing) ? rs.ps : union(rs.ps,Variable{ModelingToolkit.Parameter{Number}}.(noise_scaling)),name=rs.name,systems=convert.(SDESystem,rs.systems))
 end
 
 """
@@ -458,12 +458,12 @@ function DiffEqBase.ODEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Numb
 end
 
 # SDEProblem from AbstractReactionNetwork
-function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args...; noise_scaling=nothing::Union{Symbol,Nothing}, kwargs...)
+function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args...; noise_scaling=nothing::Union{Operation,Nothing}, kwargs...)
     sde_sys = convert(SDESystem,rs,noise_scaling=noise_scaling)
     u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
-    p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
+    p = typeof(p) <: Array{<:Pair} ? p : Pair.(sde_sys.ps,p)
     p_matrix = zeros(length(rs.states), length(rs.eqs))
-    return SDEProblem(convert(SDESystem,rs),u0,tspan,p,args...; noise_rate_prototype=p_matrix,kwargs...)
+    return SDEProblem(sde_sys,u0,tspan,p,args...; noise_rate_prototype=p_matrix,kwargs...)
 end
 
 # DiscreteProblem from AbstractReactionNetwork
