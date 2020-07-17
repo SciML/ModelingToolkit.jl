@@ -133,6 +133,7 @@ let
               end
           end] |> Rewriters.Chain |> Rewriters.Postwalk |> Rewriters.Fixpoint
 
+    global hessian_sparsity
     # we do this in a let block so that Revise works on the list of rules
     function hessian_sparsity(f, u)
         idx(i) = TermCombination(Set([Dict(i=>1)]))
