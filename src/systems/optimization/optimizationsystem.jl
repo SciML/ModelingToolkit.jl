@@ -73,7 +73,8 @@ end
 equations(sys::OptimizationSystem) = isempty(sys.systems) ? sys.op : sys.op + reduce(+,namespace_operation.(sys.systems))
 namespace_operation(sys::OptimizationSystem) = namespace_operation(sys.op,sys.name,nothing)
 
-hessian_sparsity(sys::AbstractODESystem) = hessian_sparsity(equations(sys),states(sys))
+hessian_sparsity(sys::OptimizationSystem) =
+    hessian_sparsity(sys.op,[dv() for dv in states(sys)])
 
 """
 ```julia

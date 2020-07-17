@@ -67,8 +67,9 @@ function generate_function(sys::NonlinearSystem, vs = states(sys), ps = paramete
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
-jacobian_sparsity(sys::NonlinearSystem) = jacobian_sparsity(equations(sys),states(sys))
-
+jacobian_sparsity(sys::NonlinearSystem) =
+    jacobian_sparsity([eq.rhs for eq ∈ equations(sys)],
+                      [dv() for dv in states(sys)])
 
 """
 ```julia
