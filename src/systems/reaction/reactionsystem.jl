@@ -154,19 +154,19 @@ generated ODEs for the reaction. Note, for a reaction defined by
 `k*X*Y, X+Z --> 2X + Y`
 
 the expression that is returned will be `k*X(t)^2*Y(t)*Z(t)`. For a reaction
-of the form 
+of the form
 
 `k, 2X+3Y --> Z`
 
-the `Operation` that is returned will be `k * (X(t)^2/2) * (Y(t)^3/6)`. 
+the `Operation` that is returned will be `k * (X(t)^2/2) * (Y(t)^3/6)`.
 
 Notes:
 - Allocates
 - `combinatoric_ratelaw=true` uses factorial scaling factors in calculating the rate
     law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
-    `combinatoric_ratelaw=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
+    `combinatoric_ratelaw=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is
     ignored.
-""" 
+"""
 function oderatelaw(rx; combinatoric_ratelaw=true)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
@@ -203,12 +203,13 @@ function assemble_drift(rs; combinatoric_ratelaws=true)
     eqs
 end
 
-function assemble_diffusion(rs; combinatoric_ratelaws=true)
+function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
     eqs = Expression[Constant(0) for x in rs.states, y in rs.eqs]
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for (j,rx) in enumerate(rs.eqs)
         rlsqrt = sqrt(oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws))
+        (noise_scaling!==nothing) && (rlsqrt *= noise_scaling[j])
         for (spec,stoich) in rx.netstoich
             i            = species_to_idx[spec]
             signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
@@ -234,7 +235,7 @@ for a reaction defined by
 `k*X*Y, X+Z --> 2X + Y`
 
 the expression that is returned will be `k*X^2*Y*Z`. For a reaction of
-the form 
+the form
 
 `k, 2X+3Y --> Z`
 
@@ -247,8 +248,8 @@ Notes:
 - `combinatoric_ratelaw=true` uses binomials in calculating the rate law, i.e. for `2S ->
   0` at rate `k` the ratelaw would be `k*S*(S-1)/2`. If `combinatoric_ratelaw=false` then
   the ratelaw is `k*S*(S-1)`, i.e. the rate law is not normalized by the scaling
-  factor. 
-""" 
+  factor.
+"""
 function jumpratelaw(rx; rxvars=get_variables(rx.rate), combinatoric_ratelaw=true)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
@@ -364,7 +365,7 @@ Convert a [`ReactionSystem`](@ref) to an [`ODESystem`](@ref).
 Notes:
 - `combinatoric_ratelaws=true` uses factorial scaling factors in calculating the rate
 law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
-`combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
+`combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is
 ignored.
 """
 function Base.convert(::Type{<:ODESystem}, rs::ReactionSystem; combinatoric_ratelaws=true)
@@ -383,14 +384,15 @@ Convert a [`ReactionSystem`](@ref) to an [`SDESystem`](@ref).
 Notes:
 - `combinatoric_ratelaws=true` uses factorial scaling factors in calculating the rate
 law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
-`combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
+`combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is
 ignored.
 """
-function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, combinatoric_ratelaws=true)
+function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, combinatoric_ratelaws=true; noise_scaling=nothing::Union{Vector{Operation},Operation,Nothing})
+    (typeof(noise_scaling) <: Vector{Operation}) && (length(noise_scaling)!=length(rs.eqs)) && error("The number of elements in 'noise_scaling' must be equal to the number of reactions in the reaction system.")
+    (typeof(noise_scaling) <: Operation) && (noise_scaling = fill(noise_scaling,length(rs.eqs)))
     eqs = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws)
-    noiseeqs = assemble_diffusion(rs; combinatoric_ratelaws=combinatoric_ratelaws)
-    SDESystem(eqs,noiseeqs,rs.iv,rs.states,rs.ps,
-              name=rs.name,systems=convert.(SDESystem,rs.systems))
+    noiseeqs = assemble_diffusion(rs,noise_scaling; combinatoric_ratelaws=combinatoric_ratelaws)
+    SDESystem(eqs,noiseeqs,rs.iv,rs.states,(noise_scaling===nothing) ? rs.ps : union(rs.ps,Variable{ModelingToolkit.Parameter{Number}}.(noise_scaling)),name=rs.name,systems=convert.(SDESystem,rs.systems))
 end
 
 """
@@ -404,7 +406,7 @@ Notes:
 - `combinatoric_ratelaws=true` uses binomials in calculating the rate law, i.e. for `2S ->
   0` at rate `k` the ratelaw would be `k*S*(S-1)/2`. If `combinatoric_ratelaws=false` then
   the ratelaw is `k*S*(S-1)`, i.e. the rate law is not normalized by the scaling
-  factor. 
+  factor.
 """
 function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem; combinatoric_ratelaws=true)
     eqs = assemble_jumps(rs; combinatoric_ratelaws=combinatoric_ratelaws)
@@ -423,7 +425,7 @@ Convert a [`ReactionSystem`](@ref) to an [`NonlinearSystem`](@ref).
 Notes:
 - `combinatoric_ratelaws=true` uses factorial scaling factors in calculating the rate
 law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
-`combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is 
+`combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is
 ignored.
 """
 function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem; combinatoric_ratelaws=true)
@@ -456,11 +458,12 @@ function DiffEqBase.ODEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Numb
 end
 
 # SDEProblem from AbstractReactionNetwork
-function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args...; kwargs...)
+function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args...; noise_scaling=nothing::Union{Operation,Nothing}, kwargs...)
+    sde_sys = convert(SDESystem,rs,noise_scaling=noise_scaling)
     u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
-    p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
+    p = typeof(p) <: Array{<:Pair} ? p : Pair.(sde_sys.ps,p)
     p_matrix = zeros(length(rs.states), length(rs.eqs))
-    return SDEProblem(convert(SDESystem,rs),u0,tspan,p,args...; noise_rate_prototype=p_matrix,kwargs...)
+    return SDEProblem(sde_sys,u0,tspan,p,args...; noise_rate_prototype=p_matrix,kwargs...)
 end
 
 # DiscreteProblem from AbstractReactionNetwork
