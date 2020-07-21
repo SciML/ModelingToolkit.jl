@@ -23,6 +23,8 @@ struct OptimizationSystem <: AbstractSystem
     states::Vector{Variable}
     """Parameters."""
     ps::Vector{Variable}
+    inputs::Vector{Variable}
+    outputs::Vector{Equation}
     """
     Name: the name of the system
     """
@@ -34,9 +36,11 @@ struct OptimizationSystem <: AbstractSystem
 end
 
 function OptimizationSystem(op, states, ps;
+                            inputs = Variable[],
+                            outputs = Operation[],
                             name = gensym(:OptimizationSystem),
                             systems = OptimizationSystem[])
-    OptimizationSystem(op, convert.(Variable,states), convert.(Variable,ps), name, systems)
+    OptimizationSystem(op, convert.(Variable,states), convert.(Variable,ps), inputs, outputs, name, systems)
 end
 
 function calculate_gradient(sys::OptimizationSystem)

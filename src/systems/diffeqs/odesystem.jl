@@ -31,6 +31,8 @@ struct ODESystem <: AbstractODESystem
     states::Vector{Variable}
     """Parameter variables."""
     ps::Vector{Variable}
+    inputs::Vector{Variable}
+    outputs::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
@@ -62,6 +64,8 @@ struct ODESystem <: AbstractODESystem
 end
 
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
+                   inputs = Variable[],
+                   outputs = Operation[],
                    systems = ODESystem[],
                    name=gensym(:ODESystem))
     iv′ = convert(Variable,iv)
@@ -71,7 +75,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     jac = RefValue{Any}(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
-    ODESystem(deqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name, systems)
+    ODESystem(deqs, iv′, dvs′, ps′, inputs, outputs, tgrad, jac, Wfact, Wfact_t, name, systems)
 end
 
 var_from_nested_derivative(x::Constant) = (missing, missing)

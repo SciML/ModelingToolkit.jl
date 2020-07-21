@@ -37,6 +37,8 @@ struct SDESystem <: AbstractODESystem
     states::Vector{Variable}
     """Parameter variables."""
     ps::Vector{Variable}
+    inputs::Vector{Variable}
+    outputs::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
@@ -68,6 +70,8 @@ struct SDESystem <: AbstractODESystem
 end
 
 function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
+                   inputs = Variable[],
+                   outputs = Operation[],
                    systems = SDESystem[],
                    name = gensym(:SDESystem))
     iv′ = convert(Variable,iv)
@@ -77,7 +81,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     jac = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
-    SDESystem(deqs, neqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name, systems)
+    SDESystem(deqs, neqs, iv′, dvs′, ps′, inputs, outputs, tgrad, jac, Wfact, Wfact_t, name, systems)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = sys.states, ps = sys.ps; kwargs...)
