@@ -80,7 +80,7 @@ var_from_nested_derivative(x,i=0) = x.op isa Differential ? var_from_nested_deri
 iv_from_nested_derivative(x) = x.op isa Differential ? iv_from_nested_derivative(x.args[1]) : x.args[1].op
 iv_from_nested_derivative(x::Constant) = missing
 
-function ODESystem(eqs; kwargs...)
+function ODESystem(eqs, iv=nothing; kwargs...)
     # NOTE: this assumes that the order of algebric equations doesn't matter
     diffvars = OrderedSet{Variable}()
     allstates = OrderedSet{Variable}()
@@ -89,13 +89,15 @@ function ODESystem(eqs; kwargs...)
     diffeq = Equation[]
     algeeq = Equation[]
     # initial loop for finding `iv`
-    iv = nothing
-    for eq in eqs
-        if !(eq.lhs isa Constant) # assume eq.lhs is either Differential or Constant
-            iv = iv_from_nested_derivative(eq.lhs)
+    if iv === nothing
+        for eq in eqs
+            if !(eq.lhs isa Constant) # assume eq.lhs is either Differential or Constant
+                iv = iv_from_nested_derivative(eq.lhs)
+                break
+            end
         end
     end
-    iv === nothing && throw(ArgumentError("No differential variable detected."))
+    iv === nothing && throw(ArgumentError("Please pass in independent variables."))
     for eq in eqs
         for var in vars(eq.rhs for eq ∈ eqs)
             var isa Variable || continue
