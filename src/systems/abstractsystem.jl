@@ -171,6 +171,7 @@ end
 
 namespace_equations(sys::AbstractSystem) = namespace_equation.(equations(sys),sys.name,sys.iv.name)
 
+
 function namespace_equation(eq::Equation,name,ivname)
     _lhs = namespace_operation(eq.lhs,name,ivname)
     _rhs = namespace_operation(eq.rhs,name,ivname)
@@ -209,6 +210,22 @@ end
 function inputs(sys::AbstractSystem,name::Symbol)
     x = sys.inputs[findfirst(x->x.name==name,sys.ps)]
     rename(x,renamespace(sys.name,x.name))(sys.iv())
+end
+
+lhss(xs) = map(x->x.lhs, xs)
+rhss(xs) = map(x->x.rhs, xs)
+
+function collapse_inputs(sys::ModelingToolkit.AbstractSystem)
+    eqs = equations(sys)
+
+    ns_aliases = [sys.outputs;
+                  reduce(vcat,
+                         [namespace_equation.(s.outputs, s.name, s.iv.name)
+                          for s in sys.systems])]
+
+    dict = Dict(lhss(ns_aliases) .=> rhss(ns_aliases))
+    neweqs = Equation.(lhss(eqs), Rewriters.Fixpoint(x->substitute(x, dict)).(rhss(eqs)))
+    (eqs=neweqs, outputs=ns_aliases, inputs=inputs(sys))
 end
 
 function states(sys::AbstractSystem,args...)

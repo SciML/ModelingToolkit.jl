@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, Test
+using ModelingToolkit: collapse_inputs
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t) F(t) u(t)
@@ -15,6 +16,7 @@ lorenz2 = ODESystem(eqs,inputs=[F],outputs=aliases,name=:lorenz2)
 connections = [lorenz1.F ~ lorenz2.u,
                lorenz2.F ~ lorenz1.u]
 connected = ODESystem(Equation[],t,[],[],outputs=connections,systems=[lorenz1,lorenz2])
+
 sys = connected
 
 @variables lorenz1₊F lorenz2₊F
@@ -22,12 +24,15 @@ sys = connected
 @show equations(connected)
 @show outputs(connected)
 
-function collapse_inputs!(sys::ModelingToolkit.AbstractSystem)
-    outputs = []
-    for x in inputs(sys)
-        idxs = findall(y->convert(Variable,y.lhs).name == x.name,fulleqs)
-        idxs === nothing && error("Not all inputs are connected")
-        outputeq = x(sys.iv()) ~ reduce(+,getproperty.(getindex.((fulleqs,),idxs),:rhs))
-        push!(outputs,outputeq)
-    end
-end
+collapsed_eqs = [D(lorenz1.x) ~ (lorenz1.σ * (lorenz1.y - lorenz1.x) +
+                                 (lorenz2.x + lorenz2.y - lorenz2.z)),
+                 D(lorenz1.y) ~ lorenz1.x * (lorenz1.ρ - lorenz1.z) - lorenz1.y,
+                 D(lorenz1.z) ~ lorenz1.x * lorenz1.y - (lorenz1.β * lorenz1.z),
+                 D(lorenz2.x) ~ (lorenz2.σ * (lorenz2.y - lorenz2.x) +
+                                 (lorenz1.x + lorenz1.y - lorenz1.z)),
+                 D(lorenz2.y) ~ lorenz2.x * (lorenz2.ρ - lorenz2.z) - lorenz2.y,
+                 D(lorenz2.z) ~ lorenz2.x * lorenz2.y - (lorenz2.β * lorenz2.z)]
+
+simplifyeqs(eqs) = Equation.(lhss(eqs), simplify.(rhss(eqs)))
+
+@test isequal(simplifyeqs(collapse_inputs(connected).eqs), simplifyeqs(collapsed_eqs))
