@@ -145,10 +145,10 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
         end
     end
 
-    if :outputs ∈ fieldnames(typeof(sys))
-        i = findfirst(x->convert(Variable,x.lhs).name==name,sys.outputs)
+    if :observed ∈ fieldnames(typeof(sys))
+        i = findfirst(x->convert(Variable,x.lhs).name==name,sys.observed)
         if i !== nothing
-            return rename(convert(Variable,sys.outputs[i].lhs),renamespace(sys.name,name))(getfield(sys,:iv)())
+            return rename(convert(Variable,sys.observed[i].lhs),renamespace(sys.name,name))(getfield(sys,:iv)())
         end
     end
 
@@ -165,8 +165,8 @@ function namespace_parameters(sys::AbstractSystem)
     [rename(x,renamespace(sys.name,x.name)) for x in parameters(sys)]
 end
 
-function namespace_inputs(sys::AbstractSystem)
-    [rename(x,renamespace(sys.name,x.name)) for x in inputs(sys)]
+function namespace_pins(sys::AbstractSystem)
+    [rename(x,renamespace(sys.name,x.name)) for x in pins(sys)]
 end
 
 namespace_equations(sys::AbstractSystem) = namespace_equation.(equations(sys),sys.name,sys.iv.name)
@@ -190,11 +190,11 @@ namespace_operation(O::Constant,name,ivname) = O
 independent_variable(sys::AbstractSystem) = sys.iv
 states(sys::AbstractSystem) = isempty(sys.systems) ? sys.states : [sys.states;reduce(vcat,namespace_variables.(sys.systems))]
 parameters(sys::AbstractSystem) = isempty(sys.systems) ? sys.ps : [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]
-inputs(sys::AbstractSystem) = isempty(sys.systems) ? sys.inputs : [sys.inputs;reduce(vcat,namespace_inputs.(sys.systems))]
-function outputs(sys::AbstractSystem)
-    [sys.outputs;
+pins(sys::AbstractSystem) = isempty(sys.systems) ? sys.pins : [sys.pins;reduce(vcat,namespace_pins.(sys.systems))]
+function observed(sys::AbstractSystem)
+    [sys.observed;
      reduce(vcat,
-            (namespace_equation.(s.outputs, s.name, s.iv.name) for s in sys.systems),
+            (namespace_equation.(s.observed, s.name, s.iv.name) for s in sys.systems),
             init=Equation[])]
 end
 
@@ -208,8 +208,8 @@ function parameters(sys::AbstractSystem,name::Symbol)
     rename(x,renamespace(sys.name,x.name))()
 end
 
-function inputs(sys::AbstractSystem,name::Symbol)
-    x = sys.inputs[findfirst(x->x.name==name,sys.ps)]
+function pins(sys::AbstractSystem,name::Symbol)
+    x = sys.pins[findfirst(x->x.name==name,sys.ps)]
     rename(x,renamespace(sys.name,x.name))(sys.iv())
 end
 
@@ -228,7 +228,7 @@ function equations(sys::ModelingToolkit.AbstractSystem; remove_aliases = true)
         if !remove_aliases
             return eqs
         end
-        aliases = outputs(sys)
+        aliases = observed(sys)
         dict = Dict(lhss(aliases) .=> rhss(aliases))
 
         # Substitute aliases
@@ -259,7 +259,7 @@ function islinear(sys::AbstractSystem)
     all(islinear(r, dvs) for r in rhs)
 end
 
-function inputs(sys::AbstractSystem,args...)
+function pins(sys::AbstractSystem,args...)
     name = last(args)
     extra_names = reduce(Symbol,[Symbol(:₊,x.name) for x in args[1:end-1]])
     newname = renamespace(extra_names,name)

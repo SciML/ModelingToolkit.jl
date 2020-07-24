@@ -129,8 +129,8 @@ struct ReactionSystem <: AbstractSystem
     states::Vector{Variable}
     """Parameter variables."""
     ps::Vector{Variable}
-    inputs::Vector{Variable}
-    outputs::Vector{Equation}
+    pins::Vector{Variable}
+    observed::Vector{Equation}
     """The name of the system"""
     name::Symbol
     """systems: The internal systems"""
@@ -138,8 +138,8 @@ struct ReactionSystem <: AbstractSystem
 end
 
 function ReactionSystem(eqs, iv, species, params;
-                        inputs = Variable[],
-                        outputs = Operation[],
+                        pins = Variable[],
+                        observed = Operation[],
                         systems = ReactionSystem[],
                         name = gensym(:ReactionSystem))
 
@@ -147,7 +147,7 @@ function ReactionSystem(eqs, iv, species, params;
     paramvars = map(v -> convert(Variable,v), params)
     specvars  = map(s -> convert(Variable,s), species)
     ReactionSystem(eqs, convert(Variable,iv), specvars, paramvars,
-                   inputs, outputs, name, systems)
+                   pins, observed, name, systems)
 end
 
 """

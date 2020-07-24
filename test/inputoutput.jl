@@ -9,18 +9,18 @@ eqs = [D(x) ~ σ*(y-x) + F,
        D(z) ~ x*y - β*z]
 
 aliases = [u ~ x + y - z]
-lorenz1 = ODESystem(eqs,inputs=[F],outputs=aliases,name=:lorenz1)
-lorenz2 = ODESystem(eqs,inputs=[F],outputs=aliases,name=:lorenz2)
+lorenz1 = ODESystem(eqs,pins=[F],observed=aliases,name=:lorenz1)
+lorenz2 = ODESystem(eqs,pins=[F],observed=aliases,name=:lorenz2)
 
 connections = [lorenz1.F ~ lorenz2.u,
                lorenz2.F ~ lorenz1.u]
-connected = ODESystem(Equation[],t,[],[],outputs=connections,systems=[lorenz1,lorenz2])
+connected = ODESystem(Equation[],t,[],[],observed=connections,systems=[lorenz1,lorenz2])
 
 sys = connected
 
 @variables lorenz1₊F lorenz2₊F
-@test inputs(connected) == Variable[lorenz1₊F, lorenz2₊F]
-@test isequal(outputs(connected),
+@test pins(connected) == Variable[lorenz1₊F, lorenz2₊F]
+@test isequal(observed(connected),
               [connections...,
                lorenz1.u ~ lorenz1.x + lorenz1.y - lorenz1.z,
                lorenz2.u ~ lorenz2.x + lorenz2.y - lorenz2.z])
