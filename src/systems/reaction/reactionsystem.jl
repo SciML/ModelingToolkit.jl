@@ -213,7 +213,7 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for (j,rx) in enumerate(rs.eqs)
-        rlsqrt = sqrt(oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws))
+        rlsqrt = sqrt(abs(oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)))
         (noise_scaling!==nothing) && (rlsqrt *= noise_scaling[j])
         for (spec,stoich) in rx.netstoich
             i            = species_to_idx[spec]
