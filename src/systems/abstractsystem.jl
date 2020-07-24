@@ -190,6 +190,7 @@ independent_variable(sys::AbstractSystem) = sys.iv
 states(sys::AbstractSystem) = isempty(sys.systems) ? sys.states : [sys.states;reduce(vcat,namespace_variables.(sys.systems))]
 parameters(sys::AbstractSystem) = isempty(sys.systems) ? sys.ps : [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]
 inputs(sys::AbstractSystem) = isempty(sys.systems) ? sys.inputs : [sys.inputs;reduce(vcat,namespace_inputs.(sys.systems))]
+outputs(sys::AbstractSystem) = sys.outputs
 
 function equations(sys::AbstractSystem)
     isempty(sys.systems) ? sys.eqs : [sys.eqs;reduce(vcat,namespace_equations.(sys.systems))]

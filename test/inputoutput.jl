@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit, OrdinaryDiffEq, Test
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t) F(t) u(t)
@@ -17,15 +17,17 @@ connections = [lorenz1.F ~ lorenz2.u,
 connected = ODESystem(Equation[],t,[],[],outputs=connections,systems=[lorenz1,lorenz2])
 sys = connected
 
-inputs(connected)
-equations(connected)
-outputs(connected)
+@variables lorenz1₊F lorenz2₊F
+@test inputs(connected) == Variable[lorenz1₊F, lorenz2₊F]
+@show equations(connected)
+@show outputs(connected)
 
 function collapse_inputs!(sys::ModelingToolkit.AbstractSystem)
-    for x in inputs(connected)
+    outputs = []
+    for x in inputs(sys)
         idxs = findall(y->convert(Variable,y.lhs).name == x.name,fulleqs)
         idxs === nothing && error("Not all inputs are connected")
         outputeq = x(sys.iv()) ~ reduce(+,getproperty.(getindex.((fulleqs,),idxs),:rhs))
-        push!(newsys.outputs,outputeq)
+        push!(outputs,outputeq)
     end
 end
