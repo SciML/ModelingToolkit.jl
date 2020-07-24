@@ -1,5 +1,4 @@
 using ModelingToolkit, OrdinaryDiffEq, Test
-using ModelingToolkit: collapse_inputs
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t) F(t) u(t)
@@ -21,8 +20,10 @@ sys = connected
 
 @variables lorenz1₊F lorenz2₊F
 @test inputs(connected) == Variable[lorenz1₊F, lorenz2₊F]
-@show equations(connected)
-@show outputs(connected)
+@test isequal(outputs(connected),
+              [connections...,
+               lorenz1.u ~ lorenz1.x + lorenz1.y - lorenz1.z,
+               lorenz2.u ~ lorenz2.x + lorenz2.y - lorenz2.z])
 
 collapsed_eqs = [D(lorenz1.x) ~ (lorenz1.σ * (lorenz1.y - lorenz1.x) +
                                  (lorenz2.x + lorenz2.y - lorenz2.z)),
@@ -33,6 +34,6 @@ collapsed_eqs = [D(lorenz1.x) ~ (lorenz1.σ * (lorenz1.y - lorenz1.x) +
                  D(lorenz2.y) ~ lorenz2.x * (lorenz2.ρ - lorenz2.z) - lorenz2.y,
                  D(lorenz2.z) ~ lorenz2.x * lorenz2.y - (lorenz2.β * lorenz2.z)]
 
-simplifyeqs(eqs) = Equation.(lhss(eqs), simplify.(rhss(eqs)))
+simplifyeqs(eqs) = Equation.((x->x.lhs).(eqs), simplify.((x->x.rhs).(eqs)))
 
-@test isequal(simplifyeqs(collapse_inputs(connected).eqs), simplifyeqs(collapsed_eqs))
+@test isequal(simplifyeqs(equations(connected)), simplifyeqs(collapsed_eqs))

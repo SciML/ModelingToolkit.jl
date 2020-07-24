@@ -191,10 +191,11 @@ independent_variable(sys::AbstractSystem) = sys.iv
 states(sys::AbstractSystem) = isempty(sys.systems) ? sys.states : [sys.states;reduce(vcat,namespace_variables.(sys.systems))]
 parameters(sys::AbstractSystem) = isempty(sys.systems) ? sys.ps : [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]
 inputs(sys::AbstractSystem) = isempty(sys.systems) ? sys.inputs : [sys.inputs;reduce(vcat,namespace_inputs.(sys.systems))]
-outputs(sys::AbstractSystem) = sys.outputs
-
-function equations(sys::AbstractSystem)
-    isempty(sys.systems) ? sys.eqs : [sys.eqs;reduce(vcat,namespace_equations.(sys.systems))]
+function outputs(sys::AbstractSystem)
+    [sys.outputs;
+     reduce(vcat,
+            (namespace_equation.(s.outputs, s.name, s.iv.name) for s in sys.systems),
+            init=Equation[])]
 end
 
 function states(sys::AbstractSystem,name::Symbol)
@@ -215,17 +216,24 @@ end
 lhss(xs) = map(x->x.lhs, xs)
 rhss(xs) = map(x->x.rhs, xs)
 
-function collapse_inputs(sys::ModelingToolkit.AbstractSystem)
-    eqs = equations(sys)
+function equations(sys::ModelingToolkit.AbstractSystem; remove_aliases = true)
+    if isempty(sys.systems)
+        return sys.eqs
+    else
+        eqs = [sys.eqs;
+               reduce(vcat,
+                      namespace_equations.(sys.systems);
+                      init=Equation[])]
 
-    ns_aliases = [sys.outputs;
-                  reduce(vcat,
-                         [namespace_equation.(s.outputs, s.name, s.iv.name)
-                          for s in sys.systems])]
+        if !remove_aliases
+            return eqs
+        end
+        aliases = outputs(sys)
+        dict = Dict(lhss(aliases) .=> rhss(aliases))
 
-    dict = Dict(lhss(ns_aliases) .=> rhss(ns_aliases))
-    neweqs = Equation.(lhss(eqs), Rewriters.Fixpoint(x->substitute(x, dict)).(rhss(eqs)))
-    (eqs=neweqs, outputs=ns_aliases, inputs=inputs(sys))
+        # Substitute aliases
+        return Equation.(lhss(eqs), Rewriters.Fixpoint(x->substitute(x, dict)).(rhss(eqs)))
+    end
 end
 
 function states(sys::AbstractSystem,args...)
