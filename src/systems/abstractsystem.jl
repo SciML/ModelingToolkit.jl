@@ -118,6 +118,7 @@ Generate a function to evaluate the system's equations.
 function generate_function end
 
 function Base.getproperty(sys::AbstractSystem, name::Symbol)
+
     if name ∈ fieldnames(typeof(sys))
         return getfield(sys,name)
     elseif !isempty(sys.systems)
@@ -126,6 +127,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
             return rename(sys.systems[i],renamespace(sys.name,name))
         end
     end
+
     i = findfirst(x->x.name==name,sys.states)
     if i !== nothing
         x = rename(sys.states[i],renamespace(sys.name,name))
@@ -135,12 +137,21 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
             return x()
         end
     end
+
     if :ps ∈ fieldnames(typeof(sys))
         i = findfirst(x->x.name==name,sys.ps)
         if i !== nothing
             return rename(sys.ps[i],renamespace(sys.name,name))()
         end
     end
+
+    if :observed ∈ fieldnames(typeof(sys))
+        i = findfirst(x->convert(Variable,x.lhs).name==name,sys.observed)
+        if i !== nothing
+            return rename(convert(Variable,sys.observed[i].lhs),renamespace(sys.name,name))(getfield(sys,:iv)())
+        end
+    end
+
     throw(error("Variable $name does not exist"))
 end
 
@@ -154,7 +165,12 @@ function namespace_parameters(sys::AbstractSystem)
     [rename(x,renamespace(sys.name,x.name)) for x in parameters(sys)]
 end
 
+function namespace_pins(sys::AbstractSystem)
+    [rename(x,renamespace(sys.name,x.name)) for x in pins(sys)]
+end
+
 namespace_equations(sys::AbstractSystem) = namespace_equation.(equations(sys),sys.name,sys.iv.name)
+
 
 function namespace_equation(eq::Equation,name,ivname)
     _lhs = namespace_operation(eq.lhs,name,ivname)
@@ -172,11 +188,14 @@ end
 namespace_operation(O::Constant,name,ivname) = O
 
 independent_variable(sys::AbstractSystem) = sys.iv
-states(sys::AbstractSystem) = isempty(sys.systems) ? sys.states : [sys.states;reduce(vcat,namespace_variables.(sys.systems))]
+states(sys::AbstractSystem) = isempty(sys.systems) ? setdiff(sys.states, convert.(Variable,sys.pins)) : [sys.states;reduce(vcat,namespace_variables.(sys.systems))]
 parameters(sys::AbstractSystem) = isempty(sys.systems) ? sys.ps : [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]
-
-function equations(sys::AbstractSystem)
-    isempty(sys.systems) ? sys.eqs : [sys.eqs;reduce(vcat,namespace_equations.(sys.systems))]
+pins(sys::AbstractSystem) = isempty(sys.systems) ? sys.pins : [sys.pins;reduce(vcat,namespace_pins.(sys.systems))]
+function observed(sys::AbstractSystem)
+    [sys.observed;
+     reduce(vcat,
+            (namespace_equation.(s.observed, s.name, s.iv.name) for s in sys.systems),
+            init=Equation[])]
 end
 
 function states(sys::AbstractSystem,name::Symbol)
@@ -187,6 +206,34 @@ end
 function parameters(sys::AbstractSystem,name::Symbol)
     x = sys.ps[findfirst(x->x.name==name,sys.ps)]
     rename(x,renamespace(sys.name,x.name))()
+end
+
+function pins(sys::AbstractSystem,name::Symbol)
+    x = sys.pins[findfirst(x->x.name==name,sys.ps)]
+    rename(x,renamespace(sys.name,x.name))(sys.iv())
+end
+
+lhss(xs) = map(x->x.lhs, xs)
+rhss(xs) = map(x->x.rhs, xs)
+
+function equations(sys::ModelingToolkit.AbstractSystem; remove_aliases = true)
+    if isempty(sys.systems)
+        return sys.eqs
+    else
+        eqs = [sys.eqs;
+               reduce(vcat,
+                      namespace_equations.(sys.systems);
+                      init=Equation[])]
+
+        if !remove_aliases
+            return eqs
+        end
+        aliases = observed(sys)
+        dict = Dict(lhss(aliases) .=> rhss(aliases))
+
+        # Substitute aliases
+        return Equation.(lhss(eqs), Rewriters.Fixpoint(x->substitute(x, dict)).(rhss(eqs)))
+    end
 end
 
 function states(sys::AbstractSystem,args...)
@@ -210,6 +257,13 @@ function islinear(sys::AbstractSystem)
     dvs = [dv(iv) for dv ∈ states(sys)]
 
     all(islinear(r, dvs) for r in rhs)
+end
+
+function pins(sys::AbstractSystem,args...)
+    name = last(args)
+    extra_names = reduce(Symbol,[Symbol(:₊,x.name) for x in args[1:end-1]])
+    newname = renamespace(extra_names,name)
+    rename(x,renamespace(sys.name,newname))(sys.iv())
 end
 
 struct AbstractSysToExpr

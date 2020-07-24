@@ -37,14 +37,20 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
     states::Vector{Variable}
     """The parameters of the system."""
     ps::Vector{Variable}
+    pins::Vector{Variable}
+    observed::Vector{Equation}
     """The name of the system."""
     name::Symbol
     """The internal systems."""
     systems::Vector{JumpSystem}
 end
 
-function JumpSystem(eqs, iv, states, ps; systems = JumpSystem[],
-                                          name = gensym(:JumpSystem))
+function JumpSystem(eqs, iv, states, ps;
+                    pins = Variable[],
+                    observed = Equation[],
+                    systems = JumpSystem[],
+                    name = gensym(:JumpSystem))
+
     ap = ArrayPartition(MassActionJump[], ConstantRateJump[], VariableRateJump[])
     for eq in eqs
         if eq isa MassActionJump
@@ -58,12 +64,8 @@ function JumpSystem(eqs, iv, states, ps; systems = JumpSystem[],
         end
     end
 
-    JumpSystem{typeof(ap)}(ap, convert(Variable,iv), convert.(Variable, states), convert.(Variable, ps), name, systems)
+    JumpSystem{typeof(ap)}(ap, convert(Variable,iv), convert.(Variable, states), convert.(Variable, ps), pins, observed, name, systems)
 end
-
-JumpSystem(eqs::ArrayPartition, iv, states, ps; systems = JumpSystem[], name = gensym(:JumpSystem)) =
-    JumpSystem{typeof(eqs)}(eqs, convert(Variable,iv), convert.(Variable, states), convert.(Variable, ps), name, systems)
-
 
 generate_rate_function(js, rate) = build_function(rate, states(js), parameters(js),
                                         independent_variable(js),

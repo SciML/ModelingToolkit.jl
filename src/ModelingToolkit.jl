@@ -132,7 +132,7 @@ export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
 export Operation, Expression, Variable
-export independent_variable, states, parameters, equations
+export independent_variable, states, parameters, equations, pins, observed
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad

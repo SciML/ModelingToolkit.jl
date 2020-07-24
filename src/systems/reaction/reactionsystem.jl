@@ -129,20 +129,25 @@ struct ReactionSystem <: AbstractSystem
     states::Vector{Variable}
     """Parameter variables."""
     ps::Vector{Variable}
+    pins::Vector{Variable}
+    observed::Vector{Equation}
     """The name of the system"""
     name::Symbol
     """systems: The internal systems"""
     systems::Vector{ReactionSystem}
 end
 
-function ReactionSystem(eqs, iv, species, params; systems = ReactionSystem[],
-                                                  name = gensym(:ReactionSystem))
-
+function ReactionSystem(eqs, iv, species, params;
+                        pins = Variable[],
+                        observed = Operation[],
+                        systems = ReactionSystem[],
+                        name = gensym(:ReactionSystem))
 
     isempty(species) && error("ReactionSystems require at least one species.")
     paramvars = map(v -> convert(Variable,v), params)
     specvars  = map(s -> convert(Variable,s), species)
-    ReactionSystem(eqs, convert(Variable,iv), specvars, paramvars, name, systems)
+    ReactionSystem(eqs, convert(Variable,iv), specvars, paramvars,
+                   pins, observed, name, systems)
 end
 
 """
@@ -294,6 +299,7 @@ explicitly on the independent variable (usually time).
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
                               haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars),
                               stateset = Set(states(rs)))
+    return !(haveivdep || rx.only_use_rate || any(convert(Variable,rxv) in states(rs) for rxv in rxvars))
     # if no dependencies must be zero order
     (length(rxvars)==0) && return true
     (haveivdep || rx.only_use_rate) && return false
