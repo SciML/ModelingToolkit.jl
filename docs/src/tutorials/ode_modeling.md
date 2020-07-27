@@ -90,7 +90,7 @@ u0 = [lorenz1.x => 1.0,
       lorenz2.x => 0.0,
       lorenz2.y => 1.0,
       lorenz2.z => 0.0,
-      a => 2.0]
+      α => 2.0]
 
 p  = [lorenz1.σ => 10.0,
       lorenz1.ρ => 28.0,
@@ -104,7 +104,7 @@ tspan = (0.0,100.0)
 prob = ODEProblem(connected,u0,tspan,p)
 sol = solve(prob,Rodas5())
 
-using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.z))
+using Plots; plot(sol,vars=(α,lorenz1.x,lorenz2.z))
 ```
 
 ![](https://user-images.githubusercontent.com/1814174/79229194-9e71a780-7e30-11ea-9f93-bfa762eb8dfb.png)
