@@ -1,5 +1,53 @@
 # Component-Based Modeling with Ordinary Differential Equations
 
+## Copy-Paste Example
+
+Here is the complete example, with explanation to follow:
+
+```julia
+using ModelingToolkit, OrdinaryDiffEq
+
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
+
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
+
+lorenz1 = ODESystem(eqs,name=:lorenz1)
+lorenz2 = ODESystem(eqs,name=:lorenz2)
+
+@variables a
+@parameters γ
+connections = [0 ~ lorenz1.x + lorenz2.y + a*γ]
+connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])
+
+u0 = [lorenz1.x => 1.0,
+      lorenz1.y => 0.0,
+      lorenz1.z => 0.0,
+      lorenz2.x => 0.0,
+      lorenz2.y => 1.0,
+      lorenz2.z => 0.0,
+      a => 2.0]
+
+p  = [lorenz1.σ => 10.0,
+      lorenz1.ρ => 28.0,
+      lorenz1.β => 8/3,
+      lorenz2.σ => 10.0,
+      lorenz2.ρ => 28.0,
+      lorenz2.β => 8/3,
+      γ => 2.0]
+
+tspan = (0.0,100.0)
+prob = ODEProblem(connected,u0,tspan,p)
+sol = solve(prob,Rodas5())
+
+using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.z))
+```
+
+## Generating ODESystems
+
 First let's build an ODE model. To do this we start by defining some
 variables. In a differential equation system, we need to differentiate
 between our (dependent) variables and parameters. Therefore, we label
@@ -71,10 +119,10 @@ we will define a new variable `α` which is defined by the interplay
 between these two models:
 
 ```julia
-@variables α(t)
+@variables a(t)
 @parameters γ
-connections = [0 ~ lorenz1.x + lorenz2.y + sin(α*γ)]
-connected = ODESystem(connections,t,[α],[γ],systems=[lorenz1,lorenz2])
+connections = [0 ~ lorenz1.x + lorenz2.y + a*γ]
+connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])
 ```
 
 This `ODESystem` thus connects the two Lorenz systems and defines the
