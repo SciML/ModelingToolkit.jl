@@ -100,6 +100,8 @@ function ODESystem(eqs, iv=nothing; kwargs...)
                 break
             end
         end
+    else
+        iv = convert(Variable, iv)
     end
     iv === nothing && throw(ArgumentError("Please pass in independent variables."))
     for eq in eqs
