@@ -457,25 +457,25 @@ end
 
 
 # ODEProblem from AbstractReactionNetwork
-function DiffEqBase.ODEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args...; kwargs...)
-    u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
-    p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
+function DiffEqBase.ODEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p=DiffEqBase.NullParameters(), args...; kwargs...)
+    u0 = typeof(u0) <: Union{Array{<:Pair},DiffEqBase.NullParameters} ? u0 : Pair.(rs.states,u0)
+    p = typeof(p) <: Union{Array{<:Pair},DiffEqBase.NullParameters} ? p : Pair.(rs.ps,p)
     return ODEProblem(convert(ODESystem,rs),u0,tspan,p, args...; kwargs...)
 end
 
 # SDEProblem from AbstractReactionNetwork
-function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p, args...; noise_scaling=nothing::Union{Operation,Nothing}, kwargs...)
+function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p=DiffEqBase.NullParameters(), args...; noise_scaling=nothing::Union{Operation,Nothing}, kwargs...)
     sde_sys = convert(SDESystem,rs,noise_scaling=noise_scaling)
-    u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
-    p = typeof(p) <: Array{<:Pair} ? p : Pair.(sde_sys.ps,p)
+    u0 = typeof(u0) <: Union{Array{<:Pair},DiffEqBase.NullParameters} ? u0 : Pair.(rs.states,u0)
+    p = typeof(p) <: Union{Array{<:Pair},DiffEqBase.NullParameters} ? p : Pair.(sde_sys.ps,p)
     p_matrix = zeros(length(rs.states), length(rs.eqs))
     return SDEProblem(sde_sys,u0,tspan,p,args...; noise_rate_prototype=p_matrix,kwargs...)
 end
 
 # DiscreteProblem from AbstractReactionNetwork
-function DiffEqBase.DiscreteProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan::Tuple, p=nothing, args...; kwargs...)
-    u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
-    p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
+function DiffEqBase.DiscreteProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan::Tuple, p=DiffEqBase.NullParameters(), args...; kwargs...)
+    u0 = typeof(u0) <: Union{Array{<:Pair},DiffEqBase.NullParameters} ? u0 : Pair.(rs.states,u0)
+    p = typeof(p) <: Union{Array{<:Pair},DiffEqBase.NullParameters} ? p : Pair.(rs.ps,p)
     return DiscreteProblem(convert(JumpSystem,rs), u0,tspan,p, args...; kwargs...)
 end
 
@@ -485,7 +485,7 @@ function DiffEqJump.JumpProblem(rs::ReactionSystem, prob, aggregator, args...; k
 end
 
 # SteadyStateProblem from AbstractReactionNetwork
-function DiffEqBase.SteadyStateProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, p, args...; kwargs...)
+function DiffEqBase.SteadyStateProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, p=DiffEqBase.NullParameters(), args...; kwargs...)
     #u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
     #p = typeof(p) <: Array{<:Pair} ? p : Pair.(rs.ps,p)
     return SteadyStateProblem(ODEFunction(convert(ODESystem,rs)),u0,p, args...; kwargs...)
