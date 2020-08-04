@@ -392,6 +392,14 @@ Notes:
 law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
 `combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is
 ignored.
+- `noise_scaling=nothing::Union{Vector{Operation},Operation,Nothing}` allows for linear
+scaling of the noise in the chemical Langevin equations. If `nothing` is given, the default
+value as in Gillespie 2000 is used. Alternatively, an `Operation` can be given, this is
+added as a parameter to the system (at the end of the parameter array). All noise terms
+are lineary scaled with this value. The parameter may be one already declared in the `ReactionSystem`.
+Finally, a `Vector{Operation}` can be provided (the length must be equal to the number of reactions).
+Here the noise for each reaction is scaled by the corresponding parameter in the input vector.
+This input may contain repeat parameters.
 """
 function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, combinatoric_ratelaws=true; noise_scaling=nothing::Union{Vector{Operation},Operation,Nothing})
     (typeof(noise_scaling) <: Vector{Operation}) && (length(noise_scaling)!=length(rs.eqs)) && error("The number of elements in 'noise_scaling' must be equal to the number of reactions in the reaction system.")
