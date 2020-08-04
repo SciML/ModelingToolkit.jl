@@ -396,7 +396,7 @@ ignored.
 scaling of the noise in the chemical Langevin equations. If `nothing` is given, the default
 value as in Gillespie 2000 is used. Alternatively, an `Operation` can be given, this is
 added as a parameter to the system (at the end of the parameter array). All noise terms
-are lineary scaled with this value. The parameter may be one already declared in the `ReactionSystem`.
+are linearly scaled with this value. The parameter may be one already declared in the `ReactionSystem`.
 Finally, a `Vector{Operation}` can be provided (the length must be equal to the number of reactions).
 Here the noise for each reaction is scaled by the corresponding parameter in the input vector.
 This input may contain repeat parameters.
