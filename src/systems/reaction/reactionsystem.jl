@@ -299,7 +299,6 @@ explicitly on the independent variable (usually time).
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
                               haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars),
                               stateset = Set(states(rs)))
-    return !(haveivdep || rx.only_use_rate || any(convert(Variable,rxv) in states(rs) for rxv in rxvars))
     # if no dependencies must be zero order
     (length(rxvars)==0) && return true
     (haveivdep || rx.only_use_rate) && return false
