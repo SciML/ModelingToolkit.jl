@@ -19,6 +19,7 @@ using SafeTestsets, Test
 @safetestset "Build Targets Test" begin include("build_targets.jl") end
 @safetestset "Domain Test" begin include("domains.jl") end
 @safetestset "Constraints Test" begin include("constraints.jl") end
+@safetestset "Reduction Test" begin include("reduction.jl") end
 @safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "Lowering Integration Test" begin include("lowering_solving.jl") end
 @safetestset "Test Big System Usage" begin include("bigsystem.jl") end
