@@ -50,6 +50,13 @@ test_equal(jac[3,1], y)
 test_equal(jac[3,2], x)
 test_equal(jac[3,3], -1β)
 
+# issue #545
+z = t + t^2
+test_equal(expand_derivatives(D(z)), 1 + t * 2)
+
+z = t-2t
+test_equal(expand_derivatives(D(z)), -1)
+
 # Variable dependence checking in differentiation
 @variables a(t) b(a)
 @test !isequal(D(b), 0)
