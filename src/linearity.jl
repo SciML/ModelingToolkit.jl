@@ -1,52 +1,61 @@
 using SpecialFunctions
 import Base.Broadcast
 
+
+const linearity_known_1 = Dict{Function,Bool}()
+const linearity_known_2 = Dict{Function,Bool}()
+
+const linearity_map_1 = Dict{Function, Bool}()
+const linearity_map_2 = Dict{Function, Tuple{Bool, Bool, Bool}}()
+
+# 1-arg
+
 const monadic_linear = [deg2rad, +, rad2deg, transpose, -, conj]
 
 const monadic_nonlinear = [asind, log1p, acsch, erfc, digamma, acos, asec, acosh, airybiprime, acsc, cscd, log, tand, log10, csch, asinh, airyai, abs2, gamma, lgamma, erfcx, bessely0, cosh, sin, cos, atan, cospi, cbrt, acosd, bessely1, acoth, erfcinv, erf, dawson, inv, acotd, airyaiprime, erfinv, trigamma, asecd, besselj1, exp, acot, sqrt, sind, sinpi, asech, log2, tan, invdigamma, airybi, exp10, sech, erfi, coth, asin, cotd, cosd, sinh, abs, besselj0, csc, tanh, secd, atand, sec, acscd, cot, exp2, expm1, atanh]
 
-diadic_of_linearity(::Val{(true, true, true)}) = [+, rem2pi, -, >, isless, <, isequal, max, min, convert]
-diadic_of_linearity(::Val{(true, true, false)}) = [*]
-#diadic_of_linearit(::(Val{(true, false, true)}) = [besselk, hankelh2, bessely, besselj, besseli, polygamma, hankelh1]
-diadic_of_linearity(::Val{(true, false, false)}) = [/]
-diadic_of_linearity(::Val{(false, true, false)}) = [\]
-diadic_of_linearity(::Val{(false, false, false)}) = [hypot, atan, mod, rem, lbeta, ^, beta]
-diadic_of_linearity(::Val) = []
-
-haslinearity(f, nargs) = false
-
-# linearity of a single input function is either
-# Val{true}() or Val{false}()
-#
+# We store 3 bools even for 1-arg functions for type stability
+const three_trues = (true, true, true)
 for f in monadic_linear
-    @eval begin
-        haslinearity(::typeof($f), ::Val{1}) = true
-        linearity(::typeof($f), ::Val{1}) = Val{true}()
-    end
+    linearity_known_1[f] = true
+    linearity_map_1[f] = true
 end
-# linearity of a 2-arg function is:
-# Val{(linear11, linear22, linear12)}()
-#
-# linearIJ refers to the zeroness of d^2/dxIxJ
+
 for f in monadic_nonlinear
-    @eval begin
-        haslinearity(::typeof($f), ::Val{1}) = true
-        linearity(::typeof($f), ::Val{1}) = Val{false}()
-    end
+    linearity_known_1[f] = true
+    linearity_map_1[f] = false
 end
 
-for linearity_mask = 0:2^3-1
-    lin = Val{map(x->x!=0, (linearity_mask & 4,
-                            linearity_mask & 2,
-                            linearity_mask & 1))}()
-
-    for f in diadic_of_linearity(lin)
-        @eval begin
-            haslinearity(::typeof($f), ::Val{2}) = true
-            linearity(::typeof($f), ::Val{2}) = $lin
-        end
-    end
+# 2-arg
+for f in [+, rem2pi, -, >, isless, <, isequal, max, min, convert]
+    linearity_known_2[f] = true
+    linearity_map_2[f] = (true, true, true)
 end
+
+for f in [*]
+    linearity_known_2[f] = true
+    linearity_map_2[f] = (true, true, false)
+end
+
+for f in [/]
+    linearity_known_2[f] = true
+    linearity_map_2[f] = (true, false, false)
+end
+for f in [\]
+    linearity_known_2[f] = true
+    linearity_map_2[f] = (false, true, false)
+end
+
+for f in [hypot, atan, mod, rem, lbeta, ^, beta]
+    linearity_known_2[f] = true
+    linearity_map_2[f] = (false, false, false)
+end
+
+haslinearity(f, ::Val{1}) = get(linearity_known_1, nargs, false)
+haslinearity(f, ::Val{2}) = get(linearity_known_2, nargs, false)
+
+linearity(f, ::Val{1}) = linearity_map_1[f]
+linearity(f, ::Val{2}) = linearity_map_2[f]
 
 # TermCombination datastructure
 
@@ -151,11 +160,10 @@ function _sparse(t::TermCombination, n)
 end
 
 # 1-arg functions
-combine_terms(::Val{true}, term) = term
-combine_terms(::Val{false}, term) = term * term
+combine_terms_one(lin, term) = lin ? term : term * term
 
 # 2-arg functions
-function combine_terms(::Val{linearity}, term1, term2) where linearity
+function combine_terms_two(linearity, term1, term2)
 
     linear11, linear22, linear12 = linearity
     term = zero(TermCombination)

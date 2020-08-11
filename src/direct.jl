@@ -118,7 +118,7 @@ let
           @rule *(~~xs) => reduce(*, filter(isidx, ~~xs), init=_scalar)
           @rule (~f)(~x::(!isidx)) => _scalar
           @rule (~f)(~x::isidx) => if haslinearity(~f, Val{1}())
-              combine_terms(linearity(~f, Val{1}()), ~x)
+              combine_terms_one(linearity(~f, Val{1}()), ~x)
           else
               error("Function of unknown linearity used: ", ~f)
           end
@@ -127,7 +127,7 @@ let
               if haslinearity(~f, Val{2}())
                   a = isidx(~x) ? ~x : _scalar
                   b = isidx(~y) ? ~y : _scalar
-                  combine_terms(linearity(~f, Val{2}()), a, b)
+                  combine_terms_two(linearity(~f, Val{2}()), a, b)
               else
                   error("Function of unknown linearity used: ", ~f)
               end
