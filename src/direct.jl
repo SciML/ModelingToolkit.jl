@@ -127,7 +127,7 @@ let
               if haslinearity_2(~f)
                   a = isidx(~x) ? ~x : _scalar
                   b = isidx(~y) ? ~y : _scalar
-                  combine_terms_2(linearity(~f), a, b)
+                  combine_terms_2(linearity_2(~f), a, b)
               else
                   error("Function of unknown linearity used: ", ~f)
               end
