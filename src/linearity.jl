@@ -2,11 +2,11 @@ using SpecialFunctions
 import Base.Broadcast
 
 
-const linearity_known_1 = Dict{Function,Bool}()
-const linearity_known_2 = Dict{Function,Bool}()
+const linearity_known_1 = IdDict{Function,Bool}()
+const linearity_known_2 = IdDict{Function,Bool}()
 
-const linearity_map_1 = Dict{Function, Bool}()
-const linearity_map_2 = Dict{Function, Tuple{Bool, Bool, Bool}}()
+const linearity_map_1 = IdDict{Function, Bool}()
+const linearity_map_2 = IdDict{Function, Tuple{Bool, Bool, Bool}}()
 
 # 1-arg
 
@@ -51,11 +51,11 @@ for f in [hypot, atan, mod, rem, lbeta, ^, beta]
     linearity_map_2[f] = (false, false, false)
 end
 
-haslinearity(f, ::Val{1}) = get(linearity_known_1, nargs, false)
-haslinearity(f, ::Val{2}) = get(linearity_known_2, nargs, false)
+haslinearity_1(f) = get(linearity_known_1, nargs, false)
+haslinearity_2(f) = get(linearity_known_2, nargs, false)
 
-linearity(f, ::Val{1}) = linearity_map_1[f]
-linearity(f, ::Val{2}) = linearity_map_2[f]
+linearity_1(f) = linearity_map_1[f]
+linearity_2(f) = linearity_map_2[f]
 
 # TermCombination datastructure
 
@@ -160,10 +160,10 @@ function _sparse(t::TermCombination, n)
 end
 
 # 1-arg functions
-combine_terms_one(lin, term) = lin ? term : term * term
+combine_terms_1(lin, term) = lin ? term : term * term
 
 # 2-arg functions
-function combine_terms_two(linearity, term1, term2)
+function combine_terms_2(linearity, term1, term2)
 
     linear11, linear22, linear12 = linearity
     term = zero(TermCombination)
