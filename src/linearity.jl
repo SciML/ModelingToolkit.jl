@@ -51,11 +51,11 @@ for f in [hypot, atan, mod, rem, lbeta, ^, beta]
     linearity_map_2[f] = (false, false, false)
 end
 
-haslinearity_1(f) = get(linearity_known_1, nargs, false)
-haslinearity_2(f) = get(linearity_known_2, nargs, false)
+haslinearity_1(@nospecialize(f)) = get(linearity_known_1, nargs, false)
+haslinearity_2(@nospecialize(f)) = get(linearity_known_2, nargs, false)
 
-linearity_1(f) = linearity_map_1[f]
-linearity_2(f) = linearity_map_2[f]
+linearity_1(@nospecialize(f)) = linearity_map_1[f]
+linearity_2(@nospecialize(f)) = linearity_map_2[f]
 
 # TermCombination datastructure
 
