@@ -188,13 +188,13 @@ for (modu, fun, arity) ∈ DiffRules.diffrules()
         else
             DiffRules.diffrule(modu, fun, ntuple(k->:(args[$k]), arity)...)[i]
         end
-        @eval derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i}) = $expr
+        @eval derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i}) = (x = $expr; !(x isa Expression || x isa Constant) ? Constant(x) : x)
     end
 end
 
-derivative(::typeof(+), args::NTuple{N,Any}, ::Val) where {N} = 1
+derivative(::typeof(+), args::NTuple{N,Any}, ::Val) where {N} = Constant(1)
 derivative(::typeof(*), args::NTuple{N,Any}, ::Val{i}) where {N,i} = make_operation(*, deleteat!(collect(args), i))
-derivative(::typeof(one), args::Tuple{<:Any}, ::Val) = 0
+derivative(::typeof(one), args::Tuple{<:Any}, ::Val) = Constant(0)
 
 function count_order(x)
     @assert !(x isa Symbol) "The variable $x must have an order of differentiation that is greater or equal to 1!"
