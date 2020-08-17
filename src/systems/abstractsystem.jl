@@ -188,7 +188,15 @@ end
 namespace_operation(O::Constant,name,ivname) = O
 
 independent_variable(sys::AbstractSystem) = sys.iv
-states(sys::AbstractSystem) = unique(isempty(sys.systems) ? setdiff(sys.states, convert.(Variable,sys.pins)) : [sys.states;reduce(vcat,namespace_variables.(sys.systems))])
+
+function states(sys::AbstractSystem) 
+    if isempty(sys.systems)
+        return isempty(sys.pins) ? sys.states : unique(setdiff(sys.states, convert.(Variable,sys.pins)))
+    else
+        return unique([sys.states;reduce(vcat,namespace_variables.(sys.systems))])
+    end
+end
+
 parameters(sys::AbstractSystem) = isempty(sys.systems) ? sys.ps : [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]
 pins(sys::AbstractSystem) = isempty(sys.systems) ? sys.pins : [sys.pins;reduce(vcat,namespace_pins.(sys.systems))]
 function observed(sys::AbstractSystem)

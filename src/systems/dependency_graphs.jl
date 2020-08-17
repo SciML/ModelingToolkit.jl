@@ -1,6 +1,6 @@
 """
 ```julia
-equation_dependencies(sys::AbstractSystem; variables=states(sys))
+equation_dependencies(sys::AbstractSystem; variables=Set(states(sys)))
 ```
 
 Given an `AbstractSystem` calculate for each equation the variables it depends on. 
@@ -41,7 +41,7 @@ equation_dependencies(jumpsys)
 equation_dependencies(jumpsys, variables=parameters(jumpsys))    
 ```
 """
-function equation_dependencies(sys::AbstractSystem; variables=states(sys))
+function equation_dependencies(sys::AbstractSystem; variables=Set(states(sys)))
     eqs  = equations(sys)
     deps = Set{Operation}()
     depeqs_to_vars = Vector{Vector{Variable}}(undef,length(eqs))
@@ -143,7 +143,7 @@ end
 # could be made to directly generate graph and save memory
 """
 ```julia
-asgraph(sys::AbstractSystem; variables=states(sys), 
+asgraph(sys::AbstractSystem; variables=Set(state(sys)), 
                                       variablestoids=Dict(convert(Variable, v) => i for (i,v) in enumerate(variables)))
 ```
 
@@ -164,14 +164,14 @@ Continuing the example started in [`equation_dependencies`](@ref)
 digr = asgraph(odesys)
 ```
 """
-function asgraph(sys::AbstractSystem; variables=states(sys), 
+function asgraph(sys::AbstractSystem; variables=Set(states(sys)), 
                                       variablestoids=Dict(convert(Variable, v) => i for (i,v) in enumerate(variables)))
     asgraph(equation_dependencies(sys, variables=variables), variablestoids)
 end
 
 """
 ```julia
-variable_dependencies(sys::AbstractSystem; variables=states(sys), variablestoids=nothing)
+variable_dependencies(sys::AbstractSystem; variables=Set(state(sys)), variablestoids=nothing)
 ```
 
 For each variable determine the equations that modify it and return as a [`BipartiteGraph`](@ref).
@@ -188,7 +188,7 @@ Continuing the example of [`equation_dependencies`](@ref)
 variable_dependencies(odesys)
 ```
 """
-function variable_dependencies(sys::AbstractSystem; variables=states(sys), variablestoids=nothing)
+function variable_dependencies(sys::AbstractSystem; variables=Set(states(sys)), variablestoids=nothing)
     eqs   = equations(sys)
     vtois = isnothing(variablestoids) ? Dict(convert(Variable, v) => i for (i,v) in enumerate(variables)) : variablestoids
 
@@ -235,7 +235,7 @@ Continuing the example in [`asgraph`](@ref)
 dg = asdigraph(digr)
 ```
 """
-function asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys), equationsfirst = true)
+function asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = Set(states(sys)), equationsfirst = true)
     neqs     = length(equations(sys))
     nvars    = length(variables)
     fadjlist = deepcopy(g.fadjlist)

@@ -273,8 +273,9 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, isempty(majs) ? nothing : majs)
 
     if needs_vartojumps_map(aggregator) || needs_depgraph(aggregator)
-        jdeps = asgraph(js)
-        vdeps = variable_dependencies(js)
+        variables = Set(states(js))
+        jdeps = asgraph(js, variables=variables)
+        vdeps = variable_dependencies(js, variables=variables)
         vtoj = jdeps.badjlist
         jtov = vdeps.badjlist
         jtoj = needs_depgraph(aggregator) ? eqeq_dependencies(jdeps, vdeps).fadjlist : nothing
