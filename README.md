@@ -55,7 +55,7 @@ sol = solve(prob,Tsit5())
 using Plots; plot(sol,vars=(x,y))
 ```
 
-![Lorenz2](https://user-images.githubusercontent.com/1814174/79118645-744eb580-7d5c-11ea-9c37-13c4efd585ca.png)
+![Lorenz2](https://user-images.githubusercontent.com/26102/90444784-ce7ecf00-e0de-11ea-9f6a-8507945e93eb.png)
 
 This automatically will have generated fast Jacobian functions, making
 it more optimized than directly building a function. In addition, we can then
