@@ -3,14 +3,24 @@ export alias_elimination
 function flatten(sys::ODESystem)
     ODESystem(equations(sys),
               independent_variable(sys),
-              states(sys),
-              parameters(sys),
               observed=observed(sys))
 end
 
 
+using SymbolicUtils: Rewriters
+
+function fixpoint_sub(x, dict)
+    y = substitute(x, dict)
+    while !isequal(x, y)
+        y = x
+        x = substitute(y, dict)
+    end
+
+    return x
+end
+
 function substitute_aliases(diffeqs, outputs)
-    lhss(diffeqs) .~ substitute.(rhss(diffeqs), (Dict(lhss(outputs) .=> rhss(outputs)),))
+    lhss(diffeqs) .~ fixpoint_sub.(rhss(diffeqs), (Dict(lhss(outputs) .=> rhss(outputs)),))
 end
 
 function make_lhs_0(eq)
@@ -32,11 +42,17 @@ function alias_elimination(sys::ODESystem)
             []
         end
     end |> Iterators.flatten |> collect |> unique
+
+    all_vars = map(eqs) do eq
+        filter(x->!isparameter(x.op), get_variables(eq.rhs))
+    end |> Iterators.flatten |> collect |> unique
+
     newstates = convert.(Variable, new_stateops)
 
     alg_idxs = findall(x->x.lhs isa Constant && iszero(x.lhs), eqs)
 
-    eliminate = setdiff(states(sys), newstates)
+    eliminate = setdiff(convert.(Variable, all_vars), newstates)
+
     outputs = solve_for(eqs[alg_idxs], map(x->x(sys.iv()), eliminate))
 
     diffeqs = eqs[setdiff(1:length(eqs), alg_idxs)]
