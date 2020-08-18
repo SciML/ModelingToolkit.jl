@@ -113,6 +113,8 @@ include("systems/pde/pdesystem.jl")
 include("systems/reaction/reactionsystem.jl")
 include("systems/dependency_graphs.jl")
 
+include("systems/reduction.jl")
+
 include("latexify_recipes.jl")
 include("build_function.jl")
 
