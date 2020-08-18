@@ -135,3 +135,38 @@ function substituter(pairs)
 end
 
 @deprecate substitute_expr!(expr,s) substitute(expr,s)
+
+# Really bad solve for vars
+function solve_for(eqs, vars)
+    @assert length(eqs) >= length(vars)
+    @assert all(iszero(eq.lhs) for eq in eqs)
+    neweqs = []
+    for (i, eq) in enumerate(eqs)
+        rhs = eq.rhs
+        if rhs.op == (-)
+            if any(isequal(rhs.args[1]), vars) && any(isequal(rhs.args[2]), vars)
+                push!(neweqs, rhs.args[1] ~ rhs.args[2]) # pick one?
+                @warn("todo")
+            elseif any(isequal(rhs.args[1]), vars)
+                push!(neweqs, rhs.args[1] ~ rhs.args[2])
+            elseif any(isequal(rhs.args[2]), vars)
+                push!(neweqs, rhs.args[2] ~ rhs.args[1])
+            else
+                @warn("may require unimplemented solve")
+                #error("todo 2")
+                push!(neweqs, eq)
+            end
+        elseif rhs.op == (+)
+            eqs[i] = 0 ~ rhs.args[1] - (-rhs.args[2])
+        else
+            error("todo")
+        end
+    end
+    if length(neweqs) >= length(vars)
+        return neweqs
+    else
+        # substitute
+        eqs′ = Equation.(0, substitute.(rhss(eqs), (Dict(lhss(neweqs) .=> rhss(neweqs),))))
+        solve_for(eqs′, vars)
+    end
+end
