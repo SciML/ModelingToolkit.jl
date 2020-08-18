@@ -194,7 +194,7 @@ pins(sys::AbstractSystem) = isempty(sys.systems) ? sys.pins : [sys.pins;reduce(v
 function observed(sys::AbstractSystem)
     [sys.observed;
      reduce(vcat,
-            (namespace_equation.(s.observed, s.name, s.iv.name) for s in sys.systems),
+            (namespace_equation.(observed(s), s.name, s.iv.name) for s in sys.systems),
             init=Equation[])]
 end
 

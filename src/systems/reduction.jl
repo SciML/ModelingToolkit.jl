@@ -1,11 +1,29 @@
 export alias_elimination
 
+function flatten(sys::ODESystem)
+    ODESystem(equations(sys),
+              independent_variable(sys),
+              states(sys),
+              parameters(sys),
+              observed=observed(sys))
+end
+
+
 function substitute_aliases(diffeqs, outputs)
     lhss(diffeqs) .~ substitute.(rhss(diffeqs), (Dict(lhss(outputs) .=> rhss(outputs)),))
 end
 
+function make_lhs_0(eq)
+    if eq.lhs isa Constant && iszero(eq.lhs)
+        return eq
+    else
+        0 ~ eq.lhs - eq.rhs
+    end
+end
+
 function alias_elimination(sys::ODESystem)
-    eqs = equations(sys)
+    eqs = vcat(equations(sys),
+               make_lhs_0.(observed(sys)))
 
     new_stateops = map(eqs) do eq
         if eq.lhs isa Operation && eq.lhs.op isa Differential
