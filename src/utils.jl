@@ -166,7 +166,7 @@ function solve_for(eqs, vars)
         return neweqs
     else
         # substitute
-        eqs′ = Equation.(0, substitute.(rhss(eqs), (Dict(lhss(neweqs) .=> rhss(neweqs),))))
+        eqs′ = Equation.(0, substitute.(rhss(eqs), (Dict(lhss(neweqs) .=> rhss(neweqs)),)))
         solve_for(eqs′, vars)
     end
 end
