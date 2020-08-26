@@ -171,7 +171,6 @@ end
 
 namespace_equations(sys::AbstractSystem) = namespace_equation.(equations(sys),sys.name,sys.iv.name)
 
-
 function namespace_equation(eq::Equation,name,ivname)
     _lhs = namespace_operation(eq.lhs,name,ivname)
     _rhs = namespace_operation(eq.rhs,name,ivname)

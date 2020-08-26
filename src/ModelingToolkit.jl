@@ -108,6 +108,8 @@ include("systems/nonlinear/nonlinearsystem.jl")
 
 include("systems/optimization/optimizationsystem.jl")
 
+include("systems/control/controlsystem.jl")
+
 include("systems/pde/pdesystem.jl")
 
 include("systems/reaction/reactionsystem.jl")
@@ -125,14 +127,16 @@ export OptimizationProblem, OptimizationProblemExpr
 export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
+export ControlSystem
 export ode_order_lowering
+export runge_kutta_discretize
 export PDESystem
 export Reaction, ReactionSystem, ismassaction, oderatelaw, jumpratelaw
 export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
 export Operation, Expression, Variable
-export independent_variable, states, parameters, equations, pins, observed
+export independent_variable, states, controls, parameters, equations, pins, observed
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad
