@@ -18,6 +18,33 @@ end
 
 controls(sys::AbstractControlSystem) = isempty(sys.systems) ? sys.controls : [sys.controls;reduce(vcat,namespace_controls.(sys.systems))]
 
+"""
+$(TYPEDEF)
+
+A system describing an optimal control problem. This contains a loss function
+and ordinary differential equations with control variables that describe the
+dynamics.
+
+# Fields
+$(FIELDS)
+
+# Example
+
+```
+using ModelingToolkit
+
+@variables t x(t) v(t) u(t)
+@derivatives D'~t
+
+loss = (4-x)^2 + 2v^2 + u^2
+eqs = [
+    D(x) ~ v
+    D(v) ~ u^3
+]
+
+sys = ControlSystem(loss,eqs,t,[x,v],[u],[])
+```
+"""
 struct ControlSystem <: AbstractControlSystem
     """The Loss function"""
     loss::Operation
@@ -86,6 +113,19 @@ function constructRadauIIA5(T::Type = Float64)
   return(DiffEqBase.ImplicitRKTableau(A,c,α,5))
 end
 
+
+"""
+```julia
+runge_kutta_discretize(sys::ControlSystem,dt,tspan;
+                       tab = ModelingToolkit.constructRadauIIA5())
+```
+
+Transforms a nonlinear optimal control problem into a constrained
+`OptimizationProblem` according to a Runge-Kutta tableau that describes
+a collocation method. Requires a fixed `dt` over a given `timespan`.
+Defaults to using the 5th order RadauIIA tableau, and altnerative tableaus
+can be specified using the SciML tableau style.
+"""
 function runge_kutta_discretize(sys::ControlSystem,dt,tspan;
                        tab = ModelingToolkit.constructRadauIIA5())
     n = length(tspan[1]:dt:tspan[2]) - 1
