@@ -164,5 +164,5 @@ function runge_kutta_discretize(sys::ControlSystem,dt,tspan;
     equalities = vcat(stages,updates,control_equality)
     opt_states = vcat(reduce(vcat,reduce(vcat,states_timeseries)),reduce(vcat,reduce(vcat,k_timeseries)),reduce(vcat,reduce(vcat,control_timeseries)))
 
-    OptimizationSystem(reduce(+,losses),opt_states,ps,constraints = equalities)
+    OptimizationSystem(reduce(+,losses),opt_states,ps,equality_constraints = equalities)
 end
