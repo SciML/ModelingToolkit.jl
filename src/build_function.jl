@@ -14,48 +14,24 @@ struct DaggerForm <: ParallelForm end
 `build_function`
 
 Generates a numerically-usable function from a ModelingToolkit `Expression`.
-If the `Expression` is an `Operation`, the generated function is a function
-with a scalar output, otherwise if it's an `AbstractArray{Operation}`, the output
-is two functions, one for out-of-place AbstractArray output and a second which
-is a mutating function. The outputted functions match the given argument order,
-i.e., f(u,p,args...) for the out-of-place and scalar functions and
-`f!(du,u,p,args..)` for the in-place version.
 
 ```julia
 build_function(ex, args...;
-               conv = simplified_expr, expression = Val{true},
-               checkbounds = false, convert_oop = true,
-			   force_SA = false,
-               linenumbers = false, target = JuliaTarget())
+               expression = Val{true},
+               target = JuliaTarget(),
+			   kwargs...)
 ```
 
 Arguments:
 
 - `ex`: The `Expression` to compile
-- `vs`: The variables of the expression
-- `ps`: The parameters of the expression
-- `args`: Extra arguments to the function
-- `conv`: The conversion function of the Operation to Expr. By default this uses
-  the `simplified_expr` function utilized in `convert(Expr,x)`.
+- `args`: The arguments of the function
 - `expression`: Whether to generate code or whether to generate the compiled form.
   By default, `expression = Val{true}`, which means that the code for the
-  function is returned. If `Val{false}`, then the returned value is a compiled
-  Julia function, which utilizes GeneralizedGenerated.jl in order to world-age
-  free.
+  function is returned. If `Val{false}`, then the returned value is compiled.
 
 Keyword Arguments:
 
-- `checkbounds`: For whether to enable bounds checking inside of the generated
-  function. Defaults to false, meaning that `@inbounds` is applied.
-- `linenumbers`: Determines whether the generated function expression retains
-  the line numbers. Defaults to true.
-- `convert_oop`: Determines whether the OOP version should try to convert
-  the output to match the type of the first input. This is useful for
-  cases like LabelledArrays or other array types that carry extra
-  information. Defaults to true.
-- `force_SA`: Forces the output of the OOP version to be a StaticArray.
-  Defaults to `false`, and outputs a static array when the first argument
-  is a static array.
 - `target`: The output target of the compilation process. Possible options are:
     - `JuliaTarget`: Generates a Julia function
     - `CTarget`: Generates a C function
@@ -182,6 +158,63 @@ function fill_array_with_zero!(x::AbstractArray)
     return x
 end
 
+"""
+Build function target: JuliaTarget
+
+```julia
+function _build_function(target::JuliaTarget, rhss, args...;
+                         conv = simplified_expr, expression = Val{true},
+                         checkbounds = false,
+                         linenumbers = false, multithread=nothing,
+                         headerfun = addheader, outputidxs=nothing,
+						 convert_oop = true, force_SA = false,
+                         skipzeros = outputidxs===nothing,
+						 fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
+						 parallel=SerialForm(), kwargs...)
+```
+
+Generates a Julia function which can then be utilized for further evaluations.
+If expression=Val{false}, the return is a Julia function which utilizes
+GeneralizedGenerated.jl in order to be free of world-age issues.
+
+If the `Expression` is an `Operation`, the generated function is a function
+with a scalar output, otherwise if it's an `AbstractArray{Operation}`, the output
+is two functions, one for out-of-place AbstractArray output and a second which
+is a mutating function. The outputted functions match the given argument order,
+i.e., f(u,p,args...) for the out-of-place and scalar functions and
+`f!(du,u,p,args..)` for the in-place version.
+
+Special Keyword Argumnets:
+
+- `parallel`: The kind of parallelism to use in the generated function. Defaults
+  to `SerialForm()`, i.e. no parallelism. Note that the parallel forms are not
+  exported and thus need to be chosen like `ModelingToolkit.SerialForm()`.
+  The choices are:
+  -	`SerialForm()`: Serial execution.
+  - `MultithreadedForm()`: Multithreaded execution with a static split, evenly
+    splitting the number of expressions per thread.
+  - `DistributedForm()`: Multiprocessing using Julia's Distributed with a static
+    schedule, evenly splitting the number of expressions per process.
+  - `DaggerForm()`: Multithreading and multiprocessing using Julia's Dagger.jl
+    for dynamic scheduling and load balancing.
+- `conv`: The conversion function of the Operation to Expr. By default this uses
+  the `simplified_expr` function utilized in `convert(Expr,x)`.
+- `checkbounds`: For whether to enable bounds checking inside of the generated
+  function. Defaults to false, meaning that `@inbounds` is applied.
+- `linenumbers`: Determines whether the generated function expression retains
+  the line numbers. Defaults to true.
+- `convert_oop`: Determines whether the OOP version should try to convert
+  the output to match the type of the first input. This is useful for
+  cases like LabelledArrays or other array types that carry extra
+  information. Defaults to true.
+- `force_SA`: Forces the output of the OOP version to be a StaticArray.
+  Defaults to `false`, and outputs a static array when the first argument
+  is a static array.
+- `skipzeros`: Whether to skip filling zeros in the in-place version if the
+  filling function is 0.
+- `fillzeros`: Whether to perform `fill(out,0)` before the calculations to ensure
+  safety with `skipzeros`.
+"""
 function _build_function(target::JuliaTarget, rhss, args...;
                          conv = simplified_expr, expression = Val{true},
                          checkbounds = false,
