@@ -463,10 +463,6 @@ end
 get_varnumber(varop::Operation,vars::Vector{Operation}) =  findfirst(x->isequal(x,varop),vars)
 get_varnumber(varop::Operation,vars::Vector{<:Variable})  =  findfirst(x->isequal(x,varop.op),vars)
 
-function numbered_expr(O::Equation,args...;kwargs...)
-  :($(numbered_expr(O.lhs,args...;kwargs...)) = $(numbered_expr(O.rhs,args...;kwargs...)))
-end
-
 function numbered_expr(O::Operation,args...;varordering = args[1],offset = 0,
                        lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)])
   if isa(O.op, ModelingToolkit.Variable)
@@ -499,7 +495,7 @@ Build function target: CTarget
 function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
                          conv = simplified_expr, expression = Val{true},
                          fname = :diffeqf,
-						 lhsname=:du,rhsnames=[Symbol("RHS$i") for i in 1:length(args)],
+						 lhsname=:du,rhsnames=[Symbol("RHS\$i") for i in 1:length(args)],
 						 libpath=tempname(),compiler=:gcc)
 ```
 
