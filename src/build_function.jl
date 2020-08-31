@@ -430,55 +430,44 @@ function numbered_expr(O::Equation,args...;kwargs...)
   :($(numbered_expr(O.lhs,args...;kwargs...)) = $(numbered_expr(O.rhs,args...;kwargs...)))
 end
 
-function numbered_expr(O::Operation,vars,parameters;offset = 0,
-                       derivname=:du,
-                       varname=:u,paramname=:p)
-  if isa(O.op, ModelingToolkit.Differential)
-    varop = O.args[1]
-    i = get_varnumber(varop,vars)
-    return :($derivname[$(i+offset)])
-  elseif isa(O.op, ModelingToolkit.Variable)
-    i = get_varnumber(O,vars)
-    if i == nothing
-      i = get_varnumber(O,parameters)
-      return :($paramname[$(i+offset)])
-    else
-      return :($varname[$(i+offset)])
-    end
+function numbered_expr(O::Operation,args...;varordering = args[1],offset = 0,
+                       lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)])
+  if isa(O.op, ModelingToolkit.Variable)
+	for j in 1:length(args)
+		i = get_varnumber(O,args[j])
+		if i !== nothing
+			return :($(rhsnames[j])[$(i+offset)])
+		end
+	end
   end
   return Expr(:call, Symbol(O.op),
-         [numbered_expr(x,vars,parameters;offset=offset,derivname=derivname,
-                        varname=varname,paramname=paramname) for x in O.args]...)
+         [numbered_expr(x,args...;offset=offset,lhsname=lhsname,
+                        rhsnames=rhsnames,varordering=varordering) for x in O.args]...)
 end
 
-function numbered_expr(de::ModelingToolkit.Equation,vars::Vector{<:Variable},parameters;
-                       derivname=:du,varname=:u,paramname=:p,offset=0)
-    i = findfirst(x->isequal(x.name,var_from_nested_derivative(de.lhs)[1].name),vars)
-    :($derivname[$(i+offset)] = $(numbered_expr(de.rhs,vars,parameters;offset=offset,
-                                     derivname=derivname,
-                                     varname=varname,paramname=paramname)))
-end
-function numbered_expr(de::ModelingToolkit.Equation,vars::Vector{Operation},parameters;
-                       derivname=:du,varname=:u,paramname=:p,offset=0)
-    i = findfirst(x->isequal(x.op.name,var_from_nested_derivative(de.lhs)[1].name),vars)
-    :($derivname[$(i+offset)] = $(numbered_expr(de.rhs,vars,parameters;offset=offset,
-                                     derivname=derivname,
-                                     varname=varname,paramname=paramname)))
+function numbered_expr(de::ModelingToolkit.Equation,args...;varordering = args[1],
+                       lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)],offset=0)
+    i = findfirst(x->isequal(x isa Variable ? x.name : x.op.name,var_from_nested_derivative(de.lhs)[1].name),varordering)
+    :($lhsname[$(i+offset)] = $(numbered_expr(de.rhs,args...;offset=offset,
+											  varordering = varordering,
+											  lhsname = lhsname,
+											  rhsnames = rhsnames)))
 end
 numbered_expr(c::ModelingToolkit.Constant,args...;kwargs...) = c.value
 
 function _build_function(target::StanTarget, eqs, vs, ps, iv,
                          conv = simplified_expr, expression = Val{true};
-                         fname = :diffeqf, derivname=:internal_var___du,
+                         fname = :diffeqf, lhsname=:internal_var___du,
                          varname=:internal_var___u,paramname=:internal_var___p)
-    differential_equation = string(join([numbered_expr(eq,vs,ps,derivname=derivname,
-                                   varname=varname,paramname=paramname) for
+    rhsnames=[varname,paramname]
+    differential_equation = string(join([numbered_expr(eq,vs,ps,lhsname=lhsname,
+                                   rhsnames=rhsnames) for
                                    (i, eq) ∈ enumerate(eqs)],";\n  "),";")
     """
-    real[] $fname(real $iv,real[] $varname,real[] $paramname,real[] x_r,int[] x_i) {
-      real $derivname[$(length(eqs))];
+    real[] $fname(real $iv,real[] $(rhsnames[1]),real[] $(rhsnames[2]),real[] x_r,int[] x_i) {
+      real $lhsname[$(length(eqs))];
       $differential_equation
-      return $derivname;
+      return $lhsname;
     }
     """
 end
@@ -487,8 +476,8 @@ function _build_function(target::CTarget, eqs, vs, ps, iv;
                          conv = simplified_expr, expression = Val{true},
                          fname = :diffeqf, derivname=:internal_var___du,
                          varname=:internal_var___u,paramname=:internal_var___p)
-    differential_equation = string(join([numbered_expr(eq,vs,ps,derivname=derivname,
-                                  varname=varname,paramname=paramname,offset=-1) for
+    differential_equation = string(join([numbered_expr(eq,vs,ps,lhsname=derivname,
+                                  rhsnames=[varname,paramname],offset=-1) for
                                   (i, eq) ∈ enumerate(eqs)],";\n  "),";")
     """
     void $fname(double* $derivname, double* $varname, double* $paramname, double $iv) {
@@ -501,13 +490,14 @@ function _build_function(target::MATLABTarget, eqs, vs, ps, iv;
                          conv = simplified_expr, expression = Val{true},
                          fname = :diffeqf, derivname=:internal_var___du,
                          varname=:internal_var___u,paramname=:internal_var___p)
-    matstr = join([numbered_expr(eq.rhs,vs,ps,derivname=derivname,
-                                  varname=varname,paramname=paramname) for
+	rhsnames=[varname,paramname]
+    matstr = join([numbered_expr(eq.rhs,vs,ps,lhsname=derivname,
+                                  rhsnames=rhsnames) for
                                   (i, eq) ∈ enumerate(eqs)],"; ")
 
     matstr = replace(matstr,"["=>"(")
     matstr = replace(matstr,"]"=>")")
-    matstr = "$fname = @(t,$varname) ["*matstr*"];"
+    matstr = "$fname = @(t,$(rhsnames[1])) ["*matstr*"];"
     matstr
 end
 

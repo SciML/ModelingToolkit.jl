@@ -16,9 +16,9 @@ eqs = [D(x) ~ a*x - x*y,
 
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.CTarget()) ==
   """
-  void diffeqf(double* internal_var___du, double* internal_var___u, double* internal_var___p, t) {
-    internal_var___du[1] = internal_var___p[1] * internal_var___u[1] - internal_var___u[1] * internal_var___u[2];
-    internal_var___du[2] = -3 * internal_var___u[2] + internal_var___u[1] * internal_var___u[2];
+  void diffeqf(double* internal_var___du, double* internal_var___u, double* internal_var___p, double t) {
+    internal_var___du[0] = internal_var___p[0] * internal_var___u[0] - internal_var___u[0] * internal_var___u[1];
+    internal_var___du[1] = -3 * internal_var___u[1] + internal_var___u[0] * internal_var___u[1];
   }
   """
 
