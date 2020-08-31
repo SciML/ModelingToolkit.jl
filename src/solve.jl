@@ -93,7 +93,7 @@ function ldiv(A::LU, b)
         sub = simplifying_dot(b[i+1:end], U[i,i+1:end])
         den = U[i,i]
         x[i] = _iszero(sub) ? x[i] : x[i] - sub
-        x[i] = _isone(U[i,i]) ? x[i] : x[i] / U[i,i]
+        x[i] = _isone(U[i,i]) ? x[i] : _isone(-U[i,i]) ? -x[i] : x[i] / U[i,i]
     end
     x
 end
