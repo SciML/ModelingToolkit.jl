@@ -11,6 +11,7 @@ using SpecialFunctions, NaNMath
 using Base.Threads
 import MacroTools: splitdef, combinedef, postwalk, striplines
 import GeneralizedGenerated
+import Libdl
 using DocStringExtensions
 using Base: RefValue
 
@@ -156,6 +157,7 @@ export build_function
 export @register
 export modelingtoolkitize
 export @variables, @parameters
+export compile_cfunction
 
 const HAS_DAGGER = Ref{Bool}(false)
 function __init__()

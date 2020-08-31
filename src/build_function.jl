@@ -430,38 +430,38 @@ function numbered_expr(O::Equation,args...;kwargs...)
   :($(numbered_expr(O.lhs,args...;kwargs...)) = $(numbered_expr(O.rhs,args...;kwargs...)))
 end
 
-function numbered_expr(O::Operation,vars,parameters;
+function numbered_expr(O::Operation,vars,parameters;offset = 0,
                        derivname=:du,
                        varname=:u,paramname=:p)
   if isa(O.op, ModelingToolkit.Differential)
     varop = O.args[1]
     i = get_varnumber(varop,vars)
-    return :($derivname[$i])
+    return :($derivname[$(i+offset)])
   elseif isa(O.op, ModelingToolkit.Variable)
     i = get_varnumber(O,vars)
     if i == nothing
       i = get_varnumber(O,parameters)
-      return :($paramname[$i])
+      return :($paramname[$(i+offset)])
     else
-      return :($varname[$i])
+      return :($varname[$(i+offset)])
     end
   end
   return Expr(:call, Symbol(O.op),
-         [numbered_expr(x,vars,parameters;derivname=derivname,
+         [numbered_expr(x,vars,parameters;offset=offset,derivname=derivname,
                         varname=varname,paramname=paramname) for x in O.args]...)
 end
 
 function numbered_expr(de::ModelingToolkit.Equation,vars::Vector{<:Variable},parameters;
-                       derivname=:du,varname=:u,paramname=:p)
+                       derivname=:du,varname=:u,paramname=:p,offset=0)
     i = findfirst(x->isequal(x.name,var_from_nested_derivative(de.lhs)[1].name),vars)
-    :($derivname[$i] = $(numbered_expr(de.rhs,vars,parameters;
+    :($derivname[$(i+offset)] = $(numbered_expr(de.rhs,vars,parameters;offset=offset,
                                      derivname=derivname,
                                      varname=varname,paramname=paramname)))
 end
 function numbered_expr(de::ModelingToolkit.Equation,vars::Vector{Operation},parameters;
-                       derivname=:du,varname=:u,paramname=:p)
+                       derivname=:du,varname=:u,paramname=:p,offset=0)
     i = findfirst(x->isequal(x.op.name,var_from_nested_derivative(de.lhs)[1].name),vars)
-    :($derivname[$i] = $(numbered_expr(de.rhs,vars,parameters;
+    :($derivname[$(i+offset)] = $(numbered_expr(de.rhs,vars,parameters;offset=offset,
                                      derivname=derivname,
                                      varname=varname,paramname=paramname)))
 end
@@ -488,10 +488,10 @@ function _build_function(target::CTarget, eqs, vs, ps, iv;
                          fname = :diffeqf, derivname=:internal_var___du,
                          varname=:internal_var___u,paramname=:internal_var___p)
     differential_equation = string(join([numbered_expr(eq,vs,ps,derivname=derivname,
-                                  varname=varname,paramname=paramname) for
+                                  varname=varname,paramname=paramname,offset=-1) for
                                   (i, eq) ∈ enumerate(eqs)],";\n  "),";")
     """
-    void $fname(double* $derivname, double* $varname, double* $paramname, $iv) {
+    void $fname(double* $derivname, double* $varname, double* $paramname, double $iv) {
       $differential_equation
     }
     """
@@ -509,4 +509,23 @@ function _build_function(target::MATLABTarget, eqs, vs, ps, iv;
     matstr = replace(matstr,"]"=>")")
     matstr = "$fname = @(t,$varname) ["*matstr*"];"
     matstr
+end
+
+"""
+compile_cfunction(eqs,args...;libpath=tempname(),compiler=:gcc)
+
+Builds a function in C, compiles it, and returns a lambda to that compiled function.
+Arguments match those of `build_function`. Keyword arguments:
+
+- libpath: the path to store the binary. Defaults to a temporary path.
+- compiler: which C compiler to use. Defaults to :gcc, which is currently the
+  only available option.
+"""
+function compile_cfunction(eqs,args...;libpath=tempname(),compiler=:gcc)
+	@assert compiler == :gcc
+    ex = build_function(eqs,args...;target=ModelingToolkit.CTarget())
+    open(`gcc -fPIC -O3 -msse3 -xc -shared -o $(libpath * "." * Libdl.dlext) -`, "w") do f
+        print(f, ex)
+    end
+    eval(:((du::Array{Float64},u::Array{Float64},p::Array{Float64},t::Float64) -> ccall(("diffeqf", $libpath), Cvoid, (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Float64), du, u, p, t)))
 end
