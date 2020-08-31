@@ -17,6 +17,7 @@ makedocs(
             "tutorials/nonlinear.md",
             "tutorials/modelingtoolkitize.md",
             "tutorials/auto_parallel.md"
+            "tutorials/coverting_to_C.md"
         ],
         "Systems" => Any[
             "systems/AbstractSystem.md",
@@ -32,7 +33,7 @@ makedocs(
         ],
         "Comparison Against SymPy" => "comparison.md",
         "highlevel.md",
-        "build_function",
+        "build_function.md",
         "IR.md"
     ]
 )
