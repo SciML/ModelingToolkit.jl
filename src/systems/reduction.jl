@@ -19,8 +19,8 @@ function fixpoint_sub(x, dict)
     return x
 end
 
-function substitute_aliases(diffeqs, outputs)
-    lhss(diffeqs) .~ fixpoint_sub.(rhss(diffeqs), (Dict(lhss(outputs) .=> rhss(outputs)),))
+function substitute_aliases(diffeqs, dict)
+    lhss(diffeqs) .~ fixpoint_sub.(rhss(diffeqs), (dict,))
 end
 
 function make_lhs_0(eq)
@@ -53,12 +53,13 @@ function alias_elimination(sys::ODESystem)
 
     eliminate = setdiff(convert.(Variable, all_vars), newstates)
 
-    outputs = solve_for(eqs[alg_idxs], map(x->x(sys.iv()), eliminate))
+    vars = map(x->x(sys.iv()), eliminate)
+    outputs = solve_for(eqs[alg_idxs], vars)
 
     diffeqs = eqs[setdiff(1:length(eqs), alg_idxs)]
 
-    diffeqs′ = substitute_aliases(diffeqs, outputs)
+    diffeqs′ = substitute_aliases(diffeqs, Dict(vars .=> outputs))
 
-    ODESystem(diffeqs′, sys.iv(), new_stateops, parameters(sys), observed=outputs)
+    ODESystem(diffeqs′, sys.iv(), new_stateops, parameters(sys), observed=vars .~ outputs)
 end
 
