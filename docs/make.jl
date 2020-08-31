@@ -32,6 +32,7 @@ makedocs(
         ],
         "Comparison Against SymPy" => "comparison.md",
         "highlevel.md",
+        "build_function",
         "IR.md"
     ]
 )
