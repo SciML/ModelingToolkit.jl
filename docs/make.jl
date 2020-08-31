@@ -17,7 +17,7 @@ makedocs(
             "tutorials/nonlinear.md",
             "tutorials/modelingtoolkitize.md",
             "tutorials/auto_parallel.md",
-            "tutorials/coverting_to_C.md"
+            "tutorials/converting_to_C.md"
         ],
         "Systems" => Any[
             "systems/AbstractSystem.md",
