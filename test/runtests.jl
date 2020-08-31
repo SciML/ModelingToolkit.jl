@@ -29,3 +29,5 @@ using SafeTestsets, Test
 #@testset "Latexify recipes Test" begin include("latexify.jl") end
 @testset "Distributed Test" begin include("distributed.jl") end
 @testset "Variable Utils Test" begin include("variable_utils.jl") end
+println("Last test requires gcc available in the path!")
+@safetestset "C Compilation Test" begin include("ccompile.jl") end

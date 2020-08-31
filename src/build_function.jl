@@ -63,6 +63,10 @@ Keyword Arguments:
       programming language
     - `MATLABTarget`: Generates an anonymous function for use in MATLAB and Octave
       environments
+- `fname`: Used by some targets for the name of the function in the target space.
+
+Note that not all build targets support the full compilation interface. Check the
+individual target documentation for details.
 """
 function build_function(args...;target = JuliaTarget(),kwargs...)
   _build_function(target,args...;kwargs...)
@@ -455,11 +459,73 @@ function numbered_expr(de::ModelingToolkit.Equation,args...;varordering = args[1
 end
 numbered_expr(c::ModelingToolkit.Constant,args...;kwargs...) = c.value
 
-function _build_function(target::StanTarget, eqs, vs, ps, iv,
-                         conv = simplified_expr, expression = Val{true};
+"""
+Build function target: CTarget
+
+```julia
+function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
+                         conv = simplified_expr, expression = Val{true},
+                         fname = :diffeqf,
+						 lhsname=:du,rhsnames=[Symbol("RHS$i") for i in 1:length(args)],
+						 libpath=tempname(),compiler=:gcc)
+```
+
+This builds an in-place C function. Only works on arrays of equations. If
+`expression == Val{false}`, then this builds a function in C, compiles it,
+and returns a lambda to that compiled function. These special keyword arguments
+control the compilation:
+
+- libpath: the path to store the binary. Defaults to a temporary path.
+- compiler: which C compiler to use. Defaults to :gcc, which is currently the
+  only available option.
+"""
+function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
+                         conv = simplified_expr, expression = Val{true},
+                         fname = :diffeqf,
+						 lhsname=:du,rhsnames=[Symbol("RHS$i") for i in 1:length(args)],
+						 libpath=tempname(),compiler=:gcc)
+    differential_equation = string(join([numbered_expr(eq,args...,lhsname=lhsname,
+                                  rhsnames=rhsnames,offset=-1) for
+                                  (i, eq) ∈ enumerate(eqs)],";\n  "),";")
+
+    argstrs = join(vcat("double* $(lhsname)",[typeof(args[i])<:Array ? "double* $(rhsnames[i])" : "double $(rhsnames[i])" for i in 1:length(args)]),", ")
+	ex = """
+    void $fname($(argstrs...)) {
+      $differential_equation
+    }
+    """
+
+	if expression == Val{true}
+		return ex
+	else
+		@assert compiler == :gcc
+		ex = build_function(eqs,args...;target=ModelingToolkit.CTarget())
+		open(`gcc -fPIC -O3 -msse3 -xc -shared -o $(libpath * "." * Libdl.dlext) -`, "w") do f
+			print(f, ex)
+		end
+		eval(:((du::Array{Float64},u::Array{Float64},p::Array{Float64},t::Float64) -> ccall(("diffeqf", $libpath), Cvoid, (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Float64), du, u, p, t)))
+	end
+end
+
+"""
+Build function target: StanTarget
+
+```julia
+function _build_function(target::StanTarget, eqs::Array{<:Equation}, vs, ps, iv;
+                         conv = simplified_expr, expression = Val{true},
                          fname = :diffeqf, lhsname=:internal_var___du,
-                         varname=:internal_var___u,paramname=:internal_var___p)
-    rhsnames=[varname,paramname]
+                         rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
+```
+
+This builds an in-place Stan function compatible with the Stan differential equation solvers.
+Unlike other build targets, this one requestions (vs, ps, iv) as the function arguments.
+Only allowed on arrays of equations.
+"""
+function _build_function(target::StanTarget, eqs::Array{<:Equation}, vs, ps, iv;
+                         conv = simplified_expr, expression = Val{true},
+                         fname = :diffeqf, lhsname=:internal_var___du,
+                         rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
+	@assert expression == Val{true}
     differential_equation = string(join([numbered_expr(eq,vs,ps,lhsname=lhsname,
                                    rhsnames=rhsnames) for
                                    (i, eq) ∈ enumerate(eqs)],";\n  "),";")
@@ -472,26 +538,26 @@ function _build_function(target::StanTarget, eqs, vs, ps, iv,
     """
 end
 
-function _build_function(target::CTarget, eqs, vs, ps, iv;
-                         conv = simplified_expr, expression = Val{true},
-                         fname = :diffeqf, derivname=:internal_var___du,
-                         varname=:internal_var___u,paramname=:internal_var___p)
-    differential_equation = string(join([numbered_expr(eq,vs,ps,lhsname=derivname,
-                                  rhsnames=[varname,paramname],offset=-1) for
-                                  (i, eq) ∈ enumerate(eqs)],";\n  "),";")
-    """
-    void $fname(double* $derivname, double* $varname, double* $paramname, double $iv) {
-      $differential_equation
-    }
-    """
-end
+"""
+Build function target: MATLABTarget
 
-function _build_function(target::MATLABTarget, eqs, vs, ps, iv;
+```julia
+function _build_function(target::MATLABTarget, eqs::Array{<:Equation}, args...;
                          conv = simplified_expr, expression = Val{true},
-                         fname = :diffeqf, derivname=:internal_var___du,
-                         varname=:internal_var___u,paramname=:internal_var___p)
-	rhsnames=[varname,paramname]
-    matstr = join([numbered_expr(eq.rhs,vs,ps,lhsname=derivname,
+                         lhsname=:internal_var___du,
+                         rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
+```
+
+This builds an out of place anonymous function @(t,rhsnames[1]) to be used in MATLAB.
+Compatible with the MATLAB differential equation solvers. Only allowed on arrays
+of equations.
+"""
+function _build_function(target::MATLABTarget, eqs::Array{<:Equation}, args...;
+                         conv = simplified_expr, expression = Val{true},
+                         fname = :diffeqf, lhsname=:internal_var___du,
+                         rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
+	@assert expression == Val{true}
+    matstr = join([numbered_expr(eq.rhs,args...,lhsname=lhsname,
                                   rhsnames=rhsnames) for
                                   (i, eq) ∈ enumerate(eqs)],"; ")
 
@@ -499,23 +565,4 @@ function _build_function(target::MATLABTarget, eqs, vs, ps, iv;
     matstr = replace(matstr,"]"=>")")
     matstr = "$fname = @(t,$(rhsnames[1])) ["*matstr*"];"
     matstr
-end
-
-"""
-compile_cfunction(eqs,args...;libpath=tempname(),compiler=:gcc)
-
-Builds a function in C, compiles it, and returns a lambda to that compiled function.
-Arguments match those of `build_function`. Keyword arguments:
-
-- libpath: the path to store the binary. Defaults to a temporary path.
-- compiler: which C compiler to use. Defaults to :gcc, which is currently the
-  only available option.
-"""
-function compile_cfunction(eqs,args...;libpath=tempname(),compiler=:gcc)
-	@assert compiler == :gcc
-    ex = build_function(eqs,args...;target=ModelingToolkit.CTarget())
-    open(`gcc -fPIC -O3 -msse3 -xc -shared -o $(libpath * "." * Libdl.dlext) -`, "w") do f
-        print(f, ex)
-    end
-    eval(:((du::Array{Float64},u::Array{Float64},p::Array{Float64},t::Float64) -> ccall(("diffeqf", $libpath), Cvoid, (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Float64), du, u, p, t)))
 end
