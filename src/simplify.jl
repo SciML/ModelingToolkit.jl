@@ -15,7 +15,7 @@ end
 SymbolicUtils.promote_symtype(f::SymbolicUtils.Sym{FnType{X,Parameter{Y}}},
                               xs...) where {X, Y} = Y
 
-SymbolicUtils.arguments(x::Operation) = x.args
+SymbolicUtils.arguments(x::Operation) = to_symbolic.(x.args)
 
 # SymbolicUtils wants raw numbers
 SymbolicUtils.to_symbolic(x::Constant) = x.value

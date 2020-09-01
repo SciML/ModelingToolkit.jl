@@ -193,7 +193,7 @@ pins(sys::AbstractSystem) = isempty(sys.systems) ? sys.pins : [sys.pins;reduce(v
 function observed(sys::AbstractSystem)
     [sys.observed;
      reduce(vcat,
-            (namespace_equation.(s.observed, s.name, s.iv.name) for s in sys.systems),
+            (namespace_equation.(observed(s), s.name, s.iv.name) for s in sys.systems),
             init=Equation[])]
 end
 
@@ -215,7 +215,7 @@ end
 lhss(xs) = map(x->x.lhs, xs)
 rhss(xs) = map(x->x.rhs, xs)
 
-function equations(sys::ModelingToolkit.AbstractSystem; remove_aliases = true)
+function equations(sys::ModelingToolkit.AbstractSystem)
     if isempty(sys.systems)
         return sys.eqs
     else
@@ -224,14 +224,7 @@ function equations(sys::ModelingToolkit.AbstractSystem; remove_aliases = true)
                       namespace_equations.(sys.systems);
                       init=Equation[])]
 
-        if !remove_aliases
-            return eqs
-        end
-        aliases = observed(sys)
-        dict = Dict(lhss(aliases) .=> rhss(aliases))
-
-        # Substitute aliases
-        return Equation.(lhss(eqs), Rewriters.Fixpoint(x->substitute(x, dict)).(rhss(eqs)))
+        return eqs
     end
 end
 

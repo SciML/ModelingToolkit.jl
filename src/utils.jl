@@ -131,7 +131,18 @@ substitute(expr::Operation, s::Union{Vector, Dict}) = substituter(s)(expr)
 
 function substituter(pairs)
     dict = Dict(to_symbolic(k) => to_symbolic(v)  for (k, v) in pairs)
-    expr -> to_mtk(SymbolicUtils.simplify(SymbolicUtils.substitute(expr, dict)))
+    expr -> to_mtk(SymbolicUtils.substitute(expr, dict))
+end
+
+macro showarr(x)
+    n = string(x)
+    quote
+        y = $(esc(x))
+        println($n, " = ", summary(y))
+        Base.print_array(stdout, y)
+        println()
+        y
+    end
 end
 
 @deprecate substitute_expr!(expr,s) substitute(expr,s)

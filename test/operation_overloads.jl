@@ -70,3 +70,8 @@ M \ b
 M \ reshape(b,2,1)
 M = [1 1; 0 2]
 M \ reshape(b,2,1)
+
+
+M = [1 a; 0 2]
+M \ b
+M \ [1, 2]
