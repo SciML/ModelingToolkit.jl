@@ -1,22 +1,26 @@
+using SymbolicUtils: istree
+
+function nterms(t)
+    if istree(t)
+        return reduce(+, map(nterms, arguments(t)), init=0)
+    else
+        return 1
+    end
+end
 # Soft pivoted
 # Note: we call this function with a matrix of Union{SymbolicUtils.Symbolic, Any}
 # It should work as-is with Operation type too.
 function sym_lu(A)
     m, n = size(A)
-    L = Array{Any}(undef, size(A)) # TODO: make sparse?
+    L = fill!(Array{Any}(undef, size(A)),0) # TODO: make sparse?
     for i=1:min(m, n)
         L[i,i] = 1
     end
     U = copy(A)
     p = BlasInt[1:m;]
     for k = 1:m-1
-        i = k
-        for ii=k:n
-            if !iszero(U[ii, k])
-                i = ii
-                break
-            end
-        end
+        _, i = findmin(map(ii->iszero(U[ii, k]) ? Inf : nterms(U[ii,k]), k:n))
+        i += k - 1
         # swap
         U[k, k:end], U[i, k:end] = U[i, k:end], U[k, k:end]
         L[k, 1:k-1], L[i, 1:k-1] = L[i, 1:k-1], L[k, 1:k-1]
