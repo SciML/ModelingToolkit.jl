@@ -56,7 +56,7 @@ function A_b(eqs, vars)
 end
 
 """
-    solve(eqs::Vector, vars::Vector)
+    solve_for(eqs::Vector, vars::Vector)
 
 Solve the vector of equations `eqs` for a set of variables `vars`.
 
@@ -64,7 +64,7 @@ Assumes `length(eqs) == length(vars)`
 
 Currently only works if all equations are linear.
 """
-function solve(eqs, vars)
+function solve_for(eqs, vars)
     A, b = A_b(eqs, vars)
     _solve(A, b)
 end
