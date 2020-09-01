@@ -38,7 +38,6 @@ function sym_lu(A)
         end
     end
 
-    @pa p
     LU(factors, p, BlasInt(0))
 end
 
@@ -83,15 +82,16 @@ function simplifying_dot(x,y)
     end
 end
 
-function ldiv(AA, A::LU, b)
+function ldiv(A::LU, b)
     L = A.L
     U = A.U
+
     m, n = size(L)
     x = Vector{Any}(undef, length(b))
     b = b[A.p]
 
     for i=n:-1:1
-        sub = simplifying_dot(b[i+1:end], U[i,i+1:end])
+        sub = simplifying_dot(x[i+1:end], U[i,i+1:end])
         den = U[i,i]
         x[i] = _iszero(sub) ? b[i] : b[i] - sub
         x[i] = _isone(den) ? x[i] : _isone(-den) ? -x[i] : x[i] / den
@@ -99,7 +99,7 @@ function ldiv(AA, A::LU, b)
 
     # unit lower triangular solve first:
     for i=1:n
-        sub = simplifying_dot(x[1:i-1], L[i, 1:i-1])
+        sub = simplifying_dot(b[1:i-1], L[i, 1:i-1]) # this should be `b` not x
         x[i] = _iszero(sub) ? x[i] : x[i] - sub
     end
     x
