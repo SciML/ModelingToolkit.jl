@@ -88,10 +88,10 @@ test_equal.(equations(aliased_flattened_system), [
        D(lorenz2.y) ~ lorenz2.x*(lorenz2.ρ-lorenz2.z)-lorenz2.x,
        D(lorenz2.z) ~ lorenz2.x*lorenz2.y - lorenz2.β*lorenz2.z])
 
-#=
-observed(aliased_flattened_system) == [
-        lorenz1.F ~ lorenz2.u
-        lorenz2.F ~ lorenz1.u
-        a ~ -lorenz1.x + lorenz2.y
-]
-=#
+test_equal.(observed(aliased_flattened_system), [
+       lorenz1.F ~ lorenz2.x + -1 * (lorenz2.y + lorenz2.z),
+       lorenz1.u ~ lorenz1.x + lorenz1.y + -1 * lorenz1.z,
+       lorenz2.F ~ lorenz1.x + lorenz1.y + -1 * lorenz1.z,
+       a ~ lorenz2.y + -1 * lorenz1.x,
+       lorenz2.u ~ lorenz2.x + -1 * (lorenz2.y + lorenz2.z),
+])
