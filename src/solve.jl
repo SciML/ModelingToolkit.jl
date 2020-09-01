@@ -16,7 +16,7 @@ function sym_lu(A)
     for i=1:min(m, n)
         L[i,i] = 1
     end
-    U = copy(A)
+    U = copy!(Array{Any}(undef, size(A)),A)
     p = BlasInt[1:m;]
     for k = 1:m-1
         _, i = findmin(map(ii->iszero(U[ii, k]) ? Inf : nterms(U[ii,k]), k:n))
@@ -31,14 +31,13 @@ function sym_lu(A)
             U[j,k:m] .= U[j,k:m] .- L[j,k] .* U[k,k:m]
         end
     end
-    factors = copy(U)
     for j=1:m
         for i=j+1:n
-            factors[i,j] = L[i,j]
+            U[i,j] = 0
         end
     end
 
-    LU(factors, p, BlasInt(0))
+    (L, U, LinearAlgebra.ipiv2perm(p, m))
 end
 
 # Given a vector of equations and a
@@ -67,10 +66,18 @@ Currently only works if all equations are linear.
 """
 function solve(eqs, vars)
     A, b = A_b(eqs, vars)
+    _solve(A, b)
+end
+
+function _solve(A, b)
     A = SymbolicUtils.simplify.(to_symbolic.(A), polynorm=true)
     b = SymbolicUtils.simplify.(to_symbolic.(b), polynorm=true)
     map(to_mtk, SymbolicUtils.simplify.(ldiv(sym_lu(A), b)))
 end
+
+LinearAlgebra.:(\)(A::AbstractMatrix{<:Expression}, b::AbstractVector{<:Expression}) = _solve(A, b)
+LinearAlgebra.:(\)(A::AbstractMatrix{<:Expression}, b::AbstractVector) = _solve(A, b)
+LinearAlgebra.:(\)(A::AbstractMatrix, b::AbstractVector{<:Expression}) = _solve(A, b)
 
 # ldiv below
 
@@ -90,13 +97,10 @@ function simplifying_dot(x,y)
     end
 end
 
-function ldiv(A::LU, b)
-    L = A.L
-    U = A.U
-
+function ldiv((L,U,p), b)
     m, n = size(L)
     x = Vector{Any}(undef, length(b))
-    b = b[A.p]
+    b = b[p]
 
     for i=n:-1:1
         sub = simplifying_dot(x[i+1:end], U[i,i+1:end])
