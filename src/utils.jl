@@ -134,4 +134,15 @@ function substituter(pairs)
     expr -> to_mtk(SymbolicUtils.substitute(expr, dict))
 end
 
+macro showarr(x)
+    n = string(x)
+    quote
+        y = $(esc(x))
+        println($n, " = ", summary(y))
+        Base.print_array(stdout, y)
+        println()
+        y
+    end
+end
+
 @deprecate substitute_expr!(expr,s) substitute(expr,s)
