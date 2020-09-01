@@ -38,6 +38,7 @@ function sym_lu(A)
         end
     end
 
+    @pa p
     LU(factors, p, BlasInt(0))
 end
 
@@ -56,10 +57,23 @@ function A_b(eqs, vars)
     A, b
 end
 
+macro pa(x)
+    n = string(x)
+    quote
+        println($n, " = ")
+        Base.print_array(stdout, $(esc(x)))
+        println()
+    end
+end
 function solve_for(eqs, vars)
+    @pa eqs
+    @pa vars
+
     A, b = A_b(eqs, vars)
     A = SymbolicUtils.simplify.(to_symbolic.(A), polynorm=true)
     b = SymbolicUtils.simplify.(to_symbolic.(b), polynorm=true)
+    @pa A
+    @pa b
     map(to_mtk, SymbolicUtils.simplify.(ldiv(sym_lu(A), b)))
 end
 
