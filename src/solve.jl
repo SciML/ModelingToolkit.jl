@@ -28,7 +28,7 @@ function sym_lu(A)
 
         for j = k+1:m
             L[j,k] = U[j, k] / U[k, k]
-            U[j,k:m] .= U[j,k:m] .- simplifying_dot(L[j,k],  U[k,k:m])
+            U[j,k:m] .= U[j,k:m] .- L[j,k] .* U[k,k:m]
         end
     end
     factors = copy(U)
