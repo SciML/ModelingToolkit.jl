@@ -54,7 +54,7 @@ function alias_elimination(sys::ODESystem)
     eliminate = setdiff(convert.(Variable, all_vars), newstates)
 
     vars = map(x->x(sys.iv()), eliminate)
-    outputs = solve_for(eqs[alg_idxs], vars)
+    outputs = solve(eqs[alg_idxs], vars)
 
     diffeqs = eqs[setdiff(1:length(eqs), alg_idxs)]
 

@@ -56,8 +56,16 @@ function A_b(eqs, vars)
     A, b
 end
 
-function solve_for(eqs, vars)
+"""
+    solve(eqs::Vector, vars::Vector)
 
+Solve the vector of equations `eqs` for a set of variables `vars`.
+
+Assumes `length(eqs) == length(vars)`
+
+Currently only works if all equations are linear.
+"""
+function solve(eqs, vars)
     A, b = A_b(eqs, vars)
     A = SymbolicUtils.simplify.(to_symbolic.(A), polynorm=true)
     b = SymbolicUtils.simplify.(to_symbolic.(b), polynorm=true)
