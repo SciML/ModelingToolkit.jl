@@ -6,7 +6,6 @@
 @register Base.signbit(x)
 ModelingToolkit.derivative(::typeof(signbit), args::NTuple{1,Any}, ::Val{1}) = 0
 
-@register Base.abs(x)
 ModelingToolkit.derivative(::typeof(abs), args::NTuple{1,Any}, ::Val{1}) = IfElse.ifelse(signbit(args[1]),-one(args[1]),one(args[1]))
 
 @register IfElse.ifelse(x,y,z)
