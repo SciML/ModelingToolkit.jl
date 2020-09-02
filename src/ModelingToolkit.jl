@@ -123,6 +123,7 @@ include("systems/reduction.jl")
 
 include("latexify_recipes.jl")
 include("build_function.jl")
+include("extra_functions.jl")
 
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
