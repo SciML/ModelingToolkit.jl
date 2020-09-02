@@ -14,6 +14,7 @@ import GeneralizedGenerated
 import Libdl
 using DocStringExtensions
 using Base: RefValue
+import IfElse
 
 using RecursiveArrayTools
 
