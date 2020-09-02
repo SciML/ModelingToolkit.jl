@@ -135,8 +135,8 @@ function inject_registered_module_functions(expr)
         if !isnothing(f_name)
             # Set the calling module to the module that registered it.
             mod = get(registered_external_functions, f_name, f_module)
-            if !isnothing(mod)
-                x.args[1] = :(getproperty($mod, $(Meta.quot(f_name))))
+            if !isnothing(mod) && mod != Base
+                x.args[1] = :($mod.$f_name)
             end
         end
 
