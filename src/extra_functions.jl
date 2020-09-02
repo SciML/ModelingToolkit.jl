@@ -1,4 +1,5 @@
 function ifelse end
+ifelse(args...) = Core.ifelse(args...)
 @register Base.conj(x)
 @register Base.getindex(x,i)
 @register Base.binomial(n,k)
