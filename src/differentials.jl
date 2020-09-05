@@ -180,7 +180,7 @@ derivative(O::Constant, ::Any) = Constant(0)
 # Pre-defined derivatives
 import DiffRules
 for (modu, fun, arity) ∈ DiffRules.diffrules()
-    fun in [:*, :+] && continue # special
+    fun in [:*, :+, :abs] && continue # special
     for i ∈ 1:arity
 
         expr = if arity == 1
