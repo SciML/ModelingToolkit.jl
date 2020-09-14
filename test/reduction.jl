@@ -95,3 +95,20 @@ test_equal.(observed(aliased_flattened_system), [
        a ~ lorenz2.y + -1 * lorenz1.x,
        lorenz2.u ~ lorenz2.x + -1 * (lorenz2.y + lorenz2.z),
 ])
+
+
+# issue #578
+
+let
+    @variables t x(t) y(t) z(t);
+    @derivatives D'~t;
+    eqs = [
+        D(x) ~ x + y
+        x ~ y
+    ];
+    sys = ODESystem(eqs, t, [x], []);
+    asys = alias_elimination(ModelingToolkit.flatten(sys))
+
+    test_equal.(asys.eqs, [D(x) ~ 2x])
+    test_equal.(asys.observed, [y ~ x])
+end
