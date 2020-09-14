@@ -87,6 +87,16 @@ function add_integrator_header(ex, fargs, iip; X=gensym(:MTIIPVar))
   wrappedex
 end
 
+function unflatten_long_ops(op, N=4)
+    rule1 = @rule((+)((~~x)) => length(~~x) > N ?
+                 +(+((~~x)[1:N]...) + (+)((~~x)[N+1:end]...)) : nothing)
+    rule2 = @rule((*)((~~x)) => length(~~x) > N ?
+                 *(*((~~x)[1:N]...) * (*)((~~x)[N+1:end]...)) : nothing)
+
+    op = to_symbolic(op)
+    Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2])))(op) |> to_mtk
+end
+
 # Scalar output
 function _build_function(target::JuliaTarget, op::Operation, args...;
                          conv = simplified_expr, expression = Val{true},
@@ -97,9 +107,10 @@ function _build_function(target::JuliaTarget, op::Operation, args...;
     arg_pairs = map(vars_to_pairs,zip(argnames,args))
     ls = reduce(vcat,first.(arg_pairs))
     rs = reduce(vcat,last.(arg_pairs))
-    var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, rs))
+    var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, unflatten_long_ops.(rs)))
 
     fname = gensym(:ModelingToolkitFunction)
+    op = unflatten_long_ops(op)
     out_expr = conv(op)
     let_expr = Expr(:let, var_eqs, Expr(:block, out_expr))
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
@@ -242,7 +253,13 @@ function _build_function(target::JuliaTarget, rhss, args...;
     oidx = isnothing(outputidxs) ? (i -> i) : (i -> outputidxs[i])
     X = gensym(:MTIIPVar)
 
-	rhs_length = rhss isa SparseMatrixCSC ? length(rhss.nzval) : length(rhss)
+    if rhss isa SparseMatrixCSC
+        rhs_length = length(rhss.nzval)
+        rhss = SparseMatrixCSC(rhss.m, rhss.m, rhss.colptr, rhss.rowval, map(unflatten_long_ops, rhss.nzval))
+    else
+        length(rhss)
+        rhss = map(unflatten_long_ops, rhss)
+    end
 
 	if parallel isa DistributedForm
 		numworks = Distributed.nworkers()
