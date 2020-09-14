@@ -257,7 +257,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
         rhs_length = length(rhss.nzval)
         rhss = SparseMatrixCSC(rhss.m, rhss.m, rhss.colptr, rhss.rowval, map(unflatten_long_ops, rhss.nzval))
     else
-        length(rhss)
+        rhs_length = length(rhss)
         rhss = map(unflatten_long_ops, rhss)
     end
 
