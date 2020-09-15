@@ -258,7 +258,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
         rhss = SparseMatrixCSC(rhss.m, rhss.m, rhss.colptr, rhss.rowval, map(unflatten_long_ops, rhss.nzval))
     else
         rhs_length = length(rhss)
-        rhss = map(unflatten_long_ops, rhss)
+        rhss = Expression[unflatten_long_ops(r) for r in rhss]
     end
 
 	if parallel isa DistributedForm
@@ -268,6 +268,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
 		finalsize = rhs_length - (numworks-1)*lens
 		_rhss = vcat(reduce(vcat,[[getindex(reducevars[i],j) for j in 1:lens] for i in 1:numworks-1],init=Expr[]),
 						 [getindex(reducevars[end],j) for j in 1:finalsize])
+
     elseif parallel isa DaggerForm
 		computevars = [Variable(gensym(:MTComputeVar))() for i in axes(rhss,1)]
         reducevar = Variable(gensym(:MTReduceVar))()
@@ -376,8 +377,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
         dagwrap(ex::Expr) = dagwrap(ex, Val(ex.head))
         dagwrap(ex::Expr, ::Val) = ex
         dagwrap(ex::Expr, ::Val{:call}) = :(Dagger.delayed($(ex.args[1]))($(dagwrap.(ex.args[2:end])...)))
-
-        new_rhss = dagwrap.(conv.(Array(rhss)))
+        new_rhss = dagwrap.(conv.(rhss))
         delayed_exprs = build_expr(:block, [:($(Symbol(computevars[i])) = Dagger.delayed(identity)($(new_rhss[i]))) for i in axes(computevars,1)])
         # TODO: treereduce?
         reduce_expr = quote
