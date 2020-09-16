@@ -99,17 +99,9 @@ for fun ∈ [:<, :>, :(==), :&, :|, :div]
     @eval @register $sig
 end
 
-# ifelse
-#@register Base.ifelse(cond,t,f)
-
 # special cases
 Base.:^(x::Expression,y::T) where T <: Integer = Operation(Base.:^, Expression[x, y])
 Base.:^(x::Expression,y::T) where T <: Rational = Operation(Base.:^, Expression[x, y])
-
-@register Base.conj(x)
-@register Base.getindex(x,i)
-@register Base.binomial(n,k)
-@register Base.copysign(x,y)
 
 Base.getindex(x::Operation,i::Int64) = Operation(getindex,[x,i])
 Base.one(::Operation) = 1
@@ -135,8 +127,8 @@ function inject_registered_module_functions(expr)
         if !isnothing(f_name)
             # Set the calling module to the module that registered it.
             mod = get(registered_external_functions, f_name, f_module)
-            if !isnothing(mod)
-                x.args[1] = :(getproperty($mod, $(Meta.quot(f_name))))
+            if !isnothing(mod) && mod != Base
+                x.args[1] = :($mod.$f_name)
             end
         end
 

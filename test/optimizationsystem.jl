@@ -1,4 +1,5 @@
-using ModelingToolkit
+using ModelingToolkit, SparseArrays
+
 @variables x y
 @parameters a b
 loss = (a - x)^2 + b * (y - x^2)^2
@@ -19,3 +20,4 @@ calculate_hessian(combinedsys)
 generate_function(combinedsys)
 generate_gradient(combinedsys)
 generate_hessian(combinedsys)
+ModelingToolkit.hessian_sparsity(combinedsys)

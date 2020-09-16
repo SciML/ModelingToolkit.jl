@@ -14,48 +14,24 @@ struct DaggerForm <: ParallelForm end
 `build_function`
 
 Generates a numerically-usable function from a ModelingToolkit `Expression`.
-If the `Expression` is an `Term`, the generated function is a function
-with a scalar output, otherwise if it's an `AbstractArray{Term}`, the output
-is two functions, one for out-of-place AbstractArray output and a second which
-is a mutating function. The outputted functions match the given argument order,
-i.e., f(u,p,args...) for the out-of-place and scalar functions and
-`f!(du,u,p,args..)` for the in-place version.
 
 ```julia
 build_function(ex, args...;
-               conv = toexpr, expression = Val{true},
-               checkbounds = false, convert_oop = true,
-			   force_SA = false,
-               linenumbers = false, target = JuliaTarget())
+               expression = Val{true},
+               target = JuliaTarget(),
+			   kwargs...)
 ```
 
 Arguments:
 
 - `ex`: The `Expression` to compile
-- `vs`: The variables of the expression
-- `ps`: The parameters of the expression
-- `args`: Extra arguments to the function
-- `conv`: The conversion function of the Term to Expr. By default this uses
-  the `toexpr` function utilized in `convert(Expr,x)`.
+- `args`: The arguments of the function
 - `expression`: Whether to generate code or whether to generate the compiled form.
   By default, `expression = Val{true}`, which means that the code for the
-  function is returned. If `Val{false}`, then the returned value is a compiled
-  Julia function, which utilizes GeneralizedGenerated.jl in order to world-age
-  free.
+  function is returned. If `Val{false}`, then the returned value is compiled.
 
 Keyword Arguments:
 
-- `checkbounds`: For whether to enable bounds checking inside of the generated
-  function. Defaults to false, meaning that `@inbounds` is applied.
-- `linenumbers`: Determines whether the generated function expression retains
-  the line numbers. Defaults to true.
-- `convert_oop`: Determines whether the OOP version should try to convert
-  the output to match the type of the first input. This is useful for
-  cases like LabelledArrays or other array types that carry extra
-  information. Defaults to true.
-- `force_SA`: Forces the output of the OOP version to be a StaticArray.
-  Defaults to `false`, and outputs a static array when the first argument
-  is a static array.
 - `target`: The output target of the compilation process. Possible options are:
     - `JuliaTarget`: Generates a Julia function
     - `CTarget`: Generates a C function
@@ -63,9 +39,13 @@ Keyword Arguments:
       programming language
     - `MATLABTarget`: Generates an anonymous function for use in MATLAB and Octave
       environments
+- `fname`: Used by some targets for the name of the function in the target space.
+
+Note that not all build targets support the full compilation interface. Check the
+individual target documentation for details.
 """
 function build_function(args...;target = JuliaTarget(),kwargs...)
-    _build_function(target, map(value, args)...;kwargs...)
+  _build_function(target,args...;kwargs...)
 end
 
 function addheader(ex, fargs, iip; X=gensym(:MTIIPVar))
@@ -108,8 +88,8 @@ function add_integrator_header(ex, fargs, iip; X=gensym(:MTIIPVar))
 end
 
 # Scalar output
-function _build_function(target::JuliaTarget, op::Term, args...;
-                         conv = toexpr, expression = Val{true},
+function _build_function(target::JuliaTarget, op::Operation, args...;
+                         conv = simplified_expr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = true, headerfun=addheader)
 
@@ -178,13 +158,72 @@ function fill_array_with_zero!(x::AbstractArray)
     return x
 end
 
+"""
+Build function target: JuliaTarget
+
+```julia
 function _build_function(target::JuliaTarget, rhss, args...;
-                         conv = toexpr, expression = Val{true},
+                         conv = simplified_expr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
-                         headerfun=addheader, outputidxs=nothing,
+                         headerfun = addheader, outputidxs=nothing,
 						 convert_oop = true, force_SA = false,
-                         skipzeros = outputidxs===nothing, fillzeros = skipzeros, parallel=SerialForm(), kwargs...)
+                         skipzeros = outputidxs===nothing,
+						 fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
+						 parallel=SerialForm(), kwargs...)
+```
+
+Generates a Julia function which can then be utilized for further evaluations.
+If expression=Val{false}, the return is a Julia function which utilizes
+GeneralizedGenerated.jl in order to be free of world-age issues.
+
+If the `Expression` is an `Operation`, the generated function is a function
+with a scalar output, otherwise if it's an `AbstractArray{Operation}`, the output
+is two functions, one for out-of-place AbstractArray output and a second which
+is a mutating function. The outputted functions match the given argument order,
+i.e., f(u,p,args...) for the out-of-place and scalar functions and
+`f!(du,u,p,args..)` for the in-place version.
+
+Special Keyword Argumnets:
+
+- `parallel`: The kind of parallelism to use in the generated function. Defaults
+  to `SerialForm()`, i.e. no parallelism. Note that the parallel forms are not
+  exported and thus need to be chosen like `ModelingToolkit.SerialForm()`.
+  The choices are:
+  -	`SerialForm()`: Serial execution.
+  - `MultithreadedForm()`: Multithreaded execution with a static split, evenly
+    splitting the number of expressions per thread.
+  - `DistributedForm()`: Multiprocessing using Julia's Distributed with a static
+    schedule, evenly splitting the number of expressions per process.
+  - `DaggerForm()`: Multithreading and multiprocessing using Julia's Dagger.jl
+    for dynamic scheduling and load balancing.
+- `conv`: The conversion function of the Operation to Expr. By default this uses
+  the `simplified_expr` function utilized in `convert(Expr,x)`.
+- `checkbounds`: For whether to enable bounds checking inside of the generated
+  function. Defaults to false, meaning that `@inbounds` is applied.
+- `linenumbers`: Determines whether the generated function expression retains
+  the line numbers. Defaults to true.
+- `convert_oop`: Determines whether the OOP version should try to convert
+  the output to match the type of the first input. This is useful for
+  cases like LabelledArrays or other array types that carry extra
+  information. Defaults to true.
+- `force_SA`: Forces the output of the OOP version to be a StaticArray.
+  Defaults to `false`, and outputs a static array when the first argument
+  is a static array.
+- `skipzeros`: Whether to skip filling zeros in the in-place version if the
+  filling function is 0.
+- `fillzeros`: Whether to perform `fill(out,0)` before the calculations to ensure
+  safety with `skipzeros`.
+"""
+function _build_function(target::JuliaTarget, rhss, args...;
+                         conv = simplified_expr, expression = Val{true},
+                         checkbounds = false,
+                         linenumbers = false, multithread=nothing,
+                         headerfun = addheader, outputidxs=nothing,
+						 convert_oop = true, force_SA = false,
+                         skipzeros = outputidxs===nothing,
+						 fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
+						 parallel=SerialForm(), kwargs...)
 	if multithread isa Bool
 		@warn("multithraded is deprecated for the parallel argument. See the documentation.")
 		parallel = multithread ? MultithreadedForm() : SerialForm()
@@ -224,9 +263,6 @@ function _build_function(target::JuliaTarget, rhss, args...;
 
     ip_sys_exprs = Expr[]
     # we cannot reliably fill the array with the presence of index translation
-    if fillzeros && outputidxs === nothing
-        push!(ip_sys_exprs, :($fill_array_with_zero!($X)))
-    end
     if is_array_array_sparse_matrix(rhss) # Array of arrays of sparse matrices
         for (i, rhsel) ∈ enumerate(_rhss)
             for (j, rhsel2) ∈ enumerate(rhsel)
@@ -338,6 +374,14 @@ function _build_function(target::JuliaTarget, rhss, args...;
         end
 	end
 
+	if fillzeros && outputidxs === nothing
+        ip_let_expr = quote
+			$fill_array_with_zero!($X)
+			$ip_let_expr
+		end
+    end
+
+
     tuple_sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
 
     if rhss isa Matrix
@@ -403,15 +447,15 @@ end
 
 vars_to_pairs(args) = vars_to_pairs(args[1],args[2])
 function vars_to_pairs(name,vs::AbstractArray)
-    _vs = value.(vs)
-	names = [nameof(u) for u ∈ _vs]
+	_vs = convert.(Variable,vs)
+	names = [Symbol(u) for u ∈ _vs]
 	exs = [:($name[$i]) for (i, u) ∈ enumerate(_vs)]
 	names,exs
 end
 
 function vars_to_pairs(name,vs)
-    _vs = value(vs)
-	names = [nameof(_vs)]
+	_vs = convert(Variable,vs)
+	names = [Symbol(_vs)]
 	exs = [name]
 	names,exs
 end
@@ -419,87 +463,135 @@ end
 get_varnumber(varop::Operation,vars::Vector{Operation}) =  findfirst(x->isequal(x,varop),vars)
 get_varnumber(varop::Operation,vars::Vector{<:Variable})  =  findfirst(x->isequal(x,varop.op),vars)
 
-function numbered_expr(O::Equation,args...;kwargs...)
-  :($(numbered_expr(O.lhs,args...;kwargs...)) = $(numbered_expr(O.rhs,args...;kwargs...)))
-end
-
-function numbered_expr(O::Operation,vars,parameters;
-                       derivname=:du,
-                       varname=:u,paramname=:p)
-  if isa(O.op, ModelingToolkit.Differential)
-    varop = O.args[1]
-    i = get_varnumber(varop,vars)
-    return :($derivname[$i])
-  elseif isa(O.op, ModelingToolkit.Variable)
-    i = get_varnumber(O,vars)
-    if i == nothing
-      i = get_varnumber(O,parameters)
-      return :($paramname[$i])
-    else
-      return :($varname[$i])
-    end
+function numbered_expr(O::Operation,args...;varordering = args[1],offset = 0,
+                       lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)])
+  if isa(O.op, ModelingToolkit.Variable)
+	for j in 1:length(args)
+		i = get_varnumber(O,args[j])
+		if i !== nothing
+			return :($(rhsnames[j])[$(i+offset)])
+		end
+	end
   end
   return Expr(:call, Symbol(O.op),
-         [numbered_expr(x,vars,parameters;derivname=derivname,
-                        varname=varname,paramname=paramname) for x in O.args]...)
+         [numbered_expr(x,args...;offset=offset,lhsname=lhsname,
+                        rhsnames=rhsnames,varordering=varordering) for x in O.args]...)
 end
 
-function numbered_expr(de::ModelingToolkit.Equation,vars::Vector{<:Variable},parameters;
-                       derivname=:du,varname=:u,paramname=:p)
-    i = findfirst(x->isequal(x.name,var_from_nested_derivative(de.lhs)[1].name),vars)
-    :($derivname[$i] = $(numbered_expr(de.rhs,vars,parameters;
-                                     derivname=derivname,
-                                     varname=varname,paramname=paramname)))
-end
-function numbered_expr(de::ModelingToolkit.Equation,vars::Vector{Operation},parameters;
-                       derivname=:du,varname=:u,paramname=:p)
-    i = findfirst(x->isequal(x.op.name,var_from_nested_derivative(de.lhs)[1].name),vars)
-    :($derivname[$i] = $(numbered_expr(de.rhs,vars,parameters;
-                                     derivname=derivname,
-                                     varname=varname,paramname=paramname)))
+function numbered_expr(de::ModelingToolkit.Equation,args...;varordering = args[1],
+                       lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)],offset=0)
+    i = findfirst(x->isequal(x isa Variable ? x.name : x.op.name,var_from_nested_derivative(de.lhs)[1].name),varordering)
+    :($lhsname[$(i+offset)] = $(numbered_expr(de.rhs,args...;offset=offset,
+											  varordering = varordering,
+											  lhsname = lhsname,
+											  rhsnames = rhsnames)))
 end
 numbered_expr(c::ModelingToolkit.Constant,args...;kwargs...) = c.value
 
-function _build_function(target::StanTarget, eqs, vs, ps, iv,
-                         conv = toexpr, expression = Val{true};
-                         fname = :diffeqf, derivname=:internal_var___du,
-                         varname=:internal_var___u,paramname=:internal_var___p)
-    differential_equation = string(join([numbered_expr(eq,vs,ps,derivname=derivname,
-                                   varname=varname,paramname=paramname) for
+"""
+Build function target: CTarget
+
+```julia
+function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
+                         conv = simplified_expr, expression = Val{true},
+                         fname = :diffeqf,
+						 lhsname=:du,rhsnames=[Symbol("RHS\$i") for i in 1:length(args)],
+						 libpath=tempname(),compiler=:gcc)
+```
+
+This builds an in-place C function. Only works on arrays of equations. If
+`expression == Val{false}`, then this builds a function in C, compiles it,
+and returns a lambda to that compiled function. These special keyword arguments
+control the compilation:
+
+- libpath: the path to store the binary. Defaults to a temporary path.
+- compiler: which C compiler to use. Defaults to :gcc, which is currently the
+  only available option.
+"""
+function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
+                         conv = simplified_expr, expression = Val{true},
+                         fname = :diffeqf,
+						 lhsname=:du,rhsnames=[Symbol("RHS$i") for i in 1:length(args)],
+						 libpath=tempname(),compiler=:gcc)
+    differential_equation = string(join([numbered_expr(eq,args...,lhsname=lhsname,
+                                  rhsnames=rhsnames,offset=-1) for
+                                  (i, eq) ∈ enumerate(eqs)],";\n  "),";")
+
+    argstrs = join(vcat("double* $(lhsname)",[typeof(args[i])<:Array ? "double* $(rhsnames[i])" : "double $(rhsnames[i])" for i in 1:length(args)]),", ")
+	ex = """
+    void $fname($(argstrs...)) {
+      $differential_equation
+    }
+    """
+
+	if expression == Val{true}
+		return ex
+	else
+		@assert compiler == :gcc
+		ex = build_function(eqs,args...;target=ModelingToolkit.CTarget())
+		open(`gcc -fPIC -O3 -msse3 -xc -shared -o $(libpath * "." * Libdl.dlext) -`, "w") do f
+			print(f, ex)
+		end
+		eval(:((du::Array{Float64},u::Array{Float64},p::Array{Float64},t::Float64) -> ccall(("diffeqf", $libpath), Cvoid, (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Float64), du, u, p, t)))
+	end
+end
+
+"""
+Build function target: StanTarget
+
+```julia
+function _build_function(target::StanTarget, eqs::Array{<:Equation}, vs, ps, iv;
+                         conv = simplified_expr, expression = Val{true},
+                         fname = :diffeqf, lhsname=:internal_var___du,
+                         rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
+```
+
+This builds an in-place Stan function compatible with the Stan differential equation solvers.
+Unlike other build targets, this one requestions (vs, ps, iv) as the function arguments.
+Only allowed on arrays of equations.
+"""
+function _build_function(target::StanTarget, eqs::Array{<:Equation}, vs, ps, iv;
+                         conv = simplified_expr, expression = Val{true},
+                         fname = :diffeqf, lhsname=:internal_var___du,
+                         rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
+	@assert expression == Val{true}
+    differential_equation = string(join([numbered_expr(eq,vs,ps,lhsname=lhsname,
+                                   rhsnames=rhsnames) for
                                    (i, eq) ∈ enumerate(eqs)],";\n  "),";")
     """
-    real[] $fname(real $iv,real[] $varname,real[] $paramname,real[] x_r,int[] x_i) {
-      real $derivname[$(length(eqs))];
+    real[] $fname(real $iv,real[] $(rhsnames[1]),real[] $(rhsnames[2]),real[] x_r,int[] x_i) {
+      real $lhsname[$(length(eqs))];
       $differential_equation
-      return $derivname;
+      return $lhsname;
     }
     """
 end
 
-function _build_function(target::CTarget, eqs, vs, ps, iv;
-                         conv = toexpr, expression = Val{true},
-                         fname = :diffeqf, derivname=:internal_var___du,
-                         varname=:internal_var___u,paramname=:internal_var___p)
-    differential_equation = string(join([numbered_expr(eq,vs,ps,derivname=derivname,
-                                  varname=varname,paramname=paramname) for
-                                  (i, eq) ∈ enumerate(eqs)],";\n  "),";")
-    """
-    void $fname(double* $derivname, double* $varname, double* $paramname, $iv) {
-      $differential_equation
-    }
-    """
-end
+"""
+Build function target: MATLABTarget
 
-function _build_function(target::MATLABTarget, eqs, vs, ps, iv;
-                         conv = toexpr, expression = Val{true},
-                         fname = :diffeqf, derivname=:internal_var___du,
-                         varname=:internal_var___u,paramname=:internal_var___p)
-    matstr = join([numbered_expr(eq.rhs,vs,ps,derivname=derivname,
-                                  varname=varname,paramname=paramname) for
+```julia
+function _build_function(target::MATLABTarget, eqs::Array{<:Equation}, args...;
+                         conv = simplified_expr, expression = Val{true},
+                         lhsname=:internal_var___du,
+                         rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
+```
+
+This builds an out of place anonymous function @(t,rhsnames[1]) to be used in MATLAB.
+Compatible with the MATLAB differential equation solvers. Only allowed on arrays
+of equations.
+"""
+function _build_function(target::MATLABTarget, eqs::Array{<:Equation}, args...;
+                         conv = simplified_expr, expression = Val{true},
+                         fname = :diffeqf, lhsname=:internal_var___du,
+                         rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
+	@assert expression == Val{true}
+    matstr = join([numbered_expr(eq.rhs,args...,lhsname=lhsname,
+                                  rhsnames=rhsnames) for
                                   (i, eq) ∈ enumerate(eqs)],"; ")
 
     matstr = replace(matstr,"["=>"(")
     matstr = replace(matstr,"]"=>")")
-    matstr = "$fname = @(t,$varname) ["*matstr*"];"
+    matstr = "$fname = @(t,$(rhsnames[1])) ["*matstr*"];"
     matstr
 end

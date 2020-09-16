@@ -111,18 +111,3 @@ rename
 get_variables
 substitute_expr!
 ```
-
-### Expression Generation and `build_function`
-
-At any time, Julia expressions can be generated from ModelingToolkit IR by using
-`convert(Expr,x)`. This performs some cleaning to return an expression without
-extraneous pieces that commonly matches expressions one would write in functions
-like those for differential equation solvers and optimization libraries.
-
-Additionally, the core compilation process of ModelingToolkit IR is `build_function`.
-`build_function` takes an operation or an `AbstractArray` of operations and
-generates a compilable version of the model for numerical solvers.
-
-```@docs
-build_function
-```

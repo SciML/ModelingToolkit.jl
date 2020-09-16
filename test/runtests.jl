@@ -16,9 +16,11 @@ using SafeTestsets, Test
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 @safetestset "ReactionSystem Test" begin include("reactionsystem.jl") end
 @safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
+@safetestset "ControlSystem Test" begin include("controlsystem.jl") end
 @safetestset "Build Targets Test" begin include("build_targets.jl") end
 @safetestset "Domain Test" begin include("domains.jl") end
 @safetestset "Constraints Test" begin include("constraints.jl") end
+@safetestset "Reduction Test" begin include("reduction.jl") end
 @safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "Lowering Integration Test" begin include("lowering_solving.jl") end
 @safetestset "Test Big System Usage" begin include("bigsystem.jl") end
@@ -28,3 +30,5 @@ using SafeTestsets, Test
 #@testset "Latexify recipes Test" begin include("latexify.jl") end
 @testset "Distributed Test" begin include("distributed.jl") end
 @testset "Variable Utils Test" begin include("variable_utils.jl") end
+println("Last test requires gcc available in the path!")
+@safetestset "C Compilation Test" begin include("ccompile.jl") end

@@ -93,4 +93,20 @@ substitute(expr::Num, s::Union{Pair, Vector, Dict}; kw...) = Num(substitute(valu
 substitute(expr::Term, s::Pair; kw...) = substitute(expr, Dict(s[1] => s[2]); kw...)
 substitute(expr::Term, s::Vector; kw...) = substitute(expr, Dict(s); kw...)
 
+function substituter(pairs)
+    dict = Dict(to_symbolic(k) => to_symbolic(v)  for (k, v) in pairs)
+    expr -> to_mtk(SymbolicUtils.substitute(expr, dict))
+end
+
+macro showarr(x)
+    n = string(x)
+    quote
+        y = $(esc(x))
+        println($n, " = ", summary(y))
+        Base.print_array(stdout, y)
+        println()
+        y
+    end
+end
+
 @deprecate substitute_expr!(expr,s) substitute(expr,s)

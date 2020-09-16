@@ -23,6 +23,10 @@ struct OptimizationSystem <: AbstractSystem
     states::Vector{Variable}
     """Parameters."""
     ps::Vector{Variable}
+    pins::Vector{Variable}
+    observed::Vector{Equation}
+    equality_constraints::Vector{Equation}
+    inequality_constraints::Vector{Operation}
     """
     Name: the name of the system
     """
@@ -34,9 +38,13 @@ struct OptimizationSystem <: AbstractSystem
 end
 
 function OptimizationSystem(op, states, ps;
+                            pins = Variable[],
+                            observed = Operation[],
+                            equality_constraints = Equation[],
+                            inequality_constraints = Operation[],
                             name = gensym(:OptimizationSystem),
                             systems = OptimizationSystem[])
-    OptimizationSystem(op, convert.(Variable,states), convert.(Variable,ps), name, systems)
+    OptimizationSystem(op, convert.(Variable,states), convert.(Variable,ps), pins, observed, equality_constraints, inequality_constraints, name, systems)
 end
 
 function calculate_gradient(sys::OptimizationSystem)
@@ -72,6 +80,9 @@ end
 
 equations(sys::OptimizationSystem) = isempty(sys.systems) ? sys.op : sys.op + reduce(+,namespace_operation.(sys.systems))
 namespace_operation(sys::OptimizationSystem) = namespace_operation(sys.op,sys.name,nothing)
+
+hessian_sparsity(sys::OptimizationSystem) =
+    hessian_sparsity(sys.op,[dv() for dv in states(sys)])
 
 """
 ```julia

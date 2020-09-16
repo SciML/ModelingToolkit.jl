@@ -14,11 +14,13 @@ eqs = [D(x) ~ a*x - x*y,
     }
     """
 
-@test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.CTarget()) ==
+@test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.CTarget(),
+                                     lhsname=:internal_var___du,
+                                     rhsnames=[:internal_var___u,:internal_var___p,:t]) ==
   """
-  void diffeqf(double* internal_var___du, double* internal_var___u, double* internal_var___p, t) {
-    internal_var___du[1] = internal_var___p[1] * internal_var___u[1] - internal_var___u[1] * internal_var___u[2];
-    internal_var___du[2] = -3 * internal_var___u[2] + internal_var___u[1] * internal_var___u[2];
+  void diffeqf(double* internal_var___du, double* internal_var___u, double* internal_var___p, double t) {
+    internal_var___du[0] = internal_var___p[0] * internal_var___u[0] - internal_var___u[0] * internal_var___u[1];
+    internal_var___du[1] = -3 * internal_var___u[1] + internal_var___u[0] * internal_var___u[1];
   }
   """
 
@@ -28,8 +30,12 @@ eqs = [D(x) ~ a*x - x*y,
 
 sys = ODESystem(eqs,t,[x,y],[a])
 
-@test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.CTarget()) ==
-      ModelingToolkit.build_function(sys.eqs,[x,y],[a],t,target = ModelingToolkit.CTarget())
+@test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.CTarget(),
+                                     lhsname=:internal_var___du,
+                                     rhsnames=[:internal_var___u,:internal_var___p,:t]) ==
+      ModelingToolkit.build_function(sys.eqs,[x,y],[a],t,target = ModelingToolkit.CTarget(),
+                                           lhsname=:internal_var___du,
+                                           rhsnames=[:internal_var___u,:internal_var___p,:t])
 
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.StanTarget()) ==
       ModelingToolkit.build_function(sys.eqs,[x,y],[a],t,target = ModelingToolkit.StanTarget())
@@ -37,8 +43,12 @@ sys = ODESystem(eqs,t,[x,y],[a])
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.MATLABTarget()) ==
       ModelingToolkit.build_function(sys.eqs,[x,y],[a],t,target = ModelingToolkit.MATLABTarget())
 
-@test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.CTarget()) ==
-      ModelingToolkit.build_function(sys.eqs,sys.states,sys.ps,sys.iv,target = ModelingToolkit.CTarget())
+@test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.CTarget(),
+                                     lhsname=:internal_var___du,
+                                     rhsnames=[:internal_var___u,:internal_var___p,:t]) ==
+      ModelingToolkit.build_function(sys.eqs,sys.states,sys.ps,sys.iv,target = ModelingToolkit.CTarget(),
+                                     lhsname=:internal_var___du,
+                                     rhsnames=[:internal_var___u,:internal_var___p,:t])
 
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.StanTarget()) ==
       ModelingToolkit.build_function(sys.eqs,sys.states,sys.ps,sys.iv,target = ModelingToolkit.StanTarget())

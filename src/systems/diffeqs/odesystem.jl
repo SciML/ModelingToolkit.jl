@@ -31,6 +31,8 @@ struct ODESystem <: AbstractODESystem
     states::Vector
     """Parameter variables."""
     ps::Vector
+    pins::Vector{Variable}
+    observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
@@ -62,16 +64,18 @@ struct ODESystem <: AbstractODESystem
 end
 
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
+                   pins = Variable[],
+                   observed = Operation[],
                    systems = ODESystem[],
                    name=gensym(:ODESystem))
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
-    tgrad = RefValue(Vector{Num}(undef, 0))
-    jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
-    Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
-    Wfact_t = RefValue(Matrix{Num}(undef, 1, 0))
-    ODESystem(deqs, iv′, dvs′, ps′, tgrad, jac, Wfact, Wfact_t, name, systems)
+    tgrad = RefValue(Vector{Expression}(undef, 0))
+    jac = RefValue{Any}(Matrix{Expression}(undef, 0, 0))
+    Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
+    Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
+    ODESystem(deqs, iv′, dvs′, ps′, pins, observed, tgrad, jac, Wfact, Wfact_t, name, systems)
 end
 
 var_from_nested_derivative(x, i=0) = (missing, missing)
@@ -79,7 +83,6 @@ var_from_nested_derivative(x::Term,i=0) = x.op isa Differential ? var_from_neste
 
 iv_from_nested_derivative(x) = x.op isa Differential ? iv_from_nested_derivative(x.args[1]) : x.args[1]
 iv_from_nested_derivative(x::Constant) = missing
-
 
 vars(exprs::Term) = vars([exprs])
 vars(exprs) = foldl(vars!, exprs; init = Set())
@@ -95,7 +98,7 @@ function vars!(vars, O)
     return vars
 end
 
-function ODESystem(eqs; kwargs...)
+function ODESystem(eqs, iv=nothing; kwargs...)
     # NOTE: this assumes that the order of algebric equations doesn't matter
     diffvars = OrderedSet()
     allstates = OrderedSet()
@@ -104,13 +107,17 @@ function ODESystem(eqs; kwargs...)
     diffeq = Equation[]
     algeeq = Equation[]
     # initial loop for finding `iv`
-    iv = nothing
-    for eq in eqs
-        if !(eq.lhs isa Constant) # assume eq.lhs is either Differential or Constant
-            iv = iv_from_nested_derivative(eq.lhs)
+    if iv === nothing
+        for eq in eqs
+            if !(eq.lhs isa Constant) # assume eq.lhs is either Differential or Constant
+                iv = iv_from_nested_derivative(eq.lhs)
+                break
+            end
         end
+    else
+        iv = convert(Variable, iv)
     end
-    iv === nothing && throw(ArgumentError("No differential variable detected."))
+    iv === nothing && throw(ArgumentError("Please pass in independent variables."))
     for eq in eqs
         for var in vars(eq.rhs for eq ∈ eqs)
             if isparameter(var) || isparameter(var.op)

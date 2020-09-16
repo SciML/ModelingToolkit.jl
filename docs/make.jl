@@ -16,7 +16,8 @@ makedocs(
             "tutorials/higher_order.md",
             "tutorials/nonlinear.md",
             "tutorials/modelingtoolkitize.md",
-            "tutorials/auto_parallel.md"
+            "tutorials/auto_parallel.md",
+            "tutorials/converting_to_C.md"
         ],
         "Systems" => Any[
             "systems/AbstractSystem.md",
@@ -25,12 +26,14 @@ makedocs(
             "systems/JumpSystem.md",
             "systems/NonlinearSystem.md",
             "systems/OptimizationSystem.md",
+            "systems/ControlSystem.md",
             "systems/ReactionSystem.md",
             "systems/PDESystem.md",
             "systems/DependencyGraphs.md"
         ],
         "Comparison Against SymPy" => "comparison.md",
         "highlevel.md",
+        "build_function.md",
         "IR.md"
     ]
 )

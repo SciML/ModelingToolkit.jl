@@ -11,13 +11,17 @@ using SpecialFunctions, NaNMath
 using Base.Threads
 import MacroTools: splitdef, combinedef, postwalk, striplines
 import GeneralizedGenerated
+import Libdl
 using DocStringExtensions
 using Base: RefValue
+import IfElse
 
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils:Term, Sym, FnType, @rule, Rewriters, substitute
+import SymbolicUtils: Term, Sym, to_symbolic, FnType, @rule, Rewriters, substitute
+
+using LinearAlgebra: LU, BlasInt
 
 import LightGraphs: SimpleDiGraph, add_edge!
 
@@ -169,6 +173,7 @@ include("equations.jl")
 include("function_registration.jl")
 include("utils.jl")
 include("linearity.jl")
+include("solve.jl")
 include("direct.jl")
 include("domains.jl")
 
@@ -187,13 +192,18 @@ include("systems/nonlinear/nonlinearsystem.jl")
 
 include("systems/optimization/optimizationsystem.jl")
 
+include("systems/control/controlsystem.jl")
+
 include("systems/pde/pdesystem.jl")
 
 include("systems/reaction/reactionsystem.jl")
 include("systems/dependency_graphs.jl")
 
+include("systems/reduction.jl")
+
 include("latexify_recipes.jl")
 include("build_function.jl")
+include("extra_functions.jl")
 
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
@@ -204,14 +214,16 @@ export OptimizationProblem, OptimizationProblemExpr
 export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
+export ControlSystem
 export ode_order_lowering
+export runge_kutta_discretize
 export PDESystem
 export Reaction, ReactionSystem, ismassaction, oderatelaw, jumpratelaw
 export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
 export Term, Sym, Operation, Expression, Variable
-export independent_variable, states, parameters, equations
+export independent_variable, states, parameters, equations, controls, pins, observed
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad

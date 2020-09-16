@@ -45,7 +45,8 @@ end
 
 f(du,u,nothing,0.0)
 
-multithreadedf = eval(ModelingToolkit.build_function(du,u,parallel=ModelingToolkit.MultithreadedForm())[2])
+multithreadedf = eval(ModelingToolkit.build_function(du,u,fillzeros=true,
+                      parallel=ModelingToolkit.MultithreadedForm())[2])
 
 MyA = zeros(N,N);
 AMx = zeros(N,N);

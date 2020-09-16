@@ -1,6 +1,6 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
 using OrdinaryDiffEq
-using DiffEqBase
+using DiffEqBase, SparseArrays
 using Test
 
 using ModelingToolkit: value
@@ -134,6 +134,9 @@ eqs = [D(x) ~ σ*a,
 de = ODESystem(eqs)
 generate_function(de, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(de)
+@test ModelingToolkit.jacobian_sparsity(de).colptr == sparse(jac).colptr
+@test ModelingToolkit.jacobian_sparsity(de).rowval == sparse(jac).rowval
+
 f = ODEFunction(de, [x,y,z], [σ,ρ,β])
 
 @derivatives D'~t

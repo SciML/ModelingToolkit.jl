@@ -103,30 +103,41 @@ end
 
 isidx(x) = x isa TermCombination
 
+"""
+```julia
+hessian_sparsity(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression})
+```
+
+Return the sparsity pattern of the Hessian of an array of expressions with respect to
+an array of variable expressions.
+"""
+function hessian_sparsity end
+
 let
+    # we do this in a let block so that Revise works on the list of rules
+
     _scalar = one(TermCombination)
 
     linearity_propagator = [
           @rule +(~~xs) => reduce(+, filter(isidx, ~~xs), init=_scalar)
           @rule *(~~xs) => reduce(*, filter(isidx, ~~xs), init=_scalar)
           @rule (~f)(~x::(!isidx)) => _scalar
-          @rule (~f)(~x::isidx) => if haslinearity(~f, Val{1}())
-              combine_terms(linearity(~f, Val{1}()), ~x)
+          @rule (~f)(~x::isidx) => if haslinearity_1(~f)
+              combine_terms_1(linearity_1(~f), ~x)
           else
               error("Function of unknown linearity used: ", ~f)
           end
           @rule (^)(~x::isidx, ~y) => ~y isa Number && isone(~y) ? ~x : (~x) * (~x)
           @rule (~f)(~x, ~y) => begin
-              if haslinearity(~f, Val{2}())
+              if haslinearity_2(~f)
                   a = isidx(~x) ? ~x : _scalar
                   b = isidx(~y) ? ~y : _scalar
-                  combine_terms(linearity(~f, Val{2}()), a, b)
+                  combine_terms_2(linearity_2(~f), a, b)
               else
                   error("Function of unknown linearity used: ", ~f)
               end
           end] |> Rewriters.Chain |> Rewriters.Postwalk |> Rewriters.Fixpoint
 
-    # we do this in a let block so that Revise works on the list of rules
     global hessian_sparsity
 
     """
