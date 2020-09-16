@@ -89,7 +89,7 @@ end
 
 # Scalar output
 function _build_function(target::JuliaTarget, op::Operation, args...;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = true, headerfun=addheader)
 
@@ -163,7 +163,7 @@ Build function target: JuliaTarget
 
 ```julia
 function _build_function(target::JuliaTarget, rhss, args...;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun = addheader, outputidxs=nothing,
@@ -198,7 +198,7 @@ Special Keyword Argumnets:
   - `DaggerForm()`: Multithreading and multiprocessing using Julia's Dagger.jl
     for dynamic scheduling and load balancing.
 - `conv`: The conversion function of the Operation to Expr. By default this uses
-  the `simplified_expr` function utilized in `convert(Expr,x)`.
+  the `toexpr` function utilized in `convert(Expr,x)`.
 - `checkbounds`: For whether to enable bounds checking inside of the generated
   function. Defaults to false, meaning that `@inbounds` is applied.
 - `linenumbers`: Determines whether the generated function expression retains
@@ -216,7 +216,7 @@ Special Keyword Argumnets:
   safety with `skipzeros`.
 """
 function _build_function(target::JuliaTarget, rhss, args...;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun = addheader, outputidxs=nothing,
@@ -493,7 +493,7 @@ Build function target: CTarget
 
 ```julia
 function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          fname = :diffeqf,
 						 lhsname=:du,rhsnames=[Symbol("RHS\$i") for i in 1:length(args)],
 						 libpath=tempname(),compiler=:gcc)
@@ -509,7 +509,7 @@ control the compilation:
   only available option.
 """
 function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          fname = :diffeqf,
 						 lhsname=:du,rhsnames=[Symbol("RHS$i") for i in 1:length(args)],
 						 libpath=tempname(),compiler=:gcc)
@@ -541,7 +541,7 @@ Build function target: StanTarget
 
 ```julia
 function _build_function(target::StanTarget, eqs::Array{<:Equation}, vs, ps, iv;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          fname = :diffeqf, lhsname=:internal_var___du,
                          rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
 ```
@@ -551,7 +551,7 @@ Unlike other build targets, this one requestions (vs, ps, iv) as the function ar
 Only allowed on arrays of equations.
 """
 function _build_function(target::StanTarget, eqs::Array{<:Equation}, vs, ps, iv;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          fname = :diffeqf, lhsname=:internal_var___du,
                          rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
 	@assert expression == Val{true}
@@ -572,7 +572,7 @@ Build function target: MATLABTarget
 
 ```julia
 function _build_function(target::MATLABTarget, eqs::Array{<:Equation}, args...;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          lhsname=:internal_var___du,
                          rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
 ```
@@ -582,7 +582,7 @@ Compatible with the MATLAB differential equation solvers. Only allowed on arrays
 of equations.
 """
 function _build_function(target::MATLABTarget, eqs::Array{<:Equation}, args...;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          fname = :diffeqf, lhsname=:internal_var___du,
                          rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
 	@assert expression == Val{true}
