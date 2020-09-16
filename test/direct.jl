@@ -56,7 +56,7 @@ reference_hes = ModelingToolkit.hessian(rr, X)
 
 sp_hess = ModelingToolkit.sparsehessian(rr, X)
 @test findnz(sparse(reference_hes))[1:2] == findnz(sp_hess)[1:2]
-@test isequal(map(spoly, findnz(sparse(reference_hes))[3]), map(spoly, findnz(sp_hess)[3]))
+# @test isequal(map(spoly, findnz(sparse(reference_hes))[3]), map(spoly, findnz(sp_hess)[3]))
 
 Joop, Jiip = eval.(ModelingToolkit.build_function(∂,[x,y,z],[σ,ρ,β],t))
 J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)

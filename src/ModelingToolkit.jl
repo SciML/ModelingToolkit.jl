@@ -105,7 +105,6 @@ end
 @num_method Base.isless isless(value(a), value(b))
 @num_method Base.isequal isequal(value(a), value(b)) (Number, Symbolic)
 @num_method Base.:(==) value(a) == value(b) (Number,)
-@num_method Base.copysign copysign(value(a), value(b)) (Number,)
 Base.real(x::Num) = Num(real(value(x)))
 
 Base.hash(x::Num, h::UInt) = hash(value(x), h)
