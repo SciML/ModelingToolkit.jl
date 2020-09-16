@@ -71,10 +71,10 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
-    tgrad = RefValue(Vector{Expression}(undef, 0))
-    jac = RefValue{Any}(Matrix{Expression}(undef, 0, 0))
-    Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
-    Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
+    tgrad = RefValue(Vector{Num}(undef, 0))
+    jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
+    Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
+    Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
     ODESystem(deqs, iv′, dvs′, ps′, pins, observed, tgrad, jac, Wfact, Wfact_t, name, systems)
 end
 

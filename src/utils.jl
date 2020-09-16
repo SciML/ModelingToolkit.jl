@@ -31,14 +31,14 @@ function flatten_expr!(x)
     x
 end
 
-function detime_dvs(op::Operation)
-  if op.op isa Variable
-    Operation(Variable{vartype(op.op)}(op.op.name),Expression[])
+function detime_dvs(op::Term)
+  if op.op isa Sym
+      op.op
   else
-    Operation(op.op,detime_dvs.(op.args))
+    Term(op.op,detime_dvs.(op.args))
   end
 end
-detime_dvs(op::Constant) = op
+detime_dvs(op) = op
 
 function retime_dvs(op::Operation,dvs,iv)
   if op.op isa Variable && op.op ∈ dvs

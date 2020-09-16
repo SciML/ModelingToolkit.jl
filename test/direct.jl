@@ -98,7 +98,7 @@ Jiip(J2,[1.0,2.0,3.0],[1.0,2.0,3.0],1.0)
 
 # Function building
 
-@parameters σ() ρ() β()
+@parameters σ ρ β
 @variables x y z
 eqs = [σ*(y-x),
        x*(ρ-z)-y,
@@ -112,7 +112,7 @@ f(out,[1.0,2,3],[1.0,2,3])
 @test all(o1 .== out)
 
 function test_worldage()
-   @parameters σ() ρ() β()
+   @parameters σ ρ β
    @variables x y z
    eqs = [σ*(y-x),
           x*(ρ-z)-y,

@@ -88,7 +88,7 @@ function add_integrator_header(ex, fargs, iip; X=gensym(:MTIIPVar))
 end
 
 # Scalar output
-function _build_function(target::JuliaTarget, op::Operation, args...;
+function _build_function(target::JuliaTarget, op, args...;
                          conv = toexpr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = true, headerfun=addheader)
@@ -215,7 +215,7 @@ Special Keyword Argumnets:
 - `fillzeros`: Whether to perform `fill(out,0)` before the calculations to ensure
   safety with `skipzeros`.
 """
-function _build_function(target::JuliaTarget, rhss, args...;
+function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
                          conv = toexpr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
@@ -447,17 +447,24 @@ end
 
 vars_to_pairs(args) = vars_to_pairs(args[1],args[2])
 function vars_to_pairs(name,vs::AbstractArray)
-	_vs = convert.(Variable,vs)
-	names = [Symbol(u) for u ∈ _vs]
-	exs = [:($name[$i]) for (i, u) ∈ enumerate(_vs)]
-	names,exs
+    vs_names = [term_to_symbol(value(u)) for u ∈ vs]
+	exs = [:($name[$i]) for (i, u) ∈ enumerate(vs)]
+	vs_names,exs
 end
 
+function term_to_symbol(t::Term)
+    if operation(t) isa Sym
+        s = nameof(operation(t))
+        @show s
+    else
+        error("really?")
+    end
+end
+
+term_to_symbol(s::Sym) = nameof(s)
+
 function vars_to_pairs(name,vs)
-	_vs = convert(Variable,vs)
-	names = [Symbol(_vs)]
-	exs = [name]
-	names,exs
+    [term_to_symbol(value(vs))], [name]
 end
 
 get_varnumber(varop::Operation,vars::Vector{Operation}) =  findfirst(x->isequal(x,varop),vars)
@@ -480,7 +487,7 @@ end
 
 function numbered_expr(de::ModelingToolkit.Equation,args...;varordering = args[1],
                        lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)],offset=0)
-    i = findfirst(x->isequal(x isa Variable ? x.name : x.op.name,var_from_nested_derivative(de.lhs)[1].name),varordering)
+    i = findfirst(x->isequal(x isa Variable ? term_to_symbol(x) : term_to_symbol(x.op),term_to_symbol(var_from_nested_derivative(de.lhs)[1])),varordering)
     :($lhsname[$(i+offset)] = $(numbered_expr(de.rhs,args...;offset=offset,
 											  varordering = varordering,
 											  lhsname = lhsname,

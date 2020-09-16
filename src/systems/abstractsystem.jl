@@ -245,10 +245,7 @@ end
 function islinear(sys::AbstractSystem)
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
-    iv = sys.iv
-    dvs = [dv(iv) for dv ∈ states(sys)]
-
-    all(islinear(r, dvs) for r in rhs)
+    all(islinear(r, states(sys)) for r in rhs)
 end
 
 function pins(sys::AbstractSystem,args...)

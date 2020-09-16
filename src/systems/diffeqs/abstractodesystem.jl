@@ -2,14 +2,18 @@ function calculate_tgrad(sys::AbstractODESystem;
                          simplify=true)
   isempty(sys.tgrad[]) || return sys.tgrad[]  # use cached tgrad, if possible
   rhs = [detime_dvs(eq.rhs) for eq ∈ equations(sys)]
-  iv = sys.iv()
+  iv = sys.iv
+  for r in rhs
+      @show r
+      @show expand_derivatives(Differential(iv)(r))
+  end
   notime_tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r)) for r in rhs]
   tgrad = retime_dvs.(notime_tgrad,(states(sys),),iv)
   if simplify
       tgrad = ModelingToolkit.simplify.(tgrad)
   end
   sys.tgrad[] = tgrad
-  return @show(tgrad)
+  return tgrad
 end
 
 function calculate_jacobian(sys::AbstractODESystem;
@@ -18,7 +22,7 @@ function calculate_jacobian(sys::AbstractODESystem;
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
     iv = sys.iv
-    dvs = [dv(iv) for dv ∈ states(sys)]
+    dvs = states(sys)
 
     if sparse
         jac = sparsejacobian(rhs, dvs, simplify=simplify)
@@ -90,7 +94,7 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify=true)
         if eq.lhs isa Constant
             @assert eq.lhs.value == 0
         elseif eq.lhs.op isa Differential
-            j = findfirst(x->isequal(x.name,var_from_nested_derivative(eq.lhs)[1].name),dvs)
+            j = findfirst(x->isequal(term_to_symbol(x),term_to_symbol(var_from_nested_derivative(eq.lhs)[1])),dvs)
             M[i,j] = 1
         else
             error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")

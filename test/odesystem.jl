@@ -24,8 +24,6 @@ generate_function(de)
 function test_diffeq_inference(name, sys, iv, dvs, ps)
     @testset "ODESystem construction: $name" begin
         @test independent_variable(sys) ==  value(iv)
-        @show sys.states
-        @show @which states(sys)
         @test Set(states(sys))          == Set(value.(dvs))
         @test Set(parameters(sys))      == Set(value.(ps))
     end
@@ -52,10 +50,11 @@ u  = SVector(1:3...)
 p  = SVector(4:6...)
 @test f(u, p, 0.1) === @SArray [4, 0, -16]
 
+@show y
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y*t,
        D(z) ~ x*y - β*z]
-de = ODESystem(eqs)
+de = ODESystem(eqs) # This is broken
 ModelingToolkit.calculate_tgrad(de)
 
 tgrad_oop, tgrad_iip = eval.(ModelingToolkit.generate_tgrad(de))
