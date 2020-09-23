@@ -33,21 +33,21 @@ end
 
 function detime_dvs(op::Term)
   if op.op isa Sym
-      op.op
+      Sym{Number}(nameof(op.op))
   else
     Term(op.op,detime_dvs.(op.args))
   end
 end
 detime_dvs(op) = op
 
-function retime_dvs(op::Operation,dvs,iv)
-  if op.op isa Variable && op.op ∈ dvs
-    Operation(Variable{vartype(op.op)}(op.op.name),Expression[iv])
-  else
-    Operation(op.op,retime_dvs.(op.args,(dvs,),iv))
-  end
+function retime_dvs(op::Sym,dvs,iv)
+    Sym{FnType{Tuple{symtype(iv)}, Number}}(nameof(op))(iv)
 end
-retime_dvs(op::Constant,dvs,iv) = op
+
+function retime_dvs(op::Term, dvs, iv)
+    similarterm(op, op.op, retime_dvs.(op.args,(dvs,),(iv,)))
+end
+retime_dvs(op,dvs,iv) = op
 
 is_constant(::Constant) = true
 is_constant(::Any) = false

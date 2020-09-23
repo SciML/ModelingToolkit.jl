@@ -102,7 +102,7 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     # NOTE: this assumes that the order of algebric equations doesn't matter
     diffvars = OrderedSet()
     allstates = OrderedSet()
-    ps = OrderedSet{Sym}()
+    ps = OrderedSet()
     # reorder equations such that it is in the form of `diffeq, algeeq`
     diffeq = Equation[]
     algeeq = Equation[]

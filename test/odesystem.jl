@@ -58,6 +58,7 @@ de = ODESystem(eqs) # This is broken
 ModelingToolkit.calculate_tgrad(de)
 
 tgrad_oop, tgrad_iip = eval.(ModelingToolkit.generate_tgrad(de))
+
 @test tgrad_oop(u,p,t) == [0.0,-u[2],0.0]
 du = zeros(3)
 tgrad_iip(du,u,p,t)
@@ -82,7 +83,7 @@ tgrad_iip(du,u,p,t)
            D(y) ~ x*(ρ-z)-y,
            D(z) ~ x*y - β*z]
     de = ODESystem(eqs)
-    test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ, ρ, β))
+    test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ(t-1), ρ, β))
     @test begin
         f = eval(generate_function(de, [x,y,z], [σ,ρ,β])[2])
         du = [0.0,0.0,0.0]
@@ -92,7 +93,7 @@ tgrad_iip(du,u,p,t)
 
     eqs = [D(x) ~ x + 10σ(t-1) + 100σ(t-2) + 1000σ(t^2)]
     de = ODESystem(eqs)
-    test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ,))
+    test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ(t-2),σ(t^2), σ(t-1)))
     @test begin
         f = eval(generate_function(de, [x], [σ])[2])
         du = [0.0]

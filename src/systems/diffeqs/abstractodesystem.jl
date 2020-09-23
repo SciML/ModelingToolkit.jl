@@ -1,16 +1,15 @@
 function calculate_tgrad(sys::AbstractODESystem;
                          simplify=true)
   isempty(sys.tgrad[]) || return sys.tgrad[]  # use cached tgrad, if possible
+
+  # We need to remove explicit time dependence on the state because when we
+  # have `u(t) * t` we want to have the tgrad to be `u(t)` instead of `u'(t) *
+  # t + u(t)`.
   rhs = [detime_dvs(eq.rhs) for eq ∈ equations(sys)]
   iv = sys.iv
-  for r in rhs
-      @show r
-      @show expand_derivatives(Differential(iv)(r))
-  end
   notime_tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r)) for r in rhs]
-  tgrad = retime_dvs.(notime_tgrad,(states(sys),),iv)
   if simplify
-      tgrad = ModelingToolkit.simplify.(tgrad)
+      tgrad = ModelingToolkit.simplify.(notime_tgrad)
   end
   sys.tgrad[] = tgrad
   return tgrad

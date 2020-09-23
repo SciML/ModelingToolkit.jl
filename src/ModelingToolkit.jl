@@ -19,7 +19,7 @@ import IfElse
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils: Term, Sym, to_symbolic, FnType, @rule, Rewriters, substitute
+import SymbolicUtils: Term, Sym, to_symbolic, FnType, @rule, Rewriters, substitute, similarterm
 
 using LinearAlgebra: LU, BlasInt
 
@@ -50,7 +50,7 @@ end
 const show_numwrap = Ref(false)
 
 Num(x::Num) = x # ideally this should never be called
-(n::Num)(args...) = value(n)(map(value,args)...)
+(n::Num)(args...) = Num(value(n)(map(value,args)...))
 value(x) = x
 value(x::Num) = x.val
 
@@ -105,7 +105,6 @@ end
 @num_method Base.isless isless(value(a), value(b))
 @num_method Base.isequal isequal(value(a), value(b)) (Number, Symbolic)
 @num_method Base.:(==) value(a) == value(b) (Number,)
-Base.real(x::Num) = Num(real(value(x)))
 
 Base.hash(x::Num, h::UInt) = hash(value(x), h)
 

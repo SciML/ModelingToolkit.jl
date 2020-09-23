@@ -137,8 +137,6 @@ function expand_derivatives(n::Num, simplify=true; occurances=nothing)
     Num(expand_derivatives(value(n), simplify; occurances=occurances))
 end
 
-_iszero(x::Number) = iszero(x)
-_isone(x::Number) = isone(x)
 _iszero(x) = false
 _isone(x) = false
 
