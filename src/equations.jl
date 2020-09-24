@@ -15,6 +15,8 @@ end
 Base.:(==)(a::Equation, b::Equation) = all(isequal.((a.lhs, a.rhs), (b.lhs, b.rhs)))
 Base.hash(a::Equation, salt::UInt) = hash(a.lhs, hash(a.rhs, salt))
 
+SymbolicUtils.simplify(x::Equation; kw...) = simplify(x.lhs; kw...) ~ simplify(x.rhs; kw...)
+
 """
 $(TYPEDSIGNATURES)
 
@@ -41,7 +43,6 @@ Base.:~(lhs::Number    , rhs::Num) = Equation(value(lhs), value(rhs))
 Base.:~(lhs::Symbolic, rhs::Symbolic) = Equation(value(lhs), value(rhs))
 Base.:~(lhs::Symbolic, rhs::Any    ) = Equation(value(lhs), value(rhs))
 Base.:~(lhs::Any, rhs::Symbolic    ) = Equation(value(lhs), value(rhs))
-Base.:~(lhs::Number    , rhs::Num) = Equation(value(lhs), value(rhs))
 
 struct ConstrainedEquation
   constraints

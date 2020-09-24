@@ -31,7 +31,7 @@ struct ODESystem <: AbstractODESystem
     states::Vector
     """Parameter variables."""
     ps::Vector
-    pins::Vector{Variable}
+    pins::Vector{Num}
     observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
@@ -114,8 +114,6 @@ function ODESystem(eqs, iv=nothing; kwargs...)
                 break
             end
         end
-    else
-        iv = convert(Variable, iv)
     end
     iv === nothing && throw(ArgumentError("Please pass in independent variables."))
     for eq in eqs

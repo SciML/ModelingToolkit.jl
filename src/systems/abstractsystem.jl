@@ -117,6 +117,9 @@ Generate a function to evaluate the system's equations.
 """
 function generate_function end
 
+getname(x::Sym) = nameof(x)
+getname(t::Term) = t.op isa Sym ? getname(t.op) : error("Cannot get name of $t")
+
 function Base.getproperty(sys::AbstractSystem, name::Symbol)
 
     if name ∈ fieldnames(typeof(sys))
@@ -128,27 +131,23 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
         end
     end
 
-    i = findfirst(x->x.name==name,sys.states)
+    i = findfirst(x->getname(x) == name, sys.states)
+
     if i !== nothing
-        x = rename(sys.states[i],renamespace(sys.name,name))
-        if :iv ∈ fieldnames(typeof(sys))
-            return x(getfield(sys,:iv)())
-        else
-            return x()
-        end
+        return rename(sys.states[i],renamespace(sys.name,name))
     end
 
     if :ps ∈ fieldnames(typeof(sys))
-        i = findfirst(x->x.name==name,sys.ps)
+        i = findfirst(x->getname(x) == name,sys.ps)
         if i !== nothing
-            return rename(sys.ps[i],renamespace(sys.name,name))()
+            return rename(sys.ps[i],renamespace(sys.name,name))
         end
     end
 
     if :observed ∈ fieldnames(typeof(sys))
-        i = findfirst(x->convert(Variable,x.lhs).name==name,sys.observed)
+        i = findfirst(x->getname(x.lhs)==name,sys.observed)
         if i !== nothing
-            return rename(convert(Variable,sys.observed[i].lhs),renamespace(sys.name,name))(getfield(sys,:iv)())
+            return rename(sys.observed[i].lhs,renamespace(sys.name,name))
         end
     end
 
@@ -172,19 +171,23 @@ end
 namespace_equations(sys::AbstractSystem) = namespace_equation.(equations(sys),sys.name,sys.iv.name)
 
 function namespace_equation(eq::Equation,name,ivname)
-    _lhs = namespace_operation(eq.lhs,name,ivname)
-    _rhs = namespace_operation(eq.rhs,name,ivname)
+    _lhs = namespace_expr(eq.lhs,name,ivname)
+    _rhs = namespace_expr(eq.rhs,name,ivname)
     _lhs ~ _rhs
 end
 
-function namespace_operation(O::Operation,name,ivname)
-    if O.op isa Sym && O.op.name != ivname
-        Operation(rename(O.op,renamespace(name,O.op.name)),namespace_operation.(O.args,name,ivname))
+function namespace_expr(O::Sym,name,ivname)
+    O.name == ivname ? O : rename(O,renamespace(name,O.name))
+end
+
+function namespace_expr(O::Term,name,ivname)
+    if O.op isa Sym
+        Term(rename(O.op,renamespace(name,O.op.name)),namespace_expr.(O.args,name,ivname))
     else
-        Operation(O.op,namespace_operation.(O.args,name,ivname))
+        Term(O.op,namespace_expr.(O.args,name,ivname))
     end
 end
-namespace_operation(O::Constant,name,ivname) = O
+namespace_expr(O,name,ivname) = O
 
 independent_variable(sys::AbstractSystem) = sys.iv
 states(sys::AbstractSystem) = unique(isempty(sys.systems) ? setdiff(sys.states, convert.(Variable,sys.pins)) : [sys.states;reduce(vcat,namespace_variables.(sys.systems))])

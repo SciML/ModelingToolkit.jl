@@ -63,6 +63,7 @@ function Variable(name, indices...)
 end
 
 rename(x::Sym{T},name) where T = Sym{T}(name)
+rename(x::Term, name) where T = x.op isa Sym ? rename(x.op, name)(x.args...) : error("can't rename $x to $name")
 
 """
 $(TYPEDEF)

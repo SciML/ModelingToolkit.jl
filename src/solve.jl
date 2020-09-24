@@ -72,7 +72,7 @@ end
 function _solve(A, b)
     A = SymbolicUtils.simplify.(to_symbolic.(A), polynorm=true)
     b = SymbolicUtils.simplify.(to_symbolic.(b), polynorm=true)
-    map(to_mtk, SymbolicUtils.simplify.(ldiv(sym_lu(A), b)))
+    SymbolicUtils.simplify.(ldiv(sym_lu(A), b))
 end
 
 LinearAlgebra.:(\)(A::AbstractMatrix{<:Expression}, b::AbstractVector{<:Expression}) = _solve(A, b)
