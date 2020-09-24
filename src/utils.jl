@@ -55,7 +55,7 @@ is_constant(::Any) = false
 is_operation(::Operation) = true
 is_operation(::Any) = false
 
-is_derivative(O::Operation) = isa(O.op, Differential)
+is_derivative(O::Term) = isa(O.op, Differential)
 is_derivative(::Any) = false
 
 """

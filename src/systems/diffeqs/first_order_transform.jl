@@ -1,10 +1,11 @@
-function lower_varname(var::Variable, idv, order)
+function lower_varname(var::Term, idv, order)
     order == 0 && return var
-    name = Symbol(var.name, :ˍ, string(idv.name)^order)
-    return Variable{vartype(var)}(name)
+    name = Symbol(nameof(var.op), :ˍ, string(idv)^order)
+    #name = Symbol(var.name, :ˍ, string(idv.name)^order)
+    return Sym{symtype(var.op)}(name)(var.args[1])
 end
 
-function flatten_differential(O::Operation)
+function flatten_differential(O::Term)
     @assert is_derivative(O) "invalid differential: $O"
     is_derivative(O.args[1]) || return (O.args[1], O.op.x, 1)
     (x, t, order) = flatten_differential(O.args[1])
@@ -24,12 +25,12 @@ function ode_order_lowering(sys::ODESystem)
 end
 
 function ode_order_lowering(eqs, iv, states)
-    var_order = OrderedDict{Variable,Int}()
-    D = Differential(iv())
+    var_order = OrderedDict{Any,Int}()
+    D = Differential(iv)
     diff_eqs = Equation[]
-    diff_vars = Variable[]
+    diff_vars = []
     alge_eqs = Equation[]
-    alge_vars = Variable[]
+    alge_vars = []
 
     for (i, (eq, ss)) ∈ enumerate(zip(eqs, states))
         if isequal(eq.lhs, Constant(0))
@@ -42,7 +43,7 @@ function ode_order_lowering(eqs, iv, states)
             var′ = lower_varname(var, iv, maxorder - 1)
             rhs′ = rename_lower_order(eq.rhs)
             push!(diff_vars, var′)
-            push!(diff_eqs, D(var′(iv())) ~ rhs′)
+            push!(diff_eqs, D(var′) ~ rhs′)
         end
     end
 
@@ -52,8 +53,8 @@ function ode_order_lowering(eqs, iv, states)
             rvar = lower_varname(var, iv, o)
             push!(diff_vars, lvar)
 
-            rhs = rvar(iv())
-            eq = Differential(iv())(lvar(iv())) ~ rhs
+            rhs = rvar
+            eq = Differential(iv)(lvar) ~ rhs
             push!(diff_eqs, eq)
         end
     end
@@ -62,11 +63,11 @@ function ode_order_lowering(eqs, iv, states)
     return (vcat(diff_eqs, alge_eqs), vcat(diff_vars, alge_vars))
 end
 
-function rename_lower_order(O::Expression)
-    isa(O, Operation) || return O
+function rename_lower_order(O)
+    isa(O, Term) || return O
     if is_derivative(O)
         (x, t, order) = flatten_differential(O)
-        return lower_varname(x.op, t.op, order)(x.args...)
+        return lower_varname(x, t, order)
     end
-    return Operation(O.op, rename_lower_order.(O.args))
+    return Term(O.op, rename_lower_order.(O.args))
 end
