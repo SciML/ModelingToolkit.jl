@@ -25,7 +25,7 @@ struct NonlinearSystem <: AbstractSystem
     states::Vector
     """Parameters."""
     ps::Vector
-    pins::Vector{Variable}
+    pins::Vector
     observed::Vector{Equation}
     """
     Name: the name of the system
@@ -38,11 +38,11 @@ struct NonlinearSystem <: AbstractSystem
 end
 
 function NonlinearSystem(eqs, states, ps;
-                         pins = Variable[],
-                         observed = Operation[],
+                         pins = [],
+                         observed = [],
                          name = gensym(:NonlinearSystem),
                          systems = NonlinearSystem[])
-    NonlinearSystem(eqs, value.(states), value.(ps), pins, observed, name, systems)
+    NonlinearSystem(eqs, value.(states), value.(ps), value.(pins), observed, name, systems)
 end
 
 function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=true)
@@ -59,21 +59,19 @@ end
 function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys);
                            sparse = false, simplify = true, kwargs...)
     jac = calculate_jacobian(sys,sparse=sparse, simplify=simplify)
-    return build_function(jac, convert.(Variable,vs), convert.(Variable,ps);
+    return build_function(jac, vs, ps;
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
 function generate_function(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys); kwargs...)
     rhss = [eq.rhs for eq ∈ sys.eqs]
-    vs′ = convert.(Variable,vs)
-    ps′ = convert.(Variable,ps)
-    return build_function(rhss, vs′, ps′;
+    return build_function(rhss, vs, ps;
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
 jacobian_sparsity(sys::NonlinearSystem) =
     jacobian_sparsity([eq.rhs for eq ∈ equations(sys)],
-                      [dv() for dv in states(sys)])
+                      states(sys))
 
 """
 ```julia

@@ -1,6 +1,7 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
 using DiffEqBase, SparseArrays
 using Test
+using ModelingToolkit: value
 
 canonequal(a, b) = isequal(simplify(a), simplify(b))
 
@@ -10,8 +11,8 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
 
 function test_nlsys_inference(name, sys, vs, ps)
     @testset "NonlinearSystem construction: $name" begin
-        @test Set(states(sys))     == Set(convert.(Variable,vs))
-        @test Set(parameters(sys)) == Set(convert.(Variable,ps))
+        @test Set(states(sys))     == Set(value.(vs))
+        @test Set(parameters(sys)) == Set(value.(ps))
     end
 end
 

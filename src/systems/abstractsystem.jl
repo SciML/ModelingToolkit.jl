@@ -263,10 +263,9 @@ struct AbstractSysToExpr
     states::Vector
 end
 AbstractSysToExpr(sys) = AbstractSysToExpr(sys,states(sys))
-function (f::AbstractSysToExpr)(O::Operation)
+function (f::AbstractSysToExpr)(O::Term)
     any(isequal(O), f.states) && return O.op.name  # variables
     if isa(O.op, Sym)
-        isempty(O.args) && return O.op.name  # 0-ary parameters
         return build_expr(:call, Any[O.op.name; f.(O.args)])
     end
     return build_expr(:call, Any[O.op; f.(O.args)])
