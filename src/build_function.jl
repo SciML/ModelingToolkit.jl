@@ -224,6 +224,7 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
                          skipzeros = outputidxs===nothing,
 						 fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
 						 parallel=SerialForm(), kwargs...)
+    conv = conv ∘ rm_calls_with_iv
 	if multithread isa Bool
 		@warn("multithraded is deprecated for the parallel argument. See the documentation.")
 		parallel = multithread ? MultithreadedForm() : SerialForm()
@@ -466,6 +467,10 @@ function vars_to_pairs(name,vs)
     [term_to_symbol(value(vs))], [name]
 end
 
+function rm_calls_with_iv(expr)
+    Rewriters.Prewalk(Rewriters.Chain([@rule((~f::(x->x isa Sym))(~t::(x->x isa Sym)) => Sym{symtype((~f)(~t))}((term_to_symbol(~f))))]))(value(expr))
+end
+
 get_varnumber(varop::Operation,vars::Vector{Operation}) =  findfirst(x->isequal(x,varop),vars)
 get_varnumber(varop::Operation,vars::Vector{<:Variable})  =  findfirst(x->isequal(x,varop.op),vars)
 
@@ -486,7 +491,7 @@ end
 
 function numbered_expr(de::ModelingToolkit.Equation,args...;varordering = args[1],
                        lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)],offset=0)
-    i = findfirst(x->isequal(x isa Variable ? term_to_symbol(x) : term_to_symbol(x.op),term_to_symbol(var_from_nested_derivative(de.lhs)[1])),varordering)
+    i = findfirst(x->isequal(x isa Sym ? term_to_symbol(x) : term_to_symbol(x.op),term_to_symbol(var_from_nested_derivative(de.lhs)[1])),varordering)
     :($lhsname[$(i+offset)] = $(numbered_expr(de.rhs,args...;offset=offset,
 											  varordering = varordering,
 											  lhsname = lhsname,

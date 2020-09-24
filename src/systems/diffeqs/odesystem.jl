@@ -81,8 +81,8 @@ end
 var_from_nested_derivative(x, i=0) = (missing, missing)
 var_from_nested_derivative(x::Term,i=0) = x.op isa Differential ? var_from_nested_derivative(x.args[1],i+1) : (x,i)
 
-iv_from_nested_derivative(x) = x.op isa Differential ? iv_from_nested_derivative(x.args[1]) : x.args[1]
-iv_from_nested_derivative(x::Constant) = missing
+iv_from_nested_derivative(x::Term) = x.op isa Differential ? iv_from_nested_derivative(x.args[1]) : x.args[1]
+iv_from_nested_derivative(x) = missing
 
 vars(exprs::Term) = vars([exprs])
 vars(exprs) = foldl(vars!, exprs; init = Set())

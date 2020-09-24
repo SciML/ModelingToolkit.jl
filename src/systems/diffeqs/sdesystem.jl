@@ -30,35 +30,35 @@ struct SDESystem <: AbstractODESystem
     """The expressions defining the drift term."""
     eqs::Vector{Equation}
     """The expressions defining the diffusion term."""
-    noiseeqs::AbstractArray{Operation}
+    noiseeqs::AbstractArray
     """Independent variable."""
-    iv::Variable
+    iv::Sym
     """Dependent (state) variables."""
-    states::Vector{Variable}
+    states::Vector
     """Parameter variables."""
-    ps::Vector{Variable}
-    pins::Vector{Variable}
-    observed::Vector{Equation}
+    ps::Vector
+    pins::Vector
+    observed::Vector
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
     """
-    tgrad::RefValue{Vector{Expression}}
+    tgrad::RefValue
     """
     Jacobian matrix. Note: this field will not be defined until
     [`calculate_jacobian`](@ref) is called on the system.
     """
-    jac::RefValue{Matrix{Expression}}
+    jac::RefValue
     """
     `Wfact` matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
     """
-    Wfact::RefValue{Matrix{Expression}}
+    Wfact::RefValue
     """
     `Wfact_t` matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
     """
-    Wfact_t::RefValue{Matrix{Expression}}
+    Wfact_t::RefValue
     """
     Name: the name of the system
     """
@@ -70,24 +70,22 @@ struct SDESystem <: AbstractODESystem
 end
 
 function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
-                   pins = Variable[],
-                   observed = Operation[],
+                   pins = [],
+                   observed = [],
                    systems = SDESystem[],
                    name = gensym(:SDESystem))
-    iv′ = convert(Variable,iv)
-    dvs′ = convert.(Variable,dvs)
-    ps′ = convert.(Variable,ps)
-    tgrad = RefValue(Vector{Expression}(undef, 0))
-    jac = RefValue(Matrix{Expression}(undef, 0, 0))
-    Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
-    Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
+    iv′ = value(iv)
+    dvs′ = value.(dvs)
+    ps′ = value.(ps)
+    tgrad = RefValue(Vector{Num}(undef, 0))
+    jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
+    Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
+    Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
     SDESystem(deqs, neqs, iv′, dvs′, ps′, pins, observed, tgrad, jac, Wfact, Wfact_t, name, systems)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = sys.states, ps = sys.ps; kwargs...)
-    dvs′ = convert.(Variable,dvs)
-    ps′ = convert.(Variable,ps)
-    return build_function(sys.noiseeqs, dvs′, ps′, sys.iv;
+    return build_function(sys.noiseeqs, dvs, ps, sys.iv;
                           conv = ODEToExpr(sys),kwargs...)
 end
 

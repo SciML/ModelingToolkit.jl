@@ -39,15 +39,17 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
                             return (prob.f.sys, prob.f.sys.states, prob.f.sys.ps)
     @parameters t
-    vars = reshape([Variable(:x, i)(t) for i in eachindex(prob.u0)],size(prob.u0))
+    var(x, i) = Sym{FnType{Tuple{symtype(t)}, Number}}(nameof(Variable(:x, i)))
+    vars = reshape([var(:x, i)(t) for i in eachindex(prob.u0)],size(prob.u0))
     params = prob.p isa DiffEqBase.NullParameters ? [] :
-             reshape([Variable(:α,i)() for i in eachindex(prob.p)],size(prob.p))
+             reshape([Variable(:α,i) for i in eachindex(prob.p)],size(prob.p))
     @derivatives D'~t
 
     rhs = [D(var) for var in vars]
 
     if DiffEqBase.isinplace(prob)
         lhs = similar(vars, Any)
+
         prob.f(lhs, vars, params, t)
 
         if DiffEqBase.is_diagonal_noise(prob)
