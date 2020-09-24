@@ -38,11 +38,10 @@ struct ODEToExpr
     states::Vector
 end
 ODEToExpr(@nospecialize(sys)) = ODEToExpr(sys,states(sys))
-function (f::ODEToExpr)(O::Operation)
+(f::ODEToExpr)(O::Num) = f(value(O))
+function (f::ODEToExpr)(O::Term)
     if isa(O.op, Sym)
-        isequal(O.op, f.sys.iv) && return O.op.name  # independent variable
-        O.op ∈ f.states         && return O.op.name  # dependent variables
-        isempty(O.args)         && return O.op.name  # 0-ary parameters
+        any(isequal(O), f.states) && return O.op.name  # dependent variables
         return build_expr(:call, Any[O.op.name; f.(O.args)])
     end
     return build_expr(:call, Any[Symbol(O.op); f.(O.args)])

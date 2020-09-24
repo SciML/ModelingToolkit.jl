@@ -224,7 +224,6 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
                          skipzeros = outputidxs===nothing,
 						 fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
 						 parallel=SerialForm(), kwargs...)
-    conv = conv ∘ rm_calls_with_iv
 	if multithread isa Bool
 		@warn("multithraded is deprecated for the parallel argument. See the documentation.")
 		parallel = multithread ? MultithreadedForm() : SerialForm()
@@ -524,6 +523,7 @@ function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
                          fname = :diffeqf,
 						 lhsname=:du,rhsnames=[Symbol("RHS$i") for i in 1:length(args)],
 						 libpath=tempname(),compiler=:gcc)
+
     differential_equation = string(join([numbered_expr(eq,args...,lhsname=lhsname,
                                   rhsnames=rhsnames,offset=-1) for
                                   (i, eq) ∈ enumerate(eqs)],";\n  "),";")
