@@ -7,9 +7,10 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
                             return (prob.f.sys, prob.f.sys.states, prob.f.sys.ps)
     @parameters t
-    vars = reshape([Variable(:x, i)(t) for i in eachindex(prob.u0)],size(prob.u0))
+    var(x, i) = Sym{FnType{Tuple{symtype(t)}, Number}}(nameof(Variable(:x, i)))
+    vars = reshape([var(:x, i)(t) for i in eachindex(prob.u0)],size(prob.u0))
     params = prob.p isa DiffEqBase.NullParameters ? [] :
-             reshape([Variable(:α,i)() for i in eachindex(prob.p)],size(prob.p))
+             reshape([Variable(:α,i) for i in eachindex(prob.p)],size(prob.p))
     @derivatives D'~t
 
     rhs = [D(var) for var in vars]

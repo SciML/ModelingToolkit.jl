@@ -241,8 +241,8 @@ creates the array of values in the correct order
 function varmap_to_vars(varmap::AbstractArray{<:Pair},varlist)
     out = similar(varmap,typeof(last(first(varmap))))
     for i in 1:length(varmap)
-        ivar = convert(Variable,varmap[i][1])
-        j = findfirst(x->ivar.name == convert(Variable,x).name,varlist)
+        ivar = varmap[i][1]
+        j = findfirst(isequal(ivar),varlist)
         out[j] = varmap[i][2]
     end
 

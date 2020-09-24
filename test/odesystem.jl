@@ -50,7 +50,6 @@ u  = SVector(1:3...)
 p  = SVector(4:6...)
 @test f(u, p, 0.1) === @SArray [4, 0, -16]
 
-@show y
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y*t,
        D(z) ~ x*y - β*z]

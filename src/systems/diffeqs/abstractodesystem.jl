@@ -90,13 +90,11 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify=true)
     dvs = states(sys)
     M = zeros(length(eqs),length(eqs))
     for (i,eq) in enumerate(eqs)
-        if eq.lhs isa Constant
-            @assert eq.lhs.value == 0
-        elseif eq.lhs.op isa Differential
+        if eq.lhs isa Term && eq.lhs.op isa Differential
             j = findfirst(x->isequal(term_to_symbol(x),term_to_symbol(var_from_nested_derivative(eq.lhs)[1])),dvs)
             M[i,j] = 1
         else
-            error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")
+            eq.lhs == 0 || error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")
         end
     end
     M = simplify ? ModelingToolkit.simplify.(M) : M
@@ -107,7 +105,7 @@ end
 
 jacobian_sparsity(sys::AbstractODESystem) =
     jacobian_sparsity([eq.rhs for eq ∈ equations(sys)],
-                      [dv(sys.iv()) for dv in states(sys)])
+                      [dv for dv in states(sys)])
 
 function DiffEqBase.ODEFunction(sys::AbstractODESystem, args...; kwargs...)
     ODEFunction{true}(sys, args...; kwargs...)

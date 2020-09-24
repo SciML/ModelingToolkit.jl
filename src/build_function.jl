@@ -455,7 +455,6 @@ end
 function term_to_symbol(t::Term)
     if operation(t) isa Sym
         s = nameof(operation(t))
-        @show s
     else
         error("really?")
     end
