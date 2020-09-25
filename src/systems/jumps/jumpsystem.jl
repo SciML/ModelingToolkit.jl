@@ -32,12 +32,12 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
     """
     eqs::U
     """The independent variable, usually time."""
-    iv::Variable
+    iv::Any
     """The dependent variables, representing the state of the system."""
-    states::Vector{Variable}
+    states::Vector
     """The parameters of the system."""
-    ps::Vector{Variable}
-    pins::Vector{Variable}
+    ps::Vector
+    pins::Vector
     observed::Vector{Equation}
     """The name of the system."""
     name::Symbol
@@ -46,7 +46,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
 end
 
 function JumpSystem(eqs, iv, states, ps;
-                    pins = Variable[],
+                    pins = [],
                     observed = Equation[],
                     systems = JumpSystem[],
                     name = gensym(:JumpSystem))
@@ -64,7 +64,7 @@ function JumpSystem(eqs, iv, states, ps;
         end
     end
 
-    JumpSystem{typeof(ap)}(ap, convert(Variable,iv), convert.(Variable, states), convert.(Variable, ps), pins, observed, name, systems)
+    JumpSystem{typeof(ap)}(ap, value(iv), value.(states), value.(ps), pins, observed, name, systems)
 end
 
 generate_rate_function(js, rate) = build_function(rate, states(js), parameters(js),
