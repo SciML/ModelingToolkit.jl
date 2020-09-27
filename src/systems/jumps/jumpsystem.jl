@@ -80,7 +80,7 @@ generate_affect_function(js, affect, outputidxs) = build_function(affect, states
 
 function assemble_vrj(js, vrj, statetoid)
     rate   = eval(generate_rate_function(js, vrj.rate))
-    outputvars = (convert(Variable,affect.lhs) for affect in vrj.affect!)
+    outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = ((statetoid[var] for var in outputvars)...,)
     affect = eval(generate_affect_function(js, vrj.affect!, outputidxs))
     VariableRateJump(rate, affect)
@@ -88,7 +88,7 @@ end
 
 function assemble_vrj_expr(js, vrj, statetoid)
     rate   = generate_rate_function(js, vrj.rate)
-    outputvars = (convert(Variable,affect.lhs) for affect in vrj.affect!)
+    outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = ((statetoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, vrj.affect!, outputidxs)
     quote
@@ -100,7 +100,7 @@ end
 
 function assemble_crj(js, crj, statetoid)
     rate   = eval(generate_rate_function(js, crj.rate))
-    outputvars = (convert(Variable,affect.lhs) for affect in crj.affect!)
+    outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = ((statetoid[var] for var in outputvars)...,)
     affect = eval(generate_affect_function(js, crj.affect!, outputidxs))
     ConstantRateJump(rate, affect)
@@ -108,7 +108,7 @@ end
 
 function assemble_crj_expr(js, crj, statetoid)
     rate   = generate_rate_function(js, crj.rate)
-    outputvars = (convert(Variable,affect.lhs) for affect in crj.affect!)
+    outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = ((statetoid[var] for var in outputvars)...,)
     affect = generate_affect_function(js, crj.affect!, outputidxs)
     quote
@@ -118,24 +118,13 @@ function assemble_crj_expr(js, crj, statetoid)
     end
 end
 
-function numericrate(rate, subber)
-    if rate isa Operation
-        rval = subber(rate).value
-    elseif rate isa Variable
-        rval = subber(rate()).value
-    else
-        rval = rate
-    end
-    rval
-end
-
 function numericrstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     rs = Vector{Pair{Int,W}}()
     for (spec,stoich) in mtrs
-        if !(spec isa Operation) && iszero(spec)
+        if !(spec isa Term) && iszero(spec)
             push!(rs, 0 => stoich)
         else
-            push!(rs, statetoid[convert(Variable,spec)] => stoich)
+            push!(rs, statetoid[value(spec)] => stoich)
         end
     end
     sort!(rs)
@@ -145,18 +134,19 @@ end
 function numericnstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     ns = Vector{Pair{Int,W}}()
     for (spec,stoich) in mtrs
-        !(spec isa Operation) && iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
-        push!(ns, statetoid[convert(Variable,spec)] => stoich)
+        !(spec isa Term) && iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
+        push!(ns, statetoid[value(spec)] => stoich)
     end
     sort!(ns)
 end
 
 # assemble a numeric MassActionJump from a MT MassActionJump representing one rx.
 function assemble_maj(maj::MassActionJump, statetoid, subber, invttype)
-    rval = numericrate(maj.scaled_rates, subber)
+    rval = subber(maj.scaled_rates)
     rs   = numericrstoich(maj.reactant_stoch, statetoid)
     ns   = numericnstoich(maj.net_stoch, statetoid)
-    maj  = MassActionJump(convert(invttype, rval), rs, ns, scale_rates = false)
+    @show rval
+    maj  = MassActionJump(convert(invttype, value(rval)), rs, ns, scale_rates = false)
     maj
 end
 
@@ -192,11 +182,11 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Tuple,
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
 
     (u0map isa AbstractVector) || error("For DiscreteProblems u0map must be an AbstractVector.")
-    u0d = Dict( convert(Variable,u[1]) => u[2] for u in u0map)
+    u0d = Dict( value(u[1]) => u[2] for u in u0map)
     u0 = [u0d[u] for u in states(sys)]
     if parammap != DiffEqBase.NullParameters()
         (parammap isa AbstractVector) || error("For DiscreteProblems parammap must be an AbstractVector.")
-        pd  = Dict( convert(Variable,u[1]) => u[2] for u in parammap)
+        pd  = Dict( value(u[1]) => u[2] for u in parammap)
         p  = [pd[u] for u in parameters(sys)]
     else
         p = parammap
@@ -257,15 +247,16 @@ sol = solve(jprob, SSAStepper())
 """
 function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
 
-    statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
+    statetoid = Dict(value(state) => i for (i,state) in enumerate(states(js)))
     eqs       = equations(js)
     invttype  = typeof(1 / prob.tspan[2])
 
     # handling parameter substition and empty param vecs
     p = (prob.p == DiffEqBase.NullParameters()) ? Operation[] : prob.p
-    parammap  = map((x,y)->Pair(x(),y), parameters(js), p)
+    parammap  = map((x,y)->Pair(x,y), parameters(js), p)
     subber    = substituter(parammap)
 
+    @show parammap
     majs = MassActionJump[assemble_maj(j, statetoid, subber, invttype) for j in eqs.x[1]]
     crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]
@@ -294,9 +285,9 @@ end
 
 function get_variables!(dep, jump::MassActionJump, variables)
     sr = jump.scaled_rates
-    (sr isa Operation) && get_variables!(dep, sr, variables)
+    (sr isa Term) && get_variables!(dep, sr, variables)
     for varasop in jump.reactant_stoch
-        (varasop[1].op in variables) && push!(dep, varasop[1])
+        any(isequal(varasop[1]), variables) && push!(dep, varasop[1])
     end
     dep
 end
@@ -305,12 +296,12 @@ end
 function modified_states!(mstates, jump::Union{ConstantRateJump,VariableRateJump}, sts)
     for eq in jump.affect!
         st = eq.lhs
-        (st.op in sts) && push!(mstates, st)
+        any(isequal(st), sts) && push!(mstates, st)
     end
 end
 
 function modified_states!(mstates, jump::MassActionJump, sts)
     for (state,stoich) in jump.net_stoch
-        (state.op in sts) && push!(mstates, state)
+        any(isequal(state), sts) && push!(mstates, state)
     end
 end

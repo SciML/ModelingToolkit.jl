@@ -95,7 +95,7 @@ substitute(expr::Term, s::Vector; kw...) = substitute(expr, Dict(s); kw...)
 
 function substituter(pairs)
     dict = Dict(to_symbolic(k) => to_symbolic(v)  for (k, v) in pairs)
-    expr -> to_mtk(SymbolicUtils.substitute(expr, dict))
+    expr -> SymbolicUtils.substitute(expr, dict)
 end
 
 macro showarr(x)
