@@ -223,8 +223,12 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
     eqs
 end
 
-function var2op(var)
-    Operation(var,Vector{Expression}())
+var2op(var::Sym) = var
+var2op(var::Sym{FnType{Tuple{<:Any}, T}}) where {T} = Sym{FnType{Tuple{}, T}}(nameof(var))()
+var2op(var::Num) = var2op(value(var))
+
+function var2op(var::Term)
+    Sym{FnType{Tuple{}, symtype(var)}}(nameof(var.op))()
 end
 
 # Calculate the Jump rate law (like ODE, but uses X instead of X(t).
@@ -258,12 +262,12 @@ function jumpratelaw(rx; rxvars=get_variables(rx.rate), combinatoric_ratelaw=tru
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
     for op in rxvars
-        rl = substitute(rl, op => var2op(op.op))
+        rl = substitute(rl, op => var2op(op))
     end
     if !only_use_rate
         coef = one(eltype(substoich))
         for (i,stoich) in enumerate(substoich)
-            s   = var2op(substrates[i].op)
+            s   = var2op(substrates[i])
             rl *= s
             isone(stoich) && continue
             for i in one(stoich):(stoich-one(stoich))
@@ -312,7 +316,7 @@ end
     zeroorder = (length(substoich) == 0)
     reactant_stoch = Vector{Pair{Term,eltype(substoich)}}(undef, length(substoich))
     @inbounds for i = 1:length(reactant_stoch)
-        reactant_stoch[i] = var2op(substrates[i].op) => substoich[i]
+        reactant_stoch[i] = var2op(substrates[i]) => substoich[i]
     end
     #push!(rstoich, reactant_stoch)
     coef = (zeroorder || (!combinatoric_ratelaw)) ? one(eltype(substoich)) : prod(stoich -> factorial(stoich), substoich)
@@ -457,7 +461,7 @@ law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
 ignored.
 """
 function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem; combinatoric_ratelaws=true)
-    states_swaps = map(states -> Operation(states,[var2op(rs.iv)]), rs.states)
+    states_swaps = value.(rs.states)
     eqs = map(eq -> 0 ~ make_sub!(eq,states_swaps),getproperty.(assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws),:rhs))
     NonlinearSystem(eqs,rs.states,rs.ps,name=rs.name,
               systems=convert.(NonlinearSystem,rs.systems))
