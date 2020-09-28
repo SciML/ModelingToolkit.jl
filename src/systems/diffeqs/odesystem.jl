@@ -128,7 +128,7 @@ function ODESystem(eqs, iv=nothing; kwargs...)
             push!(algeeq, eq)
         else
             diffvar = first(var_from_nested_derivative(eq.lhs))
-            iv == iv_from_nested_derivative(eq.lhs) || throw(ArgumentError("An ODESystem can only have one independent variable."))
+            isequal(iv, iv_from_nested_derivative(eq.lhs)) || throw(ArgumentError("An ODESystem can only have one independent variable."))
             diffvar in diffvars && throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
             push!(diffvars, diffvar)
             push!(diffeq, eq)

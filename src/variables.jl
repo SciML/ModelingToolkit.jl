@@ -143,7 +143,7 @@ function _construct_var(var_name, type, call_args)
     expr = if call_args === nothing
         :($Num($Sym{$type}($(Meta.quot(var_name)))))
     elseif !isempty(call_args) && call_args[end] == :..
-        :($Num($Sym{$FnType{Tuple{Any}, $type}}($(Meta.quot(var_name))))) # XXX: using Num as output
+        :($Num($Sym{$FnType{Tuple, $type}}($(Meta.quot(var_name))))) # XXX: using Num as output
     else
         :($Num($Sym{$FnType{NTuple{$(length(call_args)), Any}, $type}}($(Meta.quot(var_name)))($(map(x->:($value($x)), call_args)...))))
     end
