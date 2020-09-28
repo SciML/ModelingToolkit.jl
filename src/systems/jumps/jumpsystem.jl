@@ -79,10 +79,10 @@ generate_affect_function(js, affect, outputidxs) = build_function(affect, states
                                                       outputidxs=outputidxs)[2]
 
 function assemble_vrj(js, vrj, statetoid)
-    rate   = eval(generate_rate_function(js, vrj.rate))
+    rate   = @RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate))
     outputvars = (convert(Variable,affect.lhs) for affect in vrj.affect!)
     outputidxs = ((statetoid[var] for var in outputvars)...,)
-    affect = eval(generate_affect_function(js, vrj.affect!, outputidxs))
+    affect = @RuntimeGeneratedFunction(generate_affect_function(js, vrj.affect!, outputidxs))
     VariableRateJump(rate, affect)
 end
 
@@ -99,10 +99,10 @@ function assemble_vrj_expr(js, vrj, statetoid)
 end
 
 function assemble_crj(js, crj, statetoid)
-    rate   = eval(generate_rate_function(js, crj.rate))
+    rate   = @RuntimeGeneratedFunction(generate_rate_function(js, crj.rate))
     outputvars = (convert(Variable,affect.lhs) for affect in crj.affect!)
     outputidxs = ((statetoid[var] for var in outputvars)...,)
-    affect = eval(generate_affect_function(js, crj.affect!, outputidxs))
+    affect = @RuntimeGeneratedFunction(generate_affect_function(js, crj.affect!, outputidxs))
     ConstantRateJump(rate, affect)
 end
 
@@ -201,8 +201,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Tuple,
     else
         p = parammap
     end
-    # EvalFunc because we know that the jump functions are generated via eval
-    f  = DiffEqBase.EvalFunc(DiffEqBase.DISCRETE_INPLACE_DEFAULT)
+    f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
     df = DiscreteFunction(f, syms=Symbol.(states(sys)))
     DiscreteProblem(df, u0, tspan, p; kwargs...)
 end
@@ -231,9 +230,8 @@ function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Tuple,
     u0 = varmap_to_vars(u0map, states(sys))
     p  = varmap_to_vars(parammap, parameters(sys))
     # identity function to make syms works
-    # EvalFunc because we know that the jump functions are generated via eval
     quote
-        f  = DiffEqBase.EvalFunc(DiffEqBase.DISCRETE_INPLACE_DEFAULT)
+        f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
         u0 = $u0
         p = $p
         tspan = $tspan
@@ -287,7 +285,7 @@ end
 
 
 ### Functions to determine which states a jump depends on
-function get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables) 
+function get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables)
     (jump.rate isa Operation) && get_variables!(dep, jump.rate, variables)
     dep
 end
