@@ -470,12 +470,12 @@ function rm_calls_with_iv(expr)
     Rewriters.Prewalk(Rewriters.Chain([@rule((~f::(x->x isa Sym))(~t::(x->x isa Sym)) => Sym{symtype((~f)(~t))}((term_to_symbol(~f))))]))(value(expr))
 end
 
-get_varnumber(varop::Operation,vars::Vector{Operation}) =  findfirst(x->isequal(x,varop),vars)
-get_varnumber(varop::Operation,vars::Vector{<:Variable})  =  findfirst(x->isequal(x,varop.op),vars)
+get_varnumber(varop, vars::Vector) =  findfirst(x->isequal(x,varop),vars)
 
-function numbered_expr(O::Operation,args...;varordering = args[1],offset = 0,
+function numbered_expr(O::Union{Term,Sym},args...;varordering = args[1],offset = 0,
                        lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)])
-  if isa(O.op, ModelingToolkit.Variable)
+    O = value(O)
+  if O isa Sym || isa(O.op, Sym)
 	for j in 1:length(args)
 		i = get_varnumber(O,args[j])
 		if i !== nothing
@@ -483,20 +483,23 @@ function numbered_expr(O::Operation,args...;varordering = args[1],offset = 0,
 		end
 	end
   end
-  return Expr(:call, Symbol(O.op),
+  return Expr(:call, O isa Sym ? nameof(O) : Symbol(O.op),
          [numbered_expr(x,args...;offset=offset,lhsname=lhsname,
                         rhsnames=rhsnames,varordering=varordering) for x in O.args]...)
 end
 
 function numbered_expr(de::ModelingToolkit.Equation,args...;varordering = args[1],
                        lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)],offset=0)
+
+    varordering = value.(args[1])
     i = findfirst(x->isequal(x isa Sym ? term_to_symbol(x) : term_to_symbol(x.op),term_to_symbol(var_from_nested_derivative(de.lhs)[1])),varordering)
     :($lhsname[$(i+offset)] = $(numbered_expr(de.rhs,args...;offset=offset,
 											  varordering = varordering,
 											  lhsname = lhsname,
 											  rhsnames = rhsnames)))
 end
-numbered_expr(c::ModelingToolkit.Constant,args...;kwargs...) = c.value
+numbered_expr(c,args...;kwargs...) = c
+numbered_expr(c::Num,args...;kwargs...) = error("Num found")
 
 """
 Build function target: CTarget

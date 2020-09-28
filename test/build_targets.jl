@@ -4,7 +4,7 @@ using ModelingToolkit, Test
 @derivatives D'~t
 eqs = [D(x) ~ a*x - x*y,
        D(y) ~ -3y + x*y]
-@test ModelingToolkit.build_function(eqs,convert.(Variable,[x,y]),convert.(Variable,[a]),t,target = ModelingToolkit.StanTarget()) ==
+@test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.StanTarget()) ==
     """
     real[] diffeqf(real t,real[] internal_var___u,real[] internal_var___p,real[] x_r,int[] x_i) {
       real internal_var___du[2];
