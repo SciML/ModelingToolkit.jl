@@ -1,9 +1,13 @@
 export alias_elimination
 
 function flatten(sys::ODESystem)
-    ODESystem(equations(sys),
-              independent_variable(sys),
-              observed=observed(sys))
+    if isempty(sys.systems)
+        return sys
+    else
+        return ODESystem(equations(sys),
+                         independent_variable(sys),
+                         observed=observed(sys))
+    end
 end
 
 
@@ -32,8 +36,16 @@ function make_lhs_0(eq)
 end
 
 function alias_elimination(sys::ODESystem)
-    eqs = vcat(equations(sys),
-               make_lhs_0.(observed(sys)))
+    eqs = vcat(equations(sys), observed(sys))
+
+    # make all algebraic equations have 0 on LHS
+    eqs = map(eqs) do eq
+        if eq.lhs isa Operation && eq.lhs.op isa Differential
+            eq
+        else
+            make_lhs_0(eq)
+        end
+    end
 
     new_stateops = map(eqs) do eq
         if eq.lhs isa Operation && eq.lhs.op isa Differential
@@ -49,11 +61,13 @@ function alias_elimination(sys::ODESystem)
 
     newstates = convert.(Variable, new_stateops)
 
+
     alg_idxs = findall(x->x.lhs isa Constant && iszero(x.lhs), eqs)
 
     eliminate = setdiff(convert.(Variable, all_vars), newstates)
 
     vars = map(x->x(sys.iv()), eliminate)
+
     outputs = solve_for(eqs[alg_idxs], vars)
 
     diffeqs = eqs[setdiff(1:length(eqs), alg_idxs)]
