@@ -258,7 +258,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
         rhss = SparseMatrixCSC(rhss.m, rhss.m, rhss.colptr, rhss.rowval, map(unflatten_long_ops, rhss.nzval))
     else
         rhs_length = length(rhss)
-        rhss = Expression[unflatten_long_ops(r) for r in rhss]
+        rhss = [unflatten_long_ops(r) for r in rhss]
     end
 
 	if parallel isa DistributedForm
