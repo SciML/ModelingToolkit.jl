@@ -64,3 +64,10 @@ h_julia_scalar(a, b, c, d, e, g) = a[1] + b[1] + c[1] + c[2] + c[3] + d[1] + e[1
 h_str_scalar = ModelingToolkit.build_function(h_scalar, [a], [b], [c1, c2, c3], [d], [e], [g])
 h_oop_scalar = eval(h_str_scalar)
 @test h_oop_scalar(inputs...) == h_julia_scalar(inputs...)
+
+@variables z[1:100]
+@test isequal(simplify(ModelingToolkit.unflatten_long_ops(sum(z))),
+              simplify(sum(z)))
+
+@test isequal(simplify(ModelingToolkit.unflatten_long_ops(prod(z))),
+              simplify(prod(z)))
