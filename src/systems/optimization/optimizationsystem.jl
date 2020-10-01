@@ -84,12 +84,15 @@ namespace_operation(sys::OptimizationSystem) = namespace_operation(sys.op,sys.na
 hessian_sparsity(sys::OptimizationSystem) =
     hessian_sparsity(sys.op,[dv() for dv in states(sys)])
 
+struct ManualModelingToolkit <: DiffEqBase.AbstractADType end
+
 """
 ```julia
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
                                           parammap=DiffEqBase.NullParameters();
                                           u0=nothing, lb=nothing, ub=nothing,
-                                          hes = false, sparse = false,
+                                          grad = false,
+                                          hess = false, sparse = false,
                                           checkbounds = false,
                                           linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
@@ -98,10 +101,11 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
 Generates an OptimizationProblem from an OptimizationSystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
-function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
+function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
                                           parammap=DiffEqBase.NullParameters();
-                                          u0=nothing, lb=nothing, ub=nothing,
-                                          hes = false, sparse = false,
+                                          lb=nothing, ub=nothing,
+                                          grad = false,
+                                          hess = false, sparse = false,
                                           checkbounds = false,
                                           linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
@@ -109,12 +113,33 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
     ps = parameters(sys)
 
     f = generate_function(sys,checkbounds=checkbounds,linenumbers=linenumbers,
-                              parallel=parallel,expression=Val{false})
+                              expression=Val{false})
     u0 = varmap_to_vars(u0,dvs)
+
+    if grad
+        grad_oop,grad_iip = generate_gradient(sys,checkbounds=checkbounds,linenumbers=linenumbers,
+                                  parallel=parallel,expression=Val{false})
+        _grad(u,p) = grad_oop(u,p)
+        _grad(J,u,p) = grad_iip(J,u,p)
+    else
+        _grad = nothing
+    end
+
+    if hess
+        hess_oop,hess_iip = generate_hessian(sys,checkbounds=checkbounds,linenumbers=linenumbers,
+                                 sparse=sparse,parallel=parallel,expression=Val{false})
+       _hess(u,p) = hess_oop(u,p)
+       _hess(J,u,p) = hess_iip(J,u,p)
+    else
+        _hess = nothing
+    end
+
+    _f = OptimizationFunction{iip,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,_grad,_hess,nothing,ManualModelingToolkit(),nothing,nothing,nothing,0)
+
     p = varmap_to_vars(parammap,ps)
     lb = varmap_to_vars(lb,dvs)
     ub = varmap_to_vars(ub,dvs)
-    OptimizationProblem(f,p;u0=u0,lb=lb,ub=ub,kwargs...)
+    OptimizationProblem{iip}(_f,u0,p;lb=lb,ub=ub,kwargs...)
 end
 
 """
@@ -122,6 +147,7 @@ end
 function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
                                           parammap=DiffEqBase.NullParameters();
                                           u0=nothing, lb=nothing, ub=nothing,
+                                          grad = false,
                                           hes = false, sparse = false,
                                           checkbounds = false,
                                           linenumbers = true, parallel=SerialForm(),
@@ -134,9 +160,10 @@ calculating numerical enhancements.
 """
 struct OptimizationProblemExpr{iip} end
 
-function OptimizationProblemExpr{iip}(sys::OptimizationSystem,
+function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
                                           parammap=DiffEqBase.NullParameters();
-                                          u0=nothing, lb=nothing, ub=nothing,
+                                          lb=nothing, ub=nothing,
+                                          grad = true,
                                           hes = false, sparse = false,
                                           checkbounds = false,
                                           linenumbers = false, parallel=SerialForm(),
@@ -145,7 +172,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem,
     ps = parameters(sys)
 
     f = generate_function(sys,checkbounds=checkbounds,linenumbers=linenumbers,
-                              parallel=parallel,expression=Val{true})
+                              expression=Val{true})
     u0 = varmap_to_vars(u0,dvs)
     p = varmap_to_vars(parammap,ps)
     lb = varmap_to_vars(lb,dvs)
@@ -156,6 +183,6 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem,
         u0 = $u0
         lb = $lb
         ub = $ub
-        OptimizationProblem(f,p;u0=u0,lb=lb,ub=ub,kwargs...)
+        OptimizationProblem(f,u0,p;lb=lb,ub=ub,kwargs...)
     end
 end

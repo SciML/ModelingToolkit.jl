@@ -21,3 +21,22 @@ generate_function(combinedsys)
 generate_gradient(combinedsys)
 generate_hessian(combinedsys)
 ModelingToolkit.hessian_sparsity(combinedsys)
+
+u0 = [
+    sys1.x=>1.0
+    sys1.y=>2.0
+    sys2.x=>3.0
+    sys2.y=>4.0
+    z=>5.0
+]
+p = [
+    sys1.a => 6.0
+    sys1.b => 7.0
+    sys2.a => 8.0
+    sys2.b => 9.0
+    β => 10.0
+]
+prob = OptimizationProblem(combinedsys,u0,p,grad=true)
+
+using GalacticOptim, Optim
+solve(prob,BFGS())
