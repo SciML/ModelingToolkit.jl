@@ -134,7 +134,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
         _hess = nothing
     end
 
-    _f = OptimizationFunction{iip,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,_grad,_hess,nothing,AutoModelingToolkit(),nothing,nothing,nothing,0)
+    _f = DiffEqBase.OptimizationFunction{iip,AutoModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,AutoModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing,0)
 
     p = varmap_to_vars(parammap,ps)
     lb = varmap_to_vars(lb,dvs)
@@ -205,7 +205,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
 end
 
 function OptimizationFunction(f, x, ::AutoModelingToolkit,p = DiffEqBase.NullParameters();
-                              grad=nothing, hess=nothing, cons = nothing, cons_j = nothing, cons_h = nothing,
+                              grad=false, hess=false, cons = nothing, cons_j = nothing, cons_h = nothing,
                               num_cons = 0, chunksize = 1, hv = nothing)
 
     sys = modelingtoolkitize(OptimizationProblem(f,x,p))
@@ -215,5 +215,5 @@ function OptimizationFunction(f, x, ::AutoModelingToolkit,p = DiffEqBase.NullPar
     else
         parammap = parameters(sys) .=> p
     end
-    OptimiationProblem(sys,u0map,parammap,grad=grad,hess=hess)
+    OptimizationProblem(sys,u0map,parammap,grad=grad,hess=hess).f
 end
