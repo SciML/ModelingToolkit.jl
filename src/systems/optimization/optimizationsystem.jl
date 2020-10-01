@@ -84,7 +84,7 @@ namespace_operation(sys::OptimizationSystem) = namespace_operation(sys.op,sys.na
 hessian_sparsity(sys::OptimizationSystem) =
     hessian_sparsity(sys.op,[dv() for dv in states(sys)])
 
-struct ManualModelingToolkit <: DiffEqBase.AbstractADType end
+struct AutoModelingToolkit <: DiffEqBase.AbstractADType end
 
 """
 ```julia
@@ -134,7 +134,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
         _hess = nothing
     end
 
-    _f = OptimizationFunction{iip,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,_grad,_hess,nothing,ManualModelingToolkit(),nothing,nothing,nothing,0)
+    _f = OptimizationFunction{iip,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,_grad,_hess,nothing,AutoModelingToolkit(),nothing,nothing,nothing,0)
 
     p = varmap_to_vars(parammap,ps)
     lb = varmap_to_vars(lb,dvs)
@@ -170,9 +170,23 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
                                           kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
-
+    idx = iip ? 2 : 1
     f = generate_function(sys,checkbounds=checkbounds,linenumbers=linenumbers,
                               expression=Val{true})
+    if grad
+        _grad = generate_gradient(sys,checkbounds=checkbounds,linenumbers=linenumbers,
+                             parallel=parallel,expression=Val{false})[idx]
+    else
+        _grad = :nothing
+    end
+
+    if hess
+        _hess = generate_hessian(sys,checkbounds=checkbounds,linenumbers=linenumbers,
+                                         sparse=sparse,parallel=parallel,expression=Val{false})[idx]
+    else
+        _hess = :nothing
+    end
+
     u0 = varmap_to_vars(u0,dvs)
     p = varmap_to_vars(parammap,ps)
     lb = varmap_to_vars(lb,dvs)
@@ -181,8 +195,25 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         f = $f
         p = $p
         u0 = $u0
+        grad = $_grad
+        hess = $_hess
         lb = $lb
         ub = $ub
-        OptimizationProblem(f,u0,p;lb=lb,ub=ub,kwargs...)
+        _f = OptimizationFunction{$iip,typeof(f),typeof(grad),typeof(hess),Nothing,Nothing,Nothing,Nothing}(f,grad,hess,nothing,AutoModelingToolkit(),nothing,nothing,nothing,0)
+        OptimizationProblem{$iip}(_f,u0,p;lb=lb,ub=ub,kwargs...)
     end
+end
+
+function OptimizationFunction(f, x, ::AutoModelingToolkit,p = DiffEqBase.NullParameters();
+                              grad=nothing, hess=nothing, cons = nothing, cons_j = nothing, cons_h = nothing,
+                              num_cons = 0, chunksize = 1, hv = nothing)
+
+    sys = modelingtoolkitize(OptimizationProblem(f,x,p))
+    u0map = states(sys) .=> x
+    if p == DiffEqBase.NullParameters()
+        parammap = DiffEqBase.NullParameters()
+    else
+        parammap = parameters(sys) .=> p
+    end
+    OptimiationProblem(sys,u0map,parammap,grad=grad,hess=hess)
 end
