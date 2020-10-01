@@ -140,7 +140,7 @@ function runge_kutta_discretize(sys::ControlSystem,dt,tspan;
     states_timeseries = [getindex.(timed_vars,j) for j in 1:n+1]
     k_timeseries = [[getindex.(k_vars,i,j) for i in 1:m] for j in 1:n]
     control_timeseries = [[[Variable(x.name,i,j)(sys.iv()) for x in controls(sys)] for i in 1:m] for j in 1:n]
-    ps = parameters(sys)
+    ps = [p() for p in parameters(sys)]
     iv = sys.iv()
 
     # Calculate all of the update and stage equations
