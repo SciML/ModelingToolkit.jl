@@ -63,11 +63,12 @@ end
 
 function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
                           sparse = false, kwargs...)
-    hes = calculate_hessian(sys)
     if sparse
-        hes = sparse(hes)
+        hess = sparsehessian(equations(sys),[dv() for dv in states(sys)])
+    else
+        hess = calculate_hessian(sys)
     end
-    return build_function(hes, convert.(Variable,vs), convert.(Variable,ps);
+    return build_function(hess, convert.(Variable,vs), convert.(Variable,ps);
                           conv = AbstractSysToExpr(sys),kwargs...)
 end
 
@@ -88,6 +89,10 @@ struct AutoModelingToolkit <: DiffEqBase.AbstractADType end
 
 DiffEqBase.OptimizationProblem(sys::OptimizationSystem,args...;kwargs...) =
     DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem,args...;kwargs...)
+
+OptimizationProblemExpr(sys::OptimizationSystem,args...;kwargs...) =
+    OptimizationProblemExpr{true}(sys::OptimizationSystem,args...;kwargs...)
+
 
 """
 ```julia
@@ -166,8 +171,8 @@ struct OptimizationProblemExpr{iip} end
 function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
                                           parammap=DiffEqBase.NullParameters();
                                           lb=nothing, ub=nothing,
-                                          grad = true,
-                                          hes = false, sparse = false,
+                                          grad = false,
+                                          hess = false, sparse = false,
                                           checkbounds = false,
                                           linenumbers = false, parallel=SerialForm(),
                                           kwargs...) where iip

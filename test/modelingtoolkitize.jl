@@ -48,13 +48,14 @@ x0 = zeros(2)
 p  = [1.0,100.0]
 
 prob = OptimizationProblem(rosenbrock,x0,p)
-sys = modelingtoolkitize(prob)
-x0map = states(sys) .=> x0
-parammap = parameters(sys) .=> p
+sys = modelingtoolkitize(prob) # symbolicitize me captain!
 
-prob = OptimizationProblem(sys,x0map,parammap,grad=true)
+prob = OptimizationProblem(sys,x0,p,grad=true,hess=true)
 sol = solve(prob,NelderMead())
 @test sol.minimum < 1e-8
 
 sol = solve(prob,BFGS())
+@test sol.minimum < 1e-8
+
+sol = solve(prob,Newton())
 @test sol.minimum < 1e-8
