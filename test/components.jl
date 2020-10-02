@@ -149,3 +149,35 @@ jac2 = [connected1₊lorenz1₊x 0 g zeros(1,12)
         zeros(Expression,7,8) ModelingToolkit.namespace_operation.(calculate_jacobian(connected2),connected2.name,:t)]
 
 @test all(isequal.(calculate_jacobian(doublelevel),jac2))
+
+# Try higher hierarchy
+
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
+
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
+
+lorenz1 = ODESystem(eqs,name=:lorenz1)
+lorenz2 = ODESystem(eqs,name=:lorenz2)
+
+@variables a(t)
+@parameters γ
+connections = [0 ~ lorenz1.x + lorenz2.y + a*γ]
+
+# Now deviate from tutorial by introducing a 2nd level of connected blocks
+# Other issue: How does scoping work? Is it ok to re-use components named lorenz1 and lorenz2, or will the hierarchy be flattened eventually
+# connected1 and 2 are pairs of Lorenz oscillators. I'd like to solve multiple pairs together.
+connected1 = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2], name=:connected1)
+connected2 = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2], name=:connected2)
+
+connections2ndLevel = Equation[] # Pairs are not connected
+variables2ndLevel = [] # No extra variables
+parameters2ndLevel = [] # No extra parameters
+
+totalSystem = ODESystem(connections2ndLevel,t,variables2ndLevel, parameters2ndLevel, systems = [connected1, connected2],
+                        name=:totalSystem)
+
+connections2ndLevel = [0 ~ connected1.lorenz1.x + connected2.lorenz1.x]
