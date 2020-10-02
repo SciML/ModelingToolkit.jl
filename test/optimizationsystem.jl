@@ -1,4 +1,4 @@
-using ModelingToolkit, SparseArrays
+using ModelingToolkit, SparseArrays, Test, GalacticOptim, Optim
 
 @variables x y
 @parameters a b
@@ -36,7 +36,13 @@ p = [
     sys2.b => 9.0
     β => 10.0
 ]
-prob = OptimizationProblem(combinedsys,u0,p,grad=true)
 
-using GalacticOptim, Optim
-solve(prob,BFGS())
+prob = OptimizationProblem(combinedsys,u0,p,grad=true)
+sol = solve(prob,NelderMead())
+@test sol.minimum < -1e5
+
+prob2 = remake(prob,u0=sol.minimizer)
+sol = solve(prob,BFGS(initial_stepnorm=0.0001),allow_f_increases=true)
+@test sol.minimum < -1e8
+sol = solve(prob2,BFGS(initial_stepnorm=0.0001),allow_f_increases=true)
+@test sol.minimum < -1e9

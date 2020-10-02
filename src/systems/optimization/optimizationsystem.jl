@@ -86,6 +86,9 @@ hessian_sparsity(sys::OptimizationSystem) =
 
 struct AutoModelingToolkit <: DiffEqBase.AbstractADType end
 
+DiffEqBase.OptimizationProblem(sys::OptimizationSystem,args...;kwargs...) =
+    DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem,args...;kwargs...)
+
 """
 ```julia
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
@@ -120,7 +123,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
         grad_oop,grad_iip = generate_gradient(sys,checkbounds=checkbounds,linenumbers=linenumbers,
                                   parallel=parallel,expression=Val{false})
         _grad(u,p) = grad_oop(u,p)
-        _grad(J,u,p) = grad_iip(J,u,p)
+        _grad(J,u,p) = (grad_iip(J,u,p); J)
     else
         _grad = nothing
     end
@@ -129,7 +132,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
         hess_oop,hess_iip = generate_hessian(sys,checkbounds=checkbounds,linenumbers=linenumbers,
                                  sparse=sparse,parallel=parallel,expression=Val{false})
        _hess(u,p) = hess_oop(u,p)
-       _hess(J,u,p) = hess_iip(J,u,p)
+       _hess(J,u,p) = (hess_iip(J,u,p); J)
     else
         _hess = nothing
     end
