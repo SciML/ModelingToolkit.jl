@@ -145,5 +145,5 @@ Base.:(==)(sys1::ODESystem, sys2::ODESystem) =
 # NOTE: equality does not check cached Jacobian
 
 function rename(sys::ODESystem,name)
-    ODESystem(sys.eqs, sys.iv, sys.states, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
+    ODESystem(sys.eqs, sys.iv, sys.states, sys.ps, sys.pins, sys.observed, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
 end

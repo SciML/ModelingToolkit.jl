@@ -7,10 +7,18 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
                             return (prob.f.sys, prob.f.sys.states, prob.f.sys.ps)
     @parameters t
+
+    if prob.p isa Tuple || prob.p isa NamedTuple
+        p = [x for x in prob.p]
+    else
+        p = prob.p
+    end
+
     var(x, i) = Sym{FnType{Tuple{symtype(t)}, Number}}(nameof(Variable(:x, i)))
     vars = reshape([var(:x, i)(value(t)) for i in eachindex(prob.u0)],size(prob.u0))
-    params = prob.p isa DiffEqBase.NullParameters ? [] :
-             reshape([Variable(:α,i) for i in eachindex(prob.p)],size(prob.p))
+    params = p isa DiffEqBase.NullParameters ? [] :
+             reshape([Variable(:α,i) for i in eachindex(p)],size(p))
+
     @derivatives D'~t
 
     rhs = [D(var) for var in vars]
@@ -39,10 +47,16 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
                             return (prob.f.sys, prob.f.sys.states, prob.f.sys.ps)
     @parameters t
+    if prob.p isa Tuple || prob.p isa NamedTuple
+        p = [x for x in prob.p]
+    else
+        p = prob.p
+    end
     var(x, i) = Sym{FnType{Tuple{symtype(t)}, Number}}(nameof(Variable(:x, i)))
     vars = reshape([var(:x, i)(value(t)) for i in eachindex(prob.u0)],size(prob.u0))
-    params = prob.p isa DiffEqBase.NullParameters ? [] :
-             reshape([Variable(:α,i) for i in eachindex(prob.p)],size(prob.p))
+    params = p isa DiffEqBase.NullParameters ? [] :
+             reshape([Variable(:α,i) for i in eachindex(p)],size(p))
+
     @derivatives D'~t
 
     rhs = [D(var) for var in vars]
@@ -68,7 +82,7 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
         end
     end
     deqs = vcat([rhs[i] ~ lhs[i] for i in eachindex(prob.u0)]...)
-    
+
     de = SDESystem(deqs,neqs,t,vec(vars),vec(params))
 
     de
