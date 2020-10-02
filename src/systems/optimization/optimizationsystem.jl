@@ -90,10 +90,6 @@ struct AutoModelingToolkit <: DiffEqBase.AbstractADType end
 DiffEqBase.OptimizationProblem(sys::OptimizationSystem,args...;kwargs...) =
     DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem,args...;kwargs...)
 
-OptimizationProblemExpr(sys::OptimizationSystem,args...;kwargs...) =
-    OptimizationProblemExpr{true}(sys::OptimizationSystem,args...;kwargs...)
-
-
 """
 ```julia
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
@@ -168,6 +164,9 @@ calculating numerical enhancements.
 """
 struct OptimizationProblemExpr{iip} end
 
+OptimizationProblemExpr(sys::OptimizationSystem,args...;kwargs...) =
+    OptimizationProblemExpr{true}(sys::OptimizationSystem,args...;kwargs...)
+    
 function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
                                           parammap=DiffEqBase.NullParameters();
                                           lb=nothing, ub=nothing,

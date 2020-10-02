@@ -13,4 +13,7 @@ eqs = [
 sys = ControlSystem(loss,eqs,t,[x,v],[u],[p])
 dt = 0.1
 tspan = (0.0,1.0)
-runge_kutta_discretize(sys,dt,tspan)
+sys = runge_kutta_discretize(sys,dt,tspan)
+
+u0 = rand(112) # guess for the state values
+prob = OptimizationProblem(sys,u0,[0.1],grad=true)
