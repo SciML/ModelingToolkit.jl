@@ -84,3 +84,27 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
 
     de
 end
+
+
+"""
+$(TYPEDSIGNATURES)
+
+Generate `OptimizationSystem`, dependent variables, and parameters from an `OptimizationProblem`.
+"""
+function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem)
+
+    if prob.p isa Tuple || prob.p isa NamedTuple
+        p = [x for x in prob.p]
+    else
+        p = prob.p
+    end
+
+    vars = reshape([Variable(:x, i)() for i in eachindex(prob.u0)],size(prob.u0))
+    params = p isa DiffEqBase.NullParameters ? [] :
+             reshape([Variable(:α,i)() for i in eachindex(p)],size(Array(p)))
+
+
+    eqs = prob.f(vars, params)
+    de = OptimizationSystem(eqs,vec(vars),vec(params))
+    de
+end

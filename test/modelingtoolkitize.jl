@@ -1,4 +1,6 @@
-using OrdinaryDiffEq, ModelingToolkit
+using OrdinaryDiffEq, ModelingToolkit, Test
+using GalacticOptim, Optim
+
 const N = 32
 const xyd_brusselator = range(0,stop=1,length=N)
 brusselator_f(x, y, t) = (((x-0.3)^2 + (y-0.6)^2) <= 0.1^2) * (t >= 1.1) * 5.
@@ -38,3 +40,22 @@ prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
                                      u0,(0.,11.5),p)
 
 modelingtoolkitize(prob_ode_brusselator_2d)
+
+## Optimization
+
+rosenbrock(x,p) =  (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
+x0 = zeros(2)
+p  = [1.0,100.0]
+
+prob = OptimizationProblem(rosenbrock,x0,p)
+sys = modelingtoolkitize(prob) # symbolicitize me captain!
+
+prob = OptimizationProblem(sys,x0,p,grad=true,hess=true)
+sol = solve(prob,NelderMead())
+@test sol.minimum < 1e-8
+
+sol = solve(prob,BFGS())
+@test sol.minimum < 1e-8
+
+sol = solve(prob,Newton())
+@test sol.minimum < 1e-8
