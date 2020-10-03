@@ -94,7 +94,7 @@ function unflatten_long_ops(op, N=4)
                  *(*((~~x)[1:N]...) * (*)((~~x)[N+1:end]...)) : nothing)
 
     op = to_symbolic(op)
-    Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2])))(op) |> to_mtk
+    Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2])))(op)
 end
 
 # Scalar output
@@ -399,8 +399,13 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
 		end
     end
 
+    if rhss isa SparseMatrixCSC
+        rhss′ = map(conv∘unflatten_long_ops, rhss.nzval)
+    else
+        rhss′ = [conv(unflatten_long_ops(r)) for r in rhss]
+    end
 
-    tuple_sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
+    tuple_sys_expr = build_expr(:tuple, rhss′)
 
     if rhss isa Matrix
         arr_sys_expr = build_expr(:vcat, [build_expr(:row,[conv(rhs) for rhs ∈ rhss[i,:]]) for i in 1:size(rhss,1)])
