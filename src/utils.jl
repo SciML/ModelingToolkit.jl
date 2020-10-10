@@ -89,13 +89,14 @@ substitute(expr::Operation, s::Vector)
 
 Performs the substitution `Operation => val` on the `expr` Operation.
 """
-substitute(expr::Num, s::Union{Pair, Vector, Dict}; kw...) = Num(substitute(value(expr), s; kw...))
-substitute(expr::Term, s::Pair; kw...) = substitute(expr, Dict(s[1] => s[2]); kw...)
-substitute(expr::Term, s::Vector; kw...) = substitute(expr, Dict(s); kw...)
+substitute(expr::Num, s::Union{Pair, Vector, Dict}; kw...) = Num(substituter(s)(value(expr); kw...))
+substitute(expr::Term, s::Pair; kw...) = substituter([s[1] => s[2]])(expr; kw...)
+substitute(expr::Term, s::Vector; kw...) = substituter(s)(expr; kw...)
 
+substituter(pair::Pair) = substituter((pair,))
 function substituter(pairs)
     dict = Dict(to_symbolic(k) => to_symbolic(v)  for (k, v) in pairs)
-    expr -> SymbolicUtils.substitute(expr, dict)
+    (expr; kw...) -> SymbolicUtils.substitute(expr, dict; kw...)
 end
 
 macro showarr(x)

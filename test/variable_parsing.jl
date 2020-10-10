@@ -26,7 +26,7 @@ end
 
 t1 = Num(Sym{PType}(:t))
 s1 = Num(Sym{PType}(:s))
-σ1 = Num(Sym{FnType{Tuple{Any}, PType}}(:σ))
+σ1 = Num(Sym{FnType{Tuple, PType}}(:σ))
 @test isequal(t1, t)
 @test isequal(s1, s)
 @test isequal(σ1, σ)
@@ -34,8 +34,6 @@ s1 = Num(Sym{PType}(:s))
 @derivatives D'~t
 D1 = Differential(t)
 @test D1 == D
-
-@test_broken isequal(x ≤ y + 1, (x < y + 1) | (x == y + 1))
 
 @test @macroexpand(@parameters x, y, z(t)) == @macroexpand(@parameters x y z(t))
 @test @macroexpand(@variables x, y, z(t)) == @macroexpand(@variables x y z(t))

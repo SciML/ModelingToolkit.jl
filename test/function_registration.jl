@@ -75,7 +75,9 @@ u0 = 7.0
 foo(x, y) = sin(x) * cos(y)
 @parameters t; @variables x(t) y(t) z(t); @derivatives D'~t;
 @register foo(x, y)
-expr = foo(x, y)
+
+using ModelingToolkit: value
+expr = value(foo(x, y))
 @test expr.op === foo
 @test expr.args[1] === x
 @test expr.args[2] === y

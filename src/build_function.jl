@@ -517,7 +517,8 @@ function numbered_expr(de::ModelingToolkit.Equation,args...;varordering = args[1
                        lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)],offset=0)
 
     varordering = value.(args[1])
-    i = findfirst(x->isequal(x isa Sym ? term_to_symbol(x) : term_to_symbol(x.op),term_to_symbol(var_from_nested_derivative(de.lhs)[1])),varordering)
+    var = var_from_nested_derivative(de.lhs)[1]
+    i = findfirst(x->isequal(x isa Sym ? term_to_symbol(x) : term_to_symbol(x.op),term_to_symbol(var)),varordering)
     :($lhsname[$(i+offset)] = $(numbered_expr(de.rhs,args...;offset=offset,
 											  varordering = varordering,
 											  lhsname = lhsname,

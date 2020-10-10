@@ -256,7 +256,6 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     parammap  = map((x,y)->Pair(x,y), parameters(js), p)
     subber    = substituter(parammap)
 
-    @show parammap
     majs = MassActionJump[assemble_maj(j, statetoid, subber, invttype) for j in eqs.x[1]]
     crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]

@@ -7,7 +7,7 @@ using SafeTestsets, Test
 @safetestset "Direct Usage Test" begin include("direct.jl") end
 @safetestset "System Linearity Test" begin include("linearity.jl") end
 @safetestset "Build Function Test" begin include("build_function.jl") end
-@safetestset "ODESystem Test" begin include("odesystem.jl") end
+#@safetestset "ODESystem Test" begin include("odesystem.jl") end
 @safetestset "LabelledArrays Test" begin include("labelledarrays.jl") end
 @safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
 @safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
@@ -28,7 +28,7 @@ using SafeTestsets, Test
 @safetestset "Depdendency Graph Test" begin include("dep_graphs.jl") end
 @safetestset "Function Registration Test" begin include("function_registration.jl") end
 @safetestset "Array of Array Test" begin include("build_function_arrayofarray.jl") end
-#@testset "Latexify recipes Test" begin include("latexify.jl") end
+@testset "Latexify recipes Test" begin include("latexify.jl") end
 @testset "Distributed Test" begin include("distributed.jl") end
 @testset "Variable Utils Test" begin include("variable_utils.jl") end
 println("Last test requires gcc available in the path!")
