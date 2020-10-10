@@ -263,16 +263,16 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
 
 	if parallel isa DistributedForm
 		numworks = Distributed.nworkers()
-		reducevars = [Variable(gensym(:MTReduceVar))() for i in 1:numworks]
+		reducevars = [gensym(:MTReduceVar) for i in 1:numworks]
 		lens = Int(ceil(rhs_length/numworks))
 		finalsize = rhs_length - (numworks-1)*lens
-		_rhss = vcat(reduce(vcat,[[getindex(reducevars[i],j) for j in 1:lens] for i in 1:numworks-1],init=Expr[]),
-						 [getindex(reducevars[end],j) for j in 1:finalsize])
+		_rhss = vcat(reduce(vcat,[[Variable(reducevars[i],j) for j in 1:lens] for i in 1:numworks-1],init=Expr[]),
+						 [Variable(reducevars[end],j) for j in 1:finalsize])
 
     elseif parallel isa DaggerForm
-		computevars = [Variable(gensym(:MTComputeVar))() for i in axes(rhss,1)]
-        reducevar = Variable(gensym(:MTReduceVar))()
-        _rhss = [getindex(reducevar,i) for i in axes(rhss,1)]
+		computevars = [gensym(:MTComputeVar) for i in axes(rhss,1)]
+        reducevar = Variable(gensym(:MTReduceVar))
+        _rhss = [Variable(reducevar,i) for i in axes(rhss,1)]
 	elseif rhss isa SparseMatrixCSC
 		_rhss = rhss.nzval
 	else
