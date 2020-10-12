@@ -8,13 +8,15 @@ using UnPack: @unpack
 using DiffEqJump
 using DataStructures: OrderedDict, OrderedSet
 using SpecialFunctions, NaNMath
+using RuntimeGeneratedFunctions
 using Base.Threads
 import MacroTools: splitdef, combinedef, postwalk, striplines
-import GeneralizedGenerated
 import Libdl
 using DocStringExtensions
 using Base: RefValue
 import IfElse
+
+RuntimeGeneratedFunctions.init(@__MODULE__)
 
 using RecursiveArrayTools
 
