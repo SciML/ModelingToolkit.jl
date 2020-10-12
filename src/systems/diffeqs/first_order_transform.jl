@@ -1,10 +1,8 @@
 function lower_varname(var::Term, idv, order)
-    D = Differential(idv)
-    term = var
-    for _ in 1:order
-        term = D(term)
-    end
-    return term
+    order == 0 && return var
+    name = Symbol(nameof(var.op), :ˍ, string(idv)^order)
+    #name = Symbol(var.name, :ˍ, string(idv.name)^order)
+    return Sym{symtype(var.op)}(name)(var.args[1])
 end
 
 function flatten_differential(O::Term)

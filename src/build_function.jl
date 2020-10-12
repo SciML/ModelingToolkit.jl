@@ -478,8 +478,6 @@ end
 function term_to_symbol(t::Term)
     if operation(t) isa Sym
         s = nameof(operation(t))
-    elseif operation(t) isa Differential
-        Symbol("var", repr(t))
     else
         error("really?")
     end

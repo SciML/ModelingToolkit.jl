@@ -223,12 +223,8 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
     eqs
 end
 
-var2op(var::Sym) = var
-var2op(var::Sym{FnType{Tuple{<:Any}, T}}) where {T} = Sym{FnType{Tuple{}, T}}(nameof(var))()
-var2op(var::Num) = var2op(value(var))
-
-function var2op(var::Term)
-    Sym{FnType{Tuple{}, symtype(var)}}(nameof(var.op))()
+function var2op(var)
+    Operation(var,Vector{Expression}())
 end
 
 # Calculate the Jump rate law (like ODE, but uses X instead of X(t).
@@ -300,16 +296,13 @@ explicitly on the independent variable (usually time).
 - Optional: `stateset`, set of states which if the rxvars are within mean rx is non-mass action.
 """
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
-                              haveivdep,
+                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars),
                               stateset = Set(states(rs)))
     # if no dependencies must be zero order
-    haveivdep && return false
     (length(rxvars)==0) && return true
-    rx.only_use_rate && return false
+    (haveivdep || rx.only_use_rate) && return false
     @inbounds for i = 1:length(rxvars)
-        @show rxvars[i]
-        @show rxvars[i] in stateset
-        rxvars[i] in stateset && return false
+        (rxvars[i].op in stateset) && return false
     end
     return true
 end
@@ -327,34 +320,27 @@ end
     #push!(rates, rate)
     net_stoch      = [Pair(var2op(p[1]),p[2]) for p in netstoich]
     #push!(nstoich, net_stoch)
-
-    #XXX:              vv--- this sucks
-    MassActionJump(Num(rate), reactant_stoch, net_stoch, scale_rates=false, useiszero=false)
-end
-
-function _occursin(x, expr)
-    f = if isequal(x, expr)
-        true
-    elseif SymbolicUtils.istree(expr)
-        _occursin(x, expr.op) || any(ex -> _occursin(x, ex), arguments(expr))
-    else
-        false
-    end
+    MassActionJump(rate, reactant_stoch, net_stoch, scale_rates=false, useiszero=false)
 end
 
 function assemble_jumps(rs; combinatoric_ratelaws=true)
     meqs = MassActionJump[]; ceqs = ConstantRateJump[]; veqs = VariableRateJump[]
     stateset = Set(states(rs))
     #rates = [];  rstoich = []; nstoich = []
-    rxvars = []
+    rxvars = Operation[]
+    ivname = rs.iv.name
 
     isempty(equations(rs)) && error("Must give at least one reaction before constructing a JumpSystem.")
-
-    presence_dict = Dict(rs.states .=> 1)
     for rx in equations(rs)
-        gradient_sparsity = vec(jacobian_sparsity([rx.rate], rs.states))
-        rxvars = rs.states[gradient_sparsity]
-        haveivdep = _occursin(rs.iv, substitute(rx.rate, presence_dict))
+        empty!(rxvars)
+        (rx.rate isa Operation) && get_variables!(rxvars, rx.rate)
+        haveivdep = false
+        @inbounds for i = 1:length(rxvars)
+            if rxvars[i].op.name == ivname
+                haveivdep = true
+                break
+            end
+        end
         if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep, stateset=stateset)
             push!(meqs, makemajump(rx, combinatoric_ratelaw=combinatoric_ratelaws))
         else
