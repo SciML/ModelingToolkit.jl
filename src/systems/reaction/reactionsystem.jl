@@ -224,7 +224,7 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
 end
 
 function var2op(var)
-    Operation(var,Vector{Expression}())
+    Sym{symtype(var)}(nameof(var.op))
 end
 
 # Calculate the Jump rate law (like ODE, but uses X instead of X(t).
@@ -310,7 +310,7 @@ end
 @inline function makemajump(rx; combinatoric_ratelaw=true)
     @unpack rate, substrates, substoich, netstoich = rx
     zeroorder = (length(substoich) == 0)
-    reactant_stoch = Vector{Pair{Term,eltype(substoich)}}(undef, length(substoich))
+    reactant_stoch = Vector{Pair{Any,eltype(substoich)}}(undef, length(substoich))
     @inbounds for i = 1:length(reactant_stoch)
         reactant_stoch[i] = var2op(substrates[i]) => substoich[i]
     end
@@ -320,7 +320,7 @@ end
     #push!(rates, rate)
     net_stoch      = [Pair(var2op(p[1]),p[2]) for p in netstoich]
     #push!(nstoich, net_stoch)
-    MassActionJump(rate, reactant_stoch, net_stoch, scale_rates=false, useiszero=false)
+    MassActionJump(Num(rate), reactant_stoch, net_stoch, scale_rates=false, useiszero=false)
 end
 
 function assemble_jumps(rs; combinatoric_ratelaws=true)
