@@ -226,6 +226,9 @@ end
 function var2op(var)
     Sym{symtype(var)}(nameof(var.op))
 end
+function var2op(var::Sym)
+    var
+end
 
 # Calculate the Jump rate law (like ODE, but uses X instead of X(t).
 # The former generates a "MethodError: objects of type Int64 are not callable" when trying to solve the problem.
@@ -300,9 +303,10 @@ function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
                               stateset = Set(states(rs)))
     # if no dependencies must be zero order
     (length(rxvars)==0) && return true
-    (haveivdep || rx.only_use_rate) && return false
+    haveivdep && return false
+    rx.only_use_rate && return false
     @inbounds for i = 1:length(rxvars)
-        (rxvars[i].op in stateset) && return false
+        (rxvars[i] in stateset) && return false
     end
     return true
 end
@@ -327,20 +331,24 @@ function assemble_jumps(rs; combinatoric_ratelaws=true)
     meqs = MassActionJump[]; ceqs = ConstantRateJump[]; veqs = VariableRateJump[]
     stateset = Set(states(rs))
     #rates = [];  rstoich = []; nstoich = []
-    rxvars = Operation[]
+    rxvars = []
     ivname = rs.iv.name
 
     isempty(equations(rs)) && error("Must give at least one reaction before constructing a JumpSystem.")
     for rx in equations(rs)
         empty!(rxvars)
-        (rx.rate isa Operation) && get_variables!(rxvars, rx.rate)
+        @show rx.rate
+        @show typeof(rx.rate)
+        (rx.rate isa Term) && get_variables!(rxvars, rx.rate)
         haveivdep = false
         @inbounds for i = 1:length(rxvars)
-            if rxvars[i].op.name == ivname
+            if isequal(rxvars[i], rs.iv)
                 haveivdep = true
                 break
             end
         end
+        @show rx.rate
+        @show haveivdep
         if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep, stateset=stateset)
             push!(meqs, makemajump(rx, combinatoric_ratelaw=combinatoric_ratelaws))
         else
@@ -520,11 +528,11 @@ end
 
 # determine which species a reaction depends on
 function get_variables!(deps::Set, rx::Reaction, variables)
-    (rx.rate isa Operation) && get_variables!(deps, rx.rate, variables)
+    (rx.rate isa Term) && get_variables!(deps, rx.rate, variables)
     for s in rx.substrates
         push!(deps, s)
     end
-    deps
+    @show deps
 end
 
 # determine which species a reaction modifies

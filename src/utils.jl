@@ -67,8 +67,18 @@ get_variables(e::Num, varlist=nothing) = get_variables(value(e), varlist)
 get_variables!(vars, e, varlist=nothing) = vars
 get_variables!(vars, e::Sym, varlist=nothing) = push!(vars, e)
 
+is_singleton(e::Term) = e.op isa Sym
+is_singleton(e::Sym) = true
+is_singleton(e) = false
+
 function get_variables!(vars, e::Term, varlist=nothing)
-    foreach(x -> get_variables!(vars, x, varlist), e.args)
+    if is_singleton(e)
+        if isnothing(varlist) || e in varlist
+            push!(vars, e)
+        end
+    else
+        foreach(x -> get_variables!(vars, x, varlist), e.args)
+    end
     return (vars isa AbstractVector) ? unique!(vars) : vars
 end
 
