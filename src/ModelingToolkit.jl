@@ -83,9 +83,13 @@ include("differentials.jl")
 function Base.convert(::Type{Variable},x::Operation)
     if x.op isa Variable
         x.op
-    elseif x.op isa Differential
+    elseif x.op isa Differential && x.args[1].op isa Variable
         var = x.args[1].op
+        order = getorder(x.op)
         rename(var,Symbol(var.name,:ˍ,x.op.x))
+    elseif x.op isa Differential && x.args[1].op isa Differential
+        var = x.args[1].args[1].op
+        rename(var,Symbol(var.name,:ˍ,x.op.x,x.op.x))
     else
         throw(error("This Operation is not a Variable"))
     end
