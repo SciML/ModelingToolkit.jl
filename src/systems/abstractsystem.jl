@@ -157,7 +157,7 @@ end
 renamespace(namespace,name) = Symbol(namespace,:₊,name)
 
 function namespace_variables(sys::AbstractSystem)
-    [rename(x,renamespace(sys.name,x.name)) for x in states(sys)]
+    [Sym{symtype(x.op)}(renamespace(sys.name,x.op.name))(x.args...) for x in states(sys)]
 end
 
 function namespace_parameters(sys::AbstractSystem)
@@ -190,7 +190,11 @@ end
 namespace_expr(O,name,ivname) = O
 
 independent_variable(sys::AbstractSystem) = sys.iv
-states(sys::AbstractSystem) = unique(isempty(sys.systems) ? setdiff(sys.states, convert.(Variable,sys.pins)) : [sys.states;reduce(vcat,namespace_variables.(sys.systems))])
+function states(sys::AbstractSystem)
+    unique(isempty(sys.systems) ?
+           setdiff(sys.states, value.(sys.pins)) :
+           [sys.states;reduce(vcat,namespace_variables.(sys.systems))])
+end
 parameters(sys::AbstractSystem) = isempty(sys.systems) ? sys.ps : [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]
 pins(sys::AbstractSystem) = isempty(sys.systems) ? sys.pins : [sys.pins;reduce(vcat,namespace_pins.(sys.systems))]
 function observed(sys::AbstractSystem)

@@ -5,6 +5,12 @@ function lower_varname(var::Term, idv, order)
     return Sym{symtype(var.op)}(name)(var.args[1])
 end
 
+function lower_varname(t::Term, iv)
+    var, order = var_from_nested_derivative(t)
+    lower_varname(var, iv, order)
+end
+lower_varname(t::Sym, iv) = t
+
 function flatten_differential(O::Term)
     @assert is_derivative(O) "invalid differential: $O"
     is_derivative(O.args[1]) || return (O.args[1], O.op.x, 1)

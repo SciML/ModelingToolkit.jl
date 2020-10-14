@@ -271,8 +271,14 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
-    u0 = varmap_to_vars(u0map,dvs)
-    p = varmap_to_vars(parammap,ps)
+    u0map′ = [lower_varname(value(k), sys.iv) => value(v) for (k, v) in u0map]
+    parammap′ = [value(k) => value(v) for (k, v) in parammap]
+    u0 = varmap_to_vars(u0map′,dvs)
+    if !(parammap isa DiffEqBase.NullParameters)
+        p = varmap_to_vars(parammap′,ps)
+    else
+        p = ps
+    end
     f = ODEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,simplify=simplify,
                         sparse=sparse,eval_expression=eval_expression,kwargs...)
@@ -306,10 +312,17 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     simplify = true,
                                     linenumbers = false, parallel=SerialForm(),
                                     kwargs...) where iip
+
     dvs = states(sys)
     ps = parameters(sys)
-    u0 = varmap_to_vars(u0map,dvs)
-    p = varmap_to_vars(parammap,ps)
+    u0map′ = [lower_varname(value(k), sys.iv) => value(v) for (k, v) in u0map]
+    parammap′ = [value(k) => value(v) for (k, v) in parammap]
+    u0 = varmap_to_vars(u0map′,dvs)
+    if !(parammap isa DiffEqBase.NullParameters)
+        p = varmap_to_vars(parammap′,ps)
+    else
+        p = ps
+    end
     f = ODEFunctionExpr{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
                         simplify=simplify,
