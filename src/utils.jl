@@ -65,15 +65,16 @@ Returns the variables in the expression
 """
 get_variables(e::Num, varlist=nothing) = get_variables(value(e), varlist)
 get_variables!(vars, e, varlist=nothing) = vars
-get_variables!(vars, e::Sym, varlist=nothing) = push!(vars, e)
 
 is_singleton(e::Term) = e.op isa Sym
 is_singleton(e::Sym) = true
 is_singleton(e) = false
 
-function get_variables!(vars, e::Term, varlist=nothing)
+get_variables!(vars, e::Number, varlist=nothing) = vars
+
+function get_variables!(vars, e::Symbolic, varlist=nothing)
     if is_singleton(e)
-        if isnothing(varlist) || e in varlist
+        if isnothing(varlist) || any(isequal(e), varlist)
             push!(vars, e)
         end
     else
@@ -86,9 +87,10 @@ function get_variables!(vars, e::Equation, varlist=nothing)
   get_variables!(vars, e.rhs, varlist)
 end
 
+get_variables(e, varlist=nothing) = get_variables!([], e, varlist)
+
 modified_states!(mstates, e::Equation, statelist=nothing) = get_variables!(mstates, e.lhs, statelist)
 
-get_variables(e, varlist=nothing) = get_variables!([], e, varlist)
 
 # variable substitution
 # Piracy but mild
@@ -122,3 +124,22 @@ macro showarr(x)
 end
 
 @deprecate substitute_expr!(expr,s) substitute(expr,s)
+
+function states_to_sym(states)
+    function _states_to_sym(O)
+        if O isa Equation
+            Expr(:(=), _states_to_sym(O.lhs), _states_to_sym(O.rhs))
+        elseif O isa Term
+            if isa(O.op, Sym)
+                any(isequal(O), states) && return O.op.name  # dependent variables
+                return build_expr(:call, Any[O.op.name; _states_to_sym.(O.args)])
+            else
+                return build_expr(:call, Any[Symbol(O.op); _states_to_sym.(O.args)])
+            end
+        elseif O isa Num
+            return _states_to_sym(value(O))
+        else
+            return toexpr(O)
+        end
+    end
+end

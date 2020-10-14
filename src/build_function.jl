@@ -209,7 +209,7 @@ Special Keyword Argumnets:
   - `DaggerForm()`: Multithreading and multiprocessing using Julia's Dagger.jl
     for dynamic scheduling and load balancing.
 - `conv`: The conversion function of the Operation to Expr. By default this uses
-  the `toexpr` function utilized in `convert(Expr,x)`.
+  the `toexpr` function.
 - `checkbounds`: For whether to enable bounds checking inside of the generated
   function. Defaults to false, meaning that `@inbounds` is applied.
 - `linenumbers`: Determines whether the generated function expression retains

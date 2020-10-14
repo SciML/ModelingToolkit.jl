@@ -67,16 +67,22 @@ function JumpSystem(eqs, iv, states, ps;
     JumpSystem{typeof(ap)}(ap, value(iv), value.(states), value.(ps), pins, observed, name, systems)
 end
 
-generate_rate_function(js, rate) = build_function(rate, states(js), parameters(js),
-                                        independent_variable(js),
-                                        expression=Val{true})
+function generate_rate_function(js, rate)
+    build_function(rate, states(js), parameters(js),
+                   independent_variable(js),
+                   conv = states_to_sym(states(js)),
+                   expression=Val{true})
+end
 
-generate_affect_function(js, affect, outputidxs) = build_function(affect, states(js),
-                                                      parameters(js),
-                                                      independent_variable(js),
-                                                      expression=Val{true},
-                                                      headerfun=add_integrator_header,
-                                                      outputidxs=outputidxs)[2]
+function generate_affect_function(js, affect, outputidxs)
+    build_function(affect, states(js),
+                   parameters(js),
+                   conv = states_to_sym(states(js)),
+                   independent_variable(js),
+                   expression=Val{true},
+                   headerfun=add_integrator_header,
+                   outputidxs=outputidxs)[2]
+end
 
 function assemble_vrj(js, vrj, statetoid)
     rate   = eval(generate_rate_function(js, vrj.rate))
@@ -121,7 +127,7 @@ end
 function numericrstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     rs = Vector{Pair{Int,W}}()
     for (spec,stoich) in mtrs
-        if !(spec isa Term) && iszero(spec)
+        if !(spec isa Term) && _iszero(spec)
             push!(rs, 0 => stoich)
         else
             push!(rs, statetoid[value(spec)] => stoich)
@@ -134,8 +140,8 @@ end
 function numericnstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     ns = Vector{Pair{Int,W}}()
     for (spec,stoich) in mtrs
-        !(spec isa Term) && iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
-        push!(ns, statetoid[value(spec)] => stoich)
+        !(spec isa Term) && _iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
+        push!(ns, statetoid[spec] => stoich)
     end
     sort!(ns)
 end
@@ -278,13 +284,13 @@ end
 
 ### Functions to determine which states a jump depends on
 function get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables) 
-    (jump.rate isa Operation) && get_variables!(dep, jump.rate, variables)
+    (jump.rate isa Symbolic) && get_variables!(dep, jump.rate, variables)
     dep
 end
 
 function get_variables!(dep, jump::MassActionJump, variables)
     sr = jump.scaled_rates
-    (sr isa Term) && get_variables!(dep, sr, variables)
+    (sr isa Symbolic) && get_variables!(dep, sr, variables)
     for varasop in jump.reactant_stoch
         any(isequal(varasop[1]), variables) && push!(dep, varasop[1])
     end

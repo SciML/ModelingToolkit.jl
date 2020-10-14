@@ -349,7 +349,7 @@ function assemble_jumps(rs; combinatoric_ratelaws=true)
             rl     = jumpratelaw(rx, rxvars=rxvars, combinatoric_ratelaw=combinatoric_ratelaws)
             affect = Vector{Equation}()
             for (spec,stoich) in rx.netstoich
-                push!(affect, var2op(spec) ~ var2op(spec) + stoich)
+                push!(affect, spec ~ spec + stoich)
             end
             if haveivdep
                 push!(veqs, VariableRateJump(rl,affect))
@@ -522,7 +522,7 @@ end
 
 # determine which species a reaction depends on
 function get_variables!(deps::Set, rx::Reaction, variables)
-    (rx.rate isa Term) && get_variables!(deps, rx.rate, variables)
+    (rx.rate isa Symbolic) && get_variables!(deps, rx.rate, variables)
     for s in rx.substrates
         push!(deps, s)
     end
@@ -530,8 +530,8 @@ function get_variables!(deps::Set, rx::Reaction, variables)
 end
 
 # determine which species a reaction modifies
-function modified_states!(mstates, rx::Reaction, sts)
+function modified_states!(mstates, rx::Reaction, sts::Set)
     for (species,stoich) in rx.netstoich
-        (species in sts) && push!(mstates, species())
+        (species in sts) && push!(mstates, species)
     end
 end
