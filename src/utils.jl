@@ -100,6 +100,7 @@ substitute(expr::Operation, s::Vector)
 Performs the substitution `Operation => val` on the `expr` Operation.
 """
 substitute(expr::Num, s::Union{Pair, Vector, Dict}; kw...) = Num(substituter(s)(value(expr); kw...))
+# TODO: move this to SymbolicUtils
 substitute(expr::Term, s::Pair; kw...) = substituter([s[1] => s[2]])(expr; kw...)
 substitute(expr::Term, s::Vector; kw...) = substituter(s)(expr; kw...)
 

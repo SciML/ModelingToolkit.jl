@@ -260,9 +260,7 @@ Notes:
 function jumpratelaw(rx; rxvars=get_variables(rx.rate), combinatoric_ratelaw=true)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
-    for op in rxvars
-        rl = substitute(rl, op => var2op(op))
-    end
+    rl = substitute(rl, Dict(rxvars .=> var2op.(rxvars)))
     if !only_use_rate
         coef = one(eltype(substoich))
         for (i,stoich) in enumerate(substoich)
@@ -299,7 +297,7 @@ explicitly on the independent variable (usually time).
 - Optional: `stateset`, set of states which if the rxvars are within mean rx is non-mass action.
 """
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
-                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars),
+                              haveivdep,
                               stateset = Set(states(rs)))
     # if no dependencies must be zero order
     (length(rxvars)==0) && return true
@@ -316,13 +314,13 @@ end
     zeroorder = (length(substoich) == 0)
     reactant_stoch = Vector{Pair{Any,eltype(substoich)}}(undef, length(substoich))
     @inbounds for i = 1:length(reactant_stoch)
-        reactant_stoch[i] = var2op(substrates[i]) => substoich[i]
+        reactant_stoch[i] = substrates[i] => substoich[i]
     end
     #push!(rstoich, reactant_stoch)
     coef = (zeroorder || (!combinatoric_ratelaw)) ? one(eltype(substoich)) : prod(stoich -> factorial(stoich), substoich)
     (!isone(coef)) && (rate /= coef)
     #push!(rates, rate)
-    net_stoch      = [Pair(var2op(p[1]),p[2]) for p in netstoich]
+    net_stoch      = [Pair(p[1],p[2]) for p in netstoich]
     #push!(nstoich, net_stoch)
     MassActionJump(Num(rate), reactant_stoch, net_stoch, scale_rates=false, useiszero=false)
 end
@@ -337,9 +335,7 @@ function assemble_jumps(rs; combinatoric_ratelaws=true)
     isempty(equations(rs)) && error("Must give at least one reaction before constructing a JumpSystem.")
     for rx in equations(rs)
         empty!(rxvars)
-        @show rx.rate
-        @show typeof(rx.rate)
-        (rx.rate isa Term) && get_variables!(rxvars, rx.rate)
+        (rx.rate isa Symbolic) && get_variables!(rxvars, rx.rate)
         haveivdep = false
         @inbounds for i = 1:length(rxvars)
             if isequal(rxvars[i], rs.iv)
@@ -347,8 +343,6 @@ function assemble_jumps(rs; combinatoric_ratelaws=true)
                 break
             end
         end
-        @show rx.rate
-        @show haveivdep
         if ismassaction(rx, rs; rxvars=rxvars, haveivdep=haveivdep, stateset=stateset)
             push!(meqs, makemajump(rx, combinatoric_ratelaw=combinatoric_ratelaws))
         else
