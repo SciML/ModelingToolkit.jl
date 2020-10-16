@@ -81,7 +81,9 @@ Base.getproperty(t::Term, f::Symbol) = f === :op ? operation(t) : f === :args ? 
 <ₑ(s, x::Num) = value(s) <ₑ value(x)
 <ₑ(s::Num, x::Num) = value(s) <ₑ value(x)
 
-Base.:(^)(n::Num, i::Integer) = Num(Term{symtype(n)}(^, [value(n),i]))
+for T in (Integer, Rational)
+    @eval Base.:(^)(n::Num, i::$T) = Num(Term{symtype(n)}(^, [value(n),i]))
+end
 
 macro num_method(f, expr, Ts=nothing)
     if Ts === nothing
