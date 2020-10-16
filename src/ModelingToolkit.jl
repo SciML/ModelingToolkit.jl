@@ -170,7 +170,6 @@ include("operations.jl")
 include("differentials.jl")
 
 include("equations.jl")
-include("function_registration.jl")
 include("utils.jl")
 include("linearity.jl")
 include("solve.jl")
