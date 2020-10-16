@@ -12,11 +12,10 @@ eqs = [σ*(y-x),
        x*(ρ-z)-y,
        x*y - β*z]
 
-simpexpr = [
-   :(σ * (y - x))
-   :(x * (ρ - z) - y)
-   :(x * y - β * z)
-   ]
+
+simpexpr = Expr[:($(*)(σ, $(-)(y, x))),
+                :($(-)($(*)(x, $(-)(ρ, z)), y)),
+                :($(-)($(*)(x, y), $(*)(β, z)))]
 
 for i in 1:3
    @test ModelingToolkit.toexpr.(eqs)[i] == simpexpr[i]
