@@ -134,7 +134,7 @@ function states_to_sym(states)
                 any(isequal(O), states) && return O.op.name  # dependent variables
                 return build_expr(:call, Any[O.op.name; _states_to_sym.(O.args)])
             else
-                return build_expr(:call, Any[Symbol(O.op); _states_to_sym.(O.args)])
+                return build_expr(:call, Any[O.op; _states_to_sym.(O.args)])
             end
         elseif O isa Num
             return _states_to_sym(value(O))

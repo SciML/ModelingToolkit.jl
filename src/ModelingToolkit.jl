@@ -175,6 +175,7 @@ include("linearity.jl")
 include("solve.jl")
 include("direct.jl")
 include("domains.jl")
+include("register_function.jl")
 
 include("systems/abstractsystem.jl")
 

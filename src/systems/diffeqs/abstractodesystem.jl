@@ -44,7 +44,7 @@ function (f::ODEToExpr)(O::Term)
         any(isequal(O), f.states) && return O.op.name  # dependent variables
         return build_expr(:call, Any[O.op.name; f.(O.args)])
     end
-    return build_expr(:call, Any[Symbol(O.op); f.(O.args)])
+    return build_expr(:call, Any[O.op; f.(O.args)])
 end
 (f::ODEToExpr)(x) = toexpr(x)
 

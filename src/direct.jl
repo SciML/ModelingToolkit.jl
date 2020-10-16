@@ -215,7 +215,7 @@ function toexpr(O::Term)
           return Expr(:call, :^, Expr(:call, :inv, toexpr(O.args[1])), -(O.args[2].value))
       end
   end
-  return Expr(:call, Symbol(O.op), toexpr.(O.args)...)
+  return Expr(:call, O.op, toexpr.(O.args)...)
 end
 toexpr(s::Sym) = nameof(s)
 toexpr(s) = s
