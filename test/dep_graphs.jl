@@ -100,4 +100,4 @@ eqs = [0 ~ σ*(y-x),
 ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β])
 deps = equation_dependencies(ns)
 eq_sdeps = [[x,y],[y],[y,z]]
-@test all(i -> isequal(Set(deps[i]),Set(convert.(Variable,eq_sdeps[i]))), 1:length(deps))
+@test all(i -> isequal(Set(deps[i]),Set(value.(eq_sdeps[i]))), 1:length(deps))

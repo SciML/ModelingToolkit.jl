@@ -260,11 +260,11 @@ Notes:
 function jumpratelaw(rx; rxvars=get_variables(rx.rate), combinatoric_ratelaw=true)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
-    rl = substitute(rl, Dict(rxvars .=> var2op.(rxvars)))
+    #rl = substitute(rl, Dict(rxvars .=> var2op.(rxvars)))
     if !only_use_rate
         coef = one(eltype(substoich))
         for (i,stoich) in enumerate(substoich)
-            s   = var2op(substrates[i])
+            s   = substrates[i]
             rl *= s
             isone(stoich) && continue
             for i in one(stoich):(stoich-one(stoich))
