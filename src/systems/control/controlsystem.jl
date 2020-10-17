@@ -47,18 +47,18 @@ sys = ControlSystem(loss,eqs,t,[x,v],[u],[])
 """
 struct ControlSystem <: AbstractControlSystem
     """The Loss function"""
-    loss::Operation
+    loss::Term
     """The ODEs defining the system."""
     eqs::Vector{Equation}
     """Independent variable."""
-    iv::Variable
+    iv::Sym
     """Dependent (state) variables."""
-    states::Vector{Variable}
+    states::Vector
     """Control variables."""
-    controls::Vector{Variable}
+    controls::Vector
     """Parameter variables."""
-    ps::Vector{Variable}
-    pins::Vector{Variable}
+    ps::Vector
+    pins::Vector
     observed::Vector{Equation}
     """
     Name: the name of the system
@@ -71,34 +71,35 @@ struct ControlSystem <: AbstractControlSystem
 end
 
 function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls, ps;
-                   pins = Variable[],
-                   observed = Operation[],
+                   pins = [],
+                   observed = [],
                    systems = ODESystem[],
                    name=gensym(:ControlSystem))
-    iv′ = convert(Variable,iv)
-    dvs′ = convert.(Variable,dvs)
-    controls′ = convert.(Variable,controls)
-    ps′ = convert.(Variable,ps)
-    ControlSystem(loss, deqs, iv′, dvs′, controls′, ps′, pins, observed, name, systems)
+    iv′ = value(iv)
+    dvs′ = value.(dvs)
+    controls′ = value.(controls)
+    ps′ = value.(ps)
+    ControlSystem(value(loss), deqs, iv′, dvs′, controls′,
+                  ps′, pins, observed, name, systems)
 end
 
 struct ControlToExpr
     sys::AbstractControlSystem
-    states::Vector{Variable}
-    controls::Vector{Variable}
+    states::Vector
+    controls::Vector
 end
 ControlToExpr(@nospecialize(sys)) = ControlToExpr(sys,states(sys),controls(sys))
-function (f::ControlToExpr)(O::Operation)
-    if isa(O.op, Variable)
-        isequal(O.op, f.sys.iv) && return O.op.name  # independent variable
-        O.op ∈ f.states         && return O.op.name  # dependent variables
-        O.op ∈ f.controls       && return O.op.name  # control variables
-        isempty(O.args)         && return O.op.name  # 0-ary parameters
-        return build_expr(:call, Any[O.op.name; f.(O.args)])
+function (f::ControlToExpr)(O::Term)
+    res = if isa(O.op, Sym)
+        any(isequal(O), f.states)         && return O.op.name  # dependent variables
+        any(isequal(O), f.controls)       && return O.op.name  # control variables
+        build_expr(:call, Any[O.op.name; f.(O.args)])
+    else
+        build_expr(:call, Any[Symbol(O.op); f.(O.args)])
     end
-    return build_expr(:call, Any[Symbol(O.op); f.(O.args)])
 end
-(f::ControlToExpr)(x) = convert(Expr, x)
+(f::ControlToExpr)(x::Sym) = x.name
+(f::ControlToExpr)(x) = x
 
 function constructRadauIIA5(T::Type = Float64)
   sq6 = sqrt(6)
@@ -134,20 +135,22 @@ function runge_kutta_discretize(sys::ControlSystem,dt,tspan;
     f = @RuntimeGeneratedFunction(build_function([x.rhs for x in equations(sys)],sys.states,sys.controls,sys.ps,sys.iv,conv = ModelingToolkit.ControlToExpr(sys))[1])
     L = @RuntimeGeneratedFunction(build_function(sys.loss,sys.states,sys.controls,sys.ps,sys.iv,conv = ModelingToolkit.ControlToExpr(sys)))
 
+    var(n, i...) = var(nameof(n), i...)
+    var(n::Symbol, i...) = Sym{FnType{Tuple{symtype(sys.iv)}, Real}}(nameof(Variable(n, i...)))
     # Expand out all of the variables in time and by stages
-    timed_vars = [[Variable(x.name,i)(sys.iv()) for i in 1:n+1] for x in states(sys)]
-    k_vars = [[Variable(Symbol(:ᵏ,x.name),i,j)(sys.iv()) for i in 1:m, j in 1:n] for x in states(sys)]
+    timed_vars = [[var(x.op,i)(sys.iv) for i in 1:n+1] for x in states(sys)]
+    k_vars = [[var(Symbol(:ᵏ,nameof(x.op)),i,j)(sys.iv) for i in 1:m, j in 1:n] for x in states(sys)]
     states_timeseries = [getindex.(timed_vars,j) for j in 1:n+1]
-    k_timeseries = [[getindex.(k_vars,i,j) for i in 1:m] for j in 1:n]
-    control_timeseries = [[[Variable(x.name,i,j)(sys.iv()) for x in controls(sys)] for i in 1:m] for j in 1:n]
-    ps = [p() for p in parameters(sys)]
-    iv = sys.iv()
+    k_timeseries = [[Num.(getindex.(k_vars,i,j)) for i in 1:m] for j in 1:n]
+    control_timeseries = [[[var(x.op,i,j)(sys.iv) for x in controls(sys)] for i in 1:m] for j in 1:n]
+    ps = parameters(sys)
+    iv = sys.iv
 
     # Calculate all of the update and stage equations
     mult = [tab.A * k_timeseries[i] for i in 1:n]
     tmps = [[states_timeseries[i] .+ mult[i][j] for j in 1:m] for i in 1:n]
 
-    bs = [states_timeseries[i] .+ dt .* sum(tab.α .* k_timeseries[i],dims=1)[1] for i in 1:n]
+    bs = [states_timeseries[i] .+ dt .* reduce(+, tab.α .* k_timeseries[i],dims=1)[1] for i in 1:n]
     updates = reduce(vcat,[states_timeseries[i+1] .~ bs[i] for i in 1:n])
 
     df = [[dt .* Base.invokelatest(f,tmps[j][i],control_timeseries[j][i],ps,iv) for i in 1:m] for j in 1:n]
@@ -164,5 +167,5 @@ function runge_kutta_discretize(sys::ControlSystem,dt,tspan;
     equalities = vcat(stages,updates,control_equality)
     opt_states = vcat(reduce(vcat,reduce(vcat,states_timeseries)),reduce(vcat,reduce(vcat,k_timeseries)),reduce(vcat,reduce(vcat,control_timeseries)))
 
-    OptimizationSystem(reduce(+,losses),opt_states,ps,equality_constraints = equalities)
+    OptimizationSystem(reduce(+,losses, init=0),opt_states,ps,equality_constraints = equalities)
 end

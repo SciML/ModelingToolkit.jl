@@ -27,8 +27,18 @@ function substitute_aliases(diffeqs, dict)
     lhss(diffeqs) .~ fixpoint_sub.(rhss(diffeqs), (dict,))
 end
 
+isvar(s::Sym) = !isparameter(s)
+isvar(s::Term) = isvar(s.op)
+isvar(s::Any) = false
+
+function filterexpr(f, s)
+    vs = []
+    Rewriters.Prewalk(Rewriters.Chain([@rule((~x::f) => push!(vs, ~x))]))(s)
+    vs
+end
+
 function make_lhs_0(eq)
-    if eq.lhs isa Constant && iszero(eq.lhs)
+    if eq.lhs isa Number && iszero(eq.lhs)
         return eq
     else
         0 ~ eq.lhs - eq.rhs
@@ -40,40 +50,36 @@ function alias_elimination(sys::ODESystem)
 
     # make all algebraic equations have 0 on LHS
     eqs = map(eqs) do eq
-        if eq.lhs isa Operation && eq.lhs.op isa Differential
+        if eq.lhs isa Term && eq.lhs.op isa Differential
             eq
         else
             make_lhs_0(eq)
         end
     end
 
-    new_stateops = map(eqs) do eq
-        if eq.lhs isa Operation && eq.lhs.op isa Differential
-            get_variables(eq.lhs)
+    newstates = map(eqs) do eq
+        if eq.lhs isa Term && eq.lhs.op isa Differential
+            filterexpr(isvar, eq.lhs)
         else
             []
         end
     end |> Iterators.flatten |> collect |> unique
 
+
     all_vars = map(eqs) do eq
-        filter(x->!isparameter(x.op), get_variables(eq.rhs))
+        filterexpr(isvar, eq.rhs)
     end |> Iterators.flatten |> collect |> unique
 
-    newstates = convert.(Variable, new_stateops)
+    alg_idxs = findall(x->!(x.lhs isa Term) && iszero(x.lhs), eqs)
 
+    eliminate = setdiff(all_vars, newstates)
 
-    alg_idxs = findall(x->x.lhs isa Constant && iszero(x.lhs), eqs)
-
-    eliminate = setdiff(convert.(Variable, all_vars), newstates)
-
-    vars = map(x->x(sys.iv()), eliminate)
-
-    outputs = solve_for(eqs[alg_idxs], vars)
+    outputs = solve_for(eqs[alg_idxs], eliminate)
 
     diffeqs = eqs[setdiff(1:length(eqs), alg_idxs)]
 
-    diffeqs′ = substitute_aliases(diffeqs, Dict(vars .=> outputs))
+    diffeqs′ = substitute_aliases(diffeqs, Dict(eliminate .=> outputs))
 
-    ODESystem(diffeqs′, sys.iv(), new_stateops, parameters(sys), observed=vars .~ outputs)
+    ODESystem(diffeqs′, sys.iv, newstates, parameters(sys), observed=eliminate .~ outputs)
 end
 

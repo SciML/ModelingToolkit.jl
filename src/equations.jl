@@ -8,18 +8,20 @@ $(FIELDS)
 """
 struct Equation
     """The expression on the left-hand side of the equation."""
-    lhs::Expression
+    lhs
     """The expression on the right-hand side of the equation."""
-    rhs::Expression
+    rhs
 end
-Base.:(==)(a::Equation, b::Equation) = isequal((a.lhs, a.rhs), (b.lhs, b.rhs))
+Base.:(==)(a::Equation, b::Equation) = all(isequal.((a.lhs, a.rhs), (b.lhs, b.rhs)))
 Base.hash(a::Equation, salt::UInt) = hash(a.lhs, hash(a.rhs, salt))
+
+SymbolicUtils.simplify(x::Equation; kw...) = simplify(x.lhs; kw...) ~ simplify(x.rhs; kw...)
 
 """
 $(TYPEDSIGNATURES)
 
-Create an [`Equation`](@ref) out of two [`Expression`](@ref) instances, or an
-`Expression` and a `Number`.
+Create an [`Equation`](@ref) out of two [`Num`](@ref) instances, or an
+`Num` and a `Number`.
 
 # Examples
 
@@ -32,20 +34,21 @@ julia> x ~ y
 Equation(x(), y())
 
 julia> x - y ~ 0
-Equation(x() - y(), ModelingToolkit.Constant(0))
+Equation(x() - y(), 0)
 ```
 """
-Base.:~(lhs::Expression, rhs::Expression) = Equation(lhs, rhs)
-Base.:~(lhs::Expression, rhs::Number    ) = Equation(lhs, rhs)
-Base.:~(lhs::Number    , rhs::Expression) = Equation(lhs, rhs)
+Base.:~(lhs::Num, rhs::Num) = Equation(value(lhs), value(rhs))
+Base.:~(lhs::Num, rhs::Number    ) = Equation(value(lhs), value(rhs))
+Base.:~(lhs::Number    , rhs::Num) = Equation(value(lhs), value(rhs))
+Base.:~(lhs::Symbolic, rhs::Symbolic) = Equation(value(lhs), value(rhs))
+Base.:~(lhs::Symbolic, rhs::Any    ) = Equation(value(lhs), value(rhs))
+Base.:~(lhs::Any, rhs::Symbolic    ) = Equation(value(lhs), value(rhs))
 
 struct ConstrainedEquation
   constraints
   eq
 end
 
-
-Base.Expr(op::Equation) = simplified_expr(op)
 
 function _eq_unordered(a, b)
     length(a) === length(b) || return false

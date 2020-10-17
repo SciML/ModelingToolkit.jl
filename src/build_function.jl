@@ -13,7 +13,7 @@ struct DaggerForm <: ParallelForm end
 """
 `build_function`
 
-Generates a numerically-usable function from a ModelingToolkit `Expression`.
+Generates a numerically-usable function from a ModelingToolkit `Num`.
 
 ```julia
 build_function(ex, args...;
@@ -24,7 +24,7 @@ build_function(ex, args...;
 
 Arguments:
 
-- `ex`: The `Expression` to compile
+- `ex`: The `Num` to compile
 - `args`: The arguments of the function
 - `expression`: Whether to generate code or whether to generate the compiled form.
   By default, `expression = Val{true}`, which means that the code for the
@@ -94,12 +94,12 @@ function unflatten_long_ops(op, N=4)
                  *(*((~~x)[1:N]...) * (*)((~~x)[N+1:end]...)) : nothing)
 
     op = to_symbolic(op)
-    Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2])))(op) |> to_mtk
+    Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2])))(op)
 end
 
 # Scalar output
-function _build_function(target::JuliaTarget, op::Operation, args...;
-                         conv = simplified_expr, expression = Val{true},
+function _build_function(target::JuliaTarget, op, args...;
+                         conv = toexpr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = true, headerfun=addheader)
 
@@ -162,7 +162,7 @@ Build function target: JuliaTarget
 
 ```julia
 function _build_function(target::JuliaTarget, rhss, args...;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun = addheader, outputidxs=nothing,
@@ -176,7 +176,7 @@ Generates a Julia function which can then be utilized for further evaluations.
 If expression=Val{false}, the return is a Julia function which utilizes
 RuntimeGeneratedFunctions.jl in order to be free of world-age issues.
 
-If the `Expression` is an `Operation`, the generated function is a function
+If the `Num` is an `Operation`, the generated function is a function
 with a scalar output, otherwise if it's an `AbstractArray{Operation}`, the output
 is two functions, one for out-of-place AbstractArray output and a second which
 is a mutating function. The outputted functions match the given argument order,
@@ -197,7 +197,7 @@ Special Keyword Argumnets:
   - `DaggerForm()`: Multithreading and multiprocessing using Julia's Dagger.jl
     for dynamic scheduling and load balancing.
 - `conv`: The conversion function of the Operation to Expr. By default this uses
-  the `simplified_expr` function utilized in `convert(Expr,x)`.
+  the `toexpr` function.
 - `checkbounds`: For whether to enable bounds checking inside of the generated
   function. Defaults to false, meaning that `@inbounds` is applied.
 - `linenumbers`: Determines whether the generated function expression retains
@@ -214,8 +214,8 @@ Special Keyword Argumnets:
 - `fillzeros`: Whether to perform `fill(out,0)` before the calculations to ensure
   safety with `skipzeros`.
 """
-function _build_function(target::JuliaTarget, rhss, args...;
-                         conv = simplified_expr, expression = Val{true},
+function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
+                         conv = toexpr, expression = Val{true},
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun = addheader, outputidxs=nothing,
@@ -251,16 +251,16 @@ function _build_function(target::JuliaTarget, rhss, args...;
 
 	if parallel isa DistributedForm
 		numworks = Distributed.nworkers()
-		reducevars = [Variable(gensym(:MTReduceVar))() for i in 1:numworks]
+		reducevars = [gensym(:MTReduceVar) for i in 1:numworks]
 		lens = Int(ceil(rhs_length/numworks))
 		finalsize = rhs_length - (numworks-1)*lens
-		_rhss = vcat(reduce(vcat,[[getindex(reducevars[i],j) for j in 1:lens] for i in 1:numworks-1],init=Expr[]),
-						 [getindex(reducevars[end],j) for j in 1:finalsize])
+		_rhss = vcat(reduce(vcat,[[Variable(reducevars[i],j) for j in 1:lens] for i in 1:numworks-1],init=Expr[]),
+						 [Variable(reducevars[end],j) for j in 1:finalsize])
 
     elseif parallel isa DaggerForm
-		computevars = [Variable(gensym(:MTComputeVar))() for i in axes(rhss,1)]
-        reducevar = Variable(gensym(:MTReduceVar))()
-        _rhss = [getindex(reducevar,i) for i in axes(rhss,1)]
+		computevars = [gensym(:MTComputeVar) for i in axes(rhss,1)]
+        reducevar = Variable(gensym(:MTReduceVar))
+        _rhss = [Variable(reducevar,i) for i in axes(rhss,1)]
 	elseif rhss isa SparseMatrixCSC
 		_rhss = rhss.nzval
 	else
@@ -387,8 +387,13 @@ function _build_function(target::JuliaTarget, rhss, args...;
 		end
     end
 
+    if rhss isa SparseMatrixCSC
+        rhss′ = map(conv∘unflatten_long_ops, rhss.nzval)
+    else
+        rhss′ = [conv(unflatten_long_ops(r)) for r in rhss]
+    end
 
-    tuple_sys_expr = build_expr(:tuple, [conv(rhs) for rhs ∈ rhss])
+    tuple_sys_expr = build_expr(:tuple, rhss′)
 
     if rhss isa Matrix
         arr_sys_expr = build_expr(:vcat, [build_expr(:row,[conv(rhs) for rhs ∈ rhss[i,:]]) for i in 1:size(rhss,1)])
@@ -453,25 +458,35 @@ end
 
 vars_to_pairs(args) = vars_to_pairs(args[1],args[2])
 function vars_to_pairs(name,vs::AbstractArray)
-	_vs = convert.(Variable,vs)
-	names = [Symbol(u) for u ∈ _vs]
-	exs = [:($name[$i]) for (i, u) ∈ enumerate(_vs)]
-	names,exs
+    vs_names = [term_to_symbol(value(u)) for u ∈ vs]
+	exs = [:($name[$i]) for (i, u) ∈ enumerate(vs)]
+	vs_names,exs
 end
+
+function term_to_symbol(t::Term)
+    if operation(t) isa Sym
+        s = nameof(operation(t))
+    else
+        error("really?")
+    end
+end
+
+term_to_symbol(s::Sym) = nameof(s)
 
 function vars_to_pairs(name,vs)
-	_vs = convert(Variable,vs)
-	names = [Symbol(_vs)]
-	exs = [name]
-	names,exs
+    [term_to_symbol(value(vs))], [name]
 end
 
-get_varnumber(varop::Operation,vars::Vector{Operation}) =  findfirst(x->isequal(x,varop),vars)
-get_varnumber(varop::Operation,vars::Vector{<:Variable})  =  findfirst(x->isequal(x,varop.op),vars)
+function rm_calls_with_iv(expr)
+    Rewriters.Prewalk(Rewriters.Chain([@rule((~f::(x->x isa Sym))(~t::(x->x isa Sym)) => Sym{symtype((~f)(~t))}((term_to_symbol(~f))))]))(value(expr))
+end
 
-function numbered_expr(O::Operation,args...;varordering = args[1],offset = 0,
+get_varnumber(varop, vars::Vector) =  findfirst(x->isequal(x,varop),vars)
+
+function numbered_expr(O::Union{Term,Sym},args...;varordering = args[1],offset = 0,
                        lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)])
-  if isa(O.op, ModelingToolkit.Variable)
+    O = value(O)
+  if O isa Sym || isa(O.op, Sym)
 	for j in 1:length(args)
 		i = get_varnumber(O,args[j])
 		if i !== nothing
@@ -479,27 +494,31 @@ function numbered_expr(O::Operation,args...;varordering = args[1],offset = 0,
 		end
 	end
   end
-  return Expr(:call, Symbol(O.op),
+  return Expr(:call, O isa Sym ? nameof(O) : Symbol(O.op),
          [numbered_expr(x,args...;offset=offset,lhsname=lhsname,
                         rhsnames=rhsnames,varordering=varordering) for x in O.args]...)
 end
 
 function numbered_expr(de::ModelingToolkit.Equation,args...;varordering = args[1],
                        lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)],offset=0)
-    i = findfirst(x->isequal(x isa Variable ? x.name : x.op.name,var_from_nested_derivative(de.lhs)[1].name),varordering)
+
+    varordering = value.(args[1])
+    var = var_from_nested_derivative(de.lhs)[1]
+    i = findfirst(x->isequal(x isa Sym ? term_to_symbol(x) : term_to_symbol(x.op),term_to_symbol(var)),varordering)
     :($lhsname[$(i+offset)] = $(numbered_expr(de.rhs,args...;offset=offset,
 											  varordering = varordering,
 											  lhsname = lhsname,
 											  rhsnames = rhsnames)))
 end
-numbered_expr(c::ModelingToolkit.Constant,args...;kwargs...) = c.value
+numbered_expr(c,args...;kwargs...) = c
+numbered_expr(c::Num,args...;kwargs...) = error("Num found")
 
 """
 Build function target: CTarget
 
 ```julia
 function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          fname = :diffeqf,
 						 lhsname=:du,rhsnames=[Symbol("RHS\$i") for i in 1:length(args)],
 						 libpath=tempname(),compiler=:gcc)
@@ -515,10 +534,11 @@ control the compilation:
   only available option.
 """
 function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          fname = :diffeqf,
 						 lhsname=:du,rhsnames=[Symbol("RHS$i") for i in 1:length(args)],
 						 libpath=tempname(),compiler=:gcc)
+
     differential_equation = string(join([numbered_expr(eq,args...,lhsname=lhsname,
                                   rhsnames=rhsnames,offset=-1) for
                                   (i, eq) ∈ enumerate(eqs)],";\n  "),";")
@@ -547,7 +567,7 @@ Build function target: StanTarget
 
 ```julia
 function _build_function(target::StanTarget, eqs::Array{<:Equation}, vs, ps, iv;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          fname = :diffeqf, lhsname=:internal_var___du,
                          rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
 ```
@@ -557,7 +577,7 @@ Unlike other build targets, this one requestions (vs, ps, iv) as the function ar
 Only allowed on arrays of equations.
 """
 function _build_function(target::StanTarget, eqs::Array{<:Equation}, vs, ps, iv;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          fname = :diffeqf, lhsname=:internal_var___du,
                          rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
 	@assert expression == Val{true}
@@ -565,7 +585,7 @@ function _build_function(target::StanTarget, eqs::Array{<:Equation}, vs, ps, iv;
                                    rhsnames=rhsnames) for
                                    (i, eq) ∈ enumerate(eqs)],";\n  "),";")
     """
-    real[] $fname(real $iv,real[] $(rhsnames[1]),real[] $(rhsnames[2]),real[] x_r,int[] x_i) {
+    real[] $fname(real $(conv(iv)),real[] $(rhsnames[1]),real[] $(rhsnames[2]),real[] x_r,int[] x_i) {
       real $lhsname[$(length(eqs))];
       $differential_equation
       return $lhsname;
@@ -578,7 +598,7 @@ Build function target: MATLABTarget
 
 ```julia
 function _build_function(target::MATLABTarget, eqs::Array{<:Equation}, args...;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          lhsname=:internal_var___du,
                          rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
 ```
@@ -588,7 +608,7 @@ Compatible with the MATLAB differential equation solvers. Only allowed on arrays
 of equations.
 """
 function _build_function(target::MATLABTarget, eqs::Array{<:Equation}, args...;
-                         conv = simplified_expr, expression = Val{true},
+                         conv = toexpr, expression = Val{true},
                          fname = :diffeqf, lhsname=:internal_var___du,
                          rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
 	@assert expression == Val{true}

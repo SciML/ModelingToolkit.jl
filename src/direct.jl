@@ -1,44 +1,44 @@
 """
 ```julia
-gradient(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+gradient(O, vars::AbstractVector; simplify = true)
 ```
 
 A helper function for computing the gradient of an expression with respect to
 an array of variable expressions.
 """
-function gradient(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
-    [expand_derivatives(Differential(v)(O),simplify) for v in vars]
+function gradient(O, vars::AbstractVector; simplify = true)
+    Num[expand_derivatives(Differential(v)(value(O)),simplify) for v in vars]
 end
 
 """
 ```julia
-jacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
+jacobian(ops::AbstractVector, vars::AbstractVector; simplify = true)
 ```
 
 A helper function for computing the Jacobian of an array of expressions with respect to
 an array of variable expressions.
 """
-function jacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
-    [expand_derivatives(Differential(v)(O),simplify) for O in ops, v in vars]
+function jacobian(ops::AbstractVector, vars::AbstractVector; simplify = true)
+    Num[expand_derivatives(Differential(value(v))(value(O)),simplify) for O in ops, v in vars]
 end
 
 """
 ```julia
-sparsejacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
+sparsejacobian(ops::AbstractVector, vars::AbstractVector; simplify = true)
 ```
 
 A helper function for computing the sparse Jacobian of an array of expressions with respect to
 an array of variable expressions.
 """
-function sparsejacobian(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression}; simplify = true)
+function sparsejacobian(ops::AbstractVector, vars::AbstractVector; simplify = true)
     I = Int[]
     J = Int[]
-    du = Expression[]
+    du = Num[]
 
     sp = jacobian_sparsity(ops, vars)
     I,J,_ = findnz(sp)
 
-    exprs = Expression[]
+    exprs = Num[]
 
     for (i,j) in zip(I, J)
         push!(exprs, expand_derivatives(Differential(vars[j])(ops[i]), simplify))
@@ -48,14 +48,16 @@ end
 
 """
 ```julia
-jacobian_sparsity(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression})
+jacobian_sparsity(ops::AbstractVector, vars::AbstractVector)
 ```
 
 Return the sparsity pattern of the Jacobian of an array of expressions with respect to
 an array of variable expressions.
 """
 function jacobian_sparsity(du, u)
-    dict = Dict(zip(to_symbolic.(u), 1:length(u)))
+    du = map(value, du)
+    u = map(value, u)
+    dict = Dict(zip(u, 1:length(u)))
 
     i = Ref(1)
     I = Int[]
@@ -71,7 +73,7 @@ function jacobian_sparsity(du, u)
 
     for ii = 1:length(du)
         i[] = ii
-        r(to_symbolic(du[ii]))
+        r(du[ii])
     end
 
     sparse(I, J, true, length(du), length(u))
@@ -79,16 +81,17 @@ end
 
 """
 ```julia
-hessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+hessian(O, vars::AbstractVector; simplify = true)
 ```
 
 A helper function for computing the Hessian of an expression with respect to
 an array of variable expressions.
 """
-function hessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
-    first_derivs = vec(jacobian([O], vars, simplify=simplify))
+function hessian(O, vars::AbstractVector; simplify = true)
+    vars = map(value, vars)
+    first_derivs = map(value, vec(jacobian([values(O)], vars, simplify=simplify)))
     n = length(vars)
-    H = Array{Expression, 2}(undef,(n, n))
+    H = Array{Num, 2}(undef,(n, n))
     fill!(H, 0)
     for i=1:n
         for j=1:i
@@ -102,7 +105,7 @@ isidx(x) = x isa TermCombination
 
 """
 ```julia
-hessian_sparsity(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression})
+hessian_sparsity(ops::AbstractVector, vars::AbstractVector)
 ```
 
 Return the sparsity pattern of the Hessian of an array of expressions with respect to
@@ -111,6 +114,8 @@ an array of variable expressions.
 function hessian_sparsity end
 
 let
+    # we do this in a let block so that Revise works on the list of rules
+
     _scalar = one(TermCombination)
 
     linearity_propagator = [
@@ -134,38 +139,51 @@ let
           end] |> Rewriters.Chain |> Rewriters.Postwalk |> Rewriters.Fixpoint
 
     global hessian_sparsity
-    # we do this in a let block so that Revise works on the list of rules
+
+    """
+    ```julia
+    hessian_sparsity(ops::AbstractVector, vars::AbstractVector)
+    ```
+
+    Return the sparsity pattern of the Hessian of an array of expressions with respect to
+    an array of variable expressions.
+    """
     function hessian_sparsity(f, u)
+        @assert !(f isa AbstractArray)
+        f = value(f)
+        u = map(value, u)
         idx(i) = TermCombination(Set([Dict(i=>1)]))
-        dict = Dict(SymbolicUtils.to_symbolic.(u) .=> idx.(1:length(u)))
+        dict = Dict(u .=> idx.(1:length(u)))
         found = []
-        f = Rewriters.Prewalk(x->haskey(dict, x) ? dict[x] : x)(to_symbolic(f))
-        _sparse(linearity_propagator(to_symbolic(f)), length(u))
+        f = Rewriters.Prewalk(x->haskey(dict, x) ? dict[x] : x)(f)
+        _sparse(linearity_propagator(f), length(u))
     end
 end
 
 """
 ```julia
-islinear(ex::Expression, u)
+islinear(ex, u)
 ```
 Check if an expression is linear with respect to a list of variable expressions.
 """
-function islinear(ex::Expression, u)
+function islinear(ex, u)
     isempty(hessian_sparsity(ex, u).nzval)
 end
 
 """
 ```julia
-sparsehessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+sparsehessian(O, vars::AbstractVector; simplify = true)
 ```
 
 A helper function for computing the sparse Hessian of an expression with respect to
 an array of variable expressions.
 """
-function sparsehessian(O::Expression, vars::AbstractVector{<:Expression}; simplify = true)
+function sparsehessian(O, vars::AbstractVector; simplify = true)
+    O = value(O)
+    vars = map(value, vars)
     S = hessian_sparsity(O, vars)
     I, J, _ = findnz(S)
-    exprs = Array{Expression}(undef, length(I))
+    exprs = Array{Num}(undef, length(I))
     fill!(exprs, 0)
     prev_j = 0
     d = nothing
@@ -185,29 +203,28 @@ function sparsehessian(O::Expression, vars::AbstractVector{<:Expression}; simpli
     return H
 end
 
-function simplified_expr(O::Operation)
-  if O isa Constant
-    return O.value
-  elseif isa(O.op, Differential)
-    return :(derivative($(simplified_expr(O.args[1])),$(simplified_expr(O.op.x))))
-  elseif isa(O.op, Variable)
+function toexpr(O::Term)
+  if isa(O.op, Differential)
+     return :(derivative($(toexpr(O.args[1])),$(toexpr(O.op.x))))
+  elseif isa(O.op, Sym)
     isempty(O.args) && return O.op.name
-    return Expr(:call, Symbol(O.op), simplified_expr.(O.args)...)
+    return Expr(:call, toexpr(O.op), toexpr.(O.args)...)
   end
   if O.op === (^)
-      if length(O.args) > 1  && O.args[2] isa Constant && O.args[2].value < 0
-          return Expr(:call, :^, Expr(:call, :inv, simplified_expr(O.args[1])), -(O.args[2].value))
+      if length(O.args) > 1  && O.args[2] isa Number && O.args[2] < 0
+          return Expr(:call, :^, Expr(:call, :inv, toexpr(O.args[1])), -(O.args[2].value))
       end
   end
-  return Expr(:call, Symbol(O.op), simplified_expr.(O.args)...)
+  return Expr(:call, O.op, toexpr.(O.args)...)
+end
+toexpr(s::Sym) = nameof(s)
+toexpr(s) = s
+
+function toexpr(eq::Equation)
+    Expr(:(=), toexpr(eq.lhs), toexpr(eq.rhs))
 end
 
-simplified_expr(c::Constant) = c.value
-
-function simplified_expr(eq::Equation)
-    Expr(:(=), simplified_expr(eq.lhs), simplified_expr(eq.rhs))
-end
-
-simplified_expr(eq::AbstractArray) = simplified_expr.(eq)
-simplified_expr(x::Integer) = x
-simplified_expr(x::AbstractFloat) = x
+toexpr(eq::AbstractArray) = toexpr.(eq)
+toexpr(x::Integer) = x
+toexpr(x::AbstractFloat) = x
+toexpr(x::Num) = toexpr(value(x))

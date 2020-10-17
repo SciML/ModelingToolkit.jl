@@ -1,5 +1,7 @@
 using ModelingToolkit, LightGraphs
 
+import ModelingToolkit: value
+
 # use a ReactionSystem to generate systems for testing
 @parameters k1 k2 t
 @variables S(t) I(t) R(t)
@@ -17,9 +19,8 @@ rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
 #  testing for Jumps / all dgs
 #################################
 js = convert(JumpSystem, rs)
-S  = convert(Variable,S); I = convert(Variable,I); R = convert(Variable,R)
-k1 = convert(Variable,k1); k2 = convert(Variable,k2)
-
+S  = value(S); I = value(I); R = value(R)
+k1 = value(k1); k2 = value(k2)
 # eq to vars they depend on
 eq_sdeps  = [Variable[], [S], [S,I], [S,R], [I], [S]]
 eq_sidepsf = [Int[], [1], [1,2], [1,3], [2], [1]]
@@ -99,4 +100,4 @@ eqs = [0 ~ σ*(y-x),
 ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β])
 deps = equation_dependencies(ns)
 eq_sdeps = [[x,y],[y],[y,z]]
-@test all(i -> isequal(Set(deps[i]),Set(convert.(Variable,eq_sdeps[i]))), 1:length(deps))
+@test all(i -> isequal(Set(deps[i]),Set(value.(eq_sdeps[i]))), 1:length(deps))

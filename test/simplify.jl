@@ -10,7 +10,7 @@ null_op = 0*t
 one_op = 1*t
 @test isequal(simplify(one_op), t)
 
-identity_op = Operation(identity,[x])
+identity_op = Num(Term(identity,[x.val]))
 @test isequal(simplify(identity_op), x)
 
 minus_op = -x
@@ -19,16 +19,16 @@ simplify(minus_op)
 
 @variables x
 
-@test simplified_expr(expand_derivatives(Differential(x)((x-2)^2))) == :(2 * (-2 + x))
-@test simplified_expr(expand_derivatives(Differential(x)((x-2)^3))) == :(3 * (-2 + x)^2)
-@test simplified_expr(simplify(x+2+3)) == :(5 + x)
+@test toexpr(expand_derivatives(Differential(x)((x-2)^2))) == :($(*)(2, $(+)(-2, x)))
+@test toexpr(expand_derivatives(Differential(x)((x-2)^3))) == :($(*)(3, $(^)($(+)(-2, x), 2)))
+@test toexpr(simplify(x+2+3)) == :($(+)(5, x))
 
 d1 = Differential(x)((-2 + x)^2)
 d2 = Differential(x)(d1)
 d3 = Differential(x)(d2)
 
-@test simplified_expr(expand_derivatives(d3)) == :(0)
-@test simplified_expr(simplify(x^0)) == :(1)
+@test toexpr(expand_derivatives(d3)) == :(0)
+@test toexpr(simplify(x^0)) == :(1)
 
-@test ModelingToolkit.substitute(2x + y == 1, Dict(x => 0.0, y => 0.0)).value === false
-@test ModelingToolkit.substitute(2x + y == 1, Dict(x => 0.0, y => 1.0)).value === true
+@test ModelingToolkit.substitute(2x + y == 1, Dict(x => 0.0, y => 0.0)) === false
+@test ModelingToolkit.substitute(2x + y == 1, Dict(x => 0.0, y => 1.0)) === true

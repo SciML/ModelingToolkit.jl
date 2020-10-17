@@ -42,13 +42,13 @@ Notes:
 - The three-argument form assumes all reactant and product stoichiometric coefficients
   are one.
 """
-struct Reaction{S <: Variable, T <: Number}
+struct Reaction{S, T <: Number}
     """The rate function (excluding mass action terms)."""
     rate
     """Reaction substrates."""
-    substrates::Vector{Operation}
+    substrates::Vector
     """Reaction products."""
-    products::Vector{Operation}
+    products::Vector
     """The stoichiometric coefficients of the reactants."""
     substoich::Vector{T}
     """The stoichiometric coefficients of the products."""
@@ -65,20 +65,22 @@ end
 function Reaction(rate, subs, prods, substoich, prodstoich;
                   netstoich=nothing, only_use_rate=false, kwargs...)
 
-      (isnothing(prods)&&isnothing(subs)) && error("A reaction requires a non-nothing substrate or product vector.")
-      (isnothing(prodstoich)&&isnothing(substoich)) && error("Both substrate and product stochiometry inputs cannot be nothing.")
-      if isnothing(subs)
-        subs = Vector{Operation}()
+    (isnothing(prods)&&isnothing(subs)) && error("A reaction requires a non-nothing substrate or product vector.")
+    (isnothing(prodstoich)&&isnothing(substoich)) && error("Both substrate and product stochiometry inputs cannot be nothing.")
+    if isnothing(subs)
+        subs = Vector{Term}()
         !isnothing(substoich) && error("If substrates are nothing, substrate stiocihometries have to be so too.")
         substoich = typeof(prodstoich)()
     end
     if isnothing(prods)
-        prods = Vector{Operation}()
+        prods = Vector{Term}()
         !isnothing(prodstoich) && error("If products are nothing, product stiocihometries have to be so too.")
         prodstoich = typeof(substoich)()
     end
+    subs = value.(subs)
+    prods = value.(prods)
     ns = isnothing(netstoich) ? get_netstoich(subs, prods, substoich, prodstoich) : netstoich
-    Reaction(rate, subs, prods, substoich, prodstoich, ns, only_use_rate)
+    Reaction(value(rate), subs, prods, substoich, prodstoich, ns, only_use_rate)
 end
 
 
@@ -93,11 +95,10 @@ end
 # calculates the net stoichiometry of a reaction as a vector of pairs (sub,substoich)
 function get_netstoich(subs, prods, sstoich, pstoich)
     # stoichiometry as a Dictionary
-    nsdict = Dict{Variable,eltype(sstoich)}(sub.op => -sstoich[i] for (i,sub) in enumerate(subs))
+    nsdict = Dict{Any, eltype(sstoich)}(sub => -sstoich[i] for (i,sub) in enumerate(subs))
     for (i,p) in enumerate(prods)
         coef = pstoich[i]
-        prod = p.op
-        @inbounds nsdict[prod] = haskey(nsdict, prod) ? nsdict[prod] + coef : coef
+        @inbounds nsdict[p] = haskey(nsdict, p) ? nsdict[p] + coef : coef
     end
 
     # stoichiometry as a vector
@@ -124,12 +125,12 @@ struct ReactionSystem <: AbstractSystem
     """The reactions defining the system."""
     eqs::Vector{Reaction}
     """Independent variable (usually time)."""
-    iv::Variable
+    iv::Any
     """Dependent (state) variables representing amount of each species."""
-    states::Vector{Variable}
+    states::Vector
     """Parameter variables."""
-    ps::Vector{Variable}
-    pins::Vector{Variable}
+    ps::Vector
+    pins::Vector
     observed::Vector{Equation}
     """The name of the system"""
     name::Symbol
@@ -138,15 +139,13 @@ struct ReactionSystem <: AbstractSystem
 end
 
 function ReactionSystem(eqs, iv, species, params;
-                        pins = Variable[],
-                        observed = Operation[],
+                        pins = [],
+                        observed = [],
                         systems = ReactionSystem[],
                         name = gensym(:ReactionSystem))
 
     isempty(species) && error("ReactionSystems require at least one species.")
-    paramvars = map(v -> convert(Variable,v), params)
-    specvars  = map(s -> convert(Variable,s), species)
-    ReactionSystem(eqs, convert(Variable,iv), specvars, paramvars,
+    ReactionSystem(eqs, value(iv), value.(species), value.(params),
                    pins, observed, name, systems)
 end
 
@@ -187,15 +186,15 @@ function oderatelaw(rx; combinatoric_ratelaw=true)
 end
 
 function assemble_drift(rs; combinatoric_ratelaws=true)
-    D   = Differential(rs.iv())
-    eqs = [D(x(rs.iv())) ~ 0 for x in rs.states]
+    D   = Differential(rs.iv)
+    eqs = [D(x) ~ 0 for x in rs.states]
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for rx in rs.eqs
         rl = oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)
         for (spec,stoich) in rx.netstoich
             i = species_to_idx[spec]
-            if iszero(eqs[i].rhs)
+            if _iszero(eqs[i].rhs)
                 signedrl = (stoich > zero(stoich)) ? rl : -rl
                 rhs      = isone(abs(stoich)) ? signedrl : stoich * rl
             else
@@ -209,7 +208,7 @@ function assemble_drift(rs; combinatoric_ratelaws=true)
 end
 
 function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
-    eqs = Expression[Constant(0) for x in rs.states, y in rs.eqs]
+    eqs = fill(Num(0), length(rs.states), length(rs.eqs))
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for (j,rx) in enumerate(rs.eqs)
@@ -225,7 +224,10 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
 end
 
 function var2op(var)
-    Operation(var,Vector{Expression}())
+    Sym{symtype(var)}(nameof(var.op))
+end
+function var2op(var::Sym)
+    var
 end
 
 # Calculate the Jump rate law (like ODE, but uses X instead of X(t).
@@ -258,13 +260,11 @@ Notes:
 function jumpratelaw(rx; rxvars=get_variables(rx.rate), combinatoric_ratelaw=true)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
-    for op in rxvars
-        rl = substitute(rl, op => var2op(op.op))
-    end
+    #rl = substitute(rl, Dict(rxvars .=> var2op.(rxvars)))
     if !only_use_rate
         coef = one(eltype(substoich))
         for (i,stoich) in enumerate(substoich)
-            s   = var2op(substrates[i].op)
+            s   = substrates[i]
             rl *= s
             isone(stoich) && continue
             for i in one(stoich):(stoich-one(stoich))
@@ -281,7 +281,7 @@ end
 """
 ```julia
 ismassaction(rx, rs; rxvars = get_variables(rx.rate),
-                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars),
+                              haveivdep = any(var -> isequal(rs.iv,var), rxvars),
                               stateset = Set(states(rs)))
 ```
 
@@ -297,13 +297,14 @@ explicitly on the independent variable (usually time).
 - Optional: `stateset`, set of states which if the rxvars are within mean rx is non-mass action.
 """
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
-                              haveivdep = any(var -> isequal(rs.iv,convert(Variable,var)), rxvars),
+                              haveivdep,
                               stateset = Set(states(rs)))
     # if no dependencies must be zero order
     (length(rxvars)==0) && return true
-    (haveivdep || rx.only_use_rate) && return false
+    haveivdep && return false
+    rx.only_use_rate && return false
     @inbounds for i = 1:length(rxvars)
-        (rxvars[i].op in stateset) && return false
+        (rxvars[i] in stateset) && return false
     end
     return true
 end
@@ -311,33 +312,33 @@ end
 @inline function makemajump(rx; combinatoric_ratelaw=true)
     @unpack rate, substrates, substoich, netstoich = rx
     zeroorder = (length(substoich) == 0)
-    reactant_stoch = Vector{Pair{Operation,eltype(substoich)}}(undef, length(substoich))
+    reactant_stoch = Vector{Pair{Any,eltype(substoich)}}(undef, length(substoich))
     @inbounds for i = 1:length(reactant_stoch)
-        reactant_stoch[i] = var2op(substrates[i].op) => substoich[i]
+        reactant_stoch[i] = substrates[i] => substoich[i]
     end
     #push!(rstoich, reactant_stoch)
     coef = (zeroorder || (!combinatoric_ratelaw)) ? one(eltype(substoich)) : prod(stoich -> factorial(stoich), substoich)
     (!isone(coef)) && (rate /= coef)
     #push!(rates, rate)
-    net_stoch      = [Pair(var2op(p[1]),p[2]) for p in netstoich]
+    net_stoch      = [Pair(p[1],p[2]) for p in netstoich]
     #push!(nstoich, net_stoch)
-    MassActionJump(rate, reactant_stoch, net_stoch, scale_rates=false, useiszero=false)
+    MassActionJump(Num(rate), reactant_stoch, net_stoch, scale_rates=false, useiszero=false)
 end
 
 function assemble_jumps(rs; combinatoric_ratelaws=true)
     meqs = MassActionJump[]; ceqs = ConstantRateJump[]; veqs = VariableRateJump[]
     stateset = Set(states(rs))
     #rates = [];  rstoich = []; nstoich = []
-    rxvars = Operation[]
+    rxvars = []
     ivname = rs.iv.name
 
     isempty(equations(rs)) && error("Must give at least one reaction before constructing a JumpSystem.")
     for rx in equations(rs)
         empty!(rxvars)
-        (rx.rate isa Operation) && get_variables!(rxvars, rx.rate)
+        (rx.rate isa Symbolic) && get_variables!(rxvars, rx.rate)
         haveivdep = false
         @inbounds for i = 1:length(rxvars)
-            if rxvars[i].op.name == ivname
+            if isequal(rxvars[i], rs.iv)
                 haveivdep = true
                 break
             end
@@ -348,7 +349,7 @@ function assemble_jumps(rs; combinatoric_ratelaws=true)
             rl     = jumpratelaw(rx, rxvars=rxvars, combinatoric_ratelaw=combinatoric_ratelaws)
             affect = Vector{Equation}()
             for (spec,stoich) in rx.netstoich
-                push!(affect, var2op(spec) ~ var2op(spec) + stoich)
+                push!(affect, spec ~ spec + stoich)
             end
             if haveivdep
                 push!(veqs, VariableRateJump(rl,affect))
@@ -400,12 +401,30 @@ Finally, a `Vector{Operation}` can be provided (the length must be equal to the 
 Here the noise for each reaction is scaled by the corresponding parameter in the input vector.
 This input may contain repeat parameters.
 """
-function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, combinatoric_ratelaws=true; noise_scaling=nothing::Union{Vector{Operation},Operation,Nothing})
-    (typeof(noise_scaling) <: Vector{Operation}) && (length(noise_scaling)!=length(rs.eqs)) && error("The number of elements in 'noise_scaling' must be equal to the number of reactions in the reaction system.")
-    (typeof(noise_scaling) <: Operation) && (noise_scaling = fill(noise_scaling,length(rs.eqs)))
+function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, combinatoric_ratelaws=true; noise_scaling=nothing)
+
+    if noise_scaling isa Vector
+        (length(noise_scaling)!=length(rs.eqs)) &&
+        error("The number of elements in 'noise_scaling' must be equal " *
+              "to the number of reactions in the reaction system.")
+        noise_scaling = value.(noise_scaling)
+    elseif !isnothing(noise_scaling)
+        noise_scaling = fill(value(noise_scaling),length(rs.eqs))
+    end
+
     eqs = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws)
-    noiseeqs = assemble_diffusion(rs,noise_scaling; combinatoric_ratelaws=combinatoric_ratelaws)
-    SDESystem(eqs,noiseeqs,rs.iv,rs.states,(noise_scaling===nothing) ? rs.ps : union(rs.ps,Variable{ModelingToolkit.Parameter{Number}}.(noise_scaling)),name=rs.name,systems=convert.(SDESystem,rs.systems))
+
+    noiseeqs = assemble_diffusion(rs,noise_scaling;
+                                  combinatoric_ratelaws=combinatoric_ratelaws)
+
+    SDESystem(eqs,
+              noiseeqs,
+              rs.iv,
+              rs.states,
+              (noise_scaling===nothing) ?
+                    rs.ps :
+                    union(rs.ps,toparam.(noise_scaling)),
+                    name=rs.name,systems=convert.(SDESystem,rs.systems))
 end
 
 """
@@ -442,7 +461,7 @@ law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
 ignored.
 """
 function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem; combinatoric_ratelaws=true)
-    states_swaps = map(states -> Operation(states,[var2op(rs.iv)]), rs.states)
+    states_swaps = value.(rs.states)
     eqs = map(eq -> 0 ~ make_sub!(eq,states_swaps),getproperty.(assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws),:rhs))
     NonlinearSystem(eqs,rs.states,rs.ps,name=rs.name,
               systems=convert.(NonlinearSystem,rs.systems))
@@ -471,7 +490,7 @@ function DiffEqBase.ODEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Numb
 end
 
 # SDEProblem from AbstractReactionNetwork
-function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p=DiffEqBase.NullParameters(), args...; noise_scaling=nothing::Union{Operation,Nothing}, kwargs...)
+function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p=DiffEqBase.NullParameters(), args...; noise_scaling=nothing, kwargs...)
     sde_sys = convert(SDESystem,rs,noise_scaling=noise_scaling)
     u0 = typeof(u0) <: Array{<:Pair} ? u0 : Pair.(rs.states,u0)
     p = typeof(p) <: Union{Array{<:Pair},DiffEqBase.NullParameters} ? p : Pair.(sde_sys.ps,p)
@@ -499,8 +518,8 @@ function DiffEqBase.SteadyStateProblem(rs::ReactionSystem, u0::Union{AbstractArr
 end
 
 # determine which species a reaction depends on
-function get_variables!(deps::Set{Operation}, rx::Reaction, variables)
-    (rx.rate isa Operation) && get_variables!(deps, rx.rate, variables)
+function get_variables!(deps::Set, rx::Reaction, variables)
+    (rx.rate isa Symbolic) && get_variables!(deps, rx.rate, variables)
     for s in rx.substrates
         push!(deps, s)
     end
@@ -508,8 +527,8 @@ function get_variables!(deps::Set{Operation}, rx::Reaction, variables)
 end
 
 # determine which species a reaction modifies
-function modified_states!(mstates, rx::Reaction, sts)
+function modified_states!(mstates, rx::Reaction, sts::Set)
     for (species,stoich) in rx.netstoich
-        (species in sts) && push!(mstates, species())
+        (species in sts) && push!(mstates, species)
     end
 end

@@ -3,6 +3,8 @@ using OrdinaryDiffEq
 using DiffEqBase, SparseArrays
 using Test
 
+using ModelingToolkit: value
+
 # Define some variables
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
@@ -13,22 +15,17 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-ModelingToolkit.simplified_expr.(eqs)[1]
+ModelingToolkit.toexpr.(eqs)[1]
 :(derivative(x(t), t) = σ * (y(t) - x(t))).args
 de = ODESystem(eqs)
 
 generate_function(de)
 
-function _clean(O::Operation)
-    @assert isa(O.op, Variable)
-    return O.op
-end
-_clean(x::Variable) = x
 function test_diffeq_inference(name, sys, iv, dvs, ps)
     @testset "ODESystem construction: $name" begin
-        @test independent_variable(sys) ==  _clean(iv)
-        @test Set(states(sys))          == Set(_clean.(dvs))
-        @test Set(parameters(sys))      == Set(_clean.(ps))
+        @test isequal(independent_variable(sys),  value(iv))
+        @test isempty(setdiff(Set(states(sys)), Set(value.(dvs))))
+        @test isempty(setdiff(Set(parameters(sys)), Set(value.(ps))))
     end
 end
 
@@ -56,10 +53,11 @@ p  = SVector(4:6...)
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y*t,
        D(z) ~ x*y - β*z]
-de = ODESystem(eqs)
+de = ODESystem(eqs) # This is broken
 ModelingToolkit.calculate_tgrad(de)
 
 tgrad_oop, tgrad_iip = eval.(ModelingToolkit.generate_tgrad(de))
+
 @test tgrad_oop(u,p,t) == [0.0,-u[2],0.0]
 du = zeros(3)
 tgrad_iip(du,u,p,t)
@@ -84,7 +82,7 @@ tgrad_iip(du,u,p,t)
            D(y) ~ x*(ρ-z)-y,
            D(z) ~ x*y - β*z]
     de = ODESystem(eqs)
-    test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ, ρ, β))
+    test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ(t-1), ρ, β))
     @test begin
         f = eval(generate_function(de, [x,y,z], [σ,ρ,β])[2])
         du = [0.0,0.0,0.0]
@@ -94,7 +92,7 @@ tgrad_iip(du,u,p,t)
 
     eqs = [D(x) ~ x + 10σ(t-1) + 100σ(t-2) + 1000σ(t^2)]
     de = ODESystem(eqs)
-    test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ,))
+    test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ(t-2),σ(t^2), σ(t-1)))
     @test begin
         f = eval(generate_function(de, [x], [σ])[2])
         du = [0.0]
@@ -117,10 +115,10 @@ lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
                D(u)    ~ uˍt
                D(x)    ~ xˍt]
 
-@test de1 == ODESystem(lowered_eqs)
+#@test de1 == ODESystem(lowered_eqs)
 
 # issue #219
-@test de1.states == [ModelingToolkit.var_from_nested_derivative(eq.lhs)[1] for eq in de1.eqs] == ODESystem(lowered_eqs).states
+@test all(isequal.([ModelingToolkit.var_from_nested_derivative(eq.lhs)[1] for eq in de1.eqs], ODESystem(lowered_eqs).states))
 
 test_diffeq_inference("first-order transform", de1, t, [uˍtt, xˍt, uˍt, u, x], [])
 du = zeros(5)

@@ -61,7 +61,7 @@ flattened_system = ModelingToolkit.flatten(connected)
 
 aliased_flattened_system = alias_elimination(flattened_system)
 
-@test states(aliased_flattened_system) == convert.(Variable, [
+@test isequal(states(aliased_flattened_system), [
         lorenz1.x
         lorenz1.y
         lorenz1.z
@@ -70,7 +70,7 @@ aliased_flattened_system = alias_elimination(flattened_system)
         lorenz2.z
        ])
 
-@test setdiff(parameters(aliased_flattened_system), convert.(Variable, [
+@test setdiff(parameters(aliased_flattened_system), [
         lorenz1.σ
         lorenz1.ρ
         lorenz1.β
@@ -78,7 +78,7 @@ aliased_flattened_system = alias_elimination(flattened_system)
         lorenz2.F
         lorenz2.ρ
         lorenz2.β
-       ])) |> isempty
+       ]) |> isempty
 
 test_equal.(equations(aliased_flattened_system), [
        D(lorenz1.x) ~ lorenz1.σ*(lorenz1.y-lorenz1.x) + lorenz2.x - lorenz2.y - lorenz2.z,

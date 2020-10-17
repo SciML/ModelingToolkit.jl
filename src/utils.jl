@@ -2,28 +2,16 @@ function make_operation(@nospecialize(op), args)
     if op === (*)
         args = filter(!_isone, args)
         if isempty(args)
-            return Constant(1)
+            return 1
         end
     elseif op === (+)
         args = filter(!_iszero, args)
         if isempty(args)
-            return Constant(0)
+            return 0
         end
     end
-    if !isempty(args) && all(x-> x isa Constant || !(x isa Expression), args)
-        x = op(map(x->x isa Constant ? x.value : x, args)...)
-        return x isa Expression ? x : Constant(x)
-    else
-        return op(args...)
-    end
+    return op(args...)
 end
-Base.convert(::Type{Expression}, x::Expression) = x
-Base.convert(::Type{Expression}, x::Number) = Constant(x)
-Base.convert(::Type{Expression}, x::Bool) = Constant(x)
-Base.convert(::Type{Expression}, x::Variable) = convert(Operation,x)
-Base.convert(::Type{Expression}, x::Operation) = x
-Base.convert(::Type{Expression}, x::Symbol) = Operation(Variable(x),[])
-Expression(x::Bool) = Constant(x)
 
 function build_expr(head::Symbol, args)
     ex = Expr(head)
@@ -43,95 +31,79 @@ function flatten_expr!(x)
     x
 end
 
-function detime_dvs(op::Operation)
-  if op.op isa Variable
-    Operation(Variable{vartype(op.op)}(op.op.name),Expression[])
+function detime_dvs(op::Term)
+  if op.op isa Sym
+      Sym{Real}(nameof(op.op))
   else
-    Operation(op.op,detime_dvs.(op.args))
+    Term(op.op,detime_dvs.(op.args))
   end
 end
-detime_dvs(op::Constant) = op
+detime_dvs(op) = op
 
-function retime_dvs(op::Operation,dvs,iv)
-  if op.op isa Variable && op.op ∈ dvs
-    Operation(Variable{vartype(op.op)}(op.op.name),Expression[iv])
-  else
-    Operation(op.op,retime_dvs.(op.args,(dvs,),iv))
-  end
+function retime_dvs(op::Sym,dvs,iv)
+    Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
 end
-retime_dvs(op::Constant,dvs,iv) = op
 
-is_constant(::Constant) = true
-is_constant(::Any) = false
+function retime_dvs(op::Term, dvs, iv)
+    similarterm(op, op.op, retime_dvs.(op.args,(dvs,),(iv,)))
+end
+retime_dvs(op,dvs,iv) = op
 
-is_operation(::Operation) = true
-is_operation(::Any) = false
-
-is_derivative(O::Operation) = isa(O.op, Differential)
+is_derivative(O::Term) = isa(O.op, Differential)
 is_derivative(::Any) = false
 
-Base.occursin(t::Expression) = Base.Fix1(occursin, t)
-Base.occursin(t::Expression, x::Operation ) = isequal(x, t) || any(occursin(t), x.args)
-Base.occursin(t::Expression, x::Expression) = isequal(x, t)
+"""
+get_variables(O)
 
-vars(exprs) = foldl(vars!, exprs; init = Set{Variable}())
-function vars!(vars, O)
-    isa(O, Operation) || return vars
-    O.op isa Variable && push!(vars, O.op)
-    for arg ∈ O.args
-        if isa(arg, Operation)
-            isa(arg.op, Variable) && push!(vars, arg.op)
-            vars!(vars, arg)
-        end
-    end
+Returns the variables in the expression
+"""
+get_variables(e::Num, varlist=nothing) = get_variables(value(e), varlist)
+get_variables!(vars, e, varlist=nothing) = vars
 
-    return vars
-end
-
-# variable extraction
+is_singleton(e::Term) = e.op isa Sym
+is_singleton(e::Sym) = true
 is_singleton(e) = false
-is_singleton(e::Operation) = e.op isa Variable
 
-"""
-get_variables(O::Operation)
+get_variables!(vars, e::Number, varlist=nothing) = vars
 
-Returns the variables in the Operation
-"""
-get_variables!(vars, e::Constant, varlist=nothing) = vars
-get_variables(e::Constant, varlist=nothing) = get_variables!(Operation[], e, varlist)
-
-function get_variables!(vars, e::Operation, varlist=nothing)
+function get_variables!(vars, e::Symbolic, varlist=nothing)
     if is_singleton(e)
-      (isnothing(varlist) ? true : (e.op in varlist)) && push!(vars, e)
+        if isnothing(varlist) || any(isequal(e), varlist)
+            push!(vars, e)
+        end
     else
         foreach(x -> get_variables!(vars, x, varlist), e.args)
     end
     return (vars isa AbstractVector) ? unique!(vars) : vars
 end
-get_variables(e::Operation, varlist=nothing) = get_variables!(Operation[], e, varlist)
 
 function get_variables!(vars, e::Equation, varlist=nothing)
   get_variables!(vars, e.rhs, varlist)
 end
-get_variables(e::Equation, varlist=nothing) = get_variables!(Operation[],e,varlist)
+
+get_variables(e, varlist=nothing) = get_variables!([], e, varlist)
 
 modified_states!(mstates, e::Equation, statelist=nothing) = get_variables!(mstates, e.lhs, statelist)
 
+
 # variable substitution
+# Piracy but mild
 """
-substitute(expr::Operation, s::Pair)
-substitute(expr::Operation, s::Dict)
-substitute(expr::Operation, s::Vector)
+substitute(expr, s::Pair)
+substitute(expr, s::Dict)
+substitute(expr, s::Vector)
 
-Performs the substitution `Operation => val` on the `expr` Operation.
+Performs the substitution `Num => val` on the `expr` Num.
 """
-substitute(expr::Constant, s) = expr
-substitute(expr::Operation, s::Pair) = substituter([s[1] => s[2]])(expr)
-substitute(expr::Operation, s::Union{Vector, Dict}) = substituter(s)(expr)
+substitute(expr::Num, s::Union{Pair, Vector, Dict}; kw...) = Num(substituter(s)(value(expr); kw...))
+# TODO: move this to SymbolicUtils
+substitute(expr::Term, s::Pair; kw...) = substituter([s[1] => s[2]])(expr; kw...)
+substitute(expr::Term, s::Vector; kw...) = substituter(s)(expr; kw...)
 
+substituter(pair::Pair) = substituter((pair,))
 function substituter(pairs)
     dict = Dict(to_symbolic(k) => to_symbolic(v)  for (k, v) in pairs)
-    expr -> to_mtk(SymbolicUtils.substitute(expr, dict))
+    (expr; kw...) -> SymbolicUtils.substitute(expr, dict; kw...)
 end
 
 macro showarr(x)
@@ -146,3 +118,38 @@ macro showarr(x)
 end
 
 @deprecate substitute_expr!(expr,s) substitute(expr,s)
+
+function states_to_sym(states)
+    function _states_to_sym(O)
+        if O isa Equation
+            Expr(:(=), _states_to_sym(O.lhs), _states_to_sym(O.rhs))
+        elseif O isa Term
+            if isa(O.op, Sym)
+                any(isequal(O), states) && return O.op.name  # dependent variables
+                return build_expr(:call, Any[O.op.name; _states_to_sym.(O.args)])
+            else
+                return build_expr(:call, Any[O.op; _states_to_sym.(O.args)])
+            end
+        elseif O isa Num
+            return _states_to_sym(value(O))
+        else
+            return toexpr(O)
+        end
+    end
+end
+
+"""
+    toparam(s::Sym) -> Sym{<:Parameter}
+
+Maps the variable to a paramter.
+"""
+toparam(s::Sym) = Sym{Parameter{symtype(s)}}(s.name)
+toparam(s::Sym{<:Parameter}) = s
+
+"""
+    tovar(s::Sym) -> Sym{Real}
+
+Maps the variable to a variable (state).
+"""
+tovar(s::Sym{<:Parameter}) = Sym{symtype(s)}(s.name)
+tovar(s::Sym) = s

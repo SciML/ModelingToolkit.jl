@@ -43,12 +43,12 @@ equation_dependencies(jumpsys, variables=parameters(jumpsys))
 """
 function equation_dependencies(sys::AbstractSystem; variables=states(sys))
     eqs  = equations(sys)
-    deps = Set{Operation}()
-    depeqs_to_vars = Vector{Vector{Variable}}(undef,length(eqs))
+    deps = Set()
+    depeqs_to_vars = Vector{Vector}(undef,length(eqs))
 
-    for (i,eq) in enumerate(eqs)      
+    for (i,eq) in enumerate(eqs)
         get_variables!(deps, eq, variables)
-        depeqs_to_vars[i] = [convert(Variable,v) for v in deps]
+        depeqs_to_vars[i] = [value(v) for v in deps]
         empty!(deps)
     end
 
@@ -165,7 +165,7 @@ digr = asgraph(odesys)
 ```
 """
 function asgraph(sys::AbstractSystem; variables=states(sys), 
-                                      variablestoids=Dict(convert(Variable, v) => i for (i,v) in enumerate(variables)))
+                                      variablestoids=Dict(v => i for (i,v) in enumerate(variables)))
     asgraph(equation_dependencies(sys, variables=variables), variablestoids)
 end
 
@@ -190,13 +190,13 @@ variable_dependencies(odesys)
 """
 function variable_dependencies(sys::AbstractSystem; variables=states(sys), variablestoids=nothing)
     eqs   = equations(sys)
-    vtois = isnothing(variablestoids) ? Dict(convert(Variable, v) => i for (i,v) in enumerate(variables)) : variablestoids
+    vtois = isnothing(variablestoids) ? Dict(v => i for (i,v) in enumerate(variables)) : variablestoids
 
-    deps = Set{Operation}()
+    deps = Set()
     badjlist = Vector{Vector{Int}}(undef, length(eqs))    
     for (eidx,eq) in enumerate(eqs)
         modified_states!(deps, eq, variables)
-        badjlist[eidx] = sort!([vtois[convert(Variable,var)] for var in deps])
+        badjlist[eidx] = sort!([vtois[var] for var in deps])
         empty!(deps)
     end
 

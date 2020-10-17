@@ -1,10 +1,9 @@
 using ModelingToolkit, Test, SparseArrays
 @variables a b c
 
-# Auxiliary Functions and Constants
-get_sparsity_pattern(h::Array{Expression}) = sparse(Int64.(map(~, h .=== ModelingToolkit.Constant(0))))
-get_sparsity_pattern(h::SparseMatrixCSC{Expression,Int64}) = sparse(Int64.(map(~, h .=== ModelingToolkit.Constant(0))))
-get_sparsity_pattern(h::SparseVector{Expression,Int64}) = sparse(Int64.(map(~, h .=== ModelingToolkit.Constant(0))))
+# Auxiliary Functions
+get_sparsity_pattern(h::Union{SparseVector{Num}, SparseMatrixCSC{Num,Int}}) = get_sparsity_pattern(Array(h))
+get_sparsity_pattern(h::Array{Num}) = sparse(Int.(.!isequal.(h, 0)))
 
 input = [1, 2, 3]
 
@@ -85,7 +84,7 @@ h_dense_arrayNestedMat_ip!(out_2_arrayNestedMat, input)
 
 # Arrays of Arrays of Matrices, Heterogeneous element types
 test_exp = [exp(a) * exp(b), a]
-h_dense_arrayNestedMat_het = [[ModelingToolkit.hessian(t, [a, b]) for t in test_exp], [[ModelingToolkit.Constant(0) ModelingToolkit.Constant(0); ModelingToolkit.Constant(0) ModelingToolkit.Constant(0)], [ModelingToolkit.Constant(0) ModelingToolkit.Constant(0); ModelingToolkit.Constant(0) ModelingToolkit.Constant(0)]]]
+h_dense_arrayNestedMat_het = [[ModelingToolkit.hessian(t, [a, b]) for t in test_exp], [Num[0 0; 0 0], Num[0 0; 0 0]]]
 function h_dense_arrayNestedMat_het_julia!(out, x)
     a, b, c = x
     out[1][1] .= [exp(a[1]) * exp(b[1]) exp(a[1]) * exp(b[1]); exp(a[1]) * exp(b[1]) exp(a[1]) * exp(b[1])]
@@ -120,8 +119,8 @@ h_sparse_arraymat_ip! = eval(h_sparse_arraymat_str[2])
 h_sparse_arraymat_sparsity_patterns = map(get_sparsity_pattern, h_sparse_arraymat)
 out_1_arraymat = [similar(h) for h in h_sparse_arraymat_sparsity_patterns]
 out_2_arraymat = [similar(h) for h in h_sparse_arraymat_sparsity_patterns] # can't do similar() because it will just be #undef, with the wrong sparsity pattern
-h_sparse_arraymat_julia!(out_1_arraymat, input)
 h_sparse_arraymat_ip!(out_2_arraymat, input)
+h_sparse_arraymat_julia!(out_1_arraymat, input)
 @test out_1_arraymat == out_2_arraymat
 
 # Array of 1D Vectors
@@ -173,21 +172,21 @@ h_sparse_arrayNestedMat_ip!(out_2_arrayNestedMat, input)
 # Additional Tests
 # Returning 0-element structures (corresponding to empty Jacobians)
 # Arrays of Matrices
-h_empty = [[a b; c 0], Array{Expression,2}(undef, 0,0)]
+h_empty = [[a b; c 0], Array{Num,2}(undef, 0,0)]
 h_empty_str = ModelingToolkit.build_function(h_empty, [a, b, c])
 h_empty_ip! = eval(h_empty_str[2])
 out = [Matrix{Int64}(undef, 2, 2), Matrix{Int64}(undef, 0, 0)]
 h_empty_ip!(out, input) # should just not fail
 
 # Array of Vectors
-h_empty_vec = [[a, b, c, 0], Vector{Expression}(undef,0)]
+h_empty_vec = [[a, b, c, 0], Vector{Num}(undef,0)]
 h_empty_vec_str = ModelingToolkit.build_function(h_empty_vec, [a, b, c])
 h_empty_vec_ip! = eval(h_empty_vec_str[2])
 out = [Vector{Int64}(undef, 4), Vector{Int64}(undef, 0)]
 h_empty_vec_ip!(out, input) # should just not fail
 
 # Arrays of Arrays of Matrices
-h_emptyNested = [[[a b; c 0]], Array{Array{Expression, 2}}(undef, 0)] # emptyNested array of arrays
+h_emptyNested = [[[a b; c 0]], Array{Array{Num, 2}}(undef, 0)] # emptyNested array of arrays
 h_emptyNested_str = ModelingToolkit.build_function(h_emptyNested, [a, b, c])
 h_emptyNested_ip! = eval(h_emptyNested_str[2])
 out = [[[1 2;3 4]], Array{Array{Int64,2},1}(undef, 0)]

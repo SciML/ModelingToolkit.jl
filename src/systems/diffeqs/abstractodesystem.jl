@@ -1,12 +1,15 @@
 function calculate_tgrad(sys::AbstractODESystem;
                          simplify=true)
   isempty(sys.tgrad[]) || return sys.tgrad[]  # use cached tgrad, if possible
+
+  # We need to remove explicit time dependence on the state because when we
+  # have `u(t) * t` we want to have the tgrad to be `u(t)` instead of `u'(t) *
+  # t + u(t)`.
   rhs = [detime_dvs(eq.rhs) for eq ∈ equations(sys)]
-  iv = sys.iv()
+  iv = sys.iv
   notime_tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r)) for r in rhs]
-  tgrad = retime_dvs.(notime_tgrad,(states(sys),),iv)
   if simplify
-      tgrad = ModelingToolkit.simplify.(tgrad)
+      tgrad = ModelingToolkit.simplify.(notime_tgrad)
   end
   sys.tgrad[] = tgrad
   return tgrad
@@ -17,8 +20,8 @@ function calculate_jacobian(sys::AbstractODESystem;
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
-    iv = sys.iv()
-    dvs = [dv(iv) for dv ∈ states(sys)]
+    iv = sys.iv
+    dvs = states(sys)
 
     if sparse
         jac = sparsejacobian(rhs, dvs, simplify=simplify)
@@ -32,19 +35,18 @@ end
 
 struct ODEToExpr
     sys::AbstractODESystem
-    states::Vector{Variable}
+    states::Vector
 end
 ODEToExpr(@nospecialize(sys)) = ODEToExpr(sys,states(sys))
-function (f::ODEToExpr)(O::Operation)
-    if isa(O.op, Variable)
-        isequal(O.op, f.sys.iv) && return O.op.name  # independent variable
-        O.op ∈ f.states         && return O.op.name  # dependent variables
-        isempty(O.args)         && return O.op.name  # 0-ary parameters
+(f::ODEToExpr)(O::Num) = f(value(O))
+function (f::ODEToExpr)(O::Term)
+    if isa(O.op, Sym)
+        any(isequal(O), f.states) && return O.op.name  # dependent variables
         return build_expr(:call, Any[O.op.name; f.(O.args)])
     end
-    return build_expr(:call, Any[Symbol(O.op); f.(O.args)])
+    return build_expr(:call, Any[O.op; f.(O.args)])
 end
-(f::ODEToExpr)(x) = convert(Expr, x)
+(f::ODEToExpr)(x) = toexpr(x)
 
 function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                         simplify = true, kwargs...)
@@ -56,14 +58,28 @@ end
 function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                            simplify = true, sparse = false, kwargs...)
     jac = calculate_jacobian(sys;simplify=simplify,sparse=sparse)
+    sub = Dict(value.(dvs) .=> makesym.(value.(dvs)))
+    jac = map(d->substitute(d, sub), jac)
     return build_function(jac, dvs, ps, sys.iv;
                           conv = ODEToExpr(sys), kwargs...)
 end
 
+function makesym(t::Term{T}) where {T}
+    t.op isa Sym && return makesym(t.op)
+    t.op isa Differential && return Sym{T}(Symbol(nameof(makesym(t.args[1])), :ˍ, nameof(makesym(t.op.x))))
+    error("Cannot convert $t to a symbol")
+end
+makesym(t::Sym{T}) where {T} = t
+makesym(t::Sym{FnType{T, S}}) where {T,S} = Sym{S}(nameof(t))
+
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
-    rhss = [deq.rhs for deq ∈ equations(sys)]
-    dvs′ = convert.(Variable,dvs)
-    ps′ = convert.(Variable,ps)
+    # optimization
+    dvs′ = makesym.(value.(dvs))
+    ps′ = makesym.(value.(ps))
+
+    sub = Dict(dvs .=> dvs′)
+    # substitute x(t) by just x
+    rhss = [substitute(deq.rhs, sub) for deq ∈ equations(sys)]
     return build_function(rhss, dvs′, ps′, sys.iv;
                           conv = ODEToExpr(sys),kwargs...)
 end
@@ -73,24 +89,21 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify=true)
     dvs = states(sys)
     M = zeros(length(eqs),length(eqs))
     for (i,eq) in enumerate(eqs)
-        if eq.lhs isa Constant
-            @assert eq.lhs.value == 0
-        elseif eq.lhs.op isa Differential
-            j = findfirst(x->isequal(x.name,var_from_nested_derivative(eq.lhs)[1].name),dvs)
+        if eq.lhs isa Term && eq.lhs.op isa Differential
+            j = findfirst(x->isequal(term_to_symbol(x),term_to_symbol(var_from_nested_derivative(eq.lhs)[1])),dvs)
             M[i,j] = 1
         else
-            error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")
+            eq.lhs == 0 || error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")
         end
     end
     M = simplify ? ModelingToolkit.simplify.(M) : M
     # M should only contain concrete numbers
-    M = map(x->x isa Constant ? x.value : x, M)
     M == I ? I : M
 end
 
 jacobian_sparsity(sys::AbstractODESystem) =
     jacobian_sparsity([eq.rhs for eq ∈ equations(sys)],
-                      [dv(sys.iv()) for dv in states(sys)])
+                      [dv for dv in states(sys)])
 
 function DiffEqBase.ODEFunction(sys::AbstractODESystem, args...; kwargs...)
     ODEFunction{true}(sys, args...; kwargs...)
@@ -257,8 +270,14 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
-    u0 = varmap_to_vars(u0map,dvs)
-    p = varmap_to_vars(parammap,ps)
+    u0map′ = [lower_varname(value(k), sys.iv) => value(v) for (k, v) in u0map]
+    parammap′ = [value(k) => value(v) for (k, v) in parammap]
+    u0 = varmap_to_vars(u0map′,dvs)
+    if !(parammap isa DiffEqBase.NullParameters)
+        p = varmap_to_vars(parammap′,ps)
+    else
+        p = ps
+    end
     f = ODEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,simplify=simplify,
                         sparse=sparse,eval_expression=eval_expression,kwargs...)
@@ -292,10 +311,17 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     simplify = true,
                                     linenumbers = false, parallel=SerialForm(),
                                     kwargs...) where iip
+
     dvs = states(sys)
     ps = parameters(sys)
-    u0 = varmap_to_vars(u0map,dvs)
-    p = varmap_to_vars(parammap,ps)
+    u0map′ = [lower_varname(value(k), sys.iv) => value(v) for (k, v) in u0map]
+    parammap′ = [value(k) => value(v) for (k, v) in parammap]
+    u0 = varmap_to_vars(u0map′,dvs)
+    if !(parammap isa DiffEqBase.NullParameters)
+        p = varmap_to_vars(parammap′,ps)
+    else
+        p = ps
+    end
     f = ODEFunctionExpr{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
                         simplify=simplify,

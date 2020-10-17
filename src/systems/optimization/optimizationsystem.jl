@@ -18,15 +18,15 @@ os = OptimizationSystem(eqs, [x,y,z],[σ,ρ,β])
 """
 struct OptimizationSystem <: AbstractSystem
     """Vector of equations defining the system."""
-    op::Operation
+    op::Any
     """Unknown variables."""
-    states::Vector{Variable}
+    states::Vector
     """Parameters."""
-    ps::Vector{Variable}
-    pins::Vector{Variable}
+    ps::Vector
+    pins::Vector
     observed::Vector{Equation}
     equality_constraints::Vector{Equation}
-    inequality_constraints::Vector{Operation}
+    inequality_constraints::Vector
     """
     Name: the name of the system
     """
@@ -38,27 +38,27 @@ struct OptimizationSystem <: AbstractSystem
 end
 
 function OptimizationSystem(op, states, ps;
-                            pins = Variable[],
-                            observed = Operation[],
+                            pins = [],
+                            observed = [],
                             equality_constraints = Equation[],
-                            inequality_constraints = Operation[],
+                            inequality_constraints = [],
                             name = gensym(:OptimizationSystem),
                             systems = OptimizationSystem[])
-    OptimizationSystem(op, convert.(Variable,states), convert.(Variable,ps), pins, observed, equality_constraints, inequality_constraints, name, systems)
+    OptimizationSystem(value(op), value.(states), value.(ps), value.(pins), observed, equality_constraints, inequality_constraints, name, systems)
 end
 
 function calculate_gradient(sys::OptimizationSystem)
-    expand_derivatives.(gradient(equations(sys), [dv() for dv in states(sys)]))
+    expand_derivatives.(gradient(equations(sys), states(sys)))
 end
 
 function generate_gradient(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys); kwargs...)
     grad = calculate_gradient(sys)
-    return build_function(grad, convert.(Variable,vs), convert.(Variable,ps);
+    return build_function(grad, vs, ps;
                           conv = AbstractSysToExpr(sys),kwargs...)
 end
 
 function calculate_hessian(sys::OptimizationSystem)
-    expand_derivatives.(hessian(equations(sys), [dv() for dv in states(sys)]))
+    expand_derivatives.(hessian(equations(sys), states(sys)))
 end
 
 function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
@@ -68,22 +68,20 @@ function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parame
     else
         hess = calculate_hessian(sys)
     end
-    return build_function(hess, convert.(Variable,vs), convert.(Variable,ps);
+    return build_function(hess, vs, ps;
                           conv = AbstractSysToExpr(sys),kwargs...)
 end
 
 function generate_function(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys); kwargs...)
-    vs′ = convert.(Variable,vs)
-    ps′ = convert.(Variable,ps)
-    return build_function(equations(sys), vs′, ps′;
+    return build_function(equations(sys), vs, ps;
                           conv = AbstractSysToExpr(sys),kwargs...)
 end
 
-equations(sys::OptimizationSystem) = isempty(sys.systems) ? sys.op : sys.op + reduce(+,namespace_operation.(sys.systems))
-namespace_operation(sys::OptimizationSystem) = namespace_operation(sys.op,sys.name,nothing)
+equations(sys::OptimizationSystem) = isempty(sys.systems) ? sys.op : sys.op + reduce(+,namespace_expr.(sys.systems))
+namespace_expr(sys::OptimizationSystem) = namespace_expr(sys.op,sys.name,nothing)
 
 hessian_sparsity(sys::OptimizationSystem) =
-    hessian_sparsity(sys.op,[dv() for dv in states(sys)])
+    hessian_sparsity(sys.op, states(sys))
 
 struct AutoModelingToolkit <: DiffEqBase.AbstractADType end
 
@@ -138,7 +136,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
         _hess = nothing
     end
 
-    _f = DiffEqBase.OptimizationFunction{iip,AutoModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,AutoModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing,0)
+    _f = DiffEqBase.OptimizationFunction{iip,AutoModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,AutoModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing)
 
     p = varmap_to_vars(parammap,ps)
     lb = varmap_to_vars(lb,dvs)

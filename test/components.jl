@@ -140,13 +140,13 @@ M[12,12] = false
 M[15,15] = false
 @test calculate_massmatrix(doublelevel) == M
 
-jac = [connected1₊lorenz1₊x 0 g zeros(1,12)
-       zeros(7,1) calculate_jacobian(connected1) zeros(Expression,7,7)
-       zeros(Expression,7,8) calculate_jacobian(connected2)]
+jac = Num[connected1₊lorenz1₊x 0 g zeros(1,12)
+          zeros(7,1) calculate_jacobian(connected1) zeros(7,7)
+          zeros(7,8) calculate_jacobian(connected2)]
 
-jac2 = [connected1₊lorenz1₊x 0 g zeros(1,12)
-        zeros(7,1) ModelingToolkit.namespace_operation.(calculate_jacobian(connected1),connected1.name,:t) zeros(Expression,7,7)
-        zeros(Expression,7,8) ModelingToolkit.namespace_operation.(calculate_jacobian(connected2),connected2.name,:t)]
+jac2 = Num[connected1₊lorenz1₊x 0 g zeros(1,12)
+           zeros(7,1) ModelingToolkit.namespace_operation.(calculate_jacobian(connected1),connected1.name,:t) zeros(7,7)
+           zeros(7,8) ModelingToolkit.namespace_operation.(calculate_jacobian(connected2),connected2.name,:t)]
 
 @test all(isequal.(calculate_jacobian(doublelevel),jac2))
 

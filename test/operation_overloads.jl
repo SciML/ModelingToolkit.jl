@@ -28,7 +28,7 @@ qr(X)
 # note `isequal` instead of `==` because `==` would give another Operation
 
 # test that we can create a sparse array of Operation
-Oarray = zeros(Operation, 2,2)
+Oarray = zeros(Num, 2,2)
 Oarray[2,2] = a
 @test isequal(sparse(Oarray), sparse([2], [2], [a]))
 
@@ -52,7 +52,7 @@ D = sparse([1, 2], [2, 1], [d, d])
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
-J = [Dx(eqs[1].rhs) Dy(eqs[1].rhs) Dz(eqs[1].rhs)
+J = Num[Dx(eqs[1].rhs) Dy(eqs[1].rhs) Dz(eqs[1].rhs)
  Dx(eqs[2].rhs) Dy(eqs[2].rhs) Dz(eqs[2].rhs)
  Dx(eqs[3].rhs) Dy(eqs[3].rhs) Dz(eqs[3].rhs)]
 

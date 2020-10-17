@@ -26,18 +26,18 @@ struct ODESystem <: AbstractODESystem
     """The ODEs defining the system."""
     eqs::Vector{Equation}
     """Independent variable."""
-    iv::Variable
+    iv::Sym
     """Dependent (state) variables."""
-    states::Vector{Variable}
+    states::Vector
     """Parameter variables."""
-    ps::Vector{Variable}
-    pins::Vector{Variable}
+    ps::Vector
+    pins::Vector{Num}
     observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
     """
-    tgrad::RefValue{Vector{Expression}}
+    tgrad::RefValue{Vector{Num}}
     """
     Jacobian matrix. Note: this field will not be defined until
     [`calculate_jacobian`](@ref) is called on the system.
@@ -47,12 +47,12 @@ struct ODESystem <: AbstractODESystem
     `Wfact` matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
     """
-    Wfact::RefValue{Matrix{Expression}}
+    Wfact::RefValue{Matrix{Num}}
     """
     `Wfact_t` matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
     """
-    Wfact_t::RefValue{Matrix{Expression}}
+    Wfact_t::RefValue{Matrix{Num}}
     """
     Name: the name of the system
     """
@@ -64,60 +64,73 @@ struct ODESystem <: AbstractODESystem
 end
 
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
-                   pins = Variable[],
-                   observed = Operation[],
+                   pins = Num[],
+                   observed = Num[],
                    systems = ODESystem[],
                    name=gensym(:ODESystem))
-    iv′ = convert(Variable,iv)
-    dvs′ = convert.(Variable,dvs)
-    ps′ = convert.(Variable,ps)
-    tgrad = RefValue(Vector{Expression}(undef, 0))
-    jac = RefValue{Any}(Matrix{Expression}(undef, 0, 0))
-    Wfact   = RefValue(Matrix{Expression}(undef, 0, 0))
-    Wfact_t = RefValue(Matrix{Expression}(undef, 0, 0))
+    iv′ = value(iv)
+    dvs′ = value.(dvs)
+    ps′ = value.(ps)
+    tgrad = RefValue(Vector{Num}(undef, 0))
+    jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
+    Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
+    Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
     ODESystem(deqs, iv′, dvs′, ps′, pins, observed, tgrad, jac, Wfact, Wfact_t, name, systems)
 end
 
-var_from_nested_derivative(x::Constant) = (missing, missing)
-var_from_nested_derivative(x,i=0) = x.op isa Differential ? var_from_nested_derivative(x.args[1],i+1) : (x.op,i)
+var_from_nested_derivative(x, i=0) = (missing, missing)
+var_from_nested_derivative(x::Term,i=0) = x.op isa Differential ? var_from_nested_derivative(x.args[1],i+1) : (x,i)
+var_from_nested_derivative(x::Sym,i=0) = (x,i)
 
-iv_from_nested_derivative(x) = x.op isa Differential ? iv_from_nested_derivative(x.args[1]) : x.args[1].op
-iv_from_nested_derivative(x::Constant) = missing
+iv_from_nested_derivative(x::Term) = x.op isa Differential ? iv_from_nested_derivative(x.args[1]) : x.args[1]
+iv_from_nested_derivative(x::Sym) = x
+iv_from_nested_derivative(x) = missing
+
+vars(exprs::Term) = vars([exprs])
+vars(exprs) = foldl(vars!, exprs; init = Set())
+function vars!(vars, O)
+    isa(O, Sym) && return push!(vars, O)
+    !isa(O, Term) && return vars
+
+    O.op isa Sym && push!(vars, O)
+    for arg ∈ O.args
+        vars!(vars, arg)
+    end
+
+    return vars
+end
 
 function ODESystem(eqs, iv=nothing; kwargs...)
     # NOTE: this assumes that the order of algebric equations doesn't matter
-    diffvars = OrderedSet{Variable}()
-    allstates = OrderedSet{Variable}()
-    ps = OrderedSet{Variable}()
+    diffvars = OrderedSet()
+    allstates = OrderedSet()
+    ps = OrderedSet()
     # reorder equations such that it is in the form of `diffeq, algeeq`
     diffeq = Equation[]
     algeeq = Equation[]
     # initial loop for finding `iv`
     if iv === nothing
         for eq in eqs
-            if !(eq.lhs isa Constant) # assume eq.lhs is either Differential or Constant
+            if !(eq.lhs isa Number) # assume eq.lhs is either Differential or Number
                 iv = iv_from_nested_derivative(eq.lhs)
                 break
             end
         end
-    else
-        iv = convert(Variable, iv)
     end
     iv === nothing && throw(ArgumentError("Please pass in independent variables."))
     for eq in eqs
         for var in vars(eq.rhs for eq ∈ eqs)
-            var isa Variable || continue
-            if isparameter(var)
+            if isparameter(var) || isparameter(var.op)
                 isequal(var, iv) || push!(ps, var)
             else
                 push!(allstates, var)
             end
         end
-        if eq.lhs isa Constant
+        if !(eq.lhs isa Symbolic)
             push!(algeeq, eq)
         else
             diffvar = first(var_from_nested_derivative(eq.lhs))
-            iv == iv_from_nested_derivative(eq.lhs) || throw(ArgumentError("An ODESystem can only have one independent variable."))
+            isequal(iv, iv_from_nested_derivative(eq.lhs)) || throw(ArgumentError("An ODESystem can only have one independent variable."))
             diffvar in diffvars && throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
             push!(diffvars, diffvar)
             push!(diffeq, eq)

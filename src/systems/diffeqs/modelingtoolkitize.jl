@@ -14,9 +14,11 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
         p = prob.p
     end
 
-    vars = reshape([Variable(:x, i)(t) for i in eachindex(prob.u0)],size(prob.u0))
+    var(x, i) = Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(:x, i)))
+    vars = reshape([var(:x, i)(value(t)) for i in eachindex(prob.u0)],size(prob.u0))
     params = p isa DiffEqBase.NullParameters ? [] :
-             reshape([Variable(:α,i)() for i in eachindex(p)],size(Array(p)))
+             reshape([Variable(:α,i) for i in eachindex(p)],size(p))
+
     @derivatives D'~t
 
     rhs = [D(var) for var in vars]
@@ -45,22 +47,23 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
                             return (prob.f.sys, prob.f.sys.states, prob.f.sys.ps)
     @parameters t
-
     if prob.p isa Tuple || prob.p isa NamedTuple
         p = [x for x in prob.p]
     else
         p = prob.p
     end
-
-    vars = reshape([Variable(:x, i)(t) for i in eachindex(prob.u0)],size(prob.u0))
+    var(x, i) = Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(:x, i)))
+    vars = reshape([var(:x, i)(value(t)) for i in eachindex(prob.u0)],size(prob.u0))
     params = p isa DiffEqBase.NullParameters ? [] :
-             reshape([Variable(:α,i)() for i in eachindex(p)],size(p))
+             reshape([Variable(:α,i) for i in eachindex(p)],size(p))
+
     @derivatives D'~t
 
     rhs = [D(var) for var in vars]
 
     if DiffEqBase.isinplace(prob)
         lhs = similar(vars, Any)
+
         prob.f(lhs, vars, params, t)
 
         if DiffEqBase.is_diagonal_noise(prob)
@@ -99,9 +102,9 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem)
         p = prob.p
     end
 
-    vars = reshape([Variable(:x, i)() for i in eachindex(prob.u0)],size(prob.u0))
+    vars = reshape([Variable(:x, i) for i in eachindex(prob.u0)],size(prob.u0))
     params = p isa DiffEqBase.NullParameters ? [] :
-             reshape([Variable(:α,i)() for i in eachindex(p)],size(Array(p)))
+             reshape([Variable(:α,i) for i in eachindex(p)],size(Array(p)))
 
 
     eqs = prob.f(vars, params)

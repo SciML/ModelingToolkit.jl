@@ -4,8 +4,8 @@ struct VarDomainPairing
   variables
   domain::AbstractDomain
 end
-Base.:∈(variable::ModelingToolkit.Operation,domain::AbstractDomain) = VarDomainPairing(variable,domain)
-Base.:∈(variables::NTuple{N,ModelingToolkit.Operation},domain::AbstractDomain) where N = VarDomainPairing(variables,domain)
+Base.:∈(variable::ModelingToolkit.Num,domain::AbstractDomain) = VarDomainPairing(value(variable),domain)
+Base.:∈(variables::NTuple{N,ModelingToolkit.Num},domain::AbstractDomain) where N = VarDomainPairing(value.(variables),domain)
 
 ## Specific Domains
 

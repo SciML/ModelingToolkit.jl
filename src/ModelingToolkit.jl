@@ -21,7 +21,7 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils: to_symbolic, FnType, @rule, Rewriters, Term
+import SymbolicUtils: Term, Sym, to_symbolic, FnType, @rule, Rewriters, substitute, similarterm
 
 using LinearAlgebra: LU, BlasInt
 
@@ -31,12 +31,99 @@ import TreeViews
 
 using Requires
 
+export Num, Variable
 """
 $(TYPEDEF)
 
-Base type for a symbolic expression.
+Wrap anything in a type that is a subtype of Real
 """
-abstract type Expression <: Number end
+struct Num <: Real
+    val
+end
+
+const show_numwrap = Ref(false)
+
+Num(x::Num) = x # ideally this should never be called
+(n::Num)(args...) = Num(value(n)(map(value,args)...))
+value(x) = x
+value(x::Num) = x.val
+
+
+using SymbolicUtils: to_symbolic
+SymbolicUtils.to_symbolic(n::Num) = value(n)
+SymbolicUtils.@number_methods(Num,
+                              Num(f(value(a))),
+                              Num(f(value(a), value(b))))
+
+SymbolicUtils.simplify(n::Num; kw...) = Num(SymbolicUtils.simplify(value(n); kw...))
+
+SymbolicUtils.symtype(n::Num) = symtype(n.val)
+
+function Base.iszero(x::Num)
+    _x = SymbolicUtils.to_mpoly(value(x))[1]
+    return (_x isa Number || _x isa SymbolicUtils.MPoly) && iszero(_x)
+end
+
+import SymbolicUtils: <ₑ, Symbolic, Term, operation, arguments
+
+Base.show(io::IO, n::Num) = show_numwrap[] ? print(io, :(Num($(value(n))))) : Base.show(io, value(n))
+
+Base.promote_rule(::Type{<:Number}, ::Type{<:Num}) = Num
+Base.promote_rule(::Type{<:Symbolic{<:Number}}, ::Type{<:Num}) = Num
+Base.getproperty(t::Term, f::Symbol) = f === :op ? operation(t) : f === :args ? arguments(t) : getfield(t, f)
+<ₑ(s::Num, x) = value(s) <ₑ value(x)
+<ₑ(s, x::Num) = value(s) <ₑ value(x)
+<ₑ(s::Num, x::Num) = value(s) <ₑ value(x)
+
+for T in (Integer, Rational)
+    @eval Base.:(^)(n::Num, i::$T) = Num(Term{symtype(n)}(^, [value(n),i]))
+end
+
+macro num_method(f, expr, Ts=nothing)
+    if Ts === nothing
+        Ts = [Any]
+    else
+        @assert Ts.head == :tuple
+        # e.g. a tuple or vector
+        Ts = Ts.args
+    end
+
+    ms = [quote
+              $f(a::$T, b::$Num) = $expr
+              $f(a::$Num, b::$T) = $expr
+          end for T in Ts]
+    quote
+        $f(a::$Num, b::$Num) = $expr
+        $(ms...)
+    end |> esc
+end
+
+"""
+    tosymbolic(a::Union{Sym,Num}) -> Sym{Real}
+    tosymbolic(a::T) -> T
+"""
+tosymbolic(a::Num) = tosymbolic(value(a))
+tosymbolic(a::Sym) = tovar(a)
+tosymbolic(a) = a
+@num_method Base.isless isless(tosymbolic(a), tosymbolic(b)) (Real,)
+@num_method Base.:(<) (tosymbolic(a) < tosymbolic(b)) (Real,)
+@num_method Base.:(<=) (tosymbolic(a) <= tosymbolic(b)) (Real,)
+@num_method Base.:(>) (tosymbolic(a) > tosymbolic(b)) (Real,)
+@num_method Base.:(>=) (tosymbolic(a) >= tosymbolic(b)) (Real,)
+@num_method Base.isequal isequal(tosymbolic(a), tosymbolic(b)) (Number, Symbolic)
+@num_method Base.:(==) tosymbolic(a) == tosymbolic(b) (Number,)
+
+Base.hash(x::Num, h::UInt) = hash(value(x), h)
+
+Base.convert(::Type{Num}, x::Symbolic{<:Number}) = Num(x)
+Base.convert(::Type{Num}, x::Number) = Num(x)
+Base.convert(::Type{Num}, x::Num) = x
+
+Base.convert(::Type{<:Array{Num}}, x::AbstractArray) = map(Num, x)
+Base.convert(::Type{<:Array{Num}}, x::AbstractArray{Num}) = x
+Base.convert(::Type{Sym}, x::Num) = value(x) isa Sym ? value(x) : error("cannot convert $x to Sym")
+
+LinearAlgebra.lu(x::Array{Num}; kw...) = lu(x, Val{false}(); kw...)
 
 """
 $(TYPEDEF)
@@ -45,14 +132,6 @@ TODO
 """
 abstract type AbstractSystem end
 abstract type AbstractODESystem <: AbstractSystem end
-
-Base.promote_rule(::Type{<:Number},::Type{<:Expression}) = Expression
-Base.zero(::Type{<:Expression}) = Constant(0)
-Base.zero(::Expression) = Constant(0)
-Base.one(::Type{<:Expression}) = Constant(1)
-Base.one(::Expression) = Constant(1)
-Base.oneunit(::Expression) = Constant(1)
-Base.oneunit(::Type{<:Expression}) = Constant(1)
 
 """
 $(TYPEDSIGNATURES)
@@ -77,28 +156,15 @@ function parameters end
 
 include("variables.jl")
 include("context_dsl.jl")
-include("operations.jl")
 include("differentials.jl")
 
-function Base.convert(::Type{Variable},x::Operation)
-    if x.op isa Variable
-        x.op
-    elseif x.op isa Differential
-        var = x.args[1].op
-        rename(var,Symbol(var.name,:ˍ,x.op.x))
-    else
-        throw(error("This Operation is not a Variable"))
-    end
-end
-
 include("equations.jl")
-include("function_registration.jl")
-include("simplify.jl")
 include("utils.jl")
 include("linearity.jl")
 include("solve.jl")
 include("direct.jl")
 include("domains.jl")
+include("register_function.jl")
 
 include("systems/abstractsystem.jl")
 
@@ -145,8 +211,8 @@ export Reaction, ReactionSystem, ismassaction, oderatelaw, jumpratelaw
 export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
-export Operation, Expression, Variable
-export independent_variable, states, controls, parameters, equations, pins, observed
+export Term, Sym
+export independent_variable, states, parameters, equations, controls, pins, observed
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad
@@ -160,7 +226,7 @@ export BipartiteGraph, equation_dependencies, variable_dependencies
 export eqeq_dependencies, varvar_dependencies
 export asgraph, asdigraph
 
-export simplified_expr, rename, get_variables
+export toexpr, rename, get_variables
 export simplify, substitute
 export build_function
 export @register

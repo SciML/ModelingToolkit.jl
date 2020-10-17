@@ -1,3 +1,5 @@
+using SymbolicUtils: Term, symtype, Sym, simplify
+
 """
 $(TYPEDEF)
 
@@ -22,40 +24,44 @@ julia> D(y)  # Differentiate y wrt. x
 """
 struct Differential <: Function
     """The variable or expression to differentiate with respect to."""
-    x::Expression
+    x
+    Differential(x) = new(value(x))
 end
-(D::Differential)(x) = Operation(D, Expression[x])
+(D::Differential)(x) = Term{symtype(x)}(D, [x])
+(D::Differential)(x::Num) = Num(D(value(x)))
 
 Base.show(io::IO, D::Differential) = print(io, "(D'~", D.x, ")")
-Base.convert(::Type{Expr}, D::Differential) = D
 
 Base.:(==)(D1::Differential, D2::Differential) = isequal(D1.x, D2.x)
 
-_isfalse(occ::Constant) = occ.value === false
-_isfalse(occ::Operation) = _isfalse(occ.op)
+_isfalse(occ::Bool) = occ === false
+_isfalse(occ::Term) = _isfalse(occ.op)
 
-function occursin_info(x, expr::Operation)
+function occursin_info(x, expr::Term)
     if isequal(x, expr)
-        Constant(true)
+        true
     else
         args = map(a->occursin_info(x, a), expr.args)
         if all(_isfalse, args)
-            return Constant(false)
+            return false
         end
-        Operation(Constant(true), args)
+        Term(true, args)
     end
 end
+function occursin_info(x, expr::Sym)
+    isequal(x, expr)
+end
 
-hasderiv(O::Operation) = O.op isa Differential || any(hasderiv, O.args)
+hasderiv(O::Term) = O.op isa Differential || any(hasderiv, O.args)
 hasderiv(O) = false
 
-occursin_info(x, y) = Constant(false)
+occursin_info(x, y) = false
 """
 $(SIGNATURES)
 
 TODO
 """
-function expand_derivatives(O::Operation, simplify=true; occurances=nothing)
+function expand_derivatives(O::Term, simplify=true; occurances=nothing)
     if isa(O.op, Differential)
         @assert length(O.args) == 1
         arg = expand_derivatives(O.args[1], false)
@@ -64,19 +70,15 @@ function expand_derivatives(O::Operation, simplify=true; occurances=nothing)
             occurances = occursin_info(O.op.x, arg)
         end
 
-        _isfalse(occurances) && return Constant(0)
-        occurances isa Constant && return Constant(1) # means it's a Constant(true)
+        _isfalse(occurances) && return 0
+        occurances isa Bool && return 1 # means it's a `true`
 
         (D, o) = (O.op, arg)
 
-        if o isa Constant
-            return Constant(0)
-        elseif isequal(o, D.x)
-            return Constant(1)
-        elseif !isa(o, Operation)
-            return O
-        elseif isa(o.op, Variable)
-            return O # This means D.x occurs in o, but o is symbolic function call
+        if !isa(o, Term)
+            return O # Cannot expand
+        elseif isa(o.op, Sym)
+            return O # Cannot expand
         elseif isa(o.op, Differential)
             # The recursive expand_derivatives was not able to remove
             # a nested Differential. We can attempt to differentiate the
@@ -90,7 +92,7 @@ function expand_derivatives(O::Operation, simplify=true; occurances=nothing)
         end
 
         l = length(o.args)
-        exprs = Expression[]
+        exprs = []
         c = 0
 
         for i in 1:l
@@ -102,42 +104,43 @@ function expand_derivatives(O::Operation, simplify=true; occurances=nothing)
                 derivative(o, i)
             else
                 t1 = derivative(o, i)
-                make_operation(*, Expression[t1, t2])
+                make_operation(*, [t1, t2])
             end
 
             if _iszero(x)
                 continue
-            elseif x isa Expression
+            elseif x isa Symbolic
                 push!(exprs, x)
-            elseif x isa Constant
-                c += x.value
             else
                 c += x
             end
         end
 
         if isempty(exprs)
-            return Constant(c)
+            return c
         elseif length(exprs) == 1
-            return simplify ? ModelingToolkit.simplify(exprs[1]) : exprs[1]
+            return simplify ? SymbolicUtils.simplify(exprs[1]) : exprs[1]
         else
             x = make_operation(+, !iszero(c) ? vcat(c, exprs) : exprs)
-            return simplify ? ModelingToolkit.simplify(x) : x
+            return simplify ? SymbolicUtils.simplify(x) : x
         end
     elseif !hasderiv(O)
         return O
     else
         args = map(a->expand_derivatives(a, false), O.args)
         O1 = make_operation(O.op, args)
-        return simplify ? ModelingToolkit.simplify(O1) : O1
+        return simplify ? SymbolicUtils.simplify(O1) : O1
     end
 end
-_iszero(x::Constant) = iszero(x.value)
-_isone(x::Constant) = isone(x.value)
+
+function expand_derivatives(n::Num, simplify=true; occurances=nothing)
+    Num(expand_derivatives(value(n), simplify; occurances=occurances))
+end
+
 _iszero(x) = false
 _isone(x) = false
 
-expand_derivatives(x,args...;occurances=nothing) = x
+expand_derivatives(x, simplify=true;occurances=nothing) = x
 
 # Don't specialize on the function here
 """
@@ -174,8 +177,8 @@ julia> ModelingToolkit.derivative(myop, 2)  # wrt. y^2
 sin(x())
 ```
 """
-derivative(O::Operation, idx) = derivative(O.op, (O.args...,), Val(idx))
-derivative(O::Constant, ::Any) = Constant(0)
+derivative(O::Term, idx) = derivative(O.op, (O.args...,), Val(idx))
+derivative(O::Any, ::Any) = 0
 
 # Pre-defined derivatives
 import DiffRules
@@ -188,13 +191,13 @@ for (modu, fun, arity) ∈ DiffRules.diffrules()
         else
             DiffRules.diffrule(modu, fun, ntuple(k->:(args[$k]), arity)...)[i]
         end
-        @eval derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i}) = (x = $expr; !(x isa Expression || x isa Constant) ? Constant(x) : x)
+        @eval derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i}) = $expr
     end
 end
 
-derivative(::typeof(+), args::NTuple{N,Any}, ::Val) where {N} = Constant(1)
+derivative(::typeof(+), args::NTuple{N,Any}, ::Val) where {N} = 1
 derivative(::typeof(*), args::NTuple{N,Any}, ::Val{i}) where {N,i} = make_operation(*, deleteat!(collect(args), i))
-derivative(::typeof(one), args::Tuple{<:Any}, ::Val) = Constant(0)
+derivative(::typeof(one), args::Tuple{<:Any}, ::Val) = 0
 
 function count_order(x)
     @assert !(x isa Symbol) "The variable $x must have an order of differentiation that is greater or equal to 1!"
@@ -218,7 +221,7 @@ function _differential_macro(x)
         rhs = di.args[3]
         order, lhs = count_order(lhs)
         push!(lhss, lhs)
-        expr = :($lhs = $_repeat_apply(Differential($rhs), $order))
+        expr = :($lhs = $_repeat_apply(Differential($value($rhs)), $order))
         push!(ex.args,  expr)
     end
     push!(ex.args, Expr(:tuple, lhss...))

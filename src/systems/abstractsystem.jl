@@ -5,7 +5,7 @@ calculate_tgrad(sys::AbstractSystem)
 
 Calculate the time gradient of a system.
 
-Returns a vector of [`Expression`](@ref) instances. The result from the first
+Returns a vector of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
 """
 function calculate_tgrad end
@@ -17,7 +17,7 @@ calculate_gradient(sys::AbstractSystem)
 
 Calculate the gradient of a scalar system.
 
-Returns a vector of [`Expression`](@ref) instances. The result from the first
+Returns a vector of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
 """
 function calculate_gradient end
@@ -29,7 +29,7 @@ calculate_jacobian(sys::AbstractSystem)
 
 Calculate the jacobian matrix of a system.
 
-Returns a matrix of [`Expression`](@ref) instances. The result from the first
+Returns a matrix of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
 """
 function calculate_jacobian end
@@ -41,7 +41,7 @@ calculate_factorized_W(sys::AbstractSystem)
 
 Calculate the factorized W-matrix of a system.
 
-Returns a matrix of [`Expression`](@ref) instances. The result from the first
+Returns a matrix of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
 """
 function calculate_factorized_W end
@@ -53,7 +53,7 @@ calculate_hessian(sys::AbstractSystem)
 
 Calculate the hessian matrix of a scalar system.
 
-Returns a matrix of [`Expression`](@ref) instances. The result from the first
+Returns a matrix of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
 """
 function calculate_hessian end
@@ -117,6 +117,9 @@ Generate a function to evaluate the system's equations.
 """
 function generate_function end
 
+getname(x::Sym) = nameof(x)
+getname(t::Term) = t.op isa Sym ? getname(t.op) : error("Cannot get name of $t")
+
 function Base.getproperty(sys::AbstractSystem, name::Symbol)
 
     if name ∈ fieldnames(typeof(sys))
@@ -128,27 +131,23 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
         end
     end
 
-    i = findfirst(x->x.name==name,sys.states)
+    i = findfirst(x->getname(x) == name, sys.states)
+
     if i !== nothing
-        x = rename(sys.states[i],renamespace(sys.name,name))
-        if :iv ∈ fieldnames(typeof(sys))
-            return x(getfield(sys,:iv)())
-        else
-            return x()
-        end
+        return rename(sys.states[i],renamespace(sys.name,name))
     end
 
     if :ps ∈ fieldnames(typeof(sys))
-        i = findfirst(x->x.name==name,sys.ps)
+        i = findfirst(x->getname(x) == name,sys.ps)
         if i !== nothing
-            return rename(sys.ps[i],renamespace(sys.name,name))()
+            return rename(sys.ps[i],renamespace(sys.name,name))
         end
     end
 
     if :observed ∈ fieldnames(typeof(sys))
-        i = findfirst(x->convert(Variable,x.lhs).name==name,sys.observed)
+        i = findfirst(x->getname(x.lhs)==name,sys.observed)
         if i !== nothing
-            return rename(convert(Variable,sys.observed[i].lhs),renamespace(sys.name,name))(getfield(sys,:iv)())
+            return rename(sys.observed[i].lhs,renamespace(sys.name,name))
         end
     end
 
@@ -157,37 +156,53 @@ end
 
 renamespace(namespace,name) = Symbol(namespace,:₊,name)
 
+function renamespace(namespace, x::Sym)
+    Sym{symtype(x)}(renamespace(namespace,x.name))
+end
+
+function renamespace(namespace, x::Term)
+    renamespace(namespace, x.op)(x.args...)
+end
+
 function namespace_variables(sys::AbstractSystem)
-    [rename(x,renamespace(sys.name,x.name)) for x in states(sys)]
+    [renamespace(sys.name,x) for x in states(sys)]
 end
 
 function namespace_parameters(sys::AbstractSystem)
-    [rename(x,renamespace(sys.name,x.name)) for x in parameters(sys)]
+    [toparam(renamespace(sys.name,x)) for x in parameters(sys)]
 end
 
 function namespace_pins(sys::AbstractSystem)
-    [rename(x,renamespace(sys.name,x.name)) for x in pins(sys)]
+    [renamespace(sys.name,x) for x in pins(sys)]
 end
 
 namespace_equations(sys::AbstractSystem) = namespace_equation.(equations(sys),sys.name,sys.iv.name)
 
 function namespace_equation(eq::Equation,name,ivname)
-    _lhs = namespace_operation(eq.lhs,name,ivname)
-    _rhs = namespace_operation(eq.rhs,name,ivname)
+    _lhs = namespace_expr(eq.lhs,name,ivname)
+    _rhs = namespace_expr(eq.rhs,name,ivname)
     _lhs ~ _rhs
 end
 
-function namespace_operation(O::Operation,name,ivname)
-    if O.op isa Variable && O.op.name != ivname
-        Operation(rename(O.op,renamespace(name,O.op.name)),namespace_operation.(O.args,name,ivname))
+function namespace_expr(O::Sym,name,ivname)
+    O.name == ivname ? O : rename(O,renamespace(name,O.name))
+end
+
+function namespace_expr(O::Term,name,ivname)
+    if O.op isa Sym
+        Term(rename(O.op,renamespace(name,O.op.name)),namespace_expr.(O.args,name,ivname))
     else
-        Operation(O.op,namespace_operation.(O.args,name,ivname))
+        Term(O.op,namespace_expr.(O.args,name,ivname))
     end
 end
-namespace_operation(O::Constant,name,ivname) = O
+namespace_expr(O,name,ivname) = O
 
 independent_variable(sys::AbstractSystem) = sys.iv
-states(sys::AbstractSystem) = unique(isempty(sys.systems) ? setdiff(sys.states, convert.(Variable,sys.pins)) : [sys.states;reduce(vcat,namespace_variables.(sys.systems))])
+function states(sys::AbstractSystem)
+    unique(isempty(sys.systems) ?
+           setdiff(sys.states, value.(sys.pins)) :
+           [sys.states;reduce(vcat,namespace_variables.(sys.systems))])
+end
 parameters(sys::AbstractSystem) = isempty(sys.systems) ? sys.ps : [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]
 pins(sys::AbstractSystem) = isempty(sys.systems) ? sys.pins : [sys.pins;reduce(vcat,namespace_pins.(sys.systems))]
 function observed(sys::AbstractSystem)
@@ -199,7 +214,7 @@ end
 
 function states(sys::AbstractSystem,name::Symbol)
     x = sys.states[findfirst(x->x.name==name,sys.states)]
-    rename(x,renamespace(sys.name,x.name))(sys.iv())
+    rename(x,renamespace(sys.name,x.name))(sys.iv)
 end
 
 function parameters(sys::AbstractSystem,name::Symbol)
@@ -232,7 +247,7 @@ function states(sys::AbstractSystem,args...)
     name = last(args)
     extra_names = reduce(Symbol,[Symbol(:₊,x.name) for x in args[1:end-1]])
     newname = renamespace(extra_names,name)
-    rename(x,renamespace(sys.name,newname))(sys.iv())
+    rename(x,renamespace(sys.name,newname))(sys.iv)
 end
 
 function parameters(sys::AbstractSystem,args...)
@@ -245,10 +260,7 @@ end
 function islinear(sys::AbstractSystem)
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
-    iv = sys.iv()
-    dvs = [dv(iv) for dv ∈ states(sys)]
-
-    all(islinear(r, dvs) for r in rhs)
+    all(islinear(r, states(sys)) for r in rhs)
 end
 
 function pins(sys::AbstractSystem,args...)
@@ -260,15 +272,15 @@ end
 
 struct AbstractSysToExpr
     sys::AbstractSystem
-    states::Vector{Variable}
+    states::Vector
 end
 AbstractSysToExpr(sys) = AbstractSysToExpr(sys,states(sys))
-function (f::AbstractSysToExpr)(O::Operation)
+function (f::AbstractSysToExpr)(O::Term)
     any(isequal(O), f.states) && return O.op.name  # variables
-    if isa(O.op, Variable)
-        isempty(O.args) && return O.op.name  # 0-ary parameters
+    if isa(O.op, Sym)
         return build_expr(:call, Any[O.op.name; f.(O.args)])
     end
     return build_expr(:call, Any[O.op; f.(O.args)])
 end
-(f::AbstractSysToExpr)(x) = convert(Expr, x)
+(f::AbstractSysToExpr)(x) = toexpr(x)
+

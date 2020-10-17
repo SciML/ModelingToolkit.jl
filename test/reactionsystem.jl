@@ -149,8 +149,8 @@ jumps[18] = ConstantRateJump((u,p,t) -> p[18]*u[2], integrator -> (integrator.u[
 jumps[19] = VariableRateJump((u,p,t) -> p[19]*u[1]*t, integrator -> (integrator.u[1] -= 1; integrator.u[2] += 1))
 jumps[20] = VariableRateJump((u,p,t) -> p[20]*t*u[1]*binomial(u[2],2)*u[3], integrator -> (integrator.u[2] -= 2; integrator.u[3] -= 1; integrator.u[4] += 2))
 
-statetoid = Dict(convert(Variable,state) => i for (i,state) in enumerate(states(js)))
-parammap = map((x,y)->Pair(x(),y),parameters(js),pars)
+statetoid = Dict(state => i for (i,state) in enumerate(states(js)))
+parammap = map((x,y)->Pair(x,y),parameters(js),pars)
 for i in midxs
   maj = MT.assemble_maj(js.eqs[i], statetoid, ModelingToolkit.substituter(parammap),eltype(pars))
   @test abs(jumps[i].scaled_rates - maj.scaled_rates) < 100*eps()
@@ -161,7 +161,8 @@ for i in cidxs
   crj = MT.assemble_crj(js, js.eqs[i], statetoid)
   @test isapprox(crj.rate(u0,p,time), jumps[i].rate(u0,p,time))
   fake_integrator1 = (u=zeros(4),p=p,t=0); fake_integrator2 = deepcopy(fake_integrator1);
-  crj.affect!(fake_integrator1); jumps[i].affect!(fake_integrator2);
+  crj.affect!(fake_integrator1);
+  jumps[i].affect!(fake_integrator2);
   @test fake_integrator1 == fake_integrator2
 end
 for i in vidxs
@@ -190,12 +191,12 @@ rxs = [Reaction(k1*S, [S,I], [I], [2,3], [2]),
 rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
 @test isequal(ModelingToolkit.oderatelaw(rs.eqs[1]), k1*S*S^2*I^3/(factorial(2)*factorial(3)))
 @test_skip isequal(ModelingToolkit.jumpratelaw(rs.eqs[1]), k1*S*binomial(S,2)*binomial(I,3))
-dep = Set{Operation}()
-ModelingToolkit.get_variables!(dep, rxs[2], states(rs))
+dep = Set()
+ModelingToolkit.get_variables!(dep, rxs[2], Set(states(rs)))
 dep2  = Set([R,I])
 @test dep == dep2
-dep = Set{Operation}()
-ModelingToolkit.modified_states!(dep, rxs[2], states(rs))
+dep = Set()
+ModelingToolkit.modified_states!(dep, rxs[2], Set(states(rs)))
 @test dep == Set([R,I])
 
 isequal2(a,b) = isequal(simplify(a), simplify(b))
