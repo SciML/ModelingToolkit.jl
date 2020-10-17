@@ -136,7 +136,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
         _hess = nothing
     end
 
-    _f = DiffEqBase.OptimizationFunction{iip,AutoModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,AutoModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing,0)
+    _f = DiffEqBase.OptimizationFunction{iip,AutoModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,AutoModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing)
 
     p = varmap_to_vars(parammap,ps)
     lb = varmap_to_vars(lb,dvs)

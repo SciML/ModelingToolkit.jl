@@ -34,7 +34,7 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 [compat]
 ArrayInterface = "2.8"
 DataStructures = "0.17, 0.18"
-DiffEqBase = "6.48"
+DiffEqBase = "6.48.1"
 DiffEqJump = "6.7.5"
 DiffRules = "0.1, 1.0"
 DocStringExtensions = "0.7, 0.8"
