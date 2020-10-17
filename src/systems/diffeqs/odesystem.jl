@@ -64,8 +64,8 @@ struct ODESystem <: AbstractODESystem
 end
 
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
-                   pins = Variable[],
-                   observed = Operation[],
+                   pins = Num[],
+                   observed = Num[],
                    systems = ODESystem[],
                    name=gensym(:ODESystem))
     iv′ = value(iv)
@@ -111,7 +111,7 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     # initial loop for finding `iv`
     if iv === nothing
         for eq in eqs
-            if !(eq.lhs isa Constant) # assume eq.lhs is either Differential or Constant
+            if !(eq.lhs isa Number) # assume eq.lhs is either Differential or Number
                 iv = iv_from_nested_derivative(eq.lhs)
                 break
             end

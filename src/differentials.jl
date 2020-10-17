@@ -71,7 +71,7 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
         end
 
         _isfalse(occurances) && return 0
-        occurances isa Bool && return 1 # means it's a Constant(true)
+        occurances isa Bool && return 1 # means it's a `true`
 
         (D, o) = (O.op, arg)
 

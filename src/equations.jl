@@ -20,8 +20,8 @@ SymbolicUtils.simplify(x::Equation; kw...) = simplify(x.lhs; kw...) ~ simplify(x
 """
 $(TYPEDSIGNATURES)
 
-Create an [`Equation`](@ref) out of two [`Expression`](@ref) instances, or an
-`Expression` and a `Number`.
+Create an [`Equation`](@ref) out of two [`Num`](@ref) instances, or an
+`Num` and a `Number`.
 
 # Examples
 

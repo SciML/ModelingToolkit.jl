@@ -75,10 +75,6 @@ function _solve(A, b)
     SymbolicUtils.simplify.(ldiv(sym_lu(A), b))
 end
 
-LinearAlgebra.:(\)(A::AbstractMatrix{<:Expression}, b::AbstractVector{<:Expression}) = _solve(A, b)
-LinearAlgebra.:(\)(A::AbstractMatrix{<:Expression}, b::AbstractVector) = _solve(A, b)
-LinearAlgebra.:(\)(A::AbstractMatrix, b::AbstractVector{<:Expression}) = _solve(A, b)
-
 # ldiv below
 
 _iszero(x::Number) = iszero(x)

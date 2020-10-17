@@ -49,12 +49,6 @@ function retime_dvs(op::Term, dvs, iv)
 end
 retime_dvs(op,dvs,iv) = op
 
-is_constant(::Constant) = true
-is_constant(::Any) = false
-
-is_operation(::Operation) = true
-is_operation(::Any) = false
-
 is_derivative(O::Term) = isa(O.op, Differential)
 is_derivative(::Any) = false
 
@@ -95,11 +89,11 @@ modified_states!(mstates, e::Equation, statelist=nothing) = get_variables!(mstat
 # variable substitution
 # Piracy but mild
 """
-substitute(expr::Operation, s::Pair)
-substitute(expr::Operation, s::Dict)
-substitute(expr::Operation, s::Vector)
+substitute(expr, s::Pair)
+substitute(expr, s::Dict)
+substitute(expr, s::Vector)
 
-Performs the substitution `Operation => val` on the `expr` Operation.
+Performs the substitution `Num => val` on the `expr` Num.
 """
 substitute(expr::Num, s::Union{Pair, Vector, Dict}; kw...) = Num(substituter(s)(value(expr); kw...))
 # TODO: move this to SymbolicUtils

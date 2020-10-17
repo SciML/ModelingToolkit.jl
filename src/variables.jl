@@ -65,34 +65,6 @@ end
 rename(x::Sym{T},name) where T = Sym{T}(name)
 rename(x::Term, name) where T = x.op isa Sym ? rename(x.op, name)(x.args...) : error("can't rename $x to $name")
 
-"""
-$(TYPEDEF)
-
-An expression which wraps a constant numerical value.
-"""
-struct Constant <: Expression
-    """The constant value"""
-    value
-    Constant(x) = x
-end
-
-"""
-$(TYPEDSIGNATURES)
-
-Get the value of a [`ModelingToolkit.Constant`](@ref).
-"""
-Base.get(c::Constant) = c.value
-
-Base.iszero(c::Constant) = iszero(c.value)
-
-Base.isone(ex::Expression)  = isa(ex, Constant) && isone(ex.value)
-
-# Variables use isequal for equality since == is an Operation
-Base.isequal(c::Constant, n::Number) = c.value == n
-Base.isequal(n::Number, c::Constant) = c.value == n
-Base.isequal(a::Constant, b::Constant) = a.value == b.value
-
-
 # Build variables more easily
 function _parse_vars(macroname, type, x)
     ex = Expr(:block)
@@ -152,11 +124,11 @@ end
 function _construct_var(var_name, type, call_args, ind)
     # TODO: just use Sym here
     if call_args === nothing
-        :($Num(Variable{$type}($(Meta.quot(var_name)), $ind...)))
+        :($Num($Variable{$type}($(Meta.quot(var_name)), $ind...)))
     elseif !isempty(call_args) && call_args[end] == :..
-        :($Num(Variable{$FnType{Tuple{Any}, $type}}($(Meta.quot(var_name)), $ind...))) # XXX: using Num as output
+        :($Num($Variable{$FnType{Tuple{Any}, $type}}($(Meta.quot(var_name)), $ind...))) # XXX: using Num as output
     else
-        :($Num(Variable{$FnType{NTuple{$(length(call_args)), Any}, $type}}($(Meta.quot(var_name)), $ind...)($(map(x->:($value($x)), call_args)...))))
+        :($Num($Variable{$FnType{NTuple{$(length(call_args)), Any}, $type}}($(Meta.quot(var_name)), $ind...)($(map(x->:($value($x)), call_args)...))))
     end
 end
 

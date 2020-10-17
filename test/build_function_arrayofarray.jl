@@ -1,7 +1,7 @@
 using ModelingToolkit, Test, SparseArrays
 @variables a b c
 
-# Auxiliary Functions and Constants
+# Auxiliary Functions
 get_sparsity_pattern(h::Union{SparseVector{Num}, SparseMatrixCSC{Num,Int}}) = get_sparsity_pattern(Array(h))
 get_sparsity_pattern(h::Array{Num}) = sparse(Int.(.!isequal.(h, 0)))
 
@@ -84,7 +84,7 @@ h_dense_arrayNestedMat_ip!(out_2_arrayNestedMat, input)
 
 # Arrays of Arrays of Matrices, Heterogeneous element types
 test_exp = [exp(a) * exp(b), a]
-h_dense_arrayNestedMat_het = [[ModelingToolkit.hessian(t, [a, b]) for t in test_exp], [[ModelingToolkit.Constant(0) ModelingToolkit.Constant(0); ModelingToolkit.Constant(0) ModelingToolkit.Constant(0)], [ModelingToolkit.Constant(0) ModelingToolkit.Constant(0); ModelingToolkit.Constant(0) ModelingToolkit.Constant(0)]]]
+h_dense_arrayNestedMat_het = [[ModelingToolkit.hessian(t, [a, b]) for t in test_exp], [Num[0 0; 0 0], Num[0 0; 0 0]]]
 function h_dense_arrayNestedMat_het_julia!(out, x)
     a, b, c = x
     out[1][1] .= [exp(a[1]) * exp(b[1]) exp(a[1]) * exp(b[1]); exp(a[1]) * exp(b[1]) exp(a[1]) * exp(b[1])]

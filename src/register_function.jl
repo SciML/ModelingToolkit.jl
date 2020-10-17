@@ -21,7 +21,7 @@ macro register(expr, Ts = [Num, Symbolic, Real])
          for ts in types]...) |> esc
 end
 
-# Ensure that Operations that get @registered from outside the ModelingToolkit
+# Ensure that Num that get @registered from outside the ModelingToolkit
 # module can work without having to bring in the associated function into the
 # ModelingToolkit namespace. We basically store information about functions
 # registered at runtime in a ModelingToolkit variable,

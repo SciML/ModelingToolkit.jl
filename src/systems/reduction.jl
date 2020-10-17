@@ -27,13 +27,6 @@ function substitute_aliases(diffeqs, dict)
     lhss(diffeqs) .~ fixpoint_sub.(rhss(diffeqs), (dict,))
 end
 
-function make_lhs_0(eq)
-    if eq.lhs isa Constant && iszero(eq.lhs)
-        return eq
-    else
-        0 ~ eq.lhs - eq.rhs
-    end
-end
 isvar(s::Sym) = !isparameter(s)
 isvar(s::Term) = isvar(s.op)
 isvar(s::Any) = false
@@ -42,6 +35,14 @@ function filterexpr(f, s)
     vs = []
     Rewriters.Prewalk(Rewriters.Chain([@rule((~x::f) => push!(vs, ~x))]))(s)
     vs
+end
+
+function make_lhs_0(eq)
+    if eq.lhs isa Number && iszero(eq.lhs)
+        return eq
+    else
+        0 ~ eq.lhs - eq.rhs
+    end
 end
 
 function alias_elimination(sys::ODESystem)

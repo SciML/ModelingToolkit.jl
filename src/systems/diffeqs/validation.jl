@@ -1,9 +1,10 @@
-Base.:*(x::Expression,y::Unitful.AbstractQuantity) = x * y
+Base.:*(x::Union{Num,Symbolic},y::Unitful.AbstractQuantity) = x * y
 
 instantiate(x::ModelingToolkit.Variable{Real}) = 1.0
 instantiate(x::ModelingToolkit.Variable) = oneunit(1*ModelingToolkit.vartype(x))
-function instantiate(x::ModelingToolkit.Operation)
-    if x.op isa Variable
+function instantiate(x::Num)
+    x = value(x)
+    if x.op isa Sym
         return instantiate(x.op)
     elseif x.op isa Differential
         instantiate(x.args[1])/instantiate(x.args[1].args[1])

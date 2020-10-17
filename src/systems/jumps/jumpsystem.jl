@@ -255,7 +255,7 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     invttype  = typeof(1 / prob.tspan[2])
 
     # handling parameter substition and empty param vecs
-    p = (prob.p == DiffEqBase.NullParameters()) ? Operation[] : prob.p
+    p = (prob.p == DiffEqBase.NullParameters()) ? Num[] : prob.p
     parammap  = map((x,y)->Pair(x,y), parameters(js), p)
     subber    = substituter(parammap)
 

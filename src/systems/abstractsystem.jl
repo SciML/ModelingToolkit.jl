@@ -5,7 +5,7 @@ calculate_tgrad(sys::AbstractSystem)
 
 Calculate the time gradient of a system.
 
-Returns a vector of [`Expression`](@ref) instances. The result from the first
+Returns a vector of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
 """
 function calculate_tgrad end
@@ -17,7 +17,7 @@ calculate_gradient(sys::AbstractSystem)
 
 Calculate the gradient of a scalar system.
 
-Returns a vector of [`Expression`](@ref) instances. The result from the first
+Returns a vector of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
 """
 function calculate_gradient end
@@ -29,7 +29,7 @@ calculate_jacobian(sys::AbstractSystem)
 
 Calculate the jacobian matrix of a system.
 
-Returns a matrix of [`Expression`](@ref) instances. The result from the first
+Returns a matrix of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
 """
 function calculate_jacobian end
@@ -41,7 +41,7 @@ calculate_factorized_W(sys::AbstractSystem)
 
 Calculate the factorized W-matrix of a system.
 
-Returns a matrix of [`Expression`](@ref) instances. The result from the first
+Returns a matrix of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
 """
 function calculate_factorized_W end
@@ -53,7 +53,7 @@ calculate_hessian(sys::AbstractSystem)
 
 Calculate the hessian matrix of a scalar system.
 
-Returns a matrix of [`Expression`](@ref) instances. The result from the first
+Returns a matrix of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
 """
 function calculate_hessian end

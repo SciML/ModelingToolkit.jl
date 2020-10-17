@@ -98,7 +98,6 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify=true)
     end
     M = simplify ? ModelingToolkit.simplify.(M) : M
     # M should only contain concrete numbers
-    M = map(x->x isa Constant ? x.value : x, M)
     M == I ? I : M
 end
 

@@ -39,7 +39,7 @@ function ode_order_lowering(eqs, iv, states)
     alge_vars = []
 
     for (i, (eq, ss)) ∈ enumerate(zip(eqs, states))
-        if isequal(eq.lhs, Constant(0))
+        if _iszero(eq.lhs)
             push!(alge_vars, ss)
             push!(alge_eqs, eq)
         else

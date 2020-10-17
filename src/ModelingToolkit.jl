@@ -31,15 +31,7 @@ import TreeViews
 
 using Requires
 
-"""
-$(TYPEDEF)
-
-Base type for a symbolic expression.
-"""
-abstract type Expression <: Number end
-
-
-export Num
+export Num, Variable
 """
 $(TYPEDEF)
 
@@ -141,14 +133,6 @@ TODO
 abstract type AbstractSystem end
 abstract type AbstractODESystem <: AbstractSystem end
 
-Base.promote_rule(::Type{<:Number},::Type{<:Expression}) = Expression
-Base.zero(::Type{<:Expression}) = Constant(0)
-Base.zero(::Expression) = Constant(0)
-Base.one(::Type{<:Expression}) = Constant(1)
-Base.one(::Expression) = Constant(1)
-Base.oneunit(::Expression) = Constant(1)
-Base.oneunit(::Type{<:Expression}) = Constant(1)
-
 """
 $(TYPEDSIGNATURES)
 
@@ -172,7 +156,6 @@ function parameters end
 
 include("variables.jl")
 include("context_dsl.jl")
-include("operations.jl")
 include("differentials.jl")
 
 include("equations.jl")
@@ -228,7 +211,7 @@ export Reaction, ReactionSystem, ismassaction, oderatelaw, jumpratelaw
 export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
-export Term, Sym, Operation, Expression, Variable
+export Term, Sym
 export independent_variable, states, parameters, equations, controls, pins, observed
 
 export calculate_jacobian, generate_jacobian, generate_function

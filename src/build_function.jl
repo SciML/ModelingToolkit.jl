@@ -13,7 +13,7 @@ struct DaggerForm <: ParallelForm end
 """
 `build_function`
 
-Generates a numerically-usable function from a ModelingToolkit `Expression`.
+Generates a numerically-usable function from a ModelingToolkit `Num`.
 
 ```julia
 build_function(ex, args...;
@@ -24,7 +24,7 @@ build_function(ex, args...;
 
 Arguments:
 
-- `ex`: The `Expression` to compile
+- `ex`: The `Num` to compile
 - `args`: The arguments of the function
 - `expression`: Whether to generate code or whether to generate the compiled form.
   By default, `expression = Val{true}`, which means that the code for the
@@ -176,7 +176,7 @@ Generates a Julia function which can then be utilized for further evaluations.
 If expression=Val{false}, the return is a Julia function which utilizes
 RuntimeGeneratedFunctions.jl in order to be free of world-age issues.
 
-If the `Expression` is an `Operation`, the generated function is a function
+If the `Num` is an `Operation`, the generated function is a function
 with a scalar output, otherwise if it's an `AbstractArray{Operation}`, the output
 is two functions, one for out-of-place AbstractArray output and a second which
 is a mutating function. The outputted functions match the given argument order,

@@ -1,6 +1,6 @@
 """
 ```julia
-gradient(O::Expression, vars::AbstractVector; simplify = true)
+gradient(O, vars::AbstractVector; simplify = true)
 ```
 
 A helper function for computing the gradient of an expression with respect to
@@ -81,7 +81,7 @@ end
 
 """
 ```julia
-hessian(O::Expression, vars::AbstractVector; simplify = true)
+hessian(O, vars::AbstractVector; simplify = true)
 ```
 
 A helper function for computing the Hessian of an expression with respect to
@@ -105,7 +105,7 @@ isidx(x) = x isa TermCombination
 
 """
 ```julia
-hessian_sparsity(ops::AbstractVector{<:Expression}, vars::AbstractVector{<:Expression})
+hessian_sparsity(ops::AbstractVector, vars::AbstractVector)
 ```
 
 Return the sparsity pattern of the Hessian of an array of expressions with respect to
@@ -162,7 +162,7 @@ end
 
 """
 ```julia
-islinear(ex::Expression, u)
+islinear(ex, u)
 ```
 Check if an expression is linear with respect to a list of variable expressions.
 """
@@ -172,7 +172,7 @@ end
 
 """
 ```julia
-sparsehessian(O::Expression, vars::AbstractVector; simplify = true)
+sparsehessian(O, vars::AbstractVector; simplify = true)
 ```
 
 A helper function for computing the sparse Hessian of an expression with respect to
@@ -211,7 +211,7 @@ function toexpr(O::Term)
     return Expr(:call, toexpr(O.op), toexpr.(O.args)...)
   end
   if O.op === (^)
-      if length(O.args) > 1  && O.args[2] isa Constant && O.args[2].value < 0
+      if length(O.args) > 1  && O.args[2] isa Number && O.args[2] < 0
           return Expr(:call, :^, Expr(:call, :inv, toexpr(O.args[1])), -(O.args[2].value))
       end
   end
