@@ -585,7 +585,7 @@ function _build_function(target::StanTarget, eqs::Array{<:Equation}, vs, ps, iv;
                                    rhsnames=rhsnames) for
                                    (i, eq) ∈ enumerate(eqs)],";\n  "),";")
     """
-    real[] $fname(real $iv,real[] $(rhsnames[1]),real[] $(rhsnames[2]),real[] x_r,int[] x_i) {
+    real[] $fname(real $(conv(iv)),real[] $(rhsnames[1]),real[] $(rhsnames[2]),real[] x_r,int[] x_i) {
       real $lhsname[$(length(eqs))];
       $differential_equation
       return $lhsname;
