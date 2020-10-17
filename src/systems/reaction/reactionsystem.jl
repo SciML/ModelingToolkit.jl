@@ -526,7 +526,7 @@ function get_variables!(deps::Set, rx::Reaction, variables)
     for s in rx.substrates
         push!(deps, s)
     end
-    @show deps
+    deps
 end
 
 # determine which species a reaction modifies

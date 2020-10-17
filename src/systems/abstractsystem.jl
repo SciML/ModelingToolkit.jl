@@ -156,16 +156,24 @@ end
 
 renamespace(namespace,name) = Symbol(namespace,:₊,name)
 
+function renamespace(namespace, x::Sym)
+    Sym{symtype(x)}(renamespace(namespace,x.name))
+end
+
+function renamespace(namespace, x::Term)
+    renamespace(namespace, x.op)(x.args...)
+end
+
 function namespace_variables(sys::AbstractSystem)
-    [Sym{symtype(x.op)}(renamespace(sys.name,x.op.name))(x.args...) for x in states(sys)]
+    [renamespace(sys.name,x) for x in states(sys)]
 end
 
 function namespace_parameters(sys::AbstractSystem)
-    [rename(x,renamespace(sys.name,x.name)) for x in parameters(sys)]
+    [renamespace(sys.name,x) for x in parameters(sys)]
 end
 
 function namespace_pins(sys::AbstractSystem)
-    [rename(x,renamespace(sys.name,x.name)) for x in pins(sys)]
+    [renamespace(sys.name,x) for x in pins(sys)]
 end
 
 namespace_equations(sys::AbstractSystem) = namespace_equation.(equations(sys),sys.name,sys.iv.name)

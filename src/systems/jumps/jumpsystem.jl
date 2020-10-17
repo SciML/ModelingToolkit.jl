@@ -151,7 +151,6 @@ function assemble_maj(maj::MassActionJump, statetoid, subber, invttype)
     rval = subber(maj.scaled_rates)
     rs   = numericrstoich(maj.reactant_stoch, statetoid)
     ns   = numericnstoich(maj.net_stoch, statetoid)
-    @show rval
     maj  = MassActionJump(convert(invttype, value(rval)), rs, ns, scale_rates = false)
     maj
 end

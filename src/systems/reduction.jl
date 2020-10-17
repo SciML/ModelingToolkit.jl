@@ -66,16 +66,12 @@ function alias_elimination(sys::ODESystem)
 
 
     all_vars = map(eqs) do eq
-        @show eq.rhs
-        @show filterexpr(isvar, eq.rhs)
         filterexpr(isvar, eq.rhs)
     end |> Iterators.flatten |> collect |> unique
 
     alg_idxs = findall(x->!(x.lhs isa Term) && iszero(x.lhs), eqs)
-    @show all_vars, newstates
 
     eliminate = setdiff(all_vars, newstates)
-    @show eliminate
 
     outputs = solve_for(eqs[alg_idxs], eliminate)
 
