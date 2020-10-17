@@ -1,7 +1,6 @@
-Base.:*(x::Expression,y::Unitful.AbstractQuantity) = x * ModelingToolkit.Constant(y)
+Base.:*(x::Expression,y::Unitful.AbstractQuantity) = x * y
 
-instantiate(x::ModelingToolkit.Constant) = x.value
-instantiate(x::ModelingToolkit.Variable{Number}) = 1.0
+instantiate(x::ModelingToolkit.Variable{Real}) = 1.0
 instantiate(x::ModelingToolkit.Variable) = oneunit(1*ModelingToolkit.vartype(x))
 function instantiate(x::ModelingToolkit.Operation)
     if x.op isa Variable

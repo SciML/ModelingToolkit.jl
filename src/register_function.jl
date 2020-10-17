@@ -1,4 +1,4 @@
-macro register(expr, Ts = [Num, Symbolic, Number])
+macro register(expr, Ts = [Num, Symbolic, Real])
     @assert expr.head == :call
 
     f = expr.args[1]
@@ -8,8 +8,8 @@ macro register(expr, Ts = [Num, Symbolic, Number])
 
     types = vec(collect(Iterators.product(ntuple(_->Ts, length(symbolic_args))...)))
 
-    # remove Number Number Number methods
-    filter!(Ts->!all(T->T == Number, Ts), types)
+    # remove Real Real Real methods
+    filter!(Ts->!all(T->T == Real, Ts), types)
 
     annotype(name,T) = :($name :: $T)
     setinds(xs, idx, vs) = (xs=copy(xs); xs[idx] .= map(annotype, xs[idx], vs); xs)
@@ -17,7 +17,7 @@ macro register(expr, Ts = [Num, Symbolic, Number])
     name(x::Expr) = ((@assert x.head == :(::)); :($value($(x.args[1]))))
 
     Expr(:block,
-         [:($f($(setinds(args, symbolic_args, ts)...)) = Term{Number}($f, [$(map(name, args)...)]))
+         [:($f($(setinds(args, symbolic_args, ts)...)) = Term{Real}($f, [$(map(name, args)...)]))
          for ts in types]...) |> esc
 end
 

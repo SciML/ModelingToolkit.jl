@@ -43,9 +43,9 @@ export Num
 """
 $(TYPEDEF)
 
-Wrap anything in a type that is a subtype of Number
+Wrap anything in a type that is a subtype of Real
 """
-struct Num <: Number
+struct Num <: Real
     val
 end
 
@@ -106,9 +106,20 @@ macro num_method(f, expr, Ts=nothing)
     end |> esc
 end
 
-@num_method Base.isless isless(value(a), value(b))
-@num_method Base.isequal isequal(value(a), value(b)) (Number, Symbolic)
-@num_method Base.:(==) value(a) == value(b) (Number,)
+"""
+    tosymbolic(a::Union{Sym,Num}) -> Sym{Real}
+    tosymbolic(a::T) -> T
+"""
+tosymbolic(a::Num) = tosymbolic(value(a))
+tosymbolic(a::Sym) = tovar(a)
+tosymbolic(a) = a
+@num_method Base.isless isless(tosymbolic(a), tosymbolic(b)) (Real,)
+@num_method Base.:(<) (tosymbolic(a) < tosymbolic(b)) (Real,)
+@num_method Base.:(<=) (tosymbolic(a) <= tosymbolic(b)) (Real,)
+@num_method Base.:(>) (tosymbolic(a) > tosymbolic(b)) (Real,)
+@num_method Base.:(>=) (tosymbolic(a) >= tosymbolic(b)) (Real,)
+@num_method Base.isequal isequal(tosymbolic(a), tosymbolic(b)) (Number, Symbolic)
+@num_method Base.:(==) tosymbolic(a) == tosymbolic(b) (Number,)
 
 Base.hash(x::Num, h::UInt) = hash(value(x), h)
 
@@ -119,13 +130,6 @@ Base.convert(::Type{Num}, x::Num) = x
 Base.convert(::Type{<:Array{Num}}, x::AbstractArray) = map(Num, x)
 Base.convert(::Type{<:Array{Num}}, x::AbstractArray{Num}) = x
 Base.convert(::Type{Sym}, x::Num) = value(x) isa Sym ? value(x) : error("cannot convert $x to Sym")
-
-#=
-# TODO: use register?
-Base.isless(n::Num, x::Number) = value(n) < value(x)
-Base.isless(n::Num, x::Num) = value(n) < value(x)
-Base.isless(n::Number, x::Num) = value(n) < value(x)
-=#
 
 LinearAlgebra.lu(x::Array{Num}; kw...) = lu(x, Val{false}(); kw...)
 

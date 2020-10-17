@@ -49,7 +49,7 @@ expr = β₁ * x + y^α + σ(3) * (z - t) - β₂ * w(t - 1)
 struct Variable{T} <: Function
     """The variable's unique name."""
     name::Symbol
-    Variable(name) = Sym{Number}(name)
+    Variable(name) = Sym{Real}(name)
     Variable{T}(name) where T = Sym{T}(name)
     function Variable{T}(name, indices...) where T
         var_name = Symbol("$(name)$(join(map_subscripts.(indices), "ˏ"))")
@@ -215,7 +215,7 @@ z
 ```
 """
 macro variables(xs...)
-    esc(_parse_vars(:variables, Number, xs))
+    esc(_parse_vars(:variables, Real, xs))
 end
 
 """

@@ -380,9 +380,6 @@ function Base.convert(::Type{<:ODESystem}, rs::ReactionSystem; combinatoric_rate
               systems=convert.(ODESystem,rs.systems))
 end
 
-makeparam(s::Sym) = Sym{Parameter{Number}}(s.name)
-makeparam(s::Sym{<:Parameter}) = s
-
 """
 ```julia
 Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
@@ -426,7 +423,7 @@ function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, combinatoric_ratel
               rs.states,
               (noise_scaling===nothing) ?
                     rs.ps :
-                    union(rs.ps,makeparam.(noise_scaling)),
+                    union(rs.ps,toparam.(noise_scaling)),
                     name=rs.name,systems=convert.(SDESystem,rs.systems))
 end
 

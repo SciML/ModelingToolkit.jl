@@ -169,7 +169,7 @@ function namespace_variables(sys::AbstractSystem)
 end
 
 function namespace_parameters(sys::AbstractSystem)
-    [makeparam(renamespace(sys.name,x)) for x in parameters(sys)]
+    [toparam(renamespace(sys.name,x)) for x in parameters(sys)]
 end
 
 function namespace_pins(sys::AbstractSystem)

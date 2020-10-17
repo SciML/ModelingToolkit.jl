@@ -14,7 +14,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
         p = prob.p
     end
 
-    var(x, i) = Sym{FnType{Tuple{symtype(t)}, Number}}(nameof(Variable(:x, i)))
+    var(x, i) = Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(:x, i)))
     vars = reshape([var(:x, i)(value(t)) for i in eachindex(prob.u0)],size(prob.u0))
     params = p isa DiffEqBase.NullParameters ? [] :
              reshape([Variable(:α,i) for i in eachindex(p)],size(p))
@@ -52,7 +52,7 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
     else
         p = prob.p
     end
-    var(x, i) = Sym{FnType{Tuple{symtype(t)}, Number}}(nameof(Variable(:x, i)))
+    var(x, i) = Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(:x, i)))
     vars = reshape([var(:x, i)(value(t)) for i in eachindex(prob.u0)],size(prob.u0))
     params = p isa DiffEqBase.NullParameters ? [] :
              reshape([Variable(:α,i) for i in eachindex(p)],size(p))

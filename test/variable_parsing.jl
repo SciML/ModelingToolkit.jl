@@ -4,15 +4,15 @@ using Test
 using ModelingToolkit: value
 using SymbolicUtils: FnType
 
-const PType = ModelingToolkit.Parameter{Number}
+const PType = ModelingToolkit.Parameter{Real}
 
 @parameters t
 @variables x(t) y(t) # test multi-arg
 @variables z(t) # test single-arg
 
-x1 = Num(Sym{FnType{Tuple{Any}, Number}}(:x)(value(t)))
-y1 = Num(Sym{FnType{Tuple{Any}, Number}}(:y)(value(t)))
-z1 = Num(Sym{FnType{Tuple{Any}, Number}}(:z)(value(t)))
+x1 = Num(Sym{FnType{Tuple{Any}, Real}}(:x)(value(t)))
+y1 = Num(Sym{FnType{Tuple{Any}, Real}}(:y)(value(t)))
+z1 = Num(Sym{FnType{Tuple{Any}, Real}}(:z)(value(t)))
 
 @test isequal(x1, x)
 @test isequal(y1, y)
@@ -56,8 +56,8 @@ s1 = Num[Variable{PType}(:s, 1, 1) Variable{PType}(:s, 1, 2);
 
 @parameters t
 @variables x[1:2](t)
-x1 = Num[Variable{FnType{Tuple{Any}, Number}}(:x, 1)(t.val),
-      Variable{FnType{Tuple{Any}, Number}}(:x, 2)(t.val)]
+x1 = Num[Variable{FnType{Tuple{Any}, Real}}(:x, 1)(t.val),
+      Variable{FnType{Tuple{Any}, Real}}(:x, 2)(t.val)]
 
 @test isequal(x1, x)
 

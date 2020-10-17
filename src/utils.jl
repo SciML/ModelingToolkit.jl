@@ -33,7 +33,7 @@ end
 
 function detime_dvs(op::Term)
   if op.op isa Sym
-      Sym{Number}(nameof(op.op))
+      Sym{Real}(nameof(op.op))
   else
     Term(op.op,detime_dvs.(op.args))
   end
@@ -41,7 +41,7 @@ end
 detime_dvs(op) = op
 
 function retime_dvs(op::Sym,dvs,iv)
-    Sym{FnType{Tuple{symtype(iv)}, Number}}(nameof(op))(iv)
+    Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
 end
 
 function retime_dvs(op::Term, dvs, iv)
@@ -143,3 +143,19 @@ function states_to_sym(states)
         end
     end
 end
+
+"""
+    toparam(s::Sym) -> Sym{<:Parameter}
+
+Maps the variable to a paramter.
+"""
+toparam(s::Sym) = Sym{Parameter{symtype(s)}}(s.name)
+toparam(s::Sym{<:Parameter}) = s
+
+"""
+    tovar(s::Sym) -> Sym{Real}
+
+Maps the variable to a variable (state).
+"""
+tovar(s::Sym{<:Parameter}) = Sym{symtype(s)}(s.name)
+tovar(s::Sym) = s
