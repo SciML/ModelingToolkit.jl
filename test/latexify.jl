@@ -1,6 +1,5 @@
 using Test
 using Latexify
-using LaTeXStrings
 using ModelingToolkit
 
 ### Tips for generating latex tests:
@@ -62,4 +61,3 @@ raw"\begin{align}
 \frac{du_3(t)}{dt} =& -\left( *\left( \mathrm{u_1}\left( t \right), ^\left( \mathrm{u_2}\left( t \right), \frac{2}{3} \right) \right), *\left( p_3, \mathrm{u_3}\left( t \right) \right) \right)
 \end{align}
 "
-
