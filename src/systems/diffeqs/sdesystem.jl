@@ -148,9 +148,9 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
                                      version = nothing, tgrad=false, sparse = false,
                                      jac = false, Wfact = false, eval_expression = true, kwargs...) where {iip}
     f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
-    f_oop,f_iip = eval_expression ? ModelingToolkit.eval.(f_gen) : f_gen
+    f_oop,f_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in f_gen) : f_gen
     g_gen = generate_diffusion_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
-    g_oop,g_iip = eval_expression ? ModelingToolkit.eval.(g_gen) : g_gen
+    g_oop,g_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in g_gen) : g_gen
 
     f(u,p,t) = f_oop(u,p,t)
     f(du,u,p,t) = f_iip(du,u,p,t)
@@ -159,7 +159,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
 
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
-        tgrad_oop,tgrad_iip = eval_expression ? ModelingToolkit.eval.(tgrad_gen) : tgrad_gen
+        tgrad_oop,tgrad_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in tgrad_gen) : tgrad_gen
         _tgrad(u,p,t) = tgrad_oop(u,p,t)
         _tgrad(J,u,p,t) = tgrad_iip(J,u,p,t)
     else
@@ -168,7 +168,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
 
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps; expression=Val{eval_expression}, sparse=sparse, kwargs...)
-        jac_oop,jac_iip = eval_expression ? ModelingToolkit.eval.(jac_gen) : jac_gen
+        jac_oop,jac_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in jac_gen) : jac_gen
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else
@@ -177,8 +177,8 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
 
     if Wfact
         tmp_Wfact,tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, true; expression=Val{true}, kwargs...)
-        Wfact_oop, Wfact_iip = eval_expression ? ModelingToolkit.eval.(tmp_Wfact) : tmp_Wfact
-        Wfact_oop_t, Wfact_iip_t = eval_expression ? ModelingToolkit.eval.(tmp_Wfact_t) : tmp_Wfact_t
+        Wfact_oop, Wfact_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in tmp_Wfact) : tmp_Wfact
+        Wfact_oop_t, Wfact_iip_t = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in tmp_Wfact_t) : tmp_Wfact_t
         _Wfact(u,p,dtgamma,t) = Wfact_oop(u,p,dtgamma,t)
         _Wfact(W,u,p,dtgamma,t) = Wfact_iip(W,u,p,dtgamma,t)
         _Wfact_t(u,p,dtgamma,t) = Wfact_oop_t(u,p,dtgamma,t)
@@ -190,13 +190,13 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
     M = calculate_massmatrix(sys)
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
-    SDEFunction{iip}(DiffEqBase.EvalFunc(f),DiffEqBase.EvalFunc(g),
-                      jac = _jac === nothing ? nothing : DiffEqBase.EvalFunc(_jac),
-                      tgrad = _tgrad === nothing ? nothing : DiffEqBase.EvalFunc(_tgrad),
-                      Wfact = _Wfact === nothing ? nothing : DiffEqBase.EvalFunc(_Wfact),
-                      Wfact_t = _Wfact_t === nothing ? nothing : DiffEqBase.EvalFunc(_Wfact_t),
-                      mass_matrix = _M,
-                      syms = Symbol.(sys.states))
+    SDEFunction{iip}(f,g,
+                     jac = _jac === nothing ? nothing : _jac,
+                     tgrad = _tgrad === nothing ? nothing : _tgrad,
+                     Wfact = _Wfact === nothing ? nothing : _Wfact,
+                     Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
+                     mass_matrix = _M,
+                     syms = Symbol.(sys.states))
 end
 
 function DiffEqBase.SDEFunction(sys::SDESystem, args...; kwargs...)

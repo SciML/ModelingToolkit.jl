@@ -133,7 +133,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      kwargs...) where {iip}
 
     f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
-    f_oop,f_iip = eval_expression ? ModelingToolkit.eval.(f_gen) : f_gen
+    f_oop,f_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in f_gen) : f_gen
     f(u,p,t) = f_oop(u,p,t)
     f(du,u,p,t) = f_iip(du,u,p,t)
 
@@ -141,7 +141,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         tgrad_gen = generate_tgrad(sys, dvs, ps;
                                    simplify=simplify,
                                    expression=Val{eval_expression}, kwargs...)
-        tgrad_oop,tgrad_iip = eval_expression ? ModelingToolkit.eval.(tgrad_gen) : tgrad_gen
+        tgrad_oop,tgrad_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in tgrad_gen) : tgrad_gen
         _tgrad(u,p,t) = tgrad_oop(u,p,t)
         _tgrad(J,u,p,t) = tgrad_iip(J,u,p,t)
     else
@@ -152,7 +152,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         jac_gen = generate_jacobian(sys, dvs, ps;
                                     simplify=simplify, sparse = sparse,
                                     expression=Val{eval_expression}, kwargs...)
-        jac_oop,jac_iip = eval_expression ? ModelingToolkit.eval.(jac_gen) : jac_gen
+        jac_oop,jac_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in jac_gen) : jac_gen
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
     else
@@ -163,12 +163,12 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
-    ODEFunction{iip}(DiffEqBase.EvalFunc(f),
-                      jac = _jac === nothing ? nothing : DiffEqBase.EvalFunc(_jac),
-                      tgrad = _tgrad === nothing ? nothing : DiffEqBase.EvalFunc(_tgrad),
-                      mass_matrix = _M,
-                      jac_prototype = sparse ? similar(sys.jac[],Float64) : nothing,
-                      syms = Symbol.(states(sys)))
+    ODEFunction{iip}(f,
+                     jac = _jac === nothing ? nothing : _jac,
+                     tgrad = _tgrad === nothing ? nothing : _tgrad,
+                     mass_matrix = _M,
+                     jac_prototype = sparse ? similar(sys.jac[],Float64) : nothing,
+                     syms = Symbol.(states(sys)))
 end
 
 """

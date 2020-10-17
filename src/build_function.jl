@@ -130,19 +130,7 @@ function _build_function(target::JuliaTarget, op, args...;
 end
 
 function _build_and_inject_function(mod::Module, ex)
-    # Generate the function, which will process the expression
-    runtimefn = GeneralizedGenerated.mk_function(mod, ex)
-
-    # Extract the processed expression of the function body
-    params = typeof(runtimefn).parameters
-    fn_expr = GeneralizedGenerated.NGG.from_type(params[3])
-
-    # Inject our externally registered module functions
-    new_expr = ModelingToolkit.inject_registered_module_functions(fn_expr)
-
-    # Reconstruct the RuntimeFn's Body
-    new_body = GeneralizedGenerated.NGG.to_type(new_expr)
-    return GeneralizedGenerated.RuntimeFn{params[1:2]..., new_body, params[4]}()
+	@RuntimeGeneratedFunction(ModelingToolkit.inject_registered_module_functions(ex))
 end
 
 # Detect heterogeneous element types of "arrays of matrices/sparce matrices"
@@ -186,7 +174,7 @@ function _build_function(target::JuliaTarget, rhss, args...;
 
 Generates a Julia function which can then be utilized for further evaluations.
 If expression=Val{false}, the return is a Julia function which utilizes
-GeneralizedGenerated.jl in order to be free of world-age issues.
+RuntimeGeneratedFunctions.jl in order to be free of world-age issues.
 
 If the `Expression` is an `Operation`, the generated function is a function
 with a scalar output, otherwise if it's an `AbstractArray{Operation}`, the output
@@ -570,7 +558,7 @@ function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
 		open(`gcc -fPIC -O3 -msse3 -xc -shared -o $(libpath * "." * Libdl.dlext) -`, "w") do f
 			print(f, ex)
 		end
-		eval(:((du::Array{Float64},u::Array{Float64},p::Array{Float64},t::Float64) -> ccall(("diffeqf", $libpath), Cvoid, (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Float64), du, u, p, t)))
+		@RuntimeGeneratedFunction(:((du::Array{Float64},u::Array{Float64},p::Array{Float64},t::Float64) -> ccall(("diffeqf", $libpath), Cvoid, (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Float64), du, u, p, t)))
 	end
 end
 
