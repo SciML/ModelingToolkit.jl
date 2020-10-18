@@ -85,7 +85,7 @@ end
 Return an array of booleans `finds` where `finds[i]` is true if `exprs[i]` occurs in `expr`
 false otherwise.
 """
-function exprs_occur_in(exprs::Vector, expr)
+function exprs_occur_in(exprs, expr)
     vec(jacobian_sparsity([expr], exprs))
 end
 
