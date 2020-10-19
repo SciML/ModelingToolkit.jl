@@ -36,6 +36,11 @@ reference_jac = sparse(ModelingToolkit.jacobian(du, [x,y,z]))
 
 @test findnz(ModelingToolkit.jacobian_sparsity(du, [x,y,z]))[[1,2]] == findnz(reference_jac)[[1,2]]
 
+let
+    @variables t x(t) y(t) z(t)
+    @test ModelingToolkit.exprs_occur_in([x,y,z], x^2*y) == [true, true, false]
+end
+
 @test isequal(ModelingToolkit.sparsejacobian(du, [x,y,z]), reference_jac)
 
 using ModelingToolkit
