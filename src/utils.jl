@@ -119,13 +119,13 @@ end
 
 @deprecate substitute_expr!(expr,s) substitute(expr,s)
 
-function states_to_sym(states)
+function states_to_sym(states::Set)
     function _states_to_sym(O)
         if O isa Equation
             Expr(:(=), _states_to_sym(O.lhs), _states_to_sym(O.rhs))
         elseif O isa Term
             if isa(O.op, Sym)
-                any(isequal(O), states) && return O.op.name  # dependent variables
+                O in states && return O.op.name  # dependent variables
                 return build_expr(:call, Any[O.op.name; _states_to_sym.(O.args)])
             else
                 return build_expr(:call, Any[O.op; _states_to_sym.(O.args)])
@@ -137,6 +137,7 @@ function states_to_sym(states)
         end
     end
 end
+states_to_sym(states) = states_to_sym(Set(states))
 
 """
     toparam(s::Sym) -> Sym{<:Parameter}
