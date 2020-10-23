@@ -64,13 +64,30 @@ function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = param
                           conv = ODEToExpr(sys), kwargs...)
 end
 
-function makesym(t::Term{T}) where {T}
-    t.op isa Sym && return makesym(t.op)
-    t.op isa Differential && return Sym{T}(Symbol(nameof(makesym(t.args[1])), :ˍ, nameof(makesym(t.op.x))))
+Base.Symbol(t::Num) = Symbol(value(t))
+function Base.Symbol(t::Term)
+    if t.op isa Sym
+        op = nameof(t.op)
+        args = t.args
+    elseif t.op isa Differential
+        if !(t.args[1].op isa Sym)
+            @goto err
+        end
+        op = Symbol(nameof(t.args[1].op),
+                    :ˍ,
+                    Symbol(t.op.x))
+        args = t.args[1].args
+    else
+        @goto err
+    end
+
+    return Symbol(op, "⦗", join(args, ", "), "⦘")
+    @label err
     error("Cannot convert $t to a symbol")
 end
-makesym(t::Sym{T}) where {T} = t
-makesym(t::Sym{FnType{T, S}}) where {T,S} = Sym{S}(nameof(t))
+
+makesym(t::Symbolic) = Sym{symtype(t)}(Symbol(t))
+makesym(t::Num) = makesym(value(t))
 
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     # optimization
