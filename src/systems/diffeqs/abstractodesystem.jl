@@ -11,6 +11,9 @@ function calculate_tgrad(sys::AbstractODESystem;
   if simplify
       tgrad = ModelingToolkit.simplify.(notime_tgrad)
   end
+  xs = states(sys)
+  rule = Dict(map((x, xt) -> x=>xt, detime_dvs.(xs), xs))
+  tgrad = substitute.(tgrad, Ref(rule))
   sys.tgrad[] = tgrad
   return tgrad
 end
@@ -41,7 +44,8 @@ ODEToExpr(@nospecialize(sys)) = ODEToExpr(sys,states(sys))
 (f::ODEToExpr)(O::Num) = f(value(O))
 function (f::ODEToExpr)(O::Term)
     if isa(O.op, Sym)
-        any(isequal(O), f.states) && return O.op.name  # dependent variables
+        any(isequal(O), f.states) && return tosymbol(O)
+        # dependent variables
         return build_expr(:call, Any[O.op.name; f.(O.args)])
     end
     return build_expr(:call, Any[O.op; f.(O.args)])
@@ -64,9 +68,15 @@ function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = param
                           conv = ODEToExpr(sys), kwargs...)
 end
 
-Base.Symbol(t::Num) = Symbol(value(t))
-function Base.Symbol(t::Term)
+Base.Symbol(x::Union{Num,Symbolic}) = tosymbol(x)
+tosymbol(x; kwargs...) = x
+tosymbol(x::Sym; kwargs...) = nameof(x)
+tosymbol(t::Num; kwargs...) = tosymbol(value(t); kwargs...)
+function tosymbol(t::Term; states=nothing)
     if t.op isa Sym
+        if states !== nothing && !(any(isequal(t), states))
+            return nameof(t.op)
+        end
         op = nameof(t.op)
         args = t.args
     elseif t.op isa Differential
@@ -75,7 +85,7 @@ function Base.Symbol(t::Term)
         end
         op = Symbol(nameof(t.args[1].op),
                     :ˍ,
-                    Symbol(t.op.x))
+                    tosymbol(t.op.x))
         args = t.args[1].args
     else
         @goto err
@@ -86,13 +96,13 @@ function Base.Symbol(t::Term)
     error("Cannot convert $t to a symbol")
 end
 
-makesym(t::Symbolic) = Sym{symtype(t)}(Symbol(t))
-makesym(t::Num) = makesym(value(t))
+makesym(t::Symbolic; kwargs...) = Sym{symtype(t)}(tosymbol(t; kwargs...))
+makesym(t::Num; kwargs...) = makesym(value(t); kwargs...)
 
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     # optimization
-    dvs′ = makesym.(value.(dvs))
-    ps′ = makesym.(value.(ps))
+    dvs′ = makesym.(value.(dvs), states=dvs)
+    ps′ = makesym.(value.(ps), states=dvs)
 
     sub = Dict(dvs .=> dvs′)
     # substitute x(t) by just x
@@ -107,7 +117,7 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify=true)
     M = zeros(length(eqs),length(eqs))
     for (i,eq) in enumerate(eqs)
         if eq.lhs isa Term && eq.lhs.op isa Differential
-            j = findfirst(x->isequal(term_to_symbol(x),term_to_symbol(var_from_nested_derivative(eq.lhs)[1])),dvs)
+            j = findfirst(x->isequal(tosymbol(x),tosymbol(var_from_nested_derivative(eq.lhs)[1])),dvs)
             M[i,j] = 1
         else
             eq.lhs == 0 || error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")
