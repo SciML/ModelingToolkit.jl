@@ -91,8 +91,8 @@ end
 ControlToExpr(@nospecialize(sys)) = ControlToExpr(sys,states(sys),controls(sys))
 function (f::ControlToExpr)(O::Term)
     res = if isa(O.op, Sym)
-        any(isequal(O), f.states)         && return O.op.name  # dependent variables
-        any(isequal(O), f.controls)       && return O.op.name  # control variables
+        # normal variables and control variables
+        (any(isequal(O), f.states) || any(isequal(O), f.controls)) && return tosymbol(O)
         build_expr(:call, Any[O.op.name; f.(O.args)])
     else
         build_expr(:call, Any[Symbol(O.op); f.(O.args)])

@@ -97,7 +97,7 @@ t1 = ModelingToolkit.gradient(tmp, [x1, x2])
 @parameters t k
 @variables x(t)
 @derivatives D'~k
-@test ModelingToolkit.makesym(D(x).val).name === :xˍk
+@test ModelingToolkit.makesym(D(x).val).name === Symbol("xˍk⦗t⦘")
 
 using ModelingToolkit
 @variables t x(t)

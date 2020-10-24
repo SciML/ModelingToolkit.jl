@@ -145,6 +145,7 @@ eqs = [D(x) ~ -A*x,
        D(y) ~ A*x - B*_x]
 de = ODESystem(eqs)
 @test begin
+    local f
     f = eval(generate_function(de, [x,y], [A,B,C])[2])
     du = [0.0,0.0]
     f(du, [1.0,2.0], [1,2,3], 0.0)

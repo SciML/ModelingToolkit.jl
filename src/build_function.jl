@@ -458,27 +458,12 @@ end
 
 vars_to_pairs(args) = vars_to_pairs(args[1],args[2])
 function vars_to_pairs(name,vs::AbstractArray)
-    vs_names = [term_to_symbol(value(u)) for u ∈ vs]
-	exs = [:($name[$i]) for (i, u) ∈ enumerate(vs)]
-	vs_names,exs
+    vs_names = [tosymbol(u) for u ∈ vs]
+    exs = [:($name[$i]) for (i, u) ∈ enumerate(vs)]
+    vs_names,exs
 end
-
-function term_to_symbol(t::Term)
-    if operation(t) isa Sym
-        s = nameof(operation(t))
-    else
-        error("really?")
-    end
-end
-
-term_to_symbol(s::Sym) = nameof(s)
-
 function vars_to_pairs(name,vs)
-    [term_to_symbol(value(vs))], [name]
-end
-
-function rm_calls_with_iv(expr)
-    Rewriters.Prewalk(Rewriters.Chain([@rule((~f::(x->x isa Sym))(~t::(x->x isa Sym)) => Sym{symtype((~f)(~t))}((term_to_symbol(~f))))]))(value(expr))
+    [tosymbol(vs)], [name]
 end
 
 get_varnumber(varop, vars::Vector) =  findfirst(x->isequal(x,varop),vars)
@@ -494,7 +479,7 @@ function numbered_expr(O::Union{Term,Sym},args...;varordering = args[1],offset =
 		end
 	end
   end
-  return Expr(:call, O isa Sym ? nameof(O) : Symbol(O.op),
+  return Expr(:call, O isa Sym ? tosymbol(O, escape=false) : Symbol(O.op),
          [numbered_expr(x,args...;offset=offset,lhsname=lhsname,
                         rhsnames=rhsnames,varordering=varordering) for x in O.args]...)
 end
@@ -504,7 +489,7 @@ function numbered_expr(de::ModelingToolkit.Equation,args...;varordering = args[1
 
     varordering = value.(args[1])
     var = var_from_nested_derivative(de.lhs)[1]
-    i = findfirst(x->isequal(x isa Sym ? term_to_symbol(x) : term_to_symbol(x.op),term_to_symbol(var)),varordering)
+    i = findfirst(x->isequal(tosymbol(x isa Sym ? x : x.op, escape=false), tosymbol(var, escape=false)),varordering)
     :($lhsname[$(i+offset)] = $(numbered_expr(de.rhs,args...;offset=offset,
 											  varordering = varordering,
 											  lhsname = lhsname,
