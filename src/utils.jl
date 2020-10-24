@@ -125,7 +125,7 @@ function states_to_sym(states)
             Expr(:(=), _states_to_sym(O.lhs), _states_to_sym(O.rhs))
         elseif O isa Term
             if isa(O.op, Sym)
-                any(isequal(O), states) && return O.op.name  # dependent variables
+                any(isequal(O), states) && return tosymbol(O)  # dependent variables
                 return build_expr(:call, Any[O.op.name; _states_to_sym.(O.args)])
             else
                 return build_expr(:call, Any[O.op; _states_to_sym.(O.args)])
