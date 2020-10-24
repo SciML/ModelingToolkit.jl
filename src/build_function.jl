@@ -479,7 +479,7 @@ function numbered_expr(O::Union{Term,Sym},args...;varordering = args[1],offset =
 		end
 	end
   end
-  return Expr(:call, O isa Sym ? nameof(O) : tosymbol(O.op),
+  return Expr(:call, O isa Sym ? tosymbol(O, escape=false) : Symbol(O.op),
          [numbered_expr(x,args...;offset=offset,lhsname=lhsname,
                         rhsnames=rhsnames,varordering=varordering) for x in O.args]...)
 end
@@ -489,7 +489,7 @@ function numbered_expr(de::ModelingToolkit.Equation,args...;varordering = args[1
 
     varordering = value.(args[1])
     var = var_from_nested_derivative(de.lhs)[1]
-    i = findfirst(x->isequal(tosymbol(x isa Sym ? x : x.op), tosymbol(var)),varordering)
+    i = findfirst(x->isequal(tosymbol(x isa Sym ? x : x.op, escape=false), tosymbol(var, escape=false)),varordering)
     :($lhsname[$(i+offset)] = $(numbered_expr(de.rhs,args...;offset=offset,
 											  varordering = varordering,
 											  lhsname = lhsname,

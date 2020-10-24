@@ -72,7 +72,15 @@ Base.Symbol(x::Union{Num,Symbolic}) = tosymbol(x)
 tosymbol(x; kwargs...) = x
 tosymbol(x::Sym; kwargs...) = nameof(x)
 tosymbol(t::Num; kwargs...) = tosymbol(value(t); kwargs...)
-function tosymbol(t::Term; states=nothing)
+
+"""
+    tosymbol(x::Union{Num,Symbolic}; states=nothing, escape=true) -> Symbol
+
+Convert `x` to a symbol. `states` are the states of a system, and `escape`
+means if the target has escapes like `val"y⦗t⦘"`. If `escape` then it will only
+output `y` instead of `y⦗t⦘`.
+"""
+function tosymbol(t::Term; states=nothing, escape=true)
     if t.op isa Sym
         if states !== nothing && !(any(isequal(t), states))
             return nameof(t.op)
@@ -91,7 +99,7 @@ function tosymbol(t::Term; states=nothing)
         @goto err
     end
 
-    return Symbol(op, "⦗", join(args, ", "), "⦘")
+    return escape ? Symbol(op, "⦗", join(args, ", "), "⦘") : op
     @label err
     error("Cannot convert $t to a symbol")
 end
