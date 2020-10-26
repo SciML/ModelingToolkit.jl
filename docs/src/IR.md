@@ -82,7 +82,7 @@ function via the dispatch:
 ModelingToolkit.derivative(::typeof(my_function), args::NTuple{N,Any}, ::Val{i})
 ```
 
-where `i` means that it's the derivative of the `i`th argument. `args` is the
+where `i` means that it's the derivative with respect to the `i`th argument. `args` is the
 array of arguments, so, for example, if your function is `f(x,t)`, then `args = [x,t]`.
 You should return an `Operation` for the derivative of your function.
 
