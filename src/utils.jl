@@ -221,11 +221,12 @@ function flatten_differential(O::Term)
 end
 
 """
-    diff2term(x::Symbolic) -> Term
+    diff2term(x::Term) -> Term
+    diff2term(x) -> x
 
 diff2term(D(D(x(t)))) -> xˍtt(t)
 """
-function diff2term(O::Symbolic)
+function diff2term(O)
     isa(O, Term) || return O
     if is_derivative(O)
         (x, t, order) = flatten_differential(O)
