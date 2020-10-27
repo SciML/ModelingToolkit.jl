@@ -68,45 +68,6 @@ function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = param
                           conv = ODEToExpr(sys), kwargs...)
 end
 
-Base.Symbol(x::Union{Num,Symbolic}) = tosymbol(x)
-tosymbol(x; kwargs...) = x
-tosymbol(x::Sym; kwargs...) = nameof(x)
-tosymbol(t::Num; kwargs...) = tosymbol(value(t); kwargs...)
-
-"""
-    tosymbol(x::Union{Num,Symbolic}; states=nothing, escape=true) -> Symbol
-
-Convert `x` to a symbol. `states` are the states of a system, and `escape`
-means if the target has escapes like `val"y⦗t⦘"`. If `escape` then it will only
-output `y` instead of `y⦗t⦘`.
-"""
-function tosymbol(t::Term; states=nothing, escape=true)
-    if t.op isa Sym
-        if states !== nothing && !(any(isequal(t), states))
-            return nameof(t.op)
-        end
-        op = nameof(t.op)
-        args = t.args
-    elseif t.op isa Differential
-        if !(t.args[1].op isa Sym)
-            @goto err
-        end
-        op = Symbol(nameof(t.args[1].op),
-                    :ˍ,
-                    tosymbol(t.op.x))
-        args = t.args[1].args
-    else
-        @goto err
-    end
-
-    return escape ? Symbol(op, "⦗", join(args, ", "), "⦘") : op
-    @label err
-    error("Cannot convert $t to a symbol")
-end
-
-makesym(t::Symbolic; kwargs...) = Sym{symtype(t)}(tosymbol(t; kwargs...))
-makesym(t::Num; kwargs...) = makesym(value(t); kwargs...)
-
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     # optimization
     dvs′ = makesym.(value.(dvs), states=dvs)
