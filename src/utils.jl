@@ -155,3 +155,67 @@ Maps the variable to a variable (state).
 """
 tovar(s::Sym{<:Parameter}) = Sym{symtype(s)}(s.name)
 tovar(s::Sym) = s
+
+Base.Symbol(x::Union{Num,Symbolic}) = tosymbol(x)
+tosymbol(x; kwargs...) = x
+tosymbol(x::Sym; kwargs...) = nameof(x)
+tosymbol(t::Num; kwargs...) = tosymbol(value(t); kwargs...)
+
+"""
+    tosymbol(x::Union{Num,Symbolic}; states=nothing, escape=true) -> Symbol
+
+Convert `x` to a symbol. `states` are the states of a system, and `escape`
+means if the target has escapes like `val"y⦗t⦘"`. If `escape` then it will only
+output `y` instead of `y⦗t⦘`.
+"""
+function tosymbol(t::Term; states=nothing, escape=true)
+    if t.op isa Sym
+        if states !== nothing && !(any(isequal(t), states))
+            return nameof(t.op)
+        end
+        op = nameof(t.op)
+        args = t.args
+    elseif t.op isa Differential
+        term = diff2symbol(t)
+        op = Symbol(operation(term))
+        args = arguments(term)
+    else
+        @goto err
+    end
+
+    return escape ? Symbol(op, "⦗", join(args, ", "), "⦘") : op
+    @label err
+    error("Cannot convert $t to a symbol")
+end
+
+makesym(t::Symbolic; kwargs...) = Sym{symtype(t)}(tosymbol(t; kwargs...))
+makesym(t::Num; kwargs...) = makesym(value(t); kwargs...)
+
+function lower_varname(var::Term, idv, order)
+    order == 0 && return var
+    name = Symbol(nameof(var.op), :ˍ, string(idv)^order)
+    return Sym{symtype(var.op)}(name)(var.args[1])
+end
+
+function lower_varname(t::Term, iv)
+    var, order = var_from_nested_derivative(t)
+    lower_varname(var, iv, order)
+end
+lower_varname(t::Sym, iv) = t
+
+function flatten_differential(O::Term)
+    @assert is_derivative(O) "invalid differential: $O"
+    is_derivative(O.args[1]) || return (O.args[1], O.op.x, 1)
+    (x, t, order) = flatten_differential(O.args[1])
+    isequal(t, O.op.x) || throw(ArgumentError("non-matching differentials on lhs: $t, $(O.op.x)"))
+    return (x, t, order + 1)
+end
+
+function diff2symbol(O)
+    isa(O, Term) || return O
+    if is_derivative(O)
+        (x, t, order) = flatten_differential(O)
+        return lower_varname(x, t, order)
+    end
+    return Term(O.op, diff2symbol.(O.args))
+end

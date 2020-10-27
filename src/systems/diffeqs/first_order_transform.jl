@@ -1,24 +1,3 @@
-function lower_varname(var::Term, idv, order)
-    order == 0 && return var
-    name = Symbol(nameof(var.op), :ˍ, string(idv)^order)
-    #name = Symbol(var.name, :ˍ, string(idv.name)^order)
-    return Sym{symtype(var.op)}(name)(var.args[1])
-end
-
-function lower_varname(t::Term, iv)
-    var, order = var_from_nested_derivative(t)
-    lower_varname(var, iv, order)
-end
-lower_varname(t::Sym, iv) = t
-
-function flatten_differential(O::Term)
-    @assert is_derivative(O) "invalid differential: $O"
-    is_derivative(O.args[1]) || return (O.args[1], O.op.x, 1)
-    (x, t, order) = flatten_differential(O.args[1])
-    isequal(t, O.op.x) || throw(ArgumentError("non-matching differentials on lhs: $t, $(O.op.x)"))
-    return (x, t, order + 1)
-end
-
 """
 $(TYPEDSIGNATURES)
 
@@ -47,7 +26,7 @@ function ode_order_lowering(eqs, iv, states)
             # only save to the dict when we need to lower the order to save memory
             maxorder > get(var_order, var, 1) && (var_order[var] = maxorder)
             var′ = lower_varname(var, iv, maxorder - 1)
-            rhs′ = rename_lower_order(eq.rhs)
+            rhs′ = diff2symbol(eq.rhs)
             push!(diff_vars, var′)
             push!(diff_eqs, D(var′) ~ rhs′)
         end
@@ -67,13 +46,4 @@ function ode_order_lowering(eqs, iv, states)
 
     # we want to order the equations and variables to be `(diff, alge)`
     return (vcat(diff_eqs, alge_eqs), vcat(diff_vars, alge_vars))
-end
-
-function rename_lower_order(O)
-    isa(O, Term) || return O
-    if is_derivative(O)
-        (x, t, order) = flatten_differential(O)
-        return lower_varname(x, t, order)
-    end
-    return Term(O.op, rename_lower_order.(O.args))
 end
