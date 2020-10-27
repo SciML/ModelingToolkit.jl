@@ -4,7 +4,10 @@ using Test
 # Derivatives
 @parameters t σ ρ β
 @variables x y z
+@variables uu(t)
 @derivatives D'~t D2''~t Dx'~x
+
+@test Symbol(D(D(uu))) === Symbol("uuˍtt⦗t⦘")
 
 test_equal(a, b) = @test isequal(simplify(a), simplify(b))
 

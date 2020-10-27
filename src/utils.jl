@@ -176,7 +176,7 @@ function tosymbol(t::Term; states=nothing, escape=true)
         op = nameof(t.op)
         args = t.args
     elseif t.op isa Differential
-        term = diff2symbol(t)
+        term = diff2term(t)
         op = Symbol(operation(term))
         args = arguments(term)
     else
@@ -211,11 +211,16 @@ function flatten_differential(O::Term)
     return (x, t, order + 1)
 end
 
-function diff2symbol(O)
+"""
+    diff2term(x::Symbolic) -> Term
+
+diff2term(D(D(x(t)))) -> xˍtt(t)
+"""
+function diff2term(O::Symbolic)
     isa(O, Term) || return O
     if is_derivative(O)
         (x, t, order) = flatten_differential(O)
         return lower_varname(x, t, order)
     end
-    return Term(O.op, diff2symbol.(O.args))
+    return Term(O.op, diff2term.(O.args))
 end

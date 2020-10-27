@@ -26,7 +26,7 @@ function ode_order_lowering(eqs, iv, states)
             # only save to the dict when we need to lower the order to save memory
             maxorder > get(var_order, var, 1) && (var_order[var] = maxorder)
             var′ = lower_varname(var, iv, maxorder - 1)
-            rhs′ = diff2symbol(eq.rhs)
+            rhs′ = diff2term(eq.rhs)
             push!(diff_vars, var′)
             push!(diff_eqs, D(var′) ~ rhs′)
         end
