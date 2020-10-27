@@ -193,8 +193,17 @@ makesym(t::Num; kwargs...) = makesym(value(t); kwargs...)
 
 function lower_varname(var::Term, idv, order)
     order == 0 && return var
-    name = Symbol(nameof(var.op), :ˍ, string(idv)^order)
-    return Sym{symtype(var.op)}(name)(var.args[1])
+    name = string(nameof(var.op))
+    underscore = 'ˍ'
+    idx = findlast(underscore, name)
+    append = string(idv)^order
+    if idx === nothing
+        newname = Symbol(name, underscore, append)
+    else
+        nidx = nextind(name, idx)
+        newname = Symbol(name[1:idx], name[nidx:end], append)
+    end
+    return Sym{symtype(var.op)}(newname)(var.args[1])
 end
 
 function lower_varname(t::Term, iv)
