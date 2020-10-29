@@ -225,7 +225,7 @@ function toexpr(O::Term)
           return Expr(:call, :^, Expr(:call, :inv, toexpr(O.args[1])), -(O.args[2].value))
       end
   end
-  return Expr(:call, O.op, toexpr.(O.args)...)
+  return Expr(:call, toexpr(O.op), toexpr.(O.args)...)
 end
 toexpr(s::Sym) = nameof(s)
 toexpr(s) = s
@@ -234,6 +234,7 @@ function toexpr(eq::Equation)
     Expr(:(=), toexpr(eq.lhs), toexpr(eq.rhs))
 end
 
+toexpr(f::Function) = nameof(f)
 toexpr(eq::AbstractArray) = toexpr.(eq)
 toexpr(x::Integer) = x
 toexpr(x::AbstractFloat) = x
