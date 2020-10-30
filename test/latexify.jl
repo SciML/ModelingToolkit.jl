@@ -27,9 +27,9 @@ eqs = [D(x) ~ σ*(y-x)*D(x-y)/D(z),
        D(z) ~ x*y^(2//3) - β*z]
 
 @test latexify(eqs) == raw"""\begin{align}
-\frac{dx(t)}{dt} =& /\left( *\left( *\left( \sigma, -\left( y\left( t \right), x\left( t \right) \right) \right), \frac{d\left(-\left( x\left( t \right), y\left( t \right) \right)\right)}{dt} \right), \frac{dz(t)}{dt} \right) \\
-0 =& -\left( /\left( *\left( *\left( \sigma, x\left( t \right) \right), -\left( \rho, z\left( t \right) \right) \right), 10 \right), y\left( t \right) \right) \\
-\frac{dz(t)}{dt} =& -\left( *\left( x\left( t \right), ^\left( y\left( t \right), \frac{2}{3} \right) \right), *\left( \beta, z\left( t \right) \right) \right)
+\frac{dx(t)}{dt} =& \frac{\sigma \left( y\left( t \right) - x\left( t \right) \right) \frac{d\left(x\left( t \right) - y\left( t \right)\right)}{dt}}{\frac{dz(t)}{dt}} \\
+0 =& \frac{\sigma x\left( t \right) \left( \rho - z\left( t \right) \right)}{10} - y\left( t \right) \\
+\frac{dz(t)}{dt} =& x\left( t \right) \left( y\left( t \right) \right)^{\frac{2}{3}} - \beta z\left( t \right)
 \end{align}
 """
 @parameters t p[1:3]
@@ -42,9 +42,9 @@ eqs = [D(u[1]) ~ p[3]*(u[2]-u[1]),
 
 @test latexify(eqs) ==
 raw"\begin{align}
-\frac{du_1(t)}{dt} =& *\left( p_3, -\left( \mathrm{u_2}\left( t \right), \mathrm{u_1}\left( t \right) \right) \right) \\
-0 =& -\left( /\left( *\left( *\left( *\left( p_2, p_3 \right), \mathrm{u_1}\left( t \right) \right), -\left( p_1, \mathrm{u_1}\left( t \right) \right) \right), 10 \right), \mathrm{u_2}\left( t \right) \right) \\
-\frac{du_3(t)}{dt} =& -\left( *\left( \mathrm{u_1}\left( t \right), ^\left( \mathrm{u_2}\left( t \right), \frac{2}{3} \right) \right), *\left( p_3, \mathrm{u_3}\left( t \right) \right) \right)
+\frac{du_1(t)}{dt} =& p_3 \left( \mathrm{u_2}\left( t \right) - \mathrm{u_1}\left( t \right) \right) \\
+0 =& \frac{p_2 p_3 \mathrm{u_1}\left( t \right) \left( p_1 - \mathrm{u_1}\left( t \right) \right)}{10} - \mathrm{u_2}\left( t \right) \\
+\frac{du_3(t)}{dt} =& \mathrm{u_1}\left( t \right) \left( \mathrm{u_2}\left( t \right) \right)^{\frac{2}{3}} - p_3 \mathrm{u_3}\left( t \right)
 \end{align}
 "
 
@@ -56,8 +56,8 @@ sys = ODESystem(eqs)
 
 @test latexify(eqs) ==
 raw"\begin{align}
-\frac{du_1(t)}{dt} =& *\left( p_3, -\left( \mathrm{u_2}\left( t \right), \mathrm{u_1}\left( t \right) \right) \right) \\
-\frac{du_2(t)}{dt} =& -\left( /\left( *\left( *\left( *\left( p_2, p_3 \right), \mathrm{u_1}\left( t \right) \right), -\left( p_1, \mathrm{u_1}\left( t \right) \right) \right), 10 \right), \mathrm{u_2}\left( t \right) \right) \\
-\frac{du_3(t)}{dt} =& -\left( *\left( \mathrm{u_1}\left( t \right), ^\left( \mathrm{u_2}\left( t \right), \frac{2}{3} \right) \right), *\left( p_3, \mathrm{u_3}\left( t \right) \right) \right)
+\frac{du_1(t)}{dt} =& p_3 \left( \mathrm{u_2}\left( t \right) - \mathrm{u_1}\left( t \right) \right) \\
+\frac{du_2(t)}{dt} =& \frac{p_2 p_3 \mathrm{u_1}\left( t \right) \left( p_1 - \mathrm{u_1}\left( t \right) \right)}{10} - \mathrm{u_2}\left( t \right) \\
+\frac{du_3(t)}{dt} =& \mathrm{u_1}\left( t \right) \left( \mathrm{u_2}\left( t \right) \right)^{\frac{2}{3}} - p_3 \mathrm{u_3}\left( t \right)
 \end{align}
 "

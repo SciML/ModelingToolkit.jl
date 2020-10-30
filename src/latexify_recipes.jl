@@ -1,3 +1,7 @@
+prettify_expr(expr) = expr
+prettify_expr(f::Function) = Base.isoperator(nameof(f)) ? nameof(f) : f
+prettify_expr(expr::Expr) = Expr(expr.head, prettify_expr.(expr.args)...)
+
 @latexrecipe function f(eqs::Vector{ModelingToolkit.Equation})
     # Set default option values.
     env --> :align
@@ -7,13 +11,13 @@
     # that latexify can deal with
 
     rhs = getfield.(eqs, :rhs)
-    rhs = toexpr.(rhs)
+    rhs = prettify_expr.(toexpr.(rhs))
     rhs = [postwalk(x -> x isa Expr && length(x.args) == 1 ? x.args[1] : x, eq) for eq in rhs]
     rhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative && length(x.args[2].args) == 2 ? :($(Symbol(:d, x.args[2]))/($(Symbol(:d, x.args[2].args[2])))) : x, eq) for eq in rhs]
     rhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative ? "\\frac{d\\left($(Latexify.latexraw(x.args[2]))\\right)}{d$(Latexify.latexraw(x.args[3]))}" : x, eq) for eq in rhs]
 
     lhs = getfield.(eqs, :lhs)
-    lhs = toexpr.(lhs)
+    lhs = prettify_expr.(toexpr.(lhs))
     lhs = [postwalk(x -> x isa Expr && length(x.args) == 1 ? x.args[1] : x, eq) for eq in lhs]
     lhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative && length(x.args[2].args) == 2 ? :($(Symbol(:d, x.args[2]))/($(Symbol(:d, x.args[2].args[2])))) : x, eq) for eq in lhs]
     lhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative ? "\\frac{d\\left($(Latexify.latexraw(x.args[2]))\\right)}{d$(Latexify.latexraw(x.args[3]))}" : x, eq) for eq in lhs]
