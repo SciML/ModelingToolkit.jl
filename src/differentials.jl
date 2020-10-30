@@ -119,9 +119,10 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
         if isempty(exprs)
             return c
         elseif length(exprs) == 1
-            return simplify ? SymbolicUtils.simplify(exprs[1]) : exprs[1]
+            term = (simplify ? SymbolicUtils.simplify(exprs[1]) : exprs[1])
+            return _iszero(c) ? term : c + term
         else
-            x = make_operation(+, !iszero(c) ? vcat(c, exprs) : exprs)
+            x = make_operation(+, !_iszero(c) ? vcat(c, exprs) : exprs)
             return simplify ? SymbolicUtils.simplify(x) : x
         end
     elseif !hasderiv(O)
