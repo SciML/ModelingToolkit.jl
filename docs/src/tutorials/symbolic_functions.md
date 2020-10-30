@@ -24,10 +24,10 @@ A = [x^2+y 0 2x
      0     0 2y
      y^2+x 0 0]
 
-3×3 Array{Expression,2}:
-  x ^ 2 + y  Constant(0)           2x
-Constant(0)  Constant(0)           2y
-  y ^ 2 + x  Constant(0)  Constant(0)
+3×3 Array{Num,2}:
+  x ^ 2 + y  0  2x
+  0  0  2y
+  y ^ 2 + x  0  0
 ```
 
 To better view the results, we can use [Latexify.jl](https://github.com/korsbo/Latexify.jl).
@@ -42,9 +42,9 @@ latexify(A)
 \begin{equation}
 \left[
 \begin{array}{ccc}
-x ^ 2 + y & ModelingToolkit.Constant(0) & 2x \\
-ModelingToolkit.Constant(0) & ModelingToolkit.Constant(0) & 2y \\
-y ^ 2 + x & ModelingToolkit.Constant(0) & ModelingToolkit.Constant(0) \\
+(x ^ 2) + y & 0 & 2 * x \\
+0 & 0 & 2 * y \\
+(y ^ 2) + x & 0 & 0 \\
 \end{array}
 \right]
 \end{equation}
@@ -58,10 +58,10 @@ using SparseArrays
 spA = sparse(A)
 
 3×3 SparseMatrixCSC{Expression,Int64} with 4 stored entries:
-  [1, 1]  =  x ^ 2 + y
-  [3, 1]  =  y ^ 2 + x
-  [1, 3]  =  2x
-  [2, 3]  =  2y
+  [1, 1]  =  (x ^ 2) + y
+  [3, 1]  =  (y ^ 2) + x
+  [1, 3]  =  2 * x
+  [2, 3]  =  2 * y
 ```
 
 We can thus use normal Julia functions as generators for sparse
@@ -73,7 +73,7 @@ function f(u)
 end
 f([x,y,z]) # Recall that z = x^2 + y
 
-3-element Array{Operation,1}:
+3-element Array{Num,1}:
  x - (x ^ 2 + y)
        x ^ 2 - y
  (x ^ 2 + y) + y
@@ -85,7 +85,7 @@ Or we can build array variables and use these to trace:
 @variables u[1:3]
 f(u)
 
-3-element Array{Operation,1}:
+3-element Array{Num,1}:
      u₁ - u₃
  u₁ ^ 2 - u₂
      u₃ + u₂
@@ -178,7 +178,7 @@ a function via a sparse matrix. For example:
 N = 8
 A = sparse(Tridiagonal([x^i for i in 1:N-1],[x^i * y^(8-i) for i in 1:N], [y^i for i in 1:N-1]))
 
-8×8 SparseMatrixCSC{Operation,Int64} with 22 stored entries:
+8×8 SparseMatrixCSC{Num,Int64} with 22 stored entries:
   [1, 1]  =  x ^ 1 * y ^ 7
   [2, 1]  =  x ^ 1
   [1, 2]  =  y ^ 1
@@ -338,7 +338,7 @@ This can be applied to arrays by using Julia's broadcast mechanism:
 B = simplify.([t^2+t+t^2  2t+4t
            x+y+y+2t   x^2 - x^2 + y^2])
 
-2×2 Array{Operation,2}:
+2×2 Array{Num,2}:
   2 * t ^ 2 + t     6t
 x + 2 * (t + y)  y ^ 2
 ```
@@ -348,7 +348,7 @@ We can then use `substitute` to change values of an expression around:
 ```julia
 simplify.(substitute.(B,[x=>y^2]))
 
-2×2 Array{Operation,2}:
+2×2 Array{Num,2}:
        2 * t ^ 2 + t     6t
  y ^ 2 + 2 * (t + y)  y ^ 2
 ```
@@ -380,8 +380,8 @@ the user's code. For these cases, ModelingToolkit.jl allows for fully
 macro-free usage. For example:
 
 ```julia
-x = Variable{Float64}(:x)()
-y = Variable{Float64}(:y)()
+x = Sym{Float64}(:x)()
+y = Sym{Float64}(:y)()
 x+y^2.0
 ```
 
@@ -396,23 +396,17 @@ convert the output to an `Expr`:
 Expr(x+y^2)
 ```
 
-## Variables as Operations
+## `Sym`s and callable `Sym`s
 
-`Operation` is the type name the ModelingToolkit.jl gives to symbolic
-expressions. In ModelingToolkit.jl, essentially everything is an
-`Operation`. Notice that when we defined our variables above, they
-were represented as an `Operation` as well, which means that variables
-alone are an operation that can then be composed to make bigger
-operations.
-
-But since variables are functions, we can represent their dependencies
-as well. For example:
+In the definition
 
 ```julia
 @variables t x(t) y(t)
 ```
 
-defines `t` as a dependent variable while `x(t)` and `y(t)` are
+`t` is of type `Sym{Real}` but the name `x` refers to an object that represents the `Term` `x(t)`. The operation of this expression is itself the object `Sym{FnType{Tuple{Real}, Real}}(:x)`. The type `Sym{FnType{...}}` represents a callable object. In this case specifically it's a function that takes 1 Real argument (noted by `Tuple{Real}`) and returns a `Real` result. You can call such a callable `Sym` with either a number or a symbolic expression of a permissible type.
+
+this expression also defines `t` as a dependent variable while `x(t)` and `y(t)` are
 independent variables. This is accounted for in differentiation:
 
 ```julia
