@@ -42,9 +42,9 @@ eqs = [D(u[1]) ~ p[3]*(u[2]-u[1]),
 
 @test latexify(eqs) ==
 raw"\begin{align}
-\frac{du_1(t)}{dt} =& p_3 \left( \mathrm{u_2}\left( t \right) - \mathrm{u_1}\left( t \right) \right) \\
-0 =& \frac{p_2 p_3 \mathrm{u_1}\left( t \right) \left( p_1 - \mathrm{u_1}\left( t \right) \right)}{10} - \mathrm{u_2}\left( t \right) \\
-\frac{du_3(t)}{dt} =& \mathrm{u_1}\left( t \right) \left( \mathrm{u_2}\left( t \right) \right)^{\frac{2}{3}} - p_3 \mathrm{u_3}\left( t \right)
+\frac{du_{1(t)}}{dt} =& p_{3} \left( \mathrm{u_2}\left( t \right) - \mathrm{u_1}\left( t \right) \right) \\
+0 =& \frac{p_{2} p_{3} \mathrm{u_1}\left( t \right) \left( p_{1} - \mathrm{u_1}\left( t \right) \right)}{10} - \mathrm{u_2}\left( t \right) \\
+\frac{du_{3(t)}}{dt} =& \mathrm{u_1}\left( t \right) \left( \mathrm{u_2}\left( t \right) \right)^{\frac{2}{3}} - p_{3} \mathrm{u_3}\left( t \right)
 \end{align}
 "
 
@@ -56,8 +56,8 @@ sys = ODESystem(eqs)
 
 @test latexify(eqs) ==
 raw"\begin{align}
-\frac{du_1(t)}{dt} =& p_3 \left( \mathrm{u_2}\left( t \right) - \mathrm{u_1}\left( t \right) \right) \\
-\frac{du_2(t)}{dt} =& \frac{p_2 p_3 \mathrm{u_1}\left( t \right) \left( p_1 - \mathrm{u_1}\left( t \right) \right)}{10} - \mathrm{u_2}\left( t \right) \\
-\frac{du_3(t)}{dt} =& \mathrm{u_1}\left( t \right) \left( \mathrm{u_2}\left( t \right) \right)^{\frac{2}{3}} - p_3 \mathrm{u_3}\left( t \right)
+\frac{du_{1(t)}}{dt} =& p_{3} \left( \mathrm{u_2}\left( t \right) - \mathrm{u_1}\left( t \right) \right) \\
+\frac{du_{2(t)}}{dt} =& \frac{p_{2} p_{3} \mathrm{u_1}\left( t \right) \left( p_{1} - \mathrm{u_1}\left( t \right) \right)}{10} - \mathrm{u_2}\left( t \right) \\
+\frac{du_{3(t)}}{dt} =& \mathrm{u_1}\left( t \right) \left( \mathrm{u_2}\left( t \right) \right)^{\frac{2}{3}} - p_{3} \mathrm{u_3}\left( t \right)
 \end{align}
 "
