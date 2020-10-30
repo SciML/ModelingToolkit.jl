@@ -110,3 +110,6 @@ L = .5 * ∂ₜ(x)^2 - .5 * x^2
 @test isequal(expand_derivatives(∂ₓ(L)), -1 * x)
 test_equal(expand_derivatives(Differential(x)(L) - ∂ₜ(Differential(∂ₜ(x))(L))), -1 * (∂ₜ(∂ₜ(x)) + x))
 @test isequal(expand_derivatives(Differential(x)(L) ~ ∂ₜ(Differential(∂ₜ(x))(L))), (-1 * x) ~ ∂ₜ(∂ₜ(x)))
+
+@variables x2(t)
+@test isequal(expand_derivatives(Differential(x)(2 * x + x2 * x)), 2 + x2)
