@@ -267,9 +267,9 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
     dvs = states(sys)
     ps = parameters(sys)
     u0map′ = [lower_varname(value(k), sys.iv) => value(v) for (k, v) in u0map]
-    parammap′ = [value(k) => value(v) for (k, v) in parammap]
     u0 = varmap_to_vars(u0map′,dvs)
     if !(parammap isa DiffEqBase.NullParameters)
+        parammap′ = [value(k) => value(v) for (k, v) in parammap]
         p = varmap_to_vars(parammap′,ps)
     else
         p = ps
