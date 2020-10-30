@@ -23,7 +23,7 @@ ModelingToolkit has 3 layers:
    At the system level, there are *transformations* which take one system to
    another, and *targets* which output code for numerical solvers.
 3. The IR level, also referred to as the direct level. At this level, one
-   directly acts on arrays of `Equation`, `Operation`, and `Variable` types to
+   directly acts on arrays of `Equation`s, and symbolic expressions to
    generate functions.
 
 Each level above is built on the level below, giving more context to allow for
