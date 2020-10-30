@@ -11,7 +11,7 @@ methods.
 @parameters
 @variables
 @derivatives
-Base.:~(::Expression, ::Expression)
+Base.:~(::Num, ::Num)
 modelingtoolkitize
 ```
 

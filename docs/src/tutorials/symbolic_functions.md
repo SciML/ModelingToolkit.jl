@@ -59,7 +59,7 @@ want to create the sparse version of `A` we would just call `sparse`:
 using SparseArrays
 spA = sparse(A)
 
-3×3 SparseMatrixCSC{Expression,Int64} with 4 stored entries:
+3×3 SparseMatrixCSC{Num,Int64} with 4 stored entries:
   [1, 1]  =  (x ^ 2) + y
   [3, 1]  =  (y ^ 2) + x
   [1, 3]  =  2 * x
@@ -316,7 +316,7 @@ like:
 ```julia
 ModelingToolkit.jacobian([x+x*y,x^2+y],[x,y])
 
-2×2 Array{Expression,2}:
+2×2 Array{Num,2}:
  1 + y            x
     2x  Constant(1)
 ```
