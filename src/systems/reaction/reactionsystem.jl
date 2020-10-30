@@ -136,6 +136,10 @@ struct ReactionSystem <: AbstractSystem
     name::Symbol
     """systems: The internal systems"""
     systems::Vector{ReactionSystem}
+
+    function ReactionSystem(eqs, iv, states, ps, pins, observed, name, systems)
+        new(eqs, value(iv), value.(states), value.(ps), pins, observed, name, systems)
+    end
 end
 
 function ReactionSystem(eqs, iv, species, params;
@@ -145,8 +149,7 @@ function ReactionSystem(eqs, iv, species, params;
                         name = gensym(:ReactionSystem))
 
     isempty(species) && error("ReactionSystems require at least one species.")
-    ReactionSystem(eqs, value(iv), value.(species), value.(params),
-                   pins, observed, name, systems)
+    ReactionSystem(eqs, iv, species, params, pins, observed, name, systems)
 end
 
 """
