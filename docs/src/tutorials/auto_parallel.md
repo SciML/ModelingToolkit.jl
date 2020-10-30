@@ -1,6 +1,6 @@
 # Automated Sparse Parallelism of ODEs via Tracing
 
-Because the ModelingToolkit `Expression` types obey Julia semantics, one can
+Because the ModelingToolkit expressions obey Julia semantics, one can
 directly transform existing Julia functions into ModelingToolkit symbolic
 representations of the function by simply inputting the symbolic values into
 the function and using what is returned. For example, let's take [the following

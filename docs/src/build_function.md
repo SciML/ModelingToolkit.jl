@@ -1,11 +1,11 @@
 # Function Building and Compilation (build_function)
 
-At any time, callable functions can be generated from ModelingToolkit IR by using
-`convert(Expr,x)`. This performs some cleaning to return an expression without
-extraneous pieces that commonly matches expressions one would write in functions
-like those for differential equation solvers and optimization libraries. These
-functions can be automatically parallelize and specialize on Julia types like
-static arrays and sparse matrices.
+At any time, callable functions can be generated from ModelingToolkit IR by
+using `ModelingToolkit.toexpr`. This performs some cleaning to return an
+expression without extraneous pieces that commonly matches expressions one
+would write in functions like those for differential equation solvers and
+optimization libraries. These functions can be automatically parallelize and
+specialize on Julia types like static arrays and sparse matrices.
 
 The core compilation process of ModelingToolkit IR is `build_function`.
 `build_function` takes an operation or an `AbstractArray` of operations and

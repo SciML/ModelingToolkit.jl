@@ -25,7 +25,7 @@ lotka_volterra!(du, u, p, t)
 which gives:
 
 ```julia
-du = Operation[p₁ * u₁ - (p₂ * u₁) * u₂, -p₃ * u₂ + (p₄ * u₁) * u₂]
+du = Num[p₁ * u₁ - (p₂ * u₁) * u₂, -p₃ * u₂ + (p₄ * u₁) * u₂]
 ```
 
 Now we build the equations we want to solve:

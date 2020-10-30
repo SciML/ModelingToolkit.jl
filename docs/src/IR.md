@@ -1,32 +1,39 @@
 # ModelingToolkit IR
 
-ModelingToolkit IR, which falls under the `Expression` abstract type, mirrors
-the Julia AST but allows for easy mathematical manipulation by itself following
-mathematical semantics. The base of the IR is the `Variable` type, which defines
-a symbolic variable. These variables are combined using `Operation`s, which are
-registered functions applied to the various variables. These `Operation`s then
-perform automatic tracing, so normal mathematical functions applied to an `Operation`
-generate a new `Operation`. For example, `op1 = x+y` is one `Operation` and
-`op2 = 2z` is another, and so `op1*op2` is another `Operation`. Then, at the top,
-an `Equation`, normally written as `op1 ~ op2`, defines the symbolic equality
-between two operations.
+ModelingToolkit IR mirrors the Julia AST but allows for easy mathematical
+manipulation by itself following mathematical semantics. The base of the IR is
+the `Sym` type, which defines a symbolic variable. Registered (mathematical)
+functions on `Sym`s (or `Term`s) return `Term`s.  For example, `op1 = x+y` is
+one `Term` and `op2 = 2z` is another, and so `op1*op2` is another `Term`. Then,
+at the top, an `Equation`, normally written as `op1 ~ op2`, defines the
+symbolic equality between two operations.
 
 ### Types
 
 ```@docs
-Expression
-Variable
-ModelingToolkit.Constant
-Operation
+Sym
+Term
 Equation
 ```
+
+### A note about functions restricted to `Number`s
+
+`Sym` and `Term` objects are NOT subtypes of `Number`. ModelingToolkit provides
+a simple wrapper type called `Num` which is a subtype of `Real`. `Num` wraps
+either a Sym or a Term or any other object, defines the same set of operations
+as symbolic expressions and forwards those to the values it wraps. You can use
+`ModelingToolkit.value` function to unwrap a `Num`.
+
+By default, the `@variables` and `@parameters` functions return Num-wrapped
+objects so as to allow calling functions which are restricted to `Number` or
+`Real`.
 
 ### Function Registration
 
 The ModelingToolkit graph only allowed for registered Julia functions for the
 operations. All other functions are automatically traced down to registered
 functions. By default, ModelingToolkit.jl pre-registers the common functions
-utilized in the AD package ruleset [DiffRules.jl](https://github.com/JuliaDiff/DiffRules.jl)
+utilized in [SymbolicUtils.jl](https://github.com/JuliaSymbolics/SymbolicUtils.jl)
 and pre-defines their derivatives. However, the user can utilize the `@register`
 macro to add their function to allowed functions of the computation graph.
 
@@ -36,7 +43,7 @@ macro to add their function to allowed functions of the computation graph.
 
 ### Derivatives and Differentials
 
-A `Differential(op)` is a partial derivative with respect to the operation `op`,
+A `Differential(op)` is a partial derivative with respect to `op`,
 which can then be applied to some other operations. For example, `D=Differential(t)`
 is what would commonly be referred to as `d/dt`, which can then be applied to
 other operations using its function call, so `D(x+y)` is `d(x+y)/dt`.
@@ -50,18 +57,18 @@ of the differentials down to basic one-variable expressions.
 ModelingToolkit.derivative
 Differential
 expand_derivatives
+ModelingToolkit.jacobian
+ModelingToolkit.gradient
+ModelingToolkit.hessian
 ```
 
-Note that the generation of sparse matrices simply follows from the Julia semantics
-imbued on the IR, so `sparse(jac)` changes a dense Jacobian to a sparse Jacobian
-matrix.
+For jacobians which are sparse, use the `sparsejacobian` function.
+For hessians which are sparse, use the `sparsehessian` function.
 
 ### Adding Derivatives
 
 There is a large amount of derivatives pre-defined by
-[DiffRules.jl](https://github.com/JuliaDiff/DiffRules.jl). Note that `Expression`
-types are defined as `<:Real`, and thus any functions which allow the use of real
-numbers can automatically be traced by the derivative mechanism. Thus, for example:
+[DiffRules.jl](https://github.com/JuliaDiff/DiffRules.jl).
 
 ```julia
 f(x,y,z) = x^2 + sin(x+y) - z
@@ -84,7 +91,7 @@ ModelingToolkit.derivative(::typeof(my_function), args::NTuple{N,Any}, ::Val{i})
 
 where `i` means that it's the derivative with respect to the `i`th argument. `args` is the
 array of arguments, so, for example, if your function is `f(x,t)`, then `args = [x,t]`.
-You should return an `Operation` for the derivative of your function.
+You should return an `Term` for the derivative of your function.
 
 For example, `sin(t)`'s derivative (by `t`) is given by the following:
 
@@ -94,14 +101,14 @@ ModelingToolkit.derivative(::typeof(sin), args::NTuple{1,Any}, ::Val{1}) = cos(a
 
 ### IR Manipulation
 
-ModelingToolkit.jl provides functionality for easily manipulating `Expression`
-types. Most of the functionality comes by the `Expression` type obeying the
-standard mathematical semantics. For example, if one has `A` a matrix of
-`Expression`, then `A^2` calculates the `Expression`s for the squared matrix.
-In that sense, it is encouraged that one uses standard Julia for performing a
-lot of the manipulation on the IR, as, for example, calculating the sparse form
-of the matrix via `sparse(A)` is valid, legible, and easily understandable
-to all Julia programmers.
+ModelingToolkit.jl provides functionality for easily manipulating expressions.
+Most of the functionality comes by the expression objects obeying the standard
+mathematical semantics. For example, if one has `A` a matrix of symbolic
+expressions wrapped in `Num`, then `A^2` calculates the expressions for the
+squared matrix.  In that sense, it is encouraged that one uses standard Julia
+for performing a lot of the manipulation on the IR, as, for example,
+calculating the sparse form of the matrix via `sparse(A)` is valid, legible,
+and easily understandable to all Julia programmers.
 
 Other additional manipulation functions are given below.
 
