@@ -68,7 +68,12 @@ get_variables!(vars, e::Number, varlist=nothing) = vars
 
 function get_variables!(vars, e::Symbolic, varlist=nothing)
     if is_singleton(e)
-        if isnothing(varlist) || any(isequal(e), varlist)
+        if !isnothing(varlist)
+            @assert varlist isa AbstractSet
+            if e in varlist
+                push!(vars, e)
+            end
+        else
             push!(vars, e)
         end
     else

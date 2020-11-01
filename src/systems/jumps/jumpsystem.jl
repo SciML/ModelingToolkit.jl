@@ -284,7 +284,7 @@ function get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, var
     dep
 end
 
-function get_variables!(dep, jump::MassActionJump, variables::Set)
+function get_variables!(dep, jump::MassActionJump, variables::AbstractSet)
     sr = value(jump.scaled_rates)
     (sr isa Symbolic) && get_variables!(dep, sr, variables)
     for varasop in jump.reactant_stoch
