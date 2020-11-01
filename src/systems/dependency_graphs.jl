@@ -46,6 +46,7 @@ function equation_dependencies(sys::AbstractSystem; variables=states(sys))
     deps = Set()
     depeqs_to_vars = Vector{Vector}(undef,length(eqs))
 
+    variables = Set(variables)
     for (i,eq) in enumerate(eqs)
         get_variables!(deps, eq, variables)
         depeqs_to_vars[i] = [value(v) for v in deps]
@@ -194,6 +195,7 @@ function variable_dependencies(sys::AbstractSystem; variables=states(sys), varia
 
     deps = Set()
     badjlist = Vector{Vector{Int}}(undef, length(eqs))    
+    variables = Set(variables)
     for (eidx,eq) in enumerate(eqs)
         modified_states!(deps, eq, variables)
         badjlist[eidx] = sort!([vtois[var] for var in deps])

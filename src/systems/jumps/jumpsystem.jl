@@ -280,30 +280,30 @@ end
 
 
 ### Functions to determine which states a jump depends on
-function get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables)
+function get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables::AbstractSet)
     (jump.rate isa Symbolic) && get_variables!(dep, jump.rate, variables)
     dep
 end
 
-function get_variables!(dep, jump::MassActionJump, variables)
+function get_variables!(dep, jump::MassActionJump, variables::Set)
     sr = value(jump.scaled_rates)
     (sr isa Symbolic) && get_variables!(dep, sr, variables)
     for varasop in jump.reactant_stoch
-        any(isequal(varasop[1]), variables) && push!(dep, varasop[1])
+        isequal(varasop[1]) in variables && push!(dep, varasop[1])
     end
     dep
 end
 
 ### Functions to determine which states are modified by a given jump
-function modified_states!(mstates, jump::Union{ConstantRateJump,VariableRateJump}, sts)
+function modified_states!(mstates, jump::Union{ConstantRateJump,VariableRateJump}, sts::AbstractSet)
     for eq in jump.affect!
         st = eq.lhs
-        any(isequal(st), sts) && push!(mstates, st)
+        st in sts && push!(mstates, st)
     end
 end
 
-function modified_states!(mstates, jump::MassActionJump, sts)
+function modified_states!(mstates, jump::MassActionJump, sts::AbstractSet)
     for (state,stoich) in jump.net_stoch
-        any(isequal(state), sts) && push!(mstates, state)
+        state in sts && push!(mstates, state)
     end
 end
