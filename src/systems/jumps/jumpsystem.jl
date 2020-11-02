@@ -288,7 +288,7 @@ function get_variables!(dep, jump::MassActionJump, variables::AbstractSet)
     sr = value(jump.scaled_rates)
     (sr isa Symbolic) && get_variables!(dep, sr, variables)
     for varasop in jump.reactant_stoch
-        isequal(varasop[1]) in variables && push!(dep, varasop[1])
+        varasop[1] in variables && push!(dep, varasop[1])
     end
     dep
 end
