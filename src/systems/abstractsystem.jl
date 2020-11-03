@@ -199,9 +199,14 @@ namespace_expr(O,name,ivname) = O
 
 independent_variable(sys::AbstractSystem) = sys.iv
 function states(sys::AbstractSystem)
-    unique(isempty(sys.systems) ?
-           setdiff(sys.states, value.(sys.pins)) :
-           [sys.states;reduce(vcat,namespace_variables.(sys.systems))])
+    sts = sys.states
+    if !isempty(sys.pins)
+        sts = setdiff(sts, sys.pins)
+    end
+    if !isempty(sys.systems)
+        sts = unique([sts; reduce(vcat,namespace_variables.(sys.systems))])
+    end
+    sts
 end
 parameters(sys::AbstractSystem) = isempty(sys.systems) ? sys.ps : [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]
 pins(sys::AbstractSystem) = isempty(sys.systems) ? sys.pins : [sys.pins;reduce(vcat,namespace_pins.(sys.systems))]
