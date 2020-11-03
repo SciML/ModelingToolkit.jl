@@ -12,7 +12,7 @@ function calculate_tgrad(sys::AbstractODESystem;
       tgrad = ModelingToolkit.simplify.(notime_tgrad)
   end
   xs = states(sys)
-  rule = Dict(map((x, xt) -> x=>xt, detime_dvs.(xs), xs))
+  rule = Dict(detime_dvs(x)=>x for x in xs)
   tgrad = substitute.(tgrad, Ref(rule))
   sys.tgrad[] = tgrad
   return tgrad
