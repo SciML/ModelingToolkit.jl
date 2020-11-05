@@ -104,14 +104,16 @@ function _build_function(target::JuliaTarget, op, args...;
                          linenumbers = true, headerfun=addheader)
 
     argnames = [gensym(:MTKArg) for i in 1:length(args)]
-    arg_pairs = map(vars_to_pairs,zip(argnames,args))
+    symsdict = Dict()
+    arg_pairs = map((x,y)->vars_to_pairs(x,y, symsdict), argnames, args)
+    process = unflatten_long_ops∘(x->substitute(x, symsdict, fold=false))
     ls = reduce(vcat,first.(arg_pairs))
     rs = reduce(vcat,last.(arg_pairs))
-    var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, unflatten_long_ops.(rs)))
+    var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, process.(rs)))
 
     fname = gensym(:ModelingToolkitFunction)
-    op = unflatten_long_ops(op)
-    out_expr = conv(op)
+    op = process(op)
+    out_expr = conv(substitute(op, symsdict, fold=false))
     let_expr = Expr(:let, var_eqs, Expr(:block, out_expr))
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
 
@@ -229,7 +231,8 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
 	end
 
     argnames = [gensym(:MTKArg) for i in 1:length(args)]
-    arg_pairs = map(vars_to_pairs,zip(argnames,args))
+    symsdict = Dict()
+    arg_pairs = map((x,y)->vars_to_pairs(x,y, symsdict), argnames, args)
     ls = reduce(vcat,first.(arg_pairs))
     rs = reduce(vcat,last.(arg_pairs))
     var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, rs))
@@ -241,12 +244,14 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     oidx = isnothing(outputidxs) ? (i -> i) : (i -> outputidxs[i])
     X = gensym(:MTIIPVar)
 
+    process = unflatten_long_ops∘(x->substitute(x, symsdict, fold=false))
+
     if rhss isa SparseMatrixCSC
         rhs_length = length(rhss.nzval)
-        rhss = SparseMatrixCSC(rhss.m, rhss.m, rhss.colptr, rhss.rowval, map(unflatten_long_ops, rhss.nzval))
+        rhss = SparseMatrixCSC(rhss.m, rhss.m, rhss.colptr, rhss.rowval, map(process, rhss.nzval))
     else
         rhs_length = length(rhss)
-        rhss = [unflatten_long_ops(r) for r in rhss]
+        rhss = [process(r) for r in rhss]
     end
 
 	if parallel isa DistributedForm
@@ -388,9 +393,9 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     end
 
     if rhss isa SparseMatrixCSC
-        rhss′ = map(conv∘unflatten_long_ops, rhss.nzval)
+        rhss′ = map(conv∘process, rhss.nzval)
     else
-        rhss′ = [conv(unflatten_long_ops(r)) for r in rhss]
+        rhss′ = [conv(process(r)) for r in rhss]
     end
 
     tuple_sys_expr = build_expr(:tuple, rhss′)
@@ -456,13 +461,16 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     end
 end
 
-vars_to_pairs(args) = vars_to_pairs(args[1],args[2])
-function vars_to_pairs(name,vs::AbstractArray)
-    vs_names = [tosymbol(u) for u ∈ vs]
+function vars_to_pairs(name,vs::AbstractArray, symsdict=Dict())
+    vs_names = tosymbol.(vs)
+    for (v,k) in zip(vs_names, vs)
+        symsdict[k] = v
+    end
     exs = [:($name[$i]) for (i, u) ∈ enumerate(vs)]
     vs_names,exs
 end
-function vars_to_pairs(name,vs)
+function vars_to_pairs(name,vs, symsdict)
+    symsdict[vs] = tosymbol(vs)
     [tosymbol(vs)], [name]
 end
 
