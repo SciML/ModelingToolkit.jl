@@ -1,4 +1,4 @@
-using ModelingToolkit, Test
+using ModelingToolkit, SparseArrays, Test
 @variables a b c1 c2 c3 d e g
 
 # Multiple argument matrix
