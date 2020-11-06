@@ -1,4 +1,4 @@
-using ModelingToolkit, Test
+using ModelingToolkit, SparseArrays, Test
 @variables a b c1 c2 c3 d e g
 
 # Multiple argument matrix
@@ -71,3 +71,21 @@ h_oop_scalar = eval(h_str_scalar)
 
 @test isequal(simplify(ModelingToolkit.unflatten_long_ops(prod(z))),
               simplify(prod(z)))
+
+@variables t x(t) y(t) k
+f = eval(build_function((x+y)/k, [x,y,k]))
+@test f([1,1,2]) == 1
+
+f = eval(build_function([(x+y)/k], [x,y,k])[1])
+@test f([1,1,2]) == [1]
+
+f = eval(build_function([(x+y)/k], [x,y,k])[2])
+z = [0.0]
+f(z, [1,1,2])
+@test z == [1]
+
+f = eval(build_function(sparse([1],[1], [(x+y)/k], 10,10), [x,y,k])[1])
+
+@test size(f([1.,1.,2])) == (10,10)
+@test f([1.,1.,2])[1,1] == 1.0
+@test sum(f([1.,1.,2])) == 1.0
