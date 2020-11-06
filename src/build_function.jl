@@ -461,7 +461,7 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     end
 end
 
-function vars_to_pairs(name,vs::AbstractArray, symsdict=Dict())
+function vars_to_pairs(name,vs::Union{Tuple, AbstractArray}, symsdict=Dict())
     vs_names = tosymbol.(vs)
     for (v,k) in zip(vs_names, vs)
         symsdict[k] = v
