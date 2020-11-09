@@ -163,7 +163,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      tgrad = _tgrad === nothing ? nothing : _tgrad,
                      mass_matrix = _M,
                      jac_prototype = sparse ? similar(sys.jac[],Float64) : nothing,
-                     syms = nameof.(operation.(states(sys))))
+                     syms = tosymbol.(states(sys)))
 end
 
 """
@@ -225,7 +225,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                          tgrad = tgrad,
                          mass_matrix = M,
                          jac_prototype = $jp_expr,
-                         syms = $(nameof.(operation.(states(sys)))))
+                         syms = $(tosymbol.(states(sys))))
     end
     !linenumbers ? striplines(ex) : ex
 end
