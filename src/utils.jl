@@ -159,7 +159,6 @@ tovar(s::Sym) = s
 Base.Symbol(x::Union{Num,Symbolic}) = tosymbol(x)
 tosymbol(x; kwargs...) = x
 tosymbol(x::Sym; kwargs...) = nameof(x)
-tosymbol(x::Term; kwargs...) = nameof(operation(x))
 tosymbol(t::Num; kwargs...) = tosymbol(value(t); kwargs...)
 
 """

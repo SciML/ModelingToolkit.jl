@@ -190,13 +190,14 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
     M = calculate_massmatrix(sys)
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
+    sts = states(sys)
     SDEFunction{iip}(f,g,
                      jac = _jac === nothing ? nothing : _jac,
                      tgrad = _tgrad === nothing ? nothing : _tgrad,
                      Wfact = _Wfact === nothing ? nothing : _Wfact,
                      Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
                      mass_matrix = _M,
-                     syms = tosymbol.(states(sys)))
+                     syms = tosymbol.(sts, states=sts, escape=false))
 end
 
 function DiffEqBase.SDEFunction(sys::SDESystem, args...; kwargs...)
@@ -262,14 +263,14 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
         Wfact = $_Wfact
         Wfact_t = $_Wfact_t
         M = $_M
-
+        sts = $(states(sys))
         SDEFunction{$iip}(f,g,
                          jac = jac,
                          tgrad = tgrad,
                          Wfact = Wfact,
                          Wfact_t = Wfact_t,
                          mass_matrix = M,
-                         syms = $(tosymbol.(states(sys))),kwargs...)
+                         syms = $(tosymbol.(sts, states=sts, escape=false)),kwargs...)
     end
     !linenumbers ? striplines(ex) : ex
 end
