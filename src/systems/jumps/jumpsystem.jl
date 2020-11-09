@@ -199,7 +199,6 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Tuple,
     f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
     sts = states(sys)
     df = DiscreteFunction{true,true}(f, syms=tosymbol.(sts, states=sts, escape=false))
-    @show df.syms
     DiscreteProblem(df, u0, tspan, p; kwargs...)
 end
 
