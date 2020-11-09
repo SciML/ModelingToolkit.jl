@@ -255,6 +255,7 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
+    sts = states(sys)
     ex = quote
         f = $f
         g = $g
@@ -263,7 +264,6 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
         Wfact = $_Wfact
         Wfact_t = $_Wfact_t
         M = $_M
-        sts = $(states(sys))
         SDEFunction{$iip}(f,g,
                          jac = jac,
                          tgrad = tgrad,

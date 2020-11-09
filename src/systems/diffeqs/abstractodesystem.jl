@@ -215,12 +215,12 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     jp_expr = sparse ? :(similar($(sys.jac[]),Float64)) : :nothing
 
+    sts = states(sys)
     ex = quote
         f = $f
         tgrad = $_tgrad
         jac = $_jac
         M = $_M
-        sts = $(states(sys))
         ODEFunction{$iip}(f,
                          jac = jac,
                          tgrad = tgrad,
