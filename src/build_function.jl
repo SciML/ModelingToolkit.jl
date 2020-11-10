@@ -107,9 +107,9 @@ function _build_function(target::JuliaTarget, op, args...;
     symsdict = Dict()
     arg_pairs = map((x,y)->vars_to_pairs(x,y, symsdict), argnames, args)
     process = unflatten_long_ops∘(x->substitute(x, symsdict, fold=false))
-    ls = reduce(vcat,first.(arg_pairs))
+    ls = reduce(vcat,conv.(first.(arg_pairs)))
     rs = reduce(vcat,last.(arg_pairs))
-    var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, process.(rs)))
+    var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, conv.(process.(rs))))
 
     fname = gensym(:ModelingToolkitFunction)
     op = process(op)
@@ -233,9 +233,11 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     argnames = [gensym(:MTKArg) for i in 1:length(args)]
     symsdict = Dict()
     arg_pairs = map((x,y)->vars_to_pairs(x,y, symsdict), argnames, args)
-    ls = reduce(vcat,first.(arg_pairs))
+    process = unflatten_long_ops∘(x->substitute(x, symsdict, fold=false))
+
+    ls = reduce(vcat,conv.(first.(arg_pairs)))
     rs = reduce(vcat,last.(arg_pairs))
-    var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, rs))
+    var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, conv.(process.(rs))))
 
     fname = gensym(:ModelingToolkitFunction)
     fargs = Expr(:tuple,argnames...)
@@ -243,8 +245,6 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
 
     oidx = isnothing(outputidxs) ? (i -> i) : (i -> outputidxs[i])
     X = gensym(:MTIIPVar)
-
-    process = unflatten_long_ops∘(x->substitute(x, symsdict, fold=false))
 
     if rhss isa SparseMatrixCSC
         rhs_length = length(rhss.nzval)
@@ -464,13 +464,13 @@ end
 function vars_to_pairs(name,vs::Union{Tuple, AbstractArray}, symsdict=Dict())
     vs_names = tosymbol.(vs)
     for (v,k) in zip(vs_names, vs)
-        symsdict[k] = v
+        symsdict[k] = Sym{symtype(k)}(v)
     end
     exs = [:($name[$i]) for (i, u) ∈ enumerate(vs)]
     vs_names,exs
 end
 function vars_to_pairs(name,vs, symsdict)
-    symsdict[vs] = tosymbol(vs)
+    symsdict[vs] = Sym{symtype(vs)}(tosymbol(vs))
     [tosymbol(vs)], [name]
 end
 
