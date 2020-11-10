@@ -462,9 +462,9 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
 end
 
 function vars_to_pairs(name,vs::Union{Tuple, AbstractArray}, symsdict=Dict())
-    vs_names = map(x->Sym{symtype(x)}(tosymbol(x)), vs)
+    vs_names = tosymbol.(vs)
     for (v,k) in zip(vs_names, vs)
-        symsdict[k] = v
+        symsdict[k] = Sym{symtype(k)}(v)
     end
     exs = [:($name[$i]) for (i, u) ∈ enumerate(vs)]
     vs_names,exs
