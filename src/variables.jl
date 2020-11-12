@@ -213,10 +213,14 @@ creates the array of values in the correct order
 """
 function varmap_to_vars(varmap::AbstractArray{<:Pair},varlist)
     out = similar(varmap,typeof(last(first(varmap))))
-    for i in 1:length(varmap)
-        ivar = varmap[i][1]
+    for (ivar, ival) in varmap
         j = findfirst(isequal(ivar),varlist)
-        out[j] = varmap[i][2]
+        if isnothing(j)
+            throw(ArgumentError("Value $(ivar) provided in map not found in $(varlist)"))
+        elseif j > length(varmap)
+            throw(ArgumentError("Missing value in $(varmap), need $(varlist)"))
+        end
+        out[j] = ival
     end
 
     # Make output match varmap in type and shape
