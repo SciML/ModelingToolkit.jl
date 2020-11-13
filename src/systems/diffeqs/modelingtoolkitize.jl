@@ -17,7 +17,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     var(x, i) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x, i))))
     vars = reshape([var(:x, i)(value(t)) for i in eachindex(prob.u0)],size(prob.u0))
     params = p isa DiffEqBase.NullParameters ? [] :
-             reshape([Num(Sym{FnType{Tuple{},Real}}(nameof(Variable(:α, i))))() for i in eachindex(p)],size(p))
+             reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(p))
 
     @derivatives D'~t
 
