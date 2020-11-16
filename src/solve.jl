@@ -28,7 +28,7 @@ function sym_lu(A)
 
         for j = k+1:m
             L[j,k] = U[j, k] / U[k, k]
-            U[j,k:m] .= U[j,k:m] .- Ref(L[j,k]) .* U[k,k:m]
+            U[j,k:m] .= U[j,k:m] .- (L[j,k],) .* U[k,k:m]
         end
     end
     for j=1:m
