@@ -222,7 +222,7 @@ function toexpr(O::Term)
   end
   if O.op === (^)
       if length(O.args) > 1  && O.args[2] isa Number && O.args[2] < 0
-          return Expr(:call, :^, Expr(:call, :inv, toexpr(O.args[1])), -(O.args[2].value))
+          return Expr(:call, ^, Expr(:call, inv, toexpr(O.args[1])), -(O.args[2]))
       end
   end
   return Expr(:call, O.op, toexpr.(O.args)...)
