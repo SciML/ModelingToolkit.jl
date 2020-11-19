@@ -382,9 +382,9 @@ the user's code. For these cases, ModelingToolkit.jl allows for fully
 macro-free usage. For example:
 
 ```julia
-x = Sym{Float64}(:x)()
-y = Sym{Float64}(:y)()
-x+y^2.0
+x = Sym{Float64}(:x)
+y = Sym{Float64}(:y)
+x+y^2.0 # isa Num
 ```
 
 Does what you'd expect. The reference documentation shows how to
