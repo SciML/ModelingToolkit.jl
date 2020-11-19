@@ -395,7 +395,7 @@ If we need to use this to generate new Julia code, we can simply
 convert the output to an `Expr`:
 
 ```julia
-toexpr(x+y^2) 
+toexpr(x+y^2)
 ```
 
 ## `Sym`s and callable `Sym`s
