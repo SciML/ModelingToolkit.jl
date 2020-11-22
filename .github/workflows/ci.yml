@@ -26,7 +26,6 @@ jobs:
       matrix:
         version:
           - '1'
-          - 'nightly'
         os:
           - ubuntu-latest
         arch:
