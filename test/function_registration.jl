@@ -110,3 +110,9 @@ function run_test()
     @test fun([0.5], [u0], 0.) == [do_something_4(u0) * 2]
 end
 run_test()
+
+using ModelingToolkit: arguments
+@variables a
+@register foo(x,y,z)
+@test 1 * foo(a,a,a) * Num(1) isa Num
+@test !any(x->x isa Num, arguments(value(1 * foo(a,a,a) * Num(1))))
