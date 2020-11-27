@@ -35,7 +35,7 @@ function detime_dvs(op::Term)
   if op.op isa Sym
       Sym{Real}(nameof(op.op))
   else
-    Term(op.op,detime_dvs.(op.args))
+      Term{Real}(op.op,detime_dvs.(op.args))
   end
 end
 detime_dvs(op) = op
@@ -232,5 +232,5 @@ function diff2term(O)
         (x, t, order) = flatten_differential(O)
         return lower_varname(x, t, order)
     end
-    return Term(O.op, diff2term.(O.args))
+    return Term{Real}(O.op, diff2term.(O.args))
 end
