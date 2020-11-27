@@ -9,35 +9,33 @@ function nterms(t)
 end
 # Soft pivoted
 # Note: we call this function with a matrix of Union{SymbolicUtils.Symbolic, Any}
-# It should work as-is with Operation type too.
 function sym_lu(A)
     m, n = size(A)
-    L = fill!(Array{Any}(undef, size(A)),0) # TODO: make sparse?
-    for i=1:min(m, n)
-        L[i,i] = 1
-    end
-    U = copy!(Array{Any}(undef, size(A)),A)
-    p = BlasInt[1:m;]
-    for k = 1:m-1
-        _, i = findmin(map(ii->_iszero(U[ii, k]) ? Inf : nterms(U[ii,k]), k:n))
+    F = map(x->x isa Num ? x : Num(x), A)
+    minmn = min(m, n)
+    p = Vector{BlasInt}(undef, minmn)
+    info = zero(BlasInt)
+    for k = 1:minmn
+        val, i = findmin(map(ii->_iszero(F[ii, k]) ? Inf : nterms(F[ii,k]), k:n))
+        if !(val isa Symbolic) && (val isa Number) && val == Inf && iszero(info)
+            info = k
+        end
         i += k - 1
         # swap
-        U[k, k:end], U[i, k:end] = U[i, k:end], U[k, k:end]
-        L[k, 1:k-1], L[i, 1:k-1] = L[i, 1:k-1], L[k, 1:k-1]
+        for j in 1:n
+            F[k, j], F[i, j] = F[i, j], F[k, j]
+        end
         p[k] = i
-
-        for j = k+1:m
-            L[j,k] = U[j, k] / U[k, k]
-            U[j,k:m] .= U[j,k:m] .- (L[j,k],) .* U[k,k:m]
+        for i in k+1:m
+            F[i, k] = F[i, k] / F[k, k]
+        end
+        for j = k+1:n
+            for i in k+1:m
+                F[i, j] -= F[i, k] * F[k, j]
+            end
         end
     end
-    for j=1:m
-        for i=j+1:n
-            U[i,j] = 0
-        end
-    end
-
-    (L, U, LinearAlgebra.ipiv2perm(p, m))
+    LU(map(x->simplify(x, polynorm=true), F), p, info)
 end
 
 # Given a vector of equations and a
@@ -72,7 +70,7 @@ end
 function _solve(A, b)
     A = SymbolicUtils.simplify.(to_symbolic.(A), polynorm=true)
     b = SymbolicUtils.simplify.(to_symbolic.(b), polynorm=true)
-    SymbolicUtils.simplify.(ldiv(sym_lu(A), b))
+    SymbolicUtils.simplify.(sym_lu(A) \ b)
 end
 
 # ldiv below
@@ -93,9 +91,9 @@ function simplifying_dot(x,y)
     end
 end
 
-function ldiv((L,U,p), b)
+function LinearAlgebra.ldiv!(F::LU{Num,<:StridedMatrix{Num}}, b::Union{AbstractVector{<:Num},AbstractVector{<:Symbolic}}, x=b)
+    L, U, p = F.L, F.U, F.p
     m, n = size(L)
-    x = Vector{Any}(undef, length(b))
     b = b[p]
 
     for i=n:-1:1
