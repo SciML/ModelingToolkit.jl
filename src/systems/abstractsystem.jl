@@ -190,9 +190,9 @@ end
 
 function namespace_expr(O::Term,name,ivname)
     if O.op isa Sym
-        Term(rename(O.op,renamespace(name,O.op.name)),namespace_expr.(O.args,name,ivname))
+        Term{Real}(rename(O.op,renamespace(name,O.op.name)),namespace_expr.(O.args,name,ivname))
     else
-        Term(O.op,namespace_expr.(O.args,name,ivname))
+        Term{Real}(O.op,namespace_expr.(O.args,name,ivname))
     end
 end
 namespace_expr(O,name,ivname) = O

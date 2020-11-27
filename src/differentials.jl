@@ -45,7 +45,7 @@ function occursin_info(x, expr::Term)
         if all(_isfalse, args)
             return false
         end
-        Term(true, args)
+        Term{Real}(true, args)
     end
 end
 function occursin_info(x, expr::Sym)
