@@ -3,7 +3,7 @@ using LinearAlgebra
 using SparseArrays: sparse
 using Test
 
-@variables a,b,c,d
+@variables a,b,c,d,e,f,g,h,i
 
 # test hashing
 aa = a; # old a
@@ -18,9 +18,12 @@ aa = a; # old a
 @test hash(a+b ~ c+d) == hash(a+b ~ c+d)
 
 # test some matrix operations don't throw errors
-X = [a b;c d]
-det(X)
-lu(X)
+X = [0 b c; d e f; g h i]
+@test iszero(simplify(det(X) - ((b * f * g) + (c * d * h) - (b * d * i) - (c * e * g)), polynorm=true))
+F = lu(X)
+R = simplify.(F.L * F.U - X[F.p, :], polynorm=true)
+@test iszero(R)
+@test simplify.(F \ X, polynorm=true) == I
 inv(X)
 qr(X)
 
