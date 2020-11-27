@@ -77,9 +77,12 @@ end
 
 _iszero(x::Number) = iszero(x)
 _isone(x::Number) = isone(x)
-_iszero(::Term) = false
-_isone(::Term) = false
+_iszero(x::Num) = _iszero(value(x))
+_isone(x::Num) = _isone(value(x))
+_iszero(::Symbolic) = false
+_isone(::Symbolic) = false
 
+#= This code gives a worse result than just using `\`
 function simplifying_dot(x,y)
     isempty(x) && return 0
     muls = map(x,y) do xi,yi
@@ -91,7 +94,7 @@ function simplifying_dot(x,y)
     end
 end
 
-function ldiv(F, b, x=b)
+function ldiv(F, b::AbstractVector, x=b)
     L, U, p = F.L, F.U, F.p
     m, n = size(L)
     b = b[p]
@@ -110,3 +113,4 @@ function ldiv(F, b, x=b)
     end
     x
 end
+=#
