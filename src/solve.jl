@@ -27,15 +27,15 @@ function sym_lu(A)
         end
         p[k] = i
         for i in k+1:m
-            F[i, k] = F[i, k] / F[k, k]
+            F[i, k] = simplify(F[i, k] / F[k, k], polynorm=true)
         end
         for j = k+1:n
             for i in k+1:m
-                F[i, j] -= F[i, k] * F[k, j]
+                F[i, j] = simplify(F[i, j] - F[i, k] * F[k, j], polynorm=true)
             end
         end
     end
-    LU(map(x->simplify(x, polynorm=true), F), p, info)
+    LU(F, p, info)
 end
 
 # Given a vector of equations and a
@@ -68,9 +68,9 @@ function solve_for(eqs, vars)
 end
 
 function _solve(A, b)
-    A = SymbolicUtils.simplify.(to_symbolic.(A), polynorm=true)
-    b = SymbolicUtils.simplify.(to_symbolic.(b), polynorm=true)
-    SymbolicUtils.simplify.(sym_lu(A) \ b)
+    A = SymbolicUtils.simplify.(Num.(A), polynorm=true)
+    b = SymbolicUtils.simplify.(Num.(b), polynorm=true)
+    value.(SymbolicUtils.simplify.(sym_lu(A) \ b, polynorm=true))
 end
 
 # ldiv below
@@ -91,7 +91,7 @@ function simplifying_dot(x,y)
     end
 end
 
-function LinearAlgebra.ldiv!(F::LU{Num,<:StridedMatrix{Num}}, b::Union{AbstractVector{<:Num},AbstractVector{<:Symbolic}}, x=b)
+function ldiv(F, b, x=b)
     L, U, p = F.L, F.U, F.p
     m, n = size(L)
     b = b[p]
