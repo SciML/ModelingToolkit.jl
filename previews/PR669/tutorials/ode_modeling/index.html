@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Component-Based Modeling with Ordinary Differential Equations · ModelingToolkit.jl</title><link rel="canonical" href="https://mtk.sciml.ai/stable/tutorials/ode_modeling/"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.11.1/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit">ModelingToolkit.jl</span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../symbolic_functions/">Symbolic Calculations and Building Fast Parallel Functions</a></li><li class="is-active"><a class="tocitem" href>Component-Based Modeling with Ordinary Differential Equations</a><ul class="internal"><li><a class="tocitem" href="#Copy-Paste-Example-1"><span>Copy-Paste Example</span></a></li><li><a class="tocitem" href="#Generating-ODESystems-1"><span>Generating ODESystems</span></a></li><li><a class="tocitem" href="#Building-Component-Based-Models-1"><span>Building Component-Based Models</span></a></li></ul></li><li><a class="tocitem" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../nonlinear/">Solving Nonlinear Systems with NLsolve</a></li><li><a class="tocitem" href="../modelingtoolkitize/">Symbolic Extensions to ODEProblem via Modelingtoolkize</a></li><li><a class="tocitem" href="../auto_parallel/">Automated Sparse Parallelism of ODEs via Tracing</a></li><li><a class="tocitem" href="../converting_to_C/">Automatic Conversion of Julia Code to C Functions</a></li></ul></li><li><span class="tocitem">Systems</span><ul><li><a class="tocitem" href="../../systems/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/ControlSystem/">ControlSystem</a></li><li><a class="tocitem" href="../../systems/ReactionSystem/">ReactionSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li><li><a class="tocitem" href="../../systems/DependencyGraphs/">Dependency Graphs</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison Against SymPy</a></li><li><a class="tocitem" href="../../highlevel/">High Level API</a></li><li><a class="tocitem" href="../../build_function/">Function Building and Compilation (build_function)</a></li><li><a class="tocitem" href="../../IR/">ModelingToolkit IR</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Component-Based Modeling with Ordinary Differential Equations</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Component-Based Modeling with Ordinary Differential Equations</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/ode_modeling.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Component-Based-Modeling-with-Ordinary-Differential-Equations-1"><a class="docs-heading-anchor" href="#Component-Based-Modeling-with-Ordinary-Differential-Equations-1">Component-Based Modeling with Ordinary Differential Equations</a><a class="docs-heading-anchor-permalink" href="#Component-Based-Modeling-with-Ordinary-Differential-Equations-1" title="Permalink"></a></h1><h2 id="Copy-Paste-Example-1"><a class="docs-heading-anchor" href="#Copy-Paste-Example-1">Copy-Paste Example</a><a class="docs-heading-anchor-permalink" href="#Copy-Paste-Example-1" title="Permalink"></a></h2><p>Here is the complete example, with explanation to follow:</p><pre><code class="language-julia">using ModelingToolkit, OrdinaryDiffEq
+
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D&#39;~t
+
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
+
+lorenz1 = ODESystem(eqs,name=:lorenz1)
+lorenz2 = ODESystem(eqs,name=:lorenz2)
+
+@variables a
+@parameters γ
+connections = [0 ~ lorenz1.x + lorenz2.y + a*γ]
+connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])
+
+u0 = [lorenz1.x =&gt; 1.0,
+      lorenz1.y =&gt; 0.0,
+      lorenz1.z =&gt; 0.0,
+      lorenz2.x =&gt; 0.0,
+      lorenz2.y =&gt; 1.0,
+      lorenz2.z =&gt; 0.0,
+      a =&gt; 2.0]
+
+p  = [lorenz1.σ =&gt; 10.0,
+      lorenz1.ρ =&gt; 28.0,
+      lorenz1.β =&gt; 8/3,
+      lorenz2.σ =&gt; 10.0,
+      lorenz2.ρ =&gt; 28.0,
+      lorenz2.β =&gt; 8/3,
+      γ =&gt; 2.0]
+
+tspan = (0.0,100.0)
+prob = ODEProblem(connected,u0,tspan,p)
+sol = solve(prob,Rodas5())
+
+using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.z))</code></pre><h2 id="Generating-ODESystems-1"><a class="docs-heading-anchor" href="#Generating-ODESystems-1">Generating ODESystems</a><a class="docs-heading-anchor-permalink" href="#Generating-ODESystems-1" title="Permalink"></a></h2><p>First let&#39;s build an ODE model. To do this we start by defining some variables. In a differential equation system, we need to differentiate between our (dependent) variables and parameters. Therefore, we label them as follows:</p><pre><code class="language-julia">using ModelingToolkit
+
+@parameters t σ ρ β
+@variables x(t) y(t) z(t)
+@derivatives D&#39;~t</code></pre><p>Then we build the system:</p><pre><code class="language-julia">eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]</code></pre><p>Each operation builds an <code>Term</code> type, and thus <code>eqs</code> is an array of <code>Term</code> and <code>Sym</code>s (possibly wrapped in Num). This holds a tree of the full system that can be analyzed by other programs. We can turn this into a <code>ODESystem</code> via:</p><pre><code class="language-julia">sys = ODESystem(eqs)</code></pre><p>This <code>ODESystem</code> can then be used to generate an <code>ODEProblem</code> by supplying the constructor with a map from the states of the system to their initial condition values and from the parameters of the system to their values. For example:</p><pre><code class="language-julia">u0 = [x =&gt; 1.0
+      y =&gt; 0.0
+      z =&gt; 0.0]
+
+p  = [σ =&gt; 10.0
+      ρ =&gt; 28.0
+      β =&gt; 8/3]
+tspan = (0.0,100.0)
+prob = ODEProblem(sys,u0,tspan,p;jac=true,sparse=true)</code></pre><p>Note that the additional <code>jac=true</code> tells the system to symbolically generate an optimized Jacobian function to enhance the differential equation solvers, and <code>sparse</code> tells it to build the ODEProblem with all of the enhancements setup for sparse Jacobians.</p><h2 id="Building-Component-Based-Models-1"><a class="docs-heading-anchor" href="#Building-Component-Based-Models-1">Building Component-Based Models</a><a class="docs-heading-anchor-permalink" href="#Building-Component-Based-Models-1" title="Permalink"></a></h2><p>Now let&#39;s use ModelingToolkit to start building component-based models. Component-based models are compositions between submodels. This allows one to keep independently generated libraries of components intact and use them as the building blocks to construct more complicated models.</p><p>Let&#39;s define two interacting Lorenz equations. To do this, we will build two <code>ODESystem</code>s from the equations we used in the first part:</p><pre><code class="language-julia">lorenz1 = ODESystem(eqs,name=:lorenz1)
+lorenz2 = ODESystem(eqs,name=:lorenz2)</code></pre><p>Now let&#39;s define an interconnection between these ODE systems. Here we will define a new variable <code>α</code> which is defined by the interplay between these two models:</p><pre><code class="language-julia">@variables a(t)
+@parameters γ
+connections = [0 ~ lorenz1.x + lorenz2.y + a*γ]
+connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])</code></pre><p>This <code>ODESystem</code> thus connects the two Lorenz systems and defines the dynamics of <code>α</code> according to the continuous algebraic equation, thus this is now a differential-algebraic equation (DAE) of 7 variables. We can then define the resulting <code>ODEProblem</code> and send it over to DifferentialEquations.jl:</p><pre><code class="language-julia">u0 = [lorenz1.x =&gt; 1.0,
+      lorenz1.y =&gt; 0.0,
+      lorenz1.z =&gt; 0.0,
+      lorenz2.x =&gt; 0.0,
+      lorenz2.y =&gt; 1.0,
+      lorenz2.z =&gt; 0.0,
+      a =&gt; 2.0]
+
+p  = [lorenz1.σ =&gt; 10.0,
+      lorenz1.ρ =&gt; 28.0,
+      lorenz1.β =&gt; 8/3,
+      lorenz2.σ =&gt; 10.0,
+      lorenz2.ρ =&gt; 28.0,
+      lorenz2.β =&gt; 8/3,
+      γ =&gt; 2.0]
+
+tspan = (0.0,100.0)
+prob = ODEProblem(connected,u0,tspan,p)
+sol = solve(prob,Rodas5())
+
+using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.z))</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/79229194-9e71a780-7e30-11ea-9f93-bfa762eb8dfb.png" alt/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../symbolic_functions/">« Symbolic Calculations and Building Fast Parallel Functions</a><a class="docs-footer-nextpage" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Friday 27 November 2020 21:12">Friday 27 November 2020</span>. Using Julia version 1.4.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
