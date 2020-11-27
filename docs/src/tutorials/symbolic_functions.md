@@ -382,9 +382,9 @@ the user's code. For these cases, ModelingToolkit.jl allows for fully
 macro-free usage. For example:
 
 ```julia
-x = Sym{Float64}(:x)()
-y = Sym{Float64}(:y)()
-x+y^2.0
+x = Num(Sym{Float64}(:x))
+y = Num(Sym{Float64}(:y))
+x+y^2.0 # isa Num
 ```
 
 Does what you'd expect. The reference documentation shows how to
@@ -395,7 +395,7 @@ If we need to use this to generate new Julia code, we can simply
 convert the output to an `Expr`:
 
 ```julia
-Expr(x+y^2)
+toexpr(x+y^2)
 ```
 
 ## `Sym`s and callable `Sym`s

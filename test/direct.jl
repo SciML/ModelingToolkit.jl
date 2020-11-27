@@ -141,6 +141,17 @@ f = eval(f2)
 f(out,[1.0,2,3])
 @test all(out .== o1)
 
+# y ^ -1 test
+g = let
+    f(x,y) = x/y
+    @variables x y
+    ex = expand_derivatives(Differential(x)(f(x, y)))
+    func_ex = build_function(ex, x, y)
+    eval(func_ex)
+end
+
+@test g(42,4) == 1/4
+
 function test_worldage()
    @variables x y z
    eqs = [(y-x)^2,

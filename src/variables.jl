@@ -33,15 +33,15 @@ and parameters `β₁` and `β₂`.
 
 
 ```julia
-t = Variable(:t)()  # independent variables are treated as known
-α = Variable(:α)()  # parameters are known
-σ = Variable(:σ)    # left uncalled, since it is used as a function
-w = Variable(:w)   # unknown, left uncalled
-x = Variable(:x)(t)  # unknown, depends on `t`
-y = Variable(:y)()   # unknown, no dependents
-z = Variable(:z)(t, α, x)  # unknown, multiple arguments
-β₁ = Variable(:β, 1)() # with index 1
-β₂ = Variable(:β, 2)() # with index 2
+t = Num(Variable{ModelingToolkit.Parameter{Real}}(:t))  # independent variables are treated as known
+α = Num(Variable{ModelingToolkit.Parameter{Real}}(:α))  # parameters are known
+σ = Num(Variable{ModelingToolkit.FnType{Tuple{Any},Real}}(:σ)) # left uncalled, since it is used as a function
+w = Num(Variable{ModelingToolkit.FnType{Tuple{Any},Real}}(:w)) # unknown, left uncalled
+x = Num(Variable{ModelingToolkit.FnType{Tuple{Any},Real}}(:x))(t)  # unknown, depends on `t`
+y = Num(Variable(:y))   # unknown, no dependents
+z = Num(Variable{ModelingToolkit.FnType{NTuple{3,Any},Real}}(:z))(t, α, x)  # unknown, multiple arguments
+β₁ = Num(Variable(:β, 1)) # with index 1
+β₂ = Num(Variable(:β, 2)) # with index 2
 
 expr = β₁ * x + y^α + σ(3) * (z - t) - β₂ * w(t - 1)
 ```

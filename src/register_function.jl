@@ -17,7 +17,12 @@ macro register(expr, Ts = [Num, Symbolic, Real])
     name(x::Expr) = ((@assert x.head == :(::)); :($value($(x.args[1]))))
 
     Expr(:block,
-         [:($f($(setinds(args, symbolic_args, ts)...)) = Term{Real}($f, [$(map(name, args)...)]))
+         [quote
+              function $f($(setinds(args, symbolic_args, ts)...))
+                  wrap =  any(x->typeof(x) <: Num, tuple($(setinds(args, symbolic_args, ts)...),)) ? Num : identity
+                  wrap(Term{Real}($f, [$(map(name, args)...)]))
+              end
+          end
          for ts in types]...) |> esc
 end
 
