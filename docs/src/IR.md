@@ -114,7 +114,6 @@ Other additional manipulation functions are given below.
 
 ```@docs
 simplify_constants
-rename
 get_variables
 substitute_expr!
 ```
