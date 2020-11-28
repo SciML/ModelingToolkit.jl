@@ -226,7 +226,7 @@ export BipartiteGraph, equation_dependencies, variable_dependencies
 export eqeq_dependencies, varvar_dependencies
 export asgraph, asdigraph
 
-export toexpr, rename, get_variables
+export toexpr, get_variables
 export simplify, substitute
 export build_function
 export @register
