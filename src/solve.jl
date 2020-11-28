@@ -45,7 +45,7 @@ end
 # return the coefficient matrix `A` and a
 # vector of constants (possibly symbolic) `b` such that
 # A \ b will solve the equations for the vars
-function A_b(eqs, vars)
+function A_b(eqs::AbstractArray, vars::AbstractArray)
     exprs = rhss(eqs) .- lhss(eqs)
     for ex in exprs
         @assert islinear(ex, vars)
@@ -53,6 +53,13 @@ function A_b(eqs, vars)
     A = jacobian(exprs, vars)
     b = A * vars - exprs
     A, b
+end
+function A_b(eq, var)
+    ex = eq.rhs - eq.lhs
+    @assert islinear(ex, [var])
+    a = expand_derivatives(Differential(var)(ex))
+    b = a * var - ex
+    a, b
 end
 
 """
@@ -69,11 +76,12 @@ function solve_for(eqs, vars)
     _solve(A, b)
 end
 
-function _solve(A, b)
+function _solve(A::AbstractMatrix, b::AbstractArray)
     A = SymbolicUtils.simplify.(to_symbolic.(A), polynorm=true)
     b = SymbolicUtils.simplify.(to_symbolic.(b), polynorm=true)
     SymbolicUtils.simplify.(ldiv(sym_lu(A), b))
 end
+_solve(a, b) = value(SymbolicUtils.simplify(b/a, polynorm=true))
 
 # ldiv below
 
