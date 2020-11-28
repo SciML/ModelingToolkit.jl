@@ -27,7 +27,7 @@ for f in monadic_nonlinear
 end
 
 # 2-arg
-for f in [+, rem2pi, -, >, isless, <, isequal, max, min, convert]
+for f in [+, rem2pi, -, >, isless, <, isequal, max, min, convert, <=, >=]
     linearity_known_2[f] = true
     linearity_map_2[f] = (true, true, true)
 end
