@@ -160,8 +160,8 @@ function runge_kutta_discretize(sys::ControlSystem,dt,tspan;
     control_equality = reduce(vcat,[control_timeseries[i][end] .~ control_timeseries[i+1][1] for i in 1:n-1])
 
     # Create the loss function
-    losses = [Base.invokelatest(L,states_timeseries[i],control_timeseries[i][1],(ps,),(iv,)) for i in 1:n]
-    losses = vcat(losses,[Base.invokelatest(L,states_timeseries[n+1],control_timeseries[n][end],(ps,),(iv,))])
+    losses = [Base.invokelatest(L,states_timeseries[i],control_timeseries[i][1],ps,iv) for i in 1:n]
+    losses = vcat(losses,[Base.invokelatest(L,states_timeseries[n+1],control_timeseries[n][end],ps,iv)])
 
     # Calculate final pieces
     equalities = vcat(stages,updates,control_equality)
