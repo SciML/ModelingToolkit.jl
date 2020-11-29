@@ -1,12 +1,12 @@
 using ModelingToolkit
 
 @variables t x(t) v(t) u(t)
-@parameters p[1:1]
+@parameters p[1:2]
 @derivatives D'~t
 
 loss = (4-x)^2 + 2v^2 + u^2
 eqs = [
-    D(x) ~ v #- p[2]*x
+    D(x) ~ v - p[2]*x
     D(v) ~ p[1]*u^3 + v
 ]
 
