@@ -1,3 +1,15 @@
+"""
+    @register(expr, Ts = [Num, Symbolic, Real])
+
+Overload approperate methods such that ModelingToolkit can stop tracing into the
+registered function.
+
+# Examples
+```julia
+@register foo(x, y)
+@register goo(x, y::Int) # `y` is not overloaded to take symbolic objects
+```
+"""
 macro register(expr, Ts = [Num, Symbolic, Real])
     @assert expr.head == :call
 
