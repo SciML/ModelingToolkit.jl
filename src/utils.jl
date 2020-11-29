@@ -283,7 +283,7 @@ end
     diff2term(x::Term) -> Term
     diff2term(x) -> x
 
-Convert a differential variable to a `Symbol`. Note that it only takes a `Term`
+Convert a differential variable to a `Term`. Note that it only takes a `Term`
 not a `Num`.
 ```julia
 julia> ModelingToolkit.diff2term(ModelingToolkit.value(D(D(x))))
