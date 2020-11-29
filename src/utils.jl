@@ -53,9 +53,28 @@ is_derivative(O::Term) = isa(O.op, Differential)
 is_derivative(::Any) = false
 
 """
-get_variables(O)
+    get_variables(O) -> Vector{Union{Sym, Term}}
 
-Returns the variables in the expression
+Returns the variables in the expression. Note that the returned variables are
+not wrapped in the `Num` type.
+
+# Examples
+```julia
+julia> @parameters t
+(t,)
+
+julia> @variables x y z(t)
+(x, y, z(t))
+
+julia> ex = x + y + sin(z)
+(x + y) + sin(z(t))
+
+julia> ModelingToolkit.get_variables(ex)
+3-element Vector{Any}:
+ x
+ y
+ z(t)
+```
 """
 get_variables(e::Num, varlist=nothing) = get_variables(value(e), varlist)
 get_variables!(vars, e, varlist=nothing) = vars
@@ -89,11 +108,26 @@ modified_states!(mstates, e::Equation, statelist=nothing) = get_variables!(mstat
 # variable substitution
 # Piracy but mild
 """
-substitute(expr, s::Pair)
-substitute(expr, s::Dict)
-substitute(expr, s::Vector)
+    substitute(expr, s::Pair)
+    substitute(expr, s::Dict)
+    substitute(expr, s::Vector)
 
-Performs the substitution `Num => val` on the `expr` Num.
+Performs the substitution on `expr` according to rule(s) `s`.
+
+# Examples
+```julia
+julia> @parameters t
+(t,)
+
+julia> @variables x y z(t)
+(x, y, z(t))
+
+julia> ex = x + y + sin(z)
+(x + y) + sin(z(t))
+
+julia> substitute(ex, Dict([x => z, sin(z) => z^2]))
+(z(t) + y) + (z(t) ^ 2)
+```
 """
 substitute(expr::Num, s::Union{Pair, Vector, Dict}; kw...) = Num(substituter(s)(value(expr); kw...))
 # TODO: move this to SymbolicUtils
@@ -150,8 +184,9 @@ toparam(s::Sym{<:Parameter}) = s
 
 """
     tovar(s::Sym) -> Sym{Real}
+    tovar(s::Sym{<:Parameter}) -> Sym{Real}
 
-Maps the variable to a variable (state).
+Maps the variable to a state.
 """
 tovar(s::Sym{<:Parameter}) = Sym{symtype(s)}(s.name)
 tovar(s::Sym) = s
@@ -167,6 +202,15 @@ tosymbol(t::Num; kwargs...) = tosymbol(value(t); kwargs...)
 Convert `x` to a symbol. `states` are the states of a system, and `escape`
 means if the target has escapes like `val"y⦗t⦘"`. If `escape` then it will only
 output `y` instead of `y⦗t⦘`.
+
+# Examples
+```julia
+julia> @parameters t; @variables z(t)
+(z(t),)
+
+julia> ModelingToolkit.tosymbol(z)
+Symbol("z⦗t⦘")
+```
 """
 function tosymbol(t::Term; states=nothing, escape=true)
     if t.op isa Sym
@@ -188,6 +232,21 @@ function tosymbol(t::Term; states=nothing, escape=true)
     error("Cannot convert $t to a symbol")
 end
 
+"""
+    makesym(x::Union{Num,Symbolic}, kwargs...) -> Sym
+
+`makesym` takes the same arguments as [`tosymbol`](@ref), but it converts a
+`Term` in the form of `x(t)` to a `Sym` in the form of `x⦗t⦘`.
+
+# Examples
+```julia
+julia> @parameters t; @variables x(t)
+(x(t),)
+
+julia> ModelingToolkit.makesym(x)
+x⦗t⦘
+```
+"""
 makesym(t::Symbolic; kwargs...) = Sym{symtype(t)}(tosymbol(t; kwargs...))
 makesym(t::Num; kwargs...) = makesym(value(t); kwargs...)
 
@@ -224,7 +283,12 @@ end
     diff2term(x::Term) -> Term
     diff2term(x) -> x
 
-diff2term(D(D(x(t)))) -> xˍtt(t)
+Convert a differential variable to a `Symbol`. Note that it only takes a `Term`
+not a `Num`.
+```julia
+julia> ModelingToolkit.diff2term(ModelingToolkit.value(D(D(x))))
+xˍtt(t)
+```
 """
 function diff2term(O)
     isa(O, Term) || return O

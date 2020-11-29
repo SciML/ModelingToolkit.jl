@@ -9,10 +9,14 @@ at the top, an `Equation`, normally written as `op1 ~ op2`, defines the
 symbolic equality between two operations.
 
 ### Types
+`Sym`, `Term`, and `FnType` are from `SymbolicUtils.jl`. For more details,
+checkout https://juliasymbolics.github.io/SymbolicUtils.jl/api/. Note that in
+ModelingToolkit, we always use `Sym{Real}`, `Term{Real}`, and
+`FnType{Tuple{Any}, Real}`. To get the arguments of a `Term` use
+`arguments(t::Term)`, and to get the operation of a `Term` use
+`operation(t::Term)`.
 
 ```@docs
-Sym
-Term
 Equation
 ```
 
@@ -27,6 +31,21 @@ as symbolic expressions and forwards those to the values it wraps. You can use
 By default, the `@variables` and `@parameters` functions return Num-wrapped
 objects so as to allow calling functions which are restricted to `Number` or
 `Real`.
+
+```julia
+julia> @parameters t; @variables x y z(t);
+
+julia> ModelingToolkit.operation(ModelingToolkit.value(x + y))
++ (generic function with 377 methods)
+
+julia> ModelingToolkit.operation(ModelingToolkit.value(z))
+z(::Any)::Real
+
+julia> ModelingToolkit.arguments(ModelingToolkit.value(x + y))
+2-element Vector{Sym{Real}}:
+ x
+ y
+```
 
 ### Function Registration
 
@@ -113,7 +132,11 @@ and easily understandable to all Julia programmers.
 Other additional manipulation functions are given below.
 
 ```@docs
-simplify_constants
 get_variables
-substitute_expr!
+substitute
+tovar
+toparam
+tosymbol
+makesym
+diff2term
 ```
