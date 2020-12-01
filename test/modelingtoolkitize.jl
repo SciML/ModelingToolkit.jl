@@ -1,7 +1,7 @@
 using OrdinaryDiffEq, ModelingToolkit, Test
 using GalacticOptim, Optim
 
-const N = 32
+N = 32
 const xyd_brusselator = range(0,stop=1,length=N)
 brusselator_f(x, y, t) = (((x-0.3)^2 + (y-0.6)^2) <= 0.1^2) * (t >= 1.1) * 5.
 limit(a, N) = ModelingToolkit.ifelse(a == N+1, 1, ModelingToolkit.ifelse(a == 0, N, a))
@@ -74,7 +74,7 @@ i₀ = 0.075 # fraction of initial infected people in every age class
 regional_all_contact_matrix = [3.45536   0.485314  0.506389  0.123002 ; 0.597721  2.11738   0.911374  0.323385 ; 0.906231  1.35041   1.60756   0.67411 ; 0.237902  0.432631  0.726488  0.979258] # 4x4 contact matrix
 
 ## regional population stratified by age
-N= [723208 , 874150, 1330993, 1411928] # array of 4 elements, each of which representing the absolute amount of population in the corresponding age class.
+N = [723208 , 874150, 1330993, 1411928] # array of 4 elements, each of which representing the absolute amount of population in the corresponding age class.
 
 
 # Initial conditions
