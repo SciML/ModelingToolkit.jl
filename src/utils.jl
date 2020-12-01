@@ -271,6 +271,15 @@ function lower_varname(t::Term, iv)
 end
 lower_varname(t::Sym, iv) = t
 
+function lower_mapnames(umap::AbstractArray{<:Pair{Symbol,T}},name::Nothing=nothing) where T
+    [value(k) => value(v) for (k, v) in umap]
+end
+function lower_mapnames(umap::AbstractArray{<:Pair{Symbol,T}},name) where T
+    [lower_varname(value(k), name) => value(v) for (k, v) in umap]
+end
+lower_mapnames(umap::AbstractArray{<:Number},name::Nothing=nothing) = umap # Ambiguity
+lower_mapnames(umap::AbstractArray{<:Number},name) = umap
+
 function flatten_differential(O::Term)
     @assert is_derivative(O) "invalid differential: $O"
     is_derivative(O.args[1]) || return (O.args[1], O.op.x, 1)

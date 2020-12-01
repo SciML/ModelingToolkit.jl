@@ -310,8 +310,17 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
 
     dvs = states(sys)
     ps = parameters(sys)
-    u0 = varmap_to_vars(u0map,dvs)
-    p = varmap_to_vars(parammap,ps)
+
+    u0map′ = lower_mapnames(u0map,sys.iv)
+    u0 = varmap_to_vars(u0map′,dvs)
+
+    if !(parammap isa DiffEqBase.NullParameters)
+        parammap′ = lower_mapnames(parammap)
+        p = varmap_to_vars(parammap′,ps)
+    else
+        p = ps
+    end
+
     f = SDEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,
                          checkbounds=checkbounds,
                          linenumbers=linenumbers,parallel=parallel,
@@ -358,8 +367,17 @@ function SDEProblemExpr{iip}(sys::SDESystem,u0map,tspan,
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
-    u0 = varmap_to_vars(u0map,dvs)
-    p = varmap_to_vars(parammap,ps)
+
+    u0map′ = lower_mapnames(u0map,sys.iv)
+    u0 = varmap_to_vars(u0map′,dvs)
+
+    if !(parammap isa DiffEqBase.NullParameters)
+        parammap′ = lower_mapnames(parammap)
+        p = varmap_to_vars(parammap′,ps)
+    else
+        p = ps
+    end
+    
     f = SDEFunctionExpr{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,
                         Wfact=Wfact,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
