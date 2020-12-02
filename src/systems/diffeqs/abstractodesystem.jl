@@ -158,13 +158,12 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
-    sts = states(sys)
     ODEFunction{iip}(f,
                      jac = _jac === nothing ? nothing : _jac,
                      tgrad = _tgrad === nothing ? nothing : _tgrad,
                      mass_matrix = _M,
                      jac_prototype = sparse ? similar(sys.jac[],Float64) : nothing,
-                     syms = tosymbol.(sts, states=sts, escape=false))
+                     syms = Symbol.(states(sys)))
 end
 
 """
@@ -215,7 +214,6 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     jp_expr = sparse ? :(similar($(sys.jac[]),Float64)) : :nothing
 
-    sts = states(sys)
     ex = quote
         f = $f
         tgrad = $_tgrad
@@ -226,7 +224,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                          tgrad = tgrad,
                          mass_matrix = M,
                          jac_prototype = $jp_expr,
-                         syms = $(tosymbol.(sts, states=sts, escape=false)))
+                         syms = $(Symbol.(states(sys))))
     end
     !linenumbers ? striplines(ex) : ex
 end
