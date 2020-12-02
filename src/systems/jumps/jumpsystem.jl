@@ -197,8 +197,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Tuple,
         p = parammap
     end
     f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
-    sts = states(sys)
-    df = DiscreteFunction{true,true}(f, syms=tosymbol.(sts, states=sts, escape=false))
+    df = DiscreteFunction{true,true}(f, syms=Symbol.(states(sys)))
     DiscreteProblem(df, u0, tspan, p; kwargs...)
 end
 
@@ -226,13 +225,12 @@ function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Tuple,
     u0 = varmap_to_vars(u0map, states(sys))
     p  = varmap_to_vars(parammap, parameters(sys))
     # identity function to make syms works
-    sts = states(sys)
     quote
         f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
         u0 = $u0
         p = $p
         tspan = $tspan
-        df = DiscreteFunction{true,true}(f, syms=$(tosymbol.(sts, states=sts, escape=false)))
+        df = DiscreteFunction{true,true}(f, syms=$(Symbol.(states(sys))))
         DiscreteProblem(df, u0, tspan, p; kwargs...)
     end
 end
