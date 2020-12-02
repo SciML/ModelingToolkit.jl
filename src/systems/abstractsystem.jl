@@ -230,6 +230,8 @@ end
 lhss(xs) = map(x->x.lhs, xs)
 rhss(xs) = map(x->x.rhs, xs)
 
+flatten(sys::AbstractSystem) = sys
+
 function equations(sys::ModelingToolkit.AbstractSystem)
     if isempty(sys.systems)
         return sys.eqs
