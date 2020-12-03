@@ -6,6 +6,8 @@ function flatten(sys::ODESystem)
     else
         return ODESystem(equations(sys),
                          independent_variable(sys),
+                         states(sys),
+                         parameters(sys),
                          observed=observed(sys))
     end
 end
