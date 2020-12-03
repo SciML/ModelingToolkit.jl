@@ -16,7 +16,13 @@ module ODEPrecompileTest
         return ODEFunction(de, [x,y,z], [σ,ρ,β]; kwargs...)
     end
     
-    # Build a simple ODEFunction as part of the module's precompilation.
+    # Build an ODEFunction as part of the module's precompilation. This case
+    # will not work, because the generated RGFs will be put into
+    # ModelingToolkit's RGF cache.
     const f_bad = system()
-    # const f_good = system(; eval_module=@__MODULE__)
+
+    # This case will work, because it will be put into our own module's cache.
+    using RuntimeGeneratedFunctions
+    RuntimeGeneratedFunctions.init(@__MODULE__)
+    const f_good = system(; eval_module=@__MODULE__)
 end
