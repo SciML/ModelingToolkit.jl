@@ -100,6 +100,7 @@ end
 # Scalar output
 function _build_function(target::JuliaTarget, op, args...;
                          conv = toexpr, expression = Val{true},
+                         expression_module = @__MODULE__,
                          checkbounds = false,
                          linenumbers = true, headerfun=addheader)
 
@@ -127,12 +128,12 @@ function _build_function(target::JuliaTarget, op, args...;
     if expression == Val{true}
         return ModelingToolkit.inject_registered_module_functions(oop_ex)
     else
-        _build_and_inject_function(@__MODULE__, oop_ex)
+        _build_and_inject_function(expression_module, oop_ex)
     end
 end
 
 function _build_and_inject_function(mod::Module, ex)
-	@RuntimeGeneratedFunction(ModelingToolkit.inject_registered_module_functions(ex))
+	@RuntimeGeneratedFunction(mod, ModelingToolkit.inject_registered_module_functions(ex))
 end
 
 # Detect heterogeneous element types of "arrays of matrices/sparce matrices"
