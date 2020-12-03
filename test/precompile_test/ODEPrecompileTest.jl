@@ -25,4 +25,8 @@ module ODEPrecompileTest
     using RuntimeGeneratedFunctions
     RuntimeGeneratedFunctions.init(@__MODULE__)
     const f_good = system(; eval_module=@__MODULE__)
+
+    # Also test that eval_expression=false works
+    const f_noeval_bad = system(; eval_expression=false)
+    const f_noeval_good = system(; eval_expression=false, eval_module=@__MODULE__)
 end

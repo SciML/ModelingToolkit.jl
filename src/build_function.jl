@@ -219,6 +219,7 @@ Special Keyword Argumnets:
 """
 function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
                          conv = toexpr, expression = Val{true},
+                         expression_module = @__MODULE__,
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun = addheader, outputidxs=nothing,
@@ -458,7 +459,7 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     if expression == Val{true}
         return ModelingToolkit.inject_registered_module_functions(oop_ex), ModelingToolkit.inject_registered_module_functions(iip_ex)
     else
-        return _build_and_inject_function(@__MODULE__, oop_ex), _build_and_inject_function(@__MODULE__, iip_ex)
+        return _build_and_inject_function(expression_module, oop_ex), _build_and_inject_function(expression_module, iip_ex)
     end
 end
 

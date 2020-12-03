@@ -12,9 +12,15 @@ p  = collect(4:6)
 # instead of in the compiled module!
 @test parentmodule(typeof(ODEPrecompileTest.f_bad.f.f_iip).parameters[2]) == ModelingToolkit
 @test parentmodule(typeof(ODEPrecompileTest.f_bad.f.f_oop).parameters[2]) == ModelingToolkit
+@test parentmodule(typeof(ODEPrecompileTest.f_noeval_bad.f.f_iip).parameters[2]) == ModelingToolkit
+@test parentmodule(typeof(ODEPrecompileTest.f_noeval_bad.f.f_oop).parameters[2]) == ModelingToolkit
 @test_throws KeyError ODEPrecompileTest.f_bad(u, p, 0.1)
+@test_throws KeyError ODEPrecompileTest.f_noeval_bad(u, p, 0.1)
 
 # This case works, because "f_good" gets defined in the precompiled module.
 @test parentmodule(typeof(ODEPrecompileTest.f_good.f.f_iip).parameters[2]) == ODEPrecompileTest
 @test parentmodule(typeof(ODEPrecompileTest.f_good.f.f_oop).parameters[2]) == ODEPrecompileTest
+@test parentmodule(typeof(ODEPrecompileTest.f_noeval_good.f.f_iip).parameters[2]) == ODEPrecompileTest
+@test parentmodule(typeof(ODEPrecompileTest.f_noeval_good.f.f_oop).parameters[2]) == ODEPrecompileTest
 @test ODEPrecompileTest.f_good(u, p, 0.1) == [4, 0, -16]
+@test ODEPrecompileTest.f_noeval_good(u, p, 0.1) == [4, 0, -16]
