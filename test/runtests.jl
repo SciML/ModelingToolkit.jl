@@ -33,3 +33,4 @@ using SafeTestsets, Test
 println("Last test requires gcc available in the path!")
 @safetestset "C Compilation Test" begin include("ccompile.jl") end
 @safetestset "Latexify recipes Test" begin include("latexify.jl") end
+@safetestset "Precompiled Modules Test" begin include("precompile_test.jl") end
