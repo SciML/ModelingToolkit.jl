@@ -167,3 +167,14 @@ test_worldage()
 @test_nowarn muladd(x, y, 0)
 @test promote(x, 0) == (x, identity(0))
 @test_nowarn [x, y, z]'
+
+let
+    @register foo(x)
+    @variables t
+    @derivatives D'~t
+
+
+    @test isequal(expand_derivatives(D(foo(t))), D(foo(t)))
+    @test isequal(expand_derivatives(D(sin(t) * foo(t))), cos(t) * foo(t) + sin(t) * D(foo(t)))
+
+end

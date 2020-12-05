@@ -101,9 +101,11 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
             x = if _iszero(t2)
                 t2
             elseif _isone(t2)
-                derivative(o, i)
+                d = derivative(o, i)
+                d isa NoDeriv ? D(o) : d
             else
                 t1 = derivative(o, i)
+                t1 = t1 isa NoDeriv ? D(o) : t1
                 make_operation(*, [t1, t2])
             end
 
@@ -180,6 +182,11 @@ sin(x())
 """
 derivative(O::Term, idx) = derivative(O.op, (O.args...,), Val(idx))
 derivative(O::Any, ::Any) = 0
+
+# Indicate that no derivative is defined.
+struct NoDeriv
+end
+derivative(f, args::Tuple, v::Val) = NoDeriv()
 
 # Pre-defined derivatives
 import DiffRules
