@@ -9,24 +9,35 @@ function nterms(t)
 end
 # Soft pivoted
 # Note: we call this function with a matrix of Union{SymbolicUtils.Symbolic, Any}
-# It should work as-is with Operation type too.
-function sym_lu(A)
+function sym_lu(A; check=true)
+    SINGULAR = typemax(Int)
     m, n = size(A)
     F = map(x->x isa Num ? x : Num(x), A)
     minmn = min(m, n)
     p = Vector{BlasInt}(undef, minmn)
-    info = zero(BlasInt)
+    info = 0
     for k = 1:minmn
-        val, i = findmin(map(ii->_iszero(F[ii, k]) ? Inf : nterms(F[ii,k]), k:n))
-        if !(val isa Symbolic) && (val isa Number) && val == Inf && iszero(info)
+        kp = k
+        amin = SINGULAR
+        for i in k:m
+            absi = _iszero(F[i, k]) ? SINGULAR : nterms(F[i,k])
+            if absi < amin
+                kp = i
+                amin = absi
+            end
+        end
+
+        p[k] = kp
+
+        if amin == SINGULAR && !(amin isa Symbolic) && (amin isa Number) && iszero(info)
             info = k
         end
-        i += k - 1
+
         # swap
         for j in 1:n
-            F[k, j], F[i, j] = F[i, j], F[k, j]
+            F[k, j], F[kp, j] = F[kp, j], F[k, j]
         end
-        p[k] = i
+
         for i in k+1:m
             F[i, k] = F[i, k] / F[k, k]
         end
@@ -36,7 +47,8 @@ function sym_lu(A)
             end
         end
     end
-    LU(F, p, info)
+    check && LinearAlgebra.checknonsingular(info, Val{true}())
+    LU(F, p, convert(BlasInt, info))
 end
 
 # Given a vector of equations and a

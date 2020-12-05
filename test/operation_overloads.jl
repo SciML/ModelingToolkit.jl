@@ -21,12 +21,18 @@ aa = a; # old a
 X = [0 b c; d e f; g h i]
 @test iszero(simplify(det(X) - ((b * f * g) + (c * d * h) - (b * d * i) - (c * e * g)), polynorm=true))
 F = lu(X)
+@test F.p == [2, 1, 3]
 R = simplify.(F.L * F.U - X[F.p, :], polynorm=true)
 @test iszero(R)
-@test simplify.(F \ X, polynorm=true) == I
+@test simplify.(F \ X) == I
 @test ModelingToolkit._solve(X, X) == I
 inv(X)
 qr(X)
+
+X2 = [0 b c; 0 0 0; 0 h 0]
+@test_throws SingularException lu(X2)
+F2 = lu(X2, check=false)
+@test F2.info == 1
 
 # test operations with sparse arrays and Operations
 # note `isequal` instead of `==` because `==` would give another Operation
