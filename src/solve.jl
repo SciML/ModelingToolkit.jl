@@ -12,32 +12,31 @@ end
 # It should work as-is with Operation type too.
 function sym_lu(A)
     m, n = size(A)
-    L = fill!(Array{Any}(undef, size(A)),0) # TODO: make sparse?
-    for i=1:min(m, n)
-        L[i,i] = 1
-    end
-    U = copy!(Array{Any}(undef, size(A)),A)
-    p = BlasInt[1:m;]
-    for k = 1:m-1
-        _, i = findmin(map(ii->_iszero(U[ii, k]) ? Inf : nterms(U[ii,k]), k:n))
+    F = map(x->x isa Num ? x : Num(x), A)
+    minmn = min(m, n)
+    p = Vector{BlasInt}(undef, minmn)
+    info = zero(BlasInt)
+    for k = 1:minmn
+        val, i = findmin(map(ii->_iszero(F[ii, k]) ? Inf : nterms(F[ii,k]), k:n))
+        if !(val isa Symbolic) && (val isa Number) && val == Inf && iszero(info)
+            info = k
+        end
         i += k - 1
         # swap
-        U[k, k:end], U[i, k:end] = U[i, k:end], U[k, k:end]
-        L[k, 1:k-1], L[i, 1:k-1] = L[i, 1:k-1], L[k, 1:k-1]
+        for j in 1:n
+            F[k, j], F[i, j] = F[i, j], F[k, j]
+        end
         p[k] = i
-
-        for j = k+1:m
-            L[j,k] = U[j, k] / U[k, k]
-            U[j,k:m] .= U[j,k:m] .- (L[j,k],) .* U[k,k:m]
+        for i in k+1:m
+            F[i, k] = F[i, k] / F[k, k]
+        end
+        for j = k+1:n
+            for i in k+1:m
+                F[i, j] = F[i, j] - F[i, k] * F[k, j]
+            end
         end
     end
-    for j=1:m
-        for i=j+1:n
-            U[i,j] = 0
-        end
-    end
-
-    (L, U, LinearAlgebra.ipiv2perm(p, m))
+    LU(F, p, info)
 end
 
 # Given a vector of equations and a
@@ -77,9 +76,9 @@ function solve_for(eqs, vars)
 end
 
 function _solve(A::AbstractMatrix, b::AbstractArray)
-    A = SymbolicUtils.simplify.(to_symbolic.(A), polynorm=true)
-    b = SymbolicUtils.simplify.(to_symbolic.(b), polynorm=true)
-    SymbolicUtils.simplify.(ldiv(sym_lu(A), b))
+    A = SymbolicUtils.simplify.(Num.(A), polynorm=true)
+    b = SymbolicUtils.simplify.(Num.(b), polynorm=true)
+    value.(SymbolicUtils.simplify.(sym_lu(A) \ b))
 end
 _solve(a, b) = value(SymbolicUtils.simplify(b/a, polynorm=true))
 
@@ -87,36 +86,46 @@ _solve(a, b) = value(SymbolicUtils.simplify(b/a, polynorm=true))
 
 _iszero(x::Number) = iszero(x)
 _isone(x::Number) = isone(x)
-_iszero(::Term) = false
-_isone(::Term) = false
+_iszero(::Symbolic) = false
+_isone(::Symbolic) = false
+_iszero(x::Num) = _iszero(value(x))
+_isone(x::Num) = _isone(value(x))
 
-function simplifying_dot(x,y)
-    isempty(x) && return 0
-    muls = map(x,y) do xi,yi
-        _isone(xi) ? yi : _isone(yi) ? xi : _iszero(xi) ? 0 : _iszero(yi) ? 0 : xi * yi
+LinearAlgebra.ldiv!(A::UpperTriangular{<:Union{Symbolic,Num}}, b::AbstractVector{<:Union{Symbolic,Num}}, x::AbstractVector{<:Union{Symbolic,Num}} = b) = symsub!(A, b, x)
+function symsub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector = b)
+    LinearAlgebra.require_one_based_indexing(A, b, x)
+    n = size(A, 2)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
     end
-
-    reduce(muls) do acc, x
-        _iszero(acc) ? x : _iszero(x) ? acc : acc + x
+    @inbounds for j in n:-1:1
+        _iszero(A.data[j,j]) && throw(SingularException(j))
+        xj = x[j] = b[j] / A.data[j,j]
+        for i in j-1:-1:1
+            sub = _isone(xj) ? A.data[i,j] : A.data[i,j] * xj
+            if !_iszero(sub)
+                b[i] -= sub
+            end
+        end
     end
+    x
 end
 
-function ldiv((L,U,p), b)
-    m, n = size(L)
-    x = Vector{Any}(undef, length(b))
-    b = b[p]
-
-    for i=n:-1:1
-        sub = simplifying_dot(x[i+1:end], U[i,i+1:end])
-        den = U[i,i]
-        x[i] = _iszero(sub) ? b[i] : b[i] - sub
-        x[i] = _isone(den) ? x[i] : _isone(-den) ? -x[i] : x[i] / den
+LinearAlgebra.ldiv!(A::UnitLowerTriangular{<:Union{Symbolic,Num}}, b::AbstractVector{<:Union{Symbolic,Num}}, x::AbstractVector{<:Union{Symbolic,Num}} = b) = symsub!(A, b, x)
+function symsub!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector = b)
+    LinearAlgebra.require_one_based_indexing(A, b, x)
+    n = size(A, 2)
+    if !(n == length(b) == length(x))
+        throw(DimensionMismatch("second dimension of left hand side A, $n, length of output x, $(length(x)), and length of right hand side b, $(length(b)), must be equal"))
     end
-
-    # unit lower triangular solve first:
-    for i=1:n
-        sub = simplifying_dot(b[1:i-1], L[i, 1:i-1]) # this should be `b` not x
-        x[i] = _iszero(sub) ? x[i] : x[i] - sub
+    @inbounds for j in 1:n
+        xj = x[j] = b[j]
+        for i in j+1:n
+            sub = _isone(xj) ? A.data[i,j] : A.data[i,j] * xj
+            if !_iszero(sub)
+                b[i] -= sub
+            end
+        end
     end
     x
 end

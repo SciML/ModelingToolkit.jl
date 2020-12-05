@@ -123,7 +123,7 @@ Base.convert(::Type{<:Array{Num}}, x::AbstractArray) = map(Num, x)
 Base.convert(::Type{<:Array{Num}}, x::AbstractArray{Num}) = x
 Base.convert(::Type{Sym}, x::Num) = value(x) isa Sym ? value(x) : error("cannot convert $x to Sym")
 
-LinearAlgebra.lu(x::Array{Num}; kw...) = lu(x, Val{false}(); kw...)
+LinearAlgebra.lu(x::Array{Num}; kw...) = sym_lu(x)
 
 """
 $(TYPEDEF)
