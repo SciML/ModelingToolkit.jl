@@ -101,9 +101,11 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
             x = if _iszero(t2)
                 t2
             elseif _isone(t2)
-                derivative(o, i)
+                d = derivative_idx(o, i)
+                d isa NoDeriv ? D(o) : d
             else
-                t1 = derivative(o, i)
+                t1 = derivative_idx(o, i)
+                t1 = t1 isa NoDeriv ? D(o) : t1
                 make_operation(*, [t1, t2])
             end
 
@@ -157,7 +159,7 @@ julia> using ModelingToolkit
 
 julia> @variables x y;
 
-julia> ModelingToolkit.derivative(sin(x), 1)
+julia> ModelingToolkit.derivative_idx(sin(x), 1)
 cos(x())
 ```
 
@@ -171,15 +173,20 @@ sin(x()) * y() ^ 2
 julia> typeof(myop.op)  # Op is multiplication function
 typeof(*)
 
-julia> ModelingToolkit.derivative(myop, 1)  # wrt. sin(x)
+julia> ModelingToolkit.derivative_idx(myop, 1)  # wrt. sin(x)
 y() ^ 2
 
-julia> ModelingToolkit.derivative(myop, 2)  # wrt. y^2
+julia> ModelingToolkit.derivative_idx(myop, 2)  # wrt. y^2
 sin(x())
 ```
 """
-derivative(O::Term, idx) = derivative(O.op, (O.args...,), Val(idx))
-derivative(O::Any, ::Any) = 0
+derivative_idx(O::Any, ::Any) = 0
+derivative_idx(O::Term, idx) = derivative(O.op, (O.args...,), Val(idx))
+
+# Indicate that no derivative is defined.
+struct NoDeriv
+end
+derivative(f, args, v) = NoDeriv()
 
 # Pre-defined derivatives
 import DiffRules

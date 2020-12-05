@@ -80,7 +80,7 @@ z = t-2t
 # isequal(ModelingToolkit.derivative(Term(*, [x, y, z*ρ]), 1), y*(z*ρ))
 # isequal(ModelingToolkit.derivative(Term(+, [x*y, y, z]), 1), 1)
 
-@test iszero(ModelingToolkit.derivative(42, x))
+@test iszero(expand_derivatives(D(42)))
 @test all(iszero, ModelingToolkit.gradient(42, [t, x, y, z]))
 @test all(iszero, ModelingToolkit.hessian(42, [t, x, y, z]))
 @test isequal(ModelingToolkit.jacobian([t, x, 42], [t, x]),
