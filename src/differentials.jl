@@ -191,7 +191,7 @@ derivative(f, args, v) = NoDeriv()
 # Pre-defined derivatives
 import DiffRules
 for (modu, fun, arity) ∈ DiffRules.diffrules()
-    fun in [:*, :+, :abs] && continue # special
+    fun in [:*, :+, :abs, :mod, :rem, :max, :min] && continue # special
     for i ∈ 1:arity
 
         expr = if arity == 1
