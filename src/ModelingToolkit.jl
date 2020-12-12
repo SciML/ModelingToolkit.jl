@@ -16,6 +16,8 @@ using DocStringExtensions
 using Base: RefValue
 import IfElse
 
+import Distributions
+
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 using RecursiveArrayTools
