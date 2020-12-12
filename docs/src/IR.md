@@ -1,19 +1,26 @@
 # ModelingToolkit IR
 
 ModelingToolkit IR mirrors the Julia AST but allows for easy mathematical
-manipulation by itself following mathematical semantics. The base of the IR is
-the `Sym` type, which defines a symbolic variable. Registered (mathematical)
-functions on `Sym`s (or `Term`s) return `Term`s.  For example, `op1 = x+y` is
-one `Term` and `op2 = 2z` is another, and so `op1*op2` is another `Term`. Then,
-at the top, an `Equation`, normally written as `op1 ~ op2`, defines the
-symbolic equality between two operations.
+manipulation by itself following mathematical semantics.
 
-### Types
-`Sym`, `Term`, and `FnType` are from [SymbolicUtils.jl](https://juliasymbolics.github.io/SymbolicUtils.jl/api/). Note that in
-ModelingToolkit, we always use `Sym{Real}`, `Term{Real}`, and
-`FnType{Tuple{Any}, Real}`. To get the arguments of a `Term` use
-`arguments(t::Term)`, and to get the operation of a `Term` use
-`operation(t::Term)`.
+The IR is made of the following types:
+
+1. `Sym`:
+  a. `Sym{T}(:x)` (created using `@variables x::T`) represents a variable of type `T`. If `::T` is omitted, defaults to `Real`
+  b. `Sym{Parameter{T}}(:ρ)` (created using `@variables ρ::T`) represents a _parameter_ of type `T`.
+  c. `Sym{FnType{Tuple{X, Y}, Z}}(:f)` (created using `@variables f(::X, ::Y)::Z`) represents a variable which behaves as a function which takes 2 arguments of symbolic type X and Y respectively and returns an object of symbolic type `Z`. 
+  Supports: [`nameof`](@ref), [`symtype`](@ref)
+2. `Term`:
+  a. when a mathematical operation is called on a `Sym` of the first two kind above (variable and parameter),it results in a `Term`. `Term`s are also closed under the same mathematical operations.
+  b. when a symbolic function (an object of the 3rd kind of Sym decsribed above) is called with arguments of the appropriate type, it causes a `Term` to be created with the `Sym` as its `operation`.
+  Supports: [`operation`](@ref), [`arguments`](@ref)
+3. `Symbolic`: the super type of `Sym` and `Term`, used for convenience.
+4. `Num`: wraps either a `Symbolic` or a `Real` and is itself a subtype of `Real`. When mathematical operations are called with one or more `Num`s the results are computed with the unwrapped values and then wrapped with `Num`. The purpose of `Num` is to allow ModelingToolkit expressions to propagate through code that is restricted to `Real`s and also to make it possible for correct handling of `one` and `zero` required by common operations on Arrays of expressions. (e.g. `sum(Num[]) == 0`; `qr(num_matrix)` etc.).
+  Supports: [`value`](@ref)
+
+`Expression` is a type alias for `Union{Term{<:Real}, Sym{<:Real}, Num, Real}`. This refers to any numerically typed symbolic or literal value. This is mainly used for the purpose of documentation.
+
+User facing APIs (e.g. `jacobian`, `@variables`) all take and return `Num`s, while most of ModelingToolkit internals work on the unwrapped expressions, namely `Sym` and `Term`s.
 
 ```@docs
 Equation

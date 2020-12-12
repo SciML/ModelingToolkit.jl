@@ -126,27 +126,27 @@ The `@variables` and `@parameters` macros support this with the following syntax
 @variables x[1:3];
 x
 
-3-element Array{Operation,1}:
- x₁()
- x₂()
- x₃()
+3-element Array{Num,1}:
+ x₁
+ x₂
+ x₃
 
 # support for arbitrary ranges and tensors
 @variables y[2:3,1:5:6];
 y
 
-2×2 Array{Operation,2}:
-    y₂̒₁() y₂̒₆()
-    y₃̒₁() y₃̒₆()
+2×2 Array{Num,2}:
+    y₂̒₁ y₂̒₆
+    y₃̒₁ y₃̒₆
 
 # also works for dependent variables
 @parameters t; @variables z[1:3](t);
 z
 
-3-element Array{Operation,1}:
- z₁(t())
- z₂(t())
- z₃(t())
+3-element Array{Num,1}:
+ z₁(t)
+ z₂(t)
+ z₃(t)
 ```
 """
 macro variables(xs...)

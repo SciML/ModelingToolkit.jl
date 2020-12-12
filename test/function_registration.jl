@@ -1,5 +1,5 @@
 # Each test here builds an ODEFunction including some user-registered
-# Operations. The test simply checks that calling the ODEFunction
+# operations. The test simply checks that calling the ODEFunction
 # appropriately calls the registered functions, whether the call is
 # qualified (with a module name) or not.
 
