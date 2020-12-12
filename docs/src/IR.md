@@ -72,7 +72,6 @@ out all of the differentials, the `expand_derivatives` function eliminates all
 of the differentials down to basic one-variable expressions.
 
 ```@docs
-ModelingToolkit.derivative
 Differential
 expand_derivatives
 ModelingToolkit.jacobian
@@ -133,7 +132,6 @@ Other additional manipulation functions are given below.
 ```@docs
 get_variables
 substitute
-tovar
 toparam
 tosymbol
 makesym

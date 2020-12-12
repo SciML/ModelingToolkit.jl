@@ -155,7 +155,7 @@ end
 """
     oderatelaw(rx; combinatoric_ratelaw=true)
 
-Given a [`Reaction`](@ref), return the reaction rate law [`Operation`](@ref) used in
+Given a [`Reaction`](@ref), return the reaction rate law [`Expression`](@ref) used in
 generated ODEs for the reaction. Note, for a reaction defined by
 
 `k*X*Y, X+Z --> 2X + Y`
@@ -165,7 +165,7 @@ of the form
 
 `k, 2X+3Y --> Z`
 
-the `Operation` that is returned will be `k * (X(t)^2/2) * (Y(t)^3/6)`.
+the `Expression` that is returned will be `k * (X(t)^2/2) * (Y(t)^3/6)`.
 
 Notes:
 - Allocates
@@ -238,7 +238,7 @@ end
 """
     jumpratelaw(rx; rxvars=get_variables(rx.rate), combinatoric_ratelaw=true)
 
-Given a [`Reaction`](@ref), return the reaction rate law [`Operation`](@ref) used in
+Given a [`Reaction`](@ref), return the reaction rate law [`Expression`](@ref) used in
 generated stochastic chemical kinetics model SSAs for the reaction. Note,
 for a reaction defined by
 
@@ -249,11 +249,11 @@ the form
 
 `k, 2X+3Y --> Z`
 
-the `Operation` that is returned will be `k * binomial(X,2) *
+the `Expression` that is returned will be `k * binomial(X,2) *
 binomial(Y,3)`.
 
 Notes:
-- `rxvars` should give the `Variable`s, i.e. species and parameters, the rate depends on.
+- `rxvars` should give the `Sym`s, i.e. species and parameters, the rate depends on.
 - Allocates
 - `combinatoric_ratelaw=true` uses binomials in calculating the rate law, i.e. for `2S ->
   0` at rate `k` the ratelaw would be `k*S*(S-1)/2`. If `combinatoric_ratelaw=false` then
@@ -295,7 +295,7 @@ explicitly on the independent variable (usually time).
 # Arguments
 - `rx`, the [`Reaction`](@ref).
 - `rs`, a [`ReactionSystem`](@ref) containing the reaction.
-- Optional: `rxvars`, `Variable`s which are not in `rxvars` are ignored as possible dependencies.
+- Optional: `rxvars`, `Sym`s which are not in `rxvars` are ignored as possible dependencies.
 - Optional: `haveivdep`, `true` if the [`Reaction`](@ref) `rate` field explicitly depends on the independent variable.
 - Optional: `stateset`, set of states which if the rxvars are within mean rx is non-mass action.
 """
@@ -395,12 +395,12 @@ Notes:
 law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
 `combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is
 ignored.
-- `noise_scaling=nothing::Union{Vector{Operation},Operation,Nothing}` allows for linear
+- `noise_scaling=nothing::Union{Vector{Expression},Expression,Nothing}` allows for linear
 scaling of the noise in the chemical Langevin equations. If `nothing` is given, the default
-value as in Gillespie 2000 is used. Alternatively, an `Operation` can be given, this is
+value as in Gillespie 2000 is used. Alternatively, an `Expression` can be given, this is
 added as a parameter to the system (at the end of the parameter array). All noise terms
 are linearly scaled with this value. The parameter may be one already declared in the `ReactionSystem`.
-Finally, a `Vector{Operation}` can be provided (the length must be equal to the number of reactions).
+Finally, a `Vector{Expression}` can be provided (the length must be equal to the number of reactions).
 Here the noise for each reaction is scaled by the corresponding parameter in the input vector.
 This input may contain repeat parameters.
 """

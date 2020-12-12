@@ -1,9 +1,9 @@
 using ModelingToolkit, Unitful
 using Test
 
-t = Variable{u"s"}(:t)()
-x = Variable{u"kg"}(:x)(t)
-y = Variable{u"kg"}(:y)(t)
+t = Sym{u"s"}(:t)()
+x = Sym{u"kg"}(:x)(t)
+y = Sym{u"kg"}(:y)(t)
 D = Differential(t)
 
 eq1 = x ~ y*t

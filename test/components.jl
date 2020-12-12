@@ -52,8 +52,8 @@ eqs_flat = [D(a) ~ a*lorenz1.x,
             D(lorenz2.y) ~ lorenz2.x*(lorenz2.ρ-lorenz2.z)-lorenz2.y,
             0 ~ lorenz2.x + lorenz2.y + lorenz2.β*lorenz2.z]
 
-@test states(connected1) == convert.(Variable,[a,lorenz1.x,lorenz1.y,lorenz1.z,lorenz2.x,lorenz2.y,lorenz2.z])
-@test parameters(connected1) == convert.(Variable,[α,lorenz1.σ,lorenz1.ρ,lorenz1.β,lorenz2.σ,lorenz2.ρ,lorenz2.β])
+@test states(connected1) == value.([a,lorenz1.x,lorenz1.y,lorenz1.z,lorenz2.x,lorenz2.y,lorenz2.z])
+@test parameters(connected1) == value.([α,lorenz1.σ,lorenz1.ρ,lorenz1.β,lorenz2.σ,lorenz2.ρ,lorenz2.β])
 @test eqs_flat == equations(connected1)
 
 @variables lorenz1₊x(t) lorenz1₊y(t) lorenz1₊z(t) lorenz2₊x(t) lorenz2₊y(t) lorenz2₊z(t)
@@ -78,10 +78,10 @@ connected2 = ODESystem(connnectedeqs,t,[a],[α],systems=[lorenz1,lorenz2],name=:
 connnectedeqs2 = [D(g) ~ g*connected1.lorenz1.x]
 doublelevel = ODESystem(connnectedeqs2,t,[g],[γ],systems=[connected1,connected2],name=:doublelevel)
 
-@test states(doublelevel) == convert.(Variable,[g,connected1.a,connected1.lorenz1.x,connected1.lorenz1.y,connected1.lorenz1.z,connected1.lorenz2.x,connected1.lorenz2.y,connected1.lorenz2.z,
+@test states(doublelevel) == value.([g,connected1.a,connected1.lorenz1.x,connected1.lorenz1.y,connected1.lorenz1.z,connected1.lorenz2.x,connected1.lorenz2.y,connected1.lorenz2.z,
                                           connected2.a,connected2.lorenz1.x,connected2.lorenz1.y,connected2.lorenz1.z,connected2.lorenz2.x,connected2.lorenz2.y,connected2.lorenz2.z])
 
-@test parameters(doublelevel) == convert.(Variable,[γ,
+@test parameters(doublelevel) == value.([γ,
                                              connected1.α,connected1.lorenz1.σ,connected1.lorenz1.ρ,connected1.lorenz1.β,connected1.lorenz2.σ,connected1.lorenz2.ρ,connected1.lorenz2.β,
                                              connected2.α,connected2.lorenz1.σ,connected2.lorenz1.ρ,connected2.lorenz1.β,connected2.lorenz2.σ,connected2.lorenz2.ρ,connected2.lorenz2.β])
 

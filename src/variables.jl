@@ -16,50 +16,13 @@ function map_subscripts(indices)
     join(IndexMap[c] for c in str)
 end
 
-"""
-$(TYPEDEF)
-
-A named variable which represents a numerical value. The variable is uniquely
-identified by its `name`, and all variables with the same `name` are treated
-as equal.
-
-# Fields
-$(FIELDS)
-
-For example, the following code defines an independent variable `t`, a parameter
-`α`, a function parameter `σ`, a variable `x`, which depends on `t`, a variable
-`y` with no dependents, a variable `z`, which depends on `t`, `α`, and `x(t)`
-and parameters `β₁` and `β₂`.
-
-
-```julia
-t = Num(Variable{ModelingToolkit.Parameter{Real}}(:t))  # independent variables are treated as known
-α = Num(Variable{ModelingToolkit.Parameter{Real}}(:α))  # parameters are known
-σ = Num(Variable{ModelingToolkit.FnType{Tuple{Any},Real}}(:σ)) # left uncalled, since it is used as a function
-w = Num(Variable{ModelingToolkit.FnType{Tuple{Any},Real}}(:w)) # unknown, left uncalled
-x = Num(Variable{ModelingToolkit.FnType{Tuple{Any},Real}}(:x))(t)  # unknown, depends on `t`
-y = Num(Variable(:y))   # unknown, no dependents
-z = Num(Variable{ModelingToolkit.FnType{NTuple{3,Any},Real}}(:z))(t, α, x)  # unknown, multiple arguments
-β₁ = Num(Variable(:β, 1)) # with index 1
-β₂ = Num(Variable(:β, 2)) # with index 2
-
-expr = β₁ * x + y^α + σ(3) * (z - t) - β₂ * w(t - 1)
-```
-"""
-struct Variable{T} <: Function
-    """The variable's unique name."""
-    name::Symbol
-    Variable(name) = Sym{Real}(name)
-    Variable{T}(name) where T = Sym{T}(name)
-    function Variable{T}(name, indices...) where T
-        var_name = Symbol("$(name)$(join(map_subscripts.(indices), "ˏ"))")
-        Sym{T}(var_name)
-    end
+function subscripted(T::Type, name::Symbol, indices...)
+    var_name = Symbol("$(name)$(join(map_subscripts.(indices), "ˏ"))")
+    Sym{T}(var_name)
 end
 
-function Variable(name, indices...)
-    var_name = Symbol("$(name)$(join(map_subscripts.(indices), "ˏ"))")
-    Variable(var_name)
+function subscripted(name::Symbol, indices...)
+    subscripted(Real, name, indices...)
 end
 
 rename(x::Sym{T},name) where T = Sym{T}(name)
@@ -124,11 +87,11 @@ end
 function _construct_var(var_name, type, call_args, ind)
     # TODO: just use Sym here
     if call_args === nothing
-        :($Num($Variable{$type}($(Meta.quot(var_name)), $ind...)))
+        :($Num($subscripted($type, $(Meta.quot(var_name)), $ind...)))
     elseif !isempty(call_args) && call_args[end] == :..
-        :($Num($Variable{$FnType{Tuple{Any}, $type}}($(Meta.quot(var_name)), $ind...))) # XXX: using Num as output
+        :($Num($subscripted($FnType{Tuple{Any}, $type}, $(Meta.quot(var_name)), $ind...))) # XXX: using Num as output
     else
-        :($Num($Variable{$FnType{NTuple{$(length(call_args)), Any}, $type}}($(Meta.quot(var_name)), $ind...)($(map(x->:($value($x)), call_args)...))))
+        :($Num($subscripted($FnType{NTuple{$(length(call_args)), Any}, $type}, $(Meta.quot(var_name)), $ind...)($(map(x->:($value($x)), call_args)...))))
     end
 end
 
@@ -190,17 +153,8 @@ macro variables(xs...)
     esc(_parse_vars(:variables, Real, xs))
 end
 
-"""
-$(TYPEDSIGNATURES)
-
-Renames the variable `x` to have `name`.
-"""
-function rename(x::Variable,name::Symbol)
-    Variable{symtype(x)}(name)
-end
-
-TreeViews.hastreeview(x::Variable) = true
-function TreeViews.treelabel(io::IO,x::Variable,
+TreeViews.hastreeview(x::Sym) = true
+function TreeViews.treelabel(io::IO,x::Sym,
                              mime::MIME"text/plain" = MIME"text/plain"())
   show(io,mime,Text(x.name))
 end

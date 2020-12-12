@@ -8,7 +8,7 @@ Given an `AbstractSystem` calculate for each equation the variables it depends o
 Notes:
 - Variables that are not in `variables` are filtered out.
 - `get_variables!` is used to determine the variables within a given equation. 
-- returns a `Vector{Vector{Variable}}()` mapping the index of an equation to the `variables` it depends on.
+- returns a `Vector{Vector{Sym}}()` mapping the index of an equation to the `variables` it depends on.
 
 Example:
 ```julia
@@ -114,7 +114,7 @@ Convert a collection of equation dependencies, for example as returned by
 `equation_dependencies`, to a [`BipartiteGraph`](@ref).
 
 Notes:
-- `vtois` should provide a `Dict` like mapping from each `Variable` dependency in 
+- `vtois` should provide a `Dict` like mapping from each `Sym` dependency in 
   `eqdeps` to the integer idx of the variable to use in the graph.
 
 Example:
@@ -144,7 +144,7 @@ end
 """
 ```julia
 asgraph(sys::AbstractSystem; variables=states(sys), 
-                                      variablestoids=Dict(convert(Variable, v) => i for (i,v) in enumerate(variables)))
+                                      variablestoids=Dict(v => i for (i,v) in enumerate(variables)))
 ```
 
 Convert an `AbstractSystem` to a [`BipartiteGraph`](@ref) mapping the index of equations
@@ -155,7 +155,7 @@ Notes:
   they depend on.
 - `variables` should provide the list of variables to use for generating 
   the dependency graph.
-- `variablestoids` should provide `Dict` like mapping from a `Variable` to its 
+- `variablestoids` should provide `Dict` like mapping from a `Sym` to its 
   `Int` index within `variables`.
 
 Example:
@@ -180,7 +180,7 @@ Notes:
 - Dependencies are returned as a [`BipartiteGraph`](@ref) mapping variable 
   indices to the indices of equations that modify them.
 - `variables` denotes the list of variables to determine dependencies for.
-- `variablestoids` denotes a `Dict` mapping `Variable`s to their `Int` index in `variables`.
+- `variablestoids` denotes a `Dict` mapping `Sym`s to their `Int` index in `variables`.
 
 Example:
 Continuing the example of [`equation_dependencies`](@ref)

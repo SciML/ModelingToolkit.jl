@@ -178,8 +178,8 @@ Generates a Julia function which can then be utilized for further evaluations.
 If expression=Val{false}, the return is a Julia function which utilizes
 RuntimeGeneratedFunctions.jl in order to be free of world-age issues.
 
-If the `Num` is an `Operation`, the generated function is a function
-with a scalar output, otherwise if it's an `AbstractArray{Operation}`, the output
+If `rhss` is a single expression, the generated function is a function
+with a scalar output, otherwise if it's an `AbstractArray` of expressions, the output
 is two functions, one for out-of-place AbstractArray output and a second which
 is a mutating function. The outputted functions match the given argument order,
 i.e., f(u,p,args...) for the out-of-place and scalar functions and
@@ -198,7 +198,7 @@ Special Keyword Argumnets:
     schedule, evenly splitting the number of expressions per process.
   - `DaggerForm()`: Multithreading and multiprocessing using Julia's Dagger.jl
     for dynamic scheduling and load balancing.
-- `conv`: The conversion function of the Operation to Expr. By default this uses
+- `conv`: The conversion function of the symbolic expression to Expr. By default this uses
   the `toexpr` function.
 - `checkbounds`: For whether to enable bounds checking inside of the generated
   function. Defaults to false, meaning that `@inbounds` is applied.
@@ -259,13 +259,13 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
 		reducevars = [gensym(:MTReduceVar) for i in 1:numworks]
 		lens = Int(ceil(rhs_length/numworks))
 		finalsize = rhs_length - (numworks-1)*lens
-		_rhss = vcat(reduce(vcat,[[Variable(reducevars[i],j) for j in 1:lens] for i in 1:numworks-1],init=Expr[]),
-						 [Variable(reducevars[end],j) for j in 1:finalsize])
+		_rhss = vcat(reduce(vcat,[[subscripted(reducevars[i],j) for j in 1:lens] for i in 1:numworks-1],init=Expr[]),
+						 [subscripted(reducevars[end],j) for j in 1:finalsize])
 
     elseif parallel isa DaggerForm
 		computevars = [gensym(:MTComputeVar) for i in axes(rhss,1)]
-        reducevar = Variable(gensym(:MTReduceVar))
-        _rhss = [Variable(reducevar,i) for i in axes(rhss,1)]
+        reducevar = subscripted(gensym(:MTReduceVar))
+        _rhss = [subscripted(reducevar,i) for i in axes(rhss,1)]
 	elseif rhss isa SparseMatrixCSC
 		_rhss = rhss.nzval
 	else

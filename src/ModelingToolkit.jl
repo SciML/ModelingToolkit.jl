@@ -33,7 +33,10 @@ import TreeViews
 
 using Requires
 
-export Num, Variable
+export Num, Variable, Sym
+
+const Variable = Sym
+
 """
 $(TYPEDEF)
 
@@ -50,6 +53,16 @@ Num(x::Num) = x # ideally this should never be called
 value(x) = x
 value(x::Num) = x.val
 
+
+"""
+A symbolic expression. Type alias for `Union{Symbolic, Num, Number}`.
+
+- `Symbolic` is either `Sym` or `Term` from SymbolicUtils.jl
+- `Num` is a subtype of `Real` and wraps a `Symbolic` or a `Number` and behaves like
+   the object it wraps.
+- `Number` is just any plain old Julia number
+"""
+const Expression = Union{Symbolic, Num, Number}
 
 using SymbolicUtils: to_symbolic
 SymbolicUtils.to_symbolic(n::Num) = value(n)

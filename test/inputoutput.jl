@@ -19,7 +19,7 @@ connected = ODESystem(Equation[],t,[],[],observed=connections,systems=[lorenz1,l
 sys = connected
 
 @variables lorenz1₊F lorenz2₊F
-@test pins(connected) == Variable[lorenz1₊F, lorenz2₊F]
+@test pins(connected) == Sym[lorenz1₊F, lorenz2₊F]
 @test isequal(observed(connected),
               [connections...,
                lorenz1.u ~ lorenz1.x + lorenz1.y - lorenz1.z,

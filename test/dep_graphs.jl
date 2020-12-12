@@ -22,7 +22,7 @@ js = convert(JumpSystem, rs)
 S  = value(S); I = value(I); R = value(R)
 k1 = value(k1); k2 = value(k2)
 # eq to vars they depend on
-eq_sdeps  = [Variable[], [S], [S,I], [S,R], [I], [S]]
+eq_sdeps  = [[], [S], [S,I], [S,R], [I], [S]]
 eq_sidepsf = [Int[], [1], [1,2], [1,3], [2], [1]]
 eq_sidepsb = [[2,3,4,6], [3,5],[4]]
 deps = equation_dependencies(js)

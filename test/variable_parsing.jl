@@ -46,18 +46,18 @@ end
 @parameters σ[1:2](..)
 
 fntype(n, T) = FnType{NTuple{n, Any}, T}
-t1 = Num[Variable{PType}(:t, 1), Variable{PType}(:t, 2)]
-s1 = Num[Variable{PType}(:s, 1, 1) Variable{PType}(:s, 1, 2);
-        Variable{PType}(:s, 3, 1) Variable{PType}(:s, 3, 2)]
-σ1 = [Num(Variable{fntype(1, PType)}(:σ, 1)), Num(Variable{fntype(1, PType)}(:σ, 2))]
+t1 = Num[subscripted(PType, :t, 1), subscripted(PType, :t, 2)]
+s1 = Num[subscripted(PType, :s, 1, 1) subscripted(PType, :s, 1, 2);
+        subscripted(PType, :s, 3, 1) subscripted(PType, :s, 3, 2)]
+σ1 = [Num(subscripted(fntype(1, PType), :σ, 1)), Num(subscripted(fntype(1, PType), :σ, 2))]
 @test isequal(t1, t)
 @test isequal(s1, s)
 @test isequal(σ1, σ)
 
 @parameters t
 @variables x[1:2](t)
-x1 = Num[Variable{FnType{Tuple{Any}, Real}}(:x, 1)(t.val),
-      Variable{FnType{Tuple{Any}, Real}}(:x, 2)(t.val)]
+x1 = Num[subscripted(FnType{Tuple{Any}, Real}, :x, 1)(t.val),
+       subscripted(FnType{Tuple{Any}, Real}, :x, 2)(t.val)]
 
 @test isequal(x1, x)
 

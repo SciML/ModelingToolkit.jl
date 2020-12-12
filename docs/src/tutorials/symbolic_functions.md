@@ -386,21 +386,20 @@ x = Num(Sym{Float64}(:x))
 y = Num(Sym{Float64}(:y))
 x+y^2.0 # isa Num
 
-t = Num(Variable{ModelingToolkit.Parameter{Real}}(:t))  # independent variables are treated as known
-α = Num(Variable{ModelingToolkit.Parameter{Real}}(:α))  # parameters are known
-σ = Num(Variable{ModelingToolkit.FnType{Tuple{Any},Real}}(:σ)) # left uncalled, since it is used as a function
-w = Num(Variable{ModelingToolkit.FnType{Tuple{Any},Real}}(:w)) # unknown, left uncalled
-x = Num(Variable{ModelingToolkit.FnType{Tuple{Any},Real}}(:x))(t)  # unknown, depends on `t`
-y = Num(Variable(:y))   # unknown, no dependents
-z = Num(Variable{ModelingToolkit.FnType{NTuple{3,Any},Real}}(:z))(t, α, x)  # unknown, multiple arguments
-β₁ = Num(Variable(:β, 1)) # with index 1
-β₂ = Num(Variable(:β, 2)) # with index 2
+t = Num(Sym{ModelingToolkit.Parameter{Real}}(:t))  # independent variables are treated as known
+α = Num(Sym{ModelingToolkit.Parameter{Real}}(:α))  # parameters are known
+σ = Num(Sym{ModelingToolkit.FnType{Tuple{Any},Real}}(:σ)) # left uncalled, since it is used as a function
+w = Num(Sym{ModelingToolkit.FnType{Tuple{Any},Real}}(:w)) # unknown, left uncalled
+x = Num(Sym{ModelingToolkit.FnType{Tuple{Any},Real}}(:x))(t)  # unknown, depends on `t`
+y = Num(Sym(:y))   # unknown, no dependents
+z = Num(Sym{ModelingToolkit.FnType{NTuple{3,Any},Real}}(:z))(t, α, x)  # unknown, multiple arguments
+β₁ = Num(Sym(:β, 1)) # with index 1
+β₂ = Num(Sym(:β, 2)) # with index 2
 
 expr = β₁ * x + y^α + σ(3) * (z - t) - β₂ * w(t - 1)
 ```
 
-Does what you'd expect. Note that `Variable` is simply a convenient function for
-making variables with indices that always returns `Sym`. The reference
+Does what you'd expect. The reference
 documentation shows how to define any of the quantities in such a way that the
 names can come from runtime values.
 
