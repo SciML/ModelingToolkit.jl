@@ -23,7 +23,8 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils: Term, Sym, to_symbolic, FnType, @rule, Rewriters, substitute, similarterm
+import SymbolicUtils: Term, Sym, Symbolic, to_symbolic, FnType, @rule, Rewriters,
+                      substitute, similarterm
 
 using LinearAlgebra: LU, BlasInt
 

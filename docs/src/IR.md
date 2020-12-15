@@ -6,14 +6,12 @@ manipulation by itself following mathematical semantics.
 The IR is made of the following types:
 
 1. `Sym`:
-  a. `Sym{T}(:x)` (created using `@variables x::T`) represents a variable of type `T`. If `::T` is omitted, defaults to `Real`
-  b. `Sym{Parameter{T}}(:ρ)` (created using `@variables ρ::T`) represents a _parameter_ of type `T`.
-  c. `Sym{FnType{Tuple{X, Y}, Z}}(:f)` (created using `@variables f(::X, ::Y)::Z`) represents a variable which behaves as a function which takes 2 arguments of symbolic type X and Y respectively and returns an object of symbolic type `Z`. 
-  Supports: [`nameof`](@ref), [`symtype`](@ref)
+  * `Sym{T}(:x)`  represents a variable of type `T`. It can be created using the syntax `@variables x::T`. If `::T` is omitted, defaults to `Real`
+  * `Sym{Parameter{T}}(:ρ)`  represents a _parameter_ of type `T`. It can created using `@variables ρ::T`.
+  * `Sym{FnType{Tuple{X, Y}, Z}}(:f)` represents a variable which behaves as a function which takes 2 arguments of symbolic type X and Y respectively and returns an object of symbolic type `Z`. It can be created using the syntax created using `@variables f(::X, ::Y)::Z`.\\  Supports: [`nameof`](@ref), [`symtype`](@ref)
 2. `Term`:
-  a. when a mathematical operation is called on a `Sym` of the first two kind above (variable and parameter),it results in a `Term`. `Term`s are also closed under the same mathematical operations.
-  b. when a symbolic function (an object of the 3rd kind of Sym decsribed above) is called with arguments of the appropriate type, it causes a `Term` to be created with the `Sym` as its `operation`.
-  Supports: [`operation`](@ref), [`arguments`](@ref)
+  * when a mathematical operation is called on a `Sym` of the first two kind above (variable and parameter),it results in a `Term`. `Term`s are also closed under the same mathematical operations.
+  * when a symbolic function (an object of the 3rd kind of Sym decsribed above) is called with arguments of the appropriate type, it causes a `Term` to be created with the `Sym` as its `operation`.\\Supports: [`operation`](@ref), [`arguments`](@ref)
 3. `Symbolic`: the super type of `Sym` and `Term`, used for convenience.
 4. `Num`: wraps either a `Symbolic` or a `Real` and is itself a subtype of `Real`. When mathematical operations are called with one or more `Num`s the results are computed with the unwrapped values and then wrapped with `Num`. The purpose of `Num` is to allow ModelingToolkit expressions to propagate through code that is restricted to `Real`s and also to make it possible for correct handling of `one` and `zero` required by common operations on Arrays of expressions. (e.g. `sum(Num[]) == 0`; `qr(num_matrix)` etc.).
   Supports: [`value`](@ref)
@@ -23,6 +21,14 @@ The IR is made of the following types:
 User facing APIs (e.g. `jacobian`, `@variables`) all take and return `Num`s, while most of ModelingToolkit internals work on the unwrapped expressions, namely `Sym` and `Term`s.
 
 ```@docs
+Sym
+Base.nameof(::Sym)
+Term
+operation
+arguments
+Symbolic
+Num
+Expression
 Equation
 ```
 
