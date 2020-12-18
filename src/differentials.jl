@@ -181,13 +181,21 @@ sin(x())
 ```
 """
 derivative_idx(O::Any, ::Any) = 0
-derivative_idx(O::Term, idx) = derivative(O.op, (O.args...,), Val(idx))
+function derivative_idx(O::Term, idx)
+    d = derivatives[O.op]
+    if d isa Dict
+        d[idx](O.args)
+    else
+        d(O.args, idx)
+    end
+end
 
 # Indicate that no derivative is defined.
 struct NoDeriv
 end
 derivative(f, args, v) = NoDeriv()
 
+const derivatives = Dict{Function, Union{Function, Dict{Int,Function}}}()
 # Pre-defined derivatives
 import DiffRules
 for (modu, fun, arity) ∈ DiffRules.diffrules()
@@ -199,13 +207,13 @@ for (modu, fun, arity) ∈ DiffRules.diffrules()
         else
             DiffRules.diffrule(modu, fun, ntuple(k->:(args[$k]), arity)...)[i]
         end
-        @eval derivative(::typeof($modu.$fun), args::NTuple{$arity,Any}, ::Val{$i}) = $expr
+        Base.get!(()->Dict{Int, Function}(), derivatives, @eval($modu.$fun))[i] = @eval(args -> $expr)
     end
 end
 
-derivative(::typeof(+), args::NTuple{N,Any}, ::Val) where {N} = 1
-derivative(::typeof(*), args::NTuple{N,Any}, ::Val{i}) where {N,i} = make_operation(*, deleteat!(collect(args), i))
-derivative(::typeof(one), args::Tuple{<:Any}, ::Val) = 0
+derivatives[+] = (x, i)->1
+derivatives[*] = (args, i) -> make_operation(*, deleteat!(collect(args), i))
+derivatives[one] = (a,i) -> 0
 
 function count_order(x)
     @assert !(x isa Symbol) "The variable $x must have an order of differentiation that is greater or equal to 1!"
