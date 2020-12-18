@@ -133,7 +133,7 @@ function _build_function(target::JuliaTarget, op, args...;
 end
 
 function _build_and_inject_function(mod::Module, ex)
-	@RuntimeGeneratedFunction(mod, ModelingToolkit.inject_registered_module_functions(ex))
+	RuntimeGeneratedFunction(mod, ModelingToolkit.inject_registered_module_functions(ex))
 end
 
 # Detect heterogeneous element types of "arrays of matrices/sparce matrices"
