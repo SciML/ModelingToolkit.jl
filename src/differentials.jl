@@ -181,19 +181,18 @@ sin(x())
 ```
 """
 derivative_idx(O::Any, ::Any) = 0
+
+# Indicate that no derivative is defined.
+struct NoDeriv
+end
 function derivative_idx(O::Term, idx)
-    d = derivatives[O.op]
+    d = get(derivatives, O.op, (args, i)->NoDeriv())
     if d isa Dict
         d[idx](O.args)
     else
         d(O.args, idx)
     end
 end
-
-# Indicate that no derivative is defined.
-struct NoDeriv
-end
-derivative(f, args, v) = NoDeriv()
 
 const derivatives = Dict{Function, Union{Function, Dict{Int,Function}}}()
 # Pre-defined derivatives
