@@ -89,8 +89,11 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
             else
                 inner = expand_derivatives(D(o.args[1]), false)
                 # if the inner expression is not expandable either, return
-                operation(inner) isa Differential && return O
-                return expand_derivatives(o.op(inner), simplify)
+                if operation(inner) isa Differential
+                    return O
+                else
+                    return expand_derivatives(o.op(inner), simplify)
+                end
             end
         end
 
