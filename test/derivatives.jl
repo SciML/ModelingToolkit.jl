@@ -113,3 +113,12 @@ test_equal(expand_derivatives(Differential(x)(L) - ∂ₜ(Differential(∂ₜ(x)
 
 @variables x2(t)
 @test isequal(expand_derivatives(Differential(x)(2 * x + x2 * x)), 2 + x2)
+
+@parameters x y
+@variables u(..)
+@derivatives Dy'~y
+@derivatives Dx'~x
+dxyu = Dx(Dy(u(x,y)))
+@test isequal(expand_derivatives(dxyu), dxyu)
+dxxu = Dx(Dx(u(x,y)))
+@test isequal(expand_derivatives(dxxu), dxxu)
