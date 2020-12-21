@@ -188,11 +188,11 @@ function namespace_expr(O::Sym,name,ivname)
     O.name == ivname ? O : rename(O,renamespace(name,O.name))
 end
 
-function namespace_expr(O::Term,name,ivname)
+function namespace_expr(O::Term{T},name,ivname) where {T}
     if O.op isa Sym
-        Term{Real}(rename(O.op,renamespace(name,O.op.name)),namespace_expr.(O.args,name,ivname))
+        Term{T}(rename(O.op,renamespace(name,O.op.name)),namespace_expr.(O.args,name,ivname))
     else
-        Term{Real}(O.op,namespace_expr.(O.args,name,ivname))
+        Term{T}(O.op,namespace_expr.(O.args,name,ivname))
     end
 end
 namespace_expr(O,name,ivname) = O
