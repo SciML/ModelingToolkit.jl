@@ -1,5 +1,5 @@
 prettify_expr(expr) = expr
-prettify_expr(f::Function) = Base.isoperator(nameof(f)) ? nameof(f) : f
+prettify_expr(f::Function) = nameof(f)
 prettify_expr(expr::Expr) = Expr(expr.head, prettify_expr.(expr.args)...)
 
 @latexrecipe function f(eqs::Vector{ModelingToolkit.Equation})
