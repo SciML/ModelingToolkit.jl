@@ -1,4 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, Test
+using ModelingToolkit: alias_elimination2
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t) a(t) u(t) F(t)
@@ -9,19 +10,21 @@ test_equal(a, b) = @test isequal(simplify(a, polynorm=true), simplify(b, polynor
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ a*y - β*z,
-       0 ~ x - a]
+       β ~ 2,
+       x ~ a]
 
 lorenz1 = ODESystem(eqs,t,[x,y,z,a],[σ,ρ,β],name=:lorenz1)
 
-lorenz1_aliased = alias_elimination(lorenz1)
+lorenz1_aliased = alias_elimination2(lorenz1)
 @test length(equations(lorenz1_aliased)) == 3
 @test length(states(lorenz1_aliased)) == 3
 
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
-       D(z) ~ x*y - β*z]
+       D(z) ~ x*y - 2*z]
 
-@test lorenz1_aliased == ODESystem(eqs,t,[x,y,z],[σ,ρ,β],observed=[a ~ x],name=:lorenz1)
+# TODO: maybe remove β from ps, or maybe don't allow this example on params
+@test lorenz1_aliased == ODESystem(eqs,t,[x,y,z],[σ,ρ,β],observed=[β ~ 2, a ~ x],name=:lorenz1)
 
 # Multi-System Reduction
 
@@ -44,7 +47,7 @@ lorenz2 = ODESystem(eqs2,pins=[F],observed=aliases2,name=:lorenz2)
 connections = [lorenz1.F ~ lorenz2.u,
                lorenz2.F ~ lorenz1.u]
 
-connected = ODESystem([0 ~ a + lorenz1.x - lorenz2.y],t,[a],[],observed=connections,systems=[lorenz1,lorenz2])
+connected = ODESystem([lorenz2.y ~ a + lorenz1.x ],t,[a],[],observed=connections,systems=[lorenz1,lorenz2])
 
 # Reduced Unflattened System
 #=
@@ -59,7 +62,7 @@ connected = ODESystem(Equation[],t,[],[],observed=connections2,systems=[lorenz1,
 
 flattened_system = ModelingToolkit.flatten(connected)
 
-aliased_flattened_system = alias_elimination(flattened_system)
+aliased_flattened_system = alias_elimination2(flattened_system)
 
 @test isequal(states(aliased_flattened_system), [
         lorenz1.x
@@ -107,7 +110,7 @@ let
         x ~ y
     ];
     sys = ODESystem(eqs, t, [x], []);
-    asys = alias_elimination(ModelingToolkit.flatten(sys))
+    asys = alias_elimination2(ModelingToolkit.flatten(sys))
 
     test_equal.(asys.eqs, [D(x) ~ 2x])
     test_equal.(asys.observed, [y ~ x])
