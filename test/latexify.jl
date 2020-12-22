@@ -137,3 +137,24 @@ raw"\begin{align}
 \frac{dx}{dt} =& \frac{d^{3}x}{dt^{3}}
 \end{align}
 ", "\r\n"=>"\n")
+
+
+@parameters t, x
+@variables u(..)
+@derivatives Dt'~t
+@derivatives Dx'~x
+
+eqs = [Dt(u(t, x)) ~ Dx(Dx(u(t, x)))] 
+# Latexify.@generate_test latexify(eqs)
+@test latexify(eqs) == replace(
+raw"\begin{align}
+\frac{du(t,x)}{dt} =& \frac{d^{2}u(t,x)}{dx^{2}}
+\end{align}
+", "\r\n"=>"\n")
+
+eqs = [Dt(u(t, x)) ~ Dx(Dx(Dt(Dx(Dt(u(t, x))))))] 
+@test latexify(eqs) == replace(
+raw"\begin{align}
+\frac{du(t,x)}{dt} =& \frac{d^{5}u(t,x)}{dx^{3}dt^{2}}
+\end{align}
+", "\r\n"=>"\n")
