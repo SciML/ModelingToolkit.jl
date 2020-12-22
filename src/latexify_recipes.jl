@@ -1,8 +1,52 @@
-prettify_expr(expr) = expr
-prettify_expr(f::Function) = nameof(f)
-prettify_expr(expr::Expr) = Expr(expr.head, prettify_expr.(expr.args)...)
+"""
+    pretty_expr
 
-@latexrecipe function f(eqs::Vector{ModelingToolkit.Equation})
+Convert equations to prettified expressions for latexification.
+"""
+function pretty_expr end
+
+pretty_expr(expr; kwargs...) = expr
+pretty_expr(s::Sym; kwargs...) = nameof(s)
+pretty_expr(eq::Equation; kwargs...) = Expr(:(=), pretty_expr(eq.lhs; kwargs...), pretty_expr(eq.rhs; kwargs...))
+pretty_expr(eq::AbstractArray; kwargs...) = pretty_expr.(eq; kwargs...)
+pretty_expr(x::Integer; kwargs...) = x
+pretty_expr(x::AbstractFloat; kwargs...) = x
+pretty_expr(x::Num; kwargs...) = pretty_expr(value(x); kwargs...)
+pretty_expr(expr::Expr; kwargs...) = Expr(expr.head, pretty_expr.(expr.args; kwargs...)...)
+pretty_expr(f::Function; kwargs...) = nameof(f)
+pretty_expr(f::Term; kwargs...) = pretty_expr(f.f, f.args; kwargs...)
+
+pretty_expr(f, args; kwargs...) = Expr(:call, pretty_expr(f; kwargs...), pretty_expr.(args; kwargs...)...)
+pretty_expr(f::Function, args; kwargs...) = Expr(:call, nameof(f), pretty_expr.(args; kwargs...)...)
+
+function pretty_expr(f::Sym, args; show_iv=false, var_syms=false, kwargs...)
+    isempty(args) && return f.name
+    if show_iv
+        var_syms ? Symbol(pretty_expr(f), "(", join(pretty_expr.(args), ","), ")") : Expr(:call, pretty_expr(f), pretty_expr.(args)...)
+    else
+        return f.name
+    end
+end
+
+function pretty_expr(f::Differential, args; kwargs...)
+    ## higher-order derivative?
+    if hasfield(typeof(args[1]), :f) && args[1].f isa Differential
+        arg, diffs = incept_derivative(f, args, Symbol[])
+        diffvars = unique(diffs)
+        exponents = [count(==(x), diffs) for x in diffvars]
+        return Expr(:call, 
+            :/, 
+            Expr(:latexifymerge, "d^{$(length(diffs))}", pretty_expr(arg; kwargs...)), 
+            join(Symbol.(:d, string.(diffvars) .* "^{", string.(exponents), "}"))
+            )
+    end
+    Expr(:call, :/, Expr(:latexifymerge, :d, pretty_expr(args[1]; kwargs...)), Symbol(:d, f.x))
+end
+incept_derivative(f::Differential, args, diffs) = incept_derivative(args[1], vcat(diffs, f.x))
+incept_derivative(x::Term, diffs) = incept_derivative(x.f, x.args, diffs)
+incept_derivative(f, args, diffs) = (Term(f, args), diffs)
+
+@latexrecipe function f(eqs::Vector{ModelingToolkit.Equation}; show_iv=true, var_syms=true)
     # Set default option values.
     env --> :align
     cdot --> false
@@ -11,20 +55,15 @@ prettify_expr(expr::Expr) = Expr(expr.head, prettify_expr.(expr.args)...)
     # that latexify can deal with
 
     rhs = getfield.(eqs, :rhs)
-    rhs = prettify_expr.(toexpr.(rhs))
-    rhs = [postwalk(x -> x isa Expr && length(x.args) == 1 ? x.args[1] : x, eq) for eq in rhs]
-    rhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative && length(x.args[2].args) == 2 ? :($(Symbol(:d, x.args[2]))/($(Symbol(:d, x.args[2].args[2])))) : x, eq) for eq in rhs]
-    rhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative ? "\\frac{d\\left($(Latexify.latexraw(x.args[2]))\\right)}{d$(Latexify.latexraw(x.args[3]))}" : x, eq) for eq in rhs]
+    rhs = pretty_expr.(rhs; show_iv=show_iv, var_syms=var_syms)
 
     lhs = getfield.(eqs, :lhs)
-    lhs = prettify_expr.(toexpr.(lhs))
-    lhs = [postwalk(x -> x isa Expr && length(x.args) == 1 ? x.args[1] : x, eq) for eq in lhs]
-    lhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative && length(x.args[2].args) == 2 ? :($(Symbol(:d, x.args[2]))/($(Symbol(:d, x.args[2].args[2])))) : x, eq) for eq in lhs]
-    lhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative ? "\\frac{d\\left($(Latexify.latexraw(x.args[2]))\\right)}{d$(Latexify.latexraw(x.args[3]))}" : x, eq) for eq in lhs]
-
+    lhs = pretty_expr.(lhs; show_iv=show_iv, var_syms=var_syms)
     return lhs, rhs
 end
 
 @latexrecipe function f(sys::ModelingToolkit.AbstractSystem)
-    return latexify(equations(sys))
-end
+    ((args,), kw) = Latexify.apply_recipe(equations(sys); kwargs...)
+    kwargs = merge(kw, kwargs)
+    return args
+end 
