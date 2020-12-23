@@ -107,7 +107,6 @@ raw"\begin{align}
 @variables x(t)
 @derivatives D'~t
 eqs = [D(x) ~ (1+cos(t))/(1+2*x)]
-eqs[1].rhs.args[1].args[2].f isa Function
 
 # Latexify.@generate_test latexify(eqs)
 @test latexify(eqs) == replace(
