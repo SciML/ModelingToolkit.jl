@@ -27,7 +27,6 @@ eqs = [D(x) ~ σ*(y-x)*D(x-y)/D(z),
        D(z) ~ x*y^(2//3) - β*z]
 
 
-
 # Latexify.@generate_test latexify(eqs)
 @test latexify(eqs) == replace(
 raw"\begin{align}
