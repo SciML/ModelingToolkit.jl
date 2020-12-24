@@ -6,6 +6,8 @@ function flatten(sys::ODESystem)
     else
         return ODESystem(equations(sys),
                          independent_variable(sys),
+                         states(sys),
+                         parameters(sys),
                          observed=observed(sys))
     end
 end
@@ -116,7 +118,7 @@ function alias_elimination2(sys)
     # Case 2: One side is a differentiated var, the other is an algebraic var
     #         substitute the algebraic var with the diff var
     diff_vars = filter(!isnothing, map(eqs) do eq
-            if eq.lhs isa Term && eq.lhs.op isa Differential
+            if isdiffeq(eq)
                 eq.lhs.args[1]
             else
                 nothing
@@ -148,14 +150,19 @@ function alias_elimination2(sys)
     # Case 3: Explicit substitutions
     del = Int[]
     for (i, eq) in enumerate(eqs)
+        isdiffeq(eq) && continue
         res_left = get_α_x(eq.lhs)
         if !isnothing(res_left)
+            # `α x = rhs` => `x = rhs / α`
             α, x = res_left
+            push!(subs, x => _isone(α) ? eq.rhs : eq.rhs / α)
+            push!(del, i)
+        else
             res_right = get_α_x(eq.rhs)
             if !isnothing(res_right)
+                # `lhs = β y` => `y = lhs / β`
                 β, y = res_right
-                multiple =  β / α
-                push!(subs, x => _isone(multiple) ? x : multiple * x)
+                push!(subs, y => _isone(β) ? eq.lhs : β * eq.lhs)
                 push!(del, i)
             end
         end
