@@ -7,55 +7,52 @@ using ModelingToolkit, OrdinaryDiffEq, Test
 test_equal(a, b) = @test isequal(simplify(a, polynorm=true), simplify(b, polynorm=true))
 
 eqs = [D(x) ~ σ*(y-x),
-       D(y) ~ x*(ρ-z)-y,
-       D(z) ~ a*y - β*z,
-       β ~ 2,
-       x ~ a]
+       D(y) ~ x*(ρ-z)-y + β,
+       0 ~ sin(z) - x + y,
+       sin(u) ~ x + y,
+       2β ~ 2,
+       x ~ a,
+      ]
 
-lorenz1 = ODESystem(eqs,t,[x,y,z,a],[σ,ρ,β],name=:lorenz1)
+lorenz1 = ODESystem(eqs,t,[u,x,y,z,a],[σ,ρ,β],name=:lorenz1)
 
 lorenz1_aliased = alias_elimination(lorenz1)
-@test length(equations(lorenz1_aliased)) == 3
-@test length(states(lorenz1_aliased)) == 3
-
-eqs = [D(x) ~ σ*(y-x),
-       D(y) ~ x*(ρ-z)-y,
-       D(z) ~ x*y - 2*z]
-
-# TODO: maybe remove β from ps, or maybe don't allow this example on params
-@test lorenz1_aliased == ODESystem(eqs,t,[x,y,z],[σ,ρ,β],observed=[β ~ 2, a ~ x],name=:lorenz1)
+reduced_eqs = [
+               D(x) ~ σ * (y - x),
+               D(y) ~ x*(ρ-z)-y + 1,
+               0 ~ sin(z) - x + y,
+               sin(u) ~ x + y,
+              ]
+test_equal.(equations(lorenz1_aliased), reduced_eqs)
+test_equal.(states(lorenz1_aliased), [u, x, y, z])
+test_equal.(observed(lorenz1_aliased), [
+    β ~ 1,
+    a ~ x,
+])
 
 # Multi-System Reduction
 
-eqs1 = [D(x) ~ σ*(y-x) + F,
-       D(y) ~ x*(ρ-z)-u,
-       D(z) ~ x*y - β*z]
+eqs1 = [
+        D(x) ~ σ*(y-x) + F,
+        D(y) ~ x*(ρ-z)-u,
+        D(z) ~ x*y - β*z,
+        u ~ x + y - z,
+       ]
 
-aliases = [u ~ x + y - z]
+lorenz1 = ODESystem(eqs1,pins=[F],name=:lorenz1)
 
-lorenz1 = ODESystem(eqs1,pins=[F],observed=aliases,name=:lorenz1)
+eqs2 = [
+        D(x) ~ F,
+        D(y) ~ x*(ρ-z)-x,
+        D(z) ~ x*y - β*z,
+        u ~ x - y - z
+       ]
 
-eqs2 = [D(x) ~ F,
-       D(y) ~ x*(ρ-z)-x,
-       D(z) ~ x*y - β*z]
+lorenz2 = ODESystem(eqs2,pins=[F],name=:lorenz2)
 
-aliases2 = [u ~ x - y - z]
-
-lorenz2 = ODESystem(eqs2,pins=[F],observed=aliases2,name=:lorenz2)
-
-connections = [lorenz1.F ~ lorenz2.u,
-               lorenz2.F ~ lorenz1.u]
-
-connected = ODESystem([lorenz2.y ~ a + lorenz1.x],t,[a],[],observed=connections,systems=[lorenz1,lorenz2])
-
-# Reduced Unflattened System
-#=
-
-connections2 = [lorenz1.F ~ lorenz2.u,
-                lorenz2.F ~ lorenz1.u,
-                a ~ -lorenz1.x + lorenz2.y]
-connected = ODESystem(Equation[],t,[],[],observed=connections2,systems=[lorenz1,lorenz2])
-=#
+connected = ODESystem([lorenz2.y ~ a + lorenz1.x,
+                       lorenz1.F ~ lorenz2.u,
+                       lorenz2.F ~ lorenz1.u],t,[a],[],systems=[lorenz1,lorenz2])
 
 # Reduced Flattened System
 
@@ -64,6 +61,7 @@ flattened_system = ModelingToolkit.flatten(connected)
 aliased_flattened_system = alias_elimination(flattened_system)
 
 @test isequal(states(aliased_flattened_system), [
+        a
         lorenz1.x
         lorenz1.y
         lorenz1.z
@@ -83,24 +81,23 @@ aliased_flattened_system = alias_elimination(flattened_system)
        ]) |> isempty
 
 reduced_eqs = [
-               D(lorenz1.x) ~ lorenz1.σ*(lorenz1.y-lorenz1.x) + lorenz2.x - (a + lorenz1.x) - lorenz2.z,
+               lorenz2.y ~ a + lorenz1.x, # irreducible by alias elimination
+               D(lorenz1.x) ~ lorenz1.σ*(lorenz1.y-lorenz1.x) + lorenz2.x - lorenz2.y - lorenz2.z,
                D(lorenz1.y) ~ lorenz1.x*(lorenz1.ρ-lorenz1.z)-(lorenz1.x + lorenz1.y - lorenz1.z),
                D(lorenz1.z) ~ lorenz1.x*lorenz1.y - lorenz1.β*lorenz1.z,
                D(lorenz2.x) ~ lorenz1.x + lorenz1.y - lorenz1.z,
                D(lorenz2.y) ~ lorenz2.x*(lorenz2.ρ-lorenz2.z)-lorenz2.x,
-               D(lorenz2.z) ~ lorenz2.x*(a + lorenz1.x) - lorenz2.β*lorenz2.z
+               D(lorenz2.z) ~ lorenz2.x*lorenz2.y - lorenz2.β*lorenz2.z
               ]
 test_equal.(equations(aliased_flattened_system), reduced_eqs)
 
 observed_eqs = [
-                lorenz2.y ~ a + lorenz1.x,
                 lorenz1.F ~ lorenz2.u,
                 lorenz2.F ~ lorenz1.u,
                 lorenz1.u ~ lorenz1.x + lorenz1.y - lorenz1.z,
                 lorenz2.u ~ lorenz2.x - lorenz2.y - lorenz2.z,
                ]
 test_equal.(observed(aliased_flattened_system), observed_eqs)
-
 
 # issue #578
 

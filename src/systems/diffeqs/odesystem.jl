@@ -149,5 +149,3 @@ Base.:(==)(sys1::ODESystem, sys2::ODESystem) =
 function rename(sys::ODESystem,name)
     ODESystem(sys.eqs, sys.iv, sys.states, sys.ps, sys.pins, sys.observed, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
 end
-
-isdiffeq(eq) = eq.lhs isa Term && operation(eq.lhs) isa Differential
