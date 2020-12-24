@@ -215,6 +215,8 @@ Special Keyword Argumnets:
   filling function is 0.
 - `fillzeros`: Whether to perform `fill(out,0)` before the calculations to ensure
   safety with `skipzeros`.
+- `deduplicate_terms`: List of Terms to be computed in separate variables and
+  substituted into each equation (de-duplicating the computation of those terms).
 """
 function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
                          conv = toexpr, expression = Val{true},
@@ -224,7 +226,7 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
 						 convert_oop = true, force_SA = false,
                          skipzeros = outputidxs===nothing,
 						 fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
-						 parallel=SerialForm(), kwargs...)
+						 parallel=SerialForm(), deduplicate_terms=nothing, kwargs...)
 	if multithread isa Bool
 		@warn("multithraded is deprecated for the parallel argument. See the documentation.")
 		parallel = multithread ? MultithreadedForm() : SerialForm()
@@ -233,6 +235,16 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     argnames = [gensym(:MTKArg) for i in 1:length(args)]
     symsdict = Dict()
     arg_pairs = map((x,y)->vars_to_pairs(x,y, symsdict), argnames, args)
+
+    # Terms that should be deduplicated get converted into new variables and substituted into the RHS equations
+    dedupe_exprs = Expr[]
+    if !isnothing(deduplicate_terms)
+      !isa(parallel, SerialForm) && error("`deduplicate_terms` is not yet supported with `parallel`!")
+      # NOTE: Also updates symsdict so that variables get substituted using process() below.
+      dedupe_pairs = map((x,y)->vars_to_pairs(x, y, symsdict), conv.(deduplicate_terms), deduplicate_terms)
+      dedupe_exprs = [Expr(:(=), ModelingToolkit.build_expr(:tuple, varname), ModelingToolkit.build_expr(:tuple, term)) for (varname, term) in dedupe_pairs]
+    end
+
     process = unflatten_long_ops∘(x->substitute(x, symsdict, fold=false))
 
     ls = reduce(vcat,conv.(first.(arg_pairs)))
@@ -325,6 +337,14 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     end
 
     ip_let_expr = Expr(:let, var_eqs, build_expr(:block, ip_sys_exprs))
+
+    # Insert the deduplication variables inside the Let block, but before the Expressions.
+    # Of course, it would be simple to simply add the dedupe variables to the Let expression (i.e. `var_eqs`),
+    # but then we cannot use any of the variables as they were named by the user. So instead, we inject
+    # the dedupe variables into the Let block.
+    # NOTE: This won't play nicely with the parallel code below, but we already threw in error if they try!
+    # TODO: Add support for parallel functions (e.g. copy or compute the dedup variables in each thread?)
+    prepend!(ip_let_expr.args[2].args, collect(dedupe_exprs))
 
     if parallel isa MultithreadedForm
         lens = Int(ceil(length(ip_let_expr.args[2].args)/Threads.nthreads()))
@@ -442,7 +462,12 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
 
     let_expr = Expr(:let, var_eqs, tuple_sys_expr)
     arr_let_expr = Expr(:let, var_eqs, arr_sys_expr)
+
+    # As done above with ip_let_expr, we inject the dedupe variables into the Let expression here too.
+    prepend!(arr_let_expr.args[2].args, collect(dedupe_exprs))
+
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
+
     oop_bounds_block = checkbounds ? arr_let_expr : :(@inbounds begin $arr_let_expr end)
     ip_bounds_block = checkbounds ? ip_let_expr : :(@inbounds begin $ip_let_expr end)
 
