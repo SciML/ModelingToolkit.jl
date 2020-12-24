@@ -33,58 +33,6 @@ isvar(s::Sym; param=false) = param ? true : !isparameter(s)
 isvar(s::Term; param=false) = isvar(s.op; param=param)
 isvar(s::Any;param=false) = false
 
-function filterexpr(f, s)
-    vs = []
-    Rewriters.Prewalk(Rewriters.Chain([@rule((~x::f) => push!(vs, ~x))]))(s)
-    vs
-end
-
-function make_lhs_0(eq)
-    if eq.lhs isa Number && iszero(eq.lhs)
-        return eq
-    else
-        0 ~ eq.lhs - eq.rhs
-    end
-end
-
-function alias_elimination(sys::ODESystem)
-    eqs = vcat(equations(sys), observed(sys))
-
-    # make all algebraic equations have 0 on LHS
-    eqs = map(eqs) do eq
-        if eq.lhs isa Term && eq.lhs.op isa Differential
-            eq
-        else
-            make_lhs_0(eq)
-        end
-    end
-
-    newstates = map(eqs) do eq
-        if eq.lhs isa Term && eq.lhs.op isa Differential
-            filterexpr(isvar, eq.lhs)
-        else
-            []
-        end
-    end |> Iterators.flatten |> collect |> unique
-
-
-    all_vars = map(eqs) do eq
-        filterexpr(isvar, eq.rhs)
-    end |> Iterators.flatten |> collect |> unique
-
-    alg_idxs = findall(x->!(x.lhs isa Term) && iszero(x.lhs), eqs)
-
-    eliminate = setdiff(all_vars, newstates)
-
-    outputs = solve_for(eqs[alg_idxs], eliminate)
-
-    diffeqs = eqs[setdiff(1:length(eqs), alg_idxs)]
-
-    diffeqs′ = substitute_aliases(diffeqs, Dict(eliminate .=> outputs))
-
-    ODESystem(diffeqs′, sys.iv, newstates, parameters(sys), observed=eliminate .~ outputs)
-end
-
 function get_α_x(αx)
     if isvar(αx, param=true)
         return 1, αx
@@ -101,7 +49,7 @@ function get_α_x(αx)
     end
 end
 
-function alias_elimination2(sys)
+function alias_elimination(sys)
     eqs = vcat(equations(sys), observed(sys))
 
     subs = Pair[]
