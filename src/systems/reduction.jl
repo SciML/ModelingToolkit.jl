@@ -49,7 +49,7 @@ function get_α_x(αx)
     end
 end
 
-function alias_elimination(sys)
+function alias_elimination(sys::ODESystem)
     eqs = vcat(equations(sys), observed(sys))
 
     subs = Pair[]

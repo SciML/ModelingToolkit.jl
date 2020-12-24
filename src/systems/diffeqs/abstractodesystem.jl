@@ -418,3 +418,5 @@ end
 function SteadyStateProblemExpr(sys::AbstractODESystem, args...; kwargs...)
     SteadyStateProblemExpr{true}(sys, args...; kwargs...)
 end
+
+isdiffeq(eq) = eq.lhs isa Term && operation(eq.lhs) isa Differential
