@@ -213,7 +213,7 @@ Symbol("z⦗t⦘")
 ```
 """
 function tosymbol(t::Term; states=nothing, escape=true)
-    if t.op isa Sym
+    if t.op isa Union{Sym, Function}
         if states !== nothing && !(any(isequal(t), states))
             return nameof(t.op)
         end
