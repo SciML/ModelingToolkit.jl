@@ -200,3 +200,14 @@ for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
     sol = solve(prob, Rodas5())
     @test all(x->≈(sum(x), 1.0, atol=atol), sol.u)
 end
+
+@parameters t σ β
+@variables x(t) y(t) z(t)
+@derivatives D'~t
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x-β*y,
+       x + z ~ y]
+sys = ODESystem(eqs)
+@test all(isequal.(states(sys), [x, y, z]))
+@test all(isequal.(parameters(sys), [σ, β]))
+@test equations(sys) == eqs
