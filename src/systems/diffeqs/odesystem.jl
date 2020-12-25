@@ -119,26 +119,32 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     end
     iv === nothing && throw(ArgumentError("Please pass in independent variables."))
     for eq in eqs
-        for var in vars(eq.rhs for eq ∈ eqs)
-            if isparameter(var) || isparameter(var.op)
-                isequal(var, iv) || push!(ps, var)
-            else
-                push!(allstates, var)
-            end
-        end
-        if !(eq.lhs isa Symbolic)
-            push!(algeeq, eq)
-        else
-            diffvar = first(var_from_nested_derivative(eq.lhs))
+        collect_vars!(allstates, ps, eq.lhs, iv)
+        collect_vars!(allstates, ps, eq.rhs, iv)
+        if isdiffeq(eq)
+            diffvar, _ = var_from_nested_derivative(eq.lhs)
             isequal(iv, iv_from_nested_derivative(eq.lhs)) || throw(ArgumentError("An ODESystem can only have one independent variable."))
             diffvar in diffvars && throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
             push!(diffvars, diffvar)
             push!(diffeq, eq)
+        else
+            push!(algeeq, eq)
         end
     end
     algevars = setdiff(allstates, diffvars)
     # the orders here are very important!
     return ODESystem(append!(diffeq, algeeq), iv, vcat(collect(diffvars), collect(algevars)), ps; kwargs...)
+end
+
+function collect_vars!(states, parameters, expr, iv)
+    for var in vars(expr)
+        if isparameter(var) || isparameter(var.op)
+            isequal(var, iv) || push!(parameters, var)
+        else
+            push!(states, var)
+        end
+    end
+    return nothing
 end
 
 Base.:(==)(sys1::ODESystem, sys2::ODESystem) =

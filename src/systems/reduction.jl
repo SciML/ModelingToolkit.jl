@@ -6,6 +6,8 @@ function flatten(sys::ODESystem)
     else
         return ODESystem(equations(sys),
                          independent_variable(sys),
+                         states(sys),
+                         parameters(sys),
                          observed=observed(sys))
     end
 end
@@ -27,59 +29,67 @@ function substitute_aliases(diffeqs, dict)
     lhss(diffeqs) .~ fixpoint_sub.(rhss(diffeqs), (dict,))
 end
 
-isvar(s::Sym) = !isparameter(s)
-isvar(s::Term) = isvar(s.op)
+# Note that we reduce parameters, too
+# i.e. `2param = 3` will be reduced away
+isvar(s::Sym) = true
+isvar(s::Term) = isvar(operation(s))
 isvar(s::Any) = false
 
-function filterexpr(f, s)
-    vs = []
-    Rewriters.Prewalk(Rewriters.Chain([@rule((~x::f) => push!(vs, ~x))]))(s)
-    vs
-end
+function get_α_x(αx)
+    if isvar(αx)
+        return 1, αx
+    elseif αx isa Term && operation(αx) === (*)
+        args = arguments(αx)
+        nums = []
+        syms = []
+        for arg in args
+            isvar(arg) ? push!(syms, arg) : push!(nums, arg)
+        end
 
-function make_lhs_0(eq)
-    if eq.lhs isa Number && iszero(eq.lhs)
-        return eq
+        if length(syms) == 1
+            return prod(nums), syms[1]
+        end
     else
-        0 ~ eq.lhs - eq.rhs
+        return nothing
     end
 end
 
 function alias_elimination(sys::ODESystem)
     eqs = vcat(equations(sys), observed(sys))
+    subs = Pair[]
+    diff_vars = filter(!isnothing, map(eqs) do eq
+            if isdiffeq(eq)
+                eq.lhs.args[1]
+            else
+                nothing
+            end
+        end) |> Set
 
-    # make all algebraic equations have 0 on LHS
-    eqs = map(eqs) do eq
-        if eq.lhs isa Term && eq.lhs.op isa Differential
-            eq
+    # only substitute when the variable is algebraic
+    del = Int[]
+    for (i, eq) in enumerate(eqs)
+        isdiffeq(eq) && continue
+        res_left = get_α_x(eq.lhs)
+        if !isnothing(res_left) && !(res_left[2] in diff_vars)
+            # `α x = rhs` => `x = rhs / α`
+            α, x = res_left
+            push!(subs, x => _isone(α) ? eq.rhs : eq.rhs / α)
+            push!(del, i)
         else
-            make_lhs_0(eq)
+            res_right = get_α_x(eq.rhs)
+            if !isnothing(res_right) && !(res_right[2] in diff_vars)
+                # `lhs = β y` => `y = lhs / β`
+                β, y = res_right
+                push!(subs, y => _isone(β) ? eq.lhs : β * eq.lhs)
+                push!(del, i)
+            end
         end
     end
+    deleteat!(eqs, del)
 
-    newstates = map(eqs) do eq
-        if eq.lhs isa Term && eq.lhs.op isa Differential
-            filterexpr(isvar, eq.lhs)
-        else
-            []
-        end
-    end |> Iterators.flatten |> collect |> unique
+    eqs′ = substitute_aliases(eqs, Dict(subs))
+    alias_vars = first.(subs)
 
-
-    all_vars = map(eqs) do eq
-        filterexpr(isvar, eq.rhs)
-    end |> Iterators.flatten |> collect |> unique
-
-    alg_idxs = findall(x->!(x.lhs isa Term) && iszero(x.lhs), eqs)
-
-    eliminate = setdiff(all_vars, newstates)
-
-    outputs = solve_for(eqs[alg_idxs], eliminate)
-
-    diffeqs = eqs[setdiff(1:length(eqs), alg_idxs)]
-
-    diffeqs′ = substitute_aliases(diffeqs, Dict(eliminate .=> outputs))
-
-    ODESystem(diffeqs′, sys.iv, newstates, parameters(sys), observed=eliminate .~ outputs)
+    newstates = setdiff(states(sys), alias_vars)
+    ODESystem(eqs′, sys.iv, newstates, parameters(sys), observed=alias_vars .~ last.(subs))
 end
-
