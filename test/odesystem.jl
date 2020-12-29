@@ -211,3 +211,11 @@ sys = ODESystem(eqs)
 @test all(isequal.(states(sys), [x, y, z]))
 @test all(isequal.(parameters(sys), [σ, β]))
 @test equations(sys) == eqs
+
+# issue 701
+using ModelingToolkit
+@parameters t a
+@variables x(t)
+@derivatives D'~t
+sys = ODESystem([D(x) ~ a])
+@test sys.eqs[1].rhs isa Sym
