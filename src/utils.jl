@@ -277,8 +277,17 @@ end
 function lower_mapnames(umap::AbstractArray{T},name) where {T<:Pair}
     T[lower_varname(value(k), name) => value(v) for (k, v) in umap]
 end
+function lower_mapnames(umap::NTuple{N,T}) where {N,T<:Pair}
+    ntuple(i->value(umap[i][1]) => value(umap[i][2]),N)
+end
+function lower_mapnames(umap::NTuple{N,T},name) where {N,T<:Pair}
+    ntuple(i->lower_varname(value(umap[i][1]), name) => value(umap[i][2]),N)
+end
+
 lower_mapnames(umap::AbstractArray{<:Number}) = umap # Ambiguity
 lower_mapnames(umap::AbstractArray{<:Number},name) = umap
+lower_mapnames(umap::Tuple) = umap
+lower_mapnames(umap::Tuple, name) = umap
 
 function flatten_differential(O::Term)
     @assert is_derivative(O) "invalid differential: $O"
