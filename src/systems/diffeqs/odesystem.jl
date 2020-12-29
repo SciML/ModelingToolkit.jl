@@ -137,12 +137,21 @@ function ODESystem(eqs, iv=nothing; kwargs...)
 end
 
 function collect_vars!(states, parameters, expr, iv)
-    for var in vars(expr)
-        if isparameter(var) || isparameter(var.op)
-            isequal(var, iv) || push!(parameters, var)
-        else
-            push!(states, var)
+    if expr isa Sym
+        collect_var!(states, parameters, expr, iv)
+    else
+        for var in vars(expr)
+            collect_var!(states, parameters, var, iv)
         end
+    end
+    return nothing
+end
+
+function collect_var!(states, parameters, var, iv)
+    if isparameter(var) || isparameter(var.op)
+        isequal(var, iv) || push!(parameters, var)
+    else
+        push!(states, var)
     end
     return nothing
 end
