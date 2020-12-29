@@ -38,3 +38,10 @@ ModelingToolkit.@register Distributions.quantile(dist,x)
 
 ModelingToolkit.@register Distributions.Uniform(mu,sigma)
 ModelingToolkit.@register Distributions.Normal(mu,sigma)
+
+@register ∈(x::Num, y::AbstractArray)
+@register ∪(x, y)
+@register ∩(x, y)
+@register ∨(x, y)
+@register ∧(x, y)
+@register ⊆(x, y)
