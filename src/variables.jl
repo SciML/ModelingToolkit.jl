@@ -211,8 +211,8 @@ varmap_to_vars(varmap,varlist)
 Takes a list of pairs of variables=>values and an ordered list of variables and
 creates the array of values in the correct order
 """
-function varmap_to_vars(varmap::AbstractArray{<:Pair},varlist)
-    out = similar(varmap,typeof(last(first(varmap))))
+function varmap_to_vars(varmap::AbstractArray{Pair{T,S}},varlist) where {T,S}
+    out = similar(varmap,S)
     for (ivar, ival) in varmap
         j = findfirst(isequal(ivar),varlist)
         if isnothing(j)

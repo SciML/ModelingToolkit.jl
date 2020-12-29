@@ -271,11 +271,11 @@ function lower_varname(t::Term, iv)
 end
 lower_varname(t::Sym, iv) = t
 
-function lower_mapnames(umap::AbstractArray{<:Pair}) where T
-    [value(k) => value(v) for (k, v) in umap]
+function lower_mapnames(umap::AbstractArray{T}) where {T<:Pair}
+    T[value(k) => value(v) for (k, v) in umap]
 end
-function lower_mapnames(umap::AbstractArray{<:Pair},name) where T
-    [lower_varname(value(k), name) => value(v) for (k, v) in umap]
+function lower_mapnames(umap::AbstractArray{T},name) where {T<:Pair}
+    T[lower_varname(value(k), name) => value(v) for (k, v) in umap]
 end
 lower_mapnames(umap::AbstractArray{<:Number}) = umap # Ambiguity
 lower_mapnames(umap::AbstractArray{<:Number},name) = umap
