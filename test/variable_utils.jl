@@ -11,3 +11,14 @@ expr = (((1 / β - 1) + δ) / α) ^ (1 / (α - 1))
 sol = ModelingToolkit.substitute(expr, s)
 new = (((1 / β - 1) + δ) / γ) ^ (1 / (γ - 1))
 @test iszero(sol - new)
+
+# test namespace_expr
+@parameters t a p(t)
+pterm = p.val
+pnsp = ModelingToolkit.namespace_expr(pterm, :namespace, :t)
+@test typeof(pterm) == typeof(pnsp)
+@test ModelingToolkit.getname(pnsp) == Symbol("namespace₊p")
+asym = a.val
+ansp = ModelingToolkit.namespace_expr(asym, :namespace, :t)
+@test typeof(asym) == typeof(ansp)
+@test ModelingToolkit.getname(ansp) == Symbol("namespace₊a")
