@@ -81,6 +81,13 @@ du2 = sf.f(u,p,t)
 G2 = sf.g(u,p,t)
 @test norm(G-G2) < 100*eps()
 
+# test conversion to NonlinearSystem
+ns = convert(NonlinearSystem,rs)
+fnl = eval(generate_function(ns)[2])
+dunl = similar(du)
+fnl(dunl,u,p)
+@test norm(du-dunl) < 100*eps()
+
 # tests the noise_scaling argument.
 p  = rand(length(k)+1)
 u  = rand(length(k))
