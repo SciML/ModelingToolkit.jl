@@ -185,17 +185,8 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Tuple,
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
-
-    (u0map isa AbstractVector) || error("For DiscreteProblems u0map must be an AbstractVector.")
-    u0d = Dict( value(u[1]) => u[2] for u in u0map)
-    u0 = [u0d[u] for u in states(sys)]
-    if parammap != DiffEqBase.NullParameters()
-        (parammap isa AbstractVector) || error("For DiscreteProblems parammap must be an AbstractVector.")
-        pd  = Dict( value(u[1]) => u[2] for u in parammap)
-        p  = [pd[u] for u in parameters(sys)]
-    else
-        p = parammap
-    end
+    u0 = varmap_to_vars(u0map, states(sys))
+    p  = varmap_to_vars(parammap, parameters(sys))
     f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
     df = DiscreteFunction{true,true}(f, syms=Symbol.(states(sys)))
     DiscreteProblem(df, u0, tspan, p; kwargs...)
@@ -207,7 +198,7 @@ function DiffEqBase.DiscreteProblemExpr(sys::JumpSystem, u0map, tspan,
                                     parammap=DiffEqBase.NullParameters; kwargs...)
 ```
 
-Generates a black DiscreteProblem for a JumpSystem to utilize as its
+Generates a blank DiscreteProblem for a JumpSystem to utilize as its
 solving `prob.prob`. This is used in the case where there are no ODEs
 and no SDEs associated with the system.
 
