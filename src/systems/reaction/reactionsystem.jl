@@ -235,13 +235,6 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
     eqs
 end
 
-function var2op(var)
-    Sym{symtype(var)}(nameof(var.op))
-end
-function var2op(var::Sym)
-    var
-end
-
 # Calculate the Jump rate law (like ODE, but uses X instead of X(t).
 # The former generates a "MethodError: objects of type Int64 are not callable" when trying to solve the problem.
 """
@@ -272,7 +265,6 @@ Notes:
 function jumpratelaw(rx; rxvars=get_variables(rx.rate), combinatoric_ratelaw=true)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
-    #rl = substitute(rl, Dict(rxvars .=> var2op.(rxvars)))
     if !only_use_rate
         coef = one(eltype(substoich))
         for (i,stoich) in enumerate(substoich)
