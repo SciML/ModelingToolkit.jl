@@ -19,7 +19,7 @@ aa = a; # old a
 
 # test some matrix operations don't throw errors
 X = [0 b c; d e f; g h i]
-@test iszero(simplify(det(X) - ((b * f * g) + (c * d * h) - (b * d * i) - (c * e * g)), polynorm=true))
+@test iszero(simplify(det(X) - ((d * ((b * i) - (c * h))) + (g * ((b * f) - (c * e))))))
 F = lu(X)
 @test F.p == [2, 1, 3]
 R = simplify.(F.L * F.U - X[F.p, :], polynorm=true)
@@ -85,3 +85,27 @@ M \ reshape(b,2,1)
 M = [1 a; 0 2]
 M \ b
 M \ [1, 2]
+
+# test det
+@variables X[1:4,1:4]
+d1 = det(X, laplace=true)
+d2 = det(X, laplace=false)
+_det1 = eval(build_function(d1, X))
+_det2 = eval(build_function(d2, X))
+A = [1 1 1 1
+     1 0 1 1
+     1 1 0 1
+     1 1 1 0]
+@test _det1(A) == -1
+@test _det2(A) == -1
+
+@variables X[1:3,1:3]
+d1 = det(X, laplace=true)
+d2 = det(X, laplace=false)
+_det1 = eval(build_function(d1, X))
+_det2 = eval(build_function(d2, X))
+A = [1 1 1
+     1 0 1
+     1 1 1]
+@test _det1(A) == 0
+@test _det2(A) == 0
