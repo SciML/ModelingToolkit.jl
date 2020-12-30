@@ -42,7 +42,9 @@ ModelingToolkit.@register Distributions.Normal(mu,sigma)
 function LinearAlgebra.det(A::AbstractMatrix{<:Num}; laplace=true)
     if laplace
         n = LinearAlgebra.checksquare(A)
-        if n == 2
+        if n == 1 
+            return A[1, 1]
+        elseif n == 2
             return A[1, 1] * A[2, 2] - A[1, 2] * A[2, 1]
         else
             temp = 0
