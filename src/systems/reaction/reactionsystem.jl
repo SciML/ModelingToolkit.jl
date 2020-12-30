@@ -235,8 +235,6 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
     eqs
 end
 
-# Calculate the Jump rate law (like ODE, but uses X instead of X(t).
-# The former generates a "MethodError: objects of type Int64 are not callable" when trying to solve the problem.
 """
     jumpratelaw(rx; rxvars=get_variables(rx.rate), combinatoric_ratelaw=true)
 
@@ -301,7 +299,7 @@ explicitly on the independent variable (usually time).
 - Optional: `stateset`, set of states which if the rxvars are within mean rx is non-mass action.
 """
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
-                              haveivdep,
+                              haveivdep = any(var -> isequal(rs.iv,var), rxvars),
                               stateset = Set(states(rs)))
     # if no dependencies must be zero order
     (length(rxvars)==0) && return true
