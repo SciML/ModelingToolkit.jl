@@ -188,24 +188,34 @@ function oderatelaw(rx; combinatoric_ratelaw=true)
     rl
 end
 
-function assemble_drift(rs; combinatoric_ratelaws=true)
-    D   = Differential(rs.iv)
-    eqs = [D(x) ~ 0 for x in rs.states]
+function assemble_oderhs(rs; combinatoric_ratelaws=true)
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
+    rhsvec         = Any[0 for i in eachindex(rs.states)]
 
     for rx in rs.eqs
         rl = oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)
         for (spec,stoich) in rx.netstoich
             i = species_to_idx[spec]
-            if _iszero(eqs[i].rhs)
-                signedrl = (stoich > zero(stoich)) ? rl : -rl
-                rhs      = isone(abs(stoich)) ? signedrl : stoich * rl
+            if _iszero(rhsvec[i])
+                signedrl  = (stoich > zero(stoich)) ? rl : -rl
+                rhsvec[i] = isone(abs(stoich)) ? signedrl : stoich * rl
             else
-                Δspec = isone(abs(stoich)) ? rl : abs(stoich) * rl
-                rhs   = (stoich > zero(stoich)) ? (eqs[i].rhs + Δspec) : (eqs[i].rhs - Δspec)
+                Δspec     = isone(abs(stoich)) ? rl : abs(stoich) * rl
+                rhsvec[i] = (stoich > zero(stoich)) ? (rhsvec[i] + Δspec) : (rhsvec[i] - Δspec)
             end
-            eqs[i] = Equation(eqs[i].lhs, rhs)
         end
+    end
+
+    rhsvec
+end
+
+function assemble_drift(rs; combinatoric_ratelaws=true, as_odes=true)
+    rhsvec = assemble_oderhs(rs; combinatoric_ratelaws=combinatoric_ratelaws)
+    if as_odes
+        D   = Differential(rs.iv)
+        eqs = [Equation(D(x),rhs) for (x,rhs) in zip(rs.states,rhsvec)]
+    else
+        eqs = [Equation(0,rhs) for rhs in rhsvec]
     end
     eqs
 end
@@ -226,15 +236,6 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
     eqs
 end
 
-function var2op(var)
-    Sym{symtype(var)}(nameof(var.op))
-end
-function var2op(var::Sym)
-    var
-end
-
-# Calculate the Jump rate law (like ODE, but uses X instead of X(t).
-# The former generates a "MethodError: objects of type Int64 are not callable" when trying to solve the problem.
 """
     jumpratelaw(rx; rxvars=get_variables(rx.rate), combinatoric_ratelaw=true)
 
@@ -263,7 +264,6 @@ Notes:
 function jumpratelaw(rx; rxvars=get_variables(rx.rate), combinatoric_ratelaw=true)
     @unpack rate, substrates, substoich, only_use_rate = rx
     rl = rate
-    #rl = substitute(rl, Dict(rxvars .=> var2op.(rxvars)))
     if !only_use_rate
         coef = one(eltype(substoich))
         for (i,stoich) in enumerate(substoich)
@@ -300,7 +300,7 @@ explicitly on the independent variable (usually time).
 - Optional: `stateset`, set of states which if the rxvars are within mean rx is non-mass action.
 """
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
-                              haveivdep,
+                              haveivdep = any(var -> isequal(rs.iv,var), rxvars),
                               stateset = Set(states(rs)))
     # if no dependencies must be zero order
     (length(rxvars)==0) && return true
@@ -385,6 +385,24 @@ end
 
 """
 ```julia
+Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem)
+```
+
+Convert a [`ReactionSystem`](@ref) to an [`NonlinearSystem`](@ref).
+
+Notes:
+- `combinatoric_ratelaws=true` uses factorial scaling factors in calculating the rate
+law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
+`combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is
+ignored.
+"""
+function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem; combinatoric_ratelaws=true)
+    eqs = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws, as_odes=false)
+    NonlinearSystem(eqs,rs.states,rs.ps,name=rs.name,systems=convert.(NonlinearSystem,rs.systems))
+end
+
+"""
+```julia
 Base.convert(::Type{<:SDESystem},rs::ReactionSystem)
 ```
 
@@ -450,55 +468,29 @@ function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem; combinatoric_rate
 end
 
 
-"""
-```julia
-Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem)
-```
-
-Convert a [`ReactionSystem`](@ref) to an [`NonlinearSystem`](@ref).
-
-Notes:
-- `combinatoric_ratelaws=true` uses factorial scaling factors in calculating the rate
-law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
-`combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is
-ignored.
-"""
-function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem; combinatoric_ratelaws=true)
-    states_swaps = value.(rs.states)
-    eqs = map(eq -> 0 ~ make_sub!(eq,states_swaps),getproperty.(assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws),:rhs))
-    NonlinearSystem(eqs,rs.states,rs.ps,name=rs.name,
-              systems=convert.(NonlinearSystem,rs.systems))
-end
-
-# Used for Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem) only, should likely be removed.
-function make_sub!(eq,states_swaps)
-	for (i,arg) in enumerate(eq.args)
-		if any(isequal.(states_swaps,arg))
-			eq.args[i] = var2op(arg.op)
-		else
-			make_sub!(arg,states_swaps)
-		end
-	end
-	return eq
-end
-
 ### Converts a reaction system to ODE or SDE problems ###
 
 
 # ODEProblem from AbstractReactionNetwork
-function DiffEqBase.ODEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p=DiffEqBase.NullParameters(), args...; kwargs...)
+function DiffEqBase.ODEProblem(rs::ReactionSystem, u0, tspan, p=DiffEqBase.NullParameters(), args...; kwargs...)
     return ODEProblem(convert(ODESystem,rs),u0,tspan,p, args...; kwargs...)
 end
 
+# NonlinearProblem from AbstractReactionNetwork
+function DiffEqBase.NonlinearProblem(rs::ReactionSystem, u0, p=DiffEqBase.NullParameters(), args...; kwargs...)
+    return NonlinearProblem(convert(NonlinearSystem,rs), u0, p, args...; kwargs...)
+end
+
+
 # SDEProblem from AbstractReactionNetwork
-function DiffEqBase.SDEProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan, p=DiffEqBase.NullParameters(), args...; noise_scaling=nothing, kwargs...)
+function DiffEqBase.SDEProblem(rs::ReactionSystem, u0, tspan, p=DiffEqBase.NullParameters(), args...; noise_scaling=nothing, kwargs...)
     sde_sys = convert(SDESystem,rs,noise_scaling=noise_scaling)
     p_matrix = zeros(length(rs.states), length(rs.eqs))
     return SDEProblem(sde_sys,u0,tspan,p,args...; noise_rate_prototype=p_matrix,kwargs...)
 end
 
 # DiscreteProblem from AbstractReactionNetwork
-function DiffEqBase.DiscreteProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, tspan::Tuple, p=DiffEqBase.NullParameters(), args...; kwargs...)
+function DiffEqBase.DiscreteProblem(rs::ReactionSystem, u0, tspan::Tuple, p=DiffEqBase.NullParameters(), args...; kwargs...)
     return DiscreteProblem(convert(JumpSystem,rs), u0,tspan,p, args...; kwargs...)
 end
 
@@ -508,7 +500,7 @@ function DiffEqJump.JumpProblem(rs::ReactionSystem, prob, aggregator, args...; k
 end
 
 # SteadyStateProblem from AbstractReactionNetwork
-function DiffEqBase.SteadyStateProblem(rs::ReactionSystem, u0::Union{AbstractArray, Number}, p=DiffEqBase.NullParameters(), args...; kwargs...)
+function DiffEqBase.SteadyStateProblem(rs::ReactionSystem, u0, p=DiffEqBase.NullParameters(), args...; kwargs...)
     return SteadyStateProblem(ODEFunction(convert(ODESystem,rs)),u0,p, args...; kwargs...)
 end
 

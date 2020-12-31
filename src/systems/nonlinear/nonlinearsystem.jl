@@ -75,7 +75,7 @@ jacobian_sparsity(sys::NonlinearSystem) =
 
 """
 ```julia
-function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,tspan,
+function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,
                                           checkbounds = false,
@@ -104,7 +104,7 @@ end
 
 """
 ```julia
-function DiffEqBase.NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,tspan,
+function DiffEqBase.NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,
                                           checkbounds = false,
@@ -118,7 +118,7 @@ numerical enhancements.
 """
 struct NonlinearProblemExpr{iip} end
 
-function NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,tspan,
+function NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,
                                           checkbounds = false,
