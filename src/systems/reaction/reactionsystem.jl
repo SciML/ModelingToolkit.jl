@@ -190,7 +190,8 @@ end
 
 function assemble_oderhs(rs; combinatoric_ratelaws=true)
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
-    rhsvec         = [Num(0) for i in eachindex(rs.states)]
+    rhsvec         = Any[0 for i in eachindex(rs.states)]
+
     for rx in rs.eqs
         rl = oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)
         for (spec,stoich) in rx.netstoich
@@ -214,7 +215,7 @@ function assemble_drift(rs; combinatoric_ratelaws=true, as_odes=true)
         D   = Differential(rs.iv)
         eqs = [Equation(D(x),rhs) for (x,rhs) in zip(rs.states,rhsvec)]
     else
-        eqs = [Equation(Num(0),rhs) for rhs in rhsvec]
+        eqs = [Equation(0,rhs) for rhs in rhsvec]
     end
     eqs
 end
