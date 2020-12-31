@@ -192,8 +192,14 @@ u0 = [y₁ => 1.0,
 p  = [k₁ => 0.04,
       k₂ => 3e7,
       k₃ => 1e4]
+p2 = (k₁ => 0.04,
+      k₂ => 3e7,
+      k₃ => 1e4)
 tspan = (0.0,100000.0)
 prob1 = ODEProblem(sys,u0,tspan,p)
+prob12 = ODEProblem(sys,u0,tspan,[0.04,3e7,1e4])
+prob13 = ODEProblem(sys,u0,tspan,(0.04,3e7,1e4))
+prob14 = ODEProblem(sys,u0,tspan,p2)
 prob2 = ODEProblem(sys,u0,tspan,p,jac=true)
 prob3 = ODEProblem(sys,u0,tspan,p,jac=true,sparse=true)
 for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]

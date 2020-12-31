@@ -227,6 +227,22 @@ function varmap_to_vars(varmap::AbstractArray{Pair{T,S}},varlist) where {T,S}
     # Does things like MArray->SArray
     ArrayInterface.restructure(varmap,out)
 end
+
+function varmap_to_vars(varmap::NTuple{N,Pair{T,S}},varlist) where {N,T,S}
+    out = MArray{Tuple{N},S}(undef)
+    for (ivar, ival) in varmap
+        j = findfirst(isequal(ivar),varlist)
+        if isnothing(j)
+            throw(ArgumentError("Value $(ivar) provided in map not found in $(varlist)"))
+        elseif j > length(varmap)
+            throw(ArgumentError("Missing value in $(varmap), need $(varlist)"))
+        end
+        out[j] = ival
+    end
+    out.data
+end
+
 varmap_to_vars(varmap::AbstractArray,varlist) = varmap
+varmap_to_vars(varmap::Tuple,varlist) = varmap
 varmap_to_vars(varmap::DiffEqBase.NullParameters,varlist) = varmap
 varmap_to_vars(varmap::Nothing,varlist) = varmap
