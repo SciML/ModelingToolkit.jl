@@ -45,3 +45,33 @@ ModelingToolkit.@register Distributions.Normal(mu,sigma)
 @register ∨(x, y)
 @register ∧(x, y)
 @register ⊆(x, y)
+
+function LinearAlgebra.det(A::AbstractMatrix{<:Num}; laplace=true)
+    if laplace
+        n = LinearAlgebra.checksquare(A)
+        if n == 1 
+            return A[1, 1]
+        elseif n == 2
+            return A[1, 1] * A[2, 2] - A[1, 2] * A[2, 1]
+        else
+            temp = 0
+            # Laplace expansion along the first column
+            M′ = A[:, 2:end]
+            for i in axes(A, 1)
+                M = M′[(1:n) .!= i, :]
+                d′ = A[i, 1] * det(M)
+                if iseven(i)
+                    temp = iszero(temp) ? d′ : temp - d′
+                else
+                    temp = iszero(temp) ? d′ : temp + d′
+                end
+            end
+        end
+        return temp
+    else
+        if istriu(A) || istril(A)
+            return det(UpperTriangular(A))
+        end
+        return det(lu(A; check = false))
+    end
+end
