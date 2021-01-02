@@ -145,7 +145,7 @@ eqs = [D(x) ~ -A*x,
        D(y) ~ A*x - B*_x]
 de = ODESystem(eqs)
 @test begin
-    local f
+    local f, du
     f = eval(generate_function(de, [x,y], [A,B,C])[2])
     du = [0.0,0.0]
     f(du, [1.0,2.0], [1,2,3], 0.0)
@@ -225,3 +225,12 @@ using ModelingToolkit
 @derivatives D'~t
 sys = ODESystem([D(x) ~ a])
 @test sys.eqs[1].rhs isa Sym
+
+# issue 708
+@parameters t a
+@variables x(t) y(t) z(t)
+@derivatives D'~t
+sys = ODESystem([D(x) ~ y, 0 ~ x + z, 0 ~ x - y], t, [z, y, x], [])
+sys2 = ode_order_lowering(sys)
+M = ModelingToolkit.calculate_massmatrix(sys2)
+@test M == Diagonal([1, 0, 0])

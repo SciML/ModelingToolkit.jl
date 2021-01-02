@@ -16,12 +16,11 @@ function ode_order_lowering(eqs, iv, states)
     diff_vars = []
     alge_eqs = Equation[]
 
-    for (i, (eq, ss)) ∈ enumerate(zip(eqs, states))
-        if _iszero(eq.lhs)
+    for (i, eq) ∈ enumerate(eqs)
+        if !isdiffeq(eq)
             push!(alge_eqs, eq)
         else
             var, maxorder = var_from_nested_derivative(eq.lhs)
-            # only save to the dict when we need to lower the order to save memory
             maxorder > get(var_order, var, 1) && (var_order[var] = maxorder)
             var′ = lower_varname(var, iv, maxorder - 1)
             rhs′ = diff2term(eq.rhs)
