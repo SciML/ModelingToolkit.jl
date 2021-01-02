@@ -15,15 +15,12 @@ function ode_order_lowering(eqs, iv, states)
     diff_eqs = Equation[]
     diff_vars = []
     alge_eqs = Equation[]
-    alge_vars = []
 
-    for (i, (eq, ss)) ∈ enumerate(zip(eqs, states))
-        if _iszero(eq.lhs)
-            push!(alge_vars, ss)
+    for (i, eq) ∈ enumerate(eqs)
+        if !isdiffeq(eq)
             push!(alge_eqs, eq)
         else
             var, maxorder = var_from_nested_derivative(eq.lhs)
-            # only save to the dict when we need to lower the order to save memory
             maxorder > get(var_order, var, 1) && (var_order[var] = maxorder)
             var′ = lower_varname(var, iv, maxorder - 1)
             rhs′ = diff2term(eq.rhs)
@@ -45,5 +42,5 @@ function ode_order_lowering(eqs, iv, states)
     end
 
     # we want to order the equations and variables to be `(diff, alge)`
-    return (vcat(diff_eqs, alge_eqs), vcat(diff_vars, alge_vars))
+    return (vcat(diff_eqs, alge_eqs), vcat(diff_vars, setdiff(states, diff_vars)))
 end
