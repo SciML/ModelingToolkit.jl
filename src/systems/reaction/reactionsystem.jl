@@ -221,7 +221,8 @@ function assemble_drift(rs; combinatoric_ratelaws=true, as_odes=true)
 end
 
 function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
-    eqs = fill(Num(0), length(rs.states), length(rs.eqs))
+    eqs  = Matrix{Any}(undef, length(rs.states), length(rs.eqs))
+    eqs .= 0
     species_to_idx = Dict((x => i for (i,x) in enumerate(rs.states)))
 
     for (j,rx) in enumerate(rs.eqs)
