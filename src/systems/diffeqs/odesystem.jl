@@ -79,10 +79,10 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
 end
 
 var_from_nested_derivative(x, i=0) = (missing, missing)
-var_from_nested_derivative(x::Term,i=0) = x.op isa Differential ? var_from_nested_derivative(x.args[1],i+1) : (x,i)
+var_from_nested_derivative(x::Term,i=0) = operation(x) isa Differential ? var_from_nested_derivative(arguments(x)[1],i+1) : (x,i)
 var_from_nested_derivative(x::Sym,i=0) = (x,i)
 
-iv_from_nested_derivative(x::Term) = x.op isa Differential ? iv_from_nested_derivative(x.args[1]) : x.args[1]
+iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nested_derivative(arguments(x)[1]) : arguments(x)[1]
 iv_from_nested_derivative(x::Sym) = x
 iv_from_nested_derivative(x) = missing
 
@@ -92,8 +92,8 @@ function vars!(vars, O)
     isa(O, Sym) && return push!(vars, O)
     !isa(O, Term) && return vars
 
-    O.op isa Sym && push!(vars, O)
-    for arg ∈ O.args
+    operation(O) isa Sym && push!(vars, O)
+    for arg ∈ arguments(O)
         vars!(vars, arg)
     end
 
@@ -148,7 +148,7 @@ function collect_vars!(states, parameters, expr, iv)
 end
 
 function collect_var!(states, parameters, var, iv)
-    if isparameter(var) || isparameter(var.op)
+    if isparameter(var) || isparameter(operation(var))
         isequal(var, iv) || push!(parameters, var)
     else
         push!(states, var)

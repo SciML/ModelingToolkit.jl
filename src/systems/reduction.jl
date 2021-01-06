@@ -59,7 +59,7 @@ function alias_elimination(sys::ODESystem)
     subs = Pair[]
     diff_vars = filter(!isnothing, map(eqs) do eq
             if isdiffeq(eq)
-                eq.lhs.args[1]
+                arguments(eq.lhs)[1]
             else
                 nothing
             end

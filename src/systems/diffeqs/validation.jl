@@ -4,12 +4,12 @@ instantiate(x::ModelingToolkit.Variable{Real}) = 1.0
 instantiate(x::ModelingToolkit.Variable) = oneunit(1*ModelingToolkit.vartype(x))
 function instantiate(x::Num)
     x = value(x)
-    if x.op isa Sym
-        return instantiate(x.op)
-    elseif x.op isa Differential
-        instantiate(x.args[1])/instantiate(x.args[1].args[1])
+    if operation(x) isa Sym
+        return instantiate(operation(x))
+    elseif operation(x) isa Differential
+        instantiate(arguments(x)[1])/instantiate(arguments(x)[1].args[1])
     else
-        x.op(instantiate.(x.args)...)
+        operation(x)(instantiate.(arguments(x))...)
     end
 end
 

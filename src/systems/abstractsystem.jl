@@ -118,7 +118,7 @@ Generate a function to evaluate the system's equations.
 function generate_function end
 
 getname(x::Sym) = nameof(x)
-getname(t::Term) = t.op isa Sym ? getname(t.op) : error("Cannot get name of $t")
+getname(t::Term) = operation(t) isa Sym ? getname(operation(t)) : error("Cannot get name of $t")
 
 function Base.getproperty(sys::AbstractSystem, name::Symbol)
 
@@ -161,7 +161,7 @@ function renamespace(namespace, x::Sym)
 end
 
 function renamespace(namespace, x::Term)
-    renamespace(namespace, x.op)(x.args...)
+    renamespace(namespace, operation(x))(arguments(x)...)
 end
 
 function namespace_variables(sys::AbstractSystem)
@@ -189,10 +189,10 @@ function namespace_expr(O::Sym,name,ivname)
 end
 
 function namespace_expr(O::Term{T},name,ivname) where {T}
-    if O.op isa Sym
-        Term{T}(rename(O.op,renamespace(name,O.op.name)),namespace_expr.(O.args,name,ivname))
+    if operation(O) isa Sym
+        Term{T}(rename(operation(O),renamespace(name,operation(O).name)),namespace_expr.(arguments(O),name,ivname))
     else
-        Term{T}(O.op,namespace_expr.(O.args,name,ivname))
+        Term{T}(operation(O),namespace_expr.(arguments(O),name,ivname))
     end
 end
 namespace_expr(O,name,ivname) = O
@@ -278,11 +278,11 @@ struct AbstractSysToExpr
 end
 AbstractSysToExpr(sys) = AbstractSysToExpr(sys,states(sys))
 function (f::AbstractSysToExpr)(O::Term)
-    any(isequal(O), f.states) && return O.op.name  # variables
-    if isa(O.op, Sym)
-        return build_expr(:call, Any[O.op.name; f.(O.args)])
+    any(isequal(O), f.states) && return operation(O).name  # variables
+    if isa(operation(O), Sym)
+        return build_expr(:call, Any[operation(O).name; f.(arguments(O))])
     end
-    return build_expr(:call, Any[O.op; f.(O.args)])
+    return build_expr(:call, Any[operation(O); f.(arguments(O))])
 end
 (f::AbstractSysToExpr)(x) = toexpr(x)
 

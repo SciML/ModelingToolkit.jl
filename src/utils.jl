@@ -32,10 +32,10 @@ function flatten_expr!(x)
 end
 
 function detime_dvs(op::Term)
-  if op.op isa Sym
-      Sym{Real}(nameof(op.op))
+  if operation(op) isa Sym
+      Sym{Real}(nameof(operation(op)))
   else
-      Term{Real}(op.op,detime_dvs.(op.args))
+      Term{Real}(operation(op),detime_dvs.(arguments(op)))
   end
 end
 detime_dvs(op) = op
@@ -45,11 +45,11 @@ function retime_dvs(op::Sym,dvs,iv)
 end
 
 function retime_dvs(op::Term, dvs, iv)
-    similarterm(op, op.op, retime_dvs.(op.args,(dvs,),(iv,)))
+    similarterm(op, operation(op), retime_dvs.(arguments(op),(dvs,),(iv,)))
 end
 retime_dvs(op,dvs,iv) = op
 
-is_derivative(O::Term) = isa(O.op, Differential)
+is_derivative(O::Term) = isa(operation(O), Differential)
 is_derivative(::Any) = false
 
 """
@@ -79,7 +79,7 @@ julia> ModelingToolkit.get_variables(ex)
 get_variables(e::Num, varlist=nothing) = get_variables(value(e), varlist)
 get_variables!(vars, e, varlist=nothing) = vars
 
-is_singleton(e::Term) = e.op isa Sym
+is_singleton(e::Term) = operation(e) isa Sym
 is_singleton(e::Sym) = true
 is_singleton(e) = false
 
@@ -91,7 +91,7 @@ function get_variables!(vars, e::Symbolic, varlist=nothing)
             push!(vars, e)
         end
     else
-        foreach(x -> get_variables!(vars, x, varlist), e.args)
+        foreach(x -> get_variables!(vars, x, varlist), arguments(e))
     end
     return (vars isa AbstractVector) ? unique!(vars) : vars
 end
@@ -158,12 +158,12 @@ function states_to_sym(states::Set)
         if O isa Equation
             Expr(:(=), _states_to_sym(O.lhs), _states_to_sym(O.rhs))
         elseif O isa Term
-            if isa(O.op, Sym)
+            if isa(operation(O), Sym)
                 O in states && return tosymbol(O)
                 # dependent variables
-                return build_expr(:call, Any[O.op.name; _states_to_sym.(O.args)])
+                return build_expr(:call, Any[operation(O).name; _states_to_sym.(arguments(O))])
             else
-                return build_expr(:call, Any[O.op; _states_to_sym.(O.args)])
+                return build_expr(:call, Any[operation(O); _states_to_sym.(arguments(O))])
             end
         elseif O isa Num
             return _states_to_sym(value(O))
@@ -213,13 +213,13 @@ Symbol("z⦗t⦘")
 ```
 """
 function tosymbol(t::Term; states=nothing, escape=true)
-    if t.op isa Sym
+    if operation(t) isa Sym
         if states !== nothing && !(any(isequal(t), states))
-            return nameof(t.op)
+            return nameof(operation(t))
         end
-        op = nameof(t.op)
-        args = t.args
-    elseif t.op isa Differential
+        op = nameof(operation(t))
+        args = arguments(t)
+    elseif operation(t) isa Differential
         term = diff2term(t)
         op = Symbol(operation(term))
         args = arguments(term)
@@ -252,7 +252,7 @@ makesym(t::Num; kwargs...) = makesym(value(t); kwargs...)
 
 function lower_varname(var::Term, idv, order)
     order == 0 && return var
-    name = string(nameof(var.op))
+    name = string(nameof(operation(var)))
     underscore = 'ˍ'
     idx = findlast(underscore, name)
     append = string(idv)^order
@@ -262,7 +262,7 @@ function lower_varname(var::Term, idv, order)
         nidx = nextind(name, idx)
         newname = Symbol(name[1:idx], name[nidx:end], append)
     end
-    return Sym{symtype(var.op)}(newname)(var.args[1])
+    return Sym{symtype(operation(var))}(newname)(arguments(var)[1])
 end
 
 function lower_varname(t::Term, iv)
@@ -291,9 +291,9 @@ lower_mapnames(umap::Tuple, name) = umap
 
 function flatten_differential(O::Term)
     @assert is_derivative(O) "invalid differential: $O"
-    is_derivative(O.args[1]) || return (O.args[1], O.op.x, 1)
-    (x, t, order) = flatten_differential(O.args[1])
-    isequal(t, O.op.x) || throw(ArgumentError("non-matching differentials on lhs: $t, $(O.op.x)"))
+    is_derivative(arguments(O)[1]) || return (arguments(O)[1], operation(O).x, 1)
+    (x, t, order) = flatten_differential(arguments(O)[1])
+    isequal(t, operation(O).x) || throw(ArgumentError("non-matching differentials on lhs: $t, $(operation(O).x)"))
     return (x, t, order + 1)
 end
 
@@ -314,5 +314,5 @@ function diff2term(O)
         (x, t, order) = flatten_differential(O)
         return lower_varname(x, t, order)
     end
-    return Term{Real}(O.op, diff2term.(O.args))
+    return Term{Real}(operation(O), diff2term.(arguments(O)))
 end

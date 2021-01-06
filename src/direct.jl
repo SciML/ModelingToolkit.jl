@@ -214,18 +214,18 @@ function sparsehessian(O, vars::AbstractVector; simplify = true)
 end
 
 function toexpr(O::Term)
-  if isa(O.op, Differential)
-     return :(derivative($(toexpr(O.args[1])),$(toexpr(O.op.x))))
-  elseif isa(O.op, Sym)
-    isempty(O.args) && return O.op.name
-    return Expr(:call, toexpr(O.op), toexpr.(O.args)...)
+  if isa(operation(O), Differential)
+     return :(derivative($(toexpr(arguments(O)[1])),$(toexpr(operation(O).x))))
+  elseif isa(operation(O), Sym)
+    isempty(arguments(O)) && return operation(O).name
+    return Expr(:call, toexpr(operation(O)), toexpr.(arguments(O))...)
   end
-  if O.op === (^)
-      if length(O.args) > 1  && O.args[2] isa Number && O.args[2] < 0
-          return Expr(:call, ^, Expr(:call, inv, toexpr(O.args[1])), -(O.args[2]))
+  if operation(O) === (^)
+      if length(arguments(O)) > 1  && arguments(O)[2] isa Number && arguments(O)[2] < 0
+          return Expr(:call, ^, Expr(:call, inv, toexpr(arguments(O)[1])), -(arguments(O)[2]))
       end
   end
-  return Expr(:call, O.op, toexpr.(O.args)...)
+  return Expr(:call, operation(O), toexpr.(arguments(O))...)
 end
 toexpr(s::Sym) = nameof(s)
 toexpr(s) = s

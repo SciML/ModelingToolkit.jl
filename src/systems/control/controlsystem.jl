@@ -90,12 +90,12 @@ struct ControlToExpr
 end
 ControlToExpr(@nospecialize(sys)) = ControlToExpr(sys,states(sys),controls(sys))
 function (f::ControlToExpr)(O::Term)
-    res = if isa(O.op, Sym)
+    res = if isa(operation(O), Sym)
         # normal variables and control variables
         (any(isequal(O), f.states) || any(isequal(O), f.controls)) && return tosymbol(O)
-        build_expr(:call, Any[O.op.name; f.(O.args)])
+        build_expr(:call, Any[operation(O).name; f.(arguments(O))])
     else
-        build_expr(:call, Any[Symbol(O.op); f.(O.args)])
+        build_expr(:call, Any[Symbol(operation(O)); f.(arguments(O))])
     end
 end
 (f::ControlToExpr)(x::Sym) = x.name
@@ -138,11 +138,11 @@ function runge_kutta_discretize(sys::ControlSystem,dt,tspan;
     var(n, i...) = var(nameof(n), i...)
     var(n::Symbol, i...) = Sym{FnType{Tuple{symtype(sys.iv)}, Real}}(nameof(Variable(n, i...)))
     # Expand out all of the variables in time and by stages
-    timed_vars = [[var(x.op,i)(sys.iv) for i in 1:n+1] for x in states(sys)]
-    k_vars = [[var(Symbol(:ᵏ,nameof(x.op)),i,j)(sys.iv) for i in 1:m, j in 1:n] for x in states(sys)]
+    timed_vars = [[var(operation(x),i)(sys.iv) for i in 1:n+1] for x in states(sys)]
+    k_vars = [[var(Symbol(:ᵏ,nameof(operation(x))),i,j)(sys.iv) for i in 1:m, j in 1:n] for x in states(sys)]
     states_timeseries = [getindex.(timed_vars,j) for j in 1:n+1]
     k_timeseries = [[Num.(getindex.(k_vars,i,j)) for i in 1:m] for j in 1:n]
-    control_timeseries = [[[var(x.op,i,j)(sys.iv) for x in controls(sys)] for i in 1:m] for j in 1:n]
+    control_timeseries = [[[var(operation(x),i,j)(sys.iv) for x in controls(sys)] for i in 1:m] for j in 1:n]
     ps = parameters(sys)
     iv = sys.iv
 
