@@ -37,7 +37,8 @@ Base.:(==)(D1::Differential, D2::Differential) = isequal(D1.x, D2.x)
 _isfalse(occ::Bool) = occ === false
 _isfalse(occ::Term) = _isfalse(operation(occ))
 
-function occursin_info(x, expr::Term)
+function occursin_info(x, expr)
+    !istree(expr) && return false
     if isequal(x, expr)
         true
     else
@@ -52,16 +53,15 @@ function occursin_info(x, expr::Sym)
     isequal(x, expr)
 end
 
-hasderiv(O::Term) = operation(O) isa Differential || any(hasderiv, arguments(O))
-hasderiv(O) = false
-
-occursin_info(x, y) = false
+function hasderiv(O)
+    istree(O) ? operation(O) isa Differential || any(hasderiv, arguments(O)) : false
+end
 """
 $(SIGNATURES)
 
 TODO
 """
-function expand_derivatives(O::Symbolic, simplify=true; occurances=nothing)
+function expand_derivatives(O::Symbolic, simplify=false; occurances=nothing)
     if istree(O) && isa(operation(O), Differential)
         @assert length(arguments(O)) == 1
         arg = expand_derivatives(arguments(O)[1], false)
@@ -73,45 +73,45 @@ function expand_derivatives(O::Symbolic, simplify=true; occurances=nothing)
         _isfalse(occurances) && return 0
         occurances isa Bool && return 1 # means it's a `true`
 
-        (D, o) = (operation(O), arg)
+        D = operation(O)
 
-        if !istree(o)
-            return O # Cannot expand
-        elseif isa(operation(o), Sym)
-            return O # Cannot expand
-        elseif isa(operation(o), Differential)
+        if !istree(arg)
+            return D(arg) # Cannot expand
+        elseif isa(operation(arg), Sym)
+            return D(arg) # Cannot expand
+        elseif isa(operation(arg), Differential)
             # The recursive expand_derivatives was not able to remove
             # a nested Differential. We can attempt to differentiate the
             # inner expression wrt to the outer iv. And leave the
             # unexpandable Differential outside.
-            if isequal(operation(o).x, D.x)
-                return O
+            if isequal(operation(arg).x, D.x)
+                return D(arg)
             else
-                inner = expand_derivatives(D(arguments(o)[1]), false)
+                inner = expand_derivatives(D(arguments(arg)[1]), false)
                 # if the inner expression is not expandable either, return
                 if istree(inner) && operation(inner) isa Differential
-                    return O
+                    return D(arg)
                 else
-                    return expand_derivatives(operation(o)(inner), simplify)
+                    return expand_derivatives(operation(arg)(inner), simplify)
                 end
             end
         end
 
-        l = length(arguments(o))
+        l = length(arguments(arg))
         exprs = []
         c = 0
 
         for i in 1:l
-            t2 = expand_derivatives(D(arguments(o)[i]),false, occurances=arguments(occurances)[i])
+            t2 = expand_derivatives(D(arguments(arg)[i]),false, occurances=arguments(occurances)[i])
 
             x = if _iszero(t2)
                 t2
             elseif _isone(t2)
-                d = derivative_idx(o, i)
-                d isa NoDeriv ? D(o) : d
+                d = derivative_idx(arg, i)
+                d isa NoDeriv ? D(arg) : d
             else
-                t1 = derivative_idx(o, i)
-                t1 = t1 isa NoDeriv ? D(o) : t1
+                t1 = derivative_idx(arg, i)
+                t1 = t1 isa NoDeriv ? D(arg) : t1
                 make_operation(*, [t1, t2])
             end
 
