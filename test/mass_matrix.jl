@@ -29,6 +29,8 @@ function rober(du,u,p,t)
 end
 f = ODEFunction(rober,mass_matrix=M)
 prob_mm2 = ODEProblem(f,[1.0,0.0,0.0],(0.0,1e5),(0.04,3e7,1e4))
-sol2 = solve(prob_mm2,Rodas5(),reltol=1e-8,abstol=1e-8)
+sol2 = solve(prob_mm2,Rodas5(),reltol=1e-8,abstol=1e-8,tstops=sol.t,adaptive=false)
 
-@test Array(sol) == Array(sol2)
+# MTK expression are canonicalized, so the floating point numbers are slightly
+# different
+@test Array(sol) ≈ Array(sol2)
