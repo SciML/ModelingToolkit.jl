@@ -250,7 +250,7 @@ x⦗t⦘
 makesym(t::Symbolic; kwargs...) = Sym{symtype(t)}(tosymbol(t; kwargs...))
 makesym(t::Num; kwargs...) = makesym(value(t); kwargs...)
 
-function lower_varname(var::Term, idv, order)
+function lower_varname(var::Symbolic, idv, order)
     order == 0 && return var
     name = string(nameof(operation(var)))
     underscore = 'ˍ'
@@ -265,7 +265,7 @@ function lower_varname(var::Term, idv, order)
     return Sym{symtype(operation(var))}(newname)(arguments(var)[1])
 end
 
-function lower_varname(t::Term, iv)
+function lower_varname(t::Symbolic, iv)
     var, order = var_from_nested_derivative(t)
     lower_varname(var, iv, order)
 end
@@ -309,7 +309,7 @@ xˍtt(t)
 ```
 """
 function diff2term(O)
-    isa(O, Term) || return O
+    (isa(O, Symbolic) && !isa(O, Sym)) || return O
     if is_derivative(O)
         (x, t, order) = flatten_differential(O)
         return lower_varname(x, t, order)
