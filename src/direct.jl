@@ -214,7 +214,7 @@ function sparsehessian(O, vars::AbstractVector; simplify = true)
 end
 
 function toexpr(O)
-    !istree(O) && return s
+    !istree(O) && return O
     if isa(operation(O), Differential)
         return :(derivative($(toexpr(arguments(O)[1])),$(toexpr(operation(O).x))))
     elseif isa(operation(O), Sym)
