@@ -23,7 +23,7 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils: Term, Sym, to_symbolic, FnType, @rule, Rewriters, substitute, similarterm
+import SymbolicUtils: Term, Add, Mul, Pow, Sym, to_symbolic, FnType, @rule, Rewriters, substitute, similarterm
 
 using LinearAlgebra: LU, BlasInt
 
@@ -72,7 +72,17 @@ Base.show(io::IO, n::Num) = show_numwrap[] ? print(io, :(Num($(value(n))))) : Ba
 
 Base.promote_rule(::Type{<:Number}, ::Type{<:Num}) = Num
 Base.promote_rule(::Type{<:Symbolic{<:Number}}, ::Type{<:Num}) = Num
-Base.getproperty(t::Term, f::Symbol) = f === :op ? operation(t) : f === :args ? arguments(t) : getfield(t, f)
+function Base.getproperty(t::Union{Add, Mul, Pow, Term}, f::Symbol)
+    if f === :op
+        Base.depwarn("`x.op` is deprecated, use `operation(x)` instead", :getproperty, force=true)
+        operation(t)
+    elseif f === :args
+        Base.depwarn("`x.args` is deprecated, use `arguments(x)` instead", :getproperty, force=true)
+        arguments(t)
+    else
+        getfield(t, f)
+    end
+end
 <ₑ(s::Num, x) = value(s) <ₑ value(x)
 <ₑ(s, x::Num) = value(s) <ₑ value(x)
 <ₑ(s::Num, x::Num) = value(s) <ₑ value(x)

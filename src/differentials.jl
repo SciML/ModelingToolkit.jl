@@ -61,9 +61,9 @@ $(SIGNATURES)
 
 TODO
 """
-function expand_derivatives(O::Term, simplify=true; occurances=nothing)
-    if isa(O.op, Differential)
-        @assert length(O.args) == 1
+function expand_derivatives(O::Symbolic, simplify=true; occurances=nothing)
+    if istree(O) && isa(operation(O), Differential)
+        @assert length(arguments(O)) == 1
         arg = expand_derivatives(O.args[1], false)
 
         if occurances == nothing
@@ -75,11 +75,11 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
 
         (D, o) = (O.op, arg)
 
-        if !isa(o, Term)
+        if !istree(o)
             return O # Cannot expand
-        elseif isa(o.op, Sym)
+        elseif isa(operation(o), Sym)
             return O # Cannot expand
-        elseif isa(o.op, Differential)
+        elseif isa(operation(o), Differential)
             # The recursive expand_derivatives was not able to remove
             # a nested Differential. We can attempt to differentiate the
             # inner expression wrt to the outer iv. And leave the
@@ -87,9 +87,9 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
             if isequal(o.op.x, D.x)
                 return O
             else
-                inner = expand_derivatives(D(o.args[1]), false)
+                inner = expand_derivatives(D(arguments(o)[1]), false)
                 # if the inner expression is not expandable either, return
-                if inner isa Term && operation(inner) isa Differential
+                if istree(inner) && operation(inner) isa Differential
                     return O
                 else
                     return expand_derivatives(o.op(inner), simplify)
@@ -187,7 +187,9 @@ sin(x())
 ```
 """
 derivative_idx(O::Any, ::Any) = 0
-derivative_idx(O::Term, idx) = derivative(O.op, (O.args...,), Val(idx))
+function derivative_idx(O::Symbolic, idx)
+    istree(O) ? derivative(operation(O), (arguments(O)...,), Val(idx)) : 0
+end
 
 # Indicate that no derivative is defined.
 struct NoDeriv
