@@ -164,9 +164,9 @@ let
         u = map(value, u)
         idx(i) = TermCombination(Set([Dict(i=>1)]))
         dict = Dict(u .=> idx.(1:length(u)))
-        found = []
         f = Rewriters.Prewalk(x->haskey(dict, x) ? dict[x] : x)(f)
-        _sparse(linearity_propagator(f), length(u))
+        lp = linearity_propagator(f)
+        _sparse(lp, length(u))
     end
 end
 
