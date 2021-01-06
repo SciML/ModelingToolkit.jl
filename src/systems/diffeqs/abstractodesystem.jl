@@ -7,13 +7,12 @@ function calculate_tgrad(sys::AbstractODESystem;
   # t + u(t)`.
   rhs = [detime_dvs(eq.rhs) for eq ∈ equations(sys)]
   iv = sys.iv
-  notime_tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r)) for r in rhs]
-  if simplify
-      tgrad = ModelingToolkit.simplify.(notime_tgrad)
-  end
   xs = states(sys)
-  rule = Dict(map((x, xt) -> x=>xt, detime_dvs.(xs), xs))
-  tgrad = substitute.(tgrad, Ref(rule))
+  rule = Dict(map((x, xt) -> xt=>x, detime_dvs.(xs), xs))
+  rhs = substitute.(rhs, Ref(rule))
+  tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r), simplify) for r in rhs]
+  reverse_rule = Dict(map((x, xt) -> x=>xt, detime_dvs.(xs), xs))
+  tgrad = Num.(substitute.(tgrad, Ref(reverse_rule)))
   sys.tgrad[] = tgrad
   return tgrad
 end
