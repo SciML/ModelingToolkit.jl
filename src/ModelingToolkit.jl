@@ -176,6 +176,7 @@ include("systems/diffeqs/abstractodesystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
 include("systems/diffeqs/modelingtoolkitize.jl")
 include("systems/diffeqs/validation.jl")
+include("systems/diffeqs/basic_transformations.jl")
 
 include("systems/jumps/jumpsystem.jl")
 
@@ -206,7 +207,7 @@ export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
 export ControlSystem
-export ode_order_lowering
+export ode_order_lowering, liouville_transform
 export runge_kutta_discretize
 export PDESystem
 export Reaction, ReactionSystem, ismassaction, oderatelaw, jumpratelaw

@@ -17,6 +17,7 @@ ODESystem
 
 ```@docs
 ode_order_lowering
+liouville_transform
 ```
 
 ## Applicable Calculation and Generation Functions
