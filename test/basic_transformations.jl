@@ -1,38 +1,33 @@
 using ModelingToolkit, OrdinaryDiffEq, Test
 
-@parameters t σ ρ β
-@variables x(t) y(t) z(t)
+@parameters t α β γ δ
+@variables x(t) y(t)
 @derivatives D'~t
 
-eqs = [D(D(x)) ~ σ*(y-x),
-       D(y) ~ x*(ρ-z)-y,
-       D(z) ~ x*y - β*z]
+eqs = [D(x) ~ α*x - β*x*y,
+       D(y) ~ -δ*y + γ*x*y]
 
 sys = ODESystem(eqs)
-sys = ode_order_lowering(sys)
 
-u0 = [D(x) => 2.0,
-      x => 1.0,
-      y => 0.0,
-      z => 0.0]
+u0 = [x => 1.0,
+      y => 1.0]
 
-p  = [σ => 28.0,
-      ρ => 10.0,
-      β => 8/3]
+p  = [α => 1.5,
+      β => 1.0,
+      δ => 3.0,
+      γ => 1.0]
 
-tspan = (0.0,100.0)
-prob = ODEProblem(sys,u0,tspan,p,jac=true)
+tspan = (0.0,10.0)
+prob = ODEProblem(sys,u0,tspan,p)
 sol = solve(prob,Tsit5())
 
-sys2 = louiville_transform(sys)
+sys2 = liouville_transform(sys)
 @variables trJ
 
-u0 = [D(x) => 2.0,
-      x => 1.0,
-      y => 0.0,
-      z => 0.0,
-      trJ => 0.0]
+u0 = [x => 1.0,
+      y => 1.0,
+      trJ => 1.0]
 
 prob = ODEProblem(sys2,u0,tspan,p,jac=true)
 sol = solve(prob,Tsit5())
-@test sol[end,end] ≈ 366.66666666
+@test sol[end,end] ≈ 1.0742818931017244

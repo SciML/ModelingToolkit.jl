@@ -207,7 +207,7 @@ export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
 export ControlSystem
-export ode_order_lowering
+export ode_order_lowering, liouville_transform
 export runge_kutta_discretize
 export PDESystem
 export Reaction, ReactionSystem, ismassaction, oderatelaw, jumpratelaw
