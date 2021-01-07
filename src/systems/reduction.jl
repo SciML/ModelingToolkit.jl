@@ -1,4 +1,4 @@
-export alias_elimination
+export alias_elimination, flatten
 
 function flatten(sys::ODESystem)
     if isempty(sys.systems)
