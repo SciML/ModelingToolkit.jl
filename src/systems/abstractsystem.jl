@@ -176,7 +176,11 @@ function namespace_pins(sys::AbstractSystem)
     [renamespace(sys.name,x) for x in pins(sys)]
 end
 
-namespace_equations(sys::AbstractSystem) = namespace_equation.(equations(sys),sys.name,sys.iv.name)
+function namespace_equations(sys::AbstractSystem)
+    eqs = equations(sys)
+    isempty(eqs) && return Equation[]
+    map(eq->namespace_equation(eq,sys.name,sys.iv.name), eqs)
+end
 
 function namespace_equation(eq::Equation,name,ivname)
     _lhs = namespace_expr(eq.lhs,name,ivname)
@@ -236,11 +240,10 @@ function equations(sys::ModelingToolkit.AbstractSystem)
     if isempty(sys.systems)
         return sys.eqs
     else
-        eqs = [sys.eqs;
+        eqs = Equation[sys.eqs;
                reduce(vcat,
                       namespace_equations.(sys.systems);
                       init=Equation[])]
-
         return eqs
     end
 end

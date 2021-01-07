@@ -109,8 +109,28 @@ let
         x ~ y
     ];
     sys = ODESystem(eqs, t, [x], []);
-    asys = alias_elimination(ModelingToolkit.flatten(sys))
+    asys = alias_elimination(flatten(sys))
 
     test_equal.(asys.eqs, [D(x) ~ 2x])
     test_equal.(asys.observed, [y ~ x])
+end
+
+# issue #716
+let
+    @parameters t
+    @derivatives D'~t
+    @variables x(t), u(t), y(t)
+    @parameters a, b, c, d
+    ol = ODESystem([D(x) ~ a * x + b * u, y ~ c * x], t, name=:ol)
+    @variables u_c(t), y_c(t)
+    @parameters k_P
+    pc = ODESystem(Equation[], t, pins=[y_c], observed = [u_c ~ k_P * y_c], name=:pc)
+    connections = [
+                   ol.u ~ pc.u_c,
+                   y_c ~ ol.y
+                  ]
+    connected = ODESystem(connections, t, systems=[ol, pc])
+
+    @test equations(connected) isa Vector{Equation}
+    @test_nowarn flatten(connected)
 end
