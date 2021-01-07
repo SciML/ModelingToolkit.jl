@@ -114,3 +114,32 @@ let
     test_equal.(asys.eqs, [D(x) ~ 2x])
     test_equal.(asys.observed, [y ~ x])
 end
+
+# issue #716
+let
+    @parameters t
+    @derivatives D'~t
+
+    ## Define a system
+
+    @variables x(t), u(t), y(t)
+    @parameters a, b, c, d
+    ol = ODESystem([D(x) ~ a * x + b * u, y ~ c * x], t, name=:ol)
+
+    ## Define another system that is purely observing
+
+    @variables u_c(t), y_c(t)
+    @parameters k_P
+    pc = ODESystem(Equation[], t, pins=[y_c], observed = [u_c ~ k_P * y_c], name=:pc)
+
+    ## Connect them
+
+    connections = [
+                   ol.u ~ pc.u_c,
+                   y_c ~ ol.y
+                  ]
+
+    connected = MTK.ODESystem(connections, t, systems=[ol, pc])
+
+    @test_nowarn MTK.flatten(connected)
+end
