@@ -75,7 +75,7 @@ function generate_rate_function(js, rate)
 end
 
 function generate_affect_function(js, affect, outputidxs)
-    build_function(affect, states(js),
+    bf = build_function(map(x->x isa Equation ? x.rhs : x , affect), states(js),
                    parameters(js),
                    conv = states_to_sym(states(js)),
                    independent_variable(js),
