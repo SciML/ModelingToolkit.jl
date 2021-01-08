@@ -12,15 +12,15 @@ prettify_expr(expr::Expr) = Expr(expr.head, prettify_expr.(expr.args)...)
 
     rhs = getfield.(eqs, :rhs)
     rhs = prettify_expr.(toexpr.(rhs))
-    rhs = [postwalk(x -> x isa Expr && length(arguments(x)) == 1 ? arguments(x)[1] : x, eq) for eq in rhs]
-    rhs = [postwalk(x -> x isa Expr && arguments(x)[1] == :derivative && length(arguments(x)[2].args) == 2 ? :($(Symbol(:d, arguments(x)[2]))/($(Symbol(:d, arguments(x)[2].args[2])))) : x, eq) for eq in rhs]
-    rhs = [postwalk(x -> x isa Expr && arguments(x)[1] == :derivative ? "\\frac{d\\left($(Latexify.latexraw(arguments(x)[2]))\\right)}{d$(Latexify.latexraw(arguments(x)[3]))}" : x, eq) for eq in rhs]
+    rhs = [postwalk(x -> x isa Expr && length(x.args) == 1 ? x.args[1] : x, eq) for eq in rhs]
+    rhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative && length(x.args[2].args) == 2 ? :($(Symbol(:d, x.args[2]))/($(Symbol(:d, x.args[2].args[2])))) : x, eq) for eq in rhs]
+    rhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative ? "\\frac{d\\left($(Latexify.latexraw(x.args[2]))\\right)}{d$(Latexify.latexraw(x.args[3]))}" : x, eq) for eq in rhs]
 
     lhs = getfield.(eqs, :lhs)
     lhs = prettify_expr.(toexpr.(lhs))
-    lhs = [postwalk(x -> x isa Expr && length(arguments(x)) == 1 ? arguments(x)[1] : x, eq) for eq in lhs]
-    lhs = [postwalk(x -> x isa Expr && arguments(x)[1] == :derivative && length(arguments(x)[2].args) == 2 ? :($(Symbol(:d, arguments(x)[2]))/($(Symbol(:d, arguments(x)[2].args[2])))) : x, eq) for eq in lhs]
-    lhs = [postwalk(x -> x isa Expr && arguments(x)[1] == :derivative ? "\\frac{d\\left($(Latexify.latexraw(arguments(x)[2]))\\right)}{d$(Latexify.latexraw(arguments(x)[3]))}" : x, eq) for eq in lhs]
+    lhs = [postwalk(x -> x isa Expr && length(x.args) == 1 ? x.args[1] : x, eq) for eq in lhs]
+    lhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative && length(x.args[2].args) == 2 ? :($(Symbol(:d, x.args[2]))/($(Symbol(:d, x.args[2].args[2])))) : x, eq) for eq in lhs]
+    lhs = [postwalk(x -> x isa Expr && x.args[1] == :derivative ? "\\frac{d\\left($(Latexify.latexraw(x.args[2]))\\right)}{d$(Latexify.latexraw(x.args[3]))}" : x, eq) for eq in lhs]
 
     return lhs, rhs
 end
