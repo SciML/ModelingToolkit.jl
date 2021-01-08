@@ -149,8 +149,9 @@ function collect_vars!(states, parameters, expr, iv)
 end
 
 function collect_var!(states, parameters, var, iv)
+    isequal(var, iv) && return nothing
     if isparameter(var) || isparameter(operation(var))
-        isequal(var, iv) || push!(parameters, var)
+        push!(parameters, var)
     else
         push!(states, var)
     end
