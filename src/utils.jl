@@ -309,7 +309,7 @@ xˍtt(t)
 ```
 """
 function diff2term(O)
-    (isa(O, Symbolic) && !isa(O, Sym)) || return O
+    istree(O)) || return O
     if is_derivative(O)
         (x, t, order) = flatten_differential(O)
         return lower_varname(x, t, order)
