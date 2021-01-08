@@ -25,6 +25,8 @@ using RecursiveArrayTools
 import SymbolicUtils
 import SymbolicUtils: Term, Add, Mul, Pow, Sym, to_symbolic, FnType, @rule, Rewriters, substitute, similarterm
 
+import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
+
 using LinearAlgebra: LU, BlasInt
 
 import LightGraphs: SimpleDiGraph, add_edge!
@@ -88,7 +90,7 @@ end
 <ₑ(s::Num, x::Num) = value(s) <ₑ value(x)
 
 for T in (Integer, Rational)
-    @eval Base.:(^)(n::Num, i::$T) = Num(Term{symtype(n)}(^, [value(n),i]))
+    @eval Base.:(^)(n::Num, i::$T) = Num(value(n)^i)
 end
 
 macro num_method(f, expr, Ts=nothing)

@@ -128,7 +128,8 @@ let
 
     _scalar = one(TermCombination)
 
-    linearity_propagator = [
+    simterm(t, f, args) = Term{Any}(f, args)
+    linearity_rules = [
           @rule +(~~xs) => reduce(+, filter(isidx, ~~xs), init=_scalar)
           @rule *(~~xs) => reduce(*, filter(isidx, ~~xs), init=_scalar)
           @rule (~f)(~x::(!isidx)) => _scalar
@@ -146,7 +147,8 @@ let
               else
                   error("Function of unknown linearity used: ", ~f)
               end
-          end] |> Rewriters.Chain |> Rewriters.Postwalk |> Rewriters.Fixpoint
+          end]
+    linearity_propagator = Fixpoint(Postwalk(Chain(linearity_rules); similarterm=simterm))
 
     global hessian_sparsity
 
@@ -164,7 +166,7 @@ let
         u = map(value, u)
         idx(i) = TermCombination(Set([Dict(i=>1)]))
         dict = Dict(u .=> idx.(1:length(u)))
-        f = Rewriters.Prewalk(x->haskey(dict, x) ? dict[x] : x)(f)
+        f = Rewriters.Prewalk(x->haskey(dict, x) ? dict[x] : x; similarterm=simterm)(f)
         lp = linearity_propagator(f)
         _sparse(lp, length(u))
     end

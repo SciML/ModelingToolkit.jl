@@ -78,11 +78,14 @@ function Base.:(==)(comb1::TermCombination, comb2::TermCombination)
 end
 =#
 
-# we don't care about the ordering in this case
-SymbolicUtils.:<ₑ(comb1::TermCombination, comb2::TermCombination) = true
 # to make Mul and Add work
 Base.:*(::Number, comb::TermCombination) = comb
-Base.:^(comb::TermCombination, ::Number) = comb
+function Base.:^(comb::TermCombination, ::Number)
+    isone(comb) && return comb
+    iszero(comb) && return _scalar
+    return comb *  comb
+end
+
 function Base.:+(comb1::TermCombination, comb2::TermCombination)
     if isone(comb1) && !iszero(comb2)
         return comb2
