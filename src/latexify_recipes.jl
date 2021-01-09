@@ -28,3 +28,8 @@ end
 @latexrecipe function f(sys::ModelingToolkit.AbstractSystem)
     return latexify(equations(sys))
 end
+
+Base.show(io::IO, ::MIME"text/latex", x::ModelingToolkit.Num) = print(io, latexify(x))
+Base.show(io::IO, ::MIME"text/latex", x::ModelingToolkit.Symbolic) = print(io, latexify(x))
+Base.show(io::IO, ::MIME"text/latex", x::ModelingToolkit.AbstractSystem) = print(io, latexify(x))
+Base.show(io::IO, ::MIME"text/latex", x::Vector{ModelingToolkit.Equation}) = print(io, latexify(x))
