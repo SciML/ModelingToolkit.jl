@@ -163,12 +163,15 @@ function states_to_sym(states::Set)
         if O isa Equation
             Expr(:(=), _states_to_sym(O.lhs), _states_to_sym(O.rhs))
         elseif istree(O)
-            if isa(operation(O), Sym)
+            op = operation(O)
+            args = arguments(O)
+            if op isa Sym
                 O in states && return tosymbol(O)
                 # dependent variables
-                return build_expr(:call, Any[operation(O).name; _states_to_sym.(arguments(O))])
+                return build_expr(:call, Any[nameof(op); _states_to_sym.(args)])
             else
-                return build_expr(:call, Any[operation(O); _states_to_sym.(arguments(O))])
+                canonical, O = canonicalexpr(O)
+                return canonical ? O : build_expr(:call, Any[op; _states_to_sym.(args)])
             end
         elseif O isa Num
             return _states_to_sym(value(O))

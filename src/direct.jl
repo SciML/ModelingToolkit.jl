@@ -216,21 +216,38 @@ function sparsehessian(O, vars::AbstractVector; simplify = true)
 end
 
 function toexpr(O)
-    !istree(O) && return O
-    if isa(operation(O), Differential)
-        return :(derivative($(toexpr(arguments(O)[1])),$(toexpr(operation(O).x))))
-    elseif isa(operation(O), Sym)
-        isempty(arguments(O)) && return operation(O).name
-        return Expr(:call, toexpr(operation(O)), toexpr.(arguments(O))...)
+    canonical, O = canonicalexpr(O)
+    canonical && return O
+
+    op = operation(O)
+    args = arguments(O)
+    if op isa Differential
+        return :(derivative($(toexpr(args[1])),$(toexpr(op.x))))
+    elseif op isa Sym
+        isempty(args) && return nameof(op)
+        return Expr(:call, toexpr(op), toexpr.(args)...)
     end
-    if operation(O) === (^)
-        if length(arguments(O)) > 1  && arguments(O)[2] isa Number && arguments(O)[2] < 0
-            return Expr(:call, ^, Expr(:call, inv, toexpr(arguments(O)[1])), -(arguments(O)[2]))
-        end
-    end
-    return Expr(:call, operation(O), toexpr.(arguments(O))...)
+    return Expr(:call, op, toexpr.(args)...)
 end
 toexpr(s::Sym) = nameof(s)
+
+"""
+    canonicalexpr(O) -> (canonical::Bool, expr)
+
+Canonicalize `O`. Return `canonical` if `expr` is valid code to generate.
+"""
+function canonicalexpr(O)
+    !istree(O) && return true, O
+    op = operation(O)
+    args = arguments(O)
+    if op === (^)
+        if length(args) == 2 && args[2] isa Number && args[2] < 0
+            expr = Expr(:call, ^, Expr(:call, inv, toexpr(args[1])), -args[2])
+            return true, expr
+        end
+    end
+    return false, O
+end
 
 function toexpr(eq::Equation)
     Expr(:(=), toexpr(eq.lhs), toexpr(eq.rhs))
