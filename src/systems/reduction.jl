@@ -38,7 +38,7 @@ isvar(s::Any) = false
 function get_α_x(αx)
     if isvar(αx)
         return 1, αx
-    elseif αx isa Term && operation(αx) === (*)
+    elseif istree(αx) && operation(αx) === (*)
         args = arguments(αx)
         nums = []
         syms = []

@@ -31,23 +31,25 @@ function flatten_expr!(x)
     x
 end
 
-function detime_dvs(op::Term)
-  if operation(op) isa Sym
-      Sym{Real}(nameof(operation(op)))
-  else
-      Term{Real}(operation(op),detime_dvs.(arguments(op)))
-  end
+function detime_dvs(op)
+    if !istree(op)
+        op
+    elseif operation(op) isa Sym
+        Sym{Real}(nameof(operation(op)))
+    else
+        similarterm(op, operation(op),detime_dvs.(arguments(op)))
+    end
 end
-detime_dvs(op) = op
 
 function retime_dvs(op::Sym,dvs,iv)
     Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
 end
 
-function retime_dvs(op::Term, dvs, iv)
-    similarterm(op, operation(op), retime_dvs.(arguments(op),(dvs,),(iv,)))
+function retime_dvs(op, dvs, iv)
+    istree(op) ?
+        similarterm(op, operation(op), retime_dvs.(arguments(op),(dvs,),(iv,))) :
+        op
 end
-retime_dvs(op,dvs,iv) = op
 
 is_derivative(O::Term) = isa(operation(O), Differential)
 is_derivative(::Any) = false
@@ -131,8 +133,8 @@ julia> substitute(ex, Dict([x => z, sin(z) => z^2]))
 """
 substitute(expr::Num, s::Union{Pair, Vector, Dict}; kw...) = Num(substituter(s)(value(expr); kw...))
 # TODO: move this to SymbolicUtils
-substitute(expr::Term, s::Pair; kw...) = substituter([s[1] => s[2]])(expr; kw...)
-substitute(expr::Term, s::Vector; kw...) = substituter(s)(expr; kw...)
+substitute(expr, s::Pair; kw...) = substituter([s[1] => s[2]])(expr; kw...)
+substitute(expr, s::Vector; kw...) = substituter(s)(expr; kw...)
 
 substituter(pair::Pair) = substituter((pair,))
 function substituter(pairs)
@@ -157,7 +159,7 @@ function states_to_sym(states::Set)
     function _states_to_sym(O)
         if O isa Equation
             Expr(:(=), _states_to_sym(O.lhs), _states_to_sym(O.rhs))
-        elseif O isa Term
+        elseif istree(O)
             if isa(operation(O), Sym)
                 O in states && return tosymbol(O)
                 # dependent variables

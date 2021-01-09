@@ -196,7 +196,7 @@ end
 function namespace_expr(O,name,ivname) where {T}
     if istree(O)
         if operation(O) isa Sym
-            Term{T}(rename(operation(O),renamespace(name,operation(O).name)),namespace_expr.(arguments(O),name,ivname))
+            Term{symtype(O)}(rename(operation(O),renamespace(name,operation(O).name)),namespace_expr.(arguments(O),name,ivname))
         else
             similarterm(O,operation(O),namespace_expr.(arguments(O),name,ivname))
         end
