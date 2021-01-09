@@ -131,7 +131,10 @@ julia> substitute(ex, Dict([x => z, sin(z) => z^2]))
 (z(t) + y) + (z(t) ^ 2)
 ```
 """
-substitute(expr::Num, s::Union{Pair, Vector, Dict}; kw...) = Num(substituter(s)(value(expr); kw...))
+# cannot use Union{Pair, Vector, Dict} -- leads to ambiguity
+substitute(expr::Num, s::Pair; kw...) = Num(substituter(s)(value(expr); kw...))
+substitute(expr::Num, s::Vector; kw...) = Num(substituter(s)(value(expr); kw...))
+substitute(expr::Num, s::Dict; kw...) = Num(substituter(s)(value(expr); kw...))
 # TODO: move this to SymbolicUtils
 substitute(expr, s::Pair; kw...) = substituter([s[1] => s[2]])(expr; kw...)
 substitute(expr, s::Vector; kw...) = substituter(s)(expr; kw...)

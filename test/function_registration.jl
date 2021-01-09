@@ -76,7 +76,7 @@ foo(x, y) = sin(x) * cos(y)
 @parameters t; @variables x(t) y(t) z(t); @derivatives D'~t;
 @register foo(x, y)
 
-using ModelingToolkit: value
+using ModelingToolkit: value, arguments, operation
 expr = value(foo(x, y))
 @test operation(expr) === foo
 @test arguments(expr)[1] === value(x)

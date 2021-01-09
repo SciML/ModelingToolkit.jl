@@ -193,10 +193,11 @@ function namespace_expr(O::Sym,name,ivname)
     O.name == ivname ? O : rename(O,renamespace(name,O.name))
 end
 
+_symparam(s::Symbolic{T}) where {T} = T
 function namespace_expr(O,name,ivname) where {T}
     if istree(O)
         if operation(O) isa Sym
-            Term{symtype(O)}(rename(operation(O),renamespace(name,operation(O).name)),namespace_expr.(arguments(O),name,ivname))
+            Term{_symparam(O)}(rename(operation(O),renamespace(name,operation(O).name)),namespace_expr.(arguments(O),name,ivname))
         else
             similarterm(O,operation(O),namespace_expr.(arguments(O),name,ivname))
         end
