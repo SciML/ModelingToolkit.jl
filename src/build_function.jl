@@ -476,7 +476,7 @@ end
 
 get_varnumber(varop, vars::Vector) =  findfirst(x->isequal(x,varop),vars)
 
-function numbered_expr(O::Union{Term,Sym},args...;varordering = args[1],offset = 0,
+function numbered_expr(O::Symbolic,args...;varordering = args[1],offset = 0,
                        lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)])
     O = value(O)
   if O isa Sym || isa(operation(O), Sym)

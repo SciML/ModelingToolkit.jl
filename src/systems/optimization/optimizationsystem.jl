@@ -64,7 +64,7 @@ end
 function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
                           sparse = false, kwargs...)
     if sparse
-        hess = sparsehessian(equations(sys),[dv() for dv in states(sys)])
+        hess = sparsehessian(equations(sys),states(sys))
     else
         hess = calculate_hessian(sys)
     end
@@ -77,11 +77,11 @@ function generate_function(sys::OptimizationSystem, vs = states(sys), ps = param
                           conv = AbstractSysToExpr(sys),kwargs...)
 end
 
-equations(sys::OptimizationSystem) = isempty(sys.systems) ? operation(sys) : operation(sys) + reduce(+,namespace_expr.(sys.systems))
-namespace_expr(sys::OptimizationSystem) = namespace_expr(operation(sys),sys.name,nothing)
+equations(sys::OptimizationSystem) = isempty(sys.systems) ? sys.op : sys.op + reduce(+,namespace_expr.(sys.systems))
+namespace_expr(sys::OptimizationSystem) = namespace_expr(sys.op,sys.name,nothing)
 
 hessian_sparsity(sys::OptimizationSystem) =
-    hessian_sparsity(operation(sys), states(sys))
+    hessian_sparsity(sys.op, states(sys))
 
 struct AutoModelingToolkit <: DiffEqBase.AbstractADType end
 

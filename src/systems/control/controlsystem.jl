@@ -47,7 +47,7 @@ sys = ControlSystem(loss,eqs,t,[x,v],[u],[])
 """
 struct ControlSystem <: AbstractControlSystem
     """The Loss function"""
-    loss::Term
+    loss::Any
     """The ODEs defining the system."""
     eqs::Vector{Equation}
     """Independent variable."""
@@ -89,7 +89,8 @@ struct ControlToExpr
     controls::Vector
 end
 ControlToExpr(@nospecialize(sys)) = ControlToExpr(sys,states(sys),controls(sys))
-function (f::ControlToExpr)(O::Term)
+function (f::ControlToExpr)(O)
+    !istree(O) && return O
     res = if isa(operation(O), Sym)
         # normal variables and control variables
         (any(isequal(O), f.states) || any(isequal(O), f.controls)) && return tosymbol(O)
@@ -99,7 +100,6 @@ function (f::ControlToExpr)(O::Term)
     end
 end
 (f::ControlToExpr)(x::Sym) = x.name
-(f::ControlToExpr)(x) = x
 
 function constructRadauIIA5(T::Type = Float64)
   sq6 = sqrt(6)

@@ -117,8 +117,13 @@ Generate a function to evaluate the system's equations.
 """
 function generate_function end
 
-getname(x::Sym) = nameof(x)
-getname(t::Term) = operation(t) isa Sym ? getname(operation(t)) : error("Cannot get name of $t")
+function getname(t)
+    if istree(t)
+        operation(t) isa Sym ? getname(operation(t)) : error("Cannot get name of $t")
+    else
+        nameof(t)
+    end
+end
 
 function Base.getproperty(sys::AbstractSystem, name::Symbol)
 
@@ -188,14 +193,17 @@ function namespace_expr(O::Sym,name,ivname)
     O.name == ivname ? O : rename(O,renamespace(name,O.name))
 end
 
-function namespace_expr(O::Term{T},name,ivname) where {T}
-    if operation(O) isa Sym
-        Term{T}(rename(operation(O),renamespace(name,operation(O).name)),namespace_expr.(arguments(O),name,ivname))
+function namespace_expr(O,name,ivname) where {T}
+    if istree(O)
+        if operation(O) isa Sym
+            Term{T}(rename(operation(O),renamespace(name,operation(O).name)),namespace_expr.(arguments(O),name,ivname))
+        else
+            similarterm(O,operation(O),namespace_expr.(arguments(O),name,ivname))
+        end
     else
-        Term{T}(operation(O),namespace_expr.(arguments(O),name,ivname))
+        O
     end
 end
-namespace_expr(O,name,ivname) = O
 
 independent_variable(sys::AbstractSystem) = sys.iv
 function states(sys::AbstractSystem)
@@ -277,12 +285,12 @@ struct AbstractSysToExpr
     states::Vector
 end
 AbstractSysToExpr(sys) = AbstractSysToExpr(sys,states(sys))
-function (f::AbstractSysToExpr)(O::Term)
+function (f::AbstractSysToExpr)(O)
+    !istree(O) && return toexpr(O)
     any(isequal(O), f.states) && return operation(O).name  # variables
     if isa(operation(O), Sym)
         return build_expr(:call, Any[operation(O).name; f.(arguments(O))])
     end
     return build_expr(:call, Any[operation(O); f.(arguments(O))])
 end
-(f::AbstractSysToExpr)(x) = toexpr(x)
 
