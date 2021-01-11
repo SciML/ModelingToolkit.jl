@@ -30,7 +30,7 @@ eqs = [D(x) ~ σ*(y-x)*D(x-y)/D(z),
 # Latexify.@generate_test latexify(eqs)
 @test latexify(eqs) == replace(
 raw"\begin{align}
-\frac{dx(t)}{dt} =& \frac{d\left(x\left( t \right) -1 \cdot y\left( t \right)\right)}{dt} \left( y\left( t \right) -1 x\left( t \right) \right) \left( \mathrm{inv}\left( \frac{dz(t)}{dt} \right) \right)^{1} \sigma \\
+\frac{dx(t)}{dt} =& \frac{d\left(x\left( t \right) -1 \cdot y\left( t \right)\right)}{dt} \left( \mathrm{inv}\left( \frac{dz(t)}{dt} \right) \right)^{1} \sigma \left( y\left( t \right) -1 x\left( t \right) \right) \\
 0 =& -1 y\left( t \right) + 0.1 x\left( t \right) \sigma \left( -1 z\left( t \right) + \rho \right) \\
 \frac{dz(t)}{dt} =& x\left( t \right) \left( y\left( t \right) \right)^{\frac{2}{3}} -1 z\left( t \right) \beta
 \end{align}
@@ -54,8 +54,6 @@ raw"\begin{align}
 eqs = [D(u[1]) ~ p[3]*(u[2]-u[1]),
        D(u[2]) ~ p[2]*p[3]*u[1]*(p[1]-u[1])/10-u[2],
        D(u[3]) ~ u[1]*u[2]^(2//3) - p[3]*u[3]]
-
-sys = ODESystem(eqs)
 
 @test latexify(eqs) == replace(
 raw"\begin{align}
