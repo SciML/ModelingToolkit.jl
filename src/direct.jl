@@ -215,21 +215,31 @@ function sparsehessian(O, vars::AbstractVector; simplify = true)
     return H
 end
 
-function toexpr(O)
-    canonical, O = canonicalexpr(O)
-    canonical && return O
+"""
+    toexpr(O::Union{Symbolics,Num,Equation,AbstractArray}; canonicalize=true) -> Expr
+
+Convert `Symbolics` into `Expr`. If `canonicalize`, then we turn exprs like
+`x^(-n)` into `inv(x)^n` to avoid type error when evaluating.
+"""
+function toexpr(O; canonicalize=true)
+    if canonicalize
+        canonical, O = canonicalexpr(O)
+        canonical && return O
+    else
+        !istree(O) && return O
+    end
 
     op = operation(O)
     args = arguments(O)
     if op isa Differential
-        return :(derivative($(toexpr(args[1])),$(toexpr(op.x))))
+        return :(derivative($(toexpr(args[1]; canonicalize=canonicalize)),$(toexpr(op.x; canonicalize=canonicalize))))
     elseif op isa Sym
         isempty(args) && return nameof(op)
-        return Expr(:call, toexpr(op), toexpr.(args)...)
+        return Expr(:call, toexpr(op; canonicalize=canonicalize), toexpr(args; canonicalize=canonicalize)...)
     end
-    return Expr(:call, op, toexpr.(args)...)
+    return Expr(:call, op, toexpr(args; canonicalize=canonicalize)...)
 end
-toexpr(s::Sym) = nameof(s)
+toexpr(s::Sym; kw...) = nameof(s)
 
 """
     canonicalexpr(O) -> (canonical::Bool, expr)
@@ -242,18 +252,23 @@ function canonicalexpr(O)
     args = arguments(O)
     if op === (^)
         if length(args) == 2 && args[2] isa Number && args[2] < 0
-            expr = Expr(:call, ^, Expr(:call, inv, toexpr(args[1])), -args[2])
+            ex = toexpr(args[1])
+            if args[2] == -1
+                expr = Expr(:call, inv, ex)
+            else
+                expr = Expr(:call, ^, Expr(:call, inv, ex), -args[2])
+            end
             return true, expr
         end
     end
     return false, O
 end
 
-function toexpr(eq::Equation)
-    Expr(:(=), toexpr(eq.lhs), toexpr(eq.rhs))
+function toexpr(eq::Equation; kw...)
+    Expr(:(=), toexpr(eq.lhs; kw...), toexpr(eq.rhs; kw...))
 end
 
-toexpr(eq::AbstractArray) = toexpr.(eq)
-toexpr(x::Integer) = x
-toexpr(x::AbstractFloat) = x
-toexpr(x::Num) = toexpr(value(x))
+toexpr(eqs::AbstractArray; kw...) = map(eq->toexpr(eq; kw...), eqs)
+toexpr(x::Integer; kw...) = x
+toexpr(x::AbstractFloat; kw...) = x
+toexpr(x::Num; kw...) = toexpr(value(x); kw...)

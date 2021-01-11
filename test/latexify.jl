@@ -30,7 +30,7 @@ eqs = [D(x) ~ σ*(y-x)*D(x-y)/D(z),
 # Latexify.@generate_test latexify(eqs)
 @test latexify(eqs) == replace(
 raw"\begin{align}
-\frac{dx(t)}{dt} =& \frac{d\left(x\left( t \right) -1 \cdot y\left( t \right)\right)}{dt} \left( \mathrm{inv}\left( \frac{dz(t)}{dt} \right) \right)^{1} \sigma \left( y\left( t \right) -1 x\left( t \right) \right) \\
+\frac{dx(t)}{dt} =& \left( y\left( t \right) -1 x\left( t \right) \right) \left( \frac{dz(t)}{dt} \right)^{-1} \sigma \frac{d\left(x\left( t \right) -1 \cdot y\left( t \right)\right)}{dt} \\
 0 =& -1 y\left( t \right) + 0.1 x\left( t \right) \sigma \left( -1 z\left( t \right) + \rho \right) \\
 \frac{dz(t)}{dt} =& x\left( t \right) \left( y\left( t \right) \right)^{\frac{2}{3}} -1 z\left( t \right) \beta
 \end{align}
@@ -71,6 +71,6 @@ eqs = [D(x) ~ (1+cos(t))/(1+2*x)]
 
 @test latexify(eqs) == replace(
 raw"\begin{align}
-\frac{dx(t)}{dt} =& \left( 1 + \cos\left( t \right) \right) \left( \mathrm{inv}\left( 1 + 2 x\left( t \right) \right) \right)^{1}
+\frac{dx(t)}{dt} =& \left( 1 + \cos\left( t \right) \right) \left( 1 + 2 x\left( t \right) \right)^{-1}
 \end{align}
 ", "\r\n"=>"\n")
