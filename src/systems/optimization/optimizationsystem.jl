@@ -64,7 +64,7 @@ end
 function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
                           sparse = false, kwargs...)
     if sparse
-        hess = sparsehessian(equations(sys),[dv() for dv in states(sys)])
+        hess = sparsehessian(equations(sys),states(sys))
     else
         hess = calculate_hessian(sys)
     end

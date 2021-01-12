@@ -1,9 +1,13 @@
-import SymbolicUtils: symtype
+import SymbolicUtils: symtype, term
 struct Parameter{T} end
 
 isparameter(x) = false
 isparameter(::Sym{<:Parameter}) = true
 isparameter(::Sym{<:FnType{<:Any, <:Parameter}}) = true
+
+SymbolicUtils.@number_methods(Sym{Parameter{Real}},
+                              term(f, a),
+                              term(f, a, b), skipbasics)
 
 SymbolicUtils.symtype(s::Symbolic{Parameter{T}}) where T = T
 SymbolicUtils.similarterm(t::Term{T}, f, args) where {T<:Parameter} = Term{T}(f, args)

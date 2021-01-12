@@ -47,7 +47,7 @@ sys = ControlSystem(loss,eqs,t,[x,v],[u],[])
 """
 struct ControlSystem <: AbstractControlSystem
     """The Loss function"""
-    loss::Term
+    loss::Any
     """The ODEs defining the system."""
     eqs::Vector{Equation}
     """Independent variable."""
@@ -89,17 +89,17 @@ struct ControlToExpr
     controls::Vector
 end
 ControlToExpr(@nospecialize(sys)) = ControlToExpr(sys,states(sys),controls(sys))
-function (f::ControlToExpr)(O::Term)
-    res = if isa(O.op, Sym)
+function (f::ControlToExpr)(O)
+    !istree(O) && return O
+    res = if isa(operation(O), Sym)
         # normal variables and control variables
         (any(isequal(O), f.states) || any(isequal(O), f.controls)) && return tosymbol(O)
-        build_expr(:call, Any[O.op.name; f.(O.args)])
+        build_expr(:call, Any[operation(O).name; f.(arguments(O))])
     else
-        build_expr(:call, Any[Symbol(O.op); f.(O.args)])
+        build_expr(:call, Any[Symbol(operation(O)); f.(arguments(O))])
     end
 end
 (f::ControlToExpr)(x::Sym) = x.name
-(f::ControlToExpr)(x) = x
 
 function constructRadauIIA5(T::Type = Float64)
   sq6 = sqrt(6)
@@ -138,11 +138,11 @@ function runge_kutta_discretize(sys::ControlSystem,dt,tspan;
     var(n, i...) = var(nameof(n), i...)
     var(n::Symbol, i...) = Sym{FnType{Tuple{symtype(sys.iv)}, Real}}(nameof(Variable(n, i...)))
     # Expand out all of the variables in time and by stages
-    timed_vars = [[var(x.op,i)(sys.iv) for i in 1:n+1] for x in states(sys)]
-    k_vars = [[var(Symbol(:ᵏ,nameof(x.op)),i,j)(sys.iv) for i in 1:m, j in 1:n] for x in states(sys)]
+    timed_vars = [[var(operation(x),i)(sys.iv) for i in 1:n+1] for x in states(sys)]
+    k_vars = [[var(Symbol(:ᵏ,nameof(operation(x))),i,j)(sys.iv) for i in 1:m, j in 1:n] for x in states(sys)]
     states_timeseries = [getindex.(timed_vars,j) for j in 1:n+1]
     k_timeseries = [[Num.(getindex.(k_vars,i,j)) for i in 1:m] for j in 1:n]
-    control_timeseries = [[[var(x.op,i,j)(sys.iv) for x in controls(sys)] for i in 1:m] for j in 1:n]
+    control_timeseries = [[[var(operation(x),i,j)(sys.iv) for x in controls(sys)] for i in 1:m] for j in 1:n]
     ps = parameters(sys)
     iv = sys.iv
 

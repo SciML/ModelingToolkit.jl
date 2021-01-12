@@ -7,13 +7,12 @@ function calculate_tgrad(sys::AbstractODESystem;
   # t + u(t)`.
   rhs = [detime_dvs(eq.rhs) for eq ∈ equations(sys)]
   iv = sys.iv
-  notime_tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r)) for r in rhs]
-  if simplify
-      tgrad = ModelingToolkit.simplify.(notime_tgrad)
-  end
   xs = states(sys)
-  rule = Dict(map((x, xt) -> x=>xt, detime_dvs.(xs), xs))
-  tgrad = substitute.(tgrad, Ref(rule))
+  rule = Dict(map((x, xt) -> xt=>x, detime_dvs.(xs), xs))
+  rhs = substitute.(rhs, Ref(rule))
+  tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r), simplify) for r in rhs]
+  reverse_rule = Dict(map((x, xt) -> x=>xt, detime_dvs.(xs), xs))
+  tgrad = Num.(substitute.(tgrad, Ref(reverse_rule)))
   sys.tgrad[] = tgrad
   return tgrad
 end
@@ -43,12 +42,12 @@ end
 ODEToExpr(@nospecialize(sys)) = ODEToExpr(sys,states(sys))
 (f::ODEToExpr)(O::Num) = f(value(O))
 function (f::ODEToExpr)(O::Term)
-    if isa(O.op, Sym)
+    if isa(operation(O), Sym)
         any(isequal(O), f.states) && return tosymbol(O)
         # dependent variables
-        return build_expr(:call, Any[O.op.name; f.(O.args)])
+        return build_expr(:call, Any[operation(O).name; f.(arguments(O))])
     end
-    return build_expr(:call, Any[O.op; f.(O.args)])
+    return build_expr(:call, Any[operation(O); f.(arguments(O))])
 end
 (f::ODEToExpr)(x) = toexpr(x)
 
@@ -85,7 +84,7 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify=true)
     dvs = states(sys)
     M = zeros(length(eqs),length(eqs))
     for (i,eq) in enumerate(eqs)
-        if eq.lhs isa Term && eq.lhs.op isa Differential
+        if eq.lhs isa Term && operation(eq.lhs) isa Differential
             j = findfirst(x->isequal(tosymbol(x),tosymbol(var_from_nested_derivative(eq.lhs)[1])),dvs)
             M[i,j] = 1
         else

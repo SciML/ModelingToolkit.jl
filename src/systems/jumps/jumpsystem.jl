@@ -75,7 +75,7 @@ function generate_rate_function(js, rate)
 end
 
 function generate_affect_function(js, affect, outputidxs)
-    build_function(affect, states(js),
+    bf = build_function(map(x->x isa Equation ? x.rhs : x , affect), states(js),
                    parameters(js),
                    conv = states_to_sym(states(js)),
                    independent_variable(js),
@@ -127,7 +127,7 @@ end
 function numericrstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     rs = Vector{Pair{Int,W}}()
     for (spec,stoich) in mtrs
-        if !(spec isa Term) && _iszero(spec)
+        if !istree(spec) && _iszero(spec)
             push!(rs, 0 => stoich)
         else
             push!(rs, statetoid[value(spec)] => stoich)
@@ -140,7 +140,7 @@ end
 function numericnstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     ns = Vector{Pair{Int,W}}()
     for (spec,stoich) in mtrs
-        !(spec isa Term) && _iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
+        !istree(spec) && _iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
         push!(ns, statetoid[spec] => stoich)
     end
     sort!(ns)

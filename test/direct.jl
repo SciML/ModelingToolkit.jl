@@ -13,9 +13,9 @@ eqs = [σ*(y-x),
        x*y - β*z]
 
 
-simpexpr = Expr[:($(*)(σ, $(-)(y, x))),
-                :($(-)($(*)(x, $(-)(ρ, z)), y)),
-                :($(-)($(*)(x, y), $(*)(β, z)))]
+simpexpr = Expr[:($(*)(σ, $(+)($(*)(-1, x), y))),
+                :($(+)($(*)(x, $(+)($(*)(-1, z), ρ)), $(*)(-1, y))),
+                :($(+)($(*)(x, y), $(*)(-1, z, β)))]
 
 for i in 1:3
    @test ModelingToolkit.toexpr.(eqs)[i] == simpexpr[i]
@@ -60,7 +60,7 @@ reference_hes = ModelingToolkit.hessian(rr, X)
 
 sp_hess = ModelingToolkit.sparsehessian(rr, X)
 @test findnz(sparse(reference_hes))[1:2] == findnz(sp_hess)[1:2]
-# @test isequal(map(spoly, findnz(sparse(reference_hes))[3]), map(spoly, findnz(sp_hess)[3]))
+@test isequal(map(spoly, findnz(sparse(reference_hes))[3]), map(spoly, findnz(sp_hess)[3]))
 
 Joop, Jiip = eval.(ModelingToolkit.build_function(∂,[x,y,z],[σ,ρ,β],t))
 J = Joop([1.0,2.0,3.0],[1.0,2.0,3.0],1.0)

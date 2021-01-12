@@ -35,13 +35,14 @@ Base.show(io::IO, D::Differential) = print(io, "(D'~", D.x, ")")
 Base.:(==)(D1::Differential, D2::Differential) = isequal(D1.x, D2.x)
 
 _isfalse(occ::Bool) = occ === false
-_isfalse(occ::Term) = _isfalse(occ.op)
+_isfalse(occ::Term) = _isfalse(operation(occ))
 
-function occursin_info(x, expr::Term)
+function occursin_info(x, expr)
+    !istree(expr) && return false
     if isequal(x, expr)
         true
     else
-        args = map(a->occursin_info(x, a), expr.args)
+        args = map(a->occursin_info(x, a), arguments(expr))
         if all(_isfalse, args)
             return false
         end
@@ -52,66 +53,65 @@ function occursin_info(x, expr::Sym)
     isequal(x, expr)
 end
 
-hasderiv(O::Term) = O.op isa Differential || any(hasderiv, O.args)
-hasderiv(O) = false
-
-occursin_info(x, y) = false
+function hasderiv(O)
+    istree(O) ? operation(O) isa Differential || any(hasderiv, arguments(O)) : false
+end
 """
 $(SIGNATURES)
 
 TODO
 """
-function expand_derivatives(O::Term, simplify=true; occurances=nothing)
-    if isa(O.op, Differential)
-        @assert length(O.args) == 1
-        arg = expand_derivatives(O.args[1], false)
+function expand_derivatives(O::Symbolic, simplify=false; occurances=nothing)
+    if istree(O) && isa(operation(O), Differential)
+        @assert length(arguments(O)) == 1
+        arg = expand_derivatives(arguments(O)[1], false)
 
         if occurances == nothing
-            occurances = occursin_info(O.op.x, arg)
+            occurances = occursin_info(operation(O).x, arg)
         end
 
         _isfalse(occurances) && return 0
         occurances isa Bool && return 1 # means it's a `true`
 
-        (D, o) = (O.op, arg)
+        D = operation(O)
 
-        if !isa(o, Term)
-            return O # Cannot expand
-        elseif isa(o.op, Sym)
-            return O # Cannot expand
-        elseif isa(o.op, Differential)
+        if !istree(arg)
+            return D(arg) # Cannot expand
+        elseif isa(operation(arg), Sym)
+            return D(arg) # Cannot expand
+        elseif isa(operation(arg), Differential)
             # The recursive expand_derivatives was not able to remove
             # a nested Differential. We can attempt to differentiate the
             # inner expression wrt to the outer iv. And leave the
             # unexpandable Differential outside.
-            if isequal(o.op.x, D.x)
-                return O
+            if isequal(operation(arg).x, D.x)
+                return D(arg)
             else
-                inner = expand_derivatives(D(o.args[1]), false)
+                inner = expand_derivatives(D(arguments(arg)[1]), false)
                 # if the inner expression is not expandable either, return
-                if inner isa Term && operation(inner) isa Differential
-                    return O
+                if istree(inner) && operation(inner) isa Differential
+                    return D(arg)
                 else
-                    return expand_derivatives(o.op(inner), simplify)
+                    return expand_derivatives(operation(arg)(inner), simplify)
                 end
             end
         end
 
-        l = length(o.args)
+        l = length(arguments(arg))
         exprs = []
         c = 0
 
         for i in 1:l
-            t2 = expand_derivatives(D(o.args[i]),false, occurances=occurances.args[i])
+            t2 = expand_derivatives(D(arguments(arg)[i]),false, occurances=arguments(occurances)[i])
 
             x = if _iszero(t2)
                 t2
             elseif _isone(t2)
-                d = derivative_idx(o, i)
-                d isa NoDeriv ? D(o) : d
+                d = derivative_idx(arg, i)
+                d isa NoDeriv ? D(arg) : d
             else
-                t1 = derivative_idx(o, i)
-                t1 = t1 isa NoDeriv ? D(o) : t1
+                t1 = derivative_idx(arg, i)
+                t1 = t1 isa NoDeriv ? D(arg) : t1
                 make_operation(*, [t1, t2])
             end
 
@@ -136,8 +136,8 @@ function expand_derivatives(O::Term, simplify=true; occurances=nothing)
     elseif !hasderiv(O)
         return O
     else
-        args = map(a->expand_derivatives(a, false), O.args)
-        O1 = make_operation(O.op, args)
+        args = map(a->expand_derivatives(a, false), arguments(O))
+        O1 = make_operation(operation(O), args)
         return simplify ? SymbolicUtils.simplify(O1) : O1
     end
 end
@@ -176,7 +176,7 @@ chain rule is not applied:
 julia> myop = sin(x) * y^2
 sin(x()) * y() ^ 2
 
-julia> typeof(myop.op)  # Op is multiplication function
+julia> typeof(operation(myop))  # Op is multiplication function
 typeof(*)
 
 julia> ModelingToolkit.derivative_idx(myop, 1)  # wrt. sin(x)
@@ -187,7 +187,9 @@ sin(x())
 ```
 """
 derivative_idx(O::Any, ::Any) = 0
-derivative_idx(O::Term, idx) = derivative(O.op, (O.args...,), Val(idx))
+function derivative_idx(O::Symbolic, idx)
+    istree(O) ? derivative(operation(O), (arguments(O)...,), Val(idx)) : 0
+end
 
 # Indicate that no derivative is defined.
 struct NoDeriv

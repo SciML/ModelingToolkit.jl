@@ -128,7 +128,8 @@ let
 
     _scalar = one(TermCombination)
 
-    linearity_propagator = [
+    simterm(t, f, args) = Term{Any}(f, args)
+    linearity_rules = [
           @rule +(~~xs) => reduce(+, filter(isidx, ~~xs), init=_scalar)
           @rule *(~~xs) => reduce(*, filter(isidx, ~~xs), init=_scalar)
           @rule (~f)(~x::(!isidx)) => _scalar
@@ -146,7 +147,8 @@ let
               else
                   error("Function of unknown linearity used: ", ~f)
               end
-          end] |> Rewriters.Chain |> Rewriters.Postwalk |> Rewriters.Fixpoint
+          end]
+    linearity_propagator = Fixpoint(Postwalk(Chain(linearity_rules); similarterm=simterm))
 
     global hessian_sparsity
 
@@ -164,9 +166,9 @@ let
         u = map(value, u)
         idx(i) = TermCombination(Set([Dict(i=>1)]))
         dict = Dict(u .=> idx.(1:length(u)))
-        found = []
-        f = Rewriters.Prewalk(x->haskey(dict, x) ? dict[x] : x)(f)
-        _sparse(linearity_propagator(f), length(u))
+        f = Rewriters.Prewalk(x->haskey(dict, x) ? dict[x] : x; similarterm=simterm)(f)
+        lp = linearity_propagator(f)
+        _sparse(lp, length(u))
     end
 end
 
@@ -213,28 +215,60 @@ function sparsehessian(O, vars::AbstractVector; simplify = true)
     return H
 end
 
-function toexpr(O::Term)
-  if isa(O.op, Differential)
-     return :(derivative($(toexpr(O.args[1])),$(toexpr(O.op.x))))
-  elseif isa(O.op, Sym)
-    isempty(O.args) && return O.op.name
-    return Expr(:call, toexpr(O.op), toexpr.(O.args)...)
-  end
-  if O.op === (^)
-      if length(O.args) > 1  && O.args[2] isa Number && O.args[2] < 0
-          return Expr(:call, ^, Expr(:call, inv, toexpr(O.args[1])), -(O.args[2]))
-      end
-  end
-  return Expr(:call, O.op, toexpr.(O.args)...)
-end
-toexpr(s::Sym) = nameof(s)
-toexpr(s) = s
+"""
+    toexpr(O::Union{Symbolics,Num,Equation,AbstractArray}; canonicalize=true) -> Expr
 
-function toexpr(eq::Equation)
-    Expr(:(=), toexpr(eq.lhs), toexpr(eq.rhs))
+Convert `Symbolics` into `Expr`. If `canonicalize`, then we turn exprs like
+`x^(-n)` into `inv(x)^n` to avoid type error when evaluating.
+"""
+function toexpr(O; canonicalize=true)
+    if canonicalize
+        canonical, O = canonicalexpr(O)
+        canonical && return O
+    else
+        !istree(O) && return O
+    end
+
+    op = operation(O)
+    args = arguments(O)
+    if op isa Differential
+        return :(derivative($(toexpr(args[1]; canonicalize=canonicalize)),$(toexpr(op.x; canonicalize=canonicalize))))
+    elseif op isa Sym
+        isempty(args) && return nameof(op)
+        return Expr(:call, toexpr(op; canonicalize=canonicalize), toexpr(args; canonicalize=canonicalize)...)
+    end
+    return Expr(:call, op, toexpr(args; canonicalize=canonicalize)...)
+end
+toexpr(s::Sym; kw...) = nameof(s)
+
+"""
+    canonicalexpr(O) -> (canonical::Bool, expr)
+
+Canonicalize `O`. Return `canonical` if `expr` is valid code to generate.
+"""
+function canonicalexpr(O)
+    !istree(O) && return true, O
+    op = operation(O)
+    args = arguments(O)
+    if op === (^)
+        if length(args) == 2 && args[2] isa Number && args[2] < 0
+            ex = toexpr(args[1])
+            if args[2] == -1
+                expr = Expr(:call, inv, ex)
+            else
+                expr = Expr(:call, ^, Expr(:call, inv, ex), -args[2])
+            end
+            return true, expr
+        end
+    end
+    return false, O
 end
 
-toexpr(eq::AbstractArray) = toexpr.(eq)
-toexpr(x::Integer) = x
-toexpr(x::AbstractFloat) = x
-toexpr(x::Num) = toexpr(value(x))
+function toexpr(eq::Equation; kw...)
+    Expr(:(=), toexpr(eq.lhs; kw...), toexpr(eq.rhs; kw...))
+end
+
+toexpr(eqs::AbstractArray; kw...) = map(eq->toexpr(eq; kw...), eqs)
+toexpr(x::Integer; kw...) = x
+toexpr(x::AbstractFloat; kw...) = x
+toexpr(x::Num; kw...) = toexpr(value(x); kw...)

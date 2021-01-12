@@ -234,3 +234,16 @@ sys = ODESystem([D(x) ~ y, 0 ~ x + z, 0 ~ x - y], t, [z, y, x], [])
 sys2 = ode_order_lowering(sys)
 M = ModelingToolkit.calculate_massmatrix(sys2)
 @test M == Diagonal([1, 0, 0])
+
+# issue #609
+@variables t x1(t) x2(t)
+@derivatives D'~t
+
+eqs = [
+   D(x1) ~ -x1,
+   0 ~ x1 - x2,
+]
+sys = ODESystem(eqs, t)
+@test isequal(sys.iv, t)
+@test isequal(states(sys), [x1, x2])
+@test isempty(parameters(sys))

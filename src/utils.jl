@@ -31,25 +31,27 @@ function flatten_expr!(x)
     x
 end
 
-function detime_dvs(op::Term)
-  if op.op isa Sym
-      Sym{Real}(nameof(op.op))
-  else
-      Term{Real}(op.op,detime_dvs.(op.args))
-  end
+function detime_dvs(op)
+    if !istree(op)
+        op
+    elseif operation(op) isa Sym
+        Sym{Real}(nameof(operation(op)))
+    else
+        similarterm(op, operation(op),detime_dvs.(arguments(op)))
+    end
 end
-detime_dvs(op) = op
 
 function retime_dvs(op::Sym,dvs,iv)
     Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
 end
 
-function retime_dvs(op::Term, dvs, iv)
-    similarterm(op, op.op, retime_dvs.(op.args,(dvs,),(iv,)))
+function retime_dvs(op, dvs, iv)
+    istree(op) ?
+        similarterm(op, operation(op), retime_dvs.(arguments(op),(dvs,),(iv,))) :
+        op
 end
-retime_dvs(op,dvs,iv) = op
 
-is_derivative(O::Term) = isa(O.op, Differential)
+is_derivative(O::Term) = isa(operation(O), Differential)
 is_derivative(::Any) = false
 
 """
@@ -79,7 +81,7 @@ julia> ModelingToolkit.get_variables(ex)
 get_variables(e::Num, varlist=nothing) = get_variables(value(e), varlist)
 get_variables!(vars, e, varlist=nothing) = vars
 
-is_singleton(e::Term) = e.op isa Sym
+is_singleton(e::Term) = operation(e) isa Sym
 is_singleton(e::Sym) = true
 is_singleton(e) = false
 
@@ -91,7 +93,7 @@ function get_variables!(vars, e::Symbolic, varlist=nothing)
             push!(vars, e)
         end
     else
-        foreach(x -> get_variables!(vars, x, varlist), e.args)
+        foreach(x -> get_variables!(vars, x, varlist), arguments(e))
     end
     return (vars isa AbstractVector) ? unique!(vars) : vars
 end
@@ -129,10 +131,13 @@ julia> substitute(ex, Dict([x => z, sin(z) => z^2]))
 (z(t) + y) + (z(t) ^ 2)
 ```
 """
-substitute(expr::Num, s::Union{Pair, Vector, Dict}; kw...) = Num(substituter(s)(value(expr); kw...))
+# cannot use Union{Pair, Vector, Dict} -- leads to ambiguity
+substitute(expr::Num, s::Pair; kw...) = Num(substituter(s)(value(expr); kw...))
+substitute(expr::Num, s::Vector; kw...) = Num(substituter(s)(value(expr); kw...))
+substitute(expr::Num, s::Dict; kw...) = Num(substituter(s)(value(expr); kw...))
 # TODO: move this to SymbolicUtils
-substitute(expr::Term, s::Pair; kw...) = substituter([s[1] => s[2]])(expr; kw...)
-substitute(expr::Term, s::Vector; kw...) = substituter(s)(expr; kw...)
+substitute(expr, s::Pair; kw...) = substituter([s[1] => s[2]])(expr; kw...)
+substitute(expr, s::Vector; kw...) = substituter(s)(expr; kw...)
 
 substituter(pair::Pair) = substituter((pair,))
 function substituter(pairs)
@@ -157,13 +162,16 @@ function states_to_sym(states::Set)
     function _states_to_sym(O)
         if O isa Equation
             Expr(:(=), _states_to_sym(O.lhs), _states_to_sym(O.rhs))
-        elseif O isa Term
-            if isa(O.op, Sym)
+        elseif istree(O)
+            op = operation(O)
+            args = arguments(O)
+            if op isa Sym
                 O in states && return tosymbol(O)
                 # dependent variables
-                return build_expr(:call, Any[O.op.name; _states_to_sym.(O.args)])
+                return build_expr(:call, Any[nameof(op); _states_to_sym.(args)])
             else
-                return build_expr(:call, Any[O.op; _states_to_sym.(O.args)])
+                canonical, O = canonicalexpr(O)
+                return canonical ? O : build_expr(:call, Any[op; _states_to_sym.(args)])
             end
         elseif O isa Num
             return _states_to_sym(value(O))
@@ -213,13 +221,13 @@ Symbol("z⦗t⦘")
 ```
 """
 function tosymbol(t::Term; states=nothing, escape=true)
-    if t.op isa Sym
+    if operation(t) isa Sym
         if states !== nothing && !(any(isequal(t), states))
-            return nameof(t.op)
+            return nameof(operation(t))
         end
-        op = nameof(t.op)
-        args = t.args
-    elseif t.op isa Differential
+        op = nameof(operation(t))
+        args = arguments(t)
+    elseif operation(t) isa Differential
         term = diff2term(t)
         op = Symbol(operation(term))
         args = arguments(term)
@@ -250,9 +258,9 @@ x⦗t⦘
 makesym(t::Symbolic; kwargs...) = Sym{symtype(t)}(tosymbol(t; kwargs...))
 makesym(t::Num; kwargs...) = makesym(value(t); kwargs...)
 
-function lower_varname(var::Term, idv, order)
+function lower_varname(var::Symbolic, idv, order)
     order == 0 && return var
-    name = string(nameof(var.op))
+    name = string(nameof(operation(var)))
     underscore = 'ˍ'
     idx = findlast(underscore, name)
     append = string(idv)^order
@@ -262,10 +270,10 @@ function lower_varname(var::Term, idv, order)
         nidx = nextind(name, idx)
         newname = Symbol(name[1:idx], name[nidx:end], append)
     end
-    return Sym{symtype(var.op)}(newname)(var.args[1])
+    return Sym{symtype(operation(var))}(newname)(arguments(var)[1])
 end
 
-function lower_varname(t::Term, iv)
+function lower_varname(t::Symbolic, iv)
     var, order = var_from_nested_derivative(t)
     lower_varname(var, iv, order)
 end
@@ -291,9 +299,9 @@ lower_mapnames(umap::Tuple, name) = umap
 
 function flatten_differential(O::Term)
     @assert is_derivative(O) "invalid differential: $O"
-    is_derivative(O.args[1]) || return (O.args[1], O.op.x, 1)
-    (x, t, order) = flatten_differential(O.args[1])
-    isequal(t, O.op.x) || throw(ArgumentError("non-matching differentials on lhs: $t, $(O.op.x)"))
+    is_derivative(arguments(O)[1]) || return (arguments(O)[1], operation(O).x, 1)
+    (x, t, order) = flatten_differential(arguments(O)[1])
+    isequal(t, operation(O).x) || throw(ArgumentError("non-matching differentials on lhs: $t, $(operation(O).x)"))
     return (x, t, order + 1)
 end
 
@@ -309,10 +317,10 @@ xˍtt(t)
 ```
 """
 function diff2term(O)
-    isa(O, Term) || return O
+    istree(O) || return O
     if is_derivative(O)
         (x, t, order) = flatten_differential(O)
         return lower_varname(x, t, order)
     end
-    return Term{Real}(O.op, diff2term.(O.args))
+    return Term{Real}(operation(O), diff2term.(arguments(O)))
 end

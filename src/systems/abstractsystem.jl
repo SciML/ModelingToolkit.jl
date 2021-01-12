@@ -117,8 +117,13 @@ Generate a function to evaluate the system's equations.
 """
 function generate_function end
 
-getname(x::Sym) = nameof(x)
-getname(t::Term) = t.op isa Sym ? getname(t.op) : error("Cannot get name of $t")
+function getname(t)
+    if istree(t)
+        operation(t) isa Sym ? getname(operation(t)) : error("Cannot get name of $t")
+    else
+        nameof(t)
+    end
+end
 
 function Base.getproperty(sys::AbstractSystem, name::Symbol)
 
@@ -161,7 +166,7 @@ function renamespace(namespace, x::Sym)
 end
 
 function renamespace(namespace, x::Term)
-    renamespace(namespace, x.op)(x.args...)
+    renamespace(namespace, operation(x))(arguments(x)...)
 end
 
 function namespace_variables(sys::AbstractSystem)
@@ -192,14 +197,18 @@ function namespace_expr(O::Sym,name,ivname)
     O.name == ivname ? O : rename(O,renamespace(name,O.name))
 end
 
-function namespace_expr(O::Term{T},name,ivname) where {T}
-    if O.op isa Sym
-        Term{T}(rename(O.op,renamespace(name,O.op.name)),namespace_expr.(O.args,name,ivname))
+_symparam(s::Symbolic{T}) where {T} = T
+function namespace_expr(O,name,ivname) where {T}
+    if istree(O)
+        if operation(O) isa Sym
+            Term{_symparam(O)}(rename(operation(O),renamespace(name,operation(O).name)),namespace_expr.(arguments(O),name,ivname))
+        else
+            similarterm(O,operation(O),namespace_expr.(arguments(O),name,ivname))
+        end
     else
-        Term{T}(O.op,namespace_expr.(O.args,name,ivname))
+        O
     end
 end
-namespace_expr(O,name,ivname) = O
 
 independent_variable(sys::AbstractSystem) = sys.iv
 function states(sys::AbstractSystem)
@@ -280,12 +289,12 @@ struct AbstractSysToExpr
     states::Vector
 end
 AbstractSysToExpr(sys) = AbstractSysToExpr(sys,states(sys))
-function (f::AbstractSysToExpr)(O::Term)
-    any(isequal(O), f.states) && return O.op.name  # variables
-    if isa(O.op, Sym)
-        return build_expr(:call, Any[O.op.name; f.(O.args)])
+function (f::AbstractSysToExpr)(O)
+    !istree(O) && return toexpr(O)
+    any(isequal(O), f.states) && return operation(O).name  # variables
+    if isa(operation(O), Sym)
+        return build_expr(:call, Any[operation(O).name; f.(arguments(O))])
     end
-    return build_expr(:call, Any[O.op; f.(O.args)])
+    return build_expr(:call, Any[operation(O); f.(arguments(O))])
 end
-(f::AbstractSysToExpr)(x) = toexpr(x)
 
