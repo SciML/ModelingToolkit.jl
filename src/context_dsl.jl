@@ -10,7 +10,7 @@ SymbolicUtils.@number_methods(Sym{Parameter{Real}},
                               term(f, a, b), skipbasics)
 
 SymbolicUtils.symtype(s::Symbolic{Parameter{T}}) where T = T
-SymbolicUtils.similarterm(t::Term{T}, f, args) where {T<:Parameter} = Term{T}(f, args)
+SymbolicUtils.similarterm(t::Term{<:Parameter}, f, args) = Term(f, args)
 
 Base.convert(::Type{Num}, x::Symbolic{Parameter{T}}) where {T<:Number} = Num(x)
 
