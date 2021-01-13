@@ -30,9 +30,9 @@ eqs = [D(x) ~ σ*(y-x)*D(x-y)/D(z),
 # Latexify.@generate_test latexify(eqs)
 @test latexify(eqs) == replace(
 raw"\begin{align}
-\frac{dx(t)}{dt} =& \left( y\left( t \right) -1 x\left( t \right) \right) \left( \frac{dz(t)}{dt} \right)^{-1} \sigma \frac{d\left(x\left( t \right) -1 \cdot y\left( t \right)\right)}{dt} \\
-0 =& -1 y\left( t \right) + 0.1 x\left( t \right) \sigma \left( -1 z\left( t \right) + \rho \right) \\
-\frac{dz(t)}{dt} =& x\left( t \right) \left( y\left( t \right) \right)^{\frac{2}{3}} -1 z\left( t \right) \beta
+\frac{dx(t)}{dt} =& \sigma \frac{d\left(x\left( t \right) -1 \cdot y\left( t \right)\right)}{dt} \left( y\left( t \right) -1 x\left( t \right) \right) \left( \frac{dz(t)}{dt} \right)^{-1} \\
+0 =& -1 y\left( t \right) + 0.1 \sigma x\left( t \right) \left( \rho -1 z\left( t \right) \right) \\
+\frac{dz(t)}{dt} =& x\left( t \right) \left( y\left( t \right) \right)^{\frac{2}{3}} -1 \beta z\left( t \right)
 \end{align}
 ", "\r\n"=>"\n")
 
