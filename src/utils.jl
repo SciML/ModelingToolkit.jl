@@ -292,8 +292,8 @@ function lower_mapnames(umap::NTuple{N,T},name) where {N,T<:Pair}
     ntuple(i->lower_varname(value(umap[i][1]), name) => value(umap[i][2]),N)
 end
 
-lower_mapnames(umap::AbstractArray{<:Number}) = umap # Ambiguity
-lower_mapnames(umap::AbstractArray{<:Number},name) = umap
+lower_mapnames(umap::AbstractArray) = umap # Ambiguity
+lower_mapnames(umap::AbstractArray,name) = umap
 lower_mapnames(umap::Tuple) = umap
 lower_mapnames(umap::Tuple, name) = umap
 
