@@ -32,4 +32,4 @@ using SafeTestsets, Test
 @safetestset "Variable Utils Test" begin include("variable_utils.jl") end
 println("Last test requires gcc available in the path!")
 @safetestset "C Compilation Test" begin include("ccompile.jl") end
-#@safetestset "Latexify recipes Test" begin include("latexify.jl") end
+@safetestset "Latexify recipes Test" begin include("latexify.jl") end
