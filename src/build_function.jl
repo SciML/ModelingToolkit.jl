@@ -478,8 +478,11 @@ get_varnumber(varop, vars::Vector) =  findfirst(x->isequal(x,varop),vars)
 
 function numbered_expr(O::Symbolic,args...;varordering = args[1],offset = 0,
                        lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)])
-    O = value(O)
-  if O isa Sym || isa(operation(O), Sym)
+
+  O = value(O)
+  if ModelingToolkit.value(O) isa Sym && ModelingToolkit.value(O).name == args[3].name
+	return O.name
+  elseif (O isa Sym || isa(operation(O), Sym))
 	for j in 1:length(args)
 		i = get_varnumber(O,args[j])
 		if i !== nothing
@@ -611,6 +614,6 @@ function _build_function(target::MATLABTarget, eqs::Array{<:Equation}, args...;
 
     matstr = replace(matstr,"["=>"(")
     matstr = replace(matstr,"]"=>")")
-    matstr = "$fname = @(t,$(rhsnames[1])) ["*matstr*"];"
+    matstr = "$fname = @($(value(args[2]).name),$(rhsnames[1])) ["*matstr*"];"
     matstr
 end
