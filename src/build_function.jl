@@ -475,6 +475,7 @@ function vars_to_pairs(name,vs, symsdict)
 end
 
 get_varnumber(varop, vars::Vector) =  findfirst(x->isequal(x,varop),vars)
+get_symnumber(varsym, vars)  = findfirst(x->isequal(tosymbol(x isa Sym ? x : operation(x), escape=false), tosymbol(varsym, escape=false)),vars)
 
 function numbered_expr(O::Symbolic,args...;varordering = args[1],offset = 0,
                        lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)])
@@ -497,8 +498,8 @@ function numbered_expr(de::ModelingToolkit.Equation,args...;varordering = args[1
 
     varordering = value.(args[1])
     var = var_from_nested_derivative(de.lhs)[1]
-    i = findfirst(x->isequal(tosymbol(x isa Sym ? x : operation(x), escape=false), tosymbol(var, escape=false)),varordering)
-    :($lhsname[$(i+offset)] = $(numbered_expr(de.rhs,args...;offset=offset,
+    i = get_symnumber(var, varordering)
+    :($lhsname[$((i === nothing ? 1 : i)+offset)] = $(numbered_expr(de.rhs,args...;offset=(i === nothing ? -1 : offset),
 											  varordering = varordering,
 											  lhsname = lhsname,
 											  rhsnames = rhsnames)))
@@ -531,7 +532,9 @@ function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
                          fname = :diffeqf,
 						 lhsname=:du,rhsnames=[Symbol("RHS$i") for i in 1:length(args)],
 						 libpath=tempname(),compiler=:gcc)
-
+    lhs_in_rhs = map(eq-> !(get_symnumber(var_from_nested_derivative(eq.lhs)[1], value.(args[1])) === nothing), eqs)
+    count(lhs_in_rhs) ∈ (0, length(lhs_in_rhs)) || throw(ArgumentError("If one output is included in the state vector, all must be."))
+    offsets = [val ? -1 : i-2 for (i, val) ∈ enumerate(lhs_in_rhs)]
     differential_equation = string(join([numbered_expr(eq,args...,lhsname=lhsname,
                                   rhsnames=rhsnames,offset=-1) for
                                   (i, eq) ∈ enumerate(eqs)],";\n  "),";")
