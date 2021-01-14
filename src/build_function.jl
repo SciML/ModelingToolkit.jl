@@ -536,7 +536,7 @@ function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
     count(lhs_in_rhs) ∈ (0, length(lhs_in_rhs)) || throw(ArgumentError("If one output is included in the state vector, all must be."))
     offsets = [val ? -1 : i-2 for (i, val) ∈ enumerate(lhs_in_rhs)]
     differential_equation = string(join([numbered_expr(eq,args...,lhsname=lhsname,
-                                  rhsnames=rhsnames,offset=-1) for
+                                  rhsnames=rhsnames,offset=offsets[i]) for
                                   (i, eq) ∈ enumerate(eqs)],";\n  "),";")
 
     argstrs = join(vcat("double* $(lhsname)",[typeof(args[i])<:Array ? "double* $(rhsnames[i])" : "double $(rhsnames[i])" for i in 1:length(args)]),", ")
