@@ -24,6 +24,15 @@ eqs = [D(x) ~ a*x - x*y,
   }
   """
 
+@test let 
+  @variables x[1:2,1:2] y[1:4]
+  eqs = x[:] .~ y
+  build_function(eqs, y, target=ModelingToolkit.CTarget()) == 
+    """
+    void diffeqf(double* du, double* RHS1) {\n  du[0] = RHS1[0];\n  du[1] = RHS1[1];\n  du[2] = RHS1[2];\n  du[3] = RHS1[3];\n}\n
+    """
+end
+
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.MATLABTarget()) ==
   """
   diffeqf = @(t,internal_var___u) [internal_var___p(1) * internal_var___u(1) + -1 * internal_var___u(1) * internal_var___u(2); internal_var___u(1) * internal_var___u(2) + -3 * internal_var___u(2)];"""
