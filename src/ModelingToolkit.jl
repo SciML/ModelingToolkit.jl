@@ -183,6 +183,7 @@ include("domains.jl")
 include("register_function.jl")
 
 include("systems/abstractsystem.jl")
+include("systems/systemstructure.jl")
 
 include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")
@@ -213,6 +214,7 @@ include("extra_functions.jl")
 
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
+export SystemStructure
 export JumpSystem
 export ODEProblem, SDEProblem
 export NonlinearProblem, NonlinearProblemExpr
