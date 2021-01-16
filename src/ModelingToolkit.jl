@@ -168,6 +168,8 @@ Get the set of parameters variables for the given system.
 """
 function parameters end
 
+include("bipartite_graph.jl")
+
 include("variables.jl")
 include("context_dsl.jl")
 include("differentials.jl")

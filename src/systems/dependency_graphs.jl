@@ -3,11 +3,11 @@
 equation_dependencies(sys::AbstractSystem; variables=states(sys))
 ```
 
-Given an `AbstractSystem` calculate for each equation the variables it depends on. 
+Given an `AbstractSystem` calculate for each equation the variables it depends on.
 
 Notes:
 - Variables that are not in `variables` are filtered out.
-- `get_variables!` is used to determine the variables within a given equation. 
+- `get_variables!` is used to determine the variables within a given equation.
 - returns a `Vector{Vector{Variable}}()` mapping the index of an equation to the `variables` it depends on.
 
 Example:
@@ -26,7 +26,7 @@ rs = ReactionSystem(rxs, t, [S,I,R], [β,γ,κ,η])
 odesys = convert(ODESystem, rs)
 
 # dependency of each ODE on state variables
-equation_dependencies(odesys)    
+equation_dependencies(odesys)
 
 # dependency of each ODE on parameters
 equation_dependencies(odesys, variables=parameters(odesys))
@@ -35,10 +35,10 @@ equation_dependencies(odesys, variables=parameters(odesys))
 jumpsys = convert(JumpSystem, rs)
 
 # dependency of each jump rate function on state variables
-equation_dependencies(jumpsys)    
+equation_dependencies(jumpsys)
 
 # dependency of each jump rate function on parameters
-equation_dependencies(jumpsys, variables=parameters(jumpsys))    
+equation_dependencies(jumpsys, variables=parameters(jumpsys))
 ```
 """
 function equation_dependencies(sys::AbstractSystem; variables=states(sys))
@@ -56,65 +56,15 @@ function equation_dependencies(sys::AbstractSystem; variables=states(sys))
 end
 
 """
-$(TYPEDEF)
-
-A bipartite graph representation between two, possibly distinct, sets of vertices 
-(source and dependencies). Maps source vertices, labelled `1:N₁`, to vertices 
-on which they depend (labelled `1:N₂`).
-
-# Fields
-$(FIELDS)
-
-# Example
 ```julia
-using ModelingToolkit
-
-ne = 4
-srcverts = 1:4
-depverts = 1:2
-
-# six source vertices
-fadjlist = [[1],[1],[2],[2],[1],[1,2]]
-
-# two vertices they depend on 
-badjlist = [[1,2,5,6],[3,4,6]]
-
-bg = BipartiteGraph(7, fadjlist, badjlist)
-```
-"""
-mutable struct BipartiteGraph{T <: Integer}
-    """Number of edges from source vertices to vertices they depend on."""
-    ne::Int
-    """Forward adjacency list mapping index of source vertices to the vertices they depend on."""
-    fadjlist::Vector{Vector{T}}  # fadjlist[src] = [dest1,dest2,...]
-    """Backward adjacency list mapping index of vertices that are dependencies to the source vertices that depend on them."""
-    badjlist::Vector{Vector{T}}  # badjlist[dst] = [src1,src2,...]
-end
-
-"""
-```julia
-Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T<:Integer} 
+asgraph(eqdeps, vtois)
 ```
 
-Test whether two [`BipartiteGraph`](@ref)s are equal.
-"""
-function Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T<:Integer} 
-    iseq = (bg1.ne == bg2.ne)
-    iseq &= (bg1.fadjlist == bg2.fadjlist) 
-    iseq &= (bg1.badjlist == bg2.badjlist) 
-    iseq
-end
-
-"""
-```julia
-asgraph(eqdeps, vtois)    
-```
-
-Convert a collection of equation dependencies, for example as returned by 
+Convert a collection of equation dependencies, for example as returned by
 `equation_dependencies`, to a [`BipartiteGraph`](@ref).
 
 Notes:
-- `vtois` should provide a `Dict` like mapping from each `Variable` dependency in 
+- `vtois` should provide a `Dict` like mapping from each `Variable` dependency in
   `eqdeps` to the integer idx of the variable to use in the graph.
 
 Example:
@@ -123,7 +73,7 @@ Continuing the example started in [`equation_dependencies`](@ref)
 digr = asgraph(equation_dependencies(odesys), Dict(s => i for (i,s) in enumerate(states(odesys))))
 ```
 """
-function asgraph(eqdeps, vtois)    
+function asgraph(eqdeps, vtois)
     fadjlist = Vector{Vector{Int}}(undef, length(eqdeps))
     for (i,dep) in enumerate(eqdeps)
         fadjlist[i] = sort!([vtois[var] for var in dep])
@@ -143,7 +93,7 @@ end
 # could be made to directly generate graph and save memory
 """
 ```julia
-asgraph(sys::AbstractSystem; variables=states(sys), 
+asgraph(sys::AbstractSystem; variables=states(sys),
                                       variablestoids=Dict(convert(Variable, v) => i for (i,v) in enumerate(variables)))
 ```
 
@@ -153,9 +103,9 @@ to the indices of variables they depend on.
 Notes:
 - Defaults for kwargs creating a mapping from `equations(sys)` to `states(sys)`
   they depend on.
-- `variables` should provide the list of variables to use for generating 
+- `variables` should provide the list of variables to use for generating
   the dependency graph.
-- `variablestoids` should provide `Dict` like mapping from a `Variable` to its 
+- `variablestoids` should provide `Dict` like mapping from a `Variable` to its
   `Int` index within `variables`.
 
 Example:
@@ -164,7 +114,7 @@ Continuing the example started in [`equation_dependencies`](@ref)
 digr = asgraph(odesys)
 ```
 """
-function asgraph(sys::AbstractSystem; variables=states(sys), 
+function asgraph(sys::AbstractSystem; variables=states(sys),
                                       variablestoids=Dict(v => i for (i,v) in enumerate(variables)))
     asgraph(equation_dependencies(sys, variables=variables), variablestoids)
 end
@@ -177,7 +127,7 @@ variable_dependencies(sys::AbstractSystem; variables=states(sys), variablestoids
 For each variable determine the equations that modify it and return as a [`BipartiteGraph`](@ref).
 
 Notes:
-- Dependencies are returned as a [`BipartiteGraph`](@ref) mapping variable 
+- Dependencies are returned as a [`BipartiteGraph`](@ref) mapping variable
   indices to the indices of equations that modify them.
 - `variables` denotes the list of variables to determine dependencies for.
 - `variablestoids` denotes a `Dict` mapping `Variable`s to their `Int` index in `variables`.
@@ -193,7 +143,7 @@ function variable_dependencies(sys::AbstractSystem; variables=states(sys), varia
     vtois = isnothing(variablestoids) ? Dict(v => i for (i,v) in enumerate(variables)) : variablestoids
 
     deps = Set()
-    badjlist = Vector{Vector{Int}}(undef, length(eqs))    
+    badjlist = Vector{Vector{Int}}(undef, length(eqs))
     for (eidx,eq) in enumerate(eqs)
         modified_states!(deps, eq, variables)
         badjlist[eidx] = sort!([vtois[var] for var in deps])
@@ -218,8 +168,8 @@ asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys), equat
 Convert a [`BipartiteGraph`](@ref) to a `LightGraph.SimpleDiGraph`.
 
 Notes:
-- The resulting `SimpleDiGraph` unifies the two sets of vertices (equations 
-  and then states in the case it comes from [`asgraph`](@ref)), producing one 
+- The resulting `SimpleDiGraph` unifies the two sets of vertices (equations
+  and then states in the case it comes from [`asgraph`](@ref)), producing one
   ordered set of integer vertices (`SimpleDiGraph` does not support two distinct
   collections of vertices so they must be merged).
 - `variables` gives the variables that `g` is associated with (usually the
@@ -262,9 +212,9 @@ eqeq_dependencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {
 Calculate a `LightGraph.SimpleDiGraph` that maps each equation to equations they depend on.
 
 Notes:
-- The `fadjlist` of the `SimpleDiGraph` maps from an equation to the equations that 
+- The `fadjlist` of the `SimpleDiGraph` maps from an equation to the equations that
   modify variables it depends on.
-- The `badjlist` of the `SimpleDiGraph` maps from an equation to equations that 
+- The `badjlist` of the `SimpleDiGraph` maps from an equation to equations that
   depend on variables it modifies.
 
 Example:
@@ -275,7 +225,7 @@ eqeqdep = eqeq_dependencies(asgraph(odesys), variable_dependencies(odesys))
 """
 function eqeq_dependencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {T <: Integer}
     g = SimpleDiGraph{T}(length(eqdeps.fadjlist))
-    
+
     for (eqidx,sidxs) in enumerate(vardeps.badjlist)
         # states modified by eqidx
         for sidx in sidxs
@@ -295,7 +245,7 @@ varvar_dependencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where
 Calculate a `LightGraph.SimpleDiGraph` that maps each variable to variables they depend on.
 
 Notes:
-- The `fadjlist` of the `SimpleDiGraph` maps from a variable to the variables that 
+- The `fadjlist` of the `SimpleDiGraph` maps from a variable to the variables that
   depend on it.
 - The `badjlist` of the `SimpleDiGraph` maps from a variable to variables on which
   it depends.
