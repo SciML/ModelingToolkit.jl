@@ -297,4 +297,3 @@ function (f::AbstractSysToExpr)(O)
     end
     return build_expr(:call, Any[operation(O); f.(arguments(O))])
 end
-

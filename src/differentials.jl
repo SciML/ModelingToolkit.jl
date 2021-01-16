@@ -29,6 +29,7 @@ struct Differential <: Function
 end
 (D::Differential)(x) = Term{symtype(x)}(D, [x])
 (D::Differential)(x::Num) = Num(D(value(x)))
+SymbolicUtils.promote_symtype(::Differential, x) = x
 
 Base.show(io::IO, D::Differential) = print(io, "(D'~", D.x, ")")
 
