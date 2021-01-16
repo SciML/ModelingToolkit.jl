@@ -480,8 +480,8 @@ function numbered_expr(O::Symbolic,args...;varordering = args[1],offset = 0,
                        lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)])
 
   O = value(O)
-  if ModelingToolkit.value(O) isa Sym && ModelingToolkit.value(O).name == args[3].name
-	return O.name
+  if ModelingToolkit.value(O) isa Sym && nameof(ModelingToolkit.value(O)) == nameof(args[3])
+	return nameof(O)
   elseif (O isa Sym || isa(operation(O), Sym))
 	for j in 1:length(args)
 		i = get_varnumber(O,args[j])
