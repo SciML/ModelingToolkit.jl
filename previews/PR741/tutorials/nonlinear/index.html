@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Solving Nonlinear Systems with NLsolve · ModelingToolkit.jl</title><link rel="canonical" href="https://mtk.sciml.ai/stable/tutorials/nonlinear/"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.11.1/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit">ModelingToolkit.jl</span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../symbolic_functions/">Symbolic Calculations and Building Fast Parallel Functions</a></li><li><a class="tocitem" href="../ode_modeling/">Component-Based Modeling with Ordinary Differential Equations</a></li><li><a class="tocitem" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li class="is-active"><a class="tocitem" href>Solving Nonlinear Systems with NLsolve</a></li><li><a class="tocitem" href="../modelingtoolkitize/">Symbolic Extensions to ODEProblem via Modelingtoolkize</a></li><li><a class="tocitem" href="../auto_parallel/">Automated Sparse Parallelism of ODEs via Tracing</a></li><li><a class="tocitem" href="../converting_to_C/">Automatic Conversion of Julia Code to C Functions</a></li></ul></li><li><span class="tocitem">Systems</span><ul><li><a class="tocitem" href="../../systems/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/ControlSystem/">ControlSystem</a></li><li><a class="tocitem" href="../../systems/ReactionSystem/">ReactionSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li><li><a class="tocitem" href="../../systems/DependencyGraphs/">Dependency Graphs</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison Against SymPy</a></li><li><a class="tocitem" href="../../highlevel/">High Level API</a></li><li><a class="tocitem" href="../../build_function/">Function Building and Compilation (build_function)</a></li><li><a class="tocitem" href="../../IR/">ModelingToolkit IR</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Solving Nonlinear Systems with NLsolve</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Solving Nonlinear Systems with NLsolve</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/nonlinear.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Solving-Nonlinear-Systems-with-NLsolve-1"><a class="docs-heading-anchor" href="#Solving-Nonlinear-Systems-with-NLsolve-1">Solving Nonlinear Systems with NLsolve</a><a class="docs-heading-anchor-permalink" href="#Solving-Nonlinear-Systems-with-NLsolve-1" title="Permalink"></a></h1><p>In this example we will go one step deeper and showcase the direct function generation capabilities in ModelingToolkit.jl to build nonlinear systems. Let&#39;s say we wanted to solve for the steady state of the previous ODE. This is the nonlinear system defined by where the derivatives are zero. We use (unknown) variables for our nonlinear system.</p><pre><code class="language-julia">using ModelingToolkit
+
+@variables x y z
+@parameters σ ρ β
+
+# Define a nonlinear system
+eqs = [0 ~ σ*(y-x),
+       0 ~ x*(ρ-z)-y,
+       0 ~ x*y - β*z]
+ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
+nlsys_func = generate_function(ns)[2] # second is the inplace version</code></pre><p>which generates:</p><pre><code class="language-julia">(var&quot;##MTIIPVar#405&quot;, u, p)-&gt;begin
+        @inbounds begin
+                @inbounds begin
+                        let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+                            var&quot;##MTIIPVar#405&quot;[1] = (*)(σ, (-)(y, x))
+                            var&quot;##MTIIPVar#405&quot;[2] = (-)((*)(x, (-)(ρ, z)), y)
+                            var&quot;##MTIIPVar#405&quot;[3] = (-)((*)(x, y), (*)(β, z))
+                        end
+                    end
+            end
+        nothing
+    end</code></pre><p>We can use this to build a nonlinear function for use with NLsolve.jl:</p><pre><code class="language-julia">f = eval(nlsys_func)
+du = zeros(3); u = ones(3)
+params = (10.0,26.0,2.33)
+f(du,u,params)
+du
+
+#=
+3-element Array{Float64,1}:
+  0.0
+ 24.0
+ -1.33
+ =#</code></pre><p>We can similarly ask to generate the in-place Jacobian function:</p><pre><code class="language-julia">j_func = generate_jacobian(ns)[2] # second is in-place
+j! = eval(j_func)</code></pre><p>which gives:</p><pre><code class="language-julia">:((var&quot;##MTIIPVar#582&quot;, u, p)-&gt;begin
+          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:70 =#
+          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:71 =#
+          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:71 =# @inbounds begin
+                  #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:72 =#
+                  #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:53 =# @inbounds begin
+                          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:53 =#
+                          let (x, y, z, σ, ρ, β) = (u[1], u[2], u[3], p[1], p[2], p[3])
+                              var&quot;##MTIIPVar#582&quot;[1] = (*)(σ, -1)
+                              var&quot;##MTIIPVar#582&quot;[2] = (-)(ρ, z)
+                              var&quot;##MTIIPVar#582&quot;[3] = y
+                              var&quot;##MTIIPVar#582&quot;[4] = σ
+                              var&quot;##MTIIPVar#582&quot;[5] = -1
+                              var&quot;##MTIIPVar#582&quot;[6] = x
+                              var&quot;##MTIIPVar#582&quot;[7] = 0
+                              var&quot;##MTIIPVar#582&quot;[8] = (*)(x, -1)
+                              var&quot;##MTIIPVar#582&quot;[9] = (*)(-1, β)
+                          end
+                      end
+              end
+          #= C:\Users\accou\.julia\dev\ModelingToolkit\src\utils.jl:74 =#
+          nothing
+      end)</code></pre><p>Now, we can call <code>nlsolve</code> by enclosing our parameters into the functions:</p><pre><code class="language-julia">using NLsolve
+nlsolve((out, x) -&gt; f(out, x, params), (out, x) -&gt; j!(out, x, params), ones(3))</code></pre><p>If one would like the generated function to be a Julia function instead of an expression, and allow this function to be used from within the same world-age, one simply needs to pass <code>Val{false}</code> to tell it to generate the function, i.e.:</p><pre><code class="language-julia">nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β], expression=Val{false})[2]</code></pre><p>which uses GeneralizedGenerated.jl to build the same world-age function on the fly without eval.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../higher_order/">« Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a><a class="docs-footer-nextpage" href="../modelingtoolkitize/">Symbolic Extensions to ODEProblem via Modelingtoolkize »</a></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Monday 18 January 2021 20:08">Monday 18 January 2021</span>. Using Julia version 1.5.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
