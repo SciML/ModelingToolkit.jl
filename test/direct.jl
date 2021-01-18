@@ -13,9 +13,21 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
 )
 
 @test canonequal(
-        ModelingToolkit.derivative(sin(cos(x)), x),
-        -sin(x) * cos(cos(x))
-       )
+                 ModelingToolkit.derivative(sin(cos(x)), x),
+                 -sin(x) * cos(cos(x))
+                )
+
+@register no_der(x)
+@test canonequal(
+                 ModelingToolkit.derivative([sin(cos(x)), hypot(x, no_der(x))], x),
+                 [
+                  -sin(x) * cos(cos(x)),
+                  x/hypot(x, no_der(x)) + no_der(x)*Differential(x)(no_der(x))/hypot(x, no_der(x))
+                 ]
+                )
+
+@register intfun(x)::Int
+@test ModelingToolkit.symtype(intfun(x)) === Int
 
 eqs = [σ*(y-x),
        x*(ρ-z)-y,
