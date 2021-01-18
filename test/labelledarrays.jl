@@ -5,7 +5,7 @@ using Test
 # Define some variables
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
-@derivatives D'~t
+D = Differential(t)
 
 # Define a differential equation
 eqs = [D(x) ~ σ*(y-x),

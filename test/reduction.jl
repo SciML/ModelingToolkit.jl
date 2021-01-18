@@ -2,7 +2,7 @@ using ModelingToolkit, OrdinaryDiffEq, Test
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t) a(t) u(t) F(t)
-@derivatives D'~t
+D = Differential(t)
 
 test_equal(a, b) = @test isequal(simplify(a, polynorm=true), simplify(b, polynorm=true))
 
@@ -102,13 +102,13 @@ test_equal.(observed(aliased_flattened_system), observed_eqs)
 # issue #578
 
 let
-    @variables t x(t) y(t) z(t);
-    @derivatives D'~t;
+    @variables t x(t) y(t) z(t)
+    D = Differential(t)
     eqs = [
         D(x) ~ x + y
         x ~ y
-    ];
-    sys = ODESystem(eqs, t, [x], []);
+    ]
+    sys = ODESystem(eqs, t, [x], [])
     asys = alias_elimination(flatten(sys))
 
     test_equal.(asys.eqs, [D(x) ~ 2x])
@@ -118,7 +118,7 @@ end
 # issue #716
 let
     @parameters t
-    @derivatives D'~t
+    D = Differential(t)
     @variables x(t), u(t), y(t)
     @parameters a, b, c, d
     ol = ODESystem([D(x) ~ a * x + b * u, y ~ c * x], t, name=:ol)

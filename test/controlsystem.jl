@@ -2,7 +2,7 @@ using ModelingToolkit
 
 @variables t x(t) v(t) u(t)
 @parameters p[1:2]
-@derivatives D'~t
+D = Differential(t)
 
 loss = (4-x)^2 + 2v^2 + u^2
 eqs = [

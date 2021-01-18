@@ -19,7 +19,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     params = p isa DiffEqBase.NullParameters ? [] :
              reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(p))
 
-    @derivatives D'~t
+    D = Differential(t)
 
     rhs = [D(var) for var in vars]
 
@@ -57,7 +57,7 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
     params = p isa DiffEqBase.NullParameters ? [] :
              reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(p))
 
-    @derivatives D'~t
+    D = Differential(t)
 
     rhs = [D(var) for var in vars]
 

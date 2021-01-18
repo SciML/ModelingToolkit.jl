@@ -7,7 +7,7 @@ addprocs(2)
 # create the Lorenz system
 @everywhere @parameters t σ ρ β
 @everywhere @variables x(t) y(t) z(t)
-@everywhere @derivatives D'~t
+@everywhere D = Differential(t)
 
 @everywhere eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,

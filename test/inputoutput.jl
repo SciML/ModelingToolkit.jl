@@ -2,7 +2,7 @@ using ModelingToolkit, OrdinaryDiffEq, Test
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t) F(t) u(t)
-@derivatives D'~t
+D = Differential(t)
 
 eqs = [D(x) ~ σ*(y-x) + F,
        D(y) ~ x*(ρ-z)-y,

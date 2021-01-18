@@ -18,7 +18,7 @@ using ModelingToolkit, OrdinaryDiffEq, Test
 
 @parameters t α β γ δ
 @variables x(t) y(t)
-@derivatives D'~t
+D = Differential(t)
 
 eqs = [D(x) ~ α*x - β*x*y,
        D(y) ~ -δ*y + γ*x*y]

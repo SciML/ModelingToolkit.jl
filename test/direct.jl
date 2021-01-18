@@ -7,6 +7,10 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
 # Calculus
 @parameters t σ ρ β
 @variables x y z
+@test isequal(
+    (Differential(z) * Differential(y) * Differential(x))(t),
+    Differential(z)(Differential(y)(Differential(x)(t)))
+)
 
 eqs = [σ*(y-x),
        x*(ρ-z)-y,
@@ -173,7 +177,7 @@ test_worldage()
 let
     @register foo(x)
     @variables t
-    @derivatives D'~t
+    D = Differential(t)
 
 
     @test isequal(expand_derivatives(D(foo(t))), D(foo(t)))

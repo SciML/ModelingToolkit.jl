@@ -16,10 +16,10 @@ julia> using ModelingToolkit
 julia> @variables x y;
 
 julia> D = Differential(x)
-(D'~x())
+(D'~x)
 
 julia> D(y)  # Differentiate y wrt. x
-(D'~x())(y())
+(D'~x)(y)
 ```
 """
 struct Differential <: Function
@@ -30,6 +30,11 @@ end
 (D::Differential)(x) = Term{symtype(x)}(D, [x])
 (D::Differential)(x::Num) = Num(D(value(x)))
 SymbolicUtils.promote_symtype(::Differential, x) = x
+
+Base.:*(D1, D2::Differential) = D1 ∘ D2
+Base.:*(D1::Differential, D2) = D1 ∘ D2
+Base.:*(D1::Differential, D2::Differential) = D1 ∘ D2
+Base.:^(D::Differential, n::Integer) = _repeat_apply(D, n)
 
 Base.show(io::IO, D::Differential) = print(io, "(D'~", D.x, ")")
 
@@ -229,6 +234,7 @@ end
 _repeat_apply(f, n) = n == 1 ? f : f ∘ _repeat_apply(f, n-1)
 function _differential_macro(x)
     ex = Expr(:block)
+    push!(ex.args,  :(Base.depwarn("`@derivatives D'''~x` is deprecated. Use `Differential(x)^3` instead.", Symbol("@derivatives"), force=true)))
     lhss = Symbol[]
     x = x isa Tuple && first(x).head == :tuple ? first(x).args : x # tuple handling
     x = flatten_expr!(x)

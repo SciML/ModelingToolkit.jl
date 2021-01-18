@@ -5,7 +5,9 @@ using Test
 @parameters t σ ρ β
 @variables x y z
 @variables uu(t) uuˍt(t)
-@derivatives D'~t D2''~t Dx'~x
+D = Differential(t)
+D2 = Differential(t)^2
+Dx = Differential(x)
 
 @test Symbol(D(D(uu))) === Symbol("uuˍtt⦗t⦘")
 @test Symbol(D(uuˍt)) === Symbol(D(D(uu)))
@@ -100,12 +102,13 @@ t1 = ModelingToolkit.gradient(tmp, [x1, x2])
 
 @parameters t k
 @variables x(t)
-@derivatives D'~k
+D = Differential(k)
 @test ModelingToolkit.makesym(D(x).val).name === Symbol("xˍk⦗t⦘")
 
 using ModelingToolkit
 @variables t x(t)
-@derivatives ∂ₜ'~t ∂ₓ'~x
+∂ₜ = Differential(t)
+∂ₓ = Differential(x)
 L = .5 * ∂ₜ(x)^2 - .5 * x^2
 @test isequal(expand_derivatives(∂ₓ(L)), -1 * x)
 test_equal(expand_derivatives(Differential(x)(L) - ∂ₜ(Differential(∂ₜ(x))(L))), -1 * (∂ₜ(∂ₜ(x)) + x))
@@ -116,8 +119,8 @@ test_equal(expand_derivatives(Differential(x)(L) - ∂ₜ(Differential(∂ₜ(x)
 
 @parameters x y
 @variables u(..)
-@derivatives Dy'~y
-@derivatives Dx'~x
+Dy = Differential(y)
+Dx = Differential(x)
 dxyu = Dx(Dy(u(x,y)))
 @test isequal(expand_derivatives(dxyu), dxyu)
 dxxu = Dx(Dx(u(x,y)))
