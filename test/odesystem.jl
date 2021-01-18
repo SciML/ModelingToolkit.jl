@@ -8,7 +8,7 @@ using ModelingToolkit: value
 # Define some variables
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
-@derivatives D'~t
+D = Differential(t)
 
 # Define a differential equation
 eqs = [D(x) ~ σ*(y-x),
@@ -102,8 +102,8 @@ tgrad_iip(du,u,p,t)
 end
 
 # Conversion to first-order ODEs #17
-@derivatives D3'''~t
-@derivatives D2''~t
+D3 = Differential(t)^3
+D2 = Differential(t)^2
 @variables u(t) uˍtt(t) uˍt(t) xˍt(t)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
        D2(x) ~ D(x) + 2]
@@ -138,7 +138,7 @@ jac = calculate_jacobian(de)
 
 f = ODEFunction(de, [x,y,z], [σ,ρ,β])
 
-@derivatives D'~t
+D = Differential(t)
 @parameters A B C
 _x = y / C
 eqs = [D(x) ~ -A*x,
@@ -180,7 +180,7 @@ ODEFunction(de)(similar(prob.u0), prob.u0, prob.p, 0.1)
 # automatic state detection for DAEs
 @parameters t k₁ k₂ k₃
 @variables y₁(t) y₂(t) y₃(t)
-@derivatives D'~t
+D = Differential(t)
 # reorder the system just to be a little spicier
 eqs = [D(y₁) ~ -k₁*y₁+k₃*y₂*y₃,
        0     ~  y₁ + y₂ + y₃ - 1,
@@ -209,7 +209,7 @@ end
 
 @parameters t σ β
 @variables x(t) y(t) z(t)
-@derivatives D'~t
+D = Differential(t)
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x-β*y,
        x + z ~ y]
@@ -222,14 +222,14 @@ sys = ODESystem(eqs)
 using ModelingToolkit
 @parameters t a
 @variables x(t)
-@derivatives D'~t
+D = Differential(t)
 sys = ODESystem([D(x) ~ a])
 @test sys.eqs[1].rhs isa Sym
 
 # issue 708
 @parameters t a
 @variables x(t) y(t) z(t)
-@derivatives D'~t
+D = Differential(t)
 sys = ODESystem([D(x) ~ y, 0 ~ x + z, 0 ~ x - y], t, [z, y, x], [])
 sys2 = ode_order_lowering(sys)
 M = ModelingToolkit.calculate_massmatrix(sys2)
@@ -237,7 +237,7 @@ M = ModelingToolkit.calculate_massmatrix(sys2)
 
 # issue #609
 @variables t x1(t) x2(t)
-@derivatives D'~t
+D = Differential(t)
 
 eqs = [
    D(x1) ~ -x1,

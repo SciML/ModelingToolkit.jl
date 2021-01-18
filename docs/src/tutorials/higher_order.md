@@ -15,7 +15,7 @@ using ModelingToolkit, OrdinaryDiffEq
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
-@derivatives D'~t
+D = Differential(t)
 
 eqs = [D(D(x)) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
@@ -25,10 +25,11 @@ sys = ODESystem(eqs)
 ```
 
 Note that we could've used an alternative syntax for 2nd order, i.e.
-`@derivatives E''~t` and then `E(x)` would be the second derivative,
-and this syntax extends to Nth order.
+`D = Differential(t)^2` and then `E(x)` would be the second derivative,
+and this syntax extends to `N`-th order. Also, we can use `*` or `∘` to compose
+`Differential`s, like `Differential(t) * Differential(x)`.
 
-Now let's transform this into the ODESystem of first order components.
+Now let's transform this into the `ODESystem` of first order components.
 We do this by simply calling `ode_order_lowering`:
 
 ```julia

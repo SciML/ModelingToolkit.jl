@@ -110,7 +110,7 @@ using UnPack
 # Define some variables
 @parameters t L g
 @variables x(t) y(t) w(t) z(t) T(t)
-@derivatives D'~t
+D = Differential(t)
 
 # Simple pendulum in cartesian coordinates
 eqs = [D(x) ~ w,

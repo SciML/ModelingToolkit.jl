@@ -20,7 +20,7 @@ using ModelingToolkit
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
-@derivatives D'~t
+D = Differential(t)
 
 eqs = [D(x) ~ σ*(y-x)*D(x-y)/D(z),
        0 ~ σ*x*(ρ-z)/10-y,
@@ -66,7 +66,7 @@ raw"\begin{align}
 
 @parameters t
 @variables x(t)
-@derivatives D'~t
+D = Differential(t)
 eqs = [D(x) ~ (1+cos(t))/(1+2*x)]
 
 @test latexify(eqs) == replace(

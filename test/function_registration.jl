@@ -10,7 +10,7 @@ module MyModule
     using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
     @parameters t x
     @variables u(t)
-    @derivatives Dt'~t
+    Dt = Differential(t)
 
     function do_something(a)
         a + 10
@@ -33,7 +33,7 @@ module MyModule2
         using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
         @parameters t x
         @variables u(t)
-        @derivatives Dt'~t
+        Dt = Differential(t)
 
         function do_something_2(a)
             a + 20
@@ -55,7 +55,7 @@ end
 using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
 @parameters t x
 @variables u(t)
-@derivatives Dt'~t
+Dt = Differential(t)
 
 function do_something_3(a)
     a + 30
@@ -73,7 +73,7 @@ u0 = 7.0
 # TEST: Function registration works with derivatives.
 # ---------------------------------------------------
 foo(x, y) = sin(x) * cos(y)
-@parameters t; @variables x(t) y(t) z(t); @derivatives D'~t;
+@parameters t; @variables x(t) y(t) z(t); D = Differential(t)
 @register foo(x, y)
 
 using ModelingToolkit: value, arguments, operation
@@ -99,7 +99,7 @@ end
 function build_ode()
     @parameters t x
     @variables u(t)
-    @derivatives Dt'~t
+    Dt = Differential(t)
     eq  = Dt(u) ~ do_something_4(x) + (@__MODULE__).do_something_4(x)
     sys = ODESystem([eq], t, [u], [x])
     fun = ODEFunction(sys, eval_expression=false)
