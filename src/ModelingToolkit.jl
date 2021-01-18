@@ -23,7 +23,9 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils: Term, Add, Mul, Pow, Sym, to_symbolic, FnType, @rule, Rewriters, substitute, similarterm
+import SymbolicUtils: Term, Add, Mul, Pow, Sym, to_symbolic, FnType,
+                      @rule, Rewriters, substitute, similarterm,
+                      promote_symtype
 
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
 
@@ -168,6 +170,8 @@ Get the set of parameters variables for the given system.
 """
 function parameters end
 
+include("bipartite_graph.jl")
+
 include("variables.jl")
 include("context_dsl.jl")
 include("differentials.jl")
@@ -181,6 +185,7 @@ include("domains.jl")
 include("register_function.jl")
 
 include("systems/abstractsystem.jl")
+include("systems/systemstructure.jl")
 
 include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")
@@ -211,6 +216,7 @@ include("extra_functions.jl")
 
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
+export SystemStructure
 export JumpSystem
 export ODEProblem, SDEProblem
 export NonlinearProblem, NonlinearProblemExpr

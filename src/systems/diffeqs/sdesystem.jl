@@ -13,7 +13,7 @@ using ModelingToolkit
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
-@derivatives D'~t
+D = Differential(t)
 
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
@@ -100,7 +100,7 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
         eqs = vcat([sys.eqs[i].lhs ~ sys.noiseeqs[i] for i in eachindex(sys.states)]...)
         de = ODESystem(eqs,sys.iv,sys.states,sys.ps)
 
-        jac = calculate_jacobian(de, sparse=false, simplify=true)
+        jac = calculate_jacobian(de, sparse=false, simplify=false)
         ∇σσ′ = simplify.(jac*sys.noiseeqs)
 
         deqs = vcat([sys.eqs[i].lhs ~ sys.eqs[i].rhs+ correction_factor*∇σσ′[i] for i in eachindex(sys.states)]...)
@@ -109,13 +109,13 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
         eqs = vcat([sys.eqs[i].lhs ~ sys.noiseeqs[i] for i in eachindex(sys.states)]...)
         de = ODESystem(eqs,sys.iv,sys.states,sys.ps)
 
-        jac = calculate_jacobian(de, sparse=false, simplify=true)
+        jac = calculate_jacobian(de, sparse=false, simplify=false)
         ∇σσ′ = simplify.(jac*sys.noiseeqs[:,1])
         for k = 2:m
             eqs = vcat([sys.eqs[i].lhs ~ sys.noiseeqs[Int(i+(k-1)*dimstate)] for i in eachindex(sys.states)]...)
             de = ODESystem(eqs,sys.iv,sys.states,sys.ps)
 
-            jac = calculate_jacobian(de, sparse=false, simplify=true)
+            jac = calculate_jacobian(de, sparse=false, simplify=false)
             ∇σσ′ = ∇σσ′ + simplify.(jac*sys.noiseeqs[:,k])
         end
 

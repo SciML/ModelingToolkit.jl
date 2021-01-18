@@ -16,10 +16,16 @@ julia> using ModelingToolkit
 julia> @variables x y;
 
 julia> D = Differential(x)
-(D'~x())
+(D'~x)
 
-julia> D(y)  # Differentiate y wrt. x
-(D'~x())(y())
+julia> D(y) # Differentiate y wrt. x
+(D'~x)(y)
+
+julia> Dx = Differential(x) * Differential(y) # d^2/dxy operator
+(D'~x(t)) ∘ (D'~y(t))
+
+julia> D3 = Differential(x)^3 # 3rd order differential operator
+(D'~x(t)) ∘ (D'~x(t)) ∘ (D'~x(t))
 ```
 """
 struct Differential <: Function
@@ -29,6 +35,12 @@ struct Differential <: Function
 end
 (D::Differential)(x) = Term{symtype(x)}(D, [x])
 (D::Differential)(x::Num) = Num(D(value(x)))
+SymbolicUtils.promote_symtype(::Differential, x) = x
+
+Base.:*(D1, D2::Differential) = D1 ∘ D2
+Base.:*(D1::Differential, D2) = D1 ∘ D2
+Base.:*(D1::Differential, D2::Differential) = D1 ∘ D2
+Base.:^(D::Differential, n::Integer) = _repeat_apply(D, n)
 
 Base.show(io::IO, D::Differential) = print(io, "(D'~", D.x, ")")
 
@@ -142,14 +154,14 @@ function expand_derivatives(O::Symbolic, simplify=false; occurances=nothing)
     end
 end
 
-function expand_derivatives(n::Num, simplify=true; occurances=nothing)
+function expand_derivatives(n::Num, simplify=false; occurances=nothing)
     Num(expand_derivatives(value(n), simplify; occurances=occurances))
 end
 
 _iszero(x) = false
 _isone(x) = false
 
-expand_derivatives(x, simplify=true;occurances=nothing) = x
+expand_derivatives(x, simplify=false;occurances=nothing) = x
 
 # Don't specialize on the function here
 """
@@ -228,6 +240,7 @@ end
 _repeat_apply(f, n) = n == 1 ? f : f ∘ _repeat_apply(f, n-1)
 function _differential_macro(x)
     ex = Expr(:block)
+    push!(ex.args,  :(Base.depwarn("`@derivatives D'''~x` is deprecated. Use `Differential(x)^3` instead.", Symbol("@derivatives"), force=true)))
     lhss = Symbol[]
     x = x isa Tuple && first(x).head == :tuple ? first(x).args : x # tuple handling
     x = flatten_expr!(x)

@@ -2,7 +2,7 @@ using OrdinaryDiffEq, ModelingToolkit, Test
 @parameters t
 @variables y[1:3](t)
 @parameters k[1:3]
-@derivatives D'~t
+D = Differential(t)
 
 eqs = [D(y[1]) ~ -k[1]*y[1] + k[3]*y[2]*y[3],
        D(y[2]) ~  k[1]*y[1] - k[3]*y[2]*y[3] - k[2]*y[2]^2,

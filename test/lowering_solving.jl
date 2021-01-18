@@ -2,7 +2,7 @@ using ModelingToolkit, OrdinaryDiffEq, Test, LinearAlgebra
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t) k(t)
-@derivatives D'~t
+D = Differential(t)
 
 eqs = [D(D(x)) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
@@ -21,7 +21,7 @@ sys2 = ode_order_lowering(sys2)
 ModelingToolkit.calculate_massmatrix(sys2) == Diagonal([1, 1, 1, 1, 0])
 
 u0 = [D(x) => 2.0,
-	  x => 1.0,
+      x => 1.0,
       y => 0.0,
       z => 0.0]
 
@@ -39,7 +39,7 @@ solexpr = solve(eval(prob),Tsit5())
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
-@derivatives D'~t
+D = Differential(t)
 
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,

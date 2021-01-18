@@ -4,7 +4,7 @@ using Test
 
 @parameters t r
 @variables x(t)
-@derivatives D'~t
+D = Differential(t)
 eqs = [D(x) ~ x^2-r]
 de = ODESystem(eqs)
 

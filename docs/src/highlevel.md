@@ -10,7 +10,7 @@ methods.
 ```@docs
 @parameters
 @variables
-@derivatives
+Differential
 Base.:~(::Num, ::Num)
 modelingtoolkitize
 ```
@@ -18,6 +18,7 @@ modelingtoolkitize
 ## Differentiation Functions
 
 ```@docs
+ModelingToolkit.derivative
 ModelingToolkit.gradient
 ModelingToolkit.jacobian
 ModelingToolkit.sparsejacobian
