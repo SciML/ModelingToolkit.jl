@@ -3,7 +3,7 @@ using ModelingToolkit, DiffEqBase, LinearAlgebra
 # Define some variables
 @parameters t x
 @variables u(..)
-D = Differential(t)
+Dt = Differential(t)
 Dxx = Differential(x)^2
 eq  = Dt(u(t,x)) ~ Dxx(u(t,x))
 bcs = [u(0,x) ~ - x * (x-1) * sin(x),
