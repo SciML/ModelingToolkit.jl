@@ -10,7 +10,7 @@ methods.
 ```@docs
 @parameters
 @variables
-@derivatives
+Differential
 Base.:~(::Num, ::Num)
 modelingtoolkitize
 ```

@@ -282,11 +282,11 @@ sufficiently large!)
 One common thing to compute in a symbolic system is derivatives. In
 ModelingToolkit.jl, derivatives are represented lazily via operations,
 just like any other function. To build a differential operator, use
-`@derivatives` like:
+`Differential` like:
 
 ```julia
 @variables t
-@derivatives D'~t
+Differential(t)
 ```
 
 This is the differential operator ``D = \frac{\partial}{\partial t}``: the number of
@@ -450,7 +450,7 @@ z = g(x) + g(y)
 
 One of the benefits of a one-language Julia symbolic stack is that the
 primitives are all written in Julia, and therefore it's trivially
-extendable from Julia itself. By default, new functions are traced
+extendible from Julia itself. By default, new functions are traced
 to the primitives and the symbolic expressions are written on the
 primitives. However, we can expand the allowed primitives by registering
 new functions. For example, let's register a new function `h`:
@@ -479,7 +479,8 @@ ModelingToolkit.derivative(::typeof(h), args::NTuple{2,Any}, ::Val{2}) = 1
 and now it works with the rest of the system:
 
 ```julia
-@derivatives Dx'~x Dy'~y
+Dx = Differential(x)
+Dy = Differential(y)
 expand_derivatives(Dx(h(x,y) + y^2)) # 2x
 expand_derivatives(Dy(h(x,y) + y^2)) # 1 + 2y
 ```
