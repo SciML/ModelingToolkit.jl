@@ -1,5 +1,21 @@
 """
 ```julia
+derivative(O, v; simplify = true)
+```
+
+A helper function for computing the derivative of an expression with respect to
+`var`.
+"""
+function derivative(O, v; simplify = true)
+    if O isa AbstractArray
+        Num[expand_derivatives(Differential(v)(value(o)), simplify) for o in O]
+    else
+        Num(expand_derivatives(Differential(v)(value(O)), simplify))
+    end
+end
+
+"""
+```julia
 gradient(O, vars::AbstractVector; simplify = true)
 ```
 
@@ -232,7 +248,9 @@ function toexpr(O; canonicalize=true)
     op = operation(O)
     args = arguments(O)
     if op isa Differential
-        return :(derivative($(toexpr(args[1]; canonicalize=canonicalize)),$(toexpr(op.x; canonicalize=canonicalize))))
+        ex = toexpr(args[1]; canonicalize=canonicalize)
+        wrt = toexpr(op.x; canonicalize=canonicalize)
+        return :(Differential($wrt)($ex))
     elseif op isa Sym
         isempty(args) && return nameof(op)
         return Expr(:call, toexpr(op; canonicalize=canonicalize), toexpr(args; canonicalize=canonicalize)...)

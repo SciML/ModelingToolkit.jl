@@ -12,6 +12,11 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
     Differential(z)(Differential(y)(Differential(x)(t)))
 )
 
+@test canonequal(
+        ModelingToolkit.derivative(sin(cos(x)), x),
+        -sin(x) * cos(cos(x))
+       )
+
 eqs = [σ*(y-x),
        x*(ρ-z)-y,
        x*y - β*z]

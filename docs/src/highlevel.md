@@ -18,6 +18,7 @@ modelingtoolkitize
 ## Differentiation Functions
 
 ```@docs
+ModelingToolkit.derivative
 ModelingToolkit.gradient
 ModelingToolkit.jacobian
 ModelingToolkit.sparsejacobian
