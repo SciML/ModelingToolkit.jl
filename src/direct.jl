@@ -250,7 +250,7 @@ function toexpr(O; canonicalize=true)
     if op isa Differential
         ex = toexpr(args[1]; canonicalize=canonicalize)
         wrt = toexpr(op.x; canonicalize=canonicalize)
-        return :(Differential($wrt)($ex))
+        return :(_derivative($ex, $wrt))
     elseif op isa Sym
         isempty(args) && return nameof(op)
         return Expr(:call, toexpr(op; canonicalize=canonicalize), toexpr(args; canonicalize=canonicalize)...)
