@@ -3,7 +3,7 @@
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
-@derivatives D&#39;~t
+D = Differential(t)
 
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
@@ -41,7 +41,7 @@ using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.z))</code></pre><h2 id="Generati
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
-@derivatives D&#39;~t</code></pre><p>Then we build the system:</p><pre><code class="language-julia">eqs = [D(x) ~ σ*(y-x),
+D = Differential(t)</code></pre><p>Then we build the system:</p><pre><code class="language-julia">eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]</code></pre><p>Each operation builds an <code>Term</code> type, and thus <code>eqs</code> is an array of <code>Term</code> and <code>Sym</code>s (possibly wrapped in Num). This holds a tree of the full system that can be analyzed by other programs. We can turn this into a <code>ODESystem</code> via:</p><pre><code class="language-julia">sys = ODESystem(eqs)</code></pre><p>This <code>ODESystem</code> can then be used to generate an <code>ODEProblem</code> by supplying the constructor with a map from the states of the system to their initial condition values and from the parameters of the system to their values. For example:</p><pre><code class="language-julia">u0 = [x =&gt; 1.0
       y =&gt; 0.0
@@ -75,4 +75,4 @@ tspan = (0.0,100.0)
 prob = ODEProblem(connected,u0,tspan,p)
 sol = solve(prob,Rodas5())
 
-using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.z))</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/79229194-9e71a780-7e30-11ea-9f93-bfa762eb8dfb.png" alt/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../symbolic_functions/">« Symbolic Calculations and Building Fast Parallel Functions</a><a class="docs-footer-nextpage" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Saturday 16 January 2021 05:02">Saturday 16 January 2021</span>. Using Julia version 1.5.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.z))</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/79229194-9e71a780-7e30-11ea-9f93-bfa762eb8dfb.png" alt/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../symbolic_functions/">« Symbolic Calculations and Building Fast Parallel Functions</a><a class="docs-footer-nextpage" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Monday 18 January 2021 23:02">Monday 18 January 2021</span>. Using Julia version 1.5.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
