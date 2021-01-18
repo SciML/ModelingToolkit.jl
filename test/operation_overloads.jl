@@ -58,7 +58,11 @@ D = sparse([1, 2], [2, 1], [d, d])
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
-@derivatives D'~t Dx'~x Dy'~y Dz'~z
+D = Differential(t)
+Dx = Differential(x)
+Dy = Differential(y)
+Dz = Differential(z)
+
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]

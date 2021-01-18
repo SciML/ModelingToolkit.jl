@@ -7,6 +7,27 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
 # Calculus
 @parameters t σ ρ β
 @variables x y z
+@test isequal(
+    (Differential(z) * Differential(y) * Differential(x))(t),
+    Differential(z)(Differential(y)(Differential(x)(t)))
+)
+
+@test canonequal(
+                 ModelingToolkit.derivative(sin(cos(x)), x),
+                 -sin(x) * cos(cos(x))
+                )
+
+@register no_der(x)
+@test canonequal(
+                 ModelingToolkit.derivative([sin(cos(x)), hypot(x, no_der(x))], x),
+                 [
+                  -sin(x) * cos(cos(x)),
+                  x/hypot(x, no_der(x)) + no_der(x)*Differential(x)(no_der(x))/hypot(x, no_der(x))
+                 ]
+                )
+
+@register intfun(x)::Int
+@test ModelingToolkit.symtype(intfun(x)) === Int
 
 eqs = [σ*(y-x),
        x*(ρ-z)-y,
@@ -173,7 +194,7 @@ test_worldage()
 let
     @register foo(x)
     @variables t
-    @derivatives D'~t
+    D = Differential(t)
 
 
     @test isequal(expand_derivatives(D(foo(t))), D(foo(t)))

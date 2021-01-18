@@ -3,17 +3,19 @@
 ModelingToolkit IR mirrors the Julia AST but allows for easy mathematical
 manipulation by itself following mathematical semantics. The base of the IR is
 the `Sym` type, which defines a symbolic variable. Registered (mathematical)
-functions on `Sym`s (or `Term`s) return `Term`s.  For example, `op1 = x+y` is
-one `Term` and `op2 = 2z` is another, and so `op1*op2` is another `Term`. Then,
-at the top, an `Equation`, normally written as `op1 ~ op2`, defines the
-symbolic equality between two operations.
+functions on `Sym`s (or `istree` objects) return an expression that `istree`.
+For example, `op1 = x+y` is one symbolic object and `op2 = 2z` is another, and
+so `op1*op2` is another tree object. Then, at the top, an `Equation`, normally
+written as `op1 ~ op2`, defines the symbolic equality between two operations.
 
 ### Types
 `Sym`, `Term`, and `FnType` are from [SymbolicUtils.jl](https://juliasymbolics.github.io/SymbolicUtils.jl/api/). Note that in
 ModelingToolkit, we always use `Sym{Real}`, `Term{Real}`, and
-`FnType{Tuple{Any}, Real}`. To get the arguments of a `Term` use
-`arguments(t::Term)`, and to get the operation of a `Term` use
-`operation(t::Term)`.
+`FnType{Tuple{Any}, Real}`. To get the arguments of a `istree` object use
+`arguments(t::Term)`, and to get the operation, use `operation(t::Term)`.
+However, note that one should never dispatch on `Term` or test `isa Term`.
+Instead, one needs to use `SymbolicUtils.istree` to check if `arguments` and
+`operation` is defined.
 
 ```@docs
 Equation

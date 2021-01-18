@@ -8,10 +8,18 @@ registered function.
 ```julia
 @register foo(x, y)
 @register goo(x, y::Int) # `y` is not overloaded to take symbolic objects
+@register hoo(x, y)::Int # `hoo` returns `Int`
 ```
 """
 macro register(expr, Ts = [Num, Symbolic, Real])
-    @assert expr.head == :call
+    if expr.head === :(::)
+        ret_type = expr.args[2]
+        expr = expr.args[1]
+    else
+        ret_type = Real
+    end
+
+    @assert expr.head === :call
 
     f = expr.args[1]
     args = expr.args[2:end]
@@ -28,14 +36,17 @@ macro register(expr, Ts = [Num, Symbolic, Real])
     name(x::Symbol) = :($value($x))
     name(x::Expr) = ((@assert x.head == :(::)); :($value($(x.args[1]))))
 
-    Expr(:block,
-         [quote
-              function $f($(setinds(args, symbolic_args, ts)...))
-                  wrap =  any(x->typeof(x) <: Num, tuple($(setinds(args, symbolic_args, ts)...),)) ? Num : identity
-                  wrap(Term{Real}($f, [$(map(name, args)...)]))
-              end
-          end
-         for ts in types]...) |> esc
+    ex = Expr(:block)
+    for ts in types
+        push!(ex.args, quote
+            function $f($(setinds(args, symbolic_args, ts)...))
+                wrap =  any(x->typeof(x) <: Num, tuple($(setinds(args, symbolic_args, ts)...),)) ? Num : identity
+                wrap(Term{$ret_type}($f, [$(map(name, args)...)]))
+            end
+        end)
+    end
+    push!(ex.args, :((::$typeof($promote_symtype))(::$typeof($f), args...) = $ret_type))
+    esc(ex)
 end
 
 # Ensure that Num that get @registered from outside the ModelingToolkit

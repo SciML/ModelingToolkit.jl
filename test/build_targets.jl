@@ -1,7 +1,7 @@
 using ModelingToolkit, Test
 @parameters t a
 @variables x(t) y(t)
-@derivatives D'~t
+D = Differential(t)
 eqs = [D(x) ~ a*x - x*y,
        D(y) ~ -3y + x*y]
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.StanTarget()) ==

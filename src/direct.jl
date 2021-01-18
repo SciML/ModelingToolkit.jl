@@ -1,5 +1,21 @@
 """
 ```julia
+derivative(O, v; simplify = true)
+```
+
+A helper function for computing the derivative of an expression with respect to
+`var`.
+"""
+function derivative(O, v; simplify = true)
+    if O isa AbstractArray
+        Num[Num(expand_derivatives(Differential(v)(value(o)), simplify)) for o in O]
+    else
+        Num(expand_derivatives(Differential(v)(value(O)), simplify))
+    end
+end
+
+"""
+```julia
 gradient(O, vars::AbstractVector; simplify = true)
 ```
 
@@ -7,7 +23,7 @@ A helper function for computing the gradient of an expression with respect to
 an array of variable expressions.
 """
 function gradient(O, vars::AbstractVector; simplify = true)
-    Num[expand_derivatives(Differential(v)(value(O)),simplify) for v in vars]
+    Num[Num(expand_derivatives(Differential(v)(value(O)),simplify)) for v in vars]
 end
 
 """
@@ -19,7 +35,7 @@ A helper function for computing the Jacobian of an array of expressions with res
 an array of variable expressions.
 """
 function jacobian(ops::AbstractVector, vars::AbstractVector; simplify = true)
-    Num[expand_derivatives(Differential(value(v))(value(O)),simplify) for O in ops, v in vars]
+    Num[Num(expand_derivatives(Differential(value(v))(value(O)),simplify)) for O in ops, v in vars]
 end
 
 """
@@ -41,7 +57,7 @@ function sparsejacobian(ops::AbstractVector, vars::AbstractVector; simplify = tr
     exprs = Num[]
 
     for (i,j) in zip(I, J)
-        push!(exprs, expand_derivatives(Differential(vars[j])(ops[i]), simplify))
+        push!(exprs, Num(expand_derivatives(Differential(vars[j])(ops[i]), simplify)))
     end
     sparse(I,J, exprs, length(ops), length(vars))
 end
@@ -232,7 +248,9 @@ function toexpr(O; canonicalize=true)
     op = operation(O)
     args = arguments(O)
     if op isa Differential
-        return :(derivative($(toexpr(args[1]; canonicalize=canonicalize)),$(toexpr(op.x; canonicalize=canonicalize))))
+        ex = toexpr(args[1]; canonicalize=canonicalize)
+        wrt = toexpr(op.x; canonicalize=canonicalize)
+        return :(_derivative($ex, $wrt))
     elseif op isa Sym
         isempty(args) && return nameof(op)
         return Expr(:call, toexpr(op; canonicalize=canonicalize), toexpr(args; canonicalize=canonicalize)...)

@@ -23,7 +23,9 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils: Term, Add, Mul, Pow, Sym, to_symbolic, FnType, @rule, Rewriters, substitute, similarterm
+import SymbolicUtils: Term, Add, Mul, Pow, Sym, to_symbolic, FnType,
+                      @rule, Rewriters, substitute, similarterm,
+                      promote_symtype
 
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
 
