@@ -529,19 +529,21 @@ control the compilation:
 function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
                          conv = toexpr, expression = Val{true},
                          fname = :diffeqf,
-						 lhsname=:du,rhsnames=[Symbol("RHS$i") for i in 1:length(args)],
-						 libpath=tempname(),compiler=:gcc)
+                         lhsname=:du,rhsnames=[Symbol("RHS$i") for i in 1:length(args)],
+                         libpath=tempname(), compiler=:gcc)
 
-    differential_equation = string(join([numbered_expr(eq,args...,lhsname=lhsname,
-                                  rhsnames=rhsnames,offset=-1) for
-                                  (i, eq) ∈ enumerate(eqs)],";\n  "),";")
+  differential_equation = string(join([numbered_expr(eq,args...,lhsname=lhsname,
+                                rhsnames=rhsnames,offset=-1) for
+                                (i, eq) ∈ enumerate(eqs)],";\n  "),";")
 
-    argstrs = join(vcat("double* $(lhsname)",[typeof(args[i])<:Array ? "double* $(rhsnames[i])" : "double $(rhsnames[i])" for i in 1:length(args)]),", ")
+  argstrs = join(vcat("double* $(lhsname)",[typeof(args[i])<:Array ? "double* $(rhsnames[i])" : "double $(rhsnames[i])" for i in 1:length(args)]),", ")
 	ex = """
     void $fname($(argstrs...)) {
       $differential_equation
     }
     """
+
+  @warn "build_function(eqs, args...) is deprecated! Use build_function(ex, args...) instead."
 
 	if expression == Val{true}
 		return ex
@@ -552,7 +554,61 @@ function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
 			print(f, ex)
 		end
 		@RuntimeGeneratedFunction(:((du::Array{Float64},u::Array{Float64},p::Array{Float64},t::Float64) -> ccall(("diffeqf", $libpath), Cvoid, (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Float64), du, u, p, t)))
-	end
+  end
+  
+  
+end
+
+function _build_function(target::CTarget, ex::Array{<:Num}, args...;
+                         columnmajor = true,
+                         conv        = toexpr, 
+                         expression  = Val{true},
+                         fname       = :diffeqf,
+                         lhsname     = :du, 
+                         rhsnames    = [Symbol("RHS$i") for i in 1:length(args)],
+                         libpath     = tempname(), 
+                         compiler    = :gcc)
+
+  if !columnmajor
+    return _build_function(target, [ex[j,i] for i ∈ 1:size(ex,1), j ∈ 1:size(ex,2)], args...; 
+                           columnmajor = true, 
+                           conv        = conv,
+                           fname       = fname, 
+                           lhsname     = lhsname,
+                           rhsnames    = rhsnames,
+                           libpath     = libpath,
+                           compiler    = compiler)
+  end
+
+  equations = Vector{String}(undef, length(ex))
+  for row ∈ 1:size(ex,1)
+    for col ∈ 1:size(ex,2)
+      ind = (row-1) * size(ex,1) + col
+      lhs = string(lhsname, "[", (row-1) * size(ex,1) + col-1, "]")
+      rhs = numbered_expr(value(ex[row, col]), args...;
+                          lhsname  = lhsname,
+                          rhsnames = rhsnames,
+                          offset   = -1) |> string
+      equations[ind] = string(lhs, " = ", rhs, ";")
+    end
+  end
+
+  argstrs = join(vcat("double* $(lhsname)",[typeof(args[i])<:Array ? "double* $(rhsnames[i])" : "double $(rhsnames[i])" for i in 1:length(args)]),", ")
+
+  ccode = """
+  void $fname($(argstrs...)) { $([string("\n  ", eqn) for eqn ∈ equations]...) \n}
+  """
+
+	if expression == Val{true}
+		return ccode
+	else
+		@assert compiler == :gcc
+		open(`gcc -fPIC -O3 -msse3 -xc -shared -o $(libpath * "." * Libdl.dlext) -`, "w") do f
+			print(f, ccode)
+		end
+		@RuntimeGeneratedFunction(:((du::Array{Float64},u::Array{Float64},p::Array{Float64},t::Float64) -> ccall(("diffeqf", $libpath), Cvoid, (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Float64), du, u, p, t)))
+  end
+
 end
 
 """
