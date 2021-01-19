@@ -186,9 +186,10 @@ eqs = [D(y₁) ~ -k₁*y₁+k₃*y₂*y₃,
        0     ~  y₁ + y₂ + y₃ - 1,
        D(y₂) ~  k₁*y₁-k₂*y₂^2-k₃*y₂*y₃]
 sys = ODESystem(eqs)
-u0 = [y₁ => 1.0,
-      y₂ => 0.0,
-      y₃ => 0.0]
+u0 = Pair[]
+push!(u0, y₁ => 1.0)
+push!(u0, y₂ => 0.0)
+push!(u0, y₃ => 0.0)
 p  = [k₁ => 0.04,
       k₂ => 3e7,
       k₃ => 1e4]
