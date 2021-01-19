@@ -45,7 +45,14 @@ macro register(expr, Ts = [Num, Symbolic, Real])
             end
         end)
     end
-    push!(ex.args, :((::$typeof($promote_symtype))(::$typeof($f), args...) = $ret_type))
+    push!(
+          ex.args,
+          quote
+              if $!($hasmethod($promote_symtype, $Tuple{$typeof($f), $Vararg}))
+                  (::$typeof($promote_symtype))(::$typeof($f), args...) = $ret_type
+              end
+          end
+         )
     esc(ex)
 end
 
