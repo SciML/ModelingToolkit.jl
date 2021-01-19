@@ -150,7 +150,7 @@ end
 _iszero(x) = false
 _isone(x) = false
 
-expand_derivatives(x, simplify=true;occurances=nothing) = x
+expand_derivatives(x, simplify=false;occurances=nothing) = x
 
 # Don't specialize on the function here
 """

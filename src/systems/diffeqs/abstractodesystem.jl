@@ -1,5 +1,5 @@
 function calculate_tgrad(sys::AbstractODESystem;
-                         simplify=true)
+                         simplify=false)
   isempty(sys.tgrad[]) || return sys.tgrad[]  # use cached tgrad, if possible
 
   # We need to remove explicit time dependence on the state because when we
@@ -18,7 +18,7 @@ function calculate_tgrad(sys::AbstractODESystem;
 end
 
 function calculate_jacobian(sys::AbstractODESystem;
-                            sparse=false, simplify=true)
+                            sparse=false, simplify=false)
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
@@ -52,14 +52,14 @@ end
 (f::ODEToExpr)(x) = toexpr(x)
 
 function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
-                        simplify = true, kwargs...)
+                        simplify = false, kwargs...)
     tgrad = calculate_tgrad(sys,simplify=simplify)
     return build_function(tgrad, dvs, ps, sys.iv;
                           conv = ODEToExpr(sys), kwargs...)
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
-                           simplify = true, sparse = false, kwargs...)
+                           simplify = false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys;simplify=simplify,sparse=sparse)
     sub = Dict(value.(dvs) .=> makesym.(value.(dvs)))
     jac = map(d->substitute(d, sub), jac)
@@ -79,7 +79,7 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
                           conv = ODEToExpr(sys),kwargs...)
 end
 
-function calculate_massmatrix(sys::AbstractODESystem; simplify=true)
+function calculate_massmatrix(sys::AbstractODESystem; simplify=false)
     eqs = equations(sys)
     dvs = states(sys)
     M = zeros(length(eqs),length(eqs))
@@ -123,7 +123,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      version = nothing, tgrad=false,
                                      jac = false,
                                      eval_expression = true,
-                                     sparse = false, simplify = true,
+                                     sparse = false, simplify = false,
                                      kwargs...) where {iip}
 
     f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
@@ -186,7 +186,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      version = nothing, tgrad=false,
                                      jac = false,
                                      linenumbers = false,
-                                     sparse = false, simplify = true,
+                                     sparse = false, simplify = false,
                                      kwargs...) where {iip}
 
     idx = iip ? 2 : 1
@@ -245,7 +245,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false,
                                     checkbounds = false, sparse = false,
-                                    simplify = true,
+                                    simplify = false,
                                     linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 ```
@@ -258,7 +258,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false,
                                     checkbounds = false, sparse = false,
-                                    simplify = true,
+                                    simplify = false,
                                     linenumbers = true, parallel=SerialForm(),
                                     eval_expression = true,
                                     kwargs...) where iip
@@ -289,7 +289,7 @@ function DiffEqBase.ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     checkbounds = false, sparse = false,
                                     linenumbers = true, parallel=SerialForm(),
                                     skipzeros=true, fillzeros=true,
-                                    simplify = true,
+                                    simplify = false,
                                     kwargs...) where iip
 ```
 
@@ -304,7 +304,7 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false,
                                     checkbounds = false, sparse = false,
-                                    simplify = true,
+                                    simplify = false,
                                     linenumbers = false, parallel=SerialForm(),
                                     kwargs...) where iip
 
