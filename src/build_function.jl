@@ -87,14 +87,19 @@ function add_integrator_header(ex, fargs, iip; X=gensym(:MTIIPVar))
   wrappedex
 end
 
-function unflatten_long_ops(op, N=4)
-    rule1 = @rule((+)((~~x)) => length(~~x) > N ?
-                 +(+((~~x)[1:N]...) + (+)((~~x)[N+1:end]...)) : nothing)
-    rule2 = @rule((*)((~~x)) => length(~~x) > N ?
-                 *(*((~~x)[1:N]...) * (*)((~~x)[N+1:end]...)) : nothing)
 
+function cut_up_op(t, N=4)
+    length(arguments(t)) < N && return t
+
+    ps = Iterators.partition(arguments(t), N)
+    Term{symtype(t)}(operation(t),
+                     [Term{symtype(t)}(operation(t), p) for p in ps]) |> cut_up_op
+end
+
+function unflatten_long_ops(op, N=4)
+    rule1 = @rule(~t::(x->istree(x) && operation(x) in (+, *)) => cut_up_op)
     op = to_symbolic(op)
-    Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2])))(op)
+    Rewriters.Postwalk(Rewriters.Chain([rule1]))(op)
 end
 
 # Scalar output
