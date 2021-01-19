@@ -206,13 +206,13 @@ function TreeViews.treelabel(io::IO,x::Variable,
 end
 
 """
-varmap_to_vars(varmap,varlist)
+    varmap_to_vars(varmap,varlist)
 
 Takes a list of pairs of variables=>values and an ordered list of variables and
 creates the array of values in the correct order
 """
-function varmap_to_vars(varmap::AbstractArray{Pair{T,S}},varlist) where {T,S}
-    out = similar(varmap,S)
+function varmap_to_vars(varmap::AbstractArray{<:Pair},varlist)
+    out = map(zero ∘ last, varmap)
     for (ivar, ival) in varmap
         j = findfirst(isequal(ivar),varlist)
         if isnothing(j)
@@ -228,7 +228,8 @@ function varmap_to_vars(varmap::AbstractArray{Pair{T,S}},varlist) where {T,S}
     ArrayInterface.restructure(varmap,out)
 end
 
-function varmap_to_vars(varmap::NTuple{N,Pair{T,S}},varlist) where {N,T,S}
+function varmap_to_vars(varmap::NTuple{N,<:Pair},varlist) where {N}
+    S = Base.promote_typeof(map(zero ∘ last, varmap)...)
     out = MArray{Tuple{N},S}(undef)
     for (ivar, ival) in varmap
         j = findfirst(isequal(ivar),varlist)
