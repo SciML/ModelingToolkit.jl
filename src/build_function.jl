@@ -19,7 +19,7 @@ Generates a numerically-usable function from a ModelingToolkit `Num`.
 build_function(ex, args...;
                expression = Val{true},
                target = JuliaTarget(),
-			   kwargs...)
+         kwargs...)
 ```
 
 Arguments:
@@ -132,7 +132,7 @@ function _build_function(target::JuliaTarget, op, args...;
 end
 
 function _build_and_inject_function(mod::Module, ex)
-	@RuntimeGeneratedFunction(ModelingToolkit.inject_registered_module_functions(ex))
+  @RuntimeGeneratedFunction(ModelingToolkit.inject_registered_module_functions(ex))
 end
 
 # Detect heterogeneous element types of "arrays of matrices/sparce matrices"
@@ -168,10 +168,10 @@ function _build_function(target::JuliaTarget, rhss, args...;
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun = addheader, outputidxs=nothing,
-						 convert_oop = true, force_SA = false,
+             convert_oop = true, force_SA = false,
                          skipzeros = outputidxs===nothing,
-						 fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
-						 parallel=SerialForm(), kwargs...)
+             fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
+             parallel=SerialForm(), kwargs...)
 ```
 
 Generates a Julia function which can then be utilized for further evaluations.
@@ -221,14 +221,14 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun = addheader, outputidxs=nothing,
-						 convert_oop = true, force_SA = false,
+             convert_oop = true, force_SA = false,
                          skipzeros = outputidxs===nothing,
-						 fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
-						 parallel=SerialForm(), kwargs...)
-	if multithread isa Bool
-		@warn("multithraded is deprecated for the parallel argument. See the documentation.")
-		parallel = multithread ? MultithreadedForm() : SerialForm()
-	end
+             fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
+             parallel=SerialForm(), kwargs...)
+  if multithread isa Bool
+    @warn("multithraded is deprecated for the parallel argument. See the documentation.")
+    parallel = multithread ? MultithreadedForm() : SerialForm()
+  end
 
     argnames = [gensym(:MTKArg) for i in 1:length(args)]
     symsdict = Dict()
@@ -254,23 +254,23 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
         rhss = [process(r) for r in rhss]
     end
 
-	if parallel isa DistributedForm
-		numworks = Distributed.nworkers()
-		reducevars = [gensym(:MTReduceVar) for i in 1:numworks]
-		lens = Int(ceil(rhs_length/numworks))
-		finalsize = rhs_length - (numworks-1)*lens
-		_rhss = vcat(reduce(vcat,[[Variable(reducevars[i],j) for j in 1:lens] for i in 1:numworks-1],init=Expr[]),
-						 [Variable(reducevars[end],j) for j in 1:finalsize])
+  if parallel isa DistributedForm
+    numworks = Distributed.nworkers()
+    reducevars = [gensym(:MTReduceVar) for i in 1:numworks]
+    lens = Int(ceil(rhs_length/numworks))
+    finalsize = rhs_length - (numworks-1)*lens
+    _rhss = vcat(reduce(vcat,[[Variable(reducevars[i],j) for j in 1:lens] for i in 1:numworks-1],init=Expr[]),
+             [Variable(reducevars[end],j) for j in 1:finalsize])
 
     elseif parallel isa DaggerForm
-		computevars = [gensym(:MTComputeVar) for i in axes(rhss,1)]
+    computevars = [gensym(:MTComputeVar) for i in axes(rhss,1)]
         reducevar = Variable(gensym(:MTReduceVar))
         _rhss = [Variable(reducevar,i) for i in axes(rhss,1)]
-	elseif rhss isa SparseMatrixCSC
-		_rhss = rhss.nzval
-	else
-		_rhss = rhss
-	end
+  elseif rhss isa SparseMatrixCSC
+    _rhss = rhss.nzval
+  else
+    _rhss = rhss
+  end
 
     ip_sys_exprs = Expr[]
     # we cannot reliably fill the array with the presence of index translation
@@ -339,15 +339,15 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
               end
            end)
         ip_let_expr.args[2] =  ModelingToolkit.build_expr(:block, threaded_exprs)
-		ip_let_expr = :(@sync begin $ip_let_expr end)
+    ip_let_expr = :(@sync begin $ip_let_expr end)
     elseif parallel isa DistributedForm
-		numworks = Distributed.nworkers()
-		lens = Int(ceil(length(ip_let_expr.args[2].args)/numworks))
-		spawnvars = [gensym(:MTSpawnVar) for i in 1:numworks]
-		rhss_flat = rhss isa SparseMatrixCSC ? rhss.nzval : rhss
-		spawnvectors = vcat(
-					   [build_expr(:vect, [conv(rhs) for rhs ∈ rhss_flat[((i-1)*lens+1):i*lens]]) for i in 1:numworks-1],
-					   build_expr(:vect, [conv(rhs) for rhs ∈ rhss_flat[((numworks-1)*lens+1):end]]))
+    numworks = Distributed.nworkers()
+    lens = Int(ceil(length(ip_let_expr.args[2].args)/numworks))
+    spawnvars = [gensym(:MTSpawnVar) for i in 1:numworks]
+    rhss_flat = rhss isa SparseMatrixCSC ? rhss.nzval : rhss
+    spawnvectors = vcat(
+             [build_expr(:vect, [conv(rhs) for rhs ∈ rhss_flat[((i-1)*lens+1):i*lens]]) for i in 1:numworks-1],
+             build_expr(:vect, [conv(rhs) for rhs ∈ rhss_flat[((numworks-1)*lens+1):end]]))
 
         spawn_exprs = [quote
            $(spawnvars[i]) = ModelingToolkit.Distributed.remotecall($(i+1)) do
@@ -355,15 +355,15 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
            end
         end for i in 1:numworks]
         spawn_exprs = ModelingToolkit.build_expr(:block, spawn_exprs)
-		resunpack_exprs = [:($(Symbol(reducevars[iter])) = fetch($(spawnvars[iter]))) for iter in 1:numworks]
+    resunpack_exprs = [:($(Symbol(reducevars[iter])) = fetch($(spawnvars[iter]))) for iter in 1:numworks]
 
-		ip_let_expr.args[2] = quote
-			@sync begin
-				$spawn_exprs
-				$(resunpack_exprs...)
-				$(ip_let_expr.args[2])
-			end
-		end
+    ip_let_expr.args[2] = quote
+      @sync begin
+        $spawn_exprs
+        $(resunpack_exprs...)
+        $(ip_let_expr.args[2])
+      end
+    end
     elseif parallel isa DaggerForm
         @assert HAS_DAGGER[] "Dagger.jl is not loaded; please do `using Dagger`"
         dagwrap(x) = x
@@ -377,19 +377,19 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
             $(Symbol(reducevar)) = collect(Dagger.delayed(vcat)($(computevars...)))
         end
         ip_let_expr.args[2] = quote
-			@sync begin
-	            $delayed_exprs
-	            $reduce_expr
-	            $(ip_let_expr.args[2])
-			end
+      @sync begin
+              $delayed_exprs
+              $reduce_expr
+              $(ip_let_expr.args[2])
+      end
         end
-	end
+  end
 
-	if fillzeros && outputidxs === nothing
+  if fillzeros && outputidxs === nothing
         ip_let_expr = quote
-			$fill_array_with_zero!($X)
-			$ip_let_expr
-		end
+      $fill_array_with_zero!($X)
+      $ip_let_expr
+    end
     end
 
     if rhss isa SparseMatrixCSC
@@ -412,33 +412,33 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
         arr_sys_expr = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
     end
 
-	xname = gensym(:MTK)
+  xname = gensym(:MTK)
 
-	arr_sys_expr = (typeof(rhss) <: Vector || typeof(rhss) <: Matrix) && !(eltype(rhss) <: AbstractArray) ? quote
-		if $force_SA || typeof($(fargs.args[1])) <: Union{ModelingToolkit.StaticArrays.SArray,ModelingToolkit.LabelledArrays.SLArray}
-			$xname = ModelingToolkit.StaticArrays.@SArray $arr_sys_expr
-			if $convert_oop && !(typeof($(fargs.args[1])) <: Number) && $(typeof(rhss) <: Vector) # Only try converting if it should match `u`
-				return similar_type($(fargs.args[1]),eltype($xname))($xname)
-			else
-				return $xname
-			end
-		else
-			$xname = $arr_sys_expr
-			if $convert_oop && $(typeof(rhss) <: Vector)
-				if !(typeof($(fargs.args[1])) <: Array) && !(typeof($(fargs.args[1])) <: Number) && eltype($(fargs.args[1])) <: eltype($xname)
-					# Last condition: avoid known error because this doesn't change eltypes!
-					return convert(typeof($(fargs.args[1])),$xname)
-				elseif typeof($(fargs.args[1])) <: ModelingToolkit.LabelledArrays.LArray
-					# LArray just needs to add the names back!
-					return ModelingToolkit.LabelledArrays.LArray{ModelingToolkit.LabelledArrays.symnames(typeof($(fargs.args[1])))}($xname)
-				else
-					return $xname
-				end
-			else
-				return $xname
-			end
-		end
-	end : arr_sys_expr
+  arr_sys_expr = (typeof(rhss) <: Vector || typeof(rhss) <: Matrix) && !(eltype(rhss) <: AbstractArray) ? quote
+    if $force_SA || typeof($(fargs.args[1])) <: Union{ModelingToolkit.StaticArrays.SArray,ModelingToolkit.LabelledArrays.SLArray}
+      $xname = ModelingToolkit.StaticArrays.@SArray $arr_sys_expr
+      if $convert_oop && !(typeof($(fargs.args[1])) <: Number) && $(typeof(rhss) <: Vector) # Only try converting if it should match `u`
+        return similar_type($(fargs.args[1]),eltype($xname))($xname)
+      else
+        return $xname
+      end
+    else
+      $xname = $arr_sys_expr
+      if $convert_oop && $(typeof(rhss) <: Vector)
+        if !(typeof($(fargs.args[1])) <: Array) && !(typeof($(fargs.args[1])) <: Number) && eltype($(fargs.args[1])) <: eltype($xname)
+          # Last condition: avoid known error because this doesn't change eltypes!
+          return convert(typeof($(fargs.args[1])),$xname)
+        elseif typeof($(fargs.args[1])) <: ModelingToolkit.LabelledArrays.LArray
+          # LArray just needs to add the names back!
+          return ModelingToolkit.LabelledArrays.LArray{ModelingToolkit.LabelledArrays.symnames(typeof($(fargs.args[1])))}($xname)
+        else
+          return $xname
+        end
+      else
+        return $xname
+      end
+    end
+  end : arr_sys_expr
 
     let_expr = Expr(:let, var_eqs, tuple_sys_expr)
     arr_let_expr = Expr(:let, var_eqs, arr_sys_expr)
@@ -480,12 +480,12 @@ function numbered_expr(O::Symbolic,args...;varordering = args[1],offset = 0,
                        lhsname=gensym("du"),rhsnames=[gensym("MTK") for i in 1:length(args)])
     O = value(O)
   if O isa Sym || isa(operation(O), Sym)
-	for j in 1:length(args)
-		i = get_varnumber(O,args[j])
-		if i !== nothing
-			return :($(rhsnames[j])[$(i+offset)])
-		end
-	end
+  for j in 1:length(args)
+    i = get_varnumber(O,args[j])
+    if i !== nothing
+      return :($(rhsnames[j])[$(i+offset)])
+    end
+  end
   end
   return Expr(:call, O isa Sym ? tosymbol(O, escape=false) : Symbol(operation(O)),
          [numbered_expr(x,args...;offset=offset,lhsname=lhsname,
@@ -499,9 +499,9 @@ function numbered_expr(de::ModelingToolkit.Equation,args...;varordering = args[1
     var = var_from_nested_derivative(de.lhs)[1]
     i = findfirst(x->isequal(tosymbol(x isa Sym ? x : operation(x), escape=false), tosymbol(var, escape=false)),varordering)
     :($lhsname[$(i+offset)] = $(numbered_expr(de.rhs,args...;offset=offset,
-											  varordering = varordering,
-											  lhsname = lhsname,
-											  rhsnames = rhsnames)))
+                        varordering = varordering,
+                        lhsname = lhsname,
+                        rhsnames = rhsnames)))
 end
 numbered_expr(c,args...;kwargs...) = c
 numbered_expr(c::Num,args...;kwargs...) = error("Num found")
@@ -513,8 +513,8 @@ Build function target: CTarget
 function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
                          conv = toexpr, expression = Val{true},
                          fname = :diffeqf,
-						 lhsname=:du,rhsnames=[Symbol("RHS\$i") for i in 1:length(args)],
-						 libpath=tempname(),compiler=:gcc)
+             lhsname=:du,rhsnames=[Symbol("RHS\$i") for i in 1:length(args)],
+             libpath=tempname(),compiler=:gcc)
 ```
 
 This builds an in-place C function. Only works on arrays of equations. If
@@ -537,7 +537,7 @@ function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
                                 (i, eq) ∈ enumerate(eqs)],";\n  "),";")
 
   argstrs = join(vcat("double* $(lhsname)",[typeof(args[i])<:Array ? "double* $(rhsnames[i])" : "double $(rhsnames[i])" for i in 1:length(args)]),", ")
-	ex = """
+  ex = """
     void $fname($(argstrs...)) {
       $differential_equation
     }
@@ -545,15 +545,15 @@ function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
 
   @warn "build_function(eqs, args...) is deprecated! Use build_function(ex, args...) instead."
 
-	if expression == Val{true}
-		return ex
-	else
-		@assert compiler == :gcc
-		ex = build_function(eqs,args...;target=ModelingToolkit.CTarget())
-		open(`gcc -fPIC -O3 -msse3 -xc -shared -o $(libpath * "." * Libdl.dlext) -`, "w") do f
-			print(f, ex)
-		end
-		@RuntimeGeneratedFunction(:((du::Array{Float64},u::Array{Float64},p::Array{Float64},t::Float64) -> ccall(("diffeqf", $libpath), Cvoid, (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Float64), du, u, p, t)))
+  if expression == Val{true}
+    return ex
+  else
+    @assert compiler == :gcc
+    ex = build_function(eqs,args...;target=ModelingToolkit.CTarget())
+    open(`gcc -fPIC -O3 -msse3 -xc -shared -o $(libpath * "." * Libdl.dlext) -`, "w") do f
+      print(f, ex)
+    end
+    @RuntimeGeneratedFunction(:((du::Array{Float64},u::Array{Float64},p::Array{Float64},t::Float64) -> ccall(("diffeqf", $libpath), Cvoid, (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Float64), du, u, p, t)))
   end
   
   
@@ -599,14 +599,14 @@ function _build_function(target::CTarget, ex::Array{<:Num}, args...;
   void $fname($(argstrs...)) { $([string("\n  ", eqn) for eqn ∈ equations]...) \n}
   """
 
-	if expression == Val{true}
-		return ccode
-	else
-		@assert compiler == :gcc
-		open(`gcc -fPIC -O3 -msse3 -xc -shared -o $(libpath * "." * Libdl.dlext) -`, "w") do f
-			print(f, ccode)
-		end
-		@RuntimeGeneratedFunction(:((du::Array{Float64},u::Array{Float64},p::Array{Float64},t::Float64) -> ccall(("diffeqf", $libpath), Cvoid, (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Float64), du, u, p, t)))
+  if expression == Val{true}
+    return ccode
+  else
+    @assert compiler == :gcc
+    open(`gcc -fPIC -O3 -msse3 -xc -shared -o $(libpath * "." * Libdl.dlext) -`, "w") do f
+      print(f, ccode)
+    end
+    @RuntimeGeneratedFunction(:((du::Array{Float64},u::Array{Float64},p::Array{Float64},t::Float64) -> ccall(("diffeqf", $libpath), Cvoid, (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Float64), du, u, p, t)))
   end
 
 end
@@ -629,7 +629,7 @@ function _build_function(target::StanTarget, eqs::Array{<:Equation}, vs, ps, iv;
                          conv = toexpr, expression = Val{true},
                          fname = :diffeqf, lhsname=:internal_var___du,
                          rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
-	@assert expression == Val{true}
+  @assert expression == Val{true}
     differential_equation = string(join([numbered_expr(eq,vs,ps,lhsname=lhsname,
                                    rhsnames=rhsnames) for
                                    (i, eq) ∈ enumerate(eqs)],";\n  "),";")
@@ -660,7 +660,7 @@ function _build_function(target::MATLABTarget, eqs::Array{<:Equation}, args...;
                          conv = toexpr, expression = Val{true},
                          fname = :diffeqf, lhsname=:internal_var___du,
                          rhsnames=[:internal_var___u,:internal_var___p,:internal_var___t])
-	@assert expression == Val{true}
+  @assert expression == Val{true}
     matstr = join([numbered_expr(eq.rhs,args...,lhsname=lhsname,
                                   rhsnames=rhsnames) for
                                   (i, eq) ∈ enumerate(eqs)],"; ")
