@@ -143,7 +143,7 @@ function expand_derivatives(O::Symbolic, simplify=false; occurances=nothing)
     end
 end
 
-function expand_derivatives(n::Num, simplify=true; occurances=nothing)
+function expand_derivatives(n::Num, simplify=false; occurances=nothing)
     Num(expand_derivatives(value(n), simplify; occurances=occurances))
 end
 
