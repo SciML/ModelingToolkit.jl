@@ -242,7 +242,5 @@ end
 varmap_to_vars(varmap::DiffEqBase.NullParameters,varlist; kw...) = varmap
 varmap_to_vars(varmap::Nothing,varlist; kw...) = varmap
 
-varmap_to_vars(varmap::AbstractArray,varlist) = varmap
-varmap_to_vars(varmap::Tuple,varlist) = varmap
-varmap_to_vars(varmap::DiffEqBase.NullParameters,varlist) = varmap
-varmap_to_vars(varmap::Nothing,varlist) = varmap
+construct_state(x::StaticArray, y) = StaticArrays.similar_type(x, eltype(y), StaticArrays.Size(size(y)...))(y)
+construct_state(x::Array, y) = y
