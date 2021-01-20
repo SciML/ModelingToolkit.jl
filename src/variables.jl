@@ -62,8 +62,14 @@ function Variable(name, indices...)
     Variable(var_name)
 end
 
+
+"""
+$(SIGNATURES)
+
+Renames the variable `x` to have `name`.
+"""
 rename(x::Sym{T},name) where T = Sym{T}(name)
-rename(x::Term, name) where T = operation(x) isa Sym ? rename(operation(x), name)(arguments(x)...) : error("can't rename $x to $name")
+rename(x, name) = operation(x) isa Sym ? rename(operation(x), name)(arguments(x)...) : error("can't rename $x to $name")
 
 # Build variables more easily
 function _parse_vars(macroname, type, x)
@@ -190,15 +196,6 @@ macro variables(xs...)
     esc(_parse_vars(:variables, Real, xs))
 end
 
-"""
-$(TYPEDSIGNATURES)
-
-Renames the variable `x` to have `name`.
-"""
-function rename(x, name::Symbol)
-    Sym{symtype(x)}(name)
-end
-
 TreeViews.hastreeview(x::Variable) = true
 function TreeViews.treelabel(io::IO,x::Variable,
                              mime::MIME"text/plain" = MIME"text/plain"())
@@ -214,6 +211,7 @@ applicable.
 """
 function varmap_to_vars(varmap::Dict, varlist; defaults=Dict())
     varmap = merge(defaults, varmap) # prefers the `varmap`
+    varmap = Dict(value(k)=>value(varmap[k]) for k in keys(varmap))
     T′ = eltype(values(varmap))
     T = Base.isconcretetype(T′) ? T′ : Base.promote_typeof(values(varmap)...)
     out = Vector{T}(undef, length(varlist))

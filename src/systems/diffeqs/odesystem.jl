@@ -87,10 +87,7 @@ function ODESystem(
     ps′ = value.(ps)
 
     default_u0 isa Dict || (default_u0 = Dict(default_u0))
-    default_u0′ = Dict(k=>value(default_u0[k]) for k in keys(default_u0))
-
     default_ps isa Dict || (default_ps = Dict(default_ps))
-    default_ps′ = Dict(k=>value(default_ps[k]) for k in keys(default_ps))
 
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
