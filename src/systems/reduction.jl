@@ -135,10 +135,10 @@ function topsort_observed(eqs, states)
     end
 
     idx = 0
-    order = zeros(Int, neqs)
+    ordered_eqs = similar(eqs)
     while !isempty(q)
         𝑠eq = dequeue!(q)
-        order[idx+=1] = 𝑠eq
+        ordered_eqs[idx+=1] = eqs[𝑠eq]
         var = assigns[𝑠eq]
         for 𝑑eq in 𝑑neighbors(graph, var)
             degree = degrees[𝑑eq] = degrees[𝑑eq] - 1
@@ -148,15 +148,15 @@ function topsort_observed(eqs, states)
 
     idx == neqs || throw(ArgumentError("The obversed equations have at least one cycle."))
 
-    return eqs[order]
+    return ordered_eqs
 end
 
 function observed2graph(eqs, states)
     graph = BipartiteGraph(length(eqs), length(states))
     v2j = Dict(states .=> 1:length(states))
 
-    # `eqs[eq_idx]` defines `assigns[eq_idx]` var
-    assigns = Vector{Any}(undef, length(eqs))
+    # `assigns: eq -> var`, `eq` defines `var`
+    assigns = similar(eqs, Int)
 
     for (i, eq) in enumerate(eqs)
         lhs_j = get(v2j, eq.lhs, nothing)
