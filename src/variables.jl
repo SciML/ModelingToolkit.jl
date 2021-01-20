@@ -206,42 +206,41 @@ function TreeViews.treelabel(io::IO,x::Variable,
 end
 
 """
-    varmap_to_vars(varmap,varlist)
+$(SIGNATURES)
 
-Takes a list of pairs of variables=>values and an ordered list of variables and
-creates the array of values in the correct order
+Takes a list of pairs of `variables=>values` and an ordered list of variables
+and creates the array of values in the correct order with default values when
+applicable.
 """
-function varmap_to_vars(varmap::AbstractArray{<:Pair},varlist)
-    out = map(zero ∘ last, varmap)
-    for (ivar, ival) in varmap
-        j = findfirst(isequal(ivar),varlist)
-        if isnothing(j)
-            throw(ArgumentError("Value $(ivar) provided in map not found in $(varlist)"))
-        elseif j > length(varmap)
-            throw(ArgumentError("Missing value in $(varmap), need $(varlist)"))
-        end
-        out[j] = ival
-    end
+function varmap_to_vars(varmap::Dict, varlist; defaults=Dict())
+    varmap = merge(defaults, varmap) # prefers the `varmap`
+    T′ = eltype(values(varmap))
+    T = Base.isconcretetype(T′) ? T′ : Base.promote_typeof(values(varmap)...)
+    out = Vector{T}(undef, length(varlist))
+    missingvars = setdiff(varlist, keys(varmap))
+    isempty(missingvars) || throw(ArgumentError("$missingvars are missing from the variable map."))
 
-    # Make output match varmap in type and shape
-    # Does things like MArray->SArray
-    ArrayInterface.restructure(varmap,out)
+    for (i, var) in enumerate(varlist)
+        out[i] = varmap[var]
+    end
+    out
 end
 
-function varmap_to_vars(varmap::NTuple{N,<:Pair},varlist) where {N}
-    S = Base.promote_typeof(map(zero ∘ last, varmap)...)
-    out = MArray{Tuple{N},S}(undef)
-    for (ivar, ival) in varmap
-        j = findfirst(isequal(ivar),varlist)
-        if isnothing(j)
-            throw(ArgumentError("Value $(ivar) provided in map not found in $(varlist)"))
-        elseif j > length(varmap)
-            throw(ArgumentError("Missing value in $(varmap), need $(varlist)"))
+function varmap_to_vars(varmap::Union{AbstractArray,Tuple},varlist; kw...)
+    if eltype(varmap) <: Pair
+        out = varmap_to_vars(Dict(varmap), varlist; kw...)
+        if varmap isa Tuple
+            (out..., )
+        else
+            # Note that `varmap` might be longer than `varlist`
+            construct_state(varmap, out)
         end
-        out[j] = ival
+    else
+        varmap
     end
-    out.data
 end
+varmap_to_vars(varmap::DiffEqBase.NullParameters,varlist; kw...) = varmap
+varmap_to_vars(varmap::Nothing,varlist; kw...) = varmap
 
 varmap_to_vars(varmap::AbstractArray,varlist) = varmap
 varmap_to_vars(varmap::Tuple,varlist) = varmap
