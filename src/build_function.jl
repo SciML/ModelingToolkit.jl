@@ -44,8 +44,8 @@ Keyword Arguments:
 Note that not all build targets support the full compilation interface. Check the
 individual target documentation for details.
 """
-function build_function(args...;target = JuliaTarget(),kwargs...)
-  _build_function(target,args...;kwargs...)
+function build_function(args...; target = JuliaTarget(), kwargs...)
+  _build_function(target, args...; kwargs...)
 end
 
 function addheader(ex, fargs, iip; X=gensym(:MTIIPVar))
@@ -570,7 +570,7 @@ function _build_function(target::CTarget, ex::Array{<:Num}, args...;
                          compiler    = :gcc)
 
   if !columnmajor
-    return _build_function(target, [ex[j,i] for i ∈ 1:size(ex,1), j ∈ 1:size(ex,2)], args...; 
+    return _build_function(target, hcat([row for row ∈ eachrow(ex)]...), args...; 
                            columnmajor = true, 
                            conv        = conv,
                            fname       = fname, 
@@ -580,16 +580,15 @@ function _build_function(target::CTarget, ex::Array{<:Num}, args...;
                            compiler    = compiler)
   end
 
-  equations = Vector{String}(undef, length(ex))
+  equations = Vector{String}()
   for row ∈ 1:size(ex,1)
     for col ∈ 1:size(ex,2)
-      ind = (row-1) * size(ex,1) + col
-      lhs = string(lhsname, "[", (row-1) * size(ex,1) + col-1, "]")
+      lhs = string(lhsname, "[", (row-1) * size(ex,2) + col-1, "]")
       rhs = numbered_expr(value(ex[row, col]), args...;
                           lhsname  = lhsname,
                           rhsnames = rhsnames,
                           offset   = -1) |> string
-      equations[ind] = string(lhs, " = ", rhs, ";")
+      push!(equations, string(lhs, " = ", rhs, ";"))
     end
   end
 
