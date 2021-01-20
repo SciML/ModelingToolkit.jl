@@ -118,7 +118,7 @@ julia> ModelingToolkit.topsort_observed(eqs, [x, y, z, k])
 ```
 """
 function topsort_observed(eqs, states)
-    graph, assigns, v2j = observed2graph(eqs, states)
+    graph, assigns = observed2graph(eqs, states)
     neqs = length(eqs)
     degrees = zeros(Int, neqs)
 
@@ -137,18 +137,16 @@ function topsort_observed(eqs, states)
     idx = 0
     order = zeros(Int, neqs)
     while !isempty(q)
-        j = dequeue!(q)
-        order[idx+=1] = j
-        for 𝑠eq in 1:length(eqs); var = assigns[𝑠eq]
-            for 𝑑eq in 𝑑neighbors(graph, var)
-                # 𝑠eq => 𝑑eq
-                degree = degrees[𝑑eq] = degrees[𝑑eq] - 1
-                degree == 0 && enqueue!(q, 𝑑eq)
-            end
+        𝑠eq = dequeue!(q)
+        order[idx+=1] = 𝑠eq
+        var = assigns[𝑠eq]
+        for 𝑑eq in 𝑑neighbors(graph, var)
+            degree = degrees[𝑑eq] = degrees[𝑑eq] - 1
+            degree == 0 && enqueue!(q, 𝑑eq)
         end
     end
 
-    idx == neqs || throw(ArgumentError("There's a cycle in obversed equations."))
+    idx == neqs || throw(ArgumentError("The obversed equations have at least one cycle."))
 
     return eqs[order]
 end
@@ -171,5 +169,5 @@ function observed2graph(eqs, states)
         end
     end
 
-    return graph, assigns, v2j
+    return graph, assigns
 end
