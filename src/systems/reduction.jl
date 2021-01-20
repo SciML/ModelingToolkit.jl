@@ -93,3 +93,83 @@ function alias_elimination(sys::ODESystem)
     newstates = setdiff(states(sys), alias_vars)
     ODESystem(eqs′, sys.iv, newstates, parameters(sys), observed=alias_vars .~ last.(subs))
 end
+
+"""
+$(SIGNATURES)
+
+Use Kahn's algorithm to topologically sort observed equations.
+
+Example:
+```julia
+julia> @variables t x(t) y(t) z(t) k(t)
+(t, x(t), y(t), z(t), k(t))
+
+julia> eqs = [
+           x ~ y + z
+           z ~ 2
+           y ~ 2z + k
+       ];
+
+julia> ModelingToolkit.topsort_observed(eqs, [x, y, z, k])
+3-element Vector{Equation}:
+ Equation(z(t), 2)
+ Equation(y(t), k(t) + 2z(t))
+ Equation(x(t), y(t) + z(t))
+```
+"""
+function topsort_observed(eqs, states)
+    graph, assigns, v2j = observed2graph(eqs, states)
+    neqs = length(eqs)
+    degrees = zeros(Int, neqs)
+
+    for 𝑠eq in 1:length(eqs); var = assigns[𝑠eq]
+        for 𝑑eq in 𝑑neighbors(graph, var)
+            # 𝑠eq => 𝑑eq
+            degrees[𝑑eq] += 1
+        end
+    end
+
+    q = Queue{Int}(neqs)
+    for (i, d) in enumerate(degrees)
+        d == 0 && enqueue!(q, i)
+    end
+
+    idx = 0
+    order = zeros(Int, neqs)
+    while !isempty(q)
+        j = dequeue!(q)
+        order[idx+=1] = j
+        for 𝑠eq in 1:length(eqs); var = assigns[𝑠eq]
+            for 𝑑eq in 𝑑neighbors(graph, var)
+                # 𝑠eq => 𝑑eq
+                degree = degrees[𝑑eq] = degrees[𝑑eq] - 1
+                degree == 0 && enqueue!(q, 𝑑eq)
+            end
+        end
+    end
+
+    idx == neqs || throw(ArgumentError("There's a cycle in obversed equations."))
+
+    return eqs[order]
+end
+
+function observed2graph(eqs, states)
+    graph = BipartiteGraph(length(eqs), length(states))
+    v2j = Dict(states .=> 1:length(states))
+
+    # `eqs[eq_idx]` defines `assigns[eq_idx]` var
+    assigns = Vector{Any}(undef, length(eqs))
+
+    for (i, eq) in enumerate(eqs)
+        lhs_j = get(v2j, eq.lhs, nothing)
+        lhs_j === nothing && throw(ArgumentError("The lhs $lhs of $eq, doesn't appear in states."))
+        assigns[i] = lhs_j
+        vs = vars(eq.rhs)
+        for v in vs
+            j = get(v2j, v, nothing)
+            j !== nothing && add_edge!(graph, i, j)
+        end
+    end
+
+    return graph, assigns, v2j
+end
