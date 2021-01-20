@@ -1,4 +1,27 @@
 using ModelingToolkit, OrdinaryDiffEq, Test
+using ModelingToolkit: topsort_equations
+
+@variables t x(t) y(t) z(t) k(t)
+eqs = [
+       x ~ y + z
+       z ~ 2
+       y ~ 2z + k
+      ]
+
+sorted_eq = topsort_equations(eqs, [x, y, z, k])
+
+ref_eq = [
+          z ~ 2
+          y ~ 2z + k
+          x ~ y + z
+         ]
+@test ref_eq == sorted_eq
+
+@test_throws ArgumentError topsort_equations([
+                                             x ~ y + z
+                                             z ~ 2
+                                             y ~ 2z + x
+                                            ], [x, y, z, k])
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t) a(t) u(t) F(t)

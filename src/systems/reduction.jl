@@ -110,14 +110,14 @@ julia> eqs = [
            y ~ 2z + k
        ];
 
-julia> ModelingToolkit.topsort_observed(eqs, [x, y, z, k])
+julia> ModelingToolkit.topsort_equations(eqs, [x, y, z, k])
 3-element Vector{Equation}:
  Equation(z(t), 2)
  Equation(y(t), k(t) + 2z(t))
  Equation(x(t), y(t) + z(t))
 ```
 """
-function topsort_observed(eqs, states)
+function topsort_equations(eqs, states)
     graph, assigns = observed2graph(eqs, states)
     neqs = length(eqs)
     degrees = zeros(Int, neqs)
@@ -146,7 +146,7 @@ function topsort_observed(eqs, states)
         end
     end
 
-    idx == neqs || throw(ArgumentError("The obversed equations have at least one cycle."))
+    idx == neqs || throw(ArgumentError("The equations have at least one cycle."))
 
     return ordered_eqs
 end
