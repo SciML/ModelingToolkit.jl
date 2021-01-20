@@ -366,6 +366,7 @@ function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
+    u0map′ = lower_mapnames(u0map,sys.iv)
     u0 = varmap_to_vars(u0map′,dvs; defaults=sys.default_u0)
 
     if !(parammap isa DiffEqBase.NullParameters)
@@ -406,6 +407,7 @@ function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
+    u0map′ = lower_mapnames(u0map,sys.iv)
     u0 = varmap_to_vars(u0map′,dvs; defaults=sys.default_u0)
 
     if !(parammap isa DiffEqBase.NullParameters)
