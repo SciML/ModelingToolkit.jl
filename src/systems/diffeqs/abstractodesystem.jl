@@ -265,11 +265,11 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
     dvs = states(sys)
     ps = parameters(sys)
     u0map′ = lower_mapnames(u0map,sys.iv)
-    u0 = varmap_to_vars(u0map′,dvs)
+    u0 = varmap_to_vars(u0map′,dvs; defaults=sys.default_u0)
 
     if !(parammap isa DiffEqBase.NullParameters)
         parammap′ = lower_mapnames(parammap)
-        p = varmap_to_vars(parammap′,ps)
+        p = varmap_to_vars(parammap′,ps; defaults=sys.default_ps)
     else
         p = ps
     end
@@ -311,11 +311,11 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
     dvs = states(sys)
     ps = parameters(sys)
     u0map′ = lower_mapnames(u0map,sys.iv)
-    u0 = varmap_to_vars(u0map′,dvs)
+    u0 = varmap_to_vars(u0map′,dvs; defaults=sys.default_u0)
 
     if !(parammap isa DiffEqBase.NullParameters)
         parammap′ = lower_mapnames(parammap)
-        p = varmap_to_vars(parammap′,ps)
+        p = varmap_to_vars(parammap′,ps; defaults=sys.default_ps)
     else
         p = ps
     end
@@ -366,8 +366,14 @@ function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
-    u0 = varmap_to_vars(u0map,dvs)
-    p = varmap_to_vars(parammap,ps)
+    u0 = varmap_to_vars(u0map′,dvs; defaults=sys.default_u0)
+
+    if !(parammap isa DiffEqBase.NullParameters)
+        parammap′ = lower_mapnames(parammap)
+        p = varmap_to_vars(parammap′,ps; defaults=sys.default_ps)
+    else
+        p = ps
+    end
     f = ODEFunction(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
                         sparse=sparse,kwargs...)
@@ -400,8 +406,14 @@ function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
                                     kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
-    u0 = varmap_to_vars(u0map,dvs)
-    p = varmap_to_vars(parammap,ps)
+    u0 = varmap_to_vars(u0map′,dvs; defaults=sys.default_u0)
+
+    if !(parammap isa DiffEqBase.NullParameters)
+        parammap′ = lower_mapnames(parammap)
+        p = varmap_to_vars(parammap′,ps; defaults=sys.default_ps)
+    else
+        p = ps
+    end
     f = ODEFunctionExpr(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                         linenumbers=linenumbers,parallel=parallel,
                         sparse=sparse,kwargs...)

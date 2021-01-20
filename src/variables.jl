@@ -195,8 +195,8 @@ $(TYPEDSIGNATURES)
 
 Renames the variable `x` to have `name`.
 """
-function rename(x::Variable,name::Symbol)
-    Variable{symtype(x)}(name)
+function rename(x, name::Symbol)
+    Sym{symtype(x)}(name)
 end
 
 TreeViews.hastreeview(x::Variable) = true

@@ -61,21 +61,42 @@ struct ODESystem <: AbstractODESystem
     systems: The internal systems
     """
     systems::Vector{ODESystem}
+    """
+    default_u0: The default initial conditions to use when initial conditions
+    are not supplied in `ODEProblem`.
+    """
+    default_u0::Dict
+    """
+    default_ps: The default parameters to use when parameters are not supplied
+    in `ODEProblem`.
+    """
+    default_ps::Dict
 end
 
-function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
+function ODESystem(
+                   deqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    pins = Num[],
                    observed = Num[],
                    systems = ODESystem[],
-                   name=gensym(:ODESystem))
+                   name=gensym(:ODESystem),
+                   default_u0=Dict(),
+                   default_ps=Dict(),
+                  )
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
+
+    default_u0 isa Dict || (default_u0 = Dict(default_u0))
+    default_u0′ = Dict(k=>value(default_u0[k]) for k in keys(default_u0))
+
+    default_ps isa Dict || (default_ps = Dict(default_ps))
+    default_ps′ = Dict(k=>value(default_ps[k]) for k in keys(default_ps))
+
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
-    ODESystem(deqs, iv′, dvs′, ps′, pins, observed, tgrad, jac, Wfact, Wfact_t, name, systems)
+    ODESystem(deqs, iv′, dvs′, ps′, pins, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0′, default_ps′)
 end
 
 var_from_nested_derivative(x, i=0) = (missing, missing)
