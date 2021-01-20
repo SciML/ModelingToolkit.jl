@@ -1,6 +1,7 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
 using OrdinaryDiffEq
 using DiffEqBase, SparseArrays
+using StaticArrays
 using Test
 
 using ModelingToolkit: value
@@ -185,13 +186,11 @@ D = Differential(t)
 eqs = [D(y₁) ~ -k₁*y₁+k₃*y₂*y₃,
        0     ~  y₁ + y₂ + y₃ - 1,
        D(y₂) ~  k₁*y₁-k₂*y₂^2-k₃*y₂*y₃]
-sys = ODESystem(eqs)
+sys = ODESystem(eqs, default_ps=[k₁ => 100, k₂ => 3e7], default_u0=[y₁ => 1.0])
 u0 = Pair[]
-push!(u0, y₁ => 1.0)
 push!(u0, y₂ => 0.0)
 push!(u0, y₃ => 0.0)
 p  = [k₁ => 0.04,
-      k₂ => 3e7,
       k₃ => 1e4]
 p2 = (k₁ => 0.04,
       k₂ => 3e7,
@@ -201,12 +200,18 @@ prob1 = ODEProblem(sys,u0,tspan,p)
 prob12 = ODEProblem(sys,u0,tspan,[0.04,3e7,1e4])
 prob13 = ODEProblem(sys,u0,tspan,(0.04,3e7,1e4))
 prob14 = ODEProblem(sys,u0,tspan,p2)
+for p in [prob1, prob14]
+    @test Set(Num.(parameters(sys)) .=> p.p) == Set([k₁=>0.04, k₂=>3e7, k₃=>1e4])
+    @test Set(Num.(states(sys)) .=> p.u0) == Set([y₁=>1, y₂=>0, y₃=>0])
+end
 prob2 = ODEProblem(sys,u0,tspan,p,jac=true)
 prob3 = ODEProblem(sys,u0,tspan,p,jac=true,sparse=true)
 for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
     sol = solve(prob, Rodas5())
     @test all(x->≈(sum(x), 1.0, atol=atol), sol.u)
 end
+
+@test ModelingToolkit.construct_state(SArray{Tuple{3,3}}(rand(3,3)), [1,2]) == SVector{2}([1, 2])
 
 @parameters t σ β
 @variables x(t) y(t) z(t)
