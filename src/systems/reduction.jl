@@ -117,7 +117,7 @@ julia> ModelingToolkit.topsort_equations(eqs, [x, y, z, k])
  Equation(x(t), y(t) + z(t))
 ```
 """
-function topsort_equations(eqs, states)
+function topsort_equations(eqs, states; check=true)
     graph, assigns = observed2graph(eqs, states)
     neqs = length(eqs)
     degrees = zeros(Int, neqs)
@@ -135,10 +135,11 @@ function topsort_equations(eqs, states)
     end
 
     idx = 0
-    ordered_eqs = similar(eqs)
+    ordered_eqs = similar(eqs, 0); sizehint!(ordered_eqs, neqs)
     while !isempty(q)
         𝑠eq = dequeue!(q)
-        ordered_eqs[idx+=1] = eqs[𝑠eq]
+        idx+=1
+        push!(ordered_eqs, eqs[𝑠eq])
         var = assigns[𝑠eq]
         for 𝑑eq in 𝑑neighbors(graph, var)
             degree = degrees[𝑑eq] = degrees[𝑑eq] - 1
@@ -146,7 +147,7 @@ function topsort_equations(eqs, states)
         end
     end
 
-    idx == neqs || throw(ArgumentError("The equations have at least one cycle."))
+    (check && idx != neqs) && throw(ArgumentError("The equations have at least one cycle."))
 
     return ordered_eqs
 end
@@ -160,7 +161,7 @@ function observed2graph(eqs, states)
 
     for (i, eq) in enumerate(eqs)
         lhs_j = get(v2j, eq.lhs, nothing)
-        lhs_j === nothing && throw(ArgumentError("The lhs $lhs of $eq, doesn't appear in states."))
+        lhs_j === nothing && throw(ArgumentError("The lhs $(eq.lhs) of $eq, doesn't appear in states."))
         assigns[i] = lhs_j
         vs = vars(eq.rhs)
         for v in vs
