@@ -56,6 +56,7 @@ end
 
 function alias_elimination(sys::ODESystem)
     eqs = vcat(equations(sys), observed(sys))
+    neweqs = Equation[]; sizehint!(neweqs, length(eqs))
     subs = Pair[]
     diff_vars = filter(!isnothing, map(eqs) do eq
             if isdiffeq(eq)
@@ -65,33 +66,56 @@ function alias_elimination(sys::ODESystem)
             end
         end) |> Set
 
-    # only substitute when the variable is algebraic
-    del = Int[]
+    deps = Set()
     for (i, eq) in enumerate(eqs)
-        isdiffeq(eq) && continue
+        # only substitute when the variable is algebraic
+        if isdiffeq(eq)
+            push!(neweqs, eq)
+            continue
+        end
+
+        maybe_alias = isalias = false
         res_left = get_α_x(eq.lhs)
         if !isnothing(res_left) && !(res_left[2] in diff_vars)
             # `α x = rhs` => `x = rhs / α`
             α, x = res_left
-            push!(subs, x => _isone(α) ? eq.rhs : eq.rhs / α)
-            push!(del, i)
+            sub = x => _isone(α) ? eq.rhs : eq.rhs / α
+            maybe_alias = true
         else
             res_right = get_α_x(eq.rhs)
             if !isnothing(res_right) && !(res_right[2] in diff_vars)
                 # `lhs = β y` => `y = lhs / β`
                 β, y = res_right
-                push!(subs, y => _isone(β) ? eq.lhs : β * eq.lhs)
-                push!(del, i)
+                sub =  y => _isone(β) ? eq.lhs : β * eq.lhs
+                maybe_alias = true
             end
         end
+
+        if maybe_alias
+            l, r = sub
+            # alias equations shouldn't introduce cycles
+            if !(l in deps) && isempty(intersect(deps, vars(r)))
+                push!(deps, l)
+                push!(subs, sub)
+                isalias = true
+            end
+        end
+
+        if !isalias
+            neweq = _iszero(eq.lhs) ? eq : 0 ~ eq.rhs - eq.lhs
+            push!(neweqs, neweq)
+        end
     end
-    deleteat!(eqs, del)
 
-    eqs′ = substitute_aliases(eqs, Dict(subs))
+    eqs′ = substitute_aliases(neweqs, Dict(subs))
+
     alias_vars = first.(subs)
+    sys_states = states(sys)
+    alias_eqs = alias_vars .~ last.(subs)
+    #alias_eqs = topsort_equations(alias_eqs, sys_states)
 
-    newstates = setdiff(states(sys), alias_vars)
-    ODESystem(eqs′, sys.iv, newstates, parameters(sys), observed=alias_vars .~ last.(subs))
+    newstates = setdiff(sys_states, alias_vars)
+    ODESystem(eqs′, sys.iv, newstates, parameters(sys), observed=alias_eqs)
 end
 
 """

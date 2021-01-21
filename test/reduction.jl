@@ -44,7 +44,7 @@ reduced_eqs = [
                D(x) ~ σ * (y - x),
                D(y) ~ x*(ρ-z)-y + 1,
                0 ~ sin(z) - x + y,
-               sin(u) ~ x + y,
+               0 ~ x + y - sin(u),
               ]
 test_equal.(equations(lorenz1_aliased), reduced_eqs)
 test_equal.(states(lorenz1_aliased), [u, x, y, z])
@@ -104,7 +104,7 @@ aliased_flattened_system = alias_elimination(flattened_system)
        ]) |> isempty
 
 reduced_eqs = [
-               lorenz2.y ~ a + lorenz1.x, # irreducible by alias elimination
+               0 ~ a + lorenz1.x - lorenz2.y, # irreducible by alias elimination
                D(lorenz1.x) ~ lorenz1.σ*(lorenz1.y-lorenz1.x) + lorenz2.x - lorenz2.y - lorenz2.z,
                D(lorenz1.y) ~ lorenz1.x*(lorenz1.ρ-lorenz1.z)-(lorenz1.x + lorenz1.y - lorenz1.z),
                D(lorenz1.z) ~ lorenz1.x*lorenz1.y - lorenz1.β*lorenz1.z,
@@ -138,22 +138,28 @@ let
     test_equal.(asys.observed, [y ~ x])
 end
 
-# issue #716
+# issue #724 and #716
 let
     @parameters t
     D = Differential(t)
     @variables x(t), u(t), y(t)
     @parameters a, b, c, d
-    ol = ODESystem([D(x) ~ a * x + b * u, y ~ c * x], t, name=:ol)
+    ol = ODESystem([D(x) ~ a * x + b * u; y ~ c * x + d * u], t, pins=[u], name=:ol)
     @variables u_c(t), y_c(t)
     @parameters k_P
-    pc = ODESystem(Equation[], t, pins=[y_c], observed = [u_c ~ k_P * y_c], name=:pc)
+    pc = ODESystem(Equation[u_c ~ k_P * y_c], t, pins=[y_c], name=:pc)
     connections = [
-                   ol.u ~ pc.u_c,
-                   y_c ~ ol.y
-                  ]
+        ol.u ~ pc.u_c,
+        pc.y_c ~ ol.y
+    ]
     connected = ODESystem(connections, t, systems=[ol, pc])
-
     @test equations(connected) isa Vector{Equation}
-    @test_nowarn flatten(connected)
+    sys = flatten(connected)
+    reduced_sys = alias_elimination(sys)
+    ref_eqs = [
+               D(ol.x) ~ ol.a*ol.x + ol.b*pc.u_c
+               0 ~ ol.c*ol.x + ol.d*pc.u_c - ol.y
+               0 ~ pc.k_P*ol.y - pc.u_c
+              ]
+    @test ref_eqs == equations(reduced_sys)
 end
