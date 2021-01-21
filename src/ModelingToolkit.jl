@@ -6,7 +6,7 @@ using Latexify, Unitful, ArrayInterface
 using MacroTools
 using UnPack: @unpack
 using DiffEqJump
-using DataStructures: OrderedDict, OrderedSet
+using DataStructures
 using SpecialFunctions, NaNMath
 using RuntimeGeneratedFunctions
 using Base.Threads
