@@ -67,10 +67,10 @@ struct ODESystem <: AbstractODESystem
     """
     default_u0::Dict
     """
-    default_ps: The default parameters to use when parameters are not supplied
+    default_p: The default parameters to use when parameters are not supplied
     in `ODEProblem`.
     """
-    default_ps::Dict
+    default_p::Dict
 end
 
 function ODESystem(
@@ -80,20 +80,20 @@ function ODESystem(
                    systems = ODESystem[],
                    name=gensym(:ODESystem),
                    default_u0=Dict(),
-                   default_ps=Dict(),
+                   default_p=Dict(),
                   )
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
 
     default_u0 isa Dict || (default_u0 = Dict(default_u0))
-    default_ps isa Dict || (default_ps = Dict(default_ps))
+    default_p isa Dict || (default_p = Dict(default_p))
 
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
-    ODESystem(deqs, iv′, dvs′, ps′, pins, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_ps)
+    ODESystem(deqs, iv′, dvs′, ps′, pins, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p)
 end
 
 var_from_nested_derivative(x, i=0) = (missing, missing)

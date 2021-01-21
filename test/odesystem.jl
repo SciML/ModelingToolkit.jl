@@ -186,7 +186,7 @@ D = Differential(t)
 eqs = [D(y₁) ~ -k₁*y₁+k₃*y₂*y₃,
        0     ~  y₁ + y₂ + y₃ - 1,
        D(y₂) ~  k₁*y₁-k₂*y₂^2-k₃*y₂*y₃]
-sys = ODESystem(eqs, default_ps=[k₁ => 100, k₂ => 3e7], default_u0=[y₁ => 1.0])
+sys = ODESystem(eqs, default_p=[k₁ => 100, k₂ => 3e7], default_u0=[y₁ => 1.0])
 u0 = Pair[]
 push!(u0, y₂ => 0.0)
 push!(u0, y₃ => 0.0)
