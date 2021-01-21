@@ -107,15 +107,12 @@ function alias_elimination(sys::ODESystem)
         end
     end
 
-    eqs′ = substitute_aliases(neweqs, Dict(subs))
-
     alias_vars = first.(subs)
     sys_states = states(sys)
     alias_eqs = alias_vars .~ last.(subs)
-    #alias_eqs = topsort_equations(alias_eqs, sys_states)
 
     newstates = setdiff(sys_states, alias_vars)
-    ODESystem(eqs′, sys.iv, newstates, parameters(sys), observed=alias_eqs)
+    ODESystem(neweqs, sys.iv, newstates, parameters(sys), observed=alias_eqs)
 end
 
 """

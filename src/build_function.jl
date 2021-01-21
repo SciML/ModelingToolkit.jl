@@ -97,10 +97,36 @@ function unflatten_long_ops(op, N=4)
     Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2])))(op)
 end
 
+struct Let
+    eqs::Vector
+    body
+end
+
+function observed_let(eqs)
+    process -> ex -> begin
+        lhss = map(eq->process(eq.lhs), eqs)
+        rhss = map(eq->process(eq.rhs), eqs)
+        letexpr = Expr(:let)
+        assignments = quote end
+        for (l, r) in zip(lhss, rhss)
+            push!(assignments.args, :($l = $r))
+        end
+        push!(letexpr.args, assignments)
+        push!(letexpr.args, ex)
+        letexpr
+    end
+end
+
+function _build_function(target::JuliaTarget, op::Let, args...; conv=toexpr, kw...)
+    _build_function(target, op.body, args...;
+                    inner_let = observed_let(op.eqs), kw...)
+end
+
 # Scalar output
 function _build_function(target::JuliaTarget, op, args...;
                          conv = toexpr, expression = Val{true},
                          checkbounds = false,
+                         inner_let = nothing,
                          linenumbers = true, headerfun=addheader)
 
     argnames = [gensym(:MTKArg) for i in 1:length(args)]
@@ -109,12 +135,18 @@ function _build_function(target::JuliaTarget, op, args...;
     process = unflatten_long_ops∘(x->substitute(x, symsdict, fold=false))
     ls = reduce(vcat,conv.(first.(arg_pairs)))
     rs = reduce(vcat,last.(arg_pairs))
-    var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, conv.(process.(rs))))
+    var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, conv.(process.(rs))))
+
+    if inner_let !== nothing
+        inner_let_expr = inner_let(conv ∘ process)
+    else
+        inner_let_expr = identity
+    end
 
     fname = gensym(:ModelingToolkitFunction)
     op = process(op)
     out_expr = conv(substitute(op, symsdict, fold=false))
-    let_expr = Expr(:let, var_eqs, Expr(:block, out_expr))
+    let_expr = Expr(:let, var_eqs, Expr(:block, inner_let_expr(out_expr)))
     bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
 
     fargs = Expr(:tuple,argnames...)
@@ -218,6 +250,7 @@ Special Keyword Argumnets:
 """
 function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
                          conv = toexpr, expression = Val{true},
+                         inner_let = nothing,
                          checkbounds = false,
                          linenumbers = false, multithread=nothing,
                          headerfun = addheader, outputidxs=nothing,
@@ -234,6 +267,12 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     symsdict = Dict()
     arg_pairs = map((x,y)->vars_to_pairs(x,y, symsdict), argnames, args)
     process = unflatten_long_ops∘(x->substitute(x, symsdict, fold=false))
+
+    if inner_let !== nothing
+        inner_let_expr = inner_let(conv ∘ process)
+    else
+        inner_let_expr = identity
+    end
 
     ls = reduce(vcat,conv.(first.(arg_pairs)))
     rs = reduce(vcat,last.(arg_pairs))
@@ -440,9 +479,10 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
 		end
 	end : arr_sys_expr
 
-    let_expr = Expr(:let, var_eqs, tuple_sys_expr)
-    arr_let_expr = Expr(:let, var_eqs, arr_sys_expr)
-    bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
+    arr_let_expr = Expr(:let, var_eqs, inner_let_expr(arr_sys_expr))
+    idx = findfirst(x->Meta.isexpr(x, :let), ip_let_expr.args)
+    ip_let_expr.args[idx].args[2] = inner_let_expr(ip_let_expr.args[idx].args[2])
+
     oop_bounds_block = checkbounds ? arr_let_expr : :(@inbounds begin $arr_let_expr end)
     ip_bounds_block = checkbounds ? ip_let_expr : :(@inbounds begin $ip_let_expr end)
 
