@@ -68,19 +68,33 @@ struct ControlSystem <: AbstractControlSystem
     systems: The internal systems
     """
     systems::Vector{ControlSystem}
+    """
+    default_u0: The default initial conditions to use when initial conditions
+    are not supplied in `ODEProblem`.
+    """
+    default_u0::Dict
+    """
+    default_p: The default parameters to use when parameters are not supplied
+    in `ODEProblem`.
+    """
+    default_p::Dict
 end
 
 function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls, ps;
-                   pins = [],
-                   observed = [],
-                   systems = ODESystem[],
-                   name=gensym(:ControlSystem))
+                       pins = [],
+                       observed = [],
+                       systems = ODESystem[],
+                       default_u0=Dict(),
+                       default_p=Dict(),
+                       name=gensym(:ControlSystem))
     iv′ = value(iv)
     dvs′ = value.(dvs)
     controls′ = value.(controls)
     ps′ = value.(ps)
+    default_u0 isa Dict || (default_u0 = Dict(default_u0))
+    default_p isa Dict || (default_p = Dict(default_p))
     ControlSystem(value(loss), deqs, iv′, dvs′, controls′,
-                  ps′, pins, observed, name, systems)
+                  ps′, pins, observed, name, systems, default_u0, default_p)
 end
 
 struct ControlToExpr
@@ -102,7 +116,7 @@ end
 (f::ControlToExpr)(x::Sym) = x.name
 
 function constructRadauIIA5(T::Type = Float64)
-  sq6 = sqrt(6)
+  sq6 = sqrt(convert(T, 6))
   A = [11//45-7sq6/360 37//225-169sq6/1800 -2//225+sq6/75
        37//225+169sq6/1800 11//45+7sq6/360 -2//225-sq6/75
        4//9-sq6/36 4//9+sq6/36 1//9]
@@ -111,7 +125,7 @@ function constructRadauIIA5(T::Type = Float64)
   A = map(T,A)
   α = map(T,α)
   c = map(T,c)
-  return(DiffEqBase.ImplicitRKTableau(A,c,α,5))
+  return DiffEqBase.ImplicitRKTableau(A,c,α,5)
 end
 
 

@@ -43,12 +43,24 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
     name::Symbol
     """The internal systems."""
     systems::Vector{JumpSystem}
+    """
+    default_u0: The default initial conditions to use when initial conditions
+    are not supplied in `ODEProblem`.
+    """
+    default_u0::Dict
+    """
+    default_p: The default parameters to use when parameters are not supplied
+    in `ODEProblem`.
+    """
+    default_p::Dict
 end
 
 function JumpSystem(eqs, iv, states, ps;
                     pins = [],
                     observed = Equation[],
                     systems = JumpSystem[],
+                    default_u0=Dict(),
+                    default_p=Dict(),
                     name = gensym(:JumpSystem))
 
     ap = ArrayPartition(MassActionJump[], ConstantRateJump[], VariableRateJump[])
@@ -63,8 +75,10 @@ function JumpSystem(eqs, iv, states, ps;
             error("JumpSystem equations must contain MassActionJumps, ConstantRateJumps, or VariableRateJumps.")
         end
     end
+    default_u0 isa Dict || (default_u0 = Dict(default_u0))
+    default_p isa Dict || (default_p = Dict(default_p))
 
-    JumpSystem{typeof(ap)}(ap, value(iv), value.(states), value.(ps), pins, observed, name, systems)
+    JumpSystem{typeof(ap)}(ap, value(iv), value.(states), value.(ps), pins, observed, name, systems, default_u0, default_p)
 end
 
 function generate_rate_function(js, rate)
@@ -185,8 +199,8 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Tuple,
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
-    u0 = varmap_to_vars(u0map, states(sys))
-    p  = varmap_to_vars(parammap, parameters(sys))
+    u0 = varmap_to_vars(u0map, states(sys); defaults=get_default_u0(sys))
+    p  = varmap_to_vars(parammap, parameters(sys); defaults=get_default_p(sys))
     f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
     df = DiscreteFunction{true,true}(f, syms=Symbol.(states(sys)))
     DiscreteProblem(df, u0, tspan, p; kwargs...)
@@ -213,8 +227,8 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 """
 function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Tuple,
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
-    u0 = varmap_to_vars(u0map, states(sys))
-    p  = varmap_to_vars(parammap, parameters(sys))
+    u0 = varmap_to_vars(u0map, states(sys); defaults=get_default_u0(sys))
+    p  = varmap_to_vars(parammap, parameters(sys); defaults=get_default_p(sys))
     # identity function to make syms works
     quote
         f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT

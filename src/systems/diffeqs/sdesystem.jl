@@ -67,21 +67,37 @@ struct SDESystem <: AbstractODESystem
     Systems: the internal systems
     """
     systems::Vector{SDESystem}
+    """
+    default_u0: The default initial conditions to use when initial conditions
+    are not supplied in `ODEProblem`.
+    """
+    default_u0::Dict
+    """
+    default_p: The default parameters to use when parameters are not supplied
+    in `ODEProblem`.
+    """
+    default_p::Dict
 end
 
 function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    pins = [],
                    observed = [],
                    systems = SDESystem[],
+                   default_u0=Dict(),
+                   default_p=Dict(),
                    name = gensym(:SDESystem))
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
+
+    default_u0 isa Dict || (default_u0 = Dict(default_u0))
+    default_p isa Dict || (default_p = Dict(default_p))
+
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
-    SDESystem(deqs, neqs, iv′, dvs′, ps′, pins, observed, tgrad, jac, Wfact, Wfact_t, name, systems)
+    SDESystem(deqs, neqs, iv′, dvs′, ps′, pins, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = sys.states, ps = sys.ps; kwargs...)
@@ -299,31 +315,11 @@ Generates an SDEProblem from an SDESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
-                                    checkbounds = false, sparse = false,
-                                    sparsenoise = sparse,
-                                    linenumbers = true, parallel=SerialForm(),
-                                    eval_expression = true,
+                                    sparsenoise = nothing,
                                     kwargs...) where iip
+    f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; kwargs...)
+    sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
-    dvs = states(sys)
-    ps = parameters(sys)
-
-    u0map′ = lower_mapnames(u0map,sys.iv)
-    u0 = varmap_to_vars(u0map′,dvs)
-
-    if !(parammap isa DiffEqBase.NullParameters)
-        parammap′ = lower_mapnames(parammap)
-        p = varmap_to_vars(parammap′,ps)
-    else
-        p = ps
-    end
-
-    f = SDEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,Wfact=Wfact,
-                         checkbounds=checkbounds,
-                         linenumbers=linenumbers,parallel=parallel,
-                         sparse=sparse, eval_expression=eval_expression,kwargs...)
     if typeof(sys.noiseeqs) <: AbstractVector
         noise_rate_prototype = nothing
     elseif sparsenoise
@@ -358,29 +354,13 @@ numerical enhancements.
 struct SDEProblemExpr{iip} end
 
 function SDEProblemExpr{iip}(sys::SDESystem,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
-                                    checkbounds = false, sparse = false,
-                                    linenumbers = false, parallel=SerialForm(),
-                                    kwargs...) where iip
-    dvs = states(sys)
-    ps = parameters(sys)
+                             parammap=DiffEqBase.NullParameters();
+                             sparsenoise = nothing,
+                             kwargs...) where iip
+    f, u0, p = process_DEProblem(SDEFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
+    linenumbers = get(kwargs, :linenumbers, true)
+    sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
-    u0map′ = lower_mapnames(u0map,sys.iv)
-    u0 = varmap_to_vars(u0map′,dvs)
-
-    if !(parammap isa DiffEqBase.NullParameters)
-        parammap′ = lower_mapnames(parammap)
-        p = varmap_to_vars(parammap′,ps)
-    else
-        p = ps
-    end
-    
-    f = SDEFunctionExpr{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,
-                        Wfact=Wfact,checkbounds=checkbounds,
-                        linenumbers=linenumbers,parallel=parallel,
-                        sparse=sparse,kwargs...)
     if typeof(sys.noiseeqs) <: AbstractVector
         noise_rate_prototype = nothing
     elseif sparsenoise

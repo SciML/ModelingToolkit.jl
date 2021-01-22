@@ -228,6 +228,31 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     !linenumbers ? striplines(ex) : ex
 end
 
+function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
+                           version = nothing, tgrad=false,
+                           jac = false,
+                           checkbounds = false, sparse = false,
+                           simplify=false,
+                           linenumbers = true, parallel=SerialForm(),
+                           eval_expression = true,
+                           kwargs...)
+    dvs = states(sys)
+    ps = parameters(sys)
+    u0map′ = lower_mapnames(u0map,sys.iv)
+    u0 = varmap_to_vars(u0map′,dvs; defaults=get_default_u0(sys))
+
+    if !(parammap isa DiffEqBase.NullParameters)
+        parammap′ = lower_mapnames(parammap)
+        p = varmap_to_vars(parammap′,ps; defaults=get_default_p(sys))
+    else
+        p = ps
+    end
+
+    f = constructor(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
+                    linenumbers=linenumbers,parallel=parallel,simplify=simplify,
+                    sparse=sparse,eval_expression=eval_expression,kwargs...)
+    return f, u0, p
+end
 
 function ODEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
     ODEFunctionExpr{true}(sys, args...; kwargs...)
@@ -254,29 +279,8 @@ Generates an ODEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false,
-                                    checkbounds = false, sparse = false,
-                                    simplify=false,
-                                    linenumbers = true, parallel=SerialForm(),
-                                    eval_expression = true,
-                                    kwargs...) where iip
-    dvs = states(sys)
-    ps = parameters(sys)
-    u0map′ = lower_mapnames(u0map,sys.iv)
-    u0 = varmap_to_vars(u0map′,dvs)
-
-    if !(parammap isa DiffEqBase.NullParameters)
-        parammap′ = lower_mapnames(parammap)
-        p = varmap_to_vars(parammap′,ps)
-    else
-        p = ps
-    end
-
-    f = ODEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
-                        linenumbers=linenumbers,parallel=parallel,simplify=simplify,
-                        sparse=sparse,eval_expression=eval_expression,kwargs...)
+                                    parammap=DiffEqBase.NullParameters();kwargs...) where iip
+    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
     ODEProblem{iip}(f,u0,tspan,p;kwargs...)
 end
 
@@ -300,30 +304,12 @@ numerical enhancements.
 struct ODEProblemExpr{iip} end
 
 function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false,
-                                    checkbounds = false, sparse = false,
-                                    simplify=false,
-                                    linenumbers = false, parallel=SerialForm(),
-                                    kwargs...) where iip
+                             parammap=DiffEqBase.NullParameters();
+                             kwargs...) where iip
 
-    dvs = states(sys)
-    ps = parameters(sys)
-    u0map′ = lower_mapnames(u0map,sys.iv)
-    u0 = varmap_to_vars(u0map′,dvs)
+    f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
+    linenumbers = get(kwargs, :linenumbers, true)
 
-    if !(parammap isa DiffEqBase.NullParameters)
-        parammap′ = lower_mapnames(parammap)
-        p = varmap_to_vars(parammap′,ps)
-    else
-        p = ps
-    end
-
-    f = ODEFunctionExpr{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
-                        linenumbers=linenumbers,parallel=parallel,
-                        simplify=simplify,
-                        sparse=sparse,kwargs...)
     ex = quote
         f = $f
         u0 = $u0
@@ -358,19 +344,9 @@ Generates an SteadyStateProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
-                                    parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false,
-                                    checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=SerialForm(),
-                                    kwargs...) where iip
-    dvs = states(sys)
-    ps = parameters(sys)
-    u0 = varmap_to_vars(u0map,dvs)
-    p = varmap_to_vars(parammap,ps)
-    f = ODEFunction(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
-                        linenumbers=linenumbers,parallel=parallel,
-                        sparse=sparse,kwargs...)
+                                            parammap=DiffEqBase.NullParameters();
+                                            kwargs...) where iip
+    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
     SteadyStateProblem(f,u0,p;kwargs...)
 end
 
@@ -393,18 +369,9 @@ struct SteadyStateProblemExpr{iip} end
 
 function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false,
-                                    checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
-    dvs = states(sys)
-    ps = parameters(sys)
-    u0 = varmap_to_vars(u0map,dvs)
-    p = varmap_to_vars(parammap,ps)
-    f = ODEFunctionExpr(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
-                        linenumbers=linenumbers,parallel=parallel,
-                        sparse=sparse,kwargs...)
+    f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
+    linenumbers = get(kwargs, :linenumbers, true)
     ex = quote
         f = $f
         u0 = $u0
