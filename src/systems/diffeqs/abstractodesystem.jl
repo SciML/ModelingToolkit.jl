@@ -251,7 +251,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
     f = constructor(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                     linenumbers=linenumbers,parallel=parallel,simplify=simplify,
                     sparse=sparse,eval_expression=eval_expression,kwargs...)
-    return f, u0, p, linenumbers
+    return f, u0, p
 end
 
 function ODEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
@@ -280,7 +280,7 @@ symbolically calculating numerical enhancements.
 """
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
-    f, u0, p, _ = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
+    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
     ODEProblem{iip}(f,u0,tspan,p;kwargs...)
 end
 
@@ -307,7 +307,8 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                              parammap=DiffEqBase.NullParameters();
                              kwargs...) where iip
 
-    f, u0, p, linenumbers = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
+    f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
+    linenumbers = get(kwargs, :linenumbers, true)
 
     ex = quote
         f = $f
@@ -345,7 +346,7 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
                                             parammap=DiffEqBase.NullParameters();
                                             kwargs...) where iip
-    f, u0, p, _ = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
+    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
     SteadyStateProblem(f,u0,p;kwargs...)
 end
 
@@ -369,7 +370,8 @@ struct SteadyStateProblemExpr{iip} end
 function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     kwargs...) where iip
-    f, u0, p, linenumbers = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
+    f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
+    linenumbers = get(kwargs, :linenumbers, true)
     ex = quote
         f = $f
         u0 = $u0

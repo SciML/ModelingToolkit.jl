@@ -315,8 +315,10 @@ Generates an SDEProblem from an SDESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBase.NullParameters();
+                                    sparsenoise = nothing,
                                     kwargs...) where iip
-    f, u0, p, _ = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; kwargs...)
+    f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; kwargs...)
+    sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
     if typeof(sys.noiseeqs) <: AbstractVector
         noise_rate_prototype = nothing
@@ -353,8 +355,11 @@ struct SDEProblemExpr{iip} end
 
 function SDEProblemExpr{iip}(sys::SDESystem,u0map,tspan,
                              parammap=DiffEqBase.NullParameters();
+                             sparsenoise = nothing,
                              kwargs...) where iip
-    f, u0, p, linenumbers = process_DEProblem(SDEFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
+    f, u0, p = process_DEProblem(SDEFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
+    linenumbers = get(kwargs, :linenumbers, true)
+    sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
     if typeof(sys.noiseeqs) <: AbstractVector
         noise_rate_prototype = nothing
