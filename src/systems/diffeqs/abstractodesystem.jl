@@ -228,38 +228,30 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     !linenumbers ? striplines(ex) : ex
 end
 
-function process_ODEProblem(sys::AbstractODESystem,u0map,parammap;
-                            iip::Bool, expr::Bool,
-                            version = nothing, tgrad=false,
-                            jac = false,
-                            checkbounds = false, sparse = false,
-                            simplify=false,
-                            linenumbers = true, parallel=SerialForm(),
-                            eval_expression = true,
-                            kwargs...)
+function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
+                           version = nothing, tgrad=false,
+                           jac = false,
+                           checkbounds = false, sparse = false,
+                           simplify=false,
+                           linenumbers = true, parallel=SerialForm(),
+                           eval_expression = true,
+                           kwargs...)
     dvs = states(sys)
     ps = parameters(sys)
     u0map′ = lower_mapnames(u0map,sys.iv)
-    u0 = varmap_to_vars(u0map′,dvs; defaults=sys.default_u0)
+    u0 = varmap_to_vars(u0map′,dvs; defaults=get_default_u0(sys))
 
     if !(parammap isa DiffEqBase.NullParameters)
         parammap′ = lower_mapnames(parammap)
-        p = varmap_to_vars(parammap′,ps; defaults=sys.default_p)
+        p = varmap_to_vars(parammap′,ps; defaults=get_default_p(sys))
     else
         p = ps
     end
 
-    if expr
-        f = ODEFunctionExpr{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
-                                 linenumbers=linenumbers,parallel=parallel,simplify=simplify,
-                                 sparse=sparse,eval_expression=eval_expression,kwargs...)
-        return f, u0, p, linenumbers
-    else
-        f = ODEFunction{iip}(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
-                             linenumbers=linenumbers,parallel=parallel,simplify=simplify,
-                             sparse=sparse,eval_expression=eval_expression,kwargs...)
-        return f, u0, p
-    end
+    f = constructor(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
+                    linenumbers=linenumbers,parallel=parallel,simplify=simplify,
+                    sparse=sparse,eval_expression=eval_expression,kwargs...)
+    return f, u0, p, linenumbers
 end
 
 function ODEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
@@ -288,7 +280,7 @@ symbolically calculating numerical enhancements.
 """
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
-    f, u0, p = process_ODEProblem(sys, u0map, parammap; iip=iip, expr=false, kwargs...)
+    f, u0, p, _ = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
     ODEProblem{iip}(f,u0,tspan,p;kwargs...)
 end
 
@@ -315,7 +307,7 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                              parammap=DiffEqBase.NullParameters();
                              kwargs...) where iip
 
-    f, u0, p, linenumbers = process_ODEProblem(sys, u0map, parammap; iip=iip, expr=true, kwargs...)
+    f, u0, p, linenumbers = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
 
     ex = quote
         f = $f
@@ -353,7 +345,7 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
                                             parammap=DiffEqBase.NullParameters();
                                             kwargs...) where iip
-    f, u0, p = process_ODEProblem(sys, u0map, parammap; iip=iip, expr=false, kwargs...)
+    f, u0, p, _ = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
     SteadyStateProblem(f,u0,p;kwargs...)
 end
 
@@ -377,7 +369,7 @@ struct SteadyStateProblemExpr{iip} end
 function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     kwargs...) where iip
-    f, u0, p, linenumbers = process_ODEProblem(sys, u0map, parammap; iip=iip, expr=true, kwargs...)
+    f, u0, p, linenumbers = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
     ex = quote
         f = $f
         u0 = $u0

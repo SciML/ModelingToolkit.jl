@@ -35,14 +35,28 @@ struct NonlinearSystem <: AbstractSystem
     systems: The internal systems
     """
     systems::Vector{NonlinearSystem}
+    """
+    default_u0: The default initial conditions to use when initial conditions
+    are not supplied in `ODEProblem`.
+    """
+    default_u0::Dict
+    """
+    default_p: The default parameters to use when parameters are not supplied
+    in `ODEProblem`.
+    """
+    default_p::Dict
 end
 
 function NonlinearSystem(eqs, states, ps;
                          pins = [],
                          observed = [],
                          name = gensym(:NonlinearSystem),
+                         default_u0=Dict(),
+                         default_p=Dict(),
                          systems = NonlinearSystem[])
-    NonlinearSystem(eqs, value.(states), value.(ps), value.(pins), observed, name, systems)
+    default_u0 isa Dict || (default_u0 = Dict(default_u0))
+    default_p isa Dict || (default_p = Dict(default_p))
+    NonlinearSystem(eqs, value.(states), value.(ps), value.(pins), observed, name, systems, default_u0, default_p)
 end
 
 function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
@@ -97,8 +111,8 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,
 
     f = generate_function(sys;checkbounds=checkbounds,linenumbers=linenumbers,
                               parallel=parallel,sparse=sparse,expression=Val{false})
-    u0 = varmap_to_vars(u0map,dvs)
-    p = varmap_to_vars(parammap,ps)
+    u0 = varmap_to_vars(u0map,dvs; defaults=get_default_u0(sys))
+    p = varmap_to_vars(parammap,ps; defaults=get_default_p(sys))
     NonlinearProblem(f,u0,p;kwargs...)
 end
 
@@ -129,8 +143,8 @@ function NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,
 
     f = generate_function(sys;checkbounds=checkbounds,linenumbers=linenumbers,
                               parallel=parallel,sparse=sparse,expression=Val{true})
-    u0 = varmap_to_vars(u0map,dvs)
-    p = varmap_to_vars(parammap,ps)
+    u0 = varmap_to_vars(u0map,dvs; defaults=get_default_u0(sys))
+    p = varmap_to_vars(parammap,ps; defaults=get_default_p(sys))
     quote
         f = $f
         u0 = $u0
