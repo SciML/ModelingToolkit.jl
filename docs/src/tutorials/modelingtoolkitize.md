@@ -1,4 +1,4 @@
-# Symbolic Extensions to ODEProblem via Modelingtoolkize
+# Symbolic Extensions to ODEProblem via Modelingtoolkitize
 
 For some `DEProblem` types, automatic tracing functionality is already included
 via the `modelingtoolkitize` function. Take, for example, the Robertson ODE
