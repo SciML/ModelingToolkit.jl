@@ -34,7 +34,6 @@ eqs = [
        D(y) ~ x*(ρ-z)-y + β
        0 ~ sin(z) - x + y
        sin(u) ~ x + y
-       2β ~ 2
        x ~ a
       ]
 
@@ -48,14 +47,14 @@ reduced_eqs = [
                0 ~ x + y - sin(u),
               ]
 test_equal.(equations(lorenz1_aliased), reduced_eqs)
-test_equal.(states(lorenz1_aliased), [u, x, y, z])
+@test isempty(setdiff(states(lorenz1_aliased), [u, x, y, z]))
 test_equal.(observed(lorenz1_aliased), [
-    β ~ 1,
     a ~ x,
 ])
 
 # Multi-System Reduction
 
+@variables s
 eqs1 = [
         D(x) ~ σ*(y-x) + F,
         D(y) ~ x*(ρ-z)-u,
@@ -116,6 +115,26 @@ observed_eqs = [
                 lorenz1.F ~ lorenz2.u
                ]
 test_equal.(observed(aliased_flattened_system), observed_eqs)
+
+pp = [
+      lorenz1.σ => 10
+      lorenz1.ρ => 28
+      lorenz1.β => 8/3
+      lorenz2.σ => 10
+      lorenz2.ρ => 28
+      lorenz2.β => 8/3
+     ]
+u0 = [
+      a         => 1.0
+      lorenz1.x => 1.0
+      lorenz1.y => 0.0
+      lorenz1.z => 0.0
+      lorenz2.x => 1.0
+      lorenz2.y => 0.0
+      lorenz2.z => 0.0
+     ]
+prob1 = ODEProblem(aliased_flattened_system, u0, (0.0, 100.0), pp)
+solve(prob1, Rodas5())
 
 # issue #578
 

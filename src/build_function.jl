@@ -575,7 +575,7 @@ function _build_function(target::CTarget, eqs::Array{<:Equation}, args...;
     argstrs = join(vcat("double* $(lhsname)",[typeof(args[i])<:Array ? "double* $(rhsnames[i])" : "double $(rhsnames[i])" for i in 1:length(args)]),", ")
     ex = """
     void $fname($(argstrs...)) {
-    $differential_equation
+      $differential_equation
     }
     """
 
