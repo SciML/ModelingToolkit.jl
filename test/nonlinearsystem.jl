@@ -1,6 +1,7 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
 using DiffEqBase, SparseArrays
 using Test
+using NonlinearSolve
 using ModelingToolkit: value
 
 canonequal(a, b) = isequal(simplify(a), simplify(b))
@@ -62,9 +63,14 @@ eqs = [0 ~ σ*a,
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β])
+nf = NonlinearFunction(ns)
 jac = calculate_jacobian(ns)
 
 @test ModelingToolkit.jacobian_sparsity(ns).colptr == sparse(jac).colptr
 @test ModelingToolkit.jacobian_sparsity(ns).rowval == sparse(jac).rowval
 
 jac = generate_jacobian(ns)
+
+prob = NonlinearProblem(ns,ones(3),ones(3))
+sol = solve(prob,NewtonRaphson())
+@test sol.u[1] ≈ sol.u[2]
