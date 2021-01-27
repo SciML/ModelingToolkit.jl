@@ -42,7 +42,7 @@ function NonlinearSystem(eqs, states, ps;
                          observed = [],
                          name = gensym(:NonlinearSystem),
                          systems = NonlinearSystem[])
-    NonlinearSystem(eqs, value.(states), value.(ps), value.(pins), observed, name, systems)
+    NonlinearSystem(value.(eqs), value.(states), value.(ps), value.(pins), observed, name, systems)
 end
 
 function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)

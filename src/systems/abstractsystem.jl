@@ -215,7 +215,7 @@ end
 independent_variable(sys::AbstractSystem) = sys.iv
 function states(sys::AbstractSystem)
     unique(isempty(sys.systems) ?
-           setdiff(sys.states, value.(sys.pins)) :
+           sys.states :
            [sys.states;reduce(vcat,namespace_variables.(sys.systems))])
 end
 parameters(sys::AbstractSystem) = isempty(sys.systems) ? sys.ps : [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]
