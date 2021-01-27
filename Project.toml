@@ -64,6 +64,7 @@ julia = "1.2"
 Dagger = "d58978e5-989f-55fb-8d15-ea34adc7bf54"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 GalacticOptim = "a75be94c-b780-496d-a8a9-0878b188d577"
+NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
@@ -72,4 +73,4 @@ StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Dagger", "ForwardDiff", "GalacticOptim", "OrdinaryDiffEq", "Optim", "Random", "SteadyStateDiffEq", "Test", "StochasticDiffEq"]
+test = ["Dagger", "ForwardDiff", "GalacticOptim", "ModelingToolkit", "OrdinaryDiffEq", "Optim", "Random", "SteadyStateDiffEq", "Test", "StochasticDiffEq"]
