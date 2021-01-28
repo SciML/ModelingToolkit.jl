@@ -299,3 +299,6 @@ function (f::AbstractSysToExpr)(O)
     end
     return build_expr(:call, Any[operation(O); f.(arguments(O))])
 end
+
+get_default_p(sys) = sys.default_p
+get_default_u0(sys) = sys.default_u0

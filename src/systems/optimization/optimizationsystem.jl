@@ -35,6 +35,16 @@ struct OptimizationSystem <: AbstractSystem
     systems: The internal systems
     """
     systems::Vector{OptimizationSystem}
+    """
+    default_u0: The default initial conditions to use when initial conditions
+    are not supplied in `ODEProblem`.
+    """
+    default_u0::Dict
+    """
+    default_p: The default parameters to use when parameters are not supplied
+    in `ODEProblem`.
+    """
+    default_p::Dict
 end
 
 function OptimizationSystem(op, states, ps;
@@ -42,9 +52,20 @@ function OptimizationSystem(op, states, ps;
                             observed = [],
                             equality_constraints = Equation[],
                             inequality_constraints = [],
+                            default_u0=Dict(),
+                            default_p=Dict(),
                             name = gensym(:OptimizationSystem),
                             systems = OptimizationSystem[])
-    OptimizationSystem(value(op), value.(states), value.(ps), value.(pins), observed, equality_constraints, inequality_constraints, name, systems)
+
+    default_u0 isa Dict || (default_u0 = Dict(default_u0))
+    default_p isa Dict || (default_p = Dict(default_p))
+
+    OptimizationSystem(
+                       value(op), value.(states), value.(ps),
+                       value.(pins), observed,
+                       equality_constraints, inequality_constraints,
+                       name, systems, default_u0, default_p
+                      )
 end
 
 function calculate_gradient(sys::OptimizationSystem)
@@ -116,7 +137,6 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
 
     f = generate_function(sys,checkbounds=checkbounds,linenumbers=linenumbers,
                               expression=Val{false})
-    u0 = varmap_to_vars(u0,dvs)
 
     if grad
         grad_oop,grad_iip = generate_gradient(sys,checkbounds=checkbounds,linenumbers=linenumbers,
@@ -138,7 +158,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
 
     _f = DiffEqBase.OptimizationFunction{iip,AutoModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,AutoModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing)
 
-    p = varmap_to_vars(parammap,ps)
+    u0 = varmap_to_vars(u0,dvs; defaults=get_default_u0(sys))
+    p = varmap_to_vars(parammap,ps; defaults=get_default_p(sys))
     lb = varmap_to_vars(lb,dvs)
     ub = varmap_to_vars(ub,dvs)
     OptimizationProblem{iip}(_f,u0,p;lb=lb,ub=ub,kwargs...)
@@ -192,8 +213,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         _hess = :nothing
     end
 
-    u0 = varmap_to_vars(u0,dvs)
-    p = varmap_to_vars(parammap,ps)
+    u0 = varmap_to_vars(u0,dvs; defaults=get_default_u0(sys))
+    p = varmap_to_vars(parammap,ps; defaults=get_default_p(sys))
     lb = varmap_to_vars(lb,dvs)
     ub = varmap_to_vars(ub,dvs)
     quote

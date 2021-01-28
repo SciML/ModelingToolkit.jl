@@ -287,7 +287,7 @@ just like any other function. To build a differential operator, use
 
 ```julia
 @variables t
-Differential(t)
+D = Differential(t)
 ```
 
 This is the differential operator ``D = \frac{\partial}{\partial t}``: the number of

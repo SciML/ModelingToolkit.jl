@@ -62,8 +62,14 @@ function Variable(name, indices...)
     Variable(var_name)
 end
 
+
+"""
+$(SIGNATURES)
+
+Renames the variable `x` to have `name`.
+"""
 rename(x::Sym{T},name) where T = Sym{T}(name)
-rename(x::Term, name) where T = operation(x) isa Sym ? rename(operation(x), name)(arguments(x)...) : error("can't rename $x to $name")
+rename(x, name) = operation(x) isa Sym ? rename(operation(x), name)(arguments(x)...) : error("can't rename $x to $name")
 
 # Build variables more easily
 function _parse_vars(macroname, type, x)
@@ -190,15 +196,6 @@ macro variables(xs...)
     esc(_parse_vars(:variables, Real, xs))
 end
 
-"""
-$(TYPEDSIGNATURES)
-
-Renames the variable `x` to have `name`.
-"""
-function rename(x::Variable,name::Symbol)
-    Variable{symtype(x)}(name)
-end
-
 TreeViews.hastreeview(x::Variable) = true
 function TreeViews.treelabel(io::IO,x::Variable,
                              mime::MIME"text/plain" = MIME"text/plain"())
@@ -206,44 +203,42 @@ function TreeViews.treelabel(io::IO,x::Variable,
 end
 
 """
-    varmap_to_vars(varmap,varlist)
+$(SIGNATURES)
 
-Takes a list of pairs of variables=>values and an ordered list of variables and
-creates the array of values in the correct order
+Takes a list of pairs of `variables=>values` and an ordered list of variables
+and creates the array of values in the correct order with default values when
+applicable.
 """
-function varmap_to_vars(varmap::AbstractArray{<:Pair},varlist)
-    out = map(zero ∘ last, varmap)
-    for (ivar, ival) in varmap
-        j = findfirst(isequal(ivar),varlist)
-        if isnothing(j)
-            throw(ArgumentError("Value $(ivar) provided in map not found in $(varlist)"))
-        elseif j > length(varmap)
-            throw(ArgumentError("Missing value in $(varmap), need $(varlist)"))
-        end
-        out[j] = ival
-    end
+function varmap_to_vars(varmap::Dict, varlist; defaults=Dict())
+    varmap = merge(defaults, varmap) # prefers the `varmap`
+    varmap = Dict(value(k)=>value(varmap[k]) for k in keys(varmap))
+    T′ = eltype(values(varmap))
+    T = Base.isconcretetype(T′) ? T′ : Base.promote_typeof(values(varmap)...)
+    out = Vector{T}(undef, length(varlist))
+    missingvars = setdiff(varlist, keys(varmap))
+    isempty(missingvars) || throw(ArgumentError("$missingvars are missing from the variable map."))
 
-    # Make output match varmap in type and shape
-    # Does things like MArray->SArray
-    ArrayInterface.restructure(varmap,out)
+    for (i, var) in enumerate(varlist)
+        out[i] = varmap[var]
+    end
+    out
 end
 
-function varmap_to_vars(varmap::NTuple{N,<:Pair},varlist) where {N}
-    S = Base.promote_typeof(map(zero ∘ last, varmap)...)
-    out = MArray{Tuple{N},S}(undef)
-    for (ivar, ival) in varmap
-        j = findfirst(isequal(ivar),varlist)
-        if isnothing(j)
-            throw(ArgumentError("Value $(ivar) provided in map not found in $(varlist)"))
-        elseif j > length(varmap)
-            throw(ArgumentError("Missing value in $(varmap), need $(varlist)"))
+function varmap_to_vars(varmap::Union{AbstractArray,Tuple},varlist; kw...)
+    if eltype(varmap) <: Pair
+        out = varmap_to_vars(Dict(varmap), varlist; kw...)
+        if varmap isa Tuple
+            (out..., )
+        else
+            # Note that `varmap` might be longer than `varlist`
+            construct_state(varmap, out)
         end
-        out[j] = ival
+    else
+        varmap
     end
-    out.data
 end
+varmap_to_vars(varmap::DiffEqBase.NullParameters,varlist; kw...) = varmap
+varmap_to_vars(varmap::Nothing,varlist; kw...) = varmap
 
-varmap_to_vars(varmap::AbstractArray,varlist) = varmap
-varmap_to_vars(varmap::Tuple,varlist) = varmap
-varmap_to_vars(varmap::DiffEqBase.NullParameters,varlist) = varmap
-varmap_to_vars(varmap::Nothing,varlist) = varmap
+construct_state(x::StaticArray, y) = StaticArrays.similar_type(x, eltype(y), StaticArrays.Size(size(y)...))(y)
+construct_state(x::Array, y) = y
