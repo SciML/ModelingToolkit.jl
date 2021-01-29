@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq, Test
+using ModelingToolkit, OrdinaryDiffEq, Test, NonlinearSolve
 using ModelingToolkit: topsort_equations
 
 @variables t x(t) y(t) z(t) k(t)
@@ -179,3 +179,30 @@ let
               ]
     @test ref_eqs == equations(reduced_sys)
 end
+
+# NonlinearSystem
+@parameters t
+@variables u1(t) u2(t) u3(t) u4(t) u5(t)
+eqs = [
+       2u1 ~ 3u5
+       u2 ~ u1
+       u3 ~ 2u1 - u2
+       u4 ~ u2 + u3^2
+       u5 ~ u4^2 - u1
+      ]
+sys = NonlinearSystem(eqs, [u1, u2, u3, u4, u5], [])
+reducedsys = alias_elimination(sys)
+@test observed(reducedsys) == [u1 ~ 3/2 * u5]
+
+u0 = [
+      u1 => 1
+      u2 => 1
+      u3 => 0.3
+      u4 => 0.6
+      u5 => 2/3
+     ]
+nlprob = NonlinearProblem(reducedsys, u0)
+reducedsol = solve(nlprob, NewtonRaphson())
+residual = fill(100.0, 4)
+nlprob.f(residual, reducedsol.u, nothing)
+@test all(x->abs(x) < 1e-5, residual)

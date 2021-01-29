@@ -59,6 +59,8 @@ function NonlinearSystem(eqs, states, ps;
     NonlinearSystem(eqs, value.(states), value.(ps), value.(pins), observed, name, systems, default_u0, default_p)
 end
 
+independent_variable(::NonlinearSystem) = nothing
+
 function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
     rhs = [eq.rhs for eq ∈ equations(sys)]
     vals = [dv for dv in states(sys)]
@@ -77,9 +79,19 @@ function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = paramete
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
-function generate_function(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys); kwargs...)
-    rhss = [eq.rhs for eq ∈ sys.eqs]
-    return build_function(rhss, vs, ps;
+function generate_function(sys::NonlinearSystem, dvs = states(sys), ps = parameters(sys); kwargs...)
+    obsvars = map(eq->eq.lhs, observed(sys))
+    fulldvs = [dvs; obsvars]
+    fulldvs′ = makesym.(value.(fulldvs))
+
+    sub = Dict(fulldvs .=> fulldvs′)
+    # substitute x(t) by just x
+    rhss = [substitute(deq.rhs, sub) for deq ∈ equations(sys)]
+    obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
+
+    dvs′ = fulldvs′[1:length(dvs)]
+    ps′ = makesym.(value.(ps), states=())
+    return build_function(Let(obss, rhss), dvs′, ps′;
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
