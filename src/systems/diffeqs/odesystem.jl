@@ -180,7 +180,3 @@ Base.:(==)(sys1::ODESystem, sys2::ODESystem) =
     _eq_unordered(sys1.eqs, sys2.eqs) && isequal(sys1.iv, sys2.iv) &&
     _eq_unordered(sys1.states, sys2.states) && _eq_unordered(sys1.ps, sys2.ps)
 # NOTE: equality does not check cached Jacobian
-
-function rename(sys::ODESystem,name)
-    ODESystem(sys.eqs, sys.iv, sys.states, sys.ps, sys.pins, sys.observed, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
-end

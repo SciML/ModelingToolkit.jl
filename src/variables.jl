@@ -70,6 +70,7 @@ Renames the variable `x` to have `name`.
 """
 rename(x::Sym{T},name) where T = Sym{T}(name)
 rename(x, name) = operation(x) isa Sym ? rename(operation(x), name)(arguments(x)...) : error("can't rename $x to $name")
+rename(x::AbstractSystem, name) = @set x.name = name
 
 # Build variables more easily
 function _parse_vars(macroname, type, x)

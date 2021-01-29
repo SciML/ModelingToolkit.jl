@@ -183,14 +183,15 @@ end
 # NonlinearSystem
 @parameters t
 @variables u1(t) u2(t) u3(t) u4(t) u5(t)
+@parameters p
 eqs = [
        2u1 ~ 3u5
        u2 ~ u1
        u3 ~ 2u1 - u2
-       u4 ~ u2 + u3^2
+       u4 ~ u2 + u3^p
        u5 ~ u4^2 - u1
       ]
-sys = NonlinearSystem(eqs, [u1, u2, u3, u4, u5], [])
+sys = NonlinearSystem(eqs, [u1, u2, u3, u4, u5], [p])
 reducedsys = alias_elimination(sys)
 @test observed(reducedsys) == [u1 ~ 3/2 * u5]
 
@@ -201,8 +202,9 @@ u0 = [
       u4 => 0.6
       u5 => 2/3
      ]
-nlprob = NonlinearProblem(reducedsys, u0)
+pp = [2]
+nlprob = NonlinearProblem(reducedsys, u0, pp)
 reducedsol = solve(nlprob, NewtonRaphson())
 residual = fill(100.0, 4)
-nlprob.f(residual, reducedsol.u, nothing)
+nlprob.f(residual, reducedsol.u, pp)
 @test all(x->abs(x) < 1e-5, residual)

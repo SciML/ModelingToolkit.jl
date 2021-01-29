@@ -186,26 +186,29 @@ end
 function namespace_equations(sys::AbstractSystem)
     eqs = equations(sys)
     isempty(eqs) && return Equation[]
-    map(eq->namespace_equation(eq,sys.name,sys.iv.name), eqs)
+    iv = independent_variable(sys)
+    map(eq->namespace_equation(eq,sys.name,iv), eqs)
 end
 
-function namespace_equation(eq::Equation,name,ivname)
-    _lhs = namespace_expr(eq.lhs,name,ivname)
-    _rhs = namespace_expr(eq.rhs,name,ivname)
+function namespace_equation(eq::Equation,name,iv)
+    _lhs = namespace_expr(eq.lhs,name,iv)
+    _rhs = namespace_expr(eq.rhs,name,iv)
     _lhs ~ _rhs
 end
 
-function namespace_expr(O::Sym,name,ivname)
-    O.name == ivname ? O : rename(O,renamespace(name,O.name))
+function namespace_expr(O::Sym,name,iv)
+    isequal(O, iv) ? O : rename(O,renamespace(name,nameof(O)))
 end
 
 _symparam(s::Symbolic{T}) where {T} = T
-function namespace_expr(O,name,ivname) where {T}
+function namespace_expr(O,name,iv) where {T}
     if istree(O)
+        renamed = map(a->namespace_expr(a,name,iv), arguments(O))
         if operation(O) isa Sym
-            Term{_symparam(O)}(rename(operation(O),renamespace(name,operation(O).name)),namespace_expr.(arguments(O),name,ivname))
+            renamed_op = rename(operation(O),renamespace(name,operation(O).name))
+            Term{_symparam(O)}(renamed_op,renamed)
         else
-            similarterm(O,operation(O),namespace_expr.(arguments(O),name,ivname))
+            similarterm(O,operation(O),renamed)
         end
     else
         O
@@ -221,25 +224,30 @@ end
 parameters(sys::AbstractSystem) = isempty(sys.systems) ? sys.ps : [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]
 pins(sys::AbstractSystem) = isempty(sys.systems) ? sys.pins : [sys.pins;reduce(vcat,namespace_pins.(sys.systems))]
 function observed(sys::AbstractSystem)
+    iv = independent_variable(sys)
     [sys.observed;
      reduce(vcat,
-            (namespace_equation.(observed(s), s.name, s.iv.name) for s in sys.systems),
+            (map(o->namespace_equation(o, s.name, iv), observed(s)) for s in sys.systems),
             init=Equation[])]
 end
 
 function states(sys::AbstractSystem,name::Symbol)
     x = sys.states[findfirst(x->x.name==name,sys.states)]
-    rename(x,renamespace(sys.name,x.name))(sys.iv)
+    s = rename(x,renamespace(sys.name,x.name))
+    iv = independent_variable(sys)
+    iv === nothing ? iv : s(iv)
 end
 
 function parameters(sys::AbstractSystem,name::Symbol)
     x = sys.ps[findfirst(x->x.name==name,sys.ps)]
-    rename(x,renamespace(sys.name,x.name))()
+    rename(x,renamespace(sys.name,x.name))
 end
 
 function pins(sys::AbstractSystem,name::Symbol)
     x = sys.pins[findfirst(x->x.name==name,sys.ps)]
-    rename(x,renamespace(sys.name,x.name))(sys.iv())
+    s = rename(x,renamespace(sys.name,x.name))
+    iv = independent_variable(sys)
+    iv === nothing ? iv : s(iv)
 end
 
 lhss(xs) = map(x->x.lhs, xs)
@@ -259,31 +267,27 @@ function equations(sys::ModelingToolkit.AbstractSystem)
     end
 end
 
+pins(sys::AbstractSystem,args...) = states(sys, args...)
 function states(sys::AbstractSystem,args...)
     name = last(args)
     extra_names = reduce(Symbol,[Symbol(:₊,x.name) for x in args[1:end-1]])
     newname = renamespace(extra_names,name)
-    rename(x,renamespace(sys.name,newname))(sys.iv)
+    s = rename(x,renamespace(sys.name,newname))
+    iv = independent_variable(sys)
+    iv === nothing ? iv : s(iv)
 end
 
 function parameters(sys::AbstractSystem,args...)
     name = last(args)
     extra_names = reduce(Symbol,[Symbol(:₊,x.name) for x in args[1:end-1]])
     newname = renamespace(extra_names,name)
-    rename(x,renamespace(sys.name,newname))()
+    rename(x,renamespace(sys.name,newname))
 end
 
 function islinear(sys::AbstractSystem)
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
     all(islinear(r, states(sys)) for r in rhs)
-end
-
-function pins(sys::AbstractSystem,args...)
-    name = last(args)
-    extra_names = reduce(Symbol,[Symbol(:₊,x.name) for x in args[1:end-1]])
-    newname = renamespace(extra_names,name)
-    rename(x,renamespace(sys.name,newname))(sys.iv())
 end
 
 struct AbstractSysToExpr
