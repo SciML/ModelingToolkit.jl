@@ -75,7 +75,7 @@ connected = ODESystem([s ~ a + lorenz1.x
 
 flattened_system = ModelingToolkit.flatten(connected)
 
-aliased_flattened_system = alias_elimination(flattened_system)
+aliased_flattened_system = alias_elimination(flattened_system; conservative=false)
 
 @test setdiff(states(aliased_flattened_system), [
         a
