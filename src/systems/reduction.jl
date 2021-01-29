@@ -8,6 +8,7 @@ function flatten(sys::ODESystem)
                          independent_variable(sys),
                          states(sys),
                          parameters(sys),
+                         pins=pins(sys),
                          observed=observed(sys))
     end
 end
@@ -56,8 +57,6 @@ end
 
 function alias_elimination(sys::ODESystem)
     eqs = vcat(equations(sys), observed(sys))
-    neweqs = Equation[]; sizehint!(neweqs, length(eqs))
-    subs = Pair[]
     diff_vars = filter(!isnothing, map(eqs) do eq
             if isdiffeq(eq)
                 arguments(eq.lhs)[1]
@@ -67,6 +66,9 @@ function alias_elimination(sys::ODESystem)
         end) |> Set
 
     deps = Set()
+    subs = Pair[]
+    neweqs = Equation[]; sizehint!(neweqs, length(eqs))
+
     for (i, eq) in enumerate(eqs)
         # only substitute when the variable is algebraic
         if isdiffeq(eq)
@@ -107,15 +109,12 @@ function alias_elimination(sys::ODESystem)
         end
     end
 
-    eqs′ = substitute_aliases(neweqs, Dict(subs))
-
     alias_vars = first.(subs)
     sys_states = states(sys)
-    alias_eqs = alias_vars .~ last.(subs)
-    #alias_eqs = topsort_equations(alias_eqs, sys_states)
+    alias_eqs = topsort_equations(alias_vars .~ last.(subs), sys_states)
 
     newstates = setdiff(sys_states, alias_vars)
-    ODESystem(eqs′, sys.iv, newstates, parameters(sys), observed=alias_eqs)
+    ODESystem(neweqs, sys.iv, newstates, parameters(sys), observed=alias_eqs)
 end
 
 """

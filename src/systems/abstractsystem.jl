@@ -159,14 +159,16 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
     throw(error("Variable $name does not exist"))
 end
 
-renamespace(namespace,name) = Symbol(namespace,:₊,name)
-
-function renamespace(namespace, x::Sym)
-    Sym{symtype(x)}(renamespace(namespace,x.name))
-end
-
-function renamespace(namespace, x::Term)
-    renamespace(namespace, operation(x))(arguments(x)...)
+function renamespace(namespace, x)
+    if x isa Num
+        renamespace(namespace, value(x))
+    elseif istree(x)
+        renamespace(namespace, operation(x))(arguments(x)...)
+    elseif x isa Sym
+        Sym{symtype(x)}(renamespace(namespace,nameof(x)))
+    else
+        Symbol(namespace,:₊,x)
+    end
 end
 
 function namespace_variables(sys::AbstractSystem)
@@ -213,7 +215,7 @@ end
 independent_variable(sys::AbstractSystem) = sys.iv
 function states(sys::AbstractSystem)
     unique(isempty(sys.systems) ?
-           setdiff(sys.states, value.(sys.pins)) :
+           sys.states :
            [sys.states;reduce(vcat,namespace_variables.(sys.systems))])
 end
 parameters(sys::AbstractSystem) = isempty(sys.systems) ? sys.ps : [sys.ps;reduce(vcat,namespace_parameters.(sys.systems))]

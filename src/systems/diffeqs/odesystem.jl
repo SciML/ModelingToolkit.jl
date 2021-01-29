@@ -168,7 +168,7 @@ end
 
 function collect_var!(states, parameters, var, iv)
     isequal(var, iv) && return nothing
-    if isparameter(var) || isparameter(operation(var))
+    if isparameter(var) || (istree(var) && isparameter(operation(var)))
         push!(parameters, var)
     else
         push!(states, var)
