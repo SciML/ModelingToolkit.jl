@@ -55,13 +55,24 @@ function get_α_x(αx)
     end
 end
 
-function is_sub_candidate(rhs, conservative)
-    conservative || return true
-    isvar(rhs) || rhs isa Number
+function is_univariate_expr(ex, iv)
+    count = 0
+    for var in vars(ex)
+        if !isequal(iv, var) && !isparameter(var)
+            count += 1
+            count > 1 && return false
+        end
+    end
+    return count <= 1
 end
 
-function maybe_alias(lhs, rhs, diff_vars, conservative)
-    is_sub_candidate(rhs, conservative) || return false, nothing
+function is_sub_candidate(ex, iv, conservative)
+    conservative || return true
+    isvar(ex) || ex isa Number || is_univariate_expr(ex, iv)
+end
+
+function maybe_alias(lhs, rhs, diff_vars, iv, conservative)
+    is_sub_candidate(rhs, iv, conservative) || return false, nothing
 
     res_left = get_α_x(lhs)
     if res_left !== nothing && !(res_left[2] in diff_vars)
@@ -74,6 +85,7 @@ function maybe_alias(lhs, rhs, diff_vars, conservative)
 end
 
 function alias_elimination(sys::ODESystem; conservative=true)
+    iv = independent_variable(sys)
     eqs = vcat(equations(sys), observed(sys))
     diff_vars = filter(!isnothing, map(eqs) do eq
             if isdiffeq(eq)
@@ -95,10 +107,10 @@ function alias_elimination(sys::ODESystem; conservative=true)
         end
 
         # `α x = rhs` => `x = rhs / α`
-        ma, sub = maybe_alias(eq.lhs, eq.rhs, diff_vars, conservative)
+        ma, sub = maybe_alias(eq.lhs, eq.rhs, diff_vars, iv, conservative)
         if !ma
             # `lhs = β y` => `y = lhs / β`
-            ma, sub = maybe_alias(eq.rhs, eq.lhs, diff_vars, conservative)
+            ma, sub = maybe_alias(eq.rhs, eq.lhs, diff_vars, iv, conservative)
         end
 
         isalias = false
