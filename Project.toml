@@ -34,7 +34,7 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
-ArrayInterface = "2.8"
+ArrayInterface = "2.8, 3.0"
 DataStructures = "0.17, 0.18"
 DiffEqBase = "6.54.0"
 DiffEqJump = "6.7.5"
