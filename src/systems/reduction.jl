@@ -84,9 +84,9 @@ function maybe_alias(lhs, rhs, diff_vars, iv, conservative)
     end
 end
 
-function alias_elimination(sys::ODESystem; conservative=true)
+function alias_elimination(sys; conservative=true)
     iv = independent_variable(sys)
-    eqs = vcat(equations(sys), observed(sys))
+    eqs = equations(sys)
     diff_vars = filter(!isnothing, map(eqs) do eq
             if isdiffeq(eq)
                 arguments(eq.lhs)[1]
@@ -131,11 +131,15 @@ function alias_elimination(sys::ODESystem; conservative=true)
     end
 
     alias_vars = first.(subs)
-    sys_states = states(sys)
-    alias_eqs = topsort_equations(alias_vars .~ last.(subs), sys_states)
+    sts = states(sys)
+    fullsts = vcat(map(eq->eq.lhs, observed(sys)), sts)
+    alias_eqs = topsort_equations(alias_vars .~ last.(subs), fullsts)
+    newstates = setdiff(sts, alias_vars)
 
-    newstates = setdiff(sys_states, alias_vars)
-    ODESystem(neweqs, sys.iv, newstates, parameters(sys), observed=alias_eqs)
+    @set! sys.eqs = neweqs
+    @set! sys.states = newstates
+    @set! sys.observed = [observed(sys); alias_eqs]
+    return sys
 end
 
 """
