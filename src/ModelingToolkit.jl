@@ -89,9 +89,9 @@ function Base.show(io::IO, z::Complex{<:Num})
     r, i = reim(z)
     compact = get(io, :compact, false)
     show(io, r)
-    print(io, compact ? "+" : " + ")
+    print(io, (compact ? "+" : " + ") * "(")
     show(io, i)
-    print(io, "*im")
+    print(io, ")*im")
 end
 
 SymbolicUtils.simplify(n::Num; kw...) = Num(SymbolicUtils.simplify(value(n); kw...))
