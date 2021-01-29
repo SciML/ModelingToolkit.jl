@@ -32,9 +32,9 @@ end
 
 # Note that we reduce parameters, too
 # i.e. `2param = 3` will be reduced away
-isvar(s::Sym) = true
-isvar(s::Term) = isvar(operation(s))
-isvar(s::Any) = false
+isvar(s) = s isa Sym ? true :
+           istree(s) ? isvar(operation(s)) :
+                       false
 
 function get_α_x(αx)
     if isvar(αx)
@@ -55,7 +55,37 @@ function get_α_x(αx)
     end
 end
 
-function alias_elimination(sys::ODESystem)
+function is_univariate_expr(ex, iv)
+    count = 0
+    for var in vars(ex)
+        if !isequal(iv, var) && !isparameter(var)
+            count += 1
+            count > 1 && return false
+        end
+    end
+    return count <= 1
+end
+
+function is_sub_candidate(ex, iv, conservative)
+    conservative || return true
+    isvar(ex) || ex isa Number || is_univariate_expr(ex, iv)
+end
+
+function maybe_alias(lhs, rhs, diff_vars, iv, conservative)
+    is_sub_candidate(rhs, iv, conservative) || return false, nothing
+
+    res_left = get_α_x(lhs)
+    if res_left !== nothing && !(res_left[2] in diff_vars)
+        α, x = res_left
+        sub = x => _isone(α) ? rhs : rhs / α
+        return true, sub
+    else
+        return false, nothing
+    end
+end
+
+function alias_elimination(sys::ODESystem; conservative=true)
+    iv = independent_variable(sys)
     eqs = vcat(equations(sys), observed(sys))
     diff_vars = filter(!isnothing, map(eqs) do eq
             if isdiffeq(eq)
@@ -76,24 +106,15 @@ function alias_elimination(sys::ODESystem)
             continue
         end
 
-        maybe_alias = isalias = false
-        res_left = get_α_x(eq.lhs)
-        if !isnothing(res_left) && !(res_left[2] in diff_vars)
-            # `α x = rhs` => `x = rhs / α`
-            α, x = res_left
-            sub = x => _isone(α) ? eq.rhs : eq.rhs / α
-            maybe_alias = true
-        else
-            res_right = get_α_x(eq.rhs)
-            if !isnothing(res_right) && !(res_right[2] in diff_vars)
-                # `lhs = β y` => `y = lhs / β`
-                β, y = res_right
-                sub =  y => _isone(β) ? eq.lhs : β * eq.lhs
-                maybe_alias = true
-            end
+        # `α x = rhs` => `x = rhs / α`
+        ma, sub = maybe_alias(eq.lhs, eq.rhs, diff_vars, iv, conservative)
+        if !ma
+            # `lhs = β y` => `y = lhs / β`
+            ma, sub = maybe_alias(eq.rhs, eq.lhs, diff_vars, iv, conservative)
         end
 
-        if maybe_alias
+        isalias = false
+        if ma
             l, r = sub
             # alias equations shouldn't introduce cycles
             if !(l in deps) && isempty(intersect(deps, vars(r)))

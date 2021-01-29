@@ -34,7 +34,8 @@ eqs = [
        D(y) ~ x*(ρ-z)-y + β
        0 ~ sin(z) - x + y
        sin(u) ~ x + y
-       x ~ a
+       2x ~ 3a
+       2u ~ 3x
       ]
 
 lorenz1 = ODESystem(eqs,t,name=:lorenz1)
@@ -49,8 +50,9 @@ reduced_eqs = [
 test_equal.(equations(lorenz1_aliased), reduced_eqs)
 @test isempty(setdiff(states(lorenz1_aliased), [u, x, y, z]))
 test_equal.(observed(lorenz1_aliased), [
-    a ~ x,
-])
+                                        a ~ 2/3 * x,
+                                        u ~ 3/2 * x,
+                                       ])
 
 # Multi-System Reduction
 
@@ -75,7 +77,7 @@ connected = ODESystem([s ~ a + lorenz1.x
 
 flattened_system = ModelingToolkit.flatten(connected)
 
-aliased_flattened_system = alias_elimination(flattened_system)
+aliased_flattened_system = alias_elimination(flattened_system; conservative=false)
 
 @test setdiff(states(aliased_flattened_system), [
         a
