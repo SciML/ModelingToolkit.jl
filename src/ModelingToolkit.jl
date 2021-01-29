@@ -61,6 +61,39 @@ SymbolicUtils.@number_methods(Num,
                               Num(f(value(a))),
                               Num(f(value(a), value(b))))
 
+for C in [Complex, Complex{Bool}]
+    @eval begin
+        Base.:*(x::Num, z::$C) = Complex(x * real(z), x * imag(z))
+        Base.:*(z::$C, x::Num) = Complex(real(z) * x, imag(z) * x)
+    end
+end
+
+Base.:+(x::Num, z::Complex) = Complex(x + real(z), imag(z))
+Base.:+(z::Complex, x::Num) = Complex(real(z) + x, imag(z))
+Base.:-(x::Num, z::Complex) = Complex(x - real(z), -imag(z))
+Base.:-(z::Complex, x::Num) = Complex(real(z) - x, imag(z))
+
+function Base.inv(z::Complex{Num})
+    a, b = reim(z)
+    den = a^2 + b^2
+    Complex(a/den, -b/den)
+end
+function Base.:/(x::Complex{Num}, y::Complex{Num})
+    a, b = reim(x)
+    c, d = reim(y)
+    den = c^2 + d^2
+    Complex((a*c + b*d)/den, (b*c - a*d)/den)
+end
+
+function Base.show(io::IO, z::Complex{<:Num})
+    r, i = reim(z)
+    compact = get(io, :compact, false)
+    show(io, r)
+    print(io, (compact ? "+" : " + ") * "(")
+    show(io, i)
+    print(io, ")*im")
+end
+
 SymbolicUtils.simplify(n::Num; kw...) = Num(SymbolicUtils.simplify(value(n); kw...))
 
 SymbolicUtils.symtype(n::Num) = symtype(n.val)
