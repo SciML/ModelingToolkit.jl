@@ -222,7 +222,7 @@ Symbol("z⦗t⦘")
 """
 function tosymbol(t::Term; states=nothing, escape=true)
     if operation(t) isa Sym
-        if states !== nothing && !(any(isequal(t), states))
+        if states !== nothing && !(t in states)
             return nameof(operation(t))
         end
         op = nameof(operation(t))
