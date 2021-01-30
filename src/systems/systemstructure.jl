@@ -27,7 +27,6 @@ for v in 𝑣vertices(graph); active_𝑣vertices[v] || continue
 end
 =#
 
-const SHOW_EQUATIONS = Ref(false)
 struct SystemStructure
     dxvar_offset::Int
     fullvars::Vector # [xvar; dxvars; algvars]
@@ -37,7 +36,7 @@ struct SystemStructure
 end
 
 function initialize_system_structure(sys)
-    sys, dxvar_offset, fullvars, varassoc, graph, solvable_graph = init_graph(sys)
+    sys, dxvar_offset, fullvars, varassoc, graph, solvable_graph = init_graph(flatten(sys))
     @set sys.structure = SystemStructure(dxvar_offset, fullvars, varassoc, graph, solvable_graph)
 end
 
@@ -50,26 +49,6 @@ function Base.show(io::IO, s::SystemStructure)
     print(io, fullvars[dxvar_offset+1:algvar_offset])
     print(io, "\nalgvars: ")
     print(io, fullvars[algvar_offset+1:end], '\n')
-
-    if SHOW_EQUATIONS[]
-        println(io, "Edges:")
-        eqs = equations(s)
-        for ev in 𝑠vertices(graph)
-            print(io, "  $(eqs[ev])\n    -> ")
-            vars = 𝑠neighbors(graph, ev)
-            solvars = 𝑠neighbors(solvable_graph, ev)
-            solvable = intersect(vars, solvars)
-            notsolvable = setdiff(vars, solvars)
-
-            print(io, join(string.(fullvars[notsolvable]), ", "))
-            for ii in solvable
-                print(io, ", ")
-                var = fullvars[ii]
-                Base.printstyled(io, string(fullvars[ii]), color=:cyan)
-            end
-            println(io)
-        end
-    end
 
     S = incidence_matrix(graph, Num(Sym{Real}(:×)))
     print(io, "Incidence matrix:")

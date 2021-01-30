@@ -129,6 +129,12 @@ end
 
 independent_variable(sys::AbstractSystem) = getfield(sys, :iv)
 
+function structure(sys::AbstractSystem)
+    s = get_structure(sys)
+    s isa SystemStructure || throw(ArgumentError("SystemStructure is not yet initialized, please run `sys = initialize_system_structure(sys)` or `sys = alias_elimination(sys)`."))
+    return s
+end
+
 for prop in [:eqs, :iv, :states, :ps, :default_p, :default_u0, :observed, :tgrad, :jac, :Wfact, :Wfact_t, :systems, :structure]
     fname = Symbol(:get_, prop)
     @eval begin
