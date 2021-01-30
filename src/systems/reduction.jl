@@ -1,19 +1,5 @@
 export alias_elimination, flatten
 
-function flatten(sys::ODESystem)
-    if isempty(sys.systems)
-        return sys
-    else
-        return ODESystem(equations(sys),
-                         independent_variable(sys),
-                         states(sys),
-                         parameters(sys),
-                         pins=pins(sys),
-                         observed=observed(sys))
-    end
-end
-
-
 using SymbolicUtils: Rewriters
 
 function fixpoint_sub(x, dict)
@@ -132,7 +118,7 @@ function alias_elimination(sys; conservative=true)
 
     alias_vars = first.(subs)
     sts = states(sys)
-    fullsts = vcat(map(eq->eq.lhs, observed(sys)), sts)
+    fullsts = vcat(map(eq->eq.lhs, observed(sys)), sts, parameters(sys))
     alias_eqs = topsort_equations(alias_vars .~ last.(subs), fullsts)
     newstates = setdiff(sts, alias_vars)
 

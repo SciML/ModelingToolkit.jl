@@ -176,7 +176,25 @@ function collect_var!(states, parameters, var, iv)
     return nothing
 end
 
+# NOTE: equality does not check cached Jacobian
 Base.:(==)(sys1::ODESystem, sys2::ODESystem) =
     _eq_unordered(sys1.eqs, sys2.eqs) && isequal(sys1.iv, sys2.iv) &&
     _eq_unordered(sys1.states, sys2.states) && _eq_unordered(sys1.ps, sys2.ps)
-# NOTE: equality does not check cached Jacobian
+
+function flatten(sys::ODESystem)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return sys
+    else
+        return ODESystem(
+                         equations(sys),
+                         independent_variable(sys),
+                         states(sys),
+                         parameters(sys),
+                         pins=pins(sys),
+                         observed=observed(sys),
+                         default_u0=default_u0(sys),
+                         default_p=default_p(sys),
+                        )
+    end
+end

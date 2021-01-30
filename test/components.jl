@@ -1,8 +1,11 @@
+using ModelingToolkit
+using Test
+
 # Basic electric components
 @parameters t
 function Pin(name)
     @variables v(t) i(t)
-    ODESystem(Equation[], t, [v, i], [], name=name)
+    ODESystem(Equation[], t, [v, i], [], name=name, default_u0=[v=>1.0, i=>1.0])
 end
 
 function Ground(name)
@@ -61,7 +64,7 @@ function Inductor(name; L = 1.0)
     val = L
     v, i, op = OnePort(name)
     @parameters L
-    D = Differential(iv)
+    D = Differential(t)
     push!(op.eqs, D(i) ~ v / L)
     L = ModelingToolkit.value(L)
     push!(op.ps, L)
@@ -69,5 +72,16 @@ function Inductor(name; L = 1.0)
     op
 end
 
-R = Resistor(:R)
-@test isequal(R.p.i, (@variables R₊p₊i(t))[1])
+R1 = Resistor(:R1)
+C1 = Capacitor(:C1)
+I1 = Inductor(:I1)
+@test isequal(R1.p.i, (@variables R1₊p₊i(t))[1])
+@parameters R
+@test ModelingToolkit.get_default_p(flatten(R1)) == Dict(R => 1.0)
+@variables n₊v(t) p₊v(t) n₊i(t) p₊i(t)
+@test ModelingToolkit.get_default_u0(flatten(R1)) == Dict(
+                                                          n₊v => 1.0,
+                                                          p₊v => 1.0,
+                                                          n₊i => 1.0,
+                                                          p₊i => 1.0,
+                                                         )
