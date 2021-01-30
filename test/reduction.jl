@@ -75,11 +75,9 @@ connected = ODESystem([s ~ a + lorenz1.x
 
 # Reduced Flattened System
 
-flattened_system = ModelingToolkit.flatten(connected)
+reduced_system = alias_elimination(connected; conservative=false)
 
-aliased_flattened_system = alias_elimination(flattened_system; conservative=false)
-
-@test setdiff(states(aliased_flattened_system), [
+@test setdiff(states(reduced_system), [
         a
         lorenz1.x
         lorenz1.y
@@ -89,7 +87,7 @@ aliased_flattened_system = alias_elimination(flattened_system; conservative=fals
         lorenz2.z
        ]) |> isempty
 
-@test setdiff(parameters(aliased_flattened_system), [
+@test setdiff(parameters(reduced_system), [
         lorenz1.σ
         lorenz1.ρ
         lorenz1.β
@@ -108,9 +106,9 @@ reduced_eqs = [
                0 ~ a + lorenz1.x - lorenz2.y
               ]
 # SymbolicUtils bug
-# equations(aliased_flattened_system)[2] - (lorenz1.x*(lorenz1.ρ - (lorenz1.z)) - lorenz1.x + lorenz1.y - lorenz1.z)
+# equations(reduced_system)[2] - (lorenz1.x*(lorenz1.ρ - (lorenz1.z)) - lorenz1.x + lorenz1.y - lorenz1.z)
 # is not simplifed.
-@test_skip test_equal.(equations(aliased_flattened_system), reduced_eqs)
+@test_skip test_equal.(equations(reduced_system), reduced_eqs)
 
 observed_eqs = [
                 s ~ a + lorenz1.x
@@ -119,7 +117,7 @@ observed_eqs = [
                 lorenz2.F ~ lorenz1.u
                 lorenz1.F ~ lorenz2.u
                ]
-test_equal.(observed(aliased_flattened_system), observed_eqs)
+test_equal.(observed(reduced_system), observed_eqs)
 
 pp = [
       lorenz1.σ => 10
@@ -138,7 +136,7 @@ u0 = [
       lorenz2.y => 0.0
       lorenz2.z => 0.0
      ]
-prob1 = ODEProblem(aliased_flattened_system, u0, (0.0, 100.0), pp)
+prob1 = ODEProblem(reduced_system, u0, (0.0, 100.0), pp)
 solve(prob1, Rodas5())
 
 # issue #578
@@ -151,7 +149,7 @@ let
         x ~ y
     ]
     sys = ODESystem(eqs, t)
-    asys = alias_elimination(flatten(sys))
+    asys = alias_elimination(sys)
 
     test_equal.(asys.eqs, [D(x) ~ 2x])
     test_equal.(asys.observed, [y ~ x])
@@ -173,8 +171,7 @@ let
     ]
     connected = ODESystem(connections, t, systems=[ol, pc])
     @test equations(connected) isa Vector{Equation}
-    sys = flatten(connected)
-    reduced_sys = alias_elimination(sys)
+    reduced_sys = alias_elimination(connected)
     ref_eqs = [
                D(ol.x) ~ ol.a*ol.x + ol.b*pc.u_c
                0 ~ ol.c*ol.x + ol.d*pc.u_c - ol.y

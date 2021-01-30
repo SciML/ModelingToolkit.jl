@@ -71,6 +71,7 @@ function maybe_alias(lhs, rhs, diff_vars, iv, conservative)
 end
 
 function alias_elimination(sys; conservative=true)
+    sys = flatten(sys)
     iv = independent_variable(sys)
     eqs = equations(sys)
     diff_vars = filter(!isnothing, map(eqs) do eq
