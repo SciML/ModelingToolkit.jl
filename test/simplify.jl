@@ -1,4 +1,5 @@
 using ModelingToolkit
+using ModelingToolkit: value
 using Test
 
 @parameters t
@@ -34,11 +35,11 @@ d3 = Differential(x)(d2)
 @test ModelingToolkit.substitute(2x + y == 1, Dict(x => 0.0, y => 1.0)) === true
 
 # 699
-using SymbolicUtils: to_symbolic, substitute
+using SymbolicUtils: value, substitute
 @parameters t a(t) b(t)
 
 # back and forth substitution does not work for parameters with dependencies
-term = to_symbolic(a)
+term = value(a)
 term2 = substitute(term, a=>b)
 @test term2 isa Term{ModelingToolkit.Parameter{Real}}
 @test isequal(term2, b)

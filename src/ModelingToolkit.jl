@@ -23,7 +23,7 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils: Term, Add, Mul, Pow, Sym, to_symbolic, FnType,
+import SymbolicUtils: Term, Add, Mul, Pow, Sym, FnType,
                       @rule, Rewriters, substitute, similarterm,
                       promote_symtype
 
@@ -55,8 +55,6 @@ value(x) = x
 value(x::Num) = x.val
 
 
-using SymbolicUtils: to_symbolic
-SymbolicUtils.to_symbolic(n::Num) = value(n)
 SymbolicUtils.@number_methods(Num,
                               Num(f(value(a))),
                               Num(f(value(a), value(b))))
