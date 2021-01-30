@@ -82,12 +82,10 @@ function collect_variables(sys)
     dxvars = []
     eqs = equations(sys)
     for (i, eq) in enumerate(eqs)
-        lhs = eq.lhs
-        if istree(lhs)
+        if isdiffeq(eq)
+            lhs = eq.lhs
             # Make sure that the LHS is a first order derivative of a var.
-            if operation(lhs) isa Differential
-                @assert !(arguments(lhs)[1] isa Differential) "The equation $eq is not first order"
-            end
+            @assert !(arguments(lhs)[1] isa Differential) "The equation $eq is not first order"
 
             push!(dxvars, lhs)
         end
@@ -110,17 +108,22 @@ function init_graph(sys)
     graph = BipartiteGraph(length(eqs), length(fullvars))
     solvable_graph = BipartiteGraph(length(eqs), length(fullvars))
 
+    vs = Set()
     for (i, eq) in enumerate(eqs)
         # TODO: custom vars that handles D(x)
-        vs = vars(eq.lhs)
         # TODO: add checks here
+        lhs = eq.lhs
+        if isdiffeq(eq)
+            v = lhs
+            haskey(idxmap, v) && add_edge!(graph, i, idxmap[v])
+        else
+            vars!(vs, lhs)
+        end
+        vars!(vs, eq.rhs)
         for v in vs
             haskey(idxmap, v) && add_edge!(graph, i, idxmap[v])
         end
-        vs = vars(eq.rhs)
-        for v in vs
-            haskey(idxmap, v) && add_edge!(graph, i, idxmap[v])
-        end
+        empty!(vs)
     end
 
     varassoc = Int[(1:dxvar_offset) .+ dxvar_offset; zeros(Int, length(fullvars) - dxvar_offset)] # variable association list

@@ -129,7 +129,7 @@ end
 
 independent_variable(sys::AbstractSystem) = getfield(sys, :iv)
 
-for prop in [:eqs, :iv, :states, :ps, :default_p, :default_u0, :observed, :tgrad, :jac, :Wfact, :Wfact_t, :systems]
+for prop in [:eqs, :iv, :states, :ps, :default_p, :default_u0, :observed, :tgrad, :jac, :Wfact, :Wfact_t, :systems, :structure]
     fname = Symbol(:get_, prop)
     @eval begin
         $fname(sys::AbstractSystem) = getfield(sys, $(QuoteNode(prop)))
