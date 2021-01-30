@@ -25,7 +25,6 @@ struct NonlinearSystem <: AbstractSystem
     states::Vector
     """Parameters."""
     ps::Vector
-    pins::Vector
     observed::Vector{Equation}
     """
     Name: the name of the system
@@ -48,7 +47,6 @@ struct NonlinearSystem <: AbstractSystem
 end
 
 function NonlinearSystem(eqs, states, ps;
-                         pins = [],
                          observed = [],
                          name = gensym(:NonlinearSystem),
                          default_u0=Dict(),
@@ -56,7 +54,7 @@ function NonlinearSystem(eqs, states, ps;
                          systems = NonlinearSystem[])
     default_u0 isa Dict || (default_u0 = Dict(default_u0))
     default_p isa Dict || (default_p = Dict(default_p))
-    NonlinearSystem(eqs, value.(states), value.(ps), value.(pins), observed, name, systems, default_u0, default_p)
+    NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, default_u0, default_p)
 end
 
 independent_variable(::NonlinearSystem) = nothing
@@ -278,4 +276,20 @@ function NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,
         NonlinearProblem(f,u0,p;$(kwargs...))
     end
     !linenumbers ? striplines(ex) : ex
+end
+
+function flatten(sys::NonlinearSystem)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return sys
+    else
+        return NonlinearSystem(
+                               equations(sys),
+                               states(sys),
+                               parameters(sys),
+                               observed=observed(sys),
+                               default_u0=default_u0(sys),
+                               default_p=default_p(sys),
+                              )
+    end
 end

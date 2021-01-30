@@ -31,7 +31,6 @@ struct ODESystem <: AbstractODESystem
     states::Vector
     """Parameter variables."""
     ps::Vector
-    pins::Vector{Num}
     observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
@@ -75,7 +74,6 @@ end
 
 function ODESystem(
                    deqs::AbstractVector{<:Equation}, iv, dvs, ps;
-                   pins = Num[],
                    observed = Num[],
                    systems = ODESystem[],
                    name=gensym(:ODESystem),
@@ -93,7 +91,7 @@ function ODESystem(
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
-    ODESystem(deqs, iv′, dvs′, ps′, pins, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p)
+    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p)
 end
 
 var_from_nested_derivative(x, i=0) = (missing, missing)
@@ -191,7 +189,6 @@ function flatten(sys::ODESystem)
                          independent_variable(sys),
                          states(sys),
                          parameters(sys),
-                         pins=pins(sys),
                          observed=observed(sys),
                          default_u0=default_u0(sys),
                          default_p=default_p(sys),

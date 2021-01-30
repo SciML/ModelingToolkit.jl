@@ -74,3 +74,20 @@ jac = generate_jacobian(ns)
 prob = NonlinearProblem(ns,ones(3),ones(3))
 sol = solve(prob,NewtonRaphson())
 @test sol.u[1] ≈ sol.u[2]
+
+@variables u F s a
+eqs1 = [
+        0 ~ σ*(y-x) + F,
+        0 ~ x*(ρ-z)-u,
+        0 ~ x*y - β*z,
+        0 ~ x + y - z - u,
+       ]
+
+lorenz = name -> NonlinearSystem(eqs1, [x,y,z,u,F], [σ,ρ,β], name=name)
+lorenz1 = lorenz(:lorenz1)
+lorenz2 = lorenz(:lorenz2)
+connected = NonlinearSystem([s ~ a + lorenz1.x
+                             lorenz2.y ~ s
+                             lorenz1.F ~ lorenz2.u
+                             lorenz2.F ~ lorenz1.u], [s, a], [], systems=[lorenz1,lorenz2])
+@test_nowarn alias_elimination(flatten(connected))

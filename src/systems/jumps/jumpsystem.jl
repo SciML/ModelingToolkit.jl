@@ -37,7 +37,6 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
     states::Vector
     """The parameters of the system."""
     ps::Vector
-    pins::Vector
     observed::Vector{Equation}
     """The name of the system."""
     name::Symbol
@@ -56,7 +55,6 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
 end
 
 function JumpSystem(eqs, iv, states, ps;
-                    pins = [],
                     observed = Equation[],
                     systems = JumpSystem[],
                     default_u0=Dict(),
@@ -78,7 +76,7 @@ function JumpSystem(eqs, iv, states, ps;
     default_u0 isa Dict || (default_u0 = Dict(default_u0))
     default_p isa Dict || (default_p = Dict(default_p))
 
-    JumpSystem{typeof(ap)}(ap, value(iv), value.(states), value.(ps), pins, observed, name, systems, default_u0, default_p)
+    JumpSystem{typeof(ap)}(ap, value(iv), value.(states), value.(ps), observed, name, systems, default_u0, default_p)
 end
 
 function generate_rate_function(js, rate)

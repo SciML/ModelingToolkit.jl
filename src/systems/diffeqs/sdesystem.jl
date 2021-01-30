@@ -37,7 +37,6 @@ struct SDESystem <: AbstractODESystem
     states::Vector
     """Parameter variables."""
     ps::Vector
-    pins::Vector
     observed::Vector
     """
     Time-derivative matrix. Note: this field will not be defined until
@@ -80,7 +79,6 @@ struct SDESystem <: AbstractODESystem
 end
 
 function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
-                   pins = [],
                    observed = [],
                    systems = SDESystem[],
                    default_u0=Dict(),
@@ -97,7 +95,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
-    SDESystem(deqs, neqs, iv′, dvs′, ps′, pins, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p)
+    SDESystem(deqs, neqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = sys.states, ps = sys.ps; kwargs...)

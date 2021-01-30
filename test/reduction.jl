@@ -56,7 +56,7 @@ test_equal.(observed(lorenz1_aliased), [
 
 # Multi-System Reduction
 
-@variables s
+@variables s(t)
 eqs1 = [
         D(x) ~ σ*(y-x) + F,
         D(y) ~ x*(ρ-z)-u,
@@ -64,7 +64,7 @@ eqs1 = [
         u ~ x + y - z,
        ]
 
-lorenz = name -> ODESystem(eqs1,t,pins=[F],name=name)
+lorenz = name -> ODESystem(eqs1,t,name=name)
 lorenz1 = lorenz(:lorenz1)
 lorenz2 = lorenz(:lorenz2)
 
@@ -160,10 +160,10 @@ let
     D = Differential(t)
     @variables x(t), u(t), y(t)
     @parameters a, b, c, d
-    ol = ODESystem([D(x) ~ a * x + b * u; y ~ c * x + d * u], t, pins=[u], name=:ol)
+    ol = ODESystem([D(x) ~ a * x + b * u; y ~ c * x + d * u], t, name=:ol)
     @variables u_c(t), y_c(t)
     @parameters k_P
-    pc = ODESystem(Equation[u_c ~ k_P * y_c], t, pins=[y_c], name=:pc)
+    pc = ODESystem(Equation[u_c ~ k_P * y_c], t, name=:pc)
     connections = [
         ol.u ~ pc.u_c
         pc.y_c ~ ol.y

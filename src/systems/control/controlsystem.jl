@@ -58,7 +58,6 @@ struct ControlSystem <: AbstractControlSystem
     controls::Vector
     """Parameter variables."""
     ps::Vector
-    pins::Vector
     observed::Vector{Equation}
     """
     Name: the name of the system
@@ -81,7 +80,6 @@ struct ControlSystem <: AbstractControlSystem
 end
 
 function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls, ps;
-                       pins = [],
                        observed = [],
                        systems = ODESystem[],
                        default_u0=Dict(),
@@ -94,7 +92,7 @@ function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls
     default_u0 isa Dict || (default_u0 = Dict(default_u0))
     default_p isa Dict || (default_p = Dict(default_p))
     ControlSystem(value(loss), deqs, iv′, dvs′, controls′,
-                  ps′, pins, observed, name, systems, default_u0, default_p)
+                  ps′, observed, name, systems, default_u0, default_p)
 end
 
 struct ControlToExpr

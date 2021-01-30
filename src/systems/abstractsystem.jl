@@ -129,7 +129,7 @@ end
 
 independent_variable(sys::AbstractSystem) = getfield(sys, :iv)
 
-for prop in [:eqs, :iv, :states, :ps, :default_p, :default_u0, :pins, :observed, :tgrad, :jac, :Wfact, :Wfact_t, :systems]
+for prop in [:eqs, :iv, :states, :ps, :default_p, :default_u0, :observed, :tgrad, :jac, :Wfact, :Wfact_t, :systems]
     fname = Symbol(:get_, prop)
     @eval begin
         $fname(sys::AbstractSystem) = getfield(sys, $(QuoteNode(prop)))
@@ -189,7 +189,6 @@ end
 
 namespace_variables(sys::AbstractSystem) = states(sys, states(sys))
 namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
-namespace_pins(sys::AbstractSystem) = states(sys, pins(sys))
 
 function namespace_default_u0(sys)
     d_u0 = default_u0(sys)
@@ -244,11 +243,6 @@ function parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     systems = get_systems(sys)
     isempty(systems) ? ps : [ps;reduce(vcat,namespace_parameters.(systems))]
-end
-function pins(sys::AbstractSystem)
-    ps = get_pins(sys)
-    systems = get_systems(sys)
-    isempty(systems) ? ps : [ps;reduce(vcat,namespace_pins.(systems))]
 end
 function observed(sys::AbstractSystem)
     iv = independent_variable(sys)
