@@ -33,11 +33,25 @@ struct SystemStructure
     varassoc::Vector{Int}
     graph::BipartiteGraph{Int}
     solvable_graph::BipartiteGraph{Int}
+    assign::Vector{Int}
+    inv_assign::Vector{Int}
+    scc::Vector{Vector{Int}}
+    partitions::Vector{NTuple{4, Vector{Int}}}
 end
 
 function initialize_system_structure(sys)
     sys, dxvar_offset, fullvars, varassoc, graph, solvable_graph = init_graph(flatten(sys))
-    @set sys.structure = SystemStructure(dxvar_offset, fullvars, varassoc, graph, solvable_graph)
+    @set sys.structure = SystemStructure(
+                                         dxvar_offset,
+                                         fullvars,
+                                         varassoc,
+                                         graph,
+                                         solvable_graph,
+                                         Int[],
+                                         Int[],
+                                         Vector{Int}[],
+                                         NTuple{4, Vector{Int}}[]
+                                        )
 end
 
 function Base.show(io::IO, s::SystemStructure)
