@@ -42,7 +42,7 @@ Base.:*(D1::Differential, D2) = D1 ∘ D2
 Base.:*(D1::Differential, D2::Differential) = D1 ∘ D2
 Base.:^(D::Differential, n::Integer) = _repeat_apply(D, n)
 
-Base.show(io::IO, D::Differential) = print(io, "(D'~", D.x, ")")
+Base.show(io::IO, D::Differential) = print(io, "Differential(", D.x, ")")
 
 Base.:(==)(D1::Differential, D2::Differential) = isequal(D1.x, D2.x)
 

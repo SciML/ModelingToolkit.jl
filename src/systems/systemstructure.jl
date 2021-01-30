@@ -1,21 +1,45 @@
 using SparseArrays
 
+#=
+When we don't do subsitution, variable information is split into two different
+places, i.e. `states` and the right-hand-side of `observed`.
+
+eqs = [0 ~ z + x; 0 ~ y + z^2]
+states = [y, z]
+observed = [x ~ sin(y) + z]
+struct Reduced
+    var
+    expr
+    idxs
+end
+fullvars = [Reduced(x, sin(y) + z, [2, 3]), y, z]
+active_𝑣vertices = [false, true, true]
+      x   y   z
+eq1:  1       1
+eq2:      1   1
+
+      x   y   z
+eq1:      1   1
+eq2:      1   1
+
+for v in 𝑣vertices(graph); active_𝑣vertices[v] || continue
+
+end
+=#
+
 const SHOW_EQUATIONS = Ref(false)
 struct SystemStructure
-    sys
     dxvar_offset::Int
     fullvars::Vector # [xvar; dxvars; algvars]
     varassoc::Vector{Int}
     graph::BipartiteGraph{Int}
     solvable_graph::BipartiteGraph{Int}
 end
-function SystemStructure(sys)
-    sys = ModelingToolkit.flatten(sys)
-    sys, dxvar_offset, fullvars, varassoc, graph, solvable_graph = init_graph(sys)
-    SystemStructure(sys, dxvar_offset, fullvars, varassoc, graph, solvable_graph)
-end
 
-ModelingToolkit.equations(s::SystemStructure) = equations(s.sys)
+function initialize_system_structure(sys)
+    sys, dxvar_offset, fullvars, varassoc, graph, solvable_graph = init_graph(sys)
+    @set sys.structure = SystemStructure(dxvar_offset, fullvars, varassoc, graph, solvable_graph)
+end
 
 function Base.show(io::IO, s::SystemStructure)
     @unpack fullvars, dxvar_offset, solvable_graph, graph = s
@@ -54,16 +78,18 @@ end
 
 # V-nodes `[x_1, x_2, x_3, ..., dx_1, dx_2, ..., y_1, y_2, ...]` where `x`s are
 # differential variables and `y`s are algebraic variables.
-function get_vnodes(sys)
+function collect_variables(sys)
     dxvars = []
     eqs = equations(sys)
     for (i, eq) in enumerate(eqs)
-        if eq.lhs isa Symbolic
+        lhs = eq.lhs
+        if istree(lhs)
             # Make sure that the LHS is a first order derivative of a var.
-            @assert operation(eq.lhs) isa Differential "The equation $eq is not in the form of `D(...) ~ ...`"
-            @assert !(arguments(eq.lhs)[1] isa Differential) "The equation $eq is not first order"
+            if operation(lhs) isa Differential
+                @assert !(arguments(lhs)[1] isa Differential) "The equation $eq is not first order"
+            end
 
-            push!(dxvars, eq.lhs)
+            push!(dxvars, lhs)
         end
     end
 
@@ -73,7 +99,7 @@ function get_vnodes(sys)
 end
 
 function init_graph(sys)
-    xvars, dxvars, algvars = get_vnodes(sys)
+    xvars, dxvars, algvars = collect_variables(sys)
     dxvar_offset = length(xvars)
     algvar_offset = 2dxvar_offset
 
@@ -85,11 +111,12 @@ function init_graph(sys)
     solvable_graph = BipartiteGraph(length(eqs), length(fullvars))
 
     for (i, eq) in enumerate(eqs)
-        if isdiffeq(eq)
-            v = eq.lhs
+        # TODO: custom vars that handles D(x)
+        vs = vars(eq.lhs)
+        # TODO: add checks here
+        for v in vs
             haskey(idxmap, v) && add_edge!(graph, i, idxmap[v])
         end
-        # TODO: custom vars that handles D(x)
         vs = vars(eq.rhs)
         for v in vs
             haskey(idxmap, v) && add_edge!(graph, i, idxmap[v])
@@ -102,7 +129,7 @@ end
 
 function reordersys(sys, dxvar_offset, fullvars)
     eqs = equations(sys)
-    neweqs = Vector{Equation}(undef, length(eqs))
+    neweqs = similar(eqs, Equation)
     eqidxmap = Dict(@view(fullvars[dxvar_offset+1:2dxvar_offset]) .=> (1:dxvar_offset))
     varidxmap = Dict([@view(fullvars[1:dxvar_offset]); @view(fullvars[2dxvar_offset+1:end])] .=> (1:length(fullvars)-dxvar_offset))
     algidx = dxvar_offset

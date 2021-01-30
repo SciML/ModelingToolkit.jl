@@ -69,20 +69,22 @@ end
 
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     # optimization
-    obsvars = map(eq->eq.lhs, observed(sys))
-    fulldvs = [dvs; obsvars]
+    #obsvars = map(eq->eq.lhs, observed(sys))
+    #fulldvs = [dvs; obsvars]
+    fulldvs = dvs
     fulldvs′ = makesym.(value.(fulldvs))
 
     sub = Dict(fulldvs .=> fulldvs′)
     # substitute x(t) by just x
     rhss = [substitute(deq.rhs, sub) for deq ∈ equations(sys)]
-    obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
+    #obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
+    #rhss = Let(obss, rhss)
 
     dvs′ = fulldvs′[1:length(dvs)]
     ps′ = makesym.(value.(ps), states=())
 
     # TODO: add an optional check on the ordering of observed equations
-    return build_function(Let(obss, rhss), dvs′, ps′, sys.iv;
+    return build_function(rhss, dvs′, ps′, sys.iv;
                           conv = ODEToExpr(sys),kwargs...)
 end
 

@@ -122,10 +122,10 @@ function alias_elimination(sys; conservative=true)
     alias_eqs = topsort_equations(alias_vars .~ last.(subs), fullsts)
     newstates = setdiff(sts, alias_vars)
 
-    @set! sys.eqs = neweqs
+    @set! sys.eqs = substitute_aliases(neweqs, Dict(subs))
     @set! sys.states = newstates
     @set! sys.observed = [observed(sys); alias_eqs]
-    return sys
+    return initialize_system_structure(sys)
 end
 
 """
