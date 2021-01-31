@@ -97,18 +97,16 @@ reduced_system = alias_elimination(connected; conservative=false)
        ]) |> isempty
 
 reduced_eqs = [
-               Differential(t)(lorenz1.x) ~ lorenz2.x + lorenz2.y - lorenz2.z + lorenz1.σ*((lorenz1.y) - (lorenz1.x))
-               Differential(t)(lorenz1.y) ~ lorenz1.x*(lorenz1.ρ - (lorenz1.z)) - lorenz1.x + lorenz1.y - lorenz1.z
-               Differential(t)(lorenz1.z) ~ lorenz1.x*lorenz1.y - lorenz1.β*lorenz1.z
-               Differential(t)(lorenz2.x) ~ lorenz1.x + lorenz1.y - lorenz1.z + lorenz2.σ*((lorenz2.y) - (lorenz2.x))
-               Differential(t)(lorenz2.y) ~ lorenz2.x*(lorenz2.ρ - (lorenz2.z)) - lorenz2.x + lorenz2.y - lorenz2.z
-               Differential(t)(lorenz2.z) ~ lorenz2.x*lorenz2.y - lorenz2.β*lorenz2.z
-               0 ~ a + lorenz1.x - lorenz2.y
+               D(lorenz1.x) ~ lorenz2.x + lorenz2.y + lorenz1.σ*((lorenz1.y) - (lorenz1.x)) - (lorenz2.z)
+               D(lorenz1.y) ~ lorenz1.x*(lorenz1.ρ - (lorenz1.z)) - ((lorenz1.x) + (lorenz1.y) - (lorenz1.z))
+               D(lorenz1.z) ~ lorenz1.x*lorenz1.y - (lorenz1.β*(lorenz1.z))
+               D(lorenz2.x) ~ lorenz1.x + lorenz1.y + lorenz2.σ*((lorenz2.y) - (lorenz2.x)) - (lorenz1.z)
+               D(lorenz2.y) ~ lorenz2.x*(lorenz2.ρ - (lorenz2.z)) - ((lorenz2.x) + (lorenz2.y) - (lorenz2.z))
+               D(lorenz2.z) ~ lorenz2.x*lorenz2.y - (lorenz2.β*(lorenz2.z))
+               0 ~ a + lorenz1.x - (lorenz2.y)
               ]
-# SymbolicUtils bug
-# equations(reduced_system)[2] - (lorenz1.x*(lorenz1.ρ - (lorenz1.z)) - lorenz1.x + lorenz1.y - lorenz1.z)
-# is not simplifed.
-@test_skip test_equal.(equations(reduced_system), reduced_eqs)
+
+test_equal.(equations(reduced_system), reduced_eqs)
 
 observed_eqs = [
                 s ~ a + lorenz1.x
