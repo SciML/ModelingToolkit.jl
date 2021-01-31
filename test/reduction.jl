@@ -42,10 +42,10 @@ lorenz1 = ODESystem(eqs,t,name=:lorenz1)
 
 lorenz1_aliased = alias_elimination(lorenz1)
 reduced_eqs = [
-               D(x) ~ σ * (y - x),
-               D(y) ~ x*(ρ-z)-y + β,
-               0 ~ sin(z) - x + y,
-               0 ~ x + y - sin(u),
+               D(x) ~ σ*(y - x)
+               D(y) ~ β + x*(ρ - z) - y
+               0 ~ y + sin(z) - x
+               0 ~ x + y - sin(1.5x)
               ]
 test_equal.(equations(lorenz1_aliased), reduced_eqs)
 @test isempty(setdiff(states(lorenz1_aliased), [u, x, y, z]))
@@ -56,7 +56,7 @@ test_equal.(observed(lorenz1_aliased), [
 
 # Multi-System Reduction
 
-@variables s
+@variables s(t)
 eqs1 = [
         D(x) ~ σ*(y-x) + F,
         D(y) ~ x*(ρ-z)-u,
@@ -64,7 +64,7 @@ eqs1 = [
         u ~ x + y - z,
        ]
 
-lorenz = name -> ODESystem(eqs1,t,pins=[F],name=name)
+lorenz = name -> ODESystem(eqs1,t,name=name)
 lorenz1 = lorenz(:lorenz1)
 lorenz2 = lorenz(:lorenz2)
 
@@ -75,11 +75,9 @@ connected = ODESystem([s ~ a + lorenz1.x
 
 # Reduced Flattened System
 
-flattened_system = ModelingToolkit.flatten(connected)
+reduced_system = alias_elimination(connected; conservative=false)
 
-aliased_flattened_system = alias_elimination(flattened_system; conservative=false)
-
-@test setdiff(states(aliased_flattened_system), [
+@test setdiff(states(reduced_system), [
         a
         lorenz1.x
         lorenz1.y
@@ -89,7 +87,7 @@ aliased_flattened_system = alias_elimination(flattened_system; conservative=fals
         lorenz2.z
        ]) |> isempty
 
-@test setdiff(parameters(aliased_flattened_system), [
+@test setdiff(parameters(reduced_system), [
         lorenz1.σ
         lorenz1.ρ
         lorenz1.β
@@ -99,15 +97,16 @@ aliased_flattened_system = alias_elimination(flattened_system; conservative=fals
        ]) |> isempty
 
 reduced_eqs = [
-               0 ~ s - lorenz2.y
-               D(lorenz1.x) ~ lorenz1.F + lorenz1.σ*(lorenz1.y + -1lorenz1.x)
-               D(lorenz1.y) ~ -1lorenz1.u + lorenz1.x*(lorenz1.ρ + -1lorenz1.z)
-               D(lorenz1.z) ~ lorenz1.x*lorenz1.y + -1lorenz1.β*lorenz1.z
-               D(lorenz2.x) ~ lorenz2.F + lorenz2.σ*(lorenz2.y + -1lorenz2.x)
-               D(lorenz2.y) ~ -1lorenz2.u + lorenz2.x*(lorenz2.ρ + -1lorenz2.z)
-               D(lorenz2.z) ~ lorenz2.x*lorenz2.y + -1lorenz2.β*lorenz2.z
+               D(lorenz1.x) ~ lorenz2.x + lorenz2.y + lorenz1.σ*((lorenz1.y) - (lorenz1.x)) - (lorenz2.z)
+               D(lorenz1.y) ~ lorenz1.x*(lorenz1.ρ - (lorenz1.z)) - ((lorenz1.x) + (lorenz1.y) - (lorenz1.z))
+               D(lorenz1.z) ~ lorenz1.x*lorenz1.y - (lorenz1.β*(lorenz1.z))
+               D(lorenz2.x) ~ lorenz1.x + lorenz1.y + lorenz2.σ*((lorenz2.y) - (lorenz2.x)) - (lorenz1.z)
+               D(lorenz2.y) ~ lorenz2.x*(lorenz2.ρ - (lorenz2.z)) - ((lorenz2.x) + (lorenz2.y) - (lorenz2.z))
+               D(lorenz2.z) ~ lorenz2.x*lorenz2.y - (lorenz2.β*(lorenz2.z))
+               0 ~ a + lorenz1.x - (lorenz2.y)
               ]
-test_equal.(equations(aliased_flattened_system), reduced_eqs)
+
+test_equal.(equations(reduced_system), reduced_eqs)
 
 observed_eqs = [
                 s ~ a + lorenz1.x
@@ -116,7 +115,7 @@ observed_eqs = [
                 lorenz2.F ~ lorenz1.u
                 lorenz1.F ~ lorenz2.u
                ]
-test_equal.(observed(aliased_flattened_system), observed_eqs)
+test_equal.(observed(reduced_system), observed_eqs)
 
 pp = [
       lorenz1.σ => 10
@@ -135,7 +134,7 @@ u0 = [
       lorenz2.y => 0.0
       lorenz2.z => 0.0
      ]
-prob1 = ODEProblem(aliased_flattened_system, u0, (0.0, 100.0), pp)
+prob1 = ODEProblem(reduced_system, u0, (0.0, 100.0), pp)
 solve(prob1, Rodas5())
 
 # issue #578
@@ -148,9 +147,9 @@ let
         x ~ y
     ]
     sys = ODESystem(eqs, t)
-    asys = alias_elimination(flatten(sys))
+    asys = alias_elimination(sys)
 
-    test_equal.(asys.eqs, [D(x) ~ x + y])
+    test_equal.(asys.eqs, [D(x) ~ 2x])
     test_equal.(asys.observed, [y ~ x])
 end
 
@@ -160,22 +159,21 @@ let
     D = Differential(t)
     @variables x(t), u(t), y(t)
     @parameters a, b, c, d
-    ol = ODESystem([D(x) ~ a * x + b * u; y ~ c * x + d * u], t, pins=[u], name=:ol)
+    ol = ODESystem([D(x) ~ a * x + b * u; y ~ c * x + d * u], t, name=:ol)
     @variables u_c(t), y_c(t)
     @parameters k_P
-    pc = ODESystem(Equation[u_c ~ k_P * y_c], t, pins=[y_c], name=:pc)
+    pc = ODESystem(Equation[u_c ~ k_P * y_c], t, name=:pc)
     connections = [
         ol.u ~ pc.u_c
         pc.y_c ~ ol.y
     ]
     connected = ODESystem(connections, t, systems=[ol, pc])
     @test equations(connected) isa Vector{Equation}
-    sys = flatten(connected)
-    reduced_sys = alias_elimination(sys)
+    reduced_sys = alias_elimination(connected)
     ref_eqs = [
-               D(ol.x) ~ ol.a*ol.x + ol.b*ol.u
-               0 ~ ol.c*ol.x + ol.d*ol.u + -1ol.y
-               0 ~ pc.k_P*pc.y_c + -1pc.u_c
+               D(ol.x) ~ ol.a*ol.x + ol.b*pc.u_c
+               0 ~ ol.c*ol.x + ol.d*pc.u_c - ol.y
+               0 ~ pc.k_P*ol.y - pc.u_c
               ]
     @test ref_eqs == equations(reduced_sys)
 end
@@ -183,14 +181,15 @@ end
 # NonlinearSystem
 @parameters t
 @variables u1(t) u2(t) u3(t) u4(t) u5(t)
+@parameters p
 eqs = [
        2u1 ~ 3u5
        u2 ~ u1
        u3 ~ 2u1 - u2
-       u4 ~ u2 + u3^2
+       u4 ~ u2 + u3^p
        u5 ~ u4^2 - u1
       ]
-sys = NonlinearSystem(eqs, [u1, u2, u3, u4, u5], [])
+sys = NonlinearSystem(eqs, [u1, u2, u3, u4, u5], [p])
 reducedsys = alias_elimination(sys)
 @test observed(reducedsys) == [u1 ~ 3/2 * u5]
 
@@ -201,8 +200,9 @@ u0 = [
       u4 => 0.6
       u5 => 2/3
      ]
-nlprob = NonlinearProblem(reducedsys, u0)
+pp = [2]
+nlprob = NonlinearProblem(reducedsys, u0, pp)
 reducedsol = solve(nlprob, NewtonRaphson())
 residual = fill(100.0, 4)
-nlprob.f(residual, reducedsol.u, nothing)
+nlprob.f(residual, reducedsol.u, pp)
 @test all(x->abs(x) < 1e-5, residual)

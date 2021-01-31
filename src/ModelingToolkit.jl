@@ -23,7 +23,7 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils: Term, Add, Mul, Pow, Sym, to_symbolic, FnType,
+import SymbolicUtils: Term, Add, Mul, Pow, Sym, FnType,
                       @rule, Rewriters, substitute, similarterm,
                       promote_symtype
 
@@ -55,8 +55,6 @@ value(x) = x
 value(x::Num) = x.val
 
 
-using SymbolicUtils: to_symbolic
-SymbolicUtils.to_symbolic(n::Num) = value(n)
 SymbolicUtils.@number_methods(Num,
                               Num(f(value(a))),
                               Num(f(value(a), value(b))))
@@ -266,7 +264,7 @@ export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
 export Term, Sym
-export independent_variable, states, parameters, equations, controls, pins, observed
+export independent_variable, states, parameters, equations, controls, observed, structure
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad
@@ -275,6 +273,7 @@ export calculate_factorized_W, generate_factorized_W
 export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
 export stochastic_integral_transform
+export initialize_system_structure
 
 export BipartiteGraph, equation_dependencies, variable_dependencies
 export eqeq_dependencies, varvar_dependencies

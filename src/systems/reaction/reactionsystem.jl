@@ -130,26 +130,24 @@ struct ReactionSystem <: AbstractSystem
     states::Vector
     """Parameter variables."""
     ps::Vector
-    pins::Vector
     observed::Vector{Equation}
     """The name of the system"""
     name::Symbol
     """systems: The internal systems"""
     systems::Vector{ReactionSystem}
 
-    function ReactionSystem(eqs, iv, states, ps, pins, observed, name, systems)
-        new(eqs, value(iv), value.(states), value.(ps), pins, observed, name, systems)
+    function ReactionSystem(eqs, iv, states, ps, observed, name, systems)
+        new(eqs, value(iv), value.(states), value.(ps), observed, name, systems)
     end
 end
 
 function ReactionSystem(eqs, iv, species, params;
-                        pins = [],
                         observed = [],
                         systems = ReactionSystem[],
                         name = gensym(:ReactionSystem))
 
     isempty(species) && error("ReactionSystems require at least one species.")
-    ReactionSystem(eqs, iv, species, params, pins, observed, name, systems)
+    ReactionSystem(eqs, iv, species, params, observed, name, systems)
 end
 
 """

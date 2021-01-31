@@ -23,7 +23,6 @@ struct OptimizationSystem <: AbstractSystem
     states::Vector
     """Parameters."""
     ps::Vector
-    pins::Vector
     observed::Vector{Equation}
     equality_constraints::Vector{Equation}
     inequality_constraints::Vector
@@ -48,7 +47,6 @@ struct OptimizationSystem <: AbstractSystem
 end
 
 function OptimizationSystem(op, states, ps;
-                            pins = [],
                             observed = [],
                             equality_constraints = Equation[],
                             inequality_constraints = [],
@@ -62,7 +60,7 @@ function OptimizationSystem(op, states, ps;
 
     OptimizationSystem(
                        value(op), value.(states), value.(ps),
-                       value.(pins), observed,
+                       observed,
                        equality_constraints, inequality_constraints,
                        name, systems, default_u0, default_p
                       )

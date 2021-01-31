@@ -31,7 +31,6 @@ struct ODESystem <: AbstractODESystem
     states::Vector
     """Parameter variables."""
     ps::Vector
-    pins::Vector{Num}
     observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
@@ -71,11 +70,14 @@ struct ODESystem <: AbstractODESystem
     in `ODEProblem`.
     """
     default_p::Dict
+    """
+    structure: structural information of the system
+    """
+    structure::Any
 end
 
 function ODESystem(
                    deqs::AbstractVector{<:Equation}, iv, dvs, ps;
-                   pins = Num[],
                    observed = Num[],
                    systems = ODESystem[],
                    name=gensym(:ODESystem),
@@ -93,7 +95,7 @@ function ODESystem(
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
-    ODESystem(deqs, iv′, dvs′, ps′, pins, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p)
+    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p, nothing)
 end
 
 var_from_nested_derivative(x, i=0) = (missing, missing)
@@ -176,11 +178,24 @@ function collect_var!(states, parameters, var, iv)
     return nothing
 end
 
+# NOTE: equality does not check cached Jacobian
 Base.:(==)(sys1::ODESystem, sys2::ODESystem) =
     _eq_unordered(sys1.eqs, sys2.eqs) && isequal(sys1.iv, sys2.iv) &&
     _eq_unordered(sys1.states, sys2.states) && _eq_unordered(sys1.ps, sys2.ps)
-# NOTE: equality does not check cached Jacobian
 
-function rename(sys::ODESystem,name)
-    ODESystem(sys.eqs, sys.iv, sys.states, sys.ps, sys.pins, sys.observed, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
+function flatten(sys::ODESystem)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return sys
+    else
+        return ODESystem(
+                         equations(sys),
+                         independent_variable(sys),
+                         states(sys),
+                         parameters(sys),
+                         observed=observed(sys),
+                         default_u0=default_u0(sys),
+                         default_p=default_p(sys),
+                        )
+    end
 end

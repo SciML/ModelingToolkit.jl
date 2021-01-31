@@ -25,7 +25,6 @@ struct NonlinearSystem <: AbstractSystem
     states::Vector
     """Parameters."""
     ps::Vector
-    pins::Vector
     observed::Vector{Equation}
     """
     Name: the name of the system
@@ -45,10 +44,13 @@ struct NonlinearSystem <: AbstractSystem
     in `ODEProblem`.
     """
     default_p::Dict
+    """
+    structure: structural information of the system
+    """
+    structure::Any
 end
 
 function NonlinearSystem(eqs, states, ps;
-                         pins = [],
                          observed = [],
                          name = gensym(:NonlinearSystem),
                          default_u0=Dict(),
@@ -56,7 +58,7 @@ function NonlinearSystem(eqs, states, ps;
                          systems = NonlinearSystem[])
     default_u0 isa Dict || (default_u0 = Dict(default_u0))
     default_p isa Dict || (default_p = Dict(default_p))
-    NonlinearSystem(eqs, value.(states), value.(ps), value.(pins), observed, name, systems, default_u0, default_p)
+    NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, default_u0, default_p, nothing)
 end
 
 independent_variable(::NonlinearSystem) = nothing
@@ -80,18 +82,20 @@ function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = paramete
 end
 
 function generate_function(sys::NonlinearSystem, dvs = states(sys), ps = parameters(sys); kwargs...)
-    obsvars = map(eq->eq.lhs, observed(sys))
-    fulldvs = [dvs; obsvars]
+    #obsvars = map(eq->eq.lhs, observed(sys))
+    #fulldvs = [dvs; obsvars]
+    fulldvs = dvs
     fulldvs′ = makesym.(value.(fulldvs))
 
     sub = Dict(fulldvs .=> fulldvs′)
     # substitute x(t) by just x
     rhss = [substitute(deq.rhs, sub) for deq ∈ equations(sys)]
-    obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
+    #obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
+    #rhss = Let(obss, rhss)
 
     dvs′ = fulldvs′[1:length(dvs)]
     ps′ = makesym.(value.(ps), states=())
-    return build_function(Let(obss, rhss), dvs′, ps′;
+    return build_function(rhss, dvs′, ps′;
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
@@ -278,4 +282,20 @@ function NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,
         NonlinearProblem(f,u0,p;$(kwargs...))
     end
     !linenumbers ? striplines(ex) : ex
+end
+
+function flatten(sys::NonlinearSystem)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return sys
+    else
+        return NonlinearSystem(
+                               equations(sys),
+                               states(sys),
+                               parameters(sys),
+                               observed=observed(sys),
+                               default_u0=default_u0(sys),
+                               default_p=default_p(sys),
+                              )
+    end
 end

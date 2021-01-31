@@ -16,7 +16,7 @@ rxs = [Reaction(k1, nothing, [S]),
 rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
 
 
-################################# 
+#################################
 #  testing for Jumps / all dgs
 #################################
 js = convert(JumpSystem, rs)
@@ -119,7 +119,8 @@ eqs = [D(x) ~ w,
        D(z) ~ T*y - g,
        0 ~ x^2 + y^2 - L^2]
 pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
-sss = SystemStructure(pendulum)
+sys = initialize_system_structure(pendulum)
+sss = structure(sys)
 @unpack graph, fullvars, varassoc = sss
 @test isequal(fullvars, [x, y, w, z, D(x), D(y), D(w), D(z), T])
 @test graph.fadjlist == sort.([[5, 3], [6, 4], [7, 1, 9], [8, 2, 9], [2, 1]])
