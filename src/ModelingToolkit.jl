@@ -27,6 +27,8 @@ import SymbolicUtils: Term, Add, Mul, Pow, Sym, to_symbolic, FnType,
                       @rule, Rewriters, substitute, similarterm,
                       promote_symtype
 
+import SymbolicUtils.Code: toexpr
+
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
 
 using LinearAlgebra: LU, BlasInt

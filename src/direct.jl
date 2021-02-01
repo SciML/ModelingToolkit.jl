@@ -232,34 +232,6 @@ function sparsehessian(O, vars::AbstractVector; simplify=false)
 end
 
 """
-    toexpr(O::Union{Symbolics,Num,Equation,AbstractArray}; canonicalize=true) -> Expr
-
-Convert `Symbolics` into `Expr`. If `canonicalize`, then we turn exprs like
-`x^(-n)` into `inv(x)^n` to avoid type error when evaluating.
-"""
-function toexpr(O; canonicalize=true)
-    if canonicalize
-        canonical, O = canonicalexpr(O)
-        canonical && return O
-    else
-        !istree(O) && return O
-    end
-
-    op = operation(O)
-    args = arguments(O)
-    if op isa Differential
-        ex = toexpr(args[1]; canonicalize=canonicalize)
-        wrt = toexpr(op.x; canonicalize=canonicalize)
-        return :(_derivative($ex, $wrt))
-    elseif op isa Sym
-        isempty(args) && return nameof(op)
-        return Expr(:call, toexpr(op; canonicalize=canonicalize), toexpr(args; canonicalize=canonicalize)...)
-    end
-    return Expr(:call, op, toexpr(args; canonicalize=canonicalize)...)
-end
-toexpr(s::Sym; kw...) = nameof(s)
-
-"""
     canonicalexpr(O) -> (canonical::Bool, expr)
 
 Canonicalize `O`. Return `canonical` if `expr` is valid code to generate.

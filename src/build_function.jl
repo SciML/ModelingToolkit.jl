@@ -121,48 +121,26 @@ function _build_function(target::JuliaTarget, op::Let, args...; conv=toexpr, kw.
 end
 
 # Scalar output
+
 function _build_function(target::JuliaTarget, op, args...;
-                         conv = toexpr, expression = Val{true},
+                         conv = toexpr,
+                         expression = Val{true},
                          checkbounds = false,
-                         inner_let = nothing,
-                         linenumbers = true, headerfun=addheader)
+                         linenumbers = true,
+                         headerfun=addheader)
 
-    argnames = [gensym(:MTKArg) for i in 1:length(args)]
-    symsdict = Dict()
-    arg_pairs = map((x,y)->vars_to_pairs(x,y, symsdict), argnames, args)
-    process = unflatten_long_ops∘(x->substitute(x, symsdict, fold=false))
-    ls = reduce(vcat,conv.(first.(arg_pairs)))
-    rs = reduce(vcat,last.(arg_pairs))
-    var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, conv.(process.(rs))))
-
-    fname = gensym(:ModelingToolkitFunction)
-    op = process(op)
-    out_expr = conv(substitute(op, symsdict, fold=false))
-
-    if inner_let !== nothing
-        inner_let_expr = inner_let(conv ∘ process)
-        out_expr = inner_let_expr(out_expr)
-    end
-
-    let_expr = Expr(:let, var_eqs, Expr(:block, out_expr))
-    bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
-
-    fargs = Expr(:tuple,argnames...)
-    oop_ex = headerfun(bounds_block, fargs, false)
-
-    if !linenumbers
-        oop_ex = striplines(oop_ex)
-    end
+    dargs = map(destructure_arg, args)
+    expr = toexpr(Func(dargs, [], value(op)))
 
     if expression == Val{true}
-        return ModelingToolkit.inject_registered_module_functions(oop_ex)
+        expr
     else
-        _build_and_inject_function(@__MODULE__, oop_ex)
+        _build_and_inject_function(@__MODULE__, expr)
     end
 end
 
 function _build_and_inject_function(mod::Module, ex)
-    @RuntimeGeneratedFunction(ModelingToolkit.inject_registered_module_functions(ex))
+    @RuntimeGeneratedFunction(ex)
 end
 
 # Detect heterogeneous element types of "arrays of matrices/sparce matrices"
