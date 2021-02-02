@@ -1,3 +1,5 @@
+using SymbolicUtils.Code
+
 abstract type BuildTargets end
 struct JuliaTarget <: BuildTargets end
 struct StanTarget <: BuildTargets end
@@ -48,23 +50,6 @@ function build_function(args...;target = JuliaTarget(),kwargs...)
   _build_function(target,args...;kwargs...)
 end
 
-function addheader(ex, fargs, iip; X=gensym(:MTIIPVar))
-  if iip
-    wrappedex = :(
-        ($X,$(fargs.args...)) -> begin
-        $ex
-        nothing
-      end
-    )
-  else
-    wrappedex = :(
-      ($(fargs.args...),) -> begin
-        $ex
-      end
-    )
-  end
-  wrappedex
-end
 
 function add_integrator_header(ex, fargs, iip; X=gensym(:MTIIPVar))
   integrator = gensym(:MTKIntegrator)
@@ -112,12 +97,14 @@ end
 
 # Scalar output
 
+destructure_arg(arg::Union{AbstractArray, Tuple}) = DestructuredArgs(map(value, arg))
+destructure_arg(arg) = value(arg)
+
 function _build_function(target::JuliaTarget, op, args...;
                          conv = toexpr,
                          expression = Val{true},
                          checkbounds = false,
-                         linenumbers = true,
-                         headerfun=addheader)
+                         linenumbers = true)
 
     dargs = map(destructure_arg, args)
     expr = toexpr(Func(dargs, [], value(op)))
