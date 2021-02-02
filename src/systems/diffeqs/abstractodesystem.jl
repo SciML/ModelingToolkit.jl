@@ -35,57 +35,42 @@ function calculate_jacobian(sys::AbstractODESystem;
     return jac
 end
 
-struct ODEToExpr
-    sys::AbstractODESystem
-    states::Vector
-end
-ODEToExpr(@nospecialize(sys)) = ODEToExpr(sys,states(sys))
-(f::ODEToExpr)(O::Num) = f(value(O))
-function (f::ODEToExpr)(O::Term)
-    if isa(operation(O), Sym)
-        any(isequal(O), f.states) && return tosymbol(O)
-        # dependent variables
-        return build_expr(:call, Any[operation(O).name; f.(arguments(O))])
-    end
-    return build_expr(:call, Any[operation(O); f.(arguments(O))])
-end
-(f::ODEToExpr)(x) = toexpr(x)
-
 function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                         simplify=false, kwargs...)
     tgrad = calculate_tgrad(sys,simplify=simplify)
-    return build_function(tgrad, dvs, ps, sys.iv;
-                          conv = ODEToExpr(sys), kwargs...)
+    return build_function(tgrad, dvs, ps, sys.iv; kwargs...)
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                            simplify=false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys;simplify=simplify,sparse=sparse)
-    sub = Dict(value.(dvs) .=> makesym.(value.(dvs)))
-    jac = map(d->substitute(d, sub), jac)
-    return build_function(jac, dvs, ps, sys.iv;
-                          conv = ODEToExpr(sys), kwargs...)
+    return build_function(jac, dvs, ps, sys.iv; kwargs...)
 end
 
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     # optimization
     #obsvars = map(eq->eq.lhs, observed(sys))
     #fulldvs = [dvs; obsvars]
-    fulldvs = dvs
-    fulldvs′ = makesym.(value.(fulldvs))
 
-    sub = Dict(fulldvs .=> fulldvs′)
     # substitute x(t) by just x
-    rhss = [substitute(deq.rhs, sub) for deq ∈ equations(sys)]
+    rhss = [deq.rhs for deq ∈ equations(sys)]
     #obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
     #rhss = Let(obss, rhss)
 
-    dvs′ = fulldvs′[1:length(dvs)]
-    ps′ = makesym.(value.(ps), states=())
-
     # TODO: add an optional check on the ordering of observed equations
-    return build_function(rhss, dvs′, ps′, sys.iv;
-                          conv = ODEToExpr(sys),kwargs...)
+    return build_function(rhss,
+                          map(x->uncall_delayed_var(value(x), sys), dvs),
+                          map(x->uncall_delayed_var(value(x), sys), ps),
+                          sys.iv; kwargs...)
+end
+
+function uncall_delayed_var(x, sys)
+    if istree(x) &&
+        operation(x) isa Sym &&
+        !(length(arguments(x)) == 1 && isequal(arguments(x)[1], sys.iv))
+        return operation(x)
+    end
+    return x
 end
 
 function calculate_massmatrix(sys::AbstractODESystem; simplify=false)
