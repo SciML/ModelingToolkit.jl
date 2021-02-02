@@ -1,5 +1,5 @@
-@register Base.getindex(x,i::Integer)
-@register Base.getindex(x,i)
+@register Base.getindex(x,i::Integer) false
+@register Base.getindex(x,i) false
 @register Base.binomial(n,k)
 
 @register Base.signbit(x)
@@ -36,8 +36,8 @@ ModelingToolkit.@register Distributions.cdf(dist,x)
 ModelingToolkit.@register Distributions.logcdf(dist,x)
 ModelingToolkit.@register Distributions.quantile(dist,x)
 
-ModelingToolkit.@register Distributions.Uniform(mu,sigma)
-ModelingToolkit.@register Distributions.Normal(mu,sigma)
+ModelingToolkit.@register Distributions.Uniform(mu,sigma) false
+ModelingToolkit.@register Distributions.Normal(mu,sigma) false
 
 @register ∈(x::Num, y::AbstractArray)
 @register ∪(x, y)
