@@ -130,7 +130,7 @@ vidxs = 19:20
 @test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.ConstantRateJump, cidxs))
 @test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.VariableRateJump, vidxs))
 
-pars = rand(length(k)); u0 = rand(1:10,4); time = rand();
+pars = rand(length(k)); u0 = rand(1:10,4); ttt = rand();
 jumps = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}(undef,length(rxs))
 
 jumps[1] = MassActionJump(pars[1], Vector{Pair{Int,Int}}(), [1 => 1]);
@@ -166,7 +166,7 @@ for i in midxs
 end
 for i in cidxs
   crj = MT.assemble_crj(js, js.eqs[i], statetoid)
-  @test isapprox(crj.rate(u0,p,time), jumps[i].rate(u0,p,time))
+  @test isapprox(crj.rate(u0,p,ttt), jumps[i].rate(u0,p,ttt))
   fake_integrator1 = (u=zeros(4),p=p,t=0); fake_integrator2 = deepcopy(fake_integrator1);
   crj.affect!(fake_integrator1);
   jumps[i].affect!(fake_integrator2);
@@ -174,7 +174,7 @@ for i in cidxs
 end
 for i in vidxs
   crj = MT.assemble_vrj(js, js.eqs[i], statetoid)
-  @test isapprox(crj.rate(u0,p,time), jumps[i].rate(u0,p,time))
+  @test isapprox(crj.rate(u0,p,ttt), jumps[i].rate(u0,p,ttt))
   fake_integrator1 = (u=zeros(4),p=p,t=0.); fake_integrator2 = deepcopy(fake_integrator1);
   crj.affect!(fake_integrator1); jumps[i].affect!(fake_integrator2);
   @test fake_integrator1 == fake_integrator2

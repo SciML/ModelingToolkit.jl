@@ -50,28 +50,6 @@ function build_function(args...;target = JuliaTarget(),kwargs...)
   _build_function(target,args...;kwargs...)
 end
 
-
-function add_integrator_header(ex, fargs, iip; X=gensym(:MTIIPVar))
-  integrator = gensym(:MTKIntegrator)
-  if iip
-    wrappedex = :(
-        $integrator -> begin
-        ($X,$(fargs.args...)) = (($integrator).u,($integrator).u,($integrator).p,($integrator).t)
-        $ex
-        nothing
-      end
-    )
-  else
-    wrappedex = :(
-      $integrator -> begin
-      ($(fargs.args...),) = (($integrator).u,($integrator).p,($integrator).t)
-        $ex
-      end
-    )
-  end
-  wrappedex
-end
-
 function unflatten_long_ops(op, N=4)
     rule1 = @rule((+)((~~x)) => length(~~x) > N ?
                  +(+((~~x)[1:N]...) + (+)((~~x)[N+1:end]...)) : nothing)
@@ -106,7 +84,7 @@ function _build_function(target::JuliaTarget, op, args...;
                          checkbounds = false,
                          linenumbers = true)
 
-    dargs = map(destructure_arg, args)
+    dargs = map(destructure_arg, [args...])
     expr = toexpr(Func(dargs, [], value(op)))
 
     if expression == Val{true}
@@ -202,21 +180,25 @@ Special Keyword Argumnets:
   filling function is 0.
 - `fillzeros`: Whether to perform `fill(out,0)` before the calculations to ensure
   safety with `skipzeros`.
-  """
-  function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
-                           conv = toexpr, expression = Val{true},
-                           checkbounds = false,
-                           linenumbers = false, multithread=nothing,
-                           outputidxs=nothing,
-                           skipzeros = false,
-                           fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
-                           parallel=SerialForm(), kwargs...)
+"""
+function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
+                       conv = toexpr, expression = Val{true},
+                       checkbounds = false,
+                       linenumbers = false, multithread=nothing,
+                       outputidxs=nothing,
+                       skipzeros = false,
+                       wrap_code = (nothing, nothing),
+                       fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
+                       parallel=SerialForm(), kwargs...)
 
-    dargs = map(destructure_arg, args)
+    dargs = map(destructure_arg, [args...])
     i = findfirst(x->x isa DestructuredArgs, dargs)
     similarto = i === nothing ? Array : dargs[i].name
     array_expr = _make_array(rhss, similarto)
     oop_expr = Func(dargs, [], array_expr)
+    if !isnothing(wrap_code[1])
+        oop_expr = wrap_code[1](oop_expr)
+    end
 
     out = Sym{Any}(gensym("out"))
     if rhss isa SparseMatrixCSC
@@ -233,9 +215,13 @@ Special Keyword Argumnets:
         ii = findall(i->!_iszero(rhss[i]), outputidxs)
         array = AtIndex.(outputidxs[ii], rhss[ii])
     else
-        array = AtIndex.(vec(outputidxs), vec(rhss))
+        # sometimes outputidxs is a Tuple
+        array = AtIndex.(vec(collect(outputidxs)), vec(rhss))
     end
     ip_expr = Func([out, dargs...], [], SetArray(false, out, array))
+    if !isnothing(wrap_code[2])
+        ip_expr = wrap_code[2](ip_expr)
+    end
 
     if expression == Val{true}
         return toexpr(oop_expr), toexpr(ip_expr)
