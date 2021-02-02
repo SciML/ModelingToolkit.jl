@@ -59,15 +59,20 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
 
     # TODO: add an optional check on the ordering of observed equations
     return build_function(rhss,
-                          map(x->uncall_delayed_var(value(x), sys), dvs),
-                          map(x->uncall_delayed_var(value(x), sys), ps),
+                          map(x->time_varying_as_func(value(x), sys), dvs),
+                          map(x->time_varying_as_func(value(x), sys), ps),
                           sys.iv; kwargs...)
 end
 
-function uncall_delayed_var(x, sys)
+function time_varying_as_func(x, sys)
+    # if something is not x(t) (the current state)
+    # but is `x(t-1)` or something like that, pass in `x` as a callable function rather
+    # than pass in a value in place of x(t).
+    #
+    # This is done by just making `x` the argument of the function.
     if istree(x) &&
         operation(x) isa Sym &&
-        !(length(arguments(x)) == 1 && isequal(arguments(x)[1], sys.iv))
+        !(length(arguments(x)) == 1 && isequal(arguments(x)[1], independent_variable(sys)))
         return operation(x)
     end
     return x
