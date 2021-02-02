@@ -98,9 +98,11 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     SDESystem(deqs, neqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p)
 end
 
-function generate_diffusion_function(sys::SDESystem, dvs = sys.states, ps = sys.ps; kwargs...)
-    return build_function(sys.noiseeqs, dvs, ps, sys.iv;
-                          conv = ODEToExpr(sys),kwargs...)
+function generate_diffusion_function(sys::SDESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
+    return build_function(sys.noiseeqs,
+                          map(x->time_varying_as_func(value(x), sys), dvs),
+                          map(x->time_varying_as_func(value(x), sys), ps),
+                          sys.iv; kwargs...)
 end
 
 """
