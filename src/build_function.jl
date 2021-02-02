@@ -220,10 +220,10 @@ Special Keyword Argumnets:
 
     out = Sym{Any}(gensym("out"))
     if rhss isa SparseMatrixCSC
-        I,J, _ = findnz(rhss)
+        I,J, rhss = findnz(rhss)
         outputidxs = CartesianIndex.(I, J)
     elseif rhss isa SparseVector
-        I,_ = findnz(rhss)
+        I, rhss = findnz(rhss)
         outputidxs = I
     elseif isnothing(outputidxs)
         outputidxs = collect(eachindex(rhss))
@@ -233,7 +233,7 @@ Special Keyword Argumnets:
         ii = findall(i->!_iszero(rhss[i]), outputidxs)
         array = AtIndex.(outputidxs[ii], rhss[ii])
     else
-        array = AtIndex.(outputidxs, rhss)
+        array = AtIndex.(vec(outputidxs), vec(rhss))
     end
     ip_expr = Func([out, dargs...], [], SetArray(false, out, array))
 
