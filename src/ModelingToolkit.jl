@@ -23,7 +23,7 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 using RecursiveArrayTools
 
 import SymbolicUtils
-import SymbolicUtils: Term, Add, Mul, Pow, Sym, to_symbolic, FnType,
+import SymbolicUtils: Term, Add, Mul, Pow, Sym, FnType,
                       @rule, Rewriters, substitute, similarterm,
                       promote_symtype
 
@@ -57,11 +57,42 @@ value(x) = x
 value(x::Num) = x.val
 
 
-using SymbolicUtils: to_symbolic
-SymbolicUtils.to_symbolic(n::Num) = value(n)
 SymbolicUtils.@number_methods(Num,
                               Num(f(value(a))),
                               Num(f(value(a), value(b))))
+
+for C in [Complex, Complex{Bool}]
+    @eval begin
+        Base.:*(x::Num, z::$C) = Complex(x * real(z), x * imag(z))
+        Base.:*(z::$C, x::Num) = Complex(real(z) * x, imag(z) * x)
+    end
+end
+
+Base.:+(x::Num, z::Complex) = Complex(x + real(z), imag(z))
+Base.:+(z::Complex, x::Num) = Complex(real(z) + x, imag(z))
+Base.:-(x::Num, z::Complex) = Complex(x - real(z), -imag(z))
+Base.:-(z::Complex, x::Num) = Complex(real(z) - x, imag(z))
+
+function Base.inv(z::Complex{Num})
+    a, b = reim(z)
+    den = a^2 + b^2
+    Complex(a/den, -b/den)
+end
+function Base.:/(x::Complex{Num}, y::Complex{Num})
+    a, b = reim(x)
+    c, d = reim(y)
+    den = c^2 + d^2
+    Complex((a*c + b*d)/den, (b*c - a*d)/den)
+end
+
+function Base.show(io::IO, z::Complex{<:Num})
+    r, i = reim(z)
+    compact = get(io, :compact, false)
+    show(io, r)
+    print(io, (compact ? "+" : " + ") * "(")
+    show(io, i)
+    print(io, ")*im")
+end
 
 SymbolicUtils.simplify(n::Num; kw...) = Num(SymbolicUtils.simplify(value(n); kw...))
 
@@ -235,7 +266,7 @@ export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
 export Term, Sym
-export independent_variable, states, parameters, equations, controls, pins, observed
+export independent_variable, states, parameters, equations, controls, observed, structure
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad
@@ -244,6 +275,7 @@ export calculate_factorized_W, generate_factorized_W
 export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
 export stochastic_integral_transform
+export initialize_system_structure
 
 export BipartiteGraph, equation_dependencies, variable_dependencies
 export eqeq_dependencies, varvar_dependencies

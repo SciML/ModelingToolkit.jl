@@ -69,20 +69,22 @@ end
 
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     # optimization
-    obsvars = map(eq->eq.lhs, observed(sys))
-    fulldvs = [dvs; obsvars]
+    #obsvars = map(eq->eq.lhs, observed(sys))
+    #fulldvs = [dvs; obsvars]
+    fulldvs = dvs
     fulldvs′ = makesym.(value.(fulldvs))
 
     sub = Dict(fulldvs .=> fulldvs′)
     # substitute x(t) by just x
     rhss = [substitute(deq.rhs, sub) for deq ∈ equations(sys)]
-    obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
+    #obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
+    #rhss = Let(obss, rhss)
 
     dvs′ = fulldvs′[1:length(dvs)]
     ps′ = makesym.(value.(ps), states=())
 
     # TODO: add an optional check on the ordering of observed equations
-    return build_function(Let(obss, rhss), dvs′, ps′, sys.iv;
+    return build_function(rhss, dvs′, ps′, sys.iv;
                           conv = ODEToExpr(sys),kwargs...)
 end
 
@@ -164,12 +166,15 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
-    ODEFunction{iip}(f,
+    ODEFunction{iip}(
+                     f,
                      jac = _jac === nothing ? nothing : _jac,
                      tgrad = _tgrad === nothing ? nothing : _tgrad,
                      mass_matrix = _M,
                      jac_prototype = sparse ? similar(sys.jac[],Float64) : nothing,
-                     syms = Symbol.(states(sys)))
+                     syms = Symbol.(states(sys)),
+                     indepsym = Symbol(independent_variable(sys)),
+                    )
 end
 
 """
@@ -225,12 +230,15 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
         tgrad = $_tgrad
         jac = $_jac
         M = $_M
-        ODEFunction{$iip}(f,
-                         jac = jac,
-                         tgrad = tgrad,
-                         mass_matrix = M,
-                         jac_prototype = $jp_expr,
-                         syms = $(Symbol.(states(sys))))
+        ODEFunction{$iip}(
+                          f,
+                          jac = jac,
+                          tgrad = tgrad,
+                          mass_matrix = M,
+                          jac_prototype = $jp_expr,
+                          syms = $(Symbol.(states(sys))),
+                          indepsym = $(QuoteNode(Symbol(independent_variable(sys)))),
+                         )
     end
     !linenumbers ? striplines(ex) : ex
 end

@@ -93,7 +93,7 @@ function unflatten_long_ops(op, N=4)
     rule2 = @rule((*)((~~x)) => length(~~x) > N ?
                  *(*((~~x)[1:N]...) * (*)((~~x)[N+1:end]...)) : nothing)
 
-    op = to_symbolic(op)
+    op = value(op)
     Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2])))(op)
 end
 
