@@ -76,7 +76,7 @@ end
 # Scalar output
 
 destructure_arg(arg::Union{AbstractArray, Tuple}) = DestructuredArgs(map(value, arg))
-destructure_arg(arg) = value(arg)
+destructure_arg(arg) = arg
 
 function _build_function(target::JuliaTarget, op, args...;
                          conv = toexpr,
@@ -85,7 +85,7 @@ function _build_function(target::JuliaTarget, op, args...;
                          linenumbers = true)
 
     dargs = map(destructure_arg, [args...])
-    expr = toexpr(Func(dargs, [], value(op)))
+    expr = toexpr(Func(dargs, [], op))
 
     if expression == Val{true}
         expr
@@ -200,6 +200,7 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
         oop_expr = wrap_code[1](oop_expr)
     end
 
+    ## In-place version
     out = Sym{Any}(gensym("out"))
     if rhss isa SparseMatrixCSC
         I,J, rhss = findnz(rhss)
@@ -232,11 +233,22 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
 end
 
 function _make_array(rhss::AbstractSparseArray, similarto)
-    MakeSparseArray(map(x->_make_array(x, similarto), rhss))
+    arr = map(x->_make_array(x, similarto), rhss)
+    if !(arr isa AbstractSparseArray)
+        _make_array(arr, similarto)
+    else
+        MakeSparseArray(arr)
+    end
 end
 
 function _make_array(rhss::AbstractArray, similarto)
-    MakeArray(map(x->_make_array(x, similarto), rhss), similarto)
+    arr = map(x->_make_array(x, similarto), rhss)
+    # Ugh reshaped array of a sparse array when mapped gives a sparse array
+    if arr isa AbstractSparseArray
+        _make_array(arr, similarto)
+    else
+        MakeArray(arr, similarto)
+    end
 end
 
 _make_array(x, similarto) = x
