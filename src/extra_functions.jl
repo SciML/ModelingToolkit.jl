@@ -22,7 +22,7 @@ function ModelingToolkit.derivative(::typeof(max), args::NTuple{2,Any}, ::Val{2}
     IfElse.ifelse(x > y, zero(y), one(y))
 end
 
-@register IfElse.ifelse(x,y,z::Any)
+IfElse.ifelse(x::Num,y,z) = Num(Term{Real}(IfElse.ifelse, [value(x), value(y), value(z)]))
 ModelingToolkit.derivative(::typeof(IfElse.ifelse), args::NTuple{3,Any}, ::Val{1}) = 0
 ModelingToolkit.derivative(::typeof(IfElse.ifelse), args::NTuple{3,Any}, ::Val{2}) = IfElse.ifelse(args[1],1,0)
 ModelingToolkit.derivative(::typeof(IfElse.ifelse), args::NTuple{3,Any}, ::Val{3}) = IfElse.ifelse(args[1],0,1)

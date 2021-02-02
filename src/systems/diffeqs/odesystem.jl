@@ -138,6 +138,7 @@ function ODESystem(eqs, iv=nothing; kwargs...)
             end
         end
     end
+    iv = value(iv)
     iv === nothing && throw(ArgumentError("Please pass in independent variables."))
     for eq in eqs
         collect_vars!(allstates, ps, eq.lhs, iv)

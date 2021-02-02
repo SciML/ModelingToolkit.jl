@@ -84,6 +84,7 @@ Currently only works if all equations are linear.
 """
 function solve_for(eqs, vars)
     A, b = A_b(eqs, vars)
+    #TODO: we need to make sure that `solve_for(eqs, vars)` contains no `vars`
     _solve(A, b)
 end
 
