@@ -316,3 +316,53 @@ function (f::AbstractSysToExpr)(O)
     end
     return build_expr(:call, Any[operation(O); f.(arguments(O))])
 end
+
+function Base.show(io::IO, sys::AbstractSystem)
+    eqs = equations(sys)
+    Base.printstyled(io, "Equations ($(length(eqs))):\n"; bold=true)
+    Base.print_matrix(io, eqs)
+    println(io)
+
+    rows = first(displaysize(io)) ÷ 3
+    limit = get(io, :limit, false)
+
+    vars = states(sys); nvars = length(vars)
+    Base.printstyled(io, "States ($nvars):"; bold=true)
+    nrows = min(nvars, limit ? rows : nvars)
+    limited = nrows < length(vars)
+    d_u0 = default_u0(sys)
+    for i in 1:nrows
+        s = vars[i]
+        print(io, "\n  ", s)
+
+        val = get(d_u0, s, nothing)
+        if val !== nothing
+            print(io, " [defaults to $val]")
+        end
+    end
+    limited && print(io, "\n⋮")
+    println(io)
+
+    vars = parameters(sys); nvars = length(vars)
+    Base.printstyled(io, "Parameters ($nvars):"; bold=true)
+    nrows = min(nvars, limit ? rows : nvars)
+    limited = nrows < length(vars)
+    d_p = default_p(sys)
+    for i in 1:nrows
+        s = vars[i]
+        print(io, "\n  ", s)
+
+        val = get(d_p, s, nothing)
+        if val !== nothing
+            print(io, " [defaults to $val]")
+        end
+    end
+    limited && print(io, "\n⋮")
+
+    s = get_structure(sys)
+    if s !== nothing
+        Base.printstyled(io, "\nIncidence matrix:"; color=:magenta)
+        show(io, incidence_matrix(s.graph, Num(Sym{Real}(:×))))
+    end
+    return nothing
+end
