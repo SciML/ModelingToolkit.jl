@@ -152,13 +152,13 @@ end
 tosymbolic(a::Num) = tosymbolic(value(a))
 tosymbolic(a::Sym) = tovar(a)
 tosymbolic(a) = a
-@num_method Base.isless isless(tosymbolic(a), tosymbolic(b)) (Real,)
-@num_method Base.:(<) (tosymbolic(a) < tosymbolic(b)) (Real,)
-@num_method Base.:(<=) (tosymbolic(a) <= tosymbolic(b)) (Real,)
-@num_method Base.:(>) (tosymbolic(a) > tosymbolic(b)) (Real,)
-@num_method Base.:(>=) (tosymbolic(a) >= tosymbolic(b)) (Real,)
+@num_method Base.isless  (val = isless(tosymbolic(a), tosymbolic(b)); val isa Bool ? val : Num(val)) (Real,)
+@num_method Base.:(<)    (val = tosymbolic(a) < tosymbolic(b)       ; val isa Bool ? val : Num(val)) (Real,)
+@num_method Base.:(<=)   (val = tosymbolic(a) <= tosymbolic(b)      ; val isa Bool ? val : Num(val)) (Real,)
+@num_method Base.:(>)    (val = tosymbolic(a) > tosymbolic(b)       ; val isa Bool ? val : Num(val)) (Real,)
+@num_method Base.:(>=)   (val = tosymbolic(a) >= tosymbolic(b)      ; val isa Bool ? val : Num(val)) (Real,)
+@num_method Base.:(==)   (val = tosymbolic(a) == tosymbolic(b)      ; val isa Bool ? val : Num(val)) (AbstractFloat,Number)
 @num_method Base.isequal isequal(tosymbolic(a), tosymbolic(b)) (AbstractFloat, Number, Symbolic)
-@num_method Base.:(==) tosymbolic(a) == tosymbolic(b) (AbstractFloat,Number)
 
 Base.hash(x::Num, h::UInt) = hash(value(x), h)
 

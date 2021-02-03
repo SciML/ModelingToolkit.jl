@@ -25,7 +25,7 @@ F = lu(X)
 R = simplify.(F.L * F.U - X[F.p, :], polynorm=true)
 @test iszero(R)
 @test simplify.(F \ X) == I
-@test ModelingToolkit._solve(X, X) == I
+@test ModelingToolkit._solve(X, X, true) == I
 inv(X)
 qr(X)
 

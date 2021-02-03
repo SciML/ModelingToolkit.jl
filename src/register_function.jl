@@ -1,5 +1,5 @@
 """
-    @register(expr, Ts = [Num, Symbolic, Real])
+    @register(expr, define_promotion, Ts = [Num, Symbolic, Real])
 
 Overload approperate methods such that ModelingToolkit can stop tracing into the
 registered function.
@@ -11,7 +11,7 @@ registered function.
 @register hoo(x, y)::Int # `hoo` returns `Int`
 ```
 """
-macro register(expr, Ts = [Num, Symbolic, Real])
+macro register(expr, define_promotion = true, Ts = [Num, Symbolic, Real])
     if expr.head === :(::)
         ret_type = expr.args[2]
         expr = expr.args[1]
@@ -48,7 +48,7 @@ macro register(expr, Ts = [Num, Symbolic, Real])
     push!(
           ex.args,
           quote
-              if $!($hasmethod($promote_symtype, $Tuple{$typeof($f), $Vararg}))
+              if $define_promotion
                   (::$typeof($promote_symtype))(::$typeof($f), args...) = $ret_type
               end
           end

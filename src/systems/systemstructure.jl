@@ -95,7 +95,6 @@ function init_graph(sys)
     algvar_offset = 2dxvar_offset
 
     fullvars = [xvars; dxvars; algvars]
-    sys = reordersys(sys, dxvar_offset, fullvars)
     eqs = equations(sys)
     idxmap = Dict(fullvars .=> 1:length(fullvars))
     graph = BipartiteGraph(length(eqs), length(fullvars))
@@ -121,22 +120,4 @@ function init_graph(sys)
 
     varassoc = Int[(1:dxvar_offset) .+ dxvar_offset; zeros(Int, length(fullvars) - dxvar_offset)] # variable association list
     sys, dxvar_offset, fullvars, varassoc, graph, solvable_graph
-end
-
-function reordersys(sys, dxvar_offset, fullvars)
-    eqs = equations(sys)
-    neweqs = similar(eqs, Equation)
-    eqidxmap = Dict(@view(fullvars[dxvar_offset+1:2dxvar_offset]) .=> (1:dxvar_offset))
-    varidxmap = Dict([@view(fullvars[1:dxvar_offset]); @view(fullvars[2dxvar_offset+1:end])] .=> (1:length(fullvars)-dxvar_offset))
-    algidx = dxvar_offset
-    for eq in eqs
-        if isdiffeq(eq)
-            neweqs[eqidxmap[eq.lhs]] = eq
-        else
-            neweqs[algidx+=1] = eq
-        end
-    end
-    sts = states(sys)
-    @set! sys.eqs = neweqs
-    @set! sys.states = sts[map(s->varidxmap[s], sts)]
 end

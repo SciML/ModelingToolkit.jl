@@ -97,13 +97,13 @@ reduced_system = alias_elimination(connected; conservative=false)
        ]) |> isempty
 
 reduced_eqs = [
+               0 ~ a + lorenz1.x - (lorenz2.y)
                D(lorenz1.x) ~ lorenz2.x + lorenz2.y + lorenz1.σ*((lorenz1.y) - (lorenz1.x)) - (lorenz2.z)
                D(lorenz1.y) ~ lorenz1.x*(lorenz1.ρ - (lorenz1.z)) - ((lorenz1.x) + (lorenz1.y) - (lorenz1.z))
                D(lorenz1.z) ~ lorenz1.x*lorenz1.y - (lorenz1.β*(lorenz1.z))
                D(lorenz2.x) ~ lorenz1.x + lorenz1.y + lorenz2.σ*((lorenz2.y) - (lorenz2.x)) - (lorenz1.z)
                D(lorenz2.y) ~ lorenz2.x*(lorenz2.ρ - (lorenz2.z)) - ((lorenz2.x) + (lorenz2.y) - (lorenz2.z))
                D(lorenz2.z) ~ lorenz2.x*lorenz2.y - (lorenz2.β*(lorenz2.z))
-               0 ~ a + lorenz1.x - (lorenz2.y)
               ]
 
 test_equal.(equations(reduced_system), reduced_eqs)

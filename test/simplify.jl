@@ -31,8 +31,8 @@ d3 = Differential(x)(d2)
 @test toexpr(expand_derivatives(d3)) == :(0)
 @test toexpr(simplify(x^0)) == :(1)
 
-@test ModelingToolkit.substitute(2x + y == 1, Dict(x => 0.0, y => 0.0)) === false
-@test ModelingToolkit.substitute(2x + y == 1, Dict(x => 0.0, y => 1.0)) === true
+@test ModelingToolkit.substitute(value(2x + y == 1), Dict(x => 0.0, y => 0.0)) === false
+@test ModelingToolkit.substitute(value(2x + y == 1), Dict(x => 0.0, y => 1.0)) === true
 
 # 699
 using SymbolicUtils: substitute
