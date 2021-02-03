@@ -157,8 +157,8 @@ tosymbolic(a) = a
 @num_method Base.:(<=)   Num(tosymbolic(a) <= tosymbolic(b)) (Real,)
 @num_method Base.:(>)    Num(tosymbolic(a) > tosymbolic(b)) (Real,)
 @num_method Base.:(>=)   Num(tosymbolic(a) >= tosymbolic(b)) (Real,)
-@num_method Base.isequal Num(isequal(tosymbolic(a), tosymbolic(b))) (AbstractFloat, Number, Symbolic)
 @num_method Base.:(==)   Num(tosymbolic(a) == tosymbolic(b)) (AbstractFloat,Number)
+@num_method Base.isequal isequal(tosymbolic(a), tosymbolic(b)) (AbstractFloat, Number, Symbolic)
 
 Base.hash(x::Num, h::UInt) = hash(value(x), h)
 
