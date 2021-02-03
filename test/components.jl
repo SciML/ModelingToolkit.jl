@@ -77,11 +77,11 @@ C1 = Capacitor(:C1)
 I1 = Inductor(:I1)
 @test isequal(R1.p.i, (@variables R1₊p₊i(t))[1])
 @parameters R
-@test ModelingToolkit.get_default_p(flatten(R1)) == Dict(R => 1.0)
+@test ModelingToolkit.default_p(flatten(R1)) == Dict(R => 1.0)
 @variables n₊v(t) p₊v(t) n₊i(t) p₊i(t)
-@test ModelingToolkit.get_default_u0(flatten(R1)) == Dict(
-                                                          n₊v => 1.0,
-                                                          p₊v => 1.0,
-                                                          n₊i => 1.0,
-                                                          p₊i => 1.0,
-                                                         )
+@test ModelingToolkit.default_u0(flatten(R1)) == Dict(
+                                                      n₊v => 1.0,
+                                                      p₊v => 1.0,
+                                                      n₊i => 1.0,
+                                                      p₊i => 1.0,
+                                                     )

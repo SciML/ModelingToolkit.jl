@@ -254,11 +254,11 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
     dvs = states(sys)
     ps = parameters(sys)
     u0map′ = lower_mapnames(u0map,sys.iv)
-    u0 = varmap_to_vars(u0map′,dvs; defaults=get_default_u0(sys))
+    u0 = varmap_to_vars(u0map′,dvs; defaults=default_u0(sys))
 
     if !(parammap isa DiffEqBase.NullParameters)
         parammap′ = lower_mapnames(parammap)
-        p = varmap_to_vars(parammap′,ps; defaults=get_default_p(sys))
+        p = varmap_to_vars(parammap′,ps; defaults=default_p(sys))
     else
         p = ps
     end
