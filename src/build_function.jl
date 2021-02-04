@@ -96,6 +96,11 @@ function _build_function(target::JuliaTarget, op, args...;
 end
 
 function _build_and_inject_function(mod::Module, ex)
+    if ex.head == :function && ex.args[1].head == :tuple
+        ex.args[1] = Expr(:call, :($mod.$(gensym())), ex.args[1].args...)
+    elseif ex.head == :(->)
+        return _build_and_inject_function(mod, Expr(:function, ex.args...))
+    end
     @RuntimeGeneratedFunction(mod, ex)
 end
 
