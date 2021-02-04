@@ -4,4 +4,8 @@ struct PDESystem <: ModelingToolkit.AbstractSystem
   domain
   indvars
   depvars
+  
+  @add_kwonly function PDESystem(eq, bcs, domain, indvars, depvars)
+      new(eq, bcs, domain, indvars, depvars)
+  end
 end
