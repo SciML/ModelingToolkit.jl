@@ -5,6 +5,7 @@ using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using Latexify, Unitful, ArrayInterface
 using MacroTools
 using UnPack: @unpack
+using Setfield
 using DiffEqJump
 using DataStructures
 using SpecialFunctions, NaNMath
@@ -202,6 +203,7 @@ Get the set of parameters variables for the given system.
 function parameters end
 
 include("bipartite_graph.jl")
+using .BipartiteGraphs
 
 include("variables.jl")
 include("context_dsl.jl")
@@ -216,7 +218,6 @@ include("domains.jl")
 include("register_function.jl")
 
 include("systems/abstractsystem.jl")
-include("systems/systemstructure.jl")
 
 include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")
@@ -238,6 +239,9 @@ include("systems/pde/pdesystem.jl")
 
 include("systems/reaction/reactionsystem.jl")
 include("systems/dependency_graphs.jl")
+
+include("systems/systemstructure.jl")
+using .SystemStructures
 
 include("systems/reduction.jl")
 

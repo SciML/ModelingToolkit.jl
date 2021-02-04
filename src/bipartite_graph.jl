@@ -1,6 +1,15 @@
+module BipartiteGraphs
+
+export BipartiteEdge, BipartiteGraph
+
+export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors, 𝑑neighbors,
+       𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST
+
+using DocStringExtensions
+using Reexport
 using UnPack
 using SparseArrays
-using LightGraphs
+@reexport using LightGraphs
 using Setfield
 
 ###
@@ -229,3 +238,5 @@ function LightGraphs.incidence_matrix(g::BipartiteGraph, val=true)
     end
     S = sparse(I, J, val, nsrcs(g), ndsts(g))
 end
+
+end # module
