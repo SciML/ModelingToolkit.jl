@@ -42,21 +42,7 @@ lorenz1 = ODESystem(eqs,t,name=:lorenz1)
 
 lorenz1_aliased = alias_elimination(lorenz1)
 io = IOBuffer(); show(io, lorenz1_aliased); str = String(take!(io))
-@test str == """
-Model lorenz1 with 4 equations
-States (3):
-  x(t)
-  y(t)
-  z(t)
-Parameters (3):
-  σ
-  ρ
-  β
-Incidence matrix:
- ×  ×  ×  ⋅  ⋅
- ×  ×  ⋅  ×  ×
- ×  ×  ⋅  ⋅  ×
- ×  ×  ⋅  ⋅  ⋅"""
+@test all(s->occursin(s, str), ["lorenz1", "States (3)", "Parameters (3)"])
 reduced_eqs = [
                D(x) ~ σ*(y - x)
                D(y) ~ β + x*(ρ - z) - y
