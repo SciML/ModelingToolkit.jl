@@ -56,34 +56,37 @@ end
 # return the coefficient matrix `A` and a
 # vector of constants (possibly symbolic) `b` such that
 # A \ b will solve the equations for the vars
-function A_b(eqs::AbstractArray, vars::AbstractArray)
+function A_b(eqs::AbstractArray, vars::AbstractArray, check)
     exprs = rhss(eqs) .- lhss(eqs)
-    for ex in exprs
-        @assert islinear(ex, vars)
+    if check
+        for ex in exprs
+            @assert islinear(ex, vars)
+        end
     end
     A = jacobian(exprs, vars)
     b = A * vars - exprs
     A, b
 end
-function A_b(eq, var)
+function A_b(eq, var, check)
     ex = eq.rhs - eq.lhs
-    @assert islinear(ex, [var])
+    check && @assert islinear(ex, [var])
     a = expand_derivatives(Differential(var)(ex))
     b = a * var - ex
     a, b
 end
 
 """
-    solve_for(eqs::Vector, vars::Vector)
+    solve_for(eqs::Vector, vars::Vector; simplify=true, check=true)
 
 Solve the vector of equations `eqs` for a set of variables `vars`.
 
 Assumes `length(eqs) == length(vars)`
 
-Currently only works if all equations are linear.
+Currently only works if all equations are linear. `check` if the expr is linear
+w.r.t `vars`.
 """
-function solve_for(eqs, vars; simplify=true)
-    A, b = A_b(eqs, vars)
+function solve_for(eqs, vars; simplify=true, check=true)
+    A, b = A_b(eqs, vars, check)
     #TODO: we need to make sure that `solve_for(eqs, vars)` contains no `vars`
     _solve(A, b, simplify)
 end
