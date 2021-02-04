@@ -319,11 +319,13 @@ end
 
 function Base.show(io::IO, sys::AbstractSystem)
     eqs = equations(sys)
-    Base.printstyled(io, "Equations ($(length(eqs))):\n"; bold=true)
-    Base.print_matrix(io, eqs)
-    println(io)
+    Base.printstyled(io, "Model $(nameof(sys)) with $(length(eqs)) equations\n"; bold=true)
+    # The reduced equations are usually very long. It's not that useful to print
+    # them.
+    #Base.print_matrix(io, eqs)
+    #println(io)
 
-    rows = first(displaysize(io)) ÷ 3
+    rows = first(displaysize(io)) ÷ 5
     limit = get(io, :limit, false)
 
     vars = states(sys); nvars = length(vars)

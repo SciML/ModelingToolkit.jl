@@ -58,6 +58,8 @@ function NonlinearSystem(eqs, states, ps;
                          systems = NonlinearSystem[])
     default_u0 isa Dict || (default_u0 = Dict(default_u0))
     default_p isa Dict || (default_p = Dict(default_p))
+    default_u0 = Dict(value(k) => value(default_u0[k]) for k in keys(default_u0))
+    default_p = Dict(value(k) => value(default_p[k]) for k in keys(default_p))
     NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, default_u0, default_p, nothing)
 end
 
@@ -210,11 +212,11 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem,u0map,paramm
     dvs = states(sys)
     ps = parameters(sys)
     u0map′ = lower_mapnames(u0map)
-    u0 = varmap_to_vars(u0map′,dvs; defaults=get_default_u0(sys))
+    u0 = varmap_to_vars(u0map′,dvs; defaults=default_u0(sys))
 
     if !(parammap isa DiffEqBase.NullParameters)
         parammap′ = lower_mapnames(parammap)
-        p = varmap_to_vars(parammap′,ps; defaults=get_default_p(sys))
+        p = varmap_to_vars(parammap′,ps; defaults=default_p(sys))
     else
         p = ps
     end

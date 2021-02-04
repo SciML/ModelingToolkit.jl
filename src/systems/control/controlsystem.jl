@@ -91,6 +91,8 @@ function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls
     ps′ = value.(ps)
     default_u0 isa Dict || (default_u0 = Dict(default_u0))
     default_p isa Dict || (default_p = Dict(default_p))
+    default_u0 = Dict(value(k) => value(default_u0[k]) for k in keys(default_u0))
+    default_p = Dict(value(k) => value(default_p[k]) for k in keys(default_p))
     ControlSystem(value(loss), deqs, iv′, dvs′, controls′,
                   ps′, observed, name, systems, default_u0, default_p)
 end

@@ -57,6 +57,8 @@ function OptimizationSystem(op, states, ps;
 
     default_u0 isa Dict || (default_u0 = Dict(default_u0))
     default_p isa Dict || (default_p = Dict(default_p))
+    default_u0 = Dict(value(k) => value(default_u0[k]) for k in keys(default_u0))
+    default_p = Dict(value(k) => value(default_p[k]) for k in keys(default_p))
 
     OptimizationSystem(
                        value(op), value.(states), value.(ps),
@@ -156,8 +158,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
 
     _f = DiffEqBase.OptimizationFunction{iip,AutoModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,AutoModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing)
 
-    u0 = varmap_to_vars(u0,dvs; defaults=get_default_u0(sys))
-    p = varmap_to_vars(parammap,ps; defaults=get_default_p(sys))
+    u0 = varmap_to_vars(u0,dvs; defaults=default_u0(sys))
+    p = varmap_to_vars(parammap,ps; defaults=default_p(sys))
     lb = varmap_to_vars(lb,dvs)
     ub = varmap_to_vars(ub,dvs)
     OptimizationProblem{iip}(_f,u0,p;lb=lb,ub=ub,kwargs...)
@@ -211,8 +213,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         _hess = :nothing
     end
 
-    u0 = varmap_to_vars(u0,dvs; defaults=get_default_u0(sys))
-    p = varmap_to_vars(parammap,ps; defaults=get_default_p(sys))
+    u0 = varmap_to_vars(u0,dvs; defaults=default_u0(sys))
+    p = varmap_to_vars(parammap,ps; defaults=default_p(sys))
     lb = varmap_to_vars(lb,dvs)
     ub = varmap_to_vars(ub,dvs)
     quote
