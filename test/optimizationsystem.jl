@@ -46,3 +46,11 @@ sol = solve(prob,BFGS(initial_stepnorm=0.0001),allow_f_increases=true)
 @test sol.minimum < -1e8
 sol = solve(prob2,BFGS(initial_stepnorm=0.0001),allow_f_increases=true)
 @test sol.minimum < -1e9
+
+rosenbrock(x, p) =  (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
+x0 = zeros(2)
+_p  = [1.0, 100.0]
+
+f = OptimizationFunction(rosenbrock,ModelingToolkit.AutoModelingToolkit(),x0,_p,grad=true,hess=true)
+prob = OptimizationProblem(f,x0,_p)
+sol = solve(prob,Optim.Newton()

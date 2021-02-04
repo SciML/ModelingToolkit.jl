@@ -185,7 +185,7 @@ struct OptimizationProblemExpr{iip} end
 
 OptimizationProblemExpr(sys::OptimizationSystem,args...;kwargs...) =
     OptimizationProblemExpr{true}(sys::OptimizationSystem,args...;kwargs...)
-    
+
 function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
                                           parammap=DiffEqBase.NullParameters();
                                           lb=nothing, ub=nothing,
@@ -230,9 +230,9 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     end
 end
 
-function OptimizationFunction(f, x, ::AutoModelingToolkit,p = DiffEqBase.NullParameters();
+function DiffEqBase.OptimizationFunction{iip}(f, ::AutoModelingToolkit, x, p = DiffEqBase.NullParameters();
                               grad=false, hess=false, cons = nothing, cons_j = nothing, cons_h = nothing,
-                              num_cons = 0, chunksize = 1, hv = nothing)
+                              num_cons = 0, chunksize = 1, hv = nothing) where iip
 
     sys = modelingtoolkitize(OptimizationProblem(f,x,p))
     u0map = states(sys) .=> x
