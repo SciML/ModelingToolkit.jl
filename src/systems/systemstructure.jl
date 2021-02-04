@@ -1,7 +1,7 @@
 module SystemStructures
 
 using ..ModelingToolkit
-using ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten
+import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten
 using SymbolicUtils: arguments
 using ..BipartiteGraphs
 using UnPack
@@ -37,7 +37,7 @@ end
 
 export SystemStructure, initialize_system_structure
 export diffvars_range, dervars_range, algvars_range
-export isdiffvars, isdervars, isalgvars
+export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq
 export DIFFERENTIAL_VARIABLE, ALGEBRAIC_VARIABLE, DERIVATIVE_VARIABLE
 export DIFFERENTIAL_EQUATION, ALGEBRAIC_EQUATION
 export vartype, eqtype
@@ -73,7 +73,9 @@ end
 
 @enum EquationType DIFFERENTIAL_EQUATION ALGEBRAIC_EQUATION
 
-eqtype(s::SystemStructure, eq::Integer)::EquationType = s.algeqs[eq] ? ALGEBRAIC_EQUATION : DIFFERENTIAL_EQUATION
+isalgeq(s::SystemStructure, eq::Integer) = s.algeqs[eq]
+isdiffeq(s::SystemStructure, eq::Integer) = !isalgeq(s, eq)
+eqtype(s::SystemStructure, eq::Integer)::EquationType = isalgeq(s, eq) ? ALGEBRAIC_EQUATION : DIFFERENTIAL_EQUATION
 
 function initialize_system_structure(sys)
     sys, dxvar_offset, fullvars, varassoc, algeqs, graph, solvable_graph = init_graph(flatten(sys))
@@ -111,10 +113,10 @@ end
 function collect_variables(sys)
     dxvars = []
     eqs = equations(sys)
-    algeqs = falses(length(eqs))
+    algeqs = trues(length(eqs))
     for (i, eq) in enumerate(eqs)
         if isdiffeq(eq)
-            algeqs[i] = true
+            algeqs[i] = false
             lhs = eq.lhs
             # Make sure that the LHS is a first order derivative of a var.
             @assert !(arguments(lhs)[1] isa Differential) "The equation $eq is not first order"
