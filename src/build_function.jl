@@ -81,6 +81,7 @@ destructure_arg(arg) = arg
 function _build_function(target::JuliaTarget, op, args...;
                          conv = toexpr,
                          expression = Val{true},
+                         expression_module = @__MODULE__(),
                          checkbounds = false,
                          linenumbers = true)
 
@@ -90,12 +91,12 @@ function _build_function(target::JuliaTarget, op, args...;
     if expression == Val{true}
         expr
     else
-        _build_and_inject_function(@__MODULE__, expr)
+        _build_and_inject_function(expression_module, expr)
     end
 end
 
 function _build_and_inject_function(mod::Module, ex)
-    @RuntimeGeneratedFunction(ex)
+    @RuntimeGeneratedFunction(mod, ex)
 end
 
 # Detect heterogeneous element types of "arrays of matrices/sparce matrices"
@@ -182,7 +183,8 @@ Special Keyword Argumnets:
   safety with `skipzeros`.
 """
 function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
-                       conv = toexpr, expression = Val{true},
+                       expression = Val{true},
+                       expression_module = @__MODULE__(),
                        checkbounds = false,
                        linenumbers = false, multithread=nothing,
                        outputidxs=nothing,
@@ -213,11 +215,13 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     end
 
     if skipzeros
-        ii = findall(i->!_iszero(rhss[i]), outputidxs)
-        array = AtIndex.(outputidxs[ii], rhss[ii])
+        ii = findall(i->!iszero(rhss[i]), outputidxs)
+        array = AtIndex.(outputidxs[ii],
+                         map(x->_make_array(x, similarto), rhss[ii]))
     else
         # sometimes outputidxs is a Tuple
-        array = AtIndex.(vec(collect(outputidxs)), vec(rhss))
+        array = AtIndex.(vec(collect(outputidxs)),
+                         map(x->_make_array(x, similarto), vec(rhss)))
     end
     ip_expr = Func([out, dargs...], [], SetArray(false, out, array))
     if !isnothing(wrap_code[2])
@@ -227,8 +231,8 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     if expression == Val{true}
         return toexpr(oop_expr), toexpr(ip_expr)
     else
-        return _build_and_inject_function(@__MODULE__, toexpr(oop_expr)),
-               _build_and_inject_function(@__MODULE__, toexpr(ip_expr))
+        return _build_and_inject_function(expression_module, toexpr(oop_expr)),
+               _build_and_inject_function(expression_module, toexpr(ip_expr))
     end
 end
 
