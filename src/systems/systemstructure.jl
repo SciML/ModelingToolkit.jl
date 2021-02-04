@@ -1,7 +1,7 @@
 module SystemStructures
 
 using ..ModelingToolkit
-using ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!
+using ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten
 using SymbolicUtils: arguments
 using ..BipartiteGraphs
 using UnPack
@@ -76,7 +76,7 @@ end
 eqtype(s::SystemStructure, eq::Integer)::EquationType = s.algeqs[eq] ? ALGEBRAIC_EQUATION : DIFFERENTIAL_EQUATION
 
 function initialize_system_structure(sys)
-    sys, dxvar_offset, fullvars, varassoc, algeqs, graph, solvable_graph = init_graph(sys)
+    sys, dxvar_offset, fullvars, varassoc, algeqs, graph, solvable_graph = init_graph(flatten(sys))
     @set sys.structure = SystemStructure(
                                          dxvar_offset,
                                          fullvars,
