@@ -207,7 +207,7 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     end
 
     out = Sym{Any}(gensym("out"))
-    ip_expr = Func([out, dargs...], [], _set_array(out, outputidxs, rhss, skipzeros))
+    ip_expr = Func([out, dargs...], [], _set_array(out, outputidxs, rhss, checkbounds, skipzeros))
 
     if !isnothing(wrap_code[2])
         ip_expr = wrap_code[2](ip_expr)
@@ -231,27 +231,27 @@ function _make_array(rhss::AbstractSparseArray, similarto)
 end
 
 ## In-place version
-function _set_array(out, outputidxs, rhss::AbstractArray, skipzeros)
+function _set_array(out, outputidxs, rhss::AbstractArray, checkbounds, skipzeros)
     if rhss isa Union{SparseVector, SparseMatrixCSC}
-        return SetArray(false, LiteralExpr(:($out.nzval)), rhss.nzval)
-    elseif isnothing(outputidxs)
+        return SetArray(checkbounds, LiteralExpr(:($out.nzval)), rhss.nzval)
+    elseif outputidxs === nothing
         outputidxs = collect(eachindex(rhss))
     end
 
     # sometimes outputidxs is a Tuple
-    ii = findall(i->!(rhss[i] isa AbstractArray) && !(skipzeros && iszero(rhss[i])), outputidxs)
-    jj = findall(i->rhss[i] isa AbstractArray, outputidxs)
+    ii = findall(i->!(rhss[i] isa AbstractArray) && !(skipzeros && _iszero(rhss[i])), eachindex(outputidxs))
+    jj = findall(i->rhss[i] isa AbstractArray, eachindex(outputidxs))
     exprs = []
-    push!(exprs, SetArray(false, out, AtIndex.(vec(collect(outputidxs[ii])), vec(rhss[ii]))))
+    push!(exprs, SetArray(checkbounds, out, AtIndex.(vec(collect(outputidxs[ii])), vec(rhss[ii]))))
     for j in jj
-        push!(exprs, _set_array(LiteralExpr(:($out[$j])), nothing, rhss[j], skipzeros))
+        push!(exprs, _set_array(LiteralExpr(:($out[$j])), nothing, rhss[j], checkbounds, skipzeros))
     end
     LiteralExpr(quote
                     $(exprs...)
                 end)
 end
 
-_set_array(out, outputidxs, rhs, skipzeros) = rhs
+_set_array(out, outputidxs, rhs, checkbounds, skipzeros) = rhs
 
 
 function _make_array(rhss::AbstractArray, similarto)
