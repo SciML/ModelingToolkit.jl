@@ -1,6 +1,7 @@
 module ModelingToolkit
 
-using DiffEqBase, Distributed
+using DiffEqBase, SciMLBase
+using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using Latexify, Unitful, ArrayInterface
 using MacroTools
@@ -55,6 +56,8 @@ Num(x::Num) = x # ideally this should never be called
 value(x) = x
 value(x::Num) = x.val
 
+SciMLBase.issymbollike(::Num) = true
+SciMLBase.issymbollike(::SymbolicUtils.Symbolic) = true
 
 SymbolicUtils.@number_methods(Num,
                               Num(f(value(a))),
