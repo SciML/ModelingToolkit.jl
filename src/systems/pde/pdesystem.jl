@@ -1,4 +1,4 @@
-struct PDESystem <: ModelingToolkit.AbstractSystem
+struct PDESystem
   eq
   bcs
   domain
