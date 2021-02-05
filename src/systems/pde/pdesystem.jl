@@ -1,12 +1,12 @@
 struct PDESystem
-  eq
+  eqs
   bcs
   domain
   indvars
   depvars
 
-  @add_kwonly function PDESystem(eq, bcs, domain, indvars, depvars) 
-      new(eq, bcs, domain, indvars, depvars)
+  @add_kwonly function PDESystem(eqs, bcs, domain, indvars, depvars) 
+      new(eqs, bcs, domain, indvars, depvars)
   end
 end
 
