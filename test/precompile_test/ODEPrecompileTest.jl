@@ -5,7 +5,7 @@ module ODEPrecompileTest
         # Define some variables
         @parameters t σ ρ β
         @variables x(t) y(t) z(t)
-        @derivatives D'~t
+        D = Differential(t)
 
         # Define a differential equation
         eqs = [D(x) ~ σ*(y-x),
@@ -16,17 +16,14 @@ module ODEPrecompileTest
         return ODEFunction(de, [x,y,z], [σ,ρ,β]; kwargs...)
     end
     
-    # Build an ODEFunction as part of the module's precompilation. This case
-    # will not work, because the generated RGFs will be put into
-    # ModelingToolkit's RGF cache.
+    # Build an ODEFunction as part of the module's precompilation. These cases
+    # will not work, because the generated RGFs are put into the ModelingToolkit cache.
     const f_bad = system()
+    const f_noeval_bad = system(; eval_expression=false)
 
-    # This case will work, because it will be put into our own module's cache.
+    # Setting eval_expression=false and eval_module=[this module] will ensure
+    # the RGFs are put into our own cache, initialised below.
     using RuntimeGeneratedFunctions
     RuntimeGeneratedFunctions.init(@__MODULE__)
-    const f_good = system(; eval_module=@__MODULE__)
-
-    # Also test that eval_expression=false works
-    const f_noeval_bad = system(; eval_expression=false)
     const f_noeval_good = system(; eval_expression=false, eval_module=@__MODULE__)
 end
