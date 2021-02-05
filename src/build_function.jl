@@ -201,34 +201,14 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     dargs = map(destructure_arg, [args...])
     i = findfirst(x->x isa DestructuredArgs, dargs)
     similarto = i === nothing ? Array : dargs[i].name
-    array_expr = _make_array(rhss, similarto)
-    oop_expr = Func(dargs, [], array_expr)
+    oop_expr = Func(dargs, [], _make_array(rhss, similarto))
     if !isnothing(wrap_code[1])
         oop_expr = wrap_code[1](oop_expr)
     end
 
-    ## In-place version
     out = Sym{Any}(gensym("out"))
-    if rhss isa SparseMatrixCSC
-        I,J, rhss = findnz(rhss)
-        outputidxs = CartesianIndex.(I, J)
-    elseif rhss isa SparseVector
-        I, rhss = findnz(rhss)
-        outputidxs = I
-    elseif isnothing(outputidxs)
-        outputidxs = collect(eachindex(rhss))
-    end
+    ip_expr = Func([out, dargs...], [], _set_array(out, outputidxs, rhss, skipzeros))
 
-    if skipzeros
-        ii = findall(i->!iszero(rhss[i]), outputidxs)
-        array = AtIndex.(outputidxs[ii],
-                         map(x->_make_array(x, similarto), rhss[ii]))
-    else
-        # sometimes outputidxs is a Tuple
-        array = AtIndex.(vec(collect(outputidxs)),
-                         map(x->_make_array(x, similarto), vec(rhss)))
-    end
-    ip_expr = Func([out, dargs...], [], SetArray(false, out, array))
     if !isnothing(wrap_code[2])
         ip_expr = wrap_code[2](ip_expr)
     end
@@ -237,7 +217,7 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
         return toexpr(oop_expr), toexpr(ip_expr)
     else
         return _build_and_inject_function(expression_module, toexpr(oop_expr)),
-               _build_and_inject_function(expression_module, toexpr(ip_expr))
+        _build_and_inject_function(expression_module, toexpr(ip_expr))
     end
 end
 
@@ -249,6 +229,30 @@ function _make_array(rhss::AbstractSparseArray, similarto)
         MakeSparseArray(arr)
     end
 end
+
+## In-place version
+function _set_array(out, outputidxs, rhss::AbstractArray, skipzeros)
+    if rhss isa Union{SparseVector, SparseMatrixCSC}
+        return SetArray(false, LiteralExpr(:($out.nzval)), rhss.nzval)
+    elseif isnothing(outputidxs)
+        outputidxs = collect(eachindex(rhss))
+    end
+
+    # sometimes outputidxs is a Tuple
+    ii = findall(i->!(rhss[i] isa AbstractArray) && !(skipzeros && iszero(rhss[i])), outputidxs)
+    jj = findall(i->rhss[i] isa AbstractArray, outputidxs)
+    exprs = []
+    push!(exprs, SetArray(false, out, AtIndex.(vec(collect(outputidxs[ii])), vec(rhss[ii]))))
+    for j in jj
+        push!(exprs, _set_array(LiteralExpr(:($out[$j])), nothing, rhss[j], skipzeros))
+    end
+    LiteralExpr(quote
+                    $(exprs...)
+                end)
+end
+
+_set_array(out, outputidxs, rhs, skipzeros) = rhs
+
 
 function _make_array(rhss::AbstractArray, similarto)
     arr = map(x->_make_array(x, similarto), rhss)
