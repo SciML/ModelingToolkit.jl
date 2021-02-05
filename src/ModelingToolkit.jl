@@ -29,7 +29,7 @@ import SymbolicUtils: Term, Add, Mul, Pow, Sym, FnType,
                       promote_symtype
 
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
-
+import DiffEqBase: @add_kwonly
 using LinearAlgebra: LU, BlasInt
 
 import LightGraphs: SimpleDiGraph, add_edge!
