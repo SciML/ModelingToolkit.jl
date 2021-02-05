@@ -5,3 +5,5 @@ struct PDESystem <: ModelingToolkit.AbstractSystem
   indvars
   depvars
 end
+
+Base.getproperty(sys::PDESystem, sym::Symbol) = getfield(sys, sym)
