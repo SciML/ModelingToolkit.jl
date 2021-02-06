@@ -1,7 +1,7 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
 authors = ["Chris Rackauckas <accounts@chrisrackauckas.com>"]
-version = "5.3.1"
+version = "5.4.0"
 
 [deps]
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
@@ -41,7 +41,7 @@ DataStructures = "0.17, 0.18"
 DiffEqBase = "6.54.0"
 DiffEqJump = "6.7.5"
 DiffRules = "0.1, 1.0"
-Distributions = "0.24"
+Distributions = "0.23, 0.24"
 DocStringExtensions = "0.7, 0.8"
 IfElse = "0.1"
 LabelledArrays = "1.3"
