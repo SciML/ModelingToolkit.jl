@@ -53,4 +53,4 @@ _p  = [1.0, 100.0]
 
 f = OptimizationFunction(rosenbrock,ModelingToolkit.AutoModelingToolkit(),x0,_p,grad=true,hess=true)
 prob = OptimizationProblem(f,x0,_p)
-sol = solve(prob,Optim.Newton()
+sol = solve(prob,Optim.Newton())
