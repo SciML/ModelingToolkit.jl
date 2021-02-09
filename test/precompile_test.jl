@@ -1,8 +1,11 @@
 using Test
 using ModelingToolkit
 
+using Distributed
+
 # Test that the precompiled ODE system works
-push!(LOAD_PATH, joinpath(@__DIR__, "precompile_test"))
+@everywhere push!(LOAD_PATH, joinpath(@__DIR__, "precompile_test"))
+
 using ODEPrecompileTest
 
 u  = collect(1:3)
