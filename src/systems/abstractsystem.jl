@@ -134,11 +134,12 @@ function structure(sys::AbstractSystem)
     s isa SystemStructure || throw(ArgumentError("SystemStructure is not yet initialized, please run `sys = initialize_system_structure(sys)` or `sys = alias_elimination(sys)`."))
     return s
 end
-
 for prop in [:eqs, :iv, :states, :ps, :default_p, :default_u0, :observed, :tgrad, :jac, :Wfact, :Wfact_t, :systems, :structure]
-    fname = Symbol(:get_, prop)
+    fname1 = Symbol(:get_, prop)
+    fname2 = Symbol(:has_, prop)
     @eval begin
-        $fname(sys::AbstractSystem) = getfield(sys, $(QuoteNode(prop)))
+        $fname1(sys::AbstractSystem) = getfield(sys, $(QuoteNode(prop)))
+        $fname2(sys::AbstractSystem) = isdefined(sys, $(QuoteNode(prop)))
     end
 end
 
@@ -162,7 +163,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
         return rename(sts[i],renamespace(sysname,name))
     end
 
-    if isdefined(sys, :ps)
+    if has_ps(sys)
         ps = get_ps(sys)
         i = findfirst(x->getname(x) == name,ps)
         if i !== nothing
@@ -170,7 +171,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
         end
     end
 
-    if isdefined(sys, :observed)
+    if has_observed(sys)
         obs = get_observed(sys)
         i = findfirst(x->getname(x.lhs)==name,obs)
         if i !== nothing
@@ -332,14 +333,16 @@ function Base.show(io::IO, sys::AbstractSystem)
     Base.printstyled(io, "States ($nvars):"; bold=true)
     nrows = min(nvars, limit ? rows : nvars)
     limited = nrows < length(vars)
-    d_u0 = default_u0(sys)
+    d_u0 = has_default_u0(sys) ? default_u0(sys) : nothing
     for i in 1:nrows
         s = vars[i]
         print(io, "\n  ", s)
 
-        val = get(d_u0, s, nothing)
-        if val !== nothing
-            print(io, " [defaults to $val]")
+        if d_u0 !== nothing
+            val = get(d_u0, s, nothing)
+            if val !== nothing
+                print(io, " [defaults to $val]")
+            end
         end
     end
     limited && print(io, "\n⋮")
@@ -349,22 +352,26 @@ function Base.show(io::IO, sys::AbstractSystem)
     Base.printstyled(io, "Parameters ($nvars):"; bold=true)
     nrows = min(nvars, limit ? rows : nvars)
     limited = nrows < length(vars)
-    d_p = default_p(sys)
+    d_p = has_default_p(sys) ? default_p(sys) : nothing
     for i in 1:nrows
         s = vars[i]
         print(io, "\n  ", s)
 
-        val = get(d_p, s, nothing)
-        if val !== nothing
-            print(io, " [defaults to $val]")
+        if d_p !== nothing
+            val = get(d_p, s, nothing)
+            if val !== nothing
+                print(io, " [defaults to $val]")
+            end
         end
     end
     limited && print(io, "\n⋮")
 
-    s = get_structure(sys)
-    if s !== nothing
-        Base.printstyled(io, "\nIncidence matrix:"; color=:magenta)
-        show(io, incidence_matrix(s.graph, Num(Sym{Real}(:×))))
+    if has_structure(sys)
+        s = get_structure(sys)
+        if s !== nothing
+            Base.printstyled(io, "\nIncidence matrix:"; color=:magenta)
+            show(io, incidence_matrix(s.graph, Num(Sym{Real}(:×))))
+        end
     end
     return nothing
 end
