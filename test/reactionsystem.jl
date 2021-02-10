@@ -28,6 +28,12 @@ rs = ReactionSystem(rxs,t,[A,B,C,D],k)
 odesys = convert(ODESystem,rs)
 sdesys = convert(SDESystem,rs)
 
+# test show
+io = IOBuffer()
+show(io, rs)
+str = String(take!(io))
+@test count(isequal('\n'), str) < 30
+
 # hard coded ODE rhs
 function oderhs(u,k,t)
        A = u[1]; B = u[2]; C = u[3]; D = u[4];
