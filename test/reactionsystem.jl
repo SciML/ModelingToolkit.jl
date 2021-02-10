@@ -25,13 +25,13 @@ rxs = [Reaction(k[1], nothing, [A]),            # 0 -> A
        Reaction(k[20]*t*A, [B,C], [D],[2,1],[2])                  # 2A +B -> 2C with non constant rate.
   ]
 rs = ReactionSystem(rxs,t,[A,B,C,D],k)
-str = String(take!(io))
 odesys = convert(ODESystem,rs)
 sdesys = convert(SDESystem,rs)
 
 # test show
 io = IOBuffer()
 show(io, rs)
+str = String(take!(io))
 @test count(isequal('\n'), str) < 30
 
 # hard coded ODE rhs
