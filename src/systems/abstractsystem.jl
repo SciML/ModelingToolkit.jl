@@ -196,6 +196,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
     end
 
     sts = get_states(sys)
+    @show sts
     i = findfirst(x->getname(x) == name, sts)
 
     if i !== nothing

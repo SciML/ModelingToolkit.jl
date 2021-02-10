@@ -1,10 +1,9 @@
 module SystemStructures
 
 using DataStructures
-using SymbolicUtils: istree, operation
+using SymbolicUtils: istree, operation, arguments
 using ..ModelingToolkit
-import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten
-using SymbolicUtils: arguments
+import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten, value
 using ..BipartiteGraphs
 using UnPack
 using Setfield
@@ -46,7 +45,7 @@ export vartype, eqtype
 
 struct SystemStructure
     dxvar_offset::Int
-    fullvars::Vector # [xvar; dxvars; algvars]
+    fullvars::Vector # [diffvars; dervars; algvars]
     varassoc::Vector{Int}
     algeqs::BitVector
     graph::BipartiteGraph{Int,Nothing}
@@ -122,14 +121,17 @@ function init_graph(sys)
     for (i, eq) in enumerate(eqs)
         vars = OrderedSet()
         vars!(vars, eq)
+        isalgeq = true
         for var in vars
             if istree(var) && operation(var) isa Differential
+                isalgeq = false
                 diffvar = arguments(var)[1]
                 @assert !(diffvar isa Differential) "The equation [ $eq ] is not first order"
                 push!(dervars, var)
                 push!(diffvars, diffvar)
             end
         end
+        algeqs[i] = isalgeq
         varsadj[i] = vars
     end
 
@@ -142,12 +144,23 @@ function init_graph(sys)
     nvars = length(fullvars)
     idxmap = Dict(fullvars .=> 1:nvars)
     graph = BipartiteGraph(neqs, nvars)
-    solvable_graph = BipartiteGraph(neqs, nvars, metadata=Vector{Int}[])
+    solvable_graph = BipartiteGraph(neqs, nvars, metadata=map(_->Int[], 1:neqs))
 
     for (i, vs) in enumerate(varsadj)
+        eq = eqs[i]
         for v in vs
             j = get(idxmap, v, nothing)
-            j === nothing || add_edge!(graph, i, idxmap[v])
+            if j !== nothing
+                add_edge!(graph, i, idxmap[v])
+                j > algvar_offset || continue
+                D = Differential(fullvars[j])
+                c = value(expand_derivatives(D(eq.rhs - eq.lhs), false))
+                if c isa Number && c != 0
+                    # 0 here is a sentinel value for non-integer coefficients
+                    coeff = c isa Integer ? c : 0
+                    add_edge!(solvable_graph, i, j, coeff)
+                end
+            end
         end
     end
 

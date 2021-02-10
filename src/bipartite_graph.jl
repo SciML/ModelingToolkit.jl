@@ -130,8 +130,12 @@ end
 ###
 ### Populate
 ###
-LightGraphs.add_edge!(g::BipartiteGraph, i::Integer, j::Integer) = add_edge!(g, BipartiteEdge(i, j))
-function LightGraphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge)
+struct NoMetadata
+end
+const NO_METADATA = NoMetadata()
+
+LightGraphs.add_edge!(g::BipartiteGraph, i::Integer, j::Integer, md=NO_METADATA) = add_edge!(g, BipartiteEdge(i, j), md)
+function LightGraphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_METADATA)
     @unpack fadjlist, badjlist = g
     verts = vertices(g)
     s, d = src(edge), dst(edge)
@@ -140,6 +144,9 @@ function LightGraphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge)
     index = searchsortedfirst(list, d)
     @inbounds (index <= length(list) && list[index] == d) && return false  # edge already in graph
     insert!(list, index, d)
+    if md !== NO_METADATA
+        insert!(g.metadata[s], index, md)
+    end
 
     g.ne += 1
     @inbounds list = badjlist[d]

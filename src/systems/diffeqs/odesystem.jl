@@ -178,6 +178,9 @@ function collect_vars!(states, parameters, expr, iv)
         collect_var!(states, parameters, expr, iv)
     else
         for var in vars(expr)
+            if istree(var) && operation(var) isa Differential
+                var, _ = var_from_nested_derivative(var)
+            end
             collect_var!(states, parameters, var, iv)
         end
     end

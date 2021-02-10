@@ -68,6 +68,10 @@ eqs1 = [
 
 lorenz = name -> ODESystem(eqs1,t,name=name)
 lorenz1 = lorenz(:lorenz1)
+ss = ModelingToolkit.get_structure(initialize_system_structure(lorenz1))
+@test isequal(ss.fullvars, [x, y, z, D(x), D(y), D(z), F, u])
+@test ss.solvable_graph.fadjlist == [[7], [8], [], [8]]
+@test ss.solvable_graph.metadata == [[1], [1], [], [1]]
 lorenz2 = lorenz(:lorenz2)
 
 connected = ODESystem([s ~ a + lorenz1.x

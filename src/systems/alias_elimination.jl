@@ -10,8 +10,9 @@ function fixpoint_sub(x, dict)
     return x
 end
 
-function substitute_aliases(diffeqs, dict)
-    lhss(diffeqs) .~ fixpoint_sub.(rhss(diffeqs), (dict,))
+function substitute_aliases(eqs, dict)
+    sub = Base.Fix2(fixpoint_sub, dict)
+    map(eq->eq.lhs ~ sub(eq.rhs), eqs)
 end
 
 # Note that we reduce parameters, too
@@ -68,8 +69,13 @@ function maybe_alias(lhs, rhs, diff_vars, iv, conservative)
     end
 end
 
-function alias_elimination(sys; conservative=true)
+function alias_elimination(sys)
     sys = flatten(sys)
+    s = get_structure(sys)
+    if !(s isa SystemStructure)
+        sys = initialize_system_structure(sys)
+        s = structure(sys)
+    end
     iv = independent_variable(sys)
     eqs = equations(sys)
     diff_vars = filter(!isnothing, map(eqs) do eq
@@ -124,7 +130,7 @@ function alias_elimination(sys; conservative=true)
     @set! sys.eqs = substitute_aliases(neweqs, Dict(subs))
     @set! sys.states = newstates
     @set! sys.observed = [observed(sys); alias_eqs]
-    return initialize_system_structure(sys)
+    return 
 end
 
 """
