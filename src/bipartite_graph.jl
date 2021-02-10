@@ -66,11 +66,13 @@ badjlist = [[1,2,5,6],[3,4,6]]
 bg = BipartiteGraph(7, fadjlist, badjlist)
 ```
 """
-mutable struct BipartiteGraph{I<:Integer} <: LightGraphs.AbstractGraph{I}
+mutable struct BipartiteGraph{I<:Integer,M} <: LightGraphs.AbstractGraph{I}
     ne::Int
     fadjlist::Vector{Vector{I}} # `fadjlist[src] => dsts`
     badjlist::Vector{Vector{I}} # `badjlist[dst] => srcs`
+    metadata::M
 end
+BipartiteGraph(ne::Integer, fadj::AbstractVector, badj::AbstractVector) = BipartiteGraph(ne, fadj, badj, nothing)
 
 """
 ```julia
@@ -91,9 +93,13 @@ $(SIGNATURES)
 
 Build an empty `BipartiteGraph` with `nsrcs` sources and `ndsts` destinations.
 """
-BipartiteGraph(nsrcs::T, ndsts::T) where T = BipartiteGraph(0, map(_->T[], 1:nsrcs), map(_->T[], 1:ndsts))
+function BipartiteGraph(nsrcs::T, ndsts::T; metadata=nothing) where T
+    fadjlist = map(_->T[], 1:nsrcs)
+    badjlist = map(_->T[], 1:ndsts)
+    BipartiteGraph(0, fadjlist, badjlist, metadata)
+end
 
-Base.eltype(::Type{BipartiteGraph{I}}) where I = I
+Base.eltype(::Type{<:BipartiteGraph{I}}) where I = I
 Base.empty!(g::BipartiteGraph) = (foreach(empty!, g.fadjlist); foreach(empty!, g.badjlist); g.ne = 0; g)
 Base.length(::BipartiteGraph) = error("length is not well defined! Use `ne` or `nv`.")
 
@@ -106,8 +112,8 @@ LightGraphs.vertices(g::BipartiteGraph) = (𝑠vertices(g), 𝑑vertices(g))
 𝑑vertices(g::BipartiteGraph) = axes(g.badjlist, 1)
 has_𝑠vertex(g::BipartiteGraph, v::Integer) = v in 𝑠vertices(g)
 has_𝑑vertex(g::BipartiteGraph, v::Integer) = v in 𝑑vertices(g)
-𝑠neighbors(g::BipartiteGraph, i::Integer) = g.fadjlist[i]
-𝑑neighbors(g::BipartiteGraph, i::Integer) = g.badjlist[i]
+𝑠neighbors(g::BipartiteGraph, i::Integer, with_metadata::Val{M}=Val(false)) where M = M ? zip(g.fadjlist[i], g.metadata[i]) : g.fadjlist[i]
+𝑑neighbors(g::BipartiteGraph, j::Integer, with_metadata::Val{M}=Val(false)) where M = M ? zip(g.badjlist[j], (g.metadata[i][j] for i in g.badjlist[j])) : g.badjlist[j]
 LightGraphs.ne(g::BipartiteGraph) = g.ne
 LightGraphs.nv(g::BipartiteGraph) = sum(length, vertices(g))
 LightGraphs.edgetype(g::BipartiteGraph{I}) where I = BipartiteEdge{I}
@@ -170,7 +176,7 @@ Base.length(it::BipartiteEdgeIter{ALL}) = 2ne(it.g)
 
 Base.eltype(it::BipartiteEdgeIter) = edgetype(it.g)
 
-function Base.iterate(it::BipartiteEdgeIter{SRC,BipartiteGraph{T}}, state=(1, 1, SRC)) where T
+function Base.iterate(it::BipartiteEdgeIter{SRC,<:BipartiteGraph{T}}, state=(1, 1, SRC)) where T
     @unpack g = it
     neqs = nsrcs(g)
     neqs == 0 && return nothing
@@ -191,7 +197,7 @@ function Base.iterate(it::BipartiteEdgeIter{SRC,BipartiteGraph{T}}, state=(1, 1,
     return nothing
 end
 
-function Base.iterate(it::BipartiteEdgeIter{DST,BipartiteGraph{T}}, state=(1, 1, DST)) where T
+function Base.iterate(it::BipartiteEdgeIter{DST,<:BipartiteGraph{T}}, state=(1, 1, DST)) where T
     @unpack g = it
     nvars = ndsts(g)
     nvars == 0 && return nothing

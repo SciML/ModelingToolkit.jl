@@ -1,5 +1,7 @@
 module SystemStructures
 
+using DataStructures
+using SymbolicUtils: istree, operation
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten
 using SymbolicUtils: arguments
@@ -47,8 +49,8 @@ struct SystemStructure
     fullvars::Vector # [xvar; dxvars; algvars]
     varassoc::Vector{Int}
     algeqs::BitVector
-    graph::BipartiteGraph{Int}
-    solvable_graph::BipartiteGraph{Int}
+    graph::BipartiteGraph{Int,Nothing}
+    solvable_graph::BipartiteGraph{Int,Vector{Vector{Int}}}
     assign::Vector{Int}
     inv_assign::Vector{Int}
     scc::Vector{Vector{Int}}
@@ -108,55 +110,45 @@ function Base.show(io::IO, s::SystemStructure)
     show(io, S)
 end
 
-# V-nodes `[x_1, x_2, x_3, ..., dx_1, dx_2, ..., y_1, y_2, ...]` where `x`s are
-# differential variables and `y`s are algebraic variables.
-function collect_variables(sys)
-    dxvars = []
+function init_graph(sys)
+    iv = independent_variable(sys)
     eqs = equations(sys)
-    algeqs = trues(length(eqs))
-    for (i, eq) in enumerate(eqs)
-        if isdiffeq(eq)
-            algeqs[i] = false
-            lhs = eq.lhs
-            # Make sure that the LHS is a first order derivative of a var.
-            @assert !(arguments(lhs)[1] isa Differential) "The equation $eq is not first order"
+    neqs = length(eqs)
+    algeqs = trues(neqs)
+    varsadj = Vector{Any}(undef, neqs)
+    dervars = OrderedSet()
+    diffvars = OrderedSet()
 
-            push!(dxvars, lhs)
+    for (i, eq) in enumerate(eqs)
+        vars = OrderedSet()
+        vars!(vars, eq)
+        for var in vars
+            if istree(var) && operation(var) isa Differential
+                diffvar = arguments(var)[1]
+                @assert !(diffvar isa Differential) "The equation [ $eq ] is not first order"
+                push!(dervars, var)
+                push!(diffvars, diffvar)
+            end
         end
+        varsadj[i] = vars
     end
 
-    xvars = (first ∘ var_from_nested_derivative).(dxvars)
-    algvars  = setdiff(states(sys), xvars)
-    return xvars, dxvars, algvars, algeqs
-end
+    algvars  = setdiff(states(sys), diffvars)
+    fullvars = [collect(diffvars); collect(dervars); algvars]
 
-function init_graph(sys)
-    xvars, dxvars, algvars, algeqs = collect_variables(sys)
-    dxvar_offset = length(xvars)
+    dxvar_offset = length(diffvars)
     algvar_offset = 2dxvar_offset
 
-    fullvars = [xvars; dxvars; algvars]
-    eqs = equations(sys)
-    idxmap = Dict(fullvars .=> 1:length(fullvars))
-    graph = BipartiteGraph(length(eqs), length(fullvars))
-    solvable_graph = BipartiteGraph(length(eqs), length(fullvars))
+    nvars = length(fullvars)
+    idxmap = Dict(fullvars .=> 1:nvars)
+    graph = BipartiteGraph(neqs, nvars)
+    solvable_graph = BipartiteGraph(neqs, nvars, metadata=Vector{Int}[])
 
-    vs = Set()
-    for (i, eq) in enumerate(eqs)
-        # TODO: custom vars that handles D(x)
-        # TODO: add checks here
-        lhs = eq.lhs
-        if isdiffeq(eq)
-            v = lhs
-            haskey(idxmap, v) && add_edge!(graph, i, idxmap[v])
-        else
-            vars!(vs, lhs)
-        end
-        vars!(vs, eq.rhs)
+    for (i, vs) in enumerate(varsadj)
         for v in vs
-            haskey(idxmap, v) && add_edge!(graph, i, idxmap[v])
+            j = get(idxmap, v, nothing)
+            j === nothing || add_edge!(graph, i, idxmap[v])
         end
-        empty!(vs)
     end
 
     varassoc = Int[(1:dxvar_offset) .+ dxvar_offset; zeros(Int, length(fullvars) - dxvar_offset)] # variable association list

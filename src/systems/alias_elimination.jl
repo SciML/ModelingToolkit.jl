@@ -1,5 +1,3 @@
-export alias_elimination, flatten
-
 using SymbolicUtils: Rewriters
 
 function fixpoint_sub(x, dict)
