@@ -101,10 +101,10 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
-    return build_function(sys.noiseeqs,
+    return build_function(get_noiseeqs(sys),
                           map(x->time_varying_as_func(value(x), sys), dvs),
                           map(x->time_varying_as_func(value(x), sys), ps),
-                          sys.iv; kwargs...)
+                          independent_variable(sys); kwargs...)
 end
 
 """
