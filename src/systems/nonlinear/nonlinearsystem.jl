@@ -63,8 +63,6 @@ function NonlinearSystem(eqs, states, ps;
     NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, default_u0, default_p, nothing)
 end
 
-independent_variable(::NonlinearSystem) = nothing
-
 function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
     rhs = [eq.rhs for eq ∈ equations(sys)]
     vals = [dv for dv in states(sys)]
