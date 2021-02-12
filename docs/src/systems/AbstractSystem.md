@@ -17,10 +17,33 @@ total set, which includes that of all systems held inside.
 
 The values which are common to all `AbstractSystem`s are:
 
-- `sys.eqs` or `equations(sys)`: The equations that define the system.
-- `sys.states` or `states(sys)`: The set of states in the system.
-- `sys.parameters` or `parameters(sys)`: The parameters of the system.
-- `sys.systems`: The subsystems of the system.
+- `equations(sys)`: All equations that define the system and its subsystems.
+- `states(sys)`: All the states in the system and its subsystems.
+- `parameters(sys)`: All parameters of the system and its subsystems.
+- `nameof(sys)`: The name of the current-level system.
+- `get_eqs(sys)`: Equations that define the current-level system.
+- `get_states(sys)`: States that are in the current-level system.
+- `get_ps(sys)`: Parameters that are in the current-level system.
+- `get_systems(sys)`: Subsystems of the current-level system.
+
+Optionally, a system could have:
+
+- `observed(sys)`: All observed equations of the system and its subsystems.
+- `get_observed(sys)`: Observed equations of the current-level system.
+- `get_default_u0(sys)`: A `Dict` that maps states into their default initial
+  condition.
+- `get_default_p(sys)`: A `Dict` that maps parameters into their default value.
+- `independent_variable(sys)`: The independent variable of a system.
+- `get_noiseeqs(sys)`: Noise equations of the current-level system.
+
+Note that there's `get_iv(sys)`, but it is not advised to use, since it errors
+when the system has no field `iv`. `independent_variable(sys)` returns `nothing`
+for `NonlinearSystem`s.
+
+A system could also have caches:
+
+- `get_jac(sys)`: The Jacobian of a system.
+- `get_tgrad(sys)`: The gradient with respect to time of a system.
 
 ## Transformations
 

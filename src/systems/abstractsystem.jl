@@ -127,14 +127,29 @@ function getname(t)
     end
 end
 
-independent_variable(sys::AbstractSystem) = getfield(sys, :iv)
+independent_variable(sys::AbstractSystem) = isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
 
 function structure(sys::AbstractSystem)
     s = get_structure(sys)
     s isa SystemStructure || throw(ArgumentError("SystemStructure is not yet initialized, please run `sys = initialize_system_structure(sys)` or `sys = alias_elimination(sys)`."))
     return s
 end
-for prop in [:eqs, :iv, :states, :ps, :default_p, :default_u0, :observed, :tgrad, :jac, :Wfact, :Wfact_t, :systems, :structure]
+for prop in [
+             :eqs
+             :noiseeqs
+             :iv
+             :states
+             :ps
+             :default_p
+             :default_u0
+             :observed
+             :tgrad
+             :jac
+             :Wfact
+             :Wfact_t
+             :systems
+             :structure
+            ]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin
