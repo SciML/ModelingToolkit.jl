@@ -61,7 +61,7 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
     return build_function(rhss,
                           map(x->time_varying_as_func(value(x), sys), dvs),
                           map(x->time_varying_as_func(value(x), sys), ps),
-                          sys.iv; kwargs...)
+                          get_iv(sys); kwargs...)
 end
 
 function time_varying_as_func(x, sys)
