@@ -34,6 +34,7 @@ Optionally, a system could have:
   condition.
 - `get_default_p(sys)`: A `Dict` that maps parameters into their default value.
 - `independent_variable(sys)`: The independent variable of a system.
+- `get_noiseeqs(sys)`: Noise equations of the current-level system.
 
 Note that there's `get_iv(sys)`, but it is not advised to use, since it errors
 when the system has no field `iv`. `independent_variable(sys)` returns `nothing`
