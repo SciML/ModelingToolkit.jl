@@ -29,6 +29,8 @@ import SymbolicUtils: Term, Add, Mul, Pow, Sym, FnType,
                       @rule, Rewriters, substitute, similarterm,
                       promote_symtype
 
+import SymbolicUtils.Code: toexpr
+
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
 import DiffEqBase: @add_kwonly
 using LinearAlgebra: LU, BlasInt

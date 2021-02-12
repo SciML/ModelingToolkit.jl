@@ -82,26 +82,31 @@ function JumpSystem(eqs, iv, states, ps;
 end
 
 function generate_rate_function(js, rate)
-    build_function(rate, states(js), parameters(js),
+    rf = build_function(rate, states(js), parameters(js),
                    independent_variable(js),
                    conv = states_to_sym(states(js)),
                    expression=Val{true})
+end
+function add_integrator_header()
+  integrator = gensym(:MTKIntegrator)
+
+  expr -> Func([DestructuredArgs(expr.args, integrator, inds=[:u, :p, :t])], [], expr.body),
+  expr -> Func([DestructuredArgs(expr.args, integrator, inds=[:u, :u, :p, :t])], [], expr.body)
 end
 
 function generate_affect_function(js, affect, outputidxs)
     bf = build_function(map(x->x isa Equation ? x.rhs : x , affect), states(js),
                    parameters(js),
-                   conv = states_to_sym(states(js)),
                    independent_variable(js),
                    expression=Val{true},
-                   headerfun=add_integrator_header,
+                   wrap_code=add_integrator_header(),
                    outputidxs=outputidxs)[2]
 end
 
 function assemble_vrj(js, vrj, statetoid)
     rate   = @RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate))
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
-    outputidxs = ((statetoid[var] for var in outputvars)...,)
+    outputidxs = [statetoid[var] for var in outputvars]
     affect = @RuntimeGeneratedFunction(generate_affect_function(js, vrj.affect!, outputidxs))
     VariableRateJump(rate, affect)
 end
@@ -121,7 +126,7 @@ end
 function assemble_crj(js, crj, statetoid)
     rate   = @RuntimeGeneratedFunction(generate_rate_function(js, crj.rate))
     outputvars = (value(affect.lhs) for affect in crj.affect!)
-    outputidxs = ((statetoid[var] for var in outputvars)...,)
+    outputidxs = [statetoid[var] for var in outputvars]
     affect = @RuntimeGeneratedFunction(generate_affect_function(js, crj.affect!, outputidxs))
     ConstantRateJump(rate, affect)
 end

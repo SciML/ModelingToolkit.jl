@@ -38,4 +38,5 @@ d = LVector(x=1.0,y=2.0,z=3.0)
 @test ff.jac(b,p,ForwardDiff.Dual(0.0,1.0)) isa SArray
 @test eltype(ff.jac(b,p,ForwardDiff.Dual(0.0,1.0))) <: ForwardDiff.Dual
 @test ff.jac(d,p,ForwardDiff.Dual(0.0,1.0)) isa Array
+@inferred ff.jac(d,p,ForwardDiff.Dual(0.0,1.0))
 @test eltype(ff.jac(d,p,ForwardDiff.Dual(0.0,1.0))) <: ForwardDiff.Dual

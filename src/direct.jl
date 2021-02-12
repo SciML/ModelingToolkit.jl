@@ -231,13 +231,8 @@ function sparsehessian(O, vars::AbstractVector; simplify=false)
     return H
 end
 
-"""
-    toexpr(O::Union{Symbolics,Num,Equation,AbstractArray}; canonicalize=true) -> Expr
-
-Convert `Symbolics` into `Expr`. If `canonicalize`, then we turn exprs like
-`x^(-n)` into `inv(x)^n` to avoid type error when evaluating.
-"""
-function toexpr(O; canonicalize=true)
+# `_toexpr` is only used for latexify
+function _toexpr(O; canonicalize=true)
     if canonicalize
         canonical, O = canonicalexpr(O)
         canonical && return O
@@ -248,29 +243,24 @@ function toexpr(O; canonicalize=true)
     op = operation(O)
     args = arguments(O)
     if op isa Differential
-        ex = toexpr(args[1]; canonicalize=canonicalize)
-        wrt = toexpr(op.x; canonicalize=canonicalize)
+        ex = _toexpr(args[1]; canonicalize=canonicalize)
+        wrt = _toexpr(op.x; canonicalize=canonicalize)
         return :(_derivative($ex, $wrt))
     elseif op isa Sym
         isempty(args) && return nameof(op)
-        return Expr(:call, toexpr(op; canonicalize=canonicalize), toexpr(args; canonicalize=canonicalize)...)
+        return Expr(:call, _toexpr(op; canonicalize=canonicalize), _toexpr(args; canonicalize=canonicalize)...)
     end
-    return Expr(:call, op, toexpr(args; canonicalize=canonicalize)...)
+    return Expr(:call, op, _toexpr(args; canonicalize=canonicalize)...)
 end
-toexpr(s::Sym; kw...) = nameof(s)
+_toexpr(s::Sym; kw...) = nameof(s)
 
-"""
-    canonicalexpr(O) -> (canonical::Bool, expr)
-
-Canonicalize `O`. Return `canonical` if `expr` is valid code to generate.
-"""
 function canonicalexpr(O)
     !istree(O) && return true, O
     op = operation(O)
     args = arguments(O)
     if op === (^)
         if length(args) == 2 && args[2] isa Number && args[2] < 0
-            ex = toexpr(args[1])
+            ex = _toexpr(args[1])
             if args[2] == -1
                 expr = Expr(:call, inv, ex)
             else
@@ -282,11 +272,15 @@ function canonicalexpr(O)
     return false, O
 end
 
-function toexpr(eq::Equation; kw...)
-    Expr(:(=), toexpr(eq.lhs; kw...), toexpr(eq.rhs; kw...))
-end
+for fun in [:toexpr, :_toexpr]
+    @eval begin
+        function $fun(eq::Equation; kw...)
+            Expr(:(=), $fun(eq.lhs; kw...), $fun(eq.rhs; kw...))
+        end
 
-toexpr(eqs::AbstractArray; kw...) = map(eq->toexpr(eq; kw...), eqs)
-toexpr(x::Integer; kw...) = x
-toexpr(x::AbstractFloat; kw...) = x
-toexpr(x::Num; kw...) = toexpr(value(x); kw...)
+        $fun(eqs::AbstractArray; kw...) = map(eq->$fun(eq; kw...), eqs)
+        $fun(x::Integer; kw...) = x
+        $fun(x::AbstractFloat; kw...) = x
+        $fun(x::Num; kw...) = $fun(value(x); kw...)
+    end
+end

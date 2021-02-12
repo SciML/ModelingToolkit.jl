@@ -1,3 +1,5 @@
+using SymbolicUtils.Code
+
 abstract type BuildTargets end
 struct JuliaTarget <: BuildTargets end
 struct StanTarget <: BuildTargets end
@@ -48,45 +50,6 @@ function build_function(args...;target = JuliaTarget(),kwargs...)
   _build_function(target,args...;kwargs...)
 end
 
-function addheader(ex, fargs, iip; X=gensym(:MTIIPVar))
-  if iip
-    wrappedex = :(
-        ($X,$(fargs.args...)) -> begin
-        $ex
-        nothing
-      end
-    )
-  else
-    wrappedex = :(
-      ($(fargs.args...),) -> begin
-        $ex
-      end
-    )
-  end
-  wrappedex
-end
-
-function add_integrator_header(ex, fargs, iip; X=gensym(:MTIIPVar))
-  integrator = gensym(:MTKIntegrator)
-  if iip
-    wrappedex = :(
-        $integrator -> begin
-        ($X,$(fargs.args...)) = (($integrator).u,($integrator).u,($integrator).p,($integrator).t)
-        $ex
-        nothing
-      end
-    )
-  else
-    wrappedex = :(
-      $integrator -> begin
-      ($(fargs.args...),) = (($integrator).u,($integrator).p,($integrator).t)
-        $ex
-      end
-    )
-  end
-  wrappedex
-end
-
 function unflatten_long_ops(op, N=4)
     rule1 = @rule((+)((~~x)) => length(~~x) > N ?
                  +(+((~~x)[1:N]...) + (+)((~~x)[N+1:end]...)) : nothing)
@@ -95,11 +58,6 @@ function unflatten_long_ops(op, N=4)
 
     op = value(op)
     Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2])))(op)
-end
-
-struct Let
-    eqs::Vector
-    body
 end
 
 function observed_let(eqs)
@@ -115,54 +73,38 @@ function observed_let(eqs)
     end
 end
 
-function _build_function(target::JuliaTarget, op::Let, args...; conv=toexpr, kw...)
-    _build_function(target, op.body, args...;
-                    inner_let = observed_let(op.eqs), kw...)
-end
-
 # Scalar output
+
+destructure_arg(arg::Union{AbstractArray, Tuple}) = DestructuredArgs(map(value, arg))
+destructure_arg(arg) = arg
+
 function _build_function(target::JuliaTarget, op, args...;
-                         conv = toexpr, expression = Val{true},
+                         conv = toexpr,
+                         expression = Val{true},
+                         expression_module = @__MODULE__(),
                          checkbounds = false,
-                         inner_let = nothing,
-                         linenumbers = true, headerfun=addheader)
+                         linenumbers = true)
 
-    argnames = [gensym(:MTKArg) for i in 1:length(args)]
-    symsdict = Dict()
-    arg_pairs = map((x,y)->vars_to_pairs(x,y, symsdict), argnames, args)
-    process = unflatten_long_ops∘(x->substitute(x, symsdict, fold=false))
-    ls = reduce(vcat,conv.(first.(arg_pairs)))
-    rs = reduce(vcat,last.(arg_pairs))
-    var_eqs = Expr(:(=), build_expr(:tuple, ls), build_expr(:tuple, conv.(process.(rs))))
-
-    fname = gensym(:ModelingToolkitFunction)
-    op = process(op)
-    out_expr = conv(substitute(op, symsdict, fold=false))
-
-    if inner_let !== nothing
-        inner_let_expr = inner_let(conv ∘ process)
-        out_expr = inner_let_expr(out_expr)
-    end
-
-    let_expr = Expr(:let, var_eqs, Expr(:block, out_expr))
-    bounds_block = checkbounds ? let_expr : :(@inbounds begin $let_expr end)
-
-    fargs = Expr(:tuple,argnames...)
-    oop_ex = headerfun(bounds_block, fargs, false)
-
-    if !linenumbers
-        oop_ex = striplines(oop_ex)
-    end
+    dargs = map(destructure_arg, [args...])
+    expr = toexpr(Func(dargs, [], op))
 
     if expression == Val{true}
-        return ModelingToolkit.inject_registered_module_functions(oop_ex)
+        expr
     else
-        _build_and_inject_function(@__MODULE__, oop_ex)
+        _build_and_inject_function(expression_module, expr)
     end
 end
 
 function _build_and_inject_function(mod::Module, ex)
-    @RuntimeGeneratedFunction(ModelingToolkit.inject_registered_module_functions(ex))
+    if ex.head == :function && ex.args[1].head == :tuple
+        ex.args[1] = Expr(:call, :($mod.$(gensym())), ex.args[1].args...)
+    elseif ex.head == :(->)
+        return _build_and_inject_function(mod, Expr(:function, ex.args...))
+    end
+    # XXX: Workaround to specify the module as both the cache module AND context module.
+    # Currently, the @RuntimeGeneratedFunction macro only sets the context module.
+    module_tag = getproperty(mod, RuntimeGeneratedFunctions._tagname)
+    RuntimeGeneratedFunctions.RuntimeGeneratedFunction(module_tag, module_tag, ex)
 end
 
 # Detect heterogeneous element types of "arrays of matrices/sparce matrices"
@@ -179,6 +121,8 @@ end
 function is_array_array_sparse_matrix(F)
     return isa(F, AbstractVector) && all(x->isa(x, AbstractArray{<:AbstractSparseMatrix}), F)
 end
+
+toexpr(n::Num, st) = toexpr(value(n), st)
 
 function fill_array_with_zero!(x::AbstractArray)
     if eltype(x) <: AbstractArray
@@ -245,257 +189,85 @@ Special Keyword Argumnets:
   filling function is 0.
 - `fillzeros`: Whether to perform `fill(out,0)` before the calculations to ensure
   safety with `skipzeros`.
-  """
-  function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
-                           conv = toexpr, expression = Val{true},
-                           inner_let = nothing,
-                           checkbounds = false,
-                           linenumbers = false, multithread=nothing,
-                           headerfun = addheader, outputidxs=nothing,
-                           convert_oop = true, force_SA = false,
-                           skipzeros = outputidxs===nothing,
-                           fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
-                           parallel=SerialForm(), kwargs...)
-      if multithread isa Bool
-          @warn("multithraded is deprecated for the parallel argument. See the documentation.")
-          parallel = multithread ? MultithreadedForm() : SerialForm()
-      end
+"""
+function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
+                       expression = Val{true},
+                       expression_module = @__MODULE__(),
+                       checkbounds = false,
+                       linenumbers = false, multithread=nothing,
+                       outputidxs=nothing,
+                       skipzeros = false,
+                       wrap_code = (nothing, nothing),
+                       fillzeros = skipzeros && !(typeof(rhss)<:SparseMatrixCSC),
+                       parallel=SerialForm(), kwargs...)
 
-      argnames = [gensym(:MTKArg) for i in 1:length(args)]
-      symsdict = Dict()
-      arg_pairs = map((x,y)->vars_to_pairs(x,y, symsdict), argnames, args)
-      process = unflatten_long_ops∘(x->substitute(x, symsdict, fold=false))
-
-      ls = reduce(vcat,conv.(first.(arg_pairs)))
-      rs = reduce(vcat,last.(arg_pairs))
-      var_eqs = Expr(:(=), ModelingToolkit.build_expr(:tuple, ls), ModelingToolkit.build_expr(:tuple, conv.(process.(rs))))
-
-      fname = gensym(:ModelingToolkitFunction)
-      fargs = Expr(:tuple,argnames...)
-
-
-      oidx = isnothing(outputidxs) ? (i -> i) : (i -> outputidxs[i])
-      X = gensym(:MTIIPVar)
-
-      if rhss isa SparseMatrixCSC
-          rhs_length = length(rhss.nzval)
-          rhss = SparseMatrixCSC(rhss.m, rhss.m, rhss.colptr, rhss.rowval, map(process, rhss.nzval))
-      else
-          rhs_length = length(rhss)
-          rhss = [process(r) for r in rhss]
-      end
-
-      if parallel isa DistributedForm
-          numworks = Distributed.nworkers()
-          reducevars = [gensym(:MTReduceVar) for i in 1:numworks]
-          lens = Int(ceil(rhs_length/numworks))
-          finalsize = rhs_length - (numworks-1)*lens
-          _rhss = vcat(reduce(vcat,[[Variable(reducevars[i],j) for j in 1:lens] for i in 1:numworks-1],init=Expr[]),
-                       [Variable(reducevars[end],j) for j in 1:finalsize])
-
-      elseif parallel isa DaggerForm
-          computevars = [gensym(:MTComputeVar) for i in axes(rhss,1)]
-          reducevar = Variable(gensym(:MTReduceVar))
-          _rhss = [Variable(reducevar,i) for i in axes(rhss,1)]
-      elseif rhss isa SparseMatrixCSC
-          _rhss = rhss.nzval
-      else
-          _rhss = rhss
-      end
-
-    ip_sys_exprs = Expr[]
-    # we cannot reliably fill the array with the presence of index translation
-    if is_array_array_sparse_matrix(rhss) # Array of arrays of sparse matrices
-        for (i, rhsel) ∈ enumerate(_rhss)
-            for (j, rhsel2) ∈ enumerate(rhsel)
-                for (k, rhs) ∈ enumerate(rhsel2.nzval)
-                    rhs′ = conv(rhs)
-                    (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
-                    push!(ip_sys_exprs, :($X[$i][$j].nzval[$k] = $rhs′))
-                end
-            end
-        end
-    elseif is_array_array_matrix(rhss) # Array of arrays of arrays
-        for (i, rhsel) ∈ enumerate(_rhss)
-            for (j, rhsel2) ∈ enumerate(rhsel)
-                for (k, rhs) ∈ enumerate(rhsel2)
-                    rhs′ = conv(rhs)
-                    (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
-                    push!(ip_sys_exprs, :($X[$i][$j][$k] = $rhs′))
-                end
-            end
-        end
-    elseif is_array_sparse_matrix(rhss) # Array of sparse matrices
-        for (i, rhsel) ∈ enumerate(_rhss)
-            for (j, rhs) ∈ enumerate(rhsel.nzval)
-                rhs′ = conv(rhs)
-                (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
-                push!(ip_sys_exprs, :($X[$i].nzval[$j] = $rhs′))
-            end
-        end
-    elseif is_array_matrix(rhss) # Array of arrays
-        for (i, rhsel) ∈ enumerate(_rhss)
-            for (j, rhs) ∈ enumerate(rhsel)
-                rhs′ = conv(rhs)
-                (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
-                push!(ip_sys_exprs, :($X[$i][$j] = $rhs′))
-            end
-        end
-    elseif rhss isa SparseMatrixCSC
-        for (i, rhs) ∈ enumerate(_rhss)
-            rhs′ = conv(rhs)
-            (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
-            push!(ip_sys_exprs, :($X.nzval[$i] = $rhs′))
-        end
-    else
-        for (i, rhs) ∈ enumerate(_rhss)
-            rhs′ = conv(rhs)
-            (skipzeros && rhs′ isa Number && iszero(rhs′)) && continue
-            push!(ip_sys_exprs, :($X[$(oidx(i))] = $rhs′))
-        end
+    dargs = map(destructure_arg, [args...])
+    i = findfirst(x->x isa DestructuredArgs, dargs)
+    similarto = i === nothing ? Array : dargs[i].name
+    oop_expr = Func(dargs, [], _make_array(rhss, similarto))
+    if !isnothing(wrap_code[1])
+        oop_expr = wrap_code[1](oop_expr)
     end
 
-    ip_let_expr = Expr(:let, var_eqs, build_expr(:block, ip_sys_exprs))
+    out = Sym{Any}(gensym("out"))
+    ip_expr = Func([out, dargs...], [], _set_array(out, outputidxs, rhss, checkbounds, skipzeros))
 
-    if parallel isa MultithreadedForm
-        lens = Int(ceil(length(ip_let_expr.args[2].args)/Threads.nthreads()))
-        threaded_exprs = vcat([quote
-           Threads.@spawn begin
-              $(ip_let_expr.args[2].args[((i-1)*lens+1):i*lens]...)
-           end
-        end for i in 1:Threads.nthreads()-1],
-           quote
-              Threads.@spawn begin
-                  $(ip_let_expr.args[2].args[((Threads.nthreads()-1)*lens+1):end]...)
-              end
-          end)
-        ip_let_expr.args[2] =  ModelingToolkit.build_expr(:block, threaded_exprs)
-        ip_let_expr = :(@sync begin $ip_let_expr end)
-    elseif parallel isa DistributedForm
-        numworks = Distributed.nworkers()
-        lens = Int(ceil(length(ip_let_expr.args[2].args)/numworks))
-        spawnvars = [gensym(:MTSpawnVar) for i in 1:numworks]
-        rhss_flat = rhss isa SparseMatrixCSC ? rhss.nzval : rhss
-        spawnvectors = vcat(
-                            [build_expr(:vect, [conv(rhs) for rhs ∈ rhss_flat[((i-1)*lens+1):i*lens]]) for i in 1:numworks-1],
-                            build_expr(:vect, [conv(rhs) for rhs ∈ rhss_flat[((numworks-1)*lens+1):end]]))
-
-        spawn_exprs = [quote
-                           $(spawnvars[i]) = ModelingToolkit.Distributed.remotecall($(i+1)) do
-                               $(spawnvectors[i])
-                           end
-                       end for i in 1:numworks]
-        spawn_exprs = ModelingToolkit.build_expr(:block, spawn_exprs)
-        resunpack_exprs = [:($(Symbol(reducevars[iter])) = fetch($(spawnvars[iter]))) for iter in 1:numworks]
-
-        ip_let_expr.args[2] = quote
-            @sync begin
-                $spawn_exprs
-                $(resunpack_exprs...)
-                $(ip_let_expr.args[2])
-            end
-        end
-    elseif parallel isa DaggerForm
-        @assert HAS_DAGGER[] "Dagger.jl is not loaded; please do `using Dagger`"
-        dagwrap(x) = x
-        dagwrap(ex::Expr) = dagwrap(ex, Val(ex.head))
-        dagwrap(ex::Expr, ::Val) = ex
-        dagwrap(ex::Expr, ::Val{:call}) = :(Dagger.delayed($(ex.args[1]))($(dagwrap.(ex.args[2:end])...)))
-        new_rhss = dagwrap.(conv.(rhss))
-        delayed_exprs = build_expr(:block, [:($(Symbol(computevars[i])) = Dagger.delayed(identity)($(new_rhss[i]))) for i in axes(computevars,1)])
-        # TODO: treereduce?
-        reduce_expr = quote
-            $(Symbol(reducevar)) = collect(Dagger.delayed(vcat)($(computevars...)))
-        end
-        ip_let_expr.args[2] = quote
-            @sync begin
-                $delayed_exprs
-                $reduce_expr
-                $(ip_let_expr.args[2])
-            end
-        end
-    end
-
-    if rhss isa SparseMatrixCSC
-        rhss′ = map(conv∘process, rhss.nzval)
-    else
-        rhss′ = [conv(process(r)) for r in rhss]
-    end
-
-    tuple_sys_expr = build_expr(:tuple, rhss′)
-
-    if rhss isa Matrix
-        arr_sys_expr = build_expr(:vcat, [build_expr(:row,[conv(rhs) for rhs ∈ rhss[i,:]]) for i in 1:size(rhss,1)])
-    elseif typeof(rhss) <: Array && !(typeof(rhss) <: Vector)
-        vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
-        arr_sys_expr = :(reshape($vector_form,$(size(rhss)...)))
-    elseif rhss isa SparseMatrixCSC
-        vector_form = build_expr(:vect, [conv(rhs) for rhs ∈ nonzeros(rhss)])
-        arr_sys_expr = :(SparseMatrixCSC{eltype($(first(argnames))),Int}($(size(rhss)...), $(rhss.colptr), $(rhss.rowval), $vector_form))
-    else # Vector
-        arr_sys_expr = build_expr(:vect, [conv(rhs) for rhs ∈ rhss])
-    end
-
-    xname = gensym(:MTK)
-
-    arr_sys_expr = (typeof(rhss) <: Vector || typeof(rhss) <: Matrix) && !(eltype(rhss) <: AbstractArray) ? quote
-        if $force_SA || typeof($(fargs.args[1])) <: Union{ModelingToolkit.StaticArrays.SArray,ModelingToolkit.LabelledArrays.SLArray}
-            $xname = ModelingToolkit.StaticArrays.@SArray $arr_sys_expr
-            if $convert_oop && !(typeof($(fargs.args[1])) <: Number) && $(typeof(rhss) <: Vector) # Only try converting if it should match `u`
-                return similar_type($(fargs.args[1]),eltype($xname))($xname)
-            else
-                return $xname
-            end
-        else
-            $xname = $arr_sys_expr
-            if $convert_oop && $(typeof(rhss) <: Vector)
-                if !(typeof($(fargs.args[1])) <: Array) && !(typeof($(fargs.args[1])) <: Number) && eltype($(fargs.args[1])) <: eltype($xname)
-                    # Last condition: avoid known error because this doesn't change eltypes!
-                    return convert(typeof($(fargs.args[1])),$xname)
-                elseif typeof($(fargs.args[1])) <: ModelingToolkit.LabelledArrays.LArray
-                    # LArray just needs to add the names back!
-                    return ModelingToolkit.LabelledArrays.LArray{ModelingToolkit.LabelledArrays.symnames(typeof($(fargs.args[1])))}($xname)
-                else
-                    return $xname
-                end
-            else
-                return $xname
-            end
-        end
-    end : arr_sys_expr
-
-    if inner_let !== nothing
-        inner_let_expr = inner_let(conv ∘ process)
-        arr_sys_expr = inner_let_expr(arr_sys_expr)
-        ip_let_expr.args[2] = inner_let_expr(ip_let_expr.args[2])
-    end
-
-    if fillzeros && outputidxs === nothing
-        ip_let_expr = quote
-            $fill_array_with_zero!($X)
-            $ip_let_expr
-        end
-    end
-
-    arr_let_expr = Expr(:let, var_eqs, arr_sys_expr)
-
-    oop_bounds_block = checkbounds ? arr_let_expr : :(@inbounds $arr_let_expr)
-    ip_bounds_block = checkbounds ? ip_let_expr : :(@inbounds $ip_let_expr)
-
-    oop_ex = headerfun(oop_bounds_block, fargs, false)
-    iip_ex = headerfun(ip_bounds_block, fargs, true; X=X)
-
-    if !linenumbers
-        oop_ex = striplines(oop_ex)
-        iip_ex = striplines(iip_ex)
+    if !isnothing(wrap_code[2])
+        ip_expr = wrap_code[2](ip_expr)
     end
 
     if expression == Val{true}
-        return ModelingToolkit.inject_registered_module_functions(oop_ex), ModelingToolkit.inject_registered_module_functions(iip_ex)
+        return toexpr(oop_expr), toexpr(ip_expr)
     else
-        return _build_and_inject_function(@__MODULE__, oop_ex), _build_and_inject_function(@__MODULE__, iip_ex)
+        return _build_and_inject_function(expression_module, toexpr(oop_expr)),
+        _build_and_inject_function(expression_module, toexpr(ip_expr))
     end
 end
+
+function _make_array(rhss::AbstractSparseArray, similarto)
+    arr = map(x->_make_array(x, similarto), rhss)
+    if !(arr isa AbstractSparseArray)
+        _make_array(arr, similarto)
+    else
+        MakeSparseArray(arr)
+    end
+end
+
+## In-place version
+function _set_array(out, outputidxs, rhss::AbstractArray, checkbounds, skipzeros)
+    if rhss isa Union{SparseVector, SparseMatrixCSC}
+        return SetArray(checkbounds, LiteralExpr(:($out.nzval)), rhss.nzval)
+    elseif outputidxs === nothing
+        outputidxs = collect(eachindex(rhss))
+    end
+
+    # sometimes outputidxs is a Tuple
+    ii = findall(i->!(rhss[i] isa AbstractArray) && !(skipzeros && _iszero(rhss[i])), eachindex(outputidxs))
+    jj = findall(i->rhss[i] isa AbstractArray, eachindex(outputidxs))
+    exprs = []
+    push!(exprs, SetArray(checkbounds, out, AtIndex.(vec(collect(outputidxs[ii])), vec(rhss[ii]))))
+    for j in jj
+        push!(exprs, _set_array(LiteralExpr(:($out[$j])), nothing, rhss[j], checkbounds, skipzeros))
+    end
+    LiteralExpr(quote
+                    $(exprs...)
+                end)
+end
+
+_set_array(out, outputidxs, rhs, checkbounds, skipzeros) = rhs
+
+
+function _make_array(rhss::AbstractArray, similarto)
+    arr = map(x->_make_array(x, similarto), rhss)
+    # Ugh reshaped array of a sparse array when mapped gives a sparse array
+    if arr isa AbstractSparseArray
+        _make_array(arr, similarto)
+    else
+        MakeArray(arr, similarto)
+    end
+end
+
+_make_array(x, similarto) = x
 
 function vars_to_pairs(name,vs::Union{Tuple, AbstractArray}, symsdict=Dict())
     vs_names = tosymbol.(vs)
