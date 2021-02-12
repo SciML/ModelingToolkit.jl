@@ -369,7 +369,8 @@ function SDEProblemExpr{iip}(sys::SDESystem,u0map,tspan,
         I,J,V = findnz(SparseArrays.sparse(noiseeqs))
         noise_rate_prototype = SparseArrays.sparse(I,J,zero(eltype(u0)))
     else
-        noise_rate_prototype = zeros(eltype(u0),size(noiseeqs))
+        T = u0 === nothing ? Float64 : eltype(u0)
+        noise_rate_prototype = zeros(T,size(get_noiseeqs(sys)))
     end
     ex = quote
         f = $f

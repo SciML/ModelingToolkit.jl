@@ -28,6 +28,9 @@ solexpr = solve(eval(probexpr),SRIW1(),seed=1)
 
 @test all(x->x==0,Array(sol-solexpr))
 
+# Test no error
+SDEProblem(de,nothing,nothing,SciMLBase.NullParameters())
+
 noiseeqs_nd = [0.01*x 0.01*x*y 0.02*x*z
                σ      0.01*y   0.02*x*z
                ρ      β        0.01*z  ]
