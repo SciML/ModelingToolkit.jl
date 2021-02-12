@@ -127,7 +127,7 @@ function getname(t)
     end
 end
 
-independent_variable(sys::AbstractSystem) = getfield(sys, :iv)
+independent_variable(sys::AbstractSystem) = isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
 
 function structure(sys::AbstractSystem)
     s = get_structure(sys)
