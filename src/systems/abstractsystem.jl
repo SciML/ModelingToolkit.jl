@@ -149,12 +149,36 @@ for prop in [
              :Wfact_t
              :systems
              :structure
+             :op
+             :equality_constraints
+             :inequality_constraints
+             :controls
+             :loss
             ]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin
         $fname1(sys::AbstractSystem) = getfield(sys, $(QuoteNode(prop)))
         $fname2(sys::AbstractSystem) = isdefined(sys, $(QuoteNode(prop)))
+    end
+end
+
+Setfield.get(obj::AbstractSystem, l::Setfield.PropertyLens{field}) where {field} = getfield(obj, field)
+@generated function ConstructionBase.setproperties(obj::AbstractSystem, patch::NamedTuple)
+    if issubset(fieldnames(patch), fieldnames(obj))
+        args = map(fieldnames(obj)) do fn
+            if fn in fieldnames(patch)
+                :(patch.$fn)
+            else
+                :(getfield(obj, $(Meta.quot(fn))))
+            end
+        end
+        return Expr(:block,
+            Expr(:meta, :inline),
+            Expr(:call,:(constructorof($obj)), args...)
+        )
+    else
+        error("This should never happen. Trying to set $(typeof(obj)) with $patch.")
     end
 end
 

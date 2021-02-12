@@ -1,10 +1,11 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
 authors = ["Chris Rackauckas <accounts@chrisrackauckas.com>"]
-version = "5.6.1"
+version = "5.6.2"
 
 [deps]
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
+ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 DiffEqBase = "2b5f629d-d688-5b77-993f-72d75c75574e"
 DiffEqJump = "c894b116-72e5-5b58-be3c-e6d8d4ac2b12"
@@ -37,6 +38,7 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
 ArrayInterface = "2.8, 3.0"
+ConstructionBase = "1"
 DataStructures = "0.17, 0.18"
 DiffEqBase = "6.54.0"
 DiffEqJump = "6.7.5"

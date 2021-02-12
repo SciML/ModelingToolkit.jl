@@ -6,7 +6,7 @@ using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using Latexify, Unitful, ArrayInterface
 using MacroTools
 using UnPack: @unpack
-using Setfield
+using Setfield, ConstructionBase
 using DiffEqJump
 using DataStructures
 using SpecialFunctions, NaNMath

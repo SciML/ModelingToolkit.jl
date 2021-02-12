@@ -446,7 +446,7 @@ function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, combinatoric_ratel
               (noise_scaling===nothing) ?
                     get_ps(rs) :
                     union(get_ps(rs),toparam.(noise_scaling)),
-                    name=rs.name,systems=convert.(SDESystem,get_systems(rs)))
+                    name=nameof(rs),systems=convert.(SDESystem,get_systems(rs)))
 end
 
 """

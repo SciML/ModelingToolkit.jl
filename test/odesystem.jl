@@ -119,7 +119,7 @@ lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
 #@test de1 == ODESystem(lowered_eqs)
 
 # issue #219
-@test all(isequal.([ModelingToolkit.var_from_nested_derivative(eq.lhs)[1] for eq in de1.eqs], ODESystem(lowered_eqs).states))
+@test all(isequal.([ModelingToolkit.var_from_nested_derivative(eq.lhs)[1] for eq in equations(de1)], states(ODESystem(lowered_eqs))))
 
 test_diffeq_inference("first-order transform", de1, t, [uˍtt, xˍt, uˍt, u, x], [])
 du = zeros(5)
@@ -207,6 +207,7 @@ end
 prob2 = ODEProblem(sys,u0,tspan,p,jac=true)
 prob3 = ODEProblem(sys,u0,tspan,p,jac=true,sparse=true)
 for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
+    local sol
     sol = solve(prob, Rodas5())
     @test all(x->≈(sum(x), 1.0, atol=atol), sol.u)
 end
@@ -230,7 +231,7 @@ using ModelingToolkit
 @variables x(t)
 D = Differential(t)
 sys = ODESystem([D(x) ~ a])
-@test sys.eqs[1].rhs isa Sym
+@test equations(sys)[1].rhs isa Sym
 
 # issue 708
 @parameters t a
