@@ -6,7 +6,7 @@ function calculate_tgrad(sys::AbstractODESystem;
   # have `u(t) * t` we want to have the tgrad to be `u(t)` instead of `u'(t) *
   # t + u(t)`.
   rhs = [detime_dvs(eq.rhs) for eq ∈ equations(sys)]
-  iv = sys.iv
+  iv = get_iv(sys)
   xs = states(sys)
   rule = Dict(map((x, xt) -> xt=>x, detime_dvs.(xs), xs))
   rhs = substitute.(rhs, Ref(rule))
@@ -22,7 +22,7 @@ function calculate_jacobian(sys::AbstractODESystem;
     isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
-    iv = sys.iv
+    iv = get_iv(sys)
     dvs = states(sys)
 
     if sparse
@@ -38,13 +38,13 @@ end
 function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                         simplify=false, kwargs...)
     tgrad = calculate_tgrad(sys,simplify=simplify)
-    return build_function(tgrad, dvs, ps, sys.iv; kwargs...)
+    return build_function(tgrad, dvs, ps, get_iv(sys); kwargs...)
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                            simplify=false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys;simplify=simplify,sparse=sparse)
-    return build_function(jac, dvs, ps, sys.iv; kwargs...)
+    return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
@@ -244,7 +244,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
                            kwargs...)
     dvs = states(sys)
     ps = parameters(sys)
-    u0map′ = lower_mapnames(u0map,sys.iv)
+    u0map′ = lower_mapnames(u0map,get_iv(sys))
     u0 = varmap_to_vars(u0map′,dvs; defaults=default_u0(sys))
 
     if !(parammap isa DiffEqBase.NullParameters)

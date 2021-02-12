@@ -441,7 +441,7 @@ function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, combinatoric_ratel
 
     SDESystem(eqs,
               noiseeqs,
-              get_iv(iv),
+              get_iv(rs),
               states(rs),
               (noise_scaling===nothing) ?
                     get_ps(rs) :
