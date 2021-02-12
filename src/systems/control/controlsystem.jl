@@ -1,19 +1,19 @@
 abstract type AbstractControlSystem <: AbstractSystem end
 
 function namespace_controls(sys::AbstractSystem)
-    [rename(x,renamespace(sys.name,x.name)) for x in controls(sys)]
+    [rename(x,renamespace(nameof(sys),nameof(x))) for x in controls(sys)]
 end
 
 function controls(sys::AbstractControlSystem,args...)
     name = last(args)
-    extra_names = reduce(Symbol,[Symbol(:₊,x.name) for x in args[1:end-1]])
+    extra_names = reduce(Symbol,[Symbol(:₊,nameof(x)) for x in args[1:end-1]])
     newname = renamespace(extra_names,name)
-    rename(x,renamespace(sys.name,newname))(sys.iv())
+    rename(x,renamespace(nameof(sys),newname))(sys.iv())
 end
 
 function controls(sys::AbstractControlSystem,name::Symbol)
-    x = sys.controls[findfirst(x->x.name==name,sys.ps)]
-    rename(x,renamespace(sys.name,x.name))()
+    x = sys.controls[findfirst(x->nameof(x)==name,get_ps(sys))]
+    rename(x,renamespace(nameof(sys),nameof(x)))()
 end
 
 controls(sys::AbstractControlSystem) = isempty(sys.systems) ? sys.controls : [sys.controls;reduce(vcat,namespace_controls.(sys.systems))]
@@ -108,12 +108,12 @@ function (f::ControlToExpr)(O)
     res = if isa(operation(O), Sym)
         # normal variables and control variables
         (any(isequal(O), f.states) || any(isequal(O), f.controls)) && return tosymbol(O)
-        build_expr(:call, Any[operation(O).name; f.(arguments(O))])
+        build_expr(:call, Any[nameof(operation(O)); f.(arguments(O))])
     else
         build_expr(:call, Any[Symbol(operation(O)); f.(arguments(O))])
     end
 end
-(f::ControlToExpr)(x::Sym) = x.name
+(f::ControlToExpr)(x::Sym) = nameof(x)
 
 function constructRadauIIA5(T::Type = Float64)
   sq6 = sqrt(convert(T, 6))

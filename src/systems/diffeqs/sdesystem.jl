@@ -101,10 +101,10 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
-    return build_function(sys.noiseeqs,
+    return build_function(get_noiseeqs(sys),
                           map(x->time_varying_as_func(value(x), sys), dvs),
                           map(x->time_varying_as_func(value(x), sys), ps),
-                          sys.iv; kwargs...)
+                          get_iv(sys); kwargs...)
 end
 
 """
@@ -114,34 +114,34 @@ Choose correction_factor=-1//2 (1//2) to converte Ito -> Stratonovich (Stratonov
 """
 function stochastic_integral_transform(sys::SDESystem, correction_factor)
     # use the general interface
-    if typeof(sys.noiseeqs) <: Vector
-        eqs = vcat([sys.eqs[i].lhs ~ sys.noiseeqs[i] for i in eachindex(sys.states)]...)
-        de = ODESystem(eqs,sys.iv,sys.states,sys.ps)
+    if typeof(get_noiseeqs(sys)) <: Vector
+        eqs = vcat([sys.eqs[i].lhs ~ get_noiseeqs(sys)[i] for i in eachindex(get_states(sys))]...)
+        de = ODESystem(eqs,get_iv(sys),get_states(sys),get_ps(sys))
 
         jac = calculate_jacobian(de, sparse=false, simplify=false)
-        ∇σσ′ = simplify.(jac*sys.noiseeqs)
+        ∇σσ′ = simplify.(jac*get_noiseeqs(sys))
 
-        deqs = vcat([sys.eqs[i].lhs ~ sys.eqs[i].rhs+ correction_factor*∇σσ′[i] for i in eachindex(sys.states)]...)
+        deqs = vcat([sys.eqs[i].lhs ~ sys.eqs[i].rhs+ correction_factor*∇σσ′[i] for i in eachindex(get_states(sys))]...)
     else
-        dimstate, m = size(sys.noiseeqs)
-        eqs = vcat([sys.eqs[i].lhs ~ sys.noiseeqs[i] for i in eachindex(sys.states)]...)
-        de = ODESystem(eqs,sys.iv,sys.states,sys.ps)
+        dimstate, m = size(get_noiseeqs(sys))
+        eqs = vcat([sys.eqs[i].lhs ~ get_noiseeqs(sys)[i] for i in eachindex(get_states(sys))]...)
+        de = ODESystem(eqs,get_iv(sys),get_states(sys),get_ps(sys))
 
         jac = calculate_jacobian(de, sparse=false, simplify=false)
-        ∇σσ′ = simplify.(jac*sys.noiseeqs[:,1])
+        ∇σσ′ = simplify.(jac*get_noiseeqs(sys)[:,1])
         for k = 2:m
-            eqs = vcat([sys.eqs[i].lhs ~ sys.noiseeqs[Int(i+(k-1)*dimstate)] for i in eachindex(sys.states)]...)
-            de = ODESystem(eqs,sys.iv,sys.states,sys.ps)
+            eqs = vcat([sys.eqs[i].lhs ~ get_noiseeqs(sys)[Int(i+(k-1)*dimstate)] for i in eachindex(get_states(sys))]...)
+            de = ODESystem(eqs,get_iv(sys),get_states(sys),get_ps(sys))
 
             jac = calculate_jacobian(de, sparse=false, simplify=false)
-            ∇σσ′ = ∇σσ′ + simplify.(jac*sys.noiseeqs[:,k])
+            ∇σσ′ = ∇σσ′ + simplify.(jac*get_noiseeqs(sys)[:,k])
         end
 
-        deqs = vcat([sys.eqs[i].lhs ~ sys.eqs[i].rhs + correction_factor*∇σσ′[i] for i in eachindex(sys.states)]...)
+        deqs = vcat([sys.eqs[i].lhs ~ sys.eqs[i].rhs + correction_factor*∇σσ′[i] for i in eachindex(get_states(sys))]...)
     end
 
 
-    de = SDESystem(deqs,sys.noiseeqs,sys.iv,sys.states,sys.ps)
+    de = SDESystem(deqs,get_noiseeqs(sys),get_iv(sys),get_states(sys),get_ps(sys))
 
     de
 end
@@ -152,7 +152,7 @@ end
 
 """
 ```julia
-function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
+function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = get_states(sys), ps = get_ps(sys);
                                      version = nothing, tgrad=false, sparse = false,
                                      jac = false, Wfact = false, kwargs...) where {iip}
 ```
@@ -161,7 +161,7 @@ Create an `SDEFunction` from the [`SDESystem`](@ref). The arguments `dvs` and `p
 are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
-function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps,
+function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = get_states(sys), ps = get_ps(sys),
                                      u0 = nothing;
                                      version = nothing, tgrad=false, sparse = false,
                                      jac = false, Wfact = false, eval_expression = true, kwargs...) where {iip}
@@ -215,7 +215,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.
                      Wfact = _Wfact === nothing ? nothing : _Wfact,
                      Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
                      mass_matrix = _M,
-                     syms = Symbol.(sys.states))
+                     syms = Symbol.(get_states(sys)))
 end
 
 function DiffEqBase.SDEFunction(sys::SDESystem, args...; kwargs...)
@@ -287,7 +287,7 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
                          Wfact = Wfact,
                          Wfact_t = Wfact_t,
                          mass_matrix = M,
-                         syms = $(Symbol.(states(sys))),kwargs...)
+                         syms = $(Symbol.(states(sys))))
     end
     !linenumbers ? striplines(ex) : ex
 end
@@ -298,7 +298,7 @@ function SDEFunctionExpr(sys::SDESystem, args...; kwargs...)
 end
 
 function rename(sys::SDESystem,name)
-    SDESystem(sys.eqs, sys.noiseeqs, sys.iv, sys.states, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
+    SDESystem(sys.eqs, get_noiseeqs(sys), get_iv(sys), get_states(sys), get_ps(sys), get_tgrad(sys), get_jac(sys), get_Wfact(sys), get_Wfact_t(sys), name, get_systems(sys))
 end
 
 """
@@ -322,13 +322,13 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,parammap=DiffEqBa
     f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; kwargs...)
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
-    if typeof(sys.noiseeqs) <: AbstractVector
+    if typeof(get_noiseeqs(sys)) <: AbstractVector
         noise_rate_prototype = nothing
     elseif sparsenoise
-        I,J,V = findnz(SparseArrays.sparse(sys.noiseeqs))
+        I,J,V = findnz(SparseArrays.sparse(get_noiseeqs(sys)))
         noise_rate_prototype = SparseArrays.sparse(I,J,zero(eltype(u0)))
     else
-        noise_rate_prototype = zeros(eltype(u0),size(sys.noiseeqs))
+        noise_rate_prototype = zeros(eltype(u0),size(get_noiseeqs(sys)))
     end
 
     SDEProblem{iip}(f,f.g,u0,tspan,p;noise_rate_prototype=noise_rate_prototype,kwargs...)
@@ -363,13 +363,14 @@ function SDEProblemExpr{iip}(sys::SDESystem,u0map,tspan,
     linenumbers = get(kwargs, :linenumbers, true)
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
-    if typeof(sys.noiseeqs) <: AbstractVector
+    if typeof(get_noiseeqs(sys)) <: AbstractVector
         noise_rate_prototype = nothing
     elseif sparsenoise
-        I,J,V = findnz(SparseArrays.sparse(sys.noiseeqs))
+        I,J,V = findnz(SparseArrays.sparse(get_noiseeqs(sys)))
         noise_rate_prototype = SparseArrays.sparse(I,J,zero(eltype(u0)))
     else
-        noise_rate_prototype = zeros(eltype(u0),size(sys.noiseeqs))
+        T = u0 === nothing ? Float64 : eltype(u0)
+        noise_rate_prototype = zeros(T,size(get_noiseeqs(sys)))
     end
     ex = quote
         f = $f

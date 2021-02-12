@@ -99,7 +99,7 @@ function generate_function(sys::OptimizationSystem, vs = states(sys), ps = param
 end
 
 equations(sys::OptimizationSystem) = isempty(sys.systems) ? sys.op : sys.op + reduce(+,namespace_expr.(sys.systems))
-namespace_expr(sys::OptimizationSystem) = namespace_expr(sys.op,sys.name,nothing)
+namespace_expr(sys::OptimizationSystem) = namespace_expr(sys.op,nameof(sys),nothing)
 
 hessian_sparsity(sys::OptimizationSystem) =
     hessian_sparsity(sys.op, states(sys))
