@@ -17,10 +17,20 @@ total set, which includes that of all systems held inside.
 
 The values which are common to all `AbstractSystem`s are:
 
-- `sys.eqs` or `equations(sys)`: The equations that define the system.
-- `sys.states` or `states(sys)`: The set of states in the system.
-- `sys.parameters` or `parameters(sys)`: The parameters of the system.
-- `sys.systems`: The subsystems of the system.
+- `equations(sys)`: All equations that define the system and its subsystems.
+- `states(sys)`: All the states in the system and its subsystems.
+- `parameters(sys)`: All parameters of the system and its subsystems.
+- `get_equations(sys)`: Equations that define the current-level system.
+- `get_states(sys)`: States that are in the current-level system.
+- `get_ps(sys)`: Parameters that are in the current-level system.
+- `get_systems(sys)`: Subsystems of the current-level system.
+- `get_name(sys)` or `nameof(sys)`: The name of the current-level system.
+
+Optionally, a system could have
+
+- `get_default_u0`: A `Dict` that maps states into their default initial
+  condition.
+- `get_default_p`: A `Dict` that maps parameters into their default value.
 
 ## Transformations
 
