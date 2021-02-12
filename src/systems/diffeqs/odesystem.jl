@@ -182,9 +182,15 @@ function collect_var!(states, parameters, var, iv)
 end
 
 # NOTE: equality does not check cached Jacobian
-Base.:(==)(sys1::ODESystem, sys2::ODESystem) =
-    _eq_unordered(sys1.eqs, sys2.eqs) && isequal(sys1.iv, sys2.iv) &&
-    _eq_unordered(sys1.states, sys2.states) && _eq_unordered(sys1.ps, sys2.ps)
+function Base.:(==)(sys1::ODESystem, sys2::ODESystem)
+    iv1 = independent_variable(sys1)
+    iv2 = independent_variable(sys2)
+    isequal(iv1, iv2) &&
+    _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
+    _eq_unordered(get_states(sys1), get_states(sys2)) &&
+    _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
+    all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
+end
 
 function flatten(sys::ODESystem)
     systems = get_systems(sys)

@@ -143,6 +143,25 @@ for prop in [:eqs, :iv, :states, :ps, :default_p, :default_u0, :observed, :tgrad
     end
 end
 
+Setfield.get(obj, l::Setfield.PropertyLens{field}) where {field} = getfield(obj, field)
+@generated function ConstructionBase.setproperties(obj::AbstractSystem, patch::NamedTuple)
+    if issubset(fieldnames(patch), fieldnames(obj))
+        args = map(fieldnames(obj)) do fn
+            if fn in fieldnames(patch)
+                :(patch.$fn)
+            else
+                :(getfield(obj, $(Meta.quot(fn))))
+            end
+        end
+        return Expr(:block,
+            Expr(:meta, :inline),
+            Expr(:call,:(constructorof($obj)), args...)
+        )
+    else
+        error("This should never happen. Trying to set $(typeof(obj)) with $patch.")
+    end
+end
+
 function Base.getproperty(sys::AbstractSystem, name::Symbol)
     sysname = nameof(sys)
     systems = get_systems(sys)
