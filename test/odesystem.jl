@@ -250,6 +250,6 @@ eqs = [
    0 ~ x1 - x2,
 ]
 sys = ODESystem(eqs, t)
-@test isequal(sys.iv, t)
+@test isequal(get_iv(sys), t)
 @test isequal(states(sys), [x1, x2])
 @test isempty(parameters(sys))

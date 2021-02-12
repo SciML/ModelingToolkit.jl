@@ -1,6 +1,6 @@
 function calculate_tgrad(sys::AbstractODESystem;
                          simplify=false)
-  isempty(sys.tgrad[]) || return sys.tgrad[]  # use cached tgrad, if possible
+  isempty(get_tgrad(sys)[]) || return get_tgrad(sys)[]  # use cached tgrad, if possible
 
   # We need to remove explicit time dependence on the state because when we
   # have `u(t) * t` we want to have the tgrad to be `u(t)` instead of `u'(t) *
@@ -13,13 +13,13 @@ function calculate_tgrad(sys::AbstractODESystem;
   tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r), simplify) for r in rhs]
   reverse_rule = Dict(map((x, xt) -> x=>xt, detime_dvs.(xs), xs))
   tgrad = Num.(substitute.(tgrad, Ref(reverse_rule)))
-  sys.tgrad[] = tgrad
+  get_tgrad(sys)[] = tgrad
   return tgrad
 end
 
 function calculate_jacobian(sys::AbstractODESystem;
                             sparse=false, simplify=false)
-    isempty(sys.jac[]) || return sys.jac[]  # use cached Jacobian, if possible
+    isempty(get_jac(sys)[]) || return get_jac(sys)[]  # use cached Jacobian, if possible
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
     iv = sys.iv
@@ -31,7 +31,7 @@ function calculate_jacobian(sys::AbstractODESystem;
         jac = jacobian(rhs, dvs, simplify=simplify)
     end
 
-    sys.jac[] = jac  # cache Jacobian
+    get_jac(sys)[] = jac  # cache Jacobian
     return jac
 end
 
@@ -162,7 +162,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      jac = _jac === nothing ? nothing : _jac,
                      tgrad = _tgrad === nothing ? nothing : _tgrad,
                      mass_matrix = _M,
-                     jac_prototype = sparse ? similar(sys.jac[],Float64) : nothing,
+                     jac_prototype = sparse ? similar(get_jac(sys)[],Float64) : nothing,
                      syms = Symbol.(states(sys)),
                      indepsym = Symbol(independent_variable(sys)),
                     )
@@ -214,7 +214,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
-    jp_expr = sparse ? :(similar($(sys.jac[]),Float64)) : :nothing
+    jp_expr = sparse ? :(similar($(get_jac(sys)[]),Float64)) : :nothing
 
     ex = quote
         f = $f
