@@ -151,8 +151,8 @@ let
     sys = ODESystem(eqs, t)
     asys = alias_elimination(sys)
 
-    test_equal.(asys.eqs, [D(x) ~ 2x])
-    test_equal.(asys.observed, [y ~ x])
+    test_equal.(equations(asys), [D(x) ~ 2x])
+    test_equal.(observed(asys), [y ~ x])
 end
 
 # issue #724 and #716

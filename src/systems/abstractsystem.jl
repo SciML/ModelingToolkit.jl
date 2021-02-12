@@ -149,6 +149,11 @@ for prop in [
              :Wfact_t
              :systems
              :structure
+             :op
+             :equality_constraints
+             :inequality_constraints
+             :controls
+             :loss
             ]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
@@ -158,7 +163,7 @@ for prop in [
     end
 end
 
-Setfield.get(obj, l::Setfield.PropertyLens{field}) where {field} = getfield(obj, field)
+Setfield.get(obj::AbstractSystem, l::Setfield.PropertyLens{field}) where {field} = getfield(obj, field)
 @generated function ConstructionBase.setproperties(obj::AbstractSystem, patch::NamedTuple)
     if issubset(fieldnames(patch), fieldnames(obj))
         args = map(fieldnames(obj)) do fn

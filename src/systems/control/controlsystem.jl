@@ -1,22 +1,22 @@
 abstract type AbstractControlSystem <: AbstractSystem end
 
 function namespace_controls(sys::AbstractSystem)
-    [rename(x,renamespace(sys.name,x.name)) for x in controls(sys)]
+    [rename(x,renamespace(nameof(sys),nameof(x))) for x in controls(sys)]
 end
 
 function controls(sys::AbstractControlSystem,args...)
     name = last(args)
-    extra_names = reduce(Symbol,[Symbol(:₊,x.name) for x in args[1:end-1]])
+    extra_names = reduce(Symbol,[Symbol(:₊,nameof(x)) for x in args[1:end-1]])
     newname = renamespace(extra_names,name)
-    rename(x,renamespace(sys.name,newname))(sys.iv())
+    rename(x,renamespace(nameof(sys),newname))(get_iv(sys))
 end
 
 function controls(sys::AbstractControlSystem,name::Symbol)
-    x = sys.controls[findfirst(x->x.name==name,sys.ps)]
-    rename(x,renamespace(sys.name,x.name))()
+    x = get_controls(sys)[findfirst(x->nameof(x)==name,sys.ps)]
+    rename(x,renamespace(nameof(sys),nameof(x)))
 end
 
-controls(sys::AbstractControlSystem) = isempty(sys.systems) ? sys.controls : [sys.controls;reduce(vcat,namespace_controls.(sys.systems))]
+controls(sys::AbstractControlSystem) = isempty(get_systems(sys)) ? get_controls(sys) : [get_controls(sys);reduce(vcat,namespace_controls.(get_systems(sys)))]
 
 """
 $(TYPEDEF)
@@ -107,13 +107,13 @@ function (f::ControlToExpr)(O)
     !istree(O) && return O
     res = if isa(operation(O), Sym)
         # normal variables and control variables
-        (any(isequal(O), f.states) || any(isequal(O), f.controls)) && return tosymbol(O)
+        (any(isequal(O), f.states) || any(isequal(O), controls(f))) && return tosymbol(O)
         build_expr(:call, Any[operation(O).name; f.(arguments(O))])
     else
         build_expr(:call, Any[Symbol(operation(O)); f.(arguments(O))])
     end
 end
-(f::ControlToExpr)(x::Sym) = x.name
+(f::ControlToExpr)(x::Sym) = nameof(x)
 
 function constructRadauIIA5(T::Type = Float64)
   sq6 = sqrt(convert(T, 6))
@@ -146,19 +146,24 @@ function runge_kutta_discretize(sys::ControlSystem,dt,tspan;
     n = length(tspan[1]:dt:tspan[2]) - 1
     m = length(tab.α)
 
-    f = @RuntimeGeneratedFunction(build_function([x.rhs for x in equations(sys)],sys.states,sys.controls,sys.ps,sys.iv,conv = ModelingToolkit.ControlToExpr(sys))[1])
-    L = @RuntimeGeneratedFunction(build_function(sys.loss,sys.states,sys.controls,sys.ps,sys.iv,conv = ModelingToolkit.ControlToExpr(sys)))
+    sts = states(sys)
+    ctr = controls(sys)
+    ps = parameters(sys)
+    lo = get_loss(sys)
+    iv = get_iv(sys)
+    f = @RuntimeGeneratedFunction(build_function([x.rhs for x in equations(sys)],sts,ctr,ps,iv,conv = ModelingToolkit.ControlToExpr(sys))[1])
+    L = @RuntimeGeneratedFunction(build_function(lo,sts,ctr,ps,iv,conv = ModelingToolkit.ControlToExpr(sys)))
 
     var(n, i...) = var(nameof(n), i...)
-    var(n::Symbol, i...) = Sym{FnType{Tuple{symtype(sys.iv)}, Real}}(nameof(Variable(n, i...)))
+    var(n::Symbol, i...) = Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(Variable(n, i...)))
     # Expand out all of the variables in time and by stages
-    timed_vars = [[var(operation(x),i)(sys.iv) for i in 1:n+1] for x in states(sys)]
-    k_vars = [[var(Symbol(:ᵏ,nameof(operation(x))),i,j)(sys.iv) for i in 1:m, j in 1:n] for x in states(sys)]
+    timed_vars = [[var(operation(x),i)(iv) for i in 1:n+1] for x in states(sys)]
+    k_vars = [[var(Symbol(:ᵏ,nameof(operation(x))),i,j)(iv) for i in 1:m, j in 1:n] for x in states(sys)]
     states_timeseries = [getindex.(timed_vars,j) for j in 1:n+1]
     k_timeseries = [[Num.(getindex.(k_vars,i,j)) for i in 1:m] for j in 1:n]
-    control_timeseries = [[[var(operation(x),i,j)(sys.iv) for x in controls(sys)] for i in 1:m] for j in 1:n]
+    control_timeseries = [[[var(operation(x),i,j)(iv) for x in sts] for i in 1:m] for j in 1:n]
     ps = parameters(sys)
-    iv = sys.iv
+    iv = iv
 
     # Calculate all of the update and stage equations
     mult = [tab.A * k_timeseries[i] for i in 1:n]

@@ -132,9 +132,9 @@ js = convert(JumpSystem, rs)
 midxs = 1:14
 cidxs = 15:18
 vidxs = 19:20
-@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.MassActionJump, midxs))
-@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.ConstantRateJump, cidxs))
-@test all(map(i -> typeof(js.eqs[i]) <: DiffEqJump.VariableRateJump, vidxs))
+@test all(map(i -> typeof(equations(js)[i]) <: DiffEqJump.MassActionJump, midxs))
+@test all(map(i -> typeof(equations(js)[i]) <: DiffEqJump.ConstantRateJump, cidxs))
+@test all(map(i -> typeof(equations(js)[i]) <: DiffEqJump.VariableRateJump, vidxs))
 
 pars = rand(length(k)); u0 = rand(1:10,4); ttt = rand();
 jumps = Vector{Union{ConstantRateJump, MassActionJump, VariableRateJump}}(undef,length(rxs))
@@ -165,13 +165,13 @@ jumps[20] = VariableRateJump((u,p,t) -> p[20]*t*u[1]*binomial(u[2],2)*u[3], inte
 statetoid = Dict(state => i for (i,state) in enumerate(states(js)))
 parammap = map((x,y)->Pair(x,y),parameters(js),pars)
 for i in midxs
-  maj = MT.assemble_maj(js.eqs[i], statetoid, ModelingToolkit.substituter(parammap),eltype(pars))
+  maj = MT.assemble_maj(equations(js)[i], statetoid, ModelingToolkit.substituter(parammap),eltype(pars))
   @test abs(jumps[i].scaled_rates - maj.scaled_rates) < 100*eps()
   @test jumps[i].reactant_stoch == maj.reactant_stoch
   @test jumps[i].net_stoch == maj.net_stoch
 end
 for i in cidxs
-  crj = MT.assemble_crj(js, js.eqs[i], statetoid)
+  crj = MT.assemble_crj(js, equations(js)[i], statetoid)
   @test isapprox(crj.rate(u0,p,ttt), jumps[i].rate(u0,p,ttt))
   fake_integrator1 = (u=zeros(4),p=p,t=0); fake_integrator2 = deepcopy(fake_integrator1);
   crj.affect!(fake_integrator1);
@@ -179,7 +179,7 @@ for i in cidxs
   @test fake_integrator1 == fake_integrator2
 end
 for i in vidxs
-  crj = MT.assemble_vrj(js, js.eqs[i], statetoid)
+  crj = MT.assemble_vrj(js, equations(js)[i], statetoid)
   @test isapprox(crj.rate(u0,p,ttt), jumps[i].rate(u0,p,ttt))
   fake_integrator1 = (u=zeros(4),p=p,t=0.); fake_integrator2 = deepcopy(fake_integrator1);
   crj.affect!(fake_integrator1); jumps[i].affect!(fake_integrator2);
@@ -202,8 +202,8 @@ sol = solve(jprob, SSAStepper())
 rxs = [Reaction(k1*S, [S,I], [I], [2,3], [2]),
        Reaction(k2*R, [I], [R]) ]
 rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
-@test isequal(ModelingToolkit.oderatelaw(rs.eqs[1]), k1*S*S^2*I^3/(factorial(2)*factorial(3)))
-@test_skip isequal(ModelingToolkit.jumpratelaw(rs.eqs[1]), k1*S*binomial(S,2)*binomial(I,3))
+@test isequal(ModelingToolkit.oderatelaw(equations(rs)[1]), k1*S*S^2*I^3/(factorial(2)*factorial(3)))
+@test_skip isequal(ModelingToolkit.jumpratelaw(equations(eqs)[1]), k1*S*binomial(S,2)*binomial(I,3))
 dep = Set()
 ModelingToolkit.get_variables!(dep, rxs[2], Set(states(rs)))
 dep2  = Set([R,I])
@@ -221,21 +221,21 @@ isequal2(a,b) = isequal(simplify(a), simplify(b))
 
 #test ODE scaling:
 os = convert(ODESystem,rs)
-@test isequal2(os.eqs[1].rhs, -2*k1*S*S^2*I^3/12)
+@test isequal2(equations(os)[1].rhs, -2*k1*S*S^2*I^3/12)
 os = convert(ODESystem,rs; combinatoric_ratelaws=false)
-@test isequal2(os.eqs[1].rhs, -2*k1*S*S^2*I^3)
+@test isequal2(equations(os)[1].rhs, -2*k1*S*S^2*I^3)
 
 # test ConstantRateJump rate scaling
 js = convert(JumpSystem,rs)
-@test isequal2(js.eqs[1].rate, k1*S*S*(S-1)*I*(I-1)*(I-2)/12)
+@test isequal2(equations(js)[1].rate, k1*S*S*(S-1)*I*(I-1)*(I-2)/12)
 js = convert(JumpSystem,rs;combinatoric_ratelaws=false)
-@test isequal2(js.eqs[1].rate, k1*S*S*(S-1)*I*(I-1)*(I-2))
+@test isequal2(equations(js)[1].rate, k1*S*S*(S-1)*I*(I-1)*(I-2))
 
 # test MassActionJump rate scaling
 rxs = [Reaction(k1, [S,I], [I], [2,3], [2]),
        Reaction(k2, [I], [R]) ]
 rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
 js = convert(JumpSystem, rs)
-@test isequal2(js.eqs[1].scaled_rates, k1/12)
+@test isequal2(equations(js)[1].scaled_rates, k1/12)
 js = convert(JumpSystem,rs; combinatoric_ratelaws=false)
-@test isequal2(js.eqs[1].scaled_rates, k1)
+@test isequal2(equations(js)[1].scaled_rates, k1)

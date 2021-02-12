@@ -33,25 +33,25 @@ sys = ODESystem(eqs,t,[x,y],[a])
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.CTarget(),
                                      lhsname=:internal_var___du,
                                      rhsnames=[:internal_var___u,:internal_var___p,:t]) ==
-      ModelingToolkit.build_function(sys.eqs,[x,y],[a],t,target = ModelingToolkit.CTarget(),
-                                           lhsname=:internal_var___du,
-                                           rhsnames=[:internal_var___u,:internal_var___p,:t])
+    ModelingToolkit.build_function(equations(sys),[x,y],[a],t,target = ModelingToolkit.CTarget(),
+                                   lhsname=:internal_var___du,
+                                   rhsnames=[:internal_var___u,:internal_var___p,:t])
 
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.StanTarget()) ==
-      ModelingToolkit.build_function(sys.eqs,[x,y],[a],t,target = ModelingToolkit.StanTarget())
+      ModelingToolkit.build_function(equations(sys),[x,y],[a],t,target = ModelingToolkit.StanTarget())
 
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.MATLABTarget()) ==
-      ModelingToolkit.build_function(sys.eqs,[x,y],[a],t,target = ModelingToolkit.MATLABTarget())
+      ModelingToolkit.build_function(equations(sys),[x,y],[a],t,target = ModelingToolkit.MATLABTarget())
 
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.CTarget(),
                                      lhsname=:internal_var___du,
                                      rhsnames=[:internal_var___u,:internal_var___p,:t]) ==
-      ModelingToolkit.build_function(sys.eqs,sys.states,sys.ps,sys.iv,target = ModelingToolkit.CTarget(),
+      ModelingToolkit.build_function(equations(sys),states(sys),parameters(sys),independent_variable(sys),target = ModelingToolkit.CTarget(),
                                      lhsname=:internal_var___du,
                                      rhsnames=[:internal_var___u,:internal_var___p,:t])
 
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.StanTarget()) ==
-      ModelingToolkit.build_function(sys.eqs,sys.states,sys.ps,sys.iv,target = ModelingToolkit.StanTarget())
+      ModelingToolkit.build_function(equations(sys),states(sys),parameters(sys),independent_variable(sys),target = ModelingToolkit.StanTarget())
 
 @test ModelingToolkit.build_function(eqs,[x,y],[a],t,target = ModelingToolkit.MATLABTarget()) ==
-      ModelingToolkit.build_function(sys.eqs,sys.states,sys.ps,sys.iv,target = ModelingToolkit.MATLABTarget())
+      ModelingToolkit.build_function(equations(sys),states(sys),parameters(sys),independent_variable(sys),target = ModelingToolkit.MATLABTarget())
