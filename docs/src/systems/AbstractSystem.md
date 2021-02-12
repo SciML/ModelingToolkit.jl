@@ -21,7 +21,7 @@ The values which are common to all `AbstractSystem`s are:
 - `states(sys)`: All the states in the system and its subsystems.
 - `parameters(sys)`: All parameters of the system and its subsystems.
 - `nameof(sys)`: The name of the current-level system.
-- `get_equations(sys)`: Equations that define the current-level system.
+- `get_eqs(sys)`: Equations that define the current-level system.
 - `get_states(sys)`: States that are in the current-level system.
 - `get_ps(sys)`: Parameters that are in the current-level system.
 - `get_systems(sys)`: Subsystems of the current-level system.
