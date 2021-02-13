@@ -35,10 +35,10 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     params = if ndims(params) == 0
         [params[1]]
     else
-        Vector(params)
+        Vector(vec(params))
     end
 
-    de = ODESystem(eqs,t,Vector(vars),params)
+    de = ODESystem(eqs,t,Vector(vec(vars)),params)
 
     de
 end
@@ -93,10 +93,10 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
     params = if ndims(params) == 0
         [params[1]]
     else
-        Vector(params)
+        Vector(vec(params))
     end
 
-    de = SDESystem(deqs,neqs,t,Vector(vars),params)
+    de = SDESystem(deqs,neqs,t,Vector(vec(vars)),params)
 
     de
 end
