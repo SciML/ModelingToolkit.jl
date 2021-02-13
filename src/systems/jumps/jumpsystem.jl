@@ -202,7 +202,7 @@ tspan = (0.0, 250.0)
 dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 ```
 """
-function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Tuple,
+function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple,Nothing},
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
     u0 = varmap_to_vars(u0map, states(sys); defaults=default_u0(sys))
     p  = varmap_to_vars(parammap, parameters(sys); defaults=default_p(sys))
@@ -230,7 +230,7 @@ tspan = (0.0, 250.0)
 dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 ```
 """
-function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Tuple,
+function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Union{Tuple,Nothing},
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
     u0 = varmap_to_vars(u0map, states(sys); defaults=default_u0(sys))
     p  = varmap_to_vars(parammap, parameters(sys); defaults=default_p(sys))
@@ -241,7 +241,7 @@ function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Tuple,
         p = $p
         tspan = $tspan
         df = DiscreteFunction{true,true}(f, syms=$(Symbol.(states(sys))))
-        DiscreteProblem(df, u0, tspan, p; kwargs...)
+        DiscreteProblem(df, u0, tspan, p)
     end
 end
 
@@ -262,7 +262,7 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
 
     statetoid = Dict(value(state) => i for (i,state) in enumerate(states(js)))
     eqs       = equations(js)
-    invttype  = typeof(1 / prob.tspan[2])
+    invttype  = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
 
     # handling parameter substition and empty param vecs
     p = (prob.p == DiffEqBase.NullParameters()) ? Num[] : prob.p
