@@ -1,5 +1,5 @@
 using OrdinaryDiffEq, ModelingToolkit, Test
-using GalacticOptim, Optim
+using GalacticOptim, Optim, RecursiveArrayTools
 
 N = 32
 const xyd_brusselator = range(0,stop=1,length=N)
@@ -141,3 +141,22 @@ problem = ODEProblem(SIRD_ac!, ℬ, 𝒯, 𝒫)
 sys = modelingtoolkitize(problem)
 fast_problem = ODEProblem(sys,ℬ, 𝒯, 𝒫 )
 @time solution = solve(fast_problem, Tsit5(), saveat = 1:final_time)
+
+## Issue #778
+
+r0 = [1131.340, -2282.343, 6672.423]
+v0 = [-5.64305, 4.30333, 2.42879]
+Δt = 86400.0*365
+μ = 398600.4418
+rv0 = ArrayPartition(r0,v0)
+
+function f(dy, y, μ, t)
+    r = sqrt(sum(y[1,:].^2))
+    dy[1,:] = y[2,:]
+    dy[2,:] = -μ .* y[1,:] / r^3
+end
+
+prob = ODEProblem(f, rv0, (0.0, Δt), μ)
+sol = solve(prob, Vern8())
+
+modelingtoolkitize(prob)

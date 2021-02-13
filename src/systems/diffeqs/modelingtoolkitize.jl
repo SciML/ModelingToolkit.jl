@@ -15,7 +15,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     end
 
     var(x, i) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x, i))))
-    vars = reshape([var(:x, i)(value(t)) for i in eachindex(prob.u0)],size(prob.u0))
+    vars = ArrayInterface.restructure(prob.u0,[var(:x, i)(ModelingToolkit.value(t)) for i in eachindex(prob.u0)])
     params = p isa DiffEqBase.NullParameters ? [] :
              reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(p))
 
@@ -31,7 +31,14 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     end
 
     eqs = vcat([rhs[i] ~ lhs[i] for i in eachindex(prob.u0)]...)
-    de = ODESystem(eqs,t,vec(vars),vec(params))
+
+    params = if ndims(params) == 0
+        [params[1]]
+    else
+        Vector(vec(params))
+    end
+
+    de = ODESystem(eqs,t,Vector(vec(vars)),params)
 
     de
 end
@@ -53,7 +60,7 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
         p = prob.p
     end
     var(x, i) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x, i))))
-    vars = reshape([var(:x, i)(value(t)) for i in eachindex(prob.u0)],size(prob.u0))
+    vars = ArrayInterface.restructure(prob.u0,[var(:x, i)(ModelingToolkit.value(t)) for i in eachindex(prob.u0)])
     params = p isa DiffEqBase.NullParameters ? [] :
              reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(p))
 
@@ -83,7 +90,13 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
     end
     deqs = vcat([rhs[i] ~ lhs[i] for i in eachindex(prob.u0)]...)
 
-    de = SDESystem(deqs,neqs,t,vec(vars),vec(params))
+    params = if ndims(params) == 0
+        [params[1]]
+    else
+        Vector(vec(params))
+    end
+
+    de = SDESystem(deqs,neqs,t,Vector(vec(vars)),params)
 
     de
 end
