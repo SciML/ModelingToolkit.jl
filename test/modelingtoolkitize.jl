@@ -1,5 +1,5 @@
 using OrdinaryDiffEq, ModelingToolkit, Test
-using GalacticOptim, Optim
+using GalacticOptim, Optim, RecursiveArrayTools
 
 N = 32
 const xyd_brusselator = range(0,stop=1,length=N)
