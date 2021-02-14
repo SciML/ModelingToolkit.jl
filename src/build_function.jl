@@ -60,18 +60,6 @@ function unflatten_long_ops(op, N=4)
     Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2])))(op)
 end
 
-function observed_let(eqs)
-    process -> ex -> begin
-        isempty(eqs) && return ex
-
-        assignments = map(eq -> :($(process(eq.lhs)) = $(process(eq.rhs))), eqs)
-        letexpr = :(let $(assignments...)
-                    end)
-        # avoid a superfluous `begin ... end` block
-        letexpr.args[2] = ex
-        return letexpr
-    end
-end
 
 # Scalar output
 
