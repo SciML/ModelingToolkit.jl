@@ -213,10 +213,13 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem,u0map,paramm
     ps = parameters(sys)
     u0map′ = lower_mapnames(u0map)
     u0 = varmap_to_vars(u0map′,dvs; defaults=default_u0(sys))
+    defp = default_p(sys)
 
     if !(parammap isa DiffEqBase.NullParameters)
         parammap′ = lower_mapnames(parammap)
-        p = varmap_to_vars(parammap′,ps; defaults=default_p(sys))
+        p = varmap_to_vars(parammap′,ps; defaults=defp)
+    elseif !isempty(defp)
+        p = varmap_to_vars(Dict(),ps; defaults=defp)
     else
         p = ps
     end
