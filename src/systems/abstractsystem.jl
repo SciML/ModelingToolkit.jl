@@ -184,7 +184,7 @@ end
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     param = Sym{Parameter{Real}}(prop)
     if param in parameters(sys)
-        sys.default_p[param] = val
+        sys.default_p[param] = value(val)
     else
         setfield!(sys, prop, val)
     end
@@ -212,7 +212,7 @@ end
 
 function namespace_default_p(sys)
     d_p = default_p(sys)
-    Dict(parameters(sys, k) => namespace_expr(d_p[k], nameof(sys), []) for k in keys(d_p))
+    Dict(parameters(sys, k) => namespace_expr(d_p[k], nameof(sys), independent_variable(sys)) for k in keys(d_p))
 end
 
 function namespace_equations(sys::AbstractSystem)
