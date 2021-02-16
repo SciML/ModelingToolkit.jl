@@ -277,12 +277,13 @@ function set_array(s::MultithreadedForm, out, outputidxs, rhss, checkbounds, ski
     end
     ntasks = 2 * nthreads() # oversubscribe a little bit
     per_task = ceil(Int, length(rhss) / ntasks)
+    # TODO: do better partitioning when skipzeros is present
     slices = collect(Iterators.partition(zip(outputidxs, rhss), per_task))
     arrays = map(slices) do slice
         idxs, vals = first.(slice), last.(slice)
         _set_array(out, idxs, vals, checkbounds, skipzeros)
     end
-    SpawnFetch{Multithreaded}(arrays, @inline f(args...) = nothing)
+    SpawnFetch{Multithreaded}(arrays, @inline noop(args...) = nothing)
 end
 
 function _set_array(out, outputidxs, rhss::AbstractArray, checkbounds, skipzeros)
