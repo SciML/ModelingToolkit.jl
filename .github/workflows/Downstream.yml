@@ -18,6 +18,7 @@ jobs:
         os: [ubuntu-latest]
         package:
           - {user: SciML, repo: Catalyst.jl, group: All}
+          - {user: SciML, repo: NeuralPDE.jl, group: NNPDE}
 
     steps:
       - uses: actions/checkout@v2
