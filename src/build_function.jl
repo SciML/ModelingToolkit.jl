@@ -229,7 +229,7 @@ function make_array(s::MultithreadedForm, arr, similarto)
     arrays = map(slices) do slice
         _make_array(slice, similarto)
     end
-    Par{Multithreaded}(arrays, vcat)
+    SpawnFetch{Multithreaded}(arrays, vcat)
 end
 
 function _make_array(rhss::AbstractSparseArray, similarto)
@@ -282,7 +282,7 @@ function set_array(s::MultithreadedForm, out, outputidxs, rhss, checkbounds, ski
         idxs, vals = first.(slice), last.(slice)
         _set_array(out, idxs, vals, checkbounds, skipzeros)
     end
-    Par{Multithreaded}(arrays, @inline f(args...) = nothing)
+    SpawnFetch{Multithreaded}(arrays, @inline f(args...) = nothing)
 end
 
 function _set_array(out, outputidxs, rhss::AbstractArray, checkbounds, skipzeros)
