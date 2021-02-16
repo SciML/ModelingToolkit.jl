@@ -9,7 +9,10 @@ struct MATLABTarget <: BuildTargets end
 
 abstract type ParallelForm end
 struct SerialForm <: ParallelForm end
-struct MultithreadedForm <: ParallelForm end
+struct MultithreadedForm <: ParallelForm
+    ntasks::Int
+end
+MultithreadedForm() = MultithreadedForm(2*nthreads())
 struct DistributedForm <: ParallelForm end
 struct DaggerForm <: ParallelForm end
 
@@ -223,8 +226,7 @@ function make_array(s::SerialForm, arr, similarto)
 end
 
 function make_array(s::MultithreadedForm, arr, similarto)
-    ntasks = 2 * nthreads() # oversubscribe a little bit
-    per_task = ceil(Int, length(arr) / ntasks)
+    per_task = ceil(Int, length(arr) / s.ntasks)
     slices = collect(Iterators.partition(arr, per_task))
     arrays = map(slices) do slice
         _make_array(slice, similarto)
@@ -275,8 +277,7 @@ function set_array(s::MultithreadedForm, out, outputidxs, rhss, checkbounds, ski
     if outputidxs === nothing
         outputidxs = collect(eachindex(rhss))
     end
-    ntasks = 2 * nthreads() # oversubscribe a little bit
-    per_task = ceil(Int, length(rhss) / ntasks)
+    per_task = ceil(Int, length(rhss) / s.ntasks)
     # TODO: do better partitioning when skipzeros is present
     slices = collect(Iterators.partition(zip(outputidxs, rhss), per_task))
     arrays = map(slices) do slice
