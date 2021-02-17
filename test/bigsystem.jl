@@ -80,10 +80,6 @@ FiniteDiff.finite_difference_jacobian!(J2,(du,u)->f!(du,u,nothing,nothing),u)
 maximum(J2 .- Array(J)) < 1e-5
 =#
 
-using Distributed
-addprocs(4)
-distributedf = eval(ModelingToolkit.build_function(du,u,parallel=ModelingToolkit.DistributedForm())[2])
-
 jac = ModelingToolkit.sparsejacobian(vec(du),vec(u))
 serialjac = eval(ModelingToolkit.build_function(vec(jac),u)[2])
 multithreadedjac = eval(ModelingToolkit.build_function(vec(jac),u,parallel=ModelingToolkit.MultithreadedForm())[2])
