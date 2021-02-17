@@ -19,6 +19,7 @@ jobs:
         package:
           - {user: SciML, repo: Catalyst.jl, group: All}
           - {user: SciML, repo: NeuralPDE.jl, group: NNPDE}
+          - {user: SciML, repo: DataDrivenDiffEq.jl, group: Standard}
 
     steps:
       - uses: actions/checkout@v2
