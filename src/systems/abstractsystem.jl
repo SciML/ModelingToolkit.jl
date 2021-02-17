@@ -184,7 +184,8 @@ end
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     if (pa = Sym{Parameter{Real}}(prop); pa in parameters(sys))
         sys.default_p[pa] = value(val)
-    elseif (st = Sym{Real}(prop); st in states(sys))
+    # comparing a Sym returns a symbolic expression
+    elseif (st = Sym{Real}(prop); any(s->s.name==st.name, states(sys)))
         sys.default_u0[st] = value(val)
     else
         setfield!(sys, prop, val)
