@@ -13,8 +13,6 @@ struct MultithreadedForm <: ParallelForm
     ntasks::Int
 end
 MultithreadedForm() = MultithreadedForm(2*nthreads())
-struct DistributedForm <: ParallelForm end
-struct DaggerForm <: ParallelForm end
 
 """
 `build_function`
@@ -160,10 +158,6 @@ Special Keyword Argumnets:
   - `SerialForm()`: Serial execution.
   - `MultithreadedForm()`: Multithreaded execution with a static split, evenly
     splitting the number of expressions per thread.
-  - `DistributedForm()`: Multiprocessing using Julia's Distributed with a static
-    schedule, evenly splitting the number of expressions per process.
-  - `DaggerForm()`: Multithreading and multiprocessing using Julia's Dagger.jl
-    for dynamic scheduling and load balancing.
 - `conv`: The conversion function of the Operation to Expr. By default this uses
   the `toexpr` function.
 - `checkbounds`: For whether to enable bounds checking inside of the generated
