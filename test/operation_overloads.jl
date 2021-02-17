@@ -129,3 +129,7 @@ z2 = c + d * im
 @test isequal(2 + z1, Complex(2 + a, b))
 @test isequal(z1 - 2, Complex(a - 2, b))
 @test isequal(2 - z1, Complex(2 - a, -b))
+@test isequal((0 ~ 0+0*im).rhs, Complex(0, 0))
+@test isequal((im ~ 0+0*im).rhs, Complex(0, 0))
+@test isequal((0 ~ z1).rhs, z1)
+@test isequal((z1 ~ z2).rhs, z2)

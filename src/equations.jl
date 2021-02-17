@@ -47,6 +47,7 @@ Base.:~(lhs::Symbolic, rhs::Any    ) = Equation(value(lhs), value(rhs))
 Base.:~(lhs::Any, rhs::Symbolic    ) = Equation(value(lhs), value(rhs))
 Base.:~(lhs::Number, rhs::Complex) = Equation(value(lhs), value(rhs))
 Base.:~(lhs::Complex, rhs::Number) = Equation(value(lhs), value(rhs))
+Base.:~(lhs::Complex, rhs::Complex) = Equation(value(lhs), value(rhs))
 
 struct ConstrainedEquation
   constraints
