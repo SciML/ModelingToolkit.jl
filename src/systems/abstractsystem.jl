@@ -182,9 +182,10 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
 end
 
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
-    param = Sym{Parameter{Real}}(prop)
-    if param in parameters(sys)
-        sys.default_p[param] = value(val)
+    if (pa = Sym{Parameter{Real}}(prop); pa in parameters(sys))
+        sys.default_p[pa] = value(val)
+    elseif (st = Sym{Real}(prop); st in states(sys))
+        sys.default_u0[st] = value(val)
     else
         setfield!(sys, prop, val)
     end
