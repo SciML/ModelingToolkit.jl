@@ -208,7 +208,7 @@ namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
 
 function namespace_default_u0(sys)
     d_u0 = default_u0(sys)
-    Dict(states(sys, k) => d_u0[k] for k in keys(d_u0))
+    Dict(states(sys, k) => namespace_expr(d_u0[k], nameof(sys), independent_variable(sys)) for k in keys(d_u0))
 end
 
 function namespace_default_p(sys)

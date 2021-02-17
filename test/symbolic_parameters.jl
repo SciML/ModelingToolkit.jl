@@ -2,7 +2,7 @@ using ModelingToolkit
 using NonlinearSolve
 using Test
 
-@variables x y z
+@variables x y z u
 @parameters σ ρ β
 
 eqs = [0 ~ σ*(y-x),
@@ -14,22 +14,30 @@ par = [
     ρ => 0.1+σ,
     β => ρ*1.1
 ]
-ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β], name=:ns, default_p=par)
+u0 = [
+    x => u,
+    y => u,
+    z => u,
+]
+ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β], name=:ns, default_p=par, default_u0=u0)
 ModelingToolkit.default_p(ns)
 resolved = ModelingToolkit.varmap_to_vars(Dict(), parameters(ns), defaults=ModelingToolkit.default_p(ns))
 @test resolved == [1, 0.1+1, (0.1+1)*1.1]
 
-prob = NonlinearProblem(ns, ones(3), Pair[])
+prob = NonlinearProblem(ns, [u=>1.0], Pair[])
 @show sol = solve(prob,NewtonRaphson())
 
 @variables a
 @parameters b
-top = NonlinearSystem([0 ~ -a + ns.x+1], [a], [b], systems=[ns], name=:top)
-flat = flatten(top)
-flat.b = ns.σ*0.5
+top = NonlinearSystem([0 ~ -a + ns.x+b], [a], [b], systems=[ns], name=:top)
+top.b = ns.σ*0.5
 
-flatres = ModelingToolkit.varmap_to_vars(Dict(), parameters(flat), defaults=ModelingToolkit.default_p(flat))
-@test flatres == [0.5, 1, 0.1+1, (0.1+1)*1.1]
+res = ModelingToolkit.varmap_to_vars(Dict(), parameters(top), defaults=ModelingToolkit.default_p(top))
+@test res == [0.5, 1, 0.1+1, (0.1+1)*1.1]
 
-prob = NonlinearProblem(flat, ones(4), Pair[])
+prob = NonlinearProblem(top, [states(ns, u)=>1.0, a=>1.0], Pair[])
+@show sol = solve(prob,NewtonRaphson())
+
+# test NullParameters+defaults
+prob = NonlinearProblem(top, [states(ns, u)=>1.0, a=>1.0])
 @show sol = solve(prob,NewtonRaphson())
