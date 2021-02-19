@@ -52,14 +52,19 @@ function build_function(args...;target = JuliaTarget(),kwargs...)
   _build_function(target,args...;kwargs...)
 end
 
-function unflatten_long_ops(op, N=4)
-    rule1 = @rule((+)((~~x)) => length(~~x) > N ?
-                 +(+((~~x)[1:N]...) + (+)((~~x)[N+1:end]...)) : nothing)
-    rule2 = @rule((*)((~~x)) => length(~~x) > N ?
-                 *(*((~~x)[1:N]...) * (*)((~~x)[N+1:end]...)) : nothing)
+function unflatten_args(f, args, N=4)
+    length(args) < N && return Term{Real}(f, args)
+    unflatten_args(f, [Term{Real}(f, group)
+                                       for group in Iterators.partition(args, N)], N)
+end
 
+function unflatten_long_ops(op, N=4)
     op = value(op)
-    Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2])))(op)
+    !istree(op) && return Num(op)
+    rule1 = @rule((+)(~~x) => length(~~x) > N ? unflatten_args(+, ~~x, 4) : nothing)
+    rule2 = @rule((*)(~~x) => length(~~x) > N ? unflatten_args(*, ~~x, 4) : nothing)
+
+    Num(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2]))(op))
 end
 
 
@@ -76,7 +81,7 @@ function _build_function(target::JuliaTarget, op, args...;
                          linenumbers = true)
 
     dargs = map(destructure_arg, [args...])
-    expr = toexpr(Func(dargs, [], op))
+    expr = toexpr(Func(dargs, [], unflatten_long_ops(op)))
 
     if expression == Val{true}
         expr
@@ -247,7 +252,7 @@ function _make_array(rhss::AbstractArray, similarto)
     end
 end
 
-_make_array(x, similarto) = x
+_make_array(x, similarto) = unflatten_long_ops(x)
 
 ## In-place version
 
@@ -298,7 +303,7 @@ function _set_array(out, outputidxs, rhss::AbstractArray, checkbounds, skipzeros
                 end)
 end
 
-_set_array(out, outputidxs, rhs, checkbounds, skipzeros) = rhs
+_set_array(out, outputidxs, rhs, checkbounds, skipzeros) = unflatten_long_ops(rhs)
 
 
 function vars_to_pairs(name,vs::Union{Tuple, AbstractArray}, symsdict=Dict())
