@@ -24,9 +24,7 @@ excels in many areas due to purposeful design decisions:
 - Parallelism: ModelingToolkit.jl has pervasive parallelism. The
   symbolic simplification via [SymbolicUtils.jl](https://github.com/JuliaSymbolics/SymbolicUtils.jl)
   has built-in parallelism, ModelingToolkit.jl builds functions that
-  parallelizes across threads and multiprocesses across clusters,
-  and it has dynamic scheduling through tools like [Dagger.jl](https://github.com/JuliaParallel/Dagger.jl).
-  ModelingToolkit.jl is compatible with GPU libraries like CUDA.jl.
+  parallelizes across threads. ModelingToolkit.jl is compatible with GPU libraries like CUDA.jl.
 - Scientific Machine Learning (SciML): ModelingToolkit.jl is made to synergize
   with the high performance Julia SciML ecosystem in many ways. At a
   base level, all expressions and built functions are compatible with

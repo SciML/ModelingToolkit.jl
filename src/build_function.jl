@@ -1,4 +1,5 @@
 using SymbolicUtils.Code
+using Base.Threads
 
 abstract type BuildTargets end
 struct JuliaTarget <: BuildTargets end
@@ -8,9 +9,10 @@ struct MATLABTarget <: BuildTargets end
 
 abstract type ParallelForm end
 struct SerialForm <: ParallelForm end
-struct MultithreadedForm <: ParallelForm end
-struct DistributedForm <: ParallelForm end
-struct DaggerForm <: ParallelForm end
+struct MultithreadedForm <: ParallelForm
+    ntasks::Int
+end
+MultithreadedForm() = MultithreadedForm(2*nthreads())
 
 """
 `build_function`
@@ -60,18 +62,6 @@ function unflatten_long_ops(op, N=4)
     Rewriters.Fixpoint(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2])))(op)
 end
 
-function observed_let(eqs)
-    process -> ex -> begin
-        isempty(eqs) && return ex
-
-        assignments = map(eq -> :($(process(eq.lhs)) = $(process(eq.rhs))), eqs)
-        letexpr = :(let $(assignments...)
-                    end)
-        # avoid a superfluous `begin ... end` block
-        letexpr.args[2] = ex
-        return letexpr
-    end
-end
 
 # Scalar output
 
@@ -140,7 +130,7 @@ Build function target: JuliaTarget
 function _build_function(target::JuliaTarget, rhss, args...;
                          conv = toexpr, expression = Val{true},
                          checkbounds = false,
-                         linenumbers = false, multithread=nothing,
+                         linenumbers = false,
                          headerfun = addheader, outputidxs=nothing,
                          convert_oop = true, force_SA = false,
                          skipzeros = outputidxs===nothing,
@@ -168,10 +158,6 @@ Special Keyword Argumnets:
   - `SerialForm()`: Serial execution.
   - `MultithreadedForm()`: Multithreaded execution with a static split, evenly
     splitting the number of expressions per thread.
-  - `DistributedForm()`: Multiprocessing using Julia's Distributed with a static
-    schedule, evenly splitting the number of expressions per process.
-  - `DaggerForm()`: Multithreading and multiprocessing using Julia's Dagger.jl
-    for dynamic scheduling and load balancing.
 - `conv`: The conversion function of the Operation to Expr. By default this uses
   the `toexpr` function.
 - `checkbounds`: For whether to enable bounds checking inside of the generated
@@ -194,7 +180,7 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
                        expression = Val{true},
                        expression_module = @__MODULE__(),
                        checkbounds = false,
-                       linenumbers = false, multithread=nothing,
+                       linenumbers = false,
                        outputidxs=nothing,
                        skipzeros = false,
                        wrap_code = (nothing, nothing),
@@ -204,13 +190,13 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     dargs = map(destructure_arg, [args...])
     i = findfirst(x->x isa DestructuredArgs, dargs)
     similarto = i === nothing ? Array : dargs[i].name
-    oop_expr = Func(dargs, [], _make_array(rhss, similarto))
+    oop_expr = Func(dargs, [], make_array(parallel, rhss, similarto))
     if !isnothing(wrap_code[1])
         oop_expr = wrap_code[1](oop_expr)
     end
 
     out = Sym{Any}(gensym("out"))
-    ip_expr = Func([out, dargs...], [], _set_array(out, outputidxs, rhss, checkbounds, skipzeros))
+    ip_expr = Func([out, dargs...], [], set_array(parallel, out, outputidxs, rhss, checkbounds, skipzeros))
 
     if !isnothing(wrap_code[2])
         ip_expr = wrap_code[2](ip_expr)
@@ -224,6 +210,24 @@ function _build_function(target::JuliaTarget, rhss::AbstractArray, args...;
     end
 end
 
+function make_array(s, arr, similarto)
+    Base.@warn("Parallel form of $(typeof(s)) not implemented")
+    _make_array(arr, similarto)
+end
+
+function make_array(s::SerialForm, arr, similarto)
+    _make_array(arr, similarto)
+end
+
+function make_array(s::MultithreadedForm, arr, similarto)
+    per_task = ceil(Int, length(arr) / s.ntasks)
+    slices = collect(Iterators.partition(arr, per_task))
+    arrays = map(slices) do slice
+        _make_array(slice, similarto)
+    end
+    SpawnFetch{Multithreaded}(arrays, vcat)
+end
+
 function _make_array(rhss::AbstractSparseArray, similarto)
     arr = map(x->_make_array(x, similarto), rhss)
     if !(arr isa AbstractSparseArray)
@@ -232,30 +236,6 @@ function _make_array(rhss::AbstractSparseArray, similarto)
         MakeSparseArray(arr)
     end
 end
-
-## In-place version
-function _set_array(out, outputidxs, rhss::AbstractArray, checkbounds, skipzeros)
-    if rhss isa Union{SparseVector, SparseMatrixCSC}
-        return SetArray(checkbounds, LiteralExpr(:($out.nzval)), rhss.nzval)
-    elseif outputidxs === nothing
-        outputidxs = collect(eachindex(rhss))
-    end
-
-    # sometimes outputidxs is a Tuple
-    ii = findall(i->!(rhss[i] isa AbstractArray) && !(skipzeros && _iszero(rhss[i])), eachindex(outputidxs))
-    jj = findall(i->rhss[i] isa AbstractArray, eachindex(outputidxs))
-    exprs = []
-    push!(exprs, SetArray(checkbounds, out, AtIndex.(vec(collect(outputidxs[ii])), vec(rhss[ii]))))
-    for j in jj
-        push!(exprs, _set_array(LiteralExpr(:($out[$j])), nothing, rhss[j], checkbounds, skipzeros))
-    end
-    LiteralExpr(quote
-                    $(exprs...)
-                end)
-end
-
-_set_array(out, outputidxs, rhs, checkbounds, skipzeros) = rhs
-
 
 function _make_array(rhss::AbstractArray, similarto)
     arr = map(x->_make_array(x, similarto), rhss)
@@ -268,6 +248,58 @@ function _make_array(rhss::AbstractArray, similarto)
 end
 
 _make_array(x, similarto) = x
+
+## In-place version
+
+function set_array(p, args...)
+    Base.@warn("Parallel form of $(typeof(p)) not implemented")
+    _set_array(args...)
+end
+
+function set_array(s::SerialForm, args...)
+    _set_array(args...)
+end
+
+function set_array(s::MultithreadedForm, out, outputidxs, rhss, checkbounds, skipzeros)
+    if rhss isa AbstractSparseArray
+        return set_array(LiteralExpr(:($out.nzval)),
+                         nothing,
+                         rhss.nzval,
+                         checkbounds,
+                         skipzeros)
+    end
+    if outputidxs === nothing
+        outputidxs = collect(eachindex(rhss))
+    end
+    per_task = ceil(Int, length(rhss) / s.ntasks)
+    # TODO: do better partitioning when skipzeros is present
+    slices = collect(Iterators.partition(zip(outputidxs, rhss), per_task))
+    arrays = map(slices) do slice
+        idxs, vals = first.(slice), last.(slice)
+        _set_array(out, idxs, vals, checkbounds, skipzeros)
+    end
+    SpawnFetch{Multithreaded}(arrays, @inline noop(args...) = nothing)
+end
+
+function _set_array(out, outputidxs, rhss::AbstractArray, checkbounds, skipzeros)
+    if outputidxs === nothing
+        outputidxs = collect(eachindex(rhss))
+    end
+    # sometimes outputidxs is a Tuple
+    ii = findall(i->!(rhss[i] isa AbstractArray) && !(skipzeros && _iszero(rhss[i])), eachindex(outputidxs))
+    jj = findall(i->rhss[i] isa AbstractArray, eachindex(outputidxs))
+    exprs = []
+    push!(exprs, SetArray(!checkbounds, out, AtIndex.(vec(collect(outputidxs[ii])), vec(rhss[ii]))))
+    for j in jj
+        push!(exprs, _set_array(LiteralExpr(:($out[$j])), nothing, rhss[j], checkbounds, skipzeros))
+    end
+    LiteralExpr(quote
+                    $(exprs...)
+                end)
+end
+
+_set_array(out, outputidxs, rhs, checkbounds, skipzeros) = rhs
+
 
 function vars_to_pairs(name,vs::Union{Tuple, AbstractArray}, symsdict=Dict())
     vs_names = tosymbol.(vs)
