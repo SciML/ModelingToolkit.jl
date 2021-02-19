@@ -53,18 +53,18 @@ function build_function(args...;target = JuliaTarget(),kwargs...)
 end
 
 function unflatten_args(f, args, N=4)
-    length(args) < N && return Term{Number}(f, args)
-    unflatten_args(f, [Term{Number}(f, group)
+    length(args) < N && return Term{Real}(f, args)
+    unflatten_args(f, [Term{Real}(f, group)
                                        for group in Iterators.partition(args, N)], N)
 end
 
 function unflatten_long_ops(op, N=4)
     op = value(op)
-    !istree(op) && return
+    !istree(op) && return Num(op)
     rule1 = @rule((+)(~~x) => length(~~x) > N ? unflatten_args(+, ~~x, 4) : nothing)
     rule2 = @rule((*)(~~x) => length(~~x) > N ? unflatten_args(*, ~~x, 4) : nothing)
 
-    Rewriters.Postwalk(Rewriters.Chain([rule1, rule2]))(op)
+    Num(Rewriters.Postwalk(Rewriters.Chain([rule1, rule2]))(op))
 end
 
 
