@@ -259,18 +259,6 @@ sys = ODESystem(eqs, t)
 @parameters t r
 @variables x(t)
 D = Differential(t)
-
-# Define a differential equation
-nums = [1 + x + x^2,
-       1 - x^2]
-eqs = D(x) .~ nums
-
-systems = ODESystem.(eqs)
-sys = ODESystem(eqs[1])
 eq = D(x) ~ r*x
 ode = ODESystem(eq)
-
-@test systems isa Vector{ODESystem}
-@test isequal(sys, systems[1])
-@test isempty(parameters(sys))
 @test equations(ode) == [eq]
