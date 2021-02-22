@@ -256,7 +256,7 @@ sys = ODESystem(eqs, t)
 @test isempty(parameters(sys))
 
 # one equation ODESystem test
-@parameters t
+@parameters t r
 @variables x(t)
 D = Differential(t)
 
@@ -267,7 +267,10 @@ eqs = D(x) .~ nums
 
 systems = ODESystem.(eqs)
 sys = ODESystem(eqs[1])
+eq = D(x) ~ r*x
+ode = ODESystem(eq)
 
 @test systems isa Vector{ODESystem}
 @test isequal(sys, systems[1])
 @test isempty(parameters(sys))
+@test equations(ode) == [eq]
