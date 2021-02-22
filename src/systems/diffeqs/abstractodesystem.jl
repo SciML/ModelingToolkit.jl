@@ -192,22 +192,34 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      sparse = false, simplify=false,
                                      kwargs...) where {iip}
 
-    idx = iip ? 2 : 1
-    f = generate_function(sys, dvs, ps; expression=Val{true}, kwargs...)[idx]
+    f_oop, f_iip = generate_function(sys, dvs, ps; expression=Val{true}, kwargs...)
+    _f = quote
+      f(u,p,t) = $f_oop(u,p,t)
+      f(du,u,p,t) = $f_iip(du,u,p,t)
+    end
+  
     if tgrad
-        _tgrad = generate_tgrad(sys, dvs, ps;
+        tgrad_oop, tgrad_iip = generate_tgrad(sys, dvs, ps;
                                 simplify=simplify,
-                                expression=Val{true}, kwargs...)[idx]
+                                expression=Val{true}, kwargs...)
+        _tgrad = quote
+            tgrad(u,p,t) = $tgrad_oop(u,p,t)
+            tgrad(J,u,p,t) = $tgrad_iip(J,u,p,t)
+        end
     else
-        _tgrad = :nothing
+        _tgrad = :(tgrad = nothing)
     end
 
     if jac
-        _jac = generate_jacobian(sys, dvs, ps;
+        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps;
                                  sparse=sparse, simplify=simplify,
-                                 expression=Val{true}, kwargs...)[idx]
+                                 expression=Val{true}, kwargs...)
+        _jac = quote
+            jac(u,p,t) = $jac_oop(u,p,t)
+            jac(J,u,p,t) = $jac_iip(J,u,p,t)
+        end
     else
-        _jac = :nothing
+        _jac = :(jac = nothing)
     end
 
     M = calculate_massmatrix(sys)
@@ -217,9 +229,9 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     jp_expr = sparse ? :(similar($(get_jac(sys)[]),Float64)) : :nothing
 
     ex = quote
-        f = $f
-        tgrad = $_tgrad
-        jac = $_jac
+        $f
+        $_tgrad
+        $_jac
         M = $_M
         ODEFunction{$iip}(
                           f,
