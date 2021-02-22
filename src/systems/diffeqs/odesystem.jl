@@ -208,3 +208,5 @@ function flatten(sys::ODESystem)
                         )
     end
 end
+
+ODESystem(eq::Equation; kwargs...) = ODESystem([eq]; kwargs...)
