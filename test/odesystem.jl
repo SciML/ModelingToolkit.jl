@@ -254,3 +254,20 @@ sys = ODESystem(eqs, t)
 @test isequal(ModelingToolkit.get_iv(sys), t)
 @test isequal(states(sys), [x1, x2])
 @test isempty(parameters(sys))
+
+# one equation ODESystem test
+@parameters t
+@variables x(t)
+D = Differential(t)
+
+# Define a differential equation
+nums = [1 + x + x^2,
+       1 - x^2]
+eqs = D(x) .~ nums
+
+systems = ODESystem.(eqs)
+sys = ODESystem(eqs[1])
+
+@test systems isa Vector{ODESystem}
+@test isequal(sys, systems[1])
+@test isempty(parameters(sys))
