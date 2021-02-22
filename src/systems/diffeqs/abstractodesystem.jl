@@ -193,33 +193,36 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      kwargs...) where {iip}
 
     f_oop, f_iip = generate_function(sys, dvs, ps; expression=Val{true}, kwargs...)
+    fsym = gensym(:f)
     _f = quote
-      f(u,p,t) = $f_oop(u,p,t)
-      f(du,u,p,t) = $f_iip(du,u,p,t)
+      $fsym(u,p,t) = $f_oop(u,p,t)
+      $fsym(du,u,p,t) = $f_iip(du,u,p,t)
     end
   
+    tgradsym = gensym(:tgrad)
     if tgrad
         tgrad_oop, tgrad_iip = generate_tgrad(sys, dvs, ps;
                                 simplify=simplify,
                                 expression=Val{true}, kwargs...)
         _tgrad = quote
-            tgrad(u,p,t) = $tgrad_oop(u,p,t)
-            tgrad(J,u,p,t) = $tgrad_iip(J,u,p,t)
+            $tgradsym(u,p,t) = $tgrad_oop(u,p,t)
+            $tgradsym(J,u,p,t) = $tgrad_iip(J,u,p,t)
         end
     else
-        _tgrad = :(tgrad = nothing)
+        _tgrad = :($tgradsym = nothing)
     end
 
+    jacsym = gensym(:jac)
     if jac
         jac_oop,jac_iip = generate_jacobian(sys, dvs, ps;
                                  sparse=sparse, simplify=simplify,
                                  expression=Val{true}, kwargs...)
         _jac = quote
-            jac(u,p,t) = $jac_oop(u,p,t)
-            jac(J,u,p,t) = $jac_iip(J,u,p,t)
+            $jacsym(u,p,t) = $jac_oop(u,p,t)
+            $jacsym(J,u,p,t) = $jac_iip(J,u,p,t)
         end
     else
-        _jac = :(jac = nothing)
+        _jac = :($jacsym = nothing)
     end
 
     M = calculate_massmatrix(sys)
@@ -227,16 +230,15 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
     jp_expr = sparse ? :(similar($(get_jac(sys)[]),Float64)) : :nothing
-
     ex = quote
         $_f
         $_tgrad
         $_jac
         M = $_M
         ODEFunction{$iip}(
-                          f,
-                          jac = jac,
-                          tgrad = tgrad,
+                          $fsym,
+                          jac = $jacsym,
+                          tgrad = $tgradsym,
                           mass_matrix = M,
                           jac_prototype = $jp_expr,
                           syms = $(Symbol.(states(sys))),
