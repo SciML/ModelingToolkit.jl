@@ -11,6 +11,7 @@ function alias_eliminate_graph(sys)
     end
 
     @unpack graph, varassoc = s
+    invvarassoc = inverse_mapping(varassoc)
 
     is_linear_equations, eadj, cadj = find_linear_equations(sys)
     old_cadj = map(copy, cadj)
@@ -300,6 +301,15 @@ the `constraint`.
         end
     end
     return 0, 0
+end
+
+function inverse_mapping(assoc)
+    invassoc = zeros(Int, length(assoc))
+    for (i, v) in enumerate(assoc)
+        v <= 0 && continue
+        invassoc[v] = i
+    end
+    return invassoc
 end
 
 """
