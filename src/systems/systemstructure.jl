@@ -49,8 +49,7 @@ struct SystemStructure
     varassoc::Vector{Int}
     algeqs::BitVector
     graph::BipartiteGraph{Int,Nothing}
-    solvable_graph::BipartiteGraph{Int,Vector{Vector{Int}}}
-    is_linear_equations::BitVector
+    solvable_graph::BipartiteGraph{Int,Nothing}
     assign::Vector{Int}
     inv_assign::Vector{Int}
     scc::Vector{Vector{Int}}
@@ -83,7 +82,7 @@ eqtype(s::SystemStructure, eq::Integer)::EquationType = isalgeq(s, eq) ? ALGEBRA
 function initialize_system_structure(sys)
     sys, dxvar_offset, fullvars, varassoc, algeqs, graph = init_graph(flatten(sys))
 
-    solvable_graph = BipartiteGraph(neqs, nvars, metadata=map(_->Int[], 1:nsrcs(graph)))
+    solvable_graph = BipartiteGraph(neqs, nvars)
 
     @set sys.structure = SystemStructure(
                                          dxvar_offset,
@@ -92,7 +91,6 @@ function initialize_system_structure(sys)
                                          algeqs,
                                          graph,
                                          solvable_graph,
-                                         falses(ndsts(graph)),
                                          Int[],
                                          Int[],
                                          Vector{Int}[],
@@ -173,15 +171,20 @@ function init_graph(sys)
     sys, dxvar_offset, fullvars, varassoc, algeqs, graph
 end
 
-function find_solvables!(sys)
+function find_linear_equations(sys)
     s = structure(sys)
-    @unpack fullvars, graph, solvable_graph, is_linear_equations = s
+    @unpack fullvars, graph = s
+    is_linear_equations = falses(ndsts(graph))
     eqs = equations(sys)
-    empty!(solvable_graph)
+    eadj = Vector{Int}[]
+    cadj = Vector{Int}[]
+    coeffs = Int[]
     for (i, eq) in enumerate(eqs); isdiffeq(eq) && continue
-        term = value(eq.rhs - eq.lhs)
+        empty!(coeffs)
         linear_term = 0
         all_int_algvars = true
+
+        term = value(eq.rhs - eq.lhs)
         for j in 𝑠neighbors(graph, i)
             if !isalgvar(s, j)
                 all_int_algvars = false
@@ -190,14 +193,14 @@ function find_solvables!(sys)
             var = fullvars[j]
             c = expand_derivatives(Differential(var)(term), false)
             # test if `var` is linear in `eq`.
-            if !(c isa Symbolic) && c isa Number && c != 0
+            if !(c isa Symbolic) && c isa Number
                 if isinteger(c)
                     c = convert(Integer, c)
                 else
                     all_int_algvars = false
                 end
                 linear_term += c * var
-                add_edge!(solvable_graph, i, j, c)
+                push!(coeffs, c)
             end
         end
 
@@ -209,16 +212,13 @@ function find_solvables!(sys)
         # where ``c_i`` ∈ ℤ and ``a_i`` denotes algebraic variables.
         if all_int_algvars && isequal(linear_term, term)
             is_linear_equations[i] = true
+            push!(eadj, i)
+            push!(cadj, copy(coeff))
         else
-            # We use 0 as a sentinel value for a nonlinear or non-integer term.
-
-            # Don't move the reference, because it might lead to pointer
-            # invalidations.
             is_linear_equations[i] = false
-            fill!(solvable_graph.metadata[i], 0)
         end
     end
-    s
+    return is_linear_equations, eadj, cadj
 end
 
 end # module
