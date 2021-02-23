@@ -35,21 +35,38 @@ generate_function(de, [x,y,z], [σ,ρ,β])
 jac_expr = generate_jacobian(de)
 jac = calculate_jacobian(de)
 jacfun = eval(jac_expr[2])
-# iip
-f = ODEFunction(de, [x,y,z], [σ,ρ,β])
-du = zeros(3)
-u  = collect(1:3)
-p  = collect(4:6)
-f(du, u, p, 0.1)
-@test du == [4, 0, -16]
-J = zeros(3, 3)
-jacfun(J, u, p, t)
-# oop
-f = ODEFunction(de, [x,y,z], [σ,ρ,β])
-du = @SArray zeros(3)
-u  = SVector(1:3...)
-p  = SVector(4:6...)
-@test f(u, p, 0.1) === @SArray [4, 0, -16]
+
+for f in [
+    ODEFunction(de, [x,y,z], [σ,ρ,β], tgrad = true, jac = true),
+    eval(ODEFunctionExpr(de, [x,y,z], [σ,ρ,β], tgrad = true, jac = true)),
+]
+    # iip
+    du = zeros(3)
+    u  = collect(1:3)
+    p  = collect(4:6)
+    f.f(du, u, p, 0.1)
+    @test du == [4, 0, -16]
+
+    # oop
+    du = @SArray zeros(3)
+    u  = SVector(1:3...)
+    p  = SVector(4:6...)
+    @test f.f(u, p, 0.1) === @SArray [4, 0, -16]
+
+    # iip vs oop
+    du = zeros(3)
+    g = similar(du)
+    J = zeros(3, 3)
+    u  = collect(1:3)
+    p  = collect(4:6)
+    f.f(du, u, p, 0.1)
+    @test du == f(u, p, 0.1)
+    f.tgrad(g, u, p, t)
+    @test g == f.tgrad(u, p, t)
+    f.jac(J, u, p, t)
+    @test J == f.jac(u, p, t)
+end
+
 
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y*t,
