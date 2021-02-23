@@ -50,7 +50,7 @@ struct SystemStructure
     algeqs::BitVector
     graph::BipartiteGraph{Int,Nothing}
     solvable_graph::BipartiteGraph{Int,Vector{Vector{Int}}}
-    linear_equations::Vector{Int}
+    is_linear_equations::BitVector
     assign::Vector{Int}
     inv_assign::Vector{Int}
     scc::Vector{Vector{Int}}
@@ -92,7 +92,7 @@ function initialize_system_structure(sys)
                                          algeqs,
                                          graph,
                                          solvable_graph,
-                                         Int[],
+                                         falses(ndsts(graph)),
                                          Int[],
                                          Int[],
                                          Vector{Int}[],
@@ -175,9 +175,9 @@ end
 
 function find_solvables!(sys)
     s = structure(sys)
-    @unpack fullvars, graph, solvable_graph, linear_equations = s
+    @unpack fullvars, graph, solvable_graph, is_linear_equations = s
     eqs = equations(sys)
-    empty!(solvable_graph); empty!(linear_equations)
+    empty!(solvable_graph)
     for (i, eq) in enumerate(eqs); isdiffeq(eq) && continue
         term = value(eq.rhs - eq.lhs)
         linear_term = 0
@@ -208,12 +208,13 @@ function find_solvables!(sys)
         #
         # where ``c_i`` ∈ ℤ and ``a_i`` denotes algebraic variables.
         if all_int_algvars && isequal(linear_term, term)
-            push!(linear_equations, i)
+            is_linear_equations[i] = true
         else
             # We use 0 as a sentinel value for a nonlinear or non-integer term.
 
             # Don't move the reference, because it might lead to pointer
             # invalidations.
+            is_linear_equations[i] = false
             fill!(solvable_graph.metadata[i], 0)
         end
     end

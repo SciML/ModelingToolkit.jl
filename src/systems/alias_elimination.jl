@@ -133,6 +133,182 @@ function alias_elimination(sys)
     return 
 end
 
+
+function alias_elimination_2(sys)
+    sys = flatten(sys)
+    s = get_structure(sys)
+    if !(s isa SystemStructure)
+        sys = initialize_system_structure(sys)
+        s = structure(sys)
+    end
+    find_solvables!(sys)
+    @unpack graph, solvable_graph, is_linear_equations, varassoc = s
+
+    is_not_potential_state = iszero.(varassoc)
+    is_linear_variables = copy(is_not_potential_state)
+    for i in 𝑠edges(graph); is_linear_equations[i] || continue
+        for j in 𝑠vertices(graph, i)
+            is_linear_variables[j] = false
+        end
+    end
+    solvable_variables = findall(is_linear_variables)
+
+    linear_equations = findall(is_linear_equations)
+
+    offset = 1
+    coeffs = solvable_graph.metadata
+    old_coeffs = map(copy, coeffs)
+    fadj = solvable_graph.fadjlist
+
+    rank1 = bareiss!(
+        (fadj, coeffs),
+        old_coeffs, linear_equations, is_linear_variables, offset
+       )
+
+    v_solved = [fadj[i][1] for i in 1:rank1]
+    v_null = setdiff(solvable_variables, v_solved)
+    n_null_vars = length(v_null)
+
+    v_types = fill(KEEP, ndsts(graph))
+    for v in v_null
+        v_types[v] = 0
+    end
+
+    rank2 = bareiss!(
+        (fadj, coeffs),
+        old_coeffs, linear_equations, is_not_potential_state, offset
+       )
+end
+
+
+
+"""
+$(SIGNATURES)
+
+Use Bareiss algorithm to compute the nullspace of an integer matrix exactly.
+"""
+function bareiss!(
+        (fadj, coeffs),
+        old_coeffs, linear_equations, is_linear_variables, offset
+       )
+    m = nsrcs(solvable_graph)
+    # v = fadj[ei][vj]
+    v = ei = vj = 0
+    pivot = last_pivot = 1
+    tmp_incidence = Int[]
+    tmp_coeffs = Int[]
+    vars = Set{Int}()
+
+    # j -> vj
+    # e -> ei
+    # vj -> v
+    # GcInt2 modified
+
+    for k in offset:m
+        ###
+        ### Pivoting:
+        ###
+        ei, vj = find_first_linear_variable(solvable_graph, k:m, is_linear_variables, isequal(1))
+        if vj == 0
+            ei, vj = find_first_linear_variable(solvable_graph, k:m, is_linear_variables, isequal(2))
+        else
+            ei, vj = find_first_linear_variable(solvable_graph, k:m, is_linear_variables, _->true)
+        end
+
+        if vj > 0 # has a pivot
+            pivot = coeffs[ei][vj]
+            deleteat!(coeffs[ei] , vj)
+            v = fadj[ei][vj]
+            deleteat!(fadj[ei], vj)
+            if ei != k
+                swap!(coeffs, ei, k)
+                swap!(old_coeffs, ei, k)
+                swap!(fadj, ei, k)
+                swap!(linear_equations, ei, k)
+            end
+        else # rank deficient
+            return k-1
+        end
+
+        for ei in k+1
+            # elimate `v`
+            coeff = 0
+            vars = fadj[ei]
+            vj = findfirst(isequal(v), vars)
+            if vj === nothing # `v` is not in in `e`
+                continue
+            else # remove `v`
+                coeff = coeffs[ei][vj]
+                deleteat!(coeffs[ei], vj)
+                deleteat!(fadj[ei], vj)
+            end
+
+            # the pivot row
+            kvars = fadj[k]
+            kcoeffs = coeffs[k]
+            # the elimination target
+            ivars = fadj[ei]
+            icoeffs = coeffs[ei]
+
+            empty!(tmp_incidence)
+            empty!(tmp_coeffs)
+            empty!(vars)
+            union!(vars, kvars, ivars)
+
+            for v in vars
+                ck = getcoeff(kvars, kcoeffs, v)
+                ci = getcoeff(ivars, icoeffs, v)
+                ci = (pivot*ci - coeff*ck) ÷ last_pivot
+                if ci !== 0
+                    push!(tmp_incidence, v)
+                    push!(tmp_coeffs, ci)
+                end
+            end
+
+            fadj[ei], tmp_incidence = tmp_incidence, fadj[ei]
+            coeffs[ei], tmp_coeffs = tmp_coeffs, coeffs[ei]
+        end
+        last_pivot = pivot
+        # add `v` in the front of the `k`-th equation
+        pushfirst!(fadj[k], v)
+        pushfirst!(coeffs[k], pivot)
+    end
+
+    return m # fully ranked
+end
+
+swap!(v, i, j) = ((v[i], v[j] = v[j], v[i]); nothing)
+
+function getcoeff(vars, coeffs, var)
+    for (vj, v) in enumerate(vars)
+        v == var && return coeffs[vj]
+    end
+    return 0
+end
+
+"""
+$(SIGNATURES)
+
+Find the first linear variable such that `𝑠vertices(adj, i)[j]` is true given
+the `constraint`.
+"""
+@inline function find_first_linear_variable(
+        solvable_graph,
+        range,
+        is_linear_variables,
+        constraint,
+    )
+    for i in range
+        vertices = 𝑠vertices(solvable_graph, i)
+        if constraint(length(vertices))
+            for (j, v) in enumerate(vertices)
+                is_linear_variables[v] && return i, j
+            end
+        end
+    end
+    return 0, 0
+end
+
 """
 $(SIGNATURES)
 
