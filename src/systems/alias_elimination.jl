@@ -180,7 +180,84 @@ function alias_elimination_2(sys)
        )
 end
 
+iszeroterm(v_types, v) = v_types[v] == 0
+isirreducible(v_types, v) = v_types[v] == KEEP
+isalias(v_types, v) = v_types[v] > 0 && !isirreducible(v_types, v)
+alias(v_types, v) = v_types[v]
+negalias(v_types, v) = -v_types[v]
 
+function locally_structure_simplify!(
+        (vars, coeffs),
+        invvarassoc, v_null, v_types
+       )
+    while length(vars) > 1 && any(!isequal(KEEP), (v_types[v] in @view vars[2:end]))
+        for vj in 2:length(vars)
+            v = vars[vj]
+            if isirreducible(v_types, v)
+                continue
+            elseif iszeroterm(v_types, v)
+                deleteat!(vars, vj)
+                deleteat!(coeffs, vj)
+                break
+            else
+                coeff = coeffs[vj]
+                if isalias(v_types, v)
+                    v = alias(v_types, v)
+                else
+                    v = negalias(v_types, v)
+                    coeff = -coeff
+                end
+
+                has_v = false
+                for vi in 2:length(vars)
+                    (vi !== vj && vars[vi] == v) || continue
+                    has_v = true
+                    c = (coeffs[vi] += coeff)
+                    if c == 0
+                        if vi < vj
+                            deleteat!(vars, [vi, vj])
+                            deleteat!(coeffs, [vi, vj])
+                        else
+                            deleteat!(vars, [vj, vi])
+                            deleteat!(coeffs, [vj, vi])
+                        end
+                    end
+                    break
+                end # for vi
+
+                if has_v
+                    break
+                else
+                    vars[vj] = v
+                    coeffs[vj] = coeff
+                end # if
+            end # else
+        end # for
+    end # while
+
+    v = first(vars)
+    if invvarassoc[v] == 0
+        if length(nvars) == 1
+            push!(v_null, v)
+            v_types[v] = 0
+            empty!(vars); empty!(coeffs)
+            return true
+        elseif length(vars) == 2 && abs(coeffs[1]) == abs(coeffs[2])
+            if (coeffs[1] > 0 && coeffs[2] < 0) || (coeffs[1] < 0 && coeffs[2] > 0)
+                # positive alias
+                push!(v_null, v)
+                v_types[v] = vars[2]
+            else
+                # negative alias
+                push!(v_null, v)
+                v_types[v] = -vars[2]
+            end
+            empty!(vars); empty!(coeffs)
+            return true
+        end
+    end
+    return false
+end
 
 """
 $(SIGNATURES)
