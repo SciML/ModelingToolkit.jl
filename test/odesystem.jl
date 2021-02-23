@@ -76,6 +76,8 @@ ModelingToolkit.calculate_tgrad(de)
 
 tgrad_oop, tgrad_iip = eval.(ModelingToolkit.generate_tgrad(de))
 
+u  = SVector(1:3...)
+p  = SVector(4:6...)
 @test tgrad_oop(u,p,t) == [0.0,-u[2],0.0]
 du = zeros(3)
 tgrad_iip(du,u,p,t)
