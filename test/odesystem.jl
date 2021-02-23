@@ -254,3 +254,11 @@ sys = ODESystem(eqs, t)
 @test isequal(ModelingToolkit.get_iv(sys), t)
 @test isequal(states(sys), [x1, x2])
 @test isempty(parameters(sys))
+
+# one equation ODESystem test
+@parameters t r
+@variables x(t)
+D = Differential(t)
+eq = D(x) ~ r*x
+ode = ODESystem(eq)
+@test equations(ode) == [eq]
