@@ -1,7 +1,7 @@
 module SystemStructures
 
 using DataStructures
-using SymbolicUtils: istree, operation, arguments
+using SymbolicUtils: istree, operation, arguments, Symbolic
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten, value
 using ..BipartiteGraphs
@@ -50,6 +50,7 @@ struct SystemStructure
     algeqs::BitVector
     graph::BipartiteGraph{Int,Nothing}
     solvable_graph::BipartiteGraph{Int,Vector{Vector{Int}}}
+    linear_equations::Vector{Int}
     assign::Vector{Int}
     inv_assign::Vector{Int}
     scc::Vector{Vector{Int}}
@@ -57,6 +58,7 @@ struct SystemStructure
 end
 
 diffvars_range(s::SystemStructure) = 1:s.dxvar_offset
+# TODO: maybe dervars should be in the end.
 dervars_range(s::SystemStructure) = s.dxvar_offset+1:2s.dxvar_offset
 algvars_range(s::SystemStructure) = 2s.dxvar_offset+1:length(s.fullvars)
 
@@ -79,7 +81,10 @@ isdiffeq(s::SystemStructure, eq::Integer) = !isalgeq(s, eq)
 eqtype(s::SystemStructure, eq::Integer)::EquationType = isalgeq(s, eq) ? ALGEBRAIC_EQUATION : DIFFERENTIAL_EQUATION
 
 function initialize_system_structure(sys)
-    sys, dxvar_offset, fullvars, varassoc, algeqs, graph, solvable_graph = init_graph(flatten(sys))
+    sys, dxvar_offset, fullvars, varassoc, algeqs, graph = init_graph(flatten(sys))
+
+    solvable_graph = BipartiteGraph(neqs, nvars, metadata=map(_->Int[], 1:nsrcs(graph)))
+
     @set sys.structure = SystemStructure(
                                          dxvar_offset,
                                          fullvars,
@@ -87,6 +92,7 @@ function initialize_system_structure(sys)
                                          algeqs,
                                          graph,
                                          solvable_graph,
+                                         Int[],
                                          Int[],
                                          Int[],
                                          Vector{Int}[],
@@ -144,28 +150,74 @@ function init_graph(sys)
     nvars = length(fullvars)
     idxmap = Dict(fullvars .=> 1:nvars)
     graph = BipartiteGraph(neqs, nvars)
-    solvable_graph = BipartiteGraph(neqs, nvars, metadata=map(_->Int[], 1:neqs))
 
-    for (i, vs) in enumerate(varsadj)
-        eq = eqs[i]
-        for v in vs
-            j = get(idxmap, v, nothing)
-            if j !== nothing
-                add_edge!(graph, i, idxmap[v])
-                j > algvar_offset || continue
-                D = Differential(fullvars[j])
-                c = value(expand_derivatives(D(eq.rhs - eq.lhs), false))
-                if c isa Number && c != 0
-                    # 0 here is a sentinel value for non-integer coefficients
-                    coeff = c isa Integer ? c : 0
-                    add_edge!(solvable_graph, i, j, coeff)
-                end
-            end
+    vs = Set()
+    for (i, eq) in enumerate(eqs)
+        # TODO: custom vars that handles D(x)
+        # TODO: add checks here
+        lhs = eq.lhs
+        if isdiffeq(eq)
+            v = lhs
+            haskey(idxmap, v) && add_edge!(graph, i, idxmap[v])
+        else
+            vars!(vs, lhs)
         end
+        vars!(vs, eq.rhs)
+        for v in vs
+            haskey(idxmap, v) && add_edge!(graph, i, idxmap[v])
+        end
+        empty!(vs)
     end
 
     varassoc = Int[(1:dxvar_offset) .+ dxvar_offset; zeros(Int, length(fullvars) - dxvar_offset)] # variable association list
-    sys, dxvar_offset, fullvars, varassoc, algeqs, graph, solvable_graph
+    sys, dxvar_offset, fullvars, varassoc, algeqs, graph
+end
+
+function find_solvables!(sys)
+    s = structure(sys)
+    @unpack fullvars, graph, solvable_graph, linear_equations = s
+    eqs = equations(sys)
+    empty!(solvable_graph); empty!(linear_equations)
+    for (i, eq) in enumerate(eqs); isdiffeq(eq) && continue
+        term = value(eq.rhs - eq.lhs)
+        linear_term = 0
+        all_int_algvars = true
+        for j in 𝑠neighbors(graph, i)
+            if !isalgvar(s, j)
+                all_int_algvars = false
+                continue
+            end
+            var = fullvars[j]
+            c = expand_derivatives(Differential(var)(term), false)
+            # test if `var` is linear in `eq`.
+            if !(c isa Symbolic) && c isa Number && c != 0
+                if isinteger(c)
+                    c = convert(Integer, c)
+                else
+                    all_int_algvars = false
+                end
+                linear_term += c * var
+                add_edge!(solvable_graph, i, j, c)
+            end
+        end
+
+        # Check if there are only algebraic variables and the equation is both
+        # linear and homogeneous, i.e. it is in the form of
+        #
+        #       ``∑ c_i * a_i = 0``,
+        #
+        # where ``c_i`` ∈ ℤ and ``a_i`` denotes algebraic variables.
+        if all_int_algvars && isequal(linear_term, term)
+            push!(linear_equations, i)
+        else
+            # We use 0 as a sentinel value for a nonlinear or non-integer term.
+
+            # Don't move the reference, because it might lead to pointer
+            # invalidations.
+            fill!(solvable_graph.metadata[i], 0)
+        end
+    end
+    s
 end
 
 end # module
