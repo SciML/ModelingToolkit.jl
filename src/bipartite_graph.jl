@@ -100,7 +100,15 @@ function BipartiteGraph(nsrcs::T, ndsts::T; metadata=nothing) where T
 end
 
 Base.eltype(::Type{<:BipartiteGraph{I}}) where I = I
-Base.empty!(g::BipartiteGraph) = (foreach(empty!, g.fadjlist); foreach(empty!, g.badjlist); g.ne = 0; g)
+function Base.empty!(g::BipartiteGraph)
+    foreach(empty!, g.fadjlist)
+    foreach(empty!, g.badjlist)
+    g.ne = 0
+    if g.metadata !== nothing
+        foreach(empty!, g.metadata)
+    end
+    g
+end
 Base.length(::BipartiteGraph) = error("length is not well defined! Use `ne` or `nv`.")
 
 if isdefined(LightGraphs, :has_contiguous_vertices)
