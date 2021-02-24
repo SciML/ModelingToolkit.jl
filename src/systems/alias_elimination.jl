@@ -18,7 +18,7 @@ function alias_elimination(sys)
     s = structure(sys)
     @unpack fullvars, graph = s
 
-    subs = Dict()
+    subs = OrderedDict()
     if length(v_eliminated) - n_null_vars > 0
         for v in v_eliminated[n_null_vars+1:end]
             subs[fullvars[v]] = iszeroterm(v_types, v) ? 0.0 :
@@ -45,11 +45,12 @@ function alias_elimination(sys)
     dels = sort(collect(dels))
     deleteat!(eqs, dels)
 
+    dict = Dict(subs)
     for (ieq, eq) in enumerate(eqs)
         if !isdiffeq(eq) && !_iszero(eq.lhs)
             eq = 0 ~ eq.rhs - eq.lhs
         end
-        eqs[ieq] = eq.lhs ~ fixpoint_sub(eq.rhs, subs)
+        eqs[ieq] = eq.lhs ~ fixpoint_sub(eq.rhs, dict)
     end
 
     newstates = []
@@ -62,6 +63,7 @@ function alias_elimination(sys)
 
     @set! sys.eqs = eqs
     @set! sys.states = newstates
+    @set! sys.observed = [get_observed(sys); [lhs ~ rhs for (lhs, rhs) in pairs(subs)]]
     @set! sys.structure = nothing
     return sys
 end
