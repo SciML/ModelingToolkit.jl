@@ -11,12 +11,12 @@ function alias_elimination(sys)
     end
     is_linear_equations, eadj, cadj = find_linear_equations(sys)
 
-    sys, v_eliminated, v_types, n_null_vars, degenerate_equations, linear_equations = alias_eliminate_graph(
+    v_eliminated, v_types, n_null_vars, degenerate_equations, linear_equations = alias_eliminate_graph(
         s, is_linear_equations, eadj, cadj
     )
 
     s = structure(sys)
-    @unpack fullvars = s
+    @unpack fullvars, graph = s
 
     subs = Dict()
     if length(v_eliminated) - n_null_vars > 0
@@ -48,7 +48,7 @@ function alias_elimination(sys)
         if !isdiffeq(eq) && !_iszero(eq.lhs)
             eq = 0 ~ eq.rhs - eq.lhs
         end
-        eqs[ieq] = eq.lhs ~ fixpoint_sub(eq.rhs, dict)
+        eqs[ieq] = eq.lhs ~ fixpoint_sub(eq.rhs, subs)
     end
 
     newstates = []
@@ -59,8 +59,9 @@ function alias_elimination(sys)
         end
     end
 
-    @set sys.structure = nothing
-    @set sys.states = newstates
+    @set! sys.eqs = eqs
+    @set! sys.states = newstates
+    @set! sys.structure = nothing
     return sys
 end
 
@@ -72,7 +73,7 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_equations, eadj, ca
 
     is_not_potential_state = iszero.(varassoc)
     is_linear_variables = copy(is_not_potential_state)
-    for i in 𝑠vertices(graph); is_linear_equations[i] || continue
+    for i in 𝑠vertices(graph); is_linear_equations[i] && continue
         for j in 𝑠neighbors(graph, i)
             is_linear_variables[j] = false
         end
@@ -109,7 +110,7 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_equations, eadj, ca
     # kind of like the backward substitution
     for ei in reverse(1:rank2)
         locally_structure_simplify!(
-                                    (eadj[ei], cadj[ei]),
+                                    (eadj[ei], old_cadj[ei]),
                                     invvarassoc, v_eliminated, v_types
                                    )
     end
@@ -145,7 +146,7 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_equations, eadj, ca
     end
 
     for (ei, e) in enumerate(linear_equations)
-        graph.eadjlist[e] = eadj[ei]
+        graph.fadjlist[e] = eadj[ei]
     end
 
     degenerate_equations = rank3 < length(linear_equations) ? linear_equations[rank3+1:end] : Int[]
