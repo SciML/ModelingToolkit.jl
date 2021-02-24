@@ -54,7 +54,7 @@ function alias_elimination(sys)
 
     newstates = []
     sts = states(sys)
-    for j in eachindex(sts)
+    for j in eachindex(fullvars)
         if isirreducible(v_types, j)
             isdervar(s, j) || push!(newstates, fullvars[j])
         end
