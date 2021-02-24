@@ -2,18 +2,72 @@ using SymbolicUtils: Rewriters
 
 const KEEP = typemin(Int)
 
-function alias_eliminate_graph(sys)
+function alias_eliminate(sys)
     sys = flatten(sys)
     s = get_structure(sys)
     if !(s isa SystemStructure)
         sys = initialize_system_structure(sys)
         s = structure(sys)
     end
+    is_linear_equations, eadj, cadj = find_linear_equations(sys)
 
+    sys, v_eliminated, v_types, n_null_vars, degenerate_equations, linear_equations = alias_eliminate_graph(
+        s, is_linear_equations, eadj, cadj
+    )
+
+    s = structure(sys)
+    @unpack fullvars = s
+
+    subs = Dict()
+    if length(v_eliminated) - n_null_vars > 0
+        for v in v_eliminated[n_null_vars+1:end]
+            subs[fullvars[v]] = iszeroterm(v_types, v) ? 0.0 :
+                                isalias(v_types, v) ? fullvars[alias(v_types, v)] :
+                                -fullvars[negalias(v_types, v)]
+        end
+    end
+
+    dels = Int[]
+    eqs = copy(equations(sys))
+    for (ei, e) in enumerate(linear_equations)
+        vs = 𝑠vertices(graph, e)
+        if isempty(vs)
+            push!(dels, e)
+        else
+            rhs = 0
+            for vj in eachindex(vs)
+                var = fullvars[vs[vj]]
+                rhs += cadj[ei][vj] * var
+            end
+            eqs[e] = 0 ~ rhs
+        end
+    end
+    deleteat!(eqs, dels)
+
+    for (ieq, eq) in enumerate(eqs)
+        if !isdiffeq(eq) && !_iszero(eq.lhs)
+            eq = 0 ~ eq.rhs - eq.lhs
+        end
+        eqs[ieq] = eq.lhs ~ fixpoint_sub(eq.rhs, dict)
+    end
+
+    newstates = []
+    sts = states(sys)
+    for j in eachindex(sts)
+        if isirreducible(v_types, j)
+            isdervar(s, j) || push!(newstates, fullvars[j])
+        end
+    end
+
+    @set sys.structure = nothing
+    @set sys.states = newstates
+    return sys
+end
+
+function alias_eliminate_graph(s::SystemStructure, is_linear_variables, eadj, cadj)
     @unpack graph, varassoc = s
     invvarassoc = inverse_mapping(varassoc)
 
-    is_linear_equations, eadj, cadj = find_linear_equations(sys)
     old_cadj = map(copy, cadj)
 
     is_not_potential_state = iszero.(varassoc)
@@ -94,7 +148,7 @@ function alias_eliminate_graph(sys)
     end
 
     degenerate_equations = rank3 < length(linear_equations) ? linear_equations[rank3+1:end] : Int[]
-    return v_eliminated, v_types, n_null_vars, degenerate_equations
+    return v_eliminated, v_types, n_null_vars, degenerate_equations, linear_equations
 end
 
 iszeroterm(v_types, v) = v_types[v] == 0
