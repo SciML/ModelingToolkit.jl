@@ -247,7 +247,6 @@ function bareiss!(
     pivot = last_pivot = 1
     tmp_incidence = Int[]
     tmp_coeffs = Int[]
-    vars = Set{Int}()
 
     # j -> vj
     # e -> ei
@@ -266,8 +265,8 @@ function bareiss!(
         end
 
         if vj > 0 # has a pivot
-            pivot = cadj[ei][vj]
-            deleteat!(cadj[ei] , vj)
+            pivot = old_cadj[ei][vj]
+            deleteat!(old_cadj[ei] , vj)
             v = eadj[ei][vj]
             deleteat!(eadj[ei], vj)
             if ei != k
@@ -288,22 +287,21 @@ function bareiss!(
             if vj === nothing # `v` is not in in `e`
                 continue
             else # remove `v`
-                coeff = cadj[ei][vj]
-                deleteat!(cadj[ei], vj)
+                coeff = old_cadj[ei][vj]
+                deleteat!(old_cadj[ei], vj)
                 deleteat!(eadj[ei], vj)
             end
 
             # the pivot row
             kvars = eadj[k]
-            kcoeffs = cadj[k]
+            kcoeffs = old_cadj[k]
             # the elimination target
             ivars = eadj[ei]
-            icoeffs = cadj[ei]
+            icoeffs = old_cadj[ei]
 
             empty!(tmp_incidence)
             empty!(tmp_coeffs)
-            empty!(vars)
-            union!(vars, ivars, kvars)
+            vars = union(ivars, kvars)
 
             for v in vars
                 ck = getcoeff(kvars, kcoeffs, v)
@@ -316,12 +314,12 @@ function bareiss!(
             end
 
             eadj[ei], tmp_incidence = tmp_incidence, eadj[ei]
-            cadj[ei], tmp_coeffs = tmp_coeffs, cadj[ei]
+            old_cadj[ei], tmp_coeffs = tmp_coeffs, old_cadj[ei]
         end
         last_pivot = pivot
         # add `v` in the front of the `k`-th equation
         pushfirst!(eadj[k], v)
-        pushfirst!(cadj[k], pivot)
+        pushfirst!(old_cadj[k], pivot)
     end
 
     return m # fully ranked
