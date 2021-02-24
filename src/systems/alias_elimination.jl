@@ -249,11 +249,6 @@ function bareiss!(
     tmp_incidence = Int[]
     tmp_coeffs = Int[]
 
-    # j -> vj
-    # e -> ei
-    # vj -> v
-    # GcInt2 modified
-
     for k in offset:m
         ###
         ### Pivoting:
