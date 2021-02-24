@@ -36,7 +36,7 @@ for v in 𝑣vertices(graph); active_𝑣vertices[v] || continue
 end
 =#
 
-export SystemStructure, initialize_system_structure
+export SystemStructure, initialize_system_structure, find_linear_equations
 export diffvars_range, dervars_range, algvars_range
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq
 export DIFFERENTIAL_VARIABLE, ALGEBRAIC_VARIABLE, DERIVATIVE_VARIABLE
@@ -82,7 +82,7 @@ eqtype(s::SystemStructure, eq::Integer)::EquationType = isalgeq(s, eq) ? ALGEBRA
 function initialize_system_structure(sys)
     sys, dxvar_offset, fullvars, varassoc, algeqs, graph = init_graph(flatten(sys))
 
-    solvable_graph = BipartiteGraph(neqs, nvars)
+    solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
 
     @set sys.structure = SystemStructure(
                                          dxvar_offset,
@@ -212,8 +212,8 @@ function find_linear_equations(sys)
         # where ``c_i`` ∈ ℤ and ``a_i`` denotes algebraic variables.
         if all_int_algvars && isequal(linear_term, term)
             is_linear_equations[i] = true
-            push!(eadj, i)
-            push!(cadj, copy(coeff))
+            push!(eadj, copy(𝑠neighbors(graph, i)))
+            push!(cadj, copy(coeffs))
         else
             is_linear_equations[i] = false
         end

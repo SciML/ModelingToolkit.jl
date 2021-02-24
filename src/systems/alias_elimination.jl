@@ -2,7 +2,7 @@ using SymbolicUtils: Rewriters
 
 const KEEP = typemin(Int)
 
-function alias_eliminate(sys)
+function alias_elimination(sys)
     sys = flatten(sys)
     s = get_structure(sys)
     if !(s isa SystemStructure)
@@ -30,7 +30,7 @@ function alias_eliminate(sys)
     dels = Int[]
     eqs = copy(equations(sys))
     for (ei, e) in enumerate(linear_equations)
-        vs = 𝑠vertices(graph, e)
+        vs = 𝑠neighbors(graph, e)
         if isempty(vs)
             push!(dels, e)
         else
@@ -64,7 +64,7 @@ function alias_eliminate(sys)
     return sys
 end
 
-function alias_eliminate_graph(s::SystemStructure, is_linear_variables, eadj, cadj)
+function alias_eliminate_graph(s::SystemStructure, is_linear_equations, eadj, cadj)
     @unpack graph, varassoc = s
     invvarassoc = inverse_mapping(varassoc)
 
@@ -72,8 +72,8 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_variables, eadj, ca
 
     is_not_potential_state = iszero.(varassoc)
     is_linear_variables = copy(is_not_potential_state)
-    for i in 𝑠edges(graph); is_linear_equations[i] || continue
-        for j in 𝑠vertices(graph, i)
+    for i in 𝑠vertices(graph); is_linear_equations[i] || continue
+        for j in 𝑠neighbors(graph, i)
             is_linear_variables[j] = false
         end
     end
@@ -83,11 +83,11 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_variables, eadj, ca
 
 
     rank1 = bareiss!(
-        (eadg, cadj),
+        (eadj, cadj),
         old_cadj, linear_equations, is_linear_variables, 1
        )
 
-    v_solved = [eadg[i][1] for i in 1:rank1]
+    v_solved = [eadj[i][1] for i in 1:rank1]
     v_eliminated = setdiff(solvable_variables, v_solved)
     n_null_vars = length(v_eliminated)
 
@@ -97,31 +97,32 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_variables, eadj, ca
     end
 
     rank2 = bareiss!(
-        (eadg, cadj),
+        (eadj, cadj),
         old_cadj, linear_equations, is_not_potential_state, rank1+1
        )
 
     rank3 = bareiss!(
-        (eadg, cadj),
+        (eadj, cadj),
         old_cadj, linear_equations, nothing, rank2+1
        )
 
     # kind of like the backward substitution
     for ei in reverse(1:rank2)
         locally_structure_simplify!(
-                                    (eadg[ei], cadj[ei]),
+                                    (eadj[ei], cadj[ei]),
                                     invvarassoc, v_eliminated, v_types
                                    )
     end
 
     reduced = false
     for ei in 1:rank2
-        if length(cadj[ei]) > length(old_cadj[ei])
+        if length(cadj[ei]) >= length(old_cadj[ei])
             cadj[ei] = old_cadj[ei]
         else
-            cadj[ei] = eadg[linear_equations[ei]]
+            # MEMORY ALIAS of a vector
+            eadj[ei] = 𝑠neighbors(graph, linear_equations[ei])
             reduced |= locally_structure_simplify!(
-                                                   (eadg[ei], cadj[ei]),
+                                                   (eadj[ei], cadj[ei]),
                                                    invvarassoc, v_eliminated, v_types
                                                   )
         end
@@ -129,9 +130,9 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_variables, eadj, ca
 
     while reduced
         for ei in 1:rank2
-            if !isempty(eadg[ei])
+            if !isempty(eadj[ei])
                 reduced |= locally_structure_simplify!(
-                                                       (eadg[ei], cadj[ei]),
+                                                       (eadj[ei], cadj[ei]),
                                                        invvarassoc, v_eliminated, v_types
                                                       )
                 reduced && break # go back to the begining of equations
@@ -140,11 +141,11 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_variables, eadj, ca
     end
 
     for ei in rank2+1:length(linear_equations)
-        eadg[ei] = old_cadj[ei]
+        eadj[ei] = old_cadj[ei]
     end
 
     for (ei, e) in enumerate(linear_equations)
-        graph.eadglist[e] = eadg[ei]
+        graph.eadjlist[e] = eadj[ei]
     end
 
     degenerate_equations = rank3 < length(linear_equations) ? linear_equations[rank3+1:end] : Int[]
@@ -161,7 +162,7 @@ function locally_structure_simplify!(
         (vars, coeffs),
         invvarassoc, v_eliminated, v_types
        )
-    while length(vars) > 1 && any(!isequal(KEEP), (v_types[v] in @view vars[2:end]))
+    while length(vars) > 1 && any(!isequal(KEEP), (v_types[v] for v in @view vars[2:end]))
         for vj in 2:length(vars)
             v = vars[vj]
             if isirreducible(v_types, v)
@@ -208,7 +209,7 @@ function locally_structure_simplify!(
 
     v = first(vars)
     if invvarassoc[v] == 0
-        if length(nvars) == 1
+        if length(vars) == 1
             push!(v_eliminated, v)
             v_types[v] = 0
             empty!(vars); empty!(coeffs)
@@ -236,11 +237,11 @@ $(SIGNATURES)
 Use Bareiss algorithm to compute the nullspace of an integer matrix exactly.
 """
 function bareiss!(
-        (eadg, cadj),
+        (eadj, cadj),
         old_cadj, linear_equations, is_linear_variables, offset
        )
-    m = nsrcs(solvable_graph)
-    # v = eadg[ei][vj]
+    m = length(eadj)
+    # v = eadj[ei][vj]
     v = ei = vj = 0
     pivot = last_pivot = 1
     tmp_incidence = Int[]
@@ -256,46 +257,46 @@ function bareiss!(
         ###
         ### Pivoting:
         ###
-        ei, vj = find_first_linear_variable(solvable_graph, k:m, is_linear_variables, isequal(1))
+        ei, vj = find_first_linear_variable(eadj, k:m, is_linear_variables, isequal(1))
         if vj == 0
-            ei, vj = find_first_linear_variable(solvable_graph, k:m, is_linear_variables, isequal(2))
+            ei, vj = find_first_linear_variable(eadj, k:m, is_linear_variables, isequal(2))
         else
-            ei, vj = find_first_linear_variable(solvable_graph, k:m, is_linear_variables, _->true)
+            ei, vj = find_first_linear_variable(eadj, k:m, is_linear_variables, _->true)
         end
 
         if vj > 0 # has a pivot
             pivot = cadj[ei][vj]
             deleteat!(cadj[ei] , vj)
-            v = eadg[ei][vj]
-            deleteat!(eadg[ei], vj)
+            v = eadj[ei][vj]
+            deleteat!(eadj[ei], vj)
             if ei != k
                 swap!(cadj, ei, k)
                 swap!(old_cadj, ei, k)
-                swap!(eadg, ei, k)
+                swap!(eadj, ei, k)
                 swap!(linear_equations, ei, k)
             end
         else # rank deficient
             return k-1
         end
 
-        for ei in k+1
+        for ei in k+1:m
             # elimate `v`
             coeff = 0
-            vars = eadg[ei]
+            vars = eadj[ei]
             vj = findfirst(isequal(v), vars)
             if vj === nothing # `v` is not in in `e`
                 continue
             else # remove `v`
                 coeff = cadj[ei][vj]
                 deleteat!(cadj[ei], vj)
-                deleteat!(eadg[ei], vj)
+                deleteat!(eadj[ei], vj)
             end
 
             # the pivot row
-            kvars = eadg[k]
+            kvars = eadj[k]
             kcoeffs = cadj[k]
             # the elimination target
-            ivars = eadg[ei]
+            ivars = eadj[ei]
             icoeffs = cadj[ei]
 
             empty!(tmp_incidence)
@@ -313,19 +314,19 @@ function bareiss!(
                 end
             end
 
-            eadg[ei], tmp_incidence = tmp_incidence, eadg[ei]
+            eadj[ei], tmp_incidence = tmp_incidence, eadj[ei]
             cadj[ei], tmp_coeffs = tmp_coeffs, cadj[ei]
         end
         last_pivot = pivot
         # add `v` in the front of the `k`-th equation
-        pushfirst!(eadg[k], v)
+        pushfirst!(eadj[k], v)
         pushfirst!(cadj[k], pivot)
     end
 
     return m # fully ranked
 end
 
-swap!(v, i, j) = ((v[i], v[j] = v[j], v[i]); nothing)
+swap!(v, i, j) = v[i], v[j] = v[j], v[i]
 
 function getcoeff(vars, coeffs, var)
     for (vj, v) in enumerate(vars)
@@ -337,17 +338,17 @@ end
 """
 $(SIGNATURES)
 
-Find the first linear variable such that `𝑠vertices(adj, i)[j]` is true given
+Find the first linear variable such that `𝑠neighbors(adj, i)[j]` is true given
 the `constraint`.
 """
 @inline function find_first_linear_variable(
-        solvable_graph,
+        eadj,
         range,
         mask,
         constraint,
     )
     for i in range
-        vertices = 𝑠vertices(solvable_graph, i)
+        vertices = eadj[i]
         if constraint(length(vertices))
             for (j, v) in enumerate(vertices)
                 (mask === nothing || mask[v]) && return i, j
