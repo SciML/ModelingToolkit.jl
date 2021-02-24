@@ -57,7 +57,7 @@ struct ODESystem <: AbstractODESystem
     """
     name::Symbol
     """
-    systems: The internal systems
+    systems: The internal systems. These are required to have unique names.
     """
     systems::Vector{ODESystem}
     """
@@ -97,6 +97,10 @@ function ODESystem(
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
+    sysnames = nameof.(systems)
+    if length(unique(sysnames)) != length(sysnames)
+        throw(ArgumentError("System names must be unique."))
+    end
     ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p, nothing)
 end
 
