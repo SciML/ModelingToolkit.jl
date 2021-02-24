@@ -243,6 +243,7 @@ sys = ODESystem(eqs)
 @test all(isequal.(states(sys), [x, y, z]))
 @test all(isequal.(parameters(sys), [σ, β]))
 @test equations(sys) == eqs
+@test ModelingToolkit.isautonomous(sys)
 
 # issue 701
 using ModelingToolkit

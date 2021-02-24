@@ -99,6 +99,11 @@ jacobian_sparsity(sys::AbstractODESystem) =
     jacobian_sparsity([eq.rhs for eq ∈ equations(sys)],
                       [dv for dv in states(sys)])
 
+function isautonomous(sys::AbstractODESystem)
+    tgrad = calculate_tgrad(sys;simplify=true)
+    all(iszero,tgrad)
+end
+
 function DiffEqBase.ODEFunction(sys::AbstractODESystem, args...; kwargs...)
     ODEFunction{true}(sys, args...; kwargs...)
 end
@@ -198,7 +203,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
       $fsym(u,p,t) = $f_oop(u,p,t)
       $fsym(du,u,p,t) = $f_iip(du,u,p,t)
     end
-  
+
     tgradsym = gensym(:tgrad)
     if tgrad
         tgrad_oop, tgrad_iip = generate_tgrad(sys, dvs, ps;
