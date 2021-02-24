@@ -282,3 +282,24 @@ D = Differential(t)
 eq = D(x) ~ r*x
 ode = ODESystem(eq)
 @test equations(ode) == [eq]
+# issue #808
+@testset "Combined system name collisions" begin
+    function makesys(name)
+        @parameters t a
+        @variables x(t) f(t)
+        D = Differential(t)
+
+        ODESystem([D(x) ~ -a*x + f], name=name)
+    end
+
+    function issue808()
+        sys1 = makesys(:sys1)
+        sys2 = makesys(:sys1)
+
+        @parameters t
+        D = Differential(t)
+        @test_throws ArgumentError ODESystem([sys2.f ~ sys1.x, D(sys1.f) ~ 0], t, systems=[sys1, sys2])
+    end
+    issue808()
+
+end
