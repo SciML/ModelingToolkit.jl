@@ -283,8 +283,8 @@ function bareiss!(
         for ei in k+1:m
             # elimate `v`
             coeff = 0
-            vars = eadj[ei]
-            vj = findfirst(isequal(v), vars)
+            ivars = eadj[ei]
+            vj = findfirst(isequal(v), ivars)
             if vj === nothing # `v` is not in in `e`
                 continue
             else # remove `v`
@@ -303,7 +303,7 @@ function bareiss!(
             empty!(tmp_incidence)
             empty!(tmp_coeffs)
             empty!(vars)
-            union!(vars, kvars, ivars)
+            union!(vars, ivars, kvars)
 
             for v in vars
                 ck = getcoeff(kvars, kcoeffs, v)
