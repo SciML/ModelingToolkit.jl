@@ -11,8 +11,6 @@ function alias_elimination(sys)
     end
     is_linear_equations, eadj, cadj = find_linear_equations(sys)
 
-    #Main.a_[] = s, is_linear_equations, cadj
-
     v_eliminated, v_types, n_null_vars, degenerate_equations, linear_equations = alias_eliminate_graph(
         s, is_linear_equations, eadj, cadj
     )
@@ -29,7 +27,7 @@ function alias_elimination(sys)
         end
     end
 
-    dels = Int[]
+    dels = Set{Int}()
     eqs = copy(equations(sys))
     for (ei, e) in enumerate(linear_equations)
         vs = 𝑠neighbors(graph, e)
@@ -44,6 +42,7 @@ function alias_elimination(sys)
             eqs[e] = 0 ~ rhs
         end
     end
+    dels = sort(collect(dels))
     deleteat!(eqs, dels)
 
     for (ieq, eq) in enumerate(eqs)
