@@ -11,6 +11,8 @@ function alias_elimination(sys)
     end
     is_linear_equations, eadj, cadj = find_linear_equations(sys)
 
+    #Main.a_[] = s, is_linear_equations, cadj
+
     v_eliminated, v_types, n_null_vars, degenerate_equations, linear_equations = alias_eliminate_graph(
         s, is_linear_equations, eadj, cadj
     )
@@ -260,7 +262,8 @@ function bareiss!(
         ei, vj = find_first_linear_variable(eadj, k:m, is_linear_variables, isequal(1))
         if vj == 0
             ei, vj = find_first_linear_variable(eadj, k:m, is_linear_variables, isequal(2))
-        else
+        end
+        if vj == 0
             ei, vj = find_first_linear_variable(eadj, k:m, is_linear_variables, _->true)
         end
 
