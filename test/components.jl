@@ -1,5 +1,5 @@
 using Test
-using ModelingToolkit, StructuralTransformations, OrdinaryDiffEq
+using ModelingToolkit, OrdinaryDiffEq
 
 # Basic electric components
 const t = Sym{ModelingToolkit.Parameter{Real}}(:t)
