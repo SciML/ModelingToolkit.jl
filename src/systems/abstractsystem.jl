@@ -222,6 +222,17 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
     throw(error("Variable $name does not exist"))
 end
 
+function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
+    if (pa = Sym{Parameter{Real}}(prop); pa in parameters(sys))
+        sys.default_p[pa] = value(val)
+    # comparing a Sym returns a symbolic expression
+    elseif (st = Sym{Real}(prop); any(s->s.name==st.name, states(sys)))
+        sys.default_u0[st] = value(val)
+    else
+        setfield!(sys, prop, val)
+    end
+end
+
 function renamespace(namespace, x)
     if x isa Num
         renamespace(namespace, value(x))
@@ -239,12 +250,12 @@ namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
 
 function namespace_default_u0(sys)
     d_u0 = default_u0(sys)
-    Dict(states(sys, k) => d_u0[k] for k in keys(d_u0))
+    Dict(states(sys, k) => namespace_expr(d_u0[k], nameof(sys), independent_variable(sys)) for k in keys(d_u0))
 end
 
 function namespace_default_p(sys)
     d_p = default_p(sys)
-    Dict(parameters(sys, k) => d_p[k] for k in keys(d_p))
+    Dict(parameters(sys, k) => namespace_expr(d_p[k], nameof(sys), independent_variable(sys)) for k in keys(d_p))
 end
 
 function namespace_equations(sys::AbstractSystem)

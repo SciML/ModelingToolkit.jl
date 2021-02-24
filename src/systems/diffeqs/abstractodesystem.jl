@@ -192,22 +192,37 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      sparse = false, simplify=false,
                                      kwargs...) where {iip}
 
-    idx = iip ? 2 : 1
-    f = generate_function(sys, dvs, ps; expression=Val{true}, kwargs...)[idx]
+    f_oop, f_iip = generate_function(sys, dvs, ps; expression=Val{true}, kwargs...)
+    fsym = gensym(:f)
+    _f = quote
+      $fsym(u,p,t) = $f_oop(u,p,t)
+      $fsym(du,u,p,t) = $f_iip(du,u,p,t)
+    end
+  
+    tgradsym = gensym(:tgrad)
     if tgrad
-        _tgrad = generate_tgrad(sys, dvs, ps;
+        tgrad_oop, tgrad_iip = generate_tgrad(sys, dvs, ps;
                                 simplify=simplify,
-                                expression=Val{true}, kwargs...)[idx]
+                                expression=Val{true}, kwargs...)
+        _tgrad = quote
+            $tgradsym(u,p,t) = $tgrad_oop(u,p,t)
+            $tgradsym(J,u,p,t) = $tgrad_iip(J,u,p,t)
+        end
     else
-        _tgrad = :nothing
+        _tgrad = :($tgradsym = nothing)
     end
 
+    jacsym = gensym(:jac)
     if jac
-        _jac = generate_jacobian(sys, dvs, ps;
+        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps;
                                  sparse=sparse, simplify=simplify,
-                                 expression=Val{true}, kwargs...)[idx]
+                                 expression=Val{true}, kwargs...)
+        _jac = quote
+            $jacsym(u,p,t) = $jac_oop(u,p,t)
+            $jacsym(J,u,p,t) = $jac_iip(J,u,p,t)
+        end
     else
-        _jac = :nothing
+        _jac = :($jacsym = nothing)
     end
 
     M = calculate_massmatrix(sys)
@@ -215,16 +230,15 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
     jp_expr = sparse ? :(similar($(get_jac(sys)[]),Float64)) : :nothing
-
     ex = quote
-        f = $f
-        tgrad = $_tgrad
-        jac = $_jac
+        $_f
+        $_tgrad
+        $_jac
         M = $_M
         ODEFunction{$iip}(
-                          f,
-                          jac = jac,
-                          tgrad = tgrad,
+                          $fsym,
+                          jac = $jacsym,
+                          tgrad = $tgradsym,
                           mass_matrix = M,
                           jac_prototype = $jp_expr,
                           syms = $(Symbol.(states(sys))),
@@ -252,9 +266,12 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
         u0 = nothing
     end
 
+    defp = default_p(sys)
     if !(parammap isa DiffEqBase.NullParameters)
         parammap′ = lower_mapnames(parammap)
-        p = varmap_to_vars(parammap′,ps; defaults=default_p(sys))
+        p = varmap_to_vars(parammap′,ps; defaults=defp)
+    elseif !isempty(defp)
+        p = varmap_to_vars(Dict(),ps; defaults=defp)
     else
         p = ps
     end
