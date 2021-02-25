@@ -5,8 +5,9 @@ struct PDESystem <: ModelingToolkit.AbstractSystem
   indvars
   depvars
   ps
-  @add_kwonly function PDESystem(eqs, bcs, domain, indvars, depvars, ps = SciMLBase.NullParameters())
-      new(eqs, bcs, domain, indvars, depvars, ps)
+  default_p
+  @add_kwonly function PDESystem(eqs, bcs, domain, indvars, depvars, ps = SciMLBase.NullParameters(), default_p = nothing)
+      new(eqs, bcs, domain, indvars, depvars, ps, default_p)
   end
 end
 
@@ -21,5 +22,6 @@ function Base.show(io::IO, sys::PDESystem)
   println(io,"Dependent Variables: ", sys.depvars)
   println(io,"Independent Variables: ", sys.indvars)
   println(io,"Parameters: ", sys.ps)
+  println(io,"Default Parameter Values", sys.default_p)
   return nothing
 end
