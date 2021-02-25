@@ -581,9 +581,9 @@ function _build_function(target::CTarget, ex::Array{<:Num}, args...;
   end
 
   equations = Vector{String}()
-  for row ∈ 1:size(ex,1)
-    for col ∈ 1:size(ex,2)
-      lhs = string(lhsname, "[", (row-1) * size(ex,2) + col-1, "]")
+  for col ∈ 1:size(ex,2)
+    for row ∈ 1:size(ex,1)
+      lhs = string(lhsname, "[", (col-1) * size(ex,1) + row-1, "]")
       rhs = numbered_expr(value(ex[row, col]), args...;
                           lhsname  = lhsname,
                           rhsnames = rhsnames,
