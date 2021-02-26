@@ -182,6 +182,8 @@ Setfield.get(obj::AbstractSystem, l::Setfield.PropertyLens{field}) where {field}
     end
 end
 
+rename(x::AbstractSystem, name) = @set x.name = name
+
 function Base.getproperty(sys::AbstractSystem, name::Symbol)
     sysname = nameof(sys)
     systems = get_systems(sys)
