@@ -221,6 +221,7 @@ include("solve.jl")
 include("direct.jl")
 include("domains.jl")
 include("register_function.jl")
+include("named.jl")
 
 include("systems/abstractsystem.jl")
 
@@ -295,5 +296,6 @@ export build_function
 export @register
 export modelingtoolkitize
 export @variables, @parameters
+export @named
 
 end # module
