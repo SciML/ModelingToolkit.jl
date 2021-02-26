@@ -427,3 +427,9 @@ function Base.show(io::IO, sys::AbstractSystem)
     end
     return nothing
 end
+
+@latexrecipe function f(sys::AbstractSystem)
+    return latexify(equations(sys))
+end
+
+Base.show(io::IO, ::MIME"text/latex", x::AbstractSystem) = print(io, latexify(x))

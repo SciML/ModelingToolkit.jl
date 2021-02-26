@@ -37,7 +37,8 @@ export @derivatives
 using Symbolics: _parse_vars, value, makesym, @derivatives, get_variables,
                  exprs_occur_in
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-                  jacobian_sparsity, islinear
+                  jacobian_sparsity, islinear, _iszero, _isone,
+                  tosymbol, lower_varname, diff2term, var_from_nested_derivative
 
 import DiffEqBase: @add_kwonly
 
@@ -46,6 +47,18 @@ import LightGraphs: SimpleDiGraph, add_edge!
 import TreeViews
 
 using Requires
+
+for fun in [:toexpr]
+    @eval begin
+        function $fun(eq::Equation; kw...)
+            Expr(:(=), $fun(eq.lhs; kw...), $fun(eq.rhs; kw...))
+        end
+
+        $fun(eqs::AbstractArray; kw...) = map(eq->$fun(eq; kw...), eqs)
+        $fun(x::Integer; kw...) = x
+        $fun(x::AbstractFloat; kw...) = x
+    end
+end
 
 """
 $(TYPEDEF)
@@ -83,7 +96,6 @@ include("variables.jl")
 include("parameters.jl")
 
 include("utils.jl")
-include("direct.jl")
 include("domains.jl")
 
 include("systems/abstractsystem.jl")
@@ -114,7 +126,6 @@ using .SystemStructures
 
 include("systems/reduction.jl")
 
-include("latexify_recipes.jl")
 include("build_function.jl")
 
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr
