@@ -9,25 +9,74 @@ and Hessians, along with automatically sparsifying and parallelizing the
 computations. Automatic transformations, such as index reduction, can be applied
 to the model to make it easier for numerical solvers to handle.
 
-## Package Overview
+## Installation
 
-ModelingToolkit has 3 layers:
+To install ModelingToolkit.jl, use the Julia package manager:
 
-1. The model definition level. This is a high level of syntactic sugar for
-   easily generating ModelingToolkit models. It can be used directly like a DSL
-   for advanced users who want a lot of flexibility in a modeling language.
-   Additionally, automatic tracing functionality allows for easily generating
-   ModelingToolkit models directly from Julia code.
-2. The `AbstractSystem` level. This is the level where content-dependent functionality
-   is added, where models such an ordinary differential equation are represented.
-   At the system level, there are *transformations* which take one system to
-   another, and *targets* which output code for numerical solvers.
-3. The IR level, also referred to as the direct level. At this level, one
-   directly acts on arrays of `Equation`s, and symbolic expressions to
-   generate functions.
+```julia
+using Pkg
+Pkg.add("ModelingToolkit")
+```
 
-Each level above is built on the level below, giving more context to allow for
-more automation. For example, the system level allows for automatically generating
-fast multithreaded sparse Jacobian functions of an `ODESystem`, which is just
-calling the sparsity functions and the multithreading capabilities of
-`build_function` at the IR level.
+## Feature Summary
+
+ModelingToolkit.jl is a symbolic-numeric modeling package. Thus it combines some
+of the features from symbolic computing packages like SymPy or Mathematica with
+the ideas of equation-based modeling systems like the causal Simulink and the
+acausal Modelica. It bridges the gap between many different kinds of equations,
+allowing one to quickly and easily transform systems of DAEs into optimization
+problems, or vice-versa, and then simplify and parallelize the resulting expressions
+before generating code.
+
+### Feature List
+
+- Causal and acausal modeling (Simulink/Modelica)
+- Automated model transformation, simplification, and composition
+- Pervasive parallelism in symbolic computations and generated functions
+- Core features like alias elimination and tearing of nonlinear systems for
+  efficiently numerically handling large-scale systems of equations
+- The ability to use the entire Symbolics.jl Computer Algebra System (CAS) as
+  part of the modeling process.
+- Extendability: the whole system is written in pure Julia, so adding new
+  functions, simplification rules, and model transformations has no barrier.
+
+For information on how to use the Symbolics.jl CAS system that ModelingToolkit.jl
+is built on, consult the [Symbolics.jl documentation](https://github.com/JuliaSymbolics/Symbolics.jl)
+
+### Equation Types
+
+- Ordinary differential equations
+- Stochastic differential equations
+- Partial differential equations
+- Nonlinear systems
+- Optimization problems
+- Optimal Control
+
+## Extension Libraries
+
+Because ModelingToolkit.jl is the core foundation of a equation-based modeling
+ecosystem, there is a large set of libraries adding features to this system.
+Below is an incomplete list of extension libraries one may want to be aware of:
+
+- [Catalyst.jl](https://github.com/SciML/Catalyst.jl): Symbolic representations of chemical reactions
+    - Symbolically build and represent large systems of chemical reactions
+    - Generate code for ODEs, SDEs, continuous-time Markov Chains, and more
+    - Simulate the models using the SciML ecosystem with O(1) Gillespie methods
+- [DataDrivenDiffEq.jl](https://github.com/SciML/DataDrivenDiffEq.jl): Automatic identification of equations from data
+    - Automated construction of ODEs and DAEs from data
+    - Representations of Koopman operators and Dynamic Mode Decomposition (DMD)
+- [MomentClosure.jl](https://github.com/augustinas1/MomentClosure.jl): Automatic transformation of ReactionSystems into deterministic systems
+    - Generates ODESystems for the moment closures
+    - Allows for geometrically-distributed random reaction rates
+- [CellMLToolkit.jl](https://github.com/SciML/CellMLToolkit.jl)
+- [SbmlInterface.jl](https://github.com/paulflang/SbmlInterface.jl)
+- [ReactionMechanismSimulator.jl]()
+- [ReactionNetworkImporters.jl]()
+- [NeuralPDE.jl]()
+- [StructuralTransformations.jl]()
+
+## Compatible Numerical Solvers
+
+
+
+- [GalacticOptim.jl](https://github.com/SciML/GalacticOptim.jl)
