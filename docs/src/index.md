@@ -1,13 +1,14 @@
-# ModelingToolkit.jl
+# ModelingToolkit.jl: High-Performance Symbolic-Numeric Equation-Based Modeling
 
 ModelingToolkit.jl is a modeling language for high-performance
 symbolic-numeric computation in scientific computing and scientific machine learning.
-It allows for users to give a high-level description of a model for
-symbolic preprocessing to analyze and enhance the model. ModelingToolkit can
-automatically generate fast functions for model components like Jacobians
-and Hessians, along with automatically sparsifying and parallelizing the
-computations. Automatic transformations, such as index reduction, can be applied
-to the model to make it easier for numerical solvers to handle.
+It then mixes ideas from symbolic computational algebra systems with
+causal and acausal equation-based modeling frameworks to give an extendable and
+parallel modeling system. It allows for users to give a high-level description of
+a model for symbolic preprocessing to analyze and enhance the model. Automatic
+transformations, such as index reduction, can be applied to the model before
+solving in order to make it easily handle equations would could not be solved
+when modeled without symbolic intervention.
 
 ## Installation
 
@@ -32,8 +33,11 @@ before generating code.
 
 - Causal and acausal modeling (Simulink/Modelica)
 - Automated model transformation, simplification, and composition
+- Automatic conversion of numerical models into symbolic models
+- Composition of models through the components, a lazy connection system, and
+  tools for expanding/flattening
 - Pervasive parallelism in symbolic computations and generated functions
-- Core features like alias elimination and tearing of nonlinear systems for
+- Transformations like alias elimination and tearing of nonlinear systems for
   efficiently numerically handling large-scale systems of equations
 - The ability to use the entire Symbolics.jl Computer Algebra System (CAS) as
   part of the modeling process.
@@ -50,6 +54,8 @@ is built on, consult the [Symbolics.jl documentation](https://github.com/JuliaSy
 - Partial differential equations
 - Nonlinear systems
 - Optimization problems
+- Continuous-Time Markov Chains
+- Chemical Reactions
 - Optimal Control
 
 ## Extension Libraries
@@ -58,6 +64,10 @@ Because ModelingToolkit.jl is the core foundation of a equation-based modeling
 ecosystem, there is a large set of libraries adding features to this system.
 Below is an incomplete list of extension libraries one may want to be aware of:
 
+- [StructuralTransformations.jl](https://github.com/JuliaComputing/StructuralTransformations.jl): Various transformations of models into structurally better versions for improved numerical simulation
+    - Pantelides algortihm for index reduction of DAEs
+    - Tearing of `ODESystem`s and `NonolinearSystem`s to reduce the numerical
+      cost of handling large implicit systems via Newton methods
 - [Catalyst.jl](https://github.com/SciML/Catalyst.jl): Symbolic representations of chemical reactions
     - Symbolically build and represent large systems of chemical reactions
     - Generate code for ODEs, SDEs, continuous-time Markov Chains, and more
@@ -68,15 +78,42 @@ Below is an incomplete list of extension libraries one may want to be aware of:
 - [MomentClosure.jl](https://github.com/augustinas1/MomentClosure.jl): Automatic transformation of ReactionSystems into deterministic systems
     - Generates ODESystems for the moment closures
     - Allows for geometrically-distributed random reaction rates
-- [CellMLToolkit.jl](https://github.com/SciML/CellMLToolkit.jl)
-- [SbmlInterface.jl](https://github.com/paulflang/SbmlInterface.jl)
-- [ReactionMechanismSimulator.jl]()
-- [ReactionNetworkImporters.jl]()
-- [NeuralPDE.jl]()
-- [StructuralTransformations.jl]()
+- [CellMLToolkit.jl](https://github.com/SciML/CellMLToolkit.jl): Import [CellML](https://www.cellml.org/) models into ModelingToolkit
+    - Repository of more than a thousand pre-made models
+    - Focus on biomedical models in areas such as: Calcium Dynamics,
+      Cardiovascular Circulation, Cell Cycle, Cell Migration, Circadian Rhythms,
+      Electrophysiology, Endocrine, Excitation-Contraction Coupling, Gene Regulation,
+      Hepatology, Immunology, Ion Transport, Mechanical Constitutive Laws,
+      Metabolism, Myofilament Mechanics, Neurobiology, pH Regulation, PKPD,
+      Protein Modules, Signal Transduction, and Synthetic Biology.
+- [SbmlInterface.jl](https://github.com/paulflang/SbmlInterface.jl): Import [SBML](http://sbml.org/Main_Page) models into ModelingToolkit
+    - Uses the robust libsbml library for parsing and transforming the SBML
+- [ReactionMechanismSimulator.jl](https://github.com/ReactionMechanismGenerator/ReactionMechanismSimulator.jl): simulating and analyzing large chemical reaction mechanisms
+    - Ideal gas and dilute liquid phases.
+    - Constant T and P and constant V adiabatic ideal gas reactors.
+    - Constant T and V dilute liquid reactors.
+    - Diffusion limited rates. Sensitivity analysis for all reactors.
+    - Flux diagrams with molecular images (if molecular information is provided).
+- [ReactionNetworkImporters.jl](https://github.com/isaacsas/ReactionNetworkImporters.jl): Import various models into ModelingToolkit
+    - Supports the BioNetGen `.net` file
+    - Supports importing networks specified by stoichiometric matrices
 
 ## Compatible Numerical Solvers
 
+All of the symbolic systems have a direct conversion to a numerical system which
+can then be handled through the SciML interfaces. For example, after building a
+model and performing symbolic manipulations, an `ODESystem` can be converted into
+an `ODEProblem` to then be solved by a numerical ODE solver. Below is a list of
+the solver libraries which are the numerical targets of the ModelingToolkit
+system:
 
-
+- [DifferentialEquations.jl](https://diffeq.sciml.ai/stable/)
+    - Multi-package interface of high performance numerical solvers for `ODESystem`, `SDESystem`, and `JumpSystem`
+- [NonlinearSolve.jl](https://github.com/JuliaComputing/NonlinearSolve.jl)
+    - High performance numerical solving of `NonlinearSystem`
 - [GalacticOptim.jl](https://github.com/SciML/GalacticOptim.jl)
+    - Multi-package interface for numerical solving `OptimizationSystem`
+- [NeuralPDE.jl](https://github.com/SciML/NeuralPDE.jl)
+    - Physics-Informed Neural Network (PINN) training on `PDESystem`
+- [DiffEqOperators.jl](https://github.com/SciML/DiffEqOperators.jl)
+    - Automated finite difference method (FDM) discretization of `PDESystem`
