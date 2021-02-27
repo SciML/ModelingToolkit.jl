@@ -230,3 +230,36 @@ function flatten(sys::ODESystem)
 end
 
 ODESystem(eq::Equation, args...; kwargs...) = ODESystem([eq], args...; kwargs...)
+
+"""
+$(SIGNATURES)
+
+Build the observed function assuming the observed equations are all explicit,
+i.e. there are no cycles or dependencies.
+"""
+function build_explicit_observed_function(
+        sys, syms;
+        expression=false,
+        output_type=Array)
+
+    if (isscalar = !(syms isa Vector))
+        syms = [syms]
+    end
+    syms = value.(syms)
+
+    obs = observed(sys)
+    observed_idx = Dict(map(x->x.lhs, obs) .=> 1:length(obs))
+    output = map(sym->obs[observed_idx[sym]].rhs, syms)
+
+    ex = Func(
+        [
+         DestructuredArgs(states(sys))
+         DestructuredArgs(parameters(sys))
+         independent_variable(sys)
+        ],
+        [],
+        isscalar ? output[1] : MakeArray(output, output_type)
+    ) |> toexpr
+
+    expression ? ex : @RuntimeGeneratedFunction(ex)
+end
