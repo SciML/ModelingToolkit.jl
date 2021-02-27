@@ -201,3 +201,30 @@ let
     @test isequal(expand_derivatives(D(sin(t) * foo(t))), cos(t) * foo(t) + sin(t) * D(foo(t)))
 
 end
+
+foo(args... ;kw...) = args, kw
+pp = :name => :cool_name
+
+@named cool_name = foo()
+@test collect(cool_name) == [pp]
+
+@named cool_name = foo(42)
+@test cool_name[1] == (42,)
+@test collect(cool_name[2]) == [pp]
+
+@named cool_name = foo(42; a = 2)
+@test cool_name[1] == (42,)
+@test collect(cool_name[2]) == [:a => 2; pp]
+
+@named cool_name = foo(a = 2)
+@test collect(cool_name) == [:a => 2; pp]
+
+@named cool_name = foo(;a = 2)
+@test collect(cool_name) == [:a => 2; pp]
+
+@named cool_name = foo(name = 2)
+@test collect(cool_name) == [:name => 2]
+
+@named cool_name = foo(42; name = 3)
+@test cool_name[1] == (42,)
+@test collect(cool_name[2]) == [:name => 3]
