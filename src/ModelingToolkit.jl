@@ -295,5 +295,6 @@ export build_function
 export @register
 export modelingtoolkitize
 export @variables, @parameters
+export @named
 
 end # module
