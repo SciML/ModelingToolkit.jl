@@ -19,6 +19,7 @@ makedocs(
         "Basics" => Any[
             "basics/AbstractSystem.md",
             "basics/ContextualVariables.md",
+            "basics/Validation.md",
             "basics/DependencyGraphs.md"
         ],
         "Systems Types" => Any[

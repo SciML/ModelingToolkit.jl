@@ -14,6 +14,10 @@ NonlinearSystem
 
 ## Transformations
 
+```@docs
+alias_elimination
+```
+
 ## Applicable Calculation and Generation Functions
 
 ```julia

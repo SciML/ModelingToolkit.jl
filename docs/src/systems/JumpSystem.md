@@ -13,6 +13,12 @@ JumpSystem
 - `get_ps(sys)` or `parameters(sys)`: The parameters of the jump system.
 - `independent_variable(sys)`: The independent variable of the jump system.
 
+## Transformations
+
+```@docs
+alias_elimination
+```
+
 ## Problem Constructors
 
 ```@docs

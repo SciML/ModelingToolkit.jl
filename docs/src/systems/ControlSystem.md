@@ -16,5 +16,6 @@ ControlSystem
 ## Transformations
 
 ```@docs
-runge_kutta_discretize
+ModelingToolkit.runge_kutta_discretize
+alias_elimination
 ```
