@@ -425,3 +425,41 @@ function Base.show(io::IO, sys::AbstractSystem)
     end
     return nothing
 end
+
+function _named(expr)
+    if !(expr isa Expr && expr.head === :(=) && expr.args[2].head === :call)
+        throw(ArgumentError("expression should be of the form `sys = foo(a, b)`"))
+    end
+    name, call = expr.args
+
+    has_kw = false
+    if length(call.args) >= 2 && call.args[2] isa Expr
+        # canonicalize to use `:parameters`
+        if call.args[2].head === :kw
+            call.args[2] = Expr(:parameters, Expr(:kw, call.args[2].args...))
+            has_kw = true
+        elseif call.args[2].head === :parameters
+            has_kw = true
+        end
+    end
+
+    if !has_kw
+        param = Expr(:parameters)
+        if length(call.args) == 1
+            push!(call.args, param)
+        else
+            insert!(call.args, 2, param)
+        end
+    end
+
+    kws = call.args[2].args
+
+    if !any(kw->kw.args[1] == :name, kws) # don't overwrite `name` kwarg
+        push!(kws, Expr(:kw, :name, Meta.quot(name)))
+    end
+    :($name = $call)
+end
+
+macro named(expr)
+    esc(_named(expr))
+end
