@@ -41,7 +41,7 @@ p  = [lorenz1.σ => 10.0,
 
 tspan = (0.0,100.0)
 prob = ODEProblem(connected,u0,tspan,p)
-sol = solve(prob,Rodas5())
+sol = solve(prob,Rodas4())
 
 using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.z))
 ```
@@ -150,7 +150,7 @@ p  = [lorenz1.σ => 10.0,
 
 tspan = (0.0,100.0)
 prob = ODEProblem(connected,u0,tspan,p)
-sol = solve(prob,Rodas5())
+sol = solve(prob,Rodas4())
 
 using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.z))
 ```

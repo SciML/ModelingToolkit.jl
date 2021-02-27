@@ -8,10 +8,10 @@ SDESystem
 
 ## Composition and Accessor Functions
 
-- `sys.eqs` or `equations(sys)`: The equations that define the SDE.
-- `sys.states` or `states(sys)`: The set of states in the SDE.
-- `sys.parameters` or `parameters(sys)`: The parameters of the SDE.
-- `sys.iv` or `independent_variable(sys)`: The independent variable of the SDE.
+- `get_eqs(sys)` or `equations(sys)`: The equations that define the SDE.
+- `get_states(sys)` or `states(sys)`: The set of states in the SDE.
+- `get_ps(sys)s` or `parameters(sys)`: The parameters of the SDE.
+- `independent_variable(sys)`: The independent variable of the SDE.
 
 ## Transformations
 
