@@ -202,6 +202,7 @@ let
 
 end
 
+foo(;kw...) = kw
 foo(args... ;kw...) = args, kw
 pp = :name => :cool_name
 
