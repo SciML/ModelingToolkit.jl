@@ -41,11 +41,13 @@ before generating code.
   efficiently numerically handling large-scale systems of equations
 - The ability to use the entire Symbolics.jl Computer Algebra System (CAS) as
   part of the modeling process.
+- Import models from common formats like SBML, CellML, BioNetGen, and more.
 - Extendability: the whole system is written in pure Julia, so adding new
   functions, simplification rules, and model transformations has no barrier.
 
 For information on how to use the Symbolics.jl CAS system that ModelingToolkit.jl
-is built on, consult the [Symbolics.jl documentation](https://github.com/JuliaSymbolics/Symbolics.jl)
+is built on, consult the
+[Symbolics.jl documentation](https://github.com/JuliaSymbolics/Symbolics.jl)
 
 ### Equation Types
 
@@ -78,6 +80,15 @@ Below is an incomplete list of extension libraries one may want to be aware of:
 - [MomentClosure.jl](https://github.com/augustinas1/MomentClosure.jl): Automatic transformation of ReactionSystems into deterministic systems
     - Generates ODESystems for the moment closures
     - Allows for geometrically-distributed random reaction rates
+- [ReactionMechanismSimulator.jl](https://github.com/ReactionMechanismGenerator/ReactionMechanismSimulator.jl): simulating and analyzing large chemical reaction mechanisms
+    - Ideal gas and dilute liquid phases.
+    - Constant T and P and constant V adiabatic ideal gas reactors.
+    - Constant T and V dilute liquid reactors.
+    - Diffusion limited rates. Sensitivity analysis for all reactors.
+    - Flux diagrams with molecular images (if molecular information is provided).
+
+## Model Import Formats
+
 - [CellMLToolkit.jl](https://github.com/SciML/CellMLToolkit.jl): Import [CellML](https://www.cellml.org/) models into ModelingToolkit
     - Repository of more than a thousand pre-made models
     - Focus on biomedical models in areas such as: Calcium Dynamics,
@@ -88,12 +99,6 @@ Below is an incomplete list of extension libraries one may want to be aware of:
       Protein Modules, Signal Transduction, and Synthetic Biology.
 - [SbmlInterface.jl](https://github.com/paulflang/SbmlInterface.jl): Import [SBML](http://sbml.org/Main_Page) models into ModelingToolkit
     - Uses the robust libsbml library for parsing and transforming the SBML
-- [ReactionMechanismSimulator.jl](https://github.com/ReactionMechanismGenerator/ReactionMechanismSimulator.jl): simulating and analyzing large chemical reaction mechanisms
-    - Ideal gas and dilute liquid phases.
-    - Constant T and P and constant V adiabatic ideal gas reactors.
-    - Constant T and V dilute liquid reactors.
-    - Diffusion limited rates. Sensitivity analysis for all reactors.
-    - Flux diagrams with molecular images (if molecular information is provided).
 - [ReactionNetworkImporters.jl](https://github.com/isaacsas/ReactionNetworkImporters.jl): Import various models into ModelingToolkit
     - Supports the BioNetGen `.net` file
     - Supports importing networks specified by stoichiometric matrices

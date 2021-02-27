@@ -16,8 +16,12 @@ makedocs(
             "tutorials/nonlinear.md",
             "tutorials/modelingtoolkitize.md",
         ],
-        "Systems" => Any[
-            "systems/AbstractSystem.md",
+        "Basics" => Any[
+            "basics/AbstractSystem.md",
+            "basics/ContextualVariables.md",
+            "basics/DependencyGraphs.md"
+        ],
+        "Systems Types" => Any[
             "systems/ODESystem.md",
             "systems/SDESystem.md",
             "systems/JumpSystem.md",
@@ -26,7 +30,6 @@ makedocs(
             "systems/ControlSystem.md",
             "systems/ReactionSystem.md",
             "systems/PDESystem.md",
-            "systems/DependencyGraphs.md"
         ]
     ]
 )
