@@ -228,3 +228,20 @@ pp = :name => :cool_name
 @named cool_name = foo(42; name = 3)
 @test cool_name[1] == (42,)
 @test collect(cool_name[2]) == [:name => 3]
+
+if VERSION >= v"1.5"
+    name = 3
+    @named cool_name = foo(42; name)
+    @test cool_name[1] == (42,)
+    @test collect(cool_name[2]) == [:name => name]
+    @named cool_name = foo(; name)
+    @test collect(cool_name) == [:name => name]
+
+    ff = 3
+    @named cool_name = foo(42; ff)
+    @test cool_name[1] == (42,)
+    @test collect(cool_name[2]) == [:ff => ff; pp]
+
+    @named cool_name = foo(;ff)
+    @test collect(cool_name) == [:ff => ff; pp]
+end

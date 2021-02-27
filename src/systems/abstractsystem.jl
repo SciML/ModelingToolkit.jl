@@ -454,7 +454,7 @@ function _named(expr)
 
     kws = call.args[2].args
 
-    if !any(kw->kw.args[1] == :name, kws) # don't overwrite `name` kwarg
+    if !any(kw->(kw isa Symbol ? kw : kw.args[1]) == :name, kws) # don't overwrite `name` kwarg
         push!(kws, Expr(:kw, :name, Meta.quot(name)))
     end
     :($name = $call)
