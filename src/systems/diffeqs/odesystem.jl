@@ -115,15 +115,28 @@ iv_from_nested_derivative(x) = missing
 vars(x::Sym) = [x]
 vars(exprs::Symbolic) = vars([exprs])
 vars(exprs) = foldl(vars!, exprs; init = Set())
+vars!(vars, eq::Equation) = (vars!(vars, eq.lhs); vars!(vars, eq.rhs); vars)
 function vars!(vars, O)
     isa(O, Sym) && return push!(vars, O)
-    !isa(O, Symbolic) && return vars
+    !istree(O) && return vars
+
+    operation(O) isa Differential && return push!(vars, O)
 
     operation(O) isa Sym && push!(vars, O)
-    for arg ∈ arguments(O)
+    for arg in arguments(O)
         vars!(vars, arg)
     end
 
+    return vars
+end
+
+find_derivatives!(vars, expr::Equation, f=identity) = (find_derivatives!(vars, expr.lhs, f); find_derivatives!(vars, expr.rhs, f); vars)
+function find_derivatives!(vars, expr, f)
+    !istree(O) && return vars
+    operation(O) isa Differential && push!(vars, f(O))
+    for arg in arguments(O)
+        vars!(vars, arg)
+    end
     return vars
 end
 
@@ -169,6 +182,9 @@ function collect_vars!(states, parameters, expr, iv)
         collect_var!(states, parameters, expr, iv)
     else
         for var in vars(expr)
+            if istree(var) && operation(var) isa Differential
+                var, _ = var_from_nested_derivative(var)
+            end
             collect_var!(states, parameters, var, iv)
         end
     end
@@ -214,3 +230,36 @@ function flatten(sys::ODESystem)
 end
 
 ODESystem(eq::Equation, args...; kwargs...) = ODESystem([eq], args...; kwargs...)
+
+"""
+$(SIGNATURES)
+
+Build the observed function assuming the observed equations are all explicit,
+i.e. there are no cycles or dependencies.
+"""
+function build_explicit_observed_function(
+        sys, syms;
+        expression=false,
+        output_type=Array)
+
+    if (isscalar = !(syms isa Vector))
+        syms = [syms]
+    end
+    syms = value.(syms)
+
+    obs = observed(sys)
+    observed_idx = Dict(map(x->x.lhs, obs) .=> 1:length(obs))
+    output = map(sym->obs[observed_idx[sym]].rhs, syms)
+
+    ex = Func(
+        [
+         DestructuredArgs(states(sys))
+         DestructuredArgs(parameters(sys))
+         independent_variable(sys)
+        ],
+        [],
+        isscalar ? output[1] : MakeArray(output, output_type)
+    ) |> toexpr
+
+    expression ? ex : @RuntimeGeneratedFunction(ex)
+end

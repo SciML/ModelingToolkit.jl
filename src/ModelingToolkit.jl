@@ -248,7 +248,7 @@ include("systems/dependency_graphs.jl")
 include("systems/systemstructure.jl")
 using .SystemStructures
 
-include("systems/reduction.jl")
+include("systems/alias_elimination.jl")
 
 include("latexify_recipes.jl")
 include("build_function.jl")
@@ -266,6 +266,7 @@ export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
 export ControlSystem
+export alias_elimination, flatten
 export ode_order_lowering, liouville_transform
 export runge_kutta_discretize
 export PDESystem
@@ -295,5 +296,6 @@ export build_function
 export @register
 export modelingtoolkitize
 export @variables, @parameters
+export @named
 
 end # module

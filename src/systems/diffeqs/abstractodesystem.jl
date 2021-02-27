@@ -162,6 +162,15 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
+    observedfun = let sys = sys, dict = Dict()
+        function generated_observed(obsvar, u, p, t)
+            obs = get!(dict, value(obsvar)) do
+                build_explicit_observed_function(sys, obsvar)
+            end
+            obs(u, p, t)
+        end
+    end
+
     ODEFunction{iip}(
                      f,
                      jac = _jac === nothing ? nothing : _jac,
@@ -170,6 +179,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      jac_prototype = sparse ? similar(get_jac(sys)[],Float64) : nothing,
                      syms = Symbol.(states(sys)),
                      indepsym = Symbol(independent_variable(sys)),
+                     observed = observedfun,
                     )
 end
 

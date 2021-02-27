@@ -1,8 +1,9 @@
 module SystemStructures
 
+using DataStructures
+using SymbolicUtils: istree, operation, arguments, Symbolic
 using ..ModelingToolkit
-import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten
-using SymbolicUtils: arguments
+import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten, value
 using ..BipartiteGraphs
 using UnPack
 using Setfield
@@ -35,7 +36,7 @@ for v in 𝑣vertices(graph); active_𝑣vertices[v] || continue
 end
 =#
 
-export SystemStructure, initialize_system_structure
+export SystemStructure, initialize_system_structure, find_linear_equations
 export diffvars_range, dervars_range, algvars_range
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq
 export DIFFERENTIAL_VARIABLE, ALGEBRAIC_VARIABLE, DERIVATIVE_VARIABLE
@@ -44,11 +45,11 @@ export vartype, eqtype
 
 struct SystemStructure
     dxvar_offset::Int
-    fullvars::Vector # [xvar; dxvars; algvars]
+    fullvars::Vector # [diffvars; dervars; algvars]
     varassoc::Vector{Int}
     algeqs::BitVector
-    graph::BipartiteGraph{Int}
-    solvable_graph::BipartiteGraph{Int}
+    graph::BipartiteGraph{Int,Nothing}
+    solvable_graph::BipartiteGraph{Int,Nothing}
     assign::Vector{Int}
     inv_assign::Vector{Int}
     scc::Vector{Vector{Int}}
@@ -56,6 +57,7 @@ struct SystemStructure
 end
 
 diffvars_range(s::SystemStructure) = 1:s.dxvar_offset
+# TODO: maybe dervars should be in the end.
 dervars_range(s::SystemStructure) = s.dxvar_offset+1:2s.dxvar_offset
 algvars_range(s::SystemStructure) = 2s.dxvar_offset+1:length(s.fullvars)
 
@@ -78,7 +80,10 @@ isdiffeq(s::SystemStructure, eq::Integer) = !isalgeq(s, eq)
 eqtype(s::SystemStructure, eq::Integer)::EquationType = isalgeq(s, eq) ? ALGEBRAIC_EQUATION : DIFFERENTIAL_EQUATION
 
 function initialize_system_structure(sys)
-    sys, dxvar_offset, fullvars, varassoc, algeqs, graph, solvable_graph = init_graph(flatten(sys))
+    sys, dxvar_offset, fullvars, varassoc, algeqs, graph = init_graph(flatten(sys))
+
+    solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
+
     @set sys.structure = SystemStructure(
                                          dxvar_offset,
                                          fullvars,
@@ -108,38 +113,41 @@ function Base.show(io::IO, s::SystemStructure)
     show(io, S)
 end
 
-# V-nodes `[x_1, x_2, x_3, ..., dx_1, dx_2, ..., y_1, y_2, ...]` where `x`s are
-# differential variables and `y`s are algebraic variables.
-function collect_variables(sys)
-    dxvars = []
+function init_graph(sys)
+    iv = independent_variable(sys)
     eqs = equations(sys)
-    algeqs = trues(length(eqs))
-    for (i, eq) in enumerate(eqs)
-        if isdiffeq(eq)
-            algeqs[i] = false
-            lhs = eq.lhs
-            # Make sure that the LHS is a first order derivative of a var.
-            @assert !(arguments(lhs)[1] isa Differential) "The equation $eq is not first order"
+    neqs = length(eqs)
+    algeqs = trues(neqs)
+    varsadj = Vector{Any}(undef, neqs)
+    dervars = OrderedSet()
+    diffvars = OrderedSet()
 
-            push!(dxvars, lhs)
+    for (i, eq) in enumerate(eqs)
+        vars = OrderedSet()
+        vars!(vars, eq)
+        isalgeq = true
+        for var in vars
+            if istree(var) && operation(var) isa Differential
+                isalgeq = false
+                diffvar = arguments(var)[1]
+                @assert !(diffvar isa Differential) "The equation [ $eq ] is not first order"
+                push!(dervars, var)
+                push!(diffvars, diffvar)
+            end
         end
+        algeqs[i] = isalgeq
+        varsadj[i] = vars
     end
 
-    xvars = (first ∘ var_from_nested_derivative).(dxvars)
-    algvars  = setdiff(states(sys), xvars)
-    return xvars, dxvars, algvars, algeqs
-end
+    algvars  = setdiff(states(sys), diffvars)
+    fullvars = [collect(diffvars); collect(dervars); algvars]
 
-function init_graph(sys)
-    xvars, dxvars, algvars, algeqs = collect_variables(sys)
-    dxvar_offset = length(xvars)
+    dxvar_offset = length(diffvars)
     algvar_offset = 2dxvar_offset
 
-    fullvars = [xvars; dxvars; algvars]
-    eqs = equations(sys)
-    idxmap = Dict(fullvars .=> 1:length(fullvars))
-    graph = BipartiteGraph(length(eqs), length(fullvars))
-    solvable_graph = BipartiteGraph(length(eqs), length(fullvars))
+    nvars = length(fullvars)
+    idxmap = Dict(fullvars .=> 1:nvars)
+    graph = BipartiteGraph(neqs, nvars)
 
     vs = Set()
     for (i, eq) in enumerate(eqs)
@@ -160,7 +168,57 @@ function init_graph(sys)
     end
 
     varassoc = Int[(1:dxvar_offset) .+ dxvar_offset; zeros(Int, length(fullvars) - dxvar_offset)] # variable association list
-    sys, dxvar_offset, fullvars, varassoc, algeqs, graph, solvable_graph
+    sys, dxvar_offset, fullvars, varassoc, algeqs, graph
+end
+
+function find_linear_equations(sys)
+    s = structure(sys)
+    @unpack fullvars, graph = s
+    is_linear_equations = falses(ndsts(graph))
+    eqs = equations(sys)
+    eadj = Vector{Int}[]
+    cadj = Vector{Int}[]
+    coeffs = Int[]
+    for (i, eq) in enumerate(eqs); isdiffeq(eq) && continue
+        empty!(coeffs)
+        linear_term = 0
+        all_int_algvars = true
+
+        term = value(eq.rhs - eq.lhs)
+        for j in 𝑠neighbors(graph, i)
+            if !isalgvar(s, j)
+                all_int_algvars = false
+                continue
+            end
+            var = fullvars[j]
+            c = expand_derivatives(Differential(var)(term), false)
+            # test if `var` is linear in `eq`.
+            if !(c isa Symbolic) && c isa Number
+                if isinteger(c)
+                    c = convert(Integer, c)
+                else
+                    all_int_algvars = false
+                end
+                linear_term += c * var
+                push!(coeffs, c)
+            end
+        end
+
+        # Check if there are only algebraic variables and the equation is both
+        # linear and homogeneous, i.e. it is in the form of
+        #
+        #       ``∑ c_i * a_i = 0``,
+        #
+        # where ``c_i`` ∈ ℤ and ``a_i`` denotes algebraic variables.
+        if all_int_algvars && isequal(linear_term, term)
+            is_linear_equations[i] = true
+            push!(eadj, copy(𝑠neighbors(graph, i)))
+            push!(cadj, copy(coeffs))
+        else
+            is_linear_equations[i] = false
+        end
+    end
+    return is_linear_equations, eadj, cadj
 end
 
 end # module
