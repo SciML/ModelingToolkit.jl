@@ -215,18 +215,23 @@ pp = :name => :cool_name
 
 @named cool_name = foo(42; a = 2)
 @test cool_name[1] == (42,)
-@test collect(cool_name[2]) == [:a => 2; pp]
+@test collect(cool_name[2]) == [pp; :a => 2]
 
 @named cool_name = foo(a = 2)
-@test collect(cool_name) == [:a => 2; pp]
+@test collect(cool_name) == [pp; :a => 2]
 
 @named cool_name = foo(;a = 2)
-@test collect(cool_name) == [:a => 2; pp]
+@test collect(cool_name) == [pp; :a => 2]
 
 @named cool_name = foo(name = 2)
 @test collect(cool_name) == [:name => 2]
 
 @named cool_name = foo(42; name = 3)
+@test cool_name[1] == (42,)
+@test collect(cool_name[2]) == [:name => 3]
+
+kwargs = (;name = 3)
+@named cool_name = foo(42; kwargs...)
 @test cool_name[1] == (42,)
 @test collect(cool_name[2]) == [:name => 3]
 
@@ -241,8 +246,8 @@ if VERSION >= v"1.5"
     ff = 3
     @named cool_name = foo(42; ff)
     @test cool_name[1] == (42,)
-    @test collect(cool_name[2]) == [:ff => ff; pp]
+    @test collect(cool_name[2]) == [pp; :ff => ff]
 
     @named cool_name = foo(;ff)
-    @test collect(cool_name) == [:ff => ff; pp]
+    @test collect(cool_name) == [pp; :ff => ff]
 end
