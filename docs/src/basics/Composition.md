@@ -5,6 +5,73 @@ easily build large models. The composition is lazy and only instantiated
 at the time of conversion to numerical models, allowing a more performant
 way in terms of computation time and memory.
 
+## Simple Model Composition Example
+
+The following is an example of building a model in a library with
+an optional forcing function, and allowing the user to specify the
+forcing later. Here, the library author defines a component named
+`decay`. The user then builds two `decay` components and connects them,
+saying the forcing term of `decay1` is a constant while the forcing term
+of `decay2` is the value of the state variable `x`.
+
+```julia
+using ModelingToolkit
+
+function decay(;name)
+  @parameters t a
+  @variables x(t) f(t)
+  D = Differential(t)
+  ODESystem([
+      D(x) ~ -a*x + f
+    ];
+    name=name)
+end
+
+@named decay1 = decay()
+@named decay2 = decay()
+
+@parameters t
+D = Differential(t)
+@named connected = ODESystem([
+                        decay2.f ~ decay1.x
+                        D(decay1.f) ~ 0
+                      ], t, systems=[decay1, decay2])
+
+equations(connected)
+
+#4-element Vector{Equation}:
+# Differential(t)(decay1₊f(t)) ~ 0
+# decay2₊f(t) ~ decay1₊x(t)
+# Differential(t)(decay1₊x(t)) ~ decay1₊f(t) - (decay1₊a*(decay1₊x(t)))
+# Differential(t)(decay2₊x(t)) ~ decay2₊f(t) - (decay2₊a*(decay2₊x(t)))
+
+equations(alias_elimination(connected))
+
+# 4-element Vector{Equation}:
+# Differential(t)(decay1₊f(t)) ~ 0
+# 0 ~ decay1₊x(t) - (decay2₊f(t))
+# Differential(t)(decay1₊x(t)) ~ decay1₊f(t) - (decay1₊a*(decay1₊x(t)))
+# Differential(t)(decay2₊x(t)) ~ decay2₊f(t) - (decay2₊a*(decay2₊x(t)))
+```
+
+Now we can solve the system:
+
+```julia
+x0 = [
+  decay1.x => 1.0
+  decay1.f => 0.0
+  decay2.x => 1.0
+]
+p = [
+  decay1.a => 0.1
+  decay2.a => 0.2
+]
+
+using DifferentialEquations
+prob = ODEProblem(reduced_system, x0, (0.0, 100.0), p)
+sol = solve(prob, Tsit5())
+```
+
 ## Basics of Model Composition
 
 Every `AbstractSystem` has a `system` keyword argument for specifying
@@ -29,40 +96,121 @@ by specifying their equality: `x ~ subsys.x` in the `eqs` for `sys`.
 This algebraic relationship can then be simplified by transformations
 like `alias_elimination` or `tearing` which will be described later.
 
-### Simple Model Composition Example
+### Numerics with Composed Models
 
-The following is an example of building a model in a library with
-an optional forcing function, and allowing the user to specify the
-forcing later. Here, the library author defines a component named
-`decay`. The user then builds two `decay` components and connects them,
-saying the forcing term of `decay1` is a constant while the forcing term
-of `decay2` is the value of the state variable `x`.
+These composed models can then be directly transformed into their
+associated `SciMLProblem` type using the standard constructors. When
+this is done, the initial conditions and parameters must be specified
+in their namespaced form. For example:
 
 ```julia
-function decay(;name)
-  @parameters t a
-  @variables x(t) f(t)
-  D = Differential(t)
-  ODESystem([
-      D(x) ~ -a*x + f
-    ];
-    name=name)
-end
+u0 = [
+  x => 2.0
+  subsys.x => 2.0
+]
+```
 
-@named decay1 = decay()
-@named decay2 = decay()
+Note that any default values within the given subcomponent will be
+used if no override is provided at construction time. If any values for
+initial conditions or parameters are unspecified an error will be thrown.
+
+When the model is numerically solved, the solution can be accessed via
+its symbolic values. For example, if `sol` is the `ODESolution`, one
+can use `sol[x]` and `sol[subsys.x]` to access the respective timeseries
+in the solution. All other indexing rules stay the same, so `sol[x,1:5]`
+accesses the first through fifth values of `x`. Note that this can be
+done even if the variable `x` is eliminated from the system from
+transformations like `alias_elimination` or `tearing`: the variable
+will be lazily reconstructed on demand.
+
+## Alias Elimination
+
+In many cases, the nicest way to build a model may leave a lot of
+unnecessary variables. Thus one may want to remove these equations
+before numerically solving. The `alias_elimination` function removes
+these relationships and trivial singularity equations, i.e. equations
+which result in `0~0` expressions in over-specified systems.
+
+## Inheritance and Combine (TODO)
+
+Model inheritance can be done in two ways: explicitly or implicitly.
+The explicit way is to shadow variables with equality expressions.
+For example, let's assume we have three separate systems which we
+want to compose to a single one. This is how one could explicitly
+forward all states and parameters to the higher level system:
+
+```julia
+using ModelingToolkit, OrdinaryDiffEq, Plots
+
+## Library code
 
 @parameters t
 D = Differential(t)
-connected = ODESystem([
-                        decay2.f ~ decay1.x
-                        D(decay1.f) ~ 0
-                      ], t, systems=[decay1, decay2])
+
+@variables S(t), I(t), R(t)
+N = S + I + R
+@parameters β,γ
+
+@named seqn = ODESystem([D(S) ~ -β*S*I/N])
+@named ieqn = ODESystem([D(I) ~ β*S*I/N-γ*I])
+@named reqn = ODESystem([D(R) ~ γ*I])
+
+@named sir = ODESystem([   
+                    S ~ ieqn.S,
+                    I ~ seqn.I,
+                    R ~ ieqn.R,
+                    ieqn.S ~ seqn.S,
+                    seqn.I ~ ieqn.I,
+                    seqn.R ~ reqn.R,
+                    ieqn.R ~ reqn.R,
+                    reqn.I ~ ieqn.I], t, [S,I,R], [β,γ], name=:sir,
+                    systems=[seqn,ieqn,reqn],
+                    default_p = [
+                        seqn.β => β
+                        ieqn.β => β
+                        ieqn.γ => γ
+                        reqn.γ => γ
+                    ])
 ```
 
-## Combine
+Note that the states are forwarded by an equality relationship, while
+the parameters are forwarded through a relationship in their default
+values. The user of this model can then solve this model simply by
+specifying the values at the highest level:
 
-## Alias Elimination
+```julia
+sireqn_simple = alias_elimination(sir)
+
+## User Code
+
+u0 = [sir.S => 990.0,
+      sir.I => 10.0,
+      sir.R => 0.0]
+
+p = [
+    sir.β => 0.5
+    sir.γ => 0.25
+]
+
+# Time span
+tspan = (0.0,40.0)
+
+# Define problem
+prob = ODEProblem(sireqn_simple,u0,tspan,p,jac=true)
+
+# Solve
+sol = solve(prob,Tsit5())
+
+sol[R]
+```
+
+However, one can similarly simplify this process of inheritance by
+using `combine` which concatenates all of the vectors within the
+systems. For example, we could equivalently have done:
+
+```julia
+@named sir = combine([seqn,ieqn,reqn])
+```
 
 ## The Tearing Transformation
 
