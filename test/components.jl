@@ -81,7 +81,7 @@ rc_eqs = [
          ]
 
 rc_model = ODESystem(rc_eqs, t, systems=[resistor, capacitor, source, ground], name=:rc)
-sys = alias_elimination(rc_model)
+sys = structural_simplify(rc_model)
 @test ModelingToolkit.default_p(sys) == Dict(
                                              capacitor.C => 1.0,
                                              source.V => 1.0,
@@ -93,6 +93,15 @@ u0 = [
       resistor.v => 0.0
      ]
 prob = ODEProblem(sys, u0, (0, 10.0))
+sol = solve(prob, Rodas4())
+
+@test sol[resistor.p.i] == sol[capacitor.p.i]
+@test sol[resistor.n.i] == -sol[capacitor.p.i]
+@test sol[capacitor.n.i] == -sol[capacitor.p.i]
+@test iszero(sol[ground.g.i])
+@test iszero(sol[ground.g.v])
+
+prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 
 @test sol[resistor.p.i] == sol[capacitor.p.i]
