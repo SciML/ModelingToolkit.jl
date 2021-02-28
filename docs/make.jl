@@ -19,7 +19,7 @@ makedocs(
         "Basics" => Any[
             "basics/AbstractSystem.md",
             "basics/ContextualVariables.md",
-            "basics/Composition.md"
+            "basics/Composition.md",
             "basics/Validation.md",
             "basics/DependencyGraphs.md"
         ],
@@ -34,7 +34,7 @@ makedocs(
             "systems/PDESystem.md",
         ],
         "comparison.md",
-        "internals.md"
+        "internals.md",
     ]
 )
 
