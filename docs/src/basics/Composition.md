@@ -48,6 +48,11 @@ equations(connected)
 simplified_sys = structural_simplify(connected)
 
 equations(simplified_sys)
+
+#3-element Vector{Equation}:
+# Differential(t)(decay1₊f(t)) ~ 0
+# Differential(t)(decay1₊x(t)) ~ decay1₊f(t) - (decay1₊a*(decay1₊x(t)))
+# Differential(t)(decay2₊x(t)) ~ decay1₊x(t) - (decay2₊a*(decay2₊x(t)))
 ```
 
 Now we can solve the system:
@@ -64,8 +69,9 @@ p = [
 ]
 
 using DifferentialEquations
-prob = ODEProblem(reduced_system, x0, (0.0, 100.0), p)
+prob = ODEProblem(simplified_sys, x0, (0.0, 100.0), p)
 sol = solve(prob, Tsit5())
+sol[decay2.f]
 ```
 
 ## Basics of Model Composition
@@ -159,7 +165,7 @@ N = S + I + R
                     seqn.I ~ ieqn.I,
                     seqn.R ~ reqn.R,
                     ieqn.R ~ reqn.R,
-                    reqn.I ~ ieqn.I], t, [S,I,R], [β,γ], name=:sir,
+                    reqn.I ~ ieqn.I], t, [S,I,R], [β,γ],
                     systems=[seqn,ieqn,reqn],
                     default_p = [
                         seqn.β => β
@@ -177,27 +183,28 @@ specifying the values at the highest level:
 ```julia
 sireqn_simple = structural_simplify(sir)
 
+equations(sireqn_simple)
+
+# 3-element Vector{Equation}:
+#Differential(t)(seqn₊S(t)) ~ -seqn₊β*ieqn₊I(t)*seqn₊S(t)*(((ieqn₊I(t)) + (reqn₊R(t)) + (seqn₊S(t)))^-1)
+#Differential(t)(ieqn₊I(t)) ~ ieqn₊β*ieqn₊I(t)*seqn₊S(t)*(((ieqn₊I(t)) + (reqn₊R(t)) + (seqn₊S(t)))^-1) - (ieqn₊γ*(ieqn₊I(t)))
+#Differential(t)(reqn₊R(t)) ~ reqn₊γ*ieqn₊I(t)
+
 ## User Code
 
-u0 = [sir.S => 990.0,
-      sir.I => 10.0,
-      sir.R => 0.0]
+u0 = [seqn.S => 990.0,
+      ieqn.I => 10.0,
+      reqn.R => 0.0]
 
 p = [
-    sir.β => 0.5
-    sir.γ => 0.25
+    β => 0.5
+    γ => 0.25
 ]
 
-# Time span
 tspan = (0.0,40.0)
-
-# Define problem
 prob = ODEProblem(sireqn_simple,u0,tspan,p,jac=true)
-
-# Solve
 sol = solve(prob,Tsit5())
-
-sol[R]
+sol[reqn.R]
 ```
 
 However, one can similarly simplify this process of inheritance by

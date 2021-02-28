@@ -15,13 +15,13 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-lorenz1 = ODESystem(eqs,name=:lorenz1)
-lorenz2 = ODESystem(eqs,name=:lorenz2)
+@named lorenz1 = ODESystem(eqs)
+@named lorenz2 = ODESystem(eqs)
 
 @variables a
 @parameters γ
 connections = [0 ~ lorenz1.x + lorenz2.y + a*γ]
-connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])
+@named connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])
 
 u0 = [lorenz1.x => 1.0,
       lorenz1.y => 0.0,
@@ -110,8 +110,8 @@ Let's define two interacting Lorenz equations. To do this, we will
 build two `ODESystem`s from the equations we used in the first part:
 
 ```julia
-lorenz1 = ODESystem(eqs,name=:lorenz1)
-lorenz2 = ODESystem(eqs,name=:lorenz2)
+@named lorenz1 = ODESystem(eqs)
+@named lorenz2 = ODESystem(eqs)
 ```
 
 Now let's define an interconnection between these ODE systems. Here
@@ -122,7 +122,7 @@ between these two models:
 @variables a(t)
 @parameters γ
 connections = [0 ~ lorenz1.x + lorenz2.y + a*γ]
-connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])
+@named connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])
 ```
 
 This `ODESystem` thus connects the two Lorenz systems and defines the

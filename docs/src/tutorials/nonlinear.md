@@ -104,4 +104,4 @@ generate the function, i.e.:
 nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β], expression=Val{false})[2]
 ```
 
-which uses GeneralizedGenerated.jl to build the same world-age function on the fly without eval.
+which uses RuntimeGeneratedFunctions.jl to build the same world-age function on the fly without eval.
