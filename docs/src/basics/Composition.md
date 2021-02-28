@@ -1,4 +1,4 @@
-# [Composing Models and Building Reusable Components](@ref components)
+# [Composing Models and Building Reusable Components](@id components)
 
 The symbolic models of ModelingToolkit can be composed together to
 easily build large models. The composition is lazy and only instantiated

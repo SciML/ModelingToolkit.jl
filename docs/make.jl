@@ -12,6 +12,7 @@ makedocs(
         "Home" => "index.md",
         "Tutorials" => Any[
             "tutorials/ode_modeling.md",
+            "tutorials/acausal_components.md",
             "tutorials/higher_order.md",
             "tutorials/nonlinear.md",
             "tutorials/modelingtoolkitize.md",
