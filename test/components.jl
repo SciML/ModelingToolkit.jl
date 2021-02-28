@@ -3,21 +3,21 @@ using ModelingToolkit, OrdinaryDiffEq
 
 # Basic electric components
 const t = Sym{ModelingToolkit.Parameter{Real}}(:t)
-function Pin(name)
+function Pin(;name)
     @variables v(t) i(t)
     ODESystem(Equation[], t, [v, i], [], name=name, default_u0=[v=>1.0, i=>1.0])
 end
 
 function Ground(name)
-    g = Pin(:g)
+    @named g = Pin()
     eqs = [g.v ~ 0]
     ODESystem(eqs, t, [], [], systems=[g], name=name)
 end
 
 function ConstantVoltage(name; V = 1.0)
     val = V
-    p = Pin(:p)
-    n = Pin(:n)
+    @named p = Pin()
+    @named n = Pin()
     @parameters V
     eqs = [
            V ~ p.v - n.v
@@ -28,8 +28,8 @@ end
 
 function Resistor(name; R = 1.0)
     val = R
-    p = Pin(:p)
-    n = Pin(:n)
+    @named p = Pin()
+    @named n = Pin()
     @variables v(t)
     @parameters R
     eqs = [
@@ -42,8 +42,8 @@ end
 
 function Capacitor(name; C = 1.0)
     val = C
-    p = Pin(:p)
-    n = Pin(:n)
+    @named p = Pin()
+    @named n = Pin()
     @variables v(t)
     @parameters C
     D = Differential(t)
