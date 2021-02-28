@@ -242,3 +242,54 @@ function DiffEqBase.OptimizationFunction{iip}(f, ::AutoModelingToolkit, x, p = D
     end
     OptimizationProblem(sys,u0map,parammap,grad=grad,hess=hess).f
 end
+
+function Base.show(io::IO, sys::OptimizationSystem)
+    eqs = equations(sys)
+    Base.printstyled(io, "Model $(nameof(sys))\n"; bold=true)
+    # The reduced equations are usually very long. It's not that useful to print
+    # them.
+    #Base.print_matrix(io, eqs)
+    #println(io)
+
+    rows = first(displaysize(io)) ÷ 5
+    limit = get(io, :limit, false)
+
+    vars = states(sys); nvars = length(vars)
+    Base.printstyled(io, "States ($nvars):"; bold=true)
+    nrows = min(nvars, limit ? rows : nvars)
+    limited = nrows < length(vars)
+    d_u0 = has_default_u0(sys) ? default_u0(sys) : nothing
+    for i in 1:nrows
+        s = vars[i]
+        print(io, "\n  ", s)
+
+        if d_u0 !== nothing
+            val = get(d_u0, s, nothing)
+            if val !== nothing
+                print(io, " [defaults to $val]")
+            end
+        end
+    end
+    limited && print(io, "\n⋮")
+    println(io)
+
+    vars = parameters(sys); nvars = length(vars)
+    Base.printstyled(io, "Parameters ($nvars):"; bold=true)
+    nrows = min(nvars, limit ? rows : nvars)
+    limited = nrows < length(vars)
+    d_p = has_default_p(sys) ? default_p(sys) : nothing
+    for i in 1:nrows
+        s = vars[i]
+        print(io, "\n  ", s)
+
+        if d_p !== nothing
+            val = get(d_p, s, nothing)
+            if val !== nothing
+                print(io, " [defaults to $val]")
+            end
+        end
+    end
+    limited && print(io, "\n⋮")
+
+    return nothing
+end

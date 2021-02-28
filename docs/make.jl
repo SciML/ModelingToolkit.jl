@@ -16,6 +16,9 @@ makedocs(
             "tutorials/higher_order.md",
             "tutorials/nonlinear.md",
             "tutorials/modelingtoolkitize.md",
+            "tutorials/optimization.md",
+            "tutorials/stochastic_diffeq.md",
+            "tutorials/nonlinear_optimal_control.md"
         ],
         "Basics" => Any[
             "basics/AbstractSystem.md",

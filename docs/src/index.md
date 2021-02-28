@@ -58,7 +58,7 @@ is built on, consult the
 - Optimization problems
 - Continuous-Time Markov Chains
 - Chemical Reactions
-- Optimal Control
+- Nonlinear Optimal Control
 
 ## Model Import Formats
 
