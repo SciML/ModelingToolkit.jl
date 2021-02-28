@@ -16,7 +16,7 @@ JumpSystem
 ## Transformations
 
 ```@docs
-alias_elimination
+structural_simplify
 ```
 
 ## Problem Constructors

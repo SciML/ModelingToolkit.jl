@@ -59,4 +59,5 @@ ismassaction
 
 ```@docs
 Base.convert
+structural_simplify
 ```

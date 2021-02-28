@@ -45,13 +45,9 @@ equations(connected)
 # Differential(t)(decay1₊x(t)) ~ decay1₊f(t) - (decay1₊a*(decay1₊x(t)))
 # Differential(t)(decay2₊x(t)) ~ decay2₊f(t) - (decay2₊a*(decay2₊x(t)))
 
-equations(alias_elimination(connected))
+simplified_sys = structural_simplify(connected)
 
-# 4-element Vector{Equation}:
-# Differential(t)(decay1₊f(t)) ~ 0
-# 0 ~ decay1₊x(t) - (decay2₊f(t))
-# Differential(t)(decay1₊x(t)) ~ decay1₊f(t) - (decay1₊a*(decay1₊x(t)))
-# Differential(t)(decay2₊x(t)) ~ decay2₊f(t) - (decay2₊a*(decay2₊x(t)))
+equations(simplified_sys)
 ```
 
 Now we can solve the system:
@@ -94,7 +90,7 @@ example, let's say there is a variable `x` in `states` and a variable
 `x` in `subsys`. We can declare that these two variables are the same
 by specifying their equality: `x ~ subsys.x` in the `eqs` for `sys`.
 This algebraic relationship can then be simplified by transformations
-like `alias_elimination` or `tearing` which will be described later.
+like `structural_simplify` which will be described later.
 
 ### Numerics with Composed Models
 
@@ -123,13 +119,13 @@ done even if the variable `x` is eliminated from the system from
 transformations like `alias_elimination` or `tearing`: the variable
 will be lazily reconstructed on demand.
 
-## Alias Elimination
+## Structural Simplify
 
 In many cases, the nicest way to build a model may leave a lot of
 unnecessary variables. Thus one may want to remove these equations
-before numerically solving. The `alias_elimination` function removes
-these relationships and trivial singularity equations, i.e. equations
-which result in `0~0` expressions in over-specified systems.
+before numerically solving. The `structural_simplify` function removes
+these trivial equality relationships and trivial singularity equations,
+i.e. equations which result in `0~0` expressions, in over-specified systems.
 
 ## Inheritance and Combine (TODO)
 
@@ -179,7 +175,7 @@ values. The user of this model can then solve this model simply by
 specifying the values at the highest level:
 
 ```julia
-sireqn_simple = alias_elimination(sir)
+sireqn_simple = structural_simplify(sir)
 
 ## User Code
 
@@ -212,6 +208,22 @@ systems. For example, we could equivalently have done:
 @named sir = combine([seqn,ieqn,reqn])
 ```
 
-## The Tearing Transformation
+## Tearing Problem Construction
 
-## Automatic Model Promotion
+Some system types, specifically `ODESystem` and `NonlinearSystem`, can be further
+reduced if `structural_simplify` has already been applied to them. This is done
+by using the alternative problem constructors, `ODAEProblem` and `BlockNonlinearProblem`
+respectively. In these cases, the constructor uses the knowledge of the
+strongly connected components calculated during the process of simplification
+as the basis for building pre-simplified nonlinear systems in the implicit
+solving. In summary: these problems are structurally modified, but could be
+more efficient and more stable.
+
+## Automatic Model Promotion (TODO)
+
+In many cases one might want to compose models of different types. For example,
+one may want to include a `NonlinearSystem` as a set of algebraic equations
+within an `ODESystem`, or one may want to use an `ODESystem` as a subsystem of
+an `SDESystem`. In these cases, the compostion works automatically by promoting
+the model via `promote_system`. System promotions exist in the cases where a
+mathematically-trivial definition of the promotion exists.

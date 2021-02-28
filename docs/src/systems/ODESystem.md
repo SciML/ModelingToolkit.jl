@@ -16,7 +16,7 @@ ODESystem
 ## Transformations
 
 ```@docs
-alias_elimination
+structural_simplify
 ode_order_lowering
 liouville_transform
 ```

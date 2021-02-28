@@ -15,7 +15,7 @@ NonlinearSystem
 ## Transformations
 
 ```@docs
-alias_elimination
+structural_simplify
 ```
 
 ## Applicable Calculation and Generation Functions

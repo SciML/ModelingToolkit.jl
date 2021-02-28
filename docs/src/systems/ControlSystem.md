@@ -17,5 +17,5 @@ ControlSystem
 
 ```@docs
 ModelingToolkit.runge_kutta_discretize
-alias_elimination
+structural_simplify
 ```
