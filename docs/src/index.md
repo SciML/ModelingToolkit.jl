@@ -60,16 +60,28 @@ is built on, consult the
 - Chemical Reactions
 - Optimal Control
 
+## Model Import Formats
+
+- [CellMLToolkit.jl](https://github.com/SciML/CellMLToolkit.jl): Import [CellML](https://www.cellml.org/) models into ModelingToolkit
+    - Repository of more than a thousand pre-made models
+    - Focus on biomedical models in areas such as: Calcium Dynamics,
+      Cardiovascular Circulation, Cell Cycle, Cell Migration, Circadian Rhythms,
+      Electrophysiology, Endocrine, Excitation-Contraction Coupling, Gene Regulation,
+      Hepatology, Immunology, Ion Transport, Mechanical Constitutive Laws,
+      Metabolism, Myofilament Mechanics, Neurobiology, pH Regulation, PKPD,
+      Protein Modules, Signal Transduction, and Synthetic Biology.
+- [SbmlInterface.jl](https://github.com/paulflang/SbmlInterface.jl): Import [SBML](http://sbml.org/Main_Page) models into ModelingToolkit
+    - Uses the robust libsbml library for parsing and transforming the SBML
+- [ReactionNetworkImporters.jl](https://github.com/isaacsas/ReactionNetworkImporters.jl): Import various models into ModelingToolkit
+    - Supports the BioNetGen `.net` file
+    - Supports importing networks specified by stoichiometric matrices
+
 ## Extension Libraries
 
 Because ModelingToolkit.jl is the core foundation of a equation-based modeling
 ecosystem, there is a large set of libraries adding features to this system.
 Below is an incomplete list of extension libraries one may want to be aware of:
 
-- [StructuralTransformations.jl](https://github.com/JuliaComputing/StructuralTransformations.jl): Various transformations of models into structurally better versions for improved numerical simulation
-    - Pantelides algortihm for index reduction of DAEs
-    - Tearing of `ODESystem`s and `NonolinearSystem`s to reduce the numerical
-      cost of handling large implicit systems via Newton methods
 - [Catalyst.jl](https://github.com/SciML/Catalyst.jl): Symbolic representations of chemical reactions
     - Symbolically build and represent large systems of chemical reactions
     - Generate code for ODEs, SDEs, continuous-time Markov Chains, and more
@@ -86,22 +98,6 @@ Below is an incomplete list of extension libraries one may want to be aware of:
     - Constant T and V dilute liquid reactors.
     - Diffusion limited rates. Sensitivity analysis for all reactors.
     - Flux diagrams with molecular images (if molecular information is provided).
-
-## Model Import Formats
-
-- [CellMLToolkit.jl](https://github.com/SciML/CellMLToolkit.jl): Import [CellML](https://www.cellml.org/) models into ModelingToolkit
-    - Repository of more than a thousand pre-made models
-    - Focus on biomedical models in areas such as: Calcium Dynamics,
-      Cardiovascular Circulation, Cell Cycle, Cell Migration, Circadian Rhythms,
-      Electrophysiology, Endocrine, Excitation-Contraction Coupling, Gene Regulation,
-      Hepatology, Immunology, Ion Transport, Mechanical Constitutive Laws,
-      Metabolism, Myofilament Mechanics, Neurobiology, pH Regulation, PKPD,
-      Protein Modules, Signal Transduction, and Synthetic Biology.
-- [SbmlInterface.jl](https://github.com/paulflang/SbmlInterface.jl): Import [SBML](http://sbml.org/Main_Page) models into ModelingToolkit
-    - Uses the robust libsbml library for parsing and transforming the SBML
-- [ReactionNetworkImporters.jl](https://github.com/isaacsas/ReactionNetworkImporters.jl): Import various models into ModelingToolkit
-    - Supports the BioNetGen `.net` file
-    - Supports importing networks specified by stoichiometric matrices
 
 ## Compatible Numerical Solvers
 
