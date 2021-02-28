@@ -2,7 +2,7 @@ using Test
 using ModelingToolkit
 using ModelingToolkit: Equation
 using ModelingToolkit.StructuralTransformations: SystemStructure, find_solvables!
-using NLsolve
+using NonlinearSolve
 using LinearAlgebra
 using UnPack
 
@@ -114,14 +114,9 @@ S = StructuralTransformations.reordered_matrix(sys, partitions)
 # 0 = u5 - hypot(sin(u5), hypot(cos(sin(u5)), hypot(sin(u5), cos(sin(u5)))))
 tornsys = tearing(sys)
 @test isequal(equations(tornsys), [0 ~ u5 + (-1 * hypot(hypot(cos(sin(u5)), hypot(sin(u5), cos(sin(u5)))), sin(u5)))])
-nlsys_func = generate_function(tornsys)[2]
-f = eval(nlsys_func)
-du = zeros(1)
-u = ones(1)
-p = nothing
-sol = nlsolve((out, x) -> f(out, x, p), u)
-f(du, sol.zero, p)
-@test norm(du) < 1e-10
+prob = NonlinearProblem(tornsys, ones(1))
+sol = solve(prob, NewtonRaphson())
+@test norm(prob.f(sol.u, sol.prob.p)) < 1e-10
 
 ###
 ### Simple test (edge case)
