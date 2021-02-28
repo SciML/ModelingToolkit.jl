@@ -98,9 +98,9 @@ an optimized Jacobian function to enhance the differential equation solvers,
 and `sparse` tells it to build the ODEProblem with all of the enhancements
 setup for sparse Jacobians.
 
-## Building Component-Based Models
+## Simulating a Connected System
 
-Now let's use ModelingToolkit to start building component-based models.
+Now let's use ModelingToolkit to start connecting models.
 Component-based models are compositions between submodels. This allows
 one to keep independently generated libraries of components intact
 and use them as the building blocks to construct more complicated
