@@ -18,7 +18,10 @@ ODESystem
 ```@docs
 structural_simplify
 ode_order_lowering
+dae_index_lowering
 liouville_transform
+alias_elimination
+tearing
 ```
 
 ## Applicable Calculation and Generation Functions
@@ -33,9 +36,15 @@ generate_factorized_W
 jacobian_sparsity
 ```
 
-## Problem Constructors
+## Standard Problem Constructors
 
 ```@docs
 ODEFunction
 ODEProblem
+```
+
+## Torn Problem Constructors
+
+```@docs
+ODAEProblem
 ```

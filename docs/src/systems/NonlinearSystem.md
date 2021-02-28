@@ -16,6 +16,8 @@ NonlinearSystem
 
 ```@docs
 structural_simplify
+alias_elimination
+tearing
 ```
 
 ## Applicable Calculation and Generation Functions
@@ -30,4 +32,10 @@ jacobian_sparsity
 
 ```@docs
 NonlinearProblem
+```
+
+## Torn Problem Constructors
+
+```@docs
+BlockNonlinearProblem
 ```

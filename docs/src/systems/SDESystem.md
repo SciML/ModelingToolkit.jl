@@ -17,6 +17,7 @@ SDESystem
 
 ```@docs
 structural_simplify
+alias_elimination
 ```
 
 ## Applicable Calculation and Generation Functions
