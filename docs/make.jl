@@ -32,7 +32,9 @@ makedocs(
             "systems/ControlSystem.md",
             "systems/ReactionSystem.md",
             "systems/PDESystem.md",
-        ]
+        ],
+        "comparison.md",
+        "internals.md"
     ]
 )
 
