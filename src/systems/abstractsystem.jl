@@ -463,3 +463,10 @@ end
 macro named(expr)
     esc(_named(expr))
 end
+
+"""
+$(SIGNATURES)
+
+Structurally simplify algebraic equations in a system.
+"""
+structural_simplify(sys::AbstractSystem) = tearing(alias_elimination(sys))
