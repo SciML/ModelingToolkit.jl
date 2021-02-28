@@ -1,4 +1,4 @@
-using ModelingToolkit
+using ModelingToolkit, GalacticOptim, Optim
 
 @variables t x(t) v(t) u(t)
 @parameters p[1:2]
