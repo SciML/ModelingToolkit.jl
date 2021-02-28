@@ -223,11 +223,20 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
 end
 
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
-    if (pa = Sym{Parameter{Real}}(prop); pa in parameters(sys))
-        sys.default_p[pa] = value(val)
-    # comparing a Sym returns a symbolic expression
-    elseif (st = Sym{Real}(prop); any(s->s.name==st.name, states(sys)))
-        sys.default_u0[st] = value(val)
+    # We use this weird syntax because `parameters` and `states` calls are
+    # potentially expensive.
+    if (
+        params = parameters(sys);
+        idx = findfirst(s->getname(s) == prop, params);
+        idx !== nothing;
+       )
+        sys.default_p[params[idx]] = value(val)
+    elseif (
+            sts = states(sys);
+            idx = findfirst(s->getname(s) == prop, sts);
+            idx !== nothing;
+           )
+        sys.default_u0[sts[idx]] = value(val)
     else
         setfield!(sys, prop, val)
     end
