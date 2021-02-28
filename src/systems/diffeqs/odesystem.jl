@@ -235,7 +235,7 @@ ODESystem(eq::Equation, args...; kwargs...) = ODESystem([eq], args...; kwargs...
 $(SIGNATURES)
 
 Build the observed function assuming the observed equations are all explicit,
-i.e. there are no cycles or dependencies.
+i.e. there are no cycles.
 """
 function build_explicit_observed_function(
         sys, syms;

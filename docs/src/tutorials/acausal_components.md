@@ -406,10 +406,15 @@ observed(sys)
  capacitor₊n₊v(t) ~ 0.0
  source₊n₊v(t) ~ 0.0
  ground₊g₊i(t) ~ 0.0
- ⋮
+ source₊n₊i(t) ~ capacitor₊p₊i(t)
+ source₊p₊i(t) ~ -capacitor₊p₊i(t)
+ capacitor₊n₊i(t) ~ -capacitor₊p₊i(t)
+ resistor₊n₊i(t) ~ -capacitor₊p₊i(t)
  ground₊g₊v(t) ~ 0.0
  source₊p₊v(t) ~ source₊V
  capacitor₊p₊v(t) ~ capacitor₊v(t)
+ resistor₊p₊v(t) ~ source₊p₊v(t)
+ resistor₊n₊v(t) ~ capacitor₊p₊v(t)
  resistor₊v(t) ~ -((capacitor₊p₊v(t)) - (source₊p₊v(t)))
 ```
 

@@ -467,6 +467,13 @@ end
 """
 $(SIGNATURES)
 
-Structurally simplify algebraic equations in a system.
+Structurally simplify algebraic equations in a system and compute the
+topological sort of the observed equations.
 """
-structural_simplify(sys::AbstractSystem) = tearing(alias_elimination(sys))
+function structural_simplify(sys::AbstractSystem)
+    ss = states(sys)
+    sys = tearing(alias_elimination(sys))
+    s = structure(sys)
+    @set! sys.observed = topsort_equations(observed(sys), ss)
+    return sys
+end
