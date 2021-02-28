@@ -39,19 +39,19 @@ eqs = [
 
 lorenz1 = ODESystem(eqs,t,name=:lorenz1)
 
-lorenz1_aliased = alias_elimination(lorenz1)
+lorenz1_aliased = structural_simplify(lorenz1)
 io = IOBuffer(); show(io, lorenz1_aliased); str = String(take!(io))
-@test all(s->occursin(s, str), ["lorenz1", "States (3)", "Parameters (3)"])
+@test all(s->occursin(s, str), ["lorenz1", "States (2)", "Parameters (3)"])
 reduced_eqs = [
                D(x) ~ σ*(y - x)
-               D(y) ~ β + x*(ρ - z) - y
-               0 ~ y + z - x
+               D(y) ~ β + x*(ρ - (x - y)) - y
               ]
 test_equal.(equations(lorenz1_aliased), reduced_eqs)
 @test isempty(setdiff(states(lorenz1_aliased), [x, y, z]))
 test_equal.(observed(lorenz1_aliased), [
-                                        u ~ 0,
-                                        a ~ -z,
+                                        u ~ 0
+                                        a ~ -z
+                                        z ~ x - y
                                        ])
 
 # Multi-System Reduction
@@ -77,7 +77,7 @@ connected = ODESystem([s ~ a + lorenz1.x
 
 # Reduced Flattened System
 
-reduced_system = alias_elimination(connected)
+reduced_system = structural_simplify(connected)
 
 @test setdiff(states(reduced_system), [
         s
@@ -102,16 +102,12 @@ reduced_system = alias_elimination(connected)
        ]) |> isempty
 
 reduced_eqs = [
-               0 ~ a + lorenz1.x - (s)
-               0 ~ s - (lorenz2.y)
-               D(lorenz1.x) ~ lorenz2.u + lorenz1.σ*((lorenz1.y) - (lorenz1.x))
-               D(lorenz1.y) ~ lorenz1.x*(lorenz1.ρ - (lorenz1.z)) - (lorenz1.u)
+               D(lorenz1.x) ~ lorenz1.σ*((lorenz1.y) - (lorenz1.x)) - ((lorenz2.z) - (lorenz2.x) - (lorenz2.y))
+               D(lorenz1.y) ~ lorenz1.z + lorenz1.x*(lorenz1.ρ - (lorenz1.z)) - (lorenz1.x) - (lorenz1.y)
                D(lorenz1.z) ~ lorenz1.x*lorenz1.y - (lorenz1.β*(lorenz1.z))
-               0 ~ lorenz1.x + lorenz1.y - (lorenz1.u) - (lorenz1.z)
-               D(lorenz2.x) ~ lorenz1.u + lorenz2.σ*((lorenz2.y) - (lorenz2.x))
-               D(lorenz2.y) ~ lorenz2.x*(lorenz2.ρ - (lorenz2.z)) - (lorenz2.u)
+               D(lorenz2.x) ~ lorenz2.σ*((lorenz2.y) - (lorenz2.x)) - ((lorenz1.z) - (lorenz1.x) - (lorenz1.y))
+               D(lorenz2.y) ~ lorenz2.z + lorenz2.x*(lorenz2.ρ - (lorenz2.z)) - (lorenz2.x) - (lorenz2.y)
                D(lorenz2.z) ~ lorenz2.x*lorenz2.y - (lorenz2.β*(lorenz2.z))
-               0 ~ lorenz2.x + lorenz2.y - (lorenz2.u) - (lorenz2.z)
               ]
 
 test_equal.(equations(reduced_system), reduced_eqs)
@@ -119,6 +115,10 @@ test_equal.(equations(reduced_system), reduced_eqs)
 observed_eqs = [
                 lorenz2.F ~ lorenz1.u
                 lorenz1.F ~ lorenz2.u
+                s ~ lorenz2.y
+                a ~ s - (lorenz1.x)
+                lorenz2.u ~ -((lorenz2.z) - (lorenz2.x) - (lorenz2.y))
+                lorenz1.u ~ -((lorenz1.z) - (lorenz1.x) - (lorenz1.y))
                ]
 test_equal.(observed(reduced_system), observed_eqs)
 
@@ -131,16 +131,12 @@ pp = [
       lorenz2.β => 8/3
      ]
 u0 = [
-      a         => 1.0
-      s         => 1.0
       lorenz1.x => 1.0
       lorenz1.y => 0.0
       lorenz1.z => 0.0
-      lorenz1.u => 0.0
       lorenz2.x => 1.0
       lorenz2.y => 0.0
       lorenz2.z => 0.0
-      lorenz2.u => 0.0
      ]
 prob1 = ODEProblem(reduced_system, u0, (0.0, 100.0), pp)
 solve(prob1, Rodas5())
@@ -149,10 +145,10 @@ solve(prob1, Rodas5())
 let
     @parameters t
     D = Differential(t)
-    @variables x(t), u(t), y(t)
-    @parameters a, b, c, d
+    @variables x(t) u(t) y(t)
+    @parameters a b c d
     ol = ODESystem([D(x) ~ a * x + b * u; y ~ c * x + d * u], t, name=:ol)
-    @variables u_c(t), y_c(t)
+    @variables u_c(t) y_c(t)
     @parameters k_P
     pc = ODESystem(Equation[u_c ~ k_P * y_c], t, name=:pc)
     connections = [
@@ -161,11 +157,10 @@ let
     ]
     connected = ODESystem(connections, t, systems=[ol, pc])
     @test equations(connected) isa Vector{Equation}
-    reduced_sys = alias_elimination(connected)
+    reduced_sys = structural_simplify(connected)
     ref_eqs = [
                D(ol.x) ~ ol.a*ol.x + ol.b*pc.u_c
-               0 ~ ol.c*ol.x + ol.d*pc.u_c - ol.y
-               0 ~ pc.k_P*ol.y - pc.u_c
+               0 ~ -pc.u_c - (pc.k_P*((-ol.c*(ol.x)) - (ol.d*(pc.u_c))))
               ]
     @test ref_eqs == equations(reduced_sys)
 end
@@ -180,8 +175,8 @@ eqs = [
        u3 ~ hypot(u1, u2) * p
       ]
 sys = NonlinearSystem(eqs, [u1, u2, u3], [p])
-reducedsys = alias_elimination(sys)
-@test observed(reducedsys) == [u1 ~ u2]
+reducedsys = structural_simplify(sys)
+@test observed(reducedsys) == [u1 ~ u2; u2 ~ 0.5(u3 - p)]
 
 u0 = [
       u1 => 1

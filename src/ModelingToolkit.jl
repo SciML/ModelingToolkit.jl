@@ -1,6 +1,6 @@
 module ModelingToolkit
 
-using DiffEqBase, SciMLBase
+using DiffEqBase, SciMLBase, Reexport
 using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using Latexify, Unitful, ArrayInterface
@@ -249,6 +249,8 @@ include("systems/systemstructure.jl")
 using .SystemStructures
 
 include("systems/alias_elimination.jl")
+include("structural_transformation/StructuralTransformations.jl")
+@reexport using .StructuralTransformations
 
 include("latexify_recipes.jl")
 include("build_function.jl")
@@ -276,6 +278,7 @@ export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
 export Term, Sym
 export independent_variable, states, parameters, equations, controls, observed, structure
+export structural_simplify
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad
