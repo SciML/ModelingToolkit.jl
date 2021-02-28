@@ -272,9 +272,14 @@ function build_observed_function(
     required_algvars = Set(intersect(algvars, syms_set))
     obs = observed(sys)
     observed_idx = Dict(map(x->x.lhs, obs) .=> 1:length(obs))
-    for sym in syms
-        idx = get(observed_idx, sym, nothing)
+    # FIXME: this is a rather rough estimate of dependencies.
+    maxidx = 0
+    for (i, s) in enumerate(syms)
+        idx = get(observed_idx, s, nothing)
         idx === nothing && continue
+        idx > maxidx && (maxidx = idx)
+    end
+    for idx in 1:maxidx
         vs = vars(obs[idx].rhs)
         union!(required_algvars, intersect(algvars, vs))
     end
@@ -308,7 +313,10 @@ function build_observed_function(
         ],
         [],
         Let(
-            collect(Iterators.flatten(solves)),
+            [
+             collect(Iterators.flatten(solves))
+             map(eq -> eq.lhs←eq.rhs, obs[1:maxidx])
+            ],
             isscalar ? output[1] : MakeArray(output, output_type)
            )
     ) |> Code.toexpr

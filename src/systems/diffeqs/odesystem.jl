@@ -74,6 +74,7 @@ struct ODESystem <: AbstractODESystem
     structure: structural information of the system
     """
     structure::Any
+    reduced_states::Vector
 end
 
 function ODESystem(
@@ -101,7 +102,7 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p, nothing)
+    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p, nothing, [])
 end
 
 var_from_nested_derivative(x, i=0) = (missing, missing)
@@ -235,7 +236,7 @@ ODESystem(eq::Equation, args...; kwargs...) = ODESystem([eq], args...; kwargs...
 $(SIGNATURES)
 
 Build the observed function assuming the observed equations are all explicit,
-i.e. there are no cycles or dependencies.
+i.e. there are no cycles.
 """
 function build_explicit_observed_function(
         sys, syms;
@@ -249,7 +250,14 @@ function build_explicit_observed_function(
 
     obs = observed(sys)
     observed_idx = Dict(map(x->x.lhs, obs) .=> 1:length(obs))
-    output = map(sym->obs[observed_idx[sym]].rhs, syms)
+    output = similar(syms, Any)
+    # FIXME: this is a rather rough estimate of dependencies.
+    maxidx = 0
+    for (i, s) in enumerate(syms)
+        idx = observed_idx[s]
+        idx > maxidx && (maxidx = idx)
+        output[i] = obs[idx].rhs
+    end
 
     ex = Func(
         [
@@ -258,7 +266,10 @@ function build_explicit_observed_function(
          independent_variable(sys)
         ],
         [],
-        isscalar ? output[1] : MakeArray(output, output_type)
+        Let(
+            map(eq -> eq.lhs←eq.rhs, obs[1:maxidx]),
+            isscalar ? output[1] : MakeArray(output, output_type)
+           )
     ) |> toexpr
 
     expression ? ex : @RuntimeGeneratedFunction(ex)

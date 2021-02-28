@@ -50,8 +50,8 @@ test_equal.(equations(lorenz1_aliased), reduced_eqs)
 @test isempty(setdiff(states(lorenz1_aliased), [x, y, z]))
 test_equal.(observed(lorenz1_aliased), [
                                         u ~ 0
-                                        a ~ -z
                                         z ~ x - y
+                                        a ~ -z
                                        ])
 
 # Multi-System Reduction
@@ -113,12 +113,12 @@ reduced_eqs = [
 test_equal.(equations(reduced_system), reduced_eqs)
 
 observed_eqs = [
-                lorenz2.F ~ lorenz1.u
-                lorenz1.F ~ lorenz2.u
                 s ~ lorenz2.y
-                a ~ s - (lorenz1.x)
                 lorenz2.u ~ -((lorenz2.z) - (lorenz2.x) - (lorenz2.y))
                 lorenz1.u ~ -((lorenz1.z) - (lorenz1.x) - (lorenz1.y))
+                a ~ s - (lorenz1.x)
+                lorenz1.F ~ lorenz2.u
+                lorenz2.F ~ lorenz1.u
                ]
 test_equal.(observed(reduced_system), observed_eqs)
 
@@ -176,7 +176,7 @@ eqs = [
       ]
 sys = NonlinearSystem(eqs, [u1, u2, u3], [p])
 reducedsys = structural_simplify(sys)
-@test observed(reducedsys) == [u1 ~ u2; u2 ~ 0.5(u3 - p)]
+@test observed(reducedsys) == [u2 ~ 0.5(u3 - p); u1 ~ u2]
 
 u0 = [
       u1 => 1

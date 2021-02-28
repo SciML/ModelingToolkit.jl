@@ -12,7 +12,7 @@ equalities before solving. Let's see this in action.
 ## Copy-Paste Example
 
 ```julia
-using ModelingToolkit, Plots
+using ModelingToolkit, Plots, DifferentialEquations
 
 @parameters t
 
@@ -23,15 +23,15 @@ function Pin(;name)
 end
 
 function Ground(;name)
-    g = Pin(:g)
+    @named g = Pin()
     eqs = [g.v ~ 0]
     ODESystem(eqs, t, [], [], systems=[g], name=name)
 end
 
 function Resistor(;name, R = 1.0)
     val = R
-    p = Pin(:p)
-    n = Pin(:n)
+    @named p = Pin()
+    @named n = Pin()
     @variables v(t)
     @parameters R
     eqs = [
@@ -44,8 +44,8 @@ end
 
 function Capacitor(; name, C = 1.0)
     val = C
-    p = Pin(:p)
-    n = Pin(:n)
+    @named p = Pin()
+    @named n = Pin()
     @variables v(t)
     @parameters C
     D = Differential(t)
@@ -59,8 +59,8 @@ end
 
 function ConstantVoltage(;name, V = 1.0)
     val = V
-    p = Pin(:p)
-    n = Pin(:n)
+    @named p = Pin()
+    @named n = Pin()
     @parameters V
     eqs = [
            V ~ p.v - n.v
@@ -135,7 +135,7 @@ names to correspond to duplicates of this topology with unique variables.
 One can then construct a `Pin` like:
 
 ```julia
-Pin(:mypin1)
+Pin(name=:mypin1)
 ```
 
 or equivalently using the `@named` helper macro:
@@ -151,7 +151,7 @@ that the voltage in such a `Pin` is equal to zero. This gives:
 
 ```julia
 function Ground(;name)
-    g = Pin(:g)
+    @named g = Pin()
     eqs = [g.v ~ 0]
     ODESystem(eqs, t, [], [], systems=[g], name=name)
 end
@@ -167,8 +167,8 @@ zero. This leads to our resistor equations:
 ```julia
 function Resistor(;name, R = 1.0)
     val = R
-    p = Pin(:p)
-    n = Pin(:n)
+    @named p = Pin()
+    @named n = Pin()
     @variables v(t)
     @parameters R
     eqs = [
@@ -190,8 +190,8 @@ Using our knowledge of circuits we similarly construct the Capacitor:
 ```julia
 function Capacitor(; name, C = 1.0)
     val = C
-    p = Pin(:p)
-    n = Pin(:n)
+    @named p = Pin()
+    @named n = Pin()
     @variables v(t)
     @parameters C
     D = Differential(t)
@@ -212,8 +212,8 @@ model this as:
 ```julia
 function ConstantVoltage(;name, V = 1.0)
     val = V
-    p = Pin(:p)
-    n = Pin(:n)
+    @named p = Pin()
+    @named n = Pin()
     @parameters V
     eqs = [
            V ~ p.v - n.v
@@ -406,10 +406,15 @@ observed(sys)
  capacitor₊n₊v(t) ~ 0.0
  source₊n₊v(t) ~ 0.0
  ground₊g₊i(t) ~ 0.0
- ⋮
+ source₊n₊i(t) ~ capacitor₊p₊i(t)
+ source₊p₊i(t) ~ -capacitor₊p₊i(t)
+ capacitor₊n₊i(t) ~ -capacitor₊p₊i(t)
+ resistor₊n₊i(t) ~ -capacitor₊p₊i(t)
  ground₊g₊v(t) ~ 0.0
  source₊p₊v(t) ~ source₊V
  capacitor₊p₊v(t) ~ capacitor₊v(t)
+ resistor₊p₊v(t) ~ source₊p₊v(t)
+ resistor₊n₊v(t) ~ capacitor₊p₊v(t)
  resistor₊v(t) ~ -((capacitor₊p₊v(t)) - (source₊p₊v(t)))
 ```
 
@@ -428,5 +433,5 @@ sol[resistor.v]
 or we can plot the timeseries of the resistor's voltage:
 
 ```julia
-plot(sol,vars=(resistor.v,))
+plot(sol, vars=[resistor.v])
 ```

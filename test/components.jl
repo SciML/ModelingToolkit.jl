@@ -100,14 +100,16 @@ sol = solve(prob, Rodas4())
 @test sol[capacitor.n.i] == -sol[capacitor.p.i]
 @test iszero(sol[ground.g.i])
 @test iszero(sol[ground.g.v])
+@test sol[resistor.v] == sol[source.p.v] - sol[capacitor.p.v]
 
 prob = ODAEProblem(sys, u0, (0, 10.0))
-sol = solve(prob, Rodas4())
+sol = solve(prob, Tsit5())
 
 @test sol[resistor.p.i] == sol[capacitor.p.i]
 @test sol[resistor.n.i] == -sol[capacitor.p.i]
 @test sol[capacitor.n.i] == -sol[capacitor.p.i]
 @test iszero(sol[ground.g.i])
 @test iszero(sol[ground.g.v])
+@test sol[resistor.v] == sol[source.p.v] - sol[capacitor.p.v]
 #using Plots
 #plot(sol)
