@@ -86,6 +86,8 @@ GalacticOptim.jl:
 ```julia
 u0 = rand(length(states(sys))) # guess for the state values
 prob = OptimizationProblem(sys,u0,[0.1,0.1],grad=true)
+
+using GalacticOptim, Optim
 sol = solve(prob,BFGS())
 ```
 
