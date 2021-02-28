@@ -250,7 +250,14 @@ function build_explicit_observed_function(
 
     obs = observed(sys)
     observed_idx = Dict(map(x->x.lhs, obs) .=> 1:length(obs))
-    output = map(sym->obs[observed_idx[sym]].rhs, syms)
+    output = similar(syms, Any)
+    # FIXME: this is a rather rough estimate of dependencies.
+    maxidx = 0
+    for (i, s) in enumerate(syms)
+        idx = observed_idx[s]
+        idx > maxidx && (maxidx = idx)
+        output[i] = obs[idx].rhs
+    end
 
     ex = Func(
         [
@@ -259,7 +266,10 @@ function build_explicit_observed_function(
          independent_variable(sys)
         ],
         [],
-        isscalar ? output[1] : MakeArray(output, output_type)
+        Let(
+            map(eq -> eq.lhs←eq.rhs, obs[1:maxidx]),
+            isscalar ? output[1] : MakeArray(output, output_type)
+           )
     ) |> toexpr
 
     expression ? ex : @RuntimeGeneratedFunction(ex)
