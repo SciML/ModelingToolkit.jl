@@ -433,5 +433,5 @@ sol[resistor.v]
 or we can plot the timeseries of the resistor's voltage:
 
 ```julia
-plot(sol,vars=(resistor.v,))
+plot(sol, vars=[resistor.v])
 ```
