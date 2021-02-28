@@ -1,6 +1,6 @@
 module ModelingToolkit
 
-using DiffEqBase, SciMLBase
+using DiffEqBase, SciMLBase, Reexport
 using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using Latexify, Unitful, ArrayInterface
@@ -249,6 +249,8 @@ include("systems/systemstructure.jl")
 using .SystemStructures
 
 include("systems/alias_elimination.jl")
+include("structural_transformation/StructuralTransformations.jl")
+@reexport using .StructuralTransformations
 
 include("latexify_recipes.jl")
 include("build_function.jl")
