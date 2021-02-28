@@ -27,7 +27,7 @@ makedocs(
             "basics/Validation.md",
             "basics/DependencyGraphs.md"
         ],
-        "Systems Types" => Any[
+        "System Types" => Any[
             "systems/ODESystem.md",
             "systems/SDESystem.md",
             "systems/JumpSystem.md",
