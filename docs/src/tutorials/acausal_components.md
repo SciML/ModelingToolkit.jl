@@ -12,7 +12,7 @@ equalities before solving. Let's see this in action.
 ## Copy-Paste Example
 
 ```julia
-using ModelingToolkit, Plots, OrdinaryDiffEq
+using ModelingToolkit, Plots, DifferentialEquations
 
 @parameters t
 
