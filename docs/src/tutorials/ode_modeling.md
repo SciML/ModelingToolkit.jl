@@ -1,4 +1,4 @@
-# Component-Based Modeling with Ordinary Differential Equations
+# Composing Ordinary Differential Equations
 
 ## Copy-Paste Example
 
