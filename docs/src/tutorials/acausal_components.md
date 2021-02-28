@@ -7,7 +7,7 @@ are then applied to state equalities between currents and voltages. This
 specifies a differential-algebraic equation (DAE) system, where the algebraic
 equations are given by the constraints and equalities between different
 component variables. We then simplify this to an ODE by eliminating the
-equalities before solving. Let's see this in action
+equalities before solving. Let's see this in action.
 
 ## Copy-Paste Example
 

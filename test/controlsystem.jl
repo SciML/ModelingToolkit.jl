@@ -15,6 +15,6 @@ dt = 0.1
 tspan = (0.0,1.0)
 sys = runge_kutta_discretize(sys,dt,tspan)
 
-u0 = rand(112) # guess for the state values
-prob = OptimizationProblem(sys,u0,[0.1],grad=true)
-
+u0 = rand(length(states(sys))) # guess for the state values
+prob = OptimizationProblem(sys,u0,[0.1,0.1],grad=true)
+sol = solve(prob,BFGS())
