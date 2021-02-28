@@ -1,6 +1,10 @@
 # ReactionSystem
 
-A `ReactionSystem` represents a system of chemical reactions. Conversions are provided to generate corresponding chemical reaction ODE models, chemical Langevin equation SDE models, and stochastic chemical kinetics jump process models. As a simple example, the code below creates a SIR model, and solves the corresponding ODE, SDE, and jump process models.
+A `ReactionSystem` represents a system of chemical reactions. Conversions are
+provided to generate corresponding chemical reaction ODE models, chemical
+Langevin equation SDE models, and stochastic chemical kinetics jump process
+models. As a simple example, the code below creates a SIR model, and solves
+the corresponding ODE, SDE, and jump process models.
 
 ```julia
 using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, DiffEqJump
@@ -42,10 +46,11 @@ ReactionSystem
 
 ## Composition and Accessor Functions
 
-- `sys.eqs` or `equations(sys)`: The reactions that define the system.
-- `sys.states` or `states(sys)`: The set of chemical species in the system.
-- `sys.parameters` or `parameters(sys)`: The parameters of the system.
-- `sys.iv` or `independent_variable(sys)`: The independent variable of the reaction system, usually time.
+- `get_eqs(sys)` or `equations(sys)`: The reactions that define the system.
+- `get_states(sys)` or `states(sys)`: The set of chemical species in the system.
+- `get_ps(sys)` or `parameters(sys)`: The parameters of the system.
+- `independent_variable(sys)`: The independent variable of the
+  reaction system, usually time.
 
 ## Query Functions
 ```@docs
@@ -58,4 +63,5 @@ ismassaction
 
 ```@docs
 Base.convert
+structural_simplify
 ```

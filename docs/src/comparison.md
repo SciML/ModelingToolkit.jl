@@ -1,57 +1,123 @@
-# Comparison of Julia's ModelingToolkit vs SymPy for Symbolic Computation
+# Comparison of ModelingToolkit vs Equation-Based Modeling Languages
 
-ModelingToolkit.jl is a symbolic modeling language for Julia built in
-Julia. Its goal is very different from Sympy: it was made to support
-symbolic-numerics, the combination of symbolic computing with numerical
-methods to allow for extreme performance computing that would not be
-possible without modifying the model. Because of this, ModelingToolkit.jl
-excels in many areas due to purposeful design decisions:
+## Comparison Against Modelica
 
-- Performance: ModelingToolkit.jl is built in Julia, whereas SymPy was
-  built in Python. Thus the performance bar for ModelingToolkit.jl is
-  much higher. ModelingToolkit.jl started because SymPy was far too
-  slow and SymEngine was far too inflexible for the projects they were
-  doing. Performance is key to ModelingToolkit.jl. If you find any
-  performance issues, please file an issue.
-- `build_function`: `lambdify` is "fine" for some people, but if you're building
-  a super fast MPI-enabled Julia/C/Fortran simulation code, having a
-  function that hits the Python interpreter is less than optimal. By
-  default, `build_function` builds fast JIT-compiled functions due
-  to being in Julia. However, it has support for things like static
-  arrays, non-allocating functions via mutation, fast functions on
-  sparse matrices and arrays of arrays, etc.: all core details of
-  doing high performance computing.
-- Parallelism: ModelingToolkit.jl has pervasive parallelism. The
-  symbolic simplification via [SymbolicUtils.jl](https://github.com/JuliaSymbolics/SymbolicUtils.jl)
-  has built-in parallelism, ModelingToolkit.jl builds functions that
-  parallelizes across threads. ModelingToolkit.jl is compatible with GPU libraries like CUDA.jl.
-- Scientific Machine Learning (SciML): ModelingToolkit.jl is made to synergize
-  with the high performance Julia SciML ecosystem in many ways. At a
-  base level, all expressions and built functions are compatible with
-  automatic differentiation like ForwardDiff.jl and Zygote.jl, meaning
-  that it can be used in and with neural networks. Tools like
-  [DataDrivenDiffEq.jl](https://datadriven.sciml.ai/dev/) can reconstruct
-  symbolic expressions from neural networks and data while
-  [NeuralNetDiffEq.jl](https://github.com/SciML/NeuralNetDiffEq.jl)
-  can automatically solve partial differential equations from symbolic
-  descriptions using physics-informed neural networks.
-- Primitives for high-performance numerics. Features like `ODESystem`
-  can be used to easily generate automatically parallelized ODE solver
-  code with sparse Jacobians and all of the pieces required to get
-  the most optimal solves. Support for differential-algebraic equations,
-  chemical reaction networks, and generation of code for nonlinear
-  optimization tools makes ModelingToolkit.jl a tool for, well,
-  building, generating, and analyzing models.
-- Deep integration with the Julia ecosystem: ModelingToolkit.jl's integration
-  with neural networks is not the only thing that's deep. ModelingToolkit.jl
-  is built with the same philosophy as other SciML packages, eschewing
-  "monorepos" for a distributed development approach that ties together
-  the work of many developers. The differentiation parts utilize tools
-  from automatic differentiation libraries, all linear algebra functionality
-  comes from tracing Julia Base itself, symbolic rewriting (simplification
-  and substitution) comes from
-  [SymbolicUtils.jl](https://github.com/JuliaSymbolics/SymbolicUtils.jl),
-  parallelism comes from Julia Base libraries and Dagger.jl, and etc.
-  The list keeps going. All told, by design ModelingToolkit.jl's development
-  moves fast because it's effectively using the work of hundreds of
-  Julia developers, allowing it to grow fast.
+- Both Modelica and ModelingToolkit.jl are acausal modeling languages.
+- Modelica is a language with many different implementations, such as
+  [Dymola](https://www.3ds.com/products-services/catia/products/dymola/) and
+  [OpenModelica](https://openmodelica.org/), which have differing levels of
+  performance and can give different results on the same model. Many of the
+  commonly used Modelica compilers are not open source. ModelingToolkit.jl
+  is a language with a single canonical open source implementation.
+- All current Modelica compiler implementations are fixed and not extendable
+  by the users from the Modelica language itself. For example, the Dymola
+  compiler [shares its symbolic processing pipeline](https://www.claytex.com/tech-blog/model-translation-and-symbolic-manipulation/)
+  which is roughly equivalent to the `dae_index_lowering` and `structural_simplify`
+  of ModelingToolkit.jl. ModelingToolkit.jl is an open and hackable transformation
+  system which allows users to add new non-standard transformations and control
+  the order of application.
+- Modelica is a declarative programming language. ModelingToolkit.jl is a
+  declarative symbolic modeling language used from within the Julia programming
+  language. Its programming language semantics, such as loop constructs and
+  conditionals, can be used to more easily generate models.
+- Modelica is an object-oriented single dispatch language. ModelingToolkit.jl,
+  built on Julia, uses multiple dispatch extensively to simplify code.
+- Many Modelica compilers supply a GUI. ModelingToolkit.jl does not.
+- Modelica can be used to simulate ODE and DAE systems. ModelingToolkit.jl
+  has a much more expansive set of system types, including nonlinear systems,
+  SDEs, PDEs, and more.
+
+## Comparison Against Simulink
+
+- Simulink is a causal modeling environment, whereas ModelingToolkit.jl is an
+  acausal modeling environment. For an overview of the differences, consult
+  academic reviews such as [this one](https://arxiv.org/abs/1909.00484). In this
+  sense, ModelingToolkit.jl is more similar to the Simscape sub-environment.
+- Simulink is used from MATLAB while ModelingToolkit.jl is used from Julia.
+  Thus any user defined functions have the performance of their host language.
+  For information on the performance differences between Julia and MATLAB,
+  consult [open benchmarks](https://julialang.org/benchmarks/) which demonstrate
+  Julia as an order of magnitude or more faster in many cases due to its JIT
+  compilation.
+- Simulink uses the MATLAB differential equation solvers while ModelingToolkit.jl
+  uses [DifferentialEquations.jl](https://diffeq.sciml.ai/dev/). For a systematic
+  comparison between the solvers, consult
+  [open benchmarks](https://benchmarks.sciml.ai/html/MultiLanguage/wrapper_packages.html)
+  which demonstrate two orders of magnitude performance advantage for the native
+  Julia solvers across many benchmark problems.
+- Simulink comes with a Graphical User Interface (GUI), ModelingToolkit.jl
+  does not.
+- Simulink is a proprietary software, meaning users cannot actively modify or
+  extend the software. ModelingToolkit.jl is built in Julia and used in Julia,
+  where users can actively extend and modify the software interactively in the
+  REPL and contribute to its open source repositories.
+- Simulink covers ODE and DAE systems. ModelingToolkit.jl has a much more
+  expansive set of system types, including SDEs, PDEs, optimization problems,
+  and more.
+
+## Comparison Against CASADI
+
+- CASADI is written in C++ but used from Python/MATLAB, meaning that it cannot be
+  directly extended by users unless they are using the C++ interface and run a
+  local build of CASADI. ModelingToolkit.jl is both written and used from
+  Julia, meaning that users can easily extend the library on the fly, even
+  interactively in the REPL.
+- CASADI includes limited support for Computer Algebra System (CAS) functionality,
+  while ModelingToolkit.jl is built on the full
+  [Symbolics.jl](https://github.com/JuliaSymbolics/Symbolics.jl) CAS.
+- CASADI supports DAE and ODE problems via SUNDIALS IDAS and CVODES. ModelingToolkit.jl
+  supports DAE and ODE problems via [DifferentialEquations.jl](https://diffeq.sciml.ai/dev/),
+  of which Sundials.jl is <1% of the total available solvers and is outperformed
+  by the native Julia solvers on the vast majority of the benchmark equations.
+  In addition, the DifferentialEquations.jl interface is confederated, meaning
+  that any user can dynamically extend the system to add new solvers to the
+  interface by defining new dispatches of solve.
+- CASADI's DAEBuilder does not implement efficiency transformations like tearing
+  which are standard in the ModelingToolkit.jl transformation pipeline.
+- CASADI supports special functionality for quadratic programming problems while
+  ModelingToolkit only provides nonlinear programming via `OptimizationSystem`.
+- ModelingToolkit.jl integrates with its host language Julia, so Julia code
+  can be automatically converted into ModelingToolkit expressions. Users of
+  CASADI must explicitly create CASADI expressions.
+
+## Comparison Against Modia.jl
+
+- Modia.jl is a Modelica-like system built in pure Julia. As such, its syntax
+  is a domain-specific language (DSL) specified by macros to mirror the Modelica
+  syntax.
+- Modia's compilation pipeline is similar to the
+  [Dymola symbolic processing pipeline](https://www.claytex.com/tech-blog/model-translation-and-symbolic-manipulation/)
+  with some improvements. ModelingToolkit.jl has an open transformation pipeline
+  that allows for users to extend and reorder transformation passes, where
+  `structural_simplify` is an adaptation of the Modia.jl-improved alias elimination
+  and tearing algorithms.
+- Modia supports DAE problems via SUNDIALS IDAS. ModelingToolkit.jl
+  supports DAE and ODE problems via [DifferentialEquations.jl](https://diffeq.sciml.ai/dev/),
+  of which Sundials.jl is <1% of the total available solvers and is outperformed
+  by the native Julia solvers on the vast majority of the benchmark equations.
+  In addition, the DifferentialEquations.jl interface is confederated, meaning
+  that any user can dynamically extend the system to add new solvers to the
+  interface by defining new dispatches of solve.
+- ModelingToolkit.jl integrates with its host language Julia, so Julia code
+  can be automatically converted into ModelingToolkit expressions. Users of
+  Modia must explicitly create Modia expressions within its macro.
+- Modia covers DAE systems. ModelingToolkit.jl has a much more
+  expansive set of system types, including SDEs, PDEs, optimization problems,
+  and more.
+
+## Comparison Against Causal.jl
+
+- Causal.jl is a causal modeling environment, whereas ModelingToolkit.jl is an
+  acausal modeling environment. For an overview of the differences, consult
+  academic reviews such as [this one](https://arxiv.org/abs/1909.00484).
+- Both ModelingToolkit.jl and Causal.jl use [DifferentialEquations.jl](https://diffeq.sciml.ai/stable/)
+  as the backend solver library.
+- Causal.jl lets one add arbitrary equation systems to a given node, and allow
+  the output to effect the next node. This means an SDE may drive an ODE. These
+  two portions are solved with different solver methods in tandem. In
+  ModelingToolkit.jl, such connections promote the whole system to an SDE. This
+  results in better accuracy and stability, though in some cases it can be
+  less performant.
+- Causal.jl, similar to Simulink, breaks algebraic loops via inexact heuristics.
+  ModelingToolkit.jl treats algebraic loops exactly through algebraic equations
+  in the generated model.

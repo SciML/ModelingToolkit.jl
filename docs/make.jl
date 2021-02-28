@@ -11,16 +11,19 @@ makedocs(
     pages=[
         "Home" => "index.md",
         "Tutorials" => Any[
-            "tutorials/symbolic_functions.md",
             "tutorials/ode_modeling.md",
             "tutorials/higher_order.md",
             "tutorials/nonlinear.md",
             "tutorials/modelingtoolkitize.md",
-            "tutorials/auto_parallel.md",
-            "tutorials/converting_to_C.md"
         ],
-        "Systems" => Any[
-            "systems/AbstractSystem.md",
+        "Basics" => Any[
+            "basics/AbstractSystem.md",
+            "basics/ContextualVariables.md",
+            "basics/Composition.md",
+            "basics/Validation.md",
+            "basics/DependencyGraphs.md"
+        ],
+        "Systems Types" => Any[
             "systems/ODESystem.md",
             "systems/SDESystem.md",
             "systems/JumpSystem.md",
@@ -29,12 +32,9 @@ makedocs(
             "systems/ControlSystem.md",
             "systems/ReactionSystem.md",
             "systems/PDESystem.md",
-            "systems/DependencyGraphs.md"
         ],
-        "Comparison Against SymPy" => "comparison.md",
-        "highlevel.md",
-        "build_function.md",
-        "IR.md"
+        "comparison.md",
+        "internals.md",
     ]
 )
 
