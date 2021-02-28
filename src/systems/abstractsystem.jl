@@ -463,3 +463,5 @@ end
 macro named(expr)
     esc(_named(expr))
 end
+
+structural_simplify(sys) = tearing(alias_elimination(sys))

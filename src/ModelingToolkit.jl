@@ -278,6 +278,7 @@ export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
 export Term, Sym
 export independent_variable, states, parameters, equations, controls, observed, structure
+export structural_simplify
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad
