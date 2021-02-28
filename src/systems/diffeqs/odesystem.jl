@@ -74,6 +74,7 @@ struct ODESystem <: AbstractODESystem
     structure: structural information of the system
     """
     structure::Any
+    reduced_states::Vector
 end
 
 function ODESystem(
@@ -101,7 +102,7 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p, nothing)
+    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p, nothing, [])
 end
 
 var_from_nested_derivative(x, i=0) = (missing, missing)

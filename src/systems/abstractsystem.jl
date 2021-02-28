@@ -154,6 +154,7 @@ for prop in [
              :inequality_constraints
              :controls
              :loss
+             :reduced_states
             ]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
@@ -471,9 +472,9 @@ Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations.
 """
 function structural_simplify(sys::AbstractSystem)
-    ss = states(sys)
     sys = tearing(alias_elimination(sys))
     s = structure(sys)
-    @set! sys.observed = topsort_equations(observed(sys), ss)
+    fullstates = [get_reduced_states(sys); states(sys)]
+    @set! sys.observed = topsort_equations(observed(sys), fullstates)
     return sys
 end
