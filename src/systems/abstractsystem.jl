@@ -232,13 +232,13 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
         idx = findfirst(s->getname(s) == prop, params);
         idx !== nothing;
        )
-        sys.default_p[params[idx]] = value(val)
+        get_default_p(sys)[params[idx]] = value(val)
     elseif (
             sts = states(sys);
             idx = findfirst(s->getname(s) == prop, sts);
             idx !== nothing;
            )
-        sys.default_u0[sts[idx]] = value(val)
+        get_default_u0(sys)[sts[idx]] = value(val)
     else
         setfield!(sys, prop, val)
     end
