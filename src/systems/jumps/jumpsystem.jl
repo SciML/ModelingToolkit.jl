@@ -204,8 +204,9 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple,Nothing},
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
-    u0 = varmap_to_vars(u0map, states(sys); defaults=default_u0(sys))
-    p  = varmap_to_vars(parammap, parameters(sys); defaults=default_p(sys))
+    defaults = merge(default_p(sys), default_u0(sys))
+    u0 = varmap_to_vars(u0map, states(sys); defaults=defaults)
+    p  = varmap_to_vars(parammap, parameters(sys); defaults=defaults)
     f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
     df = DiscreteFunction{true,true}(f, syms=Symbol.(states(sys)))
     DiscreteProblem(df, u0, tspan, p; kwargs...)
@@ -232,8 +233,9 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 """
 function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Union{Tuple,Nothing},
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
-    u0 = varmap_to_vars(u0map, states(sys); defaults=default_u0(sys))
-    p  = varmap_to_vars(parammap, parameters(sys); defaults=default_p(sys))
+    defaults = merge(default_p(sys), default_u0(sys))
+    u0 = varmap_to_vars(u0map, states(sys); defaults=defaults)
+    p  = varmap_to_vars(parammap, parameters(sys); defaults=defaults)
     # identity function to make syms works
     quote
         f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT

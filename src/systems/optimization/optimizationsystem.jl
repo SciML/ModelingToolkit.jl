@@ -157,8 +157,9 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
 
     _f = DiffEqBase.OptimizationFunction{iip,AutoModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,AutoModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing)
 
-    u0 = varmap_to_vars(u0,dvs; defaults=default_u0(sys))
-    p = varmap_to_vars(parammap,ps; defaults=default_p(sys))
+    defaults = merge(default_p(sys), default_u0(sys))
+    u0 = varmap_to_vars(u0,dvs; defaults=defaults)
+    p = varmap_to_vars(parammap,ps; defaults=defaults)
     lb = varmap_to_vars(lb,dvs)
     ub = varmap_to_vars(ub,dvs)
     OptimizationProblem{iip}(_f,u0,p;lb=lb,ub=ub,kwargs...)
@@ -212,8 +213,9 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         _hess = :nothing
     end
 
-    u0 = varmap_to_vars(u0,dvs; defaults=default_u0(sys))
-    p = varmap_to_vars(parammap,ps; defaults=default_p(sys))
+    defaults = merge(default_p(sys), default_u0(sys))
+    u0 = varmap_to_vars(u0,dvs; defaults=defaults)
+    p = varmap_to_vars(parammap,ps; defaults=defaults)
     lb = varmap_to_vars(lb,dvs)
     ub = varmap_to_vars(ub,dvs)
     quote

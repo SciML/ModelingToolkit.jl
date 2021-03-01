@@ -338,12 +338,12 @@ function ODAEProblem{iip}(
     s = structure(sys)
     @unpack fullvars = s
     dvs = fullvars[diffvars_range(s)]
+    defaults = merge(default_p(sys), default_u0(sys))
     u0map′ = ModelingToolkit.lower_mapnames(u0map, independent_variable(sys))
-    u0 = ModelingToolkit.varmap_to_vars(u0map′, dvs; defaults=default_u0(sys))
+    u0 = ModelingToolkit.varmap_to_vars(u0map′, dvs; defaults=defaults)
 
     ps = parameters(sys)
-    d_p = default_p(sys)
-    if parammap isa DiffEqBase.NullParameters && isempty(d_p)
+    if parammap isa DiffEqBase.NullParameters && isempty(default_p(sys))
         isempty(ps) || throw(ArgumentError("The model has non-empty parameters but no parameters are specified in the problem."))
         p = parammap
     else
@@ -352,7 +352,7 @@ function ODAEProblem{iip}(
         else
             pp = ModelingToolkit.lower_mapnames(parammap)
         end
-        p = ModelingToolkit.varmap_to_vars(pp, ps; defaults=d_p)
+        p = ModelingToolkit.varmap_to_vars(pp, ps; defaults=defaults)
     end
 
     ODEProblem{iip}(build_torn_function(sys; kw...), u0, tspan, p; kw...)

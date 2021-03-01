@@ -16,7 +16,7 @@ par = [
 ]
 u0 = Pair{Num, Any}[
     x => u,
-    y => u,
+    y => σ, # default u0 from default p
     z => u-0.1,
 ]
 ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β], name=:ns, default_p=par, default_u0=u0)
