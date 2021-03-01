@@ -77,7 +77,7 @@ V = 1.0
 @named source = ConstantVoltage(V=V)
 @named ground = Ground()
 
-function connect(ps...)
+function connect_pins(ps...)
     eqs = [
            0 ~ sum(p->p.i, ps) # KCL
           ]
@@ -90,9 +90,9 @@ function connect(ps...)
 end
 
 rc_eqs = [
-          connect(source.p, resistor.p)
-          connect(resistor.n, capacitor.p)
-          connect(capacitor.n, source.n, ground.g)
+          connect_pins(source.p, resistor.p)
+          connect_pins(resistor.n, capacitor.p)
+          connect_pins(capacitor.n, source.n, ground.g)
          ]
 
 @named rc_model = ODESystem(rc_eqs, t,
@@ -266,9 +266,9 @@ the source and the ground. This would mean our connection equations are:
 
 ```julia
 rc_eqs = [
-          connect(source.p, resistor.p)
-          connect(resistor.n, capacitor.p)
-          connect(capacitor.n, source.n, ground.g)
+          connect_pins(source.p, resistor.p)
+          connect_pins(resistor.n, capacitor.p)
+          connect_pins(capacitor.n, source.n, ground.g)
          ]
 ```
 
