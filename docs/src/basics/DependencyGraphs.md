@@ -1,16 +1,19 @@
 # Dependency Graphs
 
 # Types
+
 ```@docs
 BipartiteGraph
 ```
 
 # Utility functions for `BiPartiteGraph`s
+
 ```@docs
 Base.isequal
 ```
 
 # Functions for calculating dependency graphs
+
 ```@docs
 equation_dependencies
 asgraph

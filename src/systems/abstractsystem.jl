@@ -154,6 +154,7 @@ for prop in [
              :inequality_constraints
              :controls
              :loss
+             :reduced_states
             ]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
@@ -224,11 +225,20 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
 end
 
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
-    if (pa = Sym{Parameter{Real}}(prop); pa in parameters(sys))
-        sys.default_p[pa] = value(val)
-    # comparing a Sym returns a symbolic expression
-    elseif (st = Sym{Real}(prop); any(s->s.name==st.name, states(sys)))
-        sys.default_u0[st] = value(val)
+    # We use this weird syntax because `parameters` and `states` calls are
+    # potentially expensive.
+    if (
+        params = parameters(sys);
+        idx = findfirst(s->getname(s) == prop, params);
+        idx !== nothing;
+       )
+        sys.default_p[params[idx]] = value(val)
+    elseif (
+            sts = states(sys);
+            idx = findfirst(s->getname(s) == prop, sts);
+            idx !== nothing;
+           )
+        sys.default_u0[sts[idx]] = value(val)
     else
         setfield!(sys, prop, val)
     end
@@ -426,6 +436,58 @@ function Base.show(io::IO, sys::AbstractSystem)
         end
     end
     return nothing
+end
+
+function _named(expr)
+    if !(expr isa Expr && expr.head === :(=) && expr.args[2].head === :call)
+        throw(ArgumentError("expression should be of the form `sys = foo(a, b)`"))
+    end
+    name, call = expr.args
+
+    has_kw = false
+    if length(call.args) >= 2 && call.args[2] isa Expr
+        # canonicalize to use `:parameters`
+        if call.args[2].head === :kw
+            call.args[2] = Expr(:parameters, Expr(:kw, call.args[2].args...))
+            has_kw = true
+        elseif call.args[2].head === :parameters
+            has_kw = true
+        end
+    end
+
+    if !has_kw
+        param = Expr(:parameters)
+        if length(call.args) == 1
+            push!(call.args, param)
+        else
+            insert!(call.args, 2, param)
+        end
+    end
+
+    kws = call.args[2].args
+
+    if !any(kw->(kw isa Symbol ? kw : kw.args[1]) == :name, kws) # don't overwrite `name` kwarg
+        pushfirst!(kws, Expr(:kw, :name, Meta.quot(name)))
+    end
+    :($name = $call)
+end
+
+macro named(expr)
+    esc(_named(expr))
+end
+
+"""
+$(SIGNATURES)
+
+Structurally simplify algebraic equations in a system and compute the
+topological sort of the observed equations.
+"""
+function structural_simplify(sys::AbstractSystem)
+    sys = tearing(alias_elimination(sys))
+    s = structure(sys)
+    fullstates = [get_reduced_states(sys); states(sys)]
+    @set! sys.observed = topsort_equations(observed(sys), fullstates)
+    return sys
 end
 
 @latexrecipe function f(sys::AbstractSystem)

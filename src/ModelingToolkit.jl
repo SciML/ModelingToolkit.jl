@@ -1,6 +1,7 @@
 module ModelingToolkit
 
-using DiffEqBase, SciMLBase
+using DiffEqBase, SciMLBase, Reexport
+using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using Latexify, Unitful, ArrayInterface
 using MacroTools
@@ -124,7 +125,9 @@ include("systems/dependency_graphs.jl")
 include("systems/systemstructure.jl")
 using .SystemStructures
 
-include("systems/reduction.jl")
+include("systems/alias_elimination.jl")
+include("structural_transformation/StructuralTransformations.jl")
+@reexport using .StructuralTransformations
 
 include("build_function.jl")
 
@@ -140,6 +143,7 @@ export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
 export ControlSystem
+export alias_elimination, flatten
 export ode_order_lowering, liouville_transform
 export runge_kutta_discretize
 export PDESystem
@@ -149,6 +153,7 @@ export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
 export Term, Sym
 export independent_variable, states, parameters, equations, controls, observed, structure
+export structural_simplify
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad
@@ -168,5 +173,6 @@ export simplify, substitute
 export build_function
 export modelingtoolkitize
 export @variables, @parameters
+export @named
 
 end # module
