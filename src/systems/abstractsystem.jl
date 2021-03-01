@@ -183,6 +183,8 @@ Setfield.get(obj::AbstractSystem, l::Setfield.PropertyLens{field}) where {field}
     end
 end
 
+rename(x::AbstractSystem, name) = @set x.name = name
+
 function Base.getproperty(sys::AbstractSystem, name::Symbol)
     sysname = nameof(sys)
     systems = get_systems(sys)
@@ -230,13 +232,13 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
         idx = findfirst(s->getname(s) == prop, params);
         idx !== nothing;
        )
-        sys.default_p[params[idx]] = value(val)
+        get_default_p(sys)[params[idx]] = value(val)
     elseif (
             sts = states(sys);
             idx = findfirst(s->getname(s) == prop, sts);
             idx !== nothing;
            )
-        sys.default_u0[sts[idx]] = value(val)
+        get_default_u0(sys)[sts[idx]] = value(val)
     else
         setfield!(sys, prop, val)
     end
@@ -487,3 +489,9 @@ function structural_simplify(sys::AbstractSystem)
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     return sys
 end
+
+@latexrecipe function f(sys::AbstractSystem)
+    return latexify(equations(sys))
+end
+
+Base.show(io::IO, ::MIME"text/latex", x::AbstractSystem) = print(io, latexify(x))

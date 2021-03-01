@@ -1,7 +1,7 @@
 Base.:*(x::Union{Num,Symbolic},y::Unitful.AbstractQuantity) = x * y
 
-instantiate(x::ModelingToolkit.Variable{Real}) = 1.0
-instantiate(x::ModelingToolkit.Variable) = oneunit(1*ModelingToolkit.vartype(x))
+instantiate(x::Sym{Real}) = 1.0
+instantiate(x::Symbolic) = oneunit(1*ModelingToolkit.vartype(x))
 function instantiate(x::Num)
     x = value(x)
     if operation(x) isa Sym

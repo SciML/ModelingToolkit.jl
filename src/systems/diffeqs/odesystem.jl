@@ -105,10 +105,6 @@ function ODESystem(
     ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p, nothing, [])
 end
 
-var_from_nested_derivative(x, i=0) = (missing, missing)
-var_from_nested_derivative(x::Term,i=0) = operation(x) isa Differential ? var_from_nested_derivative(arguments(x)[1],i+1) : (x,i)
-var_from_nested_derivative(x::Sym,i=0) = (x,i)
-
 iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nested_derivative(arguments(x)[1]) : arguments(x)[1]
 iv_from_nested_derivative(x::Sym) = x
 iv_from_nested_derivative(x) = missing
@@ -273,4 +269,17 @@ function build_explicit_observed_function(
     ) |> toexpr
 
     expression ? ex : @RuntimeGeneratedFunction(ex)
+end
+
+function _eq_unordered(a, b)
+    length(a) === length(b) || return false
+    n = length(a)
+    idxs = Set(1:n)
+    for x ∈ a
+        idx = findfirst(isequal(x), b)
+        idx === nothing && return false
+        idx ∈ idxs      || return false
+        delete!(idxs, idx)
+    end
+    return true
 end
