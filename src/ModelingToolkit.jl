@@ -39,7 +39,10 @@ using Symbolics: _parse_vars, value, makesym, @derivatives, get_variables,
                  exprs_occur_in, solve_for, build_expr
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   jacobian_sparsity, islinear, _iszero, _isone,
-                  tosymbol, lower_varname, diff2term, var_from_nested_derivative
+                  tosymbol, lower_varname, diff2term, var_from_nested_derivative,
+                  BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
+                  ParallelForm, SerialForm, MultithreadedForm, build_function,
+                  unflatten_long_ops
 
 import DiffEqBase: @add_kwonly
 
@@ -128,8 +131,6 @@ using .SystemStructures
 include("systems/alias_elimination.jl")
 include("structural_transformation/StructuralTransformations.jl")
 @reexport using .StructuralTransformations
-
-include("build_function.jl")
 
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
