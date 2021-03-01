@@ -5,7 +5,7 @@ Generate `ODESystem`, dependent variables, and parameters from an `ODEProblem`.
 """
 function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
-                            return (prob.f.sys, prob.f.sys.states, prob.f.sys.ps)
+                            return prob.f.sys
     @parameters t
 
     if prob.p isa Tuple || prob.p isa NamedTuple
