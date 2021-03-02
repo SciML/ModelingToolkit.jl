@@ -115,7 +115,7 @@ build two `ODESystem`s from the equations we used in the first part:
 ```
 
 Now let's define an interconnection between these ODE systems. Here
-we will define a new variable `α` which is defined by the interplay
+we will define a new variable `a` which is defined by the interplay
 between these two models:
 
 ```julia
@@ -126,7 +126,7 @@ connections = [0 ~ lorenz1.x + lorenz2.y + a*γ]
 ```
 
 This `ODESystem` thus connects the two Lorenz systems and defines the
-dynamics of `α` according to the continuous algebraic equation, thus
+dynamics of `a` according to the continuous algebraic equation, thus
 this is now a differential-algebraic equation (DAE) of 7 variables.
 We can then define the resulting `ODEProblem` and send it over to
 DifferentialEquations.jl:
