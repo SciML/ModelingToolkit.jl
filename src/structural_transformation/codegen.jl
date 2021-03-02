@@ -123,7 +123,7 @@ function partitions_dag(s::SystemStructure)
     sparse(I, J, true, n, n)
 end
 
-function gen_nlsolve(sys, eqs, vars)
+function gen_nlsolve(sys, eqs, vars, destructure=true)
     @assert !isempty(vars)
     @assert length(eqs) == length(vars)
     rhss = map(x->x.rhs, eqs)
@@ -158,13 +158,16 @@ function gen_nlsolve(sys, eqs, vars)
                               )
         end)
 
-    [
-     fname ← @RuntimeGeneratedFunction(f)
-     DestructuredArgs(vars) ← solver_call
-    ]
+    if destructure
+        [fname ← @RuntimeGeneratedFunction(f),
+        DestructuredArgs(vars) ← solver_call]
+    else
+        Let([fname ← @RuntimeGeneratedFunction(f)],
+            solver_call)
+    end
 end
 
-function get_torn_eqs_vars(sys)
+function get_torn_eqs_vars(sys, parallelize)
     s = structure(sys)
     partitions = s.partitions
     vars = s.fullvars
@@ -172,6 +175,39 @@ function get_torn_eqs_vars(sys)
 
     torn_eqs  = map(idxs-> eqs[idxs], map(x->x[3], partitions))
     torn_vars = map(idxs->vars[idxs], map(x->x[4], partitions))
+
+    if parallelize
+        dag = partitions_dag(s)
+        display(dag)
+        spawned = Set{Int}()
+        assigns = []
+        iszero(dag) && @goto ser
+        while !iszero(dag)
+            next = findall(1:size(dag, 2)) do i
+                !(i in spawned) && iszero(dag[:, i])
+            end
+            isempty(next) && error("Cannot parallelize")
+
+            union!(spawned, next)
+
+            dag[next, :] .= false
+
+            batch = gen_nlsolve.((sys,),
+                                 torn_eqs[next],
+                                 torn_vars[next],
+                                 false)
+
+            dargs = map(DestructuredArgs,
+                        torn_vars[next])
+
+            push!(assigns,
+                  DestructuredArgs(dargs) ←
+                  SpawnFetch{Multithreaded}(batch, (xs...)->nothing))
+        end
+        return assigns
+    end
+
+    @label ser
 
     gen_nlsolve.((sys,), torn_eqs, torn_vars)
 end
@@ -181,6 +217,7 @@ function build_torn_function(
         expression=false,
         jacobian_sparsity=true,
         checkbounds=false,
+        threaded=true,
         kw...
     )
 
@@ -210,7 +247,7 @@ function build_torn_function(
              ],
              [],
              Let(
-                 collect(Iterators.flatten(get_torn_eqs_vars(sys))),
+                 @show(get_torn_eqs_vars(sys, threaded)),
                  odefunbody
                 )
             )
@@ -229,7 +266,7 @@ function build_torn_function(
 
         ODEFunction{true}(
                           @RuntimeGeneratedFunction(expr),
-                          sparsity = torn_system_jacobian_sparsity(sys),
+                          sparsity = jacobian_sparsity ? torn_system_jacobian_sparsity(sys) : nothing,
                           syms = syms,
                           observed = observedfun,
                          )
