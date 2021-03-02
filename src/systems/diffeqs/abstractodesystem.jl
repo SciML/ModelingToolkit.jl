@@ -87,7 +87,7 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify=false)
             j = findfirst(x->isequal(tosymbol(x),tosymbol(var_from_nested_derivative(eq.lhs)[1])),dvs)
             M[i,j] = 1
         else
-            eq.lhs == 0 || error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")
+            eq.lhs === 0 || error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")
         end
     end
     M = simplify ? ModelingToolkit.simplify.(M) : M
