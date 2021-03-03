@@ -181,8 +181,8 @@ function get_torn_eqs_vars(sys, parallelize)
         display(dag)
         spawned = Set{Int}()
         assigns = []
-        iszero(dag) && @goto ser
-        while !iszero(dag)
+        while length(spawned) < size(dag, 2)
+            @show "here"
             next = findall(1:size(dag, 2)) do i
                 !(i in spawned) && iszero(dag[:, i])
             end
