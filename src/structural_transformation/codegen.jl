@@ -202,7 +202,7 @@ function get_torn_eqs_vars(sys, parallelize)
 
             push!(assigns,
                   DestructuredArgs(dargs) ←
-                  SpawnFetch{Multithreaded}(batch, (xs...)->nothing))
+                  SpawnFetch{MultithreadedForm}(batch, (xs...)->nothing))
         end
         return assigns
     end
@@ -247,7 +247,7 @@ function build_torn_function(
              ],
              [],
              Let(
-                 @show(get_torn_eqs_vars(sys, threaded)),
+                 get_torn_eqs_vars(sys, threaded),
                  odefunbody
                 )
             )
