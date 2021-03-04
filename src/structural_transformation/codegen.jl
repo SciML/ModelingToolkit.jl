@@ -179,7 +179,6 @@ function get_torn_eqs_vars(sys, parallelize)
 
     if parallelize
         dag = partitions_dag(s)
-        display(dag)
         spawned = Set{Int}()
         assigns = []
         while length(spawned) < size(dag, 2)
@@ -209,8 +208,7 @@ function get_torn_eqs_vars(sys, parallelize)
         return assigns
     end
 
-
-    gen_nlsolve.((sys,), torn_eqs, torn_vars)
+    Iterators.flatten(gen_nlsolve.((sys,), torn_eqs, torn_vars)) |> collect
 end
 
 function build_torn_function(
@@ -218,7 +216,7 @@ function build_torn_function(
         expression=false,
         jacobian_sparsity=true,
         checkbounds=false,
-        threaded=true,
+        threaded=false,
         kw...
     )
 
@@ -229,7 +227,7 @@ function build_torn_function(
 
     out = Sym{Any}(gensym("out"))
     odefunbody = SetArray(
-        checkbounds,
+        !checkbounds,
         out,
         rhss
     )
