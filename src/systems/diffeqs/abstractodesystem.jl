@@ -199,6 +199,13 @@ variable and parameter vectors, respectively.
 """
 struct ODEFunctionExpr{iip} end
 
+struct ODEFunctionClosure{O, I} <: Function
+    f_oop::O
+    f_iip::I
+end
+(f::ODEFunctionClosure)(u, p, t) = f.f_oop(u, p, t)
+(f::ODEFunctionClosure)(du, u, p, t) = f.f_iip(du, u, p, t)
+
 function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
                                      version = nothing, tgrad=false,
@@ -209,20 +216,13 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     f_oop, f_iip = generate_function(sys, dvs, ps; expression=Val{true}, kwargs...)
     fsym = gensym(:f)
-    _f = quote
-      $fsym(u,p,t) = $f_oop(u,p,t)
-      $fsym(du,u,p,t) = $f_iip(du,u,p,t)
-    end
-
+    _f = :($fsym = ModelingToolkit.ODEFunctionClosure($f_oop, $f_iip))
     tgradsym = gensym(:tgrad)
     if tgrad
         tgrad_oop, tgrad_iip = generate_tgrad(sys, dvs, ps;
                                 simplify=simplify,
                                 expression=Val{true}, kwargs...)
-        _tgrad = quote
-            $tgradsym(u,p,t) = $tgrad_oop(u,p,t)
-            $tgradsym(J,u,p,t) = $tgrad_iip(J,u,p,t)
-        end
+        _tgrad = :($tgradsym = ModelingToolkit.ODEFunctionClosure($tgrad_oop, $tgrad_iip))
     else
         _tgrad = :($tgradsym = nothing)
     end
@@ -232,10 +232,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
         jac_oop,jac_iip = generate_jacobian(sys, dvs, ps;
                                  sparse=sparse, simplify=simplify,
                                  expression=Val{true}, kwargs...)
-        _jac = quote
-            $jacsym(u,p,t) = $jac_oop(u,p,t)
-            $jacsym(J,u,p,t) = $jac_iip(J,u,p,t)
-        end
+        _jac = :($jacsym = ModelingToolkit.ODEFunctionClosure($jac_oop, $jac_iip))
     else
         _jac = :($jacsym = nothing)
     end
