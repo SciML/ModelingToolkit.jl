@@ -162,8 +162,9 @@ function gen_nlsolve(sys, eqs, vars, destructure=true)
         [fname ← @RuntimeGeneratedFunction(f),
         DestructuredArgs(vars) ← solver_call]
     else
-        Let([fname ← @RuntimeGeneratedFunction(f)],
-            solver_call)
+        Func(params, [],
+             Let([fname ← @RuntimeGeneratedFunction(f)],
+                 solver_call)), params
     end
 end
 
@@ -182,7 +183,6 @@ function get_torn_eqs_vars(sys, parallelize)
         spawned = Set{Int}()
         assigns = []
         while length(spawned) < size(dag, 2)
-            @show "here"
             next = findall(1:size(dag, 2)) do i
                 !(i in spawned) && iszero(dag[:, i])
             end
@@ -202,12 +202,13 @@ function get_torn_eqs_vars(sys, parallelize)
 
             push!(assigns,
                   DestructuredArgs(dargs) ←
-                  SpawnFetch{MultithreadedForm}(batch, (xs...)->nothing))
+                  SpawnFetch{MultithreadedForm}(first.(batch),
+                                                last.(batch),
+                                                (xs...)->xs))
         end
         return assigns
     end
 
-    @label ser
 
     gen_nlsolve.((sys,), torn_eqs, torn_vars)
 end
