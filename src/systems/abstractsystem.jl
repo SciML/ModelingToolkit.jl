@@ -481,7 +481,6 @@ topological sort of the observed equations.
 """
 function structural_simplify(sys::AbstractSystem)
     sys = tearing(alias_elimination(sys))
-    s = structure(sys)
     fullstates = [get_reduced_states(sys); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     return sys
