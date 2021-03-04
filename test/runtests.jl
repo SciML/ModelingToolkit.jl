@@ -9,7 +9,6 @@ using SafeTestsets, Test
 @safetestset "System Linearity Test" begin include("linearity.jl") end
 @safetestset "Build Function Test" begin include("build_function.jl") end
 @safetestset "ODESystem Test" begin include("odesystem.jl") end
-@safetestset "ODESystem Serialization" begin include("serialization.jl") end
 @safetestset "LabelledArrays Test" begin include("labelledarrays.jl") end
 @safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
 @safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
@@ -38,3 +37,4 @@ println("Last test requires gcc available in the path!")
 @safetestset "C Compilation Test" begin include("ccompile.jl") end
 @safetestset "Latexify recipes Test" begin include("latexify.jl") end
 @safetestset "StructuralTransformations" begin include("structural_transformation/runtests.jl") end
+@testset "Serialization" begin include("serialization.jl") end

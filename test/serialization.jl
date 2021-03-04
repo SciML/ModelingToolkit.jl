@@ -17,5 +17,5 @@ for prob in [
 
     _cmd = "using ModelingToolkit, Serialization; deserialize(\"$_fn\")"
 
-    run(`$(Base.julia_cmd()) --project -e $(_cmd)`)
+    run(`$(Base.julia_cmd()) -e $(_cmd)`)
 end
