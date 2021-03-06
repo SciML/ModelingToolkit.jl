@@ -63,16 +63,11 @@ function pantelides_reassemble(sys, eqassoc, assign)
             lhsarg1 = arguments(eq.lhs)[1]
             @assert !(lhsarg1 isa Differential) "The equation $eq is not first order"
             i = get(d_dict, lhsarg1, nothing)
-            if i !== nothing
-                lhs = D(out_vars[varassoc[i]])
-                if lhs in lhss
-                    # check only trivial equations are removed
-                    @assert isequal(diff2term(D(eq.rhs)), diff2term(lhs)) "The duplicate equation is not trivial: $eq"
-                    lhs = Num(nothing)
-                end
-                lhs
-            else
+            if i === nothing
                 D(eq.lhs)
+            else
+                # remove clashing equations
+                lhs = Num(nothing)
             end
         else
             D(eq.lhs)
