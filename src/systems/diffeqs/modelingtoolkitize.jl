@@ -23,13 +23,17 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     D = Differential(t)
     mm = prob.f.mass_matrix
 
-    lhs = map(mm * vars) do v
-        if iszero(v)
-            0
-        elseif v in var_set
-            D(v)
-        else
-            error("Non-permuation mass matrix is not supported.")
+    if mm === I
+        lhs = map(v->D(v), vars)
+    else
+        lhs = map(mm * vars) do v
+            if iszero(v)
+                0
+            elseif v in var_set
+                D(v)
+            else
+                error("Non-permuation mass matrix is not supported.")
+            end
         end
     end
 
@@ -42,17 +46,17 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
 
     eqs = vcat([lhs[i] ~ rhs[i] for i in eachindex(prob.u0)]...)
 
-    sts = Vector(vec(vars))
+    sts = vec(collect(vars))
     params = if ndims(params) == 0
         [params[1]]
     else
-        Vector(vec(params))
+        vec(collect(params))
     end
 
     de = ODESystem(
         eqs, t, sts, params,
-        default_u0=Dict(sts .=> prob.u0),
-        default_p=Dict(params .=> prob.p)
+        default_u0=Dict(sts .=> vec(collect(prob.u0))),
+        default_p=Dict(params .=> vec(collect(prob.p))),
     )
 
     de

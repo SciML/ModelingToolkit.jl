@@ -162,6 +162,7 @@ sol = solve(prob, Vern8())
 modelingtoolkitize(prob)
 
 # Index reduction and mass matrix handling
+using LinearAlgebra
 function pendulum!(du, u, p, t)
     x, dx, y, dy, T = u
     g, L = p
@@ -177,10 +178,10 @@ u0 = [1.0, 0, 0, 0, 0]
 p = [9.8, 1]
 tspan = (0, 10.0)
 pendulum_prob = ODEProblem(pendulum_fun!, u0, tspan, p)
-pendulum_sys  = dae_index_lowering(modelingtoolkitize(pendulum_prob))
+pendulum_sys_org = modelingtoolkitize(pendulum_prob)
+sts = states(pendulum_sys_org)
+pendulum_sys = dae_index_lowering(pendulum_sys_org)
 prob = ODEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Rodas4())
-@parameters t
-@variables x[1:5](t)
-l2 = sol[x[1]].^2 + sol[x[3]].^2
+l2 = sol[sts[1]].^2 + sol[sts[3]].^2
 @test all(l->abs(sqrt(l) - 1) < 0.05, l2)
