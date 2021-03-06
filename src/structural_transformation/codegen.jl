@@ -1,3 +1,5 @@
+import Symbolics: ClosureExpr
+
 function torn_system_jacobian_sparsity(sys)
     s = structure(sys)
     @unpack fullvars, graph, partitions = s
@@ -139,9 +141,9 @@ function gen_nlsolve(sys, eqs, vars, destructure=true)
     u0 = isscalar ? u0[1] : SVector(u0...)
 
     fname = gensym("fun")
+    statearg = DestructuredArgs(vars)
     f = Func(
-        [
-         DestructuredArgs(vars)
+        [statearg,
          DestructuredArgs(params)
         ],
         [],
@@ -162,9 +164,12 @@ function gen_nlsolve(sys, eqs, vars, destructure=true)
         [fname ← @RuntimeGeneratedFunction(f),
         DestructuredArgs(vars) ← solver_call]
     else
-        Func(params, [],
-             Let([fname ← @RuntimeGeneratedFunction(f)],
-                 solver_call)), params
+        ClosureExpr(
+            Func(params, [],
+                 Let([fname ← @RuntimeGeneratedFunction(f)],
+                     solver_call)),
+            params,
+            LiteralExpr(:(typeof($statearg))))
     end
 end
 
@@ -199,11 +204,10 @@ function get_torn_eqs_vars(sys, parallelize)
             dargs = map(DestructuredArgs,
                         torn_vars[next])
 
+
             push!(assigns,
                   DestructuredArgs(dargs) ←
-                  SpawnFetch{MultithreadedForm}(first.(batch),
-                                                last.(batch),
-                                                (xs...)->xs))
+                      SpawnFetch{MultithreadedForm}(batch, tuple))
         end
         return assigns
     end
