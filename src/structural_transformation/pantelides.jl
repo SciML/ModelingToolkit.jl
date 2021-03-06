@@ -81,8 +81,10 @@ function pantelides_reassemble(sys, eqassoc, assign)
     final_vars = unique(filter(x->!(operation(x) isa Differential), fullvars))
     final_eqs = map(identity, filter(x->value(x.lhs) !== nothing, out_eqs[sort(filter(x->x != UNASSIGNED, assign))]))
 
-    # remove clashing equations (from order lowering vs index reduction)
-    return ODESystem(final_eqs, independent_variable(sys), final_vars, parameters(sys))
+    @set! sys.eqs = final_eqs
+    @set! sys.states = final_vars
+    @set! sys.structure = nothing
+    return sys
 end
 
 """
