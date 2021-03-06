@@ -42,13 +42,18 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
 
     eqs = vcat([lhs[i] ~ rhs[i] for i in eachindex(prob.u0)]...)
 
+    sts = Vector(vec(vars))
     params = if ndims(params) == 0
         [params[1]]
     else
         Vector(vec(params))
     end
 
-    de = ODESystem(eqs,t,Vector(vec(vars)),params)
+    de = ODESystem(
+        eqs, t, sts, params,
+        default_u0=Dict(sts .=> prob.u0),
+        default_p=Dict(params .=> prob.p)
+    )
 
     de
 end
