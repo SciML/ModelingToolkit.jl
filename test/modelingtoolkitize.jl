@@ -160,3 +160,28 @@ prob = ODEProblem(f, rv0, (0.0, Δt), μ)
 sol = solve(prob, Vern8())
 
 modelingtoolkitize(prob)
+
+# Index reduction and mass matrix handling
+using LinearAlgebra
+function pendulum!(du, u, p, t)
+    x, dx, y, dy, T = u
+    g, L = p
+    du[1] = dx
+    du[2] = T*x
+    du[3] = dy
+    du[4] = T*y - g
+    du[5] = x^2 + y^2 - L^2
+    return nothing
+end
+pendulum_fun! = ODEFunction(pendulum!, mass_matrix=Diagonal([1,1,1,1,0]))
+u0 = [1.0, 0, 0, 0, 0]
+p = [9.8, 1]
+tspan = (0, 10.0)
+pendulum_prob = ODEProblem(pendulum_fun!, u0, tspan, p)
+pendulum_sys_org = modelingtoolkitize(pendulum_prob)
+sts = states(pendulum_sys_org)
+pendulum_sys = dae_index_lowering(pendulum_sys_org)
+prob = ODEProblem(pendulum_sys, Pair[], tspan)
+sol = solve(prob, Rodas4())
+l2 = sol[sts[1]].^2 + sol[sts[3]].^2
+@test all(l->abs(sqrt(l) - 1) < 0.05, l2)

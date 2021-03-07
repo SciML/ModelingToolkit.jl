@@ -18,27 +18,46 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     vars = ArrayInterface.restructure(prob.u0,[var(:x, i)(ModelingToolkit.value(t)) for i in eachindex(prob.u0)])
     params = p isa DiffEqBase.NullParameters ? [] :
              reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(p))
+    var_set = Set(vars)
 
     D = Differential(t)
+    mm = prob.f.mass_matrix
 
-    rhs = [D(var) for var in vars]
-
-    if DiffEqBase.isinplace(prob)
-        lhs = similar(vars, Num)
-        prob.f(lhs, vars, params, t)
+    if mm === I
+        lhs = map(v->D(v), vars)
     else
-        lhs = prob.f(vars, params, t)
+        lhs = map(mm * vars) do v
+            if iszero(v)
+                0
+            elseif v in var_set
+                D(v)
+            else
+                error("Non-permuation mass matrix is not supported.")
+            end
+        end
     end
 
-    eqs = vcat([rhs[i] ~ lhs[i] for i in eachindex(prob.u0)]...)
+    if DiffEqBase.isinplace(prob)
+        rhs = similar(vars, Num)
+        prob.f(rhs, vars, params, t)
+    else
+        rhs = prob.f(vars, params, t)
+    end
 
+    eqs = vcat([lhs[i] ~ rhs[i] for i in eachindex(prob.u0)]...)
+
+    sts = vec(collect(vars))
     params = if ndims(params) == 0
         [params[1]]
     else
-        Vector(vec(params))
+        vec(collect(params))
     end
 
-    de = ODESystem(eqs,t,Vector(vec(vars)),params)
+    de = ODESystem(
+        eqs, t, sts, params,
+        default_u0=Dict(sts .=> vec(collect(prob.u0))),
+        default_p=Dict(params .=> vec(collect(prob.p))),
+    )
 
     de
 end
