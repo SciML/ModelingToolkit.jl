@@ -160,17 +160,12 @@ function gen_nlsolve(sys, eqs, vars, destructure=true)
                               )
         end)
 
-    if destructure
-        [fname ← @RuntimeGeneratedFunction(f),
-        DestructuredArgs(vars) ← solver_call]
-    else
-        ClosureExpr(
-            Func(params, [],
-                 Let([fname ← @RuntimeGeneratedFunction(f)],
-                     solver_call)),
-            params,
-            LiteralExpr(:(typeof($statearg))))
-    end
+    Dict(:solve_params => params,
+         :solve_vars => vars,
+         :u0 => u0,
+         :function_def => fname ← @RuntimeGeneratedFunction(f),
+         :output_type => LiteralExpr(:(typeof($u0))),
+         :solver_call => solver_call)
 end
 
 function get_torn_eqs_vars(sys, parallelize)
@@ -196,23 +191,47 @@ function get_torn_eqs_vars(sys, parallelize)
 
             dag[next, :] .= false
 
-            batch = gen_nlsolve.((sys,),
+            nlsolves = gen_nlsolve.((sys,),
                                  torn_eqs[next],
                                  torn_vars[next],
                                  false)
 
-            dargs = map(DestructuredArgs,
-                        torn_vars[next])
+            @show length(nlsolves)
+
+            nt = Base.Threads.nthreads()
+            batches = map(Iterators.partition(nlsolves, nt)) do batch
+                params = reduce(union,
+                                map(s->s[:solve_params],
+                                    batch), init=[])
+                solvercalls = map(s->s[:solver_call], batch)
+
+                batchexpr = Let(map(s->s[:function_def],
+                                    batch),
+                    LiteralExpr(:(tuple($(solvercalls...)))))
 
 
-            push!(assigns,
-                  DestructuredArgs(dargs) ←
-                      SpawnFetch{MultithreadedForm}(batch, tuple))
+                ot = LiteralExpr(
+                    :(Tuple{$(map(s->s[:output_type],
+                                  batch)...)}))
+                ClosureExpr(
+                    Func(params, [], batchexpr), params, ot)
+            end
+
+            varbatches = collect(Iterators.partition(map(DestructuredArgs, torn_vars[next]), nt))
+            assign = DestructuredArgs(map(DestructuredArgs,
+                                          varbatches)) ←
+                SpawnFetch{MultithreadedForm}(batches, tuple)
+
+
+            push!(assigns, assign)
         end
         return assigns
     end
 
-    Iterators.flatten(gen_nlsolve.((sys,), torn_eqs, torn_vars)) |> collect
+    map(gen_nlsolve.((sys,), torn_eqs, torn_vars)) do s
+        [s[:function_def],
+         DestructuredArgs(s[:solve_vars]) ← s[:solver_call]]
+    end |> Iterators.flatten |> collect
 end
 
 function build_torn_function(
@@ -233,7 +252,7 @@ function build_torn_function(
     odefunbody = SetArray(
         !checkbounds,
         out,
-        rhss
+        map(Symbolics.unflatten_long_ops, rhss)
     )
 
     s = structure(sys)
