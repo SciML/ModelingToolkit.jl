@@ -248,14 +248,31 @@ function build_torn_function(
         isdiffeq(eq) && push!(rhss, eq.rhs)
     end
 
-    out = Sym{Any}(gensym("out"))
-    odefunbody = SetArray(
-        !checkbounds,
-        out,
-        map(Symbolics.unflatten_long_ops, rhss)
-    )
-
     s = structure(sys)
+
+    out = Sym{Any}(gensym("out"))
+
+    closed_args = vcat(s.fullvars[diffvars_range(s)],
+                       s.fullvars[algvars_range(s)])
+
+    if threaded
+        odefunbody = Symbolics.set_array(
+            MultithreadedForm(Threads.nthreads()),
+            closed_args,
+            out,
+            nothing, # outputidxs
+            rhss,
+            false, # checkbounds
+            true   # skipzeros
+        )
+    else
+        odefunbody = SetArray(
+            !checkbounds,
+            out,
+            map(Symbolics.unflatten_long_ops, rhss)
+        )
+    end
+
     states = s.fullvars[diffvars_range(s)]
     syms = map(Symbol, states)
 
