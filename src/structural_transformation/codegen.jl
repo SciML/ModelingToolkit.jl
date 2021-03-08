@@ -253,7 +253,8 @@ function build_torn_function(
     out = Sym{Any}(gensym("out"))
 
     closed_args = vcat(s.fullvars[diffvars_range(s)],
-                       s.fullvars[algvars_range(s)])
+                       s.fullvars[algvars_range(s)],
+                       parameters(sys))
 
     if threaded
         odefunbody = Symbolics.set_array(
