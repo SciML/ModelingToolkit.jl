@@ -373,6 +373,11 @@ function build_observed_function(
         solves = []
     end
 
+    solves = map(solves) do s
+        [s[:function_def],
+         DestructuredArgs(s[:solve_vars]) ← s[:solver_call]]
+    end
+
     output = map(syms) do sym
         if sym in required_algvars
             sym
