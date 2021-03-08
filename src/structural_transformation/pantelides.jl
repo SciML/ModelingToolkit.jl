@@ -63,16 +63,11 @@ function pantelides_reassemble(sys, eqassoc, assign)
             lhsarg1 = arguments(eq.lhs)[1]
             @assert !(lhsarg1 isa Differential) "The equation $eq is not first order"
             i = get(d_dict, lhsarg1, nothing)
-            if i !== nothing
-                lhs = D(out_vars[varassoc[i]])
-                if lhs in lhss
-                    # check only trivial equations are removed
-                    @assert isequal(diff2term(D(eq.rhs)), diff2term(lhs)) "The duplicate equation is not trivial: $eq"
-                    lhs = Num(nothing)
-                end
-                lhs
-            else
+            if i === nothing
                 D(eq.lhs)
+            else
+                # remove clashing equations
+                lhs = Num(nothing)
             end
         else
             D(eq.lhs)
@@ -86,8 +81,10 @@ function pantelides_reassemble(sys, eqassoc, assign)
     final_vars = unique(filter(x->!(operation(x) isa Differential), fullvars))
     final_eqs = map(identity, filter(x->value(x.lhs) !== nothing, out_eqs[sort(filter(x->x != UNASSIGNED, assign))]))
 
-    # remove clashing equations (from order lowering vs index reduction)
-    return ODESystem(final_eqs, independent_variable(sys), final_vars, parameters(sys))
+    @set! sys.eqs = final_eqs
+    @set! sys.states = final_vars
+    @set! sys.structure = nothing
+    return sys
 end
 
 """
