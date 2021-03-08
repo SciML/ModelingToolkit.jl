@@ -252,9 +252,26 @@ function build_torn_function(
 
     out = Sym{Any}(gensym("out"))
 
+
+    #=
+    ps = vcat(parameters(sys),
+              s.fullvars[diffvars_range(s)],
+              s.fullvars[algvars_range(s)])
+
+    Js = Symbolics.jacobian_sparsity(rhss, ps)
+    idxs = findall(x->x>0, vec(sum(Js, dims=1)))
+
+    closed_args = vcat(ps[idxs], [independent_variable(sys)])
+    @show closed_args
+    =#
+    ps = parameters(sys)
+
+    Js = Symbolics.jacobian_sparsity(rhss, ps)
+    idxs = findall(x->x>0, vec(sum(Js, dims=1)))
+
     closed_args = vcat(s.fullvars[diffvars_range(s)],
                        s.fullvars[algvars_range(s)],
-                       parameters(sys))
+                       ps[idxs], [independent_variable(sys)])
 
     if threaded
         odefunbody = Symbolics.set_array(
@@ -282,7 +299,7 @@ function build_torn_function(
              [
               out
               DestructuredArgs(states)
-              DestructuredArgs(parameters(sys))
+              DestructuredArgs(ps)
               independent_variable(sys)
              ],
              [],
@@ -292,6 +309,9 @@ function build_torn_function(
                 )
             )
     )
+    if isdefined(Main, :_debug_expr)
+        Main._debug_expr[] = expr
+    end
     if expression
         expr
     else
