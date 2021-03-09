@@ -41,6 +41,8 @@ jacobian_sparsity
 ```@docs
 ODEFunction
 ODEProblem
+SteadyStateFunction
+SteadyStateProblem
 ```
 
 ## Torn Problem Constructors
