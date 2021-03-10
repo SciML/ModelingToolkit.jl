@@ -14,7 +14,7 @@ makedocs(
             "tutorials/ode_modeling.md",
             "tutorials/acausal_components.md",
             "tutorials/higher_order.md",
-            "tutorials/tearing_parallelism",
+            "tutorials/tearing_parallelism.md",
             "tutorials/nonlinear.md",
             "tutorials/optimization.md",
             "tutorials/stochastic_diffeq.md",
