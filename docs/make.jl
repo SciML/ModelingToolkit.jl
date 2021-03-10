@@ -10,15 +10,19 @@ makedocs(
                              canonical="https://mtk.sciml.ai/stable/"),
     pages=[
         "Home" => "index.md",
-        "Tutorials" => Any[
+        "Symbolic Modeling Tutorials" => Any[
             "tutorials/ode_modeling.md",
             "tutorials/acausal_components.md",
             "tutorials/higher_order.md",
+            "tutorials/tearing_parallelism",
             "tutorials/nonlinear.md",
-            "tutorials/modelingtoolkitize.md",
             "tutorials/optimization.md",
             "tutorials/stochastic_diffeq.md",
             "tutorials/nonlinear_optimal_control.md"
+        ],
+        "ModelingToolkitize Tutorials" => Any[
+            "mtkitize_tutorials/modelingtoolkitize.md",
+            "mtkitize_tutorials/modelingtoolkitize_index_reduction.md"
         ],
         "Basics" => Any[
             "basics/AbstractSystem.md",
