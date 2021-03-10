@@ -207,35 +207,35 @@ equations(sys)
  0 ~ rc50₊resistor50₊R*rc50₊capacitor50₊p₊i(t)*(1 + (rc50₊resistor50₊alpha*(((rc50₊capacitor50₊p₊i(t))*(rc50₊source₊V - (rc50₊capacitor50₊v(t)))) - rc50₊resistor50₊TAmbient))) - (rc50₊source₊V - (rc50₊capacitor50₊v(t)))
  Differential(t)(rc50₊capacitor50₊v(t)) ~ rc50₊capacitor50₊p₊i(t)*(rc50₊capacitor50₊C^-1)
  Differential(t)(rc50₊heat_capacitor50₊h₊T(t)) ~ rc50₊capacitor50₊p₊i(t)*(rc50₊heat_capacitor50₊V^-1)*(rc50₊heat_capacitor50₊cp^-1)*(rc50₊heat_capacitor50₊rho^-1)*(rc50₊source₊V - (rc50₊capacitor50₊v(t)))
- ```
+```
 
- That's not all though. In addition, the tearing process has turned the sets of
- nonlinear equations into separate blocks and constructed a DAG for the dependencies
- between the blocks. We can use the bipartite graph functionality to dig in and
- investigate what this means:
+That's not all though. In addition, the tearing process has turned the sets of
+nonlinear equations into separate blocks and constructed a DAG for the dependencies
+between the blocks. We can use the bipartite graph functionality to dig in and
+investigate what this means:
 
- ```julia
- using ModelingToolkit.BipartiteGraphs
- big_rc = initialize_system_structure(big_rc)
- inc_org = BipartiteGraphs.incidence_matrix(structure(big_rc).graph)
- blt_org = StructuralTransformations.sorted_incidence_matrix(big_rc, only_algeqs=true, only_algvars=true)
- blt_reduced = StructuralTransformations.sorted_incidence_matrix(sys, only_algeqs=true, only_algvars=true)
- ```
+```julia
+using ModelingToolkit.BipartiteGraphs
+big_rc = initialize_system_structure(big_rc)
+inc_org = BipartiteGraphs.incidence_matrix(structure(big_rc).graph)
+blt_org = StructuralTransformations.sorted_incidence_matrix(big_rc, only_algeqs=true, only_algvars=true)
+blt_reduced = StructuralTransformations.sorted_incidence_matrix(sys, only_algeqs=true, only_algvars=true)
+```
 
- ![](https://user-images.githubusercontent.com/1814174/110589027-d4ec9b00-8143-11eb-8880-651da986504d.PNG)
+![](https://user-images.githubusercontent.com/1814174/110589027-d4ec9b00-8143-11eb-8880-651da986504d.PNG)
 
- The figure on the left is the original incidence matrix of the algebraic equations.
- Notice that the original formulation of the model has dependencies between different
- equations, and so the full set of equations must be solved together. That exposes
- no parallelism. However, the Block Lower Triangular (BLT) transformation exposes
- independent blocks. This is then further impoved by the tearing process, which
- removes 90% of the equations and transforms the nonlinear equations into 50
- independent blocks *which can now all be solved in parallel*. The conclusion
- is that, your attempts to parallelize are neigh: performing parallelism after
- structural simplification greatly improves the problem that can be parallelized,
- so this is better than trying to do it by hand.
+The figure on the left is the original incidence matrix of the algebraic equations.
+Notice that the original formulation of the model has dependencies between different
+equations, and so the full set of equations must be solved together. That exposes
+no parallelism. However, the Block Lower Triangular (BLT) transformation exposes
+independent blocks. This is then further impoved by the tearing process, which
+removes 90% of the equations and transforms the nonlinear equations into 50
+independent blocks *which can now all be solved in parallel*. The conclusion
+is that, your attempts to parallelize are neigh: performing parallelism after
+structural simplification greatly improves the problem that can be parallelized,
+so this is better than trying to do it by hand.
 
- After performing this, you can construct the `ODEProblem`/`ODAEProblem` and set
- `parallel_form` to use the exposed parallelism in multithreaded function
- constructions, but this showcases why `structural_simplify` is so important
- to that process.
+After performing this, you can construct the `ODEProblem`/`ODAEProblem` and set
+`parallel_form` to use the exposed parallelism in multithreaded function
+constructions, but this showcases why `structural_simplify` is so important
+to that process.
