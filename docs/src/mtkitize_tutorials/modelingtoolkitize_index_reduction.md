@@ -42,13 +42,13 @@ plot(sol, vars=states(traced_sys))
 In this tutorial we will look at the pendulum system:
 
 ```math
-\begin{align}
+\begin{aligned}
     x^\prime &= v_x\\
     v_x^\prime &= Tx\\
     y^\prime &= v_y\\
     v_y^\prime &= Ty - g\\
     0 &= x^2 + y^2 - L^2
-\end{align}
+\end{aligned}
 ```
 
 As a good DifferentialEquations.jl user, one would follow
@@ -114,13 +114,13 @@ If you differentiate the last equation two times and perform a substitution,
 you can arrive at the following set of equations:
 
 ```math
-\begin{align}
+\begin{aligned}
 x^\prime =& v_x \\
 v_x^\prime =& x T \\
 y^\prime =& v_y \\
 v_y^\prime =& y T - g \\
 0 =& 2 \left(v_x^{2} + v_y^{2} + y ( y T - g ) + T x^2 \right)
-\end{align}
+\end{aligned}
 ```
 
 Note that this is mathematically-equivalent to the equation that we had before,
