@@ -14,6 +14,8 @@ OptimizationSystem
 
 ## Transformations
 
+## Analyses
+
 ## Applicable Calculation and Generation Functions
 
 ```julia

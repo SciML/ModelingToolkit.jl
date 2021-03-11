@@ -20,6 +20,8 @@ structural_simplify
 alias_elimination
 ```
 
+## Analyses
+
 ## Applicable Calculation and Generation Functions
 
 ```julia

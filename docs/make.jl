@@ -22,14 +22,16 @@ makedocs(
         ],
         "ModelingToolkitize Tutorials" => Any[
             "mtkitize_tutorials/modelingtoolkitize.md",
-            "mtkitize_tutorials/modelingtoolkitize_index_reduction.md"
+            "mtkitize_tutorials/modelingtoolkitize_index_reduction.md",
+            #"mtkitize_tutorials/sparse_jacobians",
         ],
         "Basics" => Any[
             "basics/AbstractSystem.md",
             "basics/ContextualVariables.md",
             "basics/Composition.md",
             "basics/Validation.md",
-            "basics/DependencyGraphs.md"
+            "basics/DependencyGraphs.md",
+            "basics/FAQ.md"
         ],
         "System Types" => Any[
             "systems/ODESystem.md",

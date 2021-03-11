@@ -65,3 +65,5 @@ ismassaction
 Base.convert
 structural_simplify
 ```
+
+## Analyses
