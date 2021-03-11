@@ -35,44 +35,6 @@ end
 
 modified_states!(mstates, e::Equation, statelist=nothing) = get_variables!(mstates, e.lhs, statelist)
 
-# variable substitution
-# Piracy but mild
-"""
-    substitute(expr, s::Pair)
-    substitute(expr, s::Dict)
-    substitute(expr, s::Vector)
-
-Performs the substitution on `expr` according to rule(s) `s`.
-
-# Examples
-```julia
-julia> @parameters t
-(t,)
-
-julia> @variables x y z(t)
-(x, y, z(t))
-
-julia> ex = x + y + sin(z)
-(x + y) + sin(z(t))
-
-julia> substitute(ex, Dict([x => z, sin(z) => z^2]))
-(z(t) + y) + (z(t) ^ 2)
-```
-"""
-# cannot use Union{Pair, Vector, Dict} -- leads to ambiguity
-substitute(expr::Num, s::Pair; kw...) = Num(substituter(s)(value(expr); kw...))
-substitute(expr::Num, s::Vector; kw...) = Num(substituter(s)(value(expr); kw...))
-substitute(expr::Num, s::Dict; kw...) = Num(substituter(s)(value(expr); kw...))
-# TODO: move this to SymbolicUtils
-substitute(expr, s::Pair; kw...) = substituter([s[1] => s[2]])(expr; kw...)
-substitute(expr, s::Vector; kw...) = substituter(s)(expr; kw...)
-
-substituter(pair::Pair) = substituter((pair,))
-function substituter(pairs)
-    dict = Dict(value(k) => value(v)  for (k, v) in pairs)
-    (expr; kw...) -> SymbolicUtils.substitute(expr, dict; kw...)
-end
-
 macro showarr(x)
     n = string(x)
     quote
