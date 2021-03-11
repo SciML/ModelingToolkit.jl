@@ -1,4 +1,4 @@
-# Automated Index Reduction of DAEs via ModelingToolkitize
+# Automated Index Reduction of DAEs
 
 In many cases one may accidentally write down a DAE that is not easily solvable
 by numerical methods. In this tutorial we will walk through an example of a
