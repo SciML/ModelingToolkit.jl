@@ -20,7 +20,7 @@ the other choice.
 These elementary problems, such as solving linear systems `Ax=b`, solving nonlinear
 systems `f(x)=0`, ODEs, etc. are all defined by SciMLBase.jl, which then numerical
 solvers can all target these common forms. Thus someone who works on linear solvers
-doesn't necessarily need to be working on a discrete Galerkin or finite element
+doesn't necessarily need to be working on a Discontinuous Galerkin or finite element
 library, but instead "linear solvers that are good for matrices A with
 properties ..." which are then accessible by every other discretization method
 in the common PDE interface.
