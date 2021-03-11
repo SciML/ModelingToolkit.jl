@@ -20,9 +20,10 @@ the other choice.
 These elementary problems, such as solving linear systems `Ax=b`, solving nonlinear
 systems `f(x)=0`, ODEs, etc. are all defined by SciMLBase.jl, which then numerical
 solvers can all target these common forms. Thus someone who works on linear solvers
-doesn't necessarily need to be working on a DG or finite element library, but
-instead "linear solvers that are good for matrices A with properties ..." which
-are then accessible by every other discretization method in the common PDE interface.
+doesn't necessarily need to be working on a discrete Galerkin or finite element
+library, but instead "linear solvers that are good for matrices A with
+properties ..." which are then accessible by every other discretization method
+in the common PDE interface.
 
 Similar to the rest of the `AbstractSystem` types, transformation and analyses
 functions will allow for simplifying the PDE before solving it, and constructing
