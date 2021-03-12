@@ -8,7 +8,7 @@ $(FIELDS)
 
 # Example
 
-```
+```julia
 using ModelingToolkit
 
 @parameters t σ ρ β

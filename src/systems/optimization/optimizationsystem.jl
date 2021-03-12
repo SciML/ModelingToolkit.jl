@@ -8,7 +8,7 @@ $(FIELDS)
 
 # Examples
 
-```
+```julia
 @variables x y z
 @parameters σ ρ β
 
