@@ -30,7 +30,7 @@ $(FIELDS)
 
 # Example
 
-```
+```julia
 using ModelingToolkit
 
 @variables t x(t) v(t) u(t)
