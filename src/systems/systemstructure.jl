@@ -196,11 +196,11 @@ function find_linear_equations(sys)
             if !(c isa Symbolic) && c isa Number
                 if isinteger(c)
                     c = convert(Integer, c)
+                    linear_term += c * var
+                    push!(coeffs, c)
                 else
                     all_int_algvars = false
                 end
-                linear_term += c * var
-                push!(coeffs, c)
             end
         end
 
