@@ -194,7 +194,7 @@ function find_linear_equations(sys)
             c = expand_derivatives(Differential(var)(term), false)
             # test if `var` is linear in `eq`.
             if !(c isa Symbolic) && c isa Number
-                if isinteger(c)
+                if isinteger(c) && !iszero(c)
                     c = convert(Integer, c)
                     linear_term += c * var
                     push!(coeffs, c)
