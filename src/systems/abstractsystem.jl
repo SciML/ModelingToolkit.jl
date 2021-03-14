@@ -185,6 +185,27 @@ end
 
 rename(x::AbstractSystem, name) = @set x.name = name
 
+function Base.propertynames(sys::AbstractSystem; private=false)
+    if private
+        return fieldnames(typeof(sys))
+    else
+        names = Symbol[]
+        for s in get_systems(sys)
+            push!(names, getname(s))
+        end
+        has_states(sys) && for s in get_states(sys)
+            push!(names, getname(s))
+        end
+        has_ps(sys) && for s in get_ps(sys)
+            push!(names, getname(s))
+        end
+        has_observed(sys) && for s in get_observed(sys)
+            push!(names, getname(s.lhs))
+        end
+        return names
+    end
+end
+
 function Base.getproperty(sys::AbstractSystem, name::Symbol)
     sysname = nameof(sys)
     systems = get_systems(sys)
