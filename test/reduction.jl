@@ -74,6 +74,8 @@ connected = ODESystem([s ~ a + lorenz1.x
                        lorenz2.y ~ s
                        lorenz1.F ~ lorenz2.u
                        lorenz2.F ~ lorenz1.u],t,systems=[lorenz1,lorenz2])
+@test length(Base.propertynames(connected)) == 10
+@test isequal((@nonamespace connected.lorenz1.x), x)
 
 # Reduced Flattened System
 
