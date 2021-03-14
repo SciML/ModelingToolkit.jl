@@ -142,6 +142,12 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     diffvars = OrderedSet()
     allstates = OrderedSet()
     ps = OrderedSet()
+    
+    # preprocess eqs
+    args_lhs = map(x->arguments(x.lhs), eqs)
+    derivatives = map(y -> filter(x -> (operation(x) isa Differential), y), args_lhs) 
+    eqs = [ derivatives[i][1] ~ derivatives[i][1] - eqs[i].lhs + eqs[i].rhs for i in 1:length(eqs)]
+    
     # reorder equations such that it is in the form of `diffeq, algeeq`
     diffeq = Equation[]
     algeeq = Equation[]
