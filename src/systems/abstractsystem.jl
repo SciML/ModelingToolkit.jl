@@ -206,7 +206,7 @@ function Base.propertynames(sys::AbstractSystem; private=false)
     end
 end
 
-function Base.getproperty(sys::AbstractSystem, name::Symbol)
+function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true)
     sysname = nameof(sys)
     systems = get_systems(sys)
     if isdefined(sys, name)
@@ -215,7 +215,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
     elseif !isempty(systems)
         i = findfirst(x->nameof(x)==name,systems)
         if i !== nothing
-            return rename(systems[i],renamespace(sysname,name))
+            return namespace ? rename(systems[i],renamespace(sysname,name)) : systems[i]
         end
     end
 
@@ -223,14 +223,14 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
     i = findfirst(x->getname(x) == name, sts)
 
     if i !== nothing
-        return rename(sts[i],renamespace(sysname,name))
+        return namespace ? rename(sts[i],renamespace(sysname,name)) : sts[i]
     end
 
     if has_ps(sys)
         ps = get_ps(sys)
         i = findfirst(x->getname(x) == name,ps)
         if i !== nothing
-            return rename(ps[i],renamespace(sysname,name))
+            return namespace ? rename(ps[i],renamespace(sysname,name)) : ps[i]
         end
     end
 
@@ -238,7 +238,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol)
         obs = get_observed(sys)
         i = findfirst(x->getname(x.lhs)==name,obs)
         if i !== nothing
-            return rename(obs[i].lhs,renamespace(sysname,name))
+            return namespace ? rename(obs[i].lhs,renamespace(sysname,name)) : obs[i]
         end
     end
 
@@ -490,8 +490,33 @@ function _named(expr)
     :($name = $call)
 end
 
+"""
+$(SIGNATURES)
+
+Rewrite `@named y = foo(x)` to `y = foo(x; name=:y)`.
+"""
 macro named(expr)
     esc(_named(expr))
+end
+
+function _nonamespace(expr)
+    if Meta.isexpr(expr, :.)
+        return :($getproperty($(map(_nonamespace, expr.args)...); namespace=false))
+    elseif expr isa Expr && !isempty(expr.args)
+        return Expr(expr.head, map(_nonamespace, expr.args)...)
+    else
+        expr
+    end
+end
+
+"""
+$(SIGNATURES)
+
+Rewrite `@nonamespace a.b.c` to
+`getproperty(getproperty(a, :b; namespace = false), :c; namespace = false)`.
+"""
+macro nonamespace(expr)
+    esc(_nonamespace(expr))
 end
 
 """
