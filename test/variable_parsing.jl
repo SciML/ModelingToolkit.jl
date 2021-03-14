@@ -118,3 +118,5 @@ a = rename(value(x), :a)
 @test getmetadata(p, VariableDefaultValue) == 2
 @test !hasmetadata(p, VariableConnectType)
 @test getmetadata(p, VariableUnit) == u"m"
+
+@test_throws Any (@macroexpand @parameters p=2 [unit=u"m",abc=2])
