@@ -47,13 +47,29 @@ function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = param
     return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
+@noinline function throw_invalid_derivative(dervar, eq)
+    msg = "The derivative variable must be isolated to the left-hand " *
+    "side of the equation like `$dervar ~ ...`.\n Got $eq."
+    throw(InvalidSystemException(msg))
+end
+
+function check_derivative_variables(eq, expr=eq.rhs)
+    istree(expr) || return nothing
+    if operation(expr) isa Differential
+        throw_invalid_derivative(expr, eq)
+    end
+    foreach(Base.Fix1(check_derivative_variables, eq), arguments(expr))
+end
+
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     # optimization
     #obsvars = map(eq->eq.lhs, observed(sys))
     #fulldvs = [dvs; obsvars]
 
+    eqs = equations(sys)
+    foreach(check_derivative_variables, eqs)
     # substitute x(t) by just x
-    rhss = [deq.rhs for deq ∈ equations(sys)]
+    rhss = [deq.rhs for deq in eqs]
     #obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
     #rhss = Let(obss, rhss)
 
