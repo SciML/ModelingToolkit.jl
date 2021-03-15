@@ -7,7 +7,10 @@ form by defining new variables which represent the N-1 derivatives.
 function ode_order_lowering(sys::ODESystem)
     iv = independent_variable(sys)
     eqs_lowered, new_vars = ode_order_lowering(equations(sys), iv, states(sys))
-    return ODESystem(eqs_lowered, iv, new_vars, parameters(sys))
+    @set! sys.eqs = eqs_lowered
+    @set! sys.states = new_vars
+    @set! sys.structure = nothing
+    return sys
 end
 
 function ode_order_lowering(eqs, iv, states)
