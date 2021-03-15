@@ -122,7 +122,6 @@ function init_graph(sys)
     varsadj = Vector{Any}(undef, neqs)
     dervars = OrderedSet()
     diffvars = OrderedSet()
-    dervar = nothing
 
     for (i, eq) in enumerate(eqs)
         vars = OrderedSet()
@@ -135,7 +134,6 @@ function init_graph(sys)
                 if diffvar isa Differential
                     throw(InvalidSystemException("The equation [ $eq ] is not first order"))
                 end
-                dervar = var
                 push!(dervars, var)
                 push!(diffvars, diffvar)
             end
