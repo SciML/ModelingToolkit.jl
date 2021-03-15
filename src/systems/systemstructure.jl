@@ -3,7 +3,8 @@ module SystemStructures
 using DataStructures
 using SymbolicUtils: istree, operation, arguments, Symbolic
 using ..ModelingToolkit
-import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten, value
+import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
+    value, InvalidSystemException
 using ..BipartiteGraphs
 using UnPack
 using Setfield
@@ -121,6 +122,7 @@ function init_graph(sys)
     varsadj = Vector{Any}(undef, neqs)
     dervars = OrderedSet()
     diffvars = OrderedSet()
+    dervar = nothing
 
     for (i, eq) in enumerate(eqs)
         vars = OrderedSet()
@@ -130,7 +132,10 @@ function init_graph(sys)
             if istree(var) && operation(var) isa Differential
                 isalgeq = false
                 diffvar = arguments(var)[1]
-                @assert !(diffvar isa Differential) "The equation [ $eq ] is not first order"
+                if diffvar isa Differential
+                    throw(InvalidSystemException("The equation [ $eq ] is not first order"))
+                end
+                dervar = var
                 push!(dervars, var)
                 push!(diffvars, diffvar)
             end

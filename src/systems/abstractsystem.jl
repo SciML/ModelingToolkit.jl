@@ -537,3 +537,8 @@ end
 end
 
 Base.show(io::IO, ::MIME"text/latex", x::AbstractSystem) = print(io, latexify(x))
+
+struct InvalidSystemException <: Exception
+    msg::String
+end
+Base.showerror(io::IO, e::InvalidSystemException) = print(io, "InvalidSystemException: ", e.msg)

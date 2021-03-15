@@ -167,6 +167,16 @@ let
     @test ref_eqs == equations(reduced_sys)
 end
 
+# issue #889
+let
+    @parameters t
+    D = Differential(t)
+    @variables x(t)
+    @named sys = ODESystem([0 ~ D(x) + x], t, [x], [])
+    sys = structural_simplify(sys)
+    @test_throws ModelingToolkit.InvalidSystemException ODEProblem(sys, [1.0], (0, 10.0))
+end
+
 # NonlinearSystem
 @parameters t
 @variables u1(t) u2(t) u3(t)
