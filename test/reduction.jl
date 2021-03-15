@@ -191,3 +191,10 @@ reducedsol = solve(nlprob, NewtonRaphson())
 residual = fill(100.0, length(states(reducedsys)))
 nlprob.f(residual, reducedsol.u, pp)
 @test all(x->abs(x) < 1e-5, residual)
+
+N = 5
+@variables xs[1:N]
+A = reshape(1:N^2, N, N)
+eqs = xs .~ A * xs
+sys′ = NonlinearSystem(eqs, xs, [])
+sys = structural_simplify(sys′)
