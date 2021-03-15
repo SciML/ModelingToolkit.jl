@@ -1,3 +1,8 @@
+struct VariableUnit end
+struct VariableConnectType end
+Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
+Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
+
 """
 $(SIGNATURES)
 Takes a list of pairs of `variables=>values` and an ordered list of variables
