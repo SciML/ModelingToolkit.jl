@@ -20,6 +20,12 @@ alias_elimination
 tearing
 ```
 
+## Analyses
+
+```@docs
+ModelingToolkit.islinear
+```
+
 ## Applicable Calculation and Generation Functions
 
 ```julia

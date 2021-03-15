@@ -43,7 +43,8 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
                   ParallelForm, SerialForm, MultithreadedForm, build_function,
                   unflatten_long_ops, rhss, lhss, prettify_expr, gradient,
-                  jacobian, hessian, derivative, sparsejacobian, sparsehessian
+                  jacobian, hessian, derivative, sparsejacobian, sparsehessian,
+                  substituter
 
 import DiffEqBase: @add_kwonly
 
@@ -175,6 +176,6 @@ export simplify, substitute
 export build_function
 export modelingtoolkitize
 export @variables, @parameters
-export @named
+export @named, @nonamespace
 
 end # module

@@ -19,6 +19,8 @@ JumpSystem
 structural_simplify
 ```
 
+## Analyses
+
 ## Problem Constructors
 
 ```@docs

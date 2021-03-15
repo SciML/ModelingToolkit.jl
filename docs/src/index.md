@@ -19,6 +19,21 @@ using Pkg
 Pkg.add("ModelingToolkit")
 ```
 
+## Citation
+
+If you use ModelingToolkit in your work, please cite the following:
+
+```
+@misc{ma2021modelingtoolkit,
+      title={ModelingToolkit: A Composable Graph Transformation System For Equation-Based Modeling},
+      author={Yingbo Ma and Shashi Gowda and Ranjan Anantharaman and Chris Laughman and Viral Shah and Chris Rackauckas},
+      year={2021},
+      eprint={2103.05244},
+      archivePrefix={arXiv},
+      primaryClass={cs.MS}
+}
+```
+
 ## Feature Summary
 
 ModelingToolkit.jl is a symbolic-numeric modeling package. Thus it combines some

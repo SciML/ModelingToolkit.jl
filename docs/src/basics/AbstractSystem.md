@@ -71,6 +71,12 @@ another `AbstractSystem`. These are passes, like optimizations (e.g., Block-Lowe
 Triangle transformations), or changes to the representation, which allow for
 alternative numerical methods to be utilized on the model (e.g., DAE index reduction).
 
+## Analyses
+
+Analyses are functions on a system which return information about the corresponding
+properties, like whether its parameters are structurally identifiable, or whether
+it's linear.
+
 ## Function Calculation and Generation
 
 The calculation and generation functions allow for calculating additional
@@ -112,3 +118,21 @@ array would normally be provided, such as `u0` the initial condition of an
 `ODEProblem`, it is instead replaced with a variable map, i.e., an array of
 pairs `var=>value`, which allows the user to designate the values without having
 to know the order that ModelingToolkit is internally using.
+
+For the value maps, the parameters are allowed to be functions of each other,
+and value maps of states can be functions of the parameters, i.e. you can do:
+
+```
+u0 = [
+  lorenz1.x => 2.0
+  lorenz2.x => lorenz1.x * lorenz1.p
+]
+```
+
+## Default Value Handling
+
+The `AbstractSystem` types allow for specifying default values, for example
+`default_p` inside of them. At problem construction time, these values are merged
+into the value maps, where for any repeats the value maps override the default.
+In addition, defaults of a higher level in the system override the defaults of
+a lower level in the system. 

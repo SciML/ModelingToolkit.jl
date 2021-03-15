@@ -19,3 +19,5 @@ ControlSystem
 ModelingToolkit.runge_kutta_discretize
 structural_simplify
 ```
+
+## Analyses

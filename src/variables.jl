@@ -1,3 +1,8 @@
+struct VariableUnit end
+struct VariableConnectType end
+Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
+Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
+
 """
 $(SIGNATURES)
 Takes a list of pairs of `variables=>values` and an ordered list of variables
@@ -6,7 +11,7 @@ applicable.
 """
 function varmap_to_vars(varmap::Dict, varlist; defaults=Dict())
     varmap = merge(defaults, varmap) # prefers the `varmap`
-    varmap = Dict(value(k)=>value(varmap[k]) for k in keys(varmap))
+    varmap = Dict(Symbolics.diff2term(value(k))=>value(varmap[k]) for k in keys(varmap))
     # resolve symbolic parameter expressions
     for (p, v) in pairs(varmap)
         varmap[p] = fixpoint_sub(v, varmap)

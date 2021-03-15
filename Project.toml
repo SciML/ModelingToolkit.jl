@@ -1,7 +1,7 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
 authors = ["Chris Rackauckas <accounts@chrisrackauckas.com>"]
-version = "5.13.0"
+version = "5.13.3"
 
 [deps]
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
@@ -65,7 +65,7 @@ Setfield = "0.7"
 SpecialFunctions = "0.7, 0.8, 0.9, 0.10, 1.0"
 StaticArrays = "0.10, 0.11, 0.12, 1.0"
 SymbolicUtils = "0.8.3, 0.9"
-Symbolics = "0.1.2"
+Symbolics = "0.1.8"
 TreeViews = "0.3"
 UnPack = "0.1, 1.0"
 Unitful = "1.1"

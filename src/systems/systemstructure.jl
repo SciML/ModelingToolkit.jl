@@ -3,7 +3,8 @@ module SystemStructures
 using DataStructures
 using SymbolicUtils: istree, operation, arguments, Symbolic
 using ..ModelingToolkit
-import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten, value
+import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
+    value, InvalidSystemException
 using ..BipartiteGraphs
 using UnPack
 using Setfield
@@ -130,7 +131,9 @@ function init_graph(sys)
             if istree(var) && operation(var) isa Differential
                 isalgeq = false
                 diffvar = arguments(var)[1]
-                @assert !(diffvar isa Differential) "The equation [ $eq ] is not first order"
+                if diffvar isa Differential
+                    throw(InvalidSystemException("The equation [ $eq ] is not first order"))
+                end
                 push!(dervars, var)
                 push!(diffvars, diffvar)
             end
@@ -194,13 +197,13 @@ function find_linear_equations(sys)
             c = expand_derivatives(Differential(var)(term), false)
             # test if `var` is linear in `eq`.
             if !(c isa Symbolic) && c isa Number
-                if isinteger(c)
+                if isinteger(c) && !iszero(c)
                     c = convert(Integer, c)
+                    linear_term += c * var
+                    push!(coeffs, c)
                 else
                     all_int_algvars = false
                 end
-                linear_term += c * var
-                push!(coeffs, c)
             end
         end
 

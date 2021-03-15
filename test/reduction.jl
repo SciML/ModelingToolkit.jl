@@ -74,6 +74,8 @@ connected = ODESystem([s ~ a + lorenz1.x
                        lorenz2.y ~ s
                        lorenz1.F ~ lorenz2.u
                        lorenz2.F ~ lorenz1.u],t,systems=[lorenz1,lorenz2])
+@test length(Base.propertynames(connected)) == 10
+@test isequal((@nonamespace connected.lorenz1.x), x)
 
 # Reduced Flattened System
 
@@ -165,6 +167,16 @@ let
     @test ref_eqs == equations(reduced_sys)
 end
 
+# issue #889
+let
+    @parameters t
+    D = Differential(t)
+    @variables x(t)
+    @named sys = ODESystem([0 ~ D(x) + x], t, [x], [])
+    sys = structural_simplify(sys)
+    @test_throws ModelingToolkit.InvalidSystemException ODEProblem(sys, [1.0], (0, 10.0))
+end
+
 # NonlinearSystem
 @parameters t
 @variables u1(t) u2(t) u3(t)
@@ -189,3 +201,10 @@ reducedsol = solve(nlprob, NewtonRaphson())
 residual = fill(100.0, length(states(reducedsys)))
 nlprob.f(residual, reducedsol.u, pp)
 @test all(x->abs(x) < 1e-5, residual)
+
+N = 5
+@variables xs[1:N]
+A = reshape(1:N^2, N, N)
+eqs = xs .~ A * xs
+sys′ = NonlinearSystem(eqs, xs, [])
+sys = structural_simplify(sys′)

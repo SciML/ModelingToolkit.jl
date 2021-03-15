@@ -303,3 +303,16 @@ ode = ODESystem(eq)
     issue808()
 
 end
+
+@variables x(t)
+D = Differential(t)
+@parameters M b k
+eqs = [D(D(x)) ~ -b/M*D(x) - k/M*x]
+ps = [M, b, k]
+default_u0 = [D(x) => 0.0, x => 10.0]
+default_p = [M => 1.0, b => 1.0, k => 1.0]
+@named sys = ODESystem(eqs, t, [x], ps, default_u0=default_u0, default_p=default_p)
+sys = ode_order_lowering(sys)
+prob = ODEProblem(sys, Pair[], tspan)
+sol = solve(prob, Tsit5())
+@test sum(abs, sol[end]) < 1

@@ -9,7 +9,7 @@ $(FIELDS)
 
 # Examples
 
-```
+```julia
 using ModelingToolkit
 @parameters t k[1:20]
 @variables A(t) B(t) C(t) D(t)
@@ -117,7 +117,7 @@ $(FIELDS)
 
 # Example
 Continuing from the example in the [`Reaction`](@ref) definition:
-```
+```julia
 rs = ReactionSystem(rxs, t, [A,B,C,D], k)
 ```
 """
