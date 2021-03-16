@@ -11,17 +11,28 @@ and creates the array of values in the correct order with default values when
 applicable.
 """
 function varmap_to_vars(varmap, varlist; defaults=Dict())
-    if varmap isa DiffEqBase.NullParameters || isempty(varmap)
-        varmap = Dict()
+    # Edge cases where one of the arguments is effectively empty.
+    if varmap isa DiffEqBase.NullParameters || varmap === nothing || isempty(varmap)
+        if isempty(defaults)
+            isempty(varlist) || throw_missingvars(varlist)
+            return nothing
+        else
+            varmap = Dict()
+        end
     end
+
     T = typeof(varmap)
+    # We respect the input type
     container_type = T <: Dict ? Array : T
 
-    if eltype(varmap) <: Pair
-        varmap isa Dict || (varmap = Dict(varmap))
+    if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
+        varmap = todict(varmap)
         rules = Dict(varmap)
         vals = _varmap_to_vars(varmap, varlist; defaults=defaults)
+    else # plain array-like initialization
+        vals = varmap
     end
+
     if isempty(vals)
         return nothing
     elseif container_type <: Tuple
@@ -42,10 +53,12 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults=Dict())
     T = Base.isconcretetype(T′) ? T′ : Base.promote_typeof(values(varmap)...)
     out = Vector{T}(undef, length(varlist))
     missingvars = setdiff(varlist, keys(varmap))
-    isempty(missingvars) || throw(ArgumentError("$missingvars are missing from the variable map."))
+    isempty(missingvars) || throw_missingvars(missingvars)
 
     for (i, var) in enumerate(varlist)
         out[i] = varmap[var]
     end
     out
 end
+
+@noinline throw_missingvars(vars) = throw(ArgumentError("$vars are missing from the variable map."))

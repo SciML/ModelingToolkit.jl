@@ -258,13 +258,12 @@ sol = solve(jprob, SSAStepper())
 ```
 """
 function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
-
     statetoid = Dict(value(state) => i for (i,state) in enumerate(states(js)))
     eqs       = equations(js)
     invttype  = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
 
     # handling parameter substition and empty param vecs
-    p = (prob.p == DiffEqBase.NullParameters()) ? Num[] : prob.p
+    p = (prob.p isa DiffEqBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
     parammap  = map((x,y)->Pair(x,y), parameters(js), p)
     subber    = substituter(parammap)
 
