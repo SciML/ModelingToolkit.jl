@@ -133,3 +133,12 @@ system:
     - Physics-Informed Neural Network (PINN) training on `PDESystem`
 - [DiffEqOperators.jl](https://github.com/SciML/DiffEqOperators.jl)
     - Automated finite difference method (FDM) discretization of `PDESystem`
+
+## Contributing
+
+- Please refer to the [SciML ColPrac: Contributor's Guide on Collaborative Practices for Community Packages](https://github.com/SciML/ColPrac/blob/master/README.md) for guidance on PRs, issues, and other matters relating to contributing to ModelingToolkit.
+- There are a few community forums:
+    - The #diffeq-bridged channel in the [Julia Slack](https://julialang.org/slack/)
+    - [JuliaDiffEq](https://gitter.im/JuliaDiffEq/Lobby) on Gitter
+    - On the Julia Discourse forums (look for the [modelingtoolkit tag](https://discourse.julialang.org/tag/modelingtoolkit)
+    - See also [SciML Community page](https://sciml.ai/community/)
