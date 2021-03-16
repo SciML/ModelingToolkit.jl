@@ -5,11 +5,33 @@ Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
 
 """
 $(SIGNATURES)
+
 Takes a list of pairs of `variables=>values` and an ordered list of variables
 and creates the array of values in the correct order with default values when
 applicable.
 """
-function varmap_to_vars(varmap::Dict, varlist; defaults=Dict())
+function varmap_to_vars(varmap, varlist; defaults=Dict())
+    if varmap isa DiffEqBase.NullParameters || isempty(varmap)
+        varmap = Dict()
+    end
+    T = typeof(varmap)
+    container_type = T <: Dict ? Array : T
+
+    if eltype(varmap) <: Pair
+        varmap isa Dict || (varmap = Dict(varmap))
+        rules = Dict(varmap)
+        vals = _varmap_to_vars(varmap, varlist; defaults=defaults)
+    end
+    if isempty(vals)
+        return nothing
+    elseif container_type <: Tuple
+        (vals...,)
+    else
+        SymbolicUtils.Code.create_array(container_type, eltype(vals), Val(length(vals)), vals...)
+    end
+end
+
+function _varmap_to_vars(varmap::Dict, varlist; defaults=Dict())
     varmap = merge(defaults, varmap) # prefers the `varmap`
     varmap = Dict(Symbolics.diff2term(value(k))=>value(varmap[k]) for k in keys(varmap))
     # resolve symbolic parameter expressions
@@ -27,22 +49,3 @@ function varmap_to_vars(varmap::Dict, varlist; defaults=Dict())
     end
     out
 end
-
-function varmap_to_vars(varmap::Union{AbstractArray,Tuple},varlist; kw...)
-    if eltype(varmap) <: Pair
-        out = varmap_to_vars(Dict(varmap), varlist; kw...)
-        if varmap isa Tuple
-            (out..., )
-        else
-            # Note that `varmap` might be longer than `varlist`
-            construct_state(varmap, out)
-        end
-    else
-        varmap
-    end
-end
-varmap_to_vars(varmap::DiffEqBase.NullParameters,varlist; kw...) = varmap
-varmap_to_vars(varmap::Nothing,varlist; kw...) = varmap
-
-construct_state(x::StaticArray, y) = StaticArrays.similar_type(x, eltype(y), StaticArrays.Size(size(y)...))(y)
-construct_state(x::Array, y) = y
