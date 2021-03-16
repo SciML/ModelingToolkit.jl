@@ -268,11 +268,32 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     end
 end
 
+abstract type SymScope end
+
+struct LocalScope <: SymScope end
+LocalScope(sym::Union{Num, Sym}) = setmetadata(sym, SymScope, LocalScope())
+
+struct ParentScope <: SymScope
+    parent::SymScope
+end
+ParentScope(sym::Union{Num, Sym}) = setmetadata(sym, SymScope, ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+
+struct GlobalScope <: SymScope end
+GlobalScope(sym::Union{Num, Sym}) = setmetadata(sym, SymScope, GlobalScope())
+
 function renamespace(namespace, x)
     if x isa Num
         renamespace(namespace, value(x))
     elseif x isa Symbolic
-        rename(x, renamespace(namespace, getname(x)))
+        let scope = getmetadata(x, SymScope, LocalScope())
+            if scope isa LocalScope
+                rename(x, renamespace(namespace, getname(x)))
+            elseif scope isa ParentScope
+                setmetadata(x, SymScope, scope.parent)
+            else # GlobalScope
+                x
+            end
+        end
     else
         Symbol(namespace,:₊,x)
     end
