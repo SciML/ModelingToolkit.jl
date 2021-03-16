@@ -284,3 +284,18 @@ function _eq_unordered(a, b)
     end
     return true
 end
+
+function collect_differential_variables(sys::ODESystem)
+    eqs = equations(sys)
+    vars = Set()
+    diffvars = Set()
+    for eq in eqs
+        vars!(vars, eq)
+        for v in vars
+            isdifferential(v) || continue
+            push!(diffvars, arguments(v)[1])
+        end
+        empty!(vars)
+    end
+    return diffvars
+end

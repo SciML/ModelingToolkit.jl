@@ -236,8 +236,9 @@ du0 = [
        D(y₃) => 0.0
       ]
 prob4 = DAEProblem(sys, du0, u0, tspan, p2)
+@test prob4.differential_vars == [true, true, false]
 sol = solve(prob4, IDA())
-@test all(x->≈(sum(x), 1.0, atol=atol), sol.u)
+@test all(x->≈(sum(x), 1.0, atol=1e-12), sol.u)
 
 @test ModelingToolkit.construct_state(SArray{Tuple{3,3}}(rand(3,3)), [1,2]) == SVector{2}([1, 2])
 

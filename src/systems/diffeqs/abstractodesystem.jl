@@ -443,7 +443,10 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
         DAEFunction{iip}, sys, u0map, parammap;
         implicit_dae=true, du0map=du0map, kwargs...
     )
-    DAEProblem{iip}(f,du0,u0,tspan,p;kwargs...)
+    diffvars = collect_differential_variables(sys)
+    sts = states(sys)
+    differential_vars = map(Base.Fix2(in, diffvars), sts)
+    DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)
 end
 
 """
