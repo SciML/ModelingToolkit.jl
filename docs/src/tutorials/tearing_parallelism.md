@@ -59,12 +59,12 @@ function ConstantVoltage(;name, V = 1.0)
            V ~ p.v - n.v
            0 ~ p.i + n.i
           ]
-    ODESystem(eqs, t, [], [V], systems=[p, n], default=Dict(V => val), name=name)
+    ODESystem(eqs, t, [], [V], systems=[p, n], defaults=Dict(V => val), name=name)
 end
 
 function HeatPort(;name)
     @variables T(t) Q_flow(t)
-    return ODESystem(Equation[], t, [T, Q_flow], [], default=Dict(T=>293.15, Q_flow=>0.0), name=name)
+    return ODESystem(Equation[], t, [T, Q_flow], [], defaults=Dict(T=>293.15, Q_flow=>0.0), name=name)
 end
 
 function HeatingResistor(;name, R=1.0, TAmbient=293.15, alpha=1.0)
@@ -101,7 +101,7 @@ function HeatCapacitor(;name, rho=8050, V=1, cp=460, TAmbient=293.15)
           ]
     ODESystem(
         eqs, t, [], [rho, V, cp], systems=[h],
-        default=Dict(rho=>rho_val, V=>V_val, cp=>cp_val),
+        defaults=Dict(rho=>rho_val, V=>V_val, cp=>cp_val),
         name=name,
     )
 end
@@ -160,7 +160,7 @@ end
 eqs = [
        D(E) ~ sum(((i, sys),)->getproperty(sys, Symbol(:resistor, i)).h.Q_flow, enumerate(rc_systems))
       ]
-big_rc = ODESystem(eqs, t, [], [], systems=rc_systems, default=Dict(E=>0.0))
+big_rc = ODESystem(eqs, t, [], [], systems=rc_systems, defaults=Dict(E=>0.0))
 ```
 
 Now let's say we want to expose a bit more parallelism via running tearing.

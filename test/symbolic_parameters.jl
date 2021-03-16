@@ -19,7 +19,7 @@ u0 = Pair{Num, Any}[
     y => σ, # default u0 from default p
     z => u-0.1,
 ]
-ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β], name=:ns, defaults=merge(par, u0))
+ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β], name=:ns, defaults=[par; u0])
 ns.y = u*1.1
 resolved = ModelingToolkit.varmap_to_vars(Dict(), parameters(ns), defaults=ModelingToolkit.defaults(ns))
 @test resolved == [1, 0.1+1, (0.1+1)*1.1]

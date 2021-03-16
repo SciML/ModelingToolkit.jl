@@ -284,8 +284,8 @@ namespace_variables(sys::AbstractSystem) = states(sys, states(sys))
 namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
 
 function namespace_defaults(sys)
-    d_u0 = defaults(sys)
-    Dict(states(sys, k) => namespace_expr(d_u0[k], nameof(sys), independent_variable(sys)) for k in keys(d_u0))
+    defs = defaults(sys)
+    Dict((isparameter(k) ? parameters(sys, k) : states(sys, k)) => namespace_expr(defs[k], nameof(sys), independent_variable(sys)) for k in keys(defs))
 end
 
 function namespace_equations(sys::AbstractSystem)
@@ -344,8 +344,8 @@ end
 
 function defaults(sys::AbstractSystem)
     systems = get_systems(sys)
-    d_u0 = get_defaults(sys)
-    isempty(systems) ? d_u0 : mapreduce(namespace_defaults, merge, systems; init=d_u0)
+    defs = get_defaults(sys)
+    isempty(systems) ? defs : mapreduce(namespace_defaults, merge, systems; init=defs)
 end
 
 states(sys::AbstractSystem, v) = renamespace(nameof(sys), v)
@@ -405,13 +405,13 @@ function Base.show(io::IO, sys::AbstractSystem)
     Base.printstyled(io, "States ($nvars):"; bold=true)
     nrows = min(nvars, limit ? rows : nvars)
     limited = nrows < length(vars)
-    d_u0 = has_defaults(sys) ? defaults(sys) : nothing
+    defs = has_defaults(sys) ? defaults(sys) : nothing
     for i in 1:nrows
         s = vars[i]
         print(io, "\n  ", s)
 
-        if d_u0 !== nothing
-            val = get(d_u0, s, nothing)
+        if defs !== nothing
+            val = get(defs, s, nothing)
             if val !== nothing
                 print(io, " [defaults to $val]")
             end
@@ -428,8 +428,8 @@ function Base.show(io::IO, sys::AbstractSystem)
         s = vars[i]
         print(io, "\n  ", s)
 
-        if d_u0 !== nothing
-            val = get(d_u0, s, nothing)
+        if defs !== nothing
+            val = get(defs, s, nothing)
             if val !== nothing
                 print(io, " [defaults to $val]")
             end
