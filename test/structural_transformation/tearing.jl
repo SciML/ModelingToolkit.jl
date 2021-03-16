@@ -156,7 +156,7 @@ du = [0.0]; u = [1.0]; pr = 0.2; tt = 0.1
 @test du ≈ [-asin(u[1] - pr * tt)] atol=1e-5
 
 # test the initial guess is respected
-infprob = ODAEProblem(tearing(ODESystem(eqs, t, default_u0=Dict(z=>Inf))), [x=>1.0], (0, 1.0), [p=>0.2])
+infprob = ODAEProblem(tearing(ODESystem(eqs, t, defaults=Dict(z=>Inf))), [x=>1.0], (0, 1.0), [p=>0.2])
 @test_throws DomainError infprob.f(du, u, pr, tt)
 
 sol1 = solve(prob, Tsit5())

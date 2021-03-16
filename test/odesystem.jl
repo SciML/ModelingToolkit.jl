@@ -205,7 +205,7 @@ D = Differential(t)
 eqs = [D(y₁) ~ -k₁*y₁+k₃*y₂*y₃,
        0     ~  y₁ + y₂ + y₃ - 1,
        D(y₂) ~  k₁*y₁-k₂*y₂^2-k₃*y₂*y₃]
-sys = ODESystem(eqs, default_p=[k₁ => 100, k₂ => 3e7], default_u0=[y₁ => 1.0])
+sys = ODESystem(eqs, defaults=[k₁ => 100, k₂ => 3e7, y₁ => 1.0])
 u0 = Pair[]
 push!(u0, y₂ => 0.0)
 push!(u0, y₃ => 0.0)
@@ -311,8 +311,8 @@ eqs = [D(D(x)) ~ -b/M*D(x) - k/M*x]
 ps = [M, b, k]
 default_u0 = [D(x) => 0.0, x => 10.0]
 default_p = [M => 1.0, b => 1.0, k => 1.0]
-@named sys = ODESystem(eqs, t, [x], ps, default_u0=default_u0, default_p=default_p)
+@named sys = ODESystem(eqs, t, [x], ps, defaults=[default_u0; default_p])
 sys = ode_order_lowering(sys)
-prob = ODEProblem(sys, Pair[], tspan)
+prob = ODEProblem(sys, [], tspan)
 sol = solve(prob, Tsit5())
 @test sum(abs, sol[end]) < 1
