@@ -140,8 +140,7 @@ for prop in [
              :iv
              :states
              :ps
-             :default_p
-             :default_u0
+             :defaults
              :observed
              :tgrad
              :jac
@@ -155,6 +154,10 @@ for prop in [
              :controls
              :loss
              :reduced_states
+             :bcs
+             :domain
+             :depvars
+             :indvars
             ]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
@@ -253,13 +256,13 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
         idx = findfirst(s->getname(s) == prop, params);
         idx !== nothing;
        )
-        get_default_p(sys)[params[idx]] = value(val)
+        get_defaults(sys)[params[idx]] = value(val)
     elseif (
             sts = states(sys);
             idx = findfirst(s->getname(s) == prop, sts);
             idx !== nothing;
            )
-        get_default_u0(sys)[sts[idx]] = value(val)
+        get_defaults(sys)[sts[idx]] = value(val)
     else
         setfield!(sys, prop, val)
     end
@@ -280,14 +283,9 @@ end
 namespace_variables(sys::AbstractSystem) = states(sys, states(sys))
 namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
 
-function namespace_default_u0(sys)
-    d_u0 = default_u0(sys)
+function namespace_defaults(sys)
+    d_u0 = defaults(sys)
     Dict(states(sys, k) => namespace_expr(d_u0[k], nameof(sys), independent_variable(sys)) for k in keys(d_u0))
-end
-
-function namespace_default_p(sys)
-    d_p = default_p(sys)
-    Dict(parameters(sys, k) => namespace_expr(d_p[k], nameof(sys), independent_variable(sys)) for k in keys(d_p))
 end
 
 function namespace_equations(sys::AbstractSystem)
@@ -344,16 +342,10 @@ function observed(sys::AbstractSystem)
             init=Equation[])]
 end
 
-function default_u0(sys::AbstractSystem)
+function defaults(sys::AbstractSystem)
     systems = get_systems(sys)
-    d_u0 = get_default_u0(sys)
-    isempty(systems) ? d_u0 : mapreduce(namespace_default_u0, merge, systems; init=d_u0)
-end
-
-function default_p(sys::AbstractSystem)
-    systems = get_systems(sys)
-    d_p = get_default_p(sys)
-    isempty(systems) ? d_p : mapreduce(namespace_default_p, merge, systems; init=d_p)
+    d_u0 = get_defaults(sys)
+    isempty(systems) ? d_u0 : mapreduce(namespace_defaults, merge, systems; init=d_u0)
 end
 
 states(sys::AbstractSystem, v) = renamespace(nameof(sys), v)
@@ -413,7 +405,7 @@ function Base.show(io::IO, sys::AbstractSystem)
     Base.printstyled(io, "States ($nvars):"; bold=true)
     nrows = min(nvars, limit ? rows : nvars)
     limited = nrows < length(vars)
-    d_u0 = has_default_u0(sys) ? default_u0(sys) : nothing
+    d_u0 = has_defaults(sys) ? defaults(sys) : nothing
     for i in 1:nrows
         s = vars[i]
         print(io, "\n  ", s)
@@ -432,13 +424,12 @@ function Base.show(io::IO, sys::AbstractSystem)
     Base.printstyled(io, "Parameters ($nvars):"; bold=true)
     nrows = min(nvars, limit ? rows : nvars)
     limited = nrows < length(vars)
-    d_p = has_default_p(sys) ? default_p(sys) : nothing
     for i in 1:nrows
         s = vars[i]
         print(io, "\n  ", s)
 
-        if d_p !== nothing
-            val = get(d_p, s, nothing)
+        if d_u0 !== nothing
+            val = get(d_u0, s, nothing)
             if val !== nothing
                 print(io, " [defaults to $val]")
             end

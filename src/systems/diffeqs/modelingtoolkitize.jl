@@ -55,8 +55,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
 
     de = ODESystem(
         eqs, t, sts, params,
-        default_u0=Dict(sts .=> vec(collect(prob.u0))),
-        default_p=Dict(params .=> vec(collect(prob.p))),
+        defaults=merge(Dict(sts .=> vec(collect(prob.u0))), Dict(params .=> vec(collect(prob.p)))),
     )
 
     de

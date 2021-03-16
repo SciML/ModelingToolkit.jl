@@ -61,15 +61,10 @@ struct ODESystem <: AbstractODESystem
     """
     systems::Vector{ODESystem}
     """
-    default_u0: The default initial conditions to use when initial conditions
-    are not supplied in `ODEProblem`.
+    defaults: The default values to use when initial conditions and/or
+    parameters are not supplied in `ODEProblem`.
     """
-    default_u0::Dict
-    """
-    default_p: The default parameters to use when parameters are not supplied
-    in `ODEProblem`.
-    """
-    default_p::Dict
+    defaults::Dict
     """
     structure: structural information of the system
     """
@@ -84,15 +79,17 @@ function ODESystem(
                    name=gensym(:ODESystem),
                    default_u0=Dict(),
                    default_p=Dict(),
+                   defaults=merge(Dict(default_u0), Dict(default_p)),
                   )
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
 
-    default_u0 isa Dict || (default_u0 = Dict(default_u0))
-    default_p isa Dict || (default_p = Dict(default_p))
-    default_u0 = Dict(value(k) => value(default_u0[k]) for k in keys(default_u0))
-    default_p = Dict(value(k) => value(default_p[k]) for k in keys(default_p))
+    if !(isempty(default_u0) && isempty(default_p))
+        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ODESystem, force=true)
+    end
+    defaults isa Dict || (defaults = Dict(defaults))
+    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
@@ -102,7 +99,7 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p, nothing, [])
+    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, nothing, [])
 end
 
 iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nested_derivative(arguments(x)[1]) : arguments(x)[1]
@@ -220,8 +217,7 @@ function flatten(sys::ODESystem)
                          states(sys),
                          parameters(sys),
                          observed=observed(sys),
-                         default_u0=default_u0(sys),
-                         default_p=default_p(sys),
+                         defaults=defaults(sys),
                          name=nameof(sys),
                         )
     end
