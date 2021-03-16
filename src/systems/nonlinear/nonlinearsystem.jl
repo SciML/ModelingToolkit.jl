@@ -223,6 +223,8 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem,u0map,paramm
         p = ps
     end
 
+    @assert length(dvs) == length(u0) "states and initial conditions are of different lengths"
+
     f = constructor(sys,dvs,ps,u0;jac=jac,checkbounds=checkbounds,
                     linenumbers=linenumbers,parallel=parallel,simplify=simplify,
                     sparse=sparse,eval_expression=eval_expression,kwargs...)
