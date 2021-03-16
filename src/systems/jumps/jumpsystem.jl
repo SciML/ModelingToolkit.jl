@@ -54,7 +54,7 @@ function JumpSystem(eqs, iv, states, ps;
                     systems = JumpSystem[],
                     default_u0=Dict(),
                     default_p=Dict(),
-                    defaults=merge(Dict(default_u0), Dict(default_p)),
+                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                     name = gensym(:JumpSystem))
 
     ap = ArrayPartition(MassActionJump[], ConstantRateJump[], VariableRateJump[])
@@ -72,7 +72,7 @@ function JumpSystem(eqs, iv, states, ps;
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :JumpSystem, force=true)
     end
-    defaults isa Dict || (defaults = Dict(defaults))
+    defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
     JumpSystem{typeof(ap)}(ap, value(iv), value.(states), value.(ps), observed, name, systems, defaults)

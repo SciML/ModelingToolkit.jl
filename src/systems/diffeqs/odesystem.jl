@@ -79,7 +79,7 @@ function ODESystem(
                    name=gensym(:ODESystem),
                    default_u0=Dict(),
                    default_p=Dict(),
-                   defaults=merge(Dict(default_u0), Dict(default_p)),
+                   defaults=_merge(Dict(default_u0), Dict(default_p)),
                   )
     iv′ = value(iv)
     dvs′ = value.(dvs)
@@ -88,7 +88,7 @@ function ODESystem(
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ODESystem, force=true)
     end
-    defaults isa Dict || (defaults = Dict(defaults))
+    defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
     tgrad = RefValue(Vector{Num}(undef, 0))

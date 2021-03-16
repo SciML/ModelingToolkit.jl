@@ -79,7 +79,7 @@ function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls
                        systems = ODESystem[],
                        default_u0=Dict(),
                        default_p=Dict(),
-                       defaults=merge(Dict(default_u0), Dict(default_p)),
+                       defaults=_merge(Dict(default_u0), Dict(default_p)),
                        name=gensym(:ControlSystem))
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ControlSystem, force=true)
@@ -88,7 +88,8 @@ function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls
     dvs′ = value.(dvs)
     controls′ = value.(controls)
     ps′ = value.(ps)
-    defaults isa Dict || (defaults = Dict(defaults))
+    defaults = todict(defaults)
+    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
     ControlSystem(value(loss), deqs, iv′, dvs′, controls′,
                   ps′, observed, name, systems, defaults)
 end

@@ -51,12 +51,12 @@ function NonlinearSystem(eqs, states, ps;
                          name = gensym(:NonlinearSystem),
                          default_u0=Dict(),
                          default_p=Dict(),
-                         defaults=merge(Dict(default_u0), Dict(default_p)),
+                         defaults=_merge(Dict(default_u0), Dict(default_p)),
                          systems = NonlinearSystem[])
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :NonlinearSystem, force=true)
     end
-    defaults isa Dict || (defaults = Dict(defaults))
+    defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
     NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, defaults, nothing, [])
 end

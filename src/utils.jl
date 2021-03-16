@@ -88,3 +88,10 @@ Maps the variable to a state.
 """
 tovar(s::Sym{<:Parameter}) = Sym{symtype(s)}(s.name)
 tovar(s::Sym) = s
+
+function todict(d)
+    eltype(d) <: Pair || throw(ArgumentError("The variable-value mapping must be a Dict."))
+    d isa Dict ? d : Dict(d)
+end
+
+_merge(d1, d2) = merge(todict(d1), todict(d2))
