@@ -342,6 +342,8 @@ function observed(sys::AbstractSystem)
             init=Equation[])]
 end
 
+Base.@deprecate default_u0(x) defaults(x) false
+Base.@deprecate default_p(x) defaults(x) false
 function defaults(sys::AbstractSystem)
     systems = get_systems(sys)
     defs = get_defaults(sys)
