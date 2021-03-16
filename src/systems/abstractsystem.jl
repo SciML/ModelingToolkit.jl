@@ -226,14 +226,14 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true)
     i = findfirst(x->getname(x) == name, sts)
 
     if i !== nothing
-        return namespace ? rename(sts[i],renamespace(sysname,name)) : sts[i]
+        return namespace ? renamespace(sysname,sts[i]) : sts[i]
     end
 
     if has_ps(sys)
         ps = get_ps(sys)
         i = findfirst(x->getname(x) == name,ps)
         if i !== nothing
-            return namespace ? rename(ps[i],renamespace(sysname,name)) : ps[i]
+            return namespace ? renamespace(sysname,ps[i]) : ps[i]
         end
     end
 
@@ -241,7 +241,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true)
         obs = get_observed(sys)
         i = findfirst(x->getname(x.lhs)==name,obs)
         if i !== nothing
-            return namespace ? rename(obs[i].lhs,renamespace(sysname,name)) : obs[i]
+            return namespace ? renamespace(sysname,obs[i]) : obs[i]
         end
     end
 
@@ -321,7 +321,7 @@ function namespace_equation(eq::Equation,name,iv)
 end
 
 function namespace_expr(O::Sym,name,iv)
-    isequal(O, iv) ? O : rename(O,renamespace(name,nameof(O)))
+    isequal(O, iv) ? O : renamespace(name,O)
 end
 
 _symparam(s::Symbolic{T}) where {T} = T
