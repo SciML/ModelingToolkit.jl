@@ -1,5 +1,5 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
-using OrdinaryDiffEq
+using OrdinaryDiffEq, Sundials
 using DiffEqBase, SparseArrays
 using StaticArrays
 using Test
@@ -230,6 +230,14 @@ for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
     sol = solve(prob, Rodas5())
     @test all(x->≈(sum(x), 1.0, atol=atol), sol.u)
 end
+du0 = [
+       D(y₁) => -0.04
+       D(y₂) => 0.04
+       D(y₃) => 0.0
+      ]
+prob4 = DAEProblem(sys, du0, u0, tspan, p2)
+sol = solve(prob4, IDA())
+@test all(x->≈(sum(x), 1.0, atol=atol), sol.u)
 
 @test ModelingToolkit.construct_state(SArray{Tuple{3,3}}(rand(3,3)), [1,2]) == SVector{2}([1, 2])
 
