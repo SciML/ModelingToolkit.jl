@@ -304,7 +304,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
         p = ps
     end
 
-    @assert length(dvs) == length(u0) "states and initial conditions are of different lengths"
+    length(dvs) == length(u0) || throw(ArgumentError("States ($(length(dvs))) and initial conditions ($(length(u0))) are of different lengths."))
 
     f = constructor(sys,dvs,ps,u0;tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                     linenumbers=linenumbers,parallel=parallel,simplify=simplify,
