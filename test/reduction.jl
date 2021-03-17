@@ -40,7 +40,7 @@ eqs = [
 lorenz1 = ODESystem(eqs,t,name=:lorenz1)
 
 lorenz1_aliased = structural_simplify(lorenz1)
-io = IOBuffer(); show(io, lorenz1_aliased); str = String(take!(io))
+io = IOBuffer(); show(io, MIME("text/plain"), lorenz1_aliased); str = String(take!(io))
 @test all(s->occursin(s, str), ["lorenz1", "States (2)", "Parameters (3)"])
 reduced_eqs = [
                D(x) ~ σ*(y - x)
