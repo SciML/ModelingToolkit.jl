@@ -230,6 +230,7 @@ for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
     sol = solve(prob, Rodas5())
     @test all(x->≈(sum(x), 1.0, atol=atol), sol.u)
 end
+@test_throws ArgumentError ODEProblem(sys,zeros(5),tspan,p)
 
 @parameters t σ β
 @variables x(t) y(t) z(t)
