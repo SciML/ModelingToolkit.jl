@@ -10,11 +10,11 @@ Takes a list of pairs of `variables=>values` and an ordered list of variables
 and creates the array of values in the correct order with default values when
 applicable.
 """
-function varmap_to_vars(varmap, varlist; defaults=Dict())
+function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true)
     # Edge cases where one of the arguments is effectively empty.
     if varmap isa DiffEqBase.NullParameters || varmap === nothing || isempty(varmap)
         if isempty(defaults)
-            isempty(varlist) || throw_missingvars(varlist)
+            check && (isempty(varlist) || throw_missingvars(varlist))
             return nothing
         else
             varmap = Dict()
@@ -28,7 +28,7 @@ function varmap_to_vars(varmap, varlist; defaults=Dict())
     if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
         varmap = todict(varmap)
         rules = Dict(varmap)
-        vals = _varmap_to_vars(varmap, varlist; defaults=defaults)
+        vals = _varmap_to_vars(varmap, varlist; defaults=defaults, check=check)
     else # plain array-like initialization
         vals = varmap
     end
@@ -42,7 +42,7 @@ function varmap_to_vars(varmap, varlist; defaults=Dict())
     end
 end
 
-function _varmap_to_vars(varmap::Dict, varlist; defaults=Dict())
+function _varmap_to_vars(varmap::Dict, varlist; defaults=Dict(), check=false)
     varmap = merge(defaults, varmap) # prefers the `varmap`
     varmap = Dict(Symbolics.diff2term(value(k))=>value(varmap[k]) for k in keys(varmap))
     # resolve symbolic parameter expressions
@@ -53,7 +53,7 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults=Dict())
     T = Base.isconcretetype(T′) ? T′ : Base.promote_typeof(values(varmap)...)
     out = Vector{T}(undef, length(varlist))
     missingvars = setdiff(varlist, keys(varmap))
-    isempty(missingvars) || throw_missingvars(missingvars)
+    check && (isempty(missingvars) || throw_missingvars(missingvars))
 
     for (i, var) in enumerate(varlist)
         out[i] = varmap[var]

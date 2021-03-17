@@ -392,9 +392,13 @@ function (f::AbstractSysToExpr)(O)
     return build_expr(:call, Any[operation(O); f.(arguments(O))])
 end
 
-function Base.show(io::IO, sys::AbstractSystem)
+function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     eqs = equations(sys)
-    Base.printstyled(io, "Model $(nameof(sys)) with $(length(eqs)) equations\n"; bold=true)
+    if eqs isa AbstractArray
+        Base.printstyled(io, "Model $(nameof(sys)) with $(length(eqs)) equations\n"; bold=true)
+    else
+        Base.printstyled(io, "Model $(nameof(sys))\n"; bold=true)
+    end
     # The reduced equations are usually very long. It's not that useful to print
     # them.
     #Base.print_matrix(io, eqs)

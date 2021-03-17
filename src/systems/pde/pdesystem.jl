@@ -60,7 +60,7 @@ end
 Base.getproperty(x::PDESystem, sym::Symbol) = getfield(x, sym)
 
 Base.summary(prob::PDESystem) = string(nameof(typeof(prob)))
-function Base.show(io::IO, sys::PDESystem)
+function Base.show(io::IO, ::MIME"text/plain", sys::PDESystem)
     println(io,summary(sys))
     println(io,"Equations: ", get_eqs(sys))
     println(io,"Boundary Conditions: ", get_bcs(sys))
@@ -68,6 +68,6 @@ function Base.show(io::IO, sys::PDESystem)
     println(io,"Dependent Variables: ", get_depvars(sys))
     println(io,"Independent Variables: ", get_indvars(sys))
     println(io,"Parameters: ", get_ps(sys))
-    println(io,"Default Parameter Values", get_defaults(sys))
+    print(io,"Default Parameter Values", get_defaults(sys))
     return nothing
 end
