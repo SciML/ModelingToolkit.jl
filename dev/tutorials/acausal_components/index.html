@@ -6,7 +6,7 @@
 # Basic electric components
 function Pin(;name)
     @variables v(t) i(t)
-    ODESystem(Equation[], t, [v, i], [], name=name, default_u0=[v=&gt;1.0, i=&gt;1.0])
+    ODESystem(Equation[], t, [v, i], [], name=name, defaults=[v=&gt;1.0, i=&gt;1.0])
 end
 
 function Ground(;name)
@@ -26,7 +26,7 @@ function Resistor(;name, R = 1.0)
            0 ~ p.i + n.i
            v ~ p.i * R
           ]
-    ODESystem(eqs, t, [v], [R], systems=[p, n], default_p=Dict(R =&gt; val), name=name)
+    ODESystem(eqs, t, [v], [R], systems=[p, n], defaults=Dict(R =&gt; val), name=name)
 end
 
 function Capacitor(; name, C = 1.0)
@@ -41,7 +41,7 @@ function Capacitor(; name, C = 1.0)
            0 ~ p.i + n.i
            D(v) ~ p.i / C
           ]
-    ODESystem(eqs, t, [v], [C], systems=[p, n], default_p=Dict(C =&gt; val), name=name)
+    ODESystem(eqs, t, [v], [C], systems=[p, n], defaults=Dict(C =&gt; val), name=name)
 end
 
 function ConstantVoltage(;name, V = 1.0)
@@ -53,7 +53,7 @@ function ConstantVoltage(;name, V = 1.0)
            V ~ p.v - n.v
            0 ~ p.i + n.i
           ]
-    ODESystem(eqs, t, [], [V], systems=[p, n], default_p=Dict(V =&gt; val), name=name)
+    ODESystem(eqs, t, [], [V], systems=[p, n], defaults=Dict(V =&gt; val), name=name)
 end
 
 R = 1.0
@@ -93,7 +93,7 @@ prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Tsit5())
 plot(sol)</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/109416294-55184100-798b-11eb-9f05-766a793f0ba2.png" alt/></p><h2 id="Explanation-1"><a class="docs-heading-anchor" href="#Explanation-1">Explanation</a><a class="docs-heading-anchor-permalink" href="#Explanation-1" title="Permalink"></a></h2><h3 id="Building-the-Component-Library-1"><a class="docs-heading-anchor" href="#Building-the-Component-Library-1">Building the Component Library</a><a class="docs-heading-anchor-permalink" href="#Building-the-Component-Library-1" title="Permalink"></a></h3><p>For each of our components we use a Julia function which emits an <code>ODESystem</code>. At the top we start with defining the fundamental qualities of an electrical circuit component. At every input and output pin a circuit component has two values: the current at the pin and the voltage. Thus we define the <code>Pin</code> component to simply be the values there:</p><pre><code class="language-julia">function Pin(;name)
     @variables v(t) i(t)
-    ODESystem(Equation[], t, [v, i], [], name=name, default_u0=[v=&gt;1.0, i=&gt;1.0])
+    ODESystem(Equation[], t, [v, i], [], name=name, defaults=[v=&gt;1.0, i=&gt;1.0])
 end</code></pre><p>Note that this is an incompletely specified ODESystem: it cannot be simulated on its own because the equations for <code>v(t)</code> and <code>i(t)</code> are unknown. Instead this just gives a common syntax for receiving this pair with some default values. Notice that in a component we define the <code>name</code> as a keyword argument: this is because later we will generate different <code>Pin</code> objects with different names to correspond to duplicates of this topology with unique variables. One can then construct a <code>Pin</code> like:</p><pre><code class="language-julia">Pin(name=:mypin1)</code></pre><p>or equivalently using the <code>@named</code> helper macro:</p><pre><code class="language-julia">@named mypin1 = Pin()</code></pre><p>Next we build our ground node. A ground node is just a pin that is connected to a constant voltage reservoir, typically taken to be <code>V=0</code>. Thus to define this component, we generate an <code>ODESystem</code> with a <code>Pin</code> subcomponent and specify that the voltage in such a <code>Pin</code> is equal to zero. This gives:</p><pre><code class="language-julia">function Ground(;name)
     @named g = Pin()
     eqs = [g.v ~ 0]
@@ -109,8 +109,8 @@ end</code></pre><p>Next we build a resistor. A resistor is an object that has tw
            0 ~ p.i + n.i
            v ~ p.i * R
           ]
-    ODESystem(eqs, t, [v], [R], systems=[p, n], default_p=Dict(R =&gt; val), name=name)
-end</code></pre><p>Notice that we have created this system with a <code>default_p</code> for the resistor&#39;s resistance. By doing so, if the resistance of this resistor is not overridden by a higher level default or overridden at <code>ODEProblem</code> construction time, this will be the value of the resistance.</p><p>Using our knowledge of circuits we similarly construct the Capacitor:</p><pre><code class="language-julia">function Capacitor(; name, C = 1.0)
+    ODESystem(eqs, t, [v], [R], systems=[p, n], defaults=Dict(R =&gt; val), name=name)
+end</code></pre><p>Notice that we have created this system with a <code>defaults</code> for the resistor&#39;s resistance. By doing so, if the resistance of this resistor is not overridden by a higher level default or overridden at <code>ODEProblem</code> construction time, this will be the value of the resistance.</p><p>Using our knowledge of circuits we similarly construct the Capacitor:</p><pre><code class="language-julia">function Capacitor(; name, C = 1.0)
     val = C
     @named p = Pin()
     @named n = Pin()
@@ -122,7 +122,7 @@ end</code></pre><p>Notice that we have created this system with a <code>default_
            0 ~ p.i + n.i
            D(v) ~ p.i / C
           ]
-    ODESystem(eqs, t, [v], [C], systems=[p, n], default_p=Dict(C =&gt; val), name=name)
+    ODESystem(eqs, t, [v], [C], systems=[p, n], defaults=Dict(C =&gt; val), name=name)
 end</code></pre><p>Now we want to build a constant voltage electrical source term. We can think of this as similarly being a two pin object, where the object itself is kept at a constant voltage, essentially generating the electrical current. We would then model this as:</p><pre><code class="language-julia">function ConstantVoltage(;name, V = 1.0)
     val = V
     @named p = Pin()
@@ -132,7 +132,7 @@ end</code></pre><p>Now we want to build a constant voltage electrical source ter
            V ~ p.v - n.v
            0 ~ p.i + n.i
           ]
-    ODESystem(eqs, t, [], [V], systems=[p, n], default_p=Dict(V =&gt; val), name=name)
+    ODESystem(eqs, t, [], [V], systems=[p, n], defaults=Dict(V =&gt; val), name=name)
 end</code></pre><h3 id="Connecting-and-Simulating-Our-Electrical-Circuit-1"><a class="docs-heading-anchor" href="#Connecting-and-Simulating-Our-Electrical-Circuit-1">Connecting and Simulating Our Electrical Circuit</a><a class="docs-heading-anchor-permalink" href="#Connecting-and-Simulating-Our-Electrical-Circuit-1" title="Permalink"></a></h3><p>Now we are ready to simulate our circuit. Let&#39;s build our four components: a <code>resistor</code>, <code>capacitor</code>, <code>source</code>, and <code>ground</code> term. For simplicity we will make all of our parameter values 1. This is done by:</p><pre><code class="language-julia">R = 1.0
 C = 1.0
 V = 1.0
@@ -218,4 +218,4 @@ plot(sol)</code></pre><p><img src="https://user-images.githubusercontent.com/181
  capacitor₊p₊v(t) ~ capacitor₊v(t)
  resistor₊p₊v(t) ~ source₊p₊v(t)
  resistor₊n₊v(t) ~ capacitor₊p₊v(t)
- resistor₊v(t) ~ -((capacitor₊p₊v(t)) - (source₊p₊v(t)))</code></pre><p>These are explicit algebraic equations which can then be used to reconstruct the required variables on the fly. This leads to dramatic computational savings because implicitly solving an ODE scales like O(n^3), so making there be as few states as possible is good!</p><p>The solution object can be accessed via its symbols. For example, let&#39;s retrieve the voltage of the resistor over time:</p><pre><code class="language-julia">sol[resistor.v]</code></pre><p>or we can plot the timeseries of the resistor&#39;s voltage:</p><pre><code class="language-julia">plot(sol, vars=[resistor.v])</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../ode_modeling/">« Composing Ordinary Differential Equations</a><a class="docs-footer-nextpage" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Wednesday 17 March 2021 00:06">Wednesday 17 March 2021</span>. Using Julia version 1.5.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ resistor₊v(t) ~ -((capacitor₊p₊v(t)) - (source₊p₊v(t)))</code></pre><p>These are explicit algebraic equations which can then be used to reconstruct the required variables on the fly. This leads to dramatic computational savings because implicitly solving an ODE scales like O(n^3), so making there be as few states as possible is good!</p><p>The solution object can be accessed via its symbols. For example, let&#39;s retrieve the voltage of the resistor over time:</p><pre><code class="language-julia">sol[resistor.v]</code></pre><p>or we can plot the timeseries of the resistor&#39;s voltage:</p><pre><code class="language-julia">plot(sol, vars=[resistor.v])</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../ode_modeling/">« Composing Ordinary Differential Equations</a><a class="docs-footer-nextpage" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Wednesday 17 March 2021 01:47">Wednesday 17 March 2021</span>. Using Julia version 1.5.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
