@@ -16,7 +16,7 @@ using ModelingToolkit: ODESystem, var_from_nested_derivative, Differential,
                        states, equations, vars, Symbolic, diff2term, value,
                        operation, arguments, Sym, Term, simplify, solve_for,
                        isdiffeq, isdifferential,
-                       get_structure, get_reduced_states, default_u0, default_p
+                       get_structure, get_reduced_states, defaults
 
 using ModelingToolkit.BipartiteGraphs
 using ModelingToolkit.SystemStructures

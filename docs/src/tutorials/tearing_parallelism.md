@@ -41,7 +41,7 @@ const t = Sym{ModelingToolkit.Parameter{Real}}(:t)
 const D = Differential(t)
 function Pin(;name)
     @variables v(t) i(t)
-    ODESystem(Equation[], t, [v, i], [], name=name, default_u0=Dict([v=>1.0, i=>1.0]))
+    ODESystem(Equation[], t, [v, i], [], name=name, defaults=Dict([v=>1.0, i=>1.0]))
 end
 
 function Ground(;name)
@@ -59,12 +59,12 @@ function ConstantVoltage(;name, V = 1.0)
            V ~ p.v - n.v
            0 ~ p.i + n.i
           ]
-    ODESystem(eqs, t, [], [V], systems=[p, n], default_p=Dict(V => val), name=name)
+    ODESystem(eqs, t, [], [V], systems=[p, n], defaults=Dict(V => val), name=name)
 end
 
 function HeatPort(;name)
     @variables T(t) Q_flow(t)
-    return ODESystem(Equation[], t, [T, Q_flow], [], default_u0=Dict(T=>293.15, Q_flow=>0.0), name=name)
+    return ODESystem(Equation[], t, [T, Q_flow], [], defaults=Dict(T=>293.15, Q_flow=>0.0), name=name)
 end
 
 function HeatingResistor(;name, R=1.0, TAmbient=293.15, alpha=1.0)
@@ -83,8 +83,10 @@ function HeatingResistor(;name, R=1.0, TAmbient=293.15, alpha=1.0)
           ]
     ODESystem(
         eqs, t, [v, RTherm], [R, TAmbient, alpha], systems=[p, n, h],
-        default_p=Dict(R=>R_val, TAmbient=>TAmbient_val, alpha=>alpha_val),
-        default_u0=Dict(v=>0.0, RTherm=>R_val),
+        defaults=Dict(
+            R=>R_val, TAmbient=>TAmbient_val, alpha=>alpha_val,
+            v=>0.0, RTherm=>R_val
+        ),
         name=name,
     )
 end
@@ -99,7 +101,7 @@ function HeatCapacitor(;name, rho=8050, V=1, cp=460, TAmbient=293.15)
           ]
     ODESystem(
         eqs, t, [], [rho, V, cp], systems=[h],
-        default_p=Dict(rho=>rho_val, V=>V_val, cp=>cp_val),
+        defaults=Dict(rho=>rho_val, V=>V_val, cp=>cp_val),
         name=name,
     )
 end
@@ -117,8 +119,7 @@ function Capacitor(;name, C = 1.0)
           ]
     ODESystem(
         eqs, t, [v], [C], systems=[p, n],
-        default_u0=Dict(v => 0.0),
-        default_p=Dict(C => val),
+        defaults=Dict(v => 0.0, C => val),
         name=name
     )
 end
@@ -159,7 +160,7 @@ end
 eqs = [
        D(E) ~ sum(((i, sys),)->getproperty(sys, Symbol(:resistor, i)).h.Q_flow, enumerate(rc_systems))
       ]
-big_rc = ODESystem(eqs, t, [], [], systems=rc_systems, default_u0=Dict(E=>0.0))
+big_rc = ODESystem(eqs, t, [], [], systems=rc_systems, defaults=Dict(E=>0.0))
 ```
 
 Now let's say we want to expose a bit more parallelism via running tearing.

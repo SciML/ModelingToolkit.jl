@@ -35,15 +35,10 @@ struct OptimizationSystem <: AbstractSystem
     """
     systems::Vector{OptimizationSystem}
     """
-    default_u0: The default initial conditions to use when initial conditions
-    are not supplied in `ODEProblem`.
+    defaults: The default values to use when initial conditions and/or
+    parameters are not supplied in `ODEProblem`.
     """
-    default_u0::Dict
-    """
-    default_p: The default parameters to use when parameters are not supplied
-    in `ODEProblem`.
-    """
-    default_p::Dict
+    defaults::Dict
 end
 
 function OptimizationSystem(op, states, ps;
@@ -52,19 +47,20 @@ function OptimizationSystem(op, states, ps;
                             inequality_constraints = [],
                             default_u0=Dict(),
                             default_p=Dict(),
+                            defaults=_merge(Dict(default_u0), Dict(default_p)),
                             name = gensym(:OptimizationSystem),
                             systems = OptimizationSystem[])
-
-    default_u0 isa Dict || (default_u0 = Dict(default_u0))
-    default_p isa Dict || (default_p = Dict(default_p))
-    default_u0 = Dict(value(k) => value(default_u0[k]) for k in keys(default_u0))
-    default_p = Dict(value(k) => value(default_p[k]) for k in keys(default_p))
+    if !(isempty(default_u0) && isempty(default_p))
+        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :OptimizationSystem, force=true)
+    end
+    defaults = todict(defaults)
+    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
     OptimizationSystem(
                        value(op), value.(states), value.(ps),
                        observed,
                        equality_constraints, inequality_constraints,
-                       name, systems, default_u0, default_p
+                       name, systems, defaults
                       )
 end
 
@@ -157,11 +153,11 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
 
     _f = DiffEqBase.OptimizationFunction{iip,AutoModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,AutoModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing)
 
-    defaults = merge(default_p(sys), default_u0(sys))
-    u0 = varmap_to_vars(u0,dvs; defaults=defaults)
-    p = varmap_to_vars(parammap,ps; defaults=defaults)
-    lb = varmap_to_vars(lb,dvs)
-    ub = varmap_to_vars(ub,dvs)
+    defs = defaults(sys)
+    u0 = varmap_to_vars(u0,dvs; defaults=defs)
+    p = varmap_to_vars(parammap,ps; defaults=defs)
+    lb = varmap_to_vars(lb,dvs; check=false)
+    ub = varmap_to_vars(ub,dvs; check=false)
     OptimizationProblem{iip}(_f,u0,p;lb=lb,ub=ub,kwargs...)
 end
 
@@ -213,9 +209,9 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         _hess = :nothing
     end
 
-    defaults = merge(default_p(sys), default_u0(sys))
-    u0 = varmap_to_vars(u0,dvs; defaults=defaults)
-    p = varmap_to_vars(parammap,ps; defaults=defaults)
+    defs = defaults(sys)
+    u0 = varmap_to_vars(u0,dvs; defaults=defs)
+    p = varmap_to_vars(parammap,ps; defaults=defs)
     lb = varmap_to_vars(lb,dvs)
     ub = varmap_to_vars(ub,dvs)
     quote
@@ -243,55 +239,4 @@ function DiffEqBase.OptimizationFunction{iip}(f, ::AutoModelingToolkit, x, p = D
         parammap = parameters(sys) .=> p
     end
     OptimizationProblem(sys,u0map,parammap,grad=grad,hess=hess).f
-end
-
-function Base.show(io::IO, sys::OptimizationSystem)
-    eqs = equations(sys)
-    Base.printstyled(io, "Model $(nameof(sys))\n"; bold=true)
-    # The reduced equations are usually very long. It's not that useful to print
-    # them.
-    #Base.print_matrix(io, eqs)
-    #println(io)
-
-    rows = first(displaysize(io)) ÷ 5
-    limit = get(io, :limit, false)
-
-    vars = states(sys); nvars = length(vars)
-    Base.printstyled(io, "States ($nvars):"; bold=true)
-    nrows = min(nvars, limit ? rows : nvars)
-    limited = nrows < length(vars)
-    d_u0 = has_default_u0(sys) ? default_u0(sys) : nothing
-    for i in 1:nrows
-        s = vars[i]
-        print(io, "\n  ", s)
-
-        if d_u0 !== nothing
-            val = get(d_u0, s, nothing)
-            if val !== nothing
-                print(io, " [defaults to $val]")
-            end
-        end
-    end
-    limited && print(io, "\n⋮")
-    println(io)
-
-    vars = parameters(sys); nvars = length(vars)
-    Base.printstyled(io, "Parameters ($nvars):"; bold=true)
-    nrows = min(nvars, limit ? rows : nvars)
-    limited = nrows < length(vars)
-    d_p = has_default_p(sys) ? default_p(sys) : nothing
-    for i in 1:nrows
-        s = vars[i]
-        print(io, "\n  ", s)
-
-        if d_p !== nothing
-            val = get(d_p, s, nothing)
-            if val !== nothing
-                print(io, " [defaults to $val]")
-            end
-        end
-    end
-    limited && print(io, "\n⋮")
-
-    return nothing
 end

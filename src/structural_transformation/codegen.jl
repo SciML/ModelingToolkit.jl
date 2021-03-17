@@ -131,7 +131,7 @@ function gen_nlsolve(sys, eqs, vars)
     allvars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
     params = setdiff(allvars, vars)
 
-    u0map = default_u0(sys)
+    u0map = defaults(sys)
     # splatting to tighten the type
     u0 = [map(var->get(u0map, var, 1e-3), vars)...]
     # specialize on the scalar case
@@ -338,22 +338,11 @@ function ODAEProblem{iip}(
     s = structure(sys)
     @unpack fullvars = s
     dvs = fullvars[diffvars_range(s)]
-    defaults = merge(default_p(sys), default_u0(sys))
-    u0map′ = ModelingToolkit.lower_mapnames(u0map, independent_variable(sys))
-    u0 = ModelingToolkit.varmap_to_vars(u0map′, dvs; defaults=defaults)
-
     ps = parameters(sys)
-    if parammap isa DiffEqBase.NullParameters && isempty(default_p(sys))
-        isempty(ps) || throw(ArgumentError("The model has non-empty parameters but no parameters are specified in the problem."))
-        p = parammap
-    else
-        if parammap isa DiffEqBase.NullParameters
-            pp = Pair[]
-        else
-            pp = ModelingToolkit.lower_mapnames(parammap)
-        end
-        p = ModelingToolkit.varmap_to_vars(pp, ps; defaults=defaults)
-    end
+    defs = defaults(sys)
+
+    u0 = ModelingToolkit.varmap_to_vars(u0map, dvs; defaults=defs)
+    p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults=defs)
 
     ODEProblem{iip}(build_torn_function(sys; kw...), u0, tspan, p; kw...)
 end

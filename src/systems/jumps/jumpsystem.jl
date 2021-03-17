@@ -43,15 +43,10 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
     """The internal systems."""
     systems::Vector{JumpSystem}
     """
-    default_u0: The default initial conditions to use when initial conditions
-    are not supplied in `ODEProblem`.
+    defaults: The default values to use when initial conditions and/or
+    parameters are not supplied in `ODEProblem`.
     """
-    default_u0::Dict
-    """
-    default_p: The default parameters to use when parameters are not supplied
-    in `ODEProblem`.
-    """
-    default_p::Dict
+    defaults::Dict
 end
 
 function JumpSystem(eqs, iv, states, ps;
@@ -59,6 +54,7 @@ function JumpSystem(eqs, iv, states, ps;
                     systems = JumpSystem[],
                     default_u0=Dict(),
                     default_p=Dict(),
+                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                     name = gensym(:JumpSystem))
 
     ap = ArrayPartition(MassActionJump[], ConstantRateJump[], VariableRateJump[])
@@ -73,12 +69,13 @@ function JumpSystem(eqs, iv, states, ps;
             error("JumpSystem equations must contain MassActionJumps, ConstantRateJumps, or VariableRateJumps.")
         end
     end
-    default_u0 isa Dict || (default_u0 = Dict(default_u0))
-    default_p isa Dict || (default_p = Dict(default_p))
-    default_u0 = Dict(value(k) => value(default_u0[k]) for k in keys(default_u0))
-    default_p = Dict(value(k) => value(default_p[k]) for k in keys(default_p))
+    if !(isempty(default_u0) && isempty(default_p))
+        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :JumpSystem, force=true)
+    end
+    defaults = todict(defaults)
+    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    JumpSystem{typeof(ap)}(ap, value(iv), value.(states), value.(ps), observed, name, systems, default_u0, default_p)
+    JumpSystem{typeof(ap)}(ap, value(iv), value.(states), value.(ps), observed, name, systems, defaults)
 end
 
 function generate_rate_function(js, rate)
@@ -204,9 +201,9 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple,Nothing},
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
-    defaults = merge(default_p(sys), default_u0(sys))
-    u0 = varmap_to_vars(u0map, states(sys); defaults=defaults)
-    p  = varmap_to_vars(parammap, parameters(sys); defaults=defaults)
+    defs = defaults(sys)
+    u0 = varmap_to_vars(u0map, states(sys); defaults=defs)
+    p  = varmap_to_vars(parammap, parameters(sys); defaults=defs)
     f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
     df = DiscreteFunction{true,true}(f, syms=Symbol.(states(sys)))
     DiscreteProblem(df, u0, tspan, p; kwargs...)
@@ -233,9 +230,9 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 """
 function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Union{Tuple,Nothing},
                                     parammap=DiffEqBase.NullParameters(); kwargs...)
-    defaults = merge(default_p(sys), default_u0(sys))
-    u0 = varmap_to_vars(u0map, states(sys); defaults=defaults)
-    p  = varmap_to_vars(parammap, parameters(sys); defaults=defaults)
+    defs = defaults(sys)
+    u0 = varmap_to_vars(u0map, states(sys); defaults=defs)
+    p  = varmap_to_vars(parammap, parameters(sys); defaults=defs)
     # identity function to make syms works
     quote
         f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
@@ -261,13 +258,12 @@ sol = solve(jprob, SSAStepper())
 ```
 """
 function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
-
     statetoid = Dict(value(state) => i for (i,state) in enumerate(states(js)))
     eqs       = equations(js)
     invttype  = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
 
     # handling parameter substition and empty param vecs
-    p = (prob.p == DiffEqBase.NullParameters()) ? Num[] : prob.p
+    p = (prob.p isa DiffEqBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
     parammap  = map((x,y)->Pair(x,y), parameters(js), p)
     subber    = substituter(parammap)
 

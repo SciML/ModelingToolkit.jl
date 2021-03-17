@@ -5,7 +5,7 @@ using ModelingToolkit, OrdinaryDiffEq
 const t = Sym{ModelingToolkit.Parameter{Real}}(:t)
 function Pin(;name)
     @variables v(t) i(t)
-    ODESystem(Equation[], t, [v, i], [], name=name, default_u0=[v=>1.0, i=>1.0])
+    ODESystem(Equation[], t, [v, i], [], name=name, defaults=[v=>1.0, i=>1.0])
 end
 
 function Ground(name)
@@ -23,7 +23,7 @@ function ConstantVoltage(name; V = 1.0)
            V ~ p.v - n.v
            0 ~ p.i + n.i
           ]
-    ODESystem(eqs, t, [], [V], systems=[p, n], default_p=Dict(V => val), name=name)
+    ODESystem(eqs, t, [], [V], systems=[p, n], defaults=Dict(V => val), name=name)
 end
 
 function Resistor(name; R = 1.0)
@@ -37,7 +37,7 @@ function Resistor(name; R = 1.0)
            0 ~ p.i + n.i
            v ~ p.i * R
           ]
-    ODESystem(eqs, t, [v], [R], systems=[p, n], default_p=Dict(R => val), name=name)
+    ODESystem(eqs, t, [v], [R], systems=[p, n], defaults=Dict(R => val), name=name)
 end
 
 function Capacitor(name; C = 1.0)
@@ -52,7 +52,7 @@ function Capacitor(name; C = 1.0)
            0 ~ p.i + n.i
            D(v) ~ p.i / C
           ]
-    ODESystem(eqs, t, [v], [C], systems=[p, n], default_p=Dict(C => val), name=name)
+    ODESystem(eqs, t, [v], [C], systems=[p, n], defaults=Dict(C => val), name=name)
 end
 
 R = 1.0
@@ -82,11 +82,7 @@ rc_eqs = [
 
 rc_model = ODESystem(rc_eqs, t, systems=[resistor, capacitor, source, ground], name=:rc)
 sys = structural_simplify(rc_model)
-@test ModelingToolkit.default_p(sys) == Dict(
-                                             capacitor.C => 1.0,
-                                             source.V => 1.0,
-                                             resistor.R => 1.0,
-                                            )
+@test !isempty(ModelingToolkit.defaults(sys))
 u0 = [
       capacitor.v => 0.0
       capacitor.p.i => 0.0

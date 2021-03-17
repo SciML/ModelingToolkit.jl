@@ -89,20 +89,9 @@ Maps the variable to a state.
 tovar(s::Sym{<:Parameter}) = Sym{symtype(s)}(s.name)
 tovar(s::Sym) = s
 
-function lower_mapnames(umap::AbstractArray{T}) where {T<:Pair}
-    T[value(k) => value(v) for (k, v) in umap]
-end
-function lower_mapnames(umap::AbstractArray{T},name) where {T<:Pair}
-    T[lower_varname(value(k), name) => value(v) for (k, v) in umap]
-end
-function lower_mapnames(umap::NTuple{N,T}) where {N,T<:Pair}
-    ntuple(i->value(umap[i][1]) => value(umap[i][2]),N)
-end
-function lower_mapnames(umap::NTuple{N,T},name) where {N,T<:Pair}
-    ntuple(i->lower_varname(value(umap[i][1]), name) => value(umap[i][2]),N)
+function todict(d)
+    eltype(d) <: Pair || throw(ArgumentError("The variable-value mapping must be a Dict."))
+    d isa Dict ? d : Dict(d)
 end
 
-lower_mapnames(umap::AbstractArray) = umap # Ambiguity
-lower_mapnames(umap::AbstractArray,name) = umap
-lower_mapnames(umap::Tuple) = umap
-lower_mapnames(umap::Tuple, name) = umap
+_merge(d1, d2) = merge(todict(d1), todict(d2))
