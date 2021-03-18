@@ -4,7 +4,7 @@ using DataStructures
 using SymbolicUtils: istree, operation, arguments, Symbolic
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
-    value, InvalidSystemException
+    value, InvalidSystemException, isdifferential
 using ..BipartiteGraphs
 using UnPack
 using Setfield
@@ -38,15 +38,14 @@ end
 =#
 
 export SystemStructure, initialize_system_structure, find_linear_equations
-export diffvars_range, dervars_range, algvars_range
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq
-export DIFFERENTIAL_VARIABLE, ALGEBRAIC_VARIABLE, DERIVATIVE_VARIABLE
-export DIFFERENTIAL_EQUATION, ALGEBRAIC_EQUATION
-export vartype, eqtype
 
-struct SystemStructure
-    dxvar_offset::Int
-    fullvars::Vector # [diffvars; dervars; algvars]
+@enum VariableType::Int8 DIFFERENTIAL_VARIABLE ALGEBRAIC_VARIABLE DERIVATIVE_VARIABLE
+
+Base.@kwdef struct SystemStructure
+    fullvars::Vector
+    vartype::Vector{VariableType}
+    inv_varassoc::Vector{Int}
     varassoc::Vector{Int}
     algeqs::BitVector
     graph::BipartiteGraph{Int,Nothing}
@@ -57,121 +56,95 @@ struct SystemStructure
     partitions::Vector{NTuple{4, Vector{Int}}}
 end
 
-diffvars_range(s::SystemStructure) = 1:s.dxvar_offset
-# TODO: maybe dervars should be in the end.
-dervars_range(s::SystemStructure) = s.dxvar_offset+1:2s.dxvar_offset
-algvars_range(s::SystemStructure) = 2s.dxvar_offset+1:length(s.fullvars)
+isdervar(s::SystemStructure, var::Integer) = s.vartype[var] === DERIVATIVE_VARIABLE
+isdiffvar(s::SystemStructure, var::Integer) = s.vartype[var] === DIFFERENTIAL_VARIABLE
+isalgvar(s::SystemStructure, var::Integer) = s.vartype[var] === ALGEBRAIC_VARIABLE
 
-isdiffvar(s::SystemStructure, var::Integer) = var in diffvars_range(s)
-isdervar(s::SystemStructure, var::Integer) = var in dervars_range(s)
-isalgvar(s::SystemStructure, var::Integer) = var in algvars_range(s)
-
-@enum VariableType DIFFERENTIAL_VARIABLE ALGEBRAIC_VARIABLE DERIVATIVE_VARIABLE
-
-function vartype(s::SystemStructure, var::Integer)::VariableType
-    isdiffvar(s, var) ? DIFFERENTIAL_VARIABLE :
-    isdervar(s, var)  ? DERIVATIVE_VARIABLE :
-    isalgvar(s, var)  ? ALGEBRAIC_VARIABLE : error("Variable $var out of bounds")
-end
-
-@enum EquationType DIFFERENTIAL_EQUATION ALGEBRAIC_EQUATION
+dervars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(s, isdervar), eachindex(s.vartype))
+diffvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(s, isdiffvar), eachindex(s.vartype))
+algvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(s, isalgeq), eachindex(s.vartype))
 
 isalgeq(s::SystemStructure, eq::Integer) = s.algeqs[eq]
 isdiffeq(s::SystemStructure, eq::Integer) = !isalgeq(s, eq)
-eqtype(s::SystemStructure, eq::Integer)::EquationType = isalgeq(s, eq) ? ALGEBRAIC_EQUATION : DIFFERENTIAL_EQUATION
 
 function initialize_system_structure(sys)
-    sys, dxvar_offset, fullvars, varassoc, algeqs, graph = init_graph(flatten(sys))
-
-    solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
-
-    @set sys.structure = SystemStructure(
-                                         dxvar_offset,
-                                         fullvars,
-                                         varassoc,
-                                         algeqs,
-                                         graph,
-                                         solvable_graph,
-                                         Int[],
-                                         Int[],
-                                         Vector{Int}[],
-                                         NTuple{4, Vector{Int}}[]
-                                        )
-end
-
-function Base.show(io::IO, s::SystemStructure)
-    @unpack fullvars, dxvar_offset, solvable_graph, graph = s
-    algvar_offset = 2dxvar_offset
-    print(io, "xvars: ")
-    print(io, fullvars[1:dxvar_offset])
-    print(io, "\ndxvars: ")
-    print(io, fullvars[dxvar_offset+1:algvar_offset])
-    print(io, "\nalgvars: ")
-    print(io, fullvars[algvar_offset+1:end], '\n')
-
-    S = incidence_matrix(graph, Num(Sym{Real}(:×)))
-    print(io, "Incidence matrix:")
-    show(io, S)
-end
-
-function init_graph(sys)
     iv = independent_variable(sys)
     eqs = equations(sys)
     neqs = length(eqs)
     algeqs = trues(neqs)
-    varsadj = Vector{Any}(undef, neqs)
-    dervars = OrderedSet()
-    diffvars = OrderedSet()
+    dervaridxs = Int[]
+    var2idx = Dict{Any,Int}()
+    symbolic_incidence = []
+    fullvars = []
+    var_counter = 0
 
     for (i, eq) in enumerate(eqs)
         vars = OrderedSet()
         vars!(vars, eq)
+        push!(symbolic_incidence, copy(vars))
         isalgeq = true
         for var in vars
-            if istree(var) && operation(var) isa Differential
+            varidx = get(var2idx, var, 0)
+            if varidx == 0 # new var
+                var_counter += 1
+                push!(fullvars, var)
+            end
+
+            if isdifferential(var)
                 isalgeq = false
                 diffvar = arguments(var)[1]
                 if diffvar isa Differential
                     throw(InvalidSystemException("The equation [ $eq ] is not first order"))
                 end
-                push!(dervars, var)
-                push!(diffvars, diffvar)
+                push!(dervaridxs, varidx)
             end
         end
         algeqs[i] = isalgeq
-        varsadj[i] = vars
     end
 
-    algvars  = setdiff(states(sys), diffvars)
-    fullvars = [collect(diffvars); collect(dervars); algvars]
+    diffvars = []
+    varassoc = zeros(Int, length(fullvars))
+    inv_varassoc = zeros(Int, length(fullvars))
+    for dervaridx in dervaridxs
+        dervar = fullvars[dervaridx]
+        diffvar = arguments(dervar)[1]
+        diffvaridx = get(var2idx, diffvar, 0)
+        if diffvaridx != 0
+            push!(diffvars, diffvar)
+            varassoc[diffvaridx] = dervaridx
+            inv_varassoc[dervaridx] = diffvaridx
+        end
+    end
 
-    dxvar_offset = length(diffvars)
-    algvar_offset = 2dxvar_offset
+    algvars = setdiff(states(sys), diffvars)
+    for algvar in algvars
+        # it could be that a variable appeared in the states, but never appeared
+        # in the equations.
+        algvaridx = get(var2idx, algvar, 0)
+        if algvaridx != 0
+            varassoc[algvaridx] = -1
+        end
+    end
 
-    nvars = length(fullvars)
-    idxmap = Dict(fullvars .=> 1:nvars)
+    neqs, nvars = length(eqs), length(fullvars)
     graph = BipartiteGraph(neqs, nvars)
-
-    vs = Set()
-    for (i, eq) in enumerate(eqs)
-        # TODO: custom vars that handles D(x)
-        # TODO: add checks here
-        lhs = eq.lhs
-        if isdiffeq(eq)
-            v = lhs
-            haskey(idxmap, v) && add_edge!(graph, i, idxmap[v])
-        else
-            vars!(vs, lhs)
-        end
-        vars!(vs, eq.rhs)
-        for v in vs
-            haskey(idxmap, v) && add_edge!(graph, i, idxmap[v])
-        end
-        empty!(vs)
+    for (ie, vars) in enumerate(symbolic_incidence), v in vars
+        jv = var2idx[v]
+        add_edge!(graph, ie, jv)
     end
 
-    varassoc = Int[(1:dxvar_offset) .+ dxvar_offset; zeros(Int, length(fullvars) - dxvar_offset)] # variable association list
-    sys, dxvar_offset, fullvars, varassoc, algeqs, graph
+    SystemStructure(
+        fullvars = fullvars,
+        varassoc = varassoc,
+        inv_varassoc = inv_varassoc,
+        algeqs = algeqs,
+        graph = graph,
+        solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph)),
+        assign = Int[],
+        inv_assign = Int[],
+        scc = Vector{Int}[],
+        partitions = NTuple{4, Vector{Int}}[],
+    )
 end
 
 function find_linear_equations(sys)
@@ -221,6 +194,40 @@ function find_linear_equations(sys)
             is_linear_equations[i] = false
         end
     end
+    sys, dxvar_offset, fullvars, varassoc, algeqs, graph = init_graph(flatten(sys))
+
+    solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
+
+    @set sys.structure = SystemStructure(
+                                         dxvar_offset,
+                                         fullvars,
+                                         varassoc,
+                                         algeqs,
+                                         graph,
+                                         solvable_graph,
+                                         Int[],
+                                         Int[],
+                                         Vector{Int}[],
+                                         NTuple{4, Vector{Int}}[]
+                                        )
+end
+
+function Base.show(io::IO, s::SystemStructure)
+    @unpack fullvars, dxvar_offset, solvable_graph, graph = s
+    algvar_offset = 2dxvar_offset
+    print(io, "xvars: ")
+    print(io, fullvars[1:dxvar_offset])
+    print(io, "\ndxvars: ")
+    print(io, fullvars[dxvar_offset+1:algvar_offset])
+    print(io, "\nalgvars: ")
+    print(io, fullvars[algvar_offset+1:end], '\n')
+
+    S = incidence_matrix(graph, Num(Sym{Real}(:×)))
+    print(io, "Incidence matrix:")
+    show(io, S)
+end
+
+function init_graph(sys)
     return is_linear_equations, eadj, cadj
 end
 
