@@ -211,6 +211,8 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem,u0map,paramm
     u0 = varmap_to_vars(u0map,dvs; defaults=defs)
     p = varmap_to_vars(parammap,ps; defaults=defs)
 
+    length(dvs) == length(u0) || throw(ArgumentError("States ($(length(dvs))) and initial conditions ($(length(u0))) are of different lengths."))
+
     f = constructor(sys,dvs,ps,u0;jac=jac,checkbounds=checkbounds,
                     linenumbers=linenumbers,parallel=parallel,simplify=simplify,
                     sparse=sparse,eval_expression=eval_expression,kwargs...)

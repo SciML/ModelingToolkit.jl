@@ -75,6 +75,8 @@ prob = NonlinearProblem(ns,ones(3),ones(3))
 sol = solve(prob,NewtonRaphson())
 @test sol.u[1] ≈ sol.u[2]
 
+@test_throws ArgumentError NonlinearProblem(ns,ones(4),ones(3))
+
 @variables u F s a
 eqs1 = [
         0 ~ σ*(y-x) + F,
