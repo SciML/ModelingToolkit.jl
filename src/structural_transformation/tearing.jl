@@ -122,7 +122,11 @@ function tearing_reassemble(sys; simplify=false)
 
 
     ### update equations
-    newstates = setdiff([fullvars[diffvars_range(s)]; fullvars[algvars_range(s)]], solvars)
+    odestats = []
+    for idx in eachindex(fullvars); isdervar(s, idx) && continue
+        push!(odestats, fullvars[idx])
+    end
+    newstates = setdiff(odestats, solvars)
     varidxmap = Dict(newstates .=> 1:length(newstates))
     neweqs = Vector{Equation}(undef, ns)
     newalgeqs = falses(ns)

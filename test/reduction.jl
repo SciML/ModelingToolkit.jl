@@ -67,7 +67,7 @@ eqs1 = [
 lorenz = name -> ODESystem(eqs1,t,name=name)
 lorenz1 = lorenz(:lorenz1)
 ss = ModelingToolkit.get_structure(initialize_system_structure(lorenz1))
-@test isequal(ss.fullvars, [x, y, z, D(x), D(y), D(z), F, u])
+@test isequal(ss.fullvars, [D(x), F, y, x, D(y), u, z, D(z)])
 lorenz2 = lorenz(:lorenz2)
 
 connected = ODESystem([s ~ a + lorenz1.x
