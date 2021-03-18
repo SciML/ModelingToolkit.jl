@@ -61,9 +61,9 @@ isdervar(s::SystemStructure, var::Integer) = s.vartype[var] === DERIVATIVE_VARIA
 isdiffvar(s::SystemStructure, var::Integer) = s.vartype[var] === DIFFERENTIAL_VARIABLE
 isalgvar(s::SystemStructure, var::Integer) = s.vartype[var] === ALGEBRAIC_VARIABLE
 
-dervars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(s, isdervar), eachindex(s.vartype))
-diffvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(s, isdiffvar), eachindex(s.vartype))
-algvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(s, isalgeq), eachindex(s.vartype))
+dervars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isdervar, s), eachindex(s.vartype))
+diffvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isdiffvar, s), eachindex(s.vartype))
+algvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isalgvar, s), eachindex(s.vartype))
 
 isalgeq(s::SystemStructure, eq::Integer) = s.algeqs[eq]
 isdiffeq(s::SystemStructure, eq::Integer) = !isalgeq(s, eq)

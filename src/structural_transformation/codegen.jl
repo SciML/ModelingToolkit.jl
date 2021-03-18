@@ -197,7 +197,7 @@ function build_torn_function(
     )
 
     s = structure(sys)
-    states = s.fullvars[diffvars_range(s)]
+    states = map(i->s.fullvars[i], diffvars_range(s))
     syms = map(Symbol, states)
 
     expr = SymbolicUtils.Code.toexpr(
@@ -266,8 +266,8 @@ function build_observed_function(
     syms_set = Set(syms)
     s = structure(sys)
     @unpack partitions, fullvars, graph = s
-    diffvars = fullvars[diffvars_range(s)]
-    algvars = fullvars[algvars_range(s)]
+    diffvars = map(i->fullvars[i], diffvars_range(s))
+    algvars = map(i->fullvars[i], algvars_range(s))
 
     required_algvars = Set(intersect(algvars, syms_set))
     obs = observed(sys)
@@ -337,7 +337,7 @@ function ODAEProblem{iip}(
                          ) where {iip}
     s = structure(sys)
     @unpack fullvars = s
-    dvs = fullvars[diffvars_range(s)]
+    dvs = map(i->fullvars[i], diffvars_range(s))
     ps = parameters(sys)
     defs = defaults(sys)
 

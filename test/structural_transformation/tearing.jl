@@ -29,15 +29,12 @@ show(io, sss)
 prt = String(take!(io))
 
 if VERSION >= v"1.6"
-@test prt == """xvars: Any[]
-dxvars: Any[]
-algvars: Any[u1(t), u2(t), u3(t), u4(t), u5(t)]
-Incidence matrix:
- ×  ⋅  ⋅  ⋅  ×
+@test prt == "Incidence matrix:
  ×  ×  ⋅  ⋅  ⋅
- ×  ×  ×  ⋅  ⋅
- ⋅  ×  ×  ×  ⋅
- ×  ⋅  ⋅  ×  ×"""
+ ×  ⋅  ×  ⋅  ⋅
+ ×  ⋅  ×  ×  ⋅
+ ⋅  ⋅  ×  ×  ×
+ ×  ×  ⋅  ⋅  ×"
 end
 
 # u1 = f1(u5)
@@ -49,8 +46,8 @@ sys = initialize_system_structure(sys)
 find_solvables!(sys)
 sss = structure(sys)
 @unpack graph, solvable_graph, assign, partitions = sss
-@test graph.fadjlist == [[1, 5], [1, 2], [1, 2, 3], [2, 3, 4], [1, 4, 5]]
-@test solvable_graph.fadjlist == map(x->[x], 1:5)
+@test graph.fadjlist == [[1, 2], [1, 3], [1, 3, 4], [3, 4, 5], [1, 2, 5]]
+@test solvable_graph.fadjlist == map(x->[x], [1, 3, 4, 5, 2])
 
 tornsys = tearing(sys)
 sss = structure(tornsys)
@@ -148,7 +145,7 @@ eqs = [
 daesys = ODESystem(eqs, t)
 newdaesys = tearing(daesys)
 @test equations(newdaesys) == [D(x) ~ z; 0 ~ x + sin(z) - p*t]
-@test isequal(states(newdaesys), [x, z])
+@test isequal(states(newdaesys), [z, x])
 @test_throws ArgumentError ODAEProblem(newdaesys, [x=>1.0], (0, 1.0))
 prob = ODAEProblem(newdaesys, [x=>1.0], (0, 1.0), [p=>0.2])
 du = [0.0]; u = [1.0]; pr = 0.2; tt = 0.1

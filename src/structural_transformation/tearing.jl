@@ -177,11 +177,14 @@ function tearing_reassemble(sys; simplify=false)
 
     obseqs = solvars .~ rhss
 
-    @set! sys.structure.graph = newgraph
-    @set! sys.structure.scc = newscc
-    @set! sys.structure.fullvars = fullvars[active_vars]
-    @set! sys.structure.partitions = newpartitions
-    @set! sys.structure.algeqs = newalgeqs
+    @set! s.graph = newgraph
+    @set! s.scc = newscc
+    @set! s.fullvars = fullvars[active_vars]
+    @set! s.vartype = s.vartype[active_vars]
+    @set! s.partitions = newpartitions
+    @set! s.algeqs = newalgeqs
+
+    @set! sys.structure = s
     @set! sys.eqs = neweqs
     @set! sys.states = newstates
     @set! sys.reduced_states = [get_reduced_states(sys); solvars]
