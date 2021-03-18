@@ -170,7 +170,7 @@ How do we do that?
 sys = structural_simplify(big_rc)
 ```
 
-Done, that's it. There's no more too it.
+Done, that's it. There's no more to it.
 
 ## What Happened?
 
