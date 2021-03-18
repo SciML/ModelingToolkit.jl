@@ -12,9 +12,12 @@ applicable.
 """
 function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true)
     # Edge cases where one of the arguments is effectively empty.
-    if varmap isa DiffEqBase.NullParameters || varmap === nothing || isempty(varmap)
+    is_incomplete_initialization = varmap isa DiffEqBase.NullParameters || varmap === nothing
+    if is_incomplete_initialization || isempty(varmap)
         if isempty(defaults)
-            check && (isempty(varlist) || throw_missingvars(varlist))
+            if !is_incomplete_initialization && check
+                isempty(varlist) || throw_missingvars(varlist)
+            end
             return nothing
         else
             varmap = Dict()
