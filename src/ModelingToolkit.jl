@@ -1,4 +1,8 @@
+"""
+$(DocStringExtensions.README)
+"""
 module ModelingToolkit
+using DocStringExtensions
 
 using DiffEqBase, SciMLBase, Reexport
 using Distributed
