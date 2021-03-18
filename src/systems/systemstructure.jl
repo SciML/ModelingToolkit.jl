@@ -79,7 +79,15 @@ function initialize_system_structure(sys)
     var2idx = Dict{Any,Int}()
     symbolic_incidence = []
     fullvars = []
-    var_counter = 0
+    var_counter = Ref(0)
+    addvar! = let fullvars=fullvars, var_counter=var_counter
+        var -> begin
+            get!(var2idx, var) do
+                push!(fullvars, var)
+                var_counter[] += 1
+            end
+        end
+    end
 
     for (i, eq) in enumerate(eqs)
         vars = OrderedSet()
@@ -91,19 +99,16 @@ function initialize_system_structure(sys)
             if isparameter(var) || (istree(var) && isparameter(operation(var)))
                 continue
             end
+            varidx = addvar!(var)
             push!(statevars, var)
-            varidx = get!(var2idx, var) do
-                push!(fullvars, var)
-                var_counter += 1
-            end
 
-            if isdifferential(var)
+            dvar = var
+            idx = varidx
+            while isdifferential(dvar)
+                push!(dervaridxs, idx)
                 isalgeq = false
-                diffvar = arguments(var)[1]
-                if diffvar isa Differential
-                    throw(InvalidSystemException("The equation [ $eq ] is not first order"))
-                end
-                push!(dervaridxs, varidx)
+                dvar = arguments(dvar)[1]
+                idx = addvar!(dvar)
             end
         end
         push!(symbolic_incidence, copy(statevars))
@@ -123,12 +128,10 @@ function initialize_system_structure(sys)
         vartype[dervaridx] = DERIVATIVE_VARIABLE
         dervar = fullvars[dervaridx]
         diffvar = arguments(dervar)[1]
-        diffvaridx = get(var2idx, diffvar, 0)
-        if diffvaridx != 0
-            push!(diffvars, diffvar)
-            varassoc[diffvaridx] = dervaridx
-            inv_varassoc[dervaridx] = diffvaridx
-        end
+        diffvaridx = var2idx[diffvar]
+        push!(diffvars, diffvar)
+        varassoc[diffvaridx] = dervaridx
+        inv_varassoc[dervaridx] = diffvaridx
     end
 
     algvars = setdiff(states(sys), diffvars)
