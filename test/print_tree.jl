@@ -6,7 +6,7 @@ io = IOBuffer()
 print_tree(io, rc_model)
 ser = String(take!(io))
 str = 
-"""rc_model
+"""rc
 ├─ resistor
 │  ├─ p
 │  └─ n
@@ -19,4 +19,4 @@ str =
 └─ ground
    └─ g
 """
-@test ser == strip(str)
+@test strip(ser) == strip(str)
