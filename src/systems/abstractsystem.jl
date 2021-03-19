@@ -153,7 +153,6 @@ for prop in [
              :inequality_constraints
              :controls
              :loss
-             :reduced_states
              :bcs
              :domain
              :depvars
@@ -524,7 +523,7 @@ topological sort of the observed equations.
 """
 function structural_simplify(sys::AbstractSystem)
     sys = tearing(alias_elimination(sys))
-    fullstates = [get_reduced_states(sys); states(sys)]
+    fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     return sys
 end

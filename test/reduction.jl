@@ -80,7 +80,11 @@ connected = ODESystem([s ~ a + lorenz1.x
 # Reduced Flattened System
 
 reduced_system = structural_simplify(connected)
+reduced_system2 = structural_simplify(structural_simplify(structural_simplify(connected)))
 
+@test isempty(setdiff(states(reduced_system), states(reduced_system2)))
+@test isequal(equations(reduced_system), equations(reduced_system2))
+@test isequal(observed(reduced_system), observed(reduced_system2))
 @test setdiff(states(reduced_system), [
         s
         a

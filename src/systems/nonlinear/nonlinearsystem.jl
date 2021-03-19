@@ -43,7 +43,6 @@ struct NonlinearSystem <: AbstractSystem
     structure: structural information of the system
     """
     structure::Any
-    reduced_states::Any
 end
 
 function NonlinearSystem(eqs, states, ps;
@@ -58,7 +57,7 @@ function NonlinearSystem(eqs, states, ps;
     end
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
-    NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, defaults, nothing, [])
+    NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, defaults, nothing)
 end
 
 function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)

@@ -20,11 +20,9 @@ function alias_elimination(sys)
     @unpack fullvars, graph = s
 
     n_reduced_states = length(v_eliminated) - n_null_vars
-    reduced_states = similar(v_eliminated, Any, n_reduced_states)
     subs = OrderedDict()
     if n_reduced_states > 0
         for (i, v) in enumerate(@view v_eliminated[n_null_vars+1:end])
-            reduced_states[i] = fullvars[v]
             subs[fullvars[v]] = iszeroterm(v_types, v) ? 0.0 :
                                 isalias(v_types, v) ? fullvars[alias(v_types, v)] :
                                 -fullvars[negalias(v_types, v)]
@@ -67,8 +65,7 @@ function alias_elimination(sys)
 
     @set! sys.eqs = eqs
     @set! sys.states = newstates
-    @set! sys.reduced_states = [get_reduced_states(sys); reduced_states]
-    @set! sys.observed = [get_observed(sys); [lhs ~ rhs for (lhs, rhs) in pairs(subs)]]
+    @set! sys.observed = [observed(sys); [lhs ~ rhs for (lhs, rhs) in pairs(subs)]]
     @set! sys.structure = nothing
     return sys
 end

@@ -187,8 +187,7 @@ function tearing_reassemble(sys; simplify=false)
     @set! sys.structure = s
     @set! sys.eqs = neweqs
     @set! sys.states = newstates
-    @set! sys.reduced_states = [get_reduced_states(sys); solvars]
-    @set! sys.observed = vcat(observed(sys), obseqs)
+    @set! sys.observed = [observed(sys); obseqs]
     return sys
 end
 
