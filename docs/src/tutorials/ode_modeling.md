@@ -26,15 +26,14 @@ D = Differential(t) # define an operator for the differentiation w.r.t. time
 
 # your first ODE, consisting of a single equation, indicated by ~
 @named fol_model = ODESystem(D(x) ~ (1 - x)/τ)
-
-# Model fol_model with 1 equations
-# States (1):
-#   x(t)
-# Parameters (1):
-#   τ
+      # Model fol_model with 1 equations
+      # States (1):
+      #   x(t)
+      # Parameters (1):
+      #   τ
 ```
 
-Note that equations in MTK use the tilda characters (~) as equality sign.
+Note that equations in MTK use the tilde character (`~`) as equality sign.
 The `@named` macro just adds the keyword-argument `name` to the call of
 `ODESystem`. Its value is the name of the variable the system is assigned to.
 For this example, calling `fol_model = ODESystem(...; name=:fol_model)` would do
@@ -64,13 +63,12 @@ intermediate variable `RHS`:
 @variables RHS(t)
 @named fol_separate = ODESystem([ RHS  ~ (1 - x)/τ,
                                   D(x) ~ RHS ])
-
-# Model fol_separate with 2 equations
-# States (2):
-#   x(t)
-#   RHS(t)
-# Parameters (1):
-#   τ
+      # Model fol_separate with 2 equations
+      # States (2):
+      #   x(t)
+      #   RHS(t)
+      # Parameters (1):
+      #   τ
 ```
 
 To directly solve this system, you would have to create a Differential-Algebraic Equation (DAE)
@@ -81,10 +79,12 @@ first example above. MTK achieves this by means of structural simplification:
 ```julia
 fol_simplified = structural_simplify(fol_separate)
 
-@show equations(fol_simplified)
-# equations(fol_simplified) = Equation[Differential(t)(x(t)) ~ (τ^-1)*(1 - x(t))]
+equations(fol_simplified)
+      # 1-element Array{Equation,1}:
+      #  Differential(t)(x(t)) ~ (τ^-1)*(1 - x(t))
 
-equations(fol_simplified) == equations(fol_model) # true
+equations(fol_simplified) == equations(fol_model)
+      # true
 ```
 
 You can extract the equations from a system using `equations` (and, in the same way,
@@ -160,7 +160,7 @@ for customization:
 
 ```julia
 @named fol_1 = fol_factory()
-@named fol_2 = fol_factory(true) # have observable RHS
+@named fol_2 = fol_factory(true) # has observable RHS
 ```
 
 Now, these two components can be used as subsystems of a parent system, i.e. one level
@@ -172,16 +172,16 @@ connections = [ fol_1.f ~ 1.5,
                 fol_2.f ~ fol_1.x ]
 
 @named connected = ODESystem(connections; systems=[fol_1,fol_2])
-# Model connected with 5 equations
-# States (5):
-#   fol_1₊f(t)
-#   fol_2₊f(t)
-#   fol_1₊x(t)
-#   fol_2₊x(t)
-# ⋮
-# Parameters (2):
-#   fol_1₊τ
-#   fol_2₊τ
+      # Model connected with 5 equations
+      # States (5):
+      #   fol_1₊f(t)
+      #   fol_2₊f(t)
+      #   fol_1₊x(t)
+      #   fol_2₊x(t)
+      # ⋮
+      # Parameters (2):
+      #   fol_1₊τ
+      #   fol_2₊τ
 ```
 
 All equations, variables and parameters are collected, but the structure of the
@@ -192,24 +192,24 @@ and the "connections") from the system using structural simplification:
 
 ```julia
 connected_simp = structural_simplify(connected)
-# Model connected with 2 equations
-# States (2):
-#   fol_1₊x(t)
-#   fol_2₊x(t)
-# Parameters (2):
-#   fol_1₊τ
-#   fol_2₊τ
-# Incidence matrix:
-#   [1, 1]  =  ×
-#   [2, 1]  =  ×
-#   [2, 2]  =  ×
-#   [1, 3]  =  ×
-#   [2, 4]  =  ×
+      # Model connected with 2 equations
+      # States (2):
+      #   fol_1₊x(t)
+      #   fol_2₊x(t)
+      # Parameters (2):
+      #   fol_1₊τ
+      #   fol_2₊τ
+      # Incidence matrix:
+      #   [1, 1]  =  ×
+      #   [2, 1]  =  ×
+      #   [2, 2]  =  ×
+      #   [1, 3]  =  ×
+      #   [2, 4]  =  ×
 
 equations(connected_simp)
-# 2-element Array{Equation,1}:
-#  Differential(t)(fol_1₊x(t)) ~ (fol_1₊τ^-1)*(1.5 - fol_1₊x(t))
-#  Differential(t)(fol_2₊x(t)) ~ (fol_2₊τ^-1)*(fol_1₊x(t) - fol_2₊x(t))
+      # 2-element Array{Equation,1}:
+      #  Differential(t)(fol_1₊x(t)) ~ (fol_1₊τ^-1)*(1.5 - fol_1₊x(t))
+      #  Differential(t)(fol_2₊x(t)) ~ (fol_2₊τ^-1)*(fol_1₊x(t) - fol_2₊x(t))
 ```
 
 As expected, only the two state-derivative equations remain,
@@ -268,7 +268,7 @@ partial derivatives, are not used. Let's benchmark this (`prob` still is the pro
 using BenchmarkTools
 
 @btime solve(prob, Rodas4());
-# 251.300 μs (873 allocations: 31.18 KiB)
+      # 251.300 μs (873 allocations: 31.18 KiB)
 ```
 
 Now have MTK provide sparse, analytical derivatives to the solver. This has to be
@@ -278,7 +278,7 @@ specified during the construction of the `ODEProblem`:
 prob_an = ODEProblem(connected_simp, u0, (0.0,10.0), p; jac=true, sparse=true)
 
 @btime solve(prob_an, Rodas4());
-# 142.899 μs (1297 allocations: 83.96 KiB)
+      # 142.899 μs (1297 allocations: 83.96 KiB)
 ```
 
 The speedup is significant. For this small dense model (3 of 4 entries are populated), using sparse matrices is contraproductive in terms of required memory allocations. For large,
