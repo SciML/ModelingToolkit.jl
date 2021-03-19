@@ -187,7 +187,7 @@ function oderatelaw(rx; combinatoric_ratelaw=true)
 end
 
 function assemble_oderhs(rs; combinatoric_ratelaws=true)
-    sts = states(rs)
+    sts = get_states(rs)
     species_to_idx = Dict((x => i for (i,x) in enumerate(sts)))
     rhsvec         = Any[0 for i in eachindex(sts)]
 
@@ -212,7 +212,7 @@ function assemble_drift(rs; combinatoric_ratelaws=true, as_odes=true)
     rhsvec = assemble_oderhs(rs; combinatoric_ratelaws=combinatoric_ratelaws)
     if as_odes
         D   = Differential(get_iv(rs))
-        eqs = [Equation(D(x),rhs) for (x,rhs) in zip(states(rs),rhsvec)]
+        eqs = [Equation(D(x),rhs) for (x,rhs) in zip(get_states(rs),rhsvec)]
     else
         eqs = [Equation(0,rhs) for rhs in rhsvec]
     end
@@ -220,8 +220,8 @@ function assemble_drift(rs; combinatoric_ratelaws=true, as_odes=true)
 end
 
 function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
-    sts = states(rs)
-    eqs  = Matrix{Any}(undef, length(sts), length(equations(rs)))
+    sts  = get_states(rs)
+    eqs  = Matrix{Any}(undef, length(sts), length(get_eqs(rs)))
     eqs .= 0
     species_to_idx = Dict((x => i for (i,x) in enumerate(sts)))
 
@@ -302,7 +302,7 @@ explicitly on the independent variable (usually time).
 """
 function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
                               haveivdep = any(var -> isequal(get_iv(rs),var), rxvars),
-                              stateset = Set(states(rs)))
+                              stateset = Set(get_states(rs)))
     # if no dependencies must be zero order
     (length(rxvars)==0) && return true
     haveivdep && return false
@@ -331,7 +331,7 @@ end
 
 function assemble_jumps(rs; combinatoric_ratelaws=true)
     meqs = MassActionJump[]; ceqs = ConstantRateJump[]; veqs = VariableRateJump[]
-    stateset = Set(states(rs))
+    stateset = Set(get_states(rs))
     #rates = [];  rstoich = []; nstoich = []
     rxvars = []
     ivname = nameof(get_iv(rs))
@@ -378,10 +378,11 @@ law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
 `combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is
 ignored.
 """
-function Base.convert(::Type{<:ODESystem}, rs::ReactionSystem; combinatoric_ratelaws=true)
-    eqs = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws)
-    ODESystem(eqs,get_iv(rs),states(rs),get_ps(rs),name=nameof(rs),
-              systems=convert.(ODESystem,get_systems(rs)))
+function Base.convert(::Type{<:ODESystem}, rs::ReactionSystem; 
+                      name=nameof(rs), combinatoric_ratelaws=true, kwargs...)
+    eqs     = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws)
+    systems = convert.(ODESystem, get_systems(rs))
+    ODESystem(eqs, get_iv(rs), get_states(rs), get_ps(rs), name=name, systems=systems)
 end
 
 """
@@ -397,9 +398,11 @@ law, i.e. for `2S -> 0` at rate `k` the ratelaw would be `k*S^2/2!`. If
 `combinatoric_ratelaws=false` then the ratelaw is `k*S^2`, i.e. the scaling factor is
 ignored.
 """
-function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem; combinatoric_ratelaws=true)
-    eqs = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws, as_odes=false)
-    NonlinearSystem(eqs,states(rs),get_ps(rs),name=nameof(rs),systems=convert.(NonlinearSystem,get_systems(rs)))
+function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem;
+                      name=nameof(rs), combinatoric_ratelaws=true, kwargs...)
+    eqs     = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws, as_odes=false)
+    systems = convert.(NonlinearSystem, get_systems(rs))
+    NonlinearSystem(eqs, get_states(rs), get_ps(rs), name=name, systems=systems)
 end
 
 """
@@ -423,7 +426,8 @@ Finally, a `Vector{Operation}` can be provided (the length must be equal to the 
 Here the noise for each reaction is scaled by the corresponding parameter in the input vector.
 This input may contain repeat parameters.
 """
-function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, combinatoric_ratelaws=true; noise_scaling=nothing)
+function Base.convert(::Type{<:SDESystem}, rs::ReactionSystem; 
+                      noise_scaling=nothing, name=nameof(rs), combinatoric_ratelaws=true, kwargs...)
 
     if noise_scaling isa Vector
         (length(noise_scaling)!=length(equations(rs))) &&
@@ -434,19 +438,14 @@ function Base.convert(::Type{<:SDESystem},rs::ReactionSystem, combinatoric_ratel
         noise_scaling = fill(value(noise_scaling),length(equations(rs)))
     end
 
-    eqs = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws)
-
+    eqs      = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws)
     noiseeqs = assemble_diffusion(rs,noise_scaling;
                                   combinatoric_ratelaws=combinatoric_ratelaws)
-
-    SDESystem(eqs,
-              noiseeqs,
-              get_iv(rs),
-              states(rs),
-              (noise_scaling===nothing) ?
-                    get_ps(rs) :
-                    union(get_ps(rs),toparam.(noise_scaling)),
-                    name=nameof(rs),systems=convert.(SDESystem,get_systems(rs)))
+    systems  = convert.(SDESystem, get_systems(rs))
+    SDESystem(eqs, noiseeqs, get_iv(rs), get_states(rs),
+              (noise_scaling===nothing) ? get_ps(rs) : union(get_ps(rs), toparam.(noise_scaling)),
+              name=name, 
+              systems=systems)
 end
 
 """
@@ -462,10 +461,11 @@ Notes:
   the ratelaw is `k*S*(S-1)`, i.e. the rate law is not normalized by the scaling
   factor.
 """
-function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem; combinatoric_ratelaws=true)
-    eqs = assemble_jumps(rs; combinatoric_ratelaws=combinatoric_ratelaws)
-    JumpSystem(eqs,get_iv(rs),states(rs),get_ps(rs),name=nameof(rs),
-              systems=convert.(JumpSystem,get_systems(rs)))
+function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem; 
+                      name=nameof(rs), combinatoric_ratelaws=true, kwargs...)
+    eqs     = assemble_jumps(rs; combinatoric_ratelaws=combinatoric_ratelaws)
+    systems = convert.(JumpSystem, get_systems(rs))
+    JumpSystem(eqs, get_iv(rs), get_states(rs), get_ps(rs), name=name, systems=systems)
 end
 
 
@@ -474,35 +474,35 @@ end
 
 # ODEProblem from AbstractReactionNetwork
 function DiffEqBase.ODEProblem(rs::ReactionSystem, u0, tspan, p=DiffEqBase.NullParameters(), args...; kwargs...)
-    return ODEProblem(convert(ODESystem,rs),u0,tspan,p, args...; kwargs...)
+    return ODEProblem(convert(ODESystem,rs; kwargs...),u0,tspan,p, args...; kwargs...)
 end
 
 # NonlinearProblem from AbstractReactionNetwork
 function DiffEqBase.NonlinearProblem(rs::ReactionSystem, u0, p=DiffEqBase.NullParameters(), args...; kwargs...)
-    return NonlinearProblem(convert(NonlinearSystem,rs), u0, p, args...; kwargs...)
+    return NonlinearProblem(convert(NonlinearSystem,rs; kwargs...), u0, p, args...; kwargs...)
 end
 
 
 # SDEProblem from AbstractReactionNetwork
 function DiffEqBase.SDEProblem(rs::ReactionSystem, u0, tspan, p=DiffEqBase.NullParameters(), args...; noise_scaling=nothing, kwargs...)
-    sde_sys = convert(SDESystem,rs,noise_scaling=noise_scaling)
-    p_matrix = zeros(length(states(rs)), length(equations(rs)))
+    sde_sys  = convert(SDESystem,rs;noise_scaling=noise_scaling, kwargs...)
+    p_matrix = zeros(length(get_states(rs)), length(get_eqs(rs)))
     return SDEProblem(sde_sys,u0,tspan,p,args...; noise_rate_prototype=p_matrix,kwargs...)
 end
 
 # DiscreteProblem from AbstractReactionNetwork
 function DiffEqBase.DiscreteProblem(rs::ReactionSystem, u0, tspan::Tuple, p=DiffEqBase.NullParameters(), args...; kwargs...)
-    return DiscreteProblem(convert(JumpSystem,rs), u0,tspan,p, args...; kwargs...)
+    return DiscreteProblem(convert(JumpSystem,rs; kwargs...), u0,tspan,p, args...; kwargs...)
 end
 
 # JumpProblem from AbstractReactionNetwork
 function DiffEqJump.JumpProblem(rs::ReactionSystem, prob, aggregator, args...; kwargs...)
-    return JumpProblem(convert(JumpSystem,rs), prob, aggregator, args...; kwargs...)
+    return JumpProblem(convert(JumpSystem,rs; kwargs...), prob, aggregator, args...; kwargs...)
 end
 
 # SteadyStateProblem from AbstractReactionNetwork
 function DiffEqBase.SteadyStateProblem(rs::ReactionSystem, u0, p=DiffEqBase.NullParameters(), args...; kwargs...)
-    return SteadyStateProblem(ODEFunction(convert(ODESystem,rs)),u0,p, args...; kwargs...)
+    return SteadyStateProblem(ODEFunction(convert(ODESystem,rs; kwargs...)),u0,p, args...; kwargs...)
 end
 
 # determine which species a reaction depends on
