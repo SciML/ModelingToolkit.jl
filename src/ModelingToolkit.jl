@@ -3,7 +3,7 @@ $(DocStringExtensions.README)
 """
 module ModelingToolkit
 using DocStringExtensions
-
+using AbstractTrees
 using DiffEqBase, SciMLBase, Reexport
 using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
@@ -53,8 +53,6 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
 import DiffEqBase: @add_kwonly
 
 import LightGraphs: SimpleDiGraph, add_edge!
-
-import TreeViews
 
 using Requires
 
