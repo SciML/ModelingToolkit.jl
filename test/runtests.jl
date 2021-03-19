@@ -35,4 +35,4 @@ println("Last test requires gcc available in the path!")
 @safetestset "Latexify recipes Test" begin include("latexify.jl") end
 @safetestset "StructuralTransformations" begin include("structural_transformation/runtests.jl") end
 @testset "Serialization" begin include("serialization.jl") end
-@testset "print_tree" begin include("print_tree.jl") end
+@safetestset "print_tree" begin include("print_tree.jl") end

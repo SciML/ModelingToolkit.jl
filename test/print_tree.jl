@@ -1,6 +1,6 @@
 using ModelingToolkit, AbstractTrees, Test
 
-include("components.jl")
+include("rc_model.jl")
 
 io = IOBuffer()
 print_tree(io, rc_model)
