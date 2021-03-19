@@ -1,3 +1,5 @@
+const NAMESPACE_CHAR = '.'
+
 """
 ```julia
 calculate_tgrad(sys::AbstractSystem)
@@ -276,7 +278,7 @@ function renamespace(namespace, x)
     elseif x isa Sym
         Sym{symtype(x)}(renamespace(namespace,nameof(x)))
     else
-        Symbol(namespace,:₊,x)
+        Symbol(namespace,NAMESPACE_CHAR,x)
     end
 end
 

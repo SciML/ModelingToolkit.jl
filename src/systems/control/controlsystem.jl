@@ -6,7 +6,7 @@ end
 
 function controls(sys::AbstractControlSystem,args...)
     name = last(args)
-    extra_names = reduce(Symbol,[Symbol(:₊,nameof(x)) for x in args[1:end-1]])
+    extra_names = reduce(Symbol,[Symbol(NAMESPACE_CHAR,nameof(x)) for x in args[1:end-1]])
     newname = renamespace(extra_names,name)
     rename(x,renamespace(nameof(sys),newname))(get_iv(sys))
 end
