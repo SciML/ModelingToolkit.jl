@@ -1,12 +1,10 @@
-
 using ModelingToolkit, AbstractTrees, Test
 
 include("components.jl")
 
-open("rc_tree.txt", "w") do io
-    print_tree(io, rc_model)
-end;
-
+io = IOBuffer()
+print_tree(io, rc_model)
+ser = String(take!(io))
 str = 
 """rc_model
 ├─ resistor
@@ -21,6 +19,4 @@ str =
 └─ ground
    └─ g
 """
-@test read("rc_tree.txt", String) == str
-
-rm("rc_tree.txt")
+@test ser == strip(str)
