@@ -92,6 +92,14 @@ function Reaction(rate, subs, prods; kwargs...)
     Reaction(rate, subs, prods, sstoich, pstoich; kwargs...)
 end
 
+function namespace_equation(rx::Reaction, name, iv)
+    Reaction(namespace_expr(rx.rate, name, iv), 
+             namespace_expr(rx.substrates, name, iv),
+             namespace_expr(rx.products, name, iv),
+             rx.substoich, rx.prodstoich,            
+             [namespace_expr(n[1],name,iv) => n[2] for n in rx.netstoich], rx.only_use_rate)
+end
+
 # calculates the net stoichiometry of a reaction as a vector of pairs (sub,substoich)
 function get_netstoich(subs, prods, sstoich, pstoich)
     # stoichiometry as a Dictionary
@@ -134,7 +142,7 @@ struct ReactionSystem <: AbstractSystem
     """The name of the system"""
     name::Symbol
     """systems: The internal systems"""
-    systems::Vector{ReactionSystem}
+    systems::Vector
 
     function ReactionSystem(eqs, iv, states, ps, observed, name, systems)
         new(eqs, value(iv), value.(states), value.(ps), observed, name, systems)
@@ -143,11 +151,29 @@ end
 
 function ReactionSystem(eqs, iv, species, params;
                         observed = [],
-                        systems = ReactionSystem[],
+                        systems = [],
                         name = gensym(:ReactionSystem))
 
-    isempty(species) && error("ReactionSystems require at least one species.")
+    #isempty(species) && error("ReactionSystems require at least one species.")
     ReactionSystem(eqs, iv, species, params, observed, name, systems)
+end
+
+function ReactionSystem(iv; kwargs...)
+    ReactionSystem(Reaction[], iv, [], []; kwargs...)
+end
+
+function equations(sys::ModelingToolkit.ReactionSystem)
+    eqs = get_eqs(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return eqs
+    else
+        eqs = [eqs;
+               reduce(vcat,
+                      namespace_equations.(get_systems(sys));
+                      init=[])]
+        return eqs
+    end
 end
 
 """
@@ -191,7 +217,7 @@ function assemble_oderhs(rs; combinatoric_ratelaws=true)
     species_to_idx = Dict((x => i for (i,x) in enumerate(sts)))
     rhsvec         = Any[0 for i in eachindex(sts)]
 
-    for rx in equations(rs)
+    for rx in get_eqs(rs)
         rl = oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)
         for (spec,stoich) in rx.netstoich
             i = species_to_idx[spec]
@@ -212,9 +238,9 @@ function assemble_drift(rs; combinatoric_ratelaws=true, as_odes=true)
     rhsvec = assemble_oderhs(rs; combinatoric_ratelaws=combinatoric_ratelaws)
     if as_odes
         D   = Differential(get_iv(rs))
-        eqs = [Equation(D(x),rhs) for (x,rhs) in zip(get_states(rs),rhsvec)]
+        eqs = [Equation(D(x),rhs) for (x,rhs) in zip(get_states(rs),rhsvec) if (!_iszero(rhs))]
     else
-        eqs = [Equation(0,rhs) for rhs in rhsvec]
+        eqs = [Equation(0,rhs) for rhs in rhsvec if (!_iszero(rhs))]
     end
     eqs
 end
@@ -381,7 +407,7 @@ ignored.
 function Base.convert(::Type{<:ODESystem}, rs::ReactionSystem; 
                       name=nameof(rs), combinatoric_ratelaws=true, kwargs...)
     eqs     = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws)
-    systems = convert.(ODESystem, get_systems(rs))
+    systems = map(sys -> (sys isa ODESystem) ? sys : convert(ODESystem, sys), get_systems(rs))
     ODESystem(eqs, get_iv(rs), get_states(rs), get_ps(rs), name=name, systems=systems)
 end
 
