@@ -67,7 +67,7 @@ eqs1 = [
 lorenz = name -> ODESystem(eqs1,t,name=name)
 lorenz1 = lorenz(:lorenz1)
 ss = ModelingToolkit.get_structure(initialize_system_structure(lorenz1))
-@test isequal(ss.fullvars, [D(x), F, y, x, D(y), u, z, D(z)])
+@test isempty(setdiff(ss.fullvars, [D(x), F, y, x, D(y), u, z, D(z)]))
 lorenz2 = lorenz(:lorenz2)
 
 connected = ODESystem([s ~ a + lorenz1.x
@@ -120,11 +120,11 @@ test_equal.(equations(reduced_system), reduced_eqs)
 
 observed_eqs = [
                 s ~ lorenz2.y
-                lorenz2.u ~ -((lorenz2.z) - (lorenz2.x) - (lorenz2.y))
-                lorenz1.u ~ -((lorenz1.z) - (lorenz1.x) - (lorenz1.y))
+                lorenz1.F ~ -((lorenz2.z) - (lorenz2.x) - (lorenz2.y))
+                lorenz2.F ~ -((lorenz1.z) - (lorenz1.x) - (lorenz1.y))
                 a ~ s - (lorenz1.x)
-                lorenz1.F ~ lorenz2.u
-                lorenz2.F ~ lorenz1.u
+                lorenz2.u ~ lorenz1.F
+                lorenz1.u ~ lorenz2.F
                ]
 test_equal.(observed(reduced_system), observed_eqs)
 
@@ -165,8 +165,8 @@ let
     @test equations(connected) isa Vector{Equation}
     reduced_sys = structural_simplify(connected)
     ref_eqs = [
-               D(ol.x) ~ ol.a*ol.x + ol.b*pc.u_c
-               0 ~ -pc.u_c - (pc.k_P*((-ol.c*(ol.x)) - (ol.d*(pc.u_c))))
+               D(ol.x) ~ ol.a*ol.x + ol.b*ol.u
+               0 ~ -ol.u - (pc.k_P*(-ol.c*ol.x - (ol.d*ol.u)))
               ]
     @test ref_eqs == equations(reduced_sys)
 end
@@ -192,7 +192,7 @@ eqs = [
       ]
 sys = NonlinearSystem(eqs, [u1, u2, u3], [p])
 reducedsys = structural_simplify(sys)
-@test observed(reducedsys) == [u2 ~ 0.5(u3 - p); u1 ~ u2]
+@test observed(reducedsys) == [u1 ~ 0.5(u3 - p); u2 ~ u1]
 
 u0 = [
       u1 => 1

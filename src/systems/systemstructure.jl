@@ -89,8 +89,13 @@ function initialize_system_structure(sys)
         end
     end
 
-    for (i, eq) in enumerate(eqs)
-        vars = OrderedSet()
+    vars = OrderedSet()
+    for (i, eq′) in enumerate(eqs)
+        if _iszero(eq′.lhs)
+            eq = eq′
+        else
+            eq = 0 ~ eq′.rhs - eq′.lhs
+        end
         vars!(vars, eq)
         isalgeq = true
         statevars = []
@@ -113,9 +118,10 @@ function initialize_system_structure(sys)
         end
         push!(symbolic_incidence, copy(statevars))
         empty!(statevars)
+        empty!(vars)
         algeqs[i] = isalgeq
-        if isalgeq && !_iszero(eq.lhs)
-            eqs[i] = 0 ~ eq.rhs - eq.lhs
+        if isalgeq
+            eqs[i] = eq
         end
     end
 
