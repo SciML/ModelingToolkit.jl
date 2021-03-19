@@ -4,6 +4,7 @@ authors = ["Chris Rackauckas <accounts@chrisrackauckas.com>"]
 version = "5.13.6"
 
 [deps]
+AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
@@ -35,11 +36,11 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
-TreeViews = "a2a6695c-b41b-5b7d-aed9-dbfdeacea5d7"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
+AbstractTrees = "0.3"
 ArrayInterface = "2.8, 3.0"
 ConstructionBase = "1"
 DataStructures = "0.17, 0.18"
@@ -66,7 +67,6 @@ SpecialFunctions = "0.7, 0.8, 0.9, 0.10, 1.0"
 StaticArrays = "0.10, 0.11, 0.12, 1.0"
 SymbolicUtils = "0.8.3, 0.9"
 Symbolics = "0.1.8"
-TreeViews = "0.3"
 UnPack = "0.1, 1.0"
 Unitful = "1.1"
 julia = "1.2"
