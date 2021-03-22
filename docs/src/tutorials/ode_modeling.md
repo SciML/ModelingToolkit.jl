@@ -1,7 +1,8 @@
 # Composing Ordinary Differential Equations
 
 This is an introductory example for the usage of ModelingToolkit (MTK).
-It illustrates the basic user-faced functionality by means of some
+It illustrates the basic user-facing functionality by means of some
+
 examples of Ordinary Differential Equations (ODE). Some references to
 more specific documentation are given at appropriate places.
 
@@ -313,4 +314,3 @@ Where to go next?
 * If you want to automatically convert an existing function to a symbolic representation, you might go through the **ModelingToolkitize Tutorials**.
 
 * To learn more about the inner workings of MTK, consider the sections under **Basics** and **System Types**.
-
