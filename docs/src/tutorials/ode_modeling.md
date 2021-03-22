@@ -318,3 +318,5 @@ Where to go next?
 * If you want to automatically convert an existing function to a symbolic representation, you might go through the **ModelingToolkitize Tutorials**.
 
 * To learn more about the inner workings of MTK, consider the sections under **Basics** and **System Types**.
+```suggestion
+* To learn more about the details of using MTK, consider the sections under **Basics** and **System Types**.
