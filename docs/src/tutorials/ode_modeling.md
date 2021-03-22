@@ -259,10 +259,7 @@ ODEProblem(unitstep_fol_factory(name=:fol),[],(0.0,5.0),[]) |> solve
 ```
 
 Of course, the factory function could accept additional arguments to optionally
-specify the initial state or parameter values, etc. As the name says, MTK is a
-toolkit, not a modelling framework. The latter is up to you and depends on your
-specific needs and requirements.
-
+specify the initial state or parameter values, etc.
 
 ## Symbolic and sparse derivatives
 One advantage of a symbolic toolkit is that derivatives can be calculated
