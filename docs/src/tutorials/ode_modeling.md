@@ -146,7 +146,8 @@ the steps in the forcing function.
 
 ## Building component-based, hierarchical models
 Working with simple one-equation systems is already fun, but composing more complex systems from
-simple ones is even more fun. Best practice for such a "modelling framework" could be to use
+simple ones is even more fun. Best practice for such a "modeling framework" could be to use
+
 factory functions for model components:
 
 ```julia
