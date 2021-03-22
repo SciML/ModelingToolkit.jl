@@ -326,12 +326,11 @@ prob_an = ODEProblem(connected_simp, u0, (0.0,10.0), p; jac=true, sparse=true)
 
 The speedup is significant. For this small dense model (3 of 4 entries are
 populated), using sparse matrices is counterproductive in terms of required
-memory allocations. For large,
-
-hierarchically built models, which tend to be sparse, speedup and the reduction of
-memory allocation can be expected to be substantial. In addition, these problem
-builders allow for automatic parallelism using the structural information. For
-more information, see the [ODESystem](@ref ODESystem) page.
+memory allocations. For large, hierarchically built models, which tend to be
+sparse, speedup and the reduction of memory allocation can be expected to be
+substantial. In addition, these problem builders allow for automatic parallelism
+using the structural information. For more information, see the
+[ODESystem](@ref ODESystem) page.
 
 ## Notes and pointers how to go on
 
