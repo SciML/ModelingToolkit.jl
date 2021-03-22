@@ -143,10 +143,19 @@ function DiffEqBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sy
         _jac = nothing
     end
 
+    observedfun = let sys = sys, dict = Dict()
+        function generated_observed(obsvar, u, p)
+            obs = get!(dict, value(obsvar)) do
+                build_explicit_observed_function(sys, obsvar)
+            end
+            obs(u, p)
+        end
+    end
+
     NonlinearFunction{iip}(f,
                      jac = _jac === nothing ? nothing : _jac,
                      jac_prototype = sparse ? similar(sys.jac[],Float64) : nothing,
-                     syms = Symbol.(states(sys)))
+                     syms = Symbol.(states(sys)), observed = observedfun)
 end
 
 """
