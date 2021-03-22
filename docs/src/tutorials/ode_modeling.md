@@ -303,7 +303,9 @@ Here are some notes that may be helpful during your initial steps with MTK:
   it is then sufficient to specify the independent variable as second argument to
   `ODESystem`, e.g. `ODESystem(eqs, t)`.
 
-* A completely macro-free usage of MTK is possible.
+* A completely macro-free usage of MTK is possible and is discussed in a separate tutorial. This is for package
+  developers, since the macros are only essential for automatic symbolic naming for modelers.
+
 
 * Vector-valued parameters and variables are possible. A cleaner, more consistent treatment of
   these is work in progress, though. Once finished, this introductory tutorial will also
