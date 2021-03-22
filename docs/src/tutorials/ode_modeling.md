@@ -195,8 +195,9 @@ connections = [ fol_1.f ~ 1.5,
 All equations, variables and parameters are collected, but the structure of the
 hierarchical model is still preserved. That is, you can still get information about
 `fol_1` by addressing it by `connected.fol_1`, or its parameter by `connected.fol_1.τ`.
-Before simulation, we again eliminate the algebraic variables (i.e. the "placeholders"
-and the "connections") from the system using structural simplification:
+Before simulation, we again eliminate the algebraic variables (i.e. the "connections") 
+from the system using structural simplification:
+
 
 ```julia
 connected_simp = structural_simplify(connected)
