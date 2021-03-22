@@ -1,7 +1,7 @@
 using ModelingToolkit
 using ModelingToolkit: value, get_defaults, get_default_u0, get_default_p
 using Test
-using DifferentialEquations
+using OrdinaryDiffEq
 
 @parameters t
 @variables x(t) y(t) z(t)
@@ -69,13 +69,13 @@ _p = filter(e->ModelingToolkit.isparameter(e.first),defs)
 prob = ODEProblem(sys,collect(_u0),(0.0,160.0),collect(_p),jac=true)
 
 # SHOULD NOT HAPPEN; TODO: remove this test
-@test_throws StackOverflowError solve(prob)
+@test_throws StackOverflowError solve(prob,Tsit5())
 
 u0 = get_default_u0(sys)
 p = get_default_p(sys)
 @test isequal(u0, Dict([a=>0.1, sub.y=>0.05]))
 @test isequal(p, Dict())
 prob = ODEProblem(sys,collect(u0),(0.0,160.0),collect(p),jac=true)
-sol = solve(prob)
+sol = solve(prob,Tsit5())
 @test isequal(sol[a], sol[sub.x])
 
