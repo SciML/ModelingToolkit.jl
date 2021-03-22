@@ -49,7 +49,7 @@ prob = ODEProblem(fol_model, [x => 0.0], (0.0,10.0), [τ => 3.0])
 solve(prob) |> plot
 ```
 
-**[PLOT]**
+![Simulation result of first-order lag element](https://user-images.githubusercontent.com/13935112/111958369-703f2200-8aed-11eb-8bb4-0abe9652e850.png)
 
 The initial state and the parameter values are specified using a mapping
 from the actual symbolic elements to their values, represented as an array
@@ -102,7 +102,8 @@ sol = solve(prob)
 plot(sol, vars=[x, RHS])
 ```
 
-**[PLOT]**
+![Simulation result of first-order lag element, with right-hand side](https://user-images.githubusercontent.com/13935112/111958403-7e8d3e00-8aed-11eb-9d18-08b5180a59f9.png)
+
 
 ## Specifying a time-variable forcing function
 What if the forcing function (the "external input") ``f(t)`` is not constant?
@@ -128,11 +129,14 @@ f_fun(t) = t >= 10 ? value_vector[end] : value_vector[Int(floor(t))+1]
 
 @named fol_external_f = ODESystem([f ~ f_fun(t), D(x) ~ (f - x)/τ])
 prob = ODEProblem(structural_simplify(fol_external_f), [x => 0.0], (0.0,10.0), [τ => 0.75])
+
+using DifferentialEquations: Rodas4
 sol = solve(prob, Rodas4())
 plot(sol, vars=[x,f])
 ```
 
-**[PLOT]**
+![Simulation result of first-order lag element, step-wise forcing function](https://user-images.githubusercontent.com/13935112/111958424-83ea8880-8aed-11eb-8f42-489f4b44c3bc.png)
+
 
 Note that for this problem, the implicit solver `Rodas4` is used, to cleanly resolve
 the steps in the forcing function.
@@ -229,7 +233,7 @@ prob = ODEProblem(connected_simp, u0, (0.0,10.0), p)
 solve(prob) |> plot
 ```
 
-**[PLOT]**
+![Simulation of connected system (two first-order lag elements in series)](https://user-images.githubusercontent.com/13935112/111958439-877e0f80-8aed-11eb-9074-9d35458459a4.png)
 
 More on this topic may be found in [Composing Models and Building Reusable Components](@ref).
 
@@ -294,7 +298,7 @@ Here are some notes that may be helpful during your initial steps with MTK:
   it is then sufficient to specify the independent variable as second argument to
   `ODESystem`, e.g. `ODESystem(eqs, t)`.
 
-* A completely macro-free usage of MTK is possible. **[Where did this part of the docs go?!?]**
+* A completely macro-free usage of MTK is possible.
 
 * Vector-valued parameters and variables are possible. A cleaner, more consistent treatment of
   these is work in progress, though. Once finished, this introductory tutorial will also
