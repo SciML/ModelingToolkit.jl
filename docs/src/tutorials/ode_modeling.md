@@ -290,7 +290,8 @@ prob_an = ODEProblem(connected_simp, u0, (0.0,10.0), p; jac=true, sparse=true)
       # 142.899 μs (1297 allocations: 83.96 KiB)
 ```
 
-The speedup is significant. For this small dense model (3 of 4 entries are populated), using sparse matrices is contraproductive in terms of required memory allocations. For large,
+The speedup is significant. For this small dense model (3 of 4 entries are populated), using sparse matrices is counterproductive in terms of required memory allocations. For large,
+
 hierarchically built models, which tend to be sparse, speedup and the reduction of
 memory allocation can be expected to be substantial.
 
