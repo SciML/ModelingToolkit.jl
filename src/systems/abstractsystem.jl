@@ -543,3 +543,22 @@ Base.showerror(io::IO, e::InvalidSystemException) = print(io, "InvalidSystemExce
 AbstractTrees.children(sys::ModelingToolkit.AbstractSystem) = ModelingToolkit.get_systems(sys)
 AbstractTrees.printnode(io::IO, sys::ModelingToolkit.AbstractSystem) = print(io, nameof(sys))
 AbstractTrees.nodetype(::ModelingToolkit.AbstractSystem) = ModelingToolkit.AbstractSystem
+
+function get_default_u0(sys::AbstractSystem)
+    defs = get_defaults(sys)
+    u0 = filter(e->!isparameter(e.first),defs)
+    obs = Dict([e.lhs=>e.rhs for e in get_observed(sys)])
+    u0s = Dict([k=>substitute(v, obs) for (k,v) in u0])
+    u0s = Dict([k=>substitute(v, defs) for (k,v) in u0s])
+    return u0s
+end
+
+function get_default_p(sys::AbstractSystem)
+    defs = get_defaults(sys)
+    p = filter(e->isparameter(e.first),defs)
+    obs = Dict([e.lhs=>e.rhs for e in get_observed(sys)])
+    ps = Dict([k=>substitute(v, obs) for (k,v) in p])
+    ps = Dict([k=>substitute(v, defs) for (k,v) in ps])
+    return ps
+end
+
