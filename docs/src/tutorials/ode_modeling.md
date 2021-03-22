@@ -258,6 +258,8 @@ end
 ODEProblem(unitstep_fol_factory(name=:fol),[],(0.0,5.0),[]) |> solve
 ```
 
+Note that the defaults can be functions of the other variables, which is then resolved
+at the time of the problem construction.
 Of course, the factory function could accept additional arguments to optionally
 specify the initial state or parameter values, etc.
 
