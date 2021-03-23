@@ -143,6 +143,10 @@ u0 = [
 prob1 = ODEProblem(reduced_system, u0, (0.0, 100.0), pp)
 solve(prob1, Rodas5())
 
+prob2 = SteadyStateProblem(reduced_system, u0, pp)
+@test prob2.f.observed(lorenz2.u, prob2.u0, pp) === 1.0
+
+
 # issue #724 and #716
 let
     @parameters t
