@@ -256,7 +256,7 @@ function build_explicit_observed_function(
     dvs = DestructuredArgs(states(sys))
     ps = DestructuredArgs(parameters(sys))
     iv = independent_variable(sys)
-    args = iv === nothing ? [dvs, ps] : [dv, ps, iv]
+    args = iv === nothing ? [dvs, ps] : [dvs, ps, iv]
 
     ex = Func(
         args, [],
