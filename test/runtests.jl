@@ -2,7 +2,6 @@ using SafeTestsets, Test
 
 @safetestset "Symbolic parameters test" begin include("symbolic_parameters.jl") end
 @safetestset "Parsing Test" begin include("variable_parsing.jl") end
-@safetestset "Differentiation Test" begin include("derivatives.jl") end
 @safetestset "Simplify Test" begin include("simplify.jl") end
 @safetestset "Operation Overloads Test" begin include("operation_overloads.jl") end
 @safetestset "Direct Usage Test" begin include("direct.jl") end
