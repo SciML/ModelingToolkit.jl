@@ -163,8 +163,11 @@ function sorted_incidence_matrix(sys, val=true; only_algeqs=false, only_algvars=
         only_algeqs && (isalgeq(s, eq) || continue)
         for var in 𝑠neighbors(g, eq)
             only_algvars && (isalgvar(s, var) || continue)
-            push!(I, eqsmap[eq])
-            push!(J, varsmap[var])
+            i = eqsmap[eq]
+            j = varsmap[var]
+            (iszero(i) || iszero(j)) && continue
+            push!(I, i)
+            push!(J, j)
         end
     end
     #sparse(I, J, val, nsrcs(g), ndsts(g))
