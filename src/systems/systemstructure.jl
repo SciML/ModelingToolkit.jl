@@ -46,11 +46,12 @@ export dervars_range, diffvars_range, algvars_range
 Base.@kwdef struct SystemStructure
     fullvars::Vector
     vartype::Vector{VariableType}
-    inv_varassoc::Vector{Int}
     varassoc::Vector{Int}
+    inv_varassoc::Vector{Int}
+    varmask::BitVector # `true` if the variable has the highest order derivative
     algeqs::BitVector
-    graph::BipartiteGraph{Int,Nothing}
-    solvable_graph::BipartiteGraph{Int,Nothing}
+    graph::BipartiteGraph{Int,Vector{Vector{Int}},Nothing,Nothing}
+    solvable_graph::BipartiteGraph{Int,Vector{Vector{Int}},Nothing,Nothing}
     assign::Vector{Int}
     inv_assign::Vector{Int}
     scc::Vector{Vector{Int}}
@@ -148,7 +149,7 @@ function initialize_system_structure(sys)
         vartype[algvaridx] = ALGEBRAIC_VARIABLE
     end
 
-    graph = BipartiteGraph(neqs, nvars)
+    graph = BipartiteGraph(neqs, nvars, Val(false))
     for (ie, vars) in enumerate(symbolic_incidence), v in vars
         jv = var2idx[v]
         add_edge!(graph, ie, jv)
@@ -160,9 +161,10 @@ function initialize_system_structure(sys)
         vartype = vartype,
         varassoc = varassoc,
         inv_varassoc = inv_varassoc,
+        varmask = iszero.(varassoc),
         algeqs = algeqs,
         graph = graph,
-        solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph)),
+        solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph), Val(false)),
         assign = Int[],
         inv_assign = Int[],
         scc = Vector{Int}[],
