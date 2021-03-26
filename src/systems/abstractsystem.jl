@@ -522,7 +522,7 @@ Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations.
 """
 function structural_simplify(sys::AbstractSystem)
-    sys = tearing(alias_elimination(sys))
+    sys = tearing(dae_index_lowering(alias_elimination(sys)))
     fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     return sys
