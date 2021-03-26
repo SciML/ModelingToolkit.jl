@@ -182,14 +182,10 @@ function find_linear_equations(sys)
     for (i, eq) in enumerate(eqs); isdiffeq(eq) && continue
         empty!(coeffs)
         linear_term = 0
-        all_int_algvars = true
+        all_int_vars = true
 
         term = value(eq.rhs - eq.lhs)
         for j in 𝑠neighbors(graph, i)
-            if !isalgvar(s, j)
-                all_int_algvars = false
-                continue
-            end
             var = fullvars[j]
             c = expand_derivatives(Differential(var)(term), false)
             # test if `var` is linear in `eq`.
@@ -199,18 +195,18 @@ function find_linear_equations(sys)
                     linear_term += c * var
                     push!(coeffs, c)
                 else
-                    all_int_algvars = false
+                    all_int_vars = false
                 end
             end
         end
 
-        # Check if there are only algebraic variables and the equation is both
-        # linear and homogeneous, i.e. it is in the form of
+        # Check if all states in the equation is both linear and homogeneous,
+        # i.e. it is in the form of
         #
-        #       ``∑ c_i * a_i = 0``,
+        #       ``∑ c_i * v_i = 0``,
         #
-        # where ``c_i`` ∈ ℤ and ``a_i`` denotes algebraic variables.
-        if all_int_algvars && isequal(linear_term, term)
+        # where ``c_i`` ∈ ℤ and ``v_i`` denotes states.
+        if all_int_vars && isequal(linear_term, term)
             is_linear_equations[i] = true
             push!(eadj, copy(𝑠neighbors(graph, i)))
             push!(cadj, copy(coeffs))

@@ -87,7 +87,6 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_equations, eadj, ca
 
     linear_equations = findall(is_linear_equations)
 
-
     rank1 = bareiss!(
         (eadj, cadj),
         old_cadj, linear_equations, is_linear_variables, 1
@@ -147,7 +146,7 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_equations, eadj, ca
     end
 
     for ei in rank2+1:length(linear_equations)
-        eadj[ei] = old_cadj[ei]
+        cadj[ei] = old_cadj[ei]
     end
 
     for (ei, e) in enumerate(linear_equations)
