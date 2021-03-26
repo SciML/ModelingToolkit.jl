@@ -66,13 +66,13 @@ badjlist = [[1,2,5,6],[3,4,6]]
 bg = BipartiteGraph(7, fadjlist, badjlist)
 ```
 """
-mutable struct BipartiteGraph{I<:Integer,M} <: LightGraphs.AbstractGraph{I}
+mutable struct BipartiteGraph{I<:Integer,F<:Vector{Vector{I}},B<:Union{Vector{Vector{I}},Nothing},M} <: LightGraphs.AbstractGraph{I}
     ne::Int
-    fadjlist::Vector{Vector{I}} # `fadjlist[src] => dsts`
-    badjlist::Vector{Vector{I}} # `badjlist[dst] => srcs`
+    fadjlist::F # `fadjlist[src] => dsts`
+    badjlist::B # `badjlist[dst] => srcs`
     metadata::M
 end
-BipartiteGraph(ne::Integer, fadj::AbstractVector, badj::AbstractVector) = BipartiteGraph(ne, fadj, badj, nothing)
+BipartiteGraph(ne::Integer, fadj::AbstractVector, badj::Union{AbstractVector}=nothing) = BipartiteGraph(ne, fadj, badj, nothing)
 
 """
 ```julia
@@ -84,7 +84,9 @@ Test whether two [`BipartiteGraph`](@ref)s are equal.
 function Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T<:Integer}
     iseq = (bg1.ne == bg2.ne)
     iseq &= (bg1.fadjlist == bg2.fadjlist)
-    iseq &= (bg1.badjlist == bg2.badjlist)
+    if bg1.badjlist !== nothing && bg2.badjlist !== nothing
+        iseq &= (bg1.badjlist == bg2.badjlist)
+    end
     iseq
 end
 
@@ -93,16 +95,16 @@ $(SIGNATURES)
 
 Build an empty `BipartiteGraph` with `nsrcs` sources and `ndsts` destinations.
 """
-function BipartiteGraph(nsrcs::T, ndsts::T; metadata=nothing) where T
+function BipartiteGraph(nsrcs::T, ndsts::T, backedge::Val{B}=Val(true); metadata=nothing) where {T,B}
     fadjlist = map(_->T[], 1:nsrcs)
-    badjlist = map(_->T[], 1:ndsts)
+    badjlist = B ? map(_->T[], 1:ndsts) : nothing
     BipartiteGraph(0, fadjlist, badjlist, metadata)
 end
 
 Base.eltype(::Type{<:BipartiteGraph{I}}) where I = I
 function Base.empty!(g::BipartiteGraph)
     foreach(empty!, g.fadjlist)
-    foreach(empty!, g.badjlist)
+    g.badjlist === nothing || foreach(empty!, g.badjlist)
     g.ne = 0
     if g.metadata !== nothing
         foreach(empty!, g.metadata)
@@ -111,17 +113,22 @@ function Base.empty!(g::BipartiteGraph)
 end
 Base.length(::BipartiteGraph) = error("length is not well defined! Use `ne` or `nv`.")
 
+@noinline throw_no_back_edges() = throw(ArgumentError("The graph has no back edges."))
+
 if isdefined(LightGraphs, :has_contiguous_vertices)
     LightGraphs.has_contiguous_vertices(::Type{<:BipartiteGraph}) = false
 end
 LightGraphs.is_directed(::Type{<:BipartiteGraph}) = false
 LightGraphs.vertices(g::BipartiteGraph) = (𝑠vertices(g), 𝑑vertices(g))
 𝑠vertices(g::BipartiteGraph) = axes(g.fadjlist, 1)
-𝑑vertices(g::BipartiteGraph) = axes(g.badjlist, 1)
+𝑑vertices(g::BipartiteGraph) = g.badjlist === nothing ? throw_no_back_edges() : axes(g.badjlist, 1)
 has_𝑠vertex(g::BipartiteGraph, v::Integer) = v in 𝑠vertices(g)
 has_𝑑vertex(g::BipartiteGraph, v::Integer) = v in 𝑑vertices(g)
 𝑠neighbors(g::BipartiteGraph, i::Integer, with_metadata::Val{M}=Val(false)) where M = M ? zip(g.fadjlist[i], g.metadata[i]) : g.fadjlist[i]
-𝑑neighbors(g::BipartiteGraph, j::Integer, with_metadata::Val{M}=Val(false)) where M = M ? zip(g.badjlist[j], (g.metadata[i][j] for i in g.badjlist[j])) : g.badjlist[j]
+function 𝑑neighbors(g::BipartiteGraph, j::Integer, with_metadata::Val{M}=Val(false)) where M
+    g.badjlist === nothing && throw_no_back_edges()
+    M ? zip(g.badjlist[j], (g.metadata[i][j] for i in g.badjlist[j])) : g.badjlist[j]
+end
 LightGraphs.ne(g::BipartiteGraph) = g.ne
 LightGraphs.nv(g::BipartiteGraph) = sum(length, vertices(g))
 LightGraphs.edgetype(g::BipartiteGraph{I}) where I = BipartiteEdge{I}
@@ -157,14 +164,16 @@ function LightGraphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_MET
     end
 
     g.ne += 1
-    @inbounds list = badjlist[d]
-    index = searchsortedfirst(list, s)
-    insert!(list, index, s)
+    if badjlist !== nothing
+        @inbounds list = badjlist[d]
+        index = searchsortedfirst(list, s)
+        insert!(list, index, s)
+    end
     return true  # edge successfully added
 end
 
 function LightGraphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where T
-    if type === DST
+    if type === DST && g.badjlist !== nothing
         push!(g.badjlist, T[])
     elseif type === SRC
         push!(g.fadjlist, T[])
