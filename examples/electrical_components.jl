@@ -8,13 +8,13 @@ function Pin(;name)
     ODESystem(Equation[], t, [v, i], [], name=name, defaults=[v=>1.0, i=>1.0])
 end
 
-function Ground(name)
+function Ground(;name)
     @named g = Pin()
     eqs = [g.v ~ 0]
     ODESystem(eqs, t, [], [], systems=[g], name=name)
 end
 
-function ConstantVoltage(name; V = 1.0)
+function ConstantVoltage(;name, V = 1.0)
     val = V
     @named p = Pin()
     @named n = Pin()
@@ -26,7 +26,7 @@ function ConstantVoltage(name; V = 1.0)
     ODESystem(eqs, t, [], [V], systems=[p, n], defaults=Dict(V => val), name=name)
 end
 
-function Resistor(name; R = 1.0)
+function Resistor(;name, R = 1.0)
     val = R
     @named p = Pin()
     @named n = Pin()
@@ -40,7 +40,7 @@ function Resistor(name; R = 1.0)
     ODESystem(eqs, t, [v], [R], systems=[p, n], defaults=Dict(R => val), name=name)
 end
 
-function Capacitor(name; C = 1.0)
+function Capacitor(;name, C = 1.0)
     val = C
     @named p = Pin()
     @named n = Pin()
@@ -69,4 +69,16 @@ function Inductor(; name, L = 1.0)
            D(i) ~ v / L
           ]
     ODESystem(eqs, t, [v, i], [L], systems=[p, n], defaults=Dict(L => val), name=name)
+end
+
+function connect_pins(ps...)
+    eqs = [
+           0 ~ sum(p->p.i, ps) # KCL
+          ]
+    # KVL
+    for i in 1:length(ps)-1
+        push!(eqs, ps[i].v ~ ps[i+1].v)
+    end
+
+    return eqs
 end

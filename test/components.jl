@@ -1,7 +1,7 @@
 using Test
 using ModelingToolkit, OrdinaryDiffEq
 
-include("models/rc_model.jl")
+include("../examples/rc_model.jl")
 
 sys = structural_simplify(rc_model)
 @test !isempty(ModelingToolkit.defaults(sys))
@@ -31,3 +31,13 @@ sol = solve(prob, Tsit5())
 @test sol[resistor.v] == sol[source.p.v] - sol[capacitor.p.v]
 #using Plots
 #plot(sol)
+
+include("../examples/serial_inductor.jl")
+sys = structural_simplify(ll_model)
+u0 = [
+      inductor1.i => 0.0
+      inductor2.i => 0.0
+      inductor2.v => 0.0
+     ]
+prob = ODEProblem(sys, u0, (0, 10.0))
+sol = solve(prob, Rodas4())
