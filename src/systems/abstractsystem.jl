@@ -521,8 +521,13 @@ $(SIGNATURES)
 Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations.
 """
-function structural_simplify(sys::AbstractSystem)
-    sys = tearing(dae_index_lowering(alias_elimination(sys)))
+function structural_simplify(sys::AbstractSystem; verbose=true)
+    sys = initialize_system_structure(alias_elimination(sys))
+    isconsistent(structure(sys); verbose=verbose) || return sys
+    if sys isa ODESystem
+        sys = dae_index_lowering(sys)
+    end
+    sys = tearing(sys)
     fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     return sys

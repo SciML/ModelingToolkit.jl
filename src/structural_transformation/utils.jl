@@ -3,16 +3,16 @@
 ###
 
 """
-    find_augmenting_path(g::BipartiteGraph, eq, assign, varwhitelist, vcolor=falses(length(varwhitelist)), ecolor=falses(nsrcs(g))) -> path_found::Bool
+    find_augmenting_path(g::BipartiteGraph, eq, assign, varwhitelist, vcolor=falses(ndsts(g)), ecolor=falses(nsrcs(g))) -> path_found::Bool
 
 Try to find augmenting paths.
 """
-function find_augmenting_path(g, eq, assign, varwhitelist, vcolor=falses(length(varwhitelist)), ecolor=falses(nsrcs(g)))
+function find_augmenting_path(g, eq, assign, varwhitelist, vcolor=falses(ndsts(g)), ecolor=falses(nsrcs(g)))
     ecolor[eq] = true
 
     # if a `var` is unassigned and the edge `eq <=> var` exists
     for var in 𝑠neighbors(g, eq)
-        if varwhitelist[var] && assign[var] == UNASSIGNED
+        if (varwhitelist === nothing || varwhitelist[var]) && assign[var] == UNASSIGNED
             assign[var] = eq
             return true
         end
@@ -20,7 +20,7 @@ function find_augmenting_path(g, eq, assign, varwhitelist, vcolor=falses(length(
 
     # for every `var` such that edge `eq <=> var` exists and `var` is uncolored
     for var in 𝑠neighbors(g, eq)
-        (varwhitelist[var] && !vcolor[var]) || continue
+        ((varwhitelist === nothing || varwhitelist[var]) && !vcolor[var]) || continue
         vcolor[var] = true
         if find_augmenting_path(g, assign[var], assign, varwhitelist, vcolor, ecolor)
             assign[var] = eq
@@ -31,14 +31,12 @@ function find_augmenting_path(g, eq, assign, varwhitelist, vcolor=falses(length(
 end
 
 """
-    matching(s::Union{SystemStructure,BipartiteGraph}, varwhitelist=trues(nvars), eqwhitelist=nothing) -> assign
+    matching(s::Union{SystemStructure,BipartiteGraph}, varwhitelist=nothing, eqwhitelist=nothing) -> assign
 
 Find equation-variable bipartite matching. `s.graph` is a bipartite graph.
-`nvars` is the number of variables. Matched variables and equations are stored
-in like `assign[var] => eq`.
 """
-matching(s::SystemStructure, varwhitelist=trues(ndsts(s.graph)), eqwhitelist=nothing) = matching(s.graph, varwhitelist, eqwhitelist)
-function matching(g::BipartiteGraph, varwhitelist=trues(ndsts(g)), eqwhitelist=nothing)
+matching(s::SystemStructure, varwhitelist=nothing, eqwhitelist=nothing) = matching(s.graph, varwhitelist, eqwhitelist)
+function matching(g::BipartiteGraph, varwhitelist=nothing, eqwhitelist=nothing)
     assign = fill(UNASSIGNED, ndsts(g))
     for eq in 𝑠vertices(g)
         if eqwhitelist !== nothing
@@ -47,6 +45,48 @@ function matching(g::BipartiteGraph, varwhitelist=trues(ndsts(g)), eqwhitelist=n
         find_augmenting_path(g, eq, assign, varwhitelist)
     end
     return assign
+end
+
+###
+### Structural check
+###
+function isconsistent(s::SystemStructure; verbose=true)
+    @unpack varmask, graph, varassoc, fullvars = s
+    n_highest_vars = count(varmask)
+    neqs = nsrcs(graph)
+    is_balanced = n_highest_vars == neqs
+
+    (neqs > 0 && !is_balanced) && throw(ArgumentError("The system is unbalanced. "
+        * "There are $n_highest_vars highest order derivative variables "
+        * "and $neqs equations."))
+
+    # This is defined to check if Pantelides algorithm terminates. For more
+    # details, check the equation (15) of the original paper.
+    extended_graph = (@set graph.fadjlist = [graph.fadjlist; pantelides_extended_graph(varassoc)])
+    extended_assign = matching(extended_graph)
+
+    unassigned_var = []
+    for (vj, eq) in enumerate(extended_assign)
+        if eq === UNASSIGNED
+            push!(unassigned_var, fullvars[vj])
+        end
+    end
+
+    if !isempty(unassigned_var) || !is_balanced
+        verbose && @error "The system is structurally singular! Here are the unmatched variables:" unassigned_var
+        return false
+    end
+
+    return true
+end
+
+function pantelides_extended_graph(varassoc)
+    adj = Vector{Int}[]
+    for (j, v) in enumerate(varassoc)
+        dj = varassoc[j]
+        dj > 0 && push!(adj, [j, dj])
+    end
+    return adj
 end
 
 ###

@@ -101,7 +101,7 @@ function tearing_reassemble(sys; simplify=false)
         var_reidx[i] = active ? (idx += 1) : -1
     end
 
-    newgraph = BipartiteGraph(ns, nd)
+    newgraph = BipartiteGraph(ns, nd, Val(false))
 
     function visit!(ii, gidx, basecase=true)
         ieq = basecase ? ii : rvar2req[ii]

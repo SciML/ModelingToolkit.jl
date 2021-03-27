@@ -31,7 +31,7 @@ using SparseArrays
 
 using NonlinearSolve
 
-export tearing, dae_index_lowering
+export tearing, dae_index_lowering, isconsistent
 export build_torn_function, build_observed_function, ODAEProblem
 export sorted_incidence_matrix
 
