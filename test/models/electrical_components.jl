@@ -55,29 +55,18 @@ function Capacitor(name; C = 1.0)
     ODESystem(eqs, t, [v], [C], systems=[p, n], defaults=Dict(C => val), name=name)
 end
 
-R = 1.0
-C = 1.0
-V = 1.0
-resistor = Resistor(:resistor, R=R)
-capacitor = Capacitor(:capacitor, C=C)
-source = ConstantVoltage(:source, V=V)
-ground = Ground(:ground)
-
-function connect(ps...)
+function Inductor(; name, L = 1.0)
+    val = L
+    @named p = Pin()
+    @named n = Pin()
+    @variables v(t) i(t)
+    @parameters L
+    D = Differential(t)
     eqs = [
-           0 ~ sum(p->p.i, ps) # KCL
+           v ~ p.v - n.v
+           0 ~ p.i + n.i
+           i ~ p.i
+           D(i) ~ v / L
           ]
-    # KVL
-    for i in 1:length(ps)-1
-        push!(eqs, ps[i].v ~ ps[i+1].v)
-    end
-
-    return eqs
+    ODESystem(eqs, t, [v, i], [L], systems=[p, n], defaults=Dict(L => val), name=name)
 end
-rc_eqs = [
-          connect(source.p, resistor.p)
-          connect(resistor.n, capacitor.p)
-          connect(capacitor.n, source.n, ground.g)
-         ]
-
-rc_model = ODESystem(rc_eqs, t, systems=[resistor, capacitor, source, ground], name=:rc)

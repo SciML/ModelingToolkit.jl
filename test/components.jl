@@ -1,7 +1,7 @@
 using Test
 using ModelingToolkit, OrdinaryDiffEq
 
-include("rc_model.jl")
+include("models/rc_model.jl")
 
 sys = structural_simplify(rc_model)
 @test !isempty(ModelingToolkit.defaults(sys))
