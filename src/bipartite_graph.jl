@@ -72,7 +72,7 @@ mutable struct BipartiteGraph{I<:Integer,F<:Vector{Vector{I}},B<:Union{Vector{Ve
     badjlist::B # `badjlist[dst] => srcs` or `ndsts`
     metadata::M
 end
-BipartiteGraph(ne::Integer, fadj::AbstractVector, badj::Union{AbstractVector}=maximum(maximum, fadj); metadata=nothing) = BipartiteGraph(ne, fadj, badj, metadata)
+BipartiteGraph(ne::Integer, fadj::AbstractVector, badj::Union{AbstractVector,Integer}=maximum(maximum, fadj); metadata=nothing) = BipartiteGraph(ne, fadj, badj, metadata)
 
 """
 ```julia
