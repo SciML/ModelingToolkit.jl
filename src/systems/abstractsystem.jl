@@ -525,12 +525,9 @@ function structural_simplify(sys::AbstractSystem)
     sys = initialize_system_structure(alias_elimination(sys))
     check_consistency(structure(sys))
     if sys isa ODESystem
-        sys = dae_index_lowering(sys)
+        sys = sort_states(dae_index_lowering(sys))
     end
     sys = tearing(sys)
-    if sys isa ODESystem
-        sys = sort_states(sys)
-    end
     fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     return sys
