@@ -279,3 +279,33 @@ function _eq_unordered(a, b)
     end
     return true
 end
+
+"""
+$(SIGNATURES)
+
+Sort the states so that the mass matrix is as identity-like as possible.
+"""
+function sort_states(sys::ODESystem)
+    sys = flatten(sys)
+    eqs = equations(sys)
+    sts = states(sys)
+    sorted_states = OrderedSet()
+    var2idx = Dict(sts .=> eachindex(sts))
+    idx = 0
+    for eq in eqs
+        if isdiffeq(eq)
+            var = arguments(eq.lhs)[1]
+            if haskey(var2idx, var)
+                pop!(var2idx, var)
+                push!(sorted_states, var)
+            end
+        end
+    end
+
+    var2idx = collect(pairs(var2idx))
+    sorted_states = collect(sorted_states)
+    append!(sorted_states, map(x->x[1], sort(var2idx, by=x->x[2])))
+
+    @set! sys.states = sorted_states
+    @set! sys.structure = nothing
+end
