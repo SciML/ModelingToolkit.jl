@@ -102,11 +102,7 @@ end
 Base.eltype(::Type{<:BipartiteGraph{I}}) where I = I
 function Base.empty!(g::BipartiteGraph)
     foreach(empty!, g.fadjlist)
-    if g.badjlist isa AbstractVector
-        foreach(empty!, g.badjlist)
-    else
-        g.badjlist = 0
-    end
+    g.badjlist isa AbstractVector && foreach(empty!, g.badjlist)
     g.ne = 0
     if g.metadata !== nothing
         foreach(empty!, g.metadata)

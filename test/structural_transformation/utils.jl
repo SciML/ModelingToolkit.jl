@@ -24,7 +24,7 @@ sss = structure(sys)
 @test graph.fadjlist == sort.([[1, 2], [4, 5], [3, 7, 8], [6, 7, 9], [3, 6]])
 @test graph.badjlist == 9 == length(fullvars)
 @test ne(graph) == nnz(incidence_matrix(graph)) == 12
-@test nv(solvable_graph) == nv(solvable_graph) == 9 + 5
+@test nv(solvable_graph) == 9 + 5
 @test varassoc == [8, 0, 2, 9, 0, 5, 0, 0, 0]
 
 se = collect(StructuralTransformations.𝑠edges(graph))
