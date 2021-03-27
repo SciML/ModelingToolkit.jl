@@ -521,9 +521,9 @@ $(SIGNATURES)
 Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations.
 """
-function structural_simplify(sys::AbstractSystem; verbose=true)
+function structural_simplify(sys::AbstractSystem)
     sys = initialize_system_structure(alias_elimination(sys))
-    isconsistent(structure(sys); verbose=verbose) || return sys
+    check_consistency(structure(sys))
     if sys isa ODESystem
         sys = dae_index_lowering(sys)
     end

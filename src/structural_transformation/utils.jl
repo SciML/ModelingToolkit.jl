@@ -50,15 +50,17 @@ end
 ###
 ### Structural check
 ###
-function isconsistent(s::SystemStructure; verbose=true)
+function check_consistency(s::SystemStructure)
     @unpack varmask, graph, varassoc, fullvars = s
     n_highest_vars = count(varmask)
     neqs = nsrcs(graph)
     is_balanced = n_highest_vars == neqs
 
-    (neqs > 0 && !is_balanced) && throw(ArgumentError("The system is unbalanced. "
+    (neqs > 0 && !is_balanced) && throw(InvalidSystemException(
+          "The system is unbalanced. "
         * "There are $n_highest_vars highest order derivative variables "
-        * "and $neqs equations."))
+        * "and $neqs equations."
+       ))
 
     # This is defined to check if Pantelides algorithm terminates. For more
     # details, check the equation (15) of the original paper.
@@ -73,11 +75,11 @@ function isconsistent(s::SystemStructure; verbose=true)
     end
 
     if !isempty(unassigned_var) || !is_balanced
-        verbose && @error "The system is structurally singular! Here are the unmatched variables:" unassigned_var
-        return false
+        @error "The system is structurally singular! Here are the unmatched variables:" unassigned_var
+        throw(InvalidSystemException(""))
     end
 
-    return true
+    return nothing
 end
 
 function pantelides_extended_graph(varassoc)
