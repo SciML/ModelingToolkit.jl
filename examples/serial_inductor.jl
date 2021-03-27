@@ -2,8 +2,8 @@ include("electrical_components.jl")
 
 @named source = ConstantVoltage(V=10.0)
 @named resistor = Resistor(R=1.0)
-@named inductor1 = Inductor(L=8.0e-9)
-@named inductor2 = Inductor(L=2.0e-9)
+@named inductor1 = Inductor(L=1.0e-2)
+@named inductor2 = Inductor(L=2.0e-2)
 @named ground = Ground()
 
 eqs = [

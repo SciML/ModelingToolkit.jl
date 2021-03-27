@@ -41,3 +41,6 @@ u0 = [
      ]
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
+
+prob = ODAEProblem(sys, u0, (0, 10.0))
+sol = solve(prob, Tsit5())
