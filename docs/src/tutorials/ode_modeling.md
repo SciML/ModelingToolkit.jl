@@ -13,7 +13,7 @@ But if you want to just see some code and run, here's an example:
 ```julia
 using ModelingToolkit
 
-@variables t, x(t) RHS(t)  # independent and dependent variables
+@variables t x(t) RHS(t)  # independent and dependent variables
 @parameters τ       # parameters
 D = Differential(t) # define an operator for the differentiation w.r.t. time
 
@@ -51,7 +51,7 @@ first set the forcing function to a constant value.
 ```julia
 using ModelingToolkit
 
-@variables t, x(t)  # independent and dependent variables
+@variables t x(t)  # independent and dependent variables
 @parameters τ       # parameters
 D = Differential(t) # define an operator for the differentiation w.r.t. time
 
