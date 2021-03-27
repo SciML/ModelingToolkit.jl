@@ -120,9 +120,9 @@ test_equal.(equations(reduced_system), reduced_eqs)
 
 observed_eqs = [
                 s ~ lorenz2.y
+                a ~ lorenz2.y - lorenz1.x
                 lorenz1.F ~ -((lorenz2.z) - (lorenz2.x) - (lorenz2.y))
                 lorenz2.F ~ -((lorenz1.z) - (lorenz1.x) - (lorenz1.y))
-                a ~ s - (lorenz1.x)
                 lorenz2.u ~ lorenz1.F
                 lorenz1.u ~ lorenz2.F
                ]

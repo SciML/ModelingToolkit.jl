@@ -50,8 +50,8 @@ Base.@kwdef struct SystemStructure
     inv_varassoc::Vector{Int}
     varmask::BitVector # `true` if the variable has the highest order derivative
     algeqs::BitVector
-    graph::BipartiteGraph{Int,Vector{Vector{Int}},Nothing,Nothing}
-    solvable_graph::BipartiteGraph{Int,Vector{Vector{Int}},Nothing,Nothing}
+    graph::BipartiteGraph{Int,Vector{Vector{Int}},Int,Nothing}
+    solvable_graph::BipartiteGraph{Int,Vector{Vector{Int}},Int,Nothing}
     assign::Vector{Int}
     inv_assign::Vector{Int}
     scc::Vector{Vector{Int}}

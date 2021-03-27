@@ -66,13 +66,13 @@ badjlist = [[1,2,5,6],[3,4,6]]
 bg = BipartiteGraph(7, fadjlist, badjlist)
 ```
 """
-mutable struct BipartiteGraph{I<:Integer,F<:Vector{Vector{I}},B<:Union{Vector{Vector{I}},Nothing},M} <: LightGraphs.AbstractGraph{I}
+mutable struct BipartiteGraph{I<:Integer,F<:Vector{Vector{I}},B<:Union{Vector{Vector{I}},I},M} <: LightGraphs.AbstractGraph{I}
     ne::Int
     fadjlist::F # `fadjlist[src] => dsts`
-    badjlist::B # `badjlist[dst] => srcs`
+    badjlist::B # `badjlist[dst] => srcs` or `ndsts`
     metadata::M
 end
-BipartiteGraph(ne::Integer, fadj::AbstractVector, badj::Union{AbstractVector}=nothing) = BipartiteGraph(ne, fadj, badj, nothing)
+BipartiteGraph(ne::Integer, fadj::AbstractVector, badj::Union{AbstractVector}=maximum(maximum, fadj); metadata=nothing) = BipartiteGraph(ne, fadj, badj, metadata)
 
 """
 ```julia
@@ -84,9 +84,7 @@ Test whether two [`BipartiteGraph`](@ref)s are equal.
 function Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T<:Integer}
     iseq = (bg1.ne == bg2.ne)
     iseq &= (bg1.fadjlist == bg2.fadjlist)
-    if bg1.badjlist !== nothing && bg2.badjlist !== nothing
-        iseq &= (bg1.badjlist == bg2.badjlist)
-    end
+    iseq &= (bg1.badjlist == bg2.badjlist)
     iseq
 end
 
@@ -97,14 +95,18 @@ Build an empty `BipartiteGraph` with `nsrcs` sources and `ndsts` destinations.
 """
 function BipartiteGraph(nsrcs::T, ndsts::T, backedge::Val{B}=Val(true); metadata=nothing) where {T,B}
     fadjlist = map(_->T[], 1:nsrcs)
-    badjlist = B ? map(_->T[], 1:ndsts) : nothing
+    badjlist = B ? map(_->T[], 1:ndsts) : ndsts
     BipartiteGraph(0, fadjlist, badjlist, metadata)
 end
 
 Base.eltype(::Type{<:BipartiteGraph{I}}) where I = I
 function Base.empty!(g::BipartiteGraph)
     foreach(empty!, g.fadjlist)
-    g.badjlist === nothing || foreach(empty!, g.badjlist)
+    if g.badjlist isa AbstractVector
+        foreach(empty!, g.badjlist)
+    else
+        g.badjlist = 0
+    end
     g.ne = 0
     if g.metadata !== nothing
         foreach(empty!, g.metadata)
@@ -121,12 +123,12 @@ end
 LightGraphs.is_directed(::Type{<:BipartiteGraph}) = false
 LightGraphs.vertices(g::BipartiteGraph) = (𝑠vertices(g), 𝑑vertices(g))
 𝑠vertices(g::BipartiteGraph) = axes(g.fadjlist, 1)
-𝑑vertices(g::BipartiteGraph) = g.badjlist === nothing ? throw_no_back_edges() : axes(g.badjlist, 1)
+𝑑vertices(g::BipartiteGraph) = g.badjlist isa AbstractVector ? axes(g.badjlist, 1) : Base.OneTo(g.badjlist)
 has_𝑠vertex(g::BipartiteGraph, v::Integer) = v in 𝑠vertices(g)
 has_𝑑vertex(g::BipartiteGraph, v::Integer) = v in 𝑑vertices(g)
 𝑠neighbors(g::BipartiteGraph, i::Integer, with_metadata::Val{M}=Val(false)) where M = M ? zip(g.fadjlist[i], g.metadata[i]) : g.fadjlist[i]
 function 𝑑neighbors(g::BipartiteGraph, j::Integer, with_metadata::Val{M}=Val(false)) where M
-    g.badjlist === nothing && throw_no_back_edges()
+    g.badjlist isa AbstractVector || throw_no_back_edges()
     M ? zip(g.badjlist[j], (g.metadata[i][j] for i in g.badjlist[j])) : g.badjlist[j]
 end
 LightGraphs.ne(g::BipartiteGraph) = g.ne
@@ -152,7 +154,6 @@ const NO_METADATA = NoMetadata()
 LightGraphs.add_edge!(g::BipartiteGraph, i::Integer, j::Integer, md=NO_METADATA) = add_edge!(g, BipartiteEdge(i, j), md)
 function LightGraphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_METADATA)
     @unpack fadjlist, badjlist = g
-    verts = vertices(g)
     s, d = src(edge), dst(edge)
     (has_𝑠vertex(g, s) && has_𝑑vertex(g, d)) || error("edge ($edge) out of range.")
     @inbounds list = fadjlist[s]
@@ -164,7 +165,7 @@ function LightGraphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_MET
     end
 
     g.ne += 1
-    if badjlist !== nothing
+    if badjlist isa AbstractVector
         @inbounds list = badjlist[d]
         index = searchsortedfirst(list, s)
         insert!(list, index, s)
@@ -173,8 +174,12 @@ function LightGraphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_MET
 end
 
 function LightGraphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where T
-    if type === DST && g.badjlist !== nothing
-        push!(g.badjlist, T[])
+    if type === DST
+        if g.badjlist isa AbstractVector
+            push!(g.badjlist, T[])
+        else
+            g.badjlist += 1
+        end
     elseif type === SRC
         push!(g.fadjlist, T[])
     else
