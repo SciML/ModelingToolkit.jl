@@ -547,3 +547,16 @@ Base.showerror(io::IO, e::InvalidSystemException) = print(io, "InvalidSystemExce
 AbstractTrees.children(sys::ModelingToolkit.AbstractSystem) = ModelingToolkit.get_systems(sys)
 AbstractTrees.printnode(io::IO, sys::ModelingToolkit.AbstractSystem) = print(io, nameof(sys))
 AbstractTrees.nodetype(::ModelingToolkit.AbstractSystem) = ModelingToolkit.AbstractSystem
+
+function check_eqs_u0(eqs, dvs, u0)
+    if u0 !== nothing
+        if !(length(eqs) == length(dvs) == length(u0))
+            throw(ArgumentError("Equations ($(length(eqs))), states ($(length(dvs))), and initial conditions ($(length(u0))) are of different lengths."))
+        end
+    else
+        if !(length(eqs) == length(dvs))
+            throw(ArgumentError("Equations ($(length(eqs))), states ($(length(dvs))) are of different lengths."))
+        end
+    end
+    return nothing
+end
