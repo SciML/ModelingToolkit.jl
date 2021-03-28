@@ -8,15 +8,13 @@ function tear_graph(sys)
     s = structure(sys)
     @unpack graph, solvable_graph, assign, inv_assign, scc = s
 
-    partitions = map(scc) do c
+    @set! sys.structure.partitions = map(scc) do c
         ieqs = filter(eq->isalgeq(s, eq), c)
         vars = inv_assign[ieqs]
 
         td = TraverseDAG(graph.fadjlist, length(assign))
-        e_solved, v_solved, e_residue, v_tear = tearEquations!(td, solvable_graph.fadjlist, ieqs, vars)
+        SystemPartition(tearEquations!(td, solvable_graph.fadjlist, ieqs, vars)...)
     end
-
-    @set! sys.structure.partitions = partitions
     return sys
 end
 
@@ -37,7 +35,8 @@ function tearing_reassemble(sys; simplify=false)
     active_eqs  = trues(ns)
     active_vars = trues(nd)
     rvar2req = Vector{Int}(undef, nd)
-    for (ith_scc, (e_solved, v_solved, e_residue, v_tear)) in enumerate(partitions)
+    for (ith_scc, partition) in enumerate(partitions)
+        @unpack e_solved, v_solved, e_residual, v_residual = partition
         for ii in eachindex(e_solved)
             ieq = e_solved[ii]; ns -= 1
             iv = v_solved[ii]; nd -= 1
@@ -161,18 +160,19 @@ function tearing_reassemble(sys; simplify=false)
     ### update partitions
     newpartitions = similar(partitions, 0)
     emptyintvec = Int[]
-    for ii in eachindex(partitions)
-        _, _, og_e_residue, og_v_tear = partitions[ii]
-        isempty(og_v_tear) && continue
-        e_residue = similar(og_e_residue)
-        v_tear = similar(og_v_tear)
-        for ii in eachindex(og_e_residue)
-            e_residue[ii] = eq_reidx[og_e_residue[ii]]
-            v_tear[ii] = var_reidx[og_v_tear[ii]]
+    for (ii, partition) in enumerate(partitions)
+        @unpack e_residual, v_residual = partition
+        isempty(v_residual) && continue
+        new_e_residual = similar(e_residual)
+        new_v_residual = similar(v_residual)
+        for ii in eachindex(e_residual)
+            new_e_residual[ii] = eq_reidx[ e_residual[ii]]
+            new_v_residual[ii] = var_reidx[v_residual[ii]]
         end
         # `emptyintvec` is aliased to save memory
         # We need them for type stability
-        push!(newpartitions, (emptyintvec, emptyintvec, e_residue, v_tear))
+        newpart = SystemPartition(emptyintvec, emptyintvec, new_e_residual, new_v_residual)
+        push!(newpartitions, newpart)
     end
 
     obseqs = solvars .~ rhss

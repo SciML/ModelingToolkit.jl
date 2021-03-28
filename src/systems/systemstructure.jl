@@ -37,11 +37,25 @@ for v in 𝑣vertices(graph); active_𝑣vertices[v] || continue
 end
 =#
 
-export SystemStructure, initialize_system_structure, find_linear_equations
+export SystemStructure, SystemPartition
+export initialize_system_structure, find_linear_equations
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq
 export dervars_range, diffvars_range, algvars_range
 
 @enum VariableType::Int8 DIFFERENTIAL_VARIABLE ALGEBRAIC_VARIABLE DERIVATIVE_VARIABLE
+
+Base.@kwdef struct SystemPartition
+    e_solved::Vector{Int}
+    v_solved::Vector{Int}
+    e_residual::Vector{Int}
+    v_residual::Vector{Int}
+end
+
+function Base.:(==)(s1::SystemPartition, s2::SystemPartition)
+    tup1 = (s1.e_solved, s1.v_solved, s1.e_residual, s1.v_residual)
+    tup2 = (s2.e_solved, s2.v_solved, s2.e_residual, s2.v_residual)
+    tup1 == tup2
+end
 
 Base.@kwdef struct SystemStructure
     fullvars::Vector
@@ -55,7 +69,7 @@ Base.@kwdef struct SystemStructure
     assign::Vector{Int}
     inv_assign::Vector{Int}
     scc::Vector{Vector{Int}}
-    partitions::Vector{NTuple{4, Vector{Int}}}
+    partitions::Vector{SystemPartition}
 end
 
 isdervar(s::SystemStructure, var::Integer) = s.vartype[var] === DERIVATIVE_VARIABLE
@@ -168,7 +182,7 @@ function initialize_system_structure(sys)
         assign = Int[],
         inv_assign = Int[],
         scc = Vector{Int}[],
-        partitions = NTuple{4, Vector{Int}}[],
+        partitions = SystemPartition[],
     )
     return sys
 end

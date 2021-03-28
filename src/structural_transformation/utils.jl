@@ -262,13 +262,13 @@ function reordered_matrix(sys, partitions=structure(sys).partitions)
     I, J = Int[], Int[]
     ii = 0
     M = Int[]
-    for (e_solved, v_solved, e_residue, v_tear) in partitions
-        append!(M, v_solved)
-        append!(M, v_tear)
+    for partition in partitions
+        append!(M, partition.v_solved)
+        append!(M, partition.v_residual)
     end
     M = inverse_mapping(vcat(M, setdiff(1:nvars, M)))
-    for (e_solved, v_solved, e_residue, v_tear) in partitions
-        for es in e_solved
+    for partition in partitions
+        for es in partition.e_solved
             isdiffeq(eqs[es]) && continue
             ii += 1
             js = [M[x] for x in 𝑠neighbors(graph, es) if isalgvar(s, x)]
@@ -276,7 +276,7 @@ function reordered_matrix(sys, partitions=structure(sys).partitions)
             append!(J, js)
         end
 
-        for er in e_residue
+        for er in partition.e_residual
             isdiffeq(eqs[er]) && continue
             ii += 1
             js = [M[x] for x in 𝑠neighbors(graph, er) if isalgvar(s, x)]

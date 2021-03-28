@@ -244,7 +244,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true)
         end
     end
 
-    throw(error("Variable $name does not exist"))
+    throw(ArgumentError("Variable $name does not exist"))
 end
 
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
@@ -525,7 +525,7 @@ function structural_simplify(sys::AbstractSystem)
     sys = initialize_system_structure(alias_elimination(sys))
     check_consistency(structure(sys))
     if sys isa ODESystem
-        sys = sort_states(dae_index_lowering(sys))
+        sys = dae_index_lowering(sys)
     end
     sys = tearing(sys)
     fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]

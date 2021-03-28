@@ -53,7 +53,7 @@ tornsys = tearing(sys)
 sss = structure(tornsys)
 @unpack graph, solvable_graph, assign, partitions = sss
 @test graph.fadjlist == [[1]]
-@test partitions == [([], [], [1], [1])]
+@test partitions == [StructuralTransformations.SystemPartition([], [], [1], [1])]
 
 # Before:
 #      u1  u2  u3  u4  u5
