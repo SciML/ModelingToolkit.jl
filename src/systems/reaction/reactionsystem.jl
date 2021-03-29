@@ -42,7 +42,31 @@ Notes:
 - The three-argument form assumes all reactant and product stoichiometric coefficients
   are one.
 """
-struct Reaction{S, T <: Number}
+
+using Distributions, Statistics
+const ReactantDistribution = DiscreteUnivariateDistribution
+
+struct VarStoich
+    offs::Int
+    dist::ReactantDistribution
+end
+
+VarStoich(dist::ReactantDistribution) = VarStoich(0, dist)
+#VarStoich(offs::Int) = ReactantStoich(offs, nothing)
+
+Base.:(+)(vs::VarStoich, x::Int) = VarStoich(vs.offs + x, vs.dist)
+Base.:(+)(x::Int, vs::VarStoich) = vs + x
+Base.:(-)(vs::VarStoich, x::Int) = vs + (-x)
+
+function Base.:(*)(coeff::Int, vs::VarStoich) 
+    coeff == 1 && VarStoich(vs.offs, vs.dist)
+    throw("Cannot multiply distributions")
+end 
+
+Statistics.mean(vs::VarStoich) = vs.offs + mean(vs.dist)
+Statistics.var(vs::VarStoich) = var(vs.dist)
+
+struct Reaction{S}
     """The rate function (excluding mass action terms)."""
     rate
     """Reaction substrates."""
@@ -50,16 +74,28 @@ struct Reaction{S, T <: Number}
     """Reaction products."""
     products::Vector
     """The stoichiometric coefficients of the reactants."""
-    substoich::Vector{T}
+    substoich::Vector{Int}
     """The stoichiometric coefficients of the products."""
-    prodstoich::Vector{T}
+    prodstoich::Vector{Union{Int,VarStoich}}
     """The net stoichiometric coefficients of all species changed by the reaction."""
-    netstoich::Vector{Pair{S,T}}
+    netstoich::Vector{Pair{S, Union{Int, VarStoich}}}
     """
     `false` (default) if `rate` should be multiplied by mass action terms to give the rate law.
     `true` if `rate` represents the full reaction rate law.
     """
     only_use_rate::Bool
+end
+
+function convert_prodstoich(prodstoich)
+    ret = Vector{Union{Int,VarStoich}}(undef, length(prodstoich))
+    for (i, ps) in enumerate(prodstoich)
+        if ps isa Distribution
+            ret[i] = VarStoich(ps)
+        else
+            ret[i] = ps
+        end
+    end
+    ret
 end
 
 function Reaction(rate, subs, prods, substoich, prodstoich;
@@ -69,13 +105,15 @@ function Reaction(rate, subs, prods, substoich, prodstoich;
     (isnothing(prodstoich)&&isnothing(substoich)) && error("Both substrate and product stochiometry inputs cannot be nothing.")
     if isnothing(subs)
         subs = Vector{Term}()
-        !isnothing(substoich) && error("If substrates are nothing, substrate stiocihometries have to be so too.")
-        substoich = typeof(prodstoich)()
+        !isnothing(substoich) && error("If substrates are nothing, substrate stoichiometries have to be so too.")
+        substoich = Vector{Int}()
     end
     if isnothing(prods)
         prods = Vector{Term}()
-        !isnothing(prodstoich) && error("If products are nothing, product stiocihometries have to be so too.")
-        prodstoich = typeof(substoich)()
+        !isnothing(prodstoich) && error("If products are nothing, product stoichiometries have to be so too.")
+        prodstoich = Vector{Union{Int,VarStoich}}()
+    else
+        prodstoich = convert_prodstoich(prodstoich)
     end
     subs = value.(subs)
     prods = value.(prods)
@@ -86,7 +124,6 @@ end
 
 # three argument constructor assumes stoichiometric coefs are one and integers
 function Reaction(rate, subs, prods; kwargs...)
-
     sstoich = isnothing(subs) ? nothing : ones(Int,length(subs))
     pstoich = isnothing(prods) ? nothing : ones(Int,length(prods))
     Reaction(rate, subs, prods, sstoich, pstoich; kwargs...)
@@ -103,17 +140,19 @@ end
 # calculates the net stoichiometry of a reaction as a vector of pairs (sub,substoich)
 function get_netstoich(subs, prods, sstoich, pstoich)
     # stoichiometry as a Dictionary
-    nsdict = Dict{Any, eltype(sstoich)}(sub => -sstoich[i] for (i,sub) in enumerate(subs))
+    nsdict = Dict{Any, Union{Int,VarStoich}}(sub => -sstoich[i] for (i,sub) in enumerate(subs))
     for (i,p) in enumerate(prods)
         coef = pstoich[i]
         @inbounds nsdict[p] = haskey(nsdict, p) ? nsdict[p] + coef : coef
     end
 
     # stoichiometry as a vector
-    ns = [el for el in nsdict if el[2] != zero(el[2])]
+    ns = [el for el in nsdict if el[2] != 0 ]
 
     ns
 end
+
+isbursty(reac::Reaction) = any(stoich -> stoich isa VarStoich, reac.prodstoich)
 
 """
 $(TYPEDEF)
@@ -161,6 +200,10 @@ end
 function ReactionSystem(iv; kwargs...)
     ReactionSystem(Reaction[], iv, [], []; kwargs...)
 end
+
+get_bursty_eqs(sys::ReactionSystem) = filter(reac -> isbursty(reac), get_eqs(sys))
+get_bursts(rx::Reaction) = [ (rx, spec, stoich) for (spec, stoich) in zip(rx.products, rx.prodstoich) if stoich isa VarStoich ]
+get_bursts(sys::ReactionSystem) = vcat((get_bursts(rx) for rx in get_bursty_eqs(sys))...)
 
 function equations(sys::ModelingToolkit.ReactionSystem)
     eqs = get_eqs(sys)
@@ -220,6 +263,7 @@ function assemble_oderhs(rs; combinatoric_ratelaws=true)
     for rx in get_eqs(rs)
         rl = oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)
         for (spec,stoich) in rx.netstoich
+            stoich = mean(stoich)
             i = species_to_idx[spec]
             if _iszero(rhsvec[i])
                 signedrl  = (stoich > zero(stoich)) ? rl : -rl
@@ -247,7 +291,7 @@ end
 
 function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
     sts  = get_states(rs)
-    eqs  = Matrix{Any}(undef, length(sts), length(get_eqs(rs)))
+    eqs  = Matrix{Any}(undef, length(sts), length(get_eqs(rs)) + length(get_bursts(rs)))
     eqs .= 0
     species_to_idx = Dict((x => i for (i,x) in enumerate(sts)))
 
@@ -255,11 +299,24 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
         rlsqrt = sqrt(abs(oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)))
         (noise_scaling!==nothing) && (rlsqrt *= noise_scaling[j])
         for (spec,stoich) in rx.netstoich
+            stoich = mean(stoich)
             i            = species_to_idx[spec]
             signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
             eqs[i,j]     = isone(abs(stoich)) ? signedrlsqrt : stoich * rlsqrt
         end
     end
+
+    # Add additional noise due to bursts
+    for (j, (rx, spec, stoich)) in enumerate(get_bursts(rs))
+        varstoich = var(stoich)
+
+        j_reac = findfirst(x -> x == rx, equations(rs))
+        rlsqrt = sqrt(abs(oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)))
+        (noise_scaling!==nothing) && (rlsqrt *= noise_scaling[j_reac])
+        i = species_to_idx[spec]
+        eqs[i,length(get_eqs(rs))+j] = isone(abs(varstoich)) ? rlsqrt : sqrt(varstoich) * rlsqrt
+    end
+
     eqs
 end
 
@@ -333,10 +390,24 @@ function ismassaction(rx, rs; rxvars = get_variables(rx.rate),
     (length(rxvars)==0) && return true
     haveivdep && return false
     rx.only_use_rate && return false
+    isbursty(rx) && return false      # bursty reactions aren't MA for technical reasons
     @inbounds for i = 1:length(rxvars)
         (rxvars[i] in stateset) && return false
     end
     return true
+end
+
+function get_affect(rx::Reaction)
+    affect = Vector{Equation}()
+    for (spec,stoich) in rx.netstoich
+        if stoich isa VarStoich
+            throw("not yet implemented")
+#            push!(affect, spec ~ spec + stoich.offs + stoich.dist)
+        else
+            push!(affect, spec ~ spec + stoich)
+        end
+    end
+    affect
 end
 
 @inline function makemajump(rx; combinatoric_ratelaw=true)
@@ -351,6 +422,7 @@ end
     (!isone(coef)) && (rate /= coef)
     #push!(rates, rate)
     net_stoch      = [Pair(p[1],p[2]) for p in netstoich]
+    @assert all(p[2] isa Int for p in net_stoch)      # bursty reactions aren't MA for technical reasons
     #push!(nstoich, net_stoch)
     MassActionJump(Num(rate), reactant_stoch, net_stoch, scale_rates=false, useiszero=false)
 end
@@ -377,10 +449,7 @@ function assemble_jumps(rs; combinatoric_ratelaws=true)
             push!(meqs, makemajump(rx, combinatoric_ratelaw=combinatoric_ratelaws))
         else
             rl     = jumpratelaw(rx, rxvars=rxvars, combinatoric_ratelaw=combinatoric_ratelaws)
-            affect = Vector{Equation}()
-            for (spec,stoich) in rx.netstoich
-                push!(affect, spec ~ spec + stoich)
-            end
+            affect = get_affect(rx)
             if haveivdep
                 push!(veqs, VariableRateJump(rl,affect))
             else
