@@ -244,8 +244,8 @@ end
 isbursty(reac::Reaction) = any(stoich -> stoich isa VarStoich, reac.prodstoich)
 
 get_bursty_eqs(sys::ReactionSystem) = filter(reac -> isbursty(reac), get_eqs(sys))
-get_bursts(rx::Reaction) = [ (rx, spec, stoich) for (spec, stoich) in zip(rx.products, rx.prodstoich) if stoich isa VarStoich ]
-get_bursts(sys::ReactionSystem) = vcat((get_bursts(rx) for rx in get_bursty_eqs(sys))...)
+get_bursts(rx::Reaction) = ( (rx, spec, stoich) for (spec, stoich) in zip(rx.products, rx.prodstoich) if stoich isa VarStoich )
+get_bursts(sys::ReactionSystem) = Base.Iterators.flatten((get_bursts(rx) for rx in get_bursty_eqs(sys)))
 
 """
     oderatelaw(rx; combinatoric_ratelaw=true)
@@ -320,7 +320,8 @@ end
 
 function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
     sts  = get_states(rs)
-    eqs  = Matrix{Any}(undef, length(sts), length(get_eqs(rs)) + length(get_bursts(rs)))
+    n_bursts = count(f -> f !== nothing, get_bursts(rs))
+    eqs  = Matrix{Any}(undef, length(sts), length(get_eqs(rs)) + n_bursts)
     eqs .= 0
     species_to_idx = Dict((x => i for (i,x) in enumerate(sts)))
 
@@ -433,7 +434,6 @@ function get_affect(rx::Reaction)
     affect = Vector{Equation}()
     for (spec,stoich) in rx.netstoich
         if stoich isa VarStoich
-#            throw("not yet implemented")
             push!(affect, spec ~ spec + stoich.offs + convert_distribution(stoich.dist))
         else
             push!(affect, spec ~ spec + stoich)
