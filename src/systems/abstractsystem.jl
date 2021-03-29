@@ -307,6 +307,7 @@ end
 
 _symparam(s::Symbolic{T}) where {T} = T
 function namespace_expr(O,name,iv) where {T}
+    O = value(O)
     if istree(O)
         renamed = map(a->namespace_expr(a,name,iv), arguments(O))
         if operation(O) isa Sym
