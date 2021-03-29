@@ -1,18 +1,23 @@
-import SymbolicUtils: symtype, term
-struct Parameter{T} end
+import SymbolicUtils: symtype, term, hasmetadata
+struct MTKParameterCtx end
 
+isparameter(x::Num) = isparameter(value(x))
+isparameter(x::Symbolic) = hasmetadata(x, MTKParameterCtx) && getmetadata(x, MTKParameterCtx)
 isparameter(x) = false
-isparameter(::Sym{<:Parameter}) = true
-isparameter(::Sym{<:FnType{<:Any, <:Parameter}}) = true
 
-SymbolicUtils.@number_methods(Sym{Parameter{Real}},
-                              term(f, a),
-                              term(f, a, b), skipbasics)
+"""
+    toparam(s::Sym)
 
-SymbolicUtils.symtype(s::Symbolic{Parameter{T}}) where T = T
-SymbolicUtils.similarterm(t::Term{<:Parameter}, f, args) = Term(f, args)
+Maps the variable to a paramter.
+"""
+toparam(s::Sym) = setmetadata(s, MTKParameterCtx, true)
 
-Base.convert(::Type{Num}, x::Symbolic{Parameter{T}}) where {T<:Number} = Num(x)
+"""
+    tovar(s::Sym)
+
+Maps the variable to a state.
+"""
+tovar(s::Sym) = setmetadata(s, MTKParameterCtx, false)
 
 """
 $(SIGNATURES)
@@ -20,5 +25,8 @@ $(SIGNATURES)
 Define one or more known variables.
 """
 macro parameters(xs...)
-    esc(_parse_vars(:parameters, Parameter{Real}, xs))
+    Symbolics._parse_vars(:parameters,
+                          Real,
+                          xs,
+                          s->setmetadata(s, MTKParameterCtx, true)) |> esc
 end

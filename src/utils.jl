@@ -72,23 +72,6 @@ function states_to_sym(states::Set)
 end
 states_to_sym(states) = states_to_sym(Set(states))
 
-"""
-    toparam(s::Sym) -> Sym{<:Parameter}
-
-Maps the variable to a paramter.
-"""
-toparam(s::Sym) = Sym{Parameter{symtype(s)}}(s.name)
-toparam(s::Sym{<:Parameter}) = s
-
-"""
-    tovar(s::Sym) -> Sym{Real}
-    tovar(s::Sym{<:Parameter}) -> Sym{Real}
-
-Maps the variable to a state.
-"""
-tovar(s::Sym{<:Parameter}) = Sym{symtype(s)}(s.name)
-tovar(s::Sym) = s
-
 function todict(d)
     eltype(d) <: Pair || throw(ArgumentError("The variable-value mapping must be a Dict."))
     d isa Dict ? d : Dict(d)
