@@ -103,9 +103,9 @@ struct Reaction{S}
     """The stoichiometric coefficients of the reactants."""
     substoich::Vector{Int}
     """The stoichiometric coefficients of the products."""
-    prodstoich::Vector{Union{Int,VarStoich}}
+    prodstoich::Vector
     """The net stoichiometric coefficients of all species changed by the reaction."""
-    netstoich::Vector{Pair{S, Union{Int, VarStoich}}}
+    netstoich::Vector{Pair{S, Any}}
     """
     `false` (default) if `rate` should be multiplied by mass action terms to give the rate law.
     `true` if `rate` represents the full reaction rate law.
@@ -113,16 +113,12 @@ struct Reaction{S}
     only_use_rate::Bool
 end
 
-function convert_prodstoich(prodstoich)
-    ret = Vector{Union{Int,VarStoich}}(undef, length(prodstoich))
+function convert_prodstoich!(prodstoich)
     for (i, ps) in enumerate(prodstoich)
         if ps isa Distribution
-            ret[i] = VarStoich(ps)
-        else
-            ret[i] = ps
+            prodstoich[i] = VarStoich(ps)  
         end
     end
-    ret
 end
 
 function Reaction(rate, subs, prods, substoich, prodstoich;
@@ -138,10 +134,15 @@ function Reaction(rate, subs, prods, substoich, prodstoich;
     if isnothing(prods)
         prods = Vector{Term}()
         !isnothing(prodstoich) && error("If products are nothing, product stoichiometries have to be so too.")
-        prodstoich = Vector{Union{Int,VarStoich}}()
+        prodstoich = []
     else
-        prodstoich = convert_prodstoich(prodstoich)
+        if !(eltype(prodstoich) <: Number)
+            prodstoich = convert(Vector{Any}, prodstoich)
+        end
+
+        convert_prodstoich!(prodstoich)
     end
+
     subs = value.(subs)
     prods = value.(prods)
     ns = isnothing(netstoich) ? get_netstoich(subs, prods, substoich, prodstoich) : netstoich
@@ -167,7 +168,7 @@ end
 # calculates the net stoichiometry of a reaction as a vector of pairs (sub,substoich)
 function get_netstoich(subs, prods, sstoich, pstoich)
     # stoichiometry as a Dictionary
-    nsdict = Dict{Any, Union{Int,VarStoich}}(sub => -sstoich[i] for (i,sub) in enumerate(subs))
+    nsdict = Dict{Any,Any}(sub => -sstoich[i] for (i,sub) in enumerate(subs))
     for (i,p) in enumerate(prods)
         coef = pstoich[i]
         @inbounds nsdict[p] = haskey(nsdict, p) ? nsdict[p] + coef : coef
@@ -325,7 +326,8 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
     eqs .= 0
     species_to_idx = Dict((x => i for (i,x) in enumerate(sts)))
 
-    for (j,rx) in enumerate(equations(rs))
+    eqs_rs = equations(rs)
+    for (j,rx) in enumerate(eqs_rs)
         rlsqrt = sqrt(abs(oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)))
         (noise_scaling!==nothing) && (rlsqrt *= noise_scaling[j])
         for (spec,stoich) in rx.netstoich
@@ -343,7 +345,7 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
     for (j, (rx, spec, stoich)) in enumerate(get_bursts(rs))
         varstoich = var(stoich)
 
-        j_reac = findfirst(x -> x == rx, equations(rs))
+        j_reac = findfirst(x -> x == rx, eqs_rs)
         rlsqrt = sqrt(abs(oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)))
         (noise_scaling!==nothing) && (rlsqrt *= noise_scaling[j_reac])
         i = species_to_idx[spec]
@@ -432,6 +434,7 @@ end
 
 function get_affect(rx::Reaction)
     affect = Vector{Equation}()
+    sizehint!(affect, length(rx.netstoich))
     for (spec,stoich) in rx.netstoich
         if stoich isa VarStoich
             push!(affect, spec ~ spec + stoich.offs + convert_distribution(stoich.dist))
