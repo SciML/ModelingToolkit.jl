@@ -10,7 +10,7 @@ isparameter(x) = false
 
 Maps the variable to a paramter.
 """
-toparam(s::Sym) = setmetadata(s, MTKParameterCtx, true)
+toparam(s::Symbolic) = setmetadata(s, MTKParameterCtx, true)
 toparam(s::Num) = Num(toparam(value(s)))
 
 """
@@ -18,7 +18,7 @@ toparam(s::Num) = Num(toparam(value(s)))
 
 Maps the variable to a state.
 """
-tovar(s::Sym) = setmetadata(s, MTKParameterCtx, false)
+tovar(s::Symbolic) = setmetadata(s, MTKParameterCtx, false)
 tovar(s::Num) = Num(tovar(value(s)))
 
 """
