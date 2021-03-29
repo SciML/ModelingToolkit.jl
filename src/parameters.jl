@@ -11,6 +11,7 @@ isparameter(x) = false
 Maps the variable to a paramter.
 """
 toparam(s::Sym) = setmetadata(s, MTKParameterCtx, true)
+toparam(s::Num) = Num(toparam(value(s)))
 
 """
     tovar(s::Sym)
@@ -18,6 +19,7 @@ toparam(s::Sym) = setmetadata(s, MTKParameterCtx, true)
 Maps the variable to a state.
 """
 tovar(s::Sym) = setmetadata(s, MTKParameterCtx, false)
+tovar(s::Num) = Num(tovar(value(s)))
 
 """
 $(SIGNATURES)
@@ -28,5 +30,6 @@ macro parameters(xs...)
     Symbolics._parse_vars(:parameters,
                           Real,
                           xs,
-                          s->setmetadata(s, MTKParameterCtx, true)) |> esc
+                          x -> x isa Array ? toparam.(x) : toparam(x)
+                         ) |> esc
 end
