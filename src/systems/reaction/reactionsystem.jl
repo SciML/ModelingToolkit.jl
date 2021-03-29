@@ -43,6 +43,8 @@ Notes:
   are one.
 """
 
+# Support for bursty reactions
+
 using Distributions, Statistics
 const ReactantDistribution = DiscreteUnivariateDistribution
 
@@ -52,7 +54,6 @@ struct VarStoich
 end
 
 VarStoich(dist::ReactantDistribution) = VarStoich(0, dist)
-#VarStoich(offs::Int) = ReactantStoich(offs, nothing)
 
 Base.:(+)(vs::VarStoich, x::Int) = VarStoich(vs.offs + x, vs.dist)
 Base.:(+)(x::Int, vs::VarStoich) = vs + x
@@ -65,6 +66,32 @@ end
 
 Statistics.mean(vs::VarStoich) = vs.offs + mean(vs.dist)
 Statistics.var(vs::VarStoich) = var(vs.dist)
+
+sample_bernoulli(p) = rand(Bernoulli(p))
+sample_betabinomial(n,α,β) = rand(BetaBinomial(n,α,β))
+sample_binomial(n,p) = rand(Binomial(n,p))
+sample_geom(p) = rand(Geometric(p))
+sample_discunif(a,b) = rand(DiscreteUniform(a,b))
+sample_negbinomial(r,p) = rand(NegativeBinomial(r,p))
+sample_poisson(λ) = rand(Poisson(λ))
+
+@register sample_bernoulli(p)
+@register sample_betabinomial(n,α,β)
+@register sample_binomial(n,p)
+@register sample_geom(p)
+@register sample_discunif(a,b)
+@register sample_negbinomial(r,p)
+@register sample_poisson(λ)
+
+convert_distribution(bern::Bernoulli) = sample_bernoulli(bern.p)
+convert_distribution(betabin::BetaBinomial) = sample_betabinomial(bin.n, bin.α, bin.β)
+convert_distribution(bin::Binomial) = sample_binomial(bin.n, bin.p)
+convert_distribution(geom::Geometric) = sample_geom(geom.p)
+convert_distribution(unif::DiscreteUniform) = sample_discunif(unif.a, unif.b)
+convert_distribution(negbin::NegativeBinomial) = sample_negbinomial(negbin.p, negbin.r)
+convert_distribution(pois::Poisson) = sample_poisson(pois.λ)
+
+#
 
 struct Reaction{S}
     """The rate function (excluding mass action terms)."""
@@ -152,8 +179,6 @@ function get_netstoich(subs, prods, sstoich, pstoich)
     ns
 end
 
-isbursty(reac::Reaction) = any(stoich -> stoich isa VarStoich, reac.prodstoich)
-
 """
 $(TYPEDEF)
 
@@ -201,9 +226,6 @@ function ReactionSystem(iv; kwargs...)
     ReactionSystem(Reaction[], iv, [], []; kwargs...)
 end
 
-get_bursty_eqs(sys::ReactionSystem) = filter(reac -> isbursty(reac), get_eqs(sys))
-get_bursts(rx::Reaction) = [ (rx, spec, stoich) for (spec, stoich) in zip(rx.products, rx.prodstoich) if stoich isa VarStoich ]
-get_bursts(sys::ReactionSystem) = vcat((get_bursts(rx) for rx in get_bursty_eqs(sys))...)
 
 function equations(sys::ModelingToolkit.ReactionSystem)
     eqs = get_eqs(sys)
@@ -218,6 +240,12 @@ function equations(sys::ModelingToolkit.ReactionSystem)
         return eqs
     end
 end
+
+isbursty(reac::Reaction) = any(stoich -> stoich isa VarStoich, reac.prodstoich)
+
+get_bursty_eqs(sys::ReactionSystem) = filter(reac -> isbursty(reac), get_eqs(sys))
+get_bursts(rx::Reaction) = [ (rx, spec, stoich) for (spec, stoich) in zip(rx.products, rx.prodstoich) if stoich isa VarStoich ]
+get_bursts(sys::ReactionSystem) = vcat((get_bursts(rx) for rx in get_bursty_eqs(sys))...)
 
 """
     oderatelaw(rx; combinatoric_ratelaw=true)
@@ -263,9 +291,10 @@ function assemble_oderhs(rs; combinatoric_ratelaws=true)
     for rx in get_eqs(rs)
         rl = oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)
         for (spec,stoich) in rx.netstoich
-            stoich = mean(stoich)
             i = species_to_idx[spec]
-            if _iszero(rhsvec[i])
+            if stoich isa VarStoich            
+                rhsvec[i] = mean(stoich) * rl + rhsvec[i]
+            elseif _iszero(rhsvec[i])
                 signedrl  = (stoich > zero(stoich)) ? rl : -rl
                 rhsvec[i] = isone(abs(stoich)) ? signedrl : stoich * rl
             else
@@ -299,10 +328,13 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
         rlsqrt = sqrt(abs(oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)))
         (noise_scaling!==nothing) && (rlsqrt *= noise_scaling[j])
         for (spec,stoich) in rx.netstoich
-            stoich = mean(stoich)
-            i            = species_to_idx[spec]
-            signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
-            eqs[i,j]     = isone(abs(stoich)) ? signedrlsqrt : stoich * rlsqrt
+            i = species_to_idx[spec]
+            if stoich isa VarStoich            
+                eqs[i,j] = mean(stoich) * rlsqrt
+            else
+                signedrlsqrt = (stoich > zero(stoich)) ? rlsqrt : -rlsqrt
+                eqs[i,j]     = isone(abs(stoich)) ? signedrlsqrt : stoich * rlsqrt
+            end
         end
     end
 
@@ -314,7 +346,7 @@ function assemble_diffusion(rs, noise_scaling; combinatoric_ratelaws=true)
         rlsqrt = sqrt(abs(oderatelaw(rx; combinatoric_ratelaw=combinatoric_ratelaws)))
         (noise_scaling!==nothing) && (rlsqrt *= noise_scaling[j_reac])
         i = species_to_idx[spec]
-        eqs[i,length(get_eqs(rs))+j] = isone(abs(varstoich)) ? rlsqrt : sqrt(varstoich) * rlsqrt
+        eqs[i,length(get_eqs(rs))+j] = sqrt(varstoich) * rlsqrt
     end
 
     eqs
@@ -401,8 +433,8 @@ function get_affect(rx::Reaction)
     affect = Vector{Equation}()
     for (spec,stoich) in rx.netstoich
         if stoich isa VarStoich
-            throw("not yet implemented")
-#            push!(affect, spec ~ spec + stoich.offs + stoich.dist)
+#            throw("not yet implemented")
+            push!(affect, spec ~ spec + stoich.offs + convert_distribution(stoich.dist))
         else
             push!(affect, spec ~ spec + stoich)
         end
