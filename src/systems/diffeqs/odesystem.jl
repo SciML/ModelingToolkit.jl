@@ -106,7 +106,7 @@ iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nes
 iv_from_nested_derivative(x::Sym) = x
 iv_from_nested_derivative(x) = missing
 
-vars(x::Sym) = [x]
+vars(x::Sym) = Set([x])
 vars(exprs::Symbolic) = vars([exprs])
 vars(exprs) = foldl(vars!, exprs; init = Set())
 vars!(vars, eq::Equation) = (vars!(vars, eq.lhs); vars!(vars, eq.rhs); vars)
