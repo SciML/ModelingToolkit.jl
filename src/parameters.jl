@@ -2,7 +2,7 @@ import SymbolicUtils: symtype, term, hasmetadata
 struct MTKParameterCtx end
 
 isparameter(x::Num) = isparameter(value(x))
-isparameter(x::Symbolic) = hasmetadata(x, MTKParameterCtx) && getmetadata(x, MTKParameterCtx)
+isparameter(x::Symbolic) = getmetadata(x, MTKParameterCtx, false)
 isparameter(x) = false
 
 """
