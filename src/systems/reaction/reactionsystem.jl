@@ -408,7 +408,7 @@ function Base.convert(::Type{<:ODESystem}, rs::ReactionSystem;
                       name=nameof(rs), combinatoric_ratelaws=true, kwargs...)
     eqs     = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws)
     systems = map(sys -> (sys isa ODESystem) ? sys : convert(ODESystem, sys), get_systems(rs))
-    ODESystem(eqs, get_iv(rs), get_states(rs), get_ps(rs), name=name, systems=systems)
+    ODESystem(eqs, get_iv(rs), get_states(rs), get_ps(rs), name=name, systems=systems; kwargs...)
 end
 
 """
