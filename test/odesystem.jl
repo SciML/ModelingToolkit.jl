@@ -246,8 +246,6 @@ for prob in [prob4, prob5]
     @test all(x->≈(sum(x), 1.0, atol=1e-12), sol.u)
 end
 
-@test ModelingToolkit.construct_state(SArray{Tuple{3,3}}(rand(3,3)), [1,2]) == SVector{2}([1, 2])
-
 @parameters t σ β
 @variables x(t) y(t) z(t)
 D = Differential(t)
