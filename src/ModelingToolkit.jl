@@ -137,6 +137,7 @@ include("structural_transformation/StructuralTransformations.jl")
 @reexport using .StructuralTransformations
 
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr
+export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
 export SystemStructure
 export JumpSystem

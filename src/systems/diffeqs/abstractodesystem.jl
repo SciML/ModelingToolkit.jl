@@ -271,7 +271,7 @@ end
 
 """
 ```julia
-function DiffEqBase.ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing, tgrad=false,
                                      jac = false,
@@ -384,6 +384,50 @@ function ODEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
     ODEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
+"""
+```julia
+function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                     ps = parameters(sys);
+                                     version = nothing, tgrad=false,
+                                     jac = false,
+                                     sparse = false,
+                                     kwargs...) where {iip}
+```
+
+Create a Julia expression for an `ODEFunction` from the [`ODESystem`](@ref).
+The arguments `dvs` and `ps` are used to set the order of the dependent
+variable and parameter vectors, respectively.
+"""
+struct DAEFunctionExpr{iip} end
+
+struct DAEFunctionClosure{O, I} <: Function
+    f_oop::O
+    f_iip::I
+end
+(f::DAEFunctionClosure)(du, u, p, t) = f.f_oop(du, u, p, t)
+(f::DAEFunctionClosure)(out, du, u, p, t) = f.f_iip(out, du, u, p, t)
+
+function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                     ps = parameters(sys), u0 = nothing;
+                                     version = nothing, tgrad=false,
+                                     jac = false,
+                                     linenumbers = false,
+                                     sparse = false, simplify=false,
+                                     kwargs...) where {iip}
+    f_oop, f_iip = generate_function(sys, dvs, ps; expression=Val{true}, implicit_dae = true, kwargs...)
+    fsym = gensym(:f)
+    _f = :($fsym = $DAEFunctionClosure($f_oop, $f_iip))
+    ex = quote
+        $_f
+        ODEFunction{$iip}($fsym,)
+    end
+    !linenumbers ? striplines(ex) : ex
+end
+
+function DAEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
+    DAEFunctionExpr{true}(sys, args...; kwargs...)
+end
+
 for P in [:ODEProblem, :DAEProblem]
     @eval function DiffEqBase.$P(sys::AbstractODESystem, args...; kwargs...)
         $P{true}(sys, args...; kwargs...)
@@ -440,7 +484,7 @@ end
 
 """
 ```julia
-function DiffEqBase.ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
+function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false,
@@ -476,6 +520,53 @@ end
 
 function ODEProblemExpr(sys::AbstractODESystem, args...; kwargs...)
     ODEProblemExpr{true}(sys, args...; kwargs...)
+end
+
+"""
+```julia
+function DAEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
+                                    parammap=DiffEqBase.NullParameters();
+                                    version = nothing, tgrad=false,
+                                    jac = false,
+                                    checkbounds = false, sparse = false,
+                                    linenumbers = true, parallel=SerialForm(),
+                                    skipzeros=true, fillzeros=true,
+                                    simplify=false,
+                                    kwargs...) where iip
+```
+
+Generates a Julia expression for constructing an ODEProblem from an
+ODESystem and allows for automatically symbolically calculating
+numerical enhancements.
+"""
+struct DAEProblemExpr{iip} end
+
+function DAEProblemExpr{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
+                             parammap=DiffEqBase.NullParameters();
+                             kwargs...) where iip
+    f, du0, u0, p = process_DEProblem(
+        DAEFunctionExpr{iip}, sys, u0map, parammap;
+        implicit_dae=true, du0map=du0map, kwargs...
+    )
+    linenumbers = get(kwargs, :linenumbers, true)
+    diffvars = collect_differential_variables(sys)
+    sts = states(sys)
+    differential_vars = map(Base.Fix2(in, diffvars), sts)
+
+    ex = quote
+        f = $f
+        u0 = $u0
+        du0 = $du0
+        tspan = $tspan
+        p = $p
+        differential_vars = $differential_vars
+        DAEProblem{$iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,$(kwargs...))
+    end
+    !linenumbers ? striplines(ex) : ex
+end
+
+function DAEProblemExpr(sys::AbstractODESystem, args...; kwargs...)
+    DAEProblemExpr{true}(sys, args...; kwargs...)
 end
 
 
