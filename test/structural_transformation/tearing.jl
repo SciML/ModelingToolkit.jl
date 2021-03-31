@@ -149,14 +149,13 @@ daesys = ODESystem(eqs, t)
 newdaesys = tearing(daesys)
 @test equations(newdaesys) == [D(x) ~ z; 0 ~ x + sin(z) - p*t]
 @test isequal(states(newdaesys), [x, z])
-@test_throws ArgumentError ODAEProblem(newdaesys, [x=>1.0], (0, 1.0))
 prob = ODAEProblem(newdaesys, [x=>1.0], (0, 1.0), [p=>0.2])
 du = [0.0]; u = [1.0]; pr = 0.2; tt = 0.1
 @test (@ballocated $(prob.f)($du, $u, $pr, $tt)) == 0
 @test du ≈ [-asin(u[1] - pr * tt)] atol=1e-5
 
 # test the initial guess is respected
-infprob = ODAEProblem(tearing(ODESystem(eqs, t, default_u0=Dict(z=>Inf))), [x=>1.0], (0, 1.0), [p=>0.2])
+infprob = ODAEProblem(tearing(ODESystem(eqs, t, defaults=Dict(z=>Inf))), [x=>1.0], (0, 1.0), [p=>0.2])
 @test_throws DomainError infprob.f(du, u, pr, tt)
 
 sol1 = solve(prob, Tsit5())

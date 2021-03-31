@@ -22,7 +22,7 @@ same keyword arguments, which are:
 
 - `system`: This is used for specifying subsystems for hierarchical modeling with
   reusable components. For more information, see the [components page](@ref components)
-- Defaults: Keyword arguments like `default_u0` are used for specifying default
+- Defaults: Keyword arguments like `defaults` are used for specifying default
   values which are used. If a value is not given at the `SciMLProblem` construction
   time, its numerical value will be the default.
 
@@ -49,9 +49,7 @@ Optionally, a system could have:
 
 - `observed(sys)`: All observed equations of the system and its subsystems.
 - `get_observed(sys)`: Observed equations of the current-level system.
-- `get_default_u0(sys)`: A `Dict` that maps states into their default initial
-  condition.
-- `get_default_p(sys)`: A `Dict` that maps parameters into their default value.
+- `get_defaults(sys)`: A `Dict` that maps variables into their default values.
 - `independent_variable(sys)`: The independent variable of a system.
 - `get_noiseeqs(sys)`: Noise equations of the current-level system.
 
@@ -132,7 +130,7 @@ u0 = [
 ## Default Value Handling
 
 The `AbstractSystem` types allow for specifying default values, for example
-`default_p` inside of them. At problem construction time, these values are merged
+`defaults` inside of them. At problem construction time, these values are merged
 into the value maps, where for any repeats the value maps override the default.
 In addition, defaults of a higher level in the system override the defaults of
-a lower level in the system. 
+a lower level in the system.

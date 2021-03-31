@@ -14,10 +14,11 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
         p = prob.p
     end
 
+    has_p = !(p isa Union{DiffEqBase.NullParameters,Nothing})
+
     var(x, i) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x, i))))
     vars = ArrayInterface.restructure(prob.u0,[var(:x, i)(ModelingToolkit.value(t)) for i in eachindex(prob.u0)])
-    params = p isa DiffEqBase.NullParameters ? [] :
-             reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(p))
+    params = has_p ? reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(p)) : []
     var_set = Set(vars)
 
     D = Differential(t)
@@ -52,11 +53,12 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     else
         vec(collect(params))
     end
+    default_u0 = Dict(sts .=> vec(collect(prob.u0)))
+    default_p = has_p ? Dict(params .=> vec(collect(prob.p))) : Dict()
 
     de = ODESystem(
         eqs, t, sts, params,
-        default_u0=Dict(sts .=> vec(collect(prob.u0))),
-        default_p=Dict(params .=> vec(collect(prob.p))),
+        defaults=merge(default_u0, default_p),
     )
 
     de

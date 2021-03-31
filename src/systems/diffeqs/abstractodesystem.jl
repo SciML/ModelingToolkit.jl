@@ -64,7 +64,7 @@ end
 function generate_function(
         sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
         implicit_dae=false,
-        ddvs=implicit_dae ? map(diff2term ∘ Differential(independent_variable(sys)), dvs) : nothing,
+        ddvs=implicit_dae ? map(Differential(independent_variable(sys)), dvs) : nothing,
         kwargs...
     )
     # optimization
@@ -357,32 +357,21 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
                            kwargs...)
     dvs = states(sys)
     ps = parameters(sys)
-    iv = get_iv(sys)
-    defaults = merge(default_p(sys), default_u0(sys))
+    defs = defaults(sys)
+    iv = independent_variable(sys)
 
-    if u0map !== nothing
-        u0map′ = lower_mapnames(u0map, iv)
-        u0 = varmap_to_vars(u0map′,dvs; defaults=defaults)
-    else
-        u0 = nothing
-    end
-
+    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
     if implicit_dae && du0map !== nothing
-        du0map′ = lower_mapnames(du0map, iv)
-        ddvs = map(diff2term ∘ Differential(iv), dvs)
-        du0 = varmap_to_vars(du0map′, ddvs; defaults=defaults)
+        ddvs = map(Differential(iv), dvs)
+        du0 = varmap_to_vars(du0map, ddvs; defaults=defaults, toterm=identity)
     else
         du0 = nothing
         ddvs = nothing
     end
+    p = varmap_to_vars(parammap,ps; defaults=defs)
 
-    if !(parammap isa DiffEqBase.NullParameters)
-        parammap′ = lower_mapnames(parammap)
-        p = varmap_to_vars(parammap′,ps; defaults=defaults)
-    elseif !isempty(defaults)
-        p = varmap_to_vars(Dict(),ps; defaults=defaults)
-    else
-        p = ps
+    if u0 !== nothing
+        length(dvs) == length(u0) || throw(ArgumentError("States ($(length(dvs))) and initial conditions ($(length(u0))) are of different lengths."))
     end
 
     f = constructor(sys,dvs,ps,u0;ddvs=ddvs,tgrad=tgrad,jac=jac,checkbounds=checkbounds,

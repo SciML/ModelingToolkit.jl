@@ -35,36 +35,39 @@ pde_system = PDESystem(eq,bcs,domains,[t,x],[u])
 ```
 """
 struct PDESystem <: ModelingToolkit.AbstractSystem
-  "The equations which define the PDE"
-  eqs
-  "The boundary conditions"
-  bcs
-  "The domain for the independent variables."
-  domain
-  "The independent variables"
-  indvars
-  "The dependent variables"
-  depvars
-  "The parameters"
-  ps
-  "The default values of the parameters"
-  default_p
-  @add_kwonly function PDESystem(eqs, bcs, domain, indvars, depvars, ps = SciMLBase.NullParameters(), default_p = nothing)
-      new(eqs, bcs, domain, indvars, depvars, ps, default_p)
-  end
+    "The equations which define the PDE"
+    eqs
+    "The boundary conditions"
+    bcs
+    "The domain for the independent variables."
+    domain
+    "The independent variables"
+    indvars
+    "The dependent variables"
+    depvars
+    "The parameters"
+    ps
+    """
+    defaults: The default values to use when initial conditions and/or
+    parameters are not supplied in `ODEProblem`.
+    """
+    defaults::Dict
+    @add_kwonly function PDESystem(eqs, bcs, domain, indvars, depvars, ps = SciMLBase.NullParameters(), defaults = Dict())
+        new(eqs, bcs, domain, indvars, depvars, ps, defaults)
+    end
 end
 
 Base.getproperty(x::PDESystem, sym::Symbol) = getfield(x, sym)
 
 Base.summary(prob::PDESystem) = string(nameof(typeof(prob)))
-function Base.show(io::IO, sys::PDESystem)
-  println(io,summary(sys))
-  println(io,"Equations: ", sys.eqs)
-  println(io,"Boundary Conditions: ", sys.bcs)
-  println(io,"Domain: ", sys.domain)
-  println(io,"Dependent Variables: ", sys.depvars)
-  println(io,"Independent Variables: ", sys.indvars)
-  println(io,"Parameters: ", sys.ps)
-  println(io,"Default Parameter Values", sys.default_p)
-  return nothing
+function Base.show(io::IO, ::MIME"text/plain", sys::PDESystem)
+    println(io,summary(sys))
+    println(io,"Equations: ", get_eqs(sys))
+    println(io,"Boundary Conditions: ", get_bcs(sys))
+    println(io,"Domain: ", get_domain(sys))
+    println(io,"Dependent Variables: ", get_depvars(sys))
+    println(io,"Independent Variables: ", get_indvars(sys))
+    println(io,"Parameters: ", get_ps(sys))
+    print(io,"Default Parameter Values", get_defaults(sys))
+    return nothing
 end

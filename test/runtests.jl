@@ -2,9 +2,7 @@ using SafeTestsets, Test
 
 @safetestset "Symbolic parameters test" begin include("symbolic_parameters.jl") end
 @safetestset "Parsing Test" begin include("variable_parsing.jl") end
-@safetestset "Differentiation Test" begin include("derivatives.jl") end
 @safetestset "Simplify Test" begin include("simplify.jl") end
-@safetestset "Operation Overloads Test" begin include("operation_overloads.jl") end
 @safetestset "Direct Usage Test" begin include("direct.jl") end
 @safetestset "System Linearity Test" begin include("linearity.jl") end
 @safetestset "ODESystem Test" begin include("odesystem.jl") end
@@ -15,6 +13,7 @@ using SafeTestsets, Test
 @safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 @safetestset "ReactionSystem Test" begin include("reactionsystem.jl") end
+@safetestset "ReactionSystem Test" begin include("reactionsystem_components.jl") end
 @safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
 @safetestset "ControlSystem Test" begin include("controlsystem.jl") end
 @safetestset "Domain Test" begin include("domains.jl") end
@@ -35,3 +34,4 @@ println("Last test requires gcc available in the path!")
 @safetestset "Latexify recipes Test" begin include("latexify.jl") end
 @safetestset "StructuralTransformations" begin include("structural_transformation/runtests.jl") end
 @testset "Serialization" begin include("serialization.jl") end
+@safetestset "print_tree" begin include("print_tree.jl") end

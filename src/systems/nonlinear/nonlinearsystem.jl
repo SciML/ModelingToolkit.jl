@@ -35,15 +35,10 @@ struct NonlinearSystem <: AbstractSystem
     """
     systems::Vector{NonlinearSystem}
     """
-    default_u0: The default initial conditions to use when initial conditions
-    are not supplied in `ODEProblem`.
+    defaults: The default values to use when initial conditions and/or
+    parameters are not supplied in `ODEProblem`.
     """
-    default_u0::Dict
-    """
-    default_p: The default parameters to use when parameters are not supplied
-    in `ODEProblem`.
-    """
-    default_p::Dict
+    defaults::Dict
     """
     structure: structural information of the system
     """
@@ -56,12 +51,14 @@ function NonlinearSystem(eqs, states, ps;
                          name = gensym(:NonlinearSystem),
                          default_u0=Dict(),
                          default_p=Dict(),
+                         defaults=_merge(Dict(default_u0), Dict(default_p)),
                          systems = NonlinearSystem[])
-    default_u0 isa Dict || (default_u0 = Dict(default_u0))
-    default_p isa Dict || (default_p = Dict(default_p))
-    default_u0 = Dict(value(k) => value(default_u0[k]) for k in keys(default_u0))
-    default_p = Dict(value(k) => value(default_p[k]) for k in keys(default_p))
-    NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, default_u0, default_p, nothing, [])
+    if !(isempty(default_u0) && isempty(default_p))
+        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :NonlinearSystem, force=true)
+    end
+    defaults = todict(defaults)
+    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, defaults, nothing, [])
 end
 
 function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
@@ -210,17 +207,12 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem,u0map,paramm
                            kwargs...)
     dvs = states(sys)
     ps = parameters(sys)
-    u0map′ = lower_mapnames(u0map)
-    defaults = merge(default_p(sys), default_u0(sys))
-    u0 = varmap_to_vars(u0map′,dvs; defaults=defaults)
+    defs = defaults(sys)
+    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
+    p = varmap_to_vars(parammap,ps; defaults=defs)
 
-    if !(parammap isa DiffEqBase.NullParameters)
-        parammap′ = lower_mapnames(parammap)
-        p = varmap_to_vars(parammap′,ps; defaults=defaults)
-    elseif !isempty(default_p(sys))
-        p = varmap_to_vars(Dict(),ps; defaults=defaults)
-    else
-        p = ps
+    if u0 !== nothing
+        length(dvs) == length(u0) || throw(ArgumentError("States ($(length(dvs))) and initial conditions ($(length(u0))) are of different lengths."))
     end
 
     f = constructor(sys,dvs,ps,u0;jac=jac,checkbounds=checkbounds,
@@ -298,8 +290,7 @@ function flatten(sys::NonlinearSystem)
                                states(sys),
                                parameters(sys),
                                observed=observed(sys),
-                               default_u0=default_u0(sys),
-                               default_p=default_p(sys),
+                               defaults=defaults(sys),
                                name=nameof(sys),
                               )
     end

@@ -97,17 +97,21 @@ Because ModelingToolkit.jl is the core foundation of a equation-based modeling
 ecosystem, there is a large set of libraries adding features to this system.
 Below is an incomplete list of extension libraries one may want to be aware of:
 
-- [Catalyst.jl](https://github.com/SciML/Catalyst.jl): Symbolic representations of chemical reactions
+- [Catalyst.jl](https://github.com/SciML/Catalyst.jl): Symbolic representations
+  of chemical reactions
     - Symbolically build and represent large systems of chemical reactions
     - Generate code for ODEs, SDEs, continuous-time Markov Chains, and more
     - Simulate the models using the SciML ecosystem with O(1) Gillespie methods
-- [DataDrivenDiffEq.jl](https://github.com/SciML/DataDrivenDiffEq.jl): Automatic identification of equations from data
+- [DataDrivenDiffEq.jl](https://github.com/SciML/DataDrivenDiffEq.jl): Automatic
+  identification of equations from data
     - Automated construction of ODEs and DAEs from data
     - Representations of Koopman operators and Dynamic Mode Decomposition (DMD)
-- [MomentClosure.jl](https://github.com/augustinas1/MomentClosure.jl): Automatic transformation of ReactionSystems into deterministic systems
+- [MomentClosure.jl](https://github.com/augustinas1/MomentClosure.jl): Automatic
+  transformation of ReactionSystems into deterministic systems
     - Generates ODESystems for the moment closures
     - Allows for geometrically-distributed random reaction rates
-- [ReactionMechanismSimulator.jl](https://github.com/ReactionMechanismGenerator/ReactionMechanismSimulator.jl): simulating and analyzing large chemical reaction mechanisms
+- [ReactionMechanismSimulator.jl](https://github.com/ReactionMechanismGenerator/ReactionMechanismSimulator.jl):
+  simulating and analyzing large chemical reaction mechanisms
     - Ideal gas and dilute liquid phases.
     - Constant T and P and constant V adiabatic ideal gas reactors.
     - Constant T and V dilute liquid reactors.
@@ -124,7 +128,8 @@ the solver libraries which are the numerical targets of the ModelingToolkit
 system:
 
 - [DifferentialEquations.jl](https://diffeq.sciml.ai/stable/)
-    - Multi-package interface of high performance numerical solvers for `ODESystem`, `SDESystem`, and `JumpSystem`
+    - Multi-package interface of high performance numerical solvers for `ODESystem`,
+      `SDESystem`, and `JumpSystem`
 - [NonlinearSolve.jl](https://github.com/JuliaComputing/NonlinearSolve.jl)
     - High performance numerical solving of `NonlinearSystem`
 - [GalacticOptim.jl](https://github.com/SciML/GalacticOptim.jl)
@@ -133,3 +138,14 @@ system:
     - Physics-Informed Neural Network (PINN) training on `PDESystem`
 - [DiffEqOperators.jl](https://github.com/SciML/DiffEqOperators.jl)
     - Automated finite difference method (FDM) discretization of `PDESystem`
+
+## Contributing
+
+- Please refer to the
+  [SciML ColPrac: Contributor's Guide on Collaborative Practices for Community Packages](https://github.com/SciML/ColPrac/blob/master/README.md)
+  for guidance on PRs, issues, and other matters relating to contributing to ModelingToolkit.
+- There are a few community forums:
+    - The #diffeq-bridged channel in the [Julia Slack](https://julialang.org/slack/)
+    - [JuliaDiffEq](https://gitter.im/JuliaDiffEq/Lobby) on Gitter
+    - On the Julia Discourse forums (look for the [modelingtoolkit tag](https://discourse.julialang.org/tag/modelingtoolkit)
+    - See also [SciML Community page](https://sciml.ai/community/)
