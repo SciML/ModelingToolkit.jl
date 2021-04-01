@@ -1,5 +1,5 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
-using OrdinaryDiffEq
+using OrdinaryDiffEq, Sundials
 using DiffEqBase, SparseArrays
 using StaticArrays
 using Test
@@ -225,12 +225,26 @@ for p in [prob1, prob14]
 end
 prob2 = ODEProblem(sys,u0,tspan,p,jac=true)
 prob3 = ODEProblem(sys,u0,tspan,p,jac=true,sparse=true)
+@test_throws ArgumentError ODEProblem(sys,zeros(5),tspan,p)
 for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
     local sol
     sol = solve(prob, Rodas5())
     @test all(x->≈(sum(x), 1.0, atol=atol), sol.u)
 end
-@test_throws ArgumentError ODEProblem(sys,zeros(5),tspan,p)
+
+du0 = [
+       D(y₁) => -0.04
+       D(y₂) => 0.04
+       D(y₃) => 0.0
+      ]
+prob4 = DAEProblem(sys, du0, u0, tspan, p2)
+prob5 = eval(DAEProblemExpr(sys, du0, u0, tspan, p2))
+for prob in [prob4, prob5]
+    local sol
+    @test prob.differential_vars == [true, true, false]
+    sol = solve(prob, IDA())
+    @test all(x->≈(sum(x), 1.0, atol=1e-12), sol.u)
+end
 
 @parameters t σ β
 @variables x(t) y(t) z(t)

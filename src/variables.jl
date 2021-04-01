@@ -10,7 +10,7 @@ Takes a list of pairs of `variables=>values` and an ordered list of variables
 and creates the array of values in the correct order with default values when
 applicable.
 """
-function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true)
+function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true, toterm=Symbolics.diff2term)
     # Edge cases where one of the arguments is effectively empty.
     is_incomplete_initialization = varmap isa DiffEqBase.NullParameters || varmap === nothing
     if is_incomplete_initialization || isempty(varmap)
@@ -31,7 +31,7 @@ function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true)
     if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
         varmap = todict(varmap)
         rules = Dict(varmap)
-        vals = _varmap_to_vars(varmap, varlist; defaults=defaults, check=check)
+        vals = _varmap_to_vars(varmap, varlist; defaults=defaults, check=check, toterm=toterm)
     else # plain array-like initialization
         vals = varmap
     end
@@ -45,9 +45,9 @@ function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true)
     end
 end
 
-function _varmap_to_vars(varmap::Dict, varlist; defaults=Dict(), check=false)
+function _varmap_to_vars(varmap::Dict, varlist; defaults=Dict(), check=false, toterm=Symbolics.diff2term)
     varmap = merge(defaults, varmap) # prefers the `varmap`
-    varmap = Dict(Symbolics.diff2term(value(k))=>value(varmap[k]) for k in keys(varmap))
+    varmap = Dict(toterm(value(k))=>value(varmap[k]) for k in keys(varmap))
     # resolve symbolic parameter expressions
     for (p, v) in pairs(varmap)
         varmap[p] = fixpoint_sub(v, varmap)
