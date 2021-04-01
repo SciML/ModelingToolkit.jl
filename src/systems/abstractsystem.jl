@@ -271,10 +271,8 @@ end
 function renamespace(namespace, x)
     if x isa Num
         renamespace(namespace, value(x))
-    elseif istree(x)
-        renamespace(namespace, operation(x))(arguments(x)...)
-    elseif x isa Sym
-        @set! x.name = renamespace(namespace,nameof(x))
+    elseif x isa Symbolic
+        rename(x, renamespace(namespace, getname(x)))
     else
         Symbol(namespace,:₊,x)
     end
@@ -311,8 +309,7 @@ function namespace_expr(O,name,iv) where {T}
     if istree(O)
         renamed = map(a->namespace_expr(a,name,iv), arguments(O))
         if operation(O) isa Sym
-            renamed_op = rename(operation(O),renamespace(name,nameof(operation(O))))
-            @set! O.f = renamed_op # assumes Term
+            renamed_op = rename(O,renamespace(name, getname(O)))
         else
             similarterm(O,operation(O),renamed)
         end
