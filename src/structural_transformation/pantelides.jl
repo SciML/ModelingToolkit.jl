@@ -2,23 +2,6 @@
 ### Reassemble: structural information -> system
 ###
 
-# Naive subtree matching, we can make the dict have levels
-# Going forward we should look into storing the depth in Terms
-function walk_and_substitute(expr, substitution_dict)
-    if haskey(substitution_dict, expr)
-        return substitution_dict[expr]
-    elseif istree(expr)
-        return similarterm(
-                           expr,
-                           walk_and_substitute(operation(expr), substitution_dict),
-                           map(x->walk_and_substitute(x, substitution_dict), arguments(expr))
-                          )
-    else
-        @assert !(expr isa Equation) "RHS cannot contain equations"
-        return expr
-    end
-end
-
 function pantelides_reassemble(sys, eqassoc, assign)
     s = structure(sys)
     @unpack fullvars, varassoc = s
@@ -74,7 +57,7 @@ function pantelides_reassemble(sys, eqassoc, assign)
         end
         rhs = ModelingToolkit.expand_derivatives(D(eq.rhs))
         substitution_dict = Dict(x.lhs => x.rhs for x in out_eqs if x !== nothing && x.lhs isa Symbolic)
-        sub_rhs = walk_and_substitute(rhs, substitution_dict)
+        sub_rhs = substitute(rhs, substitution_dict)
         out_eqs[e] = lhs ~ sub_rhs
     end
 
