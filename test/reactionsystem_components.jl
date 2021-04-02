@@ -2,14 +2,15 @@ using ModelingToolkit, LinearAlgebra, OrdinaryDiffEq, Test
 MT = ModelingToolkit
 
 # Repressilator model
-@parameters t α₀ α K n δ β μ 
+@parameters t α₀ α K n δ β μ
 @variables m(t) P(t) R(t)
-rxs = [Reaction(α₀, nothing, [m]),
+rxs = [
+       Reaction(α₀, nothing, [m]),
        Reaction(α / (1 + (R/K)^n), nothing, [m]),
        Reaction(δ, [m], nothing),
        Reaction(β, [m], [m,P]),
-       Reaction(μ, [P], nothing)    
-]
+       Reaction(μ, [P], nothing)
+      ]
 
 specs = [m,P,R]
 pars  = [α₀,α,K,n,δ,β,μ]
@@ -19,31 +20,31 @@ pars  = [α₀,α,K,n,δ,β,μ]
 @named os₁ = convert(ODESystem, rs)
 @named os₂ = convert(ODESystem, rs)
 @named os₃ = convert(ODESystem, rs)
-connections = [os₁.R ~ os₃.P, 
+connections = [os₁.R ~ os₃.P,
                os₂.R ~ os₁.P,
                os₃.R ~ os₂.P]
 @named connected = ODESystem(connections, t, [], [], systems=[os₁,os₂,os₃])
 oderepressilator = structural_simplify(connected)
 
-pvals = [os₁.α₀ => 5e-4, 
-         os₁.α => .5, 
-         os₁.K => 40.0, 
-         os₁.n => 2, 
-         os₁.δ => (log(2)/120), 
+pvals = [os₁.α₀ => 5e-4,
+         os₁.α => .5,
+         os₁.K => 40.0,
+         os₁.n => 2,
+         os₁.δ => (log(2)/120),
          os₁.β => (20*log(2)/120),
          os₁.μ => (log(2)/600),
-         os₂.α₀ => 5e-4, 
-         os₂.α => .5, 
-         os₂.K => 40.0, 
-         os₂.n => 2, 
-         os₂.δ => (log(2)/120), 
+         os₂.α₀ => 5e-4,
+         os₂.α => .5,
+         os₂.K => 40.0,
+         os₂.n => 2,
+         os₂.δ => (log(2)/120),
          os₂.β => (20*log(2)/120),
          os₂.μ => (log(2)/600),
-         os₃.α₀ => 5e-4, 
-         os₃.α => .5, 
-         os₃.K => 40.0, 
-         os₃.n => 2, 
-         os₃.δ => (log(2)/120), 
+         os₃.α₀ => 5e-4,
+         os₃.α => .5,
+         os₃.K => 40.0,
+         os₃.n => 2,
+         os₃.δ => (log(2)/120),
          os₃.β => (20*log(2)/120),
          os₃.μ => (log(2)/600)]
 u₀    = [os₁.m => 0.0, os₁.P => 20.0, os₂.m => 0.0, os₂.P => 0.0, os₃.m => 0.0, os₃.P => 0.0]
@@ -58,8 +59,8 @@ function repress!(f, y, p, t)
     f[2] = α / (1 + (y[4] / K)^n) - δ * y[2] + α₀
     f[3] = α / (1 + (y[5] / K)^n) - δ * y[3] + α₀
     f[4] = β * y[1] - μ * y[4]
-    f[5] = β * y[2] - μ * y[5]    
-    f[6] = β * y[3] - μ * y[6]    
+    f[5] = β * y[2] - μ * y[5]
+    f[6] = β * y[3] - μ * y[6]
     nothing
 end
 ps = (α₀=5e-4, α=.5, K=40.0, n=2, δ=(log(2)/120), β=(20*log(2)/120), μ=(log(2)/600))
@@ -77,7 +78,7 @@ i = indexof(os₁.P, states(oderepressilator))
 # @named rs₁ = ReactionSystem(rxs, t, specs, pars)
 # @named rs₂ = ReactionSystem(rxs, t, specs, pars)
 # @named rs₃ = ReactionSystem(rxs, t, specs, pars)
-# connections = [rs₁.R ~ rs₃.P, 
+# connections = [rs₁.R ~ rs₃.P,
 #                rs₂.R ~ rs₁.P,
 #                rs₃.R ~ rs₂.P]
 # @named csys = ODESystem(connections, t, [], [])

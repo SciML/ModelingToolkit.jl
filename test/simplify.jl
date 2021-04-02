@@ -41,8 +41,8 @@ using SymbolicUtils: substitute
 # back and forth substitution does not work for parameters with dependencies
 term = value(a)
 term2 = substitute(term, a=>b)
-@test term2 isa Term{ModelingToolkit.Parameter{Real}}
+@test ModelingToolkit.isparameter(term2)
 @test isequal(term2, b)
 term3 = substitute(term2, b=>a)
-@test term3 isa Term{ModelingToolkit.Parameter{Real}}
+@test ModelingToolkit.isparameter(term3)
 @test isequal(term3, a)
