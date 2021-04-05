@@ -234,7 +234,8 @@ i.e. there are no cycles.
 function build_explicit_observed_function(
         sys, syms;
         expression=false,
-        output_type=Array)
+        output_type=Array,
+        checkbounds=true)
 
     if (isscalar = !(syms isa Vector))
         syms = [syms]
@@ -254,8 +255,8 @@ function build_explicit_observed_function(
 
     ex = Func(
         [
-         DestructuredArgs(states(sys))
-         DestructuredArgs(parameters(sys))
+         DestructuredArgs(states(sys), inbounds=!checkbounds)
+         DestructuredArgs(parameters(sys), inbounds=!checkbounds)
          independent_variable(sys)
         ],
         [],
