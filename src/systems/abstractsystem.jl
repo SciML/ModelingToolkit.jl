@@ -330,7 +330,7 @@ function namespace_expr(O,name,iv) where {T}
     if istree(O)
         renamed = map(a->namespace_expr(a,name,iv), arguments(O))
         if operation(O) isa Sym
-            renamed_op = rename(O,renamespace(name, getname(O)))
+            rename(O,getname(renamespace(name, O)))
         else
             similarterm(O,operation(O),renamed)
         end
