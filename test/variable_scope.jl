@@ -1,13 +1,14 @@
 using ModelingToolkit
 using Test
 
-@variables a b c d
+@parameters t
+@variables a b(t) c d
 
 b = ParentScope(b)
 c = ParentScope(ParentScope(c))
 d = GlobalScope(d)
 
-renamed(nss, sym) = nameof(foldr(ModelingToolkit.renamespace, nss, init=sym))
+renamed(nss, sym) = ModelingToolkit.getname(foldr(ModelingToolkit.renamespace, nss, init=sym))
 
 @test renamed([:foo :bar :baz], a) == :foo₊bar₊baz₊a
 @test renamed([:foo :bar :baz], b) == :foo₊bar₊b
@@ -26,7 +27,7 @@ eqs = [
 @named sub1 = NonlinearSystem([], [], [], systems=[sub2])
 @named sys = NonlinearSystem([], [], [], systems=[sub1])
 
-names = nameof.(states(sys))
+names = ModelingToolkit.getname.(states(sys))
 @test :d in names
 @test :sub1₊c in names
 @test :sub1₊sub2₊b in names
