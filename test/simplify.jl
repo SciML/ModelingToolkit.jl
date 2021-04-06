@@ -20,7 +20,7 @@ simplify(minus_op)
 
 @variables x
 
-@test toexpr(expand_derivatives(Differential(x)((x-2)^2))) == :($(*)(2, $(+)(-2, x)))
+@test toexpr(expand_derivatives(Differential(x)((x-2)^2))) == :($(+)(-4, $(*)(2, x)))
 @test toexpr(expand_derivatives(Differential(x)((x-2)^3))) == :($(*)(3, $(^)($(+)(-2, x), 2)))
 @test toexpr(simplify(x+2+3)) == :($(+)(5, x))
 
