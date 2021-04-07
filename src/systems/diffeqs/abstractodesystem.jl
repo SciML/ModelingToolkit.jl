@@ -158,9 +158,10 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      eval_expression = true,
                                      sparse = false, simplify=false,
                                      eval_module = @__MODULE__,
+                                     checkbounds=false,
                                      kwargs...) where {iip}
 
-    f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, expression_module=eval_module, kwargs...)
+    f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
     f_oop,f_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen) : f_gen
     f(u,p,t) = f_oop(u,p,t)
     f(du,u,p,t) = f_iip(du,u,p,t)
@@ -168,7 +169,8 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps;
                                    simplify=simplify,
-                                   expression=Val{eval_expression}, expression_module=eval_module, kwargs...)
+                                   expression=Val{eval_expression}, expression_module=eval_module,
+                                   checkbounds=checkbounds, kwargs...)
         tgrad_oop,tgrad_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in tgrad_gen) : tgrad_gen
         _tgrad(u,p,t) = tgrad_oop(u,p,t)
         _tgrad(J,u,p,t) = tgrad_iip(J,u,p,t)
@@ -179,7 +181,8 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
                                     simplify=simplify, sparse = sparse,
-                                    expression=Val{eval_expression}, expression_module=eval_module, kwargs...)
+                                    expression=Val{eval_expression}, expression_module=eval_module, 
+                                    checkbounds=checkbounds, kwargs...)
         jac_oop,jac_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in jac_gen) : jac_gen
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
@@ -194,7 +197,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     observedfun = let sys = sys, dict = Dict()
         function generated_observed(obsvar, u, p, t)
             obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar)
+                build_explicit_observed_function(sys, obsvar; checkbounds=checkbounds)
             end
             obs(u, p, t)
         end
