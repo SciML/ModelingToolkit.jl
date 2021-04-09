@@ -41,7 +41,7 @@ function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true, toterm=Sym
     elseif container_type <: Tuple
         (vals...,)
     else
-        SymbolicUtils.Code.create_array(container_type, eltype(vals), Val(length(vals)), vals...)
+        SymbolicUtils.Code.create_array(container_type, eltype(vals), Val{1}(), Val(length(vals)), vals...)
     end
 end
 
