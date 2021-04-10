@@ -1,7 +1,7 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
 authors = ["Chris Rackauckas <accounts@chrisrackauckas.com>"]
-version = "5.13.6"
+version = "5.14.2"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -51,7 +51,7 @@ Distributions = "0.23, 0.24"
 DocStringExtensions = "0.7, 0.8"
 IfElse = "0.1"
 LabelledArrays = "1.3"
-Latexify = "0.11, 0.12, 0.13, 0.14"
+Latexify = "0.11, 0.12, 0.13, 0.14, 0.15"
 LightGraphs = "1.3"
 MacroTools = "0.5"
 NaNMath = "0.3"
@@ -65,8 +65,8 @@ SciMLBase = "1.3"
 Setfield = "0.7"
 SpecialFunctions = "0.7, 0.8, 0.9, 0.10, 1.0"
 StaticArrays = "0.10, 0.11, 0.12, 1.0"
-SymbolicUtils = "0.8.3, 0.9"
-Symbolics = "0.1.8"
+SymbolicUtils = "0.10.1"
+Symbolics = "0.1.14"
 UnPack = "0.1, 1.0"
 Unitful = "1.1"
 julia = "1.2"
@@ -81,7 +81,8 @@ OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SteadyStateDiffEq = "9672c7b4-1e72-59bd-8a11-6ac3964bc41f"
 StochasticDiffEq = "789caeaf-c7a9-5a7d-9973-96adeb23e2a0"
+Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["BenchmarkTools", "ForwardDiff", "GalacticOptim", "NonlinearSolve", "OrdinaryDiffEq", "Optim", "Random", "SteadyStateDiffEq", "Test", "StochasticDiffEq"]
+test = ["BenchmarkTools", "ForwardDiff", "GalacticOptim", "NonlinearSolve", "OrdinaryDiffEq", "Optim", "Random", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials"]

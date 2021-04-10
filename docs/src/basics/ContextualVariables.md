@@ -7,7 +7,7 @@ the `@variable` which is defined by
 [Symbolics.jl](https://github.com/JuliaSymbolics/Symbolics.jl). For example:
 
 ```julia
-@variabes x y(x)
+@variables x y(x)
 ```
 
 This is used for the "normal" variable of a given system, like the states of a

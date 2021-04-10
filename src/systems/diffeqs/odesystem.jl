@@ -105,7 +105,7 @@ iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nes
 iv_from_nested_derivative(x::Sym) = x
 iv_from_nested_derivative(x) = missing
 
-vars(x::Sym) = [x]
+vars(x::Sym) = Set([x])
 vars(exprs::Symbolic) = vars([exprs])
 vars(exprs) = foldl(vars!, exprs; init = Set())
 vars!(vars, eq::Equation) = (vars!(vars, eq.lhs); vars!(vars, eq.rhs); vars)
@@ -233,7 +233,8 @@ i.e. there are no cycles.
 function build_explicit_observed_function(
         sys, syms;
         expression=false,
-        output_type=Array)
+        output_type=Array,
+        checkbounds=true)
 
     if (isscalar = !(syms isa Vector))
         syms = [syms]
@@ -253,8 +254,8 @@ function build_explicit_observed_function(
 
     ex = Func(
         [
-         DestructuredArgs(states(sys))
-         DestructuredArgs(parameters(sys))
+         DestructuredArgs(states(sys), inbounds=!checkbounds)
+         DestructuredArgs(parameters(sys), inbounds=!checkbounds)
          independent_variable(sys)
         ],
         [],
@@ -308,4 +309,19 @@ function sort_states(sys::ODESystem)
 
     @set! sys.states = sorted_states
     @set! sys.structure = nothing
+end
+
+function collect_differential_variables(sys::ODESystem)
+    eqs = equations(sys)
+    vars = Set()
+    diffvars = Set()
+    for eq in eqs
+        vars!(vars, eq)
+        for v in vars
+            isdifferential(v) || continue
+            push!(diffvars, arguments(v)[1])
+        end
+        empty!(vars)
+    end
+    return diffvars
 end

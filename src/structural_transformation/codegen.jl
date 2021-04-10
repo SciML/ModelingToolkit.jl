@@ -124,7 +124,7 @@ function partitions_dag(s::SystemStructure)
     sparse(I, J, true, n, n)
 end
 
-function gen_nlsolve(sys, eqs, vars)
+function gen_nlsolve(sys, eqs, vars; checkbounds=true)
     @assert !isempty(vars)
     @assert length(eqs) == length(vars)
     rhss = map(x->x.rhs, eqs)
@@ -142,8 +142,8 @@ function gen_nlsolve(sys, eqs, vars)
     fname = gensym("fun")
     f = Func(
         [
-         DestructuredArgs(vars)
-         DestructuredArgs(params)
+         DestructuredArgs(vars, inbounds=!checkbounds)
+         DestructuredArgs(params, inbounds=!checkbounds)
         ],
         [],
         isscalar ? rhss[1] : MakeArray(rhss, SVector)
@@ -161,7 +161,7 @@ function gen_nlsolve(sys, eqs, vars)
 
     [
      fname ← @RuntimeGeneratedFunction(f)
-     DestructuredArgs(vars) ← solver_call
+     DestructuredArgs(vars, inbounds=!checkbounds) ← solver_call
     ]
 end
 
@@ -205,8 +205,8 @@ function build_torn_function(
         Func(
              [
               out
-              DestructuredArgs(states)
-              DestructuredArgs(parameters(sys))
+              DestructuredArgs(states, inbounds=!checkbounds)
+              DestructuredArgs(parameters(sys), inbounds=!checkbounds)
               independent_variable(sys)
              ],
              [],
@@ -222,7 +222,7 @@ function build_torn_function(
         observedfun = let sys = sys, dict = Dict()
             function generated_observed(obsvar, u, p, t)
                 obs = get!(dict, value(obsvar)) do
-                    build_observed_function(sys, obsvar)
+                    build_observed_function(sys, obsvar, checkbounds=checkbounds)
                 end
                 obs(u, p, t)
             end
@@ -257,7 +257,8 @@ end
 function build_observed_function(
         sys, syms;
         expression=false,
-        output_type=Array
+        output_type=Array,
+        checkbounds=true
     )
 
     if (isscalar = !(syms isa Vector))
@@ -293,7 +294,7 @@ function build_observed_function(
         torn_eqs  = map(idxs-> eqs[idxs.e_residual], subset)
         torn_vars = map(idxs->fullvars[idxs.v_residual], subset)
 
-        solves = gen_nlsolve.((sys,), torn_eqs, torn_vars)
+        solves = gen_nlsolve.((sys,), torn_eqs, torn_vars; checkbounds=checkbounds)
     else
         solves = []
     end
@@ -308,8 +309,8 @@ function build_observed_function(
 
     ex = Func(
         [
-         DestructuredArgs(diffvars)
-         DestructuredArgs(parameters(sys))
+         DestructuredArgs(diffvars, inbounds=!checkbounds)
+         DestructuredArgs(parameters(sys), inbounds=!checkbounds)
          independent_variable(sys)
         ],
         [],

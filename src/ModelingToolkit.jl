@@ -137,6 +137,7 @@ include("structural_transformation/StructuralTransformations.jl")
 @reexport using .StructuralTransformations
 
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr
+export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
 export SystemStructure
 export JumpSystem
@@ -157,6 +158,7 @@ export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation
 export Term, Sym
+export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, states, parameters, equations, controls, observed, structure
 export structural_simplify
 

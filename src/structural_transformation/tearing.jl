@@ -49,7 +49,7 @@ function tearing_reassemble(sys; simplify=false)
             var = fullvars[iv]
             rhs = value(solve_for(eq, var; simplify=simplify, check=false))
             # if we don't simplify the rhs and the `eq` is not solved properly
-            (!simplify && var in vars(rhs)) && (rhs = SymbolicUtils.polynormalize(rhs))
+            (!simplify && occursin(rhs, var)) && (rhs = SymbolicUtils.polynormalize(rhs))
             # Since we know `eq` is linear wrt `var`, so the round off must be a
             # linear term. We can correct the round off error by a linear
             # correction.

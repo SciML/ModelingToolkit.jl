@@ -2,7 +2,6 @@ using Test
 using ModelingToolkit, OrdinaryDiffEq
 
 # Basic electric components
-#const t = Sym{ModelingToolkit.Parameter{Real}}(:t)
 @parameters t
 function Pin(;name)
     @variables v(t) i(t)

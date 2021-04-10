@@ -166,7 +166,7 @@ let
     reduced_sys = structural_simplify(connected)
     ref_eqs = [
                D(ol.x) ~ ol.a*ol.x + ol.b*ol.u
-               0 ~ -ol.u - (pc.k_P*(-ol.c*ol.x - (ol.d*ol.u)))
+               0 ~ pc.k_P*(ol.c*ol.x + ol.d*ol.u) - ol.u
               ]
     @test ref_eqs == equations(reduced_sys)
 end

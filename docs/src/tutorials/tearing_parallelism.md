@@ -37,7 +37,7 @@ function connect_heat(ps...)
 end
 
 # Basic electric components
-const t = Sym{ModelingToolkit.Parameter{Real}}(:t)
+@parameters t
 const D = Differential(t)
 function Pin(;name)
     @variables v(t) i(t)

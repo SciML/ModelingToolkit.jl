@@ -333,14 +333,14 @@ fdif!(du,u0,p,t)
 sys2 = stochastic_integral_transform(sys,-1//2)
 fdrift = eval(generate_function(sys2)[1])
 fdif = eval(generate_diffusion_function(sys2)[1])
-@test fdrift(u0,p,t) == [p[1]*u0[1] - 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] - 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
+@test fdrift(u0,p,t) ≈ [p[1]*u0[1] - 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] - 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
 @test fdif(u0,p,t) == [p[2]*u0[1]   p[3]*u0[1]
                       p[4]*u0[1]     p[5]*u0[2] ]
 fdrift! = eval(generate_function(sys2)[2])
 fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
-@test  du == [p[1]*u0[1] - 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] - 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
+@test  du ≈ [p[1]*u0[1] - 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] - 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
 du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du,u0,p,t)
 @test du == [p[2]*u0[1]   p[3]*u0[1]
@@ -350,14 +350,14 @@ fdif!(du,u0,p,t)
 sys2 = stochastic_integral_transform(sys,1//2)
 fdrift = eval(generate_function(sys2)[1])
 fdif = eval(generate_diffusion_function(sys2)[1])
-@test fdrift(u0,p,t) == [p[1]*u0[1] + 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] + 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
+@test fdrift(u0,p,t) ≈ [p[1]*u0[1] + 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] + 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
 @test fdif(u0,p,t) == [p[2]*u0[1]   p[3]*u0[1]
                       p[4]*u0[1]     p[5]*u0[2] ]
 fdrift! = eval(generate_function(sys2)[2])
 fdif! = eval(generate_diffusion_function(sys2)[2])
 du = similar(u0)
 fdrift!(du,u0,p,t)
-@test  du == [p[1]*u0[1] + 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] + 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
+@test  du ≈ [p[1]*u0[1] + 1//2*(p[2]^2*u0[1]+p[3]^2*u0[1]), p[1]*u0[2] + 1//2*(p[2]*p[4]*u0[1]+p[5]^2*u0[2])]
 du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du,u0,p,t)
 @test du == [p[2]*u0[1]   p[3]*u0[1]
