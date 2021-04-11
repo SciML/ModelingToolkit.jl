@@ -111,7 +111,7 @@ function initialize_system_structure(sys)
         else
             eq = 0 ~ eq′.rhs - eq′.lhs
         end
-        vars!(vars, eq)
+        vars!(vars, eq.rhs)
         isalgeq = true
         statevars = []
         for var in vars
@@ -139,6 +139,24 @@ function initialize_system_structure(sys)
             eqs[i] = eq
         end
     end
+
+    # sort `fullvars` such that the mass matrix is as diagonal as possible.
+    sorted_fullvars = OrderedSet(fullvars[dervaridxs])
+    for dervaridx in dervaridxs
+        dervar = fullvars[dervaridx]
+        diffvar = arguments(dervar)[1]
+        if !(diffvar in sorted_fullvars)
+            push!(sorted_fullvars, diffvar)
+        end
+    end
+    for v in fullvars
+        if !(v in sorted_fullvars)
+            push!(sorted_fullvars, v)
+        end
+    end
+    fullvars = collect(sorted_fullvars)
+    var2idx = Dict(fullvars .=> eachindex(fullvars))
+    dervaridxs = 1:length(dervaridxs)
 
     nvars = length(fullvars)
     diffvars = []

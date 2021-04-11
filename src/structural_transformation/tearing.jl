@@ -119,7 +119,6 @@ function tearing_reassemble(sys; simplify=false)
         return nothing
     end
 
-
     ### update equations
     odestats = []
     for idx in eachindex(fullvars); isdervar(s, idx) && continue
@@ -190,7 +189,6 @@ function tearing_reassemble(sys; simplify=false)
     @set! sys.observed = [observed(sys); obseqs]
     return sys
 end
-
 
 """
     algebraic_equations_scc(sys)
