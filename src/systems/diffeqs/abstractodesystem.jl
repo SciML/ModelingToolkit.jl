@@ -195,7 +195,6 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
-<<<<<<< HEAD
     observedfun = if steady_state
         let sys = sys, dict = Dict()
             function generated_observed(obsvar, u, p, t=Inf)
