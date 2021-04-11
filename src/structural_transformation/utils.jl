@@ -75,8 +75,13 @@ function check_consistency(s::SystemStructure)
     end
 
     if !isempty(unassigned_var) || !is_balanced
-        @error "The system is structurally singular! Here are the unmatched variables:" unassigned_var
-        throw(InvalidSystemException(""))
+        io = IOBuffer()
+        Base.print_array(io, unassigned_var)
+        unassigned_var_str = String(take!(io))
+        errmsg = "The system is structurally singular! " *
+                 "Here are the problematic variables: \n" *
+                 unassigned_var_str
+        throw(InvalidSystemException(errmsg))
     end
 
     return nothing

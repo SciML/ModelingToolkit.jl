@@ -228,3 +228,16 @@ equations = [
 
 @named sys = ODESystem(equations, t, [E, C, S, P], [k₁, k₂, k₋₁, E₀])
 @test_throws ModelingToolkit.InvalidSystemException structural_simplify(sys)
+
+# Example 5 from Pantelides' original paper
+@parameters t
+params = collect(@parameters y1(t) y2(t))
+sts = collect(@variables x(t) u1(t) u2(t))
+D = Differential(t)
+eqs = [
+       0 ~ x + sin(u1 + u2)
+       D(x) ~ x + y1
+       cos(x) ~ sin(y2)
+      ]
+@named sys = ODESystem(eqs, t, sts, params)
+@test_throws ModelingToolkit.InvalidSystemException structural_simplify(sys)
