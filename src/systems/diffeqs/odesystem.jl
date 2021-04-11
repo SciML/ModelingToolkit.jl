@@ -252,13 +252,13 @@ function build_explicit_observed_function(
         output[i] = obs[idx].rhs
     end
 
+    dvs = DestructuredArgs(states(sys), inbounds=!checkbounds)
+    ps = DestructuredArgs(parameters(sys), inbounds=!checkbounds)
+    iv = independent_variable(sys)
+    args = iv === nothing ? [dvs, ps] : [dvs, ps, iv]
+
     ex = Func(
-        [
-         DestructuredArgs(states(sys), inbounds=!checkbounds)
-         DestructuredArgs(parameters(sys), inbounds=!checkbounds)
-         independent_variable(sys)
-        ],
-        [],
+        args, [],
         Let(
             map(eq -> eq.lhs←eq.rhs, obs[1:maxidx]),
             isscalar ? output[1] : MakeArray(output, output_type)

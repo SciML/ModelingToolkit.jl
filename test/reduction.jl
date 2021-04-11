@@ -147,6 +147,10 @@ u0 = [
 prob1 = ODEProblem(reduced_system, u0, (0.0, 100.0), pp)
 solve(prob1, Rodas5())
 
+prob2 = SteadyStateProblem(reduced_system, u0, pp)
+@test prob2.f.observed(lorenz2.u, prob2.u0, pp) === 1.0
+
+
 # issue #724 and #716
 let
     @parameters t
@@ -204,6 +208,8 @@ nlprob = NonlinearProblem(reducedsys, u0, pp)
 reducedsol = solve(nlprob, NewtonRaphson())
 residual = fill(100.0, length(states(reducedsys)))
 nlprob.f(residual, reducedsol.u, pp)
+@test hypot(nlprob.f.observed(u2, reducedsol.u, pp), nlprob.f.observed(u1, reducedsol.u, pp)) * pp ≈ reducedsol.u atol=1e-9
+
 @test all(x->abs(x) < 1e-5, residual)
 
 N = 5

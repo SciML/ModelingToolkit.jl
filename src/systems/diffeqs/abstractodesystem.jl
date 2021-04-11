@@ -158,6 +158,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      eval_expression = true,
                                      sparse = false, simplify=false,
                                      eval_module = @__MODULE__,
+                                     steady_state = false,
                                      checkbounds=false,
                                      kwargs...) where {iip}
 
@@ -194,12 +195,23 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
-    observedfun = let sys = sys, dict = Dict()
-        function generated_observed(obsvar, u, p, t)
-            obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar; checkbounds=checkbounds)
+    observedfun = if steady_state
+        let sys = sys, dict = Dict()
+            function generated_observed(obsvar, u, p, t=Inf)
+                obs = get!(dict, value(obsvar)) do
+                    build_explicit_observed_function(sys, obsvar)
+                end
+                obs(u, p, t)
             end
-            obs(u, p, t)
+        end
+    else
+        let sys = sys, dict = Dict()
+            function generated_observed(obsvar, u, p, t)
+                obs = get!(dict, value(obsvar)) do
+                    build_explicit_observed_function(sys, obsvar; checkbounds=checkbounds)
+                end
+                obs(u, p, t)
+            end
         end
     end
 
@@ -301,9 +313,30 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      jac = false,
                                      linenumbers = false,
                                      sparse = false, simplify=false,
+                                     steady_state = false,
                                      kwargs...) where {iip}
 
     f_oop, f_iip = generate_function(sys, dvs, ps; expression=Val{true}, kwargs...)
+
+    dict = Dict()
+    #=
+    observedfun = if steady_state
+        :(function generated_observed(obsvar, u, p, t=Inf)
+              obs = get!($dict, value(obsvar)) do
+                  build_explicit_observed_function($sys, obsvar)
+              end
+              obs(u, p, t)
+          end)
+    else
+        :(function generated_observed(obsvar, u, p, t)
+              obs = get!($dict, value(obsvar)) do
+                  build_explicit_observed_function($sys, obsvar)
+              end
+              obs(u, p, t)
+          end)
+    end
+    =#
+
     fsym = gensym(:f)
     _f = :($fsym = ModelingToolkit.ODEFunctionClosure($f_oop, $f_iip))
     tgradsym = gensym(:tgrad)
@@ -579,7 +612,7 @@ end
 
 """
 ```julia
-function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,tspan,
+function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false,
@@ -593,13 +626,13 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
                                             parammap=DiffEqBase.NullParameters();
                                             kwargs...) where iip
-    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
-    SteadyStateProblem(f,u0,p;kwargs...)
+    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; steady_state = true, kwargs...)
+    SteadyStateProblem{iip}(f,u0,p;kwargs...)
 end
 
 """
 ```julia
-function DiffEqBase.SteadyStateProblemExpr(sys::AbstractODESystem,u0map,tspan,
+function DiffEqBase.SteadyStateProblemExpr(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false,
@@ -617,7 +650,7 @@ struct SteadyStateProblemExpr{iip} end
 function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     kwargs...) where iip
-    f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
+    f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap;steady_state = true, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
     ex = quote
         f = $f
