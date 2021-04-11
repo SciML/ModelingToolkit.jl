@@ -153,7 +153,6 @@ for prop in [
              :inequality_constraints
              :controls
              :loss
-             :reduced_states
              :bcs
              :domain
              :depvars
@@ -245,7 +244,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true)
         end
     end
 
-    throw(error("Variable $name does not exist"))
+    throw(ArgumentError("Variable $name does not exist"))
 end
 
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
@@ -542,8 +541,13 @@ Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations.
 """
 function structural_simplify(sys::AbstractSystem)
-    sys = tearing(alias_elimination(sys))
-    fullstates = [get_reduced_states(sys); states(sys)]
+    sys = initialize_system_structure(alias_elimination(sys))
+    check_consistency(structure(sys))
+    if sys isa ODESystem
+        sys = dae_index_lowering(sys)
+    end
+    sys = tearing(sys)
+    fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     return sys
 end
@@ -562,3 +566,16 @@ Base.showerror(io::IO, e::InvalidSystemException) = print(io, "InvalidSystemExce
 AbstractTrees.children(sys::ModelingToolkit.AbstractSystem) = ModelingToolkit.get_systems(sys)
 AbstractTrees.printnode(io::IO, sys::ModelingToolkit.AbstractSystem) = print(io, nameof(sys))
 AbstractTrees.nodetype(::ModelingToolkit.AbstractSystem) = ModelingToolkit.AbstractSystem
+
+function check_eqs_u0(eqs, dvs, u0)
+    if u0 !== nothing
+        if !(length(eqs) == length(dvs) == length(u0))
+            throw(ArgumentError("Equations ($(length(eqs))), states ($(length(dvs))), and initial conditions ($(length(u0))) are of different lengths."))
+        end
+    else
+        if !(length(eqs) == length(dvs))
+            throw(ArgumentError("Equations ($(length(eqs))), states ($(length(dvs))) are of different lengths."))
+        end
+    end
+    return nothing
+end

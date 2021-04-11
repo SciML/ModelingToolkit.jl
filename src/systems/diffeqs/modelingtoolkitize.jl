@@ -18,7 +18,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
 
     var(x, i) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x, i))))
     vars = ArrayInterface.restructure(prob.u0,[var(:x, i)(ModelingToolkit.value(t)) for i in eachindex(prob.u0)])
-    params = has_p ? reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(p)) : []
+    params = has_p ? reshape([Num(toparam(Sym{Real}(nameof(Variable(:α, i))))) for i in eachindex(p)],size(p)) : []
     var_set = Set(vars)
 
     D = Differential(t)

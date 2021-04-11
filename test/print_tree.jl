@@ -1,12 +1,12 @@
 using ModelingToolkit, AbstractTrees, Test
 
-include("rc_model.jl")
+include("../examples/rc_model.jl")
 
 io = IOBuffer()
 print_tree(io, rc_model)
 ser = String(take!(io))
-str = 
-"""rc
+str =
+"""rc_model
 ├─ resistor
 │  ├─ p
 │  └─ n
