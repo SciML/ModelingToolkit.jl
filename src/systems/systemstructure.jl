@@ -90,7 +90,7 @@ function initialize_system_structure(sys)
     eqs = copy(equations(sys))
     neqs = length(eqs)
     algeqs = trues(neqs)
-    dervaridxs = Set{Int}()
+    dervaridxs = OrderedSet{Int}()
     var2idx = Dict{Any,Int}()
     symbolic_incidence = []
     fullvars = []
@@ -125,7 +125,9 @@ function initialize_system_structure(sys)
             dvar = var
             idx = varidx
             while isdifferential(dvar)
-                push!(dervaridxs, idx)
+                if !(idx in dervaridxs)
+                    push!(dervaridxs, idx)
+                end
                 isalgeq = false
                 dvar = arguments(dvar)[1]
                 idx = addvar!(dvar)

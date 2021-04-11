@@ -49,9 +49,6 @@ function alias_elimination(sys)
 
     dict = Dict(subs)
     for (ieq, eq) in enumerate(eqs)
-        if !isdiffeq(eq) && !_iszero(eq.lhs)
-            eq = 0 ~ eq.rhs - eq.lhs
-        end
         eqs[ieq] = eq.lhs ~ fixpoint_sub(eq.rhs, dict)
     end
 
