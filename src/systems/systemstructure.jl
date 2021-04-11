@@ -90,7 +90,7 @@ function initialize_system_structure(sys)
     eqs = copy(equations(sys))
     neqs = length(eqs)
     algeqs = trues(neqs)
-    dervaridxs = Int[]
+    dervaridxs = Set{Int}()
     var2idx = Dict{Any,Int}()
     symbolic_incidence = []
     fullvars = []
@@ -141,6 +141,7 @@ function initialize_system_structure(sys)
     end
 
     # sort `fullvars` such that the mass matrix is as diagonal as possible.
+    dervaridxs = collect(dervaridxs)
     sorted_fullvars = OrderedSet(fullvars[dervaridxs])
     for dervaridx in dervaridxs
         dervar = fullvars[dervaridx]

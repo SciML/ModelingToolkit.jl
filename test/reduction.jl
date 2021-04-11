@@ -212,3 +212,19 @@ A = reshape(1:N^2, N, N)
 eqs = xs .~ A * xs
 sys′ = NonlinearSystem(eqs, xs, [])
 sys = structural_simplify(sys′)
+
+# issue 958
+@parameters t k₁ k₂ k₋₁ E₀
+@variables E(t) C(t) S(t) P(t)
+D = Differential(t)
+
+equations = [
+             D(E) ~ k₋₁ * C - k₁ * E * S
+             D(C) ~ k₁ * E * S - k₋₁ * C - k₂ * C
+             D(S) ~ k₋₁ * C - k₁ * E * S
+             D(P) ~ k₂ * C
+             E₀ ~ E + C
+            ]
+
+@named sys = ODESystem(equations, t, [E, C, S, P], [k₁, k₂, k₋₁, E₀])
+@test_throws ModelingToolkit.InvalidSystemException structural_simplify(sys)
