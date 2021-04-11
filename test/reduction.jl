@@ -67,7 +67,7 @@ eqs1 = [
 lorenz = name -> ODESystem(eqs1,t,name=name)
 lorenz1 = lorenz(:lorenz1)
 ss = ModelingToolkit.get_structure(initialize_system_structure(lorenz1))
-@test isequal(ss.fullvars, [x, y, z, D(x), D(y), D(z), F, u])
+@test isempty(setdiff(ss.fullvars, [D(x), F, y, x, D(y), u, z, D(z)]))
 lorenz2 = lorenz(:lorenz2)
 
 connected = ODESystem([s ~ a + lorenz1.x
@@ -80,7 +80,11 @@ connected = ODESystem([s ~ a + lorenz1.x
 # Reduced Flattened System
 
 reduced_system = structural_simplify(connected)
+reduced_system2 = structural_simplify(structural_simplify(structural_simplify(connected)))
 
+@test isempty(setdiff(states(reduced_system), states(reduced_system2)))
+@test isequal(equations(reduced_system), equations(reduced_system2))
+@test isequal(observed(reduced_system), observed(reduced_system2))
 @test setdiff(states(reduced_system), [
         s
         a
@@ -116,11 +120,11 @@ test_equal.(equations(reduced_system), reduced_eqs)
 
 observed_eqs = [
                 s ~ lorenz2.y
-                lorenz2.u ~ -((lorenz2.z) - (lorenz2.x) - (lorenz2.y))
-                lorenz1.u ~ -((lorenz1.z) - (lorenz1.x) - (lorenz1.y))
-                a ~ s - (lorenz1.x)
-                lorenz1.F ~ lorenz2.u
-                lorenz2.F ~ lorenz1.u
+                a ~ lorenz2.y - lorenz1.x
+                lorenz1.F ~ -((lorenz2.z) - (lorenz2.x) - (lorenz2.y))
+                lorenz2.F ~ -((lorenz1.z) - (lorenz1.x) - (lorenz1.y))
+                lorenz2.u ~ lorenz1.F
+                lorenz1.u ~ lorenz2.F
                ]
 test_equal.(observed(reduced_system), observed_eqs)
 
@@ -165,8 +169,8 @@ let
     @test equations(connected) isa Vector{Equation}
     reduced_sys = structural_simplify(connected)
     ref_eqs = [
-               D(ol.x) ~ ol.a*ol.x + ol.b*pc.u_c
-               0 ~ -pc.u_c - (pc.k_P*((-ol.c*(ol.x)) - (ol.d*(pc.u_c))))
+               D(ol.x) ~ ol.a*ol.x + ol.b*ol.u
+               0 ~ pc.k_P*(ol.c*ol.x + ol.d*ol.u) - ol.u
               ]
     @test ref_eqs == equations(reduced_sys)
 end
@@ -192,7 +196,7 @@ eqs = [
       ]
 sys = NonlinearSystem(eqs, [u1, u2, u3], [p])
 reducedsys = structural_simplify(sys)
-@test observed(reducedsys) == [u2 ~ 0.5(u3 - p); u1 ~ u2]
+@test observed(reducedsys) == [u1 ~ 0.5(u3 - p); u2 ~ u1]
 
 u0 = [
       u1 => 1
@@ -214,3 +218,32 @@ A = reshape(1:N^2, N, N)
 eqs = xs .~ A * xs
 sys′ = NonlinearSystem(eqs, xs, [])
 sys = structural_simplify(sys′)
+
+# issue 958
+@parameters t k₁ k₂ k₋₁ E₀
+@variables E(t) C(t) S(t) P(t)
+D = Differential(t)
+
+eqs = [
+       D(E) ~ k₋₁ * C - k₁ * E * S
+       D(C) ~ k₁ * E * S - k₋₁ * C - k₂ * C
+       D(S) ~ k₋₁ * C - k₁ * E * S
+       D(P) ~ k₂ * C
+       E₀ ~ E + C
+      ]
+
+@named sys = ODESystem(eqs, t, [E, C, S, P], [k₁, k₂, k₋₁, E₀])
+@test_throws ModelingToolkit.InvalidSystemException structural_simplify(sys)
+
+# Example 5 from Pantelides' original paper
+@parameters t
+params = collect(@parameters y1(t) y2(t))
+sts = collect(@variables x(t) u1(t) u2(t))
+D = Differential(t)
+eqs = [
+       0 ~ x + sin(u1 + u2)
+       D(x) ~ x + y1
+       cos(x) ~ sin(y2)
+      ]
+@named sys = ODESystem(eqs, t, sts, params)
+@test_throws ModelingToolkit.InvalidSystemException structural_simplify(sys)

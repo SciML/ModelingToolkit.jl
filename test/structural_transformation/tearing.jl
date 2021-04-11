@@ -29,15 +29,12 @@ show(io, sss)
 prt = String(take!(io))
 
 if VERSION >= v"1.6"
-@test prt == """xvars: Any[]
-dxvars: Any[]
-algvars: Any[u1(t), u2(t), u3(t), u4(t), u5(t)]
-Incidence matrix:
- ×  ⋅  ⋅  ⋅  ×
+@test prt == "Incidence matrix:
  ×  ×  ⋅  ⋅  ⋅
- ×  ×  ×  ⋅  ⋅
- ⋅  ×  ×  ×  ⋅
- ×  ⋅  ⋅  ×  ×"""
+ ×  ⋅  ×  ⋅  ⋅
+ ×  ⋅  ×  ×  ⋅
+ ⋅  ⋅  ×  ×  ×
+ ×  ×  ⋅  ⋅  ×"
 end
 
 # u1 = f1(u5)
@@ -49,14 +46,14 @@ sys = initialize_system_structure(sys)
 find_solvables!(sys)
 sss = structure(sys)
 @unpack graph, solvable_graph, assign, partitions = sss
-@test graph.fadjlist == [[1, 5], [1, 2], [1, 2, 3], [2, 3, 4], [1, 4, 5]]
-@test solvable_graph.fadjlist == map(x->[x], 1:5)
+@test graph.fadjlist == [[1, 2], [1, 3], [1, 3, 4], [3, 4, 5], [1, 2, 5]]
+@test solvable_graph.fadjlist == map(x->[x], [1, 3, 4, 5, 2])
 
 tornsys = tearing(sys)
 sss = structure(tornsys)
 @unpack graph, solvable_graph, assign, partitions = sss
 @test graph.fadjlist == [[1]]
-@test partitions == [([], [], [1], [1])]
+@test partitions == [StructuralTransformations.SystemPartition([], [], [1], [1])]
 
 # Before:
 #      u1  u2  u3  u4  u5

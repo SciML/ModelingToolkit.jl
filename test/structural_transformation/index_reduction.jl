@@ -34,7 +34,7 @@ pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
 pendulum = initialize_system_structure(pendulum)
 sss = structure(pendulum)
 @unpack graph, fullvars, varassoc = sss
-@test StructuralTransformations.matching(sss, varassoc .== 0) == map(x -> x == 0 ? StructuralTransformations.UNASSIGNED : x, [0, 0, 0, 0, 1, 2, 3, 4, 0])
+@test StructuralTransformations.matching(sss, varassoc .== 0) == map(x -> x == 0 ? StructuralTransformations.UNASSIGNED : x, [1, 2, 3, 4, 0, 0, 0, 0, 0])
 
 sys, assign, eqassoc = StructuralTransformations.pantelides!(pendulum)
 sss = structure(sys)
@@ -48,20 +48,8 @@ scc = StructuralTransformations.find_scc(graph, assign)
                            [6],
                           ]
 
-@test graph.fadjlist == sort.([
- [5, 3],               # 1
- [6, 4],               # 2
- [7, 9, 1],            # 3
- [8, 9, 2],            # 4
- [2, 1],               # 5
- [2, 1, 6, 5],         # 6
- [5, 3, 10, 7],        # 7
- [6, 4, 11, 8],        # 8
- [2, 1, 6, 5, 11, 10], # 9
-])
-#                  [1, 2, 3, 4,   5,   6,  7,  8, 9,   10,   11]
-#                  [x, y, w, z, xˍt, yˍt, w', z', T, xˍt', yˍt']
-@test varassoc  == [5, 6, 7, 8,  10,  11,    0,    0, 0,      0,      0]
+@test graph.fadjlist == [[1, 7], [2, 8], [3, 5, 9], [4, 6, 9], [5, 6], [1, 2, 5, 6], [1, 3, 7, 10], [2, 4, 8, 11], [1, 2, 5, 6, 10, 11]]
+@test varassoc == [10, 11, 0, 0, 1, 2, 3, 4, 0, 0, 0]
 #1: D(x) ~ w
 #2: D(y) ~ z
 #3: D(w) ~ T*x
@@ -102,7 +90,7 @@ using LinearAlgebra
 prob = ODEProblem(ODEFunction(first_order_idx1_pendulum),
         #  [x, y, w, z, xˍt, yˍt, T]
            [1, 0, 0, 0,   0,   0, 0.0],# 0, 0, 0, 0],
-           (0, 100.0),
+           (0, 10.0),
            [1, 9.8],
            mass_matrix=calculate_massmatrix(first_order_idx1_pendulum))
 sol = solve(prob, Rodas5());
@@ -110,14 +98,16 @@ sol = solve(prob, Rodas5());
 
 new_sys = dae_index_lowering(ModelingToolkit.ode_order_lowering(pendulum2))
 
-prob_auto = ODEProblem(ODEFunction(new_sys),
-        #  [xˍt, yˍt, x, y,   T]
-           [0,     0, 1, 0, 0.0],# 0, 0, 0, 0],
-           (0, 100.0),
-           [1, 9.8],
-           mass_matrix=calculate_massmatrix(new_sys))
+prob_auto = ODEProblem(new_sys,
+                       [D(x)=>0,
+                        D(y)=>0,
+                        x=>1,
+                        y=>0,
+                        T=>0.0],
+                       (0, 100.0),
+                       [1, 9.8])
 sol = solve(prob_auto, Rodas5());
-#plot(sol, vars=(3, 4))
+#plot(sol, vars=(x, y))
 
 # Define some variables
 @parameters t L g
@@ -148,7 +138,7 @@ p = [
     g => 9.8
 ]
 
-prob_auto = ODEProblem(new_sys,u0,(0.0,100.0),p)
+prob_auto = ODEProblem(new_sys,u0,(0.0,10.0),p)
 sol = solve(prob_auto, Rodas5());
 #plot(sol, vars=(D(x), y))
 

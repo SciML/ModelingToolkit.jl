@@ -408,7 +408,7 @@ function Base.convert(::Type{<:ODESystem}, rs::ReactionSystem;
                       name=nameof(rs), combinatoric_ratelaws=true, kwargs...)
     eqs     = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws)
     systems = map(sys -> (sys isa ODESystem) ? sys : convert(ODESystem, sys), get_systems(rs))
-    ODESystem(eqs, get_iv(rs), get_states(rs), get_ps(rs), name=name, systems=systems)
+    ODESystem(eqs, get_iv(rs), get_states(rs), get_ps(rs); name=name, systems=systems, kwargs...)
 end
 
 """
@@ -428,7 +428,7 @@ function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem;
                       name=nameof(rs), combinatoric_ratelaws=true, kwargs...)
     eqs     = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws, as_odes=false)
     systems = convert.(NonlinearSystem, get_systems(rs))
-    NonlinearSystem(eqs, get_states(rs), get_ps(rs), name=name, systems=systems)
+    NonlinearSystem(eqs, get_states(rs), get_ps(rs); name=name, systems=systems, kwargs...)
 end
 
 """
@@ -469,9 +469,10 @@ function Base.convert(::Type{<:SDESystem}, rs::ReactionSystem;
                                   combinatoric_ratelaws=combinatoric_ratelaws)
     systems  = convert.(SDESystem, get_systems(rs))
     SDESystem(eqs, noiseeqs, get_iv(rs), get_states(rs),
-              (noise_scaling===nothing) ? get_ps(rs) : union(get_ps(rs), toparam.(noise_scaling)),
+              (noise_scaling===nothing) ? get_ps(rs) : union(get_ps(rs), toparam.(noise_scaling));
               name=name, 
-              systems=systems)
+              systems=systems,
+              kwargs...)
 end
 
 """
@@ -491,7 +492,7 @@ function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem;
                       name=nameof(rs), combinatoric_ratelaws=true, kwargs...)
     eqs     = assemble_jumps(rs; combinatoric_ratelaws=combinatoric_ratelaws)
     systems = convert.(JumpSystem, get_systems(rs))
-    JumpSystem(eqs, get_iv(rs), get_states(rs), get_ps(rs), name=name, systems=systems)
+    JumpSystem(eqs, get_iv(rs), get_states(rs), get_ps(rs); name=name, systems=systems, kwargs...)
 end
 
 

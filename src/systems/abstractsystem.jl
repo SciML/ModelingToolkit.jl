@@ -153,7 +153,6 @@ for prop in [
              :inequality_constraints
              :controls
              :loss
-             :reduced_states
              :bcs
              :domain
              :depvars
@@ -226,14 +225,14 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true)
     i = findfirst(x->getname(x) == name, sts)
 
     if i !== nothing
-        return namespace ? rename(sts[i],renamespace(sysname,name)) : sts[i]
+        return namespace ? renamespace(sysname,sts[i]) : sts[i]
     end
 
     if has_ps(sys)
         ps = get_ps(sys)
         i = findfirst(x->getname(x) == name,ps)
         if i !== nothing
-            return namespace ? rename(ps[i],renamespace(sysname,name)) : ps[i]
+            return namespace ? renamespace(sysname,ps[i]) : ps[i]
         end
     end
 
@@ -241,11 +240,11 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true)
         obs = get_observed(sys)
         i = findfirst(x->getname(x.lhs)==name,obs)
         if i !== nothing
-            return namespace ? rename(obs[i].lhs,renamespace(sysname,name)) : obs[i]
+            return namespace ? renamespace(sysname,obs[i]) : obs[i]
         end
     end
 
-    throw(error("Variable $name does not exist"))
+    throw(ArgumentError("Variable $name does not exist"))
 end
 
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
@@ -268,13 +267,32 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     end
 end
 
+abstract type SymScope end
+
+struct LocalScope <: SymScope end
+LocalScope(sym::Union{Num, Sym}) = setmetadata(sym, SymScope, LocalScope())
+
+struct ParentScope <: SymScope
+    parent::SymScope
+end
+ParentScope(sym::Union{Num, Sym}) = setmetadata(sym, SymScope, ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+
+struct GlobalScope <: SymScope end
+GlobalScope(sym::Union{Num, Sym}) = setmetadata(sym, SymScope, GlobalScope())
+
 function renamespace(namespace, x)
     if x isa Num
         renamespace(namespace, value(x))
-    elseif istree(x)
-        renamespace(namespace, operation(x))(arguments(x)...)
-    elseif x isa Sym
-        Sym{symtype(x)}(renamespace(namespace,nameof(x)))
+    elseif x isa Symbolic
+        let scope = getmetadata(x, SymScope, LocalScope())
+            if scope isa LocalScope
+                rename(x, renamespace(namespace, getname(x)))
+            elseif scope isa ParentScope
+                setmetadata(x, SymScope, scope.parent)
+            else # GlobalScope
+                x
+            end
+        end
     else
         Symbol(namespace,:₊,x)
     end
@@ -302,16 +320,16 @@ function namespace_equation(eq::Equation,name,iv)
 end
 
 function namespace_expr(O::Sym,name,iv)
-    isequal(O, iv) ? O : rename(O,renamespace(name,nameof(O)))
+    isequal(O, iv) ? O : renamespace(name,O)
 end
 
 _symparam(s::Symbolic{T}) where {T} = T
 function namespace_expr(O,name,iv) where {T}
+    O = value(O)
     if istree(O)
         renamed = map(a->namespace_expr(a,name,iv), arguments(O))
         if operation(O) isa Sym
-            renamed_op = rename(operation(O),renamespace(name,nameof(operation(O))))
-            Term{_symparam(O)}(renamed_op,renamed)
+            rename(O,getname(renamespace(name, O)))
         else
             similarterm(O,operation(O),renamed)
         end
@@ -523,8 +541,13 @@ Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations.
 """
 function structural_simplify(sys::AbstractSystem)
-    sys = tearing(alias_elimination(sys))
-    fullstates = [get_reduced_states(sys); states(sys)]
+    sys = initialize_system_structure(alias_elimination(sys))
+    check_consistency(structure(sys))
+    if sys isa ODESystem
+        sys = dae_index_lowering(sys)
+    end
+    sys = tearing(sys)
+    fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     return sys
 end
@@ -543,3 +566,16 @@ Base.showerror(io::IO, e::InvalidSystemException) = print(io, "InvalidSystemExce
 AbstractTrees.children(sys::ModelingToolkit.AbstractSystem) = ModelingToolkit.get_systems(sys)
 AbstractTrees.printnode(io::IO, sys::ModelingToolkit.AbstractSystem) = print(io, nameof(sys))
 AbstractTrees.nodetype(::ModelingToolkit.AbstractSystem) = ModelingToolkit.AbstractSystem
+
+function check_eqs_u0(eqs, dvs, u0)
+    if u0 !== nothing
+        if !(length(eqs) == length(dvs) == length(u0))
+            throw(ArgumentError("Equations ($(length(eqs))), states ($(length(dvs))), and initial conditions ($(length(u0))) are of different lengths."))
+        end
+    else
+        if !(length(eqs) == length(dvs))
+            throw(ArgumentError("Equations ($(length(eqs))), states ($(length(dvs))) are of different lengths."))
+        end
+    end
+    return nothing
+end

@@ -69,7 +69,6 @@ struct ODESystem <: AbstractODESystem
     structure: structural information of the system
     """
     structure::Any
-    reduced_states::Vector
 end
 
 function ODESystem(
@@ -99,14 +98,14 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, nothing, [])
+    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, nothing)
 end
 
 iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nested_derivative(arguments(x)[1]) : arguments(x)[1]
 iv_from_nested_derivative(x::Sym) = x
 iv_from_nested_derivative(x) = missing
 
-vars(x::Sym) = [x]
+vars(x::Sym) = Set([x])
 vars(exprs::Symbolic) = vars([exprs])
 vars(exprs) = foldl(vars!, exprs; init = Set())
 vars!(vars, eq::Equation) = (vars!(vars, eq.lhs); vars!(vars, eq.rhs); vars)
@@ -235,7 +234,7 @@ function build_explicit_observed_function(
         sys, syms;
         expression=false,
         output_type=Array,
-    )
+        checkbounds=true)
 
     if (isscalar = !(syms isa Vector))
         syms = [syms]
@@ -253,8 +252,8 @@ function build_explicit_observed_function(
         output[i] = obs[idx].rhs
     end
 
-    dvs = DestructuredArgs(states(sys))
-    ps = DestructuredArgs(parameters(sys))
+    dvs = DestructuredArgs(states(sys), inbounds=!checkbounds)
+    ps = DestructuredArgs(parameters(sys), inbounds=!checkbounds)
     iv = independent_variable(sys)
     args = iv === nothing ? [dvs, ps] : [dvs, ps, iv]
 
@@ -280,4 +279,19 @@ function _eq_unordered(a, b)
         delete!(idxs, idx)
     end
     return true
+end
+
+function collect_differential_variables(sys::ODESystem)
+    eqs = equations(sys)
+    vars = Set()
+    diffvars = Set()
+    for eq in eqs
+        vars!(vars, eq)
+        for v in vars
+            isdifferential(v) || continue
+            push!(diffvars, arguments(v)[1])
+        end
+        empty!(vars)
+    end
+    return diffvars
 end

@@ -66,13 +66,13 @@ badjlist = [[1,2,5,6],[3,4,6]]
 bg = BipartiteGraph(7, fadjlist, badjlist)
 ```
 """
-mutable struct BipartiteGraph{I<:Integer,M} <: LightGraphs.AbstractGraph{I}
+mutable struct BipartiteGraph{I<:Integer,F<:Vector{Vector{I}},B<:Union{Vector{Vector{I}},I},M} <: LightGraphs.AbstractGraph{I}
     ne::Int
-    fadjlist::Vector{Vector{I}} # `fadjlist[src] => dsts`
-    badjlist::Vector{Vector{I}} # `badjlist[dst] => srcs`
+    fadjlist::F # `fadjlist[src] => dsts`
+    badjlist::B # `badjlist[dst] => srcs` or `ndsts`
     metadata::M
 end
-BipartiteGraph(ne::Integer, fadj::AbstractVector, badj::AbstractVector) = BipartiteGraph(ne, fadj, badj, nothing)
+BipartiteGraph(ne::Integer, fadj::AbstractVector, badj::Union{AbstractVector,Integer}=maximum(maximum, fadj); metadata=nothing) = BipartiteGraph(ne, fadj, badj, metadata)
 
 """
 ```julia
@@ -93,16 +93,16 @@ $(SIGNATURES)
 
 Build an empty `BipartiteGraph` with `nsrcs` sources and `ndsts` destinations.
 """
-function BipartiteGraph(nsrcs::T, ndsts::T; metadata=nothing) where T
+function BipartiteGraph(nsrcs::T, ndsts::T, backedge::Val{B}=Val(true); metadata=nothing) where {T,B}
     fadjlist = map(_->T[], 1:nsrcs)
-    badjlist = map(_->T[], 1:ndsts)
+    badjlist = B ? map(_->T[], 1:ndsts) : ndsts
     BipartiteGraph(0, fadjlist, badjlist, metadata)
 end
 
 Base.eltype(::Type{<:BipartiteGraph{I}}) where I = I
 function Base.empty!(g::BipartiteGraph)
     foreach(empty!, g.fadjlist)
-    foreach(empty!, g.badjlist)
+    g.badjlist isa AbstractVector && foreach(empty!, g.badjlist)
     g.ne = 0
     if g.metadata !== nothing
         foreach(empty!, g.metadata)
@@ -111,17 +111,22 @@ function Base.empty!(g::BipartiteGraph)
 end
 Base.length(::BipartiteGraph) = error("length is not well defined! Use `ne` or `nv`.")
 
+@noinline throw_no_back_edges() = throw(ArgumentError("The graph has no back edges."))
+
 if isdefined(LightGraphs, :has_contiguous_vertices)
     LightGraphs.has_contiguous_vertices(::Type{<:BipartiteGraph}) = false
 end
 LightGraphs.is_directed(::Type{<:BipartiteGraph}) = false
 LightGraphs.vertices(g::BipartiteGraph) = (𝑠vertices(g), 𝑑vertices(g))
 𝑠vertices(g::BipartiteGraph) = axes(g.fadjlist, 1)
-𝑑vertices(g::BipartiteGraph) = axes(g.badjlist, 1)
+𝑑vertices(g::BipartiteGraph) = g.badjlist isa AbstractVector ? axes(g.badjlist, 1) : Base.OneTo(g.badjlist)
 has_𝑠vertex(g::BipartiteGraph, v::Integer) = v in 𝑠vertices(g)
 has_𝑑vertex(g::BipartiteGraph, v::Integer) = v in 𝑑vertices(g)
 𝑠neighbors(g::BipartiteGraph, i::Integer, with_metadata::Val{M}=Val(false)) where M = M ? zip(g.fadjlist[i], g.metadata[i]) : g.fadjlist[i]
-𝑑neighbors(g::BipartiteGraph, j::Integer, with_metadata::Val{M}=Val(false)) where M = M ? zip(g.badjlist[j], (g.metadata[i][j] for i in g.badjlist[j])) : g.badjlist[j]
+function 𝑑neighbors(g::BipartiteGraph, j::Integer, with_metadata::Val{M}=Val(false)) where M
+    g.badjlist isa AbstractVector || throw_no_back_edges()
+    M ? zip(g.badjlist[j], (g.metadata[i][j] for i in g.badjlist[j])) : g.badjlist[j]
+end
 LightGraphs.ne(g::BipartiteGraph) = g.ne
 LightGraphs.nv(g::BipartiteGraph) = sum(length, vertices(g))
 LightGraphs.edgetype(g::BipartiteGraph{I}) where I = BipartiteEdge{I}
@@ -145,7 +150,6 @@ const NO_METADATA = NoMetadata()
 LightGraphs.add_edge!(g::BipartiteGraph, i::Integer, j::Integer, md=NO_METADATA) = add_edge!(g, BipartiteEdge(i, j), md)
 function LightGraphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_METADATA)
     @unpack fadjlist, badjlist = g
-    verts = vertices(g)
     s, d = src(edge), dst(edge)
     (has_𝑠vertex(g, s) && has_𝑑vertex(g, d)) || error("edge ($edge) out of range.")
     @inbounds list = fadjlist[s]
@@ -157,15 +161,21 @@ function LightGraphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_MET
     end
 
     g.ne += 1
-    @inbounds list = badjlist[d]
-    index = searchsortedfirst(list, s)
-    insert!(list, index, s)
+    if badjlist isa AbstractVector
+        @inbounds list = badjlist[d]
+        index = searchsortedfirst(list, s)
+        insert!(list, index, s)
+    end
     return true  # edge successfully added
 end
 
 function LightGraphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where T
     if type === DST
-        push!(g.badjlist, T[])
+        if g.badjlist isa AbstractVector
+            push!(g.badjlist, T[])
+        else
+            g.badjlist += 1
+        end
     elseif type === SRC
         push!(g.fadjlist, T[])
     else

@@ -8,15 +8,13 @@ function tear_graph(sys)
     s = structure(sys)
     @unpack graph, solvable_graph, assign, inv_assign, scc = s
 
-    partitions = map(scc) do c
+    @set! sys.structure.partitions = map(scc) do c
         ieqs = filter(eq->isalgeq(s, eq), c)
         vars = inv_assign[ieqs]
 
         td = TraverseDAG(graph.fadjlist, length(assign))
-        e_solved, v_solved, e_residue, v_tear = tearEquations!(td, solvable_graph.fadjlist, ieqs, vars)
+        SystemPartition(tearEquations!(td, solvable_graph.fadjlist, ieqs, vars)...)
     end
-
-    @set! sys.structure.partitions = partitions
     return sys
 end
 
@@ -37,7 +35,8 @@ function tearing_reassemble(sys; simplify=false)
     active_eqs  = trues(ns)
     active_vars = trues(nd)
     rvar2req = Vector{Int}(undef, nd)
-    for (ith_scc, (e_solved, v_solved, e_residue, v_tear)) in enumerate(partitions)
+    for (ith_scc, partition) in enumerate(partitions)
+        @unpack e_solved, v_solved, e_residual, v_residual = partition
         for ii in eachindex(e_solved)
             ieq = e_solved[ii]; ns -= 1
             iv = v_solved[ii]; nd -= 1
@@ -50,7 +49,7 @@ function tearing_reassemble(sys; simplify=false)
             var = fullvars[iv]
             rhs = value(solve_for(eq, var; simplify=simplify, check=false))
             # if we don't simplify the rhs and the `eq` is not solved properly
-            (!simplify && var in vars(rhs)) && (rhs = SymbolicUtils.polynormalize(rhs))
+            (!simplify && occursin(rhs, var)) && (rhs = SymbolicUtils.polynormalize(rhs))
             # Since we know `eq` is linear wrt `var`, so the round off must be a
             # linear term. We can correct the round off error by a linear
             # correction.
@@ -101,7 +100,7 @@ function tearing_reassemble(sys; simplify=false)
         var_reidx[i] = active ? (idx += 1) : -1
     end
 
-    newgraph = BipartiteGraph(ns, nd)
+    newgraph = BipartiteGraph(ns, nd, Val(false))
 
     function visit!(ii, gidx, basecase=true)
         ieq = basecase ? ii : rvar2req[ii]
@@ -120,9 +119,12 @@ function tearing_reassemble(sys; simplify=false)
         return nothing
     end
 
-
     ### update equations
-    newstates = setdiff([fullvars[diffvars_range(s)]; fullvars[algvars_range(s)]], solvars)
+    odestats = []
+    for idx in eachindex(fullvars); isdervar(s, idx) && continue
+        push!(odestats, fullvars[idx])
+    end
+    newstates = setdiff(odestats, solvars)
     varidxmap = Dict(newstates .=> 1:length(newstates))
     neweqs = Vector{Equation}(undef, ns)
     newalgeqs = falses(ns)
@@ -157,34 +159,36 @@ function tearing_reassemble(sys; simplify=false)
     ### update partitions
     newpartitions = similar(partitions, 0)
     emptyintvec = Int[]
-    for ii in eachindex(partitions)
-        _, _, og_e_residue, og_v_tear = partitions[ii]
-        isempty(og_v_tear) && continue
-        e_residue = similar(og_e_residue)
-        v_tear = similar(og_v_tear)
-        for ii in eachindex(og_e_residue)
-            e_residue[ii] = eq_reidx[og_e_residue[ii]]
-            v_tear[ii] = var_reidx[og_v_tear[ii]]
+    for (ii, partition) in enumerate(partitions)
+        @unpack e_residual, v_residual = partition
+        isempty(v_residual) && continue
+        new_e_residual = similar(e_residual)
+        new_v_residual = similar(v_residual)
+        for ii in eachindex(e_residual)
+            new_e_residual[ii] = eq_reidx[ e_residual[ii]]
+            new_v_residual[ii] = var_reidx[v_residual[ii]]
         end
         # `emptyintvec` is aliased to save memory
         # We need them for type stability
-        push!(newpartitions, (emptyintvec, emptyintvec, e_residue, v_tear))
+        newpart = SystemPartition(emptyintvec, emptyintvec, new_e_residual, new_v_residual)
+        push!(newpartitions, newpart)
     end
 
     obseqs = solvars .~ rhss
 
-    @set! sys.structure.graph = newgraph
-    @set! sys.structure.scc = newscc
-    @set! sys.structure.fullvars = fullvars[active_vars]
-    @set! sys.structure.partitions = newpartitions
-    @set! sys.structure.algeqs = newalgeqs
+    @set! s.graph = newgraph
+    @set! s.scc = newscc
+    @set! s.fullvars = fullvars[active_vars]
+    @set! s.vartype = s.vartype[active_vars]
+    @set! s.partitions = newpartitions
+    @set! s.algeqs = newalgeqs
+
+    @set! sys.structure = s
     @set! sys.eqs = neweqs
     @set! sys.states = newstates
-    @set! sys.reduced_states = [get_reduced_states(sys); solvars]
-    @set! sys.observed = vcat(observed(sys), obseqs)
+    @set! sys.observed = [observed(sys); obseqs]
     return sys
 end
-
 
 """
     algebraic_equations_scc(sys)

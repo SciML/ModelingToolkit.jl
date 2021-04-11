@@ -43,7 +43,6 @@ struct NonlinearSystem <: AbstractSystem
     structure: structural information of the system
     """
     structure::Any
-    reduced_states::Any
 end
 
 function NonlinearSystem(eqs, states, ps;
@@ -58,7 +57,7 @@ function NonlinearSystem(eqs, states, ps;
     end
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
-    NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, defaults, nothing, [])
+    NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, defaults, nothing)
 end
 
 function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
@@ -214,15 +213,14 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem,u0map,paramm
                            linenumbers = true, parallel=SerialForm(),
                            eval_expression = true,
                            kwargs...)
+    eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
     defs = defaults(sys)
     u0 = varmap_to_vars(u0map,dvs; defaults=defs)
     p = varmap_to_vars(parammap,ps; defaults=defs)
 
-    if u0 !== nothing
-        length(dvs) == length(u0) || throw(ArgumentError("States ($(length(dvs))) and initial conditions ($(length(u0))) are of different lengths."))
-    end
+    check_eqs_u0(eqs, dvs, u0)
 
     f = constructor(sys,dvs,ps,u0;jac=jac,checkbounds=checkbounds,
                     linenumbers=linenumbers,parallel=parallel,simplify=simplify,

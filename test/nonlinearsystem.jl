@@ -87,6 +87,7 @@ eqs1 = [
 
 lorenz = name -> NonlinearSystem(eqs1, [x,y,z,u,F], [σ,ρ,β], name=name)
 lorenz1 = lorenz(:lorenz1)
+@test_throws ArgumentError NonlinearProblem(lorenz1, zeros(5))
 lorenz2 = lorenz(:lorenz2)
 connected = NonlinearSystem([s ~ a + lorenz1.x
                              lorenz2.y ~ s
