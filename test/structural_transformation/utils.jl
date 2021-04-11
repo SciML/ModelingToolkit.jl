@@ -20,12 +20,12 @@ sys = initialize_system_structure(pendulum)
 StructuralTransformations.find_solvables!(sys)
 sss = structure(sys)
 @unpack graph, solvable_graph, fullvars, varassoc = sss
-@test isequal(fullvars, [w, D(x), x, z, D(y), y, T, D(w), D(z)])
-@test graph.fadjlist == sort.([[1, 2], [4, 5], [3, 7, 8], [6, 7, 9], [3, 6]])
+@test isequal(fullvars, [D(x), D(y), D(w), D(z), x, y, w, z, T])
+@test graph.fadjlist == [[1, 7], [2, 8], [3, 5, 9], [4, 6, 9], [5, 6]]
 @test graph.badjlist == 9 == length(fullvars)
 @test ne(graph) == nnz(incidence_matrix(graph)) == 12
 @test nv(solvable_graph) == 9 + 5
-@test varassoc == [8, 0, 2, 9, 0, 5, 0, 0, 0]
+@test varassoc == [0, 0, 0, 0, 1, 2, 3, 4, 0]
 
 se = collect(StructuralTransformations.𝑠edges(graph))
 @test se == mapreduce(vcat, enumerate(graph.fadjlist)) do (s, d)

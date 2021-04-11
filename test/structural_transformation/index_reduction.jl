@@ -34,7 +34,7 @@ pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
 pendulum = initialize_system_structure(pendulum)
 sss = structure(pendulum)
 @unpack graph, fullvars, varassoc = sss
-@test StructuralTransformations.matching(sss, varassoc .== 0) == map(x -> x == 0 ? StructuralTransformations.UNASSIGNED : x, [0, 1, 0, 0, 2, 0, 3, 0, 4])
+@test StructuralTransformations.matching(sss, varassoc .== 0) == map(x -> x == 0 ? StructuralTransformations.UNASSIGNED : x, [1, 2, 3, 4, 0, 0, 0, 0, 0])
 
 sys, assign, eqassoc = StructuralTransformations.pantelides!(pendulum)
 sss = structure(sys)
@@ -48,8 +48,8 @@ scc = StructuralTransformations.find_scc(graph, assign)
                            [6],
                           ]
 
-@test graph.fadjlist == sort.([[1, 2], [4, 5], [3, 7, 8], [6, 7, 9], [3, 6], [2, 3, 5, 6], [1, 2, 8, 10], [4, 5, 9, 11], [2, 3, 5, 6, 10, 11]])
-@test varassoc == [8, 10, 2, 9, 11, 5, 0, 0, 0, 0, 0]
+@test graph.fadjlist == [[1, 7], [2, 8], [3, 5, 9], [4, 6, 9], [5, 6], [1, 2, 5, 6], [1, 3, 7, 10], [2, 4, 8, 11], [1, 2, 5, 6, 10, 11]]
+@test varassoc == [10, 11, 0, 0, 1, 2, 3, 4, 0, 0, 0]
 #1: D(x) ~ w
 #2: D(y) ~ z
 #3: D(w) ~ T*x
