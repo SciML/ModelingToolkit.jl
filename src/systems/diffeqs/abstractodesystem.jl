@@ -319,6 +319,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     f_oop, f_iip = generate_function(sys, dvs, ps; expression=Val{true}, kwargs...)
 
     dict = Dict()
+    #=
     observedfun = if steady_state
         :(function generated_observed(obsvar, u, p, t=Inf)
               obs = get!($dict, value(obsvar)) do
@@ -334,6 +335,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
               obs(u, p, t)
           end)
     end
+    =#
 
     fsym = gensym(:f)
     _f = :($fsym = ModelingToolkit.ODEFunctionClosure($f_oop, $f_iip))
@@ -375,7 +377,6 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                           jac_prototype = $jp_expr,
                           syms = $(Symbol.(states(sys))),
                           indepsym = $(QuoteNode(Symbol(independent_variable(sys)))),
-                          observed = $observedfun,
                          )
     end
     !linenumbers ? striplines(ex) : ex
