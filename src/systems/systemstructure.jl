@@ -211,7 +211,7 @@ end
 function find_linear_equations(sys)
     s = structure(sys)
     @unpack fullvars, graph = s
-    is_linear_equations = falses(ndsts(graph))
+    is_linear_equations = falses(nsrcs(graph))
     eqs = equations(sys)
     eadj = Vector{Int}[]
     cadj = Vector{Int}[]
