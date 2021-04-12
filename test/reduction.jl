@@ -247,3 +247,33 @@ eqs = [
       ]
 @named sys = ODESystem(eqs, t, sts, params)
 @test_throws ModelingToolkit.InvalidSystemException structural_simplify(sys)
+
+# issue #963
+@parameters t
+D = Differential(t)
+@variables v47(t) v57(t) v66(t) v25(t) i74(t) i75(t) i64(t) i71(t) v1(t) v2(t)
+
+eq = [
+      v47 ~ v1
+      v47 ~ sin(10t)
+      v57 ~ v1 - v2
+      v57 ~ 10.0i64
+      v66 ~ v2
+      v66 ~ 5.0i74
+      v25 ~ v2
+      i75 ~ 0.005 * D(v25)
+      0 ~ i74 + i75 - i64
+      0 ~ i64 + i71]
+
+
+sys0 = ODESystem(eq, t)
+sys = structural_simplify(sys0)
+@test length(equations(sys)) == 1
+eq = equations(sys)[1]
+@test isequal(eq.lhs, 0)
+dv25 = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, v25))
+ddv25 = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, D(v25)))
+dt = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, sin(10t)))
+@test dv25 ≈ 0.3
+@test ddv25 == 0.005
+@test dt == -0.1
