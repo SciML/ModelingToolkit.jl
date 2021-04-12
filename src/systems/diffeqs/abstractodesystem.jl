@@ -26,7 +26,7 @@ function calculate_jacobian(sys::AbstractODESystem;
     dvs = states(sys)
 
     if sparse
-        jac = sparsity_pattern(sys)
+        jac = sparsejacobian(rhs, dvs, simplify=simplify)
     else
         jac = jacobian(rhs, dvs, simplify=simplify)
     end

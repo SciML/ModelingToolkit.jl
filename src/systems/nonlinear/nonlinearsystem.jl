@@ -64,7 +64,7 @@ function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
     rhs = [eq.rhs for eq ∈ equations(sys)]
     vals = [dv for dv in states(sys)]
     if sparse
-        jac = sparsity_pattern(sys)
+        jac = sparsejacobian(rhs, vals, simplify=simplify)
     else
         jac = jacobian(rhs, vals, simplify=simplify)
     end
