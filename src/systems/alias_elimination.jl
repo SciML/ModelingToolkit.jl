@@ -3,13 +3,8 @@ using SymbolicUtils: Rewriters
 const KEEP = typemin(Int)
 
 function alias_elimination(sys)
-    # FIXME: update `structure` too
-    #sys = flatten(sys)
-    #s = get_structure(sys)
-    #if !(s isa SystemStructure)
     sys = initialize_system_structure(sys)
     s = structure(sys)
-    #end
     is_linear_equations, eadj, cadj = find_linear_equations(sys)
 
     v_eliminated, v_types, n_null_vars, degenerate_equations, linear_equations = alias_eliminate_graph(
