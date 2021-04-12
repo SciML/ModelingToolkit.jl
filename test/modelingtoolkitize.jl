@@ -39,7 +39,9 @@ u0 = init_brusselator_2d(xyd_brusselator)
 prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
                                      u0,(0.,11.5),p)
 
-modelingtoolkitize(prob_ode_brusselator_2d)
+sys = modelingtoolkitize(prob_ode_brusselator_2d)
+prob = ODEProblem(sys, u0, (0, 11.5), sparse=true, jac=false)
+@test Symbolics.jacobian_sparsity(map(x->x.rhs, equations(sys)), states(sys)) == prob.f.jac_prototype
 
 ## Optimization
 
