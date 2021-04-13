@@ -30,9 +30,9 @@ eqs = [D(x) ~ σ*(y-x)*D(x-y)/D(z),
 # Latexify.@generate_test latexify(eqs)
 @test latexify(eqs) == replace(
 raw"\begin{align}
-\frac{dx(t)}{dt} =& \sigma \frac{d\left(x\left( t \right) - y\left( t \right)\right)}{dt} \left( y\left( t \right) - x\left( t \right) \right) \left( \frac{dz(t)}{dt} \right)^{-1} \\
+\frac{dx(t)}{dt} =& \frac{\sigma \mathrm{\frac{d}{d t}}\left( x\left( t \right) - y\left( t \right) \right) \left( y\left( t \right) - x\left( t \right) \right)}{\frac{dz(t)}{dt}} \\
 0 =&  - y\left( t \right) + 0.1 \sigma x\left( t \right) \left( \rho - z\left( t \right) \right) \\
-\frac{dz(t)}{dt} =& x\left( t \right) \left( y\left( t \right) \right)^{\frac{2}{3}} - \beta z\left( t \right)
+\frac{dz(t)}{dt} =& \left( y\left( t \right) \right)^{\frac{2}{3}} x\left( t \right) - \beta z\left( t \right)
 \end{align}
 ", "\r\n"=>"\n")
 
@@ -46,7 +46,7 @@ eqs = [D(u[1]) ~ p[3]*(u[2]-u[1]),
 raw"\begin{align}
 \frac{du{_1}(t)}{dt} =& p{_3} \left( \mathrm{u{_2}}\left( t \right) - \mathrm{u{_1}}\left( t \right) \right) \\
 0 =&  - \mathrm{u{_2}}\left( t \right) + 0.1 p{_2} p{_3} \mathrm{u{_1}}\left( t \right) \left( p{_1} - \mathrm{u{_1}}\left( t \right) \right) \\
-\frac{du{_3}(t)}{dt} =& \mathrm{u{_1}}\left( t \right) \left( \mathrm{u{_2}}\left( t \right) \right)^{\frac{2}{3}} - p{_3} \mathrm{u{_3}}\left( t \right)
+\frac{du{_3}(t)}{dt} =& \left( \mathrm{u{_2}}\left( t \right) \right)^{\frac{2}{3}} \mathrm{u{_1}}\left( t \right) - p{_3} \mathrm{u{_3}}\left( t \right)
 \end{align}
 ", "\r\n"=>"\n")
 
@@ -58,7 +58,7 @@ eqs = [D(u[1]) ~ p[3]*(u[2]-u[1]),
 raw"\begin{align}
 \frac{du{_1}(t)}{dt} =& p{_3} \left( \mathrm{u{_2}}\left( t \right) - \mathrm{u{_1}}\left( t \right) \right) \\
 \frac{du{_2}(t)}{dt} =&  - \mathrm{u{_2}}\left( t \right) + 0.1 p{_2} p{_3} \mathrm{u{_1}}\left( t \right) \left( p{_1} - \mathrm{u{_1}}\left( t \right) \right) \\
-\frac{du{_3}(t)}{dt} =& \mathrm{u{_1}}\left( t \right) \left( \mathrm{u{_2}}\left( t \right) \right)^{\frac{2}{3}} - p{_3} \mathrm{u{_3}}\left( t \right)
+\frac{du{_3}(t)}{dt} =& \left( \mathrm{u{_2}}\left( t \right) \right)^{\frac{2}{3}} \mathrm{u{_1}}\left( t \right) - p{_3} \mathrm{u{_3}}\left( t \right)
 \end{align}
 ", "\r\n"=>"\n")
 
@@ -69,6 +69,6 @@ eqs = [D(x) ~ (1+cos(t))/(1+2*x)]
 
 @test latexify(eqs) == replace(
 raw"\begin{align}
-\frac{dx(t)}{dt} =& \left( 1 + \cos\left( t \right) \right) \left( 1 + 2 x\left( t \right) \right)^{-1}
+\frac{dx(t)}{dt} =& \frac{\left( 1 + \cos\left( t \right) \right)}{\left( 1 + 2 x\left( t \right) \right)}
 \end{align}
 ", "\r\n"=>"\n")
