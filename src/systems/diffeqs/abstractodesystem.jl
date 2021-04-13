@@ -215,12 +215,13 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         end
     end
 
+    uElType = eltype(u0)
     ODEFunction{iip}(
                      f,
                      jac = _jac === nothing ? nothing : _jac,
                      tgrad = _tgrad === nothing ? nothing : _tgrad,
                      mass_matrix = _M,
-                     jac_prototype = sparse ? (!jac ? jacobian_sparsity(sys) : similar(get_jac(sys)[],Float64)) : nothing,
+                     jac_prototype = sparse ? (!jac ? similar(jacobian_sparsity(sys),uElType) : similar(get_jac(sys)[],uElType)) : nothing,
                      syms = Symbol.(states(sys)),
                      indepsym = Symbol(independent_variable(sys)),
                      observed = observedfun,
