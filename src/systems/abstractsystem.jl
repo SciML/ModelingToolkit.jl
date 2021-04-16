@@ -593,7 +593,9 @@ function with_connection_type(expr)
     args = sig.args[2:end]
 
     quote
-        struct $fname end
+        struct $fname
+            $(gensym()) -> 1 # this removes the default constructor
+        end
         function $fname($(args...))
             function f()
                 $body

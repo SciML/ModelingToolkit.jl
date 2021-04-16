@@ -59,7 +59,7 @@ function JumpSystem(eqs, iv, states, ps;
                     default_u0=Dict(),
                     default_p=Dict(),
                     defaults=_merge(Dict(default_u0), Dict(default_p)),
-                    name = gensym(:JumpSystem)
+                    name = gensym(:JumpSystem),
                     connection_type=nothing,
                     )
 

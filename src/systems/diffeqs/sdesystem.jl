@@ -83,7 +83,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
-                   name = gensym(:SDESystem)
+                   name = gensym(:SDESystem),
                    connection_type=nothing,
                    )
     iv′ = value(iv)
