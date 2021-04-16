@@ -52,8 +52,16 @@ struct PDESystem <: ModelingToolkit.AbstractSystem
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
-    @add_kwonly function PDESystem(eqs, bcs, domain, indvars, depvars, ps = SciMLBase.NullParameters(), defaults = Dict())
-        new(eqs, bcs, domain, indvars, depvars, ps, defaults)
+    """
+    type: type of the system
+    """
+    connection_type::Any
+    @add_kwonly function PDESystem(eqs, bcs, domain, indvars, depvars,
+                                   ps=SciMLBase.NullParameters();
+                                   defaults=Dict(),
+                                   connection_type=nothing,
+                                  )
+        new(eqs, bcs, domain, indvars, depvars, ps, defaults, connection_type)
     end
 end
 

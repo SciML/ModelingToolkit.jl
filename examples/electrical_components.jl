@@ -8,7 +8,6 @@ using ModelingToolkit, OrdinaryDiffEq
     ODESystem(Equation[], t, [v, i], [], name=name, defaults=[v=>1.0, i=>1.0])
 end
 
-# level-1
 function ModelingToolkit.connect(::Type{Pin}, ps...)
     eqs = [
            0 ~ sum(p->p.i, ps) # KCL

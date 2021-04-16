@@ -60,10 +60,16 @@ struct Reaction{S, T <: Number}
     `true` if `rate` represents the full reaction rate law.
     """
     only_use_rate::Bool
+    """
+    type: type of the system
+    """
+    connection_type::Any
 end
 
 function Reaction(rate, subs, prods, substoich, prodstoich;
-                  netstoich=nothing, only_use_rate=false, kwargs...)
+                  netstoich=nothing, only_use_rate=false,
+                  connection_type=nothing,
+                  kwargs...)
 
     (isnothing(prods)&&isnothing(subs)) && error("A reaction requires a non-nothing substrate or product vector.")
     (isnothing(prodstoich)&&isnothing(substoich)) && error("Both substrate and product stochiometry inputs cannot be nothing.")
@@ -80,7 +86,7 @@ function Reaction(rate, subs, prods, substoich, prodstoich;
     subs = value.(subs)
     prods = value.(prods)
     ns = isnothing(netstoich) ? get_netstoich(subs, prods, substoich, prodstoich) : netstoich
-    Reaction(value(rate), subs, prods, substoich, prodstoich, ns, only_use_rate)
+    Reaction(value(rate), subs, prods, substoich, prodstoich, ns, only_use_rate, connection_type)
 end
 
 

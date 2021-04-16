@@ -47,6 +47,10 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
+    """
+    type: type of the system
+    """
+    connection_type::Any
 end
 
 function JumpSystem(eqs, iv, states, ps;
@@ -55,7 +59,9 @@ function JumpSystem(eqs, iv, states, ps;
                     default_u0=Dict(),
                     default_p=Dict(),
                     defaults=_merge(Dict(default_u0), Dict(default_p)),
-                    name = gensym(:JumpSystem))
+                    name = gensym(:JumpSystem)
+                    connection_type=nothing,
+                    )
 
     ap = ArrayPartition(MassActionJump[], ConstantRateJump[], VariableRateJump[])
     for eq in eqs
@@ -75,7 +81,7 @@ function JumpSystem(eqs, iv, states, ps;
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    JumpSystem{typeof(ap)}(ap, value(iv), value.(states), value.(ps), observed, name, systems, defaults)
+    JumpSystem{typeof(ap)}(ap, value(iv), value.(states), value.(ps), observed, name, systems, defaults, connection_type)
 end
 
 function generate_rate_function(js, rate)
