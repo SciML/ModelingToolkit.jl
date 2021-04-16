@@ -3,9 +3,22 @@ using ModelingToolkit, OrdinaryDiffEq
 
 # Basic electric components
 @parameters t
-function Pin(;name)
+@connector function Pin(;name)
     @variables v(t) i(t)
     ODESystem(Equation[], t, [v, i], [], name=name, defaults=[v=>1.0, i=>1.0])
+end
+
+# level-1
+function ModelingToolkit.connect(::Type{Pin}, ps...)
+    eqs = [
+           0 ~ sum(p->p.i, ps) # KCL
+          ]
+    # KVL
+    for i in 1:length(ps)-1
+        push!(eqs, ps[i].v ~ ps[i+1].v)
+    end
+
+    return eqs
 end
 
 function Ground(;name)
@@ -69,16 +82,4 @@ function Inductor(; name, L = 1.0)
            D(i) ~ v / L
           ]
     ODESystem(eqs, t, [v, i], [L], systems=[p, n], defaults=Dict(L => val), name=name)
-end
-
-function connect_pins(ps...)
-    eqs = [
-           0 ~ sum(p->p.i, ps) # KCL
-          ]
-    # KVL
-    for i in 1:length(ps)-1
-        push!(eqs, ps[i].v ~ ps[i+1].v)
-    end
-
-    return eqs
 end

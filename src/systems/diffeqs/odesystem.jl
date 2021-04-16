@@ -69,6 +69,10 @@ struct ODESystem <: AbstractODESystem
     structure: structural information of the system
     """
     structure::Any
+    """
+    type: type of the system
+    """
+    connection_type::Any
 end
 
 function ODESystem(
@@ -79,6 +83,7 @@ function ODESystem(
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
+                   connection_type=nothing,
                   )
     iv′ = value(iv)
     dvs′ = value.(dvs)
@@ -98,7 +103,7 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, nothing)
+    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type)
 end
 
 iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nested_derivative(arguments(x)[1]) : arguments(x)[1]
