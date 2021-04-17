@@ -157,6 +157,7 @@ for prop in [
              :domain
              :depvars
              :indvars
+             :connection_type
             ]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
@@ -578,4 +579,65 @@ function check_eqs_u0(eqs, dvs, u0)
         end
     end
     return nothing
+end
+
+function with_connection_type(expr)
+    @assert expr isa Expr && (expr.head == :function || (expr.head == :(=) &&
+                                       expr.args[1] isa Expr &&
+                                       expr.args[1].head == :call))
+
+    sig = expr.args[1]
+    body = expr.args[2]
+
+    fname = sig.args[1]
+    args = sig.args[2:end]
+
+    quote
+        struct $fname
+            $(gensym()) -> 1 # this removes the default constructor
+        end
+        function $fname($(args...))
+            function f()
+                $body
+            end
+            res = f()
+            $isdefined(res, :connection_type) ? $Setfield.@set!(res.connection_type = $fname) : res
+        end
+    end
+end
+
+macro connector(expr)
+    esc(with_connection_type(expr))
+end
+
+promote_connect_rule(::Type{T}, ::Type{S}) where {T, S} = Union{}
+promote_connect_rule(::Type{T}, ::Type{T}) where {T} = T
+promote_connect_type(t1::Type, t2::Type, ts::Type...) = promote_connect_rule(promote_connect_rule(t1, t2), ts...)
+@inline function promote_connect_type(::Type{T}, ::Type{S}) where {T,S}
+    promote_connect_result(
+        T,
+        S,
+        promote_connect_rule(T,S),
+        promote_connect_rule(S,T)
+    )
+end
+
+promote_connect_result(::Type, ::Type, ::Type{T}, ::Type{Union{}}) where {T} = T
+promote_connect_result(::Type, ::Type, ::Type{Union{}}, ::Type{S}) where {S} = S
+promote_connect_result(::Type, ::Type, ::Type{T}, ::Type{T}) where {T} = T
+function promote_connect_result(::Type{T}, ::Type{S}, ::Type{P1}, ::Type{P2}) where {T,S,P1,P2}
+    throw(ArgumentError("connection promotion for $T and $S resulted in $P1 and $P2. " *
+                        "Define promotion only in one direction."))
+end
+
+throw_connector_promotion(T, S) = throw(ArgumentError("Don't know how to connect systems of type $S and $T"))
+promote_connect_result(::Type{T},::Type{S},::Type{Union{}},::Type{Union{}}) where {T,S} = throw_connector_promotion(T,S)
+
+promote_connect_type(::Type{T}, ::Type{T}) where {T} = T
+function promote_connect_type(T, S)
+    error("Don't know how to connect systems of type $S and $T")
+end
+
+function connect(syss...)
+    connect(promote_connect_type(map(get_connection_type, syss)...), syss...)
 end

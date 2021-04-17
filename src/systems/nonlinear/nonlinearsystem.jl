@@ -43,21 +43,27 @@ struct NonlinearSystem <: AbstractSystem
     structure: structural information of the system
     """
     structure::Any
+    """
+    type: type of the system
+    """
+    connection_type::Any
 end
 
 function NonlinearSystem(eqs, states, ps;
-                         observed = [],
-                         name = gensym(:NonlinearSystem),
+                         observed=[],
+                         name=gensym(:NonlinearSystem),
                          default_u0=Dict(),
                          default_p=Dict(),
                          defaults=_merge(Dict(default_u0), Dict(default_p)),
-                         systems = NonlinearSystem[])
+                         systems=NonlinearSystem[],
+                         connection_type=nothing,
+                         )
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :NonlinearSystem, force=true)
     end
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
-    NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, defaults, nothing)
+    NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, defaults, nothing, connection_type)
 end
 
 function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
