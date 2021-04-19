@@ -40,11 +40,11 @@ sys = modelingtoolkitize(prob_ode_brusselator_2d)
 
 # test sparse jacobian pattern only.
 prob = ODEProblem(sys, u0, (0, 11.5), sparse=true, jac=false)
-@test isapprox(similar(Symbolics.jacobian_sparsity(map(x->x.rhs, equations(sys)), states(sys)),Float64), prob.f.jac_prototype; atol=1.e-4)
+@test findnz(Symbolics.jacobian_sparsity(map(x->x.rhs, equations(sys)), states(sys)))[1:2] == findnz(prob.f.jac_prototype)[1:2]
 
 # test sparse jacobian
 prob = ODEProblem(sys, u0, (0, 11.5), sparse=true, jac=true)
-@test isapprox(similar(calculate_jacobian(sys), Float64), prob.f.jac_prototype; atol=1.e-4)
+@test findnz(calculate_jacobian(sys))[1:2] == findnz(prob.f.jac_prototype)[1:2]
 
 # test when not sparse
 prob = ODEProblem(sys, u0, (0, 11.5), sparse=false, jac=true)
