@@ -1,4 +1,5 @@
 using ModelingToolkit
+using DomainSets
 
 @parameters t x
 domains = [t ∈ IntervalDomain(0.0,1.0),
