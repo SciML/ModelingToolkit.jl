@@ -1,11 +1,13 @@
-abstract type AbstractDomain{T,N} end
+using DomainSets
+
+abstract type AbstractDomain{T,N} <: Domain{T} end
 
 struct VarDomainPairing
   variables
-  domain::AbstractDomain
+  domain::Domain
 end
-Base.:∈(variable::ModelingToolkit.Num,domain::AbstractDomain) = VarDomainPairing(value(variable),domain)
-Base.:∈(variables::NTuple{N,ModelingToolkit.Num},domain::AbstractDomain) where N = VarDomainPairing(value.(variables),domain)
+Base.:∈(variable::ModelingToolkit.Num,domain::Domain) = VarDomainPairing(value(variable),domain)
+Base.:∈(variables::NTuple{N,ModelingToolkit.Num},domain::Domain) where N = VarDomainPairing(value.(variables),domain)
 
 ## Specific Domains
 
