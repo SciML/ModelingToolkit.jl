@@ -468,7 +468,7 @@ function push_defaults!(stmt, defs, var2name)
     return defs_name
 end
 
-function system2expr(sys::AbstractSystem)
+function toexpr(sys::AbstractSystem)
     sys = flatten(sys)
     expr = Expr(:block)
     stmt = expr.args

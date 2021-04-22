@@ -18,7 +18,7 @@ eqs = [D(x) ~ σ*(y-x),
 
 ModelingToolkit.toexpr.(eqs)[1]
 de = ODESystem(eqs; defaults=Dict(x => 1))
-@test eval(system2expr(sys)) == sys
+@test eval(toexpr(de)) == de
 
 generate_function(de)
 
