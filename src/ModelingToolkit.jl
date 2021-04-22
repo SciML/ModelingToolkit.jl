@@ -154,6 +154,7 @@ export ode_order_lowering, liouville_transform
 export runge_kutta_discretize
 export PDESystem
 export Reaction, ReactionSystem, ismassaction, oderatelaw, jumpratelaw
+export system2expr
 export Differential, expand_derivatives, @derivatives
 export IntervalDomain, ProductDomain, ⊗, CircleDomain
 export Equation, ConstrainedEquation

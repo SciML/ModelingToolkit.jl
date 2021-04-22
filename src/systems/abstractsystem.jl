@@ -414,7 +414,7 @@ end
 ###
 ### System utils
 ###
-function push_vars!(stmt, typ, vars)
+function push_vars!(stmt, name, typ, vars)
     isempty(vars) && return
     vars_expr = Expr(:macrocall, typ, nothing)
     for s in vars
@@ -427,7 +427,7 @@ function push_vars!(stmt, typ, vars)
         end
         push!(vars_expr.args, ex)
     end
-    push!(stmt, vars_expr)
+    push!(stmt, :($name = $collect($vars_expr)))
     return
 end
 
@@ -474,14 +474,17 @@ function system2expr(sys::AbstractSystem)
     stmt = expr.args
 
     iv = independent_variable(sys)
+    ivname = gensym(:iv)
     if iv !== nothing
-        push!(stmt, :(@variables $(getname(iv))))
+        push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
     end
 
+    stsname = gensym(:sts)
     sts = states(sys)
-    push_vars!(stmt, Symbol("@variables"), sts)
+    push_vars!(stmt, stsname, Symbol("@variables"), sts)
+    psname = gensym(:ps)
     ps = parameters(sys)
-    push_vars!(stmt, Symbol("@parameters"), ps)
+    push_vars!(stmt, psname, Symbol("@parameters"), ps)
 
     var2name = Dict{Any,Symbol}()
     for v in Iterators.flatten((sts, ps))
@@ -489,10 +492,12 @@ function system2expr(sys::AbstractSystem)
     end
 
     eqs_name = push_eqs!(stmt, equations(sys), var2name)
-
     defs_name = push_defaults!(stmt, defaults(sys), var2name)
+
     if sys isa ODESystem
-        push!(stmt, :($ODESystem($eqs_name, $iv; defaults=$defs_name)))
+        push!(stmt, :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults=$defs_name)))
+    elseif sys isa NonlinearSystem
+        push!(stmt, :($NonlinearSystem($eqs_name, $stsname, $psname; defaults=$defs_name)))
     end
 
     striplines(expr) # keeping the line numbers is never helpful
