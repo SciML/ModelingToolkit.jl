@@ -21,7 +21,8 @@ end
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
+ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β], defaults = Dict(x => 2))
+@test eval(system2expr(ns)) == ns
 test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β))
 @test begin
     f = eval(generate_function(ns, [x,y,z], [σ,ρ,β])[2])
