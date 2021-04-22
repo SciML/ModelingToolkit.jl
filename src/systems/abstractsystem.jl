@@ -411,6 +411,93 @@ function (f::AbstractSysToExpr)(O)
     return build_expr(:call, Any[operation(O); f.(arguments(O))])
 end
 
+###
+### System utils
+###
+function push_vars!(stmt, typ, vars)
+    isempty(vars) && return
+    vars_expr = Expr(:macrocall, typ, nothing)
+    for s in vars
+        if istree(s)
+            f = nameof(operation(s))
+            args = arguments(s)
+            ex = :($f($(args...)))
+        else
+            ex = nameof(s)
+        end
+        push!(vars_expr.args, ex)
+    end
+    push!(stmt, vars_expr)
+    return
+end
+
+function round_trip_expr(t, var2name)
+    name = get(var2name, t, nothing)
+    name !== nothing && return name
+    t isa Sym && return nameof(t)
+    istree(t) || return t
+    f = round_trip_expr(operation(t), var2name)
+    args = map(Base.Fix2(round_trip_expr, var2name), arguments(t))
+    return :($f($(args...)))
+end
+round_trip_eq(eq, var2name) = Expr(:call, :~, round_trip_expr(eq.lhs, var2name), round_trip_expr(eq.rhs, var2name))
+
+function push_eqs!(stmt, eqs, var2name)
+    eqs_name = gensym(:eqs)
+    eqs_expr = Expr(:vcat)
+    eqs_blk = Expr(:(=), eqs_name, eqs_expr)
+    for eq in eqs
+        push!(eqs_expr.args, round_trip_eq(eq, var2name))
+    end
+
+    push!(stmt, eqs_blk)
+    return eqs_name
+end
+
+function push_defaults!(stmt, defs, var2name)
+    defs_name = gensym(:defs)
+    defs_expr = Expr(:call, Dict)
+    defs_blk = Expr(:(=), defs_name, defs_expr)
+    for d in defs
+        n = round_trip_expr(d.first, var2name)
+        v = round_trip_expr(d.second, var2name)
+        push!(defs_expr.args, :($(=>)($n, $v)))
+    end
+
+    push!(stmt, defs_blk)
+    return defs_name
+end
+
+function system2expr(sys::AbstractSystem)
+    sys = flatten(sys)
+    expr = Expr(:block)
+    stmt = expr.args
+
+    iv = independent_variable(sys)
+    if iv !== nothing
+        push!(stmt, :(@variables $(getname(iv))))
+    end
+
+    sts = states(sys)
+    push_vars!(stmt, Symbol("@variables"), sts)
+    ps = parameters(sys)
+    push_vars!(stmt, Symbol("@parameters"), ps)
+
+    var2name = Dict{Any,Symbol}()
+    for v in Iterators.flatten((sts, ps))
+        var2name[v] = getname(v)
+    end
+
+    eqs_name = push_eqs!(stmt, equations(sys), var2name)
+
+    defs_name = push_defaults!(stmt, defaults(sys), var2name)
+    if sys isa ODESystem
+        push!(stmt, :($ODESystem($eqs_name, $iv; defaults=$defs_name)))
+    end
+
+    striplines(expr) # keeping the line numbers is never helpful
+end
+
 function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     eqs = equations(sys)
     if eqs isa AbstractArray
@@ -580,6 +667,10 @@ function check_eqs_u0(eqs, dvs, u0)
     end
     return nothing
 end
+
+###
+### Connectors
+###
 
 function with_connection_type(expr)
     @assert expr isa Expr && (expr.head == :function || (expr.head == :(=) &&
