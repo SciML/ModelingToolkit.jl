@@ -17,8 +17,8 @@ eqs = [D(x) ~ σ*(y-x),
        D(z) ~ x*y - β*z]
 
 ModelingToolkit.toexpr.(eqs)[1]
-:(derivative(x(t), t) = σ * (y(t) - x(t))).args
-de = ODESystem(eqs)
+de = ODESystem(eqs; defaults=Dict(x => 1))
+@test eval(toexpr(de)) == de
 
 generate_function(de)
 
