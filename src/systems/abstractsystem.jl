@@ -737,3 +737,8 @@ end
 function connect(syss...)
     connect(promote_connect_type(map(get_connection_type, syss)...), syss...)
 end
+
+# idk where to put them 
+write(io::IO, sys::ModelingToolkit.AbstractODESystem) = write(io, string(toexpr(sys)))
+read(io::IO, sys::ModelingToolkit.AbstractODESystem) = eval(Meta.parse(read(io, String)))
+read(io::IO, sys::ODESystem) = eval(Meta.parse(read(io, String)))

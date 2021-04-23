@@ -53,6 +53,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
 import DiffEqBase: @add_kwonly
 
 import LightGraphs: SimpleDiGraph, add_edge!
+import Base.write, Base.read
 
 using Requires
 
@@ -181,5 +182,6 @@ export build_function
 export modelingtoolkitize
 export @variables, @parameters
 export @named, @nonamespace
+export read, write
 
 end # module
