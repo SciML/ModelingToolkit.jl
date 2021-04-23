@@ -35,6 +35,7 @@ import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype
 using SymbolicUtils.Code
 import SymbolicUtils.Code: toexpr
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
+import JuliaFormatter
 
 using Reexport
 @reexport using Symbolics

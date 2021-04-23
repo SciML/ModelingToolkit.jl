@@ -468,6 +468,9 @@ function push_defaults!(stmt, defs, var2name)
     return defs_name
 end
 
+###
+### System I/O
+###
 function toexpr(sys::AbstractSystem)
     sys = flatten(sys)
     expr = Expr(:block)
@@ -502,6 +505,8 @@ function toexpr(sys::AbstractSystem)
 
     striplines(expr) # keeping the line numbers is never helpful
 end
+
+Base.write(io::IO, sys::AbstractSystem) = write(io, JuliaFormatter.format_text(string(toexpr(sys))))
 
 function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     eqs = equations(sys)
