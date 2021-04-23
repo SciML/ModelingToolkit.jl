@@ -9,8 +9,8 @@ open("rc.jl", "w") do io
     write(io, rc_model)
 end
 
-open("rc.jl", "r") do io 
-    ser = read(io, ODESystem)
+ser = open("rc.jl", "r") do io 
+    read(io, AbstractSystem)
 end
 
-@tset ser == rc_model
+@test isequal(ser, rc_model)
