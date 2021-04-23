@@ -740,4 +740,4 @@ end
 
 # idk where to put them 
 Base.write(io::IO, sys::AbstractSystem) = write(io, string(toexpr(sys)))
-Base.read(io::IO, ::AbstractSystem) = eval(Meta.parse(read(io, String)))
+Base.read(io::IO, ::Type{AbstractSystem}) = eval(Meta.parse(read(io, String)))
