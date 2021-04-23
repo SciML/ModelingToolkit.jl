@@ -741,6 +741,10 @@ end
 ###
 ### system promotion
 ###
+
+# We have a stand-alone function to convert a `NonlinearSystem` or `ODESystem`
+# to an `ODESystem` to connect systems, and we later can reply on
+# `structural_simplify` to convert `ODESystem`s to `NonlinearSystem`s.
 function toodesystem(sys, t)
     varmap = Dict()
     sts = states(sys)
