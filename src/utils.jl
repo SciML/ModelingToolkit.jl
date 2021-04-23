@@ -78,3 +78,9 @@ function todict(d)
 end
 
 _merge(d1, d2) = merge(todict(d1), todict(d2))
+
+function indepvar2depvar(s::Sym, args...)
+    T = FnType{NTuple{length(args)}, symtype(s)}
+    ns = Sym{T}(s)(args...)
+    @set! ns.metadata = s.metadata
+end

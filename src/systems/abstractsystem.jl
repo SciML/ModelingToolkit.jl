@@ -737,3 +737,30 @@ end
 function connect(syss...)
     connect(promote_connect_type(map(get_connection_type, syss)...), syss...)
 end
+
+###
+### system promotion
+###
+function toodesystem(sys, t)
+    varmap = Dict()
+    sts = states(sys)
+    for (i, s) in enumerate(sts)
+        if istree(s)
+            args = arguments(s)
+            length(args) == 1 || throw(InvalidSystemException("Illegal state: $s. The state can have at most one argument like `x(t)`."))
+            arg = args[1]
+            isequal(arg, t) && continue
+            ns = operation(s)(t)
+            sts[i] = ns
+            varmap[s] = ns
+        else
+            ns = indepvar2depvar(s)
+            sts[i] = ns
+            varmap[s] = ns
+        end
+    end
+    sub = Base.Fix2(substitute, varmap)
+    neweqs = map(sub, equations(sys))
+    defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
+    return ODESystem(neweqs, t, sts, parameters(sys); defaults=defs)
+end
