@@ -739,5 +739,5 @@ function connect(syss...)
 end
 
 # idk where to put them 
-write(io::IO, sys::T) where {T <: ModelingToolkit.AbstractODESystem} = write(io, string(toexpr(sys)))
-read(io::IO, sys::T) where {T <: ModelingToolkit.AbstractODESystem} = eval(Meta.parse(read(io, String)))
+Base.write(io::IO, sys::T) where {T <: ModelingToolkit.AbstractODESystem} = write(io, string(toexpr(sys)))
+Base.read(io::IO, sys::T) where {T <: ModelingToolkit.AbstractODESystem} = eval(Meta.parse(read(io, String)))
