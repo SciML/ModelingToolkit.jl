@@ -95,3 +95,14 @@ connected = NonlinearSystem([s ~ a + lorenz1.x
                              lorenz1.F ~ lorenz2.u
                              lorenz2.F ~ lorenz1.u], [s, a], [], systems=[lorenz1,lorenz2])
 @test_nowarn alias_elimination(connected)
+
+# system promotion
+using OrdinaryDiffEq
+@variables t
+D = Differential(t)
+@named subsys = toodesystem(lorenz1, t)
+@named sys = ODESystem([D(subsys.x) ~ subsys.x + subsys.x], t, systems=[subsys])
+sys = structural_simplify(sys)
+prob = ODEProblem(sys, [subsys.x => 1, subsys.z => 2.0], (0, 1.0), [subsys.σ=>1,subsys.ρ=>2,subsys.β=>3])
+sol = solve(prob, Rodas5())
+@test sol[subsys.x] + sol[subsys.y] - sol[subsys.z] ≈ sol[subsys.u]
