@@ -53,7 +53,6 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
 import DiffEqBase: @add_kwonly
 
 import LightGraphs: SimpleDiGraph, add_edge!
-import Base.write, Base.read
 
 using Requires
 
