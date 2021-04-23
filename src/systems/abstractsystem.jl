@@ -745,26 +745,31 @@ end
 # We have a stand-alone function to convert a `NonlinearSystem` or `ODESystem`
 # to an `ODESystem` to connect systems, and we later can reply on
 # `structural_simplify` to convert `ODESystem`s to `NonlinearSystem`s.
-function toodesystem(sys, t)
+function toodesystem(sys, t; name=nameof(sys))
+    t = value(t)
     varmap = Dict()
     sts = states(sys)
+    newsts = similar(sts, Any)
     for (i, s) in enumerate(sts)
         if istree(s)
             args = arguments(s)
             length(args) == 1 || throw(InvalidSystemException("Illegal state: $s. The state can have at most one argument like `x(t)`."))
             arg = args[1]
-            isequal(arg, t) && continue
+            if isequal(arg, t)
+                newsts[i] = s
+                continue
+            end
             ns = operation(s)(t)
-            sts[i] = ns
+            newsts[i] = ns
             varmap[s] = ns
         else
-            ns = indepvar2depvar(s)
-            sts[i] = ns
+            ns = indepvar2depvar(s, t)
+            newsts[i] = ns
             varmap[s] = ns
         end
     end
     sub = Base.Fix2(substitute, varmap)
     neweqs = map(sub, equations(sys))
     defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
-    return ODESystem(neweqs, t, sts, parameters(sys); defaults=defs)
+    return ODESystem(neweqs, t, newsts, parameters(sys); defaults=defs, name=name)
 end
