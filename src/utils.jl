@@ -90,11 +90,17 @@ function _readable_code(ex)
     if ex.head === :call
         f, args = ex.args[1], ex.args[2:end]
         if f isa Function && (nf = nameof(f); Base.isoperator(nf))
-            return Expr(:call, nf, args...)
+            expr = Expr(:call, nf)
+            for a in args
+                push!(expr.args, _readable_code(a))
+            end
+            return expr
         end
     end
     expr = Expr(ex.head)
-    expr.args = map(_readable_code, ex.args)
-    Base.remove_linenums!(expr)
+    for a in ex.args
+        push!(expr.args, _readable_code(a))
+    end
+    expr
 end
-readable_code(expr) = JuliaFormatter.format_text(string(_readable_code(expr)))
+readable_code(expr) = JuliaFormatter.format_text(string(Base.remove_linenums!(_readable_code(expr))))
