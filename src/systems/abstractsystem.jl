@@ -746,6 +746,7 @@ end
 # to an `ODESystem` to connect systems, and we later can reply on
 # `structural_simplify` to convert `ODESystem`s to `NonlinearSystem`s.
 function toodesystem(sys, t; name=nameof(sys))
+    isempty(observed(sys)) || throw(ArgumentError("`toodesystem` cannot handle reduced model (i.e. observed(sys) is non-empty)."))
     t = value(t)
     varmap = Dict()
     sts = states(sys)

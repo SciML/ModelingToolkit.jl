@@ -106,3 +106,4 @@ sys = structural_simplify(sys)
 prob = ODEProblem(sys, [subsys.x => 1, subsys.z => 2.0], (0, 1.0), [subsys.σ=>1,subsys.ρ=>2,subsys.β=>3])
 sol = solve(prob, Rodas5())
 @test sol[subsys.x] + sol[subsys.y] - sol[subsys.z] ≈ sol[subsys.u]
+@test_throws ArgumentError toodesystem(sys, t)
