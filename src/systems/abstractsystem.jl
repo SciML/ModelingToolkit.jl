@@ -506,7 +506,7 @@ function toexpr(sys::AbstractSystem)
     striplines(expr) # keeping the line numbers is never helpful
 end
 
-Base.write(io::IO, sys::AbstractSystem) = write(io, JuliaFormatter.format_text(string(toexpr(sys))))
+Base.write(io::IO, sys::AbstractSystem) = write(io, readable_code(toexpr(sys)))
 
 function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     eqs = equations(sys)
