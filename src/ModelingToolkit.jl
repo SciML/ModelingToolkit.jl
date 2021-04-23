@@ -182,6 +182,5 @@ export build_function
 export modelingtoolkitize
 export @variables, @parameters
 export @named, @nonamespace
-export read, write
 
 end # module
