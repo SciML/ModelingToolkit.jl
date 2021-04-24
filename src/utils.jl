@@ -84,3 +84,23 @@ function indepvar2depvar(s::Sym, args...)
     ns = Sym{T}(nameof(s))(args...)
     @set! ns.metadata = s.metadata
 end
+
+function _readable_code(ex)
+    ex isa Expr || return ex
+    if ex.head === :call
+        f, args = ex.args[1], ex.args[2:end]
+        if f isa Function && (nf = nameof(f); Base.isoperator(nf))
+            expr = Expr(:call, nf)
+            for a in args
+                push!(expr.args, _readable_code(a))
+            end
+            return expr
+        end
+    end
+    expr = Expr(ex.head)
+    for a in ex.args
+        push!(expr.args, _readable_code(a))
+    end
+    expr
+end
+readable_code(expr) = JuliaFormatter.format_text(string(Base.remove_linenums!(_readable_code(expr))))

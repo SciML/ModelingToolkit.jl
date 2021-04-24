@@ -19,3 +19,9 @@ for prob in [
 
     run(`$(Base.julia_cmd()) -e $(_cmd)`)
 end
+
+include("../examples/rc_model.jl")
+io = IOBuffer()
+write(io, rc_model)
+sys = include_string(@__MODULE__, String(take!(io)))
+@test sys == flatten(rc_model)
