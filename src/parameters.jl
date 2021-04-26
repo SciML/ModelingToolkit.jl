@@ -30,6 +30,6 @@ macro parameters(xs...)
     Symbolics._parse_vars(:parameters,
                           Real,
                           xs,
-                          x -> x isa Array ? toparam.(x) : toparam(x)
+                          x -> x isa AbstractArray ? toparam.(x) : toparam(x)
                          ) |> esc
 end
