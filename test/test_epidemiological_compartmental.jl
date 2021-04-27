@@ -9,11 +9,6 @@ using ModelingToolkit
 # (ModelingToolkit.jl uses Symbolics.jl internally)
 
 # Auxiliary functions
-"""
-Rate to proportion.
-
-It may be used with symbolic arguments.
-"""
 @inline function rate_to_proportion(r,t)
     1-exp(-r*t)
 end;
