@@ -5,10 +5,6 @@
 =#
 using ModelingToolkit
 
-## We define our system based on symbolic types
-# (ModelingToolkit.jl uses Symbolics.jl internally)
-
-# Auxiliary functions
 @inline function rate_to_proportion(r,t)
     1-exp(-r*t)
 end;
