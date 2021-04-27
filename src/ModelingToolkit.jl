@@ -131,7 +131,6 @@ include("systems/reaction/reactionsystem.jl")
 include("systems/dependency_graphs.jl")
 
 include("systems/discrete_system/discrete_system.jl")
-include("systems/discrete_system/discrete_problem.jl")
 
 include("systems/systemstructure.jl")
 using .SystemStructures
