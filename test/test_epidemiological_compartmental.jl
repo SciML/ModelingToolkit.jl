@@ -3,11 +3,6 @@
 - https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map/function_map.md
 - https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#Deterministic_versus_stochastic_epidemic_models
 =#
-
-using Pkg
-Pkg.activate(".") # Activate environment of ModelingToolkit.jl at DiscreteSystem branch.
-# Pkg.instantiate()
-
 using ModelingToolkit
 
 ## We define our system based on symbolic types
