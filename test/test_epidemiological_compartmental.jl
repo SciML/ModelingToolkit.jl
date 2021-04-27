@@ -31,18 +31,5 @@ tspan = (0.0,ModelingToolkit.value(substitute(nsteps,p))) # value function (from
 prob_map = DiscreteProblem(sys,u0,tspan,p)
 
 # Solution
-using DifferentialEquations
-using DataFrames
-using StatsPlots
-
+using OrdinaryDiffEq
 sol_map = solve(prob_map,solver=FunctionMap);
-df_map = DataFrame(Tables.table(hcat(sol_map.u...)'))
-tmax = ModelingToolkit.value(substitute(nsteps,p)*substitute(δt,p))
-times = 0.0:ModelingToolkit.value.(substitute(δt,p)):tmax;
-df_map[!,:times] = times;
-
-@df df_map plot(:times,
-    [:Column1 :Column2 :Column3],
-    label=["S" "I" "R"],
-    xlabel="Time",
-    ylabel="Number")
