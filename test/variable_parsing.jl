@@ -47,9 +47,9 @@ D1 = Differential(t)
 end
 @parameters σ[1:2](..)
 
-@test all(ModelingToolkit.isparameter, t)
-@test all(ModelingToolkit.isparameter, s)
-@test all(ModelingToolkit.isparameter, σ)
+@test all(ModelingToolkit.isparameter, collect(t))
+@test all(ModelingToolkit.isparameter, collect(s))
+@test all(ModelingToolkit.isparameter, collect(σ))
 
 fntype(n, T) = FnType{NTuple{n, Any}, T}
 t1 = Num[Variable{Real}(:t, 1), Variable{Real}(:t, 2)]
