@@ -13,7 +13,7 @@ end;
 @parameters t c nsteps δt β γ
 @variables S(t) I(t) R(t) next_S(t) next_I(t) next_R(t)
 
-infection = rate_to_proportion(β*c*I/nsteps,δt)*S
+infection = rate_to_proportion(β*c*I/(S+I+R),δt)*S
 recovery = rate_to_proportion(γ,δt)*I
 
 # Equations
