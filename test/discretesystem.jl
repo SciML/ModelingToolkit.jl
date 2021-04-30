@@ -54,4 +54,4 @@ p = [0.05,10.0,0.25,0.1];
 prob_map = DiscreteProblem(sir_map!,u0,tspan,p);
 sol_map2 = solve(prob_map,FunctionMap());
 
-@test Array(sol_map) == Array(sol_map2)
+@test Array(sol_map) ≈ Array(sol_map2)
