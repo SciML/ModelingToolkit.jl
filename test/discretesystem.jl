@@ -32,7 +32,7 @@ prob_map = DiscreteProblem(sys,u0,tspan,p)
 
 # Solution
 using OrdinaryDiffEq
-sol_map = solve(prob_map,solver=FunctionMap);
+sol_map = solve(prob_map,FunctionMap());
 
 # Direct Implementation
 
