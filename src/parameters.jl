@@ -30,6 +30,7 @@ macro parameters(xs...)
     Symbolics._parse_vars(:parameters,
                           Real,
                           xs,
-                          x -> x isa AbstractArray ? Symbolics.getindex_posthook(x, (a, b...)->toparam(a)) : toparam(x)
+                          x -> x isa AbstractArray ?
+                              Symbolics.getindex_posthook((a, b...)->toparam(a), x) : toparam(x)
                          ) |> esc
 end
