@@ -33,3 +33,25 @@ prob_map = DiscreteProblem(sys,u0,tspan,p)
 # Solution
 using OrdinaryDiffEq
 sol_map = solve(prob_map,solver=FunctionMap);
+
+# Direct Implementation
+
+function sir_map!(du,u,p,t)
+    (S,I,R) = u
+    (β,c,γ,δt) = p
+    N = S+I+R
+    infection = rate_to_proportion(β*c*I/N,δt)*S
+    recovery = rate_to_proportion(γ,δt)*I
+    @inbounds begin
+        du[1] = S-infection
+        du[2] = I+infection-recovery
+        du[3] = R+recovery
+    end
+    nothing
+end;
+u0 = [990.0,10.0,0.0];
+p = [0.05,10.0,0.25,0.1];
+prob_map = DiscreteProblem(sir_map!,u0,tspan,p);
+sol_map2 = solve(prob_map,FunctionMap());
+
+@test Array(sol_map) == Array(sol_map2)
