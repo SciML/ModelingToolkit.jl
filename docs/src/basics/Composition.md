@@ -125,6 +125,40 @@ done even if the variable `x` is eliminated from the system from
 transformations like `alias_elimination` or `tearing`: the variable
 will be lazily reconstructed on demand.
 
+### Variable scope and parameter expressions
+
+In some scenarios, it could be useful for model parameters to be expressed
+in terms of other parameters, or shared between common subsystems.
+To fascilitate this, ModelingToolkit supports sybmolic expressions
+in default values, and scoped variables.
+
+With symbolic parameters, it is possible to set the default value of a parameter or initial condition to an expression of other variables.
+
+```julia
+# ...
+sys = ODESystem(
+    # ...
+    # directly in the defauls argument
+    defaults=Pair{Num, Any}[
+    x => u,
+    y => σ,
+    z => u-0.1,
+])
+# by assigning to the parameter
+sys.y = u*1.1
+```
+
+In a hierarchical system, variables of the subsystem get namespaced by the name of the system they are in. This prevents naming clashes, but also enforces that every state and parameter is local to the subsystem it is used in. In some cases it might be desirable to have variables and parameters that are shared between subsystems, or even global. This can be accomplished as follows.
+
+```julia
+@variables a b c d
+
+# a is a local variable
+b = ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
+c = ParentScope(ParentScope(c)) # ParentScope can be nested
+d = GlobalScope(d) # global variables will never be namespaced
+```
+
 ## Structural Simplify
 
 In many cases, the nicest way to build a model may leave a lot of
