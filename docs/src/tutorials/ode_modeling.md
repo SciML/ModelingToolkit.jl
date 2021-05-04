@@ -119,8 +119,8 @@ equations(fol_simplified) == equations(fol_model)
 ```
 
 You can extract the equations from a system using `equations` (and, in the same
-way, `variables` and `parameters`). The simplified equation is exactly the same
-as the original one, so the simulation performence will also be the same.
+way, `states` and `parameters`). The simplified equation is exactly the same
+as the original one, so the simulation performance will also be the same.
 However, there is one difference. MTK does keep track of the eliminated
 algebraic variables as "observables" (see
 [Observables and Variable Elimination](@ref)).
