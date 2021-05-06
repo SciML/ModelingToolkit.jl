@@ -193,15 +193,15 @@ end
 prob = ODEProblem(ff911, zeros(2), (0, 1.0))
 @test_nowarn modelingtoolkitize(prob)
 
-f(x,p,t) = p*x
+k(x,p,t) = p*x
 x0 = 1.0
 p = 0.98
 tspan = (0.0,1.0)
-prob = ODEProblem(f,x0,tspan,p)
+prob = ODEProblem(k,x0,tspan,p)
 sys = modelingtoolkitize(prob)
 
-f(x,p,t) = 0.98*x
+k(x,p,t) = 0.98*x
 x0 = 1.0
 tspan = (0.0,1.0)
-prob = ODEProblem(f,x0,tspan)
+prob = ODEProblem(k,x0,tspan)
 sys = modelingtoolkitize(prob)
