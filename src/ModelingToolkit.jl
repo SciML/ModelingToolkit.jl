@@ -49,7 +49,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   ParallelForm, SerialForm, MultithreadedForm, build_function,
                   unflatten_long_ops, rhss, lhss, prettify_expr, gradient,
                   jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-                  substituter
+                  substituter, scalarize
 
 import DiffEqBase: @add_kwonly
 

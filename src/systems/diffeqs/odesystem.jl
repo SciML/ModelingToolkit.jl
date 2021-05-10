@@ -85,9 +85,9 @@ function ODESystem(
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
                   )
-    iv′ = value(iv)
-    dvs′ = value.(collect(dvs))
-    ps′ = value.(collect(ps))
+    iv′ = value(scalarize(iv))
+    dvs′ = value.(scalarize(dvs))
+    ps′ = value.(scalarize(ps))
 
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ODESystem, force=true)
