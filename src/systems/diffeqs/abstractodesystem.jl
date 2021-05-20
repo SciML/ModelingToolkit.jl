@@ -397,8 +397,26 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
     ps = parameters(sys)
     defs = defaults(sys)
     iv = independent_variable(sys)
+    if parammap isa Dict
+        u0defs = merge(parammap, defs)
+    elseif eltype(parammap) <: Pair
+        u0defs = merge(Dict(parammap), defs)
+    elseif eltype(parammap) <: Number
+        u0defs = merge(Dict(zip(ps, parammap)), defs)
+    else
+        u0defs = defs
+    end
+    if u0map isa Dict
+        pdefs = merge(u0map, defs)
+    elseif eltype(u0map) <: Pair
+        pdefs = merge(Dict(u0map), defs)
+    elseif eltype(u0map) <: Number
+        pdefs = merge(Dict(zip(dvs, u0map)), defs)
+    else
+        pdefs = defs
+    end
 
-    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
+    u0 = varmap_to_vars(u0map,dvs; defaults=u0defs)
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
         du0 = varmap_to_vars(du0map, ddvs; defaults=defaults, toterm=identity)
@@ -406,7 +424,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
         du0 = nothing
         ddvs = nothing
     end
-    p = varmap_to_vars(parammap,ps; defaults=defs)
+    p = varmap_to_vars(parammap,ps; defaults=pdefs)
 
     check_eqs_u0(eqs, dvs, u0)
 
