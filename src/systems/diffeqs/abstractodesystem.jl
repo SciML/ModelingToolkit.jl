@@ -401,17 +401,19 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
         u0defs = merge(parammap, defs)
     elseif eltype(parammap) <: Pair
         u0defs = merge(Dict(parammap), defs)
-    elseif parammap isa SciMLBase.NullParameters
-        u0defs = defs
-    else
+    elseif eltype(parammap) <: Number
         u0defs = merge(Dict(zip(ps, parammap)), defs)
+    else
+        u0defs = defs
     end
     if u0map isa Dict
         pdefs = merge(u0map, defs)
     elseif eltype(u0map) <: Pair
         pdefs = merge(Dict(u0map), defs)
-    else
+    elseif eltype(u0map) <: Number
         pdefs = merge(Dict(zip(dvs, u0map)), defs)
+    else
+        pdefs = defs
     end
 
     u0 = varmap_to_vars(u0map,dvs; defaults=u0defs)
