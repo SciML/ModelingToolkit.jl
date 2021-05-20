@@ -401,6 +401,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
         u0defs = merge(parammap, defs)
     elseif eltype(parammap) <: Pair
         u0defs = merge(Dict(parammap), defs)
+    elseif parammap isa SciMLBase.NullParameters
+        u0defs = defs
     else
         u0defs = merge(Dict(zip(ps, parammap)), defs)
     end
