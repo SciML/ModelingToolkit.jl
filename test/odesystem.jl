@@ -225,6 +225,7 @@ for p in [prob1, prob14]
 end
 prob2 = ODEProblem(sys,u0,tspan,p,jac=true)
 prob3 = ODEProblem(sys,u0,tspan,p,jac=true,sparse=true)
+@test prob3.f.sparsity isa SparseMatrixCSC
 @test_throws ArgumentError ODEProblem(sys,zeros(5),tspan,p)
 for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
     local sol
