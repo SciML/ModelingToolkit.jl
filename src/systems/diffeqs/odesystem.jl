@@ -300,3 +300,42 @@ function collect_differential_variables(sys::ODESystem)
     end
     return diffvars
 end
+
+# We have a stand-alone function to convert a `NonlinearSystem` or `ODESystem`
+# to an `ODESystem` to connect systems, and we later can reply on
+# `structural_simplify` to convert `ODESystem`s to `NonlinearSystem`s.
+"""
+$(TYPEDSIGNATURES)
+
+Convert a `NonlinearSystem` to an `ODESystem` or converts an `ODESystem` to a
+new `ODESystem` with a different independent variable.
+"""
+function convert_system(::Type{<:ODESystem}, sys, t; name=nameof(sys))
+    isempty(observed(sys)) || throw(ArgumentError("`convert_system` cannot handle reduced model (i.e. observed(sys) is non-empty)."))
+    t = value(t)
+    varmap = Dict()
+    sts = states(sys)
+    newsts = similar(sts, Any)
+    for (i, s) in enumerate(sts)
+        if istree(s)
+            args = arguments(s)
+            length(args) == 1 || throw(InvalidSystemException("Illegal state: $s. The state can have at most one argument like `x(t)`."))
+            arg = args[1]
+            if isequal(arg, t)
+                newsts[i] = s
+                continue
+            end
+            ns = operation(s)(t)
+            newsts[i] = ns
+            varmap[s] = ns
+        else
+            ns = indepvar2depvar(s, t)
+            newsts[i] = ns
+            varmap[s] = ns
+        end
+    end
+    sub = Base.Fix2(substitute, varmap)
+    neweqs = map(sub, equations(sys))
+    defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
+    return ODESystem(neweqs, t, newsts, parameters(sys); defaults=defs, name=name)
+end

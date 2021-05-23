@@ -17,8 +17,8 @@ eqs = [D(x) ~ σ*(y-x),
        D(z) ~ x*y - β*z]
 
 ModelingToolkit.toexpr.(eqs)[1]
-:(derivative(x(t), t) = σ * (y(t) - x(t))).args
-de = ODESystem(eqs)
+de = ODESystem(eqs; defaults=Dict(x => 1))
+@test eval(toexpr(de)) == de
 
 generate_function(de)
 
@@ -225,6 +225,7 @@ for p in [prob1, prob14]
 end
 prob2 = ODEProblem(sys,u0,tspan,p,jac=true)
 prob3 = ODEProblem(sys,u0,tspan,p,jac=true,sparse=true)
+@test prob3.f.sparsity isa SparseMatrixCSC
 @test_throws ArgumentError ODEProblem(sys,zeros(5),tspan,p)
 for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
     local sol

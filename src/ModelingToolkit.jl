@@ -35,6 +35,7 @@ import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype
 using SymbolicUtils.Code
 import SymbolicUtils.Code: toexpr
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
+import JuliaFormatter
 
 using Reexport
 @reexport using Symbolics
@@ -129,6 +130,8 @@ include("systems/pde/pdesystem.jl")
 include("systems/reaction/reactionsystem.jl")
 include("systems/dependency_graphs.jl")
 
+include("systems/discrete_system/discrete_system.jl")
+
 include("systems/systemstructure.jl")
 using .SystemStructures
 
@@ -136,7 +139,7 @@ include("systems/alias_elimination.jl")
 include("structural_transformation/StructuralTransformations.jl")
 @reexport using .StructuralTransformations
 
-export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr
+export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
 export SystemStructure
@@ -161,6 +164,7 @@ export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, states, parameters, equations, controls, observed, structure
 export structural_simplify
+export DiscreteSystem, DiscreteProblem
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad

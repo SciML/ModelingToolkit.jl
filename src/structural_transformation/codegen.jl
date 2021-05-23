@@ -68,7 +68,8 @@ function torn_system_jacobian_sparsity(sys)
         end
     end
 
-    dvar2idx(idx) = idx # maps `dvar` to the index of the states
+    dvrange = diffvars_range(s)
+    dvar2idx = Dict(v=>i for (i, v) in enumerate(dvrange))
     I = Int[]; J = Int[]
     eqidx = 0
     for ieq in 𝑠vertices(graph)
@@ -77,11 +78,11 @@ function torn_system_jacobian_sparsity(sys)
         for ivar in 𝑠neighbors(graph, ieq)
             if isdiffvar(s, ivar)
                 push!(I, eqidx)
-                push!(J, dvar2idx(ivar))
+                push!(J, dvar2idx[ivar])
             elseif isalgvar(s, ivar)
                 for dvar in avars2dvars[ivar]
                     push!(I, eqidx)
-                    push!(J, dvar2idx(dvar))
+                    push!(J, dvar2idx[dvar])
                 end
             end
         end
