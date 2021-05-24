@@ -226,7 +226,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem,u0map,paramm
     u0 = varmap_to_vars(u0map,dvs; defaults=defs)
     p = varmap_to_vars(parammap,ps; defaults=defs)
 
-    check_eqs_u0(eqs, dvs, u0)
+    check_eqs_u0(eqs, dvs, u0; kwargs...)
 
     f = constructor(sys,dvs,ps,u0;jac=jac,checkbounds=checkbounds,
                     linenumbers=linenumbers,parallel=parallel,simplify=simplify,
