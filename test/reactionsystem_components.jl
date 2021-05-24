@@ -17,9 +17,9 @@ pars  = [α₀,α,K,n,δ,β,μ]
 @named rs = ReactionSystem(rxs, t, specs, pars)
 
 # using ODESystem components
-@named os₁ = convert(ODESystem, rs)
-@named os₂ = convert(ODESystem, rs)
-@named os₃ = convert(ODESystem, rs)
+@named os₁ = convert(ODESystem, rs; include_zero_odes=false)
+@named os₂ = convert(ODESystem, rs; include_zero_odes=false)
+@named os₃ = convert(ODESystem, rs; include_zero_odes=false)
 connections = [os₁.R ~ os₃.P,
                os₂.R ~ os₁.P,
                os₃.R ~ os₂.P]
