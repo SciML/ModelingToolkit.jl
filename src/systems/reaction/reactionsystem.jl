@@ -506,13 +506,13 @@ end
 
 
 # ODEProblem from AbstractReactionNetwork
-function DiffEqBase.ODEProblem(rs::ReactionSystem, u0, tspan, p=DiffEqBase.NullParameters(), args...; kwargs...)
-    return ODEProblem(convert(ODESystem,rs; kwargs...),u0,tspan,p, args...; kwargs...)
+function DiffEqBase.ODEProblem(rs::ReactionSystem, u0, tspan, p=DiffEqBase.NullParameters(), args...; check_length=false, kwargs...)
+    return ODEProblem(convert(ODESystem,rs; kwargs...),u0,tspan,p, args...; check_length, kwargs...)
 end
 
 # NonlinearProblem from AbstractReactionNetwork
-function DiffEqBase.NonlinearProblem(rs::ReactionSystem, u0, p=DiffEqBase.NullParameters(), args...; kwargs...)
-    return NonlinearProblem(convert(NonlinearSystem,rs; kwargs...), u0, p, args...; kwargs...)
+function DiffEqBase.NonlinearProblem(rs::ReactionSystem, u0, p=DiffEqBase.NullParameters(), args...; check_length=false, kwargs...)
+    return NonlinearProblem(convert(NonlinearSystem,rs; kwargs...), u0, p, args...; check_length, kwargs...)
 end
 
 
