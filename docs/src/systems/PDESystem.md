@@ -42,14 +42,14 @@ single or a collection of independent variables, and `domain` is the chosen
 domain type. Thus forms for the `indepvar` can be like:
 
 ```julia
-t ∈ IntervalDomain(0.0,1.0)
+t ∈ Interval(0.0,1.0)
 (t,x) ∈ UnitDisk()
 [v,w,x,y,z] ∈ VectorUnitBall(5)
 ```
 
 #### Domain Types (WIP)
 
-- `IntervalDomain(a,b)`: Defines the domain of an interval from `a` to `b`
+- `Interval(a,b)`: Defines the domain of an interval from `a` to `b`
 
 ## `discretize` and `symbolic_discretize`
 
