@@ -666,7 +666,6 @@ AbstractTrees.printnode(io::IO, sys::ModelingToolkit.AbstractSystem) = print(io,
 AbstractTrees.nodetype(::ModelingToolkit.AbstractSystem) = ModelingToolkit.AbstractSystem
 
 function check_eqs_u0(eqs, dvs, u0; check_length=true, kwargs...)
-    @show check_length
     if u0 !== nothing
         if check_length
             if !(length(eqs) == length(dvs) == length(u0))
