@@ -461,11 +461,13 @@ This input may contain repeat parameters.
 function Base.convert(::Type{<:SDESystem}, rs::ReactionSystem; 
                       noise_scaling=nothing, name=nameof(rs), combinatoric_ratelaws=true, kwargs...)
 
-    if noise_scaling isa Vector
+    if noise_scaling isa AbstractArray
         (length(noise_scaling)!=length(equations(rs))) &&
         error("The number of elements in 'noise_scaling' must be equal " *
               "to the number of reactions in the reaction system.")
-        noise_scaling = value.(noise_scaling)
+        if !(noise_scaling isa Symbolics.Arr)
+            noise_scaling = value.(noise_scaling)
+        end
     elseif !isnothing(noise_scaling)
         noise_scaling = fill(value(noise_scaling),length(equations(rs)))
     end

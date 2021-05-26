@@ -166,6 +166,9 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys), ps = par
                                      u0 = nothing;
                                      version = nothing, tgrad=false, sparse = false,
                                      jac = false, Wfact = false, eval_expression = true, kwargs...) where {iip}
+    dvs = scalarize.(dvs)
+    ps = scalarize.(ps)
+
     f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
     f_oop,f_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in f_gen) : f_gen
     g_gen = generate_diffusion_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
