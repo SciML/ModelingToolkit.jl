@@ -87,18 +87,12 @@ end
 function generate_function(sys::NonlinearSystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     #obsvars = map(eq->eq.lhs, observed(sys))
     #fulldvs = [dvs; obsvars]
-    fulldvs = dvs
-    fulldvs′ = makesym.(value.(fulldvs))
 
-    sub = Dict(fulldvs .=> fulldvs′)
-    # substitute x(t) by just x
-    rhss = [substitute(deq.rhs, sub) for deq ∈ equations(sys)]
+    rhss = [deq.rhs for deq ∈ equations(sys)]
     #obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
     #rhss = Let(obss, rhss)
 
-    dvs′ = fulldvs′[1:length(dvs)]
-    ps′ = makesym.(value.(ps), states=())
-    return build_function(rhss, dvs′, ps′;
+    return build_function(rhss, value.(dvs), value.(ps);
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 

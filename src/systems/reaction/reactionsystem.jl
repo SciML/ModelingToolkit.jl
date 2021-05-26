@@ -475,7 +475,7 @@ function Base.convert(::Type{<:SDESystem}, rs::ReactionSystem;
                                   combinatoric_ratelaws=combinatoric_ratelaws)
     systems  = convert.(SDESystem, get_systems(rs))
     SDESystem(eqs, noiseeqs, get_iv(rs), get_states(rs),
-              (noise_scaling===nothing) ? get_ps(rs) : union(get_ps(rs), toparam.(noise_scaling));
+              (noise_scaling===nothing) ? get_ps(rs) : union(get_ps(rs), toparam(noise_scaling));
               name=name, 
               systems=systems,
               kwargs...)
