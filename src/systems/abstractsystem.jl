@@ -715,7 +715,7 @@ end
 
 promote_connect_rule(::Type{T}, ::Type{S}) where {T, S} = Union{}
 promote_connect_rule(::Type{T}, ::Type{T}) where {T} = T
-promote_connect_type(t1::Type, t2::Type, ts::Type...) = promote_connect_rule(promote_connect_rule(t1, t2), ts...)
+promote_connect_type(t1::Type, t2::Type, ts::Type...) = promote_connect_type(promote_connect_rule(t1, t2), ts...)
 @inline function promote_connect_type(::Type{T}, ::Type{S}) where {T,S}
     promote_connect_result(
         T,
