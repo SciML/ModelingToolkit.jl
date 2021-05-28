@@ -665,15 +665,17 @@ AbstractTrees.children(sys::ModelingToolkit.AbstractSystem) = ModelingToolkit.ge
 AbstractTrees.printnode(io::IO, sys::ModelingToolkit.AbstractSystem) = print(io, nameof(sys))
 AbstractTrees.nodetype(::ModelingToolkit.AbstractSystem) = ModelingToolkit.AbstractSystem
 
-function check_eqs_u0(eqs, dvs, u0)
+function check_eqs_u0(eqs, dvs, u0; check_length=true, kwargs...)
     if u0 !== nothing
-        if !(length(eqs) == length(dvs) == length(u0))
-            throw(ArgumentError("Equations ($(length(eqs))), states ($(length(dvs))), and initial conditions ($(length(u0))) are of different lengths."))
+        if check_length
+            if !(length(eqs) == length(dvs) == length(u0))
+                throw(ArgumentError("Equations ($(length(eqs))), states ($(length(dvs))), and initial conditions ($(length(u0))) are of different lengths. To allow a different number of equations than states use kwarg check_length=false."))
+            end
+        elseif length(dvs) != length(u0)
+            throw(ArgumentError("States ($(length(dvs))) and initial conditions ($(length(u0))) are of different lengths."))
         end
-    else
-        if !(length(eqs) == length(dvs))
-            throw(ArgumentError("Equations ($(length(eqs))), states ($(length(dvs))) are of different lengths."))
-        end
+    elseif check_length && (length(eqs) != length(dvs))
+        throw(ArgumentError("Equations ($(length(eqs))) and states ($(length(dvs))) are of different lengths. To allow these to differ use kwarg check_length=false."))
     end
     return nothing
 end
@@ -713,7 +715,7 @@ end
 
 promote_connect_rule(::Type{T}, ::Type{S}) where {T, S} = Union{}
 promote_connect_rule(::Type{T}, ::Type{T}) where {T} = T
-promote_connect_type(t1::Type, t2::Type, ts::Type...) = promote_connect_rule(promote_connect_rule(t1, t2), ts...)
+promote_connect_type(t1::Type, t2::Type, ts::Type...) = promote_connect_type(promote_connect_rule(t1, t2), ts...)
 @inline function promote_connect_type(::Type{T}, ::Type{S}) where {T,S}
     promote_connect_result(
         T,

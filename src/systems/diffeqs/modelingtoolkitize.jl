@@ -17,8 +17,15 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     has_p = !(p isa Union{DiffEqBase.NullParameters,Nothing})
 
     var(x, i) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x, i))))
-    vars = ArrayInterface.restructure(prob.u0,[var(:x, i)(ModelingToolkit.value(t)) for i in eachindex(prob.u0)])
-    params = has_p ? reshape([Num(toparam(Sym{Real}(nameof(Variable(:α, i))))) for i in eachindex(p)],size(p)) : []
+    _vars = [var(:x, i)(ModelingToolkit.value(t)) for i in eachindex(prob.u0)]
+    vars = prob.u0 isa Number ? _vars : ArrayInterface.restructure(prob.u0,_vars)
+    params = if has_p
+        _params = [Num(toparam(Sym{Real}(nameof(Variable(:α, i))))) for i in eachindex(p)]
+        p isa Number ? _params[1] : reshape(_params,size(p))
+    else
+        []
+    end
+
     var_set = Set(vars)
 
     D = Differential(t)
@@ -63,8 +70,6 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
 
     de
 end
-
-
 
 """
 $(TYPEDSIGNATURES)

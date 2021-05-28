@@ -225,6 +225,7 @@ for p in [prob1, prob14]
 end
 prob2 = ODEProblem(sys,u0,tspan,p,jac=true)
 prob3 = ODEProblem(sys,u0,tspan,p,jac=true,sparse=true)
+@test prob3.f.sparsity isa SparseMatrixCSC
 @test_throws ArgumentError ODEProblem(sys,zeros(5),tspan,p)
 for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
     local sol
@@ -329,3 +330,13 @@ sys = ode_order_lowering(sys)
 prob = ODEProblem(sys, [], tspan)
 sol = solve(prob, Tsit5())
 @test sum(abs, sol[end]) < 1
+
+
+# check_eqs_u0 kwarg test
+@parameters t
+@variables x1(t) x2(t)
+D =Differential(t)
+eqs = [D(x1) ~ -x1]
+sys = ODESystem(eqs,t,[x1,x2],[])
+@test_throws ArgumentError ODEProblem(sys, [1.0,1.0], (0.0,1.0))
+prob = ODEProblem(sys, [1.0,1.0], (0.0,1.0), check_length=false)

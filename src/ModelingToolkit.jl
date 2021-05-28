@@ -130,6 +130,8 @@ include("systems/pde/pdesystem.jl")
 include("systems/reaction/reactionsystem.jl")
 include("systems/dependency_graphs.jl")
 
+include("systems/discrete_system/discrete_system.jl")
+
 include("systems/systemstructure.jl")
 using .SystemStructures
 
@@ -162,6 +164,7 @@ export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, states, parameters, equations, controls, observed, structure
 export structural_simplify
+export DiscreteSystem, DiscreteProblem
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_tgrad, generate_tgrad
