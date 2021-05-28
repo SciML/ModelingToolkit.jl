@@ -45,20 +45,19 @@ eqs = [D(u[1]) ~ p[3]*(u[2]-u[1]),
 @test latexify(eqs) == replace(
 raw"\begin{align}
 \frac{du{_1}(t)}{dt} =& p{_3} \left( \mathrm{u{_2}}\left( t \right) - \mathrm{u{_1}}\left( t \right) \right) \\
-0 =&  - \mathrm{u{_2}}\left( t \right) + 0.1 p{_2} p{_3} \mathrm{u{_1}}\left( t \right) \left( p{_1} - \mathrm{u{_1}}\left( t \right) \right) \\
-\frac{du{_3}(t)}{dt} =& \left( \mathrm{u{_2}}\left( t \right) \right)^{\frac{2}{3}} \mathrm{u{_1}}\left( t \right) - p{_3} \mathrm{u{_3}}\left( t \right)
+0 =&  - \mathrm{u{_2}}\left( t \right) + 0.1 \mathrm{u{_1}}\left( t \right) p{_2} p{_3} \left( p{_1} - \mathrm{u{_1}}\left( t \right) \right) \\
+\frac{du{_3}(t)}{dt} =& \left( \mathrm{u{_2}}\left( t \right) \right)^{\frac{2}{3}} \mathrm{u{_1}}\left( t \right) - \mathrm{u{_3}}\left( t \right) p{_3}
 \end{align}
 ", "\r\n"=>"\n")
 
 eqs = [D(u[1]) ~ p[3]*(u[2]-u[1]),
        D(u[2]) ~ p[2]*p[3]*u[1]*(p[1]-u[1])/10-u[2],
        D(u[3]) ~ u[1]*u[2]^(2//3) - p[3]*u[3]]
-
 @test latexify(eqs) == replace(
 raw"\begin{align}
 \frac{du{_1}(t)}{dt} =& p{_3} \left( \mathrm{u{_2}}\left( t \right) - \mathrm{u{_1}}\left( t \right) \right) \\
-\frac{du{_2}(t)}{dt} =&  - \mathrm{u{_2}}\left( t \right) + 0.1 p{_2} p{_3} \mathrm{u{_1}}\left( t \right) \left( p{_1} - \mathrm{u{_1}}\left( t \right) \right) \\
-\frac{du{_3}(t)}{dt} =& \left( \mathrm{u{_2}}\left( t \right) \right)^{\frac{2}{3}} \mathrm{u{_1}}\left( t \right) - p{_3} \mathrm{u{_3}}\left( t \right)
+\frac{du{_2}(t)}{dt} =&  - \mathrm{u{_2}}\left( t \right) + 0.1 \mathrm{u{_1}}\left( t \right) p{_2} p{_3} \left( p{_1} - \mathrm{u{_1}}\left( t \right) \right) \\
+\frac{du{_3}(t)}{dt} =& \left( \mathrm{u{_2}}\left( t \right) \right)^{\frac{2}{3}} \mathrm{u{_1}}\left( t \right) - \mathrm{u{_3}}\left( t \right) p{_3}
 \end{align}
 ", "\r\n"=>"\n")
 
