@@ -1,4 +1,6 @@
 using ModelingToolkit, LinearAlgebra, SparseArrays
+using Symbolics
+using Symbolics: scalarize
 
 # Define the constants for the PDE
 const α₂ = 1.0
@@ -26,6 +28,9 @@ My[end,end-1] = 2.0
 
 # Define the initial condition as normal arrays
 @variables du[1:N,1:N,1:3] u[1:N,1:N,1:3] MyA[1:N,1:N] AMx[1:N,1:N] DA[1:N,1:N]
+
+du,u,MyA,AMx,DA = scalarize.((du,u,MyA,AMx,DA))
+@show typeof.((du,u,MyA,AMx,DA))
 
 # Define the discretized PDE as an ODE function
 function f(du,u,p,t)
