@@ -115,10 +115,18 @@ vars(exprs::Symbolic) = vars([exprs])
 vars(exprs) = foldl(vars!, exprs; init = Set())
 vars!(vars, eq::Equation) = (vars!(vars, eq.lhs); vars!(vars, eq.rhs); vars)
 function vars!(vars, O)
-    isa(O, Sym) && return push!(vars, O)
+    if isa(O, Sym)
+        return push!(vars, O)
+    end
     !istree(O) && return vars
 
     operation(O) isa Differential && return push!(vars, O)
+
+    if operation(O) === (getindex) &&
+        first(arguments(O)) isa Symbolic
+
+        return push!(vars, O)
+    end
 
     operation(O) isa Sym && push!(vars, O)
     for arg in arguments(O)
