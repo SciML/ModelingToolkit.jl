@@ -48,26 +48,9 @@ function tearing_reassemble(sys; simplify=false)
             eq = eqs[ieq]
             var = fullvars[iv]
             rhs = value(solve_for(eq, var; simplify=simplify, check=false))
-            # if we don't simplify the rhs and the `eq` is not solved properly
-            (!simplify && occursin(rhs, var)) && (rhs = SymbolicUtils.polynormalize(rhs))
-            # Since we know `eq` is linear wrt `var`, so the round off must be a
-            # linear term. We can correct the round off error by a linear
-            # correction.
-            rhs -= expand_derivatives(Differential(var)(rhs))*var
-            @assert !(var in vars(rhs)) """
-            When solving
-            $eq
-            $var remainded in
-            $rhs.
-            """
             push!(rhss, rhs)
             push!(solvars, var)
         end
-        # DEBUG:
-        #@show ith_scc solvars .~ rhss
-        #Main._nlsys[] = eqs[e_solved], fullvars[v_solved]
-        #ModelingToolkit.topsort_equations(solvars .~ rhss, fullvars)
-        #empty!(solvars); empty!(rhss)
     end
 
     ### update SCC
