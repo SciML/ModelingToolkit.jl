@@ -78,14 +78,16 @@ Perform Pantelides algorithm.
 function pantelides!(sys; maxiters = 8000)
     s = structure(sys)
     # D(j) = assoc[j]
-    @unpack graph, fullvars, varassoc = s
+    @unpack graph, fullvars, varassoc, eqassoc, varmask = s
     iv = independent_variable(sys)
     neqs = nsrcs(graph)
     nvars = length(varassoc)
     vcolor = falses(nvars)
     ecolor = falses(neqs)
+    vmarked = Int[]
+    emarked = Int[]
     assign = fill(UNASSIGNED, nvars)
-    eqassoc = fill(0, neqs)
+    fill!(eqassoc, 0)
     neqs′ = neqs
     D = Differential(iv)
     for k in 1:neqs′
@@ -98,24 +100,30 @@ function pantelides!(sys; maxiters = 8000)
             #
             # the derivatives and algebraic variables are zeros in the variable
             # association list
-            varwhitelist = varassoc .== 0
             resize!(vcolor, nvars)
             fill!(vcolor, false)
             resize!(ecolor, neqs)
             fill!(ecolor, false)
-            pathfound = find_augmenting_path(graph, eq′, assign, varwhitelist, vcolor, ecolor)
+            empty!(vmarked)
+            empty!(emarked)
+            pathfound = find_augmenting_path(graph, eq′, assign, varmask, vcolor, ecolor, vmarked, emarked)
+            # TODO: the ordering is not important, so we don't have to sort the
+            # marked vectors.
+            sort!(vmarked)
+            sort!(emarked)
             pathfound && break # terminating condition
-            for var in eachindex(vcolor); vcolor[var] || continue
+            for var in vmarked
                 # introduce a new variable
                 nvars += 1
                 add_vertex!(graph, DST)
                 # the new variable is the derivative of `var`
                 varassoc[var] = nvars
                 push!(varassoc, 0)
+                push!(varmask, true)
                 push!(assign, UNASSIGNED)
             end
 
-            for eq in eachindex(ecolor); ecolor[eq] || continue
+            for eq in emarked
                 # introduce a new equation
                 neqs += 1
                 add_vertex!(graph, SRC)
@@ -128,7 +136,7 @@ function pantelides!(sys; maxiters = 8000)
                 push!(eqassoc, 0)
             end
 
-            for var in eachindex(vcolor); vcolor[var] || continue
+            for var in vmarked
                 # the newly introduced `var`s and `eq`s have the inherits
                 # assignment
                 assign[varassoc[var]] = eqassoc[assign[var]]

@@ -2,17 +2,15 @@
 ### Bipartite graph utilities
 ###
 
-"""
-    find_augmenting_path(g::BipartiteGraph, eq, assign, varwhitelist, vcolor=falses(ndsts(g)), ecolor=falses(nsrcs(g))) -> path_found::Bool
-
-Try to find augmenting paths.
-"""
-function find_augmenting_path(g, eq, assign, varwhitelist, vcolor=falses(ndsts(g)), ecolor=falses(nsrcs(g)))
-    ecolor[eq] = true
+function find_augmenting_path(g, eq, assign, varmask, vcolor=falses(ndsts(g)), ecolor=falses(nsrcs(g)), vmarked=nothing, emarked=nothing)
+    if !ecolor[eq]
+        ecolor[eq] = true
+        emarked !== nothing && push!(emarked, eq)
+    end
 
     # if a `var` is unassigned and the edge `eq <=> var` exists
     for var in 𝑠neighbors(g, eq)
-        if (varwhitelist === nothing || varwhitelist[var]) && assign[var] == UNASSIGNED
+        if (varmask === nothing || varmask[var]) && assign[var] == UNASSIGNED
             assign[var] = eq
             return true
         end
@@ -20,9 +18,10 @@ function find_augmenting_path(g, eq, assign, varwhitelist, vcolor=falses(ndsts(g
 
     # for every `var` such that edge `eq <=> var` exists and `var` is uncolored
     for var in 𝑠neighbors(g, eq)
-        ((varwhitelist === nothing || varwhitelist[var]) && !vcolor[var]) || continue
+        ((varmask === nothing || varmask[var]) && !vcolor[var]) || continue
         vcolor[var] = true
-        if find_augmenting_path(g, assign[var], assign, varwhitelist, vcolor, ecolor)
+        vmarked !== nothing && push!(vmarked, var)
+        if find_augmenting_path(g, assign[var], assign, varmask, vcolor, ecolor, vmarked, emarked)
             assign[var] = eq
             return true
         end
@@ -31,18 +30,18 @@ function find_augmenting_path(g, eq, assign, varwhitelist, vcolor=falses(ndsts(g
 end
 
 """
-    matching(s::Union{SystemStructure,BipartiteGraph}, varwhitelist=nothing, eqwhitelist=nothing) -> assign
+    matching(s::Union{SystemStructure,BipartiteGraph}, varmask=nothing, eqmask=nothing) -> assign
 
 Find equation-variable bipartite matching. `s.graph` is a bipartite graph.
 """
-matching(s::SystemStructure, varwhitelist=nothing, eqwhitelist=nothing) = matching(s.graph, varwhitelist, eqwhitelist)
-function matching(g::BipartiteGraph, varwhitelist=nothing, eqwhitelist=nothing)
+matching(s::SystemStructure, varmask=nothing, eqmask=nothing) = matching(s.graph, varmask, eqmask)
+function matching(g::BipartiteGraph, varmask=nothing, eqmask=nothing)
     assign = fill(UNASSIGNED, ndsts(g))
     for eq in 𝑠vertices(g)
-        if eqwhitelist !== nothing
-            eqwhitelist[eq] || continue
+        if eqmask !== nothing
+            eqmask[eq] || continue
         end
-        find_augmenting_path(g, eq, assign, varwhitelist)
+        find_augmenting_path(g, eq, assign, varmask)
     end
     return assign
 end

@@ -62,6 +62,8 @@ Base.@kwdef struct SystemStructure
     vartype::Vector{VariableType}
     varassoc::Vector{Int}
     inv_varassoc::Vector{Int}
+    eqassoc::Vector{Int}
+    inv_eqassoc::Vector{Int}
     varmask::BitVector # `true` if the variable has the highest order derivative
     algeqs::BitVector
     graph::BipartiteGraph{Int,Vector{Vector{Int}},Int,Nothing}
@@ -196,6 +198,8 @@ function initialize_system_structure(sys)
         vartype = vartype,
         varassoc = varassoc,
         inv_varassoc = inv_varassoc,
+        eqassoc = zeros(Int, neqs),
+        inv_eqassoc = zeros(Int, neqs),
         varmask = iszero.(varassoc),
         algeqs = algeqs,
         graph = graph,
