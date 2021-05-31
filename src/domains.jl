@@ -1,26 +1,17 @@
-abstract type AbstractDomain{T,N} end
+import DomainSets: Interval, Ball, infimum, supremum
 
-struct VarDomainPairing
-  variables
-  domain::AbstractDomain
-end
-Base.:∈(variable::ModelingToolkit.Num,domain::AbstractDomain) = VarDomainPairing(value(variable),domain)
-Base.:∈(variables::NTuple{N,ModelingToolkit.Num},domain::AbstractDomain) where N = VarDomainPairing(value.(variables),domain)
+@deprecate IntervalDomain(a,b) Interval(a,b)
+@deprecate CircleDomain() Ball()
 
-## Specific Domains
-
-struct IntervalDomain{T} <: AbstractDomain{T,1}
-  lower::T
-  upper::T
-end
-
-
-struct ProductDomain{D,T,N} <: AbstractDomain{T,N}
-  domains::D
-end
-⊗(args::AbstractDomain{T}...) where T = ProductDomain{typeof(args),T,length(args)}(args)
-
-struct CircleDomain <: AbstractDomain{Float64,2}
-  polar::Bool
-  CircleDomain(polar=false) = new(polar)
+# type piracy on Interval for downstream compatibility to be reverted once upgrade is complete
+function Base.getproperty(domain::Interval, sym::Symbol)
+    if sym === :lower
+        @warn "domain.lower is deprecated, use infimum(domain) instead"
+        return infimum(domain)
+    elseif sym === :upper
+        @warn "domain.upper is deprecated, use supremum(domain) instead"
+        return supremum(domain)
+    else
+        return getfield(domain, sym)
+    end
 end
