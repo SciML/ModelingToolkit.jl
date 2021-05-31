@@ -330,3 +330,13 @@ sys = ode_order_lowering(sys)
 prob = ODEProblem(sys, [], tspan)
 sol = solve(prob, Tsit5())
 @test sum(abs, sol[end]) < 1
+
+
+# check_eqs_u0 kwarg test
+@parameters t
+@variables x1(t) x2(t)
+D =Differential(t)
+eqs = [D(x1) ~ -x1]
+sys = ODESystem(eqs,t,[x1,x2],[])
+@test_throws ArgumentError ODEProblem(sys, [1.0,1.0], (0.0,1.0))
+prob = ODEProblem(sys, [1.0,1.0], (0.0,1.0), check_length=false)

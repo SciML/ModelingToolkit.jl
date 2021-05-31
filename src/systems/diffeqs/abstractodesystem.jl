@@ -426,7 +426,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
     end
     p = varmap_to_vars(parammap,ps; defaults=pdefs)
 
-    check_eqs_u0(eqs, dvs, u0)
+    check_eqs_u0(eqs, dvs, u0; kwargs...)
 
     f = constructor(sys,dvs,ps,u0;ddvs=ddvs,tgrad=tgrad,jac=jac,checkbounds=checkbounds,
                     linenumbers=linenumbers,parallel=parallel,simplify=simplify,
