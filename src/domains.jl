@@ -6,9 +6,11 @@ import DomainSets: Interval, Ball, infimum, supremum
 # type piracy on Interval for downstream compatibility to be reverted once upgrade is complete
 function Base.getproperty(domain::Interval, sym::Symbol)
     if sym === :lower
-        return infimum(domain) # or domain.left also defined by IntervalSets.jl
+        @warn "domain.lower is deprecated, used infimum(domain) instead"
+        return infimum(domain)
     elseif sym === :upper
-        return supremum(domain) # or domain.right
+        @warn "domain.upper is deprecated, used supremum(domain) instead"
+        return supremum(domain)
     else
         return getfield(domain, sym)
     end
