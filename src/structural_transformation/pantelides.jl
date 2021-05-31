@@ -84,6 +84,15 @@ function pantelides!(sys; maxiters = 8000)
     nvars = length(varassoc)
     vcolor = falses(nvars)
     ecolor = falses(neqs)
+    # `vmarked` and `emarked` store the same information as `*color`. We
+    # introduce these integer vectors so that when updating the graph, we don't
+    # have to iterate through color vectors. As the minimal singular subset is
+    # often small compare to the entire system, we want to trade memory for
+    # computation. If we were to only use boolean color vectors, then updating
+    # in each iteration ALWAYS takes $3n$ time, while our current approach takes
+    # $1 ≤ 3n_{updates} ≤ 3n$ time, and on the average case $3n_{updates} <<
+    # 3n$. Note that since we use the `push!` and `empty!` approach, the total
+    # memory usage is also upper bounded by $2n$.
     vmarked = Int[]
     emarked = Int[]
     assign = fill(UNASSIGNED, nvars)
@@ -97,47 +106,59 @@ function pantelides!(sys; maxiters = 8000)
         # index would be on the order of thousands.
         for iii in 1:maxiters
             # run matching on (dx, y) variables
-            #
-            # the derivatives and algebraic variables are zeros in the variable
-            # association list
             resize!(vcolor, nvars)
             fill!(vcolor, false)
             resize!(ecolor, neqs)
             fill!(ecolor, false)
             empty!(vmarked)
             empty!(emarked)
-            pathfound = find_augmenting_path(graph, eq′, assign, varmask, vcolor, ecolor, vmarked, emarked)
+            pathfound = find_augmenting_path(
+                                             graph, eq′, assign, varmask, #= highest-order mask =#
+                                             vcolor, ecolor, vmarked, emarked
+                                            )
             # TODO: the ordering is not important, so we don't have to sort the
             # marked vectors.
             sort!(vmarked)
             sort!(emarked)
             pathfound && break # terminating condition
             for var in vmarked
-                # introduce a new variable
+                # Introduce a new (highest order) variable
                 nvars += 1
                 add_vertex!(graph, DST)
-                # the new variable is the derivative of `var`
+                # The new variable is the derivative of `var`
                 varassoc[var] = nvars
                 push!(varassoc, 0)
+                # We can mark the `varmask` here as oppose to just before the
+                # augmenting path algorithm, as this is the only source that
+                # introduces the highest order variable, and computing it here
+                # makes the update time $n_{updates}$ instead of $n$.
                 push!(varmask, true)
+                # `assign` will be updated latter. Although we can push to
+                # `assign` in the latter block, but that would make the program
+                # less readable and more error prone.
                 push!(assign, UNASSIGNED)
             end
 
             for eq in emarked
-                # introduce a new equation
+                # Introduce a new (highest order) equation
                 neqs += 1
                 add_vertex!(graph, SRC)
-                # the new equation is created by differentiating `eq`
+                # The new equation is created by differentiating `eq`
                 eqassoc[eq] = neqs
+                # We split the loop here as `add_edge!` internally sorts the
+                # forward adjacency list. Splitting the loop would give it
+                # better spatial locality.
                 for var in 𝑠neighbors(graph, eq)
                     add_edge!(graph, neqs, var)
+                end
+                for var in 𝑠neighbors(graph, eq)
                     add_edge!(graph, neqs, varassoc[var])
                 end
                 push!(eqassoc, 0)
             end
 
             for var in vmarked
-                # the newly introduced `var`s and `eq`s have the inherits
+                # The newly introduced `var`s and `eq`s have the inherits
                 # assignment
                 assign[varassoc[var]] = eqassoc[assign[var]]
             end

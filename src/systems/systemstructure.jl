@@ -42,6 +42,8 @@ export initialize_system_structure, find_linear_equations
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq
 export dervars_range, diffvars_range, algvars_range
 
+EMPTY_INIT = Int[]
+
 @enum VariableType::Int8 DIFFERENTIAL_VARIABLE ALGEBRAIC_VARIABLE DERIVATIVE_VARIABLE
 
 Base.@kwdef struct SystemPartition
@@ -197,15 +199,17 @@ function initialize_system_structure(sys)
         fullvars = fullvars,
         vartype = vartype,
         varassoc = varassoc,
+        #TODO: remove this initialization
         inv_varassoc = inv_varassoc,
         eqassoc = zeros(Int, neqs),
+        #TODO: remove this initialization
         inv_eqassoc = zeros(Int, neqs),
         varmask = iszero.(varassoc),
         algeqs = algeqs,
         graph = graph,
         solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph), Val(false)),
-        assign = Int[],
-        inv_assign = Int[],
+        assign = EMPTY_INIT,
+        inv_assign = EMPTY_INIT,
         scc = Vector{Int}[],
         partitions = SystemPartition[],
     )
