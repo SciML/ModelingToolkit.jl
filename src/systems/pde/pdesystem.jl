@@ -28,8 +28,8 @@ bcs = [u(t,0) ~ 0.,# for all t > 0
        Dt(u(0,x)) ~ 0. ] #for all  0 < x < 1]
 
 # Space and time domains
-domains = [t ∈ Interval(0.0,1.0),
-           x ∈ Interval(0.0,1.0)]
+domains = [t ∈ (0.0,1.0),
+           x ∈ (0.0,1.0)]
 
 pde_system = PDESystem(eq,bcs,domains,[t,x],[u])
 ```

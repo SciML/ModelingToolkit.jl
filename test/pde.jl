@@ -9,7 +9,7 @@ eq  = Dt(u(t,x)) ~ Dxx(u(t,x))
 bcs = [u(0,x) ~ - x * (x-1) * sin(x),
            u(t,0) ~ 0, u(t,1) ~ 0]
 
-domains = [t ∈ Interval(0.0,1.0),
-           x ∈ Interval(0.0,1.0)]
+domains = [t ∈ (0.0,1.0),
+           x ∈ (0.0,1.0)]
 
 pdesys = PDESystem(eq,bcs,domains,[t,x],[u])
