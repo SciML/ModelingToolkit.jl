@@ -1,4 +1,4 @@
-# This code is from the Modia project and is licensed as follows: 
+# This code is from the Modia project and is licensed as follows:
 # https://github.com/ModiaSim/Modia.jl/blob/b61daad643ef7edd0c1ccce6bf462c6acfb4ad1a/LICENSE
 
 ################################################
@@ -70,7 +70,7 @@ mutable struct TraverseDAG
     stack::Vector{Int}
     eSolved::Vector{Int}
     vSolved::Vector{Int}
-    G                      # Vector{ Vector{Int} }
+    G::Vector{ Vector{Int} }
     assign::Vector{Int}
     es::Vector{Int}
     vs::Vector{Int}

@@ -166,6 +166,7 @@ function pantelides!(sys; maxiters = 8000)
         end # for _ in 1:maxiters
         pathfound || error("maxiters=$maxiters reached! File a bug report if your system has a reasonable index (<100), and you are using the default `maxiters`. Try to increase the maxiters by `pantelides(sys::ODESystem; maxiters=1_000_000)` if your system has an incredibly high index and it is truly extremely large.")
     end # for k in 1:neqs′
+    @set! s.assign = assign
     return sys, assign, eqassoc
 end
 

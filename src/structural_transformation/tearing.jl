@@ -174,48 +174,6 @@ function tearing_reassemble(sys; simplify=false)
 end
 
 """
-    highest_derivative_scc(sys)
-
-Find strongly connected components of equations with the highest order
-derivative.
-"""
-function highest_derivative_scc(sys)
-    s = get_structure(sys)
-    if !(s isa SystemStructure)
-        sys = initialize_system_structure(sys)
-        s = structure(sys)
-    end
-    sys, assign, eqassoc = pantelides!(sys; kwargs...)
-    s = get_structure(sys)
-
-    highest_order_graph = BipartiteGraph(0, length(assign), Val(false))
-    eq_reidx = Int[]
-    for (i, es) in enumerate(eqassoc); es == 0 || continue
-        vars = graph.fadjlist[i]
-        # WARNING: this is an alias to the original graph
-        push!(highest_order_graph.fadjlist, vars)
-        highest_order_graph.ne += length(vars)
-        push!(eq_reidx, i)
-    end
-    # matching is read-only, so aliasing is fine
-    assign = matching(highest_order_graph, s.varmask)
-
-    # Compute SCC and map the indices back to the original system
-    scc = Vector{Int}[]
-    for component in find_scc(highest_order_graph, assign)
-        push!(scc, eq_reidx[component])
-    end
-    for (i, a) in enumerate(assign); a == 0 && continue
-        assign[i] = eq_reidx[a]
-    end
-
-    @set! sys.structure.assign = assign
-    @set! sys.structure.inv_assign = inv_assign
-    @set! sys.structure.scc = scc
-    return sys
-end
-
-"""
     algebraic_equations_scc(sys)
 
 Find strongly connected components of algebraic equations in a system.
