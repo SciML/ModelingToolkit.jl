@@ -109,9 +109,11 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify=false)
     eqs = equations(sys)
     dvs = states(sys)
     M = zeros(length(eqs),length(eqs))
+    state2idx = Dict(s => i for (i, s) in enumerate(dvs))
     for (i,eq) in enumerate(eqs)
         if eq.lhs isa Term && operation(eq.lhs) isa Differential
-            j = findfirst(x->isequal(tosymbol(x),tosymbol(var_from_nested_derivative(eq.lhs)[1])),dvs)
+            st = var_from_nested_derivative(eq.lhs)[1]
+            j = state2idx[st]
             M[i,j] = 1
         else
             _iszero(eq.lhs) || error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")
