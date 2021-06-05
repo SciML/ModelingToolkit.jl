@@ -139,6 +139,18 @@ for F in [:ODEFunction, :DAEFunction]
     end
 end
 
+struct GeneratedObserved{S}
+    sys::S
+    dict::Dict
+end
+# t=Inf for steady states!
+function (f::GeneratedObserved)(obsvar, u, p, t=Inf)
+    obs = get!(f.dict, value(obsvar)) do
+        build_explicit_observed_function(f.sys, obsvar; checkbounds=checkbounds)
+    end
+    obs(u, p, t)
+end
+
 """
 ```julia
 function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
@@ -184,7 +196,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
                                     simplify=simplify, sparse = sparse,
-                                    expression=Val{eval_expression}, expression_module=eval_module, 
+                                    expression=Val{eval_expression}, expression_module=eval_module,
                                     checkbounds=checkbounds, kwargs...)
         jac_oop,jac_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in jac_gen) : jac_gen
         _jac(u,p,t) = jac_oop(u,p,t)
@@ -197,26 +209,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
-    observedfun = if steady_state
-        let sys = sys, dict = Dict()
-            function generated_observed(obsvar, u, p, t=Inf)
-                obs = get!(dict, value(obsvar)) do
-                    build_explicit_observed_function(sys, obsvar)
-                end
-                obs(u, p, t)
-            end
-        end
-    else
-        let sys = sys, dict = Dict()
-            function generated_observed(obsvar, u, p, t)
-                obs = get!(dict, value(obsvar)) do
-                    build_explicit_observed_function(sys, obsvar; checkbounds=checkbounds)
-                end
-                obs(u, p, t)
-            end
-        end
-    end
-
+    observedfun = GeneratedObserved(sys,Dict())
     uElType = eltype(u0)
     ODEFunction{iip}(
                      f,
