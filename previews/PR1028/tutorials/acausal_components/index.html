@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Acausal Component-Based Modeling the RC Circuit · ModelingToolkit.jl</title><link rel="canonical" href="https://mtk.sciml.ai/stable/tutorials/acausal_components/"/><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.11.1/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit">ModelingToolkit.jl</span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Symbolic Modeling Tutorials</span><ul><li><a class="tocitem" href="../ode_modeling/">Composing Ordinary Differential Equations</a></li><li class="is-active"><a class="tocitem" href>Acausal Component-Based Modeling the RC Circuit</a><ul class="internal"><li><a class="tocitem" href="#Copy-Paste-Example-1"><span>Copy-Paste Example</span></a></li><li><a class="tocitem" href="#Explanation-1"><span>Explanation</span></a></li><li><a class="tocitem" href="#Simplifying-and-Solving-this-System-1"><span>Simplifying and Solving this System</span></a></li></ul></li><li><a class="tocitem" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li><li><a class="tocitem" href="../nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../nonlinear_optimal_control/">Nonlinear Optimal Control</a></li></ul></li><li><span class="tocitem">ModelingToolkitize Tutorials</span><ul><li><a class="tocitem" href="../../mtkitize_tutorials/modelingtoolkitize/">Automatically Accelerating ODEProblem Code</a></li><li><a class="tocitem" href="../../mtkitize_tutorials/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/ControlSystem/">ControlSystem</a></li><li><a class="tocitem" href="../../systems/ReactionSystem/">ReactionSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Symbolic Modeling Tutorials</a></li><li class="is-active"><a href>Acausal Component-Based Modeling the RC Circuit</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Acausal Component-Based Modeling the RC Circuit</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/acausal_components.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Acausal-Component-Based-Modeling-the-RC-Circuit-1"><a class="docs-heading-anchor" href="#Acausal-Component-Based-Modeling-the-RC-Circuit-1">Acausal Component-Based Modeling the RC Circuit</a><a class="docs-heading-anchor-permalink" href="#Acausal-Component-Based-Modeling-the-RC-Circuit-1" title="Permalink"></a></h1><p>In this tutorial we will build a hierarchical acausal component-based model of the RC circuit. The RC circuit is a simple example where we connect a resistor and a capacitor. <a href="https://en.wikipedia.org/wiki/Kirchhoff%27s_circuit_laws">Kirchoff&#39;s laws</a> are then applied to state equalities between currents and voltages. This specifies a differential-algebraic equation (DAE) system, where the algebraic equations are given by the constraints and equalities between different component variables. We then simplify this to an ODE by eliminating the equalities before solving. Let&#39;s see this in action.</p><h2 id="Copy-Paste-Example-1"><a class="docs-heading-anchor" href="#Copy-Paste-Example-1">Copy-Paste Example</a><a class="docs-heading-anchor-permalink" href="#Copy-Paste-Example-1" title="Permalink"></a></h2><pre><code class="language-julia">using ModelingToolkit, Plots, DifferentialEquations
+
+@parameters t
+
+# Basic electric components
+function Pin(;name)
+    @variables v(t) i(t)
+    ODESystem(Equation[], t, [v, i], [], name=name, defaults=[v=&gt;1.0, i=&gt;1.0])
+end
+
+function Ground(;name)
+    @named g = Pin()
+    eqs = [g.v ~ 0]
+    ODESystem(eqs, t, [], [], systems=[g], name=name)
+end
+
+function Resistor(;name, R = 1.0)
+    val = R
+    @named p = Pin()
+    @named n = Pin()
+    @variables v(t)
+    @parameters R
+    eqs = [
+           v ~ p.v - n.v
+           0 ~ p.i + n.i
+           v ~ p.i * R
+          ]
+    ODESystem(eqs, t, [v], [R], systems=[p, n], defaults=Dict(R =&gt; val), name=name)
+end
+
+function Capacitor(; name, C = 1.0)
+    val = C
+    @named p = Pin()
+    @named n = Pin()
+    @variables v(t)
+    @parameters C
+    D = Differential(t)
+    eqs = [
+           v ~ p.v - n.v
+           0 ~ p.i + n.i
+           D(v) ~ p.i / C
+          ]
+    ODESystem(eqs, t, [v], [C], systems=[p, n], defaults=Dict(C =&gt; val), name=name)
+end
+
+function ConstantVoltage(;name, V = 1.0)
+    val = V
+    @named p = Pin()
+    @named n = Pin()
+    @parameters V
+    eqs = [
+           V ~ p.v - n.v
+           0 ~ p.i + n.i
+          ]
+    ODESystem(eqs, t, [], [V], systems=[p, n], defaults=Dict(V =&gt; val), name=name)
+end
+
+R = 1.0
+C = 1.0
+V = 1.0
+@named resistor = Resistor(R=R)
+@named capacitor = Capacitor(C=C)
+@named source = ConstantVoltage(V=V)
+@named ground = Ground()
+
+function connect_pins(ps...)
+    eqs = [
+           0 ~ sum(p-&gt;p.i, ps) # KCL
+          ]
+    # KVL
+    for i in 1:length(ps)-1
+        push!(eqs, ps[i].v ~ ps[i+1].v)
+    end
+
+    return eqs
+end
+
+rc_eqs = [
+          connect_pins(source.p, resistor.p)
+          connect_pins(resistor.n, capacitor.p)
+          connect_pins(capacitor.n, source.n, ground.g)
+         ]
+
+@named rc_model = ODESystem(rc_eqs, t,
+                            systems=[resistor, capacitor, source, ground])
+sys = structural_simplify(rc_model)
+u0 = [
+      capacitor.v =&gt; 0.0
+      capacitor.p.i =&gt; 0.0
+     ]
+prob = ODAEProblem(sys, u0, (0, 10.0))
+sol = solve(prob, Tsit5())
+plot(sol)</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/109416294-55184100-798b-11eb-9f05-766a793f0ba2.png" alt/></p><h2 id="Explanation-1"><a class="docs-heading-anchor" href="#Explanation-1">Explanation</a><a class="docs-heading-anchor-permalink" href="#Explanation-1" title="Permalink"></a></h2><h3 id="Building-the-Component-Library-1"><a class="docs-heading-anchor" href="#Building-the-Component-Library-1">Building the Component Library</a><a class="docs-heading-anchor-permalink" href="#Building-the-Component-Library-1" title="Permalink"></a></h3><p>For each of our components we use a Julia function which emits an <code>ODESystem</code>. At the top we start with defining the fundamental qualities of an electrical circuit component. At every input and output pin a circuit component has two values: the current at the pin and the voltage. Thus we define the <code>Pin</code> component to simply be the values there:</p><pre><code class="language-julia">function Pin(;name)
+    @variables v(t) i(t)
+    ODESystem(Equation[], t, [v, i], [], name=name, defaults=[v=&gt;1.0, i=&gt;1.0])
+end</code></pre><p>Note that this is an incompletely specified ODESystem: it cannot be simulated on its own because the equations for <code>v(t)</code> and <code>i(t)</code> are unknown. Instead this just gives a common syntax for receiving this pair with some default values. Notice that in a component we define the <code>name</code> as a keyword argument: this is because later we will generate different <code>Pin</code> objects with different names to correspond to duplicates of this topology with unique variables. One can then construct a <code>Pin</code> like:</p><pre><code class="language-julia">Pin(name=:mypin1)</code></pre><p>or equivalently using the <code>@named</code> helper macro:</p><pre><code class="language-julia">@named mypin1 = Pin()</code></pre><p>Next we build our ground node. A ground node is just a pin that is connected to a constant voltage reservoir, typically taken to be <code>V=0</code>. Thus to define this component, we generate an <code>ODESystem</code> with a <code>Pin</code> subcomponent and specify that the voltage in such a <code>Pin</code> is equal to zero. This gives:</p><pre><code class="language-julia">function Ground(;name)
+    @named g = Pin()
+    eqs = [g.v ~ 0]
+    ODESystem(eqs, t, [], [], systems=[g], name=name)
+end</code></pre><p>Next we build a resistor. A resistor is an object that has two <code>Pin</code>s, the positive and the negative pins, and follows Ohm&#39;s law: <code>v = i*r</code>. The voltage of the resistor is given as the voltage difference across the two pins while by conservation of charge we know that the current in must equal the current out, which means (no matter the direction of the current flow) the sum of the currents must be zero. This leads to our resistor equations:</p><pre><code class="language-julia">function Resistor(;name, R = 1.0)
+    val = R
+    @named p = Pin()
+    @named n = Pin()
+    @variables v(t)
+    @parameters R
+    eqs = [
+           v ~ p.v - n.v
+           0 ~ p.i + n.i
+           v ~ p.i * R
+          ]
+    ODESystem(eqs, t, [v], [R], systems=[p, n], defaults=Dict(R =&gt; val), name=name)
+end</code></pre><p>Notice that we have created this system with a <code>defaults</code> for the resistor&#39;s resistance. By doing so, if the resistance of this resistor is not overridden by a higher level default or overridden at <code>ODEProblem</code> construction time, this will be the value of the resistance.</p><p>Using our knowledge of circuits we similarly construct the Capacitor:</p><pre><code class="language-julia">function Capacitor(; name, C = 1.0)
+    val = C
+    @named p = Pin()
+    @named n = Pin()
+    @variables v(t)
+    @parameters C
+    D = Differential(t)
+    eqs = [
+           v ~ p.v - n.v
+           0 ~ p.i + n.i
+           D(v) ~ p.i / C
+          ]
+    ODESystem(eqs, t, [v], [C], systems=[p, n], defaults=Dict(C =&gt; val), name=name)
+end</code></pre><p>Now we want to build a constant voltage electrical source term. We can think of this as similarly being a two pin object, where the object itself is kept at a constant voltage, essentially generating the electrical current. We would then model this as:</p><pre><code class="language-julia">function ConstantVoltage(;name, V = 1.0)
+    val = V
+    @named p = Pin()
+    @named n = Pin()
+    @parameters V
+    eqs = [
+           V ~ p.v - n.v
+           0 ~ p.i + n.i
+          ]
+    ODESystem(eqs, t, [], [V], systems=[p, n], defaults=Dict(V =&gt; val), name=name)
+end</code></pre><h3 id="Connecting-and-Simulating-Our-Electrical-Circuit-1"><a class="docs-heading-anchor" href="#Connecting-and-Simulating-Our-Electrical-Circuit-1">Connecting and Simulating Our Electrical Circuit</a><a class="docs-heading-anchor-permalink" href="#Connecting-and-Simulating-Our-Electrical-Circuit-1" title="Permalink"></a></h3><p>Now we are ready to simulate our circuit. Let&#39;s build our four components: a <code>resistor</code>, <code>capacitor</code>, <code>source</code>, and <code>ground</code> term. For simplicity we will make all of our parameter values 1. This is done by:</p><pre><code class="language-julia">R = 1.0
+C = 1.0
+V = 1.0
+@named resistor = Resistor(R=R)
+@named capacitor = Capacitor(C=C)
+@named source = ConstantVoltage(V=V)
+@named ground = Ground()</code></pre><p>Next we have to define how we connect the circuit. Whenever two <code>Pin</code>s in a circuit are connected together, the system satisfies <a href="https://en.wikipedia.org/wiki/Kirchhoff%27s_circuit_laws">Kirchoff&#39;s laws</a>, i.e. that currents sum to zero and voltages across the pins are equal. Thus we will build a helper function <code>connect_pins</code> which implements these rules:</p><pre><code class="language-julia">function connect_pins(ps...)
+    eqs = [
+           0 ~ sum(p-&gt;p.i, ps) # KCL
+          ]
+    # KVL
+    for i in 1:length(ps)-1
+        push!(eqs, ps[i].v ~ ps[i+1].v)
+    end
+
+    return eqs
+end</code></pre><p>Finally we will connect the pieces of our circuit together. Let&#39;s connect the positive pin of the resistor to the source, the negative pin of the resistor to the capacitor, and the negative pin of the capacitor to a junction between the source and the ground. This would mean our connection equations are:</p><pre><code class="language-julia">rc_eqs = [
+          connect_pins(source.p, resistor.p)
+          connect_pins(resistor.n, capacitor.p)
+          connect_pins(capacitor.n, source.n, ground.g)
+         ]</code></pre><p>Finally we build our four component model with these connection rules:</p><pre><code class="language-julia">@named rc_model = ODESystem(rc_eqs, t,
+                            systems=[resistor, capacitor, source, ground])</code></pre><p>Notice that this model is acasual because we have not specified anything about the causality of the model. We have simply specified what is true about each of the variables. This forms a system of differential-algebraic equations (DAEs) which define the evolution of each state of the system. The equations are:</p><pre><code class="language-julia">equations(rc_model)
+
+16-element Vector{Equation}:
+ 0 ~ resistor₊p₊i(t) + source₊p₊i(t)
+ source₊p₊v(t) ~ resistor₊p₊v(t)
+ 0 ~ capacitor₊p₊i(t) + resistor₊n₊i(t)
+ resistor₊n₊v(t) ~ capacitor₊p₊v(t)
+ ⋮
+ Differential(t)(capacitor₊v(t)) ~ capacitor₊p₊i(t)*(capacitor₊C^-1)
+ source₊V ~ source₊p₊v(t) - (source₊n₊v(t))
+ 0 ~ source₊n₊i(t) + source₊p₊i(t)
+ ground₊g₊v(t) ~ 0</code></pre><p>the states are:</p><pre><code class="language-julia">states(rc_model)
+
+16-element Vector{Term{Real}}:
+ resistor₊p₊i(t)
+ source₊p₊i(t)
+ source₊p₊v(t)
+ resistor₊p₊v(t)
+ ⋮
+ source₊n₊v(t)
+ ground₊g₊v(t)
+ resistor₊v(t)
+ capacitor₊v(t)</code></pre><p>and the parameters are:</p><pre><code class="language-julia">parameters(rc_model)
+
+3-element Vector{Any}:
+ resistor₊R
+ capacitor₊C
+ source₊V</code></pre><h2 id="Simplifying-and-Solving-this-System-1"><a class="docs-heading-anchor" href="#Simplifying-and-Solving-this-System-1">Simplifying and Solving this System</a><a class="docs-heading-anchor-permalink" href="#Simplifying-and-Solving-this-System-1" title="Permalink"></a></h2><p>This system could be solved directly as a DAE using <a href="https://diffeq.sciml.ai/stable/solvers/dae_solve/">one of the DAE solvers from DifferentialEquations.jl</a>. However, let&#39;s take a second to symbolically simplify the system before doing the solve. The function <code>structural_simplify</code> looks for all of the equalities and eliminates unnecessary variables to build the leanest numerical representation of the system. Let&#39;s see what it does here:</p><pre><code class="language-julia">sys = structural_simplify(rc_model)
+equations(sys)
+
+2-element Vector{Equation}:
+ 0 ~ capacitor₊v(t) + resistor₊R*capacitor₊p₊i(t) - source₊V
+ Differential(t)(capacitor₊v(t)) ~ capacitor₊p₊i(t)*(capacitor₊C^-1)</code></pre><pre><code class="language-julia">states(sys)
+
+2-element Vector{Any}:
+ capacitor₊v(t)
+ capacitor₊p₊i(t)</code></pre><p>After structural simplification we are left with a system of only two equations with two state variables. One of the equations is a differential equation while the other is an algebraic equation. We can then give the values for the initial conditions of our states and solve the system by converting it to an ODEProblem in mass matrix form and solving it with an <a href="https://diffeq.sciml.ai/stable/solvers/dae_solve/#OrdinaryDiffEq.jl-(Mass-Matrix)">ODEProblem mass matrix DAE solver</a>. This is done as follows:</p><pre><code class="language-julia">u0 = [
+      capacitor.v =&gt; 0.0
+      capacitor.p.i =&gt; 0.0
+     ]
+prob = ODEProblem(sys, u0, (0, 10.0))
+sol = solve(prob, Rodas4())
+plot(sol)</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/109416295-55184100-798b-11eb-96d1-5bb7e40135ba.png" alt/></p><p>However, we can also choose to use the &quot;torn nonlinear system&quot; to remove all of the algebraic variables from the solution of the system. Note that this requires having done <code>structural_simplify</code>. This is done by using <code>ODAEProblem</code> like:</p><pre><code class="language-julia">u0 = [
+      capacitor.v =&gt; 0.0
+      capacitor.p.i =&gt; 0.0
+     ]
+prob = ODAEProblem(sys, u0, (0, 10.0))
+sol = solve(prob, Rodas4())
+plot(sol)</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/109416294-55184100-798b-11eb-9f05-766a793f0ba2.png" alt/></p><p>Notice that this solves the whole system by only solving for one variable!</p><p>However, what if we wanted to plot the timeseries of a different variable? Do not worry, that information was not thrown away! Instead, transformations like <code>structural_simplify</code> simply change state variables into <code>observed</code> variables. Let&#39;s see what our observed variables are:</p><pre><code class="language-julia">observed(sys)
+
+14-element Vector{Equation}:
+ resistor₊p₊i(t) ~ capacitor₊p₊i(t)
+ capacitor₊n₊v(t) ~ 0.0
+ source₊n₊v(t) ~ 0.0
+ ground₊g₊i(t) ~ 0.0
+ source₊n₊i(t) ~ capacitor₊p₊i(t)
+ source₊p₊i(t) ~ -capacitor₊p₊i(t)
+ capacitor₊n₊i(t) ~ -capacitor₊p₊i(t)
+ resistor₊n₊i(t) ~ -capacitor₊p₊i(t)
+ ground₊g₊v(t) ~ 0.0
+ source₊p₊v(t) ~ source₊V
+ capacitor₊p₊v(t) ~ capacitor₊v(t)
+ resistor₊p₊v(t) ~ source₊p₊v(t)
+ resistor₊n₊v(t) ~ capacitor₊p₊v(t)
+ resistor₊v(t) ~ -((capacitor₊p₊v(t)) - (source₊p₊v(t)))</code></pre><p>These are explicit algebraic equations which can then be used to reconstruct the required variables on the fly. This leads to dramatic computational savings because implicitly solving an ODE scales like O(n^3), so making there be as few states as possible is good!</p><p>The solution object can be accessed via its symbols. For example, let&#39;s retrieve the voltage of the resistor over time:</p><pre><code class="language-julia">sol[resistor.v]</code></pre><p>or we can plot the timeseries of the resistor&#39;s voltage:</p><pre><code class="language-julia">plot(sol, vars=[resistor.v])</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../ode_modeling/">« Composing Ordinary Differential Equations</a><a class="docs-footer-nextpage" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Saturday 5 June 2021 22:43">Saturday 5 June 2021</span>. Using Julia version 1.6.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
