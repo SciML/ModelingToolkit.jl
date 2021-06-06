@@ -61,20 +61,18 @@ struct ODESystem <: AbstractODESystem
     """
     systems::Vector{ODESystem}
     """
-    default_u0: The default initial conditions to use when initial conditions
-    are not supplied in `ODEProblem`.
+    defaults: The default values to use when initial conditions and/or
+    parameters are not supplied in `ODEProblem`.
     """
-    default_u0::Dict
-    """
-    default_p: The default parameters to use when parameters are not supplied
-    in `ODEProblem`.
-    """
-    default_p::Dict
+    defaults::Dict
     """
     structure: structural information of the system
     """
     structure::Any
-    reduced_states::Vector
+    """
+    type: type of the system
+    """
+    connection_type::Any
 end
 
 function ODESystem(
@@ -84,15 +82,18 @@ function ODESystem(
                    name=gensym(:ODESystem),
                    default_u0=Dict(),
                    default_p=Dict(),
+                   defaults=_merge(Dict(default_u0), Dict(default_p)),
+                   connection_type=nothing,
                   )
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
 
-    default_u0 isa Dict || (default_u0 = Dict(default_u0))
-    default_p isa Dict || (default_p = Dict(default_p))
-    default_u0 = Dict(value(k) => value(default_u0[k]) for k in keys(default_u0))
-    default_p = Dict(value(k) => value(default_p[k]) for k in keys(default_p))
+    if !(isempty(default_u0) && isempty(default_p))
+        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ODESystem, force=true)
+    end
+    defaults = todict(defaults)
+    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
@@ -102,14 +103,14 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, default_u0, default_p, nothing, [])
+    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type)
 end
 
 iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nested_derivative(arguments(x)[1]) : arguments(x)[1]
 iv_from_nested_derivative(x::Sym) = x
 iv_from_nested_derivative(x) = missing
 
-vars(x::Sym) = [x]
+vars(x::Sym) = Set([x])
 vars(exprs::Symbolic) = vars([exprs])
 vars(exprs) = foldl(vars!, exprs; init = Set())
 vars!(vars, eq::Equation) = (vars!(vars, eq.lhs); vars!(vars, eq.rhs); vars)
@@ -220,8 +221,7 @@ function flatten(sys::ODESystem)
                          states(sys),
                          parameters(sys),
                          observed=observed(sys),
-                         default_u0=default_u0(sys),
-                         default_p=default_p(sys),
+                         defaults=defaults(sys),
                          name=nameof(sys),
                         )
     end
@@ -238,7 +238,8 @@ i.e. there are no cycles.
 function build_explicit_observed_function(
         sys, syms;
         expression=false,
-        output_type=Array)
+        output_type=Array,
+        checkbounds=true)
 
     if (isscalar = !(syms isa Vector))
         syms = [syms]
@@ -256,13 +257,13 @@ function build_explicit_observed_function(
         output[i] = obs[idx].rhs
     end
 
+    dvs = DestructuredArgs(states(sys), inbounds=!checkbounds)
+    ps = DestructuredArgs(parameters(sys), inbounds=!checkbounds)
+    iv = independent_variable(sys)
+    args = iv === nothing ? [dvs, ps] : [dvs, ps, iv]
+
     ex = Func(
-        [
-         DestructuredArgs(states(sys))
-         DestructuredArgs(parameters(sys))
-         independent_variable(sys)
-        ],
-        [],
+        args, [],
         Let(
             map(eq -> eq.lhs←eq.rhs, obs[1:maxidx]),
             isscalar ? output[1] : MakeArray(output, output_type)
@@ -283,4 +284,58 @@ function _eq_unordered(a, b)
         delete!(idxs, idx)
     end
     return true
+end
+
+function collect_differential_variables(sys::ODESystem)
+    eqs = equations(sys)
+    vars = Set()
+    diffvars = Set()
+    for eq in eqs
+        vars!(vars, eq)
+        for v in vars
+            isdifferential(v) || continue
+            push!(diffvars, arguments(v)[1])
+        end
+        empty!(vars)
+    end
+    return diffvars
+end
+
+# We have a stand-alone function to convert a `NonlinearSystem` or `ODESystem`
+# to an `ODESystem` to connect systems, and we later can reply on
+# `structural_simplify` to convert `ODESystem`s to `NonlinearSystem`s.
+"""
+$(TYPEDSIGNATURES)
+
+Convert a `NonlinearSystem` to an `ODESystem` or converts an `ODESystem` to a
+new `ODESystem` with a different independent variable.
+"""
+function convert_system(::Type{<:ODESystem}, sys, t; name=nameof(sys))
+    isempty(observed(sys)) || throw(ArgumentError("`convert_system` cannot handle reduced model (i.e. observed(sys) is non-empty)."))
+    t = value(t)
+    varmap = Dict()
+    sts = states(sys)
+    newsts = similar(sts, Any)
+    for (i, s) in enumerate(sts)
+        if istree(s)
+            args = arguments(s)
+            length(args) == 1 || throw(InvalidSystemException("Illegal state: $s. The state can have at most one argument like `x(t)`."))
+            arg = args[1]
+            if isequal(arg, t)
+                newsts[i] = s
+                continue
+            end
+            ns = operation(s)(t)
+            newsts[i] = ns
+            varmap[s] = ns
+        else
+            ns = indepvar2depvar(s, t)
+            newsts[i] = ns
+            varmap[s] = ns
+        end
+    end
+    sub = Base.Fix2(substitute, varmap)
+    neweqs = map(sub, equations(sys))
+    defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
+    return ODESystem(neweqs, t, newsts, parameters(sys); defaults=defs, name=name)
 end

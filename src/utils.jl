@@ -72,37 +72,35 @@ function states_to_sym(states::Set)
 end
 states_to_sym(states) = states_to_sym(Set(states))
 
-"""
-    toparam(s::Sym) -> Sym{<:Parameter}
-
-Maps the variable to a paramter.
-"""
-toparam(s::Sym) = Sym{Parameter{symtype(s)}}(s.name)
-toparam(s::Sym{<:Parameter}) = s
-
-"""
-    tovar(s::Sym) -> Sym{Real}
-    tovar(s::Sym{<:Parameter}) -> Sym{Real}
-
-Maps the variable to a state.
-"""
-tovar(s::Sym{<:Parameter}) = Sym{symtype(s)}(s.name)
-tovar(s::Sym) = s
-
-function lower_mapnames(umap::AbstractArray{T}) where {T<:Pair}
-    T[value(k) => value(v) for (k, v) in umap]
-end
-function lower_mapnames(umap::AbstractArray{T},name) where {T<:Pair}
-    T[lower_varname(value(k), name) => value(v) for (k, v) in umap]
-end
-function lower_mapnames(umap::NTuple{N,T}) where {N,T<:Pair}
-    ntuple(i->value(umap[i][1]) => value(umap[i][2]),N)
-end
-function lower_mapnames(umap::NTuple{N,T},name) where {N,T<:Pair}
-    ntuple(i->lower_varname(value(umap[i][1]), name) => value(umap[i][2]),N)
+function todict(d)
+    eltype(d) <: Pair || throw(ArgumentError("The variable-value mapping must be a Dict."))
+    d isa Dict ? d : Dict(d)
 end
 
-lower_mapnames(umap::AbstractArray) = umap # Ambiguity
-lower_mapnames(umap::AbstractArray,name) = umap
-lower_mapnames(umap::Tuple) = umap
-lower_mapnames(umap::Tuple, name) = umap
+_merge(d1, d2) = merge(todict(d1), todict(d2))
+
+function indepvar2depvar(s::Sym, args...)
+    T = FnType{NTuple{length(args)}, symtype(s)}
+    ns = Sym{T}(nameof(s))(args...)
+    @set! ns.metadata = s.metadata
+end
+
+function _readable_code(ex)
+    ex isa Expr || return ex
+    if ex.head === :call
+        f, args = ex.args[1], ex.args[2:end]
+        if f isa Function && (nf = nameof(f); Base.isoperator(nf))
+            expr = Expr(:call, nf)
+            for a in args
+                push!(expr.args, _readable_code(a))
+            end
+            return expr
+        end
+    end
+    expr = Expr(ex.head)
+    for a in ex.args
+        push!(expr.args, _readable_code(a))
+    end
+    expr
+end
+readable_code(expr) = JuliaFormatter.format_text(string(Base.remove_linenums!(_readable_code(expr))))

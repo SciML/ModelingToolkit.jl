@@ -106,3 +106,16 @@ using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.z))
 ```
 
 ![](https://user-images.githubusercontent.com/1814174/110242538-87461780-7f24-11eb-983c-4b2c93cfc909.png)
+
+# Citation
+If you use ModelingToolkit.jl in your research, please cite [this paper](https://arxiv.org/abs/2103.05244):
+```
+@misc{ma2021modelingtoolkit,
+      title={ModelingToolkit: A Composable Graph Transformation System For Equation-Based Modeling},
+      author={Yingbo Ma and Shashi Gowda and Ranjan Anantharaman and Chris Laughman and Viral Shah and Chris Rackauckas},
+      year={2021},
+      eprint={2103.05244},
+      archivePrefix={arXiv},
+      primaryClass={cs.MS}
+}
+```

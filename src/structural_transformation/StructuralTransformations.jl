@@ -16,7 +16,7 @@ using ModelingToolkit: ODESystem, var_from_nested_derivative, Differential,
                        states, equations, vars, Symbolic, diff2term, value,
                        operation, arguments, Sym, Term, simplify, solve_for,
                        isdiffeq, isdifferential,
-                       get_structure, get_reduced_states, default_u0, default_p
+                       get_structure, defaults, InvalidSystemException
 
 using ModelingToolkit.BipartiteGraphs
 using ModelingToolkit.SystemStructures
@@ -31,7 +31,7 @@ using SparseArrays
 
 using NonlinearSolve
 
-export tearing, dae_index_lowering
+export tearing, dae_index_lowering, check_consistency
 export build_torn_function, build_observed_function, ODAEProblem
 export sorted_incidence_matrix
 

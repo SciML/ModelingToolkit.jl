@@ -4,8 +4,6 @@ using Test
 using ModelingToolkit: value
 using SymbolicUtils: FnType
 
-const PType = ModelingToolkit.Parameter{Real}
-
 @parameters t
 @variables x(t) y(t) # test multi-arg
 @variables z(t) # test single-arg
@@ -24,12 +22,16 @@ z1 = Num(Sym{FnType{Tuple{Any}, Real}}(:z)(value(t)))
 end
 @parameters σ(..)
 
-t1 = Num(Sym{PType}(:t))
-s1 = Num(Sym{PType}(:s))
-σ1 = Num(Sym{FnType{Tuple, PType}}(:σ))
+t1 = Num(Sym{Real}(:t))
+s1 = Num(Sym{Real}(:s))
+σ1 = Num(Sym{FnType{Tuple, Real}}(:σ))
 @test isequal(t1, t)
 @test isequal(s1, s)
 @test isequal(σ1, σ)
+
+@test ModelingToolkit.isparameter(t)
+@test ModelingToolkit.isparameter(s)
+@test ModelingToolkit.isparameter(σ)
 
 @derivatives D'~t
 D1 = Differential(t)
@@ -45,11 +47,15 @@ D1 = Differential(t)
 end
 @parameters σ[1:2](..)
 
+@test all(ModelingToolkit.isparameter, t)
+@test all(ModelingToolkit.isparameter, s)
+@test all(ModelingToolkit.isparameter, σ)
+
 fntype(n, T) = FnType{NTuple{n, Any}, T}
-t1 = Num[Variable{PType}(:t, 1), Variable{PType}(:t, 2)]
-s1 = Num[Variable{PType}(:s, 1, 1) Variable{PType}(:s, 1, 2);
-        Variable{PType}(:s, 3, 1) Variable{PType}(:s, 3, 2)]
-σ1 = [Num(Variable{fntype(1, PType)}(:σ, 1)), Num(Variable{fntype(1, PType)}(:σ, 2))]
+t1 = Num[Variable{Real}(:t, 1), Variable{Real}(:t, 2)]
+s1 = Num[Variable{Real}(:s, 1, 1) Variable{Real}(:s, 1, 2);
+        Variable{Real}(:s, 3, 1) Variable{Real}(:s, 3, 2)]
+σ1 = [Num(Variable{fntype(1, Real)}(:σ, 1)), Num(Variable{fntype(1, Real)}(:σ, 2))]
 @test isequal(t1, t)
 @test isequal(s1, s)
 @test isequal(σ1, σ)
@@ -63,3 +69,61 @@ x1 = Num[Variable{FnType{Tuple{Any}, Real}}(:x, 1)(t.val),
 
 @variables a[1:11,1:2]
 @variables a()
+
+using Symbolics: value, VariableDefaultValue
+using ModelingToolkit: VariableConnectType, VariableUnit, rename
+using Unitful
+
+vals = [1,2,3,4]
+@variables x=1 xs[1:4]=vals ys[1:5]=1
+
+@test getmetadata(x, VariableDefaultValue) === 1
+@test getmetadata.(xs, (VariableDefaultValue,)) == vals
+@test getmetadata.(ys, (VariableDefaultValue,)) == ones(Int, 5)
+
+struct Flow end
+u = u"m^3/s"
+@variables begin
+    x = [1, 2], [connect=Flow,unit=u]
+    y = 2
+end
+
+@test getmetadata(x, VariableDefaultValue) == [1, 2]
+@test getmetadata(x, VariableConnectType) == Flow
+@test getmetadata(x, VariableUnit) == u
+@test getmetadata(y, VariableDefaultValue) === 2
+
+@variables begin
+    x, [connect=Flow,unit=u]
+    y = 2, [connect=Flow]
+end
+
+@test !hasmetadata(x, VariableDefaultValue)
+@test getmetadata(x, VariableConnectType) == Flow
+@test getmetadata(x, VariableUnit) == u
+@test getmetadata(y, VariableDefaultValue) === 2
+@test getmetadata(y, VariableConnectType) == Flow
+
+a = rename(value(x), :a)
+@test !hasmetadata(x, VariableDefaultValue)
+@test getmetadata(x, VariableConnectType) == Flow
+@test getmetadata(x, VariableUnit) == u
+
+@variables t x(t)=1 [connect=Flow,unit=u]
+
+@test getmetadata(x, VariableDefaultValue) == 1
+@test getmetadata(x, VariableConnectType) == Flow
+@test getmetadata(x, VariableUnit) == u
+
+a = rename(value(x), :a)
+@test getmetadata(a, VariableDefaultValue) == 1
+@test getmetadata(a, VariableConnectType) == Flow
+@test getmetadata(a, VariableUnit) == u
+
+@parameters p=2 [unit=u"m",]
+@test getmetadata(p, VariableDefaultValue) == 2
+@test !hasmetadata(p, VariableConnectType)
+@test getmetadata(p, VariableUnit) == u"m"
+@test ModelingToolkit.isparameter(p)
+
+@test_throws Any (@macroexpand @parameters p=2 [unit=u"m",abc=2])

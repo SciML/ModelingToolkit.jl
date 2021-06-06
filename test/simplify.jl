@@ -20,7 +20,7 @@ simplify(minus_op)
 
 @variables x
 
-@test toexpr(expand_derivatives(Differential(x)((x-2)^2))) == :($(*)(2, $(+)(-2, x)))
+@test toexpr(expand_derivatives(Differential(x)((x-2)^2))) == :($(+)(-4, $(*)(2, x)))
 @test toexpr(expand_derivatives(Differential(x)((x-2)^3))) == :($(*)(3, $(^)($(+)(-2, x), 2)))
 @test toexpr(simplify(x+2+3)) == :($(+)(5, x))
 
@@ -41,8 +41,8 @@ using SymbolicUtils: substitute
 # back and forth substitution does not work for parameters with dependencies
 term = value(a)
 term2 = substitute(term, a=>b)
-@test term2 isa Term{ModelingToolkit.Parameter{Real}}
+@test ModelingToolkit.isparameter(term2)
 @test isequal(term2, b)
 term3 = substitute(term2, b=>a)
-@test term3 isa Term{ModelingToolkit.Parameter{Real}}
+@test ModelingToolkit.isparameter(term3)
 @test isequal(term3, a)

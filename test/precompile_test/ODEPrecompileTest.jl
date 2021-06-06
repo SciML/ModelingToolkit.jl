@@ -15,7 +15,7 @@ module ODEPrecompileTest
         de = ODESystem(eqs)
         return ODEFunction(de, [x,y,z], [σ,ρ,β]; kwargs...)
     end
-    
+
     # Build an ODEFunction as part of the module's precompilation. These cases
     # will not work, because the generated RGFs are put into the ModelingToolkit cache.
     const f_bad = system()

@@ -68,15 +68,10 @@ struct ControlSystem <: AbstractControlSystem
     """
     systems::Vector{ControlSystem}
     """
-    default_u0: The default initial conditions to use when initial conditions
-    are not supplied in `ODEProblem`.
+    defaults: The default values to use when initial conditions and/or
+    parameters are not supplied in `ODEProblem`.
     """
-    default_u0::Dict
-    """
-    default_p: The default parameters to use when parameters are not supplied
-    in `ODEProblem`.
-    """
-    default_p::Dict
+    defaults::Dict
 end
 
 function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls, ps;
@@ -84,17 +79,19 @@ function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls
                        systems = ODESystem[],
                        default_u0=Dict(),
                        default_p=Dict(),
+                       defaults=_merge(Dict(default_u0), Dict(default_p)),
                        name=gensym(:ControlSystem))
+    if !(isempty(default_u0) && isempty(default_p))
+        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ControlSystem, force=true)
+    end
     iv′ = value(iv)
     dvs′ = value.(dvs)
     controls′ = value.(controls)
     ps′ = value.(ps)
-    default_u0 isa Dict || (default_u0 = Dict(default_u0))
-    default_p isa Dict || (default_p = Dict(default_p))
-    default_u0 = Dict(value(k) => value(default_u0[k]) for k in keys(default_u0))
-    default_p = Dict(value(k) => value(default_p[k]) for k in keys(default_p))
+    defaults = todict(defaults)
+    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
     ControlSystem(value(loss), deqs, iv′, dvs′, controls′,
-                  ps′, observed, name, systems, default_u0, default_p)
+                  ps′, observed, name, systems, defaults)
 end
 
 struct ControlToExpr

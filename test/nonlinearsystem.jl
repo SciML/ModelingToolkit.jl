@@ -21,7 +21,8 @@ end
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
+ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β], defaults = Dict(x => 2))
+@test eval(toexpr(ns)) == ns
 test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β))
 @test begin
     f = eval(generate_function(ns, [x,y,z], [σ,ρ,β])[2])
@@ -75,6 +76,8 @@ prob = NonlinearProblem(ns,ones(3),ones(3))
 sol = solve(prob,NewtonRaphson())
 @test sol.u[1] ≈ sol.u[2]
 
+@test_throws ArgumentError NonlinearProblem(ns,ones(4),ones(3))
+
 @variables u F s a
 eqs1 = [
         0 ~ σ*(y-x) + F,
@@ -85,9 +88,22 @@ eqs1 = [
 
 lorenz = name -> NonlinearSystem(eqs1, [x,y,z,u,F], [σ,ρ,β], name=name)
 lorenz1 = lorenz(:lorenz1)
+@test_throws ArgumentError NonlinearProblem(lorenz1, zeros(5))
 lorenz2 = lorenz(:lorenz2)
 connected = NonlinearSystem([s ~ a + lorenz1.x
                              lorenz2.y ~ s
                              lorenz1.F ~ lorenz2.u
                              lorenz2.F ~ lorenz1.u], [s, a], [], systems=[lorenz1,lorenz2])
 @test_nowarn alias_elimination(connected)
+
+# system promotion
+using OrdinaryDiffEq
+@variables t
+D = Differential(t)
+@named subsys = convert_system(ODESystem, lorenz1, t)
+@named sys = ODESystem([D(subsys.x) ~ subsys.x + subsys.x], t, systems=[subsys])
+sys = structural_simplify(sys)
+prob = ODEProblem(sys, [subsys.x => 1, subsys.z => 2.0], (0, 1.0), [subsys.σ=>1,subsys.ρ=>2,subsys.β=>3])
+sol = solve(prob, Rodas5())
+@test sol[subsys.x] + sol[subsys.y] - sol[subsys.z] ≈ sol[subsys.u]
+@test_throws ArgumentError convert_system(ODESystem, sys, t)

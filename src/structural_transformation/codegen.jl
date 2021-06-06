@@ -40,26 +40,27 @@ function torn_system_jacobian_sparsity(sys)
     # dependencies.
     avars2dvars = Dict{Int,Set{Int}}()
     c = 0
-    for (_, _, teqs, tvars) in partitions
+    for partition in partitions
+        @unpack e_residual, v_residual = partition
         # initialization
-        for tvar in tvars
+        for tvar in v_residual
             avars2dvars[tvar] = Set{Int}()
         end
-        for teq in teqs
+        for teq in e_residual
             c += 1
             for var in 𝑠neighbors(graph, teq)
                 # Skip the tearing variables in the current partition, because
                 # we are computing them from all the other states.
-                LightGraphs.insorted(var, tvars) && continue
+                LightGraphs.insorted(var, v_residual) && continue
                 deps = get(avars2dvars, var, nothing)
                 if deps === nothing # differential variable
                     @assert !isalgvar(s, var)
-                    for tvar in tvars
+                    for tvar in v_residual
                         push!(avars2dvars[tvar], var)
                     end
                 else # tearing variable from previous partitions
                     @assert isalgvar(s, var)
-                    for tvar in tvars
+                    for tvar in v_residual
                         union!(avars2dvars[tvar], avars2dvars[var])
                     end
                 end
@@ -67,7 +68,8 @@ function torn_system_jacobian_sparsity(sys)
         end
     end
 
-    dvar2idx(idx) = idx # maps `dvar` to the index of the states
+    dvrange = diffvars_range(s)
+    dvar2idx = Dict(v=>i for (i, v) in enumerate(dvrange))
     I = Int[]; J = Int[]
     eqidx = 0
     for ieq in 𝑠vertices(graph)
@@ -76,11 +78,11 @@ function torn_system_jacobian_sparsity(sys)
         for ivar in 𝑠neighbors(graph, ieq)
             if isdiffvar(s, ivar)
                 push!(I, eqidx)
-                push!(J, dvar2idx(ivar))
+                push!(J, dvar2idx[ivar])
             elseif isalgvar(s, ivar)
                 for dvar in avars2dvars[ivar]
                     push!(I, eqidx)
-                    push!(J, dvar2idx(dvar))
+                    push!(J, dvar2idx[dvar])
                 end
             end
         end
@@ -97,9 +99,9 @@ function partitions_dag(s::SystemStructure)
     @unpack partitions, graph = s
 
     # `partvars[i]` contains all the states that appear in `partitions[i]`
-    partvars = map(partitions) do (_, _, reqs, tvars)
+    partvars = map(partitions) do partition
         ipartvars = Set{Int}()
-        for req in reqs
+        for req in partition.e_residual
             union!(ipartvars, 𝑠neighbors(graph, req))
         end
         ipartvars
@@ -107,12 +109,12 @@ function partitions_dag(s::SystemStructure)
 
     I, J = Int[], Int[]
     n = length(partitions)
-    for i in 1:n
+    for (i, partition) in enumerate(partitions)
         for j in i+1:n
             # The only way for a later partition `j` to depend on an earlier
             # partition `i` is when `partvars[j]` contains one of tearing
             # variables of partition `i`.
-            if !isdisjoint(partvars[j], partitions[i][4])
+            if !isdisjoint(partvars[j], partition.v_residual)
                 # j depends on i
                 push!(I, i)
                 push!(J, j)
@@ -123,7 +125,7 @@ function partitions_dag(s::SystemStructure)
     sparse(I, J, true, n, n)
 end
 
-function gen_nlsolve(sys, eqs, vars)
+function gen_nlsolve(sys, eqs, vars; checkbounds=true)
     @assert !isempty(vars)
     @assert length(eqs) == length(vars)
     rhss = map(x->x.rhs, eqs)
@@ -131,7 +133,7 @@ function gen_nlsolve(sys, eqs, vars)
     allvars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
     params = setdiff(allvars, vars)
 
-    u0map = default_u0(sys)
+    u0map = defaults(sys)
     # splatting to tighten the type
     u0 = [map(var->get(u0map, var, 1e-3), vars)...]
     # specialize on the scalar case
@@ -141,8 +143,8 @@ function gen_nlsolve(sys, eqs, vars)
     fname = gensym("fun")
     f = Func(
         [
-         DestructuredArgs(vars)
-         DestructuredArgs(params)
+         DestructuredArgs(vars, inbounds=!checkbounds)
+         DestructuredArgs(params, inbounds=!checkbounds)
         ],
         [],
         isscalar ? rhss[1] : MakeArray(rhss, SVector)
@@ -160,7 +162,7 @@ function gen_nlsolve(sys, eqs, vars)
 
     [
      fname ← @RuntimeGeneratedFunction(f)
-     DestructuredArgs(vars) ← solver_call
+     DestructuredArgs(vars, inbounds=!checkbounds) ← solver_call
     ]
 end
 
@@ -170,8 +172,8 @@ function get_torn_eqs_vars(sys)
     vars = s.fullvars
     eqs = equations(sys)
 
-    torn_eqs  = map(idxs-> eqs[idxs], map(x->x[3], partitions))
-    torn_vars = map(idxs->vars[idxs], map(x->x[4], partitions))
+    torn_eqs  = map(idxs-> eqs[idxs], map(x->x.e_residual, partitions))
+    torn_vars = map(idxs->vars[idxs], map(x->x.v_residual, partitions))
 
     gen_nlsolve.((sys,), torn_eqs, torn_vars)
 end
@@ -197,15 +199,15 @@ function build_torn_function(
     )
 
     s = structure(sys)
-    states = s.fullvars[diffvars_range(s)]
+    states = map(i->s.fullvars[i], diffvars_range(s))
     syms = map(Symbol, states)
 
     expr = SymbolicUtils.Code.toexpr(
         Func(
              [
               out
-              DestructuredArgs(states)
-              DestructuredArgs(parameters(sys))
+              DestructuredArgs(states, inbounds=!checkbounds)
+              DestructuredArgs(parameters(sys), inbounds=!checkbounds)
               independent_variable(sys)
              ],
              [],
@@ -221,7 +223,7 @@ function build_torn_function(
         observedfun = let sys = sys, dict = Dict()
             function generated_observed(obsvar, u, p, t)
                 obs = get!(dict, value(obsvar)) do
-                    build_observed_function(sys, obsvar)
+                    build_observed_function(sys, obsvar, checkbounds=checkbounds)
                 end
                 obs(u, p, t)
             end
@@ -243,9 +245,9 @@ given a set of `vars`, find the groups of equations we need to solve for
 to obtain the solution to `vars`
 """
 function find_solve_sequence(partitions, vars)
-    subset = filter(x -> !isdisjoint(x[4], vars), partitions)
+    subset = filter(x -> !isdisjoint(x.v_residual, vars), partitions)
     isempty(subset) && return []
-    vars′ = mapreduce(x->x[4], union, subset)
+    vars′ = mapreduce(x->x.v_residual, union, subset)
     if vars′ == vars
         return subset
     else
@@ -256,7 +258,8 @@ end
 function build_observed_function(
         sys, syms;
         expression=false,
-        output_type=Array
+        output_type=Array,
+        checkbounds=true
     )
 
     if (isscalar = !(syms isa Vector))
@@ -266,8 +269,8 @@ function build_observed_function(
     syms_set = Set(syms)
     s = structure(sys)
     @unpack partitions, fullvars, graph = s
-    diffvars = fullvars[diffvars_range(s)]
-    algvars = fullvars[algvars_range(s)]
+    diffvars = map(i->fullvars[i], diffvars_range(s))
+    algvars = map(i->fullvars[i], algvars_range(s))
 
     required_algvars = Set(intersect(algvars, syms_set))
     obs = observed(sys)
@@ -289,10 +292,10 @@ function build_observed_function(
     if !isempty(subset)
         eqs = equations(sys)
 
-        torn_eqs  = map(idxs-> eqs[idxs[3]], subset)
-        torn_vars = map(idxs->fullvars[idxs[4]], subset)
+        torn_eqs  = map(idxs-> eqs[idxs.e_residual], subset)
+        torn_vars = map(idxs->fullvars[idxs.v_residual], subset)
 
-        solves = gen_nlsolve.((sys,), torn_eqs, torn_vars)
+        solves = gen_nlsolve.((sys,), torn_eqs, torn_vars; checkbounds=checkbounds)
     else
         solves = []
     end
@@ -307,8 +310,8 @@ function build_observed_function(
 
     ex = Func(
         [
-         DestructuredArgs(diffvars)
-         DestructuredArgs(parameters(sys))
+         DestructuredArgs(diffvars, inbounds=!checkbounds)
+         DestructuredArgs(parameters(sys), inbounds=!checkbounds)
          independent_variable(sys)
         ],
         [],
@@ -337,23 +340,12 @@ function ODAEProblem{iip}(
                          ) where {iip}
     s = structure(sys)
     @unpack fullvars = s
-    dvs = fullvars[diffvars_range(s)]
-    defaults = merge(default_p(sys), default_u0(sys))
-    u0map′ = ModelingToolkit.lower_mapnames(u0map, independent_variable(sys))
-    u0 = ModelingToolkit.varmap_to_vars(u0map′, dvs; defaults=defaults)
-
+    dvs = map(i->fullvars[i], diffvars_range(s))
     ps = parameters(sys)
-    if parammap isa DiffEqBase.NullParameters && isempty(default_p(sys))
-        isempty(ps) || throw(ArgumentError("The model has non-empty parameters but no parameters are specified in the problem."))
-        p = parammap
-    else
-        if parammap isa DiffEqBase.NullParameters
-            pp = Pair[]
-        else
-            pp = ModelingToolkit.lower_mapnames(parammap)
-        end
-        p = ModelingToolkit.varmap_to_vars(pp, ps; defaults=defaults)
-    end
+    defs = defaults(sys)
+
+    u0 = ModelingToolkit.varmap_to_vars(u0map, dvs; defaults=defs)
+    p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults=defs)
 
     ODEProblem{iip}(build_torn_function(sys; kw...), u0, tspan, p; kw...)
 end

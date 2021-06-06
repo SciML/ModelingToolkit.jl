@@ -3,13 +3,8 @@ using SymbolicUtils: Rewriters
 const KEEP = typemin(Int)
 
 function alias_elimination(sys)
-    # FIXME: update `structure` too
-    #sys = flatten(sys)
-    #s = get_structure(sys)
-    #if !(s isa SystemStructure)
     sys = initialize_system_structure(sys)
     s = structure(sys)
-    #end
     is_linear_equations, eadj, cadj = find_linear_equations(sys)
 
     v_eliminated, v_types, n_null_vars, degenerate_equations, linear_equations = alias_eliminate_graph(
@@ -20,11 +15,9 @@ function alias_elimination(sys)
     @unpack fullvars, graph = s
 
     n_reduced_states = length(v_eliminated) - n_null_vars
-    reduced_states = similar(v_eliminated, Any, n_reduced_states)
     subs = OrderedDict()
     if n_reduced_states > 0
         for (i, v) in enumerate(@view v_eliminated[n_null_vars+1:end])
-            reduced_states[i] = fullvars[v]
             subs[fullvars[v]] = iszeroterm(v_types, v) ? 0.0 :
                                 isalias(v_types, v) ? fullvars[alias(v_types, v)] :
                                 -fullvars[negalias(v_types, v)]
@@ -51,9 +44,6 @@ function alias_elimination(sys)
 
     dict = Dict(subs)
     for (ieq, eq) in enumerate(eqs)
-        if !isdiffeq(eq) && !_iszero(eq.lhs)
-            eq = 0 ~ eq.rhs - eq.lhs
-        end
         eqs[ieq] = eq.lhs ~ fixpoint_sub(eq.rhs, dict)
     end
 
@@ -67,8 +57,7 @@ function alias_elimination(sys)
 
     @set! sys.eqs = eqs
     @set! sys.states = newstates
-    @set! sys.reduced_states = [get_reduced_states(sys); reduced_states]
-    @set! sys.observed = [get_observed(sys); [lhs ~ rhs for (lhs, rhs) in pairs(subs)]]
+    @set! sys.observed = [observed(sys); [lhs ~ rhs for (lhs, rhs) in pairs(subs)]]
     @set! sys.structure = nothing
     return sys
 end
@@ -89,7 +78,6 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_equations, eadj, ca
     solvable_variables = findall(is_linear_variables)
 
     linear_equations = findall(is_linear_equations)
-
 
     rank1 = bareiss!(
         (eadj, cadj),
@@ -150,7 +138,7 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_equations, eadj, ca
     end
 
     for ei in rank2+1:length(linear_equations)
-        eadj[ei] = old_cadj[ei]
+        cadj[ei] = old_cadj[ei]
     end
 
     for (ei, e) in enumerate(linear_equations)

@@ -3,7 +3,8 @@ module SystemStructures
 using DataStructures
 using SymbolicUtils: istree, operation, arguments, Symbolic
 using ..ModelingToolkit
-import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten, value
+import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
+    value, InvalidSystemException, isdifferential, _iszero, isparameter
 using ..BipartiteGraphs
 using UnPack
 using Setfield
@@ -36,145 +37,181 @@ for v in 𝑣vertices(graph); active_𝑣vertices[v] || continue
 end
 =#
 
-export SystemStructure, initialize_system_structure, find_linear_equations
-export diffvars_range, dervars_range, algvars_range
+export SystemStructure, SystemPartition
+export initialize_system_structure, find_linear_equations
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq
-export DIFFERENTIAL_VARIABLE, ALGEBRAIC_VARIABLE, DERIVATIVE_VARIABLE
-export DIFFERENTIAL_EQUATION, ALGEBRAIC_EQUATION
-export vartype, eqtype
+export dervars_range, diffvars_range, algvars_range
 
-struct SystemStructure
-    dxvar_offset::Int
-    fullvars::Vector # [diffvars; dervars; algvars]
+@enum VariableType::Int8 DIFFERENTIAL_VARIABLE ALGEBRAIC_VARIABLE DERIVATIVE_VARIABLE
+
+Base.@kwdef struct SystemPartition
+    e_solved::Vector{Int}
+    v_solved::Vector{Int}
+    e_residual::Vector{Int}
+    v_residual::Vector{Int}
+end
+
+function Base.:(==)(s1::SystemPartition, s2::SystemPartition)
+    tup1 = (s1.e_solved, s1.v_solved, s1.e_residual, s1.v_residual)
+    tup2 = (s2.e_solved, s2.v_solved, s2.e_residual, s2.v_residual)
+    tup1 == tup2
+end
+
+Base.@kwdef struct SystemStructure
+    fullvars::Vector
+    vartype::Vector{VariableType}
     varassoc::Vector{Int}
+    inv_varassoc::Vector{Int}
+    varmask::BitVector # `true` if the variable has the highest order derivative
     algeqs::BitVector
-    graph::BipartiteGraph{Int,Nothing}
-    solvable_graph::BipartiteGraph{Int,Nothing}
+    graph::BipartiteGraph{Int,Vector{Vector{Int}},Int,Nothing}
+    solvable_graph::BipartiteGraph{Int,Vector{Vector{Int}},Int,Nothing}
     assign::Vector{Int}
     inv_assign::Vector{Int}
     scc::Vector{Vector{Int}}
-    partitions::Vector{NTuple{4, Vector{Int}}}
+    partitions::Vector{SystemPartition}
 end
 
-diffvars_range(s::SystemStructure) = 1:s.dxvar_offset
-# TODO: maybe dervars should be in the end.
-dervars_range(s::SystemStructure) = s.dxvar_offset+1:2s.dxvar_offset
-algvars_range(s::SystemStructure) = 2s.dxvar_offset+1:length(s.fullvars)
+isdervar(s::SystemStructure, var::Integer) = s.vartype[var] === DERIVATIVE_VARIABLE
+isdiffvar(s::SystemStructure, var::Integer) = s.vartype[var] === DIFFERENTIAL_VARIABLE
+isalgvar(s::SystemStructure, var::Integer) = s.vartype[var] === ALGEBRAIC_VARIABLE
 
-isdiffvar(s::SystemStructure, var::Integer) = var in diffvars_range(s)
-isdervar(s::SystemStructure, var::Integer) = var in dervars_range(s)
-isalgvar(s::SystemStructure, var::Integer) = var in algvars_range(s)
-
-@enum VariableType DIFFERENTIAL_VARIABLE ALGEBRAIC_VARIABLE DERIVATIVE_VARIABLE
-
-function vartype(s::SystemStructure, var::Integer)::VariableType
-    isdiffvar(s, var) ? DIFFERENTIAL_VARIABLE :
-    isdervar(s, var)  ? DERIVATIVE_VARIABLE :
-    isalgvar(s, var)  ? ALGEBRAIC_VARIABLE : error("Variable $var out of bounds")
-end
-
-@enum EquationType DIFFERENTIAL_EQUATION ALGEBRAIC_EQUATION
+dervars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isdervar, s), eachindex(s.vartype))
+diffvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isdiffvar, s), eachindex(s.vartype))
+algvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isalgvar, s), eachindex(s.vartype))
 
 isalgeq(s::SystemStructure, eq::Integer) = s.algeqs[eq]
 isdiffeq(s::SystemStructure, eq::Integer) = !isalgeq(s, eq)
-eqtype(s::SystemStructure, eq::Integer)::EquationType = isalgeq(s, eq) ? ALGEBRAIC_EQUATION : DIFFERENTIAL_EQUATION
 
 function initialize_system_structure(sys)
-    sys, dxvar_offset, fullvars, varassoc, algeqs, graph = init_graph(flatten(sys))
+    sys = flatten(sys)
 
-    solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
-
-    @set sys.structure = SystemStructure(
-                                         dxvar_offset,
-                                         fullvars,
-                                         varassoc,
-                                         algeqs,
-                                         graph,
-                                         solvable_graph,
-                                         Int[],
-                                         Int[],
-                                         Vector{Int}[],
-                                         NTuple{4, Vector{Int}}[]
-                                        )
-end
-
-function Base.show(io::IO, s::SystemStructure)
-    @unpack fullvars, dxvar_offset, solvable_graph, graph = s
-    algvar_offset = 2dxvar_offset
-    print(io, "xvars: ")
-    print(io, fullvars[1:dxvar_offset])
-    print(io, "\ndxvars: ")
-    print(io, fullvars[dxvar_offset+1:algvar_offset])
-    print(io, "\nalgvars: ")
-    print(io, fullvars[algvar_offset+1:end], '\n')
-
-    S = incidence_matrix(graph, Num(Sym{Real}(:×)))
-    print(io, "Incidence matrix:")
-    show(io, S)
-end
-
-function init_graph(sys)
     iv = independent_variable(sys)
-    eqs = equations(sys)
+    eqs = copy(equations(sys))
     neqs = length(eqs)
     algeqs = trues(neqs)
-    varsadj = Vector{Any}(undef, neqs)
-    dervars = OrderedSet()
-    diffvars = OrderedSet()
-
-    for (i, eq) in enumerate(eqs)
-        vars = OrderedSet()
-        vars!(vars, eq)
-        isalgeq = true
-        for var in vars
-            if istree(var) && operation(var) isa Differential
-                isalgeq = false
-                diffvar = arguments(var)[1]
-                @assert !(diffvar isa Differential) "The equation [ $eq ] is not first order"
-                push!(dervars, var)
-                push!(diffvars, diffvar)
+    dervaridxs = OrderedSet{Int}()
+    var2idx = Dict{Any,Int}()
+    symbolic_incidence = []
+    fullvars = []
+    var_counter = Ref(0)
+    addvar! = let fullvars=fullvars, var_counter=var_counter
+        var -> begin
+            get!(var2idx, var) do
+                push!(fullvars, var)
+                var_counter[] += 1
             end
         end
-        algeqs[i] = isalgeq
-        varsadj[i] = vars
     end
 
-    algvars  = setdiff(states(sys), diffvars)
-    fullvars = [collect(diffvars); collect(dervars); algvars]
+    vars = OrderedSet()
+    for (i, eq′) in enumerate(eqs)
+        if _iszero(eq′.lhs)
+            eq = eq′
+        else
+            eq = 0 ~ eq′.rhs - eq′.lhs
+        end
+        vars!(vars, eq.rhs)
+        isalgeq = true
+        statevars = []
+        for var in vars
+            isequal(var, iv) && continue
+            if isparameter(var) || (istree(var) && isparameter(operation(var)))
+                continue
+            end
+            varidx = addvar!(var)
+            push!(statevars, var)
 
-    dxvar_offset = length(diffvars)
-    algvar_offset = 2dxvar_offset
+            dvar = var
+            idx = varidx
+            while isdifferential(dvar)
+                if !(idx in dervaridxs)
+                    push!(dervaridxs, idx)
+                end
+                isalgeq = false
+                dvar = arguments(dvar)[1]
+                idx = addvar!(dvar)
+            end
+        end
+        push!(symbolic_incidence, copy(statevars))
+        empty!(statevars)
+        empty!(vars)
+        algeqs[i] = isalgeq
+        if isalgeq
+            eqs[i] = eq
+        end
+    end
+
+    # sort `fullvars` such that the mass matrix is as diagonal as possible.
+    dervaridxs = collect(dervaridxs)
+    sorted_fullvars = OrderedSet(fullvars[dervaridxs])
+    for dervaridx in dervaridxs
+        dervar = fullvars[dervaridx]
+        diffvar = arguments(dervar)[1]
+        if !(diffvar in sorted_fullvars)
+            push!(sorted_fullvars, diffvar)
+        end
+    end
+    for v in fullvars
+        if !(v in sorted_fullvars)
+            push!(sorted_fullvars, v)
+        end
+    end
+    fullvars = collect(sorted_fullvars)
+    var2idx = Dict(fullvars .=> eachindex(fullvars))
+    dervaridxs = 1:length(dervaridxs)
 
     nvars = length(fullvars)
-    idxmap = Dict(fullvars .=> 1:nvars)
-    graph = BipartiteGraph(neqs, nvars)
-
-    vs = Set()
-    for (i, eq) in enumerate(eqs)
-        # TODO: custom vars that handles D(x)
-        # TODO: add checks here
-        lhs = eq.lhs
-        if isdiffeq(eq)
-            v = lhs
-            haskey(idxmap, v) && add_edge!(graph, i, idxmap[v])
-        else
-            vars!(vs, lhs)
-        end
-        vars!(vs, eq.rhs)
-        for v in vs
-            haskey(idxmap, v) && add_edge!(graph, i, idxmap[v])
-        end
-        empty!(vs)
+    diffvars = []
+    vartype = fill(DIFFERENTIAL_VARIABLE, nvars)
+    varassoc = zeros(Int, nvars)
+    inv_varassoc = zeros(Int, nvars)
+    for dervaridx in dervaridxs
+        vartype[dervaridx] = DERIVATIVE_VARIABLE
+        dervar = fullvars[dervaridx]
+        diffvar = arguments(dervar)[1]
+        diffvaridx = var2idx[diffvar]
+        push!(diffvars, diffvar)
+        varassoc[diffvaridx] = dervaridx
+        inv_varassoc[dervaridx] = diffvaridx
     end
 
-    varassoc = Int[(1:dxvar_offset) .+ dxvar_offset; zeros(Int, length(fullvars) - dxvar_offset)] # variable association list
-    sys, dxvar_offset, fullvars, varassoc, algeqs, graph
+    algvars = setdiff(states(sys), diffvars)
+    for algvar in algvars
+        # it could be that a variable appeared in the states, but never appeared
+        # in the equations.
+        algvaridx = get(var2idx, algvar, 0)
+        vartype[algvaridx] = ALGEBRAIC_VARIABLE
+    end
+
+    graph = BipartiteGraph(neqs, nvars, Val(false))
+    for (ie, vars) in enumerate(symbolic_incidence), v in vars
+        jv = var2idx[v]
+        add_edge!(graph, ie, jv)
+    end
+
+    @set! sys.eqs = eqs
+    @set! sys.structure = SystemStructure(
+        fullvars = fullvars,
+        vartype = vartype,
+        varassoc = varassoc,
+        inv_varassoc = inv_varassoc,
+        varmask = iszero.(varassoc),
+        algeqs = algeqs,
+        graph = graph,
+        solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph), Val(false)),
+        assign = Int[],
+        inv_assign = Int[],
+        scc = Vector{Int}[],
+        partitions = SystemPartition[],
+    )
+    return sys
 end
 
 function find_linear_equations(sys)
     s = structure(sys)
     @unpack fullvars, graph = s
-    is_linear_equations = falses(ndsts(graph))
+    is_linear_equations = falses(nsrcs(graph))
     eqs = equations(sys)
     eadj = Vector{Int}[]
     cadj = Vector{Int}[]
@@ -182,35 +219,31 @@ function find_linear_equations(sys)
     for (i, eq) in enumerate(eqs); isdiffeq(eq) && continue
         empty!(coeffs)
         linear_term = 0
-        all_int_algvars = true
+        all_int_vars = true
 
         term = value(eq.rhs - eq.lhs)
         for j in 𝑠neighbors(graph, i)
-            if !isalgvar(s, j)
-                all_int_algvars = false
-                continue
-            end
             var = fullvars[j]
             c = expand_derivatives(Differential(var)(term), false)
             # test if `var` is linear in `eq`.
             if !(c isa Symbolic) && c isa Number
-                if isinteger(c)
+                if c == 1 || c == -1
                     c = convert(Integer, c)
                     linear_term += c * var
                     push!(coeffs, c)
                 else
-                    all_int_algvars = false
+                    all_int_vars = false
                 end
             end
         end
 
-        # Check if there are only algebraic variables and the equation is both
-        # linear and homogeneous, i.e. it is in the form of
+        # Check if all states in the equation is both linear and homogeneous,
+        # i.e. it is in the form of
         #
-        #       ``∑ c_i * a_i = 0``,
+        #       ``∑ c_i * v_i = 0``,
         #
-        # where ``c_i`` ∈ ℤ and ``a_i`` denotes algebraic variables.
-        if all_int_algvars && isequal(linear_term, term)
+        # where ``c_i`` ∈ ℤ and ``v_i`` denotes states.
+        if all_int_vars && isequal(linear_term, term)
             is_linear_equations[i] = true
             push!(eadj, copy(𝑠neighbors(graph, i)))
             push!(cadj, copy(coeffs))
@@ -218,7 +251,15 @@ function find_linear_equations(sys)
             is_linear_equations[i] = false
         end
     end
+
     return is_linear_equations, eadj, cadj
+end
+
+function Base.show(io::IO, s::SystemStructure)
+    @unpack graph = s
+    S = incidence_matrix(graph, Num(Sym{Real}(:×)))
+    print(io, "Incidence matrix:")
+    show(io, S)
 end
 
 end # module
