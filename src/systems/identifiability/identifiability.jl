@@ -4,6 +4,7 @@ using ModelingToolkit
 using Symbolics
 using LinearAlgebra
 
+succeed = true
 @parameters t, theta[1:4]
 @variables x[1:2](t), y
 D = Differential(t)
@@ -23,6 +24,9 @@ outputs = [y~x[1]]
 
 subs=[substitute(expr.lhs, Dict([D(x[i]) => ẋ[i] for i in 1:length(x)]))~expr.rhs for expr in ode]
 
+F = [x.rhs for x in ode]
+G = [x.rhs for x in outputs]
+
 P=[x.lhs-x.rhs for x in subs]
 
 # constructing ∇P
@@ -32,4 +36,6 @@ dPdθ = Symbolics.jacobian(P, θ)
 
 Γinit = Matrix{Int64}(I, n, n)
 Λinit = Matrix{Int64}(0*I, n, ℓ)
+Φinit = Matrix{Int64}(0*I, n)
+
 
