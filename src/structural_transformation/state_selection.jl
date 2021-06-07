@@ -1,4 +1,19 @@
-function prepare_state_selection!(sys)
+Base.@kwdef mutable struct TearingState
+    td::TearingSetup
+    e_solved::Vector{Int} = Int[]
+    v_solved::Vector{Int} = Int[]
+    e_residual::Vector{Int} = Int[]
+    v_residual::Vector{Int} = Int[]
+    der_v_solved::Vector{Int} = Int[]
+    der_e_solved::Vector{Int} = Int[]
+    der_v_tear::Vector{Int} = Int[]
+    vc::Vector{Int} = Int[]
+    ec::Vector{Int} = Int[]
+    vc_candidates::Vector{Vector{Int}} = [Int[] for _ in 1:6]
+    inspected::BitVector = falses(0)
+end
+
+function state_selection!(sys; kwargs...)
     s = get_structure(sys)
     if !(s isa SystemStructure)
         sys = initialize_system_structure(sys)
@@ -44,6 +59,7 @@ function prepare_state_selection!(sys)
     @set! s.inv_assign = inverse_mapping(assign)
     @set! s.assign = assign
     @set! s.scc = scc
+    @set! sys.structure = s
 
     # Otter and Elmqvist (2017) 4.3.1:
     # All variables $v_{j}$ that appear differentiated and their derivatives
@@ -65,7 +81,7 @@ function prepare_state_selection!(sys)
     var_constraint_set = Vector{Vector{Int}}[]
 
     @unpack graph = s
-    unknow_subgraph = BipartiteGraph(nsrcs(graph), ndsts(graph), Val(false))
+    unknown_subgraph = BipartiteGraph(nsrcs(graph), ndsts(graph), Val(false))
     original_vars = trues(ndsts(graph))
 
     for c in scc
@@ -77,7 +93,7 @@ function prepare_state_selection!(sys)
         var_set = Set(var_constraints)
         for (i, eqs) in enumerate(eq_constraints), eq in eqs
             for var in 𝑠neighbors(graph, eq); var in var_set || continue
-                add_edge!(unknow_subgraph, eq, var)
+                add_edge!(unknown_subgraph, eq, var)
             end
 
             if inv_eqassoc[eq] != 0 # differentiated equations
@@ -87,9 +103,21 @@ function prepare_state_selection!(sys)
             end
         end
     end
+    ts = TearingState(td = TearingSetup(unknown_subgraph.fadjlist, length(assign)))
 
+    higher_der(vs, assoc) = map(vs) do
+        dv = assoc[v]
+        dv < 1 && scc_throw()
+        dv
+    end
+    issolveable = let eqs=equations(sys), fullvars=s.fullvars
+        (e, v) -> linear_expansion(eqs[e], fullvars[v])[3] # islinear
+    end
+
+    obs = Equation[]
     for constraints in Iterators.reverse(zip(eq_constraints, var_constraints))
         highest_order = length(first(constraints))
+        needs_tearing = false
         for (order, (eq_constraint, var_constraint)) in enumerate(zip(constraints...))
             if length(eq_constraint) == 1 == length(var_constraints)
                 if order < highest_order
@@ -99,15 +127,74 @@ function prepare_state_selection!(sys)
                     v = var_constraint[1]
                     @assert !s.varmask[v]
                     s.varmask[v] = true
-                else
-
                 end
+                needs_tearing = !solve_equations!(obs, sys, eq_constraint, var_constraint)
+            end
+
+            if needs_tearing
+                length(var_constraint) < length(eq_constraint) || scc_throw()
+                if order == 1
+                    empty!(ts.der_e_solved)
+                    empty!(ts.der_v_solved)
+                    empty!(ts.der_v_tear)
+
+                    ts.ec = eq_constraint
+                    ts.vc = var_constraint
+                else
+                    ts.der_e_solved = higher_der(ts.e_solved, eqassoc)
+                    ts.der_v_solved = higher_der(ts.v_solved, varassoc)
+                    ts.der_v_tear = higher_der(ts.v_tear, varassoc)
+
+                    ts.ec = setdiff(eq_constraint, ts.der_e_solved)
+                    ts.vc = setdiff(var_constraint, ts.der_v_solved)
+                end
+
+                tearing_with_candidates!(ts, issolveable)
+
+                if order < highest_order
+                    for v in ts.v_solved
+                        @assert !s.varmask[v]
+                        s.varmask[v] = true
+                    end
+
+                    if length(eq_constraint) == length(var_constraint)
+                        for v in ts.v_tear
+                            @assert !s.varmask[v]
+                            s.varmask[v] = true
+                        end
+                    end
+                end
+                # TODO: solving linear system of equations
             end
         end
     end
 
+    ode_states = Int[]
+    for (i, m) in enumerate(s.varmask)
+        m || push!(ode_states, i)
+    end
+    @show s.fullvars[ode_states]
+
     @set! sys.structure = s
     return sys
+end
+
+function tearing_with_candidates!(ts, issolveable)
+    @unpack vc_candidates = ts
+    forall(x->empty!(x), vc_candidates)
+
+    vc_candidates[1] = ts.der_v_tear
+
+    for v in setdiff(ts.vc, ts.der_v_tear)
+        # TODO
+        push!(hasmetadata(x, VariableDefaultValue) ? vc_candidates[2] : vc_candidates[4], v)
+    end
+
+    ts.e_solved, ts.v_solved, ts.e_residual, ts.v_tear = tearEquations!(
+        ts.td, issolveable, ts.ec, ts.vc_candidates;
+        eSolvedFixed=ts.der_e_solved,
+        vSolvedFixed=ts.der_v_solved
+    )
 end
 
 @noinline scc_throw() = error("Internal error: " *
@@ -159,3 +246,34 @@ function sorted_constraints(c::Vector{Int}, s::SystemStructure)
     end
     return eq_constraints, var_constraints
 end
+
+function solve_equations!(obs, sys, ieqs, ivars)
+    eqs = equations(sys)
+    s = get_structure(sys)
+    for (ie, iv) in zip(ieqs, ivars)
+        var = s.fullvars[iv]
+        sol = solve_for(eqs[ie], var)
+        sol === nothing && return false
+        push!(obs, var ~ sol)
+    end
+    return true
+end
+
+#=
+using ModelingToolkit
+@parameters t u[1:8](t)
+@variables x[1:8](t)
+D = Differential(t)
+eqs = [
+    0 ~ u[1] + x[1] - x[2]
+    0 ~ u[2] + x[1] + x[2] - x[3] + D(x[6])
+    0 ~ u[3] + x[1] + D(x[3]) - x[4]
+    0 ~ u[4] + 2*(D^2)(x[1]) + (D^2)(x[2]) + (D^2)(x[3]) + D(x[4]) + (D^3)(x[6])
+    0 ~ u[5] + 3*(D^2)(x[1]) + 2*(D^2)(x[2]) + x[5] + 0.1x[8]
+    0 ~ u[6] + 2x[6] + x[7]
+    0 ~ u[7] + 3x[6] + 4x[7]
+    0 ~ u[8] + x[8] - sin(x[8])
+]
+sys = ODESystem(eqs, t)
+sys = initialize_system_structure(sys); StructuralTransformations.state_selection!(sys)
+=#
