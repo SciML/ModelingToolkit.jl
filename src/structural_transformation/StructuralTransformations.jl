@@ -11,10 +11,13 @@ using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
 using SymbolicUtils: similarterm, istree
 
+using Symbolics: solve_for, linear_expansion
+
+using DocStringExtensions
 using ModelingToolkit
 using ModelingToolkit: ODESystem, var_from_nested_derivative, Differential,
                        states, equations, vars, Symbolic, diff2term, value,
-                       operation, arguments, Sym, Term, simplify, solve_for,
+                       operation, arguments, Sym, Term, simplify,
                        isdiffeq, isdifferential,
                        get_structure, defaults, InvalidSystemException
 
@@ -39,6 +42,7 @@ include("utils.jl")
 include("pantelides.jl")
 include("bipartite_tearing/modia_tearing.jl")
 include("tearing.jl")
+include("state_selection.jl")
 include("codegen.jl")
 
 end # module
