@@ -78,8 +78,7 @@ Perform Pantelides algorithm.
 function pantelides!(sys; maxiters = 8000)
     s = structure(sys)
     # D(j) = assoc[j]
-    @unpack graph, fullvars, varassoc, eqassoc, varmask = s
-    iv = independent_variable(sys)
+    @unpack graph, varassoc, eqassoc, varmask = s
     neqs = nsrcs(graph)
     nvars = length(varassoc)
     vcolor = falses(nvars)
@@ -98,13 +97,12 @@ function pantelides!(sys; maxiters = 8000)
     assign = fill(UNASSIGNED, nvars)
     fill!(eqassoc, 0)
     neqs′ = neqs
-    D = Differential(iv)
     for k in 1:neqs′
         eq′ = k
         pathfound = false
         # In practice, `maxiters=8000` should never be reached, otherwise, the
         # index would be on the order of thousands.
-        for iii in 1:maxiters
+        for _ in 1:maxiters
             # run matching on (dx, y) variables
             resize!(vcolor, nvars)
             fill!(vcolor, false)
@@ -132,6 +130,7 @@ function pantelides!(sys; maxiters = 8000)
                 # augmenting path algorithm, as this is the only source that
                 # introduces the highest order variable, and computing it here
                 # makes the update time $n_{updates}$ instead of $n$.
+                varmask[var] = false
                 push!(varmask, true)
                 # `assign` will be updated latter. Although we can push to
                 # `assign` in the latter block, but that would make the program
