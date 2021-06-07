@@ -19,8 +19,19 @@ function state_selection!(sys; kwargs...)
         sys = initialize_system_structure(sys)
         s = structure(sys)
     end
+    check_consistency(s)
     sys, assign, eqassoc = pantelides!(sys; kwargs...)
     s = get_structure(sys)
+    eqs = equations(sys)
+    extra_eqs = Vector{Equation}(undef, length(eqassoc) - length(eqs))
+    #extra_eqs = fill(eqs[end], length(eqassoc) - length(eqs))
+    eqs = [eqs; extra_eqs]
+    iv = independent_variable(sys)
+    for (i, a) in enumerate(eqassoc); a > 0 || continue
+        @show i a
+        eqs[a] = derivative(eqs[i].lhs, iv) ~ derivative(eqs[i].rhs, iv)
+    end
+    @set! sys.eqs = eqs
 
     # TODO: use eqmask
     # When writing updating a graph we often have two choices:
@@ -36,7 +47,7 @@ function state_selection!(sys; kwargs...)
     highest_order_graph = BipartiteGraph(0, length(assign), Val(false))
     eq_reidx = Int[]
     for (i, es) in enumerate(eqassoc); es == 0 || continue
-        vars = graph.fadjlist[i]
+        vars = s.graph.fadjlist[i]
         # N.B.: this is an alias to the original graph
         push!(highest_order_graph.fadjlist, vars)
         highest_order_graph.ne += length(vars)
@@ -50,7 +61,7 @@ function state_selection!(sys; kwargs...)
     for component in find_scc(highest_order_graph, assign)
         push!(scc, eq_reidx[component])
     end
-    for (j, a) in enumerate(assign); a == 0 && continue
+    for (j, a) in enumerate(assign); a == UNASSIGNED && continue
         assign[j] = eq_reidx[a]
     end
 
@@ -60,6 +71,7 @@ function state_selection!(sys; kwargs...)
     @set! s.assign = assign
     @set! s.scc = scc
     @set! sys.structure = s
+    @show scc
 
     # Otter and Elmqvist (2017) 4.3.1:
     # All variables $v_{j}$ that appear differentiated and their derivatives
@@ -96,7 +108,7 @@ function state_selection!(sys; kwargs...)
                 add_edge!(unknown_subgraph, eq, var)
             end
 
-            if inv_eqassoc[eq] != 0 # differentiated equations
+            if s.inv_eqassoc[eq] != 0 # differentiated equations
                 for var in 𝑠neighbors(graph, eq)
                     original_vars[var] = false
                 end
@@ -105,7 +117,7 @@ function state_selection!(sys; kwargs...)
     end
     ts = TearingState(td = TearingSetup(unknown_subgraph.fadjlist, length(assign)))
 
-    higher_der(vs, assoc) = map(vs) do
+    higher_der(vs, assoc) = map(vs) do v
         dv = assoc[v]
         dv < 1 && scc_throw()
         dv
@@ -115,11 +127,11 @@ function state_selection!(sys; kwargs...)
     end
 
     obs = Equation[]
-    for constraints in Iterators.reverse(zip(eq_constraints, var_constraints))
+    for constraints in Iterators.reverse(zip(eq_constraint_set, var_constraint_set))
         highest_order = length(first(constraints))
         needs_tearing = false
         for (order, (eq_constraint, var_constraint)) in enumerate(zip(constraints...))
-            if length(eq_constraint) == 1 == length(var_constraints)
+            if length(eq_constraint) == 1 == length(var_constraint)
                 if order < highest_order
                     # There is only one equation and one unknown in this local
                     # contraint set, while the equation is lower order. This
@@ -132,7 +144,8 @@ function state_selection!(sys; kwargs...)
             end
 
             if needs_tearing
-                length(var_constraint) < length(eq_constraint) || scc_throw()
+                @show var_constraint eq_constraint
+                length(var_constraint) >= length(eq_constraint) || scc_throw()
                 if order == 1
                     empty!(ts.der_e_solved)
                     empty!(ts.der_v_solved)
@@ -142,14 +155,14 @@ function state_selection!(sys; kwargs...)
                     ts.vc = var_constraint
                 else
                     ts.der_e_solved = higher_der(ts.e_solved, eqassoc)
-                    ts.der_v_solved = higher_der(ts.v_solved, varassoc)
-                    ts.der_v_tear = higher_der(ts.v_tear, varassoc)
+                    ts.der_v_solved = higher_der(ts.v_solved, s.varassoc)
+                    ts.der_v_tear = higher_der(ts.v_residual, s.varassoc)
 
                     ts.ec = setdiff(eq_constraint, ts.der_e_solved)
                     ts.vc = setdiff(var_constraint, ts.der_v_solved)
                 end
 
-                tearing_with_candidates!(ts, issolveable)
+                tearing_with_candidates!(ts, issolveable, s.fullvars)
 
                 if order < highest_order
                     for v in ts.v_solved
@@ -158,8 +171,8 @@ function state_selection!(sys; kwargs...)
                     end
 
                     if length(eq_constraint) == length(var_constraint)
-                        for v in ts.v_tear
-                            @assert !s.varmask[v]
+                        for v in ts.v_residual
+                            #@assert !s.varmask[v]
                             s.varmask[v] = true
                         end
                     end
@@ -179,18 +192,18 @@ function state_selection!(sys; kwargs...)
     return sys
 end
 
-function tearing_with_candidates!(ts, issolveable)
+function tearing_with_candidates!(ts, issolveable, fullvars)
     @unpack vc_candidates = ts
-    forall(x->empty!(x), vc_candidates)
+    foreach(x->empty!(x), vc_candidates)
 
     vc_candidates[1] = ts.der_v_tear
 
     for v in setdiff(ts.vc, ts.der_v_tear)
         # TODO
-        push!(hasmetadata(x, VariableDefaultValue) ? vc_candidates[2] : vc_candidates[4], v)
+        push!(hasmetadata(fullvars[v], VariableDefaultValue) ? vc_candidates[2] : vc_candidates[4], v)
     end
 
-    ts.e_solved, ts.v_solved, ts.e_residual, ts.v_tear = tearEquations!(
+    ts.e_solved, ts.v_solved, ts.e_residual, ts.v_residual = tearEquations!(
         ts.td, issolveable, ts.ec, ts.vc_candidates;
         eSolvedFixed=ts.der_e_solved,
         vSolvedFixed=ts.der_v_solved
@@ -223,6 +236,7 @@ function sorted_constraints(c::Vector{Int}, s::SystemStructure)
     @unpack inv_varassoc, inv_eqassoc, inv_assign = s
     # The set of variables that this compoent solves for
     unknowns = [inv_assign[eq] for eq in c]
+    #@show c s.fullvars[unknowns]
     eq_constraints = [c]
     var_constraints = [unknowns]
     while true
@@ -238,10 +252,11 @@ function sorted_constraints(c::Vector{Int}, s::SystemStructure)
         vars = Int[]
         for var in var_constraints[end]
             lower_var = inv_varassoc[var]
-            lower_var && push!(vars, lower_var)
+            lower_var > 0 && push!(vars, lower_var)
         end
         push!(var_constraints, vars)
 
+        @show vars lower_eqs
         length(vars) < length(lower_eqs) && scc_throw()
     end
     return eq_constraints, var_constraints
@@ -252,7 +267,7 @@ function solve_equations!(obs, sys, ieqs, ivars)
     s = get_structure(sys)
     for (ie, iv) in zip(ieqs, ivars)
         var = s.fullvars[iv]
-        sol = solve_for(eqs[ie], var)
+        sol = solve_for(eqs[ie], var; check=false)
         sol === nothing && return false
         push!(obs, var ~ sol)
     end
@@ -275,5 +290,27 @@ eqs = [
     0 ~ u[8] + x[8] - sin(x[8])
 ]
 sys = ODESystem(eqs, t)
+sys = initialize_system_structure(sys); StructuralTransformations.state_selection!(sys)
+
+using ModelingToolkit
+@parameters t u[1:8](t)
+@variables x[1:8](t) xx1(t) xx2(t) xx3(t) xx6(t) xxx6(t)
+D = Differential(t)
+eqs = [
+    D(x[1]) ~ xx1
+    D(x[2]) ~ xx2
+    D(x[3]) ~ xx3
+    D(x[6]) ~ xx6
+    D(xx6) ~ xxx6
+    0 ~ u[1] + x[1] - x[2]
+    0 ~ u[2] + x[1] + x[2] - x[3] + xx6
+    0 ~ u[3] + x[1] + xx3 - x[4]
+    0 ~ u[4] + 2*D(xx1) + D(xx2) + D(xx3) + D(x[4]) + D(xxx6)
+    0 ~ u[5] + 3*D(xx1) + 2*D(xx2) + x[5] + 0.1x[8]
+    0 ~ u[6] + 2x[6] + x[7]
+    0 ~ u[7] + 3x[6] + 4x[7]
+    0 ~ u[8] + x[8] - sin(x[8])
+]
+sys = ODESystem(eqs, t)#, [x..., xx1, xx2, xx3, xx6, xxx6], u)
 sys = initialize_system_structure(sys); StructuralTransformations.state_selection!(sys)
 =#

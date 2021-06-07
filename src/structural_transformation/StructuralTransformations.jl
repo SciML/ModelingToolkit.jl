@@ -11,7 +11,7 @@ using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
 using SymbolicUtils: similarterm, istree
 
-using Symbolics: solve_for, linear_expansion
+using Symbolics: solve_for, linear_expansion, VariableDefaultValue, derivative
 
 using DocStringExtensions
 using ModelingToolkit
