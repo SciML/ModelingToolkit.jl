@@ -27,6 +27,11 @@ struct NonlinearSystem <: AbstractSystem
     ps::Vector
     observed::Vector{Equation}
     """
+    Jacobian matrix. Note: this field will not be defined until
+    [`calculate_jacobian`](@ref) is called on the system.
+    """
+    jac::RefValue{Any}
+    """
     Name: the name of the system
     """
     name::Symbol
@@ -61,9 +66,10 @@ function NonlinearSystem(eqs, states, ps;
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :NonlinearSystem, force=true)
     end
+    jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
-    NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, defaults, nothing, connection_type)
+    NonlinearSystem(eqs, value.(states), value.(ps), observed, jac, name, systems, defaults, nothing, connection_type)
 end
 
 function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
@@ -74,6 +80,7 @@ function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
     else
         jac = jacobian(rhs, vals, simplify=simplify)
     end
+    get_jac(sys)[] = jac
     return jac
 end
 
