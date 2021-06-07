@@ -23,15 +23,18 @@ function state_selection!(sys; kwargs...)
     sys, assign, eqassoc = pantelides!(sys; kwargs...)
     s = get_structure(sys)
     eqs = equations(sys)
-    extra_eqs = Vector{Equation}(undef, length(eqassoc) - length(eqs))
-    #extra_eqs = fill(eqs[end], length(eqassoc) - length(eqs))
-    eqs = [eqs; extra_eqs]
+    eqs = [eqs; Vector{Equation}(undef, length(eqassoc) - length(eqs))]
     iv = independent_variable(sys)
     for (i, a) in enumerate(eqassoc); a > 0 || continue
-        @show i a
         eqs[a] = derivative(eqs[i].lhs, iv) ~ derivative(eqs[i].rhs, iv)
     end
     @set! sys.eqs = eqs
+
+    fullvars = [s.fullvars; Vector{Any}(undef, length(s.varassoc) - length(s.fullvars))]
+    for (i, a) in enumerate(s.varassoc); a > 0 || continue
+        fullvars[a] = derivative(fullvars[i], iv)
+    end
+    @set! s.fullvars = fullvars
 
     # TODO: use eqmask
     # When writing updating a graph we often have two choices:
@@ -172,7 +175,7 @@ function state_selection!(sys; kwargs...)
 
                     if length(eq_constraint) == length(var_constraint)
                         for v in ts.v_residual
-                            #@assert !s.varmask[v]
+                            @assert !s.varmask[v]
                             s.varmask[v] = true
                         end
                     end
