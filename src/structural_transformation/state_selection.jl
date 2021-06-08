@@ -98,22 +98,31 @@ function state_selection!(sys; kwargs...)
     unknown_subgraph = BipartiteGraph(nsrcs(graph), ndsts(graph), Val(false))
     original_vars = trues(ndsts(graph))
 
+    # Optimization
+    tmp_var_constaint_set = falses(ndsts(graph))
     for c in scc
         check_component(c, eqassoc) || break # skip lower order equations
         eq_constraints, var_constraints = sorted_constraints(c, s)
         push!(eq_constraint_set, eq_constraints)
         push!(var_constraint_set, var_constraints)
 
-        var_set = Set(var_constraints)
-        for (i, eqs) in enumerate(eq_constraints), eq in eqs
-            for var in 𝑠neighbors(graph, eq); var in var_set || continue
-                add_edge!(unknown_subgraph, eq, var)
+        for (i, eqs) in enumerate(eq_constraints)
+            for v in var_constraints[i]
+                tmp_var_constaint_set[v] = true
             end
-
-            if s.inv_eqassoc[eq] != 0 # differentiated equations
-                for var in 𝑠neighbors(graph, eq)
-                    original_vars[var] = false
+            for eq in eqs
+                for var in 𝑠neighbors(graph, eq); tmp_var_constaint_set[var] || continue
+                    add_edge!(unknown_subgraph, eq, var)
                 end
+
+                if s.inv_eqassoc[eq] != 0 # differentiated equations
+                    for var in 𝑠neighbors(graph, eq)
+                        original_vars[var] = false
+                    end
+                end
+            end
+            for v in var_constraints[i]
+                tmp_var_constaint_set[v] = false
             end
         end
     end
@@ -155,6 +164,7 @@ function state_selection!(sys; kwargs...)
                 end
                 needs_tearing = !solve_equations!(obs, sys, eq_constraint, var_constraint)
                 if !needs_tearing
+                    @warn 2
                     append!(solved_eq_idxs, eq_constraint)
                     append!(solved_var_idxs, var_constraint)
                 end
@@ -178,7 +188,8 @@ function state_selection!(sys; kwargs...)
                     ts.vc = setdiff(var_constraint, ts.der_v_solved)
                 end
 
-                tearing_with_candidates!(ts, issolvable, s.fullvars)
+                @show tearing_with_candidates!(ts, issolvable, s.fullvars)
+                @show s.fullvars[ts.v_residual]
 
                 if order < highest_order
                     for v in ts.v_solved
@@ -278,7 +289,8 @@ function tearing_with_candidates!(ts, issolvable, fullvars)
 
     for v in setdiff(ts.vc, ts.der_v_tear)
         # TODO
-        push!(hasmetadata(fullvars[v], VariableDefaultValue) ? vc_candidates[2] : vc_candidates[4], v)
+        #push!(hasmetadata(fullvars[v], VariableDefaultValue) ? vc_candidates[2] : vc_candidates[4], v)
+        push!(vc_candidates[2], v)
     end
 
     ts.e_solved, ts.v_solved, ts.e_residual, ts.v_residual = tearEquations!(
