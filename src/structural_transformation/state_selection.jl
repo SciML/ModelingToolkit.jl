@@ -32,7 +32,7 @@ function state_selection!(sys; kwargs...)
 
     fullvars = [s.fullvars; Vector{Any}(undef, length(s.varassoc) - length(s.fullvars))]
     for (i, a) in enumerate(s.varassoc); a > 0 || continue
-        fullvars[a] = derivative(fullvars[i], iv)
+        fullvars[a] = value(derivative(fullvars[i], iv))
     end
     @set! s.fullvars = fullvars
 
@@ -74,7 +74,6 @@ function state_selection!(sys; kwargs...)
     @set! s.assign = assign
     @set! s.scc = scc
     @set! sys.structure = s
-    @show scc
 
     # Otter and Elmqvist (2017) 4.3.1:
     # All variables $v_{j}$ that appear differentiated and their derivatives
@@ -144,10 +143,13 @@ function state_selection!(sys; kwargs...)
                     s.varmask[v] = true
                 end
                 needs_tearing = !solve_equations!(obs, sys, eq_constraint, var_constraint)
+                if !needs_tearing
+                    append!(solved_eq_idxs, eq_constraint)
+                    append!(solved_var_idxs, var_constraint)
+                end
             end
 
             if needs_tearing
-                @show var_constraint eq_constraint
                 length(var_constraint) >= length(eq_constraint) || scc_throw()
                 if order == 1
                     empty!(ts.der_e_solved)
@@ -165,7 +167,7 @@ function state_selection!(sys; kwargs...)
                     ts.vc = setdiff(var_constraint, ts.der_v_solved)
                 end
 
-                tearing_with_candidates!(ts, issolveable, s.fullvars)
+                tearing_with_candidates!(ts, issolvable, s.fullvars)
 
                 if order < highest_order
                     for v in ts.v_solved
