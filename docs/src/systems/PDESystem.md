@@ -39,17 +39,19 @@ PDESystem
 
 Domains are specifying by saying `indepvar in domain`, where `indepvar` is a
 single or a collection of independent variables, and `domain` is the chosen
-domain type. Thus forms for the `indepvar` can be like:
+domain type. A 2-tuple can be used to indicate an `Interval`. 
+Thus forms for the `indepvar` can be like:
 
 ```julia
-t ∈ IntervalDomain(0.0,1.0)
+t ∈ (0.0,1.0)
 (t,x) ∈ UnitDisk()
 [v,w,x,y,z] ∈ VectorUnitBall(5)
 ```
 
 #### Domain Types (WIP)
 
-- `IntervalDomain(a,b)`: Defines the domain of an interval from `a` to `b`
+- `Interval(a,b)`: Defines the domain of an interval from `a` to `b` (requires explicit
+import from `DomainSets.jl`, but a 2-tuple can be used instead)
 
 ## `discretize` and `symbolic_discretize`
 
