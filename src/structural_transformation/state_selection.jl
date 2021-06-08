@@ -182,22 +182,84 @@ function state_selection!(sys; kwargs...)
                         end
                     end
                 end
+
                 # TODO: solving linear system of equations
+                if isempty(ts.e_residual)
+                    is_solved = solve_equations!(obs, sys, ts.e_solved, ts.v_solved)
+                    @assert is_solved
+                    append!(solved_eq_idxs, ts.e_solved)
+                    append!(solved_var_idxs, ts.v_solved)
+                elseif length(eq_constraint) == length(var_constraint)
+                    islinear, isconstant = islinearsystem(s, ts, islineareq, eq_constraint, var_constraint)
+                    @show islinear, isconstant
+                    if islinear# && isconstant #TODO
+                        append!(obs, s.fullvars[var_constraint] .~ solve_for(eqs[eq_constraint], s.fullvars[var_constraint], check=false))
+                        append!(solved_eq_idxs, eq_constraint)
+                        append!(solved_var_idxs, var_constraint)
+                    end
+                end
             end
         end
     end
+
+    @assert length(solved_eq_idxs) == length(obs) == length(solved_var_idxs)
+    sort!(solved_eq_idxs)
+    sort!(solved_var_idxs)
 
     ode_states = Int[]
     for (i, m) in enumerate(s.varmask)
         m || push!(ode_states, i)
     end
     @show s.fullvars[ode_states]
+    @show length(ode_states)
+    @show length(obs) length(eqs)
 
+    deleteat!(eqs, solved_eq_idxs)
+    obsdict = Dict(eq.lhs => eq.rhs for eq in obs)
+    @set! sys.eqs = map(Base.Fix2(ModelingToolkit.fixpoint_sub, obsdict), eqs)
+    deleteat!(s.fullvars, solved_var_idxs)
+    @show s.fullvars
+    @set! sys.states = intersect(states(sys), s.fullvars)
+    @set! sys.observed = [observed(sys); obs]
     @set! sys.structure = s
     return sys
 end
 
-function tearing_with_candidates!(ts, issolveable, fullvars)
+function is_original_linear(s, islineareq, e, v)
+    maxiter = 8000
+    while s.inv_eqassoc[e] > 0
+        e = s.inv_eqassoc[e]
+        v = s.inv_varassoc[v]
+        maxiter -= 1
+        maxiter <= 0 && scc_throw()
+    end
+    return islineareq(e, v)
+end
+
+function islinearsystem(s, ts, islineareq, eqs, vars)
+    @unpack inspected = ts
+    resize!(inspected, length(s.fullvars))
+    for v in vars
+        inspected[v] = true
+    end
+
+    islinear = true
+    isconstant = true
+    for e in eqs, v in 𝑠neighbors(s.graph, e); inspected[v] || continue
+        islinear′, isconstant′ = is_original_linear(s, islineareq, e, v)
+        islinear &= islinear′
+        islinear || @goto EXIT
+        isconstant &= isconstant′
+    end
+
+    @label EXIT
+    for v in vars
+        inspected[v] = false
+    end
+    return islinear, isconstant
+end
+
+function tearing_with_candidates!(ts, issolvable, fullvars)
     @unpack vc_candidates = ts
     foreach(x->empty!(x), vc_candidates)
 
@@ -209,7 +271,7 @@ function tearing_with_candidates!(ts, issolveable, fullvars)
     end
 
     ts.e_solved, ts.v_solved, ts.e_residual, ts.v_residual = tearEquations!(
-        ts.td, issolveable, ts.ec, ts.vc_candidates;
+        ts.td, issolvable, ts.ec, ts.vc_candidates;
         eSolvedFixed=ts.der_e_solved,
         vSolvedFixed=ts.der_v_solved
     )
@@ -241,7 +303,6 @@ function sorted_constraints(c::Vector{Int}, s::SystemStructure)
     @unpack inv_varassoc, inv_eqassoc, inv_assign = s
     # The set of variables that this compoent solves for
     unknowns = [inv_assign[eq] for eq in c]
-    #@show c s.fullvars[unknowns]
     eq_constraints = [c]
     var_constraints = [unknowns]
     while true
@@ -261,7 +322,6 @@ function sorted_constraints(c::Vector{Int}, s::SystemStructure)
         end
         push!(var_constraints, vars)
 
-        @show vars lower_eqs
         length(vars) < length(lower_eqs) && scc_throw()
     end
     return eq_constraints, var_constraints
