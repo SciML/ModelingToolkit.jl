@@ -124,15 +124,26 @@ function state_selection!(sys; kwargs...)
         dv < 1 && scc_throw()
         dv
     end
-    issolveable = let eqs=equations(sys), fullvars=s.fullvars
+    issolvable = let eqs=equations(sys), fullvars=s.fullvars
         (e, v) -> linear_expansion(eqs[e], fullvars[v])[3] # islinear
     end
+    islineareq = let eqs=equations(sys), fullvars=s.fullvars
+        (e, v) -> begin
+            a, b, islinear = linear_expansion(eqs[e], fullvars[v])
+            return islinear, !(a isa Symbolic)
+        end
+    end
 
+    solved_eq_idxs = Int[]
+    solved_var_idxs = Int[]
     obs = Equation[]
-    for constraints in Iterators.reverse(zip(eq_constraint_set, var_constraint_set))
+    empty!(s.partitions)
+
+    for constraints in zip(eq_constraint_set, var_constraint_set)
         highest_order = length(first(constraints))
-        needs_tearing = false
-        for (order, (eq_constraint, var_constraint)) in enumerate(zip(constraints...))
+        for (order, (eq_constraint, var_constraint)) in enumerate(Iterators.reverse(zip(constraints...)))
+            needs_tearing = true
+            @info "" eqs[eq_constraint] s.fullvars[var_constraint]
             if length(eq_constraint) == 1 == length(var_constraint)
                 if order < highest_order
                     # There is only one equation and one unknown in this local
