@@ -76,7 +76,12 @@ function NonlinearSystem(eqs, states, ps;
     NonlinearSystem(eqs, value.(states), value.(ps), observed, jac, name, systems, defaults, nothing, connection_type)
 end
 
-function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
+function calculate_jacobian(sys::NonlinearSystem; sparse=false, simplify=false)
+    cache = get_jac(sys)[]
+    if cache isa Tuple && cache[2] == (sparse, simplify)
+        return cache[1]
+    end
+
     rhs = [eq.rhs for eq ∈ equations(sys)]
     vals = [dv for dv in states(sys)]
     if sparse
@@ -84,7 +89,7 @@ function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
     else
         jac = jacobian(rhs, vals, simplify=simplify)
     end
-    get_jac(sys)[] = jac
+    get_jac(sys)[] = jac, (sparse, simplify)
     return jac
 end
 
