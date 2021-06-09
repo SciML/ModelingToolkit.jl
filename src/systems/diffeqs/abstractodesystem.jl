@@ -19,7 +19,10 @@ end
 
 function calculate_jacobian(sys::AbstractODESystem;
                             sparse=false, simplify=false)
-    isempty(get_jac(sys)[]) || return get_jac(sys)[]  # use cached Jacobian, if possible
+    cache = get_jac(sys)[]
+    if cache isa Tuple && cache[2] == (sparse, simplify)
+        return cache[1]
+    end
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
     iv = get_iv(sys)
@@ -31,7 +34,7 @@ function calculate_jacobian(sys::AbstractODESystem;
         jac = jacobian(rhs, dvs, simplify=simplify)
     end
 
-    get_jac(sys)[] = jac  # cache Jacobian
+    get_jac(sys)[] = jac, (sparse, simplify) # cache Jacobian
     return jac
 end
 
