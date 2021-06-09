@@ -124,10 +124,10 @@ np = NonlinearProblem(ns, [0,0,0], [1,2,3], jac=true, sparse=true)
        function makesys(name)
            @parameters a
            @variables x f
-   
+
            NonlinearSystem([0 ~ -a*x + f],[x,f],[a], name=name)
        end
-   
+
        function issue819()
            sys1 = makesys(:sys1)
            sys2 = makesys(:sys1)

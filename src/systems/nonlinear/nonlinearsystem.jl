@@ -175,7 +175,7 @@ function DiffEqBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sy
 
     NonlinearFunction{iip}(f,
                      jac = _jac === nothing ? nothing : _jac,
-                     jac_prototype = sparse ? similar(sys.jac[],Float64) : nothing,
+                     jac_prototype = sparse ? similar(calculate_jacobian(sys, sparse=sparse),Float64) : nothing,
                      syms = Symbol.(states(sys)), observed = observedfun)
 end
 
