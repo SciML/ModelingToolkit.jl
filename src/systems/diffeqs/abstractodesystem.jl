@@ -217,13 +217,22 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         end
     end
 
-    uElType = eltype(u0)
+    jac_prototype = if sparse
+        uElType = u0 === nothing ? Float64 : eltype(u0)
+        if jac
+            similar(calculate_jacobian(sys, sparse=sparse), uElType)
+        else
+            similar(jacobian_sparsity(sys), uElType)
+        end
+    else
+        nothing
+    end
     ODEFunction{iip}(
                      f,
                      jac = _jac === nothing ? nothing : _jac,
                      tgrad = _tgrad === nothing ? nothing : _tgrad,
                      mass_matrix = _M,
-                     jac_prototype = (!isnothing(u0) && sparse) ? (!jac ? similar(jacobian_sparsity(sys),uElType) : SparseArrays.sparse(similar(get_jac(sys)[],uElType))) : nothing,
+                     jac_prototype = jac_prototype,
                      syms = Symbol.(states(sys)),
                      indepsym = Symbol(independent_variable(sys)),
                      observed = observedfun,
