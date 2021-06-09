@@ -63,7 +63,7 @@ struct SDESystem <: AbstractODESystem
     """
     name::Symbol
     """
-    Systems: the internal systems
+    Systems: the internal systems. These are required to have unique names.
     """
     systems::Vector{SDESystem}
     """
@@ -89,7 +89,10 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
-
+    sysnames = nameof.(systems)
+    if length(unique(sysnames)) != length(sysnames)
+        throw(ArgumentError("System names must be unique."))
+    end
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :SDESystem, force=true)
     end

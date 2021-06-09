@@ -153,3 +153,9 @@ dprob = DiscreteProblem(js4, [S => 999], (0,1000.), [β => 100.,γ => .01])
 jprob = JumpProblem(js4, dprob, Direct())
 sol = solve(jprob, SSAStepper());
 
+# issue #819
+@testset "Combined system name collisions" begin
+  sys1 = JumpSystem([maj1,maj2], t, [S], [β,γ],name=:sys1)
+  sys2 = JumpSystem([maj1,maj2], t, [S], [β,γ],name=:sys1)
+  @test_throws ArgumentError JumpSystem([sys1.γ ~ sys2.γ], t,[],[], systems=[sys1, sys2])
+end
