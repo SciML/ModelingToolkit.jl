@@ -60,7 +60,7 @@ struct ControlSystem <: AbstractControlSystem
     ps::Vector
     observed::Vector{Equation}
     """
-    Name: the name of the system
+    Name: the name of the system. These are required to have unique names.
     """
     name::Symbol
     """
@@ -83,6 +83,10 @@ function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls
                        name=gensym(:ControlSystem))
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ControlSystem, force=true)
+    end
+    sysnames = nameof.(systems)
+    if length(unique(sysnames)) != length(sysnames)
+        throw(ArgumentError("System names must be unique."))
     end
     iv′ = value(iv)
     dvs′ = value.(dvs)

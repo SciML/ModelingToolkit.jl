@@ -32,7 +32,7 @@ struct NonlinearSystem <: AbstractSystem
     """
     jac::RefValue{Any}
     """
-    Name: the name of the system
+    Name: the name of the system. These are required to have unique names.
     """
     name::Symbol
     """
@@ -65,6 +65,10 @@ function NonlinearSystem(eqs, states, ps;
                          )
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :NonlinearSystem, force=true)
+    end
+    sysnames = nameof.(systems)
+    if length(unique(sysnames)) != length(sysnames)
+        throw(ArgumentError("System names must be unique."))
     end
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     defaults = todict(defaults)
