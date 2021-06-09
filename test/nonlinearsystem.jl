@@ -117,17 +117,17 @@ eqs = [0 ~ σ*(y-x),
        0 ~ x*y - β*z]
 ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 np = NonlinearProblem(ns, [0,0,0], [1,2,3], jac=true, sparse=true)
-@test ModelingToolkit.get_jac(ns)[] isa SparseMatrixCSC
+@test calculate_jacobian(ns, sparse=true) isa SparseMatrixCSC
 
 # issue #819
 @testset "Combined system name collisions" begin
        function makesys(name)
            @parameters a
            @variables x f
-   
+
            NonlinearSystem([0 ~ -a*x + f],[x,f],[a], name=name)
        end
-   
+
        function issue819()
            sys1 = makesys(:sys1)
            sys2 = makesys(:sys1)
