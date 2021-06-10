@@ -27,7 +27,12 @@ struct NonlinearSystem <: AbstractSystem
     ps::Vector
     observed::Vector{Equation}
     """
-    Name: the name of the system
+    Jacobian matrix. Note: this field will not be defined until
+    [`calculate_jacobian`](@ref) is called on the system.
+    """
+    jac::RefValue{Any}
+    """
+    Name: the name of the system. These are required to have unique names.
     """
     name::Symbol
     """
@@ -61,12 +66,22 @@ function NonlinearSystem(eqs, states, ps;
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :NonlinearSystem, force=true)
     end
+    sysnames = nameof.(systems)
+    if length(unique(sysnames)) != length(sysnames)
+        throw(ArgumentError("System names must be unique."))
+    end
+    jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
-    NonlinearSystem(eqs, value.(states), value.(ps), observed, name, systems, defaults, nothing, connection_type)
+    NonlinearSystem(eqs, value.(states), value.(ps), observed, jac, name, systems, defaults, nothing, connection_type)
 end
 
-function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
+function calculate_jacobian(sys::NonlinearSystem; sparse=false, simplify=false)
+    cache = get_jac(sys)[]
+    if cache isa Tuple && cache[2] == (sparse, simplify)
+        return cache[1]
+    end
+
     rhs = [eq.rhs for eq ∈ equations(sys)]
     vals = [dv for dv in states(sys)]
     if sparse
@@ -74,6 +89,7 @@ function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
     else
         jac = jacobian(rhs, vals, simplify=simplify)
     end
+    get_jac(sys)[] = jac, (sparse, simplify)
     return jac
 end
 
@@ -153,7 +169,7 @@ function DiffEqBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sy
 
     NonlinearFunction{iip}(f,
                      jac = _jac === nothing ? nothing : _jac,
-                     jac_prototype = sparse ? similar(sys.jac[],Float64) : nothing,
+                     jac_prototype = sparse ? similar(calculate_jacobian(sys, sparse=sparse),Float64) : nothing,
                      syms = Symbol.(states(sys)), observed = observedfun)
 end
 

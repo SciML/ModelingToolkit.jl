@@ -26,11 +26,10 @@ end
 
 function connect_heat(ps...)
     eqs = [
-           0 ~ sum(p->p.Q_flow, ps) # KCL
+           0 ~ sum(p->p.Q_flow, ps)
           ]
-    # KVL
     for i in 1:length(ps)-1
-        push!(eqs, ps[i].T ~ ps[i+1].Q_flow)
+        push!(eqs, ps[i].T ~ ps[i+1].T)
     end
 
     return eqs
@@ -160,7 +159,7 @@ end
 eqs = [
        D(E) ~ sum(((i, sys),)->getproperty(sys, Symbol(:resistor, i)).h.Q_flow, enumerate(rc_systems))
       ]
-big_rc = ODESystem(eqs, t, [], [], systems=rc_systems, defaults=Dict(E=>0.0))
+big_rc = ODESystem(eqs, t, [E], [], systems=rc_systems, defaults=Dict(E=>0.0))
 ```
 
 Now let's say we want to expose a bit more parallelism via running tearing.
@@ -185,8 +184,9 @@ equations(big_rc)
  0 ~ rc1₊resistor1₊p₊i(t) + rc1₊source₊p₊i(t)
  rc1₊source₊p₊v(t) ~ rc1₊resistor1₊p₊v(t)
  0 ~ rc1₊capacitor1₊p₊i(t) + rc1₊resistor1₊n₊i(t)
+ rc1₊resistor1₊n₊v(t) ~ rc1₊capacitor1₊p₊v(t)
  ⋮
- rc50₊source₊V ~ rc50₊source₊p₊v(t) - (rc50₊source₊n₊v(t))
+ rc50₊source₊V ~ rc50₊source₊p₊v(t) - rc50₊source₊n₊v(t)
  0 ~ rc50₊source₊n₊i(t) + rc50₊source₊p₊i(t)
  rc50₊ground₊g₊v(t) ~ 0
  Differential(t)(rc50₊heat_capacitor50₊h₊T(t)) ~ rc50₊heat_capacitor50₊h₊Q_flow(t)*(rc50₊heat_capacitor50₊V^-1)*(rc50₊heat_capacitor50₊cp^-1)*(rc50₊heat_capacitor50₊rho^-1)
@@ -199,15 +199,16 @@ redundancies we arrive at 151 equations:
 equations(sys)
 
 151-element Vector{Equation}:
- Differential(t)(E(t)) ~ rc1₊resistor1₊p₊i(t)*((rc1₊capacitor1₊v(t)) - rc1₊source₊V) + rc4₊resistor4₊p₊i(t)*((rc4₊capacitor4₊v(t)) - rc4₊source₊V) - ((rc10₊capacitor10₊p₊i(t))*(rc10₊source₊V - (rc10₊capacitor10₊v(t)))) - ((rc11₊capacitor11₊p₊i(t))*(rc11₊source₊V - (rc11₊capacitor11₊v(t)))) - ((rc12₊capacitor12₊p₊i(t))*(rc12₊source₊V - (rc12₊capacitor12₊v(t)))) - ((rc13₊capacitor13₊p₊i(t))*(rc13₊source₊V - (rc13₊capacitor13₊v(t)))) - ((rc14₊capacitor14₊p₊i(t))*(rc14₊source₊V - (rc14₊capacitor14₊v(t)))) - ((rc15₊capacitor15₊p₊i(t))*(rc15₊source₊V - (rc15₊capacitor15₊v(t)))) - ((rc16₊capacitor16₊p₊i(t))*(rc16₊source₊V - (rc16₊capacitor16₊v(t)))) - ((rc17₊capacitor17₊p₊i(t))*(rc17₊source₊V - (rc17₊capacitor17₊v(t)))) - ((rc18₊capacitor18₊p₊i(t))*(rc18₊source₊V - (rc18₊capacitor18₊v(t)))) - ((rc19₊capacitor19₊p₊i(t))*(rc19₊source₊V - (rc19₊capacitor19₊v(t)))) - ((rc20₊capacitor20₊p₊i(t))*(rc20₊source₊V - (rc20₊capacitor20₊v(t)))) - ((rc21₊capacitor21₊p₊i(t))*(rc21₊source₊V - (rc21₊capacitor21₊v(t)))) - ((rc22₊capacitor22₊p₊i(t))*(rc22₊source₊V - (rc22₊capacitor22₊v(t)))) - ((rc23₊capacitor23₊p₊i(t))*(rc23₊source₊V - (rc23₊capacitor23₊v(t)))) - ((rc24₊capacitor24₊p₊i(t))*(rc24₊source₊V - (rc24₊capacitor24₊v(t)))) - ((rc25₊capacitor25₊p₊i(t))*(rc25₊source₊V - (rc25₊capacitor25₊v(t)))) - ((rc26₊capacitor26₊p₊i(t))*(rc26₊source₊V - (rc26₊capacitor26₊v(t)))) - ((rc27₊capacitor27₊p₊i(t))*(rc27₊source₊V - (rc27₊capacitor27₊v(t)))) - ((rc28₊capacitor28₊p₊i(t))*(rc28₊source₊V - (rc28₊capacitor28₊v(t)))) - ((rc29₊capacitor29₊p₊i(t))*(rc29₊source₊V - (rc29₊capacitor29₊v(t)))) - ((rc2₊capacitor2₊p₊i(t))*(rc2₊source₊V - (rc2₊capacitor2₊v(t)))) - ((rc30₊capacitor30₊p₊i(t))*(rc30₊source₊V - (rc30₊capacitor30₊v(t)))) - ((rc31₊capacitor31₊p₊i(t))*(rc31₊source₊V - (rc31₊capacitor31₊v(t)))) - ((rc32₊capacitor32₊p₊i(t))*(rc32₊source₊V - (rc32₊capacitor32₊v(t)))) - ((rc33₊capacitor33₊p₊i(t))*(rc33₊source₊V - (rc33₊capacitor33₊v(t)))) - ((rc34₊capacitor34₊p₊i(t))*(rc34₊source₊V - (rc34₊capacitor34₊v(t)))) - ((rc35₊capacitor35₊p₊i(t))*(rc35₊source₊V - (rc35₊capacitor35₊v(t)))) - ((rc36₊capacitor36₊p₊i(t))*(rc36₊source₊V - (rc36₊capacitor36₊v(t)))) - ((rc37₊capacitor37₊p₊i(t))*(rc37₊source₊V - (rc37₊capacitor37₊v(t)))) - ((rc38₊capacitor38₊p₊i(t))*(rc38₊source₊V - (rc38₊capacitor38₊v(t)))) - ((rc39₊capacitor39₊p₊i(t))*(rc39₊source₊V - (rc39₊capacitor39₊v(t)))) - ((rc3₊capacitor3₊p₊i(t))*(rc3₊source₊V - (rc3₊capacitor3₊v(t)))) - ((rc40₊capacitor40₊p₊i(t))*(rc40₊source₊V - (rc40₊capacitor40₊v(t)))) - ((rc41₊capacitor41₊p₊i(t))*(rc41₊source₊V - (rc41₊capacitor41₊v(t)))) - ((rc42₊capacitor42₊p₊i(t))*(rc42₊source₊V - (rc42₊capacitor42₊v(t)))) - ((rc43₊capacitor43₊p₊i(t))*(rc43₊source₊V - (rc43₊capacitor43₊v(t)))) - ((rc44₊capacitor44₊p₊i(t))*(rc44₊source₊V - (rc44₊capacitor44₊v(t)))) - ((rc45₊capacitor45₊p₊i(t))*(rc45₊source₊V - (rc45₊capacitor45₊v(t)))) - ((rc46₊capacitor46₊p₊i(t))*(rc46₊source₊V - (rc46₊capacitor46₊v(t)))) - ((rc47₊capacitor47₊p₊i(t))*(rc47₊source₊V - (rc47₊capacitor47₊v(t)))) - ((rc48₊capacitor48₊p₊i(t))*(rc48₊source₊V - (rc48₊capacitor48₊v(t)))) - ((rc49₊capacitor49₊p₊i(t))*(rc49₊source₊V - (rc49₊capacitor49₊v(t)))) - ((rc50₊capacitor50₊p₊i(t))*(rc50₊source₊V - (rc50₊capacitor50₊v(t)))) - ((rc5₊capacitor5₊p₊i(t))*(rc5₊source₊V - (rc5₊capacitor5₊v(t)))) - ((rc6₊capacitor6₊p₊i(t))*(rc6₊source₊V - (rc6₊capacitor6₊v(t)))) - ((rc7₊capacitor7₊p₊i(t))*(rc7₊source₊V - (rc7₊capacitor7₊v(t)))) - ((rc8₊capacitor8₊p₊i(t))*(rc8₊source₊V - (rc8₊capacitor8₊v(t)))) - ((rc9₊capacitor9₊p₊i(t))*(rc9₊source₊V - (rc9₊capacitor9₊v(t))))
- 0 ~ rc1₊resistor1₊R*rc1₊resistor1₊p₊i(t)*(1 + (rc1₊resistor1₊alpha*((-rc1₊resistor1₊TAmbient) - ((rc1₊resistor1₊p₊i(t))*((rc1₊capacitor1₊v(t)) - rc1₊source₊V))))) + rc1₊capacitor1₊v(t) - rc1₊source₊V
+ Differential(t)(E(t)) ~ -rc10₊capacitor10₊p₊i(t)*(rc10₊source₊V - rc10₊capacitor10₊v(t)) - (rc11₊capacitor11₊p₊i(t)*(rc11₊source₊V - rc11₊capacitor11₊v(t))) - (rc12₊capacitor12₊p₊i(t)*(rc12₊source₊V - rc12₊capacitor12₊v(t))) - (rc13₊capacitor13₊p₊i(t)*(rc13₊source₊V - rc13₊capacitor13₊v(t))) - (rc14₊capacitor14₊p₊i(t)*(rc14₊source₊V - rc14₊capacitor14₊v(t))) - (rc15₊capacitor15₊p₊i(t)*(rc15₊source₊V - rc15₊capacitor15₊v(t))) - (rc16₊capacitor16₊p₊i(t)*(rc16₊source₊V - rc16₊capacitor16₊v(t))) - (rc17₊capacitor17₊p₊i(t)*(rc17₊source₊V - rc17₊capacitor17₊v(t))) - (rc18₊capacitor18₊p₊i(t)*(rc18₊source₊V - rc18₊capacitor18₊v(t))) - (rc19₊capacitor19₊p₊i(t)*(rc19₊source₊V - rc19₊capacitor19₊v(t))) - (rc1₊resistor1₊p₊i(t)*(rc1₊source₊V - rc1₊capacitor1₊v(t))) - (rc20₊capacitor20₊p₊i(t)*(rc20₊source₊V - rc20₊capacitor20₊v(t))) - (rc21₊capacitor21₊p₊i(t)*(rc21₊source₊V - rc21₊capacitor21₊v(t))) - (rc22₊capacitor22₊p₊i(t)*(rc22₊source₊V - rc22₊capacitor22₊v(t))) - (rc23₊capacitor23₊p₊i(t)*(rc23₊source₊V - rc23₊capacitor23₊v(t))) - (rc24₊capacitor24₊p₊i(t)*(rc24₊source₊V - rc24₊capacitor24₊v(t))) - (rc25₊capacitor25₊p₊i(t)*(rc25₊source₊V - rc25₊capacitor25₊v(t))) - (rc26₊capacitor26₊p₊i(t)*(rc26₊source₊V - rc26₊capacitor26₊v(t))) - (rc27₊capacitor27₊p₊i(t)*(rc27₊source₊V - rc27₊capacitor27₊v(t))) - (rc28₊capacitor28₊p₊i(t)*(rc28₊source₊V - rc28₊capacitor28₊v(t))) - (rc29₊capacitor29₊p₊i(t)*(rc29₊source₊V - rc29₊capacitor29₊v(t))) - (rc2₊capacitor2₊p₊i(t)*(rc2₊source₊V - rc2₊capacitor2₊v(t))) - (rc30₊capacitor30₊p₊i(t)*(rc30₊source₊V - rc30₊capacitor30₊v(t))) - (rc31₊capacitor31₊p₊i(t)*(rc31₊source₊V - rc31₊capacitor31₊v(t))) - (rc32₊capacitor32₊p₊i(t)*(rc32₊source₊V - rc32₊capacitor32₊v(t))) - (rc33₊capacitor33₊p₊i(t)*(rc33₊source₊V - rc33₊capacitor33₊v(t))) - (rc34₊capacitor34₊p₊i(t)*(rc34₊source₊V - rc34₊capacitor34₊v(t))) - (rc35₊capacitor35₊p₊i(t)*(rc35₊source₊V - rc35₊capacitor35₊v(t))) - (rc36₊capacitor36₊p₊i(t)*(rc36₊source₊V - rc36₊capacitor36₊v(t))) - (rc37₊capacitor37₊p₊i(t)*(rc37₊source₊V - rc37₊capacitor37₊v(t))) - (rc38₊capacitor38₊p₊i(t)*(rc38₊source₊V - rc38₊capacitor38₊v(t))) - (rc39₊capacitor39₊p₊i(t)*(rc39₊source₊V - rc39₊capacitor39₊v(t))) - (rc3₊capacitor3₊p₊i(t)*(rc3₊source₊V - rc3₊capacitor3₊v(t))) - (rc40₊capacitor40₊p₊i(t)*(rc40₊source₊V - rc40₊capacitor40₊v(t))) - (rc41₊capacitor41₊p₊i(t)*(rc41₊source₊V - rc41₊capacitor41₊v(t))) - (rc42₊capacitor42₊p₊i(t)*(rc42₊source₊V - rc42₊capacitor42₊v(t))) - (rc43₊capacitor43₊p₊i(t)*(rc43₊source₊V - rc43₊capacitor43₊v(t))) - (rc44₊capacitor44₊p₊i(t)*(rc44₊source₊V - rc44₊capacitor44₊v(t))) - (rc45₊capacitor45₊p₊i(t)*(rc45₊source₊V - rc45₊capacitor45₊v(t))) - (rc46₊capacitor46₊p₊i(t)*(rc46₊source₊V - rc46₊capacitor46₊v(t))) - (rc47₊capacitor47₊p₊i(t)*(rc47₊source₊V - rc47₊capacitor47₊v(t))) - (rc48₊capacitor48₊p₊i(t)*(rc48₊source₊V - rc48₊capacitor48₊v(t))) - (rc49₊capacitor49₊p₊i(t)*(rc49₊source₊V - rc49₊capacitor49₊v(t))) - (rc4₊resistor4₊p₊i(t)*(rc4₊source₊V - rc4₊capacitor4₊v(t))) - (rc50₊capacitor50₊p₊i(t)*(rc50₊source₊V - rc50₊capacitor50₊v(t))) - (rc5₊capacitor5₊p₊i(t)*(rc5₊source₊V - rc5₊capacitor5₊v(t))) - (rc6₊capacitor6₊p₊i(t)*(rc6₊source₊V - rc6₊capacitor6₊v(t))) - (rc7₊capacitor7₊p₊i(t)*(rc7₊source₊V - rc7₊capacitor7₊v(t))) - (rc8₊capacitor8₊p₊i(t)*(rc8₊source₊V - rc8₊capacitor8₊v(t))) - (rc9₊capacitor9₊p₊i(t)*(rc9₊source₊V - rc9₊capacitor9₊v(t)))
+ 0 ~ rc1₊capacitor1₊v(t) + rc1₊resistor1₊R*rc1₊resistor1₊p₊i(t)*(1 + rc1₊resistor1₊alpha*(rc1₊heat_capacitor1₊h₊T(t) - rc1₊resistor1₊TAmbient)) - rc1₊source₊V
  Differential(t)(rc1₊capacitor1₊v(t)) ~ rc1₊resistor1₊p₊i(t)*(rc1₊capacitor1₊C^-1)
- Differential(t)(rc1₊heat_capacitor1₊h₊T(t)) ~ -rc1₊resistor1₊p₊i(t)*(rc1₊heat_capacitor1₊V^-1)*(rc1₊heat_capacitor1₊cp^-1)*(rc1₊heat_capacitor1₊rho^-1)*((rc1₊capacitor1₊v(t)) - rc1₊source₊V)
+ Differential(t)(rc1₊heat_capacitor1₊h₊T(t)) ~ rc1₊resistor1₊p₊i(t)*(rc1₊heat_capacitor1₊V^-1)*(rc1₊heat_capacitor1₊cp^-1)*(rc1₊heat_capacitor1₊rho^-1)*(rc1₊source₊V - rc1₊capacitor1₊v(t))
+ 0 ~ rc2₊resistor2₊R*rc2₊capacitor2₊p₊i(t)*(1 + rc2₊resistor2₊alpha*(rc2₊heat_capacitor2₊h₊T(t) - rc2₊resistor2₊TAmbient)) + rc2₊capacitor2₊v(t) - rc2₊source₊V
  ⋮
- Differential(t)(rc49₊heat_capacitor49₊h₊T(t)) ~ rc49₊capacitor49₊p₊i(t)*(rc49₊heat_capacitor49₊V^-1)*(rc49₊heat_capacitor49₊cp^-1)*(rc49₊heat_capacitor49₊rho^-1)*(rc49₊source₊V - (rc49₊capacitor49₊v(t)))
- 0 ~ rc50₊resistor50₊R*rc50₊capacitor50₊p₊i(t)*(1 + (rc50₊resistor50₊alpha*(((rc50₊capacitor50₊p₊i(t))*(rc50₊source₊V - (rc50₊capacitor50₊v(t)))) - rc50₊resistor50₊TAmbient))) - (rc50₊source₊V - (rc50₊capacitor50₊v(t)))
+ Differential(t)(rc49₊heat_capacitor49₊h₊T(t)) ~ rc49₊capacitor49₊p₊i(t)*(rc49₊heat_capacitor49₊V^-1)*(rc49₊heat_capacitor49₊cp^-1)*(rc49₊heat_capacitor49₊rho^-1)*(rc49₊source₊V - rc49₊capacitor49₊v(t))
+ 0 ~ rc50₊capacitor50₊v(t) + rc50₊resistor50₊R*rc50₊capacitor50₊p₊i(t)*(1 + rc50₊resistor50₊alpha*(rc50₊heat_capacitor50₊h₊T(t) - rc50₊resistor50₊TAmbient)) - rc50₊source₊V
  Differential(t)(rc50₊capacitor50₊v(t)) ~ rc50₊capacitor50₊p₊i(t)*(rc50₊capacitor50₊C^-1)
- Differential(t)(rc50₊heat_capacitor50₊h₊T(t)) ~ rc50₊capacitor50₊p₊i(t)*(rc50₊heat_capacitor50₊V^-1)*(rc50₊heat_capacitor50₊cp^-1)*(rc50₊heat_capacitor50₊rho^-1)*(rc50₊source₊V - (rc50₊capacitor50₊v(t)))
+ Differential(t)(rc50₊heat_capacitor50₊h₊T(t)) ~ rc50₊capacitor50₊p₊i(t)*(rc50₊heat_capacitor50₊V^-1)*(rc50₊heat_capacitor50₊cp^-1)*(rc50₊heat_capacitor50₊rho^-1)*(rc50₊source₊V - rc50₊capacitor50₊v(t))
 ```
 
 That's not all though. In addition, the tearing process has turned the sets of
