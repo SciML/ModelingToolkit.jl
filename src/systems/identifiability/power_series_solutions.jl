@@ -45,25 +45,25 @@ function PowerSeriesSolution(
         set_precision!(solution[dxdt], 1)
     end
 
-    cur_prec = 1
+    ν_current = 1
 
     # begin power series computation
-    while cur_prec < prec
-        new_prec = min(prec, 2 * cur_prec)
+    while ν_current < ν
+        ν_new = min(ν, 2 * ν_current)
 
         for i in 1:length(states)
-            set_precision!(solution[states[i]], new_prec)
-            set_precision!(solution[derivatives[i]], new_prec)
+            set_precision!(solution[states[i]], ν_new)
+            set_precision!(solution[derivatives[i]], ν_new)
         end
 	
 	# get a point to the right (power series) precision
-        eval_point = [solution[v] for v in gens(poly_ring)]
-        set_precision!.(eval_point, new_prec)
+        point = [solution[v] for v in gens(poly_ring)]
+        set_precision!.(point, ν_new)
 
 	# evaluate jacobians
-        P_at_point = map(p -> evaluate(p, eval_point), P) # ∇P
-	∂P∂x_at_point = map(p -> evaluate(p, eval_point), ∂P∂x) # ∂P∂ẋ_at_point
-        ∂P∂ẋ_at_point = map(p -> evaluate(p, eval_point), ∂P∂ẋ) # ∂P∂x_at_point
+        P_at_point = map(p -> evaluate(p, point), P) # ∇P
+	∂P∂x_at_point = map(p -> evaluate(p, point), ∂P∂x) # ∂P∂ẋ_at_point
+        ∂P∂ẋ_at_point = map(p -> evaluate(p, point), ∂P∂ẋ) # ∂P∂x_at_point
 
 	####
 	#### Stuck Here
@@ -73,12 +73,12 @@ function PowerSeriesSolution(
 	#### Ė = -(∂P∂ẋ⁻¹ * ∂P∂x_at_point) * E - ∂P∂ẋ⁻¹ * ∇P
 	
 	#### get inverse of ∂P∂ẋ_at_point:
-	∂P∂ẋ⁻¹ = PowerSeriesInverseMatrix(∂P∂ẋ_at_point) # TO BE IMPLEMENTED
+	∂P∂ẋ⁻¹ = InversePowerSeriesMatrix(∂P∂ẋ_at_point) # TO BE IMPLEMENTED
 
 	#### Resolve Ė = -(∂P∂ẋ⁻¹ * ∂P∂x_at_point) * E - ∂P∂ẋ⁻¹ * ∇P
 	#### A = -(∂P∂ẋ⁻¹ * ∂P∂x_at_point), B = ∂P∂ẋ⁻¹ * ∇P 
 	A = - ∂P∂ẋ⁻¹ * ∂P∂x_at_point
-	B = - ∂P∂ẋ⁻¹ * eqs_eval
+	B = - ∂P∂ẋ⁻¹ * P_at_point
 	InitialCondition = zero(Const_Space_n_by_1)
 
 	#### This function will use method of variation of constants to resolve the 
@@ -87,7 +87,20 @@ function PowerSeriesSolution(
 
 	#### update solution dict via E (to be implemented)
 
-	#### 	
+	#### return solution dictionary
     end	
     return solution #### this will be a tuple
 end
+
+function InversePowerSeriesMatrix(J)
+	#### returns inverse of J
+end
+
+function LinearSolution(A, B, IC)
+	#### solve linear ODE Ė = A * E + B, with initial condition IC
+	#### solve via variation of constant
+	#### 1. Find Homogeneous Solution
+	#### 2. Find Particular Solution 
+end
+
+
