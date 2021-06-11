@@ -27,7 +27,7 @@ struct OptimizationSystem <: AbstractSystem
     equality_constraints::Vector{Equation}
     inequality_constraints::Vector
     """
-    Name: the name of the system
+    Name: the name of the system.  These are required to have unique names. 
     """
     name::Symbol
     """
@@ -52,6 +52,10 @@ function OptimizationSystem(op, states, ps;
                             systems = OptimizationSystem[])
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :OptimizationSystem, force=true)
+    end
+    sysnames = nameof.(systems)
+    if length(unique(sysnames)) != length(sysnames)
+        throw(ArgumentError("System names must be unique."))
     end
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))

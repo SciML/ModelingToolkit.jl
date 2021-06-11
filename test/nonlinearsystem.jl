@@ -107,3 +107,31 @@ prob = ODEProblem(sys, [subsys.x => 1, subsys.z => 2.0], (0, 1.0), [subsys.σ=>1
 sol = solve(prob, Rodas5())
 @test sol[subsys.x] + sol[subsys.y] - sol[subsys.z] ≈ sol[subsys.u]
 @test_throws ArgumentError convert_system(ODESystem, sys, t)
+
+@parameters t σ ρ β
+@variables x y z
+
+# Define a nonlinear system
+eqs = [0 ~ σ*(y-x),
+       0 ~ x*(ρ-z)-y,
+       0 ~ x*y - β*z]
+ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
+np = NonlinearProblem(ns, [0,0,0], [1,2,3], jac=true, sparse=true)
+@test calculate_jacobian(ns, sparse=true) isa SparseMatrixCSC
+
+# issue #819
+@testset "Combined system name collisions" begin
+       function makesys(name)
+           @parameters a
+           @variables x f
+
+           NonlinearSystem([0 ~ -a*x + f],[x,f],[a], name=name)
+       end
+
+       function issue819()
+           sys1 = makesys(:sys1)
+           sys2 = makesys(:sys1)
+           @test_throws ArgumentError NonlinearSystem([sys2.f ~ sys1.x, sys1.f ~ 0],[],[], systems=[sys1, sys2])
+       end
+       issue819()
+end

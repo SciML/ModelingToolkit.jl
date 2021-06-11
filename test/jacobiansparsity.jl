@@ -1,7 +1,7 @@
 using OrdinaryDiffEq, ModelingToolkit, Test, SparseArrays
 
-N = 32
-const xyd_brusselator = range(0,stop=1,length=N)
+N = 3
+xyd_brusselator = range(0,stop=1,length=N)
 brusselator_f(x, y, t) = (((x-0.3)^2 + (y-0.6)^2) <= 0.1^2) * (t >= 1.1) * 5.
 limit(a, N) = ModelingToolkit.ifelse(a == N+1, 1, ModelingToolkit.ifelse(a == 0, N, a))
 function brusselator_2d_loop(du, u, p, t)
@@ -40,11 +40,12 @@ sys = modelingtoolkitize(prob_ode_brusselator_2d)
 
 # test sparse jacobian pattern only.
 prob = ODEProblem(sys, u0, (0, 11.5), sparse=true, jac=false)
-@test findnz(Symbolics.jacobian_sparsity(map(x->x.rhs, equations(sys)), states(sys)))[1:2] == findnz(prob.f.jac_prototype)[1:2]
+JP = prob.f.jac_prototype
+@test findnz(Symbolics.jacobian_sparsity(map(x->x.rhs, equations(sys)), states(sys)))[1:2] == findnz(JP)[1:2]
 
 # test sparse jacobian
 prob = ODEProblem(sys, u0, (0, 11.5), sparse=true, jac=true)
-@test findnz(calculate_jacobian(sys))[1:2] == findnz(prob.f.jac_prototype)[1:2]
+@test findnz(calculate_jacobian(sys, sparse=true))[1:2] == findnz(prob.f.jac_prototype)[1:2]
 
 # test when not sparse
 prob = ODEProblem(sys, u0, (0, 11.5), sparse=false, jac=true)
@@ -55,10 +56,12 @@ prob = ODEProblem(sys, u0, (0, 11.5), sparse=false, jac=false)
 
 # test when u0 is nothing
 f = DiffEqBase.ODEFunction(sys, u0=nothing, sparse=true, jac=true)
-@test f.jac_prototype == nothing
+@test findnz(f.jac_prototype)[1:2] == findnz(JP)[1:2]
+@test eltype(f.jac_prototype) == Float64
 
 f = DiffEqBase.ODEFunction(sys, u0=nothing, sparse=true, jac=false)
-@test f.jac_prototype == nothing
+@test findnz(f.jac_prototype)[1:2] == findnz(JP)[1:2]
+@test eltype(f.jac_prototype) == Float64
 
 # test when u0 is not Float64
 u0 = similar(init_brusselator_2d(xyd_brusselator), Float32)

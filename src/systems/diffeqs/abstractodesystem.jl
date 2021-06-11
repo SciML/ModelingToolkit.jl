@@ -19,7 +19,10 @@ end
 
 function calculate_jacobian(sys::AbstractODESystem;
                             sparse=false, simplify=false)
-    isempty(get_jac(sys)[]) || return get_jac(sys)[]  # use cached Jacobian, if possible
+    cache = get_jac(sys)[]
+    if cache isa Tuple && cache[2] == (sparse, simplify)
+        return cache[1]
+    end
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
     iv = get_iv(sys)
@@ -31,7 +34,7 @@ function calculate_jacobian(sys::AbstractODESystem;
         jac = jacobian(rhs, dvs, simplify=simplify)
     end
 
-    get_jac(sys)[] = jac  # cache Jacobian
+    get_jac(sys)[] = jac, (sparse, simplify) # cache Jacobian
     return jac
 end
 
@@ -217,13 +220,22 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         end
     end
 
-    uElType = eltype(u0)
+    jac_prototype = if sparse
+        uElType = u0 === nothing ? Float64 : eltype(u0)
+        if jac
+            similar(calculate_jacobian(sys, sparse=sparse), uElType)
+        else
+            similar(jacobian_sparsity(sys), uElType)
+        end
+    else
+        nothing
+    end
     ODEFunction{iip}(
                      f,
                      jac = _jac === nothing ? nothing : _jac,
                      tgrad = _tgrad === nothing ? nothing : _tgrad,
                      mass_matrix = _M,
-                     jac_prototype = (!isnothing(u0) && sparse) ? (!jac ? similar(jacobian_sparsity(sys),uElType) : SparseArrays.sparse(similar(get_jac(sys)[],uElType))) : nothing,
+                     jac_prototype = jac_prototype,
                      syms = Symbol.(states(sys)),
                      indepsym = Symbol(independent_variable(sys)),
                      observed = observedfun,
