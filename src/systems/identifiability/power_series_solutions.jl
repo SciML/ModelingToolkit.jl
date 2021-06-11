@@ -13,10 +13,10 @@ using Symbolics:value
 ####	P(θ̂, û), ∂P∂ẋ_at_point, ∂P∂x_at_point (see code below)
 
 function PowerSeriesSolution(
-        eqs, states, derivatives, initial_conditions, inputs, ν
+        eqs, derivatives, initial_conditions, states, inputs, parameters, ν
     )
 
-    starting_point = Initialize()
+    solution = Initialize()
     n = length(eqs)
     poly_ring = parent(eqs[1]) # equations must be polynomials in a polynomial ring over rationals
     power_series_ring, τ = PowerSeriesRing(base_ring(poly_ring), ν, "τ"; model=:capped_absolute)
@@ -29,6 +29,7 @@ function PowerSeriesSolution(
     P = MS_n_by_1(eqs)
     ∂P∂ẋ = MS_n_by_n([derivative(p, deriv) for p in eqs, deriv in derivatives])
     ∂P∂x = MS_n_by_n([derivative(p, state) for p in eqs, state in states])
+    ∂P∂θ = MS_n_by_n([derivative(p, param) for p in eqs, param in parameters])
 
     ν_current = 1
 
