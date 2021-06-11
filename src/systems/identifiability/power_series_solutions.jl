@@ -62,7 +62,7 @@ function PowerSeriesSolution(
 
 	# evaluate jacobians
         P_at_point = map(p -> evaluate(p, point), P) # P
-	∂P∂x_at_point = map(p -> evaluate(p, point), ∂P∂x) # ∂P∂ẋ_at_point
+	    ∂P∂x_at_point = map(p -> evaluate(p, point), ∂P∂x) # ∂P∂ẋ_at_point
         ∂P∂ẋ_at_point = map(p -> evaluate(p, point), ∂P∂ẋ) # ∂P∂x_at_point
 
 	####
@@ -73,17 +73,17 @@ function PowerSeriesSolution(
 	#### Ė = -(∂P∂ẋ⁻¹ * ∂P∂x_at_point) * E - ∂P∂ẋ⁻¹ * ∇P
 	
 	#### get inverse of ∂P∂ẋ_at_point:
-	∂P∂ẋ⁻¹ = InversePowerSeriesMatrix(∂P∂ẋ_at_point) # TO BE IMPLEMENTED
+	    ∂P∂ẋ⁻¹ = InversePowerSeriesMatrix(∂P∂ẋ_at_point) # TO BE IMPLEMENTED
 
 	#### Resolve Ė = -(∂P∂ẋ⁻¹ * ∂P∂x_at_point) * E - ∂P∂ẋ⁻¹ * ∇P
 	#### A = -(∂P∂ẋ⁻¹ * ∂P∂x_at_point), B = ∂P∂ẋ⁻¹ * ∇P 
-	A = - ∂P∂ẋ⁻¹ * ∂P∂x_at_point
-	B = - ∂P∂ẋ⁻¹ * P_at_point
-	InitialCondition = zero(Const_Space_n_by_1)
+        A = - ∂P∂ẋ⁻¹ * ∂P∂x_at_point
+        B = - ∂P∂ẋ⁻¹ * P_at_point
+        InitialCondition = zero(Const_Space_n_by_1)
 
 	#### This function will use method of variation of constants to resolve the 
 	#### linear ode Ė = A * E + B
-	E = LinearSolution(A, B, InitialCondition) # TO BE IMPLEMENTED
+	    E = LinearSolution(A, B, InitialCondition) # TO BE IMPLEMENTED
 
 	#### update solution dict via E (to be implemented)
 
@@ -99,8 +99,14 @@ end
 function LinearSolution(A, B, IC)
 	#### solve linear ODE Ė = A * E + B, with initial condition IC
 	#### solve via variation of constant
+    
 	#### 1. Find Homogeneous Solution
-	#### 2. Find Particular Solution 
+    E_hom = HomogeneousResolution(A, B)
+	
+    #### 2. Find Particular Solution 
+    E_part = ConstantVariation(E_hom, B)
+
+    return E_part
 end
 
 
