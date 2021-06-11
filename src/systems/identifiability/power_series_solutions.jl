@@ -16,7 +16,7 @@ function PowerSeriesSolution(
         eqs, states, derivatives, initial_conditions, inputs, prec
     )
     n = length(eqs)
-    poly_ring = parent(eqs[1])
+    poly_ring = parent(eqs[1]) # equations must be polynomials in a polynomial ring over rationals
     power_series_ring, τ = PowerSeriesRing(base_ring(poly_ring), prec, "τ"; model=:capped_absolute)
     
     MS_n_by_n = AbstractAlgebra.MatrixSpace(poly_ring, n, n)
