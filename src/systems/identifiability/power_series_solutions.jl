@@ -15,6 +15,8 @@ using Symbolics:value
 function PowerSeriesSolution(
         eqs, states, derivatives, initial_conditions, inputs, ν
     )
+
+    starting_point = Initialize()
     n = length(eqs)
     poly_ring = parent(eqs[1]) # equations must be polynomials in a polynomial ring over rationals
     power_series_ring, τ = PowerSeriesRing(base_ring(poly_ring), ν, "τ"; model=:capped_absolute)
@@ -27,23 +29,6 @@ function PowerSeriesSolution(
     P = MS_n_by_1(eqs)
     ∂P∂ẋ = MS_n_by_n([derivative(p, deriv) for p in eqs, deriv in derivatives])
     ∂P∂x = MS_n_by_n([derivative(p, state) for p in eqs, state in states])
-
-
-    solution = Dict()
-    for (u, coeffs) in inputs
-	# specialize input to the power series
-        solution[u] = sum(coeffs[i] * τ^(i - 1) for i in 1:length(coeffs))
-    end
-
-    for state in states
-        solution[state] = power_series_ring(initial_conditions[state])
-    end
-
-    for dxdt in derivatives
-	# initially derivatives are 0
-        solution[dxdt] = power_series_ring(0)
-        set_precision!(solution[dxdt], 1)
-    end
 
     ν_current = 1
 
