@@ -61,7 +61,7 @@ function PowerSeriesSolution(
         set_precision!.(eval_point, new_prec)
 
 	# evaluate jacobians
-        eqs_eval = map(p -> evaluate(p, eval_point), P) # ∇P
+        P_at_point = map(p -> evaluate(p, eval_point), P) # ∇P
 	∂P∂x_at_point = map(p -> evaluate(p, eval_point), ∂P∂x) # ∂P∂ẋ_at_point
         ∂P∂ẋ_at_point = map(p -> evaluate(p, eval_point), ∂P∂ẋ) # ∂P∂x_at_point
 
