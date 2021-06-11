@@ -50,6 +50,7 @@ function PowerSeriesSolution(
         P_at_point = map(p -> evaluate(p, point), P) # P
 	    ∂P∂x_at_point = map(p -> evaluate(p, point), ∂P∂x) # ∂P∂ẋ_at_point
         ∂P∂ẋ_at_point = map(p -> evaluate(p, point), ∂P∂ẋ) # ∂P∂x_at_point
+        ∂P∂θ_at_point = map(p -> evaluate(p, point), ∂P∂θ) # ∂P∂x_at_point
 
 	####
 	#### Stuck Here
