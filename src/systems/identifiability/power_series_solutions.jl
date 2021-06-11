@@ -77,8 +77,8 @@ function PowerSeriesSolution(
 
 	#### Resolve Ė = -(∂P∂ẋ⁻¹ * ∂P∂x_at_point) * E - ∂P∂ẋ⁻¹ * ∇P
 	#### A = -(∂P∂ẋ⁻¹ * ∂P∂x_at_point), B = ∂P∂ẋ⁻¹ * ∇P 
-	A = -∂P∂ẋ⁻¹ * ∂P∂x_at_point
-	B =  - ∂P∂ẋ⁻¹ * eqs_eval
+	A = - ∂P∂ẋ⁻¹ * ∂P∂x_at_point
+	B = - ∂P∂ẋ⁻¹ * eqs_eval
 	InitialCondition = zero(Const_Space_n_by_1)
 
 	#### This function will use method of variation of constants to resolve the 
