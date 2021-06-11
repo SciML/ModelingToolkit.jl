@@ -13,11 +13,11 @@ using Symbolics:value
 ####	P(θ̂, û), ∂P∂ẋ_at_point, ∂P∂x_at_point (see code below)
 
 function PowerSeriesSolution(
-        eqs, states, derivatives, initial_conditions, inputs, prec
+        eqs, states, derivatives, initial_conditions, inputs, ν
     )
     n = length(eqs)
     poly_ring = parent(eqs[1]) # equations must be polynomials in a polynomial ring over rationals
-    power_series_ring, τ = PowerSeriesRing(base_ring(poly_ring), prec, "τ"; model=:capped_absolute)
+    power_series_ring, τ = PowerSeriesRing(base_ring(poly_ring), ν, "τ"; model=:capped_absolute)
     
     MS_n_by_n = AbstractAlgebra.MatrixSpace(poly_ring, n, n)
     MS_n_by_1 = AbstractAlgebra.MatrixSpace(poly_ring, n, 1)
