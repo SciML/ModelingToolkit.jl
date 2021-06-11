@@ -31,7 +31,8 @@ function PowerSeriesSolution(
 
     solution = Dict()
     for (u, coeffs) in inputs
-        solution[u] = sum([coeffs[i] * τ^(i - 1) for i in 1:length(coeffs)])
+	# specialize input to the power series
+        solution[u] = sum(coeffs[i] * τ^(i - 1) for i in 1:length(coeffs))
     end
 
     for state in states
@@ -39,6 +40,7 @@ function PowerSeriesSolution(
     end
 
     for dxdt in derivatives
+	# initially derivatives are 0
         solution[dxdt] = power_series_ring(0)
         set_precision!(solution[dxdt], 1)
     end
@@ -54,10 +56,10 @@ function PowerSeriesSolution(
             set_precision!(solution[derivatives[i]], new_prec)
         end
 	
-	# get a point to the right precision
+	# get a point to the right (power series) precision
         eval_point = [solution[v] for v in gens(poly_ring)]
-        set_precision!.(eval_point, 2 * cur_prec)
-	
+        set_precision!.(eval_point, new_prec)
+
 	# evaluate jacobians
         eqs_eval = map(p -> evaluate(p, eval_point), P) # ∇P
 	∂P∂x_at_point = map(p -> evaluate(p, eval_point), ∂P∂x) # ∂P∂ẋ_at_point
