@@ -105,7 +105,6 @@ function generate_function(sys::NonlinearSystem, dvs = states(sys), ps = paramet
     #fulldvs = [dvs; obsvars]
 
     rhss = [deq.rhs for deq ∈ equations(sys)]
-    #obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
     #rhss = Let(obss, rhss)
 
     return build_function(rhss, value.(dvs), value.(ps);
