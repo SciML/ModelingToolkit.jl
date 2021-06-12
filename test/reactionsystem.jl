@@ -197,6 +197,10 @@ dprob = DiscreteProblem(js, [S => 1, I => 1], (0.0,10.0))
 jprob = JumpProblem(js, dprob, Direct())
 sol = solve(jprob, SSAStepper())
 
+# test for https://github.com/SciML/ModelingToolkit.jl/issues/1042
+jprob = JumpProblem(rs, dprob, Direct(), save_positions=(false,false))
+
+
 @parameters k1 k2
 @variables R
 rxs = [Reaction(k1*S, [S,I], [I], [2,3], [2]),

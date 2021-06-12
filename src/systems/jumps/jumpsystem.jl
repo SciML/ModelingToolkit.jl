@@ -38,7 +38,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
     """The parameters of the system."""
     ps::Vector
     observed::Vector{Equation}
-    """The name of the system."""
+    """The name of the system. . These are required to have unique names."""
     name::Symbol
     """The internal systems."""
     systems::Vector{JumpSystem}
@@ -61,8 +61,12 @@ function JumpSystem(eqs, iv, states, ps;
                     defaults=_merge(Dict(default_u0), Dict(default_p)),
                     name = gensym(:JumpSystem),
                     connection_type=nothing,
-                    )
-
+                    kwargs...)
+                    
+    sysnames = nameof.(systems)
+    if length(unique(sysnames)) != length(sysnames)
+        throw(ArgumentError("System names must be unique."))
+    end
     ap = ArrayPartition(MassActionJump[], ConstantRateJump[], VariableRateJump[])
     for eq in eqs
         if eq isa MassActionJump

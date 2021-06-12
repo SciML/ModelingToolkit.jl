@@ -1,6 +1,6 @@
 using SafeTestsets, Test
 
-@safetestset "Varialbe scope tests" begin include("variable_scope.jl") end
+@safetestset "Variable scope tests" begin include("variable_scope.jl") end
 @safetestset "Symbolic parameters test" begin include("symbolic_parameters.jl") end
 @safetestset "Parsing Test" begin include("variable_parsing.jl") end
 @safetestset "Simplify Test" begin include("simplify.jl") end
@@ -18,7 +18,6 @@ using SafeTestsets, Test
 @safetestset "ReactionSystem Test" begin include("reactionsystem_components.jl") end
 @safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
 @safetestset "ControlSystem Test" begin include("controlsystem.jl") end
-@safetestset "Domain Test" begin include("domains.jl") end
 @safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
 @safetestset "Constraints Test" begin include("constraints.jl") end
 @safetestset "Reduction Test" begin include("reduction.jl") end
