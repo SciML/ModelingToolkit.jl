@@ -1,5 +1,19 @@
 using AbstractAlgebra, LinearAlgebra, Symbolics, SymbolicUtils
 using Symbolics:value
+using Primes
+
+function Initialize(eqs, states, inputs, outputs, parameters)
+    # Proposition 3.3 in https://doi.org/10.1006/jsco.2002.0532
+    solution = Dict()
+    n = length(states)
+    m = lengh(outputs)
+    r = length(inputs)
+    ℓ = length(parameters)
+    D = 4 * (n + ell)^2 * (n + m) * d
+
+
+
+end
 
 #### this file contains code that computes power series solution to ODE
 #### The local identifiability algorithm will compute power series solution with θ (parameters)
