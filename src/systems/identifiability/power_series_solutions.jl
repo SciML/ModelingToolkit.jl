@@ -1,19 +1,109 @@
-using AbstractAlgebra, LinearAlgebra, Symbolics, SymbolicUtils
-using Symbolics:value
+using LinearAlgebra, Symbolics, SymbolicUtils
+using Symbolics:value, polygamma
 using Primes
+using Nemo
 
-function Initialize(eqs, states, inputs, outputs, parameters)
+function switch_ring(var, ring)
+    ind = findfirst(vv -> vv == var, gens(parent(var)))
+    var_s = symbols(parent(var))[ind]
+    ind = findfirst(vv -> (vv == var_s), symbols(ring))
+    if ind == nothing
+        throw(Base.KeyError("Variable $var_s is not found in $ring"))
+    end
+    return gens(ring)[ind]
+end
+
+function get_numerator(f)
+    if f isa Generic.Frac
+        return numerator(f)
+    elseif f isa fmpq_mpoly
+        return f
+    end
+end
+
+function get_denominator(f)
+    if f isa Generic.Frac
+        return denominator(f)
+    elseif f isa fmpq_mpoly
+        return f
+    end
+end
+
+function get_height_and_coeff(f)
+    if length(f)=0
+        return (0, 1)
+    end
+    max_ = 1
+    for c in coeffs(f)
+        max_coef = max(max_coef, 2 * height_bits(c))
+    end
+    return (total_degree(f), max_coef) 
+end
+
+function numerator_height_coeff(f)
+    return get_height_and_coeff(get_numerator(f))
+end
+
+function denominator_height_coeff(f)
+    return get_height_and_coeff(get_denominator(f)) 
+end
+
+""" function PreprocessODE(ODE, outputs, x, )
+Accepts ODE as array [D(x)~f(x,u,y)]
+"""
+function PreprocessODE(ODE, outputs, x, y, u, θ, t)
+    D = Differential(t) 
+    ModelingToolkit.@parameters ẋ[1:length(x)]
+
+    input_symbols = vcat(ẋ,x,u,y,θ,t)
+    generators = string.(input_symbols)
+    R, gens_ = Nemo.PolynomialRing(Nemo.QQ, generators)
+    
+    state_eqs = [substitute(eqn.lhs, D.(x).=>ẋ) ~ substitute(eqn.rhs, D.(x).=>ẋ) for eqn in ODE];
+    out_eqs = [substitute(value(eqn.lhs - eqn.rhs), input_symbols.=>gens_) for eqn in outputs]
+
+    state_eqn_dict = Dict(substitute(value(eqn.lhs), input_symbols .=> gens_) => substitute(value(eqn.rhs), input_symbols .=> gens_) for eqn in state_eqs)
+    state_eqs = [k - v for (k, v) in state_eqn_dict]
+
+    states = [substitute(value(each),  input_symbols.=>gens_) for each in x]
+    params = [substitute(value(each),  input_symbols.=>gens_) for each in θ]
+    inputs = [substitute(value(each),  input_symbols.=>gens_) for each in u]
+    outputs = [substitute(value(each),  input_symbols.=>gens_) for each in y] 
+
+    return (state_eqs, out_eqs, states, params, inputs, outputs, state_eqn_dict)
+end
+
+function Initialize(x_eqs, y_eqs, states, inputs, outputs, params, proba)
     # Proposition 3.3 in https://doi.org/10.1006/jsco.2002.0532
+    d, h = 1, 1
+    for f in vcat(x_eqs, y_eqs)
+        numer_df, numer_hf = numerator_height_coeff(f)
+        denom_df, denom_hf = denominator_height_coeff(f)
+        d = max(d, max(numer_df, denom_df))
+        h = max(h, max(numer_hf, denom_hf))
+    end
+    p_per_func = 1 - (1 - proba) / (length(states)+length(params)) # TODO: add capability for checking different functions
+    mu = ceil(1 / (1 - sqrt(p_per_func)))
     solution = Dict()
     n = length(states)
-    m = lengh(outputs)
+    m = length(outputs)
     r = length(inputs)
-    ℓ = length(parameters)
-    D = 4 * (n + ell)^2 * (n + m) * d
+    ℓ = length(params)
+    D = 4 * (n + ℓ)^2 * (n + m) * d
+    Dprime = D * (2 * log(n + ℓ + r + 1) + log(mu * D)) + 4 * (n + ℓ)^2 * ((n + m) * h + log(2 * n * D))
+    prime = Primes.nextprime(Int(ceil(2 * mu * Dprime)))
+    F = Nemo.GF(prime)
 
+    # TODO: reduce the x_eqs, y_eqs modulo prime?
 
+    prec = n + ℓ # max precision
 
+    params_vals = Dict(p => F(rand(1:prime)) for p in params)
+    inputs = Dict(u => [F(rand(1:prime)) for i in 1:prec] for u in inputs)
+    initial_conditions = Dict(x => F(rand(1:prime)) for x in states)
+    return params_vals, inputs, initial_conditions
 end
+
 
 #### this file contains code that computes power series solution to ODE
 #### The local identifiability algorithm will compute power series solution with θ (parameters)
@@ -27,14 +117,27 @@ end
 ####	P(θ̂, û), ∂P∂ẋ_at_point, ∂P∂x_at_point (see code below)
 
 function PowerSeriesSolution(
-        eqs, derivatives, initial_conditions, states, inputs, parameters, ν
+        x_eqs, y_eqs, states, inputs, outputs, parameters, proba, prec
     )
 
-    solution = Initialize()
+    params_vals, inputs, initial_conditions = Initialize(x_eqs, y_eqs, states, inputs, outputs, params, proba)
     n = length(eqs)
-    poly_ring = parent(eqs[1]) # equations must be polynomials in a polynomial ring over rationals
-    power_series_ring, τ = PowerSeriesRing(base_ring(poly_ring), ν, "τ"; model=:capped_absolute)
+
+    poly_ring = parent(x_eqs[1]) # equations must be polynomials in a polynomial ring over rationals
+    power_series_ring, τ = PowerSeriesRing(base_ring(poly_ring), prec, "τ"; model=:capped_absolute)
     
+    # we need to switch the ring here since we will specify the parameters
+    derivatives = [gen(poly_ring, i) for i in 1:length(states)]
+    new_ring, new_gens = Nemo.PolynomialRing(base_ring(poly_ring), string.(vcat(derivatives, states, inputs)))
+    
+
+
+
+
+
+
+
+
     MS_n_by_n = AbstractAlgebra.MatrixSpace(poly_ring, n, n)
     MS_n_by_1 = AbstractAlgebra.MatrixSpace(poly_ring, n, 1)
     Const_Space_n_by_1 = AbstractAlgebra.MatrixSpace(base_ring(poly_ring), n, 1)
