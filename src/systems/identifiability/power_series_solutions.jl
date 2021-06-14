@@ -25,7 +25,7 @@ function get_denominator(f)
     if f isa Generic.Frac
         return denominator(f)
     elseif f isa fmpq_mpoly
-        return f
+        return one(parent(f))
     end
 end
 
@@ -129,6 +129,8 @@ function PowerSeriesSolution(
     # we need to switch the ring here since we will specify the parameters
     derivatives = [gen(poly_ring, i) for i in 1:length(states)]
     new_ring, new_gens = Nemo.PolynomialRing(base_ring(poly_ring), string.(vcat(derivatives, states, inputs)))
+
+
     
 
 
