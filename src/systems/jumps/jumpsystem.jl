@@ -61,7 +61,8 @@ function JumpSystem(eqs, iv, states, ps;
                     defaults=_merge(Dict(default_u0), Dict(default_p)),
                     name = gensym(:JumpSystem),
                     connection_type=nothing,
-                    )
+                    kwargs...)
+                    
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
