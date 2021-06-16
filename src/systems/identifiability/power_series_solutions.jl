@@ -94,7 +94,7 @@ function Initialize(x_eqs, y_eqs, states, inputs, outputs, params, proba)
     prime = Primes.nextprime(Int(ceil(2 * mu * Dprime)))
     F = Nemo.GF(prime)
 
-    # TODO: reduce the x_eqs, y_eqs modulo prime?
+    # TODO: reduce the x_eqs, y_eqs modulo prime: change polynomials to F-based
 
     prec = n + ℓ # max precision
 
@@ -129,6 +129,14 @@ function PowerSeriesSolution(
     # we need to switch the ring here since we will specify the parameters
     derivatives = [gen(poly_ring, i) for i in 1:length(states)]
     new_ring, new_gens = Nemo.PolynomialRing(base_ring(poly_ring), string.(vcat(derivatives, states, inputs)))
+
+    # 1. switch ring on each symbol
+    # 2. for each state equation:
+    #   2.1. evaluate numerator and denominator at parameters (substitute parameter values into the system)
+    #   2.2. replace symbols (states, inputs) with the new-ring symbols in state and output equations
+    
+    evaluation = Dict(k => new_ring(v) for (k, v) in param_values) # key value pairs
+    
 
 
     
