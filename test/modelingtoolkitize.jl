@@ -216,7 +216,6 @@ function SIR!(du,u,p,t)
 
     # states
     (S, I, R) = u[1:3]
-    @show typeof(S), typeof(I), typeof(R)
     N = S + I + R
 
     # params
