@@ -254,5 +254,5 @@ problem = ODEProblem(SIR!,u0,tspan,p)
 sys = modelingtoolkitize(problem)
 
 @parameters t
-@test parameters(sys) == @variables(β, η, ω, φ, σ, μ)
-@test states(sys) ==  @variables(S(t),I(t),R(t),C(t))
+@test all(isequal.(parameters(sys),getproperty.(@variables(β, η, ω, φ, σ, μ),:val)))
+@test all(isequal.(Symbol.(states(sys)),Symbol.(@variables(S(t),I(t),R(t),C(t)))))
