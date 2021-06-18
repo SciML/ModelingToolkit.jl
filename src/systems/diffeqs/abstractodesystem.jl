@@ -38,6 +38,28 @@ function calculate_jacobian(sys::AbstractODESystem;
     return jac
 end
 
+function calculate_control_jacobian(sys::AbstractODESystem;
+                                    sparse=false, simplify=false)
+    cache = get_ctrl_jac(sys)[]
+    if cache isa Tuple && cache[2] == (sparse, simplify)
+        return cache[1]
+    end
+
+    rhs = [eq.rhs for eq ∈ equations(sys)]
+
+    iv = get_iv(sys)
+    ctrls = controls(sys)
+
+    if sparse
+        jac = sparsejacobian(rhs, ctrls, simplify=simplify)
+    else
+        jac = jacobian(rhs, ctrls, simplify=simplify)
+    end
+
+    get_ctrl_jac(sys)[] = jac, (sparse, simplify) # cache Jacobian
+    return jac
+end
+
 function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                         simplify=false, kwargs...)
     tgrad = calculate_tgrad(sys,simplify=simplify)
@@ -50,6 +72,25 @@ function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = param
     return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
+"""
+```julia
+generate_linearization(sys::ODESystem, dvs = states(sys), ps = parameters(sys), ctrls = controls(sys), point = defaults(sys), expression = Val{true}; sparse = false, kwargs...)
+```
+
+Generates a function for the linearized state space model of the system. Extra arguments
+control the arguments to the internal [`build_function`](@ref) call.
+"""
+function generate_linearization(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), ctrls = controls(sys);
+                                simplify=false, sparse=false, kwargs...) 
+    ops = map(eq -> eq.rhs, equations(sys)) 
+    
+    jac = calculate_jacobian(sys;simplify=simplify,sparse=sparse)
+
+    A = @views J[1:length(states(sys)), 1:length(states(sys))]
+    B = @views J[1:length(states(sys)), length(states(sys))+1:end]
+
+    return A, B
+end
 @noinline function throw_invalid_derivative(dervar, eq)
     msg = "The derivative variable must be isolated to the left-hand " *
     "side of the equation like `$dervar ~ ...`.\n Got $eq."

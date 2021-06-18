@@ -31,6 +31,7 @@ struct ODESystem <: AbstractODESystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    ctrl::Vector
     observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
@@ -42,6 +43,11 @@ struct ODESystem <: AbstractODESystem
     [`calculate_jacobian`](@ref) is called on the system.
     """
     jac::RefValue{Any}
+    """
+    Control Jacobian matrix. Note: this field will not be defined until
+    [`calculate_control_jacobian`](@ref) is called on the system.
+    """
+    ctrl_jac::RefValue{Any}
     """
     `Wfact` matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
@@ -84,6 +90,7 @@ end
 
 function ODESystem(
                    deqs::AbstractVector{<:Equation}, iv, dvs, ps;
+                   controls  = Num[],
                    observed = Num[],
                    systems = ODESystem[],
                    name=gensym(:ODESystem),
@@ -92,9 +99,13 @@ function ODESystem(
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
                   )
+    
+    @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
+
     iv′ = value(scalarize(iv))
     dvs′ = value.(scalarize(dvs))
     ps′ = value.(scalarize(ps))
+    ctrl′ = value.(scalarize(controls))
 
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ODESystem, force=true)
@@ -110,7 +121,7 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type)
+    ODESystem(deqs, iv′, dvs′, ps′, ctrl′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type)
 end
 
 vars(x::Sym) = Set([x])

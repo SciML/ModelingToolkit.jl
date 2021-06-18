@@ -36,6 +36,18 @@ function calculate_jacobian end
 
 """
 ```julia
+calculate_control_jacobian(sys::AbstractSystem)
+```
+
+Calculate the jacobian matrix of a system with respect to the system's controls.
+
+Returns a matrix of [`Num`](@ref) instances. The result from the first
+call will be cached in the system object.
+"""
+function calculate_control_jacobian end
+
+"""
+```julia
 calculate_factorized_W(sys::AbstractSystem)
 ```
 
@@ -140,10 +152,12 @@ for prop in [
              :iv
              :states
              :ps
+             :ctrl
              :defaults
              :observed
              :tgrad
              :jac
+             :ctrl_jac
              :Wfact
              :Wfact_t
              :systems
@@ -346,11 +360,17 @@ function states(sys::AbstractSystem)
            sts :
            [sts;reduce(vcat,namespace_variables.(systems))])
 end
+
 function parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     systems = get_systems(sys)
     isempty(systems) ? ps : [ps;reduce(vcat,namespace_parameters.(systems))]
 end
+
+function controls(sys::AbstractSystem)
+    get_ctrl(sys)
+end
+
 function observed(sys::AbstractSystem)
     iv = independent_variable(sys)
     obs = get_observed(sys)

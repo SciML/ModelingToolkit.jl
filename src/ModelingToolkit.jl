@@ -161,11 +161,13 @@ export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
-export independent_variable, states, parameters, equations, controls, observed, structure
+export independent_variable, states, parameters, equations, controls, observed, structure, defaults
+export ssmodel, linearize
 export structural_simplify
 export DiscreteSystem, DiscreteProblem
 
 export calculate_jacobian, generate_jacobian, generate_function
+export calculate_control_jacobian
 export calculate_tgrad, generate_tgrad
 export calculate_gradient, generate_gradient
 export calculate_factorized_W, generate_factorized_W
