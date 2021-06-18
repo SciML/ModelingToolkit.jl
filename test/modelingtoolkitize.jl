@@ -205,3 +205,54 @@ x0 = 1.0
 tspan = (0.0,1.0)
 prob = ODEProblem(k,x0,tspan)
 sys = modelingtoolkitize(prob)
+
+
+## https://github.com/SciML/ModelingToolkit.jl/issues/1054
+using LabelledArrays
+using ModelingToolkit
+
+# ODE model: simple SIR model with seasonally forced contact rate
+function SIR!(du,u,p,t)
+
+    # states
+    (S, I, R) = u[1:3]
+    N = S + I + R
+
+    # params
+    β = p.β
+    η = p.η
+    φ = p.φ
+    ω = 1.0/p.ω
+    μ = p.μ
+    σ = p.σ
+
+    # FOI
+    βeff = β * (1.0+η*cos(2.0*π*(t-φ)/365.0))
+    λ = βeff*I/N
+
+    # change in states
+    du[1] = (μ*N - λ*S - μ*S + ω*R)
+    du[2] = (λ*S - σ*I - μ*I)
+    du[3] = (σ*I - μ*R - ω*R)
+    du[4] = (σ*I) # cumulative incidence
+
+end
+
+# Solver settings
+tmin = 0.0
+tmax = 10.0*365.0
+tspan = (tmin, tmax)
+
+# Initiate ODE problem
+theta_fix =  [1.0/(80*365)]
+theta_est =  [0.28, 0.07, 1.0/365.0, 1.0 ,1.0/5.0]
+p = @LArray [theta_est; theta_fix] (:β, :η, :ω, :φ, :σ, :μ)
+u0 = @LArray [9998.0,1.0,1.0,1.0] (:S,:I,:R,:C)
+
+# Initiate ODE problem
+problem = ODEProblem(SIR!,u0,tspan,p)
+sys = modelingtoolkitize(problem)
+
+@parameters t
+@test all(isequal.(parameters(sys),getproperty.(@variables(β, η, ω, φ, σ, μ),:val)))
+@test all(isequal.(Symbol.(states(sys)),Symbol.(@variables(S(t),I(t),R(t),C(t)))))
