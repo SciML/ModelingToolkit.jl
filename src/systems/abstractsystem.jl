@@ -368,7 +368,7 @@ function parameters(sys::AbstractSystem)
 end
 
 function controls(sys::AbstractSystem)
-    get_ctrl(sys)
+    get_ctrl(flatten(sys))
 end
 
 function observed(sys::AbstractSystem)
