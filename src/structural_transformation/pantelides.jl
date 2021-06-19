@@ -61,7 +61,7 @@ function pantelides_reassemble(sys, eqassoc, assign)
         out_eqs[e] = lhs ~ sub_rhs
     end
 
-    final_vars = unique(filter(x->!(operation(x) isa Differential), fullvars))
+    final_vars = unique(filter(x->!(istree(x) ? operation(x) isa Differential : false), fullvars))
     final_eqs = map(identity, filter(x->value(x.lhs) !== nothing, out_eqs[sort(filter(x->x != UNASSIGNED, assign))]))
 
     @set! sys.eqs = final_eqs
