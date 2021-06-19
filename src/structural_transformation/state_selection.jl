@@ -153,6 +153,9 @@ function state_selection!(sys; kwargs...)
         for (order, (eq_constraint, var_constraint)) in enumerate(Iterators.reverse(zip(constraints...)))
             needs_tearing = true
             @info "" eqs[eq_constraint] s.fullvars[var_constraint]
+            ###
+            ### Try to solve the scalar equation via a linear solver
+            ###
             if length(eq_constraint) == 1 == length(var_constraint)
                 if order < highest_order
                     # There is only one equation and one unknown in this local
@@ -164,12 +167,15 @@ function state_selection!(sys; kwargs...)
                 end
                 needs_tearing = !solve_equations!(obs, sys, eq_constraint, var_constraint)
                 if !needs_tearing
-                    @warn 2
+                    @info "Scalar equation solved"
                     append!(solved_eq_idxs, eq_constraint)
                     append!(solved_var_idxs, var_constraint)
                 end
             end
 
+            ###
+            ### Try tearing
+            ###
             if needs_tearing
                 length(var_constraint) >= length(eq_constraint) || scc_throw()
                 if order == 1
@@ -205,20 +211,29 @@ function state_selection!(sys; kwargs...)
                     end
                 end
 
-                # TODO: solving linear system of equations
                 if isempty(ts.e_residual)
                     is_solved = solve_equations!(obs, sys, ts.e_solved, ts.v_solved)
                     @assert is_solved
                     append!(solved_eq_idxs, ts.e_solved)
                     append!(solved_var_idxs, ts.v_solved)
                 elseif length(eq_constraint) == length(var_constraint)
+                    # Use a linear system of equations solver to further reduce the
+                    # the number of states.
+                    # TODO: solving linear system of equations
                     islinear, isconstant = islinearsystem(s, ts, islineareq, eq_constraint, var_constraint)
+                    @show order == highest_order
                     @show islinear, isconstant
-                    if islinear# && isconstant #TODO
+                    if islinear && isconstant #TODO: solve the equations at runtime
                         append!(obs, s.fullvars[var_constraint] .~ solve_for(eqs[eq_constraint], s.fullvars[var_constraint], check=false))
                         append!(solved_eq_idxs, eq_constraint)
                         append!(solved_var_idxs, var_constraint)
                     end
+                #elseif length(eq_constraint) < length(var_constraint) && order < highest_order
+                #    error("ModelingToolkit cannot handle this kind of system yet. " *
+                #          "Please file an issue with a reproducible example if " *
+                #          "you encounter this error message.")
+                #else
+                #    scc_throw()
                 end
             end
         end
@@ -236,15 +251,75 @@ function state_selection!(sys; kwargs...)
     @show length(ode_states)
     @show length(obs) length(eqs)
 
-    deleteat!(eqs, solved_eq_idxs)
+    ###
+    ### Substitute reduced equations
+    ###
+    assign = matching(highest_order_graph, .!s.varmask)
+    #=
+    inv_assign = inverse_mapping(assign)
+    @set! s.inv_assign = inverse_mapping(assign)
+    @set! s.assign = assign
+
+    new_scc = find_scc(s.graph, assign)
+    =#
+
     obsdict = Dict(eq.lhs => eq.rhs for eq in obs)
-    @set! sys.eqs = map(Base.Fix2(ModelingToolkit.fixpoint_sub, obsdict), eqs)
+    @info "" obs
+    neweqs = similar(ode_states, Equation)
+    for (i, v) in enumerate(ode_states)
+        e = eqs[assign[v]]
+        @show s.fullvars[v]
+        @show e
+        Main._a[] = e, obsdict
+        neweqs[i] = fixpoint_sub(e, obsdict)
+    end
+    @set! sys.eqs = neweqs
+
+    #=
+    deleteat!(eqs, solved_eq_idxs)
     deleteat!(s.fullvars, solved_var_idxs)
     @show s.fullvars
     @set! sys.states = intersect(states(sys), s.fullvars)
     @set! sys.observed = [observed(sys); obs]
+    =#
     @set! sys.structure = s
     return sys
+end
+
+function substitute_exclude_differential(expr, dict)
+    haskey(dict, expr) && return dict[expr]
+    istree(expr) || return expr
+
+    op = operation(expr)
+    canfold=true
+    args = map(arguments(expr)) do x
+        x′ = substitute_exclude_differential(x, dict)
+        canfold = canfold && !(x′ isa Symbolic)
+        x′
+    end
+    canfold && return op(args...)
+    similarterm(expr, op(expr), args, symtype(expr), metadata=metadata(expr))
+end
+
+"""
+    occursin(needle::Symbolic, haystack::Symbolic)
+
+Determine whether the second argument contains the first argument. Note that
+this function doesn't handle associativity, commutativity, or distributivity.
+"""
+Base.occursin(needle::Symbolic, haystack::Symbolic) = _occursin(needle, haystack)
+Base.occursin(needle, haystack::Symbolic) = _occursin(needle, haystack)
+Base.occursin(needle::Symbolic, haystack) = _occursin(needle, haystack)
+function _occursin(needle, haystack)
+    isequal(needle, haystack) && return true
+
+    if istree(haystack)
+        args = arguments(haystack)
+        for arg in args
+            occursin(needle, arg) && return true
+        end
+    end
+    return false
 end
 
 function is_original_linear(s, islineareq, e, v)
