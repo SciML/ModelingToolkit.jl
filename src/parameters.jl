@@ -31,16 +31,6 @@ Maps the variable to a state.
 tovar(s::Symbolic) = setmetadata(s, MTKParameterCtx, false)
 tovar(s::Num) = Num(tovar(value(s)))
 
-function recurse_and_apply(f, x)
-    if symtype(x) <: AbstractArray
-        getindex_posthook(x) do r,x,i...
-            recurse_and_apply(f, r)
-        end
-    else
-        f(x)
-    end
-end
-
 """
 $(SIGNATURES)
 
