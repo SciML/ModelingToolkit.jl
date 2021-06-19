@@ -1,7 +1,16 @@
 using LinearAlgebra, Symbolics, SymbolicUtils
-using Symbolics:value, polygamma
+using Symbolics:value
 using Primes
 using Nemo
+
+# struct ODEIdProblem
+#     state_equations
+#     output_equations
+#     states
+#     inputs
+#     parameters
+#     polynomial_ring
+# end
 
 function switch_ring(var, ring)
     ind = findfirst(vv -> vv == var, gens(parent(var)))
@@ -16,7 +25,7 @@ end
 function get_numerator(f)
     if f isa Generic.Frac
         return numerator(f)
-    elseif f isa fmpq_mpoly
+    elseif f isa MPolyElem
         return f
     end
 end
@@ -24,16 +33,16 @@ end
 function get_denominator(f)
     if f isa Generic.Frac
         return denominator(f)
-    elseif f isa fmpq_mpoly
-        return one(parent(f))
+    elseif f isa MPolyElem
+        return denominator(f)# one(parent(f))
     end
 end
 
 function get_height_and_coeff(f)
-    if length(f)=0
+    if isequal(length(f), 0)
         return (0, 1)
     end
-    max_ = 1
+    max_coef = 1
     for c in coeffs(f)
         max_coef = max(max_coef, 2 * height_bits(c))
     end
@@ -48,41 +57,42 @@ function denominator_height_coeff(f)
     return get_height_and_coeff(get_denominator(f)) 
 end
 
+
 """ function PreprocessODE(ODE, outputs, x, )
 Accepts ODE as array [D(x)~f(x,u,y)]
 """
 function PreprocessODE(ODE, outputs, x, y, u, θ, t)
     D = Differential(t) 
-    ModelingToolkit.@parameters ẋ[1:length(x)]
+    @parameters ẋ[1:length(x)]
 
-    input_symbols = vcat(ẋ,x,u,y,θ,t)
+    input_symbols = vcat(ẋ, x, u, y, θ)
     generators = string.(input_symbols)
     R, gens_ = Nemo.PolynomialRing(Nemo.QQ, generators)
     
-    state_eqs = [substitute(eqn.lhs, D.(x).=>ẋ) ~ substitute(eqn.rhs, D.(x).=>ẋ) for eqn in ODE];
-    out_eqs = [substitute(value(eqn.lhs - eqn.rhs), input_symbols.=>gens_) for eqn in outputs]
+    state_eqs = [substitute(eqn.lhs, D.(x) .=> ẋ) ~ substitute(eqn.rhs, D.(x) .=> ẋ) for eqn in ODE];
+    out_eqs = [substitute(value(eqn.lhs - eqn.rhs), input_symbols .=> gens_) for eqn in outputs]
 
     state_eqn_dict = Dict(substitute(value(eqn.lhs), input_symbols .=> gens_) => substitute(value(eqn.rhs), input_symbols .=> gens_) for eqn in state_eqs)
     state_eqs = [k - v for (k, v) in state_eqn_dict]
 
-    states = [substitute(value(each),  input_symbols.=>gens_) for each in x]
-    params = [substitute(value(each),  input_symbols.=>gens_) for each in θ]
-    inputs = [substitute(value(each),  input_symbols.=>gens_) for each in u]
-    outputs = [substitute(value(each),  input_symbols.=>gens_) for each in y] 
+    states = [substitute(value(each),  input_symbols .=> gens_) for each in x]
+    params = [substitute(value(each),  input_symbols .=> gens_) for each in θ]
+    inputs = [substitute(value(each),  input_symbols .=> gens_) for each in u]
+    outputs = [substitute(value(each),  input_symbols .=> gens_) for each in y] 
 
     return (state_eqs, out_eqs, states, params, inputs, outputs, state_eqn_dict)
 end
 
-function Initialize(x_eqs, y_eqs, states, inputs, outputs, params, proba)
+function Initialize(state_eqs, out_eqs, states, inputs, outputs, params, proba)
     # Proposition 3.3 in https://doi.org/10.1006/jsco.2002.0532
     d, h = 1, 1
-    for f in vcat(x_eqs, y_eqs)
+    for f in vcat(state_eqs, out_eqs)
         numer_df, numer_hf = numerator_height_coeff(f)
         denom_df, denom_hf = denominator_height_coeff(f)
         d = max(d, max(numer_df, denom_df))
         h = max(h, max(numer_hf, denom_hf))
     end
-    p_per_func = 1 - (1 - proba) / (length(states)+length(params)) # TODO: add capability for checking different functions
+    p_per_func = 1 - (1 - proba) / (length(states) + length(params)) # TODO: add capability for checking different functions
     mu = ceil(1 / (1 - sqrt(p_per_func)))
     solution = Dict()
     n = length(states)
@@ -91,43 +101,101 @@ function Initialize(x_eqs, y_eqs, states, inputs, outputs, params, proba)
     ℓ = length(params)
     D = 4 * (n + ℓ)^2 * (n + m) * d
     Dprime = D * (2 * log(n + ℓ + r + 1) + log(mu * D)) + 4 * (n + ℓ)^2 * ((n + m) * h + log(2 * n * D))
-    prime = Primes.nextprime(Int(ceil(2 * mu * Dprime)))
-    F = Nemo.GF(prime)
-
-    # TODO: reduce the x_eqs, y_eqs modulo prime: change polynomials to F-based
-
+    prime_number = Primes.nextprime(Int(ceil(2 * mu * Dprime)))
+    F = Nemo.GF(prime_number)
     prec = n + ℓ # max precision
-
-    params_vals = Dict(p => F(rand(1:prime)) for p in params)
-    inputs = Dict(u => [F(rand(1:prime)) for i in 1:prec] for u in inputs)
-    initial_conditions = Dict(x => F(rand(1:prime)) for x in states)
-    return params_vals, inputs, initial_conditions
+    # params_vals = Dict(p => F(rand(1:prime_number)) for p in params)
+    # inputs = Dict(u => [F(rand(1:prime_number)) for i in 1:prec] for u in inputs)
+    # initial_conditions = Dict(x => F(rand(1:prime_number)) for x in states)
+    # return params_vals, inputs, initial_conditions, prime_number, prec
+    return prime_number, prec
 end
 
+function ReduceODEModP(state_eqs, out_eqs, states, inputs, outputs, params, prime_number)
+    equations = vcat(state_eqs, out_eqs)
+    GaloisF = Nemo.GF(prime_number)
+    original_ring = parent(equations[1])
+    new_ring, new_gens = Nemo.PolynomialRing(GaloisF, string.(gens(original_ring)))
 
-#### this file contains code that computes power series solution to ODE
-#### The local identifiability algorithm will compute power series solution with θ (parameters)
-#### specialized to random values
-#### u is specialized to a random power series of degree ν
+    new_states = map(xx -> switch_ring(xx, new_ring), states)
+    new_inputs = map(u -> switch_ring(u, new_ring), inputs)
+    new_outputs = map(y -> switch_ring(y, new_ring), outputs)
+    new_params = map(y -> switch_ring(y, new_ring), params)
 
-#### The original ode: ẋ=F(x, θ, u), F is A rational function
-#### Let P = numerator(ẋ-F(x, θ, u)).
-#### Compute two Jacobians: ∂P∂ẋ, ∂P∂x
-#### Specialize them to random (integer) values of θ and u (power series with int. coefficients): 
-####	P(θ̂, û), ∂P∂ẋ_at_point, ∂P∂x_at_point (see code below)
+    new_state_eqs = []
+    new_out_eqs = []
+    for i in 1:length(state_eqs)
+        numer = get_numerator(equations[i])
+        denom = get_denominator(equations[i])
+        if isequal(denom, 0)
+            throw(Base.ArgumentError("Prime $p divides the denominator of $poly"))
+        end
+        push!(new_state_eqs, change_base_ring(GaloisF, numer) // change_base_ring(GaloisF, denom)) # TODO: fix error on base ring change
+    end
 
-function PowerSeriesSolution(
-        x_eqs, y_eqs, states, inputs, outputs, parameters, proba, prec
+    for i in 1:length(out_eqs)
+        numer = get_numerator(equations[i])
+        denom = get_denominator(equations[i])
+        if isequal(denom, 0)
+            throw(Base.ArgumentError("Prime $p divides the denominator of $poly"))
+        end
+        push!(new_out_eqs, change_base_ring(GaloisF, numer) // change_base_ring(GaloisF, denom)) # TODO: (possibly same) fix error on base ring change
+    end
+    return new_state_eqs, new_out_eqs, new_states, new_inputs, new_outputs, new_params
+end
+
+# ModelingToolkit.@parameters θ[1:4]
+# ModelingToolkit.@variables t, x[1:2], u[1:1], y[1:1]
+# ModelingToolkit.@parameters ẋ[1:length(x)]
+# D = Differential(t)
+# using ModelingToolkit
+# eqs = [D(x[1]) ~ x[1]^2 * θ[1] + θ[2] * x[1] * x[2] + u[1], D(x[2]) ~ θ[3] * x[1]^2 + θ[4] * x[1] * x[2]];
+# outputs = [y[1] ~ x[1]];
+
+# state_eqs, out_eqs, states, params, inputs, outputs = PreprocessODE(eqs, outputs, x, y, u, θ, t)
+
+# # params_vals, input_values, initial_conditions, prime_number, ν = Initialize(state_eqs, out_eqs, states, inputs, outputs, params, 0.99)
+# prime_number, ν = Initialize(state_eqs, out_eqs, states, inputs, outputs, params, 0.99)
+
+# state_eqs, out_eqs, states, inputs, outputs, params = ReduceODEModP(state_eqs, out_eqs, states, inputs, outputs, params, prime_number)
+
+
+function evaluate_poly(poly::MPolyElem, eval_dict)
+    R = parent(first(values(eval_dict)))
+    point = [get(eval_dict, v, zero(R)) for v in gens(parent(poly))]
+    return evaluate(poly, point)
+end
+
+function evaluate_poly(poly::Generic.Frac{<: P}, eval_dict) where P <: MPolyElem
+    numer, denom = get_numerator(poly), get_denominator(poly)
+    return evaluate_poly(numer, eval_dict) // evaluate_poly(denom, eval_dict)
+end
+
+function PowerSeriesSolutionODE(
+        state_eqs, out_eqs, states, params, inputs, outputs
     )
 
-    params_vals, inputs, initial_conditions = Initialize(x_eqs, y_eqs, states, inputs, outputs, params, proba)
-    n = length(eqs)
+    # initialize get the prime and precision
+    prime_number, ν = Initialize(state_eqs, out_eqs, states, inputs, outputs, params, proba)
+    F = Nemo.GF(prime_number)
 
-    poly_ring = parent(x_eqs[1]) # equations must be polynomials in a polynomial ring over rationals
-    power_series_ring, τ = PowerSeriesRing(base_ring(poly_ring), prec, "τ"; model=:capped_absolute)
+    # # get the input ring before reduction
+    # poly_ring = parent(state_eqs[1])
+
+    # reduce the ODE modulo prime and convert polynomials accordingly
+    state_eqs, out_eqs, states, inputs, outputs, params = ReduceODEModP(state_eqs, out_eqs, states, inputs, outputs, params, prime_number) 
+    poly_ring = parent(state_eqs[1])
     
+    # random parameters, input p.s., and initial conditions
+    params_vals = Dict(p => F(rand(1:prime_number)) for p in params)
+    inputs_vals = Dict(u => [F(rand(1:prime_number)) for i in 1:ν] for u in inputs)
+    initial_conditions = Dict(x => F(rand(1:prime_number)) for x in states)
+
+    # create power series ring over rationals
+    power_series_ring, τ = PowerSeriesRing(base_ring(poly_ring), ν, "τ"; model=:capped_absolute)
+
     # we need to switch the ring here since we will specify the parameters
-    derivatives = [gen(poly_ring, i) for i in 1:length(states)]
+    derivatives = [gen(base_ring(poly_ring), i) for i in 1:length(states)]
     new_ring, new_gens = Nemo.PolynomialRing(base_ring(poly_ring), string.(vcat(derivatives, states, inputs)))
 
     # 1. switch ring on each symbol
@@ -135,7 +203,23 @@ function PowerSeriesSolution(
     #   2.1. evaluate numerator and denominator at parameters (substitute parameter values into the system)
     #   2.2. replace symbols (states, inputs) with the new-ring symbols in state and output equations
     
-    evaluation = Dict(k => new_ring(v) for (k, v) in param_values) # key value pairs
+    # evaluation = Dict(k => v for (k, v) in params_vals) # key value pairs
+    evaluation = Dict(k => new_ring(v) for (k, v) in params_vals)
+    for v in vcat(derivatives, states, inputs)
+        evaluation[v] = switch_ring(v, new_ring)
+    end
+
+    equations = [] # Array{Any}()
+    for i in 1:length(state_eqs)
+        num, den = map(p -> evaluate_poly(p, evaluation), [get_numerator(state_eqs[i]), get_denominator(state_eqs[i])])
+        push!(equations, derivatives[i] * den - num)
+    end
+
+
+
+
+
+
     
 
 
