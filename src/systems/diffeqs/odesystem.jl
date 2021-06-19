@@ -31,7 +31,7 @@ struct ODESystem <: AbstractODESystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
-    ctrl::Vector
+    ctrls::Vector
     observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
@@ -115,13 +115,14 @@ function ODESystem(
 
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
+    ctrl_jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, ctrl′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type)
+    ODESystem(deqs, iv′, dvs′, ps′, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type)
 end
 
 vars(x::Sym) = Set([x])

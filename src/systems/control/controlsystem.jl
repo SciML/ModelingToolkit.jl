@@ -1,6 +1,6 @@
 abstract type AbstractControlSystem <: AbstractSystem end
 
-function namespace_controls(sys::AbstractSystem)
+function namespace_controls(sys::AbstractControlSystem)
     [rename(x,renamespace(nameof(sys),nameof(x))) for x in controls(sys)]
 end
 

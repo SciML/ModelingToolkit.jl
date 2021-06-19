@@ -152,7 +152,7 @@ for prop in [
              :iv
              :states
              :ps
-             :ctrl
+             :ctrls
              :defaults
              :observed
              :tgrad
@@ -315,6 +315,7 @@ end
 
 namespace_variables(sys::AbstractSystem) = states(sys, states(sys))
 namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
+namespace_controls(sys::AbstractSystem) = controls(sys, controls(sys))
 
 function namespace_defaults(sys)
     defs = defaults(sys)
@@ -358,17 +359,19 @@ function states(sys::AbstractSystem)
     systems = get_systems(sys)
     unique(isempty(systems) ?
            sts :
-           [sts;reduce(vcat,namespace_variables.(systems))])
+           [sts; reduce(vcat,namespace_variables.(systems))])
 end
 
 function parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     systems = get_systems(sys)
-    isempty(systems) ? ps : [ps;reduce(vcat,namespace_parameters.(systems))]
+    isempty(systems) ? ps : [ps; reduce(vcat,namespace_parameters.(systems))]
 end
 
 function controls(sys::AbstractSystem)
-    get_ctrl(flatten(sys))
+    ctrls = get_ctrls(sys)
+    systems = get_systems(sys)
+    isempty(systems) ? ctrls : [ctrls; reduce(vcat,namespace_controls.(systems))]
 end
 
 function observed(sys::AbstractSystem)

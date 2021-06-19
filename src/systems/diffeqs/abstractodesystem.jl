@@ -72,6 +72,12 @@ function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = param
     return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
+function generate_control_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
+                                   simplify=false, sparse = false, kwargs...)
+    jac = calculate_control_jacobian(sys;simplify=simplify,sparse=sparse)
+    return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
+end
+
 """
 ```julia
 generate_linearization(sys::ODESystem, dvs = states(sys), ps = parameters(sys), ctrls = controls(sys), point = defaults(sys), expression = Val{true}; sparse = false, kwargs...)
