@@ -31,7 +31,9 @@ struct ODESystem <: AbstractODESystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    """Control parameters (some subset of `ps`)."""
     ctrls::Vector
+    """Observed states."""
     observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until

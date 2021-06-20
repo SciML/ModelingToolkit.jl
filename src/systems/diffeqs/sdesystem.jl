@@ -37,7 +37,10 @@ struct SDESystem <: AbstractODESystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
-    observed::Vector
+    """Control parameters (some subset of `ps`)."""
+    ctrls::Vector
+    """Observed states."""
+    observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
@@ -48,6 +51,11 @@ struct SDESystem <: AbstractODESystem
     [`calculate_jacobian`](@ref) is called on the system.
     """
     jac::RefValue
+    """
+    Control Jacobian matrix. Note: this field will not be defined until
+    [`calculate_control_jacobian`](@ref) is called on the system.
+    """
+    ctrl_jac::RefValue{Any}
     """
     `Wfact` matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
@@ -85,7 +93,8 @@ struct SDESystem <: AbstractODESystem
 end
 
 function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
-                   observed = [],
+                   controls = Num[],
+                   observed = Num[],
                    systems = SDESystem[],
                    default_u0=Dict(),
                    default_p=Dict(),
@@ -96,6 +105,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
+    ctrl′ = value.(controls)
+
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
@@ -108,9 +119,10 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
 
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
+    ctrl_jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
-    SDESystem(deqs, neqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
+    SDESystem(deqs, neqs, iv′, dvs′, ps′, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
@@ -156,10 +168,6 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
 
     SDESystem(deqs,get_noiseeqs(sys),get_iv(sys),states(sys),parameters(sys))
 end
-
-
-
-
 
 """
 ```julia
