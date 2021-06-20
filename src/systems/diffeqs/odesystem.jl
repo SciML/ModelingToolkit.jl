@@ -75,21 +75,14 @@ struct ODESystem <: AbstractODESystem
     connection_type::Any
 
     function ODESystem(deqs, iv, dvs, ps, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type)
-        check_differentials(deqs,iv)
+        check_dependence(dvs,iv)
         new(deqs, iv, dvs, ps, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type)
     end
 end
 
-function check_differentials(eqs,iv)
-    diffvars = OrderedSet()
-    for eq in eqs
-        if isdiffeq(eq)
-            lhs = eq.lhs
-            diffvar, _ = var_from_nested_derivative(eq.lhs)
-            isequal(iv, iv_from_nested_derivative(lhs)) || throw(ArgumentError("Differential variable $diffvar is not a function of independent variable $iv."))
-            diffvar in diffvars && throw(ArgumentError("The differential variable $diffvar is not unique in the system of equations."))
-            push!(diffvars, diffvar)
-        end
+function check_dependence(dvs,iv)
+    for dv in dvs
+        isequal(iv, iv_from_nested_derivative(dv)) || throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
     end
 end 
 
