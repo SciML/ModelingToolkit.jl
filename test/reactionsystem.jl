@@ -189,7 +189,7 @@ end
 
 # test for https://github.com/SciML/ModelingToolkit.jl/issues/436
 @parameters t
-@variables S I
+@variables S(t) I(t)
 rxs = [Reaction(1,[S],[I]), Reaction(1.1,[S],[I])]
 rs = ReactionSystem(rxs, t, [S,I], [])
 js = convert(JumpSystem, rs)
@@ -202,7 +202,7 @@ jprob = JumpProblem(rs, dprob, Direct(), save_positions=(false,false))
 
 
 @parameters k1 k2
-@variables R
+@variables R(t)
 rxs = [Reaction(k1*S, [S,I], [I], [2,3], [2]),
        Reaction(k2*R, [I], [R]) ]
 rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])

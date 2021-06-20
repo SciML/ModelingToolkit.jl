@@ -318,6 +318,16 @@ ode = ODESystem(eq)
 
 end
 
+#Issue 998
+@parameters t 
+pars = []
+vars = @variables((u1,))
+der = Differential(t)
+eqs = [
+  der(u1) ~ 1,
+]
+@test_throws ArgumentError ODESystem(eqs,t,vars,pars)
+
 @variables x(t)
 D = Differential(t)
 @parameters M b k
