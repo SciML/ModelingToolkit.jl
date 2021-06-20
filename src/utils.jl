@@ -110,8 +110,13 @@ function check_parameters(ps,iv)
         isequal(iv,p) && throw(ArgumentError("Independent variable $iv not allowed in parameters."))
     end
 end
+
 function check_dependence(dvs,iv)
     for dv in dvs
         isequal(iv, iv_from_nested_derivative(dv)) || throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
     end
 end 
+
+iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nested_derivative(arguments(x)[1]) : arguments(x)[1]
+iv_from_nested_derivative(x::Sym) = x
+iv_from_nested_derivative(x) = missing

@@ -112,10 +112,6 @@ function ODESystem(
     ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type)
 end
 
-iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nested_derivative(arguments(x)[1]) : arguments(x)[1]
-iv_from_nested_derivative(x::Sym) = x
-iv_from_nested_derivative(x) = missing
-
 vars(x::Sym) = Set([x])
 vars(exprs::Symbolic) = vars([exprs])
 vars(exprs) = foldl(vars!, exprs; init = Set())
