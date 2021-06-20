@@ -51,6 +51,11 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
     type: type of the system
     """
     connection_type::Any
+    function JumpSystem{U}(ap::U, iv, states, ps, observed, name, systems, defaults, connection_type) where U <: ArrayPartition
+        check_dependence(states,iv)
+        check_parameters(ps,iv)
+        new{U}(ap, iv, states, ps, observed, name, systems, defaults, connection_type)
+    end
 end
 
 function JumpSystem(eqs, iv, states, ps;

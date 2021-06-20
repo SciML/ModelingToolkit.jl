@@ -80,16 +80,6 @@ struct ODESystem <: AbstractODESystem
         new(deqs, iv, dvs, ps, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type)
     end
 end
-function check_parameters(ps,iv)
-    for p in ps
-        isequal(iv,p) && throw(ArgumentError("Independent variable $iv not allowed in parameters."))
-    end
-end
-function check_dependence(dvs,iv)
-    for dv in dvs
-        isequal(iv, iv_from_nested_derivative(dv)) || throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
-    end
-end 
 
 function ODESystem(
                    deqs::AbstractVector{<:Equation}, iv, dvs, ps;
