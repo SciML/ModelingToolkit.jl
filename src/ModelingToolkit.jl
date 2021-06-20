@@ -162,7 +162,6 @@ export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variable, states, parameters, equations, controls, observed, structure, defaults
-export ssmodel, linearize
 export structural_simplify
 export DiscreteSystem, DiscreteProblem
 
