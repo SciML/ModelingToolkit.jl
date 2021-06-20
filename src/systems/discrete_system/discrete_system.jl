@@ -50,7 +50,7 @@ struct DiscreteSystem <: AbstractSystem
     """
     default_p::Dict
     function DiscreteSystem(discreteEqs, iv, dvs, ps, observed, name, systems, default_u0, default_p)
-        check_dependence(dvs,iv)
+        check_variables(dvs,iv)
         check_parameters(ps,iv)
         new(discreteEqs, iv, dvs, ps, observed, name, systems, default_u0, default_p)
     end

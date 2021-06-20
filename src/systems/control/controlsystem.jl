@@ -73,7 +73,7 @@ struct ControlSystem <: AbstractControlSystem
     """
     defaults::Dict
     function ControlSystem(loss, deqs, iv, dvs, controls,ps, observed, name, systems, defaults)
-        check_dependence(dvs,iv)
+        check_variables(dvs,iv)
         check_parameters(ps,iv)
         new(loss, deqs, iv, dvs, controls,ps, observed, name, systems, defaults)
     end
