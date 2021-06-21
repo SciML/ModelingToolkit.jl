@@ -72,6 +72,11 @@ struct ControlSystem <: AbstractControlSystem
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
+    function ControlSystem(loss, deqs, iv, dvs, controls,ps, observed, name, systems, defaults)
+        check_variables(dvs,iv)
+        check_parameters(ps,iv)
+        new(loss, deqs, iv, dvs, controls,ps, observed, name, systems, defaults)
+    end
 end
 
 function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls, ps;

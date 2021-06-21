@@ -75,6 +75,12 @@ struct SDESystem <: AbstractODESystem
     type: type of the system
     """
     connection_type::Any
+
+    function SDESystem(deqs, neqs, iv, dvs, ps, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
+        check_variables(dvs,iv)
+        check_parameters(ps,iv)
+        new(deqs, neqs, iv, dvs, ps, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
+    end
 end
 
 function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;

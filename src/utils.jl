@@ -104,3 +104,20 @@ function _readable_code(ex)
     expr
 end
 readable_code(expr) = JuliaFormatter.format_text(string(Base.remove_linenums!(_readable_code(expr))))
+
+function check_parameters(ps,iv)
+    for p in ps
+        isequal(iv,p) && throw(ArgumentError("Independent variable $iv not allowed in parameters."))
+    end
+end
+
+function check_variables(dvs,iv)
+    for dv in dvs
+        isequal(iv,dv) && throw(ArgumentError("Independent variable $iv not allowed in dependent variables."))
+        isequal(iv, iv_from_nested_derivative(dv)) || throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
+    end
+end 
+
+iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nested_derivative(arguments(x)[1]) : arguments(x)[1]
+iv_from_nested_derivative(x::Sym) = x
+iv_from_nested_derivative(x) = missing

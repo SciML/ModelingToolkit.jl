@@ -328,6 +328,11 @@ eqs = [
 ]
 @test_throws ArgumentError ODESystem(eqs,t,vars,pars)
 
+#Issue 1063/998
+pars =[t]
+vars = @variables((u1(t),))
+@test_throws ArgumentError ODESystem(eqs,t,vars,pars)
+
 @variables x(t)
 D = Differential(t)
 @parameters M b k

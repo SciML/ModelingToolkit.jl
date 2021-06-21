@@ -151,7 +151,12 @@ struct ReactionSystem <: AbstractSystem
     systems::Vector
 
     function ReactionSystem(eqs, iv, states, ps, observed, name, systems)
-        new(eqs, value(iv), value.(states), value.(ps), observed, name, systems)
+        iv′ = value(iv)
+        states′ = value.(states)
+        ps′ = value.(ps)
+        check_variables(states′,iv′)
+        check_parameters(ps′,iv′)
+        new(eqs, iv′, states′, ps′, observed, name, systems)
     end
 end
 
