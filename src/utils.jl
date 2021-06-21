@@ -118,6 +118,40 @@ function check_variables(dvs,iv)
     end
 end 
 
+"Get all the independent variables with respect to which differentials are taken."
+function collect_differentials(eqs)
+    vars = Set()
+    ivs = OrderedSet()
+    for eq in eqs
+        vars!(vars, eq)
+        for v in vars
+            isdifferential(v) || continue
+            collect_ivs_from_nested_differential!(ivs,v)  
+        end
+        empty!(vars)
+    end
+    return ivs
+end
+
+"Assert that equations are well-formed when building ODE."
+function check_equations(eqs,iv)
+    ivs = collect_differentials(eqs)
+    display = [v for v in ivs]
+    length(ivs) <= 1 || throw(ArgumentError("Differential w.r.t. multiple variables $display are not allowed."))
+    if length(ivs) == 1
+        single_iv = pop!(ivs)
+        isequal(single_iv,iv) || throw(ArgumentError("Differential w.r.t. variable ($single_iv) other than the independent variable ($iv) are not allowed."))
+    end
+end
+"Get all the independent variables with respect to which differentials are taken."
+function collect_ivs_from_nested_differential!(ivs,x::Term)
+    op = operation(x)
+    if op isa Differential
+        push!(ivs,op.x)
+        collect_ivs_from_nested_differential!(ivs,arguments(x)[1])
+    end
+end
+
 iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nested_derivative(arguments(x)[1]) : arguments(x)[1]
 iv_from_nested_derivative(x::Sym) = x
 iv_from_nested_derivative(x) = missing

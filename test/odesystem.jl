@@ -333,6 +333,13 @@ pars =[t]
 vars = @variables((u1(t),))
 @test_throws ArgumentError ODESystem(eqs,t,vars,pars)
 
+@parameters w
+der = Differential(w)
+eqs = [
+  der(u1) ~ t,
+]
+@test_throws ArgumentError sys= ModelingToolkit.ODESystem(eqs,t,vars,pars,)
+
 @variables x(t)
 D = Differential(t)
 @parameters M b k
