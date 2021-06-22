@@ -146,8 +146,6 @@ function state_selection!(sys; kwargs...)
         end
     end
 
-    solved_eq_idxs = Int[]
-    solved_var_idxs = Int[]
     obs = Equation[]
     empty!(s.partitions)
 
@@ -161,19 +159,15 @@ function state_selection!(sys; kwargs...)
             ### Try to solve the scalar equation via a linear solver
             ###
             if length(eq_constraint) == 1 == length(var_constraint)
-                if order < highest_order
+                needs_tearing = !solve_equations!(obs, sys, eq_constraint, var_constraint)
+                if !needs_tearing
+                    @info "Scalar equation solved"
                     # There is only one equation and one unknown in this local
                     # contraint set, while the equation is lower order. This
                     # implies that the unknown must be a dummy state.
                     v = var_constraint[1]
                     @assert !s.varmask[v]
                     s.varmask[v] = true
-                end
-                needs_tearing = !solve_equations!(obs, sys, eq_constraint, var_constraint)
-                if !needs_tearing
-                    @info "Scalar equation solved"
-                    append!(solved_eq_idxs, eq_constraint)
-                    append!(solved_var_idxs, var_constraint)
                 end
             end
 
@@ -211,8 +205,6 @@ function state_selection!(sys; kwargs...)
                     is_solved = solve_equations!(obs, sys, e_solved, v_solved)
                     @warn obs
                     @assert is_solved
-                    append!(solved_eq_idxs, e_solved)
-                    append!(solved_var_idxs, v_solved)
                     push!(s.partitions, SystemPartition(;e_solved, v_solved, e_residual, v_residual))
                 elseif length(eq_constraint) == length(var_constraint)
                     # Use a linear system of equations solver to further reduce the
@@ -223,8 +215,6 @@ function state_selection!(sys; kwargs...)
                     @show islinear, isconstant
                     if islinear && isconstant #TODO: solve the equations at runtime
                         append!(obs, s.fullvars[var_constraint] .~ solve_for(eqs[eq_constraint], s.fullvars[var_constraint], check=false))
-                        append!(solved_eq_idxs, eq_constraint)
-                        append!(solved_var_idxs, var_constraint)
                         # v_residual ∩ v_solved = ∅ and v_residual ∪ v_solved =var_constraint
                         order < highest_order &&  for v in v_residual
                             @assert !s.varmask[v]
@@ -247,9 +237,6 @@ function state_selection!(sys; kwargs...)
     end
 
     @info "" obs
-    @assert length(solved_eq_idxs) == length(obs) == length(solved_var_idxs)
-    sort!(solved_eq_idxs)
-    sort!(solved_var_idxs)
 
     ode_states = Int[]
     for (i, m) in enumerate(s.varmask)
@@ -263,10 +250,10 @@ function state_selection!(sys; kwargs...)
     ### Substitute reduced equations
     ###
     #assign = matching(highest_order_graph, .!s.varmask)
-    solved_eq_idxs_set = Set(Iterators.flatten(solved_eq_idxs))
-    @show length(solved_eq_idxs_set), length(equations(sys))
-    eqmask = filter(i->!(i in solved_eq_idxs_set), 1:nsrcs(s.graph))
-    @show equations(sys)[eqmask]
+    #solved_eq_idxs_set = Set(Iterators.flatten(solved_eq_idxs))
+    #@show length(solved_eq_idxs_set), length(equations(sys))
+    #eqmask = filter(i->!(i in solved_eq_idxs_set), 1:nsrcs(s.graph))
+    #@show equations(sys)[eqmask]
     #assign = matching(s.graph, .!s.varmask)
     #assign = matching(s.graph, s.varmask)
     assign = matching(s.graph, s.varmask)
