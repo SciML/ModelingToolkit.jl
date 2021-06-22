@@ -76,23 +76,7 @@ function state_selection!(sys; kwargs...)
     @set! sys.structure = s
 
     # Otter and Elmqvist (2017) 4.3.1:
-    # All variables $v_{j}$ that appear differentiated and their derivatives
-    # with exception of their highest derivatives are potential states, i.e.,
-    # with slight abuse of notation:
-    # $v_{j} ∈ u$, where $u' = f(u, p, t)$.
-    #
-    # The `varmask` will be used to sort the algebraic equations, so being a
-    # $v_{j}$ is a state => `varmask[j]` is `false`.
-    #
-    # Since $a = varassoc[j]$ when $a > 0 => vⱼ = v̇ₐ$, it follows that
-    # $a > 0 => vⱼ$ is a potential state.
-    for (j, (a, ia)) in enumerate(zip(s.varassoc, s.inv_varassoc))
-        is_potential_state = a > 0 || a == 0 == ia
-        s.varmask[j] = !is_potential_state
-        if is_potential_state
-            @info "potential_state:" s.fullvars[j]
-        end
-    end
+    s.varmask .= true
 
     eq_constraint_set = Vector{Vector{Int}}[]
     var_constraint_set = Vector{Vector{Int}}[]
@@ -141,12 +125,12 @@ function state_selection!(sys; kwargs...)
     end
     islineareq = let eqs=equations(sys), fullvars=s.fullvars
         (e, v) -> begin
-            a, b, islinear = linear_expansion(eqs[e], fullvars[v])
+            a, _, islinear = linear_expansion(eqs[e], fullvars[v])
             return islinear, !(a isa Symbolic)
         end
     end
 
-    obs = Equation[]
+    obs = similar(eqs)
     empty!(s.partitions)
 
     for (bk, constraints) in enumerate(zip(eq_constraint_set, var_constraint_set))
@@ -444,13 +428,19 @@ end
 function solve_equations!(obs, sys, ieqs, ivars)
     eqs = equations(sys)
     s = get_structure(sys)
+    solved = true
     for (ie, iv) in zip(ieqs, ivars)
         var = s.fullvars[iv]
-        sol = solve_for(eqs[ie], var; check=false)
-        sol === nothing && return false
-        push!(obs, var ~ sol)
+        eq = eqs[ie]
+        sol = solve_for(eq, var; check=false)
+        if sol === nothing
+            solved = false
+            obs[ie] = eq
+        else
+            obs[ie] = var ~ sol
+        end
     end
-    return true
+    return solved
 end
 
 #=
