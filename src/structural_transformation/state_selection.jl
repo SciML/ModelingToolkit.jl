@@ -142,115 +142,116 @@ function state_selection!(sys; kwargs...)
             ###
             ### Try to solve the scalar equation via a linear solver
             ###
-            if length(eq_constraint) == 1 == length(var_constraint)
-                needs_tearing = !solve_equations!(obs, sys, eq_constraint, var_constraint)
-                if !needs_tearing
-                    @info "Scalar equation solved"
-                    # There is only one equation and one unknown in this local
-                    # contraint set, while the equation is lower order. This
-                    # implies that the unknown must be a dummy state.
-                    v = var_constraint[1]
-                    @assert !s.varmask[v]
-                    s.varmask[v] = true
-                end
+            if length(eq_constraint) == 1 == length(var_constraint) && solve_equations!(obs, sys, eq_constraint, var_constraint)
+                @info "Scalar equation solved"
+                # There is only one equation and one unknown in this local
+                # contraint set, while the equation is lower order. This
+                # implies that the unknown must be a dummy state.
+                v = var_constraint[1]
+                @assert s.varmask[v]
+                s.varmask[v] = false
+                continue
             end
 
             ###
             ### Try tearing
             ###
-            if needs_tearing
-                length(var_constraint) >= length(eq_constraint) || scc_throw()
-                if order == 1
-                    empty!(ts.der_e_solved)
-                    empty!(ts.der_v_solved)
-                    empty!(ts.der_v_tear)
+            length(var_constraint) >= length(eq_constraint) || scc_throw()
+            if order == 1
+                empty!(ts.der_e_solved)
+                empty!(ts.der_v_solved)
+                empty!(ts.der_v_tear)
 
-                    ts.ec = eq_constraint
-                    ts.vc = var_constraint
-                else
-                    ts.der_e_solved = higher_der(ts.e_solved, eqassoc)
-                    ts.der_v_solved = higher_der(ts.v_solved, s.varassoc)
-                    ts.der_v_tear = higher_der(ts.v_residual, s.varassoc)
+                ts.ec = eq_constraint
+                ts.vc = var_constraint
+            else
+                ts.der_e_solved = higher_der(ts.e_solved, eqassoc)
+                ts.der_v_solved = higher_der(ts.v_solved, s.varassoc)
+                ts.der_v_tear = higher_der(ts.v_residual, s.varassoc)
 
-                    ts.ec = setdiff(eq_constraint, ts.der_e_solved)
-                    ts.vc = setdiff(var_constraint, ts.der_v_solved)
-                end
+                ts.ec = setdiff(eq_constraint, ts.der_e_solved)
+                ts.vc = setdiff(var_constraint, ts.der_v_solved)
+            end
 
-                @show tearing_with_candidates!(ts, issolvable, s.fullvars)
-                @show s.fullvars[ts.v_residual]
+            @show tearing_with_candidates!(ts, issolvable, s.fullvars)
+            @show s.fullvars[ts.v_residual]
 
-                order < highest_order && for v in ts.v_solved
-                    @assert !s.varmask[v]
-                    s.varmask[v] = true
-                end
+            for v in ts.v_solved
+                @assert s.varmask[v]
+                s.varmask[v] = false
+            end
 
-                @unpack e_solved, v_solved, e_residual, v_residual = ts
-                if isempty(e_residual)
-                    is_solved = solve_equations!(obs, sys, e_solved, v_solved)
-                    @warn obs
-                    @assert is_solved
-                    push!(s.partitions, SystemPartition(;e_solved, v_solved, e_residual, v_residual))
-                elseif length(eq_constraint) == length(var_constraint)
-                    # Use a linear system of equations solver to further reduce the
-                    # the number of states.
-                    # TODO: solving linear system of equations
-                    islinear, isconstant = islinearsystem(s, ts, islineareq, eq_constraint, var_constraint)
-                    @show order == highest_order
-                    @show islinear, isconstant
-                    if islinear && isconstant #TODO: solve the equations at runtime
-                        append!(obs, s.fullvars[var_constraint] .~ solve_for(eqs[eq_constraint], s.fullvars[var_constraint], check=false))
-                        # v_residual ∩ v_solved = ∅ and v_residual ∪ v_solved =var_constraint
-                        order < highest_order &&  for v in v_residual
-                            @assert !s.varmask[v]
-                            s.varmask[v] = true
-                        end
-                        push!(s.partitions, SystemPartition(;e_solved=eq_constraint, v_solved=var_constraint, e_residual=Int[], v_residual=Int[]))
-                    else
-                        @show s.varmask[v_residual]
-                        push!(s.partitions, SystemPartition(;e_solved, v_solved, e_residual, v_residual))
+            @unpack e_solved, v_solved, e_residual, v_residual = ts
+            if isempty(e_residual)
+                @assert solve_equations!(obs, sys, e_solved, v_solved)
+                @warn obs
+                push!(s.partitions, SystemPartition(;e_solved, v_solved, e_residual, v_residual))
+            elseif length(eq_constraint) == length(var_constraint)
+                # Use a linear system of equations solver to further reduce the
+                # the number of states.
+                # TODO: solving linear system of equations
+                islinear, isconstant = islinearsystem(s, ts, islineareq, eq_constraint, var_constraint)
+                @show order == highest_order
+                @show islinear, isconstant
+                if islinear && isconstant #TODO: solve the equations at runtime
+                    @views obs[eq_constraint] .= s.fullvars[var_constraint] .~ solve_for(eqs[eq_constraint], s.fullvars[var_constraint], check=false)
+                    # v_residual ∩ v_solved = ∅ and v_residual ∪ v_solved =var_constraint
+                    for v in v_residual
+                        @show s.fullvars[v]
+                        @assert s.varmask[v]
+                        s.varmask[v] = false
                     end
-                elseif length(eq_constraint) < length(var_constraint) && order < highest_order
-                    error("ModelingToolkit cannot handle this kind of system yet. " *
-                          "Please file an issue with a reproducible example if " *
-                          "you encounter this error message.")
+                    push!(s.partitions, SystemPartition(;e_solved=eq_constraint, v_solved=var_constraint, e_residual=Int[], v_residual=Int[]))
                 else
-                    scc_throw()
+                    @show s.varmask[v_residual]
+                    push!(s.partitions, SystemPartition(;e_solved, v_solved, e_residual, v_residual))
+                    @assert solve_equations!(obs, sys, e_solved, v_solved)
+                    @views obs[e_residual] .= eqs[e_residual]
                 end
+            elseif length(eq_constraint) < length(var_constraint) && order < highest_order
+                error("ModelingToolkit cannot handle this kind of system yet. " *
+                        "Please file an issue with a reproducible example if " *
+                        "you encounter this error message.")
+            else
+                scc_throw()
             end
         end
     end
 
     @info "" obs
 
-    ode_states = Int[]
-    for (i, m) in enumerate(s.varmask)
-        m || push!(ode_states, i)
+    new_states = Int[]
+    #new_eqs = Equation[]
+    assign = matching(s.graph, .!s.varmask)
+    @set! s.assign = assign
+    for (v, m) in enumerate(s.varmask); m || continue
+        push!(new_states, v)
+        #dv = s.varassoc[v] > 0 ? s.varassoc[v] : v
+        #push!(new_eqs, eqs[assign[dv]])
     end
-    @show s.fullvars[ode_states]
-    @show length(ode_states)
-    @show length(obs) length(eqs)
 
     ###
     ### Substitute reduced equations
     ###
-    #assign = matching(highest_order_graph, .!s.varmask)
-    #solved_eq_idxs_set = Set(Iterators.flatten(solved_eq_idxs))
-    #@show length(solved_eq_idxs_set), length(equations(sys))
-    #eqmask = filter(i->!(i in solved_eq_idxs_set), 1:nsrcs(s.graph))
-    #@show equations(sys)[eqmask]
-    #assign = matching(s.graph, .!s.varmask)
-    #assign = matching(s.graph, s.varmask)
-    assign = matching(s.graph, s.varmask)
-    @show assign
-    idxs = findall(x->x==UNASSIGNED, assign)
-    @show equations(sys)[idxs]
-    #=
-    inv_assign = inverse_mapping(assign)
     @set! s.inv_assign = inverse_mapping(assign)
-    @set! s.assign = assign
 
+    sorted_eqs = sizehint!(Equation[], nsrcs(s.graph))
     new_scc = find_scc(s.graph, assign)
-    =#
+    for c in new_scc
+        for e in c
+            vv = s.inv_assign[e]
+            if vv > 0
+                @info "Assigned" fullvars[vv] obs[e]
+            else
+                @warn "Unassigned" obs[e]
+            end
+            push!(sorted_eqs, obs[e])
+        end
+    end
+    @info "New" s.fullvars[new_states] sorted_eqs
+    Main._a[] = sorted_eqs
+    @show length(new_states)
+    @show count(.!s.varmask)
 
     #=
     obsdict = Dict(eq.lhs => eq.rhs for eq in obs)
