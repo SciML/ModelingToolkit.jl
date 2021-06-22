@@ -263,17 +263,24 @@ function state_selection!(sys; kwargs...)
     new_scc = find_scc(s.graph, assign)
     =#
 
+    #=
     obsdict = Dict(eq.lhs => eq.rhs for eq in obs)
     @info "" obs
     neweqs = similar(ode_states, Equation)
+    D = Differential(independent_variable(sys))
     for (i, v) in enumerate(ode_states)
         e = eqs[assign[v]]
         @show s.fullvars[v]
-        @show e
         Main._a[] = e, obsdict
-        neweqs[i] = fixpoint_sub(e, obsdict)
+        neweq = fixpoint_sub_exclude_differential(e, obsdict)
+        @info "" neweq
+        lhs = D(v)
+        rhs = solve_for(lhs, neweq)
+        neweqs[i] = lhs ~ rhs
     end
+    @info "" neweqs
     @set! sys.eqs = neweqs
+    =#
 
     #=
     deleteat!(eqs, solved_eq_idxs)
@@ -286,40 +293,45 @@ function state_selection!(sys; kwargs...)
     return sys
 end
 
+"""
+$(TYPEDSIGNATURES)
+
+Like `substitute`, but stop substitution when `Differential` is encountered.
+
+# Example:
+```julia
+julia> @variables t x(t); D = Differential(t)
+(::Differential) (generic function with 2 methods)
+
+julia> StructuralTransformations.substitute_exclude_differential((D(D(x)) + D(x)).val, Dict(D(x).val => t.val))
+t + Differential(t)(Differential(t)(x(t)))
+```
+Note that `substitute_exclude_differential` is required to make sure `D(x)` and
+`D(D(x))` are treated like different variables.
+"""
+substitute_exclude_differential(eq::Equation, dict) = substitute_exclude_differential(eq.lhs, dict) ~ substitute_exclude_differential(eq.rhs, dict)
 function substitute_exclude_differential(expr, dict)
     haskey(dict, expr) && return dict[expr]
     istree(expr) || return expr
 
     op = operation(expr)
-    canfold=true
+    op isa Differential && return expr
+    canfold = true
     args = map(arguments(expr)) do x
         x′ = substitute_exclude_differential(x, dict)
         canfold = canfold && !(x′ isa Symbolic)
         x′
     end
-    canfold && return op(args...)
-    similarterm(expr, op(expr), args, symtype(expr), metadata=metadata(expr))
+    canfold ? op(args...) : similarterm(expr, op, args, symtype(expr))
 end
-
-"""
-    occursin(needle::Symbolic, haystack::Symbolic)
-
-Determine whether the second argument contains the first argument. Note that
-this function doesn't handle associativity, commutativity, or distributivity.
-"""
-Base.occursin(needle::Symbolic, haystack::Symbolic) = _occursin(needle, haystack)
-Base.occursin(needle, haystack::Symbolic) = _occursin(needle, haystack)
-Base.occursin(needle::Symbolic, haystack) = _occursin(needle, haystack)
-function _occursin(needle, haystack)
-    isequal(needle, haystack) && return true
-
-    if istree(haystack)
-        args = arguments(haystack)
-        for arg in args
-            occursin(needle, arg) && return true
-        end
+function fixpoint_sub_exclude_differential(x, dict)
+    y = substitute_exclude_differential(x, dict)
+    while !isequal(x, y)
+        y = x
+        x = substitute_exclude_differential(y, dict)
     end
-    return false
+
+    return x
 end
 
 function is_original_linear(s, islineareq, e, v)
@@ -342,14 +354,13 @@ function islinearsystem(s, ts, islineareq, eqs, vars)
 
     islinear = true
     isconstant = true
-    for e in eqs, v in 𝑠neighbors(s.graph, e); inspected[v] || continue
+    for e in eqs, v in 𝑠neighbors(s.graph, e); inspected[v] || continue # Optimization: avoiding extra work
         islinear′, isconstant′ = is_original_linear(s, islineareq, e, v)
         islinear &= islinear′
-        islinear || @goto EXIT
+        islinear || break
         isconstant &= isconstant′
     end
 
-    @label EXIT
     for v in vars
         inspected[v] = false
     end
