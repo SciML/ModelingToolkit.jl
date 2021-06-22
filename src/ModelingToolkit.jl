@@ -40,7 +40,7 @@ import JuliaFormatter
 using Reexport
 @reexport using Symbolics
 export @derivatives
-using Symbolics: _parse_vars, value, makesym, @derivatives, get_variables,
+using Symbolics: _parse_vars, value, @derivatives, get_variables,
                  exprs_occur_in, solve_for, build_expr
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   jacobian_sparsity, islinear, _iszero, _isone,
@@ -49,7 +49,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   ParallelForm, SerialForm, MultithreadedForm, build_function,
                   unflatten_long_ops, rhss, lhss, prettify_expr, gradient,
                   jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-                  substituter
+                  substituter, scalarize
 
 import DiffEqBase: @add_kwonly
 

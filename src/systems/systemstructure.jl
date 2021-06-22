@@ -180,7 +180,7 @@ function initialize_system_structure(sys)
     for algvar in algvars
         # it could be that a variable appeared in the states, but never appeared
         # in the equations.
-        algvaridx = get(var2idx, algvar, 0)
+        algvaridx = var2idx[algvar]
         vartype[algvaridx] = ALGEBRAIC_VARIABLE
     end
 

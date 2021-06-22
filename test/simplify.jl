@@ -11,7 +11,7 @@ null_op = 0*t
 one_op = 1*t
 @test isequal(simplify(one_op), t)
 
-identity_op = Num(Term(identity,[x.val]))
+identity_op = Num(Term(identity,[value(x)]))
 @test isequal(simplify(identity_op), x)
 
 minus_op = -x
