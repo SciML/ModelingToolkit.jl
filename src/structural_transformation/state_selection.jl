@@ -75,8 +75,11 @@ function state_selection!(sys; kwargs...)
     @set! s.scc = scc
     @set! sys.structure = s
 
-    # Otter and Elmqvist (2017) 4.3.1:
-    s.varmask .= true
+    # Otter and Elmqvist (2017) 4.3 [1, 2]:
+    for (i, (a, ia)) in enumerate(zip(s.varassoc, s.inv_varassoc))
+        # lower differentiated and algebraic variables are potentially states
+        s.varmask[i] = a > 0 || a == 0 == ia
+    end
 
     eq_constraint_set = Vector{Vector{Int}}[]
     var_constraint_set = Vector{Vector{Int}}[]
@@ -137,19 +140,19 @@ function state_selection!(sys; kwargs...)
         highest_order = length(first(constraints))
         println("=============== BLOCK $bk ===============")
         for (order, (eq_constraint, var_constraint)) in enumerate(Iterators.reverse(zip(constraints...)))
-            needs_tearing = true
+            lower_order = order < highest_order
             @info "" eqs[eq_constraint] s.fullvars[var_constraint]
             ###
             ### Try to solve the scalar equation via a linear solver
             ###
             if length(eq_constraint) == 1 == length(var_constraint) && solve_equations!(obs, sys, eq_constraint, var_constraint)
                 @info "Scalar equation solved"
-                # There is only one equation and one unknown in this local
-                # contraint set, while the equation is lower order. This
-                # implies that the unknown must be a dummy state.
                 v = var_constraint[1]
-                @assert s.varmask[v]
-                s.varmask[v] = false
+                # We can reduce the state if it doesn't have the highest order, or it's algebraic
+                if lower_order || isalgebraic(s, v)
+                    @assert s.varmask[v]
+                    s.varmask[v] = false
+                end
                 continue
             end
 
@@ -174,9 +177,8 @@ function state_selection!(sys; kwargs...)
             end
 
             @show tearing_with_candidates!(ts, issolvable, s.fullvars)
-            @show s.fullvars[ts.v_residual]
 
-            for v in ts.v_solved
+            for v in ts.v_solved; (lower_order || isalgebraic(s, v)) || continue
                 @assert s.varmask[v]
                 s.varmask[v] = false
             end
@@ -184,7 +186,6 @@ function state_selection!(sys; kwargs...)
             @unpack e_solved, v_solved, e_residual, v_residual = ts
             if isempty(e_residual)
                 @assert solve_equations!(obs, sys, e_solved, v_solved)
-                @warn obs
                 push!(s.partitions, SystemPartition(;e_solved, v_solved, e_residual, v_residual))
             elseif length(eq_constraint) == length(var_constraint)
                 # Use a linear system of equations solver to further reduce the
@@ -196,7 +197,7 @@ function state_selection!(sys; kwargs...)
                 if islinear && isconstant #TODO: solve the equations at runtime
                     @views obs[eq_constraint] .= s.fullvars[var_constraint] .~ solve_for(eqs[eq_constraint], s.fullvars[var_constraint], check=false)
                     # v_residual ∩ v_solved = ∅ and v_residual ∪ v_solved =var_constraint
-                    for v in v_residual
+                    for v in v_residual; (lower_order || isalgebraic(s, v)) || continue
                         @show s.fullvars[v]
                         @assert s.varmask[v]
                         s.varmask[v] = false

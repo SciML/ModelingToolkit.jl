@@ -9,7 +9,7 @@ using UnPack: @unpack
 using SymbolicUtils
 using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
-using SymbolicUtils: similarterm, istree, symtype
+using SymbolicUtils: similarterm, istree, symtype, _iszero
 
 using Symbolics: solve_for, linear_expansion, VariableDefaultValue, derivative
 
