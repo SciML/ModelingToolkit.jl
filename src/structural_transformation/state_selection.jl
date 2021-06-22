@@ -86,9 +86,12 @@ function state_selection!(sys; kwargs...)
     #
     # Since $a = varassoc[j]$ when $a > 0 => vⱼ = v̇ₐ$, it follows that
     # $a > 0 => vⱼ$ is a potential state.
-    for (j, a) in enumerate(s.varassoc)
-        is_potential_state = a > 0
+    for (j, (a, ia)) in enumerate(zip(s.varassoc, s.inv_varassoc))
+        is_potential_state = a > 0 || a == 0 == ia
         s.varmask[j] = !is_potential_state
+        if is_potential_state
+            @info "potential_state:" s.fullvars[j]
+        end
     end
 
     eq_constraint_set = Vector{Vector{Int}}[]
