@@ -151,8 +151,9 @@ function state_selection!(sys; kwargs...)
     obs = Equation[]
     empty!(s.partitions)
 
-    for constraints in zip(eq_constraint_set, var_constraint_set)
+    for (bk, constraints) in enumerate(zip(eq_constraint_set, var_constraint_set))
         highest_order = length(first(constraints))
+        println("=============== BLOCK $bk ===============")
         for (order, (eq_constraint, var_constraint)) in enumerate(Iterators.reverse(zip(constraints...)))
             needs_tearing = true
             @info "" eqs[eq_constraint] s.fullvars[var_constraint]
@@ -200,25 +201,19 @@ function state_selection!(sys; kwargs...)
                 @show tearing_with_candidates!(ts, issolvable, s.fullvars)
                 @show s.fullvars[ts.v_residual]
 
-                if order < highest_order
-                    for v in ts.v_solved
-                        @assert !s.varmask[v]
-                        s.varmask[v] = true
-                    end
-
-                    if length(eq_constraint) == length(var_constraint)
-                        for v in ts.v_residual
-                            @assert !s.varmask[v]
-                            s.varmask[v] = true
-                        end
-                    end
+                order < highest_order && for v in ts.v_solved
+                    @assert !s.varmask[v]
+                    s.varmask[v] = true
                 end
 
-                if isempty(ts.e_residual)
-                    is_solved = solve_equations!(obs, sys, ts.e_solved, ts.v_solved)
+                @unpack e_solved, v_solved, e_residual, v_residual = ts
+                if isempty(e_residual)
+                    is_solved = solve_equations!(obs, sys, e_solved, v_solved)
+                    @warn obs
                     @assert is_solved
-                    append!(solved_eq_idxs, ts.e_solved)
-                    append!(solved_var_idxs, ts.v_solved)
+                    append!(solved_eq_idxs, e_solved)
+                    append!(solved_var_idxs, v_solved)
+                    push!(s.partitions, SystemPartition(;e_solved, v_solved, e_residual, v_residual))
                 elseif length(eq_constraint) == length(var_constraint)
                     # Use a linear system of equations solver to further reduce the
                     # the number of states.
@@ -230,18 +225,28 @@ function state_selection!(sys; kwargs...)
                         append!(obs, s.fullvars[var_constraint] .~ solve_for(eqs[eq_constraint], s.fullvars[var_constraint], check=false))
                         append!(solved_eq_idxs, eq_constraint)
                         append!(solved_var_idxs, var_constraint)
+                        # v_residual ∩ v_solved = ∅ and v_residual ∪ v_solved =var_constraint
+                        order < highest_order &&  for v in v_residual
+                            @assert !s.varmask[v]
+                            s.varmask[v] = true
+                        end
+                        push!(s.partitions, SystemPartition(;e_solved=eq_constraint, v_solved=var_constraint, e_residual=Int[], v_residual=Int[]))
+                    else
+                        @show s.varmask[v_residual]
+                        push!(s.partitions, SystemPartition(;e_solved, v_solved, e_residual, v_residual))
                     end
-                #elseif length(eq_constraint) < length(var_constraint) && order < highest_order
-                #    error("ModelingToolkit cannot handle this kind of system yet. " *
-                #          "Please file an issue with a reproducible example if " *
-                #          "you encounter this error message.")
-                #else
-                #    scc_throw()
+                elseif length(eq_constraint) < length(var_constraint) && order < highest_order
+                    error("ModelingToolkit cannot handle this kind of system yet. " *
+                          "Please file an issue with a reproducible example if " *
+                          "you encounter this error message.")
+                else
+                    scc_throw()
                 end
             end
         end
     end
 
+    @info "" obs
     @assert length(solved_eq_idxs) == length(obs) == length(solved_var_idxs)
     sort!(solved_eq_idxs)
     sort!(solved_var_idxs)
@@ -257,7 +262,17 @@ function state_selection!(sys; kwargs...)
     ###
     ### Substitute reduced equations
     ###
-    assign = matching(highest_order_graph, .!s.varmask)
+    #assign = matching(highest_order_graph, .!s.varmask)
+    solved_eq_idxs_set = Set(Iterators.flatten(solved_eq_idxs))
+    @show length(solved_eq_idxs_set), length(equations(sys))
+    eqmask = filter(i->!(i in solved_eq_idxs_set), 1:nsrcs(s.graph))
+    @show equations(sys)[eqmask]
+    #assign = matching(s.graph, .!s.varmask)
+    #assign = matching(s.graph, s.varmask)
+    assign = matching(s.graph, s.varmask)
+    @show assign
+    idxs = findall(x->x==UNASSIGNED, assign)
+    @show equations(sys)[idxs]
     #=
     inv_assign = inverse_mapping(assign)
     @set! s.inv_assign = inverse_mapping(assign)
