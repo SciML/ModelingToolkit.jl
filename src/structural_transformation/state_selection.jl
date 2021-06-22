@@ -222,67 +222,59 @@ function state_selection!(sys; kwargs...)
     @info "" obs
 
     new_states = Int[]
-    #new_eqs = Equation[]
-    assign = matching(s.graph, .!s.varmask)
-    @set! s.assign = assign
+    lhss = Set{Int}()
     for (v, m) in enumerate(s.varmask); m || continue
         push!(new_states, v)
-        #dv = s.varassoc[v] > 0 ? s.varassoc[v] : v
-        #push!(new_eqs, eqs[assign[dv]])
+        dv = s.varassoc[v]
+        dv > 0 && push!(lhss, dv)
     end
 
     ###
     ### Substitute reduced equations
     ###
+    assign = matching(s.graph, .!s.varmask)
+    @set! s.assign = assign
     @set! s.inv_assign = inverse_mapping(assign)
+    var2idx = Dict(v => i for (i, v) in enumerate(s.fullvars))
 
     sorted_eqs = sizehint!(Equation[], nsrcs(s.graph))
     new_scc = find_scc(s.graph, assign)
+    new_eqs = similar(eqs, length(new_states))
+    obs_dict = Dict()
+    obs_eqs = Equation[]
+    i = 0
     for c in new_scc
         for e in c
+            #=
             vv = s.inv_assign[e]
             if vv > 0
                 @info "Assigned" fullvars[vv] obs[e]
             else
                 @warn "Unassigned" obs[e]
             end
-            push!(sorted_eqs, obs[e])
+            =#
+            eq = obs[e]
+            push!(sorted_eqs, eq)
+            if _iszero(eq.lhs) || var2idx[eq.lhs] in lhss # if it's algebraic or differential
+                new_eqs[i+=1] = obs[e]
+            else
+                obs_dict[eq.lhs] = eq.rhs
+                push!(obs_eqs, eq)
+            end
         end
     end
-    @info "New" s.fullvars[new_states] sorted_eqs
+    @info "New" s.fullvars[new_states] sorted_eqs new_eqs
     Main._a[] = sorted_eqs
     @show length(new_states)
     @show count(.!s.varmask)
 
-    #=
-    obsdict = Dict(eq.lhs => eq.rhs for eq in obs)
-    @info "" obs
-    neweqs = similar(ode_states, Equation)
-    D = Differential(independent_variable(sys))
-    for (i, v) in enumerate(ode_states)
-        e = eqs[assign[v]]
-        @show s.fullvars[v]
-        Main._a[] = e, obsdict
-        neweq = fixpoint_sub_exclude_differential(e, obsdict)
-        @info "" neweq
-        lhs = D(v)
-        rhs = solve_for(lhs, neweq)
-        neweqs[i] = lhs ~ rhs
-    end
-    @info "" neweqs
-    @set! sys.eqs = neweqs
-    =#
-
-    #=
-    deleteat!(eqs, solved_eq_idxs)
-    deleteat!(s.fullvars, solved_var_idxs)
-    @show s.fullvars
-    @set! sys.states = intersect(states(sys), s.fullvars)
-    @set! sys.observed = [observed(sys); obs]
-    =#
+    @set! sys.observed = obs_eqs
+    @set! sys.eqs = map(Base.Fix2(fixpoint_sub_exclude_differential, obs_dict), new_eqs)
     @set! sys.structure = s
     return sys
 end
+
+isalgebraic(s, v) = s.varassoc[v] == 0 == s.inv_varassoc[v]
 
 """
 $(TYPEDSIGNATURES)
@@ -459,6 +451,17 @@ eqs = [
     0 ~ u[6] + 2x[6] + x[7]
     0 ~ u[7] + 3x[6] + 4x[7]
     0 ~ u[8] + x[8] - sin(x[8])
+]
+sys = ODESystem(eqs, t)
+sys = initialize_system_structure(sys); StructuralTransformations.state_selection!(sys)
+
+# TODO: detect this case and warn that this can only be a DAEProblem
+using ModelingToolkit
+@parameters t u[1:8](t)
+@variables x[1:8](t)
+D = Differential(t)
+eqs = [
+    0 ~ sin(D(x[1])) + u[1]
 ]
 sys = ODESystem(eqs, t)
 sys = initialize_system_structure(sys); StructuralTransformations.state_selection!(sys)
