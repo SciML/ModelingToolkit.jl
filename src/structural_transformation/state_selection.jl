@@ -138,10 +138,11 @@ function state_selection!(sys; kwargs...)
 
     for (bk, constraints) in enumerate(zip(eq_constraint_set, var_constraint_set))
         highest_order = length(first(constraints))
-        println("=============== BLOCK $bk ===============")
+        println("=============== BLT block $bk ===============")
         for (order, (eq_constraint, var_constraint)) in enumerate(Iterators.reverse(zip(constraints...)))
+            println("--------------- BLT: $bk.$order ---------------")
             lower_order = order < highest_order
-            @info "" eqs[eq_constraint] s.fullvars[var_constraint]
+            @info "" equations=eqs[eq_constraint] unknows=s.fullvars[var_constraint]
             ###
             ### Try to solve the scalar equation via a linear solver
             ###
@@ -176,7 +177,7 @@ function state_selection!(sys; kwargs...)
                 ts.vc = setdiff(var_constraint, ts.der_v_solved)
             end
 
-            @show tearing_with_candidates!(ts, issolvable, s.fullvars)
+            #@show tearing_with_candidates!(ts, issolvable, s.fullvars)
 
             for v in ts.v_solved; (lower_order || isalgebraic(s, v)) || continue
                 @assert s.varmask[v]
@@ -196,7 +197,6 @@ function state_selection!(sys; kwargs...)
                 @show islinear, isconstant
                 if islinear && isconstant #TODO: solve the equations at runtime
                     @views obs[eq_constraint] .= s.fullvars[var_constraint] .~ solve_for(eqs[eq_constraint], s.fullvars[var_constraint], check=false)
-                    # v_residual ∩ v_solved = ∅ and v_residual ∪ v_solved =var_constraint
                     for v in v_residual; (lower_order || isalgebraic(s, v)) || continue
                         @show s.fullvars[v]
                         @assert s.varmask[v]
@@ -209,25 +209,27 @@ function state_selection!(sys; kwargs...)
                     @assert solve_equations!(obs, sys, e_solved, v_solved)
                     @views obs[e_residual] .= eqs[e_residual]
                 end
-            elseif length(eq_constraint) < length(var_constraint) && order < highest_order
-                error("ModelingToolkit cannot handle this kind of system yet. " *
-                        "Please file an issue with a reproducible example if " *
-                        "you encounter this error message.")
-            else
-                scc_throw()
+            #elseif length(eq_constraint) < length(var_constraint) && order < highest_order
+            #    error("ModelingToolkit cannot handle this kind of system yet. " *
+            #            "Please file an issue with a reproducible example if " *
+            #            "you encounter this error message.")
+            #else
+            #    scc_throw()
             end
         end
+        println("=============== End of BLT block $bk ===============")
     end
 
     @info "" obs
 
-    new_states = Int[]
+    new_states = []
     lhss = Set{Int}()
     for (v, m) in enumerate(s.varmask); m || continue
-        push!(new_states, v)
+        push!(new_states, diff2term(s.fullvars[v]))
         dv = s.varassoc[v]
         dv > 0 && push!(lhss, dv)
     end
+    @info "New states" new_states
 
     ###
     ### Substitute reduced equations
@@ -235,7 +237,7 @@ function state_selection!(sys; kwargs...)
     assign = matching(s.graph, .!s.varmask)
     @set! s.assign = assign
     @set! s.inv_assign = inverse_mapping(assign)
-    var2idx = Dict(v => i for (i, v) in enumerate(s.fullvars))
+    var2idx = Dict{Any,Int}(v => i for (i, v) in enumerate(s.fullvars))
 
     sorted_eqs = sizehint!(Equation[], nsrcs(s.graph))
     new_scc = find_scc(s.graph, assign)
@@ -255,20 +257,30 @@ function state_selection!(sys; kwargs...)
             =#
             eq = obs[e]
             push!(sorted_eqs, eq)
-            if _iszero(eq.lhs) || var2idx[eq.lhs] in lhss # if it's algebraic or differential
+            iv = _iszero(eq.lhs) ? -1 : var2idx[eq.lhs]
+            if iv == -1 || iv in lhss # if it's algebraic or differential
+                @show eq
                 new_eqs[i+=1] = obs[e]
+                while iv > 0 && (iv = s.inv_varassoc[iv]) > 0
+                    s.inv_varassoc[iv] > 0 || break
+                    nv = diff2term(s.fullvars[iv])
+                    if iter == 1
+                        new_eqs[i] = substitute(new_eqs[i].lhs, Dict(s.fullvars[iv] => nv)) ~ new_eqs[i].rhs
+                    end
+                    @show new_eqs[i+=1] = s.fullvars[iv] ~ nv
+                end
             else
                 obs_dict[eq.lhs] = eq.rhs
                 push!(obs_eqs, eq)
             end
         end
     end
-    @info "New" s.fullvars[new_states] sorted_eqs new_eqs
-    Main._a[] = sorted_eqs
+    @info "New equations" new_eqs
     @show length(new_states)
     @show count(.!s.varmask)
 
     @set! sys.observed = obs_eqs
+    @set! sys.states = new_states
     @set! sys.eqs = map(Base.Fix2(fixpoint_sub_exclude_differential, obs_dict), new_eqs)
     @set! sys.structure = s
     return sys
