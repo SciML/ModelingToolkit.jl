@@ -99,7 +99,7 @@ new_sol = solve(new_prob, Tsit5())
 ```
 
 """
-function changeofvariables(sys, forward_subs, backward_subs; simplify=false, t0=missing)
+function changeofvariables(sys::ODESystem, forward_subs, backward_subs; simplify=false, t0=missing)
     t = independent_variable(sys)
 
     old_vars = first.(backward_subs)
@@ -109,7 +109,7 @@ function changeofvariables(sys, forward_subs, backward_subs; simplify=false, t0=
 
     # use: dz/dt = ∂z/∂x dx/dt + ∂z/∂t
     dzdt = Symbolics.derivative( first.(forward_subs), t )
-    new_eqs = []
+    new_eqs = Equation[]
     for (new_var, ex) in zip(new_vars, dzdt)
         for ode_eq in equations(sys)
             ex = substitute(ex, ode_eq.lhs => ode_eq.rhs)
@@ -134,5 +134,6 @@ function changeofvariables(sys, forward_subs, backward_subs; simplify=false, t0=
     end
     return ODESystem(new_eqs;
                         defaults=new_defs,
-                        observed=first.(backward_subs) .~ last.(backward_subs))
+                        observed=vcat(observed(sys),first.(backward_subs) .~ last.(backward_subs))
+                        )
 end
