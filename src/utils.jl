@@ -121,7 +121,7 @@ end
 "Get all the independent variables with respect to which differentials are taken."
 function collect_differentials(eqs)
     vars = Set()
-    ivs = OrderedSet()
+    ivs = Set()
     for eq in eqs
         vars!(vars, eq)
         for v in vars
