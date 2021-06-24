@@ -136,7 +136,7 @@ end
 "Assert that equations are well-formed when building ODE."
 function check_equations(eqs,iv)
     ivs = collect_differentials(eqs)
-    display = [v for v in ivs]
+    display = collect(ivs)
     length(ivs) <= 1 || throw(ArgumentError("Differential w.r.t. multiple variables $display are not allowed."))
     if length(ivs) == 1
         single_iv = pop!(ivs)
