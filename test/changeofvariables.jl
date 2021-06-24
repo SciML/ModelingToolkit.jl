@@ -2,7 +2,8 @@ using ModelingToolkit, OrdinaryDiffEq
 using Test, LinearAlgebra
 
 
-# Change of variables: z = exp(x)
+# Change of variables: z = log(x)
+# (this implies that x = exp(z) is automatically non-negative)
 
 @parameters t α
 @variables x(t)
@@ -18,10 +19,10 @@ prob = ODEProblem(sys, [], tspan, p)
 sol = solve(prob, Tsit5())
 
 @variables z(t)
-forward_subs  = [exp(x) => z]
-backward_subs = [x => log(z)]
+forward_subs  = [log(x) => z]
+backward_subs = [x => exp(z)]
 new_sys = changeofvariables(sys, forward_subs, backward_subs)
-@test equations(new_sys)[1] == (D(z) ~ α*z*log(z))
+@test equations(new_sys)[1] == (D(z) ~ α)
 
 new_prob = ODEProblem(new_sys, [], tspan, p)
 new_sol = solve(new_prob, Tsit5())
@@ -30,7 +31,7 @@ new_sol = solve(new_prob, Tsit5())
 
 
 
-# Riccatti equation
+# Riccati equation
 @parameters t α
 @variables x(t)
 D = Differential(t)
