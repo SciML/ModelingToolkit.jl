@@ -319,7 +319,7 @@ ode = ODESystem(eq)
 end
 
 #Issue 998
-@parameters t 
+@parameters t
 pars = []
 vars = @variables((u1,))
 der = Differential(t)
@@ -333,14 +333,12 @@ pars =[t]
 vars = @variables((u1(t),))
 @test_throws ArgumentError ODESystem(eqs,t,vars,pars)
 
-@variables x(t)
+@variables x(t)=10.0
 D = Differential(t)
-@parameters M b k
+@parameters M=1.0 b=1.0 k=1.0
 eqs = [D(D(x)) ~ -b/M*D(x) - k/M*x]
 ps = [M, b, k]
-default_u0 = [D(x) => 0.0, x => 10.0]
-default_p = [M => 1.0, b => 1.0, k => 1.0]
-@named sys = ODESystem(eqs, t, [x], ps, defaults=[default_u0; default_p])
+@named sys = ODESystem(eqs, t, [x], ps, defaults=[D(x) => 0.0])
 sys = ode_order_lowering(sys)
 prob = ODEProblem(sys, [], tspan)
 sol = solve(prob, Tsit5())
