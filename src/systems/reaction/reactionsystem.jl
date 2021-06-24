@@ -154,9 +154,9 @@ struct ReactionSystem <: AbstractSystem
         iv′ = value(iv)
         states′ = value.(states)
         ps′ = value.(ps)
-        check_variables(states′,iv′)
-        check_parameters(ps′,iv′)
-        check_equations(eqs,iv′)
+        check_variables(states′, iv′)
+        check_parameters(ps′, iv′)
+        check_equations(eqs, iv′)
         new(eqs, iv′, states′, ps′, observed, name, systems)
     end
 end

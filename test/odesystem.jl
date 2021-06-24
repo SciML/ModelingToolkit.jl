@@ -303,7 +303,7 @@ ode = ODESystem(eq)
         @variables x(t) f(t)
         D = Differential(t)
 
-        ODESystem([D(x) ~ -a*x + f], name=name)
+        ODESystem([D(x) ~ -a*x + f], name = name)
     end
 
     function issue808()
@@ -312,7 +312,7 @@ ode = ODESystem(eq)
 
         @parameters t
         D = Differential(t)
-        @test_throws ArgumentError ODESystem([sys2.f ~ sys1.x, D(sys1.f) ~ 0], t, systems=[sys1, sys2])
+        @test_throws ArgumentError ODESystem([sys2.f ~ sys1.x, D(sys1.f) ~ 0], t, systems = [sys1, sys2])
     end
     issue808()
 
@@ -326,19 +326,19 @@ der = Differential(t)
 eqs = [
   der(u1) ~ 1,
 ]
-@test_throws ArgumentError ODESystem(eqs,t,vars,pars)
+@test_throws ArgumentError ODESystem(eqs, t, vars, pars)
 
 #Issue 1063/998
-pars =[t]
+pars = [t]
 vars = @variables((u1(t),))
-@test_throws ArgumentError ODESystem(eqs,t,vars,pars)
+@test_throws ArgumentError ODESystem(eqs, t, vars, pars)
 
 @parameters w
 der = Differential(w)
 eqs = [
   der(u1) ~ t,
 ]
-@test_throws ArgumentError sys= ModelingToolkit.ODESystem(eqs,t,vars,pars,)
+@test_throws ArgumentError sys = ModelingToolkit.ODESystem(eqs, t, vars, pars)
 
 @variables x(t)
 D = Differential(t)
