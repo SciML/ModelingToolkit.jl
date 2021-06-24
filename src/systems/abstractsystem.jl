@@ -535,7 +535,9 @@ function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
         if defs !== nothing
             val = get(defs, s, nothing)
             if val !== nothing
-                print(io, " [defaults to $val]")
+                print(io, " [defaults to ")
+                show(IOContext(io, :compact=>true, :limit=>true, :displaysize=>(1,displaysize(io)[2])), val)
+                print(io, "]")
             end
         end
     end
@@ -553,7 +555,9 @@ function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
         if defs !== nothing
             val = get(defs, s, nothing)
             if val !== nothing
-                print(io, " [defaults to $val]")
+                print(io, " [defaults to ")
+                show(IOContext(io, :compact=>true, :limit=>true, :displaysize=>(1,displaysize(io)[2])), val)
+                print(io, "]")
             end
         end
     end

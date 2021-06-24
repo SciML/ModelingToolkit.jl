@@ -17,11 +17,11 @@ new = (((1 / β - 1) + δ) / γ) ^ (1 / (γ - 1))
 
 # test namespace_expr
 @parameters t a p(t)
-pterm = p.val
+pterm = value(p)
 pnsp = ModelingToolkit.namespace_expr(pterm, :namespace, :t)
 @test typeof(pterm) == typeof(pnsp)
 @test ModelingToolkit.getname(pnsp) == Symbol("namespace₊p")
-asym = a.val
+asym = value(a)
 ansp = ModelingToolkit.namespace_expr(asym, :namespace, :t)
 @test typeof(asym) == typeof(ansp)
 @test ModelingToolkit.getname(ansp) == Symbol("namespace₊a")

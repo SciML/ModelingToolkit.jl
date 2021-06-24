@@ -468,11 +468,13 @@ function Base.convert(::Type{<:SDESystem}, rs::ReactionSystem;
                       noise_scaling=nothing, name=nameof(rs), combinatoric_ratelaws=true, 
                       include_zero_odes=true, kwargs...)
 
-    if noise_scaling isa Vector
+    if noise_scaling isa AbstractArray
         (length(noise_scaling)!=length(equations(rs))) &&
         error("The number of elements in 'noise_scaling' must be equal " *
               "to the number of reactions in the reaction system.")
-        noise_scaling = value.(noise_scaling)
+        if !(noise_scaling isa Symbolics.Arr)
+            noise_scaling = value.(noise_scaling)
+        end
     elseif !isnothing(noise_scaling)
         noise_scaling = fill(value(noise_scaling),length(equations(rs)))
     end
@@ -483,7 +485,7 @@ function Base.convert(::Type{<:SDESystem}, rs::ReactionSystem;
                                   combinatoric_ratelaws=combinatoric_ratelaws)
     systems  = convert.(SDESystem, get_systems(rs))
     SDESystem(eqs, noiseeqs, get_iv(rs), get_states(rs),
-              (noise_scaling===nothing) ? get_ps(rs) : union(get_ps(rs), toparam.(noise_scaling));
+              (noise_scaling===nothing) ? get_ps(rs) : union(get_ps(rs), toparam(noise_scaling));
               name=name, 
               systems=systems,
               kwargs...)
