@@ -16,8 +16,10 @@ p  = collect(4:6)
 @test parentmodule(typeof(ODEPrecompileTest.f_bad.f.f_oop).parameters[2]) == ModelingToolkit
 @test parentmodule(typeof(ODEPrecompileTest.f_noeval_bad.f.f_iip).parameters[2]) == ModelingToolkit
 @test parentmodule(typeof(ODEPrecompileTest.f_noeval_bad.f.f_oop).parameters[2]) == ModelingToolkit
-@test_throws KeyError ODEPrecompileTest.f_bad(u, p, 0.1)
-@test_throws KeyError ODEPrecompileTest.f_noeval_bad(u, p, 0.1)
+@test_skip begin
+    @test_throws KeyError ODEPrecompileTest.f_bad(u, p, 0.1)
+    @test_throws KeyError ODEPrecompileTest.f_noeval_bad(u, p, 0.1)
+end
 
 # This case works, because it gets defined with the appropriate cache and context tags.
 @test parentmodule(typeof(ODEPrecompileTest.f_noeval_good.f.f_iip).parameters[2]) == ODEPrecompileTest
