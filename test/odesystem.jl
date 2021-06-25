@@ -338,7 +338,7 @@ der = Differential(w)
 eqs = [
   der(u1) ~ t,
 ]
-@test_throws ArgumentError sys = ModelingToolkit.ODESystem(eqs, t, vars, pars)
+@test_throws ArgumentError ModelingToolkit.ODESystem(eqs, t, vars, pars)
 
 @variables x(t)
 D = Differential(t)
