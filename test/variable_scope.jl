@@ -2,11 +2,16 @@ using ModelingToolkit
 using Test
 
 @parameters t
-@variables a b(t) c d
+@variables a b(t) c d e(t)
 
 b = ParentScope(b)
 c = ParentScope(ParentScope(c))
 d = GlobalScope(d)
+
+# ensure it works on Term too
+LocalScope(e.val)
+ParentScope(e.val)
+GlobalScope(e.val)
 
 renamed(nss, sym) = ModelingToolkit.getname(foldr(ModelingToolkit.renamespace, nss, init=sym))
 

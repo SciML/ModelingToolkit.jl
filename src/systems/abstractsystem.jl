@@ -271,15 +271,15 @@ end
 abstract type SymScope end
 
 struct LocalScope <: SymScope end
-LocalScope(sym::Union{Num, Sym}) = setmetadata(sym, SymScope, LocalScope())
+LocalScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, LocalScope())
 
 struct ParentScope <: SymScope
     parent::SymScope
 end
-ParentScope(sym::Union{Num, Sym}) = setmetadata(sym, SymScope, ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+ParentScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
 
 struct GlobalScope <: SymScope end
-GlobalScope(sym::Union{Num, Sym}) = setmetadata(sym, SymScope, GlobalScope())
+GlobalScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, GlobalScope())
 
 function renamespace(namespace, x)
     if x isa Num
