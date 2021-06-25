@@ -33,9 +33,9 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
     eqs::U
     """The independent variable, usually time."""
     iv::Any
-    """The dependent variables, representing the state of the system."""
+    """The dependent variables, representing the state of the system.  Must not contain the independent variable."""
     states::Vector
-    """The parameters of the system."""
+    """The parameters of the system. Must not contain the independent variable."""
     ps::Vector
     observed::Vector{Equation}
     """The name of the system. . These are required to have unique names."""
