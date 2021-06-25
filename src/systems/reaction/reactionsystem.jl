@@ -140,9 +140,9 @@ struct ReactionSystem <: AbstractSystem
     eqs::Vector{Reaction}
     """Independent variable (usually time)."""
     iv::Any
-    """Dependent (state) variables representing amount of each species."""
+    """Dependent (state) variables representing amount of each species. Must not contain the independent variable."""
     states::Vector
-    """Parameter variables."""
+    """Parameter variables. Must not contain the independent variable."""
     ps::Vector
     observed::Vector{Equation}
     """The name of the system"""

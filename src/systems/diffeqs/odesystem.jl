@@ -27,9 +27,9 @@ struct ODESystem <: AbstractODESystem
     eqs::Vector{Equation}
     """Independent variable."""
     iv::Sym
-    """Dependent (state) variables."""
+    """Dependent (state) variables. Must not contain the independent variable."""
     states::Vector
-    """Parameter variables."""
+    """Parameter variables. Must not contain the independent variable."""
     ps::Vector
     observed::Vector{Equation}
     """
