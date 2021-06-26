@@ -25,7 +25,7 @@ j₃      = MassActionJump(2*β+γ, [R => 1], [S => 1, R => -1])
 js      = JumpSystem([j₁,j₂,j₃], t, [S,I,R], [β,γ])
 ```
 """
-struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
+struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     The jumps of the system. Allowable types are `ConstantRateJump`,
     `VariableRateJump`, `MassActionJump`.

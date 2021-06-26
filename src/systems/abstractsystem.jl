@@ -1,6 +1,6 @@
 """
 ```julia
-calculate_tgrad(sys::AbstractSystem)
+calculate_tgrad(sys::AbstractTimeDependentSystem)
 ```
 
 Calculate the time gradient of a system.
@@ -60,7 +60,7 @@ function calculate_hessian end
 
 """
 ```julia
-generate_tgrad(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+generate_tgrad(sys::AbstractTimeDependentSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
 ```
 
 Generates a function for the time gradient of a system. Extra arguments control
@@ -127,7 +127,7 @@ function getname(t)
     end
 end
 
-independent_variable(sys::AbstractSystem) = isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
+independent_variable(sys::AbstractTimeDependentSystem) = isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
 
 function structure(sys::AbstractSystem)
     s = get_structure(sys)

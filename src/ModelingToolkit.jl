@@ -75,7 +75,9 @@ $(TYPEDEF)
 TODO
 """
 abstract type AbstractSystem end
-abstract type AbstractODESystem <: AbstractSystem end
+abstract type AbstractTimeDependentSystem <: AbstractSystem end
+abstract type AbstractTimeIndependentSystem <: AbstractSystem end
+abstract type AbstractODESystem <: AbstractTimeDependentSystem end
 
 """
 $(TYPEDSIGNATURES)
