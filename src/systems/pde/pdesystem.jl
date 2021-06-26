@@ -34,7 +34,7 @@ domains = [t ∈ (0.0,1.0),
 pde_system = PDESystem(eq,bcs,domains,[t,x],[u])
 ```
 """
-struct PDESystem <: ModelingToolkit.AbstractSystem
+struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     "The equations which define the PDE"
     eqs
     "The boundary conditions"
