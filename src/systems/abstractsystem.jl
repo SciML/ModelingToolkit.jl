@@ -126,8 +126,14 @@ function getname(t)
         nameof(t)
     end
 end
+#Treat the return as whatever getfield gives you
+independent_variable(sys::AbstractTimeDependentSystem) = getfield(sys, :iv)
+independent_variable(sys::AbstractTimeIndependentSystem) = nothing
 
-independent_variable(sys::AbstractTimeDependentSystem) = isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
+#Treat the result as a vector of symbols always
+independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
+independent_variables(sys::AbstractTimeIndependentSystem) = []
+independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :indvars)
 
 function structure(sys::AbstractSystem)
     s = get_structure(sys)
@@ -304,35 +310,35 @@ namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
 
 function namespace_defaults(sys)
     defs = defaults(sys)
-    Dict((isparameter(k) ? parameters(sys, k) : states(sys, k)) => namespace_expr(defs[k], nameof(sys), independent_variable(sys)) for k in keys(defs))
+    Dict((isparameter(k) ? parameters(sys, k) : states(sys, k)) => namespace_expr(defs[k], nameof(sys), independent_variables(sys)) for k in keys(defs))
 end
 
 function namespace_equations(sys::AbstractSystem)
     eqs = equations(sys)
     isempty(eqs) && return Equation[]
-    iv = independent_variable(sys)
-    map(eq->namespace_equation(eq,nameof(sys),iv), eqs)
+    ivs = independent_variables(sys)
+    map(eq -> namespace_equation(eq, nameof(sys), ivs), eqs)
 end
 
-function namespace_equation(eq::Equation,name,iv)
-    _lhs = namespace_expr(eq.lhs,name,iv)
-    _rhs = namespace_expr(eq.rhs,name,iv)
+function namespace_equation(eq::Equation, name, ivs)
+    _lhs = namespace_expr(eq.lhs, name, ivs)
+    _rhs = namespace_expr(eq.rhs, name, ivs)
     _lhs ~ _rhs
 end
 
-function namespace_expr(O::Sym,name,iv)
-    isequal(O, iv) ? O : renamespace(name,O)
+function namespace_expr(O::Sym, name, ivs)
+    any(isequal(O), ivs) ? O : renamespace(name, O)
 end
 
 _symparam(s::Symbolic{T}) where {T} = T
-function namespace_expr(O,name,iv) where {T}
+function namespace_expr(O, name, ivs) where {T}
     O = value(O)
     if istree(O)
-        renamed = map(a->namespace_expr(a,name,iv), arguments(O))
+        renamed = map(a -> namespace_expr(a, name, ivs), arguments(O))
         if operation(O) isa Sym
-            rename(O,getname(renamespace(name, O)))
+            rename(O, getname(renamespace(name, O)))
         else
-            similarterm(O,operation(O),renamed)
+            similarterm(O, operation(O), renamed)
         end
     else
         O
@@ -352,13 +358,13 @@ function parameters(sys::AbstractSystem)
     isempty(systems) ? ps : [ps;reduce(vcat,namespace_parameters.(systems))]
 end
 function observed(sys::AbstractSystem)
-    iv = independent_variable(sys)
+    ivs = independent_variables(sys)
     obs = get_observed(sys)
     systems = get_systems(sys)
     [obs;
      reduce(vcat,
-            (map(o->namespace_equation(o, nameof(s), iv), observed(s)) for s in systems),
-            init=Equation[])]
+            (map(o -> namespace_equation.(o, nameof(s), ivs), observed(s)) for s in systems),
+            init = Equation[])]
 end
 
 Base.@deprecate default_u0(x) defaults(x) false
@@ -476,12 +482,6 @@ function toexpr(sys::AbstractSystem)
     expr = Expr(:block)
     stmt = expr.args
 
-    iv = independent_variable(sys)
-    ivname = gensym(:iv)
-    if iv !== nothing
-        push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
-    end
-
     stsname = gensym(:sts)
     sts = states(sys)
     push_vars!(stmt, stsname, Symbol("@variables"), sts)
@@ -498,7 +498,10 @@ function toexpr(sys::AbstractSystem)
     defs_name = push_defaults!(stmt, defaults(sys), var2name)
 
     if sys isa ODESystem
-        push!(stmt, :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults=$defs_name)))
+        iv = get_iv(sys)
+        ivname = gensym(:iv)
+        push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
+        push!(stmt, :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name)))
     elseif sys isa NonlinearSystem
         push!(stmt, :($NonlinearSystem($eqs_name, $stsname, $psname; defaults=$defs_name)))
     end
