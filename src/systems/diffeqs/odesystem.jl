@@ -77,6 +77,7 @@ struct ODESystem <: AbstractODESystem
     function ODESystem(deqs, iv, dvs, ps, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type)
         check_variables(dvs,iv)
         check_parameters(ps,iv)
+        check_equations(deqs,iv)
         new(deqs, iv, dvs, ps, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type)
     end
 end

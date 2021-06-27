@@ -125,13 +125,13 @@ np = NonlinearProblem(ns, [0,0,0], [1,2,3], jac=true, sparse=true)
            @parameters a
            @variables x f
 
-           NonlinearSystem([0 ~ -a*x + f],[x,f],[a], name=name)
+           NonlinearSystem([0 ~ -a * x + f], [x,f], [a], name = name)
        end
 
        function issue819()
            sys1 = makesys(:sys1)
            sys2 = makesys(:sys1)
-           @test_throws ArgumentError NonlinearSystem([sys2.f ~ sys1.x, sys1.f ~ 0],[],[], systems=[sys1, sys2])
+           @test_throws ArgumentError NonlinearSystem([sys2.f ~ sys1.x, sys1.f ~ 0], [], [], systems = [sys1, sys2])
        end
        issue819()
 end
