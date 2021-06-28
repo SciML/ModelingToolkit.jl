@@ -370,13 +370,18 @@ let
     δ = Differential(t)
     
     eqs = [δ(x) ~ ẋ, δ(ẋ) ~ f - k*x - d*ẋ]
-    sys = ODESystem(eqs, t, [x, ẋ], [f, d, k])
+    sys = ODESystem(eqs, t, [x, ẋ], [f, d, k]; controls = [f])
 
     calculate_control_jacobian(sys)
 
     @test isequal(
-        sys.ctrl_jac,
-        Num[0, 1]
+        ModelingToolkit.get_ctrl_jac(sys)[][1],
+        reshape(Num[0,1], 2, 1)
+    )
+
+    @test isequal(
+        ModelingToolkit.get_ctrl_jac(sys)[][1],
+        calculate_control_jacobian(sys)
     )
 
 end
