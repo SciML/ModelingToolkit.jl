@@ -375,13 +375,8 @@ let
     calculate_control_jacobian(sys)
 
     @test isequal(
-        ModelingToolkit.get_ctrl_jac(sys)[][1],
+        calculate_control_jacobian(sys),
         reshape(Num[0,1], 2, 1)
-    )
-
-    @test isequal(
-        ModelingToolkit.get_ctrl_jac(sys)[][1],
-        calculate_control_jacobian(sys)
     )
 
 end
