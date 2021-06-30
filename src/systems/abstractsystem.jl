@@ -223,14 +223,16 @@ function Base.propertynames(sys::AbstractSystem; private=false)
     end
 end
 
-function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=false)
+Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=false) = getvar(sys, name; namespace=namespace)
+getvar(sys, name::Symbol; namespace=false) = getproperty(sys, name)
+function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
     sysname = nameof(sys)
     systems = get_systems(sys)
     if isdefined(sys, name)
         Base.depwarn("`sys.name` like `sys.$name` is deprecated. Use getters like `get_$name` instead.", "sys.$name")
         return getfield(sys, name)
     elseif !isempty(systems)
-        i = findfirst(x->nameof(x)==name,systems)
+        i = findfirst(x->nameof(x)==name, systems)
         if i !== nothing
             return namespace ? rename(systems[i], renamespace(sysname,name)) : systems[i]
         end
@@ -642,9 +644,16 @@ end
 function _config(expr, namespace)
     cn = Base.Fix2(_config, namespace)
     if Meta.isexpr(expr, :.)
-        return :($getproperty($(map(cn, expr.args)...); namespace=$namespace))
+        return :($getvar($(map(cn, expr.args)...); namespace=$namespace))
+    elseif Meta.isexpr(expr, :function)
+        def = splitdef(expr)
+        def[:args] = map(cn, def[:args])
+        def[:body] = cn(def[:body])
+        combinedef(def)
     elseif expr isa Expr && !isempty(expr.args)
         return Expr(expr.head, map(cn, expr.args)...)
+    elseif Meta.isexpr(expr, :(=))
+        return Expr(:(=), map(cn, expr.args)...)
     else
         expr
     end
@@ -654,9 +663,9 @@ end
 $(SIGNATURES)
 
 Rewrite `@nonamespace a.b.c` to
-`getproperty(getproperty(a, :b; namespace = false), :c; namespace = false)`.
+`getvar(getvar(a, :b; namespace = false), :c; namespace = false)`.
 
-This is the default behavior of `getproperty`. This should be used when inheriting states from a model.
+This is the default behavior of `getvar`. This should be used when inheriting states from a model.
 """
 macro nonamespace(expr)
     esc(_config(expr, false))
@@ -666,7 +675,7 @@ end
 $(SIGNATURES)
 
 Rewrite `@namespace a.b.c` to
-`getproperty(getproperty(a, :b; namespace = true), :c; namespace = true)`.
+`getvar(getvar(a, :b; namespace = true), :c; namespace = true)`.
 """
 macro namespace(expr)
     esc(_config(expr, true))
