@@ -181,7 +181,7 @@ for prop in [
     end
 end
 
-Setfield.get(obj::AbstractSystem, l::Setfield.PropertyLens{field}) where {field} = getfield(obj, field)
+Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field} = getfield(obj, field)
 @generated function ConstructionBase.setproperties(obj::AbstractSystem, patch::NamedTuple)
     if issubset(fieldnames(patch), fieldnames(obj))
         args = map(fieldnames(obj)) do fn
@@ -223,7 +223,7 @@ function Base.propertynames(sys::AbstractSystem; private=false)
     end
 end
 
-function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true)
+function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=false)
     sysname = nameof(sys)
     systems = get_systems(sys)
     if isdefined(sys, name)
@@ -232,7 +232,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true)
     elseif !isempty(systems)
         i = findfirst(x->nameof(x)==name,systems)
         if i !== nothing
-            return namespace ? rename(systems[i],renamespace(sysname,name)) : systems[i]
+            return namespace ? rename(systems[i], renamespace(sysname,name)) : systems[i]
         end
     end
 
@@ -639,11 +639,12 @@ macro named(expr)
     esc(_named(expr))
 end
 
-function _nonamespace(expr)
+function _config(expr, namespace)
+    cn = Base.Fix2(_config, namespace)
     if Meta.isexpr(expr, :.)
-        return :($getproperty($(map(_nonamespace, expr.args)...); namespace=false))
+        return :($getproperty($(map(cn, expr.args)...); namespace=$namespace))
     elseif expr isa Expr && !isempty(expr.args)
-        return Expr(expr.head, map(_nonamespace, expr.args)...)
+        return Expr(expr.head, map(cn, expr.args)...)
     else
         expr
     end
@@ -654,9 +655,21 @@ $(SIGNATURES)
 
 Rewrite `@nonamespace a.b.c` to
 `getproperty(getproperty(a, :b; namespace = false), :c; namespace = false)`.
+
+This is the default behavior of `getproperty`. This should be used when inheriting states from a model.
 """
 macro nonamespace(expr)
-    esc(_nonamespace(expr))
+    esc(_config(expr, false))
+end
+
+"""
+$(SIGNATURES)
+
+Rewrite `@namespace a.b.c` to
+`getproperty(getproperty(a, :b; namespace = true), :c; namespace = true)`.
+"""
+macro namespace(expr)
+    esc(_config(expr, true))
 end
 
 """

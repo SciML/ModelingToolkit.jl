@@ -184,6 +184,6 @@ export simplify, substitute
 export build_function
 export modelingtoolkitize
 export @variables, @parameters
-export @named, @nonamespace
+export @named, @nonamespace, @namespace
 
 end # module
