@@ -47,6 +47,21 @@ function matching(g::BipartiteGraph, varwhitelist=nothing, eqwhitelist=nothing)
     return assign
 end
 
+throw_unbalanced(n_highest_vars, neqs, msg, values) = throw(InvalidSystemException(
+    "The system is unbalanced. "
+    * "There are $n_highest_vars highest order derivative variables "
+    * "and $neqs equations.\n"
+    * msg
+    * values
+))
+
+function fill_unassigned!(unassigned_list, vars, fullvars)
+    for (vj, eq) in enumerate(vars)
+        if eq === UNASSIGNED
+            push!(unassigned_list, fullvars[vj])
+        end
+    end
+end
 ###
 ### Structural check
 ###
@@ -56,11 +71,25 @@ function check_consistency(s::SystemStructure)
     neqs = nsrcs(graph)
     is_balanced = n_highest_vars == neqs
 
-    (neqs > 0 && !is_balanced) && throw(InvalidSystemException(
-          "The system is unbalanced. "
-        * "There are $n_highest_vars highest order derivative variables "
-        * "and $neqs equations."
-       ))
+    if neqs > 0 && !is_balanced
+        varwhitelist = varassoc .== 0
+        assign = matching(graph, varwhitelist) # not assigned
+        unassigned_var = []
+        if n_highest_vars > neqs
+            fill_unassigned!(unassigned_var, assign, fullvars)
+            io = IOBuffer()
+            Base.print_array(io, unassigned_var)
+            unassigned_var_str = String(take!(io))
+            throw_unbalanced(n_highest_vars, neqs, "More variables than equations:\n", unassigned_var_str)
+        else
+            inv_assign = inverse_mapping(assign) # extra equations
+            fill_unassigned!(unassigned_var, inv_assign, fullvars)
+            io = IOBuffer()
+            Base.print_array(io, unassigned_var)
+            unassigned_var_str = String(take!(io))
+            throw_unbalanced(n_highest_vars, neqs, "More equations than variables:\n", unassigned_var_str)
+        end
+    end
 
     # This is defined to check if Pantelides algorithm terminates. For more
     # details, check the equation (15) of the original paper.
