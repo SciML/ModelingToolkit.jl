@@ -8,7 +8,7 @@ sys2 = OptimizationSystem(loss,[x,y],[a,b],name=:sys2)
 
 @variables z
 @parameters β
-loss2 = sys1.x - sys2.y + z*β
+loss2 = @namespace sys1.x - sys2.y + z*β
 combinedsys = OptimizationSystem(loss2,[z],[β],systems=[sys1,sys2],name=:combinedsys)
 
 equations(combinedsys)
@@ -22,14 +22,14 @@ generate_gradient(combinedsys)
 generate_hessian(combinedsys)
 ModelingToolkit.hessian_sparsity(combinedsys)
 
-u0 = [
+u0 = @namespace [
     sys1.x=>1.0
     sys1.y=>2.0
     sys2.x=>3.0
     sys2.y=>4.0
     z=>5.0
 ]
-p = [
+p = @namespace [
     sys1.a => 6.0
     sys1.b => 7.0
     sys2.a => 8.0

@@ -20,13 +20,13 @@ pars  = [α₀,α,K,n,δ,β,μ]
 @named os₁ = convert(ODESystem, rs; include_zero_odes=false)
 @named os₂ = convert(ODESystem, rs; include_zero_odes=false)
 @named os₃ = convert(ODESystem, rs; include_zero_odes=false)
-connections = [os₁.R ~ os₃.P,
+connections = @namespace [os₁.R ~ os₃.P,
                os₂.R ~ os₁.P,
                os₃.R ~ os₂.P]
 @named connected = ODESystem(connections, t, [], [], systems=[os₁,os₂,os₃])
 oderepressilator = structural_simplify(connected)
 
-pvals = [os₁.α₀ => 5e-4,
+pvals = @namespace [os₁.α₀ => 5e-4,
          os₁.α => .5,
          os₁.K => 40.0,
          os₁.n => 2,
@@ -47,7 +47,7 @@ pvals = [os₁.α₀ => 5e-4,
          os₃.δ => (log(2)/120),
          os₃.β => (20*log(2)/120),
          os₃.μ => (log(2)/600)]
-u₀    = [os₁.m => 0.0, os₁.P => 20.0, os₂.m => 0.0, os₂.P => 0.0, os₃.m => 0.0, os₃.P => 0.0]
+u₀    = @namespace [os₁.m => 0.0, os₁.P => 20.0, os₂.m => 0.0, os₂.P => 0.0, os₃.m => 0.0, os₃.P => 0.0]
 tspan = (0.0, 100000.0)
 oprob = ODEProblem(oderepressilator, u₀, tspan, pvals)
 sol = solve(oprob, Tsit5())

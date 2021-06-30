@@ -8,7 +8,7 @@ using ModelingToolkit, OrdinaryDiffEq
     ODESystem(Equation[], t, [v, i], [], name=name, defaults=[v=>1.0, i=>1.0])
 end
 
-function ModelingToolkit.connect(::Type{Pin}, ps...)
+@namespace function ModelingToolkit.connect(::Type{Pin}, ps...)
     eqs = [
            0 ~ sum(p->p.i, ps) # KCL
           ]
@@ -20,13 +20,13 @@ function ModelingToolkit.connect(::Type{Pin}, ps...)
     return eqs
 end
 
-function Ground(;name)
+@namespace function Ground(;name)
     @named g = Pin()
     eqs = [g.v ~ 0]
     ODESystem(eqs, t, [], [], systems=[g], name=name)
 end
 
-function ConstantVoltage(;name, V = 1.0)
+@namespace function ConstantVoltage(;name, V = 1.0)
     val = V
     @named p = Pin()
     @named n = Pin()
@@ -38,7 +38,7 @@ function ConstantVoltage(;name, V = 1.0)
     ODESystem(eqs, t, [], [V], systems=[p, n], defaults=Dict(V => val), name=name)
 end
 
-function Resistor(;name, R = 1.0)
+@namespace function Resistor(;name, R = 1.0)
     val = R
     @named p = Pin()
     @named n = Pin()
@@ -52,7 +52,7 @@ function Resistor(;name, R = 1.0)
     ODESystem(eqs, t, [v], [R], systems=[p, n], defaults=Dict(R => val), name=name)
 end
 
-function Capacitor(;name, C = 1.0)
+@namespace function Capacitor(;name, C = 1.0)
     val = C
     @named p = Pin()
     @named n = Pin()
@@ -67,7 +67,7 @@ function Capacitor(;name, C = 1.0)
     ODESystem(eqs, t, [v], [C], systems=[p, n], defaults=Dict(C => val), name=name)
 end
 
-function Inductor(; name, L = 1.0)
+@namespace function Inductor(; name, L = 1.0)
     val = L
     @named p = Pin()
     @named n = Pin()

@@ -6,7 +6,7 @@ include("electrical_components.jl")
 @named inductor2 = Inductor(L=2.0e-2)
 @named ground = Ground()
 
-eqs = [
+eqs = @namespace [
        connect(source.p, resistor.p)
        connect(resistor.n, inductor1.p)
        connect(inductor1.n, inductor2.p)
