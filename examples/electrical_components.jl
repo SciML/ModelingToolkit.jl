@@ -4,8 +4,8 @@ using ModelingToolkit, OrdinaryDiffEq
 # Basic electric components
 @parameters t
 @connector function Pin(;name)
-    @variables v(t) i(t)
-    ODESystem(Equation[], t, [v, i], [], name=name, defaults=[v=>1.0, i=>1.0])
+    sts = @variables v(t)=1.0 i(t)=1.0
+    ODESystem(Equation[], t, sts, [], name=name)
 end
 
 @namespace function ModelingToolkit.connect(::Type{Pin}, ps...)
@@ -27,52 +27,48 @@ end
 end
 
 @namespace function ConstantVoltage(;name, V = 1.0)
-    val = V
     @named p = Pin()
     @named n = Pin()
-    @parameters V
+    ps = @parameters V=V
     eqs = [
            V ~ p.v - n.v
            0 ~ p.i + n.i
           ]
-    ODESystem(eqs, t, [], [V], systems=[p, n], defaults=Dict(V => val), name=name)
+    ODESystem(eqs, t, [], ps, systems=[p, n], name=name)
 end
 
 @namespace function Resistor(;name, R = 1.0)
-    val = R
     @named p = Pin()
     @named n = Pin()
-    @variables v(t)
-    @parameters R
+    sts = @variables v(t)
+    ps = @parameters R=R
     eqs = [
            v ~ p.v - n.v
            0 ~ p.i + n.i
            v ~ p.i * R
           ]
-    ODESystem(eqs, t, [v], [R], systems=[p, n], defaults=Dict(R => val), name=name)
+    ODESystem(eqs, t, sts, ps, systems=[p, n], name=name)
 end
 
 @namespace function Capacitor(;name, C = 1.0)
-    val = C
     @named p = Pin()
     @named n = Pin()
-    @variables v(t)
-    @parameters C
+    sts = @variables v(t)
+    ps = @parameters C=C
     D = Differential(t)
     eqs = [
            v ~ p.v - n.v
            0 ~ p.i + n.i
            D(v) ~ p.i / C
           ]
-    ODESystem(eqs, t, [v], [C], systems=[p, n], defaults=Dict(C => val), name=name)
+    ODESystem(eqs, t, sts, ps, systems=[p, n], name=name)
 end
 
 @namespace function Inductor(; name, L = 1.0)
-    val = L
     @named p = Pin()
     @named n = Pin()
-    @variables v(t) i(t)
-    @parameters L
+    sts = @variables v(t) i(t)
+    ps = @parameters L=L
     D = Differential(t)
     eqs = [
            v ~ p.v - n.v
@@ -80,5 +76,5 @@ end
            i ~ p.i
            D(i) ~ v / L
           ]
-    ODESystem(eqs, t, [v, i], [L], systems=[p, n], defaults=Dict(L => val), name=name)
+    ODESystem(eqs, t, sts, ps, systems=[p, n], name=name)
 end
