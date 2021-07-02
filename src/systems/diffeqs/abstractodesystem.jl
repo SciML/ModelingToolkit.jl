@@ -67,7 +67,7 @@ end
 function generate_function(
         sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
         implicit_dae=false,
-        ddvs=implicit_dae ? map(Differential(independent_variable(sys)), dvs) : nothing,
+        ddvs=implicit_dae ? map(Differential(get_iv(sys)), dvs) : nothing,
         kwargs...
     )
     # optimization
@@ -93,7 +93,7 @@ function generate_function(
     end
 end
 
-function time_varying_as_func(x, sys)
+function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
     # if something is not x(t) (the current state)
     # but is `x(t-1)` or something like that, pass in `x` as a callable function rather
     # than pass in a value in place of x(t).
@@ -101,7 +101,7 @@ function time_varying_as_func(x, sys)
     # This is done by just making `x` the argument of the function.
     if istree(x) &&
         operation(x) isa Sym &&
-        !(length(arguments(x)) == 1 && isequal(arguments(x)[1], independent_variable(sys)))
+        !(length(arguments(x)) == 1 && isequal(arguments(x)[1], get_iv(sys)))
         return operation(x)
     end
     return x
@@ -236,7 +236,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      mass_matrix = _M,
                      jac_prototype = jac_prototype,
                      syms = Symbol.(states(sys)),
-                     indepsym = Symbol(independent_variable(sys)),
+                     indepsym = Symbol(get_iv(sys)),
                      observed = observedfun,
                     )
 end
@@ -257,7 +257,7 @@ respectively.
 """
 function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
-                                     ddvs=map(diff2term ∘ Differential(independent_variable(sys)), dvs),
+                                     ddvs=map(diff2term ∘ Differential(get_iv(sys)), dvs),
                                      version = nothing,
                                      #=
                                      tgrad=false,
@@ -293,7 +293,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      f,
                      syms = Symbol.(dvs),
                      # missing fields in `DAEFunction`
-                     #indepsym = Symbol(independent_variable(sys)),
+                     #indepsym = Symbol(get_iv(sys)),
                      #observed = observedfun,
                     )
 end
@@ -390,7 +390,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                           mass_matrix = M,
                           jac_prototype = $jp_expr,
                           syms = $(Symbol.(states(sys))),
-                          indepsym = $(QuoteNode(Symbol(independent_variable(sys)))),
+                          indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
                          )
     end
     !linenumbers ? striplines(ex) : ex
@@ -409,7 +409,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
     dvs = states(sys)
     ps = parameters(sys)
     defs = defaults(sys)
-    iv = independent_variable(sys)
+    iv = get_iv(sys)
     if parammap isa Dict
         u0defs = merge(parammap, defs)
     elseif eltype(parammap) <: Pair

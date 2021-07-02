@@ -42,9 +42,9 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     "The domain for the independent variables."
     domain
     "The independent variables"
-    indvars
+    ivs
     "The dependent variables"
-    depvars
+    dvs
     "The parameters"
     ps
     """
@@ -56,12 +56,12 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     type: type of the system
     """
     connection_type::Any
-    @add_kwonly function PDESystem(eqs, bcs, domain, indvars, depvars,
+    @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
                                    ps=SciMLBase.NullParameters();
                                    defaults=Dict(),
                                    connection_type=nothing,
                                   )
-        new(eqs, bcs, domain, indvars, depvars, ps, defaults, connection_type)
+        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connection_type)
     end
 end
 

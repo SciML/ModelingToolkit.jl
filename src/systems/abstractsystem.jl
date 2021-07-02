@@ -126,9 +126,6 @@ function getname(t)
         nameof(t)
     end
 end
-#Treat the return as whatever getfield gives you
-independent_variable(sys::AbstractTimeDependentSystem) = getfield(sys, :iv)
-independent_variable(sys::AbstractTimeIndependentSystem) = nothing
 
 #Treat the result as a vector of symbols always
 independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]

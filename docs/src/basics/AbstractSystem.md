@@ -50,12 +50,11 @@ Optionally, a system could have:
 - `observed(sys)`: All observed equations of the system and its subsystems.
 - `get_observed(sys)`: Observed equations of the current-level system.
 - `get_defaults(sys)`: A `Dict` that maps variables into their default values.
-- `independent_variable(sys)`: The independent variable of a system.
+- `independent_variables(sys)`: The independent variables of a system.
 - `get_noiseeqs(sys)`: Noise equations of the current-level system.
 
-Note that there's `get_iv(sys)`, but it is not advised to use, since it errors
-when the system has no field `iv`. `independent_variable(sys)` returns `nothing`
-for `NonlinearSystem`s.
+Note that if you know a system is an `AbstractTimeDependentSystem` you could use `get_iv` to get the 
+unique independent variable directly, rather than using `independenent_variables(sys)[1]`, which is clunky and may cause problems if `sys` is an `AbstractMultivariateSystem` because there may be more than one independent variable. `AbstractTimeIndependentSystem`s do not have a method `get_iv`, and `independent_variables(sys)` will return a size-zero result for such. For an `AbstractMultivariateSystem`, `get_ivs` is equivalent.
 
 A system could also have caches:
 
