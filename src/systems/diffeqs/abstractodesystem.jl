@@ -38,6 +38,28 @@ function calculate_jacobian(sys::AbstractODESystem;
     return jac
 end
 
+function calculate_control_jacobian(sys::AbstractODESystem;
+                                    sparse=false, simplify=false)
+    cache = get_ctrl_jac(sys)[]
+    if cache isa Tuple && cache[2] == (sparse, simplify)
+        return cache[1]
+    end
+
+    rhs = [eq.rhs for eq ∈ equations(sys)]
+
+    iv = get_iv(sys)
+    ctrls = controls(sys)
+
+    if sparse
+        jac = sparsejacobian(rhs, ctrls, simplify=simplify)
+    else
+        jac = jacobian(rhs, ctrls, simplify=simplify)
+    end
+
+    get_ctrl_jac(sys)[] = jac, (sparse, simplify) # cache Jacobian
+    return jac
+end
+
 function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                         simplify=false, kwargs...)
     tgrad = calculate_tgrad(sys,simplify=simplify)
@@ -47,6 +69,12 @@ end
 function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                            simplify=false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys;simplify=simplify,sparse=sparse)
+    return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
+end
+
+function generate_control_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
+                                   simplify=false, sparse = false, kwargs...)
+    jac = calculate_control_jacobian(sys;simplify=simplify,sparse=sparse)
     return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 

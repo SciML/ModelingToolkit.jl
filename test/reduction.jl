@@ -27,7 +27,7 @@ ref_eq = [
 @variables x(t) y(t) z(t) a(t) u(t) F(t)
 D = Differential(t)
 
-test_equal(a, b) = @test isequal(simplify(a, polynorm=true), simplify(b, polynorm=true))
+test_equal(a, b) = @test isequal(simplify(a, expand=true), simplify(b, expand=true))
 
 eqs = [
        D(x) ~ σ*(y-x)
