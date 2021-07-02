@@ -7,6 +7,13 @@ It establishes a common set of functionality that is used between systems
 from ODEs and chemical reactions, allowing users to have a common framework for
 model manipulation and compilation.
 
+### Subtypes
+
+There are three immediate subtypes of `AbstractSystem`, classified by how many independent variables each type has:
+* `AbstractTimeIndependentSystem`: has no independent variable (eg: `NonlinearSystem`)
+* `AbstractTimeDependentSystem`: has a single independent variable (eg: `ODESystem`)
+* `AbstractMultivariateSystem`: may have multiple independent variables (eg: `PDESystem`)
+
 ## Constructors and Naming
 
 The `AbstractSystem` interface has a consistent method for constructing systems.
