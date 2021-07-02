@@ -30,6 +30,9 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    """Control parameters (some subset of `ps`)."""
+    ctrls::Vector
+    """Observed states."""
     observed::Vector{Equation}
     """
     Name: the name of the system
@@ -49,10 +52,10 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     in `DiscreteSystem`.
     """
     default_p::Dict
-    function DiscreteSystem(discreteEqs, iv, dvs, ps, observed, name, systems, default_u0, default_p)
+    function DiscreteSystem(discreteEqs, iv, dvs, ps, ctrls, observed, name, systems, default_u0, default_p)
         check_variables(dvs,iv)
         check_parameters(ps,iv)
-        new(discreteEqs, iv, dvs, ps, observed, name, systems, default_u0, default_p)
+        new(discreteEqs, iv, dvs, ps, ctrls, observed, name, systems, default_u0, default_p)
     end
 end
 
@@ -63,6 +66,7 @@ Constructs a DiscreteSystem.
 """
 function DiscreteSystem(
                    discreteEqs::AbstractVector{<:Equation}, iv, dvs, ps;
+                   controls = Num[],
                    observed = Num[],
                    systems = DiscreteSystem[],
                    name=gensym(:DiscreteSystem),
@@ -72,6 +76,7 @@ function DiscreteSystem(
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
+    ctrl′ = value.(controls)
 
     default_u0 isa Dict || (default_u0 = Dict(default_u0))
     default_p isa Dict || (default_p = Dict(default_p))
@@ -82,7 +87,7 @@ function DiscreteSystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(discreteEqs, iv′, dvs′, ps′, observed, name, systems, default_u0, default_p)
+    DiscreteSystem(discreteEqs, iv′, dvs′, ps′, ctrl′, observed, name, systems, default_u0, default_p)
 end
 
 """

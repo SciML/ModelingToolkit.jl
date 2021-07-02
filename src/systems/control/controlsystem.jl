@@ -1,6 +1,6 @@
 abstract type AbstractControlSystem <: AbstractTimeDependentSystem end
 
-function namespace_controls(sys::AbstractSystem)
+function namespace_controls(sys::AbstractControlSystem)
     [rename(x,renamespace(nameof(sys),nameof(x))) for x in controls(sys)]
 end
 
@@ -72,10 +72,12 @@ struct ControlSystem <: AbstractControlSystem
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
-    function ControlSystem(loss, deqs, iv, dvs, controls,ps, observed, name, systems, defaults)
-        check_variables(dvs,iv)
-        check_parameters(ps,iv)
-        new(loss, deqs, iv, dvs, controls,ps, observed, name, systems, defaults)
+    function ControlSystem(loss, deqs, iv, dvs, controls, ps, observed, name, systems, defaults)
+        check_variables(dvs, iv)
+        check_parameters(ps, iv)
+        check_equations(deqs, iv)
+        check_equations(observed, iv)
+        new(loss, deqs, iv, dvs, controls, ps, observed, name, systems, defaults)
     end
 end
 

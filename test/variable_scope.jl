@@ -12,6 +12,7 @@ d = GlobalScope(d)
 LocalScope(e.val)
 ParentScope(e.val)
 GlobalScope(e.val)
+@test ModelingToolkit.getname(ModelingToolkit.namespace_expr(ModelingToolkit.namespace_expr(b, :foo, t), :bar, t)) == :bar₊b
 
 renamed(nss, sym) = ModelingToolkit.getname(foldr(ModelingToolkit.renamespace, nss, init=sym))
 

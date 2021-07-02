@@ -304,7 +304,7 @@ ode = ODESystem(eq)
         @variables x(t) f(t)
         D = Differential(t)
 
-        ODESystem([D(x) ~ -a*x + f], name=name)
+        ODESystem([D(x) ~ -a*x + f], name = name)
     end
 
     function issue808()
@@ -313,7 +313,7 @@ ode = ODESystem(eq)
 
         @parameters t
         D = Differential(t)
-        @test_throws ArgumentError ODESystem([sys2.f ~ sys1.x, D(sys1.f) ~ 0], t, systems=[sys1, sys2])
+        @test_throws ArgumentError ODESystem([sys2.f ~ sys1.x, D(sys1.f) ~ 0], t, systems = [sys1, sys2])
     end
     issue808()
 
@@ -327,12 +327,19 @@ der = Differential(t)
 eqs = [
   der(u1) ~ 1,
 ]
-@test_throws ArgumentError ODESystem(eqs,t,vars,pars)
+@test_throws ArgumentError ODESystem(eqs, t, vars, pars)
 
 #Issue 1063/998
-pars =[t]
+pars = [t]
 vars = @variables((u1(t),))
-@test_throws ArgumentError ODESystem(eqs,t,vars,pars)
+@test_throws ArgumentError ODESystem(eqs, t, vars, pars)
+
+@parameters w
+der = Differential(w)
+eqs = [
+  der(u1) ~ t,
+]
+@test_throws ArgumentError ModelingToolkit.ODESystem(eqs, t, vars, pars)
 
 @variables x(t)
 D = Differential(t)
@@ -356,3 +363,21 @@ eqs = [D(x1) ~ -x1]
 sys = ODESystem(eqs,t,[x1,x2],[])
 @test_throws ArgumentError ODEProblem(sys, [1.0,1.0], (0.0,1.0))
 prob = ODEProblem(sys, [1.0,1.0], (0.0,1.0), check_length=false)
+
+# check inputs
+let 
+    @parameters t f k d
+    @variables x(t) ẋ(t)
+    δ = Differential(t)
+    
+    eqs = [δ(x) ~ ẋ, δ(ẋ) ~ f - k*x - d*ẋ]
+    sys = ODESystem(eqs, t, [x, ẋ], [f, d, k]; controls = [f])
+
+    calculate_control_jacobian(sys)
+
+    @test isequal(
+        calculate_control_jacobian(sys),
+        reshape(Num[0,1], 2, 1)
+    )
+
+end

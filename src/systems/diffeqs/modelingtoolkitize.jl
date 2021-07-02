@@ -3,7 +3,7 @@ $(TYPEDSIGNATURES)
 
 Generate `ODESystem`, dependent variables, and parameters from an `ODEProblem`.
 """
-function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
+function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
                             return prob.f.sys
     @parameters t
@@ -65,7 +65,8 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
 
     de = ODESystem(
         eqs, t, sts, params,
-        defaults=merge(default_u0, default_p),
+        defaults=merge(default_u0, default_p);
+        kwargs...
     )
 
     de
@@ -96,7 +97,7 @@ $(TYPEDSIGNATURES)
 
 Generate `SDESystem`, dependent variables, and parameters from an `SDEProblem`.
 """
-function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
+function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
                             return (prob.f.sys, prob.f.sys.states, prob.f.sys.ps)
     @parameters t
@@ -142,7 +143,7 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
         Vector(vec(params))
     end
 
-    de = SDESystem(deqs,neqs,t,Vector(vec(vars)),params)
+    de = SDESystem(deqs,neqs,t,Vector(vec(vars)),params; kwargs...)
 
     de
 end
@@ -153,7 +154,7 @@ $(TYPEDSIGNATURES)
 
 Generate `OptimizationSystem`, dependent variables, and parameters from an `OptimizationProblem`.
 """
-function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem)
+function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem; kwargs...)
 
     if prob.p isa Tuple || prob.p isa NamedTuple
         p = [x for x in prob.p]
@@ -166,6 +167,6 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem)
              reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(Array(p)))
 
     eqs = prob.f(vars, params)
-    de = OptimizationSystem(eqs,vec(vars),vec(params))
+    de = OptimizationSystem(eqs,vec(vars),vec(params); kwargs...)
     de
 end
