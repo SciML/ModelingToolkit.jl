@@ -87,6 +87,8 @@ Get the set of independent variables for the given system.
 """
 function independent_variables end
 
+function independent_variable end
+
 """
 $(TYPEDSIGNATURES)
 
@@ -165,7 +167,7 @@ export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
-export independent_variables, states, parameters, equations, controls, observed, structure
+export independent_variables, independent_variable, states, parameters, equations, controls, observed, structure
 export structural_simplify
 export DiscreteSystem, DiscreteProblem
 
