@@ -72,7 +72,8 @@ function Base.getproperty(x::PDESystem, sym::Symbol)
 
     elseif sym == :depvars
         return getfield(x, :dvs)
-        depwarn("`sys.depvars` is deprecated, please use `get_dvs(sys)` or `sys.dvs`", :getproperty)
+        depwarn("`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty)
+
     else
         return getfield(x, sym)
     end
