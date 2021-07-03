@@ -145,9 +145,21 @@ function independent_variable(sys::AbstractSystem)
 end
 
 #Treat the result as a vector of symbols always
+function independent_variables(sys::AbstractSystem)
+    systype = typeof(sys)
+    @warn "Please specialize `independent_variables` for this type ($systype)."
+    if isdefined(sys, :iv)
+        return [getfield(sys, :iv)]
+    elseif isdefined(sys, :ivs)
+        return sys.ivs
+    else
+        return []
+    end
+end
+
 independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
 independent_variables(sys::AbstractTimeIndependentSystem) = []
-independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :indvars)
+independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
 
 function structure(sys::AbstractSystem)
     s = get_structure(sys)
