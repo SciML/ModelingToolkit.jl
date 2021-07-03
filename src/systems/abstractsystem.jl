@@ -139,9 +139,11 @@ function getname(t)
     end
 end
 #Deprecated
-independent_variable(sys::AbstractTimeDependentSystem) = getfield(sys, :iv)
-independent_variable(sys::AbstractTimeIndependentSystem) = nothing
-@deprecate indpendent_variable(sys) get_iv(sys)
+function independent_variable(sys::AbstractSystem)
+    Base.depwarn("`independent_variable` is deprecated. Use `get_iv` or `independent_variables` instead.",:independent_variable)
+    isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
+end
+
 #Treat the result as a vector of symbols always
 independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
 independent_variables(sys::AbstractTimeIndependentSystem) = []
