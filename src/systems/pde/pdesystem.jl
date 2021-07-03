@@ -65,7 +65,17 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     end
 end
 
-Base.getproperty(x::PDESystem, sym::Symbol) = getfield(x, sym)
+function Base.getproperty(x::PDESystem, sym::Symbol)
+    if sym == :indvars
+        return getfield(x, :ivs)
+        depwarn("`sys.indvars` is deprecated, please use `get_ivs(sys)` or `sys.ivs`", :getproperty)
+    elseif sym == :depvars
+        return getfield(x, :dvs)
+        depwarn("`sys.depvars` is deprecated, please use `get_dvs(sys)` or `sys.dvs`", :getproperty)
+    else
+        return getfield(x, sym)
+    end
+end
 
 Base.summary(prob::PDESystem) = string(nameof(typeof(prob)))
 function Base.show(io::IO, ::MIME"text/plain", sys::PDESystem)
