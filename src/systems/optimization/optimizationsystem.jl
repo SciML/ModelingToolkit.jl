@@ -27,7 +27,7 @@ struct OptimizationSystem <: AbstractSystem
     equality_constraints::Vector{Equation}
     inequality_constraints::Vector
     """
-    Name: the name of the system.  These are required to have unique names. 
+    Name: the name of the system.  These are required to have unique names.
     """
     name::Symbol
     """
@@ -60,8 +60,12 @@ function OptimizationSystem(op, states, ps;
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
+    states, ps = value.(states), value.(ps)
+    collect_defaults!(defaults, states)
+    collect_defaults!(defaults, ps)
+
     OptimizationSystem(
-                       value(op), value.(states), value.(ps),
+                       value(op), states, ps,
                        observed,
                        equality_constraints, inequality_constraints,
                        name, systems, defaults

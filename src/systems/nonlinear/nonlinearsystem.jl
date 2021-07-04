@@ -73,7 +73,12 @@ function NonlinearSystem(eqs, states, ps;
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
-    NonlinearSystem(eqs, value.(states), value.(ps), observed, jac, name, systems, defaults, nothing, connection_type)
+
+    states, ps = value.(states), value.(ps)
+    collect_defaults!(defaults, states)
+    collect_defaults!(defaults, ps)
+
+    NonlinearSystem(eqs, states, ps, observed, jac, name, systems, defaults, nothing, connection_type)
 end
 
 function calculate_jacobian(sys::NonlinearSystem; sparse=false, simplify=false)
