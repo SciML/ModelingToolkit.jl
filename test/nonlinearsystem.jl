@@ -90,10 +90,10 @@ lorenz = name -> NonlinearSystem(eqs1, [x,y,z,u,F], [σ,ρ,β], name=name)
 lorenz1 = lorenz(:lorenz1)
 @test_throws ArgumentError NonlinearProblem(lorenz1, zeros(5))
 lorenz2 = lorenz(:lorenz2)
-connected = NonlinearSystem((@namespace [s ~ a + lorenz1.x
+connected = NonlinearSystem([s ~ a + lorenz1.x
                              lorenz2.y ~ s
                              lorenz1.F ~ lorenz2.u
-                             lorenz2.F ~ lorenz1.u]), [s, a], [], systems=[lorenz1,lorenz2])
+                             lorenz2.F ~ lorenz1.u], [s, a], [], systems=[lorenz1,lorenz2])
 @test_nowarn alias_elimination(connected)
 
 # system promotion
@@ -101,12 +101,12 @@ using OrdinaryDiffEq
 @variables t
 D = Differential(t)
 @named subsys = convert_system(ODESystem, lorenz1, t)
-@named sys = ODESystem((@namespace [D(subsys.x) ~ subsys.x + subsys.x]), t, systems=[subsys])
+@named sys = ODESystem([D(subsys.x) ~ subsys.x + subsys.x], t, systems=[subsys])
 sys = structural_simplify(sys)
-u0 = @namespace [subsys.x => 1, subsys.z => 2.0]
-prob = ODEProblem(sys, u0, (0, 1.0), @namespace [subsys.σ=>1,subsys.ρ=>2,subsys.β=>3])
+u0 = [subsys.x => 1, subsys.z => 2.0]
+prob = ODEProblem(sys, u0, (0, 1.0), [subsys.σ=>1,subsys.ρ=>2,subsys.β=>3])
 sol = solve(prob, Rodas5())
-@test @namespace sol[subsys.x] + sol[subsys.y] - sol[subsys.z] ≈ sol[subsys.u]
+@test sol[subsys.x] + sol[subsys.y] - sol[subsys.z] ≈ sol[subsys.u]
 @test_throws ArgumentError convert_system(ODESystem, sys, t)
 
 @parameters t σ ρ β
@@ -132,7 +132,7 @@ np = NonlinearProblem(ns, [0,0,0], [1,2,3], jac=true, sparse=true)
        function issue819()
            sys1 = makesys(:sys1)
            sys2 = makesys(:sys1)
-           @test_throws ArgumentError NonlinearSystem((@namespace [sys2.f ~ sys1.x, sys1.f ~ 0]), [], [], systems = [sys1, sys2])
+           @test_throws ArgumentError NonlinearSystem([sys2.f ~ sys1.x, sys1.f ~ 0], [], [], systems = [sys1, sys2])
        end
        issue819()
 end

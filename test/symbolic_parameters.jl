@@ -30,8 +30,8 @@ prob = NonlinearProblem(ns, [u=>1.0], Pair[])
 
 @variables a
 @parameters b
-top = NonlinearSystem((@namespace [0 ~ -a + ns.x+b]), [a], [b], systems=[ns], name=:top)
-top.b = @namespace ns.σ*0.5
+top = NonlinearSystem([0 ~ -a + ns.x+b], [a], [b], systems=[ns], name=:top)
+top.b = ns.σ*0.5
 top.ns.x = u*0.5
 
 res = ModelingToolkit.varmap_to_vars(Dict(), parameters(top), defaults=ModelingToolkit.defaults(top))

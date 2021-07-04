@@ -8,7 +8,7 @@ V = 1.0
 @named source = ConstantVoltage(V=V)
 @named ground = Ground()
 
-rc_eqs = @namespace [
+rc_eqs = [
           connect(source.p, resistor.p)
           connect(resistor.n, capacitor.p)
           connect(capacitor.n, source.n, ground.g)

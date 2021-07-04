@@ -70,11 +70,10 @@ ss = ModelingToolkit.get_structure(initialize_system_structure(lorenz1))
 @test isempty(setdiff(ss.fullvars, [D(x), F, y, x, D(y), u, z, D(z)]))
 lorenz2 = lorenz(:lorenz2)
 
-connected = ODESystem((@namespace [
-                       s ~ a + lorenz1.x
+connected = ODESystem([s ~ a + lorenz1.x
                        lorenz2.y ~ s
                        lorenz1.F ~ lorenz2.u
-                       lorenz2.F ~ lorenz1.u]), t, systems=[lorenz1, lorenz2])
+                       lorenz2.F ~ lorenz1.u], t, systems=[lorenz1, lorenz2])
 @test length(Base.propertynames(connected)) == 10
 @test isequal((@nonamespace connected.lorenz1.x), x)
 @test isequal(connected.lorenz1.x, x)
@@ -87,7 +86,7 @@ reduced_system2 = structural_simplify(structural_simplify(structural_simplify(co
 @test isempty(setdiff(states(reduced_system), states(reduced_system2)))
 @test isequal(equations(reduced_system), equations(reduced_system2))
 @test isequal(observed(reduced_system), observed(reduced_system2))
-@test setdiff(states(reduced_system), @namespace [
+@test setdiff(states(reduced_system), [
         s
         a
         lorenz1.x
@@ -100,7 +99,7 @@ reduced_system2 = structural_simplify(structural_simplify(structural_simplify(co
         lorenz2.u
        ]) |> isempty
 
-@test setdiff(parameters(reduced_system), @namespace [
+@test setdiff(parameters(reduced_system), [
         lorenz1.σ
         lorenz1.ρ
         lorenz1.β
@@ -109,7 +108,7 @@ reduced_system2 = structural_simplify(structural_simplify(structural_simplify(co
         lorenz2.β
        ]) |> isempty
 
-reduced_eqs = @namespace [
+reduced_eqs = [
                D(lorenz1.x) ~ lorenz1.σ*((lorenz1.y) - (lorenz1.x)) - ((lorenz2.z) - (lorenz2.x) - (lorenz2.y))
                D(lorenz1.y) ~ lorenz1.z + lorenz1.x*(lorenz1.ρ - (lorenz1.z)) - (lorenz1.x) - (lorenz1.y)
                D(lorenz1.z) ~ lorenz1.x*lorenz1.y - (lorenz1.β*(lorenz1.z))
@@ -120,7 +119,7 @@ reduced_eqs = @namespace [
 
 test_equal.(equations(reduced_system), reduced_eqs)
 
-observed_eqs = @namespace [
+observed_eqs = [
                 s ~ lorenz2.y
                 a ~ lorenz2.y - lorenz1.x
                 lorenz1.F ~ -((lorenz2.z) - (lorenz2.x) - (lorenz2.y))
@@ -130,7 +129,7 @@ observed_eqs = @namespace [
                ]
 test_equal.(observed(reduced_system), observed_eqs)
 
-pp = @namespace [
+pp = [
       lorenz1.σ => 10
       lorenz1.ρ => 28
       lorenz1.β => 8/3
@@ -138,7 +137,7 @@ pp = @namespace [
       lorenz2.ρ => 28
       lorenz2.β => 8/3
      ]
-u0 = @namespace [
+u0 = [
       lorenz1.x => 1.0
       lorenz1.y => 0.0
       lorenz1.z => 0.0
@@ -150,7 +149,7 @@ prob1 = ODEProblem(reduced_system, u0, (0.0, 100.0), pp)
 solve(prob1, Rodas5())
 
 prob2 = SteadyStateProblem(reduced_system, u0, pp)
-@test prob2.f.observed((@namespace lorenz2.u), prob2.u0, pp) === 1.0
+@test prob2.f.observed(lorenz2.u, prob2.u0, pp) === 1.0
 
 
 # issue #724 and #716
@@ -163,14 +162,14 @@ let
     @variables u_c(t) y_c(t)
     @parameters k_P
     pc = ODESystem(Equation[u_c ~ k_P * y_c], t, name=:pc)
-    connections = @namespace [
+    connections = [
         ol.u ~ pc.u_c
         pc.y_c ~ ol.y
     ]
     connected = ODESystem(connections, t, systems=[ol, pc])
     @test equations(connected) isa Vector{Equation}
     reduced_sys = structural_simplify(connected)
-    ref_eqs = @namespace [
+    ref_eqs = [
                D(ol.x) ~ ol.a*ol.x + ol.b*ol.u
                0 ~ pc.k_P*(ol.c*ol.x + ol.d*ol.u) - ol.u
               ]

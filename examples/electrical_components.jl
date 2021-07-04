@@ -1,14 +1,13 @@
 using Test
 using ModelingToolkit, OrdinaryDiffEq
 
-# Basic electric components
 @parameters t
 @connector function Pin(;name)
     sts = @variables v(t)=1.0 i(t)=1.0
-    ODESystem(Equation[], t, sts, [], name=name)
+    ODESystem(Equation[], t, sts, []; name=name)
 end
 
-@namespace function ModelingToolkit.connect(::Type{Pin}, ps...)
+function ModelingToolkit.connect(::Type{Pin}, ps...)
     eqs = [
            0 ~ sum(p->p.i, ps) # KCL
           ]
@@ -20,61 +19,62 @@ end
     return eqs
 end
 
-@namespace function Ground(;name)
+function Ground(;name)
     @named g = Pin()
     eqs = [g.v ~ 0]
-    ODESystem(eqs, t, [], [], systems=[g], name=name)
+    ODESystem(eqs, t, [], [], systems=[g]; name=name)
 end
 
-@namespace function ConstantVoltage(;name, V = 1.0)
+function OnePort(;name)
     @named p = Pin()
     @named n = Pin()
-    ps = @parameters V=V
-    eqs = [
-           V ~ p.v - n.v
-           0 ~ p.i + n.i
-          ]
-    ODESystem(eqs, t, [], ps, systems=[p, n], name=name)
-end
-
-@namespace function Resistor(;name, R = 1.0)
-    @named p = Pin()
-    @named n = Pin()
-    sts = @variables v(t)
-    ps = @parameters R=R
-    eqs = [
-           v ~ p.v - n.v
-           0 ~ p.i + n.i
-           v ~ p.i * R
-          ]
-    ODESystem(eqs, t, sts, ps, systems=[p, n], name=name)
-end
-
-@namespace function Capacitor(;name, C = 1.0)
-    @named p = Pin()
-    @named n = Pin()
-    sts = @variables v(t)
-    ps = @parameters C=C
-    D = Differential(t)
-    eqs = [
-           v ~ p.v - n.v
-           0 ~ p.i + n.i
-           D(v) ~ p.i / C
-          ]
-    ODESystem(eqs, t, sts, ps, systems=[p, n], name=name)
-end
-
-@namespace function Inductor(; name, L = 1.0)
-    @named p = Pin()
-    @named n = Pin()
-    sts = @variables v(t) i(t)
-    ps = @parameters L=L
-    D = Differential(t)
+    sts = @variables v(t)=1.0 i(t)=1.0
     eqs = [
            v ~ p.v - n.v
            0 ~ p.i + n.i
            i ~ p.i
+          ]
+    ODESystem(eqs, t, sts, [], systems=[p, n]; name=name)
+end
+
+function ConstantVoltage(;name, V = 1.0)
+    @named oneport = OnePort()
+    @unpack v = oneport
+    ps = @parameters V=V
+    eqs = [
+           V ~ v
+          ]
+    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+end
+
+function Resistor(;name, R = 1.0)
+    @named oneport = OnePort()
+    @unpack v, i = oneport
+    ps = @parameters R=R
+    eqs = [
+           v ~ i * R
+          ]
+    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+end
+
+function Capacitor(;name, C = 1.0)
+    @named oneport = OnePort()
+    @unpack v, i = oneport
+    ps = @parameters C=C
+    D = Differential(t)
+    eqs = [
+           D(v) ~ i / C
+          ]
+    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+end
+
+function Inductor(; name, L = 1.0)
+    @named oneport = OnePort()
+    @unpack v, i = oneport
+    ps = @parameters L=L
+    D = Differential(t)
+    eqs = [
            D(i) ~ v / L
           ]
-    ODESystem(eqs, t, sts, ps, systems=[p, n], name=name)
+    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
 end
