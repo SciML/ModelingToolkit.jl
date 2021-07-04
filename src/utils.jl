@@ -126,7 +126,7 @@ function collect_differentials(eqs)
         vars!(vars, eq)
         for v in vars
             isdifferential(v) || continue
-            collect_ivs_from_nested_differential!(ivs, v)  
+            collect_ivs_from_nested_differential!(ivs, v)
         end
         empty!(vars)
     end

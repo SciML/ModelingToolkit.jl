@@ -2,11 +2,11 @@ module BipartiteGraphs
 
 export BipartiteEdge, BipartiteGraph
 
+using Reexport
 export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors, 𝑑neighbors,
        𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST
 
 using DocStringExtensions
-using Reexport
 using UnPack
 using SparseArrays
 @reexport using LightGraphs

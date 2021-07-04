@@ -793,3 +793,24 @@ end
 function connect(syss...)
     connect(promote_connect_type(map(get_connection_type, syss)...), syss...)
 end
+
+# Inheritance
+function extend(basesys::AbstractSystem, sys::AbstractSystem; name::Symbol)
+    T = SciMLBase.parameterless_type(basesys)
+    iv = independent_variable(basesys)
+    sys = convert_system(T, sys, iv)
+    eqs = union(equations(basesys), equations(sys))
+    sts = union(states(basesys), states(sys))
+    ps = union(parameters(basesys), parameters(sys))
+    obs = union(observed(basesys), observed(sys))
+    defs = merge(defaults(basesys), defaults(sys)) # prefer `sys`
+    syss = union(get_systems(basesys), get_systems(sys))
+
+    if iv === nothing
+        T(eqs, sts, ps, observed=obs, defaults=defs, name=name, systems=syss)
+    else
+        T(eqs, iv, sts, ps, observed=obs, defaults=defs, name=name, systems=syss)
+    end
+end
+
+UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where p = getproperty(sys, p; namespace=false)
