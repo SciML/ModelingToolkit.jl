@@ -223,8 +223,7 @@ function Base.propertynames(sys::AbstractSystem; private=false)
     end
 end
 
-Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=false) = getvar(sys, name; namespace=namespace)
-getvar(sys, name::Symbol; namespace=false) = getproperty(sys, name)
+Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true) = getvar(sys, name; namespace=namespace)
 function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
     sysname = nameof(sys)
     systems = get_systems(sys)
