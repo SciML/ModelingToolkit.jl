@@ -72,16 +72,21 @@ function DiscreteSystem(
                    name=gensym(:DiscreteSystem),
                    default_u0=Dict(),
                    default_p=Dict(),
+                   defaults=_merge(Dict(default_u0), Dict(default_p)),
                   )
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
     ctrl′ = value.(controls)
 
-    default_u0 isa Dict || (default_u0 = Dict(default_u0))
-    default_p isa Dict || (default_p = Dict(default_p))
-    default_u0 = Dict(value(k) => value(default_u0[k]) for k in keys(default_u0))
-    default_p = Dict(value(k) => value(default_p[k]) for k in keys(default_p))
+    if !(isempty(default_u0) && isempty(default_p))
+        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ODESystem, force=true)
+    end
+    defaults = todict(defaults)
+    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+
+    collect_defaults!(defaults, dvs′)
+    collect_defaults!(defaults, ps′)
 
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
