@@ -37,16 +37,6 @@ function OnePort(;name)
     ODESystem(eqs, t, sts, [], systems=[p, n]; name=name)
 end
 
-function ConstantVoltage(;name, V = 1.0)
-    @named oneport = OnePort()
-    @unpack v = oneport
-    ps = @parameters V=V
-    eqs = [
-           V ~ v
-          ]
-    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
-end
-
 function Resistor(;name, R = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
@@ -64,6 +54,16 @@ function Capacitor(;name, C = 1.0)
     D = Differential(t)
     eqs = [
            D(v) ~ i / C
+          ]
+    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+end
+
+function ConstantVoltage(;name, V = 1.0)
+    @named oneport = OnePort()
+    @unpack v = oneport
+    ps = @parameters V=V
+    eqs = [
+           V ~ v
           ]
     extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
 end

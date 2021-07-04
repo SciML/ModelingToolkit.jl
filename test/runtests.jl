@@ -1,6 +1,5 @@
 using SafeTestsets, Test
 
-#=
 @safetestset "Variable scope tests" begin include("variable_scope.jl") end
 @safetestset "Symbolic parameters test" begin include("symbolic_parameters.jl") end
 @safetestset "Parsing Test" begin include("variable_parsing.jl") end
@@ -22,7 +21,6 @@ using SafeTestsets, Test
 @safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
 @safetestset "Constraints Test" begin include("constraints.jl") end
 @safetestset "Reduction Test" begin include("reduction.jl") end
-=#
 @safetestset "Components Test" begin include("components.jl") end
 @safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "Lowering Integration Test" begin include("lowering_solving.jl") end
