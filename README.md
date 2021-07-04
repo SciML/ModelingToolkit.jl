@@ -77,7 +77,7 @@ eqs = [D(x) ~ σ*(y-x),
 lorenz1 = ODESystem(eqs,name=:lorenz1)
 lorenz2 = ODESystem(eqs,name=:lorenz2)
 
-@variables a
+@variables a(t)
 @parameters γ
 connections = [0 ~ lorenz1.x + lorenz2.y + a*γ]
 connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])
