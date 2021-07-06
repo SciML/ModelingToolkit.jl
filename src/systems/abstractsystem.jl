@@ -644,7 +644,7 @@ topological sort of the observed equations.
 """
 function structural_simplify(sys::AbstractSystem)
     sys = initialize_system_structure(alias_elimination(sys))
-    check_consistency(structure(sys))
+    check_consistency(sys)
     if sys isa ODESystem
         sys = dae_index_lowering(sys)
     end

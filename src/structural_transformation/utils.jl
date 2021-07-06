@@ -47,25 +47,31 @@ function matching(g::BipartiteGraph, varwhitelist=nothing, eqwhitelist=nothing)
     return assign
 end
 
-throw_unbalanced(n_highest_vars, neqs, msg, values) = throw(InvalidSystemException(
-    "The system is unbalanced. "
-    * "There are $n_highest_vars highest order derivative variables "
-    * "and $neqs equations.\n"
-    * msg
-    * values
-))
-
-function fill_unassigned!(unassigned_list, vars, fullvars)
-    for (vj, eq) in enumerate(vars)
-        if eq === UNASSIGNED
-            push!(unassigned_list, fullvars[vj])
-        end
+function error_reporting(sys, bad_idxs, n_highest_vars, iseqs)
+    io = IOBuffer()
+    if iseqs
+        error_title = "More equations than variables:\n"
+        out_arr = equations(sys)[bad_idxs]
+    else
+        error_title = "More variables than equations:\n"
+        out_arr = structure(sys).fullvars[bad_idxs]
     end
+
+    msg = String(take!(Base.print_array(io, out_arr)))
+    neqs = length(equations(sys))
+    throw(InvalidSystemException(
+        "The system is unbalanced. "
+        * "There are $n_highest_vars highest order derivative variables "
+        * "and $neqs equations.\n"
+        * msg
+    ))
 end
+
 ###
 ### Structural check
 ###
-function check_consistency(s::SystemStructure)
+function check_consistency(sys::AbstractSystem)
+    s = structure(sys)
     @unpack varmask, graph, varassoc, fullvars = s
     n_highest_vars = count(varmask)
     neqs = nsrcs(graph)
@@ -74,21 +80,16 @@ function check_consistency(s::SystemStructure)
     if neqs > 0 && !is_balanced
         varwhitelist = varassoc .== 0
         assign = matching(graph, varwhitelist) # not assigned
-        unassigned_var = []
-        if n_highest_vars > neqs
-            fill_unassigned!(unassigned_var, assign, fullvars)
-            io = IOBuffer()
-            Base.print_array(io, unassigned_var)
-            unassigned_var_str = String(take!(io))
-            throw_unbalanced(n_highest_vars, neqs, "More variables than equations:\n", unassigned_var_str)
+        # Just use `error_reporting` to do conditional
+        iseqs = n_highest_vars > neqs
+
+        if iseqs
+            bad_idxs = findall(isequal(UNASSIGNED), assign)
         else
             inv_assign = inverse_mapping(assign) # extra equations
-            fill_unassigned!(unassigned_var, inv_assign, fullvars)
-            io = IOBuffer()
-            Base.print_array(io, unassigned_var)
-            unassigned_var_str = String(take!(io))
-            throw_unbalanced(n_highest_vars, neqs, "More equations than variables:\n", unassigned_var_str)
+            bad_idxs = findall(iszero, inv_assign)
         end
+        error_reporting(sys, bad_idxs, n_highest_vars, iseqs)
     end
 
     # This is defined to check if Pantelides algorithm terminates. For more
