@@ -57,14 +57,26 @@ function error_reporting(sys, bad_idxs, n_highest_vars, iseqs)
         out_arr = structure(sys).fullvars[bad_idxs]
     end
 
-    msg = String(take!(Base.print_array(io, out_arr)))
+    Base.print_array(io, out_arr)
+    msg = String(take!(io))
     neqs = length(equations(sys))
-    throw(InvalidSystemException(
-        "The system is unbalanced. "
-        * "There are $n_highest_vars highest order derivative variables "
-        * "and $neqs equations.\n"
-        * msg
-    ))
+    if iseqs
+        throw(ExtraEquationsSystemException(
+            "The system is unbalanced. "
+            * "There are $n_highest_vars highest order derivative variables "
+            * "and $neqs equations.\n"
+            * error_title
+            * msg
+        ))
+    else
+        throw(ExtraVariablesSystemException(
+            "The system is unbalanced. "
+            * "There are $n_highest_vars highest order derivative variables "
+            * "and $neqs equations.\n"
+            * error_title
+            * msg
+        ))
+    end
 end
 
 ###
@@ -81,7 +93,7 @@ function check_consistency(sys::AbstractSystem)
         varwhitelist = varassoc .== 0
         assign = matching(graph, varwhitelist) # not assigned
         # Just use `error_reporting` to do conditional
-        iseqs = n_highest_vars > neqs
+        iseqs = n_highest_vars < neqs
 
         if iseqs
             bad_idxs = findall(isequal(UNASSIGNED), assign)
