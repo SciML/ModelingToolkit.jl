@@ -733,7 +733,7 @@ isdiffeq(eq) = isdifferential(eq.lhs)
 
 Returns a tuple of the linearized `A` and `B` matrices for a state space model. 
 """
-function calculate_statespace(sys::AbstractODESystem, subs::Dict = sys.defaults; matrix_eltype::Type{T} = Float64) where T
+function calculate_statespace(sys::AbstractODESystem, subs::Dict = defaults(sys); matrix_eltype::Type{T} = Float64) where T
     
     J = calculate_jacobian(sys)
     C = calculate_control_jacobian(sys)
