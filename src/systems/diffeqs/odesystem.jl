@@ -151,7 +151,7 @@ function vars!(vars, O)
         return push!(vars, O)
     end
 
-    operation(O) isa Sym && push!(vars, O)
+    symtype(operation(O)) <: FnType && push!(vars, O)
     for arg in arguments(O)
         vars!(vars, arg)
     end
