@@ -260,7 +260,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
         end
     end
 
-    throw(ArgumentError("Variable $name does not exist"))
+    throw(ArgumentError("System $(nameof(sys)): variable $name does not exist"))
 end
 
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
@@ -796,6 +796,15 @@ end
 ###
 ### Inheritance & composition
 ###
+function Base.hash(sys::AbstractSystem, s::UInt)
+    s = hash(nameof(sys), s)
+    s = foldr(hash, get_systems(sys), init=s)
+    s = foldr(hash, get_states(sys), init=s)
+    s = foldr(hash, get_eqs(sys), init=s)
+    s = foldr(hash, get_observed(sys), init=s)
+    s = hash(independent_variable(sys), s)
+    return s
+end
 
 """
     $(TYPEDSIGNATURES)
