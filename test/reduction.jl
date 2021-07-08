@@ -233,7 +233,7 @@ eqs = [
       ]
 
 @named sys = ODESystem(eqs, t, [E, C, S, P], [k₁, k₂, k₋₁, E₀])
-@test_throws ModelingToolkit.InvalidSystemException structural_simplify(sys)
+@test_throws ModelingToolkit.ExtraEquationsSystemException structural_simplify(sys)
 
 # Example 5 from Pantelides' original paper
 @parameters t

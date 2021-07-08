@@ -50,10 +50,10 @@ end
 function error_reporting(sys, bad_idxs, n_highest_vars, iseqs)
     io = IOBuffer()
     if iseqs
-        error_title = "More equations than variables:\n"
+        error_title = "More equations than variables, here are the potential extra equation(s):\n"
         out_arr = equations(sys)[bad_idxs]
     else
-        error_title = "More variables than equations:\n"
+        error_title = "More variables than equations, here are the potential extra variable(s):\n"
         out_arr = structure(sys).fullvars[bad_idxs]
     end
 
@@ -94,12 +94,11 @@ function check_consistency(sys::AbstractSystem)
         assign = matching(graph, varwhitelist) # not assigned
         # Just use `error_reporting` to do conditional
         iseqs = n_highest_vars < neqs
-
         if iseqs
-            bad_idxs = findall(isequal(UNASSIGNED), assign)
-        else
             inv_assign = inverse_mapping(assign) # extra equations
-            bad_idxs = findall(iszero, inv_assign)
+            bad_idxs = findall(iszero, @view inv_assign[1:nsrcs(graph)])
+        else
+            bad_idxs = findall(isequal(UNASSIGNED), assign)
         end
         error_reporting(sys, bad_idxs, n_highest_vars, iseqs)
     end
