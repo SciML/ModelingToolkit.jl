@@ -380,3 +380,21 @@ let
     )
 
 end
+
+# check statespace
+let 
+    @parameters t f k d
+    @variables x(t) ẋ(t)
+    δ = Differential(t)
+    
+    eqs = [δ(x) ~ ẋ, δ(ẋ) ~ f - k*x - d*ẋ]
+    sys = ODESystem(eqs, t, [x, ẋ], [f, d, k]; controls = [f])
+
+    A = reshape(Float64[0, -1, 1, -2], 2, 2)
+    B = reshape(Float64[0, 1], 2, 1)
+    @test isequal(
+        calculate_statespace(sys, Dict([k => 1, d => 2]); matrix_eltype=Float64),
+        (A, B)
+    )
+
+end

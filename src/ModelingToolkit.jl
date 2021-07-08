@@ -167,6 +167,7 @@ export DiscreteSystem, DiscreteProblem
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_control_jacobian, generate_control_jacobian
+export calculate_statespace
 export calculate_tgrad, generate_tgrad
 export calculate_gradient, generate_gradient
 export calculate_factorized_W, generate_factorized_W

@@ -727,3 +727,27 @@ end
 
 isdifferential(expr) = istree(expr) && operation(expr) isa Differential
 isdiffeq(eq) = isdifferential(eq.lhs)
+
+"""
+    calculate_statespace(sys::AbstractODESystem, subs::Dict = sys.defaults; matrix_eltype::Type{T} = Float64) where T
+
+Returns a tuple of the linearized `A` and `B` matrices for a state space model. 
+"""
+function calculate_statespace(sys::AbstractODESystem, subs::Dict = sys.defaults; matrix_eltype::Type{T} = Float64) where T
+    
+    J = calculate_jacobian(sys)
+    C = calculate_control_jacobian(sys)
+
+    A = Matrix{matrix_eltype}(undef, size(J)...)
+    B = Matrix{matrix_eltype}(undef, size(C)...)
+
+    for I in CartesianIndices(A)
+        A[I] = (value ∘ substitute)(J[I], subs)
+    end
+
+    for I in CartesianIndices(B)
+        B[I] = (value ∘ substitute)(C[I], subs)
+    end
+
+    return A,B
+end
