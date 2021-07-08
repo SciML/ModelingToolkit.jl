@@ -101,7 +101,6 @@ function ODESystem(
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
                   )
-    
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
 
     iv′ = value(scalarize(iv))
@@ -114,6 +113,13 @@ function ODESystem(
     end
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+
+    iv′ = value(scalarize(iv))
+    dvs′ = value.(scalarize(dvs))
+    ps′ = value.(scalarize(ps))
+
+    collect_defaults!(defaults, dvs′)
+    collect_defaults!(defaults, ps′)
 
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))

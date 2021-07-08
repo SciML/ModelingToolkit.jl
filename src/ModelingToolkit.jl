@@ -7,9 +7,10 @@ using AbstractTrees
 using DiffEqBase, SciMLBase, Reexport
 using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
+using InteractiveUtils
 using Latexify, Unitful, ArrayInterface
 using MacroTools
-using UnPack: @unpack
+@reexport using UnPack
 using Setfield, ConstructionBase
 using DiffEqJump
 using DataStructures
@@ -139,6 +140,11 @@ include("systems/alias_elimination.jl")
 include("structural_transformation/StructuralTransformations.jl")
 @reexport using .StructuralTransformations
 
+for S in subtypes(ModelingToolkit.AbstractSystem)
+    S = nameof(S)
+    @eval convert_system(::Type{<:$S}, sys::$S) = sys
+end
+
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
@@ -184,6 +190,6 @@ export simplify, substitute
 export build_function
 export modelingtoolkitize
 export @variables, @parameters
-export @named, @nonamespace
+export @named, @nonamespace, @namespace, extend, compose
 
 end # module

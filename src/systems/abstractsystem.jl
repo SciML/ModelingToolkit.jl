@@ -181,7 +181,7 @@ for prop in [
     end
 end
 
-Setfield.get(obj::AbstractSystem, l::Setfield.PropertyLens{field}) where {field} = getfield(obj, field)
+Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field} = getfield(obj, field)
 @generated function ConstructionBase.setproperties(obj::AbstractSystem, patch::NamedTuple)
     if issubset(fieldnames(patch), fieldnames(obj))
         args = map(fieldnames(obj)) do fn
@@ -223,16 +223,17 @@ function Base.propertynames(sys::AbstractSystem; private=false)
     end
 end
 
-function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true)
+Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true) = getvar(sys, name; namespace=namespace)
+function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
     sysname = nameof(sys)
     systems = get_systems(sys)
     if isdefined(sys, name)
         Base.depwarn("`sys.name` like `sys.$name` is deprecated. Use getters like `get_$name` instead.", "sys.$name")
         return getfield(sys, name)
     elseif !isempty(systems)
-        i = findfirst(x->nameof(x)==name,systems)
+        i = findfirst(x->nameof(x)==name, systems)
         if i !== nothing
-            return namespace ? rename(systems[i],renamespace(sysname,name)) : systems[i]
+            return namespace ? rename(systems[i], renamespace(sysname,name)) : systems[i]
         end
     end
 
@@ -259,7 +260,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true)
         end
     end
 
-    throw(ArgumentError("Variable $name does not exist"))
+    throw(ArgumentError("System $(nameof(sys)): variable $name does not exist"))
 end
 
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
@@ -639,11 +640,19 @@ macro named(expr)
     esc(_named(expr))
 end
 
-function _nonamespace(expr)
+function _config(expr, namespace)
+    cn = Base.Fix2(_config, namespace)
     if Meta.isexpr(expr, :.)
-        return :($getproperty($(map(_nonamespace, expr.args)...); namespace=false))
+        return :($getvar($(map(cn, expr.args)...); namespace=$namespace))
+    elseif Meta.isexpr(expr, :function)
+        def = splitdef(expr)
+        def[:args] = map(cn, def[:args])
+        def[:body] = cn(def[:body])
+        combinedef(def)
     elseif expr isa Expr && !isempty(expr.args)
-        return Expr(expr.head, map(_nonamespace, expr.args)...)
+        return Expr(expr.head, map(cn, expr.args)...)
+    elseif Meta.isexpr(expr, :(=))
+        return Expr(:(=), map(cn, expr.args)...)
     else
         expr
     end
@@ -653,10 +662,22 @@ end
 $(SIGNATURES)
 
 Rewrite `@nonamespace a.b.c` to
-`getproperty(getproperty(a, :b; namespace = false), :c; namespace = false)`.
+`getvar(getvar(a, :b; namespace = false), :c; namespace = false)`.
+
+This is the default behavior of `getvar`. This should be used when inheriting states from a model.
 """
 macro nonamespace(expr)
-    esc(_nonamespace(expr))
+    esc(_config(expr, false))
+end
+
+"""
+$(SIGNATURES)
+
+Rewrite `@namespace a.b.c` to
+`getvar(getvar(a, :b; namespace = true), :c; namespace = true)`.
+"""
+macro namespace(expr)
+    esc(_config(expr, true))
 end
 
 """
@@ -781,3 +802,62 @@ end
 function connect(syss...)
     connect(promote_connect_type(map(get_connection_type, syss)...), syss...)
 end
+
+###
+### Inheritance & composition
+###
+function Base.hash(sys::AbstractSystem, s::UInt)
+    s = hash(nameof(sys), s)
+    s = foldr(hash, get_systems(sys), init=s)
+    s = foldr(hash, get_states(sys), init=s)
+    s = foldr(hash, get_ps(sys), init=s)
+    s = foldr(hash, get_eqs(sys), init=s)
+    s = foldr(hash, get_observed(sys), init=s)
+    s = hash(independent_variable(sys), s)
+    return s
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+entend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
+by default.
+"""
+function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys))
+    T = SciMLBase.parameterless_type(basesys)
+    iv = independent_variable(basesys)
+    sys = convert_system(T, sys, iv)
+    eqs = union(equations(basesys), equations(sys))
+    sts = union(states(basesys), states(sys))
+    ps = union(parameters(basesys), parameters(sys))
+    obs = union(observed(basesys), observed(sys))
+    defs = merge(defaults(basesys), defaults(sys)) # prefer `sys`
+    syss = union(get_systems(basesys), get_systems(sys))
+
+    if iv === nothing
+        T(eqs, sts, ps, observed=obs, defaults=defs, name=name, systems=syss)
+    else
+        T(eqs, iv, sts, ps, observed=obs, defaults=defs, name=name, systems=syss)
+    end
+end
+
+Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys)) = extend(sys, basesys; name=name)
+
+"""
+    $(SIGNATURES)
+
+compose multiple systems together. The resulting system would inherit the first
+system's name.
+"""
+compose(syss::AbstractSystem...; name=nameof(first(syss))) = compose(collect(syss); name=name)
+function compose(syss::AbstractArray{<:AbstractSystem}; name=nameof(first(syss)))
+    nsys = length(syss)
+    nsys >= 2 || throw(ArgumentError("There must be at least 2 systems. Got $nsys systems."))
+    sys = first(syss)
+    @set! sys.name = name
+    @set! sys.systems = syss[2:end]
+    return sys
+end
+Base.:(∘)(sys1::AbstractSystem, sys2::AbstractSystem) = compose(sys1, sys2)
+
+UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where p = getproperty(sys, p; namespace=false)

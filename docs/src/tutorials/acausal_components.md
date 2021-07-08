@@ -15,69 +15,12 @@ equalities before solving. Let's see this in action.
 using ModelingToolkit, Plots, DifferentialEquations
 
 @parameters t
-
-# Basic electric components
-function Pin(;name)
-    @variables v(t) i(t)
-    ODESystem(Equation[], t, [v, i], [], name=name, defaults=[v=>1.0, i=>1.0])
+@connector function Pin(;name)
+    sts = @variables v(t)=1.0 i(t)=1.0
+    ODESystem(Equation[], t, sts, []; name=name)
 end
 
-function Ground(;name)
-    @named g = Pin()
-    eqs = [g.v ~ 0]
-    ODESystem(eqs, t, [], [], systems=[g], name=name)
-end
-
-function Resistor(;name, R = 1.0)
-    val = R
-    @named p = Pin()
-    @named n = Pin()
-    @variables v(t)
-    @parameters R
-    eqs = [
-           v ~ p.v - n.v
-           0 ~ p.i + n.i
-           v ~ p.i * R
-          ]
-    ODESystem(eqs, t, [v], [R], systems=[p, n], defaults=Dict(R => val), name=name)
-end
-
-function Capacitor(; name, C = 1.0)
-    val = C
-    @named p = Pin()
-    @named n = Pin()
-    @variables v(t)
-    @parameters C
-    D = Differential(t)
-    eqs = [
-           v ~ p.v - n.v
-           0 ~ p.i + n.i
-           D(v) ~ p.i / C
-          ]
-    ODESystem(eqs, t, [v], [C], systems=[p, n], defaults=Dict(C => val), name=name)
-end
-
-function ConstantVoltage(;name, V = 1.0)
-    val = V
-    @named p = Pin()
-    @named n = Pin()
-    @parameters V
-    eqs = [
-           V ~ p.v - n.v
-           0 ~ p.i + n.i
-          ]
-    ODESystem(eqs, t, [], [V], systems=[p, n], defaults=Dict(V => val), name=name)
-end
-
-R = 1.0
-C = 1.0
-V = 1.0
-@named resistor = Resistor(R=R)
-@named capacitor = Capacitor(C=C)
-@named source = ConstantVoltage(V=V)
-@named ground = Ground()
-
-function connect_pins(ps...)
+function ModelingToolkit.connect(::Type{Pin}, ps...)
     eqs = [
            0 ~ sum(p->p.i, ps) # KCL
           ]
@@ -89,10 +32,67 @@ function connect_pins(ps...)
     return eqs
 end
 
+function Ground(;name)
+    @named g = Pin()
+    eqs = [g.v ~ 0]
+    compose(ODESystem(eqs, t, [], []; name=name), g)
+end
+
+function OnePort(;name)
+    @named p = Pin()
+    @named n = Pin()
+    sts = @variables v(t)=1.0 i(t)=1.0
+    eqs = [
+           v ~ p.v - n.v
+           0 ~ p.i + n.i
+           i ~ p.i
+          ]
+    compose(ODESystem(eqs, t, sts, []; name=name), p, n)
+end
+
+function Resistor(;name, R = 1.0)
+    @named oneport = OnePort()
+    @unpack v, i = oneport
+    ps = @parameters R=R
+    eqs = [
+           v ~ i * R
+          ]
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
+end
+
+function Capacitor(;name, C = 1.0)
+    @named oneport = OnePort()
+    @unpack v, i = oneport
+    ps = @parameters C=C
+    D = Differential(t)
+    eqs = [
+           D(v) ~ i / C
+          ]
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
+end
+
+function ConstantVoltage(;name, V = 1.0)
+    @named oneport = OnePort()
+    @unpack v = oneport
+    ps = @parameters V=V
+    eqs = [
+           V ~ v
+          ]
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
+end
+
+R = 1.0
+C = 1.0
+V = 1.0
+@named resistor = Resistor(R=R)
+@named capacitor = Capacitor(C=C)
+@named source = ConstantVoltage(V=V)
+@named ground = Ground()
+
 rc_eqs = [
-          connect_pins(source.p, resistor.p)
-          connect_pins(resistor.n, capacitor.p)
-          connect_pins(capacitor.n, source.n, ground.g)
+          connect(source.p, resistor.p)
+          connect(resistor.n, capacitor.p)
+          connect(capacitor.n, source.n, ground.g)
          ]
 
 @named rc_model = ODESystem(rc_eqs, t,
@@ -117,12 +117,12 @@ For each of our components we use a Julia function which emits an `ODESystem`.
 At the top we start with defining the fundamental qualities of an electrical
 circuit component. At every input and output pin a circuit component has
 two values: the current at the pin and the voltage. Thus we define the `Pin`
-component to simply be the values there:
+component (connector) to simply be the values there:
 
 ```julia
-function Pin(;name)
-    @variables v(t) i(t)
-    ODESystem(Equation[], t, [v, i], [], name=name, defaults=[v=>1.0, i=>1.0])
+@connector function Pin(;name)
+    sts = @variables v(t)=1.0 i(t)=1.0
+    ODESystem(Equation[], t, sts, []; name=name)
 end
 ```
 
@@ -153,7 +153,27 @@ that the voltage in such a `Pin` is equal to zero. This gives:
 function Ground(;name)
     @named g = Pin()
     eqs = [g.v ~ 0]
-    ODESystem(eqs, t, [], [], systems=[g], name=name)
+    compose(ODESystem(eqs, t, [], []; name=name), g)
+end
+```
+
+Next we build a `OnePort`: an abstraction for all simple electrical component
+with two pins. The voltage difference between the positive pin and the negative
+pin is the voltage of the component, the current between two pins must sum to
+zero, and the current of the component equals to the current of the positive
+pin.
+
+```julia
+function OnePort(;name)
+    @named p = Pin()
+    @named n = Pin()
+    sts = @variables v(t)=1.0 i(t)=1.0
+    eqs = [
+           v ~ p.v - n.v
+           0 ~ p.i + n.i
+           i ~ p.i
+          ]
+    compose(ODESystem(eqs, t, sts, []; name=name), p, n)
 end
 ```
 
@@ -166,41 +186,37 @@ zero. This leads to our resistor equations:
 
 ```julia
 function Resistor(;name, R = 1.0)
-    val = R
-    @named p = Pin()
-    @named n = Pin()
-    @variables v(t)
-    @parameters R
+    @named oneport = OnePort()
+    @unpack v, i = oneport
+    ps = @parameters R=R
     eqs = [
-           v ~ p.v - n.v
-           0 ~ p.i + n.i
-           v ~ p.i * R
+           v ~ i * R
           ]
-    ODESystem(eqs, t, [v], [R], systems=[p, n], defaults=Dict(R => val), name=name)
+    extend(ODESystem(eqs, t, [], ps; name=name, oneport)
 end
 ```
 
-Notice that we have created this system with a `defaults` for the resistor's
-resistance. By doing so, if the resistance of this resistor is not overridden
-by a higher level default or overridden at `ODEProblem` construction time, this
-will be the value of the resistance.
+Notice that we have created this system with a default parameter `R` for the
+resistor's resistance. By doing so, if the resistance of this resistor is not
+overridden by a higher level default or overridden at `ODEProblem` construction
+time, this will be the value of the resistance. Also, note the use of `@unpack`
+and `extend`. For the `Resistor`, we want to simply inherit `OnePort`'s
+equations and states and extend them with a new equation. ModelingToolkit makes
+a new namespaced variable `oneport₊v(t)` when using the syntax `oneport.v`, and
+we can use `@unpack` avoid the namespacing.
 
-Using our knowledge of circuits we similarly construct the Capacitor:
+Using our knowledge of circuits we similarly construct the `Capacitor`:
 
 ```julia
-function Capacitor(; name, C = 1.0)
-    val = C
-    @named p = Pin()
-    @named n = Pin()
-    @variables v(t)
-    @parameters C
+function Capacitor(;name, C = 1.0)
+    @named oneport = OnePort()
+    @unpack v, i = oneport
+    ps = @parameters C=C
     D = Differential(t)
     eqs = [
-           v ~ p.v - n.v
-           0 ~ p.i + n.i
-           D(v) ~ p.i / C
+           D(v) ~ i / C
           ]
-    ODESystem(eqs, t, [v], [C], systems=[p, n], defaults=Dict(C => val), name=name)
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
 end
 ```
 
@@ -211,15 +227,13 @@ model this as:
 
 ```julia
 function ConstantVoltage(;name, V = 1.0)
-    val = V
-    @named p = Pin()
-    @named n = Pin()
-    @parameters V
+    @named oneport = OnePort()
+    @unpack v = oneport
+    ps = @parameters V=V
     eqs = [
-           V ~ p.v - n.v
-           0 ~ p.i + n.i
+           V ~ v
           ]
-    ODESystem(eqs, t, [], [V], systems=[p, n], defaults=Dict(V => val), name=name)
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
 end
 ```
 
@@ -246,7 +260,7 @@ i.e. that currents sum to zero and voltages across the pins are equal. Thus
 we will build a helper function `connect_pins` which implements these rules:
 
 ```julia
-function connect_pins(ps...)
+function ModelingToolkit.connect(::Type{Pin}, ps...)
     eqs = [
            0 ~ sum(p->p.i, ps) # KCL
           ]
@@ -266,9 +280,9 @@ the source and the ground. This would mean our connection equations are:
 
 ```julia
 rc_eqs = [
-          connect_pins(source.p, resistor.p)
-          connect_pins(resistor.n, capacitor.p)
-          connect_pins(capacitor.n, source.n, ground.g)
+          connect(source.p, resistor.p)
+          connect(resistor.n, capacitor.p)
+          connect(capacitor.n, source.n, ground.g)
          ]
 ```
 
@@ -288,15 +302,26 @@ equations are:
 ```julia
 equations(rc_model)
 
-16-element Vector{Equation}:
+20-element Vector{Equation}:
  0 ~ resistor₊p₊i(t) + source₊p₊i(t)
  source₊p₊v(t) ~ resistor₊p₊v(t)
  0 ~ capacitor₊p₊i(t) + resistor₊n₊i(t)
  resistor₊n₊v(t) ~ capacitor₊p₊v(t)
- ⋮
- Differential(t)(capacitor₊v(t)) ~ capacitor₊p₊i(t)*(capacitor₊C^-1)
- source₊V ~ source₊p₊v(t) - (source₊n₊v(t))
+ 0 ~ capacitor₊n₊i(t) + ground₊g₊i(t) + source₊n₊i(t)
+ capacitor₊n₊v(t) ~ source₊n₊v(t)
+ source₊n₊v(t) ~ ground₊g₊v(t)
+ resistor₊v(t) ~ resistor₊p₊v(t) - resistor₊n₊v(t)
+ 0 ~ resistor₊n₊i(t) + resistor₊p₊i(t)
+ resistor₊i(t) ~ resistor₊p₊i(t)
+ resistor₊v(t) ~ resistor₊R*resistor₊i(t)
+ capacitor₊v(t) ~ capacitor₊p₊v(t) - capacitor₊n₊v(t)
+ 0 ~ capacitor₊n₊i(t) + capacitor₊p₊i(t)
+ capacitor₊i(t) ~ capacitor₊p₊i(t)
+ Differential(t)(capacitor₊v(t)) ~ capacitor₊i(t)*(capacitor₊C^-1)
+ source₊v(t) ~ source₊p₊v(t) - source₊n₊v(t)
  0 ~ source₊n₊i(t) + source₊p₊i(t)
+ source₊i(t) ~ source₊p₊i(t)
+ source₊V ~ source₊v(t)
  ground₊g₊v(t) ~ 0
 ```
 
@@ -305,16 +330,27 @@ the states are:
 ```julia
 states(rc_model)
 
-16-element Vector{Term{Real}}:
- resistor₊p₊i(t)
+20-element Vector{Term{Real, Base.ImmutableDict{DataType, Any}}}:
  source₊p₊i(t)
+ resistor₊p₊i(t)
  source₊p₊v(t)
  resistor₊p₊v(t)
- ⋮
+ capacitor₊p₊i(t)
+ resistor₊n₊i(t)
+ resistor₊n₊v(t)
+ capacitor₊p₊v(t)
+ source₊n₊i(t)
+ capacitor₊n₊i(t)
+ ground₊g₊i(t)
+ capacitor₊n₊v(t)
  source₊n₊v(t)
  ground₊g₊v(t)
  resistor₊v(t)
+ resistor₊i(t)
  capacitor₊v(t)
+ capacitor₊i(t)
+ source₊v(t)
+ source₊i(t)
 ```
 
 and the parameters are:
@@ -342,8 +378,8 @@ sys = structural_simplify(rc_model)
 equations(sys)
 
 2-element Vector{Equation}:
- 0 ~ capacitor₊v(t) + resistor₊R*capacitor₊p₊i(t) - source₊V
- Differential(t)(capacitor₊v(t)) ~ capacitor₊p₊i(t)*(capacitor₊C^-1)
+ 0 ~ capacitor₊v(t) + resistor₊R*resistor₊i(t) - source₊V
+ Differential(t)(capacitor₊v(t)) ~ resistor₊i(t)*(capacitor₊C^-1)
 ```
 
 ```julia
@@ -401,21 +437,25 @@ variables. Let's see what our observed variables are:
 ```julia
 observed(sys)
 
-14-element Vector{Equation}:
- resistor₊p₊i(t) ~ capacitor₊p₊i(t)
+18-element Vector{Equation}:
+ capacitor₊i(t) ~ resistor₊i(t)
+ ground₊g₊i(t) ~ 0.0
+ source₊n₊i(t) ~ resistor₊i(t)
+ source₊i(t) ~ -resistor₊i(t)
+ source₊p₊i(t) ~ -resistor₊i(t)
+ capacitor₊n₊i(t) ~ -resistor₊i(t)
+ resistor₊n₊v(t) ~ capacitor₊v(t)
+ resistor₊n₊i(t) ~ -resistor₊i(t)
+ resistor₊p₊i(t) ~ resistor₊i(t)
+ capacitor₊p₊i(t) ~ resistor₊i(t)
+ capacitor₊p₊v(t) ~ capacitor₊v(t)
  capacitor₊n₊v(t) ~ 0.0
  source₊n₊v(t) ~ 0.0
- ground₊g₊i(t) ~ 0.0
- source₊n₊i(t) ~ capacitor₊p₊i(t)
- source₊p₊i(t) ~ -capacitor₊p₊i(t)
- capacitor₊n₊i(t) ~ -capacitor₊p₊i(t)
- resistor₊n₊i(t) ~ -capacitor₊p₊i(t)
  ground₊g₊v(t) ~ 0.0
- source₊p₊v(t) ~ source₊V
- capacitor₊p₊v(t) ~ capacitor₊v(t)
- resistor₊p₊v(t) ~ source₊p₊v(t)
- resistor₊n₊v(t) ~ capacitor₊p₊v(t)
- resistor₊v(t) ~ -((capacitor₊p₊v(t)) - (source₊p₊v(t)))
+ source₊v(t) ~ source₊V
+ source₊p₊v(t) ~ source₊v(t)
+ resistor₊p₊v(t) ~ source₊v(t)
+ resistor₊v(t) ~ source₊v(t) - capacitor₊v(t)
 ```
 
 These are explicit algebraic equations which can then be used to reconstruct

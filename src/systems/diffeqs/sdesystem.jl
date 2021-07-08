@@ -117,6 +117,9 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
+    collect_defaults!(defaults, dvs′)
+    collect_defaults!(defaults, ps′)
+
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     ctrl_jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
