@@ -22,7 +22,7 @@ end
 function Ground(;name)
     @named g = Pin()
     eqs = [g.v ~ 0]
-    ODESystem(eqs, t, [], [], systems=[g]; name=name)
+    compose(ODESystem(eqs, t, [], []; name=name), g)
 end
 
 function OnePort(;name)
@@ -34,7 +34,7 @@ function OnePort(;name)
            0 ~ p.i + n.i
            i ~ p.i
           ]
-    ODESystem(eqs, t, sts, [], systems=[p, n]; name=name)
+    compose(ODESystem(eqs, t, sts, []; name=name), p, n)
 end
 
 function Resistor(;name, R = 1.0)

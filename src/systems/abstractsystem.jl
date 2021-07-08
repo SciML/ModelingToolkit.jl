@@ -793,7 +793,10 @@ function connect(syss...)
     connect(promote_connect_type(map(get_connection_type, syss)...), syss...)
 end
 
-# Inheritance
+###
+### Inheritance & composition
+###
+
 """
     $(TYPEDSIGNATURES)
 
@@ -817,5 +820,24 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameo
         T(eqs, iv, sts, ps, observed=obs, defaults=defs, name=name, systems=syss)
     end
 end
+
+Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys)) = extend(sys, basesys; name=name)
+
+"""
+    $(SIGNATURES)
+
+compose multiple systems together. The resulting system would inherit the first
+system's name.
+"""
+compose(syss::AbstractSystem...; name=nameof(first(syss))) = compose(collect(syss); name=name)
+function compose(syss::AbstractArray{<:AbstractSystem}; name=nameof(first(syss)))
+    nsys = length(syss)
+    nsys >= 2 || throw(ArgumentError("There must be at least 2 systems. Got $nsys systems."))
+    sys = first(syss)
+    @set! sys.name = name
+    @set! sys.systems = syss[2:end]
+    return sys
+end
+Base.:(∘)(sys1::AbstractSystem, sys2::AbstractSystem) = compose(sys1, sys2)
 
 UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where p = getproperty(sys, p; namespace=false)

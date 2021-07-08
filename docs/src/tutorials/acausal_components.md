@@ -35,7 +35,7 @@ end
 function Ground(;name)
     @named g = Pin()
     eqs = [g.v ~ 0]
-    ODESystem(eqs, t, [], [], systems=[g]; name=name)
+    compose(ODESystem(eqs, t, [], []; name=name), g)
 end
 
 function OnePort(;name)
@@ -47,7 +47,7 @@ function OnePort(;name)
            0 ~ p.i + n.i
            i ~ p.i
           ]
-    ODESystem(eqs, t, sts, [], systems=[p, n]; name=name)
+    compose(ODESystem(eqs, t, sts, []; name=name), p, n)
 end
 
 function Resistor(;name, R = 1.0)
@@ -57,7 +57,7 @@ function Resistor(;name, R = 1.0)
     eqs = [
            v ~ i * R
           ]
-    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
 end
 
 function Capacitor(;name, C = 1.0)
@@ -68,7 +68,7 @@ function Capacitor(;name, C = 1.0)
     eqs = [
            D(v) ~ i / C
           ]
-    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
 end
 
 function ConstantVoltage(;name, V = 1.0)
@@ -78,7 +78,7 @@ function ConstantVoltage(;name, V = 1.0)
     eqs = [
            V ~ v
           ]
-    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
 end
 
 R = 1.0
@@ -153,7 +153,7 @@ that the voltage in such a `Pin` is equal to zero. This gives:
 function Ground(;name)
     @named g = Pin()
     eqs = [g.v ~ 0]
-    ODESystem(eqs, t, [], [], systems=[g]; name=name)
+    compose(ODESystem(eqs, t, [], []; name=name), g)
 end
 ```
 
@@ -173,7 +173,7 @@ function OnePort(;name)
            0 ~ p.i + n.i
            i ~ p.i
           ]
-    ODESystem(eqs, t, sts, [], systems=[p, n]; name=name)
+    compose(ODESystem(eqs, t, sts, []; name=name), p, n)
 end
 ```
 
@@ -192,7 +192,7 @@ function Resistor(;name, R = 1.0)
     eqs = [
            v ~ i * R
           ]
-    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+    extend(ODESystem(eqs, t, [], ps; name=name, oneport)
 end
 ```
 
@@ -216,7 +216,7 @@ function Capacitor(;name, C = 1.0)
     eqs = [
            D(v) ~ i / C
           ]
-    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
 end
 ```
 
@@ -233,7 +233,7 @@ function ConstantVoltage(;name, V = 1.0)
     eqs = [
            V ~ v
           ]
-    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
 end
 ```
 

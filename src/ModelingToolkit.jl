@@ -190,6 +190,6 @@ export simplify, substitute
 export build_function
 export modelingtoolkitize
 export @variables, @parameters
-export @named, @nonamespace, @namespace, extend
+export @named, @nonamespace, @namespace, extend, compose
 
 end # module
