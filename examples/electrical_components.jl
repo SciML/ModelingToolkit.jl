@@ -44,7 +44,7 @@ function Resistor(;name, R = 1.0)
     eqs = [
            v ~ i * R
           ]
-    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
 end
 
 function Capacitor(;name, C = 1.0)
@@ -55,7 +55,7 @@ function Capacitor(;name, C = 1.0)
     eqs = [
            D(v) ~ i / C
           ]
-    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
 end
 
 function ConstantVoltage(;name, V = 1.0)
@@ -65,7 +65,7 @@ function ConstantVoltage(;name, V = 1.0)
     eqs = [
            V ~ v
           ]
-    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
 end
 
 function Inductor(; name, L = 1.0)
@@ -76,5 +76,5 @@ function Inductor(; name, L = 1.0)
     eqs = [
            D(i) ~ v / L
           ]
-    extend(oneport, ODESystem(eqs, t, [], ps; name=name); name=name)
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
 end

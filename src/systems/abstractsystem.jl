@@ -794,7 +794,13 @@ function connect(syss...)
 end
 
 # Inheritance
-function extend(basesys::AbstractSystem, sys::AbstractSystem; name::Symbol)
+"""
+    $(TYPEDSIGNATURES)
+
+entend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
+by default.
+"""
+function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys))
     T = SciMLBase.parameterless_type(basesys)
     iv = independent_variable(basesys)
     sys = convert_system(T, sys, iv)
