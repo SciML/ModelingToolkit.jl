@@ -738,15 +738,15 @@ function calculate_statespace(sys::AbstractODESystem, subs::Dict = sys.defaults;
     J = calculate_jacobian(sys)
     C = calculate_control_jacobian(sys)
 
-    A = Matrix{matrix_eltype}(undef, size(J)...)
-    B = Matrix{matrix_eltype}(undef, size(C)...)
+    A = Matrix{T}(undef, size(J))
+    B = Matrix{T}(undef, size(C))
 
     for I in CartesianIndices(A)
-        A[I] = (value ∘ substitute)(J[I], subs)
+        A[I] = value(substitute(J[I], subs))
     end
 
     for I in CartesianIndices(B)
-        B[I] = (value ∘ substitute)(C[I], subs)
+        B[I] = value(substitute(C[I], subs))
     end
 
     return A,B

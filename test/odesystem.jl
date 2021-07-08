@@ -396,5 +396,4 @@ let
         calculate_statespace(sys, Dict([k => 1, d => 2]); matrix_eltype=Float64),
         (A, B)
     )
-
 end
