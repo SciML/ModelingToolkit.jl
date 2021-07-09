@@ -34,3 +34,22 @@ with the unit m^3/s:
 ```julia
 @variables x[1:2,1:2] [connect = Flow; unit = u"m^3/s"]
 ```
+
+ModelingToolkit defines `connect`, `unit`, `noise`, and `description` keys for
+the metadata. One can get and set metadata by
+
+```julia
+julia> @variables x [unit = u"m^3/s"];
+
+julia> hasmetadata(x, Symbolics.option_to_metadata_type(Val(:unit)))
+true
+
+julia> getmetadata(x, Symbolics.option_to_metadata_type(Val(:unit)))
+m³ s⁻¹
+
+julia> x = setmetadata(x, Symbolics.option_to_metadata_type(Val(:unit)), u"m/s")
+x
+
+julia> getmetadata(x, Symbolics.option_to_metadata_type(Val(:unit)))
+m s⁻¹
+```

@@ -1,7 +1,7 @@
 using ModelingToolkit
 using Test
 
-using ModelingToolkit: value
+using ModelingToolkit: value, Flow
 using SymbolicUtils: FnType
 
 @parameters t
