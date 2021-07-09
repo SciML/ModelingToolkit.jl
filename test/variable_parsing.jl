@@ -1,7 +1,7 @@
 using ModelingToolkit
 using Test
 
-using ModelingToolkit: value
+using ModelingToolkit: value, Flow
 using SymbolicUtils: FnType
 
 @parameters t
@@ -81,7 +81,6 @@ vals = [1,2,3,4]
 @test getmetadata.(collect(xs), (VariableDefaultValue,)) == vals
 @test getmetadata.(collect(ys), (VariableDefaultValue,)) == ones(Int, 5)
 
-struct Flow end
 u = u"m^3/s"
 @variables begin
     x = [1, 2], [connect=Flow,unit=u]
