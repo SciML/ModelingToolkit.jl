@@ -156,7 +156,7 @@ struct ReactionSystem <: AbstractSystem
         ps′ = value.(ps)
         check_variables(states′, iv′)
         check_parameters(ps′, iv′)
-        new(eqs, iv′, states′, ps′, observed, name, systems)
+        new(collect(eqs), iv′, states′, ps′, observed, name, systems)
     end
 end
 

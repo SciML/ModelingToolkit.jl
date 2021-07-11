@@ -357,18 +357,18 @@ sol = solve(prob, Tsit5())
 # check_eqs_u0 kwarg test
 @parameters t
 @variables x1(t) x2(t)
-D =Differential(t)
+D = Differential(t)
 eqs = [D(x1) ~ -x1]
 sys = ODESystem(eqs,t,[x1,x2],[])
 @test_throws ArgumentError ODEProblem(sys, [1.0,1.0], (0.0,1.0))
 prob = ODEProblem(sys, [1.0,1.0], (0.0,1.0), check_length=false)
 
 # check inputs
-let 
+let
     @parameters t f k d
     @variables x(t) ẋ(t)
     δ = Differential(t)
-    
+
     eqs = [δ(x) ~ ẋ, δ(ẋ) ~ f - k*x - d*ẋ]
     sys = ODESystem(eqs, t, [x, ẋ], [f, d, k]; controls = [f])
 
@@ -378,5 +378,12 @@ let
         calculate_control_jacobian(sys),
         reshape(Num[0,1], 2, 1)
     )
+end
 
+# issue 1109
+let
+    @variables t x[1:3,1:3](t)
+    D = Differential(t)
+    sys = ODESystem(D.(x) .~ x)
+    @test_nowarn structural_simplify(sys)
 end

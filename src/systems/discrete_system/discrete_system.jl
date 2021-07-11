@@ -65,7 +65,7 @@ end
 Constructs a DiscreteSystem.
 """
 function DiscreteSystem(
-                   discreteEqs::AbstractVector{<:Equation}, iv, dvs, ps;
+                   eqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    controls = Num[],
                    observed = Num[],
                    systems = DiscreteSystem[],
@@ -74,6 +74,7 @@ function DiscreteSystem(
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                   )
+    eqs = collect(eqs)
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
@@ -92,7 +93,7 @@ function DiscreteSystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(discreteEqs, iv′, dvs′, ps′, ctrl′, observed, name, systems, default_u0, default_p)
+    DiscreteSystem(eqs, iv′, dvs′, ps′, ctrl′, observed, name, systems, default_u0, default_p)
 end
 
 """

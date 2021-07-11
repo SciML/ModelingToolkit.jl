@@ -101,6 +101,7 @@ function ODESystem(
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
                   )
+    deqs = collect(deqs)
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
 
     iv′ = value(scalarize(iv))
@@ -170,6 +171,7 @@ function find_derivatives!(vars, expr, f)
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)
+    eqs = collect(eqs)
     # NOTE: this assumes that the order of algebric equations doesn't matter
     diffvars = OrderedSet()
     allstates = OrderedSet()
