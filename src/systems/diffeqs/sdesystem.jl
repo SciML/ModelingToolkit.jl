@@ -102,6 +102,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    name = gensym(:SDESystem),
                    connection_type=nothing,
                    )
+    deqs = collect(deqs)
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
