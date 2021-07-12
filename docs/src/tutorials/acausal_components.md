@@ -412,8 +412,9 @@ plot(sol)
 
 However, we can also choose to use the "torn nonlinear system" to remove all
 of the algebraic variables from the solution of the system. Note that this
-requires having done `structural_simplify`. This is done by using `ODAEProblem`
-like:
+requires having done `structural_simplify`. MTK can numerically solve all
+the unreduced algebraic equations numerically. This is done by using
+`ODAEProblem` like:
 
 ```julia
 u0 = [
