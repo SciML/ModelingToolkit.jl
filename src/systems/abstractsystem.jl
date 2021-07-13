@@ -826,7 +826,12 @@ by default.
 function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys))
     T = SciMLBase.parameterless_type(basesys)
     iv = independent_variable(basesys)
-    sys = convert_system(T, sys, iv)
+    if iv === nothing
+        sys = convert_system(T, sys)
+    else
+        sys = convert_system(T, sys, iv)
+    end
+    
     eqs = union(equations(basesys), equations(sys))
     sts = union(states(basesys), states(sys))
     ps = union(parameters(basesys), parameters(sys))
