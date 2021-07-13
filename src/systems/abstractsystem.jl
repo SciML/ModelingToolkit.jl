@@ -917,7 +917,7 @@ Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys)
 compose multiple systems together. The resulting system would inherit the first
 system's name.
 """
-function compose(sys::AbstractSystem, systems::AbstractArray{<:AbstractSystem}; name=nameof(first(syss)))
+function compose(sys::AbstractSystem, systems::AbstractArray{<:AbstractSystem}; name=nameof(sys))
     nsys = length(systems)
     nsys >= 1 || throw(ArgumentError("There must be at least 1 subsystem. Got $nsys subsystems."))
     @set! sys.name = name
