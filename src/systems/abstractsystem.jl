@@ -597,13 +597,16 @@ function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     return nothing
 end
 
-function _named(expr)
+function split_assign(expr)
     if !(expr isa Expr && expr.head === :(=) && expr.args[2].head === :call)
         throw(ArgumentError("expression should be of the form `sys = foo(a, b)`"))
     end
     name, call = expr.args
+end
 
+function _named(name, call, runtime=false)
     has_kw = false
+    call isa Expr || throw(Meta.ParseError("The rhs must be an Expr. Got $call."))
     if length(call.args) >= 2 && call.args[2] isa Expr
         # canonicalize to use `:parameters`
         if call.args[2].head === :kw
@@ -626,18 +629,78 @@ function _named(expr)
     kws = call.args[2].args
 
     if !any(kw->(kw isa Symbol ? kw : kw.args[1]) == :name, kws) # don't overwrite `name` kwarg
-        pushfirst!(kws, Expr(:kw, :name, Meta.quot(name)))
+        pushfirst!(kws, Expr(:kw, :name, runtime ? name : Meta.quot(name)))
     end
-    :($name = $call)
+    call
 end
 
+function _named_idxs(name::Symbol, idxs, call)
+    if call.head !== :->
+        throw(ArgumentError("Not an anonymous function"))
+    end
+    if !isa(call.args[1], Symbol)
+        throw(ArgumentError("not a single-argument anonymous function"))
+    end
+    sym, ex = call.args
+    ex = Base.Cartesian.poplinenum(ex)
+    ex = _named(:(Symbol($(Meta.quot(name)), :_, $sym)), ex, true)
+    ex = Base.Cartesian.poplinenum(ex)
+    :($name = $map($sym->$ex, $idxs))
+end
+
+check_name(name) = name isa Symbol || throw(Meta.ParseError("The lhs must be a symbol (a) or a ref (a[1:10]). Got $name."))
+
 """
-$(SIGNATURES)
+    @named y = foo(x)
+    @named y[1:10] = foo(x)
+    @named y 1:10 i -> foo(x*i)
 
 Rewrite `@named y = foo(x)` to `y = foo(x; name=:y)`.
+
+Rewrite `@named y[1:10] = foo(x)` to `y = map(i′->foo(x; name=Symbol(:y_, i′)), 1:10)`.
+
+Rewrite `@named y 1:10 i -> foo(x*i)` to `y = map(i->foo(x*i; name=Symbol(:y_, i)), 1:10)`.
+
+Examples:
+```julia
+julia> using ModelingToolkit
+
+julia> foo(i; name) = i, name
+foo (generic function with 1 method)
+
+julia> x = 41
+41
+
+julia> @named y = foo(x)
+(41, :y)
+
+julia> @named y[1:3] = foo(x)
+3-element Vector{Tuple{Int64, Symbol}}:
+ (41, :y_1)
+ (41, :y_2)
+ (41, :y_3)
+
+julia> @named y 1:3 i -> foo(x*i)
+3-element Vector{Tuple{Int64, Symbol}}:
+ (41, :y_1)
+ (82, :y_2)
+ (123, :y_3)
+```
 """
 macro named(expr)
-    esc(_named(expr))
+    name, call = split_assign(expr)
+    if Meta.isexpr(name, :ref)
+        name, idxs = name.args
+        check_name(name)
+        esc(_named_idxs(name, idxs, :($(gensym()) -> $call)))
+    else
+        check_name(name)
+        esc(:($name = $(_named(name, call))))
+    end
+end
+
+macro named(name::Symbol, idxs, call)
+    esc(_named_idxs(name, idxs, call))
 end
 
 function _config(expr, namespace)
@@ -854,15 +917,14 @@ Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys)
 compose multiple systems together. The resulting system would inherit the first
 system's name.
 """
-compose(syss::AbstractSystem...; name=nameof(first(syss))) = compose(collect(syss); name=name)
-function compose(syss::AbstractArray{<:AbstractSystem}; name=nameof(first(syss)))
-    nsys = length(syss)
-    nsys >= 2 || throw(ArgumentError("There must be at least 2 systems. Got $nsys systems."))
-    sys = first(syss)
+function compose(sys::AbstractSystem, systems::AbstractArray{<:AbstractSystem}; name=nameof(first(syss)))
+    nsys = length(systems)
+    nsys >= 1 || throw(ArgumentError("There must be at least 1 subsystem. Got $nsys subsystems."))
     @set! sys.name = name
-    @set! sys.systems = syss[2:end]
+    @set! sys.systems = systems
     return sys
 end
+compose(syss::AbstractSystem...; name=nameof(first(syss))) = compose(first(syss), collect(syss[2:end]); name=name)
 Base.:(∘)(sys1::AbstractSystem, sys2::AbstractSystem) = compose(sys1, sys2)
 
 UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where p = getproperty(sys, p; namespace=false)
