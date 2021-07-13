@@ -597,13 +597,16 @@ function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     return nothing
 end
 
-function _named(expr)
+function split_assign(expr)
     if !(expr isa Expr && expr.head === :(=) && expr.args[2].head === :call)
         throw(ArgumentError("expression should be of the form `sys = foo(a, b)`"))
     end
     name, call = expr.args
+end
 
+function _named(name, call, runtime=false)
     has_kw = false
+    call isa Expr || throw(Meta.ParseError("The rhs must be an Expr. Got $call."))
     if length(call.args) >= 2 && call.args[2] isa Expr
         # canonicalize to use `:parameters`
         if call.args[2].head === :kw
@@ -626,10 +629,26 @@ function _named(expr)
     kws = call.args[2].args
 
     if !any(kw->(kw isa Symbol ? kw : kw.args[1]) == :name, kws) # don't overwrite `name` kwarg
-        pushfirst!(kws, Expr(:kw, :name, Meta.quot(name)))
+        pushfirst!(kws, Expr(:kw, :name, runtime ? name : Meta.quot(name)))
     end
-    :($name = $call)
+    call
 end
+
+function _named_idxs(name::Symbol, idxs, call)
+    if call.head !== :->
+        throw(ArgumentError("Not an anonymous function"))
+    end
+    if !isa(call.args[1], Symbol)
+        throw(ArgumentError("not a single-argument anonymous function"))
+    end
+    sym, ex = call.args
+    ex = Base.Cartesian.poplinenum(ex)
+    ex = _named(:(Symbol($(Meta.quot(name)), :_, $sym)), ex, true)
+    ex = Base.Cartesian.poplinenum(ex)
+    :($name = $map($sym->$ex, $idxs))
+end
+
+check_name(name) = name isa Symbol || throw(Meta.ParseError("The lhs must be a symbol (a) or a ref (a[1:10]). Got $name."))
 
 """
 $(SIGNATURES)
@@ -637,7 +656,19 @@ $(SIGNATURES)
 Rewrite `@named y = foo(x)` to `y = foo(x; name=:y)`.
 """
 macro named(expr)
-    esc(_named(expr))
+    name, call = split_assign(expr)
+    if Meta.isexpr(name, :ref)
+        name, idxs = name.args
+        check_name(name)
+        esc(_named_idxs(name, idxs, :($(gensym()) -> $call)))
+    else
+        check_name(name)
+        esc(:($name = $(_named(name, call))))
+    end
+end
+
+macro named(name::Symbol, idxs, call)
+    esc(_named_idxs(name, idxs, call))
 end
 
 function _config(expr, namespace)
