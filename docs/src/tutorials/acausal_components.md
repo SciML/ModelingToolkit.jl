@@ -95,12 +95,11 @@ rc_eqs = [
           connect(capacitor.n, source.n, ground.g)
          ]
 
-@named rc_model = ODESystem(rc_eqs, t,
-                            systems=[resistor, capacitor, source, ground])
+@named rc_model = compose(ODESystem(rc_eqs, t),
+                          [resistor, capacitor, source, ground])
 sys = structural_simplify(rc_model)
 u0 = [
       capacitor.v => 0.0
-      capacitor.p.i => 0.0
      ]
 prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Tsit5())
@@ -289,15 +288,15 @@ rc_eqs = [
 Finally we build our four component model with these connection rules:
 
 ```julia
-@named rc_model = ODESystem(rc_eqs, t,
-                            systems=[resistor, capacitor, source, ground])
+@named rc_model = compose(ODESystem(rc_eqs, t)
+                          [resistor, capacitor, source, ground])
 ```
 
-Notice that this model is acasual because we have not specified anything about
-the causality of the model. We have simply specified what is true about each
-of the variables. This forms a system of differential-algebraic equations
-(DAEs) which define the evolution of each state of the system. The
-equations are:
+Note that we can also specify the subsystems in a vector. This model is acasual
+because we have not specified anything about the causality of the model. We have
+simply specified what is true about each of the variables. This forms a system
+of differential-algebraic equations (DAEs) which define the evolution of each
+state of the system. The equations are:
 
 ```julia
 equations(rc_model)
@@ -369,9 +368,10 @@ parameters(rc_model)
 This system could be solved directly as a DAE using [one of the DAE solvers
 from DifferentialEquations.jl](https://diffeq.sciml.ai/stable/solvers/dae_solve/).
 However, let's take a second to symbolically simplify the system before doing the
-solve. The function `structural_simplify` looks for all of the equalities and
-eliminates unnecessary variables to build the leanest numerical representation
-of the system. Let's see what it does here:
+solve. Although we can use ODE solvers that handles mass matrices to solve the
+above system directly, we want to run the `structural_simplify` function first,
+as it eliminates many unnecessary variables to build the leanest numerical
+representation of the system. Let's see what it does here:
 
 ```julia
 sys = structural_simplify(rc_model)
@@ -410,16 +410,13 @@ plot(sol)
 
 ![](https://user-images.githubusercontent.com/1814174/109416295-55184100-798b-11eb-96d1-5bb7e40135ba.png)
 
-However, we can also choose to use the "torn nonlinear system" to remove all
-of the algebraic variables from the solution of the system. Note that this
-requires having done `structural_simplify`. MTK can numerically solve all
-the unreduced algebraic equations numerically. This is done by using
-`ODAEProblem` like:
+Since we have run `structural_simplify`, MTK can numerically solve all the
+unreduced algebraic equations numerically using the `ODAEProblem` (note the
+letter `A`):
 
 ```julia
 u0 = [
       capacitor.v => 0.0
-      capacitor.p.i => 0.0
      ]
 prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())

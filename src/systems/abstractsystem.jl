@@ -849,15 +849,14 @@ Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys)
 compose multiple systems together. The resulting system would inherit the first
 system's name.
 """
-compose(syss::AbstractSystem...; name=nameof(first(syss))) = compose(collect(syss); name=name)
-function compose(syss::AbstractArray{<:AbstractSystem}; name=nameof(first(syss)))
-    nsys = length(syss)
-    nsys >= 2 || throw(ArgumentError("There must be at least 2 systems. Got $nsys systems."))
-    sys = first(syss)
+function compose(sys::AbstractSystem, systems::AbstractArray{<:AbstractSystem}; name=nameof(first(syss)))
+    nsys = length(systems)
+    nsys >= 1 || throw(ArgumentError("There must be at least 1 subsystem. Got $nsys subsystems."))
     @set! sys.name = name
-    @set! sys.systems = syss[2:end]
+    @set! sys.systems = systems
     return sys
 end
+compose(syss::AbstractSystem...; name=nameof(first(syss))) = compose(first(syss), collect(syss[2:end]); name=name)
 Base.:(∘)(sys1::AbstractSystem, sys2::AbstractSystem) = compose(sys1, sys2)
 
 UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where p = getproperty(sys, p; namespace=false)
