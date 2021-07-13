@@ -651,9 +651,41 @@ end
 check_name(name) = name isa Symbol || throw(Meta.ParseError("The lhs must be a symbol (a) or a ref (a[1:10]). Got $name."))
 
 """
-$(SIGNATURES)
+    @named y = foo(x)
+    @named y[1:10] = foo(x)
+    @named y 1:10 i -> foo(x*i)
 
 Rewrite `@named y = foo(x)` to `y = foo(x; name=:y)`.
+
+Rewrite `@named y[1:10] = foo(x)` to `y = map(i′->foo(x; name=Symbol(:y_, i′)), 1:10)`.
+
+Rewrite `@named y 1:10 i -> foo(x*i)` to `y = map(i->foo(x*i; name=Symbol(:y_, i)), 1:10)`.
+
+Examples:
+```julia
+julia> using ModelingToolkit
+
+julia> foo(i; name) = i, name
+foo (generic function with 1 method)
+
+julia> x = 41
+41
+
+julia> @named y = foo(x)
+(41, :y)
+
+julia> @named y[1:3] = foo(x)
+3-element Vector{Tuple{Int64, Symbol}}:
+ (41, :y_1)
+ (41, :y_2)
+ (41, :y_3)
+
+julia> @named y 1:3 i -> foo(x*i)
+3-element Vector{Tuple{Int64, Symbol}}:
+ (41, :y_1)
+ (82, :y_2)
+ (123, :y_3)
+```
 """
 macro named(expr)
     name, call = split_assign(expr)
