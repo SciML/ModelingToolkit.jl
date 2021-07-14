@@ -115,8 +115,8 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     u = dvs
     p = varmap_to_vars(parammap,ps)
 
-    f_gen = build_function(rhss, dvs, ps, t; expression=Val{eval_expression}, expression_module=eval_module)
-    f_oop,f_iip = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
+    f_gen = generate_function(sys; expression=Val{eval_expression}, expression_module=eval_module)
+    f_oop, _ = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
     f(u,p,t) = f_oop(u,p,t)
     DiscreteProblem(f,u0,tspan,p;kwargs...)
 end

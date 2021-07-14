@@ -3,7 +3,7 @@
 - https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map/function_map.md
 - https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#Deterministic_versus_stochastic_epidemic_models
 =#
-using ModelingToolkit
+using ModelingToolkit, Test
 
 @inline function rate_to_proportion(r,t)
     1-exp(-r*t)
@@ -36,16 +36,16 @@ sol_map = solve(prob_map,FunctionMap());
 
 # Direct Implementation
 
-function sir_map!(du,u,p,t)
+function sir_map!(u_new,u,p,t)
     (S,I,R) = u
     (β,c,γ,δt) = p
     N = S+I+R
     infection = rate_to_proportion(β*c*I/N,δt)*S
     recovery = rate_to_proportion(γ,δt)*I
     @inbounds begin
-        du[1] = S-infection
-        du[2] = I+infection-recovery
-        du[3] = R+recovery
+        u_new[1] = S-infection
+        u_new[2] = I+infection-recovery
+        u_new[3] = R+recovery
     end
     nothing
 end;
