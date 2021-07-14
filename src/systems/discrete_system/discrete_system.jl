@@ -186,7 +186,8 @@ function generate_function(
     eqs = equations(sys)
     foreach(check_difference_variables, eqs)
     # substitute x(t) by just x
-    rhss = [isdifference(eq.lhs) ? arguments(eq.lhs)[1] + eq.rhs : eq.rhs for eq in eqs]
+    # rhss = [isdifference(eq.lhs) ? arguments(eq.lhs)[1] + eq.rhs : eq.rhs for eq in eqs]
+    rhss = [eq.rhs for eq in eqs]
 
     u = map(x->time_varying_as_func(value(x), sys), dvs)
     p = map(x->time_varying_as_func(value(x), sys), ps)
