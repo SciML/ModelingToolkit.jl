@@ -164,3 +164,33 @@ function collect_difference_variables(sys::DiscreteSystem)
     end
     return difference_vars
 end
+
+@noinline function throw_invalid_difference(difvar, eq)
+    msg = "The difference variable must be isolated to the left-hand " *
+    "side of the equation like `$difvar ~ ...`.\n Got $eq."
+    throw(InvalidSystemException(msg))
+end
+
+function check_difference_variables(eq, expr=eq.rhs)
+    istree(expr) || return nothing
+    if operation(expr) isa Difference
+        throw_invalid_difference(expr, eq)
+    end
+    foreach(Base.Fix1(check_difference_variables, eq), arguments(expr))
+end
+
+function generate_function(
+        sys::DiscreteSystem, dvs = states(sys), ps = parameters(sys);
+        kwargs...
+    )
+    eqs = equations(sys)
+    foreach(check_difference_variables, eqs)
+    # substitute x(t) by just x
+    rhss = [isdifference(eq.lhs) ? arguments(eq.lhs)[1] + eq.rhs : eq.rhs for eq in eqs]
+
+    u = map(x->time_varying_as_func(value(x), sys), dvs)
+    p = map(x->time_varying_as_func(value(x), sys), ps)
+    t = get_iv(sys)
+    
+    build_function(rhss, u, p, t; kwargs...)
+end
