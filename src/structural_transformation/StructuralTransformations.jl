@@ -21,6 +21,7 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative,
                        ExtraVariablesSystemException
 
 using ModelingToolkit.BipartiteGraphs
+using LightGraphs
 using ModelingToolkit.SystemStructures
 
 using ModelingToolkit.DiffEqBase
