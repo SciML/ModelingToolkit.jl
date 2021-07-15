@@ -78,19 +78,7 @@ function generate_control_jacobian(sys::AbstractODESystem, dvs = states(sys), ps
     return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
-@noinline function throw_invalid_derivative(dervar, eq)
-    msg = "The derivative variable must be isolated to the left-hand " *
-    "side of the equation like `$dervar ~ ...`.\n Got $eq."
-    throw(InvalidSystemException(msg))
-end
-
-function check_derivative_variables(eq, expr=eq.rhs)
-    istree(expr) || return nothing
-    if operation(expr) isa Differential
-        throw_invalid_derivative(expr, eq)
-    end
-    foreach(Base.Fix1(check_derivative_variables, eq), arguments(expr))
-end
+check_derivative_variables(eq) = check_operator_variables(eq, Differential)
 
 function generate_function(
         sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);

@@ -124,60 +124,7 @@ end
 isdifference(expr) = istree(expr) && operation(expr) isa Difference
 isdifferenceeq(eq) = isdifference(eq.lhs)
 
-difference_vars(x::Sym) = Set([x])
-difference_vars(exprs::Symbolic) = difference_vars([exprs])
-difference_vars(exprs) = foldl(difference_vars!, exprs; init = Set())
-difference_vars!(difference_vars, eq::Equation) = (difference_vars!(difference_vars, eq.lhs); difference_vars!(difference_vars, eq.rhs); difference_vars)
-function difference_vars!(difference_vars, O)
-    if isa(O, Sym)
-        return push!(difference_vars, O)
-    end
-    !istree(O) && return difference_vars
-
-    operation(O) isa Difference && return push!(difference_vars, O)
-
-    if operation(O) === (getindex) &&
-        first(arguments(O)) isa Symbolic
-
-        return push!(difference_vars, O)
-    end
-
-    symtype(operation(O)) <: FnType && push!(difference_vars, O)
-    for arg in arguments(O)
-        difference_vars!(difference_vars, arg)
-    end
-
-    return difference_vars
-end
-
-function collect_difference_variables(sys::DiscreteSystem)
-    eqs = equations(sys)
-    vars = Set()
-    difference_vars = Set()
-    for eq in eqs
-        difference_vars!(vars, eq)
-        for v in vars
-            isdifference(v) || continue
-            push!(difference_vars, arguments(v)[1])
-        end
-        empty!(vars)
-    end
-    return difference_vars
-end
-
-@noinline function throw_invalid_difference(difvar, eq)
-    msg = "The difference variable must be isolated to the left-hand " *
-    "side of the equation like `$difvar ~ ...`.\n Got $eq."
-    throw(InvalidSystemException(msg))
-end
-
-function check_difference_variables(eq, expr=eq.rhs)
-    istree(expr) || return nothing
-    if operation(expr) isa Difference
-        throw_invalid_difference(expr, eq)
-    end
-    foreach(Base.Fix1(check_difference_variables, eq), arguments(expr))
-end
+check_difference_variables(eq) = check_operator_variables(eq, Difference)
 
 function generate_function(
         sys::DiscreteSystem, dvs = states(sys), ps = parameters(sys);
