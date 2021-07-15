@@ -167,6 +167,7 @@ function collect_defaults!(defs, vars)
     return defs
 end
 
+"Throw error when difference/derivative operation occurs in the R.H.S."
 @noinline function throw_invalid_operator(opvar, eq, op::Type)
     if op === Difference
         optext = "difference"
@@ -178,6 +179,7 @@ end
     throw(InvalidSystemException(msg))
 end
 
+"Check if difference/derivative operation occurs in the R.H.S. of an equation"
 function check_operator_variables(eq, op::Type, expr=eq.rhs)
     istree(expr) || return nothing
     if operation(expr) isa op
