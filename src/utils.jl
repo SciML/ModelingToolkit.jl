@@ -166,3 +166,24 @@ function collect_defaults!(defs, vars)
     end
     return defs
 end
+
+"Throw error when difference/derivative operation occurs in the R.H.S."
+@noinline function throw_invalid_operator(opvar, eq, op::Type)
+    if op === Difference
+        optext = "difference"
+    elseif op === Differential
+        optext="derivative" 
+    end
+    msg = "The $optext variable must be isolated to the left-hand " *
+    "side of the equation like `$opvar ~ ...`.\n Got $eq."
+    throw(InvalidSystemException(msg))
+end
+
+"Check if difference/derivative operation occurs in the R.H.S. of an equation"
+function check_operator_variables(eq, op::Type, expr=eq.rhs)
+    istree(expr) || return nothing
+    if operation(expr) isa op
+        throw_invalid_operator(expr, eq, op)
+    end
+    foreach(expr -> check_operator_variables(eq, op, expr), arguments(expr))
+end
