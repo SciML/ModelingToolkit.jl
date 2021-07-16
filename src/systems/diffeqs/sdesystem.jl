@@ -37,6 +37,8 @@ struct SDESystem <: AbstractODESystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    """Array variables."""
+    array_vars
     """Control parameters (some subset of `ps`)."""
     ctrls::Vector
     """Observed states."""
@@ -84,11 +86,11 @@ struct SDESystem <: AbstractODESystem
     """
     connection_type::Any
 
-    function SDESystem(deqs, neqs, iv, dvs, ps, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
+    function SDESystem(deqs, neqs, iv, dvs, ps, array_vars, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
         check_variables(dvs,iv)
         check_parameters(ps,iv)
         check_equations(deqs,iv)
-        new(deqs, neqs, iv, dvs, ps, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
+        new(deqs, neqs, iv, dvs, ps, array_vars, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
     end
 end
 
@@ -118,15 +120,16 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    collect_defaults!(defaults, dvs′)
-    collect_defaults!(defaults, ps′)
+    array_vars = Dict()
+    process_variables!(array_vars, defaults, dvs′)
+    process_variables!(array_vars, defaults, ps′)
 
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     ctrl_jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
-    SDESystem(deqs, neqs, iv′, dvs′, ps′, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
+    SDESystem(deqs, neqs, iv′, dvs′, ps′, array_vars, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = states(sys), ps = parameters(sys); kwargs...)

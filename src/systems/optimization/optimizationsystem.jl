@@ -23,6 +23,8 @@ struct OptimizationSystem <: AbstractSystem
     states::Vector
     """Parameters."""
     ps::Vector
+    """Array variables."""
+    array_vars
     observed::Vector{Equation}
     equality_constraints::Vector{Equation}
     inequality_constraints::Vector
@@ -61,11 +63,12 @@ function OptimizationSystem(op, states, ps;
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
     states, ps = value.(states), value.(ps)
-    collect_defaults!(defaults, states)
-    collect_defaults!(defaults, ps)
+    array_vars = Dict()
+    process_variables!(array_vars, defaults, dvs′)
+    process_variables!(array_vars, defaults, ps′)
 
     OptimizationSystem(
-                       value(op), states, ps,
+                       value(op), states, ps, array_vars,
                        observed,
                        equality_constraints, inequality_constraints,
                        name, systems, defaults
