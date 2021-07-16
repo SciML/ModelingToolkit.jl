@@ -35,7 +35,7 @@ with the unit m^3/s:
 @variables x[1:2,1:2] [connect = Flow; unit = u"m^3/s"]
 ```
 
-ModelingToolkit defines `connect`, `unit`, `noise`, and `description` keys for
+ModelingToolkit defines `connect`, `unit`, `noise`, `default`, and `description` keys for
 the metadata. One can get and set metadata by
 
 ```julia
