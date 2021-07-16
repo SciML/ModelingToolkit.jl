@@ -54,8 +54,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
 
 import DiffEqBase: @add_kwonly
 
-using LightGraphs
-import LightGraphs: SimpleDiGraph, add_edge!
+import LightGraphs: SimpleDiGraph, add_edge!, incidence_matrix
 
 using Requires
 
