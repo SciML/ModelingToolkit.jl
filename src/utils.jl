@@ -175,7 +175,7 @@ end
 
 function collect_array_vars!(array_vars, vars)
     for v in vars
-        v = value(v)
+        x = v = value(v)
         while istree(v)
             op = operation(v)
             op === getindex && (v = arguments(v)[1]; break)
@@ -184,9 +184,15 @@ function collect_array_vars!(array_vars, vars)
 
         if symtype(v) <: AbstractArray
             if v isa Symbolics.ArrayOp
-                v = arguments(operation(arguments(x)[2]))[1]
+                n = nameof(arguments(operation(arguments(x)[2]))[1])
+            else
+                n = nameof(v)
             end
-            array_vars[nameof(v)] = v
+            if !hasmetadata(x, Symbolics.GetindexParent)
+                array_vars[n] = arguments(x)[1]
+            else
+                array_vars[n] = getmetadata(x, Symbolics.GetindexParent)
+            end
         end
     end
     return array_vars
