@@ -31,6 +31,8 @@ struct ODESystem <: AbstractODESystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    """Array variables."""
+    array_vars
     """Control parameters (some subset of `ps`)."""
     ctrls::Vector
     """Observed states."""
@@ -82,11 +84,11 @@ struct ODESystem <: AbstractODESystem
     """
     connection_type::Any
 
-    function ODESystem(deqs, iv, dvs, ps, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type)
+    function ODESystem(deqs, iv, dvs, ps, array_vars, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type)
         check_variables(dvs,iv)
         check_parameters(ps,iv)
         check_equations(deqs,iv)
-        new(deqs, iv, dvs, ps, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type)
+        new(deqs, iv, dvs, ps, array_vars, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type)
     end
 end
 
@@ -119,8 +121,9 @@ function ODESystem(
     dvs′ = value.(scalarize(dvs))
     ps′ = value.(scalarize(ps))
 
-    collect_defaults!(defaults, dvs′)
-    collect_defaults!(defaults, ps′)
+    array_vars = Dict()
+    process_variables!(array_vars, defaults, dvs′)
+    process_variables!(array_vars, defaults, ps′)
 
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
@@ -131,7 +134,7 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type)
+    ODESystem(deqs, iv′, dvs′, ps′, array_vars, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type)
 end
 
 vars(x::Sym) = Set([x])

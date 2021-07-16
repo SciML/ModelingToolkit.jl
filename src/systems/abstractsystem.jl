@@ -152,6 +152,7 @@ for prop in [
              :iv
              :states
              :ps
+             :array_vars
              :ctrls
              :defaults
              :observed
@@ -236,6 +237,10 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
             return namespace ? rename(systems[i], renamespace(sysname,name)) : systems[i]
         end
     end
+
+    avs = get_array_vars(sys)
+    v = get(avs, name, nothing)
+    v === nothing || return namespace ? renamespace(sysname, v) : v
 
     sts = get_states(sys)
     i = findfirst(x->getname(x) == name, sts)

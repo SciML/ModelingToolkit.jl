@@ -25,6 +25,8 @@ struct NonlinearSystem <: AbstractSystem
     states::Vector
     """Parameters."""
     ps::Vector
+    """Array variables."""
+    array_vars
     observed::Vector{Equation}
     """
     Jacobian matrix. Note: this field will not be defined until
@@ -76,10 +78,11 @@ function NonlinearSystem(eqs, states, ps;
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
     states, ps = value.(states), value.(ps)
-    collect_defaults!(defaults, states)
-    collect_defaults!(defaults, ps)
+    array_vars = Dict()
+    process_variables!(array_vars, defaults, dvs′)
+    process_variables!(array_vars, defaults, ps′)
 
-    NonlinearSystem(eqs, states, ps, observed, jac, name, systems, defaults, nothing, connection_type)
+    NonlinearSystem(eqs, states, ps, array_vars, observed, jac, name, systems, defaults, nothing, connection_type)
 end
 
 function calculate_jacobian(sys::NonlinearSystem; sparse=false, simplify=false)
