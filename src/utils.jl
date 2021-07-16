@@ -160,6 +160,12 @@ hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
 getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))
 setdefault(v, val) = val === nothing ? v : setmetadata(v, Symbolics.VariableDefaultValue, value(val))
 
+function process_variables!(array_vars, defs, vars)
+    collect_defaults!(defs, vars)
+    collect_array_vars!(array_vars, vars)
+    return nothing
+end
+
 function collect_defaults!(defs, vars)
     for v in vars; (haskey(defs, v) || !hasdefault(v)) && continue
         defs[v] = getdefault(v)
@@ -167,12 +173,31 @@ function collect_defaults!(defs, vars)
     return defs
 end
 
+function collect_array_vars!(array_vars, vars)
+    for v in vars
+        v = value(v)
+        while istree(v)
+            op = operation(v)
+            op === getindex && (v = arguments(v)[1]; break)
+            v = op
+        end
+
+        if symtype(v) <: AbstractArray
+            if v isa Symbolics.ArrayOp
+                v = arguments(operation(arguments(x)[2]))[1]
+            end
+            array_vars[nameof(v)] = v
+        end
+    end
+    return array_vars
+end
+
 "Throw error when difference/derivative operation occurs in the R.H.S."
 @noinline function throw_invalid_operator(opvar, eq, op::Type)
     if op === Difference
         optext = "difference"
     elseif op === Differential
-        optext="derivative" 
+        optext="derivative"
     end
     msg = "The $optext variable must be isolated to the left-hand " *
     "side of the equation like `$opvar ~ ...`.\n Got $eq."
