@@ -94,7 +94,7 @@ function generate_function(
     foreach(check_derivative_variables, eqs)
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
-                          [eq.rhs for eq in eqs]
+                          [eq.rhs for eq in eqs if isdiffeq(eq)]
     #rhss = Let(obss, rhss)
 
     # TODO: add an optional check on the ordering of observed equations
@@ -107,6 +107,38 @@ function generate_function(
     else
         build_function(rhss, u, p, t; kwargs...)
     end
+end
+
+function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = parameters(sys);
+    kwargs...)
+    eqs = equations(sys)
+    foreach(check_difference_variables, eqs)
+    # substitute x(t) by just x
+
+    # map(x -> isempty(x) ? Val{0} : first(x), 
+    rhss = [ 
+        begin
+            ind = findfirst(eq -> isdifference(eq.lhs) && isequal(arguments(eq.lhs)[1], s), eqs)
+            ind === nothing ? Val{0} : eqs[ind].rhs
+        end
+        for s in dvs ]
+    
+    u = map(x->time_varying_as_func(value(x), sys), dvs)
+    p = map(x->time_varying_as_func(value(x), sys), ps)
+    t = get_iv(sys)
+
+    f_oop, f_iip = build_function(rhss, u, p, t; kwargs...)
+
+    f = @RuntimeGeneratedFunction(@__MODULE__, f_oop)
+
+    function cb_affect!(int) 
+        int.u += f(int.u, int.p, int.t) 
+    end
+
+    dts = [ operation(eq.lhs).dt for eq in eqs if isdifferenceeq(eq)] 
+    all(dts .== dts[1]) || error("All difference variables should have same time steps.")
+
+    PeriodicCallback(cb_affect!, dts[1])
 end
 
 function time_varying_as_func(x, sys)
@@ -713,6 +745,3 @@ end
 function SteadyStateProblemExpr(sys::AbstractODESystem, args...; kwargs...)
     SteadyStateProblemExpr{true}(sys, args...; kwargs...)
 end
-
-isdifferential(expr) = istree(expr) && operation(expr) isa Differential
-isdiffeq(eq) = isdifferential(eq.lhs)
