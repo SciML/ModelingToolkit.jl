@@ -160,6 +160,18 @@ hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
 getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))
 setdefault(v, val) = val === nothing ? v : setmetadata(v, Symbolics.VariableDefaultValue, value(val))
 
+# should it be get_unit or getunit (not necesary, just utility)
+for prop in [:default, :connect, :unit, :noise, :description]
+    fname1 = Symbol(:get, prop)
+    fname2 = Symbol(:has, prop)
+    fname3 = Symbol(:set, prop)
+    @eval begin
+        $fname1(x::Num) = getmetadata(x, Symbolics.option_to_metadata_type(Val($(QuoteNode(prop)))))
+        $fname2(x::Num) = hasmetadata(x, Symbolics.option_to_metadata_type(Val($(QuoteNode(prop)))))
+        $fname3(x::Num, val) = setmetadata(x, Symbolics.option_to_metadata_type(Val($(QuoteNode(prop)))), val)
+    end
+end
+
 function collect_defaults!(defs, vars)
     for v in vars; (haskey(defs, v) || !hasdefault(v)) && continue
         defs[v] = getdefault(v)

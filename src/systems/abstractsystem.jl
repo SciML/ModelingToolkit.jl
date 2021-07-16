@@ -492,6 +492,29 @@ function push_defaults!(stmt, defs, var2name)
     return defs_name
 end
 
+function push_ctxvars!(stmt, name, idx, v, prop)
+    # name = nameof(Symbolics.operation(Symbolics.unwrap(x)))
+    # or
+    vname = Symbolics.tosymbol(v; escape=false)
+    ctxvar_type = Symbolics.option_to_metadata_type(Val(prop))
+    if hasmetadata(v, ctxvar_type)
+        val = getmetadata(v, ctxvar_type)
+        if idx !== nothing 
+            push!(stmt, :($name[$idx] = setmetadata($name[$idx], $ctxvar_type, $val)))
+        else 
+            push!(stmt, :($name = setmetadata($v, $ctxvar_type, $val)))
+        end
+    end
+end
+
+# function push_metadata!(stmt, vars)
+function push_metadata!(stmt, name, idx, v)
+    for ctxvar in [:default, :connect, :unit, :noise, :description]
+    # for ctxvar in [:connect, :unit, :noise, :description]
+        push_ctxvars!(stmt, name, idx, v, ctxvar)
+    end 
+end
+
 ###
 ### System I/O
 ###
@@ -512,7 +535,17 @@ function toexpr(sys::AbstractSystem)
     psname = gensym(:ps)
     ps = parameters(sys)
     push_vars!(stmt, psname, Symbol("@parameters"), ps)
-
+    
+    if iv !== nothing
+        push_metadata!(stmt, ivname, nothing, iv)
+    end
+    for (idx, st) in enumerate(sts)
+        push_metadata!(stmt, stsname, idx, st)
+    end
+    for (idx, p) in enumerate(ps)
+        push_metadata!(stmt, psname, idx, p)
+    end
+    
     var2name = Dict{Any,Symbol}()
     for v in Iterators.flatten((sts, ps))
         var2name[v] = getname(v)
