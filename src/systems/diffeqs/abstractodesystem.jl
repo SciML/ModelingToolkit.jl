@@ -113,9 +113,7 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
     kwargs...)
     eqs = equations(sys)
     foreach(check_difference_variables, eqs)
-    # substitute x(t) by just x
 
-    # map(x -> isempty(x) ? Val{0} : first(x), 
     rhss = [ 
         begin
             ind = findfirst(eq -> isdifference(eq.lhs) && isequal(arguments(eq.lhs)[1], s), eqs)
