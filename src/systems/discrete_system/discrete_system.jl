@@ -122,9 +122,6 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     DiscreteProblem(f,u0,tspan,p;kwargs...)
 end
 
-isdifference(expr) = istree(expr) && operation(expr) isa Difference
-isdifferenceeq(eq) = isdifference(eq.lhs)
-
 check_difference_variables(eq) = check_operator_variables(eq, Difference)
 
 function generate_function(

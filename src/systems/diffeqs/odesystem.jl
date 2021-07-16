@@ -134,42 +134,6 @@ function ODESystem(
     ODESystem(deqs, iv′, dvs′, ps′, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type)
 end
 
-vars(x::Sym) = Set([x])
-vars(exprs::Symbolic) = vars([exprs])
-vars(exprs) = foldl(vars!, exprs; init = Set())
-vars!(vars, eq::Equation) = (vars!(vars, eq.lhs); vars!(vars, eq.rhs); vars)
-function vars!(vars, O)
-    if isa(O, Sym)
-        return push!(vars, O)
-    end
-    !istree(O) && return vars
-
-    operation(O) isa Differential && return push!(vars, O)
-
-    if operation(O) === (getindex) &&
-        first(arguments(O)) isa Symbolic
-
-        return push!(vars, O)
-    end
-
-    symtype(operation(O)) <: FnType && push!(vars, O)
-    for arg in arguments(O)
-        vars!(vars, arg)
-    end
-
-    return vars
-end
-
-find_derivatives!(vars, expr::Equation, f=identity) = (find_derivatives!(vars, expr.lhs, f); find_derivatives!(vars, expr.rhs, f); vars)
-function find_derivatives!(vars, expr, f)
-    !istree(O) && return vars
-    operation(O) isa Differential && push!(vars, f(O))
-    for arg in arguments(O)
-        vars!(vars, arg)
-    end
-    return vars
-end
-
 function ODESystem(eqs, iv=nothing; kwargs...)
     eqs = collect(eqs)
     # NOTE: this assumes that the order of algebric equations doesn't matter
@@ -206,30 +170,6 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     algevars = setdiff(allstates, diffvars)
     # the orders here are very important!
     return ODESystem(append!(diffeq, algeeq), iv, vcat(collect(diffvars), collect(algevars)), ps; kwargs...)
-end
-
-function collect_vars!(states, parameters, expr, iv)
-    if expr isa Sym
-        collect_var!(states, parameters, expr, iv)
-    else
-        for var in vars(expr)
-            if istree(var) && operation(var) isa Differential
-                var, _ = var_from_nested_derivative(var)
-            end
-            collect_var!(states, parameters, var, iv)
-        end
-    end
-    return nothing
-end
-
-function collect_var!(states, parameters, var, iv)
-    isequal(var, iv) && return nothing
-    if isparameter(var) || (istree(var) && isparameter(operation(var)))
-        push!(parameters, var)
-    else
-        push!(states, var)
-    end
-    return nothing
 end
 
 # NOTE: equality does not check cached Jacobian
@@ -317,21 +257,6 @@ function _eq_unordered(a, b)
         delete!(idxs, idx)
     end
     return true
-end
-
-function collect_differential_variables(sys::ODESystem)
-    eqs = equations(sys)
-    vars = Set()
-    diffvars = Set()
-    for eq in eqs
-        vars!(vars, eq)
-        for v in vars
-            isdifferential(v) || continue
-            push!(diffvars, arguments(v)[1])
-        end
-        empty!(vars)
-    end
-    return diffvars
 end
 
 # We have a stand-alone function to convert a `NonlinearSystem` or `ODESystem`

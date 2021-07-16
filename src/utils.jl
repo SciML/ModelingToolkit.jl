@@ -187,3 +187,93 @@ function check_operator_variables(eq, op::Type, expr=eq.rhs)
     end
     foreach(expr -> check_operator_variables(eq, op, expr), arguments(expr))
 end
+
+isdifferential(expr) = istree(expr) && operation(expr) isa Differential
+isdiffeq(eq) = isdifferential(eq.lhs)
+
+isdifference(expr) = istree(expr) && operation(expr) isa Difference
+isdifferenceeq(eq) = isdifference(eq.lhs)
+
+vars(x::Sym; op=Differential) = Set([x])
+vars(exprs::Symbolic; op=Differential) = vars([exprs]; op=op)
+vars(exprs; op=Differential) = foldl((x, y) -> vars!(x, y; op=op), exprs; init = Set())
+vars!(vars, eq::Equation; op=Differential) = (vars!(vars, eq.lhs; op=op); vars!(vars, eq.rhs; op=op); vars)
+function vars!(vars, O; op=Differential)
+    if isa(O, Sym)
+        return push!(vars, O)
+    end
+    !istree(O) && return vars
+
+    operation(O) isa op && return push!(vars, O)
+
+    if operation(O) === (getindex) &&
+        first(arguments(O)) isa Symbolic
+
+        return push!(vars, O)
+    end
+
+    symtype(operation(O)) <: FnType && push!(vars, O)
+    for arg in arguments(O)
+        vars!(vars, arg; op=op)
+    end
+
+    return vars
+end
+difference_vars(x::Sym) = vars(x; op=Difference)
+difference_vars(exprs::Symbolic) = vars(exprs; op=Difference)
+difference_vars(exprs) = vars(exprs; op=Difference)
+difference_vars!(vars, eq::Equation) = vars!(vars, eq; op=Difference)
+difference_vars!(vars, O) = vars!(vars, O; op=Difference)
+
+function collect_operator_variables(sys, isop::Function)
+    eqs = equations(sys)
+    vars = Set()
+    diffvars = Set()
+    for eq in eqs
+        vars!(vars, eq)
+        for v in vars
+            isop(v) || continue
+            push!(diffvars, arguments(v)[1])
+        end
+        empty!(vars)
+    end
+    return diffvars
+end
+collect_differential_variables(sys) = collect_operator_variables(sys, isdifferential)
+collect_difference_variables(sys) = collect_operator_variables(sys, isdifference)
+
+# 
+
+find_derivatives!(vars, expr::Equation, f=identity) = (find_derivatives!(vars, expr.lhs, f); find_derivatives!(vars, expr.rhs, f); vars)
+function find_derivatives!(vars, expr, f)
+    !istree(O) && return vars
+    operation(O) isa Differential && push!(vars, f(O))
+    for arg in arguments(O)
+        vars!(vars, arg)
+    end
+    return vars
+end
+
+function collect_vars!(states, parameters, expr, iv)
+    if expr isa Sym
+        collect_var!(states, parameters, expr, iv)
+    else
+        for var in vars(expr)
+            if istree(var) && operation(var) isa Differential
+                var, _ = var_from_nested_derivative(var)
+            end
+            collect_var!(states, parameters, var, iv)
+        end
+    end
+    return nothing
+end
+
+function collect_var!(states, parameters, var, iv)
+    isequal(var, iv) && return nothing
+    if isparameter(var) || (istree(var) && isparameter(operation(var)))
+        push!(parameters, var)
+    else
+        push!(states, var)
+    end
+    return nothing
+end

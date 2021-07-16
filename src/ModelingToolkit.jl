@@ -17,6 +17,7 @@ using DataStructures
 using SpecialFunctions, NaNMath
 using RuntimeGeneratedFunctions
 using Base.Threads
+using DiffEqCallbacks
 import MacroTools: splitdef, combinedef, postwalk, striplines
 import Libdl
 using DocStringExtensions
@@ -182,6 +183,7 @@ export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
 export stochastic_integral_transform
 export initialize_system_structure
+export generate_difference_cb
 
 export BipartiteGraph, equation_dependencies, variable_dependencies
 export eqeq_dependencies, varvar_dependencies
