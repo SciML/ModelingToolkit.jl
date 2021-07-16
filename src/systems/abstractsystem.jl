@@ -535,8 +535,10 @@ function toexpr(sys::AbstractSystem)
     psname = gensym(:ps)
     ps = parameters(sys)
     push_vars!(stmt, psname, Symbol("@parameters"), ps)
-
-    push_metadata!(stmt, ivname, nothing, iv)
+    
+    if iv !== nothing
+        push_metadata!(stmt, ivname, nothing, iv)
+    end
     for (idx, st) in enumerate(sts)
         push_metadata!(stmt, stsname, idx, st)
     end
