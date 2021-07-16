@@ -502,7 +502,7 @@ function push_ctxvars!(stmt, name, idx, v, prop)
         if idx !== nothing 
             push!(stmt, :($name[$idx] = setmetadata($name[$idx], $ctxvar_type, $val)))
         else 
-            push!(stmt, :($vname = setmetadata($v, $ctxvar_type, $val)))
+            push!(stmt, :($name = setmetadata($v, $ctxvar_type, $val)))
         end
     end
 end
