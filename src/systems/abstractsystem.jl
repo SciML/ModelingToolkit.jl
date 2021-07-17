@@ -201,7 +201,7 @@ for prop in [
     end
 end
 
-Setfield.get(obj::AbstractSystem, l::Setfield.PropertyLens{field}) where {field} = getfield(obj, field)
+Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field} = getfield(obj, field)
 @generated function ConstructionBase.setproperties(obj::AbstractSystem, patch::NamedTuple)
     if issubset(fieldnames(patch), fieldnames(obj))
         args = map(fieldnames(obj)) do fn
@@ -243,16 +243,17 @@ function Base.propertynames(sys::AbstractSystem; private=false)
     end
 end
 
-function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true)
+Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true) = getvar(sys, name; namespace=namespace)
+function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
     sysname = nameof(sys)
     systems = get_systems(sys)
     if isdefined(sys, name)
         Base.depwarn("`sys.name` like `sys.$name` is deprecated. Use getters like `get_$name` instead.", "sys.$name")
         return getfield(sys, name)
     elseif !isempty(systems)
-        i = findfirst(x->nameof(x)==name,systems)
+        i = findfirst(x->nameof(x)==name, systems)
         if i !== nothing
-            return namespace ? rename(systems[i],renamespace(sysname,name)) : systems[i]
+            return namespace ? rename(systems[i], renamespace(sysname,name)) : systems[i]
         end
     end
 
@@ -279,7 +280,7 @@ function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true)
         end
     end
 
-    throw(ArgumentError("Variable $name does not exist"))
+    throw(ArgumentError("System $(nameof(sys)): variable $name does not exist"))
 end
 
 function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
@@ -613,13 +614,16 @@ function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     return nothing
 end
 
-function _named(expr)
+function split_assign(expr)
     if !(expr isa Expr && expr.head === :(=) && expr.args[2].head === :call)
         throw(ArgumentError("expression should be of the form `sys = foo(a, b)`"))
     end
     name, call = expr.args
+end
 
+function _named(name, call, runtime=false)
     has_kw = false
+    call isa Expr || throw(Meta.ParseError("The rhs must be an Expr. Got $call."))
     if length(call.args) >= 2 && call.args[2] isa Expr
         # canonicalize to use `:parameters`
         if call.args[2].head === :kw
@@ -642,25 +646,93 @@ function _named(expr)
     kws = call.args[2].args
 
     if !any(kw->(kw isa Symbol ? kw : kw.args[1]) == :name, kws) # don't overwrite `name` kwarg
-        pushfirst!(kws, Expr(:kw, :name, Meta.quot(name)))
+        pushfirst!(kws, Expr(:kw, :name, runtime ? name : Meta.quot(name)))
     end
-    :($name = $call)
+    call
 end
 
+function _named_idxs(name::Symbol, idxs, call)
+    if call.head !== :->
+        throw(ArgumentError("Not an anonymous function"))
+    end
+    if !isa(call.args[1], Symbol)
+        throw(ArgumentError("not a single-argument anonymous function"))
+    end
+    sym, ex = call.args
+    ex = Base.Cartesian.poplinenum(ex)
+    ex = _named(:(Symbol($(Meta.quot(name)), :_, $sym)), ex, true)
+    ex = Base.Cartesian.poplinenum(ex)
+    :($name = $map($sym->$ex, $idxs))
+end
+
+check_name(name) = name isa Symbol || throw(Meta.ParseError("The lhs must be a symbol (a) or a ref (a[1:10]). Got $name."))
+
 """
-$(SIGNATURES)
+    @named y = foo(x)
+    @named y[1:10] = foo(x)
+    @named y 1:10 i -> foo(x*i)
 
 Rewrite `@named y = foo(x)` to `y = foo(x; name=:y)`.
+
+Rewrite `@named y[1:10] = foo(x)` to `y = map(i′->foo(x; name=Symbol(:y_, i′)), 1:10)`.
+
+Rewrite `@named y 1:10 i -> foo(x*i)` to `y = map(i->foo(x*i; name=Symbol(:y_, i)), 1:10)`.
+
+Examples:
+```julia
+julia> using ModelingToolkit
+
+julia> foo(i; name) = i, name
+foo (generic function with 1 method)
+
+julia> x = 41
+41
+
+julia> @named y = foo(x)
+(41, :y)
+
+julia> @named y[1:3] = foo(x)
+3-element Vector{Tuple{Int64, Symbol}}:
+ (41, :y_1)
+ (41, :y_2)
+ (41, :y_3)
+
+julia> @named y 1:3 i -> foo(x*i)
+3-element Vector{Tuple{Int64, Symbol}}:
+ (41, :y_1)
+ (82, :y_2)
+ (123, :y_3)
+```
 """
 macro named(expr)
-    esc(_named(expr))
+    name, call = split_assign(expr)
+    if Meta.isexpr(name, :ref)
+        name, idxs = name.args
+        check_name(name)
+        esc(_named_idxs(name, idxs, :($(gensym()) -> $call)))
+    else
+        check_name(name)
+        esc(:($name = $(_named(name, call))))
+    end
 end
 
-function _nonamespace(expr)
+macro named(name::Symbol, idxs, call)
+    esc(_named_idxs(name, idxs, call))
+end
+
+function _config(expr, namespace)
+    cn = Base.Fix2(_config, namespace)
     if Meta.isexpr(expr, :.)
-        return :($getproperty($(map(_nonamespace, expr.args)...); namespace=false))
+        return :($getvar($(map(cn, expr.args)...); namespace=$namespace))
+    elseif Meta.isexpr(expr, :function)
+        def = splitdef(expr)
+        def[:args] = map(cn, def[:args])
+        def[:body] = cn(def[:body])
+        combinedef(def)
     elseif expr isa Expr && !isempty(expr.args)
-        return Expr(expr.head, map(_nonamespace, expr.args)...)
+        return Expr(expr.head, map(cn, expr.args)...)
+    elseif Meta.isexpr(expr, :(=))
+        return Expr(:(=), map(cn, expr.args)...)
     else
         expr
     end
@@ -670,10 +742,22 @@ end
 $(SIGNATURES)
 
 Rewrite `@nonamespace a.b.c` to
-`getproperty(getproperty(a, :b; namespace = false), :c; namespace = false)`.
+`getvar(getvar(a, :b; namespace = false), :c; namespace = false)`.
+
+This is the default behavior of `getvar`. This should be used when inheriting states from a model.
 """
 macro nonamespace(expr)
-    esc(_nonamespace(expr))
+    esc(_config(expr, false))
+end
+
+"""
+$(SIGNATURES)
+
+Rewrite `@namespace a.b.c` to
+`getvar(getvar(a, :b; namespace = true), :c; namespace = true)`.
+"""
+macro namespace(expr)
+    esc(_config(expr, true))
 end
 
 """
@@ -684,7 +768,7 @@ topological sort of the observed equations.
 """
 function structural_simplify(sys::AbstractSystem)
     sys = initialize_system_structure(alias_elimination(sys))
-    check_consistency(structure(sys))
+    check_consistency(sys)
     if sys isa ODESystem
         sys = dae_index_lowering(sys)
     end
@@ -704,6 +788,16 @@ struct InvalidSystemException <: Exception
     msg::String
 end
 Base.showerror(io::IO, e::InvalidSystemException) = print(io, "InvalidSystemException: ", e.msg)
+
+struct ExtraVariablesSystemException <: Exception
+    msg::String
+end
+Base.showerror(io::IO, e::ExtraVariablesSystemException) = print(io, "ExtraVariablesSystemException: ", e.msg)
+
+struct ExtraEquationsSystemException <: Exception
+    msg::String
+end
+Base.showerror(io::IO, e::ExtraEquationsSystemException) = print(io, "ExtraEquationsSystemException: ", e.msg)
 
 AbstractTrees.children(sys::ModelingToolkit.AbstractSystem) = ModelingToolkit.get_systems(sys)
 AbstractTrees.printnode(io::IO, sys::ModelingToolkit.AbstractSystem) = print(io, nameof(sys))
@@ -788,3 +882,66 @@ end
 function connect(syss...)
     connect(promote_connect_type(map(get_connection_type, syss)...), syss...)
 end
+
+###
+### Inheritance & composition
+###
+function Base.hash(sys::AbstractSystem, s::UInt)
+    s = hash(nameof(sys), s)
+    s = foldr(hash, get_systems(sys), init=s)
+    s = foldr(hash, get_states(sys), init=s)
+    s = foldr(hash, get_ps(sys), init=s)
+    s = foldr(hash, get_eqs(sys), init=s)
+    s = foldr(hash, get_observed(sys), init=s)
+    s = hash(independent_variable(sys), s)
+    return s
+end
+
+"""
+    $(TYPEDSIGNATURES)
+
+entend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
+by default.
+"""
+function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys))
+    T = SciMLBase.parameterless_type(basesys)
+    iv = independent_variable(basesys)
+    if iv === nothing
+        sys = convert_system(T, sys)
+    else
+        sys = convert_system(T, sys, iv)
+    end
+    
+    eqs = union(equations(basesys), equations(sys))
+    sts = union(states(basesys), states(sys))
+    ps = union(parameters(basesys), parameters(sys))
+    obs = union(observed(basesys), observed(sys))
+    defs = merge(defaults(basesys), defaults(sys)) # prefer `sys`
+    syss = union(get_systems(basesys), get_systems(sys))
+
+    if iv === nothing
+        T(eqs, sts, ps, observed=obs, defaults=defs, name=name, systems=syss)
+    else
+        T(eqs, iv, sts, ps, observed=obs, defaults=defs, name=name, systems=syss)
+    end
+end
+
+Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys)) = extend(sys, basesys; name=name)
+
+"""
+    $(SIGNATURES)
+
+compose multiple systems together. The resulting system would inherit the first
+system's name.
+"""
+function compose(sys::AbstractSystem, systems::AbstractArray{<:AbstractSystem}; name=nameof(sys))
+    nsys = length(systems)
+    nsys >= 1 || throw(ArgumentError("There must be at least 1 subsystem. Got $nsys subsystems."))
+    @set! sys.name = name
+    @set! sys.systems = systems
+    return sys
+end
+compose(syss::AbstractSystem...; name=nameof(first(syss))) = compose(first(syss), collect(syss[2:end]); name=name)
+Base.:(∘)(sys1::AbstractSystem, sys2::AbstractSystem) = compose(sys1, sys2)
+
+UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where p = getproperty(sys, p; namespace=false)

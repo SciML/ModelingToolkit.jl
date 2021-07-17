@@ -6,10 +6,9 @@ export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors
        𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST
 
 using DocStringExtensions
-using Reexport
 using UnPack
 using SparseArrays
-@reexport using LightGraphs
+using LightGraphs
 using Setfield
 
 ###

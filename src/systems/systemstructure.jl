@@ -6,6 +6,7 @@ using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
     value, InvalidSystemException, isdifferential, _iszero, isparameter, independent_variables
 using ..BipartiteGraphs
+using LightGraphs
 using UnPack
 using Setfield
 using SparseArrays
@@ -179,7 +180,10 @@ function initialize_system_structure(sys)
     for algvar in algvars
         # it could be that a variable appeared in the states, but never appeared
         # in the equations.
-        algvaridx = var2idx[algvar]
+        algvaridx = get(var2idx, algvar, 0)
+        algvaridx == 0 && throw(InvalidSystemException("The system is missing "
+            * "an equation for $algvar."
+        ))
         vartype[algvaridx] = ALGEBRAIC_VARIABLE
     end
 

@@ -65,29 +65,35 @@ end
 Constructs a DiscreteSystem.
 """
 function DiscreteSystem(
-                   discreteEqs::AbstractVector{<:Equation}, iv, dvs, ps;
+                   eqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    controls = Num[],
                    observed = Num[],
                    systems = DiscreteSystem[],
                    name=gensym(:DiscreteSystem),
                    default_u0=Dict(),
                    default_p=Dict(),
+                   defaults=_merge(Dict(default_u0), Dict(default_p)),
                   )
+    eqs = collect(eqs)
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
     ctrl′ = value.(controls)
 
-    default_u0 isa Dict || (default_u0 = Dict(default_u0))
-    default_p isa Dict || (default_p = Dict(default_p))
-    default_u0 = Dict(value(k) => value(default_u0[k]) for k in keys(default_u0))
-    default_p = Dict(value(k) => value(default_p[k]) for k in keys(default_p))
+    if !(isempty(default_u0) && isempty(default_p))
+        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ODESystem, force=true)
+    end
+    defaults = todict(defaults)
+    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+
+    collect_defaults!(defaults, dvs′)
+    collect_defaults!(defaults, ps′)
 
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(discreteEqs, iv′, dvs′, ps′, ctrl′, observed, name, systems, default_u0, default_p)
+    DiscreteSystem(eqs, iv′, dvs′, ps′, ctrl′, observed, name, systems, default_u0, default_p)
 end
 
 """
@@ -110,8 +116,29 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     u = dvs
     p = varmap_to_vars(parammap,ps)
 
-    f_gen = build_function(rhss, dvs, ps, t; expression=Val{eval_expression}, expression_module=eval_module)
-    f_oop,f_iip = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
+    f_gen = generate_function(sys; expression=Val{eval_expression}, expression_module=eval_module)
+    f_oop, _ = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
     f(u,p,t) = f_oop(u,p,t)
     DiscreteProblem(f,u0,tspan,p;kwargs...)
+end
+
+isdifference(expr) = istree(expr) && operation(expr) isa Difference
+isdifferenceeq(eq) = isdifference(eq.lhs)
+
+check_difference_variables(eq) = check_operator_variables(eq, Difference)
+
+function generate_function(
+        sys::DiscreteSystem, dvs = states(sys), ps = parameters(sys);
+        kwargs...
+    )
+    eqs = equations(sys)
+    foreach(check_difference_variables, eqs)
+    # substitute x(t) by just x
+    rhss = [eq.rhs for eq in eqs]
+
+    u = map(x->time_varying_as_func(value(x), sys), dvs)
+    p = map(x->time_varying_as_func(value(x), sys), ps)
+    t = get_iv(sys)
+    
+    build_function(rhss, u, p, t; kwargs...)
 end

@@ -101,7 +101,7 @@ function ODESystem(
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
                   )
-    
+    deqs = collect(deqs)
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
 
     iv′ = value(scalarize(iv))
@@ -114,6 +114,13 @@ function ODESystem(
     end
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+
+    iv′ = value(scalarize(iv))
+    dvs′ = value.(scalarize(dvs))
+    ps′ = value.(scalarize(ps))
+
+    collect_defaults!(defaults, dvs′)
+    collect_defaults!(defaults, ps′)
 
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
@@ -145,7 +152,7 @@ function vars!(vars, O)
         return push!(vars, O)
     end
 
-    operation(O) isa Sym && push!(vars, O)
+    symtype(operation(O)) <: FnType && push!(vars, O)
     for arg in arguments(O)
         vars!(vars, arg)
     end
@@ -164,6 +171,7 @@ function find_derivatives!(vars, expr, f)
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)
+    eqs = collect(eqs)
     # NOTE: this assumes that the order of algebric equations doesn't matter
     diffvars = OrderedSet()
     allstates = OrderedSet()

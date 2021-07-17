@@ -14,4 +14,4 @@ rc_eqs = [
           connect(capacitor.n, source.n, ground.g)
          ]
 
-@named rc_model = ODESystem(rc_eqs, t, systems=[resistor, capacitor, source, ground])
+@named rc_model = compose(ODESystem(rc_eqs, t), [resistor, capacitor, source, ground])

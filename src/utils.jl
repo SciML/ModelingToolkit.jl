@@ -116,7 +116,7 @@ function check_variables(dvs, iv)
         isequal(iv, dv) && throw(ArgumentError("Independent variable $iv not allowed in dependent variables."))
         isequal(iv, iv_from_nested_derivative(dv)) || throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
     end
-end 
+end
 
 "Get all the independent variables with respect to which differentials are taken."
 function collect_differentials(eqs)
@@ -126,7 +126,7 @@ function collect_differentials(eqs)
         vars!(vars, eq)
         for v in vars
             isdifferential(v) || continue
-            collect_ivs_from_nested_differential!(ivs, v)  
+            collect_ivs_from_nested_differential!(ivs, v)
         end
         empty!(vars)
     end
@@ -155,3 +155,35 @@ end
 iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nested_derivative(arguments(x)[1]) : arguments(x)[1]
 iv_from_nested_derivative(x::Sym) = x
 iv_from_nested_derivative(x) = missing
+
+hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
+getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))
+setdefault(v, val) = val === nothing ? v : setmetadata(v, Symbolics.VariableDefaultValue, value(val))
+
+function collect_defaults!(defs, vars)
+    for v in vars; (haskey(defs, v) || !hasdefault(v)) && continue
+        defs[v] = getdefault(v)
+    end
+    return defs
+end
+
+"Throw error when difference/derivative operation occurs in the R.H.S."
+@noinline function throw_invalid_operator(opvar, eq, op::Type)
+    if op === Difference
+        optext = "difference"
+    elseif op === Differential
+        optext="derivative" 
+    end
+    msg = "The $optext variable must be isolated to the left-hand " *
+    "side of the equation like `$opvar ~ ...`.\n Got $eq."
+    throw(InvalidSystemException(msg))
+end
+
+"Check if difference/derivative operation occurs in the R.H.S. of an equation"
+function check_operator_variables(eq, op::Type, expr=eq.rhs)
+    istree(expr) || return nothing
+    if operation(expr) isa op
+        throw_invalid_operator(expr, eq, op)
+    end
+    foreach(expr -> check_operator_variables(eq, op, expr), arguments(expr))
+end

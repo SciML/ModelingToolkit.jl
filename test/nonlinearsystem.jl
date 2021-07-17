@@ -103,7 +103,8 @@ D = Differential(t)
 @named subsys = convert_system(ODESystem, lorenz1, t)
 @named sys = ODESystem([D(subsys.x) ~ subsys.x + subsys.x], t, systems=[subsys])
 sys = structural_simplify(sys)
-prob = ODEProblem(sys, [subsys.x => 1, subsys.z => 2.0], (0, 1.0), [subsys.σ=>1,subsys.ρ=>2,subsys.β=>3])
+u0 = [subsys.x => 1, subsys.z => 2.0]
+prob = ODEProblem(sys, u0, (0, 1.0), [subsys.σ=>1,subsys.ρ=>2,subsys.β=>3])
 sol = solve(prob, Rodas5())
 @test sol[subsys.x] + sol[subsys.y] - sol[subsys.z] ≈ sol[subsys.u]
 @test_throws ArgumentError convert_system(ODESystem, sys, t)
@@ -135,3 +136,24 @@ np = NonlinearProblem(ns, [0,0,0], [1,2,3], jac=true, sparse=true)
        end
        issue819()
 end
+
+# issue #1115
+@testset "Extending a NonlinearSystem with no iv" begin
+    @parameters a b
+    @variables x y
+    eqs1 = [
+        0 ~ a * x
+    ]
+    eqs2 = [
+        0 ~ b * y
+    ]
+
+    @named sys1 = NonlinearSystem(eqs1, [x], [a])
+    @named sys2 = NonlinearSystem(eqs2, [y], [b])
+    @named sys3 = extend(sys1, sys2)
+
+    @test isequal(union(Set(parameters(sys1)), Set(parameters(sys2))), Set(parameters(sys3)))
+    @test isequal(union(Set(states(sys1)), Set(states(sys2))), Set(states(sys3)))
+    @test isequal(union(Set(equations(sys1)), Set(equations(sys2))), Set(equations(sys3)))
+end
+

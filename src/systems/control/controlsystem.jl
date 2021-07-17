@@ -101,6 +101,8 @@ function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls
     ps′ = value.(ps)
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    collect_defaults!(defaults, dvs′)
+    collect_defaults!(defaults, ps′)
     ControlSystem(value(loss), deqs, iv′, dvs′, controls′,
                   ps′, observed, name, systems, defaults)
 end

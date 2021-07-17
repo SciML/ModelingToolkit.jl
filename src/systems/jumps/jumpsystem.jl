@@ -67,7 +67,8 @@ function JumpSystem(eqs, iv, states, ps;
                     name = gensym(:JumpSystem),
                     connection_type=nothing,
                     kwargs...)
-                    
+
+    eqs = collect(eqs)
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
@@ -90,7 +91,11 @@ function JumpSystem(eqs, iv, states, ps;
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    JumpSystem{typeof(ap)}(ap, value(iv), value.(states), value.(ps), observed, name, systems, defaults, connection_type)
+    states, ps = value.(states), value.(ps)
+    collect_defaults!(defaults, states)
+    collect_defaults!(defaults, ps)
+
+    JumpSystem{typeof(ap)}(ap, value(iv), states, ps, observed, name, systems, defaults, connection_type)
 end
 
 function generate_rate_function(js::JumpSystem, rate)

@@ -7,9 +7,10 @@ using AbstractTrees
 using DiffEqBase, SciMLBase, Reexport
 using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
+using InteractiveUtils
 using Latexify, Unitful, ArrayInterface
 using MacroTools
-using UnPack: @unpack
+@reexport using UnPack
 using Setfield, ConstructionBase
 using DiffEqJump
 using DataStructures
@@ -53,7 +54,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
 
 import DiffEqBase: @add_kwonly
 
-import LightGraphs: SimpleDiGraph, add_edge!
+import LightGraphs: SimpleDiGraph, add_edge!, incidence_matrix
 
 using Requires
 
@@ -144,6 +145,13 @@ include("systems/alias_elimination.jl")
 include("structural_transformation/StructuralTransformations.jl")
 @reexport using .StructuralTransformations
 
+for S in subtypes(ModelingToolkit.AbstractSystem)
+    S = nameof(S)
+    @eval convert_system(::Type{<:$S}, sys::$S) = sys
+end
+
+struct Flow end
+
 export AbstractTimeDependentSystem, AbstractTimeIndependentSystem, AbstractMultivariateSystem
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
 export DAEFunctionExpr, DAEProblemExpr
@@ -189,7 +197,7 @@ export toexpr, get_variables
 export simplify, substitute
 export build_function
 export modelingtoolkitize
-export @variables, @parameters
-export @named, @nonamespace
+export @variables, @parameters, Flow
+export @named, @nonamespace, @namespace, extend, compose
 
 end # module
