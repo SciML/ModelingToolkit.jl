@@ -78,6 +78,7 @@ julia = "1.2"
 
 [extras]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+DiffEqNoiseProcess = "77a26b50-5914-5dd7-bc55-306e6241c503"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 GalacticOptim = "a75be94c-b780-496d-a8a9-0878b188d577"
 NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
@@ -91,4 +92,4 @@ Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["BenchmarkTools", "ForwardDiff", "GalacticOptim", "NonlinearSolve", "OrdinaryDiffEq", "Optim", "Random", "ReferenceTests", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials"]
+test = ["BenchmarkTools", "DiffEqNoiseProcess", "ForwardDiff", "GalacticOptim", "NonlinearSolve", "OrdinaryDiffEq", "Optim", "Random", "ReferenceTests", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials"]
