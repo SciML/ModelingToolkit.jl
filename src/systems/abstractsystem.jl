@@ -893,7 +893,7 @@ function Base.hash(sys::AbstractSystem, s::UInt)
     s = foldr(hash, get_ps(sys), init=s)
     s = foldr(hash, get_eqs(sys), init=s)
     s = foldr(hash, get_observed(sys), init=s)
-    s = hash(independent_variable(sys), s)
+    s = hash(independent_variables(sys), s)
     return s
 end
 
@@ -905,11 +905,13 @@ by default.
 """
 function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys))
     T = SciMLBase.parameterless_type(basesys)
-    iv = independent_variable(basesys)
-    if iv === nothing
+    ivs = independent_variables(basesys)
+    if length(ivs) == 0
         sys = convert_system(T, sys)
+    elseif length(ivs) == 1
+        sys = convert_system(T, sys, ivs[1])
     else
-        sys = convert_system(T, sys, iv)
+        throw("Extending multivariate systems is not supported")
     end
     
     eqs = union(equations(basesys), equations(sys))
@@ -919,10 +921,10 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameo
     defs = merge(defaults(basesys), defaults(sys)) # prefer `sys`
     syss = union(get_systems(basesys), get_systems(sys))
 
-    if iv === nothing
-        T(eqs, sts, ps, observed=obs, defaults=defs, name=name, systems=syss)
-    else
-        T(eqs, iv, sts, ps, observed=obs, defaults=defs, name=name, systems=syss)
+    if length(ivs) == 0
+        T(eqs, sts, ps, observed = obs, defaults = defs, name=name, systems = syss)
+    elseif length(ivs) == 1
+        T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name, systems = syss)
     end
 end
 
