@@ -95,8 +95,8 @@ function JumpSystem(eqs, iv, states, ps;
 
     states, ps = value.(states), value.(ps)
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, dvs′)
-    process_variables!(var_to_name, defaults, ps′)
+    process_variables!(var_to_name, defaults, states)
+    process_variables!(var_to_name, defaults, ps)
 
     JumpSystem{typeof(ap)}(ap, value(iv), states, ps, var_to_name, observed, name, systems, defaults, connection_type)
 end

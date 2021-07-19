@@ -242,9 +242,26 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
         end
     end
 
-    avs = get_var_to_name(sys)
-    v = get(avs, name, nothing)
-    v === nothing || return namespace ? renamespace(sysname, v, name) : v
+    if has_var_to_name(sys)
+        avs = get_var_to_name(sys)
+        v = get(avs, name, nothing)
+        v === nothing || return namespace ? renamespace(sysname, v, name) : v
+
+    else
+        sts = get_states(sys)
+        i = findfirst(x->getname(x) == name, sts)
+        if i !== nothing
+            return namespace ? renamespace(sysname,sts[i]) : sts[i]
+        end
+
+        if has_ps(sys)
+            ps = get_ps(sys)
+            i = findfirst(x->getname(x) == name,ps)
+            if i !== nothing
+                return namespace ? renamespace(sysname,ps[i]) : ps[i]
+            end
+        end
+    end
 
     sts = get_states(sys)
     i = findfirst(x->getname(x) == name, sts)
