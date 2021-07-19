@@ -402,3 +402,4 @@ sys = ODESystem(eqs, t, [sts...;], [ps...;])
 @test isequal(@nonamespace(sys.x), unwrap(x))
 @test isequal(@nonamespace(sys.y), unwrap(y))
 @test isequal(@nonamespace(sys.p), unwrap(p))
+@test_nowarn sys.x, sys.y, sys.p
