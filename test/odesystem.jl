@@ -392,7 +392,7 @@ end
 @parameters t a b c d
 @variables x(t) y(t)
 δ = Differential(t)
-D = Difference(t; dt=0.01)
+D = Difference(t; dt=0.1)
 eqs = [
     δ(x) ~ a*x - b*x*y,
     δ(y) ~ -c*y + d*x*y,
@@ -409,4 +409,9 @@ prob = ODEProblem(de,[1.0,1.0],(0.0,1.0),[1.5,1.0,3.0,1.0], check_length=false)
 
 @test prob.kwargs[:difference_cb] isa ModelingToolkit.DiffEqCallbacks.DiscreteCallback
 
-solve(prob, Tsit5(); cb=prob.kwargs[:difference_cb])
+sol = solve(prob, Tsit5(); cb=prob.kwargs[:difference_cb], tstops=prob.tspan[1]:0.1:prob.tspan[2])
+
+#=
+using Plots
+plot(sol)
+=#
