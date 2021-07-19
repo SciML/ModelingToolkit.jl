@@ -31,7 +31,7 @@ struct DiscreteSystem <: AbstractSystem
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
     """Array variables."""
-    array_vars
+    var_to_name
     """Control parameters (some subset of `ps`)."""
     ctrls::Vector
     """Observed states."""
@@ -54,10 +54,10 @@ struct DiscreteSystem <: AbstractSystem
     in `DiscreteSystem`.
     """
     default_p::Dict
-    function DiscreteSystem(discreteEqs, iv, dvs, ps, array_vars, ctrls, observed, name, systems, default_u0, default_p)
+    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p)
         check_variables(dvs,iv)
         check_parameters(ps,iv)
-        new(discreteEqs, iv, dvs, ps, array_vars, ctrls, observed, name, systems, default_u0, default_p)
+        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p)
     end
 end
 
@@ -88,15 +88,15 @@ function DiscreteSystem(
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    array_vars = Dict()
-    process_variables!(array_vars, defaults, dvs′)
-    process_variables!(array_vars, defaults, ps′)
+    var_to_name = Dict()
+    process_variables!(var_to_name, defaults, dvs′)
+    process_variables!(var_to_name, defaults, ps′)
 
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(eqs, iv′, dvs′, ps′, array_vars, ctrl′, observed, name, systems, default_u0, default_p)
+    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, default_u0, default_p)
 end
 
 """
