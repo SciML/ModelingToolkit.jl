@@ -52,6 +52,17 @@ nlsys = convert(NonlinearSystem,rs)
        ModelingToolkit.get_defaults(nlsys) ==
        defs
 
+u0map = [A=>5.] # was 0.5
+pmap = [k[1]=>5.] # was 1.
+prob = ODEProblem(rs, u0map, (0,10.), pmap)
+@test prob.p[1] == 5.
+@test prob.u0[1] == 5.
+u0 = [10., 11., 12., 13.]
+ps = [float(x) for x in 100:119]
+prob = ODEProblem(rs, u0, (0,10.), ps)
+@test prob.p == ps
+@test prob.u0 == u0
+
 # hard coded ODE rhs
 function oderhs(u,k,t)
        A = u[1]; B = u[2]; C = u[3]; D = u[4];
