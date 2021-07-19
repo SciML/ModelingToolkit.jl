@@ -181,20 +181,6 @@ function ReactionSystem(iv; kwargs...)
     ReactionSystem(Reaction[], iv, [], []; kwargs...)
 end
 
-# function equations(sys::ModelingToolkit.ReactionSystem)
-#     eqs = get_eqs(sys)
-#     systems = get_systems(sys)
-#     if isempty(systems)
-#         return eqs
-#     else
-#         eqs = [eqs;
-#                reduce(vcat,
-#                       namespace_equations.(get_systems(sys));
-#                       init=[])]
-#         return eqs
-#     end
-# end
-
 """
     oderatelaw(rx; combinatoric_ratelaw=true)
 
