@@ -154,7 +154,7 @@ function time_varying_as_func(x, sys)
 end
 
 function calculate_massmatrix(sys::AbstractODESystem; simplify=false)
-    eqs = equations(sys)
+    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     dvs = states(sys)
     M = zeros(length(eqs),length(eqs))
     state2idx = Dict(s => i for (i, s) in enumerate(dvs))
@@ -566,7 +566,12 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
-    ODEProblem{iip}(f,u0,tspan,p;kwargs...)
+    if any(isdifferenceeq.(equations(sys)))
+        ODEProblem{iip}(f,u0,tspan,p;difference_cb=generate_difference_cb(sys),kwargs...)
+    else
+        ODEProblem{iip}(f,u0,tspan,p;kwargs...)
+    end
+    
 end
 
 """
@@ -593,7 +598,12 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
     diffvars = collect_differential_variables(sys)
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
-    DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)
+    if any(isdifferenceeq.(equations(sys)))
+        DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)    
+    else
+        DAEProblem{iip}(f,du0,u0,tspan,p;difference_cb=generate_difference_cb(sys),differential_vars=differential_vars,kwargs...)
+    end
+    
 end
 
 """
