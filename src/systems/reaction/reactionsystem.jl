@@ -149,42 +149,36 @@ struct ReactionSystem <: AbstractSystem
     name::Symbol
     """systems: The internal systems"""
     systems::Vector
+    """
+    defaults: The default values to use when initial conditions and/or
+    parameters are not supplied in `ODEProblem`.
+    """
+    defaults::Dict
 
-    function ReactionSystem(eqs, iv, states, ps, observed, name, systems)
+    function ReactionSystem(eqs, iv, states, ps, observed, name, systems, defaults)
         iv′ = value(iv)
         states′ = value.(states)
         ps′ = value.(ps)
         check_variables(states′, iv′)
         check_parameters(ps′, iv′)
-        new(collect(eqs), iv′, states′, ps′, observed, name, systems)
+        new(collect(eqs), iv′, states′, ps′, observed, name, systems, defaults)
     end
 end
 
 function ReactionSystem(eqs, iv, species, params;
                         observed = [],
                         systems = [],
-                        name = gensym(:ReactionSystem))
+                        name = gensym(:ReactionSystem),
+                        default_u0=Dict(),
+                        default_p=Dict(),
+                        defaults=_merge(Dict(default_u0), Dict(default_p)))
 
     #isempty(species) && error("ReactionSystems require at least one species.")
-    ReactionSystem(eqs, iv, species, params, observed, name, systems)
+    ReactionSystem(eqs, iv, species, params, observed, name, systems, defaults)
 end
 
 function ReactionSystem(iv; kwargs...)
     ReactionSystem(Reaction[], iv, [], []; kwargs...)
-end
-
-function equations(sys::ModelingToolkit.ReactionSystem)
-    eqs = get_eqs(sys)
-    systems = get_systems(sys)
-    if isempty(systems)
-        return eqs
-    else
-        eqs = [eqs;
-               reduce(vcat,
-                      namespace_equations.(get_systems(sys));
-                      init=[])]
-        return eqs
-    end
 end
 
 """
@@ -419,7 +413,7 @@ function Base.convert(::Type{<:ODESystem}, rs::ReactionSystem;
                       name=nameof(rs), combinatoric_ratelaws=true, include_zero_odes=true, kwargs...)
     eqs     = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws, include_zero_odes=include_zero_odes)
     systems = map(sys -> (sys isa ODESystem) ? sys : convert(ODESystem, sys), get_systems(rs))
-    ODESystem(eqs, get_iv(rs), get_states(rs), get_ps(rs); name=name, systems=systems, kwargs...)
+    ODESystem(eqs, get_iv(rs), get_states(rs), get_ps(rs); name=name, systems=systems, defaults=get_defaults(rs), kwargs...)
 end
 
 """
@@ -439,7 +433,7 @@ function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem;
                       name=nameof(rs), combinatoric_ratelaws=true, include_zero_odes=true, kwargs...)
     eqs     = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws, as_odes=false, include_zero_odes=include_zero_odes)
     systems = convert.(NonlinearSystem, get_systems(rs))
-    NonlinearSystem(eqs, get_states(rs), get_ps(rs); name=name, systems=systems, kwargs...)
+    NonlinearSystem(eqs, get_states(rs), get_ps(rs); name=name, systems=systems, defaults=get_defaults(rs), kwargs...)
 end
 
 """
@@ -487,6 +481,7 @@ function Base.convert(::Type{<:SDESystem}, rs::ReactionSystem;
               (noise_scaling===nothing) ? get_ps(rs) : union(get_ps(rs), toparam(noise_scaling));
               name=name, 
               systems=systems,
+              defaults=get_defaults(rs), 
               kwargs...)
 end
 
@@ -507,7 +502,7 @@ function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem;
                       name=nameof(rs), combinatoric_ratelaws=true, kwargs...)
     eqs     = assemble_jumps(rs; combinatoric_ratelaws=combinatoric_ratelaws)
     systems = convert.(JumpSystem, get_systems(rs))
-    JumpSystem(eqs, get_iv(rs), get_states(rs), get_ps(rs); name=name, systems=systems, kwargs...)
+    JumpSystem(eqs, get_iv(rs), get_states(rs), get_ps(rs); name=name, systems=systems, defaults=get_defaults(rs), kwargs...)
 end
 
 
