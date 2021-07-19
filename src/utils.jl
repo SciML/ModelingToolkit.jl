@@ -173,29 +173,45 @@ function collect_defaults!(defs, vars)
     return defs
 end
 
-function collect_array_vars!(array_vars, vars)
-    for v in vars
-        x = v = value(v)
-        while istree(v)
-            op = operation(v)
-            op === getindex && (v = arguments(v)[1]; break)
-            v = op
+function array_vars(x, vars=Dict{Symbol, Any}())
+    x = Symbolics.unwrap(x)
+    if istree(x)
+        if hasmetadata(x, Symbolics.GetindexParent)
+            v = Dict{Symbol, Any}()
+            foreach(a->array_vars(a, v), arguments(x))
+            array_vars(operation(x), v)
+            name = first(only(v))
+            vars[name] = getmetadata(x, Symbolics.GetindexParent)
+        elseif x isa Symbolics.ArrayOp
+            t = x.term
+            if istree(t) && operation(t) === (map) && arguments(t)[1] isa Symbolics.CallWith
+                vars[nameof(arguments(t)[2])] = x
+            else
+                array_vars(x.expr, vars)
+            end
+        else
+            array_vars(operation(x), vars)
+            for a in arguments(x)
+                array_vars(a, vars)
+            end
         end
+    elseif x isa Sym && symtype(x) <: AbstractArray
+        vars[nameof(x)] = x
+    end
 
-        if symtype(v) <: AbstractArray
-            if v isa Symbolics.ArrayOp
-                n = nameof(arguments(operation(arguments(x)[2]))[1])
-            else
-                n = nameof(v)
-            end
-            if !hasmetadata(x, Symbolics.GetindexParent)
-                array_vars[n] = arguments(x)[1]
-            else
-                array_vars[n] = getmetadata(x, Symbolics.GetindexParent)
-            end
+    vars
+end
+
+function collect_array_vars!(vars, xs)
+    for x in xs
+        ax = array_vars(x)
+        if isempty(ax)
+            vars[getname(x)] = x
+        else
+            merge!(vars, ax)
         end
     end
-    return array_vars
+    return vars
 end
 
 "Throw error when difference/derivative operation occurs in the R.H.S."
