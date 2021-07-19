@@ -126,7 +126,8 @@ function rc_model(i; name, source, ground, R, C)
               connect_heat(resistor.h, heat_capacitor.h)
              ]
 
-    rc_model = ODESystem(rc_eqs, t, systems=[resistor, capacitor, source, ground, heat_capacitor], name=Symbol(name, i))
+    rc_model = compose(ODESystem(rc_eqs, t, name=Symbol(name, i)),
+                       [resistor, capacitor, source, ground, heat_capacitor])
 end
 ```
 
@@ -150,7 +151,7 @@ end;
 eqs = [
        D(E) ~ sum(((i, sys),)->getproperty(sys, Symbol(:resistor, i)).h.Q_flow, enumerate(rc_systems))
       ]
-big_rc = compose([ODESystem(eqs, t, [E], []); rc_systems])
+big_rc = compose(ODESystem(eqs, t, [E], []), rc_systems)
 ```
 
 Now let's say we want to expose a bit more parallelism via running tearing.

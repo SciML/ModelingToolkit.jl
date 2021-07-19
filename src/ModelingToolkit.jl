@@ -55,7 +55,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
 
 import DiffEqBase: @add_kwonly
 
-import LightGraphs: SimpleDiGraph, add_edge!
+import LightGraphs: SimpleDiGraph, add_edge!, incidence_matrix
 
 using Requires
 
@@ -146,6 +146,8 @@ for S in subtypes(ModelingToolkit.AbstractSystem)
     @eval convert_system(::Type{<:$S}, sys::$S) = sys
 end
 
+struct Flow end
+
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
@@ -191,7 +193,7 @@ export toexpr, get_variables
 export simplify, substitute
 export build_function
 export modelingtoolkitize
-export @variables, @parameters
+export @variables, @parameters, Flow
 export @named, @nonamespace, @namespace, extend, compose
 
 end # module

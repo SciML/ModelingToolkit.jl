@@ -68,6 +68,7 @@ function JumpSystem(eqs, iv, states, ps;
                     connection_type=nothing,
                     kwargs...)
 
+    eqs = collect(eqs)
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))

@@ -136,3 +136,24 @@ np = NonlinearProblem(ns, [0,0,0], [1,2,3], jac=true, sparse=true)
        end
        issue819()
 end
+
+# issue #1115
+@testset "Extending a NonlinearSystem with no iv" begin
+    @parameters a b
+    @variables x y
+    eqs1 = [
+        0 ~ a * x
+    ]
+    eqs2 = [
+        0 ~ b * y
+    ]
+
+    @named sys1 = NonlinearSystem(eqs1, [x], [a])
+    @named sys2 = NonlinearSystem(eqs2, [y], [b])
+    @named sys3 = extend(sys1, sys2)
+
+    @test isequal(union(Set(parameters(sys1)), Set(parameters(sys2))), Set(parameters(sys3)))
+    @test isequal(union(Set(states(sys1)), Set(states(sys2))), Set(states(sys3)))
+    @test isequal(union(Set(equations(sys1)), Set(equations(sys2))), Set(equations(sys3)))
+end
+

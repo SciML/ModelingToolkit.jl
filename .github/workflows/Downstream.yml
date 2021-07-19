@@ -21,7 +21,8 @@ jobs:
           - {user: SciML, repo: CellMLToolkit.jl, group: All}
           - {user: SciML, repo: NeuralPDE.jl, group: NNPDE}
           - {user: SciML, repo: DataDrivenDiffEq.jl, group: Standard}
-
+          - {user: SciML, repo: StructuralIdentifiability.jl, group: All}
+          
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v1

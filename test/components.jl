@@ -20,6 +20,9 @@ sol = solve(prob, Rodas4())
 @test iszero(sol[ground.g.v])
 @test sol[resistor.v] == sol[source.p.v] - sol[capacitor.p.v]
 
+u0 = [
+      capacitor.v => 0.0
+     ]
 prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Tsit5())
 
