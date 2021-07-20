@@ -90,11 +90,11 @@ function generate_function(
     #obsvars = map(eq->eq.lhs, observed(sys))
     #fulldvs = [dvs; obsvars]
 
-    eqs = equations(sys)
+    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     foreach(check_derivative_variables, eqs)
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
-                          [eq.rhs for eq in eqs if isdiffeq(eq)]
+                          [eq.rhs for eq in eqs]
     #rhss = Let(obss, rhss)
 
     # TODO: add an optional check on the ordering of observed equations
@@ -599,9 +599,9 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
     if any(isdifferenceeq.(equations(sys)))
-        DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)    
-    else
         DAEProblem{iip}(f,du0,u0,tspan,p;difference_cb=generate_difference_cb(sys),differential_vars=differential_vars,kwargs...)
+    else
+        DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)    
     end
     
 end
