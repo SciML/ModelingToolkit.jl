@@ -408,11 +408,8 @@ prob = ODEProblem(de,[1.0,1.0],(0.0,1.0),[1.5,1.0,3.0,1.0], check_length=false)
 @test prob.kwargs[:difference_cb] isa ModelingToolkit.DiffEqCallbacks.DiscreteCallback
 
 sol = solve(prob, Tsit5(); callback=prob.kwargs[:difference_cb], tstops=prob.tspan[1]:0.1:prob.tspan[2])
-# using Plots
-# plot(sol)
 
 # Direct implementation
-
 function lotka(du,u,p,t)
     x = u[1]
     y = u[2]
@@ -429,6 +426,6 @@ difference_cb = ModelingToolkit.PeriodicCallback(periodic_difference_affect!, 0.
 
 sol2 = solve(prob2, Tsit5(); callback=difference_cb, tstops=collect(prob.tspan[1]:0.1:prob.tspan[2])[2:end]
 )
-# plot(sol2)
 
-@test sol(0:0.01:1) ≈ sol2(0:0.01:1)
+@test sol(0:0.01:1)[x] ≈ sol2(0:0.01:1)[1,:]
+@test sol(0:0.01:1)[y] ≈ sol2(0:0.01:1)[2,:]
