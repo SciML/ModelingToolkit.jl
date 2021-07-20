@@ -109,6 +109,16 @@ function generate_function(
     end
 end
 
+@inline function allequal(x)
+    length(x) < 2 && return true
+    e1 = first(x)
+    i = 2
+    @inbounds for i=2:length(x)
+        x[i] == e1 || return false
+    end
+    return true
+end
+
 function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = parameters(sys);
     kwargs...)
     eqs = equations(sys)
@@ -134,9 +144,9 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
     end
 
     dts = [ operation(eq.lhs).dt for eq in eqs if isdifferenceeq(eq)] 
-    all(dts .== dts[1]) || error("All difference variables should have same time steps.")
+    allequal(dts) || error("All difference variables should have same time steps.")
 
-    PeriodicCallback(cb_affect!, dts[1])
+    PeriodicCallback(cb_affect!, first(dts))
 end
 
 function time_varying_as_func(x, sys)
