@@ -117,7 +117,7 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
     rhss = [ 
         begin
             ind = findfirst(eq -> isdifference(eq.lhs) && isequal(arguments(eq.lhs)[1], s), eqs)
-            ind === nothing ? Val{0} : eqs[ind].rhs
+            ind === nothing ? 0 : eqs[ind].rhs
         end
         for s in dvs ]
     
