@@ -388,6 +388,23 @@ let
     @test_nowarn structural_simplify(sys)
 end
 
+# Array vars
+using Symbolics: unwrap
+using LinearAlgebra
+@variables t
+sts = @variables x[1:3](t) y(t)
+ps = @parameters p[1:3]
+D = Differential(t)
+eqs = [
+       collect(D(x) ~ x)
+       D(y) ~ norm(x)*y
+      ]
+sys = ODESystem(eqs, t, [sts...;], [ps...;])
+@test isequal(@nonamespace(sys.x), unwrap(x))
+@test isequal(@nonamespace(sys.y), unwrap(y))
+@test isequal(@nonamespace(sys.p), unwrap(p))
+@test_nowarn sys.x, sys.y, sys.p
+
 # Mixed Difference Differential equations
 @parameters t a b c d
 @variables x(t) y(t)

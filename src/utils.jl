@@ -160,6 +160,12 @@ hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
 getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))
 setdefault(v, val) = val === nothing ? v : setmetadata(v, Symbolics.VariableDefaultValue, value(val))
 
+function process_variables!(var_to_name, defs, vars)
+    collect_defaults!(defs, vars)
+    collect_var_to_name!(var_to_name, vars)
+    return nothing
+end
+
 function collect_defaults!(defs, vars)
     for v in vars; (haskey(defs, v) || !hasdefault(v)) && continue
         defs[v] = getdefault(v)
@@ -167,12 +173,53 @@ function collect_defaults!(defs, vars)
     return defs
 end
 
+function var_to_name(x, vars=Dict{Symbol, Any}())
+    x = Symbolics.unwrap(x)
+    if istree(x)
+        if hasmetadata(x, Symbolics.GetindexParent)
+            v = Dict{Symbol, Any}()
+            foreach(a->var_to_name(a, v), arguments(x))
+            var_to_name(operation(x), v)
+            name = first(only(v))
+            vars[name] = getmetadata(x, Symbolics.GetindexParent)
+        elseif x isa Symbolics.ArrayOp
+            t = x.term
+            if istree(t) && operation(t) === (map) && arguments(t)[1] isa Symbolics.CallWith
+                vars[nameof(arguments(t)[2])] = x
+            else
+                var_to_name(x.expr, vars)
+            end
+        else
+            var_to_name(operation(x), vars)
+            for a in arguments(x)
+                var_to_name(a, vars)
+            end
+        end
+    elseif x isa Sym && symtype(x) <: AbstractArray
+        vars[nameof(x)] = x
+    end
+
+    vars
+end
+
+function collect_var_to_name!(vars, xs)
+    for x in xs
+        ax = var_to_name(x)
+        if isempty(ax)
+            vars[getname(x)] = x
+        else
+            merge!(vars, ax)
+        end
+    end
+    return vars
+end
+
 "Throw error when difference/derivative operation occurs in the R.H.S."
 @noinline function throw_invalid_operator(opvar, eq, op::Type)
     if op === Difference
         optext = "difference"
     elseif op === Differential
-        optext="derivative" 
+        optext="derivative"
     end
     msg = "The $optext variable must be isolated to the left-hand " *
     "side of the equation like `$opvar ~ ...`.\n Got $eq."
