@@ -513,6 +513,7 @@ function toexpr(sys::AbstractSystem)
     expr = Expr(:block)
     stmt = expr.args
 
+    name = Meta.quot(nameof(sys))
     iv = independent_variable(sys)
     ivname = gensym(:iv)
     if iv !== nothing
@@ -535,9 +536,9 @@ function toexpr(sys::AbstractSystem)
     defs_name = push_defaults!(stmt, defaults(sys), var2name)
 
     if sys isa ODESystem
-        push!(stmt, :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults=$defs_name)))
+        push!(stmt, :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults=$defs_name, name=$name)))
     elseif sys isa NonlinearSystem
-        push!(stmt, :($NonlinearSystem($eqs_name, $stsname, $psname; defaults=$defs_name)))
+        push!(stmt, :($NonlinearSystem($eqs_name, $stsname, $psname; defaults=$defs_name, name=$name)))
     end
 
     striplines(expr) # keeping the line numbers is never helpful
