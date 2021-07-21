@@ -328,6 +328,7 @@ function flatten(sys::NonlinearSystem)
 end
 
 function Base.:(==)(sys1::NonlinearSystem, sys2::NonlinearSystem)
+    isequal(nameof(sys1), nameof(sys2)) &&
     _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
     _eq_unordered(get_states(sys1), get_states(sys2)) &&
     _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
