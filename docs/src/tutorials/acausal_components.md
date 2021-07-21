@@ -191,7 +191,7 @@ function Resistor(;name, R = 1.0)
     eqs = [
            v ~ i * R
           ]
-    extend(ODESystem(eqs, t, [], ps; name=name, oneport)
+    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
 end
 ```
 
