@@ -17,7 +17,7 @@ eqs = [D(x) ~ σ*(y-x),
        D(z) ~ x*y - β*z]
 
 ModelingToolkit.toexpr.(eqs)[1]
-de = ODESystem(eqs; defaults=Dict(x => 1))
+@named de = ODESystem(eqs; defaults=Dict(x => 1))
 @test eval(toexpr(de)) == de
 
 generate_function(de)
@@ -389,17 +389,17 @@ let
 end
 
 # Array vars
-using Symbolics: unwrap
+using Symbolics: unwrap, wrap
 using LinearAlgebra
 @variables t
 sts = @variables x[1:3](t) y(t)
-ps = @parameters p[1:3]
+ps = @parameters p[1:3] = [1, 2, 3]
 D = Differential(t)
 eqs = [
-       collect(D(x) ~ x)
+       collect(D.(x) ~ x)
        D(y) ~ norm(x)*y
       ]
-sys = ODESystem(eqs, t, [sts...;], [ps...;])
+@named sys = ODESystem(eqs, t, [sts...;], [ps...;])
 @test isequal(@nonamespace(sys.x), unwrap(x))
 @test isequal(@nonamespace(sys.y), unwrap(y))
 @test isequal(@nonamespace(sys.p), unwrap(p))
