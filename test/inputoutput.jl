@@ -38,8 +38,7 @@ simplifyeqs(eqs) = Equation.((x->x.lhs).(eqs), simplify.((x->x.rhs).(eqs)))
 
 @test isequal(simplifyeqs(equations(connected)), simplifyeqs(collapsed_eqs))
 
-# Test if variables indicated to be input/output are not eliminated by structural_simplify
-
+# Variables indicated to be input/output 
 @variables x [input=true]
 @test hasmetadata(x, Symbolics.option_to_metadata_type(Val(:input)))
 @test getmetadata(x, Symbolics.option_to_metadata_type(Val(:input))) == true
@@ -51,27 +50,3 @@ simplifyeqs(eqs) = Equation.((x->x.lhs).(eqs), simplify.((x->x.rhs).(eqs)))
 @test getmetadata(y, Symbolics.option_to_metadata_type(Val(:output))) == true
 @test !hasmetadata(y, Symbolics.option_to_metadata_type(Val(:input)))
 @test_throws KeyError getmetadata(y, Symbolics.option_to_metadata_type(Val(:input)))
-
-@parameters t σ ρ β
-@variables x(t) y(t) z(t) a(t) u(t) F(t)
-D = Differential(t)
-
-eqs = [
-       D(x) ~ σ*(y-x)
-       D(y) ~ x*(ρ-z)-y + β
-       0 ~ z - x + y
-       0 ~ a + z
-       u ~ z + a
-      ]
-
-lorenz1 = ODESystem(eqs,t,name=:lorenz1)
-
-lorenz1_aliased = structural_simplify(lorenz1)
-
-reduced_eqs = [
-               D(x) ~ σ*(y - x)
-               D(y) ~ β + x*(ρ - (x - y)) - y
-              ]
-
-@info states(lorenz1)
-@info states(lorenz1_aliased)
