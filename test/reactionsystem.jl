@@ -1,4 +1,4 @@
-using ModelingToolkit, LinearAlgebra, DiffEqJump, Test
+using ModelingToolkit, LinearAlgebra, DiffEqJump, OrdinaryDiffEq, Test
 MT = ModelingToolkit
 
 @parameters t k[1:20]
@@ -272,3 +272,17 @@ js = convert(JumpSystem, rs)
 @test isequal2(equations(js)[1].scaled_rates, k1/12)
 js = convert(JumpSystem,rs; combinatoric_ratelaws=false)
 @test isequal2(equations(js)[1].scaled_rates, k1)
+
+# chemical master equation lowering 
+rs = @reaction_network begin
+  (c1,c2), A + B <--> C + D
+end c1 c2 
+
+u0 = [5, 5, 0, 0]
+specmap = Num.(states(rs)) .=> u0
+state_space = ModelingToolkit.BFS(rs, u0)
+cmesys = ModelingToolkit.ODESystem_cme(rs, u0)
+prob = ODEProblem(cmesys, [], (0, 10.), [1., 2.])
+
+sol = solve(prob, Tsit5())
+@test all(sum(arr; dims=1) .≈ 1.) # sanity check that states sum to probability 1

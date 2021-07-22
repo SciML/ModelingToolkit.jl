@@ -557,3 +557,63 @@ function modified_states!(mstates, rx::Reaction, sts::Set)
         (species in sts) && push!(mstates, species)
     end
 end
+
+"Performs a breadth-first graph traversal to enumerate possible states"
+function BFS(G, v)
+    state_space = []
+    Q = []
+    push!(Q, v)
+    push!(state_space, v)
+    nsm = netstoichmat(G)
+    edges = eachrow(nsm)
+    while !isempty(Q)
+        w = popfirst!(Q)
+        for e in edges
+            x = w .+ e
+            if x ∉ state_space && all(x .>= 0)
+                push!(state_space, x) 
+                push!(Q, x)
+            end
+        end
+    end
+    return state_space
+end
+
+"used in building the equations for CME"
+function propensity(jrl, rs, x)
+	substitute(jrl, Dict(states(rs) .=> x))	
+end
+
+function ODESystem_cme(rs, u0; kwargs)
+	state_space = BFS(rs, u0)
+
+	N = length(state_space)
+	d = Dict(state_space .=> 1:N)
+	defs = zeros(N)
+	start_state = d[u0]
+	defs[start_state] = 1.
+	@variables t u[1:N](t)=defs
+	D = Differential(t)
+
+	# P(u0, 0) = 1
+	# u[start_state] = Symbolics.setdefaultval(u[start_state], 1.) # not sure this is a good place to do thsi
+
+	rxns = reactions(rs)
+	M = numreactions(rs)
+	jump_rates = jumpratelaw.(rxns)
+    nsm = netstoichmat(rs)
+	
+	eqs = Equation[]
+	for x in state_space 
+		eq = Num(0)
+		for j in 1:M
+			x′ = x .- nsm[j, :]
+			p_x′ = haskey(d, x′) ? u[d[x′]] : 0
+			t1 = propensity(jump_rates[j], rs, x′)*p_x′
+			t2 = propensity(jump_rates[j], rs, x)*u[d[x]]
+			eq += t1 - t2
+		end 
+		push!(eqs, D(u[d[x]]) ~ eq)
+	end
+	ODESystem(eqs, t, u, parameters(rs); kwargs...)
+end
