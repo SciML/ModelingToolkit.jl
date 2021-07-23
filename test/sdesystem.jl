@@ -443,3 +443,7 @@ fdif!(du,u0,p,t)
     sys2 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
     @test_throws ArgumentError SDESystem([sys2.y ~ sys1.z], t, [], [], [], systems = [sys1, sys2])
 end
+
+# ODESystem -> SDESystem shorthand constructor
+sys = ODESystem(eqs,t,[x,y,z],[σ,ρ,β])
+@test SDESystem(sys, noiseeqs) isa SDESystem
