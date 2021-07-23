@@ -11,9 +11,11 @@ function will do the trick:
 indexof(sym,syms) = findfirst(isequal(sym),syms)
 indexof(σ,parameters(sys))
 ```
-Further, you can support symbolic lookup of parameter values using:
+Further, you can support symbolic lookup/update of parameter values using:
 ```julia
 Base.getindex(A::AbstractArray{Pair{S,T}},sym::S) where {T,S<:Union{Num,Symbol}} = A[findfirst(x->isequal(sym,x.first),A)].second
+Base.setindex!(A::AbstractArray{Pair{S,T}},v::T,sym::S) where {T,S<:Union{Num,Symbol}} = setindex!(A,(sym=>v),findfirst(x->isequal(sym,x.first),A))
+v
 ```
 
 ## Transforming value maps to arrays
