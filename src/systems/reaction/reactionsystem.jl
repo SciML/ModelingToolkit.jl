@@ -559,20 +559,33 @@ function modified_states!(mstates, rx::Reaction, sts::Set)
 end
 
 "Performs a breadth-first graph traversal to enumerate possible states"
-function BFS(G, v)
+function traverse_reactionsystem(G, v; truncation=nothing)
+    num_molecules = sum(v)
+    num_species = length(u0)
     state_space = []
-    Q = []
-    push!(Q, v)
+    Q = Queue{typeof(v)}()
+    enqueue!(Q, v)
     push!(state_space, v)
     nsm = netstoichmat(G)
     edges = eachrow(nsm)
     while !isempty(Q)
-        w = popfirst!(Q)
+        w = dequeue!(Q)
         for e in edges
             x = w .+ e
-            if x ∉ state_space && all(x .>= 0)
-                push!(state_space, x) 
-                push!(Q, x)
+            if x ∉ state_space && all(y >= 0 for y in x)
+              if truncation === nothing 
+                if sum(x) > num_molecules 
+                  error("need to provide truncation for infinite reaction system")
+                else 
+                    push!(state_space, x)
+                    enqueue!(Q, x)
+                end
+              else 
+                if all(x[i] <= truncation[i] for i in 1:num_species)
+                    push!(state_space, x)
+                    enqueue!(Q, x)
+                end
+              end
             end
         end
     end
@@ -584,8 +597,8 @@ function propensity(jrl, rs, x)
 	substitute(jrl, Dict(states(rs) .=> x))	
 end
 
-function ODESystem_cme(rs, u0; kwargs)
-	state_space = BFS(rs, u0)
+function ODESystem_cme(rs, u0; truncation=nothing, kwargs...)
+	state_space = traverse_reactionsystem(rs, u0; truncation=truncation)
 
 	N = length(state_space)
 	d = Dict(state_space .=> 1:N)
