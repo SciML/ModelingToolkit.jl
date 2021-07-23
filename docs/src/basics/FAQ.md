@@ -13,7 +13,7 @@ indexof(σ,parameters(sys))
 ```
 Further, you can support symbolic lookup of parameter values using:
 ```julia
-Base.getindex(A::AbstractArray{Pair{Num,T}},sym::Num) where {T} = vec[indexof(sym,map(x->x.first,vec))].second
+Base.getindex(A::AbstractArray{Pair{S,T}},sym::S) where {T,S<:Union{Num,Symbol}} = A[findfirst(x->isequal(sym,x.first),A)].second
 ```
 
 ## Transforming value maps to arrays
