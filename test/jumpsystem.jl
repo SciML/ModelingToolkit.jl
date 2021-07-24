@@ -165,6 +165,8 @@ u₀ = [A => 100, B => 0]
 tspan = (0.0,2000.0)
 dprob = DiscreteProblem(js5, u₀, tspan, p)
 jprob = JumpProblem(js5, dprob, Direct(), save_positions=(false,false))
+@test all(jprob.massaction_jump.scaled_rates .== [1.0,0.0])
+
 pcondit(u,t,integrator) = t==1000.0
 function paffect!(integrator)
   integrator.p[1] = 0.0
