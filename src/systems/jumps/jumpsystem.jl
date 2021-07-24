@@ -185,17 +185,6 @@ function numericnstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     sort!(ns)
 end
 
-# assemble a numeric MassActionJump from a MT MassActionJump representing one rx.
-# function assemble_maj(maj::MassActionJump, statetoid, subber, invttype)
-#     rval = subber(maj.scaled_rates)
-#     rs   = numericrstoich(maj.reactant_stoch, statetoid)
-#     ns   = numericnstoich(maj.net_stoch, statetoid)
-#     maj  = MassActionJump(convert(invttype, value(rval)), rs, ns, scale_rates = false)
-#     maj
-# end
-
-rstype(::MassActionJump{U,Vector{Pair{V,W}},X,Y}) where {U,V,W,X,Y} = W
-
 # assemble a numeric MassActionJump from a MT symbolics MassActionJumps
 function assemble_maj(majv::Vector{U}, statetoid, pmapper, params) where {U <: MassActionJump}
     rs = [numericrstoich(maj.reactant_stoch, statetoid) for maj in majv]
