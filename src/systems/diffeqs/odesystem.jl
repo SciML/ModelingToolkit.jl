@@ -11,8 +11,8 @@ $(FIELDS)
 ```julia
 using ModelingToolkit
 
-@parameters t σ ρ β
-@variables x(t) y(t) z(t)
+@parameters σ ρ β
+@variables t x(t) y(t) z(t)
 D = Differential(t)
 
 eqs = [D(x) ~ σ*(y-x),

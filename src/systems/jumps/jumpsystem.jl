@@ -13,8 +13,8 @@ $(FIELDS)
 ```julia
 using ModelingToolkit
 
-@parameters β γ t
-@variables S I R
+@parameters β γ 
+@variables t S(t) I(t) R(t)
 rate₁   = β*S*I
 affect₁ = [S ~ S - 1, I ~ I + 1]
 rate₂   = γ*I

@@ -14,7 +14,7 @@ equalities before solving. Let's see this in action.
 ```julia
 using ModelingToolkit, Plots, DifferentialEquations
 
-@parameters t
+@variables t
 @connector function Pin(;name)
     sts = @variables v(t)=1.0 i(t)=1.0
     ODESystem(Equation[], t, sts, []; name=name)

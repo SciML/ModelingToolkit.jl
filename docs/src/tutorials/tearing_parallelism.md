@@ -36,7 +36,7 @@ function connect_heat(ps...)
 end
 
 # Basic electric components
-@parameters t
+@variables t
 const D = Differential(t)
 function Pin(;name)
     @variables v(t)=1.0 i(t)=1.0
