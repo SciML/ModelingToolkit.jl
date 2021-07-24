@@ -116,8 +116,6 @@ m2 = getmean(jprob,Nsims)
 maj1 = MassActionJump(2*β/2, [S => 1, I => 1], [S => -1, I => 1])
 maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
 js3   = JumpSystem([maj1,maj2], t, [S,I,R], [β,γ])
-statetoid = Dict(MT.value(state) => i for (i,state) in enumerate(states(js)))
-ptoid     = Dict(MT.value(par) => i for (i,par) in enumerate(parameters(js)))
 dprob = DiscreteProblem(js3, u₀map, tspan, parammap)
 jprob = JumpProblem(js3, dprob, Direct())
 m3 = getmean(jprob,Nsims)
@@ -136,8 +134,6 @@ m4 = getmean(jprobc,Nsims)
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
 js4   = JumpSystem([maj1,maj2], t, [S], [β,γ])
-statetoid = Dict(MT.value(state) => i for (i,state) in enumerate(states(js)))
-ptoid     = Dict(MT.value(par) => i for (i,par) in enumerate(parameters(js)))
 dprob = DiscreteProblem(js4, [S => 999], (0,1000.), [β => 100.,γ => .01])
 jprob = JumpProblem(js4, dprob, Direct())
 m4 = getmean(jprob,Nsims)
@@ -147,8 +143,6 @@ m4 = getmean(jprob,Nsims)
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 2], [S => -1])
 js4   = JumpSystem([maj1,maj2], t, [S], [β,γ])
-statetoid = Dict(MT.value(state) => i for (i,state) in enumerate(states(js)))
-ptoid     = Dict(MT.value(par) => i for (i,par) in enumerate(parameters(js)))
 dprob = DiscreteProblem(js4, [S => 999], (0,1000.), [β => 100.,γ => .01])
 jprob = JumpProblem(js4, dprob, Direct())
 sol = solve(jprob, SSAStepper());
@@ -159,3 +153,23 @@ sol = solve(jprob, SSAStepper());
   sys2 = JumpSystem([maj1, maj2], t, [S], [β, γ], name = :sys1)
   @test_throws ArgumentError JumpSystem([sys1.γ ~ sys2.γ], t, [], [], systems = [sys1, sys2])
 end
+
+# test if param mapper is setup correctly for callbacks
+@parameters k1 k2 k3
+@variables A(t) B(t)
+maj1 = MassActionJump(k1*k3, [0 => 1], [A => -1, B => 1])
+maj2 = MassActionJump(k2, [B => 1], [A => 1, B => -1])
+js5 = JumpSystem([maj1,maj2], t, [A,B], [k1,k2,k3])
+p  = [k1 => 2.0, k2 => 0.0, k3 => .5]
+u₀ = [A => 100, B => 0]
+tspan = (0.0,2000.0)
+dprob = DiscreteProblem(js5, u₀, tspan, p)
+jprob = JumpProblem(js5, dprob, Direct(), save_positions=(false,false))
+pcondit(u,t,integrator) = t==1000.0
+function paffect!(integrator)
+  integrator.p[1] = 0.0
+  integrator.p[2] = 1.0
+  reset_aggregated_jumps!(integrator)
+end
+sol = solve(jprob, SSAStepper(), tstops=[1000.0], callback=DiscreteCallback(pcondit,paffect!))
+@test sol[1,end] == 100
