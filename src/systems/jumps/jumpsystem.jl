@@ -337,11 +337,10 @@ struct JumpSysMajParamMapper{U,V,W}
 end
 
 function JumpSysMajParamMapper(js::JumpSystem, p; jseqs=nothing, rateconsttype=Float64)
-    eqs       = (jseqs === nothing) ? equations(js) : jseqs
-    psyms     = parameters(js)
-    parammap  = map((x,y)->Pair(x,y), psyms, p)
-    paramdict = Dict(value(k) => value(v)  for (k, v) in parammap)
+    eqs        = (jseqs === nothing) ? equations(js) : jseqs
     paramexprs = [maj.scaled_rates for maj in eqs.x[1]]
+    psyms      = parameters(js)
+    paramdict  = Dict(value(k) => value(v)  for (k, v) in zip(psyms,p))
     JumpSysMajParamMapper{typeof(paramexprs),typeof(psyms),rateconsttype}(paramexprs, psyms, paramdict)
 end
 
