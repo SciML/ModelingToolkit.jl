@@ -14,4 +14,4 @@ domains = [t ∈ (0.0,1.0),
 
 pdesys = PDESystem(eq,bcs,domains,[t,x],[u])
 
-@test independent_variables(pdesys) == [t,x]
+@test all(isequal.(independent_variables(pdesys), [t,x]))
