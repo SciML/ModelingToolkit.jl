@@ -15,6 +15,10 @@ noiseeqs = [0.1*x,
             0.1*y,
             0.1*z]
 
+# ODESystem -> SDESystem shorthand constructor
+sys = ODESystem(eqs,t,[x,y,z],[σ,ρ,β])
+@test SDESystem(sys, noiseeqs) isa SDESystem
+
 de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β])
 f = eval(generate_diffusion_function(de)[1])
 @test f(ones(3),rand(3),nothing) == 0.1ones(3)
@@ -443,7 +447,3 @@ fdif!(du,u0,p,t)
     sys2 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
     @test_throws ArgumentError SDESystem([sys2.y ~ sys1.z], t, [], [], [], systems = [sys1, sys2])
 end
-
-# ODESystem -> SDESystem shorthand constructor
-sys = ODESystem(eqs,t,[x,y,z],[σ,ρ,β])
-@test SDESystem(sys, noiseeqs) isa SDESystem
