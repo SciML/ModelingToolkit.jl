@@ -151,7 +151,7 @@ function independent_variables(sys::AbstractSystem)
     if isdefined(sys, :iv)
         return [getfield(sys, :iv)]
     elseif isdefined(sys, :ivs)
-        return sys.ivs
+        return getfield(sys,:ivs)
     else
         return []
     end
