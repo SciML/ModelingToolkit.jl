@@ -147,7 +147,7 @@ end
 #Treat the result as a vector of symbols always
 function independent_variables(sys::AbstractSystem)
     systype = typeof(sys)
-    @warn "Please specialize `independent_variables` for this type ($systype)."
+    @warn "Please declare ($systype) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
     if isdefined(sys, :iv)
         return [getfield(sys, :iv)]
     elseif isdefined(sys, :ivs)
