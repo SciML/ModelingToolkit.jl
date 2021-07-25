@@ -132,7 +132,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     SDESystem(deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
 end
 
-SDESystem(sys::ODESystem, neqs; kwargs...) = SDESystem(equations(sys), neqs, independent_variable(sys), states(sys), parameters(sys); kwargs...)
+SDESystem(sys::ODESystem, neqs; kwargs...) = SDESystem(equations(sys), neqs, get_iv(sys), states(sys), parameters(sys); kwargs...)
 
 function generate_diffusion_function(sys::SDESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     return build_function(get_noiseeqs(sys),
