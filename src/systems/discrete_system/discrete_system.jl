@@ -30,6 +30,8 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    """Array variables."""
+    var_to_name
     """Control parameters (some subset of `ps`)."""
     ctrls::Vector
     """Observed states."""
@@ -52,10 +54,10 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     in `DiscreteSystem`.
     """
     default_p::Dict
-    function DiscreteSystem(discreteEqs, iv, dvs, ps, ctrls, observed, name, systems, default_u0, default_p)
+    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p)
         check_variables(dvs,iv)
         check_parameters(ps,iv)
-        new(discreteEqs, iv, dvs, ps, ctrls, observed, name, systems, default_u0, default_p)
+        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p)
     end
 end
 
@@ -86,14 +88,15 @@ function DiscreteSystem(
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    collect_defaults!(defaults, dvs′)
-    collect_defaults!(defaults, ps′)
+    var_to_name = Dict()
+    process_variables!(var_to_name, defaults, dvs′)
+    process_variables!(var_to_name, defaults, ps′)
 
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(eqs, iv′, dvs′, ps′, ctrl′, observed, name, systems, default_u0, default_p)
+    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, default_u0, default_p)
 end
 
 """
@@ -121,9 +124,6 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     f(u,p,t) = f_oop(u,p,t)
     DiscreteProblem(f,u0,tspan,p;kwargs...)
 end
-
-isdifference(expr) = istree(expr) && operation(expr) isa Difference
-isdifferenceeq(eq) = isdifference(eq.lhs)
 
 check_difference_variables(eq) = check_operator_variables(eq, Difference)
 

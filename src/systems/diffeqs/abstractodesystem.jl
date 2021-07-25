@@ -90,7 +90,7 @@ function generate_function(
     #obsvars = map(eq->eq.lhs, observed(sys))
     #fulldvs = [dvs; obsvars]
 
-    eqs = equations(sys)
+    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     foreach(check_derivative_variables, eqs)
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
@@ -109,6 +109,46 @@ function generate_function(
     end
 end
 
+@inline function allequal(x)
+    length(x) < 2 && return true
+    e1 = first(x)
+    i = 2
+    @inbounds for i=2:length(x)
+        x[i] == e1 || return false
+    end
+    return true
+end
+
+function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = parameters(sys);
+    kwargs...)
+    eqs = equations(sys)
+    foreach(check_difference_variables, eqs)
+
+    rhss = [ 
+        begin
+            ind = findfirst(eq -> isdifference(eq.lhs) && isequal(arguments(eq.lhs)[1], s), eqs)
+            ind === nothing ? 0 : eqs[ind].rhs
+        end
+        for s in dvs ]
+    
+    u = map(x->time_varying_as_func(value(x), sys), dvs)
+    p = map(x->time_varying_as_func(value(x), sys), ps)
+    t = get_iv(sys)
+
+    f_oop, f_iip = build_function(rhss, u, p, t; kwargs...)
+
+    f = @RuntimeGeneratedFunction(@__MODULE__, f_oop)
+
+    function cb_affect!(int) 
+        int.u += f(int.u, int.p, int.t) 
+    end
+
+    dts = [ operation(eq.lhs).dt for eq in eqs if isdifferenceeq(eq)] 
+    allequal(dts) || error("All difference variables should have same time steps.")
+
+    PeriodicCallback(cb_affect!, first(dts))
+end
+
 function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
     # if something is not x(t) (the current state)
     # but is `x(t-1)` or something like that, pass in `x` as a callable function rather
@@ -124,7 +164,7 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
 end
 
 function calculate_massmatrix(sys::AbstractODESystem; simplify=false)
-    eqs = equations(sys)
+    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     dvs = states(sys)
     M = zeros(length(eqs),length(eqs))
     state2idx = Dict(s => i for (i, s) in enumerate(dvs))
@@ -536,7 +576,12 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
-    ODEProblem{iip}(f,u0,tspan,p;kwargs...)
+    if any(isdifferenceeq.(equations(sys)))
+        ODEProblem{iip}(f,u0,tspan,p;difference_cb=generate_difference_cb(sys),kwargs...)
+    else
+        ODEProblem{iip}(f,u0,tspan,p;kwargs...)
+    end
+    
 end
 
 """
@@ -563,7 +608,12 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
     diffvars = collect_differential_variables(sys)
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
-    DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)
+    if any(isdifferenceeq.(equations(sys)))
+        DAEProblem{iip}(f,du0,u0,tspan,p;difference_cb=generate_difference_cb(sys),differential_vars=differential_vars,kwargs...)
+    else
+        DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)    
+    end
+    
 end
 
 """
@@ -713,6 +763,3 @@ end
 function SteadyStateProblemExpr(sys::AbstractODESystem, args...; kwargs...)
     SteadyStateProblemExpr{true}(sys, args...; kwargs...)
 end
-
-isdifferential(expr) = istree(expr) && operation(expr) isa Differential
-isdiffeq(eq) = isdifferential(eq.lhs)

@@ -6,6 +6,12 @@
 SDESystem
 ```
 
+To convert an `ODESystem` to an `SDESystem` directly:
+```
+ode = ODESystem(eqs,t,[x,y,z],[σ,ρ,β])
+sde = SDESystem(ode, noiseeqs)
+```
+
 ## Composition and Accessor Functions
 
 - `get_eqs(sys)` or `equations(sys)`: The equations that define the SDE.

@@ -172,6 +172,7 @@ for prop in [
              :iv
              :states
              :ps
+             :var_to_name
              :ctrls
              :defaults
              :observed
@@ -221,6 +222,10 @@ Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field} 
 end
 
 rename(x::AbstractSystem, name) = @set x.name = name
+function rename(xx::Symbolics.ArrayOp, name)
+    @set! xx.expr.f.arguments[1] = rename(xx.expr.f.arguments[1], name)
+    @set! xx.term.arguments[2] = rename(xx.term.arguments[2], name)
+end
 
 function Base.propertynames(sys::AbstractSystem; private=false)
     if private
@@ -253,24 +258,33 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
     elseif !isempty(systems)
         i = findfirst(x->nameof(x)==name, systems)
         if i !== nothing
-            return namespace ? rename(systems[i], renamespace(sysname,name)) : systems[i]
+            return namespace ? rename(systems[i], renamespace(sysname, name)) : systems[i]
+        end
+    end
+
+    if has_var_to_name(sys)
+        avs = get_var_to_name(sys)
+        v = get(avs, name, nothing)
+        v === nothing || return namespace ? renamespace(sysname, v, name) : v
+
+    else
+        sts = get_states(sys)
+        i = findfirst(x->getname(x) == name, sts)
+        if i !== nothing
+            return namespace ? renamespace(sysname,sts[i]) : sts[i]
+        end
+
+        if has_ps(sys)
+            ps = get_ps(sys)
+            i = findfirst(x->getname(x) == name,ps)
+            if i !== nothing
+                return namespace ? renamespace(sysname,ps[i]) : ps[i]
+            end
         end
     end
 
     sts = get_states(sys)
     i = findfirst(x->getname(x) == name, sts)
-
-    if i !== nothing
-        return namespace ? renamespace(sysname,sts[i]) : sts[i]
-    end
-
-    if has_ps(sys)
-        ps = get_ps(sys)
-        i = findfirst(x->getname(x) == name,ps)
-        if i !== nothing
-            return namespace ? renamespace(sysname,ps[i]) : ps[i]
-        end
-    end
 
     if has_observed(sys)
         obs = get_observed(sys)
@@ -316,13 +330,12 @@ ParentScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, ParentScope(
 struct GlobalScope <: SymScope end
 GlobalScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, GlobalScope())
 
-function renamespace(namespace, x)
-    if x isa Num
-        renamespace(namespace, value(x))
-    elseif x isa Symbolic
+function renamespace(namespace, x, name=nothing)
+    x = unwrap(x)
+    if x isa Symbolic
         let scope = getmetadata(x, SymScope, LocalScope())
             if scope isa LocalScope
-                rename(x, renamespace(namespace, getname(x)))
+                rename(x, renamespace(namespace, name === nothing ? getname(x) : name))
             elseif scope isa ParentScope
                 setmetadata(x, SymScope, scope.parent)
             else # GlobalScope
@@ -520,6 +533,14 @@ function toexpr(sys::AbstractSystem)
     expr = Expr(:block)
     stmt = expr.args
 
+    name = Meta.quot(nameof(sys))
+    ivs = independent_variables(sys)
+    ivname = gensym(:iv)
+    for iv in ivs
+        ivname = gensym(:iv)
+        push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
+    end
+
     stsname = gensym(:sts)
     sts = states(sys)
     push_vars!(stmt, stsname, Symbol("@variables"), sts)
@@ -539,9 +560,9 @@ function toexpr(sys::AbstractSystem)
         iv = get_iv(sys)
         ivname = gensym(:iv)
         push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
-        push!(stmt, :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name)))
+        push!(stmt, :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name, name=$name)))
     elseif sys isa NonlinearSystem
-        push!(stmt, :($NonlinearSystem($eqs_name, $stsname, $psname; defaults=$defs_name)))
+        push!(stmt, :($NonlinearSystem($eqs_name, $stsname, $psname; defaults = $defs_name, name=$name)))
     end
 
     striplines(expr) # keeping the line numbers is never helpful

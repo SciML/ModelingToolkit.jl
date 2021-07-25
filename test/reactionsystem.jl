@@ -34,6 +34,35 @@ show(io, rs)
 str = String(take!(io))
 @test count(isequal('\n'), str) < 30
 
+# defaults test
+def_p = [ki => float(i) for (i, ki) in enumerate(k)]
+def_u0 = [A => 0.5, B => 1., C=> 1.5, D => 2.0]
+defs = merge(Dict(def_p), Dict(def_u0))
+
+rs = ReactionSystem(rxs,t,[A,B,C,D],k; defaults=defs)
+odesys = convert(ODESystem,rs)
+sdesys = convert(SDESystem,rs)
+js = convert(JumpSystem,rs)
+nlsys = convert(NonlinearSystem,rs)
+
+@test ModelingToolkit.get_defaults(rs) ==
+       ModelingToolkit.get_defaults(odesys) ==
+       ModelingToolkit.get_defaults(sdesys) ==
+       ModelingToolkit.get_defaults(js) ==
+       ModelingToolkit.get_defaults(nlsys) ==
+       defs
+
+u0map = [A=>5.] # was 0.5
+pmap = [k[1]=>5.] # was 1.
+prob = ODEProblem(rs, u0map, (0,10.), pmap)
+@test prob.p[1] == 5.
+@test prob.u0[1] == 5.
+u0 = [10., 11., 12., 13.]
+ps = [float(x) for x in 100:119]
+prob = ODEProblem(rs, u0, (0,10.), ps)
+@test prob.p == ps
+@test prob.u0 == u0
+
 # hard coded ODE rhs
 function oderhs(u,k,t)
        A = u[1]; B = u[2]; C = u[3]; D = u[4];

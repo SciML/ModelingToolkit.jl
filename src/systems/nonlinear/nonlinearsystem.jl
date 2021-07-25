@@ -25,6 +25,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     states::Vector
     """Parameters."""
     ps::Vector
+    """Array variables."""
+    var_to_name
     observed::Vector{Equation}
     """
     Jacobian matrix. Note: this field will not be defined until
@@ -76,10 +78,11 @@ function NonlinearSystem(eqs, states, ps;
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
     states, ps = value.(states), value.(ps)
-    collect_defaults!(defaults, states)
-    collect_defaults!(defaults, ps)
+    var_to_name = Dict()
+    process_variables!(var_to_name, defaults, states)
+    process_variables!(var_to_name, defaults, ps)
 
-    NonlinearSystem(eqs, states, ps, observed, jac, name, systems, defaults, nothing, connection_type)
+    NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, nothing, connection_type)
 end
 
 function calculate_jacobian(sys::NonlinearSystem; sparse=false, simplify=false)
@@ -325,6 +328,7 @@ function flatten(sys::NonlinearSystem)
 end
 
 function Base.:(==)(sys1::NonlinearSystem, sys2::NonlinearSystem)
+    isequal(nameof(sys1), nameof(sys2)) &&
     _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
     _eq_unordered(get_states(sys1), get_states(sys2)) &&
     _eq_unordered(get_ps(sys1), get_ps(sys2)) &&

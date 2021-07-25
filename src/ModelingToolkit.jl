@@ -17,6 +17,7 @@ using DataStructures
 using SpecialFunctions, NaNMath
 using RuntimeGeneratedFunctions
 using Base.Threads
+using DiffEqCallbacks
 import MacroTools: splitdef, combinedef, postwalk, striplines
 import Libdl
 using DocStringExtensions
@@ -42,7 +43,7 @@ using Reexport
 @reexport using Symbolics
 export @derivatives
 using Symbolics: _parse_vars, value, @derivatives, get_variables,
-                 exprs_occur_in, solve_for, build_expr
+                 exprs_occur_in, solve_for, build_expr, unwrap, wrap
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   jacobian_sparsity, islinear, _iszero, _isone,
                   tosymbol, lower_varname, diff2term, var_from_nested_derivative,
@@ -188,6 +189,7 @@ export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
 export stochastic_integral_transform
 export initialize_system_structure
+export generate_difference_cb
 
 export BipartiteGraph, equation_dependencies, variable_dependencies
 export eqeq_dependencies, varvar_dependencies

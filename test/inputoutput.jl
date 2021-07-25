@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq, Test
+using ModelingToolkit, OrdinaryDiffEq, Symbolics, Test
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t) F(t) u(t)
@@ -37,3 +37,16 @@ collapsed_eqs = [D(lorenz1.x) ~ (lorenz1.σ * (lorenz1.y - lorenz1.x) +
 simplifyeqs(eqs) = Equation.((x->x.lhs).(eqs), simplify.((x->x.rhs).(eqs)))
 
 @test isequal(simplifyeqs(equations(connected)), simplifyeqs(collapsed_eqs))
+
+# Variables indicated to be input/output 
+@variables x [input=true]
+@test hasmetadata(x, Symbolics.option_to_metadata_type(Val(:input)))
+@test getmetadata(x, Symbolics.option_to_metadata_type(Val(:input))) == true
+@test !hasmetadata(x, Symbolics.option_to_metadata_type(Val(:output)))
+@test_throws KeyError getmetadata(x, Symbolics.option_to_metadata_type(Val(:output)))
+
+@variables y [output=true]
+@test hasmetadata(y, Symbolics.option_to_metadata_type(Val(:output)))
+@test getmetadata(y, Symbolics.option_to_metadata_type(Val(:output))) == true
+@test !hasmetadata(y, Symbolics.option_to_metadata_type(Val(:input)))
+@test_throws KeyError getmetadata(y, Symbolics.option_to_metadata_type(Val(:input)))
