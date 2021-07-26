@@ -1,4 +1,4 @@
-# Acausal Component-Based Modeling the RC Circuit
+# [Acausal Component-Based Modeling the RC Circuit](@id acausal)
 
 In this tutorial we will build a hierarchical acausal component-based model of
 the RC circuit. The RC circuit is a simple example where we connect a resistor
