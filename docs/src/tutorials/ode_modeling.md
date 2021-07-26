@@ -272,7 +272,7 @@ plot(solve(prob))
 
 ![Simulation of connected system (two first-order lag elements in series)](https://user-images.githubusercontent.com/13935112/111958439-877e0f80-8aed-11eb-9074-9d35458459a4.png)
 
-More on this topic may be found in [Composing Models and Building Reusable Components](@ref).
+More on this topic may be found in [Composing Models and Building Reusable Components](@ref acausal).
 
 ## Defaults
 
