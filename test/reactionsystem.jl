@@ -193,7 +193,8 @@ jumps[20] = VariableRateJump((u,p,t) -> p[20]*t*u[1]*binomial(u[2],2)*u[3], inte
 
 statetoid = Dict(state => i for (i,state) in enumerate(states(js)))
 jspmapper = ModelingToolkit.JumpSysMajParamMapper(js, pars)
-maj = MT.assemble_maj(equations(js).x[1], statetoid, jspmapper, pars)
+symmaj = MT.assemble_maj(equations(js).x[1], statetoid, jspmapper)
+maj    = MassActionJump(symmaj.param_mapper(pars), symmaj.reactant_stoch, symmaj.net_stoch, symmaj.param_mapper, scale_rates=false)
 for i in midxs  
   @test abs(jumps[i].scaled_rates - maj.scaled_rates[i]) < 100*eps()
   @test jumps[i].reactant_stoch == maj.reactant_stoch[i]

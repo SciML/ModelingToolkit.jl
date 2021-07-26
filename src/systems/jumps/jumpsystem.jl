@@ -186,10 +186,10 @@ function numericnstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
 end
 
 # assemble a numeric MassActionJump from a MT symbolics MassActionJumps
-function assemble_maj(majv::Vector{U}, statetoid, pmapper, params) where {U <: MassActionJump}
+function assemble_maj(majv::Vector{U}, statetoid, pmapper) where {U <: MassActionJump}
     rs = [numericrstoich(maj.reactant_stoch, statetoid) for maj in majv]
     ns = [numericnstoich(maj.net_stoch, statetoid) for maj in majv]
-    MassActionJump(rs, ns; param_mapper = pmapper, params=params, scale_rates=false, nocopy=true)
+    MassActionJump(rs, ns; param_mapper=pmapper, nocopy=true)
 end
 
 """
@@ -278,7 +278,7 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     p = (prob.p isa DiffEqBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
 
     majpmapper = JumpSysMajParamMapper(js, p; jseqs=eqs, rateconsttype=invttype)
-    majs = isempty(eqs.x[1]) ? nothing : assemble_maj(eqs.x[1], statetoid, majpmapper, p)
+    majs = isempty(eqs.x[1]) ? nothing : assemble_maj(eqs.x[1], statetoid, majpmapper)
     crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]
     ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
@@ -294,7 +294,8 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
         vtoj = nothing; jtov = nothing; jtoj = nothing
     end
 
-    JumpProblem(prob, aggregator, jset; dep_graph=jtoj, vartojumps_map=vtoj, jumptovars_map=jtov, kwargs...)
+    JumpProblem(prob, aggregator, jset; dep_graph=jtoj, vartojumps_map=vtoj, jumptovars_map=jtov, 
+                scale_rates=false, nocopy=true, kwargs...)
 end
 
 
@@ -349,7 +350,13 @@ function updateparams!(ratemap::JumpSysMajParamMapper{U,V,W}, params) where {U <
         sympar = ratemap.sympars[i]
         ratemap.subdict[sympar] = p
     end
+    nothing
 end
+
+function updateparams!(::JumpSysMajParamMapper{U,V,W}, params::Nothing) where {U <: AbstractArray, V <: AbstractArray, W}
+    nothing
+end
+
 
 # create the initial parameter vector for use in a MassActionJump
 function (ratemap::JumpSysMajParamMapper{U,V,W})(params) where {U <: AbstractArray, V <: AbstractArray, W}
