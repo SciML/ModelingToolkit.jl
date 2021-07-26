@@ -1,7 +1,7 @@
 # Modeling Optimization Problems
 
 ```julia
-using ModelingToolkit, GalacticOptim
+using ModelingToolkit, GalacticOptim, Optim
 
 @variables x y
 @parameters a b
