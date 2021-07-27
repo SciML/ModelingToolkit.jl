@@ -192,12 +192,13 @@ jumps[19] = VariableRateJump((u,p,t) -> p[19]*u[1]*t, integrator -> (integrator.
 jumps[20] = VariableRateJump((u,p,t) -> p[20]*t*u[1]*binomial(u[2],2)*u[3], integrator -> (integrator.u[2] -= 2; integrator.u[3] -= 1; integrator.u[4] += 2))
 
 statetoid = Dict(state => i for (i,state) in enumerate(states(js)))
-parammap = map((x,y)->Pair(x,y),parameters(js),pars)
-for i in midxs
-  maj = MT.assemble_maj(equations(js)[i], statetoid, ModelingToolkit.substituter(parammap),eltype(pars))
-  @test abs(jumps[i].scaled_rates - maj.scaled_rates) < 100*eps()
-  @test jumps[i].reactant_stoch == maj.reactant_stoch
-  @test jumps[i].net_stoch == maj.net_stoch
+jspmapper = ModelingToolkit.JumpSysMajParamMapper(js, pars)
+symmaj = MT.assemble_maj(equations(js).x[1], statetoid, jspmapper)
+maj    = MassActionJump(symmaj.param_mapper(pars), symmaj.reactant_stoch, symmaj.net_stoch, symmaj.param_mapper, scale_rates=false)
+for i in midxs  
+  @test abs(jumps[i].scaled_rates - maj.scaled_rates[i]) < 100*eps()
+  @test jumps[i].reactant_stoch == maj.reactant_stoch[i]
+  @test jumps[i].net_stoch == maj.net_stoch[i]
 end
 for i in cidxs
   crj = MT.assemble_crj(js, equations(js)[i], statetoid)
