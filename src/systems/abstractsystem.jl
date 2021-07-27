@@ -761,7 +761,8 @@ end
 $(SIGNATURES)
 
 Structurally simplify algebraic equations in a system and compute the
-topological sort of the observed equations.
+topological sort of the observed equations. When `simplify=true`, the `simplify`
+function will be applied during the tearing process.
 """
 function structural_simplify(sys::AbstractSystem; simplify=false)
     sys = initialize_system_structure(alias_elimination(sys))
