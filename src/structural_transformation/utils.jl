@@ -276,9 +276,9 @@ function find_solvables!(sys)
         term = value(eq.rhs - eq.lhs)
         for j in 𝑠neighbors(graph, i)
             isalgvar(s, j) || continue
-            D = Differential(fullvars[j])
-            c = expand_derivatives(D(term), false)
-            if !(c isa Symbolic) && c isa Number && c != 0
+            a, b, islinear = linear_expansion(term, fullvars[j])
+            a = unwrap(a)
+            if islinear && (!(a isa Symbolic) && a isa Number && a != 0)
                 add_edge!(solvable_graph, i, j)
             end
         end
