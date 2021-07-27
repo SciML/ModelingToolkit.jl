@@ -231,7 +231,7 @@ function find_linear_equations(sys)
             var = fullvars[j]
             a, b, islinear = linear_expansion(term, var)
             a = unwrap(a)
-            if !(a isa Symbolic) && a isa Number
+            if islinear && !(a isa Symbolic) && a isa Number
                 if a == 1 || a == -1
                     a = convert(Integer, a)
                     linear_term += a * var
