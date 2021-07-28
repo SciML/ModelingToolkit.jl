@@ -6,6 +6,7 @@ const UNASSIGNED = typemin(Int)
 using Setfield: @set!, @set
 using UnPack: @unpack
 
+using Symbolics: unwrap, linear_expansion
 using SymbolicUtils
 using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
