@@ -1,4 +1,4 @@
-using ModelingToolkit, LinearAlgebra, DiffEqJump, Test
+using ModelingToolkit, LinearAlgebra, DiffEqJump, Test, OrdinaryDiffEq
 MT = ModelingToolkit
 
 @parameters t k[1:20]
@@ -273,3 +273,17 @@ js = convert(JumpSystem, rs)
 @test isequal2(equations(js)[1].scaled_rates, k1/12)
 js = convert(JumpSystem,rs; combinatoric_ratelaws=false)
 @test isequal2(equations(js)[1].scaled_rates, k1)
+
+# test for having algebraic constraint equations
+@parameters t, r₊, r₋, β
+@variables A(t), B(t), C(t), D(t)
+rxs = [Reaction(r₊, [A,B], [C]),
+       Reaction(r₋, [C], [A,B])]
+aeqs = [D ~ 2*A + β*B]
+rs = ReactionSystem(rxs, t, [A,B,C,D], [r₊, r₋, β]; algebraic_eqs=aeqs)
+osys = convert(ODESystem, rs; include_zero_odes=false)
+p  = [r₊ => 1.0, r₋ => 2.0, β => 3.0]
+u₀ = [1.0, 2.0, 0.0]
+oprob = ODEProblem(structural_simplify(osys), u₀, (0.0,10.0), p)
+sol = solve(oprob, Tsit5())
+@test isapprox(0, norm(sol[D] .- 2*sol[A] - 3*sol[B]), atol=(100*eps()))

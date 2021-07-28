@@ -154,14 +154,16 @@ struct ReactionSystem <: AbstractSystem
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
+    """Algebraic equations that impose constraints on species."""
+    algebraic_eqs::Vector{Equation}
 
-    function ReactionSystem(eqs, iv, states, ps, observed, name, systems, defaults)
+    function ReactionSystem(eqs, iv, states, ps, observed, name, systems, defaults, algebraic_eqs)
         iv′ = value(iv)
         states′ = value.(states)
         ps′ = value.(ps)
         check_variables(states′, iv′)
         check_parameters(ps′, iv′)
-        new(collect(eqs), iv′, states′, ps′, observed, name, systems, defaults)
+        new(collect(eqs), iv′, states′, ps′, observed, name, systems, defaults, algebraic_eqs)
     end
 end
 
@@ -171,10 +173,11 @@ function ReactionSystem(eqs, iv, species, params;
                         name = gensym(:ReactionSystem),
                         default_u0=Dict(),
                         default_p=Dict(),
-                        defaults=_merge(Dict(default_u0), Dict(default_p)))
+                        defaults=_merge(Dict(default_u0), Dict(default_p)),
+                        algebraic_eqs=nothing)
 
     #isempty(species) && error("ReactionSystems require at least one species.")
-    ReactionSystem(eqs, iv, species, params, observed, name, systems, defaults)
+    ReactionSystem(eqs, iv, species, params, observed, name, systems, defaults, algebraic_eqs)
 end
 
 function ReactionSystem(iv; kwargs...)
@@ -411,8 +414,9 @@ ignored.
 """
 function Base.convert(::Type{<:ODESystem}, rs::ReactionSystem; 
                       name=nameof(rs), combinatoric_ratelaws=true, include_zero_odes=true, kwargs...)
-    eqs     = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws, include_zero_odes=include_zero_odes)
+    eqs     = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws, include_zero_odes=include_zero_odes)    
     systems = map(sys -> (sys isa ODESystem) ? sys : convert(ODESystem, sys), get_systems(rs))
+    (rs.algebraic_eqs !== nothing) && append!(eqs, rs.algebraic_eqs)
     ODESystem(eqs, get_iv(rs), get_states(rs), get_ps(rs); name=name, systems=systems, defaults=get_defaults(rs), kwargs...)
 end
 
@@ -433,6 +437,7 @@ function Base.convert(::Type{<:NonlinearSystem},rs::ReactionSystem;
                       name=nameof(rs), combinatoric_ratelaws=true, include_zero_odes=true, kwargs...)
     eqs     = assemble_drift(rs; combinatoric_ratelaws=combinatoric_ratelaws, as_odes=false, include_zero_odes=include_zero_odes)
     systems = convert.(NonlinearSystem, get_systems(rs))
+    (rs.algebraic_eqs !== nothing) && append!(eqs, rs.algebraic_eqs)
     NonlinearSystem(eqs, get_states(rs), get_ps(rs); name=name, systems=systems, defaults=get_defaults(rs), kwargs...)
 end
 
@@ -477,6 +482,7 @@ function Base.convert(::Type{<:SDESystem}, rs::ReactionSystem;
     noiseeqs = assemble_diffusion(rs,noise_scaling;
                                   combinatoric_ratelaws=combinatoric_ratelaws)
     systems  = convert.(SDESystem, get_systems(rs))
+    (rs.algebraic_eqs !== nothing) && append!(eqs, rs.algebraic_eqs)
     SDESystem(eqs, noiseeqs, get_iv(rs), get_states(rs),
               (noise_scaling===nothing) ? get_ps(rs) : union(get_ps(rs), toparam(noise_scaling));
               name=name, 
@@ -502,6 +508,7 @@ function Base.convert(::Type{<:JumpSystem},rs::ReactionSystem;
                       name=nameof(rs), combinatoric_ratelaws=true, kwargs...)
     eqs     = assemble_jumps(rs; combinatoric_ratelaws=combinatoric_ratelaws)
     systems = convert.(JumpSystem, get_systems(rs))
+    (rs.algebraic_eqs !== nothing) && error("Error, JumpSystems do not currently support coupled algebraic equations.")
     JumpSystem(eqs, get_iv(rs), get_states(rs), get_ps(rs); name=name, systems=systems, defaults=get_defaults(rs), kwargs...)
 end
 
