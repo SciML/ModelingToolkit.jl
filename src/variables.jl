@@ -19,6 +19,7 @@ and creates the array of values in the correct order with default values when
 applicable.
 """
 function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true, toterm=Symbolics.diff2term)
+    varlist = map(unwrap, varlist)
     # Edge cases where one of the arguments is effectively empty.
     is_incomplete_initialization = varmap isa DiffEqBase.NullParameters || varmap === nothing
     if is_incomplete_initialization || isempty(varmap)

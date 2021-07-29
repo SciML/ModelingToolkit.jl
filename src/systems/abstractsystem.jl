@@ -398,7 +398,7 @@ function defaults(sys::AbstractSystem)
     isempty(systems) ? defs : mapreduce(namespace_defaults, merge, systems; init=defs)
 end
 
-states(sys::AbstractSystem, v) = renamespace(nameof(sys), v)
+states(sys::AbstractSystem, v) = renamespace(sys, v)
 parameters(sys::AbstractSystem, v) = toparam(states(sys, v))
 for f in [:states, :parameters]
     @eval $f(sys::AbstractSystem, vs::AbstractArray) = map(v->$f(sys, v), vs)
