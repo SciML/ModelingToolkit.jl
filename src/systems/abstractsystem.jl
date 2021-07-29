@@ -131,14 +131,6 @@ function generate_function end
 
 Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
 
-function getname(t)
-    if istree(t)
-        operation(t) isa Sym ? getname(operation(t)) : error("Cannot get name of $t")
-    else
-        nameof(t)
-    end
-end
-
 independent_variable(sys::AbstractSystem) = isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
 
 function structure(sys::AbstractSystem)
@@ -238,27 +230,26 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
     elseif !isempty(systems)
         i = findfirst(x->nameof(x)==name, systems)
         if i !== nothing
-            return namespace ? rename(systems[i], renamespace(sysname, name)) : systems[i]
+            return namespace ? rename(systems[i], renamespace(sys, name)) : systems[i]
         end
     end
 
     if has_var_to_name(sys)
         avs = get_var_to_name(sys)
         v = get(avs, name, nothing)
-        v === nothing || return namespace ? renamespace(sysname, v, name) : v
-
+        v === nothing || return namespace ? renamespace(sys, v) : v
     else
         sts = get_states(sys)
         i = findfirst(x->getname(x) == name, sts)
         if i !== nothing
-            return namespace ? renamespace(sysname,sts[i]) : sts[i]
+            return namespace ? renamespace(sys, sts[i]) : sts[i]
         end
 
         if has_ps(sys)
             ps = get_ps(sys)
             i = findfirst(x->getname(x) == name,ps)
             if i !== nothing
-                return namespace ? renamespace(sysname,ps[i]) : ps[i]
+                return namespace ? renamespace(sys, ps[i]) : ps[i]
             end
         end
     end
@@ -270,7 +261,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
         obs = get_observed(sys)
         i = findfirst(x->getname(x.lhs)==name,obs)
         if i !== nothing
-            return namespace ? renamespace(sysname,obs[i]) : obs[i]
+            return namespace ? renamespace(sys, obs[i]) : obs[i]
         end
     end
 
