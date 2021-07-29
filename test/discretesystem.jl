@@ -56,3 +56,26 @@ prob_map = DiscreteProblem(sir_map!,u0,tspan,p);
 sol_map2 = solve(prob_map,FunctionMap());
 
 @test Array(sol_map) ≈ Array(sol_map2)
+
+# Delayed difference equations
+@parameters t
+@variables x(..)
+D = Difference(t; dt=0.1)
+
+# Equations
+eqs = [
+    D(x(t)) ~ 0.9x(t) - 0.1x(t-1),
+]
+
+linearized_eqs = [
+    D(x(t)) ~ 0.9x(t) + 0.1var"x(t - 1)",
+    var"x(t - 1)" ~ x(t),
+]
+
+@test linearized_eqs == linearize_eqs(sys, eqs)
+
+# System
+sys = DiscreteSystem(eqs,t,[x(t)],[])
+
+
+ 

@@ -112,6 +112,7 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     dvs = states(sys)
     ps = parameters(sys)
     eqs = equations(sys)
+    eqs = linearize_eqs(sys, eqs)
     # defs = defaults(sys)
     t = get_iv(sys)
     u0 = varmap_to_vars(u0map,dvs)
@@ -123,6 +124,33 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     f_oop, _ = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
     f(u,p,t) = f_oop(u,p,t)
     DiscreteProblem(f,u0,tspan,p;kwargs...)
+end
+
+function linearize_eqs(sys, eqs=sys.eqs)
+    for eq in eqs
+        max_delay = 0
+        eq.rhs = get_delayed_var(sys, eq.rhs)
+    end
+    eqs
+end
+
+function is_func_of_iv(sys, args::AbstractVector)
+    varss = get_variables.(args)
+    all(isequal(var,sys.iv) for vars in varss for var in vars)
+end
+
+function get_delayed_var(sys, t)
+    if t isa Term && any(isequal(t.f), operation.(sys.states)) && is_func_of_iv(sys, arguments(t))
+        name_ij = Symbol(t.f.name, Symbol("("), join(tosymbol.(arguments(t)), Symbol(",")), Symbol(")"))
+        return first(@variables $name_ij)
+    elseif t isa Term
+        t.arguments = get_delayed_var.(t.arguments) 
+        return t
+    elseif t isa SymbolicUtils.Add #TODO: or other ops
+        return t #TODO
+    else
+        return t
+    end
 end
 
 check_difference_variables(eq) = check_operator_variables(eq, Difference)
