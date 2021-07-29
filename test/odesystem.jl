@@ -439,7 +439,7 @@ function periodic_difference_affect!(int)
     int.u += [int.u[2], 0]
 end
 
-difference_cb = ModelingToolkit.PeriodicCallback(periodic_difference_affect!, 0.1) 
+difference_cb = ModelingToolkit.PeriodicCallback(periodic_difference_affect!, 0.1)
 
 sol2 = solve(prob2, Tsit5(); callback=difference_cb, tstops=collect(prob.tspan[1]:0.1:prob.tspan[2])[2:end]
 )
