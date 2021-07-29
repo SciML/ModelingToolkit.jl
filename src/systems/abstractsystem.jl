@@ -761,15 +761,16 @@ end
 $(SIGNATURES)
 
 Structurally simplify algebraic equations in a system and compute the
-topological sort of the observed equations.
+topological sort of the observed equations. When `simplify=true`, the `simplify`
+function will be applied during the tearing process.
 """
-function structural_simplify(sys::AbstractSystem)
+function structural_simplify(sys::AbstractSystem; simplify=false)
     sys = initialize_system_structure(alias_elimination(sys))
     check_consistency(sys)
     if sys isa ODESystem
         sys = dae_index_lowering(sys)
     end
-    sys = tearing(sys)
+    sys = tearing(sys, simplify=simplify)
     fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     return sys

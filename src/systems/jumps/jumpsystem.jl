@@ -185,24 +185,13 @@ function numericnstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     sort!(ns)
 end
 
-# assemble a numeric MassActionJump from a MT MassActionJump representing one rx.
-function assemble_maj(maj::MassActionJump, statetoid, subber, invttype)
-    rval = subber(maj.scaled_rates)
-    rs   = numericrstoich(maj.reactant_stoch, statetoid)
-    ns   = numericnstoich(maj.net_stoch, statetoid)
-    maj  = MassActionJump(convert(invttype, value(rval)), rs, ns, scale_rates = false)
-    maj
+# assemble a numeric MassActionJump from a MT symbolics MassActionJumps
+function assemble_maj(majv::Vector{U}, statetoid, pmapper) where {U <: MassActionJump}
+    rs = [numericrstoich(maj.reactant_stoch, statetoid) for maj in majv]
+    ns = [numericnstoich(maj.net_stoch, statetoid) for maj in majv]
+    MassActionJump(rs, ns; param_mapper=pmapper, nocopy=true)
 end
 
-# For MassActionJumps that contain many reactions
-# function assemble_maj(maj::MassActionJump{U,V,W}, statetoid, subber,
-#                       invttype) where {U <: AbstractVector,V,W}
-#     rval = [convert(invttype,numericrate(sr, subber)) for sr in maj.scaled_rates]
-#     rs   = [numericrstoich(rs, statetoid) for rs in maj.reactant_stoch]
-#     ns   = [numericnstoich(ns, statetoid) for ns in maj.net_stoch]
-#     maj  = MassActionJump(rval, rs, ns, scale_rates = false)
-#     maj
-# end
 """
 ```julia
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan,
@@ -287,14 +276,13 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
 
     # handling parameter substition and empty param vecs
     p = (prob.p isa DiffEqBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
-    parammap  = map((x,y)->Pair(x,y), parameters(js), p)
-    subber    = substituter(parammap)
 
-    majs = MassActionJump[assemble_maj(j, statetoid, subber, invttype) for j in eqs.x[1]]
+    majpmapper = JumpSysMajParamMapper(js, p; jseqs=eqs, rateconsttype=invttype)
+    majs = isempty(eqs.x[1]) ? nothing : assemble_maj(eqs.x[1], statetoid, majpmapper)
     crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]
     ((prob isa DiscreteProblem) && !isempty(vrjs)) && error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
-    jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, isempty(majs) ? nothing : majs)
+    jset = JumpSet(Tuple(vrjs), Tuple(crjs), nothing, majs)
 
     if needs_vartojumps_map(aggregator) || needs_depgraph(aggregator)
         jdeps = asgraph(js)
@@ -306,7 +294,8 @@ function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
         vtoj = nothing; jtov = nothing; jtoj = nothing
     end
 
-    JumpProblem(prob, aggregator, jset; dep_graph=jtoj, vartojumps_map=vtoj, jumptovars_map=jtov, kwargs...)
+    JumpProblem(prob, aggregator, jset; dep_graph=jtoj, vartojumps_map=vtoj, jumptovars_map=jtov, 
+                scale_rates=false, nocopy=true, kwargs...)
 end
 
 
@@ -337,4 +326,50 @@ function modified_states!(mstates, jump::MassActionJump, sts)
     for (state,stoich) in jump.net_stoch
         any(isequal(state), sts) && push!(mstates, state)
     end
+end
+
+
+
+###################### parameter mapper ###########################
+struct JumpSysMajParamMapper{U,V,W}
+    paramexprs::U     # the parameter expressions to use for each jump rate constant
+    sympars::V        # parameters(sys) from the underlying JumpSystem
+    subdict           # mapping from an element of parameters(sys) to its current numerical value
+end
+
+function JumpSysMajParamMapper(js::JumpSystem, p; jseqs=nothing, rateconsttype=Float64)
+    eqs        = (jseqs === nothing) ? equations(js) : jseqs
+    paramexprs = [maj.scaled_rates for maj in eqs.x[1]]
+    psyms      = parameters(js)
+    paramdict  = Dict(value(k) => value(v)  for (k, v) in zip(psyms,p))
+    JumpSysMajParamMapper{typeof(paramexprs),typeof(psyms),rateconsttype}(paramexprs, psyms, paramdict)
+end
+
+function updateparams!(ratemap::JumpSysMajParamMapper{U,V,W}, params) where {U <: AbstractArray, V <: AbstractArray, W}
+    for (i,p) in enumerate(params)
+        sympar = ratemap.sympars[i]
+        ratemap.subdict[sympar] = p
+    end
+    nothing
+end
+
+function updateparams!(::JumpSysMajParamMapper{U,V,W}, params::Nothing) where {U <: AbstractArray, V <: AbstractArray, W}
+    nothing
+end
+
+
+# create the initial parameter vector for use in a MassActionJump
+function (ratemap::JumpSysMajParamMapper{U,V,W})(params) where {U <: AbstractArray, V <: AbstractArray, W}
+    updateparams!(ratemap, params)
+    [convert(W,value(substitute(paramexpr, ratemap.subdict))) for paramexpr in ratemap.paramexprs]
+end
+
+# update a maj with parameter vectors
+function (ratemap::JumpSysMajParamMapper{U,V,W})(maj::MassActionJump, newparams; scale_rates, kwargs...) where {U <: AbstractArray, V <: AbstractArray, W}
+    updateparams!(ratemap, newparams)
+    for i in 1:get_num_majumps(maj)
+        maj.scaled_rates[i] = convert(W,value(substitute(ratemap.paramexprs[i], ratemap.subdict)))
+    end
+    scale_rates && DiffEqJump.scalerates!(maj.scaled_rates, maj.reactant_stoch)
+    nothing
 end

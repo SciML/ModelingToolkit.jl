@@ -1,6 +1,7 @@
 module SystemStructures
 
 using DataStructures
+using Symbolics: linear_expansion, unwrap
 using SymbolicUtils: istree, operation, arguments, Symbolic
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
@@ -228,13 +229,13 @@ function find_linear_equations(sys)
         term = value(eq.rhs - eq.lhs)
         for j in 𝑠neighbors(graph, i)
             var = fullvars[j]
-            c = expand_derivatives(Differential(var)(term), false)
-            # test if `var` is linear in `eq`.
-            if !(c isa Symbolic) && c isa Number
-                if c == 1 || c == -1
-                    c = convert(Integer, c)
-                    linear_term += c * var
-                    push!(coeffs, c)
+            a, b, islinear = linear_expansion(term, var)
+            a = unwrap(a)
+            if islinear && !(a isa Symbolic) && a isa Number
+                if a == 1 || a == -1
+                    a = convert(Integer, a)
+                    linear_term += a * var
+                    push!(coeffs, a)
                 else
                     all_int_vars = false
                 end
