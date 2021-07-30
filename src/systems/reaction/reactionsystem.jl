@@ -155,7 +155,7 @@ struct ReactionSystem <: AbstractSystem
     """
     defaults::Dict
     """Algebraic equations that impose constraints on species."""
-    algebraic_eqs::Vector{Equation}
+    algebraic_eqs::Union{Nothing,Vector{Equation}}
 
     function ReactionSystem(eqs, iv, states, ps, observed, name, systems, defaults, algebraic_eqs)
         iv′ = value(iv)
