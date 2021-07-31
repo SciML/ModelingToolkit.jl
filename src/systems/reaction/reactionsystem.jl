@@ -60,15 +60,10 @@ struct Reaction{S, T <: Number}
     `true` if `rate` represents the full reaction rate law.
     """
     only_use_rate::Bool
-    """
-    type: type of the system
-    """
-    connection_type::Any
 end
 
 function Reaction(rate, subs, prods, substoich, prodstoich;
                   netstoich=nothing, only_use_rate=false,
-                  connection_type=nothing,
                   kwargs...)
 
     (isnothing(prods)&&isnothing(subs)) && error("A reaction requires a non-nothing substrate or product vector.")
@@ -86,7 +81,7 @@ function Reaction(rate, subs, prods, substoich, prodstoich;
     subs = value.(subs)
     prods = value.(prods)
     ns = isnothing(netstoich) ? get_netstoich(subs, prods, substoich, prodstoich) : netstoich
-    Reaction(value(rate), subs, prods, substoich, prodstoich, ns, only_use_rate, connection_type)
+    Reaction(value(rate), subs, prods, substoich, prodstoich, ns, only_use_rate)
 end
 
 
@@ -154,14 +149,19 @@ struct ReactionSystem <: AbstractSystem
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
+    """
+    type: type of the system
+    """
+    connection_type::Any
 
-    function ReactionSystem(eqs, iv, states, ps, observed, name, systems, defaults)
+
+    function ReactionSystem(eqs, iv, states, ps, observed, name, systems, defaults, connection_type)
         iv′ = value(iv)
         states′ = value.(states)
         ps′ = value.(ps)
         check_variables(states′, iv′)
         check_parameters(ps′, iv′)
-        new(collect(eqs), iv′, states′, ps′, observed, name, systems, defaults)
+        new(collect(eqs), iv′, states′, ps′, observed, name, systems, defaults, connection_type)
     end
 end
 
@@ -171,10 +171,11 @@ function ReactionSystem(eqs, iv, species, params;
                         name = gensym(:ReactionSystem),
                         default_u0=Dict(),
                         default_p=Dict(),
-                        defaults=_merge(Dict(default_u0), Dict(default_p)))
+                        defaults=_merge(Dict(default_u0), Dict(default_p)),
+                        connection_type=nothing)
 
     #isempty(species) && error("ReactionSystems require at least one species.")
-    ReactionSystem(eqs, iv, species, params, observed, name, systems, defaults)
+    ReactionSystem(eqs, iv, species, params, observed, name, systems, defaults, connection_type)
 end
 
 function ReactionSystem(iv; kwargs...)
