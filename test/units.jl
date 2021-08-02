@@ -1,4 +1,4 @@
-using ModelingToolkit, Unitful
+using ModelingToolkit, Unitful, OrdinaryDiffEq
 using Test
 MT = ModelingToolkit
 @parameters τ [unit = u"ms"]
@@ -9,13 +9,8 @@ D = Differential(t)
 @test MT.vartype(E) == u"kJ"
 @test MT.vartype(τ) == u"ms"
 
-eqs = [D(E) ~ P - E/τ]
-sys = ODESystem(eqs)
-
 @test MT.instantiate(eqs[1].lhs) == 1.0u"MW"
 @test MT.instantiate(eqs[1].rhs) == 1.0u"MW"
-@test MT.validate(eqs[1])
-@test MT.validate(sys)
 
 @test MT.instantiate(0.5) == 1.0
 @test MT.instantiate(t) == 1.0u"ms"
@@ -38,6 +33,11 @@ sys = ODESystem(eqs)
 @test !MT.validate(E^1.5 ~ E^(t/τ))
 @test MT.validate(E^(t/τ) ~ E^(t/τ))
 
+eqs = [D(E) ~ P - E/τ
+        0.0u"MW" ~ P]
+@test MT.validate(eqs[1])
+@test MT.validate(eqs[2])
+sys = ODESystem(eqs)
 sys = ODESystem(eqs, t, [P, E], [τ])
 @test MT.validate(sys)
 

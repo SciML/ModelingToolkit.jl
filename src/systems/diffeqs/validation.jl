@@ -10,6 +10,7 @@ end
 vartype(x::Num) = vartype(value(x))
 
 instantiate(x) = 1
+instantiate(x::Unitful.Quantity) = 1 * Unitful.unit(x)
 instantiate(x::Num) = instantiate(value(x))
 function instantiate(x::Symbolic)
     vx = value(x)
