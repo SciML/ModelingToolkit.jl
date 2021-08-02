@@ -1,3 +1,4 @@
+using Symbolics: variable
 """
 $(TYPEDSIGNATURES)
 
@@ -72,23 +73,23 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     de
 end
 
-_defvaridx(x, i, t) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x, i))))
-_defvar(x, t) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x))))
+_defvaridx(x, i, t) = variable(x, i, T=SymbolicUtils.FnType{Tuple,Real})
+_defvar(x, t) = variable(x, T=SymbolicUtils.FnType{Tuple,Real})
 
 function define_vars(u,t)
-    _vars = [_defvaridx(:x, i, t)(ModelingToolkit.value(t)) for i in eachindex(u)]
+    _vars = [_defvaridx(:x, i, t)(t) for i in eachindex(u)]
 end
 
 function define_vars(u::Union{SLArray,LArray},t)
-    _vars = [_defvar(x, t)(ModelingToolkit.value(t)) for x in LabelledArrays.symnames(typeof(u))]
+    _vars = [_defvar(x, t)(t) for x in LabelledArrays.symnames(typeof(u))]
 end
 
 function define_params(p)
-    [Num(toparam(Sym{Real}(nameof(Variable(:α, i))))) for i in eachindex(p)]
+    [toparam(variable(:α, i)) for i in eachindex(p)]
 end
 
 function define_params(p::Union{SLArray,LArray})
-    [Num(toparam(Sym{Real}(nameof(Variable(x))))) for x in LabelledArrays.symnames(typeof(p))]
+    [toparam(variable(x)) for x in LabelledArrays.symnames(typeof(p))]
 end
 
 
