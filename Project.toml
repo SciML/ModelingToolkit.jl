@@ -1,7 +1,7 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
 authors = ["Chris Rackauckas <accounts@chrisrackauckas.com>"]
-version = "5.25.1"
+version = "5.26.0"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -50,7 +50,7 @@ ConstructionBase = "1"
 DataStructures = "0.17, 0.18"
 DiffEqBase = "6.54.0"
 DiffEqCallbacks = "2.16"
-DiffEqJump = "6.7.5"
+DiffEqJump = "7.0"
 DiffRules = "0.1, 1.0"
 Distributions = "0.23, 0.24, 0.25"
 DocStringExtensions = "0.7, 0.8"
