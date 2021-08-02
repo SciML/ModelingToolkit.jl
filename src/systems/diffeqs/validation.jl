@@ -3,30 +3,30 @@ Base.:*(x::Union{Num,Symbolic},y::Unitful.AbstractQuantity) = x * y
 
 function vartype(x::Symbolic)
     if !(x.metadata isa Nothing)
-        return haskey(x.metadata,VariableUnit) ? x.metadata[VariableUnit] : 1.0
+        return haskey(x.metadata, VariableUnit) ? x.metadata[VariableUnit] : 1
     end
-    1.0
+    1
 end
 vartype(x::Num) = vartype(value(x))
 
-instantiate(x) = 1.0
+instantiate(x) = 1
 instantiate(x::Num) = instantiate(value(x))
 function instantiate(x::Symbolic)
     vx = value(x)
     if vx isa Sym || operation(vx) isa Sym
-        return oneunit(1 * ModelingToolkit.vartype(x))
     elseif operation(vx) isa Differential
+        return oneunit(1 * vartype(vx))
         return instantiate(arguments(vx)[1]) / instantiate(arguments(arguments(vx)[1])[1])
     elseif vx isa Pow
         pargs = arguments(vx)
         base,expon = instantiate.(pargs)
         uconvert(NoUnits, expon) # This acts as an assertion
-        return base == 1.0 ? 1.0 : operation(vx)(base, pargs[2])
+        return base == 1 ? 1 : operation(vx)(base, pargs[2])
     elseif vx isa Add # Cannot simply add the units b/c they may differ in magnitude (eg, kg vs g)
         terms = instantiate.(arguments(vx))
         firstunit = unit(terms[1])
         @assert all(map(x -> ustrip(firstunit, x) == 1, terms[2:end]))
-        return 1.0 * firstunit
+        return 1 * firstunit
     else
         return oneunit(operation(vx)(instantiate.(arguments(vx))...))
     end
