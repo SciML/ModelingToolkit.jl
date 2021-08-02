@@ -13,9 +13,9 @@ instantiate(x) = 1
 instantiate(x::Num) = instantiate(value(x))
 function instantiate(x::Symbolic)
     vx = value(x)
-    if vx isa Sym || operation(vx) isa Sym
-    elseif operation(vx) isa Differential
+    if vx isa Sym || operation(vx) isa Sym || (operation(vx) isa Term && operation(vx).f == getindex) || vx isa Symbolics.ArrayOp
         return oneunit(1 * vartype(vx))
+    elseif operation(vx) isa Differential || operation(vx) isa Difference
         return instantiate(arguments(vx)[1]) / instantiate(arguments(arguments(vx)[1])[1])
     elseif vx isa Pow
         pargs = arguments(vx)
@@ -27,6 +27,12 @@ function instantiate(x::Symbolic)
         firstunit = unit(terms[1])
         @assert all(map(x -> ustrip(firstunit, x) == 1, terms[2:end]))
         return 1 * firstunit
+    elseif operation(vx) == Symbolics._mapreduce 
+        if vx.arguments[2] == +
+            instantiate(vx.arguments[3])
+        else
+            throw(ArgumentError("Unknown array operation $vx"))
+        end
     else
         return oneunit(operation(vx)(instantiate.(arguments(vx))...))
     end
