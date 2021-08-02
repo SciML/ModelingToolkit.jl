@@ -9,8 +9,6 @@ D = Differential(t)
 @test MT.vartype(E) == u"kJ"
 @test MT.vartype(τ) == u"ms"
 
-@test MT.instantiate(eqs[1].lhs) == 1.0u"MW"
-@test MT.instantiate(eqs[1].rhs) == 1.0u"MW"
 
 @test MT.instantiate(0.5) == 1.0
 @test MT.instantiate(t) == 1.0u"ms"
@@ -35,6 +33,8 @@ D = Differential(t)
 
 eqs = [D(E) ~ P - E/τ
         0.0u"MW" ~ P]
+@test MT.instantiate(eqs[1].lhs) == 1.0u"MW"
+@test MT.instantiate(eqs[1].rhs) == 1.0u"MW"
 @test MT.validate(eqs[1])
 @test MT.validate(eqs[2])
 sys = ODESystem(eqs)
