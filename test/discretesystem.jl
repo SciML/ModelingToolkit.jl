@@ -64,18 +64,12 @@ D = Difference(t; dt=0.1)
 
 # Equations
 eqs = [
-    D(x(t)) ~ 0.9x(t) - 0.1x(t-1),
+    D(x(t)) ~ 0.4x(t) + 0.3x(t-1) + 0.2x(t-2) + 0.1x(t-3),
 ]
-
-linearized_eqs = [
-    D(x(t)) ~ 0.9x(t) + 0.1var"x(t - 1)",
-    var"x(t - 1)" ~ x(t),
-]
-
-@test linearized_eqs == linearize_eqs(sys, eqs)
 
 # System
 sys = DiscreteSystem(eqs,t,[x(t)],[])
 
-
- 
+eqs, max_delay = ModelingToolkit.linearize_eqs(sys)
+@test max_delay == 3
+# @test linearized_eqs == linearize_eqs(sys, eqs)

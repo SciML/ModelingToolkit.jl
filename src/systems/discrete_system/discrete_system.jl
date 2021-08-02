@@ -112,7 +112,8 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     dvs = states(sys)
     ps = parameters(sys)
     eqs = equations(sys)
-    eqs = linearize_eqs(sys, eqs)
+    eqs, max_delay = linearize_eqs(sys, eqs)
+    # TODO: Add equations to update delayed variables
     # defs = defaults(sys)
     t = get_iv(sys)
     u0 = varmap_to_vars(u0map,dvs)
@@ -127,30 +128,40 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
 end
 
 function linearize_eqs(sys, eqs=sys.eqs)
-    for eq in eqs
-        max_delay = 0
-        eq.rhs = get_delayed_var(sys, eq.rhs)
+    max_delay = 0
+    r = @rule ~t => begin
+        if ~t isa Symbolics.Term && any(isequal((~t).f), Symbolics.operation.(sys.states)) && is_delay(sys, Symbolics.arguments(~t))
+            delay = get_delay_val(sys, first(Symbolics.arguments(~t)))
+            if delay > max_delay
+                max_delay = delay
+            end
+            var_sym = Symbol((~t).f.name, Symbol("("), join(Symbolics.tosymbol.(Symbolics.arguments(~t)), Symbol(",")), Symbol(")"))
+            Symbolics.variable(var_sym)
+        else
+            ~t
+        end
     end
-    eqs
+    rw = SymbolicUtils.Postwalk(r)
+    [
+        Symbolics.value(eq.lhs) ~ Symbolics.value(rw(eq.rhs))
+        for eq in eqs
+    ], max_delay
 end
 
-function is_func_of_iv(sys, args::AbstractVector)
-    varss = get_variables.(args)
-    all(isequal(var,sys.iv) for vars in varss for var in vars)
+function get_delay_val(sys, x)
+    delay = x - sys.iv
+    delay > 0 && error("Forward delay not permitted")
+    return -delay
 end
 
-function get_delayed_var(sys, t)
-    if t isa Term && any(isequal(t.f), operation.(sys.states)) && is_func_of_iv(sys, arguments(t))
-        name_ij = Symbol(t.f.name, Symbol("("), join(tosymbol.(arguments(t)), Symbol(",")), Symbol(")"))
-        return first(@variables $name_ij)
-    elseif t isa Term
-        t.arguments = get_delayed_var.(t.arguments) 
-        return t
-    elseif t isa SymbolicUtils.Add #TODO: or other ops
-        return t #TODO
-    else
-        return t
-    end
+function is_delay(sys, args::AbstractVector)
+    length(args) > 1 && return false
+    isequal(first(args), sys.iv) && return false
+    delay = sys.iv - first(args)
+    delay isa Integer || 
+    (delay isa AbstractFloat && isinteger(delay)) ||
+    (delay isa Num && isinteger(delay.val))
+    
 end
 
 check_difference_variables(eq) = check_operator_variables(eq, Difference)
