@@ -1,26 +1,72 @@
 Base.:*(x::Union{Num,Symbolic},y::Unitful.AbstractQuantity) = x * y
 
-instantiate(x::Sym{Real}) = 1.0
-instantiate(x::Symbolic) = oneunit(1*ModelingToolkit.vartype(x))
-function instantiate(x::Num)
-    x = value(x)
-    if operation(x) isa Sym
-        return instantiate(operation(x))
-    elseif operation(x) isa Differential
-        instantiate(arguments(x)[1])/instantiate(arguments(x)[1].args[1])
+
+function vartype(x::Symbolic)
+    if !(x.metadata isa Nothing)
+        return haskey(x.metadata,VariableUnit) ? x.metadata[VariableUnit] : 1.0
+    end
+    1.0
+end
+vartype(x::Num) = vartype(value(x))
+
+instantiate(x) = 1.0
+instantiate(x::Num) = instantiate(value(x))
+function instantiate(x::Symbolic)
+    vx = value(x)
+    if vx isa Sym || operation(vx) isa Sym
+        return oneunit(1 * ModelingToolkit.vartype(x))
+    elseif operation(vx) isa Differential
+        return instantiate(arguments(vx)[1]) / instantiate(arguments(arguments(vx)[1])[1])
+    elseif vx isa Pow
+        pargs = arguments(vx)
+        base,expon = instantiate.(pargs)
+        uconvert(NoUnits, expon) # This acts as an assertion
+        return base == 1.0 ? 1.0 : operation(vx)(base, pargs[2])
+    elseif vx isa Add # Cannot simply add the units b/c they may differ in magnitude (eg, kg vs g)
+        terms = instantiate.(arguments(vx))
+        firstunit = unit(terms[1])
+        @assert all(map(x -> ustrip(firstunit, x) == 1, terms[2:end]))
+        return 1.0 * firstunit
     else
-        operation(x)(instantiate.(arguments(x))...)
+        return oneunit(operation(vx)(instantiate.(arguments(vx))...))
     end
 end
 
-function validate(eq::ModelingToolkit.Equation)
+function validate(eq::ModelingToolkit.Equation; eqnum = 1)
+    lhs = rhs = nothing
     try
-        return typeof(instantiate(eq.lhs)) == typeof(instantiate(eq.rhs))
-    catch
-        return false
+        lhs = instantiate(eq.lhs)
+    catch err
+        if err isa Unitful.DimensionError 
+            @warn("In left-hand side of eq. #$eqnum: $(eq.lhs),  $(err.x) and $(err.y) are not dimensionally compatible.")
+        elseif err isa MethodError
+            @warn("In right-hand side of eq. #$eqnum: $(err.f) doesn't accept $(err.args).")
+        else
+            rethrow()
+        end
     end
+    try
+        rhs = instantiate(eq.rhs)
+    catch err
+        if err isa Unitful.DimensionError
+            @warn("In right-hand side of eq. #$eqnum: $(eq.rhs), $(err.x) and $(err.y) are not dimensionally compatible.")
+        elseif err isa MethodError
+            @warn("In right-hand side of eq. #$eqnum: $(err.f) doesn't accept $(err.args).")
+        else
+            rethrow()
+        end
+    end
+    if (rhs !== nothing) && (lhs !== nothing)
+        if !isequal(lhs, rhs)
+            @warn("In eq. #$eqnum, left-side units ($lhs) and right-side units ($rhs) don't match.")
+        end
+    end
+    (rhs !== nothing) && (lhs !== nothing) && isequal(lhs, rhs)
 end
 
-function validate(sys::AbstractODESystem)
-    all(validate.(equations(sys)))
+function validate(eqs::Vector{ModelingToolkit.Equation})
+    correct = [validate(eqs[idx],eqnum=idx) for idx in 1:length(eqs)]
+    all(correct) || throw(ArgumentError("Invalid equations, see warnings for details."))
 end
+
+validate(sys::AbstractODESystem) = validate(equations(sys))
