@@ -40,7 +40,7 @@ function validate(eq::ModelingToolkit.Equation; eqnum = 1)
         if err isa Unitful.DimensionError 
             @warn("In left-hand side of eq. #$eqnum: $(eq.lhs),  $(err.x) and $(err.y) are not dimensionally compatible.")
         elseif err isa MethodError
-            @warn("In right-hand side of eq. #$eqnum: $(err.f) doesn't accept $(err.args).")
+            @warn("In left-hand side of eq. #$eqnum: $(err.f) doesn't accept $(err.args).")
         else
             rethrow()
         end
