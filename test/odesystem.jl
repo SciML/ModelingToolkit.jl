@@ -319,7 +319,7 @@ ode = ODESystem(eq)
 end
 
 #Issue 998
-@parameters t 
+@parameters t
 pars = []
 vars = @variables((u1,))
 der = Differential(t)

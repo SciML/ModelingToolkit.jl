@@ -237,6 +237,11 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
     if has_var_to_name(sys)
         avs = get_var_to_name(sys)
         v = get(avs, name, nothing)
+        if istree(v) && symtype(operation(v)) <: FnType
+            ov = operation(v)
+            @set! ov.metadata = SymbolicUtils.metadata(v)
+            return similarterm(v, renamespace(sys, ov), arguments(v), symtype(v), metadata=SymbolicUtils.metadata(v))
+        end
         v === nothing || return namespace ? renamespace(sys, v) : v
     else
         sts = get_states(sys)
