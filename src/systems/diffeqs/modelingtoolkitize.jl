@@ -1,4 +1,3 @@
-using Symbolics: variable
 """
 $(TYPEDSIGNATURES)
 

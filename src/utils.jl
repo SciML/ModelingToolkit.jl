@@ -79,12 +79,6 @@ end
 
 _merge(d1, d2) = merge(todict(d1), todict(d2))
 
-function indepvar2depvar(s::Sym, args...)
-    T = FnType{NTuple{length(args)}, symtype(s)}
-    ns = Sym{T}(nameof(s))(args...)
-    @set! ns.metadata = s.metadata
-end
-
 function _readable_code(ex)
     ex isa Expr || return ex
     if ex.head === :call

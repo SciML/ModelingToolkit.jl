@@ -291,7 +291,7 @@ function convert_system(::Type{<:ODESystem}, sys, t; name=nameof(sys))
             newsts[i] = ns
             varmap[s] = ns
         else
-            ns = indepvar2depvar(s, t)
+            ns = variable(getname(s); T=FnType)(t)
             newsts[i] = ns
             varmap[s] = ns
         end
