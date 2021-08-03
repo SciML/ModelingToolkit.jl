@@ -90,7 +90,7 @@ struct SDESystem <: AbstractODESystem
         check_variables(dvs,iv)
         check_parameters(ps,iv)
         check_equations(deqs,iv)
-        validate(deqs)
+        check_units(deqs,neqs)
         new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
     end
 end

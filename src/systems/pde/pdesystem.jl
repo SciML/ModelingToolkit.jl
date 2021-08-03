@@ -61,6 +61,7 @@ struct PDESystem <: ModelingToolkit.AbstractSystem
                                    defaults=Dict(),
                                    connection_type=nothing,
                                   )
+        check_units(eqs)
         new(eqs, bcs, domain, indvars, depvars, ps, defaults, connection_type)
     end
 end

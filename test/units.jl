@@ -5,41 +5,40 @@ MT = ModelingToolkit
 @variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 
-@test MT.vartype(t) == u"ms"
-@test MT.vartype(E) == u"kJ"
-@test MT.vartype(τ) == u"ms"
+@test MT.get_units(t) == 1u"ms"
+@test MT.get_units(E) == 1u"kJ"
+@test MT.get_units(τ) == 1u"ms"
 
+@test MT.get_units(0.5) == 1.0
+@test MT.get_units(t) == 1.0u"ms"
+@test MT.get_units(P) == 1.0u"MW"
+@test MT.get_units(τ) == 1.0u"ms"
 
-@test MT.instantiate(0.5) == 1.0
-@test MT.instantiate(t) == 1.0u"ms"
-@test MT.instantiate(P) == 1.0u"MW"
-@test MT.instantiate(τ) == 1.0u"ms"
+@test MT.get_units(τ^-1) == 1/u"ms"
+@test MT.get_units(D(E)) == 1.0u"MW"
+@test MT.get_units(E/τ) == 1.0u"MW"
+@test MT.get_units(2*P) == 1.0u"MW"
+@test MT.get_units(t/τ) == 1.0
+@test MT.get_units(P - E/τ)/1.0u"MW" == 1.0
 
-@test MT.instantiate(τ^-1) == 1/u"ms"
-@test MT.instantiate(D(E)) == 1.0u"MW"
-@test MT.instantiate(E/τ) == 1.0u"MW"
-@test MT.instantiate(2*P) == 1.0u"MW"
-@test MT.instantiate(t/τ) == 1.0
-@test MT.instantiate(P - E/τ)/1.0u"MW" == 1.0
-
-@test MT.instantiate(1.0^(t/τ)) == 1.0
-@test MT.instantiate(exp(t/τ)) == 1.0
-@test MT.instantiate(sin(t/τ)) == 1.0
-@test MT.instantiate(sin(1u"rad")) == 1.0
-@test MT.instantiate(t^2) == 1.0u"ms"^2
+@test MT.get_units(1.0^(t/τ)) == 1.0
+@test MT.get_units(exp(t/τ)) == 1.0
+@test MT.get_units(sin(t/τ)) == 1.0
+@test MT.get_units(sin(1u"rad")) == 1.0
+@test MT.get_units(t^2) == 1.0u"ms"^2
 
 @test !MT.validate(E^1.5 ~ E^(t/τ))
 @test MT.validate(E^(t/τ) ~ E^(t/τ))
 
 eqs = [D(E) ~ P - E/τ
         0.0u"MW" ~ P]
-@test MT.instantiate(eqs[1].lhs) == 1.0u"MW"
-@test MT.instantiate(eqs[1].rhs) == 1.0u"MW"
+@test MT.get_units(eqs[1].lhs) == 1.0u"MW"
+@test MT.get_units(eqs[1].rhs) == 1.0u"MW"
 @test MT.validate(eqs[1])
 @test MT.validate(eqs[2])
+@test MT.validate(eqs)
 sys = ODESystem(eqs)
 sys = ODESystem(eqs, t, [P, E], [τ])
-@test MT.validate(sys)
 
 @test !MT.validate(D(D(E)) ~ P)
 @test !MT.validate(0 ~ P + E*τ)
@@ -113,3 +112,30 @@ eqs = [D(y[1]) ~ -k[1]*y[1] + k[3]*y[2]*y[3],
        0 ~  y[1] + y[2] + y[3] - 1]
 
 sys = ODESystem(eqs,t,y,k)
+
+# Nonlinear system
+@parameters a [unit = u"kg"^-1]
+@variables x [unit = u"kg"]
+eqs = [
+    0 ~ a*x 
+]
+nls = NonlinearSystem(eqs, [x], [a])
+
+# SDE test w/ noise vector
+@parameters τ [unit = u"ms"] Q [unit = u"MW"]
+@variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
+D = Differential(t)
+eqs = [D(E) ~ P - E/τ
+      P ~ Q]
+
+noiseeqs = [0.1u"MW",
+            0.1u"MW"]
+sys = SDESystem(eqs,noiseeqs,t,[P,E],[τ,Q])
+# With noise matrix
+noiseeqs = [0.1u"MW" 0.1u"MW"
+            0.1u"MW" 0.1u"MW"]
+sys = SDESystem(eqs,noiseeqs,t,[P,E],[τ,Q])
+
+noiseeqs = [0.1u"MW" 0.1u"MW"
+            0.1u"MW" 0.1u"s"]
+@test !MT.validate(eqs,noiseeqs)
