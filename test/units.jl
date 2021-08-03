@@ -139,3 +139,29 @@ sys = SDESystem(eqs,noiseeqs,t,[P,E],[τ,Q])
 noiseeqs = [0.1u"MW" 0.1u"MW"
             0.1u"MW" 0.1u"s"]
 @test !MT.validate(eqs,noiseeqs)
+
+#Test non-trivial simplifications
+@variables t [unit = u"s"] V(t) [unit = u"m"^3] L(t) [unit = u"m"]
+@parameters v [unit = u"m/s"] r [unit =u"m"^3/u"s"]
+D = Differential(t)
+eqs = [D(L) ~ v,
+       V ~ L^3]
+sys = ODESystem(eqs)
+sys_simple = structural_simplify(sys)
+
+eqs = [D(V) ~ r,
+       V ~ L^3]
+sys = ODESystem(eqs)
+sys_simple = structural_simplify(sys)
+
+@variables V [unit = u"m"^3] L [unit = u"m"]
+@parameters v [unit = u"m/s"] r [unit =u"m"^3/u"s"] t [unit = u"s"]
+eqs = [V ~ r*t,
+       V ~ L^3]
+sys = NonlinearSystem(eqs,[V,L],[t,r])
+sys_simple = structural_simplify(sys)
+
+eqs = [L ~ v*t,
+       V ~ L^3]
+sys = NonlinearSystem(eqs,[V,L],[t,r])
+sys_simple = structural_simplify(sys)

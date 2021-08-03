@@ -155,12 +155,14 @@ struct ReactionSystem <: AbstractSystem
     connection_type::Any
 
 
-    function ReactionSystem(eqs, iv, states, ps, observed, name, systems, defaults, connection_type)
-        iv′ = value(iv)
-        states′ = value.(states)
-        ps′ = value.(ps)
-        check_variables(states′, iv′)
-        check_parameters(ps′, iv′)
+    function ReactionSystem(eqs, iv, states, ps, observed, name, systems, defaults, connection_type; checks::Bool = true)
+        if checks
+            iv′ = value(iv)
+            states′ = value.(states)
+            ps′ = value.(ps)
+            check_variables(states′, iv′)
+            check_parameters(ps′, iv′)
+        end
         new(collect(eqs), iv′, states′, ps′, observed, name, systems, defaults, connection_type)
     end
 end

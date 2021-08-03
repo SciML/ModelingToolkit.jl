@@ -84,11 +84,13 @@ struct ODESystem <: AbstractODESystem
     """
     connection_type::Any
 
-    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type)
-        check_variables(dvs,iv)
-        check_parameters(ps,iv)
-        check_equations(deqs,iv)
-        check_units(deqs)
+    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type; checks::Bool = true)
+        if checks
+            check_variables(dvs,iv)
+            check_parameters(ps,iv)
+            check_equations(deqs,iv)
+            check_units(deqs)
+        end
         new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type)
     end
 end

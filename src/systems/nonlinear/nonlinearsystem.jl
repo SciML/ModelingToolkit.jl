@@ -54,8 +54,10 @@ struct NonlinearSystem <: AbstractSystem
     type: type of the system
     """
     connection_type::Any
-    function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, structure, connection_type)
-        check_units(eqs)
+    function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, structure, connection_type; checks::Bool = true)
+        if checks
+            check_units(eqs)
+        end
         new(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, structure, connection_type)
     end
 end

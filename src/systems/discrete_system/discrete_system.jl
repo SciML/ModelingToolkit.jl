@@ -54,10 +54,12 @@ struct DiscreteSystem <: AbstractSystem
     in `DiscreteSystem`.
     """
     default_p::Dict
-    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p)
-        check_variables(dvs,iv)
-        check_parameters(ps,iv)
-        check_units(discreteEqs)
+    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p; checks::Bool = true)
+        if checks
+            check_variables(dvs, iv)
+            check_parameters(ps, iv)
+            check_units(discreteEqs)
+        end
         new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p)
     end
 end

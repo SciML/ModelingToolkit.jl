@@ -41,6 +41,9 @@ struct OptimizationSystem <: AbstractSystem
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
+    function OptimizationSystem(op, states, ps, var_to_name, observed, equality_constraints, inequality_constraints, name, systems, defaults; checks::Bool = true)
+        new(op, states, ps, var_to_name, observed, equality_constraints, inequality_constraints, name, systems, defaults)
+    end
 end
 
 function OptimizationSystem(op, states, ps;
