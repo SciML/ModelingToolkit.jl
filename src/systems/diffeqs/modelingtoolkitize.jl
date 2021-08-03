@@ -106,10 +106,9 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     else
         p = prob.p
     end
-    var(x, i) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x, i))))
-    vars = ArrayInterface.restructure(prob.u0,[var(:x, i)(ModelingToolkit.value(t)) for i in eachindex(prob.u0)])
+    vars = ArrayInterface.restructure(prob.u0,[_defvaridx(:x, i, t)(t) for i in eachindex(prob.u0)])
     params = p isa DiffEqBase.NullParameters ? [] :
-             reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(p))
+             reshape([toparam(variable(:α, i)) for i in eachindex(p)],size(p))
 
     D = Differential(t)
 
