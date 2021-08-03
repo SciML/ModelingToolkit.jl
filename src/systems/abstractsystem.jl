@@ -220,7 +220,7 @@ function Base.propertynames(sys::AbstractSystem; private=false)
     end
 end
 
-Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true) = getvar(sys, name; namespace=namespace)
+Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true) = wrap(getvar(sys, name; namespace=namespace))
 function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
     sysname = nameof(sys)
     systems = get_systems(sys)
@@ -230,17 +230,13 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
     elseif !isempty(systems)
         i = findfirst(x->nameof(x)==name, systems)
         if i !== nothing
-            return namespace ? rename(systems[i], renamespace(sys, name)) : systems[i]
+            return namespace ? rename(systems[i], renamespace(nameof(sys), name)) : systems[i]
         end
     end
 
     if has_var_to_name(sys)
         avs = get_var_to_name(sys)
         v = get(avs, name, nothing)
-        if istree(v) && symtype(operation(v)) <: FnType
-            ov = metadata(operation(v), metadata(v))
-            return similarterm(v, renamespace(sys, ov), arguments(v), symtype(v), metadata=metadata(v))
-        end
         v === nothing || return namespace ? renamespace(sys, v) : v
     else
         sts = get_states(sys)
@@ -307,7 +303,17 @@ GlobalScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, GlobalScope(
 
 renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
 
-_renamespace(sys, x) = wrap(Namespace(sys, unwrap(x)))
+function _renamespace(sys, x)
+    v = unwrap(x)
+
+    if istree(v) && symtype(operation(v)) <: FnType
+        ov = metadata(operation(v), metadata(v))
+        return similarterm(v, renamespace(sys, ov), arguments(v), symtype(v), metadata=metadata(v))
+    end
+
+    Namespace(sys, v)
+end
+
 function renamespace(sys, x)
     x = unwrap(x)
     if x isa Symbolic
