@@ -53,13 +53,13 @@ function safe_get_units(term, info)
     side
 end
 
-function _validate(terms::Vector,labels::Vector; info::String = "")
-    equnits = safe_get_units.(terms,info.*labels)
-    allthere = all(map(x->x!==nothing,equnits))
+function _validate(terms::Vector, labels::Vector; info::String = "")
+    equnits = safe_get_units.(terms, info*", ".*labels)
+    allthere = all(map(x -> x!==nothing, equnits))
     allmatching = true
     if allthere
         for idx in 2:length(equnits)
-            if !isequal(equnits[1],equnits[idx])
+            if !isequal(equnits[1], equnits[idx])
                 allmatching = false
                 @warn("$info: units $(equnits[1]) for $(labels[1]) and $(equnits[idx]) for $(labels[idx]) do not match.")
             end
@@ -70,36 +70,36 @@ end
 
 function validate(eq::ModelingToolkit.Equation; info::String = "")
     labels = ["left-hand side", "right-hand side"]
-    terms = [eq.lhs,eq.rhs]
-    _validate(terms,labels,info = info)
+    terms = [eq.lhs, eq.rhs]
+    _validate(terms, labels, info = info)
 end
 
-function validate(eq::ModelingToolkit.Equation,noiseterm; info::String = "")
-    labels = ["left-hand side", "right-hand side","noise term"]
-    terms = [eq.lhs,eq.rhs,noiseterm]
-    _validate(terms,labels,info = info)
+function validate(eq::ModelingToolkit.Equation, noiseterm; info::String = "")
+    labels = ["left-hand side", "right-hand side", "noise term"]
+    terms = [eq.lhs, eq.rhs, noiseterm]
+    _validate(terms, labels, info = info)
 end
 
-function validate(eq::ModelingToolkit.Equation,noisevec::Vector; info::String = "")
-    labels = vcat(["left-hand side", "right-hand side"],"noise term #".* string.(1:length(noisevec)))
-    terms = vcat([eq.lhs,eq.rhs],noisevec)
-    _validate(terms,labels,info = info)
+function validate(eq::ModelingToolkit.Equation, noisevec::Vector; info::String = "")
+    labels = vcat(["left-hand side", "right-hand side"], "noise term #".* string.(1:length(noisevec)))
+    terms = vcat([eq.lhs, eq.rhs], noisevec)
+    _validate(terms, labels, info = info)
 end
 
 function validate(eqs::Vector{ModelingToolkit.Equation})
-    all([validate(eqs[idx],info = "In eq. #$idx") for idx in 1:length(eqs)])
+    all([validate(eqs[idx], info = "In eq. #$idx") for idx in 1:length(eqs)])
 end
 
-function validate(eqs::Vector{ModelingToolkit.Equation},noise::Vector)
-    all([validate(eqs[idx],noise[idx],info = "In eq. #$idx") for idx in 1:length(eqs)])
+function validate(eqs::Vector{ModelingToolkit.Equation}, noise::Vector)
+    all([validate(eqs[idx], noise[idx], info = "In eq. #$idx") for idx in 1:length(eqs)])
 end
 
-function validate(eqs::Vector{ModelingToolkit.Equation},noise::Matrix)
-    all([validate(eqs[idx],noise[idx,:],info = "In eq. #$idx") for idx in 1:length(eqs)])
+function validate(eqs::Vector{ModelingToolkit.Equation}, noise::Matrix)
+    all([validate(eqs[idx], noise[idx, :], info = "In eq. #$idx") for idx in 1:length(eqs)])
 end
 
 "Returns true iff units of equations are valid."
-validate(eqs::Vector) = validate(convert.(ModelingToolkit.Equation,eqs))
+validate(eqs::Vector) = validate(convert.(ModelingToolkit.Equation, eqs))
 
 "Throws error if units of equations are invalid."
 check_units(eqs...) = validate(eqs...) || throw(ArgumentError("Some equations had invalid units. See warnings for details."))
