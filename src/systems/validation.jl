@@ -5,34 +5,33 @@ get_units(x::Real) = 1
 get_units(x::Unitful.Quantity) = 1 * Unitful.unit(x)
 get_units(x::Num) = get_units(value(x))
 function get_units(x::Symbolic)
-    vx = value(x)
-    if vx isa Sym || operation(vx) isa Sym || (operation(vx) isa Term && operation(vx).f == getindex) || vx isa Symbolics.ArrayOp
+    if x isa Sym || operation(x) isa Sym || (operation(x) isa Term && operation(x).f == getindex) || x isa Symbolics.ArrayOp
         if x.metadata !== nothing
-            symunits = haskey(x.metadata, VariableUnit) ? x.metadata[VariableUnit] : 1
+            symunits = get(x.metadata, VariableUnit, 1)
         else
             symunits = 1
         end
         return oneunit(1 * symunits)
-    elseif operation(vx) isa Differential || operation(vx) isa Difference
-        return get_units(arguments(vx)[1]) / get_units(arguments(arguments(vx)[1])[1])
-    elseif vx isa Pow
-        pargs = arguments(vx)
+    elseif operation(x) isa Differential || operation(x) isa Difference
+        return get_units(arguments(x)[1]) / get_units(arguments(arguments(x)[1])[1])
+    elseif x isa Pow
+        pargs = arguments(x)
         base,expon = get_units.(pargs)
         uconvert(NoUnits, expon) # This acts as an assertion
-        return base == 1 ? 1 : operation(vx)(base, pargs[2])
-    elseif vx isa Add # Cannot simply add the units b/c they may differ in magnitude (eg, kg vs g)
-        terms = get_units.(arguments(vx))
+        return base == 1 ? 1 : operation(x)(base, pargs[2])
+    elseif x isa Add # Cannot simply add the units b/c they may differ in magnitude (eg, kg vs g)
+        terms = get_units.(arguments(x))
         firstunit = unit(terms[1])
         @assert all(map(x -> ustrip(firstunit, x) == 1, terms[2:end]))
         return 1 * firstunit
-    elseif operation(vx) == Symbolics._mapreduce 
-        if vx.arguments[2] == +
-            get_units(vx.arguments[3])
+    elseif operation(x) == Symbolics._mapreduce 
+        if x.arguments[2] == +
+            get_units(x.arguments[3])
         else
-            throw(ArgumentError("Unknown array operation $vx"))
+            throw(ArgumentError("Unknown array operation $x"))
         end
     else
-        return oneunit(operation(vx)(get_units.(arguments(vx))...))
+        return oneunit(operation(x)(get_units.(arguments(x))...))
     end
 end
 
@@ -88,10 +87,10 @@ function validate(jumps::ArrayPartition{<:Union{Any, Vector{<:JumpType}}}, t::Sy
     all([validate(jumps.x[idx], t, info = labels[idx]) for idx in 1:3])
 end
 
-validate(eq::ModelingToolkit.Reaction; info::String = "") = _validate([oderatelaw(eq)],["",], info = info)
-validate(eq::ModelingToolkit.Equation; info::String = "") = _validate([eq.lhs, eq.rhs],["left", "right"],info = info)
-validate(eq::ModelingToolkit.Equation, term::Union{Symbolic,Unitful.Quantity,Num}; info::String = "") = _validate([eq.lhs, eq.rhs, term],["left","right","noise"],info = info)
-validate(eq::ModelingToolkit.Equation, terms::Vector; info::String = "") = _validate(vcat([eq.lhs, eq.rhs], terms),vcat(["left", "right"], "noise #".*string.(1:length(terms))), info = info)
+validate(eq::ModelingToolkit.Reaction; info::String = "") = _validate([oderatelaw(eq)], ["",], info = info)
+validate(eq::ModelingToolkit.Equation; info::String = "") = _validate([eq.lhs, eq.rhs], ["left", "right"], info = info)
+validate(eq::ModelingToolkit.Equation, term::Union{Symbolic,Unitful.Quantity,Num}; info::String = "") = _validate([eq.lhs, eq.rhs, term], ["left","right","noise"], info = info)
+validate(eq::ModelingToolkit.Equation, terms::Vector; info::String = "") = _validate(vcat([eq.lhs, eq.rhs], terms), vcat(["left", "right"], "noise #".*string.(1:length(terms))), info = info)
 
 "Returns true iff units of equations are valid."
 validate(eqs::Vector; info::String = "") = all([validate(eqs[idx], info = info*"in eq. #$idx") for idx in 1:length(eqs)])
