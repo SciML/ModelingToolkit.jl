@@ -66,7 +66,7 @@ function NonlinearSystem(eqs, states, ps;
                          connection_type=nothing,
                          )
     # Move things over, but do not touch array expressions
-    eqs = eqs isa Vector{Equation} ? [0 ~ x.rhs - x.lhs : x for x in eqs] : eqs
+    eqs = eqs isa Vector{Equation} ? [0 ~ x.rhs - x.lhs for x in eqs] : eqs
 
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :NonlinearSystem, force=true)
