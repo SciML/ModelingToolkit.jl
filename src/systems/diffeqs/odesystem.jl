@@ -92,6 +92,29 @@ struct ODESystem <: AbstractODESystem
     end
 end
 
+function move_diffs(eq::Equation,r)
+    if !(eq.lhs isa Term && ModelingToolkit.operation(eq.lhs) isa Differential)
+       _eq = eq.rhs-eq.lhs
+       rhs = r(_eq)
+       if isnothing(rhs)
+           eq
+       else
+           lhs = _eq - rhs
+           @show lhs
+           if !(lhs isa Number) && ModelingToolkit.operation(lhs) isa Differential
+               lhs ~ -rhs
+           else
+               -lhs ~ rhs
+           end
+       end
+   else
+       eq
+   end
+end
+
+# Skip over array equations
+move_diffs(eq,r) = eq
+
 function ODESystem(
                    deqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    controls  = Num[],
@@ -103,7 +126,17 @@ function ODESystem(
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
                   )
-    deqs = collect(deqs)
+
+    # Equation is not in the canonical form
+    # Use a rule to find all g(u)*D(u) terms
+    # and move those to the lhs
+
+    D = Differential(iv)
+    r1 = SymbolicUtils.@rule *(~~a, D(~~b), ~~c) => 0
+    r2 = SymbolicUtils.@rule D(~~b) => 0
+    remove_diffs = SymbolicUtils.Postwalk(SymbolicUtils.Chain([r1,r2]))
+    deqs = [move_diffs(eq,remove_diffs) for eq in deqs]
+
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
 
     iv′ = value(scalarize(iv))

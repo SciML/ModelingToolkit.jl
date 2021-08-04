@@ -319,7 +319,7 @@ ode = ODESystem(eq)
 end
 
 #Issue 998
-@parameters t 
+@parameters t
 pars = []
 vars = @variables((u1,))
 der = Differential(t)
@@ -439,10 +439,39 @@ function periodic_difference_affect!(int)
     int.u += [int.u[2], 0]
 end
 
-difference_cb = ModelingToolkit.PeriodicCallback(periodic_difference_affect!, 0.1) 
+difference_cb = ModelingToolkit.PeriodicCallback(periodic_difference_affect!, 0.1)
 
 sol2 = solve(prob2, Tsit5(); callback=difference_cb, tstops=collect(prob.tspan[1]:0.1:prob.tspan[2])[2:end]
 )
 
 @test sol(0:0.01:1)[x] ≈ sol2(0:0.01:1)[1,:]
 @test sol(0:0.01:1)[y] ≈ sol2(0:0.01:1)[2,:]
+
+# Test equation side switching
+
+@variables t x(t) y(t)
+D = Differential(t)
+eqs = [0 ~ x + y - D(x)
+       x ~ y]
+sys = ODESystem(eqs)
+eqs2 = equations(sys)
+eqs3 = [D(x) ~ x + y,
+        0 ~ y-x]
+@test isequal(eqs2,eqs3)
+
+eqs = [0 ~ x + y + D(x)
+       x ~ y]
+sys = ODESystem(eqs)
+eqs2 = equations(sys)
+eqs3 = [D(x) ~ -x + -y,
+        0 ~ y-x]
+@test isequal(eqs2,eqs3)
+
+@parameters t
+@variables z[1:3](t)
+z = collect(z)
+@derivatives D'~t
+eqs = [D(z[i]) + z[i] ~ 0 for i in 1:3]
+sys = ODESystem(eqs,t)
+eqs2 = [D(z[i]) ~ -z[i] for i in 1:3]
+@test isequal(equations(sys),eqs2)
