@@ -68,40 +68,6 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
     allthere && allmatching
 end
 
-function validate(eq::ModelingToolkit.Equation; info::String = "")
-    labels = ["left-hand side", "right-hand side"]
-    terms = [eq.lhs, eq.rhs]
-    _validate(terms, labels, info = info)
-end
-
-function validate(eq::ModelingToolkit.Equation, noiseterm; info::String = "")
-    labels = ["left-hand side", "right-hand side", "noise term"]
-    terms = [eq.lhs, eq.rhs, noiseterm]
-    _validate(terms, labels, info = info)
-end
-
-function validate(eq::ModelingToolkit.Equation, noisevec::Vector; info::String = "")
-    labels = vcat(["left-hand side", "right-hand side"], "noise term #".* string.(1:length(noisevec)))
-    terms = vcat([eq.lhs, eq.rhs], noisevec)
-    _validate(terms, labels, info = info)
-end
-
-function validate(eqs::Vector{ModelingToolkit.Equation}; info::String = "")
-    all([validate(eqs[idx], info = info*"in eq. #$idx") for idx in 1:length(eqs)])
-end
-
-function validate(eqs::Vector{ModelingToolkit.Equation}, noise::Vector)
-    all([validate(eqs[idx], noise[idx], info = "in eq. #$idx") for idx in 1:length(eqs)])
-end
-
-function validate(eqs::Vector{ModelingToolkit.Equation}, noise::Matrix)
-    all([validate(eqs[idx], noise[idx, :], info = "in eq. #$idx") for idx in 1:length(eqs)])
-end
-
-function validate(terms::Vector{<:SymbolicUtils.Symbolic})
-   _validate(terms,["in term #$idx" for idx in 1:length(terms)],info = "")
-end
-
 function validate(jump::Union{ModelingToolkit.VariableRateJump, ModelingToolkit.ConstantRateJump}, t::Symbolic; info::String = "")
     _validate([jump.rate, 1/t], ["rate", "1/t"], info = info) && # Assuming the rate is per time units
     validate(jump.affect!,info = info) 
@@ -117,19 +83,21 @@ function validate(jump::ModelingToolkit.MassActionJump, t::Symbolic; info::Strin
     allgood && _validate([jump.scaled_rates, 1/(t*base_unitful^n)], ["scaled_rates", "1/(t*reactants^$n))"], info = info)
 end
 
-function validate(jumps::Vector{<:JumpType}, t::Symbolic; info::String = "")
-    all([validate(jumps[idx], t, info = info*"in jump #$idx") for idx in 1:length(jumps)])
-end
-
 function validate(jumps::ArrayPartition{<:Union{Any, Vector{<:JumpType}}}, t::Symbolic)
     labels = ["in Mass Action Jumps, ", "in Constant Rate Jumps, ", "in Variable Rate Jumps, "]
     all([validate(jumps.x[idx], t, info = labels[idx]) for idx in 1:3])
 end
 
-validate(eqs::Vector{<:ModelingToolkit.Reaction}) = validate(oderatelaw.(eqs))
+validate(eq::ModelingToolkit.Reaction; info::String = "") = _validate([oderatelaw(eq)],["",], info = info)
+validate(eq::ModelingToolkit.Equation; info::String = "") = _validate([eq.lhs, eq.rhs],["left", "right"],info = info)
+validate(eq::ModelingToolkit.Equation, term::Union{Symbolic,Unitful.Quantity,Num}; info::String = "") = _validate([eq.lhs, eq.rhs, term],["left","right","noise"],info = info)
+validate(eq::ModelingToolkit.Equation, terms::Vector; info::String = "") = _validate(vcat([eq.lhs, eq.rhs], terms),vcat(["left", "right"], "noise #".*string.(1:length(terms))), info = info)
 
 "Returns true iff units of equations are valid."
-validate(eqs::Vector{Any}) = length(eqs) == 0 
+validate(eqs::Vector; info::String = "") = all([validate(eqs[idx], info = info*"in eq. #$idx") for idx in 1:length(eqs)])
+validate(eqs::Vector, noise::Vector; info::String = "") = all([validate(eqs[idx], noise[idx], info = info*"in eq. #$idx") for idx in 1:length(eqs)])
+validate(eqs::Vector, noise::Matrix; info::String = "") = all([validate(eqs[idx], noise[idx, :], info = info*"in eq. #$idx") for idx in 1:length(eqs)])
+validate(eqs::Vector, term::Symbolic; info::String = "") = all([validate(eqs[idx], term, info = info*"in eq. #$idx") for idx in 1:length(eqs)])
 
 "Throws error if units of equations are invalid."
 check_units(eqs...) = validate(eqs...) || throw(ArgumentError("Some equations had invalid units. See warnings for details."))
