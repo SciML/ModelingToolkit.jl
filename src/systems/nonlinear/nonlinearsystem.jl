@@ -77,6 +77,7 @@ function NonlinearSystem(eqs, states, ps;
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
+    states = collect(states)
     states, ps = value.(states), value.(ps)
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, states)
