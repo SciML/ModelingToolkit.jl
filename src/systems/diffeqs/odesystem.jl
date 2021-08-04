@@ -99,7 +99,7 @@ function move_diffs(eq::Equation,r)
        !(eq.lhs isa Term && operation(eq.lhs) isa Difference)
        _eq = eq.rhs-eq.lhs
        rhs = r(_eq)
-       if isnothing(rhs)
+       if rhs === nothing
            eq
        else
            lhs = _eq - rhs
