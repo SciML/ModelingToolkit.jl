@@ -186,7 +186,7 @@ let
     @variables x(t)
     @named sys = ODESystem([0 ~ D(x) + x], t, [x], [])
     sys = structural_simplify(sys)
-    @test_throws ModelingToolkit.InvalidSystemException ODEProblem(sys, [1.0], (0, 10.0))
+    ODEProblem(sys, [1.0], (0, 10.0))
 end
 
 # NonlinearSystem
