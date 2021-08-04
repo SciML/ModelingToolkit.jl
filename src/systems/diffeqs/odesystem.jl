@@ -95,15 +95,15 @@ end
 function move_diffs(eq::Equation,r)
     # Do not modify `D(x) ~ ...`, already correct
     # Ignore `δ(x) ~ ...` for now
-    if !(eq.lhs isa Term && ModelingToolkit.operation(eq.lhs) isa Differential) &&
-       !(eq.lhs isa Term && ModelingToolkit.operation(eq.lhs) isa Difference)
+    if !(eq.lhs isa Term && operation(eq.lhs) isa Differential) &&
+       !(eq.lhs isa Term && operation(eq.lhs) isa Difference)
        _eq = eq.rhs-eq.lhs
        rhs = r(_eq)
        if isnothing(rhs)
            eq
        else
            lhs = _eq - rhs
-           if !(lhs isa Number) && ModelingToolkit.operation(lhs) isa Differential
+           if !(lhs isa Number) && operation(lhs) isa Differential
                lhs ~ -rhs
            else
                -lhs ~ rhs
