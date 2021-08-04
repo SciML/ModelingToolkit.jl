@@ -44,7 +44,7 @@ function safe_get_units(term, info)
         if err isa Unitful.DimensionError 
             @warn("$info: $(err.x) and $(err.y) are not dimensionally compatible.")
         elseif err isa MethodError #TODO: filter for only instances where the arguments are unitful
-            @warn("$info: no method matching $(err.f) for arguments $(err.args).")
+            @warn("$info: no method matching $(err.f) for arguments $(typeof.(err.args)).")
         else
             rethrow()
         end
