@@ -100,7 +100,7 @@ function define_params(p::Tuple)
 end
 
 function define_params(p::NamedTuple)
-    @show NamedTuple(x=>Num(toparam(Sym{Real}(nameof(Variable(x))))) for x in keys(p))
+    NamedTuple(x=>Num(toparam(Sym{Real}(nameof(Variable(x))))) for x in keys(p))
 end
 
 
