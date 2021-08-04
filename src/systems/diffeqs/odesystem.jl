@@ -103,7 +103,6 @@ function move_diffs(eq::Equation,r)
            eq
        else
            lhs = _eq - rhs
-           @show lhs
            if !(lhs isa Number) && ModelingToolkit.operation(lhs) isa Differential
                lhs ~ -rhs
            else
