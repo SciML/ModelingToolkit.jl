@@ -65,7 +65,9 @@ function NonlinearSystem(eqs, states, ps;
                          systems=NonlinearSystem[],
                          connection_type=nothing,
                          )
-    eqs = collect(eqs)
+    # Move things over, but do not touch array expressions
+    eqs = [0 ~ x.rhs - x.lhs for x in collect(eqs)]
+
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :NonlinearSystem, force=true)
     end

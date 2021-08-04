@@ -37,8 +37,8 @@ end
 
 # Define a nonlinear system
 eqs = [0 ~ σ*(y-x),
-       0 ~ x*(ρ-z)-y,
-       0 ~ x*y - β*z]
+       y ~ x*(ρ-z),
+       β*z ~ x*y]
 ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(ns)
 @testset "nlsys jacobian" begin
@@ -156,4 +156,3 @@ end
     @test isequal(union(Set(states(sys1)), Set(states(sys2))), Set(states(sys3)))
     @test isequal(union(Set(equations(sys1)), Set(equations(sys2))), Set(equations(sys3)))
 end
-
