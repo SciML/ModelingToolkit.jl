@@ -162,6 +162,7 @@ struct ReactionSystem <: AbstractSystem
             ps′ = value.(ps)
             check_variables(states′, iv′)
             check_parameters(ps′, iv′)
+            check_units(eqs)
         end
         new(collect(eqs), iv′, states′, ps′, observed, name, systems, defaults, connection_type)
     end

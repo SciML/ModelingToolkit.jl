@@ -1,4 +1,4 @@
-using ModelingToolkit, Unitful, OrdinaryDiffEq
+using ModelingToolkit, Unitful, OrdinaryDiffEq, DiffEqJump
 using Test
 MT = ModelingToolkit
 @parameters τ [unit = u"ms"]
@@ -130,11 +130,11 @@ eqs = [D(E) ~ P - E/τ
 
 noiseeqs = [0.1u"MW",
             0.1u"MW"]
-sys = SDESystem(eqs,noiseeqs,t,[P,E],[τ,Q])
+sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
 # With noise matrix
 noiseeqs = [0.1u"MW" 0.1u"MW"
             0.1u"MW" 0.1u"MW"]
-sys = SDESystem(eqs,noiseeqs,t,[P,E],[τ,Q])
+sys = SDESystem(eqs,noiseeqs, t, [P, E], [τ, Q])
 
 noiseeqs = [0.1u"MW" 0.1u"MW"
             0.1u"MW" 0.1u"s"]
@@ -158,10 +158,42 @@ sys_simple = structural_simplify(sys)
 @parameters v [unit = u"m/s"] r [unit =u"m"^3/u"s"] t [unit = u"s"]
 eqs = [V ~ r*t,
        V ~ L^3]
-sys = NonlinearSystem(eqs,[V,L],[t,r])
+sys = NonlinearSystem(eqs, [V, L], [t, r])
 sys_simple = structural_simplify(sys)
 
 eqs = [L ~ v*t,
        V ~ L^3]
-sys = NonlinearSystem(eqs,[V,L],[t,r])
+sys = NonlinearSystem(eqs, [V,L], [t,r])
 sys_simple = structural_simplify(sys)
+
+#Jump System
+@parameters β [unit = 1/(u"mol"^2*u"s")] γ [unit = 1/(u"mol"*u"s")] t [unit = u"s"] 
+@variables S(t) [unit = u"mol"] I(t) [unit = u"mol"] R(t) [unit = u"mol"]
+rate₁   = β*S*I
+affect₁ = [S ~ S - 1u"mol", I ~ I + 1u"mol"]
+rate₂   = γ*I
+affect₂ = [I ~ I - 1u"mol", R ~ R + 1u"mol"]
+j₁      = ConstantRateJump(rate₁, affect₁)
+j₂      = VariableRateJump(rate₂, affect₂)
+js      = JumpSystem([j₁, j₂], t, [S, I, R], [β, γ])
+
+affect_wrong = [S ~ S - 1u"mol", I ~ I + 1]
+j_wrong      = ConstantRateJump(rate₁, affect_wrong)
+@test_throws ArgumentError JumpSystem([j_wrong, j₂], t, [S, I, R], [β, γ])
+
+rate_wrong   = γ^2*I
+j_wrong     = ConstantRateJump(rate_wrong, affect₂)
+@test_throws ArgumentError JumpSystem([j₁, j_wrong], t, [S, I, R], [β, γ])
+
+# mass action jump tests for SIR model
+maj1 = MassActionJump(2*β/2, [S => 1, I => 1], [S => -1, I => 1])
+maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
+js3  = JumpSystem([maj1, maj2], t, [S,I,R], [β,γ])
+
+#Test unusual jump system
+@parameters β γ t
+@variables S(t) I(t) R(t)
+
+maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
+maj2 = MassActionJump(γ, [S => 1], [S => -1])
+js4  = JumpSystem([maj1, maj2], t, [S], [β, γ])
