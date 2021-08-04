@@ -222,7 +222,6 @@ end
 
 Base.getproperty(sys::AbstractSystem, name::Symbol; namespace=true) = wrap(getvar(sys, name; namespace=namespace))
 function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
-    sysname = nameof(sys)
     systems = get_systems(sys)
     if isdefined(sys, name)
         Base.depwarn("`sys.name` like `sys.$name` is deprecated. Use getters like `get_$name` instead.", "sys.$name")
@@ -230,7 +229,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
     elseif !isempty(systems)
         i = findfirst(x->nameof(x)==name, systems)
         if i !== nothing
-            return namespace ? rename(systems[i], renamespace(nameof(sys), name)) : systems[i]
+            return namespace ? rename(systems[i], renamespace(sys, name)) : systems[i]
         end
     end
 
@@ -311,6 +310,12 @@ function _renamespace(sys, x)
         return similarterm(v, renamespace(sys, ov), arguments(v), symtype(v), metadata=metadata(v))
     end
 
+    if v isa Namespace
+        sysp, v = v.parent, v.named
+        sysn = Symbol(getname(sys), :., getname(sysp))
+        sys = sys isa AbstractSystem ? rename(sysp, sysn) : sysn
+    end
+
     Namespace(sys, v)
 end
 
@@ -327,7 +332,7 @@ function renamespace(sys, x)
             end
         end
     else
-        Symbol(sys, :., x)
+        Symbol(getname(sys), :., x)
     end
 end
 
