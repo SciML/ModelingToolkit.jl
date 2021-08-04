@@ -256,7 +256,9 @@ eqs = [D(x) ~ σ*(y-x),
 sys = ODESystem(eqs)
 @test all(isequal.(states(sys), [x, y, z]))
 @test all(isequal.(parameters(sys), [σ, β]))
-@test equations(sys) == eqs
+@test equations(sys) == [D(x) ~ σ*(y-x),
+       D(y) ~ x-β*y,
+      0 ~ y -  x - z]
 @test ModelingToolkit.isautonomous(sys)
 
 # issue 701
