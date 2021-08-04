@@ -93,7 +93,10 @@ struct ODESystem <: AbstractODESystem
 end
 
 function move_diffs(eq::Equation,r)
-    if !(eq.lhs isa Term && ModelingToolkit.operation(eq.lhs) isa Differential)
+    # Do not modify `D(x) ~ ...`, already correct
+    # Ignore `δ(x) ~ ...` for now
+    if !(eq.lhs isa Term && ModelingToolkit.operation(eq.lhs) isa Differential) &&
+       !(eq.lhs isa Term && ModelingToolkit.operation(eq.lhs) isa Difference)
        _eq = eq.rhs-eq.lhs
        rhs = r(_eq)
        if isnothing(rhs)
