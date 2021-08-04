@@ -475,3 +475,27 @@ eqs = [D(z[i]) + z[i] ~ 0 for i in 1:3]
 sys = ODESystem(eqs,t)
 eqs2 = [D(z[i]) ~ -z[i] for i in 1:3]
 @test isequal(equations(sys),eqs2)
+
+eqs = [D(x)*x ~ x]
+sys = ODESystem(eqs,t)
+eqs2 = equations(sys)
+eqs3 = [x*D(x) ~ x]
+@test isequal(eqs2,eqs3)
+
+eqs = [D(x)/x ~ x]
+sys = ODESystem(eqs,t)
+eqs2 = equations(sys)
+eqs3 = [D(x)/x ~ x]
+@test isequal(eqs2,eqs3)
+
+eqs = [sin(D(x) * x) ~ x]
+sys = structural_simplify(ODESystem(eqs,t))
+eqs2 = equations(sys)
+eqs3 = [0 ~ x - sin(D(x) * x)]
+@test isequal(eqs2,eqs3)
+
+eqs = [cos(D(x) * x) ~ x]
+sys = structural_simplify(ODESystem(eqs,t))
+eqs2 = equations(sys)
+eqs3 = [0 ~ x - cos(D(x) * x)]
+@test isequal(eqs2,eqs3)
