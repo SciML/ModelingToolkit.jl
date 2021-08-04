@@ -27,7 +27,7 @@ s1 = Num(Sym{Real}(:s))
 σ1 = Num(Sym{FnType{Tuple, Real}}(:σ))
 @test isequal(t1, t)
 @test isequal(s1, s)
-@test isequal(σ1, σ)
+@test isequal(σ1(t), σ(t))
 
 @test ModelingToolkit.isparameter(t)
 @test ModelingToolkit.isparameter(s)

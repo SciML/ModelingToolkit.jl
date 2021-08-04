@@ -165,7 +165,7 @@ function runge_kutta_discretize(sys::ControlSystem,dt,tspan;
     L = @RuntimeGeneratedFunction(build_function(lo,sts,ctr,ps,iv,conv = ModelingToolkit.ControlToExpr(sys)))
 
     var(n, i...) = var(nameof(n), i...)
-    var(n::Symbol, i...) = Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(Variable(n, i...)))
+    var(n::Symbol, i...) = variable(n, i..., T=FnType)
     # Expand out all of the variables in time and by stages
     timed_vars = [[var(operation(x),i)(iv) for i in 1:n+1] for x in states(sys)]
     k_vars = [[var(Symbol(:ᵏ,nameof(operation(x))),i,j)(iv) for i in 1:m, j in 1:n] for x in states(sys)]

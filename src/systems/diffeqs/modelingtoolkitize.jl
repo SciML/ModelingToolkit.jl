@@ -161,9 +161,9 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem; kwargs...)
         p = prob.p
     end
 
-    vars = reshape([Num(Sym{Real}(nameof(Variable(:x, i)))) for i in eachindex(prob.u0)],size(prob.u0))
+    vars = reshape([variable(:x, i) for i in eachindex(prob.u0)],size(prob.u0))
     params = p isa DiffEqBase.NullParameters ? [] :
-             reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(Array(p)))
+        reshape([variable(:α, i) for i in eachindex(p)],size(Array(p)))
 
     eqs = prob.f(vars, params)
     de = OptimizationSystem(eqs,vec(vars),vec(params); kwargs...)
