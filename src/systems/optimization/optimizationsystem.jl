@@ -50,8 +50,9 @@ function OptimizationSystem(op, states, ps;
                             default_u0=Dict(),
                             default_p=Dict(),
                             defaults=_merge(Dict(default_u0), Dict(default_p)),
-                            name = gensym(:OptimizationSystem),
+                            name=nothing,
                             systems = OptimizationSystem[])
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :OptimizationSystem, force=true)
     end

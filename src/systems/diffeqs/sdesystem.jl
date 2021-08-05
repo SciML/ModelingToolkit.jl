@@ -101,9 +101,10 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
-                   name = gensym(:SDESystem),
+                   name=nothing,
                    connection_type=nothing,
                    )
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = collect(deqs)
     iv′ = value(iv)
     dvs′ = value.(dvs)

@@ -87,7 +87,8 @@ function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls
                        default_u0=Dict(),
                        default_p=Dict(),
                        defaults=_merge(Dict(default_u0), Dict(default_p)),
-                       name=gensym(:ControlSystem))
+                       name=nothing)
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ControlSystem, force=true)
     end

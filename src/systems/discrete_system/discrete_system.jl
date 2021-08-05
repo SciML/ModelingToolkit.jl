@@ -71,11 +71,12 @@ function DiscreteSystem(
                    controls = Num[],
                    observed = Num[],
                    systems = DiscreteSystem[],
-                   name=gensym(:DiscreteSystem),
+                   name=nothing,
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                   )
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     eqs = collect(eqs)
     iv′ = value(iv)
     dvs′ = value.(dvs)

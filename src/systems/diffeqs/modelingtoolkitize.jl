@@ -62,6 +62,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     de = ODESystem(
         eqs, t, sts, params,
         defaults=merge(default_u0, default_p);
+        name=gensym(:MTKizedODE),
         kwargs...
     )
 
@@ -158,7 +159,9 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
         Vector(vec(params))
     end
 
-    de = SDESystem(deqs,neqs,t,Vector(vec(vars)),params; kwargs...)
+    de = SDESystem(deqs,neqs,t,Vector(vec(vars)),params;
+                   name=gensym(:MTKizedSDE),
+                   kwargs...)
 
     de
 end
@@ -182,6 +185,8 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem; kwargs...)
         reshape([variable(:α, i) for i in eachindex(p)],size(Array(p)))
 
     eqs = prob.f(vars, params)
-    de = OptimizationSystem(eqs,vec(vars),vec(params); kwargs...)
+    de = OptimizationSystem(eqs,vec(vars),vec(params);
+                            name=gensym(:MTKizedOpt),
+                            kwargs...)
     de
 end

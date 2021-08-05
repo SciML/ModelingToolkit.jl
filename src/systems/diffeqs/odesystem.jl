@@ -97,12 +97,13 @@ function ODESystem(
                    controls  = Num[],
                    observed = Num[],
                    systems = ODESystem[],
-                   name=gensym(:ODESystem),
+                   name=nothing,
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
                   )
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = collect(deqs)
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
 

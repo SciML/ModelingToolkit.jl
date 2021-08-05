@@ -1,4 +1,4 @@
-JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
+const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
 
 """
 $(TYPEDEF)
@@ -66,10 +66,10 @@ function JumpSystem(eqs, iv, states, ps;
                     default_u0=Dict(),
                     default_p=Dict(),
                     defaults=_merge(Dict(default_u0), Dict(default_p)),
-                    name = gensym(:JumpSystem),
+                    name=nothing,
                     connection_type=nothing,
                     kwargs...)
-
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     eqs = collect(eqs)
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
