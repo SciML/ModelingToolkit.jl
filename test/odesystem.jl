@@ -89,12 +89,11 @@ eqs = [D(x) ~ σ′*(y-x),
        D(z) ~ x*y - β*z]
 de = ODESystem(eqs)
 test_diffeq_inference("global iv-varying", de, t, (x, y, z), (σ′, ρ, β))
-@test begin
-    f = eval(generate_function(de, [x,y,z], [σ′,ρ,β])[2])
-    du = [0.0,0.0,0.0]
-    f(du, [1.0,2.0,3.0], [x->x+7,2,3], 5.0)
-    du ≈ [11, -3, -7]
-end
+
+f = eval(generate_function(de, [x,y,z], [σ′,ρ,β])[2])
+du = [0.0,0.0,0.0]
+f(du, [1.0,2.0,3.0], [x->x+7,2,3], 5.0)
+@test du ≈ [11, -3, -7]
 
 @parameters σ(..)
 eqs = [D(x) ~ σ(t-1)*(y-x),
@@ -102,22 +101,18 @@ eqs = [D(x) ~ σ(t-1)*(y-x),
        D(z) ~ x*y - β*z]
 de = ODESystem(eqs)
 test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ(t-1), ρ, β))
-@test begin
-    f = eval(generate_function(de, [x,y,z], [σ,ρ,β])[2])
-    du = [0.0,0.0,0.0]
-    f(du, [1.0,2.0,3.0], [x->x+7,2,3], 5.0)
-    du ≈ [11, -3, -7]
-end
+f = eval(generate_function(de, [x,y,z], [σ,ρ,β])[2])
+du = [0.0,0.0,0.0]
+f(du, [1.0,2.0,3.0], [x->x+7,2,3], 5.0)
+@test du ≈ [11, -3, -7]
 
 eqs = [D(x) ~ x + 10σ(t-1) + 100σ(t-2) + 1000σ(t^2)]
 de = ODESystem(eqs)
 test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ(t-2),σ(t^2), σ(t-1)))
-@test begin
-    f = eval(generate_function(de, [x], [σ])[2])
-    du = [0.0]
-    f(du, [1.0], [t -> t + 2], 5.0)
-    du ≈ [27561]
-end
+f = eval(generate_function(de, [x], [σ])[2])
+du = [0.0]
+f(du, [1.0], [t -> t + 2], 5.0)
+@test du ≈ [27561]
 
 # Conversion to first-order ODEs #17
 D3 = Differential(t)^3
