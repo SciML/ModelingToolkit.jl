@@ -112,7 +112,7 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     dvs = states(sys)
     ps = parameters(sys)
     eqs = equations(sys)
-    eqs, max_delay = linearize_eqs(sys, eqs)
+    eqs = linearize_eqs(sys, eqs)
     # defs = defaults(sys)
     t = get_iv(sys)
     u0 = varmap_to_vars(u0map,dvs)
