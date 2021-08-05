@@ -60,16 +60,23 @@ sol_map2 = solve(prob_map,FunctionMap());
 # Delayed difference equations
 @parameters t
 @variables x(..)
-D = Difference(t; dt=0.1)
+D = Difference(t; dt=1.5)
 
 # Equations
 eqs = [
-    D(x(t)) ~ 0.4x(t) + 0.3x(t-1) + 0.2x(t-2) + 0.1x(t-3),
+    D(x(t)) ~ 0.4x(t) + 0.3x(t-1) + 0.1x(t-3),
 ]
 
 # System
-sys = DiscreteSystem(eqs,t,[x(t)],[])
+sys = DiscreteSystem(eqs,t,[x(t),x(t-1),x(t-2),x(t-3)],[])
 
-eqs, max_delay = ModelingToolkit.linearize_eqs(sys)
-@test max_delay == 3
-# @test linearized_eqs == linearize_eqs(sys, eqs)
+linearized_eqs = [
+    eqs
+    x(t - 3.0) ~ x(t - 1.5)
+    x(t - 1.5) ~ x(t)
+]
+
+eqs2, max_delay = ModelingToolkit.linearize_eqs(sys; return_max_delay=true)
+
+@test max_delay[x] == 3
+@test all(eqs2 .== linearized_eqs)

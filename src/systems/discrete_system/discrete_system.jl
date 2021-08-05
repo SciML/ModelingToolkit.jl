@@ -113,7 +113,6 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     ps = parameters(sys)
     eqs = equations(sys)
     eqs, max_delay = linearize_eqs(sys, eqs)
-    # TODO: Add equations to update delayed variables
     # defs = defaults(sys)
     t = get_iv(sys)
     u0 = varmap_to_vars(u0map,dvs)
@@ -127,41 +126,53 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     DiscreteProblem(f,u0,tspan,p;kwargs...)
 end
 
-function linearize_eqs(sys, eqs=sys.eqs)
-    max_delay = 0
-    r = @rule ~t => begin
-        if ~t isa Symbolics.Term && any(isequal((~t).f), Symbolics.operation.(sys.states)) && is_delay(sys, Symbolics.arguments(~t))
-            delay = get_delay_val(sys, first(Symbolics.arguments(~t)))
-            if delay > max_delay
-                max_delay = delay
-            end
-            var_sym = Symbol((~t).f.name, Symbol("("), join(Symbolics.tosymbol.(Symbolics.arguments(~t)), Symbol(",")), Symbol(")"))
-            Symbolics.variable(var_sym)
-        else
-            ~t
+function linearize_eqs(sys, eqs=sys.eqs; return_max_delay=false)
+    unique_states = unique(operation.(sys.states))
+
+    max_delay = Dict(v=>0 for v in unique_states)
+    r = @rule ~t::(t -> t isa Symbolics.Term && any(isequal((t).f), Symbolics.operation.(sys.states)) && is_delay_var(sys.iv, t)) => begin
+        delay = get_delay_val(sys.iv, first(Symbolics.arguments(~t)))
+        if delay > max_delay[operation(~t)]
+            max_delay[operation(~t)] = delay
         end
+        nothing
     end
-    rw = SymbolicUtils.Postwalk(r)
-    [
-        Symbolics.value(eq.lhs) ~ Symbolics.value(rw(eq.rhs))
-        for eq in eqs
-    ], max_delay
+    SymbolicUtils.Postwalk(r).(rhss(eqs))
+
+    if any(values(max_delay) .> 0)
+
+        dts = Dict(v=>Any[] for v in unique_states)
+        state_ops = Dict(v=>Any[] for v in unique_states)
+        for v in unique_states
+            for eq in eqs
+                if isdifferenceeq(eq)
+                    append!(dts[v], [operation(eq.lhs).dt])
+                    append!(state_ops[v], [operation(eq.lhs)])
+                end
+            end
+        end
+        
+        all(length.(unique.(values(state_ops))) .<= 1) || error("Each state should be used with single difference operator.")
+        
+        dts_gcd = Dict()
+        for v in keys(dts)
+            dts_gcd[v] = first(dts[v])
+        end
+
+        lin_eqs = [
+            v(sys.iv - (t)) ~ v(sys.iv - (t-dts_gcd[v]))
+            for v in unique_states for t in collect(max_delay[v]:(-dts_gcd[v]):0)[1:end-1]
+        ]
+        eqs = vcat(eqs, lin_eqs)
+    end
+    if return_max_delay return eqs, max_delay end
+    eqs
 end
 
-function get_delay_val(sys, x)
-    delay = x - sys.iv
+function get_delay_val(iv, x)
+    delay = x - iv
     delay > 0 && error("Forward delay not permitted")
     return -delay
-end
-
-function is_delay(sys, args::AbstractVector)
-    length(args) > 1 && return false
-    isequal(first(args), sys.iv) && return false
-    delay = sys.iv - first(args)
-    delay isa Integer || 
-    (delay isa AbstractFloat && isinteger(delay)) ||
-    (delay isa Num && isinteger(delay.val))
-    
 end
 
 check_difference_variables(eq) = check_operator_variables(eq, Difference)
