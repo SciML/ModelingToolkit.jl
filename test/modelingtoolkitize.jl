@@ -256,3 +256,25 @@ sys = modelingtoolkitize(problem)
 @parameters t
 @test all(isequal.(parameters(sys),getproperty.(@variables(β, η, ω, φ, σ, μ),:val)))
 @test all(isequal.(Symbol.(states(sys)),Symbol.(@variables(S(t),I(t),R(t),C(t)))))
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/1158
+
+function ode_prob(du, u, p::NamedTuple, t)
+    du[1] = u[1]+p.α*u[2]
+    du[2] = u[2]+p.β*u[1]
+end
+params = (α = 1, β = 1)
+prob = ODEProblem(ode_prob, [1 1], (0, 1), params)
+sys = modelingtoolkitize(prob)
+@test nameof.(parameters(sys)) == [:α,:β]
+
+function ode_prob(du, u, p::Tuple, t)
+    α, β = p
+    du[1] = u[1]+α*u[2]
+    du[2] = u[2]+β*u[1]
+end
+
+params = (1, 1)
+prob = ODEProblem(ode_prob, [1 1], (0, 1), params)
+sys = modelingtoolkitize(prob)
+@test nameof.(parameters(sys)) == [:α₁,:α₂]
