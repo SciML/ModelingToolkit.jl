@@ -112,7 +112,12 @@ function check_parameters(ps, iv)
 end
 
 function is_delay_var(iv, var)
-    args = arguments(var)
+    args = nothing
+    try
+        args = arguments(var)
+    catch
+        return false
+    end
     length(args) > 1 && return false
     isequal(first(args), iv) && return false
     delay = iv - first(args)

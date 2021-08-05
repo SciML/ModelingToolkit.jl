@@ -57,26 +57,34 @@ sol_map2 = solve(prob_map,FunctionMap());
 
 @test Array(sol_map) ≈ Array(sol_map2)
 
-# Delayed difference equations
+# Delayed difference equation
 @parameters t
-@variables x(..)
-D = Difference(t; dt=1.5)
+@variables x(..) y(..) z(t)
+D1 = Difference(t; dt=1.5)
+D2 = Difference(t; dt=0.1)
+
+@test ModelingToolkit.is_delay_var(Symbolics.value(t), Symbolics.value(x(t-2)))
+@test ModelingToolkit.is_delay_var(Symbolics.value(t), Symbolics.value(y(t-1)))
+@test !ModelingToolkit.is_delay_var(Symbolics.value(t), Symbolics.value(z))
+@test_throws ErrorException z(t)
 
 # Equations
 eqs = [
-    D(x(t)) ~ 0.4x(t) + 0.3x(t-1) + 0.1x(t-3),
+    D1(x(t)) ~ 0.4x(t) + 0.3x(t-1.5) + 0.1x(t-3),
+    D2(y(t)) ~ 0.3y(t) + 0.7y(t-2) + 0.1z,
 ]
 
 # System
-sys = DiscreteSystem(eqs,t,[x(t),x(t-1),x(t-2),x(t-3)],[])
-
-linearized_eqs = [
-    eqs
-    x(t - 3.0) ~ x(t - 1.5)
-    x(t - 1.5) ~ x(t)
-]
+sys = DiscreteSystem(eqs,t,[x(t),x(t-1),x(t-2),x(t-3),y(t),y(t-2),z],[])
 
 eqs2, max_delay = ModelingToolkit.linearize_eqs(sys; return_max_delay=true)
 
-@test max_delay[x] == 3
-@test all(eqs2 .== linearized_eqs)
+@test max_delay[x] ≈ 3
+@test max_delay[y] ≈ 2
+
+# linearized_eqs = [
+#     eqs
+#     x(t - 3.0) ~ x(t - 1.5)
+#     x(t - 1.5) ~ x(t)
+# ]
+# @test all(eqs2 .== linearized_eqs)
