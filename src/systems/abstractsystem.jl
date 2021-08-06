@@ -1,6 +1,6 @@
 """
 ```julia
-calculate_tgrad(sys::AbstractSystem)
+calculate_tgrad(sys::AbstractTimeDependentSystem)
 ```
 
 Calculate the time gradient of a system.
@@ -72,7 +72,7 @@ function calculate_hessian end
 
 """
 ```julia
-generate_tgrad(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+generate_tgrad(sys::AbstractTimeDependentSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
 ```
 
 Generates a function for the time gradient of a system. Extra arguments control
@@ -131,7 +131,28 @@ function generate_function end
 
 Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
 
-independent_variable(sys::AbstractSystem) = isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
+#Deprecated
+function independent_variable(sys::AbstractSystem)
+    Base.depwarn("`independent_variable` is deprecated. Use `get_iv` or `independent_variables` instead.",:independent_variable)
+    isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
+end
+
+#Treat the result as a vector of symbols always
+function independent_variables(sys::AbstractSystem)
+    systype = typeof(sys)
+    @warn "Please declare ($systype) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
+    if isdefined(sys, :iv)
+        return [getfield(sys, :iv)]
+    elseif isdefined(sys, :ivs)
+        return getfield(sys,:ivs)
+    else
+        return []
+    end
+end
+
+independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
+independent_variables(sys::AbstractTimeIndependentSystem) = []
+independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
 
 function structure(sys::AbstractSystem)
     s = get_structure(sys)
@@ -365,9 +386,9 @@ function namespace_assignment(eq::Assignment, sys)
 end
 
 function namespace_expr(O, sys) where {T}
-    iv = independent_variable(sys)
+    ivs = independent_variables(sys)
     O = unwrap(O)
-    if isequal(O, iv)
+    if any(isequal(O), ivs)
         return O
     elseif isvariable(O)
         renamespace(sys, O)
@@ -547,9 +568,10 @@ function toexpr(sys::AbstractSystem)
     stmt = expr.args
 
     name = Meta.quot(nameof(sys))
-    iv = independent_variable(sys)
+    ivs = independent_variables(sys)
     ivname = gensym(:iv)
-    if iv !== nothing
+    for iv in ivs
+        ivname = gensym(:iv)
         push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
     end
 
@@ -569,9 +591,12 @@ function toexpr(sys::AbstractSystem)
     defs_name = push_defaults!(stmt, defaults(sys), var2name)
 
     if sys isa ODESystem
-        push!(stmt, :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults=$defs_name, name=$name)))
+        iv = get_iv(sys)
+        ivname = gensym(:iv)
+        push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
+        push!(stmt, :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name, name=$name)))
     elseif sys isa NonlinearSystem
-        push!(stmt, :($NonlinearSystem($eqs_name, $stsname, $psname; defaults=$defs_name, name=$name)))
+        push!(stmt, :($NonlinearSystem($eqs_name, $stsname, $psname; defaults = $defs_name, name=$name)))
     end
 
     striplines(expr) # keeping the line numbers is never helpful
@@ -928,7 +953,7 @@ function Base.hash(sys::AbstractSystem, s::UInt)
         s = foldr(hash, get_eqs(sys), init=s)
     end
     s = foldr(hash, get_observed(sys), init=s)
-    s = hash(independent_variable(sys), s)
+    s = hash(independent_variables(sys), s)
     return s
 end
 
@@ -940,11 +965,13 @@ by default.
 """
 function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys))
     T = SciMLBase.parameterless_type(basesys)
-    iv = independent_variable(basesys)
-    if iv === nothing
+    ivs = independent_variables(basesys)
+    if length(ivs) == 0
         sys = convert_system(T, sys)
+    elseif length(ivs) == 1
+        sys = convert_system(T, sys, ivs[1])
     else
-        sys = convert_system(T, sys, iv)
+        throw("Extending multivariate systems is not supported")
     end
 
     eqs = union(equations(basesys), equations(sys))
@@ -954,10 +981,10 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameo
     defs = merge(defaults(basesys), defaults(sys)) # prefer `sys`
     syss = union(get_systems(basesys), get_systems(sys))
 
-    if iv === nothing
-        T(eqs, sts, ps, observed=obs, defaults=defs, name=name, systems=syss)
-    else
-        T(eqs, iv, sts, ps, observed=obs, defaults=defs, name=name, systems=syss)
+    if length(ivs) == 0
+        T(eqs, sts, ps, observed = obs, defaults = defs, name=name, systems = syss)
+    elseif length(ivs) == 1
+        T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name, systems = syss)
     end
 end
 

@@ -78,7 +78,10 @@ $(TYPEDEF)
 TODO
 """
 abstract type AbstractSystem end
-abstract type AbstractODESystem <: AbstractSystem end
+abstract type AbstractTimeDependentSystem <: AbstractSystem end
+abstract type AbstractTimeIndependentSystem <: AbstractSystem end
+abstract type AbstractODESystem <: AbstractTimeDependentSystem end
+abstract type AbstractMultivariateSystem <: AbstractSystem end
 
 """
 $(TYPEDSIGNATURES)
@@ -86,6 +89,8 @@ $(TYPEDSIGNATURES)
 Get the set of independent variables for the given system.
 """
 function independent_variables end
+
+function independent_variable end
 
 """
 $(TYPEDSIGNATURES)
@@ -149,6 +154,7 @@ end
 
 struct Flow end
 
+export AbstractTimeDependentSystem, AbstractTimeIndependentSystem, AbstractMultivariateSystem
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
@@ -171,7 +177,7 @@ export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
-export independent_variable, states, parameters, equations, controls, observed, structure
+export independent_variables, independent_variable, states, parameters, equations, controls, observed, structure
 export structural_simplify
 export DiscreteSystem, DiscreteProblem
 

@@ -16,7 +16,7 @@ op = σ*(y-x) + x*(ρ-z)-y + x*y - β*z
 os = OptimizationSystem(eqs, [x,y,z],[σ,ρ,β])
 ```
 """
-struct OptimizationSystem <: AbstractSystem
+struct OptimizationSystem <: AbstractTimeIndependentSystem
     """Vector of equations defining the system."""
     op::Any
     """Unknown variables."""
