@@ -8,7 +8,7 @@ eqs = [D(y[1]) ~ -k[1]*y[1] + k[3]*y[2]*y[3],
        D(y[2]) ~  k[1]*y[1] - k[3]*y[2]*y[3] - k[2]*y[2]^2,
        0 ~  y[1] + y[2] + y[3] - 1]
 
-sys = ODESystem(eqs,t,y,k)
+@named sys = ODESystem(eqs,t,y,k)
 @test_throws ArgumentError ODESystem(eqs,y[1])
 M = calculate_massmatrix(sys)
 @test M == [1 0 0

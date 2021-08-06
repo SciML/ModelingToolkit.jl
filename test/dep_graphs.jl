@@ -13,7 +13,7 @@ rxs = [Reaction(k1, nothing, [S]),
        Reaction(k2, [S,R], [S], [2,1], [2]),
        Reaction(k1*I, nothing, [R]),
        Reaction(k1*k2/(1+t), [S], [R])]
-rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
+@named rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
 
 
 #################################
@@ -98,7 +98,7 @@ s_eqdeps = [[1],[2],[3]]
 eqs = [0 ~ σ*(y-x),
        0 ~ ρ-y,
        0 ~ y - β*z]
-ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β])
+@named ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β])
 deps = equation_dependencies(ns)
 eq_sdeps = [[x,y],[y],[y,z]]
 @test all(i -> isequal(Set(deps[i]),Set(value.(eq_sdeps[i]))), 1:length(deps))

@@ -82,7 +82,7 @@ idx1_pendulum = [D(x) ~ w,
                  # 2x*D(D(x)) + 2*D(x)*D(x) + 2y*D(D(y)) + 2*D(y)*D(y) and
                  # substitute the rhs
                  0 ~ 2x*(T*x) + 2*xˍt*xˍt + 2y*(T*y - g) + 2*yˍt*yˍt]
-idx1_pendulum = ODESystem(idx1_pendulum, t, [x, y, w, z, xˍt, yˍt, T], [L, g])
+@named idx1_pendulum = ODESystem(idx1_pendulum, t, [x, y, w, z, xˍt, yˍt, T], [L, g])
 first_order_idx1_pendulum = ode_order_lowering(idx1_pendulum)
 
 using OrdinaryDiffEq

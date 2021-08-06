@@ -168,12 +168,12 @@ end
 function ReactionSystem(eqs, iv, species, params;
                         observed = [],
                         systems = [],
-                        name = gensym(:ReactionSystem),
+                        name = nothing,
                         default_u0=Dict(),
                         default_p=Dict(),
                         defaults=_merge(Dict(default_u0), Dict(default_p)),
                         connection_type=nothing)
-
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     #isempty(species) && error("ReactionSystems require at least one species.")
     ReactionSystem(eqs, iv, species, params, observed, name, systems, defaults, connection_type)
 end
@@ -458,7 +458,7 @@ Finally, a `Vector{Num}` can be provided (the length must be equal to the number
 Here the noise for each reaction is scaled by the corresponding parameter in the input vector.
 This input may contain repeat parameters.
 """
-function Base.convert(::Type{<:SDESystem}, rs::ReactionSystem; 
+function Base.convert(::Type{<:SDESystem}, rs::ReactionSystem;
                       noise_scaling=nothing, name=nameof(rs), combinatoric_ratelaws=true, 
                       include_zero_odes=true, kwargs...)
 

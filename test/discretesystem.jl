@@ -23,7 +23,7 @@ eqs = [D(S) ~ S-infection,
        D(R) ~ R+recovery]
 
 # System
-sys = DiscreteSystem(eqs,t,[S,I,R],[c,nsteps,δt,β,γ]; controls = [β, γ])
+@named sys = DiscreteSystem(eqs,t,[S,I,R],[c,nsteps,δt,β,γ]; controls = [β, γ])
 
 # Problem
 u0 = [S => 990.0, I => 10.0, R => 0.0]

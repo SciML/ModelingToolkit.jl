@@ -62,21 +62,22 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     de = ODESystem(
         eqs, t, sts, params,
         defaults=merge(default_u0, default_p);
+        name=gensym(:MTKizedODE),
         kwargs...
     )
 
     de
 end
 
-_defvaridx(x, i, t) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x, i))))
-_defvar(x, t) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x))))
+_defvaridx(x, i, t) = variable(x, i, T=SymbolicUtils.FnType{Tuple,Real})
+_defvar(x, t) = variable(x, T=SymbolicUtils.FnType{Tuple,Real})
 
 function define_vars(u,t)
-    _vars = [_defvaridx(:x, i, t)(ModelingToolkit.value(t)) for i in eachindex(u)]
+    _vars = [_defvaridx(:x, i, t)(t) for i in eachindex(u)]
 end
 
 function define_vars(u::Union{SLArray,LArray},t)
-    _vars = [_defvar(x, t)(ModelingToolkit.value(t)) for x in LabelledArrays.symnames(typeof(u))]
+    _vars = [_defvar(x, t)(t) for x in LabelledArrays.symnames(typeof(u))]
 end
 
 function define_vars(u::Tuple,t)
@@ -88,19 +89,19 @@ function define_vars(u::NamedTuple,t)
 end
 
 function define_params(p)
-    [Num(toparam(Sym{Real}(nameof(Variable(:α, i))))) for i in eachindex(p)]
+    [toparam(variable(:α, i)) for i in eachindex(p)]
 end
 
 function define_params(p::Union{SLArray,LArray})
-    [Num(toparam(Sym{Real}(nameof(Variable(x))))) for x in LabelledArrays.symnames(typeof(p))]
+    [toparam(variable(x)) for x in LabelledArrays.symnames(typeof(p))]
 end
 
 function define_params(p::Tuple)
-    tuple((Num(toparam(Sym{Real}(nameof(Variable(:α, i))))) for i in eachindex(p))...)
+    tuple((toparam(variable(:α, i)) for i in eachindex(p))...)
 end
 
 function define_params(p::NamedTuple)
-    NamedTuple(x=>Num(toparam(Sym{Real}(nameof(Variable(x))))) for x in keys(p))
+    NamedTuple(x=>toparam(variable(x)) for x in keys(p))
 end
 
 
@@ -125,7 +126,6 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     else
         []
     end
-
 
     D = Differential(t)
 
@@ -159,7 +159,9 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
         Vector(vec(params))
     end
 
-    de = SDESystem(deqs,neqs,t,Vector(vec(vars)),params; kwargs...)
+    de = SDESystem(deqs,neqs,t,Vector(vec(vars)),params;
+                   name=gensym(:MTKizedSDE),
+                   kwargs...)
 
     de
 end
@@ -178,11 +180,13 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem; kwargs...)
         p = prob.p
     end
 
-    vars = reshape([Num(Sym{Real}(nameof(Variable(:x, i)))) for i in eachindex(prob.u0)],size(prob.u0))
+    vars = reshape([variable(:x, i) for i in eachindex(prob.u0)],size(prob.u0))
     params = p isa DiffEqBase.NullParameters ? [] :
-             reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(Array(p)))
+        reshape([variable(:α, i) for i in eachindex(p)],size(Array(p)))
 
     eqs = prob.f(vars, params)
-    de = OptimizationSystem(eqs,vec(vars),vec(params); kwargs...)
+    de = OptimizationSystem(eqs,vec(vars),vec(params);
+                            name=gensym(:MTKizedOpt),
+                            kwargs...)
     de
 end

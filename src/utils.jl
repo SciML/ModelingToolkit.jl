@@ -79,12 +79,6 @@ end
 
 _merge(d1, d2) = merge(todict(d1), todict(d2))
 
-function indepvar2depvar(s::Sym, args...)
-    T = FnType{NTuple{length(args)}, symtype(s)}
-    ns = Sym{T}(nameof(s))(args...)
-    @set! ns.metadata = s.metadata
-end
-
 function _readable_code(ex)
     ex isa Expr || return ex
     if ex.head === :call
@@ -173,45 +167,20 @@ function collect_defaults!(defs, vars)
     return defs
 end
 
-function var_to_name(x, vars=Dict{Symbol, Any}())
-    x = Symbolics.unwrap(x)
-    if istree(x)
-        if hasmetadata(x, Symbolics.GetindexParent)
-            v = Dict{Symbol, Any}()
-            foreach(a->var_to_name(a, v), arguments(x))
-            var_to_name(operation(x), v)
-            name = first(only(v))
-            vars[name] = getmetadata(x, Symbolics.GetindexParent)
-        elseif x isa Symbolics.ArrayOp
-            t = x.term
-            if istree(t) && operation(t) === (map) && arguments(t)[1] isa Symbolics.CallWith
-                vars[nameof(arguments(t)[2])] = x
-            else
-                var_to_name(x.expr, vars)
-            end
-        else
-            var_to_name(operation(x), vars)
-            for a in arguments(x)
-                var_to_name(a, vars)
-            end
-        end
-    elseif x isa Sym && symtype(x) <: AbstractArray
-        vars[nameof(x)] = x
-    end
-
-    vars
-end
-
 function collect_var_to_name!(vars, xs)
     for x in xs
-        ax = var_to_name(x)
-        if isempty(ax)
-            vars[getname(x)] = x
+        x = unwrap(x)
+        if hasmetadata(x, Symbolics.GetindexParent)
+            xarr = getmetadata(x, Symbolics.GetindexParent)
+            vars[Symbolics.getname(xarr)] = xarr
         else
-            merge!(vars, ax)
+            if istree(x) && operation(x) === getindex
+                x = arguments(x)[1]
+            end
+            vars[Symbolics.getname(unwrap(x))] = x
         end
     end
-    return vars
+
 end
 
 "Throw error when difference/derivative operation occurs in the R.H.S."
@@ -241,12 +210,14 @@ isdiffeq(eq) = isdifferential(eq.lhs)
 isdifference(expr) = istree(expr) && operation(expr) isa Difference
 isdifferenceeq(eq) = isdifference(eq.lhs)
 
+isvariable(x) = x isa Symbolic && hasmetadata(x, VariableSource)
+
 vars(x::Sym; op=Differential) = Set([x])
 vars(exprs::Symbolic; op=Differential) = vars([exprs]; op=op)
 vars(exprs; op=Differential) = foldl((x, y) -> vars!(x, y; op=op), exprs; init = Set())
 vars!(vars, eq::Equation; op=Differential) = (vars!(vars, eq.lhs; op=op); vars!(vars, eq.rhs; op=op); vars)
 function vars!(vars, O; op=Differential)
-    if isa(O, Sym)
+    if isvariable(O)
         return push!(vars, O)
     end
     !istree(O) && return vars
@@ -254,12 +225,12 @@ function vars!(vars, O; op=Differential)
     operation(O) isa op && return push!(vars, O)
 
     if operation(O) === (getindex) &&
-        first(arguments(O)) isa Symbolic
+        isvariable(first(arguments(O)))
 
         return push!(vars, O)
     end
 
-    symtype(operation(O)) <: FnType && push!(vars, O)
+    isvariable(operation(O)) && push!(vars, O)
     for arg in arguments(O)
         vars!(vars, arg; op=op)
     end
@@ -288,8 +259,6 @@ function collect_operator_variables(sys, isop::Function)
 end
 collect_differential_variables(sys) = collect_operator_variables(sys, isdifferential)
 collect_difference_variables(sys) = collect_operator_variables(sys, isdifference)
-
-# 
 
 find_derivatives!(vars, expr::Equation, f=identity) = (find_derivatives!(vars, expr.lhs, f); find_derivatives!(vars, expr.rhs, f); vars)
 function find_derivatives!(vars, expr, f)

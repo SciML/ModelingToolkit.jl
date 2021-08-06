@@ -13,4 +13,5 @@ eqs = [
        connect(source.n, inductor2.n, ground.g)
       ]
 
-@named ll_model = compose(ODESystem(eqs, t), source, resistor, inductor1, inductor2, ground)
+@named ll_model = ODESystem(eqs, t)
+ll_model = compose(ll_model, [source, resistor, inductor1, inductor2, ground])

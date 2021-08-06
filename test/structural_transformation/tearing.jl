@@ -18,7 +18,7 @@ eqs = [
        0 ~ u4 - hypot(u2, u3),
        0 ~ u5 - hypot(u4, u1),
 ]
-sys = NonlinearSystem(eqs, [u1, u2, u3, u4, u5], [])
+@named sys = NonlinearSystem(eqs, [u1, u2, u3, u4, u5], [])
 sys = initialize_system_structure(sys)
 StructuralTransformations.find_solvables!(sys)
 sss = structure(sys)
@@ -125,7 +125,7 @@ eqs = [
        0 ~ z + y,
        0 ~ x + z,
       ]
-nlsys = NonlinearSystem(eqs, [x, y, z], [])
+@named nlsys = NonlinearSystem(eqs, [x, y, z], [])
 newsys = tearing(nlsys)
 @test equations(newsys) == [0 ~ z]
 @test isequal(states(newsys), [z])
@@ -142,7 +142,7 @@ eqs = [
        0 ~ x - y
        0 ~ sin(z) + y - p*t
       ]
-daesys = ODESystem(eqs, t)
+@named daesys = ODESystem(eqs, t)
 newdaesys = tearing(daesys)
 @test equations(newdaesys) == [D(x) ~ z; 0 ~ x + sin(z) - p*t]
 @test isequal(states(newdaesys), [x, z])
@@ -152,7 +152,8 @@ du = [0.0]; u = [1.0]; pr = 0.2; tt = 0.1
 @test du ≈ [-asin(u[1] - pr * tt)] atol=1e-5
 
 # test the initial guess is respected
-infprob = ODAEProblem(tearing(ODESystem(eqs, t, defaults=Dict(z=>Inf))), [x=>1.0], (0, 1.0), [p=>0.2])
+@named sys = ODESystem(eqs, t, defaults=Dict(z=>Inf))
+infprob = ODAEProblem(tearing(sys), [x=>1.0], (0, 1.0), [p=>0.2])
 @test_throws DomainError infprob.f(du, u, pr, tt)
 
 sol1 = solve(prob, Tsit5())

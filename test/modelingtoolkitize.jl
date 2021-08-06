@@ -150,7 +150,7 @@ v0 = [-5.64305, 4.30333, 2.42879]
 μ = 398600.4418
 rv0 = ArrayPartition(r0,v0)
 
-function f(dy, y, μ, t)
+f = function (dy, y, μ, t)
     r = sqrt(sum(y[1,:].^2))
     dy[1,:] = y[2,:]
     dy[2,:] = -μ .* y[1,:] / r^3

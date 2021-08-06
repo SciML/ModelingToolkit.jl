@@ -50,8 +50,9 @@ function OptimizationSystem(op, states, ps;
                             default_u0=Dict(),
                             default_p=Dict(),
                             defaults=_merge(Dict(default_u0), Dict(default_p)),
-                            name = gensym(:OptimizationSystem),
+                            name=nothing,
                             systems = OptimizationSystem[])
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :OptimizationSystem, force=true)
     end
@@ -106,7 +107,7 @@ function generate_function(sys::OptimizationSystem, vs = states(sys), ps = param
 end
 
 equations(sys::OptimizationSystem) = isempty(get_systems(sys)) ? get_op(sys) : get_op(sys) + reduce(+,namespace_expr.(get_systems(sys)))
-namespace_expr(sys::OptimizationSystem) = namespace_expr(get_op(sys), nameof(sys), [])
+namespace_expr(sys::OptimizationSystem) = namespace_expr(get_op(sys), sys)
 
 hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
 
