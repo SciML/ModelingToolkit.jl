@@ -75,7 +75,7 @@ eqs = [
 ]
 
 # System
-sys = DiscreteSystem(eqs,t,[x(t),x(t-1),x(t-2),x(t-3),y(t),y(t-2),z],[])
+sys = DiscreteSystem(eqs,t,[x(t),x(t-1.5),x(t-3),y(t),y(t-2),z],[])
 
 eqs2, max_delay = ModelingToolkit.linearize_eqs(sys; return_max_delay=true)
 
