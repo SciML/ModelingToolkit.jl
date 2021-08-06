@@ -165,6 +165,7 @@ for prop in [
              :depvars
              :indvars
              :connection_type
+             :preface
             ]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
@@ -357,6 +358,12 @@ function namespace_equation(eq::Equation, sys)
     _lhs ~ _rhs
 end
 
+function namespace_assignment(eq::Assignment, sys)
+    _lhs = namespace_expr(eq.lhs, sys)
+    _rhs = namespace_expr(eq.rhs, sys)
+    Assignment(_lhs, _rhs)
+end
+
 function namespace_expr(O, sys) where {T}
     iv = independent_variable(sys)
     O = unwrap(O)
@@ -432,6 +439,25 @@ function equations(sys::ModelingToolkit.AbstractSystem)
                       namespace_equations.(get_systems(sys));
                       init=Equation[])]
         return eqs
+    end
+end
+
+function preface(sys::ModelingToolkit.AbstractSystem)
+    has_preface(sys) || return nothing
+    pre = get_preface(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        return pre
+    else
+        pres = pre === nothing ? [] : pre
+        for sys in systems
+            pre = get_preface(sys)
+            pre === nothing && continue
+            for eq in pre
+                push!(pres, namespace_assignment(eq, sys))
+            end
+        end
+        return isempty(pres) ? nothing : pres
     end
 end
 
