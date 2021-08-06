@@ -10,7 +10,7 @@ function calculate_tgrad(sys::AbstractODESystem;
   xs = states(sys)
   rule = Dict(map((x, xt) -> xt=>x, detime_dvs.(xs), xs))
   rhs = substitute.(rhs, Ref(rule))
-  tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r), simplify) for r in rhs]
+  tgrad = [expand_derivatives(Differential(iv)(r), simplify) for r in rhs]
   reverse_rule = Dict(map((x, xt) -> x=>xt, detime_dvs.(xs), xs))
   tgrad = Num.(substitute.(tgrad, Ref(reverse_rule)))
   get_tgrad(sys)[] = tgrad
@@ -102,8 +102,8 @@ function generate_function(
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
-    if has_preface(sys)
-      pre = ex -> Let(preface(sys), ex)
+    if has_preface(sys) && (pre = preface(sys); pre !== nothing)
+      pre = ex -> Let(pre, ex)
     else
         pre = ex -> ex
     end
@@ -415,13 +415,13 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     =#
 
     fsym = gensym(:f)
-    _f = :($fsym = ModelingToolkit.ODEFunctionClosure($f_oop, $f_iip))
+    _f = :($fsym = $ODEFunctionClosure($f_oop, $f_iip))
     tgradsym = gensym(:tgrad)
     if tgrad
         tgrad_oop, tgrad_iip = generate_tgrad(sys, dvs, ps;
                                 simplify=simplify,
                                 expression=Val{true}, kwargs...)
-        _tgrad = :($tgradsym = ModelingToolkit.ODEFunctionClosure($tgrad_oop, $tgrad_iip))
+        _tgrad = :($tgradsym = $ODEFunctionClosure($tgrad_oop, $tgrad_iip))
     else
         _tgrad = :($tgradsym = nothing)
     end
@@ -431,7 +431,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
         jac_oop,jac_iip = generate_jacobian(sys, dvs, ps;
                                  sparse=sparse, simplify=simplify,
                                  expression=Val{true}, kwargs...)
-        _jac = :($jacsym = ModelingToolkit.ODEFunctionClosure($jac_oop, $jac_iip))
+        _jac = :($jacsym = $ODEFunctionClosure($jac_oop, $jac_iip))
     else
         _jac = :($jacsym = nothing)
     end
