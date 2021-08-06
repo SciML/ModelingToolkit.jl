@@ -61,7 +61,7 @@ sol_map2 = solve(prob_map,FunctionMap());
 @parameters t
 @variables x(..) y(..) z(t)
 D1 = Difference(t; dt=1.5)
-D2 = Difference(t; dt=0.1)
+D2 = Difference(t; dt=2)
 
 @test ModelingToolkit.is_delay_var(Symbolics.value(t), Symbolics.value(x(t-2)))
 @test ModelingToolkit.is_delay_var(Symbolics.value(t), Symbolics.value(y(t-1)))
@@ -82,9 +82,10 @@ eqs2, max_delay = ModelingToolkit.linearize_eqs(sys; return_max_delay=true)
 @test max_delay[x] ≈ 3
 @test max_delay[y] ≈ 2
 
-# linearized_eqs = [
-#     eqs
-#     x(t - 3.0) ~ x(t - 1.5)
-#     x(t - 1.5) ~ x(t)
-# ]
-# @test all(eqs2 .== linearized_eqs)
+linearized_eqs = [
+    eqs
+    x(t - 3.0) ~ x(t - 1.5)
+    x(t - 1.5) ~ x(t)
+    y(t - 2.0) ~ y(t)
+]
+@test all(eqs2 .== linearized_eqs)

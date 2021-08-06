@@ -123,7 +123,7 @@ function is_delay_var(iv, var)
     delay = iv - first(args)
     delay isa Integer || 
     delay isa AbstractFloat ||
-    (delay isa Num && isreal(delay.val)) 
+    (delay isa Num && isreal(value(delay))) 
 end
 
 function check_variables(dvs, iv)
