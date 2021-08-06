@@ -71,7 +71,7 @@ end
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y*t,
        D(z) ~ x*y - β*z]
-de = ODESystem(eqs) # This is broken
+@named de = ODESystem(eqs)
 ModelingToolkit.calculate_tgrad(de)
 
 tgrad_oop, tgrad_iip = eval.(ModelingToolkit.generate_tgrad(de))
@@ -87,7 +87,7 @@ tgrad_iip(du,u,p,t)
 eqs = [D(x) ~ σ′*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
-de = ODESystem(eqs)
+@named de = ODESystem(eqs)
 test_diffeq_inference("global iv-varying", de, t, (x, y, z), (σ′, ρ, β))
 
 f = eval(generate_function(de, [x,y,z], [σ′,ρ,β])[2])
@@ -99,7 +99,7 @@ f(du, [1.0,2.0,3.0], [x->x+7,2,3], 5.0)
 eqs = [D(x) ~ σ(t-1)*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
-de = ODESystem(eqs)
+@named de = ODESystem(eqs)
 test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ(t-1), ρ, β))
 f = eval(generate_function(de, [x,y,z], [σ,ρ,β])[2])
 du = [0.0,0.0,0.0]
@@ -107,7 +107,7 @@ f(du, [1.0,2.0,3.0], [x->x+7,2,3], 5.0)
 @test du ≈ [11, -3, -7]
 
 eqs = [D(x) ~ x + 10σ(t-1) + 100σ(t-2) + 1000σ(t^2)]
-de = ODESystem(eqs)
+@named de = ODESystem(eqs)
 test_diffeq_inference("many internal iv-varying", de, t, (x,), (σ(t-2),σ(t^2), σ(t-1)))
 f = eval(generate_function(de, [x], [σ])[2])
 du = [0.0]
@@ -120,7 +120,7 @@ D2 = Differential(t)^2
 @variables u(t) uˍtt(t) uˍt(t) xˍt(t)
 eqs = [D3(u) ~ 2(D2(u)) + D(u) + D(x) + 1
        D2(x) ~ D(x) + 2]
-de = ODESystem(eqs)
+@named de = ODESystem(eqs)
 de1 = ode_order_lowering(de)
 lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
                D(xˍt)  ~ xˍt + 2
@@ -131,7 +131,7 @@ lowered_eqs = [D(uˍtt) ~ 2uˍtt + uˍt + xˍt + 1
 #@test de1 == ODESystem(lowered_eqs)
 
 # issue #219
-@test all(isequal.([ModelingToolkit.var_from_nested_derivative(eq.lhs)[1] for eq in equations(de1)], states(ODESystem(lowered_eqs))))
+@test all(isequal.([ModelingToolkit.var_from_nested_derivative(eq.lhs)[1] for eq in equations(de1)], states(@named lowered = ODESystem(lowered_eqs))))
 
 test_diffeq_inference("first-order transform", de1, t, [uˍtt, xˍt, uˍt, u, x], [])
 du = zeros(5)
@@ -144,7 +144,7 @@ a = y - x
 eqs = [D(x) ~ σ*a,
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
-de = ODESystem(eqs)
+@named de = ODESystem(eqs)
 generate_function(de, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(de)
 @test ModelingToolkit.jacobian_sparsity(de).colptr == sparse(jac).colptr
@@ -157,7 +157,7 @@ D = Differential(t)
 _x = y / C
 eqs = [D(x) ~ -A*x,
        D(y) ~ A*x - B*_x]
-de = ODESystem(eqs)
+@named de = ODESystem(eqs)
 @test begin
     local f, du
     f = eval(generate_function(de, [x,y], [A,B,C])[2])
@@ -199,7 +199,7 @@ D = Differential(t)
 eqs = [D(y₁) ~ -k₁*y₁+k₃*y₂*y₃,
        0     ~  y₁ + y₂ + y₃ - 1,
        D(y₂) ~  k₁*y₁-k₂*y₂^2-k₃*y₂*y₃]
-sys = ODESystem(eqs, defaults=[k₁ => 100, k₂ => 3e7, y₁ => 1.0])
+@named sys = ODESystem(eqs, defaults=[k₁ => 100, k₂ => 3e7, y₁ => 1.0])
 u0 = Pair[]
 push!(u0, y₂ => 0.0)
 push!(u0, y₃ => 0.0)
@@ -247,7 +247,7 @@ D = Differential(t)
 eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x-β*y,
        x + z ~ y]
-sys = ODESystem(eqs)
+@named sys = ODESystem(eqs)
 @test all(isequal.(states(sys), [x, y, z]))
 @test all(isequal.(parameters(sys), [σ, β]))
 @test equations(sys) == eqs
@@ -258,14 +258,14 @@ using ModelingToolkit
 @parameters t a
 @variables x(t)
 D = Differential(t)
-sys = ODESystem([D(x) ~ a])
+@named sys = ODESystem([D(x) ~ a])
 @test equations(sys)[1].rhs isa Sym
 
 # issue 708
 @parameters t a
 @variables x(t) y(t) z(t)
 D = Differential(t)
-sys = ODESystem([D(x) ~ y, 0 ~ x + z, 0 ~ x - y], t, [z, y, x], [])
+@named sys = ODESystem([D(x) ~ y, 0 ~ x + z, 0 ~ x - y], t, [z, y, x], [])
 sys2 = ode_order_lowering(sys)
 M = ModelingToolkit.calculate_massmatrix(sys2)
 @test M == Diagonal([1, 0, 0])
@@ -278,7 +278,7 @@ eqs = [
    D(x1) ~ -x1,
    0 ~ x1 - x2,
 ]
-sys = ODESystem(eqs, t)
+@named sys = ODESystem(eqs, t)
 @test isequal(ModelingToolkit.get_iv(sys), t)
 @test isequal(states(sys), [x1, x2])
 @test isempty(parameters(sys))
@@ -288,7 +288,7 @@ sys = ODESystem(eqs, t)
 @variables x(t)
 D = Differential(t)
 eq = D(x) ~ r*x
-ode = ODESystem(eq)
+@named ode = ODESystem(eq)
 @test equations(ode) == [eq]
 # issue #808
 @testset "Combined system name collisions" begin
@@ -306,7 +306,7 @@ ode = ODESystem(eq)
 
         @parameters t
         D = Differential(t)
-        @test_throws ArgumentError ODESystem([sys2.f ~ sys1.x, D(sys1.f) ~ 0], t, systems = [sys1, sys2])
+        @test_throws ArgumentError ODESystem([sys2.f ~ sys1.x, D(sys1.f) ~ 0], t, systems = [sys1, sys2], name=:foo)
     end
     issue808()
 
@@ -320,19 +320,19 @@ der = Differential(t)
 eqs = [
   der(u1) ~ 1,
 ]
-@test_throws ArgumentError ODESystem(eqs, t, vars, pars)
+@test_throws ArgumentError ODESystem(eqs, t, vars, pars, name=:foo)
 
 #Issue 1063/998
 pars = [t]
 vars = @variables((u1(t),))
-@test_throws ArgumentError ODESystem(eqs, t, vars, pars)
+@test_throws ArgumentError ODESystem(eqs, t, vars, pars, name=:foo)
 
 @parameters w
 der = Differential(w)
 eqs = [
   der(u1) ~ t,
 ]
-@test_throws ArgumentError ModelingToolkit.ODESystem(eqs, t, vars, pars)
+@test_throws ArgumentError ModelingToolkit.ODESystem(eqs, t, vars, pars, name=:foo)
 
 @variables x(t)
 D = Differential(t)
@@ -353,7 +353,7 @@ sol = solve(prob, Tsit5())
 @variables x1(t) x2(t)
 D = Differential(t)
 eqs = [D(x1) ~ -x1]
-sys = ODESystem(eqs,t,[x1,x2],[])
+@named sys = ODESystem(eqs,t,[x1,x2],[])
 @test_throws ArgumentError ODEProblem(sys, [1.0,1.0], (0.0,1.0))
 prob = ODEProblem(sys, [1.0,1.0], (0.0,1.0), check_length=false)
 
@@ -364,7 +364,7 @@ let
     δ = Differential(t)
 
     eqs = [δ(x) ~ ẋ, δ(ẋ) ~ f - k*x - d*ẋ]
-    sys = ODESystem(eqs, t, [x, ẋ], [f, d, k]; controls = [f])
+    @named sys = ODESystem(eqs, t, [x, ẋ], [f, d, k]; controls = [f])
 
     calculate_control_jacobian(sys)
 
@@ -378,7 +378,7 @@ end
 let
     @variables t x[1:3,1:3](t)
     D = Differential(t)
-    sys = ODESystem(D.(x) .~ x)
+    @named sys = ODESystem(D.(x) .~ x)
     @test_nowarn structural_simplify(sys)
 end
 
@@ -409,7 +409,7 @@ eqs = [
     δ(y) ~ -c*y + d*x*y,
     D(x) ~ y
 ]
-de = ODESystem(eqs,t,[x,y],[a,b,c,d])
+@named de = ODESystem(eqs,t,[x,y],[a,b,c,d])
 @test generate_difference_cb(de) isa ModelingToolkit.DiffEqCallbacks.DiscreteCallback
 
 # doesn't work with ODEFunction
@@ -440,3 +440,20 @@ sol2 = solve(prob2, Tsit5(); callback=difference_cb, tstops=collect(prob.tspan[1
 
 @test sol(0:0.01:1)[x] ≈ sol2(0:0.01:1)[1,:]
 @test sol(0:0.01:1)[y] ≈ sol2(0:0.01:1)[2,:]
+
+using ModelingToolkit
+
+function submodel(;name)
+    @variables t y(t)
+    @parameters A[1:5]
+    A = collect(A)
+    D = Differential(t)
+    ODESystem(D(y) ~ sum(A) * y; name=name)
+end
+
+# Buid system
+@named sys1 = submodel()
+@named sys2 = submodel()
+
+@variables t
+@named sys = ODESystem([0 ~ sys1.y + sys2.y ], t; systems=[sys1, sys2])

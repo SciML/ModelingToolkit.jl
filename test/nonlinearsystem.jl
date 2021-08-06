@@ -21,7 +21,7 @@ end
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β], defaults = Dict(x => 2))
+@named ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β], defaults = Dict(x => 2))
 @test eval(toexpr(ns)) == ns
 test_nlsys_inference("standard", ns, (x, y, z), (σ, ρ, β))
 @test begin
@@ -39,7 +39,7 @@ end
 eqs = [0 ~ σ*(y-x),
        y ~ x*(ρ-z),
        β*z ~ x*y]
-ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
+@named ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 jac = calculate_jacobian(ns)
 @testset "nlsys jacobian" begin
     @test canonequal(jac[1,1], σ * -1)
@@ -62,7 +62,7 @@ a = y - x
 eqs = [0 ~ σ*a,
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
+@named ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 nlsys_func = generate_function(ns, [x,y,z], [σ,ρ,β])
 nf = NonlinearFunction(ns)
 jac = calculate_jacobian(ns)
@@ -90,7 +90,7 @@ lorenz = name -> NonlinearSystem(eqs1, [x,y,z,u,F], [σ,ρ,β], name=name)
 lorenz1 = lorenz(:lorenz1)
 @test_throws ArgumentError NonlinearProblem(lorenz1, zeros(5))
 lorenz2 = lorenz(:lorenz2)
-connected = NonlinearSystem([s ~ a + lorenz1.x
+@named connected = NonlinearSystem([s ~ a + lorenz1.x
                              lorenz2.y ~ s
                              lorenz1.F ~ lorenz2.u
                              lorenz2.F ~ lorenz1.u], [s, a], [], systems=[lorenz1,lorenz2])
@@ -116,7 +116,7 @@ sol = solve(prob, Rodas5())
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
+@named ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
 np = NonlinearProblem(ns, [0,0,0], [1,2,3], jac=true, sparse=true)
 @test calculate_jacobian(ns, sparse=true) isa SparseMatrixCSC
 
@@ -132,7 +132,7 @@ np = NonlinearProblem(ns, [0,0,0], [1,2,3], jac=true, sparse=true)
        function issue819()
            sys1 = makesys(:sys1)
            sys2 = makesys(:sys1)
-           @test_throws ArgumentError NonlinearSystem([sys2.f ~ sys1.x, sys1.f ~ 0], [], [], systems = [sys1, sys2])
+           @test_throws ArgumentError NonlinearSystem([sys2.f ~ sys1.x, sys1.f ~ 0], [], [], systems = [sys1, sys2], name=:foo)
        end
        issue819()
 end
