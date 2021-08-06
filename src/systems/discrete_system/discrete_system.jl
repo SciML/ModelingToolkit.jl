@@ -171,7 +171,7 @@ end
 
 function get_delay_val(iv, x)
     delay = x - iv
-    delay > 0 && error("Forward delay not permitted")
+    isequal(delay > 0, true) && error("Forward delay not permitted")
     return -delay
 end
 

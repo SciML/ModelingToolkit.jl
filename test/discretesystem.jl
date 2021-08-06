@@ -66,6 +66,7 @@ D2 = Difference(t; dt=2)
 @test ModelingToolkit.is_delay_var(Symbolics.value(t), Symbolics.value(x(t-2)))
 @test ModelingToolkit.is_delay_var(Symbolics.value(t), Symbolics.value(y(t-1)))
 @test !ModelingToolkit.is_delay_var(Symbolics.value(t), Symbolics.value(z))
+@test_throws ErrorException ModelingToolkit.get_delay_val(Symbolics.value(t), Symbolics.arguments(Symbolics.value(x(t+2)))[1])
 @test_throws ErrorException z(t)
 
 # Equations
