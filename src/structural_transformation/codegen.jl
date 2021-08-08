@@ -193,7 +193,7 @@ function build_torn_function(
 
     out = Sym{Any}(gensym("out"))
     odefunbody = SetArray(
-        checkbounds,
+        !checkbounds,
         out,
         rhss
     )
