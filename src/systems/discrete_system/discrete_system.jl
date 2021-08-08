@@ -11,8 +11,8 @@ $(FIELDS)
 ```
 using ModelingToolkit
 
-@parameters t σ ρ β
-@variables x(t) y(t) z(t) next_x(t) next_y(t) next_z(t)
+@parameters σ ρ β
+@variables t x(t) y(t) z(t) next_x(t) next_y(t) next_z(t)
 
 eqs = [next_x ~ σ*(y-x),
        next_y ~ x*(ρ-z)-y,

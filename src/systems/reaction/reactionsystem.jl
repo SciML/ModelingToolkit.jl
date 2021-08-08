@@ -11,8 +11,8 @@ $(FIELDS)
 
 ```julia
 using ModelingToolkit
-@parameters t k[1:20]
-@variables A(t) B(t) C(t) D(t)
+@parameters k[1:20]
+@variables t A(t) B(t) C(t) D(t)
 rxs = [Reaction(k[1], nothing, [A]),            # 0 -> A
        Reaction(k[2], [B], nothing),            # B -> 0
        Reaction(k[3],[A],[C]),                  # A -> C
