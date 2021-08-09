@@ -216,10 +216,6 @@ Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field} 
 end
 
 rename(x::AbstractSystem, name) = @set x.name = name
-function rename(xx::Symbolics.ArrayOp, name)
-    @set! xx.expr.f.arguments[1] = rename(xx.expr.f.arguments[1], name)
-    @set! xx.term.arguments[2] = rename(xx.term.arguments[2], name)
-end
 
 function Base.propertynames(sys::AbstractSystem; private=false)
     if private
@@ -324,29 +320,12 @@ GlobalScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, GlobalScope(
 
 renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
 
-function _renamespace(sys, x)
-    v = unwrap(x)
-
-    if istree(v) && symtype(operation(v)) <: FnType
-        ov = metadata(operation(v), metadata(v))
-        return similarterm(v, renamespace(sys, ov), arguments(v), symtype(v), metadata=metadata(v))
-    end
-
-    if v isa Namespace
-        sysp, v = v.parent, v.named
-        sysn = Symbol(getname(sys), :., getname(sysp))
-        sys = sys isa AbstractSystem ? rename(sysp, sysn) : sysn
-    end
-
-    Namespace(sys, v)
-end
-
 function renamespace(sys, x)
     x = unwrap(x)
     if x isa Symbolic
         let scope = getmetadata(x, SymScope, LocalScope())
             if scope isa LocalScope
-                _renamespace(sys, x)
+                rename(x, renamespace(getname(sys), getname(x)))
             elseif scope isa ParentScope
                 setmetadata(x, SymScope, scope.parent)
             else # GlobalScope
@@ -354,7 +333,7 @@ function renamespace(sys, x)
             end
         end
     else
-        Symbol(getname(sys), :., x)
+        Symbol(getname(sys), :₊, x)
     end
 end
 
