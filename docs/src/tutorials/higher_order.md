@@ -13,8 +13,8 @@ We utilize the derivative operator twice here to define the second order:
 ```julia
 using ModelingToolkit, OrdinaryDiffEq
 
-@parameters t σ ρ β
-@variables x(t) y(t) z(t)
+@parameters σ ρ β
+@variables t x(t) y(t) z(t)
 D = Differential(t)
 
 eqs = [D(D(x)) ~ σ*(y-x),

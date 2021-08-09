@@ -11,8 +11,8 @@ $(FIELDS)
 
 ```julia
 using ModelingToolkit
-@parameters t k[1:20]
-@variables A(t) B(t) C(t) D(t)
+@parameters k[1:20]
+@variables t A(t) B(t) C(t) D(t)
 rxs = [Reaction(k[1], nothing, [A]),            # 0 -> A
        Reaction(k[2], [B], nothing),            # B -> 0
        Reaction(k[3],[A],[C]),                  # A -> C
@@ -60,15 +60,10 @@ struct Reaction{S, T <: Number}
     `true` if `rate` represents the full reaction rate law.
     """
     only_use_rate::Bool
-    """
-    type: type of the system
-    """
-    connection_type::Any
 end
 
 function Reaction(rate, subs, prods, substoich, prodstoich;
                   netstoich=nothing, only_use_rate=false,
-                  connection_type=nothing,
                   kwargs...)
 
     (isnothing(prods)&&isnothing(subs)) && error("A reaction requires a non-nothing substrate or product vector.")
@@ -86,7 +81,7 @@ function Reaction(rate, subs, prods, substoich, prodstoich;
     subs = value.(subs)
     prods = value.(prods)
     ns = isnothing(netstoich) ? get_netstoich(subs, prods, substoich, prodstoich) : netstoich
-    Reaction(value(rate), subs, prods, substoich, prodstoich, ns, only_use_rate, connection_type)
+    Reaction(value(rate), subs, prods, substoich, prodstoich, ns, only_use_rate)
 end
 
 
@@ -135,7 +130,7 @@ Continuing from the example in the [`Reaction`](@ref) definition:
 rs = ReactionSystem(rxs, t, [A,B,C,D], k)
 ```
 """
-struct ReactionSystem <: AbstractSystem
+struct ReactionSystem <: AbstractTimeDependentSystem
     """The reactions defining the system."""
     eqs::Vector{Reaction}
     """Independent variable (usually time)."""
@@ -154,27 +149,33 @@ struct ReactionSystem <: AbstractSystem
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
+    """
+    type: type of the system
+    """
+    connection_type::Any
 
-    function ReactionSystem(eqs, iv, states, ps, observed, name, systems, defaults)
+
+    function ReactionSystem(eqs, iv, states, ps, observed, name, systems, defaults, connection_type)
         iv′ = value(iv)
         states′ = value.(states)
         ps′ = value.(ps)
         check_variables(states′, iv′)
         check_parameters(ps′, iv′)
-        new(collect(eqs), iv′, states′, ps′, observed, name, systems, defaults)
+        new(collect(eqs), iv′, states′, ps′, observed, name, systems, defaults, connection_type)
     end
 end
 
 function ReactionSystem(eqs, iv, species, params;
                         observed = [],
                         systems = [],
-                        name = gensym(:ReactionSystem),
+                        name = nothing,
                         default_u0=Dict(),
                         default_p=Dict(),
-                        defaults=_merge(Dict(default_u0), Dict(default_p)))
-
+                        defaults=_merge(Dict(default_u0), Dict(default_p)),
+                        connection_type=nothing)
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     #isempty(species) && error("ReactionSystems require at least one species.")
-    ReactionSystem(eqs, iv, species, params, observed, name, systems, defaults)
+    ReactionSystem(eqs, iv, species, params, observed, name, systems, defaults, connection_type)
 end
 
 function ReactionSystem(iv; kwargs...)
@@ -457,7 +458,7 @@ Finally, a `Vector{Num}` can be provided (the length must be equal to the number
 Here the noise for each reaction is scaled by the corresponding parameter in the input vector.
 This input may contain repeat parameters.
 """
-function Base.convert(::Type{<:SDESystem}, rs::ReactionSystem; 
+function Base.convert(::Type{<:SDESystem}, rs::ReactionSystem;
                       noise_scaling=nothing, name=nameof(rs), combinatoric_ratelaws=true, 
                       include_zero_odes=true, kwargs...)
 

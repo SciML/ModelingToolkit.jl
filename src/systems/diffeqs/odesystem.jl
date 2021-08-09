@@ -11,8 +11,8 @@ $(FIELDS)
 ```julia
 using ModelingToolkit
 
-@parameters t σ ρ β
-@variables x(t) y(t) z(t)
+@parameters σ ρ β
+@variables t x(t) y(t) z(t)
 D = Differential(t)
 
 eqs = [D(x) ~ σ*(y-x),
@@ -80,15 +80,19 @@ struct ODESystem <: AbstractODESystem
     """
     structure::Any
     """
-    type: type of the system
+    connection_type: type of the system
     """
     connection_type::Any
+    """
+    preface: injuect assignment statements before the evaluation of the RHS function.
+    """
+    preface::Any
 
-    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type)
+    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface)
         check_variables(dvs,iv)
         check_parameters(ps,iv)
         check_equations(deqs,iv)
-        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type)
+        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface)
     end
 end
 
@@ -97,12 +101,14 @@ function ODESystem(
                    controls  = Num[],
                    observed = Num[],
                    systems = ODESystem[],
-                   name=gensym(:ODESystem),
+                   name=nothing,
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
+                   preface=nothing,
                   )
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = collect(deqs)
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
 
@@ -134,7 +140,7 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type)
+    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface)
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)
@@ -177,8 +183,8 @@ end
 
 # NOTE: equality does not check cached Jacobian
 function Base.:(==)(sys1::ODESystem, sys2::ODESystem)
-    iv1 = independent_variable(sys1)
-    iv2 = independent_variable(sys2)
+    iv1 = get_iv(sys1)
+    iv2 = get_iv(sys2)
     isequal(iv1, iv2) &&
     isequal(nameof(sys1), nameof(sys2)) &&
     _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
@@ -194,7 +200,7 @@ function flatten(sys::ODESystem)
     else
         return ODESystem(
                          equations(sys),
-                         independent_variable(sys),
+                         get_iv(sys),
                          states(sys),
                          parameters(sys),
                          observed=observed(sys),
@@ -236,8 +242,8 @@ function build_explicit_observed_function(
 
     dvs = DestructuredArgs(states(sys), inbounds=!checkbounds)
     ps = DestructuredArgs(parameters(sys), inbounds=!checkbounds)
-    iv = independent_variable(sys)
-    args = iv === nothing ? [dvs, ps] : [dvs, ps, iv]
+    ivs = independent_variables(sys)
+    args = [dvs, ps, ivs...]
 
     ex = Func(
         args, [],
@@ -291,7 +297,7 @@ function convert_system(::Type{<:ODESystem}, sys, t; name=nameof(sys))
             newsts[i] = ns
             varmap[s] = ns
         else
-            ns = indepvar2depvar(s, t)
+            ns = variable(getname(s); T=FnType)(t)
             newsts[i] = ns
             varmap[s] = ns
         end

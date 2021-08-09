@@ -33,7 +33,7 @@ using RecursiveArrayTools
 import SymbolicUtils
 import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
                       Symbolic, Term, Add, Mul, Pow, Sym, FnType,
-                      @rule, Rewriters, substitute
+                      @rule, Rewriters, substitute, metadata
 using SymbolicUtils.Code
 import SymbolicUtils.Code: toexpr
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
@@ -43,7 +43,8 @@ using Reexport
 @reexport using Symbolics
 export @derivatives
 using Symbolics: _parse_vars, value, @derivatives, get_variables,
-                 exprs_occur_in, solve_for, build_expr, unwrap, wrap
+                 exprs_occur_in, solve_for, build_expr, unwrap, wrap,
+                 VariableSource, getname, variable
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   jacobian_sparsity, islinear, _iszero, _isone,
                   tosymbol, lower_varname, diff2term, var_from_nested_derivative,
@@ -77,7 +78,10 @@ $(TYPEDEF)
 TODO
 """
 abstract type AbstractSystem end
-abstract type AbstractODESystem <: AbstractSystem end
+abstract type AbstractTimeDependentSystem <: AbstractSystem end
+abstract type AbstractTimeIndependentSystem <: AbstractSystem end
+abstract type AbstractODESystem <: AbstractTimeDependentSystem end
+abstract type AbstractMultivariateSystem <: AbstractSystem end
 
 """
 $(TYPEDSIGNATURES)
@@ -85,6 +89,8 @@ $(TYPEDSIGNATURES)
 Get the set of independent variables for the given system.
 """
 function independent_variables end
+
+function independent_variable end
 
 """
 $(TYPEDSIGNATURES)
@@ -148,6 +154,7 @@ end
 
 struct Flow end
 
+export AbstractTimeDependentSystem, AbstractTimeIndependentSystem, AbstractMultivariateSystem
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
@@ -170,7 +177,7 @@ export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
-export independent_variable, states, parameters, equations, controls, observed, structure
+export independent_variables, independent_variable, states, parameters, equations, controls, observed, structure
 export structural_simplify
 export DiscreteSystem, DiscreteProblem
 

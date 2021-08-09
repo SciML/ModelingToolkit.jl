@@ -24,7 +24,7 @@ rxs = [Reaction(k[1], nothing, [A]),            # 0 -> A
        Reaction(k[19]*t, [A], [B]),                                # A -> B with non constant rate.
        Reaction(k[20]*t*A, [B,C], [D],[2,1],[2])                  # 2A +B -> 2C with non constant rate.
   ]
-rs = ReactionSystem(rxs,t,[A,B,C,D],k)
+@named rs = ReactionSystem(rxs,t,[A,B,C,D],k)
 odesys = convert(ODESystem,rs)
 sdesys = convert(SDESystem,rs)
 
@@ -39,7 +39,7 @@ def_p = [ki => float(i) for (i, ki) in enumerate(k)]
 def_u0 = [A => 0.5, B => 1., C=> 1.5, D => 2.0]
 defs = merge(Dict(def_p), Dict(def_u0))
 
-rs = ReactionSystem(rxs,t,[A,B,C,D],k; defaults=defs)
+@named rs = ReactionSystem(rxs,t,[A,B,C,D],k; defaults=defs)
 odesys = convert(ODESystem,rs)
 sdesys = convert(SDESystem,rs)
 js = convert(JumpSystem,rs)
@@ -221,7 +221,7 @@ end
 @parameters t
 @variables S(t) I(t)
 rxs = [Reaction(1,[S],[I]), Reaction(1.1,[S],[I])]
-rs = ReactionSystem(rxs, t, [S,I], [])
+@named rs = ReactionSystem(rxs, t, [S,I], [])
 js = convert(JumpSystem, rs)
 dprob = DiscreteProblem(js, [S => 1, I => 1], (0.0,10.0))
 jprob = JumpProblem(js, dprob, Direct())
@@ -235,7 +235,7 @@ jprob = JumpProblem(rs, dprob, Direct(), save_positions=(false,false))
 @variables R(t)
 rxs = [Reaction(k1*S, [S,I], [I], [2,3], [2]),
        Reaction(k2*R, [I], [R]) ]
-rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
+@named rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
 @test isequal(ModelingToolkit.oderatelaw(equations(rs)[1]), k1*S*S^2*I^3/(factorial(2)*factorial(3)))
 @test_skip isequal(ModelingToolkit.jumpratelaw(equations(eqs)[1]), k1*S*binomial(S,2)*binomial(I,3))
 dep = Set()
@@ -268,7 +268,7 @@ js = convert(JumpSystem,rs;combinatoric_ratelaws=false)
 # test MassActionJump rate scaling
 rxs = [Reaction(k1, [S,I], [I], [2,3], [2]),
        Reaction(k2, [I], [R]) ]
-rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
+@named rs = ReactionSystem(rxs, t, [S,I,R], [k1,k2])
 js = convert(JumpSystem, rs)
 @test isequal2(equations(js)[1].scaled_rates, k1/12)
 js = convert(JumpSystem,rs; combinatoric_ratelaws=false)

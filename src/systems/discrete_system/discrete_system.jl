@@ -11,8 +11,8 @@ $(FIELDS)
 ```
 using ModelingToolkit
 
-@parameters t σ ρ β
-@variables x(t) y(t) z(t) next_x(t) next_y(t) next_z(t)
+@parameters σ ρ β
+@variables t x(t) y(t) z(t) next_x(t) next_y(t) next_z(t)
 
 eqs = [next_x ~ σ*(y-x),
        next_y ~ x*(ρ-z)-y,
@@ -21,7 +21,7 @@ eqs = [next_x ~ σ*(y-x),
 de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β])
 ```
 """
-struct DiscreteSystem <: AbstractSystem
+struct DiscreteSystem <: AbstractTimeDependentSystem
     """The differential equations defining the discrete system."""
     eqs::Vector{Equation}
     """Independent variable."""
@@ -71,11 +71,12 @@ function DiscreteSystem(
                    controls = Num[],
                    observed = Num[],
                    systems = DiscreteSystem[],
-                   name=gensym(:DiscreteSystem),
+                   name=nothing,
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                   )
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     eqs = collect(eqs)
     iv′ = value(iv)
     dvs′ = value.(dvs)

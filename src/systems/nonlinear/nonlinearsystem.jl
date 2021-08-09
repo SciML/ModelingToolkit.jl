@@ -18,7 +18,7 @@ eqs = [0 ~ σ*(y-x),
 ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β])
 ```
 """
-struct NonlinearSystem <: AbstractSystem
+struct NonlinearSystem <: AbstractTimeIndependentSystem
     """Vector of equations defining the system."""
     eqs::Vector{Equation}
     """Unknown variables."""
@@ -58,14 +58,17 @@ end
 
 function NonlinearSystem(eqs, states, ps;
                          observed=[],
-                         name=gensym(:NonlinearSystem),
+                         name=nothing,
                          default_u0=Dict(),
                          default_p=Dict(),
                          defaults=_merge(Dict(default_u0), Dict(default_p)),
                          systems=NonlinearSystem[],
                          connection_type=nothing,
                          )
-    eqs = collect(eqs)
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
+    # Move things over, but do not touch array expressions
+    eqs = [0 ~ x.rhs - x.lhs for x in collect(eqs)]
+
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :NonlinearSystem, force=true)
     end
@@ -77,6 +80,7 @@ function NonlinearSystem(eqs, states, ps;
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
+    states = collect(states)
     states, ps = value.(states), value.(ps)
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, states)
