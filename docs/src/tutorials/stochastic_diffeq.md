@@ -23,7 +23,7 @@ noiseeqs = [0.1*x,
             0.1*y,
             0.1*z]
 
-de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β])
+@named de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β])
 
 u0map = [
     x => 1.0,
