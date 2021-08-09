@@ -183,8 +183,8 @@ for prop in [
              :loss
              :bcs
              :domain
-             :depvars
-             :indvars
+             :ivs
+             :dvs
              :connection_type
              :preface
             ]
