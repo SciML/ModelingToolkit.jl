@@ -21,7 +21,7 @@ eqs = [D(D(x)) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-sys = ODESystem(eqs)
+@named sys = ODESystem(eqs)
 ```
 
 Note that we could've used an alternative syntax for 2nd order, i.e.

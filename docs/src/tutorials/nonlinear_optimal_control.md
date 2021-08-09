@@ -59,7 +59,7 @@ eqs = [
     D(v) ~ p[1]*u^3 + v
 ]
 
-sys = ControlSystem(loss,eqs,t,[x,v],[u],p)
+@named sys = ControlSystem(loss,eqs,t,[x,v],[u],p)
 ```
 
 ## Solving a Control Problem via Discretize-Then-Optimize

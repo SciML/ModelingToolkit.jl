@@ -6,7 +6,7 @@ using ModelingToolkit, GalacticOptim, Optim
 @variables x y
 @parameters a b
 loss = (a - x)^2 + b * (y - x^2)^2
-sys = OptimizationSystem(loss,[x,y],[a,b])
+@named sys = OptimizationSystem(loss,[x,y],[a,b])
 
 u0 = [
     x=>1.0
