@@ -185,6 +185,8 @@ for prop in [
              :domain
              :depvars
              :indvars
+             :ivs
+             :dvs
              :connection_type
              :preface
             ]
