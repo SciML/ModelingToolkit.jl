@@ -165,11 +165,12 @@ end
 
 function numericrstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     rs = Vector{Pair{Int,W}}()
-    for (spec,stoich) in mtrs
+    for (wspec,stoich) in mtrs
+        spec = value(wspec)
         if !istree(spec) && _iszero(spec)
             push!(rs, 0 => stoich)
         else
-            push!(rs, statetoid[value(spec)] => stoich)
+            push!(rs, statetoid[spec] => stoich)
         end
     end
     sort!(rs)
@@ -178,7 +179,8 @@ end
 
 function numericnstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     ns = Vector{Pair{Int,W}}()
-    for (spec,stoich) in mtrs
+    for (wspec,stoich) in mtrs
+        spec = value(wspec)
         !istree(spec) && _iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
         push!(ns, statetoid[spec] => stoich)
     end
@@ -301,7 +303,8 @@ end
 
 ### Functions to determine which states a jump depends on
 function get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables)
-    (jump.rate isa Symbolic) && get_variables!(dep, jump.rate, variables)
+    jr = value(jump.rate)
+    (jr isa Symbolic) && get_variables!(dep, jr, variables)
     dep
 end
 
