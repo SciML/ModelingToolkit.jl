@@ -166,7 +166,7 @@ end
 function numericrstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     rs = Vector{Pair{Int,W}}()
     for (wspec,stoich) in mtrs
-        spec = value(spec)
+        spec = value(wspec)
         if !istree(spec) && _iszero(spec)
             push!(rs, 0 => stoich)
         else
