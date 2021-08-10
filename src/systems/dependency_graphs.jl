@@ -13,32 +13,25 @@ Notes:
 Example:
 ```julia
 using ModelingToolkit
-@parameters β γ κ η t
-@variables S(t) I(t) R(t)
+@parameters β γ κ η 
+@variables t S(t) I(t) R(t)
 
-# use a reaction system to easily generate ODE and jump systems
-rxs = [Reaction(β, [S,I], [I], [1,1], [2]),
-       Reaction(γ, [I], [R]),
-       Reaction(κ+η, [R], [S])]
-rs = ReactionSystem(rxs, t, [S,I,R], [β,γ,κ,η])
+rate₁   = β*S*I
+rate₂   = γ*I+t
+affect₁ = [S ~ S - 1, I ~ I + 1]
+affect₂ = [I ~ I - 1, R ~ R + 1]
+j₁ = ConstantRateJump(rate₁,affect₁)
+j₂ = VariableRateJump(rate₂,affect₂)
 
-# ODEs:
-odesys = convert(ODESystem, rs)
-
-# dependency of each ODE on state variables
-equation_dependencies(odesys)
-
-# dependency of each ODE on parameters
-equation_dependencies(odesys, variables=parameters(odesys))
-
-# Jumps
-jumpsys = convert(JumpSystem, rs)
+# create a JumpSystem using these jumps
+@named jumpsys = JumpSystem([j₁,j₂], t, [S,I,R], [β,γ])
 
 # dependency of each jump rate function on state variables
 equation_dependencies(jumpsys)
 
 # dependency of each jump rate function on parameters
 equation_dependencies(jumpsys, variables=parameters(jumpsys))
+
 ```
 """
 function equation_dependencies(sys::AbstractSystem; variables=states(sys))

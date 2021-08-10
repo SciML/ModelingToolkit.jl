@@ -15,8 +15,6 @@ using SafeTestsets, Test
 @safetestset "SDESystem Test" begin include("sdesystem.jl") end
 @safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
-@safetestset "ReactionSystem Test" begin include("reactionsystem.jl") end
-@safetestset "ReactionSystem Components Test" begin include("reactionsystem_components.jl") end
 @safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
 @safetestset "ControlSystem Test" begin include("controlsystem.jl") end
 @safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
