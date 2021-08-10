@@ -180,7 +180,7 @@ end
 function numericnstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     ns = Vector{Pair{Int,W}}()
     for (wspec,stoich) in mtrs
-        spec = value(spec)
+        spec = value(wspec)
         !istree(spec) && _iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
         push!(ns, statetoid[spec] => stoich)
     end
