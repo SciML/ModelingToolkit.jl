@@ -945,12 +945,14 @@ by default.
 function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys))
     T = SciMLBase.parameterless_type(basesys)
     ivs = independent_variables(basesys)
-    if length(ivs) == 0
-        sys = convert_system(T, sys)
-    elseif length(ivs) == 1
-        sys = convert_system(T, sys, ivs[1])
-    else
-        throw("Extending multivariate systems is not supported")
+    if !(typeof(sys) <: T)
+        if length(ivs) == 0
+            sys = convert_system(T, sys)
+        elseif length(ivs) == 1
+            sys = convert_system(T, sys, ivs[1])
+        else
+            throw("Extending multivariate systems is not supported")
+        end
     end
 
     eqs = union(equations(basesys), equations(sys))
