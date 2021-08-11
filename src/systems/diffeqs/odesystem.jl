@@ -244,13 +244,14 @@ function build_explicit_observed_function(
     ps = DestructuredArgs(parameters(sys), inbounds=!checkbounds)
     ivs = independent_variables(sys)
     args = [dvs, ps, ivs...]
+    pre = get_postprocess_fbody(sys)
 
     ex = Func(
         args, [],
-        Let(
+        pre(Let(
             map(eq -> eq.lhs←eq.rhs, obs[1:maxidx]),
             isscalar ? output[1] : MakeArray(output, output_type)
-           )
+           ))
     ) |> toexpr
 
     expression ? ex : @RuntimeGeneratedFunction(ex)
