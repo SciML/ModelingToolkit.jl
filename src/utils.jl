@@ -108,7 +108,7 @@ end
 function check_variables(dvs, iv)
     for dv in dvs
         isequal(iv, dv) && throw(ArgumentError("Independent variable $iv not allowed in dependent variables."))
-        isequal(iv, iv_from_nested_derivative(dv)) || throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
+        occursin(iv, iv_from_nested_derivative(dv)) || throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
     end
 end
 

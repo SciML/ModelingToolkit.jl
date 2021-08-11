@@ -75,3 +75,9 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults=Dict(), check=false, to
 end
 
 @noinline throw_missingvars(vars) = throw(ArgumentError("$vars are missing from the variable map."))
+
+struct IsHistory end
+ishistory(x) = ishistory(unwrap(x))
+ishistory(x::Symbolic) = getmetadata(x, IsHistory, false)
+hist(x, t) = wrap(hist(unwrap(x), t))
+hist(x::Symbolic, t) = setmetadata(toparam(similarterm(x, operation(x), [unwrap(t)], metadata=metadata(x))), IsHistory, true)
