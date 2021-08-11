@@ -82,25 +82,21 @@
 
 ## Comparison Against Modia.jl
 
-- Modia.jl is a Modelica-like system built in pure Julia. As such, its syntax
-  is a domain-specific language (DSL) specified by macros to mirror the Modelica
-  syntax.
+- Modia.jl uses Julia's expression objects for representing its equations.
+  ModelingToolkit.jl uses [Symbolics.jl](https://symbolics.juliasymbolics.org/dev/),
+  and thus the Julia expressions follow Julia symantics and can be manipulated
+  using a computer algebra system (CAS).
 - Modia's compilation pipeline is similar to the
   [Dymola symbolic processing pipeline](https://www.claytex.com/tech-blog/model-translation-and-symbolic-manipulation/)
   with some improvements. ModelingToolkit.jl has an open transformation pipeline
   that allows for users to extend and reorder transformation passes, where
   `structural_simplify` is an adaptation of the Modia.jl-improved alias elimination
   and tearing algorithms.
-- Modia supports DAE problems via SUNDIALS IDAS. ModelingToolkit.jl
-  supports DAE and ODE problems via [DifferentialEquations.jl](https://diffeq.sciml.ai/dev/),
-  of which Sundials.jl is <1% of the total available solvers and is outperformed
-  by the native Julia solvers on the vast majority of the benchmark equations.
-  In addition, the DifferentialEquations.jl interface is confederated, meaning
-  that any user can dynamically extend the system to add new solvers to the
-  interface by defining new dispatches of solve.
+- Both Modia and ModelingToolkit generate `DAEProblem` and `ODEProblem` forms for
+  solving with [DifferentialEquations.jl](https://diffeq.sciml.ai/dev/).
 - ModelingToolkit.jl integrates with its host language Julia, so Julia code
   can be automatically converted into ModelingToolkit expressions. Users of
-  Modia must explicitly create Modia expressions within its macro.
+  Modia must explicitly create Modia expressions.
 - Modia covers DAE systems. ModelingToolkit.jl has a much more
   expansive set of system types, including SDEs, PDEs, optimization problems,
   and more.

@@ -32,10 +32,10 @@ end
 
 @parameters t
 D = Differential(t)
-@named connected = ODESystem([
+@named connected = compose(ODESystem([
                         decay2.f ~ decay1.x
                         D(decay1.f) ~ 0
-                      ], t, systems=[decay1, decay2])
+                      ], t), decay1, decay2)
 
 equations(connected)
 
@@ -81,7 +81,7 @@ subsystems. A model is the composition of itself and its subsystems.
 For example, if we have:
 
 ```julia
-@named sys = ODESystem(eqs,indepvar,states,ps,system=[subsys])
+@named sys = compose(ODESystem(eqs,indepvar,states,ps),subsys)
 ```
 
 the `equations` of `sys` is the concatenation of `get_eqs(sys)` and
@@ -191,7 +191,7 @@ N = S + I + R
 @named ieqn = ODESystem([D(I) ~ β*S*I/N-γ*I])
 @named reqn = ODESystem([D(R) ~ γ*I])
 
-@named sir = ODESystem([   
+@named sir = compose(ODESystem([
                     S ~ ieqn.S,
                     I ~ seqn.I,
                     R ~ ieqn.R,
@@ -200,13 +200,12 @@ N = S + I + R
                     seqn.R ~ reqn.R,
                     ieqn.R ~ reqn.R,
                     reqn.I ~ ieqn.I], t, [S,I,R], [β,γ],
-                    systems=[seqn,ieqn,reqn],
-                    default_p = [
+                    defaults = [
                         seqn.β => β
                         ieqn.β => β
                         ieqn.γ => γ
                         reqn.γ => γ
-                    ])
+                    ]), seqn, ieqn, reqn)
 ```
 
 Note that the states are forwarded by an equality relationship, while
@@ -241,14 +240,6 @@ sol = solve(prob,Tsit5())
 sol[reqn.R]
 ```
 
-However, one can similarly simplify this process of inheritance by
-using `combine` which concatenates all of the vectors within the
-systems. For example, we could equivalently have done:
-
-```julia
-@named sir = combine([seqn,ieqn,reqn])
-```
-
 ## Tearing Problem Construction
 
 Some system types, specifically `ODESystem` and `NonlinearSystem`, can be further
@@ -259,12 +250,3 @@ strongly connected components calculated during the process of simplification
 as the basis for building pre-simplified nonlinear systems in the implicit
 solving. In summary: these problems are structurally modified, but could be
 more efficient and more stable.
-
-## Automatic Model Promotion (TODO)
-
-In many cases one might want to compose models of different types. For example,
-one may want to include a `NonlinearSystem` as a set of algebraic equations
-within an `ODESystem`, or one may want to use an `ODESystem` as a subsystem of
-an `SDESystem`. In these cases, the compostion works automatically by promoting
-the model via `promote_system`. System promotions exist in the cases where a
-mathematically-trivial definition of the promotion exists.

@@ -47,20 +47,61 @@ function matching(g::BipartiteGraph, varwhitelist=nothing, eqwhitelist=nothing)
     return assign
 end
 
+function error_reporting(sys, bad_idxs, n_highest_vars, iseqs)
+    io = IOBuffer()
+    if iseqs
+        error_title = "More equations than variables, here are the potential extra equation(s):\n"
+        out_arr = equations(sys)[bad_idxs]
+    else
+        error_title = "More variables than equations, here are the potential extra variable(s):\n"
+        out_arr = structure(sys).fullvars[bad_idxs]
+    end
+
+    Base.print_array(io, out_arr)
+    msg = String(take!(io))
+    neqs = length(equations(sys))
+    if iseqs
+        throw(ExtraEquationsSystemException(
+            "The system is unbalanced. "
+            * "There are $n_highest_vars highest order derivative variables "
+            * "and $neqs equations.\n"
+            * error_title
+            * msg
+        ))
+    else
+        throw(ExtraVariablesSystemException(
+            "The system is unbalanced. "
+            * "There are $n_highest_vars highest order derivative variables "
+            * "and $neqs equations.\n"
+            * error_title
+            * msg
+        ))
+    end
+end
+
 ###
 ### Structural check
 ###
-function check_consistency(s::SystemStructure)
+function check_consistency(sys::AbstractSystem)
+    s = structure(sys)
     @unpack varmask, graph, varassoc, fullvars = s
     n_highest_vars = count(varmask)
     neqs = nsrcs(graph)
     is_balanced = n_highest_vars == neqs
 
-    (neqs > 0 && !is_balanced) && throw(InvalidSystemException(
-          "The system is unbalanced. "
-        * "There are $n_highest_vars highest order derivative variables "
-        * "and $neqs equations."
-       ))
+    if neqs > 0 && !is_balanced
+        varwhitelist = varassoc .== 0
+        assign = matching(graph, varwhitelist) # not assigned
+        # Just use `error_reporting` to do conditional
+        iseqs = n_highest_vars < neqs
+        if iseqs
+            inv_assign = inverse_mapping(assign) # extra equations
+            bad_idxs = findall(iszero, @view inv_assign[1:nsrcs(graph)])
+        else
+            bad_idxs = findall(isequal(UNASSIGNED), assign)
+        end
+        error_reporting(sys, bad_idxs, n_highest_vars, iseqs)
+    end
 
     # This is defined to check if Pantelides algorithm terminates. For more
     # details, check the equation (15) of the original paper.
@@ -235,9 +276,9 @@ function find_solvables!(sys)
         term = value(eq.rhs - eq.lhs)
         for j in 𝑠neighbors(graph, i)
             isalgvar(s, j) || continue
-            D = Differential(fullvars[j])
-            c = expand_derivatives(D(term), false)
-            if !(c isa Symbolic) && c isa Number && c != 0
+            a, b, islinear = linear_expansion(term, fullvars[j])
+            a = unwrap(a)
+            if islinear && (!(a isa Symbolic) && a isa Number && a != 0)
                 add_edge!(solvable_graph, i, j)
             end
         end

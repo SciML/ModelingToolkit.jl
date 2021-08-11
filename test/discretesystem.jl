@@ -3,7 +3,7 @@
 - https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map/function_map.md
 - https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#Deterministic_versus_stochastic_epidemic_models
 =#
-using ModelingToolkit
+using ModelingToolkit, Test
 
 @inline function rate_to_proportion(r,t)
     1-exp(-r*t)
@@ -11,18 +11,19 @@ end;
 
 # Independent and dependent variables and parameters
 @parameters t c nsteps δt β γ
+D = Difference(t; dt=0.1)
 @variables S(t) I(t) R(t) next_S(t) next_I(t) next_R(t)
 
 infection = rate_to_proportion(β*c*I/(S+I+R),δt)*S
 recovery = rate_to_proportion(γ,δt)*I
 
 # Equations
-eqs = [next_S ~ S-infection,
-       next_I ~ I+infection-recovery,
-       next_R ~ R+recovery]
+eqs = [D(S) ~ S-infection,
+       D(I) ~ I+infection-recovery,
+       D(R) ~ R+recovery]
 
 # System
-sys = DiscreteSystem(eqs,t,[S,I,R],[c,nsteps,δt,β,γ])
+@named sys = DiscreteSystem(eqs,t,[S,I,R],[c,nsteps,δt,β,γ]; controls = [β, γ])
 
 # Problem
 u0 = [S => 990.0, I => 10.0, R => 0.0]
@@ -36,16 +37,16 @@ sol_map = solve(prob_map,FunctionMap());
 
 # Direct Implementation
 
-function sir_map!(du,u,p,t)
+function sir_map!(u_diff,u,p,t)
     (S,I,R) = u
     (β,c,γ,δt) = p
     N = S+I+R
     infection = rate_to_proportion(β*c*I/N,δt)*S
     recovery = rate_to_proportion(γ,δt)*I
     @inbounds begin
-        du[1] = S-infection
-        du[2] = I+infection-recovery
-        du[3] = R+recovery
+        u_diff[1] = S-infection
+        u_diff[2] = I+infection-recovery
+        u_diff[3] = R+recovery
     end
     nothing
 end;

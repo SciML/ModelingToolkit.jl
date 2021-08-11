@@ -14,12 +14,12 @@ par = [
     ρ => 0.1+σ,
     β => ρ*1.1
 ]
-u0 = Pair{Num, Any}[
+u0 = [
     x => u,
     y => σ, # default u0 from default p
     z => u-0.1,
 ]
-ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β], name=:ns, defaults=[par; u0])
+ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β], name=:ns, defaults=[par; u0])
 ns.y = u*1.1
 resolved = ModelingToolkit.varmap_to_vars(Dict(), parameters(ns), defaults=ModelingToolkit.defaults(ns))
 @test resolved == [1, 0.1+1, (0.1+1)*1.1]
@@ -37,7 +37,7 @@ top.ns.x = u*0.5
 res = ModelingToolkit.varmap_to_vars(Dict(), parameters(top), defaults=ModelingToolkit.defaults(top))
 @test res == [0.5, 1, 0.1+1, (0.1+1)*1.1]
 
-prob = NonlinearProblem(top, [states(ns, u)=>1.0, a=>1.0], Pair[])
+prob = NonlinearProblem(top, [states(ns, u)=>1.0, a=>1.0], [])
 @test prob.u0 == [1.0, 0.5, 1.1, 0.9]
 @show sol = solve(prob,NewtonRaphson())
 
@@ -56,7 +56,7 @@ vars = @variables(begin
                   end)
 der = Differential(t)
 eqs = [der(x) ~ x]
-sys = ODESystem(eqs, t, vars, [x0])
+@named sys = ODESystem(eqs, t, vars, [x0])
 pars = [
   x0 => 10.0,
 ]

@@ -10,7 +10,7 @@ eqs = [
     D(v) ~ p[1]*u^3 + v
 ]
 
-sys = ControlSystem(loss,eqs,t,[x,v],[u],p)
+@named sys = ControlSystem(loss,eqs,t,[x,v],[u],p)
 dt = 0.1
 tspan = (0.0,1.0)
 sys = runge_kutta_discretize(sys,dt,tspan)
@@ -25,7 +25,7 @@ sol = solve(prob,BFGS())
         D(x) ~ - p[2]*x
         D(v) ~ p[1]*u^3
     ]
-    sys1 = ControlSystem(loss,eqs_short,t,[x,v],[u],p,name=:sys1)
-    sys2 = ControlSystem(loss,eqs_short,t,[x,v],[u],p,name=:sys1)
-    @test_throws ArgumentError ControlSystem(loss,[sys2.v ~ sys1.v],t, [],[],[],systems=[sys1, sys2])
+    sys1 = ControlSystem(loss,eqs_short, t, [x, v], [u], p, name = :sys1)
+    sys2 = ControlSystem(loss,eqs_short, t, [x, v], [u], p, name = :sys1)
+    @test_throws ArgumentError ControlSystem(loss, [sys2.v ~ sys1.v], t, [], [], [], systems = [sys1, sys2], name=:foo)
 end

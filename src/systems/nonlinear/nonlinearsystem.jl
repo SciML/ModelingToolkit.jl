@@ -18,13 +18,15 @@ eqs = [0 ~ σ*(y-x),
 ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β])
 ```
 """
-struct NonlinearSystem <: AbstractSystem
+struct NonlinearSystem <: AbstractTimeIndependentSystem
     """Vector of equations defining the system."""
     eqs::Vector{Equation}
     """Unknown variables."""
     states::Vector
     """Parameters."""
     ps::Vector
+    """Array variables."""
+    var_to_name
     observed::Vector{Equation}
     """
     Jacobian matrix. Note: this field will not be defined until
@@ -56,13 +58,17 @@ end
 
 function NonlinearSystem(eqs, states, ps;
                          observed=[],
-                         name=gensym(:NonlinearSystem),
+                         name=nothing,
                          default_u0=Dict(),
                          default_p=Dict(),
                          defaults=_merge(Dict(default_u0), Dict(default_p)),
                          systems=NonlinearSystem[],
                          connection_type=nothing,
                          )
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
+    # Move things over, but do not touch array expressions
+    eqs = [0 ~ x.rhs - x.lhs for x in collect(eqs)]
+
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :NonlinearSystem, force=true)
     end
@@ -73,7 +79,14 @@ function NonlinearSystem(eqs, states, ps;
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
-    NonlinearSystem(eqs, value.(states), value.(ps), observed, jac, name, systems, defaults, nothing, connection_type)
+
+    states = collect(states)
+    states, ps = value.(states), value.(ps)
+    var_to_name = Dict()
+    process_variables!(var_to_name, defaults, states)
+    process_variables!(var_to_name, defaults, ps)
+
+    NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, nothing, connection_type)
 end
 
 function calculate_jacobian(sys::NonlinearSystem; sparse=false, simplify=false)
@@ -103,18 +116,11 @@ end
 function generate_function(sys::NonlinearSystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     #obsvars = map(eq->eq.lhs, observed(sys))
     #fulldvs = [dvs; obsvars]
-    fulldvs = dvs
-    fulldvs′ = makesym.(value.(fulldvs))
 
-    sub = Dict(fulldvs .=> fulldvs′)
-    # substitute x(t) by just x
-    rhss = [substitute(deq.rhs, sub) for deq ∈ equations(sys)]
-    #obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
+    rhss = [deq.rhs for deq ∈ equations(sys)]
     #rhss = Let(obss, rhss)
 
-    dvs′ = fulldvs′[1:length(dvs)]
-    ps′ = makesym.(value.(ps), states=())
-    return build_function(rhss, dvs′, ps′;
+    return build_function(rhss, value.(dvs), value.(ps);
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
@@ -326,6 +332,7 @@ function flatten(sys::NonlinearSystem)
 end
 
 function Base.:(==)(sys1::NonlinearSystem, sys2::NonlinearSystem)
+    isequal(nameof(sys1), nameof(sys2)) &&
     _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
     _eq_unordered(get_states(sys1), get_states(sys2)) &&
     _eq_unordered(get_ps(sys1), get_ps(sys2)) &&

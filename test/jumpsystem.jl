@@ -10,7 +10,7 @@ rate₂   = γ*I+t
 affect₂ = [I ~ I - 1, R ~ R + 1]
 j₁      = ConstantRateJump(rate₁,affect₁)
 j₂      = VariableRateJump(rate₂,affect₂)
-js      = JumpSystem([j₁,j₂], t, [S,I,R], [β,γ])
+@named js = JumpSystem([j₁,j₂], t, [S,I,R], [β,γ])
 statetoid = Dict(MT.value(state) => i for (i,state) in enumerate(states(js)))
 mtjump1 = MT.assemble_crj(js, j₁, statetoid)
 mtjump2 = MT.assemble_vrj(js, j₂, statetoid)
@@ -54,7 +54,7 @@ jump2.affect!(integrator)
 rate₃   = γ*I
 affect₃ = [I ~ I - 1, R ~ R + 1]
 j₃ = ConstantRateJump(rate₃,affect₃)
-js2 = JumpSystem([j₁,j₃], t, [S,I,R], [β,γ])
+@named js2 = JumpSystem([j₁,j₃], t, [S,I,R], [β,γ])
 u₀ = [999,1,0]; p = (0.1/1000,0.01); tspan = (0.,250.)
 u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => .1/1000, γ => .01]
@@ -115,16 +115,14 @@ m2 = getmean(jprob,Nsims)
 # mass action jump tests for SIR model
 maj1 = MassActionJump(2*β/2, [S => 1, I => 1], [S => -1, I => 1])
 maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
-js3   = JumpSystem([maj1,maj2], t, [S,I,R], [β,γ])
-statetoid = Dict(MT.value(state) => i for (i,state) in enumerate(states(js)))
-ptoid     = Dict(MT.value(par) => i for (i,par) in enumerate(parameters(js)))
+@named js3 = JumpSystem([maj1,maj2], t, [S,I,R], [β,γ])
 dprob = DiscreteProblem(js3, u₀map, tspan, parammap)
 jprob = JumpProblem(js3, dprob, Direct())
 m3 = getmean(jprob,Nsims)
 @test abs(m-m3)/m < .01
 
 # maj jump test with various dep graphs
-js3b = JumpSystem([maj1,maj2], t, [S,I,R], [β,γ])
+@named js3b = JumpSystem([maj1,maj2], t, [S,I,R], [β,γ])
 jprobb = JumpProblem(js3b, dprob, NRM())
 m4 = getmean(jprobb,Nsims)
 @test abs(m-m4)/m < .01
@@ -135,9 +133,7 @@ m4 = getmean(jprobc,Nsims)
 # mass action jump tests for other reaction types (zero order, decay)
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
-js4   = JumpSystem([maj1,maj2], t, [S], [β,γ])
-statetoid = Dict(MT.value(state) => i for (i,state) in enumerate(states(js)))
-ptoid     = Dict(MT.value(par) => i for (i,par) in enumerate(parameters(js)))
+@named js4 = JumpSystem([maj1,maj2], t, [S], [β,γ])
 dprob = DiscreteProblem(js4, [S => 999], (0,1000.), [β => 100.,γ => .01])
 jprob = JumpProblem(js4, dprob, Direct())
 m4 = getmean(jprob,Nsims)
@@ -146,16 +142,36 @@ m4 = getmean(jprob,Nsims)
 # test second order rx runs
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 2], [S => -1])
-js4   = JumpSystem([maj1,maj2], t, [S], [β,γ])
-statetoid = Dict(MT.value(state) => i for (i,state) in enumerate(states(js)))
-ptoid     = Dict(MT.value(par) => i for (i,par) in enumerate(parameters(js)))
+@named js4 = JumpSystem([maj1,maj2], t, [S], [β,γ])
 dprob = DiscreteProblem(js4, [S => 999], (0,1000.), [β => 100.,γ => .01])
 jprob = JumpProblem(js4, dprob, Direct())
 sol = solve(jprob, SSAStepper());
 
 # issue #819
 @testset "Combined system name collisions" begin
-  sys1 = JumpSystem([maj1,maj2], t, [S], [β,γ],name=:sys1)
-  sys2 = JumpSystem([maj1,maj2], t, [S], [β,γ],name=:sys1)
-  @test_throws ArgumentError JumpSystem([sys1.γ ~ sys2.γ], t,[],[], systems=[sys1, sys2])
+  sys1 = JumpSystem([maj1, maj2], t, [S], [β, γ], name = :sys1)
+  sys2 = JumpSystem([maj1, maj2], t, [S], [β, γ], name = :sys1)
+  @test_throws ArgumentError JumpSystem([sys1.γ ~ sys2.γ], t, [], [], systems = [sys1, sys2], name=:foo)
 end
+
+# test if param mapper is setup correctly for callbacks
+@parameters k1 k2 k3
+@variables A(t) B(t)
+maj1 = MassActionJump(k1*k3, [0 => 1], [A => -1, B => 1])
+maj2 = MassActionJump(k2, [B => 1], [A => 1, B => -1])
+@named js5 = JumpSystem([maj1,maj2], t, [A,B], [k1,k2,k3])
+p  = [k1 => 2.0, k2 => 0.0, k3 => .5]
+u₀ = [A => 100, B => 0]
+tspan = (0.0,2000.0)
+dprob = DiscreteProblem(js5, u₀, tspan, p)
+jprob = JumpProblem(js5, dprob, Direct(), save_positions=(false,false))
+@test all(jprob.massaction_jump.scaled_rates .== [1.0,0.0])
+
+pcondit(u,t,integrator) = t==1000.0
+function paffect!(integrator)
+  integrator.p[1] = 0.0
+  integrator.p[2] = 1.0
+  reset_aggregated_jumps!(integrator)
+end
+sol = solve(jprob, SSAStepper(), tstops=[1000.0], callback=DiscreteCallback(pcondit,paffect!))
+@test sol[1,end] == 100

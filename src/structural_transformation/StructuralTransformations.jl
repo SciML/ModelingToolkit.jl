@@ -6,19 +6,23 @@ const UNASSIGNED = typemin(Int)
 using Setfield: @set!, @set
 using UnPack: @unpack
 
+using Symbolics: unwrap, linear_expansion
 using SymbolicUtils
 using SymbolicUtils.Code
 using SymbolicUtils.Rewriters
 using SymbolicUtils: similarterm, istree
 
 using ModelingToolkit
-using ModelingToolkit: ODESystem, var_from_nested_derivative, Differential,
+using ModelingToolkit: ODESystem, AbstractSystem,var_from_nested_derivative, Differential,
                        states, equations, vars, Symbolic, diff2term, value,
                        operation, arguments, Sym, Term, simplify, solve_for,
-                       isdiffeq, isdifferential,
-                       get_structure, defaults, InvalidSystemException
+                       isdiffeq, isdifferential, get_structure, get_iv, independent_variables,
+                       get_structure, defaults, InvalidSystemException,
+                       ExtraEquationsSystemException,
+                       ExtraVariablesSystemException
 
 using ModelingToolkit.BipartiteGraphs
+using LightGraphs
 using ModelingToolkit.SystemStructures
 
 using ModelingToolkit.DiffEqBase

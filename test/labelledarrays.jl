@@ -12,7 +12,7 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ t*x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-de = ODESystem(eqs)
+@named de = ODESystem(eqs)
 ff = ODEFunction(de, [x,y,z], [σ,ρ,β], jac=true)
 
 a = @SVector [1.0,2.0,3.0]

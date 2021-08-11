@@ -11,8 +11,8 @@ $(FIELDS)
 ```julia
 using ModelingToolkit
 
-@parameters t σ ρ β
-@variables x(t) y(t) z(t)
+@parameters σ ρ β
+@variables t x(t) y(t) z(t)
 D = Differential(t)
 
 eqs = [D(x) ~ σ*(y-x),
@@ -33,11 +33,16 @@ struct SDESystem <: AbstractODESystem
     noiseeqs::AbstractArray
     """Independent variable."""
     iv::Sym
-    """Dependent (state) variables."""
+    """Dependent (state) variables. Must not contain the independent variable."""
     states::Vector
-    """Parameter variables."""
+    """Parameter variables. Must not contain the independent variable."""
     ps::Vector
-    observed::Vector
+    """Array variables."""
+    var_to_name
+    """Control parameters (some subset of `ps`)."""
+    ctrls::Vector
+    """Observed states."""
+    observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
     [`calculate_tgrad`](@ref) is called on the system.
@@ -48,6 +53,11 @@ struct SDESystem <: AbstractODESystem
     [`calculate_jacobian`](@ref) is called on the system.
     """
     jac::RefValue
+    """
+    Control Jacobian matrix. Note: this field will not be defined until
+    [`calculate_control_jacobian`](@ref) is called on the system.
+    """
+    ctrl_jac::RefValue{Any}
     """
     `Wfact` matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
@@ -76,25 +86,31 @@ struct SDESystem <: AbstractODESystem
     """
     connection_type::Any
 
-    function SDESystem(deqs, neqs, iv, dvs, ps, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
+    function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
         check_variables(dvs,iv)
         check_parameters(ps,iv)
-        new(deqs, neqs, iv, dvs, ps, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
+        check_equations(deqs,iv)
+        new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
     end
 end
 
 function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
-                   observed = [],
+                   controls = Num[],
+                   observed = Num[],
                    systems = SDESystem[],
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
-                   name = gensym(:SDESystem),
+                   name=nothing,
                    connection_type=nothing,
                    )
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
+    deqs = collect(deqs)
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
+    ctrl′ = value.(controls)
+
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
@@ -105,18 +121,25 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
+    var_to_name = Dict()
+    process_variables!(var_to_name, defaults, dvs′)
+    process_variables!(var_to_name, defaults, ps′)
+
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
+    ctrl_jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
-    SDESystem(deqs, neqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
+    SDESystem(deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
 end
+
+SDESystem(sys::ODESystem, neqs; kwargs...) = SDESystem(equations(sys), neqs, get_iv(sys), states(sys), parameters(sys); kwargs...)
 
 function generate_diffusion_function(sys::SDESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     return build_function(get_noiseeqs(sys),
                           map(x->time_varying_as_func(value(x), sys), dvs),
                           map(x->time_varying_as_func(value(x), sys), ps),
-                          independent_variable(sys); kwargs...)
+                          get_iv(sys); kwargs...)
 end
 
 """
@@ -125,10 +148,11 @@ $(TYPEDSIGNATURES)
 Choose correction_factor=-1//2 (1//2) to converte Ito -> Stratonovich (Stratonovich->Ito).
 """
 function stochastic_integral_transform(sys::SDESystem, correction_factor)
+    name = nameof(sys)
     # use the general interface
     if typeof(get_noiseeqs(sys)) <: Vector
         eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[i] for i in eachindex(states(sys))]...)
-        de = ODESystem(eqs,get_iv(sys),states(sys),parameters(sys))
+        de = ODESystem(eqs,get_iv(sys),states(sys),parameters(sys),name=name)
 
         jac = calculate_jacobian(de, sparse=false, simplify=false)
         ∇σσ′ = simplify.(jac*get_noiseeqs(sys))
@@ -137,13 +161,13 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     else
         dimstate, m = size(get_noiseeqs(sys))
         eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[i] for i in eachindex(states(sys))]...)
-        de = ODESystem(eqs,get_iv(sys),states(sys),parameters(sys))
+        de = ODESystem(eqs,get_iv(sys),states(sys),parameters(sys),name=name)
 
         jac = calculate_jacobian(de, sparse=false, simplify=false)
         ∇σσ′ = simplify.(jac*get_noiseeqs(sys)[:,1])
         for k = 2:m
             eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[Int(i+(k-1)*dimstate)] for i in eachindex(states(sys))]...)
-            de = ODESystem(eqs,get_iv(sys),states(sys),parameters(sys))
+            de = ODESystem(eqs,get_iv(sys),states(sys),parameters(sys),name=name)
 
             jac = calculate_jacobian(de, sparse=false, simplify=false)
             ∇σσ′ = ∇σσ′ + simplify.(jac*get_noiseeqs(sys)[:,k])
@@ -153,12 +177,8 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     end
 
 
-    SDESystem(deqs,get_noiseeqs(sys),get_iv(sys),states(sys),parameters(sys))
+    SDESystem(deqs,get_noiseeqs(sys),get_iv(sys),states(sys),parameters(sys),name=name)
 end
-
-
-
-
 
 """
 ```julia
@@ -175,6 +195,9 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys), ps = par
                                      u0 = nothing;
                                      version = nothing, tgrad=false, sparse = false,
                                      jac = false, Wfact = false, eval_expression = true, kwargs...) where {iip}
+    dvs = scalarize.(dvs)
+    ps = scalarize.(ps)
+
     f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
     f_oop,f_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in f_gen) : f_gen
     g_gen = generate_diffusion_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)

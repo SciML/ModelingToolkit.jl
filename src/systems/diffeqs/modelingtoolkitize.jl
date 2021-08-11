@@ -3,17 +3,12 @@ $(TYPEDSIGNATURES)
 
 Generate `ODESystem`, dependent variables, and parameters from an `ODEProblem`.
 """
-function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
+function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
                             return prob.f.sys
     @parameters t
 
-    if prob.p isa Tuple || prob.p isa NamedTuple
-        p = [x for x in prob.p]
-    else
-        p = prob.p
-    end
-
+    p = prob.p
     has_p = !(p isa Union{DiffEqBase.NullParameters,Nothing})
 
     _vars = define_vars(prob.u0,t)
@@ -21,7 +16,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     vars = prob.u0 isa Number ? _vars : ArrayInterface.restructure(prob.u0,_vars)
     params = if has_p
         _params = define_params(p)
-        p isa Number ? _params[1] : ArrayInterface.restructure(p,_params)
+        p isa Number ? _params[1] : (p isa Tuple || p isa NamedTuple ? _params : ArrayInterface.restructure(p,_params))
     else
         []
     end
@@ -55,7 +50,8 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
     eqs = vcat([lhs[i] ~ rhs[i] for i in eachindex(prob.u0)]...)
 
     sts = vec(collect(vars))
-    params = if ndims(params) == 0
+
+    params = if params isa Array && ndims(params) == 0
         [params[1]]
     else
         vec(collect(params))
@@ -65,29 +61,47 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem)
 
     de = ODESystem(
         eqs, t, sts, params,
-        defaults=merge(default_u0, default_p),
+        defaults=merge(default_u0, default_p);
+        name=gensym(:MTKizedODE),
+        kwargs...
     )
 
     de
 end
 
-_defvaridx(x, i, t) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x, i))))
-_defvar(x, t) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x))))
+_defvaridx(x, i, t) = variable(x, i, T=SymbolicUtils.FnType{Tuple,Real})
+_defvar(x, t) = variable(x, T=SymbolicUtils.FnType{Tuple,Real})
 
 function define_vars(u,t)
-    _vars = [_defvaridx(:x, i, t)(ModelingToolkit.value(t)) for i in eachindex(u)]
+    _vars = [_defvaridx(:x, i, t)(t) for i in eachindex(u)]
 end
 
 function define_vars(u::Union{SLArray,LArray},t)
-    _vars = [_defvar(x, t)(ModelingToolkit.value(t)) for x in LabelledArrays.symnames(typeof(u))]
+    _vars = [_defvar(x, t)(t) for x in LabelledArrays.symnames(typeof(u))]
+end
+
+function define_vars(u::Tuple,t)
+    _vars = tuple((_defvaridx(:x, i, t)(ModelingToolkit.value(t)) for i in eachindex(u))...)
+end
+
+function define_vars(u::NamedTuple,t)
+    _vars = NamedTuple(x=>_defvar(x, t)(ModelingToolkit.value(t)) for x in keys(u))
 end
 
 function define_params(p)
-    [Num(toparam(Sym{Real}(nameof(Variable(:α, i))))) for i in eachindex(p)]
+    [toparam(variable(:α, i)) for i in eachindex(p)]
 end
 
 function define_params(p::Union{SLArray,LArray})
-    [Num(toparam(Sym{Real}(nameof(Variable(x))))) for x in LabelledArrays.symnames(typeof(p))]
+    [toparam(variable(x)) for x in LabelledArrays.symnames(typeof(p))]
+end
+
+function define_params(p::Tuple)
+    tuple((toparam(variable(:α, i)) for i in eachindex(p))...)
+end
+
+function define_params(p::NamedTuple)
+    NamedTuple(x=>toparam(variable(x)) for x in keys(p))
 end
 
 
@@ -96,19 +110,22 @@ $(TYPEDSIGNATURES)
 
 Generate `SDESystem`, dependent variables, and parameters from an `SDEProblem`.
 """
-function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
+function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     prob.f isa DiffEqBase.AbstractParameterizedFunction &&
                             return (prob.f.sys, prob.f.sys.states, prob.f.sys.ps)
     @parameters t
-    if prob.p isa Tuple || prob.p isa NamedTuple
-        p = [x for x in prob.p]
+    p = prob.p
+    has_p = !(p isa Union{DiffEqBase.NullParameters,Nothing})
+
+    _vars = define_vars(prob.u0,t)
+
+    vars = prob.u0 isa Number ? _vars : ArrayInterface.restructure(prob.u0,_vars)
+    params = if has_p
+        _params = define_params(p)
+        p isa Number ? _params[1] : (p isa Tuple || p isa NamedTuple ? _params : ArrayInterface.restructure(p,_params))
     else
-        p = prob.p
+        []
     end
-    var(x, i) = Num(Sym{FnType{Tuple{symtype(t)}, Real}}(nameof(Variable(x, i))))
-    vars = ArrayInterface.restructure(prob.u0,[var(:x, i)(ModelingToolkit.value(t)) for i in eachindex(prob.u0)])
-    params = p isa DiffEqBase.NullParameters ? [] :
-             reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(p))
 
     D = Differential(t)
 
@@ -142,7 +159,9 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem)
         Vector(vec(params))
     end
 
-    de = SDESystem(deqs,neqs,t,Vector(vec(vars)),params)
+    de = SDESystem(deqs,neqs,t,Vector(vec(vars)),params;
+                   name=gensym(:MTKizedSDE),
+                   kwargs...)
 
     de
 end
@@ -153,7 +172,7 @@ $(TYPEDSIGNATURES)
 
 Generate `OptimizationSystem`, dependent variables, and parameters from an `OptimizationProblem`.
 """
-function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem)
+function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem; kwargs...)
 
     if prob.p isa Tuple || prob.p isa NamedTuple
         p = [x for x in prob.p]
@@ -161,11 +180,13 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem)
         p = prob.p
     end
 
-    vars = reshape([Num(Sym{Real}(nameof(Variable(:x, i)))) for i in eachindex(prob.u0)],size(prob.u0))
+    vars = reshape([variable(:x, i) for i in eachindex(prob.u0)],size(prob.u0))
     params = p isa DiffEqBase.NullParameters ? [] :
-             reshape([Num(Sym{Real}(nameof(Variable(:α, i)))) for i in eachindex(p)],size(Array(p)))
+        reshape([variable(:α, i) for i in eachindex(p)],size(Array(p)))
 
     eqs = prob.f(vars, params)
-    de = OptimizationSystem(eqs,vec(vars),vec(params))
+    de = OptimizationSystem(eqs,vec(vars),vec(params);
+                            name=gensym(:MTKizedOpt),
+                            kwargs...)
     de
 end
