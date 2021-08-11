@@ -128,10 +128,10 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
 end
 
 function linearize_eqs(sys, eqs=sys.eqs; return_max_delay=false)
-    unique_states = unique(operation.(sys.states))
+    unique_states = unique(operation.(states(sys)))
     max_delay = Dict(v=>0.0 for v in unique_states)
 
-    r = @rule ~t::(t -> istree(t) && any(isequal(operation(t)), operation.(sys.states)) && is_delay_var(sys.iv, t)) => begin
+    r = @rule ~t::(t -> istree(t) && any(isequal(operation(t)), operation.(states(sys))) && is_delay_var(sys.iv, t)) => begin
         delay = get_delay_val(sys.iv, first(arguments(~t)))
         if delay > max_delay[operation(~t)]
             max_delay[operation(~t)] = delay
