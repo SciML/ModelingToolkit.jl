@@ -103,15 +103,15 @@ function generate_function(
     t = get_iv(sys)
 
     if has_preface(sys) && (pre = preface(sys); pre !== nothing)
-      pre = ex -> Let(pre, ex)
+        pre_ = ex -> Let(pre, ex)
     else
-        pre = ex -> ex
+        pre_ = ex -> ex
     end
 
     if implicit_dae
-        build_function(rhss, ddvs, u, p, t; postprocess_fbody=pre, kwargs...)
+        build_function(rhss, ddvs, u, p, t; postprocess_fbody=pre_, kwargs...)
     else
-        build_function(rhss, u, p, t; postprocess_fbody=pre, kwargs...)
+        build_function(rhss, u, p, t; postprocess_fbody=pre_, kwargs...)
     end
 end
 
