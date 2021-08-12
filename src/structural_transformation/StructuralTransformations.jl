@@ -19,7 +19,8 @@ using ModelingToolkit: ODESystem, AbstractSystem,var_from_nested_derivative, Dif
                        isdiffeq, isdifferential, get_structure, get_iv, independent_variables,
                        get_structure, defaults, InvalidSystemException,
                        ExtraEquationsSystemException,
-                       ExtraVariablesSystemException
+                       ExtraVariablesSystemException,
+                       get_postprocess_fbody
 
 using ModelingToolkit.BipartiteGraphs
 using LightGraphs
