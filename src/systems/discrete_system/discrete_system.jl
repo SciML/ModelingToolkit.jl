@@ -131,8 +131,8 @@ function linearize_eqs(sys, eqs=sys.eqs; return_max_delay=false)
     unique_states = unique(operation.(states(sys)))
     max_delay = Dict(v=>0.0 for v in unique_states)
 
-    r = @rule ~t::(t -> istree(t) && any(isequal(operation(t)), operation.(states(sys))) && is_delay_var(sys.iv, t)) => begin
-        delay = get_delay_val(sys.iv, first(arguments(~t)))
+    r = @rule ~t::(t -> istree(t) && any(isequal(operation(t)), operation.(states(sys))) && is_delay_var(get_iv(sys), t)) => begin
+        delay = get_delay_val(get_iv(sys), first(arguments(~t)))
         if delay > max_delay[operation(~t)]
             max_delay[operation(~t)] = delay
         end
@@ -161,7 +161,7 @@ function linearize_eqs(sys, eqs=sys.eqs; return_max_delay=false)
         end
 
         lin_eqs = [
-            v(sys.iv - (t)) ~ v(sys.iv - (t-dts_gcd[v]))
+            v(get_iv(sys) - (t)) ~ v(get_iv(sys) - (t-dts_gcd[v]))
             for v in unique_states if max_delay[v] > 0 && dts_gcd[v]!==nothing for t in collect(max_delay[v]:(-dts_gcd[v]):0)[1:end-1] 
         ]
         eqs = vcat(eqs, lin_eqs)
