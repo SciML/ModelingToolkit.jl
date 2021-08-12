@@ -127,7 +127,7 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     DiscreteProblem(f,u0,tspan,p;kwargs...)
 end
 
-function linearize_eqs(sys, eqs=sys.eqs; return_max_delay=false)
+function linearize_eqs(sys, eqs=get_eqs(sys); return_max_delay=false)
     unique_states = unique(operation.(states(sys)))
     max_delay = Dict(v=>0.0 for v in unique_states)
 
