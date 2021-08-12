@@ -293,3 +293,15 @@ function collect_var!(states, parameters, var, iv)
     end
     return nothing
 end
+
+
+function get_postprocess_fbody(sys)
+    if has_preface(sys) && (pre = preface(sys); pre !== nothing)
+        pre_ = let pre=pre
+            ex -> Let(pre, ex)
+        end
+    else
+        pre_ = ex -> ex
+    end
+    return pre_
+end
