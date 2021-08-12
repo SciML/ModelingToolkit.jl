@@ -95,7 +95,8 @@ rc_eqs = [
           connect(capacitor.n, source.n, ground.g)
          ]
 
-@named rc_model = compose(ODESystem(rc_eqs, t),
+@named _rc_model = ODESystem(rc_eqs, t)
+@named rc_model = compose(_rc_model,
                           [resistor, capacitor, source, ground])
 sys = structural_simplify(rc_model)
 u0 = [
@@ -288,7 +289,8 @@ rc_eqs = [
 Finally we build our four component model with these connection rules:
 
 ```julia
-@named rc_model = compose(ODESystem(rc_eqs, t)
+@named _rc_model = ODESystem(rc_eqs, t)
+@named rc_model = compose(_rc_model,
                           [resistor, capacitor, source, ground])
 ```
 

@@ -102,11 +102,7 @@ function generate_function(
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
-    if has_preface(sys) && (pre = preface(sys); pre !== nothing)
-      pre = ex -> Let(pre, ex)
-    else
-        pre = ex -> ex
-    end
+    pre = get_postprocess_fbody(sys)
 
     if implicit_dae
         build_function(rhss, ddvs, u, p, t; postprocess_fbody=pre, kwargs...)

@@ -135,7 +135,6 @@ include("systems/control/controlsystem.jl")
 
 include("systems/pde/pdesystem.jl")
 
-include("systems/reaction/reactionsystem.jl")
 include("systems/dependency_graphs.jl")
 
 include("systems/discrete_system/discrete_system.jl")
@@ -172,7 +171,6 @@ export alias_elimination, flatten, connect, @connector
 export ode_order_lowering, liouville_transform
 export runge_kutta_discretize
 export PDESystem
-export Reaction, ReactionSystem, ismassaction, oderatelaw, jumpratelaw
 export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym

@@ -4,7 +4,7 @@
 
 The `AbstractSystem` interface is the core of the system level of ModelingToolkit.jl.
 It establishes a common set of functionality that is used between systems
-from ODEs and chemical reactions, allowing users to have a common framework for
+representing ODEs, PDEs, SDEs and more, allowing users to have a common framework for
 model manipulation and compilation.
 
 ### Subtypes

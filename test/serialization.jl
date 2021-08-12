@@ -25,4 +25,4 @@ io = IOBuffer()
 write(io, rc_model)
 str = String(take!(io))
 sys = include_string(@__MODULE__, str)
-@test_broken sys == flatten(rc_model) # this actually kind of works, but the variables would have different identities.
+@test sys == flatten(rc_model) # this actually kind of works, but the variables would have different identities.

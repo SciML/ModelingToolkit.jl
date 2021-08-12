@@ -201,6 +201,7 @@ function build_torn_function(
     s = structure(sys)
     states = map(i->s.fullvars[i], diffvars_range(s))
     syms = map(Symbol, states)
+    pre = get_postprocess_fbody(sys)
 
     expr = SymbolicUtils.Code.toexpr(
         Func(
@@ -211,10 +212,10 @@ function build_torn_function(
               independent_variables(sys)
              ],
              [],
-             Let(
+             pre(Let(
                  collect(Iterators.flatten(get_torn_eqs_vars(sys, checkbounds=checkbounds))),
                  odefunbody
-                )
+                ))
             )
     )
     if expression
@@ -307,6 +308,7 @@ function build_observed_function(
             obs[observed_idx[sym]].rhs
         end
     end
+    pre = get_postprocess_fbody(sys)
 
     ex = Func(
         [
@@ -315,13 +317,13 @@ function build_observed_function(
          independent_variables(sys)
         ],
         [],
-        Let(
+        pre(Let(
             [
              collect(Iterators.flatten(solves))
              map(eq -> eq.lhs←eq.rhs, obs[1:maxidx])
             ],
             isscalar ? output[1] : MakeArray(output, output_type)
-           )
+           ))
     ) |> Code.toexpr
 
     expression ? ex : @RuntimeGeneratedFunction(ex)

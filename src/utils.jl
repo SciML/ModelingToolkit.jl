@@ -123,7 +123,7 @@ end
 function check_variables(dvs, iv)
     for dv in dvs
         isequal(iv, dv) && throw(ArgumentError("Independent variable $iv not allowed in dependent variables."))
-        (is_delay_var(iv, dv) || isequal(iv, iv_from_nested_derivative(dv))) || throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
+        (is_delay_var(iv, dv) || occursin(iv, iv_from_nested_derivative(dv)) || throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
     end
 end
 
@@ -307,4 +307,16 @@ function collect_var!(states, parameters, var, iv)
         push!(states, var)
     end
     return nothing
+end
+
+
+function get_postprocess_fbody(sys)
+    if has_preface(sys) && (pre = preface(sys); pre !== nothing)
+        pre_ = let pre=pre
+            ex -> Let(pre, ex)
+        end
+    else
+        pre_ = ex -> ex
+    end
+    return pre_
 end
