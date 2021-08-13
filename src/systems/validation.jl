@@ -22,7 +22,9 @@ function get_units(x::Symbolic)
     elseif x isa Add # Cannot simply add the units b/c they may differ in magnitude (eg, kg vs g)
         terms = get_units.(arguments(x))
         firstunit = unit(terms[1])
-        @assert all(map(x -> ustrip(firstunit, x) == 1, terms[2:end]))
+        for other in terms[2:end]
+            unit(other) == firstunit || throw(ArgumentError("Units mismatch: [$x] with units [$terms]."))
+        end
         return 1 * firstunit
     elseif operation(x) == Symbolics._mapreduce 
         if x.arguments[2] == +
