@@ -105,10 +105,25 @@ function check_parameters(ps, iv)
     end
 end
 
+function is_delay_var(iv, var)
+    args = nothing
+    try
+        args = arguments(var)
+    catch
+        return false
+    end
+    length(args) > 1 && return false
+    isequal(first(args), iv) && return false
+    delay = iv - first(args)
+    delay isa Integer || 
+    delay isa AbstractFloat ||
+    (delay isa Num && isreal(value(delay))) 
+end
+
 function check_variables(dvs, iv)
     for dv in dvs
         isequal(iv, dv) && throw(ArgumentError("Independent variable $iv not allowed in dependent variables."))
-        occursin(iv, iv_from_nested_derivative(dv)) || throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
+        (is_delay_var(iv, dv) || occursin(iv, iv_from_nested_derivative(dv))) || throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
     end
 end
 

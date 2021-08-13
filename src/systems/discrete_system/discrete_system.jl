@@ -113,6 +113,7 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     dvs = states(sys)
     ps = parameters(sys)
     eqs = equations(sys)
+    eqs = linearize_eqs(sys, eqs)
     # defs = defaults(sys)
     t = get_iv(sys)
     u0 = varmap_to_vars(u0map,dvs)
@@ -124,6 +125,55 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     f_oop, _ = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
     f(u,p,t) = f_oop(u,p,t)
     DiscreteProblem(f,u0,tspan,p;kwargs...)
+end
+
+function linearize_eqs(sys, eqs=get_eqs(sys); return_max_delay=false)
+    unique_states = unique(operation.(states(sys)))
+    max_delay = Dict(v=>0.0 for v in unique_states)
+
+    r = @rule ~t::(t -> istree(t) && any(isequal(operation(t)), operation.(states(sys))) && is_delay_var(get_iv(sys), t)) => begin
+        delay = get_delay_val(get_iv(sys), first(arguments(~t)))
+        if delay > max_delay[operation(~t)]
+            max_delay[operation(~t)] = delay
+        end
+        nothing
+    end
+    SymbolicUtils.Postwalk(r).(rhss(eqs))
+
+    if any(values(max_delay) .> 0)
+
+        dts = Dict(v=>Any[] for v in unique_states)
+        state_ops = Dict(v=>Any[] for v in unique_states)
+        for v in unique_states
+            for eq in eqs
+                if isdifferenceeq(eq) && istree(arguments(eq.lhs)[1]) && isequal(v, operation(arguments(eq.lhs)[1]))
+                    append!(dts[v], [operation(eq.lhs).dt])
+                    append!(state_ops[v], [operation(eq.lhs)])
+                end
+            end
+        end
+
+        all(length.(unique.(values(state_ops))) .<= 1) || error("Each state should be used with single difference operator.")
+        
+        dts_gcd = Dict()
+        for v in keys(dts)
+            dts_gcd[v] = (length(dts[v]) > 0) ? first(dts[v]) : nothing
+        end
+
+        lin_eqs = [
+            v(get_iv(sys) - (t)) ~ v(get_iv(sys) - (t-dts_gcd[v]))
+            for v in unique_states if max_delay[v] > 0 && dts_gcd[v]!==nothing for t in collect(max_delay[v]:(-dts_gcd[v]):0)[1:end-1] 
+        ]
+        eqs = vcat(eqs, lin_eqs)
+    end
+    if return_max_delay return eqs, max_delay end
+    eqs
+end
+
+function get_delay_val(iv, x)
+    delay = x - iv
+    isequal(delay > 0, true) && error("Forward delay not permitted")
+    return -delay
 end
 
 check_difference_variables(eq) = check_operator_variables(eq, Difference)
