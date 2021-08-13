@@ -111,28 +111,17 @@ function generate_function(
     end
 end
 
-@inline function allequal(x)
-    length(x) < 2 && return true
-    e1 = first(x)
-    i = 2
-    @inbounds for i=2:length(x)
-        x[i] == e1 || return false
-    end
-    return true
-end
-
-function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = parameters(sys);
-    kwargs...)
+function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     eqs = equations(sys)
     foreach(check_difference_variables, eqs)
 
-    rhss = [ 
+    rhss = [
         begin
             ind = findfirst(eq -> isdifference(eq.lhs) && isequal(arguments(eq.lhs)[1], s), eqs)
             ind === nothing ? 0 : eqs[ind].rhs
         end
-        for s in dvs ]
-    
+        for s in dvs]
+
     u = map(x->time_varying_as_func(value(x), sys), dvs)
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
@@ -141,12 +130,12 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
 
     f = @RuntimeGeneratedFunction(@__MODULE__, f_oop)
 
-    function cb_affect!(int) 
-        int.u += f(int.u, int.p, int.t) 
+    function cb_affect!(int)
+        int.u += f(int.u, int.p, int.t)
     end
 
-    dts = [ operation(eq.lhs).dt for eq in eqs if isdifferenceeq(eq)] 
-    allequal(dts) || error("All difference variables should have same time steps.")
+    dts = [operation(eq.lhs).dt for eq in eqs if isdifferenceeq(eq)]
+    all(dt == dts[1] for dt in dts) || error("All difference variables should have same time steps.")
 
     PeriodicCallback(cb_affect!, first(dts))
 end
