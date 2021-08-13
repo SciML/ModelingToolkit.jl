@@ -36,7 +36,7 @@ function connect_heat(ps...)
 end
 
 # Basic electric components
-@parameters t
+@variables t
 const D = Differential(t)
 function Pin(;name)
     @variables v(t)=1.0 i(t)=1.0
@@ -114,7 +114,7 @@ function Capacitor(;name, C = 1.0)
     ), p, n)
 end
 
-function rc_model(i; name, source, ground, R, C)
+function parallel_rc_model(i; name, source, ground, R, C)
     resistor = HeatingResistor(name=Symbol(:resistor, i), R=R)
     capacitor = Capacitor(name=Symbol(:capacitor, i), C=C)
     heat_capacitor = HeatCapacitor(name=Symbol(:heat_capacitor, i))
@@ -126,8 +126,8 @@ function rc_model(i; name, source, ground, R, C)
               connect_heat(resistor.h, heat_capacitor.h)
              ]
 
-    rc_model = compose(ODESystem(rc_eqs, t, name=Symbol(name, i)),
-                       [resistor, capacitor, source, ground, heat_capacitor])
+    compose(ODESystem(rc_eqs, t, name=Symbol(name, i)),
+            [resistor, capacitor, source, ground, heat_capacitor])
 end
 ```
 
@@ -145,13 +145,14 @@ N = 50
 Rs = 10 .^range(0, stop=-4, length=N)
 Cs = 10 .^range(-3, stop=0, length=N)
 rc_systems = map(1:N) do i
-    rc_model(i; name=:rc, source=source, ground=ground, R=Rs[i], C=Cs[i])
+    parallel_rc_model(i; name=:rc, source=source, ground=ground, R=Rs[i], C=Cs[i])
 end;
 @variables E(t)=0.0
 eqs = [
        D(E) ~ sum(((i, sys),)->getproperty(sys, Symbol(:resistor, i)).h.Q_flow, enumerate(rc_systems))
       ]
-big_rc = compose(ODESystem(eqs, t, [E], []), rc_systems)
+@named _big_rc = ODESystem(eqs, t, [E], [])
+@named big_rc = compose(_big_rc, rc_systems)
 ```
 
 Now let's say we want to expose a bit more parallelism via running tearing.

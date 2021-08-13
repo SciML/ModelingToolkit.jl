@@ -166,7 +166,7 @@ function gen_nlsolve(sys, eqs, vars; checkbounds=true)
     ]
 end
 
-function get_torn_eqs_vars(sys)
+function get_torn_eqs_vars(sys; checkbounds=true)
     s = structure(sys)
     partitions = s.partitions
     vars = s.fullvars
@@ -175,7 +175,7 @@ function get_torn_eqs_vars(sys)
     torn_eqs  = map(idxs-> eqs[idxs], map(x->x.e_residual, partitions))
     torn_vars = map(idxs->vars[idxs], map(x->x.v_residual, partitions))
 
-    gen_nlsolve.((sys,), torn_eqs, torn_vars)
+    gen_nlsolve.((sys,), torn_eqs, torn_vars, checkbounds=checkbounds)
 end
 
 function build_torn_function(
@@ -193,7 +193,7 @@ function build_torn_function(
 
     out = Sym{Any}(gensym("out"))
     odefunbody = SetArray(
-        checkbounds,
+        !checkbounds,
         out,
         rhss
     )
@@ -201,6 +201,7 @@ function build_torn_function(
     s = structure(sys)
     states = map(i->s.fullvars[i], diffvars_range(s))
     syms = map(Symbol, states)
+    pre = get_postprocess_fbody(sys)
 
     expr = SymbolicUtils.Code.toexpr(
         Func(
@@ -208,13 +209,13 @@ function build_torn_function(
               out
               DestructuredArgs(states, inbounds=!checkbounds)
               DestructuredArgs(parameters(sys), inbounds=!checkbounds)
-              independent_variable(sys)
+              independent_variables(sys)
              ],
              [],
-             Let(
-                 collect(Iterators.flatten(get_torn_eqs_vars(sys))),
+             pre(Let(
+                 collect(Iterators.flatten(get_torn_eqs_vars(sys, checkbounds=checkbounds))),
                  odefunbody
-                )
+                ))
             )
     )
     if expression
@@ -307,21 +308,22 @@ function build_observed_function(
             obs[observed_idx[sym]].rhs
         end
     end
+    pre = get_postprocess_fbody(sys)
 
     ex = Func(
         [
          DestructuredArgs(diffvars, inbounds=!checkbounds)
          DestructuredArgs(parameters(sys), inbounds=!checkbounds)
-         independent_variable(sys)
+         independent_variables(sys)
         ],
         [],
-        Let(
+        pre(Let(
             [
              collect(Iterators.flatten(solves))
              map(eq -> eq.lhs←eq.rhs, obs[1:maxidx])
             ],
             isscalar ? output[1] : MakeArray(output, output_type)
-           )
+           ))
     ) |> Code.toexpr
 
     expression ? ex : @RuntimeGeneratedFunction(ex)

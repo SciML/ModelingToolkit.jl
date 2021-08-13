@@ -72,7 +72,7 @@ is built on, consult the
 - Nonlinear systems
 - Optimization problems
 - Continuous-Time Markov Chains
-- Chemical Reactions
+- Chemical Reactions (via [Catalyst.jl](https://github.com/SciML/Catalyst.jl))
 - Nonlinear Optimal Control
 
 ## Model Import Formats

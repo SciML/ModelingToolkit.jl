@@ -70,7 +70,7 @@ ss = ModelingToolkit.get_structure(initialize_system_structure(lorenz1))
 @test isempty(setdiff(ss.fullvars, [D(x), F, y, x, D(y), u, z, D(z)]))
 lorenz2 = lorenz(:lorenz2)
 
-connected = ODESystem([s ~ a + lorenz1.x
+@named connected = ODESystem([s ~ a + lorenz1.x
                        lorenz2.y ~ s
                        lorenz1.F ~ lorenz2.u
                        lorenz2.F ~ lorenz1.u], t, systems=[lorenz1, lorenz2])
@@ -169,7 +169,7 @@ let
         ol.u ~ pc.u_c
         pc.y_c ~ ol.y
     ]
-    connected = ODESystem(connections, t, systems=[ol, pc])
+    @named connected = ODESystem(connections, t, systems=[ol, pc])
     @test equations(connected) isa Vector{Equation}
     reduced_sys = structural_simplify(connected)
     ref_eqs = [
@@ -198,7 +198,7 @@ eqs = [
        u3 ~ u1 + u2 + p
        u3 ~ hypot(u1, u2) * p
       ]
-sys = NonlinearSystem(eqs, [u1, u2, u3], [p])
+@named sys = NonlinearSystem(eqs, [u1, u2, u3], [p])
 reducedsys = structural_simplify(sys)
 @test observed(reducedsys) == [u1 ~ 0.5(u3 - p); u2 ~ u1]
 
@@ -220,7 +220,7 @@ N = 5
 @variables xs[1:N]
 A = reshape(1:N^2, N, N)
 eqs = xs .~ A * xs
-sys′ = NonlinearSystem(eqs, xs, [])
+@named sys′ = NonlinearSystem(eqs, xs, [])
 sys = structural_simplify(sys′)
 
 # issue 958
@@ -270,7 +270,7 @@ eq = [
       0 ~ i64 + i71]
 
 
-sys0 = ODESystem(eq, t)
+@named sys0 = ODESystem(eq, t)
 sys = structural_simplify(sys0)
 @test length(equations(sys)) == 1
 eq = equations(sys)[1]

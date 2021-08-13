@@ -1,4 +1,4 @@
-JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
+const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
 
 """
 $(TYPEDEF)
@@ -13,8 +13,8 @@ $(FIELDS)
 ```julia
 using ModelingToolkit
 
-@parameters β γ t
-@variables S I R
+@parameters β γ 
+@variables t S(t) I(t) R(t)
 rate₁   = β*S*I
 affect₁ = [S ~ S - 1, I ~ I + 1]
 rate₂   = γ*I
@@ -25,7 +25,7 @@ j₃      = MassActionJump(2*β+γ, [R => 1], [S => 1, R => -1])
 js      = JumpSystem([j₁,j₂,j₃], t, [S,I,R], [β,γ])
 ```
 """
-struct JumpSystem{U <: ArrayPartition} <: AbstractSystem
+struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     The jumps of the system. Allowable types are `ConstantRateJump`,
     `VariableRateJump`, `MassActionJump`.
@@ -69,10 +69,10 @@ function JumpSystem(eqs, iv, states, ps;
                     default_u0=Dict(),
                     default_p=Dict(),
                     defaults=_merge(Dict(default_u0), Dict(default_p)),
-                    name = gensym(:JumpSystem),
+                    name=nothing,
                     connection_type=nothing,
                     kwargs...)
-
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     eqs = collect(eqs)
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
@@ -104,9 +104,9 @@ function JumpSystem(eqs, iv, states, ps;
     JumpSystem{typeof(ap)}(ap, value(iv), states, ps, var_to_name, observed, name, systems, defaults, connection_type)
 end
 
-function generate_rate_function(js, rate)
+function generate_rate_function(js::JumpSystem, rate)
     rf = build_function(rate, states(js), parameters(js),
-                   independent_variable(js),
+                   get_iv(js),
                    conv = states_to_sym(states(js)),
                    expression=Val{true})
 end
@@ -117,10 +117,10 @@ function add_integrator_header()
   expr -> Func([DestructuredArgs(expr.args, integrator, inds=[:u, :u, :p, :t])], [], expr.body)
 end
 
-function generate_affect_function(js, affect, outputidxs)
+function generate_affect_function(js::JumpSystem, affect, outputidxs)
     bf = build_function(map(x->x isa Equation ? x.rhs : x , affect), states(js),
                    parameters(js),
-                   independent_variable(js),
+                   get_iv(js),
                    expression=Val{true},
                    wrap_code=add_integrator_header(),
                    outputidxs=outputidxs)[2]
@@ -168,11 +168,12 @@ end
 
 function numericrstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     rs = Vector{Pair{Int,W}}()
-    for (spec,stoich) in mtrs
+    for (wspec,stoich) in mtrs
+        spec = value(wspec)
         if !istree(spec) && _iszero(spec)
             push!(rs, 0 => stoich)
         else
-            push!(rs, statetoid[value(spec)] => stoich)
+            push!(rs, statetoid[spec] => stoich)
         end
     end
     sort!(rs)
@@ -181,7 +182,8 @@ end
 
 function numericnstoich(mtrs::Vector{Pair{V,W}}, statetoid) where {V,W}
     ns = Vector{Pair{Int,W}}()
-    for (spec,stoich) in mtrs
+    for (wspec,stoich) in mtrs
+        spec = value(wspec)
         !istree(spec) && _iszero(spec) && error("Net stoichiometry can not have a species labelled 0.")
         push!(ns, statetoid[spec] => stoich)
     end
@@ -304,7 +306,8 @@ end
 
 ### Functions to determine which states a jump depends on
 function get_variables!(dep, jump::Union{ConstantRateJump,VariableRateJump}, variables)
-    (jump.rate isa Symbolic) && get_variables!(dep, jump.rate, variables)
+    jr = value(jump.rate)
+    (jr isa Symbolic) && get_variables!(dep, jr, variables)
     dep
 end
 

@@ -4,13 +4,13 @@ using Test, ModelingToolkit
 
 @connector function Foo(;name)
     @variables x(t)
-    ODESystem(Equation[], t, [x], [], defaults=Dict(x=>1.0))
+    ODESystem(Equation[], t, [x], [], defaults=Dict(x=>1.0), name=name)
 end
 
 @connector function Goo(;name)
     @variables x(t)
     @parameters p
-    ODESystem(Equation[], t, [x], [p], defaults=Dict(x=>1.0, p=>1.0))
+    ODESystem(Equation[], t, [x], [p], defaults=Dict(x=>1.0, p=>1.0), name=name)
 end
 
 function ModelingToolkit.connect(::Type{<:Foo}, ss...)

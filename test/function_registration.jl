@@ -18,7 +18,7 @@ module MyModule
     @register do_something(a)
 
     eq  = Dt(u) ~ do_something(x) + MyModule.do_something(x)
-    sys = ODESystem([eq], t, [u], [x])
+    @named sys = ODESystem([eq], t, [u], [x])
     fun = ODEFunction(sys)
 
     u0 = 5.0
@@ -41,7 +41,7 @@ module MyModule2
         @register do_something_2(a)
 
         eq  = Dt(u) ~ do_something_2(x) + MyNestedModule.do_something_2(x)
-        sys = ODESystem([eq], t, [u], [x])
+        @named sys = ODESystem([eq], t, [u], [x])
         fun = ODEFunction(sys)
 
         u0 = 3.0
@@ -63,7 +63,7 @@ end
 @register do_something_3(a)
 
 eq  = Dt(u) ~ do_something_3(x) + (@__MODULE__).do_something_3(x)
-sys = ODESystem([eq], t, [u], [x])
+@named sys = ODESystem([eq], t, [u], [x])
 fun = ODEFunction(sys)
 
 u0 = 7.0
@@ -101,7 +101,7 @@ function build_ode()
     @variables u(t)
     Dt = Differential(t)
     eq  = Dt(u) ~ do_something_4(x) + (@__MODULE__).do_something_4(x)
-    sys = ODESystem([eq], t, [u], [x])
+    @named sys = ODESystem([eq], t, [u], [x])
     fun = ODEFunction(sys, eval_expression=false)
 end
 function run_test()
