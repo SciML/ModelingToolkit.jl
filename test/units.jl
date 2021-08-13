@@ -19,7 +19,7 @@ D = Differential(t)
 @test MT.get_units(E/τ) == 1.0u"MW"
 @test MT.get_units(2*P) == 1.0u"MW"
 @test MT.get_units(t/τ) == 1.0
-@test MT.get_units(P - E/τ)/1.0u"MW" == 1.0
+@test MT.get_units(P - E/τ) == 1.0u"MW"
 
 @test MT.get_units(1.0^(t/τ)) == 1.0
 @test MT.get_units(exp(t/τ)) == 1.0
@@ -37,14 +37,11 @@ eqs = [D(E) ~ P - E/τ
 @test MT.validate(eqs[1])
 @test MT.validate(eqs[2])
 @test MT.validate(eqs)
-sys = ODESystem(eqs)
-sys = ODESystem(eqs, t, [P, E], [τ])
+@named sys = ODESystem(eqs)
+@named sys = ODESystem(eqs, t, [P, E], [τ])
 
 @test !MT.validate(D(D(E)) ~ P)
 @test !MT.validate(0 ~ P + E*τ)
-@test_logs (:warn,) MT.validate(0 ~ P + E*τ)
-@test_logs (:warn,) MT.validate(P + E*τ ~ 0)
-@test_logs (:warn,) MT.validate(P ~ 0)
 
 #Unit-free
 @variables x y z u
@@ -56,7 +53,7 @@ eqs = [0 ~ σ*(y - x)]
 @variables t x[1:3,1:3](t)
 D = Differential(t)
 eqs = D.(x) .~ x
-ODESystem(eqs)
+ODESystem(eqs,name=:sys)
 
 # Array ops
 using Symbolics: unwrap, wrap
@@ -69,7 +66,7 @@ eqs = [
        collect(D.(x) ~ x)
        D(y) ~ norm(x)*y
       ]
-ODESystem(eqs, t, [sts...;], [ps...;])
+ODESystem(eqs, t, [sts...;], [ps...;],name=:sys)
 
 #= Not supported yet b/c iterate doesn't work on unitful array
 # Array ops with units
@@ -99,7 +96,7 @@ D = Difference(t; dt = 0.1u"s")
 eqs = [
     δ(x) ~ a*x 
 ]
-de = ODESystem(eqs, t, [x, y], [a])
+de = ODESystem(eqs, t, [x, y], [a],name=:sys)
 
 
 @parameters t
@@ -111,7 +108,7 @@ eqs = [D(y[1]) ~ -k[1]*y[1] + k[3]*y[2]*y[3],
        D(y[2]) ~  k[1]*y[1] - k[3]*y[2]*y[3] - k[2]*y[2]^2,
        0 ~  y[1] + y[2] + y[3] - 1]
 
-sys = ODESystem(eqs,t,y,k)
+@named sys = ODESystem(eqs,t,y,k)
 
 # Nonlinear system
 @parameters a [unit = u"kg"^-1]
@@ -119,7 +116,7 @@ sys = ODESystem(eqs,t,y,k)
 eqs = [
     0 ~ a*x 
 ]
-nls = NonlinearSystem(eqs, [x], [a])
+@named nls = NonlinearSystem(eqs, [x], [a])
 
 # SDE test w/ noise vector
 @parameters τ [unit = u"ms"] Q [unit = u"MW"]
@@ -130,11 +127,11 @@ eqs = [D(E) ~ P - E/τ
 
 noiseeqs = [0.1u"MW",
             0.1u"MW"]
-sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
+@named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
 # With noise matrix
 noiseeqs = [0.1u"MW" 0.1u"MW"
             0.1u"MW" 0.1u"MW"]
-sys = SDESystem(eqs,noiseeqs, t, [P, E], [τ, Q])
+@named sys = SDESystem(eqs,noiseeqs, t, [P, E], [τ, Q])
 
 noiseeqs = [0.1u"MW" 0.1u"MW"
             0.1u"MW" 0.1u"s"]
@@ -146,24 +143,24 @@ noiseeqs = [0.1u"MW" 0.1u"MW"
 D = Differential(t)
 eqs = [D(L) ~ v,
        V ~ L^3]
-sys = ODESystem(eqs)
+@named sys = ODESystem(eqs)
 sys_simple = structural_simplify(sys)
 
 eqs = [D(V) ~ r,
        V ~ L^3]
-sys = ODESystem(eqs)
+@named sys = ODESystem(eqs)
 sys_simple = structural_simplify(sys)
 
 @variables V [unit = u"m"^3] L [unit = u"m"]
-@parameters v [unit = u"m/s"] r [unit =u"m"^3/u"s"] t [unit = u"s"]
+@parameters v [unit = u"m/s"] r [unit = u"m"^3/u"s"] t [unit = u"s"]
 eqs = [V ~ r*t,
        V ~ L^3]
-sys = NonlinearSystem(eqs, [V, L], [t, r])
+@named sys = NonlinearSystem(eqs, [V, L], [t, r])
 sys_simple = structural_simplify(sys)
 
 eqs = [L ~ v*t,
        V ~ L^3]
-sys = NonlinearSystem(eqs, [V,L], [t,r])
+@named sys = NonlinearSystem(eqs, [V,L], [t,r])
 sys_simple = structural_simplify(sys)
 
 #Jump System
@@ -175,20 +172,20 @@ rate₂   = γ*I
 affect₂ = [I ~ I - 1u"mol", R ~ R + 1u"mol"]
 j₁      = ConstantRateJump(rate₁, affect₁)
 j₂      = VariableRateJump(rate₂, affect₂)
-js      = JumpSystem([j₁, j₂], t, [S, I, R], [β, γ])
+js      = JumpSystem([j₁, j₂], t, [S, I, R], [β, γ],name=:sys)
 
 affect_wrong = [S ~ S - 1u"mol", I ~ I + 1]
 j_wrong      = ConstantRateJump(rate₁, affect_wrong)
-@test_throws ArgumentError JumpSystem([j_wrong, j₂], t, [S, I, R], [β, γ])
+@test_throws ArgumentError JumpSystem([j_wrong, j₂], t, [S, I, R], [β, γ],name=:sys)
 
 rate_wrong   = γ^2*I
 j_wrong     = ConstantRateJump(rate_wrong, affect₂)
-@test_throws ArgumentError JumpSystem([j₁, j_wrong], t, [S, I, R], [β, γ])
+@test_throws ArgumentError JumpSystem([j₁, j_wrong], t, [S, I, R], [β, γ],name=:sys)
 
 # mass action jump tests for SIR model
 maj1 = MassActionJump(2*β/2, [S => 1, I => 1], [S => -1, I => 1])
 maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
-js3  = JumpSystem([maj1, maj2], t, [S,I,R], [β,γ])
+@named js3  = JumpSystem([maj1, maj2], t, [S,I,R], [β,γ])
 
 #Test unusual jump system
 @parameters β γ t
@@ -196,4 +193,4 @@ js3  = JumpSystem([maj1, maj2], t, [S,I,R], [β,γ])
 
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
-js4  = JumpSystem([maj1, maj2], t, [S], [β, γ])
+@named js4  = JumpSystem([maj1, maj2], t, [S], [β, γ])

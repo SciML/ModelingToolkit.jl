@@ -21,9 +21,9 @@ function get_units(x::Symbolic)
         return base == 1 ? 1 : operation(x)(base, pargs[2])
     elseif x isa Add # Cannot simply add the units b/c they may differ in magnitude (eg, kg vs g)
         terms = get_units.(arguments(x))
-        firstunit = unit(terms[1])
+        firstunit = 1*unit(terms[1])
         for other in terms[2:end]
-            unit(other) == firstunit || throw(ArgumentError("Units mismatch: [$x] with units [$terms]."))
+            isequal(1 * unit(other), firstunit) || throw(Unitful.DimensionError(x, terms))
         end
         return 1 * firstunit
     elseif operation(x) == Symbolics._mapreduce 
@@ -45,7 +45,7 @@ function safe_get_units(term, info)
     catch err
         if err isa Unitful.DimensionError 
             @warn("$info: $(err.x) and $(err.y) are not dimensionally compatible.")
-        elseif err isa MethodError #TODO: filter for only instances where the arguments are unitful
+        elseif err isa MethodError
             @warn("$info: no method matching $(err.f) for arguments $(typeof.(err.args)).")
         else
             rethrow()
@@ -58,11 +58,17 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
     equnits = safe_get_units.(terms, info*", ".*labels)
     allthere = all(map(x -> x!==nothing, equnits))
     allmatching = true
+    first_unit = nothing
     if allthere
-        for idx in 2:length(equnits)
-            if !isequal(equnits[1], equnits[idx])
-                allmatching = false
-                @warn("$info: units $(equnits[1]) for $(labels[1]) and $(equnits[idx]) for $(labels[idx]) do not match.")
+        for idx in 1:length(equnits)
+            if !isequal(terms[idx],0)
+                if first_unit === nothing
+                    first_unit = equnits[idx]
+                elseif !isequal(first_unit, equnits[idx])
+                    allmatching = false
+                    @warn("$info: units $(equnits[1]) for $(labels[1]) and $(equnits[idx]) for $(labels[idx]) do not match.")
+           
+                end
             end
         end
     end
