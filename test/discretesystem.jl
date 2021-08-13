@@ -80,8 +80,8 @@ eqs = [
 
 eqs2, max_delay = ModelingToolkit.linearize_eqs(sys; return_max_delay=true)
 
-@test max_delay[Symbolics.value(x)] ≈ 3
-@test max_delay[Symbolics.value(y)] ≈ 2
+@test max_delay[Symbolics.operation(Symbolics.value(x(t)))] ≈ 3
+@test max_delay[Symbolics.operation(Symbolics.value(y(t)))] ≈ 2
 
 linearized_eqs = [
     eqs
