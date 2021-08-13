@@ -115,29 +115,40 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
     eqs = equations(sys)
     foreach(check_difference_variables, eqs)
 
-    rhss = [
-        begin
-            ind = findfirst(eq -> isdifference(eq.lhs) && isequal(arguments(eq.lhs)[1], s), eqs)
-            ind === nothing ? 0 : eqs[ind].rhs
-        end
-        for s in dvs]
+    var2eq = Dict(arguments(eq.lhs)[1] => eq for eq in eqs if isdifference(eq.lhs))
 
     u = map(x->time_varying_as_func(value(x), sys), dvs)
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
-    f_oop, f_iip = build_function(rhss, u, p, t; kwargs...)
-
-    f = @RuntimeGeneratedFunction(@__MODULE__, f_oop)
-
-    function cb_affect!(int)
-        int.u += f(int.u, int.p, int.t)
+    body = map(dvs) do v
+        eq = get(var2eq, v, nothing)
+        eq === nothing && return v
+        d = operation(eq.lhs)
+        d.update ? eq.rhs : eq.rhs + v
     end
 
-    dts = [operation(eq.lhs).dt for eq in eqs if isdifferenceeq(eq)]
-    all(dt == dts[1] for dt in dts) || error("All difference variables should have same time steps.")
+    f_oop, f_iip = build_function(body, u, p, t; expression=Val{false}, kwargs...)
 
-    PeriodicCallback(cb_affect!, first(dts))
+    cb_affect! = let f_oop=f_oop, f_iip=f_iip
+        function cb_affect!(integ)
+            if DiffEqBase.isinplace(integ.sol.prob)
+                tmp, = DiffEqBase.get_tmp_cache(integ)
+                f_iip(tmp, integ.u, integ.p, integ.t) # aliasing `integ.u` would be bad.
+                copyto!(integ.u, tmp)
+            else
+                integ.u = f_oop(integ.u, integ.p, integ.t)
+            end
+            return nothing
+        end
+    end
+
+    getdt(eq) = operation(eq.lhs).dt
+    deqs = values(var2eq)
+    dt = getdt(first(deqs))
+    all(dt == getdt(eq) for eq in deqs) || error("All difference variables should have same time steps.")
+
+    PeriodicCallback(cb_affect!, first(dt))
 end
 
 function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
