@@ -5,37 +5,40 @@ MT = ModelingToolkit
 @variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 
-@test MT.get_units(t) == 1u"ms"
-@test MT.get_units(E) == 1u"kJ"
-@test MT.get_units(τ) == 1u"ms"
+@test MT.get_unit(t) == u"ms"
+@test MT.get_unit(E) == u"kJ"
+@test MT.get_unit(τ) == u"ms"
 
-@test MT.get_units(0.5) == 1.0
-@test MT.get_units(t) == 1.0u"ms"
-@test MT.get_units(P) == 1.0u"MW"
-@test MT.get_units(τ) == 1.0u"ms"
+@parameters β [unit = u"°"] α [unit = u"°C"] γ [unit = 1u"s"]
+@test_throws MT.ValidationError MT.get_unit(β)
+@test_throws MT.ValidationError MT.get_unit(α)
+@test_throws MT.ValidationError MT.get_unit(γ)
 
-@test MT.get_units(τ^-1) == 1/u"ms"
-@test MT.get_units(D(E)) == 1.0u"MW"
-@test MT.get_units(E/τ) == 1.0u"MW"
-@test MT.get_units(2*P) == 1.0u"MW"
-@test MT.get_units(t/τ) == 1.0
-@test MT.get_units(P - E/τ) == 1.0u"MW"
+unitless = Unitful.unit(1)
+@test MT.get_unit(0.5) == unitless
+@test MT.get_unit(t) == u"ms"
+@test MT.get_unit(P) == u"MW"
+@test MT.get_unit(τ) == u"ms"
 
-@test MT.get_units(1.0^(t/τ)) == 1.0
-@test MT.get_units(exp(t/τ)) == 1.0
-@test MT.get_units(sin(t/τ)) == 1.0
-@test MT.get_units(sin(1u"rad")) == 1.0
-@test MT.get_units(t^2) == 1.0u"ms"^2
+@test MT.get_unit(τ^-1) == u"ms^-1"
+@test MT.equivalent(MT.get_unit(D(E)),u"MW")
+@test MT.equivalent(MT.get_unit(E/τ), u"MW")
+@test MT.get_unit(2*P) == u"MW"
+@test MT.get_unit(t/τ) == unitless
+@test MT.equivalent(MT.get_unit(P - E/τ),u"MW")
+@test MT.equivalent(MT.get_unit(D(D(E))),u"MW/ms")
+
+@test MT.get_unit(1.0^(t/τ)) == unitless
+@test MT.get_unit(exp(t/τ)) == unitless
+@test MT.get_unit(sin(t/τ)) == unitless
+@test MT.get_unit(sin(1u"rad")) == unitless
+@test MT.get_unit(t^2) == u"ms^2"
 
 @test !MT.validate(E^1.5 ~ E^(t/τ))
 @test MT.validate(E^(t/τ) ~ E^(t/τ))
 
 eqs = [D(E) ~ P - E/τ
-        0.0u"MW" ~ P]
-@test MT.get_units(eqs[1].lhs) == 1.0u"MW"
-@test MT.get_units(eqs[1].rhs) == 1.0u"MW"
-@test MT.validate(eqs[1])
-@test MT.validate(eqs[2])
+        0 ~ P]
 @test MT.validate(eqs)
 @named sys = ODESystem(eqs)
 @named sys = ODESystem(eqs, t, [P, E], [τ])
@@ -164,23 +167,23 @@ eqs = [L ~ v*t,
 sys_simple = structural_simplify(sys)
 
 #Jump System
-@parameters β [unit = 1/(u"mol"^2*u"s")] γ [unit = 1/(u"mol"*u"s")] t [unit = u"s"] 
+@parameters β [unit = u"(mol^2*s)^-1"] γ [unit = u"(mol*s)^-1"] t [unit = u"s"] jumpmol [unit = u"mol"]
 @variables S(t) [unit = u"mol"] I(t) [unit = u"mol"] R(t) [unit = u"mol"]
 rate₁   = β*S*I
-affect₁ = [S ~ S - 1u"mol", I ~ I + 1u"mol"]
+affect₁ = [S ~ S - 1*jumpmol, I ~ I + 1*jumpmol]
 rate₂   = γ*I
-affect₂ = [I ~ I - 1u"mol", R ~ R + 1u"mol"]
+affect₂ = [I ~ I - 1*jumpmol, R ~ R + 1*jumpmol]
 j₁      = ConstantRateJump(rate₁, affect₁)
 j₂      = VariableRateJump(rate₂, affect₂)
 js      = JumpSystem([j₁, j₂], t, [S, I, R], [β, γ],name=:sys)
 
-affect_wrong = [S ~ S - 1u"mol", I ~ I + 1]
+affect_wrong = [S ~ S - jumpmol, I ~ I + 1]
 j_wrong      = ConstantRateJump(rate₁, affect_wrong)
-@test_throws ArgumentError JumpSystem([j_wrong, j₂], t, [S, I, R], [β, γ],name=:sys)
+@test_throws MT.ValidationError JumpSystem([j_wrong, j₂], t, [S, I, R], [β, γ],name=:sys)
 
 rate_wrong   = γ^2*I
 j_wrong     = ConstantRateJump(rate_wrong, affect₂)
-@test_throws ArgumentError JumpSystem([j₁, j_wrong], t, [S, I, R], [β, γ],name=:sys)
+@test_throws MT.ValidationError JumpSystem([j₁, j_wrong], t, [S, I, R], [β, γ],name=:sys)
 
 # mass action jump tests for SIR model
 maj1 = MassActionJump(2*β/2, [S => 1, I => 1], [S => -1, I => 1])
