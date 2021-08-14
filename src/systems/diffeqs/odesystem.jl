@@ -110,6 +110,7 @@ function ODESystem(
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
                    preface=nothing,
+                   checks = true,
                   )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = collect(deqs)
@@ -143,7 +144,7 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface)
+    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface, checks = checks)
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)
