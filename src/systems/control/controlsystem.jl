@@ -90,7 +90,8 @@ function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls
                        default_u0=Dict(),
                        default_p=Dict(),
                        defaults=_merge(Dict(default_u0), Dict(default_p)),
-                       name=nothing)
+                       name=nothing,
+                       kwargs...)
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ControlSystem, force=true)
@@ -108,7 +109,7 @@ function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls
     collect_defaults!(defaults, dvs′)
     collect_defaults!(defaults, ps′)
     ControlSystem(value(loss), deqs, iv′, dvs′, controls′,
-                  ps′, observed, name, systems, defaults)
+                  ps′, observed, name, systems, defaults, kwargs...)
 end
 
 struct ControlToExpr
@@ -200,5 +201,5 @@ function runge_kutta_discretize(sys::ControlSystem,dt,tspan;
     equalities = vcat(stages,updates,control_equality)
     opt_states = vcat(reduce(vcat,reduce(vcat,states_timeseries)),reduce(vcat,reduce(vcat,k_timeseries)),reduce(vcat,reduce(vcat,control_timeseries)))
 
-    OptimizationSystem(reduce(+,losses, init=0),opt_states,ps,equality_constraints = equalities, name=nameof(sys))
+    OptimizationSystem(reduce(+,losses, init=0),opt_states,ps,equality_constraints = equalities, name=nameof(sys), checks = false)
 end

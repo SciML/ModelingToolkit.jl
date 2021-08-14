@@ -60,7 +60,8 @@ function OptimizationSystem(op, states, ps;
                             default_p=Dict(),
                             defaults=_merge(Dict(default_u0), Dict(default_p)),
                             name=nothing,
-                            systems = OptimizationSystem[])
+                            systems = OptimizationSystem[],
+                            checks = true)
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :OptimizationSystem, force=true)
@@ -81,7 +82,7 @@ function OptimizationSystem(op, states, ps;
                        value(op), states, ps, var_to_name,
                        observed,
                        equality_constraints, inequality_constraints,
-                       name, systems, defaults
+                       name, systems, defaults, checks = checks
                       )
 end
 

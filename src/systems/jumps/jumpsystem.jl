@@ -71,6 +71,7 @@ function JumpSystem(eqs, iv, states, ps;
                     defaults=_merge(Dict(default_u0), Dict(default_p)),
                     name=nothing,
                     connection_type=nothing,
+                    checks = true,
                     kwargs...)
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     eqs = collect(eqs)
@@ -101,7 +102,7 @@ function JumpSystem(eqs, iv, states, ps;
     process_variables!(var_to_name, defaults, states)
     process_variables!(var_to_name, defaults, ps)
 
-    JumpSystem{typeof(ap)}(ap, value(iv), states, ps, var_to_name, observed, name, systems, defaults, connection_type)
+    JumpSystem{typeof(ap)}(ap, value(iv), states, ps, var_to_name, observed, name, systems, defaults, connection_type, checks = checks)
 end
 
 function generate_rate_function(js::JumpSystem, rate)

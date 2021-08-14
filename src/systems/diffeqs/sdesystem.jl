@@ -106,6 +106,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    name=nothing,
                    connection_type=nothing,
+                   checks = true,
                    )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = collect(deqs)
@@ -133,7 +134,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     ctrl_jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
-    SDESystem(deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
+    SDESystem(deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type, checks = checks)
 end
 
 SDESystem(sys::ODESystem, neqs; kwargs...) = SDESystem(equations(sys), neqs, get_iv(sys), states(sys), parameters(sys); kwargs...)

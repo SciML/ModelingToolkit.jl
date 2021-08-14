@@ -70,6 +70,7 @@ function NonlinearSystem(eqs, states, ps;
                          defaults=_merge(Dict(default_u0), Dict(default_p)),
                          systems=NonlinearSystem[],
                          connection_type=nothing,
+                         checks = true,
                          )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     # Move things over, but do not touch array expressions
@@ -92,7 +93,7 @@ function NonlinearSystem(eqs, states, ps;
     process_variables!(var_to_name, defaults, states)
     process_variables!(var_to_name, defaults, ps)
 
-    NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, nothing, connection_type)
+    NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, nothing, connection_type, checks = checks)
 end
 
 function calculate_jacobian(sys::NonlinearSystem; sparse=false, simplify=false)
