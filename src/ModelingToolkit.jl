@@ -134,8 +134,6 @@ include("systems/control/controlsystem.jl")
 
 include("systems/pde/pdesystem.jl")
 
-include("systems/reaction/reactionsystem.jl")
-
 include("systems/discrete_system/discrete_system.jl")
 include("systems/validation.jl")
 include("systems/dependency_graphs.jl")
