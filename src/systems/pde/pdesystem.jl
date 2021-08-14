@@ -59,8 +59,12 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
                                    ps=SciMLBase.NullParameters();
                                    defaults=Dict(),
-                                   connection_type=nothing,
+                                   connection_type = nothing,
+                                   checks::Bool = true
                                   )
+        if checks
+            check_units(eqs)
+        end
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connection_type)
     end
 end

@@ -122,7 +122,6 @@ include("systems/diffeqs/sdesystem.jl")
 include("systems/diffeqs/abstractodesystem.jl")
 include("systems/diffeqs/first_order_transform.jl")
 include("systems/diffeqs/modelingtoolkitize.jl")
-include("systems/diffeqs/validation.jl")
 include("systems/diffeqs/basic_transformations.jl")
 
 include("systems/jumps/jumpsystem.jl")
@@ -135,10 +134,9 @@ include("systems/control/controlsystem.jl")
 
 include("systems/pde/pdesystem.jl")
 
-include("systems/dependency_graphs.jl")
-
 include("systems/discrete_system/discrete_system.jl")
-
+include("systems/validation.jl")
+include("systems/dependency_graphs.jl")
 include("systems/systemstructure.jl")
 using .SystemStructures
 

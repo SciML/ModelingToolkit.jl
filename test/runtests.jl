@@ -9,6 +9,7 @@ using SafeTestsets, Test
 @safetestset "System Linearity Test" begin include("linearity.jl") end
 @safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
 @safetestset "ODESystem Test" begin include("odesystem.jl") end
+@safetestset "Unitful Quantities Test" begin include("units.jl") end
 @safetestset "LabelledArrays Test" begin include("labelledarrays.jl") end
 @safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
 @safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end

@@ -54,9 +54,12 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     in `DiscreteSystem`.
     """
     default_p::Dict
-    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p)
-        check_variables(dvs,iv)
-        check_parameters(ps,iv)
+    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p; checks::Bool = true)
+        if checks
+            check_variables(dvs, iv)
+            check_parameters(ps, iv)
+            check_units(discreteEqs)
+        end
         new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p)
     end
 end
@@ -75,6 +78,7 @@ function DiscreteSystem(
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
+                   kwargs...,
                   )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     eqs = collect(eqs)
@@ -97,7 +101,7 @@ function DiscreteSystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, default_u0, default_p)
+    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, default_u0, default_p, kwargs...)
 end
 
 """
