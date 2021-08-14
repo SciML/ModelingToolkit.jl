@@ -132,6 +132,7 @@ validate(eqs::Vector; info::String = "") = all([validate(eqs[idx], info = info*"
 validate(eqs::Vector, noise::Vector; info::String = "") = all([validate(eqs[idx], noise[idx], info = info*" in eq. #$idx") for idx in 1:length(eqs)])
 validate(eqs::Vector, noise::Matrix; info::String = "") = all([validate(eqs[idx], noise[idx, :], info = info*" in eq. #$idx") for idx in 1:length(eqs)])
 validate(eqs::Vector, term::Symbolic; info::String = "") = all([validate(eqs[idx], term, info = info*" in eq. #$idx") for idx in 1:length(eqs)])
+validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term,"") !== nothing
 
 "Throws error if units of equations are invalid."
 check_units(eqs...) = validate(eqs...) || throw(ValidationError("Some equations had invalid units. See warnings for details."))

@@ -63,7 +63,7 @@ eqs = eqs = [D(E) ~ P - E/τ,
 ModelingToolkit.validate(eqs) #Returns false while displaying a warning message
 ```
 
-## `Unitful` Literals & User-defined functions
+## `Unitful` Literals & User-Defined Functions
 
 In order for a function to work correctly during both validation & execution, the function must be unit-agnostic. That is, no unitful literals may be used. Any unitful quantity must either be a `parameter` or `variable`. For example, these equations will not validate successfully. 
 

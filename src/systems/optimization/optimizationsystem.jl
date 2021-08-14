@@ -42,6 +42,12 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     """
     defaults::Dict
     function OptimizationSystem(op, states, ps, var_to_name, observed, equality_constraints, inequality_constraints, name, systems, defaults; checks::Bool = true)
+        if checks
+            check_units(op)
+            check_units(observed)
+            check_units(equality_constraints)
+            check_units(inequality_constraints)
+        end
         new(op, states, ps, var_to_name, observed, equality_constraints, inequality_constraints, name, systems, defaults)
     end
 end
