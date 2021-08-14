@@ -82,24 +82,24 @@ function safe_get_unit(term, info)
 end
 
 function _validate(terms::Vector, labels::Vector{String}; info::String = "")
-    equnits = safe_get_unit.(terms, info*" ".*labels)
-    allthere = all(map(x -> x!==nothing, equnits))
-    allmatching = true
+    valid = true
     first_unit = nothing
-    if allthere
-        for idx in 1:length(equnits)
-            if !isequal(terms[idx],0)
-                if first_unit === nothing
-                    first_unit = equnits[idx]
-                elseif !equivalent(first_unit, equnits[idx])
-                    allmatching = false
-                    @warn("$info: units [$(equnits[1])] for $(labels[1]) and [$(equnits[idx])] for $(labels[idx]) do not match.")
-           
-                end
+    first_label = nothing
+    for (term,label) in zip(terms,labels)
+        equnit = safe_get_unit(term, info*label)
+        if equnit === nothing
+            valid = false
+        elseif !isequal(term,0)
+            if first_unit === nothing
+                first_unit = equnit
+                first_label = label
+            elseif !equivalent(first_unit, equnit)
+                valid = false
+                @warn("$info: units [$(equnit)] for $(first_label) and [$(equnit)] for $(label) do not match.")
             end
         end
     end
-    allthere && allmatching
+    valid
 end
 
 function validate(jump::Union{ModelingToolkit.VariableRateJump, ModelingToolkit.ConstantRateJump}, t::Symbolic; info::String = "")
