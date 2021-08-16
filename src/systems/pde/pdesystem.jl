@@ -64,7 +64,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                                    ps=SciMLBase.NullParameters();
                                    defaults=Dict(),
                                    connection_type = nothing,
-                                   checks::Bool = true
+                                   checks::Bool = true,
                                    name
                                   )
         if checks
