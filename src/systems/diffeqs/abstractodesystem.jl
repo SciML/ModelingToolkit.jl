@@ -111,44 +111,45 @@ function generate_function(
     end
 end
 
-@inline function allequal(x)
-    length(x) < 2 && return true
-    e1 = first(x)
-    i = 2
-    @inbounds for i=2:length(x)
-        x[i] == e1 || return false
-    end
-    return true
-end
-
-function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = parameters(sys);
-    kwargs...)
+function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     eqs = equations(sys)
     foreach(check_difference_variables, eqs)
 
-    rhss = [ 
-        begin
-            ind = findfirst(eq -> isdifference(eq.lhs) && isequal(arguments(eq.lhs)[1], s), eqs)
-            ind === nothing ? 0 : eqs[ind].rhs
-        end
-        for s in dvs ]
-    
+    var2eq = Dict(arguments(eq.lhs)[1] => eq for eq in eqs if isdifference(eq.lhs))
+
     u = map(x->time_varying_as_func(value(x), sys), dvs)
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
-    f_oop, f_iip = build_function(rhss, u, p, t; kwargs...)
-
-    f = @RuntimeGeneratedFunction(@__MODULE__, f_oop)
-
-    function cb_affect!(int) 
-        int.u += f(int.u, int.p, int.t) 
+    body = map(dvs) do v
+        eq = get(var2eq, v, nothing)
+        eq === nothing && return v
+        d = operation(eq.lhs)
+        d.update ? eq.rhs : eq.rhs + v
     end
 
-    dts = [ operation(eq.lhs).dt for eq in eqs if isdifferenceeq(eq)] 
-    allequal(dts) || error("All difference variables should have same time steps.")
+    pre = get_postprocess_fbody(sys)
+    f_oop, f_iip = build_function(body, u, p, t; expression=Val{false}, postprocess_fbody=pre, kwargs...)
 
-    PeriodicCallback(cb_affect!, first(dts))
+    cb_affect! = let f_oop=f_oop, f_iip=f_iip
+        function cb_affect!(integ)
+            if DiffEqBase.isinplace(integ.sol.prob)
+                tmp, = DiffEqBase.get_tmp_cache(integ)
+                f_iip(tmp, integ.u, integ.p, integ.t) # aliasing `integ.u` would be bad.
+                copyto!(integ.u, tmp)
+            else
+                integ.u = f_oop(integ.u, integ.p, integ.t)
+            end
+            return nothing
+        end
+    end
+
+    getdt(eq) = operation(eq.lhs).dt
+    deqs = values(var2eq)
+    dt = getdt(first(deqs))
+    all(dt == getdt(eq) for eq in deqs) || error("All difference variables should have same time steps.")
+
+    PeriodicCallback(cb_affect!, first(dt))
 end
 
 function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
@@ -578,12 +579,11 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
-    if any(isdifferenceeq.(equations(sys)))
-        ODEProblem{iip}(f,u0,tspan,p;difference_cb=generate_difference_cb(sys),kwargs...)
+    if any(isdifferenceeq, equations(sys))
+        ODEProblem{iip}(f,u0,tspan,p;difference_cb=generate_difference_cb(sys;kwargs...),kwargs...)
     else
         ODEProblem{iip}(f,u0,tspan,p;kwargs...)
     end
-    
 end
 
 """
@@ -610,12 +610,11 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
     diffvars = collect_differential_variables(sys)
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
-    if any(isdifferenceeq.(equations(sys)))
-        DAEProblem{iip}(f,du0,u0,tspan,p;difference_cb=generate_difference_cb(sys),differential_vars=differential_vars,kwargs...)
+    if any(isdifferenceeq, equations(sys))
+        DAEProblem{iip}(f,du0,u0,tspan,p;difference_cb=generate_difference_cb(sys; kwargs...),differential_vars=differential_vars,kwargs...)
     else
-        DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)    
+        DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)
     end
-    
 end
 
 """

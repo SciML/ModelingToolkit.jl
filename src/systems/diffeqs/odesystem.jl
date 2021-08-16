@@ -239,7 +239,8 @@ function build_explicit_observed_function(
     # FIXME: this is a rather rough estimate of dependencies.
     maxidx = 0
     for (i, s) in enumerate(syms)
-        idx = observed_idx[s]
+        idx = get(observed_idx, s, nothing)
+        idx === nothing && throw(ArgumentError("$s is not an observed variable."))
         idx > maxidx && (maxidx = idx)
         output[i] = obs[idx].rhs
     end
