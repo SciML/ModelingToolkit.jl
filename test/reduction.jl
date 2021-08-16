@@ -281,3 +281,20 @@ dt = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, sin(10t)))
 @test dv25 ≈ 0.3
 @test ddv25 == 0.005
 @test dt == -0.1
+
+# Don't reduce inputs
+@parameters t σ ρ β
+@variables x(t) y(t) z(t) [input=true] a(t) u(t) F(t)
+D = Differential(t)
+
+eqs = [
+       D(x) ~ σ*(y-x)
+       D(y) ~ x*(ρ-z)-y + β
+       0 ~ z - x + y
+       0 ~ a + z
+       u ~ z + a
+      ]
+
+lorenz1 = ODESystem(eqs,t,name=:lorenz1)
+lorenz1_reduced = structural_simplify(lorenz1)
+@test z in Set(states(lorenz1_reduced))
