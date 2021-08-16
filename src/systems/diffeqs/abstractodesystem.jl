@@ -128,7 +128,8 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
         d.update ? eq.rhs : eq.rhs + v
     end
 
-    f_oop, f_iip = build_function(body, u, p, t; expression=Val{false}, kwargs...)
+    pre = get_postprocess_fbody(sys)
+    f_oop, f_iip = build_function(body, u, p, t; expression=Val{false}, postprocess_fbody=pre, kwargs...)
 
     cb_affect! = let f_oop=f_oop, f_iip=f_iip
         function cb_affect!(integ)
@@ -578,12 +579,11 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
-    if any(isdifferenceeq.(equations(sys)))
-        ODEProblem{iip}(f,u0,tspan,p;difference_cb=generate_difference_cb(sys),kwargs...)
+    if any(isdifferenceeq, equations(sys))
+        ODEProblem{iip}(f,u0,tspan,p;difference_cb=generate_difference_cb(sys;kwargs...),kwargs...)
     else
         ODEProblem{iip}(f,u0,tspan,p;kwargs...)
     end
-    
 end
 
 """
@@ -610,12 +610,11 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
     diffvars = collect_differential_variables(sys)
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
-    if any(isdifferenceeq.(equations(sys)))
-        DAEProblem{iip}(f,du0,u0,tspan,p;difference_cb=generate_difference_cb(sys),differential_vars=differential_vars,kwargs...)
+    if any(isdifferenceeq, equations(sys))
+        DAEProblem{iip}(f,du0,u0,tspan,p;difference_cb=generate_difference_cb(sys; kwargs...),differential_vars=differential_vars,kwargs...)
     else
-        DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)    
+        DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)
     end
-    
 end
 
 """
