@@ -404,11 +404,13 @@ eqs = [
 @parameters t a b c d
 @variables x(t) y(t)
 δ = Differential(t)
-D = Difference(t; dt=0.1)
+Δ = Difference(t; dt=0.1)
+U = DiscreteUpdate(t; dt=0.1)
 eqs = [
-    δ(x) ~ a*x - b*x*y,
-    δ(y) ~ -c*y + d*x*y,
-    D(x) ~ y
+    δ(x) ~ a*x - b*x*y
+    δ(y) ~ -c*y + d*x*y
+    Δ(x) ~ y
+    U(y) ~ x + 1
 ]
 @named de = ODESystem(eqs,t,[x,y],[a,b,c,d])
 @test generate_difference_cb(de) isa ModelingToolkit.DiffEqCallbacks.DiscreteCallback
@@ -431,7 +433,8 @@ end
 
 prob2 = ODEProblem(lotka,[1.0,1.0],(0.0,1.0),[1.5,1.0,3.0,1.0])
 function periodic_difference_affect!(int)
-    int.u += [int.u[2], 0]
+    int.u = [int.u[1] + int.u[2], int.u[1] + 1]
+    return nothing
 end
 
 difference_cb = ModelingToolkit.PeriodicCallback(periodic_difference_affect!, 0.1)
