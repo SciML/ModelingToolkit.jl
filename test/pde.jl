@@ -12,6 +12,6 @@ bcs = [u(0,x) ~ - x * (x-1) * sin(x),
 domains = [t ∈ (0.0,1.0),
            x ∈ (0.0,1.0)]
 
-pdesys = PDESystem(eq,bcs,domains,[t,x],[u])
+@named pdesys = PDESystem(eq,bcs,domains,[t,x],[u])
 
 @test all(isequal.(independent_variables(pdesys), [t,x]))
