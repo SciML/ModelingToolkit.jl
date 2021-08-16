@@ -37,7 +37,7 @@ eqs = [D(D(x)) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-sys = ODESystem(eqs)
+@named sys = ODESystem(eqs)
 sys = ode_order_lowering(sys)
 
 u0 = [D(x) => 2.0,
@@ -74,13 +74,13 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-lorenz1 = ODESystem(eqs,name=:lorenz1)
-lorenz2 = ODESystem(eqs,name=:lorenz2)
+@named lorenz1 = ODESystem(eqs)
+@named lorenz2 = ODESystem(eqs)
 
 @variables a(t)
 @parameters γ
 connections = [0 ~ lorenz1.x + lorenz2.y + a*γ]
-connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])
+@named connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])
 
 u0 = [lorenz1.x => 1.0,
       lorenz1.y => 0.0,
