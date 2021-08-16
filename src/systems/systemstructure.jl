@@ -5,7 +5,8 @@ using Symbolics: linear_expansion, unwrap
 using SymbolicUtils: istree, operation, arguments, Symbolic
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
-    value, InvalidSystemException, isdifferential, _iszero, isparameter, independent_variables
+    value, InvalidSystemException, isdifferential, _iszero, isparameter,
+    independent_variables, isinput
 using ..BipartiteGraphs
 using LightGraphs
 using UnPack
@@ -230,7 +231,7 @@ function find_linear_equations(sys)
             var = fullvars[j]
             a, b, islinear = linear_expansion(term, var)
             a = unwrap(a)
-            if islinear && !(a isa Symbolic) && a isa Number
+            if islinear && !(a isa Symbolic) && a isa Number && !isinput(var)
                 if a == 1 || a == -1
                     a = convert(Integer, a)
                     linear_term += a * var
