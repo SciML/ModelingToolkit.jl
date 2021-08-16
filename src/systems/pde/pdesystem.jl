@@ -56,16 +56,21 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     type: type of the system
     """
     connection_type::Any
+    """
+    name: the name of the system
+    """
+    name::Symbol
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
                                    ps=SciMLBase.NullParameters();
                                    defaults=Dict(),
                                    connection_type = nothing,
                                    checks::Bool = true
+                                   name
                                   )
         if checks
             check_units(eqs)
         end
-        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connection_type)
+        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connection_type, name)
     end
 end
 
