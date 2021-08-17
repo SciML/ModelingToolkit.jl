@@ -102,6 +102,20 @@ function states end
 """
 $(TYPEDSIGNATURES)
 
+Get the set of states decorated as inputs for the given system.
+"""
+function inputs end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get the set of states decorated as outputs for the given system.
+"""
+function outputs end
+
+"""
+$(TYPEDSIGNATURES)
+
 Get the set of parameters variables for the given system.
 """
 function parameters end
