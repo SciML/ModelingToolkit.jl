@@ -51,6 +51,15 @@ function get_unit(x::Symbolic)
             equivalent(other,firstunit) || throw(ValidationError(", in sum $x, units [$termlist] do not match."))
         end
         return firstunit
+    elseif operation(x) in ( Base.:> ,  Base.:< , == )
+        terms = get_unit.(arguments(x))
+        equivalent(terms[1],terms[2]) || throw(ValidationError(", in comparison $x, units [$(terms[1])] and [$(terms[2])] do not match."))
+        return unitless
+    elseif operation(x) == ifelse || operation(x) == IfElse.ifelse
+         terms = get_unit.(arguments(x))
+        terms[1] == unitless || throw(ValidationError(", in $x, [$(terms[1])] is not dimensionless."))
+        equivalent(terms[2],terms[3]) || throw(ValidationError(", in $x, units [$(terms[2])] and [$(terms[3])] do not match."))
+        return terms[2]
     elseif operation(x) == Symbolics._mapreduce 
         if x.arguments[2] == +
             get_unit(x.arguments[3])
