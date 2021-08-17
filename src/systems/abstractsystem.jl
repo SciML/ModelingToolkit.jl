@@ -397,7 +397,8 @@ function inputs(sys::AbstractSystem)
 end
 
 function outputs(sys::AbstractSystem)
-    [st for st in states(sys) if isoutput(st)]
+    sts = vcat(states(sys), map(x->x.lhs, observed(sys)))
+    [st for st in sts if isoutput(st)]
 end
 
 function parameters(sys::AbstractSystem)
