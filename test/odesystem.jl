@@ -399,6 +399,7 @@ eqs = [
 @test isequal(@nonamespace(sys.y), unwrap(y))
 @test isequal(@nonamespace(sys.p), unwrap(p))
 @test_nowarn sys.x, sys.y, sys.p
+@test ModelingToolkit.isvariable(Symbolics.unwrap(x[1]))
 
 # Mixed Difference Differential equations
 @parameters t a b c d

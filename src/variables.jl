@@ -12,7 +12,7 @@ Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 
 function isvarkind(m, x)
-    p = Symbolics.getparent(x, nothing)
+    p = getparent(x, nothing)
     p === nothing || (x = p)
     getmetadata(x, m, false)
 end

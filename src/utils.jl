@@ -210,7 +210,12 @@ isdiffeq(eq) = isdifferential(eq.lhs)
 isdifference(expr) = istree(expr) && operation(expr) isa Difference
 isdifferenceeq(eq) = isdifference(eq.lhs)
 
-isvariable(x) = x isa Symbolic && hasmetadata(x, VariableSource)
+function isvariable(x)
+    x isa Symbolic || return false
+    p = getparent(x, nothing)
+    p === nothing || (x = p)
+    hasmetadata(x, VariableSource)
+end
 
 vars(x::Sym; op=Differential) = Set([x])
 vars(exprs::Symbolic; op=Differential) = vars([exprs]; op=op)
