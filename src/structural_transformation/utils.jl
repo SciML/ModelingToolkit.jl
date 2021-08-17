@@ -276,7 +276,9 @@ function find_solvables!(sys)
         term = value(eq.rhs - eq.lhs)
         for j in 𝑠neighbors(graph, i)
             isalgvar(s, j) || continue
-            a, b, islinear = linear_expansion(term, fullvars[j])
+            var = fullvars[j]
+            isinput(var) && continue
+            a, b, islinear = linear_expansion(term, var)
             a = unwrap(a)
             if islinear && (!(a isa Symbolic) && a isa Number && a != 0)
                 add_edge!(solvable_graph, i, j)

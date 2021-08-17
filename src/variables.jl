@@ -11,6 +11,15 @@ Symbolics.option_to_metadata_type(::Val{:description}) = VariableDescriptionType
 Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 
+function isvarkind(m, x)
+    p = getparent(x, nothing)
+    p === nothing || (x = p)
+    getmetadata(x, m, false)
+end
+
+isinput(x) = isvarkind(VariableInput, x)
+isoutput(x) = isvarkind(VariableOutput, x)
+
 """
 $(SIGNATURES)
 
