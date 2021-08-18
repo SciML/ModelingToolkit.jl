@@ -72,7 +72,7 @@ is built on, consult the
 - Nonlinear systems
 - Optimization problems
 - Continuous-Time Markov Chains
-- Chemical Reactions
+- Chemical Reactions (via [Catalyst.jl](https://github.com/SciML/Catalyst.jl))
 - Nonlinear Optimal Control
 
 ## Model Import Formats
@@ -85,9 +85,9 @@ is built on, consult the
       Hepatology, Immunology, Ion Transport, Mechanical Constitutive Laws,
       Metabolism, Myofilament Mechanics, Neurobiology, pH Regulation, PKPD,
       Protein Modules, Signal Transduction, and Synthetic Biology.
-- [SbmlInterface.jl](https://github.com/paulflang/SbmlInterface.jl): Import [SBML](http://sbml.org/Main_Page) models into ModelingToolkit
+- [SBMLToolkit.jl](https://github.com/SciML/SBMLToolkit.jl): Import [SBML](http://sbml.org/Main_Page) models into ModelingToolkit
     - Uses the robust libsbml library for parsing and transforming the SBML
-- [ReactionNetworkImporters.jl](https://github.com/isaacsas/ReactionNetworkImporters.jl): Import various models into ModelingToolkit
+- [ReactionNetworkImporters.jl](https://github.com/SciML/ReactionNetworkImporters.jl): Import various models into ModelingToolkit
     - Supports the BioNetGen `.net` file
     - Supports importing networks specified by stoichiometric matrices
 

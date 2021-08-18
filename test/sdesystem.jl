@@ -15,7 +15,11 @@ noiseeqs = [0.1*x,
             0.1*y,
             0.1*z]
 
-de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β])
+# ODESystem -> SDESystem shorthand constructor
+@named sys = ODESystem(eqs,t,[x,y,z],[σ,ρ,β])
+@test SDESystem(sys, noiseeqs, name=:foo) isa SDESystem
+
+@named de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β])
 f = eval(generate_diffusion_function(de)[1])
 @test f(ones(3),rand(3),nothing) == 0.1ones(3)
 
@@ -34,7 +38,7 @@ solexpr = solve(eval(probexpr),SRIW1(),seed=1)
 noiseeqs_nd = [0.01*x 0.01*x*y 0.02*x*z
                σ      0.01*y   0.02*x*z
                ρ      β        0.01*z  ]
-de = SDESystem(eqs,noiseeqs_nd,t,[x,y,z],[σ,ρ,β])
+@named de = SDESystem(eqs,noiseeqs_nd,t,[x,y,z],[σ,ρ,β])
 f = eval(generate_diffusion_function(de)[1])
 @test f([1,2,3.0],[0.1,0.2,0.3],nothing) == [0.01*1   0.01*1*2   0.02*1*3
                                              0.1      0.01*2     0.02*1*3
@@ -432,3 +436,14 @@ du = similar(u0, size(prob.noise_rate_prototype))
 fdif!(du,u0,p,t)
 @test du == [ cos(p[1])*sin(u0[1])   cos(p[1])*cos(u0[1])   -sin(p[1])*sin(u0[2])   -sin(p[1])*cos(u0[2])
               sin(p[1])*sin(u0[1])   sin(p[1])*cos(u0[1])    cos(p[1])*sin(u0[2])    cos(p[1])*cos(u0[2])]
+
+# issue #819
+@testset "Combined system name collisions" begin
+    @variables t
+    eqs_short = [D(x) ~ σ*(y-x),
+                D(y) ~ x*(ρ-z)-y,
+                ]
+    sys1 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
+    sys2 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
+    @test_throws ArgumentError SDESystem([sys2.y ~ sys1.z], t, [], [], [], systems = [sys1, sys2], name=:foo)
+end

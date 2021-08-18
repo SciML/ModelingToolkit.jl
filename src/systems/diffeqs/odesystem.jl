@@ -11,8 +11,8 @@ $(FIELDS)
 ```julia
 using ModelingToolkit
 
-@parameters t σ ρ β
-@variables x(t) y(t) z(t)
+@parameters σ ρ β
+@variables t x(t) y(t) z(t)
 D = Differential(t)
 
 eqs = [D(x) ~ σ*(y-x),
@@ -27,10 +27,15 @@ struct ODESystem <: AbstractODESystem
     eqs::Vector{Equation}
     """Independent variable."""
     iv::Sym
-    """Dependent (state) variables."""
+    """Dependent (state) variables. Must not contain the independent variable."""
     states::Vector
-    """Parameter variables."""
+    """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    """Array variables."""
+    var_to_name
+    """Control parameters (some subset of `ps`)."""
+    ctrls::Vector
+    """Observed states."""
     observed::Vector{Equation}
     """
     Time-derivative matrix. Note: this field will not be defined until
@@ -42,6 +47,11 @@ struct ODESystem <: AbstractODESystem
     [`calculate_jacobian`](@ref) is called on the system.
     """
     jac::RefValue{Any}
+    """
+    Control Jacobian matrix. Note: this field will not be defined until
+    [`calculate_control_jacobian`](@ref) is called on the system.
+    """
+    ctrl_jac::RefValue{Any}
     """
     `Wfact` matrix. Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
@@ -70,24 +80,46 @@ struct ODESystem <: AbstractODESystem
     """
     structure::Any
     """
-    type: type of the system
+    connection_type: type of the system
     """
     connection_type::Any
+    """
+    preface: injuect assignment statements before the evaluation of the RHS function.
+    """
+    preface::Any
+
+    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface; checks::Bool = true)
+        if checks
+            check_variables(dvs,iv)
+            check_parameters(ps,iv)
+            check_equations(deqs,iv)
+            check_units(deqs)
+        end
+        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface)
+    end
 end
 
 function ODESystem(
                    deqs::AbstractVector{<:Equation}, iv, dvs, ps;
+                   controls  = Num[],
                    observed = Num[],
                    systems = ODESystem[],
-                   name=gensym(:ODESystem),
+                   name=nothing,
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
+                   preface=nothing,
+                   checks = true,
                   )
-    iv′ = value(iv)
-    dvs′ = value.(dvs)
-    ps′ = value.(ps)
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
+    deqs = collect(deqs)
+    @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
+
+    iv′ = value(scalarize(iv))
+    dvs′ = value.(scalarize(dvs))
+    ps′ = value.(scalarize(ps))
+    ctrl′ = value.(scalarize(controls))
 
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ODESystem, force=true)
@@ -95,50 +127,28 @@ function ODESystem(
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
+    iv′ = value(scalarize(iv))
+    dvs′ = value.(scalarize(dvs))
+    ps′ = value.(scalarize(ps))
+
+    var_to_name = Dict()
+    process_variables!(var_to_name, defaults, dvs′)
+    process_variables!(var_to_name, defaults, ps′)
+
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
+    ctrl_jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
     Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, observed, tgrad, jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type)
-end
-
-iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nested_derivative(arguments(x)[1]) : arguments(x)[1]
-iv_from_nested_derivative(x::Sym) = x
-iv_from_nested_derivative(x) = missing
-
-vars(x::Sym) = Set([x])
-vars(exprs::Symbolic) = vars([exprs])
-vars(exprs) = foldl(vars!, exprs; init = Set())
-vars!(vars, eq::Equation) = (vars!(vars, eq.lhs); vars!(vars, eq.rhs); vars)
-function vars!(vars, O)
-    isa(O, Sym) && return push!(vars, O)
-    !istree(O) && return vars
-
-    operation(O) isa Differential && return push!(vars, O)
-
-    operation(O) isa Sym && push!(vars, O)
-    for arg in arguments(O)
-        vars!(vars, arg)
-    end
-
-    return vars
-end
-
-find_derivatives!(vars, expr::Equation, f=identity) = (find_derivatives!(vars, expr.lhs, f); find_derivatives!(vars, expr.rhs, f); vars)
-function find_derivatives!(vars, expr, f)
-    !istree(O) && return vars
-    operation(O) isa Differential && push!(vars, f(O))
-    for arg in arguments(O)
-        vars!(vars, arg)
-    end
-    return vars
+    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface, checks = checks)
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)
+    eqs = collect(eqs)
     # NOTE: this assumes that the order of algebric equations doesn't matter
     diffvars = OrderedSet()
     allstates = OrderedSet()
@@ -175,35 +185,12 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     return ODESystem(append!(diffeq, algeeq), iv, vcat(collect(diffvars), collect(algevars)), ps; kwargs...)
 end
 
-function collect_vars!(states, parameters, expr, iv)
-    if expr isa Sym
-        collect_var!(states, parameters, expr, iv)
-    else
-        for var in vars(expr)
-            if istree(var) && operation(var) isa Differential
-                var, _ = var_from_nested_derivative(var)
-            end
-            collect_var!(states, parameters, var, iv)
-        end
-    end
-    return nothing
-end
-
-function collect_var!(states, parameters, var, iv)
-    isequal(var, iv) && return nothing
-    if isparameter(var) || (istree(var) && isparameter(operation(var)))
-        push!(parameters, var)
-    else
-        push!(states, var)
-    end
-    return nothing
-end
-
 # NOTE: equality does not check cached Jacobian
 function Base.:(==)(sys1::ODESystem, sys2::ODESystem)
-    iv1 = independent_variable(sys1)
-    iv2 = independent_variable(sys2)
+    iv1 = get_iv(sys1)
+    iv2 = get_iv(sys2)
     isequal(iv1, iv2) &&
+    isequal(nameof(sys1), nameof(sys2)) &&
     _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
     _eq_unordered(get_states(sys1), get_states(sys2)) &&
     _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
@@ -217,7 +204,7 @@ function flatten(sys::ODESystem)
     else
         return ODESystem(
                          equations(sys),
-                         independent_variable(sys),
+                         get_iv(sys),
                          states(sys),
                          parameters(sys),
                          observed=observed(sys),
@@ -252,22 +239,24 @@ function build_explicit_observed_function(
     # FIXME: this is a rather rough estimate of dependencies.
     maxidx = 0
     for (i, s) in enumerate(syms)
-        idx = observed_idx[s]
+        idx = get(observed_idx, s, nothing)
+        idx === nothing && throw(ArgumentError("$s is not an observed variable."))
         idx > maxidx && (maxidx = idx)
         output[i] = obs[idx].rhs
     end
 
     dvs = DestructuredArgs(states(sys), inbounds=!checkbounds)
     ps = DestructuredArgs(parameters(sys), inbounds=!checkbounds)
-    iv = independent_variable(sys)
-    args = iv === nothing ? [dvs, ps] : [dvs, ps, iv]
+    ivs = independent_variables(sys)
+    args = [dvs, ps, ivs...]
+    pre = get_postprocess_fbody(sys)
 
     ex = Func(
         args, [],
-        Let(
+        pre(Let(
             map(eq -> eq.lhs←eq.rhs, obs[1:maxidx]),
             isscalar ? output[1] : MakeArray(output, output_type)
-           )
+           ))
     ) |> toexpr
 
     expression ? ex : @RuntimeGeneratedFunction(ex)
@@ -284,21 +273,6 @@ function _eq_unordered(a, b)
         delete!(idxs, idx)
     end
     return true
-end
-
-function collect_differential_variables(sys::ODESystem)
-    eqs = equations(sys)
-    vars = Set()
-    diffvars = Set()
-    for eq in eqs
-        vars!(vars, eq)
-        for v in vars
-            isdifferential(v) || continue
-            push!(diffvars, arguments(v)[1])
-        end
-        empty!(vars)
-    end
-    return diffvars
 end
 
 # We have a stand-alone function to convert a `NonlinearSystem` or `ODESystem`
@@ -329,7 +303,7 @@ function convert_system(::Type{<:ODESystem}, sys, t; name=nameof(sys))
             newsts[i] = ns
             varmap[s] = ns
         else
-            ns = indepvar2depvar(s, t)
+            ns = variable(getname(s); T=FnType)(t)
             newsts[i] = ns
             varmap[s] = ns
         end

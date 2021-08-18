@@ -11,8 +11,8 @@ it to have multiplicative noise.
 using ModelingToolkit, StochasticDiffEq
 
 # Define some variables
-@parameters t σ ρ β
-@variables x(t) y(t) z(t)
+@parameters σ ρ β
+@variables t x(t) y(t) z(t)
 D = Differential(t)
 
 eqs = [D(x) ~ σ*(y-x),
@@ -23,7 +23,7 @@ noiseeqs = [0.1*x,
             0.1*y,
             0.1*z]
 
-de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β])
+@named de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β])
 
 u0map = [
     x => 1.0,

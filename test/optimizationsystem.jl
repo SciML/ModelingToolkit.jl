@@ -54,3 +54,9 @@ _p  = [1.0, 100.0]
 f = OptimizationFunction(rosenbrock,ModelingToolkit.AutoModelingToolkit(),x0,_p,grad=true,hess=true)
 prob = OptimizationProblem(f,x0,_p)
 sol = solve(prob,Optim.Newton())
+
+# issue #819
+@testset "Combined system name collisions" begin
+    sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
+    @test_throws ArgumentError OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2])
+end

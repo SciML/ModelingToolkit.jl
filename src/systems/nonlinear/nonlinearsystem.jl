@@ -18,13 +18,15 @@ eqs = [0 ~ σ*(y-x),
 ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β])
 ```
 """
-struct NonlinearSystem <: AbstractSystem
+struct NonlinearSystem <: AbstractTimeIndependentSystem
     """Vector of equations defining the system."""
     eqs::Vector{Equation}
     """Unknown variables."""
     states::Vector
     """Parameters."""
     ps::Vector
+    """Array variables."""
+    var_to_name
     observed::Vector{Equation}
     """
     Jacobian matrix. Note: this field will not be defined until
@@ -32,7 +34,7 @@ struct NonlinearSystem <: AbstractSystem
     """
     jac::RefValue{Any}
     """
-    Name: the name of the system
+    Name: the name of the system. These are required to have unique names.
     """
     name::Symbol
     """
@@ -52,27 +54,54 @@ struct NonlinearSystem <: AbstractSystem
     type: type of the system
     """
     connection_type::Any
+    function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, structure, connection_type; checks::Bool = true)
+        if checks
+            check_units(eqs)
+        end
+        new(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, structure, connection_type)
+    end
 end
 
 function NonlinearSystem(eqs, states, ps;
                          observed=[],
-                         name=gensym(:NonlinearSystem),
+                         name=nothing,
                          default_u0=Dict(),
                          default_p=Dict(),
                          defaults=_merge(Dict(default_u0), Dict(default_p)),
                          systems=NonlinearSystem[],
                          connection_type=nothing,
+                         checks = true,
                          )
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
+    # Move things over, but do not touch array expressions
+    eqs = [0 ~ x.rhs - x.lhs for x in collect(eqs)]
+
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :NonlinearSystem, force=true)
+    end
+    sysnames = nameof.(systems)
+    if length(unique(sysnames)) != length(sysnames)
+        throw(ArgumentError("System names must be unique."))
     end
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
-    NonlinearSystem(eqs, value.(states), value.(ps), observed, jac, name, systems, defaults, nothing, connection_type)
+
+    states = collect(states)
+    states, ps = value.(states), value.(ps)
+    var_to_name = Dict()
+    process_variables!(var_to_name, defaults, states)
+    process_variables!(var_to_name, defaults, ps)
+
+    NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, nothing, connection_type, checks = checks)
 end
 
-function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
+function calculate_jacobian(sys::NonlinearSystem; sparse=false, simplify=false)
+    cache = get_jac(sys)[]
+    if cache isa Tuple && cache[2] == (sparse, simplify)
+        return cache[1]
+    end
+
     rhs = [eq.rhs for eq ∈ equations(sys)]
     vals = [dv for dv in states(sys)]
     if sparse
@@ -80,7 +109,7 @@ function calculate_jacobian(sys::NonlinearSystem;sparse=false,simplify=false)
     else
         jac = jacobian(rhs, vals, simplify=simplify)
     end
-    get_jac(sys)[] = jac
+    get_jac(sys)[] = jac, (sparse, simplify)
     return jac
 end
 
@@ -94,18 +123,11 @@ end
 function generate_function(sys::NonlinearSystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     #obsvars = map(eq->eq.lhs, observed(sys))
     #fulldvs = [dvs; obsvars]
-    fulldvs = dvs
-    fulldvs′ = makesym.(value.(fulldvs))
 
-    sub = Dict(fulldvs .=> fulldvs′)
-    # substitute x(t) by just x
-    rhss = [substitute(deq.rhs, sub) for deq ∈ equations(sys)]
-    #obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
+    rhss = [deq.rhs for deq ∈ equations(sys)]
     #rhss = Let(obss, rhss)
 
-    dvs′ = fulldvs′[1:length(dvs)]
-    ps′ = makesym.(value.(ps), states=())
-    return build_function(rhss, dvs′, ps′;
+    return build_function(rhss, value.(dvs), value.(ps);
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
@@ -166,7 +188,7 @@ function DiffEqBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sy
 
     NonlinearFunction{iip}(f,
                      jac = _jac === nothing ? nothing : _jac,
-                     jac_prototype = sparse ? similar(sys.jac[],Float64) : nothing,
+                     jac_prototype = sparse ? similar(calculate_jacobian(sys, sparse=sparse),Float64) : nothing,
                      syms = Symbol.(states(sys)), observed = observedfun)
 end
 
@@ -317,6 +339,7 @@ function flatten(sys::NonlinearSystem)
 end
 
 function Base.:(==)(sys1::NonlinearSystem, sys2::NonlinearSystem)
+    isequal(nameof(sys1), nameof(sys2)) &&
     _eq_unordered(get_eqs(sys1), get_eqs(sys2)) &&
     _eq_unordered(get_states(sys1), get_states(sys2)) &&
     _eq_unordered(get_ps(sys1), get_ps(sys2)) &&

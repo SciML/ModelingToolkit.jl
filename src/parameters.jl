@@ -10,7 +10,17 @@ isparameter(x) = false
 
 Maps the variable to a paramter.
 """
-toparam(s::Symbolic) = setmetadata(s, MTKParameterCtx, true)
+function toparam(s)
+    if s isa Symbolics.Arr
+        Symbolics.wrap(toparam(Symbolics.unwrap(s)))
+    elseif s isa AbstractArray
+        map(toparam, s)
+    elseif symtype(s) <: AbstractArray
+        Symbolics.recurse_and_apply(toparam, s)
+    else
+        setmetadata(s, MTKParameterCtx, true)
+    end
+end
 toparam(s::Num) = Num(toparam(value(s)))
 
 """
@@ -30,6 +40,6 @@ macro parameters(xs...)
     Symbolics._parse_vars(:parameters,
                           Real,
                           xs,
-                          x -> x isa Array ? toparam.(x) : toparam(x)
+                          toparam,
                          ) |> esc
 end

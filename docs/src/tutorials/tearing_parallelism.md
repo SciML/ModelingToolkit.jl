@@ -36,43 +36,42 @@ function connect_heat(ps...)
 end
 
 # Basic electric components
-@parameters t
+@variables t
 const D = Differential(t)
 function Pin(;name)
-    @variables v(t) i(t)
-    ODESystem(Equation[], t, [v, i], [], name=name, defaults=Dict([v=>1.0, i=>1.0]))
+    @variables v(t)=1.0 i(t)=1.0
+    ODESystem(Equation[], t, [v, i], [], name=name)
 end
 
 function Ground(;name)
     @named g = Pin()
     eqs = [g.v ~ 0]
-    ODESystem(eqs, t, [], [], systems=[g], name=name)
+    compose(ODESystem(eqs, t, [], [], name=name), g)
 end
 
 function ConstantVoltage(;name, V = 1.0)
     val = V
     @named p = Pin()
     @named n = Pin()
-    @parameters V
+    @parameters V=V
     eqs = [
            V ~ p.v - n.v
            0 ~ p.i + n.i
           ]
-    ODESystem(eqs, t, [], [V], systems=[p, n], defaults=Dict(V => val), name=name)
+    compose(ODESystem(eqs, t, [], [V], name=name), p, n)
 end
 
 function HeatPort(;name)
-    @variables T(t) Q_flow(t)
-    return ODESystem(Equation[], t, [T, Q_flow], [], defaults=Dict(T=>293.15, Q_flow=>0.0), name=name)
+    @variables T(t)=293.15 Q_flow(t)=0.0
+    ODESystem(Equation[], t, [T, Q_flow], [], name=name)
 end
 
 function HeatingResistor(;name, R=1.0, TAmbient=293.15, alpha=1.0)
-    R_val, TAmbient_val, alpha_val = R, TAmbient, alpha
     @named p = Pin()
     @named n = Pin()
     @named h = HeatPort()
     @variables v(t) RTherm(t)
-    @parameters R TAmbient alpha
+    @parameters R=R TAmbient=TAmbient alpha=alpha
     eqs = [
            RTherm ~ R*(1 + alpha*(h.T - TAmbient))
            v ~ p.i * RTherm
@@ -80,50 +79,42 @@ function HeatingResistor(;name, R=1.0, TAmbient=293.15, alpha=1.0)
            v ~ p.v - n.v
            0 ~ p.i + n.i
           ]
-    ODESystem(
-        eqs, t, [v, RTherm], [R, TAmbient, alpha], systems=[p, n, h],
-        defaults=Dict(
-            R=>R_val, TAmbient=>TAmbient_val, alpha=>alpha_val,
-            v=>0.0, RTherm=>R_val
-        ),
+    compose(ODESystem(
+        eqs, t, [v, RTherm], [R, TAmbient, alpha],
         name=name,
-    )
+    ), p, n, h)
 end
 
 function HeatCapacitor(;name, rho=8050, V=1, cp=460, TAmbient=293.15)
-    rho_val, V_val, cp_val = rho, V, cp
-    @parameters rho V cp
+    @parameters rho=rho V=V cp=cp
     C = rho*V*cp
     @named h = HeatPort()
     eqs = [
            D(h.T) ~ h.Q_flow / C
           ]
-    ODESystem(
-        eqs, t, [], [rho, V, cp], systems=[h],
-        defaults=Dict(rho=>rho_val, V=>V_val, cp=>cp_val),
+    compose(ODESystem(
+        eqs, t, [], [rho, V, cp],
         name=name,
-    )
+    ), h)
 end
 
 function Capacitor(;name, C = 1.0)
-    val = C
     @named p = Pin()
     @named n = Pin()
-    @variables v(t)
-    @parameters C
+    @variables v(t)=0.0
+    @parameters C=C
     eqs = [
            v ~ p.v - n.v
            0 ~ p.i + n.i
            D(v) ~ p.i / C
           ]
-    ODESystem(
-        eqs, t, [v], [C], systems=[p, n],
-        defaults=Dict(v => 0.0, C => val),
+    compose(ODESystem(
+        eqs, t, [v], [C],
         name=name
-    )
+    ), p, n)
 end
 
-function rc_model(i; name, source, ground, R, C)
+function parallel_rc_model(i; name, source, ground, R, C)
     resistor = HeatingResistor(name=Symbol(:resistor, i), R=R)
     capacitor = Capacitor(name=Symbol(:capacitor, i), C=C)
     heat_capacitor = HeatCapacitor(name=Symbol(:heat_capacitor, i))
@@ -135,7 +126,8 @@ function rc_model(i; name, source, ground, R, C)
               connect_heat(resistor.h, heat_capacitor.h)
              ]
 
-    rc_model = ODESystem(rc_eqs, t, systems=[resistor, capacitor, source, ground, heat_capacitor], name=Symbol(name, i))
+    compose(ODESystem(rc_eqs, t, name=Symbol(name, i)),
+            [resistor, capacitor, source, ground, heat_capacitor])
 end
 ```
 
@@ -153,13 +145,14 @@ N = 50
 Rs = 10 .^range(0, stop=-4, length=N)
 Cs = 10 .^range(-3, stop=0, length=N)
 rc_systems = map(1:N) do i
-    rc_model(i; name=:rc, source=source, ground=ground, R=Rs[i], C=Cs[i])
-end
-@variables E(t)
+    parallel_rc_model(i; name=:rc, source=source, ground=ground, R=Rs[i], C=Cs[i])
+end;
+@variables E(t)=0.0
 eqs = [
        D(E) ~ sum(((i, sys),)->getproperty(sys, Symbol(:resistor, i)).h.Q_flow, enumerate(rc_systems))
       ]
-big_rc = ODESystem(eqs, t, [E], [], systems=rc_systems, defaults=Dict(E=>0.0))
+@named _big_rc = ODESystem(eqs, t, [E], [])
+@named big_rc = compose(_big_rc, rc_systems)
 ```
 
 Now let's say we want to expose a bit more parallelism via running tearing.

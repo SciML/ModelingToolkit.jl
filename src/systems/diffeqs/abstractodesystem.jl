@@ -10,7 +10,7 @@ function calculate_tgrad(sys::AbstractODESystem;
   xs = states(sys)
   rule = Dict(map((x, xt) -> xt=>x, detime_dvs.(xs), xs))
   rhs = substitute.(rhs, Ref(rule))
-  tgrad = [expand_derivatives(ModelingToolkit.Differential(iv)(r), simplify) for r in rhs]
+  tgrad = [expand_derivatives(Differential(iv)(r), simplify) for r in rhs]
   reverse_rule = Dict(map((x, xt) -> x=>xt, detime_dvs.(xs), xs))
   tgrad = Num.(substitute.(tgrad, Ref(reverse_rule)))
   get_tgrad(sys)[] = tgrad
@@ -19,7 +19,10 @@ end
 
 function calculate_jacobian(sys::AbstractODESystem;
                             sparse=false, simplify=false)
-    isempty(get_jac(sys)[]) || return get_jac(sys)[]  # use cached Jacobian, if possible
+    cache = get_jac(sys)[]
+    if cache isa Tuple && cache[2] == (sparse, simplify)
+        return cache[1]
+    end
     rhs = [eq.rhs for eq ∈ equations(sys)]
 
     iv = get_iv(sys)
@@ -31,7 +34,29 @@ function calculate_jacobian(sys::AbstractODESystem;
         jac = jacobian(rhs, dvs, simplify=simplify)
     end
 
-    get_jac(sys)[] = jac  # cache Jacobian
+    get_jac(sys)[] = jac, (sparse, simplify) # cache Jacobian
+    return jac
+end
+
+function calculate_control_jacobian(sys::AbstractODESystem;
+                                    sparse=false, simplify=false)
+    cache = get_ctrl_jac(sys)[]
+    if cache isa Tuple && cache[2] == (sparse, simplify)
+        return cache[1]
+    end
+
+    rhs = [eq.rhs for eq ∈ equations(sys)]
+
+    iv = get_iv(sys)
+    ctrls = controls(sys)
+
+    if sparse
+        jac = sparsejacobian(rhs, ctrls, simplify=simplify)
+    else
+        jac = jacobian(rhs, ctrls, simplify=simplify)
+    end
+
+    get_ctrl_jac(sys)[] = jac, (sparse, simplify) # cache Jacobian
     return jac
 end
 
@@ -47,36 +72,29 @@ function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = param
     return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
-@noinline function throw_invalid_derivative(dervar, eq)
-    msg = "The derivative variable must be isolated to the left-hand " *
-    "side of the equation like `$dervar ~ ...`.\n Got $eq."
-    throw(InvalidSystemException(msg))
+function generate_control_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
+                                   simplify=false, sparse = false, kwargs...)
+    jac = calculate_control_jacobian(sys;simplify=simplify,sparse=sparse)
+    return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
-function check_derivative_variables(eq, expr=eq.rhs)
-    istree(expr) || return nothing
-    if operation(expr) isa Differential
-        throw_invalid_derivative(expr, eq)
-    end
-    foreach(Base.Fix1(check_derivative_variables, eq), arguments(expr))
-end
+check_derivative_variables(eq) = check_operator_variables(eq, Differential)
 
 function generate_function(
         sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
         implicit_dae=false,
-        ddvs=implicit_dae ? map(Differential(independent_variable(sys)), dvs) : nothing,
+        ddvs=implicit_dae ? map(Differential(get_iv(sys)), dvs) : nothing,
         kwargs...
     )
     # optimization
     #obsvars = map(eq->eq.lhs, observed(sys))
     #fulldvs = [dvs; obsvars]
 
-    eqs = equations(sys)
+    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     foreach(check_derivative_variables, eqs)
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
                           [eq.rhs for eq in eqs]
-    #obss = [makesym(value(eq.lhs)) ~ substitute(eq.rhs, sub) for eq ∈ observed(sys)]
     #rhss = Let(obss, rhss)
 
     # TODO: add an optional check on the ordering of observed equations
@@ -84,14 +102,57 @@ function generate_function(
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
+    pre = get_postprocess_fbody(sys)
+
     if implicit_dae
-        build_function(rhss, ddvs, u, p, t; kwargs...)
+        build_function(rhss, ddvs, u, p, t; postprocess_fbody=pre, kwargs...)
     else
-        build_function(rhss, u, p, t; kwargs...)
+        build_function(rhss, u, p, t; postprocess_fbody=pre, kwargs...)
     end
 end
 
-function time_varying_as_func(x, sys)
+function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
+    eqs = equations(sys)
+    foreach(check_difference_variables, eqs)
+
+    var2eq = Dict(arguments(eq.lhs)[1] => eq for eq in eqs if isdifference(eq.lhs))
+
+    u = map(x->time_varying_as_func(value(x), sys), dvs)
+    p = map(x->time_varying_as_func(value(x), sys), ps)
+    t = get_iv(sys)
+
+    body = map(dvs) do v
+        eq = get(var2eq, v, nothing)
+        eq === nothing && return v
+        d = operation(eq.lhs)
+        d.update ? eq.rhs : eq.rhs + v
+    end
+
+    pre = get_postprocess_fbody(sys)
+    f_oop, f_iip = build_function(body, u, p, t; expression=Val{false}, postprocess_fbody=pre, kwargs...)
+
+    cb_affect! = let f_oop=f_oop, f_iip=f_iip
+        function cb_affect!(integ)
+            if DiffEqBase.isinplace(integ.sol.prob)
+                tmp, = DiffEqBase.get_tmp_cache(integ)
+                f_iip(tmp, integ.u, integ.p, integ.t) # aliasing `integ.u` would be bad.
+                copyto!(integ.u, tmp)
+            else
+                integ.u = f_oop(integ.u, integ.p, integ.t)
+            end
+            return nothing
+        end
+    end
+
+    getdt(eq) = operation(eq.lhs).dt
+    deqs = values(var2eq)
+    dt = getdt(first(deqs))
+    all(dt == getdt(eq) for eq in deqs) || error("All difference variables should have same time steps.")
+
+    PeriodicCallback(cb_affect!, first(dt))
+end
+
+function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
     # if something is not x(t) (the current state)
     # but is `x(t-1)` or something like that, pass in `x` as a callable function rather
     # than pass in a value in place of x(t).
@@ -99,14 +160,14 @@ function time_varying_as_func(x, sys)
     # This is done by just making `x` the argument of the function.
     if istree(x) &&
         operation(x) isa Sym &&
-        !(length(arguments(x)) == 1 && isequal(arguments(x)[1], independent_variable(sys)))
+        !(length(arguments(x)) == 1 && isequal(arguments(x)[1], get_iv(sys)))
         return operation(x)
     end
     return x
 end
 
 function calculate_massmatrix(sys::AbstractODESystem; simplify=false)
-    eqs = equations(sys)
+    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     dvs = states(sys)
     M = zeros(length(eqs),length(eqs))
     state2idx = Dict(s => i for (i, s) in enumerate(dvs))
@@ -184,7 +245,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
                                     simplify=simplify, sparse = sparse,
-                                    expression=Val{eval_expression}, expression_module=eval_module, 
+                                    expression=Val{eval_expression}, expression_module=eval_module,
                                     checkbounds=checkbounds, kwargs...)
         jac_oop,jac_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in jac_gen) : jac_gen
         _jac(u,p,t) = jac_oop(u,p,t)
@@ -197,8 +258,9 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
 
+    obs = observed(sys)
     observedfun = if steady_state
-        let sys = sys, dict = Dict()
+        isempty(obs) ? SciMLBase.DEFAULT_OBSERVED_NO_TIME : let sys = sys, dict = Dict()
             function generated_observed(obsvar, u, p, t=Inf)
                 obs = get!(dict, value(obsvar)) do
                     build_explicit_observed_function(sys, obsvar)
@@ -207,7 +269,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
             end
         end
     else
-        let sys = sys, dict = Dict()
+        isempty(obs) ? SciMLBase.DEFAULT_OBSERVED : let sys = sys, dict = Dict()
             function generated_observed(obsvar, u, p, t)
                 obs = get!(dict, value(obsvar)) do
                     build_explicit_observed_function(sys, obsvar; checkbounds=checkbounds)
@@ -217,15 +279,24 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         end
     end
 
-    uElType = eltype(u0)
+    jac_prototype = if sparse
+        uElType = u0 === nothing ? Float64 : eltype(u0)
+        if jac
+            similar(calculate_jacobian(sys, sparse=sparse), uElType)
+        else
+            similar(jacobian_sparsity(sys), uElType)
+        end
+    else
+        nothing
+    end
     ODEFunction{iip}(
                      f,
                      jac = _jac === nothing ? nothing : _jac,
                      tgrad = _tgrad === nothing ? nothing : _tgrad,
                      mass_matrix = _M,
-                     jac_prototype = (!isnothing(u0) && sparse) ? (!jac ? similar(jacobian_sparsity(sys),uElType) : SparseArrays.sparse(similar(get_jac(sys)[],uElType))) : nothing,
+                     jac_prototype = jac_prototype,
                      syms = Symbol.(states(sys)),
-                     indepsym = Symbol(independent_variable(sys)),
+                     indepsym = Symbol(get_iv(sys)),
                      observed = observedfun,
                     )
 end
@@ -246,7 +317,7 @@ respectively.
 """
 function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
-                                     ddvs=map(diff2term ∘ Differential(independent_variable(sys)), dvs),
+                                     ddvs=map(diff2term ∘ Differential(get_iv(sys)), dvs),
                                      version = nothing,
                                      #=
                                      tgrad=false,
@@ -282,7 +353,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      f,
                      syms = Symbol.(dvs),
                      # missing fields in `DAEFunction`
-                     #indepsym = Symbol(independent_variable(sys)),
+                     #indepsym = Symbol(get_iv(sys)),
                      #observed = observedfun,
                     )
 end
@@ -341,13 +412,13 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     =#
 
     fsym = gensym(:f)
-    _f = :($fsym = ModelingToolkit.ODEFunctionClosure($f_oop, $f_iip))
+    _f = :($fsym = $ODEFunctionClosure($f_oop, $f_iip))
     tgradsym = gensym(:tgrad)
     if tgrad
         tgrad_oop, tgrad_iip = generate_tgrad(sys, dvs, ps;
                                 simplify=simplify,
                                 expression=Val{true}, kwargs...)
-        _tgrad = :($tgradsym = ModelingToolkit.ODEFunctionClosure($tgrad_oop, $tgrad_iip))
+        _tgrad = :($tgradsym = $ODEFunctionClosure($tgrad_oop, $tgrad_iip))
     else
         _tgrad = :($tgradsym = nothing)
     end
@@ -357,7 +428,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
         jac_oop,jac_iip = generate_jacobian(sys, dvs, ps;
                                  sparse=sparse, simplify=simplify,
                                  expression=Val{true}, kwargs...)
-        _jac = :($jacsym = ModelingToolkit.ODEFunctionClosure($jac_oop, $jac_iip))
+        _jac = :($jacsym = $ODEFunctionClosure($jac_oop, $jac_iip))
     else
         _jac = :($jacsym = nothing)
     end
@@ -379,7 +450,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                           mass_matrix = M,
                           jac_prototype = $jp_expr,
                           syms = $(Symbol.(states(sys))),
-                          indepsym = $(QuoteNode(Symbol(independent_variable(sys)))),
+                          indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
                          )
     end
     !linenumbers ? striplines(ex) : ex
@@ -398,7 +469,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
     dvs = states(sys)
     ps = parameters(sys)
     defs = defaults(sys)
-    iv = independent_variable(sys)
+    iv = get_iv(sys)
     if parammap isa Dict
         u0defs = merge(parammap, defs)
     elseif eltype(parammap) <: Pair
@@ -508,7 +579,11 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
-    ODEProblem{iip}(f,u0,tspan,p;kwargs...)
+    if any(isdifferenceeq, equations(sys))
+        ODEProblem{iip}(f,u0,tspan,p;difference_cb=generate_difference_cb(sys;kwargs...),kwargs...)
+    else
+        ODEProblem{iip}(f,u0,tspan,p;kwargs...)
+    end
 end
 
 """
@@ -535,7 +610,11 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
     diffvars = collect_differential_variables(sys)
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
-    DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)
+    if any(isdifferenceeq, equations(sys))
+        DAEProblem{iip}(f,du0,u0,tspan,p;difference_cb=generate_difference_cb(sys; kwargs...),differential_vars=differential_vars,kwargs...)
+    else
+        DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)
+    end
 end
 
 """
@@ -685,6 +764,3 @@ end
 function SteadyStateProblemExpr(sys::AbstractODESystem, args...; kwargs...)
     SteadyStateProblemExpr{true}(sys, args...; kwargs...)
 end
-
-isdifferential(expr) = istree(expr) && operation(expr) isa Differential
-isdiffeq(eq) = isdifferential(eq.lhs)

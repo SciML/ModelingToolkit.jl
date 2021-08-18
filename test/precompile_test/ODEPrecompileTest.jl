@@ -12,7 +12,7 @@ module ODEPrecompileTest
             D(y) ~ x*(ρ-z)-y,
             D(z) ~ x*y - β*z]
 
-        de = ODESystem(eqs)
+        @named de = ODESystem(eqs)
         return ODEFunction(de, [x,y,z], [σ,ρ,β]; kwargs...)
     end
 

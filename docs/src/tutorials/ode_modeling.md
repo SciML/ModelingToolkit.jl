@@ -71,11 +71,11 @@ matches the name in the REPL. If omitted, you can directly set the `name` keywor
 After construction of the ODE, you can solve it using [DifferentialEquations.jl](https://diffeq.sciml.ai/):
 
 ```julia
-using DifferentialEquations: solve
-using Plots: plot
+using DifferentialEquations
+using Plots
 
 prob = ODEProblem(fol_model, [x => 0.0], (0.0,10.0), [τ => 3.0])
-solve(prob) |> plot
+plot(solve(prob))
 ```
 
 ![Simulation result of first-order lag element](https://user-images.githubusercontent.com/13935112/111958369-703f2200-8aed-11eb-8bb4-0abe9652e850.png)
@@ -211,7 +211,7 @@ again are just algebraic relations:
 connections = [ fol_1.f ~ 1.5,
                 fol_2.f ~ fol_1.x ]
 
-@named connected = ODESystem(connections; systems=[fol_1,fol_2])
+@named connected = compose(ODESystem(connections), fol_1, fol_2)
       # Model connected with 5 equations
       # States (5):
       #   fol_1₊f(t)
@@ -267,12 +267,12 @@ p = [ fol_1.τ => 2.0,
       fol_2.τ => 4.0 ]
 
 prob = ODEProblem(connected_simp, u0, (0.0,10.0), p)
-solve(prob) |> plot
+plot(solve(prob))
 ```
 
 ![Simulation of connected system (two first-order lag elements in series)](https://user-images.githubusercontent.com/13935112/111958439-877e0f80-8aed-11eb-9074-9d35458459a4.png)
 
-More on this topic may be found in [Composing Models and Building Reusable Components](@ref).
+More on this topic may be found in [Composing Models and Building Reusable Components](@ref acausal).
 
 ## Defaults
 
@@ -308,9 +308,8 @@ still is the problem using the `connected_simp` system above):
 
 ```julia
 using BenchmarkTools
-using DifferentialEquations: Rodas4
 
-@btime solve(prob, Rodas4());
+@btime solve($prob, Rodas4());
       # 251.300 μs (873 allocations: 31.18 KiB)
 ```
 
@@ -320,7 +319,7 @@ be specified during the construction of the `ODEProblem`:
 ```julia
 prob_an = ODEProblem(connected_simp, u0, (0.0,10.0), p; jac=true, sparse=true)
 
-@btime solve(prob_an, Rodas4());
+@btime solve($prob_an, Rodas4());
       # 142.899 μs (1297 allocations: 83.96 KiB)
 ```
 

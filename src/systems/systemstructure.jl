@@ -1,11 +1,14 @@
 module SystemStructures
 
 using DataStructures
+using Symbolics: linear_expansion, unwrap
 using SymbolicUtils: istree, operation, arguments, Symbolic
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
-    value, InvalidSystemException, isdifferential, _iszero, isparameter
+    value, InvalidSystemException, isdifferential, _iszero, isparameter,
+    independent_variables, isinput
 using ..BipartiteGraphs
+using LightGraphs
 using UnPack
 using Setfield
 using SparseArrays
@@ -89,8 +92,7 @@ isdiffeq(s::SystemStructure, eq::Integer) = !isalgeq(s, eq)
 
 function initialize_system_structure(sys)
     sys = flatten(sys)
-
-    iv = independent_variable(sys)
+    ivs = independent_variables(sys)
     eqs = copy(equations(sys))
     neqs = length(eqs)
     algeqs = trues(neqs)
@@ -119,7 +121,7 @@ function initialize_system_structure(sys)
         isalgeq = true
         statevars = []
         for var in vars
-            isequal(var, iv) && continue
+            any(isequal(var), ivs) && continue
             if isparameter(var) || (istree(var) && isparameter(operation(var)))
                 continue
             end
@@ -185,6 +187,9 @@ function initialize_system_structure(sys)
         # it could be that a variable appeared in the states, but never appeared
         # in the equations.
         algvaridx = get(var2idx, algvar, 0)
+        algvaridx == 0 && throw(InvalidSystemException("The system is missing "
+            * "an equation for $algvar."
+        ))
         vartype[algvaridx] = ALGEBRAIC_VARIABLE
     end
 
@@ -232,13 +237,13 @@ function find_linear_equations(sys)
         term = value(eq.rhs - eq.lhs)
         for j in 𝑠neighbors(graph, i)
             var = fullvars[j]
-            c = expand_derivatives(Differential(var)(term), false)
-            # test if `var` is linear in `eq`.
-            if !(c isa Symbolic) && c isa Number
-                if c == 1 || c == -1
-                    c = convert(Integer, c)
-                    linear_term += c * var
-                    push!(coeffs, c)
+            a, b, islinear = linear_expansion(term, var)
+            a = unwrap(a)
+            if islinear && !(a isa Symbolic) && a isa Number && !isinput(var)
+                if a == 1 || a == -1
+                    a = convert(Integer, a)
+                    linear_term += a * var
+                    push!(coeffs, a)
                 else
                     all_int_vars = false
                 end

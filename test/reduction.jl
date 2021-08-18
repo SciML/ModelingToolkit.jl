@@ -27,7 +27,7 @@ ref_eq = [
 @variables x(t) y(t) z(t) a(t) u(t) F(t)
 D = Differential(t)
 
-test_equal(a, b) = @test isequal(simplify(a, polynorm=true), simplify(b, polynorm=true))
+test_equal(a, b) = @test isequal(simplify(a, expand=true), simplify(b, expand=true))
 
 eqs = [
        D(x) ~ σ*(y-x)
@@ -70,12 +70,16 @@ ss = ModelingToolkit.get_structure(initialize_system_structure(lorenz1))
 @test isempty(setdiff(ss.fullvars, [D(x), F, y, x, D(y), u, z, D(z)]))
 lorenz2 = lorenz(:lorenz2)
 
-connected = ODESystem([s ~ a + lorenz1.x
+@named connected = ODESystem([s ~ a + lorenz1.x
                        lorenz2.y ~ s
                        lorenz1.F ~ lorenz2.u
-                       lorenz2.F ~ lorenz1.u],t,systems=[lorenz1,lorenz2])
+                       lorenz2.F ~ lorenz1.u], t, systems=[lorenz1, lorenz2])
 @test length(Base.propertynames(connected)) == 10
 @test isequal((@nonamespace connected.lorenz1.x), x)
+__x = x
+@unpack lorenz1 = connected
+@unpack x = lorenz1
+@test isequal(x, __x)
 
 # Reduced Flattened System
 
@@ -165,7 +169,7 @@ let
         ol.u ~ pc.u_c
         pc.y_c ~ ol.y
     ]
-    connected = ODESystem(connections, t, systems=[ol, pc])
+    @named connected = ODESystem(connections, t, systems=[ol, pc])
     @test equations(connected) isa Vector{Equation}
     reduced_sys = structural_simplify(connected)
     ref_eqs = [
@@ -194,7 +198,7 @@ eqs = [
        u3 ~ u1 + u2 + p
        u3 ~ hypot(u1, u2) * p
       ]
-sys = NonlinearSystem(eqs, [u1, u2, u3], [p])
+@named sys = NonlinearSystem(eqs, [u1, u2, u3], [p])
 reducedsys = structural_simplify(sys)
 @test observed(reducedsys) == [u1 ~ 0.5(u3 - p); u2 ~ u1]
 
@@ -216,7 +220,7 @@ N = 5
 @variables xs[1:N]
 A = reshape(1:N^2, N, N)
 eqs = xs .~ A * xs
-sys′ = NonlinearSystem(eqs, xs, [])
+@named sys′ = NonlinearSystem(eqs, xs, [])
 sys = structural_simplify(sys′)
 
 # issue 958
@@ -233,7 +237,7 @@ eqs = [
       ]
 
 @named sys = ODESystem(eqs, t, [E, C, S, P], [k₁, k₂, k₋₁, E₀])
-@test_throws ModelingToolkit.InvalidSystemException structural_simplify(sys)
+@test_throws ModelingToolkit.ExtraEquationsSystemException structural_simplify(sys)
 
 # Example 5 from Pantelides' original paper
 @parameters t
@@ -266,7 +270,7 @@ eq = [
       0 ~ i64 + i71]
 
 
-sys0 = ODESystem(eq, t)
+@named sys0 = ODESystem(eq, t)
 sys = structural_simplify(sys0)
 @test length(equations(sys)) == 1
 eq = equations(sys)[1]
@@ -277,3 +281,20 @@ dt = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, sin(10t)))
 @test dv25 ≈ 0.3
 @test ddv25 == 0.005
 @test dt == -0.1
+
+# Don't reduce inputs
+@parameters t σ ρ β
+@variables x(t) y(t) z(t) [input=true] a(t) u(t) F(t)
+D = Differential(t)
+
+eqs = [
+       D(x) ~ σ*(y-x)
+       D(y) ~ x*(ρ-z)-y + β
+       0 ~ z - x + y
+       0 ~ a + z
+       u ~ z + a
+      ]
+
+lorenz1 = ODESystem(eqs,t,name=:lorenz1)
+lorenz1_reduced = structural_simplify(lorenz1)
+@test z in Set(states(lorenz1_reduced))

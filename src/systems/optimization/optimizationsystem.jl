@@ -16,18 +16,20 @@ op = σ*(y-x) + x*(ρ-z)-y + x*y - β*z
 os = OptimizationSystem(eqs, [x,y,z],[σ,ρ,β])
 ```
 """
-struct OptimizationSystem <: AbstractSystem
+struct OptimizationSystem <: AbstractTimeIndependentSystem
     """Vector of equations defining the system."""
     op::Any
     """Unknown variables."""
     states::Vector
     """Parameters."""
     ps::Vector
+    """Array variables."""
+    var_to_name
     observed::Vector{Equation}
     equality_constraints::Vector{Equation}
     inequality_constraints::Vector
     """
-    Name: the name of the system
+    Name: the name of the system.  These are required to have unique names.
     """
     name::Symbol
     """
@@ -39,6 +41,15 @@ struct OptimizationSystem <: AbstractSystem
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
+    function OptimizationSystem(op, states, ps, var_to_name, observed, equality_constraints, inequality_constraints, name, systems, defaults; checks::Bool = true)
+        if checks
+            check_units(op)
+            check_units(observed)
+            check_units(equality_constraints)
+            check_units(inequality_constraints)
+        end
+        new(op, states, ps, var_to_name, observed, equality_constraints, inequality_constraints, name, systems, defaults)
+    end
 end
 
 function OptimizationSystem(op, states, ps;
@@ -48,19 +59,30 @@ function OptimizationSystem(op, states, ps;
                             default_u0=Dict(),
                             default_p=Dict(),
                             defaults=_merge(Dict(default_u0), Dict(default_p)),
-                            name = gensym(:OptimizationSystem),
-                            systems = OptimizationSystem[])
+                            name=nothing,
+                            systems = OptimizationSystem[],
+                            checks = true)
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :OptimizationSystem, force=true)
+    end
+    sysnames = nameof.(systems)
+    if length(unique(sysnames)) != length(sysnames)
+        throw(ArgumentError("System names must be unique."))
     end
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
+    states, ps = value.(states), value.(ps)
+    var_to_name = Dict()
+    process_variables!(var_to_name, defaults, states)
+    process_variables!(var_to_name, defaults, ps)
+
     OptimizationSystem(
-                       value(op), value.(states), value.(ps),
+                       value(op), states, ps, var_to_name,
                        observed,
                        equality_constraints, inequality_constraints,
-                       name, systems, defaults
+                       name, systems, defaults, checks = checks
                       )
 end
 
@@ -95,7 +117,7 @@ function generate_function(sys::OptimizationSystem, vs = states(sys), ps = param
 end
 
 equations(sys::OptimizationSystem) = isempty(get_systems(sys)) ? get_op(sys) : get_op(sys) + reduce(+,namespace_expr.(get_systems(sys)))
-namespace_expr(sys::OptimizationSystem) = namespace_expr(get_op(sys),nameof(sys),nothing)
+namespace_expr(sys::OptimizationSystem) = namespace_expr(get_op(sys), sys)
 
 hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
 

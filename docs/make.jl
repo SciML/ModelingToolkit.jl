@@ -40,7 +40,6 @@ makedocs(
             "systems/NonlinearSystem.md",
             "systems/OptimizationSystem.md",
             "systems/ControlSystem.md",
-            "systems/ReactionSystem.md",
             "systems/PDESystem.md",
         ],
         "comparison.md",

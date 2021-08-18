@@ -20,7 +20,7 @@ All modeling projects have some form of parameters. `@parameters` marks a variab
 as being the parameter of some system, which allows automatic detection algorithms
 to ignore such variables when attempting to find the states of a system.
 
-## Flow Variables (TODO)
+## Variable metadata [Experimental/TODO]
 
 In many engineering systems some variables act like "flows" while others do not.
 For example, in circuit models you have current which flows, and the related
@@ -28,16 +28,28 @@ voltage which does not. Or in thermal models you have heat flows. In these cases
 the `connect` statement enforces conservation of flow between all of the connected
 components.
 
-For example, the following specifies that `x` is a 2x2 matrix of flow variables:
+For example, the following specifies that `x` is a 2x2 matrix of flow variables
+with the unit m^3/s:
 
 ```julia
-@variables x[1:2,1:2] type=flow
+@variables x[1:2,1:2] [connect = Flow; unit = u"m^3/s"]
 ```
 
-## Stream Variables
+ModelingToolkit defines `connect`, `unit`, `noise`, and `description` keys for
+the metadata. One can get and set metadata by
 
-TODO
+```julia
+julia> @variables x [unit = u"m^3/s"];
 
-## Brownian Variables
+julia> hasmetadata(x, Symbolics.option_to_metadata_type(Val(:unit)))
+true
 
-TODO
+julia> getmetadata(x, Symbolics.option_to_metadata_type(Val(:unit)))
+m³ s⁻¹
+
+julia> x = setmetadata(x, Symbolics.option_to_metadata_type(Val(:unit)), u"m/s")
+x
+
+julia> getmetadata(x, Symbolics.option_to_metadata_type(Val(:unit)))
+m s⁻¹
+```

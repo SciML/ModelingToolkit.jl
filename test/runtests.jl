@@ -1,6 +1,7 @@
 using SafeTestsets, Test
 
-@safetestset "Varialbe scope tests" begin include("variable_scope.jl") end
+@safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
+@safetestset "Variable scope tests" begin include("variable_scope.jl") end
 @safetestset "Symbolic parameters test" begin include("symbolic_parameters.jl") end
 @safetestset "Parsing Test" begin include("variable_parsing.jl") end
 @safetestset "Simplify Test" begin include("simplify.jl") end
@@ -8,14 +9,13 @@ using SafeTestsets, Test
 @safetestset "System Linearity Test" begin include("linearity.jl") end
 @safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
 @safetestset "ODESystem Test" begin include("odesystem.jl") end
+@safetestset "Unitful Quantities Test" begin include("units.jl") end
 @safetestset "LabelledArrays Test" begin include("labelledarrays.jl") end
 @safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
 @safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
 @safetestset "SDESystem Test" begin include("sdesystem.jl") end
 @safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
-@safetestset "ReactionSystem Test" begin include("reactionsystem.jl") end
-@safetestset "ReactionSystem Test" begin include("reactionsystem_components.jl") end
 @safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
 @safetestset "ControlSystem Test" begin include("controlsystem.jl") end
 @safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
@@ -38,3 +38,4 @@ println("Last test requires gcc available in the path!")
 @testset "Serialization" begin include("serialization.jl") end
 @safetestset "print_tree" begin include("print_tree.jl") end
 @safetestset "connectors" begin include("connectors.jl") end
+@safetestset "error_handling" begin include("error_handling.jl") end

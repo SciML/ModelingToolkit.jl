@@ -1,6 +1,6 @@
-abstract type AbstractControlSystem <: AbstractSystem end
+abstract type AbstractControlSystem <: AbstractTimeDependentSystem end
 
-function namespace_controls(sys::AbstractSystem)
+function namespace_controls(sys::AbstractControlSystem)
     [rename(x,renamespace(nameof(sys),nameof(x))) for x in controls(sys)]
 end
 
@@ -52,15 +52,15 @@ struct ControlSystem <: AbstractControlSystem
     eqs::Vector{Equation}
     """Independent variable."""
     iv::Sym
-    """Dependent (state) variables."""
+    """Dependent (state) variables. Must not contain the independent variable."""
     states::Vector
     """Control variables."""
     controls::Vector
-    """Parameter variables."""
+    """Parameter variables. Must not contain the independent variable."""
     ps::Vector
     observed::Vector{Equation}
     """
-    Name: the name of the system
+    Name: the name of the system. These are required to have unique names.
     """
     name::Symbol
     """
@@ -72,6 +72,16 @@ struct ControlSystem <: AbstractControlSystem
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
+    function ControlSystem(loss, deqs, iv, dvs, controls, ps, observed, name, systems, defaults; checks::Bool = true)
+        if checks
+            check_variables(dvs, iv)
+            check_parameters(ps, iv)
+            check_equations(deqs, iv)
+            check_equations(observed, iv)
+            check_units(deqs)
+        end
+        new(loss, deqs, iv, dvs, controls, ps, observed, name, systems, defaults)
+    end
 end
 
 function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls, ps;
@@ -80,9 +90,15 @@ function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls
                        default_u0=Dict(),
                        default_p=Dict(),
                        defaults=_merge(Dict(default_u0), Dict(default_p)),
-                       name=gensym(:ControlSystem))
+                       name=nothing,
+                       kwargs...)
+    name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ControlSystem, force=true)
+    end
+    sysnames = nameof.(systems)
+    if length(unique(sysnames)) != length(sysnames)
+        throw(ArgumentError("System names must be unique."))
     end
     iv′ = value(iv)
     dvs′ = value.(dvs)
@@ -90,8 +106,10 @@ function ControlSystem(loss, deqs::AbstractVector{<:Equation}, iv, dvs, controls
     ps′ = value.(ps)
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    collect_defaults!(defaults, dvs′)
+    collect_defaults!(defaults, ps′)
     ControlSystem(value(loss), deqs, iv′, dvs′, controls′,
-                  ps′, observed, name, systems, defaults)
+                  ps′, observed, name, systems, defaults, kwargs...)
 end
 
 struct ControlToExpr
@@ -152,7 +170,7 @@ function runge_kutta_discretize(sys::ControlSystem,dt,tspan;
     L = @RuntimeGeneratedFunction(build_function(lo,sts,ctr,ps,iv,conv = ModelingToolkit.ControlToExpr(sys)))
 
     var(n, i...) = var(nameof(n), i...)
-    var(n::Symbol, i...) = Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(Variable(n, i...)))
+    var(n::Symbol, i...) = variable(n, i..., T=FnType)
     # Expand out all of the variables in time and by stages
     timed_vars = [[var(operation(x),i)(iv) for i in 1:n+1] for x in states(sys)]
     k_vars = [[var(Symbol(:ᵏ,nameof(operation(x))),i,j)(iv) for i in 1:m, j in 1:n] for x in states(sys)]
@@ -183,5 +201,5 @@ function runge_kutta_discretize(sys::ControlSystem,dt,tspan;
     equalities = vcat(stages,updates,control_equality)
     opt_states = vcat(reduce(vcat,reduce(vcat,states_timeseries)),reduce(vcat,reduce(vcat,k_timeseries)),reduce(vcat,reduce(vcat,control_timeseries)))
 
-    OptimizationSystem(reduce(+,losses, init=0),opt_states,ps,equality_constraints = equalities)
+    OptimizationSystem(reduce(+,losses, init=0),opt_states,ps,equality_constraints = equalities, name=nameof(sys), checks = false)
 end
