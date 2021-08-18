@@ -151,6 +151,9 @@ using .SystemStructures
 
 include("systems/alias_elimination.jl")
 include("structural_transformation/StructuralTransformations.jl")
+
+include("precompile.jl")
+
 @reexport using .StructuralTransformations
 
 for S in subtypes(ModelingToolkit.AbstractSystem)
