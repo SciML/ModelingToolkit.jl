@@ -1,4 +1,4 @@
-using ModelingToolkit, Unitful, OrdinaryDiffEq, DiffEqJump
+using ModelingToolkit, Unitful, OrdinaryDiffEq, DiffEqJump, IfElse
 using Test
 MT = ModelingToolkit
 @parameters τ [unit = u"ms"]
@@ -197,3 +197,13 @@ maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
 @named js4  = JumpSystem([maj1, maj2], t, [S], [β, γ])
+
+#Test comparisons
+@parameters t
+vars = @variables x(t)
+D = Differential(t)
+eqs = 
+[
+    D(x) ~ IfElse.ifelse(t>0.1,2,1)
+]
+@named sys = ODESystem(eqs, t, vars, [])
