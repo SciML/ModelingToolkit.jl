@@ -758,7 +758,7 @@ end
 function _config(expr, namespace)
     cn = Base.Fix2(_config, namespace)
     if Meta.isexpr(expr, :.)
-        return :($getvar($(map(cn, expr.args)...); namespace=$namespace))
+        return :($getproperty($(map(cn, expr.args)...); namespace=$namespace))
     elseif Meta.isexpr(expr, :function)
         def = splitdef(expr)
         def[:args] = map(cn, def[:args])
