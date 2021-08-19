@@ -387,18 +387,21 @@ end
 using Symbolics: unwrap, wrap
 using LinearAlgebra
 @variables t
-sts = @variables x[1:3](t) y(t)
+sts = @variables x[1:3](t)=[1,2,3.0] y(t)=1.0
 ps = @parameters p[1:3] = [1, 2, 3]
 D = Differential(t)
 eqs = [
-       collect(D.(x) ~ x)
-       D(y) ~ norm(x)*y
+       collect(D.(x) .~ x)
+       D(y) ~ norm(x)*y - x[1]
       ]
 @named sys = ODESystem(eqs, t, [sts...;], [ps...;])
+sys = structural_simplify(sys)
 @test isequal(@nonamespace(sys.x), unwrap(x))
 @test isequal(@nonamespace(sys.y), unwrap(y))
 @test isequal(@nonamespace(sys.p), unwrap(p))
 @test_nowarn sys.x, sys.y, sys.p
+@test all(x->x isa Symbolics.Arr, (sys.x, sys.p))
+@test all(x->x isa Symbolics.Arr, @nonamespace (sys.x, sys.p))
 @test ModelingToolkit.isvariable(Symbolics.unwrap(x[1]))
 
 # Mixed Difference Differential equations
