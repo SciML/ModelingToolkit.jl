@@ -20,6 +20,7 @@ end
 equivalent(x,y) = isequal(1*x,1*y)
 unitless = Unitful.unit(1)
 
+get_unit(x::AbstractArray) = map(get_unit,x)
 get_unit(x::Num) = get_unit(value(x))
 function get_unit(x::Symbolic)
     if x isa Sym || operation(x) isa Sym || (operation(x) isa Term && operation(x).f == getindex) || x isa Symbolics.ArrayOp
