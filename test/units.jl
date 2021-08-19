@@ -207,3 +207,15 @@ eqs =
     D(x) ~ IfElse.ifelse(t>0.1,2,1)
 ]
 @named sys = ODESystem(eqs, t, vars, [])
+
+#Vectors of symbols
+@parameters t
+@register dummy(vector::Vector{Num}, scalar)
+dummy(vector, scalar) = vector[1] .- scalar
+
+@variables vec[1:2](t)
+vec = collect(vec)
+eqs = [vec .~ dummy(vec, vec[1]);]
+sts = vcat(vec)
+ODESystem(eqs, t, [sts...;], [], name=:sys)
+
