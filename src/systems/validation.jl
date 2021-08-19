@@ -12,7 +12,7 @@ function screen_unit(result)
 end
 "Find the unit of a symbolic item."
 get_unit(x::Real) = unitless
-function get_unit(x::Unitful.Quantity) 
+function get_unit(x::Unitful.Quantity)
     result = Unitful.unit(x)
     screen_unit(result)
     return result
@@ -33,6 +33,12 @@ function get_unit(x::Symbolic)
         return symunits
     elseif operation(x) isa Differential
         return get_unit(arguments(x)[1]) / get_unit(operation(x).x)
+    elseif operation(x) isa Integral
+        unit = 1
+        for u in operation(x).x
+            unit *= get_unit(u)
+        end
+        return get_unit(arguments(x)[1]) * unit
     elseif  operation(x) isa Difference
         return get_unit(arguments(x)[1]) / get_unit(operation(x).t) #TODO: make this same as Differential
     elseif x isa Pow
@@ -41,7 +47,7 @@ function get_unit(x::Symbolic)
         @assert expon isa Unitful.DimensionlessUnits
         if base == unitless
             unitless
-        else 
+        else
             pargs[2] isa Number ? operation(x)(base, pargs[2]) : operation(x)(1*base, pargs[2])
         end
     elseif x isa Add # Cannot simply add the units b/c they may differ in magnitude (eg, kg vs g)
@@ -61,7 +67,7 @@ function get_unit(x::Symbolic)
         terms[1] == unitless || throw(ValidationError(", in $x, [$(terms[1])] is not dimensionless."))
         equivalent(terms[2],terms[3]) || throw(ValidationError(", in $x, units [$(terms[2])] and [$(terms[3])] do not match."))
         return terms[2]
-    elseif operation(x) == Symbolics._mapreduce 
+    elseif operation(x) == Symbolics._mapreduce
         if x.arguments[2] == +
             get_unit(x.arguments[3])
         else
@@ -78,7 +84,7 @@ function safe_get_unit(term, info)
     try
         side = get_unit(term)
     catch err
-        if err isa Unitful.DimensionError 
+        if err isa Unitful.DimensionError
             @warn("$info: $(err.x) and $(err.y) are not dimensionally compatible.")
         elseif err isa ValidationError
             @warn(info*err.message)
@@ -113,7 +119,7 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
 end
 
 function validate(jump::Union{ModelingToolkit.VariableRateJump, ModelingToolkit.ConstantRateJump}, t::Symbolic; info::String = "")
-    newinfo = replace(info,"eq."=>"jump") 
+    newinfo = replace(info,"eq."=>"jump")
     _validate([jump.rate, 1/t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units
     validate(jump.affect!,info = newinfo)
 end
