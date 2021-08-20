@@ -111,7 +111,7 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
                 first_label = label
             elseif !equivalent(first_unit, equnit)
                 valid = false
-                @warn("$info: units [$(equnit)] for $(first_label) and [$(equnit)] for $(label) do not match.")
+                @warn("$info: units [$(first_unit)] for $(first_label) and [$(equnit)] for $(label) do not match.")
             end
         end
     end
