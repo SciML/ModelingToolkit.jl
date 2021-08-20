@@ -396,9 +396,9 @@ eqs = [
       ]
 @named sys = ODESystem(eqs, t, [sts...;], [ps...;])
 sys = structural_simplify(sys)
-@test isequal(@nonamespace(sys.x), unwrap(x))
-@test isequal(@nonamespace(sys.y), unwrap(y))
-@test isequal(@nonamespace(sys.p), unwrap(p))
+@test isequal(@nonamespace(sys.x), x)
+@test isequal(@nonamespace(sys.y), y)
+@test isequal(@nonamespace(sys.p), p)
 @test_nowarn sys.x, sys.y, sys.p
 @test all(x->x isa Symbolics.Arr, (sys.x, sys.p))
 @test all(x->x isa Symbolics.Arr, @nonamespace (sys.x, sys.p))
