@@ -260,7 +260,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     obs = observed(sys)
     observedfun = if steady_state
-        isempty(obs) ? SciMLBase.DEFAULT_OBSERVED_NO_TIME : let sys = sys, dict = Dict()
+        let sys = sys, dict = Dict()
             function generated_observed(obsvar, u, p, t=Inf)
                 obs = get!(dict, value(obsvar)) do
                     build_explicit_observed_function(sys, obsvar)
@@ -269,7 +269,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
             end
         end
     else
-        isempty(obs) ? SciMLBase.DEFAULT_OBSERVED : let sys = sys, dict = Dict()
+        let sys = sys, dict = Dict()
             function generated_observed(obsvar, u, p, t)
                 obs = get!(dict, value(obsvar)) do
                     build_explicit_observed_function(sys, obsvar; checkbounds=checkbounds)
@@ -337,16 +337,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     # TODO: Jacobian sparsity / sparse Jacobian / dense Jacobian
 
     #=
-    observedfun = let sys = sys, dict = Dict()
         # TODO: We don't have enought information to reconstruct arbitrary state
-        # in general from `(u, p, t)`, e.g. `a ~ D(x)`.
-        function generated_observed(obsvar, u, p, t)
-            obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar)
-            end
-            obs(u, p, t)
-        end
-    end
     =#
 
     DAEFunction{iip}(
@@ -393,23 +384,6 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     f_oop, f_iip = generate_function(sys, dvs, ps; expression=Val{true}, kwargs...)
 
     dict = Dict()
-    #=
-    observedfun = if steady_state
-        :(function generated_observed(obsvar, u, p, t=Inf)
-              obs = get!($dict, value(obsvar)) do
-                  build_explicit_observed_function($sys, obsvar)
-              end
-              obs(u, p, t)
-          end)
-    else
-        :(function generated_observed(obsvar, u, p, t)
-              obs = get!($dict, value(obsvar)) do
-                  build_explicit_observed_function($sys, obsvar)
-              end
-              obs(u, p, t)
-          end)
-    end
-    =#
 
     fsym = gensym(:f)
     _f = :($fsym = $ODEFunctionClosure($f_oop, $f_iip))

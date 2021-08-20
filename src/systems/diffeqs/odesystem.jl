@@ -223,42 +223,52 @@ Build the observed function assuming the observed equations are all explicit,
 i.e. there are no cycles.
 """
 function build_explicit_observed_function(
-        sys, syms;
+        sys, ts;
         expression=false,
         output_type=Array,
         checkbounds=true)
 
-    if (isscalar = !(syms isa Vector))
-        syms = [syms]
+    if (isscalar = !(ts isa AbstractVector))
+        ts = [ts]
     end
-    syms = value.(syms)
+    ts = Symbolics.scalarize.(value.(ts))
+
+    vars = Set()
+    syms = foreach(Base.Fix1(vars!, vars), ts)
+    ivs = independent_variables(sys)
+    dep_vars = collect(setdiff(vars, ivs))
 
     obs = observed(sys)
+    sts = Set(states(sys))
     observed_idx = Dict(map(x->x.lhs, obs) .=> 1:length(obs))
-    output = similar(syms, Any)
-    # FIXME: this is a rather rough estimate of dependencies.
+
+    # FIXME: This is a rather rough estimate of dependencies. We assume
+    # the expression depends on everything before the `maxidx`.
     maxidx = 0
-    for (i, s) in enumerate(syms)
+    for (i, s) in enumerate(dep_vars)
         idx = get(observed_idx, s, nothing)
-        idx === nothing && throw(ArgumentError("$s is not an observed variable."))
+        if idx === nothing
+            if !(s in sts)
+                throw(ArgumentError("$s is either an observed nor a state variable."))
+            end
+            continue
+        end
         idx > maxidx && (maxidx = idx)
-        output[i] = obs[idx].rhs
     end
+    obsexprs = map(eq -> eq.lhs←eq.rhs, obs[1:maxidx])
 
     dvs = DestructuredArgs(states(sys), inbounds=!checkbounds)
     ps = DestructuredArgs(parameters(sys), inbounds=!checkbounds)
-    ivs = independent_variables(sys)
     args = [dvs, ps, ivs...]
     pre = get_postprocess_fbody(sys)
 
     ex = Func(
         args, [],
         pre(Let(
-            map(eq -> eq.lhs←eq.rhs, obs[1:maxidx]),
-            isscalar ? output[1] : MakeArray(output, output_type)
+            obsexprs,
+            isscalar ? ts[1] : MakeArray(ts, output_type)
            ))
     ) |> toexpr
-
     expression ? ex : @RuntimeGeneratedFunction(ex)
 end
 
