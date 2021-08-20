@@ -334,6 +334,7 @@ function flatten(sys::NonlinearSystem)
                                observed=observed(sys),
                                defaults=defaults(sys),
                                name=nameof(sys),
+                               checks = false,
                               )
     end
 end
