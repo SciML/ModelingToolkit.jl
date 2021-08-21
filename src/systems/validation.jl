@@ -35,8 +35,12 @@ function get_unit(x::Symbolic)
         return get_unit(arguments(x)[1]) / get_unit(operation(x).x)
     elseif operation(x) isa Integral
         unit = 1
-        for u in operation(x).x
-            unit *= get_unit(u)
+        if operation(x).x isa Vector
+            for u in operation(x).x
+                unit *= get_unit(u)
+            end
+        else
+            unit *= get_unit(operation(x).x)
         end
         return get_unit(arguments(x)[1]) * unit
     elseif  operation(x) isa Difference
