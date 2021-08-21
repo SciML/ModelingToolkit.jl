@@ -12,6 +12,7 @@ makedocs(
         "Home" => "index.md",
         "Symbolic Modeling Tutorials" => Any[
             "tutorials/ode_modeling.md",
+            "tutorials/spring_mass.md",
             "tutorials/acausal_components.md",
             "tutorials/higher_order.md",
             "tutorials/tearing_parallelism.md",
