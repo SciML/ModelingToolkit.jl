@@ -55,6 +55,8 @@ sol = solve(prob, Rosenbrock23())
 plot(sol)
 ```
 
+![plotsol](https://user-images.githubusercontent.com/23384717/130322185-52ff1523-4ad8-4b24-94d3-3aa2c4a87082.png)
+
 ## Explanation
 ### Building the components
 For each component we use a Julia function that returns an `ODESystem`. At the top, we define the fundamental properties of a `Mass`: it has a mass `m`, a position `pos` and a velocity `v`. We also define that the velocity is the rate of change of position with respect to time.
@@ -90,7 +92,7 @@ function Spring(; name, k = 1e4, l = 1.)
 end
 ```
 
-We now define functions that help construct the equations for a mass-spring system. First, the `connect_spring` function connects a `spring` between two positions `a` and `b`. Note that `a` and `b` can be the `pos` of a `Mass`, or just a fixed position such as `[0., 0.]`.
+We now define functions that help construct the equations for a mass-spring system. First, the `connect_spring` function connects a `spring` between two positions `a` and `b`. Note that `a` and `b` can be the `pos` of a `Mass`, or just a fixed position such as `[0., 0.]`. In that sense, the length of the spring `x` is given by the length of the vector `dir` joining `a` and `b`.
 
 ```julia
 function connect_spring(spring, a, b)
@@ -216,14 +218,16 @@ observed(sys)
 
 These are explicit algebraic equations which can be used to reconstruct the required variables on the fly. This leads to dramatic computational savings since implicitly solving an ODE scales as O(n^3), so fewer states are signficantly better!
 
-We can access these variables using the solution object. For example, let's retrieve the length of the spring over time:
+We can access these variables using the solution object. For example, let's retrieve the x-position of the mass over time:
 
 ```julia
-sol[spring.x]
+sol[mass.pos[1]]
 ```
 
-We can also plot its timeseries:
+We can also plot the path of the mass:
 
 ```julia
-plot(sol, vars = [spring.x])
+plot(sol, vars = (mass.pos[1], mass.pos[2]))
 ```
+
+![plotpos](https://user-images.githubusercontent.com/23384717/130322197-cff35eb7-0739-471d-a3d9-af83d87f1cc7.png)
