@@ -46,7 +46,7 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
             check_units(op)
             check_units(observed)
             check_units(equality_constraints)
-            check_units(inequality_constraints)
+            all_dimensionless([states;ps]) || check_units(inequality_constraints)
         end
         new(op, states, ps, var_to_name, observed, equality_constraints, inequality_constraints, name, systems, defaults)
     end

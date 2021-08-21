@@ -68,7 +68,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                                    name
                                   )
         if checks
-            check_units(eqs)
+            all_dimensionless([dvs;ivs;ps]) ||check_units(eqs)
         end
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connection_type, name)
     end

@@ -93,7 +93,7 @@ struct ODESystem <: AbstractODESystem
             check_variables(dvs,iv)
             check_parameters(ps,iv)
             check_equations(deqs,iv)
-            check_units(deqs)
+            all_dimensionless([dvs;ps;iv]) ||check_units(deqs)
         end
         new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface)
     end
