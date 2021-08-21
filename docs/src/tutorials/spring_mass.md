@@ -57,7 +57,7 @@ plot(sol)
 
 ## Explanation
 ### Building the components
-For each component we use a Julia function that returns an `ODESystem`. At the top, we define the fundamental properties of a `Mass`: it has a mass `m`, a position `pos` and a velocity `vel`. We also define that the velocity is the rate of change of position with respect to time.
+For each component we use a Julia function that returns an `ODESystem`. At the top, we define the fundamental properties of a `Mass`: it has a mass `m`, a position `pos` and a velocity `v`. We also define that the velocity is the rate of change of position with respect to time.
 
 ```julia
 function Mass(; name, m = 1.0, xy = [0., 0.], u = [0., 0.])
@@ -68,7 +68,7 @@ function Mass(; name, m = 1.0, xy = [0., 0.], u = [0., 0.])
 end
 ```
 
-Note that this is an incompletely specified `ODESystem`. It cannot be simulated on its own since the equations for `pos[1:2](t)` are unknown. Notice the addition of a `name` keyword. This allows us to generate different masses with different names. A `Mass` can now be constructed as:
+Note that this is an incompletely specified `ODESystem`. It cannot be simulated on its own since the equations for the velocity `v[1:2](t)` are unknown. Notice the addition of a `name` keyword. This allows us to generate different masses with different names. A `Mass` can now be constructed as:
 
 ```julia
 Mass(name = :mass1)
@@ -195,7 +195,7 @@ equations(sys)
  Differential(t)(mass₊pos[2](t)) ~ mass₊v[2](t)
 ```
 
-We are left with only 4 equations involving 4 state variables (`mass.pos[1]`, `mass.pos[2]`, `mass.vel[1]`, `mass.vel[2]`). We can solve the system by converting it to an `ODEProblem` in mass matrix form and solving with an [`ODEProblem` mass matrix solver](https://diffeq.sciml.ai/stable/solvers/dae_solve/#OrdinaryDiffEq.jl-(Mass-Matrix)). This is done as follows:
+We are left with only 4 equations involving 4 state variables (`mass.pos[1]`, `mass.pos[2]`, `mass.v[1]`, `mass.v[2]`). We can solve the system by converting it to an `ODEProblem` in mass matrix form and solving with an [`ODEProblem` mass matrix solver](https://diffeq.sciml.ai/stable/solvers/dae_solve/#OrdinaryDiffEq.jl-(Mass-Matrix)). This is done as follows:
 
 ```julia
 prob = ODEProblem(sys, [], (0., 3.))
