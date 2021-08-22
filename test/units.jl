@@ -52,44 +52,12 @@ eqs = [D(E) ~ P - E/τ
 eqs = [0 ~ σ*(y - x)]
 @test MT.validate(eqs)
 
-#Array variables
-@variables t x[1:3,1:3](t)
+##Array variables
+@variables t [unit = u"s"] x[1:3](t) [unit = u"m"]
+@parameters v[1:3] = [1,2,3] [unit = u"m/s"]
 D = Differential(t)
-eqs = D.(x) .~ x
+eqs = D.(x) .~ v
 ODESystem(eqs,name=:sys)
-
-# Array ops
-using Symbolics: unwrap, wrap
-using LinearAlgebra
-@variables t
-sts = @variables x[1:3](t) y(t)
-ps = @parameters p[1:3] = [1, 2, 3]
-D = Differential(t)
-eqs = [
-       collect(D.(x) ~ x)
-       D(y) ~ norm(x)*y
-      ]
-ODESystem(eqs, t, [sts...;], [ps...;],name=:sys)
-
-#= Not supported yet b/c iterate doesn't work on unitful array
-# Array ops with units
-@variables t [unit =u"s"]
-sts = @variables x[1:3](t) [unit = u"kg"] y(t) [unit = u"kg"]
-ps = @parameters b [unit = u"s"^-1]
-D = Differential(t)
-eqs = [
-       collect(D.(x) ~ b*x)
-       D(y) ~ b*norm(x)
-      ]
-ODESystem(eqs, t, [sts...;], [ps...;])
-
-#Array variables with units
-@variables t [unit = u"s"] x[1:3,1:3](t) [unit = u"kg"] 
-@parameters a [unit = u"s"^-1]
-D = Differential(t)
-eqs = D.(x) .~ a*x
-ODESystem(eqs)
-=#
 
 #Difference equation with units
 @parameters t [unit = u"s"] a [unit = u"s"^-1]
@@ -99,7 +67,7 @@ D = Difference(t; dt = 0.1u"s")
 eqs = [
     δ(x) ~ a*x 
 ]
-de = ODESystem(eqs, t, [x, y], [a],name=:sys)
+de = ODESystem(eqs, t, [x], [a],name=:sys)
 
 
 @parameters t
@@ -202,20 +170,8 @@ maj2 = MassActionJump(γ, [S => 1], [S => -1])
 @parameters t
 vars = @variables x(t)
 D = Differential(t)
-eqs = 
-[
+eqs = [
     D(x) ~ IfElse.ifelse(t>0.1,2,1)
 ]
 @named sys = ODESystem(eqs, t, vars, [])
-
-#Vectors of symbols
-@parameters t
-@register dummy(vector::Vector{Num}, scalar)
-dummy(vector, scalar) = vector[1] .- scalar
-
-@variables vec[1:2](t)
-vec = collect(vec)
-eqs = [vec .~ dummy(vec, vec[1]);]
-sts = vcat(vec)
-ODESystem(eqs, t, [sts...;], [], name=:sys)
 
