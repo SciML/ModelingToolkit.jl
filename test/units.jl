@@ -1,65 +1,59 @@
 using ModelingToolkit, Unitful, OrdinaryDiffEq, DiffEqJump, IfElse
 using Test
 MT = ModelingToolkit
-@parameters τ [unit = u"ms"]
+@parameters τ [unit = u"ms"] γ
 @variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 
+#This is how equivalent works:
+@test MT.equivalent(u"MW" ,u"kJ/ms")
+@test !MT.equivalent(u"m", u"cm")
+@test MT.equivalent(MT.get_unit(P^γ), MT.get_unit((E/τ)^γ))
+
+# Basic access
 @test MT.get_unit(t) == u"ms"
 @test MT.get_unit(E) == u"kJ"
 @test MT.get_unit(τ) == u"ms"
+@test MT.get_unit(γ) == MT.unitless
+@test MT.get_unit(0.5) == MT.unitless
 
+# Prohibited unit types
 @parameters β [unit = u"°"] α [unit = u"°C"] γ [unit = 1u"s"]
 @test_throws MT.ValidationError MT.get_unit(β)
 @test_throws MT.ValidationError MT.get_unit(α)
 @test_throws MT.ValidationError MT.get_unit(γ)
 
-unitless = Unitful.unit(1)
-@test MT.get_unit(0.5) == unitless
-@test MT.get_unit(t) == u"ms"
-@test MT.get_unit(P) == u"MW"
-@test MT.get_unit(τ) == u"ms"
-
+# Non-trivial equivalence & operators
 @test MT.get_unit(τ^-1) == u"ms^-1"
 @test MT.equivalent(MT.get_unit(D(E)),u"MW")
 @test MT.equivalent(MT.get_unit(E/τ), u"MW")
 @test MT.get_unit(2*P) == u"MW"
-@test MT.get_unit(t/τ) == unitless
+@test MT.get_unit(t/τ) == MT.unitless
 @test MT.equivalent(MT.get_unit(P - E/τ),u"MW")
 @test MT.equivalent(MT.get_unit(D(D(E))),u"MW/ms")
-
-@test MT.get_unit(1.0^(t/τ)) == unitless
-@test MT.get_unit(exp(t/τ)) == unitless
-@test MT.get_unit(sin(t/τ)) == unitless
-@test MT.get_unit(sin(1u"rad")) == unitless
+@test MT.get_unit(IfElse.ifelse(t>t,P,E/τ)) == u"MW"
+@test MT.get_unit(1.0^(t/τ)) == MT.unitless
+@test MT.get_unit(exp(t/τ)) == MT.unitless
+@test MT.get_unit(sin(t/τ)) == MT.unitless
+@test MT.get_unit(sin(1u"rad")) == MT.unitless
 @test MT.get_unit(t^2) == u"ms^2"
-
-@test !MT.validate(E^1.5 ~ E^(t/τ))
-@test MT.validate(E^(t/τ) ~ E^(t/τ))
 
 eqs = [D(E) ~ P - E/τ
         0 ~ P]
 @test MT.validate(eqs)
 @named sys = ODESystem(eqs)
-@named sys = ODESystem(eqs, t, [P, E], [τ])
 
 @test !MT.validate(D(D(E)) ~ P)
 @test !MT.validate(0 ~ P + E*τ)
 
-#Unit-free
-@variables x y z u
-@parameters σ ρ β
-eqs = [0 ~ σ*(y - x)]
-@test MT.validate(eqs)
-
-##Array variables
+# Array variables
 @variables t [unit = u"s"] x[1:3](t) [unit = u"m"]
 @parameters v[1:3] = [1,2,3] [unit = u"m/s"]
 D = Differential(t)
 eqs = D.(x) .~ v
 ODESystem(eqs,name=:sys)
 
-#Difference equation with units
+# Difference equation
 @parameters t [unit = u"s"] a [unit = u"s"^-1]
 @variables x(t) [unit = u"kg"]
 δ = Differential(t)
@@ -68,18 +62,6 @@ eqs = [
     δ(x) ~ a*x 
 ]
 de = ODESystem(eqs, t, [x], [a],name=:sys)
-
-
-@parameters t
-@variables y[1:3](t)
-@parameters k[1:3]
-D = Differential(t)
-
-eqs = [D(y[1]) ~ -k[1]*y[1] + k[3]*y[2]*y[3],
-       D(y[2]) ~  k[1]*y[1] - k[3]*y[2]*y[3] - k[2]*y[2]^2,
-       0 ~  y[1] + y[2] + y[3] - 1]
-
-@named sys = ODESystem(eqs,t,y,k)
 
 # Nonlinear system
 @parameters a [unit = u"kg"^-1]
@@ -99,16 +81,18 @@ eqs = [D(E) ~ P - E/τ
 noiseeqs = [0.1u"MW",
             0.1u"MW"]
 @named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
+
 # With noise matrix
 noiseeqs = [0.1u"MW" 0.1u"MW"
             0.1u"MW" 0.1u"MW"]
 @named sys = SDESystem(eqs,noiseeqs, t, [P, E], [τ, Q])
 
+# Invalid noise matrix 
 noiseeqs = [0.1u"MW" 0.1u"MW"
             0.1u"MW" 0.1u"s"]
 @test !MT.validate(eqs,noiseeqs)
 
-#Test non-trivial simplifications
+# Non-trivial simplifications
 @variables t [unit = u"s"] V(t) [unit = u"m"^3] L(t) [unit = u"m"]
 @parameters v [unit = u"m/s"] r [unit =u"m"^3/u"s"]
 D = Differential(t)
@@ -165,13 +149,4 @@ maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
 maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
 @named js4  = JumpSystem([maj1, maj2], t, [S], [β, γ])
-
-#Test comparisons
-@parameters t
-vars = @variables x(t)
-D = Differential(t)
-eqs = [
-    D(x) ~ IfElse.ifelse(t>0.1,2,1)
-]
-@named sys = ODESystem(eqs, t, vars, [])
 

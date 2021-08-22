@@ -5,19 +5,33 @@ struct ValidationError <: Exception
     message::String
 end
 
+"Throw exception on invalid unit types, otherwise return argument."
 function screen_unit(result)
     result isa Unitful.Unitlike || throw(ValidationError("Unit must be a subtype of Unitful.Unitlike, not $(typeof(result))."))
     result isa Unitful.ScalarUnits || throw(ValidationError("Non-scalar units such as $result are not supported. Use a scalar unit instead."))
     result == u"°" && throw(ValidationError("Degrees are not supported. Use radians instead."))
     result
 end
+
+"""Test unit equivalence.
+
+Example of implemented behavior:
+```julia
+using ModelingToolkit, Unitful
+MT = ModelingToolkit
+@parameters γ P [unit = u"MW"] E [unit = u"kJ"] τ [unit = u"ms"]
+@test MT.equivalent(u"MW" ,u"kJ/ms") # Understands prefixes
+@test !MT.equivalent(u"m", u"cm") # Units must be same magnitude
+@test MT.equivalent(MT.get_unit(P^γ), MT.get_unit((E/τ)^γ)) # Handles symbolic exponents
+```
+"""
 equivalent(x,y) = isequal(1*x,1*y)
 unitless = Unitful.unit(1)
 
 #For dispatching get_unit
 Literal = Union{Sym,Symbolics.ArrayOp,Symbolics.Arr,Symbolics.CallWithMetadata}
 Conditional = Union{typeof(ifelse),typeof(IfElse.ifelse)}
-Comparison = Union{typeof(Base.:>), typeof(Base.:<), typeof(==)}
+Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
 
 "Find the unit of a symbolic item."
 get_unit(x::Real) = unitless
@@ -26,9 +40,9 @@ get_unit(x::AbstractArray) = map(get_unit,x)
 get_unit(x::Num) = get_unit(value(x))
 get_unit(x::Literal) = screen_unit(getmetadata(x,VariableUnit, unitless))
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
-get_unit(op::Difference, args) =   get_unit(args[1]) / get_unit(op.t) #why are these not identical?!?
+get_unit(op::Difference, args) =   get_unit(args[1]) / get_unit(op.t)
 get_unit(op::typeof(getindex),args) = get_unit(args[1]) 
-function get_unit(op,args) #Fallback
+function get_unit(op,args) # Fallback
     result = op(1 .* get_unit.(args)...)
     try 
         unit(result)
@@ -87,24 +101,22 @@ end
 
 function get_unit(op::Comparison, args)
     terms = get_unit.(args)
-    equivalent(terms[1], terms[2]) || throw(ValidationError(", in comparison $x, units [$(terms[1])] and [$(terms[2])] do not match."))
+    equivalent(terms[1], terms[2]) || throw(ValidationError(", in comparison $op, units [$(terms[1])] and [$(terms[2])] do not match."))
     return unitless
 end
 
 function get_unit(x::Symbolic) 
     if SymbolicUtils.istree(x)
         op = operation(x)
-        if op isa Sym # Not a real function call, just a dependent variable. Unit is on the Sym.
-            return screen_unit(getmetadata(x, VariableUnit, unitless)) 
-        elseif op isa Term && !(operation(op) isa Term) #
-            gp = getmetadata(x,Symbolics.GetindexParent,nothing)
+        if op isa Sym || (op isa Term && operation(op) isa Term) # Dependent variables, not function calls
+            return screen_unit(getmetadata(x, VariableUnit, unitless)) # Like x(t) or x[i]
+        elseif op isa Term && !(operation(op) isa Term) 
+            gp = getmetadata(x,Symbolics.GetindexParent,nothing) # Like x[1](t)
             return screen_unit(getmetadata(gp, VariableUnit, unitless))
-        elseif op isa Term
-            return screen_unit(getmetadata(x, VariableUnit, unitless))
-        end        
+        end  # Actual function calls:
         args = arguments(x)
         return get_unit(op, args)
-    else #This function should only be reached by Terms, for which `istree` is true
+    else # This function should only be reached by Terms, for which `istree` is true
         throw(ArgumentError("Unsupported value $x."))
     end
 end
@@ -119,7 +131,7 @@ function safe_get_unit(term, info)
             @warn("$info: $(err.x) and $(err.y) are not dimensionally compatible.")
         elseif err isa ValidationError
             @warn(info*err.message)
-        elseif err isa MethodError #Warning: Unable to get unit for operation x[1] with arguments SymbolicUtils.Sym{Real, Base.ImmutableDict{DataType, Any}}[t].
+        elseif err isa MethodError
             @warn("$info: no method matching $(err.f) for arguments $(typeof.(err.args)).")
         else
             rethrow()
