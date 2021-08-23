@@ -41,24 +41,24 @@ get_unit(x::Num) = get_unit(value(x))
 get_unit(x::Literal) = screen_unit(getmetadata(x,VariableUnit, unitless))
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
 get_unit(op::Difference, args) =   get_unit(args[1]) / get_unit(op.t)
-get_unit(op::typeof(getindex),args) = get_unit(args[1]) 
+get_unit(op::typeof(getindex),args) = get_unit(args[1])
 function get_unit(op,args) # Fallback
     result = op(1 .* get_unit.(args)...)
-    try 
+    try
         unit(result)
-    catch 
+    catch
         throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
     end
 end
 
 function get_unit(op::Integral,args)
     unit = 1
-    if op.x isa Vector
-        for u in op.x
+    if op.domain.variables isa Vector
+        for u in op.domain.variables
             unit *= get_unit(u)
         end
     else
-        unit *= get_unit(op.x)
+        unit *= get_unit(op.domain.variables)
     end
     return get_unit(args[1]) * unit
 end
@@ -105,12 +105,12 @@ function get_unit(op::Comparison, args)
     return unitless
 end
 
-function get_unit(x::Symbolic) 
+function get_unit(x::Symbolic)
     if SymbolicUtils.istree(x)
         op = operation(x)
         if op isa Sym || (op isa Term && operation(op) isa Term) # Dependent variables, not function calls
             return screen_unit(getmetadata(x, VariableUnit, unitless)) # Like x(t) or x[i]
-        elseif op isa Term && !(operation(op) isa Term) 
+        elseif op isa Term && !(operation(op) isa Term)
             gp = getmetadata(x,Symbolics.GetindexParent,nothing) # Like x[1](t)
             return screen_unit(getmetadata(gp, VariableUnit, unitless))
         end  # Actual function calls:
