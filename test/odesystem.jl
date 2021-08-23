@@ -392,7 +392,7 @@ ps = @parameters p[1:3] = [1, 2, 3]
 D = Differential(t)
 eqs = [
        collect(D.(x) .~ x)
-       D(y) ~ norm(x)*y - x[1]
+       D(y) ~ norm(collect(x))*y - x[1]
       ]
 @named sys = ODESystem(eqs, t, [sts...;], [ps...;])
 sys = structural_simplify(sys)
@@ -403,6 +403,10 @@ sys = structural_simplify(sys)
 @test all(x->x isa Symbolics.Arr, (sys.x, sys.p))
 @test all(x->x isa Symbolics.Arr, @nonamespace (sys.x, sys.p))
 @test ModelingToolkit.isvariable(Symbolics.unwrap(x[1]))
+prob = ODEProblem(sys, [], (0, 1.0))
+sol = solve(prob, Tsit5())
+@test sol[2x[1] + 3x[3] + norm(x)] ≈ 2sol[x[1]] + 3sol[x[3]] + vec(mapslices(norm, hcat(sol[x]...), dims=2))
+@test sol[x + [y, 2y, 3y]] ≈ sol[x] + [sol[y], 2sol[y], 3sol[y]]
 
 # Mixed Difference Differential equations
 @parameters t a b c d
