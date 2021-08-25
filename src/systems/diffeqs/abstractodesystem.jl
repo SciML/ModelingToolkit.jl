@@ -84,6 +84,7 @@ function generate_function(
         sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
         implicit_dae=false,
         ddvs=implicit_dae ? map(Differential(get_iv(sys)), dvs) : nothing,
+        has_difference=false,
         kwargs...
     )
     # optimization
@@ -102,7 +103,7 @@ function generate_function(
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
-    pre = get_postprocess_fbody(sys)
+    pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
 
     if implicit_dae
         build_function(rhss, ddvs, u, p, t; postprocess_fbody=pre, kwargs...)
@@ -578,8 +579,9 @@ symbolically calculating numerical enhancements.
 """
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
-    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
-    if any(isdifferenceeq, equations(sys))
+    has_difference = any(isdifferenceeq, equations(sys))
+    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; has_difference=has_difference, kwargs...)
+    if has_difference
         ODEProblem{iip}(f,u0,tspan,p;difference_cb=generate_difference_cb(sys;kwargs...),kwargs...)
     else
         ODEProblem{iip}(f,u0,tspan,p;kwargs...)
@@ -603,14 +605,15 @@ symbolically calculating numerical enhancements.
 """
 function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
+    has_difference = any(isdifferenceeq, equations(sys))
     f, du0, u0, p = process_DEProblem(
         DAEFunction{iip}, sys, u0map, parammap;
-        implicit_dae=true, du0map=du0map, kwargs...
+        implicit_dae=true, du0map=du0map, has_difference=has_difference, kwargs...
     )
     diffvars = collect_differential_variables(sys)
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
-    if any(isdifferenceeq, equations(sys))
+    if has_difference
         DAEProblem{iip}(f,du0,u0,tspan,p;difference_cb=generate_difference_cb(sys; kwargs...),differential_vars=differential_vars,kwargs...)
     else
         DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)
