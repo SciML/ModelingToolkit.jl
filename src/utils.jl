@@ -216,7 +216,7 @@ function check_operator_variables(eq, op::Type, expr=eq.rhs)
     if operation(expr) isa op
         throw_invalid_operator(expr, eq, op)
     end
-    foreach(expr -> check_operator_variables(eq, op, expr), arguments(expr))
+    foreach(expr -> check_operator_variables(eq, op, expr), SymbolicUtils.unsorted_arguments(expr))
 end
 
 isdifferential(expr) = istree(expr) && operation(expr) isa Differential
