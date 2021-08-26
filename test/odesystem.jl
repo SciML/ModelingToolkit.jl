@@ -471,3 +471,24 @@ xₜ₋₁ = hist(x, t-1)
 eqs = [D(x) ~ x * y
        D(y) ~ y * x - xₜ₋₁]
 @named sys = ODESystem(eqs, t)
+
+# register
+using StaticArrays
+using SymbolicUtils: term
+using SymbolicUtils.Code
+using Symbolics: unwrap, wrap
+function foo(a::Num, ms::AbstractVector)
+    a = unwrap(a)
+    ms = map(unwrap, ms)
+    wrap(term(foo, a, MakeArray(ms, SArray)))
+end
+foo(a, ms::AbstractVector) = a + sum(ms)
+@variables t x(t) ms[1:3](t)
+D = Differential(t)
+ms = collect(ms)
+eqs = [D(x) ~ foo(x, ms); D.(ms) .~ 1]
+@named sys = ODESystem(eqs, t, [x; ms], [])
+@named emptysys = ODESystem(Equation[], t)
+@named outersys = compose(emptysys, sys)
+prob = ODEProblem(outersys, [sys.x=>1.0; collect(sys.ms).=>1:3], (0, 1.0))
+@test_nowarn solve(prob, Tsit5())

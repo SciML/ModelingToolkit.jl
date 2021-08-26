@@ -379,6 +379,8 @@ function namespace_expr(O, sys) where {T}
         else
             similarterm(O, operation(O), renamed)
         end
+    elseif O isa Array
+        map(Base.Fix2(namespace_expr, sys), O)
     else
         O
     end
