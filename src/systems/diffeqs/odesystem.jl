@@ -187,6 +187,7 @@ end
 
 # NOTE: equality does not check cached Jacobian
 function Base.:(==)(sys1::ODESystem, sys2::ODESystem)
+    sys1 === sys2 && return true
     iv1 = get_iv(sys1)
     iv2 = get_iv(sys2)
     isequal(iv1, iv2) &&
