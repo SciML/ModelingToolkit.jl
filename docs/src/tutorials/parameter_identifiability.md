@@ -75,51 +75,76 @@ In this tutorial, let us cover an example problem of querying the ODE for global
 
 Let us consider the following four-dimensional model with two outputs:
 
-$\begin{cases}x'(t) = lm - d \, x(t) - \beta \, x(t) \, v(t),\\
-    y'(t) = \beta \, x(t) \, v(t) - a \, y(t),\\
-    v'(t) = k \, y(t) - u \, v(t),\\
-    w'(t) = c \, x(t) \, y(t) \, w(t) - c \, q \, y(t) \, w(t) - b \, w(t),\\
-    z'(t) = c \, q \, y(t) \, w(t) - h \, z(t),\\
-    y_1(t) = w(t),\\
-    y_2(t) = z(t)\end{cases}$
+$$\begin{cases}
+    x_1'(t) = -b  x_1(t) + \frac{1 }{ c + x_4(t)},\\
+    x_2'(t) = \alpha  x_1(t) - \beta  x_2(t),\\
+    x_3'(t) = \gamma  x_2(t) - \delta  x_3(t),\\
+    x_4'(t) = \sigma  x_4(t)  \frac{(\gamma x_2(t) - \delta x_3(t))}{ x_3(t)},\\
+    y(t) = x_1(t)
+\end{cases}$$
 
-This model describes HIV dynamics[^1]. Let us run a global identifiability check on this model to get the result with probability of correctness being `p=0.999`. To do this, we will use `assess_identifiability(ode, p)` function.
+This model describes enzyme dynamics[^3]. Let us run a global identifiability check on this model. We will use the default settings: the probability of correctness will be `p=0.99` and we are interested in identifiability of all possible parameters
 
 Global identifiability needs information about local identifiability first, hence the function we chose here will take care of that extra step for us.
 
 ```@repl
-using StructuralIdentifiability
+using StructuralIdentifiability, ModelingToolkit
+@parameters b c α β γ δ σ
+@variables t x1(t) x2(t) x3(t) x4(t) y(t)
+D = Differential(t)
 
-ode = @ODEmodel(
-    x'(t) = lm - d * x(t) - beta * x(t) * v(t),
-    y'(t) = beta * x(t) * v(t) - a * y(t),
-    v'(t) = k * y(t) - u * v(t),
-    w'(t) = c * x(t) * y(t) * w(t) - c * q * y(t) * w(t) - b * w(t),
-    z'(t) = c * q * y(t) * w(t) - h * z(t),
-    y1(t) = w(t),
-    y2(t) = z(t)
-)
-@time global_id = assess_identifiability(ode, 0.999)
+eqs = [
+    D(x1) ~ -b * x1 + 1/(c + x4),
+    D(x2) ~ α * x1 - β * x2,
+    D(x3) ~ γ * x2 - δ * x3,
+    D(x4) ~ σ * x4 * (γ * x2 - δ * x3)/x3
+]
+
+observed = [
+    y~x1
+]
+
+# no inputs
+inputs = []
+
+# check all parameters
+to_check = []
+
+ode = ODESystem(eqs, t, [x1, x2, x3, x4], [b, c, α, β, γ, δ, σ], observed=observed, name=:GoodwinOsc)
+
+@time global_id = assess_identifiability(ode, inputs, to_check, 0.99)
 ```
 
-Now let us compare the same system but with probability being `p=0.99`. We will see a reduction in runtime:
+Let us consider the same system but with two inputs and we will try to find out identifiability with probability `0.9` for parameters `c` and `b`:
 
 ```@repl
-using StructuralIdentifiability
+using StructuralIdentifiability, ModelingToolkit
+@parameters b c α β γ δ σ
+@variables t x1(t) x2(t) x3(t) x4(t) y(t) u1 u2
+D = Differential(t)
 
-ode = @ODEmodel(
-    x'(t) = lm - d * x(t) - beta * x(t) * v(t),
-    y'(t) = beta * x(t) * v(t) - a * y(t),
-    v'(t) = k * y(t) - u * v(t),
-    w'(t) = c * x(t) * y(t) * w(t) - c * q * y(t) * w(t) - b * w(t),
-    z'(t) = c * q * y(t) * w(t) - h * z(t),
-    y1(t) = w(t),
-    y2(t) = z(t)
-)
-@time global_id = assess_identifiability(ode, 0.99)
+eqs = [
+    D(x1) ~ -b * x1 + 1/(c + x4),
+    D(x2) ~ α * x1 - β * x2 - u1,
+    D(x3) ~ γ * x2 - δ * x3 + u2,
+    D(x4) ~ σ * x4 * (γ * x2 - δ * x3)/x3
+]
+
+observed = [
+    y~x1
+]
+
+# no inputs
+inputs = [u1, u2]
+
+# check all parameters
+to_check = [b, c]
+
+ode = ODESystem(eqs, t, [x1, x2, x3, x4], [b, c, α, β, γ, δ, σ], observed=observed, name=:GoodwinOsc)
+
+@time global_id = assess_identifiability(ode, inputs, to_check, 0.9)
 ```
 
-Indeed, notice how much quicker we obtained the result with 99% correctness guarantee! This illustrates the fact that you may sometimes sacrifice probability slightly to get results much faster.
 
 [^1]:
     > R. Munoz-Tamayo, L. Puillet, J.B. Daniel, D. Sauvant, O. Martin, M. Taghipoor, P. Blavy [*Review: To be or not to be an identifiable model. Is this a relevant question in animal science modelling?*](https://doi.org/10.1017/S1751731117002774), Animal, Vol 12 (4), 701-712, 2018. The model is the ODE system (3) in Supplementary Material 2, initial conditions are assumed to be unknown.
@@ -128,4 +153,4 @@ Indeed, notice how much quicker we obtained the result with 99% correctness guar
     > Moate P.J., Boston R.C., Jenkins T.C. and Lean I.J., [*Kinetics of Ruminal Lipolysis of Triacylglycerol and Biohydrogenationof Long-Chain Fatty Acids: New Insights from Old Data*](doi:10.3168/jds.2007-0398), Journal of Dairy Science 91, 731–742, 2008
 
 [^3]:
-    > D. Wodarz, M. Nowak, [*Specific therapy regimes could lead to long-term immunological control of HIV*](https://doi.org/10.1073/pnas.96.25.14464), PNAS December 7, 1999 96 (25) 14464-14469;
+    > Goodwin, B.C. [*Oscillatory behavior in enzymatic control processes*](https://doi.org/10.1016/0065-2571(65)90067-1), Advances in Enzyme Regulation, Vol 3 (C), 425-437, 1965
