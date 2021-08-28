@@ -85,7 +85,7 @@ function NonlinearSystem(eqs, states, ps;
     end
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    defaults = Dict{Any,Any}(value(k) => value(v) for (k, v) in pairs(defaults))
 
     states = collect(states)
     states, ps = value.(states), value.(ps)

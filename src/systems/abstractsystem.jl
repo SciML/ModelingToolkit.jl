@@ -948,7 +948,7 @@ by default.
 function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys))
     T = SciMLBase.parameterless_type(basesys)
     ivs = independent_variables(basesys)
-    if !(typeof(sys) <: T)
+    if !(sys isa T)
         if length(ivs) == 0
             sys = convert_system(T, sys)
         elseif length(ivs) == 1
@@ -958,11 +958,11 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameo
         end
     end
 
-    eqs = union(equations(basesys), equations(sys))
-    sts = union(states(basesys), states(sys))
-    ps = union(parameters(basesys), parameters(sys))
-    obs = union(observed(basesys), observed(sys))
-    defs = merge(defaults(basesys), defaults(sys)) # prefer `sys`
+    eqs = union(get_eqs(basesys), get_eqs(sys))
+    sts = union(get_states(basesys), get_states(sys))
+    ps = union(get_ps(basesys), get_ps(sys))
+    obs = union(get_observed(basesys), get_observed(sys))
+    defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
     syss = union(get_systems(basesys), get_systems(sys))
 
     if length(ivs) == 0
@@ -984,7 +984,7 @@ function compose(sys::AbstractSystem, systems::AbstractArray{<:AbstractSystem}; 
     nsys = length(systems)
     nsys >= 1 || throw(ArgumentError("There must be at least 1 subsystem. Got $nsys subsystems."))
     @set! sys.name = name
-    @set! sys.systems = systems
+    @set! sys.systems = [get_systems(sys); systems]
     return sys
 end
 compose(syss::AbstractSystem...; name=nameof(first(syss))) = compose(first(syss), collect(syss[2:end]); name=name)

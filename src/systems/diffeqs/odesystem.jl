@@ -125,7 +125,7 @@ function ODESystem(
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ODESystem, force=true)
     end
     defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    defaults = Dict{Any,Any}(value(k) => value(v) for (k, v) in pairs(defaults))
 
     iv′ = value(scalarize(iv))
     dvs′ = value.(scalarize(dvs))
@@ -187,6 +187,7 @@ end
 
 # NOTE: equality does not check cached Jacobian
 function Base.:(==)(sys1::ODESystem, sys2::ODESystem)
+    sys1 === sys2 && return true
     iv1 = get_iv(sys1)
     iv2 = get_iv(sys2)
     isequal(iv1, iv2) &&
