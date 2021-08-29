@@ -4,10 +4,19 @@ Using ordinary differential equations in modeling processes is commonplace and t
 
 We will start with determining local identifiability, where a parameter is known up to finitely many values, and then proceed to determining global identifiability properties, that is, which parameters can be identified uniquely.
 
+To install `StructuralIdentifiability.jl`, simply run
+```julia
+using Pkg
+Pkg.add("StructuralIdentifiability")
+```
+
+The package has a standalone data structure for ordinary differential equations but is also compatible with `ODESystem` type from `ModelingToolkit.jl`.
+
+Let's start with local identifiability!
 ## Local Identifiability
 ### Input System
 
-We will consider a simple two-species competition model
+We will consider the following model:
 
 $$\begin{cases}
 \frac{d\,x_4}{d\,t} = - \frac{k_5 x_4}{k_6 + x_4},\\
@@ -120,7 +129,7 @@ Let us consider the same system but with two inputs and we will try to find out 
 ```@repl
 using StructuralIdentifiability, ModelingToolkit
 @parameters b c α β γ δ σ
-@variables t x1(t) x2(t) x3(t) x4(t) y(t) u1 u2
+@variables t x1(t) x2(t) x3(t) x4(t) y(t) u1(t) u2(t)
 D = Differential(t)
 
 eqs = [
@@ -134,10 +143,10 @@ observed = [
     y~x1
 ]
 
-# no inputs
+# indicate inputs
 inputs = [u1, u2]
 
-# check all parameters
+# check only 2 parameters
 to_check = [b, c]
 
 ode = ODESystem(eqs, t, [x1, x2, x3, x4], [b, c, α, β, γ, δ, σ], observed=observed, name=:GoodwinOsc)
