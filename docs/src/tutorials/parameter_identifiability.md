@@ -29,15 +29,14 @@ y_2 = x_5\end{cases}$$
 This model describes the biohydrogenation[^1] process[^2] with unknown initial conditions.
 
 ### Using the `ODESystem` object
-To define the system in Julia, we use `ModelingToolkit.jl`.
+To define the ode system in Julia, we use `ModelingToolkit.jl`.
 
-We first define the parameters, variables, differential equations and the output equations. Notice that the system does not have any input functions, so inputs will be an empty array.
-
-```@example
+We first define the parameters, variables, differential equations and the output equations.
+```julia
 using StructuralIdentifiability, ModelingToolkit
 
 # define parameters and variables
-@variables t x4(t) x5(t) x6(t) x7(t) y1(t) y2(t)
+@variables t x4(t) x5(t) x6(t) x7(t) y1(t) [output=true] y2(t) [output=true]
 @parameters k5 k6 k7 k8 k9 k10
 D = Differential(t)
 
@@ -46,32 +45,45 @@ eqs = [
     D(x4) ~ - k5 * x4 / (k6 + x4),
     D(x5) ~ k5 * x4 / (k6 + x4) - k7 * x5/(k8 + x5 + x6),
     D(x6) ~ k7 * x5 / (k8 + x5 + x6) - k9 * x6 * (k10 - x6) / k10,
-    D(x7) ~ k9 * x6 * (k10 - x6) / k10
-]
-
-# define observed functions
-observed = [
+    D(x7) ~ k9 * x6 * (k10 - x6) / k10,
     y1 ~ x4,
     y2 ~ x5
 ]
 
 # define the system
-de = ODESystem(eqs, t, [x4, x5, x6, x7], [k5, k6, k7, k8, k9, k10], observed=observed, name=:Biohydrogenation)
+de = ODESystem(eqs, t, name=:Biohydrogenation)
 
-# no input functions:
-inputs = []
+```
 
-# we want to check everything
-to_check = []
-
+After that we are ready to check the system for local identifiability:
+```julia
 # query local identifiability
 # we pass the ode-system
-local_id_all = assess_local_identifiability(de, inputs, to_check, 0.99)
+local_id_all = assess_local_identifiability(de, 0.99)
+                # [ Info: Preproccessing `ModelingToolkit.ODESystem` object
+                # Dict{Nemo.fmpq_mpoly, Bool} with 10 entries:
+                #   x5  => 1
+                #   k7  => 1
+                #   k10 => 1
+                #   x6  => 1
+                #   k8  => 1
+                #   k9  => 1
+                #   k6  => 1
+                #   k5  => 1
+                #   x4  => 1
+                #   x7  => 0
+```
+We can see that all states (except $x_7$) and all parameters are locally identifiable with probability 0.99. 
 
-# let's try to check specific parameters and their combinations
+Let's try to check specific parameters and their combinations
+```julia
 to_check = [k5, k7, k10/k9, k5+k6]
-local_id_some = assess_local_identifiability(de, inputs, to_check, 0.99)
-
+local_id_some = assess_local_identifiability(de, to_check, 0.99)
+                # 4-element Vector{Bool}:
+                #  1
+                #  1
+                #  1
+                #  1
 ```
 
 Notice that in this case, everything (except the state variable $x_7$) is locally identifiable, including combinations such as $k_{10}/k_9, k_5+k_6$
@@ -94,66 +106,68 @@ $$\begin{cases}
 
 This model describes enzyme dynamics[^3]. Let us run a global identifiability check on this model. We will use the default settings: the probability of correctness will be `p=0.99` and we are interested in identifiability of all possible parameters
 
-Global identifiability needs information about local identifiability first, hence the function we chose here will take care of that extra step for us.
+Global identifiability needs information about local identifiability first, but the function we chose here will take care of that extra step for us.
 
-```@repl
+__Note__: as of writing this tutorial, UTF-symbols such as Greek characters are not supported by one of the project's dependencies, see (this issue)[https://github.com/SciML/StructuralIdentifiability.jl/issues/43].
+
+```julia
 using StructuralIdentifiability, ModelingToolkit
-@parameters b c α β γ δ σ
-@variables t x1(t) x2(t) x3(t) x4(t) y(t)
+@parameters b c a beta g delta sigma
+@variables t x1(t) x2(t) x3(t) x4(t) y(t) [output=true]
 D = Differential(t)
 
 eqs = [
     D(x1) ~ -b * x1 + 1/(c + x4),
-    D(x2) ~ α * x1 - β * x2,
-    D(x3) ~ γ * x2 - δ * x3,
-    D(x4) ~ σ * x4 * (γ * x2 - δ * x3)/x3
-]
-
-observed = [
+    D(x2) ~ a * x1 - beta * x2,
+    D(x3) ~ g * x2 - delta * x3,
+    D(x4) ~ sigma * x4 * (g * x2 - delta * x3)/x3,
     y~x1
 ]
 
-# no inputs
-inputs = []
 
-# check all parameters
-to_check = []
+ode = ODESystem(eqs, t, name=:GoodwinOsc)
 
-ode = ODESystem(eqs, t, [x1, x2, x3, x4], [b, c, α, β, γ, δ, σ], observed=observed, name=:GoodwinOsc)
-
-@time global_id = assess_identifiability(ode, inputs, to_check, 0.99)
+@time global_id = assess_identifiability(ode)
+                # 28.961573 seconds (88.92 M allocations: 5.541 GiB, 4.01% gc time)
+                # Dict{Nemo.fmpq_mpoly, Symbol} with 7 entries:
+                #   c     => :globally
+                #   a     => :nonidentifiable
+                #   g     => :nonidentifiable
+                #   delta => :locally
+                #   sigma => :globally
+                #   beta  => :locally
+                #   b     => :globally
 ```
+We can see that 
 
 Let us consider the same system but with two inputs and we will try to find out identifiability with probability `0.9` for parameters `c` and `b`:
 
-```@repl
+```julia
 using StructuralIdentifiability, ModelingToolkit
-@parameters b c α β γ δ σ
-@variables t x1(t) x2(t) x3(t) x4(t) y(t) u1(t) u2(t)
+@parameters b c a beta g delta sigma
+@variables t x1(t) x2(t) x3(t) x4(t) y(t) [output=true] u1(t) [input=true] u2(t) [input=true]
 D = Differential(t)
 
 eqs = [
     D(x1) ~ -b * x1 + 1/(c + x4),
-    D(x2) ~ α * x1 - β * x2 - u1,
-    D(x3) ~ γ * x2 - δ * x3 + u2,
-    D(x4) ~ σ * x4 * (γ * x2 - δ * x3)/x3
-]
-
-observed = [
+    D(x2) ~ a * x1 - beta * x2 - u1,
+    D(x3) ~ g * x2 - delta * x3 + u2,
+    D(x4) ~ sigma * x4 * (g * x2 - delta * x3)/x3,
     y~x1
 ]
-
-# indicate inputs
-inputs = [u1, u2]
 
 # check only 2 parameters
 to_check = [b, c]
 
-ode = ODESystem(eqs, t, [x1, x2, x3, x4], [b, c, α, β, γ, δ, σ], observed=observed, name=:GoodwinOsc)
+ode = ODESystem(eqs, t, name=:GoodwinOsc)
 
-@time global_id = assess_identifiability(ode, inputs, to_check, 0.9)
+global_id = assess_identifiability(ode, to_check, 0.9)
+            # Dict{Nemo.fmpq_mpoly, Symbol} with 2 entries:
+            #   b => :globally
+            #   c => :globally
 ```
 
+Both parameters $b, c$ are globally identifiable with probability 0.9.
 
 [^1]:
     > R. Munoz-Tamayo, L. Puillet, J.B. Daniel, D. Sauvant, O. Martin, M. Taghipoor, P. Blavy [*Review: To be or not to be an identifiable model. Is this a relevant question in animal science modelling?*](https://doi.org/10.1017/S1751731117002774), Animal, Vol 12 (4), 701-712, 2018. The model is the ODE system (3) in Supplementary Material 2, initial conditions are assumed to be unknown.
