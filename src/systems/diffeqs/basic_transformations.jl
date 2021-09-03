@@ -73,6 +73,9 @@ Example:
 ```julia
 using ModelingToolkit, OrdinaryDiffEq, Test
 
+# Change of variables: z = log(x)
+# (this implies that x = exp(z) is automatically non-negative)
+
 @parameters t α
 @variables x(t)
 D = Differential(t)
@@ -82,14 +85,15 @@ tspan = (0., 1.)
 u0 = [x => 1.0]
 p = [α => -0.5]
 
-sys = ODESystem(eqs; defaults=u0)
+@named sys = ODESystem(eqs; defaults=u0)
 prob = ODEProblem(sys, [], tspan, p)
 sol = solve(prob, Tsit5())
 
 @variables z(t)
-forward_subs  = [exp(x) => z]
-backward_subs = [x => log(z)]
-new_sys = changeofvariables(sys, forward_subs, backward_subs)
+forward_subs  = [log(x) => z]
+backward_subs = [x => exp(z)]
+
+@named new_sys = changeofvariables(sys, forward_subs, backward_subs)
 @test equations(new_sys)[1] == (D(z) ~ α)
 
 new_prob = ODEProblem(new_sys, [], tspan, p)
