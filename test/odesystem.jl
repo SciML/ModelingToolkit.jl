@@ -480,7 +480,7 @@ using Symbolics: unwrap, wrap
 function foo(a::Num, ms::AbstractVector)
     a = unwrap(a)
     ms = map(unwrap, ms)
-    wrap(term(foo, a, MakeArray(ms, SArray)))
+    wrap(term(foo, a, term(SVector, ms...)))
 end
 foo(a, ms::AbstractVector) = a + sum(ms)
 @variables t x(t) ms[1:3](t)
