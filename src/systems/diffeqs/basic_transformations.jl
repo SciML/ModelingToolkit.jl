@@ -90,7 +90,7 @@ sol = solve(prob, Tsit5())
 forward_subs  = [exp(x) => z]
 backward_subs = [x => log(z)]
 new_sys = changeofvariables(sys, forward_subs, backward_subs)
-@test equations(new_sys)[1] == (D(z) ~ α*z*log(z))
+@test equations(new_sys)[1] == (D(z) ~ α)
 
 new_prob = ODEProblem(new_sys, [], tspan, p)
 new_sol = solve(new_prob, Tsit5())
