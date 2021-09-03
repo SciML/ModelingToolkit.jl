@@ -482,7 +482,7 @@ function foo(a::Num, ms::AbstractVector)
     ms = map(unwrap, ms)
     wrap(term(foo, a, MakeArray(ms, SArray)))
 end
-foo(a, ms::AbstractVector) = a + sum(ms)
+@test_skip foo(a, ms::AbstractVector) = a + sum(ms)
 @variables t x(t) ms[1:3](t)
 D = Differential(t)
 ms = collect(ms)
