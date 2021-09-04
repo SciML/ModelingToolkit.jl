@@ -1,6 +1,3 @@
-Base.:*(x::Union{Num,Symbolic},y::Unitful.AbstractQuantity) = x * y
-Base.:/(x::Union{Num,Symbolic},y::Unitful.AbstractQuantity) = x / y
-
 struct ValidationError <: Exception
     message::String
 end
@@ -9,7 +6,6 @@ end
 function screen_unit(result)
     result isa Unitful.Unitlike || throw(ValidationError("Unit must be a subtype of Unitful.Unitlike, not $(typeof(result))."))
     result isa Unitful.ScalarUnits || throw(ValidationError("Non-scalar units such as $result are not supported. Use a scalar unit instead."))
-    result == u"°" && throw(ValidationError("Degrees are not supported. Use radians instead."))
     result
 end
 
@@ -33,92 +29,191 @@ Literal = Union{Sym,Symbolics.ArrayOp,Symbolics.Arr,Symbolics.CallWithMetadata}
 Conditional = Union{typeof(ifelse),typeof(IfElse.ifelse)}
 Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
 
-"Find the unit of a symbolic item."
-get_unit(x::Real) = unitless
-get_unit(x::Unitful.Quantity) = screen_unit(Unitful.unit(x))
-get_unit(x::AbstractArray) = map(get_unit,x)
-get_unit(x::Num) = get_unit(value(x))
-get_unit(x::Literal) = screen_unit(getmetadata(x,VariableUnit, unitless))
-get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
-get_unit(op::Difference, args) =   get_unit(args[1]) / get_unit(op.t)
-get_unit(op::typeof(getindex),args) = get_unit(args[1])
-function get_unit(op,args) # Fallback
-    result = op(1 .* get_unit.(args)...)
-    try
-        unit(result)
-    catch
-        throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
-    end
+set_unitless(x::Vector) = [_has_unit(y) ? y : SymbolicUtils.setmetadata(y,VariableUnit,unitless) for y in x]
+
+constructunit(x::Num) = constructunit(value(x))
+function constructunit(x::Unitful.Quantity)
+    return Constant(x.val,Dict(VariableUnit=>Unitful.unit(x)))
 end
 
-function get_unit(op::Integral,args)
-    unit = 1
-    if op.domain.variables isa Vector
-        for u in op.domain.variables
-            unit *= get_unit(u)
+struct Constant{T,M} <: SymbolicUtils.Symbolic{T}
+    val::T
+    metadata::M
+end
+
+Constant(x) = Constant(x,Dict(VariableUnit=>Unitful.unit(x)))
+
+Base.:*(x::Num,y::Unitful.Quantity) = value(x) * y
+Base.:*(x::Unitful.Quantity,y::Num) = x * value(y)
+
+Base.show(io::IO,v::Constant) = Base.show(io, v.val)
+
+Unitless = Union{typeof.([exp,log,sinh,asinh,asin,
+                                  cosh,acosh,acos,
+                                  tanh,atanh,atan,
+                                  coth,acoth,acot,
+                                  sech,asech,asec,
+                                  csch,acsch,acsc])...}
+isunitless(f::Unitless) = true
+
+function unitcoerce(u::Unitful.Unitlike,x) 
+    st = constructunit(x)
+    tu = _get_unit(st)
+    output = Unitful.convfact(u,tu)*st
+    return SymbolicUtils.setmetadata(output,VariableUnit,u)
+end
+
+function constructunit(op,args) # Fallback
+    if isunitless(op)
+        try
+            args = unitcoerce.(unitless,args)
+            return SymbolicUtils.setmetadata(op(args...),VariableUnit,unitless)
+        catch err
+            if err isa Unitful.DimensionError
+                argunits = get_unit.(args)
+                throw(ValidationError("Unable to coerce $args to dimensionless from $argunits for function $op."))
+            else
+                rethrow(err)
+            end
         end
     else
-        unit *= get_unit(op.domain.variables)
-    end
-    return get_unit(args[1]) * unit
-end
-
-function get_unit(x::Pow)
-    pargs = arguments(x)
-    base,expon = get_unit.(pargs)
-    @assert expon isa Unitful.DimensionlessUnits
-    if base == unitless
-        unitless
-    else
-        pargs[2] isa Number ? base^pargs[2] : (1*base)^pargs[2]
+        throw(ValidationError("Unknown function $op supplied with $args with units $argunits"))
     end
 end
 
-function get_unit(x::Add)
-    terms = get_unit.(arguments(x))
-    firstunit = terms[1]
-    for other in terms[2:end]
-        termlist = join(map(repr, terms), ", ")
-        equivalent(other, firstunit) || throw(ValidationError(", in sum $x, units [$termlist] do not match."))
+function constructunit(x) 
+    _has_unit(x) && return x
+    SymbolicUtils.istree(x) || throw(ValidationError("Primary quantity but doesn't have units: $x"))
+    op = operation(x)
+    if op isa Term
+        gp = getmetadata(x,Symbolics.GetindexParent,nothing) # Like x[1](t)
+        tu = getmetadata(gp, VariableUnit, unitless)
+        return SymbolicUtils.setmetadata(x,VariableUnit,tu)
     end
-    return firstunit
+    args = arguments(x)
+    constructunit(op,args)
 end
 
-function get_unit(op::Conditional, args)
-    terms = get_unit.(args)
-    terms[1] == unitless || throw(ValidationError(", in $x, [$(terms[1])] is not dimensionless."))
-    equivalent(terms[2], terms[3]) || throw(ValidationError(", in $x, units [$(terms[2])] and [$(terms[3])] do not match."))
-    return terms[2]
+function constructunit(op::typeof(getindex),subterms)
+    arr = subterms[1]
+    arrunit = _get_unit(arr) #It had better be there!
+    output = op(subterms...)
+    return SymbolicUtils.setmetadata(output,VariableUnit,arrunit)
 end
 
-function get_unit(op::typeof(Symbolics._mapreduce),args)
-    if args[2] == +
-        get_unit(args[3])
-    else
-        throw(ValidationError("Unsupported array operation $op"))
+function constructunit(op::typeof(+),subterms)
+    newterms = Vector{Any}(undef,size(subterms))
+    firstunit = nothing
+    for (idx,st) in enumerate(subterms)
+        if !isequal(st,0)
+            st = constructunit(st)
+            tu = _get_unit(st)
+            if firstunit === nothing
+                firstunit = tu
+            end
+            newterms[idx] = Unitful.convfact(firstunit,tu)*st
+        end
     end
+    output = +(newterms...)
+    return SymbolicUtils.setmetadata(output,VariableUnit,firstunit)
 end
 
-function get_unit(op::Comparison, args)
-    terms = get_unit.(args)
-    equivalent(terms[1], terms[2]) || throw(ValidationError(", in comparison $op, units [$(terms[1])] and [$(terms[2])] do not match."))
-    return unitless
-end
+Literal = Union{Sym,Symbolics.ArrayOp,Symbolics.Arr,Symbolics.CallWithMetadata}
+Conditional = Union{typeof(ifelse),typeof(IfElse.ifelse)}
+Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
+Trig = Union{typeof.([sin,cos,tan,sec,csc,cot])...}
 
-function get_unit(x::Symbolic)
-    if SymbolicUtils.istree(x)
-        op = operation(x)
-        if op isa Sym || (op isa Term && operation(op) isa Term) # Dependent variables, not function calls
-            return screen_unit(getmetadata(x, VariableUnit, unitless)) # Like x(t) or x[i]
-        elseif op isa Term && !(operation(op) isa Term)
-            gp = getmetadata(x,Symbolics.GetindexParent,nothing) # Like x[1](t)
-            return screen_unit(getmetadata(gp, VariableUnit, unitless))
-        end  # Actual function calls:
-        args = arguments(x)
-        return get_unit(op, args)
-    else # This function should only be reached by Terms, for which `istree` is true
-        throw(ArgumentError("Unsupported value $x."))
+function constructunit(op::Trig,subterms)
+    arg = constructunit(only(subterms))
+    argunit = _get_unit(arg)
+    if equivalent(argunit,u"°")
+        arg = pi/180*arg
     end
+    return SymbolicUtils.setmetadata(op(arg),VariableUnit,unitless)
+end
+
+function constructunit(op::Conditional,subterms)
+    newterms = Vector{Any}(undef, 3)
+    firstunit = nothing
+    newterms[1] = constructunit(subterms[1])
+    for (idx,st) in enumerate(subterms[2:3])
+        if !isequal(st,0)
+            st = constructunit(st)
+            tu = _get_unit(st)
+            if firstunit === nothing
+                firstunit = tu
+            end
+            newterms[idx+1] = Unitful.convfact(firstunit,tu)*st
+        end
+    end
+    output = op(newterms...)
+    return SymbolicUtils.setmetadata(output,VariableUnit,firstunit)
+end
+
+function constructunit(op::Union{Differential,Difference}, subterms)
+    numerator = constructunit(only(subterms))
+    nu = _get_unit(numerator)
+    denominator  = op isa Differential ? constructunit(op.x) : constructunit(op.t) #TODO: make consistent!
+    du = _get_unit(denominator)
+    output = op isa Differential ? Differential(denominator)(numerator) : Difference(denominator)(numerator)
+    return SymbolicUtils.setmetadata(output, VariableUnit, nu/du)
+end
+
+function constructunit(op::typeof(^),subterms)
+    base, exponent = subterms
+    base = constructunit(base)
+    bu = _get_unit(base)
+    exponent = constructunit(exponent)
+    exponent = Unitful.convfact(unitless,_get_unit(exponent))*exponent
+    output = base^exponent
+    output_unit = exponent isa Real ? bu^exponent : (1*bu)^exponent
+    return SymbolicUtils.setmetadata(output,VariableUnit,output_unit)
+end
+
+function constructunit(op::Comparison,subterms)
+    newterms = Vector{Any}(undef,size(subterms))
+    firstunit = nothing
+    for (idx,st) in enumerate(subterms)
+        if !isequal(st,0)
+            st = constructunit(st)
+            tu = _get_unit(st)
+            if firstunit === nothing
+                firstunit = tu
+            end
+            newterms[idx] = Unitful.convfact(firstunit,tu)*st
+        end
+    end
+    output = op(newterms...)
+    return SymbolicUtils.setmetadata(output,VariableUnit,unitless)
+end
+
+function constructunit(op::typeof(*),subterms)
+    newterms = Vector{Any}(undef,size(subterms))
+    pu = unitless
+    for (idx,st) in enumerate(subterms)
+        st = constructunit(st)
+        pu *= _get_unit(st)
+        newterms[idx] = st
+    end
+    output = op(newterms...)
+    return SymbolicUtils.setmetadata(output,VariableUnit,pu)
+end
+
+#_has_unit(x::Equation) = getmetadata(x,VariableUnit) Doesn't work yet, equations don't have metadata.
+_hasnt_unit(x) = !_has_unit(x)
+_has_unit(x::Real) = true
+_has_unit(x::Num) = _has_unit(value(x))
+_has_unit(x::Symbolic) = hasmetadata(x,VariableUnit)
+
+_get_unit(x::Real) = unitless
+_get_unit(x::Num) = _get_unit(value(x))
+_get_unit(x::Symbolic) = getmetadata(x,VariableUnit)
+
+get_unit(x) = _has_unit(x) ?  _get_unit(x) : _get_unit(constructunit(x))
+
+function functionize(pt)
+    syms = Symbolics.get_variables(pt)
+    eval(build_function(constructunit(pt),syms,expression=Val{false}))
 end
 
 "Get unit of term, returning nothing & showing warning instead of throwing errors."

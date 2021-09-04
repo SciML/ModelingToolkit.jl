@@ -150,3 +150,109 @@ maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
 @named js4  = JumpSystem([maj1, maj2], t, [S], [β, γ])
 
+
+@variables x [unit = u"m"] y [unit = u"cm"] z [unit = u"mm"]
+
+eq = 0~x+y+z
+rhs = eq.rhs
+rrhs = constructunit(rhs)
+@test _get_unit(rrhs) == u"m"
+
+rhs = (0~y*x*z).rhs
+rrhs = constructunit(rhs)
+@test MT.equivalent(_get_unit(rrhs),u"m*cm*mm")
+
+#Fails if something doesn't have units defined -- no more assuming!
+@variables α 
+rhs = x*α
+@test_throws MT.ValidationError get_unit(rhs)
+
+#Fix this by assigning default unitless
+x,α = set_unitless([x,α])
+rhs = x*α
+@test MT.equivalent(get_unit(rhs),u"m")
+
+#With coefficients already
+rhs = (0~y + 3x + 2z).rhs
+rrhs = constructunit(rhs)
+
+#Comparison
+thing = constructunit(x<y)
+@test _get_unit(thing) == MT.unitless
+@test isequal(thing,x<1//100*y)
+
+#Conditional
+rhs = IfElse.ifelse(x<y,y,x)
+thing = constructunit(rhs)
+@test isequal(_get_unit(thing),u"cm")
+@test isequal(thing,IfElse.ifelse(x<1//100*y,y,100x))
+
+#Inverse
+rhs = x^-1
+thing = constructunit(rhs)
+@test MT.equivalent(_get_unit(thing),_get_unit(x)^-1)
+
+#Cancellation
+rhs = x/y
+thing = constructunit(rhs)
+@test isequal(rhs,thing)
+@test MT.equivalent(_get_unit(thing),_get_unit(x)/_get_unit(y))
+
+#Symbolic exponent
+rhs = x^(y/z)
+thing = constructunit(rhs)
+MT.equivalent(_get_unit(thing),(1u"m")^(10*MT.value(y/z)))
+@test isequal(thing,x^(10y/z))
+
+#Differential
+@variables t [unit = u"s"] x(t) [unit = u"m"]
+D = Differential(t)
+rhs = D(x)
+thing = constructunit(rhs)
+@test isequal(thing,rhs)
+@test MT.equivalent(_get_unit(x)/_get_unit(t),_get_unit(thing))
+
+#Nested Derivatives
+rhs = D(D(x))
+thing = constructunit(rhs)
+@test isequal(thing,rhs)
+@test MT.equivalent(_get_unit(x)/_get_unit(t)^2,_get_unit(thing))
+
+#Arrays
+@variables t [unit = u"s"] x[1:3](t) [unit = u"m"]
+@parameters v[1:3] = [1,2,3] [unit = u"m/s"]
+D = Differential(t)
+eqs = D.(x) .~ v
+eqs = collect(eqs)
+rhs = eqs[1].rhs
+@test MT.equivalent(get_unit(rhs),u"m/s")
+
+lhs = eqs[1].lhs
+thing = constructunit(lhs)
+@test isequal(thing,lhs)
+@test MT.equivalent(_get_unit(thing),u"m/s")
+
+#Constants
+@variables  x(t) [unit = u"m"]
+eq = D(x) ~ x*10u"s^-1"
+thing = constructunit(eq.rhs)
+@test MT.equivalent(get_unit(thing), get_unit(eq.lhs))
+eq = D(x) ~ x*10u"s^-1" + 1u"m/s"
+thing = constructunit(eq.rhs)
+@test MT.equivalent(get_unit(thing), get_unit(eq.lhs))
+
+#Trig functions
+@variables θ=90 [unit = u"°"]
+rhs = sin(θ)
+thing = constructunit(rhs)
+
+fthing = functionize(thing)
+fthing(90) == sin(90u"°")
+
+#Exponential
+rhs = exp(α)
+thing = constructunit(rhs)
+rhs = exp(x/y)
+thing = constructunit(rhs)
+rhs = exp(x)
+@test_throws MT.ValidationError constructunit(rhs)
