@@ -56,7 +56,9 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     connection_type::Any
     function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, structure, connection_type; checks::Bool = true)
         if checks
-            all_dimensionless([states;ps]) ||check_units(eqs)
+            if !all_dimensionless([states;ps])
+                eqs = rewrite_units(eqs)
+            end
         end
         new(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, structure, connection_type)
     end

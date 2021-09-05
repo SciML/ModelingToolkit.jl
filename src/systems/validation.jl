@@ -12,6 +12,7 @@ end
 
 "Throw exception on invalid unit types, otherwise return argument."
 function screen_unit(result)
+    result isa Symbolic && return result
     result isa Unitful.Unitlike || throw(ValidationError("Unit must be a subtype of Unitful.Unitlike, not $(typeof(result))."))
     result isa Unitful.ScalarUnits || throw(ValidationError("Non-scalar units such as $result are not supported. Use a scalar unit instead."))
     result
@@ -88,16 +89,20 @@ function constructunit(op, args) # Fallback
 end
 
 function constructunit(x) 
-    _has_unit(x) && return x
-    SymbolicUtils.istree(x) || throw(ValidationError("Primary quantity but doesn't have units: $x"))
-    op = operation(x)
-    if op isa Term
-        gp = getmetadata(x, Symbolics.GetindexParent, nothing) # Like x[1](t)
-        tu = screen_unit(getmetadata(gp, VariableUnit, unitless))
-        return SymbolicUtils.setmetadata(x, VariableUnit, tu)
+    if _has_unit(x)
+        return x
+    elseif !SymbolicUtils.istree(x) || operation(x) isa Sym # End of the line, if it doesn't have units, it's unitless
+        return SymbolicUtils.setmetadata(x, VariableUnit, unitless)
+    else
+        op = operation(x)
+        if op isa Term
+            gp = getmetadata(x, Symbolics.GetindexParent, nothing) # Like x[1](t)
+            tu = screen_unit(getmetadata(gp, VariableUnit, unitless))
+            return SymbolicUtils.setmetadata(x, VariableUnit, tu)
+        end
+        args = arguments(x)
+        constructunit(op, args)
     end
-    args = arguments(x)
-    constructunit(op, args)
 end
 
 function constructunit(op::typeof(getindex), subterms) #for symbolic array access
@@ -206,7 +211,6 @@ function constructunit(op::typeof(*), subterms)
 end
 
 #_has_unit(x::Equation) = getmetadata(x,VariableUnit) Doesn't work yet, equations don't have metadata.
-_hasnt_unit(x) = !_has_unit(x)
 _has_unit(x::Real) = true
 _has_unit(x::Num) = _has_unit(value(x))
 _has_unit(x::Symbolic) = hasmetadata(x,VariableUnit)
@@ -215,7 +219,8 @@ _get_unit(x::Real) = unitless
 _get_unit(x::Num) = _get_unit(value(x))
 _get_unit(x::Symbolic) = screen_unit(getmetadata(x,VariableUnit,unitless))
 
-get_unit(x) = _has_unit(x) ?  _get_unit(x) : _get_unit(constructunit(x))
+get_unit(x::Num) = get_unit(value(x))
+get_unit(x) = _has_unit(x) ?  _get_unit(x) :  _get_unit(constructunit(x))
 
 function functionize(pt)
     syms = Symbolics.get_variables(pt)
@@ -274,7 +279,6 @@ validate(eqs::Vector, term::Symbolic; info::String = "") = all([validate(eqs[idx
 validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term,"") !== nothing
 
 "Throws error if units of equations are invalid."
-check_units(eqs...) = validate(eqs...) || throw(ValidationError("Some equations had invalid units. See warnings for details."))
 function rewrite_units(eqs::Vector) #Should be vector of equations, but hard to check that
     output = similar(eqs)
     allgood = true
@@ -286,8 +290,8 @@ function rewrite_units(eqs::Vector) #Should be vector of equations, but hard to 
             err isa ValidationError ? @warn("in eq [$idx], "*err.message) : rethrow(err)
         end
     end
-    allgood || throw(ValidationError("Some sequations had invalid units. See warnings for details."))
+    allgood || throw(ValidationError("Some equations had invalid units. See warnings for details."))
     return output
 end
 
-all_dimensionless(states) = all(map(x->_get_unit(x) in (unitless,nothing),states))
+all_dimensionless(states) = all(map(x-> _get_unit(x) in (unitless,nothing),states))
