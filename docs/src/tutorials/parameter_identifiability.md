@@ -1,6 +1,6 @@
 # Parameter Identifiability in ODE Models
 
-Using ordinary differential equations in modeling processes is commonplace and the challenge of parameter identifiability is one of the key design challenges. In this tutorial, we will show how to use `StructuralIdentifiability.jl` with `ModelingToolkit.jl` to assess parameter identifiability.
+Using ordinary differential equations for modeling real-world processes is commonplace and the challenge of parameter identifiability is one of the key design challenges. In this tutorial, we will show how to use `StructuralIdentifiability.jl` with `ModelingToolkit.jl` to assess parameter identifiability.
 
 We will start with determining local identifiability, where a parameter is known up to finitely many values, and then proceed to determining global identifiability properties, that is, which parameters can be identified uniquely.
 
