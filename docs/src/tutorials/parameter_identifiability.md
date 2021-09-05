@@ -61,17 +61,13 @@ After that we are ready to check the system for local identifiability:
 # we pass the ode-system
 local_id_all = assess_local_identifiability(de, 0.99)
                 # [ Info: Preproccessing `ModelingToolkit.ODESystem` object
-                # Dict{Nemo.fmpq_mpoly, Bool} with 10 entries:
-                #   x5  => 1
-                #   k7  => 1
-                #   k10 => 1
-                #   x6  => 1
-                #   k8  => 1
-                #   k9  => 1
-                #   k6  => 1
-                #   k5  => 1
-                #   x4  => 1
-                #   x7  => 0
+                # 6-element Vector{Bool}:
+                #  1
+                #  1
+                #  1
+                #  1
+                #  1
+                #  1
 ```
 We can see that all states (except $x_7$) and all parameters are locally identifiable with probability 0.99. 
 
