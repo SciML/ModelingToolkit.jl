@@ -8,19 +8,17 @@ D = Differential(t)
 #This is how equivalent works:
 @test MT.equivalent(u"MW" ,u"kJ/ms")
 @test !MT.equivalent(u"m", u"cm")
-@test MT.equivalent(MT.get_unit(P^γ), MT.get_unit((E/τ)^γ))
+@test MT.equivalent(MT.get_unit(P^γ), MT.get_unit((E/τ)^γ)) #Fails b/c no units on gamma
 
 # Basic access
 @test MT.get_unit(t) == u"ms"
 @test MT.get_unit(E) == u"kJ"
 @test MT.get_unit(τ) == u"ms"
-@test MT.get_unit(γ) == MT.unitless
+@test MT.get_unit(γ) == MT.unitless #Fails b/c no units on gamma
 @test MT.get_unit(0.5) == MT.unitless
 
 # Prohibited unit types
-@parameters β [unit = u"°"] α [unit = u"°C"] γ [unit = 1u"s"]
-@test_throws MT.ValidationError MT.get_unit(β)
-@test_throws MT.ValidationError MT.get_unit(α)
+@parameters γ [unit = 1u"s"]
 @test_throws MT.ValidationError MT.get_unit(γ)
 
 # Non-trivial equivalence & operators
@@ -32,7 +30,7 @@ D = Differential(t)
 @test MT.equivalent(MT.get_unit(P - E/τ),u"MW")
 @test MT.equivalent(MT.get_unit(D(D(E))),u"MW/ms")
 @test MT.get_unit(IfElse.ifelse(t>t,P,E/τ)) == u"MW"
-@test MT.get_unit(1.0^(t/τ)) == MT.unitless
+@test MT.equivalent(MT.get_unit(1.0^(t/τ)),MT.unitless)
 @test MT.get_unit(exp(t/τ)) == MT.unitless
 @test MT.get_unit(sin(t/τ)) == MT.unitless
 @test MT.get_unit(sin(1u"rad")) == MT.unitless
@@ -40,11 +38,11 @@ D = Differential(t)
 
 eqs = [D(E) ~ P - E/τ
         0 ~ P]
-@test MT.validate(eqs)
+MT.rewrite_units(eqs)
 @named sys = ODESystem(eqs)
 
-@test !MT.validate(D(D(E)) ~ P)
-@test !MT.validate(0 ~ P + E*τ)
+@test_throws MT.ValidationError MT.constructunit(D(D(E)) ~ P)
+@test_throws MT.ValidationError MT.constructunit(0 ~ P + E*τ)
 
 # Array variables
 @variables t [unit = u"s"] x[1:3](t) [unit = u"m"]
@@ -155,68 +153,68 @@ maj2 = MassActionJump(γ, [S => 1], [S => -1])
 
 eq = 0~x+y+z
 rhs = eq.rhs
-rrhs = constructunit(rhs)
-@test _get_unit(rrhs) == u"m"
+rrhs = MT.constructunit(rhs)
+@test MT._get_unit(rrhs) == u"m"
 
 rhs = (0~y*x*z).rhs
-rrhs = constructunit(rhs)
-@test MT.equivalent(_get_unit(rrhs),u"m*cm*mm")
+rrhs = MT.constructunit(rhs)
+@test MT.equivalent(MT._get_unit(rrhs),u"m*cm*mm")
 
 #Fails if something doesn't have units defined -- no more assuming!
 @variables α 
 rhs = x*α
-@test_throws MT.ValidationError get_unit(rhs)
+@test_throws MT.ValidationError MT.get_unit(rhs)
 
 #Fix this by assigning default unitless
-x,α = set_unitless([x,α])
+x,α = MT.set_unitless([x,α])
 rhs = x*α
-@test MT.equivalent(get_unit(rhs),u"m")
+@test MT.equivalent(MT.get_unit(rhs),u"m")
 
 #With coefficients already
 rhs = (0~y + 3x + 2z).rhs
-rrhs = constructunit(rhs)
+rrhs = MT.constructunit(rhs)
 
 #Comparison
-thing = constructunit(x<y)
-@test _get_unit(thing) == MT.unitless
+thing = MT.constructunit(x<y)
+@test MT._get_unit(thing) == MT.unitless
 @test isequal(thing,x<1//100*y)
 
 #Conditional
 rhs = IfElse.ifelse(x<y,y,x)
-thing = constructunit(rhs)
-@test isequal(_get_unit(thing),u"cm")
+thing = MT.constructunit(rhs)
+@test isequal(MT._get_unit(thing),u"cm")
 @test isequal(thing,IfElse.ifelse(x<1//100*y,y,100x))
 
 #Inverse
 rhs = x^-1
-thing = constructunit(rhs)
-@test MT.equivalent(_get_unit(thing),_get_unit(x)^-1)
+thing = MT.constructunit(rhs)
+@test MT.equivalent(MT._get_unit(thing),MT._get_unit(x)^-1)
 
 #Cancellation
 rhs = x/y
-thing = constructunit(rhs)
+thing = MT.constructunit(rhs)
 @test isequal(rhs,thing)
-@test MT.equivalent(_get_unit(thing),_get_unit(x)/_get_unit(y))
+@test MT.equivalent(MT._get_unit(thing),MT._get_unit(x)/MT._get_unit(y))
 
 #Symbolic exponent
 rhs = x^(y/z)
-thing = constructunit(rhs)
-MT.equivalent(_get_unit(thing),(1u"m")^(10*MT.value(y/z)))
+thing = MT.constructunit(rhs)
+MT.equivalent(MT._get_unit(thing),(1u"m")^(10*MT.value(y/z)))
 @test isequal(thing,x^(10y/z))
 
 #Differential
 @variables t [unit = u"s"] x(t) [unit = u"m"]
 D = Differential(t)
 rhs = D(x)
-thing = constructunit(rhs)
+thing = MT.constructunit(rhs)
 @test isequal(thing,rhs)
-@test MT.equivalent(_get_unit(x)/_get_unit(t),_get_unit(thing))
+@test MT.equivalent(MT._get_unit(x)/MT._get_unit(t),MT._get_unit(thing))
 
 #Nested Derivatives
 rhs = D(D(x))
-thing = constructunit(rhs)
+thing = MT.constructunit(rhs)
 @test isequal(thing,rhs)
-@test MT.equivalent(_get_unit(x)/_get_unit(t)^2,_get_unit(thing))
+@test MT.equivalent(MT._get_unit(x)/MT._get_unit(t)^2,MT._get_unit(thing))
 
 #Arrays
 @variables t [unit = u"s"] x[1:3](t) [unit = u"m"]
@@ -225,34 +223,34 @@ D = Differential(t)
 eqs = D.(x) .~ v
 eqs = collect(eqs)
 rhs = eqs[1].rhs
-@test MT.equivalent(get_unit(rhs),u"m/s")
+@test MT.equivalent(MT.get_unit(rhs),u"m/s")
 
 lhs = eqs[1].lhs
-thing = constructunit(lhs)
-@test isequal(thing,lhs)
-@test MT.equivalent(_get_unit(thing),u"m/s")
+thing = MT.constructunit(lhs)
+@test MT.isequal(thing,lhs)
+@test MT.equivalent(MT._get_unit(thing),u"m/s")
 
 #Constants
 @variables  x(t) [unit = u"m"]
 eq = D(x) ~ x*10u"s^-1"
-thing = constructunit(eq.rhs)
-@test MT.equivalent(get_unit(thing), get_unit(eq.lhs))
-eq = D(x) ~ x*10u"s^-1" + 1u"m/s"
-thing = constructunit(eq.rhs)
-@test MT.equivalent(get_unit(thing), get_unit(eq.lhs))
+thing = MT.constructunit(eq.rhs)
+@test MT.equivalent(MT.get_unit(thing), MT.get_unit(eq.lhs))
+eq = D(x) ~ x*10u"s^-1" + 1u"m/s" #Not working
+thing = MT.constructunit(eq.rhs)
+@test MT.equivalent(MT.get_unit(thing), MT.get_unit(eq.lhs))
 
 #Trig functions
 @variables θ=90 [unit = u"°"]
 rhs = sin(θ)
-thing = constructunit(rhs)
+thing = MT.constructunit(rhs)
 
-fthing = functionize(thing)
+fthing = MT.functionize(thing)
 fthing(90) == sin(90u"°")
 
 #Exponential
 rhs = exp(α)
-thing = constructunit(rhs)
+thing = MT.constructunit(rhs)
 rhs = exp(x/y)
-thing = constructunit(rhs)
+thing = MT.constructunit(rhs)
 rhs = exp(x)
-@test_throws MT.ValidationError constructunit(rhs)
+@test_throws MT.ValidationError MT.constructunit(rhs)

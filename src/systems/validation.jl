@@ -2,6 +2,14 @@ struct ValidationError <: Exception
     message::String
 end
 
+function unitfactor(u,tu) #Just need to make the error type consistent
+    try
+        return Unitful.convfact(u,tu)
+    catch err
+        throw(ValidationError("Unable to convert [$tu] to [$u]"))
+    end
+end
+
 "Throw exception on invalid unit types, otherwise return argument."
 function screen_unit(result)
     result isa Unitful.Unitlike || throw(ValidationError("Unit must be a subtype of Unitful.Unitlike, not $(typeof(result))."))
@@ -41,33 +49,31 @@ struct Constant{T,M} <: SymbolicUtils.Symbolic{T}
     metadata::M
 end
 
-Constant(x) = Constant(x,Dict(VariableUnit=>Unitful.unit(x)))
+Constant(x) = Constant(x, Dict(VariableUnit => Unitful.unit(x)))
+Base.:*(x::Num, y::Unitful.Quantity) = value(x) * y
+Base.:*(x::Unitful.Quantity, y::Num) = x * value(y)
+Base.show(io::IO, v::Constant) = Base.show(io, v.val)
 
-Base.:*(x::Num,y::Unitful.Quantity) = value(x) * y
-Base.:*(x::Unitful.Quantity,y::Num) = x * value(y)
-
-Base.show(io::IO,v::Constant) = Base.show(io, v.val)
-
-Unitless = Union{typeof.([exp,log,sinh,asinh,asin,
-                                  cosh,acosh,acos,
-                                  tanh,atanh,atan,
-                                  coth,acoth,acot,
-                                  sech,asech,asec,
-                                  csch,acsch,acsc])...}
+Unitless = Union{typeof.([exp, log, sinh, asinh, asin,
+                                  cosh, acosh, acos,
+                                  tanh, atanh, atan,
+                                  coth, acoth, acot,
+                                  sech, asech, asec,
+                                  csch, acsch, acsc])...}
 isunitless(f::Unitless) = true
 
-function unitcoerce(u::Unitful.Unitlike,x) 
+function unitcoerce(u::Unitful.Unitlike, x) 
     st = constructunit(x)
     tu = _get_unit(st)
-    output = Unitful.convfact(u,tu)*st
+    output = unitfactor(u, tu) * st
     return SymbolicUtils.setmetadata(output,VariableUnit,u)
 end
 
-function constructunit(op,args) # Fallback
+function constructunit(op, args) # Fallback
     if isunitless(op)
         try
-            args = unitcoerce.(unitless,args)
-            return SymbolicUtils.setmetadata(op(args...),VariableUnit,unitless)
+            args = unitcoerce.(unitless, args)
+            return SymbolicUtils.setmetadata(op(args...), VariableUnit, unitless)
         catch err
             if err isa Unitful.DimensionError
                 argunits = get_unit.(args)
@@ -86,68 +92,68 @@ function constructunit(x)
     SymbolicUtils.istree(x) || throw(ValidationError("Primary quantity but doesn't have units: $x"))
     op = operation(x)
     if op isa Term
-        gp = getmetadata(x,Symbolics.GetindexParent,nothing) # Like x[1](t)
-        tu = getmetadata(gp, VariableUnit, unitless)
-        return SymbolicUtils.setmetadata(x,VariableUnit,tu)
+        gp = getmetadata(x, Symbolics.GetindexParent, nothing) # Like x[1](t)
+        tu = screen_unit(getmetadata(gp, VariableUnit, unitless))
+        return SymbolicUtils.setmetadata(x, VariableUnit, tu)
     end
     args = arguments(x)
-    constructunit(op,args)
+    constructunit(op, args)
 end
 
-function constructunit(op::typeof(getindex),subterms)
+function constructunit(op::typeof(getindex), subterms) #for symbolic array access
     arr = subterms[1]
     arrunit = _get_unit(arr) #It had better be there!
     output = op(subterms...)
-    return SymbolicUtils.setmetadata(output,VariableUnit,arrunit)
+    return SymbolicUtils.setmetadata(output, VariableUnit, arrunit)
 end
 
-function constructunit(op::typeof(+),subterms)
-    newterms = Vector{Any}(undef,size(subterms))
+function constructunit(op::typeof(+), subterms)
+    newterms = Vector{Any}(undef, size(subterms))
     firstunit = nothing
-    for (idx,st) in enumerate(subterms)
-        if !isequal(st,0)
+    for (idx, st) in enumerate(subterms)
+        if !isequal(st, 0)
             st = constructunit(st)
             tu = _get_unit(st)
             if firstunit === nothing
                 firstunit = tu
             end
-            newterms[idx] = Unitful.convfact(firstunit,tu)*st
+            newterms[idx] = unitfactor(firstunit, tu) * st
         end
     end
     output = +(newterms...)
-    return SymbolicUtils.setmetadata(output,VariableUnit,firstunit)
+    return SymbolicUtils.setmetadata(output, VariableUnit, firstunit)
 end
 
-Literal = Union{Sym,Symbolics.ArrayOp,Symbolics.Arr,Symbolics.CallWithMetadata}
-Conditional = Union{typeof(ifelse),typeof(IfElse.ifelse)}
+Literal = Union{Sym,Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithMetadata}
+Conditional = Union{typeof(ifelse), typeof(IfElse.ifelse)}
 Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
-Trig = Union{typeof.([sin,cos,tan,sec,csc,cot])...}
+Trig = Union{typeof.([sin, cos, tan, sec, csc, cot])...}
 
-function constructunit(op::Trig,subterms)
+function constructunit(op::Trig, subterms)
     arg = constructunit(only(subterms))
     argunit = _get_unit(arg)
-    if equivalent(argunit,u"°")
-        arg = pi/180*arg
+    if equivalent(argunit, u"°")
+        arg = pi/180 * arg
     end
-    return SymbolicUtils.setmetadata(op(arg),VariableUnit,unitless)
+    return SymbolicUtils.setmetadata(op(arg), VariableUnit, unitless)
 end
 
-function constructunit(op::Conditional,subterms)
+function constructunit(op::Conditional, subterms)
     newterms = Vector{Any}(undef, 3)
     firstunit = nothing
     newterms[1] = constructunit(subterms[1])
-    for (idx,st) in enumerate(subterms[2:3])
-        if !isequal(st,0)
+    for (idx, st) in enumerate(subterms[2:3])
+        if !isequal(st, 0)
             st = constructunit(st)
             tu = _get_unit(st)
             if firstunit === nothing
                 firstunit = tu
             end
-            newterms[idx+1] = Unitful.convfact(firstunit,tu)*st
+            newterms[idx + 1] = unitfactor(firstunit, tu) * st
         end
     end
     output = op(newterms...)
-    return SymbolicUtils.setmetadata(output,VariableUnit,firstunit)
+    return SymbolicUtils.setmetadata(output, VariableUnit, firstunit)
 end
 
 function constructunit(op::Union{Differential,Difference}, subterms)
@@ -159,44 +165,44 @@ function constructunit(op::Union{Differential,Difference}, subterms)
     return SymbolicUtils.setmetadata(output, VariableUnit, nu/du)
 end
 
-function constructunit(op::typeof(^),subterms)
+function constructunit(op::typeof(^), subterms)
     base, exponent = subterms
     base = constructunit(base)
     bu = _get_unit(base)
     exponent = constructunit(exponent)
-    exponent = Unitful.convfact(unitless,_get_unit(exponent))*exponent
+    exponent = unitfactor(unitless, _get_unit(exponent)) * exponent
     output = base^exponent
-    output_unit = exponent isa Real ? bu^exponent : (1*bu)^exponent
-    return SymbolicUtils.setmetadata(output,VariableUnit,output_unit)
+    output_unit = bu == unitless ? unitless : (exponent isa Real ? bu^exponent : (1*bu)^exponent)
+    return SymbolicUtils.setmetadata(output, VariableUnit, output_unit)
 end
 
-function constructunit(op::Comparison,subterms)
-    newterms = Vector{Any}(undef,size(subterms))
+function constructunit(op::Comparison, subterms)
+    newterms = Vector{Any}(undef, size(subterms))
     firstunit = nothing
-    for (idx,st) in enumerate(subterms)
-        if !isequal(st,0)
+    for (idx, st) in enumerate(subterms)
+        if !isequal(st, 0)
             st = constructunit(st)
             tu = _get_unit(st)
             if firstunit === nothing
                 firstunit = tu
             end
-            newterms[idx] = Unitful.convfact(firstunit,tu)*st
+            newterms[idx] = unitfactor(firstunit, tu) * st
         end
     end
     output = op(newterms...)
-    return SymbolicUtils.setmetadata(output,VariableUnit,unitless)
+    return SymbolicUtils.setmetadata(output, VariableUnit, unitless)
 end
 
-function constructunit(op::typeof(*),subterms)
-    newterms = Vector{Any}(undef,size(subterms))
+function constructunit(op::typeof(*), subterms)
+    newterms = Vector{Any}(undef, size(subterms))
     pu = unitless
-    for (idx,st) in enumerate(subterms)
+    for (idx, st) in enumerate(subterms)
         st = constructunit(st)
         pu *= _get_unit(st)
         newterms[idx] = st
     end
     output = op(newterms...)
-    return SymbolicUtils.setmetadata(output,VariableUnit,pu)
+    return SymbolicUtils.setmetadata(output, VariableUnit, pu)
 end
 
 #_has_unit(x::Equation) = getmetadata(x,VariableUnit) Doesn't work yet, equations don't have metadata.
@@ -207,53 +213,33 @@ _has_unit(x::Symbolic) = hasmetadata(x,VariableUnit)
 
 _get_unit(x::Real) = unitless
 _get_unit(x::Num) = _get_unit(value(x))
-_get_unit(x::Symbolic) = getmetadata(x,VariableUnit)
+_get_unit(x::Symbolic) = screen_unit(getmetadata(x,VariableUnit,unitless))
 
 get_unit(x) = _has_unit(x) ?  _get_unit(x) : _get_unit(constructunit(x))
 
 function functionize(pt)
     syms = Symbolics.get_variables(pt)
-    eval(build_function(constructunit(pt),syms,expression=Val{false}))
+    eval(build_function(constructunit(pt), syms, expression = Val{false}))
 end
 
-"Get unit of term, returning nothing & showing warning instead of throwing errors."
-function safe_get_unit(term, info)
-    side = nothing
-    try
-        side = get_unit(term)
-    catch err
-        if err isa Unitful.DimensionError
-            @warn("$info: $(err.x) and $(err.y) are not dimensionally compatible.")
-        elseif err isa ValidationError
-            @warn(info*err.message)
-        elseif err isa MethodError
-            @warn("$info: no method matching $(err.f) for arguments $(typeof.(err.args)).")
-        else
-            rethrow()
-        end
-    end
-    side
-end
-
-function _validate(terms::Vector, labels::Vector{String}; info::String = "")
-    valid = true
-    first_unit = nothing
-    first_label = nothing
-    for (term,label) in zip(terms,labels)
-        equnit = safe_get_unit(term, info*label)
-        if equnit === nothing
-            valid = false
-        elseif !isequal(term,0)
-            if first_unit === nothing
-                first_unit = equnit
-                first_label = label
-            elseif !equivalent(first_unit, equnit)
-                valid = false
-                @warn("$info: units [$(first_unit)] for $(first_label) and [$(equnit)] for $(label) do not match.")
+function constructunit(eq::ModelingToolkit.Equation)
+    newterms = Vector{Any}(undef,2)
+    subterms = [eq.lhs,eq.rhs]
+    firstunit = nothing
+    for (idx,st) in enumerate(subterms)
+        if !isequal(st,0)
+            st = constructunit(st)
+            tu = _get_unit(st)
+            if firstunit === nothing
+                firstunit = tu
             end
+            newterms[idx] = unitfactor(firstunit, tu) * st
+        else
+            newterms[idx] = 0
         end
     end
-    valid
+    return ~(newterms...)
+    #return SymbolicUtils.setmetadata(output,VariableUnit,firstunit) #Fix this once Symbolics.jl Equations accept units
 end
 
 function validate(jump::Union{ModelingToolkit.VariableRateJump, ModelingToolkit.ConstantRateJump}, t::Symbolic; info::String = "")
@@ -282,7 +268,6 @@ validate(eq::ModelingToolkit.Equation, term::Union{Symbolic,Unitful.Quantity,Num
 validate(eq::ModelingToolkit.Equation, terms::Vector; info::String = "") = _validate(vcat([eq.lhs, eq.rhs], terms), vcat(["left", "right"], "noise  #".*string.(1:length(terms))), info = info)
 
 "Returns true iff units of equations are valid."
-validate(eqs::Vector; info::String = "") = all([validate(eqs[idx], info = info*" in eq. #$idx") for idx in 1:length(eqs)])
 validate(eqs::Vector, noise::Vector; info::String = "") = all([validate(eqs[idx], noise[idx], info = info*" in eq. #$idx") for idx in 1:length(eqs)])
 validate(eqs::Vector, noise::Matrix; info::String = "") = all([validate(eqs[idx], noise[idx, :], info = info*" in eq. #$idx") for idx in 1:length(eqs)])
 validate(eqs::Vector, term::Symbolic; info::String = "") = all([validate(eqs[idx], term, info = info*" in eq. #$idx") for idx in 1:length(eqs)])
@@ -290,4 +275,19 @@ validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term,"") !== no
 
 "Throws error if units of equations are invalid."
 check_units(eqs...) = validate(eqs...) || throw(ValidationError("Some equations had invalid units. See warnings for details."))
-all_dimensionless(states) = all(map(x->safe_get_unit(x,"") in (unitless,nothing),states))
+function rewrite_units(eqs::Vector) #Should be vector of equations, but hard to check that
+    output = similar(eqs)
+    allgood = true
+    for (idx, eq) in enumerate(eqs)
+        try
+            output[idx] = constructunit(eq)
+        catch err
+            allgood = false
+            err isa ValidationError ? @warn("in eq [$idx], "*err.message) : rethrow(err)
+        end
+    end
+    allgood || throw(ValidationError("Some sequations had invalid units. See warnings for details."))
+    return output
+end
+
+all_dimensionless(states) = all(map(x->_get_unit(x) in (unitless,nothing),states))
