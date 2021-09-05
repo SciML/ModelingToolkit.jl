@@ -90,10 +90,10 @@ struct ODESystem <: AbstractODESystem
 
     function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface; checks::Bool = true)
         if checks
-            check_variables(dvs,iv)
-            check_parameters(ps,iv)
-            check_equations(deqs,iv)
-            if !all_dimensionless([dvs;ps;iv])
+            check_variables(dvs, iv)
+            check_parameters(ps, iv)
+            check_equations(deqs, iv)
+            if !all_dimensionless([dvs; ps; iv])
                  deqs = rewrite_units(deqs)
             end
         end

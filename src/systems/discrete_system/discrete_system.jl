@@ -58,7 +58,10 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
-            all_dimensionless([dvs;ps;iv;ctrls]) ||check_units(discreteEqs)
+            if !all_dimensionless([dvs; ps; iv; ctrls])
+                discreteEqs = rewrite_units(discreteEqs)
+                observed = rewrite_units(observed)
+            end
         end
         new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p)
     end

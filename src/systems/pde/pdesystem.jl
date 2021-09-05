@@ -61,14 +61,16 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     """
     name::Symbol
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
-                                   ps=SciMLBase.NullParameters();
-                                   defaults=Dict(),
+                                   ps = SciMLBase.NullParameters();
+                                   defaults = Dict(),
                                    connection_type = nothing,
                                    checks::Bool = true,
                                    name
                                   )
         if checks
-            all_dimensionless([dvs;ivs;ps]) ||check_units(eqs)
+            if all_dimensionless([dvs; ivs; ps]) 
+                eqs = rewrite_units(eqs)
+            end
         end
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connection_type, name)
     end

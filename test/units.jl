@@ -5,7 +5,7 @@ MT = ModelingToolkit
 @variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 
-#This is how equivalent works:
+# This is how `equivalent` works:
 @test MT.equivalent(u"MW" ,u"kJ/ms")
 @test !MT.equivalent(u"m", u"cm")
 @test MT.equivalent(MT.get_unit(P^γ), MT.get_unit((E/τ)^γ))
@@ -116,7 +116,7 @@ eqs = [L ~ v*t,
 @named sys = NonlinearSystem(eqs, [V,L], [t,r])
 sys_simple = structural_simplify(sys)
 
-#Jump System
+# Jump System
 @parameters β [unit = u"(mol^2*s)^-1"] γ [unit = u"(mol*s)^-1"] t [unit = u"s"] jumpmol [unit = u"mol"]
 @variables S(t) [unit = u"mol"] I(t) [unit = u"mol"] R(t) [unit = u"mol"]
 rate₁   = β*S*I
@@ -140,7 +140,7 @@ maj1 = MassActionJump(2*β/2, [S => 1, I => 1], [S => -1, I => 1])
 maj2 = MassActionJump(γ, [I => 1], [I => -1, R => 1])
 @named js3  = JumpSystem([maj1, maj2], t, [S,I,R], [β,γ])
 
-#Test unusual jump system
+# Test unusual jump system
 @parameters β γ t
 @variables S(t) I(t) R(t)
 
@@ -160,39 +160,39 @@ rhs = (0~y*x*z).rhs
 rrhs = MT.constructunit(rhs)
 @test MT.equivalent(MT._get_unit(rrhs),u"m*cm*mm")
 
-#With coefficients already
+# With coefficients already
 rhs = (0~y + 3x + 2z).rhs
 rrhs = MT.constructunit(rhs)
 
-#Comparison
+# Comparison
 thing = MT.constructunit(x<y)
 @test MT._get_unit(thing) == MT.unitless
 @test isequal(thing,x<1//100*y)
 
-#Conditional
+# Conditional
 rhs = IfElse.ifelse(x<y,y,x)
 thing = MT.constructunit(rhs)
 @test isequal(MT._get_unit(thing),u"cm")
 @test isequal(thing,IfElse.ifelse(x<1//100*y,y,100x))
 
-#Inverse
+# Inverse
 rhs = x^-1
 thing = MT.constructunit(rhs)
 @test MT.equivalent(MT._get_unit(thing),MT._get_unit(x)^-1)
 
-#Cancellation
+# Cancellation
 rhs = x/y
 thing = MT.constructunit(rhs)
 @test isequal(rhs,thing)
 @test MT.equivalent(MT._get_unit(thing),MT._get_unit(x)/MT._get_unit(y))
 
-#Symbolic exponent
+# Symbolic exponent
 rhs = x^(y/z)
 thing = MT.constructunit(rhs)
 MT.equivalent(MT._get_unit(thing),(1u"m")^(10*MT.value(y/z)))
 @test isequal(thing,x^(10y/z))
 
-#Differential
+# Differential
 @variables t [unit = u"s"] x(t) [unit = u"m"]
 D = Differential(t)
 rhs = D(x)
@@ -200,13 +200,13 @@ thing = MT.constructunit(rhs)
 @test isequal(thing,rhs)
 @test MT.equivalent(MT._get_unit(x)/MT._get_unit(t),MT._get_unit(thing))
 
-#Nested Derivatives
+# Nested Derivatives
 rhs = D(D(x))
 thing = MT.constructunit(rhs)
 @test isequal(thing,rhs)
 @test MT.equivalent(MT._get_unit(x)/MT._get_unit(t)^2,MT._get_unit(thing))
 
-#Arrays
+# Arrays
 @variables t [unit = u"s"] x[1:3](t) [unit = u"m"]
 @parameters v[1:3] = [1,2,3] [unit = u"m/s"]
 D = Differential(t)
@@ -220,7 +220,7 @@ thing = MT.constructunit(lhs)
 @test MT.isequal(thing,lhs)
 @test MT.equivalent(MT._get_unit(thing),u"m/s")
 
-#Constants
+# Constants
 @variables  x(t) [unit = u"m"]
 eq = D(x) ~ x*10u"s^-1"
 thing = MT.constructunit(eq.rhs)
@@ -229,7 +229,7 @@ thing = MT.constructunit(eq.rhs)
 #thing = MT.constructunit(eq.rhs)
 #@test MT.equivalent(MT.get_unit(thing), MT.get_unit(eq.lhs))
 
-#Trig functions
+# Trig functions
 @variables θ=90 [unit = u"°"]
 rhs = sin(θ)
 thing = MT.constructunit(rhs)
@@ -237,7 +237,7 @@ thing = MT.constructunit(rhs)
 fthing = MT.functionize(thing)
 @test fthing(90) == sin(90u"°")
 
-#Exponential
+# Exponential
 rhs = exp(α)
 thing = MT.constructunit(rhs)
 rhs = exp(x/y)

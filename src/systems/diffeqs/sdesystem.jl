@@ -88,10 +88,12 @@ struct SDESystem <: AbstractODESystem
 
     function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type; checks::Bool = true)
         if checks
-            check_variables(dvs,iv)
-            check_parameters(ps,iv)
-            check_equations(deqs,iv)
-            all_dimensionless([dvs;ps;iv]) || check_units(deqs,neqs)
+            check_variables(dvs, iv)
+            check_parameters(ps, iv)
+            check_equations(deqs, iv)
+            if !all_dimensionless([dvs; ps; iv])
+                deqs,neqs = rewrite_units(deqs, neqs)
+            end
         end
         new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
     end

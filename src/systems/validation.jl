@@ -70,6 +70,23 @@ function unitcoerce(u::Unitful.Unitlike, x)
     return SymbolicUtils.setmetadata(output,VariableUnit,u)
 end
 
+function constructunit(x) #This is where it all starts
+    if _has_unit(x)
+        return x
+    elseif !SymbolicUtils.istree(x) || operation(x) isa Sym # If a bare symbol doesn't have units, it's unitless
+        return SymbolicUtils.setmetadata(x, VariableUnit, unitless)
+    else
+        op = operation(x)
+        if op isa Term
+            gp = getmetadata(x, Symbolics.GetindexParent, nothing) # Like x[1](t)
+            tu = screen_unit(getmetadata(gp, VariableUnit, unitless))
+            return SymbolicUtils.setmetadata(x, VariableUnit, tu)
+        end
+        args = arguments(x)
+        constructunit(op, args)
+    end
+end
+
 function constructunit(op, args) # Fallback
     if isunitless(op)
         try
@@ -88,23 +105,6 @@ function constructunit(op, args) # Fallback
     end
 end
 
-function constructunit(x) 
-    if _has_unit(x)
-        return x
-    elseif !SymbolicUtils.istree(x) || operation(x) isa Sym # End of the line, if it doesn't have units, it's unitless
-        return SymbolicUtils.setmetadata(x, VariableUnit, unitless)
-    else
-        op = operation(x)
-        if op isa Term
-            gp = getmetadata(x, Symbolics.GetindexParent, nothing) # Like x[1](t)
-            tu = screen_unit(getmetadata(gp, VariableUnit, unitless))
-            return SymbolicUtils.setmetadata(x, VariableUnit, tu)
-        end
-        args = arguments(x)
-        constructunit(op, args)
-    end
-end
-
 function constructunit(op::typeof(getindex), subterms) #for symbolic array access
     arr = subterms[1]
     arrunit = _get_unit(arr) #It had better be there!
@@ -112,7 +112,7 @@ function constructunit(op::typeof(getindex), subterms) #for symbolic array acces
     return SymbolicUtils.setmetadata(output, VariableUnit, arrunit)
 end
 
-function constructunit(op::typeof(+), subterms)
+function uniformize(subterms)
     newterms = Vector{Any}(undef, size(subterms))
     firstunit = nothing
     for (idx, st) in enumerate(subterms)
@@ -123,10 +123,17 @@ function constructunit(op::typeof(+), subterms)
                 firstunit = tu
             end
             newterms[idx] = unitfactor(firstunit, tu) * st
+        else
+            newterms[idx] = 0
         end
     end
+    return newterms
+end
+
+function constructunit(op::typeof(+), subterms)
+    newterms = uniformize(subterms)
     output = +(newterms...)
-    return SymbolicUtils.setmetadata(output, VariableUnit, firstunit)
+    return SymbolicUtils.setmetadata(output, VariableUnit, _get_unit(newterms[1]))
 end
 
 Literal = Union{Sym,Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithMetadata}
@@ -147,18 +154,9 @@ function constructunit(op::Conditional, subterms)
     newterms = Vector{Any}(undef, 3)
     firstunit = nothing
     newterms[1] = constructunit(subterms[1])
-    for (idx, st) in enumerate(subterms[2:3])
-        if !isequal(st, 0)
-            st = constructunit(st)
-            tu = _get_unit(st)
-            if firstunit === nothing
-                firstunit = tu
-            end
-            newterms[idx + 1] = unitfactor(firstunit, tu) * st
-        end
-    end
+    newterms[2:3] = uniformize(subterms[2:3])
     output = op(newterms...)
-    return SymbolicUtils.setmetadata(output, VariableUnit, firstunit)
+    return SymbolicUtils.setmetadata(output, VariableUnit, _get_unit(newterms[2]))
 end
 
 function constructunit(op::Union{Differential,Difference}, subterms)
@@ -182,18 +180,7 @@ function constructunit(op::typeof(^), subterms)
 end
 
 function constructunit(op::Comparison, subterms)
-    newterms = Vector{Any}(undef, size(subterms))
-    firstunit = nothing
-    for (idx, st) in enumerate(subterms)
-        if !isequal(st, 0)
-            st = constructunit(st)
-            tu = _get_unit(st)
-            if firstunit === nothing
-                firstunit = tu
-            end
-            newterms[idx] = unitfactor(firstunit, tu) * st
-        end
-    end
+    newterms = uniformize(subterms)
     output = op(newterms...)
     return SymbolicUtils.setmetadata(output, VariableUnit, unitless)
 end
@@ -228,21 +215,7 @@ function functionize(pt)
 end
 
 function constructunit(eq::ModelingToolkit.Equation)
-    newterms = Vector{Any}(undef,2)
-    subterms = [eq.lhs,eq.rhs]
-    firstunit = nothing
-    for (idx,st) in enumerate(subterms)
-        if !isequal(st,0)
-            st = constructunit(st)
-            tu = _get_unit(st)
-            if firstunit === nothing
-                firstunit = tu
-            end
-            newterms[idx] = unitfactor(firstunit, tu) * st
-        else
-            newterms[idx] = 0
-        end
-    end
+    newterms = uniformize([eq.lhs,eq.rhs])
     return ~(newterms...)
     #return SymbolicUtils.setmetadata(output,VariableUnit,firstunit) #Fix this once Symbolics.jl Equations accept units
 end
@@ -279,7 +252,7 @@ validate(eqs::Vector, term::Symbolic; info::String = "") = all([validate(eqs[idx
 validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term,"") !== nothing
 
 "Throws error if units of equations are invalid."
-function rewrite_units(eqs::Vector) #Should be vector of equations, but hard to check that
+function rewrite_units(eqs::Vector{Equation})
     output = similar(eqs)
     allgood = true
     for (idx, eq) in enumerate(eqs)

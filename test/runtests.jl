@@ -1,20 +1,20 @@
 using SafeTestsets, Test
 
-@safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
-@safetestset "Variable scope tests" begin include("variable_scope.jl") end
-@safetestset "Symbolic parameters test" begin include("symbolic_parameters.jl") end
-@safetestset "Parsing Test" begin include("variable_parsing.jl") end
-@safetestset "Simplify Test" begin include("simplify.jl") end
-@safetestset "Direct Usage Test" begin include("direct.jl") end
-@safetestset "System Linearity Test" begin include("linearity.jl") end
-@safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
-@safetestset "ODESystem Test" begin include("odesystem.jl") end
-@safetestset "Unitful Quantities Test" begin include("units.jl") end
-@safetestset "LabelledArrays Test" begin include("labelledarrays.jl") end
-@safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
-@safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
-@safetestset "SDESystem Test" begin include("sdesystem.jl") end
-@safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
+# @safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
+# @safetestset "Variable scope tests" begin include("variable_scope.jl") end
+# @safetestset "Symbolic parameters test" begin include("symbolic_parameters.jl") end
+# @safetestset "Parsing Test" begin include("variable_parsing.jl") end
+# @safetestset "Simplify Test" begin include("simplify.jl") end
+# @safetestset "Direct Usage Test" begin include("direct.jl") end
+# @safetestset "System Linearity Test" begin include("linearity.jl") end
+# @safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
+# @safetestset "ODESystem Test" begin include("odesystem.jl") end
+# @safetestset "Unitful Quantities Test" begin include("units.jl") end
+# @safetestset "LabelledArrays Test" begin include("labelledarrays.jl") end
+# @safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
+# @safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
+# @safetestset "SDESystem Test" begin include("sdesystem.jl") end
+# @safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 @safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
 @safetestset "ControlSystem Test" begin include("controlsystem.jl") end

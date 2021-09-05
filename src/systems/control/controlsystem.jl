@@ -78,7 +78,10 @@ struct ControlSystem <: AbstractControlSystem
             check_parameters(ps, iv)
             check_equations(deqs, iv)
             check_equations(observed, iv)
-            all_dimensionless([dvs;ps;controls;iv]) || check_units(deqs)
+            if !all_dimensionless([dvs; ps; controls; iv])
+                deqs = rewrite_units(deqs)
+                observed = rewrite_units(observed)
+            end
         end
         new(loss, deqs, iv, dvs, controls, ps, observed, name, systems, defaults)
     end

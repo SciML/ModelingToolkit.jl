@@ -43,10 +43,12 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     defaults::Dict
     function OptimizationSystem(op, states, ps, var_to_name, observed, equality_constraints, inequality_constraints, name, systems, defaults; checks::Bool = true)
         if checks
-            check_units(op)
-            check_units(observed)
-            check_units(equality_constraints)
-            all_dimensionless([states;ps]) || check_units(inequality_constraints)
+            if !all_dimensionless([states; ps])
+                inequality_constraints = rewrite_units(inequality_constraints)
+                equality_constraints = rewrite_units(equality_constraints)
+                observed = rewrite_units(observed)
+                op = rewrite_units(op)
+            end
         end
         new(op, states, ps, var_to_name, observed, equality_constraints, inequality_constraints, name, systems, defaults)
     end
