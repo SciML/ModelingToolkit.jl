@@ -150,3 +150,23 @@ maj1 = MassActionJump(2.0, [0 => 1], [S => 1])
 maj2 = MassActionJump(γ, [S => 1], [S => -1])
 @named js4  = JumpSystem([maj1, maj2], t, [S], [β, γ])
 
+# Rewriting
+@variables t [unit = u"ms"] P(t) [unit = u"MW"] E(t) [unit = u"J"] 
+@parameters τ [unit = u"ms"] γ 
+D = Differential(t)
+eqs = [D(E) ~ P - E/τ]
+@test_throws MT.ValidationError MT.get_unit(eqs[1].rhs)
+neweqs = MT.rewrite_units(eqs)
+@named sys = ODESystem(neweqs)
+equations(sys)
+
+@test MT.get_unit(t/τ) == MT._get_unit(MT.constructunit(t/τ))
+@test MT.get_unit(2^(t/τ)) == MT._get_unit(MT.constructunit(2^(t/τ)))
+@test MT.equivalent(MT.get_unit(t^γ), MT._get_unit(MT.constructunit(t^γ)))
+@test MT.get_unit(sin(γ)) == MT._get_unit(MT.sin(γ))
+@test MT.get_unit(sqrt(E)) == MT._get_unit(MT.constructunit(sqrt(E)))
+@test MT.get_unit(exp(γ)) == MT._get_unit(MT.exp(γ))
+
+@variables E(t) [unit = u"kJ"]
+@test MT.get_unit(IfElse.ifelse(t<τ,E/τ,P)) == MT._get_unit(MT.constructunit(IfElse.ifelse(t<τ,E/τ,P)))
+@test_throws MT.ValidationError MT.constructunit(E+τ)
