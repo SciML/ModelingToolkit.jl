@@ -19,7 +19,7 @@ function functionize(pt)
 end
 
 "Represent a constant as a Symbolic (esp. for lifting units to metadata level)."
-struct Constant{T,M} <: SymbolicUtils.Symbolic{T}
+struct Constant{T, M} <: SymbolicUtils.Symbolic{T}
     val::T
     metadata::M
 end
@@ -37,20 +37,39 @@ Unitless = Union{typeof.([exp, log, sinh, asinh, asin,
                                   csch, acsch, acsc])...}
 isunitless(f::Unitless) = true
 
+#Should run this at the end of @variables and @parameters
+set_unitless(x::Vector) = [_has_unit(y) ? y : SymbolicUtils.setmetadata(y,VariableUnit,unitless) for y in x]
+
 "Convert symbolic expression `x` to have units `u` if possible."
 function unitcoerce(u::Unitful.Unitlike, x::Symbolic)
     st =  _has_unit(x) ? x : constructunit(x)
     tu = _get_unit(st)
     output = unitfactor(u, tu) * st
-    return SymbolicUtils.setmetadata(output,VariableUnit,u)
+    return SymbolicUtils.setmetadata(output, VariableUnit, u)
 end
 
-#Should run this at the end of @variables and @parameters
-set_unitless(x::Vector) = [_has_unit(y) ? y : SymbolicUtils.setmetadata(y,VariableUnit,unitless) for y in x]
+"Convert a set of expressions to a common unit, defined by the first dimensional quantity encountered."
+function uniformize(subterms)
+    newterms = Vector{Any}(undef, size(subterms))
+    firstunit = nothing
+    for (idx, st) in enumerate(subterms)
+        if !isequal(st, 0)
+            st = constructunit(st)
+            tu = _get_unit(st)
+            if firstunit === nothing
+                firstunit = tu
+            end
+            newterms[idx] = unitfactor(firstunit, tu) * st
+        else
+            newterms[idx] = 0
+        end
+    end
+    return newterms
+end
 
 constructunit(x::Num) = constructunit(value(x))
 function constructunit(x::Unitful.Quantity)
-    return Constant(x.val,Dict(VariableUnit=>Unitful.unit(x)))
+    return Constant(x.val, Dict(VariableUnit => Unitful.unit(x)))
 end
 
 function constructunit(x) #This is where it all starts
@@ -89,27 +108,9 @@ end
 
 function constructunit(op::typeof(getindex), subterms) #for symbolic array access
     arr = subterms[1]
-    arrunit = _get_unit(arr) #It had better be there!
+    arrunit = _get_unit(arr)
     output = op(subterms...)
     return SymbolicUtils.setmetadata(output, VariableUnit, arrunit)
-end
-
-function uniformize(subterms)
-    newterms = Vector{Any}(undef, size(subterms))
-    firstunit = nothing
-    for (idx, st) in enumerate(subterms)
-        if !isequal(st, 0)
-            st = constructunit(st)
-            tu = _get_unit(st)
-            if firstunit === nothing
-                firstunit = tu
-            end
-            newterms[idx] = unitfactor(firstunit, tu) * st
-        else
-            newterms[idx] = 0
-        end
-    end
-    return newterms
 end
 
 function constructunit(op::typeof(+), subterms)
@@ -173,7 +174,7 @@ function constructunit(op::typeof(*), subterms)
 end
 
 function constructunit(eq::ModelingToolkit.Equation)
-    newterms = uniformize([eq.lhs,eq.rhs])
+    newterms = uniformize([eq.lhs, eq.rhs])
     return ~(newterms...)
     #return SymbolicUtils.setmetadata(output,VariableUnit,firstunit) #Fix this once Symbolics.jl Equations accept units
 end

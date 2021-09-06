@@ -7,6 +7,7 @@ end
 
 "Throw exception on invalid unit types, otherwise return argument."
 function screen_unit(result)
+    result isa Symbolic && return result #For cases like P^γ where base is unitful, exponent is symbolic but dimensionless
     result isa Unitful.Unitlike || throw(ValidationError("Unit must be a subtype of Unitful.Unitlike, not $(typeof(result))."))
     result isa Unitful.ScalarUnits || throw(ValidationError("Non-scalar units such as $result are not supported. Use a scalar unit instead."))
     result == u"°" && throw(ValidationError("Degrees are not supported. Use radians instead."))
