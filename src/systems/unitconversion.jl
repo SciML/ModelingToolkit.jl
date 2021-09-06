@@ -78,11 +78,6 @@ function constructunit(x) #This is where it all starts
         return SymbolicUtils.setmetadata(x, VariableUnit, maybeunit)
     else # Something needs to be rewritten
         op = operation(x)
-        if op isa Term
-            gp = getmetadata(x, Symbolics.GetindexParent, nothing) # Like x[1](t)
-            tu = screen_unit(getmetadata(gp, VariableUnit, unitless))
-            return SymbolicUtils.setmetadata(x, VariableUnit, tu)
-        end
         args = arguments(x)
         constructunit(op, args)
     end
@@ -104,13 +99,6 @@ function constructunit(op, args) # Fallback
     else
         throw(ValidationError("Unknown function $op supplied with $args with units $argunits"))
     end
-end
-
-function constructunit(op::typeof(getindex), subterms) #for symbolic array access
-    arr = subterms[1]
-    arrunit = _get_unit(arr)
-    output = op(subterms...)
-    return SymbolicUtils.setmetadata(output, VariableUnit, arrunit)
 end
 
 function constructunit(op::typeof(+), subterms)
