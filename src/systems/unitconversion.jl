@@ -54,11 +54,10 @@ function constructunit(x::Unitful.Quantity)
 end
 
 function constructunit(x) #This is where it all starts
-    if _has_unit(x)
-        return x
-    elseif !SymbolicUtils.istree(x) || operation(x) isa Sym # If a bare symbol doesn't have units, it's unitless
-        return SymbolicUtils.setmetadata(x, VariableUnit, unitless)
-    else
+    maybeunit = safe_get_unit(x,"")
+    if maybeunit !== nothing
+        return SymbolicUtils.setmetadata(x, VariableUnit, maybeunit)
+    else # Something needs to be rewritten
         op = operation(x)
         if op isa Term
             gp = getmetadata(x, Symbolics.GetindexParent, nothing) # Like x[1](t)
