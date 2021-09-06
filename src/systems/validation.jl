@@ -33,6 +33,16 @@ Literal = Union{Sym,Symbolics.ArrayOp,Symbolics.Arr,Symbolics.CallWithMetadata}
 Conditional = Union{typeof(ifelse),typeof(IfElse.ifelse)}
 Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
 
+#Underscore methods are 'dumb': they only look at the outermost object to see if it has units, they don't traverse the expression tree.
+#_has_unit(x::Equation) = getmetadata(x,VariableUnit) Doesn't work yet, equations don't have metadata.
+_has_unit(x::Real) = true
+_has_unit(x::Num) = _has_unit(value(x))
+_has_unit(x::Symbolic) = hasmetadata(x,VariableUnit)
+
+_get_unit(x::Real) = unitless
+_get_unit(x::Num) = _get_unit(value(x))
+_get_unit(x::Symbolic) = screen_unit(getmetadata(x,VariableUnit,unitless))
+
 "Find the unit of a symbolic item."
 get_unit(x::Real) = unitless
 get_unit(x::Unitful.Quantity) = screen_unit(Unitful.unit(x))
@@ -42,6 +52,7 @@ get_unit(x::Literal) = screen_unit(getmetadata(x,VariableUnit, unitless))
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
 get_unit(op::Difference, args) =   get_unit(args[1]) / get_unit(op.t)
 get_unit(op::typeof(getindex),args) = get_unit(args[1])
+
 function get_unit(op,args) # Fallback
     result = op(1 .* get_unit.(args)...)
     try
@@ -106,6 +117,7 @@ function get_unit(op::Comparison, args)
 end
 
 function get_unit(x::Symbolic)
+    _has_unit(x) && return _get_unit(x) #Easy out, if the tree has already been traversed by constructunit
     if SymbolicUtils.istree(x)
         op = operation(x)
         if op isa Sym || (op isa Term && operation(op) isa Term) # Dependent variables, not function calls
@@ -116,7 +128,7 @@ function get_unit(x::Symbolic)
         end  # Actual function calls:
         args = arguments(x)
         return get_unit(op, args)
-    else # This function should only be reached by Terms, for which `istree` is true
+    else # This method should only be reached by Terms, for which `istree` is true, so this branch should never happen:
         throw(ArgumentError("Unsupported value $x."))
     end
 end

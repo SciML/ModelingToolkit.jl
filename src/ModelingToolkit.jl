@@ -136,6 +136,7 @@ include("systems/pde/pdesystem.jl")
 
 include("systems/discrete_system/discrete_system.jl")
 include("systems/validation.jl")
+include("systems/unitconversion.jl")
 include("systems/dependency_graphs.jl")
 include("systems/systemstructure.jl")
 using .SystemStructures
@@ -174,7 +175,7 @@ export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variables, independent_variable, states, parameters, equations, controls, observed, structure
-export structural_simplify
+export structural_simplify, rewrite_units
 export DiscreteSystem, DiscreteProblem
 
 export calculate_jacobian, generate_jacobian, generate_function
