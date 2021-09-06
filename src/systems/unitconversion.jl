@@ -2,11 +2,7 @@
 function unitfactor(u, t)
     try
         cf = Unitful.convfact(u, t)
-        if cf == 1
-            1
-        else
-            Constant(cf*u/t)
-        end
+        return cf == 1 ? 1 : Constant(cf*u/t)
     catch err
         throw(ValidationError("Unable to convert [$t] to [$u]"))
     end
