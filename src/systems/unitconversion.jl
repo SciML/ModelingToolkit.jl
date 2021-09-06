@@ -173,7 +173,7 @@ function constructunit(eq::ModelingToolkit.Equation)
 end
 
 "Rewrite a set of equations by inserting appropriate unit conversion factors."
-function rewrite_units(eqs::Vector{Equation})
+function rewrite_units(eqs::Vector{Equation}; debug = false)
     output = similar(eqs)
     allgood = true
     for (idx, eq) in enumerate(eqs)
@@ -181,7 +181,7 @@ function rewrite_units(eqs::Vector{Equation})
             output[idx] = constructunit(eq)
         catch err
             allgood = false
-            err isa ValidationError ? @warn("in eq [$idx], "*err.message) : rethrow(err)
+            err isa ValidationError && !debug ? @warn("in eq [$idx], "*err.message) : rethrow(err)
         end
     end
     allgood || throw(ValidationError("Some equations had invalid units. See warnings for details."))
