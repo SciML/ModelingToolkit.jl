@@ -148,6 +148,13 @@ function constructunit(op::typeof(^), subterms)
     return SymbolicUtils.setmetadata(output, VariableUnit, output_unit)
 end
 
+Root = Union{typeof(sqrt),typeof(cbrt)}
+function constructunit(op::Root,args)
+    arg = constructunit(only(args))
+    argunit = _get_unit(arg)
+    return SymbolicUtils.setmetadata(op(arg), VariableUnit, op(argunit))
+end
+
 function constructunit(op::Comparison, subterms)
     newterms = uniformize(subterms)
     output = op(newterms...)
