@@ -119,16 +119,6 @@ function constructunit(op::typeof(+), subterms)
     return SymbolicUtils.setmetadata(output, VariableUnit, _get_unit(newterms[1]))
 end
 
-Trig = Union{typeof.([sin, cos, tan, sec, csc, cot])...}
-function constructunit(op::Trig, subterms)
-    arg = constructunit(only(subterms))
-    argunit = _get_unit(arg)
-    if equivalent(argunit, u"°")
-        arg = pi/180 * arg
-    end
-    return SymbolicUtils.setmetadata(op(arg), VariableUnit, unitless)
-end
-
 function constructunit(op::Conditional, subterms)
     newterms = Vector{Any}(undef, 3)
     firstunit = nothing
