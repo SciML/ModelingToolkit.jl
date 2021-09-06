@@ -18,7 +18,7 @@ eqs = [next_x ~ σ*(y-x),
        next_y ~ x*(ρ-z)-y,
        next_z ~ x*y - β*z]
 
-de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β])
+@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β])
 ```
 """
 struct DiscreteSystem <: AbstractTimeDependentSystem

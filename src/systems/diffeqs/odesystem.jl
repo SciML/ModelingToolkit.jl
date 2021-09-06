@@ -19,7 +19,7 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-de = ODESystem(eqs,t,[x,y,z],[σ,ρ,β])
+@named de = ODESystem(eqs,t,[x,y,z],[σ,ρ,β])
 ```
 """
 struct ODESystem <: AbstractODESystem
