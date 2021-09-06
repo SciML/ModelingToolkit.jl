@@ -1,9 +1,12 @@
 "Wrapper for Unitful.convfact that returns a Constant & throws ValidationError instead of DimensionError."
-function unitfactor(u,t)
-    println("u: ",u)
-    println("t: ",t)
+function unitfactor(u, t)
     try
-        return Unitful.convfact(u,t) #Constant(Unitful.convfact(u,t)*u/t)
+        cf = Unitful.convfact(u, t)
+        if cf == 1
+            1
+        else
+            Constant(cf*u/t)
+        end
     catch err
         throw(ValidationError("Unable to convert [$t] to [$u]"))
     end
