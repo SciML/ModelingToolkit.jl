@@ -42,6 +42,8 @@ get_unit(x::Literal) = screen_unit(getmetadata(x,VariableUnit, unitless))
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
 get_unit(op::Difference, args) =   get_unit(args[1]) / get_unit(op.t)
 get_unit(op::typeof(getindex),args) = get_unit(args[1])
+get_unit(x::typeof(SciMLBase.NullParameters)) = unitless
+
 function get_unit(op,args) # Fallback
     result = op(1 .* get_unit.(args)...)
     try
