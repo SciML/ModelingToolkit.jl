@@ -101,16 +101,17 @@ end
 
 function ODESystem(
                    deqs::AbstractVector{<:Equation}, iv, dvs, ps;
-                   controls  = Num[],
-                   observed = Num[],
-                   systems = ODESystem[],
+                   controls=Num[],
+                   observed=Num[],
+                   systems=ODESystem[],
                    name=nothing,
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
                    preface=nothing,
-                   checks = true,
+                   checks=true,
+                   autodetect=false,
                   )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = collect(deqs)
@@ -121,15 +122,17 @@ function ODESystem(
     ps′ = value.(scalarize(ps))
     ctrl′ = value.(scalarize(controls))
 
+    if autodetect
+        sys = ODESystem(deqs, iv; name=name)
+        dvs′ = union(states(sys), dvs′)
+        ps′ = union(parameters(sys), ps′)
+    end
+
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ODESystem, force=true)
     end
     defaults = todict(defaults)
     defaults = Dict{Any,Any}(value(k) => value(v) for (k, v) in pairs(defaults))
-
-    iv′ = value(scalarize(iv))
-    dvs′ = value.(scalarize(dvs))
-    ps′ = value.(scalarize(ps))
 
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
