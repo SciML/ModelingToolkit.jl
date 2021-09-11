@@ -73,6 +73,15 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y*t,
        D(z) ~ x*y - β*z]
 @named de = ODESystem(eqs)
+# Force autodetection
+@variables extra_state(t)
+@parameters extra_parameters
+@named de2 = ODESystem(eqs, t, [extra_state], [extra_parameters], autodetect=true)
+# states should always be unwrapped.
+@test typeof(states(de)) == typeof(map(Symbolics.unwrap, states(de)))
+@test typeof(parameters(de)) == typeof(map(Symbolics.unwrap, parameters(de)))
+@test Set([Symbolics.unwrap(extra_state); states(de)]) == Set(states(de2))
+@test Set([Symbolics.unwrap(extra_parameters); parameters(de)]) == Set(parameters(de2))
 ModelingToolkit.calculate_tgrad(de)
 
 tgrad_oop, tgrad_iip = eval.(ModelingToolkit.generate_tgrad(de))
