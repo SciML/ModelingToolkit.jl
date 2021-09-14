@@ -9,18 +9,24 @@ Units may assigned with the following syntax.
 ```julia
 using ModelingToolkit, Unitful
 @variables t [unit = u"s"] x(t) [unit = u"m"] g(t) w(t) [unit = "Hz"]
-#Or,
+
 @variables(t, [unit = u"s"], x(t), [unit = u"m"], g(t), w(t), [unit = "Hz"])
-#Or,
+
 @variables(begin
 t, [unit = u"s"],
 x(t), [unit = u"m"],
 g(t),
 w(t), [unit = "Hz"]
 end)
+
+# Simultaneously set default value (use plain numbers, not quantities)
+@variable x=10 [unit = u"m"]
+
+# Symbolic array: unit applies to all elements
+@variable x[1:3] [unit = u"m"]
 ```
 
-Do not use `quantities` such as `1u"s"` or `1/u"s"` or `u"1/s"` as these will result in errors; instead use `u"s"` or `u"s^1"`. 
+Do not use `quantities` such as  `1u"s"`, `1/u"s"` or `u"1/s"` as these will result in errors; instead use `u"s"`, `u"s^-1"`, or `u"s"^-1`. 
 
 ## Unit Validation & Inspection
 
@@ -62,8 +68,38 @@ eqs = eqs = [D(E) ~ P - E/τ,
                 0 ~ P       ]
 ModelingToolkit.validate(eqs) #Returns false while displaying a warning message
 ```
+## User-Defined Registered Functions and Types
 
-## `Unitful` Literals & User-Defined Functions
+In order to validate user-defined types and `register`ed functions, specialize `get_unit`.  Single-parameter calls to `get_unit`
+expect an object type, while two-parameter calls expect a function type as the first argument, and a vector of arguments as the 
+second argument.
+
+```julia
+using ModelingToolkit
+# Composite type parameter in registered function
+@parameters t
+D = Differential(t)
+struct NewType
+    f
+end
+@register dummycomplex(complex::Num, scalar)
+dummycomplex(complex, scalar) = complex.f - scalar
+
+c = NewType(1)
+MT.get_unit(x::NewType) = MT.get_unit(x.f)
+function MT.get_unit(op::typeof(dummycomplex),args)
+    argunits = MT.get_unit.(args)
+    MT.get_unit(-,args)
+end
+
+sts = @variables a(t)=0 [unit = u"cm"]
+ps = @parameters s=-1 [unit = u"cm"] c=c [unit = u"cm"]
+eqs = [D(a) ~ dummycomplex(c, s);]
+sys = ODESystem(eqs, t, [sts...;], [ps...;], name=:sys)
+sys_simple = structural_simplify(sys)
+```
+
+## `Unitful` Literals
 
 In order for a function to work correctly during both validation & execution, the function must be unit-agnostic. That is, no unitful literals may be used. Any unitful quantity must either be a `parameter` or `variable`. For example, these equations will not validate successfully. 
 

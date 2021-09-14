@@ -18,7 +18,7 @@ eqs = [next_x ~ σ*(y-x),
        next_y ~ x*(ρ-z)-y,
        next_z ~ x*y - β*z]
 
-de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β])
+@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β])
 ```
 """
 struct DiscreteSystem <: AbstractTimeDependentSystem
@@ -58,7 +58,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
-            check_units(discreteEqs)
+            all_dimensionless([dvs;ps;iv;ctrls]) ||check_units(discreteEqs)
         end
         new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p)
     end

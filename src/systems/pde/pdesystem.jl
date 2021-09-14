@@ -31,7 +31,7 @@ bcs = [u(t,0) ~ 0.,# for all t > 0
 domains = [t ∈ (0.0,1.0),
            x ∈ (0.0,1.0)]
 
-pde_system = PDESystem(eq,bcs,domains,[t,x],[u])
+@named pde_system = PDESystem(eq,bcs,domains,[t,x],[u])
 ```
 """
 struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
@@ -68,7 +68,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                                    name
                                   )
         if checks
-            check_units(eqs)
+            all_dimensionless([dvs;ivs;ps]) ||check_units(eqs)
         end
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connection_type, name)
     end

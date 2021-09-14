@@ -379,6 +379,8 @@ function namespace_expr(O, sys) where {T}
         else
             similarterm(O, operation(O), renamed)
         end
+    elseif O isa Array
+        map(Base.Fix2(namespace_expr, sys), O)
     else
         O
     end
@@ -574,9 +576,9 @@ function toexpr(sys::AbstractSystem)
         iv = get_iv(sys)
         ivname = gensym(:iv)
         push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
-        push!(stmt, :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name, name=$name)))
+        push!(stmt, :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name, name = $name, checks = false)))
     elseif sys isa NonlinearSystem
-        push!(stmt, :($NonlinearSystem($eqs_name, $stsname, $psname; defaults = $defs_name, name=$name)))
+        push!(stmt, :($NonlinearSystem($eqs_name, $stsname, $psname; defaults = $defs_name, name = $name, checks = false)))
     end
 
     striplines(expr) # keeping the line numbers is never helpful
@@ -946,7 +948,7 @@ by default.
 function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys))
     T = SciMLBase.parameterless_type(basesys)
     ivs = independent_variables(basesys)
-    if !(typeof(sys) <: T)
+    if !(sys isa T)
         if length(ivs) == 0
             sys = convert_system(T, sys)
         elseif length(ivs) == 1
@@ -956,11 +958,11 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameo
         end
     end
 
-    eqs = union(equations(basesys), equations(sys))
-    sts = union(states(basesys), states(sys))
-    ps = union(parameters(basesys), parameters(sys))
-    obs = union(observed(basesys), observed(sys))
-    defs = merge(defaults(basesys), defaults(sys)) # prefer `sys`
+    eqs = union(get_eqs(basesys), get_eqs(sys))
+    sts = union(get_states(basesys), get_states(sys))
+    ps = union(get_ps(basesys), get_ps(sys))
+    obs = union(get_observed(basesys), get_observed(sys))
+    defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
     syss = union(get_systems(basesys), get_systems(sys))
 
     if length(ivs) == 0
@@ -982,7 +984,7 @@ function compose(sys::AbstractSystem, systems::AbstractArray{<:AbstractSystem}; 
     nsys = length(systems)
     nsys >= 1 || throw(ArgumentError("There must be at least 1 subsystem. Got $nsys subsystems."))
     @set! sys.name = name
-    @set! sys.systems = systems
+    @set! sys.systems = [get_systems(sys); systems]
     return sys
 end
 compose(syss::AbstractSystem...; name=nameof(first(syss))) = compose(first(syss), collect(syss[2:end]); name=name)

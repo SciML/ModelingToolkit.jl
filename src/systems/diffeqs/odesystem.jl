@@ -19,7 +19,7 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-de = ODESystem(eqs,t,[x,y,z],[σ,ρ,β])
+@named de = ODESystem(eqs,t,[x,y,z],[σ,ρ,β])
 ```
 """
 struct ODESystem <: AbstractODESystem
@@ -93,7 +93,7 @@ struct ODESystem <: AbstractODESystem
             check_variables(dvs,iv)
             check_parameters(ps,iv)
             check_equations(deqs,iv)
-            check_units(deqs)
+            all_dimensionless([dvs;ps;iv]) ||check_units(deqs)
         end
         new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface)
     end
@@ -125,7 +125,7 @@ function ODESystem(
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ODESystem, force=true)
     end
     defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    defaults = Dict{Any,Any}(value(k) => value(v) for (k, v) in pairs(defaults))
 
     iv′ = value(scalarize(iv))
     dvs′ = value.(scalarize(dvs))
@@ -187,6 +187,7 @@ end
 
 # NOTE: equality does not check cached Jacobian
 function Base.:(==)(sys1::ODESystem, sys2::ODESystem)
+    sys1 === sys2 && return true
     iv1 = get_iv(sys1)
     iv2 = get_iv(sys2)
     isequal(iv1, iv2) &&
@@ -210,6 +211,7 @@ function flatten(sys::ODESystem)
                          observed=observed(sys),
                          defaults=defaults(sys),
                          name=nameof(sys),
+                         checks = false,
                         )
     end
 end
@@ -321,5 +323,5 @@ function convert_system(::Type{<:ODESystem}, sys, t; name=nameof(sys))
     sub = Base.Fix2(substitute, varmap)
     neweqs = map(sub, equations(sys))
     defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
-    return ODESystem(neweqs, t, newsts, parameters(sys); defaults=defs, name=name)
+    return ODESystem(neweqs, t, newsts, parameters(sys); defaults=defs, name=name,checks=false)
 end
