@@ -40,11 +40,15 @@ simpexpr = [
  :($(+)($(*)(x, y), $(*)(-1, z, β)))
 ]
 
+σ, β, ρ = 2//3, 3//4, 4//5
+x, y, z = 6//7, 7//8, 8//9
 for i in 1:3
-   @test ModelingToolkit.toexpr.(eqs)[i] == simpexpr[i]
-   @test ModelingToolkit.toexpr.(eqs)[i] == simpexpr[i]
+    @test eval(ModelingToolkit.toexpr.(eqs)[i]) == eval(simpexpr[i])
+    @test eval(ModelingToolkit.toexpr.(eqs)[i]) == eval(simpexpr[i])
 end
 
+@parameters t σ ρ β
+@variables x y z
 ∂ = ModelingToolkit.jacobian(eqs,[x,y,z])
 for i in 1:3
     ∇ = ModelingToolkit.gradient(eqs[i],[x,y,z])
