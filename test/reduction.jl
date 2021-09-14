@@ -212,7 +212,7 @@ nlprob = NonlinearProblem(reducedsys, u0, pp)
 reducedsol = solve(nlprob, NewtonRaphson())
 residual = fill(100.0, length(states(reducedsys)))
 nlprob.f(residual, reducedsol.u, pp)
-@test hypot(nlprob.f.observed(u2, reducedsol.u, pp), nlprob.f.observed(u1, reducedsol.u, pp)) * pp ≈ reducedsol.u atol=1e-9
+@test hypot(nlprob.f.observed(u2, reducedsol.u, pp), nlprob.f.observed(u1, reducedsol.u, pp)) * pp[1] ≈ nlprob.f.observed(u3, reducedsol.u, pp) atol=1e-9
 
 @test all(x->abs(x) < 1e-5, residual)
 
