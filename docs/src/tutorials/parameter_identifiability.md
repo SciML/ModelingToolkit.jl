@@ -158,7 +158,7 @@ to_check = [b, c]
 ode = ODESystem(eqs, t, name=:GoodwinOsc)
 
 global_id = assess_identifiability(ode, to_check, 0.9)
-            # Dict{Nemo.fmpq_mpoly, Symbol} with 2 entries:
+            # Dict{Num, Symbol} with 2 entries:
             #   b => :globally
             #   c => :globally
 ```
