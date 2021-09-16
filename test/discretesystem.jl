@@ -40,13 +40,21 @@ sol_map = solve(prob_map,FunctionMap());
 Diff = Difference(t; dt=0.1)
 @variables S(t)=990.0 I(t)=10.0 R(t)=0.0
 
-@named sys = DiscreteSystem(eqs; controls = [β, γ])
+infection2 = rate_to_proportion(β*c*I/(S+I+R),δt)*S
+recovery2 = rate_to_proportion(γ,δt)*I
+
+eqs2 = [D(S) ~ S-infection2,
+       D(I) ~ I+infection2-recovery2,
+       D(R) ~ R+recovery2]
+
+@named sys = DiscreteSystem(eqs2; controls = [β, γ])
 @test ModelingToolkit.defaults(sys) != Dict()
 
 prob_map2 = DiscreteProblem(sys,[],tspan)
 sol_map2 = solve(prob_map,FunctionMap());
 
-@test sol_map == sol_map2
+@test sol_map.u == sol_map2.u
+@test sol_map.prob.p == sol_map2.prob.p
 
 # Direct Implementation
 
