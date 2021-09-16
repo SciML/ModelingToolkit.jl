@@ -45,22 +45,17 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     systems::Vector{DiscreteSystem}
     """
-    default_u0: The default initial conditions to use when initial conditions
-    are not supplied in `DiscreteSystem`.
+    defaults: The default values to use when initial conditions and/or
+    parameters are not supplied in `DiscreteProblem`.
     """
-    default_u0::Dict
-    """
-    default_p: The default parameters to use when parameters are not supplied
-    in `DiscreteSystem`.
-    """
-    default_p::Dict
-    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p; checks::Bool = true)
+    defaults::Dict
+    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults; checks::Bool = true)
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             all_dimensionless([dvs;ps;iv;ctrls]) ||check_units(discreteEqs)
         end
-        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p)
+        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults)
     end
 end
 
@@ -88,7 +83,7 @@ function DiscreteSystem(
     ctrl′ = value.(controls)
 
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ODESystem, force=true)
+        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :DiscreteSystem, force=true)
     end
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
@@ -101,7 +96,46 @@ function DiscreteSystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, default_u0, default_p, kwargs...)
+    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, defaults, kwargs...)
+end
+
+
+function DiscreteSystem(eqs, iv=nothing; kwargs...)
+    eqs = collect(eqs)
+    # NOTE: this assumes that the order of algebric equations doesn't matter
+    diffvars = OrderedSet()
+    allstates = OrderedSet()
+    ps = OrderedSet()
+    # reorder equations such that it is in the form of `diffeq, algeeq`
+    diffeq = Equation[]
+    algeeq = Equation[]
+    # initial loop for finding `iv`
+    if iv === nothing
+        for eq in eqs
+            if !(eq.lhs isa Number) # assume eq.lhs is either Differential or Number
+                iv = iv_from_nested_difference(eq.lhs)
+                break
+            end
+        end
+    end
+    iv = value(iv)
+    iv === nothing && throw(ArgumentError("Please pass in independent variables."))
+    for eq in eqs
+        collect_vars_difference!(allstates, ps, eq.lhs, iv)
+        collect_vars_difference!(allstates, ps, eq.rhs, iv)
+        if isdifferenceeq(eq)
+            diffvar, _ = var_from_nested_difference(eq.lhs)
+            isequal(iv, iv_from_nested_difference(eq.lhs)) || throw(ArgumentError("A DiscreteSystem can only have one independent variable."))
+            diffvar in diffvars && throw(ArgumentError("The difference variable $diffvar is not unique in the system of equations."))
+            push!(diffvars, diffvar)
+            push!(diffeq, eq)
+        else
+            push!(algeeq, eq)
+        end
+    end
+    algevars = setdiff(allstates, diffvars)
+    # the orders here are very important!
+    return DiscreteSystem(append!(diffeq, algeeq), iv, vcat(collect(diffvars), collect(algevars)), ps; kwargs...)
 end
 
 """
@@ -118,16 +152,37 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     ps = parameters(sys)
     eqs = equations(sys)
     eqs = linearize_eqs(sys, eqs)
-    # defs = defaults(sys)
-    t = get_iv(sys)
-    u0 = varmap_to_vars(u0map,dvs)
+    defs = defaults(sys)
+    iv = get_iv(sys)
+
+    if parammap isa Dict
+        u0defs = merge(parammap, defs)
+    elseif eltype(parammap) <: Pair
+        u0defs = merge(Dict(parammap), defs)
+    elseif eltype(parammap) <: Number
+        u0defs = merge(Dict(zip(ps, parammap)), defs)
+    else
+        u0defs = defs
+    end
+    if u0map isa Dict
+        pdefs = merge(u0map, defs)
+    elseif eltype(u0map) <: Pair
+        pdefs = merge(Dict(u0map), defs)
+    elseif eltype(u0map) <: Number
+        pdefs = merge(Dict(zip(dvs, u0map)), defs)
+    else
+        pdefs = defs
+    end
+
+    u0 = varmap_to_vars(u0map,dvs; defaults=u0defs)
+    
     rhss = [eq.rhs for eq in eqs]
     u = dvs
-    p = varmap_to_vars(parammap,ps)
+    p = varmap_to_vars(parammap,ps; defaults=pdefs)
 
     f_gen = generate_function(sys; expression=Val{eval_expression}, expression_module=eval_module)
     f_oop, _ = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
-    f(u,p,t) = f_oop(u,p,t)
+    f(u,p,iv) = f_oop(u,p,iv)
     DiscreteProblem(f,u0,tspan,p;kwargs...)
 end
 

@@ -12,7 +12,7 @@ end;
 # Independent and dependent variables and parameters
 @parameters t c nsteps δt β γ
 D = Difference(t; dt=0.1)
-@variables S(t) I(t) R(t) next_S(t) next_I(t) next_R(t)
+@variables S(t) I(t) R(t)
 
 infection = rate_to_proportion(β*c*I/(S+I+R),δt)*S
 recovery = rate_to_proportion(γ,δt)*I
@@ -34,6 +34,19 @@ prob_map = DiscreteProblem(sys,u0,tspan,p)
 # Solution
 using OrdinaryDiffEq
 sol_map = solve(prob_map,FunctionMap());
+
+# Using defaults constructor
+@parameters t c=10.0 nsteps=400 δt=0.1 β=0.05 γ=0.25
+Diff = Difference(t; dt=0.1)
+@variables S(t)=990.0 I(t)=10.0 R(t)=0.0
+
+@named sys = DiscreteSystem(eqs; controls = [β, γ])
+@test ModelingToolkit.defaults(sys) != Dict()
+
+prob_map2 = DiscreteProblem(sys,[],tspan)
+sol_map2 = solve(prob_map,FunctionMap());
+
+@test sol_map == sol_map2
 
 # Direct Implementation
 
