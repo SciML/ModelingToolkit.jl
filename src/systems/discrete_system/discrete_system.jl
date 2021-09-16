@@ -11,14 +11,16 @@ $(FIELDS)
 ```
 using ModelingToolkit
 
-@parameters σ ρ β
-@variables t x(t) y(t) z(t) next_x(t) next_y(t) next_z(t)
+@parameters σ=28.0 ρ=10.0 β=8/3 δt=0.1
+@variables t x(t)=1.0 y(t)=0.0 z(t)=0.0
+D = Difference(t; dt=δt)
 
-eqs = [next_x ~ σ*(y-x),
-       next_y ~ x*(ρ-z)-y,
-       next_z ~ x*y - β*z]
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
 
-@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β])
+@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]) # or 
+@named de = DiscreteSystem(eqs)
 ```
 """
 struct DiscreteSystem <: AbstractTimeDependentSystem
