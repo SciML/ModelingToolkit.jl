@@ -72,8 +72,8 @@ lorenz2 = lorenz(:lorenz2)
 
 @named connected = ODESystem([s ~ a + lorenz1.x
                        lorenz2.y ~ s
-                       lorenz1.F ~ lorenz2.u
-                       lorenz2.F ~ lorenz1.u], t, systems=[lorenz1, lorenz2])
+                       lorenz1.u ~ lorenz2.F
+                       lorenz2.u ~ lorenz1.F], t, systems=[lorenz1, lorenz2])
 @test length(Base.propertynames(connected)) == 10
 @test isequal((@nonamespace connected.lorenz1.x), x)
 __x = x
@@ -166,7 +166,7 @@ let
     @parameters k_P
     pc = ODESystem(Equation[u_c ~ k_P * y_c], t, name=:pc)
     connections = [
-        ol.u ~ pc.u_c
+        pc.u_c ~ ol.u
         pc.y_c ~ ol.y
     ]
     @named connected = ODESystem(connections, t, systems=[ol, pc])
@@ -200,7 +200,7 @@ eqs = [
       ]
 @named sys = NonlinearSystem(eqs, [u1, u2, u3], [p])
 reducedsys = structural_simplify(sys)
-@test observed(reducedsys) == [u1 ~ 0.5(u3 - p); u2 ~ u1]
+@test observed(reducedsys) == [u2 ~ 1//2 * (u3 - p); u1 ~ u2]
 
 u0 = [
       u1 => 1
