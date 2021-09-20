@@ -260,11 +260,11 @@ function find_linear_equations(sys)
     return is_linear_equations, eadj, cadj
 end
 
-function Base.show(io::IO, s::SystemStructure)
+function Base.show(io::IO, mime::MIME"text/plain", s::SystemStructure)
     @unpack graph = s
     S = incidence_matrix(graph, Num(Sym{Real}(:×)))
     print(io, "Incidence matrix:")
-    show(io, S)
+    show(io, mime, S)
 end
 
 end # module
