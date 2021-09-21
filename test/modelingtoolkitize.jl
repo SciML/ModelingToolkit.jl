@@ -157,8 +157,6 @@ f = function (dy, y, μ, t)
 end
 
 prob = ODEProblem(f, rv0, (0.0, Δt), μ)
-sol = solve(prob, Vern8())
-
 modelingtoolkitize(prob)
 
 # Index reduction and mass matrix handling
