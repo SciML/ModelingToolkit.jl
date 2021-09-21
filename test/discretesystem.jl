@@ -90,3 +90,13 @@ linearized_eqs = [
     y(t - 2.0) ~ y(t)
 ]
 @test all(eqs2 .== linearized_eqs)
+
+# Test connection_type
+@connector function DiscreteComponent(;name)
+    @variables v(t) i(t)
+    DiscreteSystem(Equation[], t, [v, i], [], name=name, defaults=Dict(v=>1.0, i=>1.0))
+end
+
+@named d1 = DiscreteComponent()
+
+@test ModelingToolkit.get_connection_type(d1) == DiscreteComponent
