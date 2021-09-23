@@ -397,7 +397,7 @@ end
 function parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     systems = get_systems(sys)
-    isempty(systems) ? ps : [ps; reduce(vcat,namespace_parameters.(systems))]
+    unique(isempty(systems) ? ps : [ps; reduce(vcat,namespace_parameters.(systems))])
 end
 
 function controls(sys::AbstractSystem)
