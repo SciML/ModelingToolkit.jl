@@ -74,6 +74,7 @@ function first_model(;name)
     pars = @parameters x=2 y=20
     compose(ODESystem(Equation[], t, [], pars; name, defaults=defs), foo)
 end
-@named foo = first_model()
-@test ModelingToolkit.defaults(foo)[foo.a] == 3
-@test ModelingToolkit.defaults(foo)[foo.b] == 300
+@named goo = first_model()
+@unpack foo = goo
+@test ModelingToolkit.defaults(goo)[foo.a] == 3
+@test ModelingToolkit.defaults(goo)[foo.b] == 300
