@@ -499,3 +499,8 @@ eqs = [D(x) ~ foo(x, ms); D.(ms) .~ 1]
 @named outersys = compose(emptysys, sys)
 prob = ODEProblem(outersys, [sys.x=>1.0; collect(sys.ms).=>1:3], (0, 1.0))
 @test_nowarn solve(prob, Tsit5())
+
+# x/x
+@variables t x(t)
+@named sys = ODESystem([D(x) ~ x/x], t)
+@test equations(alias_elimination(sys)) == [D(x) ~ 1]
