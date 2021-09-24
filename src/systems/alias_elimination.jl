@@ -3,7 +3,7 @@ using SymbolicUtils: Rewriters
 const KEEP = typemin(Int)
 
 function alias_elimination(sys)
-    sys = initialize_system_structure(sys)
+    sys = initialize_system_structure(sys; quick_cancel=true)
     s = structure(sys)
     is_linear_equations, eadj, cadj = find_linear_equations(sys)
 
