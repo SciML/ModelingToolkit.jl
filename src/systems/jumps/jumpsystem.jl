@@ -327,12 +327,14 @@ function modified_states!(mstates, jump::Union{ConstantRateJump,VariableRateJump
         st = eq.lhs
         any(isequal(st), sts) && push!(mstates, st)
     end
+    mstates
 end
 
 function modified_states!(mstates, jump::MassActionJump, sts)
     for (state,stoich) in jump.net_stoch
         any(isequal(state), sts) && push!(mstates, state)
     end
+    mstates
 end
 
 
