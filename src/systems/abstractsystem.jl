@@ -397,7 +397,7 @@ end
 function parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     systems = get_systems(sys)
-    isempty(systems) ? ps : [ps; reduce(vcat,namespace_parameters.(systems))]
+    unique(isempty(systems) ? ps : [ps; reduce(vcat,namespace_parameters.(systems))])
 end
 
 function controls(sys::AbstractSystem)
@@ -420,7 +420,13 @@ Base.@deprecate default_p(x) defaults(x) false
 function defaults(sys::AbstractSystem)
     systems = get_systems(sys)
     defs = get_defaults(sys)
-    isempty(systems) ? defs : mapreduce(namespace_defaults, merge, systems; init=defs)
+    # `mapfoldr` is really important!!! We should prefer the base model for
+    # defaults, because people write:
+    #
+    # `compose(ODESystem(...; defaults=defs), ...)`
+    #
+    # Thus, right associativity is required and crucial for correctness.
+    isempty(systems) ? defs : mapfoldr(namespace_defaults, merge, systems; init=defs)
 end
 
 states(sys::AbstractSystem, v) = renamespace(sys, v)
