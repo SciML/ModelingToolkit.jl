@@ -504,3 +504,24 @@ prob = ODEProblem(outersys, [sys.x=>1.0; collect(sys.ms).=>1:3], (0, 1.0))
 @variables t x(t)
 @named sys = ODESystem([D(x) ~ x/x], t)
 @test equations(alias_elimination(sys)) == [D(x) ~ 1]
+
+# isisomorphic
+@parameters σ ρ β sigma rho beta
+@variables t t2 x(t) y(t) z(t) u[1:3](t2)
+
+D = Differential(t)
+D_ = Differential(t2)
+
+eqs = [D(x) ~ σ*(y-x),
+        D(y) ~ x*(ρ-z)-y,
+        D(z) ~ x*y - β*z]
+
+
+eqs2 = [0 ~ sigma*(u[2]-u[1] - D_(u[1])),
+    D_(u[2]) ~ u[1]*(rho-u[3])-u[2],
+    D_(u[3]) ~ u[1]*u[2] - beta*u[3]]
+
+@named sys1 = ODESystem(eqs)
+@named sys2 = ODESystem(eqs2)
+
+@test ModelingToolkit.isisomorphic(sys1, sys2)

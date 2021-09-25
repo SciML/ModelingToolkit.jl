@@ -325,3 +325,39 @@ function convert_system(::Type{<:ODESystem}, sys, t; name=nameof(sys))
     defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
     return ODESystem(neweqs, t, newsts, parameters(sys); defaults=defs, name=name,checks=false)
 end
+
+function isisomorphic(sys1, sys2)
+    sys1 = flatten(sys1)
+    sys2 = flatten(sys2)
+
+    s1, s2 = states(sys1), states(sys2)
+    p1, p2 = parameters(sys1), parameters(sys2)
+    iv1, iv2 = independent_variable(sys1), independent_variable(sys2) # not needed
+    sys1 = convert_system(ODESystem, sys1, iv2)
+
+    length(s1) != length(s2) && return false
+    length(p1) != length(p2) && return false # not necesarily true though (cases where a p==1, 1x == x)
+
+    eqs1 = equations(sys1)
+    eqs2 = equations(sys2)
+
+    rpairs = reduce(vcat, [p1.=>p2, s1.=>s2]) #, independent_variable(sys1)=>independent_variable(sys2)])
+    rules = Dict(rpairs)
+    eqs1 = substitute(eqs1, rules)
+    @info eqs1, eqs2
+
+    eqpairs = Pair[]
+    for (i, eq) in enumerate(eqs1)
+        for (j, eq2) in enumerate(eqs2)
+            if isequal(eq, eq2)
+                push!(eqpairs, i=>j)
+                @info eq, eq2
+                break
+            elseif !isequal(eq, eq2) && j == length(eqs2)
+                @info "could not find equivalent Equation in sys2 for $eq"
+                return false # , eqpairs
+            end
+        end 
+    end
+    return true # , eqpairs
+end
