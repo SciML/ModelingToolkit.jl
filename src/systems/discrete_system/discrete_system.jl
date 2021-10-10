@@ -51,6 +51,10 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     parameters are not supplied in `DiscreteProblem`.
     """
     defaults::Dict
+    """
+    type: type of the system
+    """
+    connection_type::Any
     function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, connection_type; checks::Bool = true)
         if checks
             check_variables(dvs, iv)
