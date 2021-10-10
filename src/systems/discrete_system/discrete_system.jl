@@ -51,13 +51,13 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     parameters are not supplied in `DiscreteProblem`.
     """
     defaults::Dict
-    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults; checks::Bool = true)
+    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, connection_type; checks::Bool = true)
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             all_dimensionless([dvs;ps;iv;ctrls]) ||check_units(discreteEqs)
         end
-        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults)
+        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, connection_type)
     end
 end
 
@@ -75,6 +75,7 @@ function DiscreteSystem(
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
+                   connection_type=nothing,
                    kwargs...,
                   )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
@@ -98,7 +99,7 @@ function DiscreteSystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, defaults, kwargs...)
+    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, defaults, connection_type, kwargs...)
 end
 
 
