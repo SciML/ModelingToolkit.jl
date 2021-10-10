@@ -225,6 +225,15 @@ isdiffeq(eq) = isdifferential(eq.lhs)
 isdifference(expr) = istree(expr) && operation(expr) isa Difference
 isdifferenceeq(eq) = isdifference(eq.lhs)
 
+iv_from_nested_difference(x::Term) = operation(x) isa Difference ? iv_from_nested_difference(arguments(x)[1]) : arguments(x)[1]
+iv_from_nested_difference(x::Sym) = x
+iv_from_nested_difference(x) = missing
+
+var_from_nested_difference(x, i=0) = (missing, missing)
+var_from_nested_difference(x::Term,i=0) = operation(x) isa Difference ? var_from_nested_difference(arguments(x)[1], i + 1) : (x, i)
+var_from_nested_difference(x::Sym,i=0) = (x, i)
+
+
 isvariable(x::Num) = isvariable(value(x))
 function isvariable(x)
     x isa Symbolic || return false
@@ -298,6 +307,20 @@ function collect_vars!(states, parameters, expr, iv)
         for var in vars(expr)
             if istree(var) && operation(var) isa Differential
                 var, _ = var_from_nested_derivative(var)
+            end
+            collect_var!(states, parameters, var, iv)
+        end
+    end
+    return nothing
+end
+
+function collect_vars_difference!(states, parameters, expr, iv)
+    if expr isa Sym
+        collect_var!(states, parameters, expr, iv)
+    else
+        for var in vars(expr)
+            if istree(var) && operation(var) isa Difference
+                var, _ = var_from_nested_difference(var)
             end
             collect_var!(states, parameters, var, iv)
         end

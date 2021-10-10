@@ -11,14 +11,16 @@ $(FIELDS)
 ```
 using ModelingToolkit
 
-@parameters σ ρ β
-@variables t x(t) y(t) z(t) next_x(t) next_y(t) next_z(t)
+@parameters σ=28.0 ρ=10.0 β=8/3 δt=0.1
+@variables t x(t)=1.0 y(t)=0.0 z(t)=0.0
+D = Difference(t; dt=δt)
 
-eqs = [next_x ~ σ*(y-x),
-       next_y ~ x*(ρ-z)-y,
-       next_z ~ x*y - β*z]
+eqs = [D(x) ~ σ*(y-x),
+       D(y) ~ x*(ρ-z)-y,
+       D(z) ~ x*y - β*z]
 
-@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β])
+@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]) # or 
+@named de = DiscreteSystem(eqs)
 ```
 """
 struct DiscreteSystem <: AbstractTimeDependentSystem
@@ -45,26 +47,21 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     systems::Vector{DiscreteSystem}
     """
-    default_u0: The default initial conditions to use when initial conditions
-    are not supplied in `DiscreteSystem`.
+    defaults: The default values to use when initial conditions and/or
+    parameters are not supplied in `DiscreteProblem`.
     """
-    default_u0::Dict
-    """
-    default_p: The default parameters to use when parameters are not supplied
-    in `DiscreteSystem`.
-    """
-    default_p::Dict
+    defaults::Dict
     """
     type: type of the system
     """
     connection_type::Any
-    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p, connection_type; checks::Bool = true)
+    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, connection_type; checks::Bool = true)
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             all_dimensionless([dvs;ps;iv;ctrls]) ||check_units(discreteEqs)
         end
-        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, default_u0, default_p, connection_type)
+        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, connection_type)
     end
 end
 
@@ -93,7 +90,7 @@ function DiscreteSystem(
     ctrl′ = value.(controls)
 
     if !(isempty(default_u0) && isempty(default_p))
-        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :ODESystem, force=true)
+        Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :DiscreteSystem, force=true)
     end
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
@@ -106,7 +103,46 @@ function DiscreteSystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, default_u0, default_p, connection_type, kwargs...)
+    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, defaults, connection_type, kwargs...)
+end
+
+
+function DiscreteSystem(eqs, iv=nothing; kwargs...)
+    eqs = collect(eqs)
+    # NOTE: this assumes that the order of algebric equations doesn't matter
+    diffvars = OrderedSet()
+    allstates = OrderedSet()
+    ps = OrderedSet()
+    # reorder equations such that it is in the form of `diffeq, algeeq`
+    diffeq = Equation[]
+    algeeq = Equation[]
+    # initial loop for finding `iv`
+    if iv === nothing
+        for eq in eqs
+            if !(eq.lhs isa Number) # assume eq.lhs is either Differential or Number
+                iv = iv_from_nested_difference(eq.lhs)
+                break
+            end
+        end
+    end
+    iv = value(iv)
+    iv === nothing && throw(ArgumentError("Please pass in independent variables."))
+    for eq in eqs
+        collect_vars_difference!(allstates, ps, eq.lhs, iv)
+        collect_vars_difference!(allstates, ps, eq.rhs, iv)
+        if isdifferenceeq(eq)
+            diffvar, _ = var_from_nested_difference(eq.lhs)
+            isequal(iv, iv_from_nested_difference(eq.lhs)) || throw(ArgumentError("A DiscreteSystem can only have one independent variable."))
+            diffvar in diffvars && throw(ArgumentError("The difference variable $diffvar is not unique in the system of equations."))
+            push!(diffvars, diffvar)
+            push!(diffeq, eq)
+        else
+            push!(algeeq, eq)
+        end
+    end
+    algevars = setdiff(allstates, diffvars)
+    # the orders here are very important!
+    return DiscreteSystem(append!(diffeq, algeeq), iv, vcat(collect(diffvars), collect(algevars)), ps; kwargs...)
 end
 
 """
@@ -123,16 +159,37 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     ps = parameters(sys)
     eqs = equations(sys)
     eqs = linearize_eqs(sys, eqs)
-    # defs = defaults(sys)
-    t = get_iv(sys)
-    u0 = varmap_to_vars(u0map,dvs)
+    defs = defaults(sys)
+    iv = get_iv(sys)
+
+    if parammap isa Dict
+        u0defs = merge(parammap, defs)
+    elseif eltype(parammap) <: Pair
+        u0defs = merge(Dict(parammap), defs)
+    elseif eltype(parammap) <: Number
+        u0defs = merge(Dict(zip(ps, parammap)), defs)
+    else
+        u0defs = defs
+    end
+    if u0map isa Dict
+        pdefs = merge(u0map, defs)
+    elseif eltype(u0map) <: Pair
+        pdefs = merge(Dict(u0map), defs)
+    elseif eltype(u0map) <: Number
+        pdefs = merge(Dict(zip(dvs, u0map)), defs)
+    else
+        pdefs = defs
+    end
+
+    u0 = varmap_to_vars(u0map,dvs; defaults=u0defs)
+    
     rhss = [eq.rhs for eq in eqs]
     u = dvs
-    p = varmap_to_vars(parammap,ps)
+    p = varmap_to_vars(parammap,ps; defaults=pdefs)
 
     f_gen = generate_function(sys; expression=Val{eval_expression}, expression_module=eval_module)
     f_oop, _ = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
-    f(u,p,t) = f_oop(u,p,t)
+    f(u,p,iv) = f_oop(u,p,iv)
     DiscreteProblem(f,u0,tspan,p;kwargs...)
 end
 
