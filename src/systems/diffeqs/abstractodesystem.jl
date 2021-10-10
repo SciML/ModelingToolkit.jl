@@ -84,6 +84,7 @@ function generate_function(
         sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
         implicit_dae=false,
         ddvs=implicit_dae ? map(Differential(get_iv(sys)), dvs) : nothing,
+        has_difference=false,
         kwargs...
     )
     # optimization
@@ -102,7 +103,7 @@ function generate_function(
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
-    pre = get_postprocess_fbody(sys)
+    pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
 
     if implicit_dae
         build_function(rhss, ddvs, u, p, t; postprocess_fbody=pre, kwargs...)
@@ -260,7 +261,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     obs = observed(sys)
     observedfun = if steady_state
-        isempty(obs) ? SciMLBase.DEFAULT_OBSERVED_NO_TIME : let sys = sys, dict = Dict()
+        let sys = sys, dict = Dict()
             function generated_observed(obsvar, u, p, t=Inf)
                 obs = get!(dict, value(obsvar)) do
                     build_explicit_observed_function(sys, obsvar)
@@ -269,7 +270,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
             end
         end
     else
-        isempty(obs) ? SciMLBase.DEFAULT_OBSERVED : let sys = sys, dict = Dict()
+        let sys = sys, dict = Dict()
             function generated_observed(obsvar, u, p, t)
                 obs = get!(dict, value(obsvar)) do
                     build_explicit_observed_function(sys, obsvar; checkbounds=checkbounds)
@@ -337,16 +338,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     # TODO: Jacobian sparsity / sparse Jacobian / dense Jacobian
 
     #=
-    observedfun = let sys = sys, dict = Dict()
         # TODO: We don't have enought information to reconstruct arbitrary state
-        # in general from `(u, p, t)`, e.g. `a ~ D(x)`.
-        function generated_observed(obsvar, u, p, t)
-            obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar)
-            end
-            obs(u, p, t)
-        end
-    end
     =#
 
     DAEFunction{iip}(
@@ -393,23 +385,6 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     f_oop, f_iip = generate_function(sys, dvs, ps; expression=Val{true}, kwargs...)
 
     dict = Dict()
-    #=
-    observedfun = if steady_state
-        :(function generated_observed(obsvar, u, p, t=Inf)
-              obs = get!($dict, value(obsvar)) do
-                  build_explicit_observed_function($sys, obsvar)
-              end
-              obs(u, p, t)
-          end)
-    else
-        :(function generated_observed(obsvar, u, p, t)
-              obs = get!($dict, value(obsvar)) do
-                  build_explicit_observed_function($sys, obsvar)
-              end
-              obs(u, p, t)
-          end)
-    end
-    =#
 
     fsym = gensym(:f)
     _f = :($fsym = $ODEFunctionClosure($f_oop, $f_iip))
@@ -578,8 +553,9 @@ symbolically calculating numerical enhancements.
 """
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
-    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; kwargs...)
-    if any(isdifferenceeq, equations(sys))
+    has_difference = any(isdifferenceeq, equations(sys))
+    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; has_difference=has_difference, kwargs...)
+    if has_difference
         ODEProblem{iip}(f,u0,tspan,p;difference_cb=generate_difference_cb(sys;kwargs...),kwargs...)
     else
         ODEProblem{iip}(f,u0,tspan,p;kwargs...)
@@ -603,14 +579,15 @@ symbolically calculating numerical enhancements.
 """
 function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
+    has_difference = any(isdifferenceeq, equations(sys))
     f, du0, u0, p = process_DEProblem(
         DAEFunction{iip}, sys, u0map, parammap;
-        implicit_dae=true, du0map=du0map, kwargs...
+        implicit_dae=true, du0map=du0map, has_difference=has_difference, kwargs...
     )
     diffvars = collect_differential_variables(sys)
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
-    if any(isdifferenceeq, equations(sys))
+    if has_difference
         DAEProblem{iip}(f,du0,u0,tspan,p;difference_cb=generate_difference_cb(sys; kwargs...),differential_vars=differential_vars,kwargs...)
     else
         DAEProblem{iip}(f,du0,u0,tspan,p;differential_vars=differential_vars,kwargs...)

@@ -52,5 +52,5 @@ function liouville_transform(sys::AbstractODESystem)
       neweq = D(trJ) ~ trJ*-tr(calculate_jacobian(sys))
       neweqs = [equations(sys);neweq]
       vars = [states(sys);trJ]
-      ODESystem(neweqs,t,vars,parameters(sys))
+      ODESystem(neweqs,t,vars,parameters(sys),checks=false)
 end

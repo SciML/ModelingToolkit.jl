@@ -5,69 +5,121 @@ struct ValidationError <: Exception
     message::String
 end
 
+"Throw exception on invalid unit types, otherwise return argument."
 function screen_unit(result)
     result isa Unitful.Unitlike || throw(ValidationError("Unit must be a subtype of Unitful.Unitlike, not $(typeof(result))."))
     result isa Unitful.ScalarUnits || throw(ValidationError("Non-scalar units such as $result are not supported. Use a scalar unit instead."))
     result == u"°" && throw(ValidationError("Degrees are not supported. Use radians instead."))
+    result
 end
-"Find the unit of a symbolic item."
-get_unit(x::Real) = unitless
-function get_unit(x::Unitful.Quantity) 
-    result = Unitful.unit(x)
-    screen_unit(result)
-    return result
-end
+
+"""Test unit equivalence.
+
+Example of implemented behavior:
+```julia
+using ModelingToolkit, Unitful
+MT = ModelingToolkit
+@parameters γ P [unit = u"MW"] E [unit = u"kJ"] τ [unit = u"ms"]
+@test MT.equivalent(u"MW" ,u"kJ/ms") # Understands prefixes
+@test !MT.equivalent(u"m", u"cm") # Units must be same magnitude
+@test MT.equivalent(MT.get_unit(P^γ), MT.get_unit((E/τ)^γ)) # Handles symbolic exponents
+```
+"""
 equivalent(x,y) = isequal(1*x,1*y)
 unitless = Unitful.unit(1)
 
+#For dispatching get_unit
+Literal = Union{Sym,Symbolics.ArrayOp,Symbolics.Arr,Symbolics.CallWithMetadata}
+Conditional = Union{typeof(ifelse),typeof(IfElse.ifelse)}
+Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
+
+"Find the unit of a symbolic item."
+get_unit(x::Real) = unitless
+get_unit(x::Unitful.Quantity) = screen_unit(Unitful.unit(x))
+get_unit(x::AbstractArray) = map(get_unit,x)
 get_unit(x::Num) = get_unit(value(x))
-function get_unit(x::Symbolic)
-    if x isa Sym || operation(x) isa Sym || (operation(x) isa Term && operation(x).f == getindex) || x isa Symbolics.ArrayOp
-        if x.metadata !== nothing
-            symunits = get(x.metadata, VariableUnit, unitless)
-            screen_unit(symunits)
-        else
-            symunits = unitless
-        end
-        return symunits
-    elseif operation(x) isa Differential
-        return get_unit(arguments(x)[1]) / get_unit(operation(x).x)
-    elseif  operation(x) isa Difference
-        return get_unit(arguments(x)[1]) / get_unit(operation(x).t) #TODO: make this same as Differential
-    elseif x isa Pow
-        pargs = arguments(x)
-        base,expon = get_unit.(pargs)
-        @assert expon isa Unitful.DimensionlessUnits
-        if base == unitless
-            unitless
-        else 
-            pargs[2] isa Number ? operation(x)(base, pargs[2]) : operation(x)(1*base, pargs[2])
-        end
-    elseif x isa Add # Cannot simply add the units b/c they may differ in magnitude (eg, kg vs g)
-        terms = get_unit.(arguments(x))
-        firstunit = terms[1]
-        for other in terms[2:end]
-            termlist = join(map(repr,terms),", ")
-            equivalent(other,firstunit) || throw(ValidationError(", in sum $x, units [$termlist] do not match."))
-        end
-        return firstunit
-    elseif operation(x) in ( Base.:> ,  Base.:< , == )
-        terms = get_unit.(arguments(x))
-        equivalent(terms[1],terms[2]) || throw(ValidationError(", in comparison $x, units [$(terms[1])] and [$(terms[2])] do not match."))
-        return unitless
-    elseif operation(x) == ifelse || operation(x) == IfElse.ifelse
-         terms = get_unit.(arguments(x))
-        terms[1] == unitless || throw(ValidationError(", in $x, [$(terms[1])] is not dimensionless."))
-        equivalent(terms[2],terms[3]) || throw(ValidationError(", in $x, units [$(terms[2])] and [$(terms[3])] do not match."))
-        return terms[2]
-    elseif operation(x) == Symbolics._mapreduce 
-        if x.arguments[2] == +
-            get_unit(x.arguments[3])
-        else
-            throw(ValidationError("Unsupported array operation $x"))
+get_unit(x::Literal) = screen_unit(getmetadata(x,VariableUnit, unitless))
+get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
+get_unit(op::Difference, args) =   get_unit(args[1]) / get_unit(op.t)
+get_unit(op::typeof(getindex),args) = get_unit(args[1])
+get_unit(x::typeof(SciMLBase.NullParameters)) = unitless
+
+function get_unit(op,args) # Fallback
+    result = op(1 .* get_unit.(args)...)
+    try
+        unit(result)
+    catch
+        throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
+    end
+end
+
+function get_unit(op::Integral,args)
+    unit = 1
+    if op.domain.variables isa Vector
+        for u in op.domain.variables
+            unit *= get_unit(u)
         end
     else
-        return get_unit(operation(x)(1 .* get_unit.(arguments(x))...))
+        unit *= get_unit(op.domain.variables)
+    end
+    return get_unit(args[1]) * unit
+end
+
+function get_unit(x::Pow)
+    pargs = arguments(x)
+    base,expon = get_unit.(pargs)
+    @assert expon isa Unitful.DimensionlessUnits
+    if base == unitless
+        unitless
+    else
+        pargs[2] isa Number ? base^pargs[2] : (1*base)^pargs[2]
+    end
+end
+
+function get_unit(x::Add)
+    terms = get_unit.(arguments(x))
+    firstunit = terms[1]
+    for other in terms[2:end]
+        termlist = join(map(repr, terms), ", ")
+        equivalent(other, firstunit) || throw(ValidationError(", in sum $x, units [$termlist] do not match."))
+    end
+    return firstunit
+end
+
+function get_unit(op::Conditional, args)
+    terms = get_unit.(args)
+    terms[1] == unitless || throw(ValidationError(", in $x, [$(terms[1])] is not dimensionless."))
+    equivalent(terms[2], terms[3]) || throw(ValidationError(", in $x, units [$(terms[2])] and [$(terms[3])] do not match."))
+    return terms[2]
+end
+
+function get_unit(op::typeof(Symbolics._mapreduce),args)
+    if args[2] == +
+        get_unit(args[3])
+    else
+        throw(ValidationError("Unsupported array operation $op"))
+    end
+end
+
+function get_unit(op::Comparison, args)
+    terms = get_unit.(args)
+    equivalent(terms[1], terms[2]) || throw(ValidationError(", in comparison $op, units [$(terms[1])] and [$(terms[2])] do not match."))
+    return unitless
+end
+
+function get_unit(x::Symbolic)
+    if SymbolicUtils.istree(x)
+        op = operation(x)
+        if op isa Sym || (op isa Term && operation(op) isa Term) # Dependent variables, not function calls
+            return screen_unit(getmetadata(x, VariableUnit, unitless)) # Like x(t) or x[i]
+        elseif op isa Term && !(operation(op) isa Term)
+            gp = getmetadata(x,Symbolics.GetindexParent,nothing) # Like x[1](t)
+            return screen_unit(getmetadata(gp, VariableUnit, unitless))
+        end  # Actual function calls:
+        args = arguments(x)
+        return get_unit(op, args)
+    else # This function should only be reached by Terms, for which `istree` is true
+        throw(ArgumentError("Unsupported value $x."))
     end
 end
 
@@ -77,7 +129,7 @@ function safe_get_unit(term, info)
     try
         side = get_unit(term)
     catch err
-        if err isa Unitful.DimensionError 
+        if err isa Unitful.DimensionError
             @warn("$info: $(err.x) and $(err.y) are not dimensionally compatible.")
         elseif err isa ValidationError
             @warn(info*err.message)
@@ -104,7 +156,7 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
                 first_label = label
             elseif !equivalent(first_unit, equnit)
                 valid = false
-                @warn("$info: units [$(equnit)] for $(first_label) and [$(equnit)] for $(label) do not match.")
+                @warn("$info: units [$(first_unit)] for $(first_label) and [$(equnit)] for $(label) do not match.")
             end
         end
     end
@@ -112,7 +164,7 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
 end
 
 function validate(jump::Union{ModelingToolkit.VariableRateJump, ModelingToolkit.ConstantRateJump}, t::Symbolic; info::String = "")
-    newinfo = replace(info,"eq."=>"jump") 
+    newinfo = replace(info,"eq."=>"jump")
     _validate([jump.rate, 1/t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units
     validate(jump.affect!,info = newinfo)
 end
@@ -145,3 +197,4 @@ validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term,"") !== no
 
 "Throws error if units of equations are invalid."
 check_units(eqs...) = validate(eqs...) || throw(ValidationError("Some equations had invalid units. See warnings for details."))
+all_dimensionless(states) = all(map(x->safe_get_unit(x,"") in (unitless,nothing),states))

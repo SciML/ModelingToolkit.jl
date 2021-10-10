@@ -23,7 +23,7 @@ noiseeqs = [0.1*x,
             0.1*y,
             0.1*z]
 
-de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β])
+@named de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β])
 ```
 """
 struct SDESystem <: AbstractODESystem
@@ -91,7 +91,7 @@ struct SDESystem <: AbstractODESystem
             check_variables(dvs,iv)
             check_parameters(ps,iv)
             check_equations(deqs,iv)
-            check_units(deqs,neqs)
+            all_dimensionless([dvs;ps;iv]) || check_units(deqs,neqs)
         end
         new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
     end
@@ -156,7 +156,7 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     # use the general interface
     if typeof(get_noiseeqs(sys)) <: Vector
         eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[i] for i in eachindex(states(sys))]...)
-        de = ODESystem(eqs,get_iv(sys),states(sys),parameters(sys),name=name)
+        de = ODESystem(eqs, get_iv(sys), states(sys), parameters(sys), name = name, checks = false)
 
         jac = calculate_jacobian(de, sparse=false, simplify=false)
         ∇σσ′ = simplify.(jac*get_noiseeqs(sys))
@@ -165,13 +165,13 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     else
         dimstate, m = size(get_noiseeqs(sys))
         eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[i] for i in eachindex(states(sys))]...)
-        de = ODESystem(eqs,get_iv(sys),states(sys),parameters(sys),name=name)
+        de = ODESystem(eqs, get_iv(sys), states(sys), parameters(sys), name = name, checks = false)
 
         jac = calculate_jacobian(de, sparse=false, simplify=false)
         ∇σσ′ = simplify.(jac*get_noiseeqs(sys)[:,1])
         for k = 2:m
             eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[Int(i+(k-1)*dimstate)] for i in eachindex(states(sys))]...)
-            de = ODESystem(eqs,get_iv(sys),states(sys),parameters(sys),name=name)
+            de = ODESystem(eqs, get_iv(sys), states(sys), parameters(sys), name = name, checks = false)
 
             jac = calculate_jacobian(de, sparse=false, simplify=false)
             ∇σσ′ = ∇σσ′ + simplify.(jac*get_noiseeqs(sys)[:,k])
@@ -181,7 +181,7 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     end
 
 
-    SDESystem(deqs,get_noiseeqs(sys),get_iv(sys),states(sys),parameters(sys),name=name)
+    SDESystem(deqs, get_noiseeqs(sys), get_iv(sys), states(sys), parameters(sys), name = name, checks = false)
 end
 
 """
@@ -335,7 +335,7 @@ function SDEFunctionExpr(sys::SDESystem, args...; kwargs...)
 end
 
 function rename(sys::SDESystem,name)
-    SDESystem(sys.eqs, sys.noiseeqs, sys.iv, sys.states, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems)
+    SDESystem(sys.eqs, sys.noiseeqs, sys.iv, sys.states, sys.ps, sys.tgrad, sys.jac, sys.Wfact, sys.Wfact_t, name, sys.systems, checks = false)
 end
 
 """

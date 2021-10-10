@@ -15,7 +15,7 @@ $(FIELDS)
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β])
+@named ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β])
 ```
 """
 struct NonlinearSystem <: AbstractTimeIndependentSystem
@@ -56,7 +56,7 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     connection_type::Any
     function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, structure, connection_type; checks::Bool = true)
         if checks
-            check_units(eqs)
+            all_dimensionless([states;ps]) ||check_units(eqs)
         end
         new(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, structure, connection_type)
     end
@@ -85,7 +85,7 @@ function NonlinearSystem(eqs, states, ps;
     end
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
     defaults = todict(defaults)
-    defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
+    defaults = Dict{Any,Any}(value(k) => value(v) for (k, v) in pairs(defaults))
 
     states = collect(states)
     states, ps = value.(states), value.(ps)
@@ -334,6 +334,7 @@ function flatten(sys::NonlinearSystem)
                                observed=observed(sys),
                                defaults=defaults(sys),
                                name=nameof(sys),
+                               checks = false,
                               )
     end
 end

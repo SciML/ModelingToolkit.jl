@@ -22,7 +22,7 @@ affect₂ = [I ~ I - 1, R ~ R + 1]
 j₁      = ConstantRateJump(rate₁,affect₁)
 j₂      = ConstantRateJump(rate₂,affect₂)
 j₃      = MassActionJump(2*β+γ, [R => 1], [S => 1, R => -1])
-js      = JumpSystem([j₁,j₂,j₃], t, [S,I,R], [β,γ])
+@named js      = JumpSystem([j₁,j₂,j₃], t, [S,I,R], [β,γ])
 ```
 """
 struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
@@ -57,7 +57,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
         if checks
             check_variables(states, iv)
             check_parameters(ps, iv)
-            check_units(ap,iv)
+            all_dimensionless([states;ps;iv]) || check_units(ap,iv)
         end
         new{U}(ap, iv, states, ps, var_to_name, observed, name, systems, defaults, connection_type)
     end
@@ -327,12 +327,14 @@ function modified_states!(mstates, jump::Union{ConstantRateJump,VariableRateJump
         st = eq.lhs
         any(isequal(st), sts) && push!(mstates, st)
     end
+    mstates
 end
 
 function modified_states!(mstates, jump::MassActionJump, sts)
     for (state,stoich) in jump.net_stoch
         any(isequal(state), sts) && push!(mstates, state)
     end
+    mstates
 end
 
 
