@@ -233,6 +233,8 @@ var_from_nested_difference(x, i=0) = (missing, missing)
 var_from_nested_difference(x::Term,i=0) = operation(x) isa Difference ? var_from_nested_difference(arguments(x)[1], i + 1) : (x, i)
 var_from_nested_difference(x::Sym,i=0) = (x, i)
 
+
+isvariable(x::Num) = isvariable(value(x))
 function isvariable(x)
     x isa Symbolic || return false
     p = getparent(x, nothing)
