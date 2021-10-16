@@ -51,7 +51,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
 
     sts = vec(collect(vars))
 
-    params = if params isa Array && ndims(params) == 0
+    params = if params isa Number || (params isa Array && ndims(params) == 0)
         [params[1]]
     else
         vec(collect(params))

@@ -13,7 +13,7 @@ $(FIELDS)
 @parameters σ ρ β
 
 op = σ*(y-x) + x*(ρ-z)-y + x*y - β*z
-os = OptimizationSystem(eqs, [x,y,z],[σ,ρ,β])
+@named os = OptimizationSystem(eqs, [x,y,z],[σ,ρ,β])
 ```
 """
 struct OptimizationSystem <: AbstractTimeIndependentSystem

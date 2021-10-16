@@ -15,7 +15,7 @@ $(FIELDS)
 eqs = [0 ~ σ*(y-x),
        0 ~ x*(ρ-z)-y,
        0 ~ x*y - β*z]
-ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β])
+@named ns = NonlinearSystem(eqs, [x,y,z],[σ,ρ,β])
 ```
 """
 struct NonlinearSystem <: AbstractTimeIndependentSystem

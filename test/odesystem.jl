@@ -387,19 +387,26 @@ end
 using Symbolics: unwrap, wrap
 using LinearAlgebra
 @variables t
-sts = @variables x[1:3](t) y(t)
+sts = @variables x[1:3](t)=[1,2,3.0] y(t)=1.0
 ps = @parameters p[1:3] = [1, 2, 3]
 D = Differential(t)
 eqs = [
-       collect(D.(x) ~ x)
-       D(y) ~ norm(x)*y
+       collect(D.(x) .~ x)
+       D(y) ~ norm(collect(x))*y - x[1]
       ]
 @named sys = ODESystem(eqs, t, [sts...;], [ps...;])
-@test isequal(@nonamespace(sys.x), unwrap(x))
-@test isequal(@nonamespace(sys.y), unwrap(y))
-@test isequal(@nonamespace(sys.p), unwrap(p))
+sys = structural_simplify(sys)
+@test isequal(@nonamespace(sys.x), x)
+@test isequal(@nonamespace(sys.y), y)
+@test isequal(@nonamespace(sys.p), p)
 @test_nowarn sys.x, sys.y, sys.p
+@test all(x->x isa Symbolics.Arr, (sys.x, sys.p))
+@test all(x->x isa Symbolics.Arr, @nonamespace (sys.x, sys.p))
 @test ModelingToolkit.isvariable(Symbolics.unwrap(x[1]))
+prob = ODEProblem(sys, [], (0, 1.0))
+sol = solve(prob, Tsit5())
+@test sol[2x[1] + 3x[3] + norm(x)] ≈ 2sol[x[1]] + 3sol[x[3]] + vec(mapslices(norm, hcat(sol[x]...), dims=2))
+@test sol[x + [y, 2y, 3y]] ≈ sol[x] + [sol[y], 2sol[y], 3sol[y]]
 
 # Mixed Difference Differential equations
 @parameters t a b c d
@@ -480,7 +487,7 @@ using Symbolics: unwrap, wrap
 function foo(a::Num, ms::AbstractVector)
     a = unwrap(a)
     ms = map(unwrap, ms)
-    wrap(term(foo, a, MakeArray(ms, SArray)))
+    wrap(term(foo, a, term(SVector, ms...)))
 end
 foo(a, ms::AbstractVector) = a + sum(ms)
 @variables t x(t) ms[1:3](t)
@@ -492,3 +499,8 @@ eqs = [D(x) ~ foo(x, ms); D.(ms) .~ 1]
 @named outersys = compose(emptysys, sys)
 prob = ODEProblem(outersys, [sys.x=>1.0; collect(sys.ms).=>1:3], (0, 1.0))
 @test_nowarn solve(prob, Tsit5())
+
+# x/x
+@variables t x(t)
+@named sys = ODESystem([D(x) ~ x/x], t)
+@test equations(alias_elimination(sys)) == [D(x) ~ 1]

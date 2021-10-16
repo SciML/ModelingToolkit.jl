@@ -3,6 +3,7 @@ module SystemStructures
 using DataStructures
 using Symbolics: linear_expansion, unwrap
 using SymbolicUtils: istree, operation, arguments, Symbolic
+using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
     value, InvalidSystemException, isdifferential, _iszero, isparameter,
@@ -12,6 +13,14 @@ using LightGraphs
 using UnPack
 using Setfield
 using SparseArrays
+
+quick_cancel_expr(expr) = Rewriters.Postwalk(
+    quick_cancel,
+    similarterm=(x, f, args) -> similarterm(
+        x, f, args, SymbolicUtils.symtype(x);
+        metadata=SymbolicUtils.metadata(x)
+    )
+)(expr)
 
 #=
 When we don't do subsitution, variable information is split into two different
@@ -86,7 +95,7 @@ algvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isalgvar, s), eac
 isalgeq(s::SystemStructure, eq::Integer) = s.algeqs[eq]
 isdiffeq(s::SystemStructure, eq::Integer) = !isalgeq(s, eq)
 
-function initialize_system_structure(sys)
+function initialize_system_structure(sys; quick_cancel=false)
     sys = flatten(sys)
     ivs = independent_variables(sys)
     eqs = copy(equations(sys))
@@ -109,9 +118,12 @@ function initialize_system_structure(sys)
     vars = OrderedSet()
     for (i, eq′) in enumerate(eqs)
         if _iszero(eq′.lhs)
+            rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
             eq = eq′
         else
-            eq = 0 ~ eq′.rhs - eq′.lhs
+            lhs = quick_cancel ? quick_cancel_expr(eq′.lhs) : eq′.lhs
+            rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
+            eq = 0 ~ rhs - lhs
         end
         vars!(vars, eq.rhs)
         isalgeq = true
@@ -141,6 +153,8 @@ function initialize_system_structure(sys)
         algeqs[i] = isalgeq
         if isalgeq
             eqs[i] = eq
+        else
+            eqs[i] = eqs[i].lhs ~ rhs
         end
     end
 
@@ -260,11 +274,11 @@ function find_linear_equations(sys)
     return is_linear_equations, eadj, cadj
 end
 
-function Base.show(io::IO, s::SystemStructure)
+function Base.show(io::IO, mime::MIME"text/plain", s::SystemStructure)
     @unpack graph = s
     S = incidence_matrix(graph, Num(Sym{Real}(:×)))
     print(io, "Incidence matrix:")
-    show(io, S)
+    show(io, mime, S)
 end
 
 end # module

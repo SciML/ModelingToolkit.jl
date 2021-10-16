@@ -12,7 +12,7 @@ end;
 # Independent and dependent variables and parameters
 @parameters t c nsteps δt β γ
 D = Difference(t; dt=0.1)
-@variables S(t) I(t) R(t) next_S(t) next_I(t) next_R(t)
+@variables S(t) I(t) R(t)
 
 infection = rate_to_proportion(β*c*I/(S+I+R),δt)*S
 recovery = rate_to_proportion(γ,δt)*I
@@ -34,6 +34,27 @@ prob_map = DiscreteProblem(sys,u0,tspan,p)
 # Solution
 using OrdinaryDiffEq
 sol_map = solve(prob_map,FunctionMap());
+
+# Using defaults constructor
+@parameters t c=10.0 nsteps=400 δt=0.1 β=0.05 γ=0.25
+Diff = Difference(t; dt=0.1)
+@variables S(t)=990.0 I(t)=10.0 R(t)=0.0
+
+infection2 = rate_to_proportion(β*c*I/(S+I+R),δt)*S
+recovery2 = rate_to_proportion(γ,δt)*I
+
+eqs2 = [D(S) ~ S-infection2,
+       D(I) ~ I+infection2-recovery2,
+       D(R) ~ R+recovery2]
+
+@named sys = DiscreteSystem(eqs2; controls = [β, γ])
+@test ModelingToolkit.defaults(sys) != Dict()
+
+prob_map2 = DiscreteProblem(sys,[],tspan)
+sol_map2 = solve(prob_map,FunctionMap());
+
+@test sol_map.u == sol_map2.u
+@test sol_map.prob.p == sol_map2.prob.p
 
 # Direct Implementation
 
@@ -90,3 +111,13 @@ linearized_eqs = [
     y(t - 2.0) ~ y(t)
 ]
 @test all(eqs2 .== linearized_eqs)
+
+# Test connection_type
+@connector function DiscreteComponent(;name)
+    @variables v(t) i(t)
+    DiscreteSystem(Equation[], t, [v, i], [], name=name, defaults=Dict(v=>1.0, i=>1.0))
+end
+
+@named d1 = DiscreteComponent()
+
+@test ModelingToolkit.get_connection_type(d1) == DiscreteComponent
