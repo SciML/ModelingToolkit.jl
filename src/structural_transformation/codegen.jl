@@ -51,7 +51,7 @@ function torn_system_jacobian_sparsity(sys)
             for var in 𝑠neighbors(graph, teq)
                 # Skip the tearing variables in the current partition, because
                 # we are computing them from all the other states.
-                LightGraphs.insorted(var, v_residual) && continue
+                Graphs.insorted(var, v_residual) && continue
                 deps = get(avars2dvars, var, nothing)
                 if deps === nothing # differential variable
                     @assert !isalgvar(s, var)

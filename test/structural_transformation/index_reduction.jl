@@ -1,5 +1,5 @@
 using ModelingToolkit
-using LightGraphs
+using Graphs
 using DiffEqBase
 using Test
 using UnPack

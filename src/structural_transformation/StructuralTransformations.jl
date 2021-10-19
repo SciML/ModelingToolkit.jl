@@ -24,7 +24,7 @@ using ModelingToolkit: ODESystem, AbstractSystem,var_from_nested_derivative, Dif
                        get_postprocess_fbody
 
 using ModelingToolkit.BipartiteGraphs
-using LightGraphs
+using Graphs
 using ModelingToolkit.SystemStructures
 
 using ModelingToolkit.DiffEqBase
