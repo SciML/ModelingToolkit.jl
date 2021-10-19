@@ -5,7 +5,7 @@ In this tutorial we will build a simple component-based model of a spring-mass s
 ## Copy-Paste Example
 
 ```julia
-using ModelingToolkit, LinearAlgebra
+using ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra
 
 @variables t
 D = Differential(t)
