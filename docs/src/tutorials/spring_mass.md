@@ -5,7 +5,7 @@ In this tutorial we will build a simple component-based model of a spring-mass s
 ## Copy-Paste Example
 
 ```julia
-using ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra
+using ModelingToolkit, LinearAlgebra
 
 @variables t
 D = Differential(t)
@@ -25,8 +25,8 @@ end
 
 function connect_spring(spring, a, b)
     [
-        spring.x ~ norm(collect(a .- b))
-        collect(spring.dir .~ collect(a .- b))
+        spring.x ~ norm(a .- b)
+        collect(spring.dir .~ a .- b)
     ]
 end
 
@@ -42,8 +42,8 @@ g = [0., -9.81]
 @named spring = Spring(k=k, l=l)
 
 eqs = [
-    connect_spring(spring, mass.pos, center)
-    collect(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)
+       connect_spring(spring, collect(mass.pos), center)
+       D.(collect(mass.v)) .~ spring_force(spring) / mass.m .+ g
 ]
 
 @named _model = ODESystem(eqs, t)
@@ -97,8 +97,8 @@ We now define functions that help construct the equations for a mass-spring syst
 ```julia
 function connect_spring(spring, a, b)
     [
-        spring.x ~ norm(collect(a .- b))
-        collect(spring.dir .~ collect(a .- b))
+        spring.x ~ norm(a .- b)
+        collect(spring.dir .~ a .- b)
     ]
 end
 ```
@@ -126,8 +126,8 @@ We can now create the equations describing this system, by connecting `spring` t
 
 ```julia
 eqs = [
-    connect_spring(spring, mass.pos, center)
-    collect(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)
+       connect_spring(spring, collect(mass.pos), center)
+       D.(collect(mass.v)) .~ spring_force(spring) / mass.m .+ g
 ]
 ```
 
