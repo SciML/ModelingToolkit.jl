@@ -16,7 +16,7 @@ D = Differential(t)
 @test MT.get_unit(τ) == u"ms"
 @test MT.get_unit(γ) == MT.unitless
 @test MT.get_unit(0.5) == MT.unitless
-@test MT.get_unit(MT.SciMLBase.NullParameters) == MT.unitless
+@test MT.get_unit(MT.SciMLBase.NullParameters()) == MT.unitless
 
 # Prohibited unit types
 @parameters β [unit = u"°"] α [unit = u"°C"] γ [unit = 1u"s"]
