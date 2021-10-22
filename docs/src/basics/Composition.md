@@ -32,10 +32,10 @@ end
 
 @parameters t
 D = Differential(t)
-@named connected = compose(ODESystem([
+connected = compose(ODESystem([
                         decay2.f ~ decay1.x
                         D(decay1.f) ~ 0
-                      ], t), decay1, decay2)
+                      ], t; name=:connected), decay1, decay2)
 
 equations(connected)
 
