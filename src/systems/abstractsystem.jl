@@ -811,7 +811,7 @@ topological sort of the observed equations. When `simplify=true`, the `simplify`
 function will be applied during the tearing process.
 """
 function structural_simplify(sys::AbstractSystem; simplify=false)
-    sys = expand_connects(sys)
+    sys = expand_connections(sys)
     sys = initialize_system_structure(alias_elimination(sys))
     check_consistency(sys)
     if sys isa ODESystem
@@ -943,7 +943,7 @@ function connect(syss...)
     Equation(Connect(nothing), Connect(syss)) # the RHS are connected systems
 end
 
-function expand_connects(sys::AbstractSystem; debug=false)
+function expand_connections(sys::AbstractSystem; debug=false)
     sys = flatten(sys)
     eqs′ = equations(sys)
     eqs = Equation[]
@@ -957,8 +957,15 @@ function expand_connects(sys::AbstractSystem; debug=false)
     narg_connects = Vector{Any}[]
     for (i, syss) in enumerate(cts)
         # find intersecting connections
-        exclude = findfirst(s->haskey(sys2idx, nameof(s)), syss)
-        if exclude === nothing
+        exclude = 0 # exclude the intersecting system
+        idx = 0     # idx of narg_connects
+        for (j, s) in enumerate(syss)
+            idx′ = get(sys2idx, nameof(s), nothing)
+            idx′ === nothing && continue
+            idx = idx′
+            exclude = j
+        end
+        if exclude == 0
             push!(narg_connects, collect(syss))
             for s in syss
                 sys2idx[nameof(s)] = length(narg_connects)
