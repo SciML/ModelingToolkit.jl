@@ -72,6 +72,8 @@ end
 Base.@kwdef struct SystemStructure
     fullvars::Vector
     vartype::Vector{VariableType}
+    # Maps the (index of) a variable to the (index of) the variable describing
+    # its derivative.
     varassoc::Vector{Int}
     inv_varassoc::Vector{Int}
     varmask::BitVector # `true` if the variable has the highest order derivative
