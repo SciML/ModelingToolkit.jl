@@ -973,6 +973,7 @@ function expand_connections(sys::AbstractSystem; debug=false)
         else
             # fuse intersecting connections
             for (j, s) in enumerate(syss); j == exclude && continue
+                sys2idx[nameof(s)] = idx
                 push!(narg_connects[idx], s)
             end
         end
@@ -992,7 +993,8 @@ function expand_connections(sys::AbstractSystem; debug=false)
     # generate connections
     for syss in narg_connects
         T = promote_connect_type(map(get_connection_type, syss)...)
-        append!(eqs, connect(T, syss...))
+        ceqs = connect(T, syss...)
+        ceqs isa Equation ? push!(eqs, ceqs) : append!(eqs, ceqs)
     end
 
     @set! sys.eqs = eqs
