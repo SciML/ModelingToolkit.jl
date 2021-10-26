@@ -236,7 +236,7 @@ function build_explicit_observed_function(
     ts = Symbolics.scalarize.(value.(ts))
 
     vars = Set()
-    syms = foreach(Base.Fix1(vars!, vars), ts)
+    foreach(Base.Fix1(vars!, vars), ts)
     ivs = independent_variables(sys)
     dep_vars = collect(setdiff(vars, ivs))
 

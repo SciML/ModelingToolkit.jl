@@ -175,9 +175,10 @@ sol2 = solve(ODEProblem{false}(
                               ), Tsit5(), tstops=sol1.t, adaptive=false)
 @test Array(sol1) ≈ Array(sol2) atol=1e-5
 
-obs = build_observed_function(newdaesys, [z, y])
-@test map(u -> u[2], obs.(sol1.u, pr, sol1.t)) == first.(sol1.u)
-@test map(u -> sin(u[1]), obs.(sol1.u, pr, sol1.t)) + first.(sol1.u) ≈ pr[1]*sol1.t atol=1e-5
+@test sol1[x] == first.(sol1.u)
+@test sol1[y] == first.(sol1.u)
+@test sin.(sol1[z]) .+ sol1[y] ≈ pr[1] * sol1.t atol=1e-5
+@test sol1[sin(z) + y] ≈ sin.(sol1[z]) .+ sol1[y] rtol=1e-12
 
 @test sol1[y, :] == sol1[x, :]
 @test (@. sin(sol1[z, :]) + sol1[y, :]) ≈ pr * sol1.t atol=1e-5
