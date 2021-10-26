@@ -42,3 +42,35 @@ ModelingToolkit.promote_connect_rule(::Type{<:Goo}, ::Type{<:Foo}) = Foo
 # test conflict
 ModelingToolkit.promote_connect_rule(::Type{<:Goo}, ::Type{<:Foo}) = Goo
 @test_throws ArgumentError connect(f1, g)
+
+@connector Hoo(;name) = ODESystem(Equation[], t, [], [], name=name)
+function ModelingToolkit.connect(::Type{<:Hoo}, ss...)
+    nameof.(ss) ~ 0
+end
+@named hs[1:8] = Hoo()
+@named sys = ODESystem([connect(hs[1], hs[2]),
+                        connect(hs[1], hs[3])], t, [], [])
+@test equations(expand_connections(sys)) == [(:hs_1, :hs_2, :hs_3) ~ 0]
+@named sys = ODESystem([connect(hs[1], hs[2]),
+                        connect(hs[2], hs[3])], t, [], [])
+@test equations(expand_connections(sys)) == [(:hs_1, :hs_2, :hs_3) ~ 0]
+@named sys = ODESystem([connect(hs[1], hs[2]),
+                        connect(hs[4], hs[3])], t, [], [])
+@test equations(expand_connections(sys)) == [(:hs_1, :hs_2) ~ 0, (:hs_4, :hs_3) ~ 0]
+@named sys = ODESystem([connect(hs[1], hs[2]),
+                        connect(hs[1], hs[2])], t, [], [])
+@test_throws Any expand_connections(sys)
+@named sys = ODESystem([connect(hs[1], hs[2]),
+                        connect(hs[3], hs[2]),
+                        connect(hs[1], hs[4]),
+                        connect(hs[8], hs[4]),
+                        connect(hs[7], hs[5]),
+                       ], t, [], [])
+@test equations(expand_connections(sys)) == [(:hs_1, :hs_2, :hs_3, :hs_4, :hs_8) ~ 0, (:hs_7, :hs_5) ~ 0]
+@named sys = ODESystem([connect(hs[1], hs[2]),
+                        connect(hs[3], hs[2]),
+                        connect(hs[1], hs[4]),
+                        connect(hs[8], hs[4]),
+                        connect(hs[2], hs[8]),
+                       ], t, [], [])
+@test_throws Any expand_connections(sys)
