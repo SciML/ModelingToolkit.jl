@@ -21,7 +21,7 @@ using ModelingToolkit: ODESystem, AbstractSystem,var_from_nested_derivative, Dif
                        get_structure, defaults, InvalidSystemException,
                        ExtraEquationsSystemException,
                        ExtraVariablesSystemException,
-                       get_postprocess_fbody
+                       get_postprocess_fbody, vars!
 
 using ModelingToolkit.BipartiteGraphs
 using LightGraphs
