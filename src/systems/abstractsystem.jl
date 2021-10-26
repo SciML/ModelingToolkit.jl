@@ -811,6 +811,7 @@ topological sort of the observed equations. When `simplify=true`, the `simplify`
 function will be applied during the tearing process.
 """
 function structural_simplify(sys::AbstractSystem; simplify=false)
+    sys = expand_connects(sys)
     sys = initialize_system_structure(alias_elimination(sys))
     check_consistency(sys)
     if sys isa ODESystem
@@ -923,8 +924,72 @@ function promote_connect_type(T, S)
     error("Don't know how to connect systems of type $S and $T")
 end
 
+struct Connect
+    syss
+end
+
+function Base.show(io::IO, c::Connect)
+    syss = c.syss
+    if syss === nothing
+        print(io, "<Connect>")
+    else
+        print(io, "<", join((nameof(s) for s in syss), ", "), ">")
+    end
+end
+
 function connect(syss...)
-    connect(promote_connect_type(map(get_connection_type, syss)...), syss...)
+    length(syss) >= 2 || error("connect takes at least two systems!")
+    length(unique(nameof, syss)) == length(syss) || error("connect takes distinct systems!")
+    Equation(Connect(nothing), Connect(syss)) # the RHS are connected systems
+end
+
+function expand_connects(sys::AbstractSystem; debug=false)
+    sys = flatten(sys)
+    eqs′ = equations(sys)
+    eqs = Equation[]
+    cts = []
+    for eq in eqs′
+        eq.lhs isa Connect ? push!(cts, eq.rhs.syss) : push!(eqs, eq) # split connections and equations
+    end
+
+    # O(n) algorithm for connection fusing
+    sys2idx = Dict{Symbol,Int}() # system (name) to n-th connect statement
+    narg_connects = Vector{Any}[]
+    for (i, syss) in enumerate(cts)
+        # find intersecting connections
+        exclude = findfirst(s->haskey(sys2idx, nameof(s)), syss)
+        if exclude === nothing
+            push!(narg_connects, collect(syss))
+            for s in syss
+                sys2idx[nameof(s)] = length(narg_connects)
+            end
+        else
+            # fuse intersecting connections
+            for (j, s) in enumerate(syss); j == exclude && continue
+                push!(narg_connects[idx], s)
+            end
+        end
+    end
+
+    # validation
+    for syss in narg_connects
+        length(unique(nameof, syss)) == length(syss) || error("$(Connect(syss)) has duplicated connections")
+    end
+
+    if debug
+        println("Connections:")
+        print_with_indent(x) = println(" " ^ 4, x)
+        foreach(print_with_indent ∘ Connect, narg_connects)
+    end
+
+    # generate connections
+    for syss in narg_connects
+        T = promote_connect_type(map(get_connection_type, syss)...)
+        append!(eqs, connect(T, syss...))
+    end
+
+    @set! sys.eqs = eqs
+    return sys
 end
 
 ###

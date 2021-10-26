@@ -167,7 +167,9 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     end
     iv = value(iv)
     iv === nothing && throw(ArgumentError("Please pass in independent variables."))
+    connecteqs = Equation[]
     for eq in eqs
+        eq.lhs isa Connect && (push!(connecteqs, eq); continue)
         collect_vars!(allstates, ps, eq.lhs, iv)
         collect_vars!(allstates, ps, eq.rhs, iv)
         if isdiffeq(eq)
@@ -182,7 +184,7 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     end
     algevars = setdiff(allstates, diffvars)
     # the orders here are very important!
-    return ODESystem(append!(diffeq, algeeq), iv, vcat(collect(diffvars), collect(algevars)), ps; kwargs...)
+    return ODESystem(Equation[diffeq; algeeq; connecteqs], iv, vcat(collect(diffvars), collect(algevars)), ps; kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian
