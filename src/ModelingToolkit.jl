@@ -102,6 +102,20 @@ function states end
 """
 $(TYPEDSIGNATURES)
 
+Get the set of states decorated as inputs for the given system.
+"""
+function inputs end
+
+"""
+$(TYPEDSIGNATURES)
+
+Get the set of states decorated as outputs for the given system.
+"""
+function outputs end
+
+"""
+$(TYPEDSIGNATURES)
+
 Get the set of parameters variables for the given system.
 """
 function parameters end
@@ -173,7 +187,7 @@ export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
-export independent_variables, independent_variable, states, parameters, equations, controls, observed, structure
+export independent_variables, independent_variable, states, parameters, equations, controls, observed, structure, inputs, outputs
 export structural_simplify
 export DiscreteSystem, DiscreteProblem
 

@@ -394,6 +394,15 @@ function states(sys::AbstractSystem)
            [sts; reduce(vcat,namespace_variables.(systems))])
 end
 
+function inputs(sys::AbstractSystem)
+    [st for st in states(sys) if isinput(st)]
+end
+
+function outputs(sys::AbstractSystem)
+    sts = vcat(states(sys), map(x->x.lhs, observed(sys)))
+    [st for st in sts if isoutput(st)]
+end
+
 function parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     systems = get_systems(sys)
