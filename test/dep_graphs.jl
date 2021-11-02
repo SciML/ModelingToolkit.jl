@@ -1,5 +1,5 @@
 using Test
-using ModelingToolkit, LightGraphs, DiffEqJump
+using ModelingToolkit, Graphs, DiffEqJump
 
 import ModelingToolkit: value
 

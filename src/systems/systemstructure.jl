@@ -9,7 +9,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
     value, InvalidSystemException, isdifferential, _iszero, isparameter,
     independent_variables, isinput
 using ..BipartiteGraphs
-using LightGraphs
+using Graphs
 using UnPack
 using Setfield
 using SparseArrays
