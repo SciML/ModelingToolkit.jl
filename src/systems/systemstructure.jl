@@ -16,9 +16,9 @@ using SparseArrays
 
 quick_cancel_expr(expr) = Rewriters.Postwalk(
     quick_cancel,
-    similarterm=(x, f, args) -> similarterm(
+    similarterm=(x, f, args; kws...) -> similarterm(
         x, f, args, SymbolicUtils.symtype(x);
-        metadata=SymbolicUtils.metadata(x)
+        metadata=SymbolicUtils.metadata(x), kws...
     )
 )(expr)
 
