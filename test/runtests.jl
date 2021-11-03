@@ -7,6 +7,7 @@ using SafeTestsets, Test
 @safetestset "Simplify Test" begin include("simplify.jl") end
 @safetestset "Direct Usage Test" begin include("direct.jl") end
 @safetestset "System Linearity Test" begin include("linearity.jl") end
+@safetestset "Input Output Test" begin include("input_output_handling.jl") end
 @safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
 @safetestset "ODESystem Test" begin include("odesystem.jl") end
 @safetestset "Unitful Quantities Test" begin include("units.jl") end
