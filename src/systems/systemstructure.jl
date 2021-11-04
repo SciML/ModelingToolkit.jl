@@ -7,7 +7,7 @@ using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
     value, InvalidSystemException, isdifferential, _iszero, isparameter,
-    independent_variables, isinput
+    independent_variables, isinput, SparseMatrixCLIL
 using ..BipartiteGraphs
 using Graphs
 using UnPack
@@ -50,7 +50,7 @@ end
 =#
 
 export SystemStructure, SystemPartition
-export initialize_system_structure, find_linear_equations
+export initialize_system_structure, find_linear_equations, linear_subsys_adjmat
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq
 export dervars_range, diffvars_range, algvars_range
 
@@ -229,7 +229,7 @@ function initialize_system_structure(sys; quick_cancel=false)
     return sys
 end
 
-function find_linear_equations(sys)
+function linear_subsys_adjmat(sys)
     s = structure(sys)
     @unpack fullvars, graph = s
     is_linear_equations = falses(nsrcs(graph))
@@ -273,7 +273,10 @@ function find_linear_equations(sys)
         end
     end
 
-    return is_linear_equations, eadj, cadj
+    linear_equations = findall(is_linear_equations)
+    return SparseMatrixCLIL(nsrcs(graph),
+                           ndsts(graph),
+                           linear_equations, eadj, cadj)
 end
 
 function Base.show(io::IO, mime::MIME"text/plain", s::SystemStructure)
