@@ -7,36 +7,29 @@ include("compat/bareiss.jl")
 function alias_elimination(sys)
     sys = initialize_system_structure(sys; quick_cancel=true)
     s = structure(sys)
-    is_linear_equations, eadj, cadj = find_linear_equations(sys)
 
-    v_eliminated, v_types, n_null_vars, degenerate_equations, linear_equations = alias_eliminate_graph(
-        s, is_linear_equations, eadj, cadj
-    )
+    mm = linear_subsys_adjmat(sys)
+    size(mm, 1) == 0 && return sys # No linear subsystems
 
-    s = structure(sys)
+    ag, mm = alias_eliminate_graph!(s.graph, s.varassoc, mm)
+
     @unpack fullvars, graph = s
 
-    n_reduced_states = length(v_eliminated) - n_null_vars
     subs = OrderedDict()
-    if n_reduced_states > 0
-        for (i, v) in enumerate(@view v_eliminated[n_null_vars+1:end])
-            subs[fullvars[v]] = iszeroterm(v_types, v) ? 0.0 :
-                                isalias(v_types, v) ? fullvars[alias(v_types, v)] :
-                                -fullvars[negalias(v_types, v)]
-        end
+    for (v, (coeff, alias)) in pairs(ag)
+        subs[fullvars[v]] = iszero(coeff) ? 0 : coeff * fullvars[alias]
     end
 
     dels = Set{Int}()
     eqs = copy(equations(sys))
-    for (ei, e) in enumerate(linear_equations)
+    for (ei, e) in enumerate(mm.nzrows)
         vs = 𝑠neighbors(graph, e)
         if isempty(vs)
             push!(dels, e)
         else
-            rhs = 0
-            for vj in eachindex(vs)
-                var = fullvars[vs[vj]]
-                rhs += cadj[ei][vj] * var
+            rhs = mapfoldl(+, pairs(nonzerosmap(@view mm[ei, :]))) do (var, coeff)
+                iszero(coeff) && return 0
+                return coeff * fullvars[var]
             end
             eqs[e] = 0 ~ rhs
         end
@@ -52,7 +45,7 @@ function alias_elimination(sys)
     newstates = []
     sts = states(sys)
     for j in eachindex(fullvars)
-        if isirreducible(v_types, j)
+        if !(j in keys(ag))
             isdervar(s, j) || push!(newstates, fullvars[j])
         end
     end
@@ -62,163 +55,6 @@ function alias_elimination(sys)
     @set! sys.observed = [observed(sys); [lhs ~ rhs for (lhs, rhs) in pairs(subs)]]
     @set! sys.structure = nothing
     return sys
-end
-
-"""
-    SparseMatrixCLIL{T, Ti}
-
-The SparseMatrixCLIL represents a sparse matrix in two distinct ways:
-
-1. As a sparse (in both row and column) n x m matrix
-2. As a row-dense, column-sparse k x m matrix
-
-The data structure keeps a permutation between the row order of the two representations.
-Swapping the rows in one does not affect the other.
-
-On construction, the second representation is equivalent to the first with fully-sparse
-rows removed, though this may cease being true as row permutations are being applied
-to the matrix.
-
-The default structure of the `SparseMatrixCLIL` type is the second structure, while
-the first is available via the thin `AsSubMatrix` wrapper.
-"""
-struct SparseMatrixCLIL{T, Ti<:Integer} <: AbstractSparseMatrix{T, Ti}
-    nparentrows::Int
-    ncols::Int
-    nzrows::Vector{Ti}
-    row_cols::Vector{Vector{Ti}}
-    row_vals::Vector{Vector{T}}
-end
-Base.size(S::SparseMatrixCLIL) = (length(S.nzrows), S.ncols)
-Base.copy(S::SparseMatrixCLIL{T, Ti}) where {T, Ti} =
-    SparseMatrixCLIL(S.nparentrows, S.ncols, copy(S.nzrows), copy(S.row_cols), copy(S.row_vals))
-function swaprows!(S::SparseMatrixCLIL, i, j)
-    swap!(S.nzrows, i, j)
-    swap!(S.row_cols, i, j)
-    swap!(S.row_vals, i, j)
-end
-
-function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swapto, pivot, last_pivot; pivot_equal_optimization=true)
-    # for ei in nzrows(>= k)
-    eadj = M.row_cols
-    old_cadj = M.row_vals
-    vpivot = swapto[2]
-
-    ## N.B.: Micro-optimization
-    #
-    # For rows that do not have an entry in the eliminated column, all this
-    # update does is multiply the row in question by `pivot/last_pivot` (the
-    # result of which is guaranteed to be integer by general properties of the
-    # bareiss algorithm, even if `pivot/last_pivot` is not).
-    #
-    # Thus, when `pivot == last pivot`, we can skip the update for any rows that
-    # do not have an entry in the eliminated column (because we'd simply be
-    # multiplying by 1).
-    #
-    # As an additional MTK-specific enhancement, we further allow the case
-    # when the absolute values are equal, i.e. effectively multiplying the row
-    # by `-1`. To ensure this is legal, we need to show two things.
-    # 1. The multiplication does not change the answer and
-    # 2. The multiplication does not affect the fraction-freeness of the Bareiss
-    #    algorithm.
-    #
-    # For point 1, remember that we're working on a system of linear equations,
-    # so it is always legal for us to multiply any row by a sclar without changing
-    # the underlying system of equations.
-    #
-    # For point 2, note that the factorization we're now computing is the same
-    # as if we had multiplied the corresponding row (accounting for row swaps)
-    # in the original matrix by `last_pivot/pivot`, ensuring that the matrix
-    # itself has integral entries when `last_pivot/pivot` is integral (here we
-    # have -1, which counts). We could use the more general integrality
-    # condition, but that would in turn disturb the growth bounds on the
-    # factorization matrix entries that the bareiss algorithm guarantees. To be
-    # conservative, we leave it at this, as this captures the most important
-    # case for MTK (where most pivots are `1` or `-1`).
-    pivot_equal = pivot_equal_optimization && abs(pivot) == abs(last_pivot)
-
-    for ei in k+1:size(M, 1)
-        # elimate `v`
-        coeff = 0
-        ivars = eadj[ei]
-        vj = findfirst(isequal(vpivot), ivars)
-        if vj !== nothing
-            coeff = old_cadj[ei][vj]
-            deleteat!(old_cadj[ei], vj)
-            deleteat!(eadj[ei], vj)
-        elseif pivot_equal
-            continue
-        end
-
-        # the pivot row
-        kvars = eadj[k]
-        kcoeffs = old_cadj[k]
-        # the elimination target
-        ivars = eadj[ei]
-        icoeffs = old_cadj[ei]
-
-        tmp_incidence = similar(eadj[ei], 0)
-        tmp_coeffs = similar(old_cadj[ei], 0)
-        vars = union(ivars, kvars)
-
-        for v in vars
-            v == vpivot && continue
-            ck = getcoeff(kvars, kcoeffs, v)
-            ci = getcoeff(ivars, icoeffs, v)
-            ci = (pivot*ci - coeff*ck) ÷ last_pivot
-            if ci !== 0
-                push!(tmp_incidence, v)
-                push!(tmp_coeffs, ci)
-            end
-        end
-
-        eadj[ei] = tmp_incidence
-        old_cadj[ei] = tmp_coeffs
-    end
-
-    # Swap pivots to the front of the coefficient list
-    # TODO: This prevents the coefficient list from being sorted, making
-    # the rest of the algorithm much more expensive
-    pivot_idx = findfirst(==(vpivot), eadj[k])
-    deleteat!(eadj[k], pivot_idx)
-    deleteat!(old_cadj[k], pivot_idx)
-    pushfirst!(eadj[k], vpivot)
-    pushfirst!(old_cadj[k], pivot)
-end
-
-function bareiss_update_virtual_colswap_mtk!(zero!, M::AbstractMatrix, k, swapto, pivot, last_pivot; pivot_equal_optimization=true)
-    if pivot_equal_optimization
-        error("MTK pivot micro-optimization not implemented for `$(typeof(M))`.
-            Turn off the optimization for debugging or use a different matrix type.")
-    end
-    bareiss_update_virtual_colswap!(zero!, M, k, swapto, pivot, last_pivot)
-end
-
-struct AsSubMatrix{T, Ti<:Integer} <: AbstractSparseMatrix{T, Ti}
-    M::SparseMatrixCLIL{T, Ti}
-end
-Base.size(S::AsSubMatrix) = (S.M.nparentrows, S.M.ncols)
-
-function Base.getindex(S::SparseMatrixCLIL{T}, i1, i2) where {T}
-    checkbounds(S, i1, i2)
-
-    nncol = findfirst(==(i2), S.row_cols[i1])
-    isnothing(nncol) && return zero(T)
-
-    return S.row_vals[i1][nncol]
-end
-
-function Base.getindex(S::AsSubMatrix{T}, i1, i2) where {T}
-    checkbounds(S, i1, i2)
-    S = S.M
-
-    nnrow = findfirst(==(i1), S.nzrows)
-    isnothing(nnrow) && return zero(T)
-
-    nncol = findfirst(==(i2), S.row_cols[nnrow])
-    isnothing(nncol) && return zero(T)
-
-    return S.row_vals[nnrow][nncol]
 end
 
 """
@@ -274,11 +110,93 @@ function find_masked_pivot(variables, M, k)
     return r
 end
 
-function alias_eliminate_graph(s::SystemStructure, is_linear_equations, eadj, cadj)
-    @unpack graph, varassoc = s
+"""
+    AliasGraph
+
+When eliminating variables, keeps track of which variables where eliminated in
+favor of which others.
+
+Currently only supports elimination as direct aliases (+- 1).
+
+We represent this as a dict from eliminated variables to a (coeff, var) pair
+representing the variable that it was aliased to.
+"""
+struct AliasGraph <: AbstractDict{Int, Pair{Int, Int}}
+    aliasto::Vector{Union{Int, Nothing}}
+    eliminated::Vector{Int}
+    function AliasGraph(nvars::Int)
+        new(fill(nothing, nvars), Int[])
+    end
+end
+
+function Base.getindex(ag::AliasGraph, i::Integer)
+    r = ag.aliasto[i]
+    r === nothing && throw(KeyError(i))
+    coeff, var = (sign(r), abs(r))
+    if var in keys(ag)
+        # Amortized lookup. Check if since we last looked this up, our alias was
+        # itself aliased. If so, adjust adjust the alias table.
+        ac, av = ag[var]
+        nc = ac * coeff
+        ag.aliasto[var] = nc > 0 ? av : -av
+    end
+    return (coeff, var)
+end
+
+function Base.iterate(ag::AliasGraph, state...)
+    r = Base.iterate(ag.eliminated, state...)
+    r === nothing && return nothing
+    c = ag.aliasto[r[1]]
+    return (r[1] => (c == 0 ? 0 :
+                     c >= 0 ? 1 :
+                             -1, abs(c))), r[2]
+end
+
+function Base.setindex!(ag::AliasGraph, v::Integer, i::Integer)
+    @assert v == 0
+    if ag.aliasto[i] === nothing
+        push!(ag.eliminated, i)
+    end
+    ag.aliasto[i] = 0
+    return 0=>0
+end
+
+function Base.setindex!(ag::AliasGraph, p::Pair{Int, Int}, i::Integer)
+    (c, v) = p
+    @assert v != 0 && c in (-1, 1)
+    if ag.aliasto[i] === nothing
+        push!(ag.eliminated, i)
+    end
+    ag.aliasto[i] = c > 0 ? v : -v
+    return p
+end
+
+function Base.get(ag::AliasGraph, i::Integer, default)
+    i in keys(ag) || return default
+    return ag[i]
+end
+
+struct AliasGraphKeySet <: AbstractSet{Int}
+    ag::AliasGraph
+end
+Base.keys(ag::AliasGraph) = AliasGraphKeySet(ag)
+Base.iterate(agk::AliasGraphKeySet, state...) = Base.iterate(agk.ag.eliminated, state...)
+Base.in(i::Int, agk::AliasGraphKeySet) = agk.ag.aliasto[i] !== nothing
+
+count_nonzeros(a::AbstractArray) = count(!iszero, a)
+
+# N.B.: Ordinarily sparse vectors allow zero stored elements.
+# Here we have a guarantee that they won't, so we can make this identification
+count_nonzeros(a::SparseVector) = nnz(a)
+
+function alias_eliminate_graph!(graph, varassoc, mm_orig::SparseMatrixCLIL)
     invvarassoc = inverse_mapping(varassoc)
 
-    old_cadj = map(copy, cadj)
+    mm = copy(mm_orig)
+    is_linear_equations = falses(size(AsSubMatrix(mm_orig), 1))
+    for e in mm_orig.nzrows
+        is_linear_equations[e] = true
+    end
 
     is_not_potential_state = iszero.(varassoc)
     is_linear_variables = copy(is_not_potential_state)
@@ -289,14 +207,9 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_equations, eadj, ca
     end
     solvable_variables = findall(is_linear_variables)
 
-    linear_equations = findall(is_linear_equations)
-
-    mm = SparseMatrixCLIL(nsrcs(graph),
-                          ndsts(graph),
-                          linear_equations, eadj, old_cadj)
-
-    function do_bareiss!(M, cadj=nothing)
+    function do_bareiss!(M, Mold=nothing)
         rank1 = rank2 = nothing
+        pivots = Int[]
         function find_pivot(M, k)
             if rank1 === nothing
                 r = find_masked_pivot(is_linear_variables, M, k)
@@ -310,76 +223,70 @@ function alias_eliminate_graph(s::SystemStructure, is_linear_equations, eadj, ca
             end
             return find_masked_pivot(nothing, M, k)
         end
+        function find_and_record_pivot(M, k)
+            r = find_pivot(M, k)
+            r === nothing && return nothing
+            push!(pivots, r[1][2])
+            return r
+        end
         function myswaprows!(M, i, j)
-            cadj !== nothing && swap!(cadj, i, j)
+            Mold !== nothing && swaprows!(Mold, i, j)
             swaprows!(M, i, j)
         end
         bareiss_ops = ((M,i,j)->nothing, myswaprows!, bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
-        rank3 = bareiss!(M, bareiss_ops; find_pivot)
+        rank3 = bareiss!(M, bareiss_ops; find_pivot=find_and_record_pivot)
         rank1 = something(rank1, rank3)
         rank2 = something(rank2, rank3)
-        (rank1, rank2, rank3)
+        (rank1, rank2, rank3, pivots)
     end
 
     # mm2 = Array(copy(mm))
     # @show do_bareiss!(mm2)
     # display(mm2)
 
-    (rank1, rank2, rank3) = do_bareiss!(mm, cadj)
+    # Step 1: Perform bareiss factorization on the adjacency matrix of the linear
+    #         subsystem of the system we're interested in.
+    (rank1, rank2, rank3, pivots) = do_bareiss!(mm, mm_orig)
 
-    v_solved = [eadj[i][1] for i in 1:rank1]
-    v_eliminated = setdiff(solvable_variables, v_solved)
-    n_null_vars = length(v_eliminated)
-
-    v_types = fill(KEEP, ndsts(graph))
-    for v in v_eliminated
-        v_types[v] = 0
+    # Step 2: Simplify the system using the bareiss factorization
+    ag = AliasGraph(size(mm, 2))
+    for v in setdiff(solvable_variables, @view pivots[1:rank1])
+        ag[v] = 0
     end
 
     # kind of like the backward substitution
-    for ei in reverse(1:rank2)
-        locally_structure_simplify!(
-                                    (eadj[ei], old_cadj[ei]),
-                                    invvarassoc, v_eliminated, v_types
-                                   )
-    end
+    lss!(ei::Integer) = locally_structure_simplify!((@view mm[ei, :]), pivots[ei], ag, invvarassoc[pivots[ei]] == 0)
 
-    reduced = false
-    for ei in 1:rank2
-        if length(cadj[ei]) >= length(old_cadj[ei])
-            cadj[ei] = old_cadj[ei]
-        else
-            # MEMORY ALIAS of a vector
-            eadj[ei] = 𝑠neighbors(graph, linear_equations[ei])
-            reduced |= locally_structure_simplify!(
-                                                   (eadj[ei], cadj[ei]),
-                                                   invvarassoc, v_eliminated, v_types
-                                                  )
+    # Step 2.1: Go backwards, collecting eliminated variables and substituting
+    #         alias as we go.
+    foreach(lss!, reverse(1:rank2))
+
+    # Step 2.2: Sometimes bareiss can make the equations more complicated.
+    #         Go back and check the original matrix. If this happened,
+    #         Replace the equation by the one from the original system,
+    #         but be sure to also run lss! again, since we only ran that
+    #         on the bareiss'd matrix, not the original one.
+    reduced = mapreduce(|, 1:rank2; init=false) do ei
+        if count_nonzeros(@view mm_orig[ei, :]) < count_nonzeros(@view mm[ei, :])
+            mm[ei, :] = @view mm_orig[ei, :]
+            return lss!(ei)
         end
+        return false
     end
 
-    while reduced
-        for ei in 1:rank2
-            if !isempty(eadj[ei])
-                reduced |= locally_structure_simplify!(
-                                                       (eadj[ei], cadj[ei]),
-                                                       invvarassoc, v_eliminated, v_types
-                                                      )
-                reduced && break # go back to the begining of equations
-            end
-        end
+    # Step 2.3: Iterate to convergance.
+    #         N.B.: `lss!` modifies the array.
+    # TODO: We know exactly what variable we eliminated. Starting over at the
+    #       start is wasteful. We can lookup which equations have this variable
+    #       using the graph.
+    reduced && while any(lss!, 1:rank2); end
+
+    # Step 3: Reflect our update decitions back into the graph
+    for (ei, e) in enumerate(mm.nzrows)
+        graph.fadjlist[e] = mm.row_cols[ei]
     end
 
-    for ei in rank2+1:length(linear_equations)
-        cadj[ei] = old_cadj[ei]
-    end
-
-    for (ei, e) in enumerate(linear_equations)
-        graph.fadjlist[e] = eadj[ei]
-    end
-
-    degenerate_equations = rank3 < length(linear_equations) ? linear_equations[rank3+1:end] : Int[]
-    return v_eliminated, v_types, n_null_vars, degenerate_equations, linear_equations
+    return ag, mm
 end
 
 iszeroterm(v_types, v) = v_types[v] == 0
@@ -388,76 +295,56 @@ isalias(v_types, v) = v_types[v] > 0 && !isirreducible(v_types, v)
 alias(v_types, v) = v_types[v]
 negalias(v_types, v) = -v_types[v]
 
-function locally_structure_simplify!(
-        (vars, coeffs),
-        invvarassoc, v_eliminated, v_types
-       )
-    while length(vars) > 1 && any(!isequal(KEEP), (v_types[v] for v in @view vars[2:end]))
-        for vj in 2:length(vars)
-            v = vars[vj]
-            if isirreducible(v_types, v)
-                continue
-            elseif iszeroterm(v_types, v)
-                deleteat!(vars, vj)
-                deleteat!(coeffs, vj)
-                break
-            else
-                coeff = coeffs[vj]
-                if isalias(v_types, v)
-                    v = alias(v_types, v)
-                else
-                    v = negalias(v_types, v)
-                    coeff = -coeff
-                end
+function exactdiv(a::Integer, b::Integer)
+    d, r = divrem(a, b)
+    @assert r == 0
+    return d
+end
 
-                has_v = false
-                for vi in 2:length(vars)
-                    (vi !== vj && vars[vi] == v) || continue
-                    has_v = true
-                    c = (coeffs[vi] += coeff)
-                    if c == 0
-                        if vi < vj
-                            deleteat!(vars, [vi, vj])
-                            deleteat!(coeffs, [vi, vj])
-                        else
-                            deleteat!(vars, [vj, vi])
-                            deleteat!(coeffs, [vj, vi])
-                        end
-                    end
-                    break
-                end # for vi
+function locally_structure_simplify!(adj_row, pivot_col, ag, may_eliminate)
+    pivot_val = adj_row[pivot_col]
+    iszero(pivot_val) && return false
 
-                if has_v
-                    break
-                else
-                    vars[vj] = v
-                    coeffs[vj] = coeff
-                end # if
-            end # else
-        end # for
-    end # while
+    nirreducible = 0
+    alias_candidate = 0
 
-    v = first(vars)
-
-    # Do not attempt to eliminate derivatives
-    invvarassoc[v] != 0 && return false
-
-    if length(vars) == 1
-        push!(v_eliminated, v)
-        v_types[v] = 0
-        empty!(vars); empty!(coeffs)
-        return true
-    elseif length(vars) == 2 && abs(coeffs[1]) == abs(coeffs[2])
-        if (coeffs[1] > 0 && coeffs[2] < 0) || (coeffs[1] < 0 && coeffs[2] > 0)
-            # positive alias
-            push!(v_eliminated, v)
-            v_types[v] = vars[2]
-        else
-            # negative alias
-            push!(v_eliminated, v)
-            v_types[v] = -vars[2]
+    # N.B.: Assumes that the non-zeros iterator is robust to modification
+    # of the underlying array datastructure.
+    for (var, val) in pairs(nonzerosmap(adj_row))
+        # Go through every variable/coefficient in this row and apply all aliases
+        # that we have so far accumulated in `ag`, updating the adj_row as
+        # we go along.
+        var == pivot_col && continue
+        iszero(val) && continue
+        alias = get(ag, var, nothing)
+        if alias === nothing
+            nirreducible += 1
+            alias_candidate = val => var
+            continue
         end
-        empty!(vars); empty!(coeffs)
+        (coeff, alias_var) = alias
+        adj_row[var] = 0
+        if alias_var != 0
+            val *= coeff
+            new_coeff = (adj_row[alias_var] += val)
+            if alias_var < var
+                # If this adds to a coeff that was not previously accounted for, and
+                # we've already passed it, make sure to count it here. We're
+                # relying on `var` being produced in sorted order here.
+                nirreducible += 1
+                alias_candidate = new_coeff => alias_var
+            end
+        end
+    end
+
+    if may_eliminate && nirreducible <= 1
+        # There were only one or two terms left in the equation (including the pivot variable).
+        # We can eliminate the pivot variable.
+        if alias_candidate !== 0
+            alias_candidate = -exactdiv(alias_candidate[1], pivot_val) => alias_candidate[2]
+        end
+        ag[pivot_col] = alias_candidate
+        zero!(adj_row)
         return true
     end
     return false
