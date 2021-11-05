@@ -7,10 +7,12 @@ using ModelingToolkit, OrdinaryDiffEq
     ODESystem(Equation[], t, sts, []; name=name)
 end
 
-function ModelingToolkit.connect(::Type{Pin}, ps...)
-    eqs = [
-           0 ~ sum(p->p.i, ps) # KCL
-          ]
+function ModelingToolkit.connect(::Type{Pin}, c::Connection)
+    @unpack outers, inners = c
+    isum = isempty(inners) ? 0 : sum(p->p.i, inners)
+    osum = isempty(outers) ? 0 : sum(p->p.i, outers)
+    eqs = [0 ~ isum - osum] # KCL
+    ps = [outers; inners]
     # KVL
     for i in 1:length(ps)-1
         push!(eqs, ps[i].v ~ ps[i+1].v)

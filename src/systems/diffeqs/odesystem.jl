@@ -169,7 +169,7 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     iv === nothing && throw(ArgumentError("Please pass in independent variables."))
     connecteqs = Equation[]
     for eq in eqs
-        eq.lhs isa Connect && (push!(connecteqs, eq); continue)
+        eq.lhs isa Connection && (push!(connecteqs, eq); continue)
         collect_vars!(allstates, ps, eq.lhs, iv)
         collect_vars!(allstates, ps, eq.rhs, iv)
         if isdiffeq(eq)

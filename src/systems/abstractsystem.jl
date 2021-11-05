@@ -924,18 +924,18 @@ function promote_connect_type(T, S)
     error("Don't know how to connect systems of type $S and $T")
 end
 
-Base.@kwdef struct Connect
+Base.@kwdef struct Connection
     inners = nothing
     outers = nothing
 end
 
-Connect(syss) = Connect(inners=syss)
-get_systems(c::Connect) = c.inners
+Connection(syss) = Connection(inners=syss)
+get_systems(c::Connection) = c.inners
 
-function Base.show(io::IO, c::Connect)
+function Base.show(io::IO, c::Connection)
     @unpack outers, inners = c
     if outers === nothing && inners === nothing
-        print(io, "<Connect>")
+        print(io, "<Connection>")
     else
         inner_str = join((string(nameof(s)) * "::inner" for s in inners), ", ")
         outer_str = join((string(nameof(s)) * "::outer" for s in outers), ", ")
@@ -947,18 +947,15 @@ end
 function connect(syss...)
     length(syss) >= 2 || error("connect takes at least two systems!")
     length(unique(nameof, syss)) == length(syss) || error("connect takes distinct systems!")
-    Equation(Connect(), Connect(syss)) # the RHS are connected systems
+    Equation(Connection(), Connection(syss)) # the RHS are connected systems
 end
-
-# fallback
-connect(T::Type, c::Connect) = connect(T, c.outers..., c.inners...)
 
 function expand_connections(sys::AbstractSystem; debug=false)
     subsys = get_systems(sys)
     isempty(subsys) && return sys
 
     # post order traversal
-    @unpack sys.systems = map(s->expand_connections(s, debug=debug), subsys)
+    @set sys.systems = map(s->expand_connections(s, debug=debug), subsys)
 
 
     # Note that subconnectors in outer connectors are still outer connectors.
@@ -968,19 +965,19 @@ function expand_connections(sys::AbstractSystem; debug=false)
             s = string(nameof(sys))
             idx = findfirst(isequal('₊'), s)
             parent_name = idx === nothing ? s : s[1:idx]
-            parent_name in isouter
+            parent_name in outer_connectors
         end
     end
 
-    eqs′ = equations(sys)
+    eqs′ = get_eqs(sys)
     eqs = Equation[]
     cts = [] # connections
     for eq in eqs′
-        eq.lhs isa Connect ? push!(cts, get_systems(eq.rhs)) : push!(eqs, eq) # split connections and equations
+        eq.lhs isa Connection ? push!(cts, get_systems(eq.rhs)) : push!(eqs, eq) # split connections and equations
     end
 
     sys2idx = Dict{Symbol,Int}() # system (name) to n-th connect statement
-    narg_connects = Vector{Connect}[]
+    narg_connects = Connection[]
     for (i, syss) in enumerate(cts)
         # find intersecting connections
         exclude = 0 # exclude the intersecting system
@@ -997,7 +994,7 @@ function expand_connections(sys::AbstractSystem; debug=false)
             for s in syss
                 isouter(s) ? push!(outers, s) : push!(inners, s)
             end
-            push!(narg_connects, Connect(outers=outers, inners=inners))
+            push!(narg_connects, Connection(outers=outers, inners=inners))
             for s in syss
                 sys2idx[nameof(s)] = length(narg_connects)
             end
@@ -1013,15 +1010,15 @@ function expand_connections(sys::AbstractSystem; debug=false)
 
     # Bad things happen when there are more than one intersections
     for c in narg_connects
-        @unpack outer, inner = c
+        @unpack outers, inners = c
         len = length(outers) + length(inners)
-        length(unique(nameof, [outers; inners])) == len || error("$(Connect(syss)) has duplicated connections")
+        length(unique(nameof, [outers; inners])) == len || error("$(Connection(syss)) has duplicated connections")
     end
 
     if debug
         println("Connections:")
         print_with_indent(x) = println(" " ^ 4, x)
-        foreach(print_with_indent ∘ Connect, narg_connects)
+        foreach(print_with_indent, narg_connects)
     end
 
     for c in narg_connects
@@ -1033,66 +1030,6 @@ function expand_connections(sys::AbstractSystem; debug=false)
     @set! sys.eqs = eqs
     return sys
 end
-
-#=
-function expand_connections(sys::AbstractSystem; debug=false)
-    sys = flatten(sys)
-    eqs′ = equations(sys)
-    eqs = Equation[]
-    cts = []
-    for eq in eqs′
-        eq.lhs isa Connect ? push!(cts, eq.rhs.syss) : push!(eqs, eq) # split connections and equations
-    end
-
-    # O(n) algorithm for connection fusing
-    sys2idx = Dict{Symbol,Int}() # system (name) to n-th connect statement
-    narg_connects = Vector{Any}[]
-    for (i, syss) in enumerate(cts)
-        # find intersecting connections
-        exclude = 0 # exclude the intersecting system
-        idx = 0     # idx of narg_connects
-        for (j, s) in enumerate(syss)
-            idx′ = get(sys2idx, nameof(s), nothing)
-            idx′ === nothing && continue
-            idx = idx′
-            exclude = j
-        end
-        if exclude == 0
-            push!(narg_connects, collect(syss))
-            for s in syss
-                sys2idx[nameof(s)] = length(narg_connects)
-            end
-        else
-            # fuse intersecting connections
-            for (j, s) in enumerate(syss); j == exclude && continue
-                sys2idx[nameof(s)] = idx
-                push!(narg_connects[idx], s)
-            end
-        end
-    end
-
-    # validation
-    for syss in narg_connects
-        length(unique(nameof, syss)) == length(syss) || error("$(Connect(syss)) has duplicated connections")
-    end
-
-    if debug
-        println("Connections:")
-        print_with_indent(x) = println(" " ^ 4, x)
-        foreach(print_with_indent ∘ Connect, narg_connects)
-    end
-
-    # generate connections
-    for syss in narg_connects
-        T = promote_connect_type(map(get_connection_type, syss)...)
-        ceqs = connect(T, syss...)
-        ceqs isa Equation ? push!(eqs, ceqs) : append!(eqs, ceqs)
-    end
-
-    @set! sys.eqs = eqs
-    return sys
-end
-=#
 
 ###
 ### Inheritance & composition
