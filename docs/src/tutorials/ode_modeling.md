@@ -211,7 +211,7 @@ again are just algebraic relations:
 connections = [ fol_1.f ~ 1.5,
                 fol_2.f ~ fol_1.x ]
 
-@named connected = compose(ODESystem(connections), fol_1, fol_2)
+connected = compose(ODESystem(connections,name=:connected), fol_1, fol_2)
       # Model connected with 5 equations
       # States (5):
       #   fol_1₊f(t)
