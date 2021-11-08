@@ -125,15 +125,31 @@ function partitions_dag(s::SystemStructure)
     sparse(I, J, true, n, n)
 end
 
-function gen_nlsolve(sys, eqs, vars; checkbounds=true)
-    @assert !isempty(vars)
-    @assert length(eqs) == length(vars)
+"""
+    exprs = gen_nlsolve(eqs::Vector{Equation}, vars::Vector, u0map::Dict; checkbounds = true)
+
+Generate `SymbolicUtils` expressions for a root-finding function based on `eqs`,
+as well as a call to the root-finding solver.
+
+`exprs` is a two element vector
+```
+exprs = [fname = f, numerical_nlsolve(fname, ...)]
+```
+
+# Arguments:
+- `eqs`: Equations to find roots of.
+- `vars`: ???
+- `u0map`: A `Dict` which maps variables in `eqs` to values, e.g., `defaults(sys)` if `eqs = equations(sys)`.
+- `checkbounds`: Apply bounds checking in the generated code.
+"""
+function gen_nlsolve(eqs, vars, u0map::AbstractDict; checkbounds=true)
+    isempty(vars) && throw(ArgumentError("vars may not be empty"))
+    length(eqs) == length(vars) || throw(ArgumentError("vars must be of the same length as the number of equations to find the roots of"))
     rhss = map(x->x.rhs, eqs)
     # We use `vars` instead of `graph` to capture parameters, too.
     allvars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
-    params = setdiff(allvars, vars)
+    params = setdiff(allvars, vars) # these are not the subject of the root finding
 
-    u0map = defaults(sys)
     # splatting to tighten the type
     u0 = [map(var->get(u0map, var, 1e-3), vars)...]
     # specialize on the scalar case
@@ -141,6 +157,7 @@ function gen_nlsolve(sys, eqs, vars; checkbounds=true)
     u0 = isscalar ? u0[1] : SVector(u0...)
 
     fname = gensym("fun")
+    # f is the function to find roots on
     f = Func(
         [
          DestructuredArgs(vars, inbounds=!checkbounds)
@@ -150,6 +167,7 @@ function gen_nlsolve(sys, eqs, vars; checkbounds=true)
         isscalar ? rhss[1] : MakeArray(rhss, SVector)
     ) |> SymbolicUtils.Code.toexpr
 
+    # solver call contains code to call the root-finding solver on the function f
     solver_call = LiteralExpr(quote
             $numerical_nlsolve(
                                $fname,
@@ -174,8 +192,9 @@ function get_torn_eqs_vars(sys; checkbounds=true)
 
     torn_eqs  = map(idxs-> eqs[idxs], map(x->x.e_residual, partitions))
     torn_vars = map(idxs->vars[idxs], map(x->x.v_residual, partitions))
+    u0map = defaults(sys)
 
-    gen_nlsolve.((sys,), torn_eqs, torn_vars, checkbounds=checkbounds)
+    gen_nlsolve.(torn_eqs, torn_vars, (u0map,), checkbounds=checkbounds)
 end
 
 function build_torn_function(
@@ -308,8 +327,8 @@ function build_observed_function(
 
         torn_eqs  = map(idxs-> eqs[idxs.e_residual], subset)
         torn_vars = map(idxs->fullvars[idxs.v_residual], subset)
-
-        solves = gen_nlsolve.((sys,), torn_eqs, torn_vars; checkbounds=checkbounds)
+        u0map = defaults(sys)
+        solves = gen_nlsolve.(torn_eqs, torn_vars, (u0map,); checkbounds=checkbounds)
     else
         solves = []
     end
