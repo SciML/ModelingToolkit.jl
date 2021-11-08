@@ -1,8 +1,5 @@
 module StructuralTransformations
 
-const UNVISITED = typemin(Int)
-const UNASSIGNED = typemin(Int)
-
 using Setfield: @set!, @set
 using UnPack: @unpack
 

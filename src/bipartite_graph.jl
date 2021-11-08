@@ -1,6 +1,6 @@
 module BipartiteGraphs
 
-export BipartiteEdge, BipartiteGraph
+export BipartiteEdge, BipartiteGraph, DiCMOBiGraph, Unassigned, unassigned
 
 export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors, 𝑑neighbors,
        𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST
@@ -10,6 +10,12 @@ using UnPack
 using SparseArrays
 using Graphs
 using Setfield
+
+### Matching
+struct Unassigned
+    global unassigned
+    const unassigned = Unassigned.instance
+end
 
 ###
 ### Edges & Vertex
@@ -267,6 +273,58 @@ function Graphs.incidence_matrix(g::BipartiteGraph, val=true)
         push!(J, n)
     end
     S = sparse(I, J, val, nsrcs(g), ndsts(g))
+end
+
+
+"""
+    struct DiCMOBiGraph
+
+This data structure implements a "directed, contracted, matching-oriented" view of an
+original (undirected) bipartite graph. In particular, it performs two largely
+orthogonal functions.
+
+1. It pairs an undirected bipartite graph with a matching of destination vertex.
+
+    This matching is used to induce an orientation on the otherwise undirected graph:
+    Matched edges pass from destination to source, all other edges pass in the opposite
+    direction.
+
+2. It exposes the graph view obtained by contracting the destination vertices into
+   the source edges.
+
+The result of this operation is an induced, directed graph on the source vertices.
+The resulting graph has a few desirable properties. In particular, this graph
+is acyclic if and only if the induced directed graph on the original bipartite
+graph is acyclic.
+"""
+struct DiCMOBiGraph{I, G<:BipartiteGraph{I}, M} <: Graphs.AbstractGraph{I}
+    graph::G
+    matching::M
+end
+Graphs.is_directed(::Type{<:DiCMOBiGraph}) = true
+Graphs.nv(g::DiCMOBiGraph) = nsrcs(g.graph)
+Graphs.vertices(g::DiCMOBiGraph) = 1:nsrcs(g.graph)
+
+struct CMOOutNeighbors{V}
+    g::DiCMOBiGraph
+    v::V
+end
+Graphs.outneighbors(g::DiCMOBiGraph, v) = CMOOutNeighbors(g, v)
+Base.iterate(c::CMOOutNeighbors) = iterate(c, (c.g.graph.fadjlist[c.v],))
+function Base.iterate(c::CMOOutNeighbors, (l, state...))
+    while true
+        r = iterate(l, state...)
+        r === nothing && return nothing
+        # If this is a matched edge, skip it, it's reversed in the induced
+        # directed graph. Otherwise, if there is no matching for this destination
+        # edge, also skip it, since it got delted in the contraction.
+        vdst = c.g.matching[r[1]]
+        if vdst === c.v || vdst === unassigned
+            state = (r[2],)
+            continue
+        end
+        return vdst, (l, r[2])
+    end
 end
 
 end # module
