@@ -51,7 +51,7 @@ function torn_system_jacobian_sparsity(sys)
             for var in 𝑠neighbors(graph, teq)
                 # Skip the tearing variables in the current partition, because
                 # we are computing them from all the other states.
-                LightGraphs.insorted(var, v_residual) && continue
+                Graphs.insorted(var, v_residual) && continue
                 deps = get(avars2dvars, var, nothing)
                 if deps === nothing # differential variable
                     @assert !isalgvar(s, var)
@@ -257,35 +257,48 @@ function find_solve_sequence(partitions, vars)
 end
 
 function build_observed_function(
-        sys, syms;
+        sys, ts;
         expression=false,
         output_type=Array,
         checkbounds=true
     )
 
-    if (isscalar = !(syms isa Vector))
-        syms = [syms]
+    if (isscalar = !(ts isa AbstractVector))
+        ts = [ts]
     end
-    syms = value.(syms)
-    syms_set = Set(syms)
+    ts = Symbolics.scalarize.(value.(ts))
+
+    vars = Set()
+    foreach(Base.Fix1(vars!, vars), ts)
+    ivs = independent_variables(sys)
+    dep_vars = collect(setdiff(vars, ivs))
+
     s = structure(sys)
     @unpack partitions, fullvars, graph = s
     diffvars = map(i->fullvars[i], diffvars_range(s))
     algvars = map(i->fullvars[i], algvars_range(s))
 
-    required_algvars = Set(intersect(algvars, syms_set))
+    required_algvars = Set(intersect(algvars, vars))
     obs = observed(sys)
     observed_idx = Dict(map(x->x.lhs, obs) .=> 1:length(obs))
     # FIXME: this is a rather rough estimate of dependencies.
     maxidx = 0
-    for (i, s) in enumerate(syms)
+    sts = Set(states(sys))
+    for (i, s) in enumerate(dep_vars)
         idx = get(observed_idx, s, nothing)
-        idx === nothing && continue
+        if idx === nothing
+            if !(s in sts)
+                throw(ArgumentError("$s is either an observed nor a state variable."))
+            end
+            continue
+        end
         idx > maxidx && (maxidx = idx)
     end
+    vs = Set()
     for idx in 1:maxidx
-        vs = vars(obs[idx].rhs)
+        vars!(vs, obs[idx].rhs)
         union!(required_algvars, intersect(algvars, vs))
+        empty!(vs)
     end
 
     varidxs = findall(x->x in required_algvars, fullvars)
@@ -301,12 +314,11 @@ function build_observed_function(
         solves = []
     end
 
-    output = map(syms) do sym
-        if sym in required_algvars
-            sym
-        else
-            obs[observed_idx[sym]].rhs
-        end
+    subs = []
+    for sym in vars
+        eqidx = get(observed_idx, sym, nothing)
+        eqidx === nothing && continue
+        push!(subs, sym ← obs[eqidx].rhs)
     end
     pre = get_postprocess_fbody(sys)
 
@@ -321,8 +333,9 @@ function build_observed_function(
             [
              collect(Iterators.flatten(solves))
              map(eq -> eq.lhs←eq.rhs, obs[1:maxidx])
+             subs
             ],
-            isscalar ? output[1] : MakeArray(output, output_type)
+            isscalar ? ts[1] : MakeArray(ts, output_type)
            ))
     ) |> Code.toexpr
 
@@ -333,6 +346,19 @@ struct ODAEProblem{iip}
 end
 
 ODAEProblem(args...; kw...) = ODAEProblem{true}(args...; kw...)
+
+"""
+    ODAEProblem{iip}(sys, u0map, tspan, parammap = DiffEqBase.NullParameters(); kw...)
+
+This constructor acts similar to the one for [`ODEProblem`](@ref) with the following changes:
+`ODESystem`s can sometimes be further reduced if `structural_simplify` has
+already been applied to them. This is done this constructor.
+In these cases, the constructor uses the knowledge of the strongly connected
+components calculated during the process of simplification as the basis for
+building pre-simplified nonlinear systems in the implicit solving.
+In summary: these problems are structurally modified, but could be
+more efficient and more stable. Note, the returned object is still of type [`ODEProblem`](@ref).
+"""
 function ODAEProblem{iip}(
                           sys,
                           u0map,

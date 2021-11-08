@@ -190,7 +190,8 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     f_gen = generate_function(sys; expression=Val{eval_expression}, expression_module=eval_module)
     f_oop, _ = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
     f(u,p,iv) = f_oop(u,p,iv)
-    DiscreteProblem(f,u0,tspan,p;kwargs...)
+    fd = DiscreteFunction(f, syms=Symbol.(dvs))
+    DiscreteProblem(fd,u0,tspan,p;kwargs...)
 end
 
 function linearize_eqs(sys, eqs=get_eqs(sys); return_max_delay=false)

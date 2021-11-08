@@ -127,10 +127,6 @@ function ODESystem(
     defaults = todict(defaults)
     defaults = Dict{Any,Any}(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    iv′ = value(scalarize(iv))
-    dvs′ = value.(scalarize(dvs))
-    ps′ = value.(scalarize(ps))
-
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
@@ -238,7 +234,7 @@ function build_explicit_observed_function(
     ts = Symbolics.scalarize.(value.(ts))
 
     vars = Set()
-    syms = foreach(Base.Fix1(vars!, vars), ts)
+    foreach(Base.Fix1(vars!, vars), ts)
     ivs = independent_variables(sys)
     dep_vars = collect(setdiff(vars, ivs))
 

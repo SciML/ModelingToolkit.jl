@@ -1,6 +1,6 @@
 using Test
 using ModelingToolkit
-using LightGraphs
+using Graphs
 using SparseArrays
 using UnPack
 

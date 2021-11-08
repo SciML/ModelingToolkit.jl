@@ -1,6 +1,6 @@
 module BipartiteGraphs
 
-export BipartiteEdge, BipartiteGraph
+export BipartiteEdge, BipartiteGraph, DiCMOBiGraph, Unassigned, unassigned
 
 export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors, 𝑑neighbors,
        𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST
@@ -8,15 +8,21 @@ export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors
 using DocStringExtensions
 using UnPack
 using SparseArrays
-using LightGraphs
+using Graphs
 using Setfield
+
+### Matching
+struct Unassigned
+    global unassigned
+    const unassigned = Unassigned.instance
+end
 
 ###
 ### Edges & Vertex
 ###
 @enum VertType SRC DST ALL
 
-struct BipartiteEdge{I<:Integer} <: LightGraphs.AbstractEdge{I}
+struct BipartiteEdge{I<:Integer} <: Graphs.AbstractEdge{I}
     src::I
     dst::I
     function BipartiteEdge(src::I, dst::V) where {I,V}
@@ -25,8 +31,8 @@ struct BipartiteEdge{I<:Integer} <: LightGraphs.AbstractEdge{I}
     end
 end
 
-LightGraphs.src(edge::BipartiteEdge) = edge.src
-LightGraphs.dst(edge::BipartiteEdge) = edge.dst
+Graphs.src(edge::BipartiteEdge) = edge.src
+Graphs.dst(edge::BipartiteEdge) = edge.dst
 
 function Base.show(io::IO, edge::BipartiteEdge)
     @unpack src, dst = edge
@@ -65,7 +71,7 @@ badjlist = [[1,2,5,6],[3,4,6]]
 bg = BipartiteGraph(7, fadjlist, badjlist)
 ```
 """
-mutable struct BipartiteGraph{I<:Integer,F<:Vector{Vector{I}},B<:Union{Vector{Vector{I}},I},M} <: LightGraphs.AbstractGraph{I}
+mutable struct BipartiteGraph{I<:Integer,F<:Vector{Vector{I}},B<:Union{Vector{Vector{I}},I},M} <: Graphs.AbstractGraph{I}
     ne::Int
     fadjlist::F # `fadjlist[src] => dsts`
     badjlist::B # `badjlist[dst] => srcs` or `ndsts`
@@ -112,11 +118,11 @@ Base.length(::BipartiteGraph) = error("length is not well defined! Use `ne` or `
 
 @noinline throw_no_back_edges() = throw(ArgumentError("The graph has no back edges."))
 
-if isdefined(LightGraphs, :has_contiguous_vertices)
-    LightGraphs.has_contiguous_vertices(::Type{<:BipartiteGraph}) = false
+if isdefined(Graphs, :has_contiguous_vertices)
+    Graphs.has_contiguous_vertices(::Type{<:BipartiteGraph}) = false
 end
-LightGraphs.is_directed(::Type{<:BipartiteGraph}) = false
-LightGraphs.vertices(g::BipartiteGraph) = (𝑠vertices(g), 𝑑vertices(g))
+Graphs.is_directed(::Type{<:BipartiteGraph}) = false
+Graphs.vertices(g::BipartiteGraph) = (𝑠vertices(g), 𝑑vertices(g))
 𝑠vertices(g::BipartiteGraph) = axes(g.fadjlist, 1)
 𝑑vertices(g::BipartiteGraph) = g.badjlist isa AbstractVector ? axes(g.badjlist, 1) : Base.OneTo(g.badjlist)
 has_𝑠vertex(g::BipartiteGraph, v::Integer) = v in 𝑠vertices(g)
@@ -126,14 +132,14 @@ function 𝑑neighbors(g::BipartiteGraph, j::Integer, with_metadata::Val{M}=Val(
     g.badjlist isa AbstractVector || throw_no_back_edges()
     M ? zip(g.badjlist[j], (g.metadata[i][j] for i in g.badjlist[j])) : g.badjlist[j]
 end
-LightGraphs.ne(g::BipartiteGraph) = g.ne
-LightGraphs.nv(g::BipartiteGraph) = sum(length, vertices(g))
-LightGraphs.edgetype(g::BipartiteGraph{I}) where I = BipartiteEdge{I}
+Graphs.ne(g::BipartiteGraph) = g.ne
+Graphs.nv(g::BipartiteGraph) = sum(length, vertices(g))
+Graphs.edgetype(g::BipartiteGraph{I}) where I = BipartiteEdge{I}
 
 nsrcs(g::BipartiteGraph) = length(𝑠vertices(g))
 ndsts(g::BipartiteGraph) = length(𝑑vertices(g))
 
-function LightGraphs.has_edge(g::BipartiteGraph, edge::BipartiteEdge)
+function Graphs.has_edge(g::BipartiteGraph, edge::BipartiteEdge)
     @unpack src, dst = edge
     (src in 𝑠vertices(g) && dst in 𝑑vertices(g)) || return false  # edge out of bounds
     insorted(𝑠neighbors(src), dst)
@@ -146,8 +152,8 @@ struct NoMetadata
 end
 const NO_METADATA = NoMetadata()
 
-LightGraphs.add_edge!(g::BipartiteGraph, i::Integer, j::Integer, md=NO_METADATA) = add_edge!(g, BipartiteEdge(i, j), md)
-function LightGraphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_METADATA)
+Graphs.add_edge!(g::BipartiteGraph, i::Integer, j::Integer, md=NO_METADATA) = add_edge!(g, BipartiteEdge(i, j), md)
+function Graphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_METADATA)
     @unpack fadjlist, badjlist = g
     s, d = src(edge), dst(edge)
     (has_𝑠vertex(g, s) && has_𝑑vertex(g, d)) || error("edge ($edge) out of range.")
@@ -168,7 +174,7 @@ function LightGraphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_MET
     return true  # edge successfully added
 end
 
-function LightGraphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where T
+function Graphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where T
     if type === DST
         if g.badjlist isa AbstractVector
             push!(g.badjlist, T[])
@@ -186,11 +192,11 @@ end
 ###
 ### Edges iteration
 ###
-LightGraphs.edges(g::BipartiteGraph) = BipartiteEdgeIter(g, Val(ALL))
+Graphs.edges(g::BipartiteGraph) = BipartiteEdgeIter(g, Val(ALL))
 𝑠edges(g::BipartiteGraph) = BipartiteEdgeIter(g, Val(SRC))
 𝑑edges(g::BipartiteGraph) = BipartiteEdgeIter(g, Val(DST))
 
-struct BipartiteEdgeIter{T,G} <: LightGraphs.AbstractEdgeIter
+struct BipartiteEdgeIter{T,G} <: Graphs.AbstractEdgeIter
     g::G
     type::Val{T}
 end
@@ -259,7 +265,7 @@ end
 ###
 ### Utils
 ###
-function LightGraphs.incidence_matrix(g::BipartiteGraph, val=true)
+function Graphs.incidence_matrix(g::BipartiteGraph, val=true)
     I = Int[]
     J = Int[]
     for i in 𝑠vertices(g), n in 𝑠neighbors(g, i)
@@ -267,6 +273,58 @@ function LightGraphs.incidence_matrix(g::BipartiteGraph, val=true)
         push!(J, n)
     end
     S = sparse(I, J, val, nsrcs(g), ndsts(g))
+end
+
+
+"""
+    struct DiCMOBiGraph
+
+This data structure implements a "directed, contracted, matching-oriented" view of an
+original (undirected) bipartite graph. In particular, it performs two largely
+orthogonal functions.
+
+1. It pairs an undirected bipartite graph with a matching of destination vertex.
+
+    This matching is used to induce an orientation on the otherwise undirected graph:
+    Matched edges pass from destination to source, all other edges pass in the opposite
+    direction.
+
+2. It exposes the graph view obtained by contracting the destination vertices into
+   the source edges.
+
+The result of this operation is an induced, directed graph on the source vertices.
+The resulting graph has a few desirable properties. In particular, this graph
+is acyclic if and only if the induced directed graph on the original bipartite
+graph is acyclic.
+"""
+struct DiCMOBiGraph{I, G<:BipartiteGraph{I}, M} <: Graphs.AbstractGraph{I}
+    graph::G
+    matching::M
+end
+Graphs.is_directed(::Type{<:DiCMOBiGraph}) = true
+Graphs.nv(g::DiCMOBiGraph) = nsrcs(g.graph)
+Graphs.vertices(g::DiCMOBiGraph) = 1:nsrcs(g.graph)
+
+struct CMOOutNeighbors{V}
+    g::DiCMOBiGraph
+    v::V
+end
+Graphs.outneighbors(g::DiCMOBiGraph, v) = CMOOutNeighbors(g, v)
+Base.iterate(c::CMOOutNeighbors) = iterate(c, (c.g.graph.fadjlist[c.v],))
+function Base.iterate(c::CMOOutNeighbors, (l, state...))
+    while true
+        r = iterate(l, state...)
+        r === nothing && return nothing
+        # If this is a matched edge, skip it, it's reversed in the induced
+        # directed graph. Otherwise, if there is no matching for this destination
+        # edge, also skip it, since it got delted in the contraction.
+        vdst = c.g.matching[r[1]]
+        if vdst === c.v || vdst === unassigned
+            state = (r[2],)
+            continue
+        end
+        return vdst, (l, r[2])
+    end
 end
 
 end # module
