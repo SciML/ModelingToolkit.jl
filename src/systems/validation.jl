@@ -197,4 +197,4 @@ validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term,"") !== no
 
 "Throws error if units of equations are invalid."
 check_units(eqs...) = validate(eqs...) || throw(ValidationError("Some equations had invalid units. See warnings for details."))
-all_dimensionless(states) = all(map(x->safe_get_unit(x,"") in (unitless,nothing),states))
+all_dimensionless(states) = all(x->safe_get_unit(x,"") in (unitless,nothing),states)
