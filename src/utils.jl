@@ -142,7 +142,11 @@ function collect_differentials(eqs)
     return ivs
 end
 
-"Assert that equations are well-formed when building ODE."
+"""
+    check_equations(eqs, iv)
+
+Assert that equations are well-formed when building ODE, i.e., only containing a single independent variable.
+"""
 function check_equations(eqs, iv)
     ivs = collect_differentials(eqs)
     display = collect(ivs)

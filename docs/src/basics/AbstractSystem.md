@@ -56,6 +56,7 @@ Optionally, a system could have:
 
 - `observed(sys)`: All observed equations of the system and its subsystems.
 - `get_observed(sys)`: Observed equations of the current-level system.
+- `get_root_eqs(sys)`: Root-finding equations of the current-level system.
 - `get_defaults(sys)`: A `Dict` that maps variables into their default values.
 - `independent_variables(sys)`: The independent variables of a system.
 - `get_noiseeqs(sys)`: Noise equations of the current-level system.

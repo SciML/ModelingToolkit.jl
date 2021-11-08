@@ -84,25 +84,31 @@ struct ODESystem <: AbstractODESystem
     """
     connection_type::Any
     """
-    preface: injuect assignment statements before the evaluation of the RHS function.
+    preface: inject assignment statements before the evaluation of the RHS function.
     """
     preface::Any
+    """
+    root_eqs: A `Vector{Equation}` that evaluate to 0 at events.
+    The integrator will use root finding to guarantee that it steps at each zero crossing.
+    """
+    root_eqs::Vector{Equation}
 
-    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface; checks::Bool = true)
+    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface, root_eqs; checks::Bool = true)
         if checks
             check_variables(dvs,iv)
             check_parameters(ps,iv)
             check_equations(deqs,iv)
-            all_dimensionless([dvs;ps;iv]) ||check_units(deqs)
+            check_equations(root_eqs,iv)
+            all_dimensionless([dvs;ps;iv]) || check_units(deqs)
         end
-        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface)
+        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface, root_eqs)
     end
 end
 
 function ODESystem(
                    deqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    controls  = Num[],
-                   observed = Num[],
+                   observed = Equation[],
                    systems = ODESystem[],
                    name=nothing,
                    default_u0=Dict(),
@@ -110,6 +116,7 @@ function ODESystem(
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
                    preface=nothing,
+                   root_eqs=Equation[],
                    checks = true,
                   )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
@@ -144,7 +151,7 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface, checks = checks)
+    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface, root_eqs, checks = checks)
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)
@@ -209,6 +216,7 @@ function flatten(sys::ODESystem)
                          states(sys),
                          parameters(sys),
                          observed=observed(sys),
+                         root_eqs=root_eqs(sys),
                          defaults=defaults(sys),
                          name=nameof(sys),
                          checks = false,
