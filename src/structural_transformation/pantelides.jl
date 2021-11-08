@@ -62,7 +62,7 @@ function pantelides_reassemble(sys::ODESystem, eqassoc, assign)
     end
 
     final_vars = unique(filter(x->!(operation(x) isa Differential), fullvars))
-    final_eqs = map(identity, filter(x->value(x.lhs) !== nothing, out_eqs[sort(filter(x->x != UNASSIGNED, assign))]))
+    final_eqs = map(identity, filter(x->value(x.lhs) !== nothing, out_eqs[sort(filter(x->x !== unassigned, assign))]))
 
     @set! sys.eqs = final_eqs
     @set! sys.states = final_vars
@@ -84,7 +84,7 @@ function pantelides!(sys::ODESystem; maxiters = 8000)
     nvars = length(varassoc)
     vcolor = falses(nvars)
     ecolor = falses(neqs)
-    assign = fill(UNASSIGNED, nvars)
+    assign = Union{Unassigned, Int}[unassigned for _ = 1:nvars]
     eqassoc = fill(0, neqs)
     neqs′ = neqs
     D = Differential(iv)
@@ -112,7 +112,7 @@ function pantelides!(sys::ODESystem; maxiters = 8000)
                 # the new variable is the derivative of `var`
                 varassoc[var] = nvars
                 push!(varassoc, 0)
-                push!(assign, UNASSIGNED)
+                push!(assign, unassigned)
             end
 
             for eq in eachindex(ecolor); ecolor[eq] || continue

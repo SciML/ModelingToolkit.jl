@@ -80,7 +80,7 @@ Base.@kwdef struct SystemStructure
     algeqs::BitVector
     graph::BipartiteGraph{Int,Vector{Vector{Int}},Int,Nothing}
     solvable_graph::BipartiteGraph{Int,Vector{Vector{Int}},Int,Nothing}
-    assign::Vector{Int}
+    assign::Vector{Union{Int, Unassigned}}
     inv_assign::Vector{Int}
     scc::Vector{Vector{Int}}
     partitions::Vector{SystemPartition}

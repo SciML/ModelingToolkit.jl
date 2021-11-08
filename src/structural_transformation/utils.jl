@@ -12,7 +12,7 @@ function find_augmenting_path(g, eq, assign, varwhitelist, vcolor=falses(ndsts(g
 
     # if a `var` is unassigned and the edge `eq <=> var` exists
     for var in 𝑠neighbors(g, eq)
-        if (varwhitelist === nothing || varwhitelist[var]) && assign[var] == UNASSIGNED
+        if (varwhitelist === nothing || varwhitelist[var]) && assign[var] === unassigned
             assign[var] = eq
             return true
         end
@@ -37,7 +37,7 @@ Find equation-variable bipartite matching. `s.graph` is a bipartite graph.
 """
 matching(s::SystemStructure, varwhitelist=nothing, eqwhitelist=nothing) = matching(s.graph, varwhitelist, eqwhitelist)
 function matching(g::BipartiteGraph, varwhitelist=nothing, eqwhitelist=nothing)
-    assign = fill(UNASSIGNED, ndsts(g))
+    assign = Union{Unassigned, Int}[unassigned for _ = 1:ndsts(g)]
     for eq in 𝑠vertices(g)
         if eqwhitelist !== nothing
             eqwhitelist[eq] || continue
@@ -98,7 +98,7 @@ function check_consistency(sys::AbstractSystem)
             inv_assign = inverse_mapping(assign) # extra equations
             bad_idxs = findall(iszero, @view inv_assign[1:nsrcs(graph)])
         else
-            bad_idxs = findall(isequal(UNASSIGNED), assign)
+            bad_idxs = findall(isequal(unassigned), assign)
         end
         error_reporting(sys, bad_idxs, n_highest_vars, iseqs)
     end
@@ -110,7 +110,7 @@ function check_consistency(sys::AbstractSystem)
 
     unassigned_var = []
     for (vj, eq) in enumerate(extended_assign)
-        if eq === UNASSIGNED
+        if eq === unassigned
             push!(unassigned_var, fullvars[vj])
         end
     end
@@ -149,72 +149,10 @@ gives the undirected bipartite graph a direction. When `assign === nothing`, we
 assume that the ``i``-th variable is assigned to the ``i``-th equation.
 """
 function find_scc(g::BipartiteGraph, assign=nothing)
-    id = 0
-    stack = Int[]
-    components = Vector{Int}[]
-    n = nsrcs(g)
-    onstack = falses(n)
-    lowlink = zeros(Int, n)
-    ids = fill(UNVISITED, n)
-
-    for eq in 𝑠vertices(g)
-        if ids[eq] == UNVISITED
-            id = strongly_connected!(stack, onstack, components, lowlink, ids, g, assign, eq, id)
-        end
-    end
-    return components
-end
-
-"""
-    strongly_connected!(stack, onstack, components, lowlink, ids, g, assign, eq, id)
-
-Use Tarjan's algorithm to find strongly connected components.
-"""
-function strongly_connected!(stack, onstack, components, lowlink, ids, g, assign, eq, id)
-    id += 1
-    lowlink[eq] = ids[eq] = id
-
-    # add `eq` to the stack
-    push!(stack, eq)
-    onstack[eq] = true
-
-    # for `adjeq` in the adjacency list of `eq`
-    for var in 𝑠neighbors(g, eq)
-        if assign === nothing
-            adjeq = var
-        else
-            # assign[var] => the equation that's assigned to var
-            adjeq = assign[var]
-            # skip equations that are not assigned
-            adjeq == UNASSIGNED && continue
-        end
-
-        # if `adjeq` is not yet idsed
-        if ids[adjeq] == UNVISITED # visit unvisited nodes
-            id = strongly_connected!(stack, onstack, components, lowlink, ids, g, assign, adjeq, id)
-        end
-        # at the callback of the DFS
-        if onstack[adjeq]
-            lowlink[eq] = min(lowlink[eq], lowlink[adjeq])
-        end
-    end
-
-    # if we are at a start of a strongly connected component
-    if lowlink[eq] == ids[eq]
-        component = Int[]
-        repeat = true
-        # pop until we are at the start of the strongly connected component
-        while repeat
-            w = pop!(stack)
-            onstack[w] = false
-            lowlink[w] = ids[eq]
-            # put `w` in current component
-            push!(component, w)
-            repeat = w != eq
-        end
-        push!(components, sort!(component))
-    end
-    return id
+    cmog = DiCMOBiGraph(g, assign === nothing ? Base.OneTo(nsrcs(g)) : assign)
+    sccs = Graphs.strongly_connected_components(cmog)
+    foreach(sort!, sccs)
+    return sccs
 end
 
 function sorted_incidence_matrix(sys, val=true; only_algeqs=false, only_algvars=false)
@@ -295,7 +233,7 @@ end
 function inverse_mapping(assign)
     invassign = zeros(Int, length(assign))
     for (i, eq) in enumerate(assign)
-        eq <= 0 && continue
+        eq === unassigned && continue
         invassign[eq] = i
     end
     return invassign
