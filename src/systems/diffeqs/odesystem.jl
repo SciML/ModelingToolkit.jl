@@ -127,10 +127,6 @@ function ODESystem(
     defaults = todict(defaults)
     defaults = Dict{Any,Any}(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    iv′ = value(scalarize(iv))
-    dvs′ = value.(scalarize(dvs))
-    ps′ = value.(scalarize(ps))
-
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
