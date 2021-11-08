@@ -932,15 +932,17 @@ end
 Connection(syss) = Connection(inners=syss)
 get_systems(c::Connection) = c.inners
 
+const EMPTY_VEC = []
+
 function Base.show(io::IO, c::Connection)
     @unpack outers, inners = c
     if outers === nothing && inners === nothing
         print(io, "<Connection>")
     else
-        inner_str = join((string(nameof(s)) * "::inner" for s in inners), ", ")
-        outer_str = join((string(nameof(s)) * "::outer" for s in outers), ", ")
-        isempty(outer_str) || (outer_str = ", " * outer_str)
-        print(io, "<", inner_str, outer_str, ">")
+        syss = Iterators.flatten((something(inners, EMPTY_VEC), something(outers, EMPTY_VEC)))
+        splitting_idx = length(inners)
+        sys_str = join((string(nameof(s)) * (i <= splitting_idx ? ("::inner") : ("::outers")) for (i, s) in enumerate(syss)), ", ")
+        print(io, "<", sys_str, ">")
     end
 end
 
