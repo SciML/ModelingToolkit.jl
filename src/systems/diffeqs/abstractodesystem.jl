@@ -153,6 +153,40 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
     PeriodicCallback(cb_affect!, first(dt))
 end
 
+function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
+    eqs = root_eqs(sys)
+    eqs = map(eqs) do eq
+        isequal(eq.lhs, 0) && return eq
+        0 ~ eq.lhs - eq.rhs
+    end
+    isempty(eqs) && return nothing
+
+    # Strategy 1
+    # rhss = map(eq->eq.rhs, eqs)
+    # u = map(x->time_varying_as_func(value(x), sys), dvs)
+    p = map(x->time_varying_as_func(value(x), sys), ps)
+    # t = get_iv(sys)
+    # f = build_function(rhss, u, p, t; kwargs...)
+
+    # Strategy 2
+    x = filter(x->!isinput(x) && !isoutput(x), dvs)
+    rhss = [map(x->x.rhs, eqs); map(x->x.lhs, eqs)]
+    root_eq_vars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
+    vars = x ∩ root_eq_vars # we look for the roots w.r.t. the states of the root equations
+    u0map = defaults(sys)
+    rf_assignment, _ = StructuralTransformations.gen_nlsolve(eqs, vars, u0map; checkbounds=true) 
+    rf = rf_assignment.rhs
+    cb_affect!(args...) = () # We don't do anything in the callback, we're just after the event
+    if length(vars) == 1
+        condition = (u, t, integrator) -> rf(u, p, t)
+        ContinuousCallback(condition, cb_affect!)
+    else
+        condition = (out, u, t, integrator) -> out .= rf(u, p, t)
+        VectorContinuousCallback(condition, cb_affect!, length(vars))
+    end
+end
+
+
 function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
     # if something is not x(t) (the current state)
     # but is `x(t-1)` or something like that, pass in `x` as a callable function rather
@@ -555,12 +589,20 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
     has_difference = any(isdifferenceeq, equations(sys))
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; has_difference=has_difference, kwargs...)
-    if has_difference
-        ODEProblem{iip}(f,u0,tspan,p;difference_cb=generate_difference_cb(sys;kwargs...),kwargs...)
+    if !isempty(sys.root_eqs)
+        event_cb = generate_rootfinding_callback(sys; kwargs...)
     else
-        ODEProblem{iip}(f,u0,tspan,p;kwargs...)
+        event_cb = nothing
     end
+    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
+    cb = merge_cb(event_cb, difference_cb)
+
+    ODEProblem{iip}(f, u0, tspan, p; callback=cb, kwargs...)
 end
+merge_cb(::Nothing, ::Nothing) = nothing
+merge_cb(::Nothing, x) = merge_cb(x, nothing)
+merge_cb(x, ::Nothing) = x
+merge_cb(x, y) = CallbackSet(x, y)
 
 """
 ```julia
