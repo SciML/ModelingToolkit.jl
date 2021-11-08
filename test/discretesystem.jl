@@ -34,6 +34,7 @@ prob_map = DiscreteProblem(sys,u0,tspan,p)
 # Solution
 using OrdinaryDiffEq
 sol_map = solve(prob_map,FunctionMap());
+@test sol_map[S] isa Vector
 
 # Using defaults constructor
 @parameters t c=10.0 nsteps=400 δt=0.1 β=0.05 γ=0.25
