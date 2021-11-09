@@ -155,6 +155,8 @@ end
 
 function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     eqs = root_eqs(sys)
+
+    # rewrite all equations as 0 ~ interesting stuff
     eqs = map(eqs) do eq
         isequal(eq.lhs, 0) && return eq
         0 ~ eq.lhs - eq.rhs
@@ -170,7 +172,7 @@ function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys), ps = p
 
     # Strategy 2
     x = filter(x->!isinput(x) && !isoutput(x), dvs)
-    rhss = [map(x->x.rhs, eqs); map(x->x.lhs, eqs)]
+    rhss = map(x->x.rhs, eqs)
     root_eq_vars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
     vars = x ∩ root_eq_vars # we look for the roots w.r.t. the states of the root equations
     u0map = defaults(sys)
