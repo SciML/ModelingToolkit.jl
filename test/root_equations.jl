@@ -22,9 +22,13 @@ prob = ODEProblem(sys, Pair[], (0.0, 2.0))
 @test prob.kwargs[:callback] isa ModelingToolkit.DiffEqCallbacks.ContinuousCallback
 cb = ModelingToolkit.generate_rootfinding_callback(sys)
 cond = cb.condition
-@test cond.rf([0], 1.2, 1.3) ≈ -1
-@test cond.rf([1], 1.2, 1.3) ≈ 0
-@test cond.rf([2], 1.2, 1.3) ≈ 1
+out = [0.0]
+cond.rf_ip(out, [0], 1.2, 1)
+@test out[] ≈ -1 # signature is u,p,t
+cond.rf_ip(out, [1], 1.2, 1)
+@test out[] ≈ 0  # signature is u,p,t
+cond.rf_ip(out, [2], 1.2, 1)
+@test out[] ≈ 1  # signature is u,p,t
 
 
 prob = ODEProblem(sys, Pair[], (0.0, 2.0))

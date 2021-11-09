@@ -155,35 +155,37 @@ end
 
 function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     eqs = root_eqs(sys)
+    isempty(eqs) && return nothing
 
     # rewrite all equations as 0 ~ interesting stuff
     eqs = map(eqs) do eq
         isequal(eq.lhs, 0) && return eq
         0 ~ eq.lhs - eq.rhs
     end
-    isempty(eqs) && return nothing
 
-    # Strategy 1
-    # rhss = map(eq->eq.rhs, eqs)
-    # u = map(x->time_varying_as_func(value(x), sys), dvs)
-    p = map(x->time_varying_as_func(value(x), sys), ps)
-    # t = get_iv(sys)
-    # f = build_function(rhss, u, p, t; kwargs...)
-
-    # Strategy 2
-    x = filter(x->!isinput(x) && !isoutput(x), dvs)
     rhss = map(x->x.rhs, eqs)
     root_eq_vars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
-    vars = x ∩ root_eq_vars # we look for the roots w.r.t. the states of the root equations
-    u0map = defaults(sys)
-    rf_assignment, _ = StructuralTransformations.gen_nlsolve(eqs, vars, u0map; checkbounds=true) 
-    rf = rf_assignment.rhs
+    vars = dvs ∩ root_eq_vars # we look for the roots w.r.t. the states of the root equations
+
+    u = map(x->time_varying_as_func(value(x), sys), vars)
+    p = map(x->time_varying_as_func(value(x), sys), ps)
+    t = get_iv(sys)
+    rf_oop, rf_ip = build_function(rhss, u, p, t; expression=Val{false}, kwargs...)
+
     cb_affect!(args...) = () # We don't do anything in the callback, we're just after the event
-    if length(vars) == 1
-        condition = (u, t, integrator) -> rf(u, p, t)
+    if length(eqs) == 1
+        function condition(u, t, integ)
+            if DiffEqBase.isinplace(integ.sol.prob)
+                tmp, = DiffEqBase.get_tmp_cache(integ)
+                rf_ip(tmp, u, integ.p, t)
+                tmp[1]
+            else
+                rf_oop(u, integ.p, t)
+            end
+        end
         ContinuousCallback(condition, cb_affect!)
     else
-        condition = (out, u, t, integrator) -> out .= rf(u, p, t)
+        condition = (out, u, t, integ) -> rf_ip(out, u, integ.p, t)
         VectorContinuousCallback(condition, cb_affect!, length(vars))
     end
 end
