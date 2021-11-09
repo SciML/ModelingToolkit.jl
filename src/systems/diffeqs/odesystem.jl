@@ -80,22 +80,22 @@ struct ODESystem <: AbstractODESystem
     """
     structure::Any
     """
-    connection_type: type of the system
+    connector_type: type of the system
     """
-    connection_type::Any
+    connector_type::Any
     """
     preface: injuect assignment statements before the evaluation of the RHS function.
     """
     preface::Any
 
-    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface; checks::Bool = true)
+    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connector_type, preface; checks::Bool = true)
         if checks
             check_variables(dvs,iv)
             check_parameters(ps,iv)
             check_equations(deqs,iv)
             all_dimensionless([dvs;ps;iv]) ||check_units(deqs)
         end
-        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface)
+        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connector_type, preface)
     end
 end
 
@@ -108,7 +108,7 @@ function ODESystem(
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
-                   connection_type=nothing,
+                   connector_type=nothing,
                    preface=nothing,
                    checks = true,
                   )
@@ -140,7 +140,7 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface, checks = checks)
+    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connector_type, preface, checks = checks)
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)
