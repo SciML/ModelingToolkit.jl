@@ -36,8 +36,14 @@ sol = solve(prob, Tsit5())
 @test minimum(t->abs(t-1), sol.t) < 1e-10 # test that the solver stepped at the root
 
 
-# TODO: the problem is that the ContinuousCallback only handles scalar conditions. NEed to adjust the condition function to always be multivariate and use VectorContinuousCallback
-prob = ODEProblem(sys2, Pair[], (0.0, 2.0))
+prob = ODEProblem(sys2, Pair[], (0.0, 3.0))
+@test prob.kwargs[:callback] isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
+sol = solve(prob, Tsit5())
+@test minimum(t->abs(t-1), sol.t) < 1e-10 # test that the solver stepped at the first root
+@test minimum(t->abs(t-2), sol.t) < 1e-10 # test that the solver stepped at the second root
+
+@named sys = ODESystem(eqs, root_eqs = [x ~ 1, x ~ 2]) # two root eqs using the same state
+prob = ODEProblem(sys, Pair[], (0.0, 3.0))
 @test prob.kwargs[:callback] isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
 sol = solve(prob, Tsit5())
 @test minimum(t->abs(t-1), sol.t) < 1e-10 # test that the solver stepped at the first root
