@@ -12,8 +12,9 @@ Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 
 abstract type AbstractConnectType end
-struct Flow <: AbstractConnectType end   # sum to 0
-struct Stream <: AbstractConnectType end # special stream connector
+struct Equality <: AbstractConnectType end # Equality connection
+struct Flow <: AbstractConnectType end     # sum to 0
+struct Stream <: AbstractConnectType end   # special stream connector
 
 function isvarkind(m, x)
     p = getparent(x, nothing)

@@ -24,36 +24,14 @@ macro connector(expr)
     esc(with_connector_type(expr))
 end
 
+abstract type AbstractConnectorType end
+struct StreamConnector <: AbstractConnectorType end
+struct RegularConnector <: AbstractConnectorType end
+
 function connector_type(sys::AbstractSystem)
-    states(sys)
-end
-
-promote_connect_rule(::Type{T}, ::Type{S}) where {T, S} = Union{}
-promote_connect_rule(::Type{T}, ::Type{T}) where {T} = T
-promote_connect_type(t1::Type, t2::Type, ts::Type...) = promote_connect_type(promote_connect_rule(t1, t2), ts...)
-@inline function promote_connect_type(::Type{T}, ::Type{S}) where {T,S}
-    promote_connect_result(
-        T,
-        S,
-        promote_connect_rule(T,S),
-        promote_connect_rule(S,T)
-    )
-end
-
-promote_connect_result(::Type, ::Type, ::Type{T}, ::Type{Union{}}) where {T} = T
-promote_connect_result(::Type, ::Type, ::Type{Union{}}, ::Type{S}) where {S} = S
-promote_connect_result(::Type, ::Type, ::Type{T}, ::Type{T}) where {T} = T
-function promote_connect_result(::Type{T}, ::Type{S}, ::Type{P1}, ::Type{P2}) where {T,S,P1,P2}
-    throw(ArgumentError("connection promotion for $T and $S resulted in $P1 and $P2. " *
-                        "Define promotion only in one direction."))
-end
-
-throw_connector_promotion(T, S) = throw(ArgumentError("Don't know how to connect systems of type $S and $T"))
-promote_connect_result(::Type{T},::Type{S},::Type{Union{}},::Type{Union{}}) where {T,S} = throw_connector_promotion(T,S)
-
-promote_connect_type(::Type{T}, ::Type{T}) where {T} = T
-function promote_connect_type(T, S)
-    error("Don't know how to connect systems of type $S and $T")
+    sts = states(sys)
+    #TODO: check the criteria for stream connectors
+    any(s->getmetadata(s, ModelingToolkit.VariableConnectType, nothing) === Stream, sts) ? StreamConnector() : RegularConnector()
 end
 
 Base.@kwdef struct Connection
@@ -61,6 +39,7 @@ Base.@kwdef struct Connection
     outers = nothing
 end
 
+# everything is inner by default until we expand the connections
 Connection(syss) = Connection(inners=syss)
 get_systems(c::Connection) = c.inners
 
@@ -78,10 +57,49 @@ function Base.show(io::IO, c::Connection)
     end
 end
 
-function connect(syss...)
+function connect(syss::AbstractSystem...)
     length(syss) >= 2 || error("connect takes at least two systems!")
     length(unique(nameof, syss)) == length(syss) || error("connect takes distinct systems!")
     Equation(Connection(), Connection(syss)) # the RHS are connected systems
+end
+
+function connect(c::Connection; check=true)
+    @unpack inners, outers = c
+
+    flow_eqs = Equation[]
+    other_eqs = Equation[]
+
+    cnts = Iterators.flatten((inners, outers))
+    fs, ss = Iterators.peel(cnts)
+    splitting_idx = length(inners) # anything after the splitting_idx is outer.
+    first_sts = get_states(fs)
+    first_sts_set = Set(getname.(first_sts))
+    for sys in ss
+        current_sts = getname.(get_states(sys))
+        Set(current_sts) == first_sts_set || error("$(nameof(sys)) ($current_sts) doesn't match the connection type of $(nameof(fs)) ($first_sts).")
+    end
+
+    ceqs = Equation[]
+    for s in first_sts
+        name = getname(s)
+        isflow = getmetadata(s, VariableConnectType, Equality) === Flow
+        rhs = 0 # only used for flow variables
+        fix_val = getproperty(fs, name) # used for equality connections
+        for (i, c) in enumerate(cnts)
+            isinner = i <= splitting_idx
+            # https://specification.modelica.org/v3.4/Ch15.html
+            var = getproperty(c, name)
+            if isflow
+                rhs += isinner ? var : -var
+            else
+                i == 1 && continue # skip the first iteration
+                push!(ceqs, fix_val ~ getproperty(c, name))
+            end
+        end
+        isflow && push!(ceqs, 0 ~ rhs)
+    end
+
+    return ceqs
 end
 
 isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) !== nothing
@@ -165,8 +183,7 @@ function expand_connections(sys::AbstractSystem; debug=false)
     end
 
     for c in narg_connects
-        T = promote_connect_type(map(get_connector_type, c.outers)..., map(get_connector_type, c.inners)...)
-        ceqs = connect(T, c)
+        ceqs = connect(c)
         ceqs isa Equation ? push!(eqs, ceqs) : append!(eqs, ceqs)
     end
 
