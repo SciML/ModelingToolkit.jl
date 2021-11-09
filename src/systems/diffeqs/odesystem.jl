@@ -163,9 +163,9 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     end
     iv = value(iv)
     iv === nothing && throw(ArgumentError("Please pass in independent variables."))
-    connecteqs = Equation[]
+    compressed_eqs = Equation[] # equations that need to be expanded later, like `connect(a, b)`
     for eq in eqs
-        eq.lhs isa Connection && (push!(connecteqs, eq); continue)
+        eq.lhs isa Symbolic || (push!(compressed_eqs, eq); continue)
         collect_vars!(allstates, ps, eq.lhs, iv)
         collect_vars!(allstates, ps, eq.rhs, iv)
         if isdiffeq(eq)
@@ -180,7 +180,7 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     end
     algevars = setdiff(allstates, diffvars)
     # the orders here are very important!
-    return ODESystem(Equation[diffeq; algeeq; connecteqs], iv, vcat(collect(diffvars), collect(algevars)), ps; kwargs...)
+    return ODESystem(Equation[diffeq; algeeq; compressed_eqs], iv, vcat(collect(diffvars), collect(algevars)), ps; kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian

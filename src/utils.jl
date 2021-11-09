@@ -349,3 +349,21 @@ function get_postprocess_fbody(sys)
     end
     return pre_
 end
+
+"""
+$(SIGNATURES)
+
+find duplicates in an iterable object.
+"""
+function find_duplicates(xs)
+    appeared = Set()
+    duplicates = Set()
+    for x in xs
+        if x in appeared
+            push!(duplicates, x)
+        else
+            push!(appeared, x)
+        end
+    end
+    return duplicates
+end

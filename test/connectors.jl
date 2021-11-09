@@ -82,3 +82,6 @@ ceqs = connection_eqs(hs)
                        connect(hs[1], hs[4]),
                        connect(hs[8], hs[4]),
                        connect(hs[2], hs[8])])
+
+# Outer/inner connectors
+

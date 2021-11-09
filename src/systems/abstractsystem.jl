@@ -952,24 +952,31 @@ function connect(syss...)
     Equation(Connection(), Connection(syss)) # the RHS are connected systems
 end
 
+isconnector(s::AbstractSystem) = has_connection_type(s) && get_connection_type(s) !== nothing
+
+function isouterconnector(sys::AbstractSystem; check=true)
+    subsys = get_systems(sys)
+    outer_connectors = [nameof(s) for s in subsys if isconnector(sys)]
+    # Note that subconnectors in outer connectors are still outer connectors.
+    # Ref: https://specification.modelica.org/v3.4/Ch9.html see 9.1.2
+    let outer_connectors=outer_connectors, check=check
+        function isouter(sys)::Bool
+            s = string(nameof(sys))
+            check && (isconnector(sys) || error("$s is not a connector!"))
+            idx = findfirst(isequal('₊'), s)
+            parent_name = idx === nothing ? s : s[1:idx]
+            parent_name in outer_connectors
+        end
+    end
+end
+
 function expand_connections(sys::AbstractSystem; debug=false)
     subsys = get_systems(sys)
     isempty(subsys) && return sys
 
     # post order traversal
     @set sys.systems = map(s->expand_connections(s, debug=debug), subsys)
-
-
-    # Note that subconnectors in outer connectors are still outer connectors.
-    # Ref: https://specification.modelica.org/v3.4/Ch9.html see 9.1.2
-    isouter = let outer_connectors=[nameof(s) for s in subsys if has_connection_type(s) && get_connection_type(s) !== nothing]
-        sys -> begin
-            s = string(nameof(sys))
-            idx = findfirst(isequal('₊'), s)
-            parent_name = idx === nothing ? s : s[1:idx]
-            parent_name in outer_connectors
-        end
-    end
+    isouter = isouterconnector(sys)
 
     eqs′ = get_eqs(sys)
     eqs = Equation[]
@@ -1014,7 +1021,9 @@ function expand_connections(sys::AbstractSystem; debug=false)
     for c in narg_connects
         @unpack outers, inners = c
         len = length(outers) + length(inners)
-        length(unique(nameof, [outers; inners])) == len || error("$(Connection(syss)) has duplicated connections")
+        allconnectors = Iterators.flatten((outers, inners))
+        dups = find_duplicates(nameof(c) for c in allconnectors)
+        length(dups) == 0 || error("$(Connection(syss)) has duplicated connections: $(dups).")
     end
 
     if debug
@@ -1052,7 +1061,7 @@ function Base.hash(sys::AbstractSystem, s::UInt)
 end
 
 """
-    $(TYPEDSIGNATURES)
+$(TYPEDSIGNATURES)
 
 entend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
 by default.
@@ -1087,7 +1096,7 @@ end
 Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys)) = extend(sys, basesys; name=name)
 
 """
-    $(SIGNATURES)
+$(SIGNATURES)
 
 compose multiple systems together. The resulting system would inherit the first
 system's name.
