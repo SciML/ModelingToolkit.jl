@@ -250,3 +250,26 @@ strongly connected components calculated during the process of simplification
 as the basis for building pre-simplified nonlinear systems in the implicit
 solving. In summary: these problems are structurally modified, but could be
 more efficient and more stable.
+
+## Components with discontinous dynamics
+When modeling, e.g., impacts, saturations or Coulomb friction, the dynamic equations are discontinuous in either the state or one of its derivatives. This causes the solver to take very small steps around the discontinuity, and sometimes leads to early stopping due to `dt <= dt_min`. The correct way to handle such dynamics is to tell the solver about the discontinuity be means of a root-finding equation. [`ODEsystem`](@ref)s accept a keyword argument `root_eqs`
+```
+ODESystem(eqs, ...; root_eqs::Vector{Equation})
+```
+where equations can be added that evaluate to 0 at discontinuities. The system below illustrates how this can be used to model Coulomb friction
+```julia
+using ModelingToolkit, OrdinaryDiffEq, Plots
+function UnitMassWithFriction(k; name)
+  @variables t x(t)=0 v(t)=0
+  D = Differential(t)
+  eqs = [
+    D(x) ~ v
+    D(v) ~ sin(t) - k*sign(v) # f = ma, sinusoidal force acting on the mass, and Coulomb friction opposing the movement
+  ]
+  ODESystem(eqs, t, root_eqs=[v ~ 0], name=name) # when v = 0 there is a discontinuity
+end
+@named m = UnitMassWithFriction(0.7)
+prob = ODEProblem(m, Pair[], (0, 10pi))
+sol = solve(prob, Tsit5())
+plot(sol)
+```
