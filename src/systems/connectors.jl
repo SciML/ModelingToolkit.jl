@@ -15,7 +15,7 @@ function with_connector_type(expr)
                 $body
             end
             res = f()
-            $isdefined(res, :connector_type) ? $Setfield.@set!(res.connector_type = $connector_type(res)) : res
+            $isdefined(res, :connector_type) && $getfield(res, :connector_type) === nothing ? $Setfield.@set!(res.connector_type = $connector_type(res)) : res
         end
     end
 end
@@ -106,7 +106,7 @@ isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) 
 
 function isouterconnector(sys::AbstractSystem; check=true)
     subsys = get_systems(sys)
-    outer_connectors = [nameof(s) for s in subsys if isconnector(sys)]
+    outer_connectors = [nameof(s) for s in subsys if isconnector(s)]
     # Note that subconnectors in outer connectors are still outer connectors.
     # Ref: https://specification.modelica.org/v3.4/Ch9.html see 9.1.2
     let outer_connectors=outer_connectors, check=check
@@ -114,18 +114,20 @@ function isouterconnector(sys::AbstractSystem; check=true)
             s = string(nameof(sys))
             check && (isconnector(sys) || error("$s is not a connector!"))
             idx = findfirst(isequal('₊'), s)
-            parent_name = idx === nothing ? s : s[1:idx]
+            parent_name = Symbol(idx === nothing ? s : s[1:idx])
             parent_name in outer_connectors
         end
     end
 end
+
+print_with_indent(n, x) = println(" " ^ n, x)
 
 function expand_connections(sys::AbstractSystem; debug=false)
     subsys = get_systems(sys)
     isempty(subsys) && return sys
 
     # post order traversal
-    @set sys.systems = map(s->expand_connections(s, debug=debug), subsys)
+    @set! sys.systems = map(s->expand_connections(s, debug=debug), subsys)
     isouter = isouterconnector(sys)
 
     eqs′ = get_eqs(sys)
@@ -176,15 +178,18 @@ function expand_connections(sys::AbstractSystem; debug=false)
         length(dups) == 0 || error("$(Connection(syss)) has duplicated connections: $(dups).")
     end
 
-    if debug
+    if debug && !isempty(narg_connects)
         println("Connections:")
-        print_with_indent(x) = println(" " ^ 4, x)
-        foreach(print_with_indent, narg_connects)
+        foreach(Base.Fix1(print_with_indent, 4), narg_connects)
     end
 
     for c in narg_connects
         ceqs = connect(c)
-        ceqs isa Equation ? push!(eqs, ceqs) : append!(eqs, ceqs)
+        if debug
+            println("Connection equations:")
+            foreach(Base.Fix1(print_with_indent, 4), ceqs)
+        end
+        append!(eqs, ceqs)
     end
 
     @set! sys.eqs = eqs

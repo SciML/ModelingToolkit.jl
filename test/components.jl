@@ -78,3 +78,32 @@ end
 @unpack foo = goo
 @test ModelingToolkit.defaults(goo)[foo.a] == 3
 @test ModelingToolkit.defaults(goo)[foo.b] == 300
+
+# Outer/inner connections
+function rc_component(;name)
+    R = 1
+    C = 1
+    @named p = Pin()
+    @named n = Pin()
+    @named resistor = Resistor(R=R)
+    @named capacitor = Capacitor(C=C)
+    eqs = [
+           connect(p, resistor.p);
+           connect(resistor.n, capacitor.p);
+           connect(capacitor.n, n);
+          ]
+    @named sys = ODESystem(eqs, t)
+    compose(sys, [p, n, resistor, capacitor]; name=name)
+end
+
+@named ground = Ground()
+@named source = ConstantVoltage(V=1)
+@named rc_comp = rc_component()
+eqs = [
+       connect(source.p, rc_comp.p)
+       connect(source.n, rc_comp.n)
+       connect(source.n, ground.g)
+      ]
+@named sys′ = ODESystem(eqs, t)
+@named sys = compose(sys′, [ground, source, rc_comp])
+expand_connections(sys, debug=true)
