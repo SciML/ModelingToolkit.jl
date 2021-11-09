@@ -52,7 +52,7 @@ function Base.show(io::IO, c::Connection)
     else
         syss = Iterators.flatten((something(inners, EMPTY_VEC), something(outers, EMPTY_VEC)))
         splitting_idx = length(inners)
-        sys_str = join((string(nameof(s)) * (i <= splitting_idx ? ("::inner") : ("::outers")) for (i, s) in enumerate(syss)), ", ")
+        sys_str = join((string(nameof(s)) * (i <= splitting_idx ? ("::inner") : ("::outer")) for (i, s) in enumerate(syss)), ", ")
         print(io, "<", sys_str, ">")
     end
 end
@@ -179,17 +179,22 @@ function expand_connections(sys::AbstractSystem; debug=false)
     end
 
     if debug && !isempty(narg_connects)
-        println("Connections:")
+        println("============BEGIN================")
+        println("Connections for [$(nameof(sys))]:")
         foreach(Base.Fix1(print_with_indent, 4), narg_connects)
     end
 
+    connection_eqs = Equation[]
     for c in narg_connects
         ceqs = connect(c)
-        if debug
-            println("Connection equations:")
-            foreach(Base.Fix1(print_with_indent, 4), ceqs)
-        end
+        debug && append!(connection_eqs, ceqs)
         append!(eqs, ceqs)
+    end
+
+    if debug && !isempty(narg_connects)
+        println("Connection equations:")
+        foreach(Base.Fix1(print_with_indent, 4), connection_eqs)
+        println("=============END=================")
     end
 
     @set! sys.eqs = eqs
