@@ -187,7 +187,6 @@ for prop in [
              :dvs
              :connection_type
              :preface
-             :root_eqs
             ]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
@@ -979,7 +978,7 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameo
     sts = union(get_states(basesys), get_states(sys))
     ps = union(get_ps(basesys), get_ps(sys))
     obs = union(get_observed(basesys), get_observed(sys))
-    roots = union(get_rooteqs(basesys), get_rooteqs(sys))
+    roots = union(get_root_eqs(basesys), get_root_eqs(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
     syss = union(get_systems(basesys), get_systems(sys))
 

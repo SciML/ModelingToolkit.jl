@@ -226,6 +226,10 @@ end
 
 ODESystem(eq::Equation, args...; kwargs...) = ODESystem([eq], args...; kwargs...)
 
+get_root_eqs(sys::AbstractSystem) = Equation[]
+get_root_eqs(sys::AbstractODESystem) = getfield(sys, :root_eqs)
+has_root_eqs(sys::AbstractSystem) = isdefined(sys, :root_eqs)
+
 """
 $(SIGNATURES)
 
