@@ -186,7 +186,7 @@ function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys), ps = p
         ContinuousCallback(condition, cb_affect!)
     else
         condition = (out, u, t, integ) -> rf_ip(out, u, integ.p, t)
-        VectorContinuousCallback(condition, cb_affect!, length(vars))
+        VectorContinuousCallback(condition, cb_affect!, length(eqs))
     end
 end
 
