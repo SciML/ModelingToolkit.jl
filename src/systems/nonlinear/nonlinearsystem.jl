@@ -70,10 +70,10 @@ function NonlinearSystem(eqs, states, ps;
                          defaults=_merge(Dict(default_u0), Dict(default_p)),
                          systems=NonlinearSystem[],
                          connection_type=nothing,
-                         root_eqs=nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
+                         events=nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
                          checks = true,
                          )
-    root_eqs === nothing || isempty(root_eqs) || throw(ArgumentError("NonlinearSystem does not accept `root_eqs`, you provided $root_eqs"))
+    events === nothing || isempty(events) || throw(ArgumentError("NonlinearSystem does not accept `events`, you provided $events"))
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     # Move things over, but do not touch array expressions
     eqs = [0 ~ x.rhs - x.lhs for x in collect(eqs)]

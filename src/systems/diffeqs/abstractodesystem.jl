@@ -154,12 +154,15 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
 end
 
 function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
-    eq_affs = root_eqs(sys)
+    eq_affs = events(sys)
     isempty(eq_affs) && return nothing
     callbacks = map(eq_affs) do eq_aff
         generate_rootfinding_callback(eq_aff, sys, dvs, ps; kwargs...)
     end
-    if length(callbacks) == 1
+    callbacks = filter(cb->cb !== nothing, callbacks)
+    if isempty(callbacks)
+        return nothing
+    elseif length(callbacks) == 1
         return callbacks[]
     else
         CallbackSet(callbacks...)
@@ -168,7 +171,7 @@ end
 
 function generate_rootfinding_callback(eq_aff::EqAffectPair, sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     eqs = eq_aff.eqs
-
+    isempty(eqs) && return nothing
     # rewrite all equations as 0 ~ interesting stuff
     eqs = map(eqs) do eq
         isequal(eq.lhs, 0) && return eq
@@ -213,8 +216,8 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; kwargs...)
         lhss = map(x->x.lhs, eqs)
         affect_eq_vars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
         update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're chaning
-        length(update_vars) == length(update_vars) || error("affected variables not unique, each state can only be affected by one equation")
-        vars = states(sys)#dvs ∩ affect_eq_vars # we look for the roots w.r.t. the states of the root equations
+        length(update_vars) == length(update_vars) || error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
+        vars = states(sys)
     
         u        = map(x->time_varying_as_func(value(x), sys), vars)
         p        = map(x->time_varying_as_func(value(x), sys), ps)
@@ -635,7 +638,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
     has_difference = any(isdifferenceeq, equations(sys))
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; has_difference=has_difference, kwargs...)
-    if has_root_eqs(sys)
+    if has_events(sys)
         event_cb = generate_rootfinding_callback(sys; kwargs...)
     else
         event_cb = nothing
@@ -643,7 +646,11 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
     difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
     cb = merge_cb(event_cb, difference_cb)
 
-    ODEProblem{iip}(f, u0, tspan, p; callback=cb, kwargs...)
+    if cb === nothing
+        ODEProblem{iip}(f, u0, tspan, p; kwargs...)
+    else
+        ODEProblem{iip}(f, u0, tspan, p; callback=cb, kwargs...)
+    end
 end
 merge_cb(::Nothing, ::Nothing) = nothing
 merge_cb(::Nothing, x) = merge_cb(x, nothing)

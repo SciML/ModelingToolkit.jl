@@ -165,6 +165,10 @@ Base.:(==)(e1::EqAffectPair, e2::EqAffectPair) = isequal(e1.eqs, e2.eqs) && iseq
 
 to_equation_vector(eq::Equation) = [eq]
 to_equation_vector(eqs::Vector{Equation}) = eqs
+function to_equation_vector(eqs::Vector{Any})
+    isempty(eqs) || error("This should never happen")
+    Equation[]
+end
 # to_equation_vector(nothing) = nothing
 EqAffectPair(args...) = EqAffectPair(to_equation_vector.(args)...) # wrap eq in vector
 EqAffectPair(p::Pair) = EqAffectPair(p[1], p[2])
@@ -175,12 +179,13 @@ EqAffectPairs(eq_affs::Vector{<:EqAffectPair}) = eq_affs
 EqAffectPairs(eq_affs::Vector) = EqAffectPair.(eq_affs)
 EqAffectPairs(ve::Vector{Equation}) = EqAffectPairs(EqAffectPair(ve))
 EqAffectPairs(others) = EqAffectPairs(EqAffectPair(others))
+EqAffectPairs(::Nothing) = EqAffectPairs(Equation[])
 
 equations(eq_aff::EqAffectPair) = eq_aff.eqs
 equations(eq_affs::Vector{<:EqAffectPair}) = reduce(vcat, [equations(eq_aff) for eq_aff in eq_affs])
 affect_equations(eq_aff::EqAffectPair) = eq_aff.affect
-affect_equations(eq_affs::Vector{<:EqAffectPair}) = reduce(vcat, [affect_equations(eq_aff) for eq_aff in eq_affs])
-namespace_equation(eq_aff::EqAffectPair, s) = EqAffectPair(namespace_equation.(equations(eq_aff), (s, )), namespace_equation.(affect_equations(eq_aff), (s, )))
+affect_equations(eq_affs::Vector{EqAffectPair}) = reduce(vcat, [affect_equations(eq_aff) for eq_aff in eq_affs])
+namespace_equation(eq_aff::EqAffectPair, s)::EqAffectPair = EqAffectPair(namespace_equation.(equations(eq_aff), (s, )), namespace_equation.(affect_equations(eq_aff), (s, )))
 
 
 function structure(sys::AbstractSystem)
@@ -444,12 +449,12 @@ function observed(sys::AbstractSystem)
             init=Equation[])]
 end
 
-function root_eqs(sys::AbstractSystem)
-    obs = get_root_eqs(sys)
+function events(sys::AbstractSystem)
+    obs = get_events(sys)
     systems = get_systems(sys)
     [obs;
      reduce(vcat,
-            (map(o->namespace_equation(o, s), root_eqs(s)) for s in systems),
+            (map(o->namespace_equation(o, s), events(s)) for s in systems),
             init=EqAffectPair[])]
 end
 
@@ -979,7 +984,7 @@ function Base.hash(sys::AbstractSystem, s::UInt)
         s = foldr(hash, get_eqs(sys), init=s)
     end
     s = foldr(hash, get_observed(sys), init=s)
-    s = foldr(hash, get_root_eqs(sys), init=s)
+    s = foldr(hash, get_events(sys), init=s)
     s = hash(independent_variables(sys), s)
     return s
 end
@@ -1007,14 +1012,14 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameo
     sts = union(get_states(basesys), get_states(sys))
     ps = union(get_ps(basesys), get_ps(sys))
     obs = union(get_observed(basesys), get_observed(sys))
-    roots = union(get_root_eqs(basesys), get_root_eqs(sys))
+    evs = union(get_events(basesys), get_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
     syss = union(get_systems(basesys), get_systems(sys))
 
     if length(ivs) == 0
-        T(eqs, sts, ps, observed = obs, defaults = defs, name=name, systems = syss, root_eqs=roots)
+        T(eqs, sts, ps, observed = obs, defaults = defs, name=name, systems = syss, events=evs)
     elseif length(ivs) == 1
-        T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name, systems = syss, root_eqs=roots)
+        T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name, systems = syss, events=evs)
     end
 end
 

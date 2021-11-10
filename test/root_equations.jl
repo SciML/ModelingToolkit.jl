@@ -1,5 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, Test
-using ModelingToolkit: EqAffectPair, NULL_AFFECT
+using ModelingToolkit: EqAffectPair, EqAffectPairs, NULL_AFFECT
 
 @parameters t
 @variables x(t)=0 
@@ -71,25 +71,66 @@ affect = [x ~ 0]
     @test e isa EqAffectPair
     @test isequal(e.eqs, eqs)
     @test e.affect == affect
+
+
+
+
+    # test plural constructor
+
+    e = EqAffectPairs(eqs[]) 
+    @test e isa Vector{EqAffectPair}
+    @test isequal(e[].eqs, eqs)
+    @test e[].affect == NULL_AFFECT
+
+    e = EqAffectPairs(eqs) 
+    @test e isa Vector{EqAffectPair}
+    @test isequal(e[].eqs, eqs)
+    @test e[].affect == NULL_AFFECT
+
+    e = EqAffectPairs(eqs[] => affect) 
+    @test e isa Vector{EqAffectPair}
+    @test isequal(e[].eqs, eqs)
+    @test e[].affect == affect
+
+    e = EqAffectPairs(eqs => affect) 
+    @test e isa Vector{EqAffectPair}
+    @test isequal(e[].eqs, eqs)
+    @test e[].affect == affect
+
+    e = EqAffectPairs([eqs[] => affect]) 
+    @test e isa Vector{EqAffectPair}
+    @test isequal(e[].eqs, eqs)
+    @test e[].affect == affect
+
+    e = EqAffectPairs([eqs => affect]) 
+    @test e isa Vector{EqAffectPair}
+    @test isequal(e[].eqs, eqs)
+    @test e[].affect == affect
+
+    e = EqAffectPairs(EqAffectPairs([eqs => affect]))
+    @test e isa Vector{EqAffectPair}
+    @test isequal(e[].eqs, eqs)
+    @test e[].affect == affect
+
 end
 
 
 ##
 
-@named sys = ODESystem(eqs, root_eqs = [x ~ 1])
-@test getfield(sys, :root_eqs)[] == EqAffectPair(Equation[x ~ 1], NULL_AFFECT)
-@test isequal(equations(getfield(sys, :root_eqs))[], x ~ 1)
+@named sys = ODESystem(eqs, events = [x ~ 1])
+@test getfield(sys, :events)[] == EqAffectPair(Equation[x ~ 1], NULL_AFFECT)
+@test isequal(equations(getfield(sys, :events))[], x ~ 1)
 fsys = flatten(sys)
-@test isequal(equations(getfield(fsys, :root_eqs))[], x ~ 1)
+@test isequal(equations(getfield(fsys, :events))[], x ~ 1)
 
-@named sys2 = ODESystem([D(x) ~ 1], root_eqs = [x ~ 2], systems=[sys])
-@test getfield(sys2, :root_eqs)[] == EqAffectPair(Equation[x ~ 2], NULL_AFFECT)
-@test all(ModelingToolkit.root_eqs(sys2) .== [EqAffectPair(Equation[x ~ 2], NULL_AFFECT), EqAffectPair(Equation[sys.x ~ 1], NULL_AFFECT)])
+@named sys2 = ODESystem([D(x) ~ 1], events = [x ~ 2], systems=[sys])
+@test getfield(sys2, :events)[] == EqAffectPair(Equation[x ~ 2], NULL_AFFECT)
+@test all(ModelingToolkit.events(sys2) .== [EqAffectPair(Equation[x ~ 2], NULL_AFFECT), EqAffectPair(Equation[sys.x ~ 1], NULL_AFFECT)])
 
-@test isequal(equations(getfield(sys2, :root_eqs))[1], x ~ 2)
-@test length(ModelingToolkit.root_eqs(sys2)) == 2
-@test isequal(ModelingToolkit.root_eqs(sys2)[1].eqs[], x ~ 2)
-@test isequal(ModelingToolkit.root_eqs(sys2)[2].eqs[], sys.x ~ 1)
+@test isequal(equations(getfield(sys2, :events))[1], x ~ 2)
+@test length(ModelingToolkit.events(sys2)) == 2
+@test isequal(ModelingToolkit.events(sys2)[1].eqs[], x ~ 2)
+@test isequal(ModelingToolkit.events(sys2)[2].eqs[], sys.x ~ 1)
 
 # Functions should be generated for root-finding equations
 prob = ODEProblem(sys, Pair[], (0.0, 2.0))
@@ -142,7 +183,7 @@ sol = solve(prob, Tsit5())
 @test minimum(t->abs(t-1), sol.t) < 1e-10 # test that the solver stepped at the first root
 @test minimum(t->abs(t-2), sol.t) < 1e-10 # test that the solver stepped at the second root
 
-@named sys = ODESystem(eqs, root_eqs = [x ~ 1, x ~ 2]) # two root eqs using the same state
+@named sys = ODESystem(eqs, events = [x ~ 1, x ~ 2]) # two root eqs using the same state
 prob = ODEProblem(sys, Pair[], (0.0, 3.0))
 @test prob.kwargs[:callback] isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
 sol = solve(prob, Tsit5())
@@ -160,9 +201,9 @@ affect   = [v ~ -v]
 @named ball = ODESystem([
     D(x) ~ v
     D(v) ~ -9.8
-], t, root_eqs = root_eqs => affect)
+], t, events = root_eqs => affect)
 
-@test getfield(ball, :root_eqs)[] == EqAffectPair(Equation[x ~ 0], Equation[v ~ -v])
+@test getfield(ball, :events)[] == EqAffectPair(Equation[x ~ 0], Equation[v ~ -v])
 ball = structural_simplify(ball)
 
 tspan = (0.0,5.0)
