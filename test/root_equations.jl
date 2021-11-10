@@ -139,3 +139,26 @@ prob = ODEProblem(sys2, Pair[], (0.0, 3.0))
 sol = solve(prob, Tsit5())
 @test secret_stash ≈ [1, 2]
 empty!(secret_stash)
+
+
+
+## Test bouncing ball
+@variables t x(t)=1 v(t)=0
+D = Differential(t)
+
+function affect!(integrator)
+    integrator.u[2] = -integrator.u[2]
+end
+
+@named ball = ODESystem([
+    D(x) ~ v
+    D(v) ~ -9.8
+], t, root_eqs = [x ~ 0] => affect!)
+
+ball = structural_simplify(ball)
+
+tspan = (0.0,15.0)
+prob = ODEProblem(ball, Pair[], tspan)
+sol = solve(prob,Tsit5())
+@test all(sol[x] .>= 0)
+# plot(sol)
