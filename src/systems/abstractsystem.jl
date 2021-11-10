@@ -155,13 +155,13 @@ independent_variables(sys::AbstractTimeIndependentSystem) = []
 independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
 
 const NULL_AFFECT = Equation[]
-struct EqAffectPair
+struct SymbolicContinuousCallback
     eqs::Vector{Equation}
     affect::Vector{Equation}
-    EqAffectPair(eqs::Vector{Equation}, affect=NULL_AFFECT) = new(eqs, affect) # Default affect to nothing
+    SymbolicContinuousCallback(eqs::Vector{Equation}, affect=NULL_AFFECT) = new(eqs, affect) # Default affect to nothing
 end
 
-Base.:(==)(e1::EqAffectPair, e2::EqAffectPair) = isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect)
+Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback) = isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect)
 
 to_equation_vector(eq::Equation) = [eq]
 to_equation_vector(eqs::Vector{Equation}) = eqs
@@ -169,23 +169,23 @@ function to_equation_vector(eqs::Vector{Any})
     isempty(eqs) || error("This should never happen")
     Equation[]
 end
-# to_equation_vector(nothing) = nothing
-EqAffectPair(args...) = EqAffectPair(to_equation_vector.(args)...) # wrap eq in vector
-EqAffectPair(p::Pair) = EqAffectPair(p[1], p[2])
-EqAffectPair(eq_aff::EqAffectPair) = eq_aff # passthrough
 
-EqAffectPairs(eq_aff::EqAffectPair) = [eq_aff]
-EqAffectPairs(eq_affs::Vector{<:EqAffectPair}) = eq_affs
-EqAffectPairs(eq_affs::Vector) = EqAffectPair.(eq_affs)
-EqAffectPairs(ve::Vector{Equation}) = EqAffectPairs(EqAffectPair(ve))
-EqAffectPairs(others) = EqAffectPairs(EqAffectPair(others))
-EqAffectPairs(::Nothing) = EqAffectPairs(Equation[])
+SymbolicContinuousCallback(args...) = SymbolicContinuousCallback(to_equation_vector.(args)...) # wrap eq in vector
+SymbolicContinuousCallback(p::Pair) = SymbolicContinuousCallback(p[1], p[2])
+SymbolicContinuousCallback(cb::SymbolicContinuousCallback) = cb # passthrough
 
-equations(eq_aff::EqAffectPair) = eq_aff.eqs
-equations(eq_affs::Vector{<:EqAffectPair}) = reduce(vcat, [equations(eq_aff) for eq_aff in eq_affs])
-affect_equations(eq_aff::EqAffectPair) = eq_aff.affect
-affect_equations(eq_affs::Vector{EqAffectPair}) = reduce(vcat, [affect_equations(eq_aff) for eq_aff in eq_affs])
-namespace_equation(eq_aff::EqAffectPair, s)::EqAffectPair = EqAffectPair(namespace_equation.(equations(eq_aff), (s, )), namespace_equation.(affect_equations(eq_aff), (s, )))
+SymbolicContinuousCallbacks(cb::SymbolicContinuousCallback) = [cb]
+SymbolicContinuousCallbacks(cbs::Vector{<:SymbolicContinuousCallback}) = cbs
+SymbolicContinuousCallbacks(cbs::Vector) = SymbolicContinuousCallback.(cbs)
+SymbolicContinuousCallbacks(ve::Vector{Equation}) = SymbolicContinuousCallbacks(SymbolicContinuousCallback(ve))
+SymbolicContinuousCallbacks(others) = SymbolicContinuousCallbacks(SymbolicContinuousCallback(others))
+SymbolicContinuousCallbacks(::Nothing) = SymbolicContinuousCallbacks(Equation[])
+
+equations(cb::SymbolicContinuousCallback) = cb.eqs
+equations(cbs::Vector{<:SymbolicContinuousCallback}) = reduce(vcat, [equations(cb) for cb in cbs])
+affect_equations(cb::SymbolicContinuousCallback) = cb.affect
+affect_equations(cbs::Vector{SymbolicContinuousCallback}) = reduce(vcat, [affect_equations(cb) for cb in cbs])
+namespace_equation(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback = SymbolicContinuousCallback(namespace_equation.(equations(cb), (s, )), namespace_equation.(affect_equations(cb), (s, )))
 
 
 function structure(sys::AbstractSystem)
@@ -449,13 +449,13 @@ function observed(sys::AbstractSystem)
             init=Equation[])]
 end
 
-function events(sys::AbstractSystem)
-    obs = get_events(sys)
+function continuous_events(sys::AbstractSystem)
+    obs = get_continuous_events(sys)
     systems = get_systems(sys)
     [obs;
      reduce(vcat,
-            (map(o->namespace_equation(o, s), events(s)) for s in systems),
-            init=EqAffectPair[])]
+            (map(o->namespace_equation(o, s), continuous_events(s)) for s in systems),
+            init=SymbolicContinuousCallback[])]
 end
 
 Base.@deprecate default_u0(x) defaults(x) false
@@ -984,7 +984,7 @@ function Base.hash(sys::AbstractSystem, s::UInt)
         s = foldr(hash, get_eqs(sys), init=s)
     end
     s = foldr(hash, get_observed(sys), init=s)
-    s = foldr(hash, get_events(sys), init=s)
+    s = foldr(hash, get_continuous_events(sys), init=s)
     s = hash(independent_variables(sys), s)
     return s
 end
@@ -1012,14 +1012,14 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameo
     sts = union(get_states(basesys), get_states(sys))
     ps = union(get_ps(basesys), get_ps(sys))
     obs = union(get_observed(basesys), get_observed(sys))
-    evs = union(get_events(basesys), get_events(sys))
+    evs = union(get_continuous_events(basesys), get_continuous_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
     syss = union(get_systems(basesys), get_systems(sys))
 
     if length(ivs) == 0
-        T(eqs, sts, ps, observed = obs, defaults = defs, name=name, systems = syss, events=evs)
+        T(eqs, sts, ps, observed = obs, defaults = defs, name=name, systems = syss, continuous_events=evs)
     elseif length(ivs) == 1
-        T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name, systems = syss, events=evs)
+        T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name, systems = syss, continuous_events=evs)
     end
 end
 

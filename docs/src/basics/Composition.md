@@ -252,10 +252,10 @@ solving. In summary: these problems are structurally modified, but could be
 more efficient and more stable.
 
 ## Components with discontinuous dynamics
-When modeling, e.g., impacts, saturations or Coulomb friction, the dynamic equations are discontinuous in either the state or one of its derivatives. This causes the solver to take very small steps around the discontinuity, and sometimes leads to early stopping due to `dt <= dt_min`. The correct way to handle such dynamics is to tell the solver about the discontinuity be means of a root-finding equation. [`ODEsystem`](@ref)s accept a keyword argument `events`
+When modeling, e.g., impacts, saturations or Coulomb friction, the dynamic equations are discontinuous in either the state or one of its derivatives. This causes the solver to take very small steps around the discontinuity, and sometimes leads to early stopping due to `dt <= dt_min`. The correct way to handle such dynamics is to tell the solver about the discontinuity be means of a root-finding equation. [`ODEsystem`](@ref)s accept a keyword argument `continuous_events`
 ```
-ODESystem(eqs, ...; events::Vector{Equation})
-ODESystem(eqs, ...; events::Pair{Vector{Equation}, Vector{Equation}})
+ODESystem(eqs, ...; continuous_events::Vector{Equation})
+ODESystem(eqs, ...; continuous_events::Pair{Vector{Equation}, Vector{Equation}})
 ```
 where equations can be added that evaluate to 0 at discontinuities.
 
@@ -275,7 +275,7 @@ function UnitMassWithFriction(k; name)
     D(x) ~ v
     D(v) ~ sin(t) - k*sign(v) # f = ma, sinusoidal force acting on the mass, and Coulomb friction opposing the movement
   ]
-  ODESystem(eqs, t, events=[v ~ 0], name=name) # when v = 0 there is a discontinuity
+  ODESystem(eqs, t, continuous_events=[v ~ 0], name=name) # when v = 0 there is a discontinuity
 end
 @named m = UnitMassWithFriction(0.7)
 prob = ODEProblem(m, Pair[], (0, 10pi))
@@ -296,7 +296,7 @@ affect   = [v ~ -v] # the effect is that the velocity changes sign
 @named ball = ODESystem([
     D(x) ~ v
     D(v) ~ -9.8
-], t, events = root_eqs => affect) # equation => affect
+], t, continuous_events = root_eqs => affect) # equation => affect
 
 ball = structural_simplify(ball)
 
@@ -313,7 +313,7 @@ Multiple events? No problem! This example models a bouncing ball in 2D that is e
 @variables t x(t)=1 y(t)=0 vx(t)=0 vy(t)=2
 D = Differential(t)
 
-events = [ # This time we have a vector of pairs
+continuous_events = [ # This time we have a vector of pairs
     [x ~ 0] => [vx ~ -vx]
     [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]
 ]
@@ -323,7 +323,7 @@ events = [ # This time we have a vector of pairs
     D(y)  ~ vy,
     D(vx) ~ -9.8-0.1vx, # gravity + some small air resistance
     D(vy) ~ -0.1vy,
-], t, events = events)
+], t, continuous_events = continuous_events)
 
 
 ball = structural_simplify(ball)

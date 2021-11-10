@@ -154,9 +154,9 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
 end
 
 function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
-    eq_affs = events(sys)
-    isempty(eq_affs) && return nothing
-    callbacks = map(eq_affs) do eq_aff
+    cbs = continuous_events(sys)
+    isempty(cbs) && return nothing
+    callbacks = map(cbs) do eq_aff
         generate_rootfinding_callback(eq_aff, sys, dvs, ps; kwargs...)
     end
     callbacks = filter(cb->cb !== nothing, callbacks)
@@ -169,7 +169,7 @@ function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys), ps = p
     end
 end
 
-function generate_rootfinding_callback(eq_aff::EqAffectPair, sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
+function generate_rootfinding_callback(eq_aff::SymbolicContinuousCallback, sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     eqs = eq_aff.eqs
     isempty(eqs) && return nothing
     # rewrite all equations as 0 ~ interesting stuff
@@ -207,7 +207,7 @@ function generate_rootfinding_callback(eq_aff::EqAffectPair, sys::ODESystem, dvs
     end
 end
 
-compile_affect(eqaff::EqAffectPair, args...; kwargs...) = compile_affect(affect_equations(eqaff), args...; kwargs...)
+compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...) = compile_affect(affect_equations(cb), args...; kwargs...)
 
 function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; kwargs...)
     if isempty(eqs)
@@ -639,7 +639,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
     has_difference = any(isdifferenceeq, equations(sys))
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; has_difference=has_difference, kwargs...)
-    if has_events(sys)
+    if has_continuous_events(sys)
         event_cb = generate_rootfinding_callback(sys; kwargs...)
     else
         event_cb = nothing

@@ -88,10 +88,10 @@ struct ODESystem <: AbstractODESystem
     """
     preface::Any
     """
-    events: A `Vector{EqAffectPair}` that model events.
+    events: A `Vector{SymbolicContinuousCallback}` that model events.
     The integrator will use root finding to guarantee that it steps at each zero crossing.
     """
-    events::Vector{EqAffectPair}
+    continuous_events::Vector{SymbolicContinuousCallback}
 
     function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface, events; checks::Bool = true)
         if checks
@@ -116,7 +116,7 @@ function ODESystem(
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
                    preface=nothing,
-                   events=nothing,
+                   continuous_events=nothing,
                    checks = true,
                   )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
@@ -151,8 +151,8 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    eq_affect_pairs = EqAffectPairs(events)
-    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface, eq_affect_pairs, checks = checks)
+    cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
+    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface, cont_callbacks, checks = checks)
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)
@@ -217,7 +217,7 @@ function flatten(sys::ODESystem)
                          states(sys),
                          parameters(sys),
                          observed=observed(sys),
-                         events=events(sys),
+                         continuous_events=continuous_events(sys),
                          defaults=defaults(sys),
                          name=nameof(sys),
                          checks = false,
@@ -227,9 +227,9 @@ end
 
 ODESystem(eq::Equation, args...; kwargs...) = ODESystem([eq], args...; kwargs...)
 
-get_events(sys::AbstractSystem) = Equation[]
-get_events(sys::AbstractODESystem) = getfield(sys, :events)
-has_events(sys::AbstractSystem) = isdefined(sys, :events)
+get_continuous_events(sys::AbstractSystem) = Equation[]
+get_continuous_events(sys::AbstractODESystem) = getfield(sys, :continuous_events)
+has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
 
 """
 $(SIGNATURES)
