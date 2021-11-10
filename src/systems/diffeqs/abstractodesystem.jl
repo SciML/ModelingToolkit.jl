@@ -216,7 +216,8 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; kwargs...)
         rhss = map(x->x.rhs, eqs)
         lhss = map(x->x.lhs, eqs)
         update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're chaning
-        length(update_vars) == length(update_vars) || error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
+        length(update_vars) == length(unique(update_vars)) == length(eqs) ||
+            error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
         vars = states(sys)
     
         u        = map(x->time_varying_as_func(value(x), sys), vars)
