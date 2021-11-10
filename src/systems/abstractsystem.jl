@@ -154,23 +154,34 @@ independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
 independent_variables(sys::AbstractTimeIndependentSystem) = []
 independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
 
-NULL_AFFECT(args...) = ()
-struct EqAffectPair{F <: Function}
+const NULL_AFFECT = Equation[]
+struct EqAffectPair
     eqs::Vector{Equation}
-    affect::F
-    EqAffectPair(eqs::Vector{Equation}, affect::Function=NULL_AFFECT) = new{typeof(affect)}(eqs, affect)
+    affect::Vector{Equation}
+    EqAffectPair(eqs::Vector{Equation}, affect=NULL_AFFECT) = new(eqs, affect) # Default affect to nothing
 end
-EqAffectPair(eq::Equation, args...) = EqAffectPair([eq], args...)
-EqAffectPair(p::Pair{<:Union{Equation, Vector{Equation}}, F}) where F = EqAffectPair(p[1], p[2])
-EqAffectPair(eq_aff::EqAffectPair) = eq_aff
+
+Base.:(==)(e1::EqAffectPair, e2::EqAffectPair) = isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect)
+
+to_equation_vector(eq::Equation) = [eq]
+to_equation_vector(eqs::Vector{Equation}) = eqs
+# to_equation_vector(nothing) = nothing
+EqAffectPair(args...) = EqAffectPair(to_equation_vector.(args)...) # wrap eq in vector
+EqAffectPair(p::Pair) = EqAffectPair(p[1], p[2])
+EqAffectPair(eq_aff::EqAffectPair) = eq_aff # passthrough
+
 EqAffectPairs(eq_aff::EqAffectPair) = [eq_aff]
 EqAffectPairs(eq_affs::Vector{<:EqAffectPair}) = eq_affs
 EqAffectPairs(eq_affs::Vector) = EqAffectPair.(eq_affs)
 EqAffectPairs(ve::Vector{Equation}) = EqAffectPairs(EqAffectPair(ve))
 EqAffectPairs(others) = EqAffectPairs(EqAffectPair(others))
+
 equations(eq_aff::EqAffectPair) = eq_aff.eqs
 equations(eq_affs::Vector{<:EqAffectPair}) = reduce(vcat, [equations(eq_aff) for eq_aff in eq_affs])
-namespace_equation(eq_aff::EqAffectPair, s) = EqAffectPair(namespace_equation.(eq_aff.eqs, (s, )), eq_aff.affect)
+affect_equations(eq_aff::EqAffectPair) = eq_aff.affect
+affect_equations(eq_affs::Vector{<:EqAffectPair}) = reduce(vcat, [affect_equations(eq_aff) for eq_aff in eq_affs])
+namespace_equation(eq_aff::EqAffectPair, s) = EqAffectPair(namespace_equation.(equations(eq_aff), (s, )), namespace_equation.(affect_equations(eq_aff), (s, )))
+
 
 function structure(sys::AbstractSystem)
     s = get_structure(sys)

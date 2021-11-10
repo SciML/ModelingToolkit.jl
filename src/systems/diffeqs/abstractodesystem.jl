@@ -184,7 +184,8 @@ function generate_rootfinding_callback(eq_aff::EqAffectPair, sys::ODESystem, dvs
     t = get_iv(sys)
     rf_oop, rf_ip = build_function(rhss, u, p, t; expression=Val{false}, kwargs...)
 
-    # cb_affect!(args...) = () # We don't do anything in the callback, we're just after the event
+    affect = compile_affect(eq_aff, sys, dvs, ps; kwargs...)
+
     if length(eqs) == 1
         function condition(u, t, integ)
             if DiffEqBase.isinplace(integ.sol.prob)
@@ -195,10 +196,39 @@ function generate_rootfinding_callback(eq_aff::EqAffectPair, sys::ODESystem, dvs
                 rf_oop(u, integ.p, t)
             end
         end
-        ContinuousCallback(condition, eq_aff.affect)
+        ContinuousCallback(condition, affect)
     else
         condition = (out, u, t, integ) -> rf_ip(out, u, integ.p, t)
-        VectorContinuousCallback(condition, eq_aff.affect, length(eqs))
+        VectorContinuousCallback(condition, affect, length(eqs))
+    end
+end
+
+compile_affect(eqaff::EqAffectPair, args...; kwargs...) = compile_affect(affect_equations(eqaff), args...; kwargs...)
+
+function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; kwargs...)
+    if isempty(eqs)
+        return (args...) -> () # We don't do anything in the callback, we're just after the event
+    else
+        rhss = map(x->x.rhs, eqs)
+        lhss = map(x->x.lhs, eqs)
+        affect_eq_vars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
+        update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're chaning
+        length(update_vars) == length(update_vars) || error("affected variables not unique, each state can only be affected by one equation")
+        vars = states(sys)#dvs ∩ affect_eq_vars # we look for the roots w.r.t. the states of the root equations
+    
+        u        = map(x->time_varying_as_func(value(x), sys), vars)
+        p        = map(x->time_varying_as_func(value(x), sys), ps)
+        t        = get_iv(sys)
+        rf_oop, rf_ip = build_function(rhss, u, p, t; expression=Val{false}, kwargs...)
+
+        stateind(sym) = findfirst(isequal(sym),vars)
+
+        update_inds = stateind.(update_vars)
+
+        function(integ, _ = 0) # the second argument might be an event index
+            lhs = @view integ.u[update_inds]
+            rf_ip(lhs, integ.u, integ.p, integ.t)
+        end
     end
 end
 

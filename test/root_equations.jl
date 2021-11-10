@@ -6,7 +6,7 @@ using ModelingToolkit: EqAffectPair, NULL_AFFECT
 D = Differential(t)
 
 eqs = [D(x) ~ 1]
-
+affect = [x ~ 0]
 
 ## Test EqAffectPair
 @testset "EqAffectPair constructors" begin
@@ -39,24 +39,60 @@ eqs = [D(x) ~ 1]
     @test e isa EqAffectPair
     @test isequal(e.eqs, eqs)
     @test e.affect == NULL_AFFECT
+
+    ## With affect
+
+    e = EqAffectPair(eqs[], affect) 
+    @test e isa EqAffectPair
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+
+    e = EqAffectPair(eqs, affect) 
+    @test e isa EqAffectPair
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+
+    e = EqAffectPair(eqs, affect) 
+    @test e isa EqAffectPair
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+
+    e = EqAffectPair(eqs[], affect) 
+    @test e isa EqAffectPair
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+
+    e = EqAffectPair(eqs => affect) 
+    @test e isa EqAffectPair
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
+
+    e = EqAffectPair(eqs[] => affect) 
+    @test e isa EqAffectPair
+    @test isequal(e.eqs, eqs)
+    @test e.affect == affect
 end
 
 
 ##
 
 @named sys = ODESystem(eqs, root_eqs = [x ~ 1])
+@test getfield(sys, :root_eqs)[] == EqAffectPair(Equation[x ~ 1], NULL_AFFECT)
 @test isequal(equations(getfield(sys, :root_eqs))[], x ~ 1)
 fsys = flatten(sys)
 @test isequal(equations(getfield(fsys, :root_eqs))[], x ~ 1)
-prob = ODEProblem(sys, Pair[], (0.0, 2.0))
 
 @named sys2 = ODESystem([D(x) ~ 1], root_eqs = [x ~ 2], systems=[sys])
+@test getfield(sys2, :root_eqs)[] == EqAffectPair(Equation[x ~ 2], NULL_AFFECT)
+@test all(ModelingToolkit.root_eqs(sys2) .== [EqAffectPair(Equation[x ~ 2], NULL_AFFECT), EqAffectPair(Equation[sys.x ~ 1], NULL_AFFECT)])
+
 @test isequal(equations(getfield(sys2, :root_eqs))[1], x ~ 2)
 @test length(ModelingToolkit.root_eqs(sys2)) == 2
 @test isequal(ModelingToolkit.root_eqs(sys2)[1].eqs[], x ~ 2)
 @test isequal(ModelingToolkit.root_eqs(sys2)[2].eqs[], sys.x ~ 1)
 
 # Functions should be generated for root-finding equations
+prob = ODEProblem(sys, Pair[], (0.0, 2.0))
 p0 = 0
 t0 = 0
 @test prob.kwargs[:callback] isa ModelingToolkit.DiffEqCallbacks.ContinuousCallback
@@ -114,51 +150,23 @@ sol = solve(prob, Tsit5())
 @test minimum(t->abs(t-2), sol.t) < 1e-10 # test that the solver stepped at the second root
 
 
-## Test affects
-secret_stash = []
-function affect(integ, _=0)
-    global secret_stash
-    println(integ.t)
-    push!(secret_stash, integ.t)
-end
-@named sys = ODESystem(eqs, root_eqs = [x ~ 1] => affect)
-@named sys2 = ODESystem([D(x) ~ 1], root_eqs = [x ~ 2] => affect, systems=[sys])
-
-
-# Functions should be generated for root-finding equations
-p0 = 0
-t0 = 0
-prob = ODEProblem(sys, Pair[], (0.0, 2.0))
-sol = solve(prob, Tsit5())
-@test minimum(t->abs(t-1), sol.t) < 1e-10 # test that the solver stepped at the root
-@test secret_stash[] ≈ 1 # test taht the affect was called
-empty!(secret_stash)
-
-
-prob = ODEProblem(sys2, Pair[], (0.0, 3.0))
-sol = solve(prob, Tsit5())
-@test secret_stash ≈ [1, 2]
-empty!(secret_stash)
-
-
-
-## Test bouncing ball
+## Test bouncing ball with equation affect
 @variables t x(t)=1 v(t)=0
 D = Differential(t)
 
-function affect!(integrator)
-    integrator.u[2] = -integrator.u[2]
-end
+root_eqs = [x ~ 0]
+affect   = [v ~ -v]
 
 @named ball = ODESystem([
     D(x) ~ v
     D(v) ~ -9.8
-], t, root_eqs = [x ~ 0] => affect!)
+], t, root_eqs = root_eqs => affect)
 
+@test getfield(ball, :root_eqs)[] == EqAffectPair(Equation[x ~ 0], Equation[v ~ -v])
 ball = structural_simplify(ball)
 
-tspan = (0.0,15.0)
+tspan = (0.0,5.0)
 prob = ODEProblem(ball, Pair[], tspan)
 sol = solve(prob,Tsit5())
-@test all(sol[x] .>= 0)
+@test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
 # plot(sol)
