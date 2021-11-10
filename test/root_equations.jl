@@ -153,6 +153,14 @@ sol = solve(prob, Tsit5())
 @test minimum(t->abs(t-1), sol.t) < 1e-10 # test that the solver stepped at the root
 
 
+# Test that a user provided callback is respected
+test_callback = DiscreteCallback(x->x, x->x)
+prob = ODEProblem(sys, Pair[], (0.0, 2.0), callback = test_callback)
+cbs = get_callback(prob)
+@test cbs isa CallbackSet
+@test cbs.discrete_callbacks[1] == test_callback
+
+
 prob = ODEProblem(sys2, Pair[], (0.0, 3.0))
 cbs = get_callback(prob)
 @test cbs isa ModelingToolkit.DiffEqCallbacks.CallbackSet

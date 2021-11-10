@@ -648,6 +648,11 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
     difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
     cb = merge_cb(event_cb, difference_cb)
 
+    if haskey(kwargs, :callback)
+        cb = merge_cb(cb, kwargs[:callback])
+        kwargs = Base.structdiff((; kwargs...), NamedTuple{(:callback,)}) # remove the :callback key
+    end
+
     if cb === nothing
         ODEProblem{iip}(f, u0, tspan, p; kwargs...)
     else
