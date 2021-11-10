@@ -88,17 +88,17 @@ struct ODESystem <: AbstractODESystem
     """
     preface::Any
     """
-    root_eqs: A `Vector{Equation}` that evaluate to 0 at events.
+    root_eqs: A `Vector{EqAffectPair}` that evaluate to 0 at events.
     The integrator will use root finding to guarantee that it steps at each zero crossing.
     """
-    root_eqs::Vector{Equation}
+    root_eqs::Vector{EqAffectPair}
 
     function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface, root_eqs; checks::Bool = true)
         if checks
             check_variables(dvs,iv)
             check_parameters(ps,iv)
             check_equations(deqs,iv)
-            check_equations(root_eqs,iv)
+            check_equations(equations(root_eqs),iv)
             all_dimensionless([dvs;ps;iv]) || check_units(deqs)
         end
         new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface, root_eqs)
@@ -151,7 +151,8 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface, root_eqs, checks = checks)
+    eq_affect_pairs = EqAffectPairs(root_eqs)
+    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface, eq_affect_pairs, checks = checks)
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)

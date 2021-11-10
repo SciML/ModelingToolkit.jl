@@ -154,6 +154,24 @@ independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
 independent_variables(sys::AbstractTimeIndependentSystem) = []
 independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
 
+NULL_AFFECT(args...) = ()
+struct EqAffectPair{F <: Function}
+    eqs::Vector{Equation}
+    affect::F
+    EqAffectPair(eqs::Vector{Equation}, affect::Function=NULL_AFFECT) = new{typeof(affect)}(eqs, affect)
+end
+EqAffectPair(eq::Equation, args...) = EqAffectPair([eq], args...)
+EqAffectPair(p::Pair{<:Union{Equation, Vector{Equation}}, F}) where F = EqAffectPair(p[1], p[2])
+EqAffectPair(eq_aff::EqAffectPair) = eq_aff
+EqAffectPairs(eq_aff::EqAffectPair) = [eq_aff]
+EqAffectPairs(eq_affs::Vector{<:EqAffectPair}) = eq_affs
+EqAffectPairs(eq_affs::Vector) = EqAffectPair.(eq_affs)
+EqAffectPairs(ve::Vector{Equation}) = EqAffectPairs(EqAffectPair(ve))
+EqAffectPairs(others) = EqAffectPairs(EqAffectPair(others))
+equations(eq_aff::EqAffectPair) = eq_aff.eqs
+equations(eq_affs::Vector{<:EqAffectPair}) = reduce(vcat, [equations(eq_aff) for eq_aff in eq_affs])
+namespace_equation(eq_aff::EqAffectPair, s) = EqAffectPair(namespace_equation.(eq_aff.eqs, (s, )), eq_aff.affect)
+
 function structure(sys::AbstractSystem)
     s = get_structure(sys)
     s isa SystemStructure || throw(ArgumentError("SystemStructure is not yet initialized, please run `sys = initialize_system_structure(sys)` or `sys = alias_elimination(sys)`."))
@@ -421,7 +439,7 @@ function root_eqs(sys::AbstractSystem)
     [obs;
      reduce(vcat,
             (map(o->namespace_equation(o, s), root_eqs(s)) for s in systems),
-            init=Equation[])]
+            init=EqAffectPair[])]
 end
 
 Base.@deprecate default_u0(x) defaults(x) false

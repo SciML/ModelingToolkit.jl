@@ -154,8 +154,20 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
 end
 
 function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
-    eqs = root_eqs(sys)
-    isempty(eqs) && return nothing
+    eq_affs = root_eqs(sys)
+    isempty(eq_affs) && return nothing
+    callbacks = map(eq_affs) do eq_aff
+        generate_rootfinding_callback(eq_aff, sys, dvs, ps; kwargs...)
+    end
+    if length(callbacks) == 1
+        return callbacks[]
+    else
+        CallbackSet(callbacks...)
+    end
+end
+
+function generate_rootfinding_callback(eq_aff::EqAffectPair, sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
+    eqs = eq_aff.eqs
 
     # rewrite all equations as 0 ~ interesting stuff
     eqs = map(eqs) do eq
@@ -172,7 +184,7 @@ function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys), ps = p
     t = get_iv(sys)
     rf_oop, rf_ip = build_function(rhss, u, p, t; expression=Val{false}, kwargs...)
 
-    cb_affect!(args...) = () # We don't do anything in the callback, we're just after the event
+    # cb_affect!(args...) = () # We don't do anything in the callback, we're just after the event
     if length(eqs) == 1
         function condition(u, t, integ)
             if DiffEqBase.isinplace(integ.sol.prob)
@@ -183,10 +195,10 @@ function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys), ps = p
                 rf_oop(u, integ.p, t)
             end
         end
-        ContinuousCallback(condition, cb_affect!)
+        ContinuousCallback(condition, eq_aff.affect)
     else
         condition = (out, u, t, integ) -> rf_ip(out, u, integ.p, t)
-        VectorContinuousCallback(condition, cb_affect!, length(eqs))
+        VectorContinuousCallback(condition, eq_aff.affect, length(eqs))
     end
 end
 
@@ -593,7 +605,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();kwargs...) where iip
     has_difference = any(isdifferenceeq, equations(sys))
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; has_difference=has_difference, kwargs...)
-    if !isempty(sys.root_eqs)
+    if has_root_eqs(sys)
         event_cb = generate_rootfinding_callback(sys; kwargs...)
     else
         event_cb = nothing
