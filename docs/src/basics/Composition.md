@@ -298,12 +298,46 @@ affect   = [v ~ -v] # the effect is that the velocity changes sign
     D(v) ~ -9.8
 ], t, events = root_eqs => affect) # equation => affect
 
-@test getfield(ball, :events)[] == EqAffectPair(Equation[x ~ 0], Equation[v ~ -v])
 ball = structural_simplify(ball)
 
 tspan = (0.0,5.0)
 prob = ODEProblem(ball, Pair[], tspan)
 sol = solve(prob,Tsit5())
-@test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
+@assert 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
 plot(sol)
+```
+
+### Test bouncing ball in 2D with walls
+Multiple events? No problem! This example models a bouncing ball in 2D that is enclosed by two walls at $y = \pm 1.5$.
+```julia
+@variables t x(t)=1 y(t)=0 vx(t)=0 vy(t)=2
+D = Differential(t)
+
+events = [ # This time we have a vector of pairs
+    [x ~ 0] => [vx ~ -vx]
+    [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]
+]
+
+@named ball = ODESystem([
+    D(x)  ~ vx,
+    D(y)  ~ vy,
+    D(vx) ~ -9.8-0.1vx, # gravity + some small air resistance
+    D(vy) ~ -0.1vy,
+], t, events = events)
+
+
+ball = structural_simplify(ball)
+
+tspan = (0.0,10.0)
+prob = ODEProblem(ball, Pair[], tspan)
+
+sol = solve(prob,Tsit5())
+@assert 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
+@assert minimum(sol[y]) > -1.5 # check wall conditions
+@assert maximum(sol[y]) < 1.5  # check wall conditions
+
+tv = sort([LinRange(0, 10, 200); sol.t])
+plot(sol(tv)[y], sol(tv)[x], line_z=tv)
+vline!([-1.5, 1.5], l=(:black, 5), primary=false)
+hline!([0], l=(:black, 5), primary=false)
 ```

@@ -180,9 +180,8 @@ function generate_rootfinding_callback(eq_aff::EqAffectPair, sys::ODESystem, dvs
 
     rhss = map(x->x.rhs, eqs)
     root_eq_vars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
-    vars = dvs ∩ root_eq_vars # we look for the roots w.r.t. the states of the root equations
 
-    u = map(x->time_varying_as_func(value(x), sys), vars)
+    u = map(x->time_varying_as_func(value(x), sys), dvs)
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
     rf_oop, rf_ip = build_function(rhss, u, p, t; expression=Val{false}, kwargs...)
@@ -190,7 +189,7 @@ function generate_rootfinding_callback(eq_aff::EqAffectPair, sys::ODESystem, dvs
     affect = compile_affect(eq_aff, sys, dvs, ps; kwargs...)
 
     if length(eqs) == 1
-        function condition(u, t, integ)
+        cond = function(u, t, integ)
             if DiffEqBase.isinplace(integ.sol.prob)
                 tmp, = DiffEqBase.get_tmp_cache(integ)
                 rf_ip(tmp, u, integ.p, t)
@@ -199,10 +198,12 @@ function generate_rootfinding_callback(eq_aff::EqAffectPair, sys::ODESystem, dvs
                 rf_oop(u, integ.p, t)
             end
         end
-        ContinuousCallback(condition, affect)
+        ContinuousCallback(cond, affect)
     else
-        condition = (out, u, t, integ) -> rf_ip(out, u, integ.p, t)
-        VectorContinuousCallback(condition, affect, length(eqs))
+        cond = function(out, u, t, integ)
+            rf_ip(out, u, integ.p, t)
+        end
+        VectorContinuousCallback(cond, affect, length(eqs))
     end
 end
 
@@ -214,7 +215,6 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; kwargs...)
     else
         rhss = map(x->x.rhs, eqs)
         lhss = map(x->x.lhs, eqs)
-        affect_eq_vars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
         update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're chaning
         length(update_vars) == length(update_vars) || error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
         vars = states(sys)
@@ -227,10 +227,11 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; kwargs...)
         stateind(sym) = findfirst(isequal(sym),vars)
 
         update_inds = stateind.(update_vars)
-
-        function(integ, _ = 0) # the second argument might be an event index
-            lhs = @view integ.u[update_inds]
-            rf_ip(lhs, integ.u, integ.p, integ.t)
+        let update_inds=update_inds
+            function(integ, _ = 0) # the second argument might be an event index
+                lhs = @views integ.u[update_inds]
+                rf_ip(lhs, integ.u, integ.p, integ.t)
+            end
         end
     end
 end

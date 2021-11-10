@@ -161,22 +161,22 @@ cb = cbs.continuous_callbacks[1]
 cond = cb.condition
 out = [0.0]
 # the root to find is 2
-cond.rf_ip(out, [0], p0, t0)
+cond.rf_ip(out, [0,0], p0, t0)
 @test out[] ≈ -2 # signature is u,p,t
-cond.rf_ip(out, [1], p0, t0)
+cond.rf_ip(out, [1,0], p0, t0)
 @test out[] ≈ -1  # signature is u,p,t
-cond.rf_ip(out, [2], p0, t0) # this should return 0
+cond.rf_ip(out, [2,0], p0, t0) # this should return 0
 @test out[] ≈ 0  # signature is u,p,t
 
 # the root to find is 1
 cb = cbs.continuous_callbacks[2]
 cond = cb.condition
 out = [0.0]
-cond.rf_ip(out, [0], p0, t0)
+cond.rf_ip(out, [0,0], p0, t0)
 @test out[] ≈ -1 # signature is u,p,t
-cond.rf_ip(out, [1], p0, t0) # this should return 0
+cond.rf_ip(out, [0,1], p0, t0) # this should return 0
 @test out[] ≈ 0  # signature is u,p,t
-cond.rf_ip(out, [2], p0, t0)
+cond.rf_ip(out, [0,2], p0, t0)
 @test out[] ≈ 1  # signature is u,p,t
 
 sol = solve(prob, Tsit5())
@@ -211,3 +211,50 @@ prob = ODEProblem(ball, Pair[], tspan)
 sol = solve(prob,Tsit5())
 @test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
 # plot(sol)
+
+
+## Test bouncing ball in 2D with walls
+@variables t x(t)=1 y(t)=0 vx(t)=0 vy(t)=1
+D = Differential(t)
+
+events = [
+    [x ~ 0] => [vx ~ -vx]
+    [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]
+]
+
+@named ball = ODESystem([
+    D(x) ~ vx
+    D(y) ~ vy
+    D(vx) ~ -9.8
+    D(vy) ~ -0.01vy # there is some small air resistance
+], t, events = events)
+
+
+
+ball = structural_simplify(ball)
+
+tspan = (0.0,5.0)
+prob = ODEProblem(ball, Pair[], tspan)
+
+
+cbs = prob.kwargs[:callback]
+@test cbs isa ModelingToolkit.DiffEqCallbacks.CallbackSet
+@test getfield(ball, :events)[1] == EqAffectPair(Equation[x ~ 0], Equation[vx ~ -vx])
+@test getfield(ball, :events)[2] == EqAffectPair(Equation[y ~ -1.5, y ~ 1.5], Equation[vy ~ -vy])
+cb = cbs.continuous_callbacks[2]
+@test cb isa VectorContinuousCallback
+cond = cb.condition
+out = [0.0, 0.0]
+cond.rf_ip(out, [0,0,0,0], p0, t0)
+@test out ≈ [1.5, -1.5] # signature is u,p,t
+
+
+sol = solve(prob,Tsit5())
+@test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
+@test minimum(sol[y]) ≈ -1.5 # check wall conditions
+@test maximum(sol[y]) ≈ 1.5  # check wall conditions
+
+tv = sort([LinRange(0, 5, 200); sol.t])
+plot(sol(tv)[y], sol(tv)[x], line_z=tv)
+vline!([-1.5, 1.5], l=(:black, 5), primary=false)
+hline!([0], l=(:black, 5), primary=false)
