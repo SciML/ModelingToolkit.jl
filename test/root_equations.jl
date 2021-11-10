@@ -258,3 +258,30 @@ tv = sort([LinRange(0, 5, 200); sol.t])
 # plot(sol(tv)[y], sol(tv)[x], line_z=tv)
 # vline!([-1.5, 1.5], l=(:black, 5), primary=false)
 # hline!([0], l=(:black, 5), primary=false)
+
+
+## Test multi-variable affect
+# in this test, there are two variables affected by a single event.
+continuous_events = [
+    [x ~ 0] => [vx ~ -vx, vy ~ -vy]
+]
+
+@named ball = ODESystem([
+    D(x) ~ vx
+    D(y) ~ vy
+    D(vx) ~ -1
+    D(vy) ~ 0
+], t, continuous_events = continuous_events)
+
+ball = structural_simplify(ball)
+
+tspan = (0.0,5.0)
+prob = ODEProblem(ball, Pair[], tspan)
+sol = solve(prob,Tsit5())
+@test 0 <= minimum(sol[x]) <= 1e-10 # the ball never went through the floor but got very close
+@test -minimum(sol[y]) ≈ maximum(sol[y]) ≈ sqrt(2)  # the ball will never go further than √2 in either direction (gravity was changed to 1 to get this particular number)
+
+# tv = sort([LinRange(0, 5, 200); sol.t])
+# plot(sol(tv)[y], sol(tv)[x], line_z=tv)
+# vline!([-1.5, 1.5], l=(:black, 5), primary=false)
+# hline!([0], l=(:black, 5), primary=false)
