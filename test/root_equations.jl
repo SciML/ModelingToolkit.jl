@@ -1,5 +1,5 @@
 using ModelingToolkit, OrdinaryDiffEq, Test
-using ModelingToolkit: SymbolicContinuousCallback, SymbolicContinuousCallbacks, NULL_AFFECT
+using ModelingToolkit: SymbolicContinuousCallback, SymbolicContinuousCallbacks, NULL_AFFECT, get_callback
 
 @parameters t
 @variables x(t)=0 
@@ -136,7 +136,7 @@ fsys = flatten(sys)
 prob = ODEProblem(sys, Pair[], (0.0, 2.0))
 p0 = 0
 t0 = 0
-@test prob.kwargs[:callback] isa ModelingToolkit.DiffEqCallbacks.ContinuousCallback
+@test get_callback(prob) isa ModelingToolkit.DiffEqCallbacks.ContinuousCallback
 cb = ModelingToolkit.generate_rootfinding_callback(sys)
 cond = cb.condition
 out = [0.0]
@@ -154,7 +154,7 @@ sol = solve(prob, Tsit5())
 
 
 prob = ODEProblem(sys2, Pair[], (0.0, 3.0))
-cbs = prob.kwargs[:callback]
+cbs = get_callback(prob)
 @test cbs isa ModelingToolkit.DiffEqCallbacks.CallbackSet
 
 cb = cbs.continuous_callbacks[1]
@@ -185,7 +185,7 @@ sol = solve(prob, Tsit5())
 
 @named sys = ODESystem(eqs, continuous_events = [x ~ 1, x ~ 2]) # two root eqs using the same state
 prob = ODEProblem(sys, Pair[], (0.0, 3.0))
-@test prob.kwargs[:callback] isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
+@test get_callback(prob) isa ModelingToolkit.DiffEqCallbacks.VectorContinuousCallback
 sol = solve(prob, Tsit5())
 @test minimum(t->abs(t-1), sol.t) < 1e-10 # test that the solver stepped at the first root
 @test minimum(t->abs(t-2), sol.t) < 1e-10 # test that the solver stepped at the second root
@@ -237,7 +237,7 @@ tspan = (0.0,5.0)
 prob = ODEProblem(ball, Pair[], tspan)
 
 
-cbs = prob.kwargs[:callback]
+cbs = get_callback(prob)
 @test cbs isa ModelingToolkit.DiffEqCallbacks.CallbackSet
 @test getfield(ball, :continuous_events)[1] == SymbolicContinuousCallback(Equation[x ~ 0], Equation[vx ~ -vx])
 @test getfield(ball, :continuous_events)[2] == SymbolicContinuousCallback(Equation[y ~ -1.5, y ~ 1.5], Equation[vy ~ -vy])

@@ -230,6 +230,7 @@ ODESystem(eq::Equation, args...; kwargs...) = ODESystem([eq], args...; kwargs...
 get_continuous_events(sys::AbstractSystem) = Equation[]
 get_continuous_events(sys::AbstractODESystem) = getfield(sys, :continuous_events)
 has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
+get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 
 """
 $(SIGNATURES)
