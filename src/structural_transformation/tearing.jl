@@ -13,8 +13,8 @@ function tear_graph(sys)
         ieqs = filter(eq->isalgeq(s, eq), c)
         vars = inv_assign[ieqs]
 
-        td = TraverseDAG(graph.fadjlist, length(assign))
-        SystemPartition(tearEquations!(td, solvable_graph.fadjlist, ieqs, vars)...)
+        ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph); in_out_reverse=true)
+        SystemPartition(tearEquations!(ict, solvable_graph.fadjlist, ieqs, vars)...)
     end
     return sys
 end

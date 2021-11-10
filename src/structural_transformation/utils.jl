@@ -149,7 +149,7 @@ gives the undirected bipartite graph a direction. When `assign === nothing`, we
 assume that the ``i``-th variable is assigned to the ``i``-th equation.
 """
 function find_scc(g::BipartiteGraph, assign=nothing)
-    cmog = DiCMOBiGraph(g, assign === nothing ? Base.OneTo(nsrcs(g)) : assign)
+    cmog = DiCMOBiGraph{false}(g, assign === nothing ? Base.OneTo(nsrcs(g)) : assign)
     sccs = Graphs.strongly_connected_components(cmog)
     foreach(sort!, sccs)
     return sccs
