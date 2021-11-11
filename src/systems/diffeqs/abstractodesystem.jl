@@ -637,7 +637,7 @@ Generates an ODEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters();kwargs...) where iip
+                                    parammap=DiffEqBase.NullParameters(); callback=nothing, kwargs...) where iip
     has_difference = any(isdifferenceeq, equations(sys))
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; has_difference=has_difference, kwargs...)
     if has_continuous_events(sys)
@@ -647,11 +647,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
     end
     difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
     cb = merge_cb(event_cb, difference_cb)
-
-    if haskey(kwargs, :callback)
-        cb = merge_cb(cb, kwargs[:callback])
-        kwargs = Base.structdiff((; kwargs...), NamedTuple{(:callback,)}) # remove the :callback key
-    end
+    cb = merge_cb(cb, callback)
 
     if cb === nothing
         ODEProblem{iip}(f, u0, tspan, p; kwargs...)
