@@ -156,22 +156,15 @@ end
 function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
-    callbacks = map(cbs) do eq_aff
-        generate_rootfinding_callback(eq_aff, sys, dvs, ps; kwargs...)
-    end
-    callbacks = filter(cb->cb !== nothing, callbacks)
-    if isempty(callbacks)
-        return nothing
-    elseif length(callbacks) == 1
-        return callbacks[]
-    else
-        CallbackSet(callbacks...)
-    end
+    generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
 end
 
-function generate_rootfinding_callback(eq_aff::SymbolicContinuousCallback, sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
-    eqs = eq_aff.eqs
+function generate_rootfinding_callback(cbs, sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
+    eqs = map(cb->cb.eqs, cbs)
+    num_eqs = length.(eqs)
     isempty(eqs) && return nothing
+    # fuse equations to create VectorContinuousCallback
+    eqs = reduce(vcat, eqs)
     # rewrite all equations as 0 ~ interesting stuff
     eqs = map(eqs) do eq
         isequal(eq.lhs, 0) && return eq
@@ -180,13 +173,16 @@ function generate_rootfinding_callback(eq_aff::SymbolicContinuousCallback, sys::
 
     rhss = map(x->x.rhs, eqs)
     root_eq_vars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
-
+    
     u = map(x->time_varying_as_func(value(x), sys), dvs)
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
     rf_oop, rf_ip = build_function(rhss, u, p, t; expression=Val{false}, kwargs...)
-
-    affect = compile_affect(eq_aff, sys, dvs, ps; kwargs...)
+    
+    affect_functions = map(cbs) do cb # Keep affect function separate
+        eq_aff = affect_equations(cb)
+        affect = compile_affect(eq_aff, sys, dvs, ps; kwargs...)
+    end
 
     if length(eqs) == 1
         cond = function(u, t, integ)
@@ -198,10 +194,22 @@ function generate_rootfinding_callback(eq_aff::SymbolicContinuousCallback, sys::
                 rf_oop(u, integ.p, t)
             end
         end
-        ContinuousCallback(cond, affect)
+        ContinuousCallback(cond, affect_functions[])
     else
         cond = function(out, u, t, integ)
             rf_ip(out, u, integ.p, t)
+        end
+
+        # since there may be different number of conditions and affects,
+        # we build a map that translates the condition eq. number to the affect number
+        eq_ind2affect = reduce(vcat, [fill(i, num_eqs[i]) for i in eachindex(affect_functions)])
+        @assert length(eq_ind2affect) == length(eqs)
+        @assert maximum(eq_ind2affect) == length(affect_functions)
+
+        affect = let affect_functions=affect_functions, eq_ind2affect=eq_ind2affect
+            function(integ, eq_ind) # eq_ind refers to the equation index that triggered the event, each event has num_eqs[i] equations
+                affect_functions[eq_ind2affect[eq_ind]](integ)
+            end
         end
         VectorContinuousCallback(cond, affect, length(eqs))
     end
@@ -209,6 +217,12 @@ end
 
 compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...) = compile_affect(affect_equations(cb), args...; kwargs...)
 
+"""
+    compile_affect(eqs::Vector{Equation}, sys, dvs, ps; kwargs...)
+    compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
+
+Returns a function that takes an integrator as argument and modifies the state with the affect.
+"""
 function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; kwargs...)
     if isempty(eqs)
         return (args...) -> () # We don't do anything in the callback, we're just after the event
@@ -229,7 +243,7 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; kwargs...)
 
         update_inds = stateind.(update_vars)
         let update_inds=update_inds
-            function(integ, _ = 0) # the second argument might be an event index
+            function(integ)
                 lhs = @views integ.u[update_inds]
                 rf_ip(lhs, integ.u, integ.p, integ.t)
             end
