@@ -14,7 +14,7 @@
 ################################################
 
 """
-    (eSolved, vSolved, eResidue, vTear) = tearEquations!(td, Gsolvable, es, vs; eSolvedFixed=Int[], vSolvedFixed=Int[], vTearFixed=Int[])
+    (eSolved, vSolved, eResidue, vTear) = tearEquations!(td, Gsolvable, es, vs)
 
 Equations es shall be solved with respect to variables vs. The function returns
 the teared equation so that if vTear is given, vSolved can be computed from eSolved
@@ -25,31 +25,23 @@ Variables vs are the union of vSolved and vTear.
 
 Gsolvable defines the variables that can be explicitly solved in every equation without influencing the solution space
 (= rank preserving operation).
-
-eSolvedFixed/vSolvedFixed must be a DAG starting at eSolvedFixed/SolvedFixed[1]
 """
-function tearEquations!(ict::IncrementalCycleTracker, Gsolvable, es::Vector{Int}, vs::Vector{Int};
-                        eSolvedFixed::Vector{Int}=Int[], vSolvedFixed::Vector{Int}=Int[], vTearFixed::Vector{Int}=Int[])
+function tearEquations!(ict::IncrementalCycleTracker, Gsolvable, es::Vector{Int}, vs::Vector{Int})
     G = ict.graph
     vActive = BitSet(vs)
-    vMatched = BitSet()
 
-    esReduced = setdiff(es, eSolvedFixed)
-    # println("    es = ", es, ", eSolvedFixed = ", eSolvedFixed, ", esReduced = ", esReduced)
-    # println("    vs = ", vs, ", vSolvedFixed = ", vSolvedFixed)
-    for eq in esReduced  # iterate only over equations that are not in eSolvedFixed
+    for eq in es  # iterate only over equations that are not in eSolvedFixed
         for vj in Gsolvable[eq]
-            if !(vj in vMatched) && (vj in vActive)
-                r = add_edge_checked!(ict, Iterators.filter(!=(vj), G.graph.fadjlist[eq]), vj) do G
+            if G.matching[vj] === unassigned && (vj in vActive)
+                r = add_edge_checked!(ict, Iterators.filter(!=(vj), 𝑠neighbors(G.graph, eq)), vj) do G
                     G.matching[vj] = eq
-                    push!(vMatched, vj)
                 end
                 r && break
             end
         end
     end
 
-    vSolved = filter(in(vMatched), topological_sort(ict))
+    vSolved = filter(v->G.matching[v] !== unassigned, topological_sort(ict))
     inv_matching = Union{Missing, Int}[missing for _ = 1:nv(G)]
     for (v, eq) in pairs(G.matching)
         eq === unassigned && continue

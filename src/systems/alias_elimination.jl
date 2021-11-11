@@ -2,8 +2,6 @@ using SymbolicUtils: Rewriters
 
 const KEEP = typemin(Int)
 
-include("compat/bareiss.jl")
-
 function alias_elimination(sys)
     sys = initialize_system_structure(sys; quick_cancel=true)
     s = structure(sys)
