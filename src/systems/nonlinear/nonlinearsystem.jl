@@ -70,8 +70,11 @@ function NonlinearSystem(eqs, states, ps;
                          defaults=_merge(Dict(default_u0), Dict(default_p)),
                          systems=NonlinearSystem[],
                          connection_type=nothing,
+                         continuous_events=nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
                          checks = true,
                          )
+    continuous_events === nothing || isempty(continuous_events) ||
+        throw(ArgumentError("NonlinearSystem does not accept `continuous_events`, you provided $continuous_events"))
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     # Move things over, but do not touch array expressions
     eqs = [0 ~ x.rhs - x.lhs for x in collect(eqs)]

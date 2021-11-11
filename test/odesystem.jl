@@ -427,9 +427,9 @@ eqs = [
 # prob = ODEProblem(ODEFunction{false}(de),[1.0,1.0],(0.0,1.0),[1.5,1.0,3.0,1.0])
 
 prob = ODEProblem(de,[1.0,1.0],(0.0,1.0),[1.5,1.0,3.0,1.0], check_length=false)
-@test prob.kwargs[:difference_cb] isa ModelingToolkit.DiffEqCallbacks.DiscreteCallback
+@test prob.kwargs[:callback] isa ModelingToolkit.DiffEqCallbacks.DiscreteCallback
 
-sol = solve(prob, Tsit5(); callback=prob.kwargs[:difference_cb], tstops=prob.tspan[1]:0.1:prob.tspan[2])
+sol = solve(prob, Tsit5(); callback=prob.kwargs[:callback], tstops=prob.tspan[1]:0.1:prob.tspan[2])
 
 # Direct implementation
 function lotka(du,u,p,t)
