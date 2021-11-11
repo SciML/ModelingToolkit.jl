@@ -162,7 +162,7 @@ end
 function generate_rootfinding_callback(cbs, sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     eqs = map(cb->cb.eqs, cbs)
     num_eqs = length.(eqs)
-    isempty(eqs) && return nothing
+    (isempty(eqs) || sum(num_eqs) == 0) && return nothing
     # fuse equations to create VectorContinuousCallback
     eqs = reduce(vcat, eqs)
     # rewrite all equations as 0 ~ interesting stuff
