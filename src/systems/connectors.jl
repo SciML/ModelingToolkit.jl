@@ -31,7 +31,15 @@ struct RegularConnector <: AbstractConnectorType end
 function connector_type(sys::AbstractSystem)
     sts = states(sys)
     #TODO: check the criteria for stream connectors
-    any(s->getmetadata(s, ModelingToolkit.VariableConnectType, nothing) === Stream, sts) ? StreamConnector() : RegularConnector()
+    n_stream = 0
+    n_flow = 0
+    for s in sts
+        vtype = getmetadata(s, ModelingToolkit.VariableConnectType, nothing)
+        vtype === Stream && (n_stream += 1)
+        vtype === Flow   && (n_flow += 1)
+    end
+    (n_stream > 1 && n_flow > 1) && error("There are multiple flow variables in $(nameof(sys))!")
+    n_stream > 1 ? StreamConnector() : RegularConnector()
 end
 
 Base.@kwdef struct Connection
@@ -57,12 +65,14 @@ function Base.show(io::IO, c::Connection)
     end
 end
 
+# symbolic `connect`
 function connect(syss::AbstractSystem...)
     length(syss) >= 2 || error("connect takes at least two systems!")
     length(unique(nameof, syss)) == length(syss) || error("connect takes distinct systems!")
     Equation(Connection(), Connection(syss)) # the RHS are connected systems
 end
 
+# the actual `connect`.
 function connect(c::Connection; check=true)
     @unpack inners, outers = c
 
@@ -102,25 +112,137 @@ function connect(c::Connection; check=true)
     return ceqs
 end
 
-isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) !== nothing
+instream(a) = term(instream, unwrap(a), type=symtype(a))
 
-function isouterconnector(sys::AbstractSystem; check=true)
-    subsys = get_systems(sys)
-    outer_connectors = [nameof(s) for s in subsys if isconnector(s)]
-    # Note that subconnectors in outer connectors are still outer connectors.
-    # Ref: https://specification.modelica.org/v3.4/Ch9.html see 9.1.2
-    let outer_connectors=outer_connectors, check=check
-        function isouter(sys)::Bool
-            s = string(nameof(sys))
-            check && (isconnector(sys) || error("$s is not a connector!"))
-            idx = findfirst(isequal('₊'), s)
-            parent_name = Symbol(idx === nothing ? s : s[1:idx])
-            parent_name in outer_connectors
-        end
-    end
-end
+isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) !== nothing
+isstreamconnector(s::AbstractSystem) = isconnector(s) && get_connector_type(s) === Stream
 
 print_with_indent(n, x) = println(" " ^ n, x)
+
+function get_stream_connectors!(sc, sys::AbstractSystem)
+    subsys = get_systems(sys)
+    isempty(subsys) && return nothing
+    for s in subsys; isstreamconnector(s) || continue
+        push!(sc, renamespace(sys, s))
+    end
+    for s in subsys
+        get_stream_connectors!(sc, renamespace(sys, s))
+    end
+    nothing
+end
+
+collect_instream!(set, eq::Equation) = collect_instream!(set, eq.lhs) | collect_instream!(set, eq.rhs)
+
+function collect_instream!(set, expr, occurs=false)
+    istree(expr) || return occurs
+    op = operation(expr)
+    op === instream && (push!(set, expr); occurs = true)
+    for a in unsorted_arguments(expr)
+        occurs |= collect_instream!(set, a, occurs)
+    end
+    return occurs
+end
+
+function split_var(var)
+    name = string(nameof(var))
+    map(Symbol, split(name, '₊'))
+end
+
+# inclusive means the first level of `var` is `sys`
+function get_sys_var(sys::AbstractSystem, var; inclusive=true)
+    lvs = split_var(var)
+    if inclusive
+        sysn, lvs = Iterator.peel(lvs)
+        sysn === nameof(sys) || error("$(nameof(sys)) doesn't have $var!")
+    end
+    newsys = getproperty(sys, first(lvs))
+    for i in 2:length(lvs)-1
+        newsys = getproperty(newsys, lvs[i])
+    end
+    newsys, lvs[end]
+end
+
+function expand_instream(sys::AbstractSystem; debug=false)
+    subsys = get_systems(sys)
+    isempty(subsys) && return sys
+
+    # post order traversal
+    @set! sys.systems = map(s->expand_connections(s, debug=debug), subsys)
+
+    outer_sc = []
+    for s in subsys
+        n = nameof(s)
+        isstreamconnector(s) && push!(outer_sc, n)
+    end
+
+    # the number of stream connectors excluding the current level
+    inner_sc = []
+    for s in subsys
+        get_stream_connectors!(inner_sc, renamespace(sys, s))
+    end
+
+    # error checking
+    # TODO: Error might never be possible anyway, because subsystem names must
+    # be distinct.
+    outer_names, dup = find_duplicates((nameof(s) for s in outer_sc), Val(true))
+    isempty(dup) || error("$dup are duplicate stream connectors!")
+    inner_names, dup = find_duplicates((nameof(s) for s in inner_sc), Val(true))
+    isempty(dup) || error("$dup are duplicate stream connectors!")
+
+    foreach(Base.Fix1(get_stream_connectors!, inner_sc), subsys)
+    isouterstream = let stream_connectors=outer_sc
+        function isstream(sys)::Bool
+            s = string(nameof(sys))
+            isstreamconnector(sys) || error("$s is not a stream connector!")
+            s in stream_connectors
+        end
+    end
+
+    eqs′ = get_eqs(sys)
+    eqs = Equation[]
+    instream_eqs = Equation[]
+    instream_exprs = Set()
+    for eq in eqs′
+        if collect_instream!(instream_exprs, eq)
+            push!(instream_eqs, eq)
+        else
+            push!(eqs, eq) # split instreams and equations
+        end
+    end
+
+    function check_in_stream_connectors(stream, sc)
+        stream = only(arguments(ex))
+        stream_name = string(nameof(stream))
+        connector_name = stream_name[1:something(findlast('₊', stream_name), end)]
+        connector_name in sc || error("$stream_name is not in any stream connector of $(nameof(sys))")
+    end
+
+    # expand `instream`s
+    sub = Dict()
+    n_outers = length(outer_names)
+    n_inners = length(inner_names)
+    # https://specification.modelica.org/v3.4/Ch15.html
+    # Based on the above requirements, the following implementation is
+    # recommended:
+    if n_inners == 1 && n_outers == 0
+        for ex in instream_exprs
+            stream = only(arguments(ex))
+            check_in_stream_connectors(stream, inner_names)
+            sub[ex] = stream
+        end
+    elseif n_inners == 2 && n_outers == 0
+        for ex in instream_exprs
+            stream = only(arguments(ex))
+            check_in_stream_connectors(stream, inner_names)
+            
+            sub[ex] = stream
+        end
+    elseif n_inners == 1 && n_outers == 1
+    elseif n_inners == 0 && n_outers == 2
+    else
+    end
+    instream_eqs = map(Base.Fix2(substitute, sub), instream_eqs)
+end
 
 function expand_connections(sys::AbstractSystem; debug=false)
     subsys = get_systems(sys)
@@ -128,7 +250,21 @@ function expand_connections(sys::AbstractSystem; debug=false)
 
     # post order traversal
     @set! sys.systems = map(s->expand_connections(s, debug=debug), subsys)
-    isouter = isouterconnector(sys)
+
+    outer_connectors = Symbol[]
+    for s in subsys
+        n = nameof(s)
+        isconnector(s) && push!(outer_connectors, n)
+    end
+    isouter = let outer_connectors=outer_connectors
+        function isouter(sys)::Bool
+            s = string(nameof(sys))
+            isconnector(sys) || error("$s is not a connector!")
+            idx = findfirst(isequal('₊'), s)
+            parent_name = Symbol(idx === nothing ? s : s[1:idx])
+            parent_name in outer_connectors
+        end
+    end
 
     eqs′ = get_eqs(sys)
     eqs = Equation[]

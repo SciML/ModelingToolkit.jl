@@ -248,7 +248,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
     elseif !isempty(systems)
         i = findfirst(x->nameof(x)==name, systems)
         if i !== nothing
-            return namespace ? rename(systems[i], renamespace(sys, name)) : systems[i]
+            return namespace ? renamespace(sys, systems[i]) : systems[i]
         end
     end
 
@@ -333,6 +333,8 @@ function renamespace(sys, x)
                 x
             end
         end
+    elseif x isa AbstractSystem
+        rename(x, renamespace(sys, nameof(x)))
     else
         Symbol(getname(sys), :₊, x)
     end
