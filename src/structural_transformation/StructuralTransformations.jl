@@ -18,7 +18,8 @@ using ModelingToolkit: ODESystem, AbstractSystem,var_from_nested_derivative, Dif
                        get_structure, defaults, InvalidSystemException,
                        ExtraEquationsSystemException,
                        ExtraVariablesSystemException,
-                       get_postprocess_fbody, vars!
+                       get_postprocess_fbody, vars!,
+                       IncrementalCycleTracker, add_edge_checked!, topological_sort
 
 using ModelingToolkit.BipartiteGraphs
 using Graphs

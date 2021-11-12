@@ -280,50 +280,77 @@ end
     struct DiCMOBiGraph
 
 This data structure implements a "directed, contracted, matching-oriented" view of an
-original (undirected) bipartite graph. In particular, it performs two largely
-orthogonal functions.
+original (undirected) bipartite graph. It has two modes, depending on the `Transposed`
+flag, which switches the direction of the induced matching.
 
-1. It pairs an undirected bipartite graph with a matching of destination vertex.
+Essentially the graph adapter performs two largely orthogonal functions
+[`Transposed == true` differences are indicated in square brackets]:
+
+1. It pairs an undirected bipartite graph with a matching of the destination vertex.
 
     This matching is used to induce an orientation on the otherwise undirected graph:
-    Matched edges pass from destination to source, all other edges pass in the opposite
-    direction.
+    Matched edges pass from destination to source [source to desination], all other edges
+    pass in the opposite direction.
 
-2. It exposes the graph view obtained by contracting the destination vertices into
-   the source edges.
+2. It exposes the graph view obtained by contracting the destination [source] vertices
+   along the matched edges.
 
-The result of this operation is an induced, directed graph on the source vertices.
+The result of this operation is an induced, directed graph on the source [destination] vertices.
 The resulting graph has a few desirable properties. In particular, this graph
 is acyclic if and only if the induced directed graph on the original bipartite
 graph is acyclic.
+
 """
-struct DiCMOBiGraph{I, G<:BipartiteGraph{I}, M} <: Graphs.AbstractGraph{I}
+struct DiCMOBiGraph{Transposed, I, G<:BipartiteGraph{I}, M} <: Graphs.AbstractGraph{I}
     graph::G
     matching::M
+    DiCMOBiGraph{Transposed}(g::G, m::M) where {Transposed, I, G<:BipartiteGraph{I}, M} =
+        new{Transposed, I, G, M}(g, m)
 end
+DiCMOBiGraph{Transposed}(g::BipartiteGraph) where {Transposed} = DiCMOBiGraph{Transposed}(g, Union{Unassigned, Int}[unassigned for i = 1:ndsts(g)])
 Graphs.is_directed(::Type{<:DiCMOBiGraph}) = true
-Graphs.nv(g::DiCMOBiGraph) = nsrcs(g.graph)
-Graphs.vertices(g::DiCMOBiGraph) = 1:nsrcs(g.graph)
+Graphs.nv(g::DiCMOBiGraph{Transposed}) where {Transposed} = Transposed ? ndsts(g.graph) : nsrcs(g.graph)
+Graphs.vertices(g::DiCMOBiGraph{Transposed}) where {Transposed} = Transposed ? 𝑑vertices(g.graph) : 𝑠vertices(g.graph)
 
-struct CMOOutNeighbors{V}
-    g::DiCMOBiGraph
+struct CMONeighbors{Transposed, V}
+    g::DiCMOBiGraph{Transposed}
     v::V
+    CMONeighbors{Transposed}(g::DiCMOBiGraph{Transposed}, v::V) where {Transposed, V} =
+        new{Transposed, V}(g, v)
 end
-Graphs.outneighbors(g::DiCMOBiGraph, v) = CMOOutNeighbors(g, v)
-Base.iterate(c::CMOOutNeighbors) = iterate(c, (c.g.graph.fadjlist[c.v],))
-function Base.iterate(c::CMOOutNeighbors, (l, state...))
+Graphs.outneighbors(g::DiCMOBiGraph{false}, v) = CMONeighbors{false}(g, v)
+Base.iterate(c::CMONeighbors{false}) = iterate(c, (c.g.graph.fadjlist[c.v],))
+function Base.iterate(c::CMONeighbors{false}, (l, state...))
     while true
         r = iterate(l, state...)
         r === nothing && return nothing
         # If this is a matched edge, skip it, it's reversed in the induced
         # directed graph. Otherwise, if there is no matching for this destination
         # edge, also skip it, since it got delted in the contraction.
-        vdst = c.g.matching[r[1]]
-        if vdst === c.v || vdst === unassigned
+        vsrc = c.g.matching[r[1]]
+        if vsrc === c.v || vsrc === unassigned
             state = (r[2],)
             continue
         end
-        return vdst, (l, r[2])
+        return vsrc, (l, r[2])
+    end
+end
+
+Graphs.inneighbors(g::DiCMOBiGraph{true}, v) = CMONeighbors{true}(g, v)
+function Base.iterate(c::CMONeighbors{true})
+    vsrc = c.g.matching[c.v]
+    vsrc === unassigned && return nothing
+    iterate(c, (c.g.graph.fadjlist[vsrc],))
+end
+function Base.iterate(c::CMONeighbors{true}, (l, state...))
+    while true
+        r = iterate(l, state...)
+        r === nothing && return nothing
+        if r[1] === c.v
+            state = (r[2],)
+            continue
+        end
+        return r[1], (l, r[2])
     end
 end
 
