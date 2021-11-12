@@ -29,7 +29,7 @@ p = [9.8, 1]
 tspan = (0, 10.0)
 pendulum_prob = ODEProblem(pendulum_fun!, u0, tspan, p)
 traced_sys = modelingtoolkitize(pendulum_prob)
-pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
+pendulum_sys = structural_simplify(traced_sys)
 prob = ODAEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Tsit5(),abstol=1e-8,reltol=1e-8)
 plot(sol, vars=states(traced_sys))

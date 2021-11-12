@@ -1,5 +1,5 @@
 using ModelingToolkit
-using LightGraphs
+using Graphs
 using DiffEqBase
 using Test
 using UnPack
@@ -34,7 +34,7 @@ pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
 pendulum = initialize_system_structure(pendulum)
 sss = structure(pendulum)
 @unpack graph, fullvars, varassoc = sss
-@test StructuralTransformations.matching(sss, varassoc .== 0) == map(x -> x == 0 ? StructuralTransformations.UNASSIGNED : x, [1, 2, 3, 4, 0, 0, 0, 0, 0])
+@test StructuralTransformations.matching(sss, varassoc .== 0) == map(x -> x == 0 ? StructuralTransformations.unassigned : x, [1, 2, 3, 4, 0, 0, 0, 0, 0])
 
 sys, assign, eqassoc = StructuralTransformations.pantelides!(pendulum)
 sss = structure(sys)

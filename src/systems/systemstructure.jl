@@ -7,18 +7,18 @@ using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
     value, InvalidSystemException, isdifferential, _iszero, isparameter,
-    independent_variables, isinput
+    independent_variables, isinput, SparseMatrixCLIL
 using ..BipartiteGraphs
-using LightGraphs
+using Graphs
 using UnPack
 using Setfield
 using SparseArrays
 
 quick_cancel_expr(expr) = Rewriters.Postwalk(
     quick_cancel,
-    similarterm=(x, f, args) -> similarterm(
+    similarterm=(x, f, args; kws...) -> similarterm(
         x, f, args, SymbolicUtils.symtype(x);
-        metadata=SymbolicUtils.metadata(x)
+        metadata=SymbolicUtils.metadata(x), kws...
     )
 )(expr)
 
@@ -50,7 +50,7 @@ end
 =#
 
 export SystemStructure, SystemPartition
-export initialize_system_structure, find_linear_equations
+export initialize_system_structure, find_linear_equations, linear_subsys_adjmat
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq
 export dervars_range, diffvars_range, algvars_range
 
@@ -72,13 +72,15 @@ end
 Base.@kwdef struct SystemStructure
     fullvars::Vector
     vartype::Vector{VariableType}
+    # Maps the (index of) a variable to the (index of) the variable describing
+    # its derivative.
     varassoc::Vector{Int}
     inv_varassoc::Vector{Int}
     varmask::BitVector # `true` if the variable has the highest order derivative
     algeqs::BitVector
     graph::BipartiteGraph{Int,Vector{Vector{Int}},Int,Nothing}
     solvable_graph::BipartiteGraph{Int,Vector{Vector{Int}},Int,Nothing}
-    assign::Vector{Int}
+    assign::Vector{Union{Int, Unassigned}}
     inv_assign::Vector{Int}
     scc::Vector{Vector{Int}}
     partitions::Vector{SystemPartition}
@@ -227,7 +229,7 @@ function initialize_system_structure(sys; quick_cancel=false)
     return sys
 end
 
-function find_linear_equations(sys)
+function linear_subsys_adjmat(sys)
     s = structure(sys)
     @unpack fullvars, graph = s
     is_linear_equations = falses(nsrcs(graph))
@@ -271,7 +273,10 @@ function find_linear_equations(sys)
         end
     end
 
-    return is_linear_equations, eadj, cadj
+    linear_equations = findall(is_linear_equations)
+    return SparseMatrixCLIL(nsrcs(graph),
+                           ndsts(graph),
+                           linear_equations, eadj, cadj)
 end
 
 function Base.show(io::IO, mime::MIME"text/plain", s::SystemStructure)

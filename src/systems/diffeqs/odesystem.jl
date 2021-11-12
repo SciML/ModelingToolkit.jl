@@ -84,25 +84,31 @@ struct ODESystem <: AbstractODESystem
     """
     connection_type::Any
     """
-    preface: injuect assignment statements before the evaluation of the RHS function.
+    preface: inject assignment statements before the evaluation of the RHS function.
     """
     preface::Any
+    """
+    events: A `Vector{SymbolicContinuousCallback}` that model events.
+    The integrator will use root finding to guarantee that it steps at each zero crossing.
+    """
+    continuous_events::Vector{SymbolicContinuousCallback}
 
-    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface; checks::Bool = true)
+    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface, events; checks::Bool = true)
         if checks
             check_variables(dvs,iv)
             check_parameters(ps,iv)
             check_equations(deqs,iv)
-            all_dimensionless([dvs;ps;iv]) ||check_units(deqs)
+            check_equations(equations(events),iv)
+            all_dimensionless([dvs;ps;iv]) || check_units(deqs)
         end
-        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface)
+        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface, events)
     end
 end
 
 function ODESystem(
                    deqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    controls  = Num[],
-                   observed = Num[],
+                   observed = Equation[],
                    systems = ODESystem[],
                    name=nothing,
                    default_u0=Dict(),
@@ -110,6 +116,7 @@ function ODESystem(
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    connection_type=nothing,
                    preface=nothing,
+                   continuous_events=nothing,
                    checks = true,
                   )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
@@ -127,10 +134,6 @@ function ODESystem(
     defaults = todict(defaults)
     defaults = Dict{Any,Any}(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    iv′ = value(scalarize(iv))
-    dvs′ = value.(scalarize(dvs))
-    ps′ = value.(scalarize(ps))
-
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
@@ -144,7 +147,8 @@ function ODESystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface, checks = checks)
+    cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
+    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface, cont_callbacks, checks = checks)
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)
@@ -209,6 +213,7 @@ function flatten(sys::ODESystem)
                          states(sys),
                          parameters(sys),
                          observed=observed(sys),
+                         continuous_events=continuous_events(sys),
                          defaults=defaults(sys),
                          name=nameof(sys),
                          checks = false,
@@ -217,6 +222,11 @@ function flatten(sys::ODESystem)
 end
 
 ODESystem(eq::Equation, args...; kwargs...) = ODESystem([eq], args...; kwargs...)
+
+get_continuous_events(sys::AbstractSystem) = Equation[]
+get_continuous_events(sys::AbstractODESystem) = getfield(sys, :continuous_events)
+has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
+get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 
 """
 $(SIGNATURES)
@@ -236,7 +246,7 @@ function build_explicit_observed_function(
     ts = Symbolics.scalarize.(value.(ts))
 
     vars = Set()
-    syms = foreach(Base.Fix1(vars!, vars), ts)
+    foreach(Base.Fix1(vars!, vars), ts)
     ivs = independent_variables(sys)
     dep_vars = collect(setdiff(vars, ivs))
 

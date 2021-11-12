@@ -1,7 +1,8 @@
 """
     tear_graph(sys) -> sys
 
-Tear the bipartite graph in a system.
+Tear the bipartite graph in a system. End users are encouraged to call [`structural_simplify`](@ref)
+instead, which calls this function internally.
 """
 function tear_graph(sys)
     find_solvables!(sys)
@@ -220,6 +221,7 @@ end
     tearing(sys; simplify=false)
 
 Tear the nonlinear equations in system. When `simplify=true`, we simplify the
-new residual residual equations after tearing.
+new residual residual equations after tearing. End users are encouraged to call [`structural_simplify`](@ref)
+instead, which calls this function internally.
 """
 tearing(sys; simplify=false) = tearing_reassemble(tear_graph(algebraic_equations_scc(sys)); simplify=simplify)

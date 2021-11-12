@@ -50,13 +50,13 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   tosymbol, lower_varname, diff2term, var_from_nested_derivative,
                   BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
                   ParallelForm, SerialForm, MultithreadedForm, build_function,
-                  unflatten_long_ops, rhss, lhss, prettify_expr, gradient,
+                  rhss, lhss, prettify_expr, gradient,
                   jacobian, hessian, derivative, sparsejacobian, sparsehessian,
                   substituter, scalarize, getparent
 
 import DiffEqBase: @add_kwonly
 
-import LightGraphs: SimpleDiGraph, add_edge!, incidence_matrix
+import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 
 using Requires
 
@@ -134,6 +134,7 @@ include("systems/control/controlsystem.jl")
 
 include("systems/pde/pdesystem.jl")
 
+include("systems/sparsematrixclil.jl")
 include("systems/discrete_system/discrete_system.jl")
 include("systems/validation.jl")
 include("systems/dependency_graphs.jl")

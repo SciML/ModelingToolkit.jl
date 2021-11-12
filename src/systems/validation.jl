@@ -42,7 +42,7 @@ get_unit(x::Literal) = screen_unit(getmetadata(x,VariableUnit, unitless))
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
 get_unit(op::Difference, args) =   get_unit(args[1]) / get_unit(op.t)
 get_unit(op::typeof(getindex),args) = get_unit(args[1])
-get_unit(x::typeof(SciMLBase.NullParameters)) = unitless
+get_unit(x::SciMLBase.NullParameters) = unitless
 
 function get_unit(op,args) # Fallback
     result = op(1 .* get_unit.(args)...)
@@ -197,4 +197,4 @@ validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term,"") !== no
 
 "Throws error if units of equations are invalid."
 check_units(eqs...) = validate(eqs...) || throw(ValidationError("Some equations had invalid units. See warnings for details."))
-all_dimensionless(states) = all(map(x->safe_get_unit(x,"") in (unitless,nothing),states))
+all_dimensionless(states) = all(x->safe_get_unit(x,"") in (unitless,nothing),states)
