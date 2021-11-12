@@ -1,8 +1,8 @@
 # Parameter Identifiability in ODE Models
 
-Using ordinary differential equations for modeling real-world processes is commonplace and the problem of parameter identifiability is one of the key design challenges. We say that a parameter is identifiable if we can recover its value from experimental data. When we describe the parameter without actual data at hand is _structurally_ identifiable. In this tutorial, we will show how to use `StructuralIdentifiability.jl` with `ModelingToolkit.jl` to assess parameter identifiability.
+Using ordinary differential equations for modeling real-world processes is commonplace and the problem of parameter identifiability is one of the key design challenges. A parameter is said to be _identifiable_ if one can recover its value from experimental data. _Structurally_ identifiabiliy is a property that answers this question without needing to perform the actual measurement. In this tutorial, we will show how to use `StructuralIdentifiability.jl` with `ModelingToolkit.jl` to assess identifiability of parameters in ODE models. The theory behind `StructuralIdentifiability.jl` is presented in paper [^4].
 
-We will start with determining local identifiability, where a parameter is known up to finitely many values, and then proceed to determining global identifiability properties, that is, which parameters can be identified uniquely.
+We will start with determining **local identifiability**, where a parameter is known up to _finitely many values_, and then proceed to determining **global identifiability** properties, that is, which parameters can be identified _uniquely_.
 
 To install `StructuralIdentifiability.jl`, simply run
 ```julia
@@ -12,7 +12,6 @@ Pkg.add("StructuralIdentifiability")
 
 The package has a standalone data structure for ordinary differential equations but is also compatible with `ODESystem` type from `ModelingToolkit.jl`.
 
-Let's start with local identifiability!
 ## Local Identifiability
 ### Input System
 
@@ -86,7 +85,7 @@ Notice that in this case, everything (except the state variable $x_7$) is locall
 
 ## Global Identifiability
 
-In this tutorial, let us cover an example problem of querying the ODE for globally identifiable parameters.
+In this part tutorial, let us cover an example problem of querying the ODE for globally identifiable parameters.
 
 ### Input System
 
@@ -100,7 +99,7 @@ $$\begin{cases}
     y(t) = x_1(t)
 \end{cases}$$
 
-This model describes enzyme dynamics[^3]. Let us run a global identifiability check on this model. We will use the default settings: the probability of correctness will be `p=0.99` and we are interested in identifiability of all possible parameters
+We will run a global identifiability check on this enzyme dynamics[^3] model. We will use the default settings: the probability of correctness will be `p=0.99` and we are interested in identifiability of all possible parameters
 
 Global identifiability needs information about local identifiability first, but the function we chose here will take care of that extra step for us.
 
@@ -134,7 +133,7 @@ ode = ODESystem(eqs, t, name=:GoodwinOsc)
                 #   beta  => :locally
                 #   b     => :globally
 ```
-We can see that 
+We can see that only parameters `a, g` are unidentifiable and everything else can be uniquely recovered.
 
 Let us consider the same system but with two inputs and we will try to find out identifiability with probability `0.9` for parameters `c` and `b`:
 
@@ -163,7 +162,7 @@ global_id = assess_identifiability(ode, to_check, 0.9)
             #   c => :globally
 ```
 
-Both parameters $b, c$ are globally identifiable with probability 0.9.
+Both parameters `b, c` are globally identifiable with probability `0.9` in this case.
 
 [^1]:
     > R. Munoz-Tamayo, L. Puillet, J.B. Daniel, D. Sauvant, O. Martin, M. Taghipoor, P. Blavy [*Review: To be or not to be an identifiable model. Is this a relevant question in animal science modelling?*](https://doi.org/10.1017/S1751731117002774), Animal, Vol 12 (4), 701-712, 2018. The model is the ODE system (3) in Supplementary Material 2, initial conditions are assumed to be unknown.
@@ -173,3 +172,6 @@ Both parameters $b, c$ are globally identifiable with probability 0.9.
 
 [^3]:
     > Goodwin, B.C. [*Oscillatory behavior in enzymatic control processes*](https://doi.org/10.1016/0065-2571(65)90067-1), Advances in Enzyme Regulation, Vol 3 (C), 425-437, 1965
+
+[^4]:
+    > Dong, R., Goodbrake, C., Harrington, H. A., & Pogudin, G. [*Computing input-output projections of dynamical models with applications to structural identifiability*](https://arxiv.org/pdf/2111.00991). arXiv preprint arXiv:2111.00991.
