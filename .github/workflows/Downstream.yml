@@ -17,13 +17,13 @@ jobs:
         julia-version: [1]
         os: [ubuntu-latest]
         package:
+          - {user: SciML, repo: SciMLBase.jl, group: Downstream}
           - {user: SciML, repo: Catalyst.jl, group: All}
           - {user: SciML, repo: CellMLToolkit.jl, group: All}
           - {user: SciML, repo: SBMLToolkit.jl, group: All}
           - {user: SciML, repo: NeuralPDE.jl, group: NNPDE}
           - {user: SciML, repo: DataDrivenDiffEq.jl, group: Standard}
           - {user: SciML, repo: StructuralIdentifiability.jl, group: All}
-          
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v1
