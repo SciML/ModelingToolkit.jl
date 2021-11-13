@@ -359,7 +359,7 @@ $(SIGNATURES)
 
 find duplicates in an iterable object.
 """
-function find_duplicates(xs, ::Val{Ret}) where Ret
+function find_duplicates(xs, ::Val{Ret}=Val(false)) where Ret
     appeared = Set()
     duplicates = Set()
     for x in xs
@@ -369,5 +369,5 @@ function find_duplicates(xs, ::Val{Ret}) where Ret
             push!(appeared, x)
         end
     end
-    return Ret ? duplicates : (appeared, duplicates)
+    return Ret ? (appeared, duplicates) : duplicates
 end

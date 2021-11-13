@@ -173,7 +173,7 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     iv === nothing && throw(ArgumentError("Please pass in independent variables."))
     compressed_eqs = Equation[] # equations that need to be expanded later, like `connect(a, b)`
     for eq in eqs
-        eq.lhs isa Symbolic || (push!(compressed_eqs, eq); continue)
+        eq.lhs isa Union{Symbolic,Number} || (push!(compressed_eqs, eq); continue)
         collect_vars!(allstates, ps, eq.lhs, iv)
         collect_vars!(allstates, ps, eq.rhs, iv)
         if isdiffeq(eq)
