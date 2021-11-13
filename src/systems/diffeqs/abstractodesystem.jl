@@ -173,12 +173,12 @@ function generate_rootfinding_callback(cbs, sys::ODESystem, dvs = states(sys), p
 
     rhss = map(x->x.rhs, eqs)
     root_eq_vars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
-    
+
     u = map(x->time_varying_as_func(value(x), sys), dvs)
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
     rf_oop, rf_ip = build_function(rhss, u, p, t; expression=Val{false}, kwargs...)
-    
+
     affect_functions = map(cbs) do cb # Keep affect function separate
         eq_aff = affect_equations(cb)
         affect = compile_affect(eq_aff, sys, dvs, ps; kwargs...)
@@ -233,7 +233,7 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; kwargs...)
         length(update_vars) == length(unique(update_vars)) == length(eqs) ||
             error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
         vars = states(sys)
-    
+
         u        = map(x->time_varying_as_func(value(x), sys), vars)
         p        = map(x->time_varying_as_func(value(x), sys), ps)
         t        = get_iv(sys)

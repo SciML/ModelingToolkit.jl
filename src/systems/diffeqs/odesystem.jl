@@ -120,7 +120,7 @@ function ODESystem(
                    checks = true,
                   )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    deqs = collect(deqs)
+    deqs = scalarize(deqs)
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
 
     iv′ = value(scalarize(iv))
@@ -152,7 +152,7 @@ function ODESystem(
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)
-    eqs = collect(eqs)
+    eqs = scalarize(eqs)
     # NOTE: this assumes that the order of algebric equations doesn't matter
     diffvars = OrderedSet()
     allstates = OrderedSet()
@@ -186,7 +186,7 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     end
     algevars = setdiff(allstates, diffvars)
     # the orders here are very important!
-    return ODESystem(append!(diffeq, algeeq), iv, vcat(collect(diffvars), collect(algevars)), ps; kwargs...)
+    return ODESystem(append!(diffeq, algeeq), iv, collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian
@@ -248,7 +248,7 @@ function build_explicit_observed_function(
     vars = Set()
     foreach(Base.Fix1(vars!, vars), ts)
     ivs = independent_variables(sys)
-    dep_vars = collect(setdiff(vars, ivs))
+    dep_vars = scalarize(setdiff(vars, ivs))
 
     obs = observed(sys)
     sts = Set(states(sys))

@@ -83,7 +83,7 @@ function DiscreteSystem(
                    kwargs...,
                   )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    eqs = collect(eqs)
+    eqs = scalarize(eqs)
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
@@ -108,7 +108,7 @@ end
 
 
 function DiscreteSystem(eqs, iv=nothing; kwargs...)
-    eqs = collect(eqs)
+    eqs = scalarize(eqs)
     # NOTE: this assumes that the order of algebric equations doesn't matter
     diffvars = OrderedSet()
     allstates = OrderedSet()
@@ -142,7 +142,7 @@ function DiscreteSystem(eqs, iv=nothing; kwargs...)
     end
     algevars = setdiff(allstates, diffvars)
     # the orders here are very important!
-    return DiscreteSystem(append!(diffeq, algeeq), iv, vcat(collect(diffvars), collect(algevars)), ps; kwargs...)
+    return DiscreteSystem(append!(diffeq, algeeq), iv, collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
 end
 
 """
