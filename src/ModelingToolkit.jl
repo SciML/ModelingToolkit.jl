@@ -18,6 +18,7 @@ using SpecialFunctions, NaNMath
 using RuntimeGeneratedFunctions
 using Base.Threads
 using DiffEqCallbacks
+using Graphs
 import MacroTools: splitdef, combinedef, postwalk, striplines
 import Libdl
 using DocStringExtensions
@@ -114,6 +115,12 @@ include("parameters.jl")
 
 include("utils.jl")
 include("domains.jl")
+
+# Code that should eventually go elsewhere, but is here for fow
+include("compat/bareiss.jl")
+if !isdefined(Graphs, :IncrementalCycleTracker)
+    include("compat/incremental_cycles.jl")
+end
 
 include("systems/abstractsystem.jl")
 include("systems/connectors.jl")

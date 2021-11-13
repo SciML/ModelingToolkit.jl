@@ -153,6 +153,105 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
     PeriodicCallback(cb_affect!, first(dt))
 end
 
+function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
+    cbs = continuous_events(sys)
+    isempty(cbs) && return nothing
+    generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
+end
+
+function generate_rootfinding_callback(cbs, sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
+    eqs = map(cb->cb.eqs, cbs)
+    num_eqs = length.(eqs)
+    (isempty(eqs) || sum(num_eqs) == 0) && return nothing
+    # fuse equations to create VectorContinuousCallback
+    eqs = reduce(vcat, eqs)
+    # rewrite all equations as 0 ~ interesting stuff
+    eqs = map(eqs) do eq
+        isequal(eq.lhs, 0) && return eq
+        0 ~ eq.lhs - eq.rhs
+    end
+
+    rhss = map(x->x.rhs, eqs)
+    root_eq_vars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
+
+    u = map(x->time_varying_as_func(value(x), sys), dvs)
+    p = map(x->time_varying_as_func(value(x), sys), ps)
+    t = get_iv(sys)
+    rf_oop, rf_ip = build_function(rhss, u, p, t; expression=Val{false}, kwargs...)
+
+    affect_functions = map(cbs) do cb # Keep affect function separate
+        eq_aff = affect_equations(cb)
+        affect = compile_affect(eq_aff, sys, dvs, ps; kwargs...)
+    end
+
+    if length(eqs) == 1
+        cond = function(u, t, integ)
+            if DiffEqBase.isinplace(integ.sol.prob)
+                tmp, = DiffEqBase.get_tmp_cache(integ)
+                rf_ip(tmp, u, integ.p, t)
+                tmp[1]
+            else
+                rf_oop(u, integ.p, t)
+            end
+        end
+        ContinuousCallback(cond, affect_functions[])
+    else
+        cond = function(out, u, t, integ)
+            rf_ip(out, u, integ.p, t)
+        end
+
+        # since there may be different number of conditions and affects,
+        # we build a map that translates the condition eq. number to the affect number
+        eq_ind2affect = reduce(vcat, [fill(i, num_eqs[i]) for i in eachindex(affect_functions)])
+        @assert length(eq_ind2affect) == length(eqs)
+        @assert maximum(eq_ind2affect) == length(affect_functions)
+
+        affect = let affect_functions=affect_functions, eq_ind2affect=eq_ind2affect
+            function(integ, eq_ind) # eq_ind refers to the equation index that triggered the event, each event has num_eqs[i] equations
+                affect_functions[eq_ind2affect[eq_ind]](integ)
+            end
+        end
+        VectorContinuousCallback(cond, affect, length(eqs))
+    end
+end
+
+compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...) = compile_affect(affect_equations(cb), args...; kwargs...)
+
+"""
+    compile_affect(eqs::Vector{Equation}, sys, dvs, ps; kwargs...)
+    compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
+
+Returns a function that takes an integrator as argument and modifies the state with the affect.
+"""
+function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; kwargs...)
+    if isempty(eqs)
+        return (args...) -> () # We don't do anything in the callback, we're just after the event
+    else
+        rhss = map(x->x.rhs, eqs)
+        lhss = map(x->x.lhs, eqs)
+        update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're chaning
+        length(update_vars) == length(unique(update_vars)) == length(eqs) ||
+            error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
+        vars = states(sys)
+
+        u        = map(x->time_varying_as_func(value(x), sys), vars)
+        p        = map(x->time_varying_as_func(value(x), sys), ps)
+        t        = get_iv(sys)
+        rf_oop, rf_ip = build_function(rhss, u, p, t; expression=Val{false}, kwargs...)
+
+        stateind(sym) = findfirst(isequal(sym),vars)
+
+        update_inds = stateind.(update_vars)
+        let update_inds=update_inds
+            function(integ)
+                lhs = @views integ.u[update_inds]
+                rf_ip(lhs, integ.u, integ.p, integ.t)
+            end
+        end
+    end
+end
+
+
 function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
     # if something is not x(t) (the current state)
     # but is `x(t-1)` or something like that, pass in `x` as a callable function rather
@@ -552,15 +651,28 @@ Generates an ODEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters();kwargs...) where iip
+                                    parammap=DiffEqBase.NullParameters(); callback=nothing, kwargs...) where iip
     has_difference = any(isdifferenceeq, equations(sys))
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; has_difference=has_difference, kwargs...)
-    if has_difference
-        ODEProblem{iip}(f,u0,tspan,p;difference_cb=generate_difference_cb(sys;kwargs...),kwargs...)
+    if has_continuous_events(sys)
+        event_cb = generate_rootfinding_callback(sys; kwargs...)
     else
-        ODEProblem{iip}(f,u0,tspan,p;kwargs...)
+        event_cb = nothing
+    end
+    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
+    cb = merge_cb(event_cb, difference_cb)
+    cb = merge_cb(cb, callback)
+
+    if cb === nothing
+        ODEProblem{iip}(f, u0, tspan, p; kwargs...)
+    else
+        ODEProblem{iip}(f, u0, tspan, p; callback=cb, kwargs...)
     end
 end
+merge_cb(::Nothing, ::Nothing) = nothing
+merge_cb(::Nothing, x) = merge_cb(x, nothing)
+merge_cb(x, ::Nothing) = x
+merge_cb(x, y) = CallbackSet(x, y)
 
 """
 ```julia

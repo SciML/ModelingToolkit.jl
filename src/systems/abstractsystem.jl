@@ -154,6 +154,40 @@ independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
 independent_variables(sys::AbstractTimeIndependentSystem) = []
 independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
 
+const NULL_AFFECT = Equation[]
+struct SymbolicContinuousCallback
+    eqs::Vector{Equation}
+    affect::Vector{Equation}
+    SymbolicContinuousCallback(eqs::Vector{Equation}, affect=NULL_AFFECT) = new(eqs, affect) # Default affect to nothing
+end
+
+Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback) = isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect)
+
+to_equation_vector(eq::Equation) = [eq]
+to_equation_vector(eqs::Vector{Equation}) = eqs
+function to_equation_vector(eqs::Vector{Any})
+    isempty(eqs) || error("This should never happen")
+    Equation[]
+end
+
+SymbolicContinuousCallback(args...) = SymbolicContinuousCallback(to_equation_vector.(args)...) # wrap eq in vector
+SymbolicContinuousCallback(p::Pair) = SymbolicContinuousCallback(p[1], p[2])
+SymbolicContinuousCallback(cb::SymbolicContinuousCallback) = cb # passthrough
+
+SymbolicContinuousCallbacks(cb::SymbolicContinuousCallback) = [cb]
+SymbolicContinuousCallbacks(cbs::Vector{<:SymbolicContinuousCallback}) = cbs
+SymbolicContinuousCallbacks(cbs::Vector) = SymbolicContinuousCallback.(cbs)
+SymbolicContinuousCallbacks(ve::Vector{Equation}) = SymbolicContinuousCallbacks(SymbolicContinuousCallback(ve))
+SymbolicContinuousCallbacks(others) = SymbolicContinuousCallbacks(SymbolicContinuousCallback(others))
+SymbolicContinuousCallbacks(::Nothing) = SymbolicContinuousCallbacks(Equation[])
+
+equations(cb::SymbolicContinuousCallback) = cb.eqs
+equations(cbs::Vector{<:SymbolicContinuousCallback}) = reduce(vcat, [equations(cb) for cb in cbs])
+affect_equations(cb::SymbolicContinuousCallback) = cb.affect
+affect_equations(cbs::Vector{SymbolicContinuousCallback}) = reduce(vcat, [affect_equations(cb) for cb in cbs])
+namespace_equation(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback = SymbolicContinuousCallback(namespace_equation.(equations(cb), (s, )), namespace_equation.(affect_equations(cb), (s, )))
+
+
 function structure(sys::AbstractSystem)
     s = get_structure(sys)
     s isa SystemStructure || throw(ArgumentError("SystemStructure is not yet initialized, please run `sys = initialize_system_structure(sys)` or `sys = alias_elimination(sys)`."))
@@ -415,6 +449,15 @@ function observed(sys::AbstractSystem)
      reduce(vcat,
             (map(o->namespace_equation(o, s), observed(s)) for s in systems),
             init=Equation[])]
+end
+
+function continuous_events(sys::AbstractSystem)
+    obs = get_continuous_events(sys)
+    systems = get_systems(sys)
+    [obs;
+     reduce(vcat,
+            (map(o->namespace_equation(o, s), continuous_events(s)) for s in systems),
+            init=SymbolicContinuousCallback[])]
 end
 
 Base.@deprecate default_u0(x) defaults(x) false
@@ -879,6 +922,7 @@ function Base.hash(sys::AbstractSystem, s::UInt)
         s = foldr(hash, get_eqs(sys), init=s)
     end
     s = foldr(hash, get_observed(sys), init=s)
+    s = foldr(hash, get_continuous_events(sys), init=s)
     s = hash(independent_variables(sys), s)
     return s
 end
@@ -906,13 +950,14 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameo
     sts = union(get_states(basesys), get_states(sys))
     ps = union(get_ps(basesys), get_ps(sys))
     obs = union(get_observed(basesys), get_observed(sys))
+    evs = union(get_continuous_events(basesys), get_continuous_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
     syss = union(get_systems(basesys), get_systems(sys))
 
     if length(ivs) == 0
-        T(eqs, sts, ps, observed = obs, defaults = defs, name=name, systems = syss)
+        T(eqs, sts, ps, observed = obs, defaults = defs, name=name, systems = syss, continuous_events=evs)
     elseif length(ivs) == 1
-        T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name, systems = syss)
+        T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name, systems = syss, continuous_events=evs)
     end
 end
 
