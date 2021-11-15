@@ -69,8 +69,8 @@ function Base.show(io::IO, c::Connection)
 end
 
 # symbolic `connect`
-function connect(syss::AbstractSystem...)
-    length(syss) >= 2 || error("connect takes at least two systems!")
+function connect(sys1::AbstractSystem, sys2::AbstractSystem, syss::AbstractSystem...)
+    syss = (sys1, sys2, syss...)
     length(unique(nameof, syss)) == length(syss) || error("connect takes distinct systems!")
     Equation(Connection(), Connection(syss)) # the RHS are connected systems
 end
