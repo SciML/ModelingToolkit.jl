@@ -173,7 +173,7 @@ export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
 export ControlSystem
 export alias_elimination, flatten
-export connect, @connector, Connection, Flow, Stream
+export connect, @connector, Connection, Flow, Stream, instream
 export ode_order_lowering, liouville_transform
 export runge_kutta_discretize
 export PDESystem

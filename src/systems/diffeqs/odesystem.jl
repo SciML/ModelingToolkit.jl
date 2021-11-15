@@ -84,6 +84,10 @@ struct ODESystem <: AbstractODESystem
     """
     connector_type::Any
     """
+    connections: connections in a system
+    """
+    connections::Any
+    """
     preface: inject assignment statements before the evaluation of the RHS function.
     """
     preface::Any
@@ -93,7 +97,7 @@ struct ODESystem <: AbstractODESystem
     """
     continuous_events::Vector{SymbolicContinuousCallback}
 
-    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connector_type, preface, events; checks::Bool = true)
+    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connector_type, connections, preface, events; checks::Bool = true)
         if checks
             check_variables(dvs,iv)
             check_parameters(ps,iv)
@@ -101,7 +105,7 @@ struct ODESystem <: AbstractODESystem
             check_equations(equations(events),iv)
             all_dimensionless([dvs;ps;iv]) || check_units(deqs)
         end
-        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connector_type, preface, events)
+        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connector_type, connections, preface, events)
     end
 end
 
@@ -148,7 +152,7 @@ function ODESystem(
         throw(ArgumentError("System names must be unique."))
     end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
-    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connector_type, preface, cont_callbacks, checks = checks)
+    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connector_type, nothing, preface, cont_callbacks, checks = checks)
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)

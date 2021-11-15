@@ -220,6 +220,7 @@ for prop in [
              :ivs
              :dvs
              :connector_type
+             :connections
              :preface
             ]
     fname1 = Symbol(:get_, prop)
@@ -355,6 +356,7 @@ GlobalScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, GlobalScope(
 
 renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
 
+renamespace(names::AbstractVector, x) = foldr(renamespace, names, init=x)
 function renamespace(sys, x)
     x = unwrap(x)
     if x isa Symbolic

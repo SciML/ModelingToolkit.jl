@@ -50,6 +50,10 @@ end
 # everything is inner by default until we expand the connections
 Connection(syss) = Connection(inners=syss)
 get_systems(c::Connection) = c.inners
+function Base.in(e::Symbol, c::Connection)
+    f = isequal(e)
+    any(f, c.inners) || any(f, c.outers)
+end
 
 const EMPTY_VEC = []
 
@@ -137,7 +141,7 @@ function collect_instream!(set, expr, occurs=false)
     istree(expr) || return occurs
     op = operation(expr)
     op === instream && (push!(set, expr); occurs = true)
-    for a in unsorted_arguments(expr)
+    for a in SymbolicUtils.unsorted_arguments(expr)
         occurs |= collect_instream!(set, a, occurs)
     end
     return occurs
@@ -162,42 +166,42 @@ function get_sys_var(sys::AbstractSystem, var; inclusive=true)
     newsys, lvs[end]
 end
 
-function expand_instream(sys::AbstractSystem; debug=false)
+function split_stream_var(var)
+    var_name = string(getname(var))
+    @show var_name
+    sidx = findlast(isequal('₊'), var_name)
+    sidx === nothing && error("$var is not a stream variable")
+    connector_name = Symbol(var_name[1:prevind(var_name, sidx)])
+    streamvar_name = Symbol(var_name[nextind(var_name, sidx):end])
+    connector_name, streamvar_name
+end
+
+function find_connection(connector_name, ogsys, names)
+    cs = get_connections(ogsys)
+    cs === nothing || for c in cs
+        @show renamespace(names, connector_name)
+        renamespace(names, connector_name) in c && return c
+    end
+    innersys = ogsys
+    for n in names
+        innersys = getproperty(innersys, n)
+        cs = get_connections(innersys)
+        cs === nothing || for c in cs
+            connector_name in c && return c
+        end
+    end
+    error("$connector_name cannot be found in $(nameof(ogsys)) with levels $(names)")
+end
+
+function expand_instream(ogsys, sys::AbstractSystem=ogsys, names=[]; debug=false)
     subsys = get_systems(sys)
     isempty(subsys) && return sys
 
     # post order traversal
-    @set! sys.systems = map(s->expand_connections(s, debug=debug), subsys)
-
-    outer_sc = []
-    for s in subsys
+    @set! sys.systems = map(subsys) do s
         n = nameof(s)
-        isstreamconnector(s) && push!(outer_sc, n)
+        expand_instream(ogsys, s, [names; n], debug=debug)
     end
-
-    # the number of stream connectors excluding the current level
-    inner_sc = []
-    for s in subsys
-        get_stream_connectors!(inner_sc, renamespace(sys, s))
-    end
-
-    # error checking
-    # TODO: Error might never be possible anyway, because subsystem names must
-    # be distinct.
-    outer_names, dup = find_duplicates((nameof(s) for s in outer_sc), Val(true))
-    isempty(dup) || error("$dup are duplicate stream connectors!")
-    inner_names, dup = find_duplicates((nameof(s) for s in inner_sc), Val(true))
-    isempty(dup) || error("$dup are duplicate stream connectors!")
-
-    foreach(Base.Fix1(get_stream_connectors!, inner_sc), subsys)
-    isouterstream = let stream_connectors=outer_sc
-        function isstream(sys)::Bool
-            s = string(nameof(sys))
-            isstreamconnector(sys) || error("$s is not a stream connector!")
-            s in stream_connectors
-        end
-    end
-
     eqs′ = get_eqs(sys)
     eqs = Equation[]
     instream_eqs = Equation[]
@@ -209,47 +213,87 @@ function expand_instream(sys::AbstractSystem; debug=false)
             push!(eqs, eq) # split instreams and equations
         end
     end
+    @show nameof(sys), names, instream_exprs
+    isempty(instream_eqs) && return sys
 
-    function check_in_stream_connectors(stream, sc)
-        stream = only(arguments(ex))
-        stream_name = string(nameof(stream))
-        connector_name = stream_name[1:something(findlast('₊', stream_name), end)]
-        connector_name in sc || error("$stream_name is not in any stream connector of $(nameof(sys))")
+    for ex in instream_exprs
+        var = only(arguments(ex))
+        connector_name, streamvar_name = split_stream_var(var)
+
+        n_inners = 0
+        n_outers = 0
+        outer_names = Symbol[]
+        inner_names = Symbol[]
+        outer_sc = Symbol[]
+        inner_sc = Symbol[]
+        # find the connect
+        connect = find_connection(connector_name, ogsys, names)
+        @show connect
     end
+    return sys
+    #=
+
+    #splitting_idx
+
+    #n_inners + n_outers <= 0 && error("Model $(nameof(sys)) has no stream connectors, yet there are equations with `instream` functions: $(instream_eqs)")
 
     # expand `instream`s
     sub = Dict()
-    n_outers = length(outer_names)
-    n_inners = length(inner_names)
+    additional_eqs = Equation[]
+    seen = Set()
     # https://specification.modelica.org/v3.4/Ch15.html
     # Based on the above requirements, the following implementation is
     # recommended:
     if n_inners == 1 && n_outers == 0
         for ex in instream_exprs
-            stream = only(arguments(ex))
-            check_in_stream_connectors(stream, inner_names)
-            sub[ex] = stream
+            var = only(arguments(ex))
+            connector_name, streamvar_name = split_stream_var(var)
+            idx = findfirst(isequal(connector_name), inner_names)
+            idx === nothing || error("$stream_name is not in any stream connector of $(nameof(sys))")
+            sub[ex] = var #getproperty(inner_sc[idx], streamvar_name)
         end
     elseif n_inners == 2 && n_outers == 0
         for ex in instream_exprs
-            stream = only(arguments(ex))
-            check_in_stream_connectors(stream, inner_names)
-            
-            sub[ex] = stream
+            var = only(arguments(ex))
+            connector_name, streamvar_name = split_stream_var(var)
+            idx = findfirst(isequal(connector_name), inner_names)
+            idx === nothing || error("$stream_name is not in any stream connector of $(nameof(sys))")
+            other = idx == 1 ? 2 : 1
+            sub[ex] = getproperty(inner_sc[other], streamvar_name)
         end
     elseif n_inners == 1 && n_outers == 1
+        for ex in instream_exprs
+            var = only(arguments(ex)) # m_1.c.h_outflow
+            connector_name, streamvar_name = split_stream_var(var)
+            idx = findfirst(isequal(connector_name), inner_names)
+            idx === nothing || error("$stream_name is not in any stream connector of $(nameof(sys))")
+            outerinstream = getproperty(only(outer_sc), streamvar_name) # c_1.h_outflow
+            sub[ex] = outerinstream
+            if var in seen
+                push!(additional_eqs, outerinstream ~ var)
+                push!(seen, var)
+            end
+        end
     elseif n_inners == 0 && n_outers == 2
+        push!(additional_eqs, outerinstream ~ var)
     else
     end
     instream_eqs = map(Base.Fix2(substitute, sub), instream_eqs)
+    =#
 end
 
 function expand_connections(sys::AbstractSystem; debug=false)
+    sys = collect_connections(sys; debug=debug)
+    sys = expand_instream(sys; debug=debug)
+    return sys
+end
+
+function collect_connections(sys::AbstractSystem; debug=false)
     subsys = get_systems(sys)
     isempty(subsys) && return sys
 
     # post order traversal
-    @set! sys.systems = map(s->expand_connections(s, debug=debug), subsys)
+    @set! sys.systems = map(s->collect_connections(s, debug=debug), subsys)
 
     outer_connectors = Symbol[]
     for s in subsys
@@ -272,6 +316,9 @@ function expand_connections(sys::AbstractSystem; debug=false)
     for eq in eqs′
         eq.lhs isa Connection ? push!(cts, get_systems(eq.rhs)) : push!(eqs, eq) # split connections and equations
     end
+
+    # if there are no connections, we are done
+    isempty(cts) && return sys
 
     sys2idx = Dict{Symbol,Int}() # system (name) to n-th connect statement
     narg_connects = Connection[]
@@ -305,6 +352,10 @@ function expand_connections(sys::AbstractSystem; debug=false)
         end
     end
 
+    isempty(narg_connects) && error("Unreachable reached. Please file an issue.")
+
+    @set! sys.connections = narg_connects
+
     # Bad things happen when there are more than one intersections
     for c in narg_connects
         @unpack outers, inners = c
@@ -314,7 +365,7 @@ function expand_connections(sys::AbstractSystem; debug=false)
         length(dups) == 0 || error("$(Connection(syss)) has duplicated connections: $(dups).")
     end
 
-    if debug && !isempty(narg_connects)
+    if debug
         println("============BEGIN================")
         println("Connections for [$(nameof(sys))]:")
         foreach(Base.Fix1(print_with_indent, 4), narg_connects)
@@ -327,7 +378,7 @@ function expand_connections(sys::AbstractSystem; debug=false)
         append!(eqs, ceqs)
     end
 
-    if debug && !isempty(narg_connects)
+    if debug
         println("Connection equations:")
         foreach(Base.Fix1(print_with_indent, 4), connection_eqs)
         println("=============END=================")
