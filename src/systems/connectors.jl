@@ -51,8 +51,7 @@ end
 Connection(syss) = Connection(inners=syss)
 get_systems(c::Connection) = c.inners
 function Base.in(e::Symbol, c::Connection)
-    f = isequal(e)
-    any(f, c.inners) || any(f, c.outers)
+    any(k->nameof(k) === e, c.inners) || any(k->nameof(k) === e, c.outers)
 end
 
 const EMPTY_VEC = []
@@ -166,11 +165,10 @@ function get_sys_var(sys::AbstractSystem, var; inclusive=true)
     newsys, lvs[end]
 end
 
-function split_stream_var(var)
+function split_sys_var(var)
     var_name = string(getname(var))
-    @show var_name
     sidx = findlast(isequal('₊'), var_name)
-    sidx === nothing && error("$var is not a stream variable")
+    sidx === nothing && error("$var is not a namespaced variable")
     connector_name = Symbol(var_name[1:prevind(var_name, sidx)])
     streamvar_name = Symbol(var_name[nextind(var_name, sidx):end])
     connector_name, streamvar_name
@@ -179,15 +177,15 @@ end
 function find_connection(connector_name, ogsys, names)
     cs = get_connections(ogsys)
     cs === nothing || for c in cs
-        @show renamespace(names, connector_name)
-        renamespace(names, connector_name) in c && return c
+        renamespace(names, connector_name) in c && return ogsys, c
     end
     innersys = ogsys
-    for n in names
+    for (i, n) in enumerate(names)
         innersys = getproperty(innersys, n)
         cs = get_connections(innersys)
         cs === nothing || for c in cs
-            connector_name in c && return c
+            nn = @view names[i+1:end]
+            renamespace(nn, connector_name) in c && return innersys, c
         end
     end
     error("$connector_name cannot be found in $(nameof(ogsys)) with levels $(names)")
@@ -218,68 +216,75 @@ function expand_instream(ogsys, sys::AbstractSystem=ogsys, names=[]; debug=false
 
     for ex in instream_exprs
         var = only(arguments(ex))
-        connector_name, streamvar_name = split_stream_var(var)
+        connector_name, streamvar_name = split_sys_var(var)
 
-        n_inners = 0
-        n_outers = 0
-        outer_names = Symbol[]
-        inner_names = Symbol[]
-        outer_sc = Symbol[]
-        inner_sc = Symbol[]
+        outer_sc = []
+        inner_sc = []
         # find the connect
-        connect = find_connection(connector_name, ogsys, names)
-        @show connect
-    end
-    return sys
-    #=
-
-    #splitting_idx
-
-    #n_inners + n_outers <= 0 && error("Model $(nameof(sys)) has no stream connectors, yet there are equations with `instream` functions: $(instream_eqs)")
-
-    # expand `instream`s
-    sub = Dict()
-    additional_eqs = Equation[]
-    seen = Set()
-    # https://specification.modelica.org/v3.4/Ch15.html
-    # Based on the above requirements, the following implementation is
-    # recommended:
-    if n_inners == 1 && n_outers == 0
-        for ex in instream_exprs
-            var = only(arguments(ex))
-            connector_name, streamvar_name = split_stream_var(var)
-            idx = findfirst(isequal(connector_name), inner_names)
-            idx === nothing || error("$stream_name is not in any stream connector of $(nameof(sys))")
-            sub[ex] = var #getproperty(inner_sc[idx], streamvar_name)
-        end
-    elseif n_inners == 2 && n_outers == 0
-        for ex in instream_exprs
-            var = only(arguments(ex))
-            connector_name, streamvar_name = split_stream_var(var)
-            idx = findfirst(isequal(connector_name), inner_names)
-            idx === nothing || error("$stream_name is not in any stream connector of $(nameof(sys))")
-            other = idx == 1 ? 2 : 1
-            sub[ex] = getproperty(inner_sc[other], streamvar_name)
-        end
-    elseif n_inners == 1 && n_outers == 1
-        for ex in instream_exprs
-            var = only(arguments(ex)) # m_1.c.h_outflow
-            connector_name, streamvar_name = split_stream_var(var)
-            idx = findfirst(isequal(connector_name), inner_names)
-            idx === nothing || error("$stream_name is not in any stream connector of $(nameof(sys))")
-            outerinstream = getproperty(only(outer_sc), streamvar_name) # c_1.h_outflow
-            sub[ex] = outerinstream
-            if var in seen
-                push!(additional_eqs, outerinstream ~ var)
-                push!(seen, var)
+        parentsys, connect = find_connection(connector_name, ogsys, names)
+        if nameof(parentsys) != nameof(sys)
+            # everything is a inner connector w.r.t. `sys`
+            for s in Iterators.flatten((connect.inners, connect.outers))
+                push!(inner_sc, s)
+            end
+        else
+            for s in Iterators.flatten((connect.inners, connect.outers))
+                if connector_name == split_var(nameof(s))[1]
+                    push!(inner_sc, s)
+                else
+                    push!(outer_sc, s)
+                end
             end
         end
-    elseif n_inners == 0 && n_outers == 2
-        push!(additional_eqs, outerinstream ~ var)
-    else
+
+        n_inners = length(outer_sc)
+        n_outers = length(inner_sc)
+        @show n_inners n_outers
+
+        # expand `instream`s
+        sub = Dict()
+        additional_eqs = Equation[]
+        seen = Set()
+        # https://specification.modelica.org/v3.4/Ch15.html
+        # Based on the above requirements, the following implementation is
+        # recommended:
+        if n_inners == 1 && n_outers == 0
+            for ex in instream_exprs
+                var = only(arguments(ex))
+                connector_name, streamvar_name = split_stream_var(var)
+                idx = findfirst(isequal(connector_name), inner_names)
+                idx === nothing || error("$stream_name is not in any stream connector of $(nameof(sys))")
+                sub[ex] = var #getproperty(inner_sc[idx], streamvar_name)
+            end
+        elseif n_inners == 2 && n_outers == 0
+            for ex in instream_exprs
+                var = only(arguments(ex))
+                connector_name, streamvar_name = split_stream_var(var)
+                idx = findfirst(isequal(connector_name), inner_names)
+                idx === nothing || error("$stream_name is not in any stream connector of $(nameof(sys))")
+                other = idx == 1 ? 2 : 1
+                sub[ex] = getproperty(inner_sc[other], streamvar_name)
+            end
+        elseif n_inners == 1 && n_outers == 1
+            for ex in instream_exprs
+                var = only(arguments(ex)) # m_1.c.h_outflow
+                connector_name, streamvar_name = split_stream_var(var)
+                idx = findfirst(isequal(connector_name), inner_names)
+                idx === nothing || error("$stream_name is not in any stream connector of $(nameof(sys))")
+                outerinstream = getproperty(only(outer_sc), streamvar_name) # c_1.h_outflow
+                sub[ex] = outerinstream
+                if var in seen
+                    push!(additional_eqs, outerinstream ~ var)
+                    push!(seen, var)
+                end
+            end
+        elseif n_inners == 0 && n_outers == 2
+            push!(additional_eqs, outerinstream ~ var)
+        else
+        end
     end
     instream_eqs = map(Base.Fix2(substitute, sub), instream_eqs)
-    =#
+    return sys
 end
 
 function expand_connections(sys::AbstractSystem; debug=false)
@@ -305,7 +310,7 @@ function collect_connections(sys::AbstractSystem; debug=false)
             s = string(nameof(sys))
             isconnector(sys) || error("$s is not a connector!")
             idx = findfirst(isequal('₊'), s)
-            parent_name = Symbol(idx === nothing ? s : s[1:idx])
+            parent_name = Symbol(idx === nothing ? s : s[1:prevind(s, idx)])
             parent_name in outer_connectors
         end
     end
