@@ -95,7 +95,9 @@ function connect(c::Connection; check=true)
     ceqs = Equation[]
     for s in first_sts
         name = getname(s)
-        isflow = getmetadata(s, VariableConnectType, Equality) === Flow
+        vtype = getmetadata(s, VariableConnectType, Equality)
+        vtype === Stream && continue
+        isflow = vtype === Flow
         rhs = 0 # only used for flow variables
         fix_val = getproperty(fs, name) # used for equality connections
         for (i, c) in enumerate(cnts)
@@ -374,7 +376,7 @@ end
 
 function expand_connections(sys::AbstractSystem; debug=false)
     sys = collect_connections(sys; debug=debug)
-    sys = expand_instream(sys; debug=debug)
+    #sys = expand_instream(sys; debug=debug)
     return sys
 end
 
