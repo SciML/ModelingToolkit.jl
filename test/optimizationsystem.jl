@@ -60,3 +60,11 @@ sol = solve(prob,Optim.Newton())
     sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
     @test_throws ArgumentError OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2])
 end
+
+# observed variable handling
+@variables OBS
+@named sys2 = OptimizationSystem(loss, [x,y], [a,b]; observed=[OBS ~ x+y])
+OBS2 = OBS
+@test isequal(OBS2, @nonamespace sys2.OBS)
+@unpack OBS = sys2
+@test isequal(OBS2,OBS)

@@ -156,3 +156,12 @@ end
     @test isequal(union(Set(states(sys1)), Set(states(sys2))), Set(states(sys3)))
     @test isequal(union(Set(equations(sys1)), Set(equations(sys2))), Set(equations(sys3)))
 end
+
+# observed variable handling
+@variables t x(t) RHS(t)
+@parameters τ   
+@named fol = NonlinearSystem([0  ~ (1 - x)/τ], [x], [τ]; observed=[RHS ~ (1 - x)/τ])
+@test isequal(RHS, @nonamespace fol.RHS)
+RHS2 = RHS
+@unpack RHS = fol
+@test isequal(RHS, RHS2)

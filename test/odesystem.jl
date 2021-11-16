@@ -504,3 +504,14 @@ prob = ODEProblem(outersys, [sys.x=>1.0; collect(sys.ms).=>1:3], (0, 1.0))
 @variables t x(t)
 @named sys = ODESystem([D(x) ~ x/x], t)
 @test equations(alias_elimination(sys)) == [D(x) ~ 1]
+
+# observed variable handling
+@variables t x(t) RHS(t)
+@parameters τ   
+D = Differential(t) 
+@named fol = ODESystem([D(x)  ~ (1 - x)/τ]; observed=[RHS ~ (1 - x)/τ])
+@test isequal(RHS, @nonamespace fol.RHS)
+RHS2 = RHS
+@unpack RHS = fol
+@test isequal(RHS, RHS2)
+
