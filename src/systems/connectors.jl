@@ -38,8 +38,8 @@ function connector_type(sys::AbstractSystem)
         vtype === Stream && (n_stream += 1)
         vtype === Flow   && (n_flow += 1)
     end
-    (n_stream > 1 && n_flow > 1) && error("There are multiple flow variables in $(nameof(sys))!")
-    n_stream > 1 ? StreamConnector() : RegularConnector()
+    (n_stream > 0 && n_flow > 1) && error("There are multiple flow variables in $(nameof(sys))!")
+    n_stream > 0 ? StreamConnector() : RegularConnector()
 end
 
 Base.@kwdef struct Connection
@@ -120,7 +120,8 @@ end
 instream(a) = term(instream, unwrap(a), type=symtype(a))
 
 isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) !== nothing
-isstreamconnector(s::AbstractSystem) = isconnector(s) && get_connector_type(s) === Stream
+isstreamconnector(s::AbstractSystem) = isconnector(s) && get_connector_type(s) isa StreamConnector
+isstreamconnection(c::Connection) = any(isstreamconnector, c.inners) || any(isstreamconnector, c.outers)
 
 print_with_indent(n, x) = println(" " ^ n, x)
 
@@ -176,6 +177,18 @@ function split_sys_var(var)
     connector_name, streamvar_name
 end
 
+function flowvar(sys::AbstractSystem)
+    sts = get_states(sys)
+    for s in sts
+        vtype = getmetadata(s, ModelingToolkit.VariableConnectType, nothing)
+        vtype === Flow && return s
+    end
+    error("There in no flow variable in $(nameof(sys))")
+end
+
+positivemax(m, ::Any; tol=nothing)= max(m, something(tol, 1e-8))
+
+#=
 function find_connection(connector_name, ogsys, names)
     cs = get_connections(ogsys)
     cs === nothing || for c in cs
@@ -192,17 +205,6 @@ function find_connection(connector_name, ogsys, names)
     end
     error("$connector_name cannot be found in $(nameof(ogsys)) with levels $(names)")
 end
-
-function flowvar(sys::AbstractSystem)
-    sts = get_states(sys)
-    for s in sts
-        vtype = getmetadata(s, ModelingToolkit.VariableConnectType, nothing)
-        vtype === Flow && return s
-    end
-    error("There in no flow variable in $(nameof(sys))")
-end
-
-positivemax(m, ::Any; tol=nothing)= max(m, something(tol, 1e-8))
 
 function expand_instream(ogsys, sys::AbstractSystem=ogsys, names=[]; debug=false, tol=nothing)
     subsys = get_systems(sys)
@@ -373,6 +375,7 @@ function expand_instream(ogsys, sys::AbstractSystem=ogsys, names=[]; debug=false
     @set! sys.eqs = [eqs; instream_eqs; additional_eqs]
     return sys
 end
+=#
 
 function expand_connections(sys::AbstractSystem; debug=false)
     sys = collect_connections(sys; debug=debug)
@@ -402,15 +405,27 @@ function collect_connections(sys::AbstractSystem; debug=false)
         end
     end
 
+    sys = flatten(sys)
     eqs′ = get_eqs(sys)
     eqs = Equation[]
+    instream_eqs = Equation[]
+    instream_exprs = []
     cts = [] # connections
     for eq in eqs′
-        eq.lhs isa Connection ? push!(cts, get_systems(eq.rhs)) : push!(eqs, eq) # split connections and equations
+        if eq.lhs isa Connection
+            push!(cts, get_systems(eq.rhs))
+        elseif collect_instream!(instream_exprs, eq)
+            push!(instream_eqs, eq)
+        else
+            push!(eqs, eq) # split connections and equations
+        end
     end
 
     # if there are no connections, we are done
-    isempty(cts) && return sys
+    if isempty(cts)
+        isempty(instream_eqs) || error("Illegal instream function in $(nameof(sys))")
+        return sys
+    end
 
     sys2idx = Dict{Symbol,Int}() # system (name) to n-th connect statement
     narg_connects = Connection[]
@@ -476,6 +491,154 @@ function collect_connections(sys::AbstractSystem; debug=false)
         println("=============END=================")
     end
 
-    @set! sys.eqs = eqs
+    # stream variables
+    stream_connects = filter(isstreamconnection, narg_connects)
+    @show length(stream_connects)
+    instream_eqs, additional_eqs = expand_instream(instream_eqs, instream_exprs, stream_connects; debug=debug)
+
+    @set! sys.eqs = [eqs; instream_eqs; additional_eqs]
     return sys
+end
+
+function expand_instream(instream_eqs, instream_exprs, connects; debug=false)
+    sub = Dict()
+    seen = Set()
+    for ex in instream_exprs
+        var = only(arguments(ex))
+        connector_name, streamvar_name = split_sys_var(var)
+
+        # find the connect
+        cidx = findfirst(c->connector_name in c, connects)
+        cidx === nothing && error("$var is not a variable inside stream connectors")
+        connect = connects[cidx]
+        connectors = Iterators.flatten((connect.inners, connect.outers))
+        # stream variable
+        sv = getproperty(first(connectors), streamvar_name; namespace=false)
+        inner_sc = connect.inners
+        outer_sc = connect.outers
+
+        n_outers = length(outer_sc)
+        n_inners = length(inner_sc)
+        outer_names = (nameof(s) for s in outer_sc)
+        inner_names = (nameof(s) for s in inner_sc)
+        if debug
+            println("Expanding: $ex")
+            isempty(inner_names) || println("Inner connectors: $(collect(inner_names))")
+            isempty(outer_names) || println("Outer connectors: $(collect(outer_names))")
+        end
+
+        # expand `instream`s
+        # https://specification.modelica.org/v3.4/Ch15.html
+        # Based on the above requirements, the following implementation is
+        # recommended:
+        if n_inners == 1 && n_outers == 0
+            connector_name === only(inner_names) || error("$var is not in any stream connector of $(nameof(ogsys))")
+            sub[ex] = var
+        elseif n_inners == 2 && n_outers == 0
+            @info connector_name collect(inner_names) length(inner_sc)
+            connector_name in inner_names || error("$var is not in any stream connector of $(nameof(ogsys))")
+            idx = findfirst(c->nameof(c) === connector_name, inner_sc)
+            other = idx == 1 ? 2 : 1
+            sub[ex] = states(inner_sc[other], sv)
+        elseif n_inners == 1 && n_outers == 1
+            isinner = connector_name === only(inner_names)
+            isouter = connector_name === only(outer_names)
+            (isinner || isouter) || error("$var is not in any stream connector of $(nameof(ogsys))")
+            if isinner
+                outerstream = states(only(outer_sc), sv) # c_1.h_outflow
+                sub[ex] = outerstream
+            end
+        else
+            fv = flowvar(first(connectors))
+            idx = findfirst(c->nameof(c) === connector_name, inner_sc)
+            if idx !== nothing
+                si = sum(s->max(states(s, fv), 0), outer_sc)
+                for j in 1:n_inners; j == i && continue
+                    f = states(inner_sc[j], fv)
+                    si += max(-f, 0)
+                end
+
+                num = 0
+                den = 0
+                for j in 1:n_inners; j == i && continue
+                    f = states(inner_sc[j], fv)
+                    tmp = positivemax(-f, si; tol=tol)
+                    den += tmp
+                    num += tmp * states(inner_sc[j], sv)
+                end
+                for k in 1:n_outers
+                    f = states(outer_sc[k], fv)
+                    tmp = positivemax(f, si; tol=tol)
+                    den += tmp
+                    num += tmp * instream(states(outer_sc[k], sv))
+                end
+                sub[ex] = num / den
+            end
+
+        end
+    end
+
+    # additional equations
+    additional_eqs = Equation[]
+    for c in connects
+        outer_sc = c.outers
+        isempty(outer_sc) && continue
+        inner_sc = c.inners
+        n_outers = length(outer_sc)
+        n_inners = length(inner_sc)
+        for sv in get_states(first(outer_sc))
+            vtype = getmetadata(sv, ModelingToolkit.VariableConnectType, nothing)
+            vtype === Stream || continue
+            if n_inners == 1 && n_outers == 1
+                innerstream = states(only(inner_sc), sv)
+                outerstream = states(only(outer_sc), sv)
+                push!(additional_eqs, outerstream ~ innerstream)
+            elseif n_inners == 0 && n_outers == 2
+                # we don't expand `instream` in this case.
+                v1 = states(outer_sc[1], sv)
+                v2 = states(outer_sc[2], sv)
+                push!(additional_eqs, v1 ~ instream(v2))
+                push!(additional_eqs, v2 ~ instream(v1))
+            else
+                for q in 1:n_outers
+                    sq += sum(s->max(-states(s, fv), 0), inner_sc)
+                    for k in 1:n_outers; k == q && continue
+                        f = states(outer_sc[j], fv)
+                        si += max(f, 0)
+                    end
+
+                    num = 0
+                    den = 0
+                    for j in 1:n_inners
+                        f = states(inner_sc[j], fv)
+                        tmp = positivemax(-f, sq; tol=tol)
+                        den += tmp
+                        num += tmp * states(inner_sc[j], sv)
+                    end
+                    for k in 1:n_outers; k == q && continue
+                        f = states(outer_sc[k], fv)
+                        tmp = positivemax(f, sq; tol=tol)
+                        den += tmp
+                        num += tmp * instream(states(outer_sc[k], sv))
+                    end
+                    push!(additional_eqs, states(outer_sc[q], sv) ~ num / den)
+                end
+            end
+        end
+    end
+
+    instream_eqs = map(Base.Fix2(substitute, sub), instream_eqs)
+    if debug
+        println("Expanded equations:")
+        for eq in instream_eqs
+            print_with_indent(4, eq)
+        end
+        if !isempty(additional_eqs)
+            println("Additional equations:")
+            for eq in additional_eqs
+                print_with_indent(4, eq)
+            end
+        end
+    end
+    return instream_eqs, additional_eqs
 end
