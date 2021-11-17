@@ -118,6 +118,7 @@ function connect(c::Connection; check=true)
 end
 
 instream(a) = term(instream, unwrap(a), type=symtype(a))
+SymbolicUtils.promote_symtype(::typeof(instream), _) = Real
 
 isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) !== nothing
 isstreamconnector(s::AbstractSystem) = isconnector(s) && get_connector_type(s) isa StreamConnector
@@ -383,7 +384,7 @@ function expand_connections(sys::AbstractSystem; debug=false)
     return sys
 end
 
-function collect_connections(sys::AbstractSystem; debug=false)
+function collect_connections(sys::AbstractSystem; debug=false, tol=1e-10)
     subsys = get_systems(sys)
     isempty(subsys) && return sys
 
@@ -494,13 +495,13 @@ function collect_connections(sys::AbstractSystem; debug=false)
     # stream variables
     stream_connects = filter(isstreamconnection, narg_connects)
     @show length(stream_connects)
-    instream_eqs, additional_eqs = expand_instream(instream_eqs, instream_exprs, stream_connects; debug=debug)
+    instream_eqs, additional_eqs = expand_instream(instream_eqs, instream_exprs, stream_connects; debug=debug, tol=tol)
 
     @set! sys.eqs = [eqs; instream_eqs; additional_eqs]
     return sys
 end
 
-function expand_instream(instream_eqs, instream_exprs, connects; debug=false)
+function expand_instream(instream_eqs, instream_exprs, connects; debug=false, tol)
     sub = Dict()
     seen = Set()
     for ex in instream_exprs
@@ -535,7 +536,6 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false)
             connector_name === only(inner_names) || error("$var is not in any stream connector of $(nameof(ogsys))")
             sub[ex] = var
         elseif n_inners == 2 && n_outers == 0
-            @info connector_name collect(inner_names) length(inner_sc)
             connector_name in inner_names || error("$var is not in any stream connector of $(nameof(ogsys))")
             idx = findfirst(c->nameof(c) === connector_name, inner_sc)
             other = idx == 1 ? 2 : 1
@@ -550,9 +550,9 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false)
             end
         else
             fv = flowvar(first(connectors))
-            idx = findfirst(c->nameof(c) === connector_name, inner_sc)
-            if idx !== nothing
-                si = sum(s->max(states(s, fv), 0), outer_sc)
+            i = findfirst(c->nameof(c) === connector_name, inner_sc)
+            if i !== nothing
+                si = isempty(outer_sc) ? 0 : sum(s->max(states(s, fv), 0), outer_sc)
                 for j in 1:n_inners; j == i && continue
                     f = states(inner_sc[j], fv)
                     si += max(-f, 0)
@@ -586,7 +586,9 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false)
         inner_sc = c.inners
         n_outers = length(outer_sc)
         n_inners = length(inner_sc)
-        for sv in get_states(first(outer_sc))
+        connector_representative = first(outer_sc)
+        fv = flowvar(connector_representative)
+        for sv in get_states(connector_representative)
             vtype = getmetadata(sv, ModelingToolkit.VariableConnectType, nothing)
             vtype === Stream || continue
             if n_inners == 1 && n_outers == 1
@@ -600,11 +602,12 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false)
                 push!(additional_eqs, v1 ~ instream(v2))
                 push!(additional_eqs, v2 ~ instream(v1))
             else
+                sq = 0
                 for q in 1:n_outers
                     sq += sum(s->max(-states(s, fv), 0), inner_sc)
                     for k in 1:n_outers; k == q && continue
-                        f = states(outer_sc[j], fv)
-                        si += max(f, 0)
+                        f = states(outer_sc[k], fv)
+                        sq += max(f, 0)
                     end
 
                     num = 0
@@ -629,6 +632,7 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false)
 
     instream_eqs = map(Base.Fix2(substitute, sub), instream_eqs)
     if debug
+        println("===========BEGIN=============")
         println("Expanded equations:")
         for eq in instream_eqs
             print_with_indent(4, eq)
@@ -639,6 +643,7 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false)
                 print_with_indent(4, eq)
             end
         end
+        println("============END==============")
     end
     return instream_eqs, additional_eqs
 end
