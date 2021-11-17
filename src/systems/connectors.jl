@@ -126,49 +126,6 @@ isstreamconnection(c::Connection) = any(isstreamconnector, c.inners) || any(isst
 
 print_with_indent(n, x) = println(" " ^ n, x)
 
-function get_stream_connectors!(sc, sys::AbstractSystem)
-    subsys = get_systems(sys)
-    isempty(subsys) && return nothing
-    for s in subsys; isstreamconnector(s) || continue
-        push!(sc, renamespace(sys, s))
-    end
-    for s in subsys
-        get_stream_connectors!(sc, renamespace(sys, s))
-    end
-    nothing
-end
-
-collect_instream!(set, eq::Equation) = collect_instream!(set, eq.lhs) | collect_instream!(set, eq.rhs)
-
-function collect_instream!(set, expr, occurs=false)
-    istree(expr) || return occurs
-    op = operation(expr)
-    op === instream && (push!(set, expr); occurs = true)
-    for a in SymbolicUtils.unsorted_arguments(expr)
-        occurs |= collect_instream!(set, a, occurs)
-    end
-    return occurs
-end
-
-function split_var(var)
-    name = string(nameof(var))
-    map(Symbol, split(name, '₊'))
-end
-
-# inclusive means the first level of `var` is `sys`
-function get_sys_var(sys::AbstractSystem, var; inclusive=true)
-    lvs = split_var(var)
-    if inclusive
-        sysn, lvs = Iterator.peel(lvs)
-        sysn === nameof(sys) || error("$(nameof(sys)) doesn't have $var!")
-    end
-    newsys = getproperty(sys, first(lvs))
-    for i in 2:length(lvs)-1
-        newsys = getproperty(newsys, lvs[i])
-    end
-    newsys, lvs[end]
-end
-
 function split_sys_var(var)
     var_name = string(getname(var))
     sidx = findlast(isequal('₊'), var_name)
@@ -187,209 +144,26 @@ function flowvar(sys::AbstractSystem)
     error("There in no flow variable in $(nameof(sys))")
 end
 
+collect_instream!(set, eq::Equation) = collect_instream!(set, eq.lhs) | collect_instream!(set, eq.rhs)
+
+function collect_instream!(set, expr, occurs=false)
+    istree(expr) || return occurs
+    op = operation(expr)
+    op === instream && (push!(set, expr); occurs = true)
+    for a in SymbolicUtils.unsorted_arguments(expr)
+        occurs |= collect_instream!(set, a, occurs)
+    end
+    return occurs
+end
+
 positivemax(m, ::Any; tol=nothing)= max(m, something(tol, 1e-8))
 
-#=
-function find_connection(connector_name, ogsys, names)
-    cs = get_connections(ogsys)
-    cs === nothing || for c in cs
-        renamespace(names, connector_name) in c && return names, c
-    end
-    innersys = ogsys
-    for (i, n) in enumerate(names)
-        innersys = getproperty(innersys, n)
-        cs = get_connections(innersys)
-        cs === nothing || for c in cs
-            nn = @view names[i+1:end]
-            renamespace(nn, connector_name) in c && return nn, c
-        end
-    end
-    error("$connector_name cannot be found in $(nameof(ogsys)) with levels $(names)")
-end
-
-function expand_instream(ogsys, sys::AbstractSystem=ogsys, names=[]; debug=false, tol=nothing)
+function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10)
     subsys = get_systems(sys)
     isempty(subsys) && return sys
 
     # post order traversal
-    @set! sys.systems = map(subsys) do s
-        n = nameof(s)
-        expand_instream(ogsys, s, [names; n], debug=debug)
-    end
-
-    sys = flatten(sys)
-    eqs′ = get_eqs(sys)
-    eqs = Equation[]
-    instream_eqs = Equation[]
-    instream_exprs = Set()
-    for eq in eqs′
-        if collect_instream!(instream_exprs, eq)
-            push!(instream_eqs, eq)
-        else
-            push!(eqs, eq) # split instreams and equations
-        end
-    end
-    #@show nameof(sys), names, instream_exprs
-    isempty(instream_eqs) && return sys
-
-    sub = Dict()
-    seen = Set()
-    #additional_eqs = Equation[]
-    for ex in instream_exprs
-        var = only(arguments(ex))
-        connector_name, streamvar_name = split_sys_var(var)
-
-        # find the connect
-        connect_namespaces, connect = find_connection(connector_name, ogsys, names)
-        connectors = Iterators.flatten((connect.inners, connect.outers))
-        # stream variable
-        sv = getproperty(first(connectors), streamvar_name; namespace=false)
-        if connect_namespaces !== names
-            inner_sc = []
-            for s in connectors
-                push!(inner_sc, s)
-            end
-            outer_sc = []
-        else
-            inner_sc = connect.inners
-            outer_sc = connect.outers
-        end
-
-        n_outers = length(outer_sc)
-        n_inners = length(inner_sc)
-        outer_names = (nameof(s) for s in outer_sc)
-        inner_names = (nameof(s) for s in inner_sc)
-        if debug
-            @show connect_namespaces
-            println("Expanding: $ex")
-            isempty(inner_names) || println("Inner connectors: $(collect(inner_names))")
-            isempty(outer_names) || println("Outer connectors: $(collect(outer_names))")
-        end
-
-        cn = renamespace(connect_namespaces, connector_name)
-        # expand `instream`s
-        # https://specification.modelica.org/v3.4/Ch15.html
-        # Based on the above requirements, the following implementation is
-        # recommended:
-        if n_inners == 1 && n_outers == 0
-            cn === only(inner_names) || error("$var is not in any stream connector of $(nameof(ogsys))")
-            sub[ex] = var
-        elseif n_inners == 2 && n_outers == 0
-            @info names cn collect(inner_names) length(inner_sc)
-            cn in inner_names || error("$var is not in any stream connector of $(nameof(ogsys))")
-            idx = findfirst(c->nameof(c) === cn, inner_sc)
-            other = idx == 1 ? 2 : 1
-            sub[ex] = states(inner_sc[other], sv)
-        elseif n_inners == 1 && n_outers == 1
-            isinner = cn === only(inner_names)
-            isouter = cn === only(outer_names)
-            (isinner || isouter) || error("$var is not in any stream connector of $(nameof(ogsys))")
-            if isinner
-                outerinstream = states(only(outer_sc), sv) # c_1.h_outflow
-                sub[ex] = outerinstream
-            end
-            if var in seen
-                #push!(additional_eqs, outerinstream ~ var)
-                push!(seen, var)
-            end
-        elseif n_inners == 0 && n_outers == 2
-            # we don't expand `instream` in this case.
-            #=
-            if var in seen
-                v1 = states(outer_sc[1], sv)
-                v2 = states(outer_sc[2], sv)
-                push!(additional_eqs, v1 ~ instream(v2))
-                push!(additional_eqs, v2 ~ instream(v1))
-                push!(seen, var)
-            end
-            =#
-        else
-            fv = flowvar(first(connectors))
-            idx = findfirst(c->nameof(c) === cn, inner_sc)
-            if idx !== nothing
-                si = sum(s->max(states(s, fv), 0), outer_sc)
-                for j in 1:n_inners; j == i && continue
-                    f = states(inner_sc[j], fv)
-                    si += max(-f, 0)
-                end
-
-                num = 0
-                den = 0
-                for j in 1:n_inners; j == i && continue
-                    f = states(inner_sc[j], fv)
-                    tmp = positivemax(-f, si; tol=tol)
-                    den += tmp
-                    num += tmp * states(inner_sc[j], sv)
-                end
-                for k in 1:n_outers
-                    f = states(outer_sc[k], fv)
-                    tmp = positivemax(f, si; tol=tol)
-                    den += tmp
-                    num += tmp * instream(states(outer_sc[k], sv))
-                end
-                sub[ex] = num / den
-            end
-
-            #=
-            if var in seen
-                for q in 1:n_outers
-                    sq += sum(s->max(-states(s, fv), 0), inner_sc)
-                    for k in 1:n_outers; k == q && continue
-                        f = states(outer_sc[j], fv)
-                        si += max(f, 0)
-                    end
-
-                    num = 0
-                    den = 0
-                    for j in 1:n_inners
-                        f = states(inner_sc[j], fv)
-                        tmp = positivemax(-f, sq; tol=tol)
-                        den += tmp
-                        num += tmp * states(inner_sc[j], sv)
-                    end
-                    for k in 1:n_outers; k == q && continue
-                        f = states(outer_sc[k], fv)
-                        tmp = positivemax(f, sq; tol=tol)
-                        den += tmp
-                        num += tmp * instream(states(outer_sc[k], sv))
-                    end
-                    push!(additional_eqs, states(outer_sc[q], sv) ~ num / den)
-                end
-                push!(seen, var)
-            end
-            =#
-        end
-    end
-    instream_eqs = map(Base.Fix2(substitute, sub), instream_eqs)
-    if debug
-        println("Expanded equations:")
-        for eq in instream_eqs
-            print_with_indent(4, eq)
-        end
-        if !isempty(additional_eqs)
-            println("Additional equations:")
-            for eq in additional_eqs
-                print_with_indent(4, eq)
-            end
-        end
-    end
-    @set! sys.eqs = [eqs; instream_eqs; additional_eqs]
-    return sys
-end
-=#
-
-function expand_connections(sys::AbstractSystem; debug=false)
-    sys = collect_connections(sys; debug=debug)
-    #sys = expand_instream(sys; debug=debug)
-    return sys
-end
-
-function collect_connections(sys::AbstractSystem; debug=false, tol=1e-10)
-    subsys = get_systems(sys)
-    isempty(subsys) && return sys
-
-    # post order traversal
-    @set! sys.systems = map(s->collect_connections(s, debug=debug), subsys)
+    @set! sys.systems = map(s->expand_connections(s, debug=debug), subsys)
 
     outer_connectors = Symbol[]
     for s in subsys
@@ -494,7 +268,6 @@ function collect_connections(sys::AbstractSystem; debug=false, tol=1e-10)
 
     # stream variables
     stream_connects = filter(isstreamconnection, narg_connects)
-    @show length(stream_connects)
     instream_eqs, additional_eqs = expand_instream(instream_eqs, instream_exprs, stream_connects; debug=debug, tol=tol)
 
     @set! sys.eqs = [eqs; instream_eqs; additional_eqs]
