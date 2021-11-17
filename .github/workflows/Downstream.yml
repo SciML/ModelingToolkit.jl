@@ -24,6 +24,7 @@ jobs:
           - {user: SciML, repo: NeuralPDE.jl, group: NNPDE}
           - {user: SciML, repo: DataDrivenDiffEq.jl, group: Standard}
           - {user: SciML, repo: StructuralIdentifiability.jl, group: All}
+          - {user: SciML, repo: ModelingToolkitStandardLibrary.jl}
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v1
