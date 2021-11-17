@@ -179,7 +179,10 @@ struct AliasGraphKeySet <: AbstractSet{Int}
 end
 Base.keys(ag::AliasGraph) = AliasGraphKeySet(ag)
 Base.iterate(agk::AliasGraphKeySet, state...) = Base.iterate(agk.ag.eliminated, state...)
-Base.in(i::Int, agk::AliasGraphKeySet) = agk.ag.aliasto[i] !== nothing
+function Base.in(i::Int, agk::AliasGraphKeySet)
+    aliasto = agk.ag.aliasto
+    1 <= i <= length(aliasto) && aliasto[i] !== nothing
+end
 
 count_nonzeros(a::AbstractArray) = count(!iszero, a)
 
