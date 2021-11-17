@@ -197,10 +197,7 @@ function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10)
     end
 
     # if there are no connections, we are done
-    if isempty(cts)
-        isempty(instream_eqs) || error("Illegal instream function in $(nameof(sys))")
-        return sys
-    end
+    isempty(cts) && return sys
 
     sys2idx = Dict{Symbol,Int}() # system (name) to n-th connect statement
     narg_connects = Connection[]
