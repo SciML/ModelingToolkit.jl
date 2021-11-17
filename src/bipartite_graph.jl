@@ -71,7 +71,7 @@ badjlist = [[1,2,5,6],[3,4,6]]
 bg = BipartiteGraph(7, fadjlist, badjlist)
 ```
 """
-mutable struct BipartiteGraph{I<:Integer, M} <: LightGraphs.AbstractGraph{I}
+mutable struct BipartiteGraph{I<:Integer, M} <: Graphs.AbstractGraph{I}
     ne::Int
     fadjlist::Vector{Vector{I}} # `fadjlist[src] => dsts`
     badjlist::Union{Vector{Vector{I}},I} # `badjlist[dst] => srcs` or `ndsts`
