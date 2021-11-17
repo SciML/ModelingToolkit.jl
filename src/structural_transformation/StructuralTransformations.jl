@@ -22,6 +22,7 @@ using ModelingToolkit: ODESystem, AbstractSystem,var_from_nested_derivative, Dif
                        IncrementalCycleTracker, add_edge_checked!, topological_sort
 
 using ModelingToolkit.BipartiteGraphs
+import .BipartiteGraphs: invview
 using Graphs
 using ModelingToolkit.SystemStructures
 

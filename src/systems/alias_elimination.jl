@@ -9,7 +9,7 @@ function alias_elimination(sys)
     mm = linear_subsys_adjmat(sys)
     size(mm, 1) == 0 && return sys # No linear subsystems
 
-    ag, mm = alias_eliminate_graph!(s.graph, s.varassoc, mm)
+    ag, mm = alias_eliminate_graph!(s.graph, complete(s.var_to_diff), mm)
 
     @unpack fullvars, graph = s
 
@@ -192,8 +192,8 @@ count_nonzeros(a::AbstractArray) = count(!iszero, a)
 # Here we have a guarantee that they won't, so we can make this identification
 count_nonzeros(a::SparseVector) = nnz(a)
 
-function alias_eliminate_graph!(graph, varassoc, mm_orig::SparseMatrixCLIL)
-    invvarassoc = inverse_mapping(varassoc)
+function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
+    diff_to_var = invview(var_to_diff)
 
     mm = copy(mm_orig)
     is_linear_equations = falses(size(AsSubMatrix(mm_orig), 1))
@@ -201,7 +201,7 @@ function alias_eliminate_graph!(graph, varassoc, mm_orig::SparseMatrixCLIL)
         is_linear_equations[e] = true
     end
 
-    is_not_potential_state = iszero.(varassoc)
+    is_not_potential_state = isnothing.(var_to_diff)
     is_linear_variables = copy(is_not_potential_state)
     for i in 𝑠vertices(graph); is_linear_equations[i] && continue
         for j in 𝑠neighbors(graph, i)
@@ -258,7 +258,7 @@ function alias_eliminate_graph!(graph, varassoc, mm_orig::SparseMatrixCLIL)
     end
 
     # kind of like the backward substitution
-    lss!(ei::Integer) = locally_structure_simplify!((@view mm[ei, :]), pivots[ei], ag, invvarassoc[pivots[ei]] == 0)
+    lss!(ei::Integer) = locally_structure_simplify!((@view mm[ei, :]), pivots[ei], ag, diff_to_var[pivots[ei]] == 0)
 
     # Step 2.1: Go backwards, collecting eliminated variables and substituting
     #         alias as we go.
@@ -360,15 +360,6 @@ function getcoeff(vars, coeffs, var)
         v == var && return coeffs[vj]
     end
     return 0
-end
-
-function inverse_mapping(assoc)
-    invassoc = zeros(Int, length(assoc))
-    for (i, v) in enumerate(assoc)
-        v <= 0 && continue
-        invassoc[v] = i
-    end
-    return invassoc
 end
 
 """

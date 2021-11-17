@@ -12,10 +12,10 @@ for a usage example.
 """
 abstract type IncrementalCycleTracker{I} <: AbstractGraph{I} end
 
-function (::Type{IncrementalCycleTracker})(s::AbstractGraph{I}; in_out_reverse=nothing) where {I}
+function (::Type{IncrementalCycleTracker})(s::AbstractGraph{I}; dir=:out) where {I}
     # TODO: Once we have more algorithms, the poly-algorithm decision goes here.
     # For now, we only have Algorithm N.
-    return DenseGraphICT_BFGT_N{something(in_out_reverse, false)}(s)
+    return DenseGraphICT_BFGT_N{something(dir == :in, false)}(s)
 end
 
 # Cycle Detection Interface
@@ -116,7 +116,7 @@ function Base.setindex!(vec::TransactionalVector, val, idx)
     return nothing
 end
 Base.getindex(vec::TransactionalVector, idx) = vec.v[idx]
-Base.size(vec) = size(vec.v)
+Base.size(vec::TransactionalVector) = size(vec.v)
 
 # Specific Algorithms
 

@@ -7,13 +7,13 @@ instead, which calls this function internally.
 function tear_graph(sys)
     find_solvables!(sys)
     s = structure(sys)
-    @unpack graph, solvable_graph, assign, inv_assign, scc = s
+    @unpack graph, solvable_graph, var_eq_matching, scc = s
 
     @set! sys.structure.partitions = map(scc) do c
         ieqs = filter(eq->isalgeq(s, eq), c)
-        vars = inv_assign[ieqs]
+        vars = Int[var for var in invview(var_eq_matching)[ieqs] if var !== unassigned]
 
-        ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph); in_out_reverse=true)
+        ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph); dir=:in)
         SystemPartition(tearEquations!(ict, solvable_graph.fadjlist, ieqs, vars)...)
     end
     return sys
@@ -26,7 +26,7 @@ end
 
 function tearing_reassemble(sys; simplify=false)
     s = structure(sys)
-    @unpack fullvars, partitions, assign, inv_assign, graph, scc = s
+    @unpack fullvars, partitions, var_eq_matching, graph, scc = s
     eqs = equations(sys)
 
     ### extract partition information
@@ -152,7 +152,7 @@ function tearing_reassemble(sys; simplify=false)
                 if abs(rhs) > 100eps(float(rhs))
                     @warn "The equation $eq is not consistent. It simplifed to 0 == $rhs."
                 end
-                neweqs[ridx] = 0 ~ fullvars[inv_assign[ieq]]
+                neweqs[ridx] = 0 ~ fullvars[invview(var_eq_matching)[ieq]]
             end
         end
     end
@@ -205,14 +205,10 @@ function algebraic_equations_scc(sys)
 
     # skip over differential equations
     algvars = isalgvar.(Ref(s), 1:ndsts(s.graph))
-    eqs = equations(sys)
-    assign = matching(s, algvars, s.algeqs)
+    var_eq_matching = complete(matching(s, algvars, s.algeqs))
+    components = find_scc(s.graph, var_eq_matching)
 
-    components = find_scc(s.graph, assign)
-    inv_assign = inverse_mapping(assign)
-
-    @set! sys.structure.assign = assign
-    @set! sys.structure.inv_assign = inv_assign
+    @set! sys.structure.var_eq_matching = var_eq_matching
     @set! sys.structure.scc = components
     return sys
 end
