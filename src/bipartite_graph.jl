@@ -71,10 +71,10 @@ badjlist = [[1,2,5,6],[3,4,6]]
 bg = BipartiteGraph(7, fadjlist, badjlist)
 ```
 """
-mutable struct BipartiteGraph{I<:Integer,F<:Vector{Vector{I}},B<:Union{Vector{Vector{I}},I},M} <: Graphs.AbstractGraph{I}
+mutable struct BipartiteGraph{I<:Integer, M} <: Graphs.AbstractGraph{I}
     ne::Int
-    fadjlist::F # `fadjlist[src] => dsts`
-    badjlist::B # `badjlist[dst] => srcs` or `ndsts`
+    fadjlist::Vector{Vector{I}} # `fadjlist[src] => dsts`
+    badjlist::Union{Vector{Vector{I}},I} # `badjlist[dst] => srcs` or `ndsts`
     metadata::M
 end
 BipartiteGraph(ne::Integer, fadj::AbstractVector, badj::Union{AbstractVector,Integer}=maximum(maximum, fadj); metadata=nothing) = BipartiteGraph(ne, fadj, badj, metadata)
