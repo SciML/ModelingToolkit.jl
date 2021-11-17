@@ -35,6 +35,7 @@ function tearEquations!(ict::IncrementalCycleTracker, Gsolvable, es::Vector{Int}
             if G.matching[vj] === unassigned && (vj in vActive)
                 r = add_edge_checked!(ict, Iterators.filter(!=(vj), 𝑠neighbors(G.graph, eq)), vj) do G
                     G.matching[vj] = eq
+                    G.ne += length(𝑠neighbors(G.graph, eq)) - 1
                 end
                 r && break
             end

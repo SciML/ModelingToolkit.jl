@@ -27,9 +27,7 @@ sss = structure(sys)
 @test nv(solvable_graph) == 9 + 5
 @test varassoc == [0, 0, 0, 0, 1, 2, 3, 4, 0]
 
-se = collect(StructuralTransformations.𝑠edges(graph))
+se = collect(StructuralTransformations.edges(graph))
 @test se == mapreduce(vcat, enumerate(graph.fadjlist)) do (s, d)
     StructuralTransformations.BipartiteEdge.(s, d)
 end
-@test_throws ArgumentError collect(StructuralTransformations.𝑑edges(graph))
-@test_throws ArgumentError collect(StructuralTransformations.edges(graph))
