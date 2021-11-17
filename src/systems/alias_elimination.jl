@@ -127,6 +127,8 @@ struct AliasGraph <: AbstractDict{Int, Pair{Int, Int}}
     end
 end
 
+Base.length(ag::AliasGraph) = length(ag.eliminated)
+
 function Base.getindex(ag::AliasGraph, i::Integer)
     r = ag.aliasto[i]
     r === nothing && throw(KeyError(i))
@@ -281,7 +283,7 @@ function alias_eliminate_graph!(graph, varassoc, mm_orig::SparseMatrixCLIL)
 
     # Step 3: Reflect our update decitions back into the graph
     for (ei, e) in enumerate(mm.nzrows)
-        graph.fadjlist[e] = mm.row_cols[ei]
+        set_neighbors!(graph, e, mm.row_cols[ei])
     end
 
     return ag, mm
