@@ -241,7 +241,7 @@ function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10)
         len = length(outers) + length(inners)
         allconnectors = Iterators.flatten((outers, inners))
         dups = find_duplicates(nameof(c) for c in allconnectors)
-        length(dups) == 0 || error("$(Connection(syss)) has duplicated connections: $(dups).")
+        length(dups) == 0 || error("$(Connection(sys)) has duplicated connections: $(dups).")
     end
 
     if debug
