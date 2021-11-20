@@ -566,7 +566,24 @@ function round_trip_expr(t, var2name)
     args = map(Base.Fix2(round_trip_expr, var2name), arguments(t))
     return :($f($(args...)))
 end
-round_trip_eq(eq, var2name) = Expr(:call, :~, round_trip_expr(eq.lhs, var2name), round_trip_expr(eq.rhs, var2name))
+
+function round_trip_eq(eq::Equation, var2name)
+    if eq.lhs isa Connection
+        syss = get_systems(eq.rhs)
+        call = Expr(:call, connect)
+        for sys in syss
+            strs = split(string(nameof(sys)), "₊")
+            s = Symbol(strs[1])
+            for st in strs[2:end]
+                s = Expr(:., s, Meta.quot(Symbol(st)))
+            end
+            push!(call.args, s)
+        end
+        call
+    else
+        Expr(:call, (~), round_trip_expr(eq.lhs, var2name), round_trip_expr(eq.rhs, var2name))
+    end
+end
 
 function push_eqs!(stmt, eqs, var2name)
     eqs_name = gensym(:eqs)

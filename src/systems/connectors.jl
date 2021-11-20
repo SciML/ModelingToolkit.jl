@@ -56,7 +56,9 @@ end
 
 const EMPTY_VEC = []
 
-function Base.show(io::IO, c::Connection)
+function Base.show(io::IO, ::MIME"text/plain", c::Connection)
+    # It is a bit unfortunate that the display of an array of `Equation`s won't
+    # call this.
     @unpack outers, inners = c
     if outers === nothing && inners === nothing
         print(io, "<Connection>")
@@ -124,7 +126,11 @@ isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) 
 isstreamconnector(s::AbstractSystem) = isconnector(s) && get_connector_type(s) isa StreamConnector
 isstreamconnection(c::Connection) = any(isstreamconnector, c.inners) || any(isstreamconnector, c.outers)
 
-print_with_indent(n, x) = println(" " ^ n, x)
+function print_with_indent(n, x)
+    print(" " ^ n)
+    show(stdout, MIME"text/plain"(), x)
+    println()
+end
 
 function split_sys_var(var)
     var_name = string(getname(var))
