@@ -31,9 +31,12 @@ Matching(m::Matching) = m
 Base.size(m::Matching) = Base.size(m.match)
 Base.getindex(m::Matching, i::Integer) = m.match[i]
 Base.iterate(m::Matching, state...) = iterate(m.match, state...)
-function Base.setindex!(m::Matching, v::Integer, i::Integer)
+Base.copy(m::Matching) = Matching(copy(m.match), m.inv_match === nothing ? nothing : copy(m.inv_match))
+function Base.setindex!(m::Matching, v::Union{Integer, Unassigned}, i::Integer)
     if m.inv_match !== nothing
-        m.inv_match[v] = i
+        oldv = m.match[i]
+        oldv !== unassigned && (m.inv_match[oldv] = unassigned)
+        v !== unassigned && (m.inv_match[v] = i)
     end
     return m.match[i] = v
 end
@@ -55,8 +58,11 @@ function complete(m::Matching)
     return Matching(collect(m.match), inv_match)
 end
 
-function invview(m::Matching)
+@noinline require_complete(m::Matching) =
     m.inv_match === nothing && throw(ArgumentError("Backwards matching not defined. `complete` the matching first."))
+
+function invview(m::Matching)
+    require_complete(m)
     return Matching(m.inv_match, m.match)
 end
 
@@ -122,6 +128,23 @@ mutable struct BipartiteGraph{I<:Integer, M} <: Graphs.AbstractGraph{I}
 end
 BipartiteGraph(ne::Integer, fadj::AbstractVector, badj::Union{AbstractVector,Integer}=maximum(maximum, fadj); metadata=nothing) = BipartiteGraph(ne, fadj, badj, metadata)
 
+@noinline require_complete(g::BipartiteGraph) = g.badjlist isa AbstractVector || throw(ArgumentError("The graph has no back edges. Use `complete`."))
+
+function invview(g::BipartiteGraph)
+    BipartiteGraph(g.ne, g.badjlist, g.fadjlist)
+end
+
+function complete(g::BipartiteGraph{I}) where {I}
+    isa(g.badjlist, AbstractVector) && return g
+    badjlist = Vector{I}[Vector{I}() for _ in 1:g.badjlist]
+    for (s, l) in enumerate(g.fadjlist)
+        for d in l
+            push!(badjlist[d], s)
+        end
+    end
+    BipartiteGraph(g.ne, g.fadjlist, badjlist)
+end
+
 """
 ```julia
 Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T<:Integer}
@@ -147,6 +170,7 @@ function BipartiteGraph(nsrcs::T, ndsts::T, backedge::Val{B}=Val(true); metadata
     BipartiteGraph(0, fadjlist, badjlist, metadata)
 end
 
+Base.copy(bg::BipartiteGraph) = BipartiteGraph(bg.ne, copy(bg.fadjlist), copy(bg.badjlist), deepcopy(bg.metadata))
 Base.eltype(::Type{<:BipartiteGraph{I}}) where I = I
 function Base.empty!(g::BipartiteGraph)
     foreach(empty!, g.fadjlist)
@@ -159,8 +183,6 @@ function Base.empty!(g::BipartiteGraph)
 end
 Base.length(::BipartiteGraph) = error("length is not well defined! Use `ne` or `nv`.")
 
-@noinline throw_no_back_edges() = throw(ArgumentError("The graph has no back edges."))
-
 if isdefined(Graphs, :has_contiguous_vertices)
     Graphs.has_contiguous_vertices(::Type{<:BipartiteGraph}) = false
 end
@@ -172,7 +194,7 @@ has_𝑠vertex(g::BipartiteGraph, v::Integer) = v in 𝑠vertices(g)
 has_𝑑vertex(g::BipartiteGraph, v::Integer) = v in 𝑑vertices(g)
 𝑠neighbors(g::BipartiteGraph, i::Integer, with_metadata::Val{M}=Val(false)) where M = M ? zip(g.fadjlist[i], g.metadata[i]) : g.fadjlist[i]
 function 𝑑neighbors(g::BipartiteGraph, j::Integer, with_metadata::Val{M}=Val(false)) where M
-    g.badjlist isa AbstractVector || throw_no_back_edges()
+    require_complete(g)
     M ? zip(g.badjlist[j], (g.metadata[i][j] for i in g.badjlist[j])) : g.badjlist[j]
 end
 Graphs.ne(g::BipartiteGraph) = g.ne
@@ -348,6 +370,9 @@ function DiCMOBiGraph{Transposed}(g::BipartiteGraph, m::M) where {Transposed, M}
     DiCMOBiGraph{Transposed}(g, missing, m)
 end
 
+invview(g::DiCMOBiGraph{Transposed}) where {Transposed} =
+    DiCMOBiGraph{!Transposed}(invview(g.graph), g.ne, invview(g.matching))
+
 Graphs.is_directed(::Type{<:DiCMOBiGraph}) = true
 Graphs.nv(g::DiCMOBiGraph{Transposed}) where {Transposed} = Transposed ? ndsts(g.graph) : nsrcs(g.graph)
 Graphs.vertices(g::DiCMOBiGraph{Transposed}) where {Transposed} = Transposed ? 𝑑vertices(g.graph) : 𝑠vertices(g.graph)
@@ -360,6 +385,8 @@ struct CMONeighbors{Transposed, V}
 end
 
 Graphs.outneighbors(g::DiCMOBiGraph{false}, v) = CMONeighbors{false}(g, v)
+Graphs.inneighbors(g::DiCMOBiGraph{false}, v) = CMONeighbors{true}(invview(g), v)
+Graphs.all_neighbors(g::DiCMOBiGraph{true}, v::Integer) = 𝑠neighbors(g.graph, v)
 Base.iterate(c::CMONeighbors{false}) = iterate(c, (c.g.graph.fadjlist[c.v],))
 function Base.iterate(c::CMONeighbors{false}, (l, state...))
     while true
@@ -376,6 +403,7 @@ function Base.iterate(c::CMONeighbors{false}, (l, state...))
         return vsrc, (l, r[2])
     end
 end
+Base.length(c::CMONeighbors{false}) = count(_->true, c)
 
 lift(f, x) = (x === unassigned || isnothing(x)) ? nothing : f(x)
 
@@ -383,6 +411,8 @@ _vsrc(c::CMONeighbors{true}) = c.g.matching[c.v]
 _neighbors(c::CMONeighbors{true}) = lift(vsrc->c.g.graph.fadjlist[vsrc], _vsrc(c))
 Base.length(c::CMONeighbors{true}) = something(lift(length, _neighbors(c)), 1) - 1
 Graphs.inneighbors(g::DiCMOBiGraph{true}, v) = CMONeighbors{true}(g, v)
+Graphs.outneighbors(g::DiCMOBiGraph{true}, v) = CMONeighbors{false}(invview(g), v)
+Graphs.all_neighbors(g::DiCMOBiGraph{true}, v::Integer) = 𝑑neighbors(g.graph, v)
 Base.iterate(c::CMONeighbors{true}) = lift(ns->iterate(c, (ns,)), _neighbors(c))
 function Base.iterate(c::CMONeighbors{true}, (l, state...))
     while true
@@ -396,16 +426,15 @@ function Base.iterate(c::CMONeighbors{true}, (l, state...))
     end
 end
 
+
 _edges(g::DiCMOBiGraph{Transposed}) where Transposed = Transposed ?
     ((w=>v for w in inneighbors(g, v)) for v in vertices(g)) :
     ((v=>w for w in outneighbors(g, v)) for v in vertices(g))
-_count(c::CMONeighbors{true}) = length(c)
-_count(c::CMONeighbors{false}) = count(_->true, c)
 
 Graphs.edges(g::DiCMOBiGraph) = (Graphs.SimpleEdge(p) for p in Iterators.flatten(_edges(g)))
 function Graphs.ne(g::DiCMOBiGraph)
     if g.ne === missing
-        g.ne = mapreduce(x->_count(x.iter), +, _edges(g))
+        g.ne = mapreduce(x->length(x.iter), +, _edges(g))
     end
     return g.ne
 end

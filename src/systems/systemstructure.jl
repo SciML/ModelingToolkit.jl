@@ -114,6 +114,8 @@ Base.eltype(::DiffGraph) = Union{Int, Nothing}
 Base.size(dg::DiffGraph) = size(dg.primal_to_diff)
 Base.length(dg::DiffGraph) = length(dg.primal_to_diff)
 Base.getindex(dg::DiffGraph, var::Integer) = dg.primal_to_diff[var]
+Base.getindex(dg::DiffGraph, a::AbstractArray) = [dg[x] for x in a]
+
 function Base.setindex!(dg::DiffGraph, val::Union{Integer, Nothing}, var::Integer)
     if dg.diff_to_primal !== nothing
         old_pd = dg.primal_to_diff[var]
@@ -132,7 +134,7 @@ Base.iterate(dg::DiffGraph, state...) = iterate(dg.primal_to_diff, state...)
 
 function complete(dg::DiffGraph)
     dg.diff_to_primal !== nothing && return dg
-    diff_to_primal = zeros(Int, length(dg.primal_to_diff))
+    diff_to_primal = Union{Int, Nothing}[nothing for _ = 1:length(dg.primal_to_diff)]
     for (var, diff) in edges(dg)
         diff_to_primal[diff] = var
     end
