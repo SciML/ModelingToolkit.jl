@@ -3,17 +3,17 @@
 ###
 
 """
-    find_augmenting_path(g::BipartiteGraph, eq, assign, varwhitelist, vcolor=falses(ndsts(g)), ecolor=falses(nsrcs(g))) -> path_found::Bool
+    find_augmenting_path(g::BipartiteGraph, eq, var_eq_matching, varwhitelist, vcolor=falses(ndsts(g)), ecolor=falses(nsrcs(g))) -> path_found::Bool
 
 Try to find augmenting paths.
 """
-function find_augmenting_path(g, eq, assign, varwhitelist, vcolor=falses(ndsts(g)), ecolor=falses(nsrcs(g)))
+function find_augmenting_path(g, eq, var_eq_matching, varwhitelist, vcolor=falses(ndsts(g)), ecolor=falses(nsrcs(g)))
     ecolor[eq] = true
 
     # if a `var` is unassigned and the edge `eq <=> var` exists
     for var in 𝑠neighbors(g, eq)
-        if (varwhitelist === nothing || varwhitelist[var]) && assign[var] === unassigned
-            assign[var] = eq
+        if (varwhitelist === nothing || varwhitelist[var]) && var_eq_matching[var] === unassigned
+            var_eq_matching[var] = eq
             return true
         end
     end
@@ -22,8 +22,8 @@ function find_augmenting_path(g, eq, assign, varwhitelist, vcolor=falses(ndsts(g
     for var in 𝑠neighbors(g, eq)
         ((varwhitelist === nothing || varwhitelist[var]) && !vcolor[var]) || continue
         vcolor[var] = true
-        if find_augmenting_path(g, assign[var], assign, varwhitelist, vcolor, ecolor)
-            assign[var] = eq
+        if find_augmenting_path(g, var_eq_matching[var], var_eq_matching, varwhitelist, vcolor, ecolor)
+            var_eq_matching[var] = eq
             return true
         end
     end
@@ -37,14 +37,14 @@ Find equation-variable bipartite matching. `s.graph` is a bipartite graph.
 """
 matching(s::SystemStructure, varwhitelist=nothing, eqwhitelist=nothing) = matching(s.graph, varwhitelist, eqwhitelist)
 function matching(g::BipartiteGraph, varwhitelist=nothing, eqwhitelist=nothing)
-    assign = Union{Unassigned, Int}[unassigned for _ = 1:ndsts(g)]
+    var_eq_matching = Matching(ndsts(g))
     for eq in 𝑠vertices(g)
         if eqwhitelist !== nothing
             eqwhitelist[eq] || continue
         end
-        find_augmenting_path(g, eq, assign, varwhitelist)
+        find_augmenting_path(g, eq, var_eq_matching, varwhitelist)
     end
-    return assign
+    return var_eq_matching
 end
 
 function error_reporting(sys, bad_idxs, n_highest_vars, iseqs)
@@ -84,32 +84,32 @@ end
 ###
 function check_consistency(sys::AbstractSystem)
     s = structure(sys)
-    @unpack varmask, graph, varassoc, fullvars = s
-    n_highest_vars = count(varmask)
+    @unpack graph, var_to_diff, fullvars = s
+    n_highest_vars = count(v->length(outneighbors(s.var_to_diff, v)) == 0, vertices(s.var_to_diff))
     neqs = nsrcs(graph)
     is_balanced = n_highest_vars == neqs
 
     if neqs > 0 && !is_balanced
-        varwhitelist = varassoc .== 0
-        assign = matching(graph, varwhitelist) # not assigned
+        varwhitelist = var_to_diff .== nothing
+        var_eq_matching = matching(graph, varwhitelist) # not assigned
         # Just use `error_reporting` to do conditional
         iseqs = n_highest_vars < neqs
         if iseqs
-            inv_assign = inverse_mapping(assign) # extra equations
-            bad_idxs = findall(iszero, @view inv_assign[1:nsrcs(graph)])
+            eq_var_matching = invview(complete(var_eq_matching)) # extra equations
+            bad_idxs = findall(isnothing, @view eq_var_matching[1:nsrcs(graph)])
         else
-            bad_idxs = findall(isequal(unassigned), assign)
+            bad_idxs = findall(isequal(unassigned), var_eq_matching)
         end
         error_reporting(sys, bad_idxs, n_highest_vars, iseqs)
     end
 
     # This is defined to check if Pantelides algorithm terminates. For more
     # details, check the equation (15) of the original paper.
-    extended_graph = (@set graph.fadjlist = [graph.fadjlist; pantelides_extended_graph(varassoc)])
-    extended_assign = matching(extended_graph)
+    extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist; map(collect, edges(var_to_diff))])
+    extended_var_eq_matching = matching(extended_graph)
 
     unassigned_var = []
-    for (vj, eq) in enumerate(extended_assign)
+    for (vj, eq) in enumerate(extended_var_eq_matching)
         if eq === unassigned
             push!(unassigned_var, fullvars[vj])
         end
@@ -128,15 +128,6 @@ function check_consistency(sys::AbstractSystem)
     return nothing
 end
 
-function pantelides_extended_graph(varassoc)
-    adj = Vector{Int}[]
-    for (j, v) in enumerate(varassoc)
-        dj = varassoc[j]
-        dj > 0 && push!(adj, [j, dj])
-    end
-    return adj
-end
-
 ###
 ### BLT ordering
 ###
@@ -149,7 +140,7 @@ gives the undirected bipartite graph a direction. When `assign === nothing`, we
 assume that the ``i``-th variable is assigned to the ``i``-th equation.
 """
 function find_scc(g::BipartiteGraph, assign=nothing)
-    cmog = DiCMOBiGraph{false}(g, assign === nothing ? Base.OneTo(nsrcs(g)) : assign)
+    cmog = DiCMOBiGraph{false}(g, Matching(assign === nothing ? Base.OneTo(nsrcs(g)) : assign))
     sccs = Graphs.strongly_connected_components(cmog)
     foreach(sort!, sccs)
     return sccs
@@ -158,14 +149,14 @@ end
 function sorted_incidence_matrix(sys, val=true; only_algeqs=false, only_algvars=false)
     sys = algebraic_equations_scc(sys)
     s = structure(sys)
-    @unpack assign, inv_assign, fullvars, scc, graph = s
+    @unpack var_eq_matching, fullvars, scc, graph = s
     g = graph
     varsmap = zeros(Int, ndsts(graph))
     eqsmap = zeros(Int, nsrcs(graph))
     varidx = 0
     eqidx = 0
     for c in scc, eq in c
-        var = inv_assign[eq]
+        var = invview(var_eq_matching)[eq]
         if var != 0
             eqsmap[eq] = (eqidx += 1)
             varsmap[var] = (varidx += 1)
@@ -226,19 +217,6 @@ function find_solvables!(sys)
     s
 end
 
-###
-### Miscellaneous
-###
-
-function inverse_mapping(assign)
-    invassign = zeros(Int, length(assign))
-    for (i, eq) in enumerate(assign)
-        eq === unassigned && continue
-        invassign[eq] = i
-    end
-    return invassign
-end
-
 # debugging use
 function reordered_matrix(sys, partitions=structure(sys).partitions)
     s = structure(sys)
@@ -252,7 +230,7 @@ function reordered_matrix(sys, partitions=structure(sys).partitions)
         append!(M, partition.v_solved)
         append!(M, partition.v_residual)
     end
-    M = inverse_mapping(vcat(M, setdiff(1:nvars, M)))
+    M = invperm(vcat(M, setdiff(1:nvars, M)))
     for partition in partitions
         for es in partition.e_solved
             isdiffeq(eqs[es]) && continue

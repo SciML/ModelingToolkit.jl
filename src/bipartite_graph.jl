@@ -1,9 +1,11 @@
 module BipartiteGraphs
 
-export BipartiteEdge, BipartiteGraph, DiCMOBiGraph, Unassigned, unassigned
+export BipartiteEdge, BipartiteGraph, DiCMOBiGraph, Unassigned, unassigned,
+        Matching
 
 export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors, 𝑑neighbors,
-       𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST, set_neighbors!
+       𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST, set_neighbors!, invview,
+       complete
 
 using DocStringExtensions
 using UnPack
@@ -15,6 +17,47 @@ using Setfield
 struct Unassigned
     global unassigned
     const unassigned = Unassigned.instance
+end
+
+struct Matching{V<:AbstractVector{<:Union{Unassigned, Int}}} <: AbstractVector{Union{Unassigned, Int}}
+    match::V
+    inv_match::Union{Nothing, V}
+end
+Matching(v::V) where {V<:AbstractVector{<:Union{Unassigned, Int}}} =
+    Matching{V}(v, nothing)
+Matching(m::Int) = Matching(Union{Int, Unassigned}[unassigned for _ = 1:m], nothing)
+Matching(m::Matching) = m
+
+Base.size(m::Matching) = Base.size(m.match)
+Base.getindex(m::Matching, i::Integer) = m.match[i]
+Base.iterate(m::Matching, state...) = iterate(m.match, state...)
+function Base.setindex!(m::Matching, v::Integer, i::Integer)
+    if m.inv_match !== nothing
+        m.inv_match[v] = i
+    end
+    return m.match[i] = v
+end
+
+function Base.push!(m::Matching, v::Union{Integer, Unassigned})
+    push!(m.match, v)
+    if v !== unassigned && m.inv_match !== nothing
+        m.inv_match[v] = length(m.match)
+    end
+end
+
+function complete(m::Matching)
+    m.inv_match !== nothing && return m
+    inv_match = Union{Unassigned, Int}[unassigned for _ = 1:length(m.match)]
+    for (i, eq) in enumerate(m.match)
+        eq === unassigned  && continue
+        inv_match[eq] = i
+    end
+    return Matching(collect(m.match), inv_match)
+end
+
+function invview(m::Matching)
+    m.inv_match === nothing && throw(ArgumentError("Backwards matching not defined. `complete` the matching first."))
+    return Matching(m.inv_match, m.match)
 end
 
 ###
@@ -291,7 +334,7 @@ is acyclic if and only if the induced directed graph on the original bipartite
 graph is acyclic.
 
 """
-mutable struct DiCMOBiGraph{Transposed, I, G<:BipartiteGraph{I}, M} <: Graphs.AbstractGraph{I}
+mutable struct DiCMOBiGraph{Transposed, I, G<:BipartiteGraph{I}, M <: Matching} <: Graphs.AbstractGraph{I}
     graph::G
     ne::Union{Missing, Int}
     matching::M
@@ -299,7 +342,7 @@ mutable struct DiCMOBiGraph{Transposed, I, G<:BipartiteGraph{I}, M} <: Graphs.Ab
         new{Transposed, I, G, M}(g, ne, m)
 end
 function DiCMOBiGraph{Transposed}(g::BipartiteGraph) where {Transposed}
-    DiCMOBiGraph{Transposed}(g, 0, Union{Unassigned, Int}[unassigned for i = 1:ndsts(g)])
+    DiCMOBiGraph{Transposed}(g, 0, Matching(ndsts(g)))
 end
 function DiCMOBiGraph{Transposed}(g::BipartiteGraph, m::M) where {Transposed, M}
     DiCMOBiGraph{Transposed}(g, missing, m)

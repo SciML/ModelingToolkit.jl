@@ -49,8 +49,8 @@ reduced_eqs = [
 test_equal.(equations(lorenz1_aliased), reduced_eqs)
 @test isempty(setdiff(states(lorenz1_aliased), [x, y, z]))
 test_equal.(observed(lorenz1_aliased), [
-                                        u ~ 0
                                         z ~ x - y
+                                        u ~ -0.0
                                         a ~ -z
                                        ])
 
