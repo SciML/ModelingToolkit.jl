@@ -44,6 +44,7 @@ include("utils.jl")
 include("pantelides.jl")
 include("bipartite_tearing/modia_tearing.jl")
 include("tearing.jl")
+include("symbolics_tearing.jl")
 include("codegen.jl")
 
 end # module
