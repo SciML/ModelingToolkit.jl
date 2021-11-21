@@ -258,7 +258,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     end
 
     # kind of like the backward substitution
-    lss!(ei::Integer) = locally_structure_simplify!((@view mm[ei, :]), pivots[ei], ag, diff_to_var[pivots[ei]] == 0)
+    lss!(ei::Integer) = locally_structure_simplify!((@view mm[ei, :]), pivots[ei], ag, isnothing(diff_to_var[pivots[ei]]))
 
     # Step 2.1: Go backwards, collecting eliminated variables and substituting
     #         alias as we go.
