@@ -1,7 +1,7 @@
 module BipartiteGraphs
 
 export BipartiteEdge, BipartiteGraph, DiCMOBiGraph, Unassigned, unassigned,
-        Matching
+        Matching, ResidualCMOGraph
 
 export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors, 𝑑neighbors,
        𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST, set_neighbors!, invview,
@@ -19,51 +19,59 @@ struct Unassigned
     const unassigned = Unassigned.instance
 end
 
-struct Matching{V<:AbstractVector{<:Union{Unassigned, Int}}} <: AbstractVector{Union{Unassigned, Int}}
+struct Matching{U #=> :Unassigned =#, V<:AbstractVector} <: AbstractVector{Union{U, Int}}
     match::V
     inv_match::Union{Nothing, V}
 end
-Matching(v::V) where {V<:AbstractVector{<:Union{Unassigned, Int}}} =
-    Matching{V}(v, nothing)
-Matching(m::Int) = Matching(Union{Int, Unassigned}[unassigned for _ = 1:m], nothing)
-Matching(m::Matching) = m
+# These constructors work around https://github.com/JuliaLang/julia/issues/41948
+function Matching{V}(m::Matching) where {V}
+    eltype(m) === Union{V, Int} && return M
+    VUT = typeof(similar(m.match, Union{V, Int}))
+    Matching{V}(convert(VUT, m.match),
+        m.inv_match === nothing ? nothing : convert(VUT, m.inv_match))
+end
+Matching{U}(v::V) where {U, V<:AbstractVector} = Matching{U, V}(v, nothing)
+Matching{U}(v::V, iv::Union{V, Nothing}) where {U, V<:AbstractVector} = Matching{U, V}(v, iv)
+Matching(v::V) where {U, V<:AbstractVector{Union{U, Int}}} =
+    Matching{@isdefined(U) ? U : Unassigned, V}(v, nothing)
+Matching(m::Int) = Matching{Unassigned}(Union{Int, Unassigned}[unassigned for _ = 1:m], nothing)
 
 Base.size(m::Matching) = Base.size(m.match)
 Base.getindex(m::Matching, i::Integer) = m.match[i]
 Base.iterate(m::Matching, state...) = iterate(m.match, state...)
 Base.copy(m::Matching) = Matching(copy(m.match), m.inv_match === nothing ? nothing : copy(m.inv_match))
-function Base.setindex!(m::Matching, v::Union{Integer, Unassigned}, i::Integer)
+function Base.setindex!(m::Matching{U}, v::Union{Integer, U}, i::Integer) where {U}
     if m.inv_match !== nothing
         oldv = m.match[i]
-        oldv !== unassigned && (m.inv_match[oldv] = unassigned)
-        v !== unassigned && (m.inv_match[v] = i)
+        isa(oldv, Int) && (m.inv_match[oldv] = unassigned)
+        isa(v, Int) && (m.inv_match[v] = i)
     end
     return m.match[i] = v
 end
 
-function Base.push!(m::Matching, v::Union{Integer, Unassigned})
+function Base.push!(m::Matching{U}, v::Union{Integer, U}) where {U}
     push!(m.match, v)
     if v !== unassigned && m.inv_match !== nothing
         m.inv_match[v] = length(m.match)
     end
 end
 
-function complete(m::Matching)
+function complete(m::Matching{U}) where {U}
     m.inv_match !== nothing && return m
-    inv_match = Union{Unassigned, Int}[unassigned for _ = 1:length(m.match)]
+    inv_match = Union{U, Int}[unassigned for _ = 1:length(m.match)]
     for (i, eq) in enumerate(m.match)
-        eq === unassigned  && continue
+        isa(eq, Int) || continue
         inv_match[eq] = i
     end
-    return Matching(collect(m.match), inv_match)
+    return Matching{U}(collect(m.match), inv_match)
 end
 
 @noinline require_complete(m::Matching) =
     m.inv_match === nothing && throw(ArgumentError("Backwards matching not defined. `complete` the matching first."))
 
-function invview(m::Matching)
+function invview(m::Matching{U, V}) where {U, V}
     require_complete(m)
-    return Matching(m.inv_match, m.match)
+    return Matching{U, V}(m.inv_match, m.match)
 end
 
 ###
@@ -355,6 +363,14 @@ The resulting graph has a few desirable properties. In particular, this graph
 is acyclic if and only if the induced directed graph on the original bipartite
 graph is acyclic.
 
+# Hypergraph interpretation
+
+Consider the bipartite graph `B` as the incidence graph of some hypergraph `H`.
+Note that a maching `M` on `B` in the above sense is equivalent to determining
+an (1,n)-orientation on the hypergraph (i.e. each directed hyperedge has exactly
+one head, but any arbitrary number of tails). In this setting, this is simply
+the graph formed by expanding each directed hyperedge into `n` ordinary edges
+between the same vertices.
 """
 mutable struct DiCMOBiGraph{Transposed, I, G<:BipartiteGraph{I}, M <: Matching} <: Graphs.AbstractGraph{I}
     graph::G
@@ -385,8 +401,7 @@ struct CMONeighbors{Transposed, V}
 end
 
 Graphs.outneighbors(g::DiCMOBiGraph{false}, v) = CMONeighbors{false}(g, v)
-Graphs.inneighbors(g::DiCMOBiGraph{false}, v) = CMONeighbors{true}(invview(g), v)
-Graphs.all_neighbors(g::DiCMOBiGraph{true}, v::Integer) = 𝑠neighbors(g.graph, v)
+Graphs.inneighbors(g::DiCMOBiGraph{false}, v) = inneighbors(invview(g), v)
 Base.iterate(c::CMONeighbors{false}) = iterate(c, (c.g.graph.fadjlist[c.v],))
 function Base.iterate(c::CMONeighbors{false}, (l, state...))
     while true
@@ -405,15 +420,15 @@ function Base.iterate(c::CMONeighbors{false}, (l, state...))
 end
 Base.length(c::CMONeighbors{false}) = count(_->true, c)
 
-lift(f, x) = (x === unassigned || isnothing(x)) ? nothing : f(x)
+liftint(f, x) = (!isa(x, Int)) ? nothing : f(x)
+liftnothing(f, x) = x === nothing ? nothing : f(x)
 
 _vsrc(c::CMONeighbors{true}) = c.g.matching[c.v]
-_neighbors(c::CMONeighbors{true}) = lift(vsrc->c.g.graph.fadjlist[vsrc], _vsrc(c))
-Base.length(c::CMONeighbors{true}) = something(lift(length, _neighbors(c)), 1) - 1
+_neighbors(c::CMONeighbors{true}) = liftint(vsrc->c.g.graph.fadjlist[vsrc], _vsrc(c))
+Base.length(c::CMONeighbors{true}) = something(liftnothing(length, _neighbors(c)), 1) - 1
 Graphs.inneighbors(g::DiCMOBiGraph{true}, v) = CMONeighbors{true}(g, v)
-Graphs.outneighbors(g::DiCMOBiGraph{true}, v) = CMONeighbors{false}(invview(g), v)
-Graphs.all_neighbors(g::DiCMOBiGraph{true}, v::Integer) = 𝑑neighbors(g.graph, v)
-Base.iterate(c::CMONeighbors{true}) = lift(ns->iterate(c, (ns,)), _neighbors(c))
+Graphs.outneighbors(g::DiCMOBiGraph{true}, v) = outneighbors(invview(g), v)
+Base.iterate(c::CMONeighbors{true}) = liftnothing(ns->iterate(c, (ns,)), _neighbors(c))
 function Base.iterate(c::CMONeighbors{true}, (l, state...))
     while true
         r = iterate(l, state...)
@@ -441,5 +456,56 @@ end
 
 Graphs.has_edge(g::DiCMOBiGraph{true}, a, b) = a in inneighbors(g, b)
 Graphs.has_edge(g::DiCMOBiGraph{false}, a, b) = b in outneighbors(g, a)
+
+"""
+    struct ResidualCMOGraph
+
+For a bipartite graph and matching on the graph's destination vertices, this
+wrapper exposes the induced graph on the destination vertices formed by those
+destination and source vertices that are left unmatched. In particular, two
+(destination) vertices a and b are neighbors if they are both unassigned and
+there is some unassigned source vertex `s` such that `s` is a neighbor (in the
+bipartite graph) of both `a` and `b`.
+
+# Hypergraph interpreation
+
+Refer to the hypergraph interpretation of the DiCMOBiGraph. Now consider the
+hypergraph left over after removing all edges that are oriented by the mapping.
+This graph is the undirected graph obtained by replacing all hyper edges by the
+maximal undirected graph on the vertices that are members of the original hyper
+edge.
+
+# Nota Bene
+
+1. For technical reasons, the `vertices` function includes even those vertices
+   vertices that are assigned in the original hypergraph, even though they
+   are conceptually not part of the graph.
+2. This graph is not strict. In particular, multi edges between vertices are
+   allowed and common.
+"""
+struct ResidualCMOGraph{I, G<:BipartiteGraph{I}, M <: Matching} <: Graphs.AbstractGraph{I}
+    graph::G
+    matching::M
+    function ResidualCMOGraph{I, G, M}(g::G, m::M) where {I, G<:BipartiteGraph{I}, M}
+        require_complete(g)
+        require_complete(m)
+        new{I, G, M}(g, m)
+    end
+end
+ResidualCMOGraph(g::G, m::M) where {I, G<:BipartiteGraph{I}, M} = ResidualCMOGraph{I, G, M}(g, m)
+
+invview(rcg::ResidualCMOGraph) = ResidualCMOGraph(invview(rcg.graph), invview(rcg.matching))
+
+Graphs.is_directed(::Type{<:ResidualCMOGraph}) = false
+Graphs.nv(rcg::ResidualCMOGraph) = ndsts(rcg.graph)
+Graphs.vertices(rcg::ResidualCMOGraph) = 𝑑vertices(rcg.graph)
+function Graphs.neighbors(rcg::ResidualCMOGraph, v::Integer)
+    rcg.matching[v] !== unassigned && return ()
+    Iterators.filter(
+        vdst->rcg.matching[vdst] === unassigned,
+        Iterators.flatten(rcg.graph.fadjlist[vsrc] for
+            vsrc in rcg.graph.badjlist[v] if
+            invview(rcg.matching)[vsrc] === unassigned))
+end
 
 end # module
