@@ -35,13 +35,14 @@ function tearing_reassemble(sys; simplify=false)
     ns, nd = nsrcs(graph), ndsts(graph)
     active_eqs  = trues(ns)
     active_vars = trues(nd)
-    rvar2req = Vector{Int}(undef, nd)
+    rvar2reqs = Vector{Vector{Int}}(undef, nd)
+    #reduction_graph = BipartiteGraph(nsrcs(graph), ndsts(graph), Val(false))
     for (ith_scc, partition) in enumerate(partitions)
         @unpack e_solved, v_solved, e_residual, v_residual = partition
         for ii in eachindex(e_solved)
             ieq = e_solved[ii]; ns -= 1
             iv = v_solved[ii]; nd -= 1
-            rvar2req[iv] = ieq
+            rvar2reqs[iv] = e_solved
 
             active_eqs[ieq] = false
             active_vars[iv] = false
@@ -103,22 +104,6 @@ function tearing_reassemble(sys; simplify=false)
 
     newgraph = BipartiteGraph(ns, nd, Val(false))
 
-    function visit!(ii, gidx, basecase=true)
-        ieq = basecase ? ii : rvar2req[ii]
-        for ivar in 𝑠neighbors(graph, ieq)
-            # Note that we need to check `ii` against the rhs states to make
-            # sure we don't run in circles.
-            (!basecase && ivar === ii) && continue
-            if active_vars[ivar]
-                add_edge!(newgraph, gidx, var_reidx[ivar])
-            else
-                # If a state is reduced, then we go to the rhs and collect
-                # its states.
-                visit!(ivar, gidx, false)
-            end
-        end
-        return nothing
-    end
 
     ### update equations
     odestats = []
@@ -132,11 +117,13 @@ function tearing_reassemble(sys; simplify=false)
 
     dict = Dict(value.(solvars) .=> value.(rhss))
 
+    visited = falses(ndsts(graph))
     for ieq in Iterators.flatten(scc); active_eqs[ieq] || continue
         eq = eqs[ieq]
         ridx = eq_reidx[ieq]
 
-        visit!(ieq, ridx)
+        fill!(visited, false)
+        compact_graph!(newgraph, graph, visited, ieq, ridx, rvar2reqs, var_reidx, active_vars)
 
         if isdiffeq(eq)
             neweqs[ridx] = eq.lhs ~ tearing_sub(eq.rhs, dict, simplify)
@@ -189,6 +176,27 @@ function tearing_reassemble(sys; simplify=false)
     @set! sys.states = newstates
     @set! sys.observed = [observed(sys); obseqs]
     return sys
+end
+
+# removes the solved equations and variables
+function compact_graph!(newgraph, graph, visited, eq, req, rvar2reqs, var_reidx, active_vars)
+    for ivar in 𝑠neighbors(graph, eq)
+        # Note that we need to check `ii` against the rhs states to make
+        # sure we don't run in circles.
+        visited[ivar] && continue
+        visited[ivar] = true
+
+        if active_vars[ivar]
+            add_edge!(newgraph, req, var_reidx[ivar])
+        else
+            # If a state is reduced, then we go to the rhs and collect
+            # its states.
+            for ieq in rvar2reqs[ivar]
+                compact_graph!(newgraph, graph, visited, ieq, req, rvar2reqs, var_reidx, active_vars)
+            end
+        end
+    end
+    return nothing
 end
 
 """
