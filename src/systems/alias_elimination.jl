@@ -348,7 +348,7 @@ function locally_structure_simplify!(adj_row, pivot_col, ag, may_eliminate)
         # `var = coeff * alias_var`, so we eliminate this var.
         adj_row[var] = 0
         if alias_var != 0
-            # val * var = (val * coeff) * alias_var
+            # val * var = val * (coeff * alias_var) = (val * coeff) * alias_var
             val *= coeff
             # val * var + c * alias_var + ... = (val * coeff + c) * alias_var + ...
             new_coeff = (adj_row[alias_var] += val)
