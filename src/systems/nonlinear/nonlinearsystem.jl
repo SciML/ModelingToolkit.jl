@@ -53,12 +53,12 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     type: type of the system
     """
-    connection_type::Any
-    function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, structure, connection_type; checks::Bool = true)
+    connector_type::Any
+    function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, structure, connector_type; checks::Bool = true)
         if checks
             all_dimensionless([states;ps]) ||check_units(eqs)
         end
-        new(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, structure, connection_type)
+        new(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, structure, connector_type)
     end
 end
 
@@ -69,7 +69,7 @@ function NonlinearSystem(eqs, states, ps;
                          default_p=Dict(),
                          defaults=_merge(Dict(default_u0), Dict(default_p)),
                          systems=NonlinearSystem[],
-                         connection_type=nothing,
+                         connector_type=nothing,
                          continuous_events=nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
                          checks = true,
                          )
@@ -99,7 +99,7 @@ function NonlinearSystem(eqs, states, ps;
     process_variables!(var_to_name, defaults, states)
     process_variables!(var_to_name, defaults, ps)
 
-    NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, nothing, connection_type, checks = checks)
+    NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, nothing, connector_type, checks = checks)
 end
 
 function calculate_jacobian(sys::NonlinearSystem; sparse=false, simplify=false)

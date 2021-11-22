@@ -3,20 +3,8 @@ using ModelingToolkit, OrdinaryDiffEq
 
 @parameters t
 @connector function Pin(;name)
-    sts = @variables v(t)=1.0 i(t)=1.0
+    sts = @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
     ODESystem(Equation[], t, sts, []; name=name)
-end
-
-function ModelingToolkit.connect(::Type{Pin}, ps...)
-    eqs = [
-           0 ~ sum(p->p.i, ps) # KCL
-          ]
-    # KVL
-    for i in 1:length(ps)-1
-        push!(eqs, ps[i].v ~ ps[i+1].v)
-    end
-
-    return eqs
 end
 
 function Ground(;name)
