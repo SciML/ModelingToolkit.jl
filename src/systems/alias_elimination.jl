@@ -23,6 +23,7 @@ function alias_elimination(sys)
     for (ei, e) in enumerate(mm.nzrows)
         vs = 𝑠neighbors(graph, e)
         if isempty(vs)
+            # remove empty equations
             push!(dels, e)
         else
             rhs = mapfoldl(+, pairs(nonzerosmap(@view mm[ei, :]))) do (var, coeff)
@@ -135,7 +136,7 @@ function Base.getindex(ag::AliasGraph, i::Integer)
     coeff, var = (sign(r), abs(r))
     if var in keys(ag)
         # Amortized lookup. Check if since we last looked this up, our alias was
-        # itself aliased. If so, adjust adjust the alias table.
+        # itself aliased. If so, just adjust the alias table.
         ac, av = ag[var]
         nc = ac * coeff
         ag.aliasto[var] = nc > 0 ? av : -av
@@ -201,6 +202,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         is_linear_equations[e] = true
     end
 
+    # Variables that are highest order differentiated cannot be states of an ODE
     is_not_potential_state = isnothing.(var_to_diff)
     is_linear_variables = copy(is_not_potential_state)
     for i in 𝑠vertices(graph); is_linear_equations[i] && continue
@@ -249,26 +251,43 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
 
     # Step 1: Perform bareiss factorization on the adjacency matrix of the linear
     #         subsystem of the system we're interested in.
+    #
+    # Let `m = the number of linear equations` and `n = the number of
+    # variables`.
+    #
+    # `do_bareiss` conceptually gives us this system:
+    # rank1 | [ M₁₁  M₁₂ | M₁₃  M₁₄ ]   [v₁] = [0]
+    # rank2 | [ 0    M₂₂ | M₂₃  M₂₄ ] P [v₂] = [0]
+    # -------------------|------------------------
+    # rank3 | [ 0    0   | M₃₃  M₃₄ ]   [v₃] = [0]
+    #         [ 0    0   | 0    0   ]   [v₄] = [0]
     (rank1, rank2, rank3, pivots) = do_bareiss!(mm, mm_orig)
 
-    # Step 2: Simplify the system using the bareiss factorization
+    # Step 2: Simplify the system using the Bareiss factorization
     ag = AliasGraph(size(mm, 2))
     for v in setdiff(solvable_variables, @view pivots[1:rank1])
         ag[v] = 0
     end
 
-    # kind of like the backward substitution
-    lss!(ei::Integer) = locally_structure_simplify!((@view mm[ei, :]), pivots[ei], ag, isnothing(diff_to_var[pivots[ei]]))
+    # Kind of like the backward substitution, but we don't actually rely on it
+    # being lower triangular. We eliminate a variable if there are at most 2
+    # variables left after the substitution.
+    function lss!(ei::Integer)
+        vi = pivots[ei]
+        # the lowest differentiated variable can be eliminated
+        islowest = isnothing(diff_to_var[vi])
+        locally_structure_simplify!((@view mm[ei, :]), vi, ag, islowest)
+    end
 
     # Step 2.1: Go backwards, collecting eliminated variables and substituting
     #         alias as we go.
     foreach(lss!, reverse(1:rank2))
 
-    # Step 2.2: Sometimes bareiss can make the equations more complicated.
+    # Step 2.2: Sometimes Bareiss can make the equations more complicated.
     #         Go back and check the original matrix. If this happened,
     #         Replace the equation by the one from the original system,
-    #         but be sure to also run lss! again, since we only ran that
-    #         on the bareiss'd matrix, not the original one.
+    #         but be sure to also run `lss!` again, since we only ran that
+    #         on the Bareiss'd matrix, not the original one.
     reduced = mapreduce(|, 1:rank2; init=false) do ei
         if count_nonzeros(@view mm_orig[ei, :]) < count_nonzeros(@view mm[ei, :])
             mm[ei, :] = @view mm_orig[ei, :]
@@ -277,14 +296,14 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         return false
     end
 
-    # Step 2.3: Iterate to convergance.
+    # Step 2.3: Iterate to convergence.
     #         N.B.: `lss!` modifies the array.
     # TODO: We know exactly what variable we eliminated. Starting over at the
     #       start is wasteful. We can lookup which equations have this variable
     #       using the graph.
     reduced && while any(lss!, 1:rank2); end
 
-    # Step 3: Reflect our update decitions back into the graph
+    # Step 3: Reflect our update decisions back into the graph
     for (ei, e) in enumerate(mm.nzrows)
         set_neighbors!(graph, e, mm.row_cols[ei])
     end
@@ -326,14 +345,20 @@ function locally_structure_simplify!(adj_row, pivot_col, ag, may_eliminate)
             continue
         end
         (coeff, alias_var) = alias
+        # `var = coeff * alias_var`, so we eliminate this var.
         adj_row[var] = 0
         if alias_var != 0
+            # val * var = val * (coeff * alias_var) = (val * coeff) * alias_var
             val *= coeff
+            # val * var + c * alias_var + ... = (val * coeff + c) * alias_var + ...
             new_coeff = (adj_row[alias_var] += val)
             if alias_var < var
-                # If this adds to a coeff that was not previously accounted for, and
-                # we've already passed it, make sure to count it here. We're
-                # relying on `var` being produced in sorted order here.
+                # If this adds to a coeff that was not previously accounted for,
+                # and we've already passed it, make sure to count it here. We
+                # need to know if there are at most 2 terms left after this
+                # loop.
+                #
+                # We're relying on `var` being produced in sorted order here.
                 nirreducible += 1
                 alias_candidate = new_coeff => alias_var
             end
@@ -341,8 +366,11 @@ function locally_structure_simplify!(adj_row, pivot_col, ag, may_eliminate)
     end
 
     if may_eliminate && nirreducible <= 1
-        # There were only one or two terms left in the equation (including the pivot variable).
-        # We can eliminate the pivot variable.
+        # There were only one or two terms left in the equation (including the
+        # pivot variable). We can eliminate the pivot variable.
+        #
+        # Note that when `nirreducible <= 1`, `alias_candidate` is uniquely
+        # determined.
         if alias_candidate !== 0
             alias_candidate = -exactdiv(alias_candidate[1], pivot_val) => alias_candidate[2]
         end
