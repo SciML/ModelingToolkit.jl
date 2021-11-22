@@ -33,13 +33,13 @@ pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
 
 pendulum = initialize_system_structure(pendulum)
 sss = structure(pendulum)
-@unpack graph, fullvars, varassoc = sss
-@test StructuralTransformations.matching(sss, varassoc .== 0) == map(x -> x == 0 ? StructuralTransformations.unassigned : x, [1, 2, 3, 4, 0, 0, 0, 0, 0])
+@unpack graph, fullvars, var_to_diff = sss
+@test StructuralTransformations.matching(sss, isnothing.(var_to_diff)) == map(x -> x == 0 ? StructuralTransformations.unassigned : x, [1, 2, 3, 4, 0, 0, 0, 0, 0])
 
-sys, assign, eqassoc = StructuralTransformations.pantelides!(pendulum)
+sys, var_eq_matching, eq_to_diff = StructuralTransformations.pantelides!(pendulum)
 sss = structure(sys)
-@unpack graph, fullvars, varassoc = sss
-scc = StructuralTransformations.find_scc(graph, assign)
+@unpack graph, fullvars, var_to_diff = sss
+scc = StructuralTransformations.find_scc(graph, var_eq_matching)
 @test sort(sort.(scc)) == [
                            [1],
                            [2],
@@ -49,7 +49,8 @@ scc = StructuralTransformations.find_scc(graph, assign)
                           ]
 
 @test graph.fadjlist == [[1, 7], [2, 8], [3, 5, 9], [4, 6, 9], [5, 6], [1, 2, 5, 6], [1, 3, 7, 10], [2, 4, 8, 11], [1, 2, 5, 6, 10, 11]]
-@test varassoc == [10, 11, 0, 0, 1, 2, 3, 4, 0, 0, 0]
+let N=nothing;
+    @test var_to_diff == [10, 11, N, N, 1, 2, 3, 4, N, N, N];
 #1: D(x) ~ w
 #2: D(y) ~ z
 #3: D(w) ~ T*x
@@ -61,7 +62,8 @@ scc = StructuralTransformations.find_scc(graph, assign)
 #8: D(eq:2) -> D(D(y)) ~ D(z) -> D(y_t) ~ T*y - g
 #9: D(eq:6) -> 0 ~ 2xx'' + 2x'x' + 2yy'' + 2y'y'
 #                 [1, 2, 3, 4, 5, 6, 7, 8, 9]
-@test eqassoc == [7, 8, 0, 0, 6, 9, 0, 0, 0]
+    @test eq_to_diff == [7, 8, N, N, 6, 9, N, N, N]
+end
 
 using ModelingToolkit
 @parameters t L g

@@ -80,9 +80,13 @@ struct ODESystem <: AbstractODESystem
     """
     structure::Any
     """
-    connection_type: type of the system
+    connector_type: type of the system
     """
-    connection_type::Any
+    connector_type::Any
+    """
+    connections: connections in a system
+    """
+    connections::Any
     """
     preface: inject assignment statements before the evaluation of the RHS function.
     """
@@ -93,7 +97,7 @@ struct ODESystem <: AbstractODESystem
     """
     continuous_events::Vector{SymbolicContinuousCallback}
 
-    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface, events; checks::Bool = true)
+    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connector_type, connections, preface, events; checks::Bool = true)
         if checks
             check_variables(dvs,iv)
             check_parameters(ps,iv)
@@ -101,7 +105,7 @@ struct ODESystem <: AbstractODESystem
             check_equations(equations(events),iv)
             all_dimensionless([dvs;ps;iv]) || check_units(deqs)
         end
-        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connection_type, preface, events)
+        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connector_type, connections, preface, events)
     end
 end
 
@@ -114,7 +118,7 @@ function ODESystem(
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
-                   connection_type=nothing,
+                   connector_type=nothing,
                    preface=nothing,
                    continuous_events=nothing,
                    checks = true,
@@ -149,7 +153,7 @@ function ODESystem(
         throw(ArgumentError("System names must be unique."))
     end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
-    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connection_type, preface, cont_callbacks, checks = checks)
+    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connector_type, nothing, preface, cont_callbacks, checks = checks)
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)
@@ -172,7 +176,9 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     end
     iv = value(iv)
     iv === nothing && throw(ArgumentError("Please pass in independent variables."))
+    compressed_eqs = Equation[] # equations that need to be expanded later, like `connect(a, b)`
     for eq in eqs
+        eq.lhs isa Union{Symbolic,Number} || (push!(compressed_eqs, eq); continue)
         collect_vars!(allstates, ps, eq.lhs, iv)
         collect_vars!(allstates, ps, eq.rhs, iv)
         if isdiffeq(eq)
@@ -187,7 +193,7 @@ function ODESystem(eqs, iv=nothing; kwargs...)
     end
     algevars = setdiff(allstates, diffvars)
     # the orders here are very important!
-    return ODESystem(append!(diffeq, algeeq), iv, collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
+    return ODESystem(Equation[diffeq; algeeq; compressed_eqs], iv, collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian

@@ -353,3 +353,21 @@ function get_postprocess_fbody(sys)
     end
     return pre_
 end
+
+"""
+$(SIGNATURES)
+
+find duplicates in an iterable object.
+"""
+function find_duplicates(xs, ::Val{Ret}=Val(false)) where Ret
+    appeared = Set()
+    duplicates = Set()
+    for x in xs
+        if x in appeared
+            push!(duplicates, x)
+        else
+            push!(appeared, x)
+        end
+    end
+    return Ret ? (appeared, duplicates) : duplicates
+end

@@ -42,7 +42,7 @@ end
 sys = initialize_system_structure(sys)
 find_solvables!(sys)
 sss = structure(sys)
-@unpack graph, solvable_graph, assign, partitions, fullvars = sss
+@unpack graph, solvable_graph, partitions, fullvars = sss
 int2var = Dict(eachindex(fullvars) .=> fullvars)
 graph2vars(graph) = map(is->Set(map(i->int2var[i], is)), graph.fadjlist)
 @test graph2vars(graph) == [
@@ -62,9 +62,11 @@ graph2vars(graph) = map(is->Set(map(i->int2var[i], is)), graph.fadjlist)
 
 tornsys = tearing(sys)
 sss = structure(tornsys)
-@unpack graph, solvable_graph, assign, partitions = sss
-@test graph2vars(graph) == [Set([u5])]
-@test partitions == [StructuralTransformations.SystemPartition([], [], [1], [1])]
+let
+    @unpack graph, partitions = sss
+    @test graph2vars(graph) == [Set([u5])]
+    @test partitions == [StructuralTransformations.SystemPartition([], [], [1], [1])]
+end
 
 # Before:
 #      u1  u2  u3  u4  u5

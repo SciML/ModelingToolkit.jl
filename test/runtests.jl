@@ -22,6 +22,7 @@ using SafeTestsets, Test
 @safetestset "Constraints Test" begin include("constraints.jl") end
 @safetestset "Reduction Test" begin include("reduction.jl") end
 @safetestset "Components Test" begin include("components.jl") end
+@safetestset "Stream Connnect Test" begin include("stream_connectors.jl") end
 @safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "Lowering Integration Test" begin include("lowering_solving.jl") end
 @safetestset "Test Big System Usage" begin include("bigsystem.jl") end
@@ -37,6 +38,5 @@ println("Last test requires gcc available in the path!")
 @safetestset "StructuralTransformations" begin include("structural_transformation/runtests.jl") end
 @testset "Serialization" begin include("serialization.jl") end
 @safetestset "print_tree" begin include("print_tree.jl") end
-@safetestset "connectors" begin include("connectors.jl") end
 @safetestset "error_handling" begin include("error_handling.jl") end
 @safetestset "root_equations" begin include("root_equations.jl") end

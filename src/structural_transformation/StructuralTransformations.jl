@@ -22,6 +22,7 @@ using ModelingToolkit: ODESystem, AbstractSystem,var_from_nested_derivative, Dif
                        IncrementalCycleTracker, add_edge_checked!, topological_sort
 
 using ModelingToolkit.BipartiteGraphs
+import .BipartiteGraphs: invview
 using Graphs
 using ModelingToolkit.SystemStructures
 
@@ -43,6 +44,7 @@ include("utils.jl")
 include("pantelides.jl")
 include("bipartite_tearing/modia_tearing.jl")
 include("tearing.jl")
+include("symbolics_tearing.jl")
 include("codegen.jl")
 
 end # module

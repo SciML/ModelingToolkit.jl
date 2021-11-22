@@ -9,6 +9,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
     value, InvalidSystemException, isdifferential, _iszero, isparameter,
     independent_variables, isinput, SparseMatrixCLIL
 using ..BipartiteGraphs
+import ..BipartiteGraphs: invview, complete
 using Graphs
 using UnPack
 using Setfield
@@ -53,6 +54,7 @@ export SystemStructure, SystemPartition
 export initialize_system_structure, find_linear_equations, linear_subsys_adjmat
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq
 export dervars_range, diffvars_range, algvars_range
+export DiffGraph
 
 @enum VariableType::Int8 DIFFERENTIAL_VARIABLE ALGEBRAIC_VARIABLE DERIVATIVE_VARIABLE
 
@@ -69,19 +71,89 @@ function Base.:(==)(s1::SystemPartition, s2::SystemPartition)
     tup1 == tup2
 end
 
+struct DiffGraph <: Graphs.AbstractGraph{Int}
+    primal_to_diff::Vector{Union{Int, Nothing}}
+    diff_to_primal::Union{Nothing, Vector{Union{Int, Nothing}}}
+end
+DiffGraph(n::Integer, with_badj::Bool=false) = DiffGraph(Union{Int, Nothing}[nothing for _=1:n],
+    with_badj ? Union{Int, Nothing}[nothing for _=1:n] : nothing)
+
+@noinline require_complete(dg::DiffGraph) = dg.diff_to_primal === nothing &&
+    error("Not complete. Run `complete` first.")
+
+Graphs.is_directed(dg::DiffGraph) = true
+Graphs.edges(dg::DiffGraph) = (i => v for (i, v) in enumerate(dg.primal_to_diff) if v !== nothing)
+Graphs.nv(dg::DiffGraph) = length(dg.primal_to_diff)
+Graphs.ne(dg::DiffGraph) = count(x->x !== nothing, dg.primal_to_diff)
+Graphs.vertices(dg::DiffGraph) = Base.OneTo(nv(dg))
+function Graphs.outneighbors(dg::DiffGraph, var::Integer)
+    diff = dg.primal_to_diff[var]
+    return diff === nothing ? () : (diff,)
+end
+function Graphs.inneighbors(dg::DiffGraph, var::Integer)
+    require_complete(dg)
+    diff = dg.diff_to_primal[var]
+    return diff === nothing ? () : (diff,)
+end
+function Graphs.add_vertex!(dg::DiffGraph)
+    push!(dg.primal_to_diff, nothing)
+    if dg.diff_to_primal !== nothing
+        push!(dg.diff_to_primal, nothing)
+    end
+    return length(dg.primal_to_diff)
+end
+
+function Graphs.add_edge!(dg::DiffGraph, var::Integer, diff::Integer)
+    dg[var] = diff
+end
+
+# Also pass through the array interface for ease of use
+Base.:(==)(dg::DiffGraph, v::AbstractVector) = dg.primal_to_diff == v
+Base.:(==)(dg::AbstractVector, v::DiffGraph) = v == dg.primal_to_diff
+Base.eltype(::DiffGraph) = Union{Int, Nothing}
+Base.size(dg::DiffGraph) = size(dg.primal_to_diff)
+Base.length(dg::DiffGraph) = length(dg.primal_to_diff)
+Base.getindex(dg::DiffGraph, var::Integer) = dg.primal_to_diff[var]
+function Base.setindex!(dg::DiffGraph, val::Union{Integer, Nothing}, var::Integer)
+    if dg.diff_to_primal !== nothing
+        old_pd = dg.primal_to_diff[var]
+        if old_pd !== nothing
+            dg.diff_to_primal[old_pd] = nothing
+        end
+        if val !== nothing
+            old_dp = dg.diff_to_primal[val]
+            old_dp === nothing || error("Variable already assigned.")
+            dg.diff_to_primal[val] = var
+        end
+    end
+    return dg.primal_to_diff[var] = val
+end
+Base.iterate(dg::DiffGraph, state...) = iterate(dg.primal_to_diff, state...)
+
+function complete(dg::DiffGraph)
+    dg.diff_to_primal !== nothing && return dg
+    diff_to_primal = zeros(Int, length(dg.primal_to_diff))
+    for (var, diff) in edges(dg)
+        diff_to_primal[diff] = var
+    end
+    return DiffGraph(dg.primal_to_diff, diff_to_primal)
+end
+
+function invview(dg::DiffGraph)
+    require_complete(dg)
+    return DiffGraph(dg.diff_to_primal, dg.primal_to_diff)
+end
+
 Base.@kwdef struct SystemStructure
     fullvars::Vector
     vartype::Vector{VariableType}
     # Maps the (index of) a variable to the (index of) the variable describing
     # its derivative.
-    varassoc::Vector{Int}
-    inv_varassoc::Vector{Int}
-    varmask::BitVector # `true` if the variable has the highest order derivative
+    var_to_diff::DiffGraph
     algeqs::BitVector
-    graph::BipartiteGraph{Int,Vector{Vector{Int}},Int,Nothing}
-    solvable_graph::BipartiteGraph{Int,Vector{Vector{Int}},Int,Nothing}
-    assign::Vector{Union{Int, Unassigned}}
-    inv_assign::Vector{Int}
+    graph::BipartiteGraph{Int,Nothing}
+    solvable_graph::BipartiteGraph{Int,Nothing}
+    var_eq_matching::Matching
     scc::Vector{Vector{Int}}
     partitions::Vector{SystemPartition}
 end
@@ -182,16 +254,14 @@ function initialize_system_structure(sys; quick_cancel=false)
     nvars = length(fullvars)
     diffvars = []
     vartype = fill(DIFFERENTIAL_VARIABLE, nvars)
-    varassoc = zeros(Int, nvars)
-    inv_varassoc = zeros(Int, nvars)
+    var_to_diff = DiffGraph(nvars, true)
     for dervaridx in dervaridxs
         vartype[dervaridx] = DERIVATIVE_VARIABLE
         dervar = fullvars[dervaridx]
         diffvar = arguments(dervar)[1]
         diffvaridx = var2idx[diffvar]
         push!(diffvars, diffvar)
-        varassoc[diffvaridx] = dervaridx
-        inv_varassoc[dervaridx] = diffvaridx
+        var_to_diff[diffvaridx] = dervaridx
     end
 
     algvars = setdiff(states(sys), diffvars)
@@ -215,14 +285,11 @@ function initialize_system_structure(sys; quick_cancel=false)
     @set! sys.structure = SystemStructure(
         fullvars = fullvars,
         vartype = vartype,
-        varassoc = varassoc,
-        inv_varassoc = inv_varassoc,
-        varmask = iszero.(varassoc),
+        var_to_diff = var_to_diff,
         algeqs = algeqs,
         graph = graph,
         solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph), Val(false)),
-        assign = Int[],
-        inv_assign = Int[],
+        var_eq_matching = Matching(ndsts(graph)),
         scc = Vector{Int}[],
         partitions = SystemPartition[],
     )
