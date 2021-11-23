@@ -193,7 +193,7 @@ function build_torn_function(
         expression=false,
         jacobian_sparsity=true,
         checkbounds=false,
-        max_inlining_size=nothing
+        max_inlining_size=nothing,
         kw...
     )
 
@@ -212,7 +212,7 @@ function build_torn_function(
     torn_expr = []
     defs = defaults(sys)
 
-    needs_exdending = false
+    needs_extending = false
     for p in partitions
         @unpack e_residual, v_residual = p
         torn_eqs = eqs[e_residual]
@@ -220,8 +220,8 @@ function build_torn_function(
         if length(e_residual) <= max_inlining_size
             append!(torn_expr, gen_nlsolve(torn_eqs, torn_vars, defs, checkbounds=checkbounds))
         else
-            needs_exdending = true
-            append!(rhss, torn_eqs)
+            needs_extending = true
+            append!(rhss, map(x->x.rhs, torn_eqs))
             append!(states, torn_vars)
             append!(mass_matrix_diag, zeros(length(torn_eqs)))
         end
@@ -255,7 +255,7 @@ function build_torn_function(
             )
     )
     if expression
-        expr
+        expr, states
     else
         observedfun = let sys = sys, dict = Dict()
             function generated_observed(obsvar, u, p, t)
@@ -272,7 +272,7 @@ function build_torn_function(
                           syms = syms,
                           observed = observedfun,
                           mass_matrix = mass_matrix,
-                         )
+                         ), states
     end
 end
 
@@ -403,14 +403,12 @@ function ODAEProblem{iip}(
                           parammap=DiffEqBase.NullParameters();
                           kw...
                          ) where {iip}
-    s = structure(sys)
-    @unpack fullvars = s
-    dvs = map(i->fullvars[i], diffvars_range(s))
+    fun, dvs = build_torn_function(sys; kw...)
     ps = parameters(sys)
     defs = defaults(sys)
 
     u0 = ModelingToolkit.varmap_to_vars(u0map, dvs; defaults=defs)
     p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults=defs)
 
-    ODEProblem{iip}(build_torn_function(sys; kw...), u0, tspan, p; kw...)
+    ODEProblem{iip}(fun, u0, tspan, p; kw...)
 end
