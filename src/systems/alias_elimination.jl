@@ -375,6 +375,8 @@ function locally_structure_simplify!(adj_row, pivot_col, ag, may_eliminate)
             d, r = divrem(alias_candidate[1], pivot_val)
             if r == 0 && (d == 1 || d == -1)
                 alias_candidate = -d => alias_candidate[2]
+            else
+                return false
             end
         end
         ag[pivot_col] = alias_candidate
