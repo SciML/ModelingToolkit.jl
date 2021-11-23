@@ -215,3 +215,21 @@ eqns = [
 @named sys = ODESystem(eqns, t)
 @named n2m2Test = compose(sys, n2m2, source, sink)
 @test_nowarn structural_simplify(n2m2Test)
+
+# array var
+@connector function VecPin(;name)
+    sts = @variables v[1:2](t)=[1.0,0.0] i[1:2](t)=1.0 [connect = Flow]
+    ODESystem(Equation[], t, [sts...;], []; name=name)
+end
+
+@named vp1 = VecPin()
+@named vp2 = VecPin()
+
+@named simple = ODESystem([connect(vp1, vp2)], t)
+sys = expand_connections(compose(simple, [vp1, vp2]))
+@test equations(sys) == [
+                         vp1.v[1] ~ vp2.v[1]
+                         vp1.v[2] ~ vp2.v[2]
+                         0 ~ -vp1.i[1] - vp2.i[1]
+                         0 ~ -vp1.i[2] - vp2.i[2]
+                        ]
