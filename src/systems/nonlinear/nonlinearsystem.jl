@@ -98,6 +98,7 @@ function NonlinearSystem(eqs, states, ps;
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, states)
     process_variables!(var_to_name, defaults, ps)
+    isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, nothing, connector_type, checks = checks)
 end

@@ -141,6 +141,7 @@ function ODESystem(
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
+    isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     tgrad = RefValue(Vector{Num}(undef, 0))
     jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))

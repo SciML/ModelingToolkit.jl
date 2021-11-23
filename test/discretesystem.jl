@@ -112,3 +112,12 @@ linearized_eqs = [
     y(t - 2.0) ~ y(t)
 ]
 @test all(eqs2 .== linearized_eqs)
+
+# observed variable handling
+@variables t x(t) RHS(t)
+@parameters τ   
+@named fol = DiscreteSystem([D(x) ~ (1 - x)/τ]; observed=[RHS ~ (1 - x)/τ])
+@test isequal(RHS, @nonamespace fol.RHS)
+RHS2 = RHS
+@unpack RHS = fol
+@test isequal(RHS, RHS2)
