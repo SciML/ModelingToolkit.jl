@@ -372,7 +372,10 @@ function locally_structure_simplify!(adj_row, pivot_col, ag, may_eliminate)
         # Note that when `nirreducible <= 1`, `alias_candidate` is uniquely
         # determined.
         if alias_candidate !== 0
-            alias_candidate = -exactdiv(alias_candidate[1], pivot_val) => alias_candidate[2]
+            d, r = divrem(alias_candidate[1], pivot_val)
+            if r == 0 && (d == 1 || d == -1)
+                alias_candidate = -d => alias_candidate[2]
+            end
         end
         ag[pivot_col] = alias_candidate
         zero!(adj_row)

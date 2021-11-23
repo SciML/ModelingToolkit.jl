@@ -159,9 +159,21 @@ end
 
 # observed variable handling
 @variables t x(t) RHS(t)
-@parameters τ   
+@parameters τ
 @named fol = NonlinearSystem([0  ~ (1 - x)/τ], [x], [τ]; observed=[RHS ~ (1 - x)/τ])
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
 @unpack RHS = fol
 @test isequal(RHS, RHS2)
+
+# issue #1358
+@variables t
+@variables v1(t) v2(t) i1(t) i2(t)
+eq = [
+    v1 ~ sin(2pi*t)
+    v1 - v2 ~ i1
+    v2 ~ i2
+    i1 ~ i2
+]
+@named sys = ODESystem(eq)
+@test length(equations(structural_simplify(sys))) == 0
