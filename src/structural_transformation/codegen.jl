@@ -1,3 +1,7 @@
+using LinearAlgebra
+
+const MAX_INLINE_NLSOLVE_SIZE = 8
+
 function torn_system_jacobian_sparsity(sys)
     s = structure(sys)
     @unpack fullvars, graph, partitions = s
@@ -184,41 +188,54 @@ function gen_nlsolve(eqs, vars, u0map::AbstractDict; checkbounds=true)
     ]
 end
 
-function get_torn_eqs_vars(sys; checkbounds=true)
-    s = structure(sys)
-    partitions = s.partitions
-    vars = s.fullvars
-    eqs = equations(sys)
-
-    torn_eqs  = map(idxs-> eqs[idxs], map(x->x.e_residual, partitions))
-    torn_vars = map(idxs->vars[idxs], map(x->x.v_residual, partitions))
-    u0map = defaults(sys)
-
-    gen_nlsolve.(torn_eqs, torn_vars, (u0map,), checkbounds=checkbounds)
-end
-
 function build_torn_function(
         sys;
         expression=false,
         jacobian_sparsity=true,
         checkbounds=false,
+        max_inlining_size=nothing,
         kw...
     )
 
+    max_inlining_size = something(max_inlining_size, MAX_INLINE_NLSOLVE_SIZE)
     rhss = []
-    for eq in equations(sys)
+    eqs = equations(sys)
+    for eq in eqs
         isdiffeq(eq) && push!(rhss, eq.rhs)
     end
 
+    s = structure(sys)
+    @unpack fullvars, partitions = s
+
+    states = map(i->s.fullvars[i], diffvars_range(s))
+    mass_matrix_diag = ones(length(states))
+    torn_expr = []
+    defs = defaults(sys)
+
+    needs_extending = false
+    for p in partitions
+        @unpack e_residual, v_residual = p
+        torn_eqs = eqs[e_residual]
+        torn_vars = fullvars[v_residual]
+        if length(e_residual) <= max_inlining_size
+            append!(torn_expr, gen_nlsolve(torn_eqs, torn_vars, defs, checkbounds=checkbounds))
+        else
+            needs_extending = true
+            append!(rhss, map(x->x.rhs, torn_eqs))
+            append!(states, torn_vars)
+            append!(mass_matrix_diag, zeros(length(torn_eqs)))
+        end
+    end
+
+    mass_matrix = needs_extending ? Diagonal(mass_matrix_diag) : I
+
     out = Sym{Any}(gensym("out"))
-    odefunbody = SetArray(
+    funbody = SetArray(
         !checkbounds,
         out,
         rhss
     )
 
-    s = structure(sys)
-    states = map(i->s.fullvars[i], diffvars_range(s))
     syms = map(Symbol, states)
     pre = get_postprocess_fbody(sys)
 
@@ -232,13 +249,13 @@ function build_torn_function(
              ],
              [],
              pre(Let(
-                 collect(Iterators.flatten(get_torn_eqs_vars(sys, checkbounds=checkbounds))),
-                 odefunbody
+                 torn_expr,
+                 funbody
                 ))
             )
     )
     if expression
-        expr
+        expr, states
     else
         observedfun = let sys = sys, dict = Dict()
             function generated_observed(obsvar, u, p, t)
@@ -254,7 +271,8 @@ function build_torn_function(
                           sparsity = torn_system_jacobian_sparsity(sys),
                           syms = syms,
                           observed = observedfun,
-                         )
+                          mass_matrix = mass_matrix,
+                         ), states
     end
 end
 
@@ -385,14 +403,12 @@ function ODAEProblem{iip}(
                           parammap=DiffEqBase.NullParameters();
                           kw...
                          ) where {iip}
-    s = structure(sys)
-    @unpack fullvars = s
-    dvs = map(i->fullvars[i], diffvars_range(s))
+    fun, dvs = build_torn_function(sys; kw...)
     ps = parameters(sys)
     defs = defaults(sys)
 
     u0 = ModelingToolkit.varmap_to_vars(u0map, dvs; defaults=defs)
     p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults=defs)
 
-    ODEProblem{iip}(build_torn_function(sys; kw...), u0, tspan, p; kw...)
+    ODEProblem{iip}(fun, u0, tspan, p; kw...)
 end
