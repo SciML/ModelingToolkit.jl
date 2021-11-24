@@ -523,6 +523,12 @@ function islinear(sys::AbstractSystem)
     all(islinear(r, states(sys)) for r in rhs)
 end
 
+function isaffine(sys::AbstractSystem)
+    rhs = [eq.rhs for eq ∈ equations(sys)]
+
+    all(isaffine(r, states(sys)) for r in rhs)
+end
+
 struct AbstractSysToExpr
     sys::AbstractSystem
     states::Vector

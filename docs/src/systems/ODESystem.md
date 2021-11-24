@@ -29,6 +29,7 @@ tearing
 ```@docs
 ModelingToolkit.islinear
 ModelingToolkit.isautonomous
+ModelingToolkit.isaffine
 ```
 
 ## Applicable Calculation and Generation Functions
