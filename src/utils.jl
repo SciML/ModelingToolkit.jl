@@ -371,3 +371,5 @@ function find_duplicates(xs, ::Val{Ret}=Val(false)) where Ret
     end
     return Ret ? (appeared, duplicates) : duplicates
 end
+
+isarray(x) = x isa AbstractArray || x isa Symbolics.Arr

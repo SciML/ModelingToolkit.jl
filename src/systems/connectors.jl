@@ -1,3 +1,5 @@
+get_connection_type(s) = getmetadata(unwrap(s), VariableConnectType, Equality)
+
 function with_connector_type(expr)
     @assert expr isa Expr && (expr.head == :function || (expr.head == :(=) &&
                                        expr.args[1] isa Expr &&
@@ -34,9 +36,12 @@ function connector_type(sys::AbstractSystem)
     n_stream = 0
     n_flow = 0
     for s in sts
-        vtype = getmetadata(s, ModelingToolkit.VariableConnectType, nothing)
-        vtype === Stream && (n_stream += 1)
-        vtype === Flow   && (n_flow += 1)
+        vtype = get_connection_type(s)
+        if vtype === Stream
+            isarray(s) && error("Array stream variables are not supported. Got $s.")
+            n_stream += 1
+        end
+        vtype === Flow && (n_flow += 1)
     end
     (n_stream > 0 && n_flow > 1) && error("There are multiple flow variables in $(nameof(sys))!")
     n_stream > 0 ? StreamConnector() : RegularConnector()
@@ -84,6 +89,7 @@ function connect(c::Connection; check=true)
     flow_eqs = Equation[]
     other_eqs = Equation[]
 
+    ncnts = length(inners) + length(outers)
     cnts = Iterators.flatten((inners, outers))
     fs, ss = Iterators.peel(cnts)
     splitting_idx = length(inners) # anything after the splitting_idx is outer.
@@ -94,26 +100,47 @@ function connect(c::Connection; check=true)
         Set(current_sts) == first_sts_set || error("$(nameof(sys)) ($current_sts) doesn't match the connection type of $(nameof(fs)) ($first_sts).")
     end
 
+    seen = Set()
     ceqs = Equation[]
     for s in first_sts
         name = getname(s)
-        vtype = getmetadata(s, VariableConnectType, Equality)
+        fix_val = getproperty(fs, name) # representative
+        fix_val in seen && continue
+        push!(seen, fix_val)
+
+        vtype = get_connection_type(fix_val)
         vtype === Stream && continue
-        isflow = vtype === Flow
-        rhs = 0 # only used for flow variables
-        fix_val = getproperty(fs, name) # used for equality connections
-        for (i, c) in enumerate(cnts)
-            isinner = i <= splitting_idx
-            # https://specification.modelica.org/v3.4/Ch15.html
-            var = getproperty(c, name)
-            if isflow
+
+        isarr = isarray(fix_val)
+
+        if vtype === Flow
+            rhs = isarr ? zeros(Int, ncnts) : 0
+            for (i, c) in enumerate(cnts)
+                isinner = i <= splitting_idx
+                # https://specification.modelica.org/v3.4/Ch15.html
+                var = scalarize(getproperty(c, name))
                 rhs += isinner ? var : -var
+            end
+            if isarr
+                for r in rhs
+                    push!(ceqs, 0 ~ r)
+                end
             else
-                i == 1 && continue # skip the first iteration
-                push!(ceqs, fix_val ~ getproperty(c, name))
+                push!(ceqs, 0 ~ rhs)
+            end
+        else # Equality
+            for c in ss
+                var = getproperty(c, name)
+                if isarr
+                    vs = scalarize(var)
+                    for (i, v) in enumerate(vs)
+                        push!(ceqs, fix_val[i] ~ v)
+                    end
+                else
+                    push!(ceqs, fix_val ~ var)
+                end
             end
         end
-        isflow && push!(ceqs, 0 ~ rhs)
     end
 
     return ceqs
@@ -144,7 +171,7 @@ end
 function flowvar(sys::AbstractSystem)
     sts = get_states(sys)
     for s in sts
-        vtype = getmetadata(s, ModelingToolkit.VariableConnectType, nothing)
+        vtype = get_connection_type(s)
         vtype === Flow && return s
     end
     error("There in no flow variable in $(nameof(sys))")
@@ -365,7 +392,7 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false, to
         connector_representative = first(outer_sc)
         fv = flowvar(connector_representative)
         for sv in get_states(connector_representative)
-            vtype = getmetadata(sv, ModelingToolkit.VariableConnectType, nothing)
+            vtype = get_connection_type(sv)
             vtype === Stream || continue
             if n_inners == 1 && n_outers == 1
                 innerstream = states(only(inner_sc), sv)
