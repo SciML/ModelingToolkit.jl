@@ -227,7 +227,7 @@ function build_torn_function(
         end
     end
 
-    mass_matrix = needs_exdending ? Diagonal(mass_matrix_diag) : I
+    mass_matrix = needs_extending ? Diagonal(mass_matrix_diag) : I
 
     out = Sym{Any}(gensym("out"))
     funbody = SetArray(
