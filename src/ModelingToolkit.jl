@@ -47,7 +47,7 @@ using Symbolics: _parse_vars, value, @derivatives, get_variables,
                  exprs_occur_in, solve_for, build_expr, unwrap, wrap,
                  VariableSource, getname, variable
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-                  jacobian_sparsity, islinear, _iszero, _isone,
+                  jacobian_sparsity, isaffine, islinear, _iszero, _isone,
                   tosymbol, lower_varname, diff2term, var_from_nested_derivative,
                   BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
                   ParallelForm, SerialForm, MultithreadedForm, build_function,

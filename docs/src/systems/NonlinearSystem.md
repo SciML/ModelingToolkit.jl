@@ -23,6 +23,7 @@ tearing
 ## Analyses
 
 ```@docs
+ModelingToolkit.isaffine
 ModelingToolkit.islinear
 ```
 
