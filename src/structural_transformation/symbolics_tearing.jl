@@ -107,7 +107,7 @@ function tearing_reassemble(sys; simplify=false)
             neweqs[ridx] = eq.lhs ~ tearing_sub(eq.rhs, dict, simplify)
         else
             newalgeqs[ridx] = true
-            if !(eq.lhs isa Number && eq.lhs != 0)
+            if !(eq.lhs isa Number && eq.lhs == 0)
                 eq = 0 ~ eq.rhs - eq.lhs
             end
             rhs = tearing_sub(eq.rhs, dict, simplify)
