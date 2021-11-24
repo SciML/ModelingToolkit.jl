@@ -24,6 +24,8 @@ eqs = [D(S) ~ S-infection,
 
 # System
 @named sys = DiscreteSystem(eqs,t,[S,I,R],[c,nsteps,δt,β,γ]; controls = [β, γ])
+syss = structural_simplify(sys)
+@test syss == syss
 
 # Problem
 u0 = [S => 990.0, I => 10.0, R => 0.0]

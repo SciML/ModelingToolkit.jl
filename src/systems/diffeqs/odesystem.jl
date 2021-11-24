@@ -92,7 +92,7 @@ struct ODESystem <: AbstractODESystem
     """
     preface::Any
     """
-    events: A `Vector{SymbolicContinuousCallback}` that model events.
+    continuous_events: A `Vector{SymbolicContinuousCallback}` that model events.
     The integrator will use root finding to guarantee that it steps at each zero crossing.
     """
     continuous_events::Vector{SymbolicContinuousCallback}
