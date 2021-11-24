@@ -52,16 +52,20 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     defaults::Dict
     """
+    structure: structural information of the system
+    """
+    structure::Any
+    """
     type: type of the system
     """
     connector_type::Any
-    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, connector_type; checks::Bool = true)
+    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, structure, connector_type; checks::Bool = true)
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
-            all_dimensionless([dvs;ps;iv;ctrls]) ||check_units(discreteEqs)
+            all_dimensionless([dvs;ps;iv;ctrls]) || check_units(discreteEqs)
         end
-        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, connector_type)
+        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, structure, connector_type)
     end
 end
 
@@ -104,7 +108,7 @@ function DiscreteSystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, defaults, connector_type, kwargs...)
+    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, defaults, nothing, connector_type, kwargs...)
 end
 
 
