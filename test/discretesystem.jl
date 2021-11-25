@@ -78,7 +78,7 @@ function sir_map!(u_diff,u,p,t)
 end;
 u0 = [990.0,10.0,0.0];
 p = [0.05,10.0,0.25,0.1];
-prob_map = DiscreteProblem(sir_map!,u0,tspan,p);
+prob_map = DiscreteProblem(sir_map!,u0,tspan,p,dt=0.1);
 sol_map2 = solve(prob_map,FunctionMap());
 
 @test Array(sol_map) ≈ Array(sol_map2)
@@ -103,6 +103,8 @@ eqs = [
 
 # System
 @named sys = DiscreteSystem(eqs,t,[x(t),x(t-1.5),x(t-3),y(t),y(t-2),z],[])
+
+@test_throws ErrorException DiscreteProblem(sys,u0,tspan,p) # multi-rate systems can not yet be simulated
 
 eqs2, max_delay = ModelingToolkit.linearize_eqs(sys; return_max_delay=true)
 
