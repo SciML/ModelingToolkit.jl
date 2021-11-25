@@ -101,7 +101,7 @@ function pantelides!(graph, var_to_diff; maxiters = 8000)
             fill!(vcolor, false)
             resize!(ecolor, neqs)
             fill!(ecolor, false)
-            pathfound = find_augmenting_path(graph, eq′, var_eq_matching, varwhitelist, vcolor, ecolor)
+            pathfound = construct_augmenting_path!(var_eq_matching, graph, eq′, v->varwhitelist[v], vcolor, ecolor)
             pathfound && break # terminating condition
             for var in eachindex(vcolor); vcolor[var] || continue
                 # introduce a new variable

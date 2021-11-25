@@ -1,7 +1,8 @@
 module BipartiteGraphs
 
 export BipartiteEdge, BipartiteGraph, DiCMOBiGraph, Unassigned, unassigned,
-        Matching, ResidualCMOGraph
+        Matching, ResidualCMOGraph, InducedCondensationGraph, maximal_matching,
+        construct_augmenting_path!
 
 export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors, 𝑑neighbors,
        𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST, set_neighbors!, invview,
@@ -18,6 +19,14 @@ struct Unassigned
     global unassigned
     const unassigned = Unassigned.instance
 end
+# Behaves as a scalar
+Base.length(u::Unassigned) = 1
+Base.size(u::Unassigned) = ()
+Base.iterate(u::Unassigned) = (unassigned, nothing)
+Base.iterate(u::Unassigned, state) = nothing
+
+Base.show(io::IO, ::Unassigned) =
+    printstyled(io, "u"; color=:light_black)
 
 struct Matching{U #=> :Unassigned =#, V<:AbstractVector} <: AbstractVector{Union{U, Int}}
     match::V
@@ -30,6 +39,7 @@ function Matching{V}(m::Matching) where {V}
     Matching{V}(convert(VUT, m.match),
         m.inv_match === nothing ? nothing : convert(VUT, m.inv_match))
 end
+Matching(m::Matching) = m
 Matching{U}(v::V) where {U, V<:AbstractVector} = Matching{U, V}(v, nothing)
 Matching{U}(v::V, iv::Union{V, Nothing}) where {U, V<:AbstractVector} = Matching{U, V}(v, iv)
 Matching(v::V) where {U, V<:AbstractVector{Union{U, Int}}} =
@@ -135,10 +145,13 @@ mutable struct BipartiteGraph{I<:Integer, M} <: Graphs.AbstractGraph{I}
     metadata::M
 end
 BipartiteGraph(ne::Integer, fadj::AbstractVector, badj::Union{AbstractVector,Integer}=maximum(maximum, fadj); metadata=nothing) = BipartiteGraph(ne, fadj, badj, metadata)
+BipartiteGraph(fadj::AbstractVector, badj::Union{AbstractVector,Integer}=maximum(maximum, fadj); metadata=nothing) =
+    BipartiteGraph(mapreduce(length, +, fadj; init=0), fadj, badj, metadata)
 
 @noinline require_complete(g::BipartiteGraph) = g.badjlist isa AbstractVector || throw(ArgumentError("The graph has no back edges. Use `complete`."))
 
 function invview(g::BipartiteGraph)
+    require_complete(g)
     BipartiteGraph(g.ne, g.badjlist, g.fadjlist)
 end
 
@@ -215,7 +228,53 @@ ndsts(g::BipartiteGraph) = length(𝑑vertices(g))
 function Graphs.has_edge(g::BipartiteGraph, edge::BipartiteEdge)
     @unpack src, dst = edge
     (src in 𝑠vertices(g) && dst in 𝑑vertices(g)) || return false  # edge out of bounds
-    insorted(𝑠neighbors(src), dst)
+    insorted(dst, 𝑠neighbors(g, src))
+end
+Base.in(edge::BipartiteEdge, g::BipartiteGraph) = Graphs.has_edge(g, edge)
+
+### Maximal matching
+"""
+    construct_augmenting_path!(m::Matching, g::BipartiteGraph, vsrc, dstfilter, vcolor=falses(ndsts(g)), ecolor=falses(nsrcs(g))) -> path_found::Bool
+
+Try to construct an augmenting path in matching and if such a path is found,
+update the matching accordingly.
+"""
+function construct_augmenting_path!(matching::Matching, g::BipartiteGraph, vsrc, dstfilter, dcolor=falses(ndsts(g)), scolor=falses(nsrcs(g)))
+    scolor[vsrc] = true
+
+    # if a `vdst` is unassigned and the edge `vsrc <=> vdst` exists
+    for vdst in 𝑠neighbors(g, vsrc)
+        if dstfilter(vdst) && matching[vdst] === unassigned
+            matching[vdst] = vsrc
+            return true
+        end
+    end
+
+    # for every `vsrc` such that edge `vsrc <=> vdst` exists and `vdst` is uncolored
+    for vdst in 𝑠neighbors(g, vsrc)
+        (dstfilter(vdst) && !dcolor[vdst]) || continue
+        dcolor[vdst] = true
+        if construct_augmenting_path!(matching, g, matching[vdst], dstfilter, dcolor, scolor)
+            matching[vdst] = vsrc
+            return true
+        end
+    end
+    return false
+end
+
+"""
+    maximal_matching(g::BipartiteGraph, [srcfilter], [dstfilter])
+
+For a bipartite graph `g`, construct a maximal matching of destination to source
+vertices, subject to the constraint that vertices for which `srcfilter` or `dstfilter`,
+return `false` may not be matched.
+"""
+function maximal_matching(g::BipartiteGraph, srcfilter=vsrc->true, dstfilter=vdst->true)
+    matching = Matching(ndsts(g))
+    foreach(Iterators.filter(srcfilter, 𝑠vertices(g))) do vsrc
+        construct_augmenting_path!(matching, g, vsrc, dstfilter)
+    end
+    return matching
 end
 
 ###
@@ -507,5 +566,67 @@ function Graphs.neighbors(rcg::ResidualCMOGraph, v::Integer)
             vsrc in rcg.graph.badjlist[v] if
             invview(rcg.matching)[vsrc] === unassigned))
 end
+
+# TODO: Fix the function in Graphs to do this instead
+function Graphs.neighborhood(rcg::ResidualCMOGraph, v::Integer)
+    worklist = Int[v]
+    ns = BitSet()
+    while !isempty(worklist)
+        v′ = popfirst!(worklist)
+        for n in neighbors(rcg, v′)
+            if !(n in ns)
+                push!(ns, n)
+                push!(worklist, n)
+            end
+        end
+    end
+    return ns
+end
+
+"""
+    struct InducedCondensationGraph
+
+For some bipartite-graph and an orientation induced on its destination contraction,
+records the condensation DAG of the digraph formed by the orientation. I.e. this
+is a DAG of connected components formed by the destination vertices of some
+underlying bipartite graph.
+
+N.B.: This graph does not store explicit neighbor relations of the sccs.
+Therefor, the edge multiplicity is derived from the underlying bipartite graph,
+i.e. this graph is not strict.
+"""
+struct InducedCondensationGraph{G <: BipartiteGraph} <: AbstractGraph{Vector{Union{Int, Vector{Int}}}}
+    graph::G
+    # Records the members of a strongly connected component. For efficiency,
+    # trivial sccs (with one vertex member) are stored inline. Note: the sccs
+    # here are stored in topological order.
+    sccs::Vector{Union{Int, Vector{Int}}}
+    # Maps the vertices back to the scc of which they are a part
+    scc_assignment::Vector{Int}
+end
+
+function InducedCondensationGraph(g::BipartiteGraph, sccs::Vector{Union{Int, Vector{Int}}})
+    scc_assignment = Vector{Int}(undef, ndsts(g))
+    for (i, c) in enumerate(sccs)
+        for v in c
+            scc_assignment[v] = i
+        end
+    end
+    InducedCondensationGraph(g, sccs, scc_assignment)
+end
+
+Graphs.is_directed(::Type{<:InducedCondensationGraph}) = true
+Graphs.nv(icg::InducedCondensationGraph) = length(icg.sccs)
+Graphs.vertices(icg::InducedCondensationGraph) = icg.sccs
+
+_neighbors(icg::InducedCondensationGraph, cc::Integer) =
+    Iterators.flatten(Iterators.flatten(rcg.graph.fadjlist[vsrc] for vsrc in rcg.graph.badjlist[v]) for v in icg.sccs[cc])
+
+Graphs.outneighbors(rcg::InducedCondensationGraph, v::Integer) =
+    (scc_assignment[n] for n in _neighbors(rcg, v) if scc_assignment[n] > v)
+
+Graphs.inneighbors(rcg::InducedCondensationGraph, v::Integer) =
+    (scc_assignment[n] for n in _neighbors(rcg, v) if scc_assignment[n] < v)
+
 
 end # module

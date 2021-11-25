@@ -885,7 +885,7 @@ function structural_simplify(sys::AbstractSystem; simplify=false)
     sys = initialize_system_structure(alias_elimination(sys))
     check_consistency(sys)
     if sys isa ODESystem
-        sys = dae_index_lowering(sys)
+        sys = initialize_system_structure(dae_index_lowering(sys))
     end
     sys = tearing(sys, simplify=simplify)
     fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]

@@ -3,49 +3,12 @@
 ###
 
 """
-    find_augmenting_path(g::BipartiteGraph, eq, var_eq_matching, varwhitelist, vcolor=falses(ndsts(g)), ecolor=falses(nsrcs(g))) -> path_found::Bool
+    maximal_matching(s::SystemStructure, eqfilter=eq->true, varfilter=v->true) -> Matching
 
-Try to find augmenting paths.
+Find equation-variable maximal bipartite matching. `s.graph` is a bipartite graph.
 """
-function find_augmenting_path(g, eq, var_eq_matching, varwhitelist, vcolor=falses(ndsts(g)), ecolor=falses(nsrcs(g)))
-    ecolor[eq] = true
-
-    # if a `var` is unassigned and the edge `eq <=> var` exists
-    for var in 𝑠neighbors(g, eq)
-        if (varwhitelist === nothing || varwhitelist[var]) && var_eq_matching[var] === unassigned
-            var_eq_matching[var] = eq
-            return true
-        end
-    end
-
-    # for every `var` such that edge `eq <=> var` exists and `var` is uncolored
-    for var in 𝑠neighbors(g, eq)
-        ((varwhitelist === nothing || varwhitelist[var]) && !vcolor[var]) || continue
-        vcolor[var] = true
-        if find_augmenting_path(g, var_eq_matching[var], var_eq_matching, varwhitelist, vcolor, ecolor)
-            var_eq_matching[var] = eq
-            return true
-        end
-    end
-    return false
-end
-
-"""
-    matching(s::Union{SystemStructure,BipartiteGraph}, varwhitelist=nothing, eqwhitelist=nothing) -> assign
-
-Find equation-variable bipartite matching. `s.graph` is a bipartite graph.
-"""
-matching(s::SystemStructure, varwhitelist=nothing, eqwhitelist=nothing) = matching(s.graph, varwhitelist, eqwhitelist)
-function matching(g::BipartiteGraph, varwhitelist=nothing, eqwhitelist=nothing)
-    var_eq_matching = Matching(ndsts(g))
-    for eq in 𝑠vertices(g)
-        if eqwhitelist !== nothing
-            eqwhitelist[eq] || continue
-        end
-        find_augmenting_path(g, eq, var_eq_matching, varwhitelist)
-    end
-    return var_eq_matching
-end
+BipartiteGraphs.maximal_matching(s::SystemStructure, eqfilter=eq->true, varfilter=v->true) =
+    maximal_matching(s.graph, eqfilter, varfilter)
 
 function error_reporting(sys, bad_idxs, n_highest_vars, iseqs)
     io = IOBuffer()
@@ -91,7 +54,7 @@ function check_consistency(sys::AbstractSystem)
 
     if neqs > 0 && !is_balanced
         varwhitelist = var_to_diff .== nothing
-        var_eq_matching = matching(graph, varwhitelist) # not assigned
+        var_eq_matching = maximal_matching(graph, eq->true, v->varwhitelist[v]) # not assigned
         # Just use `error_reporting` to do conditional
         iseqs = n_highest_vars < neqs
         if iseqs
@@ -106,7 +69,7 @@ function check_consistency(sys::AbstractSystem)
     # This is defined to check if Pantelides algorithm terminates. For more
     # details, check the equation (15) of the original paper.
     extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist; map(collect, edges(var_to_diff))])
-    extended_var_eq_matching = matching(extended_graph)
+    extended_var_eq_matching = maximal_matching(extended_graph)
 
     unassigned_var = []
     for (vj, eq) in enumerate(extended_var_eq_matching)
@@ -133,31 +96,31 @@ end
 ###
 
 """
-    find_scc(g::BipartiteGraph, assign=nothing)
+    find_var_sccs(g::BipartiteGraph, assign=nothing)
 
-Find strongly connected components of the equations defined by `g`. `assign`
+Find strongly connected components of the variables defined by `g`. `assign`
 gives the undirected bipartite graph a direction. When `assign === nothing`, we
 assume that the ``i``-th variable is assigned to the ``i``-th equation.
 """
-function find_scc(g::BipartiteGraph, assign=nothing)
-    cmog = DiCMOBiGraph{false}(g, Matching(assign === nothing ? Base.OneTo(nsrcs(g)) : assign))
+function find_var_sccs(g::BipartiteGraph, assign=nothing)
+    cmog = DiCMOBiGraph{true}(g, Matching(assign === nothing ? Base.OneTo(nsrcs(g)) : assign))
     sccs = Graphs.strongly_connected_components(cmog)
     foreach(sort!, sccs)
     return sccs
 end
 
 function sorted_incidence_matrix(sys, val=true; only_algeqs=false, only_algvars=false)
-    sys = algebraic_equations_scc(sys)
+    var_eq_matching, var_scc = algebraic_variables_scc(sys)
     s = structure(sys)
-    @unpack var_eq_matching, fullvars, scc, graph = s
+    @unpack fullvars, graph = s
     g = graph
     varsmap = zeros(Int, ndsts(graph))
     eqsmap = zeros(Int, nsrcs(graph))
     varidx = 0
     eqidx = 0
-    for c in scc, eq in c
-        var = invview(var_eq_matching)[eq]
-        if var != 0
+    for vs in scc, v in vs
+        eq = var_eq_matching[v]
+        if eq !== unassigned
             eqsmap[eq] = (eqidx += 1)
             varsmap[var] = (varidx += 1)
         end
@@ -218,21 +181,26 @@ function find_solvables!(sys)
 end
 
 # debugging use
-function reordered_matrix(sys, partitions=structure(sys).partitions)
+function reordered_matrix(sys, torn_matching)
     s = structure(sys)
     @unpack graph = s
     eqs = equations(sys)
     nvars = ndsts(graph)
+    max_matching = complete(maximal_matching(s))
+    torn_matching = complete(torn_matching)
+    sccs = find_var_sccs(s.graph, max_matching)
     I, J = Int[], Int[]
     ii = 0
     M = Int[]
-    for partition in partitions
-        append!(M, partition.v_solved)
-        append!(M, partition.v_residual)
+    solved = BitSet(findall(torn_matching .!== unassigned))
+    for vars in sccs
+        append!(M, filter(in(solved), vars))
+        append!(M, filter(!in(solved), vars))
     end
     M = invperm(vcat(M, setdiff(1:nvars, M)))
-    for partition in partitions
-        for es in partition.e_solved
+    for vars in sccs
+        e_solved = [torn_matching[v] for v in vars if torn_matching[v] !== unassigned]
+        for es in e_solved
             isdiffeq(eqs[es]) && continue
             ii += 1
             js = [M[x] for x in 𝑠neighbors(graph, es) if isalgvar(s, x)]
@@ -240,7 +208,8 @@ function reordered_matrix(sys, partitions=structure(sys).partitions)
             append!(J, js)
         end
 
-        for er in partition.e_residual
+        e_residual = setdiff([max_matching[v] for v in vars if max_matching[v] !== unassigned], e_solved)
+        for er in e_residual
             isdiffeq(eqs[er]) && continue
             ii += 1
             js = [M[x] for x in 𝑠neighbors(graph, er) if isalgvar(s, x)]
