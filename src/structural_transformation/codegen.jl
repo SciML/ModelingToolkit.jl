@@ -164,8 +164,8 @@ function gen_nlsolve(eqs, vars, u0map::AbstractDict; checkbounds=true)
     # f is the function to find roots on
     f = Func(
         [
-         DestructuredArgs(vars, inbounds=!checkbounds)
-         DestructuredArgs(params, inbounds=!checkbounds)
+         DestructuredArgs(vars, inbounds=!checkbounds, create_bindings=false)
+         DestructuredArgs(params, inbounds=!checkbounds, create_bindings=false)
         ],
         [],
         isscalar ? rhss[1] : MakeArray(rhss, SVector)
@@ -184,7 +184,7 @@ function gen_nlsolve(eqs, vars, u0map::AbstractDict; checkbounds=true)
 
     [
      fname ← @RuntimeGeneratedFunction(f)
-     DestructuredArgs(vars, inbounds=!checkbounds) ← solver_call
+     DestructuredArgs(vars, inbounds=!checkbounds, create_bindings=false) ← solver_call
     ]
 end
 
@@ -243,8 +243,8 @@ function build_torn_function(
         Func(
              [
               out
-              DestructuredArgs(states, inbounds=!checkbounds)
-              DestructuredArgs(parameters(sys), inbounds=!checkbounds)
+              DestructuredArgs(states, inbounds=!checkbounds, create_bindings=false)
+              DestructuredArgs(parameters(sys), inbounds=!checkbounds, create_bindings=false)
               independent_variables(sys)
              ],
              [],
@@ -361,8 +361,8 @@ function build_observed_function(
 
     ex = Func(
         [
-         DestructuredArgs(diffvars, inbounds=!checkbounds)
-         DestructuredArgs(parameters(sys), inbounds=!checkbounds)
+         DestructuredArgs(diffvars, inbounds=!checkbounds, create_bindings=false)
+         DestructuredArgs(parameters(sys), inbounds=!checkbounds, create_bindings=false)
          independent_variables(sys)
         ],
         [],
