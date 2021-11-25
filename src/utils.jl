@@ -282,7 +282,7 @@ function collect_operator_variables(sys, isop::Function)
     vars = Set()
     diffvars = Set()
     for eq in eqs
-        vars!(vars, eq)
+        isop === isdifferential ? vars!(vars, eq) : difference_vars!(vars, eq)
         for v in vars
             isop(v) || continue
             push!(diffvars, arguments(v)[1])
