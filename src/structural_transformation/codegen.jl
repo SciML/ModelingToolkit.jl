@@ -146,7 +146,7 @@ exprs = [fname = f, numerical_nlsolve(fname, ...)]
 - `u0map`: A `Dict` which maps variables in `eqs` to values, e.g., `defaults(sys)` if `eqs = equations(sys)`.
 - `checkbounds`: Apply bounds checking in the generated code.
 """
-function gen_nlsolve(eqs, vars, u0map::AbstractDict; checkbounds=true)
+function gen_nlsolve(eqs, idx, vars, u0map::AbstractDict; checkbounds=true)
     isempty(vars) && throw(ArgumentError("vars may not be empty"))
     length(eqs) == length(vars) || throw(ArgumentError("vars must be of the same length as the number of equations to find the roots of"))
     rhss = map(x->x.rhs, eqs)
@@ -160,7 +160,7 @@ function gen_nlsolve(eqs, vars, u0map::AbstractDict; checkbounds=true)
     isscalar = length(u0) == 1
     u0 = isscalar ? u0[1] : SVector(u0...)
 
-    fname = gensym("fun")
+    fname = Symbol("ˍ₋fun₋$idx")
     # f is the function to find roots on
     f = Func(
         [
@@ -218,7 +218,11 @@ function build_torn_function(
         torn_eqs = eqs[e_residual]
         torn_vars = fullvars[v_residual]
         if length(e_residual) <= max_inlining_size
-            append!(torn_expr, gen_nlsolve(torn_eqs, torn_vars, defs, checkbounds=checkbounds))
+            append!(torn_expr, gen_nlsolve(torn_eqs,
+                                           hash(torn_eqs),
+                                           torn_vars,
+                                           defs,
+                                           checkbounds=checkbounds))
         else
             needs_extending = true
             append!(rhss, map(x->x.rhs, torn_eqs))
@@ -229,7 +233,10 @@ function build_torn_function(
 
     mass_matrix = needs_extending ? Diagonal(mass_matrix_diag) : I
 
-    out = Sym{Any}(gensym("out"))
+    out = Sym{Any}(Symbol("ˍ₋out"))
+    # --> recursive_split?
+    @show length(rhss)
+    @show length(torn_expr)
     funbody = SetArray(
         !checkbounds,
         out,
