@@ -1,3 +1,6 @@
+get_iv(D::Differential) = D.x
+get_iv(D::Difference) = D.t
+
 function make_operation(@nospecialize(op), args)
     if op === (*)
         args = filter(!_isone, args)
@@ -164,7 +167,7 @@ end
 function collect_ivs_from_nested_operator!(ivs, x::Term, target_op)
     op = operation(x)
     if op isa target_op
-        push!(ivs, Symbolics.get_iv(op))
+        push!(ivs, get_iv(op))
         collect_ivs_from_nested_operator!(ivs, arguments(x)[1], target_op)
     end
 end
