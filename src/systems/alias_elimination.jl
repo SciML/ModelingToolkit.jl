@@ -2,15 +2,30 @@ using SymbolicUtils: Rewriters
 
 const KEEP = typemin(Int)
 
-function alias_elimination(sys)
+function alias_eliminate_graph(sys::AbstractSystem)
     sys = initialize_system_structure(sys; quick_cancel=true)
     s = structure(sys)
 
     mm = linear_subsys_adjmat(sys)
-    size(mm, 1) == 0 && return sys # No linear subsystems
+    size(mm, 1) == 0 && return sys, nothing, mm # No linear subsystems
 
     ag, mm = alias_eliminate_graph!(s.graph, complete(s.var_to_diff), mm)
+    return sys, ag, mm
+end
 
+# For debug purposes
+function aag_bareiss(sys::AbstractSystem)
+    sys = initialize_system_structure(sys; quick_cancel=true)
+    s = structure(sys)
+    mm = linear_subsys_adjmat(sys)
+    return aag_bareiss!(s.graph, complete(s.var_to_diff), mm)
+end
+
+function alias_elimination(sys)
+    sys, ag, mm = alias_eliminate_graph(sys)
+    ag === nothing && return sys
+
+    s = structure(sys)
     @unpack fullvars, graph = s
 
     subs = OrderedDict()
@@ -193,9 +208,7 @@ count_nonzeros(a::AbstractArray) = count(!iszero, a)
 # Here we have a guarantee that they won't, so we can make this identification
 count_nonzeros(a::SparseVector) = nnz(a)
 
-function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
-    diff_to_var = invview(var_to_diff)
-
+function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     mm = copy(mm_orig)
     is_linear_equations = falses(size(AsSubMatrix(mm_orig), 1))
     for e in mm_orig.nzrows
@@ -245,10 +258,10 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         (rank1, rank2, rank3, pivots)
     end
 
-    # mm2 = Array(copy(mm))
-    # @show do_bareiss!(mm2)
-    # display(mm2)
+    return mm, solvable_variables, do_bareiss!(mm, mm_orig)
+end
 
+function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # Step 1: Perform bareiss factorization on the adjacency matrix of the linear
     #         subsystem of the system we're interested in.
     #
@@ -261,7 +274,8 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # -------------------|------------------------
     # rank3 | [ 0    0   | M₃₃  M₃₄ ]   [v₃] = [0]
     #         [ 0    0   | 0    0   ]   [v₄] = [0]
-    (rank1, rank2, rank3, pivots) = do_bareiss!(mm, mm_orig)
+    mm, solvable_variables, (rank1, rank2, rank3, pivots) =
+        aag_bareiss!(graph, var_to_diff, mm_orig)
 
     # Step 2: Simplify the system using the Bareiss factorization
     ag = AliasGraph(size(mm, 2))
@@ -272,6 +286,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # Kind of like the backward substitution, but we don't actually rely on it
     # being lower triangular. We eliminate a variable if there are at most 2
     # variables left after the substitution.
+    diff_to_var = invview(var_to_diff)
     function lss!(ei::Integer)
         vi = pivots[ei]
         # the lowest differentiated variable can be eliminated
