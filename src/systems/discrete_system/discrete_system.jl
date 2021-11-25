@@ -159,6 +159,7 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     eval_module = @__MODULE__,
                                     eval_expression = true,
+                                    dt = nothing,
                                     kwargs...)
     dvs = states(sys)
     ps = parameters(sys)
@@ -166,6 +167,15 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     eqs = linearize_eqs(sys, eqs)
     defs = defaults(sys)
     iv = get_iv(sys)
+    # verify that the sample time is the same for all difference operators
+    diffvars = collect_applied_operators(eqs, Difference) |> collect
+    dt0 = diffvars[1].f.dt
+    all(dv.f.dt == dt0 for dv in diffvars) || error("Multi-rate systems are not yet supported")
+    if dt !== nothing
+        dt == dt0 || throw(ArgumentError("The supplied dt = $dt is different from the sample time of the system."))
+    else
+        dt = dt0
+    end
 
     if parammap isa Dict
         u0defs = merge(parammap, defs)
@@ -196,7 +206,7 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     f_oop, _ = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
     f(u,p,iv) = f_oop(u,p,iv)
     fd = DiscreteFunction(f, syms=Symbol.(dvs))
-    DiscreteProblem(fd,u0,tspan,p;kwargs...)
+    DiscreteProblem(fd,u0,tspan,p; dt=dt, kwargs...)
 end
 
 function linearize_eqs(sys, eqs=get_eqs(sys); return_max_delay=false)
