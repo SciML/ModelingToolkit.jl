@@ -136,7 +136,7 @@ hashold(O) = recursive_hasoperator(Hold, O)
 """
     SampledTime
 
-The `SampledTime` operator allows you to index a continuous-time signal and obtain a sampled and possibly shifted discrete-time signal.
+The `SampledTime` operator allows you to index a signal and obtain a shifted discrete-time signal. If the signal is continuous-time, the signal is sampled before shifting.
 
 # Examples 
 ```
@@ -163,11 +163,11 @@ function (xn::Num)(k::SampledTime)
     @unpack t, dt, steps = k
     x = value(xn)
     t = k.t
-    # Verify that the independent variables of k and x match
+    # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
     vars = Symbolics.get_variables(x)
     length(vars) == 1 ||
         error("Cannot sample a multivariate expression $x. Create a new state and sample this instead.")
-    args = Symbolics.arguments(vars[])
+    args = Symbolics.arguments(vars[]) # args should be one element vector with the t in x(t)
     length(args) == 1 ||
         error("Cannot sample an expression with multiple independent variables $x.")
     isequal(args[], t) ||
