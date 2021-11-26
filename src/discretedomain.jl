@@ -25,18 +25,33 @@ struct Shift <: Operator
     """Fixed Shift"""
     t
     dt
-    Shift(t; dt) = new(value(t), dt)
+    steps::Int
+    Shift(t, steps=1; dt) = new(value(t), dt, steps)
 end
 (D::Shift)(t) = Term{symtype(t)}(D, [t])
-(D::Shift)(t::Num) = Num(D(value(t)))
+function (D::Shift)(x::Num)
+    vt = value(x)
+    if vt isa Term
+        op = operation(vt)
+        if op isa Shift
+            op.dt == D.dt || error("Multi rate shifts are currently not supported.")
+            if isequal(D.t, op.t)
+                arg = arguments(vt)[1]
+                return Num(Shift(D.t, D.steps + op.steps, dt=D.dt)(arg)) # Add the steps together
+            end
+        end
+    end
+    Num(D(vt))
+end
 SymbolicUtils.promote_symtype(::Shift, t) = t
 
-Base.show(io::IO, D::Shift) = print(io, "Shift(", D.t, "; dt=", D.dt, ")")
+Base.show(io::IO, D::Shift) = print(io, "Shift(", D.t, ", ", D.steps, "; dt=", D.dt, ")")
 
-Base.:(==)(D1::Shift, D2::Shift) = isequal(D1.t, D2.t) && isequal(D1.dt, D2.dt)
-Base.hash(D::Shift, u::UInt) = hash(D.dt, hash(D.t, xor(u, 0x055640d6d952f101)))
+Base.:(==)(D1::Shift, D2::Shift) = isequal(D1.t, D2.t) && isequal(D1.steps, D2.steps) && isequal(D1.dt, D2.dt)
+Base.hash(D::Shift, u::UInt) = hash(D.steps, hash(D.dt, hash(D.t, xor(u, 0x055640d6d952f101))))
 
-Base.:^(D::Shift, n::Integer) = Symbolics._repeat_apply(D, n)
+Base.:^(D::Shift, n::Integer) = Shift(D.t, D.steps*n; dt=D.dt)
+Base.literal_pow(f::typeof(^), D::Shift, ::Val{n}) where n = Shift(D.t, D.steps*n; dt=D.dt)
 
 hasshift(eq::Equation) = hasshift(eq.lhs) || hasshift(eq.rhs)
 
