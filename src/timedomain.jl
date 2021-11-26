@@ -59,11 +59,11 @@ has_continuous_domain(x) = hasderiv(x) || hasdiff(x) || hassample(x) || hashold(
 
 
 """
-    transitions_timedomain(x)
+    is_hybrid_domain(x)
 
 true if `x` contains both discrete and continuous-domain signals. `x` may be an expression or equation.
 """
-transitions_timedomain(x) = has_discrete_domain(x) && has_continuous_domain(x)
+is_hybrid_domain(x) = has_discrete_domain(x) && has_continuous_domain(x)
 
 """
     is_discrete_domain(x)
