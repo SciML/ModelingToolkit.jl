@@ -31,21 +31,11 @@ function contract_variables(graph::BipartiteGraph, var_eq_matching::Matching, el
     masked_cumsum!(var_rename)
     masked_cumsum!(eq_rename)
 
-    rg = ResidualCMOGraph(graph, var_eq_matching)
+    dig = DiCMOBiGraph{true}(graph, var_eq_matching)
 
     # Update bipartite graph
-    var_deps = Union{Vector{Int}, Nothing}[nothing for v in eliminated_variables]
-    var_idxs = Dict(v => i for (i,v) in enumerate(eliminated_variables))
-    for (i, v) in enumerate(eliminated_variables)
-        isa(var_deps[i], Vector{Int}) && continue
-        var_deps[i] = deps = Vector{Int}()
-        for v′ in neighborhood(rg, v)
-            if var_rename[v′] != 0
-                push!(deps, var_rename[v′])
-            else
-                var_deps[var_idxs[v′]] = deps
-            end
-        end
+    var_deps = map(1:ndsts(graph)) do v
+        [var_rename[v′] for v′ in neighborhood(dig, v, Inf; dir=:in) if var_rename[v′] != 0]
     end
 
     new_fadjlist = Vector{Int}[
@@ -54,7 +44,7 @@ function contract_variables(graph::BipartiteGraph, var_eq_matching::Matching, el
                 if var_rename[v] != 0
                     push!(new_list, var_rename[v])
                 else
-                    append!(new_list, var_deps[var_idxs[v]])
+                    append!(new_list, var_deps[v])
                 end
             end
             new_list
