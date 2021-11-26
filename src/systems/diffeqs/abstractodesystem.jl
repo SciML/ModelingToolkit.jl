@@ -126,7 +126,7 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
         eq = get(var2eq, v, nothing)
         eq === nothing && return v
         d = operation(eq.lhs)
-        d.update ? eq.rhs : eq.rhs + v
+        d.shift ? eq.rhs : eq.rhs + v
     end
 
     pre = get_postprocess_fbody(sys)
