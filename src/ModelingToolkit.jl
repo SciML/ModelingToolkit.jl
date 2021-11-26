@@ -153,6 +153,9 @@ include("systems/alias_elimination.jl")
 include("structural_transformation/StructuralTransformations.jl")
 @reexport using .StructuralTransformations
 
+include("discretedomain.jl")
+include("timedomain.jl")
+
 for S in subtypes(ModelingToolkit.AbstractSystem)
     S = nameof(S)
     @eval convert_system(::Type{<:$S}, sys::$S) = sys
@@ -206,5 +209,10 @@ export build_function
 export modelingtoolkitize
 export @variables, @parameters
 export @named, @nonamespace, @namespace, extend, compose
+
+export Continuous, Discrete, sampletime, input_timedomain, output_timedomain
+export has_discrete_domain, has_continuous_domain, transitions_timedomain
+export is_discrete_domain, is_continuous_domain
+export Sample, Hold, Shift
 
 end # module
