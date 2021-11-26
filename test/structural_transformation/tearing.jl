@@ -139,6 +139,14 @@ eqs = [
        0 ~ x + z,
       ]
 @named nlsys = NonlinearSystem(eqs, [x, y, z], [])
+let (mm, _, _) = ModelingToolkit.aag_bareiss(nlsys)
+    @test mm == [
+        -1  1  0;
+         0 -1 -1;
+         0  0  0
+    ]
+end
+
 newsys = tearing(nlsys)
 @test length(equations(newsys)) == 1
 
