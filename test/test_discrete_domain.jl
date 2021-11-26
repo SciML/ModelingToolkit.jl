@@ -1,5 +1,5 @@
 using ModelingToolkit
-using ModelingToolkit: hashold, hassample, hasshift
+using ModelingToolkit: hashold, hassample, hasshift, value
 
 @variables t x
 
@@ -58,7 +58,7 @@ D1 = Hold()
 
 ## Test SampledTime
 
-@variables t x(t)
+@variables t t2 x(t) y(t) y2(t2) y3(t, t2)
 k = SampledTime(t, dt=0.1)
 
 
@@ -85,3 +85,15 @@ samp = shift.arguments[1]
 @test samp.f isa Sample
 @test samp.f.t === k.t
 
+# more complicated expressions
+dt = 0.1
+s = Sample(t; dt)
+z = Shift(t; dt)
+x2 = x^2
+@test isequal(x2(k), s(x2))
+@test isequal(x2(k+1), z(s(x2)))
+
+@test_throws ErrorException y2(k)
+
+@test_throws ErrorException (x + y)(k)
+@test_throws ErrorException y3(k)

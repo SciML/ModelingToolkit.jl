@@ -161,15 +161,23 @@ end
 
 function (xn::Num)(k::SampledTime)
     @unpack t, dt, steps = k
-    sample = Sample(t; dt=dt)
-    if steps == 0
-        return sample(xn)
-    end
-    z = Shift(t, steps; dt=dt) # a shift of k steps
     x = value(xn)
     t = k.t
-    emsg = "variable $xn does not depend on independent variable $(k.t)"
-    (length(x.arguments) != 1 || !isequal(x.arguments[1], t)) && error(emsg)
+    # Verify that the independent variables of k and x match
+    vars = Symbolics.get_variables(x)
+    length(vars) == 1 ||
+        error("Cannot sample a multivariate expression $x. Create a new state and sample this instead.")
+    args = Symbolics.arguments(vars[])
+    length(args) == 1 ||
+        error("Cannot sample an expression with multiple independent variables $x.")
+    isequal(args[], t) ||
+        error("Independent variable of $xn is not the same as that of the SampledTime $(k.t)")
+
+    sample = Sample(t; dt=dt)
+    if steps == 0
+        return sample(xn) # x(k) needs no shift operator if the step of k is 0
+    end
+    z = Shift(t, steps; dt=dt) # a shift of k steps
     z(sample(xn))
 end
 
