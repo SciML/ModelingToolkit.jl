@@ -1,4 +1,4 @@
-using Symbolics: Operator, Num, Term, value
+using Symbolics: Operator, Num, Term, value, recursive_hasoperator
 
 # Shift
 
@@ -61,22 +61,7 @@ hasshift(eq::Equation) = hasshift(eq.lhs) || hasshift(eq.rhs)
 
 Returns true if the expression or equation `O` contains [`Shift`](@ref) terms.
 """
-function hasshift(O)
-    istree(O) || return false
-    if operation(O) isa Shift
-        return true
-    else
-        if O isa Union{Add, Mul}
-            any(hasshift, keys(O.dict))
-        elseif O isa Pow
-            hasshift(O.base) || hasshift(O.exp)
-        elseif O isa SymbolicUtils.Div
-            hasshift(O.num) || hasshift(O.den)
-        else
-            any(hasshift, arguments(O))
-        end
-    end
-end
+hasshift(O) = recursive_hasoperator(Shift, O)
 
 
 # Sample
@@ -114,31 +99,12 @@ Base.show(io::IO, D::Sample) = print(io, "Sample(", D.t, "; dt=", D.dt, ")")
 Base.:(==)(D1::Sample, D2::Sample) = isequal(D1.t, D2.t) && isequal(D1.dt, D2.dt)
 Base.hash(D::Sample, u::UInt) = hash(D.dt, hash(D.t, xor(u, 0x055640d6d952f101)))
 
-
-hassample(eq::Equation) = hassample(eq.lhs) || hassample(eq.rhs)
-hassample(h::Sample) = true
-
 """
     hassample(O)
 
 Returns true if the expression or equation `O` contains [`Sample`](@ref) terms.
 """
-function hassample(O)
-    istree(O) || return false
-    if operation(O) isa Sample
-        return true
-    else
-        if O isa Union{Add, Mul}
-            any(hassample, keys(O.dict))
-        elseif O isa Pow
-            hassample(O.base) || hassample(O.exp)
-        elseif O isa SymbolicUtils.Div
-            hassample(O.num) || hassample(O.den)
-        else
-            any(hassample, arguments(O))
-        end
-    end
-end
+hassample(O) = recursive_hasoperator(Sample, O)
 
 
 # Hold
@@ -158,27 +124,9 @@ end
 (D::Hold)(x::Num) = Num(D(value(x)))
 SymbolicUtils.promote_symtype(::Hold, x) = x
 
-hashold(eq::Equation) = hashold(eq.lhs) || hashold(eq.rhs)
-hashold(h::Hold) = true
-
 """
     hashold(O)
 
 Returns true if the expression or equation `O` contains [`Hold`](@ref) terms.
 """
-function hashold(O)
-    istree(O) || return false
-    if operation(O) isa Hold
-        return true
-    else
-        if O isa Union{Add, Mul}
-            any(hashold, keys(O.dict))
-        elseif O isa Pow
-            hashold(O.base) || hashold(O.exp)
-        elseif O isa SymbolicUtils.Div
-            hashold(O.num) || hashold(O.den)
-        else
-            any(hashold, arguments(O))
-        end
-    end
-end
+hashold(O) = recursive_hasoperator(Hold, O)
