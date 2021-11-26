@@ -20,8 +20,8 @@ op = Difference(t; dt=0.01)
 @test !has_discrete_domain(t ~ x)
 @test !has_discrete_domain((op^2)(x) ~ x)
 
-@test !transitions_timedomain(op(x) ~ x)
-@test !transitions_timedomain(x ~ op(x))
+@test !is_hybrid_domain(op(x) ~ x)
+@test !is_hybrid_domain(x ~ op(x))
 
 
 @test is_continuous_domain(op(x) ~ x)
@@ -43,8 +43,8 @@ op = Shift(t; dt=0.01)
 @test has_discrete_domain(x ~ op(x))
 @test !has_discrete_domain(t ~ x)
 
-@test !transitions_timedomain(op(x) ~ x)
-@test !transitions_timedomain(x ~ op(x))
+@test !is_hybrid_domain(op(x) ~ x)
+@test !is_hybrid_domain(x ~ op(x))
 
 @test !is_continuous_domain(op(x) ~ x)
 @test is_discrete_domain(op(x) ~ x)
@@ -61,8 +61,8 @@ op = Sample(t; dt=0.01)
 @test has_discrete_domain(op(x) ~ x)
 @test has_discrete_domain(x ~ op(x))
 
-@test transitions_timedomain(op(x) ~ x)
-@test transitions_timedomain(x ~ op(x))
+@test is_hybrid_domain(op(x) ~ x)
+@test is_hybrid_domain(x ~ op(x))
 
 @test !is_continuous_domain(op(x) ~ x)
 @test !is_discrete_domain(op(x) ~ x)
@@ -79,8 +79,8 @@ op = Hold()
 @test has_discrete_domain(op(x) ~ x)
 @test has_discrete_domain(x ~ op(x))
 
-@test transitions_timedomain(op(x) ~ x)
-@test transitions_timedomain(x ~ op(x))
+@test is_hybrid_domain(op(x) ~ x)
+@test is_hybrid_domain(x ~ op(x))
 
 @test !is_continuous_domain(op(x) ~ x)
 @test !is_discrete_domain(op(x) ~ x)
