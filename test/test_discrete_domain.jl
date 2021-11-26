@@ -55,3 +55,33 @@ D1 = Hold()
 @test !hashold(t ~ x)
 @test hashold(D1(x) ~ D2(x))
 
+
+## Test SampledTime
+
+@variables t x(t)
+k = SampledTime(t, dt=0.1)
+
+
+xk = x(k)
+@test xk isa Num
+@test value(xk).f isa Sample
+@test value(xk).f.dt == k.dt
+
+k1 = k+1
+@test k1.steps == 1
+@test k1.t === k.t
+@test k1.dt === k.dt
+
+
+xk1 = x(k+1)
+@test xk1 isa Num
+shift = value(xk1)
+@test shift isa Term
+@test value(xk1).f isa Shift
+@test value(xk1).f.dt == k.dt
+@test value(xk1).f.t === k.t
+samp = shift.arguments[1]
+@test samp isa Term
+@test samp.f isa Sample
+@test samp.f.t === k.t
+

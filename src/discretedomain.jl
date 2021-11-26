@@ -182,3 +182,48 @@ function hashold(O)
         end
     end
 end
+
+
+# SampledTime
+
+"""
+    SampledTime
+
+The `SampledTime` operator allows you to index a continuous-time signal and obtain a sampled and possibly shifted discrete-time signal.
+
+# Examples 
+```
+julia> @variables t x(t);
+
+julia> k = SampledTime(t, dt=0.1);
+
+julia> x(k)
+Sample(t; dt=0.1)(x(t))
+
+julia> x(k+1)
+Shift(t, 1; dt=0.1)(Sample(t; dt=0.1)(x(t)))
+```
+"""
+struct SampledTime
+    t
+    dt
+    steps::Int
+    SampledTime(t, steps=0; dt) = new(value(t), dt, steps)
+end
+
+
+function (xn::Num)(k::SampledTime)
+    @unpack t, dt, steps = k
+    sample = Sample(t; dt=dt)
+    if steps == 0
+        return sample(xn)
+    end
+    z = Shift(t, steps; dt=dt) # a shift of k steps
+    x = value(xn)
+    t = k.t
+    emsg = "variable $xn does not depend on independent variable $(k.t)"
+    (length(x.arguments) != 1 || !isequal(x.arguments[1], t)) && error(emsg)
+    z(sample(xn))
+end
+
+Base.:+(k::SampledTime, i::Int) = SampledTime(k.t, k.steps + i; dt = k.dt)
