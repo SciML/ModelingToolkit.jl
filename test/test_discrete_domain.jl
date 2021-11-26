@@ -22,6 +22,10 @@ D2 = Shift(t; dt=0.01)
 @test hasshift((D1^2)(x) ~ x)
 @test hasshift(D1(x) ~ D2(x))
 
+@test D1.steps == 1
+@test (D1^2).steps == 2
+@test (D1^(-2)).steps == -2
+
 
 ## Sample
 
