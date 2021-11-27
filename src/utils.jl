@@ -130,18 +130,19 @@ function check_variables(dvs, iv)
     end
 end
 
-"Get all the independent variables with respect to which differentials are taken"
-function collect_ivs(eqs)
+"""
+    collect_ivs(eqs, op = Differential)
+
+Get all the independent variables with respect to which differentials (`op`) are taken.
+"""
+function collect_ivs(eqs, op=Differential)
     vars = Set()
     ivs = Set()
     for eq in eqs
-        vars!(vars, eq)
-        difference_vars!(vars, eq)
+        vars!(vars, eq; op=op)
         for v in vars
-            if isdifferential(v)
-                collect_ivs_from_nested_operator!(ivs, v, Differential)
-            elseif isdifference(v)
-                collect_ivs_from_nested_operator!(ivs, v, Difference)
+            if isoperator(v, op)
+                collect_ivs_from_nested_operator!(ivs, v, op)
             end
         end
         empty!(vars)
@@ -230,10 +231,13 @@ function check_operator_variables(eq, op::Type, expr=eq.rhs)
     foreach(expr -> check_operator_variables(eq, op, expr), SymbolicUtils.unsorted_arguments(expr))
 end
 
-isdifferential(expr) = istree(expr) && operation(expr) isa Differential
+isoperator(expr, op) = istree(expr) && operation(expr) isa op
+isoperator(op) = expr -> isoperator(expr, op)
+
+isdifferential(expr) = isoperator(expr, Differential)
 isdiffeq(eq) = isdifferential(eq.lhs)
 
-isdifference(expr) = istree(expr) && operation(expr) isa Difference
+isdifference(expr) = isoperator(expr, Difference)
 isdifferenceeq(eq) = isdifference(eq.lhs)
 
 iv_from_nested_difference(x::Term) = operation(x) isa Difference ? iv_from_nested_difference(arguments(x)[1]) : arguments(x)[1]
@@ -312,7 +316,7 @@ function collect_operator_variables(eqs::AbstractVector{Equation}, op)
     for eq in eqs
         vars!(vars, eq; op=op)
         for v in vars
-            (istree(v) && operation(v) isa op) || continue
+            isoperator(v, op) || continue
             push!(diffvars, arguments(v)[1])
         end
         empty!(vars)

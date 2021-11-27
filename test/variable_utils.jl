@@ -50,7 +50,7 @@ aov = ModelingToolkit.collect_applied_operators(eq, Difference)
 @test aov == Set(Any[z(y)])
 
 
-ts = collect_ivs([eq])
+ts = collect_ivs([eq], Difference)
 @test ts == Set([t])
 
 
