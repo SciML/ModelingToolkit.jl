@@ -164,10 +164,8 @@ function find_solvables!(sys)
     eqs = equations(sys)
     empty!(solvable_graph)
     for (i, eq) in enumerate(eqs)
-        isdiffeq(eq) && continue
         term = value(eq.rhs - eq.lhs)
         for j in 𝑠neighbors(graph, i)
-            isalgvar(s, j) || continue
             var = fullvars[j]
             isinput(var) && continue
             a, b, islinear = linear_expansion(term, var)

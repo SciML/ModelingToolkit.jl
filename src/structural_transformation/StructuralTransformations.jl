@@ -36,7 +36,7 @@ using SparseArrays
 
 using NonlinearSolve
 
-export tearing, dae_index_lowering, check_consistency
+export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export build_torn_function, build_observed_function, ODAEProblem
 export sorted_incidence_matrix
 
@@ -45,6 +45,7 @@ include("pantelides.jl")
 include("bipartite_tearing/modia_tearing.jl")
 include("tearing.jl")
 include("symbolics_tearing.jl")
+include("partial_state_selection.jl")
 include("codegen.jl")
 
 end # module

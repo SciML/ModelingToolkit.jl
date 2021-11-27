@@ -62,6 +62,8 @@ struct DiffGraph <: Graphs.AbstractGraph{Int}
     primal_to_diff::Vector{Union{Int, Nothing}}
     diff_to_primal::Union{Nothing, Vector{Union{Int, Nothing}}}
 end
+DiffGraph(primal_to_diff::Vector{Union{Int, Nothing}}) =
+    DiffGraph(primal_to_diff, nothing)
 DiffGraph(n::Integer, with_badj::Bool=false) = DiffGraph(Union{Int, Nothing}[nothing for _=1:n],
     with_badj ? Union{Int, Nothing}[nothing for _=1:n] : nothing)
 

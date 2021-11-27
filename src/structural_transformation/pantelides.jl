@@ -72,13 +72,14 @@ end
 Perform Pantelides algorithm.
 """
 function pantelides!(sys::ODESystem; maxiters = 8000)
+    find_solvables!(sys)
     s = structure(sys)
     # D(j) = assoc[j]
-    @unpack graph, var_to_diff = s
-    return (sys, pantelides!(graph, var_to_diff)...)
+    @unpack graph, var_to_diff, solvable_graph = s
+    return (sys, pantelides!(graph, solvable_graph, var_to_diff)...)
 end
 
-function pantelides!(graph, var_to_diff; maxiters = 8000)
+function pantelides!(graph, solvable_graph, var_to_diff; maxiters = 8000)
     neqs = nsrcs(graph)
     nvars = nv(var_to_diff)
     vcolor = falses(nvars)
@@ -106,7 +107,7 @@ function pantelides!(graph, var_to_diff; maxiters = 8000)
             for var in eachindex(vcolor); vcolor[var] || continue
                 # introduce a new variable
                 nvars += 1
-                add_vertex!(graph, DST)
+                add_vertex!(graph, DST); add_vertex!(solvable_graph, DST)
                 # the new variable is the derivative of `var`
 
                 add_edge!(var_to_diff, var, add_vertex!(var_to_diff))
@@ -116,13 +117,16 @@ function pantelides!(graph, var_to_diff; maxiters = 8000)
             for eq in eachindex(ecolor); ecolor[eq] || continue
                 # introduce a new equation
                 neqs += 1
-                add_vertex!(graph, SRC)
+                add_vertex!(graph, SRC); add_vertex!(solvable_graph, SRC)
                 # the new equation is created by differentiating `eq`
                 eq_diff = add_vertex!(eq_to_diff)
                 add_edge!(eq_to_diff, eq, eq_diff)
                 for var in 𝑠neighbors(graph, eq)
                     add_edge!(graph, eq_diff, var)
                     add_edge!(graph, eq_diff, var_to_diff[var])
+                    # If you have f(x) = 0, then the derivative is (∂f/∂x) ẋ = 0.
+                    # which is linear, thus solvable in ẋ.
+                    add_edge!(solvable_graph, eq_diff, var_to_diff[var])
                 end
             end
 

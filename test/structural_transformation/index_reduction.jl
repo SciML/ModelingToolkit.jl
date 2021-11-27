@@ -134,3 +134,20 @@ p = [
 prob_auto = ODEProblem(new_sys,u0,(0.0,10.0),p)
 sol = solve(prob_auto, Rodas5());
 #plot(sol, vars=(D(x), y))
+
+let pss_pendulum2 = partial_state_selection(pendulum2)
+    @test length(equations(pss_pendulum2)) == 3
+    @test length(equations(ModelingToolkit.ode_order_lowering(pss_pendulum2))) == 4
+end
+
+eqs = [D(x) ~ w,
+       D(y) ~ z,
+       D(w) ~ T*x,
+       D(z) ~ T*y - g,
+       0 ~ x^2 + y^2 - L^2]
+pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
+
+let pss_pendulum = partial_state_selection(pendulum)
+    @test length(equations(pss_pendulum)) == 3
+    @test length(equations(ModelingToolkit.ode_order_lowering(pss_pendulum))) == 4
+end
