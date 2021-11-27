@@ -2,9 +2,9 @@ using LinearAlgebra
 
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
-function torn_system_jacobian_sparsity(sys)
+function torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs)
     s = structure(sys)
-    @unpack fullvars, graph, partitions = s
+    @unpack fullvars, graph = s
 
     # The sparsity pattern of `nlsolve(f, u, p)` w.r.t `p` is difficult to
     # determine in general. Consider the "simplest" case, a linear system. We
@@ -44,8 +44,9 @@ function torn_system_jacobian_sparsity(sys)
     # dependencies.
     avars2dvars = Dict{Int,Set{Int}}()
     c = 0
-    for partition in partitions
-        @unpack e_residual, v_residual = partition
+    for scc in var_sccs
+        v_residual = scc
+        e_residual = [var_eq_matching[c] for c in v_residual if var_eq_matching[c] !== unassigned]
         # initialization
         for tvar in v_residual
             avars2dvars[tvar] = Set{Int}()
@@ -92,41 +93,6 @@ function torn_system_jacobian_sparsity(sys)
         end
     end
     sparse(I, J, true)
-end
-
-"""
-    partitions_dag(s::SystemStructure)
-
-Return a DAG (sparse matrix) of partitions to use for parallelism.
-"""
-function partitions_dag(s::SystemStructure)
-    @unpack partitions, graph = s
-
-    # `partvars[i]` contains all the states that appear in `partitions[i]`
-    partvars = map(partitions) do partition
-        ipartvars = Set{Int}()
-        for req in partition.e_residual
-            union!(ipartvars, 𝑠neighbors(graph, req))
-        end
-        ipartvars
-    end
-
-    I, J = Int[], Int[]
-    n = length(partitions)
-    for (i, partition) in enumerate(partitions)
-        for j in i+1:n
-            # The only way for a later partition `j` to depend on an earlier
-            # partition `i` is when `partvars[j]` contains one of tearing
-            # variables of partition `i`.
-            if !isdisjoint(partvars[j], partition.v_residual)
-                # j depends on i
-                push!(I, i)
-                push!(J, j)
-            end
-        end
-    end
-
-    sparse(I, J, true, n, n)
 end
 
 """
@@ -205,7 +171,8 @@ function build_torn_function(
     end
 
     s = structure(sys)
-    @unpack fullvars, partitions = s
+    @unpack fullvars = s
+    var_eq_matching, var_sccs = algebraic_variables_scc(sys)
 
     states = map(i->s.fullvars[i], diffvars_range(s))
     mass_matrix_diag = ones(length(states))
@@ -213,11 +180,11 @@ function build_torn_function(
     defs = defaults(sys)
 
     needs_extending = false
-    for p in partitions
-        @unpack e_residual, v_residual = p
-        torn_eqs = eqs[e_residual]
-        torn_vars = fullvars[v_residual]
-        if length(e_residual) <= max_inlining_size
+    for scc in var_sccs
+        torn_vars = [s.fullvars[var] for var in scc if var_eq_matching[var] !== unassigned]
+        torn_eqs = [eqs[var_eq_matching[var]] for var in scc if var_eq_matching[var] !== unassigned]
+        isempty(torn_eqs) && continue
+        if length(torn_eqs) <= max_inlining_size
             append!(torn_expr, gen_nlsolve(torn_eqs, torn_vars, defs, checkbounds=checkbounds))
         else
             needs_extending = true
@@ -260,7 +227,7 @@ function build_torn_function(
         observedfun = let sys = sys, dict = Dict()
             function generated_observed(obsvar, u, p, t)
                 obs = get!(dict, value(obsvar)) do
-                    build_observed_function(sys, obsvar, checkbounds=checkbounds)
+                    build_observed_function(sys, obsvar, var_eq_matching, var_sccs, checkbounds=checkbounds)
                 end
                 obs(u, p, t)
             end
@@ -268,7 +235,7 @@ function build_torn_function(
 
         ODEFunction{true}(
                           @RuntimeGeneratedFunction(expr),
-                          sparsity = torn_system_jacobian_sparsity(sys),
+                          sparsity = torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs),
                           syms = syms,
                           observed = observedfun,
                           mass_matrix = mass_matrix,
@@ -277,24 +244,24 @@ function build_torn_function(
 end
 
 """
-    find_solve_sequence(partitions, vars)
+    find_solve_sequence(sccs, vars)
 
 given a set of `vars`, find the groups of equations we need to solve for
 to obtain the solution to `vars`
 """
-function find_solve_sequence(partitions, vars)
-    subset = filter(x -> !isdisjoint(x.v_residual, vars), partitions)
+function find_solve_sequence(sccs, vars)
+    subset = filter(i -> !isdisjoint(sccs[i], vars), 1:length(sccs))
     isempty(subset) && return []
-    vars′ = mapreduce(x->x.v_residual, union, subset)
+    vars′ = mapreduce(i->sccs[i], union, subset)
     if vars′ == vars
         return subset
     else
-        return find_solve_sequence(partitions, vars′)
+        return find_solve_sequence(sccs, vars′)
     end
 end
 
 function build_observed_function(
-        sys, ts;
+        sys, ts, var_eq_matching, var_sccs;
         expression=false,
         output_type=Array,
         checkbounds=true
@@ -311,7 +278,7 @@ function build_observed_function(
     dep_vars = collect(setdiff(vars, ivs))
 
     s = structure(sys)
-    @unpack partitions, fullvars, graph = s
+    @unpack fullvars, graph = s
     diffvars = map(i->fullvars[i], diffvars_range(s))
     algvars = map(i->fullvars[i], algvars_range(s))
 
@@ -339,12 +306,12 @@ function build_observed_function(
     end
 
     varidxs = findall(x->x in required_algvars, fullvars)
-    subset = find_solve_sequence(partitions, varidxs)
+    subset = find_solve_sequence(var_sccs, varidxs)
     if !isempty(subset)
         eqs = equations(sys)
 
-        torn_eqs  = map(idxs-> eqs[idxs.e_residual], subset)
-        torn_vars = map(idxs->fullvars[idxs.v_residual], subset)
+        torn_eqs  = map(i->map(v->eqs[var_eq_matching[v]], var_sccs[i]), subset)
+        torn_vars = map(i->map(v->fullvars[v], var_sccs[i]), subset)
         u0map = defaults(sys)
         solves = gen_nlsolve.(torn_eqs, torn_vars, (u0map,); checkbounds=checkbounds)
     else

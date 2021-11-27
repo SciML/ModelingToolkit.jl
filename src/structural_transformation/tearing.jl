@@ -1,31 +1,65 @@
-"""
-    tear_graph(sys) -> sys
+struct EquationSolveError
+    eq
+    var
+    rhs
+end
 
-Tear the bipartite graph in a system. End users are encouraged to call [`structural_simplify`](@ref)
-instead, which calls this function internally.
-"""
-function tear_graph(sys)
-    find_solvables!(sys)
-    s = structure(sys)
-    @unpack graph, solvable_graph, var_eq_matching, scc = s
+function Base.showerror(io::IO, ese::EquationSolveError)
+    print(io, "EquationSolveError: While solving\n\n\t")
+    print(io, ese.eq)
+    print(io, "\nfor ")
+    printstyled(io, var, bold=true)
+    print(io, ", obtained RHS\n\n\tt")
+    println(io, rhs)
+end
 
-    @set! sys.structure.partitions = map(scc) do c
-        ieqs = filter(eq->isalgeq(s, eq), c)
-        vars = Int[var for var in invview(var_eq_matching)[ieqs] if var !== unassigned]
-
-        ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph); dir=:in)
-        SystemPartition(tearEquations!(ict, solvable_graph.fadjlist, ieqs, vars)...)
+function masked_cumsum!(A::Vector)
+    acc = zero(eltype(A))
+    for i in eachindex(A)
+        iszero(A[i]) && continue
+        A[i] = (acc += A[i])
     end
-    return sys
+end
+
+function contract_variables(graph::BipartiteGraph, var_eq_matching::Matching, eliminated_variables)
+    var_rename = ones(Int64, ndsts(graph))
+    eq_rename = ones(Int64, nsrcs(graph))
+    for v in eliminated_variables
+        eq_rename[var_eq_matching[v]] = 0
+        var_rename[v] = 0
+    end
+    masked_cumsum!(var_rename)
+    masked_cumsum!(eq_rename)
+
+    dig = DiCMOBiGraph{true}(graph, var_eq_matching)
+
+    # Update bipartite graph
+    var_deps = map(1:ndsts(graph)) do v
+        [var_rename[v′] for v′ in neighborhood(dig, v, Inf; dir=:in) if var_rename[v′] != 0]
+    end
+
+    new_fadjlist = Vector{Int}[
+        let new_list = Vector{Int}()
+            for v in graph.fadjlist[i]
+                if var_rename[v] != 0
+                    push!(new_list, var_rename[v])
+                else
+                    append!(new_list, var_deps[v])
+                end
+            end
+            new_list
+        end for i = 1:nsrcs(graph) if eq_rename[i] != 0]
+
+    return BipartiteGraph(new_fadjlist, ndsts(graph) - length(eliminated_variables))
 end
 
 """
-    algebraic_equations_scc(sys)
+    algebraic_variables_scc(sys)
 
-Find strongly connected components of algebraic equations in a system.
+Find strongly connected components of algebraic variables in a system.
 """
-function algebraic_equations_scc(sys)
-    s = get_structure(sys)
+function algebraic_variables_scc(sys)
+    s = structure(sys)
     if !(s isa SystemStructure)
         sys = initialize_system_structure(sys)
         s = structure(sys)
@@ -33,10 +67,9 @@ function algebraic_equations_scc(sys)
 
     # skip over differential equations
     algvars = isalgvar.(Ref(s), 1:ndsts(s.graph))
-    var_eq_matching = complete(matching(s, algvars, s.algeqs))
-    components = find_scc(s.graph, var_eq_matching)
 
-    @set! sys.structure.var_eq_matching = var_eq_matching
-    @set! sys.structure.scc = components
-    return sys
+    var_eq_matching = complete(maximal_matching(s, e->s.algeqs[e], v->algvars[v]))
+    var_sccs = find_var_sccs(complete(s.graph), var_eq_matching)
+
+    return var_eq_matching, var_sccs
 end

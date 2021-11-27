@@ -42,14 +42,30 @@ function tearEquations!(ict::IncrementalCycleTracker, Gsolvable, es::Vector{Int}
         end
     end
 
-    vSolved = filter(v->G.matching[v] !== unassigned, topological_sort(ict))
-    inv_matching = Union{Missing, Int}[missing for _ = 1:nv(G)]
-    for (v, eq) in pairs(G.matching)
-        eq === unassigned && continue
-        inv_matching[v] = eq
+    return ict
+end
+
+"""
+    tear_graph_modia(sys) -> sys
+
+Tear the bipartite graph in a system. End users are encouraged to call [`structural_simplify`](@ref)
+instead, which calls this function internally.
+"""
+function tear_graph_modia(graph::BipartiteGraph, solvable_graph::BipartiteGraph; varfilter=v->true, eqfilter=eq->true)
+    var_eq_matching = complete(maximal_matching(graph, eqfilter, varfilter))
+    var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, var_eq_matching)
+
+    for vars in var_sccs
+        filtered_vars = filter(varfilter, vars)
+        ieqs = Int[var_eq_matching[v] for v in filtered_vars if var_eq_matching[v] !== unassigned]
+
+        ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph); dir=:in)
+        tearEquations!(ict, solvable_graph.fadjlist, ieqs, filtered_vars)
+
+        for var in vars
+            var_eq_matching[var] = ict.graph.matching[var]
+        end
     end
-    eSolved = getindex.(Ref(inv_matching), vSolved)
-    vTear = setdiff(vs, vSolved)
-    eResidue = setdiff(es, eSolved)
-    return (eSolved, vSolved, eResidue, vTear)
+
+    return var_eq_matching
 end

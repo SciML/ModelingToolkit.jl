@@ -34,20 +34,11 @@ pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
 pendulum = initialize_system_structure(pendulum)
 sss = structure(pendulum)
 @unpack graph, fullvars, var_to_diff = sss
-@test StructuralTransformations.matching(sss, isnothing.(var_to_diff)) == map(x -> x == 0 ? StructuralTransformations.unassigned : x, [1, 2, 3, 4, 0, 0, 0, 0, 0])
+@test StructuralTransformations.maximal_matching(sss, eq->true, v->var_to_diff[v] === nothing) == map(x -> x == 0 ? StructuralTransformations.unassigned : x, [1, 2, 3, 4, 0, 0, 0, 0, 0])
 
 sys, var_eq_matching, eq_to_diff = StructuralTransformations.pantelides!(pendulum)
 sss = structure(sys)
 @unpack graph, fullvars, var_to_diff = sss
-scc = StructuralTransformations.find_scc(graph, var_eq_matching)
-@test sort(sort.(scc)) == [
-                           [1],
-                           [2],
-                           [3, 4, 7, 8, 9],
-                           [5],
-                           [6],
-                          ]
-
 @test graph.fadjlist == [[1, 7], [2, 8], [3, 5, 9], [4, 6, 9], [5, 6], [1, 2, 5, 6], [1, 3, 7, 10], [2, 4, 8, 11], [1, 2, 5, 6, 10, 11]]
 let N=nothing;
     @test var_to_diff == [10, 11, N, N, 1, 2, 3, 4, N, N, N];
@@ -143,29 +134,3 @@ p = [
 prob_auto = ODEProblem(new_sys,u0,(0.0,10.0),p)
 sol = solve(prob_auto, Rodas5());
 #plot(sol, vars=(D(x), y))
-
-###
-### More BLT/SCC tests
-###
-
-# Test Tarjan (1972) Fig. 3
-g = [
-     [2],
-     [3,8],
-     [4,7],
-     [5],
-     [3,6],
-     Int[],
-     [4,6],
-     [1,7],
-    ]
-graph = StructuralTransformations.BipartiteGraph(8, 8)
-for (eq, vars) in enumerate(g), var in vars
-    add_edge!(graph, eq, var)
-end
-scc = StructuralTransformations.find_scc(graph)
-@test scc == [
-              [6],
-              [3, 4, 5, 7],
-              [1, 2, 8],
-             ]

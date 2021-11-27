@@ -42,7 +42,7 @@ end
 sys = initialize_system_structure(sys)
 find_solvables!(sys)
 sss = structure(sys)
-@unpack graph, solvable_graph, partitions, fullvars = sss
+@unpack graph, solvable_graph, fullvars = sss
 int2var = Dict(eachindex(fullvars) .=> fullvars)
 graph2vars(graph) = map(is->Set(map(i->int2var[i], is)), graph.fadjlist)
 @test graph2vars(graph) == [
@@ -63,9 +63,8 @@ graph2vars(graph) = map(is->Set(map(i->int2var[i], is)), graph.fadjlist)
 tornsys = tearing(sys)
 sss = structure(tornsys)
 let
-    @unpack graph, partitions = sss
+    @unpack graph = sss
     @test graph2vars(graph) == [Set([u5])]
-    @test partitions == [StructuralTransformations.SystemPartition([], [], [1], [1])]
 end
 
 # Before:
@@ -101,15 +100,15 @@ end
 # --------------------|-----
 # e5 [  1           1 |  1 ]
 
-sys = StructuralTransformations.tear_graph(StructuralTransformations.algebraic_equations_scc(sys))
-sss = structure(sys)
-@unpack partitions = sss
-S = StructuralTransformations.reordered_matrix(sys, partitions)
-@test S == [1 0 0 0 1
-            1 1 0 0 0
-            1 1 1 0 0
-            0 1 1 1 0
-            1 0 0 1 1]
+let sys = StructuralTransformations.init_for_tearing(sys)
+    torn_matching = StructuralTransformations.tear_graph(sys)
+    S = StructuralTransformations.reordered_matrix(sys, torn_matching)
+    @test S == [1 0 0 0 1
+                1 1 0 0 0
+                1 1 1 0 0
+                0 1 1 1 0
+                1 0 0 1 1]
+end
 
 # unknowns: u5
 # u1 := sin(u5)
@@ -148,7 +147,7 @@ let (mm, _, _) = ModelingToolkit.aag_bareiss(nlsys)
 end
 
 newsys = tearing(nlsys)
-@test length(equations(newsys)) == 1
+@test length(equations(newsys)) == 0
 
 ###
 ### DAE system

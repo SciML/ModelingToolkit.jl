@@ -50,26 +50,13 @@ for v in 𝑣vertices(graph); active_𝑣vertices[v] || continue
 end
 =#
 
-export SystemStructure, SystemPartition
+export SystemStructure
 export initialize_system_structure, find_linear_equations, linear_subsys_adjmat
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq
 export dervars_range, diffvars_range, algvars_range
 export DiffGraph
 
 @enum VariableType::Int8 DIFFERENTIAL_VARIABLE ALGEBRAIC_VARIABLE DERIVATIVE_VARIABLE
-
-Base.@kwdef struct SystemPartition
-    e_solved::Vector{Int}
-    v_solved::Vector{Int}
-    e_residual::Vector{Int}
-    v_residual::Vector{Int}
-end
-
-function Base.:(==)(s1::SystemPartition, s2::SystemPartition)
-    tup1 = (s1.e_solved, s1.v_solved, s1.e_residual, s1.v_residual)
-    tup2 = (s2.e_solved, s2.v_solved, s2.e_residual, s2.v_residual)
-    tup1 == tup2
-end
 
 struct DiffGraph <: Graphs.AbstractGraph{Int}
     primal_to_diff::Vector{Union{Int, Nothing}}
@@ -114,6 +101,8 @@ Base.eltype(::DiffGraph) = Union{Int, Nothing}
 Base.size(dg::DiffGraph) = size(dg.primal_to_diff)
 Base.length(dg::DiffGraph) = length(dg.primal_to_diff)
 Base.getindex(dg::DiffGraph, var::Integer) = dg.primal_to_diff[var]
+Base.getindex(dg::DiffGraph, a::AbstractArray) = [dg[x] for x in a]
+
 function Base.setindex!(dg::DiffGraph, val::Union{Integer, Nothing}, var::Integer)
     if dg.diff_to_primal !== nothing
         old_pd = dg.primal_to_diff[var]
@@ -132,7 +121,7 @@ Base.iterate(dg::DiffGraph, state...) = iterate(dg.primal_to_diff, state...)
 
 function complete(dg::DiffGraph)
     dg.diff_to_primal !== nothing && return dg
-    diff_to_primal = zeros(Int, length(dg.primal_to_diff))
+    diff_to_primal = Union{Int, Nothing}[nothing for _ = 1:length(dg.primal_to_diff)]
     for (var, diff) in edges(dg)
         diff_to_primal[diff] = var
     end
@@ -151,13 +140,12 @@ Base.@kwdef struct SystemStructure
     # its derivative.
     var_to_diff::DiffGraph
     algeqs::BitVector
+    # Can be access as
+    # `graph` to automatically look at the bipartite graph
+    # or as `torn` to assert that tearing has run.
     graph::BipartiteGraph{Int,Nothing}
     solvable_graph::BipartiteGraph{Int,Nothing}
-    var_eq_matching::Matching
-    scc::Vector{Vector{Int}}
-    partitions::Vector{SystemPartition}
 end
-
 isdervar(s::SystemStructure, var::Integer) = s.vartype[var] === DERIVATIVE_VARIABLE
 isdiffvar(s::SystemStructure, var::Integer) = s.vartype[var] === DIFFERENTIAL_VARIABLE
 isalgvar(s::SystemStructure, var::Integer) = s.vartype[var] === ALGEBRAIC_VARIABLE
@@ -289,9 +277,6 @@ function initialize_system_structure(sys; quick_cancel=false)
         algeqs = algeqs,
         graph = graph,
         solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph), Val(false)),
-        var_eq_matching = Matching(ndsts(graph)),
-        scc = Vector{Int}[],
-        partitions = SystemPartition[],
     )
     return sys
 end
