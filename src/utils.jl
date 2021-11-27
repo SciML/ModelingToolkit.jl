@@ -1,3 +1,6 @@
+get_iv(D::Differential) = D.x
+get_iv(D::Difference) = D.t
+
 function make_operation(@nospecialize(op), args)
     if op === (*)
         args = filter(!_isone, args)
@@ -127,15 +130,19 @@ function check_variables(dvs, iv)
     end
 end
 
-"Get all the independent variables with respect to which differentials are taken."
-function collect_differentials(eqs)
+"Get all the independent variables with respect to which differentials are taken"
+function collect_ivs(eqs)
     vars = Set()
     ivs = Set()
     for eq in eqs
         vars!(vars, eq)
+        difference_vars!(vars, eq)
         for v in vars
-            isdifferential(v) || continue
-            collect_ivs_from_nested_differential!(ivs, v)
+            if isdifferential(v)
+                collect_ivs_from_nested_operator!(ivs, v, Differential)
+            elseif isdifference(v)
+                collect_ivs_from_nested_operator!(ivs, v, Difference)
+            end
         end
         empty!(vars)
     end
@@ -148,7 +155,7 @@ end
 Assert that equations are well-formed when building ODE, i.e., only containing a single independent variable.
 """
 function check_equations(eqs, iv)
-    ivs = collect_differentials(eqs)
+    ivs = collect_ivs(eqs)
     display = collect(ivs)
     length(ivs) <= 1 || throw(ArgumentError("Differential w.r.t. multiple variables $display are not allowed."))
     if length(ivs) == 1
@@ -156,18 +163,18 @@ function check_equations(eqs, iv)
         isequal(single_iv, iv) || throw(ArgumentError("Differential w.r.t. variable ($single_iv) other than the independent variable ($iv) are not allowed."))
     end
 end
-"Get all the independent variables with respect to which differentials are taken."
-function collect_ivs_from_nested_differential!(ivs, x::Term)
+"Get all the independent variables with respect to which differentials/differences are taken."
+function collect_ivs_from_nested_operator!(ivs, x::Term, target_op)
     op = operation(x)
-    if op isa Differential
-        push!(ivs, op.x)
-        collect_ivs_from_nested_differential!(ivs, arguments(x)[1])
+    if op isa target_op
+        push!(ivs, get_iv(op))
+        collect_ivs_from_nested_operator!(ivs, arguments(x)[1], target_op)
     end
 end
 
-iv_from_nested_derivative(x::Term) = operation(x) isa Differential ? iv_from_nested_derivative(arguments(x)[1]) : arguments(x)[1]
-iv_from_nested_derivative(x::Sym) = x
-iv_from_nested_derivative(x) = missing
+iv_from_nested_derivative(x::Term, op=Differential) = operation(x) isa op ? iv_from_nested_derivative(arguments(x)[1], op) : arguments(x)[1]
+iv_from_nested_derivative(x::Sym, op=Differential) = x
+iv_from_nested_derivative(x, op=Differential) = missing
 
 hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
 getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))
@@ -246,9 +253,24 @@ function isvariable(x)
     hasmetadata(x, VariableSource)
 end
 
+"""
+    vars(x; op=Differential)
+Return a `Set` containing all variables in `x` that appear in
+- differential equations if `op = Differential`
+- difference equations if `op = Differential`
+
+Example:
+```
+@variables t u(t) y(t)
+D  = Differential(t)
+v  = ModelingToolkit.vars(D(y) ~ u)
+v == Set([D(y), u])
+```
+"""
 vars(x::Sym; op=Differential) = Set([x])
 vars(exprs::Symbolic; op=Differential) = vars([exprs]; op=op)
 vars(exprs; op=Differential) = foldl((x, y) -> vars!(x, y; op=op), exprs; init = Set())
+vars(eq::Equation; op=Differential) = vars!(Set(), eq; op=op)
 vars!(vars, eq::Equation; op=Differential) = (vars!(vars, eq.lhs; op=op); vars!(vars, eq.rhs; op=op); vars)
 function vars!(vars, O; op=Differential)
     if isvariable(O)
@@ -271,18 +293,17 @@ function vars!(vars, O; op=Differential)
 
     return vars
 end
-difference_vars(x::Sym) = vars(x; op=Difference)
-difference_vars(exprs::Symbolic) = vars(exprs; op=Difference)
-difference_vars(exprs) = vars(exprs; op=Difference)
-difference_vars!(vars, eq::Equation) = vars!(vars, eq; op=Difference)
+
+difference_vars(x) = vars(x; op=Difference)
 difference_vars!(vars, O) = vars!(vars, O; op=Difference)
 
-function collect_operator_variables(sys, isop::Function)
-    eqs = equations(sys)
+collect_operator_variables(sys::AbstractSystem, args...) = collect_operator_variables(equations(sys), args...)
+collect_operator_variables(eq::Equation, args...) = collect_operator_variables([eq], args...)
+function collect_operator_variables(eqs::AbstractVector{Equation}, isop::Function)
     vars = Set()
     diffvars = Set()
     for eq in eqs
-        vars!(vars, eq)
+        isop === isdifferential ? vars!(vars, eq) : difference_vars!(vars, eq)
         for v in vars
             isop(v) || continue
             push!(diffvars, arguments(v)[1])
@@ -293,6 +314,27 @@ function collect_operator_variables(sys, isop::Function)
 end
 collect_differential_variables(sys) = collect_operator_variables(sys, isdifferential)
 collect_difference_variables(sys) = collect_operator_variables(sys, isdifference)
+
+"""
+    collect_applied_operators(x, op)
+
+Return  a `Set` with all applied operators in `x`, example:
+```
+@variables t u(t) y(t)
+D = Differential(t)
+eq = D(y) ~ u
+ModelingToolkit.collect_applied_operators(eq, Differential) == Set([D(y)])
+```
+The difference compared to `collect_operator_variables` is that `collect_operator_variables` returns the variable without the operator applied.
+"""
+function collect_applied_operators(x, op)
+    v = vars(x, op=op)
+    filter(v) do x
+        x isa Sym && return false
+        x isa Term && return operation(x) isa op
+        false
+    end
+end
 
 find_derivatives!(vars, expr::Equation, f=identity) = (find_derivatives!(vars, expr.lhs, f); find_derivatives!(vars, expr.rhs, f); vars)
 function find_derivatives!(vars, expr, f)
