@@ -1,37 +1,57 @@
+using Symbolics: Operator, Num, Term, value, recursive_hasoperator
 using Symbolics: Differential, Difference
 using Symbolics: hasderiv, hasdiff
 
 abstract type TimeDomain end
 
+struct Inferred <: TimeDomain end
+abstract type AbstractDiscrete <: TimeDomain end
 struct Continuous <: TimeDomain end
-struct Discrete <: TimeDomain end
+
+Symbolics.option_to_metadata_type(::Val{:timedomain}) = TimeDomain
+
+"""
+    is_continuous_domain(x::Sym)
+
+Determine if variable `x` is a continuous-time variable.
+"""
+is_continuous_domain(x::Sym) = getmetadata(x, TimeDomain, false) isa Continuous
+# is_continuous_domain(x::Sym) = isvarkind(Continuous, x)
+
+"""
+    is_discrete_domain(x::Sym)
+
+Determine if variable `x` is a discrete-time variable.
+"""
+is_discrete_domain(x::Sym) = getmetadata(x, TimeDomain, false) isa Discrete
+# is_discrete_domain(x::Sym) = isvarkind(Discrete, x)
+
+
+has_continuous_domain(x::Sym) = is_continuous_domain(x)
+has_discrete_domain(x::Sym) = is_discrete_domain(x)
+
+get_time_domain(x) = getmetadata(x, TimeDomain, nothing)
+get_time_domain(x::Num) = get_time_domain(value(x))
+
+"""
+    has_time_domain(x::Sym)
+
+Determine if variable `x` has a time-domain attributed to it.
+"""
+function has_time_domain(x::Union{Sym, Term})
+    # getmetadata(x, Continuous, nothing) !== nothing || 
+    # getmetadata(x, Discrete,   nothing) !== nothing
+    getmetadata(x, TimeDomain, nothing) !== nothing
+end
+has_time_domain(x) = false
+
+
 
 
 for op in [Differential, Difference]
     @eval input_timedomain(::$op) = Continuous()
     @eval output_timedomain(::$op) = Continuous()
 end
-
-
-"""
-    input_timedomain(op::Operator)
-
-Return the time-domain type (`Continuous()` or `Discrete()`) that `op` operates on. 
-"""
-input_timedomain(::Shift) = Discrete()
-
-"""
-    output_timedomain(op::Operator)
-
-Return the time-domain type (`Continuous()` or `Discrete()`) that `op` results in. 
-"""
-output_timedomain(::Shift) = Discrete()
-
-input_timedomain(::Sample) = Continuous()
-output_timedomain(::Sample) = Discrete()
-
-input_timedomain(::Hold) = Discrete()
-output_timedomain(::Hold) = Continuous()
 
 
 """
