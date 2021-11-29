@@ -158,24 +158,46 @@ end
 ### Structural and symbolic utilities
 ###
 
-function find_solvables!(sys)
+function find_eq_solvables!(sys, ieq; may_be_zero=false, allow_symbolic=false)
     s = structure(sys)
     @unpack fullvars, graph, solvable_graph = s
-    eqs = equations(sys)
-    empty!(solvable_graph)
-    for (i, eq) in enumerate(eqs)
-        term = value(eq.rhs - eq.lhs)
-        for j in 𝑠neighbors(graph, i)
-            var = fullvars[j]
-            isinput(var) && continue
-            a, b, islinear = linear_expansion(term, var)
-            a = unwrap(a)
-            if islinear && (!(a isa Symbolic) && a isa Number && a != 0)
-                add_edge!(solvable_graph, i, j)
+    eq = equations(sys)[ieq]
+    term = value(eq.rhs - eq.lhs)
+    to_rm = Int[]
+    for j in 𝑠neighbors(graph, ieq)
+        var = fullvars[j]
+        isinput(var) && continue
+        a, b, islinear = linear_expansion(term, var)
+        a = unwrap(a)
+        islinear || continue
+        if a isa Symbolic
+            allow_symbolic || continue
+            add_edge!(solvable_graph, ieq, j)
+            continue
+        end
+        (a isa Number) || continue
+        if a != 0
+            add_edge!(solvable_graph, ieq, j)
+        else
+            if may_be_zero
+                push!(to_rm, j)
+            else
+                @warn "Internal error: Variable $var was marked as being in $eq, but was actually zero"
             end
         end
     end
-    s
+    for j in to_rm
+        rem_edge!(graph, ieq, j)
+    end
+end
+
+function find_solvables!(sys; allow_symbolic=false)
+    eqs = equations(sys)
+    empty!(structure(sys).solvable_graph)
+    for ieq in 1:length(eqs)
+        find_eq_solvables!(sys, ieq; allow_symbolic)
+    end
+    structure(sys)
 end
 
 # debugging use

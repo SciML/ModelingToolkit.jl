@@ -2,21 +2,108 @@ function partial_state_selection_graph!(sys::ODESystem)
     s = get_structure(sys)
     (s isa SystemStructure) || (sys = initialize_system_structure(sys))
     s = structure(sys)
-    find_solvables!(sys)
+    find_solvables!(sys; allow_symbolic=true)
     @set! s.graph = complete(s.graph)
     @set! sys.structure = s
-    (sys, partial_state_selection_graph!(s.graph, s.solvable_graph, s.var_to_diff)...)
+    var_eq_matching, eq_to_diff = pantelides!(PantelidesSetup(sys, s.graph, s.var_to_diff))
+    (sys, partial_state_selection_graph!(s.graph, s.solvable_graph, s.var_to_diff, var_eq_matching, eq_to_diff)...)
+end
+
+function ascend_dg(xs, dg, level)
+    while level > 0
+        xs = Int[dg[x] for x in xs]
+        level -= 1
+    end
+    return xs
+end
+
+function ascend_dg_all(xs, dg, level, maxlevel)
+    r = Int[]
+    while true
+        if level <= 0
+            append!(r, xs)
+        end
+        maxlevel <= 0 && break
+        xs = Int[dg[x] for x in xs if dg[x] !== nothing]
+        level -= 1
+        maxlevel -= 1
+    end
+    return r
+end
+
+function pss_graph_modia!(graph, solvable_graph, var_eq_matching, var_to_diff, eq_to_diff, varlevel, inv_varlevel, inv_eqlevel)
+    # var_eq_matching is a maximal matching on the top-differentiated variables.
+    # Find Strongly connected components. Note that after pantelides, we expect
+    # a balanced system, so a maximal matching should be possible.
+    var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, var_eq_matching)
+    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(var_eq_matching)
+    for vars in var_sccs
+        # TODO: We should have a way to not have the scc code look at unassigned vars.
+        if length(vars) == 1 && varlevel[vars[1]] != 0
+            continue
+        end
+
+        # Now proceed level by level from lowest to highest and tear the graph.
+        eqs = [var_eq_matching[var] for var in vars]
+        maxlevel = level = maximum(map(x->inv_eqlevel[x], eqs))
+        old_level_vars = ()
+        ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph, complete(Matching(ndsts(graph)))); dir=:in)
+        while level >= 0
+            to_tear_eqs_toplevel = filter(eq->inv_eqlevel[eq] >= level, eqs)
+            to_tear_eqs = ascend_dg(to_tear_eqs_toplevel, invview(eq_to_diff), level)
+
+            to_tear_vars_toplevel = filter(var->inv_varlevel[var] >= level, vars)
+            to_tear_vars = ascend_dg_all(to_tear_vars_toplevel, invview(var_to_diff), level, maxlevel)
+
+            if old_level_vars !== ()
+                # Inherit constraints from previous level.
+                # TODO: Is this actually a good idea or do we want full freedom
+                # to tear differently on each level? Does it make a difference
+                # whether we're using heuristic or optimal tearing?
+                removed_eqs = Int[]
+                removed_vars = Int[]
+                for var in old_level_vars
+                    old_assign = ict.graph.matching[var]
+                    if !isa(old_assign, Int) || ict.graph.matching[var_to_diff[var]] !== unassigned
+                        continue
+                    end
+                    # Make sure the ict knows about this edge, so it doesn't accidentally introduce
+                    # a cycle.
+                    ok = try_assign_eq!(ict, var_to_diff[var], eq_to_diff[old_assign])
+                    @assert ok
+                    var_eq_matching[var_to_diff[var]] = eq_to_diff[old_assign]
+                    push!(removed_eqs, eq_to_diff[ict.graph.matching[var]])
+                    push!(removed_vars, var_to_diff[var])
+                end
+                to_tear_eqs = setdiff(to_tear_eqs, removed_eqs)
+                to_tear_vars = setdiff(to_tear_vars, removed_vars)
+            end
+            filter!(var->ict.graph.matching[var] === unassigned, to_tear_vars)
+            filter!(eq->invview(ict.graph.matching)[eq] === unassigned, to_tear_eqs)
+            tearEquations!(ict, solvable_graph.fadjlist, to_tear_eqs, to_tear_vars)
+            for var in to_tear_vars
+                var_eq_matching[var] = ict.graph.matching[var]
+            end
+            old_level_vars = to_tear_vars
+            level -= 1
+        end
+        for var in old_level_vars
+            if varlevel[var] !== 0 && var_eq_matching[var] === unassigned
+                var_eq_matching[var] = SelectedState()
+            end
+        end
+    end
+    return var_eq_matching
 end
 
 struct SelectedState; end
-function partial_state_selection_graph!(graph, solvable_graph, var_to_diff)
-    var_eq_matching, eq_to_diff = pantelides!(graph, solvable_graph, var_to_diff)
+function partial_state_selection_graph!(graph, solvable_graph, var_to_diff, var_eq_matching, eq_to_diff)
     eq_to_diff = complete(eq_to_diff)
 
-    eqlevel = map(1:nsrcs(graph)) do eq
+    inv_eqlevel = map(1:nsrcs(graph)) do eq
         level = 0
-        while eq_to_diff[eq] !== nothing
-            eq = eq_to_diff[eq]
+        while invview(eq_to_diff)[eq] !== nothing
+            eq = invview(eq_to_diff)[eq]
             level += 1
         end
         level
@@ -31,45 +118,25 @@ function partial_state_selection_graph!(graph, solvable_graph, var_to_diff)
         level
     end
 
-    all_selected_states = Int[]
+    inv_varlevel = map(1:ndsts(graph)) do var
+        level = 0
+        while invview(var_to_diff)[var] !== nothing
+            var = invview(var_to_diff)[var]
+            level += 1
+        end
+        level
+    end
 
-    level = 0
-    level_vars = [var for var in 1:ndsts(graph) if varlevel[var] == 0 && invview(var_to_diff)[var] !== nothing]
-
-    # TODO: Is this actually useful or should we just compute another maximal matching?
+    # TODO: Should pantelides just return this?
     for var in 1:ndsts(graph)
-        if !(var in level_vars)
+        if var_to_diff[var] !== nothing
             var_eq_matching[var] = unassigned
         end
     end
 
-    while level < maximum(eqlevel)
-        var_eq_matching = tear_graph_modia(graph, solvable_graph;
-            eqfilter  = eq->eqlevel[eq] == level && invview(eq_to_diff)[eq] !== nothing,
-            varfilter = var->(var in level_vars && !(var in all_selected_states)))
-        for var in level_vars
-            if var_eq_matching[var] === unassigned
-                selected_state = invview(var_to_diff)[var]
-                push!(all_selected_states, selected_state)
-                #=
-                    # TODO: This is what the Matteson paper says, but it doesn't
-                    #       quite seem to work.
-                    while selected_state !== nothing
-                        push!(all_selected_states, selected_state)
-                        selected_state = invview(var_to_diff)[selected_state]
-                    end
-                =#
-            end
-        end
-        level += 1
-        level_vars = [var for var = 1:ndsts(graph) if varlevel[var] == level && invview(var_to_diff)[var] !== nothing]
-    end
+    var_eq_matching = pss_graph_modia!(graph, solvable_graph,
+        complete(var_eq_matching), var_to_diff, eq_to_diff, varlevel, inv_varlevel,
+        inv_eqlevel)
 
-    var_eq_matching = tear_graph_modia(graph, solvable_graph;
-        varfilter = var->!(var in all_selected_states))
-    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(var_eq_matching)
-    for var in all_selected_states
-        var_eq_matching[var] = SelectedState()
-    end
-    return var_eq_matching, eq_to_diff
+    var_eq_matching, eq_to_diff
 end

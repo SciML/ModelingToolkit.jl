@@ -3,29 +3,42 @@ function tearing_sub(expr, dict, s)
     s ? simplify(expr) : expr
 end
 
+function var_derivative!(p::PantelidesSetup{ODESystem}, v::Int)
+    sys = p.system
+    s = sys.structure
+    D = Differential(get_iv(sys))
+    add_vertex!(s.solvable_graph, DST)
+    push!(s.fullvars, D(s.fullvars[v]))
+end
+
+function eq_derivative!(p::PantelidesSetup{ODESystem}, ieq::Int)
+    sys = p.system
+    s = structure(sys)
+    D = Differential(get_iv(sys))
+    eq = equations(sys)[ieq]
+    eq = ModelingToolkit.expand_derivatives(0 ~ D(eq.rhs - eq.lhs))
+    add_vertex!(s.solvable_graph, SRC)
+    push!(equations(sys), eq)
+    # Analyze the new equation and update the graph/solvable_graph
+    # First, copy the previous incidence and add the derivative terms.
+    # That's a superset of all possible occurrences. find_solvables! will
+    # remove those that doen't actually occur.
+    eq_diff = length(equations(sys))
+    for var in 𝑠neighbors(s.graph, ieq)
+        add_edge!(s.graph, eq_diff, var)
+        add_edge!(s.graph, eq_diff, p.var_to_diff[var])
+    end
+    find_eq_solvables!(sys, eq_diff; may_be_zero=true, allow_symbolic=true)
+end
+
 function tearing_reassemble(sys, var_eq_matching, eq_to_diff=nothing; simplify=false)
     s = structure(sys)
     @unpack fullvars, solvable_graph, var_to_diff, graph = s
 
     eqs = equations(sys)
 
-    ### Add the differentiated equations and variables
-    D = Differential(get_iv(sys))
-    if length(fullvars) != length(var_to_diff)
-        for i = (length(fullvars)+1):length(var_to_diff)
-            push!(fullvars, D(fullvars[invview(var_to_diff)[i]]))
-        end
-    end
-
-    ### Add the differentiated equations
     neweqs = copy(eqs)
     if eq_to_diff !== nothing
-        eq_to_diff = complete(eq_to_diff)
-        for i = (length(eqs)+1):length(eq_to_diff)
-            eq = neweqs[invview(eq_to_diff)[i]]
-            push!(neweqs, ModelingToolkit.expand_derivatives(0 ~ D(eq.rhs - eq.lhs)))
-        end
-
         ### Replace derivatives of non-selected states by dumy derivatives
         dummy_subs = Dict()
         for var = 1:length(fullvars)
@@ -86,7 +99,33 @@ function tearing_reassemble(sys, var_eq_matching, eq_to_diff=nothing; simplify=f
         end
         rhs = tearing_sub(eq.rhs, solved, simplify)
         if rhs isa Symbolic
-            return 0 ~ rhs
+            # Check if the rhs is solvable in all state derivatives and if those
+            # the linear terms for them are all zero. If so, move them to the
+            # LHS.
+            dterms = [var for var in 𝑠neighbors(graph, ieq) if isdiffvar(var)]
+            new_rhs = rhs
+            new_lhs = 0
+            nnegative = 0
+            for iv in dterms
+                var = fullvars[iv]
+                a, b, islinear = linear_expansion(new_rhs, var)
+                au = unwrap(a)
+                if !islinear || (au isa Symbolic) || isinput(var) || !(au isa Number)
+                    return 0 ~ rhs
+                end
+                if -au < 0
+                    nnegative += 1
+                end
+                new_lhs -= a*var
+                new_rhs = b
+            end
+            # If most of the terms are negative, just multiply through by -1
+            # to make the equations looks slightly nicer.
+            if nnegative > div(length(dterms), 2)
+                new_lhs = -new_lhs
+                new_rhs = -new_rhs
+            end
+            return new_lhs ~ new_rhs
         else # a number
             if abs(rhs) > 100eps(float(rhs))
                 @warn "The equation $eq is not consistent. It simplifed to 0 == $rhs."
@@ -116,7 +155,8 @@ function tearing_reassemble(sys, var_eq_matching, eq_to_diff=nothing; simplify=f
 
     @set! sys.structure = s
     @set! sys.eqs = neweqs
-    @set! sys.states = [fullvars[i] for i in active_vars]
+    isstatediff(i) = var_eq_matching[i] !== SelectedState() && invview(var_to_diff)[i] !== nothing && var_eq_matching[invview(var_to_diff)[i]] === SelectedState()
+    @set! sys.states = [fullvars[i] for i in active_vars if !isstatediff(i)]
     @set! sys.observed = [observed(sys); obseqs]
     return sys
 end

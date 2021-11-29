@@ -75,17 +75,33 @@ function pantelides!(sys::ODESystem; maxiters = 8000)
     find_solvables!(sys)
     s = structure(sys)
     # D(j) = assoc[j]
-    @unpack graph, var_to_diff, solvable_graph = s
-    return (sys, pantelides!(graph, solvable_graph, var_to_diff)...)
+    @unpack graph, var_to_diff = s
+    # N.B.: var_derivative! and eq_derivative! are defined in symbolics_tearing.jl
+    return (sys, pantelides!(PantelidesSetup(sys, graph, var_to_diff))...)
 end
 
-function pantelides!(graph, solvable_graph, var_to_diff; maxiters = 8000)
+struct PantelidesSetup{T}
+    system::T
+    graph::BipartiteGraph
+    var_to_diff::DiffGraph
+    eq_to_diff::DiffGraph
+    var_eq_matching::Matching
+end
+
+function PantelidesSetup(sys::T, graph, var_to_diff) where {T}
+    neqs = nsrcs(graph)
+    nvars = nv(var_to_diff)
+    var_eq_matching = Matching(nvars)
+    eq_to_diff = DiffGraph(neqs)
+    PantelidesSetup{T}(sys, graph, var_to_diff, eq_to_diff, var_eq_matching)
+end
+
+function pantelides!(p::PantelidesSetup; maxiters = 8000)
+    @unpack graph, var_to_diff, eq_to_diff, var_eq_matching = p
     neqs = nsrcs(graph)
     nvars = nv(var_to_diff)
     vcolor = falses(nvars)
     ecolor = falses(neqs)
-    var_eq_matching = Matching(nvars)
-    eq_to_diff = DiffGraph(neqs)
     neqs′ = neqs
     for k in 1:neqs′
         eq′ = k
@@ -107,27 +123,22 @@ function pantelides!(graph, solvable_graph, var_to_diff; maxiters = 8000)
             for var in eachindex(vcolor); vcolor[var] || continue
                 # introduce a new variable
                 nvars += 1
-                add_vertex!(graph, DST); add_vertex!(solvable_graph, DST)
+                add_vertex!(graph, DST);
                 # the new variable is the derivative of `var`
 
                 add_edge!(var_to_diff, var, add_vertex!(var_to_diff))
                 push!(var_eq_matching, unassigned)
+                var_derivative!(p, eq)
             end
 
             for eq in eachindex(ecolor); ecolor[eq] || continue
                 # introduce a new equation
                 neqs += 1
-                add_vertex!(graph, SRC); add_vertex!(solvable_graph, SRC)
+                add_vertex!(graph, SRC);
                 # the new equation is created by differentiating `eq`
                 eq_diff = add_vertex!(eq_to_diff)
                 add_edge!(eq_to_diff, eq, eq_diff)
-                for var in 𝑠neighbors(graph, eq)
-                    add_edge!(graph, eq_diff, var)
-                    add_edge!(graph, eq_diff, var_to_diff[var])
-                    # If you have f(x) = 0, then the derivative is (∂f/∂x) ẋ = 0.
-                    # which is linear, thus solvable in ẋ.
-                    add_edge!(solvable_graph, eq_diff, var_to_diff[var])
-                end
+                eq_derivative!(p, eq)
             end
 
             for var in eachindex(vcolor); vcolor[var] || continue

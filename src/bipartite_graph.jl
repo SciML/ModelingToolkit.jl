@@ -306,6 +306,25 @@ function Graphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_METADATA
     return true  # edge successfully added
 end
 
+Graphs.rem_edge!(g::BipartiteGraph, i::Integer, j::Integer) =
+    Graphs.rem_edge!(g, BipartiteEdge(i, j))
+function Graphs.rem_edge!(g::BipartiteGraph, edge::BipartiteEdge)
+    @unpack fadjlist, badjlist = g
+    s, d = src(edge), dst(edge)
+    (has_𝑠vertex(g, s) && has_𝑑vertex(g, d)) || error("edge ($edge) out of range.")
+    @inbounds list = fadjlist[s]
+    index = searchsortedfirst(list, d)
+    @inbounds (index <= length(list) && list[index] == d) || error("graph does not have edge $edge")
+    deleteat!(list, index)
+    g.ne -= 1
+    if badjlist isa AbstractVector
+        @inbounds list = badjlist[d]
+        index = searchsortedfirst(list, s)
+        deleteat!(list, index)
+    end
+    return true  # edge successfully deleted
+end
+
 function Graphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where T
     if type === DST
         if g.badjlist isa AbstractVector
