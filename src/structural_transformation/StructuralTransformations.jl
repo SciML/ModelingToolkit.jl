@@ -10,12 +10,12 @@ using SymbolicUtils.Rewriters
 using SymbolicUtils: similarterm, istree
 
 using ModelingToolkit
-using ModelingToolkit: ODESystem, AbstractSystem,var_from_nested_derivative, Differential,
+using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Differential,
                        states, equations, vars, Symbolic, diff2term, value,
                        operation, arguments, Sym, Term, simplify, solve_for,
                        isdiffeq, isdifferential, isinput,
-                       get_structure, get_iv, independent_variables,
-                       get_structure, defaults, InvalidSystemException,
+                       get_iv, independent_variables,
+                       defaults, InvalidSystemException,
                        ExtraEquationsSystemException,
                        ExtraVariablesSystemException,
                        get_postprocess_fbody, vars!,
@@ -25,6 +25,7 @@ using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview
 using Graphs
 using ModelingToolkit.SystemStructures
+using ModelingToolkit.SystemStructures: algeqs
 
 using ModelingToolkit.DiffEqBase
 using ModelingToolkit.StaticArrays
@@ -38,7 +39,7 @@ using NonlinearSolve
 
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export build_torn_function, build_observed_function, ODAEProblem
-export sorted_incidence_matrix
+export sorted_incidence_matrix, pantelides!, tearing_reassemble
 
 include("utils.jl")
 include("pantelides.jl")

@@ -58,18 +58,15 @@ end
 
 Find strongly connected components of algebraic variables in a system.
 """
-function algebraic_variables_scc(sys)
-    s = structure(sys)
-    if !(s isa SystemStructure)
-        sys = initialize_system_structure(sys)
-        s = structure(sys)
-    end
-
+function algebraic_variables_scc(state::TearingState)
+    graph = state.structure.graph
     # skip over differential equations
-    algvars = isalgvar.(Ref(s), 1:ndsts(s.graph))
-
-    var_eq_matching = complete(maximal_matching(s, e->s.algeqs[e], v->algvars[v]))
-    var_sccs = find_var_sccs(complete(s.graph), var_eq_matching)
+    algvars = BitSet(findall(v->isalgvar(state.structure, v), 1:ndsts(graph)))
+    algeqs = BitSet(findall(map(1:nsrcs(graph)) do eq
+        all(v->!isdervar(state.structure, v), 𝑠neighbors(graph, eq))
+    end))
+    var_eq_matching = complete(maximal_matching(graph, e->e in algeqs, v->v in algvars))
+    var_sccs = find_var_sccs(complete(graph), var_eq_matching)
 
     return var_eq_matching, var_sccs
 end

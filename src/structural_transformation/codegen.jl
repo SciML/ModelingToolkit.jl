@@ -2,9 +2,9 @@ using LinearAlgebra
 
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
-function torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs)
-    s = structure(sys)
-    @unpack fullvars, graph = s
+function torn_system_jacobian_sparsity(state, var_eq_matching, var_sccs)
+    fullvars = state.fullvars
+    graph = state.structure.graph
 
     # The sparsity pattern of `nlsolve(f, u, p)` w.r.t `p` is difficult to
     # determine in general. Consider the "simplest" case, a linear system. We
@@ -59,12 +59,12 @@ function torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs)
                 Graphs.insorted(var, v_residual) && continue
                 deps = get(avars2dvars, var, nothing)
                 if deps === nothing # differential variable
-                    @assert !isalgvar(s, var)
+                    @assert !isalgvar(state.structure, var)
                     for tvar in v_residual
                         push!(avars2dvars[tvar], var)
                     end
                 else # tearing variable from previous partitions
-                    @assert isalgvar(s, var)
+                    @assert isalgvar(state.structure, var)
                     for tvar in v_residual
                         union!(avars2dvars[tvar], avars2dvars[var])
                     end
@@ -73,18 +73,19 @@ function torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs)
         end
     end
 
-    dvrange = diffvars_range(s)
+    dvrange = diffvars_range(state.structure)
     dvar2idx = Dict(v=>i for (i, v) in enumerate(dvrange))
     I = Int[]; J = Int[]
     eqidx = 0
+    aeqs = algeqs(state.structure)
     for ieq in 𝑠vertices(graph)
-        isalgeq(s, ieq) && continue
+        ieq in aeqs && continue
         eqidx += 1
         for ivar in 𝑠neighbors(graph, ieq)
-            if isdiffvar(s, ivar)
+            if isdiffvar(state.structure, ivar)
                 push!(I, eqidx)
                 push!(J, dvar2idx[ivar])
-            elseif isalgvar(s, ivar)
+            elseif isalgvar(state.structure, ivar)
                 for dvar in avars2dvars[ivar]
                     push!(I, eqidx)
                     push!(J, dvar2idx[dvar])
@@ -170,18 +171,18 @@ function build_torn_function(
         isdiffeq(eq) && push!(rhss, eq.rhs)
     end
 
-    s = structure(sys)
-    @unpack fullvars = s
-    var_eq_matching, var_sccs = algebraic_variables_scc(sys)
+    state = TearingState(sys)
+    fullvars = state.fullvars
+    var_eq_matching, var_sccs = algebraic_variables_scc(state)
 
-    states = map(i->s.fullvars[i], diffvars_range(s))
+    states = map(i->fullvars[i], diffvars_range(state.structure))
     mass_matrix_diag = ones(length(states))
     torn_expr = []
     defs = defaults(sys)
 
     needs_extending = false
     for scc in var_sccs
-        torn_vars = [s.fullvars[var] for var in scc if var_eq_matching[var] !== unassigned]
+        torn_vars = [fullvars[var] for var in scc if var_eq_matching[var] !== unassigned]
         torn_eqs = [eqs[var_eq_matching[var]] for var in scc if var_eq_matching[var] !== unassigned]
         isempty(torn_eqs) && continue
         if length(torn_eqs) <= max_inlining_size
@@ -224,10 +225,10 @@ function build_torn_function(
     if expression
         expr, states
     else
-        observedfun = let sys = sys, dict = Dict()
+        observedfun = let state = state, dict = Dict()
             function generated_observed(obsvar, u, p, t)
                 obs = get!(dict, value(obsvar)) do
-                    build_observed_function(sys, obsvar, var_eq_matching, var_sccs, checkbounds=checkbounds)
+                    build_observed_function(state, obsvar, var_eq_matching, var_sccs, checkbounds=checkbounds)
                 end
                 obs(u, p, t)
             end
@@ -235,7 +236,7 @@ function build_torn_function(
 
         ODEFunction{true}(
                           @RuntimeGeneratedFunction(expr),
-                          sparsity = torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs),
+                          sparsity = torn_system_jacobian_sparsity(state, var_eq_matching, var_sccs),
                           syms = syms,
                           observed = observedfun,
                           mass_matrix = mass_matrix,
@@ -261,7 +262,7 @@ function find_solve_sequence(sccs, vars)
 end
 
 function build_observed_function(
-        sys, ts, var_eq_matching, var_sccs;
+        state, ts, var_eq_matching, var_sccs;
         expression=false,
         output_type=Array,
         checkbounds=true
@@ -273,12 +274,14 @@ function build_observed_function(
     ts = Symbolics.scalarize.(value.(ts))
 
     vars = Set()
+    sys = state.sys
     foreach(Base.Fix1(vars!, vars), ts)
     ivs = independent_variables(sys)
     dep_vars = collect(setdiff(vars, ivs))
 
-    s = structure(sys)
-    @unpack fullvars, graph = s
+    fullvars = state.fullvars
+    s = state.structure
+    graph = s.graph
     diffvars = map(i->fullvars[i], diffvars_range(s))
     algvars = map(i->fullvars[i], algvars_range(s))
 

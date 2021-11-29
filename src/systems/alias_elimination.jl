@@ -2,31 +2,30 @@ using SymbolicUtils: Rewriters
 
 const KEEP = typemin(Int)
 
-function alias_eliminate_graph(sys::AbstractSystem)
-    sys = initialize_system_structure(sys; quick_cancel=true)
-    s = structure(sys)
+function alias_eliminate_graph!(state::TransformationState)
+    mm = linear_subsys_adjmat(state)
+    size(mm, 1) == 0 && nothing, mm # No linear subsystems
 
-    mm = linear_subsys_adjmat(sys)
-    size(mm, 1) == 0 && return sys, nothing, mm # No linear subsystems
+    @unpack graph, var_to_diff = state.structure
 
-    ag, mm = alias_eliminate_graph!(s.graph, complete(s.var_to_diff), mm)
-    return sys, ag, mm
+    ag, mm = alias_eliminate_graph!(graph, complete(var_to_diff), mm)
+    return ag, mm
 end
 
 # For debug purposes
 function aag_bareiss(sys::AbstractSystem)
-    sys = initialize_system_structure(sys; quick_cancel=true)
-    s = structure(sys)
-    mm = linear_subsys_adjmat(sys)
-    return aag_bareiss!(s.graph, complete(s.var_to_diff), mm)
+    state = TearingState(sys)
+    mm = linear_subsys_adjmat(state)
+    return aag_bareiss!(state.structure.graph, complete(state.structure.var_to_diff), mm)
 end
 
 function alias_elimination(sys)
-    sys, ag, mm = alias_eliminate_graph(sys)
+    state = TearingState(sys; quick_cancel=true)
+    ag, mm = alias_eliminate_graph!(state)
     ag === nothing && return sys
 
-    s = structure(sys)
-    @unpack fullvars, graph = s
+    fullvars = state.fullvars
+    graph = state.structure.graph
 
     subs = OrderedDict()
     for (v, (coeff, alias)) in pairs(ag)
@@ -34,7 +33,7 @@ function alias_elimination(sys)
     end
 
     dels = Set{Int}()
-    eqs = copy(equations(sys))
+    eqs = collect(equations(state))
     for (ei, e) in enumerate(mm.nzrows)
         vs = 𝑠neighbors(graph, e)
         if isempty(vs)
@@ -57,17 +56,16 @@ function alias_elimination(sys)
     end
 
     newstates = []
-    sts = states(sys)
     for j in eachindex(fullvars)
         if !(j in keys(ag))
-            isdervar(s, j) || push!(newstates, fullvars[j])
+            isdervar(state.structure, j) || push!(newstates, fullvars[j])
         end
     end
 
+    sys = state.sys
     @set! sys.eqs = eqs
     @set! sys.states = newstates
     @set! sys.observed = [observed(sys); [lhs ~ rhs for (lhs, rhs) in pairs(subs)]]
-    @set! sys.structure = nothing
     return sys
 end
 

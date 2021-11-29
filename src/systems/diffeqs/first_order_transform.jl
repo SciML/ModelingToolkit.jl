@@ -9,7 +9,6 @@ function ode_order_lowering(sys::ODESystem)
     eqs_lowered, new_vars = ode_order_lowering(equations(sys), iv, states(sys))
     @set! sys.eqs = eqs_lowered
     @set! sys.states = new_vars
-    @set! sys.structure = nothing
     return sys
 end
 

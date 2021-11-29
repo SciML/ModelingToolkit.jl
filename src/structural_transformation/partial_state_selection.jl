@@ -1,12 +1,8 @@
-function partial_state_selection_graph!(sys::ODESystem)
-    s = get_structure(sys)
-    (s isa SystemStructure) || (sys = initialize_system_structure(sys))
-    s = structure(sys)
-    find_solvables!(sys; allow_symbolic=true)
-    @set! s.graph = complete(s.graph)
-    @set! sys.structure = s
-    var_eq_matching, eq_to_diff = pantelides!(PantelidesSetup(sys, s.graph, s.var_to_diff))
-    (sys, partial_state_selection_graph!(s.graph, s.solvable_graph, s.var_to_diff, var_eq_matching, eq_to_diff)...)
+function partial_state_selection_graph!(state::TransformationState)
+    find_solvables!(state; allow_symbolic=true)
+    var_eq_matching = complete(pantelides!(state))
+    complete!(state.structure)
+    partial_state_selection_graph!(state.structure, var_eq_matching)
 end
 
 function ascend_dg(xs, dg, level)
@@ -31,7 +27,9 @@ function ascend_dg_all(xs, dg, level, maxlevel)
     return r
 end
 
-function pss_graph_modia!(graph, solvable_graph, var_eq_matching, var_to_diff, eq_to_diff, varlevel, inv_varlevel, inv_eqlevel)
+function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel, inv_varlevel, inv_eqlevel)
+    @unpack eq_to_diff, var_to_diff, graph, solvable_graph = structure
+
     # var_eq_matching is a maximal matching on the top-differentiated variables.
     # Find Strongly connected components. Note that after pantelides, we expect
     # a balanced system, so a maximal matching should be possible.
@@ -44,7 +42,8 @@ function pss_graph_modia!(graph, solvable_graph, var_eq_matching, var_to_diff, e
         end
 
         # Now proceed level by level from lowest to highest and tear the graph.
-        eqs = [var_eq_matching[var] for var in vars]
+        eqs = [var_eq_matching[var] for var in vars if var_eq_matching[var] !== unassigned]
+        isempty(eqs) && continue
         maxlevel = level = maximum(map(x->inv_eqlevel[x], eqs))
         old_level_vars = ()
         ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph, complete(Matching(ndsts(graph)))); dir=:in)
@@ -97,7 +96,8 @@ function pss_graph_modia!(graph, solvable_graph, var_eq_matching, var_to_diff, e
 end
 
 struct SelectedState; end
-function partial_state_selection_graph!(graph, solvable_graph, var_to_diff, var_eq_matching, eq_to_diff)
+function partial_state_selection_graph!(structure::SystemStructure, var_eq_matching)
+    @unpack eq_to_diff, var_to_diff, graph, solvable_graph = structure
     eq_to_diff = complete(eq_to_diff)
 
     inv_eqlevel = map(1:nsrcs(graph)) do eq
@@ -134,9 +134,8 @@ function partial_state_selection_graph!(graph, solvable_graph, var_to_diff, var_
         end
     end
 
-    var_eq_matching = pss_graph_modia!(graph, solvable_graph,
-        complete(var_eq_matching), var_to_diff, eq_to_diff, varlevel, inv_varlevel,
-        inv_eqlevel)
+    var_eq_matching = pss_graph_modia!(structure,
+        complete(var_eq_matching), varlevel, inv_varlevel, inv_eqlevel)
 
-    var_eq_matching, eq_to_diff
+    var_eq_matching
 end

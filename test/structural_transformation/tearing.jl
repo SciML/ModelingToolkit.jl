@@ -19,13 +19,11 @@ eqs = [
        0 ~ u5 - hypot(u4, u1),
 ]
 @named sys = NonlinearSystem(eqs, [u1, u2, u3, u4, u5], [])
-sys = initialize_system_structure(sys)
-StructuralTransformations.find_solvables!(sys)
-sss = structure(sys)
-@unpack graph, solvable_graph, fullvars = sss
+state = TearingState(sys)
+StructuralTransformations.find_solvables!(state)
 
 io = IOBuffer()
-show(io, MIME"text/plain"(), sss)
+show(io, MIME"text/plain"(), state.structure)
 prt = String(take!(io))
 
 if VERSION >= v"1.6"
@@ -39,10 +37,10 @@ end
 # u3 = f3(u1, u2)
 # u4 = f4(u2, u3)
 # u5 = f5(u4, u1)
-sys = initialize_system_structure(sys)
-find_solvables!(sys)
-sss = structure(sys)
-@unpack graph, solvable_graph, fullvars = sss
+state = TearingState(sys)
+find_solvables!(state)
+@unpack structure, fullvars = state
+@unpack graph, solvable_graph = state.structure
 int2var = Dict(eachindex(fullvars) .=> fullvars)
 graph2vars(graph) = map(is->Set(map(i->int2var[i], is)), graph.fadjlist)
 @test graph2vars(graph) == [
@@ -60,9 +58,8 @@ graph2vars(graph) = map(is->Set(map(i->int2var[i], is)), graph.fadjlist)
                                      Set([u5])
                                     ]
 
-tornsys = tearing(sys)
-sss = structure(tornsys)
-let
+state = TearingState(tearing(sys))
+let sss = state.structure
     @unpack graph = sss
     @test graph2vars(graph) == [Set([u5])]
 end
@@ -100,8 +97,8 @@ end
 # --------------------|-----
 # e5 [  1           1 |  1 ]
 
-let sys = StructuralTransformations.init_for_tearing(sys)
-    torn_matching = StructuralTransformations.tear_graph(sys)
+let state = TearingState(sys)
+    torn_matching = tearing(state)
     S = StructuralTransformations.reordered_matrix(sys, torn_matching)
     @test S == [1 0 0 0 1
                 1 1 0 0 0

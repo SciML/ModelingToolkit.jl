@@ -19,7 +19,7 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]) # or 
+@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]) # or
 @named de = DiscreteSystem(eqs)
 ```
 """
@@ -52,20 +52,16 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     defaults::Dict
     """
-    structure: structural information of the system
-    """
-    structure::Any
-    """
     type: type of the system
     """
     connector_type::Any
-    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, structure, connector_type; checks::Bool = true)
+    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, connector_type; checks::Bool = true)
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             all_dimensionless([dvs;ps;iv;ctrls]) || check_units(discreteEqs)
         end
-        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, structure, connector_type)
+        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, connector_type)
     end
 end
 
@@ -103,12 +99,12 @@ function DiscreteSystem(
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
-    
+
     sysnames = nameof.(systems)
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, defaults, nothing, connector_type, kwargs...)
+    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, defaults, connector_type, kwargs...)
 end
 
 
@@ -187,7 +183,7 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     end
 
     u0 = varmap_to_vars(u0map,dvs; defaults=u0defs)
-    
+
     rhss = [eq.rhs for eq in eqs]
     u = dvs
     p = varmap_to_vars(parammap,ps; defaults=pdefs)
@@ -226,7 +222,7 @@ function linearize_eqs(sys, eqs=get_eqs(sys); return_max_delay=false)
         end
 
         all(length.(unique.(values(state_ops))) .<= 1) || error("Each state should be used with single difference operator.")
-        
+
         dts_gcd = Dict()
         for v in keys(dts)
             dts_gcd[v] = (length(dts[v]) > 0) ? first(dts[v]) : nothing
@@ -234,7 +230,7 @@ function linearize_eqs(sys, eqs=get_eqs(sys); return_max_delay=false)
 
         lin_eqs = [
             v(get_iv(sys) - (t)) ~ v(get_iv(sys) - (t-dts_gcd[v]))
-            for v in unique_states if max_delay[v] > 0 && dts_gcd[v]!==nothing for t in collect(max_delay[v]:(-dts_gcd[v]):0)[1:end-1] 
+            for v in unique_states if max_delay[v] > 0 && dts_gcd[v]!==nothing for t in collect(max_delay[v]:(-dts_gcd[v]):0)[1:end-1]
         ]
         eqs = vcat(eqs, lin_eqs)
     end
@@ -262,6 +258,6 @@ function generate_function(
     u = map(x->time_varying_as_func(value(x), sys), dvs)
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
-    
+
     build_function(rhss, u, p, t; kwargs...)
 end

@@ -7,7 +7,8 @@ using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
     value, InvalidSystemException, isdifferential, _iszero, isparameter,
-    independent_variables, isinput, SparseMatrixCLIL
+    independent_variables, isinput, SparseMatrixCLIL, AbstractSystem,
+    equations
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -50,11 +51,11 @@ for v in 𝑣vertices(graph); active_𝑣vertices[v] || continue
 end
 =#
 
-export SystemStructure
+export SystemStructure, TransformationState, TearingState
 export initialize_system_structure, find_linear_equations, linear_subsys_adjmat
-export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq
+export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq, algeqs
 export dervars_range, diffvars_range, algvars_range
-export DiffGraph
+export DiffGraph, complete!
 
 @enum VariableType::Int8 DIFFERENTIAL_VARIABLE ALGEBRAIC_VARIABLE DERIVATIVE_VARIABLE
 
@@ -135,31 +136,67 @@ function invview(dg::DiffGraph)
     return DiffGraph(dg.diff_to_primal, dg.primal_to_diff)
 end
 
-Base.@kwdef struct SystemStructure
-    fullvars::Vector
-    vartype::Vector{VariableType}
+abstract type TransformationState{T}; end
+abstract type AbstractTearingState{T} <: TransformationState{T}; end
+
+Base.@kwdef mutable struct SystemStructure
     # Maps the (index of) a variable to the (index of) the variable describing
     # its derivative.
     var_to_diff::DiffGraph
-    algeqs::BitVector
+    eq_to_diff::DiffGraph
     # Can be access as
     # `graph` to automatically look at the bipartite graph
     # or as `torn` to assert that tearing has run.
     graph::BipartiteGraph{Int,Nothing}
-    solvable_graph::BipartiteGraph{Int,Nothing}
+    solvable_graph::Union{BipartiteGraph{Int,Nothing}, Nothing}
 end
-isdervar(s::SystemStructure, var::Integer) = s.vartype[var] === DERIVATIVE_VARIABLE
-isdiffvar(s::SystemStructure, var::Integer) = s.vartype[var] === DIFFERENTIAL_VARIABLE
-isalgvar(s::SystemStructure, var::Integer) = s.vartype[var] === ALGEBRAIC_VARIABLE
+isdervar(s::SystemStructure, i) = s.var_to_diff[i] === nothing &&
+    invview(s.var_to_diff)[i] !== nothing
+isalgvar(s::SystemStructure, i) = s.var_to_diff[i] === nothing &&
+    invview(s.var_to_diff)[i] === nothing
+isdiffvar(s::SystemStructure, i) = s.var_to_diff[i] !== nothing
 
-dervars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isdervar, s), eachindex(s.vartype))
-diffvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isdiffvar, s), eachindex(s.vartype))
-algvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isalgvar, s), eachindex(s.vartype))
+dervars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isdervar, s), Base.OneTo(ndsts(s.graph)))
+diffvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isdiffvar, s), Base.OneTo(ndsts(s.graph)))
+algvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isalgvar, s), Base.OneTo(ndsts(s.graph)))
 
-isalgeq(s::SystemStructure, eq::Integer) = s.algeqs[eq]
-isdiffeq(s::SystemStructure, eq::Integer) = !isalgeq(s, eq)
+algeqs(s::SystemStructure) = BitSet(findall(map(1:nsrcs(s.graph)) do eq
+        all(v->!isdervar(s, v), 𝑠neighbors(s.graph, eq))
+    end))
 
-function initialize_system_structure(sys; quick_cancel=false)
+function complete!(s::SystemStructure)
+    s.var_to_diff = complete(s.var_to_diff)
+    s.eq_to_diff = complete(s.eq_to_diff)
+    s.graph = complete(s.graph)
+    if s.solvable_graph !== nothing
+        s.solvable_graph = complete(s.solvable_graph)
+    end
+end
+
+mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
+    sys::T
+    fullvars::Vector
+    structure::SystemStructure
+    extra_eqs::Vector
+end
+
+struct EquationsView{T} <: AbstractVector{Any}
+    ts::TearingState{T}
+end
+equations(ts::TearingState) = EquationsView(ts)
+Base.size(ev::EquationsView) = (length(equations(ev.ts.sys)) + length(ev.ts.extra_eqs),)
+function Base.getindex(ev::EquationsView, i::Integer)
+    eqs = equations(ev.ts.sys)
+    if i > length(eqs)
+        return ev.ts.extra_eqs[i - length(eqs)]
+    end
+    return eqs[i]
+end
+function Base.push!(ev::EquationsView, eq)
+    push!(ev.ts.extra_eqs, eq)
+end
+
+function TearingState(sys; quick_cancel=false)
     sys = flatten(sys)
     ivs = independent_variables(sys)
     eqs = copy(equations(sys))
@@ -272,22 +309,18 @@ function initialize_system_structure(sys; quick_cancel=false)
     end
 
     @set! sys.eqs = eqs
-    @set! sys.structure = SystemStructure(
-        fullvars = fullvars,
-        vartype = vartype,
-        var_to_diff = var_to_diff,
-        algeqs = algeqs,
-        graph = graph,
-        solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph), Val(false)),
-    )
-    return sys
+
+    eq_to_diff = DiffGraph(nsrcs(graph))
+
+    return TearingState(sys, fullvars,
+        SystemStructure(var_to_diff, eq_to_diff, graph, nothing), Any[])
 end
 
-function linear_subsys_adjmat(sys)
-    s = structure(sys)
-    @unpack fullvars, graph = s
+function linear_subsys_adjmat(state::TransformationState)
+    fullvars = state.fullvars
+    graph = state.structure.graph
     is_linear_equations = falses(nsrcs(graph))
-    eqs = equations(sys)
+    eqs = equations(state.sys)
     eadj = Vector{Int}[]
     cadj = Vector{Int}[]
     coeffs = Int[]

@@ -31,14 +31,13 @@ eqs = [D(x) ~ w,
        0 ~ x^2 + y^2 - L^2]
 pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
 
-pendulum = initialize_system_structure(pendulum)
-sss = structure(pendulum)
-@unpack graph, fullvars, var_to_diff = sss
-@test StructuralTransformations.maximal_matching(sss, eq->true, v->var_to_diff[v] === nothing) == map(x -> x == 0 ? StructuralTransformations.unassigned : x, [1, 2, 3, 4, 0, 0, 0, 0, 0])
+state = TearingState(pendulum)
+@unpack graph, var_to_diff = state.structure
+@test StructuralTransformations.maximal_matching(graph, eq->true, v->var_to_diff[v] === nothing) == map(x -> x == 0 ? StructuralTransformations.unassigned : x, [1, 2, 3, 4, 0, 0, 0, 0, 0])
 
 sys, var_eq_matching, eq_to_diff = StructuralTransformations.pantelides!(pendulum)
-sss = structure(sys)
-@unpack graph, fullvars, var_to_diff = sss
+state = TearingState(sys)
+@unpack graph, var_to_diff = state.structure
 @test graph.fadjlist == [[1, 7], [2, 8], [3, 5, 9], [4, 6, 9], [5, 6], [1, 2, 5, 6], [1, 3, 7, 10], [2, 4, 8, 11], [1, 2, 5, 6, 10, 11]]
 let N=nothing;
     @test var_to_diff == [10, 11, N, N, 1, 2, 3, 4, N, N, N];

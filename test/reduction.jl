@@ -66,8 +66,8 @@ eqs1 = [
 
 lorenz = name -> ODESystem(eqs1,t,name=name)
 lorenz1 = lorenz(:lorenz1)
-ss = ModelingToolkit.get_structure(initialize_system_structure(lorenz1))
-@test isempty(setdiff(ss.fullvars, [D(x), F, y, x, D(y), u, z, D(z)]))
+state = TearingState(lorenz1)
+@test isempty(setdiff(state.fullvars, [D(x), F, y, x, D(y), u, z, D(z)]))
 lorenz2 = lorenz(:lorenz2)
 
 @named connected = ODESystem([s ~ a + lorenz1.x
@@ -166,8 +166,9 @@ let
     D = Differential(t)
     @variables x(t)
     @named sys = ODESystem([0 ~ D(x) + x], t, [x], [])
-    sys = structural_simplify(sys)
     @test_throws ModelingToolkit.InvalidSystemException ODEProblem(sys, [1.0], (0, 10.0))
+    sys = structural_simplify(sys)
+    @test_nowarn ODEProblem(sys, [1.0], (0, 10.0))
 end
 
 # NonlinearSystem
@@ -255,13 +256,12 @@ eq = [
 sys = structural_simplify(sys0)
 @test length(equations(sys)) == 1
 eq = equations(sys)[1]
-@test isequal(eq.lhs, 0)
 dv25 = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, v25))
-ddv25 = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, D(v25)))
+ddv25 = ModelingToolkit.value(ModelingToolkit.derivative(eq.lhs, D(v25)))
 dt = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, sin(10t)))
-@test dv25 ≈ 0.3
+@test dv25 ≈ -0.3
 @test ddv25 == 0.005
-@test dt == -0.1
+@test dt == 0.1
 
 # Don't reduce inputs
 @parameters t σ ρ β

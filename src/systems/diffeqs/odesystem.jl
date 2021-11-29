@@ -27,7 +27,12 @@ struct ODESystem <: AbstractODESystem
     eqs::Vector{Equation}
     """Independent variable."""
     iv::Sym
-    """Dependent (state) variables. Must not contain the independent variable."""
+    """
+    Dependent (state) variables. Must not contain the independent variable.
+
+    N.B.: If torn_matching !== nothing, this includes all variables. Actual
+    ODE states are determined by the SelectedState() entries in `torn_matching`.
+    """
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
@@ -76,9 +81,9 @@ struct ODESystem <: AbstractODESystem
     """
     defaults::Dict
     """
-    structure: structural information of the system
+    torn_matching: Tearing result specifying how to solve the system.
     """
-    structure::Any
+    torn_matching::Union{Matching, Nothing}
     """
     connector_type: type of the system
     """
@@ -97,7 +102,10 @@ struct ODESystem <: AbstractODESystem
     """
     continuous_events::Vector{SymbolicContinuousCallback}
 
-    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connector_type, connections, preface, events; checks::Bool = true)
+    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed,
+                       tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems,
+                       defaults, torn_matching, connector_type, connections,
+                       preface, events; checks::Bool = true)
         if checks
             check_variables(dvs,iv)
             check_parameters(ps,iv)
@@ -105,7 +113,9 @@ struct ODESystem <: AbstractODESystem
             check_equations(equations(events),iv)
             all_dimensionless([dvs;ps;iv]) || check_units(deqs)
         end
-        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, structure, connector_type, connections, preface, events)
+        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed,
+            tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems,
+            defaults, torn_matching, connector_type, connections, preface, events)
     end
 end
 
@@ -153,7 +163,9 @@ function ODESystem(
         throw(ArgumentError("System names must be unique."))
     end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
-    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing, connector_type, nothing, preface, cont_callbacks, checks = checks)
+    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad,
+        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
+        nothing, connector_type, nothing, preface, cont_callbacks, checks = checks)
 end
 
 function ODESystem(eqs, iv=nothing; kwargs...)

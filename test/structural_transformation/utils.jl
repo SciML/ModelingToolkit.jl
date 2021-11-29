@@ -16,9 +16,9 @@ eqs = [D(x) ~ w,
        D(z) ~ T*y - g,
        0 ~ x^2 + y^2 - L^2]
 pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
-sys = initialize_system_structure(pendulum)
-StructuralTransformations.find_solvables!(sys)
-sss = structure(sys)
+state = TearingState(pendulum)
+StructuralTransformations.find_solvables!(state)
+sss = state.structure
 @unpack graph, solvable_graph, fullvars, var_to_diff = sss
 @test isequal(fullvars, [D(x), D(y), D(w), D(z), x, y, w, z, T])
 @test graph.fadjlist == [[1, 7], [2, 8], [3, 5, 9], [4, 6, 9], [5, 6]]

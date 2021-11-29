@@ -211,8 +211,8 @@ investigate what this means:
 
 ```julia
 using ModelingToolkit.BipartiteGraphs
-big_rc = initialize_system_structure(big_rc)
-inc_org = BipartiteGraphs.incidence_matrix(structure(big_rc).graph)
+ts = TearingState(big_rc)
+inc_org = BipartiteGraphs.incidence_matrix(ts.graph)
 blt_org = StructuralTransformations.sorted_incidence_matrix(big_rc, only_algeqs=true, only_algvars=true)
 blt_reduced = StructuralTransformations.sorted_incidence_matrix(sys, only_algeqs=true, only_algvars=true)
 ```
