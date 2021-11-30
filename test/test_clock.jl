@@ -32,6 +32,7 @@ end
 
     n = nothing
     i = Inferred()
+    id = InferredDiscrete()
     c = Continuous()
     d = Clock(t, 1)
     d2 = Clock(t, 2)
@@ -49,6 +50,12 @@ end
 
     @test merge_domains(i,i,0) == i
     @test merge_domains(d,d,0) == d
+
+    @test merge_domains(n,id,0) == id
+    @test merge_domains(id,n,0) == id
+
+    @test merge_domains(i,id,0) == id
+    @test merge_domains(id,i,0) == id
 
     @test_throws ClockInferenceException merge_domains(d,c,0)
     @test_throws ClockInferenceException merge_domains(c,d,0)
@@ -114,6 +121,14 @@ end
     xd2 = Sample(t, d2)(xd) # resample xd
 
     @test propagate_time_domain(xd2)[1] == d2
+
+
+    # bad hybrid system
+    @variables t
+    d = Clock(t, 1)
+    @variables x(t) xd(t) [timedomain=d]
+    eq = Shift(t, 1)(xd) + Shift(t, 3)(xd) ~ Hold(xd) + 1
+    @test_throws ClockInferenceException propagate_time_domain(eq)
 end
 
 
@@ -141,7 +156,7 @@ end
 
     d = Clock(t, dt)
     @test propagate_time_domain(eqs[1]) == (d, Dict(yd => d, y => Inferred()))
-    @test propagate_time_domain(eqs[3]) == (Continuous(), Dict(u => Continuous(), ud => Inferred())) 
+    @test propagate_time_domain(eqs[3]) == (Continuous(), Dict(u => Continuous(), ud => InferredDiscrete())) 
     @test propagate_time_domain(eqs[4]) == (Continuous(), Dict(u => Continuous(), x => Continuous())) 
 
 

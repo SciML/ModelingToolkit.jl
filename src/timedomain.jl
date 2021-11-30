@@ -3,10 +3,14 @@ using Symbolics: Differential, Difference
 using Symbolics: hasderiv, hasdiff
 
 abstract type TimeDomain end
+abstract type AbstractDiscrete <: TimeDomain end
 
 struct Inferred <: TimeDomain end
-abstract type AbstractDiscrete <: TimeDomain end
+struct InferredDiscrete <: AbstractDiscrete end
 struct Continuous <: TimeDomain end
+
+const UnknownDomain = Union{Nothing, Inferred, InferredDiscrete}
+const InferredDomain = Union{Inferred, InferredDiscrete}
 
 Symbolics.option_to_metadata_type(::Val{:timedomain}) = TimeDomain
 

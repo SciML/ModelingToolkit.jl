@@ -198,19 +198,19 @@ Base.:-(k::SampledTime, i::Int) = k + (-i)
 
 Return the time-domain type (`Continuous()` or `Discrete()`) that `op` operates on. 
 """
-input_timedomain(s::Shift) = Inferred()
+input_timedomain(s::Shift) = InferredDiscrete()
 
 """
     output_timedomain(op::Operator)
 
 Return the time-domain type (`Continuous()` or `Discrete()`) that `op` results in. 
 """
-output_timedomain(s::Shift) = Inferred()
+output_timedomain(s::Shift) = InferredDiscrete()
 
 input_timedomain(::Sample) = Inferred() # TODO: change name to inferred, because this operator can be used on discrete variables as well
 output_timedomain(s::Sample) = s.clock
 
-input_timedomain(h::Hold) = Inferred() # the Hold accepts any discrete
+input_timedomain(h::Hold) = InferredDiscrete() # the Hold accepts any discrete
 output_timedomain(::Hold) = Continuous()
 
 sampletime(op::Sample) = sampletime(op.clock)

@@ -6,8 +6,6 @@ end
 
 abstract type AbstractClock <: AbstractDiscrete end
 
-const UnknownDomain = Union{Nothing, Inferred}
-
 
 """
     Clock <: AbstractClock
@@ -91,7 +89,7 @@ function propagate_time_domain(e, domain_above::Union{TimeDomain, Nothing} = not
             return_domain = merge_domains(domain_above, domain_below, e) # this is the domain we return upwards, but on the way down we use the operator input time domain
             downward_domain = input_timedomain(f) # we expect this domain further down
             domain_below, varmap = propagate_time_domain(only(arguments(e)), downward_domain, varmap) # the received domain from below only matters if the operator has inferred output domain
-            if return_domain isa Inferred
+            if return_domain isa InferredDomain
                 # This is where the Inferred is inferred
                 return_domain = merge_domains(return_domain, domain_below, e)
             end
@@ -152,12 +150,14 @@ function propagate_time_domain(sys::DiscreteSystem)
 end
 
 
-# The rules are, `nothing` loses to everything, DiscreteInferred loses to everything else
+# The rules are, `nothing` loses to everything, Inferred loses to everything else, then InferredDiscrete and so on
 function merge_inferred(x, y)
     x === nothing && return y
     y === nothing && return x
     x isa Inferred && return y
     y isa Inferred && return x
+    x isa InferredDiscrete && !(y isa Continuous) && return y
+    y isa InferredDiscrete && !(x isa Continuous) && return x
     x == y || throw(ClockInferenceException("Cannot merge $x and $y"))
     x
 end
@@ -171,7 +171,7 @@ merge_domains(::Nothing, x::Any, args...) = x
 function merge_domains(above::A, below::B, ex) where {A <: TimeDomain, B <: TimeDomain}
     emsg = "In expression $ex, the domain was inferred to $above from the root of the tree but $below from the leaves."
     above == below && return above
-    if above isa Inferred || below isa Inferred
+    if above isa InferredDomain || below isa InferredDomain
         return merge_inferred(above, below)
     end
     if above isa Continuous || below isa Continuous
