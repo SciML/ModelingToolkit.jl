@@ -123,6 +123,8 @@ end
 (D::Hold)(x::Num) = Num(D(value(x)))
 SymbolicUtils.promote_symtype(::Hold, x) = x
 
+Hold(x) = Hold()(x)
+
 """
     hashold(O)
 
