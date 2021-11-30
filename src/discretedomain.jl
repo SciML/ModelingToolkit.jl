@@ -145,13 +145,21 @@ The `SampledTime` operator allows you to index a signal and obtain a shifted dis
 ```
 julia> @variables t x(t);
 
-julia> k = SampledTime(t, clock=0.1);
+julia> k = SampledTime(t, 0.1);
 
-julia> x(k)
-Sample(t; dt=0.1)(x(t))
+julia> x(k)                                         # no shift, only sample
+Sample(t; clock=Clock(t, 0.1))(x(t))
 
-julia> x(k+1)
-Shift(t, 1; dt=0.1)(Sample(t; dt=0.1)(x(t)))
+julia> x(k+1)                                       # sample and shift
+Shift(t, 1)(Sample(t; clock=Clock(t, 0.1))(x(t)))
+
+julia> @variables t xd(t) [timedomain=k.clock];
+
+julia> xd(k)                                        # Discrete variables are not sampled
+xd(t)
+
+julia> xd(k-1)                                      # only shift, no sample
+Shift(t, -1)(xd(t))
 ```
 """
 struct SampledTime
@@ -177,7 +185,7 @@ function (xn::Num)(k::SampledTime)
     isequal(args[], t) ||
         error("Independent variable of $xn is not the same as that of the SampledTime $(k.t)")
 
-    d = propagate_time_domain(xn)
+    d, _ = propagate_time_domain(xn)
     if d != clock # this is only required if the variable has another clock
         xn = Sample(t, clock)(xn) 
     end

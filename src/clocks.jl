@@ -50,7 +50,7 @@ function add_varmap!(varmap, e, domain::TimeDomain)
 end
 
 function propagate_time_domain(eq::Equation, domain_above::Union{TimeDomain, Nothing} = nothing, varmap = Dict{Any, Any}())
-    h_old = hash(varmap)
+    last_hash = hash(varmap)
     ex = eq.lhs - eq.rhs
     for i = 1:10 # max 10 step fixed-point iteration
         # The fix-point iteration is performed in order to make 
@@ -59,8 +59,8 @@ function propagate_time_domain(eq::Equation, domain_above::Union{TimeDomain, Not
         # d, varmap = propagate_time_domain(eq.rhs, domain_above, varmap)
         # domain_above = merge_domains(domain_above, d, eq)
         h = hash(varmap)
-        h == h_old && break
-        h = h_old 
+        h == last_hash && break
+        h = last_hash 
     end
     domain_above, varmap
 end
@@ -73,7 +73,7 @@ propagate_time_domain(e::Num, domain_above::Union{TimeDomain, Nothing} = nothing
 """
     domain, varmap = propagate_time_domain(e, domain_above::Union{TimeDomain, Nothing} = nothing, varmap = Dict{Any, Any}())
 
-Determine the time-domain (clock inference) of an expression or equation `e`. `domain` is the time domain for the compound expression `e`, while `varmap` is a dict that maps variables to time domains.
+Determine the time-domain (clock inference) of an expression or equation `e`. `domain` is the time domain for the compound expression `e`, while `varmap` is a dict that maps variables to time domains / clocks.
 
 # Details
 At the expression root, the domain is typically unknown (nothing), we thus start from the root and recurse down until qe encounter an expression with known domain. When we find a domain, we continue to propagate all the way down to the leaves, checking consistency on the way if the domain is specified also further down the tree. We then propagate the domain back up to the root. At a middle point, there might be one domain coming from above, and one from below, if they differ it's an error.
@@ -128,17 +128,16 @@ end
 function equation_and_variable_time_domains(eqs::Vector{Equation}, domain_above::Union{TimeDomain, Nothing} = nothing)
     varmap = Dict{Any, Any}()
     eq2dom = Vector{Any}(undef, length(eqs)) .= domain_above
-    h_old = UInt(0)
-    local eq2dom
-    while true
+    last_hash = UInt(0)
+    while true # fix-point iteration: iterate until the variable map no longer changes. This allows domain information to propagate between equations.
         for (j, eq) in pairs(eqs)
             d, varmap = propagate_time_domain(eq, eq2dom[j], varmap)
-            # domain_above = merge_domains(domain_above, d, eq) # we should not merge the domain here sicne different eqs can have different domains
+            # domain_above = merge_domains(domain_above, d, eq) # we should not merge the domain here since different eqs can have different domains
             eq2dom[j] = d
         end
         h = hash(varmap)
-        h == h_old && break
-        h_old = h
+        h == last_hash && break
+        last_hash = h
     end
     eq2dom, varmap
 end
@@ -182,3 +181,78 @@ function merge_domains(above::A, below::B, ex) where {A <: TimeDomain, B <: Time
     throw(ClockInferenceException(emsg))
 end
 
+
+"""
+    preprocess_hybrid_equations(eqs)
+
+1. Perform clock inference using [`equation_and_variable_time_domains`](@ref).
+2. Normalize `Shift` operations so that the largest positive shift becomes 0, and is the only term on the LHS of the equation. This uses [`normalize_shifts`](@ref).
+3. Strip away hybrid and discrete operators from equations (domains are known from the clock inference). Uses [`strip_operator`](@ref)
+
+"""
+function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
+    eqmap, varmap = equation_and_variable_time_domains(eqs)
+
+    eqs = map(zip(eqs, eqmap)) do (eq, domain)
+        if domain isa Continuous
+            eq = strip_operator(eq, Hold)
+        elseif domain isa AbstractDiscrete
+            if hasshift(eq)
+                eq = normalize_shifts(eq)
+            end
+            eq = strip_operator(eq, Sample)
+        end
+        eq
+    end
+end
+
+"""
+    normalize_shifts(eq)
+
+Normalize `Shift` operations so that the largest positive shift becomes 0, and is the only term on the LHS of the equation.
+Example:
+```julia
+julia> eq = Shift(t, 1)(u) + Shift(t, 3)(u) ~ 0
+Shift(t, 1)(u(t)) + Shift(t, 3)(u(t)) ~ 0
+
+julia> normalize_shifts(eq)
+u(t) ~ -Shift(t, -2)(u(t))
+```
+"""
+function normalize_shifts(eq::Equation)
+    ops = collect(collect_applied_operators(eq, Shift))
+    maxshift, maxind = findmax(op->op.f.steps, ops)
+    newops = map(ops) do op
+        s = op.f
+        if s.steps == maxshift
+            op.arguments[1] # the highest-order term should be without shift
+        else
+            Shift(s.t, s.steps-maxshift)(op.arguments[1]) # arguments[¡] is the shifted variable
+        end
+    end
+    subs = Dict(ops .=> newops)
+    eq = substitute(eq, subs) # eq now has normalized shifts
+    highest_order_term = ops[maxind].arguments[1]
+    rhs = solve_for(eq, highest_order_term)
+    highest_order_term ~ rhs
+end
+
+"""
+    strip_operator(eq, operator)
+
+Removes operators from equation `eq`, example
+```julia
+julia> eq = u ~ Hold(ud) + 1
+u(t) ~ 1 + Hold()(ud(t))
+
+julia> strip_operator(eq, Hold)
+u(t) ~ 1 + ud(t)
+"""
+function strip_operator(eq::Equation, operator)
+    ops = collect(collect_applied_operators(eq, operator))
+    args = map(ops) do op
+        op.arguments[1]
+    end
+    subs = Dict(ops .=> args)
+    eq = substitute(eq, subs)
+end

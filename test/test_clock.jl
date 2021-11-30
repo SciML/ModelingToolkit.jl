@@ -104,7 +104,7 @@ end
     xd2 = Sample(t, d2)(x)
 
     for x in exprs
-        @show x
+        # @show x
         @test propagate_time_domain(Differential(t)(x))[1] == Continuous()
     end
 
@@ -227,4 +227,31 @@ end
     @test eqmap[6] == Continuous()
     @test eqmap[7] == Continuous()
 
+end
+
+
+
+@testset "preprocess_hybrid_equations" begin
+    @info "Testing preprocess_hybrid_equations"
+    @variables t u(t) ud(t)
+
+    eq = Shift(t, 1)(u) + Shift(t, 3)(u) ~ 0
+    @test isequal(ModelingToolkit.normalize_shifts(eq), u ~ -Shift(t, -2)(u))
+
+    eq = u ~ Hold(ud) + 1
+    @test isequal(ModelingToolkit.strip_operator(eq, Hold), u ~ ud + 1)
+
+    eq = u + Hold(ud) + 1 ~ 0
+    @test isequal(ModelingToolkit.strip_operator(eq, Hold), u + ud + 1 ~ 0)
+
+    eq = u ~ Sample(t, 1)(ud) + 1
+    @test isequal(ModelingToolkit.strip_operator(eq, Sample), u ~ ud + 1)
+
+    eqs = [
+        Shift(t, 1)(ud) + Shift(t, 3)(ud) ~ 0
+        u ~ Hold(ud) + 1
+        ]
+    neqs = ModelingToolkit.preprocess_hybrid_equations(eqs)
+    @test isequal(neqs[1], ud ~ -Shift(t, -2)(ud))
+    @test isequal(neqs[2], u ~ ud + 1)
 end
