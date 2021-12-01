@@ -196,7 +196,7 @@ function Base.push!(ev::EquationsView, eq)
     push!(ev.ts.extra_eqs, eq)
 end
 
-function TearingState(sys; quick_cancel=false)
+function TearingState(sys; quick_cancel=false, check=true)
     sys = flatten(sys)
     ivs = independent_variables(sys)
     eqs = copy(equations(sys))
@@ -218,6 +218,9 @@ function TearingState(sys; quick_cancel=false)
 
     vars = OrderedSet()
     for (i, eq′) in enumerate(eqs)
+        if eq′.lhs isa Connection
+            check ? error("$(nameof(sys)) has unexpanded `connect` statements") : return nothing
+        end
         if _iszero(eq′.lhs)
             rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
             eq = eq′
@@ -296,9 +299,9 @@ function TearingState(sys; quick_cancel=false)
         # it could be that a variable appeared in the states, but never appeared
         # in the equations.
         algvaridx = get(var2idx, algvar, 0)
-        algvaridx == 0 && throw(InvalidSystemException("The system is missing "
-            * "an equation for $algvar."
-        ))
+        if algvaridx == 0
+            check ? throw(InvalidSystemException("The system is missing an equation for $algvar.")) : return nothing
+        end
         vartype[algvaridx] = ALGEBRAIC_VARIABLE
     end
 

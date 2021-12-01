@@ -151,7 +151,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify=false
 end
 
 function tearing(state::TearingState)
-    find_solvables!(state)
+    state.structure.solvable_graph === nothing && find_solvables!(state)
     complete!(state.structure)
     @unpack graph, solvable_graph = state.structure
     algvars = BitSet(findall(v->isalgvar(state.structure, v), 1:ndsts(graph)))

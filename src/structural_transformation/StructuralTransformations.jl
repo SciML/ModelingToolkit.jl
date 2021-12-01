@@ -39,7 +39,7 @@ using NonlinearSolve
 
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export build_torn_function, build_observed_function, ODAEProblem
-export sorted_incidence_matrix, pantelides!, tearing_reassemble
+export sorted_incidence_matrix, pantelides!, tearing_reassemble, find_solvables!
 
 include("utils.jl")
 include("pantelides.jl")
