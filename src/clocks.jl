@@ -229,9 +229,7 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
             eq = strip_operator(eq, Hold)
         elseif domain isa AbstractDiscrete
             eq = strip_operator(eq, Sample)
-            if hasshift(eq)
-                eq = normalize_shifts(eq)
-            end
+            eq = normalize_shifts(eq, varmap)
         end
         eq
     end
@@ -240,15 +238,17 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
     new_eqs_and_vars = map(clocks) do clock
         cp_inds = findall(==(clock), eqmap) 
         cp_eqs = eqs[cp_inds] # get all equations that belong to this particular clock partition
-        clock isa Continuous && return cp_eqs # only work on discrete eqs
-        expand_shifts(cp_eqs, clock)
+        clock isa Continuous && return cp_eqs, [] # only work on discrete eqs
+        new_eqs, new_vars = expand_shifts(cp_eqs, clock)
+        new_eqs = discrete2continuous_operators.(new_eqs, Ref(clock))
+        new_eqs, new_vars
     end
     new_eqs, new_vars = first.(new_eqs_and_vars), last.(new_eqs_and_vars)
     reduce(vcat, new_eqs), reduce(vcat, new_vars)
 end
 
 """
-    normalize_shifts(eq)
+    normalize_shifts(eq, varmap)
 
 Normalize `Shift` operations so that the largest positive shift becomes 1, and is the only term on the LHS of the equation.
 Example:
@@ -260,11 +260,14 @@ julia> normalize_shifts(eq)
 Shift(t, 1)(u(t)) ~ -Shift(t, -1)(u(t))
 ```
 """
-function normalize_shifts(eq::Equation)
-    eq = insert_zero_shifts(eq)
+function normalize_shifts(eq0::Equation, varmap)
+    eq = insert_zero_shifts(eq0, varmap)
+    is_discrete_algebraic(eq) && return eq
     ops = collect(collect_applied_operators(eq, Shift)) # this leaves out u(k) (no shift)
 
     maxshift, maxind = findmax(op->op.f.steps, ops)
+    minshift = minimum(op->op.f.steps, ops)
+    maxshift == minshift == 0 && return eq # This implies an algebraic equation without delay
     newops = map(ops) do op
         s = op.f
         Shift(s.t, s.steps-maxshift+1)(op.arguments[1]) # arguments[1] is the shifted variable
@@ -278,30 +281,30 @@ function normalize_shifts(eq::Equation)
     newops[maxind] ~ rhs
 end
 
-is_function_of(t) = function(var)
-    var isa Term                       &&
-        operation(var) isa Sym         &&
-        length(arguments(var)) == 1    &&
-        isequal(arguments(var)[1], t)
-end
-
 
 """
     insert_zero_shifts(eq)
 
 Inserts `Shift(t, 0)` terms, i.e., replace `u(t)` with `Shift(t, 0)(u(t))`.
 """
-function insert_zero_shifts(eq)
-    vars = collect(collect_operator_variables(eq, Shift))
-    ops = collect(collect_applied_operators(eq, Shift))
-    t = operation(ops[1]).t
-    r1 = @rule ~var::is_function_of(t) => Shift(t,0)(~var, true)
-    r = AbortablePrewalk(PassThrough(r1), cond=isoperator(Shift)) # We should not insert a shift inside another shift
+function insert_zero_shifts(eq, varmap)
+    discrete_vars = []
+    local t
+    for k in keys(varmap)
+        if varmap[k] isa AbstractDiscrete
+            push!(discrete_vars, k)
+            t = varmap[k].t
+        end
+    end
+    discrete_vars = Set(discrete_vars)
+    predicate = var -> var ∈ discrete_vars
+    r1 = @rule ~var::predicate => Shift(t,0)(~var, true)
+    r = AbortablePrewalk(PassThrough(r1), cond=isoperator(Operator)) # We should not insert a shift inside another operator
     r(eq.lhs) ~ r(eq.rhs)
 end
 
 """
-    expand_shifts(eqs::Vector{Equation}, clock)
+    new_eqs, new_vars = expand_shifts(eqs::Vector{Equation}, clock)
 
 Takes a vector of equations, all belonging to the same discrete clock partition, and introduces new variables for terms that are shifted by more than -1. For example
 ```
@@ -369,4 +372,37 @@ function strip_operator(eq::Equation, operator)
     end
     subs = Dict(ops .=> args)
     eq = substitute(eq, subs)
+end
+
+strip_operator(ex, operator) = strip_operator(ex~0, operator).lhs
+
+
+"""
+    is_discrete_algebraic(eq)
+
+Returns true if the equation is a discrete algebraic equation. This function assumes that the equation has been shift normalized using [`normalize_shifts`](@ref).
+"""
+function is_discrete_algebraic(eq)
+    t = eq.lhs
+    t isa Term && operation(t) isa Shift && operation(t).steps == 0
+end
+
+
+function discrete2continuous_operators(eq, clock)
+    t = clock.t
+    dt = sampletime(clock)
+    term = value(eq.lhs)
+    var = arguments(term)[1]
+    if is_discrete_algebraic(eq)
+        return DiscreteUpdate(t; dt=dt)(var) ~ strip_operator(eq.rhs, Shift)
+    else
+        return Difference(t; dt=dt)(var) ~ eq.rhs
+    end
+end
+
+function hybrid_simplify(sys::ODESystem)
+    new_eqs, new_vars = ModelingToolkit.preprocess_hybrid_equations(equations(sys))
+    @set! sys.eqs = new_eqs
+    @set! sys.states = [states(sys); new_vars]
+    sys
 end

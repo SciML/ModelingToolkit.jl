@@ -44,7 +44,7 @@ function (D::Shift)(x::Num, allow_zero = false)
             end
         end
     end
-    Num(D(vt))
+    Num(D(vt, allow_zero))
 end
 SymbolicUtils.promote_symtype(::Shift, t) = t
 
