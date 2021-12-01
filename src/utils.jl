@@ -342,7 +342,7 @@ function collect_applied_operators(x, op)
     v = vars(x, op=op)
     filter(v) do x
         x isa Sym && return false
-        x isa Term && return operation(x) isa op
+        istree(x) && return operation(x) isa op
         false
     end
 end
