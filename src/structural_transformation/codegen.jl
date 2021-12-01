@@ -175,6 +175,10 @@ function build_torn_function(
     s = structure(sys)
     @unpack fullvars = s
     var_eq_matching, var_sccs = algebraic_variables_scc(sys)
+    condensed_graph = MatchedCondensationGraph(
+        DiCMOBiGraph{true}(complete(s.graph), complete(var_eq_matching)), var_sccs)
+    toporder = topological_sort_by_dfs(condensed_graph)
+    var_sccs = var_sccs[toporder]
 
     states = map(i->s.fullvars[i], diffvars_range(s))
     mass_matrix_diag = ones(length(states))

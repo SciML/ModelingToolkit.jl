@@ -1,4 +1,5 @@
 using Base.Iterators: repeated
+import Graphs.Experimental.Traversals: topological_sort
 
 # Abstract Interface
 
