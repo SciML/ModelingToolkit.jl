@@ -1,4 +1,6 @@
 using Symbolics: value
+using SymbolicUtils.Rewriters: Postwalk, Prewalk, PassThrough, Empty
+import SymbolicUtils.Rewriters
 
 struct ClockInferenceException <: Exception
     msg
@@ -23,6 +25,34 @@ struct Clock <: AbstractClock
 end
 
 sampletime(c::AbstractClock) = c.dt
+
+
+# The abortable prewal lets you do the transformation `f(t) + t => f(t) + g(t)`
+struct AbortablePrewalk{C, F, CO}
+    rw::C
+    similarterm::F
+    cond::CO
+end
+
+function AbortablePrewalk(rw; similarterm=similarterm, cond)
+    AbortablePrewalk{typeof(rw), typeof(similarterm), typeof(cond)}(rw, similarterm, cond)
+end
+
+function (p::AbortablePrewalk{C, F})(x) where {C, F}
+    p.cond(x) && return x
+    if istree(x)
+        x = p.rw(x)
+        p.cond(x) && return x
+        if istree(x)
+            x = p.similarterm(x, operation(x), map(PassThrough(p), Rewriters.unsorted_arguments(x)))
+            p.cond(x) && return x
+        end
+        return x
+    else
+        return p.rw(x)
+    end
+end
+
 
 #=
 TODO: A clock may need a unique id since otherwise Clock(t, 0.1) === Clock(t, 0.1)
