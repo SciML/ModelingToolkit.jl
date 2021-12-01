@@ -174,6 +174,9 @@ function build_torn_function(
     state = TearingState(sys)
     fullvars = state.fullvars
     var_eq_matching, var_sccs = algebraic_variables_scc(state)
+    toporder = reverse(topological_sort_by_dfs(MatchedCondensationGraph(
+        DiCMOBiGraph{true}(complete(state.structure.graph), complete(var_eq_matching)), var_sccs)))
+    var_sccs = var_sccs[toporder]
 
     states = map(i->fullvars[i], diffvars_range(state.structure))
     mass_matrix_diag = ones(length(states))
