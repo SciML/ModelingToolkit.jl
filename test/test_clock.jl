@@ -1,5 +1,5 @@
 using ModelingToolkit, Symbolics
-using ModelingToolkit: Inferred, merge_inferred, merge_domains, propagate_time_domain, get_time_domain
+using ModelingToolkit: Inferred, merge_inferred, merge_domains, propagate_time_domain, get_time_domain, collect_operator_variables
 using Symbolics: value
 @variables t x(t)
 
@@ -122,6 +122,14 @@ end
 
     @test propagate_time_domain(xd2)[1] == d2
 
+    ## Inferred clock in sample
+    @variables yd(t)
+    xd = Sample(t, d)(x)
+    eq = yd ~ Sample(t)(x) + xd
+    id, vm = propagate_time_domain(eq)
+    @test id == d
+    @test vm[yd] == d
+    @test vm[x] isa ModelingToolkit.UnknownDomain
 
     # bad hybrid system
     @variables t
@@ -233,10 +241,12 @@ end
 
 @testset "preprocess_hybrid_equations" begin
     @info "Testing preprocess_hybrid_equations"
-    @variables t u(t) ud(t)
+    @variables t
+    d = Clock(t, 1)
+    @variables u(t) ud(t) [timedomain=d]
 
     eq = Shift(t, 1)(u) + Shift(t, 3)(u) ~ 0
-    @test isequal(ModelingToolkit.normalize_shifts(eq), u ~ -Shift(t, -2)(u))
+    @test isequal(ModelingToolkit.normalize_shifts(eq), Shift(t, 1)(u) ~ -Shift(t, -1)(u))
 
     eq = u ~ Hold(ud) + 1
     @test isequal(ModelingToolkit.strip_operator(eq, Hold), u ~ ud + 1)
@@ -247,11 +257,80 @@ end
     eq = u ~ Sample(t, 1)(ud) + 1
     @test isequal(ModelingToolkit.strip_operator(eq, Sample), u ~ ud + 1)
 
+
+    # test with varying number of shift terms
+    @variables t
+    d = Clock(t, 1)
+    @variables ud(t) [timedomain=d]
     eqs = [
-        Shift(t, 1)(ud) + Shift(t, 3)(ud) ~ 0
-        u ~ Hold(ud) + 1
-        ]
-    neqs = ModelingToolkit.preprocess_hybrid_equations(eqs)
-    @test isequal(neqs[1], ud ~ -Shift(t, -2)(ud))
-    @test isequal(neqs[2], u ~ ud + 1)
+            Shift(t, 3)(ud) ~ Shift(t, 2)(ud) + Shift(t, 1)(ud) - Shift(t, 0)(ud)
+    ]
+
+    new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
+    expected_eqs = [
+        Shift(t, 1)(ud) ~ Shift(t, 0)(ud) + ud_delay[1] - ud_delay[2]
+        Shift(t, 1)(ud_delay[1]) ~ ud
+        Shift(t, 1)(ud_delay[2]) ~ ud_delay[1]
+    ]
+    @test all(isequal.(new_eqs, expected_eqs))
+
+
+    eqs = [ # intermediate shift term omitted
+            Shift(t, 3)(ud) ~ Shift(t, 1)(ud) - Shift(t, 0)(ud)
+    ]
+
+    new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
+    expected_eqs = [
+        Shift(t, 1)(ud) ~ ud_delay[1] - ud_delay[2]
+        Shift(t, 1)(ud_delay[1]) ~ ud
+        Shift(t, 1)(ud_delay[2]) ~ ud_delay[1]
+    ]
+    @test all(isequal.(new_eqs, expected_eqs))
+
+
+    eqs = [
+            Shift(t, 3)(ud) ~ - Shift(t, 0)(ud)
+    ]
+
+    new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
+    expected_eqs = [
+        Shift(t, 1)(ud) ~ - ud_delay[2]
+        Shift(t, 1)(ud_delay[1]) ~ ud
+        Shift(t, 1)(ud_delay[2]) ~ ud_delay[1]
+    ]
+    @test all(isequal.(new_eqs, expected_eqs))
+
+
+    eqs = [ # ud(k) not expressed as a shift
+        Shift(t, 3)(ud) ~ - ud
+    ]
+
+    new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
+    expected_eqs = [
+        Shift(t, 1)(ud) ~ - ud_delay[2]
+        Shift(t, 1)(ud_delay[1]) ~ ud
+        Shift(t, 1)(ud_delay[2]) ~ ud_delay[1]
+    ]
+    @test all(isequal.(new_eqs, expected_eqs))
+
+    # test with more than one variable
+    
+    @variables t
+    d = Clock(t, 1)
+    @variables ud(t) [timedomain=d] yd(t) [timedomain=d]
+    eqs = [
+            Shift(t, 3)(ud) ~ Shift(t, 2)(ud) + Shift(t, 1)(ud) - Shift(t, 0)(ud)
+            Shift(t, 3)(yd) ~ Shift(t, 1)(ud)
+    ]
+    
+    new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
+    expected_eqs = [
+        Shift(t, 1)(ud) ~ Shift(t, 0)(ud) + ud_delay[1] - ud_delay[2]
+        Shift(t, 1)(yd) ~ ud_delay[1]
+        Shift(t, 1)(ud_delay[1]) ~ ud
+        Shift(t, 1)(ud_delay[2]) ~ ud_delay[1]
+    ]
+    @test all(isequal.(new_eqs, expected_eqs))
+
 end
+

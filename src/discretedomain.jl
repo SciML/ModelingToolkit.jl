@@ -27,15 +27,20 @@ struct Shift <: Operator
     steps::Int
     Shift(t, steps=1) = new(value(t), steps)
 end
-(D::Shift)(t) = Term{symtype(t)}(D, [t])
-function (D::Shift)(x::Num)
+function (D::Shift)(x, allow_zero = false)
+    !allow_zero && D.steps == 0 && return x
+    Term{symtype(x)}(D, [x])
+end
+function (D::Shift)(x::Num, allow_zero = false)
+    !allow_zero && D.steps == 0 && return x
     vt = value(x)
     if vt isa Term
         op = operation(vt)
         if op isa Shift
             if isequal(D.t, op.t)
                 arg = arguments(vt)[1]
-                return Num(Shift(D.t, D.steps + op.steps)(arg)) # Add the steps together
+                newsteps = D.steps + op.steps
+                return Num(newsteps == 0 ? arg : Shift(D.t, newsteps)(arg))
             end
         end
     end
@@ -84,14 +89,14 @@ julia> Δ = Sample(t; clock=Clock(0.01))
 ```
 """
 struct Sample <: Operator
-    t
+    t # TODO: remove the need to keep the iv, it can be inferred from the varibale that is sampled
     clock
-    Sample(t, clock::TimeDomain) = new(value(t), clock)
+    Sample(t, clock::TimeDomain = InferredDiscrete()) = new(value(t), clock)
     Sample(t, dt::Real) = new(value(t), Clock(t, dt))
 end
-(D::Sample)(t) = Term{symtype(t)}(D, [t])
-(D::Sample)(t::Num) = Num(D(value(t)))
-SymbolicUtils.promote_symtype(::Sample, t) = t
+(D::Sample)(x) = Term{symtype(x)}(D, [x])
+(D::Sample)(x::Num) = Num(D(value(x)))
+SymbolicUtils.promote_symtype(::Sample, x) = x
 
 Base.show(io::IO, D::Sample) = print(io, "Sample(", D.t, "; clock=", D.clock, ")")
 
@@ -215,7 +220,7 @@ Return the time-domain type (`Continuous()` or `Discrete()`) that `op` results i
 """
 output_timedomain(s::Shift) = InferredDiscrete()
 
-input_timedomain(::Sample) = Inferred() # TODO: change name to inferred, because this operator can be used on discrete variables as well
+input_timedomain(::Sample) = Inferred()
 output_timedomain(s::Sample) = s.clock
 
 input_timedomain(h::Hold) = InferredDiscrete() # the Hold accepts any discrete

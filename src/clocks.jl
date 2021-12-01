@@ -217,7 +217,8 @@ end
 
 1. Perform clock inference using [`equation_and_variable_time_domains`](@ref).
 2. Normalize `Shift` operations so that the largest positive shift becomes 0, and is the only term on the LHS of the equation. This uses [`normalize_shifts`](@ref).
-3. Strip away hybrid and discrete operators from equations (domains are known from the clock inference). Uses [`strip_operator`](@ref)
+3. For each clock partition, expand shift equations to companion form where the largest shift is -1. This introduces max_shift-1 new states and equations. 
+4. Strip away hybrid and discrete operators from equations (domains are known from the clock inference). Uses [`strip_operator`](@ref)
 
 """
 function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
@@ -227,44 +228,127 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
         if domain isa Continuous
             eq = strip_operator(eq, Hold)
         elseif domain isa AbstractDiscrete
+            eq = strip_operator(eq, Sample)
             if hasshift(eq)
                 eq = normalize_shifts(eq)
             end
-            eq = strip_operator(eq, Sample)
         end
         eq
     end
+
+    clocks = unique(eqmap)
+    new_eqs_and_vars = map(clocks) do clock
+        cp_inds = findall(==(clock), eqmap) 
+        cp_eqs = eqs[cp_inds] # get all equations that belong to this particular clock partition
+        clock isa Continuous && return cp_eqs # only work on discrete eqs
+        expand_shifts(cp_eqs, clock)
+    end
+    new_eqs, new_vars = first.(new_eqs_and_vars), last.(new_eqs_and_vars)
+    reduce(vcat, new_eqs), reduce(vcat, new_vars)
 end
 
 """
     normalize_shifts(eq)
 
-Normalize `Shift` operations so that the largest positive shift becomes 0, and is the only term on the LHS of the equation.
+Normalize `Shift` operations so that the largest positive shift becomes 1, and is the only term on the LHS of the equation.
 Example:
 ```julia
 julia> eq = Shift(t, 1)(u) + Shift(t, 3)(u) ~ 0
 Shift(t, 1)(u(t)) + Shift(t, 3)(u(t)) ~ 0
 
 julia> normalize_shifts(eq)
-u(t) ~ -Shift(t, -2)(u(t))
+Shift(t, 1)(u(t)) ~ -Shift(t, -1)(u(t))
 ```
 """
 function normalize_shifts(eq::Equation)
-    ops = collect(collect_applied_operators(eq, Shift))
+    eq = insert_zero_shifts(eq)
+    ops = collect(collect_applied_operators(eq, Shift)) # this leaves out u(k) (no shift)
+
     maxshift, maxind = findmax(op->op.f.steps, ops)
     newops = map(ops) do op
         s = op.f
-        if s.steps == maxshift
-            op.arguments[1] # the highest-order term should be without shift
-        else
-            Shift(s.t, s.steps-maxshift)(op.arguments[1]) # arguments[¡] is the shifted variable
-        end
+        Shift(s.t, s.steps-maxshift+1)(op.arguments[1]) # arguments[1] is the shifted variable
     end
     subs = Dict(ops .=> newops)
     eq = substitute(eq, subs) # eq now has normalized shifts
     highest_order_term = ops[maxind].arguments[1]
-    rhs = solve_for(eq, highest_order_term)
-    highest_order_term ~ rhs
+    @variables __placeholder__
+    eq = substitute(eq, Dict(newops[maxind]=>__placeholder__)) # solve_for can not solve for general terms, so we replace temporarily
+    rhs = solve_for(eq, __placeholder__)
+    newops[maxind] ~ rhs
+end
+
+is_function_of(t) = function(var)
+    var isa Term                       &&
+        operation(var) isa Sym         &&
+        length(arguments(var)) == 1    &&
+        isequal(arguments(var)[1], t)
+end
+
+
+"""
+    insert_zero_shifts(eq)
+
+Inserts `Shift(t, 0)` terms, i.e., replace `u(t)` with `Shift(t, 0)(u(t))`.
+"""
+function insert_zero_shifts(eq)
+    vars = collect(collect_operator_variables(eq, Shift))
+    ops = collect(collect_applied_operators(eq, Shift))
+    t = operation(ops[1]).t
+    r1 = @rule ~var::is_function_of(t) => Shift(t,0)(~var, true)
+    r = AbortablePrewalk(PassThrough(r1), cond=isoperator(Shift)) # We should not insert a shift inside another shift
+    r(eq.lhs) ~ r(eq.rhs)
+end
+
+"""
+    expand_shifts(eqs::Vector{Equation}, clock)
+
+Takes a vector of equations, all belonging to the same discrete clock partition, and introduces new variables for terms that are shifted by more than -1. For example
+```
+u(k+1) ~ u(k) + u(k-1) + u(k-2)
+```
+becomes
+```
+u(k+1)  ~  u(k) + u1(k) + u2(k)
+u1(k+1) ~  u(k)
+u2(k+1) ~ u1(k)
+```
+"""
+function expand_shifts(eqs::Vector{Equation}, clock::AbstractDiscrete)
+    t = clock.t
+    shift(x) = Shift(t)(x)
+    vars = collect(union(collect_operator_variables.(eqs, Ref(Shift))...))
+    # eqs = insert_zero_shifts(eqs, vars)
+    ops  = collect(union(collect_applied_operators.(eqs, Ref(Shift))...))
+    
+    new_eqs = Equation[]
+    new_vars = []
+    # for each variable that appears shifted, find the maximum (negative) shift, introduce new states and substitute shifted occurances by new variables
+    for var in vars       
+        varops = filter(ops) do op # extract shifted var terms 
+            isequal(arguments(op)[1], var)
+        end
+        maximum(op->op.f.steps, varops) <= 1 || throw(ArgumentError("Shift equations must be normalized to have shifts <= 1, see normalize_shifts(eq)"))
+        n_new_states = -minimum(op->op.f.steps, varops) # number of new states required is maximum negative shift
+        n_new_states < 1 && continue
+        varname = Symbol(string(value(var).f)*"_delay")
+        new_eq_vars = @variables $varname[1:n_new_states](t)
+        new_eqvars = collect(new_eq_vars[]) # @variables returns a vector wrapper
+        new_vareqs = map(1:n_new_states-1) do i
+            shift(new_eqvars[i+1]) ~ new_eqvars[i]
+        end
+        pushfirst!(new_vareqs, shift(new_eqvars[1]) ~ var)
+        sort!(varops, by=op->operation(op).steps, rev=true) # highest shift first
+        startind = findfirst(op->operation(op).steps <= -1, varops) # we should not replace shifts 1 and 0
+
+        subs = Dict(varops[startind:end] .=> new_eqvars)
+        eqs = substitute.(eqs, Ref(subs))
+        
+        append!(new_eqs, new_vareqs)
+        append!(new_vars, new_eqvars)
+    end
+
+    [eqs; new_eqs], new_vars
 end
 
 """
