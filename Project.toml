@@ -76,7 +76,7 @@ SymbolicUtils = "0.18"
 Symbolics = "4.0.0"
 UnPack = "0.1, 1.0"
 Unitful = "1.1"
-julia = "1.2"
+julia = "1.6"
 
 [extras]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
