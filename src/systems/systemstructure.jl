@@ -1,14 +1,14 @@
 module SystemStructures
 
 using DataStructures
-using Symbolics: linear_expansion, unwrap
+using Symbolics: linear_expansion, unwrap, Operator
 using SymbolicUtils: istree, operation, arguments, Symbolic
 using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
                           isparameter,
-                          independent_variables, SparseMatrixCLIL, AbstractSystem,
+                          independent_variables, SparseMatrixCLIL, isoperator, AbstractSystem,
                           equations, isirreducible
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
@@ -260,7 +260,7 @@ function TearingState(sys; quick_cancel = false, check = true)
             rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
             eq = 0 ~ rhs - lhs
         end
-        vars!(vars, eq.rhs)
+        vars!(vars, eq.rhs, op=Operator)
         isalgeq = true
         statevars = []
         for var in vars
@@ -274,7 +274,7 @@ function TearingState(sys; quick_cancel = false, check = true)
 
             dvar = var
             idx = varidx
-            while isdifferential(dvar)
+            while isoperator(dvar, Operator)
                 if !(idx in dervaridxs)
                     push!(dervaridxs, idx)
                 end
