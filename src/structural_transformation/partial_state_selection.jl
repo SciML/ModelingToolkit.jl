@@ -86,10 +86,10 @@ function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
             old_level_vars = to_tear_vars
             level -= 1
         end
-        for var in old_level_vars
-            if varlevel[var] !== 0 && var_eq_matching[var] === unassigned
-                var_eq_matching[var] = SelectedState()
-            end
+    end
+    for var in 1:ndsts(graph)
+        if varlevel[var] !== 0 && var_eq_matching[var] === unassigned
+            var_eq_matching[var] = SelectedState()
         end
     end
     return var_eq_matching
