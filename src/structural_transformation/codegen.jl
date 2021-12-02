@@ -1,5 +1,7 @@
 using LinearAlgebra
 
+using ModelingToolkit: isdifferenceeq, has_continuous_events, generate_rootfinding_callback, generate_difference_cb, merge_cb
+
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
 function torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs)
@@ -368,14 +370,29 @@ function ODAEProblem{iip}(
                           u0map,
                           tspan,
                           parammap=DiffEqBase.NullParameters();
-                          kw...
+                          callback = nothing,
+                          kwargs...
                          ) where {iip}
-    fun, dvs = build_torn_function(sys; kw...)
+    fun, dvs = build_torn_function(sys; kwargs...)
     ps = parameters(sys)
     defs = defaults(sys)
 
     u0 = ModelingToolkit.varmap_to_vars(u0map, dvs; defaults=defs)
     p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults=defs)
 
-    ODEProblem{iip}(fun, u0, tspan, p; kw...)
+    has_difference = any(isdifferenceeq, equations(sys))
+    if has_continuous_events(sys)
+        event_cb = generate_rootfinding_callback(sys; kwargs...)
+    else
+        event_cb = nothing
+    end
+    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
+    cb = merge_cb(event_cb, difference_cb)
+    cb = merge_cb(cb, callback)
+
+    if cb === nothing
+        ODEProblem{iip}(fun, u0, tspan, p; kwargs...)
+    else
+        ODEProblem{iip}(fun, u0, tspan, p; callback=cb, kwargs...)
+    end
 end
