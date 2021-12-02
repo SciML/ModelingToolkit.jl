@@ -341,10 +341,23 @@ function Graphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where T
 end
 
 function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors::AbstractVector)
-    old_nneighbors = length(g.fadjlist[i])
+    old_neighbors = g.fadjlist[i]
+    old_nneighbors = length(old_neighbors)
     new_nneighbors = length(new_neighbors)
     g.fadjlist[i] = new_neighbors
     g.ne += new_nneighbors - old_nneighbors
+    if isa(g.badjlist, AbstractVector)
+        for n in old_neighbors
+            @inbounds list = g.badjlist[n]
+            index = searchsortedfirst(list, i)
+            deleteat!(list, index)
+        end
+        for n in new_neighbors
+            @inbounds list = g.badjlist[n]
+            index = searchsortedfirst(list, i)
+            insert!(list, index, i)
+        end
+    end
 end
 
 ###
