@@ -228,7 +228,7 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
         if domain isa Continuous
             eq = strip_operator(eq, Hold)
         elseif domain isa AbstractDiscrete
-            eq = strip_operator(eq, Sample)
+            # eq = strip_operator(eq, Sample) # Sample must be known in normalize shifts
             eq = normalize_shifts(eq, varmap)
         end
         eq
@@ -239,12 +239,16 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
         cp_inds = findall(==(clock), eqmap) 
         cp_eqs = eqs[cp_inds] # get all equations that belong to this particular clock partition
         clock isa Continuous && return cp_eqs, [] # only work on discrete eqs
-        new_eqs, new_vars = expand_shifts(cp_eqs, clock)
+        alg_inds = [!isoperator(eq.lhs, Operator) for eq in cp_eqs] # only expand shifts for non-algeraic equations
+        new_eqs, new_vars = expand_shifts(cp_eqs[.!alg_inds], clock)
         new_eqs = discrete2continuous_operators.(new_eqs, Ref(clock))
-        new_eqs, new_vars
+        [new_eqs; cp_eqs[alg_inds]], new_vars
     end
     new_eqs, new_vars = first.(new_eqs_and_vars), last.(new_eqs_and_vars)
-    reduce(vcat, new_eqs), reduce(vcat, new_vars)
+    # sort equations so that all operator equations come first
+    new_eqs = reduce(vcat, new_eqs)
+    sort!(new_eqs, by = eq->!isoperator(eq.lhs, Operator))
+    new_eqs, reduce(vcat, new_vars)
 end
 
 """
@@ -262,12 +266,13 @@ Shift(t, 1)(u(t)) ~ -Shift(t, -1)(u(t))
 """
 function normalize_shifts(eq0::Equation, varmap)
     eq = insert_zero_shifts(eq0, varmap)
-    is_discrete_algebraic(eq) && return eq
+    is_discrete_algebraic(eq) && !hassample(eq) && return eq0
     ops = collect(collect_applied_operators(eq, Shift)) # this leaves out u(k) (no shift)
+    # sops = collect(collect_applied_operators(eq, Sample))
 
     maxshift, maxind = findmax(op->op.f.steps, ops)
     minshift = minimum(op->op.f.steps, ops)
-    maxshift == minshift == 0 && return eq # This implies an algebraic equation without delay
+    maxshift == minshift == 0 && return strip_operator(eq, Sample) # This implies an algebraic equation without delay
     newops = map(ops) do op
         s = op.f
         Shift(s.t, s.steps-maxshift+1)(op.arguments[1]) # arguments[1] is the shifted variable
@@ -278,7 +283,7 @@ function normalize_shifts(eq0::Equation, varmap)
     @variables __placeholder__
     eq = substitute(eq, Dict(newops[maxind]=>__placeholder__)) # solve_for can not solve for general terms, so we replace temporarily
     rhs = solve_for(eq, __placeholder__)
-    newops[maxind] ~ rhs
+    strip_operator(newops[maxind] ~ rhs, Sample)
 end
 
 
@@ -396,7 +401,7 @@ function discrete2continuous_operators(eq, clock)
     if is_discrete_algebraic(eq)
         return DiscreteUpdate(t; dt=dt)(var) ~ strip_operator(eq.rhs, Shift)
     else
-        return Difference(t; dt=dt)(var) ~ eq.rhs
+        return DiscreteUpdate(t; dt=dt)(var) ~ eq.rhs
     end
 end
 

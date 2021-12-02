@@ -2,6 +2,24 @@ using ModelingToolkit, Symbolics
 using ModelingToolkit: Inferred, merge_inferred, merge_domains, propagate_time_domain, get_time_domain, collect_operator_variables
 using Symbolics: value
 using OrdinaryDiffEq
+
+# Helper function to extract discrete states from solution in a right or left continuous way
+function Base.getindex(sol::ODESolution, var::Num, t::AbstractArray, from::Symbol=:right)
+    u = sol[var]
+    map(t) do t
+        ind = from === :right ? findlast(==(t), sol.t) : findfirst(==(t), sol.t)
+        ind === nothing && throw(ArgumentError("t = $t is not a valid time point in the solution."))
+        u[ind]
+    end
+end
+function Base.getindex(sol::ODESolution, var::Num, t::Number, from::Symbol=:right)
+    ind = from === :right ? findlast(==(t), sol.t) : findfirst(==(t), sol.t)
+    ind === nothing && throw(ArgumentError("t = $t is not a valid time point in the solution."))
+    sol[var][ind]
+end
+
+
+
 @variables t x(t)
 
 @testset "merge_inferred" begin
@@ -247,7 +265,7 @@ end
     @variables u(t) ud(t) [timedomain=d]
 
     eq = Shift(t, 1)(u) + Shift(t, 3)(u) ~ 0
-    @test isequal(ModelingToolkit.normalize_shifts(eq), Shift(t, 1)(u) ~ -Shift(t, -1)(u))
+    @test isequal(ModelingToolkit.normalize_shifts(eq, Dict()), Shift(t, 1)(u) ~ -Shift(t, -1)(u))
 
     eq = u ~ Hold(ud) + 1
     @test isequal(ModelingToolkit.strip_operator(eq, Hold), u ~ ud + 1)
@@ -269,9 +287,9 @@ end
 
     new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
     expected_eqs = [
-        Difference(t; dt=1, update=false)(ud) ~ Shift(t, 0)(ud) + ud_delay[1] - ud_delay[2]
-        Difference(t; dt=1, update=false)(ud_delay[1]) ~ ud
-        Difference(t; dt=1, update=false)(ud_delay[2]) ~ ud_delay[1]
+        Difference(t; dt=1, update=true)(ud) ~ Shift(t, 0)(ud) + ud_delay[1] - ud_delay[2]
+        Difference(t; dt=1, update=true)(ud_delay[1]) ~ ud
+        Difference(t; dt=1, update=true)(ud_delay[2]) ~ ud_delay[1]
     ]
     @test all(isequal.(new_eqs, expected_eqs))
 
@@ -282,9 +300,9 @@ end
 
     new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
     expected_eqs = [
-        Difference(t; dt=1, update=false)(ud) ~ ud_delay[1] - ud_delay[2]
-        Difference(t; dt=1, update=false)(ud_delay[1]) ~ ud
-        Difference(t; dt=1, update=false)(ud_delay[2]) ~ ud_delay[1]
+        Difference(t; dt=1, update=true)(ud) ~ ud_delay[1] - ud_delay[2]
+        Difference(t; dt=1, update=true)(ud_delay[1]) ~ ud
+        Difference(t; dt=1, update=true)(ud_delay[2]) ~ ud_delay[1]
     ]
     @test all(isequal.(new_eqs, expected_eqs))
 
@@ -295,9 +313,9 @@ end
 
     new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
     expected_eqs = [
-        Difference(t; dt=1, update=false)(ud) ~ - ud_delay[2]
-        Difference(t; dt=1, update=false)(ud_delay[1]) ~ ud
-        Difference(t; dt=1, update=false)(ud_delay[2]) ~ ud_delay[1]
+        Difference(t; dt=1, update=true)(ud) ~ - ud_delay[2]
+        Difference(t; dt=1, update=true)(ud_delay[1]) ~ ud
+        Difference(t; dt=1, update=true)(ud_delay[2]) ~ ud_delay[1]
     ]
     @test all(isequal.(new_eqs, expected_eqs))
 
@@ -308,9 +326,9 @@ end
 
     new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
     expected_eqs = [
-        Difference(t; dt=1, update=false)(ud) ~ - ud_delay[2]
-        Difference(t; dt=1, update=false)(ud_delay[1]) ~ ud
-        Difference(t; dt=1, update=false)(ud_delay[2]) ~ ud_delay[1]
+        Difference(t; dt=1, update=true)(ud) ~ - ud_delay[2]
+        Difference(t; dt=1, update=true)(ud_delay[1]) ~ ud
+        Difference(t; dt=1, update=true)(ud_delay[2]) ~ ud_delay[1]
     ]
     @test all(isequal.(new_eqs, expected_eqs))
 
@@ -326,10 +344,10 @@ end
     
     new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
     expected_eqs = [
-        Difference(t; dt=1, update=false)(ud) ~ Shift(t, 0)(ud) + ud_delay[1] - ud_delay[2]
-        Difference(t; dt=1, update=false)(yd) ~ ud_delay[1]
-        Difference(t; dt=1, update=false)(ud_delay[1]) ~ ud
-        Difference(t; dt=1, update=false)(ud_delay[2]) ~ ud_delay[1]
+        Difference(t; dt=1, update=true)(ud) ~ Shift(t, 0)(ud) + ud_delay[1] - ud_delay[2]
+        Difference(t; dt=1, update=true)(yd) ~ ud_delay[1]
+        Difference(t; dt=1, update=true)(ud_delay[1]) ~ ud
+        Difference(t; dt=1, update=true)(ud_delay[2]) ~ ud_delay[1]
     ]
     @test all(isequal.(new_eqs, expected_eqs))
 
@@ -368,8 +386,8 @@ sol_manual = solve(prob, Rosenbrock23(), tstops=timevec)
 plot(sol_manual)
 @test issubset(timevec, sol_manual.t) # this will be false if the solver stopped early
 
-dt_timevec = (prob.tspan[1]:dt:prob.tspan[2]) .+ 1e-10 # the added epsilon is to make sure we use the updated value of discrete variables, unfortunately, it has to be fairly large for the test below to pass
-@test sol_manual(dt_timevec)[ud] ≈ -sol_manual(dt_timevec)[x] atol=1e-4 # this tests that there are no additional delays. 
+dt_timevec = (prob.tspan[1]:dt:prob.tspan[2]) 
+@test sol_manual[ud, dt_timevec] ≈ -sol_manual[x, dt_timevec] atol=1e-4 # this tests that there are no additional delays. 
 
 ##
 # The following test implements a P controller in discrete time with a continuous-time plant. This time, algebraic variables are present
@@ -393,23 +411,51 @@ eqs = [
 new_eqs, new_vars = ModelingToolkit.preprocess_hybrid_equations(eqs)
 
 @test isequal(new_eqs[1], Difference(t; dt=dt, update=true)(yd) ~ y)
-@test isequal(new_eqs[2], Difference(t; dt=dt, update=true)(ud) ~ -kp*yd)
-@test isequal(new_eqs[3], u ~ ud)
-@test isequal(new_eqs[4], Differential(t)(x) ~ u - x)
+@test isequal(new_eqs[2], Differential(t)(x) ~ u - x) 
+@test isequal(new_eqs[3], ud ~ -kp*yd) 
+@test isequal(new_eqs[4], u ~ ud)
 @test isequal(new_eqs[5], y ~ x)
 
 sys = ODESystem(eqs, t, name = :sys)
 sysr = ModelingToolkit.hybrid_simplify(sys)
+sysrr = structural_simplify(sysr)
+# sysr2 = alias_elimination(sysr) # built into hybrid_simplify
 
-@test_skip begin # this system requires handling of algebraic variables but structural_simplify currently doesn't handle discrete equations
-    sysr2 = structural_simplify(sysr)
-    prob = ODEProblem(sysr2, [x=>1, kp=>1], (0.0, 10.0))
+    prob = ODEProblem(sysrr, [x=>1, kp=>1, yd=>1, ud=>-1.0], (0.0, 4.0))
     sol = solve(prob, Rosenbrock23(), tstops=timevec)
-    plot(sol)
+    isinteractive() && plot(sol)
 
-    @test sol(timevec)[ud] ≈ sol_manual(timevec)[ud]
+    @test sol(timevec)[ud] ≈ sol_manual(timevec)[ud] # broken due to extra delay introduced by sampling, the manually reduced system only has one Difference operator
     @test issubset(timevec, sol.t) # this will be false if the solver stopped early
-end
+
 
 end
 
+# test system with discrete states
+@testset "System with discrete states" begin
+    @info "Testing System with discrete states"
+
+    dt = 0.5
+    @variables t
+    d = Clock(t, dt)
+    @variables u(t)=1 [timedomain=d]
+    timevec = (0:dt:4) 
+
+    eqs = [
+        Shift(t, 1)(u) ~ 0.5u
+    ]
+    sys = ODESystem(eqs, t, name = :sys)
+    sysr = ModelingToolkit.hybrid_simplify(sys)
+    # sysrr = structural_simplify(sysr)
+    prob = ODEProblem(sysr, [], (0.0, 4.1))
+    sol = solve(prob, Rosenbrock23(), tstops=timevec)
+    isinteractive() && plot(sol)
+    @test issubset(timevec, sol.t)
+
+    @test sol[u, timevec[2:end]] ≈ 0.5sol[u, timevec[1:end-1]] # broken due to extra delay introduced by sampling, the manually reduced system only has one Difference operator
+
+end
+
+#=
+Many consequtive DiscreteUpdate introduces a delay, so DiscreteUpdate can be used for Sample only, all other algebraic equations must remain algebraic without operators
+=#
