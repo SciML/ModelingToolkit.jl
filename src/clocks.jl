@@ -450,7 +450,8 @@ The equations of the returned system will not contain any discrete operators, an
 """
 function hybrid_simplify(sys::ODESystem)
     new_eqs, new_vars = ModelingToolkit.preprocess_hybrid_equations(equations(sys))
-    @set! sys.eqs = new_eqs
-    @set! sys.states = [states(sys); new_vars]
+    # @set! sys.eqs = new_eqs # thsi only modifies the equations of the outer system, not inner systems
+    # @set! sys.states = [states(sys); new_vars]
+    sys = ODESystem(new_eqs, get_iv(sys), [states(sys); new_vars], parameters(sys), name=sys.name)
     sys
 end
