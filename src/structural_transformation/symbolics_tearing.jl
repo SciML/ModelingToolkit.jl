@@ -47,7 +47,7 @@ function tearing_reassemble(sys, var_eq_matching; simplify=false)
     # Rewrite remaining equations in terms of solved variables
     function substitute_equation(ieq)
         eq = eqs[ieq]
-        if isdiffeq(eq)
+        if ModelingToolkit.isoperator(eq.lhs, Symbolics.Operator)
             return eq.lhs ~ tearing_sub(eq.rhs, solved, simplify)
         else
             if !(eq.lhs isa Number && eq.lhs == 0)

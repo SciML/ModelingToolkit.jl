@@ -885,7 +885,11 @@ function structural_simplify(sys::AbstractSystem; simplify=false)
     sys = initialize_system_structure(alias_elimination(sys))
     check_consistency(sys)
     if sys isa ODESystem
-        sys = initialize_system_structure(dae_index_lowering(sys))
+        if any(isdifferenceeq, equations(sys))
+            @warn "dae_index_lowering currently doesn't support systems with discrete states and will thus not be performed."
+        else
+            sys = initialize_system_structure(dae_index_lowering(sys))
+        end
     end
     sys = tearing(sys, simplify=simplify)
     fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
