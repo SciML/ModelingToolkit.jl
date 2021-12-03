@@ -169,11 +169,12 @@ Shift(t, -1)(xd(t))
 """
 struct SampledTime
     t
-    clock
+    clock::TimeDomain
     steps::Int
     SampledTime(t, clock=Inferred(), steps=0) = new(value(t), clock, steps)
     SampledTime(t, dt::Real, steps=0) = new(value(t), Clock(t, dt), steps)
 end
+SampledTime(d::AbstractClock) = SampledTime(d.t, d)
 
 
 function (xn::Num)(k::SampledTime)
