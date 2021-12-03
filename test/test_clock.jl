@@ -19,7 +19,7 @@ function Base.getindex(sol::ODESolution, var::Num, t::Number, from::Symbol=:righ
 end
 
 
-
+##
 @variables t x(t)
 
 @testset "merge_inferred" begin
@@ -187,7 +187,7 @@ end
     @test propagate_time_domain(eqs[4]) == (Continuous(), Dict(u => Continuous(), x => Continuous())) 
 
 
-    eqmap, varmap = ModelingToolkit.equation_and_variable_time_domains(eqs)
+    eqmap, varmap = ModelingToolkit.clock_inference(eqs)
 
     @test varmap[yd] == d
     @test varmap[ud] == d
@@ -235,7 +235,7 @@ end
     @test propagate_time_domain(eqs[3]) == (d2, Dict(yd2 => d2, y => Inferred()))
 
 
-    eqmap, varmap = ModelingToolkit.equation_and_variable_time_domains(eqs)
+    eqmap, varmap = ModelingToolkit.clock_inference(eqs)
 
     @test varmap[yd1] == d
     @test varmap[ud1] == d
@@ -423,9 +423,9 @@ sysrr = structural_simplify(sysr)
 
     prob = ODEProblem(sysrr, [x=>1, kp=>1, yd=>1, ud=>-1.0], (0.0, 4.0))
     sol = solve(prob, Rosenbrock23(), tstops=timevec)
-    isinteractive() && plot(sol)
+    isinteractive() && plot(sol) |> display
 
-    @test sol(timevec)[ud] ≈ sol_manual(timevec)[ud] # broken due to extra delay introduced by sampling, the manually reduced system only has one Difference operator
+    @test sol(timevec)[ud] ≈ sol_manual(timevec)[ud] 
     @test issubset(timevec, sol.t) # this will be false if the solver stopped early
 
 
@@ -449,10 +449,10 @@ end
     # sysrr = structural_simplify(sysr)
     prob = ODEProblem(sysr, [], (0.0, 4.1))
     sol = solve(prob, Rosenbrock23(), tstops=timevec)
-    isinteractive() && plot(sol)
+    isinteractive() && plot(sol) |> display
     @test issubset(timevec, sol.t)
 
-    @test sol[u, timevec[2:end]] ≈ 0.5sol[u, timevec[1:end-1]] # broken due to extra delay introduced by sampling, the manually reduced system only has one Difference operator
+    @test sol[u, timevec[2:end]] ≈ 0.5sol[u, timevec[1:end-1]] 
 
 end
 

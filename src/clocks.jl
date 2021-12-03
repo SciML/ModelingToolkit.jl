@@ -83,14 +83,15 @@ function propagate_time_domain(eq::Equation, domain_above::Union{TimeDomain, Not
     last_hash = hash(varmap)
     ex = eq.lhs - eq.rhs
     for i = 1:10 # max 10 step fixed-point iteration
-        # The fix-point iteration is performed in order to make 
+        # The fix-point iteration is performed in order to propagate information between both sides of the equation.
         d, varmap = propagate_time_domain(ex, domain_above, varmap)
         domain_above = merge_domains(domain_above, d, eq)
         # d, varmap = propagate_time_domain(eq.rhs, domain_above, varmap)
         # domain_above = merge_domains(domain_above, d, eq)
         h = hash(varmap)
         h == last_hash && break
-        h = last_hash 
+        last_hash  = h
+        i == 10 && error("Clock inference failed to converge after $i iterations for equation $eq, the current inference result is $domain_above and the varmap is $varmap")
     end
     domain_above, varmap
 end
@@ -103,7 +104,7 @@ propagate_time_domain(e::Num, domain_above::Union{TimeDomain, Nothing} = nothing
 """
     domain, varmap = propagate_time_domain(e, domain_above::Union{TimeDomain, Nothing} = nothing, varmap = Dict{Any, Any}())
 
-Determine the time-domain (clock inference) of an expression or equation `e`. `domain` is the time domain for the compound expression `e`, while `varmap` is a dict that maps variables to time domains / clocks.
+Recursively determine the time-domain (clock inference) of an expression or equation `e`. `domain` is the time domain for the compound expression `e`, while `varmap` is a dict that maps variables to time domains / clocks.
 
 # Details
 At the expression root, the domain is typically unknown (nothing), we thus start from the root and recurse down until qe encounter an expression with known domain. When we find a domain, we continue to propagate all the way down to the leaves, checking consistency on the way if the domain is specified also further down the tree. We then propagate the domain back up to the root. At a middle point, there might be one domain coming from above, and one from below, if they differ it's an error.
@@ -155,7 +156,13 @@ function propagate_time_domain(v::AbstractVector, domain_above::Union{TimeDomain
 end
 
 
-function equation_and_variable_time_domains(eqs::Vector{Equation}, domain_above::Union{TimeDomain, Nothing} = nothing)
+"""
+    clock_inference(eqs::Vector{Equation}, domain_above::Union{TimeDomain, Nothing} = nothing)
+
+Performs clock-inference for a collection of equations, like `equations(sys)`
+`domain_above` is the knowledge at the starting point.
+"""
+function clock_inference(eqs::Vector{Equation}, domain_above::Union{TimeDomain, Nothing} = nothing)
     varmap = Dict{Any, Any}()
     eq2dom = Vector{Any}(undef, length(eqs)) .= domain_above
     last_hash = UInt(0)
@@ -197,6 +204,18 @@ merge_domains(::Nothing, ::Nothing, args...) = nothing
 merge_domains(x::Any, ::Nothing, args...) = x
 merge_domains(::Nothing, x::Any, args...) = x
 
+
+"""
+    merge_domains(above::A, below::B, ex)
+
+Takes in two time domains and returns the most specific one. The specificity rules are
+1.  A concrete domain like `Continuous` or `Clock`
+2. InferredDiscrete
+3. Inferred
+4. nothing
+
+If both arguments are concrete domains, they must be equal, otherwise a ClockInferenceException is thrown.
+"""
 function merge_domains(above::A, below::B, ex) where {A <: TimeDomain, B <: TimeDomain}
     emsg = "In expression $ex, the domain was inferred to $above from the root of the tree but $below from the leaves."
     above == below && return above
@@ -215,21 +234,24 @@ end
 """
     preprocess_hybrid_equations(eqs)
 
-1. Perform clock inference using [`equation_and_variable_time_domains`](@ref).
-2. Normalize `Shift` operations so that the largest positive shift becomes 0, and is the only term on the LHS of the equation. This uses [`normalize_shifts`](@ref).
-3. For each clock partition, expand shift equations to companion form where the largest shift is -1. This introduces max_shift-1 new states and equations. 
-4. Strip away hybrid and discrete operators from equations (domains are known from the clock inference). Uses [`strip_operator`](@ref)
-
+1. Perform clock inference using [`clock_inference`](@ref).
+2. Normalize `Shift` operations so that the largest positive shift becomes 1, and is the only term on the LHS of the equation. This uses [`normalize_shifts`](@ref).
+3. For each clock partition, expand shift equations to companion form where the only remaining shifts are 1 and 0. This introduces `n` new states and equations where `n` = max_shift - min_shift - 1. 
+4. Rewrite Shift(1) to the continuous-time ` [`DiscreteUpdate`](@ref) operator and strip away hybrid and discrete operators from equations (domains are known from the clock inference). Uses [`strip_operator`](@ref)
 """
 function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
-    eqmap, varmap = equation_and_variable_time_domains(eqs)
-
+    eqmap, varmap = clock_inference(eqs)
+    if any(d isa UnknownDomain for d in eqmap)
+        display(eqs .=> eqmap)
+        throw(ClockInferenceException("Clock inference failed to infer the time domain of all equations, the inference result was printed above."))
+    end
     eqs = map(zip(eqs, eqmap)) do (eq, domain)
         if domain isa Continuous
             eq = strip_operator(eq, Hold)
         elseif domain isa AbstractDiscrete
             # eq = strip_operator(eq, Sample) # Sample must be known in normalize shifts
             eq = normalize_shifts(eq, varmap)
+            @assert !hassample(eq)
         end
         eq
     end
@@ -240,8 +262,10 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
         cp_eqs = eqs[cp_inds] # get all equations that belong to this particular clock partition
         clock isa Continuous && return cp_eqs, [] # only work on discrete eqs
         alg_inds = [!isoperator(eq.lhs, Operator) for eq in cp_eqs] # only expand shifts for non-algeraic equations
-        new_eqs, new_vars = expand_shifts(cp_eqs[.!alg_inds], clock)
+        new_eqs, new_vars = shift_order_lowering(cp_eqs[.!alg_inds], clock)
+        @assert !any(hassample, new_eqs)
         new_eqs = discrete2continuous_operators.(new_eqs, Ref(clock))
+        @assert !any(hassample, new_eqs)
         [new_eqs; cp_eqs[alg_inds]], new_vars
     end
     new_eqs, new_vars = first.(new_eqs_and_vars), last.(new_eqs_and_vars)
@@ -254,7 +278,7 @@ end
 """
     normalize_shifts(eq, varmap)
 
-Normalize `Shift` operations so that the largest positive shift becomes 1, and is the only term on the LHS of the equation.
+Normalize `Shift` operations so that the largest positive shift becomes 1, and is the only term on the LHS of the equation. This function also removes `Sample` operators from the equation.
 Example:
 ```julia
 julia> eq = Shift(t, 1)(u) + Shift(t, 3)(u) ~ 0
@@ -263,12 +287,12 @@ Shift(t, 1)(u(t)) + Shift(t, 3)(u(t)) ~ 0
 julia> normalize_shifts(eq)
 Shift(t, 1)(u(t)) ~ -Shift(t, -1)(u(t))
 ```
+Equations have a "floating" shift index, meaning that a shift equation is equivalent to another shift equation where all shifts are related by a constant offset. Equations may be shift-normalized independently, but different variables in the same equation are *not* normalized independently.
 """
 function normalize_shifts(eq0::Equation, varmap)
     eq = insert_zero_shifts(eq0, varmap)
     is_discrete_algebraic(eq) && !hassample(eq) && return eq0
-    ops = collect(collect_applied_operators(eq, Shift)) # this leaves out u(k) (no shift)
-    # sops = collect(collect_applied_operators(eq, Sample))
+    ops = collect(collect_applied_operators(eq, Shift)) 
 
     maxshift, maxind = findmax(op->op.f.steps, ops)
     minshift = minimum(op->op.f.steps, ops)
@@ -291,6 +315,8 @@ end
     insert_zero_shifts(eq)
 
 Inserts `Shift(t, 0)` terms, i.e., replace `u(t)` with `Shift(t, 0)(u(t))`.
+Does not insert shifts inside other operators, e.g., `Shift(t, 1)(u(t))` does not become
+`Shift(t, 1)(Shift(t, 0)(u(t)))`
 """
 function insert_zero_shifts(eq, varmap)
     discrete_vars = []
@@ -309,7 +335,7 @@ function insert_zero_shifts(eq, varmap)
 end
 
 """
-    new_eqs, new_vars = expand_shifts(eqs::Vector{Equation}, clock)
+    new_eqs, new_vars = shift_order_lowering(eqs::Vector{Equation}, clock)
 
 Takes a vector of equations, all belonging to the same discrete clock partition, and introduces new variables for terms that are shifted by more than -1. For example
 ```
@@ -317,12 +343,15 @@ u(k+1) ~ u(k) + u(k-1) + u(k-2)
 ```
 becomes
 ```
-u(k+1)  ~  u(k) + u1(k) + u2(k)
-u1(k+1) ~  u(k)
-u2(k+1) ~ u1(k)
+u(k+1)  ~  u(k) + u_delay[1](k) + u_delay[2](k)
+u_delay[1](k+1) ~ u(k)
+u_delay[2](k+1) ~ u_delay[1](k)
 ```
+This corresponds to [`ode_order_lowering`](@ref) for continuous systems.
+
+This function assumes that shifts are already normalized using [`normalize_shifts`](@ref).
 """
-function expand_shifts(eqs::Vector{Equation}, clock::AbstractDiscrete)
+function shift_order_lowering(eqs::Vector{Equation}, clock::AbstractDiscrete)
     t = clock.t
     shift(x) = Shift(t)(x)
     vars = collect(union(collect_operator_variables.(eqs, Ref(Shift))...))
@@ -369,6 +398,7 @@ u(t) ~ 1 + Hold()(ud(t))
 
 julia> strip_operator(eq, Hold)
 u(t) ~ 1 + ud(t)
+```
 """
 function strip_operator(eq::Equation, operator)
     ops = collect(collect_applied_operators(eq, operator))
@@ -393,11 +423,17 @@ function is_discrete_algebraic(eq)
 end
 
 
+"""
+    discrete2continuous_operators(eq, clock)
+
+Rewrites `eq` by removing all shift operators, and replaces `Shift(1)` on the eq.lhs with the continuous-time [`DiscreteUpdate`](@ref) operator which lowers to a [`DiscreteCallback`](@ref) when an [`ODEProblem`](@ref) is created.
+"""
 function discrete2continuous_operators(eq, clock)
     t = clock.t
     dt = sampletime(clock)
     term = value(eq.lhs)
     var = arguments(term)[1]
+    @assert !hassample(eq)
     if is_discrete_algebraic(eq)
         return DiscreteUpdate(t; dt=dt)(var) ~ strip_operator(eq.rhs, Shift)
     else
@@ -405,6 +441,13 @@ function discrete2continuous_operators(eq, clock)
     end
 end
 
+
+"""
+    hybrid_simplify(sys::ODESystem)
+
+Simplification of hybrid systems (containing both discrete and continuous states).
+The equations of the returned system will not contain any discrete operators, and shift equations have been rewritten into [`DiscreteUpdate`](@ref) equations. This simplification pass may introduce new variables and equations for equations with relative shifts larger than 1, corresponding to [`ode_order_lowering`](@ref) for continuous systems.
+"""
 function hybrid_simplify(sys::ODESystem)
     new_eqs, new_vars = ModelingToolkit.preprocess_hybrid_equations(equations(sys))
     @set! sys.eqs = new_eqs
