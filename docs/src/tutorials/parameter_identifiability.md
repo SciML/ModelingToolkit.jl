@@ -1,8 +1,8 @@
 # Parameter Identifiability in ODE Models
 
-Using ordinary differential equations for modeling real-world processes is commonplace and the problem of parameter identifiability is one of the key design challenges. A parameter is said to be _identifiable_ if one can recover its value from experimental data. _Structurally_ identifiabiliy is a property that answers this question without needing to perform the actual measurement. In this tutorial, we will show how to use `StructuralIdentifiability.jl` with `ModelingToolkit.jl` to assess identifiability of parameters in ODE models. The theory behind `StructuralIdentifiability.jl` is presented in paper [^4].
+Ordinary differential equations are commonly used for modeling real-world processes. The problem of parameter identifiability is one of the key design challenges for mathematical models. A parameter is said to be _identifiable_ if one can recover its value from experimental data. _Structural_ identifiabiliy is a theoretical property of a model that answers this question. In this tutorial, we will show how to use `StructuralIdentifiability.jl` with `ModelingToolkit.jl` to assess identifiability of parameters in ODE models. The theory behind `StructuralIdentifiability.jl` is presented in paper [^4].
 
-We will start with determining **local identifiability**, where a parameter is known up to _finitely many values_, and then proceed to determining **global identifiability** properties, that is, which parameters can be identified _uniquely_.
+We will start by illutrating **local identifiability** in which a parameter is known up to _finitely many values_, and then proceed to determining **global identifiability**, that is, which parameters can be identified _uniquely_.
 
 To install `StructuralIdentifiability.jl`, simply run
 ```julia
