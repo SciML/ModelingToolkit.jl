@@ -18,9 +18,6 @@ function tearing_reassemble(sys, var_eq_matching; simplify=false)
         if var in vars(rhs)
             # Usually we should be done here, but if we don't simplify we can get in
             # trouble, so try our best to still solve for rhs
-            if !simplify
-                rhs = SymbolicUtils.polynormalize(rhs)
-            end
 
             # Since we know `eq` is linear wrt `var`, so the round off must be a
             # linear term. We can correct the round off error by a linear
