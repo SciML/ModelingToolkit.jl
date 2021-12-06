@@ -1,7 +1,10 @@
 using ModelingToolkit, Symbolics
-using ModelingToolkit: Inferred, merge_inferred, merge_domains, get_time_domain, collect_operator_variables, get_eq_domain
+using ModelingToolkit: Inferred, merge_inferred, merge_domains, get_time_domain, collect_operator_variables, get_eq_domain, vars
 using Symbolics: value
 using OrdinaryDiffEq
+
+
+eqstates(eqs) = filter(istree, collect(vars(eqs, op=Nothing)))
 
 # Helper function to extract discrete states from solution in a right or left continuous way
 function Base.getindex(sol::ODESolution, var::Num, t::AbstractArray, from::Symbol=:right)
@@ -295,7 +298,11 @@ end
             Shift(t, 3)(ud) ~ Shift(t, 2)(ud) + Shift(t, 1)(ud) - Shift(t, 0)(ud)
     ]
 
-    new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
+    dvs = eqstates(eqs)
+    part = ModelingToolkit.preprocess_hybrid_equations(eqs, dvs)
+    new_eqs = part.eqs
+    ud_delay = part.vars[length(dvs)+1:end]
+
     expected_eqs = [
         Difference(t; dt=1, update=true)(ud) ~ Shift(t, 0)(ud) + ud_delay[1] - ud_delay[2]
         Difference(t; dt=1, update=true)(ud_delay[1]) ~ ud
@@ -308,7 +315,10 @@ end
             Shift(t, 3)(ud) ~ Shift(t, 1)(ud) - Shift(t, 0)(ud)
     ]
 
-    new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
+    dvs = eqstates(eqs)
+    part = ModelingToolkit.preprocess_hybrid_equations(eqs, dvs)
+    new_eqs = part.eqs
+    ud_delay = part.vars[length(dvs)+1:end]
     expected_eqs = [
         Difference(t; dt=1, update=true)(ud) ~ ud_delay[1] - ud_delay[2]
         Difference(t; dt=1, update=true)(ud_delay[1]) ~ ud
@@ -321,7 +331,10 @@ end
             Shift(t, 3)(ud) ~ - Shift(t, 0)(ud)
     ]
 
-    new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
+    dvs = eqstates(eqs)
+    part = ModelingToolkit.preprocess_hybrid_equations(eqs, dvs)
+    new_eqs = part.eqs
+    ud_delay = part.vars[length(dvs)+1:end]
     expected_eqs = [
         Difference(t; dt=1, update=true)(ud) ~ - ud_delay[2]
         Difference(t; dt=1, update=true)(ud_delay[1]) ~ ud
@@ -334,7 +347,10 @@ end
         Shift(t, 3)(ud) ~ - ud
     ]
 
-    new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
+    dvs = eqstates(eqs)
+    part = ModelingToolkit.preprocess_hybrid_equations(eqs, dvs)
+    new_eqs = part.eqs
+    ud_delay = part.vars[length(dvs)+1:end]
     expected_eqs = [
         Difference(t; dt=1, update=true)(ud) ~ - ud_delay[2]
         Difference(t; dt=1, update=true)(ud_delay[1]) ~ ud
@@ -352,7 +368,10 @@ end
             Shift(t, 3)(yd) ~ Shift(t, 1)(ud)
     ]
     
-    new_eqs, ud_delay = ModelingToolkit.preprocess_hybrid_equations(eqs)
+    dvs = eqstates(eqs)
+    part = ModelingToolkit.preprocess_hybrid_equations(eqs, dvs)
+    new_eqs = part.eqs
+    ud_delay = part.vars[length(dvs)+1:end]
     expected_eqs = [
         Difference(t; dt=1, update=true)(ud) ~ Shift(t, 0)(ud) + ud_delay[1] - ud_delay[2]
         Difference(t; dt=1, update=true)(yd) ~ ud_delay[1]
@@ -382,11 +401,8 @@ end
         D(x) ~ -x + Hold(ud)
     ]
 
-    new_eqs, new_vars = ModelingToolkit.preprocess_hybrid_equations(eqs)
-
     sys = ODESystem(eqs, t, name = :sys)
     sysr = ModelingToolkit.hybrid_simplify(sys)
-
 
 
     prob = ODEProblem(sysr, [x=>1, kp=>1, ud=>-1], (0.0, 4.0))
@@ -415,8 +431,8 @@ end
         y ~ x
     ]
 
-
-    new_eqs, new_vars = ModelingToolkit.preprocess_hybrid_equations(eqs)
+    dvs = eqstates(eqs)
+    new_eqs = ModelingToolkit.preprocess_hybrid_equations(eqs, dvs).eqs
 
     @test isequal(new_eqs[1], Difference(t; dt=dt, update=true)(yd) ~ y)
     @test isequal(new_eqs[2], Differential(t)(x) ~ u - x) 
@@ -427,7 +443,6 @@ end
     sys = ODESystem(eqs, t, name = :sys)
     sysr = ModelingToolkit.hybrid_simplify(sys)
     sysrr = structural_simplify(sysr)
-    # sysr2 = alias_elimination(sysr) # built into hybrid_simplify
 
     prob = ODEProblem(sysrr, [x=>1, kp=>1, yd=>1, ud=>-1.0], (0.0, 4.0))
     sol = solve(prob, Rosenbrock23(), tstops=timevec)
@@ -540,8 +555,11 @@ cres = ModelingToolkit.clock_inference(eqs)
 @test cres.varmap[p.u ] == Continuous()
 @test cres.varmap[c.r ] == Clock(t, 0.5)
 
-new_eqs, new_vars = ModelingToolkit.preprocess_hybrid_equations(equations(cl))
 
+
+eqs = equations(cl)
+dvs = collect(vars(eqs))
+# part = ModelingToolkit.preprocess_hybrid_equations(eqs, dvs)
 
 
 sysr = ModelingToolkit.hybrid_simplify(cl)
@@ -551,7 +569,7 @@ sysr = ModelingToolkit.hybrid_simplify(cl)
 
 sysrr = structural_simplify(sysr)
 prob = ODAEProblem(sysrr, [], (0.0, 4.1))
-# prob = ODEProblem(sysrr, [], (0.0, 4.1))
+# prob = ODEProblem(sysr, [], (0.0, 4.1), check_length=false)
 
 ##
 

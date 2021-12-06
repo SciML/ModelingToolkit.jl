@@ -38,7 +38,9 @@ struct Clock <: AbstractClock
 end
 
 sampletime(c::AbstractClock) = c.dt
-
+#=
+TODO: A clock may need a unique id since otherwise Clock(t, 0.1) === Clock(t, 0.1)
+=#
 
 # The abortable prewal lets you do the transformation `f(t) + t => f(t) + g(t)`
 struct AbortablePrewalk{C, F, CO}
@@ -66,10 +68,31 @@ function (p::AbortablePrewalk{C, F})(x) where {C, F}
     end
 end
 
+struct ClockPartitioning
+    eqs::Vector{Equation}
+    "A vector of TimeDomain of the same length as ccs"
+    clocks::Vector{TimeDomain}
+    "A vector of TimeDomain of the same length as the number of equations"
+    eqmap::Vector{TimeDomain}
+    "A vector of all variables in the inferred equation set"
+    vars
+    "A dict that maps variables to TimeDomain"
+    varmap::Dict
+end
+struct ClockInferenceResult
+    clockpart::ClockPartitioning
+    "A Vector{Vector{Int}}. incidences[i] points to the unknown variables, as well as variables x in Differential(x), and Shift(x), which lexically appear in eqs[i] except as first argument of base-clock conversion operators: Sample() and Hold(). Example, if j ∈ incidences[eq_ind], then allvars[j] appears in eqs[eq_ind]"
+    incidences
+    "A vector of vectors with equation indices that form each connected component"
+    ccs::Vector{Vector{Int}}
+    bg::BipartiteGraph
+end
 
-#=
-TODO: A clock may need a unique id since otherwise Clock(t, 0.1) === Clock(t, 0.1)
-=#
+function Base.getproperty(cir::ClockInferenceResult, s::Symbol)
+    s ∈ fieldnames(typeof(cir)) && return getfield(cir, s)
+    getproperty(getfield(cir, :clockpart), s)
+end
+
 
 
 # The rules are, `nothing` loses to everything, Inferred loses to everything else, then InferredDiscrete and so on
@@ -118,16 +141,16 @@ end
 
 
 """
-    preprocess_hybrid_equations(eqs)
+    preprocess_hybrid_equations(eqs, states)
 
 1. Perform clock inference using [`clock_inference`](@ref).
 2. Normalize `Shift` operations so that the largest positive shift becomes 1, and is the only term on the LHS of the equation. This uses [`normalize_shifts`](@ref).
 3. For each clock partition, expand shift equations to companion form where the only remaining shifts are 1 and 0. This introduces `n` new states and equations where `n` = max_shift - min_shift - 1. 
 4. Rewrite Shift(1) to the continuous-time ` [`DiscreteUpdate`](@ref) operator and strip away hybrid and discrete operators from equations (domains are known from the clock inference). Uses [`strip_operator`](@ref)
 """
-function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
-    res = clock_inference(eqs)
-    @unpack eqmap, varmap = res
+function preprocess_hybrid_equations(eqs::AbstractVector{Equation}, original_vars)
+    cires = clock_inference(eqs)
+    @unpack eqmap, varmap = cires
     if any(d isa UnknownDomain for d in eqmap)
         display(eqs .=> eqmap)
         throw(ClockInferenceException("Clock inference failed to infer the time domain of all equations, the inference result was printed above."))
@@ -144,30 +167,48 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
 
     clocks = unique(eqmap)
     # QUESTION: we now process each clock partition independently. We possibly want to perform additional simplification on clock partitions independently?
+    # TODO: If we want to handle discrete and continuous states separately, we definitely want to separate them
     new_eqs_and_vars = map(clocks) do clock
-        cp_inds = findall(==(clock), eqmap) 
-        cp_eqs = eqs[cp_inds] # get all equations that belong to this particular clock partition
-        clock isa Continuous && return cp_eqs, [] # only work on discrete eqs
+        cp_inds  = findall(==(clock), eqmap) 
+        cp_eqs   = eqs[cp_inds] # get all equations that belong to this particular clock partition
+        clock isa Continuous && return (cp_eqs, []) # only work on discrete eqs
         alg_inds = [!isoperator(eq.lhs, Operator) for eq in cp_eqs] # only expand shifts for non-algeraic equations
         new_eqs, new_vars = shift_order_lowering(cp_eqs[.!alg_inds], clock)
+        for nv in new_vars
+            varmap[nv] = clock # add the new variables to the varmap
+        end
         @assert !any(hassample, new_eqs)
-        new_eqs = discrete2continuous_operators.(new_eqs, Ref(clock))
+        new_eqs  = discrete2continuous_operators.(new_eqs, Ref(clock))
         # new_eqs = reduce(vcat, new_eqs)
         @assert !any(hassample, new_eqs)
-
-        new_eqs = [new_eqs; cp_eqs[alg_inds]]
+        new_eqs  = [new_eqs; cp_eqs[alg_inds]]
         
         new_eqs, new_vars
     end
+
     new_eqs, new_vars = first.(new_eqs_and_vars), last.(new_eqs_and_vars)
     eqmap = reduce(vcat, [fill(c, length(eqs)) for (c,eqs) in zip(clocks, new_eqs)]) # recreate shuffled eqmap
-    # sort equations so that all operator equations come first
     new_eqs = reduce(vcat, new_eqs)
+    new_vars = reduce(vcat, new_vars)
     # new_eqs, removed_vars = substitute_algebraic_eqs(new_eqs, eqmap) # can't get this to work out
     removed_vars = []
-    new_vars = reduce(vcat, new_vars)
+    # sort equations so that all operator equations come first
     sort!(new_eqs, by = eq->!isoperator(eq.lhs, Operator))
-    new_eqs, new_vars, removed_vars
+
+
+    allvars = [setdiff(original_vars, removed_vars); new_vars]
+    part = ClockPartitioning(new_eqs, clocks, eqmap, allvars, varmap)
+end
+
+function discrete_var2param(part::ClockPartitioning)
+    @unpack eqs, clocks, eqmap, vars, varmap = part
+    vars = map(enumerate(vars)) do (i, var)
+        varmap[var] isa AbstractDiscrete || return var # we only need to change variables in the continuous partition
+        param = toparam(var)
+        eqs .= substitute.(eqs, Ref(Dict(var => param)))
+        vars[i] = param
+    end
+    ClockPartitioning(eqs, clocks, eqmap, vars, varmap)
 end
 
 """
@@ -264,7 +305,7 @@ function shift_order_lowering(eqs::Vector{Equation}, clock::AbstractDiscrete)
         n_new_states = -minimum(op->op.f.steps, varops) # number of new states required is maximum negative shift
         n_new_states < 1 && continue
         varname = Symbol(string(value(var).f)*"_delay")
-        new_eq_vars = @variables $varname[1:n_new_states](t)
+        new_eq_vars = @variables $varname[1:n_new_states](t) [timedomain=clock]
         new_eqvars = collect(new_eq_vars[]) # @variables returns a vector wrapper
         new_vareqs = map(1:n_new_states-1) do i
             shift(new_eqvars[i+1]) ~ new_eqvars[i]
@@ -368,30 +409,19 @@ end
 Simplification of hybrid systems (containing both discrete and continuous states).
 The equations of the returned system will not contain any discrete operators, and shift equations have been rewritten into [`DiscreteUpdate`](@ref) equations. This simplification pass may introduce new variables and equations for equations with relative shifts larger than 1, corresponding to [`ode_order_lowering`](@ref) for continuous systems.
 """
-function hybrid_simplify(sys::ODESystem)
-    new_eqs, new_vars, removed_vars = preprocess_hybrid_equations(equations(sys))
+function hybrid_simplify(sys::ODESystem; param=false)
+    part = preprocess_hybrid_equations(equations(sys), states(sys))
     # @set! sys.eqs = new_eqs # this only modifies the equations of the outer system, not inner systems
     # @set! sys.states = [states(sys); new_vars]
-    vars = [setdiff(states(sys), removed_vars); new_vars]
     # TODO: propagate all other fields to ODESystem
-    sys = ODESystem(new_eqs, get_iv(sys), vars, parameters(sys), name=sys.name)
-    sys
-end
-
-struct ClockInferenceResult
-    "A Vector{Vector{Int}}. incidences[i] points to the unknown variables, as well as variables x in Differential(x), and Shift(x), which lexically appear in eqs[i] except as first argument of base-clock conversion operators: Sample() and Hold(). Example, if j ∈ incidences[eq_ind], then allvars[j] appears in eqs[eq_ind]"
-    incidences::Vector{Vector{Int}}
-    "A vector of all variables in the inferred equation set"
-    allvars
-    "A dict that maps variables to TimeDomain"
-    varmap::Dict
-    "A vector of TimeDomain of the same length as the number of equations"
-    eqmap::Vector{TimeDomain}
-    bg::BipartiteGraph
-    "A vector of vectors with equation indices that form each connected component"
-    ccs::Vector{Vector{Int}}
-    "A vector of TimeDomain of the same length as ccs"
-    cc_domains::Vector{TimeDomain}
+    if param
+        part = discrete_var2param(part)
+        new_params = filter(isparameter, part.vars)
+        new_states = filter(!isparameter, part.vars)
+        return ODESystem(part.eqs, get_iv(sys), new_states, [new_params; parameters(sys)], name=sys.name)
+    else
+        return ODESystem(part.eqs, get_iv(sys), part.vars, parameters(sys), name=sys.name)
+    end
 end
 
 function get_eq_domain(x::Num, domain_above=Inferred())
@@ -431,7 +461,7 @@ end
     clock_inference(eqs::Vector{Equation}, domain_above::TimeDomain = Inferred())
 
 Performs clock-inference for a collection of equations, like `equations(sys)`
-`domain_above` is the knowledge at the starting point.
+`domain_above` is the knowledge at the starting point. Returns a [`ClockInferenceResult`](@ref) containing `clockpart::ClockPartitioning`.
 """
 function clock_inference(eqs::Vector{Equation}, domain_above::TimeDomain = Inferred())
     varmap = Dict{Any, Any}()
@@ -486,7 +516,7 @@ function clock_inference(eqs::Vector{Equation}, domain_above::TimeDomain = Infer
         filter!(<=(length(eqs)), cc) # "undo" graph expansion, keep only equation part
     end
 
-    cc_domains = map(ccs) do cc
+    clocks = map(ccs) do cc
         dom = domain_above
         for eqind in cc
             dom = merge_domains(dom, eq2dom[eqind], eqs[eqind])
@@ -500,6 +530,6 @@ function clock_inference(eqs::Vector{Equation}, domain_above::TimeDomain = Infer
         end
         dom
     end
-
-    ClockInferenceResult(incidences, allvars, varmap, eq2dom, bg, ccs, cc_domains)
+    part = ClockPartitioning(eqs, clocks, eq2dom, allvars, varmap)
+    ClockInferenceResult(part, incidences, ccs, bg)
 end
