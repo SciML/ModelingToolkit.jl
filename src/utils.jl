@@ -373,14 +373,13 @@ v  = ModelingToolkit.vars(D(y) ~ u)
 v == Set([D(y), u])
 ```
 """
-vars(x::Sym; op = Differential) = Set([x])
-vars(exprs::Symbolic; op = Differential) = vars([exprs]; op = op)
-vars(exprs; op = Differential) = foldl((x, y) -> vars!(x, y; op = op), exprs; init = Set())
-vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
-function vars!(vars, eq::Equation; op = Differential)
-    (vars!(vars, eq.lhs; op = op); vars!(vars, eq.rhs; op = op); vars)
-end
-function vars!(vars, O; op = Differential)
+vars(x::Sym; op=Differential) = Set([x])
+vars(x::Num; op=Differential) = vars(unwrap(x); op)
+vars(exprs::Symbolic; op=Differential) = vars([exprs]; op=op)
+vars(exprs; op=Differential) = foldl((x, y) -> vars!(x, y; op=op), exprs; init = Set())
+vars(eq::Equation; op=Differential) = vars!(Set(), eq; op=op)
+vars!(vars, eq::Equation; op=Differential) = (vars!(vars, eq.lhs; op=op); vars!(vars, eq.rhs; op=op); vars)
+function vars!(vars, O; op=Differential)
     if isvariable(O)
         return push!(vars, O)
     end

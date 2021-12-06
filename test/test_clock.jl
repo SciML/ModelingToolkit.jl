@@ -1,5 +1,5 @@
 using ModelingToolkit, Symbolics
-using ModelingToolkit: Inferred, merge_inferred, merge_domains, propagate_time_domain, get_time_domain, collect_operator_variables
+using ModelingToolkit: Inferred, merge_inferred, merge_domains, get_time_domain, collect_operator_variables, get_eq_domain
 using Symbolics: value
 using OrdinaryDiffEq
 
@@ -18,6 +18,23 @@ function Base.getindex(sol::ODESolution, var::Num, t::Number, from::Symbol=:righ
     sol[var][ind]
 end
 
+# function Base.getindex(sol::ODESolution, var::Num, t::AbstractArray, from::Symbol=:right)
+#     u = sol[var]
+#     map(t) do t
+#         ind = findfirst(==(t), sol.t)
+#         ind === nothing && throw(ArgumentError("t = $t is not a valid time point in the solution."))
+#         from === :right && (ind += 1)
+#         ind = min(ind, length(sol))
+#         u[ind]
+#     end
+# end
+# function Base.getindex(sol::ODESolution, var::Num, t::Number, from::Symbol=:right)
+#     ind = findfirst(==(t), sol.t)
+#     ind === nothing && throw(ArgumentError("t = $t is not a valid time point in the solution."))
+#     from === :right && (ind += 1)
+#     ind = min(ind, length(sol))
+#     sol[var][ind]
+# end
 
 ##
 @variables t x(t)
@@ -98,23 +115,23 @@ end
     # explicit time domain
     @variables xd(t) [timedomain=d]
     @variables xc(t) [timedomain=Continuous()]
-    @test propagate_time_domain(xd) == (d, Dict(xd => d))
-    @test propagate_time_domain(xc) == (Continuous(), Dict(xc => Continuous())) # TODO: se till att få bort -1 etc.
+    @test get_eq_domain(xd) == d
+    @test get_eq_domain(xc) == Continuous()
 
     # test that the domain is propagated correctly for a bunch of different expressions
     exprs = [x, 2x, x^2, x+t, v, 2v, p]
     eqs = [x ~ 1, x ~ p, x ~ v[1]]
 
     for ex in [exprs; eqs]
-        # @show ex
+        @show ex
 
         # when x has no domain set, the domain from above should be returned
-        @test propagate_time_domain(ex)[1] == nothing # we can't possibly know the domain of x
-        @test propagate_time_domain(ex, Continuous())[1] == Continuous() 
+        @test get_eq_domain(ex) == Inferred() # we can't possibly know the domain of x
+        @test get_eq_domain(ex, Continuous()) == Continuous() 
         # @test_broken get_time_domain(x) == Continuous() # Tbis is currently not supported since the metadata is immutable. Might not be needed
 
-        @test propagate_time_domain(ex, i)[1] == i 
-        @test propagate_time_domain(ex, d)[1] == d
+        @test get_eq_domain(ex, i) == i 
+        @test get_eq_domain(ex, d) == d
     end
 
     ## with operators
@@ -122,40 +139,33 @@ end
     xd = Sample(t, d)(x)
     xd2 = Sample(t, d2)(x)
 
-    for x in exprs
-        # @show x
-        @test propagate_time_domain(Differential(t)(x))[1] == Continuous()
-    end
+    @test get_eq_domain(xd) == d
+    @test get_eq_domain(Hold()(xd)) == Continuous()
 
-    @test propagate_time_domain(xd)[1] == d
-    @test propagate_time_domain(Hold()(xd))[1] == Continuous()
+    @test get_eq_domain(s(xd)) == d # the domain after a shift is inferred from the shifted variable
 
-    @test propagate_time_domain(s(xd))[1] == d # the domain after a shift is inferred from the shifted variable
-
-    @test_throws ClockInferenceException propagate_time_domain(xd ~ xd2)
+    @test_throws ClockInferenceException get_eq_domain(xd ~ xd2)
 
 
     ## resample to change sampling rate
     xd = Sample(t, d)(x)
     xd2 = Sample(t, d2)(xd) # resample xd
 
-    @test propagate_time_domain(xd2)[1] == d2
+    @test get_eq_domain(xd2) == d2
 
     ## Inferred clock in sample
     @variables yd(t)
     xd = Sample(t, d)(x)
     eq = yd ~ Sample(t)(x) + xd
-    id, vm = propagate_time_domain(eq)
+    id = get_eq_domain(eq)
     @test id == d
-    @test vm[yd] == d
-    @test vm[x] isa ModelingToolkit.UnknownDomain
 
     # bad hybrid system
     @variables t
     d = Clock(t, 1)
     @variables x(t) xd(t) [timedomain=d]
     eq = Shift(t, 1)(xd) + Shift(t, 3)(xd) ~ Hold(xd) + 1
-    @test_throws ClockInferenceException propagate_time_domain(eq)
+    @test_throws ClockInferenceException get_eq_domain(eq)
 end
 
 
@@ -182,12 +192,12 @@ end
 
 
     d = Clock(t, dt)
-    @test propagate_time_domain(eqs[1]) == (d, Dict(yd => d, y => Inferred()))
-    @test propagate_time_domain(eqs[3]) == (Continuous(), Dict(u => Continuous(), ud => InferredDiscrete())) 
-    @test propagate_time_domain(eqs[4]) == (Continuous(), Dict(u => Continuous(), x => Continuous())) 
+    @test get_eq_domain(eqs[1]) == d
+    @test get_eq_domain(eqs[3]) == Continuous()
+    @test get_eq_domain(eqs[4]) == Continuous()
 
 
-    eqmap, varmap = ModelingToolkit.clock_inference(eqs)
+    @unpack eqmap, varmap = ModelingToolkit.clock_inference(eqs)
 
     @test varmap[yd] == d
     @test varmap[ud] == d
@@ -231,17 +241,17 @@ end
 
     d = Clock(t, dt)
     d2 = Clock(t, dt2)
-    @test propagate_time_domain(eqs[1]) == (d, Dict(yd1 => d, y => Inferred()))
-    @test propagate_time_domain(eqs[3]) == (d2, Dict(yd2 => d2, y => Inferred()))
+    @test get_eq_domain(eqs[1]) == d
+    @test get_eq_domain(eqs[3]) == d2
 
 
-    eqmap, varmap = ModelingToolkit.clock_inference(eqs)
+    @unpack eqmap, varmap = ModelingToolkit.clock_inference(eqs)
 
     @test varmap[yd1] == d
     @test varmap[ud1] == d
     @test varmap[yd2] == d2
     @test varmap[ud2] == d2
-    @test varmap[r] == Inferred()
+    @test varmap[r] == Continuous()
     @test varmap[x] == Continuous()
     @test varmap[y] == Continuous()
     @test varmap[u] == Continuous()
@@ -358,68 +368,66 @@ end
 @testset "Simulate hybrid system" begin
     @info "Testing Simulate hybrid system"
 
+    dt = 0.5
+    @variables t x(t)=0 y(t)=0 u(t)=0 yd(t)=0 ud(t)=0 
+    @parameters kp
+    D = Differential(t)
+    timevec = 0:0.1:4
 
+    ## Eliminate algebraic vars manually
+    # The following test implements a P controller in discrete time with a continuous-time plant. All algebraic variables have been manually eliminated
 
-dt = 0.5
-@variables t x(t)=0 y(t)=0 u(t)=0 yd(t)=0 ud(t)=0 
-@parameters kp
-D = Differential(t)
-timevec = 0:0.1:4
+    eqs = [
+        ud ~ kp * (0 - Sample(t, dt)(x))
+        D(x) ~ -x + Hold(ud)
+    ]
 
-## Eliminate algebraic vars manually
-# The following test implements a P controller in discrete time with a continuous-time plant. All algebraic variables have been manually eliminated
+    new_eqs, new_vars = ModelingToolkit.preprocess_hybrid_equations(eqs)
 
-eqs = [
-    ud ~ kp * (0 - Sample(t, dt)(x))
-    D(x) ~ -x + Hold(ud)
-]
-
-new_eqs, new_vars = ModelingToolkit.preprocess_hybrid_equations(eqs)
-
-sys = ODESystem(eqs, t, name = :sys)
-sysr = ModelingToolkit.hybrid_simplify(sys)
+    sys = ODESystem(eqs, t, name = :sys)
+    sysr = ModelingToolkit.hybrid_simplify(sys)
 
 
 
-prob = ODEProblem(sysr, [x=>1, kp=>1, ud=>-1], (0.0, 4.0))
-sol_manual = solve(prob, Rosenbrock23(), tstops=timevec)
-plot(sol_manual)
-@test issubset(timevec, sol_manual.t) # this will be false if the solver stopped early
+    prob = ODEProblem(sysr, [x=>1, kp=>1, ud=>-1], (0.0, 4.0))
+    sol_manual = solve(prob, Rosenbrock23(), tstops=timevec)
+    plot(sol_manual)
+    @test issubset(timevec, sol_manual.t) # this will be false if the solver stopped early
 
-dt_timevec = (prob.tspan[1]:dt:prob.tspan[2]) 
-@test sol_manual[ud, dt_timevec] ≈ -sol_manual[x, dt_timevec] atol=1e-4 # this tests that there are no additional delays. 
+    dt_timevec = (prob.tspan[1]:dt:prob.tspan[2]) 
+    @test sol_manual[ud, dt_timevec] ≈ -sol_manual[x, dt_timevec] atol=1e-4 # this tests that there are no additional delays. 
 
-##
-# The following test implements a P controller in discrete time with a continuous-time plant. This time, algebraic variables are present
+    ##
+    # The following test implements a P controller in discrete time with a continuous-time plant. This time, algebraic variables are present
 
-@test ModelingToolkit.is_discrete_algebraic(Shift(t, 0)(ud, true) ~ 1)
-@test !ModelingToolkit.is_discrete_algebraic(Shift(t, 1)(ud) ~ 1)
-
-
-eqs = [
-    # controller (time discrete part `dt=0.1`)
-    yd ~ Sample(t, dt)(y)
-    ud ~ kp * (0 - yd)
-
-    # plant (time continuous part)
-    u ~ Hold(ud)
-    D(x) ~ -x + u
-    y ~ x
-]
+    @test ModelingToolkit.is_discrete_algebraic(Shift(t, 0)(ud, true) ~ 1)
+    @test !ModelingToolkit.is_discrete_algebraic(Shift(t, 1)(ud) ~ 1)
 
 
-new_eqs, new_vars = ModelingToolkit.preprocess_hybrid_equations(eqs)
+    eqs = [
+        # controller (time discrete part `dt=0.1`)
+        yd ~ Sample(t, dt)(y)
+        ud ~ kp * (0 - yd)
 
-@test isequal(new_eqs[1], Difference(t; dt=dt, update=true)(yd) ~ y)
-@test isequal(new_eqs[2], Differential(t)(x) ~ u - x) 
-@test isequal(new_eqs[3], ud ~ -kp*yd) 
-@test isequal(new_eqs[4], u ~ ud)
-@test isequal(new_eqs[5], y ~ x)
+        # plant (time continuous part)
+        u ~ Hold(ud)
+        D(x) ~ -x + u
+        y ~ x
+    ]
 
-sys = ODESystem(eqs, t, name = :sys)
-sysr = ModelingToolkit.hybrid_simplify(sys)
-sysrr = structural_simplify(sysr)
-# sysr2 = alias_elimination(sysr) # built into hybrid_simplify
+
+    new_eqs, new_vars = ModelingToolkit.preprocess_hybrid_equations(eqs)
+
+    @test isequal(new_eqs[1], Difference(t; dt=dt, update=true)(yd) ~ y)
+    @test isequal(new_eqs[2], Differential(t)(x) ~ u - x) 
+    @test isequal(new_eqs[3], ud ~ -kp*yd) 
+    @test isequal(new_eqs[4], u ~ ud)
+    @test isequal(new_eqs[5], y ~ x)
+
+    sys = ODESystem(eqs, t, name = :sys)
+    sysr = ModelingToolkit.hybrid_simplify(sys)
+    sysrr = structural_simplify(sysr)
+    # sysr2 = alias_elimination(sysr) # built into hybrid_simplify
 
     prob = ODEProblem(sysrr, [x=>1, kp=>1, yd=>1, ud=>-1.0], (0.0, 4.0))
     sol = solve(prob, Rosenbrock23(), tstops=timevec)
@@ -458,4 +466,126 @@ end
 
 #=
 Many consequtive DiscreteUpdate introduces a delay, so DiscreteUpdate can be used for Sample only, all other algebraic equations must remain algebraic without operators
+=#
+
+
+## Compose systems together
+
+using ModelingToolkit.BipartiteGraphs
+using ModelingToolkit.Graphs
+
+
+dt = 0.5
+@variables t
+d = Clock(t, dt)
+k = SampledTime(d)
+timevec = 0:0.1:4
+
+function plant(; name)
+    @variables  x(t)=1 u(t)=0 [input=true] y(t)=0 [output=true]
+    D = Differential(t)
+    eqs = [
+        D(x) ~ -x + u
+        y ~ x
+    ]
+    ODESystem(eqs, t; name=name)
+end
+
+function filt(; name)
+    @variables x(t)=0 u(t)=0 [input=true] y(t)=0 [output=true]
+    a = 1/exp(dt)
+    eqs = [
+        x(k+1) ~ a*x + (1-a)*u(k)
+        y ~ x
+    ]
+    ODESystem(eqs, t, name=name)
+end
+
+function controller(kp; name)
+    @variables y(t)=0 r(t)=0 ud(t)=0 yd(t)=0
+    @parameters kp=kp
+    eqs = [
+        yd ~ Sample(t)(y)
+        ud ~ kp * (r - yd)
+    ]
+    ODESystem(eqs, t; name=name)
+end
+
+
+
+@named f = filt()
+@named c = controller(1)
+@named p = plant()
+
+connections = [
+    f.u ~ Sample(d)(-1)#(t >= 1)  # step input
+    f.y ~ c.r # filtered reference to controller reference
+    Hold(c.ud) ~ p.u # controller output to plant input
+    p.y ~ c.y # feedback
+]
+
+@named cl = ODESystem(connections, t, systems=[f,c,p])
+
+eqs = equations(cl)
+cres = ModelingToolkit.clock_inference(eqs)
+
+@test cres.varmap[f.x ] == Clock(t, 0.5)
+@test cres.varmap[p.x ] == Continuous()
+@test cres.varmap[p.y ] == Continuous()
+@test cres.varmap[c.ud] == Clock(t, 0.5)
+@test cres.varmap[c.yd] == Clock(t, 0.5)
+@test cres.varmap[c.y ] == Continuous()
+@test cres.varmap[f.y ] == Clock(t, 0.5)
+@test cres.varmap[f.u ] == Clock(t, 0.5)
+@test cres.varmap[p.u ] == Continuous()
+@test cres.varmap[c.r ] == Clock(t, 0.5)
+
+new_eqs, new_vars = ModelingToolkit.preprocess_hybrid_equations(equations(cl))
+
+
+
+sysr = ModelingToolkit.hybrid_simplify(cl)
+
+# eqmap, varmap = ModelingToolkit.clock_inference(equations(cl))
+# ModelingToolkit.substitute_algebraic_eqs(equations(cl), varmap)
+
+sysrr = structural_simplify(sysr)
+prob = ODAEProblem(sysrr, [], (0.0, 4.1))
+# prob = ODEProblem(sysrr, [], (0.0, 4.1))
+
+##
+
+sol = solve(prob, Rosenbrock23(), tstops=timevec)
+@test issubset(timevec, sol.t)
+isinteractive() && plot(sol) |> display
+@test_broken all(sol[f.u, timevec[2:end]] .== -1) 
+# @test sol[u, timevec[2:end]] ≈ 0.5sol[u, timevec[1:end-1]]
+
+#=
+QUESTIONS:
+Does equation order matter in a discrete partition? No, in modelica
+> The order between the equations in a when-equation does not matter
+
+Modelica does impose causality on the equations in a when condition:
+> The equations within the when-equation must have one of the following forms:
+• v = expr;
+• (out1, out2, out3, ...) = function_call_name(in1, in2, ...);
+8.3.5.3 https://specification.modelica.org/v3.4/Ch8.html#when-equations
+
+What's the causality here? ud should obviously come after yd, but is that always the case?
+yd ~ sample(y)
+ud ~ (r - yd)
+If we consider ud an algebraic equation, it's always valid, and we do not have to care more about it. If it's a discrete algebraic equation evluated together with everything else in the clock partition, it depends on yd
+
+alias_elimination moves equations to observed, but also messes with the remaining discrete algebraic equations so that 
+ud ~ (r - yd)
+becomes
+0 ~ (r - yd) - ud
+
+
+It's better if the hybrid_simplify substitutes the rhs of all discrete-algebraic equations into difference eqs where the lhs appears
+=#
+
+#=
+the discrete states can be replaced by parameters which are updated by the discrete affect function? We still need to handle storage of the discrete states in the solution. push!(sol, stuff)?
 =#

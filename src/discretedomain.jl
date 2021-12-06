@@ -94,6 +94,7 @@ struct Sample <: Operator
     Sample(t, clock::TimeDomain = InferredDiscrete()) = new(value(t), clock)
     Sample(t, dt::Real) = new(value(t), Clock(t, dt))
 end
+Sample(clock::AbstractClock) = Sample(clock.t, clock)
 (D::Sample)(x) = Term{symtype(x)}(D, [x])
 (D::Sample)(x::Num) = Num(D(value(x)))
 SymbolicUtils.promote_symtype(::Sample, x) = x
@@ -191,10 +192,10 @@ function (xn::Num)(k::SampledTime)
     isequal(args[], t) ||
         error("Independent variable of $xn is not the same as that of the SampledTime $(k.t)")
 
-    d, _ = propagate_time_domain(xn)
-    if d != clock # this is only required if the variable has another clock
-        xn = Sample(t, clock)(xn) 
-    end
+    # d, _ = propagate_time_domain(xn)
+    # if d != clock # this is only required if the variable has another clock
+    #     xn = Sample(t, clock)(xn) 
+    # end
     if steps == 0
         return xn # x(k) needs no shift operator if the step of k is 0
     end
@@ -212,20 +213,53 @@ Base.:-(k::SampledTime, i::Int) = k + (-i)
 
 Return the time-domain type (`Continuous()` or `Discrete()`) that `op` operates on. 
 """
-input_timedomain(s::Shift) = InferredDiscrete()
+function input_timedomain(s::Shift, arg=nothing)
+    if has_time_domain(arg)
+        return get_time_domain(arg)
+    end
+    InferredDiscrete()
+end
 
 """
     output_timedomain(op::Operator)
 
 Return the time-domain type (`Continuous()` or `Discrete()`) that `op` results in. 
 """
-output_timedomain(s::Shift) = InferredDiscrete()
+function output_timedomain(s::Shift, arg=nothing)
+    if has_time_domain(arg)
+        return get_time_domain(arg)
+    end
+    InferredDiscrete()
+end
 
-input_timedomain(::Sample) = Inferred()
-output_timedomain(s::Sample) = s.clock
+input_timedomain(::Sample, arg=nothing) = Continuous()
+output_timedomain(s::Sample, arg=nothing) = s.clock
 
-input_timedomain(h::Hold) = InferredDiscrete() # the Hold accepts any discrete
-output_timedomain(::Hold) = Continuous()
+function input_timedomain(h::Hold, arg=nothing)
+    if has_time_domain(arg)
+        return get_time_domain(arg)
+    end
+    InferredDiscrete() # the Hold accepts any discrete
+end
+output_timedomain(::Hold, arg=nothing) = Continuous()
 
-sampletime(op::Sample) = sampletime(op.clock)
-sampletime(op::SampledTime) = sampletime(op.clock)
+sampletime(op::Sample, arg=nothing) = sampletime(op.clock)
+sampletime(op::SampledTime, arg=nothing) = sampletime(op.clock)
+
+changes_domain(op) = isoperator(op, Union{Sample, Hold})
+
+function output_timedomain(x)
+    if isoperator(x, Operator)
+        return output_timedomain(operation(x), arguments(x)[])
+    else
+        throw(ArgumentError("$x of type $(typeof(x)) is not an operator expression"))
+    end
+end
+
+function input_timedomain(x)
+    if isoperator(x, Operator)
+        return input_timedomain(operation(x), arguments(x)[])
+    else
+        throw(ArgumentError("$x of type $(typeof(x)) is not an operator expression"))
+    end
+end

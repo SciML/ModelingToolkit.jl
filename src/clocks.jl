@@ -1,3 +1,16 @@
+#=
+# Clock inferece functionality
+The semantics of clocked variables roughly follows
+https://specification.modelica.org/v3.4/Ch16.html
+
+In particular
+> The base clock partitions are identified as clocked or as continuous-time partitions according to the following properties:
+> A variable u in sample(u) and a variable y in y = hold(ud) is in a continuous-time partition.
+> Correspondingly, variables u and y in y = sample(uc), y = subSample(u), y = superSample(u), y = shiftSample(u), y = backSample(u), y = previous(u), are in a clocked partition. Equations in a clocked when clause are also in a clocked partition. Other partitions where none of the variables in the partition are associated with any of the operators above have an unspecified partition kind and are considered continuous-time partitions.
+>Since sample(u) returns the left limit of u, and the left limit of u is a known value, all inputs to a base-clock partition are treated as known during sorting.
+
+
+=#
 using Symbolics: value
 using SymbolicUtils.Rewriters: Postwalk, Prewalk, PassThrough, Empty
 import SymbolicUtils.Rewriters
@@ -58,133 +71,6 @@ end
 TODO: A clock may need a unique id since otherwise Clock(t, 0.1) === Clock(t, 0.1)
 =#
 
-function add_varmap!(varmap, e, ::Nothing)
-    return get!(varmap, e, nothing) # throw away the nothing value
-end
-function add_varmap!(varmap, e, domain::TimeDomain)
-    if  e isa Sym
-        return domain # This discards variables without independet variable from the varmap
-    end
-    if e ∈ keys(varmap)
-        if varmap[e] isa UnknownDomain
-            varmap[e] = domain
-        elseif domain isa UnknownDomain
-            return varmap[e]
-        else
-            domain == varmap[e] || throw(ClockInferenceException("Variable $e was associate with more than one domain, $domain and $(varmap[e])"))
-        end
-    else
-        varmap[e] = domain
-    end
-    domain
-end
-
-function propagate_time_domain(eq::Equation, domain_above::Union{TimeDomain, Nothing} = nothing, varmap = Dict{Any, Any}())
-    last_hash = hash(varmap)
-    ex = eq.lhs - eq.rhs
-    for i = 1:10 # max 10 step fixed-point iteration
-        # The fix-point iteration is performed in order to propagate information between both sides of the equation.
-        d, varmap = propagate_time_domain(ex, domain_above, varmap)
-        domain_above = merge_domains(domain_above, d, eq)
-        # d, varmap = propagate_time_domain(eq.rhs, domain_above, varmap)
-        # domain_above = merge_domains(domain_above, d, eq)
-        h = hash(varmap)
-        h == last_hash && break
-        last_hash  = h
-        i == 10 && error("Clock inference failed to converge after $i iterations for equation $eq, the current inference result is $domain_above and the varmap is $varmap")
-    end
-    domain_above, varmap
-end
-
-
-# Nums are just unwrapped
-propagate_time_domain(e::Num, domain_above::Union{TimeDomain, Nothing} = nothing, args...) = propagate_time_domain(value(e), domain_above, args...)
-
-
-"""
-    domain, varmap = propagate_time_domain(e, domain_above::Union{TimeDomain, Nothing} = nothing, varmap = Dict{Any, Any}())
-
-Recursively determine the time-domain (clock inference) of an expression or equation `e`. `domain` is the time domain for the compound expression `e`, while `varmap` is a dict that maps variables to time domains / clocks.
-
-# Details
-At the expression root, the domain is typically unknown (nothing), we thus start from the root and recurse down until qe encounter an expression with known domain. When we find a domain, we continue to propagate all the way down to the leaves, checking consistency on the way if the domain is specified also further down the tree. We then propagate the domain back up to the root. At a middle point, there might be one domain coming from above, and one from below, if they differ it's an error.
-
-In a DiscreteSystem, the root starts out as [`Inferred()`](@ref). If it remains inferred after inference, it's set to the default `Clock(t, 1)` which corresponds to the default time step for discrete systems in DifferentialEquations.
-"""
-function propagate_time_domain(e, domain_above::Union{TimeDomain, Nothing} = nothing, varmap = Dict{Any, Any}())
-    e isa Symbolics.Symbolic || return (domain_above, varmap)
-    if istree(e)
-        f = operation(e)
-        if f isa Operator # operators are the only things that can change the domain
-            domain_below = output_timedomain(f)
-            return_domain = merge_domains(domain_above, domain_below, e) # this is the domain we return upwards, but on the way down we use the operator input time domain
-            downward_domain = input_timedomain(f) # we expect this domain further down
-            domain_below, varmap = propagate_time_domain(only(arguments(e)), downward_domain, varmap) # the received domain from below only matters if the operator has inferred output domain
-            if return_domain isa InferredDomain
-                # This is where the Inferred is inferred
-                return_domain = merge_domains(return_domain, domain_below, e)
-            end
-            return return_domain, varmap
-        end
-        if !has_time_domain(e) && !(f isa Sym) # vars created with @variables x(t) [timedomain=d] will be terms with metadata
-            return propagate_time_domain(arguments(e), domain_above, varmap)
-        end
-    end
-    
-    # If we reach here, e is a Sym or Term with metadata
-    if has_time_domain(e)
-        domain_below = get_time_domain(e)
-        domain_above = merge_domains(domain_above, domain_below, e)
-    end
-
-    stored_domain = add_varmap!(varmap, e, domain_above)
-    domain_above = merge_domains(domain_above ,stored_domain, e)
-    # QUESTION: if the domain_above is nothing here, should we set continuous, do everything one more time now that the domain of the root is known, or error?
-
-    # NOTE: the metadata is immutable so we can not set it, we are thus currently only able to classify the tome domain expressions, but not set the domain or variables
-    # setmetadata!(e, TimeDomain, domain_above)
-    return domain_above, varmap
-end
-
-
-function propagate_time_domain(v::AbstractVector, domain_above::Union{TimeDomain, Nothing} = nothing, varmap = Dict{Any, Any}())
-    for arg in v
-        domain_below, varmap = propagate_time_domain(arg, domain_above, varmap)
-        domain_above = merge_domains(domain_above, domain_below, v)
-    end
-    return domain_above, varmap
-end
-
-
-"""
-    clock_inference(eqs::Vector{Equation}, domain_above::Union{TimeDomain, Nothing} = nothing)
-
-Performs clock-inference for a collection of equations, like `equations(sys)`
-`domain_above` is the knowledge at the starting point.
-"""
-function clock_inference(eqs::Vector{Equation}, domain_above::Union{TimeDomain, Nothing} = nothing)
-    varmap = Dict{Any, Any}()
-    eq2dom = Vector{Any}(undef, length(eqs)) .= domain_above
-    last_hash = UInt(0)
-    while true # fix-point iteration: iterate until the variable map no longer changes. This allows domain information to propagate between equations.
-        for (j, eq) in pairs(eqs)
-            d, varmap = propagate_time_domain(eq, eq2dom[j], varmap)
-            # domain_above = merge_domains(domain_above, d, eq) # we should not merge the domain here since different eqs can have different domains
-            eq2dom[j] = d
-        end
-        h = hash(varmap)
-        h == last_hash && break
-        last_hash = h
-    end
-    eq2dom, varmap
-end
-
-function propagate_time_domain(sys::DiscreteSystem)
-    d = propagate_time_domain(equations(sys), nothing)
-    d === nothing && return Clock(get_iv(sys), 1)
-    d
-end
-
 
 # The rules are, `nothing` loses to everything, Inferred loses to everything else, then InferredDiscrete and so on
 function merge_inferred(x, y)
@@ -240,7 +126,8 @@ end
 4. Rewrite Shift(1) to the continuous-time ` [`DiscreteUpdate`](@ref) operator and strip away hybrid and discrete operators from equations (domains are known from the clock inference). Uses [`strip_operator`](@ref)
 """
 function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
-    eqmap, varmap = clock_inference(eqs)
+    res = clock_inference(eqs)
+    @unpack eqmap, varmap = res
     if any(d isa UnknownDomain for d in eqmap)
         display(eqs .=> eqmap)
         throw(ClockInferenceException("Clock inference failed to infer the time domain of all equations, the inference result was printed above."))
@@ -249,7 +136,6 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
         if domain isa Continuous
             eq = strip_operator(eq, Hold)
         elseif domain isa AbstractDiscrete
-            # eq = strip_operator(eq, Sample) # Sample must be known in normalize shifts
             eq = normalize_shifts(eq, varmap)
             @assert !hassample(eq)
         end
@@ -257,6 +143,7 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
     end
 
     clocks = unique(eqmap)
+    # QUESTION: we now process each clock partition independently. We possibly want to perform additional simplification on clock partitions independently?
     new_eqs_and_vars = map(clocks) do clock
         cp_inds = findall(==(clock), eqmap) 
         cp_eqs = eqs[cp_inds] # get all equations that belong to this particular clock partition
@@ -265,14 +152,22 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation})
         new_eqs, new_vars = shift_order_lowering(cp_eqs[.!alg_inds], clock)
         @assert !any(hassample, new_eqs)
         new_eqs = discrete2continuous_operators.(new_eqs, Ref(clock))
+        # new_eqs = reduce(vcat, new_eqs)
         @assert !any(hassample, new_eqs)
-        [new_eqs; cp_eqs[alg_inds]], new_vars
+
+        new_eqs = [new_eqs; cp_eqs[alg_inds]]
+        
+        new_eqs, new_vars
     end
     new_eqs, new_vars = first.(new_eqs_and_vars), last.(new_eqs_and_vars)
+    eqmap = reduce(vcat, [fill(c, length(eqs)) for (c,eqs) in zip(clocks, new_eqs)]) # recreate shuffled eqmap
     # sort equations so that all operator equations come first
     new_eqs = reduce(vcat, new_eqs)
+    # new_eqs, removed_vars = substitute_algebraic_eqs(new_eqs, eqmap) # can't get this to work out
+    removed_vars = []
+    new_vars = reduce(vcat, new_vars)
     sort!(new_eqs, by = eq->!isoperator(eq.lhs, Operator))
-    new_eqs, reduce(vcat, new_vars)
+    new_eqs, new_vars, removed_vars
 end
 
 """
@@ -435,10 +330,35 @@ function discrete2continuous_operators(eq, clock)
     var = arguments(term)[1]
     @assert !hassample(eq)
     if is_discrete_algebraic(eq)
-        return DiscreteUpdate(t; dt=dt)(var) ~ strip_operator(eq.rhs, Shift)
+        deq = DiscreteUpdate(t; dt=dt)(var) ~ strip_operator(eq.rhs, Shift)
     else
-        return DiscreteUpdate(t; dt=dt)(var) ~ eq.rhs
+        deq = DiscreteUpdate(t; dt=dt)(var) ~ eq.rhs
     end
+    # [deq; Differential(t)(var) ~ 0] # get segfault if simulating with D(x) ~ 0 equaiton added
+    deq
+end
+
+function substitute_algebraic_eqs(eqs, eqmap)
+    n = typemax(Int)
+    removed_states = []
+    while length(eqs) < n
+        n = length(eqs)
+        for (i, eq) in enumerate(eqs)
+            isoperator(eq.lhs, Operator) && continue
+            eqmap[i] === Continuous() && continue # may be possible to omit this
+            for (j, other_eq) in pairs(eqs)
+                other_eq === eq && continue
+                eqmap[j] === Continuous() && continue
+                eqs[j] = substitute(other_eq, Dict(eq.lhs => eq.rhs))
+            end
+            if eqmap[i] isa AbstractDiscrete
+                push!(removed_states, eq.lhs)
+                eqs[i] = 0 ~ 0
+            end
+        end
+        eqs = filter!(eq->!(isequal(eq.rhs, 0) && isequal(eq.lhs, 0)), eqs) # remove empty equations
+    end
+    eqs, removed_states
 end
 
 
@@ -449,9 +369,137 @@ Simplification of hybrid systems (containing both discrete and continuous states
 The equations of the returned system will not contain any discrete operators, and shift equations have been rewritten into [`DiscreteUpdate`](@ref) equations. This simplification pass may introduce new variables and equations for equations with relative shifts larger than 1, corresponding to [`ode_order_lowering`](@ref) for continuous systems.
 """
 function hybrid_simplify(sys::ODESystem)
-    new_eqs, new_vars = ModelingToolkit.preprocess_hybrid_equations(equations(sys))
-    # @set! sys.eqs = new_eqs # thsi only modifies the equations of the outer system, not inner systems
+    new_eqs, new_vars, removed_vars = preprocess_hybrid_equations(equations(sys))
+    # @set! sys.eqs = new_eqs # this only modifies the equations of the outer system, not inner systems
     # @set! sys.states = [states(sys); new_vars]
-    sys = ODESystem(new_eqs, get_iv(sys), [states(sys); new_vars], parameters(sys), name=sys.name)
+    vars = [setdiff(states(sys), removed_vars); new_vars]
+    # TODO: propagate all other fields to ODESystem
+    sys = ODESystem(new_eqs, get_iv(sys), vars, parameters(sys), name=sys.name)
     sys
+end
+
+struct ClockInferenceResult
+    "A Vector{Vector{Int}}. incidences[i] points to the unknown variables, as well as variables x in Differential(x), and Shift(x), which lexically appear in eqs[i] except as first argument of base-clock conversion operators: Sample() and Hold(). Example, if j ∈ incidences[eq_ind], then allvars[j] appears in eqs[eq_ind]"
+    incidences::Vector{Vector{Int}}
+    "A vector of all variables in the inferred equation set"
+    allvars
+    "A dict that maps variables to TimeDomain"
+    varmap::Dict
+    "A vector of TimeDomain of the same length as the number of equations"
+    eqmap::Vector{TimeDomain}
+    bg::BipartiteGraph
+    "A vector of vectors with equation indices that form each connected component"
+    ccs::Vector{Vector{Int}}
+    "A vector of TimeDomain of the same length as ccs"
+    cc_domains::Vector{TimeDomain}
+end
+
+function get_eq_domain(x::Num, domain_above=Inferred())
+    v = value(x)
+    if v isa Term && operation(v) isa Sym
+        return merge_domains(domain_above, get_time_domain(v), x)
+    else
+        return get_eq_domain(v, domain_above)
+    end
+end
+
+"""
+    domain = get_eq_domain(e, domain_above = Inferred())
+
+Determine the time-domain (clock inference) of an expression or equation `e`.
+"""
+function get_eq_domain(eq, domain_above=Inferred())
+    ovars = collect_applied_operators(eq, Operator)
+    for op in ovars
+        while isoperator(op, Operator) # handle nested operators
+            odom = output_timedomain(op)
+            domain_above = merge_domains(domain_above, odom, eq)
+            changes_domain(op) && break 
+            op = arguments(op)[1] # unwrap operator in case there are wrapped operators with a more specific output
+        end
+        if op isa Num
+            if has_time_domain(op)
+                domain_above = merge_domains(domain_above, get_time_domain(op), op)
+            end
+        end
+    end
+    domain_above
+end
+
+# incidence(e) = the unknown variables, as well as variables x in der(x), pre(x), and previous(x), which lexically appear in e except as first argument of base-clock conversion operators: sample() and hold().
+"""
+    clock_inference(eqs::Vector{Equation}, domain_above::TimeDomain = Inferred())
+
+Performs clock-inference for a collection of equations, like `equations(sys)`
+`domain_above` is the knowledge at the starting point.
+"""
+function clock_inference(eqs::Vector{Equation}, domain_above::TimeDomain = Inferred())
+    varmap = Dict{Any, Any}()
+    eq2dom = Vector{Any}(undef, length(eqs)) .= Ref(domain_above)
+
+    innervars = vars(eqs; op=Nothing) |> collect
+    filter!(istree, innervars) # only keep variables of time
+    varinds = Dict(innervars .=> 1:length(innervars))
+
+    # Build graph
+    incidences = [Int[] for _ in eachindex(eqs)]
+    for (eqind, eq) in pairs(eqs)
+        eqvars = vars(eq; op=Operator)
+        for var in eqvars
+            changes_domain(var) && continue # Sample and Hold change the time domain
+            while isoperator(var, Operator) # handle nested operators
+                var = arguments(var)[1]
+            end
+            changes_domain(var) && continue # Sample and Hold change the time domain
+            istree(var) || continue # skip if not function of time
+            push!(incidences[eqind], varinds[var])
+        end
+    end
+
+    # Infer variable and equation time domains
+    allvars = vars(eqs; op=Operator) |> collect
+    for var in allvars
+        if has_time_domain(var)
+            varmap[var] = get_time_domain(var)
+        elseif isoperator(var, Operator)
+            inner_var = arguments(var)[1]
+            while isoperator(inner_var, Operator) # handle nested operators
+                var = inner_var
+                inner_var = arguments(var)[1]
+            end
+
+            idom = input_timedomain(var)
+            varmap[inner_var] = idom
+        end
+    end
+    for (eqind, eq) in pairs(eqs)
+        eq2dom[eqind] = get_eq_domain(eq, eq2dom[eqind])
+    end
+
+    # Some equations and variables will still be uninferred, we now propagate
+    # inferred domains to all other equations and variables
+    bg = BipartiteGraph(incidences)
+    im = incidence_matrix(bg)
+    g2 = SimpleGraph([0I im; im' 0I]) # expand BipartiteGraph to full graph (I can't figure out how to use connected_components on BipartiteGraph)
+    ccs = connected_components(g2)
+    ccs = map(ccs) do cc
+        filter!(<=(length(eqs)), cc) # "undo" graph expansion, keep only equation part
+    end
+
+    cc_domains = map(ccs) do cc
+        dom = domain_above
+        for eqind in cc
+            dom = merge_domains(dom, eq2dom[eqind], eqs[eqind])
+        end
+        eq2dom[cc] .= Ref(dom)
+        for eqind in cc
+            for varind in incidences[eqind]
+                var = innervars[varind]
+                varmap[var] = merge_domains(get(varmap, var, Inferred()), dom, var)
+            end
+        end
+        dom
+    end
+
+    ClockInferenceResult(incidences, allvars, varmap, eq2dom, bg, ccs, cc_domains)
 end

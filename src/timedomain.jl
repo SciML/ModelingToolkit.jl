@@ -53,8 +53,8 @@ has_time_domain(x) = false
 
 
 for op in [Differential, Difference]
-    @eval input_timedomain(::$op) = Continuous()
-    @eval output_timedomain(::$op) = Continuous()
+    @eval input_timedomain(::$op, arg=nothing) = Continuous()
+    @eval output_timedomain(::$op, arg=nothing) = Continuous()
 end
 
 
