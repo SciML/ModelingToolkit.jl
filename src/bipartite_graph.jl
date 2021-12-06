@@ -589,10 +589,10 @@ end
 
 
 Graphs.outneighbors(mcg::MatchedCondensationGraph, cc::Integer) =
-    Iterators.flatten((mcg.scc_assignment[v′] for v′ in outneighbors(mcg.graph, v)) for v in mcg.sccs[cc])
+    Iterators.flatten((mcg.scc_assignment[v′] for v′ in outneighbors(mcg.graph, v) if mcg.scc_assignment[v′] != cc) for v in mcg.sccs[cc])
 
 Graphs.inneighbors(mcg::MatchedCondensationGraph, cc::Integer) =
-    Iterators.flatten((mcg.scc_assignment[v′] for v′ in inneighbors(mcg.graph, v)) for v in mcg.sccs[cc])
+    Iterators.flatten((mcg.scc_assignment[v′] for v′ in inneighbors(mcg.graph, v) if mcg.scc_assignment[v′] != cc) for v in mcg.sccs[cc])
 
 """
     struct InducedCondensationGraph
