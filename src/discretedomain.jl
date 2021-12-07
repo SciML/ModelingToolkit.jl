@@ -143,72 +143,62 @@ Returns true if the expression or equation `O` contains [`Hold`](@ref) terms.
 """
 hashold(O) = recursive_hasoperator(Hold, O)
 
-
-
-# SampledTime
+# ShiftIndex
 
 """
-    SampledTime
+    ShiftIndex
 
-The `SampledTime` operator allows you to index a signal and obtain a shifted discrete-time signal. If the signal is continuous-time, the signal is sampled before shifting.
+The `ShiftIndex` operator allows you to index a signal and obtain a shifted discrete-time signal. If the signal is continuous-time, the signal is sampled before shifting.
 
 # Examples 
 ```
 julia> @variables t x(t);
 
-julia> k = SampledTime(t, 0.1);
+julia> k = ShiftIndex(t, 0.1);
 
-julia> x(k)                                         # no shift, only sample
-Sample(t; clock=Clock(t, 0.1))(x(t))
+julia> x(k)      # no shift
+x(t)
 
-julia> x(k+1)                                       # sample and shift
-Shift(t, 1)(Sample(t; clock=Clock(t, 0.1))(x(t)))
-
-julia> @variables t xd(t) [timedomain=k.clock];
-
-julia> xd(k)                                        # Discrete variables are not sampled
-xd(t)
-
-julia> xd(k-1)                                      # only shift, no sample
-Shift(t, -1)(xd(t))
+julia> x(k+1)    # shift
+Shift(t, 1)(x(t))
 ```
 """
-struct SampledTime
-    t
+struct ShiftIndex
     clock::TimeDomain
     steps::Int
-    SampledTime(t, clock=Inferred(), steps=0) = new(value(t), clock, steps)
-    SampledTime(t, dt::Real, steps=0) = new(value(t), Clock(t, dt), steps)
+    ShiftIndex(clock::TimeDomain=Inferred(), steps::Int=0) = new(clock, steps)
+    ShiftIndex(t::Num, dt::Real, steps::Int=0) = new(Clock(t, dt), steps)
 end
-SampledTime(d::AbstractClock) = SampledTime(d.t, d)
 
 
-function (xn::Num)(k::SampledTime)
-    @unpack t, clock, steps = k
+function (xn::Num)(k::ShiftIndex)
+    @unpack clock, steps = k
     x = value(xn)
-    t = k.t
+    t = clock.t
     # Verify that the independent variables of k and x match and that the expression doesn't have multiple variables
     vars = Symbolics.get_variables(x)
     length(vars) == 1 ||
-        error("Cannot sample a multivariate expression $x. Create a new state and sample this instead.")
+        error("Cannot shift a multivariate expression $x. Either create a new state and shift this, or shift the individual variables in the expression.")
     args = Symbolics.arguments(vars[]) # args should be one element vector with the t in x(t)
     length(args) == 1 ||
-        error("Cannot sample an expression with multiple independent variables $x.")
+        error("Cannot shift an expression with multiple independent variables $x.")
     isequal(args[], t) ||
-        error("Independent variable of $xn is not the same as that of the SampledTime $(k.t)")
+        error("Independent variable of $xn is not the same as that of the ShiftIndex $(k.t)")
 
     # d, _ = propagate_time_domain(xn)
     # if d != clock # this is only required if the variable has another clock
     #     xn = Sample(t, clock)(xn) 
     # end
+    # QUESTION: should we return a variable with time domain set to k.clock?
+    xn = setmetadata(xn, TimeDomain, k.clock)
     if steps == 0
         return xn # x(k) needs no shift operator if the step of k is 0
     end
     Shift(t, steps)(xn) # a shift of k steps
 end
 
-Base.:+(k::SampledTime, i::Int) = SampledTime(k.t, k.clock, k.steps + i)
-Base.:-(k::SampledTime, i::Int) = k + (-i)
+Base.:+(k::ShiftIndex, i::Int) = ShiftIndex(k.clock, k.steps + i)
+Base.:-(k::ShiftIndex, i::Int) = k + (-i)
 
 
 
@@ -249,7 +239,7 @@ end
 output_timedomain(::Hold, arg=nothing) = Continuous()
 
 sampletime(op::Sample, arg=nothing) = sampletime(op.clock)
-sampletime(op::SampledTime, arg=nothing) = sampletime(op.clock)
+sampletime(op::ShiftIndex, arg=nothing) = sampletime(op.clock)
 
 changes_domain(op) = isoperator(op, Union{Sample, Hold})
 

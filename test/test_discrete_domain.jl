@@ -56,20 +56,20 @@ D1 = Hold()
 @test hashold(D1(x) ~ D2(x))
 
 
-## Test SampledTime
+## Test ShiftIndex
 
 @variables t t2 x(t) y(t) y2(t2) y3(t, t2)
-k = SampledTime(t, 0.1)
+k = ShiftIndex(t, 0.1)
 
 
 xk = x(k)
 @test xk isa Num
-@test value(xk).f isa Sample
-@test sampletime(value(xk).f) == sampletime(k)
+@test ModelingToolkit.has_time_domain(xk)
+@test ModelingToolkit.get_time_domain(xk) == Clock(t, 0.1)
 
 k1 = k+1
 @test k1.steps == 1
-@test k1.t === k.t
+@test k1.clock === k.clock
 @test sampletime(k1) === sampletime(k)
 
 
@@ -78,19 +78,12 @@ xk1 = x(k+1)
 shift = value(xk1)
 @test shift isa Term
 @test value(xk1).f isa Shift
-@test value(xk1).f.t === k.t
-samp = shift.arguments[1]
-@test samp isa Term
-@test samp.f isa Sample
-@test samp.f.t === k.t
 
 # more complicated expressions
 dt = 0.1
-s = Sample(t, dt)
 z = Shift(t)
 x2 = x^2
-@test isequal(x2(k), s(x2))
-@test isequal(x2(k+1), z(s(x2)))
+@test isequal(x2(k+1), z(x2))
 
 @test_throws ErrorException y2(k)
 
@@ -100,10 +93,7 @@ x2 = x^2
 # test that the sample operator is present when continuous variables are indexed
 d = Clock(t, 1)
 @variables t xd(t) [timedomain=d]
-k = SampledTime(t, d, 0)
+k = ShiftIndex(d, 0)
 eq = x(k+1) ~ x(k) + x(k-1)
-@test ModelingToolkit.hassample(eq)
-
-# test that the sample operator is omitted when clocked variables are indexed
-eqd = xd(k+1) ~ xd(k) + xd(k-1)
-@test !ModelingToolkit.hassample(eqd) # there should be no sample operator if the clock of the SampledTime is the same as the indexed variable
+@test !ModelingToolkit.hassample(eq)
+@test  ModelingToolkit.hasshift(eq)

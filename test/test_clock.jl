@@ -179,7 +179,6 @@ end
     dt = 0.1
     @variables t x(t) y(t) u(t) yd(t) ud(t) r(t)
     @parameters kp
-    k = SampledTime(t, dt)
     D = Differential(t)
 
     eqs = [
@@ -224,7 +223,6 @@ end
     dt2 = 0.2
     @variables t x(t) y(t) u(t) r(t) yd1(t) ud1(t) yd2(t) ud2(t)
     @parameters kp
-    k = SampledTime(t, dt)
     D = Differential(t)
 
     eqs = [
@@ -289,6 +287,10 @@ end
     eq = u ~ Sample(t, 1)(ud) + 1
     @test isequal(ModelingToolkit.strip_operator(eq, Sample), u ~ ud + 1)
 
+    k = ShiftIndex(d)
+    eq = u(k+1) + u(k+3) ~ 0
+    @test isequal(ModelingToolkit.normalize_shifts(eq, Dict()), Shift(t, 1)(u) ~ -Shift(t, -1)(u))
+
 
     # test with varying number of shift terms
     @variables t
@@ -342,9 +344,39 @@ end
     ]
     @test all(isequal.(new_eqs, expected_eqs))
 
+    eqs = [
+        ud(k+3) ~ - ud(k)
+    ]
+
+    dvs = eqstates(eqs)
+    part = ModelingToolkit.preprocess_hybrid_equations(eqs, dvs)
+    new_eqs = part.eqs
+    ud_delay = part.vars[length(dvs)+1:end]
+    expected_eqs = [
+        Difference(t; dt=1, update=true)(ud) ~ - ud_delay[2]
+        Difference(t; dt=1, update=true)(ud_delay[1]) ~ ud
+        Difference(t; dt=1, update=true)(ud_delay[2]) ~ ud_delay[1]
+    ]
+    @test all(isequal.(new_eqs, expected_eqs))
+
 
     eqs = [ # ud(k) not expressed as a shift
         Shift(t, 3)(ud) ~ - ud
+    ]
+
+    dvs = eqstates(eqs)
+    part = ModelingToolkit.preprocess_hybrid_equations(eqs, dvs)
+    new_eqs = part.eqs
+    ud_delay = part.vars[length(dvs)+1:end]
+    expected_eqs = [
+        Difference(t; dt=1, update=true)(ud) ~ - ud_delay[2]
+        Difference(t; dt=1, update=true)(ud_delay[1]) ~ ud
+        Difference(t; dt=1, update=true)(ud_delay[2]) ~ ud_delay[1]
+    ]
+    @test all(isequal.(new_eqs, expected_eqs))
+
+    eqs = [ # ud(k) not expressed as a shift
+        ud(k+3) ~ - ud
     ]
 
     dvs = eqstates(eqs)
@@ -493,7 +525,7 @@ using ModelingToolkit.Graphs
 dt = 0.5
 @variables t
 d = Clock(t, dt)
-k = SampledTime(d)
+k = ShiftIndex(d)
 timevec = 0:0.1:4
 
 function plant(; name)

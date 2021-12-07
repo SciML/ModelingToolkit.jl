@@ -50,6 +50,7 @@ function has_time_domain(x::Union{Sym, Term})
     # getmetadata(x, Discrete,   nothing) !== nothing
     getmetadata(x, TimeDomain, nothing) !== nothing
 end
+has_time_domain(x::Num) = has_time_domain(value(x))
 has_time_domain(x) = false
 
 
