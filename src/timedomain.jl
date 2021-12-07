@@ -5,6 +5,9 @@ using Symbolics: hasderiv, hasdiff
 abstract type TimeDomain end
 abstract type AbstractDiscrete <: TimeDomain end
 
+Base.Broadcast.broadcastable(d::TimeDomain) = Ref(d)
+
+
 struct Inferred <: TimeDomain end
 struct InferredDiscrete <: AbstractDiscrete end
 struct Continuous <: TimeDomain end

@@ -166,6 +166,7 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation}, original_var
     end
 
     clocks = unique(eqmap)
+    sort!(clocks, by = c -> c === Continuous() ? 0.0 : sampletime(c)) # Continuous partition will be first, then ascending sampletime
     # QUESTION: we now process each clock partition independently. We possibly want to perform additional simplification on clock partitions independently?
     # TODO: If we want to handle discrete and continuous states separately, we definitely want to separate them
     new_eqs_and_vars = map(clocks) do clock
@@ -178,7 +179,7 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation}, original_var
             varmap[nv] = clock # add the new variables to the varmap
         end
         @assert !any(hassample, new_eqs)
-        new_eqs  = discrete2continuous_operators.(new_eqs, Ref(clock))
+        new_eqs  = discrete2continuous_operators.(new_eqs, clock)
         # new_eqs = reduce(vcat, new_eqs)
         @assert !any(hassample, new_eqs)
         new_eqs  = [new_eqs; cp_eqs[alg_inds]]
@@ -190,10 +191,12 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation}, original_var
     eqmap = reduce(vcat, [fill(c, length(eqs)) for (c,eqs) in zip(clocks, new_eqs)]) # recreate shuffled eqmap
     new_eqs = reduce(vcat, new_eqs)
     new_vars = reduce(vcat, new_vars)
-    # new_eqs, removed_vars = substitute_algebraic_eqs(new_eqs, eqmap) # can't get this to work out
+    # new_eqs, eqmap, removed_vars = substitute_algebraic_eqs(new_eqs, eqmap) # broken
     removed_vars = []
     # sort equations so that all operator equations come first
-    sort!(new_eqs, by = eq->!isoperator(eq.lhs, Operator))
+    perm = sortperm(new_eqs, by = eq->!isoperator(eq.lhs, Operator))
+    new_eqs = new_eqs[perm]
+    eqmap = eqmap[perm]
 
 
     allvars = [setdiff(original_vars, removed_vars); new_vars]
@@ -397,9 +400,11 @@ function substitute_algebraic_eqs(eqs, eqmap)
                 eqs[i] = 0 ~ 0
             end
         end
-        eqs = filter!(eq->!(isequal(eq.rhs, 0) && isequal(eq.lhs, 0)), eqs) # remove empty equations
+        keep_inds = map(eq->!(isequal(eq.rhs, 0) && isequal(eq.lhs, 0)), eqs)
+        eqs = eqs[keep_inds] # remove empty equations
+        eqmap = eqmap[keep_inds]
     end
-    eqs, removed_states
+    eqs, eqmap, removed_states
 end
 
 
@@ -418,9 +423,9 @@ function hybrid_simplify(sys::ODESystem; param=false)
         part = discrete_var2param(part)
         new_params = filter(isparameter, part.vars)
         new_states = filter(!isparameter, part.vars)
-        return ODESystem(part.eqs, get_iv(sys), new_states, [new_params; parameters(sys)], name=sys.name)
+        return ODESystem(part.eqs, get_iv(sys), new_states, [new_params; parameters(sys)], name=sys.name, clock_partitioning=part)
     else
-        return ODESystem(part.eqs, get_iv(sys), part.vars, parameters(sys), name=sys.name)
+        return ODESystem(part.eqs, get_iv(sys), part.vars, parameters(sys), name=sys.name, clock_partitioning=part)
     end
 end
 
@@ -465,7 +470,7 @@ Performs clock-inference for a collection of equations, like `equations(sys)`
 """
 function clock_inference(eqs::Vector{Equation}, domain_above::TimeDomain = Inferred())
     varmap = Dict{Any, Any}()
-    eq2dom = Vector{Any}(undef, length(eqs)) .= Ref(domain_above)
+    eq2dom = Vector{Any}(undef, length(eqs)) .= domain_above
 
     innervars = vars(eqs; op=Nothing) |> collect
     filter!(istree, innervars) # only keep variables of time
@@ -521,7 +526,7 @@ function clock_inference(eqs::Vector{Equation}, domain_above::TimeDomain = Infer
         for eqind in cc
             dom = merge_domains(dom, eq2dom[eqind], eqs[eqind])
         end
-        eq2dom[cc] .= Ref(dom)
+        eq2dom[cc] .= dom
         for eqind in cc
             for varind in incidences[eqind]
                 var = innervars[varind]
@@ -533,3 +538,36 @@ function clock_inference(eqs::Vector{Equation}, domain_above::TimeDomain = Infer
     part = ClockPartitioning(eqs, clocks, eq2dom, allvars, varmap)
     ClockInferenceResult(part, incidences, ccs, bg)
 end
+
+
+function get_clocked_partitions(sys,  part = sys.clock_partitioning)
+    t = independent_variable(sys)
+    @unpack eqs, clocks, eqmap, vars, varmap = part
+    sort!(clocks, by = c->c === Continuous() ? 0.0 : sampletime(c)) # cont., then ascending sampletime
+
+    if clocks[1] === Continuous()
+        continds = eqmap .== Continuous()
+        cont = ODESystem(eqs[continds], t; name=sys.name) # TODO: propagate other properties
+        clocks = clocks[2:end]
+    else
+        error("This function should not be called for completely discrete systems.")
+    end
+    disc = map(clocks) do clock
+        inds = eqmap .== clock
+        DiscreteSystem(eqs[inds], t; name=sys.name) # TODO: propagate other properties
+    end
+    cont, disc
+end
+
+
+# struct ClockPartitioning
+#     eqs::Vector{Equation}
+#     "A vector of TimeDomain of the same length as ccs"
+#     clocks::Vector{TimeDomain}
+#     "A vector of TimeDomain of the same length as the number of equations"
+#     eqmap::Vector{TimeDomain}
+#     "A vector of all variables in the inferred equation set"
+#     vars
+#     "A dict that maps variables to TimeDomain"
+#     varmap::Dict
+# end

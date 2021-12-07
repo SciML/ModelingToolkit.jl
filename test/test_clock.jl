@@ -562,7 +562,14 @@ dvs = collect(vars(eqs))
 # part = ModelingToolkit.preprocess_hybrid_equations(eqs, dvs)
 
 
-sysr = ModelingToolkit.hybrid_simplify(cl)
+sysr = ModelingToolkit.hybrid_simplify(cl, param=true)
+cont, disc = ModelingToolkit.get_clocked_partitions(sysr)
+@test cont isa ODESystem
+@test length(equations(structural_simplify(cont))) == 2 # the diff.eq. and the connection to the discrete input
+@test length(disc) == 1
+
+
+
 
 # eqmap, varmap = ModelingToolkit.clock_inference(equations(cl))
 # ModelingToolkit.substitute_algebraic_eqs(equations(cl), varmap)
