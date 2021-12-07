@@ -74,6 +74,12 @@ $(TYPEDEF)
 
 Represents a sample operator. A discrete-time signal is created by sampling a continuous-time signal.
 
+# Constructors
+`Sample(clock::TimeDomain = InferredDiscrete())`
+`Sample(t, dt::Real)`
+
+`Sample(x::Num)`, with a single argument, is shorthand for `Sample()(x)`.
+
 # Fields
 $(FIELDS)
 
@@ -84,25 +90,24 @@ julia> using Symbolics
 
 julia> @variables t;
 
-julia> Δ = Sample(t; clock=Clock(0.01))
+julia> Δ = Sample(t, 0.01)
 (::Sample) (generic function with 2 methods)
 ```
 """
 struct Sample <: Operator
-    t # TODO: remove the need to keep the iv, it can be inferred from the varibale that is sampled
     clock
-    Sample(t, clock::TimeDomain = InferredDiscrete()) = new(value(t), clock)
-    Sample(t, dt::Real) = new(value(t), Clock(t, dt))
+    Sample(clock::TimeDomain = InferredDiscrete()) = new(clock)
+    Sample(t, dt::Real) = new(Clock(t, dt))
 end
-Sample(clock::AbstractClock) = Sample(clock.t, clock)
+Sample(x) = Sample()(x)
 (D::Sample)(x) = Term{symtype(x)}(D, [x])
 (D::Sample)(x::Num) = Num(D(value(x)))
 SymbolicUtils.promote_symtype(::Sample, x) = x
 
-Base.show(io::IO, D::Sample) = print(io, "Sample(", D.t, "; clock=", D.clock, ")")
+Base.show(io::IO, D::Sample) = print(io, "Sample(", D.clock, ")")
 
-Base.:(==)(D1::Sample, D2::Sample) = isequal(D1.t, D2.t) && isequal(D1.clock, D2.clock)
-Base.hash(D::Sample, u::UInt) = hash(D.clock, hash(D.t, xor(u, 0x055640d6d952f101)))
+Base.:(==)(D1::Sample, D2::Sample) = isequal(D1.clock, D2.clock)
+Base.hash(D::Sample, u::UInt) = hash(D.clock, xor(u, 0x055640d6d952f101))
 
 """
     hassample(O)

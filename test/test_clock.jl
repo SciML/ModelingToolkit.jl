@@ -139,8 +139,8 @@ end
 
     ## with operators
     s = Shift(t, 1)
-    xd = Sample(t, d)(x)
-    xd2 = Sample(t, d2)(x)
+    xd = Sample(d)(x)
+    xd2 = Sample(d2)(x)
 
     @test get_eq_domain(xd) == d
     @test get_eq_domain(Hold()(xd)) == Continuous()
@@ -151,15 +151,15 @@ end
 
 
     ## resample to change sampling rate
-    xd = Sample(t, d)(x)
-    xd2 = Sample(t, d2)(xd) # resample xd
+    xd = Sample(d)(x)
+    xd2 = Sample(d2)(xd) # resample xd
 
     @test get_eq_domain(xd2) == d2
 
     ## Inferred clock in sample
     @variables yd(t)
-    xd = Sample(t, d)(x)
-    eq = yd ~ Sample(t)(x) + xd
+    xd = Sample(d)(x)
+    eq = yd ~ Sample(x) + xd
     id = get_eq_domain(eq)
     @test id == d
 
@@ -434,11 +434,11 @@ end
     dvs = eqstates(eqs)
     new_eqs = ModelingToolkit.preprocess_hybrid_equations(eqs, dvs).eqs
 
-    @test isequal(new_eqs[1], Difference(t; dt=dt, update=true)(yd) ~ y)
-    @test isequal(new_eqs[2], Differential(t)(x) ~ u - x) 
-    @test isequal(new_eqs[3], ud ~ -kp*yd) 
-    @test isequal(new_eqs[4], u ~ ud)
-    @test isequal(new_eqs[5], y ~ x)
+    @test isequal(new_eqs[1], Differential(t)(x) ~ u - x) 
+    @test isequal(new_eqs[2], Difference(t; dt=dt, update=true)(yd) ~ y)
+    @test isequal(new_eqs[3], u ~ ud)
+    @test isequal(new_eqs[4], y ~ x)
+    @test isequal(new_eqs[5], ud ~ -kp*yd) 
 
     sys = ODESystem(eqs, t, name = :sys)
     sysr = ModelingToolkit.hybrid_simplify(sys)
@@ -520,7 +520,7 @@ function controller(kp; name)
     @variables y(t)=0 r(t)=0 ud(t)=0 yd(t)=0
     @parameters kp=kp
     eqs = [
-        yd ~ Sample(t)(y)
+        yd ~ Sample(y)
         ud ~ kp * (r - yd)
     ]
     ODESystem(eqs, t; name=name)
@@ -613,4 +613,8 @@ It's better if the hybrid_simplify substitutes the rhs of all discrete-algebraic
 
 #=
 the discrete states can be replaced by parameters which are updated by the discrete affect function? We still need to handle storage of the discrete states in the solution. push!(sol, stuff)?
+
+1. replace discrete vars with params. Done
+2. ODAEProblem needs to write the integrator function using only discrete states
+3. difference affect must take care of discrete dynamics
 =#
