@@ -106,7 +106,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    name=nothing,
                    connector_type=nothing,
-                   checks = true,
+                   checks=true,
                    )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = scalarize(deqs)

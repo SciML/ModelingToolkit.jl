@@ -222,6 +222,7 @@ for prop in [
              :connector_type
              :connections
              :preface
+             :substitutions
             ]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
