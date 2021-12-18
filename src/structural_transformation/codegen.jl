@@ -125,9 +125,9 @@ function gen_nlsolve(eqs, vars, u0map::AbstractDict; checkbounds=true)
     for v in vars
         v in keys(u0map) || (push!(u0, 1e-3); continue)
         u = substitute(v, u0map)
-        for i in 1:1000
+        for i in 1:length(u0map)
             u = substitute(u, u0map)
-            u isa Number && (push!(u0, u); continue)
+            u isa Number && (push!(u0, u); break)
         end
         u isa Number || error("$v doesn't have a default.")
     end
