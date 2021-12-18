@@ -38,19 +38,24 @@ function contract_variables(graph::BipartiteGraph, var_eq_matching::Matching, el
         [var_rename[v′] for v′ in neighborhood(dig, v, Inf; dir=:in) if var_rename[v′] != 0]
     end
 
-    new_fadjlist = Vector{Int}[
-        let new_list = Vector{Int}()
-            for v in graph.fadjlist[i]
-                if var_rename[v] != 0
-                    push!(new_list, var_rename[v])
-                else
-                    append!(new_list, var_deps[v])
+    nelim = length(eliminated_variables)
+    newgraph = BipartiteGraph(nsrcs(graph) - nelim, ndsts(graph) - nelim)
+    for e in 𝑠vertices(graph)
+        ne = eq_rename[e]
+        ne == 0 && continue
+        for v in 𝑠neighbors(graph, e)
+            newvar = var_rename[v]
+            if newvar != 0
+                add_edge!(newgraph, ne, newvar)
+            else
+                for nv in var_deps[v]
+                    add_edge!(newgraph, ne, nv)
                 end
             end
-            new_list
-        end for i = 1:nsrcs(graph) if eq_rename[i] != 0]
+        end
+    end
 
-    return BipartiteGraph(new_fadjlist, ndsts(graph) - length(eliminated_variables))
+    return newgraph
 end
 
 """
