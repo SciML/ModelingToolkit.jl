@@ -4,7 +4,7 @@ using ModelingToolkit: isdifferenceeq, has_continuous_events, generate_rootfindi
 
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
-function torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs, nlsolve_scc_idxs, states_idxs)
+function torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs)
     s = structure(sys)
     @unpack fullvars, graph = s
 
@@ -55,39 +55,39 @@ function torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs, nlsolve_s
     dig = DiCMOBiGraph{true}(graph, var_eq_matching)
 
     fused_var_deps = map(1:ndsts(graph)) do v
-        BitSet(var_rename[v′] for v′ in neighborhood(dig, v, Inf; dir=:in) if var_rename[v′] != 0)
+        BitSet(v′ for v′ in neighborhood(dig, v, Inf; dir=:in) if var_rename[v′] != 0)
     end
 
-    for scc in var_sccs
+    for scc in var_sccs[nlsolve_scc_idxs]
         if length(scc) >= 2
             deps = fused_var_deps[scc[1]]
             for c in 2:length(scc)
                 union!(deps, fused_var_deps[c])
+                fused_var_deps[c] = deps
             end
         end
     end
 
-    nlsolve_eqs = BitSet(var_eq_matching[c]::Int for c in nlsolve_vars if var_eq_matching[c] !== unassigned)
-
-    var2idx = Dict(v => i for (i, v) in enumerate(states_idxs))
+    var2idx = Dict{Int,Int}(v => i for (i, v) in enumerate(states_idxs))
+    eqs2idx = Dict{Int,Int}(v => i for (i, v) in enumerate(eqs_idxs))
     nlsolve_vars_set = BitSet(nlsolve_vars)
 
     I = Int[]; J = Int[]
-    eqidx = 0
     for ieq in 𝑠vertices(graph)
-        ieq in nlsolve_eqs && continue
-        eqidx += 1
+        nieq = get(eqs2idx, ieq, 0)
+        nieq == 0 && continue
         for ivar in 𝑠neighbors(graph, ieq)
             isdervar(s, ivar) && continue
             if var_rename[ivar] != 0
-                push!(I, eqidx)
+                push!(I, nieq)
                 push!(J, var2idx[ivar])
             else
                 for dvar in fused_var_deps[ivar]
                     isdervar(s, dvar) && continue
-                    dvar in nlsolve_vars_set && continue
-                    push!(I, eqidx)
-                    push!(J, var2idx[dvar])
+                    niv = get(var2idx, dvar, 0)
+                    niv == 0 && continue
+                    push!(I, nieq)
+                    push!(J, niv)
                 end
             end
         end
@@ -176,8 +176,11 @@ function build_torn_function(
     max_inlining_size = something(max_inlining_size, MAX_INLINE_NLSOLVE_SIZE)
     rhss = []
     eqs = equations(sys)
-    for eq in eqs
-        isdiffeq(eq) && push!(rhss, eq.rhs)
+    eqs_idxs = Int[]
+    for (i, eq) in enumerate(eqs)
+        isdiffeq(eq) || continue
+        push!(eqs_idxs, i)
+        push!(rhss, eq.rhs)
     end
 
     s = structure(sys)
@@ -198,16 +201,17 @@ function build_torn_function(
     for (i, scc) in enumerate(var_sccs)
         #torn_vars = [s.fullvars[var] for var in scc if var_eq_matching[var] !== unassigned]
         torn_vars_idxs = Int[var for var in scc if var_eq_matching[var] !== unassigned]
-        torn_eqs = [eqs[var_eq_matching[var]] for var in torn_vars_idxs]
-        isempty(torn_eqs) && continue
-        if length(torn_eqs) <= max_inlining_size
-            append!(torn_expr, gen_nlsolve(torn_eqs, s.fullvars[torn_vars_idxs], defs, checkbounds=checkbounds))
+        torn_eqs_idxs = [var_eq_matching[var] for var in torn_vars_idxs]
+        isempty(torn_eqs_idxs) && continue
+        if length(torn_eqs_idxs) <= max_inlining_size
+            append!(torn_expr, gen_nlsolve(eqs[torn_eqs_idxs], s.fullvars[torn_vars_idxs], defs, checkbounds=checkbounds))
             push!(nlsolve_scc_idxs, i)
         else
             needs_extending = true
-            append!(rhss, map(x->x.rhs, torn_eqs))
+            append!(eqs_idxs, torn_eqs_idxs)
+            append!(rhss, map(x->x.rhs, eqs[torn_eqs_idxs]))
             append!(states_idxs, torn_vars_idxs)
-            append!(mass_matrix_diag, zeros(length(torn_eqs)))
+            append!(mass_matrix_diag, zeros(length(torn_eqs_idxs)))
         end
     end
 
@@ -253,7 +257,7 @@ function build_torn_function(
 
         ODEFunction{true}(
                           @RuntimeGeneratedFunction(expr),
-                          sparsity = jacobian_sparsity ? torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs, nlsolve_scc_idxs, states_idxs) : nothing,
+                          sparsity = jacobian_sparsity ? torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs) : nothing,
                           syms = syms,
                           observed = observedfun,
                           mass_matrix = mass_matrix,
