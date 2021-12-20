@@ -1,9 +1,25 @@
 using Test
 using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit.BipartiteGraphs
+
+function check_contract(sys)
+    state = TearingState(sys)
+    fullvars = state.fullvars
+    graph = state.structure.graph
+    eqs = equations(sys)
+    var2idx = Dict(enumerate(fullvars))
+    for (i, eq) in enumerate(eqs)
+        actual = union(ModelingToolkit.vars(eq.lhs), ModelingToolkit.vars(eq.rhs))
+        actual = filter(!ModelingToolkit.isparameter, collect(actual))
+        current = Set(fullvars[𝑠neighbors(graph, i)])
+        @test isempty(setdiff(actual, current))
+    end
+end
 
 include("../examples/rc_model.jl")
 
 sys = structural_simplify(rc_model)
+check_contract(sys)
 @test !isempty(ModelingToolkit.defaults(sys))
 u0 = [
       capacitor.v => 0.0
@@ -76,6 +92,7 @@ sol = solve(prob, Tsit5())
 
 include("../examples/serial_inductor.jl")
 sys = structural_simplify(ll_model)
+check_contract(sys)
 u0 = [
       inductor1.i => 0.0
       inductor2.i => 0.0

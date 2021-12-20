@@ -1,8 +1,10 @@
 using LinearAlgebra
 
+using ModelingToolkit: isdifferenceeq, has_continuous_events, generate_rootfinding_callback, generate_difference_cb, merge_cb
+
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
-function torn_system_jacobian_sparsity(state, var_eq_matching, var_sccs)
+function torn_system_jacobian_sparsity(state, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs)
     fullvars = state.fullvars
     graph = state.structure.graph
 
@@ -40,55 +42,53 @@ function torn_system_jacobian_sparsity(state, var_eq_matching, var_sccs)
     # from previous partitions. Hence, we can build the dependency chain as we
     # traverse the partitions.
 
-    # `avars2dvars` maps a algebraic variable to its differential variable
-    # dependencies.
-    avars2dvars = Dict{Int,Set{Int}}()
-    c = 0
-    for scc in var_sccs
-        v_residual = scc
-        e_residual = [var_eq_matching[c] for c in v_residual if var_eq_matching[c] !== unassigned]
-        # initialization
-        for tvar in v_residual
-            avars2dvars[tvar] = Set{Int}()
+    var_rename = ones(Int64, ndsts(graph))
+    nlsolve_vars = Int[]
+    for i in nlsolve_scc_idxs, c in var_sccs[i]
+        append!(nlsolve_vars, c)
+        for v in c
+            var_rename[v] = 0
         end
-        for teq in e_residual
-            c += 1
-            for var in 𝑠neighbors(graph, teq)
-                # Skip the tearing variables in the current partition, because
-                # we are computing them from all the other states.
-                Graphs.insorted(var, v_residual) && continue
-                deps = get(avars2dvars, var, nothing)
-                if deps === nothing # differential variable
-                    @assert !isalgvar(state.structure, var)
-                    for tvar in v_residual
-                        push!(avars2dvars[tvar], var)
-                    end
-                else # tearing variable from previous partitions
-                    @assert isalgvar(state.structure, var)
-                    for tvar in v_residual
-                        union!(avars2dvars[tvar], avars2dvars[var])
-                    end
-                end
+    end
+    masked_cumsum!(var_rename)
+
+    dig = DiCMOBiGraph{true}(graph, var_eq_matching)
+
+    fused_var_deps = map(1:ndsts(graph)) do v
+        BitSet(v′ for v′ in neighborhood(dig, v, Inf; dir=:in) if var_rename[v′] != 0)
+    end
+
+    for scc in var_sccs[nlsolve_scc_idxs]
+        if length(scc) >= 2
+            deps = fused_var_deps[scc[1]]
+            for c in 2:length(scc)
+                union!(deps, fused_var_deps[c])
+                fused_var_deps[c] = deps
             end
         end
     end
 
-    dvrange = diffvars_range(state.structure)
-    dvar2idx = Dict(v=>i for (i, v) in enumerate(dvrange))
+    var2idx = Dict{Int,Int}(v => i for (i, v) in enumerate(states_idxs))
+    eqs2idx = Dict{Int,Int}(v => i for (i, v) in enumerate(eqs_idxs))
+    nlsolve_vars_set = BitSet(nlsolve_vars)
+
     I = Int[]; J = Int[]
-    eqidx = 0
-    aeqs = algeqs(state.structure)
+    s = state.structure
     for ieq in 𝑠vertices(graph)
-        ieq in aeqs && continue
-        eqidx += 1
+        nieq = get(eqs2idx, ieq, 0)
+        nieq == 0 && continue
         for ivar in 𝑠neighbors(graph, ieq)
-            if isdiffvar(state.structure, ivar)
-                push!(I, eqidx)
-                push!(J, dvar2idx[ivar])
-            elseif isalgvar(state.structure, ivar)
-                for dvar in avars2dvars[ivar]
-                    push!(I, eqidx)
-                    push!(J, dvar2idx[dvar])
+            isdervar(s, ivar) && continue
+            if var_rename[ivar] != 0
+                push!(I, nieq)
+                push!(J, var2idx[ivar])
+            else
+                for dvar in fused_var_deps[ivar]
+                    isdervar(s, dvar) && continue
+                    niv = get(var2idx, dvar, 0)
+                    niv == 0 && continue
+                    push!(I, nieq)
+                    push!(J, niv)
                 end
             end
         end
@@ -122,7 +122,17 @@ function gen_nlsolve(eqs, vars, u0map::AbstractDict; checkbounds=true)
     params = setdiff(allvars, vars) # these are not the subject of the root finding
 
     # splatting to tighten the type
-    u0 = [map(var->get(u0map, var, 1e-3), vars)...]
+    u0 = []
+    for v in vars
+        v in keys(u0map) || (push!(u0, 1e-3); continue)
+        u = substitute(v, u0map)
+        for i in 1:length(u0map)
+            u = substitute(u, u0map)
+            u isa Number && (push!(u0, u); break)
+        end
+        u isa Number || error("$v doesn't have a default.")
+    end
+    u0 = [u0...]
     # specialize on the scalar case
     isscalar = length(u0) == 1
     u0 = isscalar ? u0[1] : SVector(u0...)
@@ -167,8 +177,11 @@ function build_torn_function(
     max_inlining_size = something(max_inlining_size, MAX_INLINE_NLSOLVE_SIZE)
     rhss = []
     eqs = equations(sys)
-    for eq in eqs
-        isdiffeq(eq) && push!(rhss, eq.rhs)
+    eqs_idxs = Int[]
+    for (i, eq) in enumerate(eqs)
+        isdiffeq(eq) || continue
+        push!(eqs_idxs, i)
+        push!(rhss, eq.rhs)
     end
 
     state = TearingState(sys)
@@ -179,23 +192,26 @@ function build_torn_function(
     toporder = topological_sort_by_dfs(condensed_graph)
     var_sccs = var_sccs[toporder]
 
-    states = map(i->fullvars[i], diffvars_range(state.structure))
-    mass_matrix_diag = ones(length(states))
+    states_idxs = collect(diffvars_range(state.structure))
+    mass_matrix_diag = ones(length(states_idxs))
     torn_expr = []
     defs = defaults(sys)
+    nlsolve_scc_idxs = Int[]
 
     needs_extending = false
-    for scc in var_sccs
-        torn_vars = [fullvars[var] for var in scc if var_eq_matching[var] !== unassigned]
-        torn_eqs = [eqs[var_eq_matching[var]] for var in scc if var_eq_matching[var] !== unassigned]
-        isempty(torn_eqs) && continue
-        if length(torn_eqs) <= max_inlining_size
-            append!(torn_expr, gen_nlsolve(torn_eqs, torn_vars, defs, checkbounds=checkbounds))
+    for (i, scc) in enumerate(var_sccs)
+        torn_vars_idxs = Int[var for var in scc if var_eq_matching[var] !== unassigned]
+        torn_eqs_idxs = [var_eq_matching[var] for var in torn_vars_idxs]
+        isempty(torn_eqs_idxs) && continue
+        if length(torn_eqs_idxs) <= max_inlining_size
+            append!(torn_expr, gen_nlsolve(eqs[torn_eqs_idxs], fullvars[torn_vars_idxs], defs, checkbounds=checkbounds))
+            push!(nlsolve_scc_idxs, i)
         else
             needs_extending = true
-            append!(rhss, map(x->x.rhs, torn_eqs))
-            append!(states, torn_vars)
-            append!(mass_matrix_diag, zeros(length(torn_eqs)))
+            append!(eqs_idxs, torn_eqs_idxs)
+            append!(rhss, map(x->x.rhs, eqs[torn_eqs_idxs]))
+            append!(states_idxs, torn_vars_idxs)
+            append!(mass_matrix_diag, zeros(length(torn_eqs_idxs)))
         end
     end
 
@@ -208,7 +224,8 @@ function build_torn_function(
         rhss
     )
 
-    syms = map(Symbol, states)
+    states = fullvars[states_idxs]
+    syms = map(Symbol, states_idxs)
     pre = get_postprocess_fbody(sys)
 
     expr = SymbolicUtils.Code.toexpr(
@@ -240,7 +257,7 @@ function build_torn_function(
 
         ODEFunction{true}(
                           @RuntimeGeneratedFunction(expr),
-                          sparsity = torn_system_jacobian_sparsity(state, var_eq_matching, var_sccs),
+                          sparsity = jacobian_sparsity ? torn_system_jacobian_sparsity(state, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs) : nothing,
                           syms = syms,
                           observed = observedfun,
                           mass_matrix = mass_matrix,
@@ -375,14 +392,29 @@ function ODAEProblem{iip}(
                           u0map,
                           tspan,
                           parammap=DiffEqBase.NullParameters();
-                          kw...
+                          callback = nothing,
+                          kwargs...
                          ) where {iip}
-    fun, dvs = build_torn_function(sys; kw...)
+    fun, dvs = build_torn_function(sys; kwargs...)
     ps = parameters(sys)
     defs = defaults(sys)
 
     u0 = ModelingToolkit.varmap_to_vars(u0map, dvs; defaults=defs)
     p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults=defs)
 
-    ODEProblem{iip}(fun, u0, tspan, p; kw...)
+    has_difference = any(isdifferenceeq, equations(sys))
+    if has_continuous_events(sys)
+        event_cb = generate_rootfinding_callback(sys; kwargs...)
+    else
+        event_cb = nothing
+    end
+    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
+    cb = merge_cb(event_cb, difference_cb)
+    cb = merge_cb(cb, callback)
+
+    if cb === nothing
+        ODEProblem{iip}(fun, u0, tspan, p; kwargs...)
+    else
+        ODEProblem{iip}(fun, u0, tspan, p; callback=cb, kwargs...)
+    end
 end
