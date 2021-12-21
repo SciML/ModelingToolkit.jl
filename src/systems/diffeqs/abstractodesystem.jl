@@ -87,28 +87,36 @@ function generate_function(
         has_difference=false,
         kwargs...
     )
-    # optimization
-    #obsvars = map(eq->eq.lhs, observed(sys))
-    #fulldvs = [dvs; obsvars]
 
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     foreach(check_derivative_variables, eqs)
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
                           [eq.rhs for eq in eqs]
-    #rhss = Let(obss, rhss)
 
     # TODO: add an optional check on the ordering of observed equations
     u = map(x->time_varying_as_func(value(x), sys), dvs)
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
-    pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
+    if empty_substitutions(sys)
+        bf_states = Code.LazyState()
+        pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
+    else
+        subs = get_substitutions(sys)
+        bf_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
+        if has_difference
+            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex)
+        else
+            process = get_postprocess_fbody(sys)
+            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], process(ex))
+        end
+    end
 
     if implicit_dae
-        build_function(rhss, ddvs, u, p, t; postprocess_fbody=pre, kwargs...)
+        build_function(rhss, ddvs, u, p, t; postprocess_fbody=pre, states=bf_states, kwargs...)
     else
-        build_function(rhss, u, p, t; postprocess_fbody=pre, kwargs...)
+        build_function(rhss, u, p, t; postprocess_fbody=pre, states=bf_states, kwargs...)
     end
 end
 
