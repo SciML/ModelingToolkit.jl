@@ -1,24 +1,11 @@
-"""
-    uneven_invmap(n::Int, list)
-
-returns an uneven inv map with length `n`.
-"""
-function uneven_invmap(n::Int, list)
-    rename = zero(Int, n)
-    for (i, v) in enumerate(list)
-        rename[v] = i
-    end
-    return rename
-end
-
 # N.B. assumes `slist` and `dlist` are unique
 function substitution_graph(graph, slist, dlist, var_eq_matching)
     ns = length(slist)
     nd = length(dlist)
     ns == nd || error("internal error")
     newgraph = BipartiteGraph(ns, nd)
-    erename = uneven_invmap(nsrc(graph), slist)
-    vrename = uneven_invmap(ndst(graph), dlist)
+    erename = uneven_invmap(nsrcs(graph), slist)
+    vrename = uneven_invmap(ndsts(graph), dlist)
     for e in 𝑠vertices(graph)
         ie = erename[e]
         ie == 0 && continue
@@ -29,8 +16,9 @@ function substitution_graph(graph, slist, dlist, var_eq_matching)
         end
     end
 
-    newmatching = zero(slist)
+    newmatching = Matching(ns)
     for (v, e) in enumerate(var_eq_matching)
+        e === unassigned && continue
         iv = vrename[v]
         ie = erename[e]
         iv == 0 && continue
@@ -47,8 +35,9 @@ function tearing_sub(expr, dict, s)
 end
 
 function tearing_substitution(sys::AbstractSystem; simplify=false)
-    (has_substitutions(sys) && !isnothing(get_substitutions(sys))) || return sys
+    empty_substitutions(sys) && return sys
     subs = get_substitutions(sys)
+    solved = Dict(eq.lhs => eq.rhs for eq in subs)
     neweqs = map(equations(sys)) do eq
         if isdiffeq(eq)
             return eq.lhs ~ tearing_sub(eq.rhs, solved, simplify)
@@ -66,6 +55,7 @@ function tearing_substitution(sys::AbstractSystem; simplify=false)
         eq
     end
     @set! sys.eqs = neweqs
+    @set! sys.substitutions = nothing
 end
 
 function solve_equation(eq, var, simplify)
@@ -97,13 +87,12 @@ function tearing_reassemble(sys, var_eq_matching; simplify=false)
 
     # Solve solvable equations
     for (iv, ieq) in enumerate(var_eq_matching)
-        #is_solvable(ieq, iv) || continue
-        is_solvable(ieq, iv) || error("unreachable reached")
+        is_solvable(ieq, iv) || continue
         push!(solved_equations, ieq); push!(solved_variables, iv)
     end
-    subgraph, submatching = substitution_graph(graph, slist, dlist, var_eq_matching)
-    toporder = topological_sort_by_dfs(DiCMOBiGraph{true}(subgraph, submatching))
-    substitutions = [solve_equation(eqs[solved_equations[i]], fullvars[solved_variables[i]], simplify) for i in toporder]
+    subgraph, submatching = substitution_graph(graph, solved_equations, solved_variables, var_eq_matching)
+    toporder = topological_sort_by_dfs(DiCMOBiGraph{true}(subgraph, complete(submatching)))
+    substitutions = Equation[solve_equation(eqs[solved_equations[i]], fullvars[solved_variables[i]], simplify) for i in toporder]
 
     # Rewrite remaining equations in terms of solved variables
 
@@ -126,6 +115,7 @@ function tearing_reassemble(sys, var_eq_matching; simplify=false)
     @set! sys.structure = s
     @set! sys.eqs = neweqs
     @set! sys.states = [s.fullvars[idx] for idx in 1:length(s.fullvars) if !isdervar(s, idx)]
+    @set! sys.observed = [observed(sys); substitutions]
     @set! sys.substitutions = substitutions
     return sys
 end

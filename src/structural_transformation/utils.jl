@@ -221,6 +221,19 @@ function reordered_matrix(sys, torn_matching)
     sparse(I, J, true)
 end
 
+"""
+    uneven_invmap(n::Int, list)
+
+returns an uneven inv map with length `n`.
+"""
+function uneven_invmap(n::Int, list)
+    rename = zeros(Int, n)
+    for (i, v) in enumerate(list)
+        rename[v] = i
+    end
+    return rename
+end
+
 ###
 ### Nonlinear equation(s) solving
 ###

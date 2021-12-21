@@ -14,6 +14,7 @@ using ModelingToolkit: ODESystem, AbstractSystem,var_from_nested_derivative, Dif
                        states, equations, vars, Symbolic, diff2term, value,
                        operation, arguments, Sym, Term, simplify, solve_for,
                        isdiffeq, isdifferential, isinput,
+                       empty_substitutions, get_substitutions,
                        get_structure, get_iv, independent_variables,
                        get_structure, defaults, InvalidSystemException,
                        ExtraEquationsSystemException,
