@@ -12,34 +12,11 @@ electrical circuits:
 ```julia
 using ModelingToolkit, OrdinaryDiffEq
 
-function connect_pin(ps...)
-    eqs = [
-           0 ~ sum(p->p.i, ps) # KCL
-          ]
-    # KVL
-    for i in 1:length(ps)-1
-        push!(eqs, ps[i].v ~ ps[i+1].v)
-    end
-
-    return eqs
-end
-
-function connect_heat(ps...)
-    eqs = [
-           0 ~ sum(p->p.Q_flow, ps)
-          ]
-    for i in 1:length(ps)-1
-        push!(eqs, ps[i].T ~ ps[i+1].T)
-    end
-
-    return eqs
-end
-
 # Basic electric components
 @variables t
 const D = Differential(t)
-function Pin(;name)
-    @variables v(t)=1.0 i(t)=1.0
+@connector function Pin(;name)
+    @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
     ODESystem(Equation[], t, [v, i], [], name=name)
 end
 
@@ -61,8 +38,8 @@ function ConstantVoltage(;name, V = 1.0)
     compose(ODESystem(eqs, t, [], [V], name=name), p, n)
 end
 
-function HeatPort(;name)
-    @variables T(t)=293.15 Q_flow(t)=0.0
+@connector function HeatPort(;name)
+    @variables T(t)=293.15 Q_flow(t)=0.0 [connect = Flow]
     ODESystem(Equation[], t, [T, Q_flow], [], name=name)
 end
 
@@ -120,10 +97,10 @@ function parallel_rc_model(i; name, source, ground, R, C)
     heat_capacitor = HeatCapacitor(name=Symbol(:heat_capacitor, i))
 
     rc_eqs = [
-              connect_pin(source.p, resistor.p)
-              connect_pin(resistor.n, capacitor.p)
-              connect_pin(capacitor.n, source.n, ground.g)
-              connect_heat(resistor.h, heat_capacitor.h)
+              connect(source.p, resistor.p)
+              connect(resistor.n, capacitor.p)
+              connect(capacitor.n, source.n, ground.g)
+              connect(resistor.h, heat_capacitor.h)
              ]
 
     compose(ODESystem(rc_eqs, t, name=Symbol(name, i)),
@@ -139,8 +116,8 @@ we can connect a bunch of RC components as follows:
 
 ```julia
 V = 2.0
-source = ConstantVoltage(name=:source, V=V)
-ground = Ground(name=:ground)
+@named source = ConstantVoltage(V=V)
+@named ground = Ground()
 N = 50
 Rs = 10 .^range(0, stop=-4, length=N)
 Cs = 10 .^range(-3, stop=0, length=N)
@@ -170,19 +147,9 @@ Yes, that's a good question! Let's investigate a little bit more what had happen
 If you look at the system we defined:
 
 ```julia
-equations(big_rc)
+length(equations(big_rc))
 
-1051-element Vector{Equation}:
- Differential(t)(E(t)) ~ rc10₊resistor10₊h₊Q_flow(t) + rc11₊resistor11₊h₊Q_flow(t) + rc12₊resistor12₊h₊Q_flow(t) + rc13₊resistor13₊h₊Q_flow(t) + rc14₊resistor14₊h₊Q_flow(t) + rc15₊resistor15₊h₊Q_flow(t) + rc16₊resistor16₊h₊Q_flow(t) + rc17₊resistor17₊h₊Q_flow(t) + rc18₊resistor18₊h₊Q_flow(t) + rc19₊resistor19₊h₊Q_flow(t) + rc1₊resistor1₊h₊Q_flow(t) + rc20₊resistor20₊h₊Q_flow(t) + rc21₊resistor21₊h₊Q_flow(t) + rc22₊resistor22₊h₊Q_flow(t) + rc23₊resistor23₊h₊Q_flow(t) + rc24₊resistor24₊h₊Q_flow(t) + rc25₊resistor25₊h₊Q_flow(t) + rc26₊resistor26₊h₊Q_flow(t) + rc27₊resistor27₊h₊Q_flow(t) + rc28₊resistor28₊h₊Q_flow(t) + rc29₊resistor29₊h₊Q_flow(t) + rc2₊resistor2₊h₊Q_flow(t) + rc30₊resistor30₊h₊Q_flow(t) + rc31₊resistor31₊h₊Q_flow(t) + rc32₊resistor32₊h₊Q_flow(t) + rc33₊resistor33₊h₊Q_flow(t) + rc34₊resistor34₊h₊Q_flow(t) + rc35₊resistor35₊h₊Q_flow(t) + rc36₊resistor36₊h₊Q_flow(t) + rc37₊resistor37₊h₊Q_flow(t) + rc38₊resistor38₊h₊Q_flow(t) + rc39₊resistor39₊h₊Q_flow(t) + rc3₊resistor3₊h₊Q_flow(t) + rc40₊resistor40₊h₊Q_flow(t) + rc41₊resistor41₊h₊Q_flow(t) + rc42₊resistor42₊h₊Q_flow(t) + rc43₊resistor43₊h₊Q_flow(t) + rc44₊resistor44₊h₊Q_flow(t) + rc45₊resistor45₊h₊Q_flow(t) + rc46₊resistor46₊h₊Q_flow(t) + rc47₊resistor47₊h₊Q_flow(t) + rc48₊resistor48₊h₊Q_flow(t) + rc49₊resistor49₊h₊Q_flow(t) + rc4₊resistor4₊h₊Q_flow(t) + rc50₊resistor50₊h₊Q_flow(t) + rc5₊resistor5₊h₊Q_flow(t) + rc6₊resistor6₊h₊Q_flow(t) + rc7₊resistor7₊h₊Q_flow(t) + rc8₊resistor8₊h₊Q_flow(t) + rc9₊resistor9₊h₊Q_flow(t)
- 0 ~ rc1₊resistor1₊p₊i(t) + rc1₊source₊p₊i(t)
- rc1₊source₊p₊v(t) ~ rc1₊resistor1₊p₊v(t)
- 0 ~ rc1₊capacitor1₊p₊i(t) + rc1₊resistor1₊n₊i(t)
- rc1₊resistor1₊n₊v(t) ~ rc1₊capacitor1₊p₊v(t)
- ⋮
- rc50₊source₊V ~ rc50₊source₊p₊v(t) - rc50₊source₊n₊v(t)
- 0 ~ rc50₊source₊n₊i(t) + rc50₊source₊p₊i(t)
- rc50₊ground₊g₊v(t) ~ 0
- Differential(t)(rc50₊heat_capacitor50₊h₊T(t)) ~ rc50₊heat_capacitor50₊h₊Q_flow(t)*(rc50₊heat_capacitor50₊V^-1)*(rc50₊heat_capacitor50₊cp^-1)*(rc50₊heat_capacitor50₊rho^-1)
+801
 ```
 
 You see it started as a massive 1051 set of equations. However, after eliminating
@@ -211,7 +178,7 @@ investigate what this means:
 
 ```julia
 using ModelingToolkit.BipartiteGraphs
-big_rc = initialize_system_structure(big_rc)
+big_rc = initialize_system_structure(expand_connections(big_rc))
 inc_org = BipartiteGraphs.incidence_matrix(structure(big_rc).graph)
 blt_org = StructuralTransformations.sorted_incidence_matrix(big_rc, only_algeqs=true, only_algvars=true)
 blt_reduced = StructuralTransformations.sorted_incidence_matrix(sys, only_algeqs=true, only_algvars=true)

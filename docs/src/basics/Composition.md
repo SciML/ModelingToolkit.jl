@@ -167,13 +167,17 @@ before numerically solving. The `structural_simplify` function removes
 these trivial equality relationships and trivial singularity equations,
 i.e. equations which result in `0~0` expressions, in over-specified systems.
 
-## Inheritance and Combine (TODO)
+## Inheritance and Combine
 
-Model inheritance can be done in two ways: explicitly or implicitly.
-The explicit way is to shadow variables with equality expressions.
-For example, let's assume we have three separate systems which we
-want to compose to a single one. This is how one could explicitly
-forward all states and parameters to the higher level system:
+Model inheritance can be done in two ways: implicitly or explicitly. First, one
+can use the `extend` function to extend a base model with another set of
+equations, states, and parameters. An example can be found in the
+[acausal components tutorial](@ref acausal).
+
+The explicit way is to shadow variables with equality expressions. For example,
+let's assume we have three separate systems which we want to compose to a single
+one. This is how one could explicitly forward all states and parameters to the
+higher level system:
 
 ```julia
 using ModelingToolkit, OrdinaryDiffEq, Plots
