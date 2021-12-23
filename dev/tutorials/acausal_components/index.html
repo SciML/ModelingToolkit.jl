@@ -3,20 +3,8 @@
 
 @variables t
 @connector function Pin(;name)
-    sts = @variables v(t)=1.0 i(t)=1.0
+    sts = @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
     ODESystem(Equation[], t, sts, []; name=name)
-end
-
-function ModelingToolkit.connect(::Type{Pin}, ps...)
-    eqs = [
-           0 ~ sum(p-&gt;p.i, ps) # KCL
-          ]
-    # KVL
-    for i in 1:length(ps)-1
-        push!(eqs, ps[i].v ~ ps[i+1].v)
-    end
-
-    return eqs
 end
 
 function Ground(;name)
@@ -79,7 +67,8 @@ V = 1.0
 rc_eqs = [
           connect(source.p, resistor.p)
           connect(resistor.n, capacitor.p)
-          connect(capacitor.n, source.n, ground.g)
+          connect(capacitor.n, source.n)
+          connect(capacitor.n, ground.g)
          ]
 
 @named _rc_model = ODESystem(rc_eqs, t)
@@ -91,8 +80,8 @@ u0 = [
      ]
 prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Tsit5())
-plot(sol)</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/109416294-55184100-798b-11eb-9f05-766a793f0ba2.png" alt/></p><h2 id="Explanation"><a class="docs-heading-anchor" href="#Explanation">Explanation</a><a id="Explanation-1"></a><a class="docs-heading-anchor-permalink" href="#Explanation" title="Permalink"></a></h2><h3 id="Building-the-Component-Library"><a class="docs-heading-anchor" href="#Building-the-Component-Library">Building the Component Library</a><a id="Building-the-Component-Library-1"></a><a class="docs-heading-anchor-permalink" href="#Building-the-Component-Library" title="Permalink"></a></h3><p>For each of our components we use a Julia function which emits an <code>ODESystem</code>. At the top we start with defining the fundamental qualities of an electrical circuit component. At every input and output pin a circuit component has two values: the current at the pin and the voltage. Thus we define the <code>Pin</code> component (connector) to simply be the values there:</p><pre><code class="language-julia hljs">@connector function Pin(;name)
-    sts = @variables v(t)=1.0 i(t)=1.0
+plot(sol)</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/109416294-55184100-798b-11eb-9f05-766a793f0ba2.png" alt/></p><h2 id="Explanation"><a class="docs-heading-anchor" href="#Explanation">Explanation</a><a id="Explanation-1"></a><a class="docs-heading-anchor-permalink" href="#Explanation" title="Permalink"></a></h2><h3 id="Building-the-Component-Library"><a class="docs-heading-anchor" href="#Building-the-Component-Library">Building the Component Library</a><a id="Building-the-Component-Library-1"></a><a class="docs-heading-anchor-permalink" href="#Building-the-Component-Library" title="Permalink"></a></h3><p>For each of our components we use a Julia function which emits an <code>ODESystem</code>. At the top we start with defining the fundamental qualities of an electrical circuit component. At every input and output pin a circuit component has two values: the current at the pin and the voltage. Thus we define the <code>Pin</code> component (connector) to simply be the values there. Whenever two <code>Pin</code>s in a circuit are connected together, the system satisfies <a href="tutorials/https: /en.wikipedia.org/wiki/Kirchhoff%27s_circuit_laws">Kirchoff&#39;s laws</a>, i.e. that currents sum to zero and voltages across the pins are equal. <code>[connect = Flow]</code> informs MTK that currents ought to sum to zero, and by default, variables are equal in a connection.</p><pre><code class="language-julia hljs">@connector function Pin(;name)
+    sts = @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
     ODESystem(Equation[], t, sts, []; name=name)
 end</code></pre><p>Note that this is an incompletely specified ODESystem: it cannot be simulated on its own because the equations for <code>v(t)</code> and <code>i(t)</code> are unknown. Instead this just gives a common syntax for receiving this pair with some default values. Notice that in a component we define the <code>name</code> as a keyword argument: this is because later we will generate different <code>Pin</code> objects with different names to correspond to duplicates of this topology with unique variables. One can then construct a <code>Pin</code> like:</p><pre><code class="language-julia hljs">Pin(name=:mypin1)</code></pre><p>or equivalently using the <code>@named</code> helper macro:</p><pre><code class="language-julia hljs">@named mypin1 = Pin()</code></pre><p>Next we build our ground node. A ground node is just a pin that is connected to a constant voltage reservoir, typically taken to be <code>V=0</code>. Thus to define this component, we generate an <code>ODESystem</code> with a <code>Pin</code> subcomponent and specify that the voltage in such a <code>Pin</code> is equal to zero. This gives:</p><pre><code class="language-julia hljs">function Ground(;name)
     @named g = Pin()
@@ -139,20 +128,11 @@ V = 1.0
 @named resistor = Resistor(R=R)
 @named capacitor = Capacitor(C=C)
 @named source = ConstantVoltage(V=V)
-@named ground = Ground()</code></pre><p>Next we have to define how we connect the circuit. Whenever two <code>Pin</code>s in a circuit are connected together, the system satisfies <a href="https://en.wikipedia.org/wiki/Kirchhoff%27s_circuit_laws">Kirchoff&#39;s laws</a>, i.e. that currents sum to zero and voltages across the pins are equal. Thus we will build a helper function <code>connect_pins</code> which implements these rules:</p><pre><code class="language-julia hljs">function ModelingToolkit.connect(::Type{Pin}, ps...)
-    eqs = [
-           0 ~ sum(p-&gt;p.i, ps) # KCL
-          ]
-    # KVL
-    for i in 1:length(ps)-1
-        push!(eqs, ps[i].v ~ ps[i+1].v)
-    end
-
-    return eqs
-end</code></pre><p>Finally we will connect the pieces of our circuit together. Let&#39;s connect the positive pin of the resistor to the source, the negative pin of the resistor to the capacitor, and the negative pin of the capacitor to a junction between the source and the ground. This would mean our connection equations are:</p><pre><code class="language-julia hljs">rc_eqs = [
+@named ground = Ground()</code></pre><p>Finally we will connect the pieces of our circuit together. Let&#39;s connect the positive pin of the resistor to the source, the negative pin of the resistor to the capacitor, and the negative pin of the capacitor to a junction between the source and the ground. This would mean our connection equations are:</p><pre><code class="language-julia hljs">rc_eqs = [
           connect(source.p, resistor.p)
           connect(resistor.n, capacitor.p)
-          connect(capacitor.n, source.n, ground.g)
+          connect(capacitor.n, source.n)
+          connect(capacitor.n, ground.g)
          ]</code></pre><p>Finally we build our four component model with these connection rules:</p><pre><code class="language-julia hljs">@named _rc_model = ODESystem(rc_eqs, t)
 @named rc_model = compose(_rc_model,
                           [resistor, capacitor, source, ground])</code></pre><p>Note that we can also specify the subsystems in a vector. This model is acasual because we have not specified anything about the causality of the model. We have simply specified what is true about each of the variables. This forms a system of differential-algebraic equations (DAEs) which define the evolution of each state of the system. The equations are:</p><pre><code class="language-julia hljs">equations(rc_model)
@@ -244,4 +224,4 @@ plot(sol)</code></pre><p><img src="https://user-images.githubusercontent.com/181
  source₊v(t) ~ source₊V
  source₊p₊v(t) ~ source₊v(t)
  resistor₊p₊v(t) ~ source₊v(t)
- resistor₊v(t) ~ source₊v(t) - capacitor₊v(t)</code></pre><p>These are explicit algebraic equations which can then be used to reconstruct the required variables on the fly. This leads to dramatic computational savings because implicitly solving an ODE scales like O(n^3), so making there be as few states as possible is good!</p><p>The solution object can be accessed via its symbols. For example, let&#39;s retrieve the voltage of the resistor over time:</p><pre><code class="language-julia hljs">sol[resistor.v]</code></pre><p>or we can plot the timeseries of the resistor&#39;s voltage:</p><pre><code class="language-julia hljs">plot(sol, vars=[resistor.v])</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../spring_mass/">« Component-Based Modeling a Spring-Mass System</a><a class="docs-footer-nextpage" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.10 on <span class="colophon-date" title="Sunday 19 December 2021 04:55">Sunday 19 December 2021</span>. Using Julia version 1.7.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ resistor₊v(t) ~ source₊v(t) - capacitor₊v(t)</code></pre><p>These are explicit algebraic equations which can then be used to reconstruct the required variables on the fly. This leads to dramatic computational savings because implicitly solving an ODE scales like O(n^3), so making there be as few states as possible is good!</p><p>The solution object can be accessed via its symbols. For example, let&#39;s retrieve the voltage of the resistor over time:</p><pre><code class="language-julia hljs">sol[resistor.v]</code></pre><p>or we can plot the timeseries of the resistor&#39;s voltage:</p><pre><code class="language-julia hljs">plot(sol, vars=[resistor.v])</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../spring_mass/">« Component-Based Modeling a Spring-Mass System</a><a class="docs-footer-nextpage" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.10 on <span class="colophon-date" title="Thursday 23 December 2021 04:09">Thursday 23 December 2021</span>. Using Julia version 1.7.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
