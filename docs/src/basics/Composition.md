@@ -279,7 +279,7 @@ function UnitMassWithFriction(k; name)
     D(x) ~ v
     D(v) ~ sin(t) - k*sign(v) # f = ma, sinusoidal force acting on the mass, and Coulomb friction opposing the movement
   ]
-  ODESystem(eqs, t, continuous_events=[v ~ 0], name=name) # when v = 0 there is a discontinuity
+  ODESystem(eqs, t; continuous_events=[v ~ 0], name) # when v = 0 there is a discontinuity
 end
 @named m = UnitMassWithFriction(0.7)
 prob = ODEProblem(m, Pair[], (0, 10pi))
@@ -300,7 +300,7 @@ affect   = [v ~ -v] # the effect is that the velocity changes sign
 @named ball = ODESystem([
     D(x) ~ v
     D(v) ~ -9.8
-], t, continuous_events = root_eqs => affect) # equation => affect
+], t; continuous_events = root_eqs => affect) # equation => affect
 
 ball = structural_simplify(ball)
 
@@ -327,7 +327,7 @@ continuous_events = [ # This time we have a vector of pairs
     D(y)  ~ vy,
     D(vx) ~ -9.8-0.1vx, # gravity + some small air resistance
     D(vy) ~ -0.1vy,
-], t, continuous_events = continuous_events)
+], t; continuous_events)
 
 
 ball = structural_simplify(ball)

@@ -298,7 +298,7 @@ eq = D(x) ~ r*x
         @variables x(t) f(t)
         D = Differential(t)
 
-        ODESystem([D(x) ~ -a*x + f], name = name)
+        ODESystem([D(x) ~ -a*x + f]; name)
     end
 
     function issue808()

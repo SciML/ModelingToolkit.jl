@@ -126,7 +126,7 @@ np = NonlinearProblem(ns, [0,0,0], [1,2,3], jac=true, sparse=true)
            @parameters a
            @variables x f
 
-           NonlinearSystem([0 ~ -a * x + f], [x,f], [a], name = name)
+           NonlinearSystem([0 ~ -a * x + f], [x,f], [a]; name)
        end
 
        function issue819()
