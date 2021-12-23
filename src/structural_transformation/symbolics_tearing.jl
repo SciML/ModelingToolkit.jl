@@ -58,6 +58,18 @@ function tearing_substitution(sys::AbstractSystem; simplify=false)
     @set! sys.substitutions = nothing
 end
 
+function tearing_assignments(sys::AbstractSystem)
+    if empty_substitutions(sys)
+        assignments = []
+        bf_states = Code.LazyState()
+    else
+        subs = get_substitutions(sys)
+        assignments = [Assignment(eq.lhs, eq.rhs) for eq in subs]
+        bf_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
+    end
+    return assignments, bf_states
+end
+
 function solve_equation(eq, var, simplify)
     rhs = value(solve_for(eq, var; simplify=simplify, check=false))
     occursin(var, rhs) && error("solving $rhs for [$var] failed")

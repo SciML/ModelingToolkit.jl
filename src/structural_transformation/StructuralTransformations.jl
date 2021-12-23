@@ -38,6 +38,7 @@ using SparseArrays
 using NonlinearSolve
 
 export tearing, dae_index_lowering, check_consistency
+export tearing_assignments, tearing_substitution
 export build_torn_function, build_observed_function, ODAEProblem
 export sorted_incidence_matrix
 
