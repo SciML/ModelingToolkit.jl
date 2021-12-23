@@ -16,20 +16,8 @@ using ModelingToolkit, Plots, DifferentialEquations
 
 @variables t
 @connector function Pin(;name)
-    sts = @variables v(t)=1.0 i(t)=1.0
+    sts = @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
     ODESystem(Equation[], t, sts, []; name=name)
-end
-
-function ModelingToolkit.connect(::Type{Pin}, ps...)
-    eqs = [
-           0 ~ sum(p->p.i, ps) # KCL
-          ]
-    # KVL
-    for i in 1:length(ps)-1
-        push!(eqs, ps[i].v ~ ps[i+1].v)
-    end
-
-    return eqs
 end
 
 function Ground(;name)
@@ -92,7 +80,8 @@ V = 1.0
 rc_eqs = [
           connect(source.p, resistor.p)
           connect(resistor.n, capacitor.p)
-          connect(capacitor.n, source.n, ground.g)
+          connect(capacitor.n, source.n)
+          connect(capacitor.n, ground.g)
          ]
 
 @named _rc_model = ODESystem(rc_eqs, t)
@@ -117,11 +106,15 @@ For each of our components we use a Julia function which emits an `ODESystem`.
 At the top we start with defining the fundamental qualities of an electrical
 circuit component. At every input and output pin a circuit component has
 two values: the current at the pin and the voltage. Thus we define the `Pin`
-component (connector) to simply be the values there:
+component (connector) to simply be the values there. Whenever two `Pin`s in a
+circuit are connected together, the system satisfies [Kirchoff's laws](https: //en.wikipedia.org/wiki/Kirchhoff%27s_circuit_laws),
+i.e. that currents sum to zero and voltages across the pins are equal.
+`[connect = Flow]` informs MTK that currents ought to sum to zero, and by
+default, variables are equal in a connection.
 
 ```julia
 @connector function Pin(;name)
-    sts = @variables v(t)=1.0 i(t)=1.0
+    sts = @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
     ODESystem(Equation[], t, sts, []; name=name)
 end
 ```
@@ -253,26 +246,6 @@ V = 1.0
 @named ground = Ground()
 ```
 
-Next we have to define how we connect the circuit. Whenever two `Pin`s in a
-circuit are connected together, the system satisfies
-[Kirchoff's laws](https://en.wikipedia.org/wiki/Kirchhoff%27s_circuit_laws),
-i.e. that currents sum to zero and voltages across the pins are equal. Thus
-we will build a helper function `connect_pins` which implements these rules:
-
-```julia
-function ModelingToolkit.connect(::Type{Pin}, ps...)
-    eqs = [
-           0 ~ sum(p->p.i, ps) # KCL
-          ]
-    # KVL
-    for i in 1:length(ps)-1
-        push!(eqs, ps[i].v ~ ps[i+1].v)
-    end
-
-    return eqs
-end
-```
-
 Finally we will connect the pieces of our circuit together. Let's connect the
 positive pin of the resistor to the source, the negative pin of the resistor
 to the capacitor, and the negative pin of the capacitor to a junction between
@@ -282,7 +255,8 @@ the source and the ground. This would mean our connection equations are:
 rc_eqs = [
           connect(source.p, resistor.p)
           connect(resistor.n, capacitor.p)
-          connect(capacitor.n, source.n, ground.g)
+          connect(capacitor.n, source.n)
+          connect(capacitor.n, ground.g)
          ]
 ```
 
