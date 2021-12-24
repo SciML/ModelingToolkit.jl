@@ -232,7 +232,7 @@ continuous_events = [
     D(y) ~ vy
     D(vx) ~ -9.8
     D(vy) ~ -0.01vy # there is some small air resistance
-], t, continuous_events = continuous_events)
+], t; continuous_events)
 
 
 
@@ -274,7 +274,7 @@ continuous_events = [
     D(y) ~ vy
     D(vx) ~ -1
     D(vy) ~ 0
-], t, continuous_events = continuous_events)
+], t; continuous_events)
 
 ball = structural_simplify(ball)
 
