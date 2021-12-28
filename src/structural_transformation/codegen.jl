@@ -100,7 +100,7 @@ function gen_nlsolve(eqs, vars, u0map::AbstractDict, assignments, deps, var2assi
     length(eqs) == length(vars) || throw(ArgumentError("vars must be of the same length as the number of equations to find the roots of"))
     rhss = map(x->x.rhs, eqs)
     # We use `vars` instead of `graph` to capture parameters, too.
-    paramset = Set(Iterators.flatten(ModelingToolkit.vars(r) for r in rhss))
+    paramset = Set{Any}(Iterators.flatten(ModelingToolkit.vars(r) for r in rhss))
 
     init_assignments = [var2assignment[p] for p in paramset if haskey(var2assignment, p)]
     tmp = [init_assignments]
@@ -109,8 +109,8 @@ function gen_nlsolve(eqs, vars, u0map::AbstractDict, assignments, deps, var2assi
         init_assignments = next_assignments
         push!(tmp, init_assignments)
     end
-    needed_assignments = mapreduce(i->assignments[i], vcat, reverse(tmp))
-    extravars = Set(Iterators.flatten(ModelingToolkit.vars(r.rhs) for r in needed_assignments))
+    needed_assignments = mapreduce(i->assignments[i], vcat, unique(reverse(tmp)))
+    extravars = Set{Any}(Iterators.flatten(ModelingToolkit.vars(r.rhs) for r in needed_assignments))
     union!(paramset, extravars)
     # these are not the subject of the root finding
     setdiff!(paramset, vars); setdiff!(paramset, map(a->a.lhs, needed_assignments))
