@@ -430,5 +430,5 @@ isarray(x) = x isa AbstractArray || x isa Symbolics.Arr
 function empty_substitutions(sys)
     has_substitutions(sys) || return true
     subs = get_substitutions(sys)
-    isnothing(subs) || isempty(subs)
+    isnothing(subs) || isempty(last(subs))
 end

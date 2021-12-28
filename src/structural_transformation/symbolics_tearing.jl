@@ -26,7 +26,7 @@ function substitution_graph(graph, slist, dlist, var_eq_matching)
         newmatching[iv] = ie
     end
 
-    return newgraph, newmatching
+    return DiCMOBiGraph{true}(newgraph, complete(newmatching))
 end
 
 function tearing_sub(expr, dict, s)
@@ -36,7 +36,7 @@ end
 
 function tearing_substitution(sys::AbstractSystem; simplify=false)
     empty_substitutions(sys) && return sys
-    subs = get_substitutions(sys)
+    subs, = get_substitutions(sys)
     solved = Dict(eq.lhs => eq.rhs for eq in subs)
     neweqs = map(equations(sys)) do eq
         if isdiffeq(eq)
@@ -61,13 +61,14 @@ end
 function tearing_assignments(sys::AbstractSystem)
     if empty_substitutions(sys)
         assignments = []
+        deps = Int[]
         bf_states = Code.LazyState()
     else
-        subs = get_substitutions(sys)
+        subs, deps = get_substitutions(sys)
         assignments = [Assignment(eq.lhs, eq.rhs) for eq in subs]
         bf_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
     end
-    return assignments, bf_states
+    return assignments, deps, bf_states
 end
 
 function solve_equation(eq, var, simplify)
@@ -102,9 +103,15 @@ function tearing_reassemble(sys, var_eq_matching; simplify=false)
         is_solvable(ieq, iv) || continue
         push!(solved_equations, ieq); push!(solved_variables, iv)
     end
-    subgraph, submatching = substitution_graph(graph, solved_equations, solved_variables, var_eq_matching)
-    toporder = topological_sort_by_dfs(DiCMOBiGraph{true}(subgraph, complete(submatching)))
-    substitutions = Equation[solve_equation(eqs[solved_equations[i]], fullvars[solved_variables[i]], simplify) for i in toporder]
+    subgraph = substitution_graph(graph, solved_equations, solved_variables, var_eq_matching)
+    toporder = topological_sort_by_dfs(subgraph)
+    substitutions = [solve_equation(
+                                    eqs[solved_equations[i]],
+                                    fullvars[solved_variables[i]],
+                                    simplify
+                                   ) for i in toporder]
+    invtoporder = invperm(toporder)
+    deps = [[invtoporder[n] for n in neighborhood(subgraph, j, Inf, dir=:in) if n!=j] for (i, j) in enumerate(toporder)]
 
     # Rewrite remaining equations in terms of solved variables
 
@@ -128,7 +135,7 @@ function tearing_reassemble(sys, var_eq_matching; simplify=false)
     @set! sys.eqs = neweqs
     @set! sys.states = [s.fullvars[idx] for idx in 1:length(s.fullvars) if !isdervar(s, idx)]
     @set! sys.observed = [observed(sys); substitutions]
-    @set! sys.substitutions = substitutions
+    @set! sys.substitutions = substitutions, deps
     return sys
 end
 

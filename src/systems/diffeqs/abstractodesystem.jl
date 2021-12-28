@@ -103,7 +103,7 @@ function generate_function(
         bf_states = Code.LazyState()
         pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
     else
-        subs = get_substitutions(sys)
+        subs, = get_substitutions(sys)
         bf_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
         if has_difference
             pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex)
