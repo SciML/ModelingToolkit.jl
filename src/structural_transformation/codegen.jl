@@ -95,7 +95,7 @@ function torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs, nlsolve_s
     sparse(I, J, true)
 end
 
-function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDict, assignments, deps, var2assignment; checkbounds=true)
+function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDict, assignments, (deps, invdeps), var2assignment; checkbounds=true)
     isempty(vars) && throw(ArgumentError("vars may not be empty"))
     length(eqs) == length(vars) || throw(ArgumentError("vars must be of the same length as the number of equations to find the roots of"))
     rhss = map(x->x.rhs, eqs)
@@ -106,7 +106,6 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
     init_assignments = [var2assignment[p] for p in paramset if haskey(var2assignment, p)]
     tmp = [init_assignments]
     # `deps[init_assignments]` gives the dependency of `init_assignments`
-    successors = Dict{Int,Vector{Int}}()
     while true
         next_assignments = reduce(vcat, deps[init_assignments])
         isempty(next_assignments) && break
@@ -118,19 +117,43 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
 
     # Compute `params`. They are like enclosed variables
     rhsvars = [ModelingToolkit.vars(r.rhs) for r in needed_assignments]
-    is_vars_independent = isdisjoint.((vars,), rhsvars)
-    inner_assignments = []; outer_idxs = Int[]
-    outer_assignments = []; inner_idxs = Int[]
-    for (i, ind) in enumerate(is_vars_independent)
-        a = needed_assignments[i]
-        if ind
-            push!(outer_assignments, a)
-            push!(outer_idxs, i)
+    vars_set = Set(vars)
+    outer_set = BitSet()
+    inner_set = BitSet()
+    for (i, vs) in enumerate(rhsvars)
+        j = needed_assignments_idxs[i]
+        if isdisjoint(vars_set, vs)
+            push!(outer_set, j)
         else
-            push!(inner_assignments, a)
-            push!(inner_idxs, i)
+            push!(inner_set, j)
         end
     end
+    init_refine = BitSet()
+    for i in inner_set
+        union!(init_refine, invdeps[i])
+    end
+    intersect!(init_refine, outer_set)
+    setdiff!(outer_set, init_refine)
+    union!(inner_set, init_refine)
+
+    next_refine = BitSet()
+    while true
+        for i in init_refine
+            id = invdeps[i]
+            isempty(id) && break
+            union!(next_refine, id)
+        end
+        intersect!(next_refine, outer_set)
+        isempty(next_refine) && break
+        setdiff!(outer_set, next_refine)
+        union!(inner_set, next_refine)
+
+        init_refine, next_refine = next_refine, init_refine
+        empty!(next_refine)
+    end
+    global2local = Dict(j=>i for (i, j) in enumerate(needed_assignments_idxs))
+    inner_idxs = [global2local[i] for i in collect(inner_set)]
+    outer_idxs = [global2local[i] for i in collect(outer_set)]
     extravars = reduce(union!, rhsvars[inner_idxs], init=Set())
     union!(paramset, extravars)
     setdiff!(paramset, vars)
@@ -227,6 +250,12 @@ function build_torn_function(
     mass_matrix_diag = ones(length(states_idxs))
 
     assignments, deps, bf_states = tearing_assignments(sys)
+    invdeps = map(_->BitSet(), deps)
+    for (i, d) in enumerate(deps)
+        for a in d
+            push!(invdeps[a], i)
+        end
+    end
     var2assignment = Dict{Any,Int}(eq.lhs => i for (i, eq) in enumerate(assignments))
     is_not_prepended_assignment = trues(length(assignments))
 
@@ -241,7 +270,7 @@ function build_torn_function(
         torn_eqs_idxs = [var_eq_matching[var] for var in torn_vars_idxs]
         isempty(torn_eqs_idxs) && continue
         if length(torn_eqs_idxs) <= max_inlining_size
-            nlsolve_expr = gen_nlsolve!(is_not_prepended_assignment, eqs[torn_eqs_idxs], s.fullvars[torn_vars_idxs], defs, assignments, deps, var2assignment, checkbounds=checkbounds)
+            nlsolve_expr = gen_nlsolve!(is_not_prepended_assignment, eqs[torn_eqs_idxs], s.fullvars[torn_vars_idxs], defs, assignments, (deps, invdeps), var2assignment, checkbounds=checkbounds)
             append!(torn_expr, nlsolve_expr)
             push!(nlsolve_scc_idxs, i)
         else
