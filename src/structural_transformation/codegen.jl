@@ -315,7 +315,7 @@ function build_torn_function(
     if expression
         expr, states
     else
-        observedfun = let sys=sys, dict=Dict(), assignments=assignments, deps=deps, bf_states=bf_states, var2assignment=var2assignment
+        observedfun = let sys=sys, dict=Dict(), assignments=assignments, deps=(deps, invdeps), bf_states=bf_states, var2assignment=var2assignment
             function generated_observed(obsvar, u, p, t)
                 obs = get!(dict, value(obsvar)) do
                     build_observed_function(sys, obsvar, var_eq_matching, var_sccs,
@@ -365,6 +365,7 @@ function build_observed_function(
         checkbounds=true,
     )
 
+    is_not_prepended_assignment = trues(length(assignments))
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
     end
@@ -412,7 +413,10 @@ function build_observed_function(
         torn_vars = map(i->map(v->fullvars[v], var_sccs[i]), subset)
         u0map = defaults(sys)
         assignments = copy(assignments)
-        solves = gen_nlsolve.(torn_eqs, torn_vars, (u0map,), (assignments,), (deps,), (var2assignment,); checkbounds=checkbounds)
+        solves = map(zip(torn_eqs, torn_vars)) do (eqs, vars)
+            gen_nlsolve!(is_not_prepended_assignment, eqs, vars,
+                         u0map, assignments, deps, var2assignment; checkbounds=checkbounds)
+        end
     else
         solves = []
     end
@@ -434,10 +438,10 @@ function build_observed_function(
         [],
         pre(Let(
             [
-             assignments
              collect(Iterators.flatten(solves))
              map(eq -> eq.lhs←eq.rhs, obs[1:maxidx])
              subs
+             assignments[is_not_prepended_assignment]
             ],
             isscalar ? ts[1] : MakeArray(ts, output_type)
            ))
