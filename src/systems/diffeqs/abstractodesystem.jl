@@ -99,24 +99,12 @@ function generate_function(
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
-    if empty_substitutions(sys)
-        bf_states = Code.LazyState()
-        pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
-    else
-        subs, = get_substitutions(sys)
-        bf_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
-        if has_difference
-            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex)
-        else
-            process = get_postprocess_fbody(sys)
-            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], process(ex))
-        end
-    end
+    pre, sol_states = get_substitutions_and_solved_states(sys, no_postprocess = has_difference)
 
     if implicit_dae
-        build_function(rhss, ddvs, u, p, t; postprocess_fbody=pre, states=bf_states, kwargs...)
+        build_function(rhss, ddvs, u, p, t; postprocess_fbody=pre, states=sol_states, kwargs...)
     else
-        build_function(rhss, u, p, t; postprocess_fbody=pre, states=bf_states, kwargs...)
+        build_function(rhss, u, p, t; postprocess_fbody=pre, states=sol_states, kwargs...)
     end
 end
 

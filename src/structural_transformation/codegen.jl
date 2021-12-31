@@ -249,7 +249,7 @@ function build_torn_function(
     states_idxs = collect(diffvars_range(s))
     mass_matrix_diag = ones(length(states_idxs))
 
-    assignments, deps, bf_states = tearing_assignments(sys)
+    assignments, deps, sol_states = tearing_assignments(sys)
     invdeps = map(_->BitSet(), deps)
     for (i, d) in enumerate(deps)
         for a in d
@@ -310,16 +310,16 @@ function build_torn_function(
                  funbody
                 ))
             ),
-        bf_states
+        sol_states
     )
     if expression
         expr, states
     else
-        observedfun = let sys=sys, dict=Dict(), assignments=assignments, deps=(deps, invdeps), bf_states=bf_states, var2assignment=var2assignment
+        observedfun = let sys=sys, dict=Dict(), assignments=assignments, deps=(deps, invdeps), sol_states=sol_states, var2assignment=var2assignment
             function generated_observed(obsvar, u, p, t)
                 obs = get!(dict, value(obsvar)) do
                     build_observed_function(sys, obsvar, var_eq_matching, var_sccs,
-                                            assignments, deps, bf_states, var2assignment,
+                                            assignments, deps, sol_states, var2assignment,
                                             checkbounds=checkbounds,
                                            )
                 end
@@ -358,7 +358,7 @@ function build_observed_function(
         sys, ts, var_eq_matching, var_sccs,
         assignments,
         deps,
-        bf_states,
+        sol_states,
         var2assignment;
         expression=false,
         output_type=Array,
@@ -445,7 +445,7 @@ function build_observed_function(
             ],
             isscalar ? ts[1] : MakeArray(ts, output_type)
            ))
-       ), bf_states)
+       ), sol_states)
 
     expression ? ex : @RuntimeGeneratedFunction(ex)
 end

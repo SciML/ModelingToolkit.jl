@@ -62,13 +62,13 @@ function tearing_assignments(sys::AbstractSystem)
     if empty_substitutions(sys)
         assignments = []
         deps = Int[]
-        bf_states = Code.LazyState()
+        sol_states = Code.LazyState()
     else
         subs, deps = get_substitutions(sys)
         assignments = [Assignment(eq.lhs, eq.rhs) for eq in subs]
-        bf_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
+        sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
     end
-    return assignments, deps, bf_states
+    return assignments, deps, sol_states
 end
 
 function solve_equation(eq, var, simplify)

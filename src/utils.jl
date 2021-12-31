@@ -432,3 +432,20 @@ function empty_substitutions(sys)
     subs = get_substitutions(sys)
     isnothing(subs) || isempty(last(subs))
 end
+
+function get_substitutions_and_solved_states(sys; no_postprocess=false)
+    if empty_substitutions(sys)
+        sol_states = Code.LazyState()
+        pre = no_postprocess ? (ex -> ex) : get_postprocess_fbody(sys)
+    else
+        subs, = get_substitutions(sys)
+        sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
+        if no_postprocess
+            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex)
+        else
+            process = get_postprocess_fbody(sys)
+            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], process(ex))
+        end
+    end
+    return pre, sol_states
+end
