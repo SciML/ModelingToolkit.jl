@@ -263,7 +263,7 @@ ODESystem(eqs, ...; continuous_events::Pair{Vector{Equation}, Vector{Equation}})
 ```
 where equations can be added that evaluate to 0 at discontinuities.
 
-To model events that have an affect on the state, provide `events::Pair{Vector{Equation}, Vector{Equation}}` where the first entry in the pair is a vector of equations describing event conditions, and the second vector of equations describe the affect on the state. The affect equations must be on the form
+To model events that have an effect on the state, provide `events::Pair{Vector{Equation}, Vector{Equation}}` where the first entry in the pair is a vector of equations describing event conditions, and the second vector of equations describe the effect on the state. The effect equations must be of the form
 ```
 single_state_variable ~ expression_involving_any_variables
 ```
