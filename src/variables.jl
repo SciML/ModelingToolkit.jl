@@ -75,8 +75,9 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults=Dict(), check=false, to
     for (p, v) in pairs(varmap)
         varmap[p] = fixpoint_sub(v, varmap)
     end
-    T′ = eltype(values(varmap))
-    T = Base.isconcretetype(T′) ? T′ : Base.promote_typeof(values(varmap)...)
+    vs = values(varmap)
+    T′ = eltype(vs)
+    T = Base.isconcretetype(T′) ? T′ : float(typeof(first(vs)))
     out = Vector{T}(undef, length(varlist))
     missingvars = setdiff(varlist, keys(varmap))
     check && (isempty(missingvars) || throw_missingvars(missingvars))
