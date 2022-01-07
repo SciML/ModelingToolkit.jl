@@ -232,6 +232,23 @@ for prop in [
     end
 end
 
+const EMPTY_TGRAD = Vector{Num}(undef, 0)
+const EMPTY_JAC = Matrix{Num}(undef, 0, 0)
+function invalidate_cache!(sys::AbstractSystem)
+    if isdefined(sys, :tgrad)
+        sys.tgrad[] = EMPTY_TGRAD
+    elseif isdefined(sys, :jac)
+        sys.jac[] = EMPTY_JAC
+    elseif isdefined(sys, :ctrl_jac)
+        sys.jac[] = EMPTY_JAC
+    elseif isdefined(sys, :Wfact)
+        sys.jac[] = EMPTY_JAC
+    elseif isdefined(sys, :Wfact_t)
+        sys.jac[] = EMPTY_JAC
+    end
+    return sys
+end
+
 Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field} = getfield(obj, field)
 @generated function ConstructionBase.setproperties(obj::AbstractSystem, patch::NamedTuple)
     if issubset(fieldnames(patch), fieldnames(obj))

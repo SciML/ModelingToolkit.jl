@@ -150,7 +150,7 @@ function tearing(sys; simplify=false)
     sys = init_for_tearing(sys)
     var_eq_matching = tear_graph(sys)
 
-    tearing_reassemble(sys, var_eq_matching; simplify=simplify)
+    invalidate_cache!(tearing_reassemble(sys, var_eq_matching; simplify=simplify))
 end
 
 function init_for_tearing(sys)

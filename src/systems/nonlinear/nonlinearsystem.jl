@@ -94,7 +94,7 @@ function NonlinearSystem(eqs, states, ps;
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
+    jac = RefValue{Any}(EMPTY_JAC)
     defaults = todict(defaults)
     defaults = Dict{Any,Any}(value(k) => value(v) for (k, v) in pairs(defaults))
 
