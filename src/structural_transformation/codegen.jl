@@ -4,7 +4,7 @@ using ModelingToolkit: isdifferenceeq, has_continuous_events, generate_rootfindi
 
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
-function torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs)
+function torn_system_with_nlsolve_jacobian_sparsity(sys, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs)
     s = structure(sys)
     @unpack fullvars, graph = s
 
@@ -329,7 +329,7 @@ function build_torn_function(
 
         ODEFunction{true}(
                           @RuntimeGeneratedFunction(expr),
-                          sparsity = jacobian_sparsity ? torn_system_jacobian_sparsity(sys, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs) : nothing,
+                          sparsity = jacobian_sparsity ? torn_system_with_nlsolve_jacobian_sparsity(sys, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs) : nothing,
                           syms = syms,
                           observed = observedfun,
                           mass_matrix = mass_matrix,

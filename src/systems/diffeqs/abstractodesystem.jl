@@ -281,9 +281,13 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify=false)
     M == I ? I : M
 end
 
-jacobian_sparsity(sys::AbstractODESystem) =
+function jacobian_sparsity(sys::AbstractODESystem)
+    sparsity = torn_system_jacobian_sparsity(sys)
+    sparsity === nothing || return sparsity
+
     jacobian_sparsity([eq.rhs for eq ∈ equations(sys)],
                       [dv for dv in states(sys)])
+end
 
 function isautonomous(sys::AbstractODESystem)
     tgrad = calculate_tgrad(sys;simplify=true)
@@ -319,6 +323,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      eval_module = @__MODULE__,
                                      steady_state = false,
                                      checkbounds=false,
+                                     sparsity=false,
                                      kwargs...) where {iip}
 
     f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
@@ -394,6 +399,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      syms = Symbol.(states(sys)),
                      indepsym = Symbol(get_iv(sys)),
                      observed = observedfun,
+                     sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
                     )
 end
 

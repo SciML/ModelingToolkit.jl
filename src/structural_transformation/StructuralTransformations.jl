@@ -16,11 +16,12 @@ using ModelingToolkit: ODESystem, AbstractSystem,var_from_nested_derivative, Dif
                        isdiffeq, isdifferential, isinput,
                        empty_substitutions, get_substitutions,
                        get_structure, get_iv, independent_variables,
-                       get_structure, defaults, InvalidSystemException,
+                       has_structure, defaults, InvalidSystemException,
                        ExtraEquationsSystemException,
                        ExtraVariablesSystemException,
                        get_postprocess_fbody, vars!,
-                       IncrementalCycleTracker, add_edge_checked!, topological_sort
+                       IncrementalCycleTracker, add_edge_checked!, topological_sort,
+                       invalidate_cache!
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview
@@ -41,6 +42,7 @@ export tearing, dae_index_lowering, check_consistency
 export tearing_assignments, tearing_substitution
 export build_torn_function, build_observed_function, ODAEProblem
 export sorted_incidence_matrix
+export torn_system_jacobian_sparsity
 
 include("utils.jl")
 include("pantelides.jl")
