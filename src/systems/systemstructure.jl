@@ -1,13 +1,13 @@
 module SystemStructures
 
 using DataStructures
-using Symbolics: linear_expansion, unwrap
+using Symbolics: linear_expansion, unwrap, Operator
 using SymbolicUtils: istree, operation, arguments, Symbolic
 using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
     value, InvalidSystemException, isdifferential, _iszero, isparameter,
-    independent_variables, isinput, SparseMatrixCLIL
+    independent_variables, isinput, SparseMatrixCLIL, isoperator
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -187,7 +187,7 @@ function initialize_system_structure(sys; quick_cancel=false)
             rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
             eq = 0 ~ rhs - lhs
         end
-        vars!(vars, eq.rhs)
+        vars!(vars, eq.rhs, op=Operator)
         isalgeq = true
         statevars = []
         for var in vars
@@ -200,7 +200,7 @@ function initialize_system_structure(sys; quick_cancel=false)
 
             dvar = var
             idx = varidx
-            while isdifferential(dvar)
+            while isoperator(dvar, Operator)
                 if !(idx in dervaridxs)
                     push!(dervaridxs, idx)
                 end
@@ -289,7 +289,7 @@ function linear_subsys_adjmat(sys)
     eadj = Vector{Int}[]
     cadj = Vector{Int}[]
     coeffs = Int[]
-    for (i, eq) in enumerate(eqs); isdiffeq(eq) && continue
+    for (i, eq) in enumerate(eqs); isoperator(eq.lhs, Operator) && continue
         empty!(coeffs)
         linear_term = 0
         all_int_vars = true
