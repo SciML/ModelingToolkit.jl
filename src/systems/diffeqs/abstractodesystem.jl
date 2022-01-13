@@ -361,7 +361,6 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     elseif u0 === nothing || M === I
       M
     else
-      @show u0 .* u0', M
       ArrayInterface.restructure(u0 .* u0',M)
     end
 
