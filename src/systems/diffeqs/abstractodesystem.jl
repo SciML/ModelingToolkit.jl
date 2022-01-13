@@ -282,7 +282,7 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify=false)
     end
     M = simplify ? ModelingToolkit.simplify.(M) : M
     # M should only contain concrete numbers
-    M == I ? I : M
+    M === I ? I : M
 end
 
 jacobian_sparsity(sys::AbstractODESystem) =
@@ -355,8 +355,14 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     M = calculate_massmatrix(sys)
-
-    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
+    
+    _M = if sparse && !(u0 === nothing || M === I)
+      SparseArrays.sparse(M)
+    elseif u0 === nothing || M === I
+      M
+    else
+      ArrayInterface.restructure(u0 .* u0',M)
+    end
 
     obs = observed(sys)
     observedfun = if steady_state
@@ -509,7 +515,13 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     M = calculate_massmatrix(sys)
 
-    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
+    _M = if sparse && !(u0 === nothing || M === I)
+      SparseArrays.sparse(M)
+    elseif u0 === nothing || M === I
+      M
+    else
+      ArrayInterface.restructure(u0 .* u0',M)
+    end
 
     jp_expr = sparse ? :(similar($(get_jac(sys)[]),Float64)) : :nothing
     ex = quote
