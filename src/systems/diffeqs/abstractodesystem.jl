@@ -355,8 +355,14 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     M = calculate_massmatrix(sys)
-
-    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
+    
+    _M = if sparse && !(u0 === nothing || M == I)
+      sparse(M)
+    elseif u0 === nothing || M == I
+      M
+    else
+      ArrayInterface.restructure(u0 .* u0',M)
+    end
 
     obs = observed(sys)
     observedfun = if steady_state
