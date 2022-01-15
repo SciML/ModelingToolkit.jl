@@ -1,8 +1,10 @@
 using Test
 using ModelingToolkit, OrdinaryDiffEq
 using ModelingToolkit.BipartiteGraphs
+using ModelingToolkit.StructuralTransformations
 
 function check_contract(sys)
+    sys = tearing_substitution(sys)
     s = structure(sys)
     @unpack fullvars, graph = s
     eqs = equations(sys)

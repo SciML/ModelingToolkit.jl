@@ -397,7 +397,6 @@ function Graphs.incidence_matrix(g::BipartiteGraph, val=true)
     S = sparse(I, J, val, nsrcs(g), ndsts(g))
 end
 
-
 """
     struct DiCMOBiGraph
 

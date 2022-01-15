@@ -68,7 +68,7 @@ function alias_elimination(sys)
     @set! sys.states = newstates
     @set! sys.observed = [observed(sys); [lhs ~ rhs for (lhs, rhs) in pairs(subs)]]
     @set! sys.structure = nothing
-    return sys
+    return invalidate_cache!(sys)
 end
 
 """

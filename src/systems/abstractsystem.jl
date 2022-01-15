@@ -129,6 +129,14 @@ Generate a function to evaluate the system's equations.
 """
 function generate_function end
 
+
+mutable struct Substitutions
+    subs::Vector{Equation}
+    deps::Vector{Vector{Int}}
+    subed_eqs::Union{Nothing,Vector{Equation}}
+end
+Substitutions(subs, deps) = Substitutions(subs, deps, nothing)
+
 Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
 
 #Deprecated
@@ -222,6 +230,7 @@ for prop in [
              :connector_type
              :connections
              :preface
+             :substitutions
             ]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
@@ -229,6 +238,23 @@ for prop in [
         $fname1(sys::AbstractSystem) = getfield(sys, $(QuoteNode(prop)))
         $fname2(sys::AbstractSystem) = isdefined(sys, $(QuoteNode(prop)))
     end
+end
+
+const EMPTY_TGRAD = Vector{Num}(undef, 0)
+const EMPTY_JAC = Matrix{Num}(undef, 0, 0)
+function invalidate_cache!(sys::AbstractSystem)
+    if has_tgrad(sys)
+        get_tgrad(sys)[] = EMPTY_TGRAD
+    elseif has_jac(sys)
+        get_jac(sys)[] = EMPTY_JAC
+    elseif has_ctrl_jac(sys)
+        get_ctrl_jac(sys)[] = EMPTY_JAC
+    elseif has_Wfact(sys)
+        get_Wfact(sys)[] = EMPTY_JAC
+    elseif has_Wfact_t(sys)
+        get_Wfact_t(sys)[] = EMPTY_JAC
+    end
+    return sys
 end
 
 Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field} = getfield(obj, field)

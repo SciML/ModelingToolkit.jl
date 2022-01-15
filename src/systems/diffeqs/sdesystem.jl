@@ -106,7 +106,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    name=nothing,
                    connector_type=nothing,
-                   checks = true,
+                   checks=true,
                    )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = scalarize(deqs)
@@ -130,11 +130,11 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     process_variables!(var_to_name, defaults, ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
-    tgrad = RefValue(Vector{Num}(undef, 0))
-    jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
-    ctrl_jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
-    Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
-    Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
+    tgrad = RefValue(EMPTY_TGRAD)
+    jac = RefValue{Any}(EMPTY_JAC)
+    ctrl_jac = RefValue{Any}(EMPTY_JAC)
+    Wfact   = RefValue(EMPTY_JAC)
+    Wfact_t = RefValue(EMPTY_JAC)
     SDESystem(deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type, checks = checks)
 end
 

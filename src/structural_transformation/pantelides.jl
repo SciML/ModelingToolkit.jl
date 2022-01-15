@@ -149,5 +149,5 @@ function dae_index_lowering(sys::ODESystem; kwargs...)
     s = get_structure(sys)
     (s isa SystemStructure) || (sys = initialize_system_structure(sys))
     sys, var_eq_matching, eq_to_diff = pantelides!(sys; kwargs...)
-    return pantelides_reassemble(sys, eq_to_diff, var_eq_matching)
+    return invalidate_cache!(pantelides_reassemble(sys, eq_to_diff, var_eq_matching))
 end
