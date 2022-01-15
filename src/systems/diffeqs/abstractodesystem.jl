@@ -90,6 +90,7 @@ function generate_function(
 
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     foreach(check_derivative_variables, eqs)
+    check_lhs(eqs, Differential, Set(dvs))
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
                           [eq.rhs for eq in eqs]
