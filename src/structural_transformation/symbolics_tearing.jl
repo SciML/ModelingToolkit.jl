@@ -34,9 +34,11 @@ function tearing_sub(expr, dict, s)
     s ? simplify(expr) : expr
 end
 
-function tearing_substitution(sys::AbstractSystem; simplify=false)
-    empty_substitutions(sys) && return sys
-    subs, = get_substitutions(sys)
+function full_equations(sys::AbstractSystem; simplify=false)
+    empty_substitutions(sys) && return equations(sys)
+    substitutions = get_substitutions(sys)
+    substitutions.subed_eqs === nothing && return substitutions.subed_eqs
+    @unpack subs = substitutions
     solved = Dict(eq.lhs => eq.rhs for eq in subs)
     neweqs = map(equations(sys)) do eq
         if isdiffeq(eq)
@@ -54,6 +56,12 @@ function tearing_substitution(sys::AbstractSystem; simplify=false)
         end
         eq
     end
+    substitutions.subed_eqs = neweqs
+    return neweqs
+end
+
+function tearing_substitution(sys::AbstractSystem; kwargs...)
+    neweqs = full_equations(sys::AbstractSystem; kwargs...)
     @set! sys.eqs = neweqs
     @set! sys.substitutions = nothing
 end
@@ -64,7 +72,7 @@ function tearing_assignments(sys::AbstractSystem)
         deps = Int[]
         sol_states = Code.LazyState()
     else
-        subs, deps = get_substitutions(sys)
+        @unpack subs, deps = get_substitutions(sys)
         assignments = [Assignment(eq.lhs, eq.rhs) for eq in subs]
         sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
     end
@@ -105,13 +113,13 @@ function tearing_reassemble(sys, var_eq_matching; simplify=false)
     end
     subgraph = substitution_graph(graph, solved_equations, solved_variables, var_eq_matching)
     toporder = topological_sort_by_dfs(subgraph)
-    substitutions = [solve_equation(
-                                    eqs[solved_equations[i]],
-                                    fullvars[solved_variables[i]],
-                                    simplify
-                                   ) for i in toporder]
+    subeqs = [solve_equation(
+                             eqs[solved_equations[i]],
+                             fullvars[solved_variables[i]],
+                             simplify
+                            ) for i in toporder]
     invtoporder = invperm(toporder)
-    deps = [[invtoporder[n] for n in neighborhood(subgraph, j, Inf, dir=:in) if n!=j] for (i, j) in enumerate(toporder)]
+    deps = [Int[invtoporder[n] for n in neighborhood(subgraph, j, Inf, dir=:in) if n!=j] for (i, j) in enumerate(toporder)]
 
     # Rewrite remaining equations in terms of solved variables
 
@@ -134,8 +142,8 @@ function tearing_reassemble(sys, var_eq_matching; simplify=false)
     @set! sys.structure = s
     @set! sys.eqs = neweqs
     @set! sys.states = [s.fullvars[idx] for idx in 1:length(s.fullvars) if !isdervar(s, idx)]
-    @set! sys.observed = [observed(sys); substitutions]
-    @set! sys.substitutions = substitutions, deps
+    @set! sys.observed = [observed(sys); subeqs]
+    @set! sys.substitutions = Substitutions(subeqs, deps)
     return sys
 end
 

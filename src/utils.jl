@@ -430,7 +430,7 @@ isarray(x) = x isa AbstractArray || x isa Symbolics.Arr
 function empty_substitutions(sys)
     has_substitutions(sys) || return true
     subs = get_substitutions(sys)
-    isnothing(subs) || isempty(last(subs))
+    isnothing(subs) || isempty(subs.deps)
 end
 
 function get_substitutions_and_solved_states(sys; no_postprocess=false)
@@ -438,7 +438,7 @@ function get_substitutions_and_solved_states(sys; no_postprocess=false)
         sol_states = Code.LazyState()
         pre = no_postprocess ? (ex -> ex) : get_postprocess_fbody(sys)
     else
-        subs, = get_substitutions(sys)
+        @unpack subs = get_substitutions(sys)
         sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
         if no_postprocess
             pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex)

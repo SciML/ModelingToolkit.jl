@@ -129,6 +129,14 @@ Generate a function to evaluate the system's equations.
 """
 function generate_function end
 
+
+mutable struct Substitutions
+    subs::Vector{Equation}
+    deps::Vector{Vector{Int}}
+    subed_eqs::Union{Nothing,Vector{Equation}}
+end
+Substitutions(subs, deps) = Substitutions(subs, deps, nothing)
+
 Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
 
 #Deprecated

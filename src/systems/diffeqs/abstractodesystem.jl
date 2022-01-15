@@ -5,7 +5,7 @@ function calculate_tgrad(sys::AbstractODESystem;
   # We need to remove explicit time dependence on the state because when we
   # have `u(t) * t` we want to have the tgrad to be `u(t)` instead of `u'(t) *
   # t + u(t)`.
-  rhs = [detime_dvs(eq.rhs) for eq ∈ equations(sys)]
+  rhs = [detime_dvs(eq.rhs) for eq ∈ full_equations(sys)]
   iv = get_iv(sys)
   xs = states(sys)
   rule = Dict(map((x, xt) -> xt=>x, detime_dvs.(xs), xs))
@@ -23,7 +23,7 @@ function calculate_jacobian(sys::AbstractODESystem;
     if cache isa Tuple && cache[2] == (sparse, simplify)
         return cache[1]
     end
-    rhs = [eq.rhs for eq ∈ equations(sys)]
+    rhs = [eq.rhs for eq ∈ full_equations(sys)]
 
     iv = get_iv(sys)
     dvs = states(sys)
@@ -45,7 +45,7 @@ function calculate_control_jacobian(sys::AbstractODESystem;
         return cache[1]
     end
 
-    rhs = [eq.rhs for eq ∈ equations(sys)]
+    rhs = [eq.rhs for eq ∈ full_equations(sys)]
 
     iv = get_iv(sys)
     ctrls = controls(sys)
@@ -263,7 +263,7 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
 end
 
 function calculate_massmatrix(sys::AbstractODESystem; simplify=false)
-    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
+    eqs = [eq for eq in full_equations(sys) if !isdifferenceeq(eq)]
     dvs = states(sys)
     M = zeros(length(eqs),length(eqs))
     state2idx = Dict(s => i for (i, s) in enumerate(dvs))
@@ -285,7 +285,7 @@ function jacobian_sparsity(sys::AbstractODESystem)
     sparsity = torn_system_jacobian_sparsity(sys)
     sparsity === nothing || return sparsity
 
-    jacobian_sparsity([eq.rhs for eq ∈ equations(sys)],
+    jacobian_sparsity([eq.rhs for eq ∈ full_equations(sys)],
                       [dv for dv in states(sys)])
 end
 

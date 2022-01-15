@@ -21,7 +21,7 @@ using ModelingToolkit: ODESystem, AbstractSystem,var_from_nested_derivative, Dif
                        ExtraVariablesSystemException,
                        get_postprocess_fbody, vars!,
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
-                       invalidate_cache!
+                       invalidate_cache!, Substitutions
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview
@@ -43,6 +43,7 @@ export tearing_assignments, tearing_substitution
 export build_torn_function, build_observed_function, ODAEProblem
 export sorted_incidence_matrix
 export torn_system_jacobian_sparsity
+export full_equations
 
 include("utils.jl")
 include("pantelides.jl")
