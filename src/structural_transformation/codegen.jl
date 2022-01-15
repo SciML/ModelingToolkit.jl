@@ -187,7 +187,8 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
         [],
         Let(
             needed_assignments[inner_idxs],
-            isscalar ? rhss[1] : MakeArray(rhss, SVector)
+            isscalar ? rhss[1] : MakeArray(rhss, SVector),
+            false
            )
     ) |> SymbolicUtils.Code.toexpr
 
@@ -307,7 +308,8 @@ function build_torn_function(
              [],
              pre(Let(
                      [torn_expr; assignments[is_not_prepended_assignment]],
-                 funbody
+                     funbody,
+                     false
                 ))
             ),
         sol_states
@@ -443,7 +445,8 @@ function build_observed_function(
              subs
              assignments[is_not_prepended_assignment]
             ],
-            isscalar ? ts[1] : MakeArray(ts, output_type)
+            isscalar ? ts[1] : MakeArray(ts, output_type),
+            false
            ))
        ), sol_states)
 

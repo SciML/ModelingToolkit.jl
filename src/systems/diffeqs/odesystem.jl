@@ -289,7 +289,8 @@ function build_explicit_observed_function(
         args, [],
         pre(Let(
             obsexprs,
-            isscalar ? ts[1] : MakeArray(ts, output_type)
+            isscalar ? ts[1] : MakeArray(ts, output_type),
+            false # don't actually use let
            ))
     ) |> toexpr
     expression ? ex : @RuntimeGeneratedFunction(ex)

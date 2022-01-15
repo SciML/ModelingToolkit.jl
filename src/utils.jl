@@ -399,7 +399,7 @@ end
 function get_postprocess_fbody(sys)
     if has_preface(sys) && (pre = preface(sys); pre !== nothing)
         pre_ = let pre=pre
-            ex -> Let(pre, ex)
+            ex -> Let(pre, ex, false)
         end
     else
         pre_ = ex -> ex
@@ -441,10 +441,10 @@ function get_substitutions_and_solved_states(sys; no_postprocess=false)
         @unpack subs = get_substitutions(sys)
         sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
         if no_postprocess
-            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex)
+            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex, false)
         else
             process = get_postprocess_fbody(sys)
-            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], process(ex))
+            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], process(ex), false)
         end
     end
     return pre, sol_states
