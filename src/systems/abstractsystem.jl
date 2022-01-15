@@ -243,16 +243,16 @@ end
 const EMPTY_TGRAD = Vector{Num}(undef, 0)
 const EMPTY_JAC = Matrix{Num}(undef, 0, 0)
 function invalidate_cache!(sys::AbstractSystem)
-    if isdefined(sys, :tgrad)
-        sys.tgrad[] = EMPTY_TGRAD
-    elseif isdefined(sys, :jac)
-        sys.jac[] = EMPTY_JAC
-    elseif isdefined(sys, :ctrl_jac)
-        sys.jac[] = EMPTY_JAC
-    elseif isdefined(sys, :Wfact)
-        sys.jac[] = EMPTY_JAC
-    elseif isdefined(sys, :Wfact_t)
-        sys.jac[] = EMPTY_JAC
+    if has_tgrad(sys)
+        get_tgrad(sys)[] = EMPTY_TGRAD
+    elseif has_jac(sys)
+        get_jac(sys)[] = EMPTY_JAC
+    elseif has_ctrl_jac(sys)
+        get_ctrl_jac(sys)[] = EMPTY_JAC
+    elseif has_Wfact(sys)
+        get_Wfact(sys)[] = EMPTY_JAC
+    elseif has_Wfact_t(sys)
+        get_Wfact_t(sys)[] = EMPTY_JAC
     end
     return sys
 end
