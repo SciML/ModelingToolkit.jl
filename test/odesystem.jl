@@ -517,3 +517,21 @@ RHS2 = RHS
 @unpack RHS = fol
 @test isequal(RHS, RHS2)
 
+#1413 and 1389
+@parameters t α β
+@variables x(t) y(t) z(t)
+D = Differential(t)
+
+eqs = [
+       D(x) ~ 0.1x + 0.9y,
+       D(y) ~ 0.5x + 0.5y,
+       z ~ α*x - β*y
+       ]
+
+@named sys = ODESystem(eqs, t, [x,y,z],[α,β])
+@test_throws Any ODEFunction(sys)
+
+eqs = copy(eqs)
+eqs[end] = D(D(z)) ~ α*x - β*y
+@named sys = ODESystem(eqs, t, [x,y,z],[α,β])
+@test_throws Any ODEFunction(sys)

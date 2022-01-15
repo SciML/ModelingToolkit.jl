@@ -130,6 +130,16 @@ function check_variables(dvs, iv)
     end
 end
 
+function check_lhs(eq::Equation, op, dvs::Set)
+    v = unwrap(eq.lhs)
+    _iszero(v) && return
+    (operation(v) isa op && only(arguments(v)) in dvs) && return
+    error("$v is not a valid LHS. Please run structural_simplify before simulation.")
+end
+check_lhs(eqs, op, dvs::Set) = for eq in eqs
+    check_lhs(eq, op, dvs)
+end
+
 """
     collect_ivs(eqs, op = Differential)
 
