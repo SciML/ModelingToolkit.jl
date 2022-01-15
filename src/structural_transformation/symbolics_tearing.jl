@@ -37,7 +37,7 @@ end
 function full_equations(sys::AbstractSystem; simplify=false)
     empty_substitutions(sys) && return equations(sys)
     substitutions = get_substitutions(sys)
-    substitutions.subed_eqs === nothing && return substitutions.subed_eqs
+    substitutions.subed_eqs === nothing || return substitutions.subed_eqs
     @unpack subs = substitutions
     solved = Dict(eq.lhs => eq.rhs for eq in subs)
     neweqs = map(equations(sys)) do eq

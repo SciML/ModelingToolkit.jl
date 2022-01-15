@@ -236,6 +236,7 @@ end
 
 function torn_system_jacobian_sparsity(sys)
     has_structure(sys) || return nothing
+    get_structure(sys) isa SystemStructure || return nothing
     s = structure(sys)
     @unpack fullvars, graph = s
 
