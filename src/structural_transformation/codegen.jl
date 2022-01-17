@@ -104,16 +104,21 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
 
     # Compute necessary assignments for the nlsolve expr
     init_assignments = [var2assignment[p] for p in paramset if haskey(var2assignment, p)]
-    tmp = [init_assignments]
-    # `deps[init_assignments]` gives the dependency of `init_assignments`
-    while true
-        next_assignments = reduce(vcat, deps[init_assignments])
-        isempty(next_assignments) && break
-        init_assignments = next_assignments
-        push!(tmp, init_assignments)
+    if isempty(init_assignments)
+        needed_assignments_idxs = Int[]
+        needed_assignments = similar(assignments, 0)
+    else
+        tmp = [init_assignments]
+        # `deps[init_assignments]` gives the dependency of `init_assignments`
+        while true
+            next_assignments = reduce(vcat, deps[init_assignments])
+            isempty(next_assignments) && break
+            init_assignments = next_assignments
+            push!(tmp, init_assignments)
+        end
+        needed_assignments_idxs = reduce(vcat, unique(reverse(tmp)))
+        needed_assignments = assignments[needed_assignments_idxs]
     end
-    needed_assignments_idxs = reduce(vcat, unique(reverse(tmp)))
-    needed_assignments = assignments[needed_assignments_idxs]
 
     # Compute `params`. They are like enclosed variables
     rhsvars = [ModelingToolkit.vars(r.rhs) for r in needed_assignments]

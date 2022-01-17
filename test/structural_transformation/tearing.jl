@@ -192,3 +192,36 @@ sol2 = solve(ODEProblem{false}(
 
 @test sol1[y, :] == sol1[x, :]
 @test (@. sin(sol1[z, :]) + sol1[y, :]) ≈ pr * sol1.t atol=1e-5
+
+# 1426
+function Translational_Mass(;name, m = 1.0)
+    sts = @variables s(t) v(t) a(t)
+    ps = @parameters m=m
+    D = Differential(t)
+    eqs = [
+           D(s) ~ v
+           D(v) ~ a
+           m*a ~ 0.0
+          ]
+    ODESystem(eqs, t, sts, ps; name=name)
+end
+
+m = 1.0
+@named mass = Translational_Mass(m=m)
+
+ms_eqs = []
+
+@named _ms_model = ODESystem(ms_eqs, t)
+@named ms_model = compose(_ms_model,
+                          [mass])
+
+# Mass starts with velocity = 1
+u0 = [
+      mass.s => 0.0
+      mass.v => 1.0
+     ]
+
+sys = structural_simplify(ms_model)
+prob_complex = ODAEProblem(sys, u0, (0, 1.0))
+sol = solve(prob_complex, Tsit5())
+@test all(sol[mass.v] .== 1)
