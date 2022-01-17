@@ -158,3 +158,91 @@ end
 
 has_var(ex, x) = x ∈ Set(get_variables(ex))
 
+# Build control function
+
+"""
+    (f_oop, f_ip), dvs, p = generate_control_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); implicit_dae = false, ddvs = if implicit_dae
+
+For a system `sys` that has unbound inputs (as determined by [`unbound_inputs`](@ref)), generate a function with additional input argument `in`
+```
+f_oop : (u,in,p,t)      -> rhs
+f_ip  : (uout,u,in,p,t) -> nothing
+```
+The return values also include the remaining states and parameters, in the order they appear as arguments to `f`.
+
+# Example
+```
+using ModelingToolkit: generate_control_function, varmap_to_vars, defaults
+f, dvs, ps = generate_control_function(sys, expression=Val{false}, simplify=true)
+p = varmap_to_vars(defaults(sys), ps)
+x = varmap_to_vars(defaults(sys), dvs)
+t = 0
+f[1](x, inputs, p, t)
+```
+"""
+function generate_control_function(
+    sys::AbstractODESystem;
+    implicit_dae=false,
+    has_difference=false,
+    simplify=true,
+    kwargs...
+)
+
+    ctrls = unbound_inputs(sys)
+    if isempty(ctrls)
+        error("No unbound inputs were found in system.")
+    end
+
+    # One can either connect unbound inputs to new parameters and allow structural_simplify, but then the unbound inputs appear as states :( .
+    # One can also just remove them from the states and parameters for the purposes of code generation, but then structural_simplify fails :(
+    # To have the best of both worlds, all unbound inputs must be converted to `@parameters` in which case structural_simplify handles them correctly :)
+    sys = toparam(sys, ctrls)
+
+    if simplify
+        sys = structural_simplify(sys)
+    end
+
+    dvs = states(sys)
+    ps  = parameters(sys)
+
+    dvs = setdiff(dvs, ctrls)
+    ps = setdiff(ps, ctrls)
+    inputs = map(x->time_varying_as_func(value(x), sys), ctrls)
+
+    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
+    foreach(check_derivative_variables, eqs)
+    # substitute x(t) by just x
+    rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
+                        [eq.rhs for eq in eqs]
+
+
+    # TODO: add an optional check on the ordering of observed equations
+    u = map(x->time_varying_as_func(value(x), sys), dvs)
+    p = map(x->time_varying_as_func(value(x), sys), ps)
+    t = get_iv(sys)
+
+    # pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
+
+    args = (u, inputs, p, t)
+    if implicit_dae
+        ddvs = map(Differential(get_iv(sys)), dvs)
+        args = (ddvs, args...)
+    end
+    pre, sol_states = get_substitutions_and_solved_states(sys)
+    f = build_function(rhss, args...; postprocess_fbody=pre, states=sol_states, kwargs...)
+    f, dvs, ps
+end
+
+"""
+    toparam(sys, ctrls::AbstractVector)
+
+Transform all instances of `@varibales` in `ctrls` appearing as states and in equations of `sys` with similarly named `@parameters`. This allows [`structural_simplify`](@ref)(sys) in the presence unbound inputs.
+"""
+function toparam(sys, ctrls::AbstractVector)
+    eqs = equations(sys)
+    subs = Dict(ctrls .=> toparam.(ctrls))
+    eqs = map(eqs) do eq
+        substitute(eq.lhs, subs) ~ substitute(eq.rhs, subs)
+    end
+    ODESystem(eqs, name=sys.name)
+end
