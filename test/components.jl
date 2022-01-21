@@ -1,11 +1,14 @@
 using Test
 using ModelingToolkit, OrdinaryDiffEq
 using ModelingToolkit.BipartiteGraphs
+using ModelingToolkit.StructuralTransformations
 
 function check_contract(sys)
+    sys = tearing_substitution(sys)
     state = TearingState(sys)
     fullvars = state.fullvars
     graph = state.structure.graph
+
     eqs = equations(sys)
     var2idx = Dict(enumerate(fullvars))
     for (i, eq) in enumerate(eqs)

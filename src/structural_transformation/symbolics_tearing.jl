@@ -1,6 +1,32 @@
-function tearing_sub(expr, dict, s)
-    expr = ModelingToolkit.fixpoint_sub(expr, dict)
-    s ? simplify(expr) : expr
+# N.B. assumes `slist` and `dlist` are unique
+function substitution_graph(graph, slist, dlist, var_eq_matching)
+    ns = length(slist)
+    nd = length(dlist)
+    ns == nd || error("internal error")
+    newgraph = BipartiteGraph(ns, nd)
+    erename = uneven_invmap(nsrcs(graph), slist)
+    vrename = uneven_invmap(ndsts(graph), dlist)
+    for e in 𝑠vertices(graph)
+        ie = erename[e]
+        ie == 0 && continue
+        for v in 𝑠neighbors(graph, e)
+            iv = vrename[v]
+            iv == 0 && continue
+            add_edge!(newgraph, ie, iv)
+        end
+    end
+
+    newmatching = Matching(ns)
+    for (v, e) in enumerate(var_eq_matching)
+        (e === unassigned || e === SelectedState()) && continue
+        iv = vrename[v]
+        ie = erename[e]
+        iv == 0 && continue
+        ie == 0 && error("internal error")
+        newmatching[iv] = ie
+    end
+
+    return DiCMOBiGraph{true}(newgraph, complete(newmatching))
 end
 
 function var_derivative!(ts::TearingState{ODESystem}, v::Int)
@@ -31,6 +57,62 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int)
     find_eq_solvables!(ts, eq_diff; may_be_zero=true, allow_symbolic=true)
 end
 
+function tearing_sub(expr, dict, s)
+    expr = ModelingToolkit.fixpoint_sub(expr, dict)
+    s ? simplify(expr) : expr
+end
+
+function full_equations(sys::AbstractSystem; simplify=false)
+    empty_substitutions(sys) && return equations(sys)
+    substitutions = get_substitutions(sys)
+    substitutions.subed_eqs === nothing || return substitutions.subed_eqs
+    @unpack subs = substitutions
+    solved = Dict(eq.lhs => eq.rhs for eq in subs)
+    neweqs = map(equations(sys)) do eq
+        if isdiffeq(eq)
+            return eq.lhs ~ tearing_sub(eq.rhs, solved, simplify)
+        else
+            if !(eq.lhs isa Number && eq.lhs == 0)
+                eq = 0 ~ eq.rhs - eq.lhs
+            end
+            rhs = tearing_sub(eq.rhs, solved, simplify)
+            if rhs isa Symbolic
+                return 0 ~ rhs
+            else # a number
+                error("tearing failled because the system is singular")
+            end
+        end
+        eq
+    end
+    substitutions.subed_eqs = neweqs
+    return neweqs
+end
+
+function tearing_substitution(sys::AbstractSystem; kwargs...)
+    neweqs = full_equations(sys::AbstractSystem; kwargs...)
+    @set! sys.eqs = neweqs
+    @set! sys.substitutions = nothing
+end
+
+function tearing_assignments(sys::AbstractSystem)
+    if empty_substitutions(sys)
+        assignments = []
+        deps = Int[]
+        sol_states = Code.LazyState()
+    else
+        @unpack subs, deps = get_substitutions(sys)
+        assignments = [Assignment(eq.lhs, eq.rhs) for eq in subs]
+        sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
+    end
+    return assignments, deps, sol_states
+end
+
+function solve_equation(eq, var, simplify)
+    rhs = value(solve_for(eq, var; simplify=simplify, check=false))
+    occursin(var, rhs) && throw(EquationSolveErrors(eq, var, rhs))
+    var ~ rhs
+end
+
 function tearing_reassemble(state::TearingState, var_eq_matching; simplify=false)
     fullvars = state.fullvars
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
@@ -55,48 +137,35 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify=false
     end
 
     ### extract partition information
-    function solve_equation(ieq, iv)
-        var = fullvars[iv]
-        eq = neweqs[ieq]
-        rhs = value(solve_for(eq, var; simplify=simplify, check=false))
-
-        if var in vars(rhs)
-            # Usually we should be done here, but if we don't simplify we can get in
-            # trouble, so try our best to still solve for rhs
-            if !simplify
-                rhs = SymbolicUtils.polynormalize(rhs)
-            end
-
-            # Since we know `eq` is linear wrt `var`, so the round off must be a
-            # linear term. We can correct the round off error by a linear
-            # correction.
-            rhs -= expand_derivatives(Differential(var)(rhs))*var
-            (var in vars(rhs)) && throw(EquationSolveErrors(eq, var, rhs))
-        end
-        var => rhs
-    end
     is_solvable(eq, iv) = isa(eq, Int) && BipartiteEdge(eq, iv) in solvable_graph
 
     solved_equations = Int[]
     solved_variables = Int[]
 
+    # if var is like D(x)
+    isdiffvar(var) = invview(var_to_diff)[var] !== nothing && var_eq_matching[invview(var_to_diff)[var]] === SelectedState()
+
+    diffeqs = Equation[]
     # Solve solvable equations
-    for (iv, ieq) in enumerate(var_eq_matching);
+    for (iv, ieq) in enumerate(var_eq_matching)
         is_solvable(ieq, iv) || continue
+        # We don't solve differential equations, but we will need to try to
+        # convert it into the mass matrix form.
+        # We cannot solve the differential variable like D(x)
+        if isdiffvar(iv)
+            push!(diffeqs, solve_equation(eqs[ieq], fullvars[iv], simplify))
+            continue
+        end
         push!(solved_equations, ieq); push!(solved_variables, iv)
     end
 
-    isdiffvar(var) = invview(var_to_diff)[var] !== nothing && var_eq_matching[invview(var_to_diff)[var]] === SelectedState()
-    solved = Dict(solve_equation(ieq, iv) for (ieq, iv) in zip(solved_equations, solved_variables))
-    obseqs = [var ~ rhs for (var, rhs) in solved]
-
     # Rewrite remaining equations in terms of solved variables
-    function substitute_equation(ieq)
+    function to_mass_matrix_form(ieq)
         eq = neweqs[ieq]
         if !(eq.lhs isa Number && eq.lhs == 0)
             eq = 0 ~ eq.rhs - eq.lhs
         end
-        rhs = tearing_sub(eq.rhs, solved, simplify)
+        rhs = eq.rhs
         if rhs isa Symbolic
             # Check if the rhs is solvable in all state derivatives and if those
             # the linear terms for them are all zero. If so, move them to the
@@ -134,10 +203,32 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify=false
         end
     end
 
-    diffeqs = [fullvars[iv] ~ tearing_sub(solved[fullvars[iv]], solved, simplify) for iv in solved_variables if isdiffvar(iv)]
-    neweqs = Any[substitute_equation(ieq) for ieq in 1:length(neweqs) if !(ieq in solved_equations)]
+    if isempty(solved_equations)
+        subeqs = Equation[]
+        deps = Vector{Int}[]
+    else
+        subgraph = substitution_graph(graph, solved_equations, solved_variables, var_eq_matching)
+        toporder = topological_sort_by_dfs(subgraph)
+        subeqs = Equation[solve_equation(
+                                 neweqs[solved_equations[i]],
+                                 fullvars[solved_variables[i]],
+                                 simplify
+                                ) for i in toporder]
+        # find the dependency of solved variables. we will need this for ODAEProblem
+        invtoporder = invperm(toporder)
+        deps = [Int[invtoporder[n] for n in neighborhood(subgraph, j, Inf, dir=:in) if n!=j] for (i, j) in enumerate(toporder)]
+    end
+
+    # TODO: BLT sorting
+    # Rewrite remaining equations in terms of solved variables
+    solved_eq_set = BitSet(solved_equations)
+    neweqs = Equation[to_mass_matrix_form(ieq) for ieq in 1:length(neweqs) if !(ieq in solved_eq_set)]
     filter!(!isnothing, neweqs)
     prepend!(neweqs, diffeqs)
+
+    # Contract the vertices in the structure graph to make the structure match
+    # the new reality of the system we've just created.
+    #graph = contract_variables(graph, var_eq_matching, solved_variables)
 
     # Update system
     active_vars = setdiff(BitSet(1:length(fullvars)), solved_variables)
@@ -146,7 +237,9 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify=false
     @set! sys.eqs = neweqs
     isstatediff(i) = var_eq_matching[i] !== SelectedState() && invview(var_to_diff)[i] !== nothing && var_eq_matching[invview(var_to_diff)[i]] === SelectedState()
     @set! sys.states = [fullvars[i] for i in active_vars if !isstatediff(i)]
-    @set! sys.observed = [observed(sys); obseqs]
+    @set! sys.observed = [observed(sys); subeqs]
+    @set! sys.substitutions = Substitutions(subeqs, deps)
+
     return sys
 end
 
@@ -176,11 +269,11 @@ instead, which calls this function internally.
 function tearing(sys::AbstractSystem; simplify=false)
     state = TearingState(sys)
     var_eq_matching = tearing(state)
-    tearing_reassemble(state, var_eq_matching; simplify=simplify)
+    invalidate_cache!(tearing_reassemble(state, var_eq_matching; simplify=simplify))
 end
 
 """
-    tearing(sys; simplify=false)
+    partial_state_selection(sys; simplify=false)
 
 Perform partial state selection and tearing.
 """

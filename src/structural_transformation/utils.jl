@@ -244,6 +244,39 @@ function reordered_matrix(sys, torn_matching)
     sparse(I, J, true)
 end
 
+"""
+    uneven_invmap(n::Int, list)
+
+returns an uneven inv map with length `n`.
+"""
+function uneven_invmap(n::Int, list)
+    rename = zeros(Int, n)
+    for (i, v) in enumerate(list)
+        rename[v] = i
+    end
+    return rename
+end
+
+function torn_system_jacobian_sparsity(sys)
+    has_structure(sys) || return nothing
+    get_structure(sys) isa SystemStructure || return nothing
+    s = structure(sys)
+    @unpack fullvars, graph = s
+
+    states_idxs = findall(!isdifferential, fullvars)
+    var2idx = Dict{Int,Int}(v => i for (i, v) in enumerate(states_idxs))
+    I = Int[]; J = Int[]
+    for ieq in 𝑠vertices(graph)
+        for ivar in 𝑠neighbors(graph, ieq)
+            nivar = get(var2idx, ivar, 0)
+            nivar == 0 && continue
+            push!(I, ieq)
+            push!(J, nivar)
+        end
+    end
+    return sparse(I, J, true)
+end
+
 ###
 ### Nonlinear equation(s) solving
 ###

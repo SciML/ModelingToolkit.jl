@@ -130,6 +130,16 @@ function check_variables(dvs, iv)
     end
 end
 
+function check_lhs(eq::Equation, op, dvs::Set)
+    v = unwrap(eq.lhs)
+    _iszero(v) && return
+    (operation(v) isa op && only(arguments(v)) in dvs) && return
+    error("$v is not a valid LHS. Please run structural_simplify before simulation.")
+end
+check_lhs(eqs, op, dvs::Set) = for eq in eqs
+    check_lhs(eq, op, dvs)
+end
+
 """
     collect_ivs(eqs, op = Differential)
 
@@ -399,7 +409,7 @@ end
 function get_postprocess_fbody(sys)
     if has_preface(sys) && (pre = preface(sys); pre !== nothing)
         pre_ = let pre=pre
-            ex -> Let(pre, ex)
+            ex -> Let(pre, ex, false)
         end
     else
         pre_ = ex -> ex
@@ -426,3 +436,26 @@ function find_duplicates(xs, ::Val{Ret}=Val(false)) where Ret
 end
 
 isarray(x) = x isa AbstractArray || x isa Symbolics.Arr
+
+function empty_substitutions(sys)
+    has_substitutions(sys) || return true
+    subs = get_substitutions(sys)
+    isnothing(subs) || isempty(subs.deps)
+end
+
+function get_substitutions_and_solved_states(sys; no_postprocess=false)
+    if empty_substitutions(sys)
+        sol_states = Code.LazyState()
+        pre = no_postprocess ? (ex -> ex) : get_postprocess_fbody(sys)
+    else
+        @unpack subs = get_substitutions(sys)
+        sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
+        if no_postprocess
+            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex, false)
+        else
+            process = get_postprocess_fbody(sys)
+            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], process(ex), false)
+        end
+    end
+    return pre, sol_states
+end

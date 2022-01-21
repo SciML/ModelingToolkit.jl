@@ -5,7 +5,7 @@ function calculate_tgrad(sys::AbstractODESystem;
   # We need to remove explicit time dependence on the state because when we
   # have `u(t) * t` we want to have the tgrad to be `u(t)` instead of `u'(t) *
   # t + u(t)`.
-  rhs = [detime_dvs(eq.rhs) for eq ∈ equations(sys)]
+  rhs = [detime_dvs(eq.rhs) for eq ∈ full_equations(sys)]
   iv = get_iv(sys)
   xs = states(sys)
   rule = Dict(map((x, xt) -> xt=>x, detime_dvs.(xs), xs))
@@ -23,7 +23,7 @@ function calculate_jacobian(sys::AbstractODESystem;
     if cache isa Tuple && cache[2] == (sparse, simplify)
         return cache[1]
     end
-    rhs = [eq.rhs for eq ∈ equations(sys)]
+    rhs = [eq.rhs for eq ∈ full_equations(sys)]
 
     iv = get_iv(sys)
     dvs = states(sys)
@@ -45,7 +45,7 @@ function calculate_control_jacobian(sys::AbstractODESystem;
         return cache[1]
     end
 
-    rhs = [eq.rhs for eq ∈ equations(sys)]
+    rhs = [eq.rhs for eq ∈ full_equations(sys)]
 
     iv = get_iv(sys)
     ctrls = controls(sys)
@@ -87,28 +87,25 @@ function generate_function(
         has_difference=false,
         kwargs...
     )
-    # optimization
-    #obsvars = map(eq->eq.lhs, observed(sys))
-    #fulldvs = [dvs; obsvars]
 
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     foreach(check_derivative_variables, eqs)
+    check_lhs(eqs, Differential, Set(dvs))
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
                           [eq.rhs for eq in eqs]
-    #rhss = Let(obss, rhss)
 
     # TODO: add an optional check on the ordering of observed equations
     u = map(x->time_varying_as_func(value(x), sys), dvs)
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
-    pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
+    pre, sol_states = get_substitutions_and_solved_states(sys, no_postprocess = has_difference)
 
     if implicit_dae
-        build_function(rhss, ddvs, u, p, t; postprocess_fbody=pre, kwargs...)
+        build_function(rhss, ddvs, u, p, t; postprocess_fbody=pre, states=sol_states, kwargs...)
     else
-        build_function(rhss, u, p, t; postprocess_fbody=pre, kwargs...)
+        build_function(rhss, u, p, t; postprocess_fbody=pre, states=sol_states, kwargs...)
     end
 end
 
@@ -267,7 +264,7 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
 end
 
 function calculate_massmatrix(sys::AbstractODESystem; simplify=false)
-    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
+    eqs = [eq for eq in full_equations(sys) if !isdifferenceeq(eq)]
     dvs = states(sys)
     M = zeros(length(eqs),length(eqs))
     state2idx = Dict(s => i for (i, s) in enumerate(dvs))
@@ -282,12 +279,16 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify=false)
     end
     M = simplify ? ModelingToolkit.simplify.(M) : M
     # M should only contain concrete numbers
-    M == I ? I : M
+    M === I ? I : M
 end
 
-jacobian_sparsity(sys::AbstractODESystem) =
-    jacobian_sparsity([eq.rhs for eq ∈ equations(sys)],
+function jacobian_sparsity(sys::AbstractODESystem)
+    sparsity = torn_system_jacobian_sparsity(sys)
+    sparsity === nothing || return sparsity
+
+    jacobian_sparsity([eq.rhs for eq ∈ full_equations(sys)],
                       [dv for dv in states(sys)])
+end
 
 function isautonomous(sys::AbstractODESystem)
     tgrad = calculate_tgrad(sys;simplify=true)
@@ -323,6 +324,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      eval_module = @__MODULE__,
                                      steady_state = false,
                                      checkbounds=false,
+                                     sparsity=false,
                                      kwargs...) where {iip}
 
     f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
@@ -355,8 +357,14 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     M = calculate_massmatrix(sys)
-
-    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
+    
+    _M = if sparse && !(u0 === nothing || M === I)
+      SparseArrays.sparse(M)
+    elseif u0 === nothing || M === I
+      M
+    else
+      ArrayInterface.restructure(u0 .* u0',M)
+    end
 
     obs = observed(sys)
     observedfun = if steady_state
@@ -398,6 +406,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      syms = Symbol.(states(sys)),
                      indepsym = Symbol(get_iv(sys)),
                      observed = observedfun,
+                     sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
                     )
 end
 
@@ -509,7 +518,13 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     M = calculate_massmatrix(sys)
 
-    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
+    _M = if sparse && !(u0 === nothing || M === I)
+      SparseArrays.sparse(M)
+    elseif u0 === nothing || M === I
+      M
+    else
+      ArrayInterface.restructure(u0 .* u0',M)
+    end
 
     jp_expr = sparse ? :(similar($(get_jac(sys)[]),Float64)) : :nothing
     ex = quote

@@ -119,7 +119,7 @@ end
 # solve for
 # 0 = u5 - hypot(sin(u5), hypot(cos(sin(u5)), hypot(sin(u5), cos(sin(u5)))))
 tornsys = tearing(sys)
-@test isequal(equations(tornsys), [0 ~ u5 + (-1 * hypot(hypot(cos(sin(u5)), hypot(sin(u5), cos(sin(u5)))), sin(u5)))])
+@test isequal(equations(tornsys), [0 ~ u5 - hypot(u4, u1)])
 prob = NonlinearProblem(tornsys, ones(1))
 sol = solve(prob, NewtonRaphson())
 @test norm(prob.f(sol.u, sol.prob.p)) < 1e-10
@@ -144,7 +144,7 @@ let (mm, _, _) = ModelingToolkit.aag_bareiss(nlsys)
 end
 
 newsys = tearing(nlsys)
-@test length(equations(newsys)) == 0
+@test length(equations(newsys)) <= 1
 
 ###
 ### DAE system
@@ -160,7 +160,8 @@ eqs = [
       ]
 @named daesys = ODESystem(eqs, t)
 newdaesys = tearing(daesys)
-@test equations(newdaesys) == [D(x) ~ z; 0 ~ x + sin(z) - p*t]
+@test equations(newdaesys) == [D(x) ~ z; 0 ~ y + sin(z) - p*t]
+@test equations(tearing_substitution(newdaesys)) == [D(x) ~ z; 0 ~ x + sin(z) - p*t]
 @test isequal(states(newdaesys), [x, z])
 prob = ODAEProblem(newdaesys, [x=>1.0], (0, 1.0), [p=>0.2])
 du = [0.0]; u = [1.0]; pr = 0.2; tt = 0.1
@@ -188,3 +189,36 @@ sol2 = solve(ODEProblem{false}(
 
 @test sol1[y, :] == sol1[x, :]
 @test (@. sin(sol1[z, :]) + sol1[y, :]) ≈ pr * sol1.t atol=1e-5
+
+# 1426
+function Translational_Mass(;name, m = 1.0)
+    sts = @variables s(t) v(t) a(t)
+    ps = @parameters m=m
+    D = Differential(t)
+    eqs = [
+           D(s) ~ v
+           D(v) ~ a
+           m*a ~ 0.0
+          ]
+    ODESystem(eqs, t, sts, ps; name=name)
+end
+
+m = 1.0
+@named mass = Translational_Mass(m=m)
+
+ms_eqs = []
+
+@named _ms_model = ODESystem(ms_eqs, t)
+@named ms_model = compose(_ms_model,
+                          [mass])
+
+# Mass starts with velocity = 1
+u0 = [
+      mass.s => 0.0
+      mass.v => 1.0
+     ]
+
+sys = structural_simplify(ms_model)
+prob_complex = ODAEProblem(sys, u0, (0, 1.0))
+sol = solve(prob_complex, Tsit5())
+@test all(sol[mass.v] .== 1)

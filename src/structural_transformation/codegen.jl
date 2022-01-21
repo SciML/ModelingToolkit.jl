@@ -4,7 +4,7 @@ using ModelingToolkit: isdifferenceeq, has_continuous_events, generate_rootfindi
 
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
-function torn_system_jacobian_sparsity(state, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs)
+function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs)
     fullvars = state.fullvars
     graph = state.structure.graph
 
@@ -96,30 +96,76 @@ function torn_system_jacobian_sparsity(state, var_eq_matching, var_sccs, nlsolve
     sparse(I, J, true)
 end
 
-"""
-    exprs = gen_nlsolve(eqs::Vector{Equation}, vars::Vector, u0map::Dict; checkbounds = true)
-
-Generate `SymbolicUtils` expressions for a root-finding function based on `eqs`,
-as well as a call to the root-finding solver.
-
-`exprs` is a two element vector
-```
-exprs = [fname = f, numerical_nlsolve(fname, ...)]
-```
-
-# Arguments:
-- `eqs`: Equations to find roots of.
-- `vars`: ???
-- `u0map`: A `Dict` which maps variables in `eqs` to values, e.g., `defaults(sys)` if `eqs = equations(sys)`.
-- `checkbounds`: Apply bounds checking in the generated code.
-"""
-function gen_nlsolve(eqs, vars, u0map::AbstractDict; checkbounds=true)
+function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDict, assignments, (deps, invdeps), var2assignment; checkbounds=true)
     isempty(vars) && throw(ArgumentError("vars may not be empty"))
     length(eqs) == length(vars) || throw(ArgumentError("vars must be of the same length as the number of equations to find the roots of"))
     rhss = map(x->x.rhs, eqs)
     # We use `vars` instead of `graph` to capture parameters, too.
-    allvars = unique(collect(Iterators.flatten(map(ModelingToolkit.vars, rhss))))
-    params = setdiff(allvars, vars) # these are not the subject of the root finding
+    paramset = ModelingToolkit.vars(r for r in rhss)
+
+    # Compute necessary assignments for the nlsolve expr
+    init_assignments = [var2assignment[p] for p in paramset if haskey(var2assignment, p)]
+    if isempty(init_assignments)
+        needed_assignments_idxs = Int[]
+        needed_assignments = similar(assignments, 0)
+    else
+        tmp = [init_assignments]
+        # `deps[init_assignments]` gives the dependency of `init_assignments`
+        while true
+            next_assignments = reduce(vcat, deps[init_assignments])
+            isempty(next_assignments) && break
+            init_assignments = next_assignments
+            push!(tmp, init_assignments)
+        end
+        needed_assignments_idxs = reduce(vcat, unique(reverse(tmp)))
+        needed_assignments = assignments[needed_assignments_idxs]
+    end
+
+    # Compute `params`. They are like enclosed variables
+    rhsvars = [ModelingToolkit.vars(r.rhs) for r in needed_assignments]
+    vars_set = Set(vars)
+    outer_set = BitSet()
+    inner_set = BitSet()
+    for (i, vs) in enumerate(rhsvars)
+        j = needed_assignments_idxs[i]
+        if isdisjoint(vars_set, vs)
+            push!(outer_set, j)
+        else
+            push!(inner_set, j)
+        end
+    end
+    init_refine = BitSet()
+    for i in inner_set
+        union!(init_refine, invdeps[i])
+    end
+    intersect!(init_refine, outer_set)
+    setdiff!(outer_set, init_refine)
+    union!(inner_set, init_refine)
+
+    next_refine = BitSet()
+    while true
+        for i in init_refine
+            id = invdeps[i]
+            isempty(id) && break
+            union!(next_refine, id)
+        end
+        intersect!(next_refine, outer_set)
+        isempty(next_refine) && break
+        setdiff!(outer_set, next_refine)
+        union!(inner_set, next_refine)
+
+        init_refine, next_refine = next_refine, init_refine
+        empty!(next_refine)
+    end
+    global2local = Dict(j=>i for (i, j) in enumerate(needed_assignments_idxs))
+    inner_idxs = [global2local[i] for i in collect(inner_set)]
+    outer_idxs = [global2local[i] for i in collect(outer_set)]
+    extravars = reduce(union!, rhsvars[inner_idxs], init=Set())
+    union!(paramset, extravars)
+    setdiff!(paramset, vars)
+    setdiff!(paramset, [needed_assignments[i].lhs for i in inner_idxs])
+    union!(paramset, [needed_assignments[i].lhs for i in outer_idxs])
+    params = collect(paramset)
 
     # splatting to tighten the type
     u0 = []
@@ -145,7 +191,11 @@ function gen_nlsolve(eqs, vars, u0map::AbstractDict; checkbounds=true)
          DestructuredArgs(params, inbounds=!checkbounds)
         ],
         [],
-        isscalar ? rhss[1] : MakeArray(rhss, SVector)
+        Let(
+            needed_assignments[inner_idxs],
+            isscalar ? rhss[1] : MakeArray(rhss, SVector),
+            false
+           )
     ) |> SymbolicUtils.Code.toexpr
 
     # solver call contains code to call the root-finding solver on the function f
@@ -159,10 +209,21 @@ function gen_nlsolve(eqs, vars, u0map::AbstractDict; checkbounds=true)
                               )
         end)
 
-    [
-     fname ← @RuntimeGeneratedFunction(f)
-     DestructuredArgs(vars, inbounds=!checkbounds) ← solver_call
-    ]
+    preassignments = []
+    for i in outer_idxs
+        ii = needed_assignments_idxs[i]
+        is_not_prepended_assignment[ii] || continue
+        is_not_prepended_assignment[ii] = false
+        push!(preassignments, assignments[ii])
+    end
+
+    nlsolve_expr = Assignment[
+                    preassignments
+                    fname ← @RuntimeGeneratedFunction(f)
+                    DestructuredArgs(vars, inbounds=!checkbounds) ← solver_call
+                   ]
+
+    nlsolve_expr
 end
 
 function build_torn_function(
@@ -194,17 +255,30 @@ function build_torn_function(
 
     states_idxs = collect(diffvars_range(state.structure))
     mass_matrix_diag = ones(length(states_idxs))
-    torn_expr = []
+
+    assignments, deps, sol_states = tearing_assignments(sys)
+    invdeps = map(_->BitSet(), deps)
+    for (i, d) in enumerate(deps)
+        for a in d
+            push!(invdeps[a], i)
+        end
+    end
+    var2assignment = Dict{Any,Int}(eq.lhs => i for (i, eq) in enumerate(assignments))
+    is_not_prepended_assignment = trues(length(assignments))
+
+    torn_expr = Assignment[]
+
     defs = defaults(sys)
     nlsolve_scc_idxs = Int[]
 
     needs_extending = false
-    for (i, scc) in enumerate(var_sccs)
+    @views for (i, scc) in enumerate(var_sccs)
         torn_vars_idxs = Int[var for var in scc if var_eq_matching[var] !== unassigned]
         torn_eqs_idxs = [var_eq_matching[var] for var in torn_vars_idxs]
         isempty(torn_eqs_idxs) && continue
         if length(torn_eqs_idxs) <= max_inlining_size
-            append!(torn_expr, gen_nlsolve(eqs[torn_eqs_idxs], fullvars[torn_vars_idxs], defs, checkbounds=checkbounds))
+            nlsolve_expr = gen_nlsolve!(is_not_prepended_assignment, eqs[torn_eqs_idxs], fullvars[torn_vars_idxs], defs, assignments, (deps, invdeps), var2assignment, checkbounds=checkbounds)
+            append!(torn_expr, nlsolve_expr)
             push!(nlsolve_scc_idxs, i)
         else
             needs_extending = true
@@ -226,6 +300,7 @@ function build_torn_function(
 
     states = fullvars[states_idxs]
     syms = map(Symbol, states_idxs)
+
     pre = get_postprocess_fbody(sys)
 
     expr = SymbolicUtils.Code.toexpr(
@@ -238,18 +313,23 @@ function build_torn_function(
              ],
              [],
              pre(Let(
-                 torn_expr,
-                 funbody
+                     [torn_expr; assignments[is_not_prepended_assignment]],
+                     funbody,
+                     false
                 ))
-            )
+            ),
+        sol_states
     )
     if expression
         expr, states
     else
-        observedfun = let state = state, dict = Dict()
+        observedfun = let state = state, dict=Dict(), assignments=assignments, deps=(deps, invdeps), sol_states=sol_states, var2assignment=var2assignment
             function generated_observed(obsvar, u, p, t)
                 obs = get!(dict, value(obsvar)) do
-                    build_observed_function(state, obsvar, var_eq_matching, var_sccs, checkbounds=checkbounds)
+                    build_observed_function(state, obsvar, var_eq_matching, var_sccs,
+                                            assignments, deps, sol_states, var2assignment,
+                                            checkbounds=checkbounds,
+                                           )
                 end
                 obs(u, p, t)
             end
@@ -257,7 +337,7 @@ function build_torn_function(
 
         ODEFunction{true}(
                           @RuntimeGeneratedFunction(expr),
-                          sparsity = jacobian_sparsity ? torn_system_jacobian_sparsity(state, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs) : nothing,
+                          sparsity = jacobian_sparsity ? torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs) : nothing,
                           syms = syms,
                           observed = observedfun,
                           mass_matrix = mass_matrix,
@@ -283,12 +363,17 @@ function find_solve_sequence(sccs, vars)
 end
 
 function build_observed_function(
-        state, ts, var_eq_matching, var_sccs;
+        state, ts, var_eq_matching, var_sccs,
+        assignments,
+        deps,
+        sol_states,
+        var2assignment;
         expression=false,
         output_type=Array,
-        checkbounds=true
+        checkbounds=true,
     )
 
+    is_not_prepended_assignment = trues(length(assignments))
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
     end
@@ -337,7 +422,11 @@ function build_observed_function(
         torn_eqs  = map(i->map(v->eqs[var_eq_matching[v]], var_sccs[i]), subset)
         torn_vars = map(i->map(v->fullvars[v], var_sccs[i]), subset)
         u0map = defaults(sys)
-        solves = gen_nlsolve.(torn_eqs, torn_vars, (u0map,); checkbounds=checkbounds)
+        assignments = copy(assignments)
+        solves = map(zip(torn_eqs, torn_vars)) do (eqs, vars)
+            gen_nlsolve!(is_not_prepended_assignment, eqs, vars,
+                         u0map, assignments, deps, var2assignment; checkbounds=checkbounds)
+        end
     else
         solves = []
     end
@@ -350,7 +439,7 @@ function build_observed_function(
     end
     pre = get_postprocess_fbody(sys)
 
-    ex = Func(
+    ex = Code.toexpr(Func(
         [
          DestructuredArgs(diffvars, inbounds=!checkbounds)
          DestructuredArgs(parameters(sys), inbounds=!checkbounds)
@@ -362,10 +451,12 @@ function build_observed_function(
              collect(Iterators.flatten(solves))
              map(eq -> eq.lhs←eq.rhs, obs[1:maxidx])
              subs
+             assignments[is_not_prepended_assignment]
             ],
-            isscalar ? ts[1] : MakeArray(ts, output_type)
+            isscalar ? ts[1] : MakeArray(ts, output_type),
+            false
            ))
-    ) |> Code.toexpr
+       ), sol_states)
 
     expression ? ex : @RuntimeGeneratedFunction(ex)
 end

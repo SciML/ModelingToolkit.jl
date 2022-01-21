@@ -167,13 +167,17 @@ before numerically solving. The `structural_simplify` function removes
 these trivial equality relationships and trivial singularity equations,
 i.e. equations which result in `0~0` expressions, in over-specified systems.
 
-## Inheritance and Combine (TODO)
+## Inheritance and Combine
 
-Model inheritance can be done in two ways: explicitly or implicitly.
-The explicit way is to shadow variables with equality expressions.
-For example, let's assume we have three separate systems which we
-want to compose to a single one. This is how one could explicitly
-forward all states and parameters to the higher level system:
+Model inheritance can be done in two ways: implicitly or explicitly. First, one
+can use the `extend` function to extend a base model with another set of
+equations, states, and parameters. An example can be found in the
+[acausal components tutorial](@ref acausal).
+
+The explicit way is to shadow variables with equality expressions. For example,
+let's assume we have three separate systems which we want to compose to a single
+one. This is how one could explicitly forward all states and parameters to the
+higher level system:
 
 ```julia
 using ModelingToolkit, OrdinaryDiffEq, Plots
@@ -259,7 +263,7 @@ ODESystem(eqs, ...; continuous_events::Pair{Vector{Equation}, Vector{Equation}})
 ```
 where equations can be added that evaluate to 0 at discontinuities.
 
-To model events that have an affect on the state, provide `events::Pair{Vector{Equation}, Vector{Equation}}` where the first entry in the pair is a vector of equations describing event conditions, and the second vector of equations describe the affect on the state. The affect equations must be on the form
+To model events that have an effect on the state, provide `events::Pair{Vector{Equation}, Vector{Equation}}` where the first entry in the pair is a vector of equations describing event conditions, and the second vector of equations describe the effect on the state. The effect equations must be of the form
 ```
 single_state_variable ~ expression_involving_any_variables
 ```
@@ -275,7 +279,7 @@ function UnitMassWithFriction(k; name)
     D(x) ~ v
     D(v) ~ sin(t) - k*sign(v) # f = ma, sinusoidal force acting on the mass, and Coulomb friction opposing the movement
   ]
-  ODESystem(eqs, t, continuous_events=[v ~ 0], name=name) # when v = 0 there is a discontinuity
+  ODESystem(eqs, t; continuous_events=[v ~ 0], name) # when v = 0 there is a discontinuity
 end
 @named m = UnitMassWithFriction(0.7)
 prob = ODEProblem(m, Pair[], (0, 10pi))
@@ -296,7 +300,7 @@ affect   = [v ~ -v] # the effect is that the velocity changes sign
 @named ball = ODESystem([
     D(x) ~ v
     D(v) ~ -9.8
-], t, continuous_events = root_eqs => affect) # equation => affect
+], t; continuous_events = root_eqs => affect) # equation => affect
 
 ball = structural_simplify(ball)
 
@@ -323,7 +327,7 @@ continuous_events = [ # This time we have a vector of pairs
     D(y)  ~ vy,
     D(vx) ~ -9.8-0.1vx, # gravity + some small air resistance
     D(vy) ~ -0.1vy,
-], t, continuous_events = continuous_events)
+], t; continuous_events)
 
 
 ball = structural_simplify(ball)

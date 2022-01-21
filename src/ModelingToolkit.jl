@@ -181,7 +181,7 @@ export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
-export independent_variables, independent_variable, states, parameters, equations, controls, observed, structure
+export independent_variables, independent_variable, states, parameters, equations, controls, observed, structure, full_equations
 export structural_simplify, expand_connections
 export DiscreteSystem, DiscreteProblem
 

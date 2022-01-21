@@ -220,6 +220,8 @@ for p in [prob1, prob14]
 end
 prob2 = ODEProblem(sys,u0,tspan,p,jac=true)
 prob3 = ODEProblem(sys,u0,tspan,p,jac=true,sparse=true)
+@test prob3.f.jac_prototype isa SparseMatrixCSC
+prob3 = ODEProblem(sys,u0,tspan,p,jac=true,sparsity=true)
 @test prob3.f.sparsity isa SparseMatrixCSC
 @test_throws ArgumentError ODEProblem(sys,zeros(5),tspan,p)
 for (prob, atol) in [(prob1, 1e-12), (prob2, 1e-12), (prob3, 1e-12)]
@@ -298,7 +300,7 @@ eq = D(x) ~ r*x
         @variables x(t) f(t)
         D = Differential(t)
 
-        ODESystem([D(x) ~ -a*x + f], name = name)
+        ODESystem([D(x) ~ -a*x + f]; name)
     end
 
     function issue808()
@@ -356,7 +358,7 @@ D = Differential(t)
 eqs = [D(x1) ~ -x1]
 @named sys = ODESystem(eqs,t,[x1,x2],[])
 @test_throws ArgumentError ODEProblem(sys, [1.0,1.0], (0.0,1.0))
-prob = ODEProblem(sys, [1.0,1.0], (0.0,1.0), check_length=false)
+@test_throws DimensionMismatch ODEProblem(sys, [1.0,1.0], (0.0,1.0), check_length=false)
 
 # check inputs
 let
@@ -429,7 +431,7 @@ eqs = [
 prob = ODEProblem(de,[1.0,1.0],(0.0,1.0),[1.5,1.0,3.0,1.0], check_length=false)
 @test prob.kwargs[:callback] isa ModelingToolkit.DiffEqCallbacks.DiscreteCallback
 
-sol = solve(prob, Tsit5(); callback=prob.kwargs[:callback], tstops=prob.tspan[1]:0.1:prob.tspan[2])
+sol = solve(prob, Tsit5(); callback=prob.kwargs[:callback], tstops=prob.tspan[1]:0.1:prob.tspan[2], verbose=false)
 
 # Direct implementation
 function lotka(du,u,p,t)
@@ -447,8 +449,7 @@ end
 
 difference_cb = ModelingToolkit.PeriodicCallback(periodic_difference_affect!, 0.1)
 
-sol2 = solve(prob2, Tsit5(); callback=difference_cb, tstops=collect(prob.tspan[1]:0.1:prob.tspan[2])[2:end]
-)
+sol2 = solve(prob2, Tsit5(); callback=difference_cb, tstops=collect(prob.tspan[1]:0.1:prob.tspan[2])[2:end], verbose=false)
 
 @test sol(0:0.01:1)[x] ≈ sol2(0:0.01:1)[1,:]
 @test sol(0:0.01:1)[y] ≈ sol2(0:0.01:1)[2,:]
@@ -515,3 +516,21 @@ RHS2 = RHS
 @unpack RHS = fol
 @test isequal(RHS, RHS2)
 
+#1413 and 1389
+@parameters t α β
+@variables x(t) y(t) z(t)
+D = Differential(t)
+
+eqs = [
+       D(x) ~ 0.1x + 0.9y,
+       D(y) ~ 0.5x + 0.5y,
+       z ~ α*x - β*y
+       ]
+
+@named sys = ODESystem(eqs, t, [x,y,z],[α,β])
+@test_throws Any ODEFunction(sys)
+
+eqs = copy(eqs)
+eqs[end] = D(D(z)) ~ α*x - β*y
+@named sys = ODESystem(eqs, t, [x,y,z],[α,β])
+@test_throws Any ODEFunction(sys)

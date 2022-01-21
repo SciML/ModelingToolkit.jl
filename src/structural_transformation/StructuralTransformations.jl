@@ -14,12 +14,14 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
                        states, equations, vars, Symbolic, diff2term, value,
                        operation, arguments, Sym, Term, simplify, solve_for,
                        isdiffeq, isdifferential, isinput,
-                       get_iv, independent_variables,
-                       defaults, InvalidSystemException,
+                       empty_substitutions, get_substitutions,
+                       get_structure, get_iv, independent_variables,
+                       has_structure, defaults, InvalidSystemException,
                        ExtraEquationsSystemException,
                        ExtraVariablesSystemException,
                        get_postprocess_fbody, vars!,
-                       IncrementalCycleTracker, add_edge_checked!, topological_sort
+                       IncrementalCycleTracker, add_edge_checked!, topological_sort,
+                       invalidate_cache!, Substitutions
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview
@@ -40,6 +42,9 @@ using NonlinearSolve
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export build_torn_function, build_observed_function, ODAEProblem
 export sorted_incidence_matrix, pantelides!, tearing_reassemble, find_solvables!
+export tearing_assignments, tearing_substitution
+export torn_system_jacobian_sparsity
+export full_equations
 
 include("utils.jl")
 include("pantelides.jl")
