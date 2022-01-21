@@ -535,3 +535,65 @@ eqs = copy(eqs)
 eqs[end] = D(D(z)) ~ α*x - β*y
 @named sys = ODESystem(eqs, t, [x,y,z],[α,β])
 @test_throws Any ODEFunction(sys)
+
+using OrdinaryDiffEq
+using Symbolics
+using DiffEqBase: isinplace
+using ModelingToolkit
+using SymbolicUtils.Code
+using SymbolicUtils: Sym
+
+@testset "Preface tests" begin
+
+    @variables a[1:5], a_temp[1:5], t
+    D = Differential(t)
+
+    tester = 0
+    function f(c, du::AbstractVector{Float64}, u::AbstractVector{Float64}, p, t::Float64)
+        tester += 1
+        du .= randn(length(u))
+        nothing
+    end
+
+    @register dummy_identity(x, y)
+    dummy_identity(x, _) = x
+
+    u0 = ones(5)
+    p0 = Float64[]
+    syms = [Symbol(:a, i) for i in 1:5]
+    syms_p = Symbol[]
+    c = 1
+
+    @assert isinplace(f, 5)
+    wf = let buffer = similar(u0), u=similar(u0), p=similar(p0), c=c
+            t -> (f(c, buffer, u, p, t); buffer)
+        end
+
+    num = hash(f) ⊻ length(u0) ⊻ length(p0)
+    buffername = Symbol(:fmi_buffer_, num)
+
+    D = Differential(t)
+    us = map(s->(@variables $s(t))[1], syms)
+    ps = map(s->(@variables $s(t))[1], syms_p)
+    buffer, = @variables $buffername[1:length(u0)]
+    dummy_var = Sym{Any}(:_) # this is safe because _ cannot be a rvalue in Julia
+
+    ss = Iterators.flatten((us, ps))
+    vv = Iterators.flatten((u0, p0))
+    defs = Dict{Any, Any}(s=>v for (s, v) in zip(ss, vv))
+
+    preface = [
+            Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:u)), us))
+            Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:p)), ps))
+            Assignment(buffer, term(wf, t))
+            ]
+    eqs = map(1:length(us)) do i
+        D(us[i]) ~ dummy_identity(buffer[i], us[i])
+    end
+
+    @named sys = ODESystem(eqs, t, us, ps; defaults=defs, preface=preface)
+    prob = ODEProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob, Tsit5())
+    
+    @test length(tester) == length(sol)
+end
