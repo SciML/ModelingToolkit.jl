@@ -52,7 +52,15 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     defaults::Dict
     """
-    type: type of the system
+    structure: structural information of the system
+    """
+    structure::Any
+    """
+    preface: inject assignment statements before the evaluation of the RHS function.
+    """
+    preface::Any
+    """
+    connector_type: type of the system
     """
     connector_type::Any
     """
@@ -60,13 +68,13 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     substitutions::Any
 
-    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, connector_type, substitutions=nothing; checks::Bool = true)
+    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, structure, preface, connector_type, substitutions=nothing; checks::Bool = true)
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             all_dimensionless([dvs;ps;iv;ctrls]) || check_units(discreteEqs)
         end
-        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, connector_type, substitutions)
+        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults, structure, preface, connector_type, substitutions)
     end
 end
 
@@ -84,6 +92,7 @@ function DiscreteSystem(
                    default_u0=Dict(),
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
+                   preface=nothing,
                    connector_type=nothing,
                    kwargs...,
                   )
@@ -109,7 +118,7 @@ function DiscreteSystem(
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, defaults, connector_type, kwargs...)
+    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems, defaults, nothing, preface, connector_type, kwargs...)
 end
 
 
