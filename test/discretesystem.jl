@@ -136,6 +136,9 @@ RHS2 = RHS
         nothing
     end
     
+    @register dummy_identity(x, y)
+    dummy_identity(x, _) = x
+    
     u0 = ones(5)
     p0 = Float64[]
     syms = [Symbol(:a, i) for i in 1:5]
