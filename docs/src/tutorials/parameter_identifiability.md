@@ -35,7 +35,7 @@ We first define the parameters, variables, differential equations and the output
 using StructuralIdentifiability, ModelingToolkit
 
 # define parameters and variables
-@variables t x4(t) x5(t) x6(t) x7(t) y1(t) [output=true] y2(t) [output=true]
+@variables t x4(t) x5(t) x6(t) x7(t) y1(t) y2(t)
 @parameters k5 k6 k7 k8 k9 k10
 D = Differential(t)
 
@@ -44,10 +44,11 @@ eqs = [
     D(x4) ~ - k5 * x4 / (k6 + x4),
     D(x5) ~ k5 * x4 / (k6 + x4) - k7 * x5/(k8 + x5 + x6),
     D(x6) ~ k7 * x5 / (k8 + x5 + x6) - k9 * x6 * (k10 - x6) / k10,
-    D(x7) ~ k9 * x6 * (k10 - x6) / k10,
-    y1 ~ x4,
-    y2 ~ x5
+    D(x7) ~ k9 * x6 * (k10 - x6) / k10
 ]
+
+# define the output functions (quantities that can be measured)
+measured_quantities = [y1 ~ x4, y2 ~ x5]
 
 # define the system
 de = ODESystem(eqs, t, name=:Biohydrogenation)
@@ -58,7 +59,7 @@ After that we are ready to check the system for local identifiability:
 ```julia
 # query local identifiability
 # we pass the ode-system
-local_id_all = assess_local_identifiability(de, 0.99)
+local_id_all = assess_local_identifiability(de, measured_quantities=measured_quantities, p=0.99)
                 # [ Info: Preproccessing `ModelingToolkit.ODESystem` object
                 # 6-element Vector{Bool}:
                 #  1
@@ -73,7 +74,7 @@ We can see that all states (except $x_7$) and all parameters are locally identif
 Let's try to check specific parameters and their combinations
 ```julia
 to_check = [k5, k7, k10/k9, k5+k6]
-local_id_some = assess_local_identifiability(de, to_check, 0.99)
+local_id_some = assess_local_identifiability(de, funcs_to_check=to_check, p=0.99)
                 # 4-element Vector{Bool}:
                 #  1
                 #  1
@@ -108,23 +109,24 @@ __Note__: as of writing this tutorial, UTF-symbols such as Greek characters are 
 ```julia
 using StructuralIdentifiability, ModelingToolkit
 @parameters b c a beta g delta sigma
-@variables t x1(t) x2(t) x3(t) x4(t) y(t) [output=true]
+@variables t x1(t) x2(t) x3(t) x4(t) y(t)
 D = Differential(t)
 
 eqs = [
     D(x1) ~ -b * x1 + 1/(c + x4),
     D(x2) ~ a * x1 - beta * x2,
     D(x3) ~ g * x2 - delta * x3,
-    D(x4) ~ sigma * x4 * (g * x2 - delta * x3)/x3,
-    y~x1
+    D(x4) ~ sigma * x4 * (g * x2 - delta * x3)/x3
 ]
+
+measured_quantities = [y~x1]
 
 
 ode = ODESystem(eqs, t, name=:GoodwinOsc)
 
-@time global_id = assess_identifiability(ode)
+@time global_id = assess_identifiability(ode, measured_quantities=measured_quantities)
                 # 28.961573 seconds (88.92 M allocations: 5.541 GiB, 4.01% gc time)
-                # Dict{Nemo.fmpq_mpoly, Symbol} with 7 entries:
+                # Dict{Num, Symbol} with 7 entries:
                 #   c     => :globally
                 #   a     => :nonidentifiable
                 #   g     => :nonidentifiable
@@ -140,23 +142,23 @@ Let us consider the same system but with two inputs and we will try to find out 
 ```julia
 using StructuralIdentifiability, ModelingToolkit
 @parameters b c a beta g delta sigma
-@variables t x1(t) x2(t) x3(t) x4(t) y(t) [output=true] u1(t) [input=true] u2(t) [input=true]
+@variables t x1(t) x2(t) x3(t) x4(t) y(t) u1(t) [input=true] u2(t) [input=true]
 D = Differential(t)
 
 eqs = [
     D(x1) ~ -b * x1 + 1/(c + x4),
     D(x2) ~ a * x1 - beta * x2 - u1,
     D(x3) ~ g * x2 - delta * x3 + u2,
-    D(x4) ~ sigma * x4 * (g * x2 - delta * x3)/x3,
-    y~x1
+    D(x4) ~ sigma * x4 * (g * x2 - delta * x3)/x3
 ]
+measured_quantities = [y~x1]
 
 # check only 2 parameters
 to_check = [b, c]
 
 ode = ODESystem(eqs, t, name=:GoodwinOsc)
 
-global_id = assess_identifiability(ode, to_check, 0.9)
+global_id = assess_identifiability(ode, measured_quantities=measured_quantities, funcs_to_check=to_check, p=0.9)
             # Dict{Num, Symbol} with 2 entries:
             #   b => :globally
             #   c => :globally
