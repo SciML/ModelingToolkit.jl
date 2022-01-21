@@ -907,15 +907,11 @@ function structural_simplify(sys::AbstractSystem; simplify=false)
     sys = expand_connections(sys)
     sys = alias_elimination(sys)
     if sys isa ODESystem
-        sys = ode_order_lowering(sys)
+        sys = dae_index_lowering(ode_order_lowering(sys))
     end
     state = TearingState(sys)
     check_consistency(state)
     find_solvables!(state)
-    if sys isa ODESystem
-        # Aka dae_index_lowering
-        pantelides!(state)
-    end
     sys = tearing_reassemble(state, tearing(state), simplify=simplify)
     fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
