@@ -256,13 +256,11 @@ eq = [
 sys = structural_simplify(sys0)
 @test length(equations(sys)) == 1
 eq = equations(tearing_substitution(sys))[1]
-@test isequal(eq.lhs, 0)
+@test isequal(eq.lhs, D(v25))
 dv25 = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, v25))
-ddv25 = ModelingToolkit.value(ModelingToolkit.derivative(eq.lhs, D(v25)))
 dt = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, sin(10t)))
-@test dv25 ≈ -0.3
-@test ddv25 == 0.005
-@test dt == 0.1
+@test dv25 ≈ -60
+@test dt ≈ 20
 
 # Don't reduce inputs
 @parameters t σ ρ β

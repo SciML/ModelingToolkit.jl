@@ -153,7 +153,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify=false
         # convert it into the mass matrix form.
         # We cannot solve the differential variable like D(x)
         if isdiffvar(iv)
-            push!(diffeqs, solve_equation(eqs[ieq], fullvars[iv], simplify))
+            push!(diffeqs, solve_equation(neweqs[ieq], fullvars[iv], simplify))
             continue
         end
         push!(solved_equations, ieq); push!(solved_variables, iv)
@@ -174,25 +174,17 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify=false
             length(dterms) == 0 && return 0 ~ rhs
             new_rhs = rhs
             new_lhs = 0
-            nnegative = 0
             for iv in dterms
                 var = fullvars[iv]
+                # 0 ~ a * D(x) + b
+                # D(x) ~ -b/a
                 a, b, islinear = linear_expansion(new_rhs, var)
                 au = unwrap(a)
-                if !islinear || (au isa Symbolic) || isinput(var) || !(au isa Number)
+                if !islinear
                     return 0 ~ rhs
                 end
-                if -au < 0
-                    nnegative += 1
-                end
-                new_lhs -= a*var
-                new_rhs = b
-            end
-            # If most of the terms are negative, just multiply through by -1
-            # to make the equations looks slightly nicer.
-            if nnegative > div(length(dterms), 2)
-                new_lhs = -new_lhs
-                new_rhs = -new_rhs
+                new_lhs += var
+                new_rhs = -b/a
             end
             return new_lhs ~ new_rhs
         else # a number

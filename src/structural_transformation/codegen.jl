@@ -419,8 +419,13 @@ function build_observed_function(
     if !isempty(subset)
         eqs = equations(sys)
 
-        torn_eqs  = map(i->map(v->eqs[var_eq_matching[v]], var_sccs[i]), subset)
-        torn_vars = map(i->map(v->fullvars[v], var_sccs[i]), subset)
+        nested_torn_vars_idxs = []
+        for iscc in subset
+            torn_vars_idxs = Int[var for var in var_sccs[iscc] if var_eq_matching[var] !== unassigned]
+            isempty(torn_vars_idxs) || push!(nested_torn_vars_idxs, torn_vars_idxs)
+        end
+        torn_eqs = [[eqs[var_eq_matching[i]] for i in idxs] for idxs in nested_torn_vars_idxs]
+        torn_vars = [fullvars[idxs] for idxs in nested_torn_vars_idxs]
         u0map = defaults(sys)
         assignments = copy(assignments)
         solves = map(zip(torn_eqs, torn_vars)) do (eqs, vars)

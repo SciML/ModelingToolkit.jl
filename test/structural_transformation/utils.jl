@@ -19,10 +19,9 @@ pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
 state = TearingState(pendulum)
 StructuralTransformations.find_solvables!(state)
 sss = state.structure
-@unpack graph, solvable_graph, fullvars, var_to_diff = sss
-@test isequal(fullvars, [D(x), D(y), D(w), D(z), x, y, w, z, T])
+@unpack graph, solvable_graph, var_to_diff = sss
 @test graph.fadjlist == [[1, 7], [2, 8], [3, 5, 9], [4, 6, 9], [5, 6]]
-@test graph.badjlist == 9 == length(fullvars)
+@test graph.badjlist == 9
 @test ne(graph) == nnz(incidence_matrix(graph)) == 12
 @test nv(solvable_graph) == 9 + 5
 let N = nothing

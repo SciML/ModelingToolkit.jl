@@ -61,7 +61,7 @@ graph2vars(graph) = map(is->Set(map(i->int2var[i], is)), graph.fadjlist)
 state = TearingState(tearing(sys))
 let sss = state.structure
     @unpack graph = sss
-    @test graph2vars(graph) == [Set([u5])]
+    @test graph2vars(graph) == [Set([u1, u2, u5])]
 end
 
 # Before:
