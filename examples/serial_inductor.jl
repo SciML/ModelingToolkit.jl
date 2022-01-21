@@ -10,7 +10,8 @@ eqs = [
        connect(source.p, resistor.p)
        connect(resistor.n, inductor1.p)
        connect(inductor1.n, inductor2.p)
-       connect(source.n, inductor2.n, ground.g)
+       connect(source.n, inductor2.n)
+       connect(inductor2.n, ground.g)
       ]
 
 @named ll_model = ODESystem(eqs, t)

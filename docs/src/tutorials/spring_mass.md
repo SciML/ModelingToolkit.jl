@@ -6,6 +6,7 @@ In this tutorial we will build a simple component-based model of a spring-mass s
 
 ```julia
 using ModelingToolkit, Plots, DifferentialEquations, LinearAlgebra
+using Symbolics: scalarize
 
 @variables t
 D = Differential(t)
@@ -13,7 +14,7 @@ D = Differential(t)
 function Mass(; name, m = 1.0, xy = [0., 0.], u = [0., 0.])
     ps = @parameters m=m
     sts = @variables pos[1:2](t)=xy v[1:2](t)=u
-    eqs = collect(D.(pos) .~ v)
+    eqs = scalarize(D.(pos) .~ v)
     ODESystem(eqs, t, [pos..., v...], ps; name)
 end
 
@@ -25,12 +26,12 @@ end
 
 function connect_spring(spring, a, b)
     [
-        spring.x ~ norm(collect(a .- b))
-        collect(spring.dir .~ collect(a .- b))
+        spring.x ~ norm(scalarize(a .- b))
+        scalarize(spring.dir .~ scalarize(a .- b))
     ]
 end
 
-spring_force(spring) = -spring.k .* collect(spring.dir) .* (spring.x - spring.l)  ./ spring.x
+spring_force(spring) = -spring.k .* scalarize(spring.dir) .* (spring.x - spring.l)  ./ spring.x
 
 m = 1.0
 xy = [1., -1.]
@@ -43,7 +44,7 @@ g = [0., -9.81]
 
 eqs = [
     connect_spring(spring, mass.pos, center)
-    collect(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)
+    scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)
 ]
 
 @named _model = ODESystem(eqs, t)
@@ -65,7 +66,7 @@ For each component we use a Julia function that returns an `ODESystem`. At the t
 function Mass(; name, m = 1.0, xy = [0., 0.], u = [0., 0.])
     ps = @parameters m=m
     sts = @variables pos[1:2](t)=xy v[1:2](t)=u
-    eqs = collect(D.(pos) .~ v)
+    eqs = scalarize(D.(pos) .~ v)
     ODESystem(eqs, t, [pos..., v...], ps; name)
 end
 ```
@@ -97,8 +98,8 @@ We now define functions that help construct the equations for a mass-spring syst
 ```julia
 function connect_spring(spring, a, b)
     [
-        spring.x ~ norm(collect(a .- b))
-        collect(spring.dir .~ collect(a .- b))
+        spring.x ~ norm(scalarize(a .- b))
+        scalarize(spring.dir .~ scalarize(a .- b))
     ]
 end
 ```
@@ -106,7 +107,7 @@ end
 Lastly, we define the `spring_force` function that takes a `spring` and returns the force exerted by this spring.
 
 ```julia
-spring_force(spring) = -spring.k .* collect(spring.dir) .* (spring.x - spring.l)  ./ spring.x
+spring_force(spring) = -spring.k .* scalarize(spring.dir) .* (spring.x - spring.l)  ./ spring.x
 ```
 
 To create our system, we will first create the components: a mass and a spring. This is done as follows:
@@ -127,7 +128,7 @@ We can now create the equations describing this system, by connecting `spring` t
 ```julia
 eqs = [
     connect_spring(spring, mass.pos, center)
-    collect(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)
+    scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)
 ]
 ```
 

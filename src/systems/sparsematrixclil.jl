@@ -32,6 +32,13 @@ function swaprows!(S::SparseMatrixCLIL, i, j)
     swap!(S.row_vals, i, j)
 end
 
+function SparseMatrixCLIL(mm::AbstractMatrix)
+    nrows, ncols = size(mm)
+    row_cols = [findall(!iszero, row) for row in eachrow(mm)]
+    row_vals = [row[cols] for (row, cols) in zip(eachrow(mm), row_cols)]
+    SparseMatrixCLIL(nrows, ncols, Int[1:length(row_cols);], row_cols, row_vals)
+end
+
 struct CLILVector{T, Ti} <: AbstractSparseVector{T, Ti}
     vec::SparseVector{T, Ti}
 end
@@ -166,7 +173,9 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
 
         tmp_incidence = similar(eadj[ei], 0)
         tmp_coeffs = similar(old_cadj[ei], 0)
-        vars = union(ivars, kvars)
+        # TODO: We know both ivars and kvars are sorted, we could just write
+        # a quick iterator here that does this without allocation/faster.
+        vars = sort(union(ivars, kvars))
 
         for v in vars
             v == vpivot && continue
@@ -197,7 +206,7 @@ struct AsSubMatrix{T, Ti<:Integer} <: AbstractSparseMatrix{T, Ti}
 end
 Base.size(S::AsSubMatrix) = (S.M.nparentrows, S.M.ncols)
 
-function Base.getindex(S::SparseMatrixCLIL{T}, i1, i2) where {T}
+function Base.getindex(S::SparseMatrixCLIL{T}, i1::Integer, i2::Integer) where {T}
     checkbounds(S, i1, i2)
 
     col = S.row_cols[i1]
@@ -207,7 +216,7 @@ function Base.getindex(S::SparseMatrixCLIL{T}, i1, i2) where {T}
     return S.row_vals[i1][nncol]
 end
 
-function Base.getindex(S::AsSubMatrix{T}, i1, i2) where {T}
+function Base.getindex(S::AsSubMatrix{T}, i1::Integer, i2::Integer) where {T}
     checkbounds(S, i1, i2)
     S = S.M
 

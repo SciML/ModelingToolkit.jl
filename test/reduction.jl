@@ -44,7 +44,7 @@ io = IOBuffer(); show(io, MIME("text/plain"), lorenz1_aliased); str = String(tak
 @test all(s->occursin(s, str), ["lorenz1", "States (2)", "Parameters (3)"])
 reduced_eqs = [
                D(x) ~ σ*(y - x)
-               D(y) ~ β + x*(ρ - (x - y)) - y
+               D(y) ~ β + x*(ρ - z) - y
               ]
 test_equal.(equations(lorenz1_aliased), reduced_eqs)
 @test isempty(setdiff(states(lorenz1_aliased), [x, y, z]))
@@ -84,10 +84,10 @@ __x = x
 # Reduced Flattened System
 
 reduced_system = structural_simplify(connected)
-reduced_system2 = structural_simplify(structural_simplify(structural_simplify(connected)))
+reduced_system2 = structural_simplify(tearing_substitution(structural_simplify(tearing_substitution(structural_simplify(connected)))))
 
 @test isempty(setdiff(states(reduced_system), states(reduced_system2)))
-@test isequal(equations(reduced_system), equations(reduced_system2))
+@test isequal(equations(tearing_substitution(reduced_system)), equations(reduced_system2))
 @test isequal(observed(reduced_system), observed(reduced_system2))
 @test setdiff(states(reduced_system), [
         s
@@ -155,7 +155,7 @@ let
     reduced_sys = structural_simplify(connected)
     ref_eqs = [
                D(ol.x) ~ ol.a*ol.x + ol.b*ol.u
-               0 ~ pc.k_P*(ol.c*ol.x + ol.d*ol.u) - ol.u
+               0 ~ pc.k_P*ol.y - ol.u
               ]
     @test ref_eqs == equations(reduced_sys)
 end
@@ -254,7 +254,7 @@ eq = [
 @named sys0 = ODESystem(eq, t)
 sys = structural_simplify(sys0)
 @test length(equations(sys)) == 1
-eq = equations(sys)[1]
+eq = equations(tearing_substitution(sys))[1]
 @test isequal(eq.lhs, 0)
 dv25 = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, v25))
 ddv25 = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, D(v25)))

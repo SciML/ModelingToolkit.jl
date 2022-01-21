@@ -84,16 +84,16 @@ struct SDESystem <: AbstractODESystem
     """
     type: type of the system
     """
-    connection_type::Any
+    connector_type::Any
 
-    function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type; checks::Bool = true)
+    function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type; checks::Bool = true)
         if checks
             check_variables(dvs,iv)
             check_parameters(ps,iv)
             check_equations(deqs,iv)
             all_dimensionless([dvs;ps;iv]) || check_units(deqs,neqs)
         end
-        new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type)
+        new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type)
     end
 end
 
@@ -105,11 +105,11 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    default_p=Dict(),
                    defaults=_merge(Dict(default_u0), Dict(default_p)),
                    name=nothing,
-                   connection_type=nothing,
-                   checks = true,
+                   connector_type=nothing,
+                   checks=true,
                    )
     name === nothing && throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-    deqs = collect(deqs)
+    deqs = scalarize(deqs)
     iv′ = value(iv)
     dvs′ = value.(dvs)
     ps′ = value.(ps)
@@ -128,13 +128,14 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
+    isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
-    tgrad = RefValue(Vector{Num}(undef, 0))
-    jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
-    ctrl_jac = RefValue{Any}(Matrix{Num}(undef, 0, 0))
-    Wfact   = RefValue(Matrix{Num}(undef, 0, 0))
-    Wfact_t = RefValue(Matrix{Num}(undef, 0, 0))
-    SDESystem(deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connection_type, checks = checks)
+    tgrad = RefValue(EMPTY_TGRAD)
+    jac = RefValue{Any}(EMPTY_JAC)
+    ctrl_jac = RefValue{Any}(EMPTY_JAC)
+    Wfact   = RefValue(EMPTY_JAC)
+    Wfact_t = RefValue(EMPTY_JAC)
+    SDESystem(deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type, checks = checks)
 end
 
 SDESystem(sys::ODESystem, neqs; kwargs...) = SDESystem(equations(sys), neqs, get_iv(sys), states(sys), parameters(sys); kwargs...)

@@ -11,7 +11,8 @@ V = 1.0
 rc_eqs = [
           connect(source.p, resistor.p)
           connect(resistor.n, capacitor.p)
-          connect(capacitor.n, source.n, ground.g)
+          connect(capacitor.n, source.n)
+          connect(capacitor.n, ground.g)
          ]
 
 @named rc_model = ODESystem(rc_eqs, t)

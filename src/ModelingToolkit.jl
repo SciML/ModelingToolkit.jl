@@ -18,6 +18,7 @@ using SpecialFunctions, NaNMath
 using RuntimeGeneratedFunctions
 using Base.Threads
 using DiffEqCallbacks
+using Graphs
 import MacroTools: splitdef, combinedef, postwalk, striplines
 import Libdl
 using DocStringExtensions
@@ -46,7 +47,7 @@ using Symbolics: _parse_vars, value, @derivatives, get_variables,
                  exprs_occur_in, solve_for, build_expr, unwrap, wrap,
                  VariableSource, getname, variable
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-                  jacobian_sparsity, islinear, _iszero, _isone,
+                  jacobian_sparsity, isaffine, islinear, _iszero, _isone,
                   tosymbol, lower_varname, diff2term, var_from_nested_derivative,
                   BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
                   ParallelForm, SerialForm, MultithreadedForm, build_function,
@@ -115,7 +116,14 @@ include("parameters.jl")
 include("utils.jl")
 include("domains.jl")
 
+# Code that should eventually go elsewhere, but is here for fow
+include("compat/bareiss.jl")
+if !isdefined(Graphs, :IncrementalCycleTracker)
+    include("compat/incremental_cycles.jl")
+end
+
 include("systems/abstractsystem.jl")
+include("systems/connectors.jl")
 
 include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")
@@ -150,8 +158,6 @@ for S in subtypes(ModelingToolkit.AbstractSystem)
     @eval convert_system(::Type{<:$S}, sys::$S) = sys
 end
 
-struct Flow end
-
 export AbstractTimeDependentSystem, AbstractTimeIndependentSystem, AbstractMultivariateSystem
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
 export DAEFunctionExpr, DAEProblemExpr
@@ -166,7 +172,8 @@ export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
 export ControlSystem
-export alias_elimination, flatten, connect, @connector
+export alias_elimination, flatten
+export connect, @connector, Connection, Flow, Stream, instream
 export ode_order_lowering, liouville_transform
 export runge_kutta_discretize
 export PDESystem
@@ -174,8 +181,8 @@ export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
-export independent_variables, independent_variable, states, parameters, equations, controls, observed, structure
-export structural_simplify
+export independent_variables, independent_variable, states, parameters, equations, controls, observed, structure, full_equations
+export structural_simplify, expand_connections
 export DiscreteSystem, DiscreteProblem
 
 export calculate_jacobian, generate_jacobian, generate_function
@@ -197,7 +204,7 @@ export toexpr, get_variables
 export simplify, substitute
 export build_function
 export modelingtoolkitize
-export @variables, @parameters, Flow
+export @variables, @parameters
 export @named, @nonamespace, @namespace, extend, compose
 
 end # module

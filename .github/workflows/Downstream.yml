@@ -7,23 +7,24 @@ on:
 
 jobs:
   test:
-    name: ${{ matrix.package.repo }}/${{ matrix.package.group }}
+    name: ${{ matrix.package.repo }}/${{ matrix.package.group }}/${{ matrix.julia-version }}
     runs-on: ${{ matrix.os }}
     env:
       GROUP: ${{ matrix.package.group }}
     strategy:
       fail-fast: false
       matrix:
-        julia-version: [1]
+        julia-version: [1,1.6]
         os: [ubuntu-latest]
         package:
+          - {user: SciML, repo: SciMLBase.jl, group: Downstream}
           - {user: SciML, repo: Catalyst.jl, group: All}
           - {user: SciML, repo: CellMLToolkit.jl, group: All}
           - {user: SciML, repo: SBMLToolkit.jl, group: All}
           - {user: SciML, repo: NeuralPDE.jl, group: NNPDE}
           - {user: SciML, repo: DataDrivenDiffEq.jl, group: Standard}
           - {user: SciML, repo: StructuralIdentifiability.jl, group: All}
-          
+          - {user: SciML, repo: ModelingToolkitStandardLibrary.jl}
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v1

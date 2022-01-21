@@ -18,3 +18,9 @@ eqs2 = [D(x) ~ σ*(y-x),
        D(z) ~ y - β*z]
 
 @test !ModelingToolkit.islinear(@named sys = ODESystem(eqs2))
+
+eqs3 = [D(x) ~ σ*(y-x),
+        D(y) ~ -z-y,
+        D(z) ~ y - β*z + 1]
+
+@test ModelingToolkit.isaffine(@named sys = ODESystem(eqs))

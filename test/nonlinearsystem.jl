@@ -126,7 +126,7 @@ np = NonlinearProblem(ns, [0,0,0], [1,2,3], jac=true, sparse=true)
            @parameters a
            @variables x f
 
-           NonlinearSystem([0 ~ -a * x + f], [x,f], [a], name = name)
+           NonlinearSystem([0 ~ -a * x + f], [x,f], [a]; name)
        end
 
        function issue819()
@@ -156,3 +156,24 @@ end
     @test isequal(union(Set(states(sys1)), Set(states(sys2))), Set(states(sys3)))
     @test isequal(union(Set(equations(sys1)), Set(equations(sys2))), Set(equations(sys3)))
 end
+
+# observed variable handling
+@variables t x(t) RHS(t)
+@parameters τ
+@named fol = NonlinearSystem([0  ~ (1 - x)/τ], [x], [τ]; observed=[RHS ~ (1 - x)/τ])
+@test isequal(RHS, @nonamespace fol.RHS)
+RHS2 = RHS
+@unpack RHS = fol
+@test isequal(RHS, RHS2)
+
+# issue #1358
+@variables t
+@variables v1(t) v2(t) i1(t) i2(t)
+eq = [
+    v1 ~ sin(2pi*t)
+    v1 - v2 ~ i1
+    v2 ~ i2
+    i1 ~ i2
+]
+@named sys = ODESystem(eq)
+@test length(equations(structural_simplify(sys))) == 0

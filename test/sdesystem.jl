@@ -447,3 +447,14 @@ fdif!(du,u0,p,t)
     sys2 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
     @test_throws ArgumentError SDESystem([sys2.y ~ sys1.z], t, [], [], [], systems = [sys1, sys2], name=:foo)
 end
+
+# observed variable handling
+@variables t x(t) RHS(t)
+@parameters τ   
+D = Differential(t) 
+@named fol = SDESystem([D(x)  ~ (1 - x)/τ], [x], t, [x], [τ]; observed=[RHS ~ (1 - x)/τ])
+@test isequal(RHS, @nonamespace fol.RHS)
+RHS2 = RHS
+@unpack RHS = fol
+@test isequal(RHS, RHS2)
+

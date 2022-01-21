@@ -175,3 +175,11 @@ function paffect!(integrator)
 end
 sol = solve(jprob, SSAStepper(), tstops=[1000.0], callback=DiscreteCallback(pcondit,paffect!))
 @test sol[1,end] == 100
+
+# observed variable handling
+@variables OBS(t)
+@named js5 = JumpSystem([maj1,maj2], t, [S], [β,γ]; observed=[OBS ~ 2*S])
+OBS2 = OBS
+@test isequal(OBS2, @nonamespace js5.OBS)
+@unpack OBS = js5
+@test isequal(OBS2, OBS)

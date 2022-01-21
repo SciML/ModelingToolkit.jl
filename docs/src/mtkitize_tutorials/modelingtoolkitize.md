@@ -27,7 +27,5 @@ sys = modelingtoolkitize(prob)
 Using this, we can symbolically build the Jacobian and then rebuild the ODEProblem:
 
 ```julia
-jac = eval(ModelingToolkit.generate_jacobian(sys)[2])
-f = ODEFunction(rober, jac=jac)
-prob_jac = ODEProblem(f,[1.0,0.0,0.0],(0.0,1e5),(0.04,3e7,1e4))
+prob_jac = ODEProblem(sys,[],(0.0,1e5),jac=true)
 ```

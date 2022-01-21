@@ -1,9 +1,26 @@
 using Test
 using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit.BipartiteGraphs
+using ModelingToolkit.StructuralTransformations
+
+function check_contract(sys)
+    sys = tearing_substitution(sys)
+    s = structure(sys)
+    @unpack fullvars, graph = s
+    eqs = equations(sys)
+    var2idx = Dict(enumerate(fullvars))
+    for (i, eq) in enumerate(eqs)
+        actual = union(ModelingToolkit.vars(eq.lhs), ModelingToolkit.vars(eq.rhs))
+        actual = filter(!ModelingToolkit.isparameter, collect(actual))
+        current = Set(fullvars[𝑠neighbors(graph, i)])
+        @test isempty(setdiff(actual, current))
+    end
+end
 
 include("../examples/rc_model.jl")
 
 sys = structural_simplify(rc_model)
+check_contract(sys)
 @test !isempty(ModelingToolkit.defaults(sys))
 u0 = [
       capacitor.v => 0.0
@@ -19,6 +36,45 @@ sol = solve(prob, Rodas4())
 @test iszero(sol[ground.g.i])
 @test iszero(sol[ground.g.v])
 @test sol[resistor.v] == sol[source.p.v] - sol[capacitor.p.v]
+
+# Outer/inner connections
+function rc_component(;name)
+    R = 1
+    C = 1
+    @named p = Pin()
+    @named n = Pin()
+    @named resistor = Resistor(R=R)
+    @named capacitor = Capacitor(C=C)
+    eqs = [
+           connect(p, resistor.p);
+           connect(resistor.n, capacitor.p);
+           connect(capacitor.n, n);
+          ]
+    @named sys = ODESystem(eqs, t)
+    compose(sys, [p, n, resistor, capacitor]; name=name)
+end
+
+@named ground = Ground()
+@named source = ConstantVoltage(V=1)
+@named rc_comp = rc_component()
+eqs = [
+       connect(source.p, rc_comp.p)
+       connect(source.n, rc_comp.n)
+       connect(source.n, ground.g)
+      ]
+@named sys′ = ODESystem(eqs, t)
+@named sys_inner_outer = compose(sys′, [ground, source, rc_comp])
+expand_connections(sys_inner_outer, debug=true)
+sys_inner_outer = structural_simplify(sys_inner_outer)
+@test !isempty(ModelingToolkit.defaults(sys_inner_outer))
+u0 = [
+      rc_comp.capacitor.v => 0.0
+      rc_comp.capacitor.p.i => 0.0
+      rc_comp.resistor.v => 0.0
+     ]
+prob = ODEProblem(sys_inner_outer, u0, (0, 10.0))
+sol_inner_outer = solve(prob, Rodas4())
+@test sol[capacitor.v] ≈ sol_inner_outer[rc_comp.capacitor.v]
 
 u0 = [
       capacitor.v => 0.0
@@ -37,6 +93,7 @@ sol = solve(prob, Tsit5())
 
 include("../examples/serial_inductor.jl")
 sys = structural_simplify(ll_model)
+check_contract(sys)
 u0 = [
       inductor1.i => 0.0
       inductor2.i => 0.0

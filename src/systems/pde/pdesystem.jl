@@ -55,7 +55,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     """
     type: type of the system
     """
-    connection_type::Any
+    connector_type::Any
     """
     name: the name of the system
     """
@@ -63,14 +63,14 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
                                    ps=SciMLBase.NullParameters();
                                    defaults=Dict(),
-                                   connection_type = nothing,
+                                   connector_type = nothing,
                                    checks::Bool = true,
                                    name
                                   )
         if checks
             all_dimensionless([dvs;ivs;ps]) ||check_units(eqs)
         end
-        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connection_type, name)
+        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, name)
     end
 end
 

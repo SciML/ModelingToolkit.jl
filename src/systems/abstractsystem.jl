@@ -129,6 +129,14 @@ Generate a function to evaluate the system's equations.
 """
 function generate_function end
 
+
+mutable struct Substitutions
+    subs::Vector{Equation}
+    deps::Vector{Vector{Int}}
+    subed_eqs::Union{Nothing,Vector{Equation}}
+end
+Substitutions(subs, deps) = Substitutions(subs, deps, nothing)
+
 Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
 
 #Deprecated
@@ -219,8 +227,10 @@ for prop in [
              :domain
              :ivs
              :dvs
-             :connection_type
+             :connector_type
+             :connections
              :preface
+             :substitutions
             ]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
@@ -228,6 +238,23 @@ for prop in [
         $fname1(sys::AbstractSystem) = getfield(sys, $(QuoteNode(prop)))
         $fname2(sys::AbstractSystem) = isdefined(sys, $(QuoteNode(prop)))
     end
+end
+
+const EMPTY_TGRAD = Vector{Num}(undef, 0)
+const EMPTY_JAC = Matrix{Num}(undef, 0, 0)
+function invalidate_cache!(sys::AbstractSystem)
+    if has_tgrad(sys)
+        get_tgrad(sys)[] = EMPTY_TGRAD
+    elseif has_jac(sys)
+        get_jac(sys)[] = EMPTY_JAC
+    elseif has_ctrl_jac(sys)
+        get_ctrl_jac(sys)[] = EMPTY_JAC
+    elseif has_Wfact(sys)
+        get_Wfact(sys)[] = EMPTY_JAC
+    elseif has_Wfact_t(sys)
+        get_Wfact_t(sys)[] = EMPTY_JAC
+    end
+    return sys
 end
 
 Setfield.get(obj::AbstractSystem, ::Setfield.PropertyLens{field}) where {field} = getfield(obj, field)
@@ -282,7 +309,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace=false)
     elseif !isempty(systems)
         i = findfirst(x->nameof(x)==name, systems)
         if i !== nothing
-            return namespace ? rename(systems[i], renamespace(sys, name)) : systems[i]
+            return namespace ? renamespace(sys, systems[i]) : systems[i]
         end
     end
 
@@ -355,6 +382,7 @@ GlobalScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, GlobalScope(
 
 renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
 
+renamespace(names::AbstractVector, x) = foldr(renamespace, names, init=x)
 function renamespace(sys, x)
     x = unwrap(x)
     if x isa Symbolic
@@ -367,6 +395,8 @@ function renamespace(sys, x)
                 x
             end
         end
+    elseif x isa AbstractSystem
+        rename(x, renamespace(sys, nameof(x)))
     else
         Symbol(getname(sys), :₊, x)
     end
@@ -519,6 +549,12 @@ function islinear(sys::AbstractSystem)
     all(islinear(r, states(sys)) for r in rhs)
 end
 
+function isaffine(sys::AbstractSystem)
+    rhs = [eq.rhs for eq ∈ equations(sys)]
+
+    all(isaffine(r, states(sys)) for r in rhs)
+end
+
 struct AbstractSysToExpr
     sys::AbstractSystem
     states::Vector
@@ -562,7 +598,24 @@ function round_trip_expr(t, var2name)
     args = map(Base.Fix2(round_trip_expr, var2name), arguments(t))
     return :($f($(args...)))
 end
-round_trip_eq(eq, var2name) = Expr(:call, :~, round_trip_expr(eq.lhs, var2name), round_trip_expr(eq.rhs, var2name))
+
+function round_trip_eq(eq::Equation, var2name)
+    if eq.lhs isa Connection
+        syss = get_systems(eq.rhs)
+        call = Expr(:call, connect)
+        for sys in syss
+            strs = split(string(nameof(sys)), "₊")
+            s = Symbol(strs[1])
+            for st in strs[2:end]
+                s = Expr(:., s, Meta.quot(Symbol(st)))
+            end
+            push!(call.args, s)
+        end
+        call
+    else
+        Expr(:call, (~), round_trip_expr(eq.lhs, var2name), round_trip_expr(eq.rhs, var2name))
+    end
+end
 
 function push_eqs!(stmt, eqs, var2name)
     eqs_name = gensym(:eqs)
@@ -854,10 +907,11 @@ topological sort of the observed equations. When `simplify=true`, the `simplify`
 function will be applied during the tearing process.
 """
 function structural_simplify(sys::AbstractSystem; simplify=false)
+    sys = expand_connections(sys)
     sys = initialize_system_structure(alias_elimination(sys))
     check_consistency(sys)
     if sys isa ODESystem
-        sys = dae_index_lowering(sys)
+        sys = initialize_system_structure(dae_index_lowering(ode_order_lowering(sys)))
     end
     sys = tearing(sys, simplify=simplify)
     fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
@@ -906,71 +960,6 @@ function check_eqs_u0(eqs, dvs, u0; check_length=true, kwargs...)
 end
 
 ###
-### Connectors
-###
-
-function with_connection_type(expr)
-    @assert expr isa Expr && (expr.head == :function || (expr.head == :(=) &&
-                                       expr.args[1] isa Expr &&
-                                       expr.args[1].head == :call))
-
-    sig = expr.args[1]
-    body = expr.args[2]
-
-    fname = sig.args[1]
-    args = sig.args[2:end]
-
-    quote
-        struct $fname
-            $(gensym()) -> 1 # this removes the default constructor
-        end
-        function $fname($(args...))
-            function f()
-                $body
-            end
-            res = f()
-            $isdefined(res, :connection_type) ? $Setfield.@set!(res.connection_type = $fname) : res
-        end
-    end
-end
-
-macro connector(expr)
-    esc(with_connection_type(expr))
-end
-
-promote_connect_rule(::Type{T}, ::Type{S}) where {T, S} = Union{}
-promote_connect_rule(::Type{T}, ::Type{T}) where {T} = T
-promote_connect_type(t1::Type, t2::Type, ts::Type...) = promote_connect_type(promote_connect_rule(t1, t2), ts...)
-@inline function promote_connect_type(::Type{T}, ::Type{S}) where {T,S}
-    promote_connect_result(
-        T,
-        S,
-        promote_connect_rule(T,S),
-        promote_connect_rule(S,T)
-    )
-end
-
-promote_connect_result(::Type, ::Type, ::Type{T}, ::Type{Union{}}) where {T} = T
-promote_connect_result(::Type, ::Type, ::Type{Union{}}, ::Type{S}) where {S} = S
-promote_connect_result(::Type, ::Type, ::Type{T}, ::Type{T}) where {T} = T
-function promote_connect_result(::Type{T}, ::Type{S}, ::Type{P1}, ::Type{P2}) where {T,S,P1,P2}
-    throw(ArgumentError("connection promotion for $T and $S resulted in $P1 and $P2. " *
-                        "Define promotion only in one direction."))
-end
-
-throw_connector_promotion(T, S) = throw(ArgumentError("Don't know how to connect systems of type $S and $T"))
-promote_connect_result(::Type{T},::Type{S},::Type{Union{}},::Type{Union{}}) where {T,S} = throw_connector_promotion(T,S)
-
-promote_connect_type(::Type{T}, ::Type{T}) where {T} = T
-function promote_connect_type(T, S)
-    error("Don't know how to connect systems of type $S and $T")
-end
-
-function connect(syss...)
-    connect(promote_connect_type(map(get_connection_type, syss)...), syss...)
-end
-
-###
 ### Inheritance & composition
 ###
 function Base.hash(sys::AbstractSystem, s::UInt)
@@ -990,7 +979,7 @@ function Base.hash(sys::AbstractSystem, s::UInt)
 end
 
 """
-    $(TYPEDSIGNATURES)
+$(TYPEDSIGNATURES)
 
 entend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
 by default.
@@ -1026,7 +1015,7 @@ end
 Base.:(&)(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys)) = extend(sys, basesys; name=name)
 
 """
-    $(SIGNATURES)
+$(SIGNATURES)
 
 compose multiple systems together. The resulting system would inherit the first
 system's name.

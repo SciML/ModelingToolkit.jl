@@ -24,6 +24,8 @@ eqs = [D(S) ~ S-infection,
 
 # System
 @named sys = DiscreteSystem(eqs,t,[S,I,R],[c,nsteps,δt,β,γ]; controls = [β, γ])
+syss = structural_simplify(sys)
+@test syss == syss
 
 # Problem
 u0 = [S => 990.0, I => 10.0, R => 0.0]
@@ -113,12 +115,11 @@ linearized_eqs = [
 ]
 @test all(eqs2 .== linearized_eqs)
 
-# Test connection_type
-@connector function DiscreteComponent(;name)
-    @variables v(t) i(t)
-    DiscreteSystem(Equation[], t, [v, i], [], name=name, defaults=Dict(v=>1.0, i=>1.0))
-end
-
-@named d1 = DiscreteComponent()
-
-@test ModelingToolkit.get_connection_type(d1) == DiscreteComponent
+# observed variable handling
+@variables t x(t) RHS(t)
+@parameters τ   
+@named fol = DiscreteSystem([D(x) ~ (1 - x)/τ]; observed=[RHS ~ (1 - x)/τ])
+@test isequal(RHS, @nonamespace fol.RHS)
+RHS2 = RHS
+@unpack RHS = fol
+@test isequal(RHS, RHS2)

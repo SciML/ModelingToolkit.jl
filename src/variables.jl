@@ -11,6 +11,11 @@ Symbolics.option_to_metadata_type(::Val{:description}) = VariableDescriptionType
 Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 
+abstract type AbstractConnectType end
+struct Equality <: AbstractConnectType end # Equality connection
+struct Flow <: AbstractConnectType end     # sum to 0
+struct Stream <: AbstractConnectType end   # special stream connector
+
 function isvarkind(m, x)
     p = getparent(x, nothing)
     p === nothing || (x = p)
@@ -67,11 +72,21 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults=Dict(), check=false, to
     varmap = merge(defaults, varmap) # prefers the `varmap`
     varmap = Dict(toterm(value(k))=>value(varmap[k]) for k in keys(varmap))
     # resolve symbolic parameter expressions
+    example_val = nothing
     for (p, v) in pairs(varmap)
-        varmap[p] = fixpoint_sub(v, varmap)
+        val = varmap[p] = fixpoint_sub(v, varmap)
+        if example_val === nothing && unwrap(val) isa Number
+            example_val = val
+        end
     end
-    T′ = eltype(values(varmap))
-    T = Base.isconcretetype(T′) ? T′ : Base.promote_typeof(values(varmap)...)
+    vs = values(varmap)
+    T′ = eltype(vs)
+    if Base.isconcretetype(T′)
+        T = T′
+    else
+        example_val === nothing && throw_missingvars(varlist)
+        T = float(typeof(example_val))
+    end
     out = Vector{T}(undef, length(varlist))
     missingvars = setdiff(varlist, keys(varmap))
     check && (isempty(missingvars) || throw_missingvars(missingvars))
