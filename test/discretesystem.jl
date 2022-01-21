@@ -141,7 +141,7 @@ RHS2 = RHS
     syms = [Symbol(:a, i) for i in 1:5]
     syms_p = Symbol[]
     c = 1
-    @assert isinplace(f, 6
+    @assert isinplace(f, 6)
     wf = let c=c, buffer = similar(u0), u=similar(u0), p=similar(p0), dt=dt
             t -> (f(c, buffer, u, p, t, dt); buffer)
     end
