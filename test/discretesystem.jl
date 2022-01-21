@@ -125,25 +125,29 @@ RHS2 = RHS
 @test isequal(RHS, RHS2)
 
 @testset "Preface tests" begin
-    @variables a[1:5], a_temp[1:5], t
-    @register dummy_identity(x, y)
-    dummy_identity(x, _) = x
+    @parameters t
+    using OrdinaryDiffEq
+    using Symbolics
+    using DiffEqBase: isinplace
+    using ModelingToolkit
+    using SymbolicUtils.Code
+    using SymbolicUtils: Sym
 
-    tester = 0
-    function f(c, d::Vector{Float64}, u::Vector{Float64}, p, t::Float64, dt::Float64)
-        tester += 1
-        d .= randn(length(u))
-        nothing
-    end
+    c = [0]
+    f =  function f(c, d::Vector{Float64}, u::Vector{Float64}, p, t::Float64, dt::Float64)
+            c .= [c[1] + 1]
+            d .= randn(length(u))
+            nothing
+        end
     
-    @register dummy_identity(x, y)
     dummy_identity(x, _) = x
-    
+    @register dummy_identity(x, y)
+
     u0 = ones(5)
     p0 = Float64[]
     syms = [Symbol(:a, i) for i in 1:5]
     syms_p = Symbol[]
-    c = 1
+    dt = 0.1
     @assert isinplace(f, 6)
     wf = let c=c, buffer = similar(u0), u=similar(u0), p=similar(p0), dt=dt
             t -> (f(c, buffer, u, p, t, dt); buffer)
@@ -171,8 +175,8 @@ RHS2 = RHS
         Δ(us[i]) ~ dummy_identity(buffer[i], us[i])
     end
 
-    sys = DiscreteSystem(eqs, t, us, ps; name=Symbol(fmu.modelName), defaults=defs, preface=preface)
+    @named sys = DiscreteSystem(eqs, t, us, ps; defaults=defs, preface=preface)
     prob = DiscreteProblem(sys, [], (0.0, 1.0))
-    sol = solve(prob; dt=0.1)
-    @test length(tester) == length(sol)
+    sol = solve(prob, FunctionMap(); dt=dt)
+    @test c[1]+1 == length(sol)
 end

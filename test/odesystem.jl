@@ -536,36 +536,32 @@ eqs[end] = D(D(z)) ~ α*x - β*y
 @named sys = ODESystem(eqs, t, [x,y,z],[α,β])
 @test_throws Any ODEFunction(sys)
 
-using OrdinaryDiffEq
-using Symbolics
-using DiffEqBase: isinplace
-using ModelingToolkit
-using SymbolicUtils.Code
-using SymbolicUtils: Sym
 
 @testset "Preface tests" begin
+    using OrdinaryDiffEq
+    using Symbolics
+    using DiffEqBase: isinplace
+    using ModelingToolkit
+    using SymbolicUtils.Code
+    using SymbolicUtils: Sym
 
-    @variables a[1:5], a_temp[1:5], t
-    D = Differential(t)
-
-    tester = 0
+    c = [0]
     function f(c, du::AbstractVector{Float64}, u::AbstractVector{Float64}, p, t::Float64)
-        tester += 1
+        c .= [c[1]+1]
         du .= randn(length(u))
         nothing
     end
 
-    @register dummy_identity(x, y)
     dummy_identity(x, _) = x
+    @register dummy_identity(x, y)
 
     u0 = ones(5)
     p0 = Float64[]
     syms = [Symbol(:a, i) for i in 1:5]
     syms_p = Symbol[]
-    c = 1
 
     @assert isinplace(f, 5)
-    wf = let buffer = similar(u0), u=similar(u0), p=similar(p0), c=c
+    wf = let buffer=similar(u0), u=similar(u0), p=similar(p0), c=c
             t -> (f(c, buffer, u, p, t); buffer)
         end
 
@@ -593,7 +589,7 @@ using SymbolicUtils: Sym
 
     @named sys = ODESystem(eqs, t, us, ps; defaults=defs, preface=preface)
     prob = ODEProblem(sys, [], (0.0, 1.0))
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, Euler(); dt=0.1)
     
-    @test length(tester) == length(sol)
+    @test c[1] == length(sol)
 end
