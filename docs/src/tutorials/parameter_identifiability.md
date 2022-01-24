@@ -119,7 +119,7 @@ eqs = [
     D(x4) ~ sigma * x4 * (g * x2 - delta * x3)/x3
 ]
 
-measured_quantities = [y~x1]
+measured_quantities = [y~x1+x2]
 
 
 ode = ODESystem(eqs, t, name=:GoodwinOsc)
@@ -151,7 +151,7 @@ eqs = [
     D(x3) ~ g * x2 - delta * x3 + u2,
     D(x4) ~ sigma * x4 * (g * x2 - delta * x3)/x3
 ]
-measured_quantities = [y~x1]
+measured_quantities = [y~x1+x2]
 
 # check only 2 parameters
 to_check = [b, c]
