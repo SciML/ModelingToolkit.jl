@@ -145,20 +145,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify=false
     # if var is like D(x)
     isdiffvar(var) = invview(var_to_diff)[var] !== nothing && var_eq_matching[invview(var_to_diff)[var]] === SelectedState()
 
-    diffeqs = Equation[]
-    # Solve solvable equations
-    for (iv, ieq) in enumerate(var_eq_matching)
-        is_solvable(ieq, iv) || continue
-        # We don't solve differential equations, but we will need to try to
-        # convert it into the mass matrix form.
-        # We cannot solve the differential variable like D(x)
-        if isdiffvar(iv)
-            push!(diffeqs, solve_equation(neweqs[ieq], fullvars[iv], simplify))
-            continue
-        end
-        push!(solved_equations, ieq); push!(solved_variables, iv)
-    end
-
     # Rewrite remaining equations in terms of solved variables
     function to_mass_matrix_form(ieq)
         eq = neweqs[ieq]
@@ -195,6 +181,22 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify=false
         end
     end
 
+    diffeq_idxs = BitSet()
+    diffeqs = Equation[]
+    # Solve solvable equations
+    for (iv, ieq) in enumerate(var_eq_matching)
+        is_solvable(ieq, iv) || continue
+        # We don't solve differential equations, but we will need to try to
+        # convert it into the mass matrix form.
+        # We cannot solve the differential variable like D(x)
+        if isdiffvar(iv)
+            push!(diffeqs, to_mass_matrix_form(ieq))
+            push!(diffeq_idxs, ieq)
+            continue
+        end
+        push!(solved_equations, ieq); push!(solved_variables, iv)
+    end
+
     if isempty(solved_equations)
         subeqs = Equation[]
         deps = Vector{Int}[]
@@ -214,7 +216,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify=false
     # TODO: BLT sorting
     # Rewrite remaining equations in terms of solved variables
     solved_eq_set = BitSet(solved_equations)
-    neweqs = Equation[to_mass_matrix_form(ieq) for ieq in 1:length(neweqs) if !(ieq in solved_eq_set)]
+    neweqs = Equation[to_mass_matrix_form(ieq) for ieq in 1:length(neweqs) if !(ieq in diffeq_idxs || ieq in solved_eq_set)]
     filter!(!isnothing, neweqs)
     prepend!(neweqs, diffeqs)
 

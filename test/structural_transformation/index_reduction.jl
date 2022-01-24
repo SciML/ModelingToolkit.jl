@@ -130,5 +130,4 @@ pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
 let pss_pendulum = partial_state_selection(pendulum)
     # This currently selects `T` rather than `x` at top level. Needs tearing priorities to fix.
     @test_broken length(equations(pss_pendulum)) == 3
-    @test_broken length(equations(ModelingToolkit.ode_order_lowering(pss_pendulum))) == 4
 end
