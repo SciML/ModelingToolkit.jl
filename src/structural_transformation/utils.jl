@@ -258,10 +258,11 @@ function uneven_invmap(n::Int, list)
 end
 
 function torn_system_jacobian_sparsity(sys)
-    has_structure(sys) || return nothing
-    get_structure(sys) isa SystemStructure || return nothing
+    state = get_tearing_state(sys)
+    state isa TearingState || return nothing
     s = structure(sys)
-    @unpack fullvars, graph = s
+    graph = state.structure.graph
+    fullvars = state.fullvars
 
     states_idxs = findall(!isdifferential, fullvars)
     var2idx = Dict{Int,Int}(v => i for (i, v) in enumerate(states_idxs))

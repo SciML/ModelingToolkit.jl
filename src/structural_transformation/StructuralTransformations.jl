@@ -15,13 +15,13 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
                        operation, arguments, Sym, Term, simplify, solve_for,
                        isdiffeq, isdifferential, isinput,
                        empty_substitutions, get_substitutions,
-                       get_structure, get_iv, independent_variables,
-                       has_structure, defaults, InvalidSystemException,
+                       get_tearing_state, get_iv, independent_variables,
+                       has_tearing_state, defaults, InvalidSystemException,
                        ExtraEquationsSystemException,
                        ExtraVariablesSystemException,
                        get_postprocess_fbody, vars!,
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
-                       invalidate_cache!, Substitutions
+                       invalidate_cache!, Substitutions, get_or_construct_tearing_state
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview

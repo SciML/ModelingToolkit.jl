@@ -225,6 +225,7 @@ for prop in [
              :connections
              :preface
              :torn_matching
+             :tearing_state
              :substitutions
             ]
     fname1 = Symbol(:get_, prop)
@@ -683,6 +684,18 @@ end
 
 Base.write(io::IO, sys::AbstractSystem) = write(io, readable_code(toexpr(sys)))
 
+function get_or_construct_tearing_state(sys)
+    if has_tearing_state(sys)
+        state = get_tearing_state(sys)
+        if state === nothing
+            state = TearingState(sys)
+        end
+    else
+        state = nothing
+    end
+    state
+end
+
 function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     eqs = equations(sys)
     if eqs isa AbstractArray
@@ -741,7 +754,7 @@ function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     if has_torn_matching(sys)
         # If the system can take a torn matching, then we can initialize a tearing
         # state on it. Do so and get show the structure.
-        state = TearingState(sys; check=false)
+        state = get_or_construct_tearing_state(sys)
         if state !== nothing
             Base.printstyled(io, "\nIncidence matrix:"; color=:magenta)
             show(io, incidence_matrix(state.structure.graph, Num(Sym{Real}(:×))))

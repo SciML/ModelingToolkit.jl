@@ -245,7 +245,7 @@ function build_torn_function(
         push!(rhss, eq.rhs)
     end
 
-    state = TearingState(sys)
+    state = get_or_construct_tearing_state(sys)
     fullvars = state.fullvars
     var_eq_matching, var_sccs = algebraic_variables_scc(state)
     condensed_graph = MatchedCondensationGraph(

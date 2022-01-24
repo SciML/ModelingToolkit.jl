@@ -220,10 +220,13 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify=false
 
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
-    #graph = contract_variables(graph, var_eq_matching, solved_variables)
+    graph = contract_variables(graph, var_eq_matching, solved_variables)
 
     # Update system
     active_vars = setdiff(BitSet(1:length(fullvars)), solved_variables)
+
+    @set! state.structure.graph = graph
+    @set! state.fullvars = [v for (i, v) in enumerate(fullvars) if i in active_vars]
 
     sys = state.sys
     @set! sys.eqs = neweqs
@@ -231,8 +234,10 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify=false
     @set! sys.states = [fullvars[i] for i in active_vars if !isstatediff(i)]
     @set! sys.observed = [observed(sys); subeqs]
     @set! sys.substitutions = Substitutions(subeqs, deps)
+    @set! state.sys = sys
+    @set! sys.tearing_state = state
 
-    return sys
+    return invalidate_cache!(sys)
 end
 
 function tearing(state::TearingState)
