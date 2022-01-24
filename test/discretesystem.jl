@@ -123,3 +123,60 @@ linearized_eqs = [
 RHS2 = RHS
 @unpack RHS = fol
 @test isequal(RHS, RHS2)
+
+@testset "Preface tests" begin
+    @parameters t
+    using OrdinaryDiffEq
+    using Symbolics
+    using DiffEqBase: isinplace
+    using ModelingToolkit
+    using SymbolicUtils.Code
+    using SymbolicUtils: Sym
+
+    c = [0]
+    f =  function f(c, d::Vector{Float64}, u::Vector{Float64}, p, t::Float64, dt::Float64)
+            c .= [c[1] + 1]
+            d .= randn(length(u))
+            nothing
+        end
+    
+    dummy_identity(x, _) = x
+    @register dummy_identity(x, y)
+
+    u0 = ones(5)
+    p0 = Float64[]
+    syms = [Symbol(:a, i) for i in 1:5]
+    syms_p = Symbol[]
+    dt = 0.1
+    @assert isinplace(f, 6)
+    wf = let c=c, buffer = similar(u0), u=similar(u0), p=similar(p0), dt=dt
+            t -> (f(c, buffer, u, p, t, dt); buffer)
+    end
+
+    num = hash(f) ⊻ length(u0) ⊻ length(p0)
+    buffername = Symbol(:fmi_buffer_, num)
+
+    Δ = DiscreteUpdate(t; dt=dt)
+    us = map(s->(@variables $s(t))[1], syms)
+    ps = map(s->(@variables $s(t))[1], syms_p)
+    buffer, = @variables $buffername[1:length(u0)]
+    dummy_var = Sym{Any}(:_) # this is safe because _ cannot be a rvalue in Julia
+
+    ss = Iterators.flatten((us, ps))
+    vv = Iterators.flatten((u0, p0))
+    defs = Dict{Any, Any}(s=>v for (s, v) in zip(ss, vv))
+
+    preface = [
+               Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:u)), us))
+               Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:p)), ps))
+               Assignment(buffer, term(wf, t))
+              ]
+    eqs = map(1:length(us)) do i
+        Δ(us[i]) ~ dummy_identity(buffer[i], us[i])
+    end
+
+    @named sys = DiscreteSystem(eqs, t, us, ps; defaults=defs, preface=preface)
+    prob = DiscreteProblem(sys, [], (0.0, 1.0))
+    sol = solve(prob, FunctionMap(); dt=dt)
+    @test c[1]+1 == length(sol)
+end
