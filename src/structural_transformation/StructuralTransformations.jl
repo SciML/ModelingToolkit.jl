@@ -10,23 +10,24 @@ using SymbolicUtils.Rewriters
 using SymbolicUtils: similarterm, istree
 
 using ModelingToolkit
-using ModelingToolkit: ODESystem, AbstractSystem,var_from_nested_derivative, Differential,
+using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Differential,
                        states, equations, vars, Symbolic, diff2term, value,
                        operation, arguments, Sym, Term, simplify, solve_for,
                        isdiffeq, isdifferential, isinput,
                        empty_substitutions, get_substitutions,
-                       get_structure, get_iv, independent_variables,
-                       has_structure, defaults, InvalidSystemException,
+                       get_tearing_state, get_iv, independent_variables,
+                       has_tearing_state, defaults, InvalidSystemException,
                        ExtraEquationsSystemException,
                        ExtraVariablesSystemException,
                        get_postprocess_fbody, vars!,
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
-                       invalidate_cache!, Substitutions
+                       invalidate_cache!, Substitutions, get_or_construct_tearing_state
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview
 using Graphs
 using ModelingToolkit.SystemStructures
+using ModelingToolkit.SystemStructures: algeqs
 
 using ModelingToolkit.DiffEqBase
 using ModelingToolkit.StaticArrays
@@ -38,10 +39,10 @@ using SparseArrays
 
 using NonlinearSolve
 
-export tearing, dae_index_lowering, check_consistency
-export tearing_assignments, tearing_substitution
+export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export build_torn_function, build_observed_function, ODAEProblem
-export sorted_incidence_matrix
+export sorted_incidence_matrix, pantelides!, tearing_reassemble, find_solvables!
+export tearing_assignments, tearing_substitution
 export torn_system_jacobian_sparsity
 export full_equations
 
@@ -50,6 +51,7 @@ include("pantelides.jl")
 include("bipartite_tearing/modia_tearing.jl")
 include("tearing.jl")
 include("symbolics_tearing.jl")
+include("partial_state_selection.jl")
 include("codegen.jl")
 
 end # module

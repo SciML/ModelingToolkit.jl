@@ -4,9 +4,9 @@ using ModelingToolkit: isdifferenceeq, has_continuous_events, generate_rootfindi
 
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
-function torn_system_with_nlsolve_jacobian_sparsity(sys, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs)
-    s = structure(sys)
-    @unpack fullvars, graph = s
+function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs)
+    fullvars = state.fullvars
+    graph = state.structure.graph
 
     # The sparsity pattern of `nlsolve(f, u, p)` w.r.t `p` is difficult to
     # determine in general. Consider the "simplest" case, a linear system. We
@@ -73,6 +73,7 @@ function torn_system_with_nlsolve_jacobian_sparsity(sys, var_eq_matching, var_sc
     nlsolve_vars_set = BitSet(nlsolve_vars)
 
     I = Int[]; J = Int[]
+    s = state.structure
     for ieq in 𝑠vertices(graph)
         nieq = get(eqs2idx, ieq, 0)
         nieq == 0 && continue
@@ -244,15 +245,15 @@ function build_torn_function(
         push!(rhss, eq.rhs)
     end
 
-    s = structure(sys)
-    @unpack fullvars = s
-    var_eq_matching, var_sccs = algebraic_variables_scc(sys)
+    state = get_or_construct_tearing_state(sys)
+    fullvars = state.fullvars
+    var_eq_matching, var_sccs = algebraic_variables_scc(state)
     condensed_graph = MatchedCondensationGraph(
-        DiCMOBiGraph{true}(complete(s.graph), complete(var_eq_matching)), var_sccs)
+        DiCMOBiGraph{true}(complete(state.structure.graph), complete(var_eq_matching)), var_sccs)
     toporder = topological_sort_by_dfs(condensed_graph)
     var_sccs = var_sccs[toporder]
 
-    states_idxs = collect(diffvars_range(s))
+    states_idxs = collect(diffvars_range(state.structure))
     mass_matrix_diag = ones(length(states_idxs))
 
     assignments, deps, sol_states = tearing_assignments(sys)
@@ -276,7 +277,7 @@ function build_torn_function(
         torn_eqs_idxs = [var_eq_matching[var] for var in torn_vars_idxs]
         isempty(torn_eqs_idxs) && continue
         if length(torn_eqs_idxs) <= max_inlining_size
-            nlsolve_expr = gen_nlsolve!(is_not_prepended_assignment, eqs[torn_eqs_idxs], s.fullvars[torn_vars_idxs], defs, assignments, (deps, invdeps), var2assignment, checkbounds=checkbounds)
+            nlsolve_expr = gen_nlsolve!(is_not_prepended_assignment, eqs[torn_eqs_idxs], fullvars[torn_vars_idxs], defs, assignments, (deps, invdeps), var2assignment, checkbounds=checkbounds)
             append!(torn_expr, nlsolve_expr)
             push!(nlsolve_scc_idxs, i)
         else
@@ -297,7 +298,7 @@ function build_torn_function(
         rhss
     )
 
-    states = s.fullvars[states_idxs]
+    states = fullvars[states_idxs]
     syms = map(Symbol, states_idxs)
 
     pre = get_postprocess_fbody(sys)
@@ -322,10 +323,10 @@ function build_torn_function(
     if expression
         expr, states
     else
-        observedfun = let sys=sys, dict=Dict(), assignments=assignments, deps=(deps, invdeps), sol_states=sol_states, var2assignment=var2assignment
+        observedfun = let state = state, dict=Dict(), assignments=assignments, deps=(deps, invdeps), sol_states=sol_states, var2assignment=var2assignment
             function generated_observed(obsvar, u, p, t)
                 obs = get!(dict, value(obsvar)) do
-                    build_observed_function(sys, obsvar, var_eq_matching, var_sccs,
+                    build_observed_function(state, obsvar, var_eq_matching, var_sccs,
                                             assignments, deps, sol_states, var2assignment,
                                             checkbounds=checkbounds,
                                            )
@@ -336,7 +337,7 @@ function build_torn_function(
 
         ODEFunction{true}(
                           @RuntimeGeneratedFunction(expr),
-                          sparsity = jacobian_sparsity ? torn_system_with_nlsolve_jacobian_sparsity(sys, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs) : nothing,
+                          sparsity = jacobian_sparsity ? torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_sccs, nlsolve_scc_idxs, eqs_idxs, states_idxs) : nothing,
                           syms = syms,
                           observed = observedfun,
                           mass_matrix = mass_matrix,
@@ -362,7 +363,7 @@ function find_solve_sequence(sccs, vars)
 end
 
 function build_observed_function(
-        sys, ts, var_eq_matching, var_sccs,
+        state, ts, var_eq_matching, var_sccs,
         assignments,
         deps,
         sol_states,
@@ -379,12 +380,14 @@ function build_observed_function(
     ts = Symbolics.scalarize.(value.(ts))
 
     vars = Set()
+    sys = state.sys
     foreach(Base.Fix1(vars!, vars), ts)
     ivs = independent_variables(sys)
     dep_vars = collect(setdiff(vars, ivs))
 
-    s = structure(sys)
-    @unpack fullvars, graph = s
+    fullvars = state.fullvars
+    s = state.structure
+    graph = s.graph
     diffvars = map(i->fullvars[i], diffvars_range(s))
     algvars = map(i->fullvars[i], algvars_range(s))
 
@@ -416,8 +419,13 @@ function build_observed_function(
     if !isempty(subset)
         eqs = equations(sys)
 
-        torn_eqs  = map(i->map(v->eqs[var_eq_matching[v]], var_sccs[i]), subset)
-        torn_vars = map(i->map(v->fullvars[v], var_sccs[i]), subset)
+        nested_torn_vars_idxs = []
+        for iscc in subset
+            torn_vars_idxs = Int[var for var in var_sccs[iscc] if var_eq_matching[var] !== unassigned]
+            isempty(torn_vars_idxs) || push!(nested_torn_vars_idxs, torn_vars_idxs)
+        end
+        torn_eqs = [[eqs[var_eq_matching[i]] for i in idxs] for idxs in nested_torn_vars_idxs]
+        torn_vars = [fullvars[idxs] for idxs in nested_torn_vars_idxs]
         u0map = defaults(sys)
         assignments = copy(assignments)
         solves = map(zip(torn_eqs, torn_vars)) do (eqs, vars)

@@ -306,6 +306,25 @@ function Graphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_METADATA
     return true  # edge successfully added
 end
 
+Graphs.rem_edge!(g::BipartiteGraph, i::Integer, j::Integer) =
+    Graphs.rem_edge!(g, BipartiteEdge(i, j))
+function Graphs.rem_edge!(g::BipartiteGraph, edge::BipartiteEdge)
+    @unpack fadjlist, badjlist = g
+    s, d = src(edge), dst(edge)
+    (has_𝑠vertex(g, s) && has_𝑑vertex(g, d)) || error("edge ($edge) out of range.")
+    @inbounds list = fadjlist[s]
+    index = searchsortedfirst(list, d)
+    @inbounds (index <= length(list) && list[index] == d) || error("graph does not have edge $edge")
+    deleteat!(list, index)
+    g.ne -= 1
+    if badjlist isa AbstractVector
+        @inbounds list = badjlist[d]
+        index = searchsortedfirst(list, s)
+        deleteat!(list, index)
+    end
+    return true  # edge successfully deleted
+end
+
 function Graphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where T
     if type === DST
         if g.badjlist isa AbstractVector
@@ -322,10 +341,23 @@ function Graphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where T
 end
 
 function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors::AbstractVector)
-    old_nneighbors = length(g.fadjlist[i])
+    old_neighbors = g.fadjlist[i]
+    old_nneighbors = length(old_neighbors)
     new_nneighbors = length(new_neighbors)
     g.fadjlist[i] = new_neighbors
     g.ne += new_nneighbors - old_nneighbors
+    if isa(g.badjlist, AbstractVector)
+        for n in old_neighbors
+            @inbounds list = g.badjlist[n]
+            index = searchsortedfirst(list, i)
+            deleteat!(list, index)
+        end
+        for n in new_neighbors
+            @inbounds list = g.badjlist[n]
+            index = searchsortedfirst(list, i)
+            insert!(list, index, i)
+        end
+    end
 end
 
 ###

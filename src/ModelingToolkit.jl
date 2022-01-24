@@ -193,7 +193,7 @@ export calculate_factorized_W, generate_factorized_W
 export calculate_hessian, generate_hessian
 export calculate_massmatrix, generate_diffusion_function
 export stochastic_integral_transform
-export initialize_system_structure
+export TearingState, StateSelectionState
 export generate_difference_cb
 
 export BipartiteGraph, equation_dependencies, variable_dependencies

@@ -178,8 +178,8 @@ investigate what this means:
 
 ```julia
 using ModelingToolkit.BipartiteGraphs
-big_rc = initialize_system_structure(expand_connections(big_rc))
-inc_org = BipartiteGraphs.incidence_matrix(structure(big_rc).graph)
+ts = TearingState(expand_connections(big_rc))
+inc_org = BipartiteGraphs.incidence_matrix(ts.graph)
 blt_org = StructuralTransformations.sorted_incidence_matrix(big_rc, only_algeqs=true, only_algvars=true)
 blt_reduced = StructuralTransformations.sorted_incidence_matrix(sys, only_algeqs=true, only_algvars=true)
 ```
@@ -190,7 +190,7 @@ The figure on the left is the original incidence matrix of the algebraic equatio
 Notice that the original formulation of the model has dependencies between different
 equations, and so the full set of equations must be solved together. That exposes
 no parallelism. However, the Block Lower Triangular (BLT) transformation exposes
-independent blocks. This is then further impoved by the tearing process, which
+independent blocks. This is then further improved by the tearing process, which
 removes 90% of the equations and transforms the nonlinear equations into 50
 independent blocks *which can now all be solved in parallel*. The conclusion
 is that, your attempts to parallelize are neigh: performing parallelism after

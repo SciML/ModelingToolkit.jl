@@ -2,9 +2,10 @@
 ### Reassemble: structural information -> system
 ###
 
-function pantelides_reassemble(sys::ODESystem, eq_to_diff, assign)
-    s = structure(sys)
-    @unpack fullvars, var_to_diff = s
+function pantelides_reassemble(state::TearingState, var_eq_matching)
+    fullvars = state.fullvars
+    @unpack var_to_diff, eq_to_diff = state.structure
+    sys = state.sys
     # Step 1: write derivative equations
     in_eqs = equations(sys)
     out_eqs = Vector{Any}(undef, nv(eq_to_diff))
@@ -58,36 +59,29 @@ function pantelides_reassemble(sys::ODESystem, eq_to_diff, assign)
     end
 
     final_vars = unique(filter(x->!(operation(x) isa Differential), fullvars))
-    final_eqs = map(identity, filter(x->value(x.lhs) !== nothing, out_eqs[sort(filter(x->x !== unassigned, assign))]))
+    final_eqs = map(identity, filter(x->value(x.lhs) !== nothing, out_eqs[sort(filter(x->x !== unassigned, var_eq_matching))]))
 
     @set! sys.eqs = final_eqs
     @set! sys.states = final_vars
-    @set! sys.structure = nothing
     return sys
 end
 
 """
-    pantelides!(sys::ODESystem; kwargs...)
+    pantelides!(state::TransformationState; kwargs...)
 
 Perform Pantelides algorithm.
 """
-function pantelides!(sys::ODESystem; maxiters = 8000)
-    s = structure(sys)
-    # D(j) = assoc[j]
-    @unpack graph, var_to_diff = s
-    return (sys, pantelides!(graph, var_to_diff)...)
-end
-
-function pantelides!(graph, var_to_diff; maxiters = 8000)
+function pantelides!(state::TransformationState; maxiters = 8000)
+    @unpack graph, var_to_diff, eq_to_diff = state.structure
     neqs = nsrcs(graph)
     nvars = nv(var_to_diff)
     vcolor = falses(nvars)
     ecolor = falses(neqs)
     var_eq_matching = Matching(nvars)
-    eq_to_diff = DiffGraph(neqs)
     neqs′ = neqs
     for k in 1:neqs′
         eq′ = k
+        isempty(𝑠neighbors(graph, eq′)) && continue
         pathfound = false
         # In practice, `maxiters=8000` should never be reached, otherwise, the
         # index would be on the order of thousands.
@@ -106,24 +100,22 @@ function pantelides!(graph, var_to_diff; maxiters = 8000)
             for var in eachindex(vcolor); vcolor[var] || continue
                 # introduce a new variable
                 nvars += 1
-                add_vertex!(graph, DST)
+                add_vertex!(graph, DST);
                 # the new variable is the derivative of `var`
 
                 add_edge!(var_to_diff, var, add_vertex!(var_to_diff))
                 push!(var_eq_matching, unassigned)
+                var_derivative!(state, var)
             end
 
             for eq in eachindex(ecolor); ecolor[eq] || continue
                 # introduce a new equation
                 neqs += 1
-                add_vertex!(graph, SRC)
+                add_vertex!(graph, SRC);
                 # the new equation is created by differentiating `eq`
                 eq_diff = add_vertex!(eq_to_diff)
                 add_edge!(eq_to_diff, eq, eq_diff)
-                for var in 𝑠neighbors(graph, eq)
-                    add_edge!(graph, eq_diff, var)
-                    add_edge!(graph, eq_diff, var_to_diff[var])
-                end
+                eq_derivative!(state, eq)
             end
 
             for var in eachindex(vcolor); vcolor[var] || continue
@@ -135,7 +127,7 @@ function pantelides!(graph, var_to_diff; maxiters = 8000)
         end # for _ in 1:maxiters
         pathfound || error("maxiters=$maxiters reached! File a bug report if your system has a reasonable index (<100), and you are using the default `maxiters`. Try to increase the maxiters by `pantelides(sys::ODESystem; maxiters=1_000_000)` if your system has an incredibly high index and it is truly extremely large.")
     end # for k in 1:neqs′
-    return var_eq_matching, eq_to_diff
+    return var_eq_matching
 end
 
 """
@@ -146,8 +138,8 @@ DAE. `kwargs` are forwarded to [`pantelides!`](@ref). End users are encouraged t
 instead, which calls this function internally.
 """
 function dae_index_lowering(sys::ODESystem; kwargs...)
-    s = get_structure(sys)
-    (s isa SystemStructure) || (sys = initialize_system_structure(sys))
-    sys, var_eq_matching, eq_to_diff = pantelides!(sys; kwargs...)
-    return invalidate_cache!(pantelides_reassemble(sys, eq_to_diff, var_eq_matching))
+    state = TearingState(sys)
+    find_solvables!(state)
+    var_eq_matching = pantelides!(state; kwargs...)
+    return invalidate_cache!(pantelides_reassemble(state, var_eq_matching))
 end

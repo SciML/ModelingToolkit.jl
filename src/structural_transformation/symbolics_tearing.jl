@@ -18,7 +18,7 @@ function substitution_graph(graph, slist, dlist, var_eq_matching)
 
     newmatching = Matching(ns)
     for (v, e) in enumerate(var_eq_matching)
-        e === unassigned && continue
+        (e === unassigned || e === SelectedState()) && continue
         iv = vrename[v]
         ie = erename[e]
         iv == 0 && continue
@@ -27,6 +27,34 @@ function substitution_graph(graph, slist, dlist, var_eq_matching)
     end
 
     return DiCMOBiGraph{true}(newgraph, complete(newmatching))
+end
+
+function var_derivative!(ts::TearingState{ODESystem}, v::Int)
+    sys = ts.sys
+    s = ts.structure
+    D = Differential(get_iv(sys))
+    add_vertex!(s.solvable_graph, DST)
+    push!(ts.fullvars, D(ts.fullvars[v]))
+end
+
+function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int)
+    sys = ts.sys
+    s = ts.structure
+    D = Differential(get_iv(sys))
+    eq = equations(ts)[ieq]
+    eq = ModelingToolkit.expand_derivatives(0 ~ D(eq.rhs - eq.lhs))
+    add_vertex!(s.solvable_graph, SRC)
+    push!(equations(ts), eq)
+    # Analyze the new equation and update the graph/solvable_graph
+    # First, copy the previous incidence and add the derivative terms.
+    # That's a superset of all possible occurrences. find_solvables! will
+    # remove those that doen't actually occur.
+    eq_diff = length(equations(ts))
+    for var in 𝑠neighbors(s.graph, ieq)
+        add_edge!(s.graph, eq_diff, var)
+        add_edge!(s.graph, eq_diff, s.var_to_diff[var])
+    end
+    find_eq_solvables!(ts, eq_diff; may_be_zero=true, allow_symbolic=true)
 end
 
 function tearing_sub(expr, dict, s)
@@ -81,50 +109,116 @@ end
 
 function solve_equation(eq, var, simplify)
     rhs = value(solve_for(eq, var; simplify=simplify, check=false))
-    occursin(var, rhs) && error("solving $rhs for [$var] failed")
+    occursin(var, rhs) && throw(EquationSolveErrors(eq, var, rhs))
     var ~ rhs
 end
 
-function normalize_equation(eq)
-    if !isdiffeq(eq)
-        if !(eq.lhs isa Number && eq.lhs == 0)
-            eq = 0 ~ eq.rhs - eq.lhs
+function tearing_reassemble(state::TearingState, var_eq_matching; simplify=false)
+    fullvars = state.fullvars
+    @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
+
+    neweqs = collect(equations(state))
+
+    ### Replace derivatives of non-selected states by dumy derivatives
+    dummy_subs = Dict()
+    for var = 1:length(fullvars)
+        invview(var_to_diff)[var] === nothing && continue
+        if var_eq_matching[invview(var_to_diff)[var]] !== SelectedState()
+            fullvar = fullvars[var]
+            subst_fullvar = tearing_sub(fullvar, dummy_subs, simplify)
+            dummy_subs[fullvar] = fullvars[var] = diff2term(unwrap(subst_fullvar))
+            var_to_diff[invview(var_to_diff)[var]] = nothing
         end
     end
-    eq
-end
-
-function tearing_reassemble(sys, var_eq_matching; simplify=false)
-    s = structure(sys)
-    @unpack fullvars, solvable_graph, graph = s
-
-    eqs = equations(sys)
+    if !isempty(dummy_subs)
+        neweqs = map(neweqs) do eq
+            0 ~ tearing_sub(eq.rhs - eq.lhs, dummy_subs, simplify)
+        end
+    end
 
     ### extract partition information
-    is_solvable(eq, iv) = eq !== unassigned && BipartiteEdge(eq, iv) in solvable_graph
+    is_solvable(eq, iv) = isa(eq, Int) && BipartiteEdge(eq, iv) in solvable_graph
 
     solved_equations = Int[]
     solved_variables = Int[]
 
+    # if var is like D(x)
+    isdiffvar(var) = invview(var_to_diff)[var] !== nothing && var_eq_matching[invview(var_to_diff)[var]] === SelectedState()
+
+    # Rewrite remaining equations in terms of solved variables
+    function to_mass_matrix_form(ieq)
+        eq = neweqs[ieq]
+        if !(eq.lhs isa Number && eq.lhs == 0)
+            eq = 0 ~ eq.rhs - eq.lhs
+        end
+        rhs = eq.rhs
+        if rhs isa Symbolic
+            # Check if the rhs is solvable in all state derivatives and if those
+            # the linear terms for them are all zero. If so, move them to the
+            # LHS.
+            dterms = [var for var in 𝑠neighbors(graph, ieq) if isdiffvar(var)]
+            length(dterms) == 0 && return 0 ~ rhs
+            new_rhs = rhs
+            new_lhs = 0
+            for iv in dterms
+                var = fullvars[iv]
+                # 0 ~ a * D(x) + b
+                # D(x) ~ -b/a
+                a, b, islinear = linear_expansion(new_rhs, var)
+                au = unwrap(a)
+                if !islinear
+                    return 0 ~ rhs
+                end
+                new_lhs += var
+                new_rhs = -b/a
+            end
+            return new_lhs ~ new_rhs
+        else # a number
+            if abs(rhs) > 100eps(float(rhs))
+                @warn "The equation $eq is not consistent. It simplifed to 0 == $rhs."
+            end
+            return nothing
+        end
+    end
+
+    diffeq_idxs = BitSet()
+    diffeqs = Equation[]
     # Solve solvable equations
     for (iv, ieq) in enumerate(var_eq_matching)
         is_solvable(ieq, iv) || continue
+        # We don't solve differential equations, but we will need to try to
+        # convert it into the mass matrix form.
+        # We cannot solve the differential variable like D(x)
+        if isdiffvar(iv)
+            push!(diffeqs, to_mass_matrix_form(ieq))
+            push!(diffeq_idxs, ieq)
+            continue
+        end
         push!(solved_equations, ieq); push!(solved_variables, iv)
     end
-    subgraph = substitution_graph(graph, solved_equations, solved_variables, var_eq_matching)
-    toporder = topological_sort_by_dfs(subgraph)
-    subeqs = [solve_equation(
-                             eqs[solved_equations[i]],
-                             fullvars[solved_variables[i]],
-                             simplify
-                            ) for i in toporder]
-    invtoporder = invperm(toporder)
-    deps = [Int[invtoporder[n] for n in neighborhood(subgraph, j, Inf, dir=:in) if n!=j] for (i, j) in enumerate(toporder)]
 
+    if isempty(solved_equations)
+        subeqs = Equation[]
+        deps = Vector{Int}[]
+    else
+        subgraph = substitution_graph(graph, solved_equations, solved_variables, var_eq_matching)
+        toporder = topological_sort_by_dfs(subgraph)
+        subeqs = Equation[solve_equation(
+                                 neweqs[solved_equations[i]],
+                                 fullvars[solved_variables[i]],
+                                 simplify
+                                ) for i in toporder]
+        # find the dependency of solved variables. we will need this for ODAEProblem
+        invtoporder = invperm(toporder)
+        deps = [Int[invtoporder[n] for n in neighborhood(subgraph, j, Inf, dir=:in) if n!=j] for (i, j) in enumerate(toporder)]
+    end
+
+    # TODO: BLT sorting
     # Rewrite remaining equations in terms of solved variables
-
     solved_eq_set = BitSet(solved_equations)
-    neweqs = Equation[normalize_equation(eqs[ieq]) for ieq in 1:length(eqs) if !(ieq in solved_eq_set)]
+    neweqs = Equation[to_mass_matrix_form(ieq) for ieq in 1:length(neweqs) if !(ieq in diffeq_idxs || ieq in solved_eq_set)]
+    filter!(!isnothing, neweqs)
+    prepend!(neweqs, diffeqs)
 
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
@@ -132,19 +226,36 @@ function tearing_reassemble(sys, var_eq_matching; simplify=false)
 
     # Update system
     active_vars = setdiff(BitSet(1:length(fullvars)), solved_variables)
-    active_eqs = setdiff(BitSet(1:length(s.algeqs)), solved_equations)
 
-    @set! s.graph = graph
-    @set! s.fullvars = [v for (i, v) in enumerate(fullvars) if i in active_vars]
-    @set! s.vartype = [v for (i, v) in enumerate(s.vartype) if i in active_vars]
-    @set! s.algeqs = [e for (i, e) in enumerate(s.algeqs) if i in active_eqs]
+    @set! state.structure.graph = graph
+    @set! state.fullvars = [v for (i, v) in enumerate(fullvars) if i in active_vars]
 
-    @set! sys.structure = s
+    sys = state.sys
     @set! sys.eqs = neweqs
-    @set! sys.states = [s.fullvars[idx] for idx in 1:length(s.fullvars) if !isdervar(s, idx)]
+    isstatediff(i) = var_eq_matching[i] !== SelectedState() && invview(var_to_diff)[i] !== nothing && var_eq_matching[invview(var_to_diff)[i]] === SelectedState()
+    @set! sys.states = [fullvars[i] for i in active_vars if !isstatediff(i)]
     @set! sys.observed = [observed(sys); subeqs]
     @set! sys.substitutions = Substitutions(subeqs, deps)
-    return sys
+    @set! state.sys = sys
+    @set! sys.tearing_state = state
+
+    return invalidate_cache!(sys)
+end
+
+function tearing(state::TearingState)
+    state.structure.solvable_graph === nothing && find_solvables!(state)
+    complete!(state.structure)
+    @unpack graph, solvable_graph = state.structure
+    algvars = BitSet(findall(v->isalgvar(state.structure, v), 1:ndsts(graph)))
+    aeqs = algeqs(state.structure)
+    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(tear_graph_modia(graph, solvable_graph;
+        varfilter=var->var in algvars, eqfilter=eq->eq in aeqs))
+    for var in 1:ndsts(graph)
+        if isdiffvar(state.structure, var)
+            var_eq_matching[var] = SelectedState()
+        end
+    end
+    var_eq_matching
 end
 
 """
@@ -154,30 +265,20 @@ Tear the nonlinear equations in system. When `simplify=true`, we simplify the
 new residual residual equations after tearing. End users are encouraged to call [`structural_simplify`](@ref)
 instead, which calls this function internally.
 """
-function tearing(sys; simplify=false)
-    sys = init_for_tearing(sys)
-    var_eq_matching = tear_graph(sys)
-
-    invalidate_cache!(tearing_reassemble(sys, var_eq_matching; simplify=simplify))
+function tearing(sys::AbstractSystem; simplify=false)
+    state = TearingState(sys)
+    var_eq_matching = tearing(state)
+    invalidate_cache!(tearing_reassemble(state, var_eq_matching; simplify=simplify))
 end
 
-function init_for_tearing(sys)
-    s = get_structure(sys)
-    if !(s isa SystemStructure)
-        sys = initialize_system_structure(sys)
-        s = structure(sys)
-    end
-    find_solvables!(sys)
-    @unpack graph, solvable_graph = s
-    graph = complete(graph)
-    @set! s.graph = graph
-    @set! sys.structure = s
-    return sys
-end
+"""
+    partial_state_selection(sys; simplify=false)
 
-function tear_graph(sys)
-    s = structure(sys)
-    @unpack graph, solvable_graph = s
-    tear_graph_modia(graph, solvable_graph;
-        varfilter=var->isalgvar(s, var), eqfilter=eq->s.algeqs[eq])
+Perform partial state selection and tearing.
+"""
+function partial_state_selection(sys; simplify=false)
+    state = TearingState(sys)
+    var_eq_matching = partial_state_selection_graph!(state)
+
+    tearing_reassemble(state, var_eq_matching; simplify=simplify)
 end

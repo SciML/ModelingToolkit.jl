@@ -195,12 +195,6 @@ affect_equations(cb::SymbolicContinuousCallback) = cb.affect
 affect_equations(cbs::Vector{SymbolicContinuousCallback}) = reduce(vcat, [affect_equations(cb) for cb in cbs])
 namespace_equation(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback = SymbolicContinuousCallback(namespace_equation.(equations(cb), (s, )), namespace_equation.(affect_equations(cb), (s, )))
 
-
-function structure(sys::AbstractSystem)
-    s = get_structure(sys)
-    s isa SystemStructure || throw(ArgumentError("SystemStructure is not yet initialized, please run `sys = initialize_system_structure(sys)` or `sys = alias_elimination(sys)`."))
-    return s
-end
 for prop in [
              :eqs
              :noiseeqs
@@ -230,6 +224,8 @@ for prop in [
              :connector_type
              :connections
              :preface
+             :torn_matching
+             :tearing_state
              :substitutions
             ]
     fname1 = Symbol(:get_, prop)
@@ -688,6 +684,18 @@ end
 
 Base.write(io::IO, sys::AbstractSystem) = write(io, readable_code(toexpr(sys)))
 
+function get_or_construct_tearing_state(sys)
+    if has_tearing_state(sys)
+        state = get_tearing_state(sys)
+        if state === nothing
+            state = TearingState(sys)
+        end
+    else
+        state = nothing
+    end
+    state
+end
+
 function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     eqs = equations(sys)
     if eqs isa AbstractArray
@@ -743,11 +751,13 @@ function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     end
     limited && print(io, "\n⋮")
 
-    if has_structure(sys)
-        s = get_structure(sys)
-        if s !== nothing
+    if has_torn_matching(sys)
+        # If the system can take a torn matching, then we can initialize a tearing
+        # state on it. Do so and get show the structure.
+        state = get_or_construct_tearing_state(sys)
+        if state !== nothing
             Base.printstyled(io, "\nIncidence matrix:"; color=:magenta)
-            show(io, incidence_matrix(s.graph, Num(Sym{Real}(:×))))
+            show(io, incidence_matrix(state.structure.graph, Num(Sym{Real}(:×))))
         end
     end
     return nothing
@@ -908,12 +918,15 @@ function will be applied during the tearing process.
 """
 function structural_simplify(sys::AbstractSystem; simplify=false)
     sys = expand_connections(sys)
-    sys = initialize_system_structure(alias_elimination(sys))
-    check_consistency(sys)
+    sys = alias_elimination(sys)
+    state = TearingState(sys)
+    check_consistency(state)
     if sys isa ODESystem
-        sys = initialize_system_structure(dae_index_lowering(ode_order_lowering(sys)))
+        sys = dae_index_lowering(ode_order_lowering(sys))
     end
-    sys = tearing(sys, simplify=simplify)
+    state = TearingState(sys)
+    find_solvables!(state)
+    sys = tearing_reassemble(state, tearing(state), simplify=simplify)
     fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     return sys

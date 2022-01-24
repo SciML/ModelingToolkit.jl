@@ -10,19 +10,19 @@ Find equation-variable maximal bipartite matching. `s.graph` is a bipartite grap
 BipartiteGraphs.maximal_matching(s::SystemStructure, eqfilter=eq->true, varfilter=v->true) =
     maximal_matching(s.graph, eqfilter, varfilter)
 
-function error_reporting(sys, bad_idxs, n_highest_vars, iseqs)
+function error_reporting(state, bad_idxs, n_highest_vars, iseqs)
     io = IOBuffer()
     if iseqs
         error_title = "More equations than variables, here are the potential extra equation(s):\n"
-        out_arr = equations(sys)[bad_idxs]
+        out_arr = equations(state)[bad_idxs]
     else
         error_title = "More variables than equations, here are the potential extra variable(s):\n"
-        out_arr = structure(sys).fullvars[bad_idxs]
+        out_arr = state.fullvars[bad_idxs]
     end
 
     Base.print_array(io, out_arr)
     msg = String(take!(io))
-    neqs = length(equations(sys))
+    neqs = length(equations(state))
     if iseqs
         throw(ExtraEquationsSystemException(
             "The system is unbalanced. "
@@ -45,10 +45,10 @@ end
 ###
 ### Structural check
 ###
-function check_consistency(sys::AbstractSystem)
-    s = structure(sys)
-    @unpack graph, var_to_diff, fullvars = s
-    n_highest_vars = count(v->length(outneighbors(s.var_to_diff, v)) == 0, vertices(s.var_to_diff))
+function check_consistency(state::TearingState)
+    fullvars = state.fullvars
+    @unpack graph, var_to_diff = state.structure
+    n_highest_vars = count(v->length(outneighbors(var_to_diff, v)) == 0, vertices(var_to_diff))
     neqs = nsrcs(graph)
     is_balanced = n_highest_vars == neqs
 
@@ -63,7 +63,7 @@ function check_consistency(sys::AbstractSystem)
         else
             bad_idxs = findall(isequal(unassigned), var_eq_matching)
         end
-        error_reporting(sys, bad_idxs, n_highest_vars, iseqs)
+        error_reporting(state, bad_idxs, n_highest_vars, iseqs)
     end
 
     # This is defined to check if Pantelides algorithm terminates. For more
@@ -158,37 +158,60 @@ end
 ### Structural and symbolic utilities
 ###
 
-function find_solvables!(sys)
-    s = structure(sys)
-    @unpack fullvars, graph, solvable_graph = s
-    eqs = equations(sys)
-    empty!(solvable_graph)
-    for (i, eq) in enumerate(eqs)
-        isdiffeq(eq) && continue
-        term = value(eq.rhs - eq.lhs)
-        for j in 𝑠neighbors(graph, i)
-            isalgvar(s, j) || continue
-            var = fullvars[j]
-            isinput(var) && continue
-            a, b, islinear = linear_expansion(term, var)
-            a = unwrap(a)
-            if islinear && (!(a isa Symbolic) && a isa Number && a != 0)
-                add_edge!(solvable_graph, i, j)
+function find_eq_solvables!(state::TearingState, ieq; may_be_zero=false, allow_symbolic=false)
+    fullvars = state.fullvars
+    @unpack graph, solvable_graph = state.structure
+    eq = equations(state)[ieq]
+    term = value(eq.rhs - eq.lhs)
+    to_rm = Int[]
+    for j in 𝑠neighbors(graph, ieq)
+        var = fullvars[j]
+        isinput(var) && continue
+        a, b, islinear = linear_expansion(term, var)
+        a = unwrap(a)
+        islinear || continue
+        if a isa Symbolic
+            allow_symbolic || continue
+            add_edge!(solvable_graph, ieq, j)
+            continue
+        end
+        (a isa Number) || continue
+        if a != 0
+            add_edge!(solvable_graph, ieq, j)
+        else
+            if may_be_zero
+                push!(to_rm, j)
+            else
+                @warn "Internal error: Variable $var was marked as being in $eq, but was actually zero"
             end
         end
     end
-    s
+    for j in to_rm
+        rem_edge!(graph, ieq, j)
+    end
+end
+
+function find_solvables!(state::TearingState; allow_symbolic=false)
+    @assert state.structure.solvable_graph === nothing
+    eqs = equations(state)
+    graph = state.structure.graph
+    state.structure.solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
+    for ieq in 1:length(eqs)
+        find_eq_solvables!(state, ieq; allow_symbolic)
+    end
+    return nothing
 end
 
 # debugging use
 function reordered_matrix(sys, torn_matching)
-    s = structure(sys)
-    @unpack graph = s
+    s = TearingState(sys)
+    complete!(s.structure)
+    @unpack graph = s.structure
     eqs = equations(sys)
     nvars = ndsts(graph)
-    max_matching = complete(maximal_matching(s))
+    max_matching = complete(maximal_matching(graph))
     torn_matching = complete(torn_matching)
-    sccs = find_var_sccs(s.graph, max_matching)
+    sccs = find_var_sccs(graph, max_matching)
     I, J = Int[], Int[]
     ii = 0
     M = Int[]
@@ -203,7 +226,7 @@ function reordered_matrix(sys, torn_matching)
         for es in e_solved
             isdiffeq(eqs[es]) && continue
             ii += 1
-            js = [M[x] for x in 𝑠neighbors(graph, es) if isalgvar(s, x)]
+            js = [M[x] for x in 𝑠neighbors(graph, es) if isalgvar(s.structure, x)]
             append!(I, fill(ii, length(js)))
             append!(J, js)
         end
@@ -212,7 +235,7 @@ function reordered_matrix(sys, torn_matching)
         for er in e_residual
             isdiffeq(eqs[er]) && continue
             ii += 1
-            js = [M[x] for x in 𝑠neighbors(graph, er) if isalgvar(s, x)]
+            js = [M[x] for x in 𝑠neighbors(graph, er) if isalgvar(s.structure, x)]
             append!(I, fill(ii, length(js)))
             append!(J, js)
         end
@@ -235,10 +258,11 @@ function uneven_invmap(n::Int, list)
 end
 
 function torn_system_jacobian_sparsity(sys)
-    has_structure(sys) || return nothing
-    get_structure(sys) isa SystemStructure || return nothing
+    state = get_tearing_state(sys)
+    state isa TearingState || return nothing
     s = structure(sys)
-    @unpack fullvars, graph = s
+    graph = state.structure.graph
+    fullvars = state.fullvars
 
     states_idxs = findall(!isdifferential, fullvars)
     var2idx = Dict{Int,Int}(v => i for (i, v) in enumerate(states_idxs))
