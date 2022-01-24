@@ -906,11 +906,12 @@ function will be applied during the tearing process.
 function structural_simplify(sys::AbstractSystem; simplify=false)
     sys = expand_connections(sys)
     sys = alias_elimination(sys)
+    state = TearingState(sys)
+    check_consistency(state)
     if sys isa ODESystem
         sys = dae_index_lowering(ode_order_lowering(sys))
     end
     state = TearingState(sys)
-    check_consistency(state)
     find_solvables!(state)
     sys = tearing_reassemble(state, tearing(state), simplify=simplify)
     fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
