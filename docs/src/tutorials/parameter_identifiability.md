@@ -109,7 +109,7 @@ __Note__: as of writing this tutorial, UTF-symbols such as Greek characters are 
 ```julia
 using StructuralIdentifiability, ModelingToolkit
 @parameters b c a beta g delta sigma
-@variables t x1(t) x2(t) x3(t) x4(t) y(t)
+@variables t x1(t) x2(t) x3(t) x4(t) y(t) y2(t)
 D = Differential(t)
 
 eqs = [
@@ -119,21 +119,21 @@ eqs = [
     D(x4) ~ sigma * x4 * (g * x2 - delta * x3)/x3
 ]
 
-measured_quantities = [y~x1+x2]
+measured_quantities = [y~x1+x2, y2~x2]
 
 
 ode = ODESystem(eqs, t, name=:GoodwinOsc)
 
 @time global_id = assess_identifiability(ode, measured_quantities=measured_quantities)
-                # 28.961573 seconds (88.92 M allocations: 5.541 GiB, 4.01% gc time)
-                # Dict{Num, Symbol} with 7 entries:
-                #   c     => :globally
-                #   a     => :nonidentifiable
-                #   g     => :nonidentifiable
-                #   delta => :locally
-                #   sigma => :globally
-                #   beta  => :locally
-                #   b     => :globally
+                    # 30.672594 seconds (100.97 M allocations: 6.219 GiB, 3.15% gc time, 0.01% compilation time)
+                    # Dict{Num, Symbol} with 7 entries:
+                    #   a     => :globally
+                    #   b     => :globally
+                    #   beta  => :globally
+                    #   c     => :globally
+                    #   sigma => :globally
+                    #   g     => :nonidentifiable
+                    #   delta => :globally
 ```
 We can see that only parameters `a, g` are unidentifiable and everything else can be uniquely recovered.
 
@@ -151,7 +151,7 @@ eqs = [
     D(x3) ~ g * x2 - delta * x3 + u2,
     D(x4) ~ sigma * x4 * (g * x2 - delta * x3)/x3
 ]
-measured_quantities = [y~x1+x2]
+measured_quantities = [y~x1+x2, y2~x2]
 
 # check only 2 parameters
 to_check = [b, c]
