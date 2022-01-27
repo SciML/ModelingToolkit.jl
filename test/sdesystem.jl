@@ -575,7 +575,7 @@ end
   probmod = SDEProblem(demod,u0modmap,(0.0,1.0),parammap)
 
   ensemble_probmod = EnsembleProblem(probmod;
-          output_func = (sol,i) -> (h(sol[end][1])*sol[end][2]/θ0,false), # first component is x
+          output_func = (sol,i) -> (h(sol[x,end])*sol[θ,end]/θ0,false),
           prob_func = prob_func
           )
 
