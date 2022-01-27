@@ -24,6 +24,7 @@ sde = SDESystem(ode, noiseeqs)
 ```@docs
 structural_simplify
 alias_elimination
+Girsanov_transform
 ```
 
 ## Analyses
