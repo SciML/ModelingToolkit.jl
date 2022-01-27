@@ -592,3 +592,39 @@ eqs[end] = D(D(z)) ~ α*x - β*y
     
     @test c[1] == length(sol)
 end
+
+@testset "Callback tests" begin
+    using Test, ModelingToolkit, OrdinaryDiffEq
+    @parameters t
+    @variables u(t)
+    D = Differential(t)
+    eqs =[
+        D(u) ~ -u
+    ]
+
+    u0 = [10.0]
+    tspan = (0.0,10.0)
+    
+    function condition(out,u,t,integrator)
+        out[1] = u[1] - 4
+        out[2] = t - 4
+    end
+    function affect!(integrator, idx)
+        if idx==1
+            integrator.u[1] += 5
+        elseif idx==2
+             integrator.u[1] -= 3
+        end
+    end
+    cb = VectorContinuousCallback(condition,affect!, 2)
+    
+    @named test_sys = ODESystem(eqs)
+    prob = ODEProblem(test_sys, u0, tspan; callback=cb)
+    ref_sol = solve(prob, Tsit5())
+    
+    @named test_sys = ODESystem(eqs, callback=cb)
+    prob = ODEProblem(test_sys, u0, tspan)
+    res_sol = solve(prob, Tsit5())
+    
+    @test test_relerror(ref_sol, res_sol(ref_sol.t), [0.6])    
+end
