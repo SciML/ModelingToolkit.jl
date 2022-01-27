@@ -205,6 +205,92 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
               name = name, checks = false)
 end
 
+
+"""
+$(TYPEDSIGNATURES)
+
+Measure transformation method that allows for a reduction in the variance of an estimator `Exp(g(X_t))`.
+Input:  Original SDE system and symbolic function `u(t,x)` with scalar output that defines the 
+        adjustable parameters `d` in the Girsanov transformation. 
+Output: Modified SDESystem with additional component `θ_t` and initial value `θ0`, 
+        such that the estimator `Exp(g(X_t)θ_t/θ0)` has a smaller variance. 
+
+Reference: 
+Kloeden, P. E., Platen, E., & Schurz, H. (2012). Numerical solution of SDE through computer 
+experiments. Springer Science & Business Media.
+
+# Example
+
+```julia
+using ModelingToolkit
+
+@parameters α β
+@variables t x(t) y(t) z(t)
+D = Differential(t)
+
+eqs = [D(x) ~ α*x]
+noiseeqs = [β*x]
+
+@named de = SDESystem(eqs,noiseeqs,t,[x],[α,β])
+
+# define u (user choice)
+u = x 
+demod = ModelingToolkit.Girsanov_transform(de, u)
+```
+
+"""
+function Girsanov_transform(sys::SDESystem, u)
+    name = nameof(sys)
+
+    # register new varible θ corresponding to 1D correction process θ(t)
+    t = get_iv(sys)
+    @variables θ(t)
+    D = Differential(t)
+    
+    # determine the adjustable parameters `d` given `u`
+    # gradient of u with respect to states 
+    grad = Symbolics.gradient(u,states(sys)) 
+
+    noiseeqs = get_noiseeqs(sys)
+    if typeof(noiseeqs) <: Vector
+        d = simplify.(-(noiseeqs.*grad)/u)
+        drft_correction = noiseeqs.*d
+    else
+        d = simplify.(-noiseeqs*grad/u)
+        drft_correction = noiseeqs*d
+    end
+
+    # transformation adds additional state θ: newX = (X,θ)
+    # drift function for state is modified
+    # θ has zero drift
+    deqs = vcat([equations(sys)[i].lhs ~ equations(sys)[i].rhs - drft_correction[i] for i in eachindex(states(sys))]...)
+    deqsθ = D(θ) ~ 0
+    push!(deqs,deqsθ)
+
+    # diffusion matrix is of size d x m (d states, m noise), with diagonal noise represented as a d-dimensional vector
+    # for diagonal noise processes with m>1, the noise process will become non-diagonal; extra state component but no new noise process.
+    # new diffusion matrix is of size d+1 x M
+    # diffusion for state is unchanged
+
+    noiseqsθ = θ*d
+
+    if typeof(noiseeqs) <: Vector
+        m = size(noiseeqs)
+        if m == 1
+            push!(noiseeqs,noiseqsθ)
+        else
+            noiseeqs = [Array(Diagonal(noiseeqs)); noiseqsθ']
+        end
+    else
+        noiseeqs = [Array(noiseeqs); noiseqsθ']
+    end
+
+    state = [states(sys);θ]
+
+    # return modified SDE System
+    SDESystem(deqs, noiseeqs, get_iv(sys), state, parameters(sys), name = name, checks = false)
+end
+
 """
 ```julia
 function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
