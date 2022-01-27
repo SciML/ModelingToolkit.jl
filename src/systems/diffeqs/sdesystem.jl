@@ -254,16 +254,16 @@ function Girsanov_transform(sys::SDESystem, u)
     noiseeqs = get_noiseeqs(sys)
     if typeof(noiseeqs) <: Vector
         d = simplify.(-(noiseeqs.*grad)/u)
-        drft_correction = noiseeqs.*d
+        drift_correction = noiseeqs.*d
     else
         d = simplify.(-noiseeqs*grad/u)
-        drft_correction = noiseeqs*d
+        drift_correction = noiseeqs*d
     end
 
     # transformation adds additional state θ: newX = (X,θ)
     # drift function for state is modified
     # θ has zero drift
-    deqs = vcat([equations(sys)[i].lhs ~ equations(sys)[i].rhs - drft_correction[i] for i in eachindex(states(sys))]...)
+    deqs = vcat([equations(sys)[i].lhs ~ equations(sys)[i].rhs - drift_correction[i] for i in eachindex(states(sys))]...)
     deqsθ = D(θ) ~ 0
     push!(deqs,deqsθ)
 

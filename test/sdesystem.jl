@@ -562,6 +562,7 @@ end
   μ = mean(sim)
   σ = std(sim)/sqrt(numtraj)
 
+  ## Variance reduction method
   u = x 
   demod = ModelingToolkit.Girsanov_transform(de, u)
   @variables θ(t)
