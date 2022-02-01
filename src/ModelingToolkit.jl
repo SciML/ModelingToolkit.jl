@@ -152,8 +152,6 @@ using .SystemStructures
 include("systems/alias_elimination.jl")
 include("structural_transformation/StructuralTransformations.jl")
 
-include("precompile.jl")
-
 @reexport using .StructuralTransformations
 
 for S in subtypes(ModelingToolkit.AbstractSystem)
@@ -209,5 +207,7 @@ export build_function
 export modelingtoolkitize
 export @variables, @parameters
 export @named, @nonamespace, @namespace, extend, compose
+
+include("precompile.jl")
 
 end # module
