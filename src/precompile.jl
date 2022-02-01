@@ -4,7 +4,7 @@ let
         @variables x(t) y(t) z(t)
         D = Differential(t)
 
-        eqs = [D(D(x)) ~ σ*(y-x) + 0.000000000000135,
+        eqs = [D(D(x)) ~ σ*(y-x) + x^0.000000000000135,
                D(y) ~ x*(ρ-z)-y,
                D(z) ~ x*y - β*z]
 
