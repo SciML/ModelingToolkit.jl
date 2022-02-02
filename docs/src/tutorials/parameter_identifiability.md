@@ -1,8 +1,8 @@
 # Parameter Identifiability in ODE Models
 
-Ordinary differential equations are commonly used for modeling real-world processes. The problem of parameter identifiability is one of the key design challenges for mathematical models. A parameter is said to be _identifiable_ if one can recover its value from experimental data. _Structural_ identifiabiliy is a theoretical property of a model that answers this question. In this tutorial, we will show how to use `StructuralIdentifiability.jl` with `ModelingToolkit.jl` to assess identifiability of parameters in ODE models. The theory behind `StructuralIdentifiability.jl` is presented in paper [^4].
+Ordinary differential equations are commonly used for modeling real-world processes. The problem of parameter identifiability is one of the key design challenges for mathematical models. A parameter is said to be _identifiable_ if one can recover its value from experimental data. _Structural_ identifiability is a theoretical property of a model that answers this question. In this tutorial, we will show how to use `StructuralIdentifiability.jl` with `ModelingToolkit.jl` to assess identifiability of parameters in ODE models. The theory behind `StructuralIdentifiability.jl` is presented in paper [^4].
 
-We will start by illutrating **local identifiability** in which a parameter is known up to _finitely many values_, and then proceed to determining **global identifiability**, that is, which parameters can be identified _uniquely_.
+We will start by illustrating **local identifiability** in which a parameter is known up to _finitely many values_, and then proceed to determining **global identifiability**, that is, which parameters can be identified _uniquely_.
 
 To install `StructuralIdentifiability.jl`, simply run
 ```julia
@@ -104,7 +104,7 @@ We will run a global identifiability check on this enzyme dynamics[^3] model. We
 
 Global identifiability needs information about local identifiability first, but the function we chose here will take care of that extra step for us.
 
-__Note__: as of writing this tutorial, UTF-symbols such as Greek characters are not supported by one of the project's dependencies, see (this issue)[https://github.com/SciML/StructuralIdentifiability.jl/issues/43].
+__Note__: as of writing this tutorial, UTF-symbols such as Greek characters are not supported by one of the project's dependencies, see [this issue](https://github.com/SciML/StructuralIdentifiability.jl/issues/43).
 
 ```julia
 using StructuralIdentifiability, ModelingToolkit
