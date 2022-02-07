@@ -51,6 +51,10 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     connector_type::Any
     """
+    connections: connections in a system
+    """
+    connections::Any
+    """
     tearing_state: cache for intermediate tearing state
     """
     tearing_state::Any
@@ -59,11 +63,11 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     substitutions::Any
 
-    function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, connector_type, tearing_state=nothing, substitutions=nothing; checks::Bool = true)
+    function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, connector_type, connections, tearing_state=nothing, substitutions=nothing; checks::Bool = true)
         if checks
             all_dimensionless([states;ps]) ||check_units(eqs)
         end
-        new(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, connector_type, tearing_state, substitutions)
+        new(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, connector_type, connections, tearing_state, substitutions)
     end
 end
 
@@ -85,7 +89,9 @@ function NonlinearSystem(eqs, states, ps;
     #
     # # we cannot scalarize in the loop because `eqs` itself might require
     # scalarization
-    eqs = [0 ~ x.rhs - x.lhs for x in scalarize(eqs)]
+    eqs = [
+        x.lhs isa Union{Symbolic,Number} ? 0 ~ x.rhs - x.lhs : x for x in scalarize(eqs)
+        ]
 
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.", :NonlinearSystem, force=true)
@@ -105,7 +111,7 @@ function NonlinearSystem(eqs, states, ps;
     process_variables!(var_to_name, defaults, ps)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
-    NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, connector_type, checks = checks)
+    NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults, connector_type, nothing, checks = checks)
 end
 
 function calculate_jacobian(sys::NonlinearSystem; sparse=false, simplify=false)
