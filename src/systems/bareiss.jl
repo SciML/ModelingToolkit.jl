@@ -109,22 +109,22 @@ function swaprows!(A::AbstractSparseMatrixCSC, i, j)
     return nothing
 end
 
-function bareiss_update!(zero!, M::Matrix, k, swapto, pivot, prev_pivot)
+function bareiss_update!(zero!, M::StridedMatrix, k, swapto, pivot, prev_pivot)
     for i in k+1:size(M, 2), j in k+1:size(M, 1)
         M[j,i] = exactdiv(M[j,i]*pivot - M[j,k]*M[k,i], prev_pivot)
     end
     zero!(M, k+1:size(M, 1), k)
 end
 
-function bareiss_update!(zero!, M::AbstractMatrix, k, swapto, pivot, prev_pivot)
-    V = @view M[k+1:end, k+1:end]
-    V .= exactdiv.(V * pivot - M[k+1:end, k] * M[k, k+1:end]', prev_pivot)
+@views function bareiss_update!(zero!, M::AbstractMatrix, k, swapto, pivot, prev_pivot)
+    V = M[k+1:end, k+1:end]
+    V .= exactdiv.(V .* pivot .- M[k+1:end, k] * M[k, k+1:end]', prev_pivot)
     zero!(M, k+1:size(M, 1), k)
 end
 
 function bareiss_update_virtual_colswap!(zero!, M::AbstractMatrix, k, swapto, pivot, prev_pivot)
     V = @view M[k+1:end, :]
-    V .= exactdiv.(V * pivot - M[k+1:end, swapto[2]] * M[k, :]', prev_pivot)
+    V .= @views exactdiv.(V .* pivot .- M[k+1:end, swapto[2]] * M[k, :]', prev_pivot)
     zero!(M, k+1:size(M, 1), swapto[2])
 end
 
@@ -148,14 +148,18 @@ const bareiss_colswap = (Base.swapcols!, swaprows!, bareiss_update!, bareiss_zer
 const bareiss_virtcolswap = ((M,i,j)->nothing, swaprows!, bareiss_update_virtual_colswap!, bareiss_zero!)
 
 """
-    bareiss!(M)
+    bareiss!(M, [swap_strategy])
 
 Perform Bareiss's fraction-free row-reduction algorithm on the matrix `M`.
 Optionally, a specific pivoting method may be specified.
+
+swap_strategy is an optional argument that determines how the swapping of rows and coulmns is performed.
+bareiss_colswap (the default) swaps the columns and rows normally.
+bareiss_virtcolswap pretends to swap the columns which can be faster for sparse matrices.
 """
-function bareiss!(M::AbstractMatrix,
-                     (swapcols!, swaprows!, update!, zero!) = bareiss_colswap;
+function bareiss!(M::AbstractMatrix, swap_strategy=bareiss_colswap;
                   find_pivot=find_pivot_any)
+    swapcols!, swaprows!, update!, zero! = bareiss_colswap;
     prev = one(eltype(M))
     n = size(M, 1)
     for k in 1:n
