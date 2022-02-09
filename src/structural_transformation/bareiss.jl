@@ -159,7 +159,7 @@ bareiss_virtcolswap pretends to swap the columns which can be faster for sparse 
 """
 function bareiss!(M::AbstractMatrix, swap_strategy=bareiss_colswap;
                   find_pivot=find_pivot_any)
-    swapcols!, swaprows!, update!, zero! = bareiss_colswap;
+    swapcols!, swaprows!, update!, zero! = swap_strategy;
     prev = one(eltype(M))
     n = size(M, 1)
     for k in 1:n
