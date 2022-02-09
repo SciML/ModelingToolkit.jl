@@ -118,9 +118,6 @@ include("domains.jl")
 
 # Code that should eventually go elsewhere, but is here for fow
 include("compat/bareiss.jl")
-if !isdefined(Graphs, :IncrementalCycleTracker)
-    include("compat/incremental_cycles.jl")
-end
 
 include("systems/abstractsystem.jl")
 include("systems/connectors.jl")
