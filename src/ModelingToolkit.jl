@@ -117,7 +117,7 @@ include("utils.jl")
 include("domains.jl")
 
 # Code that should eventually go elsewhere, but is here for fow
-include("compat/bareiss.jl")
+include("structural_transformation/bareiss.jl")
 
 include("systems/abstractsystem.jl")
 include("systems/connectors.jl")
