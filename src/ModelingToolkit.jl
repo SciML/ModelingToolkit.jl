@@ -107,6 +107,8 @@ Get the set of parameters variables for the given system.
 """
 function parameters end
 
+# this has to be included early to deal with depency issues
+include("structural_transformation/bareiss.jl")
 include("bipartite_graph.jl")
 using .BipartiteGraphs
 
@@ -115,9 +117,6 @@ include("parameters.jl")
 
 include("utils.jl")
 include("domains.jl")
-
-# Code that should eventually go elsewhere, but is here for fow
-include("structural_transformation/bareiss.jl")
 
 include("systems/abstractsystem.jl")
 include("systems/connectors.jl")
