@@ -1,6 +1,6 @@
 using SparseArrays
 using ModelingToolkit
-import ModelingToolkit:  bareiss!, bareiss_colswap, bareiss_virtcolswap, find_pivot_col, bareiss_update!
+import ModelingToolkit:  bareiss!, swapcols!, swaprows!, find_pivot_col, bareiss_update!
 
 function det_bareiss!(M)
     parity = 1
