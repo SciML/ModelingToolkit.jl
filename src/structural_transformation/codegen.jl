@@ -453,10 +453,10 @@ function build_observed_function(
         [],
         pre(Let(
             [
+             assignments[is_not_prepended_assignment]
              collect(Iterators.flatten(solves))
              map(eq -> eq.lhs←eq.rhs, obs[1:maxidx])
              subs
-             assignments[is_not_prepended_assignment]
             ],
             isscalar ? ts[1] : MakeArray(ts, output_type),
             false
