@@ -205,6 +205,5 @@ export modelingtoolkitize
 export @variables, @parameters
 export @named, @nonamespace, @namespace, extend, compose
 
-include("precompile.jl")
 
 end # module
