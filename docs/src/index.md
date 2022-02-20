@@ -136,7 +136,7 @@ system:
     - Multi-package interface for numerical solving `OptimizationSystem`
 - [NeuralPDE.jl](https://github.com/SciML/NeuralPDE.jl)
     - Physics-Informed Neural Network (PINN) training on `PDESystem`
-- [MethoodOfLines.jl](https://github.com/SciML/MethodOfLines.jl)
+- [MethodOfLines.jl](https://github.com/SciML/MethodOfLines.jl)
     - Automated finite difference method (FDM) discretization of `PDESystem`
 
 ## Contributing
