@@ -219,12 +219,24 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 ```
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple,Nothing},
-                                    parammap=DiffEqBase.NullParameters(); kwargs...)
+                                    parammap=DiffEqBase.NullParameters(); checkbounds=false, kwargs...)
     defs = defaults(sys)
     u0 = varmap_to_vars(u0map, states(sys); defaults=defs)
     p  = varmap_to_vars(parammap, parameters(sys); defaults=defs)
     f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
-    df = DiscreteFunction{true,true}(f, syms=Symbol.(states(sys)))
+    
+    # just taken from abstractodesystem.jl for ODEFunction def
+    obs = observed(sys)
+    observedfun = let sys = sys, dict = Dict()
+            function generated_observed(obsvar, u, p, t)
+                obs = get!(dict, value(obsvar)) do
+                    build_explicit_observed_function(sys, obsvar; checkbounds=checkbounds)
+                end
+                obs(u, p, t)
+            end
+        end
+
+    df = DiscreteFunction{true,true}(f, syms=Symbol.(states(sys)), observed=observedfun)
     DiscreteProblem(df, u0, tspan, p; kwargs...)
 end
 

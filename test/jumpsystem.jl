@@ -71,6 +71,14 @@ function getmean(jprob,Nsims)
 end
 m = getmean(jprob,Nsims)
 
+@variables S2(t)
+obs = [S2 ~ 2*S]
+@named js2b = JumpSystem([j₁,j₃], t, [S,I,R], [β,γ], observed=obs)
+dprob = DiscreteProblem(js2b, u₀map, tspan, parammap)
+jprob = JumpProblem(js2b, dprob, Direct(), save_positions=(false,false))
+sol = solve(jprob, SSAStepper(), saveat=tspan[2]/10)
+@test all(2 .* sol[S] .== sol[S2])
+
 # test save_positions is working
 jprob = JumpProblem(js2, dprob, Direct(), save_positions=(false,false))
 sol = solve(jprob, SSAStepper(), saveat=1.0)
