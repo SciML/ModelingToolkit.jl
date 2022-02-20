@@ -70,6 +70,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         if checks
             all_dimensionless([dvs;ivs;ps]) ||check_units(eqs)
         end
+        eqs = eqs isa Vector ? eqs : [eqs]
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, name)
     end
 end
