@@ -260,7 +260,6 @@ end
 function torn_system_jacobian_sparsity(sys)
     state = get_tearing_state(sys)
     state isa TearingState || return nothing
-    s = structure(sys)
     graph = state.structure.graph
     fullvars = state.fullvars
 
