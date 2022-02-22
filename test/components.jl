@@ -66,6 +66,7 @@ eqs = [
       ]
 @named sys′ = ODESystem(eqs, t)
 @named sys_inner_outer = compose(sys′, [ground, source, rc_comp])
+@test_nowarn show(IOBuffer(), MIME"text/plain"(), sys_inner_outer)
 expand_connections(sys_inner_outer, debug=true)
 sys_inner_outer = structural_simplify(sys_inner_outer)
 @test !isempty(ModelingToolkit.defaults(sys_inner_outer))
@@ -74,7 +75,7 @@ u0 = [
       rc_comp.capacitor.p.i => 0.0
       rc_comp.resistor.v => 0.0
      ]
-prob = ODEProblem(sys_inner_outer, u0, (0, 10.0))
+prob = ODEProblem(sys_inner_outer, u0, (0, 10.0), sparse=true)
 sol_inner_outer = solve(prob, Rodas4())
 @test sol[capacitor.v] ≈ sol_inner_outer[rc_comp.capacitor.v]
 

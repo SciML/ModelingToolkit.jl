@@ -751,10 +751,10 @@ function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     end
     limited && print(io, "\n⋮")
 
-    if has_torn_matching(sys)
+    if has_torn_matching(sys) && has_tearing_state(sys)
         # If the system can take a torn matching, then we can initialize a tearing
         # state on it. Do so and get show the structure.
-        state = get_or_construct_tearing_state(sys)
+        state = get_tearing_state(sys)
         if state !== nothing
             Base.printstyled(io, "\nIncidence matrix:"; color=:magenta)
             show(io, incidence_matrix(state.structure.graph, Num(Sym{Real}(:×))))
