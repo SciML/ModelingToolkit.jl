@@ -27,7 +27,7 @@ pnew = varmap_to_vars([β=>3.0, c=>10.0, γ=>2.0],parameters(sys))
 For statements that are in the `if then else` form, use `IfElse.ifelse` from the
 [IfElse.jl](https://github.com/SciML/IfElse.jl) package to represent the code in a
 functional form. For handling direct `if` statements, you can use equivalent boolean
-mathematical expressions. For example `if x > 0 ...` can be implementated as just
+mathematical expressions. For example `if x > 0 ...` can be implemented as just
 `(x > 0) * `, where if `x <= 0` then the boolean will evaluate to `0` and thus the
 term will be excluded from the model.
 

@@ -84,7 +84,7 @@
 
 - Modia.jl uses Julia's expression objects for representing its equations.
   ModelingToolkit.jl uses [Symbolics.jl](https://symbolics.juliasymbolics.org/dev/),
-  and thus the Julia expressions follow Julia symantics and can be manipulated
+  and thus the Julia expressions follow Julia semantics and can be manipulated
   using a computer algebra system (CAS).
 - Modia's compilation pipeline is similar to the
   [Dymola symbolic processing pipeline](https://www.claytex.com/tech-blog/model-translation-and-symbolic-manipulation/)

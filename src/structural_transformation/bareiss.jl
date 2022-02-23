@@ -1,4 +1,4 @@
-# Keeps compatibility with bariess code movoed to Base/stdlib on older releases
+# Keeps compatibility with bariess code moved to Base/stdlib on older releases
 
 using LinearAlgebra
 using SparseArrays
