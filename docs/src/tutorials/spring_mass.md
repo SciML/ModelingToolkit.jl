@@ -217,7 +217,7 @@ observed(sys)
  spring₊x(t) ~ sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t)))
 ```
 
-These are explicit algebraic equations which can be used to reconstruct the required variables on the fly. This leads to dramatic computational savings since implicitly solving an ODE scales as O(n^3), so fewer states are signficantly better!
+These are explicit algebraic equations which can be used to reconstruct the required variables on the fly. This leads to dramatic computational savings since implicitly solving an ODE scales as O(n^3), so fewer states are significantly better!
 
 We can access these variables using the solution object. For example, let's retrieve the x-position of the mass over time:
 

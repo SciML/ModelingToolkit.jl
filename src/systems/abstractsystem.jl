@@ -994,7 +994,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-entend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
+extend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
 by default.
 """
 function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol=nameof(sys))

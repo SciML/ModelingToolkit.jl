@@ -129,7 +129,7 @@ will be lazily reconstructed on demand.
 
 In some scenarios, it could be useful for model parameters to be expressed
 in terms of other parameters, or shared between common subsystems.
-To fascilitate this, ModelingToolkit supports sybmolic expressions
+To facilitate this, ModelingToolkit supports symbolic expressions
 in default values, and scoped variables.
 
 With symbolic parameters, it is possible to set the default value of a parameter or initial condition to an expression of other variables.
@@ -256,7 +256,7 @@ solving. In summary: these problems are structurally modified, but could be
 more efficient and more stable.
 
 ## Components with discontinuous dynamics
-When modeling, e.g., impacts, saturations or Coulomb friction, the dynamic equations are discontinuous in either the state or one of its derivatives. This causes the solver to take very small steps around the discontinuity, and sometimes leads to early stopping due to `dt <= dt_min`. The correct way to handle such dynamics is to tell the solver about the discontinuity be means of a root-finding equation. [`ODEsystem`](@ref)s accept a keyword argument `continuous_events`
+When modeling, e.g., impacts, saturations or Coulomb friction, the dynamic equations are discontinuous in either the state or one of its derivatives. This causes the solver to take very small steps around the discontinuity, and sometimes leads to early stopping due to `dt <= dt_min`. The correct way to handle such dynamics is to tell the solver about the discontinuity by means of a root-finding equation. [`ODEsystem`](@ref)s accept a keyword argument `continuous_events`
 ```
 ODESystem(eqs, ...; continuous_events::Vector{Equation})
 ODESystem(eqs, ...; continuous_events::Pair{Vector{Equation}, Vector{Equation}})
