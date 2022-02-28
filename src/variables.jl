@@ -80,7 +80,7 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults=Dict(), check=false, to
     if Base.isconcretetype(T′)
         T = T′
     else
-        T = foldl((t, elem)->promote_type(t, typeof(elem)), vs; init=typeof(first(vs)))
+        T = foldl((t, elem)->promote_type(t, eltype(elem)), vs; init=typeof(first(vs)))
     end
     out = Vector{T}(undef, length(varlist))
     missingvars = setdiff(varlist, keys(varmap))
