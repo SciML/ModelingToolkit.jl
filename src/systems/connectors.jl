@@ -86,10 +86,6 @@ end
 function connect(c::Connection; check=true)
     @unpack inners, outers = c
 
-    flow_eqs = Equation[]
-    other_eqs = Equation[]
-
-    ncnts = length(inners) + length(outers)
     cnts = Iterators.flatten((inners, outers))
     fs, ss = Iterators.peel(cnts)
     splitting_idx = length(inners) # anything after the splitting_idx is outer.
@@ -111,33 +107,21 @@ function connect(c::Connection; check=true)
         vtype = get_connection_type(fix_val)
         vtype === Stream && continue
 
-        isarr = isarray(fix_val)
-
         if vtype === Flow
-            rhs = isarr ? zeros(Int, ncnts) : 0
-            for (i, c) in enumerate(cnts)
-                isinner = i <= splitting_idx
-                # https://specification.modelica.org/v3.4/Ch15.html
-                var = scalarize(getproperty(c, name))
-                rhs += isinner ? var : -var
-            end
-            if isarr
-                for r in rhs
-                    push!(ceqs, 0 ~ r)
+            for j in eachindex(fix_val)
+                rhs = 0
+                for (i, c) in enumerate(cnts)
+                    isinner = i <= splitting_idx
+                    var = getproperty(c, name)
+                    rhs += isinner ? var[j] : -var[j]
                 end
-            else
                 push!(ceqs, 0 ~ rhs)
             end
         else # Equality
             for c in ss
                 var = getproperty(c, name)
-                if isarr
-                    vs = scalarize(var)
-                    for (i, v) in enumerate(vs)
-                        push!(ceqs, fix_val[i] ~ v)
-                    end
-                else
-                    push!(ceqs, fix_val ~ var)
+                for (i, v) in enumerate(var)
+                    push!(ceqs, fix_val[i] ~ v)
                 end
             end
         end
