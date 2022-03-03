@@ -279,7 +279,7 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify=false)
     end
     M = simplify ? ModelingToolkit.simplify.(M) : M
     # M should only contain concrete numbers
-    M == I ? I : M
+    M === I ? I : M
 end
 
 function jacobian_sparsity(sys::AbstractODESystem)
