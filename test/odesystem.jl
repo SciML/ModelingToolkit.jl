@@ -358,6 +358,7 @@ D = Differential(t)
 eqs = [D(x1) ~ -x1]
 @named sys = ODESystem(eqs,t,[x1,x2],[])
 @test_throws ArgumentError ODEProblem(sys, [1.0,1.0], (0.0,1.0))
+@test_nowarn ODEProblem(sys, [1.0,1.0], (0.0,1.0), check_length=false) 
 
 # check inputs
 let
