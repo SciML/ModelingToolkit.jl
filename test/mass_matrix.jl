@@ -1,4 +1,4 @@
-using OrdinaryDiffEq, ModelingToolkit, Test
+using OrdinaryDiffEq, ModelingToolkit, Test, LinearAlgebra
 @parameters t
 @variables y[1:3](t)
 @parameters k[1:3]
@@ -34,3 +34,10 @@ sol2 = solve(prob_mm2,Rodas5(),reltol=1e-8,abstol=1e-8,tstops=sol.t,adaptive=fal
 # MTK expression are canonicalized, so the floating point numbers are slightly
 # different
 @test Array(sol) ≈ Array(sol2)
+
+# Test mass matrix in the identity case
+eqs = [D(y[1]) ~ y[1], D(y[2]) ~ y[2], D(y[3]) ~ y[3]]
+
+@named sys = ODESystem(eqs,t,y,k)
+
+@test calculate_massmatrix(sys) === I
