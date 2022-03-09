@@ -1,15 +1,16 @@
 using SparseArrays
 using ModelingToolkit
-import ModelingToolkit:  bareiss!, find_pivot_col, bareiss_update!
+import ModelingToolkit: bareiss!, find_pivot_col, bareiss_update!, swaprows!
+import Base: swapcols!
 
 function det_bareiss!(M)
     parity = 1
-    swaprows!(M, i, j) = (i != j && (parity = -parity); Base.swaprows!(M, i, j))
-    swapcols!(M, i, j) = (i != j && (parity = -parity); Base.swapcols!(M, i, j))
+    _swaprows!(M, i, j) = (i != j && (parity = -parity); swaprows!(M, i, j))
+    _swapcols!(M, i, j) = (i != j && (parity = -parity); swapcols!(M, i, j))
     # We only look at the last entry, so we don't care that the sub-diagonals are
     # garbage.
     zero!(M, i, j) = nothing
-    rank = bareiss!(M, (swapcols!, swaprows!, bareiss_update!, zero!);
+    rank = bareiss!(M, (_swapcols!, _swaprows!, bareiss_update!, zero!);
         find_pivot=find_pivot_col)
     return parity * M[end,end]
 end

@@ -2,7 +2,7 @@
 
 using LinearAlgebra
 using SparseArrays
-using SparseArrays: AbstractSparseMatrixCSC
+using SparseArrays: AbstractSparseMatrixCSC, getcolptr
 
 macro swap(a, b)
     esc(:(($a, $b) = ($b, $a)))
