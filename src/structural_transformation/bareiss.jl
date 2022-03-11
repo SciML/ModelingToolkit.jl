@@ -9,7 +9,7 @@ macro swap(a, b)
 end
 
 # https://github.com/JuliaLang/julia/pull/42678
-if VERSION > v"1.8.0-DEV.762"
+@static if VERSION > v"1.8.0-DEV.762"
     import Base: swaprows!
 else
     function swaprows!(a::AbstractMatrix, i, j)
