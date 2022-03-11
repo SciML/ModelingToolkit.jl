@@ -212,6 +212,9 @@ ms_eqs = []
 @named ms_model = compose(_ms_model,
                           [mass])
 
+calculate_jacobian(ms_model)
+calculate_tgrad(ms_model)
+
 # Mass starts with velocity = 1
 u0 = [
       mass.s => 0.0
@@ -219,6 +222,8 @@ u0 = [
      ]
 
 sys = structural_simplify(ms_model)
+@test sys.jac[] === ModelingToolkit.EMPTY_JAC
+@test sys.tgrad[] === ModelingToolkit.EMPTY_TGRAD
 prob_complex = ODAEProblem(sys, u0, (0, 1.0))
 sol = solve(prob_complex, Tsit5())
 @test all(sol[mass.v] .== 1)

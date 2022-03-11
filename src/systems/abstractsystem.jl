@@ -929,6 +929,7 @@ function structural_simplify(sys::AbstractSystem; simplify=false)
     sys = tearing_reassemble(state, tearing(state), simplify=simplify)
     fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
+    invalidate_cache!(sys)
     return sys
 end
 
