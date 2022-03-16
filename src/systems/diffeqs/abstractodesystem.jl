@@ -677,6 +677,12 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
     difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
     cb = merge_cb(event_cb, difference_cb)
     cb = merge_cb(cb, callback)
+    kwargs_dict = Dict(sys.kwargs)
+    
+    has_sys_cb = haskey(kwargs_dict, :callback)
+    if has_sys_cb
+        cb = merge_cb(cb, kwargs_dict[:callback])
+    end
 
     if cb === nothing
         ODEProblem{iip}(f, u0, tspan, p; kwargs...)

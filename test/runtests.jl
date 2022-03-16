@@ -1,5 +1,6 @@
 using SafeTestsets, Test
 
+include("utils.jl")
 @safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
 @safetestset "Variable scope tests" begin include("variable_scope.jl") end
 @safetestset "Symbolic parameters test" begin include("symbolic_parameters.jl") end
