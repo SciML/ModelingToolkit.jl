@@ -173,14 +173,39 @@ function collect_instream!(set, expr, occurs=false)
     return occurs
 end
 
-positivemax(m, ::Any; tol=nothing)= max(m, something(tol, 1e-8))
+#positivemax(m, ::Any; tol=nothing)= max(m, something(tol, 1e-8))
+#_positivemax(m, tol) = ifelse((-tol <= m) & (m <= tol), ((3 * tol - m) * (tol + m)^3)/(16 * tol^3) + tol, max(m, tol))
+function _positivemax(m, si)
+    T = typeof(m)
+    relativeTolerance = 1e-4
+    nominal = one(T)
+    eps = relativeTolerance * nominal
+    alpha = if si > eps
+        one(T)
+    else
+        if si > 0
+            (si/eps)^2*(3-2* si/eps)
+        else
+            zero(T)
+        end
+    end
+    alpha * max(m, 0) + (1-alpha)*eps
+end
+@register _positivemax(m, tol)
+positivemax(m, ::Any; tol=nothing) = _positivemax(m, tol)
+mydiv(num, den) = if den == 0
+    error()
+else
+    num / den
+end
+@register mydiv(n, d)
 
 function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10)
     subsys = get_systems(sys)
     isempty(subsys) && return sys
 
     # post order traversal
-    @set! sys.systems = map(s->expand_connections(s, debug=debug), subsys)
+    @set! sys.systems = map(s->expand_connections(s, debug=debug, tol=tol), subsys)
 
     outer_connectors = Symbol[]
     for s in subsys
@@ -288,6 +313,67 @@ function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10)
     return sys
 end
 
+@generated function _instream_split(::Val{inner_n}, ::Val{outer_n}, vars::NTuple{N}) where {inner_n, outer_n, N}
+    #instream_rt(innerfvs..., innersvs..., outerfvs..., outersvs...)
+    ret = Expr(:tuple)
+    # mj.c.m_flow
+    inner_f = :(Base.@ntuple $inner_n i -> vars[i])
+    offset = inner_n
+    inner_s = :(Base.@ntuple $inner_n i -> vars[$offset+i])
+    offset += inner_n
+    # ck.m_flow
+    outer_f = :(Base.@ntuple $outer_n i -> vars[$offset+i])
+    offset += outer_n
+    outer_s = :(Base.@ntuple $outer_n i -> vars[$offset+i])
+    Expr(:tuple, inner_f, inner_s, outer_f, outer_s)
+end
+
+function instream_rt(ins::Val{inner_n}, outs::Val{outer_n}, vars::Vararg{Any,N}) where {inner_n, outer_n, N}
+    @assert N == 2*(inner_n + outer_n)
+
+    # inner: mj.c.m_flow
+    # outer: ck.m_flow
+    inner_f, inner_s, outer_f, outer_s = _instream_split(ins, outs, vars)
+
+    T = float(first(inner_f))
+    si = zero(T)
+    num = den = zero(T)
+    for f in inner_f
+        si += max(-f, 0)
+    end
+    for f in outer_f
+        si += max(f, 0)
+    end
+    #for (f, s) in zip(inner_f, inner_s)
+    for j in 1:inner_n
+        @inbounds f = inner_f[j]
+        @inbounds s = inner_s[j]
+        num += _positivemax(-f, si) * s
+        den += _positivemax(-f, si)
+    end
+    #for (f, s) in zip(outer_f, outer_s)
+    for j in 1:outer_n
+        @inbounds f = outer_f[j]
+        @inbounds s = outer_s[j]
+        num += _positivemax(-f, si) * s
+        den += _positivemax(-f, si)
+    end
+    return num / den
+    #=
+    si = sum(max(-mj.c.m_flow,0) for j in cat(1,1:i-1, i+1:N)) +
+            sum(max(ck.m_flow ,0) for k  in 1:M)
+
+    inStream(mi.c.h_outflow) =
+       (sum(positiveMax(-mj.c.m_flow,si)*mj.c.h_outflow)
+      +  sum(positiveMax(ck.m_flow,s_i)*inStream(ck.h_outflow)))/
+     (sum(positiveMax(-mj.c.m_flow,s_i))
+        +  sum(positiveMax(ck.m_flow,s_i)))
+                  for j in 1:N and i <> j and mj.c.m_flow.min < 0,
+                  for k in 1:M and ck.m_flow.max > 0
+    =#
+end
+SymbolicUtils.promote_symtype(::typeof(instream_rt), ::Vararg) = Real
+
 function expand_instream(instream_eqs, instream_exprs, connects; debug=false, tol)
     sub = Dict()
     seen = Set()
@@ -339,6 +425,15 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false, to
             fv = flowvar(first(connectors))
             i = findfirst(c->nameof(c) === connector_name, inner_sc)
             if i !== nothing
+                # mj.c.m_flow
+                innerfvs = [unwrap(states(s, fv)) for (j, s) in enumerate(inner_sc) if j != i]
+                innersvs = [unwrap(states(s, sv)) for (j, s) in enumerate(inner_sc) if j != i]
+                # ck.m_flow
+                outerfvs = [unwrap(states(s, fv)) for s in outer_sc]
+                outersvs = [instream(states(s, fv)) for s in outer_sc]
+
+                sub[ex] = term(instream_rt, Val(length(innerfvs)), Val(length(outerfvs)), innerfvs..., innersvs..., outerfvs..., outersvs...)
+                #=
                 si = isempty(outer_sc) ? 0 : sum(s->max(states(s, fv), 0), outer_sc)
                 for j in 1:n_inners; j == i && continue
                     f = states(inner_sc[j], fv)
@@ -359,9 +454,9 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false, to
                     den += tmp
                     num += tmp * instream(states(outer_sc[k], sv))
                 end
-                sub[ex] = num / den
+                sub[ex] = mydiv(num, den)
+                =#
             end
-
         end
     end
 
