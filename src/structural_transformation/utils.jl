@@ -158,7 +158,7 @@ end
 ### Structural and symbolic utilities
 ###
 
-function find_eq_solvables!(state::TearingState, ieq; may_be_zero=false, allow_symbolic=true)
+function find_eq_solvables!(state::TearingState, ieq; may_be_zero=false, allow_symbolic=false, allow_parameter=true)
     fullvars = state.fullvars
     @unpack graph, solvable_graph = state.structure
     eq = equations(state)[ieq]
@@ -171,7 +171,13 @@ function find_eq_solvables!(state::TearingState, ieq; may_be_zero=false, allow_s
         a = unwrap(a)
         islinear || continue
         if a isa Symbolic
-            allow_symbolic || continue
+            if !allow_symbolic
+                if allow_parameter
+                    ModelingToolkit.isparameter(a) || continue
+                else
+                    continue
+                end
+            end
             add_edge!(solvable_graph, ieq, j)
             continue
         end
@@ -191,7 +197,7 @@ function find_eq_solvables!(state::TearingState, ieq; may_be_zero=false, allow_s
     end
 end
 
-function find_solvables!(state::TearingState; allow_symbolic=true)
+function find_solvables!(state::TearingState; allow_symbolic=false)
     @assert state.structure.solvable_graph === nothing
     eqs = equations(state)
     graph = state.structure.graph
