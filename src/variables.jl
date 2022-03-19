@@ -73,23 +73,13 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults=Dict(), check=false, to
     varmap = Dict(toterm(value(k))=>value(varmap[k]) for k in keys(varmap))
     # resolve symbolic parameter expressions
     for (p, v) in pairs(varmap)
-        val = varmap[p] = fixpoint_sub(v, varmap)
+        varmap[p] = fixpoint_sub(v, varmap)
     end
-    vs = values(varmap)
-    T′ = eltype(vs)
-    if Base.isconcretetype(T′)
-        T = T′
-    else
-        T = foldl((t, elem)->promote_type(t, eltype(elem)), vs; init=typeof(first(vs)))
-    end
-    out = Vector{T}(undef, length(varlist))
+    
     missingvars = setdiff(varlist, keys(varmap))
     check && (isempty(missingvars) || throw_missingvars(missingvars))
 
-    for (i, var) in enumerate(varlist)
-        out[i] = varmap[var]
-    end
-    out
+    out = [varmap[var] for var in varlist]
 end
 
 @noinline throw_missingvars(vars) = throw(ArgumentError("$vars are missing from the variable map."))
