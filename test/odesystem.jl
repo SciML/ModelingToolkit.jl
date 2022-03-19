@@ -633,3 +633,17 @@ let
     # no initial conditions for D(x[1]) and D(x[2]) provided
     @test_throws ArgumentError prob = DAEProblem(sys, Pair[], Pair[], (0, 50))    
 end
+
+#issue 1475 (mixed numeric type)
+let
+    @parameters k1 k2
+    @variables t, A(t)
+    D = Differential(t)
+    eqs = [D(A) ~ -k1*k2*A]
+    @named sys = ODESystem(eqs,t)
+    u0map = [A => 1.0]
+    pmap = (k1 => 1.0, k2 => 1)
+    tspan = (0.0,1.0)
+    prob = ODEProblem(sys, u0map, tspan, pmap)
+    @test prob.p === Tuple([(Dict(pmap))[k] for k in values(parameters(sys))])
+end
