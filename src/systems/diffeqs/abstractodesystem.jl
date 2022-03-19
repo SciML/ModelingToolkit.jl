@@ -559,17 +559,6 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
     ps = parameters(sys)
     defs = defaults(sys)
     iv = get_iv(sys)
-    function mergedefaults(defaults, varmap, vars)
-        defs = if varmap isa Dict
-            merge(defaults, varmap)
-        elseif eltype(varmap) <: Pair
-            merge(defaults, Dict(varmap))
-        elseif eltype(varmap) <: Number
-            merge(defaults, Dict(zip(vars, varmap)))
-        else
-            defaults
-        end
-    end
 
     pdefs = mergedefaults(defs, parammap, ps)
     u0defs = mergedefaults(defs, u0map, dvs)
