@@ -220,9 +220,17 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple,Nothing},
                                     parammap=DiffEqBase.NullParameters(); checkbounds=false, kwargs...)
+    
+    dvs = states(sys)
+    ps = parameters(sys)
+    
     defs = defaults(sys)
-    u0 = varmap_to_vars(u0map, states(sys); defaults=defs)
-    p  = varmap_to_vars(parammap, parameters(sys); defaults=defs)
+    # defs = mergedefaults(defs,parammap,ps)
+    # defs = mergedefaults(defs,u0map,dvs) # fill result in wrong type for u0
+    
+    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
+    p = varmap_to_vars(parammap,ps; defaults=defs)
+        
     f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
     
     # just taken from abstractodesystem.jl for ODEFunction def

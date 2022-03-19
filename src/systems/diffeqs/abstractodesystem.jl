@@ -557,22 +557,22 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
     eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
-    defs = defaults(sys)
     iv = get_iv(sys)
-
-    pdefs = mergedefaults(defs, parammap, ps)
-    u0defs = mergedefaults(defs, u0map, dvs)
-
-    u0 = varmap_to_vars(u0map, dvs; defaults=u0defs)
+    
+    defs = defaults(sys)
+    defs = mergedefaults(defs,parammap,ps)
+    defs = mergedefaults(defs,u0map,dvs)
+    
+    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
+    p = varmap_to_vars(parammap,ps; defaults=defs)
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
-        du0defs = mergedefaults(defs, du0map, ddvs)
-        du0 = varmap_to_vars(du0map, ddvs; defaults=du0defs, toterm=identity)
+        defs = mergedefaults(defs,du0map, ddvs)
+        du0 = varmap_to_vars(du0map,ddvs; defaults=defs, toterm=identity)
     else
         du0 = nothing
         ddvs = nothing
     end
-    p = varmap_to_vars(parammap, ps; defaults=pdefs)
 
     check_eqs_u0(eqs, dvs, u0; kwargs...)
 
