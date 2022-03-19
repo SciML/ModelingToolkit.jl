@@ -689,7 +689,7 @@ merge_cb(x, y) = CallbackSet(x, y)
 
 """
 ```julia
-function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
+function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false,
