@@ -592,3 +592,58 @@ eqs[end] = D(D(z)) ~ α*x - β*y
     
     @test c[1] == length(sol)
 end
+                                                                      
+let
+    @parameters t
+    D = Differential(t)
+    @variables x[1:2](t) = zeros(2) 
+    @variables y(t) = 0
+    @parameters k = 1
+    eqs= [
+        D(x[1]) ~ x[2]
+        D(x[2]) ~ -x[1] - 0.5 * x[2] + k
+        y ~ 0.9 * x[1] + x[2]
+    ]
+    @named sys = ODESystem(eqs, t, vcat(x, [y]), [k])
+    sys = structural_simplify(sys)
+
+    u0 = [0.5, 0]
+    du0 = 0 .* copy(u0)
+    prob = DAEProblem(sys, du0, u0, (0, 50))
+    @test prob.u0 ≈ u0
+    @test prob.du0 ≈ du0
+    @test prob.p ≈ [1]
+    sol = solve(prob, IDA())
+    @test isapprox(sol[x[1]][end], 1, atol=1e-3)
+
+    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0], Pair[x[1] => 0.5], (0, 50))
+    @test prob.u0 ≈ [0.5, 0]
+    @test prob.du0 ≈ [0, 0]
+    @test prob.p ≈ [1]
+    sol = solve(prob, IDA())
+    @test isapprox(sol[x[1]][end], 1, atol=1e-3)
+
+    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0], Pair[x[1] => 0.5], (0, 50), [k => 2])
+    @test prob.u0 ≈ [0.5, 0]
+    @test prob.du0 ≈ [0, 0]
+    @test prob.p ≈ [2]
+    sol = solve(prob, IDA())
+    @test isapprox(sol[x[1]][end], 2, atol=1e-3)
+
+    # no initial conditions for D(x[1]) and D(x[2]) provided
+    @test_throws ArgumentError prob = DAEProblem(sys, Pair[], Pair[], (0, 50))    
+end
+
+#issue 1475 (mixed numeric type)
+let
+    @parameters k1 k2
+    @variables t, A(t)
+    D = Differential(t)
+    eqs = [D(A) ~ -k1*k2*A]
+    @named sys = ODESystem(eqs,t)
+    u0map = [A => 1.0]
+    pmap = (k1 => 1.0, k2 => 1)
+    tspan = (0.0,1.0)
+    prob = ODEProblem(sys, u0map, tspan, pmap)
+    @test prob.p === Tuple([(Dict(pmap))[k] for k in values(parameters(sys))])
+end

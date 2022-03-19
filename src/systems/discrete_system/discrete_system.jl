@@ -174,33 +174,17 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     ps = parameters(sys)
     eqs = equations(sys)
     eqs = linearize_eqs(sys, eqs)
-    defs = defaults(sys)
     iv = get_iv(sys)
-
-    if parammap isa Dict
-        u0defs = merge(parammap, defs)
-    elseif eltype(parammap) <: Pair
-        u0defs = merge(Dict(parammap), defs)
-    elseif eltype(parammap) <: Number
-        u0defs = merge(Dict(zip(ps, parammap)), defs)
-    else
-        u0defs = defs
-    end
-    if u0map isa Dict
-        pdefs = merge(u0map, defs)
-    elseif eltype(u0map) <: Pair
-        pdefs = merge(Dict(u0map), defs)
-    elseif eltype(u0map) <: Number
-        pdefs = merge(Dict(zip(dvs, u0map)), defs)
-    else
-        pdefs = defs
-    end
-
-    u0 = varmap_to_vars(u0map,dvs; defaults=u0defs)
+    
+    defs = defaults(sys)
+    defs = mergedefaults(defs,parammap,ps)
+    defs = mergedefaults(defs,u0map,dvs)
+    
+    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
+    p = varmap_to_vars(parammap,ps; defaults=defs)
 
     rhss = [eq.rhs for eq in eqs]
     u = dvs
-    p = varmap_to_vars(parammap,ps; defaults=pdefs)
 
     f_gen = generate_function(sys; expression=Val{eval_expression}, expression_module=eval_module)
     f_oop, _ = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)

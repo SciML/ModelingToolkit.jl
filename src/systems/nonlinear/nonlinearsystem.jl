@@ -264,7 +264,11 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem,u0map,paramm
     eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
+    
     defs = defaults(sys)
+    defs = mergedefaults(defs,parammap,ps)
+    defs = mergedefaults(defs,u0map,dvs)
+    
     u0 = varmap_to_vars(u0map,dvs; defaults=defs)
     p = varmap_to_vars(parammap,ps; defaults=defs)
 

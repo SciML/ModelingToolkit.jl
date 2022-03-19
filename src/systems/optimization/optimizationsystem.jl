@@ -129,9 +129,9 @@ DiffEqBase.OptimizationProblem(sys::OptimizationSystem,args...;kwargs...) =
 
 """
 ```julia
-function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
+function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
-                                          u0=nothing, lb=nothing, ub=nothing,
+                                          lb=nothing, ub=nothing,
                                           grad = false,
                                           hess = false, sparse = false,
                                           checkbounds = false,
@@ -142,7 +142,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,
 Generates an OptimizationProblem from an OptimizationSystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
-function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
+function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           lb=nothing, ub=nothing,
                                           grad = false,
@@ -177,7 +177,10 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0,
     _f = DiffEqBase.OptimizationFunction{iip,AutoModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,AutoModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing)
 
     defs = defaults(sys)
-    u0 = varmap_to_vars(u0,dvs; defaults=defs)
+    defs = mergedefaults(defs,parammap,ps)
+    defs = mergedefaults(defs,u0map,dvs)
+
+    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
     p = varmap_to_vars(parammap,ps; defaults=defs)
     lb = varmap_to_vars(lb,dvs; check=false)
     ub = varmap_to_vars(ub,dvs; check=false)
@@ -233,7 +236,10 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     end
 
     defs = defaults(sys)
-    u0 = varmap_to_vars(u0,dvs; defaults=defs)
+    defs = mergedefaults(defs,parammap,ps)
+    defs = mergedefaults(defs,u0map,dvs)
+
+    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
     p = varmap_to_vars(parammap,ps; defaults=defs)
     lb = varmap_to_vars(lb,dvs)
     ub = varmap_to_vars(ub,dvs)

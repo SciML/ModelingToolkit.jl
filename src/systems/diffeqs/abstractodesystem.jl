@@ -557,36 +557,22 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
     eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
-    defs = defaults(sys)
     iv = get_iv(sys)
-    if parammap isa Dict
-        u0defs = merge(parammap, defs)
-    elseif eltype(parammap) <: Pair
-        u0defs = merge(Dict(parammap), defs)
-    elseif eltype(parammap) <: Number
-        u0defs = merge(Dict(zip(ps, parammap)), defs)
-    else
-        u0defs = defs
-    end
-    if u0map isa Dict
-        pdefs = merge(u0map, defs)
-    elseif eltype(u0map) <: Pair
-        pdefs = merge(Dict(u0map), defs)
-    elseif eltype(u0map) <: Number
-        pdefs = merge(Dict(zip(dvs, u0map)), defs)
-    else
-        pdefs = defs
-    end
-
-    u0 = varmap_to_vars(u0map,dvs; defaults=u0defs)
+    
+    defs = defaults(sys)
+    defs = mergedefaults(defs,parammap,ps)
+    defs = mergedefaults(defs,u0map,dvs)
+    
+    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
+    p = varmap_to_vars(parammap,ps; defaults=defs)
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
-        du0 = varmap_to_vars(du0map, ddvs; defaults=defaults, toterm=identity)
+        defs = mergedefaults(defs,du0map, ddvs)
+        du0 = varmap_to_vars(du0map,ddvs; defaults=defs, toterm=identity)
     else
         du0 = nothing
         ddvs = nothing
     end
-    p = varmap_to_vars(parammap,ps; defaults=pdefs)
 
     check_eqs_u0(eqs, dvs, u0; kwargs...)
 
@@ -691,7 +677,7 @@ merge_cb(x, y) = CallbackSet(x, y)
 
 """
 ```julia
-function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
+function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false,
