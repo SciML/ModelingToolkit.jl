@@ -19,6 +19,15 @@ function check_contract(sys)
     end
 end
 
+function check_rc_sol(sol)
+    @test sol[rc_model.resistor.p.i] == sol[resistor.p.i] == sol[capacitor.p.i]
+    @test sol[rc_model.resistor.n.i] == sol[resistor.n.i] == -sol[capacitor.p.i]
+    @test sol[rc_model.capacitor.n.i] ==sol[capacitor.n.i] == -sol[capacitor.p.i]
+    @test iszero(sol[rc_model.ground.g.i])
+    @test iszero(sol[rc_model.ground.g.v])
+    @test sol[rc_model.resistor.v] == sol[resistor.v] == sol[source.p.v] - sol[capacitor.p.v]
+end
+
 include("../examples/rc_model.jl")
 
 sys = structural_simplify(rc_model)
@@ -31,13 +40,10 @@ u0 = [
      ]
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
-
-@test sol[resistor.p.i] == sol[capacitor.p.i]
-@test sol[resistor.n.i] == -sol[capacitor.p.i]
-@test sol[capacitor.n.i] == -sol[capacitor.p.i]
-@test iszero(sol[ground.g.i])
-@test iszero(sol[ground.g.v])
-@test sol[resistor.v] == sol[source.p.v] - sol[capacitor.p.v]
+check_rc_sol(sol)
+prob = ODAEProblem(sys, u0, (0, 10.0))
+sol = solve(prob, Rodas4())
+check_rc_sol(sol)
 
 # Outer/inner connections
 function rc_component(;name)
