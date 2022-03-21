@@ -393,20 +393,40 @@ function build_observed_function(
 
     required_algvars = Set(intersect(algvars, vars))
     obs = observed(sys)
-    observed_idx = Dict(map(x->x.lhs, obs) .=> 1:length(obs))
-    # FIXME: this is a rather rough estimate of dependencies.
-    maxidx = 0
+    observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
+    namespaced_to_obs = Dict(states(sys, x.lhs) => x.lhs for x in obs)
+    namespaced_to_sts = Dict(states(sys, x) => x for x in states(sys))
     sts = Set(states(sys))
+
+    # FIXME: This is a rather rough estimate of dependencies. We assume
+    # the expression depends on everything before the `maxidx`.
+    subs = Dict()
+    maxidx = 0
     for (i, s) in enumerate(dep_vars)
         idx = get(observed_idx, s, nothing)
-        if idx === nothing
-            if !(s in sts)
+        if idx !== nothing
+            idx > maxidx && (maxidx = idx)
+        else
+            s′ = get(namespaced_to_obs, s, nothing)
+            if s′ !== nothing
+                subs[s] = s′
+                s = s′
+                idx = get(observed_idx, s, nothing)
+            end
+            if idx !== nothing
+                idx > maxidx && (maxidx = idx)
+            elseif !(s in sts)
+                s′ = get(namespaced_to_sts, s, nothing)
+                if s′ !== nothing
+                    subs[s] = s′
+                    continue
+                end
                 throw(ArgumentError("$s is either an observed nor a state variable."))
             end
             continue
         end
-        idx > maxidx && (maxidx = idx)
     end
+    ts = map(t->substitute(t, subs), ts)
     vs = Set()
     for idx in 1:maxidx
         vars!(vs, obs[idx].rhs)

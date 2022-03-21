@@ -357,7 +357,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     M = calculate_massmatrix(sys)
-    
+
     _M = if sparse && !(u0 === nothing || M === I)
       SparseArrays.sparse(M)
     elseif u0 === nothing || M === I
