@@ -552,7 +552,7 @@ eqs[end] = D(D(z)) ~ α*x - β*y
     end
 
     dummy_identity(x, _) = x
-    @register dummy_identity(x, y)
+    @register_symbolic dummy_identity(x, y)
 
     u0 = ones(5)
     p0 = Float64[]
