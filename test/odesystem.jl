@@ -631,10 +631,14 @@ let
     @test isapprox(sol[x[1]][end], 2, atol=1e-3)
 
     # no initial conditions for D(x[1]) and D(x[2]) provided
-    @test_throws ArgumentError prob = DAEProblem(sys, Pair[], Pair[], (0, 50))    
+    @test_throws ArgumentError prob = DAEProblem(sys, Pair[], Pair[], (0, 50))   
+    
+    prob = ODEProblem(sys, Pair[x[1] => 0], (0, 50))
+    sol = solve(prob, Rosenbrock23())
+    @test isapprox(sol[x[1]][end], 1, atol=1e-3)
 end
 
-#issue 1475 (mixed numeric type)
+#issue 1475 (mixed numeric type for parameters)
 let
     @parameters k1 k2
     @variables t, A(t)
