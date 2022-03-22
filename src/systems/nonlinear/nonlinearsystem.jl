@@ -269,7 +269,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem,u0map,paramm
     defs = mergedefaults(defs,parammap,ps)
     defs = mergedefaults(defs,u0map,dvs)
     
-    u0 = promote_to_concrete(varmap_to_vars(u0map,dvs; defaults=defs))
+    u0 = varmap_to_vars(u0map,dvs; defaults=defs, promotetoconcrete=true)
     p = varmap_to_vars(parammap,ps; defaults=defs)
 
     check_eqs_u0(eqs, dvs, u0; kwargs...)
