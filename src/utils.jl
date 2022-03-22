@@ -472,11 +472,12 @@ function mergedefaults(defaults, varmap, vars)
     end
 end
 
-function promote_to_concrete(vs::Vector{T}) where {T}
+function promote_to_concrete(vs)
+    T = eltype(vs)
     if Base.isconcretetype(T) # nothing to do
         vs
     else
         C = foldl((t, elem)->promote_type(t, eltype(elem)), vs; init=typeof(first(vs)))
-        convert(Vector{C}, vs)
+        convert.(C, vs)
     end
 end
