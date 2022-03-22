@@ -180,7 +180,7 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
     defs = mergedefaults(defs,parammap,ps)
     defs = mergedefaults(defs,u0map,dvs)
     
-    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
+    u0 = promote_to_concrete(varmap_to_vars(u0map,dvs; defaults=defs))
     p = varmap_to_vars(parammap,ps; defaults=defs)
 
     rhss = [eq.rhs for eq in eqs]

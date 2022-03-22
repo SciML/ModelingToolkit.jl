@@ -228,7 +228,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple,N
     defs = mergedefaults(defs,parammap,ps)
     defs = mergedefaults(defs,u0map,dvs) 
     
-    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
+    u0 = promote_to_concrete(varmap_to_vars(u0map,dvs; defaults=defs))
     p = varmap_to_vars(parammap,ps; defaults=defs)
         
     f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
