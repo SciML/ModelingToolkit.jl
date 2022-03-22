@@ -473,7 +473,9 @@ function mergedefaults(defaults, varmap, vars)
 end
 
 function promote_to_concrete(vs)
-    isemtpy(vs) && return vs
+    if isempty(vs) 
+        return vs
+    end
     T = eltype(vs)
     if Base.isconcretetype(T) # nothing to do
         vs
