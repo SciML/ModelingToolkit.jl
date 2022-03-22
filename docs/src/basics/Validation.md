@@ -82,7 +82,7 @@ D = Differential(t)
 struct NewType
     f
 end
-@register dummycomplex(complex::Num, scalar)
+@register_symbolic dummycomplex(complex::Num, scalar)
 dummycomplex(complex, scalar) = complex.f - scalar
 
 c = NewType(1)

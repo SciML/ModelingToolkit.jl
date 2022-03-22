@@ -165,7 +165,7 @@ of random values:
 ```julia
 value_vector = randn(10)
 f_fun(t) = t >= 10 ? value_vector[end] : value_vector[Int(floor(t))+1]
-@register f_fun(t)
+@register_symbolic f_fun(t)
 
 @named fol_external_f = ODESystem([f ~ f_fun(t), D(x) ~ (f - x)/τ])
 prob = ODEProblem(structural_simplify(fol_external_f), [x => 0.0], (0.0,10.0), [τ => 0.75])

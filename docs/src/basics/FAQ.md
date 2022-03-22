@@ -41,5 +41,5 @@ ERROR: TypeError: non-boolean (Num) used in boolean context
 
 then it's likely you are trying to trace through a function which cannot be
 directly represented in Julia symbols. The techniques to handle this problem,
-such as `@register`, are described in detail 
+such as `@register_symbolic`, are described in detail 
 [in the Symbolics.jl documentation](https://symbolics.juliasymbolics.org/dev/manual/faq/#Transforming-my-function-to-a-symbolic-equation-has-failed.-What-do-I-do?-1).

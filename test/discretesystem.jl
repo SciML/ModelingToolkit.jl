@@ -141,7 +141,7 @@ RHS2 = RHS
         end
     
     dummy_identity(x, _) = x
-    @register dummy_identity(x, y)
+    @register_symbolic dummy_identity(x, y)
 
     u0 = ones(5)
     p0 = Float64[]

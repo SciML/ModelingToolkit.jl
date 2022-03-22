@@ -15,7 +15,7 @@ module MyModule
     function do_something(a)
         a + 10
     end
-    @register do_something(a)
+    @register_symbolic do_something(a)
 
     eq  = Dt(u) ~ do_something(x) + MyModule.do_something(x)
     @named sys = ODESystem([eq], t, [u], [x])
@@ -38,7 +38,7 @@ module MyModule2
         function do_something_2(a)
             a + 20
         end
-        @register do_something_2(a)
+        @register_symbolic do_something_2(a)
 
         eq  = Dt(u) ~ do_something_2(x) + MyNestedModule.do_something_2(x)
         @named sys = ODESystem([eq], t, [u], [x])
@@ -60,7 +60,7 @@ Dt = Differential(t)
 function do_something_3(a)
     a + 30
 end
-@register do_something_3(a)
+@register_symbolic do_something_3(a)
 
 eq  = Dt(u) ~ do_something_3(x) + (@__MODULE__).do_something_3(x)
 @named sys = ODESystem([eq], t, [u], [x])
@@ -74,7 +74,7 @@ u0 = 7.0
 # ---------------------------------------------------
 foo(x, y) = sin(x) * cos(y)
 @parameters t; @variables x(t) y(t) z(t); D = Differential(t)
-@register foo(x, y)
+@register_symbolic foo(x, y)
 
 using ModelingToolkit: value, arguments, operation
 expr = value(foo(x, y))
@@ -95,7 +95,7 @@ ModelingToolkit.derivative(::typeof(foo), (x, y), ::Val{2}) = -sin(x) * sin(y) #
 function do_something_4(a)
     a + 30
 end
-@register do_something_4(a)
+@register_symbolic do_something_4(a)
 function build_ode()
     @parameters t x
     @variables u(t)
@@ -113,6 +113,6 @@ run_test()
 
 using ModelingToolkit: arguments
 @variables a
-@register foo(x,y,z)
+@register_symbolic foo(x,y,z)
 @test 1 * foo(a,a,a) * Num(1) isa Num
 @test !any(x->x isa Num, arguments(value(1 * foo(a,a,a) * Num(1))))

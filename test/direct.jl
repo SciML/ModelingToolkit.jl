@@ -17,7 +17,7 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
                  -sin(x) * cos(cos(x))
                 )
 
-@register no_der(x)
+@register_symbolic no_der(x)
 @test canonequal(
                  ModelingToolkit.derivative([sin(cos(x)), hypot(x, no_der(x))], x),
                  [
@@ -26,7 +26,7 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
                  ]
                 )
 
-@register intfun(x)::Int
+@register_symbolic intfun(x)::Int
 @test ModelingToolkit.symtype(intfun(x)) === Int
 
 eqs = [σ*(y-x),
@@ -196,7 +196,7 @@ test_worldage()
 @test_nowarn [x, y, z]'
 
 let
-    @register foo(x)
+    @register_symbolic foo(x)
     @variables t
     D = Differential(t)
 
