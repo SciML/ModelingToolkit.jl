@@ -32,7 +32,7 @@ Takes a list of pairs of `variables=>values` and an ordered list of variables
 and creates the array of values in the correct order with default values when
 applicable.
 """
-function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true, toterm=Symbolics.diff2term)
+function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true, toterm=Symbolics.diff2term, promotetoconcrete=false)
     varlist = map(unwrap, varlist)
     # Edge cases where one of the arguments is effectively empty.
     is_incomplete_initialization = varmap isa DiffEqBase.NullParameters || varmap === nothing
@@ -51,11 +51,15 @@ function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true, toterm=Sym
     # We respect the input type
     container_type = T <: Dict ? Array : T
 
-    if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
+    vals = if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
         varmap = todict(varmap)
-        vals = _varmap_to_vars(varmap, varlist; defaults=defaults, check=check, toterm=toterm)
+        _varmap_to_vars(varmap, varlist; defaults=defaults, check=check, toterm=toterm)
     else # plain array-like initialization
-        vals = varmap
+        varmap
+    end
+
+    if promotetoconcrete
+        vals = promote_to_concrete(vals)
     end
 
     if isempty(vals)

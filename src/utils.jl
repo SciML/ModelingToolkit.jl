@@ -471,3 +471,16 @@ function mergedefaults(defaults, varmap, vars)
         defaults
     end
 end
+
+function promote_to_concrete(vs)
+    if isempty(vs) 
+        return vs
+    end
+    T = eltype(vs)
+    if Base.isconcretetype(T) # nothing to do
+        vs
+    else
+        C = foldl((t, elem)->promote_type(t, eltype(elem)), vs; init=typeof(first(vs)))
+        convert.(C, vs)
+    end
+end

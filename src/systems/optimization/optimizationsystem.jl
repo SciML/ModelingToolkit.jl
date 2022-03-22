@@ -239,7 +239,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     defs = mergedefaults(defs,parammap,ps)
     defs = mergedefaults(defs,u0map,dvs)
 
-    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
+    u0 = varmap_to_vars(u0map,dvs; defaults=defs, promotetoconcrete=true)
     p = varmap_to_vars(parammap,ps; defaults=defs)
     lb = varmap_to_vars(lb,dvs)
     ub = varmap_to_vars(ub,dvs)

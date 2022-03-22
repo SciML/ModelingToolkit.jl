@@ -563,12 +563,12 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
     defs = mergedefaults(defs,parammap,ps)
     defs = mergedefaults(defs,u0map,dvs)
     
-    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
+    u0 = varmap_to_vars(u0map,dvs; defaults=defs, promotetoconcrete=true)
     p = varmap_to_vars(parammap,ps; defaults=defs)
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
         defs = mergedefaults(defs,du0map, ddvs)
-        du0 = varmap_to_vars(du0map,ddvs; defaults=defs, toterm=identity)
+        du0 = varmap_to_vars(du0map,ddvs; defaults=defs, toterm=identity, promotetoconcrete=true)
     else
         du0 = nothing
         ddvs = nothing
