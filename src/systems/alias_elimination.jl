@@ -4,7 +4,7 @@ const KEEP = typemin(Int)
 
 function alias_eliminate_graph!(state::TransformationState)
     mm = linear_subsys_adjmat(state)
-    size(mm, 1) == 0 && nothing, mm # No linear subsystems
+    size(mm, 1) == 0 && return nothing, mm # No linear subsystems
 
     @unpack graph, var_to_diff = state.structure
 
