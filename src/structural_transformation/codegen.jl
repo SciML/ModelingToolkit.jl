@@ -433,6 +433,11 @@ function build_observed_function(
         union!(required_algvars, intersect(algvars, vs))
         empty!(vs)
     end
+    for eq in assignments
+        vars!(vs, eq.rhs)
+        union!(required_algvars, intersect(algvars, vs))
+        empty!(vs)
+    end
 
     varidxs = findall(x->x in required_algvars, fullvars)
     subset = find_solve_sequence(var_sccs, varidxs)
@@ -473,8 +478,8 @@ function build_observed_function(
         [],
         pre(Let(
             [
-             assignments[is_not_prepended_assignment]
              collect(Iterators.flatten(solves))
+             assignments[is_not_prepended_assignment]
              map(eq -> eq.lhs←eq.rhs, obs[1:maxidx])
              subs
             ],
