@@ -45,6 +45,26 @@ prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 check_rc_sol(sol)
 
+let
+# 1478
+@named resistor2 = Resistor(R=R)
+rc_eqs2 = [
+          connect(source.p, resistor.p)
+          connect(resistor.n, resistor2.p)
+          connect(resistor2.n, capacitor.p)
+          connect(capacitor.n, source.n)
+          connect(capacitor.n, ground.g)
+         ]
+
+@named _rc_model2 = ODESystem(rc_eqs2, t)
+@named rc_model2 = compose(_rc_model2,
+                          [resistor, resistor2, capacitor, source, ground])
+sys2 = structural_simplify(rc_model2)
+prob2 = ODAEProblem(sys2, u0, (0, 10.0))
+sol2 = solve(prob2, Tsit5())
+@test sol2[source.p.i] == sol2[rc_model2.source.p.i] == -sol2[capacitor.i]
+end
+
 # Outer/inner connections
 function rc_component(;name)
     R = 1

@@ -288,6 +288,7 @@ function build_torn_function(
             append!(mass_matrix_diag, zeros(length(torn_eqs_idxs)))
         end
     end
+    sort!(states_idxs)
 
     mass_matrix = needs_extending ? Diagonal(mass_matrix_diag) : I
 
@@ -323,11 +324,18 @@ function build_torn_function(
     if expression
         expr, states
     else
-        observedfun = let state = state, dict=Dict(), assignments=assignments, deps=(deps, invdeps), sol_states=sol_states, var2assignment=var2assignment
+        observedfun = let state=state,
+            dict=Dict(),
+            is_solver_state_idxs=insorted.(1:length(fullvars), (states_idxs,)),
+            assignments=assignments,
+            deps=(deps, invdeps),
+            sol_states=sol_states,
+            var2assignment=var2assignment
+
             function generated_observed(obsvar, u, p, t)
                 obs = get!(dict, value(obsvar)) do
                     build_observed_function(state, obsvar, var_eq_matching, var_sccs,
-                                            assignments, deps, sol_states, var2assignment,
+                                            is_solver_state_idxs, assignments, deps, sol_states, var2assignment,
                                             checkbounds=checkbounds,
                                            )
                 end
@@ -364,6 +372,7 @@ end
 
 function build_observed_function(
         state, ts, var_eq_matching, var_sccs,
+        is_solver_state_idxs,
         assignments,
         deps,
         sol_states,
@@ -388,8 +397,8 @@ function build_observed_function(
     fullvars = state.fullvars
     s = state.structure
     graph = s.graph
-    diffvars = map(i->fullvars[i], diffvars_range(s))
-    algvars = map(i->fullvars[i], algvars_range(s))
+    solver_states = fullvars[is_solver_state_idxs]
+    algvars = fullvars[.!is_solver_state_idxs]
 
     required_algvars = Set(intersect(algvars, vars))
     obs = observed(sys)
@@ -433,6 +442,11 @@ function build_observed_function(
         union!(required_algvars, intersect(algvars, vs))
         empty!(vs)
     end
+    for eq in assignments
+        vars!(vs, eq.rhs)
+        union!(required_algvars, intersect(algvars, vs))
+        empty!(vs)
+    end
 
     varidxs = findall(x->x in required_algvars, fullvars)
     subset = find_solve_sequence(var_sccs, varidxs)
@@ -466,15 +480,15 @@ function build_observed_function(
 
     ex = Code.toexpr(Func(
         [
-         DestructuredArgs(diffvars, inbounds=!checkbounds)
+         DestructuredArgs(solver_states, inbounds=!checkbounds)
          DestructuredArgs(parameters(sys), inbounds=!checkbounds)
          independent_variables(sys)
         ],
         [],
         pre(Let(
             [
-             assignments[is_not_prepended_assignment]
              collect(Iterators.flatten(solves))
+             assignments[is_not_prepended_assignment]
              map(eq -> eq.lhs←eq.rhs, obs[1:maxidx])
              subs
             ],
