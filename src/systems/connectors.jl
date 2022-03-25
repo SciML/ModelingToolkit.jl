@@ -56,7 +56,18 @@ end
 Connection(syss) = Connection(inners=syss)
 get_systems(c::Connection) = c.inners
 function Base.in(e::Symbol, c::Connection)
-    any(k->nameof(k) === e, c.inners) || any(k->nameof(k) === e, c.outers)
+    (c.inners !== nothing && any(k->nameof(k) === e, c.inners)) ||
+    (c.outers !== nothing && any(k->nameof(k) === e, c.outers))
+end
+
+function renamespace(sym::Symbol, connection::Connection)
+    inners = connection.inners === nothing ? [] : renamespace.(sym, connection.inners)
+    if connection.outers !== nothing
+        for o in connection.outers
+            push!(inners, renamespace(sym, o))
+        end
+    end
+    Connection(;inners=inners)
 end
 
 const EMPTY_VEC = []
@@ -200,12 +211,14 @@ else
 end
 @register mydiv(n, d)
 
-function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10)
+function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10,
+        rename=Ref{Union{Nothing,Tuple{Symbol,Int}}}(nothing), stream_connects=[])
     subsys = get_systems(sys)
     isempty(subsys) && return sys
 
     # post order traversal
-    @set! sys.systems = map(s->expand_connections(s, debug=debug, tol=tol), subsys)
+    @set! sys.systems = map(s->expand_connections(s, debug=debug, tol=tol,
+                                                  rename=rename, stream_connects=stream_connects), subsys)
 
     outer_connectors = Symbol[]
     for s in subsys
@@ -306,7 +319,21 @@ function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10)
     end
 
     # stream variables
-    stream_connects = filter(isstreamconnection, narg_connects)
+    if rename[] !== nothing
+        name, depth = rename[]
+        nc = length(stream_connects)
+        for i in nc-depth+1:nc
+            stream_connects[i] = renamespace(:room, stream_connects[i])
+        end
+    end
+    nsc = 0
+    for c in narg_connects
+        if isstreamconnection(c)
+            push!(stream_connects, c)
+            nsc += 1
+        end
+    end
+    rename[] = nameof(sys), nsc
     instream_eqs, additional_eqs = expand_instream(instream_eqs, instream_exprs, stream_connects; debug=debug, tol=tol)
 
     @set! sys.eqs = [eqs; instream_eqs; additional_eqs]
@@ -388,8 +415,8 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false, to
         connectors = Iterators.flatten((connect.inners, connect.outers))
         # stream variable
         sv = getproperty(first(connectors), streamvar_name; namespace=false)
-        inner_sc = connect.inners
-        outer_sc = connect.outers
+        inner_sc = something(connect.inners, EMPTY_VEC)
+        outer_sc = something(connect.outers, EMPTY_VEC)
 
         n_outers = length(outer_sc)
         n_inners = length(inner_sc)
@@ -463,7 +490,7 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false, to
     # additional equations
     additional_eqs = Equation[]
     for c in connects
-        outer_sc = c.outers
+        outer_sc = something(c.outers, EMPTY_VEC)
         isempty(outer_sc) && continue
         inner_sc = c.inners
         n_outers = length(outer_sc)
