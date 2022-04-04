@@ -359,6 +359,42 @@ end
 {<load.n.v, outside>, <load.resistor.n.v, inside>}
 =#
 
+function Base.merge(csets::AbstractVector{<:ConnectionSet})
+    mcsets = ConnectionSet[]
+    # FIXME: this is O(m n^3)
+    for cset in csets
+        idx = findfirst(mcset->any(s->any(z->isequal(z, s), cset.set), mcset.set), mcsets)
+        if idx === nothing
+            push!(mcsets, cset)
+        else
+            union!(mcsets[idx].set, cset.set)
+        end
+    end
+    mcsets
+end
+
+function generate_connection_equations(csets::AbstractVector{<:ConnectionSet})
+    eqs = Equation[]
+    for cset in csets
+        vtype = get_connection_type(cset.set[1][1])
+        vtype === Stream && continue
+        if vtype === Flow
+            rhs = 0
+            for (v, isouter) in cset.set
+                rhs += isouter ? -v : v
+            end
+            push!(eqs, 0 ~ rhs)
+        else # Equality
+            base = cset.set[1][1]
+            for i in 2:length(cset.set)
+                v = cset.set[i][1]
+                push!(eqs, base ~ v)
+            end
+        end
+    end
+    eqs
+end
+
 function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10,
         rename=Ref{Union{Nothing,Tuple{Symbol,Int}}}(nothing), stream_connects=[])
     subsys = get_systems(sys)
