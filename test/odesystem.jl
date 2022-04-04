@@ -358,7 +358,7 @@ D = Differential(t)
 eqs = [D(x1) ~ -x1]
 @named sys = ODESystem(eqs,t,[x1,x2],[])
 @test_throws ArgumentError ODEProblem(sys, [1.0,1.0], (0.0,1.0))
-@test_nowarn ODEProblem(sys, [1.0,1.0], (0.0,1.0), check_length=false) 
+@test_nowarn ODEProblem(sys, [1.0,1.0], (0.0,1.0), check_length=false)
 
 # check inputs
 let
@@ -508,8 +508,8 @@ prob = ODEProblem(outersys, [sys.x=>1.0; collect(sys.ms).=>1:3], (0, 1.0))
 
 # observed variable handling
 @variables t x(t) RHS(t)
-@parameters τ   
-D = Differential(t) 
+@parameters τ
+D = Differential(t)
 @named fol = ODESystem([D(x)  ~ (1 - x)/τ]; observed=[RHS ~ (1 - x)/τ])
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
@@ -589,14 +589,14 @@ eqs[end] = D(D(z)) ~ α*x - β*y
     @named sys = ODESystem(eqs, t, us, ps; defaults=defs, preface=preface)
     prob = ODEProblem(sys, [], (0.0, 1.0))
     sol = solve(prob, Euler(); dt=0.1)
-    
+
     @test c[1] == length(sol)
 end
-                                                                      
+
 let
     @parameters t
     D = Differential(t)
-    @variables x[1:2](t) = zeros(2) 
+    @variables x[1:2](t) = zeros(2)
     @variables y(t) = 0
     @parameters k = 1
     eqs= [
@@ -631,8 +631,8 @@ let
     @test isapprox(sol[x[1]][end], 2, atol=1e-3)
 
     # no initial conditions for D(x[1]) and D(x[2]) provided
-    @test_throws ArgumentError prob = DAEProblem(sys, Pair[], Pair[], (0, 50))   
-    
+    @test_throws ArgumentError prob = DAEProblem(sys, Pair[], Pair[], (0, 50))
+
     prob = ODEProblem(sys, Pair[x[1] => 0], (0, 50))
     sol = solve(prob, Rosenbrock23())
     @test isapprox(sol[x[1]][end], 1, atol=1e-3)
@@ -650,4 +650,10 @@ let
     tspan = (0.0,1.0)
     prob = ODEProblem(sys, u0map, tspan, pmap)
     @test prob.p === Tuple([(Dict(pmap))[k] for k in values(parameters(sys))])
+end
+
+let
+    @variables t s(t) I(t) r(t)
+    @parameters N
+    @test_throws Any @named tmp = ODESystem([s + I + r ~ N])
 end
