@@ -211,6 +211,58 @@ else
 end
 @register mydiv(n, d)
 
+function generate_isouter(sys::AbstractSystem)
+    outer_connectors = Symbol[]
+    for s in get_systems(sys)
+        n = nameof(s)
+        isconnector(s) && push!(outer_connectors, n)
+    end
+    let outer_connectors=outer_connectors
+        function isouter(sys)::Bool
+            s = string(nameof(sys))
+            isconnector(sys) || error("$s is not a connector!")
+            idx = findfirst(isequal('₊'), s)
+            parent_name = Symbol(idx === nothing ? s : s[1:prevind(s, idx)])
+            parent_name in outer_connectors
+        end
+    end
+end
+
+struct ConnectionSet
+    set::Vector{Pair{Any, Bool}} # var => isouter
+end
+
+function generate_connection_set(sys::AbstractSystem, namespace=nothing)
+    subsys = get_systems(sys)
+    isempty(subsys) && return sys
+
+    isouter = generate_isouter(sys)
+    eqs′ = get_eqs(sys)
+    eqs = Equation[]
+    #instream_eqs = Equation[]
+    #instream_exprs = []
+    cts = [] # connections
+    for eq in eqs′
+        if eq.lhs isa Connection
+            push!(cts, get_systems(eq.rhs))
+        #elseif collect_instream!(instream_exprs, eq)
+        #    push!(instream_eqs, eq)
+        else
+            push!(eqs, eq) # split connections and equations
+        end
+    end
+
+    # if there are no connections, we are done
+    isempty(cts) && return sys
+
+    set = Pair{Any, Bool}[]
+    
+
+    # pre order traversal
+    namespace = renamespace(nameof(sys), namespace)
+    @set! sys.systems = map(Base.Fix2(generate_connection_set, namespace), subsys)
+end
+
 function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10,
         rename=Ref{Union{Nothing,Tuple{Symbol,Int}}}(nothing), stream_connects=[])
     subsys = get_systems(sys)
@@ -220,21 +272,7 @@ function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10,
     @set! sys.systems = map(s->expand_connections(s, debug=debug, tol=tol,
                                                   rename=rename, stream_connects=stream_connects), subsys)
 
-    outer_connectors = Symbol[]
-    for s in subsys
-        n = nameof(s)
-        isconnector(s) && push!(outer_connectors, n)
-    end
-    isouter = let outer_connectors=outer_connectors
-        function isouter(sys)::Bool
-            s = string(nameof(sys))
-            isconnector(sys) || error("$s is not a connector!")
-            idx = findfirst(isequal('₊'), s)
-            parent_name = Symbol(idx === nothing ? s : s[1:prevind(s, idx)])
-            parent_name in outer_connectors
-        end
-    end
-
+    isouter = generate_isouter(sys)
     sys = flatten(sys)
     eqs′ = get_eqs(sys)
     eqs = Equation[]
