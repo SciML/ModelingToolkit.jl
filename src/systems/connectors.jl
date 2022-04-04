@@ -232,8 +232,43 @@ struct ConnectionSet
     set::Vector{Pair{Any, Bool}} # var => isouter
 end
 
-function generate_connection_set(sys::AbstractSystem, namespace=nothing)
+function Base.show(io::IO, c::ConnectionSet)
+    print(io, "<")
+    for i in 1:length(c.set)-1
+        v, isouter = c.set[i]
+        print(io, v, "::", isouter ? "outer" : "inner", ", ")
+    end
+    v, isouter = last(c.set)
+    print(io, v, "::", isouter ? "outer" : "inner", ">")
+end
+
+@noinline connection_error(ss) = error("Different types of connectors are in one conenction statement: <$(map(nameof, ss))>")
+
+function connection2set!(connectionsets, namespace, ss, isouter)
+    sts1 = Set(states(first(ss)))
+    T = Pair{Any,Bool}
+    csets = [T[] for _ in 1:length(ss)]
+    for (i, s) in enumerate(ss)
+        sts = states(s)
+        i != 1 && ((length(sts1) == length(sts) && all(Base.Fix2(in, sts1), sts)) || connection_error(ss))
+        io = isouter(s)
+        for (j, v) in enumerate(sts)
+            push!(csets[j], T(states(renamespace(namespace, s), v), io))
+        end
+    end
+    for cset in csets
+        vtype = get_connection_type(first(cset)[1])
+        for k in 2:length(cset)
+            vtype === get_connection_type(cset[k][1]) || connection_error(ss)
+        end
+        push!(connectionsets, ConnectionSet(cset))
+    end
+end
+
+generate_connection_set(sys::AbstractSystem) = (connectionsets = ConnectionSet[]; generate_connection_set!(connectionsets, sys::AbstractSystem); connectionsets)
+function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace=nothing)
     subsys = get_systems(sys)
+    # no connectors if there are no subsystems
     isempty(subsys) && return sys
 
     isouter = generate_isouter(sys)
@@ -252,16 +287,77 @@ function generate_connection_set(sys::AbstractSystem, namespace=nothing)
         end
     end
 
+    if namespace !== nothing
+        # Except for the top level, all connectors are eventually inside
+        # connectors.
+        T = Pair{Any,Bool}
+        for s in subsys
+            isconnector(s) || continue
+            for v in states(s)
+                Flow === get_connection_type(v) || continue
+                push!(connectionsets, ConnectionSet([T(renamespace(namespace, states(s, v)), false)]))
+            end
+        end
+    end
+
     # if there are no connections, we are done
     isempty(cts) && return sys
 
-    set = Pair{Any, Bool}[]
-    
+    for ct in cts
+        connection2set!(connectionsets, namespace, ct, isouter)
+    end
 
     # pre order traversal
-    namespace = renamespace(nameof(sys), namespace)
-    @set! sys.systems = map(Base.Fix2(generate_connection_set, namespace), subsys)
+    @set! sys.systems = map(s->generate_connection_set!(connectionsets, s, renamespace(namespace, nameof(s))), subsys)
 end
+#=
+
+ <load₊p₊i(t)::inner>
+{<load.p.i, inside>}
+
+ <load₊n₊i(t)::inner>
+{<load.n.i, inside>}
+
+ <ground₊g₊i(t)::inner>
+{<ground.p.i, inside>}
+
+ <load₊resistor₊p₊i(t)::inner>
+{<load.resistor.p.i, inside>}
+
+ <load₊resistor₊n₊i(t)::inner>
+{<load.resistor.n.i, inside>}
+
+ <resistor₊p₊i(t)::inner>
+{<resistor.p.i, inside>}
+
+ <resistor₊n₊i(t)::inner>
+{<resistor.n.i, inside>}
+
+
+ <resistor.p.i(t)::inner, ground.g.i(t)::inner>
+{<resistor.p.i, inside>, <ground.p.i, inside>}
+
+ <resistor.p.v(t)::inner, ground.g.v(t)::inner>
+{<resistor.p.v, inside>, <ground.p.v, inside>}
+
+ <load.p.i(t)::inner, ground.g.i(t)::inner>
+{<load.p.i, inside>, <ground.p.i, inside>}
+
+ <load.p.v(t)::inner, ground.g.v(t)::inner>
+{<load.p.v, inside>, <ground.p.v, inside>}
+
+ <load.p.i(t)::outer, load.resistor.p.i(t)::inner>
+{<load.p.i, outside>, <load.resistor.p.i, inside>}
+
+ <load.p.v(t)::outer, load.resistor.p.v(t)::inner>
+{<load.p.v, outside>, <load.resistor.p.v, inside>}
+
+ <load.resistor.n.i(t)::inner, load.n.i(t)::outer>
+{<load.n.i, outside>, <load.resistor.n.i, inside>}
+
+ <load.resistor.n.v(t)::inner, load.n.v(t)::outer>
+{<load.n.v, outside>, <load.resistor.n.v, inside>}
+=#
 
 function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10,
         rename=Ref{Union{Nothing,Tuple{Symbol,Int}}}(nothing), stream_connects=[])

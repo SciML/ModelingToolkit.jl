@@ -380,6 +380,7 @@ renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
 
 renamespace(names::AbstractVector, x) = foldr(renamespace, names, init=x)
 function renamespace(sys, x)
+    sys === nothing && return x
     x = unwrap(x)
     if x isa Symbolic
         let scope = getmetadata(x, SymScope, LocalScope())
