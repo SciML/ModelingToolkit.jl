@@ -18,7 +18,7 @@ function calculate_tgrad(sys::AbstractODESystem;
 end
 
 function calculate_jacobian(sys::AbstractODESystem;
-                            sparse=false, simplify=false)
+                            sparse=false, simplify=false, dvs=states(sys))
     cache = get_jac(sys)[]
     if cache isa Tuple && cache[2] == (sparse, simplify)
         return cache[1]
@@ -26,7 +26,7 @@ function calculate_jacobian(sys::AbstractODESystem;
     rhs = [eq.rhs for eq ∈ full_equations(sys)]
 
     iv = get_iv(sys)
-    dvs = states(sys)
+    # dvs = states(sys)
 
     if sparse
         jac = sparsejacobian(rhs, dvs, simplify=simplify)
@@ -75,6 +75,15 @@ end
 function generate_control_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                                    simplify=false, sparse = false, kwargs...)
     jac = calculate_control_jacobian(sys;simplify=simplify,sparse=sparse)
+    return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
+end
+
+function generate_dae_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); simplify=false, sparse=false, kwargs...)
+    jac_u = calculate_jacobian(sys; simplify=simplify, sparse=sparse)
+    jac_du = calculate_jacobian(sys; simplify=simplify, sparse=sparse, dvs=Differential(independent_variable(sys)).(states(sys)))
+    dvs = states(sys)
+    @variables ˍ₋gamma
+    jac = ˍ₋gamma*jac_du + jac_u
     return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
@@ -427,31 +436,49 @@ respectively.
 function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
                                      ddvs=map(diff2term ∘ Differential(get_iv(sys)), dvs),
-                                     version = nothing,
-                                     #=
-                                     tgrad=false,
-                                     jac = false,
-                                     sparse = false,
-                                     =#
-                                     simplify=false,
+                                     version = nothing, tgrad=false,
+                                     jac=false,
                                      eval_expression = true,
+                                     sparse=false, simplify=false,
                                      eval_module = @__MODULE__,
+                                     checkbounds=false,
                                      kwargs...) where {iip}
 
-    f_gen = generate_function(sys, dvs, ps; implicit_dae = true, expression=Val{eval_expression}, expression_module=eval_module, kwargs...)
+    f_gen = generate_function(sys, dvs, ps; implicit_dae = true, expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
     f_oop,f_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen) : f_gen
     f(du,u,p,t) = f_oop(du,u,p,t)
     f(out,du,u,p,t) = f_iip(out,du,u,p,t)
 
-    # TODO: Jacobian sparsity / sparse Jacobian / dense Jacobian
+    if tgrad
+        tgrad_gen = generate_tgrad(sys, dvs, ps;
+                                   simplify=simplify,
+                                   expression=Val{eval_expression}, expression_module=eval_module,
+                                   checkbounds=checkbounds, kwargs...)
+        tgrad_oop, tgrad_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in tgrad_gen) : tgrad_gen
+        _tgrad(u,p,t) = tgrad_oop(u,p,t)
+        _tgrad(J,u,p,t) = tgrad_iip(J,u,p,t)
+    else
+        _tgrad = nothing
+    end
 
-    #=
-        # TODO: We don't have enought information to reconstruct arbitrary state
-    =#
+    if jac
+        jac_gen = generate_dae_jacobian(sys, dvs, ps;
+                                        simplify=simplify, sparse=sparse,
+                                        expression=Val{eval_expression}, expression_module=eval_module,
+                                        checkbounds=checkbounds, kwargs...)
+        jac_oop, jac_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in jac_gen) : jac_gen
+        _jac(u,p,t) = jac_oop(u,p,t)
+        _jac(J,u,p,t) = jac_iip(J,u,p,t)
+    else
+        _jac = nothing
+    end
 
     DAEFunction{iip}(
                      f,
+                     jac = _jac === nothing ? nothing : _jac,
+                     tgrad = _tgrad === nothing ? nothing : _tgrad,
                      syms = Symbol.(dvs),
+                     indepsym = Symbol(get_iv(sys)),
                      # missing fields in `DAEFunction`
                      #indepsym = Symbol(get_iv(sys)),
                      #observed = observedfun,
@@ -558,11 +585,11 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
     dvs = states(sys)
     ps = parameters(sys)
     iv = get_iv(sys)
-    
+
     defs = defaults(sys)
     defs = mergedefaults(defs,parammap,ps)
     defs = mergedefaults(defs,u0map,dvs)
-    
+
     u0 = varmap_to_vars(u0map,dvs; defaults=defs, promotetoconcrete=true)
     p = varmap_to_vars(parammap,ps; defaults=defs)
     if implicit_dae && du0map !== nothing
