@@ -228,44 +228,66 @@ function generate_isouter(sys::AbstractSystem)
     end
 end
 
+struct LazyNamespace
+    namespace::Union{Nothing,Symbol}
+    sys
+end
+
+Base.copy(l::LazyNamespace) = renamespace(l.namespace, l.sys)
+Base.nameof(l::LazyNamespace) = renamespace(l.namespace, nameof(l.sys))
+
+struct ConnectionElement
+    sys::LazyNamespace
+    v
+    isouter::Bool
+end
+Base.hash(l::ConnectionElement, salt::UInt) = hash(nameof(l.sys)) ⊻ hash(l.v) ⊻ hash(l.isouter) ⊻ salt
+Base.isequal(l1::ConnectionElement, l2::ConnectionElement) = l1 == l2
+Base.:(==)(l1::ConnectionElement, l2::ConnectionElement) = nameof(l1.sys) == nameof(l2.sys) && isequal(l1.v, l2.v) && l1.isouter == l2.isouter
+function namespaced_var(l::ConnectionElement)
+    @unpack sys, v = l
+    states(copy(sys), v)
+end
+
 struct ConnectionSet
-    set::Vector{Pair{Any, Bool}} # var => isouter
+    set::Vector{ConnectionElement} # namespace.sys, var, isouter
 end
 
 function Base.show(io::IO, c::ConnectionSet)
     print(io, "<")
     for i in 1:length(c.set)-1
-        v, isouter = c.set[i]
-        print(io, v, "::", isouter ? "outer" : "inner", ", ")
+        @unpack sys, v, isouter = c.set[i]
+        print(io, nameof(sys), ".", v, "::", isouter ? "outer" : "inner", ", ")
     end
-    v, isouter = last(c.set)
-    print(io, v, "::", isouter ? "outer" : "inner", ">")
+    @unpack sys, v, isouter = last(c.set)
+    print(io, nameof(sys), ".", v, "::", isouter ? "outer" : "inner", ">")
 end
 
 @noinline connection_error(ss) = error("Different types of connectors are in one conenction statement: <$(map(nameof, ss))>")
 
 function connection2set!(connectionsets, namespace, ss, isouter)
+    nn = map(nameof, ss)
     sts1 = Set(states(first(ss)))
-    T = Pair{Any,Bool}
-    csets = [T[] for _ in 1:length(ss)]
+    T = ConnectionElement
+    csets = [T[] for _ in 1:length(sts1)]
     for (i, s) in enumerate(ss)
         sts = states(s)
         i != 1 && ((length(sts1) == length(sts) && all(Base.Fix2(in, sts1), sts)) || connection_error(ss))
         io = isouter(s)
         for (j, v) in enumerate(sts)
-            push!(csets[j], T(states(renamespace(namespace, s), v), io))
+            push!(csets[j], T(LazyNamespace(namespace, s), v, io))
         end
     end
     for cset in csets
-        vtype = get_connection_type(first(cset)[1])
+        vtype = get_connection_type(first(cset).v)
         for k in 2:length(cset)
-            vtype === get_connection_type(cset[k][1]) || connection_error(ss)
+            vtype === get_connection_type(cset[k].v) || connection_error(ss)
         end
         push!(connectionsets, ConnectionSet(cset))
     end
 end
 
-generate_connection_set(sys::AbstractSystem) = (connectionsets = ConnectionSet[]; generate_connection_set!(connectionsets, sys::AbstractSystem); connectionsets)
+generate_connection_set(sys::AbstractSystem) = (connectionsets = ConnectionSet[]; (generate_connection_set!(connectionsets, sys::AbstractSystem), connectionsets))
 function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace=nothing)
     subsys = get_systems(sys)
     # no connectors if there are no subsystems
@@ -290,12 +312,12 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace
     if namespace !== nothing
         # Except for the top level, all connectors are eventually inside
         # connectors.
-        T = Pair{Any,Bool}
+        T = ConnectionElement
         for s in subsys
             isconnector(s) || continue
             for v in states(s)
                 Flow === get_connection_type(v) || continue
-                push!(connectionsets, ConnectionSet([T(renamespace(namespace, states(s, v)), false)]))
+                push!(connectionsets, ConnectionSet([T(LazyNamespace(namespace, s), v, false)]))
             end
         end
     end
@@ -309,61 +331,14 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace
 
     # pre order traversal
     @set! sys.systems = map(s->generate_connection_set!(connectionsets, s, renamespace(namespace, nameof(s))), subsys)
+    @set! sys.eqs = eqs
 end
-#=
-
- <load₊p₊i(t)::inner>
-{<load.p.i, inside>}
-
- <load₊n₊i(t)::inner>
-{<load.n.i, inside>}
-
- <ground₊g₊i(t)::inner>
-{<ground.p.i, inside>}
-
- <load₊resistor₊p₊i(t)::inner>
-{<load.resistor.p.i, inside>}
-
- <load₊resistor₊n₊i(t)::inner>
-{<load.resistor.n.i, inside>}
-
- <resistor₊p₊i(t)::inner>
-{<resistor.p.i, inside>}
-
- <resistor₊n₊i(t)::inner>
-{<resistor.n.i, inside>}
-
-
- <resistor.p.i(t)::inner, ground.g.i(t)::inner>
-{<resistor.p.i, inside>, <ground.p.i, inside>}
-
- <resistor.p.v(t)::inner, ground.g.v(t)::inner>
-{<resistor.p.v, inside>, <ground.p.v, inside>}
-
- <load.p.i(t)::inner, ground.g.i(t)::inner>
-{<load.p.i, inside>, <ground.p.i, inside>}
-
- <load.p.v(t)::inner, ground.g.v(t)::inner>
-{<load.p.v, inside>, <ground.p.v, inside>}
-
- <load.p.i(t)::outer, load.resistor.p.i(t)::inner>
-{<load.p.i, outside>, <load.resistor.p.i, inside>}
-
- <load.p.v(t)::outer, load.resistor.p.v(t)::inner>
-{<load.p.v, outside>, <load.resistor.p.v, inside>}
-
- <load.resistor.n.i(t)::inner, load.n.i(t)::outer>
-{<load.n.i, outside>, <load.resistor.n.i, inside>}
-
- <load.resistor.n.v(t)::inner, load.n.v(t)::outer>
-{<load.n.v, outside>, <load.resistor.n.v, inside>}
-=#
 
 function Base.merge(csets::AbstractVector{<:ConnectionSet})
     mcsets = ConnectionSet[]
     # FIXME: this is O(m n^3)
     for cset in csets
-        idx = findfirst(mcset->any(s->any(z->isequal(z, s), cset.set), mcset.set), mcsets)
+        idx = findfirst(mcset->any(s->any(z->z == s, cset.set), mcset.set), mcsets)
         if idx === nothing
             push!(mcsets, cset)
         else
@@ -373,26 +348,30 @@ function Base.merge(csets::AbstractVector{<:ConnectionSet})
     mcsets
 end
 
-function generate_connection_equations(csets::AbstractVector{<:ConnectionSet})
+function generate_connection_equations_and_stream_connections(csets::AbstractVector{<:ConnectionSet})
     eqs = Equation[]
+    stream_connections = ConnectionSet[]
     for cset in csets
-        vtype = get_connection_type(cset.set[1][1])
-        vtype === Stream && continue
-        if vtype === Flow
+        vtype = get_connection_type(cset.set[1].v)
+        if vtype === Stream
+            push!(stream_connections, cset)
+            continue
+        elseif vtype === Flow
             rhs = 0
-            for (v, isouter) in cset.set
-                rhs += isouter ? -v : v
+            for ele in cset.set
+                v = namespaced_var(ele)
+                rhs += ele.isouter ? -v : v
             end
             push!(eqs, 0 ~ rhs)
         else # Equality
-            base = cset.set[1][1]
+            base = namespaced_var(cset.set[1])
             for i in 2:length(cset.set)
-                v = cset.set[i][1]
+                v = namespaced_var(cset.set[i])
                 push!(eqs, base ~ v)
             end
         end
     end
-    eqs
+    eqs, stream_connections
 end
 
 function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10,
