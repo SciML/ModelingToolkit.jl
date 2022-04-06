@@ -19,10 +19,14 @@ end
 
 function calculate_jacobian(sys::AbstractODESystem;
                             sparse=false, simplify=false, dvs=states(sys))
-    cache = get_jac(sys)[]
-    if cache isa Tuple && cache[2] == (sparse, simplify)
-        return cache[1]
+    
+    if isequal(dvs, states(sys))
+        cache = get_jac(sys)[]
+        if cache isa Tuple && cache[2] == (sparse, simplify)
+            return cache[1]
+        end
     end
+
     rhs = [eq.rhs for eq ∈ full_equations(sys)]
 
     iv = get_iv(sys)
@@ -33,7 +37,10 @@ function calculate_jacobian(sys::AbstractODESystem;
         jac = jacobian(rhs, dvs, simplify=simplify)
     end
 
-    get_jac(sys)[] = jac, (sparse, simplify) # cache Jacobian
+    if isequal(dvs, states(sys))
+        get_jac(sys)[] = jac, (sparse, simplify) # cache Jacobian
+    end
+
     return jac
 end
 
@@ -79,11 +86,12 @@ end
 
 function generate_dae_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); simplify=false, sparse=false, kwargs...)
     jac_u = calculate_jacobian(sys; simplify=simplify, sparse=sparse)
-    jac_du = calculate_jacobian(sys; simplify=simplify, sparse=sparse, dvs=Differential(get_iv(sys)).(states(sys)))
+    derivatives = Differential(get_iv(sys)).(states(sys))
+    jac_du = calculate_jacobian(sys; simplify=simplify, sparse=sparse, dvs=derivatives)
     dvs = states(sys)
     @variables ˍ₋gamma
     jac = ˍ₋gamma*jac_du + jac_u
-    return build_function(jac, dvs, ps, ˍ₋gamma, get_iv(sys); kwargs...)
+    return build_function(jac, derivatives, dvs, ps, ˍ₋gamma, get_iv(sys); kwargs...)
 
 end
 
@@ -299,6 +307,15 @@ function jacobian_sparsity(sys::AbstractODESystem)
                       [dv for dv in states(sys)])
 end
 
+function jacobian_dae_sparsity(sys::AbstractODESystem)
+    J1 = jacobian_sparsity([eq.rhs for eq ∈ full_equations(sys)],
+        [dv for dv in states(sys)])
+    derivatives = Differential(get_iv(sys)).(states(sys))
+    J2 = jacobian_sparsity([eq.rhs for eq ∈ full_equations(sys)],
+        [dv for dv in derivatives])
+    J1 + J2
+end
+
 function isautonomous(sys::AbstractODESystem)
     tgrad = calculate_tgrad(sys;simplify=true)
     all(iszero,tgrad)
@@ -433,43 +450,58 @@ Create an `DAEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and
 `ps` are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
-function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
-                                     ps = parameters(sys), u0 = nothing;
-                                     ddvs=map(diff2term ∘ Differential(get_iv(sys)), dvs),
-                                     version = nothing,
-                                     jac=false,
-                                     eval_expression = true,
-                                     sparse=false, simplify=false,
-                                     eval_module = @__MODULE__,
-                                     checkbounds=false,
-                                     kwargs...) where {iip}
+function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs=states(sys),
+    ps=parameters(sys), u0=nothing;
+    ddvs=map(diff2term ∘ Differential(get_iv(sys)), dvs),
+    version=nothing,
+    jac=false,
+    eval_expression=true,
+    sparse=false, simplify=false,
+    eval_module=@__MODULE__,
+    checkbounds=false,
+    kwargs...) where {iip}
 
-    f_gen = generate_function(sys, dvs, ps; implicit_dae = true, expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
-    f_oop,f_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen) : f_gen
-    f(du,u,p,t) = f_oop(du,u,p,t)
-    f(out,du,u,p,t) = f_iip(out,du,u,p,t)
+    f_gen = generate_function(sys, dvs, ps; implicit_dae=true, expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
+    f_oop, f_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen) : f_gen
+    f(du, u, p, t) = f_oop(du, u, p, t)
+    f(out, du, u, p, t) = f_iip(out, du, u, p, t)
 
     if jac
         jac_gen = generate_dae_jacobian(sys, dvs, ps;
-                                        simplify=simplify, sparse=sparse,
-                                        expression=Val{eval_expression}, expression_module=eval_module,
-                                        checkbounds=checkbounds, kwargs...)
+            simplify=simplify, sparse=sparse,
+            expression=Val{eval_expression}, expression_module=eval_module,
+            checkbounds=checkbounds, kwargs...)
         jac_oop, jac_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in jac_gen) : jac_gen
-        _jac(u,p,ˍ₋gamma,t) = jac_oop(u,p,ˍ₋gamma,t)
+        _jac(du, u, p, ˍ₋gamma, t) = jac_oop(du, u, p, ˍ₋gamma, t)
 
-        _jac(J,du,u,p,ˍ₋gamma,t) = jac_iip(J,du,u,p,ˍ₋gamma,t)
+        _jac(J, du, u, p, ˍ₋gamma, t) = jac_iip(J, du, u, p, ˍ₋gamma, t)
     else
         _jac = nothing
     end
 
+    jac_prototype = if sparse
+        uElType = u0 === nothing ? Float64 : eltype(u0)
+        if jac
+            J1 = calculate_jacobian(sys, sparse=sparse)
+            derivatives = Differential(get_iv(sys)).(states(sys))
+            J2 = calculate_jacobian(sys; sparse=sparse, dvs=derivatives)
+            similar(J1 + J2, uElType)
+        else
+            similar(jacobian_dae_sparsity(sys), uElType)
+        end
+    else
+        nothing
+    end
+
     DAEFunction{iip}(
-                     f,
-                     jac = _jac === nothing ? nothing : _jac,
-                     syms = Symbol.(dvs)
-                     # missing fields in `DAEFunction`
-                     #indepsym = Symbol(get_iv(sys)),
-                     #observed = observedfun,
-                    )
+        f,
+        jac=_jac === nothing ? nothing : _jac,
+        syms=Symbol.(dvs),
+        jac_prototype=jac_prototype,
+        # missing fields in `DAEFunction`
+        #indepsym = Symbol(get_iv(sys)),
+        #observed = observedfun,
+    )
 end
 
 """
