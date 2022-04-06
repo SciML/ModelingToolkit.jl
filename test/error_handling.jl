@@ -1,4 +1,4 @@
-﻿using Test
+using Test
 using ModelingToolkit
 import ModelingToolkit: ExtraVariablesSystemException, ExtraEquationsSystemException
 
