@@ -6,6 +6,7 @@
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](http://mtk.sciml.ai/dev/)
 [![ColPrac: Contributor's Guide on Collaborative Practices for Community Packages](https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet)](https://github.com/SciML/ColPrac)
 
+
 ModelingToolkit.jl is a modeling framework for high-performance symbolic-numeric computation
 in scientific computing  and scientific machine learning.
 It allows for users to give a high-level description of a model for
