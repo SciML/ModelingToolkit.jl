@@ -83,7 +83,8 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = p
     dvs = states(sys)
     @variables ˍ₋gamma
     jac = ˍ₋gamma*jac_du + jac_u
-    return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
+    return build_function(jac, dvs, ps, ˍ₋gamma, get_iv(sys); kwargs...)
+
 end
 
 check_derivative_variables(eq) = check_operator_variables(eq, Differential)
