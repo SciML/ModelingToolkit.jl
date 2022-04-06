@@ -454,7 +454,8 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                         expression=Val{eval_expression}, expression_module=eval_module,
                                         checkbounds=checkbounds, kwargs...)
         jac_oop, jac_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in jac_gen) : jac_gen
-        _jac(du,u,p,t) = jac_oop(du,u,p,t)
+        _jac(u,p,ˍ₋gamma,t) = jac_oop(u,p,ˍ₋gamma,t)
+
         _jac(J,du,u,p,ˍ₋gamma,t) = jac_iip(J,du,u,p,ˍ₋gamma,t)
     else
         _jac = nothing
