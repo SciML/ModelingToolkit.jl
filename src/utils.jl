@@ -185,7 +185,7 @@ end
 
 iv_from_nested_derivative(x::Term, op=Differential) = operation(x) isa op ? iv_from_nested_derivative(arguments(x)[1], op) : arguments(x)[1]
 iv_from_nested_derivative(x::Sym, op=Differential) = x
-iv_from_nested_derivative(x, op=Differential) = missing
+iv_from_nested_derivative(x, op=Differential) = nothing
 
 hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
 getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))
@@ -252,9 +252,9 @@ isdifferenceeq(eq) = isdifference(eq.lhs)
 
 iv_from_nested_difference(x::Term) = operation(x) isa Difference ? iv_from_nested_difference(arguments(x)[1]) : arguments(x)[1]
 iv_from_nested_difference(x::Sym) = x
-iv_from_nested_difference(x) = missing
+iv_from_nested_difference(x) = nothing
 
-var_from_nested_difference(x, i=0) = (missing, missing)
+var_from_nested_difference(x, i=0) = (nothing, nothing)
 var_from_nested_difference(x::Term,i=0) = operation(x) isa Difference ? var_from_nested_difference(arguments(x)[1], i + 1) : (x, i)
 var_from_nested_difference(x::Sym,i=0) = (x, i)
 
