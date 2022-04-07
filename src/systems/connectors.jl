@@ -350,8 +350,13 @@ end
 function generate_connection_equations_and_stream_connections(csets::AbstractVector{<:ConnectionSet})
     eqs = Equation[]
     stream_connections = ConnectionSet[]
+
     for cset in csets
-        vtype = get_connection_type(cset.set[1].v)
+        v = cset.set[1].v
+        if hasmetadata(v, Symbolics.GetindexParent)
+            v = getparent(v)
+        end
+        vtype = get_connection_type(v)
         if vtype === Stream
             push!(stream_connections, cset)
             continue
