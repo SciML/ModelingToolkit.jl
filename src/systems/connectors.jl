@@ -487,7 +487,7 @@ function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10,
     return sys
 end
 
-@generated function _instream_split(::Val{inner_n}, ::Val{outer_n}, vars::NTuple{N}) where {inner_n, outer_n, N}
+@generated function _instream_split(::Val{inner_n}, ::Val{outer_n}, vars::NTuple{N,Any}) where {inner_n, outer_n, N}
     #instream_rt(innerfvs..., innersvs..., outerfvs..., outersvs...)
     ret = Expr(:tuple)
     # mj.c.m_flow
@@ -756,7 +756,7 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false, to
                 innersvs = [unwrap(states(s, sv)) for (j, s) in enumerate(inner_sc) if j != i]
                 # ck.m_flow
                 outerfvs = [unwrap(states(s, fv)) for s in outer_sc]
-                outersvs = [instream(states(s, fv)) for s in outer_sc]
+                outersvs = [instream(states(s, sv)) for s in outer_sc]
 
                 sub[ex] = term(instream_rt, Val(length(innerfvs)), Val(length(outerfvs)), innerfvs..., innersvs..., outerfvs..., outersvs...)
                 #=
