@@ -285,7 +285,7 @@ function connection2set!(connectionsets, namespace, ss, isouter)
     end
 end
 
-generate_connection_set(sys::AbstractSystem) = (connectionsets = ConnectionSet[]; (generate_connection_set!(connectionsets, sys::AbstractSystem), connectionsets))
+generate_connection_set(sys::AbstractSystem) = (connectionsets = ConnectionSet[]; (generate_connection_set!(connectionsets, sys::AbstractSystem), merge(connectionsets)))
 function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace=nothing)
     subsys = get_systems(sys)
     # no connectors if there are no subsystems
@@ -293,7 +293,8 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace
 
     isouter = generate_isouter(sys)
     eqs′ = get_eqs(sys)
-    eqs = Equation[]
+    #eqs = Equation[]
+
     #instream_eqs = Equation[]
     #instream_exprs = []
     cts = [] # connections
@@ -303,7 +304,7 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace
         #elseif collect_instream!(instream_exprs, eq)
         #    push!(instream_eqs, eq)
         else
-            push!(eqs, eq) # split connections and equations
+            #push!(eqs, eq) # split connections and equations
         end
     end
 
@@ -329,7 +330,7 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace
 
     # pre order traversal
     @set! sys.systems = map(s->generate_connection_set!(connectionsets, s, renamespace(namespace, nameof(s))), subsys)
-    @set! sys.eqs = eqs
+    #@set! sys.eqs = eqs
 end
 
 function Base.merge(csets::AbstractVector{<:ConnectionSet})
@@ -372,13 +373,20 @@ function generate_connection_equations_and_stream_connections(csets::AbstractVec
     eqs, stream_connections
 end
 
-function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10,
+function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10)
+    sys, csets = generate_connection_set(sys)
+    ceqs, _ = generate_connection_equations_and_stream_connections(csets)
+    sys = _expand_connections(sys; debug=debug, tol=tol)
+    @set! sys.eqs = [equations(sys); ceqs]
+end
+
+function _expand_connections(sys::AbstractSystem; debug=false, tol=1e-10,
         rename=Ref{Union{Nothing,Tuple{Symbol,Int}}}(nothing), stream_connects=[])
     subsys = get_systems(sys)
     isempty(subsys) && return sys
 
     # post order traversal
-    @set! sys.systems = map(s->expand_connections(s, debug=debug, tol=tol,
+    @set! sys.systems = map(s->_expand_connections(s, debug=debug, tol=tol,
                                                   rename=rename, stream_connects=stream_connects), subsys)
 
     isouter = generate_isouter(sys)
@@ -444,25 +452,6 @@ function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10,
         allconnectors = Iterators.flatten((outers, inners))
         dups = find_duplicates(nameof(c) for c in allconnectors)
         length(dups) == 0 || error("Connection([$(join(map(nameof, allconnectors), ", "))]) has duplicated connections: [$(join(collect(dups), ", "))].")
-    end
-
-    if debug
-        println("============BEGIN================")
-        println("Connections for [$(nameof(sys))]:")
-        foreach(Base.Fix1(print_with_indent, 4), narg_connects)
-    end
-
-    connection_eqs = Equation[]
-    for c in narg_connects
-        ceqs = connect(c)
-        debug && append!(connection_eqs, ceqs)
-        append!(eqs, ceqs)
-    end
-
-    if debug
-        println("Connection equations:")
-        foreach(Base.Fix1(print_with_indent, 4), connection_eqs)
-        println("=============END=================")
     end
 
     # stream variables
