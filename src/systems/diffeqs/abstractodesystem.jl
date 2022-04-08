@@ -19,7 +19,7 @@ end
 
 function calculate_jacobian(sys::AbstractODESystem;
                             sparse=false, simplify=false, dvs=states(sys))
-    
+
     if isequal(dvs, states(sys))
         cache = get_jac(sys)[]
         if cache isa Tuple && cache[2] == (sparse, simplify)
@@ -27,7 +27,7 @@ function calculate_jacobian(sys::AbstractODESystem;
         end
     end
 
-    rhs = [eq.rhs for eq ∈ full_equations(sys)]
+    rhs = [eq.rhs - eq.lhs for eq ∈ full_equations(sys)] #need du terms on rhs for differentiating wrt du
 
     iv = get_iv(sys)
 
