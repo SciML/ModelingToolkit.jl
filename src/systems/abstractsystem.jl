@@ -1035,14 +1035,14 @@ $(SIGNATURES)
 compose multiple systems together. The resulting system would inherit the first
 system's name.
 """
-function compose(sys::AbstractSystem, systems::AbstractArray{<:AbstractSystem}; name=nameof(sys))
+function compose(sys::AbstractSystem, systems::AbstractArray; name=nameof(sys))
     nsys = length(systems)
-    nsys >= 1 || throw(ArgumentError("There must be at least 1 subsystem. Got $nsys subsystems."))
+    nsys == 0 && return sys
     @set! sys.name = name
     @set! sys.systems = [get_systems(sys); systems]
     return sys
 end
-compose(syss::AbstractSystem...; name=nameof(first(syss))) = compose(first(syss), collect(syss[2:end]); name=name)
+compose(syss...; name=nameof(first(syss))) = compose(first(syss), collect(syss[2:end]); name=name)
 Base.:(∘)(sys1::AbstractSystem, sys2::AbstractSystem) = compose(sys1, sys2)
 
 UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where p = getproperty(sys, p; namespace=false)
