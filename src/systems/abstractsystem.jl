@@ -241,13 +241,17 @@ const EMPTY_JAC = Matrix{Num}(undef, 0, 0)
 function invalidate_cache!(sys::AbstractSystem)
     if has_tgrad(sys)
         get_tgrad(sys)[] = EMPTY_TGRAD
-    elseif has_jac(sys)
+    end
+    if has_jac(sys)
         get_jac(sys)[] = EMPTY_JAC
-    elseif has_ctrl_jac(sys)
+    end
+    if has_ctrl_jac(sys)
         get_ctrl_jac(sys)[] = EMPTY_JAC
-    elseif has_Wfact(sys)
+    end
+    if has_Wfact(sys)
         get_Wfact(sys)[] = EMPTY_JAC
-    elseif has_Wfact_t(sys)
+    end
+    if has_Wfact_t(sys)
         get_Wfact_t(sys)[] = EMPTY_JAC
     end
     return sys
