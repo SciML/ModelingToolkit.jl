@@ -5,9 +5,9 @@ makedocs(
     authors="Chris Rackauckas",
     modules=[ModelingToolkit],
     clean=true,doctest=false,
-    format=Documenter.HTML(# analytics = "UA-90474609-3",
-                             assets=["assets/favicon.ico"],
-                             canonical="https://mtk.sciml.ai/stable/"),
+    format=Documenter.HTML(analytics = "UA-90474609-3",
+                           assets=["assets/favicon.ico"],
+                           canonical="https://mtk.sciml.ai/stable/"),
     pages=[
         "Home" => "index.md",
         "Symbolic Modeling Tutorials" => Any[
@@ -25,7 +25,7 @@ makedocs(
         "ModelingToolkitize Tutorials" => Any[
             "mtkitize_tutorials/modelingtoolkitize.md",
             "mtkitize_tutorials/modelingtoolkitize_index_reduction.md",
-            # "mtkitize_tutorials/sparse_jacobians",
+            "mtkitize_tutorials/sparse_jacobians",
         ],
         "Basics" => Any[
             "basics/AbstractSystem.md",
