@@ -283,13 +283,32 @@ end
 
 function Base.merge(csets::AbstractVector{<:ConnectionSet})
     mcsets = ConnectionSet[]
-    # FIXME: this is O(m n^3)
+    ele2idx = Dict{ConnectionElement,Int}()
+    cacheset = Set{ConnectionElement}()
     for cset in csets
-        idx = findfirst(mcset->any(s->any(z->z == s, cset.set), mcset.set), mcsets)
+        idx = nothing
+        for e in cset.set
+            idx = get(ele2idx, e, nothing)
+            idx !== nothing && break
+        end
         if idx === nothing
             push!(mcsets, cset)
+            for e in cset.set
+                ele2idx[e] = length(mcsets)
+            end
         else
-            union!(mcsets[idx].set, cset.set)
+            for e in mcsets[idx].set
+                push!(cacheset, e)
+            end
+            for e in cset.set
+                push!(cacheset, e)
+            end
+            empty!(mcsets[idx].set)
+            for e in cacheset
+                ele2idx[e] = idx
+                push!(mcsets[idx].set, e)
+            end
+            empty!(cacheset)
         end
     end
     mcsets
@@ -330,8 +349,8 @@ function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10)
     sys, csets = generate_connection_set(sys)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     additional_eqs = Equation[]
-    _sys = expand_instream2(instream_csets, sys; debug=debug, tol=tol)
-    sys = flatten(sys)
+    _sys = expand_instream(instream_csets, sys; debug=debug, tol=tol)
+    sys = flatten(sys, true)
     @set! sys.eqs = [equations(_sys); ceqs; additional_eqs]
 end
 
@@ -348,12 +367,10 @@ function unnamespace(root, namespace)
     end
 end
 
-function expand_instream2(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSystem, namespace=nothing, prevnamespace=nothing; debug=false, tol=1e-8)
+function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSystem, namespace=nothing, prevnamespace=nothing; debug=false, tol=1e-8)
     subsys = get_systems(sys)
-    # no connectors if there are no subsystems
-    #isempty(subsys) && return sys
     # post order traversal
-    @set! sys.systems = map(s->expand_instream2(csets, s, renamespace(namespace, nameof(s)), namespace; debug, tol), subsys)
+    @set! sys.systems = map(s->expand_instream(csets, s, renamespace(namespace, nameof(s)), namespace; debug, tol), subsys)
     subsys = get_systems(sys)
 
     if debug
@@ -365,8 +382,8 @@ function expand_instream2(csets::AbstractVector{<:ConnectionSet}, sys::AbstractS
     instream_eqs = Equation[]
     instream_exprs = Set()
     for s in subsys
-        seqs = map(Base.Fix2(namespace_equation, s), get_eqs(s))
-        for eq in seqs
+        for eq in get_eqs(s)
+            eq = namespace_equation(eq, s)
             if collect_instream!(instream_exprs, eq)
                 push!(instream_eqs, eq)
             else

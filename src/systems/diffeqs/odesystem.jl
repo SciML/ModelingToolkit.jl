@@ -229,13 +229,13 @@ function Base.:(==)(sys1::ODESystem, sys2::ODESystem)
     all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
-function flatten(sys::ODESystem)
+function flatten(sys::ODESystem, noeqs=false)
     systems = get_systems(sys)
     if isempty(systems)
         return sys
     else
         return ODESystem(
-                         equations(sys),
+                         noeqs ? Equation[] : equations(sys),
                          get_iv(sys),
                          states(sys),
                          parameters(sys),

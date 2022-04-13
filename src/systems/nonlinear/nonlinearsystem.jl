@@ -335,13 +335,13 @@ function NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,
     !linenumbers ? striplines(ex) : ex
 end
 
-function flatten(sys::NonlinearSystem)
+function flatten(sys::NonlinearSystem, noeqs=false)
     systems = get_systems(sys)
     if isempty(systems)
         return sys
     else
         return NonlinearSystem(
-                               equations(sys),
+                               noeqs ? Equation[] : equations(sys),
                                states(sys),
                                parameters(sys),
                                observed=observed(sys),
