@@ -441,33 +441,98 @@ function expand_instream2(csets::AbstractVector{<:ConnectionSet}, sys::AbstractS
             sub[ex] = sv
         elseif n_inners == 2 && n_outers == 0
             other = idx_in_set == 1 ? 2 : 1
-            sub[ex] = states(renamespace(unnamespace(namespace, cset[other].sys.namespace), cset[other].sys.sys), sv)
+            sub[ex] = get_current_var(namespace, cset[other], sv)
         elseif n_inners == 1 && n_outers == 1
             if !cset[idx_in_set].isouter
                 other = idx_in_set == 1 ? 2 : 1
-                outerstream = states(renamespace(unnamespace(namespace, cset[other].sys.namespace), cset[other].sys.sys), sv)
+                outerstream = get_current_var(namespace, cset[other], sv)
                 sub[ex] = instream(outerstream)
             end
         else
             if !cset[idx_in_set].isouter
-                fv = flowvar(first(connectors))
+                fv = flowvar(first(cset).sys.sys)
                 # mj.c.m_flow
-                innerfvs = [unwrap(states(s, fv)) for (j, s) in enumerate(cset) if j != idx_in_set && !s.isouter]
-                innersvs = [unwrap(states(s, sv)) for (j, s) in enumerate(cset) if j != idx_in_set && !s.isouter]
+                innerfvs = [get_current_var(namespace, s, fv) for (j, s) in enumerate(cset) if j != idx_in_set && !s.isouter]
+                innersvs = [get_current_var(namespace, s, sv) for (j, s) in enumerate(cset) if j != idx_in_set && !s.isouter]
                 # ck.m_flow
-                outerfvs = [unwrap(states(s, fv)) for s in cset if s.isouter]
-                outersvs = [unwrap(states(s, sv)) for s in cset if s.isouter]
+                outerfvs = [get_current_var(namespace, s, fv) for s in cset if s.isouter]
+                outersvs = [get_current_var(namespace, s, sv) for s in cset if s.isouter]
 
-                sub[ex_n] = term(instream_rt, Val(length(innerfvs)), Val(length(outerfvs)), innerfvs..., innersvs..., outerfvs..., outersvs...)
+                sub[ex] = term(instream_rt, Val(length(innerfvs)), Val(length(outerfvs)), innerfvs..., innersvs..., outerfvs..., outersvs...)
             end
         end
     end
 
+    # additional equations
+    additional_eqs = Equation[]
+    csets = filter(cset->any(e->e.sys.namespace === namespace, cset.set), csets)
+    @show csets
+    for cset′ in csets
+        cset = cset′.set
+        connectors = Vector{Any}(undef, length(cset))
+        n_inners = n_outers = 0
+        for (i, e) in enumerate(cset)
+            connectors[i] = e.sys.sys
+            if e.isouter
+                n_outers += 1
+            else
+                n_inners += 1
+            end
+        end
+        iszero(n_outers) && continue
+        connector_representative = first(cset).sys.sys
+        fv = flowvar(connector_representative)
+        sv = first(cset).v
+        vtype = get_connection_type(sv)
+        vtype === Stream || continue
+        if n_inners == 1 && n_outers == 1
+            push!(additional_eqs, @show states(cset[1].sys.sys, sv) ~ states(cset[2].sys.sys, sv))
+        elseif n_inners == 0 && n_outers == 2
+            # we don't expand `instream` in this case.
+            v1 = states(cset[1].sys.sys, sv)
+            v2 = states(cset[2].sys.sys, sv)
+            push!(additional_eqs, v1 ~ instream(v2))
+            push!(additional_eqs, v2 ~ instream(v1))
+        else
+            sq = 0
+            s_inners = (s for s in cset if !s.isouter)
+            s_outers = (s for s in cset if s.isouter)
+            for (q, oscq) in enumerate(s_outers)
+                sq += sum(s->max(-states(s, fv), 0), s_inners)
+                for (k, s) in enumerate(s_outers); k == q && continue
+                    f = states(s.sys.sys, fv)
+                    sq += max(f, 0)
+                end
+
+                num = 0
+                den = 0
+                for s in s_inners
+                    f = states(s.sys.sys, fv)
+                    tmp = positivemax(-f, sq; tol=tol)
+                    den += tmp
+                    num += tmp * states(s.sys.sys, sv)
+                end
+                for (k, s) in enumerate(s_outers); k == q && continue
+                    f = states(s.sys.sys, fv)
+                    tmp = positivemax(f, sq; tol=tol)
+                    den += tmp
+                    num += tmp * instream(states(s.sys.sys, sv))
+                end
+                push!(additional_eqs, states(oscq.sys.sys, sv) ~ num / den)
+            end
+        end
+    end
+    @show additional_eqs
+
     display(instream_exprs)
     display(sub)
     @set! sys.systems = []
-    @set! sys.eqs = [get_eqs(sys); eqs; substitute(instream_eqs, sub)]
+    @set! sys.eqs = [get_eqs(sys); eqs; substitute(instream_eqs, sub); additional_eqs]
     sys
+end
+
+function get_current_var(namespace, cele, sv)
+    states(renamespace(unnamespace(namespace, cele.sys.namespace), cele.sys.sys), sv)
 end
 
 function get_cset_sv(namespace, ex, csets)
