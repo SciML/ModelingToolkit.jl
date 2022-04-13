@@ -164,3 +164,50 @@ end
 @unpack foo = goo
 @test ModelingToolkit.defaults(goo)[foo.a] == 3
 @test ModelingToolkit.defaults(goo)[foo.b] == 300
+
+#=
+model Circuit
+  Ground ground;
+  Load load;
+  Resistor resistor;
+equation
+  connect(load.p , ground.p);
+  connect(resistor.p, ground.p);
+end Circuit;
+model Load
+  extends TwoPin;
+  Resistor resistor;
+equation
+  connect(p, resistor.p);
+  connect(resistor.n, n);
+end Load;
+=#
+
+function Load(;name)
+    R = 1
+    @named p = Pin()
+    @named n = Pin()
+    @named resistor = Resistor(R=R)
+    eqs = [
+           connect(p, resistor.p);
+           connect(resistor.n, n);
+          ]
+    @named sys = ODESystem(eqs, t)
+    compose(sys, [p, n, resistor]; name=name)
+end
+
+function Circuit(;name)
+    R = 1
+    @named ground = Ground()
+    @named load = Load()
+    @named resistor = Resistor(R=R)
+    eqs = [
+           connect(load.p , ground.g);
+           connect(resistor.p, ground.g);
+          ]
+    @named sys = ODESystem(eqs, t)
+    compose(sys, [ground, resistor, load]; name=name)
+end
+
+@named foo = Circuit()
+@test structural_simplify(foo) isa ModelingToolkit.AbstractSystem

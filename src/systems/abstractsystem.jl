@@ -384,6 +384,7 @@ renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
 
 renamespace(names::AbstractVector, x) = foldr(renamespace, names, init=x)
 function renamespace(sys, x)
+    sys === nothing && return x
     x = unwrap(x)
     if x isa Symbolic
         let scope = getmetadata(x, SymScope, LocalScope())
@@ -417,9 +418,9 @@ function namespace_equations(sys::AbstractSystem)
     map(eq->namespace_equation(eq, sys), eqs)
 end
 
-function namespace_equation(eq::Equation, sys)
-    _lhs = namespace_expr(eq.lhs, sys)
-    _rhs = namespace_expr(eq.rhs, sys)
+function namespace_equation(eq::Equation, sys, n=nameof(sys))
+    _lhs = namespace_expr(eq.lhs, sys, n)
+    _rhs = namespace_expr(eq.rhs, sys, n)
     _lhs ~ _rhs
 end
 
@@ -429,22 +430,22 @@ function namespace_assignment(eq::Assignment, sys)
     Assignment(_lhs, _rhs)
 end
 
-function namespace_expr(O, sys) where {T}
+function namespace_expr(O, sys, n=nameof(sys)) where {T}
     ivs = independent_variables(sys)
     O = unwrap(O)
     if any(isequal(O), ivs)
         return O
     elseif isvariable(O)
-        renamespace(sys, O)
+        renamespace(n, O)
     elseif istree(O)
-        renamed = map(a->namespace_expr(a, sys), arguments(O))
+        renamed = map(a->namespace_expr(a, sys, n), arguments(O))
         if symtype(operation(O)) <: FnType
-            renamespace(sys, O)
+            renamespace(n, O)
         else
             similarterm(O, operation(O), renamed)
         end
     elseif O isa Array
-        map(Base.Fix2(namespace_expr, sys), O)
+        map(o->namespace_expr(o, sys, n), O)
     else
         O
     end
@@ -508,7 +509,7 @@ for f in [:states, :parameters]
     @eval $f(sys::AbstractSystem, vs::AbstractArray) = map(v->$f(sys, v), vs)
 end
 
-flatten(sys::AbstractSystem) = sys
+flatten(sys::AbstractSystem, args...) = sys
 
 function equations(sys::ModelingToolkit.AbstractSystem)
     eqs = get_eqs(sys)
@@ -1038,14 +1039,14 @@ $(SIGNATURES)
 compose multiple systems together. The resulting system would inherit the first
 system's name.
 """
-function compose(sys::AbstractSystem, systems::AbstractArray{<:AbstractSystem}; name=nameof(sys))
+function compose(sys::AbstractSystem, systems::AbstractArray; name=nameof(sys))
     nsys = length(systems)
-    nsys >= 1 || throw(ArgumentError("There must be at least 1 subsystem. Got $nsys subsystems."))
+    nsys == 0 && return sys
     @set! sys.name = name
     @set! sys.systems = [get_systems(sys); systems]
     return sys
 end
-compose(syss::AbstractSystem...; name=nameof(first(syss))) = compose(first(syss), collect(syss[2:end]); name=name)
+compose(syss...; name=nameof(first(syss))) = compose(first(syss), collect(syss[2:end]); name=name)
 Base.:(∘)(sys1::AbstractSystem, sys2::AbstractSystem) = compose(sys1, sys2)
 
 UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where p = getproperty(sys, p; namespace=false)
