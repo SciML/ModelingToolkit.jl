@@ -299,10 +299,12 @@ function TearingState(sys; quick_cancel=false, check=true)
         # it could be that a variable appeared in the states, but never appeared
         # in the equations.
         algvaridx = get(var2idx, algvar, 0)
-        if algvaridx == 0
-            check ? throw(InvalidSystemException("The system is missing an equation for $algvar.")) : return nothing
+        #if algvaridx == 0
+        #    check ? throw(InvalidSystemException("The system is missing an equation for $algvar.")) : return nothing
+        #end
+        if algvaridx != 0
+            vartype[algvaridx] = ALGEBRAIC_VARIABLE
         end
-        vartype[algvaridx] = ALGEBRAIC_VARIABLE
     end
 
     graph = BipartiteGraph(neqs, nvars, Val(false))
