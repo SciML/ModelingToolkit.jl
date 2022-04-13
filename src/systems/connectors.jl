@@ -285,26 +285,27 @@ function connection2set!(connectionsets, namespace, ss, isouter)
     end
 end
 
-generate_connection_set(sys::AbstractSystem) = (connectionsets = ConnectionSet[]; (generate_connection_set!(connectionsets, sys::AbstractSystem), merge(connectionsets)))
+function generate_connection_set(sys::AbstractSystem)
+    connectionsets = ConnectionSet[]
+    sys = generate_connection_set!(connectionsets, sys)
+    sys, merge(connectionsets)
+end
+
 function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace=nothing)
+    @show namespace
+
     subsys = get_systems(sys)
-    # no connectors if there are no subsystems
-    isempty(subsys) && return sys
 
     isouter = generate_isouter(sys)
     eqs′ = get_eqs(sys)
-    #eqs = Equation[]
+    eqs = Equation[]
 
-    #instream_eqs = Equation[]
-    #instream_exprs = []
     cts = [] # connections
     for eq in eqs′
         if eq.lhs isa Connection
             push!(cts, get_systems(eq.rhs))
-        #elseif collect_instream!(instream_exprs, eq)
-        #    push!(instream_eqs, eq)
         else
-            #push!(eqs, eq) # split connections and equations
+            push!(eqs, eq) # split connections and equations
         end
     end
 
@@ -321,16 +322,13 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace
         end
     end
 
-    # if there are no connections, we are done
-    isempty(cts) && return sys
-
     for ct in cts
         connection2set!(connectionsets, namespace, ct, isouter)
     end
 
     # pre order traversal
     @set! sys.systems = map(s->generate_connection_set!(connectionsets, s, renamespace(namespace, nameof(s))), subsys)
-    #@set! sys.eqs = eqs
+    @set! sys.eqs = eqs
 end
 
 function Base.merge(csets::AbstractVector{<:ConnectionSet})
@@ -380,105 +378,120 @@ end
 
 function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10)
     sys, csets = generate_connection_set(sys)
-    ceqs, _ = generate_connection_equations_and_stream_connections(csets)
-    sys = _expand_connections(sys; debug=debug, tol=tol)
-    @set! sys.eqs = [equations(sys); ceqs]
+    ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
+    additional_eqs = Equation[]
+    _sys = expand_instream2(instream_csets, sys; debug=debug, tol=tol)
+    Main._a[] = _sys
+    sys = flatten(sys)
+    @set! sys.eqs = [equations(_sys); ceqs; additional_eqs]
 end
 
-function _expand_connections(sys::AbstractSystem; debug=false, tol=1e-10,
-        rename=Ref{Union{Nothing,Tuple{Symbol,Int}}}(nothing), stream_connects=[])
+function unnamespace(root, namespace)
+    root === nothing && return namespace
+    root = string(root)
+    namespace = string(namespace)
+    if length(namespace) > length(root)
+        @assert root == namespace[1:length(root)]
+        Symbol(namespace[nextind(namespace, length(root)):end])
+    else
+        @assert root == namespace
+        nothing
+    end
+end
+
+function expand_instream2(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSystem, namespace=nothing, prevnamespace=nothing; debug=false, tol=1e-8)
     subsys = get_systems(sys)
-    isempty(subsys) && return sys
-
+    # no connectors if there are no subsystems
+    #isempty(subsys) && return sys
     # post order traversal
-    @set! sys.systems = map(s->_expand_connections(s, debug=debug, tol=tol,
-                                                  rename=rename, stream_connects=stream_connects), subsys)
+    @set! sys.systems = map(s->expand_instream2(csets, s, renamespace(namespace, nameof(s)), namespace; debug, tol), subsys)
+    subsys = get_systems(sys)
+    @info "Expanding" namespace
 
-    isouter = generate_isouter(sys)
-    sys = flatten(sys)
-    eqs′ = get_eqs(sys)
+    sub = Dict()
     eqs = Equation[]
     instream_eqs = Equation[]
-    instream_exprs = []
-    cts = [] # connections
-    for eq in eqs′
-        if eq.lhs isa Connection
-            push!(cts, get_systems(eq.rhs))
-        elseif collect_instream!(instream_exprs, eq)
-            push!(instream_eqs, eq)
+    instream_exprs = Set()
+    for s in subsys
+        seqs = map(Base.Fix2(namespace_equation, s), get_eqs(s))
+        for eq in seqs
+            if collect_instream!(instream_exprs, eq)
+                push!(instream_eqs, eq)
+            else
+                push!(eqs, eq)
+            end
+        end
+
+    end
+
+    for ex in instream_exprs
+        cset, idx_in_set, sv = get_cset_sv(namespace, ex, csets)
+
+        n_inners = n_outers = 0
+        for (i, e) in enumerate(cset)
+            if e.isouter
+                n_outers += 1
+            else
+                n_inners += 1
+            end
+        end
+        @show ex idx_in_set ConnectionSet(cset)
+        @show n_inners, n_outers
+        if n_inners == 1 && n_outers == 0
+            sub[ex] = sv
+        elseif n_inners == 2 && n_outers == 0
+            other = idx_in_set == 1 ? 2 : 1
+            sub[ex] = states(renamespace(unnamespace(namespace, cset[other].sys.namespace), cset[other].sys.sys), sv)
+        elseif n_inners == 1 && n_outers == 1
+            if !cset[idx_in_set].isouter
+                other = idx_in_set == 1 ? 2 : 1
+                outerstream = states(renamespace(unnamespace(namespace, cset[other].sys.namespace), cset[other].sys.sys), sv)
+                sub[ex] = instream(outerstream)
+            end
         else
-            push!(eqs, eq) # split connections and equations
-        end
-    end
+            if !cset[idx_in_set].isouter
+                fv = flowvar(first(connectors))
+                # mj.c.m_flow
+                innerfvs = [unwrap(states(s, fv)) for (j, s) in enumerate(cset) if j != idx_in_set && !s.isouter]
+                innersvs = [unwrap(states(s, sv)) for (j, s) in enumerate(cset) if j != idx_in_set && !s.isouter]
+                # ck.m_flow
+                outerfvs = [unwrap(states(s, fv)) for s in cset if s.isouter]
+                outersvs = [unwrap(states(s, sv)) for s in cset if s.isouter]
 
-    # if there are no connections, we are done
-    isempty(cts) && return sys
-
-    sys2idx = Dict{Symbol,Int}() # system (name) to n-th connect statement
-    narg_connects = Connection[]
-    for (i, syss) in enumerate(cts)
-        # find intersecting connections
-        exclude = 0 # exclude the intersecting system
-        idx = 0     # idx of narg_connects
-        for (j, s) in enumerate(syss)
-            idx′ = get(sys2idx, nameof(s), nothing)
-            idx′ === nothing && continue
-            idx = idx′
-            exclude = j
-        end
-        if exclude == 0
-            outers = []
-            inners = []
-            for s in syss
-                isouter(s) ? push!(outers, s) : push!(inners, s)
-            end
-            push!(narg_connects, Connection(outers=outers, inners=inners))
-            for s in syss
-                sys2idx[nameof(s)] = length(narg_connects)
-            end
-        else
-            # fuse intersecting connections
-            for (j, s) in enumerate(syss); j == exclude && continue
-                sys2idx[nameof(s)] = idx
-                c = narg_connects[idx]
-                isouter(s) ? push!(c.outers, s) : push!(c.inners, s)
+                sub[ex_n] = term(instream_rt, Val(length(innerfvs)), Val(length(outerfvs)), innerfvs..., innersvs..., outerfvs..., outersvs...)
             end
         end
     end
 
-    isempty(narg_connects) && error("Unreachable reached. Please file an issue.")
+    display(instream_exprs)
+    display(sub)
+    @set! sys.systems = []
+    @set! sys.eqs = [get_eqs(sys); eqs; substitute(instream_eqs, sub)]
+    sys
+end
 
-    @set! sys.connections = narg_connects
+function get_cset_sv(namespace, ex, csets)
+    ns_sv = only(arguments(ex))
+    full_name_sv = renamespace(namespace, ns_sv)
 
-    # Bad things happen when there are more than one intersections
-    for c in narg_connects
-        @unpack outers, inners = c
-        len = length(outers) + length(inners)
-        allconnectors = Iterators.flatten((outers, inners))
-        dups = find_duplicates(nameof(c) for c in allconnectors)
-        length(dups) == 0 || error("Connection([$(join(map(nameof, allconnectors), ", "))]) has duplicated connections: [$(join(collect(dups), ", "))].")
-    end
-
-    # stream variables
-    if rename[] !== nothing
-        name, depth = rename[]
-        nc = length(stream_connects)
-        for i in nc-depth+1:nc
-            stream_connects[i] = renamespace(:room, stream_connects[i])
+    cidx = -1
+    idx_in_set = -1
+    sv = ns_sv
+    for (i, c) in enumerate(csets)
+        for (j, v) in enumerate(c.set)
+            if isequal(namespaced_var(v), full_name_sv)
+                cidx = i
+                idx_in_set = j
+                sv = v.v
+            end
         end
     end
-    nsc = 0
-    for c in narg_connects
-        if isstreamconnection(c)
-            push!(stream_connects, c)
-            nsc += 1
-        end
+    cidx < 0 && error("$ns_sv is not a variable inside stream connectors")
+    cset = csets[cidx].set
+    if namespace != first(cset).sys.namespace
+        cset = map(c->@set(c.isouter = false), cset)
     end
-    rename[] = nameof(sys), nsc
-    instream_eqs, additional_eqs = expand_instream(instream_eqs, instream_exprs, stream_connects; debug=debug, tol=tol)
-
-    @set! sys.eqs = [eqs; instream_eqs; additional_eqs]
-    return sys
+    cset, idx_in_set, sv
 end
 
 @generated function _instream_split(::Val{inner_n}, ::Val{outer_n}, vars::NTuple{N,Any}) where {inner_n, outer_n, N}
@@ -542,65 +555,85 @@ function instream_rt(ins::Val{inner_n}, outs::Val{outer_n}, vars::Vararg{Any,N})
 end
 SymbolicUtils.promote_symtype(::typeof(instream_rt), ::Vararg) = Real
 
-function expand_instream2(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSystem, namespace=nothing, debug=false, tol=1e-8)
+#=
+function expand_instream2!(additional_eqs, csets::AbstractVector{<:ConnectionSet}, ins, sys::AbstractSystem, namespace=nothing, prevnamespace=nothing; debug=false, tol=1e-8)
     subsys = get_systems(sys)
     # no connectors if there are no subsystems
-    isempty(subsys) && return sys
+    isempty(subsys) && return
     # post order traversal
-    @set! sys.systems = map(s->expand_instream2(csets, s, renamespace(namespace, nameof(s)), debug, tol), subsys)
-
-    eqs′ = get_eqs(sys)
-    eqs = Equation[]
-    instream_eqs = Equation[]
-    instream_exprs = []
-    for eq in eqs′
-        if collect_instream!(instream_exprs, eq)
-            push!(instream_eqs, eq)
-        else
-            push!(eqs, eq) # split connections and equations
-        end
+    for s in subsys
+        expand_instream2!(additional_eqs, csets, ins, s, renamespace(namespace, nameof(s)), namespace; debug, tol)
     end
 
+    instream_eqs, instream_exprs = ins[namespace]
+    sys = flatten(sys)
 
     sub = Dict()
-    for ex in instream_exprs
-        sv = only(arguments(ex))
-        full_name_sv = renamespace(namespace, sv)
+    dels = Int[]
+    for (k, ex) in enumerate(instream_exprs)
+        ex_n = namespace_expr(ex, sys, namespace)
+        ns_sv = only(arguments(ex))
+        full_name_sv = renamespace(namespace, ns_sv)
+        @show full_name_sv
 
-        #cidx = findfirst(c->any(v->, ), )
         cidx = -1
         idx_in_set = -1
+        sv = ns_sv
         for (i, c) in enumerate(csets)
             for (j, v) in enumerate(c.set)
                 if isequal(namespaced_var(v), full_name_sv)
                     cidx = i
                     idx_in_set = j
+                    sv = v.v
                 end
             end
         end
-        cidx < 0 && error("$sv is not a variable inside stream connectors")
-        cset = csets[cidx].set
+        #cidx < 0 && error("$ns_sv is not a variable inside stream connectors")
+        if cidx > 0
+            cset = csets[cidx].set
 
-        connectors = Vector{Any}(undef, length(cset))
-        n_inners = n_outers = 0
-        for (i, e) in enumerate(cset)
-            connectors[i] = e.sys.sys
-            if e.isouter
-                n_outers += 1
-            else
-                n_inners += 1
+            connectors = Vector{Any}(undef, length(cset))
+            n_inners = n_outers = 0
+            for (i, e) in enumerate(cset)
+                connectors[i] = e.sys.sys
+                if e.isouter
+                    n_outers += 1
+                else
+                    n_inners += 1
+                end
             end
+            #@assert all(s->first(cset).sys.namespace == s.sys.namespace, cset)
+            if first(cset).sys.namespace != prevnamespace
+                cset = map(c->@set(c.isouter = false), cset)
+            end
+            @show prevnamespace
+            @show n_inners, n_outers
+            @show nameof(sys) ConnectionSet(cset)
+        else
+            n_inners = 1
+            n_outers = 0
         end
         if n_inners == 1 && n_outers == 0
-            sub[ex] = sv
+            @show namespace, ex, sv
+            sub[ex_n] = renamespace(renamespace(namespace, nameof(sys)), sv)
         elseif n_inners == 2 && n_outers == 0
             other = idx_in_set == 1 ? 2 : 1
-            sub[ex] = states(cset[other], sv)
+            sub[ex_n] = states(cset[other], sv)
         elseif n_inners == 1 && n_outers == 1
             if !cset[idx_in_set].isouter
                 other = idx_in_set == 1 ? 2 : 1
-                outerstream = states(cset[other], sv)
-                sub[ex] = outerstream
+                outerstream = instream(states(cset[other].sys.sys, sv))
+                @show outerstream
+                ns = nameof(sys)
+                ex = namespace_expr(ex, sys, ns)
+                # TODO: write a mapping from eqs to exprs
+                push!(dels, k)
+                eq = substitute(namespace_equation(instream_eqs[k], sys, ns), Dict(ex=>outerstream))
+                previnstream_eqs, previnstream_exprs = ins[prevnamespace]
+                push!(previnstream_eqs, eq)
+                push!(previnstream_exprs, outerstream)
+                #outerstream = states(cset[other], sv)
+                #substitute()
             end
         else
             if !cset[idx_in_set].isouter
@@ -612,13 +645,14 @@ function expand_instream2(csets::AbstractVector{<:ConnectionSet}, sys::AbstractS
                 outerfvs = [unwrap(states(s, fv)) for s in cset if s.isouter]
                 outersvs = [unwrap(states(s, sv)) for s in cset if s.isouter]
 
-                sub[ex] = term(instream_rt, Val(length(innerfvs)), Val(length(outerfvs)), innerfvs..., innersvs..., outerfvs..., outersvs...)
+                sub[ex_n] = term(instream_rt, Val(length(innerfvs)), Val(length(outerfvs)), innerfvs..., innersvs..., outerfvs..., outersvs...)
             end
         end
     end
+    instream_eqs = deleteat!(copy(instream_eqs), dels)
+    instream_eqs = map(eq->substitute(namespace_equation(eq, sys, namespace), sub), instream_eqs)
 
     # additional equations
-    additional_eqs = Equation[]
     csets = filter(cset->any(e->e.sys.namespace === namespace, cset.set), csets)
     for cset′ in csets
         cset = cset′.set
@@ -676,7 +710,6 @@ function expand_instream2(csets::AbstractVector{<:ConnectionSet}, sys::AbstractS
         end
     end
 
-    instream_eqs = map(Base.Fix2(substitute, sub), instream_eqs)
     if debug
         println("===========BEGIN=============")
         println("Expanded equations:")
@@ -691,9 +724,10 @@ function expand_instream2(csets::AbstractVector{<:ConnectionSet}, sys::AbstractS
         end
         println("============END==============")
     end
-
-    @set! sys.eqs = [eqs; instream_eqs; additional_eqs]
+    append!(additional_eqs, instream_eqs)
+    return
 end
+=#
 
 function expand_instream(instream_eqs, instream_exprs, connects; debug=false, tol)
     sub = Dict()
@@ -727,19 +761,19 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false, to
         # recommended:
         if n_inners == 1 && n_outers == 0
             connector_name === only(inner_names) || error("$var is not in any stream connector of $(nameof(ogsys))")
-            sub[ex] = var
+            sub[ex_n] = var
         elseif n_inners == 2 && n_outers == 0
             connector_name in inner_names || error("$var is not in any stream connector of $(nameof(ogsys))")
             idx = findfirst(c->nameof(c) === connector_name, inner_sc)
             other = idx == 1 ? 2 : 1
-            sub[ex] = states(inner_sc[other], sv)
+            sub[ex_n] = states(inner_sc[other], sv)
         elseif n_inners == 1 && n_outers == 1
             isinner = connector_name === only(inner_names)
             isouter = connector_name === only(outer_names)
             (isinner || isouter) || error("$var is not in any stream connector of $(nameof(ogsys))")
             if isinner
                 outerstream = states(only(outer_sc), sv) # c_1.h_outflow
-                sub[ex] = outerstream
+                sub[ex_n] = outerstream
             end
         else
             fv = flowvar(first(connectors))
@@ -752,7 +786,7 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false, to
                 outerfvs = [unwrap(states(s, fv)) for s in outer_sc]
                 outersvs = [instream(states(s, sv)) for s in outer_sc]
 
-                sub[ex] = term(instream_rt, Val(length(innerfvs)), Val(length(outerfvs)), innerfvs..., innersvs..., outerfvs..., outersvs...)
+                sub[ex_n] = term(instream_rt, Val(length(innerfvs)), Val(length(outerfvs)), innerfvs..., innersvs..., outerfvs..., outersvs...)
                 #=
                 si = isempty(outer_sc) ? 0 : sum(s->max(states(s, fv), 0), outer_sc)
                 for j in 1:n_inners; j == i && continue
@@ -774,7 +808,7 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false, to
                     den += tmp
                     num += tmp * instream(states(outer_sc[k], sv))
                 end
-                sub[ex] = mydiv(num, den)
+                sub[ex_n] = mydiv(num, den)
                 =#
             end
         end
@@ -847,5 +881,5 @@ function expand_instream(instream_eqs, instream_exprs, connects; debug=false, to
         end
         println("============END==============")
     end
-    return instream_eqs, additional_eqs
+    return
 end

@@ -418,9 +418,9 @@ function namespace_equations(sys::AbstractSystem)
     map(eq->namespace_equation(eq, sys), eqs)
 end
 
-function namespace_equation(eq::Equation, sys)
-    _lhs = namespace_expr(eq.lhs, sys)
-    _rhs = namespace_expr(eq.rhs, sys)
+function namespace_equation(eq::Equation, sys, n=nameof(sys))
+    _lhs = namespace_expr(eq.lhs, sys, n)
+    _rhs = namespace_expr(eq.rhs, sys, n)
     _lhs ~ _rhs
 end
 
@@ -430,22 +430,22 @@ function namespace_assignment(eq::Assignment, sys)
     Assignment(_lhs, _rhs)
 end
 
-function namespace_expr(O, sys) where {T}
+function namespace_expr(O, sys, n=nameof(sys)) where {T}
     ivs = independent_variables(sys)
     O = unwrap(O)
     if any(isequal(O), ivs)
         return O
     elseif isvariable(O)
-        renamespace(sys, O)
+        renamespace(n, O)
     elseif istree(O)
-        renamed = map(a->namespace_expr(a, sys), arguments(O))
+        renamed = map(a->namespace_expr(a, sys, n), arguments(O))
         if symtype(operation(O)) <: FnType
-            renamespace(sys, O)
+            renamespace(n, O)
         else
             similarterm(O, operation(O), renamed)
         end
     elseif O isa Array
-        map(Base.Fix2(namespace_expr, sys), O)
+        map(o->namespace_expr(o, sys, n), O)
     else
         O
     end
