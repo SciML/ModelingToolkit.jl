@@ -184,4 +184,4 @@ function Circuit(;name)
 end
 
 @named foo = Circuit()
-@test_broken structural_simplify(foo) isa AbstractSystem
+@test structural_simplify(foo) isa ModelingToolkit.AbstractSystem

@@ -509,7 +509,7 @@ for f in [:states, :parameters]
     @eval $f(sys::AbstractSystem, vs::AbstractArray) = map(v->$f(sys, v), vs)
 end
 
-flatten(sys::AbstractSystem) = sys
+flatten(sys::AbstractSystem, args...) = sys
 
 function equations(sys::ModelingToolkit.AbstractSystem)
     eqs = get_eqs(sys)
