@@ -173,7 +173,7 @@ function find_eq_solvables!(state::TearingState, ieq; may_be_zero=false, allow_s
         if a isa Symbolic
             if !allow_symbolic
                 if allow_parameter
-                    ModelingToolkit.isparameter(a) || continue
+                    all(ModelingToolkit.isparameter, vars(a)) || continue
                 else
                     continue
                 end

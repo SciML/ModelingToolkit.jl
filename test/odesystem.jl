@@ -657,3 +657,18 @@ let
     @parameters N
     @test_throws Any @named tmp = ODESystem([s + I + r ~ N])
 end
+
+let
+    @parameters C L R
+    @variables t q(t) p(t) F(t)
+    D = Differential(t)
+
+    eqs = [
+           D(q) ~ -p/L - F
+           D(p) ~ q/C
+           0 ~ q/C - R*F
+          ]
+
+    @named sys = ODESystem(eqs, t)
+    @test length(equations(structural_simplify(sys))) == 2
+end
