@@ -208,6 +208,38 @@ function find_solvables!(state::TearingState; allow_symbolic=false)
     return nothing
 end
 
+highest_order_variable_mask(ts) = let v2d = ts.structure.var_to_diff
+    v->isempty(outneighbors(v2d, v))
+end
+
+lowest_order_variable_mask(ts) = let v2d = ts.structure.var_to_diff
+    v->isempty(outneighbors(v2d, v))
+end
+
+function but_ordered_incidence(ts::TearingState, varmask=highest_order_variable_mask(ts))
+    graph = complete(ts.structure.graph)
+    var_eq_matching = complete(maximal_matching(graph, _->true, varmask))
+    scc = find_var_sccs(graph, var_eq_matching)
+    vordering = Vector{Int}(undef, 0)
+    bb = Int[1]
+    sizehint!(vordering, ndsts(graph))
+    sizehint!(bb, ndsts(graph))
+    l = 1
+    for c in scc
+        isemptyc = true
+        for v in c
+            if varmask(v)
+                push!(vordering, v)
+                l += 1
+                isemptyc = false
+            end
+        end
+        isemptyc || push!(bb, l)
+    end
+    mm = incidence_matrix(graph)
+    mm[[var_eq_matching[v] for v in vordering if var_eq_matching[v] isa Int], vordering], bb
+end
+
 # debugging use
 function reordered_matrix(sys, torn_matching)
     s = TearingState(sys)
