@@ -45,6 +45,7 @@ export sorted_incidence_matrix, pantelides!, tearing_reassemble, find_solvables!
 export tearing_assignments, tearing_substitution
 export torn_system_jacobian_sparsity
 export full_equations
+export but_ordered_incidence, lowest_order_variable_mask, highest_order_variable_mask
 
 include("utils.jl")
 include("pantelides.jl")

@@ -211,3 +211,22 @@ end
 
 @named foo = Circuit()
 @test structural_simplify(foo) isa ModelingToolkit.AbstractSystem
+
+# BLT tests
+V = 2.0
+@named source = ConstantVoltage(V=V)
+@named ground = Ground()
+N = 50
+Rs = 10 .^range(0, stop=-4, length=N)
+Cs = 10 .^range(-3, stop=0, length=N)
+rc_systems = map(1:N) do i
+    parallel_rc_model(i; name=:rc, source=source, ground=ground, R=Rs[i], C=Cs[i])
+end;
+@variables E(t)=0.0
+eqs = [
+       D(E) ~ sum(((i, sys),)->getproperty(sys, Symbol(:resistor, i)).h.Q_flow, enumerate(rc_systems))
+      ]
+@named _big_rc = ODESystem(eqs, t, [E], [])
+@named big_rc = compose(_big_rc, rc_systems)
+ts = TearingState(expand_connections(big_rc))
+@test istriu(but_ordered_incidence(ts)[1])
