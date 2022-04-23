@@ -9,6 +9,14 @@ equations are given by the constraints and equalities between different
 component variables. We then simplify this to an ODE by eliminating the
 equalities before solving. Let's see this in action.
 
+!!! note
+
+    This tutorial teaches how to build the entire RC circuit from scratch.
+    However, to simulate electrical components with more ease, check out the
+    [ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl)
+    which includes a 
+    [tutorial for simulating RC circuits with pre-built components](http://mtkstdlib.sciml.ai/dev/tutorials/rc_circuit/)
+
 ## Copy-Paste Example
 
 ```julia

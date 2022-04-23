@@ -75,6 +75,12 @@ is built on, consult the
 - Chemical Reactions (via [Catalyst.jl](https://github.com/SciML/Catalyst.jl))
 - Nonlinear Optimal Control
 
+## Standard Library
+
+For quick development, ModelingToolkit.jl includes 
+[ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl),
+a standard library of prebuilt components for the ModelingToolkit ecosystem.
+
 ## Model Import Formats
 
 - [CellMLToolkit.jl](https://github.com/SciML/CellMLToolkit.jl): Import [CellML](https://www.cellml.org/) models into ModelingToolkit
@@ -111,12 +117,19 @@ Below is an incomplete list of extension libraries one may want to be aware of:
     - Generates ODESystems for the moment closures
     - Allows for geometrically-distributed random reaction rates
 - [ReactionMechanismSimulator.jl](https://github.com/ReactionMechanismGenerator/ReactionMechanismSimulator.jl):
-  simulating and analyzing large chemical reaction mechanisms
+  Simulating and analyzing large chemical reaction mechanisms
     - Ideal gas and dilute liquid phases.
     - Constant T and P and constant V adiabatic ideal gas reactors.
     - Constant T and V dilute liquid reactors.
     - Diffusion limited rates. Sensitivity analysis for all reactors.
     - Flux diagrams with molecular images (if molecular information is provided).
+- [NumCME.jl](https://github.com/voduchuy/NumCME.jl): High-performance simulation of chemical master equations (CME)
+    - Transient solution of the CME
+    - Dynamic state spaces
+    - Accepts reaction systems defined using Catalyst.jl DSL.
+- [FiniteStateProjection.jl](https://github.com/kaandocal/FiniteStateProjection.jl): High-performance simulation of 
+  chemical master equations (CME) via finite state projections
+    - Accepts reaction systems defined using Catalyst.jl DSL.
 
 ## Compatible Numerical Solvers
 
