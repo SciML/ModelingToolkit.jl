@@ -25,7 +25,7 @@ makedocs(
         "ModelingToolkitize Tutorials" => Any[
             "mtkitize_tutorials/modelingtoolkitize.md",
             "mtkitize_tutorials/modelingtoolkitize_index_reduction.md",
-            "mtkitize_tutorials/sparse_jacobians",
+            "mtkitize_tutorials/sparse_jacobians.md",
         ],
         "Basics" => Any[
             "basics/AbstractSystem.md",
