@@ -20,6 +20,11 @@ For information on using the package,
 [in-development documentation](https://mtk.sciml.ai/dev/) for the version of
 the documentation which contains the unreleased features.
 
+## Standard Library
+
+For a standard library of ModelingToolkit components and blocks, check out the
+[ModelingToolkitStandardLibrary](https://github.com/SciML/ModelingToolkitStandardLibrary.jl)
+
 ## High-Level Examples
 
 First, let's define a second order riff on the Lorenz equations, symbolically
