@@ -4,10 +4,10 @@ using ModelingToolkit.BipartiteGraphs
 using ModelingToolkit.StructuralTransformations
 
 function check_contract(sys)
+    graph = ModelingToolkit.get_tearing_state(sys).structure.graph
     sys = tearing_substitution(sys)
     state = TearingState(sys)
     fullvars = state.fullvars
-    graph = state.structure.graph
 
     eqs = equations(sys)
     var2idx = Dict(enumerate(fullvars))
@@ -30,6 +30,7 @@ end
 
 include("../examples/rc_model.jl")
 
+@test length(equations(structural_simplify(rc_model, allow_parameter=false))) > 1
 sys = structural_simplify(rc_model)
 check_contract(sys)
 @test !isempty(ModelingToolkit.defaults(sys))

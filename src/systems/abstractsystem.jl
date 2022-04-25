@@ -919,9 +919,11 @@ $(SIGNATURES)
 
 Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations. When `simplify=true`, the `simplify`
-function will be applied during the tearing process.
+function will be applied during the tearing process. It also takes kwargs
+`allow_symbolic=false` and `allow_parameter=true` which limits the coefficient
+types during tearing.
 """
-function structural_simplify(sys::AbstractSystem; simplify=false)
+function structural_simplify(sys::AbstractSystem; simplify=false, kwargs...)
     sys = expand_connections(sys)
     sys = alias_elimination(sys)
     state = TearingState(sys)
@@ -930,7 +932,7 @@ function structural_simplify(sys::AbstractSystem; simplify=false)
         sys = dae_index_lowering(ode_order_lowering(sys))
     end
     state = TearingState(sys)
-    find_solvables!(state)
+    find_solvables!(state; kwargs...)
     sys = tearing_reassemble(state, tearing(state), simplify=simplify)
     fullstates = [map(eq->eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
