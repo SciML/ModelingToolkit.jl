@@ -66,3 +66,41 @@ function Inductor(; name, L = 1.0)
           ]
     extend(ODESystem(eqs, t, [], ps; name=name), oneport)
 end
+
+@connector function HeatPort(;name)
+    @variables T(t)=293.15 Q_flow(t)=0.0 [connect = Flow]
+    ODESystem(Equation[], t, [T, Q_flow], [], name=name)
+end
+
+function HeatingResistor(;name, R=1.0, TAmbient=293.15, alpha=1.0)
+    @named p = Pin()
+    @named n = Pin()
+    @named h = HeatPort()
+    @variables v(t) RTherm(t)
+    @parameters R=R TAmbient=TAmbient alpha=alpha
+    eqs = [
+           RTherm ~ R*(1 + alpha*(h.T - TAmbient))
+           v ~ p.i * RTherm
+           h.Q_flow ~ -v * p.i # -LossPower
+           v ~ p.v - n.v
+           0 ~ p.i + n.i
+          ]
+    compose(ODESystem(
+        eqs, t, [v, RTherm], [R, TAmbient, alpha],
+        name=name,
+    ), p, n, h)
+end
+
+function HeatCapacitor(;name, rho=8050, V=1, cp=460, TAmbient=293.15)
+    @parameters rho=rho V=V cp=cp
+    C = rho*V*cp
+    @named h = HeatPort()
+    D = Differential(t)
+    eqs = [
+           D(h.T) ~ h.Q_flow / C
+          ]
+    compose(ODESystem(
+        eqs, t, [], [rho, V, cp],
+        name=name,
+    ), h)
+end

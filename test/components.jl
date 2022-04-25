@@ -212,3 +212,38 @@ end
 
 @named foo = Circuit()
 @test structural_simplify(foo) isa ModelingToolkit.AbstractSystem
+
+# BLT tests
+using LinearAlgebra
+function parallel_rc_model(i; name, source, ground, R, C)
+    resistor = HeatingResistor(name=Symbol(:resistor, i), R=R)
+    capacitor = Capacitor(name=Symbol(:capacitor, i), C=C)
+    heat_capacitor = HeatCapacitor(name=Symbol(:heat_capacitor, i))
+
+    rc_eqs = [
+              connect(source.p, resistor.p)
+              connect(resistor.n, capacitor.p)
+              connect(capacitor.n, source.n, ground.g)
+              connect(resistor.h, heat_capacitor.h)
+             ]
+
+    compose(ODESystem(rc_eqs, t, name=Symbol(name, i)),
+            [resistor, capacitor, source, ground, heat_capacitor])
+end
+V = 2.0
+@named source = ConstantVoltage(V=V)
+@named ground = Ground()
+N = 50
+Rs = 10 .^range(0, stop=-4, length=N)
+Cs = 10 .^range(-3, stop=0, length=N)
+rc_systems = map(1:N) do i
+    parallel_rc_model(i; name=:rc, source=source, ground=ground, R=Rs[i], C=Cs[i])
+end;
+@variables E(t)=0.0
+eqs = [
+       D(E) ~ sum(((i, sys),)->getproperty(sys, Symbol(:resistor, i)).h.Q_flow, enumerate(rc_systems))
+      ]
+@named _big_rc = ODESystem(eqs, t, [E], [])
+@named big_rc = compose(_big_rc, rc_systems)
+ts = TearingState(expand_connections(big_rc))
+@test istriu(but_ordered_incidence(ts)[1])
