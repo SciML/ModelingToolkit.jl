@@ -139,7 +139,6 @@ instead, which calls this function internally.
 """
 function dae_index_lowering(sys::ODESystem; kwargs...)
     state = TearingState(sys)
-    find_solvables!(state)
     var_eq_matching = pantelides!(state; kwargs...)
     return invalidate_cache!(pantelides_reassemble(state, var_eq_matching))
 end
