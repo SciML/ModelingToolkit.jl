@@ -33,7 +33,7 @@ function var_derivative!(ts::TearingState{ODESystem}, v::Int)
     sys = ts.sys
     s = ts.structure
     D = Differential(get_iv(sys))
-    add_vertex!(s.solvable_graph, DST)
+    s.solvable_graph === nothing || add_vertex!(s.solvable_graph, DST)
     push!(ts.fullvars, D(ts.fullvars[v]))
 end
 
@@ -43,7 +43,7 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int)
     D = Differential(get_iv(sys))
     eq = equations(ts)[ieq]
     eq = ModelingToolkit.expand_derivatives(0 ~ D(eq.rhs - eq.lhs))
-    add_vertex!(s.solvable_graph, SRC)
+    s.solvable_graph === nothing || add_vertex!(s.solvable_graph, SRC)
     push!(equations(ts), eq)
     # Analyze the new equation and update the graph/solvable_graph
     # First, copy the previous incidence and add the derivative terms.
@@ -54,7 +54,7 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int)
         add_edge!(s.graph, eq_diff, var)
         add_edge!(s.graph, eq_diff, s.var_to_diff[var])
     end
-    find_eq_solvables!(ts, eq_diff; may_be_zero=true, allow_symbolic=true)
+    s.solvable_graph === nothing || find_eq_solvables!(ts, eq_diff; may_be_zero=true, allow_symbolic=true)
 end
 
 function tearing_sub(expr, dict, s)
