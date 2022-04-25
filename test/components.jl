@@ -213,6 +213,22 @@ end
 @test structural_simplify(foo) isa ModelingToolkit.AbstractSystem
 
 # BLT tests
+using LinearAlgebra
+function parallel_rc_model(i; name, source, ground, R, C)
+    resistor = HeatingResistor(name=Symbol(:resistor, i), R=R)
+    capacitor = Capacitor(name=Symbol(:capacitor, i), C=C)
+    heat_capacitor = HeatCapacitor(name=Symbol(:heat_capacitor, i))
+
+    rc_eqs = [
+              connect(source.p, resistor.p)
+              connect(resistor.n, capacitor.p)
+              connect(capacitor.n, source.n, ground.g)
+              connect(resistor.h, heat_capacitor.h)
+             ]
+
+    compose(ODESystem(rc_eqs, t, name=Symbol(name, i)),
+            [resistor, capacitor, source, ground, heat_capacitor])
+end
 V = 2.0
 @named source = ConstantVoltage(V=V)
 @named ground = Ground()
