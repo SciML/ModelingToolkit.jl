@@ -523,8 +523,10 @@ function get_cset_sv(namespace, ex, csets)
     idx_in_set = -1
     sv = ns_sv
     for (i, c) in enumerate(csets)
+        crep = first(c.set)
+        current = namespace == crep.sys.namespace
         for (j, v) in enumerate(c.set)
-            if isequal(namespaced_var(v), full_name_sv)
+            if isequal(namespaced_var(v), full_name_sv) && (current || !v.isouter)
                 cidx = i
                 idx_in_set = j
                 sv = v.v
@@ -533,9 +535,9 @@ function get_cset_sv(namespace, ex, csets)
     end
     cidx < 0 && error("$ns_sv is not a variable inside stream connectors")
     cset = csets[cidx].set
-    if namespace != first(cset).sys.namespace
-        cset = map(c->@set(c.isouter = false), cset)
-    end
+    #if namespace != first(cset).sys.namespace
+    #    cset = map(c->@set(c.isouter = false), cset)
+    #end
     cset, idx_in_set, sv
 end
 
