@@ -348,10 +348,9 @@ end
 function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10)
     sys, csets = generate_connection_set(sys)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
-    additional_eqs = Equation[]
     _sys = expand_instream(instream_csets, sys; debug=debug, tol=tol)
     sys = flatten(sys, true)
-    @set! sys.eqs = [equations(_sys); ceqs; additional_eqs]
+    @set! sys.eqs = [equations(_sys); ceqs]
 end
 
 function unnamespace(root, namespace)
@@ -405,7 +404,7 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
             end
         end
         if debug
-            @show ex idx_in_set ConnectionSet(cset)
+            @info "Expanding at [$idx_in_set]" ex ConnectionSet(cset)
             @show n_inners, n_outers
         end
         if n_inners == 1 && n_outers == 0
@@ -493,15 +492,22 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
         end
     end
 
-    if debug
+    subed_eqs = substitute(instream_eqs, sub)
+    if debug && !(isempty(csets) && isempty(additional_eqs) && isempty(instream_eqs))
+        println("======================================")
         @info "Additional equations" csets
-        @show additional_eqs
+        display(additional_eqs)
+        println("======================================")
         println("Substitutions")
         display(sub)
+        println("======================================")
+        println("Substituted equations")
+        foreach(i->println(instream_eqs[i] => subed_eqs[i]), eachindex(subed_eqs))
+        println("======================================")
     end
 
     @set! sys.systems = []
-    @set! sys.eqs = [get_eqs(sys); eqs; substitute(instream_eqs, sub); additional_eqs]
+    @set! sys.eqs = [get_eqs(sys); eqs; subed_eqs; additional_eqs]
     sys
 end
 
@@ -517,8 +523,10 @@ function get_cset_sv(namespace, ex, csets)
     idx_in_set = -1
     sv = ns_sv
     for (i, c) in enumerate(csets)
+        crep = first(c.set)
+        current = namespace == crep.sys.namespace
         for (j, v) in enumerate(c.set)
-            if isequal(namespaced_var(v), full_name_sv)
+            if isequal(namespaced_var(v), full_name_sv) && (current || !v.isouter)
                 cidx = i
                 idx_in_set = j
                 sv = v.v
@@ -527,9 +535,9 @@ function get_cset_sv(namespace, ex, csets)
     end
     cidx < 0 && error("$ns_sv is not a variable inside stream connectors")
     cset = csets[cidx].set
-    if namespace != first(cset).sys.namespace
-        cset = map(c->@set(c.isouter = false), cset)
-    end
+    #if namespace != first(cset).sys.namespace
+    #    cset = map(c->@set(c.isouter = false), cset)
+    #end
     cset, idx_in_set, sv
 end
 
