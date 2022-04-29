@@ -15,10 +15,7 @@ using SafeTestsets, Test
 @safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
 @safetestset "SDESystem Test" begin include("sdesystem.jl") end
 @safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
-@safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 @safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
-@safetestset "ControlSystem Test" begin include("controlsystem.jl") end
-@safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
 @safetestset "Constraints Test" begin include("constraints.jl") end
 @safetestset "Reduction Test" begin include("reduction.jl") end
 @safetestset "Components Test" begin include("components.jl") end
@@ -41,6 +38,9 @@ println("Last test requires gcc available in the path!")
 @safetestset "error_handling" begin include("error_handling.jl") end
 @safetestset "root_equations" begin include("root_equations.jl") end
 @safetestset "state_selection" begin include("state_selection.jl") end
+@safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
+@safetestset "ControlSystem Test" begin include("controlsystem.jl") end
+@safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 
 # Reference tests go Last
 @safetestset "Latexify recipes Test" begin include("latexify.jl") end
