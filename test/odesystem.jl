@@ -693,22 +693,28 @@ let
         D2(z2) ~ x2 * y2 - beta * z2
     ]
 
-    eqs3 = copy(eqs2)
-    
     # array u
     eqs3 = [D2(u[1]) ~ sigma * (u[2] - u[1]),
         D2(u[2]) ~ u[1] * (rho - u[3]) - u[2],
         D2(u[3]) ~ u[1] * u[2] - beta * u[3]]
     eqs3 = eqs_to_lhs(eqs3)
     
+    eqs4 = [
+        D2(y2) ~ x2 * (rho - z2) - y2,
+        D2(x2) ~ sigma * (y2 - x2),
+        D2(z2) ~ y2 - beta * z2 # missing x2 term
+    ]
+
     @named sys1 = ODESystem(eqs)
     @named sys2 = ODESystem(eqs2)
     @named sys3 = ODESystem(eqs3, t2)
     ssys3 = structural_simplify(sys3)
+    @named sys4 = ODESystem(eqs4)
 
     @test ModelingToolkit.isisomorphic(sys1, sys2)
     @test !ModelingToolkit.isisomorphic(sys1, sys3)
     @test ModelingToolkit.isisomorphic(sys1, ssys3) # I don't call structural_simplify in isisomorphic
+    @test !ModelingToolkit.isisomorphic(sys1, sys4) 
 
     # 1281
     iv2 = independent_variable(sys2)
