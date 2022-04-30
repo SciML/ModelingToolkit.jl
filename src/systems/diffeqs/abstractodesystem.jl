@@ -902,7 +902,6 @@ function SteadyStateProblemExpr(sys::AbstractODESystem, args...; kwargs...)
 end
 
 # SU 442 and Symbolics 588 copied over for CI, will be removed
-(f::Symbolic{<:FnType})(args...; kwargs...) = Term{promote_symtype(f, symtype.(args)...)}(f, [args...]; kwargs...)
 function SymbolicUtils.substitute(op::Symbolics.Differential, dict; kwargs...)
     @set! op.x = substitute(op.x, dict; kwargs...)
 end
@@ -914,18 +913,17 @@ function _match_eqs(eqs1, eqs2)
             if isequal(eq, eq2)
                 push!(eqpairs, i => j)
                 break
-            elseif !isequal(eq, eq2) && j == length(eqs2)
             end
         end
     end
     eqpairs
 end
 
-function isisomorphic(sys1::AbstractODESystem, sys2::AbstractODESystem; verbose=false)
+function isisomorphic(sys1::AbstractODESystem, sys2::AbstractODESystem)
     sys1 = flatten(sys1)
     sys2 = flatten(sys2)
 
-    iv1, iv2 = independent_variable(sys1), independent_variable(sys2) # not needed
+    iv2 = only(independent_variables(sys2))
     sys1 = convert_system(ODESystem, sys1, iv2)
     s1, s2 = states(sys1), states(sys2)
     p1, p2 = parameters(sys1), parameters(sys2)
@@ -938,7 +936,7 @@ function isisomorphic(sys1::AbstractODESystem, sys2::AbstractODESystem; verbose=
     pps = permutations(p2)
     psts = permutations(s2)
     orig = [p1; s1]
-    perms = [[x; y] for x in pps for y in psts]
+    perms = ([x; y] for x in pps for y in psts)
 
     for perm in perms
         rules = Dict(orig .=> perm)

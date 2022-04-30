@@ -717,6 +717,6 @@ let
     @test !ModelingToolkit.isisomorphic(sys1, sys4) 
 
     # 1281
-    iv2 = independent_variable(sys2)
-    @test isequal(independent_variable(convert_system(ODESystem, sys1, iv2)), iv2)
+    iv2 = only(independent_variables(sys2))
+    @test isequal(only(independent_variables(convert_system(ODESystem, sys1, iv2))), iv2)
 end
