@@ -139,16 +139,9 @@ V = 1.0
           connect(capacitor.n, ground.g)
          ]</code></pre><p>Finally we build our four component model with these connection rules:</p><pre><code class="language-julia hljs">@named _rc_model = ODESystem(rc_eqs, t)
 @named rc_model = compose(_rc_model,
-                          [resistor, capacitor, source, ground])</code></pre><p>Note that we can also specify the subsystems in a vector. This model is acasual because we have not specified anything about the causality of the model. We have simply specified what is true about each of the variables. This forms a system of differential-algebraic equations (DAEs) which define the evolution of each state of the system. The equations are:</p><pre><code class="language-julia hljs">equations(rc_model)
+                          [resistor, capacitor, source, ground])</code></pre><p>Note that we can also specify the subsystems in a vector. This model is acasual because we have not specified anything about the causality of the model. We have simply specified what is true about each of the variables. This forms a system of differential-algebraic equations (DAEs) which define the evolution of each state of the system. The equations are:</p><pre><code class="language-julia hljs">equations(expand_connections(rc_model))
 
 20-element Vector{Equation}:
- 0 ~ resistor₊p₊i(t) + source₊p₊i(t)
- source₊p₊v(t) ~ resistor₊p₊v(t)
- 0 ~ capacitor₊p₊i(t) + resistor₊n₊i(t)
- resistor₊n₊v(t) ~ capacitor₊p₊v(t)
- 0 ~ capacitor₊n₊i(t) + ground₊g₊i(t) + source₊n₊i(t)
- capacitor₊n₊v(t) ~ source₊n₊v(t)
- source₊n₊v(t) ~ ground₊g₊v(t)
  resistor₊v(t) ~ resistor₊p₊v(t) - resistor₊n₊v(t)
  0 ~ resistor₊n₊i(t) + resistor₊p₊i(t)
  resistor₊i(t) ~ resistor₊p₊i(t)
@@ -156,34 +149,41 @@ V = 1.0
  capacitor₊v(t) ~ capacitor₊p₊v(t) - capacitor₊n₊v(t)
  0 ~ capacitor₊n₊i(t) + capacitor₊p₊i(t)
  capacitor₊i(t) ~ capacitor₊p₊i(t)
- Differential(t)(capacitor₊v(t)) ~ capacitor₊i(t)*(capacitor₊C^-1)
+ Differential(t)(capacitor₊v(t)) ~ capacitor₊i(t) / capacitor₊C
  source₊v(t) ~ source₊p₊v(t) - source₊n₊v(t)
  0 ~ source₊n₊i(t) + source₊p₊i(t)
  source₊i(t) ~ source₊p₊i(t)
  source₊V ~ source₊v(t)
- ground₊g₊v(t) ~ 0</code></pre><p>the states are:</p><pre><code class="language-julia hljs">states(rc_model)
+ ground₊g₊v(t) ~ 0
+ source₊p₊v(t) ~ resistor₊p₊v(t)
+ 0 ~ resistor₊p₊i(t) + source₊p₊i(t)
+ resistor₊n₊v(t) ~ capacitor₊p₊v(t)
+ 0 ~ capacitor₊p₊i(t) + resistor₊n₊i(t)
+ ground₊g₊v(t) ~ source₊n₊v(t)
+ ground₊g₊v(t) ~ capacitor₊n₊v(t)
+ 0 ~ capacitor₊n₊i(t) + ground₊g₊i(t) + source₊n₊i(t)</code></pre><p>the states are:</p><pre><code class="language-julia hljs">states(rc_model)
 
-20-element Vector{Term{Real, Base.ImmutableDict{DataType, Any}}}:
- source₊p₊i(t)
- resistor₊p₊i(t)
- source₊p₊v(t)
- resistor₊p₊v(t)
- capacitor₊p₊i(t)
- resistor₊n₊i(t)
- resistor₊n₊v(t)
- capacitor₊p₊v(t)
- source₊n₊i(t)
- capacitor₊n₊i(t)
- ground₊g₊i(t)
- capacitor₊n₊v(t)
- source₊n₊v(t)
- ground₊g₊v(t)
+20-element Vector{Any}:
  resistor₊v(t)
  resistor₊i(t)
+ resistor₊p₊v(t)
+ resistor₊p₊i(t)
+ resistor₊n₊v(t)
+ resistor₊n₊i(t)
  capacitor₊v(t)
  capacitor₊i(t)
+ capacitor₊p₊v(t)
+ capacitor₊p₊i(t)
+ capacitor₊n₊v(t)
+ capacitor₊n₊i(t)
  source₊v(t)
- source₊i(t)</code></pre><p>and the parameters are:</p><pre><code class="language-julia hljs">parameters(rc_model)
+ source₊i(t)
+ source₊p₊v(t)
+ source₊p₊i(t)
+ source₊n₊v(t)
+ source₊n₊i(t)
+ ground₊g₊v(t)
+ ground₊g₊i(t)</code></pre><p>and the parameters are:</p><pre><code class="language-julia hljs">parameters(rc_model)
 
 3-element Vector{Any}:
  resistor₊R
@@ -191,13 +191,11 @@ V = 1.0
  source₊V</code></pre><h2 id="Simplifying-and-Solving-this-System"><a class="docs-heading-anchor" href="#Simplifying-and-Solving-this-System">Simplifying and Solving this System</a><a id="Simplifying-and-Solving-this-System-1"></a><a class="docs-heading-anchor-permalink" href="#Simplifying-and-Solving-this-System" title="Permalink"></a></h2><p>This system could be solved directly as a DAE using <a href="https://diffeq.sciml.ai/stable/solvers/dae_solve/">one of the DAE solvers from DifferentialEquations.jl</a>. However, let&#39;s take a second to symbolically simplify the system before doing the solve. Although we can use ODE solvers that handles mass matrices to solve the above system directly, we want to run the <code>structural_simplify</code> function first, as it eliminates many unnecessary variables to build the leanest numerical representation of the system. Let&#39;s see what it does here:</p><pre><code class="language-julia hljs">sys = structural_simplify(rc_model)
 equations(sys)
 
-2-element Vector{Equation}:
- 0 ~ capacitor₊v(t) + resistor₊R*resistor₊i(t) - source₊V
- Differential(t)(capacitor₊v(t)) ~ resistor₊i(t)*(capacitor₊C^-1)</code></pre><pre><code class="language-julia hljs">states(sys)
+1-element Vector{Equation}:
+ Differential(t)(capacitor₊v(t)) ~ capacitor₊i(t) / capacitor₊C</code></pre><pre><code class="language-julia hljs">states(sys)
 
-2-element Vector{Any}:
- capacitor₊v(t)
- capacitor₊p₊i(t)</code></pre><p>After structural simplification we are left with a system of only two equations with two state variables. One of the equations is a differential equation while the other is an algebraic equation. We can then give the values for the initial conditions of our states and solve the system by converting it to an ODEProblem in mass matrix form and solving it with an <a href="https://diffeq.sciml.ai/stable/solvers/dae_solve/#OrdinaryDiffEq.jl-(Mass-Matrix)">ODEProblem mass matrix DAE solver</a>. This is done as follows:</p><pre><code class="language-julia hljs">u0 = [
+1-element Vector{Term{Real, Base.ImmutableDict{DataType, Any}}}:
+ capacitor₊v(t)</code></pre><p>After structural simplification we are left with a system of only two equations with two state variables. One of the equations is a differential equation while the other is an algebraic equation. We can then give the values for the initial conditions of our states and solve the system by converting it to an ODEProblem in mass matrix form and solving it with an <a href="https://diffeq.sciml.ai/stable/solvers/dae_solve/#OrdinaryDiffEq.jl-(Mass-Matrix)">ODEProblem mass matrix DAE solver</a>. This is done as follows:</p><pre><code class="language-julia hljs">u0 = [
       capacitor.v =&gt; 0.0
       capacitor.p.i =&gt; 0.0
      ]
@@ -210,22 +208,23 @@ prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 plot(sol)</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/109416294-55184100-798b-11eb-9f05-766a793f0ba2.png" alt/></p><p>Notice that this solves the whole system by only solving for one variable!</p><p>However, what if we wanted to plot the timeseries of a different variable? Do not worry, that information was not thrown away! Instead, transformations like <code>structural_simplify</code> simply change state variables into <code>observed</code> variables. Let&#39;s see what our observed variables are:</p><pre><code class="language-julia hljs">observed(sys)
 
-18-element Vector{Equation}:
- capacitor₊i(t) ~ resistor₊i(t)
- ground₊g₊i(t) ~ 0.0
- source₊n₊i(t) ~ resistor₊i(t)
- source₊i(t) ~ -resistor₊i(t)
- source₊p₊i(t) ~ -resistor₊i(t)
- capacitor₊n₊i(t) ~ -resistor₊i(t)
+19-element Vector{Equation}:
+ ground₊g₊i(t) ~ 0
  resistor₊n₊v(t) ~ capacitor₊v(t)
- resistor₊n₊i(t) ~ -resistor₊i(t)
- resistor₊p₊i(t) ~ resistor₊i(t)
- capacitor₊p₊i(t) ~ resistor₊i(t)
  capacitor₊p₊v(t) ~ capacitor₊v(t)
- capacitor₊n₊v(t) ~ 0.0
- source₊n₊v(t) ~ 0.0
- ground₊g₊v(t) ~ 0.0
+ capacitor₊n₊v(t) ~ 0
+ source₊n₊v(t) ~ 0
+ ground₊g₊v(t) ~ 0
  source₊v(t) ~ source₊V
- source₊p₊v(t) ~ source₊v(t)
  resistor₊p₊v(t) ~ source₊v(t)
- resistor₊v(t) ~ source₊v(t) - capacitor₊v(t)</code></pre><p>These are explicit algebraic equations which can then be used to reconstruct the required variables on the fly. This leads to dramatic computational savings because implicitly solving an ODE scales like O(n^3), so making there be as few states as possible is good!</p><p>The solution object can be accessed via its symbols. For example, let&#39;s retrieve the voltage of the resistor over time:</p><pre><code class="language-julia hljs">sol[resistor.v]</code></pre><p>or we can plot the timeseries of the resistor&#39;s voltage:</p><pre><code class="language-julia hljs">plot(sol, vars=[resistor.v])</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../spring_mass/">« Component-Based Modeling a Spring-Mass System</a><a class="docs-footer-nextpage" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.16 on <span class="colophon-date" title="Sunday 1 May 2022 17:33">Sunday 1 May 2022</span>. Using Julia version 1.7.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ source₊p₊v(t) ~ source₊v(t)
+ resistor₊v(t) ~ source₊v(t) - capacitor₊v(t)
+ capacitor₊i(t) ~ resistor₊v(t) / resistor₊R
+ resistor₊i(t) ~ capacitor₊i(t)
+ source₊i(t) ~ -capacitor₊i(t)
+ resistor₊n₊i(t) ~ -capacitor₊i(t)
+ resistor₊p₊i(t) ~ capacitor₊i(t)
+ source₊p₊i(t) ~ -capacitor₊i(t)
+ source₊n₊i(t) ~ capacitor₊i(t)
+ capacitor₊p₊i(t) ~ capacitor₊i(t)
+ capacitor₊n₊i(t) ~ -capacitor₊i(t)</code></pre><p>These are explicit algebraic equations which can then be used to reconstruct the required variables on the fly. This leads to dramatic computational savings because implicitly solving an ODE scales like O(n^3), so making there be as few states as possible is good!</p><p>The solution object can be accessed via its symbols. For example, let&#39;s retrieve the voltage of the resistor over time:</p><pre><code class="language-julia hljs">sol[resistor.v]</code></pre><p>or we can plot the timeseries of the resistor&#39;s voltage:</p><pre><code class="language-julia hljs">plot(sol, vars=[resistor.v])</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../spring_mass/">« Component-Based Modeling a Spring-Mass System</a><a class="docs-footer-nextpage" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.16 on <span class="colophon-date" title="Sunday 1 May 2022 17:34">Sunday 1 May 2022</span>. Using Julia version 1.7.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
