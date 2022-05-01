@@ -901,11 +901,6 @@ function SteadyStateProblemExpr(sys::AbstractODESystem, args...; kwargs...)
     SteadyStateProblemExpr{true}(sys, args...; kwargs...)
 end
 
-# SU 442 and Symbolics 588 copied over for CI, will be removed
-function SymbolicUtils.substitute(op::Symbolics.Differential, dict; kwargs...)
-    @set! op.x = substitute(op.x, dict; kwargs...)
-end
-
 function _match_eqs(eqs1, eqs2)
     eqpairs = Pair[]
     for (i, eq) in enumerate(eqs1)
