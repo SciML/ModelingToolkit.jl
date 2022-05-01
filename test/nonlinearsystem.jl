@@ -177,3 +177,20 @@ eq = [
 ]
 @named sys = ODESystem(eq)
 @test length(equations(structural_simplify(sys))) == 0
+
+#1504
+let
+    @variables u[1:4]
+
+    eqs = [u[1] ~ 1,
+           u[2] ~ 1,
+           u[3] ~ 1,
+           u[4] ~ 1]
+
+    sys = NonlinearSystem(eqs, collect(u[1:4]), Num[], defaults=Dict([]), name=:test)
+    prob = NonlinearProblem(sys, ones(length(sys.states)))
+
+    sol = NonlinearSolve.solve(prob, NewtonRaphson())
+
+    @test sol[u] ≈ ones(4)
+end
