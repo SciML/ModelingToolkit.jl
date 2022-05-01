@@ -270,7 +270,7 @@ function build_explicit_observed_function(
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
     end
-    ts = Symbolics.scalarize.(value.(ts))
+    ts = unwrap.(Symbolics.scalarize(ts))
 
     vars = Set()
     foreach(Base.Fix1(vars!, vars), ts)
