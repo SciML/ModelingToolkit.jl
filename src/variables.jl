@@ -32,7 +32,7 @@ Takes a list of pairs of `variables=>values` and an ordered list of variables
 and creates the array of values in the correct order with default values when
 applicable.
 """
-function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true, toterm=Symbolics.diff2term, promotetoconcrete=false)
+function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true, toterm=Symbolics.diff2term, promotetoconcrete=nothing)
     varlist = map(unwrap, varlist)
     # Edge cases where one of the arguments is effectively empty.
     is_incomplete_initialization = varmap isa DiffEqBase.NullParameters || varmap === nothing
@@ -58,6 +58,7 @@ function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true, toterm=Sym
         varmap
     end
 
+    promotetoconcrete === nothing && (promotetoconcrete = container_type <: AbstractArray)
     if promotetoconcrete
         vals = promote_to_concrete(vals)
     end
@@ -79,7 +80,7 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults=Dict(), check=false, to
     for (p, v) in pairs(varmap)
         varmap[p] = fixpoint_sub(v, varmap)
     end
-    
+
     missingvars = setdiff(varlist, keys(varmap))
     check && (isempty(missingvars) || throw_missingvars(missingvars))
 

@@ -472,8 +472,8 @@ function mergedefaults(defaults, varmap, vars)
     end
 end
 
-function promote_to_concrete(vs)
-    if isempty(vs) 
+function promote_to_concrete(vs, tofloat=true)
+    if isempty(vs)
         return vs
     end
     T = eltype(vs)
@@ -481,6 +481,6 @@ function promote_to_concrete(vs)
         vs
     else
         C = foldl((t, elem)->promote_type(t, eltype(elem)), vs; init=typeof(first(vs)))
-        convert.(C, vs)
+        convert.(tofloat ? float(C) : C, vs)
     end
 end
