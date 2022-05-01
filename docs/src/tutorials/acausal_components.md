@@ -283,16 +283,9 @@ of differential-algebraic equations (DAEs) which define the evolution of each
 state of the system. The equations are:
 
 ```julia
-equations(rc_model)
+equations(expand_connections(rc_model))
 
 20-element Vector{Equation}:
- 0 ~ resistor₊p₊i(t) + source₊p₊i(t)
- source₊p₊v(t) ~ resistor₊p₊v(t)
- 0 ~ capacitor₊p₊i(t) + resistor₊n₊i(t)
- resistor₊n₊v(t) ~ capacitor₊p₊v(t)
- 0 ~ capacitor₊n₊i(t) + ground₊g₊i(t) + source₊n₊i(t)
- capacitor₊n₊v(t) ~ source₊n₊v(t)
- source₊n₊v(t) ~ ground₊g₊v(t)
  resistor₊v(t) ~ resistor₊p₊v(t) - resistor₊n₊v(t)
  0 ~ resistor₊n₊i(t) + resistor₊p₊i(t)
  resistor₊i(t) ~ resistor₊p₊i(t)
@@ -300,12 +293,19 @@ equations(rc_model)
  capacitor₊v(t) ~ capacitor₊p₊v(t) - capacitor₊n₊v(t)
  0 ~ capacitor₊n₊i(t) + capacitor₊p₊i(t)
  capacitor₊i(t) ~ capacitor₊p₊i(t)
- Differential(t)(capacitor₊v(t)) ~ capacitor₊i(t)*(capacitor₊C^-1)
+ Differential(t)(capacitor₊v(t)) ~ capacitor₊i(t) / capacitor₊C
  source₊v(t) ~ source₊p₊v(t) - source₊n₊v(t)
  0 ~ source₊n₊i(t) + source₊p₊i(t)
  source₊i(t) ~ source₊p₊i(t)
  source₊V ~ source₊v(t)
  ground₊g₊v(t) ~ 0
+ source₊p₊v(t) ~ resistor₊p₊v(t)
+ 0 ~ resistor₊p₊i(t) + source₊p₊i(t)
+ resistor₊n₊v(t) ~ capacitor₊p₊v(t)
+ 0 ~ capacitor₊p₊i(t) + resistor₊n₊i(t)
+ ground₊g₊v(t) ~ source₊n₊v(t)
+ ground₊g₊v(t) ~ capacitor₊n₊v(t)
+ 0 ~ capacitor₊n₊i(t) + ground₊g₊i(t) + source₊n₊i(t)
 ```
 
 the states are:
@@ -313,27 +313,27 @@ the states are:
 ```julia
 states(rc_model)
 
-20-element Vector{Term{Real, Base.ImmutableDict{DataType, Any}}}:
- source₊p₊i(t)
- resistor₊p₊i(t)
- source₊p₊v(t)
- resistor₊p₊v(t)
- capacitor₊p₊i(t)
- resistor₊n₊i(t)
- resistor₊n₊v(t)
- capacitor₊p₊v(t)
- source₊n₊i(t)
- capacitor₊n₊i(t)
- ground₊g₊i(t)
- capacitor₊n₊v(t)
- source₊n₊v(t)
- ground₊g₊v(t)
+20-element Vector{Any}:
  resistor₊v(t)
  resistor₊i(t)
+ resistor₊p₊v(t)
+ resistor₊p₊i(t)
+ resistor₊n₊v(t)
+ resistor₊n₊i(t)
  capacitor₊v(t)
  capacitor₊i(t)
+ capacitor₊p₊v(t)
+ capacitor₊p₊i(t)
+ capacitor₊n₊v(t)
+ capacitor₊n₊i(t)
  source₊v(t)
  source₊i(t)
+ source₊p₊v(t)
+ source₊p₊i(t)
+ source₊n₊v(t)
+ source₊n₊i(t)
+ ground₊g₊v(t)
+ ground₊g₊i(t)
 ```
 
 and the parameters are:
@@ -361,17 +361,15 @@ representation of the system. Let's see what it does here:
 sys = structural_simplify(rc_model)
 equations(sys)
 
-2-element Vector{Equation}:
- 0 ~ capacitor₊v(t) + resistor₊R*resistor₊i(t) - source₊V
- Differential(t)(capacitor₊v(t)) ~ resistor₊i(t)*(capacitor₊C^-1)
+1-element Vector{Equation}:
+ Differential(t)(capacitor₊v(t)) ~ capacitor₊i(t) / capacitor₊C
 ```
 
 ```julia
 states(sys)
 
-2-element Vector{Any}:
+1-element Vector{Term{Real, Base.ImmutableDict{DataType, Any}}}:
  capacitor₊v(t)
- capacitor₊p₊i(t)
 ```
 
 After structural simplification we are left with a system of only two equations
@@ -419,25 +417,26 @@ variables. Let's see what our observed variables are:
 ```julia
 observed(sys)
 
-18-element Vector{Equation}:
- capacitor₊i(t) ~ resistor₊i(t)
- ground₊g₊i(t) ~ 0.0
- source₊n₊i(t) ~ resistor₊i(t)
- source₊i(t) ~ -resistor₊i(t)
- source₊p₊i(t) ~ -resistor₊i(t)
- capacitor₊n₊i(t) ~ -resistor₊i(t)
+19-element Vector{Equation}:
+ ground₊g₊i(t) ~ 0
  resistor₊n₊v(t) ~ capacitor₊v(t)
- resistor₊n₊i(t) ~ -resistor₊i(t)
- resistor₊p₊i(t) ~ resistor₊i(t)
- capacitor₊p₊i(t) ~ resistor₊i(t)
  capacitor₊p₊v(t) ~ capacitor₊v(t)
- capacitor₊n₊v(t) ~ 0.0
- source₊n₊v(t) ~ 0.0
- ground₊g₊v(t) ~ 0.0
+ capacitor₊n₊v(t) ~ 0
+ source₊n₊v(t) ~ 0
+ ground₊g₊v(t) ~ 0
  source₊v(t) ~ source₊V
- source₊p₊v(t) ~ source₊v(t)
  resistor₊p₊v(t) ~ source₊v(t)
+ source₊p₊v(t) ~ source₊v(t)
  resistor₊v(t) ~ source₊v(t) - capacitor₊v(t)
+ capacitor₊i(t) ~ resistor₊v(t) / resistor₊R
+ resistor₊i(t) ~ capacitor₊i(t)
+ source₊i(t) ~ -capacitor₊i(t)
+ resistor₊n₊i(t) ~ -capacitor₊i(t)
+ resistor₊p₊i(t) ~ capacitor₊i(t)
+ source₊p₊i(t) ~ -capacitor₊i(t)
+ source₊n₊i(t) ~ capacitor₊i(t)
+ capacitor₊p₊i(t) ~ capacitor₊i(t)
+ capacitor₊n₊i(t) ~ -capacitor₊i(t)
 ```
 
 These are explicit algebraic equations which can then be used to reconstruct
