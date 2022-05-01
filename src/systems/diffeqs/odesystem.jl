@@ -367,7 +367,7 @@ function convert_system(::Type{<:ODESystem}, sys, t; name=nameof(sys))
                 newsts[i] = s
                 continue
             end
-            ns = operation(s)(t)
+            ns = similarterm(s, operation(s), (t,); metadata=SymbolicUtils.metadata(s))
             newsts[i] = ns
             varmap[s] = ns
         else
@@ -377,7 +377,11 @@ function convert_system(::Type{<:ODESystem}, sys, t; name=nameof(sys))
         end
     end
     sub = Base.Fix2(substitute, varmap)
+    if sys isa AbstractODESystem
+        iv = only(independent_variables(sys))
+        sub.x[iv] = t # otherwise the Differentials aren't fixed
+    end
     neweqs = map(sub, equations(sys))
     defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
-    return ODESystem(neweqs, t, newsts, parameters(sys); defaults=defs, name=name,checks=false)
+    return ODESystem(neweqs, t, newsts, parameters(sys); defaults=defs, name=name, checks=false)
 end

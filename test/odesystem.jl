@@ -672,3 +672,51 @@ let
     @named sys = ODESystem(eqs, t)
     @test length(equations(structural_simplify(sys))) == 2
 end
+
+let 
+    eq_to_lhs(eq) = eq.lhs - eq.rhs ~ 0
+    eqs_to_lhs(eqs) = eq_to_lhs.(eqs)
+
+    @parameters σ = 10 ρ = 28 β = 8 / 3 sigma rho beta
+    @variables t t2 x(t) = 1 y(t) = 0 z(t) = 0 x2(t2) = 1 y2(t2) = 0 z2(t2) = 0 u[1:3](t2)
+
+    D = Differential(t)
+    D2 = Differential(t2)
+
+    eqs = [D(x) ~ σ * (y - x),
+        D(y) ~ x * (ρ - z) - y,
+        D(z) ~ x * y - β * z]
+
+    eqs2 = [
+        D2(y2) ~ x2 * (rho - z2) - y2,
+        D2(x2) ~ sigma * (y2 - x2),
+        D2(z2) ~ x2 * y2 - beta * z2
+    ]
+
+    # array u
+    eqs3 = [D2(u[1]) ~ sigma * (u[2] - u[1]),
+        D2(u[2]) ~ u[1] * (rho - u[3]) - u[2],
+        D2(u[3]) ~ u[1] * u[2] - beta * u[3]]
+    eqs3 = eqs_to_lhs(eqs3)
+    
+    eqs4 = [
+        D2(y2) ~ x2 * (rho - z2) - y2,
+        D2(x2) ~ sigma * (y2 - x2),
+        D2(z2) ~ y2 - beta * z2 # missing x2 term
+    ]
+
+    @named sys1 = ODESystem(eqs)
+    @named sys2 = ODESystem(eqs2)
+    @named sys3 = ODESystem(eqs3, t2)
+    ssys3 = structural_simplify(sys3)
+    @named sys4 = ODESystem(eqs4)
+
+    @test ModelingToolkit.isisomorphic(sys1, sys2)
+    @test !ModelingToolkit.isisomorphic(sys1, sys3)
+    @test ModelingToolkit.isisomorphic(sys1, ssys3) # I don't call structural_simplify in isisomorphic
+    @test !ModelingToolkit.isisomorphic(sys1, sys4) 
+
+    # 1281
+    iv2 = only(independent_variables(sys2))
+    @test isequal(only(independent_variables(convert_system(ODESystem, sys1, iv2))), iv2)
+end

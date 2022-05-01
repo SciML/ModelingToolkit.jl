@@ -900,3 +900,51 @@ end
 function SteadyStateProblemExpr(sys::AbstractODESystem, args...; kwargs...)
     SteadyStateProblemExpr{true}(sys, args...; kwargs...)
 end
+
+# SU 442 and Symbolics 588 copied over for CI, will be removed
+function SymbolicUtils.substitute(op::Symbolics.Differential, dict; kwargs...)
+    @set! op.x = substitute(op.x, dict; kwargs...)
+end
+
+function _match_eqs(eqs1, eqs2)
+    eqpairs = Pair[]
+    for (i, eq) in enumerate(eqs1)
+        for (j, eq2) in enumerate(eqs2)
+            if isequal(eq, eq2)
+                push!(eqpairs, i => j)
+                break
+            end
+        end
+    end
+    eqpairs
+end
+
+function isisomorphic(sys1::AbstractODESystem, sys2::AbstractODESystem)
+    sys1 = flatten(sys1)
+    sys2 = flatten(sys2)
+
+    iv2 = only(independent_variables(sys2))
+    sys1 = convert_system(ODESystem, sys1, iv2)
+    s1, s2 = states(sys1), states(sys2)
+    p1, p2 = parameters(sys1), parameters(sys2)
+
+    (length(s1) != length(s2)) || (length(p1) != length(p2)) && return false
+
+    eqs1 = equations(sys1)
+    eqs2 = equations(sys2)
+
+    pps = permutations(p2)
+    psts = permutations(s2)
+    orig = [p1; s1]
+    perms = ([x; y] for x in pps for y in psts)
+
+    for perm in perms
+        rules = Dict(orig .=> perm)
+        neweqs1 = substitute(eqs1, rules)
+        eqpairs = _match_eqs(neweqs1, eqs2)
+        if length(eqpairs) == length(eqs1)
+            return true
+        end
+    end
+    return false
+end

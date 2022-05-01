@@ -23,6 +23,7 @@ import MacroTools: splitdef, combinedef, postwalk, striplines
 import Libdl
 using DocStringExtensions
 using Base: RefValue
+using Combinatorics
 import IfElse
 
 import Distributions
