@@ -650,6 +650,11 @@ let
     tspan = (0.0,1.0)
     prob = ODEProblem(sys, u0map, tspan, pmap)
     @test prob.p === Tuple([(Dict(pmap))[k] for k in values(parameters(sys))])
+
+    pmap = [k1 => 1.0, k2 => 1]
+    tspan = (0.0,1.0)
+    prob = ODEProblem(sys, u0map, tspan, pmap)
+    @test eltype(prob.p) === Float64
 end
 
 let
