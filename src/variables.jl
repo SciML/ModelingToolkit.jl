@@ -32,7 +32,7 @@ Takes a list of pairs of `variables=>values` and an ordered list of variables
 and creates the array of values in the correct order with default values when
 applicable.
 """
-function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true, toterm=Symbolics.diff2term, promotetoconcrete=nothing)
+function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true, toterm=Symbolics.diff2term, promotetoconcrete=nothing, tofloat=true, use_union=false)
     varlist = map(unwrap, varlist)
     # Edge cases where one of the arguments is effectively empty.
     is_incomplete_initialization = varmap isa DiffEqBase.NullParameters || varmap === nothing
@@ -60,7 +60,7 @@ function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true, toterm=Sym
 
     promotetoconcrete === nothing && (promotetoconcrete = container_type <: AbstractArray)
     if promotetoconcrete
-        vals = promote_to_concrete(vals)
+        vals = promote_to_concrete(vals; tofloat=tofloat, use_union=use_union)
     end
 
     if isempty(vals)
@@ -68,7 +68,6 @@ function varmap_to_vars(varmap, varlist; defaults=Dict(), check=true, toterm=Sym
     elseif container_type <: Tuple
         (vals...,)
     else
-        vals = identity.(vals)
         SymbolicUtils.Code.create_array(container_type, eltype(vals), Val{1}(), Val(length(vals)), vals...)
     end
 end

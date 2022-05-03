@@ -169,19 +169,20 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     eval_module = @__MODULE__,
                                     eval_expression = true,
+                                    use_union = false,
                                     kwargs...)
     dvs = states(sys)
     ps = parameters(sys)
     eqs = equations(sys)
     eqs = linearize_eqs(sys, eqs)
     iv = get_iv(sys)
-    
+
     defs = defaults(sys)
     defs = mergedefaults(defs,parammap,ps)
     defs = mergedefaults(defs,u0map,dvs)
-    
-    u0 = varmap_to_vars(u0map,dvs; defaults=defs, promotetoconcrete=true)
-    p = varmap_to_vars(parammap,ps; defaults=defs)
+
+    u0 = varmap_to_vars(u0map, dvs; defaults=defs, tofloat=false)
+    p = varmap_to_vars(parammap, ps; defaults=defs, tofloat=false, use_union)
 
     rhss = [eq.rhs for eq in eqs]
     u = dvs

@@ -472,15 +472,31 @@ function mergedefaults(defaults, varmap, vars)
     end
 end
 
-function promote_to_concrete(vs, tofloat=true)
+function promote_to_concrete(vs; tofloat=true, use_union=false)
     if isempty(vs)
         return vs
     end
     T = eltype(vs)
-    if Base.isconcretetype(T) # nothing to do
+    if Base.isconcretetype(T) && (!tofloat || T === float(T)) # nothing to do
         vs
     else
-        C = foldl((t, elem)->promote_type(t, eltype(elem)), vs; init=typeof(first(vs)))
-        convert.(tofloat ? float(C) : C, vs)
+        C = typeof(first(vs))
+        has_int = false
+        I = Int8
+        for v in vs
+            E = eltype(v)
+            C = promote_type(C, E)
+            if E <: Integer
+                has_int = true
+                I = promote_type(I, E)
+            end
+        end
+        if tofloat
+            C = float(C)
+        elseif use_union && has_int && C !== I
+            C = Union{C, I}
+            return copyto!(similar(vs, C), vs)
+        end
+        convert.(C, vs)
     end
 end
