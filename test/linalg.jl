@@ -1,4 +1,5 @@
 using ModelingToolkit
+using LinearAlgebra
 using Test
 
 A = [
@@ -14,4 +15,6 @@ A = [
      0  1   1   2   2  1  1   2  2   2
     ]
 N = ModelingToolkit.nullspace(A)
+@test size(N, 2) == 3
+@test rank(N) == 3
 @test iszero(A * N)
