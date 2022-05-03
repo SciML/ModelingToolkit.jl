@@ -532,8 +532,8 @@ function ODAEProblem{iip}(
 
     defs = ModelingToolkit.mergedefaults(defs,parammap,ps)
     defs = ModelingToolkit.mergedefaults(defs,u0map,dvs)
-    u0 = varmap_to_vars(u0map, dvs; defaults=defs, tofloat=true)
-    p = varmap_to_vars(parammap, ps; defaults=defs, tofloat=!use_union, use_union)
+    u0 = ModelingToolkit.varmap_to_vars(u0map, dvs; defaults=defs, tofloat=true)
+    p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults=defs, tofloat=!use_union, use_union)
 
     has_difference = any(isdifferenceeq, equations(sys))
     if has_continuous_events(sys)

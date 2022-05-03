@@ -275,7 +275,10 @@ function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Union{Tuple,Nothing}
                                     parammap=DiffEqBase.NullParameters();
                                     use_union=false,
                                     kwargs...)
+    dvs = states(sys)
+    ps = parameters(sys)
     defs = defaults(sys)
+
     u0 = varmap_to_vars(u0map, dvs; defaults=defs, tofloat=false)
     p = varmap_to_vars(parammap, ps; defaults=defs, tofloat=false, use_union)
     # identity function to make syms works
