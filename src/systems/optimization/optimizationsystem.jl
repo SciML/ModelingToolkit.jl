@@ -149,6 +149,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                           hess = false, sparse = false,
                                           checkbounds = false,
                                           linenumbers = true, parallel=SerialForm(),
+                                          use_union = false,
                                           kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
