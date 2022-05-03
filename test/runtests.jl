@@ -1,5 +1,6 @@
 using SafeTestsets, Test
 
+@safetestset "Linear Algebra Test" begin include("linalg.jl") end
 @safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
 @safetestset "Variable scope tests" begin include("variable_scope.jl") end
 @safetestset "Symbolic parameters test" begin include("symbolic_parameters.jl") end

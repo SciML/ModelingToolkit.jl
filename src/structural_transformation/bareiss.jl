@@ -162,15 +162,21 @@ swap_strategy is an optional argument that determines how the swapping of rows a
 bareiss_colswap (the default) swaps the columns and rows normally.
 bareiss_virtcolswap pretends to swap the columns which can be faster for sparse matrices.
 """
-function bareiss!(M::AbstractMatrix, swap_strategy=bareiss_colswap;
-                  find_pivot=find_pivot_any)
-    swapcols!, swaprows!, update!, zero! = swap_strategy;
+function bareiss!(M::AbstractMatrix{T}, swap_strategy=bareiss_colswap;
+                  find_pivot=find_pivot_any, column_pivots=nothing) where T
+    swapcols!, swaprows!, update!, zero! = swap_strategy
     prev = one(eltype(M))
     n = size(M, 1)
+    pivot = one(T)
+    column_permuted = false
     for k in 1:n
         r = find_pivot(M, k)
-        r === nothing && return k - 1
+        r === nothing && return (k - 1, pivot, column_permuted)
         (swapto, pivot) = r
+        if column_pivots !== nothing && k != swapto[2]
+            column_pivots[k] = swapto[2]
+            column_permuted |= true
+        end
         if CartesianIndex(k, k) != swapto
             swapcols!(M, k, swapto[2])
             swaprows!(M, k, swapto[1])
@@ -178,5 +184,113 @@ function bareiss!(M::AbstractMatrix, swap_strategy=bareiss_colswap;
         update!(zero!, M, k, swapto, pivot, prev)
         prev = pivot
     end
-    return n
+    return (n, pivot, column_permuted)
+end
+
+function nullspace(A)
+    column_pivots = collect(1:size(A, 2))
+    B = copy(A)
+    (rank, d, column_permuted) = bareiss!(B; column_pivots)
+    reduce_echelon!(B, rank, d)
+    N = ModelingToolkit.reduced_echelon_nullspace(rank, B)
+    apply_inv_pivot_rows!(N, column_pivots)
+end
+
+function apply_inv_pivot_rows!(M, ipiv)
+    for i in size(M, 1):-1:1
+        swaprows!(M, i, ipiv[i])
+    end
+    M
+end
+
+###
+### Modified from AbstractAlgebra.jl
+###
+### https://github.com/Nemocas/AbstractAlgebra.jl/blob/4803548c7a945f3f7bd8c63f8bb7c79fac92b11a/LICENSE.md
+function reduce_echelon!(A::AbstractMatrix{T}, rank, d) where T
+    m, n = size(A)
+    for i = rank + 1:m
+        for j = 1:n
+            A[i, j] = zero(T)
+        end
+    end
+    if rank > 1
+        t = zero(T)
+        q = zero(T)
+        d = -d
+        pivots = zeros(Int, n)
+        np = rank
+        j = k = 1
+        for i = 1:rank
+            while iszero(A[i, j])
+                pivots[np + k] = j
+                j += 1
+                k += 1
+            end
+            pivots[i] = j
+            j += 1
+        end
+        while k <= n - rank
+            pivots[np + k] = j
+            j += 1
+            k += 1
+        end
+        for k = 1:n - rank
+            for i = rank - 1:-1:1
+                t = A[i, pivots[np + k]] * d
+                for j = i + 1:rank
+                    t += A[i, pivots[j]] * A[j, pivots[np + k]] + q
+                end
+                A[i, pivots[np + k]] = exactdiv(-t, A[i, pivots[i]])
+            end
+        end
+        d = -d
+        for i = 1:rank
+            for j = 1:rank
+                if i == j
+                    A[j, pivots[i]] = d
+                else
+                    A[j, pivots[i]] = zero(T)
+                end
+            end
+        end
+    end
+    return A
+end
+
+function reduced_echelon_nullspace(rank, A::AbstractMatrix{T}) where T
+    n = size(A, 2)
+    nullity = n - rank
+    U = zeros(T, n, nullity)
+    if rank == 0
+        for i = 1:nullity
+            U[i, i] = one(T)
+        end
+    elseif nullity != 0
+        pivots = zeros(Int, rank)
+        nonpivots = zeros(Int, nullity)
+        j = k = 1
+        for i = 1:rank
+            while iszero(A[i, j])
+                nonpivots[k] = j
+                j += 1
+                k += 1
+            end
+            pivots[i] = j
+            j += 1
+        end
+        while k <= nullity
+            nonpivots[k] = j
+            j += 1
+            k += 1
+        end
+        d = -A[1, pivots[1]]
+        for i = 1:nullity
+            for j = 1:rank
+                U[pivots[j], i] = A[j, nonpivots[i]]
+            end
+            U[nonpivots[i], i] = d
+        end
+    end
+    return U
 end
