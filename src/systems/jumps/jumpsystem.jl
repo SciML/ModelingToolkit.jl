@@ -202,7 +202,9 @@ end
 """
 ```julia
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan,
-                                    parammap=DiffEqBase.NullParameters; kwargs...)
+                                    parammap=DiffEqBase.NullParameters;
+                                    use_union=false,
+                                    kwargs...)
 ```
 
 Generates a blank DiscreteProblem for a pure jump JumpSystem to utilize as
@@ -219,20 +221,22 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 ```
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple,Nothing},
-                                    parammap=DiffEqBase.NullParameters(); checkbounds=false, kwargs...)
-    
+                                    parammap=DiffEqBase.NullParameters(); checkbounds=false,
+                                    use_union=false,
+                                    kwargs...)
+
     dvs = states(sys)
     ps = parameters(sys)
-    
+
     defs = defaults(sys)
     defs = mergedefaults(defs,parammap,ps)
-    defs = mergedefaults(defs,u0map,dvs) 
-    
-    u0 = varmap_to_vars(u0map,dvs; defaults=defs, promotetoconcrete=true)
-    p = varmap_to_vars(parammap,ps; defaults=defs)
-        
+    defs = mergedefaults(defs,u0map,dvs)
+
+    u0 = varmap_to_vars(u0map, dvs; defaults=defs, tofloat=false)
+    p = varmap_to_vars(parammap, ps; defaults=defs, tofloat=false, use_union)
+
     f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT
-    
+
     # just taken from abstractodesystem.jl for ODEFunction def
     obs = observed(sys)
     observedfun = let sys = sys, dict = Dict()
@@ -268,10 +272,15 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 ```
 """
 function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Union{Tuple,Nothing},
-                                    parammap=DiffEqBase.NullParameters(); kwargs...)
+                                    parammap=DiffEqBase.NullParameters();
+                                    use_union=false,
+                                    kwargs...)
+    dvs = states(sys)
+    ps = parameters(sys)
     defs = defaults(sys)
-    u0 = varmap_to_vars(u0map, states(sys); defaults=defs)
-    p  = varmap_to_vars(parammap, parameters(sys); defaults=defs)
+
+    u0 = varmap_to_vars(u0map, dvs; defaults=defs, tofloat=false)
+    p = varmap_to_vars(parammap, ps; defaults=defs, tofloat=false, use_union)
     # identity function to make syms works
     quote
         f  = DiffEqBase.DISCRETE_INPLACE_DEFAULT

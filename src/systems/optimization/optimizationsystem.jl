@@ -149,6 +149,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                           hess = false, sparse = false,
                                           checkbounds = false,
                                           linenumbers = true, parallel=SerialForm(),
+                                          use_union = false,
                                           kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
@@ -180,10 +181,10 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     defs = mergedefaults(defs,parammap,ps)
     defs = mergedefaults(defs,u0map,dvs)
 
-    u0 = varmap_to_vars(u0map,dvs; defaults=defs)
-    p = varmap_to_vars(parammap,ps; defaults=defs)
-    lb = varmap_to_vars(lb,dvs; check=false)
-    ub = varmap_to_vars(ub,dvs; check=false)
+    u0 = varmap_to_vars(u0map, dvs; defaults=defs, tofloat=false)
+    p = varmap_to_vars(parammap, ps; defaults=defs, tofloat=false, use_union)
+    lb = varmap_to_vars(lb, dvs; check=false, tofloat=false, use_union)
+    ub = varmap_to_vars(ub, dvs; check=false, tofloat=false, use_union)
     OptimizationProblem{iip}(_f,u0,p;lb=lb,ub=ub,kwargs...)
 end
 
@@ -215,6 +216,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
                                           hess = false, sparse = false,
                                           checkbounds = false,
                                           linenumbers = false, parallel=SerialForm(),
+                                          use_union = false,
                                           kwargs...) where iip
     dvs = states(sys)
     ps = parameters(sys)
@@ -239,10 +241,10 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     defs = mergedefaults(defs,parammap,ps)
     defs = mergedefaults(defs,u0map,dvs)
 
-    u0 = varmap_to_vars(u0map,dvs; defaults=defs, promotetoconcrete=true)
-    p = varmap_to_vars(parammap,ps; defaults=defs)
-    lb = varmap_to_vars(lb,dvs)
-    ub = varmap_to_vars(ub,dvs)
+    u0 = varmap_to_vars(u0map, dvs; defaults=defs, tofloat=false)
+    p = varmap_to_vars(parammap, ps; defaults=defs, tofloat=false, use_union)
+    lb = varmap_to_vars(lb, dvs; check=false, tofloat=false, use_union)
+    ub = varmap_to_vars(ub, dvs; check=false, tofloat=false, use_union)
     quote
         f = $f
         p = $p

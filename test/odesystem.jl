@@ -641,7 +641,7 @@ end
 #issue 1475 (mixed numeric type for parameters)
 let
     @parameters k1 k2
-    @variables t, A(t)
+    @variables t A(t)
     D = Differential(t)
     eqs = [D(A) ~ -k1*k2*A]
     @named sys = ODESystem(eqs,t)
@@ -650,6 +650,16 @@ let
     tspan = (0.0,1.0)
     prob = ODEProblem(sys, u0map, tspan, pmap)
     @test prob.p === Tuple([(Dict(pmap))[k] for k in values(parameters(sys))])
+
+    pmap = [k1 => 1, k2 => 1]
+    tspan = (0.0,1.0)
+    prob = ODEProblem(sys, u0map, tspan, pmap)
+    @test eltype(prob.p) === Float64
+
+    pmap = Pair{Any,Union{Int,Float64}}[k1 => 1, k2 => 1.0]
+    tspan = (0.0,1.0)
+    prob = ODEProblem(sys, u0map, tspan, pmap, use_union=true)
+    @test eltype(prob.p) === Union{Float64,Int}
 end
 
 let

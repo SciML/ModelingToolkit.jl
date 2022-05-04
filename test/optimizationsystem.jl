@@ -1,4 +1,4 @@
-using ModelingToolkit, SparseArrays, Test, GalacticOptim, Optim
+using ModelingToolkit, SparseArrays, Test, GalacticOptim, Optim, GalacticOptimJL
 
 @variables x y
 @parameters a b

@@ -599,6 +599,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
                            simplify=false,
                            linenumbers = true, parallel=SerialForm(),
                            eval_expression = true,
+                           use_union = false,
                            kwargs...)
     eqs = equations(sys)
     dvs = states(sys)
@@ -609,12 +610,12 @@ function process_DEProblem(constructor, sys::AbstractODESystem,u0map,parammap;
     defs = mergedefaults(defs,parammap,ps)
     defs = mergedefaults(defs,u0map,dvs)
 
-    u0 = varmap_to_vars(u0map,dvs; defaults=defs, promotetoconcrete=true)
-    p = varmap_to_vars(parammap,ps; defaults=defs)
+    u0 = varmap_to_vars(u0map, dvs; defaults=defs, tofloat=true)
+    p = varmap_to_vars(parammap, ps; defaults=defs, tofloat=!use_union, use_union)
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
         defs = mergedefaults(defs,du0map, ddvs)
-        du0 = varmap_to_vars(du0map,ddvs; defaults=defs, toterm=identity, promotetoconcrete=true)
+        du0 = varmap_to_vars(du0map,ddvs; defaults=defs, toterm=identity, tofloat=true)
     else
         du0 = nothing
         ddvs = nothing
