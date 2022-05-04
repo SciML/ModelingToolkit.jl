@@ -324,13 +324,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     return ag, mm
 end
 
-iszeroterm(v_types, v) = v_types[v] == 0
-isirreducible(v_types, v) = v_types[v] == KEEP
-isalias(v_types, v) = v_types[v] > 0 && !isirreducible(v_types, v)
-alias(v_types, v) = v_types[v]
-negalias(v_types, v) = -v_types[v]
-
-function exactdiv(a::Integer, b::Integer)
+function exactdiv(a::Integer, b)
     d, r = divrem(a, b)
     @assert r == 0
     return d

@@ -114,20 +114,40 @@ else
     end
 end
 
+function bareiss_update!(zero!, M::StridedMatrix, k, swapto, pivot, prev_pivot::Base.BitInteger)
+    flag = zero(prev_pivot)
+    prev_pivot = Base.MultiplicativeInverses.SignedMultiplicativeInverse(prev_pivot)
+    @inbounds for i in k+1:size(M, 2)
+        Mki = M[k,i]
+        @simd ivdep for j in k+1:size(M, 1)
+            M[j,i], r = divrem(M[j,i]*pivot - M[j,k]*Mki, prev_pivot)
+            flag = flag | r
+        end
+    end
+    iszero(flag) || error("Overflow occurred")
+    zero!(M, k+1:size(M, 1), k)
+end
+
 function bareiss_update!(zero!, M::StridedMatrix, k, swapto, pivot, prev_pivot)
-    for i in k+1:size(M, 2), j in k+1:size(M, 1)
+    @inbounds for i in k+1:size(M, 2), j in k+1:size(M, 1)
         M[j,i] = exactdiv(M[j,i]*pivot - M[j,k]*M[k,i], prev_pivot)
     end
     zero!(M, k+1:size(M, 1), k)
 end
 
 @views function bareiss_update!(zero!, M::AbstractMatrix, k, swapto, pivot, prev_pivot)
+    if prev_pivot isa Base.BitInteger
+        prev_pivot = Base.MultiplicativeInverses.SignedMultiplicativeInverse(prev_pivot)
+    end
     V = M[k+1:end, k+1:end]
     V .= exactdiv.(V .* pivot .- M[k+1:end, k] * M[k, k+1:end]', prev_pivot)
     zero!(M, k+1:size(M, 1), k)
 end
 
 function bareiss_update_virtual_colswap!(zero!, M::AbstractMatrix, k, swapto, pivot, prev_pivot)
+    if prev_pivot isa Base.BitInteger
+        prev_pivot = Base.MultiplicativeInverses.SignedMultiplicativeInverse(prev_pivot)
+    end
     V = @view M[k+1:end, :]
     V .= @views exactdiv.(V .* pivot .- M[k+1:end, swapto[2]] * M[k, :]', prev_pivot)
     zero!(M, k+1:size(M, 1), swapto[2])
