@@ -16,6 +16,7 @@ struct Equality <: AbstractConnectType end # Equality connection
 struct Flow <: AbstractConnectType end     # sum to 0
 struct Stream <: AbstractConnectType end   # special stream connector
 
+isvarkind(m, x::Num) = isvarkind(m, value(x))
 function isvarkind(m, x)
     p = getparent(x, nothing)
     p === nothing || (x = p)
