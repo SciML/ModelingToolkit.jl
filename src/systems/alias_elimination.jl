@@ -287,8 +287,8 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     diff_to_var = invview(var_to_diff)
     function lss!(ei::Integer)
         vi = pivots[ei]
-        # the lowest differentiated variable can be eliminated
-        islowest = isnothing(diff_to_var[vi])
+        # the differentiated variable cannot be eliminated
+        islowest = isnothing(diff_to_var[vi]) && isnothing(var_to_diff[vi])
         locally_structure_simplify!((@view mm[ei, :]), vi, ag, islowest)
     end
 
