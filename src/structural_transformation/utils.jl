@@ -58,7 +58,7 @@ function check_consistency(state::TearingState)
         # Just use `error_reporting` to do conditional
         iseqs = n_highest_vars < neqs
         if iseqs
-            eq_var_matching = invview(complete(var_eq_matching)) # extra equations
+            eq_var_matching = invview(complete(var_eq_matching, nsrcs(graph))) # extra equations
             bad_idxs = findall(isequal(unassigned), @view eq_var_matching[1:nsrcs(graph)])
         else
             bad_idxs = findall(isequal(unassigned), var_eq_matching)

@@ -66,20 +66,12 @@ function Base.push!(m::Matching{U}, v::Union{Integer, U}) where {U}
     end
 end
 
-function complete(m::Matching{U}) where {U}
+function complete(m::Matching{U}, N=length(m.match)) where {U}
     m.inv_match !== nothing && return m
-    N = length(m.match)
     inv_match = Union{U, Int}[unassigned for _ = 1:N]
     for (i, eq) in enumerate(m.match)
         isa(eq, Int) || continue
-        if eq <= N
-            inv_match[eq] = i
-        else # this only happens when the system is imbalanced
-            for k in N+1:eq-1
-                push!(inv_match, unassigned)
-            end
-            push!(inv_match, i)
-        end
+        inv_match[eq] = i
     end
     return Matching{U}(collect(m.match), inv_match)
 end

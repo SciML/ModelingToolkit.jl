@@ -741,6 +741,7 @@ let
            spm ~ a
            sph ~ b
            spm ~ 0
+           sph ~ a
           ]
     @named sys = ODESystem(eqs, t, vars, pars)
     @test_throws ModelingToolkit.ExtraEquationsSystemException structural_simplify(sys)
