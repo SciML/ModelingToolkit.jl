@@ -683,7 +683,7 @@ let
     @test length(equations(structural_simplify(sys))) == 2
 end
 
-let 
+let
     eq_to_lhs(eq) = eq.lhs - eq.rhs ~ 0
     eqs_to_lhs(eqs) = eq_to_lhs.(eqs)
 
@@ -708,7 +708,7 @@ let
         D2(u[2]) ~ u[1] * (rho - u[3]) - u[2],
         D2(u[3]) ~ u[1] * u[2] - beta * u[3]]
     eqs3 = eqs_to_lhs(eqs3)
-    
+
     eqs4 = [
         D2(y2) ~ x2 * (rho - z2) - y2,
         D2(x2) ~ sigma * (y2 - x2),
@@ -724,9 +724,24 @@ let
     @test ModelingToolkit.isisomorphic(sys1, sys2)
     @test !ModelingToolkit.isisomorphic(sys1, sys3)
     @test ModelingToolkit.isisomorphic(sys1, ssys3) # I don't call structural_simplify in isisomorphic
-    @test !ModelingToolkit.isisomorphic(sys1, sys4) 
+    @test !ModelingToolkit.isisomorphic(sys1, sys4)
 
     # 1281
     iv2 = only(independent_variables(sys2))
     @test isequal(only(independent_variables(convert_system(ODESystem, sys1, iv2))), iv2)
+end
+
+let
+    @variables t
+    vars = @variables sP(t) spP(t) spm(t) sph(t)
+    pars = @parameters a b
+    eqs = [
+           sP ~ 1
+           spP ~ sP
+           spm ~ a
+           sph ~ b
+           spm ~ 0
+          ]
+    @named sys = ODESystem(eqs, t, vars, pars)
+    @test_throws ModelingToolkit.ExtraEquationsSystemException structural_simplify(sys)
 end
