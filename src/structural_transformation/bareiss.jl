@@ -207,11 +207,22 @@ function bareiss!(M::AbstractMatrix{T}, swap_strategy=bareiss_colswap;
     return (n, pivot, column_permuted)
 end
 
-function nullspace(A)
+function nullspace(A; col_order=nothing)
     column_pivots = collect(1:size(A, 2))
     B = copy(A)
     (rank, d, column_permuted) = bareiss!(B; column_pivots)
     reduce_echelon!(B, rank, d)
+
+    # The first rank entries in col_order are columns that give a basis
+    # for the column space. The remainder give the free variables.
+    if col_order !== nothing
+        resize!(col_order, size(A,2))
+        col_order .= 1:size(A,2)
+        for (i,cp) in enumerate(column_pivots)
+            @swap(col_order[i],col_order[cp])
+        end
+    end
+    
     N = ModelingToolkit.reduced_echelon_nullspace(rank, B)
     apply_inv_pivot_rows!(N, column_pivots)
 end
