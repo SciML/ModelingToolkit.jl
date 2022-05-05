@@ -68,10 +68,18 @@ end
 
 function complete(m::Matching{U}) where {U}
     m.inv_match !== nothing && return m
-    inv_match = Union{U, Int}[unassigned for _ = 1:length(m.match)]
+    N = length(m.match)
+    inv_match = Union{U, Int}[unassigned for _ = 1:N]
     for (i, eq) in enumerate(m.match)
         isa(eq, Int) || continue
-        inv_match[eq] = i
+        if eq <= N
+            inv_match[eq] = i
+        else # this only happens when the system is imbalanced
+            for k in N+1:eq-1
+                push!(inv_match, unassigned)
+            end
+            push!(inv_match, i)
+        end
     end
     return Matching{U}(collect(m.match), inv_match)
 end
