@@ -78,13 +78,21 @@ function OptimizationSystem(op, states, ps;
     process_variables!(var_to_name, defaults, states)
     process_variables!(var_to_name, defaults, ps)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
-
     OptimizationSystem(
                        value(op), states, ps, var_to_name,
                        observed,
                        equality_constraints, inequality_constraints,
-                       name, systems, defaults, checks = checks
+                       name, systems, defaults; checks = checks
                       )
+end
+
+function calculate_jacobian(sys::OptimizationSystem)
+    expand_derivatives.(jacobian(equations(sys), states(sys)))
+end
+
+function generate_jacobian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys); kwargs...)
+    jac = calculate_jacobian(sys)
+    return build_function(jac, vs, ps; conv =  AbstractSysToExpr(sys), kwargs...)
 end
 
 function calculate_gradient(sys::OptimizationSystem)
@@ -121,153 +129,3 @@ equations(sys::OptimizationSystem) = isempty(get_systems(sys)) ? get_op(sys) : g
 namespace_expr(sys::OptimizationSystem) = namespace_expr(get_op(sys), sys)
 
 hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
-
-struct AutoModelingToolkit <: DiffEqBase.AbstractADType end
-
-DiffEqBase.OptimizationProblem(sys::OptimizationSystem,args...;kwargs...) =
-    DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem,args...;kwargs...)
-
-"""
-```julia
-function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
-                                          parammap=DiffEqBase.NullParameters();
-                                          lb=nothing, ub=nothing,
-                                          grad = false,
-                                          hess = false, sparse = false,
-                                          checkbounds = false,
-                                          linenumbers = true, parallel=SerialForm(),
-                                          kwargs...) where iip
-```
-
-Generates an OptimizationProblem from an OptimizationSystem and allows for automatically
-symbolically calculating numerical enhancements.
-"""
-function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
-                                          parammap=DiffEqBase.NullParameters();
-                                          lb=nothing, ub=nothing,
-                                          grad = false,
-                                          hess = false, sparse = false,
-                                          checkbounds = false,
-                                          linenumbers = true, parallel=SerialForm(),
-                                          use_union = false,
-                                          kwargs...) where iip
-    dvs = states(sys)
-    ps = parameters(sys)
-
-    f = generate_function(sys,checkbounds=checkbounds,linenumbers=linenumbers,
-                              expression=Val{false})
-
-    if grad
-        grad_oop,grad_iip = generate_gradient(sys,checkbounds=checkbounds,linenumbers=linenumbers,
-                                  parallel=parallel,expression=Val{false})
-        _grad(u,p) = grad_oop(u,p)
-        _grad(J,u,p) = (grad_iip(J,u,p); J)
-    else
-        _grad = nothing
-    end
-
-    if hess
-        hess_oop,hess_iip = generate_hessian(sys,checkbounds=checkbounds,linenumbers=linenumbers,
-                                 sparse=sparse,parallel=parallel,expression=Val{false})
-       _hess(u,p) = hess_oop(u,p)
-       _hess(J,u,p) = (hess_iip(J,u,p); J)
-    else
-        _hess = nothing
-    end
-
-    _f = DiffEqBase.OptimizationFunction{iip,AutoModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,AutoModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing)
-
-    defs = defaults(sys)
-    defs = mergedefaults(defs,parammap,ps)
-    defs = mergedefaults(defs,u0map,dvs)
-
-    u0 = varmap_to_vars(u0map, dvs; defaults=defs, tofloat=false)
-    p = varmap_to_vars(parammap, ps; defaults=defs, tofloat=false, use_union)
-    lb = varmap_to_vars(lb, dvs; check=false, tofloat=false, use_union)
-    ub = varmap_to_vars(ub, dvs; check=false, tofloat=false, use_union)
-    OptimizationProblem{iip}(_f,u0,p;lb=lb,ub=ub,kwargs...)
-end
-
-"""
-```julia
-function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
-                                          parammap=DiffEqBase.NullParameters();
-                                          u0=nothing, lb=nothing, ub=nothing,
-                                          grad = false,
-                                          hes = false, sparse = false,
-                                          checkbounds = false,
-                                          linenumbers = true, parallel=SerialForm(),
-                                          kwargs...) where iip
-```
-
-Generates a Julia expression for an OptimizationProblem from an
-OptimizationSystem and allows for automatically symbolically
-calculating numerical enhancements.
-"""
-struct OptimizationProblemExpr{iip} end
-
-OptimizationProblemExpr(sys::OptimizationSystem,args...;kwargs...) =
-    OptimizationProblemExpr{true}(sys::OptimizationSystem,args...;kwargs...)
-
-function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
-                                          parammap=DiffEqBase.NullParameters();
-                                          lb=nothing, ub=nothing,
-                                          grad = false,
-                                          hess = false, sparse = false,
-                                          checkbounds = false,
-                                          linenumbers = false, parallel=SerialForm(),
-                                          use_union = false,
-                                          kwargs...) where iip
-    dvs = states(sys)
-    ps = parameters(sys)
-    idx = iip ? 2 : 1
-    f = generate_function(sys,checkbounds=checkbounds,linenumbers=linenumbers,
-                              expression=Val{true})
-    if grad
-        _grad = generate_gradient(sys,checkbounds=checkbounds,linenumbers=linenumbers,
-                             parallel=parallel,expression=Val{false})[idx]
-    else
-        _grad = :nothing
-    end
-
-    if hess
-        _hess = generate_hessian(sys,checkbounds=checkbounds,linenumbers=linenumbers,
-                                         sparse=sparse,parallel=parallel,expression=Val{false})[idx]
-    else
-        _hess = :nothing
-    end
-
-    defs = defaults(sys)
-    defs = mergedefaults(defs,parammap,ps)
-    defs = mergedefaults(defs,u0map,dvs)
-
-    u0 = varmap_to_vars(u0map, dvs; defaults=defs, tofloat=false)
-    p = varmap_to_vars(parammap, ps; defaults=defs, tofloat=false, use_union)
-    lb = varmap_to_vars(lb, dvs; check=false, tofloat=false, use_union)
-    ub = varmap_to_vars(ub, dvs; check=false, tofloat=false, use_union)
-    quote
-        f = $f
-        p = $p
-        u0 = $u0
-        grad = $_grad
-        hess = $_hess
-        lb = $lb
-        ub = $ub
-        _f = OptimizationFunction{$iip,typeof(f),typeof(grad),typeof(hess),Nothing,Nothing,Nothing,Nothing}(f,grad,hess,nothing,AutoModelingToolkit(),nothing,nothing,nothing,0)
-        OptimizationProblem{$iip}(_f,u0,p;lb=lb,ub=ub,kwargs...)
-    end
-end
-
-function DiffEqBase.OptimizationFunction{iip}(f, ::AutoModelingToolkit, x, p = DiffEqBase.NullParameters();
-                              grad=false, hess=false, cons = nothing, cons_j = nothing, cons_h = nothing,
-                              num_cons = 0, chunksize = 1, hv = nothing) where iip
-
-    sys = modelingtoolkitize(OptimizationProblem(f,x,p))
-    u0map = states(sys) .=> x
-    if p == DiffEqBase.NullParameters()
-        parammap = DiffEqBase.NullParameters()
-    else
-        parammap = parameters(sys) .=> p
-    end
-    OptimizationProblem(sys,u0map,parammap,grad=grad,hess=hess).f
-end
