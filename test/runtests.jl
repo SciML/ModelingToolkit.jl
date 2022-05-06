@@ -30,6 +30,7 @@ using SafeTestsets, Test
 @safetestset "Precompiled Modules Test" begin include("precompile_test.jl") end
 @testset "Distributed Test" begin include("distributed.jl") end
 @safetestset "Variable Utils Test" begin include("variable_utils.jl") end
+@safetestset "Variable Metadata Test" begin include("test_variable_metadata.jl") end
 @safetestset "DAE Jacobians Test" begin include("dae_jacobian.jl") end
 @safetestset "Jacobian Sparsity" begin include("jacobiansparsity.jl") end
 println("Last test requires gcc available in the path!")
