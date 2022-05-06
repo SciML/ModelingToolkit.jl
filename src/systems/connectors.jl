@@ -32,18 +32,27 @@ struct RegularConnector <: AbstractConnectorType end
 
 function connector_type(sys::AbstractSystem)
     sts = get_states(sys)
-    #TODO: check the criteria for stream connectors
     n_stream = 0
     n_flow = 0
+    n_regular = 0 # state that is not input, output, stream, or flow.
     for s in sts
         vtype = get_connection_type(s)
         if vtype === Stream
             isarray(s) && error("Array stream variables are not supported. Got $s.")
             n_stream += 1
+        elseif vtype === Flow
+            n_flow += 1
+        elseif !(isinput(s) || isoutput(s))
+            n_regular += 1
         end
-        vtype === Flow && (n_flow += 1)
     end
     (n_stream > 0 && n_flow > 1) && error("There are multiple flow variables in $(nameof(sys))!")
+    if n_flow != n_regular
+        @warn "$(nameof(sys)) contains $n_flow variables, yet $n_regular regular " *
+        "(non-flow, non-stream, non-input, non-output) variables." *
+        "This could lead to imbalanced model that are difficult to debug." *
+        "Consider marking some of the regular variables as input/output variables."
+    end
     n_stream > 0 ? StreamConnector() : RegularConnector()
 end
 
@@ -97,23 +106,6 @@ instream(a) = term(instream, unwrap(a), type=symtype(a))
 SymbolicUtils.promote_symtype(::typeof(instream), _) = Real
 
 isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) !== nothing
-isstreamconnector(s::AbstractSystem) = isconnector(s) && get_connector_type(s) isa StreamConnector
-isstreamconnection(c::Connection) = any(isstreamconnector, c.inners) || any(isstreamconnector, c.outers)
-
-function print_with_indent(n, x)
-    print(" " ^ n)
-    show(stdout, MIME"text/plain"(), x)
-    println()
-end
-
-function split_sys_var(var)
-    var_name = string(getname(var))
-    sidx = findlast(isequal('₊'), var_name)
-    sidx === nothing && error("$var is not a namespaced variable")
-    connector_name = Symbol(var_name[1:prevind(var_name, sidx)])
-    streamvar_name = Symbol(var_name[nextind(var_name, sidx):end])
-    connector_name, streamvar_name
-end
 
 function flowvar(sys::AbstractSystem)
     sts = get_states(sys)
