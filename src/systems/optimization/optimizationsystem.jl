@@ -78,13 +78,21 @@ function OptimizationSystem(op, states, ps;
     process_variables!(var_to_name, defaults, states)
     process_variables!(var_to_name, defaults, ps)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
-
     OptimizationSystem(
                        value(op), states, ps, var_to_name,
                        observed,
                        equality_constraints, inequality_constraints,
-                       name, systems, defaults, checks = checks
+                       name, systems, defaults; checks = checks
                       )
+end
+
+function calculate_jacobian(sys::OptimizationSystem)
+    expand_derivatives.(jacobian(equations(sys), states(sys)))
+end
+
+function generate_jacobian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys); kwargs...)
+    jac = calculate_jacobian(sys)
+    return build_function(jac, vs, ps; conv =  AbstractSysToExpr(sys), kwargs...)
 end
 
 function calculate_gradient(sys::OptimizationSystem)
