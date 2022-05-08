@@ -17,6 +17,7 @@ Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
+GalacticOptim = "a75be94c-b780-496d-a8a9-0878b188d577"
 Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
 IfElse = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
@@ -81,9 +82,7 @@ julia = "1.6"
 [extras]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
-GalacticOptim = "a75be94c-b780-496d-a8a9-0878b188d577"
 GalacticOptimJL = "9d3c5eb1-403b-401b-8c0f-c11105342e6b"
-Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 ReferenceTests = "324d217c-45ce-50fc-942e-d289b448e8cf"
@@ -94,4 +93,4 @@ Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["BenchmarkTools", "ForwardDiff", "GalacticOptim", "GalacticOptimJL", "OrdinaryDiffEq", "Optim", "Random", "ReferenceTests", "SafeTestsets", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials"]
+test = ["BenchmarkTools", "ForwardDiff", "GalacticOptimJL", "OrdinaryDiffEq", "Random", "ReferenceTests", "SafeTestsets", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials"]

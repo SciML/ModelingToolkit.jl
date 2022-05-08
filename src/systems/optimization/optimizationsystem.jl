@@ -122,8 +122,6 @@ namespace_expr(sys::OptimizationSystem) = namespace_expr(get_op(sys), sys)
 
 hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
 
-struct AutoModelingToolkit <: DiffEqBase.AbstractADType end
-
 DiffEqBase.OptimizationProblem(sys::OptimizationSystem,args...;kwargs...) =
     DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem,args...;kwargs...)
 
@@ -145,8 +143,8 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           lb=nothing, ub=nothing,
-                                          grad = false,
-                                          hess = false, sparse = false,
+                                          grad = true,
+                                          hess = true, sparse = false,
                                           checkbounds = false,
                                           linenumbers = true, parallel=SerialForm(),
                                           use_union = false,
@@ -212,8 +210,8 @@ OptimizationProblemExpr(sys::OptimizationSystem,args...;kwargs...) =
 function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
                                           parammap=DiffEqBase.NullParameters();
                                           lb=nothing, ub=nothing,
-                                          grad = false,
-                                          hess = false, sparse = false,
+                                          grad = true,
+                                          hess = true, sparse = false,
                                           checkbounds = false,
                                           linenumbers = false, parallel=SerialForm(),
                                           use_union = false,
@@ -256,18 +254,4 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         _f = OptimizationFunction{$iip,typeof(f),typeof(grad),typeof(hess),Nothing,Nothing,Nothing,Nothing}(f,grad,hess,nothing,AutoModelingToolkit(),nothing,nothing,nothing,0)
         OptimizationProblem{$iip}(_f,u0,p;lb=lb,ub=ub,kwargs...)
     end
-end
-
-function DiffEqBase.OptimizationFunction{iip}(f, ::AutoModelingToolkit, x, p = DiffEqBase.NullParameters();
-                              grad=false, hess=false, cons = nothing, cons_j = nothing, cons_h = nothing,
-                              num_cons = 0, chunksize = 1, hv = nothing) where iip
-
-    sys = modelingtoolkitize(OptimizationProblem(f,x,p))
-    u0map = states(sys) .=> x
-    if p == DiffEqBase.NullParameters()
-        parammap = DiffEqBase.NullParameters()
-    else
-        parammap = parameters(sys) .=> p
-    end
-    OptimizationProblem(sys,u0map,parammap,grad=grad,hess=hess).f
 end
