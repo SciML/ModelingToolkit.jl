@@ -481,9 +481,15 @@ function promote_to_concrete(vs; tofloat=true, use_union=false)
         vs
     else
         C = typeof(first(vs))
-        has_int = false
         I = Int8
+        has_int = false
+        has_array = false
+        array_T = nothing
         for v in vs
+            if v isa AbstractArray
+                has_array = true
+                array_T = typeof(v)
+            end
             E = eltype(v)
             C = promote_type(C, E)
             if E <: Integer
@@ -491,10 +497,15 @@ function promote_to_concrete(vs; tofloat=true, use_union=false)
                 I = promote_type(I, E)
             end
         end
-        if tofloat
+        if tofloat && !has_array
             C = float(C)
-        elseif use_union && has_int && C !== I
-            C = Union{C, I}
+        elseif has_array || (use_union && has_int && C !== I)
+            if has_array
+                C = Union{C, array_T}
+            end
+            if has_int
+                C = Union{C, I}
+            end
             return copyto!(similar(vs, C), vs)
         end
         convert.(C, vs)
