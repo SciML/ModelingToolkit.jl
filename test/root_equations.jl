@@ -211,6 +211,8 @@ affect   = [v ~ -v]
 @test getfield(ball, :continuous_events)[] == SymbolicContinuousCallback(Equation[x ~ 0], Equation[v ~ -v])
 ball = structural_simplify(ball)
 
+@test length(ModelingToolkit.continuous_events(ball)) == 1
+
 tspan = (0.0,5.0)
 prob = ODEProblem(ball, Pair[], tspan)
 sol = solve(prob,Tsit5())
@@ -305,3 +307,52 @@ prob = ODAEProblem(sys, zeros(2), (0.0, 5.1))
 sol = solve(prob, Tsit5())
 @test all(minimum((0:0.1:5) .- sol.t', dims=2) .< 0.0001) # test that the solver stepped every 0.1s as dictated by event
 @test sol([0.25])[vmeasured][] == sol([0.23])[vmeasured][] # test the hold property
+
+
+
+##  https://github.com/SciML/ModelingToolkit.jl/issues/1528
+Dₜ = Differential(t)
+
+@parameters u(t) [input=true]  # Indicate that this is a controlled input
+@parameters y(t) [output=true] # Indicate that this is a measured output
+
+function Mass(; name, m = 1.0, p = 0, v = 0)
+    ps = @parameters m=m
+    sts = @variables pos(t)=p vel(t)=v
+    eqs = Dₜ(pos) ~ vel
+    ODESystem(eqs, t, [pos, vel], ps; name)
+end
+function Spring(; name, k = 1e4)
+    ps = @parameters k=k
+    @variables x(t)=0 # Spring deflection
+    ODESystem(Equation[], t, [x], ps; name)
+end
+function Damper(; name, c = 10)
+    ps = @parameters c=c
+    @variables vel(t)=0
+    ODESystem(Equation[], t, [vel], ps; name)
+end
+function SpringDamper(; name, k=false, c=false)
+    spring = Spring(; name=:spring, k)
+    damper = Damper(; name=:damper, c)
+    compose(
+        ODESystem(Equation[], t; name),
+        spring, damper)
+end
+connect_sd(sd, m1, m2) = [sd.spring.x ~ m1.pos - m2.pos, sd.damper.vel ~ m1.vel - m2.vel]
+sd_force(sd) = -sd.spring.k * sd.spring.x - sd.damper.c * sd.damper.vel
+@named mass1 = Mass(; m=1)
+@named mass2 = Mass(; m=1)
+@named sd = SpringDamper(; k=1000, c=10)
+function Model(u, d=0)
+    eqs = [
+        connect_sd(sd, mass1, mass2)
+        Dₜ(mass1.vel) ~ ( sd_force(sd) + u) / mass1.m
+        Dₜ(mass2.vel) ~ (-sd_force(sd) + d) / mass2.m
+    ]
+    @named _model = ODESystem(eqs, t; observed=[y~mass2.pos])
+    @named model = compose(_model, mass1, mass2, sd)
+end
+model = Model(sin(30t))
+sys = structural_simplify(model)
+@test isempty(ModelingToolkit.continuous_events(sys))
