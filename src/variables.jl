@@ -150,22 +150,25 @@ end
 struct VariableTunable end
 Symbolics.option_to_metadata_type(::Val{:tunable}) = VariableTunable
 
-istunable(x::Num) = istunable(Symbolics.unwrap(x))
+istunable(x::Num, args...) = istunable(Symbolics.unwrap(x), args...)
 
 """
-    istunable(x)
+    istunable(x, default = false)
 
 Determine whether or not symbolic variable `x` is marked as a tunable for an automatic tuning algorithm.
+
+`default` indicates whether variables without `tunable` metadata are to be considered tunable or not.
+
 Create a tunable parameter by
 ```
 @parameters u [tunable=true]
 ```
 See also [`tunable_parameters`](@ref), [`getbounds`](@ref)
 """
-function istunable(x)
+function istunable(x, default=false)
     p = Symbolics.getparent(x, nothing)
     p === nothing || (x = p)
-    Symbolics.getmetadata(x, VariableTunable, false)
+    Symbolics.getmetadata(x, VariableTunable, default)
 end
 
 
@@ -208,16 +211,20 @@ end
 ## System interface
 
 """
-    tunable_parameters(sys, p = parameters(sys))
+    tunable_parameters(sys, p = parameters(sys); default=false)
 
-Get all parameters of `sys` that are marked as `tunable`. Create a tunable parameter by
+Get all parameters of `sys` that are marked as `tunable`.
+
+Keyword argument `default` indicates whether variables without `tunable` metadata are to be considered tunable or not.
+
+Create a tunable parameter by
 ```
 @parameters u [tunable=true]
 ```
 See also [`getbounds`](@ref), [`istunable`](@ref)
 """
-function tunable_parameters(sys, p = parameters(sys))
-    filter(istunable, p)
+function tunable_parameters(sys, p = parameters(sys); default=false)
+    filter(x->istunable(x, default), p)
 end
 
 """
