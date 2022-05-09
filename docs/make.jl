@@ -30,6 +30,7 @@ makedocs(
         "Basics" => Any[
             "basics/AbstractSystem.md",
             "basics/ContextualVariables.md",
+            "basics/Variable_metadata.md",
             "basics/Composition.md",
             "basics/Validation.md",
             "basics/DependencyGraphs.md",
