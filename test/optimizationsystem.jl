@@ -1,4 +1,4 @@
-using ModelingToolkit, SparseArrays, Test, GalacticOptim, Optim, GalacticOptimJL
+using ModelingToolkit, SparseArrays, Test, GalacticOptim, GalacticOptimJL
 
 @variables x y
 @parameters a b
@@ -51,9 +51,9 @@ rosenbrock(x, p) =  (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
 x0 = zeros(2)
 _p  = [1.0, 100.0]
 
-f = OptimizationFunction(rosenbrock,ModelingToolkit.AutoModelingToolkit(),x0,_p,grad=true,hess=true)
+f = OptimizationFunction(rosenbrock,GalacticOptim.AutoModelingToolkit())
 prob = OptimizationProblem(f,x0,_p)
-sol = solve(prob,Optim.Newton())
+sol = solve(prob,Newton())
 
 # issue #819
 @testset "Combined system name collisions" begin

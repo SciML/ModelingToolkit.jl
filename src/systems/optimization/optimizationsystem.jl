@@ -78,12 +78,11 @@ function OptimizationSystem(op, states, ps;
     process_variables!(var_to_name, defaults, states)
     process_variables!(var_to_name, defaults, ps)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
-
     OptimizationSystem(
                        value(op), states, ps, var_to_name,
                        observed,
                        equality_constraints, inequality_constraints,
-                       name, systems, defaults, checks = checks
+                       name, systems, defaults; checks = checks
                       )
 end
 
@@ -121,8 +120,6 @@ equations(sys::OptimizationSystem) = isempty(get_systems(sys)) ? get_op(sys) : g
 namespace_expr(sys::OptimizationSystem) = namespace_expr(get_op(sys), sys)
 
 hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
-
-struct AutoModelingToolkit <: DiffEqBase.AbstractADType end
 
 DiffEqBase.OptimizationProblem(sys::OptimizationSystem,args...;kwargs...) =
     DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem,args...;kwargs...)
@@ -175,7 +172,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         _hess = nothing
     end
 
-    _f = DiffEqBase.OptimizationFunction{iip,AutoModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,AutoModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing)
+    _f = DiffEqBase.OptimizationFunction{iip,SciMLBase.NoAD,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f, SciMLBase.NoAD(), _grad, _hess, nothing, nothing, nothing, nothing)
 
     defs = defaults(sys)
     defs = mergedefaults(defs,parammap,ps)
@@ -253,21 +250,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         hess = $_hess
         lb = $lb
         ub = $ub
-        _f = OptimizationFunction{$iip,typeof(f),typeof(grad),typeof(hess),Nothing,Nothing,Nothing,Nothing}(f,grad,hess,nothing,AutoModelingToolkit(),nothing,nothing,nothing,0)
+        _f = OptimizationFunction{$iip,typeof(f),typeof(grad),typeof(hess),SciMLBase.NoAD,Nothing,Nothing,Nothing}(f,grad,hess,nothing,SciMLBase.NoAD(),nothing,nothing,nothing,0)
         OptimizationProblem{$iip}(_f,u0,p;lb=lb,ub=ub,kwargs...)
     end
-end
-
-function DiffEqBase.OptimizationFunction{iip}(f, ::AutoModelingToolkit, x, p = DiffEqBase.NullParameters();
-                              grad=false, hess=false, cons = nothing, cons_j = nothing, cons_h = nothing,
-                              num_cons = 0, chunksize = 1, hv = nothing) where iip
-
-    sys = modelingtoolkitize(OptimizationProblem(f,x,p))
-    u0map = states(sys) .=> x
-    if p == DiffEqBase.NullParameters()
-        parammap = DiffEqBase.NullParameters()
-    else
-        parammap = parameters(sys) .=> p
-    end
-    OptimizationProblem(sys,u0map,parammap,grad=grad,hess=hess).f
 end

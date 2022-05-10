@@ -25,7 +25,6 @@ using DocStringExtensions
 using Base: RefValue
 using Combinatorics
 import IfElse
-
 import Distributions
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
@@ -133,6 +132,7 @@ include("systems/diffeqs/basic_transformations.jl")
 include("systems/jumps/jumpsystem.jl")
 
 include("systems/nonlinear/nonlinearsystem.jl")
+include("systems/nonlinear/modelingtoolkitize.jl")
 
 include("systems/optimization/optimizationsystem.jl")
 
