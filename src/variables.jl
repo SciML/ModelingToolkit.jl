@@ -16,6 +16,7 @@ struct Equality <: AbstractConnectType end # Equality connection
 struct Flow <: AbstractConnectType end     # sum to 0
 struct Stream <: AbstractConnectType end   # special stream connector
 
+isvarkind(m, x::Num) = isvarkind(m, value(x))
 function isvarkind(m, x)
     p = getparent(x, nothing)
     p === nothing || (x = p)
@@ -93,3 +94,167 @@ ishistory(x) = ishistory(unwrap(x))
 ishistory(x::Symbolic) = getmetadata(x, IsHistory, false)
 hist(x, t) = wrap(hist(unwrap(x), t))
 hist(x::Symbolic, t) = setmetadata(toparam(similarterm(x, operation(x), [unwrap(t)], metadata=metadata(x))), IsHistory, true)
+
+
+## Bounds ======================================================================
+struct VariableBounds end
+Symbolics.option_to_metadata_type(::Val{:bounds}) = VariableBounds
+getbounds(x::Num) = getbounds(Symbolics.unwrap(x))
+
+"""
+    getbounds(x)
+
+Get the bounds associated with symbolc variable `x`.
+Create parameters with bounds like this
+```
+@parameters p [bounds=(-1, 1)]
+```
+"""
+function getbounds(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    Symbolics.getmetadata(x, VariableBounds, (-Inf, Inf))
+end
+
+"""
+    hasbounds(x)
+
+Determine whether or not symbolic variable `x` has bounds associated with it.
+See also [`getbounds`](@ref).
+"""
+function hasbounds(x)
+    b = getbounds(x)
+    isfinite(b[1]) && isfinite(b[2])
+end
+
+
+## Disturbance =================================================================
+struct VariableDisturbance end
+Symbolics.option_to_metadata_type(::Val{:disturbance}) = VariableDisturbance
+
+isdisturbance(x::Num) = isdisturbance(Symbolics.unwrap(x))
+
+"""
+    isdisturbance(x)
+
+Determine whether or not symbolic variable `x` is marked as a disturbance input.
+"""
+function isdisturbance(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    Symbolics.getmetadata(x, VariableDisturbance, false)
+end
+
+
+## Tunable =====================================================================
+struct VariableTunable end
+Symbolics.option_to_metadata_type(::Val{:tunable}) = VariableTunable
+
+istunable(x::Num, args...) = istunable(Symbolics.unwrap(x), args...)
+
+"""
+    istunable(x, default = false)
+
+Determine whether or not symbolic variable `x` is marked as a tunable for an automatic tuning algorithm.
+
+`default` indicates whether variables without `tunable` metadata are to be considered tunable or not.
+
+Create a tunable parameter by
+```
+@parameters u [tunable=true]
+```
+See also [`tunable_parameters`](@ref), [`getbounds`](@ref)
+"""
+function istunable(x, default=false)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    Symbolics.getmetadata(x, VariableTunable, default)
+end
+
+
+## Dist ========================================================================
+struct VariableDistribution end
+Symbolics.option_to_metadata_type(::Val{:dist}) = VariableDistribution
+getdist(x::Num) = getdist(Symbolics.unwrap(x))
+
+"""
+    getdist(x)
+
+Get the probability distribution associated with symbolc variable `x`. If no distribution
+is associated with `x`, `nothing` is returned.
+Create parameters with associated distributions like this
+```julia
+using Distributions
+d = Normal(0, 1)
+@parameters u [dist=d]
+hasdist(u) # true
+getdist(u) # retrieve distribution
+```
+"""
+function getdist(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    Symbolics.getmetadata(x, VariableDistribution, nothing)
+end
+
+"""
+    hasdist(x)
+
+Determine whether or not symbolic variable `x` has a probability distribution associated with it.
+"""
+function hasdist(x)
+    b = getdist(x)
+    b !== nothing
+end
+
+
+## System interface
+
+"""
+    tunable_parameters(sys, p = parameters(sys); default=false)
+
+Get all parameters of `sys` that are marked as `tunable`.
+
+Keyword argument `default` indicates whether variables without `tunable` metadata are to be considered tunable or not.
+
+Create a tunable parameter by
+```
+@parameters u [tunable=true]
+```
+See also [`getbounds`](@ref), [`istunable`](@ref)
+"""
+function tunable_parameters(sys, p = parameters(sys); default=false)
+    filter(x->istunable(x, default), p)
+end
+
+"""
+    getbounds(sys::ModelingToolkit.AbstractSystem)
+
+Returns a dict with pairs `p => (lb, ub)` mapping parameters of `sys` to lower and upper bounds.
+Create parameters with bounds like this
+```
+@parameters p [bounds=(-1, 1)]
+```
+"""
+function getbounds(sys::ModelingToolkit.AbstractSystem)
+    p = parameters(sys)
+    Dict(p .=> getbounds.(p))
+end
+
+"""
+    lb, ub = getbounds(p::AbstractVector)
+
+Return vectors of lower and upper bounds of parameter vector `p`.
+Create parameters with bounds like this
+```
+@parameters p [bounds=(-1, 1)]
+```
+See also [`tunable_parameters`](@ref), [`hasbounds`](@ref)
+"""
+function getbounds(p::AbstractVector)
+    bounds = getbounds.(p)
+    lb = first.(bounds)
+    ub = last.(bounds)
+    (; lb, ub)
+end
+

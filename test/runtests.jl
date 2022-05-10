@@ -8,6 +8,7 @@ using SafeTestsets, Test
 @safetestset "Simplify Test" begin include("simplify.jl") end
 @safetestset "Direct Usage Test" begin include("direct.jl") end
 @safetestset "System Linearity Test" begin include("linearity.jl") end
+@safetestset "Input Output Test" begin include("input_output_handling.jl") end
 @safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
 @safetestset "ODESystem Test" begin include("odesystem.jl") end
 @safetestset "Unitful Quantities Test" begin include("units.jl") end
@@ -29,6 +30,7 @@ using SafeTestsets, Test
 @safetestset "Precompiled Modules Test" begin include("precompile_test.jl") end
 @testset "Distributed Test" begin include("distributed.jl") end
 @safetestset "Variable Utils Test" begin include("variable_utils.jl") end
+@safetestset "Variable Metadata Test" begin include("test_variable_metadata.jl") end
 @safetestset "DAE Jacobians Test" begin include("dae_jacobian.jl") end
 @safetestset "Jacobian Sparsity" begin include("jacobiansparsity.jl") end
 println("Last test requires gcc available in the path!")
