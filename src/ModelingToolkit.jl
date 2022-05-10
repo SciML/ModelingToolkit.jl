@@ -25,7 +25,6 @@ using DocStringExtensions
 using Base: RefValue
 using Combinatorics
 import IfElse
-using GalacticOptim
 import Distributions
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
