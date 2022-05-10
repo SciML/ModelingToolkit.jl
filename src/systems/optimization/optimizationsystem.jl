@@ -142,8 +142,8 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           lb=nothing, ub=nothing,
-                                          grad = true,
-                                          hess = true, sparse = false,
+                                          grad = false,
+                                          hess = false, sparse = false,
                                           checkbounds = false,
                                           linenumbers = true, parallel=SerialForm(),
                                           use_union = false,
@@ -209,8 +209,8 @@ OptimizationProblemExpr(sys::OptimizationSystem,args...;kwargs...) =
 function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
                                           parammap=DiffEqBase.NullParameters();
                                           lb=nothing, ub=nothing,
-                                          grad = true,
-                                          hess = true, sparse = false,
+                                          grad = false,
+                                          hess = false, sparse = false,
                                           checkbounds = false,
                                           linenumbers = false, parallel=SerialForm(),
                                           use_union = false,
