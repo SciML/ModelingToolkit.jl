@@ -251,16 +251,13 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace
         end
     end
 
-    if namespace !== nothing
-        # Except for the top level, all connectors are eventually inside
-        # connectors.
-        T = ConnectionElement
-        for s in subsys
-            isconnector(s) || continue
-            for v in states(s)
-                Flow === get_connection_type(v) || continue
-                push!(connectionsets, ConnectionSet([T(LazyNamespace(namespace, s), v, false)]))
-            end
+    # all connectors are eventually inside connectors.
+    T = ConnectionElement
+    for s in subsys
+        isconnector(s) || continue
+        for v in states(s)
+            Flow === get_connection_type(v) || continue
+            push!(connectionsets, ConnectionSet([T(LazyNamespace(namespace, s), v, false)]))
         end
     end
 
