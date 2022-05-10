@@ -701,10 +701,34 @@ function get_or_construct_tearing_state(sys)
     state
 end
 
+# TODO: what about inputs?
+function count_unexpanded_flows(sys::AbstractSystem)
+    nflows = 0
+    for m in PreOrderDFS(Tree(sys))
+        isconnector(m) || continue
+        nflows += count(x->get_connection_type(x) === Flow, get_states(m))
+    end
+    nflows
+end
+
+function n_extra_equations(sys::AbstractSystem)
+    isconnector(sys) && return length(get_states(sys))
+    nextras = count_unexpanded_flows(sys)
+end
+
 function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     eqs = equations(sys)
+    vars = states(sys); nvars = length(vars)
     if eqs isa AbstractArray
-        Base.printstyled(io, "Model $(nameof(sys)) with $(length(eqs)) equations\n"; bold=true)
+        neqs = count(eq->!(eq.lhs isa Connection), eqs)
+        Base.printstyled(io, "Model $(nameof(sys)) with $neqs "; bold=true)
+        nextras = n_extra_equations(sys)
+        if nextras > 0
+            Base.printstyled(io, "("; bold=true)
+            Base.printstyled(io, neqs + nextras; bold=true, color=:magenta)
+            Base.printstyled(io, ") "; bold=true)
+        end
+        Base.printstyled(io, "equations\n"; bold=true)
     else
         Base.printstyled(io, "Model $(nameof(sys))\n"; bold=true)
     end
@@ -716,7 +740,6 @@ function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     rows = first(displaysize(io)) ÷ 5
     limit = get(io, :limit, false)
 
-    vars = states(sys); nvars = length(vars)
     Base.printstyled(io, "States ($nvars):"; bold=true)
     nrows = min(nvars, limit ? rows : nvars)
     limited = nrows < length(vars)
