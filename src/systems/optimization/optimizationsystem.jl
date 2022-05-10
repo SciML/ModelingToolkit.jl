@@ -1,3 +1,5 @@
+struct SymbolicModelingToolkit end
+
 """
 $(TYPEDEF)
 
@@ -172,7 +174,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         _hess = nothing
     end
 
-    _f = DiffEqBase.OptimizationFunction{iip,AutoModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,AutoModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing)
+    _f = DiffEqBase.OptimizationFunction{iip,SymbolicModelingToolkit,typeof(f),typeof(_grad),typeof(_hess),Nothing,Nothing,Nothing,Nothing}(f,SymbolicModelingToolkit(),_grad,_hess,nothing,nothing,nothing,nothing)
 
     defs = defaults(sys)
     defs = mergedefaults(defs,parammap,ps)
@@ -250,7 +252,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         hess = $_hess
         lb = $lb
         ub = $ub
-        _f = OptimizationFunction{$iip,typeof(f),typeof(grad),typeof(hess),Nothing,Nothing,Nothing,Nothing}(f,grad,hess,nothing,AutoModelingToolkit(),nothing,nothing,nothing,0)
+        _f = OptimizationFunction{$iip,typeof(f),typeof(grad),typeof(hess),SymbolicModelingToolkit,Nothing,Nothing,Nothing}(f,grad,hess,nothing,SymbolicModelingToolkit(),nothing,nothing,nothing,0)
         OptimizationProblem{$iip}(_f,u0,p;lb=lb,ub=ub,kwargs...)
     end
 end
