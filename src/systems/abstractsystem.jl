@@ -170,6 +170,7 @@ struct SymbolicContinuousCallback
 end
 
 Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback) = isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect)
+Base.isempty(cb::SymbolicContinuousCallback) = isempty(cb.eqs)
 
 to_equation_vector(eq::Equation) = [eq]
 to_equation_vector(eqs::Vector{Equation}) = eqs
@@ -482,11 +483,13 @@ end
 
 function continuous_events(sys::AbstractSystem)
     obs = get_continuous_events(sys)
+    filter(!isempty, obs)
     systems = get_systems(sys)
-    [obs;
-     reduce(vcat,
+    cbs = [obs;
+    reduce(vcat,
             (map(o->namespace_equation(o, s), continuous_events(s)) for s in systems),
             init=SymbolicContinuousCallback[])]
+    filter(!isempty, cbs)
 end
 
 Base.@deprecate default_u0(x) defaults(x) false
