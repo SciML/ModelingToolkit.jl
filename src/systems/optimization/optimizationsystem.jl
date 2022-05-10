@@ -86,15 +86,6 @@ function OptimizationSystem(op, states, ps;
                       )
 end
 
-function calculate_jacobian(sys::OptimizationSystem)
-    expand_derivatives.(jacobian(equations(sys), states(sys)))
-end
-
-function generate_jacobian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys); kwargs...)
-    jac = calculate_jacobian(sys)
-    return build_function(jac, vs, ps; conv =  AbstractSysToExpr(sys), kwargs...)
-end
-
 function calculate_gradient(sys::OptimizationSystem)
     expand_derivatives.(gradient(equations(sys), states(sys)))
 end
