@@ -702,18 +702,32 @@ function get_or_construct_tearing_state(sys)
 end
 
 # TODO: what about inputs?
-function count_unexpanded_flows(sys::AbstractSystem)
-    nflows = 0
-    for m in PreOrderDFS(Tree(sys))
-        isconnector(m) || continue
-        nflows += count(x->get_connection_type(x) === Flow, get_states(m))
-    end
-    nflows
-end
-
 function n_extra_equations(sys::AbstractSystem)
     isconnector(sys) && return length(get_states(sys))
-    nextras = count_unexpanded_flows(sys)
+    sys, csets = generate_connection_set(sys)
+    ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
+    n_outer_stream_variables = 0
+    for cset in instream_csets
+        n_outer_stream_variables += count(x->x.isouter, cset.set)
+    end
+
+    #n_toplevel_unused_flows = 0
+    #toplevel_flows = Set()
+    #for cset in csets
+    #    e1 = first(cset.set)
+    #    e1.sys.namespace === nothing || continue
+    #    for e in cset.set
+    #        get_connection_type(e.v) === Flow || continue
+    #        push!(toplevel_flows, e.v)
+    #    end
+    #end
+    #for m in get_systems(sys)
+    #    isconnector(m) || continue
+    #    n_toplevel_unused_flows += count(x->get_connection_type(x) === Flow && !(x in toplevel_flows), get_states(m))
+    #end
+
+
+    nextras = n_outer_stream_variables + length(ceqs)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
