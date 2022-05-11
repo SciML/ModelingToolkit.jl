@@ -56,44 +56,11 @@ function connector_type(sys::AbstractSystem)
     n_stream > 0 ? StreamConnector() : RegularConnector()
 end
 
-Base.@kwdef struct Connection
-    inners = nothing
-    outers = nothing
+struct Connection
+    systems
 end
-
-# everything is inner by default until we expand the connections
-Connection(syss) = Connection(inners=syss)
-get_systems(c::Connection) = c.inners
-function Base.in(e::Symbol, c::Connection)
-    (c.inners !== nothing && any(k->nameof(k) === e, c.inners)) ||
-    (c.outers !== nothing && any(k->nameof(k) === e, c.outers))
-end
-
-function renamespace(sym::Symbol, connection::Connection)
-    inners = connection.inners === nothing ? [] : renamespace.(sym, connection.inners)
-    if connection.outers !== nothing
-        for o in connection.outers
-            push!(inners, renamespace(sym, o))
-        end
-    end
-    Connection(;inners=inners)
-end
-
-const EMPTY_VEC = []
-
-function Base.show(io::IO, ::MIME"text/plain", c::Connection)
-    # It is a bit unfortunate that the display of an array of `Equation`s won't
-    # call this.
-    @unpack outers, inners = c
-    if outers === nothing && inners === nothing
-        print(io, "<Connection>")
-    else
-        syss = Iterators.flatten((something(inners, EMPTY_VEC), something(outers, EMPTY_VEC)))
-        splitting_idx = length(inners)
-        sys_str = join((string(nameof(s)) * (i <= splitting_idx ? ("::inner") : ("::outer")) for (i, s) in enumerate(syss)), ", ")
-        print(io, "<", sys_str, ">")
-    end
-end
+Connection() = Connection(nothing)
+get_systems(c::Connection) = c.systems
 
 # symbolic `connect`
 function connect(sys1::AbstractSystem, sys2::AbstractSystem, syss::AbstractSystem...)
