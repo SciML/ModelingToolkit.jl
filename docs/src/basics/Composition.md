@@ -75,7 +75,7 @@ Every `AbstractSystem` has a `system` keyword argument for specifying
 subsystems. A model is the composition of itself and its subsystems.
 For example, if we have:
 
-```@example composition
+```julia
 @named sys = compose(ODESystem(eqs,indepvar,states,ps),subsys)
 ```
 
@@ -100,7 +100,7 @@ associated `SciMLProblem` type using the standard constructors. When
 this is done, the initial conditions and parameters must be specified
 in their namespaced form. For example:
 
-```@example composition
+```julia
 u0 = [
   x => 2.0
   subsys.x => 2.0
@@ -190,7 +190,7 @@ N = S + I + R
 @named ieqn = ODESystem([D(I) ~ β*S*I/N-γ*I])
 @named reqn = ODESystem([D(R) ~ γ*I])
 
-@named sir = compose(ODESystem([
+sir = compose(ODESystem([
                     S ~ ieqn.S,
                     I ~ seqn.I,
                     R ~ ieqn.R,
@@ -204,7 +204,7 @@ N = S + I + R
                         ieqn.β => β
                         ieqn.γ => γ
                         reqn.γ => γ
-                    ]), seqn, ieqn, reqn)
+                    ], name=:sir), seqn, ieqn, reqn)
 ```
 
 Note that the states are forwarded by an equality relationship, while

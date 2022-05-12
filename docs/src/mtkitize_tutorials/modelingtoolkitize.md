@@ -5,7 +5,7 @@ via the `modelingtoolkitize` function. Take, for example, the Robertson ODE
 defined as an `ODEProblem` for DifferentialEquations.jl:
 
 ```@example mtkize
-using DifferentialEquations
+using DifferentialEquations, ModelingToolkit
 function rober(du,u,p,t)
   y₁,y₂,y₃ = u
   k₁,k₂,k₃ = p
