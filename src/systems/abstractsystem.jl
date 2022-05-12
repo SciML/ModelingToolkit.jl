@@ -171,6 +171,10 @@ end
 
 Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback) = isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect)
 Base.isempty(cb::SymbolicContinuousCallback) = isempty(cb.eqs)
+function Base.hash(cb::SymbolicContinuousCallback, s::UInt)
+    s = foldr(hash, cb.eqs, init=s)
+    foldr(hash, cb.affect, init=s)
+end
 
 to_equation_vector(eq::Equation) = [eq]
 to_equation_vector(eqs::Vector{Equation}) = eqs

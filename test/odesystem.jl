@@ -19,6 +19,7 @@ eqs = [D(x) ~ σ*(y-x),
 ModelingToolkit.toexpr.(eqs)[1]
 @named de = ODESystem(eqs; defaults=Dict(x => 1))
 @test eval(toexpr(de)) == de
+@test hash(deepcopy(de)) == hash(de)
 
 generate_function(de)
 
