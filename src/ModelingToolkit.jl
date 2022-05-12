@@ -46,7 +46,8 @@ using Reexport
 export @derivatives
 using Symbolics: _parse_vars, value, @derivatives, get_variables,
                  exprs_occur_in, solve_for, build_expr, unwrap, wrap,
-                 VariableSource, getname, variable
+                 VariableSource, getname, variable, Connection, connect,
+                 NAMESPACE_SEPARATOR
 import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   jacobian_sparsity, isaffine, islinear, _iszero, _isone,
                   tosymbol, lower_varname, diff2term, var_from_nested_derivative,
