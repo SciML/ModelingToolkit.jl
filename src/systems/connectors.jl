@@ -56,18 +56,7 @@ function connector_type(sys::AbstractSystem)
     n_stream > 0 ? StreamConnector() : RegularConnector()
 end
 
-struct Connection
-    systems
-end
-Connection() = Connection(nothing)
 get_systems(c::Connection) = c.systems
-
-# symbolic `connect`
-function connect(sys1::AbstractSystem, sys2::AbstractSystem, syss::AbstractSystem...)
-    syss = (sys1, sys2, syss...)
-    length(unique(nameof, syss)) == length(syss) || error("connect takes distinct systems!")
-    Equation(Connection(), Connection(syss)) # the RHS are connected systems
-end
 
 instream(a) = term(instream, unwrap(a), type=symtype(a))
 SymbolicUtils.promote_symtype(::typeof(instream), _) = Real
