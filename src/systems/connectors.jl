@@ -32,59 +32,35 @@ struct RegularConnector <: AbstractConnectorType end
 
 function connector_type(sys::AbstractSystem)
     sts = get_states(sys)
-    #TODO: check the criteria for stream connectors
     n_stream = 0
     n_flow = 0
+    n_regular = 0 # state that is not input, output, stream, or flow.
     for s in sts
         vtype = get_connection_type(s)
         if vtype === Stream
             isarray(s) && error("Array stream variables are not supported. Got $s.")
             n_stream += 1
+        elseif vtype === Flow
+            n_flow += 1
+        elseif !(isinput(s) || isoutput(s))
+            n_regular += 1
         end
-        vtype === Flow && (n_flow += 1)
     end
     (n_stream > 0 && n_flow > 1) && error("There are multiple flow variables in $(nameof(sys))!")
+    if n_flow != n_regular
+        @warn "$(nameof(sys)) contains $n_flow variables, yet $n_regular regular " *
+        "(non-flow, non-stream, non-input, non-output) variables." *
+        "This could lead to imbalanced model that are difficult to debug." *
+        "Consider marking some of the regular variables as input/output variables."
+    end
     n_stream > 0 ? StreamConnector() : RegularConnector()
 end
 
-Base.@kwdef struct Connection
-    inners = nothing
-    outers = nothing
+struct Connection
+    systems
 end
-
-# everything is inner by default until we expand the connections
-Connection(syss) = Connection(inners=syss)
-get_systems(c::Connection) = c.inners
-function Base.in(e::Symbol, c::Connection)
-    (c.inners !== nothing && any(k->nameof(k) === e, c.inners)) ||
-    (c.outers !== nothing && any(k->nameof(k) === e, c.outers))
-end
-
-function renamespace(sym::Symbol, connection::Connection)
-    inners = connection.inners === nothing ? [] : renamespace.(sym, connection.inners)
-    if connection.outers !== nothing
-        for o in connection.outers
-            push!(inners, renamespace(sym, o))
-        end
-    end
-    Connection(;inners=inners)
-end
-
-const EMPTY_VEC = []
-
-function Base.show(io::IO, ::MIME"text/plain", c::Connection)
-    # It is a bit unfortunate that the display of an array of `Equation`s won't
-    # call this.
-    @unpack outers, inners = c
-    if outers === nothing && inners === nothing
-        print(io, "<Connection>")
-    else
-        syss = Iterators.flatten((something(inners, EMPTY_VEC), something(outers, EMPTY_VEC)))
-        splitting_idx = length(inners)
-        sys_str = join((string(nameof(s)) * (i <= splitting_idx ? ("::inner") : ("::outer")) for (i, s) in enumerate(syss)), ", ")
-        print(io, "<", sys_str, ">")
-    end
-end
+Connection() = Connection(nothing)
+get_systems(c::Connection) = c.systems
 
 # symbolic `connect`
 function connect(sys1::AbstractSystem, sys2::AbstractSystem, syss::AbstractSystem...)
@@ -97,23 +73,6 @@ instream(a) = term(instream, unwrap(a), type=symtype(a))
 SymbolicUtils.promote_symtype(::typeof(instream), _) = Real
 
 isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) !== nothing
-isstreamconnector(s::AbstractSystem) = isconnector(s) && get_connector_type(s) isa StreamConnector
-isstreamconnection(c::Connection) = any(isstreamconnector, c.inners) || any(isstreamconnector, c.outers)
-
-function print_with_indent(n, x)
-    print(" " ^ n)
-    show(stdout, MIME"text/plain"(), x)
-    println()
-end
-
-function split_sys_var(var)
-    var_name = string(getname(var))
-    sidx = findlast(isequal('₊'), var_name)
-    sidx === nothing && error("$var is not a namespaced variable")
-    connector_name = Symbol(var_name[1:prevind(var_name, sidx)])
-    streamvar_name = Symbol(var_name[nextind(var_name, sidx):end])
-    connector_name, streamvar_name
-end
 
 function flowvar(sys::AbstractSystem)
     sts = get_states(sys)
@@ -259,16 +218,13 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace
         end
     end
 
-    if namespace !== nothing
-        # Except for the top level, all connectors are eventually inside
-        # connectors.
-        T = ConnectionElement
-        for s in subsys
-            isconnector(s) || continue
-            for v in states(s)
-                Flow === get_connection_type(v) || continue
-                push!(connectionsets, ConnectionSet([T(LazyNamespace(namespace, s), v, false)]))
-            end
+    # all connectors are eventually inside connectors.
+    T = ConnectionElement
+    for s in subsys
+        isconnector(s) || continue
+        for v in states(s)
+            Flow === get_connection_type(v) || continue
+            push!(connectionsets, ConnectionSet([T(LazyNamespace(namespace, s), v, false)]))
         end
     end
 

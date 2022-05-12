@@ -704,10 +704,48 @@ function get_or_construct_tearing_state(sys)
     state
 end
 
+# TODO: what about inputs?
+function n_extra_equations(sys::AbstractSystem)
+    isconnector(sys) && return length(get_states(sys))
+    sys, csets = generate_connection_set(sys)
+    ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
+    n_outer_stream_variables = 0
+    for cset in instream_csets
+        n_outer_stream_variables += count(x->x.isouter, cset.set)
+    end
+
+    #n_toplevel_unused_flows = 0
+    #toplevel_flows = Set()
+    #for cset in csets
+    #    e1 = first(cset.set)
+    #    e1.sys.namespace === nothing || continue
+    #    for e in cset.set
+    #        get_connection_type(e.v) === Flow || continue
+    #        push!(toplevel_flows, e.v)
+    #    end
+    #end
+    #for m in get_systems(sys)
+    #    isconnector(m) || continue
+    #    n_toplevel_unused_flows += count(x->get_connection_type(x) === Flow && !(x in toplevel_flows), get_states(m))
+    #end
+
+
+    nextras = n_outer_stream_variables + length(ceqs)
+end
+
 function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     eqs = equations(sys)
+    vars = states(sys); nvars = length(vars)
     if eqs isa AbstractArray
-        Base.printstyled(io, "Model $(nameof(sys)) with $(length(eqs)) equations\n"; bold=true)
+        neqs = count(eq->!(eq.lhs isa Connection), eqs)
+        Base.printstyled(io, "Model $(nameof(sys)) with $neqs "; bold=true)
+        nextras = n_extra_equations(sys)
+        if nextras > 0
+            Base.printstyled(io, "("; bold=true)
+            Base.printstyled(io, neqs + nextras; bold=true, color=:magenta)
+            Base.printstyled(io, ") "; bold=true)
+        end
+        Base.printstyled(io, "equations\n"; bold=true)
     else
         Base.printstyled(io, "Model $(nameof(sys))\n"; bold=true)
     end
@@ -719,7 +757,6 @@ function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     rows = first(displaysize(io)) ÷ 5
     limit = get(io, :limit, false)
 
-    vars = states(sys); nvars = length(vars)
     Base.printstyled(io, "States ($nvars):"; bold=true)
     nrows = min(nvars, limit ? rows : nvars)
     limited = nrows < length(vars)

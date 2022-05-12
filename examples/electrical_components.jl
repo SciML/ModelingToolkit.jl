@@ -1,7 +1,7 @@
 using Test
 using ModelingToolkit, OrdinaryDiffEq
 
-@parameters t
+@isdefined(t) || @parameters t
 @connector function Pin(;name)
     sts = @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
     ODESystem(Equation[], t, sts, []; name=name)

@@ -30,6 +30,7 @@ end
 
 include("../examples/rc_model.jl")
 
+@test ModelingToolkit.n_extra_equations(capacitor) == 2
 @test length(equations(structural_simplify(rc_model, allow_parameter=false))) > 1
 sys = structural_simplify(rc_model)
 check_contract(sys)
