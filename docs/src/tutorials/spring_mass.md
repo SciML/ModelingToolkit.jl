@@ -47,7 +47,7 @@ eqs = [
     scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)
 ]
 
-@named _model = ODESystem(eqs, t)
+@named _model = ODESystem(eqs, t, [spring.x; spring.dir; mass.pos], [])
 @named model = compose(_model, mass, spring)
 sys = structural_simplify(model)
 
@@ -135,7 +135,7 @@ eqs = [
 Finally, we can build the model using these equations and components.
 
 ```julia
-@named _model = ODESystem(eqs, t)
+@named _model = ODESystem(eqs, t, [spring.x; spring.dir; mass.pos], [])
 @named model = compose(_model, mass, spring)
 ```
 
@@ -192,13 +192,26 @@ sys = structural_simplify(model)
 equations(sys)
 
 4-element Vector{Equation}:
- Differential(t)(mass₊v[1](t)) ~ -spring₊k*mass₊pos[1](t)*(mass₊m^-1)*(sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t))) - spring₊l)*(sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t)))^-1)
- Differential(t)(mass₊v[2](t)) ~ -9.81 - (spring₊k*mass₊pos[2](t)*(mass₊m^-1)*(sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t))) - spring₊l)*(sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t)))^-1))
+ Differential(t)(mass₊v[1](t)) ~ (-spring₊k*(spring₊x(t) - spring₊l)*mass₊pos[1](t)) / (mass₊m*spring₊x(t))
+ Differential(t)(mass₊v[2](t)) ~ (-spring₊k*(spring₊x(t) - spring₊l)*mass₊pos[2](t)) / (mass₊m*spring₊x(t)) - 9.81
  Differential(t)(mass₊pos[1](t)) ~ mass₊v[1](t)
  Differential(t)(mass₊pos[2](t)) ~ mass₊v[2](t)
 ```
 
-We are left with only 4 equations involving 4 state variables (`mass.pos[1]`, `mass.pos[2]`, `mass.v[1]`, `mass.v[2]`). We can solve the system by converting it to an `ODEProblem` in mass matrix form and solving with an [`ODEProblem` mass matrix solver](https://diffeq.sciml.ai/stable/solvers/dae_solve/#OrdinaryDiffEq.jl-(Mass-Matrix)). This is done as follows:
+We are left with only 4 equations involving 4 state variables (`mass.pos[1]`,
+`mass.pos[2]`, `mass.v[1]`, `mass.v[2]`). We can solve the system by converting
+it to an `ODEProblem`. Some observed variables are not expanded by default. To
+view the complete equations, one can do
+```julia
+julia> full_equations(sys)
+4-element Vector{Equation}:
+ Differential(t)(mass₊v[1](t)) ~ (-spring₊k*(sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t))) - spring₊l)*mass₊pos[1](t)) / (mass₊m*sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t))))
+ Differential(t)(mass₊v[2](t)) ~ (-spring₊k*(sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t))) - spring₊l)*mass₊pos[2](t)) / (mass₊m*sqrt(abs2(mass₊pos[1](t)) + abs2(mass₊pos[2](t)))) - 9.81
+ Differential(t)(mass₊pos[1](t)) ~ mass₊v[1](t)
+ Differential(t)(mass₊pos[2](t)) ~ mass₊v[2](t)
+```
+
+This is done as follows:
 
 ```julia
 prob = ODEProblem(sys, [], (0., 3.))
