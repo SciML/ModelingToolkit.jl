@@ -14,7 +14,7 @@ forcing later. Here, the library author defines a component named
 saying the forcing term of `decay1` is a constant while the forcing term
 of `decay2` is the value of the state variable `x`.
 
-```julia
+```@example composition
 using ModelingToolkit
 
 function decay(;name)
@@ -48,16 +48,11 @@ equations(connected)
 simplified_sys = structural_simplify(connected)
 
 equations(simplified_sys)
-
-#3-element Vector{Equation}:
-# Differential(t)(decay1₊f(t)) ~ 0
-# Differential(t)(decay1₊x(t)) ~ decay1₊f(t) - (decay1₊a*(decay1₊x(t)))
-# Differential(t)(decay2₊x(t)) ~ decay1₊x(t) - (decay2₊a*(decay2₊x(t)))
 ```
 
 Now we can solve the system:
 
-```julia
+```@example composition
 x0 = [
   decay1.x => 1.0
   decay1.f => 0.0
@@ -80,7 +75,7 @@ Every `AbstractSystem` has a `system` keyword argument for specifying
 subsystems. A model is the composition of itself and its subsystems.
 For example, if we have:
 
-```julia
+```@example composition
 @named sys = compose(ODESystem(eqs,indepvar,states,ps),subsys)
 ```
 
@@ -105,7 +100,7 @@ associated `SciMLProblem` type using the standard constructors. When
 this is done, the initial conditions and parameters must be specified
 in their namespaced form. For example:
 
-```julia
+```@example composition
 u0 = [
   x => 2.0
   subsys.x => 2.0
@@ -179,7 +174,7 @@ let's assume we have three separate systems which we want to compose to a single
 one. This is how one could explicitly forward all states and parameters to the
 higher level system:
 
-```julia
+```@example compose
 using ModelingToolkit, OrdinaryDiffEq, Plots
 
 ## Library code
@@ -217,16 +212,13 @@ the parameters are forwarded through a relationship in their default
 values. The user of this model can then solve this model simply by
 specifying the values at the highest level:
 
-```julia
+```@example compose
 sireqn_simple = structural_simplify(sir)
 
 equations(sireqn_simple)
+```
 
-# 3-element Vector{Equation}:
-#Differential(t)(seqn₊S(t)) ~ -seqn₊β*ieqn₊I(t)*seqn₊S(t)*(((ieqn₊I(t)) + (reqn₊R(t)) + (seqn₊S(t)))^-1)
-#Differential(t)(ieqn₊I(t)) ~ ieqn₊β*ieqn₊I(t)*seqn₊S(t)*(((ieqn₊I(t)) + (reqn₊R(t)) + (seqn₊S(t)))^-1) - (ieqn₊γ*(ieqn₊I(t)))
-#Differential(t)(reqn₊R(t)) ~ reqn₊γ*ieqn₊I(t)
-
+```@example compose
 ## User Code
 
 u0 = [seqn.S => 990.0,
@@ -270,7 +262,7 @@ single_state_variable ~ expression_involving_any_variables
 
 ### Example: Friction
 The system below illustrates how this can be used to model Coulomb friction
-```julia
+```@example events
 using ModelingToolkit, OrdinaryDiffEq, Plots
 function UnitMassWithFriction(k; name)
   @variables t x(t)=0 v(t)=0
@@ -290,7 +282,7 @@ plot(sol)
 ### Example: Bouncing ball
 In the documentation for DifferentialEquations, we have an example where a bouncing ball is simulated using callbacks which has an `affect!` on the state. We can model the same system using ModelingToolkit like this
 
-```julia
+```@example events
 @variables t x(t)=1 v(t)=0
 D = Differential(t)
 
@@ -313,7 +305,7 @@ plot(sol)
 
 ### Test bouncing ball in 2D with walls
 Multiple events? No problem! This example models a bouncing ball in 2D that is enclosed by two walls at $y = \pm 1.5$.
-```julia
+```@example events
 @variables t x(t)=1 y(t)=0 vx(t)=0 vy(t)=2
 D = Differential(t)
 
