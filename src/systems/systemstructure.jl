@@ -233,8 +233,9 @@ function TearingState(sys; quick_cancel=false, check=true)
         isalgeq = true
         statevars = []
         for var in vars
-            any(isequal(var), ivs) && continue
-            if isparameter(var) || (istree(var) && isparameter(operation(var)))
+            _var, _ = var_from_nested_derivative(var)
+            any(isequal(_var), ivs) && continue
+            if isparameter(_var) || (istree(_var) && isparameter(operation(_var)))
                 continue
             end
             varidx = addvar!(var)
