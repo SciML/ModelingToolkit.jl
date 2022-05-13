@@ -973,7 +973,7 @@ function structural_simplify(sys::AbstractSystem; simplify=false, kwargs...)
     state = TearingState(sys)
     check_consistency(state)
     if sys isa ODESystem
-        sys = dae_index_lowering(ode_order_lowering(sys))
+        sys = dae_order_lowering(dummy_derivative(sys, state))
     end
     state = TearingState(sys)
     find_solvables!(state; kwargs...)

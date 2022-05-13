@@ -289,8 +289,7 @@ end
 Perform index reduction and use the dummy derivative techinque to ensure that
 the system is balanced.
 """
-function dummy_derivative(sys)
-    state = TearingState(sys)
+function dummy_derivative(sys, state=TearingState(sys))
     function jac(eqs, vars)
         symeqs = EquationsView(state)[eqs]
         Symbolics.jacobian((x->x.rhs).(symeqs), state.fullvars[vars])
