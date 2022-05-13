@@ -282,3 +282,15 @@ function partial_state_selection(sys; simplify=false)
 
     tearing_reassemble(state, var_eq_matching; simplify=simplify)
 end
+
+"""
+    dummy_derivative(sys)
+
+Perform index reduction and use the dummy derivative techinque to ensure that
+the system is balanced.
+"""
+function dummy_derivative(sys)
+    state = TearingState(sys)
+    dds = dummy_derivative_graph!(state)
+    EquationsView(state), state.fullvars[dds]
+end

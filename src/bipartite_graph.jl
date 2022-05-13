@@ -234,13 +234,13 @@ Base.in(edge::BipartiteEdge, g::BipartiteGraph) = Graphs.has_edge(g, edge)
 
 ### Maximal matching
 """
-    construct_augmenting_path!(m::Matching, g::BipartiteGraph, vsrc, dstfilter, vcolor=falses(ndsts(g)), ecolor=falses(nsrcs(g))) -> path_found::Bool
+    construct_augmenting_path!(m::Matching, g::BipartiteGraph, vsrc, dstfilter, vcolor=falses(ndsts(g)), ecolor=nothing) -> path_found::Bool
 
 Try to construct an augmenting path in matching and if such a path is found,
 update the matching accordingly.
 """
-function construct_augmenting_path!(matching::Matching, g::BipartiteGraph, vsrc, dstfilter, dcolor=falses(ndsts(g)), scolor=falses(nsrcs(g)))
-    scolor[vsrc] = true
+function construct_augmenting_path!(matching::Matching, g::BipartiteGraph, vsrc, dstfilter, dcolor=falses(ndsts(g)), scolor=nothing)
+    scolor === nothing || (scolor[vsrc] = true)
 
     # if a `vdst` is unassigned and the edge `vsrc <=> vdst` exists
     for vdst in 𝑠neighbors(g, vsrc)
