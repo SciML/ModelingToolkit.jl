@@ -222,7 +222,7 @@ function nullspace(A; col_order=nothing)
             @swap(col_order[i],col_order[cp])
         end
     end
-    
+
     N = ModelingToolkit.reduced_echelon_nullspace(rank, B)
     apply_inv_pivot_rows!(N, column_pivots)
 end
