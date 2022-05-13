@@ -291,6 +291,10 @@ the system is balanced.
 """
 function dummy_derivative(sys)
     state = TearingState(sys)
-    dds = dummy_derivative_graph!(state)
+    function jac(eqs, vars)
+        symeqs = EquationsView(state)[eqs]
+        Symbolics.jacobian((x->x.rhs).(symeqs), state.fullvars[vars])
+    end
+    dds = dummy_derivative_graph!(state, jac)
     EquationsView(state), state.fullvars[dds]
 end
