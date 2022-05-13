@@ -228,7 +228,7 @@ end
         optext="derivative"
     end
     msg = "The $optext variable must be isolated to the left-hand " *
-    "side of the equation like `$opvar ~ ...`.\n Got $eq."
+    "side of the equation like `$opvar ~ ...`. You may want to use `structural_simplify` or the DAE form.\nGot $eq."
     throw(InvalidSystemException(msg))
 end
 
