@@ -12,6 +12,17 @@ eqs = [
 ]
 @named sys = ODESystem(eqs, t)
 
+let dd = dummy_derivative(sys)
+    has_dx1 = has_dx2 = false
+    for eq in equations(dd)
+        vars = ModelingToolkit.vars(eq)
+        has_dx1 |= D(x1) in vars || D(D(x1)) in vars
+        has_dx2 |= D(x2) in vars || D(D(x2)) in vars
+    end
+    @test has_dx1 ⊻ has_dx2 # only one of x1 and x2 can be a dummy derivative
+    @test length(states(dd)) == length(equations(dd)) == 10
+end
+
 let pss = partial_state_selection(sys)
     @test length(equations(pss)) == 1
     @test length(states(pss)) == 2
