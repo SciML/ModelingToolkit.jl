@@ -259,12 +259,12 @@ function check_operator_variables(eqs, op::T) where T
             nd = count(x->istree(x) && !(operation(x) isa op), tmp)
             is_tmp_fine = iszero(nd)
         end
-        empty!(tmp)
         is_tmp_fine || error("The LHS cannot contain nondifferentiated variables. Please run `structural_simplify` or use the DAE form.\nGot $eq")
         for v in tmp
             v in ops && error("The LHS operator must be unique. Please run `structural_simplify` or use the DAE form. $v appears in LHS more than once.")
             push!(ops, v)
         end
+        empty!(tmp)
     end
 end
 
