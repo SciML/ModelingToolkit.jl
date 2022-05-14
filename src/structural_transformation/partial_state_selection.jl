@@ -143,11 +143,10 @@ end
 function dummy_derivative_graph!(state::TransformationState, jac=nothing)
     var_eq_matching = complete(pantelides!(state))
     complete!(state.structure)
-    # TODO: remove state when done
-    dummy_derivative_graph!(state.structure, var_eq_matching, jac, state)
+    dummy_derivative_graph!(state.structure, var_eq_matching, jac)
 end
 
-function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac, state)
+function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac)
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)

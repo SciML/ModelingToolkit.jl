@@ -20,7 +20,8 @@ let dd = dummy_derivative(sys)
         has_dx2 |= D(x2) in vars || D(D(x2)) in vars
     end
     @test has_dx1 ⊻ has_dx2 # only one of x1 and x2 can be a dummy derivative
-    @test length(states(dd)) == length(equations(dd)) == 10
+    @test length(states(dd)) == length(equations(dd)) == 9
+    @test length(states(structural_simplify(dd))) <= 6
 end
 
 let pss = partial_state_selection(sys)
