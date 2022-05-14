@@ -243,14 +243,12 @@ function get_delay_val(iv, x)
     return -delay
 end
 
-check_difference_variables(eq) = check_operator_variables(eq, Difference)
-
 function generate_function(
         sys::DiscreteSystem, dvs = states(sys), ps = parameters(sys);
         kwargs...
     )
     eqs = equations(sys)
-    foreach(check_difference_variables, eqs)
+    check_operator_variables(eqs, Difference)
     rhss = [eq.rhs for eq in eqs]
 
     u = map(x->time_varying_as_func(value(x), sys), dvs)

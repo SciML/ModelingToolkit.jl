@@ -524,8 +524,11 @@ function ODAEProblem{iip}(
                           parammap = DiffEqBase.NullParameters();
                           callback = nothing,
                           use_union = false,
+                          check = true,
                           kwargs...
                          ) where {iip}
+    eqs = equations(sys)
+    check && ModelingToolkit.check_operator_variables(eqs, Differential)
     fun, dvs = build_torn_function(sys; kwargs...)
     ps = parameters(sys)
     defs = defaults(sys)
@@ -535,7 +538,7 @@ function ODAEProblem{iip}(
     u0 = ModelingToolkit.varmap_to_vars(u0map, dvs; defaults=defs, tofloat=true)
     p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults=defs, tofloat=!use_union, use_union)
 
-    has_difference = any(isdifferenceeq, equations(sys))
+    has_difference = any(isdifferenceeq, eqs)
     if has_continuous_events(sys)
         event_cb = generate_rootfinding_callback(sys; kwargs...)
     else

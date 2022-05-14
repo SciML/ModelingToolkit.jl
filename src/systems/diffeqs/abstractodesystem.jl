@@ -95,8 +95,6 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = p
 
 end
 
-check_derivative_variables(eq) = check_operator_variables(eq, Differential)
-
 function generate_function(
         sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
         implicit_dae=false,
@@ -107,7 +105,7 @@ function generate_function(
 
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     if !implicit_dae
-        foreach(check_derivative_variables, eqs)
+        check_operator_variables(eqs, Differential)
     end
     check_lhs(eqs, Differential, Set(dvs))
     # substitute x(t) by just x
@@ -130,7 +128,7 @@ end
 
 function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = parameters(sys); kwargs...)
     eqs = equations(sys)
-    foreach(check_difference_variables, eqs)
+    check_operator_variables(eqs, Difference)
 
     var2eq = Dict(arguments(eq.lhs)[1] => eq for eq in eqs if isdifference(eq.lhs))
 
