@@ -148,5 +148,6 @@ p = [
     g => 9.8
 ]
 
-prob_auto = DAEProblem(sys,zeros(length(u0)),u0,(0.0,10.0),p)
-@test_nowarn solve(prob_auto, DFBDF())
+prob_auto = DAEProblem(sys,zeros(length(u0)),u0,(0.0,0.2),p)
+sol = solve(prob_auto, DFBDF())
+@test norm(sol[x].^2 + sol[y].^2 .- 1) < 1e-2
