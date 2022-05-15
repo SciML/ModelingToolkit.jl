@@ -737,7 +737,7 @@ function n_extra_equations(sys::AbstractSystem)
     nextras = n_outer_stream_variables + length(ceqs)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
+function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
     eqs = equations(sys)
     vars = states(sys); nvars = length(vars)
     if eqs isa AbstractArray
@@ -806,7 +806,7 @@ function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
         state = get_tearing_state(sys)
         if state !== nothing
             Base.printstyled(io, "\nIncidence matrix:"; color=:magenta)
-            show(io, incidence_matrix(state.structure.graph, Num(Sym{Real}(:×))))
+            show(io, mime, incidence_matrix(state.structure.graph, Num(Sym{Real}(:×))))
         end
     end
     return nothing

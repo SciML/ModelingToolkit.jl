@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit, OrdinaryDiffEq, Test
 
 @variables t
 sts = @variables x1(t) x2(t) x3(t) x4(t)
@@ -21,7 +21,7 @@ let dd = dummy_derivative(sys)
     end
     @test has_dx1 ⊻ has_dx2 # only one of x1 and x2 can be a dummy derivative
     @test length(states(dd)) == length(equations(dd)) == 9
-    @test length(states(structural_simplify(dd))) <= 6
+    @test length(states(structural_simplify(dd))) < 9
 end
 
 let pss = partial_state_selection(sys)
