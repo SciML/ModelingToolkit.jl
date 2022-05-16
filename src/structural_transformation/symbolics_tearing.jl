@@ -248,7 +248,7 @@ function tearing(state::TearingState; kwargs...)
     @unpack graph, solvable_graph = state.structure
     algvars = BitSet(findall(v->isalgvar(state.structure, v), 1:ndsts(graph)))
     aeqs = algeqs(state.structure)
-    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(tear_graph_modia(graph, solvable_graph;
+    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(tear_graph_modia(state.structure;
         varfilter=var->var in algvars, eqfilter=eq->eq in aeqs))
     for var in 1:ndsts(graph)
         if isdiffvar(state.structure, var)
