@@ -171,6 +171,10 @@ end
 
 Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback) = isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect)
 Base.isempty(cb::SymbolicContinuousCallback) = isempty(cb.eqs)
+function Base.hash(cb::SymbolicContinuousCallback, s::UInt)
+    s = foldr(hash, cb.eqs, init=s)
+    foldr(hash, cb.affect, init=s)
+end
 
 to_equation_vector(eq::Equation) = [eq]
 to_equation_vector(eqs::Vector{Equation}) = eqs
@@ -736,7 +740,7 @@ end
 function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
     eqs = equations(sys)
     vars = states(sys); nvars = length(vars)
-    if eqs isa AbstractArray
+    if eqs isa AbstractArray && eltype(eqs) <: Equation
         neqs = count(eq->!(eq.lhs isa Connection), eqs)
         Base.printstyled(io, "Model $(nameof(sys)) with $neqs "; bold=true)
         nextras = n_extra_equations(sys)
