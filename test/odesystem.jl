@@ -776,3 +776,14 @@ let
     @named sys = ODESystem(eqs, t, u, ps)
     @test_nowarn simpsys = structural_simplify(sys)
 end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/1583
+let
+    @parameters k
+    @variables t A(t)
+    D = Differential(t)
+    eqs = [D(A) ~ -k*A]
+    @named osys = ODESystem(eqs,t)
+    oprob = ODEProblem(osys, [A => 1.0], (0.0,10.0), [k => 1.0]; check_length=false)
+    @test_nowarn sol = solve(oprob, Tsit5())
+end
