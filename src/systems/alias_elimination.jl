@@ -52,7 +52,7 @@ function alias_elimination(sys)
 
     dict = Dict(subs)
     for (ieq, eq) in enumerate(eqs)
-        eqs[ieq] = eq.lhs ~ fixpoint_sub(eq.rhs, dict)
+        eqs[ieq] = fixpoint_sub(eq.lhs, dict) ~ fixpoint_sub(eq.rhs, dict)
     end
 
     newstates = []

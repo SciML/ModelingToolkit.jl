@@ -70,7 +70,7 @@ function full_equations(sys::AbstractSystem; simplify=false)
     solved = Dict(eq.lhs => eq.rhs for eq in subs)
     neweqs = map(equations(sys)) do eq
         if isdiffeq(eq)
-            return eq.lhs ~ tearing_sub(eq.rhs, solved, simplify)
+            return tearing_sub(eq.lhs, solved, simplify) ~ tearing_sub(eq.rhs, solved, simplify)
         else
             if !(eq.lhs isa Number && eq.lhs == 0)
                 eq = 0 ~ eq.rhs - eq.lhs

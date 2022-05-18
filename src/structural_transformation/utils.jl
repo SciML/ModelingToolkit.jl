@@ -109,20 +109,20 @@ function find_var_sccs(g::BipartiteGraph, assign=nothing)
     return sccs
 end
 
-function sorted_incidence_matrix(sys, val=true; only_algeqs=false, only_algvars=false)
-    var_eq_matching, var_scc = algebraic_variables_scc(sys)
-    s = structure(sys)
-    @unpack fullvars, graph = s
-    g = graph
+function sorted_incidence_matrix(ts::TransformationState, val=true; only_algeqs=false, only_algvars=false)
+    var_eq_matching, var_scc = algebraic_variables_scc(ts)
+    fullvars = ts.fullvars
+    s = ts.structure
+    graph = ts.structure.graph
     varsmap = zeros(Int, ndsts(graph))
     eqsmap = zeros(Int, nsrcs(graph))
     varidx = 0
     eqidx = 0
-    for vs in scc, v in vs
+    for vs in var_scc, v in vs
         eq = var_eq_matching[v]
         if eq !== unassigned
             eqsmap[eq] = (eqidx += 1)
-            varsmap[var] = (varidx += 1)
+            varsmap[v] = (varidx += 1)
         end
     end
     for i in diffvars_range(s)
@@ -139,9 +139,10 @@ function sorted_incidence_matrix(sys, val=true; only_algeqs=false, only_algvars=
 
     I = Int[]
     J = Int[]
-    for eq in 𝑠vertices(g)
-        only_algeqs && (isalgeq(s, eq) || continue)
-        for var in 𝑠neighbors(g, eq)
+    algeqs_set = algeqs(s)
+    for eq in 𝑠vertices(graph)
+        only_algeqs && (eq in algeqs_set || continue)
+        for var in 𝑠neighbors(graph, eq)
             only_algvars && (isalgvar(s, var) || continue)
             i = eqsmap[eq]
             j = varsmap[var]
