@@ -6,7 +6,7 @@ Let's say we wanted to solve for the steady state of the previous ODE. This is
 the nonlinear system defined by where the derivatives are zero. We use (unknown)
 variables for our nonlinear system.
 
-```julia
+```@example nonlinear
 using ModelingToolkit, NonlinearSolve
 
 @variables x y z
@@ -35,7 +35,7 @@ sol = solve(prob,NewtonRaphson())
 We can similarly ask to generate the `NonlinearProblem` with the analytical
 Jacobian function:
 
-```julia
+```@example nonlinear
 prob = NonlinearProblem(ns,guess,ps,jac=true)
 sol = solve(prob,NewtonRaphson())
 ```

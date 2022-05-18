@@ -10,7 +10,7 @@ to a 1st order ODE.
 To see this, let's define a second order riff on the Lorenz equations.
 We utilize the derivative operator twice here to define the second order:
 
-```julia
+```@example orderlowering
 using ModelingToolkit, OrdinaryDiffEq
 
 @parameters σ ρ β
@@ -32,7 +32,7 @@ and this syntax extends to `N`-th order. Also, we can use `*` or `∘` to compos
 Now let's transform this into the `ODESystem` of first order components.
 We do this by simply calling `ode_order_lowering`:
 
-```julia
+```@example orderlowering
 sys = ode_order_lowering(sys)
 ```
 
@@ -41,7 +41,7 @@ following the original problem, the solution requires knowing the
 initial condition for `x'`, and thus we include that in our input
 specification:
 
-```julia
+```@example orderlowering
 u0 = [D(x) => 2.0,
       x => 1.0,
       y => 0.0,
@@ -56,5 +56,3 @@ prob = ODEProblem(sys,u0,tspan,p,jac=true)
 sol = solve(prob,Tsit5())
 using Plots; plot(sol,vars=(x,y))
 ```
-
-![Lorenz2](https://user-images.githubusercontent.com/1814174/79118645-744eb580-7d5c-11ea-9c37-13c4efd585ca.png)
