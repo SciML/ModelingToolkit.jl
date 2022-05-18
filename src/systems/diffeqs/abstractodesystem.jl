@@ -699,9 +699,11 @@ Generates an ODEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters(); callback=nothing, kwargs...) where iip
+                                    parammap=DiffEqBase.NullParameters(); callback=nothing, 
+                                    check_length=true, kwargs...) where iip
     has_difference = any(isdifferenceeq, equations(sys))
-    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; has_difference=has_difference, kwargs...)
+    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; has_difference=has_difference, 
+                                 check_length, kwargs...)
     if has_continuous_events(sys)
         event_cb = generate_rootfinding_callback(sys; kwargs...)
     else
@@ -738,11 +740,11 @@ Generates an DAEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters();kwargs...) where iip
+                                    parammap=DiffEqBase.NullParameters(); check_length=true, kwargs...) where iip
     has_difference = any(isdifferenceeq, equations(sys))
     f, du0, u0, p = process_DEProblem(
         DAEFunction{iip}, sys, u0map, parammap;
-        implicit_dae=true, du0map=du0map, has_difference=has_difference, kwargs...
+        implicit_dae=true, du0map=du0map, has_difference=has_difference, check_length, kwargs...
     )
     diffvars = collect_differential_variables(sys)
     sts = states(sys)
@@ -774,10 +776,10 @@ numerical enhancements.
 struct ODEProblemExpr{iip} end
 
 function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
-                             parammap=DiffEqBase.NullParameters();
+                             parammap=DiffEqBase.NullParameters(); check_length=true, 
                              kwargs...) where iip
 
-    f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
+    f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; check_length, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
 
     ex = quote
@@ -814,11 +816,11 @@ numerical enhancements.
 struct DAEProblemExpr{iip} end
 
 function DAEProblemExpr{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
-                             parammap=DiffEqBase.NullParameters();
+                             parammap=DiffEqBase.NullParameters(); check_length=true,
                              kwargs...) where iip
     f, du0, u0, p = process_DEProblem(
         DAEFunctionExpr{iip}, sys, u0map, parammap;
-        implicit_dae=true, du0map=du0map, kwargs...
+        implicit_dae=true, du0map=du0map, check_length, kwargs...
     )
     linenumbers = get(kwargs, :linenumbers, true)
     diffvars = collect_differential_variables(sys)
@@ -861,9 +863,10 @@ Generates an SteadyStateProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
-                                            parammap=DiffEqBase.NullParameters();
-                                            kwargs...) where iip
-    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; steady_state = true, kwargs...)
+                                            parammap=DiffEqBase.NullParameters(); 
+                                            check_length=true, kwargs...) where iip
+    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; steady_state = true, 
+                                 check_length, kwargs...)
     SteadyStateProblem{iip}(f,u0,p;kwargs...)
 end
 
@@ -885,9 +888,10 @@ numerical enhancements.
 struct SteadyStateProblemExpr{iip} end
 
 function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
-                                    parammap=DiffEqBase.NullParameters();
+                                    parammap=DiffEqBase.NullParameters(); check_length=true,
                                     kwargs...) where iip
-    f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap;steady_state = true, kwargs...)
+    f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap;steady_state = true, 
+                                 check_length, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
     ex = quote
         f = $f
