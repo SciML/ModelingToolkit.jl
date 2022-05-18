@@ -345,7 +345,7 @@ function NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,
                              parammap=DiffEqBase.NullParameters(); check_length=true,
                              kwargs...) where iip
 
-    f, u0, p = process_NonlinearProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap; 
+    f, u0, p = process_NonlinearProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap;
                                         check_length, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
 

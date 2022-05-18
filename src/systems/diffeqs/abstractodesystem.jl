@@ -699,10 +699,10 @@ Generates an ODEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters(); callback=nothing, 
+                                    parammap=DiffEqBase.NullParameters(); callback=nothing,
                                     check_length=true, kwargs...) where iip
     has_difference = any(isdifferenceeq, equations(sys))
-    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; has_difference=has_difference, 
+    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; has_difference=has_difference,
                                  check_length, kwargs...)
     if has_continuous_events(sys)
         event_cb = generate_rootfinding_callback(sys; kwargs...)
@@ -776,7 +776,7 @@ numerical enhancements.
 struct ODEProblemExpr{iip} end
 
 function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
-                             parammap=DiffEqBase.NullParameters(); check_length=true, 
+                             parammap=DiffEqBase.NullParameters(); check_length=true,
                              kwargs...) where iip
 
     f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; check_length, kwargs...)
@@ -863,9 +863,9 @@ Generates an SteadyStateProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem,u0map,
-                                            parammap=DiffEqBase.NullParameters(); 
+                                            parammap=DiffEqBase.NullParameters();
                                             check_length=true, kwargs...) where iip
-    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; steady_state = true, 
+    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap; steady_state = true,
                                  check_length, kwargs...)
     SteadyStateProblem{iip}(f,u0,p;kwargs...)
 end
@@ -890,7 +890,7 @@ struct SteadyStateProblemExpr{iip} end
 function SteadyStateProblemExpr{iip}(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters(); check_length=true,
                                     kwargs...) where iip
-    f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap;steady_state = true, 
+    f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap;steady_state = true,
                                  check_length, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
     ex = quote
