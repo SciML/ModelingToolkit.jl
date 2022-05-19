@@ -22,18 +22,18 @@ function detime_dvs(op)
     elseif operation(op) isa Sym
         Sym{Real}(nameof(operation(op)))
     else
-        similarterm(op, operation(op),detime_dvs.(arguments(op)))
+        similarterm(op, operation(op), detime_dvs.(arguments(op)))
     end
 end
 
-function retime_dvs(op::Sym,dvs,iv)
-    Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
+function retime_dvs(op::Sym, dvs, iv)
+    Sym{FnType{Tuple{symtype(iv)},Real}}(nameof(op))(iv)
 end
 
 function retime_dvs(op, dvs, iv)
     istree(op) ?
-        similarterm(op, operation(op), retime_dvs.(arguments(op),(dvs,),(iv,))) :
-        op
+    similarterm(op, operation(op), retime_dvs.(arguments(op), (dvs,), (iv,))) :
+    op
 end
 
 modified_states!(mstates, e::Equation, statelist=nothing) = get_variables!(mstates, e.lhs, statelist)
@@ -49,7 +49,7 @@ macro showarr(x)
     end
 end
 
-@deprecate substitute_expr!(expr,s) substitute(expr,s)
+@deprecate substitute_expr!(expr, s) substitute(expr, s)
 
 function states_to_sym(states::Set)
     function _states_to_sym(O)
@@ -118,9 +118,9 @@ function is_delay_var(iv, var)
     length(args) > 1 && return false
     isequal(first(args), iv) && return false
     delay = iv - first(args)
-    delay isa Integer || 
-    delay isa AbstractFloat ||
-    (delay isa Num && isreal(value(delay))) 
+    delay isa Integer ||
+        delay isa AbstractFloat ||
+        (delay isa Num && isreal(value(delay)))
 end
 
 function check_variables(dvs, iv)
@@ -136,9 +136,10 @@ function check_lhs(eq::Equation, op, dvs::Set)
     (operation(v) isa op && only(arguments(v)) in dvs) && return
     error("$v is not a valid LHS. Please run structural_simplify before simulation.")
 end
-check_lhs(eqs, op, dvs::Set) = for eq in eqs
-    check_lhs(eq, op, dvs)
-end
+check_lhs(eqs, op, dvs::Set) =
+    for eq in eqs
+        check_lhs(eq, op, dvs)
+    end
 
 """
     collect_ivs(eqs, op = Differential)
@@ -198,7 +199,8 @@ function process_variables!(var_to_name, defs, vars)
 end
 
 function collect_defaults!(defs, vars)
-    for v in vars; (haskey(defs, v) || !hasdefault(v)) && continue
+    for v in vars
+        (haskey(defs, v) || !hasdefault(v)) && continue
         defs[v] = getdefault(v)
     end
     return defs
@@ -225,10 +227,10 @@ end
     if op === Difference
         optext = "difference"
     elseif op === Differential
-        optext="derivative"
+        optext = "derivative"
     end
     msg = "The $optext variable must be isolated to the left-hand " *
-    "side of the equation like `$opvar ~ ...`.\n Got $eq."
+          "side of the equation like `$opvar ~ ...`.\n Got $eq."
     throw(InvalidSystemException(msg))
 end
 
@@ -255,8 +257,8 @@ iv_from_nested_difference(x::Sym) = x
 iv_from_nested_difference(x) = nothing
 
 var_from_nested_difference(x, i=0) = (nothing, nothing)
-var_from_nested_difference(x::Term,i=0) = operation(x) isa Difference ? var_from_nested_difference(arguments(x)[1], i + 1) : (x, i)
-var_from_nested_difference(x::Sym,i=0) = (x, i)
+var_from_nested_difference(x::Term, i=0) = operation(x) isa Difference ? var_from_nested_difference(arguments(x)[1], i + 1) : (x, i)
+var_from_nested_difference(x::Sym, i=0) = (x, i)
 
 
 isvariable(x::Num) = isvariable(value(x))
@@ -283,7 +285,7 @@ v == Set([D(y), u])
 """
 vars(x::Sym; op=Differential) = Set([x])
 vars(exprs::Symbolic; op=Differential) = vars([exprs]; op=op)
-vars(exprs; op=Differential) = foldl((x, y) -> vars!(x, y; op=op), exprs; init = Set())
+vars(exprs; op=Differential) = foldl((x, y) -> vars!(x, y; op=op), exprs; init=Set())
 vars(eq::Equation; op=Differential) = vars!(Set(), eq; op=op)
 vars!(vars, eq::Equation; op=Differential) = (vars!(vars, eq.lhs; op=op); vars!(vars, eq.rhs; op=op); vars)
 function vars!(vars, O; op=Differential)
@@ -295,7 +297,7 @@ function vars!(vars, O; op=Differential)
     operation(O) isa op && return push!(vars, O)
 
     if operation(O) === (getindex) &&
-        isvariable(first(arguments(O)))
+       isvariable(first(arguments(O)))
 
         return push!(vars, O)
     end
@@ -408,7 +410,7 @@ end
 
 function get_postprocess_fbody(sys)
     if has_preface(sys) && (pre = preface(sys); pre !== nothing)
-        pre_ = let pre=pre
+        pre_ = let pre = pre
             ex -> Let(pre, ex, false)
         end
     else
@@ -422,7 +424,7 @@ $(SIGNATURES)
 
 find duplicates in an iterable object.
 """
-function find_duplicates(xs, ::Val{Ret}=Val(false)) where Ret
+function find_duplicates(xs, ::Val{Ret}=Val(false)) where {Ret}
     appeared = Set()
     duplicates = Set()
     for x in xs
@@ -501,13 +503,79 @@ function promote_to_concrete(vs; tofloat=true, use_union=false)
             C = float(C)
         elseif has_array || (use_union && has_int && C !== I)
             if has_array
-                C = Union{C, array_T}
+                C = Union{C,array_T}
             end
             if has_int
-                C = Union{C, I}
+                C = Union{C,I}
             end
             return copyto!(similar(vs, C), vs)
         end
         convert.(C, vs)
     end
+end
+
+"""
+Counts the Differential operators for given variable x. This is used to determine
+the order of a PDE.
+"""
+function count_differentials(term, x::Symbolics.Symbolic)
+    S = Symbolics
+    SU = SymbolicUtils
+    if !S.istree(term)
+        return 0
+    else
+        op = SU.operation(term)
+        count_children = sum(map(arg -> count_differentials(arg, x), SU.arguments(term)))
+        if op isa Differential && isequal(op.x, x)
+            return 1 + count_children
+        end
+        return count_children
+    end
+end
+
+"""
+return list of differential orders in the equation
+"""
+function differential_order(eq, x::Symbolics.Symbolic)
+    S = Symbolics
+    SU = SymbolicUtils
+    orders = Set{Int}()
+    if S.istree(eq)
+        op = SU.operation(eq)
+        if op isa Differential
+            push!(orders, count_differentials(eq, x))
+        else
+            for o in map(ch -> differential_order(ch, x), SU.arguments(eq))
+                union!(orders, o)
+            end
+        end
+    end
+    return filter(!iszero, orders)
+end
+
+"""
+find all the dependent variables given by depvar_ops in an expression
+"""
+function get_depvars(eq, depvar_ops)
+    S = Symbolics
+    SU = SymbolicUtils
+    depvars = Set()
+    if eq isa Num
+        eq = eq.val
+    end
+    if S.istree(eq)
+        if eq isa Term && any(u -> isequal(operation(eq), u), depvar_ops)
+            push!(depvars, eq)
+        else
+            for o in map(x -> get_depvars(x, depvar_ops), SU.arguments(eq))
+                union!(depvars, o)
+            end
+        end
+    end
+    return depvars
+end
+
+@inline function get_all_depvars(pdesys, depvar_ops)
+    pdeeqs = pdesys.eqs # Vector
+    return collect(mapreduce(x -> get_depvars(x.lhs, depvar_ops), union, pdeeqs) ∪ mapreduce(x -> get_depvars(x.rhs, depvar_ops), union, pdeeqs))
 end

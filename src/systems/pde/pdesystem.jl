@@ -61,16 +61,25 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     """
     name::Symbol
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
-                                   ps=SciMLBase.NullParameters();
-                                   defaults=Dict(),
-                                   connector_type = nothing,
-                                   checks::Bool = true,
-                                   name
-                                  )
+        ps=SciMLBase.NullParameters();
+        defaults=Dict(),
+        connector_type=nothing,
+        checks::Bool=true,
+        name
+    )
         if checks
-            all_dimensionless([dvs;ivs;ps]) ||check_units(eqs)
+            all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
         end
         eqs = eqs isa Vector ? eqs : [eqs]
+
+
+        depvar_ops = map(x -> operation(x.val), dvs)
+        # Get all dependent variables in the correct type
+        alldepvars = get_all_depvars(pdesys, depvar_ops)
+        dvs = filter(u -> !any(map(x -> x isa Number, arguments(u))), alldepvars)
+        # Get all independent variables in the correct type, removing time from the list
+        ivs = collect(filter(x -> !(x isa Number), reduce(union, map(arguments, alldepvars))))
+
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, name)
     end
 end
