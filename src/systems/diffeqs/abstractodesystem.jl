@@ -506,6 +506,65 @@ end
 
 """
 ```julia
+function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                ps = parameters(sys);
+                                version = nothing, tgrad = false,
+                                jac = false,
+                                sparse = false,
+                                kwargs...) where {iip}
+```
+
+Create a `SplitFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `ps`
+are used to set the order of the dependent variable and parameter vectors,
+respectively.
+"""
+function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                      ps = parameters(sys), u0 = nothing;
+                                      version = nothing, tgrad=false,
+                                      jac = false,
+                                      eval_expression = true,
+                                      sparse = false, simplify = false,
+                                      eval_module = @__MODULE__,
+                                      steady_state = false,
+                                      checkbounds = false,
+                                      sparsity = false,
+                                      kwargs...) where {iip}
+    u = map(x->time_varying_as_func(value(x), sys), dvs)
+    p = map(x->time_varying_as_func(value(x), sys), ps)
+    t = get_iv(sys)
+    fs = [eq.rhs for eq in equations(sys)]
+    A, f_n = semilinear_form(fs, dvs)
+    A = DiffEqArrayOperator(A)
+    f_gen = build_function(f_n, A(u,p,t), u, p, t)#if failure try removing A
+    f_oop, f_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen) : f_gen
+    f(u,p,t) = f_oop(u,p,t)
+    f(du,u,p,t) = f_iip(du,u,p,t)
+
+    if jac
+        jac_gen = generate_jacobian(sys, dvs, ps;
+                                    simplify=simplify, sparse = sparse,
+                                    expression=Val{eval_expression}, expression_module=eval_module,
+                                    checkbounds=checkbounds, kwargs...)
+        jac_oop, jac_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in jac_gen) : jac_gen
+        _jac(u,p,t) = jac_oop(u,p,t)
+        _jac(J,u,p,t) = jac_iip(J,u,p,t)
+
+    else
+        _jac = nothing
+    end
+
+    SplitFunction{iip}(
+                        A,
+                        f,
+                        jac = _jac === nothing ? nothing : _jac,
+                        syms = Symbol.(states(sys)),
+                        indepsym = Symbol(get_iv(sys)),
+                        sparsity = sparsity ? jacobian_sparsity(sys) : nothing
+                      )
+end
+
+"""
+```julia
 function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing, tgrad=false,
@@ -756,6 +815,43 @@ end
 
 """
 ```julia
+function SciMLBase.SplitODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
+                                        parammap=DiffEqBase.NullParameters();
+                                        version=nothing, tgrad=false,
+                                        jac=false,
+                                        checkbounds=false, sparse=false,
+                                        simplify=false,
+                                        linenumbers=true, parallel=SerialForm(),
+                                        kwargs...) where iip
+```
+
+Generates a SplitODEProblem from an ODESystem and allows for automatically
+symbolically calculating numerical enhancements.
+"""
+function SciMLBase.SplitODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
+    parammap=DiffEqBase.NullParameters(); callback=nothing, kwargs...) where iip
+
+    has_difference = any(isdifferenceeq, equations(sys))
+    #f1 and f2 are the linear and non-linear split of f, such that f = f1 + f2
+    f1, f2, u0, p = process_DEProblem(SplitFunction{iip}, sys, u0map, parammap; has_difference=has_difference, kwargs...)
+    if has_continuous_events(sys)
+        event_cb = generate_rootfinding_callback(sys; kwargs...)
+    else
+        event_cb = nothing
+    end
+    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
+    cb = merge_cb(event_cb, difference_cb)
+    cb = merge_cb(cb, callback)
+
+    if cb === nothing
+        SplitODEProblem{iip}(f1,f2,u0,tspan,p;kwargs...)
+    else
+        SplitODEProblem{iip}(f1,f2,u0,tspan,p;callback=cb,kwargs...)
+    end
+end
+
+"""
+```julia
 function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
@@ -943,75 +1039,4 @@ function isisomorphic(sys1::AbstractODESystem, sys2::AbstractODESystem)
         end
     end
     return false
-end
-
-"""
-```julia
-function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
-                                ps = parameters(sys);
-                                version = nothing, tgrad = false,
-                                jac = false,
-                                sparse = false,
-                                kwargs...) where {iip}
-```
-
-Create a `SplitFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `ps`
-are used to set the order of the dependent variable and parameter vectors,
-respectively.
-"""
-function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
-                                      ps = parameters(sys), u0 = nothing;
-                                      version = nothing, tgrad=false,
-                                      jac = false,
-                                      eval_expression = true,
-                                      sparse = false, simplify = false,
-                                      eval_module = @__MODULE__,
-                                      steady_state = false,
-                                      checkbounds = false,
-                                      sparsity = false,
-                                      kwargs...) where {iip}
-    eqs = [eq for eq in equations(sys)]
-    fs = [eq.rhs for eq in eqs]
-    A, f_n = semilinear_form(fs, dvs)
-    DiffEqArrayOperator(A)
-    f_gen1 = generate_function(sys, dvs, ps; expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
-
-
-
-"""
-```julia
-function SciMLBase.SplitODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
-                                        parammap=DiffEqBase.NullParameters();
-                                        version=nothing, tgrad=false,
-                                        jac=false,
-                                        checkbounds=false, sparse=false,
-                                        simplify=false,
-                                        linenumbers=true, parallel=SerialForm(),
-                                        kwargs...) where iip
-```
-
-Generates a SplitODEProblem from an ODESystem and allows for automatically
-symbolically calculating numerical enhancements.
-"""
-function SciMLBase.SplitODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
-    parammap=DiffEqBase.NullParameters(); callback=nothing, kwargs...) where iip
-
-    has_difference = any(isdifferenceeq, equations(sys))
-    #f1 and f2 are the linear and non-linear split of f, such that f = f1 + f2
-    f1, f2, u0, p = process_DEProblem(SplitFunction{iip}, sys, u0map, parammap; has_difference=has_difference, kwargs...)
-    if has_continuous_events(sys)
-        event_cb = generate_rootfinding_callback(sys; kwargs...)
-    else
-        event_cb = nothing
-    end
-    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
-    cb = merge_cb(event_cb, difference_cb)
-    cb = merge_cb(cb, callback)
-
-    if cb === nothing
-        # Put the SplitODEProblem method call here with callback
-        #SplitODEProblem{isinplace}(f1,f2,u0,tspan,p=NullParameters();kwargs...)
-    else
-        #Put the SplitODEProblem method call here without callback
-    end
 end

@@ -164,7 +164,7 @@ export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
 export SystemStructure
 export JumpSystem
-export ODEProblem, SDEProblem
+export ODEProblem, SplitODEProblem, SDEProblem
 export NonlinearProblem, NonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr
 export AutoModelingToolkit
