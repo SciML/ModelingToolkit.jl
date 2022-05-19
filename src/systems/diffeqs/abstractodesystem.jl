@@ -944,3 +944,74 @@ function isisomorphic(sys1::AbstractODESystem, sys2::AbstractODESystem)
     end
     return false
 end
+
+"""
+```julia
+function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                ps = parameters(sys);
+                                version = nothing, tgrad = false,
+                                jac = false,
+                                sparse = false,
+                                kwargs...) where {iip}
+```
+
+Create a `SplitFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `ps`
+are used to set the order of the dependent variable and parameter vectors,
+respectively.
+"""
+function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                      ps = parameters(sys), u0 = nothing;
+                                      version = nothing, tgrad=false,
+                                      jac = false,
+                                      eval_expression = true,
+                                      sparse = false, simplify = false,
+                                      eval_module = @__MODULE__,
+                                      steady_state = false,
+                                      checkbounds = false,
+                                      sparsity = false,
+                                      kwargs...) where {iip}
+    eqs = [eq for eq in equations(sys)]
+    fs = [eq.rhs for eq in eqs]
+    A, f_n = semilinear_form(fs, dvs)
+    DiffEqArrayOperator(A)
+    f_gen1 = generate_function(sys, dvs, ps; expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
+
+
+
+"""
+```julia
+function SciMLBase.SplitODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
+                                        parammap=DiffEqBase.NullParameters();
+                                        version=nothing, tgrad=false,
+                                        jac=false,
+                                        checkbounds=false, sparse=false,
+                                        simplify=false,
+                                        linenumbers=true, parallel=SerialForm(),
+                                        kwargs...) where iip
+```
+
+Generates a SplitODEProblem from an ODESystem and allows for automatically
+symbolically calculating numerical enhancements.
+"""
+function SciMLBase.SplitODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
+    parammap=DiffEqBase.NullParameters(); callback=nothing, kwargs...) where iip
+
+    has_difference = any(isdifferenceeq, equations(sys))
+    #f1 and f2 are the linear and non-linear split of f, such that f = f1 + f2
+    f1, f2, u0, p = process_DEProblem(SplitFunction{iip}, sys, u0map, parammap; has_difference=has_difference, kwargs...)
+    if has_continuous_events(sys)
+        event_cb = generate_rootfinding_callback(sys; kwargs...)
+    else
+        event_cb = nothing
+    end
+    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
+    cb = merge_cb(event_cb, difference_cb)
+    cb = merge_cb(cb, callback)
+
+    if cb === nothing
+        # Put the SplitODEProblem method call here with callback
+        #SplitODEProblem{isinplace}(f1,f2,u0,tspan,p=NullParameters();kwargs...)
+    else
+        #Put the SplitODEProblem method call here without callback
+    end
+end
