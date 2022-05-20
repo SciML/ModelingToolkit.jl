@@ -67,6 +67,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
         ps=SciMLBase.NullParameters();
         defaults=Dict(),
+        systems=[],
         connector_type=nothing,
         checks::Bool=true,
         name
@@ -75,7 +76,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
             all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
         end
         eqs = eqs isa Vector ? eqs : [eqs]
-        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, [], name)
+        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, name)
     end
 end
 
