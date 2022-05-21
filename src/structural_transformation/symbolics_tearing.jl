@@ -295,7 +295,6 @@ function dummy_derivative(sys, state=TearingState(sys))
         Symbolics.jacobian((x->x.rhs).(symeqs), state.fullvars[vars])
     end
     dds = dummy_derivative_graph!(state, jac)
-    length(dds) == length(state.extra_eqs) || error("Identified $(length(dds)) dummy derivatives, but Pantelides' algorithm generated $(length(state.extra_eqs)) more equations.")
     symdds = Symbolics.diff2term.(state.fullvars[dds])
     subs = Dict(state.fullvars[dd] => symdds[i] for (i, dd) in enumerate(dds))
     @set! sys.eqs = substitute.(EquationsView(state), (subs,))
