@@ -106,8 +106,8 @@ function generate_function(
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     if !implicit_dae
         check_operator_variables(eqs, Differential)
+        check_lhs(eqs, Differential, Set(dvs))
     end
-    check_lhs(eqs, Differential, Set(dvs))
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
                           [eq.rhs for eq in eqs]
