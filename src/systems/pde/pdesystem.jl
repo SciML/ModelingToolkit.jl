@@ -57,32 +57,37 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     """
     connector_type::Any
     """
+    systems: The internal systems. These are required to have unique names.
+    """
+    systems::Vector
+    """
     name: the name of the system
     """
     name::Symbol
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
-                                   ps=SciMLBase.NullParameters();
-                                   defaults=Dict(),
-                                   connector_type = nothing,
-                                   checks::Bool = true,
-                                   name
-                                  )
+        ps=SciMLBase.NullParameters();
+        defaults=Dict(),
+        systems=[],
+        connector_type=nothing,
+        checks::Bool=true,
+        name
+    )
         if checks
-            all_dimensionless([dvs;ivs;ps]) ||check_units(eqs)
+            all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
         end
         eqs = eqs isa Vector ? eqs : [eqs]
-        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, name)
+        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, name)
     end
 end
 
 function Base.getproperty(x::PDESystem, sym::Symbol)
     if sym == :indvars
         return getfield(x, :ivs)
-        Base.depwarn("`sys.indvars` is deprecated, please use `get_ivs(sys)`", :getproperty,force=true)
+        Base.depwarn("`sys.indvars` is deprecated, please use `get_ivs(sys)`", :getproperty, force=true)
 
     elseif sym == :depvars
         return getfield(x, :dvs)
-        Base.depwarn("`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty,force=true)
+        Base.depwarn("`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty, force=true)
 
     else
         return getfield(x, sym)
@@ -91,13 +96,13 @@ end
 
 Base.summary(prob::PDESystem) = string(nameof(typeof(prob)))
 function Base.show(io::IO, ::MIME"text/plain", sys::PDESystem)
-    println(io,summary(sys))
-    println(io,"Equations: ", get_eqs(sys))
-    println(io,"Boundary Conditions: ", get_bcs(sys))
-    println(io,"Domain: ", get_domain(sys))
-    println(io,"Dependent Variables: ", get_dvs(sys))
-    println(io,"Independent Variables: ", get_ivs(sys))
-    println(io,"Parameters: ", get_ps(sys))
-    print(io,"Default Parameter Values", get_defaults(sys))
+    println(io, summary(sys))
+    println(io, "Equations: ", get_eqs(sys))
+    println(io, "Boundary Conditions: ", get_bcs(sys))
+    println(io, "Domain: ", get_domain(sys))
+    println(io, "Dependent Variables: ", get_dvs(sys))
+    println(io, "Independent Variables: ", get_ivs(sys))
+    println(io, "Parameters: ", get_ps(sys))
+    print(io, "Default Parameter Values", get_defaults(sys))
     return nothing
 end
