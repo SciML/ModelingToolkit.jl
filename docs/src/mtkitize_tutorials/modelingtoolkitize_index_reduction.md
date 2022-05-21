@@ -7,7 +7,7 @@ pendulum which accidentally generates an index-3 DAE, and show how to use the
 
 ## Copy-Pastable Example
 
-```julia
+```@example indexred
 using ModelingToolkit
 using LinearAlgebra
 using OrdinaryDiffEq
@@ -55,7 +55,7 @@ As a good DifferentialEquations.jl user, one would follow
 [the mass matrix DAE tutorial](https://diffeq.sciml.ai/stable/tutorials/advanced_ode_example/#Handling-Mass-Matrices)
 to arrive at code for simulating the model:
 
-```julia
+```@example indexred
 using OrdinaryDiffEq, LinearAlgebra
 function pendulum!(du, u, p, t)
     x, dx, y, dy, T = u
@@ -143,7 +143,7 @@ the numerical code into symbolic code, run `dae_index_lowering` lowering,
 then transform back to numerical code with `ODEProblem`, and solve with a
 numerical solver. Let's try that out:
 
-```julia
+```@example indexred
 traced_sys = modelingtoolkitize(pendulum_prob)
 pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
 prob = ODEProblem(pendulum_sys, Pair[], tspan)
@@ -152,8 +152,6 @@ sol = solve(prob, Rodas4())
 using Plots
 plot(sol, vars=states(traced_sys))
 ```
-
-![](https://user-images.githubusercontent.com/1814174/110587364-9524b400-8141-11eb-91c7-4e56ce4fa20b.png)
 
 Note that plotting using `states(traced_sys)` is done so that any
 variables which are symbolically eliminated, or any variable reorderings
@@ -166,15 +164,13 @@ constructor, we can remove the algebraic equations from the states of the
 system and fully transform the index-3 DAE into an index-0 ODE which can
 be solved via an explicit Runge-Kutta method:
 
-```julia
+```@example indexred
 traced_sys = modelingtoolkitize(pendulum_prob)
 pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
 prob = ODAEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Tsit5(),abstol=1e-8,reltol=1e-8)
 plot(sol, vars=states(traced_sys))
 ```
-
-![](https://user-images.githubusercontent.com/1814174/110587362-9524b400-8141-11eb-8b77-d940f108ae72.png)
 
 And there you go: this has transformed the model from being too hard to
 solve with implicit DAE solvers, to something that is easily solved with

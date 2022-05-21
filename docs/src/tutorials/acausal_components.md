@@ -19,7 +19,7 @@ equalities before solving. Let's see this in action.
 
 ## Copy-Paste Example
 
-```julia
+```@example acausal
 using ModelingToolkit, Plots, DifferentialEquations
 
 @variables t
@@ -104,8 +104,6 @@ sol = solve(prob, Tsit5())
 plot(sol)
 ```
 
-![](https://user-images.githubusercontent.com/1814174/109416294-55184100-798b-11eb-9f05-766a793f0ba2.png)
-
 ## Explanation
 
 ### Building the Component Library
@@ -120,7 +118,7 @@ i.e. that currents sum to zero and voltages across the pins are equal.
 `[connect = Flow]` informs MTK that currents ought to sum to zero, and by
 default, variables are equal in a connection.
 
-```julia
+```@example acausal
 @connector function Pin(;name)
     sts = @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
     ODESystem(Equation[], t, sts, []; name=name)
@@ -135,13 +133,13 @@ this is because later we will generate different `Pin` objects with different
 names to correspond to duplicates of this topology with unique variables.
 One can then construct a `Pin` like:
 
-```julia
+```@example acausal
 Pin(name=:mypin1)
 ```
 
 or equivalently using the `@named` helper macro:
 
-```julia
+```@example acausal
 @named mypin1 = Pin()
 ```
 
@@ -150,7 +148,7 @@ to a constant voltage reservoir, typically taken to be `V=0`. Thus to define
 this component, we generate an `ODESystem` with a `Pin` subcomponent and specify
 that the voltage in such a `Pin` is equal to zero. This gives:
 
-```julia
+```@example acausal
 function Ground(;name)
     @named g = Pin()
     eqs = [g.v ~ 0]
@@ -164,7 +162,7 @@ pin is the voltage of the component, the current between two pins must sum to
 zero, and the current of the component equals to the current of the positive
 pin.
 
-```julia
+```@example acausal
 function OnePort(;name)
     @named p = Pin()
     @named n = Pin()
@@ -185,7 +183,7 @@ of charge we know that the current in must equal the current out, which means
 (no matter the direction of the current flow) the sum of the currents must be
 zero. This leads to our resistor equations:
 
-```julia
+```@example acausal
 function Resistor(;name, R = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
@@ -208,7 +206,7 @@ we can use `@unpack` avoid the namespacing.
 
 Using our knowledge of circuits we similarly construct the `Capacitor`:
 
-```julia
+```@example acausal
 function Capacitor(;name, C = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
@@ -226,7 +224,7 @@ this as similarly being a two pin object, where the object itself is kept at a
 constant voltage, essentially generating the electrical current. We would then
 model this as:
 
-```julia
+```@example acausal
 function ConstantVoltage(;name, V = 1.0)
     @named oneport = OnePort()
     @unpack v = oneport
@@ -244,7 +242,7 @@ Now we are ready to simulate our circuit. Let's build our four components:
 a `resistor`, `capacitor`, `source`, and `ground` term. For simplicity we will
 make all of our parameter values 1. This is done by:
 
-```julia
+```@example acausal
 R = 1.0
 C = 1.0
 V = 1.0
@@ -259,7 +257,7 @@ positive pin of the resistor to the source, the negative pin of the resistor
 to the capacitor, and the negative pin of the capacitor to a junction between
 the source and the ground. This would mean our connection equations are:
 
-```julia
+```@example acausal
 rc_eqs = [
           connect(source.p, resistor.p)
           connect(resistor.n, capacitor.p)
@@ -270,7 +268,7 @@ rc_eqs = [
 
 Finally we build our four component model with these connection rules:
 
-```julia
+```@example acausal
 @named _rc_model = ODESystem(rc_eqs, t)
 @named rc_model = compose(_rc_model,
                           [resistor, capacitor, source, ground])
@@ -282,69 +280,20 @@ simply specified what is true about each of the variables. This forms a system
 of differential-algebraic equations (DAEs) which define the evolution of each
 state of the system. The equations are:
 
-```julia
+```@example acausal
 equations(expand_connections(rc_model))
-
-20-element Vector{Equation}:
- resistor₊v(t) ~ resistor₊p₊v(t) - resistor₊n₊v(t)
- 0 ~ resistor₊n₊i(t) + resistor₊p₊i(t)
- resistor₊i(t) ~ resistor₊p₊i(t)
- resistor₊v(t) ~ resistor₊R*resistor₊i(t)
- capacitor₊v(t) ~ capacitor₊p₊v(t) - capacitor₊n₊v(t)
- 0 ~ capacitor₊n₊i(t) + capacitor₊p₊i(t)
- capacitor₊i(t) ~ capacitor₊p₊i(t)
- Differential(t)(capacitor₊v(t)) ~ capacitor₊i(t) / capacitor₊C
- source₊v(t) ~ source₊p₊v(t) - source₊n₊v(t)
- 0 ~ source₊n₊i(t) + source₊p₊i(t)
- source₊i(t) ~ source₊p₊i(t)
- source₊V ~ source₊v(t)
- ground₊g₊v(t) ~ 0
- source₊p₊v(t) ~ resistor₊p₊v(t)
- 0 ~ resistor₊p₊i(t) + source₊p₊i(t)
- resistor₊n₊v(t) ~ capacitor₊p₊v(t)
- 0 ~ capacitor₊p₊i(t) + resistor₊n₊i(t)
- ground₊g₊v(t) ~ source₊n₊v(t)
- ground₊g₊v(t) ~ capacitor₊n₊v(t)
- 0 ~ capacitor₊n₊i(t) + ground₊g₊i(t) + source₊n₊i(t)
 ```
 
 the states are:
 
-```julia
+```@example acausal
 states(rc_model)
-
-20-element Vector{Any}:
- resistor₊v(t)
- resistor₊i(t)
- resistor₊p₊v(t)
- resistor₊p₊i(t)
- resistor₊n₊v(t)
- resistor₊n₊i(t)
- capacitor₊v(t)
- capacitor₊i(t)
- capacitor₊p₊v(t)
- capacitor₊p₊i(t)
- capacitor₊n₊v(t)
- capacitor₊n₊i(t)
- source₊v(t)
- source₊i(t)
- source₊p₊v(t)
- source₊p₊i(t)
- source₊n₊v(t)
- source₊n₊i(t)
- ground₊g₊v(t)
- ground₊g₊i(t)
 ```
 
 and the parameters are:
 
-```julia
+```@example acausal
 parameters(rc_model)
-
-3-element Vector{Any}:
- resistor₊R
- capacitor₊C
- source₊V
 ```
 
 ## Simplifying and Solving this System
@@ -357,19 +306,13 @@ above system directly, we want to run the `structural_simplify` function first,
 as it eliminates many unnecessary variables to build the leanest numerical
 representation of the system. Let's see what it does here:
 
-```julia
+```@example acausal
 sys = structural_simplify(rc_model)
 equations(sys)
-
-1-element Vector{Equation}:
- Differential(t)(capacitor₊v(t)) ~ capacitor₊i(t) / capacitor₊C
 ```
 
-```julia
+```@example acausal
 states(sys)
-
-1-element Vector{Term{Real, Base.ImmutableDict{DataType, Any}}}:
- capacitor₊v(t)
 ```
 
 After structural simplification we are left with a system of only two equations
@@ -380,7 +323,7 @@ an ODEProblem in mass matrix form and solving it with an [ODEProblem mass matrix
 DAE solver](https://diffeq.sciml.ai/stable/solvers/dae_solve/#OrdinaryDiffEq.jl-(Mass-Matrix)).
 This is done as follows:
 
-```julia
+```@example acausal
 u0 = [
       capacitor.v => 0.0
       capacitor.p.i => 0.0
@@ -390,13 +333,11 @@ sol = solve(prob, Rodas4())
 plot(sol)
 ```
 
-![](https://user-images.githubusercontent.com/1814174/109416295-55184100-798b-11eb-96d1-5bb7e40135ba.png)
-
 Since we have run `structural_simplify`, MTK can numerically solve all the
 unreduced algebraic equations numerically using the `ODAEProblem` (note the
 letter `A`):
 
-```julia
+```@example acausal
 u0 = [
       capacitor.v => 0.0
      ]
@@ -405,8 +346,6 @@ sol = solve(prob, Rodas4())
 plot(sol)
 ```
 
-![](https://user-images.githubusercontent.com/1814174/109416294-55184100-798b-11eb-9f05-766a793f0ba2.png)
-
 Notice that this solves the whole system by only solving for one variable!
 
 However, what if we wanted to plot the timeseries of a different variable? Do
@@ -414,29 +353,8 @@ not worry, that information was not thrown away! Instead, transformations
 like `structural_simplify` simply change state variables into `observed`
 variables. Let's see what our observed variables are:
 
-```julia
+```@example acausal
 observed(sys)
-
-19-element Vector{Equation}:
- ground₊g₊i(t) ~ 0
- resistor₊n₊v(t) ~ capacitor₊v(t)
- capacitor₊p₊v(t) ~ capacitor₊v(t)
- capacitor₊n₊v(t) ~ 0
- source₊n₊v(t) ~ 0
- ground₊g₊v(t) ~ 0
- source₊v(t) ~ source₊V
- resistor₊p₊v(t) ~ source₊v(t)
- source₊p₊v(t) ~ source₊v(t)
- resistor₊v(t) ~ source₊v(t) - capacitor₊v(t)
- capacitor₊i(t) ~ resistor₊v(t) / resistor₊R
- resistor₊i(t) ~ capacitor₊i(t)
- source₊i(t) ~ -capacitor₊i(t)
- resistor₊n₊i(t) ~ -capacitor₊i(t)
- resistor₊p₊i(t) ~ capacitor₊i(t)
- source₊p₊i(t) ~ -capacitor₊i(t)
- source₊n₊i(t) ~ capacitor₊i(t)
- capacitor₊p₊i(t) ~ capacitor₊i(t)
- capacitor₊n₊i(t) ~ -capacitor₊i(t)
 ```
 
 These are explicit algebraic equations which can then be used to reconstruct
@@ -447,12 +365,12 @@ few states as possible is good!
 The solution object can be accessed via its symbols. For example, let's retrieve
 the voltage of the resistor over time:
 
-```julia
+```@example acausal
 sol[resistor.v]
 ```
 
 or we can plot the timeseries of the resistor's voltage:
 
-```julia
+```@example acausal
 plot(sol, vars=[resistor.v])
 ```

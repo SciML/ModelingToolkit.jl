@@ -10,7 +10,7 @@ process.
 First let's start out with an implementation of the 2-dimensional Brusselator
 partial differential equation discretized using finite differences:
 
-```julia
+```@example sparsejac
 using DifferentialEquations, ModelingToolkit
 
 const N = 32
@@ -49,14 +49,14 @@ prob = ODEProblem(brusselator_2d_loop,u0,(0.,11.5),p)
 
 Now let's use `modelingtoolkitize` to generate the symbolic version:
 
-```julia
-sys = modelingtoolkitize(prob_ode_brusselator_2d)
+```@example sparsejac
+sys = modelingtoolkitize(prob)
 ```
 
 Now we regenerate the problem using `jac=true` for the analytical Jacobian
 and `sparse=true` to make it sparse:
 
-```julia
+```@example sparsejac
 sparseprob = ODEProblem(sys,Pair[],(0.,11.5),jac=true,sparse=true)
 ```
 

@@ -740,7 +740,7 @@ end
 function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
     eqs = equations(sys)
     vars = states(sys); nvars = length(vars)
-    if eqs isa AbstractArray
+    if eqs isa AbstractArray && eltype(eqs) <: Equation
         neqs = count(eq->!(eq.lhs isa Connection), eqs)
         Base.printstyled(io, "Model $(nameof(sys)) with $neqs "; bold=true)
         nextras = n_extra_equations(sys)
