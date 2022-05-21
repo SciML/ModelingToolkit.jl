@@ -228,17 +228,44 @@ end
         optext="derivative"
     end
     msg = "The $optext variable must be isolated to the left-hand " *
-    "side of the equation like `$opvar ~ ...`.\n Got $eq."
+    "side of the equation like `$opvar ~ ...`. You may want to use `structural_simplify` or the DAE form.\nGot $eq."
     throw(InvalidSystemException(msg))
 end
 
 "Check if difference/derivative operation occurs in the R.H.S. of an equation"
-function check_operator_variables(eq, op::Type, expr=eq.rhs)
+function _check_operator_variables(eq, op::T, expr=eq.rhs) where T
     istree(expr) || return nothing
     if operation(expr) isa op
         throw_invalid_operator(expr, eq, op)
     end
-    foreach(expr -> check_operator_variables(eq, op, expr), SymbolicUtils.unsorted_arguments(expr))
+    foreach(expr -> _check_operator_variables(eq, op, expr), SymbolicUtils.unsorted_arguments(expr))
+end
+"Check if all the LHS are unique"
+function check_operator_variables(eqs, op::T) where T
+    ops = Set()
+    tmp = Set()
+    for eq in eqs
+        _check_operator_variables(eq, op)
+        vars!(tmp, eq.lhs)
+        if length(tmp) == 1
+            x = only(tmp)
+            if op === Differential
+                # Having a differece is fine for ODEs
+                is_tmp_fine = isdifferential(x) || isdifference(x)
+            else
+                is_tmp_fine = istree(x) && !(operation(x) isa op)
+            end
+        else
+            nd = count(x->istree(x) && !(operation(x) isa op), tmp)
+            is_tmp_fine = iszero(nd)
+        end
+        is_tmp_fine || error("The LHS cannot contain nondifferentiated variables. Please run `structural_simplify` or use the DAE form.\nGot $eq")
+        for v in tmp
+            v in ops && error("The LHS operator must be unique. Please run `structural_simplify` or use the DAE form. $v appears in LHS more than once.")
+            push!(ops, v)
+        end
+        empty!(tmp)
+    end
 end
 
 isoperator(expr, op) = istree(expr) && operation(expr) isa op

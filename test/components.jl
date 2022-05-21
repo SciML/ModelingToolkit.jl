@@ -130,11 +130,10 @@ u0 = [
       inductor2.i => 0.0
       inductor2.v => 0.0
      ]
-prob = ODEProblem(sys, u0, (0, 10.0))
-sol = solve(prob, Rodas4())
-
-prob = ODAEProblem(sys, u0, (0, 10.0))
-sol = solve(prob, Tsit5())
+@test_throws Any ODEProblem(sys, u0, (0, 10.0))
+@test_throws Any ODAEProblem(sys, u0, (0, 10.0))
+prob = DAEProblem(sys, Differential(t).(states(sys)) .=> 0, u0, (0, 0.5))
+@test_nowarn sol = solve(prob, DFBDF())
 
 @variables t x1(t) x2(t) x3(t) x4(t)
 D = Differential(t)

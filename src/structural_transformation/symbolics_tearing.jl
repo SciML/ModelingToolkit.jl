@@ -248,7 +248,7 @@ function tearing(state::TearingState; kwargs...)
     @unpack graph, solvable_graph = state.structure
     algvars = BitSet(findall(v->isalgvar(state.structure, v), 1:ndsts(graph)))
     aeqs = algeqs(state.structure)
-    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(tear_graph_modia(graph, solvable_graph;
+    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(tear_graph_modia(state.structure;
         varfilter=var->var in algvars, eqfilter=eq->eq in aeqs))
     for var in 1:ndsts(graph)
         if isdiffvar(state.structure, var)
@@ -281,4 +281,22 @@ function partial_state_selection(sys; simplify=false)
     var_eq_matching = partial_state_selection_graph!(state)
 
     tearing_reassemble(state, var_eq_matching; simplify=simplify)
+end
+
+"""
+    dummy_derivative(sys)
+
+Perform index reduction and use the dummy derivative techinque to ensure that
+the system is balanced.
+"""
+function dummy_derivative(sys, state=TearingState(sys))
+    function jac(eqs, vars)
+        symeqs = EquationsView(state)[eqs]
+        Symbolics.jacobian((x->x.rhs).(symeqs), state.fullvars[vars])
+    end
+    dds = dummy_derivative_graph!(state, jac)
+    symdds = Symbolics.diff2term.(state.fullvars[dds])
+    subs = Dict(state.fullvars[dd] => symdds[i] for (i, dd) in enumerate(dds))
+    @set! sys.eqs = substitute.(EquationsView(state), (subs,))
+    @set! sys.states = [states(sys); symdds]
 end

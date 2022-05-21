@@ -257,7 +257,7 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = states(sys),
         _jac = :nothing
     end
 
-    jp_expr = sparse ? :(similar($(sys.jac[]),Float64)) : :nothing
+    jp_expr = sparse ? :(similar($(get_jac(sys)[]),Float64)) : :nothing
 
     ex = quote
         f = $f
