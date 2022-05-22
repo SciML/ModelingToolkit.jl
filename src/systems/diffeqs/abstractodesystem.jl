@@ -132,7 +132,6 @@ function generate_split_function(
         kwargs...
     )
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
-    foreach(check_derivative_variables, eqs)
     check_lhs(eqs, Differential, Set(dvs))
     
     rhs = [eq.rhs for eq in eqs]
