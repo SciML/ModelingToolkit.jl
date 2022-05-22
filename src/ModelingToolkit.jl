@@ -8,7 +8,7 @@ using DiffEqBase, SciMLBase, Reexport
 using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using InteractiveUtils
-using Latexify, Unitful, ArrayInterface
+using Latexify, Unitful, ArrayInterfaceCore
 using MacroTools
 @reexport using UnPack
 using Setfield, ConstructionBase
