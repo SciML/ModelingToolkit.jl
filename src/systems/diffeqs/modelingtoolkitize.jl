@@ -13,10 +13,10 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
 
     _vars = define_vars(prob.u0,t)
 
-    vars = prob.u0 isa Number ? _vars : ArrayInterface.restructure(prob.u0,_vars)
+    vars = prob.u0 isa Number ? _vars : ArrayInterfaceCore.restructure(prob.u0,_vars)
     params = if has_p
         _params = define_params(p)
-        p isa Number ? _params[1] : (p isa Tuple || p isa NamedTuple ? _params : ArrayInterface.restructure(p,_params))
+        p isa Number ? _params[1] : (p isa Tuple || p isa NamedTuple ? _params : ArrayInterfaceCore.restructure(p,_params))
     else
         []
     end
@@ -41,7 +41,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     end
 
     if DiffEqBase.isinplace(prob)
-        rhs = ArrayInterface.restructure(prob.u0,similar(vars, Num))
+        rhs = ArrayInterfaceCore.restructure(prob.u0,similar(vars, Num))
         prob.f(rhs, vars, params, t)
     else
         rhs = prob.f(vars, params, t)
@@ -119,10 +119,10 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
 
     _vars = define_vars(prob.u0,t)
 
-    vars = prob.u0 isa Number ? _vars : ArrayInterface.restructure(prob.u0,_vars)
+    vars = prob.u0 isa Number ? _vars : ArrayInterfaceCore.restructure(prob.u0,_vars)
     params = if has_p
         _params = define_params(p)
-        p isa Number ? _params[1] : (p isa Tuple || p isa NamedTuple ? _params : ArrayInterface.restructure(p,_params))
+        p isa Number ? _params[1] : (p isa Tuple || p isa NamedTuple ? _params : ArrayInterfaceCore.restructure(p,_params))
     else
         []
     end

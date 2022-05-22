@@ -244,7 +244,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys), ps = par
     end
 
     M = calculate_massmatrix(sys)
-    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
+    _M = (u0 === nothing || M == I) ? M : ArrayInterfaceCore.restructure(u0 .* u0',M)
 
     sts = states(sys)
     SDEFunction{iip}(f,g,
@@ -309,7 +309,7 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
 
     M = calculate_massmatrix(sys)
 
-    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0',M)
+    _M = (u0 === nothing || M == I) ? M : ArrayInterfaceCore.restructure(u0 .* u0',M)
 
     ex = quote
         f = $f
