@@ -159,7 +159,7 @@ for S in subtypes(ModelingToolkit.AbstractSystem)
 end
 
 export AbstractTimeDependentSystem, AbstractTimeIndependentSystem, AbstractMultivariateSystem
-export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
+export ODESystem, ODEFunction, SplitFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
 export SystemStructure
