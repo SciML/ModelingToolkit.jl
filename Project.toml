@@ -1,11 +1,11 @@
 name = "ModelingToolkit"
 uuid = "961ee093-0014-501f-94e3-6117800e7a78"
 authors = ["Chris Rackauckas <accounts@chrisrackauckas.com>"]
-version = "8.11.1"
+version = "8.11.6"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
-ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
+ArrayInterfaceCore = "30b0a656-2188-435a-8636-2ec0e6a096e2"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
@@ -45,7 +45,7 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
 AbstractTrees = "0.3"
-ArrayInterface = "3.1.39, 4, 5"
+ArrayInterfaceCore = "0.1.1"
 Combinatorics = "1"
 ConstructionBase = "1"
 DataStructures = "0.17, 0.18"

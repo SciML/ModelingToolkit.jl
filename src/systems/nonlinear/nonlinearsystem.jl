@@ -257,7 +257,7 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = states(sys),
         _jac = :nothing
     end
 
-    jp_expr = sparse ? :(similar($(sys.jac[]),Float64)) : :nothing
+    jp_expr = sparse ? :(similar($(get_jac(sys)[]),Float64)) : :nothing
 
     ex = quote
         f = $f
@@ -316,8 +316,8 @@ Generates an NonlinearProblem from a NonlinearSystem and allows for automaticall
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,
-                                    parammap=DiffEqBase.NullParameters();kwargs...) where iip
-    f, u0, p = process_NonlinearProblem(NonlinearFunction{iip}, sys, u0map, parammap; kwargs...)
+                                    parammap=DiffEqBase.NullParameters(); check_length=true, kwargs...) where iip
+    f, u0, p = process_NonlinearProblem(NonlinearFunction{iip}, sys, u0map, parammap; check_length, kwargs...)
     NonlinearProblem{iip}(f,u0,p;kwargs...)
 end
 
@@ -342,10 +342,11 @@ function NonlinearProblemExpr(sys::NonlinearSystem, args...; kwargs...)
 end
 
 function NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,
-                             parammap=DiffEqBase.NullParameters();
+                             parammap=DiffEqBase.NullParameters(); check_length=true,
                              kwargs...) where iip
 
-    f, u0, p = process_NonlinearProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
+    f, u0, p = process_NonlinearProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap;
+                                        check_length, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
 
     ex = quote

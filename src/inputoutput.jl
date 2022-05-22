@@ -210,7 +210,7 @@ function generate_control_function(
     inputs = map(x->time_varying_as_func(value(x), sys), ctrls)
 
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
-    foreach(check_derivative_variables, eqs)
+    check_operator_variables(eqs, Differential)
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
                         [eq.rhs for eq in eqs]
@@ -244,5 +244,5 @@ function toparam(sys, ctrls::AbstractVector)
     eqs = map(eqs) do eq
         substitute(eq.lhs, subs) ~ substitute(eq.rhs, subs)
     end
-    ODESystem(eqs, name=sys.name)
+    ODESystem(eqs, name=nameof(sys))
 end

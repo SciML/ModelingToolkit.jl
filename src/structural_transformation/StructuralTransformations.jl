@@ -27,7 +27,7 @@ using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview
 using Graphs
 using ModelingToolkit.SystemStructures
-using ModelingToolkit.SystemStructures: algeqs
+using ModelingToolkit.SystemStructures: algeqs, EquationsView
 
 using ModelingToolkit.DiffEqBase
 using ModelingToolkit.StaticArrays
@@ -40,6 +40,7 @@ using SparseArrays
 using NonlinearSolve
 
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
+export dummy_derivative
 export build_torn_function, build_observed_function, ODAEProblem
 export sorted_incidence_matrix, pantelides!, tearing_reassemble, find_solvables!
 export tearing_assignments, tearing_substitution

@@ -8,7 +8,7 @@ using DiffEqBase, SciMLBase, Reexport
 using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using InteractiveUtils
-using Latexify, Unitful, ArrayInterface
+using Latexify, Unitful, ArrayInterfaceCore
 using MacroTools
 @reexport using UnPack
 using Setfield, ConstructionBase
@@ -175,7 +175,7 @@ export ControlSystem
 export alias_elimination, flatten
 export connect, @connector, Connection, Flow, Stream, instream
 export isinput, isoutput, getbounds, hasbounds, isdisturbance, istunable, getdist, hasdist, tunable_parameters
-export ode_order_lowering, liouville_transform
+export ode_order_lowering, dae_order_lowering, liouville_transform
 export runge_kutta_discretize
 export PDESystem
 export Differential, expand_derivatives, @derivatives

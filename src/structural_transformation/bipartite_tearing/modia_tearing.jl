@@ -1,17 +1,5 @@
-# This code is from the Modia project and is licensed as follows:
+# This code is derived from the Modia project and is licensed as follows:
 # https://github.com/ModiaSim/Modia.jl/blob/b61daad643ef7edd0c1ccce6bf462c6acfb4ad1a/LICENSE
-
-################################################
-#
-# Functions to tear systems of equations
-#
-# Author: Martin Otter, DLR-SR (first version: Jan. 14, 2017)
-#
-# Details are described in the paper:
-#   Otter, Elmqvist (2017): Transformation of Differential Algebraic Array Equations to
-#                           Index One Form. Modelica'2017 Conference.
-#
-################################################
 
 function try_assign_eq!(ict::IncrementalCycleTracker, vj::Integer, eq::Integer)
     G = ict.graph
@@ -21,19 +9,6 @@ function try_assign_eq!(ict::IncrementalCycleTracker, vj::Integer, eq::Integer)
     end
 end
 
-"""
-    (eSolved, vSolved, eResidue, vTear) = tearEquations!(td, Gsolvable, es, vs)
-
-Equations es shall be solved with respect to variables vs. The function returns
-the teared equation so that if vTear is given, vSolved can be computed from eSolved
-in a forward sequence (so solving eSolved[1] for vSolved[1], eSolved[2] for vSolved[2],
-and so on). vTear must be selected, so that the equations eResidues are fulfilled.
-Equations es are the union of eSolved and eResidue.
-Variables vs are the union of vSolved and vTear.
-
-Gsolvable defines the variables that can be explicitly solved in every equation without influencing the solution space
-(= rank preserving operation).
-"""
 function tearEquations!(ict::IncrementalCycleTracker, Gsolvable, es::Vector{Int}, vs::Vector{Int})
     G = ict.graph
     vActive = BitSet(vs)
@@ -59,13 +34,8 @@ function tear_graph_block_modia!(var_eq_matching, graph, solvable_graph, eqs, va
     return nothing
 end
 
-"""
-    tear_graph_modia(sys) -> sys
-
-Tear the bipartite graph in a system. End users are encouraged to call [`structural_simplify`](@ref)
-instead, which calls this function internally.
-"""
-function tear_graph_modia(graph::BipartiteGraph, solvable_graph::BipartiteGraph; varfilter=v->true, eqfilter=eq->true)
+function tear_graph_modia(structure::SystemStructure; varfilter=v->true, eqfilter=eq->true)
+    @unpack graph, solvable_graph = structure
     var_eq_matching = complete(maximal_matching(graph, eqfilter, varfilter))
     var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, var_eq_matching)
 

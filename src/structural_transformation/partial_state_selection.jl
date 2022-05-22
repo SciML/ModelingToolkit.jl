@@ -139,3 +139,98 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
 
     var_eq_matching
 end
+
+function dummy_derivative_graph!(state::TransformationState, jac=nothing)
+    var_eq_matching = complete(pantelides!(state))
+    complete!(state.structure)
+    dummy_derivative_graph!(state.structure, var_eq_matching, jac)
+end
+
+function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac)
+    @unpack eq_to_diff, var_to_diff, graph = structure
+    diff_to_eq = invview(eq_to_diff)
+    diff_to_var = invview(var_to_diff)
+    invgraph = invview(graph)
+
+    neqs = nsrcs(graph)
+    eqlevel = zeros(Int, neqs)
+    maxlevel = 0
+    for i in 1:neqs
+        level = 0
+        eq = i
+        while diff_to_eq[eq] !== nothing
+            eq = diff_to_eq[eq]
+            level += 1
+        end
+        maxlevel = max(maxlevel, level)
+        eqlevel[i] = level
+    end
+
+    nvars = ndsts(graph)
+    varlevel = zeros(Int, nvars)
+    for i in 1:nvars
+        level = 0
+        var = i
+        while diff_to_var[var] !== nothing
+            var = diff_to_var[var]
+            level += 1
+        end
+        maxlevel = max(maxlevel, level)
+        varlevel[i] = level
+    end
+
+    var_sccs = find_var_sccs(graph, var_eq_matching)
+    eqcolor = falses(neqs)
+    dummy_derivatives = Int[]
+    col_order = Int[]
+    for vars in var_sccs
+        eqs = [var_eq_matching[var] for var in vars if var_eq_matching[var] !== unassigned]
+        isempty(eqs) && continue
+        maxlevel = maximum(map(x->eqlevel[x], eqs))
+        iszero(maxlevel) && continue
+
+        rank_matching = Matching(nvars)
+        for level in maxlevel:-1:1
+            eqs = filter(eq->diff_to_eq[eq] !== nothing, eqs)
+            nrows = length(eqs)
+            iszero(nrows) && break
+            eqs_set = BitSet(eqs)
+
+            # TODO: making the algorithm more robust
+            # 1. If the Jacobian is a integer matrix, use Bareiss to check
+            # linear independence. (done)
+            #
+            # 2. If the Jacobian is a single row, generate pivots. (Dynamic
+            # state selection.)
+            #
+            # 3. If the Jacobian is a polynomial matrix, use Gröbner basis (?)
+            if jac !== nothing && (_J = jac(eqs, vars); all(x->unwrap(x) isa Integer, _J))
+                J = Int.(unwrap.(_J))
+                N = ModelingToolkit.nullspace(J; col_order) # modifies col_order
+                rank = length(col_order)-size(N, 2)
+                for i in 1:rank
+                    push!(dummy_derivatives, vars[col_order[i]])
+                end
+            else
+                rank = 0
+                for var in vars
+                    pathfound = construct_augmenting_path!(rank_matching, invgraph, var, eq->eq in eqs_set, eqcolor)
+                    pathfound || continue
+                    push!(dummy_derivatives, var)
+                    rank += 1
+                    rank == nrows && break
+                end
+                fill!(rank_matching, unassigned)
+            end
+            if rank != nrows
+                @warn "The DAE system is structurally singular!"
+            end
+
+            # prepare the next iteration
+            eqs = map(eq->diff_to_eq[eq], eqs)
+            vars = [diff_to_var[var] for var in vars if diff_to_var[var] !== nothing]
+        end
+    end
+
+    dummy_derivatives
+end

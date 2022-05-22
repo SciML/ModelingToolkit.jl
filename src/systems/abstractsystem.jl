@@ -737,10 +737,10 @@ function n_extra_equations(sys::AbstractSystem)
     nextras = n_outer_stream_variables + length(ceqs)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
+function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
     eqs = equations(sys)
     vars = states(sys); nvars = length(vars)
-    if eqs isa AbstractArray
+    if eqs isa AbstractArray && eltype(eqs) <: Equation
         neqs = count(eq->!(eq.lhs isa Connection), eqs)
         Base.printstyled(io, "Model $(nameof(sys)) with $neqs "; bold=true)
         nextras = n_extra_equations(sys)
@@ -806,7 +806,7 @@ function Base.show(io::IO, ::MIME"text/plain", sys::AbstractSystem)
         state = get_tearing_state(sys)
         if state !== nothing
             Base.printstyled(io, "\nIncidence matrix:"; color=:magenta)
-            show(io, incidence_matrix(state.structure.graph, Num(Sym{Real}(:×))))
+            show(io, mime, incidence_matrix(state.structure.graph, Num(Sym{Real}(:×))))
         end
     end
     return nothing
@@ -973,7 +973,7 @@ function structural_simplify(sys::AbstractSystem; simplify=false, kwargs...)
     state = TearingState(sys)
     check_consistency(state)
     if sys isa ODESystem
-        sys = dae_index_lowering(ode_order_lowering(sys))
+        sys = dae_order_lowering(dummy_derivative(sys, state))
     end
     state = TearingState(sys)
     find_solvables!(state; kwargs...)
