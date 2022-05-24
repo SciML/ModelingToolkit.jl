@@ -410,7 +410,7 @@ function renamespace(sys, x)
     x = unwrap(x)
     if x isa Symbolic
         if isdifferential(x)
-            return similarterm(x, operation(x), [renamespace(sys, only(arguments(x)))])
+            return similarterm(x, operation(x), Any[renamespace(sys, only(arguments(x)))])
         end
         let scope = getmetadata(x, SymScope, LocalScope())
             if scope isa LocalScope
