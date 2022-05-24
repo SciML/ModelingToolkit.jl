@@ -18,7 +18,7 @@ function calculate_tgrad(sys::AbstractODESystem;
 end
 
 function calculate_jacobian(sys::AbstractODESystem;
-                            sparse=false, split=false, simplify=false, dvs=states(sys))
+                            sparse=false, simplify=false, dvs=states(sys))
 
     if isequal(dvs, states(sys))
         cache = get_jac(sys)[]
@@ -31,25 +31,10 @@ function calculate_jacobian(sys::AbstractODESystem;
 
     iv = get_iv(sys)
 
-    if split
-        rhs_sp = [eq.rhs for eq ∈ full_equations(sys)]
-        A, f_n = semilinear_form(rhs_sp, dvs)
-    end
-
     if sparse
-        if split
-            jac_f = sparsejacobian(f_n, dvs, simplify=simplify)
-            jac = A + jac_f
-        else
-            jac = sparsejacobian(rhs, dvs, simplify=simplify)
-        end
+        jac = sparsejacobian(rhs, dvs, simplify=simplify)
     else
-        if split
-            jac_f = jacobian(f_n, dvs, simplify=simplify)
-            jac = A + jac_f
-        else
-            jac = jacobian(rhs, dvs, simplify=simplify)
-        end
+        jac = jacobian(rhs, dvs, simplify=simplify)
     end
 
     if isequal(dvs, states(sys))
@@ -88,8 +73,8 @@ function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = paramete
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
-                           simplify=false, sparse = false, split=false, kwargs...)
-    jac = calculate_jacobian(sys;simplify=simplify,sparse=sparse, split=false)
+                           simplify=false, sparse = false, kwargs...)
+    jac = calculate_jacobian(sys;simplify=simplify,sparse=sparse)
     return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
@@ -108,6 +93,26 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = p
     jac = ˍ₋gamma*jac_du + jac_u
     return build_function(jac, derivatives, dvs, ps, ˍ₋gamma, get_iv(sys); kwargs...)
 
+end
+
+function generate_split_jacobian(sys::AbstractODESystem, A, f_n, dvs = states(sys), ps = parameters(sys);
+    simplify=false, sparse = false, kwargs...)
+    if isequal(dvs, states(sys))
+        cache = get_jac(sys)[]
+        if cache isa Tuple && cache[2] == (sparse, simplify)
+            return cache[1]
+        end
+    end
+    if sparse
+        jac_fn = sparsejacobian(f_n, dvs, simplify=simplify)
+    else
+        jac_fn = jacobian(f_n, dvs, simplify=simplify)
+    end
+    jac = A + jac_fn
+    if isequal(dvs, states(sys))
+        get_jac(sys)[] = jac, (sparse, simplify) # cache Jacobian
+    end
+    return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
 function generate_function(
@@ -142,20 +147,14 @@ function generate_function(
 end
 
 function generate_split_function(
-        sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
+        sys::AbstractODESystem, A, f_n, dvs = states(sys), ps = parameters(sys);
         has_difference = false,
         kwargs...
     )
-    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
-    check_lhs(eqs, Differential, Set(dvs))
-    
-    rhs = [eq.rhs for eq in eqs]
-
     u = map(x->time_varying_as_func(value(x), sys), dvs)
     p = map(x->time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
-    A, f_n = semilinear_form(rhs, dvs)
     A = DiffEqArrayOperator(A)
 
     pre, sol_states = get_substitutions_and_solved_states(sys, no_postprocess = has_difference)
@@ -572,13 +571,17 @@ function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                       checkbounds = false,
                                       sparsity = false,
                                       kwargs...) where {iip}
-    A, f_gen = generate_split_function(sys, dvs, ps; expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
-    f_oop, f_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen) : f_gen
-    f(u,p,t) = f_oop(u,p,t)
-    f(du,u,p,t) = f_iip(du,u,p,t)
-    A_oop, A_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in A) : A
-    A(u,p,t) = A_oop(u,p,t)
-    A(du,u,p,t) = A_iip(du,u,p,t)
+    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
+    rhs = [eq.rhs for eq in eqs]
+    A, f_n = semilinear_form(rhs, dvs)
+    # f1 and f2 are generated from the linear and non-linear splits of the operator respectively
+    f1_gen, f2_gen = generate_split_function(sys, A, f_n, dvs, ps; expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
+    f1_oop, f1_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in f1_gen) : f1_gen
+    f1(u,p,t) = f1_oop(u,p,t)
+    f1(du,u,p,t) = f1_iip(du,u,p,t)
+    f2_oop, f2_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in f2_gen) : f2_gen
+    f2(u,p,t) = f2_oop(u,p,t)
+    f2(du,u,p,t) = f2_iip(du,u,p,t)
 
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps;
@@ -593,8 +596,8 @@ function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     if jac
-        jac_gen = generate_jacobian(sys, dvs, ps;
-                                    simplify=simplify, sparse = sparse, split=true,
+        jac_gen = generate_split_jacobian(sys, A, f_n, dvs, ps;
+                                    simplify=simplify, sparse = sparse,
                                     expression=Val{eval_expression}, expression_module=eval_module,
                                     checkbounds=checkbounds, kwargs...)
         jac_oop, jac_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in jac_gen) : jac_gen
@@ -647,8 +650,8 @@ function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         nothing
     end
 
-    SplitFunction{iip}( A,
-                        f,
+    SplitFunction{iip}( f1,
+                        f2,
                         jac = _jac === nothing ? nothing : _jac,
                         tgrad = _tgrad === nothing ? nothing : _tgrad,
                         mass_matrix = _M,
