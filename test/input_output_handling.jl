@@ -161,3 +161,9 @@ p = ModelingToolkit.varmap_to_vars(ModelingToolkit.defaults(model), ps)
 x = ModelingToolkit.varmap_to_vars(ModelingToolkit.defaults(model), dvs)
 u = [rand()]
 @test f[1](x, u, p, 1) == [u; 0; 0; 0]
+
+@parameters t
+@variables x(t) u(t) [input=true]
+eqs = [Differential(t)(x) ~ u]
+@named sys = ODESystem(eqs, t)
+structural_simplify(sys)
