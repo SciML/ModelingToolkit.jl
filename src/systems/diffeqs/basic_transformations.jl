@@ -46,11 +46,11 @@ Abhishek Halder, Kooktae Lee, and Raktim Bhattacharya
 https://abhishekhalder.bitbucket.io/F16ACC2013Final.pdf
 """
 function liouville_transform(sys::AbstractODESystem)
-      t = get_iv(sys)
-      @variables trJ
-      D = ModelingToolkit.Differential(t)
-      neweq = D(trJ) ~ trJ*-tr(calculate_jacobian(sys))
-      neweqs = [equations(sys);neweq]
-      vars = [states(sys);trJ]
-      ODESystem(neweqs,t,vars,parameters(sys),checks=false)
+    t = get_iv(sys)
+    @variables trJ
+    D = ModelingToolkit.Differential(t)
+    neweq = D(trJ) ~ trJ * -tr(calculate_jacobian(sys))
+    neweqs = [equations(sys); neweq]
+    vars = [states(sys); trJ]
+    ODESystem(neweqs, t, vars, parameters(sys), checks = false)
 end

@@ -1,5 +1,5 @@
-Base.:*(x::Union{Num,Symbolic},y::Unitful.AbstractQuantity) = x * y
-Base.:/(x::Union{Num,Symbolic},y::Unitful.AbstractQuantity) = x / y
+Base.:*(x::Union{Num, Symbolic}, y::Unitful.AbstractQuantity) = x * y
+Base.:/(x::Union{Num, Symbolic}, y::Unitful.AbstractQuantity) = x / y
 
 struct ValidationError <: Exception
     message::String
@@ -7,9 +7,12 @@ end
 
 "Throw exception on invalid unit types, otherwise return argument."
 function screen_unit(result)
-    result isa Unitful.Unitlike || throw(ValidationError("Unit must be a subtype of Unitful.Unitlike, not $(typeof(result))."))
-    result isa Unitful.ScalarUnits || throw(ValidationError("Non-scalar units such as $result are not supported. Use a scalar unit instead."))
-    result == u"°" && throw(ValidationError("Degrees are not supported. Use radians instead."))
+    result isa Unitful.Unitlike ||
+        throw(ValidationError("Unit must be a subtype of Unitful.Unitlike, not $(typeof(result))."))
+    result isa Unitful.ScalarUnits ||
+        throw(ValidationError("Non-scalar units such as $result are not supported. Use a scalar unit instead."))
+    result == u"°" &&
+        throw(ValidationError("Degrees are not supported. Use radians instead."))
     result
 end
 
@@ -25,26 +28,26 @@ MT = ModelingToolkit
 @test MT.equivalent(MT.get_unit(P^γ), MT.get_unit((E/τ)^γ)) # Handles symbolic exponents
 ```
 """
-equivalent(x,y) = isequal(1*x,1*y)
+equivalent(x, y) = isequal(1 * x, 1 * y)
 unitless = Unitful.unit(1)
 
 #For dispatching get_unit
-Literal = Union{Sym,Symbolics.ArrayOp,Symbolics.Arr,Symbolics.CallWithMetadata}
-Conditional = Union{typeof(ifelse),typeof(IfElse.ifelse)}
+Literal = Union{Sym, Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithMetadata}
+Conditional = Union{typeof(ifelse), typeof(IfElse.ifelse)}
 Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
 
 "Find the unit of a symbolic item."
 get_unit(x::Real) = unitless
 get_unit(x::Unitful.Quantity) = screen_unit(Unitful.unit(x))
-get_unit(x::AbstractArray) = map(get_unit,x)
+get_unit(x::AbstractArray) = map(get_unit, x)
 get_unit(x::Num) = get_unit(value(x))
-get_unit(x::Literal) = screen_unit(getmetadata(x,VariableUnit, unitless))
+get_unit(x::Literal) = screen_unit(getmetadata(x, VariableUnit, unitless))
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
-get_unit(op::Difference, args) =   get_unit(args[1]) / get_unit(op.t)
-get_unit(op::typeof(getindex),args) = get_unit(args[1])
+get_unit(op::Difference, args) = get_unit(args[1]) / get_unit(op.t)
+get_unit(op::typeof(getindex), args) = get_unit(args[1])
 get_unit(x::SciMLBase.NullParameters) = unitless
 
-function get_unit(op,args) # Fallback
+function get_unit(op, args) # Fallback
     result = op(1 .* get_unit.(args)...)
     try
         unit(result)
@@ -53,7 +56,7 @@ function get_unit(op,args) # Fallback
     end
 end
 
-function get_unit(op::Integral,args)
+function get_unit(op::Integral, args)
     unit = 1
     if op.domain.variables isa Vector
         for u in op.domain.variables
@@ -67,12 +70,12 @@ end
 
 function get_unit(x::Pow)
     pargs = arguments(x)
-    base,expon = get_unit.(pargs)
+    base, expon = get_unit.(pargs)
     @assert expon isa Unitful.DimensionlessUnits
     if base == unitless
         unitless
     else
-        pargs[2] isa Number ? base^pargs[2] : (1*base)^pargs[2]
+        pargs[2] isa Number ? base^pargs[2] : (1 * base)^pargs[2]
     end
 end
 
@@ -81,19 +84,22 @@ function get_unit(x::Add)
     firstunit = terms[1]
     for other in terms[2:end]
         termlist = join(map(repr, terms), ", ")
-        equivalent(other, firstunit) || throw(ValidationError(", in sum $x, units [$termlist] do not match."))
+        equivalent(other, firstunit) ||
+            throw(ValidationError(", in sum $x, units [$termlist] do not match."))
     end
     return firstunit
 end
 
 function get_unit(op::Conditional, args)
     terms = get_unit.(args)
-    terms[1] == unitless || throw(ValidationError(", in $x, [$(terms[1])] is not dimensionless."))
-    equivalent(terms[2], terms[3]) || throw(ValidationError(", in $x, units [$(terms[2])] and [$(terms[3])] do not match."))
+    terms[1] == unitless ||
+        throw(ValidationError(", in $x, [$(terms[1])] is not dimensionless."))
+    equivalent(terms[2], terms[3]) ||
+        throw(ValidationError(", in $x, units [$(terms[2])] and [$(terms[3])] do not match."))
     return terms[2]
 end
 
-function get_unit(op::typeof(Symbolics._mapreduce),args)
+function get_unit(op::typeof(Symbolics._mapreduce), args)
     if args[2] == +
         get_unit(args[3])
     else
@@ -103,7 +109,8 @@ end
 
 function get_unit(op::Comparison, args)
     terms = get_unit.(args)
-    equivalent(terms[1], terms[2]) || throw(ValidationError(", in comparison $op, units [$(terms[1])] and [$(terms[2])] do not match."))
+    equivalent(terms[1], terms[2]) ||
+        throw(ValidationError(", in comparison $op, units [$(terms[1])] and [$(terms[2])] do not match."))
     return unitless
 end
 
@@ -113,7 +120,7 @@ function get_unit(x::Symbolic)
         if op isa Sym || (op isa Term && operation(op) isa Term) # Dependent variables, not function calls
             return screen_unit(getmetadata(x, VariableUnit, unitless)) # Like x(t) or x[i]
         elseif op isa Term && !(operation(op) isa Term)
-            gp = getmetadata(x,Symbolics.GetindexParent,nothing) # Like x[1](t)
+            gp = getmetadata(x, Symbolics.GetindexParent, nothing) # Like x[1](t)
             return screen_unit(getmetadata(gp, VariableUnit, unitless))
         end  # Actual function calls:
         args = arguments(x)
@@ -146,11 +153,11 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
     valid = true
     first_unit = nothing
     first_label = nothing
-    for (term,label) in zip(terms,labels)
-        equnit = safe_get_unit(term, info*label)
+    for (term, label) in zip(terms, labels)
+        equnit = safe_get_unit(term, info * label)
         if equnit === nothing
             valid = false
-        elseif !isequal(term,0)
+        elseif !isequal(term, 0)
             if first_unit === nothing
                 first_unit = equnit
                 first_label = label
@@ -163,20 +170,23 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
     valid
 end
 
-function validate(jump::Union{ModelingToolkit.VariableRateJump, ModelingToolkit.ConstantRateJump}, t::Symbolic; info::String = "")
-    newinfo = replace(info,"eq."=>"jump")
-    _validate([jump.rate, 1/t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units
-    validate(jump.affect!,info = newinfo)
+function validate(jump::Union{ModelingToolkit.VariableRateJump,
+                              ModelingToolkit.ConstantRateJump}, t::Symbolic;
+                  info::String = "")
+    newinfo = replace(info, "eq." => "jump")
+    _validate([jump.rate, 1 / t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units
+        validate(jump.affect!, info = newinfo)
 end
 
 function validate(jump::ModelingToolkit.MassActionJump, t::Symbolic; info::String = "")
     left_symbols = [x[1] for x in jump.reactant_stoch] #vector of pairs of symbol,int -> vector symbols
     net_symbols = [x[1] for x in jump.net_stoch]
-    all_symbols = vcat(left_symbols,net_symbols)
+    all_symbols = vcat(left_symbols, net_symbols)
     allgood = _validate(all_symbols, string.(all_symbols); info)
-    n = sum(x->x[2],jump.reactant_stoch,init = 0)
+    n = sum(x -> x[2], jump.reactant_stoch, init = 0)
     base_unitful = all_symbols[1] #all same, get first
-    allgood && _validate([jump.scaled_rates, 1/(t*base_unitful^n)], ["scaled_rates", "1/(t*reactants^$n))"]; info)
+    allgood && _validate([jump.scaled_rates, 1 / (t * base_unitful^n)],
+              ["scaled_rates", "1/(t*reactants^$n))"]; info)
 end
 
 function validate(jumps::ArrayPartition{<:Union{Any, Vector{<:JumpType}}}, t::Symbolic)
@@ -184,17 +194,38 @@ function validate(jumps::ArrayPartition{<:Union{Any, Vector{<:JumpType}}}, t::Sy
     all([validate(jumps.x[idx], t, info = labels[idx]) for idx in 1:3])
 end
 
-validate(eq::ModelingToolkit.Equation; info::String = "") = _validate([eq.lhs, eq.rhs], ["left", "right"]; info)
-validate(eq::ModelingToolkit.Equation, term::Union{Symbolic,Unitful.Quantity,Num}; info::String = "") = _validate([eq.lhs, eq.rhs, term], ["left","right","noise"]; info)
-validate(eq::ModelingToolkit.Equation, terms::Vector; info::String = "") = _validate(vcat([eq.lhs, eq.rhs], terms), vcat(["left", "right"], "noise  #".*string.(1:length(terms))); info)
+function validate(eq::ModelingToolkit.Equation; info::String = "")
+    _validate([eq.lhs, eq.rhs], ["left", "right"]; info)
+end
+function validate(eq::ModelingToolkit.Equation,
+                  term::Union{Symbolic, Unitful.Quantity, Num}; info::String = "")
+    _validate([eq.lhs, eq.rhs, term], ["left", "right", "noise"]; info)
+end
+function validate(eq::ModelingToolkit.Equation, terms::Vector; info::String = "")
+    _validate(vcat([eq.lhs, eq.rhs], terms),
+              vcat(["left", "right"], "noise  #" .* string.(1:length(terms))); info)
+end
 
 "Returns true iff units of equations are valid."
-validate(eqs::Vector; info::String = "") = all([validate(eqs[idx], info = info*" in eq. #$idx") for idx in 1:length(eqs)])
-validate(eqs::Vector, noise::Vector; info::String = "") = all([validate(eqs[idx], noise[idx], info = info*" in eq. #$idx") for idx in 1:length(eqs)])
-validate(eqs::Vector, noise::Matrix; info::String = "") = all([validate(eqs[idx], noise[idx, :], info = info*" in eq. #$idx") for idx in 1:length(eqs)])
-validate(eqs::Vector, term::Symbolic; info::String = "") = all([validate(eqs[idx], term, info = info*" in eq. #$idx") for idx in 1:length(eqs)])
-validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term,"") !== nothing
+function validate(eqs::Vector; info::String = "")
+    all([validate(eqs[idx], info = info * " in eq. #$idx") for idx in 1:length(eqs)])
+end
+function validate(eqs::Vector, noise::Vector; info::String = "")
+    all([validate(eqs[idx], noise[idx], info = info * " in eq. #$idx")
+         for idx in 1:length(eqs)])
+end
+function validate(eqs::Vector, noise::Matrix; info::String = "")
+    all([validate(eqs[idx], noise[idx, :], info = info * " in eq. #$idx")
+         for idx in 1:length(eqs)])
+end
+function validate(eqs::Vector, term::Symbolic; info::String = "")
+    all([validate(eqs[idx], term, info = info * " in eq. #$idx") for idx in 1:length(eqs)])
+end
+validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term, "") !== nothing
 
 "Throws error if units of equations are invalid."
-check_units(eqs...) = validate(eqs...) || throw(ValidationError("Some equations had invalid units. See warnings for details."))
-all_dimensionless(states) = all(x->safe_get_unit(x,"") in (unitless,nothing),states)
+function check_units(eqs...)
+    validate(eqs...) ||
+        throw(ValidationError("Some equations had invalid units. See warnings for details."))
+end
+all_dimensionless(states) = all(x -> safe_get_unit(x, "") in (unitless, nothing), states)

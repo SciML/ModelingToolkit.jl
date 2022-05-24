@@ -6,9 +6,10 @@ using SymbolicUtils: istree, operation, arguments, Symbolic
 using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
-    value, InvalidSystemException, isdifferential, _iszero, isparameter,
-    independent_variables, isinput, SparseMatrixCLIL, AbstractSystem,
-    equations
+                          value, InvalidSystemException, isdifferential, _iszero,
+                          isparameter,
+                          independent_variables, isinput, SparseMatrixCLIL, AbstractSystem,
+                          equations
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -16,13 +17,13 @@ using UnPack
 using Setfield
 using SparseArrays
 
-quick_cancel_expr(expr) = Rewriters.Postwalk(
-    quick_cancel,
-    similarterm=(x, f, args; kws...) -> similarterm(
-        x, f, args, SymbolicUtils.symtype(x);
-        metadata=SymbolicUtils.metadata(x), kws...
-    )
-)(expr)
+function quick_cancel_expr(expr)
+    Rewriters.Postwalk(quick_cancel,
+                       similarterm = (x, f, args; kws...) -> similarterm(x, f, args,
+                                                                         SymbolicUtils.symtype(x);
+                                                                         metadata = SymbolicUtils.metadata(x),
+                                                                         kws...))(expr)
+end
 
 #=
 When we don't do subsitution, variable information is split into two different
@@ -63,18 +64,23 @@ struct DiffGraph <: Graphs.AbstractGraph{Int}
     primal_to_diff::Vector{Union{Int, Nothing}}
     diff_to_primal::Union{Nothing, Vector{Union{Int, Nothing}}}
 end
-DiffGraph(primal_to_diff::Vector{Union{Int, Nothing}}) =
-    DiffGraph(primal_to_diff, nothing)
-DiffGraph(n::Integer, with_badj::Bool=false) = DiffGraph(Union{Int, Nothing}[nothing for _=1:n],
-    with_badj ? Union{Int, Nothing}[nothing for _=1:n] : nothing)
+DiffGraph(primal_to_diff::Vector{Union{Int, Nothing}}) = DiffGraph(primal_to_diff, nothing)
+function DiffGraph(n::Integer, with_badj::Bool = false)
+    DiffGraph(Union{Int, Nothing}[nothing for _ in 1:n],
+              with_badj ? Union{Int, Nothing}[nothing for _ in 1:n] : nothing)
+end
 
-@noinline require_complete(dg::DiffGraph) = dg.diff_to_primal === nothing &&
-    error("Not complete. Run `complete` first.")
+@noinline function require_complete(dg::DiffGraph)
+    dg.diff_to_primal === nothing &&
+        error("Not complete. Run `complete` first.")
+end
 
 Graphs.is_directed(dg::DiffGraph) = true
-Graphs.edges(dg::DiffGraph) = (i => v for (i, v) in enumerate(dg.primal_to_diff) if v !== nothing)
+function Graphs.edges(dg::DiffGraph)
+    (i => v for (i, v) in enumerate(dg.primal_to_diff) if v !== nothing)
+end
 Graphs.nv(dg::DiffGraph) = length(dg.primal_to_diff)
-Graphs.ne(dg::DiffGraph) = count(x->x !== nothing, dg.primal_to_diff)
+Graphs.ne(dg::DiffGraph) = count(x -> x !== nothing, dg.primal_to_diff)
 Graphs.vertices(dg::DiffGraph) = Base.OneTo(nv(dg))
 function Graphs.outneighbors(dg::DiffGraph, var::Integer)
     diff = dg.primal_to_diff[var]
@@ -124,7 +130,7 @@ Base.iterate(dg::DiffGraph, state...) = iterate(dg.primal_to_diff, state...)
 
 function complete(dg::DiffGraph)
     dg.diff_to_primal !== nothing && return dg
-    diff_to_primal = Union{Int, Nothing}[nothing for _ = 1:length(dg.primal_to_diff)]
+    diff_to_primal = Union{Int, Nothing}[nothing for _ in 1:length(dg.primal_to_diff)]
     for (var, diff) in edges(dg)
         diff_to_primal[diff] = var
     end
@@ -136,8 +142,8 @@ function invview(dg::DiffGraph)
     return DiffGraph(dg.diff_to_primal, dg.primal_to_diff)
 end
 
-abstract type TransformationState{T}; end
-abstract type AbstractTearingState{T} <: TransformationState{T}; end
+abstract type TransformationState{T} end
+abstract type AbstractTearingState{T} <: TransformationState{T} end
 
 Base.@kwdef mutable struct SystemStructure
     # Maps the (index of) a variable to the (index of) the variable describing
@@ -147,22 +153,34 @@ Base.@kwdef mutable struct SystemStructure
     # Can be access as
     # `graph` to automatically look at the bipartite graph
     # or as `torn` to assert that tearing has run.
-    graph::BipartiteGraph{Int,Nothing}
-    solvable_graph::Union{BipartiteGraph{Int,Nothing}, Nothing}
+    graph::BipartiteGraph{Int, Nothing}
+    solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
 end
-isdervar(s::SystemStructure, i) = s.var_to_diff[i] === nothing &&
-    invview(s.var_to_diff)[i] !== nothing
-isalgvar(s::SystemStructure, i) = s.var_to_diff[i] === nothing &&
-    invview(s.var_to_diff)[i] === nothing
+function isdervar(s::SystemStructure, i)
+    s.var_to_diff[i] === nothing &&
+        invview(s.var_to_diff)[i] !== nothing
+end
+function isalgvar(s::SystemStructure, i)
+    s.var_to_diff[i] === nothing &&
+        invview(s.var_to_diff)[i] === nothing
+end
 isdiffvar(s::SystemStructure, i) = s.var_to_diff[i] !== nothing
 
-dervars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isdervar, s), Base.OneTo(ndsts(s.graph)))
-diffvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isdiffvar, s), Base.OneTo(ndsts(s.graph)))
-algvars_range(s::SystemStructure) = Iterators.filter(Base.Fix1(isalgvar, s), Base.OneTo(ndsts(s.graph)))
+function dervars_range(s::SystemStructure)
+    Iterators.filter(Base.Fix1(isdervar, s), Base.OneTo(ndsts(s.graph)))
+end
+function diffvars_range(s::SystemStructure)
+    Iterators.filter(Base.Fix1(isdiffvar, s), Base.OneTo(ndsts(s.graph)))
+end
+function algvars_range(s::SystemStructure)
+    Iterators.filter(Base.Fix1(isalgvar, s), Base.OneTo(ndsts(s.graph)))
+end
 
-algeqs(s::SystemStructure) = BitSet(findall(map(1:nsrcs(s.graph)) do eq
-        all(v->!isdervar(s, v), 𝑠neighbors(s.graph, eq))
-    end))
+function algeqs(s::SystemStructure)
+    BitSet(findall(map(1:nsrcs(s.graph)) do eq
+                       all(v -> !isdervar(s, v), 𝑠neighbors(s.graph, eq))
+                   end))
+end
 
 function complete!(s::SystemStructure)
     s.var_to_diff = complete(s.var_to_diff)
@@ -196,30 +214,29 @@ function Base.push!(ev::EquationsView, eq)
     push!(ev.ts.extra_eqs, eq)
 end
 
-function TearingState(sys; quick_cancel=false, check=true)
+function TearingState(sys; quick_cancel = false, check = true)
     sys = flatten(sys)
     ivs = independent_variables(sys)
     eqs = copy(equations(sys))
     neqs = length(eqs)
     algeqs = trues(neqs)
     dervaridxs = OrderedSet{Int}()
-    var2idx = Dict{Any,Int}()
+    var2idx = Dict{Any, Int}()
     symbolic_incidence = []
     fullvars = []
     var_counter = Ref(0)
-    addvar! = let fullvars=fullvars, var_counter=var_counter
-        var -> begin
-            get!(var2idx, var) do
-                push!(fullvars, var)
-                var_counter[] += 1
-            end
-        end
+    addvar! = let fullvars = fullvars, var_counter = var_counter
+        var -> begin get!(var2idx, var) do
+            push!(fullvars, var)
+            var_counter[] += 1
+        end end
     end
 
     vars = OrderedSet()
     for (i, eq′) in enumerate(eqs)
         if eq′.lhs isa Connection
-            check ? error("$(nameof(sys)) has unexpanded `connect` statements") : return nothing
+            check ? error("$(nameof(sys)) has unexpanded `connect` statements") :
+            return nothing
         end
         if _iszero(eq′.lhs)
             rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
@@ -319,7 +336,7 @@ function TearingState(sys; quick_cancel=false, check=true)
     eq_to_diff = DiffGraph(nsrcs(graph))
 
     return TearingState(sys, fullvars,
-        SystemStructure(var_to_diff, eq_to_diff, graph, nothing), Any[])
+                        SystemStructure(var_to_diff, eq_to_diff, graph, nothing), Any[])
 end
 
 function linear_subsys_adjmat(state::TransformationState)
@@ -330,7 +347,8 @@ function linear_subsys_adjmat(state::TransformationState)
     eadj = Vector{Int}[]
     cadj = Vector{Int}[]
     coeffs = Int[]
-    for (i, eq) in enumerate(eqs); isdiffeq(eq) && continue
+    for (i, eq) in enumerate(eqs)
+        isdiffeq(eq) && continue
         empty!(coeffs)
         linear_term = 0
         all_int_vars = true
@@ -368,8 +386,8 @@ function linear_subsys_adjmat(state::TransformationState)
 
     linear_equations = findall(is_linear_equations)
     return SparseMatrixCLIL(nsrcs(graph),
-                           ndsts(graph),
-                           linear_equations, eadj, cadj)
+                            ndsts(graph),
+                            linear_equations, eadj, cadj)
 end
 
 function Base.show(io::IO, mime::MIME"text/plain", s::SystemStructure)

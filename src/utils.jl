@@ -22,21 +22,23 @@ function detime_dvs(op)
     elseif operation(op) isa Sym
         Sym{Real}(nameof(operation(op)))
     else
-        similarterm(op, operation(op),detime_dvs.(arguments(op)))
+        similarterm(op, operation(op), detime_dvs.(arguments(op)))
     end
 end
 
-function retime_dvs(op::Sym,dvs,iv)
+function retime_dvs(op::Sym, dvs, iv)
     Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
 end
 
 function retime_dvs(op, dvs, iv)
     istree(op) ?
-        similarterm(op, operation(op), retime_dvs.(arguments(op),(dvs,),(iv,))) :
-        op
+    similarterm(op, operation(op), retime_dvs.(arguments(op), (dvs,), (iv,))) :
+    op
 end
 
-modified_states!(mstates, e::Equation, statelist=nothing) = get_variables!(mstates, e.lhs, statelist)
+function modified_states!(mstates, e::Equation, statelist = nothing)
+    get_variables!(mstates, e.lhs, statelist)
+end
 
 macro showarr(x)
     n = string(x)
@@ -49,7 +51,7 @@ macro showarr(x)
     end
 end
 
-@deprecate substitute_expr!(expr,s) substitute(expr,s)
+@deprecate substitute_expr!(expr, s) substitute(expr, s)
 
 function states_to_sym(states::Set)
     function _states_to_sym(O)
@@ -100,11 +102,14 @@ function _readable_code(ex)
     end
     expr
 end
-readable_code(expr) = JuliaFormatter.format_text(string(Base.remove_linenums!(_readable_code(expr))))
+function readable_code(expr)
+    JuliaFormatter.format_text(string(Base.remove_linenums!(_readable_code(expr))))
+end
 
 function check_parameters(ps, iv)
     for p in ps
-        isequal(iv, p) && throw(ArgumentError("Independent variable $iv not allowed in parameters."))
+        isequal(iv, p) &&
+            throw(ArgumentError("Independent variable $iv not allowed in parameters."))
     end
 end
 
@@ -118,15 +123,17 @@ function is_delay_var(iv, var)
     length(args) > 1 && return false
     isequal(first(args), iv) && return false
     delay = iv - first(args)
-    delay isa Integer || 
-    delay isa AbstractFloat ||
-    (delay isa Num && isreal(value(delay))) 
+    delay isa Integer ||
+        delay isa AbstractFloat ||
+        (delay isa Num && isreal(value(delay)))
 end
 
 function check_variables(dvs, iv)
     for dv in dvs
-        isequal(iv, dv) && throw(ArgumentError("Independent variable $iv not allowed in dependent variables."))
-        (is_delay_var(iv, dv) || occursin(iv, iv_from_nested_derivative(dv))) || throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
+        isequal(iv, dv) &&
+            throw(ArgumentError("Independent variable $iv not allowed in dependent variables."))
+        (is_delay_var(iv, dv) || occursin(iv, iv_from_nested_derivative(dv))) ||
+            throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
     end
 end
 
@@ -136,20 +143,21 @@ function check_lhs(eq::Equation, op, dvs::Set)
     (operation(v) isa op && only(arguments(v)) in dvs) && return
     error("$v is not a valid LHS. Please run structural_simplify before simulation.")
 end
-check_lhs(eqs, op, dvs::Set) = for eq in eqs
-    check_lhs(eq, op, dvs)
-end
+check_lhs(eqs, op, dvs::Set) =
+    for eq in eqs
+        check_lhs(eq, op, dvs)
+    end
 
 """
     collect_ivs(eqs, op = Differential)
 
 Get all the independent variables with respect to which differentials (`op`) are taken.
 """
-function collect_ivs(eqs, op=Differential)
+function collect_ivs(eqs, op = Differential)
     vars = Set()
     ivs = Set()
     for eq in eqs
-        vars!(vars, eq; op=op)
+        vars!(vars, eq; op = op)
         for v in vars
             if isoperator(v, op)
                 collect_ivs_from_nested_operator!(ivs, v, op)
@@ -168,10 +176,12 @@ Assert that equations are well-formed when building ODE, i.e., only containing a
 function check_equations(eqs, iv)
     ivs = collect_ivs(eqs)
     display = collect(ivs)
-    length(ivs) <= 1 || throw(ArgumentError("Differential w.r.t. multiple variables $display are not allowed."))
+    length(ivs) <= 1 ||
+        throw(ArgumentError("Differential w.r.t. multiple variables $display are not allowed."))
     if length(ivs) == 1
         single_iv = pop!(ivs)
-        isequal(single_iv, iv) || throw(ArgumentError("Differential w.r.t. variable ($single_iv) other than the independent variable ($iv) are not allowed."))
+        isequal(single_iv, iv) ||
+            throw(ArgumentError("Differential w.r.t. variable ($single_iv) other than the independent variable ($iv) are not allowed."))
     end
 end
 "Get all the independent variables with respect to which differentials/differences are taken."
@@ -183,13 +193,17 @@ function collect_ivs_from_nested_operator!(ivs, x::Term, target_op)
     end
 end
 
-iv_from_nested_derivative(x::Term, op=Differential) = operation(x) isa op ? iv_from_nested_derivative(arguments(x)[1], op) : arguments(x)[1]
-iv_from_nested_derivative(x::Sym, op=Differential) = x
-iv_from_nested_derivative(x, op=Differential) = nothing
+function iv_from_nested_derivative(x::Term, op = Differential)
+    operation(x) isa op ? iv_from_nested_derivative(arguments(x)[1], op) : arguments(x)[1]
+end
+iv_from_nested_derivative(x::Sym, op = Differential) = x
+iv_from_nested_derivative(x, op = Differential) = nothing
 
 hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
 getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))
-setdefault(v, val) = val === nothing ? v : setmetadata(v, Symbolics.VariableDefaultValue, value(val))
+function setdefault(v, val)
+    val === nothing ? v : setmetadata(v, Symbolics.VariableDefaultValue, value(val))
+end
 
 function process_variables!(var_to_name, defs, vars)
     collect_defaults!(defs, vars)
@@ -198,7 +212,8 @@ function process_variables!(var_to_name, defs, vars)
 end
 
 function collect_defaults!(defs, vars)
-    for v in vars; (haskey(defs, v) || !hasdefault(v)) && continue
+    for v in vars
+        (haskey(defs, v) || !hasdefault(v)) && continue
         defs[v] = getdefault(v)
     end
     return defs
@@ -217,7 +232,6 @@ function collect_var_to_name!(vars, xs)
             vars[Symbolics.getname(unwrap(x))] = x
         end
     end
-
 end
 
 "Throw error when difference/derivative operation occurs in the R.H.S."
@@ -225,23 +239,24 @@ end
     if op === Difference
         optext = "difference"
     elseif op === Differential
-        optext="derivative"
+        optext = "derivative"
     end
     msg = "The $optext variable must be isolated to the left-hand " *
-    "side of the equation like `$opvar ~ ...`. You may want to use `structural_simplify` or the DAE form.\nGot $eq."
+          "side of the equation like `$opvar ~ ...`. You may want to use `structural_simplify` or the DAE form.\nGot $eq."
     throw(InvalidSystemException(msg))
 end
 
 "Check if difference/derivative operation occurs in the R.H.S. of an equation"
-function _check_operator_variables(eq, op::T, expr=eq.rhs) where T
+function _check_operator_variables(eq, op::T, expr = eq.rhs) where {T}
     istree(expr) || return nothing
     if operation(expr) isa op
         throw_invalid_operator(expr, eq, op)
     end
-    foreach(expr -> _check_operator_variables(eq, op, expr), SymbolicUtils.unsorted_arguments(expr))
+    foreach(expr -> _check_operator_variables(eq, op, expr),
+            SymbolicUtils.unsorted_arguments(expr))
 end
 "Check if all the LHS are unique"
-function check_operator_variables(eqs, op::T) where T
+function check_operator_variables(eqs, op::T) where {T}
     ops = Set()
     tmp = Set()
     for eq in eqs
@@ -256,12 +271,14 @@ function check_operator_variables(eqs, op::T) where T
                 is_tmp_fine = istree(x) && !(operation(x) isa op)
             end
         else
-            nd = count(x->istree(x) && !(operation(x) isa op), tmp)
+            nd = count(x -> istree(x) && !(operation(x) isa op), tmp)
             is_tmp_fine = iszero(nd)
         end
-        is_tmp_fine || error("The LHS cannot contain nondifferentiated variables. Please run `structural_simplify` or use the DAE form.\nGot $eq")
+        is_tmp_fine ||
+            error("The LHS cannot contain nondifferentiated variables. Please run `structural_simplify` or use the DAE form.\nGot $eq")
         for v in tmp
-            v in ops && error("The LHS operator must be unique. Please run `structural_simplify` or use the DAE form. $v appears in LHS more than once.")
+            v in ops &&
+                error("The LHS operator must be unique. Please run `structural_simplify` or use the DAE form. $v appears in LHS more than once.")
             push!(ops, v)
         end
         empty!(tmp)
@@ -277,14 +294,19 @@ isdiffeq(eq) = isdifferential(eq.lhs)
 isdifference(expr) = isoperator(expr, Difference)
 isdifferenceeq(eq) = isdifference(eq.lhs)
 
-iv_from_nested_difference(x::Term) = operation(x) isa Difference ? iv_from_nested_difference(arguments(x)[1]) : arguments(x)[1]
+function iv_from_nested_difference(x::Term)
+    operation(x) isa Difference ? iv_from_nested_difference(arguments(x)[1]) :
+    arguments(x)[1]
+end
 iv_from_nested_difference(x::Sym) = x
 iv_from_nested_difference(x) = nothing
 
-var_from_nested_difference(x, i=0) = (nothing, nothing)
-var_from_nested_difference(x::Term,i=0) = operation(x) isa Difference ? var_from_nested_difference(arguments(x)[1], i + 1) : (x, i)
-var_from_nested_difference(x::Sym,i=0) = (x, i)
-
+var_from_nested_difference(x, i = 0) = (nothing, nothing)
+function var_from_nested_difference(x::Term, i = 0)
+    operation(x) isa Difference ? var_from_nested_difference(arguments(x)[1], i + 1) :
+    (x, i)
+end
+var_from_nested_difference(x::Sym, i = 0) = (x, i)
 
 isvariable(x::Num) = isvariable(value(x))
 function isvariable(x)
@@ -308,12 +330,14 @@ v  = ModelingToolkit.vars(D(y) ~ u)
 v == Set([D(y), u])
 ```
 """
-vars(x::Sym; op=Differential) = Set([x])
-vars(exprs::Symbolic; op=Differential) = vars([exprs]; op=op)
-vars(exprs; op=Differential) = foldl((x, y) -> vars!(x, y; op=op), exprs; init = Set())
-vars(eq::Equation; op=Differential) = vars!(Set(), eq; op=op)
-vars!(vars, eq::Equation; op=Differential) = (vars!(vars, eq.lhs; op=op); vars!(vars, eq.rhs; op=op); vars)
-function vars!(vars, O; op=Differential)
+vars(x::Sym; op = Differential) = Set([x])
+vars(exprs::Symbolic; op = Differential) = vars([exprs]; op = op)
+vars(exprs; op = Differential) = foldl((x, y) -> vars!(x, y; op = op), exprs; init = Set())
+vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
+function vars!(vars, eq::Equation; op = Differential)
+    (vars!(vars, eq.lhs; op = op); vars!(vars, eq.rhs; op = op); vars)
+end
+function vars!(vars, O; op = Differential)
     if isvariable(O)
         return push!(vars, O)
     end
@@ -322,24 +346,27 @@ function vars!(vars, O; op=Differential)
     operation(O) isa op && return push!(vars, O)
 
     if operation(O) === (getindex) &&
-        isvariable(first(arguments(O)))
-
+       isvariable(first(arguments(O)))
         return push!(vars, O)
     end
 
     isvariable(operation(O)) && push!(vars, O)
     for arg in arguments(O)
-        vars!(vars, arg; op=op)
+        vars!(vars, arg; op = op)
     end
 
     return vars
 end
 
-difference_vars(x) = vars(x; op=Difference)
-difference_vars!(vars, O) = vars!(vars, O; op=Difference)
+difference_vars(x) = vars(x; op = Difference)
+difference_vars!(vars, O) = vars!(vars, O; op = Difference)
 
-collect_operator_variables(sys::AbstractSystem, args...) = collect_operator_variables(equations(sys), args...)
-collect_operator_variables(eq::Equation, args...) = collect_operator_variables([eq], args...)
+function collect_operator_variables(sys::AbstractSystem, args...)
+    collect_operator_variables(equations(sys), args...)
+end
+function collect_operator_variables(eq::Equation, args...)
+    collect_operator_variables([eq], args...)
+end
 
 """
     collect_operator_variables(eqs::AbstractVector{Equation}, op)
@@ -351,7 +378,7 @@ function collect_operator_variables(eqs::AbstractVector{Equation}, op)
     vars = Set()
     diffvars = Set()
     for eq in eqs
-        vars!(vars, eq; op=op)
+        vars!(vars, eq; op = op)
         for v in vars
             isoperator(v, op) || continue
             push!(diffvars, arguments(v)[1])
@@ -376,7 +403,7 @@ ModelingToolkit.collect_applied_operators(eq, Differential) == Set([D(y)])
 The difference compared to `collect_operator_variables` is that `collect_operator_variables` returns the variable without the operator applied.
 """
 function collect_applied_operators(x, op)
-    v = vars(x, op=op)
+    v = vars(x, op = op)
     filter(v) do x
         x isa Sym && return false
         istree(x) && return operation(x) isa op
@@ -384,7 +411,9 @@ function collect_applied_operators(x, op)
     end
 end
 
-find_derivatives!(vars, expr::Equation, f=identity) = (find_derivatives!(vars, expr.lhs, f); find_derivatives!(vars, expr.rhs, f); vars)
+function find_derivatives!(vars, expr::Equation, f = identity)
+    (find_derivatives!(vars, expr.lhs, f); find_derivatives!(vars, expr.rhs, f); vars)
+end
 function find_derivatives!(vars, expr, f)
     !istree(O) && return vars
     operation(O) isa Differential && push!(vars, f(O))
@@ -432,10 +461,9 @@ function collect_var!(states, parameters, var, iv)
     return nothing
 end
 
-
 function get_postprocess_fbody(sys)
     if has_preface(sys) && (pre = preface(sys); pre !== nothing)
-        pre_ = let pre=pre
+        pre_ = let pre = pre
             ex -> Let(pre, ex, false)
         end
     else
@@ -449,7 +477,7 @@ $(SIGNATURES)
 
 find duplicates in an iterable object.
 """
-function find_duplicates(xs, ::Val{Ret}=Val(false)) where Ret
+function find_duplicates(xs, ::Val{Ret} = Val(false)) where {Ret}
     appeared = Set()
     duplicates = Set()
     for x in xs
@@ -470,7 +498,7 @@ function empty_substitutions(sys)
     isnothing(subs) || isempty(subs.deps)
 end
 
-function get_substitutions_and_solved_states(sys; no_postprocess=false)
+function get_substitutions_and_solved_states(sys; no_postprocess = false)
     if empty_substitutions(sys)
         sol_states = Code.LazyState()
         pre = no_postprocess ? (ex -> ex) : get_postprocess_fbody(sys)
@@ -478,10 +506,12 @@ function get_substitutions_and_solved_states(sys; no_postprocess=false)
         @unpack subs = get_substitutions(sys)
         sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
         if no_postprocess
-            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex, false)
+            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex,
+                            false)
         else
             process = get_postprocess_fbody(sys)
-            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], process(ex), false)
+            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs],
+                            process(ex), false)
         end
     end
     return pre, sol_states
@@ -499,7 +529,7 @@ function mergedefaults(defaults, varmap, vars)
     end
 end
 
-function promote_to_concrete(vs; tofloat=true, use_union=false)
+function promote_to_concrete(vs; tofloat = true, use_union = false)
     if isempty(vs)
         return vs
     end

@@ -1,14 +1,14 @@
 struct EquationSolveError
-    eq
-    var
-    rhs
+    eq::Any
+    var::Any
+    rhs::Any
 end
 
 function Base.showerror(io::IO, ese::EquationSolveError)
     print(io, "EquationSolveError: While solving\n\n\t")
     print(io, ese.eq)
     print(io, "\nfor ")
-    printstyled(io, var, bold=true)
+    printstyled(io, var, bold = true)
     print(io, ", obtained RHS\n\n\tt")
     println(io, rhs)
 end
@@ -21,7 +21,8 @@ function masked_cumsum!(A::Vector)
     end
 end
 
-function contract_variables(graph::BipartiteGraph, var_eq_matching::Matching, eliminated_variables)
+function contract_variables(graph::BipartiteGraph, var_eq_matching::Matching,
+                            eliminated_variables)
     var_rename = ones(Int64, ndsts(graph))
     eq_rename = ones(Int64, nsrcs(graph))
     for v in eliminated_variables
@@ -35,7 +36,8 @@ function contract_variables(graph::BipartiteGraph, var_eq_matching::Matching, el
 
     # Update bipartite graph
     var_deps = map(1:ndsts(graph)) do v
-        [var_rename[v′] for v′ in neighborhood(dig, v, Inf; dir=:in) if var_rename[v′] != 0]
+        [var_rename[v′]
+         for v′ in neighborhood(dig, v, Inf; dir = :in) if var_rename[v′] != 0]
     end
 
     nelim = length(eliminated_variables)
@@ -66,11 +68,12 @@ Find strongly connected components of algebraic variables in a system.
 function algebraic_variables_scc(state::TearingState)
     graph = state.structure.graph
     # skip over differential equations
-    algvars = BitSet(findall(v->isalgvar(state.structure, v), 1:ndsts(graph)))
+    algvars = BitSet(findall(v -> isalgvar(state.structure, v), 1:ndsts(graph)))
     algeqs = BitSet(findall(map(1:nsrcs(graph)) do eq
-        all(v->!isdervar(state.structure, v), 𝑠neighbors(graph, eq))
-    end))
-    var_eq_matching = complete(maximal_matching(graph, e->e in algeqs, v->v in algvars))
+                                all(v -> !isdervar(state.structure, v),
+                                    𝑠neighbors(graph, eq))
+                            end))
+    var_eq_matching = complete(maximal_matching(graph, e -> e in algeqs, v -> v in algvars))
     var_sccs = find_var_sccs(complete(graph), var_eq_matching)
 
     return var_eq_matching, var_sccs

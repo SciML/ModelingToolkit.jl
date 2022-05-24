@@ -20,7 +20,7 @@ function aag_bareiss(sys::AbstractSystem)
 end
 
 function alias_elimination(sys)
-    state = TearingState(sys; quick_cancel=true)
+    state = TearingState(sys; quick_cancel = true)
     ag, mm = alias_eliminate_graph!(state)
     ag === nothing && return sys
 
@@ -75,30 +75,27 @@ $(SIGNATURES)
 Find the first linear variable such that `𝑠neighbors(adj, i)[j]` is true given
 the `constraint`.
 """
-@inline function find_first_linear_variable(
-        M::SparseMatrixCLIL,
-        range,
-        mask,
-        constraint,
-    )
+@inline function find_first_linear_variable(M::SparseMatrixCLIL,
+                                            range,
+                                            mask,
+                                            constraint)
     eadj = M.row_cols
     for i in range
         vertices = eadj[i]
         if constraint(length(vertices))
             for (j, v) in enumerate(vertices)
-                (mask === nothing || mask[v]) && return (CartesianIndex(i, v), M.row_vals[i][j])
+                (mask === nothing || mask[v]) &&
+                    return (CartesianIndex(i, v), M.row_vals[i][j])
             end
         end
     end
     return nothing
 end
 
-@inline function find_first_linear_variable(
-        M::AbstractMatrix,
-        range,
-        mask,
-        constraint,
-    )
+@inline function find_first_linear_variable(M::AbstractMatrix,
+                                            range,
+                                            mask,
+                                            constraint)
     for i in range
         row = @view M[i, :]
         if constraint(count(!iszero, row))
@@ -114,11 +111,11 @@ end
 end
 
 function find_masked_pivot(variables, M, k)
-    r = find_first_linear_variable(M, k:size(M,1), variables, isequal(1))
+    r = find_first_linear_variable(M, k:size(M, 1), variables, isequal(1))
     r !== nothing && return r
-    r = find_first_linear_variable(M, k:size(M,1), variables, isequal(2))
+    r = find_first_linear_variable(M, k:size(M, 1), variables, isequal(2))
     r !== nothing && return r
-    r = find_first_linear_variable(M, k:size(M,1), variables, _->true)
+    r = find_first_linear_variable(M, k:size(M, 1), variables, _ -> true)
     return r
 end
 
@@ -163,7 +160,7 @@ function Base.iterate(ag::AliasGraph, state...)
     c = ag.aliasto[r[1]]
     return (r[1] => (c == 0 ? 0 :
                      c >= 0 ? 1 :
-                             -1, abs(c))), r[2]
+                     -1, abs(c))), r[2]
 end
 
 function Base.setindex!(ag::AliasGraph, v::Integer, i::Integer)
@@ -172,7 +169,7 @@ function Base.setindex!(ag::AliasGraph, v::Integer, i::Integer)
         push!(ag.eliminated, i)
     end
     ag.aliasto[i] = 0
-    return 0=>0
+    return 0 => 0
 end
 
 function Base.setindex!(ag::AliasGraph, p::Pair{Int, Int}, i::Integer)
@@ -216,14 +213,15 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # Variables that are highest order differentiated cannot be states of an ODE
     is_not_potential_state = isnothing.(var_to_diff)
     is_linear_variables = copy(is_not_potential_state)
-    for i in 𝑠vertices(graph); is_linear_equations[i] && continue
+    for i in 𝑠vertices(graph)
+        is_linear_equations[i] && continue
         for j in 𝑠neighbors(graph, i)
             is_linear_variables[j] = false
         end
     end
     solvable_variables = findall(is_linear_variables)
 
-    function do_bareiss!(M, Mold=nothing)
+    function do_bareiss!(M, Mold = nothing)
         rank1 = rank2 = nothing
         pivots = Int[]
         function find_pivot(M, k)
@@ -249,8 +247,9 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             Mold !== nothing && swaprows!(Mold, i, j)
             swaprows!(M, i, j)
         end
-        bareiss_ops = ((M,i,j)->nothing, myswaprows!, bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
-        rank3, = bareiss!(M, bareiss_ops; find_pivot=find_and_record_pivot)
+        bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
+                       bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
+        rank3, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
         rank1 = something(rank1, rank3)
         rank2 = something(rank2, rank3)
         (rank1, rank2, rank3, pivots)
@@ -272,8 +271,8 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # -------------------|------------------------
     # rank3 | [ 0    0   | M₃₃  M₃₄ ]   [v₃] = [0]
     #         [ 0    0   | 0    0   ]   [v₄] = [0]
-    mm, solvable_variables, (rank1, rank2, rank3, pivots) =
-        aag_bareiss!(graph, var_to_diff, mm_orig)
+    mm, solvable_variables, (rank1, rank2, rank3, pivots) = aag_bareiss!(graph, var_to_diff,
+                                                                         mm_orig)
 
     # Step 2: Simplify the system using the Bareiss factorization
     ag = AliasGraph(size(mm, 2))
@@ -304,7 +303,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     #         Replace the equation by the one from the original system,
     #         but be sure to also run `lss!` again, since we only ran that
     #         on the Bareiss'd matrix, not the original one.
-    reduced = mapreduce(|, 1:rank2; init=false) do ei
+    reduced = mapreduce(|, 1:rank2; init = false) do ei
         if count_nonzeros(@view mm_orig[ei, :]) < count_nonzeros(@view mm[ei, :])
             mm[ei, :] = @view mm_orig[ei, :]
             return lss!(ei)
@@ -317,7 +316,8 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # TODO: We know exactly what variable we eliminated. Starting over at the
     #       start is wasteful. We can lookup which equations have this variable
     #       using the graph.
-    reduced && while any(lss!, 1:rank2); end
+    reduced && while any(lss!, 1:rank2)
+    end
 
     # Step 3: Reflect our update decisions back into the graph
     for (ei, e) in enumerate(mm.nzrows)
@@ -428,12 +428,13 @@ julia> ModelingToolkit.topsort_equations(eqs, [x, y, z, k])
  Equation(x(t), y(t) + z(t))
 ```
 """
-function topsort_equations(eqs, states; check=true)
+function topsort_equations(eqs, states; check = true)
     graph, assigns = observed2graph(eqs, states)
     neqs = length(eqs)
     degrees = zeros(Int, neqs)
 
-    for 𝑠eq in 1:length(eqs); var = assigns[𝑠eq]
+    for 𝑠eq in 1:length(eqs)
+        var = assigns[𝑠eq]
         for 𝑑eq in 𝑑neighbors(graph, var)
             # 𝑠eq => 𝑑eq
             degrees[𝑑eq] += 1
@@ -446,10 +447,11 @@ function topsort_equations(eqs, states; check=true)
     end
 
     idx = 0
-    ordered_eqs = similar(eqs, 0); sizehint!(ordered_eqs, neqs)
+    ordered_eqs = similar(eqs, 0)
+    sizehint!(ordered_eqs, neqs)
     while !isempty(q)
         𝑠eq = dequeue!(q)
-        idx+=1
+        idx += 1
         push!(ordered_eqs, eqs[𝑠eq])
         var = assigns[𝑠eq]
         for 𝑑eq in 𝑑neighbors(graph, var)
@@ -472,7 +474,8 @@ function observed2graph(eqs, states)
 
     for (i, eq) in enumerate(eqs)
         lhs_j = get(v2j, eq.lhs, nothing)
-        lhs_j === nothing && throw(ArgumentError("The lhs $(eq.lhs) of $eq, doesn't appear in states."))
+        lhs_j === nothing &&
+            throw(ArgumentError("The lhs $(eq.lhs) of $eq, doesn't appear in states."))
         assigns[i] = lhs_j
         vs = vars(eq.rhs)
         for v in vs
@@ -496,5 +499,5 @@ end
 
 function substitute_aliases(eqs, dict)
     sub = Base.Fix2(fixpoint_sub, dict)
-    map(eq->eq.lhs ~ sub(eq.rhs), eqs)
+    map(eq -> eq.lhs ~ sub(eq.rhs), eqs)
 end

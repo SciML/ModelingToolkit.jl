@@ -34,12 +34,12 @@ equation_dependencies(jumpsys, variables=parameters(jumpsys))
 
 ```
 """
-function equation_dependencies(sys::AbstractSystem; variables=states(sys))
-    eqs  = equations(sys)
+function equation_dependencies(sys::AbstractSystem; variables = states(sys))
+    eqs = equations(sys)
     deps = Set()
-    depeqs_to_vars = Vector{Vector}(undef,length(eqs))
+    depeqs_to_vars = Vector{Vector}(undef, length(eqs))
 
-    for (i,eq) in enumerate(eqs)
+    for (i, eq) in enumerate(eqs)
         get_variables!(deps, eq, variables)
         depeqs_to_vars[i] = [value(v) for v in deps]
         empty!(deps)
@@ -68,20 +68,19 @@ digr = asgraph(equation_dependencies(odesys), Dict(s => i for (i,s) in enumerate
 """
 function asgraph(eqdeps, vtois)
     fadjlist = Vector{Vector{Int}}(undef, length(eqdeps))
-    for (i,dep) in enumerate(eqdeps)
+    for (i, dep) in enumerate(eqdeps)
         fadjlist[i] = sort!([vtois[var] for var in dep])
     end
 
-    badjlist = [Vector{Int}() for i = 1:length(vtois)]
+    badjlist = [Vector{Int}() for i in 1:length(vtois)]
     ne = 0
-    for (eqidx,vidxs) in enumerate(fadjlist)
+    for (eqidx, vidxs) in enumerate(fadjlist)
         foreach(vidx -> push!(badjlist[vidx], eqidx), vidxs)
         ne += length(vidxs)
     end
 
     BipartiteGraph(ne, fadjlist, badjlist)
 end
-
 
 # could be made to directly generate graph and save memory
 """
@@ -107,9 +106,9 @@ Continuing the example started in [`equation_dependencies`](@ref)
 digr = asgraph(odesys)
 ```
 """
-function asgraph(sys::AbstractSystem; variables=states(sys),
-                                      variablestoids=Dict(v => i for (i,v) in enumerate(variables)))
-    asgraph(equation_dependencies(sys, variables=variables), variablestoids)
+function asgraph(sys::AbstractSystem; variables = states(sys),
+                 variablestoids = Dict(v => i for (i, v) in enumerate(variables)))
+    asgraph(equation_dependencies(sys, variables = variables), variablestoids)
 end
 
 """
@@ -131,21 +130,23 @@ Continuing the example of [`equation_dependencies`](@ref)
 variable_dependencies(odesys)
 ```
 """
-function variable_dependencies(sys::AbstractSystem; variables=states(sys), variablestoids=nothing)
-    eqs   = equations(sys)
-    vtois = isnothing(variablestoids) ? Dict(v => i for (i,v) in enumerate(variables)) : variablestoids
+function variable_dependencies(sys::AbstractSystem; variables = states(sys),
+                               variablestoids = nothing)
+    eqs = equations(sys)
+    vtois = isnothing(variablestoids) ? Dict(v => i for (i, v) in enumerate(variables)) :
+            variablestoids
 
     deps = Set()
     badjlist = Vector{Vector{Int}}(undef, length(eqs))
-    for (eidx,eq) in enumerate(eqs)
+    for (eidx, eq) in enumerate(eqs)
         modified_states!(deps, eq, variables)
         badjlist[eidx] = sort!([vtois[var] for var in deps])
         empty!(deps)
     end
 
-    fadjlist = [Vector{Int}() for i = 1:length(variables)]
+    fadjlist = [Vector{Int}() for i in 1:length(variables)]
     ne = 0
-    for (eqidx,vidxs) in enumerate(badjlist)
+    for (eqidx, vidxs) in enumerate(badjlist)
         foreach(vidx -> push!(fadjlist[vidx], eqidx), vidxs)
         ne += length(vidxs)
     end
@@ -178,21 +179,22 @@ Continuing the example in [`asgraph`](@ref)
 dg = asdigraph(digr)
 ```
 """
-function asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys), equationsfirst = true)
-    neqs     = length(equations(sys))
-    nvars    = length(variables)
+function asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys),
+                   equationsfirst = true)
+    neqs = length(equations(sys))
+    nvars = length(variables)
     fadjlist = deepcopy(g.fadjlist)
     badjlist = deepcopy(g.badjlist)
 
     # offset is for determining indices for the second set of vertices
     offset = equationsfirst ? neqs : nvars
-    for i = 1:offset
+    for i in 1:offset
         fadjlist[i] .+= offset
     end
 
     # add empty rows for vertices without connections
-    append!(fadjlist, [Vector{Int}() for i=1:(equationsfirst ? nvars : neqs)])
-    prepend!(badjlist, [Vector{Int}() for i=1:(equationsfirst ? neqs : nvars)])
+    append!(fadjlist, [Vector{Int}() for i in 1:(equationsfirst ? nvars : neqs)])
+    prepend!(badjlist, [Vector{Int}() for i in 1:(equationsfirst ? neqs : nvars)])
 
     SimpleDiGraph(g.ne, fadjlist, badjlist)
 end
@@ -216,10 +218,11 @@ Continuing the example of `equation_dependencies`
 eqeqdep = eqeq_dependencies(asgraph(odesys), variable_dependencies(odesys))
 ```
 """
-function eqeq_dependencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {T <: Integer}
+function eqeq_dependencies(eqdeps::BipartiteGraph{T},
+                           vardeps::BipartiteGraph{T}) where {T <: Integer}
     g = SimpleDiGraph{T}(length(eqdeps.fadjlist))
 
-    for (eqidx,sidxs) in enumerate(vardeps.badjlist)
+    for (eqidx, sidxs) in enumerate(vardeps.badjlist)
         # states modified by eqidx
         for sidx in sidxs
             # equations depending on sidx
@@ -249,4 +252,7 @@ Continuing the example of `equation_dependencies`
 varvardep = varvar_dependencies(asgraph(odesys), variable_dependencies(odesys))
 ```
 """
-varvar_dependencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {T <: Integer} = eqeq_dependencies(vardeps, eqdeps)
+function varvar_dependencies(eqdeps::BipartiteGraph{T},
+                             vardeps::BipartiteGraph{T}) where {T <: Integer}
+    eqeq_dependencies(vardeps, eqdeps)
+end

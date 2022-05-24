@@ -68,7 +68,7 @@ for fun in [:toexpr]
             Expr(:(=), $fun(eq.lhs; kw...), $fun(eq.rhs; kw...))
         end
 
-        $fun(eqs::AbstractArray; kw...) = map(eq->$fun(eq; kw...), eqs)
+        $fun(eqs::AbstractArray; kw...) = map(eq -> $fun(eq; kw...), eqs)
         $fun(x::Integer; kw...) = x
         $fun(x::AbstractFloat; kw...) = x
     end
@@ -158,7 +158,8 @@ for S in subtypes(ModelingToolkit.AbstractSystem)
     @eval convert_system(::Type{<:$S}, sys::$S) = sys
 end
 
-export AbstractTimeDependentSystem, AbstractTimeIndependentSystem, AbstractMultivariateSystem
+export AbstractTimeDependentSystem, AbstractTimeIndependentSystem,
+       AbstractMultivariateSystem
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
@@ -174,7 +175,8 @@ export NonlinearSystem, OptimizationSystem
 export ControlSystem
 export alias_elimination, flatten
 export connect, @connector, Connection, Flow, Stream, instream
-export isinput, isoutput, getbounds, hasbounds, isdisturbance, istunable, getdist, hasdist, tunable_parameters
+export isinput, isoutput, getbounds, hasbounds, isdisturbance, istunable, getdist, hasdist,
+       tunable_parameters
 export ode_order_lowering, dae_order_lowering, liouville_transform
 export runge_kutta_discretize
 export PDESystem
@@ -182,7 +184,8 @@ export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
-export independent_variables, independent_variable, states, parameters, equations, controls, observed, structure, full_equations
+export independent_variables, independent_variable, states, parameters, equations, controls,
+       observed, structure, full_equations
 export structural_simplify, expand_connections
 export DiscreteSystem, DiscreteProblem
 
@@ -207,6 +210,5 @@ export build_function
 export modelingtoolkitize
 export @variables, @parameters
 export @named, @nonamespace, @namespace, extend, compose
-
 
 end # module

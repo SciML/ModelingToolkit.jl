@@ -4,10 +4,12 @@ using ModelingToolkit, SciMLBase, Serialization
 @variables x(t)
 D = Differential(t)
 
-@named sys = ODESystem([D(x) ~ -0.5*x], defaults=Dict(x=>1.0))
+@named sys = ODESystem([D(x) ~ -0.5 * x], defaults = Dict(x => 1.0))
 for prob in [
-    eval(ModelingToolkit.ODEProblem{false}(sys, nothing, nothing, SciMLBase.NullParameters())),
-    eval(ModelingToolkit.ODEProblemExpr{false}(sys, nothing, nothing, SciMLBase.NullParameters()))
+    eval(ModelingToolkit.ODEProblem{false}(sys, nothing, nothing,
+                                           SciMLBase.NullParameters())),
+    eval(ModelingToolkit.ODEProblemExpr{false}(sys, nothing, nothing,
+                                               SciMLBase.NullParameters())),
 ]
     _fn = tempname()
 

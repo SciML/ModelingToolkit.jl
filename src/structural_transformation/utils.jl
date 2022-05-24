@@ -7,8 +7,10 @@
 
 Find equation-variable maximal bipartite matching. `s.graph` is a bipartite graph.
 """
-BipartiteGraphs.maximal_matching(s::SystemStructure, eqfilter=eq->true, varfilter=v->true) =
+function BipartiteGraphs.maximal_matching(s::SystemStructure, eqfilter = eq -> true,
+                                          varfilter = v -> true)
     maximal_matching(s.graph, eqfilter, varfilter)
+end
 
 function error_reporting(state, bad_idxs, n_highest_vars, iseqs)
     io = IOBuffer()
@@ -24,21 +26,17 @@ function error_reporting(state, bad_idxs, n_highest_vars, iseqs)
     msg = String(take!(io))
     neqs = length(equations(state))
     if iseqs
-        throw(ExtraEquationsSystemException(
-            "The system is unbalanced. "
-            * "There are $n_highest_vars highest order derivative variables "
-            * "and $neqs equations.\n"
-            * error_title
-            * msg
-        ))
+        throw(ExtraEquationsSystemException("The system is unbalanced. There are " *
+                                            "$n_highest_vars highest order derivative variables "
+                                            * "and $neqs equations.\n"
+                                            * error_title
+                                            * msg))
     else
-        throw(ExtraVariablesSystemException(
-            "The system is unbalanced. "
-            * "There are $n_highest_vars highest order derivative variables "
-            * "and $neqs equations.\n"
-            * error_title
-            * msg
-        ))
+        throw(ExtraVariablesSystemException("The system is unbalanced. There are " *
+                                            "$n_highest_vars highest order derivative variables "
+                                            * "and $neqs equations.\n"
+                                            * error_title
+                                            * msg))
     end
 end
 
@@ -48,13 +46,14 @@ end
 function check_consistency(state::TearingState)
     fullvars = state.fullvars
     @unpack graph, var_to_diff = state.structure
-    n_highest_vars = count(v->length(outneighbors(var_to_diff, v)) == 0, vertices(var_to_diff))
+    n_highest_vars = count(v -> length(outneighbors(var_to_diff, v)) == 0,
+                           vertices(var_to_diff))
     neqs = nsrcs(graph)
     is_balanced = n_highest_vars == neqs
 
     if neqs > 0 && !is_balanced
         varwhitelist = var_to_diff .== nothing
-        var_eq_matching = maximal_matching(graph, eq->true, v->varwhitelist[v]) # not assigned
+        var_eq_matching = maximal_matching(graph, eq -> true, v -> varwhitelist[v]) # not assigned
         # Just use `error_reporting` to do conditional
         iseqs = n_highest_vars < neqs
         if iseqs
@@ -68,7 +67,8 @@ function check_consistency(state::TearingState)
 
     # This is defined to check if Pantelides algorithm terminates. For more
     # details, check the equation (15) of the original paper.
-    extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist; map(collect, edges(var_to_diff))])
+    extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist;
+                                                        map(collect, edges(var_to_diff))])
     extended_var_eq_matching = maximal_matching(extended_graph)
 
     unassigned_var = []
@@ -102,14 +102,16 @@ Find strongly connected components of the variables defined by `g`. `assign`
 gives the undirected bipartite graph a direction. When `assign === nothing`, we
 assume that the ``i``-th variable is assigned to the ``i``-th equation.
 """
-function find_var_sccs(g::BipartiteGraph, assign=nothing)
-    cmog = DiCMOBiGraph{true}(g, Matching(assign === nothing ? Base.OneTo(nsrcs(g)) : assign))
+function find_var_sccs(g::BipartiteGraph, assign = nothing)
+    cmog = DiCMOBiGraph{true}(g,
+                              Matching(assign === nothing ? Base.OneTo(nsrcs(g)) : assign))
     sccs = Graphs.strongly_connected_components(cmog)
     foreach(sort!, sccs)
     return sccs
 end
 
-function sorted_incidence_matrix(ts::TransformationState, val=true; only_algeqs=false, only_algvars=false)
+function sorted_incidence_matrix(ts::TransformationState, val = true; only_algeqs = false,
+                                 only_algvars = false)
     var_eq_matching, var_scc = algebraic_variables_scc(ts)
     fullvars = ts.fullvars
     s = ts.structure
@@ -159,7 +161,8 @@ end
 ### Structural and symbolic utilities
 ###
 
-function find_eq_solvables!(state::TearingState, ieq; may_be_zero=false, allow_symbolic=false, allow_parameter=true)
+function find_eq_solvables!(state::TearingState, ieq; may_be_zero = false,
+                            allow_symbolic = false, allow_parameter = true)
     fullvars = state.fullvars
     @unpack graph, solvable_graph = state.structure
     eq = equations(state)[ieq]
@@ -209,17 +212,19 @@ function find_solvables!(state::TearingState; kwargs...)
     return nothing
 end
 
-highest_order_variable_mask(ts) = let v2d = ts.structure.var_to_diff
-    v->isempty(outneighbors(v2d, v))
-end
+highest_order_variable_mask(ts) =
+    let v2d = ts.structure.var_to_diff
+        v -> isempty(outneighbors(v2d, v))
+    end
 
-lowest_order_variable_mask(ts) = let v2d = ts.structure.var_to_diff
-    v->isempty(outneighbors(v2d, v))
-end
+lowest_order_variable_mask(ts) =
+    let v2d = ts.structure.var_to_diff
+        v -> isempty(outneighbors(v2d, v))
+    end
 
-function but_ordered_incidence(ts::TearingState, varmask=highest_order_variable_mask(ts))
+function but_ordered_incidence(ts::TearingState, varmask = highest_order_variable_mask(ts))
     graph = complete(ts.structure.graph)
-    var_eq_matching = complete(maximal_matching(graph, _->true, varmask))
+    var_eq_matching = complete(maximal_matching(graph, _ -> true, varmask))
     scc = find_var_sccs(graph, var_eq_matching)
     vordering = Vector{Int}(undef, 0)
     bb = Int[1]
@@ -270,7 +275,8 @@ function reordered_matrix(sys, torn_matching)
             append!(J, js)
         end
 
-        e_residual = setdiff([max_matching[v] for v in vars if max_matching[v] !== unassigned], e_solved)
+        e_residual = setdiff([max_matching[v]
+                              for v in vars if max_matching[v] !== unassigned], e_solved)
         for er in e_residual
             isdiffeq(eqs[er]) && continue
             ii += 1
@@ -303,8 +309,9 @@ function torn_system_jacobian_sparsity(sys)
     fullvars = state.fullvars
 
     states_idxs = findall(!isdifferential, fullvars)
-    var2idx = Dict{Int,Int}(v => i for (i, v) in enumerate(states_idxs))
-    I = Int[]; J = Int[]
+    var2idx = Dict{Int, Int}(v => i for (i, v) in enumerate(states_idxs))
+    I = Int[]
+    J = Int[]
     for ieq in 𝑠vertices(graph)
         for ivar in 𝑠neighbors(graph, ieq)
             nivar = get(var2idx, ivar, 0)
@@ -320,7 +327,9 @@ end
 ### Nonlinear equation(s) solving
 ###
 
-@noinline nlsolve_failure(rc) = error("The nonlinear solver failed with the return code $rc.")
+@noinline function nlsolve_failure(rc)
+    error("The nonlinear solver failed with the return code $rc.")
+end
 
 function numerical_nlsolve(f, u0, p)
     prob = NonlinearProblem{false}(f, u0, p)

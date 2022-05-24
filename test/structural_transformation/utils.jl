@@ -11,11 +11,11 @@ D = Differential(t)
 
 # Simple pendulum in cartesian coordinates
 eqs = [D(x) ~ w,
-       D(y) ~ z,
-       D(w) ~ T*x,
-       D(z) ~ T*y - g,
-       0 ~ x^2 + y^2 - L^2]
-pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name=:pendulum)
+    D(y) ~ z,
+    D(w) ~ T * x,
+    D(z) ~ T * y - g,
+    0 ~ x^2 + y^2 - L^2]
+pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
 state = TearingState(pendulum)
 StructuralTransformations.find_solvables!(state)
 sss = state.structure

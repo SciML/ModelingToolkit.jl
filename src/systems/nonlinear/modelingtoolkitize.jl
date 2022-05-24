@@ -5,14 +5,16 @@ Generate `NonlinearSystem`, dependent variables, and parameters from an `Nonline
 """
 function modelingtoolkitize(prob::NonlinearProblem; kwargs...)
     p = prob.p
-    has_p = !(p isa Union{DiffEqBase.NullParameters,Nothing})
+    has_p = !(p isa Union{DiffEqBase.NullParameters, Nothing})
 
     _vars = reshape([variable(:x, i) for i in eachindex(prob.u0)], size(prob.u0))
 
     vars = prob.u0 isa Number ? _vars : ArrayInterfaceCore.restructure(prob.u0, _vars)
     params = if has_p
         _params = define_params(p)
-        p isa Number ? _params[1] : (p isa Tuple || p isa NamedTuple ? _params : ArrayInterfaceCore.restructure(p, _params))
+        p isa Number ? _params[1] :
+        (p isa Tuple || p isa NamedTuple ? _params :
+         ArrayInterfaceCore.restructure(p, _params))
     else
         []
     end
@@ -36,12 +38,10 @@ function modelingtoolkitize(prob::NonlinearProblem; kwargs...)
     default_u0 = Dict(sts .=> vec(collect(prob.u0)))
     default_p = has_p ? Dict(params .=> vec(collect(prob.p))) : Dict()
 
-    de = NonlinearSystem(
-        eqs, sts, params,
-        defaults=merge(default_u0, default_p);
-        name=gensym(:MTKizedNonlinProb),
-        kwargs...
-    )
+    de = NonlinearSystem(eqs, sts, params,
+                         defaults = merge(default_u0, default_p);
+                         name = gensym(:MTKizedNonlinProb),
+                         kwargs...)
 
     de
 end
