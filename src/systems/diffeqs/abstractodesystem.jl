@@ -66,6 +66,33 @@ function calculate_control_jacobian(sys::AbstractODESystem;
     return jac
 end
 
+function calculate_split_jacobian(sys::AbstractODESystem, A, f_n;
+    sparse=false, simplify=false, dvs=states(sys))
+
+    if isequal(dvs, states(sys))
+        cache = get_jac(sys)[]
+        if cache isa Tuple && cache[2] == (sparse, simplify)
+            return cache[1]
+        end
+    end
+
+    iv = get_iv(sys)
+
+    if sparse
+        jac = sparsejacobian(f_n, dvs, simplify=simplify)
+    else
+        jac = jacobian(f_n, dvs, simplify=simplify)
+    end
+
+    jac += A
+
+    if isequal(dvs, states(sys))
+        get_jac(sys)[] = jac, (sparse, simplify) # cache Jacobian
+    end
+
+    return jac
+end
+
 function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                         simplify=false, kwargs...)
     tgrad = calculate_tgrad(sys,simplify=simplify)
@@ -97,21 +124,7 @@ end
 
 function generate_split_jacobian(sys::AbstractODESystem, A, f_n, dvs = states(sys), ps = parameters(sys);
     simplify=false, sparse = false, kwargs...)
-    if isequal(dvs, states(sys))
-        cache = get_jac(sys)[]
-        if cache isa Tuple && cache[2] == (sparse, simplify)
-            return cache[1]
-        end
-    end
-    if sparse
-        jac_fn = sparsejacobian(f_n, dvs, simplify=simplify)
-    else
-        jac_fn = jacobian(f_n, dvs, simplify=simplify)
-    end
-    jac = A + jac_fn
-    if isequal(dvs, states(sys))
-        get_jac(sys)[] = jac, (sparse, simplify) # cache Jacobian
-    end
+    jac = calculate_split_jacobian(sys, A, f_n; sparse=sparse, simplify=simplify)
     return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
@@ -573,6 +586,8 @@ function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                       kwargs...) where {iip}
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     rhs = [eq.rhs for eq in eqs]
+    check_operator_variables(eqs, Differential)
+    check_lhs(eqs, Differential, Set(dvs))
     A, f_n = semilinear_form(rhs, dvs)
     # f1 and f2 are generated from the linear and non-linear splits of the operator respectively
     f1_gen, f2_gen = generate_split_function(sys, A, f_n, dvs, ps; expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
