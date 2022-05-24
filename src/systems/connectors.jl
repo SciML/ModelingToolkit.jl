@@ -2,8 +2,8 @@ get_connection_type(s) = getmetadata(unwrap(s), VariableConnectType, Equality)
 
 function with_connector_type(expr)
     @assert expr isa Expr && (expr.head == :function || (expr.head == :(=) &&
-                                       expr.args[1] isa Expr &&
-                                       expr.args[1].head == :call))
+              expr.args[1] isa Expr &&
+              expr.args[1].head == :call))
 
     sig = expr.args[1]
     body = expr.args[2]
@@ -17,7 +17,9 @@ function with_connector_type(expr)
                 $body
             end
             res = f()
-            $isdefined(res, :connector_type) && $getfield(res, :connector_type) === nothing ? $Setfield.@set!(res.connector_type = $connector_type(res)) : res
+            $isdefined(res, :connector_type) &&
+                $getfield(res, :connector_type) === nothing ?
+            $Setfield.@set!(res.connector_type=$connector_type(res)) : res
         end
     end
 end
@@ -46,19 +48,20 @@ function connector_type(sys::AbstractSystem)
             n_regular += 1
         end
     end
-    (n_stream > 0 && n_flow > 1) && error("There are multiple flow variables in $(nameof(sys))!")
+    (n_stream > 0 && n_flow > 1) &&
+        error("There are multiple flow variables in $(nameof(sys))!")
     if n_flow != n_regular
         @warn "$(nameof(sys)) contains $n_flow variables, yet $n_regular regular " *
-        "(non-flow, non-stream, non-input, non-output) variables." *
-        "This could lead to imbalanced model that are difficult to debug." *
-        "Consider marking some of the regular variables as input/output variables."
+              "(non-flow, non-stream, non-input, non-output) variables." *
+              "This could lead to imbalanced model that are difficult to debug." *
+              "Consider marking some of the regular variables as input/output variables."
     end
     n_stream > 0 ? StreamConnector() : RegularConnector()
 end
 
 get_systems(c::Connection) = c.systems
 
-instream(a) = term(instream, unwrap(a), type=symtype(a))
+instream(a) = term(instream, unwrap(a), type = symtype(a))
 SymbolicUtils.promote_symtype(::typeof(instream), _) = Real
 
 isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) !== nothing
@@ -72,9 +75,11 @@ function flowvar(sys::AbstractSystem)
     error("There in no flow variable in $(nameof(sys))")
 end
 
-collect_instream!(set, eq::Equation) = collect_instream!(set, eq.lhs) | collect_instream!(set, eq.rhs)
+function collect_instream!(set, eq::Equation)
+    collect_instream!(set, eq.lhs) | collect_instream!(set, eq.rhs)
+end
 
-function collect_instream!(set, expr, occurs=false)
+function collect_instream!(set, expr, occurs = false)
     istree(expr) || return occurs
     op = operation(expr)
     op === instream && (push!(set, expr); occurs = true)
@@ -95,20 +100,21 @@ function _positivemax(m, si)
         one(T)
     else
         if si > 0
-            (si/eps)^2*(3-2* si/eps)
+            (si / eps)^2 * (3 - 2 * si / eps)
         else
             zero(T)
         end
     end
-    alpha * max(m, 0) + (1-alpha)*eps
+    alpha * max(m, 0) + (1 - alpha) * eps
 end
 @register _positivemax(m, tol)
-positivemax(m, ::Any; tol=nothing) = _positivemax(m, tol)
-mydiv(num, den) = if den == 0
-    error()
-else
-    num / den
-end
+positivemax(m, ::Any; tol = nothing) = _positivemax(m, tol)
+mydiv(num, den) =
+    if den == 0
+        error()
+    else
+        num / den
+    end
 @register mydiv(n, d)
 
 function generate_isouter(sys::AbstractSystem)
@@ -117,7 +123,7 @@ function generate_isouter(sys::AbstractSystem)
         n = nameof(s)
         isconnector(s) && push!(outer_connectors, n)
     end
-    let outer_connectors=outer_connectors
+    let outer_connectors = outer_connectors
         function isouter(sys)::Bool
             s = string(nameof(sys))
             isconnector(sys) || error("$s is not a connector!")
@@ -129,8 +135,8 @@ function generate_isouter(sys::AbstractSystem)
 end
 
 struct LazyNamespace
-    namespace::Union{Nothing,Symbol}
-    sys
+    namespace::Union{Nothing, Symbol}
+    sys::Any
 end
 
 Base.copy(l::LazyNamespace) = renamespace(l.namespace, l.sys)
@@ -138,12 +144,16 @@ Base.nameof(l::LazyNamespace) = renamespace(l.namespace, nameof(l.sys))
 
 struct ConnectionElement
     sys::LazyNamespace
-    v
+    v::Any
     isouter::Bool
 end
-Base.hash(l::ConnectionElement, salt::UInt) = hash(nameof(l.sys)) ⊻ hash(l.v) ⊻ hash(l.isouter) ⊻ salt
+function Base.hash(l::ConnectionElement, salt::UInt)
+    hash(nameof(l.sys)) ⊻ hash(l.v) ⊻ hash(l.isouter) ⊻ salt
+end
 Base.isequal(l1::ConnectionElement, l2::ConnectionElement) = l1 == l2
-Base.:(==)(l1::ConnectionElement, l2::ConnectionElement) = nameof(l1.sys) == nameof(l2.sys) && isequal(l1.v, l2.v) && l1.isouter == l2.isouter
+function Base.:(==)(l1::ConnectionElement, l2::ConnectionElement)
+    nameof(l1.sys) == nameof(l2.sys) && isequal(l1.v, l2.v) && l1.isouter == l2.isouter
+end
 namespaced_var(l::ConnectionElement) = states(l, l.v)
 states(l::ConnectionElement, v) = states(copy(l.sys), v)
 
@@ -153,7 +163,7 @@ end
 
 function Base.show(io::IO, c::ConnectionSet)
     print(io, "<")
-    for i in 1:length(c.set)-1
+    for i in 1:(length(c.set) - 1)
         @unpack sys, v, isouter = c.set[i]
         print(io, nameof(sys), ".", v, "::", isouter ? "outer" : "inner", ", ")
     end
@@ -161,7 +171,9 @@ function Base.show(io::IO, c::ConnectionSet)
     print(io, nameof(sys), ".", v, "::", isouter ? "outer" : "inner", ">")
 end
 
-@noinline connection_error(ss) = error("Different types of connectors are in one conenction statement: <$(map(nameof, ss))>")
+@noinline function connection_error(ss)
+    error("Different types of connectors are in one conenction statement: <$(map(nameof, ss))>")
+end
 
 function connection2set!(connectionsets, namespace, ss, isouter)
     nn = map(nameof, ss)
@@ -170,7 +182,8 @@ function connection2set!(connectionsets, namespace, ss, isouter)
     csets = [T[] for _ in 1:length(sts1)]
     for (i, s) in enumerate(ss)
         sts = states(s)
-        i != 1 && ((length(sts1) == length(sts) && all(Base.Fix2(in, sts1), sts)) || connection_error(ss))
+        i != 1 && ((length(sts1) == length(sts) && all(Base.Fix2(in, sts1), sts)) ||
+         connection_error(ss))
         io = isouter(s)
         for (j, v) in enumerate(sts)
             push!(csets[j], T(LazyNamespace(namespace, s), v, io))
@@ -191,7 +204,7 @@ function generate_connection_set(sys::AbstractSystem)
     sys, merge(connectionsets)
 end
 
-function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace=nothing)
+function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace = nothing)
     subsys = get_systems(sys)
 
     isouter = generate_isouter(sys)
@@ -222,13 +235,15 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace
     end
 
     # pre order traversal
-    @set! sys.systems = map(s->generate_connection_set!(connectionsets, s, renamespace(namespace, nameof(s))), subsys)
+    @set! sys.systems = map(s -> generate_connection_set!(connectionsets, s,
+                                                          renamespace(namespace, nameof(s))),
+                            subsys)
     @set! sys.eqs = eqs
 end
 
 function Base.merge(csets::AbstractVector{<:ConnectionSet})
     mcsets = ConnectionSet[]
-    ele2idx = Dict{ConnectionElement,Int}()
+    ele2idx = Dict{ConnectionElement, Int}()
     cacheset = Set{ConnectionElement}()
     for cset in csets
         idx = nothing
@@ -259,7 +274,9 @@ function Base.merge(csets::AbstractVector{<:ConnectionSet})
     mcsets
 end
 
-function generate_connection_equations_and_stream_connections(csets::AbstractVector{<:ConnectionSet})
+function generate_connection_equations_and_stream_connections(csets::AbstractVector{
+                                                                                    <:ConnectionSet
+                                                                                    })
     eqs = Equation[]
     stream_connections = ConnectionSet[]
 
@@ -290,10 +307,10 @@ function generate_connection_equations_and_stream_connections(csets::AbstractVec
     eqs, stream_connections
 end
 
-function expand_connections(sys::AbstractSystem; debug=false, tol=1e-10)
+function expand_connections(sys::AbstractSystem; debug = false, tol = 1e-10)
     sys, csets = generate_connection_set(sys)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
-    _sys = expand_instream(instream_csets, sys; debug=debug, tol=tol)
+    _sys = expand_instream(instream_csets, sys; debug = debug, tol = tol)
     sys = flatten(sys, true)
     @set! sys.eqs = [equations(_sys); ceqs]
 end
@@ -311,10 +328,14 @@ function unnamespace(root, namespace)
     end
 end
 
-function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSystem, namespace=nothing, prevnamespace=nothing; debug=false, tol=1e-8)
+function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSystem,
+                         namespace = nothing, prevnamespace = nothing; debug = false,
+                         tol = 1e-8)
     subsys = get_systems(sys)
     # post order traversal
-    @set! sys.systems = map(s->expand_instream(csets, s, renamespace(namespace, nameof(s)), namespace; debug, tol), subsys)
+    @set! sys.systems = map(s -> expand_instream(csets, s,
+                                                 renamespace(namespace, nameof(s)),
+                                                 namespace; debug, tol), subsys)
     subsys = get_systems(sys)
 
     if debug
@@ -334,7 +355,6 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
                 push!(eqs, eq)
             end
         end
-
     end
 
     for ex in instream_exprs
@@ -367,20 +387,23 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
             if !cset[idx_in_set].isouter
                 fv = flowvar(first(cset).sys.sys)
                 # mj.c.m_flow
-                innerfvs = [get_current_var(namespace, s, fv) for (j, s) in enumerate(cset) if j != idx_in_set && !s.isouter]
-                innersvs = [get_current_var(namespace, s, sv) for (j, s) in enumerate(cset) if j != idx_in_set && !s.isouter]
+                innerfvs = [get_current_var(namespace, s, fv)
+                            for (j, s) in enumerate(cset) if j != idx_in_set && !s.isouter]
+                innersvs = [get_current_var(namespace, s, sv)
+                            for (j, s) in enumerate(cset) if j != idx_in_set && !s.isouter]
                 # ck.m_flow
                 outerfvs = [get_current_var(namespace, s, fv) for s in cset if s.isouter]
                 outersvs = [get_current_var(namespace, s, sv) for s in cset if s.isouter]
 
-                sub[ex] = term(instream_rt, Val(length(innerfvs)), Val(length(outerfvs)), innerfvs..., innersvs..., outerfvs..., outersvs...)
+                sub[ex] = term(instream_rt, Val(length(innerfvs)), Val(length(outerfvs)),
+                               innerfvs..., innersvs..., outerfvs..., outersvs...)
             end
         end
     end
 
     # additional equations
     additional_eqs = Equation[]
-    csets = filter(cset->any(e->e.sys.namespace === namespace, cset.set), csets)
+    csets = filter(cset -> any(e -> e.sys.namespace === namespace, cset.set), csets)
     for cset′ in csets
         cset = cset′.set
         connectors = Vector{Any}(undef, length(cset))
@@ -412,8 +435,9 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
             s_inners = (s for s in cset if !s.isouter)
             s_outers = (s for s in cset if s.isouter)
             for (q, oscq) in enumerate(s_outers)
-                sq += sum(s->max(-states(s, fv), 0), s_inners)
-                for (k, s) in enumerate(s_outers); k == q && continue
+                sq += sum(s -> max(-states(s, fv), 0), s_inners)
+                for (k, s) in enumerate(s_outers)
+                    k == q && continue
                     f = states(s.sys.sys, fv)
                     sq += max(f, 0)
                 end
@@ -422,13 +446,14 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
                 den = 0
                 for s in s_inners
                     f = states(s.sys.sys, fv)
-                    tmp = positivemax(-f, sq; tol=tol)
+                    tmp = positivemax(-f, sq; tol = tol)
                     den += tmp
                     num += tmp * states(s.sys.sys, sv)
                 end
-                for (k, s) in enumerate(s_outers); k == q && continue
+                for (k, s) in enumerate(s_outers)
+                    k == q && continue
                     f = states(s.sys.sys, fv)
-                    tmp = positivemax(f, sq; tol=tol)
+                    tmp = positivemax(f, sq; tol = tol)
                     den += tmp
                     num += tmp * instream(states(s.sys.sys, sv))
                 end
@@ -447,7 +472,7 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
         display(sub)
         println("======================================")
         println("Substituted equations")
-        foreach(i->println(instream_eqs[i] => subed_eqs[i]), eachindex(subed_eqs))
+        foreach(i -> println(instream_eqs[i] => subed_eqs[i]), eachindex(subed_eqs))
         println("======================================")
     end
 
@@ -487,23 +512,25 @@ function get_cset_sv(namespace, ex, csets)
 end
 
 # instream runtime
-@generated function _instream_split(::Val{inner_n}, ::Val{outer_n}, vars::NTuple{N,Any}) where {inner_n, outer_n, N}
+@generated function _instream_split(::Val{inner_n}, ::Val{outer_n},
+                                    vars::NTuple{N, Any}) where {inner_n, outer_n, N}
     #instream_rt(innerfvs..., innersvs..., outerfvs..., outersvs...)
     ret = Expr(:tuple)
     # mj.c.m_flow
-    inner_f = :(Base.@ntuple $inner_n i -> vars[i])
+    inner_f = :(Base.@ntuple $inner_n i->vars[i])
     offset = inner_n
-    inner_s = :(Base.@ntuple $inner_n i -> vars[$offset+i])
+    inner_s = :(Base.@ntuple $inner_n i->vars[$offset + i])
     offset += inner_n
     # ck.m_flow
-    outer_f = :(Base.@ntuple $outer_n i -> vars[$offset+i])
+    outer_f = :(Base.@ntuple $outer_n i->vars[$offset + i])
     offset += outer_n
-    outer_s = :(Base.@ntuple $outer_n i -> vars[$offset+i])
+    outer_s = :(Base.@ntuple $outer_n i->vars[$offset + i])
     Expr(:tuple, inner_f, inner_s, outer_f, outer_s)
 end
 
-function instream_rt(ins::Val{inner_n}, outs::Val{outer_n}, vars::Vararg{Any,N}) where {inner_n, outer_n, N}
-    @assert N == 2*(inner_n + outer_n)
+function instream_rt(ins::Val{inner_n}, outs::Val{outer_n},
+                     vars::Vararg{Any, N}) where {inner_n, outer_n, N}
+    @assert N == 2 * (inner_n + outer_n)
 
     # inner: mj.c.m_flow
     # outer: ck.m_flow

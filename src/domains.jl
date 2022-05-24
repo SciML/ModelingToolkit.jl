@@ -1,6 +1,6 @@
 import DomainSets: Interval, Ball, infimum, supremum
 
-@deprecate IntervalDomain(a,b) Interval(a,b)
+@deprecate IntervalDomain(a, b) Interval(a, b)
 @deprecate CircleDomain() Ball()
 
 # type piracy on Interval for downstream compatibility to be reverted once upgrade is complete

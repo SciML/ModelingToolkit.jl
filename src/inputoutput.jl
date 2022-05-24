@@ -17,11 +17,9 @@ function outputs(sys)
     o = observed(sys)
     rhss = [eq.rhs for eq in o]
     lhss = [eq.lhs for eq in o]
-    unique([
-        filter(isoutput, states(sys))
-        filter(x -> x isa Term && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
-        filter(x -> x isa Term && isoutput(x), lhss)
-    ])
+    unique([filter(isoutput, states(sys))
+            filter(x -> x isa Term && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
+            filter(x -> x isa Term && isoutput(x), lhss)])
 end
 
 """
@@ -30,7 +28,7 @@ end
 Return inputs that are bound within the system, i.e., internal inputs
 See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref), [`bound_outputs`](@ref), [`unbound_outputs`](@ref)
 """
-bound_inputs(sys) = filter(x->is_bound(sys, x), inputs(sys))
+bound_inputs(sys) = filter(x -> is_bound(sys, x), inputs(sys))
 
 """
     unbound_inputs(sys)
@@ -38,7 +36,7 @@ bound_inputs(sys) = filter(x->is_bound(sys, x), inputs(sys))
 Return inputs that are not bound within the system, i.e., external inputs
 See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref), [`bound_outputs`](@ref), [`unbound_outputs`](@ref)
 """
-unbound_inputs(sys) = filter(x->!is_bound(sys, x), inputs(sys))
+unbound_inputs(sys) = filter(x -> !is_bound(sys, x), inputs(sys))
 
 """
     bound_outputs(sys)
@@ -46,7 +44,7 @@ unbound_inputs(sys) = filter(x->!is_bound(sys, x), inputs(sys))
 Return outputs that are bound within the system, i.e., internal outputs
 See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref), [`bound_outputs`](@ref), [`unbound_outputs`](@ref)
 """
-bound_outputs(sys) = filter(x->is_bound(sys, x), outputs(sys))
+bound_outputs(sys) = filter(x -> is_bound(sys, x), outputs(sys))
 
 """
     unbound_outputs(sys)
@@ -54,7 +52,7 @@ bound_outputs(sys) = filter(x->is_bound(sys, x), outputs(sys))
 Return outputs that are not bound within the system, i.e., external outputs
 See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref), [`bound_outputs`](@ref), [`unbound_outputs`](@ref)
 """
-unbound_outputs(sys) = filter(x->!is_bound(sys, x), outputs(sys))
+unbound_outputs(sys) = filter(x -> !is_bound(sys, x), outputs(sys))
 
 """
     is_bound(sys, u)
@@ -66,7 +64,7 @@ or if it remains an external input that the user has to supply before simulating
 
 See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref), [`bound_outputs`](@ref), [`unbound_outputs`](@ref)
 """
-function is_bound(sys, u, stack=[])
+function is_bound(sys, u, stack = [])
     #=
     For observed quantities, we check if a variable is connected to something that is bound to something further out. 
     In the following scenario
@@ -80,7 +78,7 @@ function is_bound(sys, u, stack=[])
     =#
     u ∈ Set(stack) && return false # Cycle detected
     eqs = equations(sys)
-    eqs = filter(eq->has_var(eq, u), eqs) # Only look at equations that contain u
+    eqs = filter(eq -> has_var(eq, u), eqs) # Only look at equations that contain u
     # isout = isoutput(u)
     for eq in eqs
         vars = [get_variables(eq.rhs); get_variables(eq.lhs)]
@@ -93,7 +91,7 @@ function is_bound(sys, u, stack=[])
     end
     # Look through observed equations as well
     oeqs = observed(sys)
-    oeqs = filter(eq->has_var(eq, u), oeqs) # Only look at equations that contain u
+    oeqs = filter(eq -> has_var(eq, u), oeqs) # Only look at equations that contain u
     for eq in oeqs
         vars = [get_variables(eq.rhs); get_variables(eq.lhs)]
         for var in vars
@@ -108,8 +106,6 @@ function is_bound(sys, u, stack=[])
     end
     false
 end
-
-
 
 """
     same_or_inner_namespace(u, var)
@@ -144,7 +140,7 @@ function get_namespace(x)
     if length(parts) == 1
         return ""
     end
-    join(parts[1:end-1], '₊')
+    join(parts[1:(end - 1)], '₊')
 end
 
 """
@@ -180,14 +176,11 @@ t = 0
 f[1](x, inputs, p, t)
 ```
 """
-function generate_control_function(
-    sys::AbstractODESystem;
-    implicit_dae=false,
-    has_difference=false,
-    simplify=true,
-    kwargs...
-)
-
+function generate_control_function(sys::AbstractODESystem;
+                                   implicit_dae = false,
+                                   has_difference = false,
+                                   simplify = true,
+                                   kwargs...)
     ctrls = unbound_inputs(sys)
     if isempty(ctrls)
         error("No unbound inputs were found in system.")
@@ -203,22 +196,21 @@ function generate_control_function(
     end
 
     dvs = states(sys)
-    ps  = parameters(sys)
+    ps = parameters(sys)
 
     dvs = setdiff(dvs, ctrls)
     ps = setdiff(ps, ctrls)
-    inputs = map(x->time_varying_as_func(value(x), sys), ctrls)
+    inputs = map(x -> time_varying_as_func(value(x), sys), ctrls)
 
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     check_operator_variables(eqs, Differential)
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
-                        [eq.rhs for eq in eqs]
-
+           [eq.rhs for eq in eqs]
 
     # TODO: add an optional check on the ordering of observed equations
-    u = map(x->time_varying_as_func(value(x), sys), dvs)
-    p = map(x->time_varying_as_func(value(x), sys), ps)
+    u = map(x -> time_varying_as_func(value(x), sys), dvs)
+    p = map(x -> time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
     # pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
@@ -229,7 +221,8 @@ function generate_control_function(
         args = (ddvs, args...)
     end
     pre, sol_states = get_substitutions_and_solved_states(sys)
-    f = build_function(rhss, args...; postprocess_fbody=pre, states=sol_states, kwargs...)
+    f = build_function(rhss, args...; postprocess_fbody = pre, states = sol_states,
+                       kwargs...)
     f, dvs, ps
 end
 
@@ -244,5 +237,5 @@ function toparam(sys, ctrls::AbstractVector)
     eqs = map(eqs) do eq
         substitute(eq.lhs, subs) ~ substitute(eq.rhs, subs)
     end
-    ODESystem(eqs, name=nameof(sys))
+    ODESystem(eqs, name = nameof(sys))
 end

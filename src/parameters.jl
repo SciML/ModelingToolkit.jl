@@ -40,6 +40,5 @@ macro parameters(xs...)
     Symbolics._parse_vars(:parameters,
                           Real,
                           xs,
-                          toparam,
-                         ) |> esc
+                          toparam) |> esc
 end

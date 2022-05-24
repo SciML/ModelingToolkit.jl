@@ -33,7 +33,7 @@ s1 = Num(Sym{Real}(:s))
 @test ModelingToolkit.isparameter(s)
 @test ModelingToolkit.isparameter(σ)
 
-@derivatives D'~t
+@derivatives D' ~ t
 D1 = Differential(t)
 @test D1 == D
 
@@ -43,7 +43,7 @@ D1 = Differential(t)
 # Test array expressions
 @parameters begin
     t[1:2]
-    s[1:4,1:2]
+    s[1:4, 1:2]
 end
 @parameters σ[1:2](..)
 
@@ -67,14 +67,14 @@ end
 #
 #@test isequal(x1, x)
 
-@variables a[1:11,1:2]
+@variables a[1:11, 1:2]
 @variables a()
 
 using Symbolics: value, VariableDefaultValue
 using ModelingToolkit: VariableConnectType, VariableUnit, rename
 using Unitful
 
-vals = [1,2,3,4]
+vals = [1, 2, 3, 4]
 @variables x=1 xs[1:4]=vals ys[1:5]=1
 
 @test getmetadata(x, VariableDefaultValue) === 1
@@ -83,7 +83,7 @@ vals = [1,2,3,4]
 
 u = u"m^3/s"
 @variables begin
-    x = [1, 2], [connect=Flow,unit=u]
+    x = [1, 2], [connect = Flow, unit = u]
     y = 2
 end
 
@@ -93,8 +93,8 @@ end
 @test getmetadata(y, VariableDefaultValue) === 2
 
 @variables begin
-    x, [connect=Flow,unit=u]
-    y = 2, [connect=Flow]
+    x, [connect = Flow, unit = u]
+    y = 2, [connect = Flow]
 end
 
 @test !hasmetadata(x, VariableDefaultValue)
@@ -108,7 +108,7 @@ a = rename(value(x), :a)
 @test getmetadata(x, VariableConnectType) == Flow
 @test getmetadata(x, VariableUnit) == u
 
-@variables t x(t)=1 [connect=Flow,unit=u]
+@variables t x(t)=1 [connect = Flow, unit = u]
 
 @test getmetadata(x, VariableDefaultValue) == 1
 @test getmetadata(x, VariableConnectType) == Flow
@@ -119,10 +119,10 @@ a = rename(value(x), :a)
 @test getmetadata(a, VariableConnectType) == Flow
 @test getmetadata(a, VariableUnit) == u
 
-@parameters p=2 [unit=u"m",]
+@parameters p=2 [unit = u"m"]
 @test getmetadata(p, VariableDefaultValue) == 2
 @test !hasmetadata(p, VariableConnectType)
 @test getmetadata(p, VariableUnit) == u"m"
 @test ModelingToolkit.isparameter(p)
 
-@test_throws Any (@macroexpand @parameters p=2 [unit=u"m",abc=2])
+@test_throws Any (@macroexpand @parameters p=2 [unit = u"m", abc = 2])
