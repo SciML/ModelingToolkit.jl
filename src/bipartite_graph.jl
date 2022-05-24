@@ -1,8 +1,8 @@
 module BipartiteGraphs
 
 export BipartiteEdge, BipartiteGraph, DiCMOBiGraph, Unassigned, unassigned,
-        Matching, ResidualCMOGraph, InducedCondensationGraph, maximal_matching,
-        construct_augmenting_path!, MatchedCondensationGraph
+       Matching, ResidualCMOGraph, InducedCondensationGraph, maximal_matching,
+       construct_augmenting_path!, MatchedCondensationGraph
 
 export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors, 𝑑neighbors,
        𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST, set_neighbors!, invview,
@@ -25,10 +25,9 @@ Base.size(u::Unassigned) = ()
 Base.iterate(u::Unassigned) = (unassigned, nothing)
 Base.iterate(u::Unassigned, state) = nothing
 
-Base.show(io::IO, ::Unassigned) =
-    printstyled(io, "u"; color=:light_black)
+Base.show(io::IO, ::Unassigned) = printstyled(io, "u"; color = :light_black)
 
-struct Matching{U #=> :Unassigned =#, V<:AbstractVector} <: AbstractVector{Union{U, Int}}
+struct Matching{U, V <: AbstractVector} <: AbstractVector{Union{U, Int}} #=> :Unassigned =#
     match::V
     inv_match::Union{Nothing, V}
 end
@@ -37,19 +36,26 @@ function Matching{V}(m::Matching) where {V}
     eltype(m) === Union{V, Int} && return M
     VUT = typeof(similar(m.match, Union{V, Int}))
     Matching{V}(convert(VUT, m.match),
-        m.inv_match === nothing ? nothing : convert(VUT, m.inv_match))
+                m.inv_match === nothing ? nothing : convert(VUT, m.inv_match))
 end
 Matching(m::Matching) = m
-Matching{U}(v::V) where {U, V<:AbstractVector} = Matching{U, V}(v, nothing)
-Matching{U}(v::V, iv::Union{V, Nothing}) where {U, V<:AbstractVector} = Matching{U, V}(v, iv)
-Matching(v::V) where {U, V<:AbstractVector{Union{U, Int}}} =
+Matching{U}(v::V) where {U, V <: AbstractVector} = Matching{U, V}(v, nothing)
+function Matching{U}(v::V, iv::Union{V, Nothing}) where {U, V <: AbstractVector}
+    Matching{U, V}(v, iv)
+end
+function Matching(v::V) where {U, V <: AbstractVector{Union{U, Int}}}
     Matching{@isdefined(U) ? U : Unassigned, V}(v, nothing)
-Matching(m::Int) = Matching{Unassigned}(Union{Int, Unassigned}[unassigned for _ = 1:m], nothing)
+end
+function Matching(m::Int)
+    Matching{Unassigned}(Union{Int, Unassigned}[unassigned for _ in 1:m], nothing)
+end
 
 Base.size(m::Matching) = Base.size(m.match)
 Base.getindex(m::Matching, i::Integer) = m.match[i]
 Base.iterate(m::Matching, state...) = iterate(m.match, state...)
-Base.copy(m::Matching) = Matching(copy(m.match), m.inv_match === nothing ? nothing : copy(m.inv_match))
+function Base.copy(m::Matching)
+    Matching(copy(m.match), m.inv_match === nothing ? nothing : copy(m.inv_match))
+end
 function Base.setindex!(m::Matching{U}, v::Union{Integer, U}, i::Integer) where {U}
     if m.inv_match !== nothing
         oldv = m.match[i]
@@ -66,9 +72,9 @@ function Base.push!(m::Matching{U}, v::Union{Integer, U}) where {U}
     end
 end
 
-function complete(m::Matching{U}, N=length(m.match)) where {U}
+function complete(m::Matching{U}, N = length(m.match)) where {U}
     m.inv_match !== nothing && return m
-    inv_match = Union{U, Int}[unassigned for _ = 1:N]
+    inv_match = Union{U, Int}[unassigned for _ in 1:N]
     for (i, eq) in enumerate(m.match)
         isa(eq, Int) || continue
         inv_match[eq] = i
@@ -76,8 +82,10 @@ function complete(m::Matching{U}, N=length(m.match)) where {U}
     return Matching{U}(collect(m.match), inv_match)
 end
 
-@noinline require_complete(m::Matching) =
-    m.inv_match === nothing && throw(ArgumentError("Backwards matching not defined. `complete` the matching first."))
+@noinline function require_complete(m::Matching)
+    m.inv_match === nothing &&
+        throw(ArgumentError("Backwards matching not defined. `complete` the matching first."))
+end
 
 function invview(m::Matching{U, V}) where {U, V}
     require_complete(m)
@@ -89,10 +97,10 @@ end
 ###
 @enum VertType SRC DST
 
-struct BipartiteEdge{I<:Integer} <: Graphs.AbstractEdge{I}
+struct BipartiteEdge{I <: Integer} <: Graphs.AbstractEdge{I}
     src::I
     dst::I
-    function BipartiteEdge(src::I, dst::V) where {I,V}
+    function BipartiteEdge(src::I, dst::V) where {I, V}
         T = promote_type(I, V)
         new{T}(T(src), T(dst))
     end
@@ -138,17 +146,27 @@ badjlist = [[1,2,5,6],[3,4,6]]
 bg = BipartiteGraph(7, fadjlist, badjlist)
 ```
 """
-mutable struct BipartiteGraph{I<:Integer, M} <: Graphs.AbstractGraph{I}
+mutable struct BipartiteGraph{I <: Integer, M} <: Graphs.AbstractGraph{I}
     ne::Int
     fadjlist::Vector{Vector{I}} # `fadjlist[src] => dsts`
-    badjlist::Union{Vector{Vector{I}},I} # `badjlist[dst] => srcs` or `ndsts`
+    badjlist::Union{Vector{Vector{I}}, I} # `badjlist[dst] => srcs` or `ndsts`
     metadata::M
 end
-BipartiteGraph(ne::Integer, fadj::AbstractVector, badj::Union{AbstractVector,Integer}=maximum(maximum, fadj); metadata=nothing) = BipartiteGraph(ne, fadj, badj, metadata)
-BipartiteGraph(fadj::AbstractVector, badj::Union{AbstractVector,Integer}=maximum(maximum, fadj); metadata=nothing) =
-    BipartiteGraph(mapreduce(length, +, fadj; init=0), fadj, badj, metadata)
+function BipartiteGraph(ne::Integer, fadj::AbstractVector,
+                        badj::Union{AbstractVector, Integer} = maximum(maximum, fadj);
+                        metadata = nothing)
+    BipartiteGraph(ne, fadj, badj, metadata)
+end
+function BipartiteGraph(fadj::AbstractVector,
+                        badj::Union{AbstractVector, Integer} = maximum(maximum, fadj);
+                        metadata = nothing)
+    BipartiteGraph(mapreduce(length, +, fadj; init = 0), fadj, badj, metadata)
+end
 
-@noinline require_complete(g::BipartiteGraph) = g.badjlist isa AbstractVector || throw(ArgumentError("The graph has no back edges. Use `complete`."))
+@noinline function require_complete(g::BipartiteGraph)
+    g.badjlist isa AbstractVector ||
+        throw(ArgumentError("The graph has no back edges. Use `complete`."))
+end
 
 function invview(g::BipartiteGraph)
     require_complete(g)
@@ -157,7 +175,7 @@ end
 
 function complete(g::BipartiteGraph{I}) where {I}
     isa(g.badjlist, AbstractVector) && return g
-    badjlist = Vector{I}[Vector{I}() for _ in 1:g.badjlist]
+    badjlist = Vector{I}[Vector{I}() for _ in 1:(g.badjlist)]
     for (s, l) in enumerate(g.fadjlist)
         for d in l
             push!(badjlist[d], s)
@@ -173,7 +191,7 @@ Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T<:Integer}
 
 Test whether two [`BipartiteGraph`](@ref)s are equal.
 """
-function Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T<:Integer}
+function Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T <: Integer}
     iseq = (bg1.ne == bg2.ne)
     iseq &= (bg1.fadjlist == bg2.fadjlist)
     iseq &= (bg1.badjlist == bg2.badjlist)
@@ -185,14 +203,17 @@ $(SIGNATURES)
 
 Build an empty `BipartiteGraph` with `nsrcs` sources and `ndsts` destinations.
 """
-function BipartiteGraph(nsrcs::T, ndsts::T, backedge::Val{B}=Val(true); metadata=nothing) where {T,B}
-    fadjlist = map(_->T[], 1:nsrcs)
-    badjlist = B ? map(_->T[], 1:ndsts) : ndsts
+function BipartiteGraph(nsrcs::T, ndsts::T, backedge::Val{B} = Val(true);
+                        metadata = nothing) where {T, B}
+    fadjlist = map(_ -> T[], 1:nsrcs)
+    badjlist = B ? map(_ -> T[], 1:ndsts) : ndsts
     BipartiteGraph(0, fadjlist, badjlist, metadata)
 end
 
-Base.copy(bg::BipartiteGraph) = BipartiteGraph(bg.ne, copy(bg.fadjlist), copy(bg.badjlist), deepcopy(bg.metadata))
-Base.eltype(::Type{<:BipartiteGraph{I}}) where I = I
+function Base.copy(bg::BipartiteGraph)
+    BipartiteGraph(bg.ne, copy(bg.fadjlist), copy(bg.badjlist), deepcopy(bg.metadata))
+end
+Base.eltype(::Type{<:BipartiteGraph{I}}) where {I} = I
 function Base.empty!(g::BipartiteGraph)
     foreach(empty!, g.fadjlist)
     g.badjlist isa AbstractVector && foreach(empty!, g.badjlist)
@@ -210,17 +231,23 @@ end
 Graphs.is_directed(::Type{<:BipartiteGraph}) = false
 Graphs.vertices(g::BipartiteGraph) = (𝑠vertices(g), 𝑑vertices(g))
 𝑠vertices(g::BipartiteGraph) = axes(g.fadjlist, 1)
-𝑑vertices(g::BipartiteGraph) = g.badjlist isa AbstractVector ? axes(g.badjlist, 1) : Base.OneTo(g.badjlist)
+function 𝑑vertices(g::BipartiteGraph)
+    g.badjlist isa AbstractVector ? axes(g.badjlist, 1) : Base.OneTo(g.badjlist)
+end
 has_𝑠vertex(g::BipartiteGraph, v::Integer) = v in 𝑠vertices(g)
 has_𝑑vertex(g::BipartiteGraph, v::Integer) = v in 𝑑vertices(g)
-𝑠neighbors(g::BipartiteGraph, i::Integer, with_metadata::Val{M}=Val(false)) where M = M ? zip(g.fadjlist[i], g.metadata[i]) : g.fadjlist[i]
-function 𝑑neighbors(g::BipartiteGraph, j::Integer, with_metadata::Val{M}=Val(false)) where M
+function 𝑠neighbors(g::BipartiteGraph, i::Integer,
+                    with_metadata::Val{M} = Val(false)) where {M}
+    M ? zip(g.fadjlist[i], g.metadata[i]) : g.fadjlist[i]
+end
+function 𝑑neighbors(g::BipartiteGraph, j::Integer,
+                    with_metadata::Val{M} = Val(false)) where {M}
     require_complete(g)
     M ? zip(g.badjlist[j], (g.metadata[i][j] for i in g.badjlist[j])) : g.badjlist[j]
 end
 Graphs.ne(g::BipartiteGraph) = g.ne
 Graphs.nv(g::BipartiteGraph) = sum(length, vertices(g))
-Graphs.edgetype(g::BipartiteGraph{I}) where I = BipartiteEdge{I}
+Graphs.edgetype(g::BipartiteGraph{I}) where {I} = BipartiteEdge{I}
 
 nsrcs(g::BipartiteGraph) = length(𝑠vertices(g))
 ndsts(g::BipartiteGraph) = length(𝑑vertices(g))
@@ -239,7 +266,8 @@ Base.in(edge::BipartiteEdge, g::BipartiteGraph) = Graphs.has_edge(g, edge)
 Try to construct an augmenting path in matching and if such a path is found,
 update the matching accordingly.
 """
-function construct_augmenting_path!(matching::Matching, g::BipartiteGraph, vsrc, dstfilter, dcolor=falses(ndsts(g)), scolor=nothing)
+function construct_augmenting_path!(matching::Matching, g::BipartiteGraph, vsrc, dstfilter,
+                                    dcolor = falses(ndsts(g)), scolor = nothing)
     scolor === nothing || (scolor[vsrc] = true)
 
     # if a `vdst` is unassigned and the edge `vsrc <=> vdst` exists
@@ -254,7 +282,8 @@ function construct_augmenting_path!(matching::Matching, g::BipartiteGraph, vsrc,
     for vdst in 𝑠neighbors(g, vsrc)
         (dstfilter(vdst) && !dcolor[vdst]) || continue
         dcolor[vdst] = true
-        if construct_augmenting_path!(matching, g, matching[vdst], dstfilter, dcolor, scolor)
+        if construct_augmenting_path!(matching, g, matching[vdst], dstfilter, dcolor,
+                                      scolor)
             matching[vdst] = vsrc
             return true
         end
@@ -269,7 +298,8 @@ For a bipartite graph `g`, construct a maximal matching of destination to source
 vertices, subject to the constraint that vertices for which `srcfilter` or `dstfilter`,
 return `false` may not be matched.
 """
-function maximal_matching(g::BipartiteGraph, srcfilter=vsrc->true, dstfilter=vdst->true)
+function maximal_matching(g::BipartiteGraph, srcfilter = vsrc -> true,
+                          dstfilter = vdst -> true)
     matching = Matching(ndsts(g))
     foreach(Iterators.filter(srcfilter, 𝑠vertices(g))) do vsrc
         construct_augmenting_path!(matching, g, vsrc, dstfilter)
@@ -280,12 +310,13 @@ end
 ###
 ### Populate
 ###
-struct NoMetadata
-end
+struct NoMetadata end
 const NO_METADATA = NoMetadata()
 
-Graphs.add_edge!(g::BipartiteGraph, i::Integer, j::Integer, md=NO_METADATA) = add_edge!(g, BipartiteEdge(i, j), md)
-function Graphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_METADATA)
+function Graphs.add_edge!(g::BipartiteGraph, i::Integer, j::Integer, md = NO_METADATA)
+    add_edge!(g, BipartiteEdge(i, j), md)
+end
+function Graphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md = NO_METADATA)
     @unpack fadjlist, badjlist = g
     s, d = src(edge), dst(edge)
     (has_𝑠vertex(g, s) && has_𝑑vertex(g, d)) || error("edge ($edge) out of range.")
@@ -306,15 +337,17 @@ function Graphs.add_edge!(g::BipartiteGraph, edge::BipartiteEdge, md=NO_METADATA
     return true  # edge successfully added
 end
 
-Graphs.rem_edge!(g::BipartiteGraph, i::Integer, j::Integer) =
+function Graphs.rem_edge!(g::BipartiteGraph, i::Integer, j::Integer)
     Graphs.rem_edge!(g, BipartiteEdge(i, j))
+end
 function Graphs.rem_edge!(g::BipartiteGraph, edge::BipartiteEdge)
     @unpack fadjlist, badjlist = g
     s, d = src(edge), dst(edge)
     (has_𝑠vertex(g, s) && has_𝑑vertex(g, d)) || error("edge ($edge) out of range.")
     @inbounds list = fadjlist[s]
     index = searchsortedfirst(list, d)
-    @inbounds (index <= length(list) && list[index] == d) || error("graph does not have edge $edge")
+    @inbounds (index <= length(list) && list[index] == d) ||
+              error("graph does not have edge $edge")
     deleteat!(list, index)
     g.ne -= 1
     if badjlist isa AbstractVector
@@ -325,7 +358,7 @@ function Graphs.rem_edge!(g::BipartiteGraph, edge::BipartiteEdge)
     return true  # edge successfully deleted
 end
 
-function Graphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where T
+function Graphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where {T}
     if type === DST
         if g.badjlist isa AbstractVector
             push!(g.badjlist, T[])
@@ -367,7 +400,7 @@ Graphs.edges(g::BipartiteGraph) = BipartiteEdgeIter(g, Val(SRC))
 𝑠edges(g::BipartiteGraph) = BipartiteEdgeIter(g, Val(SRC))
 𝑑edges(g::BipartiteGraph) = BipartiteEdgeIter(g, Val(DST))
 
-struct BipartiteEdgeIter{T,G} <: Graphs.AbstractEdgeIter
+struct BipartiteEdgeIter{T, G} <: Graphs.AbstractEdgeIter
     g::G
     type::Val{T}
 end
@@ -375,7 +408,8 @@ end
 Base.length(it::BipartiteEdgeIter) = ne(it.g)
 Base.eltype(it::BipartiteEdgeIter) = edgetype(it.g)
 
-function Base.iterate(it::BipartiteEdgeIter{SRC,<:BipartiteGraph{T}}, state=(1, 1, SRC)) where T
+function Base.iterate(it::BipartiteEdgeIter{SRC, <:BipartiteGraph{T}},
+                      state = (1, 1, SRC)) where {T}
     @unpack g = it
     neqs = nsrcs(g)
     neqs == 0 && return nothing
@@ -396,7 +430,8 @@ function Base.iterate(it::BipartiteEdgeIter{SRC,<:BipartiteGraph{T}}, state=(1, 
     return nothing
 end
 
-function Base.iterate(it::BipartiteEdgeIter{DST,<:BipartiteGraph{T}}, state=(1, 1, DST)) where T
+function Base.iterate(it::BipartiteEdgeIter{DST, <:BipartiteGraph{T}},
+                      state = (1, 1, DST)) where {T}
     @unpack g = it
     nvars = ndsts(g)
     nvars == 0 && return nothing
@@ -419,7 +454,7 @@ end
 ###
 ### Utils
 ###
-function Graphs.incidence_matrix(g::BipartiteGraph, val=true)
+function Graphs.incidence_matrix(g::BipartiteGraph, val = true)
     I = Int[]
     J = Int[]
     for i in 𝑠vertices(g), n in 𝑠neighbors(g, i)
@@ -462,12 +497,15 @@ one head, but any arbitrary number of tails). In this setting, this is simply
 the graph formed by expanding each directed hyperedge into `n` ordinary edges
 between the same vertices.
 """
-mutable struct DiCMOBiGraph{Transposed, I, G<:BipartiteGraph{I}, M <: Matching} <: Graphs.AbstractGraph{I}
+mutable struct DiCMOBiGraph{Transposed, I, G <: BipartiteGraph{I}, M <: Matching} <:
+               Graphs.AbstractGraph{I}
     graph::G
     ne::Union{Missing, Int}
     matching::M
-    DiCMOBiGraph{Transposed}(g::G, ne::Union{Missing, Int}, m::M) where {Transposed, I, G<:BipartiteGraph{I}, M} =
+    function DiCMOBiGraph{Transposed}(g::G, ne::Union{Missing, Int},
+                                      m::M) where {Transposed, I, G <: BipartiteGraph{I}, M}
         new{Transposed, I, G, M}(g, ne, m)
+    end
 end
 function DiCMOBiGraph{Transposed}(g::BipartiteGraph) where {Transposed}
     DiCMOBiGraph{Transposed}(g, 0, Matching(ndsts(g)))
@@ -476,18 +514,25 @@ function DiCMOBiGraph{Transposed}(g::BipartiteGraph, m::M) where {Transposed, M}
     DiCMOBiGraph{Transposed}(g, missing, m)
 end
 
-invview(g::DiCMOBiGraph{Transposed}) where {Transposed} =
+function invview(g::DiCMOBiGraph{Transposed}) where {Transposed}
     DiCMOBiGraph{!Transposed}(invview(g.graph), g.ne, invview(g.matching))
+end
 
 Graphs.is_directed(::Type{<:DiCMOBiGraph}) = true
-Graphs.nv(g::DiCMOBiGraph{Transposed}) where {Transposed} = Transposed ? ndsts(g.graph) : nsrcs(g.graph)
-Graphs.vertices(g::DiCMOBiGraph{Transposed}) where {Transposed} = Transposed ? 𝑑vertices(g.graph) : 𝑠vertices(g.graph)
+function Graphs.nv(g::DiCMOBiGraph{Transposed}) where {Transposed}
+    Transposed ? ndsts(g.graph) : nsrcs(g.graph)
+end
+function Graphs.vertices(g::DiCMOBiGraph{Transposed}) where {Transposed}
+    Transposed ? 𝑑vertices(g.graph) : 𝑠vertices(g.graph)
+end
 
 struct CMONeighbors{Transposed, V}
     g::DiCMOBiGraph{Transposed}
     v::V
-    CMONeighbors{Transposed}(g::DiCMOBiGraph{Transposed}, v::V) where {Transposed, V} =
+    function CMONeighbors{Transposed}(g::DiCMOBiGraph{Transposed},
+                                      v::V) where {Transposed, V}
         new{Transposed, V}(g, v)
+    end
 end
 
 Graphs.outneighbors(g::DiCMOBiGraph{false}, v) = CMONeighbors{false}(g, v)
@@ -508,17 +553,17 @@ function Base.iterate(c::CMONeighbors{false}, (l, state...))
         return vsrc, (l, r[2])
     end
 end
-Base.length(c::CMONeighbors{false}) = count(_->true, c)
+Base.length(c::CMONeighbors{false}) = count(_ -> true, c)
 
 liftint(f, x) = (!isa(x, Int)) ? nothing : f(x)
 liftnothing(f, x) = x === nothing ? nothing : f(x)
 
 _vsrc(c::CMONeighbors{true}) = c.g.matching[c.v]
-_neighbors(c::CMONeighbors{true}) = liftint(vsrc->c.g.graph.fadjlist[vsrc], _vsrc(c))
+_neighbors(c::CMONeighbors{true}) = liftint(vsrc -> c.g.graph.fadjlist[vsrc], _vsrc(c))
 Base.length(c::CMONeighbors{true}) = something(liftnothing(length, _neighbors(c)), 1) - 1
 Graphs.inneighbors(g::DiCMOBiGraph{true}, v) = CMONeighbors{true}(g, v)
 Graphs.outneighbors(g::DiCMOBiGraph{true}, v) = outneighbors(invview(g), v)
-Base.iterate(c::CMONeighbors{true}) = liftnothing(ns->iterate(c, (ns,)), _neighbors(c))
+Base.iterate(c::CMONeighbors{true}) = liftnothing(ns -> iterate(c, (ns,)), _neighbors(c))
 function Base.iterate(c::CMONeighbors{true}, (l, state...))
     while true
         r = iterate(l, state...)
@@ -531,15 +576,16 @@ function Base.iterate(c::CMONeighbors{true}, (l, state...))
     end
 end
 
-
-_edges(g::DiCMOBiGraph{Transposed}) where Transposed = Transposed ?
-    ((w=>v for w in inneighbors(g, v)) for v in vertices(g)) :
-    ((v=>w for w in outneighbors(g, v)) for v in vertices(g))
+function _edges(g::DiCMOBiGraph{Transposed}) where {Transposed}
+    Transposed ?
+    ((w => v for w in inneighbors(g, v)) for v in vertices(g)) :
+    ((v => w for w in outneighbors(g, v)) for v in vertices(g))
+end
 
 Graphs.edges(g::DiCMOBiGraph) = (Graphs.SimpleEdge(p) for p in Iterators.flatten(_edges(g)))
 function Graphs.ne(g::DiCMOBiGraph)
     if g.ne === missing
-        g.ne = mapreduce(x->length(x.iter), +, _edges(g))
+        g.ne = mapreduce(x -> length(x.iter), +, _edges(g))
     end
     return g.ne
 end
@@ -548,7 +594,7 @@ Graphs.has_edge(g::DiCMOBiGraph{true}, a, b) = a in inneighbors(g, b)
 Graphs.has_edge(g::DiCMOBiGraph{false}, a, b) = b in outneighbors(g, a)
 
 # Condensation Graphs
-abstract type AbstractCondensationGraph <: AbstractGraph{Int}; end
+abstract type AbstractCondensationGraph <: AbstractGraph{Int} end
 function (T::Type{<:AbstractCondensationGraph})(g, sccs::Vector{Union{Int, Vector{Int}}})
     scc_assignment = Vector{Int}(undef, isa(g, BipartiteGraph) ? ndsts(g) : nv(g))
     for (i, c) in enumerate(sccs)
@@ -558,8 +604,9 @@ function (T::Type{<:AbstractCondensationGraph})(g, sccs::Vector{Union{Int, Vecto
     end
     T(g, sccs, scc_assignment)
 end
-(T::Type{<:AbstractCondensationGraph})(g, sccs::Vector{Vector{Int}}) =
+function (T::Type{<:AbstractCondensationGraph})(g, sccs::Vector{Vector{Int}})
     T(g, Vector{Union{Int, Vector{Int}}}(sccs))
+end
 
 Graphs.is_directed(::Type{<:AbstractCondensationGraph}) = true
 Graphs.nv(icg::AbstractCondensationGraph) = length(icg.sccs)
@@ -586,12 +633,17 @@ struct MatchedCondensationGraph{G <: DiCMOBiGraph} <: AbstractCondensationGraph
     scc_assignment::Vector{Int}
 end
 
+function Graphs.outneighbors(mcg::MatchedCondensationGraph, cc::Integer)
+    Iterators.flatten((mcg.scc_assignment[v′]
+                       for v′ in outneighbors(mcg.graph, v) if mcg.scc_assignment[v′] != cc)
+                      for v in mcg.sccs[cc])
+end
 
-Graphs.outneighbors(mcg::MatchedCondensationGraph, cc::Integer) =
-    Iterators.flatten((mcg.scc_assignment[v′] for v′ in outneighbors(mcg.graph, v) if mcg.scc_assignment[v′] != cc) for v in mcg.sccs[cc])
-
-Graphs.inneighbors(mcg::MatchedCondensationGraph, cc::Integer) =
-    Iterators.flatten((mcg.scc_assignment[v′] for v′ in inneighbors(mcg.graph, v) if mcg.scc_assignment[v′] != cc) for v in mcg.sccs[cc])
+function Graphs.inneighbors(mcg::MatchedCondensationGraph, cc::Integer)
+    Iterators.flatten((mcg.scc_assignment[v′]
+                       for v′ in inneighbors(mcg.graph, v) if mcg.scc_assignment[v′] != cc)
+                      for v in mcg.sccs[cc])
+end
 
 """
     struct InducedCondensationGraph
@@ -614,13 +666,18 @@ struct InducedCondensationGraph{G <: BipartiteGraph} <: AbstractCondensationGrap
     scc_assignment::Vector{Int}
 end
 
-_neighbors(icg::InducedCondensationGraph, cc::Integer) =
-    Iterators.flatten(Iterators.flatten(icg.graph.fadjlist[vsrc] for vsrc in icg.graph.badjlist[v]) for v in icg.sccs[cc])
+function _neighbors(icg::InducedCondensationGraph, cc::Integer)
+    Iterators.flatten(Iterators.flatten(icg.graph.fadjlist[vsrc]
+                                        for vsrc in icg.graph.badjlist[v])
+                      for v in icg.sccs[cc])
+end
 
-Graphs.outneighbors(icg::InducedCondensationGraph, v::Integer) =
+function Graphs.outneighbors(icg::InducedCondensationGraph, v::Integer)
     (icg.scc_assignment[n] for n in _neighbors(icg, v) if icg.scc_assignment[n] > v)
+end
 
-Graphs.inneighbors(icg::InducedCondensationGraph, v::Integer) =
+function Graphs.inneighbors(icg::InducedCondensationGraph, v::Integer)
     (icg.scc_assignment[n] for n in _neighbors(icg, v) if icg.scc_assignment[n] < v)
+end
 
 end # module

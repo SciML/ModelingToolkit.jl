@@ -17,15 +17,14 @@ function testjac_jac(J, du, u, p, gamma, t) #Explicit Jacobian
     nothing
 end
 
-testjac_f = DAEFunction(testjac, jac = testjac_jac, jac_prototype = sparse([1, 2, 1, 2], [1, 1, 2, 2], zeros(4)))
+testjac_f = DAEFunction(testjac, jac = testjac_jac,
+                        jac_prototype = sparse([1, 2, 1, 2], [1, 1, 2, 2], zeros(4)))
 
-prob1 = DAEProblem(
-    testjac_f,
-    [0.5, -2.0],
-    ones(2),
-    (0.0, 10.0),
-    differential_vars = [true, true],
-)
+prob1 = DAEProblem(testjac_f,
+                   [0.5, -2.0],
+                   ones(2),
+                   (0.0, 10.0),
+                   differential_vars = [true, true])
 sol1 = solve(prob1, IDA(linear_solver = :KLU))
 
 # Now MTK style solution with generated Jacobian
@@ -35,8 +34,8 @@ sol1 = solve(prob1, IDA(linear_solver = :KLU))
 
 D = Differential(t)
 
-eqs = [D(u1) ~ p1*u1 - u1 * u2,
-    D(u2) ~ u1*u2 - p2*u2]
+eqs = [D(u1) ~ p1 * u1 - u1 * u2,
+    D(u2) ~ u1 * u2 - p2 * u2]
 
 @named sys = ODESystem(eqs)
 
@@ -48,9 +47,9 @@ tspan = (0.0, 10.0)
 du0 = [0.5, -2.0]
 
 p = [p1 => 1.5,
-     p2 => 3.0]
+    p2 => 3.0]
 
-prob = DAEProblem(sys, du0, u0, tspan, p, jac=true, sparse=true)
-sol = solve(prob, IDA(linear_solver= :KLU))
+prob = DAEProblem(sys, du0, u0, tspan, p, jac = true, sparse = true)
+sol = solve(prob, IDA(linear_solver = :KLU))
 
 @test maximum(sol - sol1) < 1e-12

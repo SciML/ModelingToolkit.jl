@@ -12,11 +12,11 @@ using UnPack
 @parameters t
 @variables u1(t) u2(t) u3(t) u4(t) u5(t)
 eqs = [
-       0 ~ u1 - sin(u5),
-       0 ~ u2 - cos(u1),
-       0 ~ u3 - hypot(u1, u2),
-       0 ~ u4 - hypot(u2, u3),
-       0 ~ u5 - hypot(u4, u1),
+    0 ~ u1 - sin(u5),
+    0 ~ u2 - cos(u1),
+    0 ~ u3 - hypot(u1, u2),
+    0 ~ u4 - hypot(u2, u3),
+    0 ~ u5 - hypot(u4, u1),
 ]
 @named sys = NonlinearSystem(eqs, [u1, u2, u3, u4, u5], [])
 state = TearingState(sys)
@@ -42,21 +42,17 @@ find_solvables!(state)
 @unpack structure, fullvars = state
 @unpack graph, solvable_graph = state.structure
 int2var = Dict(eachindex(fullvars) .=> fullvars)
-graph2vars(graph) = map(is->Set(map(i->int2var[i], is)), graph.fadjlist)
-@test graph2vars(graph) == [
- Set([u1, u5])
- Set([u1, u2])
- Set([u1, u3, u2])
- Set([u4, u3, u2])
- Set([u4, u1, u5])
-]
-@test graph2vars(solvable_graph) == [
-                                     Set([u1])
+graph2vars(graph) = map(is -> Set(map(i -> int2var[i], is)), graph.fadjlist)
+@test graph2vars(graph) == [Set([u1, u5])
+       Set([u1, u2])
+       Set([u1, u3, u2])
+       Set([u4, u3, u2])
+       Set([u4, u1, u5])]
+@test graph2vars(solvable_graph) == [Set([u1])
                                      Set([u2])
                                      Set([u3])
                                      Set([u4])
-                                     Set([u5])
-                                    ]
+                                     Set([u5])]
 
 state = TearingState(tearing(sys))
 let sss = state.structure
@@ -130,17 +126,15 @@ sol = solve(prob, NewtonRaphson())
 @parameters t
 @variables x(t) y(t) z(t)
 eqs = [
-       0 ~ x - y,
-       0 ~ z + y,
-       0 ~ x + z,
-      ]
+    0 ~ x - y,
+    0 ~ z + y,
+    0 ~ x + z,
+]
 @named nlsys = NonlinearSystem(eqs, [x, y, z], [])
 let (mm, _, _) = ModelingToolkit.aag_bareiss(nlsys)
-    @test mm == [
-        -1  1  0;
-         0 -1 -1;
-         0  0  0
-    ]
+    @test mm == [-1 1 0;
+                 0 -1 -1;
+                 0 0 0]
 end
 
 newsys = tearing(nlsys)
@@ -153,58 +147,55 @@ using ModelingToolkit, OrdinaryDiffEq, BenchmarkTools
 @parameters t p
 @variables x(t) y(t) z(t)
 D = Differential(t)
-eqs = [
-       D(x) ~ z
+eqs = [D(x) ~ z
        0 ~ x - y
-       0 ~ sin(z) + y - p*t
-      ]
+       0 ~ sin(z) + y - p * t]
 @named daesys = ODESystem(eqs, t)
 newdaesys = tearing(daesys)
-@test equations(newdaesys) == [D(x) ~ z; 0 ~ y + sin(z) - p*t]
-@test equations(tearing_substitution(newdaesys)) == [D(x) ~ z; 0 ~ x + sin(z) - p*t]
+@test equations(newdaesys) == [D(x) ~ z; 0 ~ y + sin(z) - p * t]
+@test equations(tearing_substitution(newdaesys)) == [D(x) ~ z; 0 ~ x + sin(z) - p * t]
 @test isequal(states(newdaesys), [x, z])
-prob = ODAEProblem(newdaesys, [x=>1.0], (0, 1.0), [p=>0.2])
-du = [0.0]; u = [1.0]; pr = 0.2; tt = 0.1
+prob = ODAEProblem(newdaesys, [x => 1.0], (0, 1.0), [p => 0.2])
+du = [0.0];
+u = [1.0];
+pr = 0.2;
+tt = 0.1;
 @test (@ballocated $(prob.f)($du, $u, $pr, $tt)) == 0
-@test du ≈ [-asin(u[1] - pr * tt)] atol=1e-5
+@test du≈[-asin(u[1] - pr * tt)] atol=1e-5
 
 # test the initial guess is respected
-@named sys = ODESystem(eqs, t, defaults=Dict(z=>Inf))
-infprob = ODAEProblem(tearing(sys), [x=>1.0], (0, 1.0), [p=>0.2])
+@named sys = ODESystem(eqs, t, defaults = Dict(z => Inf))
+infprob = ODAEProblem(tearing(sys), [x => 1.0], (0, 1.0), [p => 0.2])
 @test_throws DomainError infprob.f(du, u, pr, tt)
 
 sol1 = solve(prob, Tsit5())
-sol2 = solve(ODEProblem{false}(
-                               (u,p,t) -> [-asin(u[1] - pr*t)],
+sol2 = solve(ODEProblem{false}((u, p, t) -> [-asin(u[1] - pr * t)],
                                [1.0],
                                (0, 1.0),
-                               0.2,
-                              ), Tsit5(), tstops=sol1.t, adaptive=false)
-@test Array(sol1) ≈ Array(sol2) atol=1e-5
+                               0.2), Tsit5(), tstops = sol1.t, adaptive = false)
+@test Array(sol1)≈Array(sol2) atol=1e-5
 
 @test sol1[x] == first.(sol1.u)
 @test sol1[y] == first.(sol1.u)
-@test sin.(sol1[z]) .+ sol1[y] ≈ pr[1] * sol1.t atol=1e-5
-@test sol1[sin(z) + y] ≈ sin.(sol1[z]) .+ sol1[y] rtol=1e-12
+@test sin.(sol1[z]) .+ sol1[y]≈pr[1] * sol1.t atol=1e-5
+@test sol1[sin(z) + y]≈sin.(sol1[z]) .+ sol1[y] rtol=1e-12
 
 @test sol1[y, :] == sol1[x, :]
-@test (@. sin(sol1[z, :]) + sol1[y, :]) ≈ pr * sol1.t atol=1e-5
+@test (@. sin(sol1[z, :]) + sol1[y, :])≈pr * sol1.t atol=1e-5
 
 # 1426
-function Translational_Mass(;name, m = 1.0)
+function Translational_Mass(; name, m = 1.0)
     sts = @variables s(t) v(t) a(t)
-    ps = @parameters m=m
+    ps = @parameters m = m
     D = Differential(t)
-    eqs = [
-           D(s) ~ v
+    eqs = [D(s) ~ v
            D(v) ~ a
-           m*a ~ 0.0
-          ]
-    ODESystem(eqs, t, sts, ps; name=name)
+           m * a ~ 0.0]
+    ODESystem(eqs, t, sts, ps; name = name)
 end
 
 m = 1.0
-@named mass = Translational_Mass(m=m)
+@named mass = Translational_Mass(m = m)
 
 ms_eqs = []
 
@@ -216,10 +207,8 @@ calculate_jacobian(ms_model)
 calculate_tgrad(ms_model)
 
 # Mass starts with velocity = 1
-u0 = [
-      mass.s => 0.0
-      mass.v => 1.0
-     ]
+u0 = [mass.s => 0.0
+      mass.v => 1.0]
 
 sys = structural_simplify(ms_model)
 @test sys.jac[] === ModelingToolkit.EMPTY_JAC

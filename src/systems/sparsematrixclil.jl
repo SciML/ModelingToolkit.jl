@@ -16,7 +16,7 @@ to the matrix.
 The default structure of the `SparseMatrixCLIL` type is the second structure, while
 the first is available via the thin `AsSubMatrix` wrapper.
 """
-struct SparseMatrixCLIL{T, Ti<:Integer} <: AbstractSparseMatrix{T, Ti}
+struct SparseMatrixCLIL{T, Ti <: Integer} <: AbstractSparseMatrix{T, Ti}
     nparentrows::Int
     ncols::Int
     nzrows::Vector{Ti}
@@ -24,8 +24,10 @@ struct SparseMatrixCLIL{T, Ti<:Integer} <: AbstractSparseMatrix{T, Ti}
     row_vals::Vector{Vector{T}}
 end
 Base.size(S::SparseMatrixCLIL) = (length(S.nzrows), S.ncols)
-Base.copy(S::SparseMatrixCLIL{T, Ti}) where {T, Ti} =
-    SparseMatrixCLIL(S.nparentrows, S.ncols, copy(S.nzrows), map(copy, S.row_cols), map(copy, S.row_vals))
+function Base.copy(S::SparseMatrixCLIL{T, Ti}) where {T, Ti}
+    SparseMatrixCLIL(S.nparentrows, S.ncols, copy(S.nzrows), map(copy, S.row_cols),
+                     map(copy, S.row_vals))
+end
 function swaprows!(S::SparseMatrixCLIL, i, j)
     swap!(S.nzrows, i, j)
     swap!(S.row_cols, i, j)
@@ -45,14 +47,15 @@ end
 Base.size(v::CLILVector) = Base.size(v.vec)
 Base.getindex(v::CLILVector, idx::Integer...) = Base.getindex(v.vec, idx...)
 Base.setindex!(vec::CLILVector, v, idx::Integer...) = Base.setindex!(vec.vec, v, idx...)
-Base.view(a::SparseMatrixCLIL, i::Integer, ::Colon) =
+function Base.view(a::SparseMatrixCLIL, i::Integer, ::Colon)
     CLILVector(SparseVector(a.ncols, a.row_cols[i], a.row_vals[i]))
+end
 SparseArrays.nonzeroinds(a::CLILVector) = SparseArrays.nonzeroinds(a.vec)
 SparseArrays.nonzeros(a::CLILVector) = SparseArrays.nonzeros(a.vec)
 
 function Base.setindex!(S::SparseMatrixCLIL, v::CLILVector, i::Integer, c::Colon)
     if v.vec.n != S.ncols
-        throw(BoundsError(v, 1:S.ncols))
+        throw(BoundsError(v, 1:(S.ncols)))
     end
     S.row_cols[i] = copy(v.vec.nzind)
     S.row_vals[i] = copy(v.vec.nzval)
@@ -87,17 +90,17 @@ function Base.iterate(nzp::NonZerosPairs{<:CLILVector}, (idx, col))
     if col !== oldcol
         # The vector was changed since the last iteration. Find our
         # place in the vector again.
-        tail = col > oldcol ? (@view nzind[idx+1:end]) : (@view nzind[1:idx])
+        tail = col > oldcol ? (@view nzind[(idx + 1):end]) : (@view nzind[1:idx])
         tail_i = searchsortedfirst(tail, col + 1)
         # No remaining indices.
         tail_i > length(tail) && return nothing
         new_idx = col > oldcol ? idx + tail_i : tail_i
         new_col = nzind[new_idx]
-        return (new_col=>nzval[new_idx], (new_idx, new_col))
+        return (new_col => nzval[new_idx], (new_idx, new_col))
     end
     idx == length(nzind) && return nothing
-    new_col = nzind[idx+1]
-    return (new_col=>nzval[idx+1], (idx+1, new_col))
+    new_col = nzind[idx + 1]
+    return (new_col => nzval[idx + 1], (idx + 1, new_col))
 end
 
 function Base.iterate(nzp::NonZerosPairs{<:CLILVector})
@@ -105,14 +108,15 @@ function Base.iterate(nzp::NonZerosPairs{<:CLILVector})
     nzind = v.nzind
     nzval = v.nzval
     isempty(nzind) && return nothing
-    return nzind[1]=>nzval[1], (1, nzind[1])
+    return nzind[1] => nzval[1], (1, nzind[1])
 end
 
 # Arguably this is how nonzeros should behave in the first place, but let's
 # build something that works for us here and worry about it later.
 nonzerosmap(a::CLILVector) = NonZeros(a)
 
-function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swapto, pivot, last_pivot; pivot_equal_optimization=true)
+function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swapto, pivot,
+                                             last_pivot; pivot_equal_optimization = true)
     # for ei in nzrows(>= k)
     eadj = M.row_cols
     old_cadj = M.row_vals
@@ -151,7 +155,7 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
     # case for MTK (where most pivots are `1` or `-1`).
     pivot_equal = pivot_equal_optimization && abs(pivot) == abs(last_pivot)
 
-    for ei in k+1:size(M, 1)
+    for ei in (k + 1):size(M, 1)
         # elimate `v`
         coeff = 0
         ivars = eadj[ei]
@@ -181,7 +185,7 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
             v == vpivot && continue
             ck = getcoeff(kvars, kcoeffs, v)
             ci = getcoeff(ivars, icoeffs, v)
-            ci = (pivot*ci - coeff*ck) ÷ last_pivot
+            ci = (pivot * ci - coeff * ck) ÷ last_pivot
             if ci !== 0
                 push!(tmp_incidence, v)
                 push!(tmp_coeffs, ci)
@@ -193,7 +197,8 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
     end
 end
 
-function bareiss_update_virtual_colswap_mtk!(zero!, M::AbstractMatrix, k, swapto, pivot, last_pivot; pivot_equal_optimization=true)
+function bareiss_update_virtual_colswap_mtk!(zero!, M::AbstractMatrix, k, swapto, pivot,
+                                             last_pivot; pivot_equal_optimization = true)
     if pivot_equal_optimization
         error("MTK pivot micro-optimization not implemented for `$(typeof(M))`.
             Turn off the optimization for debugging or use a different matrix type.")
@@ -201,7 +206,7 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::AbstractMatrix, k, swapto
     bareiss_update_virtual_colswap!(zero!, M, k, swapto, pivot, last_pivot)
 end
 
-struct AsSubMatrix{T, Ti<:Integer} <: AbstractSparseMatrix{T, Ti}
+struct AsSubMatrix{T, Ti <: Integer} <: AbstractSparseMatrix{T, Ti}
     M::SparseMatrixCLIL{T, Ti}
 end
 Base.size(S::AsSubMatrix) = (S.M.nparentrows, S.M.ncols)

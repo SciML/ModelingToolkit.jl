@@ -36,17 +36,17 @@ domains = [t ∈ (0.0,1.0),
 """
 struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     "The equations which define the PDE"
-    eqs
+    eqs::Any
     "The boundary conditions"
-    bcs
+    bcs::Any
     "The domain for the independent variables."
-    domain
+    domain::Any
     "The independent variables"
-    ivs
+    ivs::Any
     "The dependent variables"
-    dvs
+    dvs::Any
     "The parameters"
-    ps
+    ps::Any
     """
     defaults: The default values to use when initial conditions and/or
     parameters are not supplied in `ODEProblem`.
@@ -65,13 +65,12 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     """
     name::Symbol
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
-        ps=SciMLBase.NullParameters();
-        defaults=Dict(),
-        systems=[],
-        connector_type=nothing,
-        checks::Bool=true,
-        name
-    )
+                                   ps = SciMLBase.NullParameters();
+                                   defaults = Dict(),
+                                   systems = [],
+                                   connector_type = nothing,
+                                   checks::Bool = true,
+                                   name)
         if checks
             all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
         end
@@ -83,11 +82,13 @@ end
 function Base.getproperty(x::PDESystem, sym::Symbol)
     if sym == :indvars
         return getfield(x, :ivs)
-        Base.depwarn("`sys.indvars` is deprecated, please use `get_ivs(sys)`", :getproperty, force=true)
+        Base.depwarn("`sys.indvars` is deprecated, please use `get_ivs(sys)`", :getproperty,
+                     force = true)
 
     elseif sym == :depvars
         return getfield(x, :dvs)
-        Base.depwarn("`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty, force=true)
+        Base.depwarn("`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty,
+                     force = true)
 
     else
         return getfield(x, sym)

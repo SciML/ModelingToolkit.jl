@@ -21,7 +21,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
     for (varidx, diff) in edges(var_to_diff)
         # fullvars[diff] = D(fullvars[var])
         vi = out_vars[varidx]
-        @assert vi !== nothing "Something went wrong on reconstructing states from variable association list"
+        @assert vi!==nothing "Something went wrong on reconstructing states from variable association list"
         # `fullvars[i]` needs to be not a `D(...)`, because we want the DAE to be
         # first-order.
         if isdifferential(vi)
@@ -53,13 +53,16 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
             D(eq.lhs)
         end
         rhs = ModelingToolkit.expand_derivatives(D(eq.rhs))
-        substitution_dict = Dict(x.lhs => x.rhs for x in out_eqs if x !== nothing && x.lhs isa Symbolic)
+        substitution_dict = Dict(x.lhs => x.rhs
+                                 for x in out_eqs if x !== nothing && x.lhs isa Symbolic)
         sub_rhs = substitute(rhs, substitution_dict)
         out_eqs[diff] = lhs ~ sub_rhs
     end
 
-    final_vars = unique(filter(x->!(operation(x) isa Differential), fullvars))
-    final_eqs = map(identity, filter(x->value(x.lhs) !== nothing, out_eqs[sort(filter(x->x !== unassigned, var_eq_matching))]))
+    final_vars = unique(filter(x -> !(operation(x) isa Differential), fullvars))
+    final_eqs = map(identity,
+                    filter(x -> value(x.lhs) !== nothing,
+                           out_eqs[sort(filter(x -> x !== unassigned, var_eq_matching))]))
 
     @set! sys.eqs = final_eqs
     @set! sys.states = final_vars
@@ -95,12 +98,14 @@ function pantelides!(state::TransformationState; maxiters = 8000)
             fill!(vcolor, false)
             resize!(ecolor, neqs)
             fill!(ecolor, false)
-            pathfound = construct_augmenting_path!(var_eq_matching, graph, eq′, v->varwhitelist[v], vcolor, ecolor)
+            pathfound = construct_augmenting_path!(var_eq_matching, graph, eq′,
+                                                   v -> varwhitelist[v], vcolor, ecolor)
             pathfound && break # terminating condition
-            for var in eachindex(vcolor); vcolor[var] || continue
+            for var in eachindex(vcolor)
+                vcolor[var] || continue
                 # introduce a new variable
                 nvars += 1
-                add_vertex!(graph, DST);
+                add_vertex!(graph, DST)
                 # the new variable is the derivative of `var`
 
                 add_edge!(var_to_diff, var, add_vertex!(var_to_diff))
@@ -108,24 +113,27 @@ function pantelides!(state::TransformationState; maxiters = 8000)
                 var_derivative!(state, var)
             end
 
-            for eq in eachindex(ecolor); ecolor[eq] || continue
+            for eq in eachindex(ecolor)
+                ecolor[eq] || continue
                 # introduce a new equation
                 neqs += 1
-                add_vertex!(graph, SRC);
+                add_vertex!(graph, SRC)
                 # the new equation is created by differentiating `eq`
                 eq_diff = add_vertex!(eq_to_diff)
                 add_edge!(eq_to_diff, eq, eq_diff)
                 eq_derivative!(state, eq)
             end
 
-            for var in eachindex(vcolor); vcolor[var] || continue
+            for var in eachindex(vcolor)
+                vcolor[var] || continue
                 # the newly introduced `var`s and `eq`s have the inherits
                 # assignment
                 var_eq_matching[var_to_diff[var]] = eq_to_diff[var_eq_matching[var]]
             end
             eq′ = eq_to_diff[eq′]
         end # for _ in 1:maxiters
-        pathfound || error("maxiters=$maxiters reached! File a bug report if your system has a reasonable index (<100), and you are using the default `maxiters`. Try to increase the maxiters by `pantelides(sys::ODESystem; maxiters=1_000_000)` if your system has an incredibly high index and it is truly extremely large.")
+        pathfound ||
+            error("maxiters=$maxiters reached! File a bug report if your system has a reasonable index (<100), and you are using the default `maxiters`. Try to increase the maxiters by `pantelides(sys::ODESystem; maxiters=1_000_000)` if your system has an incredibly high index and it is truly extremely large.")
     end # for k in 1:neqs′
     return var_eq_matching
 end

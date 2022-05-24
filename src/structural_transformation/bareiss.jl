@@ -14,11 +14,11 @@ end
 else
     function swaprows!(a::AbstractMatrix, i, j)
         i == j && return
-        rows = axes(a,1)
-        @boundscheck i in rows || throw(BoundsError(a, (:,i)))
-        @boundscheck j in rows || throw(BoundsError(a, (:,j)))
-        for k in axes(a,2)
-            @inbounds a[i,k],a[j,k] = a[j,k],a[i,k]
+        rows = axes(a, 1)
+        @boundscheck i in rows || throw(BoundsError(a, (:, i)))
+        @boundscheck j in rows || throw(BoundsError(a, (:, j)))
+        for k in axes(a, 2)
+            @inbounds a[i, k], a[j, k] = a[j, k], a[i, k]
         end
     end
     function Base.circshift!(a::AbstractVector, shift::Integer)
@@ -27,7 +27,7 @@ else
         shift = mod(shift, n)
         shift == 0 && return
         reverse!(a, 1, shift)
-        reverse!(a, shift+1, length(a))
+        reverse!(a, shift + 1, length(a))
         reverse!(a)
         return a
     end
@@ -38,8 +38,8 @@ else
         j < i && @swap(i, j)
 
         colptr = getcolptr(A)
-        irow = colptr[i]:(colptr[i+1]-1)
-        jrow = colptr[j]:(colptr[j+1]-1)
+        irow = colptr[i]:(colptr[i + 1] - 1)
+        jrow = colptr[j]:(colptr[j + 1] - 1)
 
         function rangeexchange!(arr, irow, jrow)
             if length(irow) == length(jrow)
@@ -60,14 +60,14 @@ else
             # discussion of circshift!-like algorithms.
             reverse!(@view arr[irow])
             reverse!(@view arr[jrow])
-            reverse!(@view arr[(last(irow)+1):(first(jrow)-1)])
+            reverse!(@view arr[(last(irow) + 1):(first(jrow) - 1)])
             reverse!(@view arr[first(irow):last(jrow)])
         end
         rangeexchange!(rowvals(A), irow, jrow)
         rangeexchange!(nonzeros(A), irow, jrow)
 
         if length(irow) != length(jrow)
-            @inbounds colptr[i+1:j] .+= length(jrow) - length(irow)
+            @inbounds colptr[(i + 1):j] .+= length(jrow) - length(irow)
         end
         return nothing
     end
@@ -77,7 +77,7 @@ else
 
         rows = rowvals(A)
         vals = nonzeros(A)
-        for col = 1:size(A, 2)
+        for col in 1:size(A, 2)
             rr = nzrange(A, col)
             iidx = searchsortedfirst(@view(rows[rr]), i)
             has_i = iidx <= length(rr) && rows[rr[iidx]] == i
@@ -114,63 +114,66 @@ else
     end
 end
 
-function bareiss_update!(zero!, M::StridedMatrix, k, swapto, pivot, prev_pivot::Base.BitInteger)
+function bareiss_update!(zero!, M::StridedMatrix, k, swapto, pivot,
+                         prev_pivot::Base.BitInteger)
     flag = zero(prev_pivot)
     prev_pivot = Base.MultiplicativeInverses.SignedMultiplicativeInverse(prev_pivot)
-    @inbounds for i in k+1:size(M, 2)
-        Mki = M[k,i]
-        @simd ivdep for j in k+1:size(M, 1)
-            M[j,i], r = divrem(M[j,i]*pivot - M[j,k]*Mki, prev_pivot)
+    @inbounds for i in (k + 1):size(M, 2)
+        Mki = M[k, i]
+        @simd ivdep for j in (k + 1):size(M, 1)
+            M[j, i], r = divrem(M[j, i] * pivot - M[j, k] * Mki, prev_pivot)
             flag = flag | r
         end
     end
     iszero(flag) || error("Overflow occurred")
-    zero!(M, k+1:size(M, 1), k)
+    zero!(M, (k + 1):size(M, 1), k)
 end
 
 function bareiss_update!(zero!, M::StridedMatrix, k, swapto, pivot, prev_pivot)
-    @inbounds for i in k+1:size(M, 2), j in k+1:size(M, 1)
-        M[j,i] = exactdiv(M[j,i]*pivot - M[j,k]*M[k,i], prev_pivot)
+    @inbounds for i in (k + 1):size(M, 2), j in (k + 1):size(M, 1)
+        M[j, i] = exactdiv(M[j, i] * pivot - M[j, k] * M[k, i], prev_pivot)
     end
-    zero!(M, k+1:size(M, 1), k)
+    zero!(M, (k + 1):size(M, 1), k)
 end
 
 @views function bareiss_update!(zero!, M::AbstractMatrix, k, swapto, pivot, prev_pivot)
     if prev_pivot isa Base.BitInteger
         prev_pivot = Base.MultiplicativeInverses.SignedMultiplicativeInverse(prev_pivot)
     end
-    V = M[k+1:end, k+1:end]
-    V .= exactdiv.(V .* pivot .- M[k+1:end, k] * M[k, k+1:end]', prev_pivot)
-    zero!(M, k+1:size(M, 1), k)
+    V = M[(k + 1):end, (k + 1):end]
+    V .= exactdiv.(V .* pivot .- M[(k + 1):end, k] * M[k, (k + 1):end]', prev_pivot)
+    zero!(M, (k + 1):size(M, 1), k)
 end
 
-function bareiss_update_virtual_colswap!(zero!, M::AbstractMatrix, k, swapto, pivot, prev_pivot)
+function bareiss_update_virtual_colswap!(zero!, M::AbstractMatrix, k, swapto, pivot,
+                                         prev_pivot)
     if prev_pivot isa Base.BitInteger
         prev_pivot = Base.MultiplicativeInverses.SignedMultiplicativeInverse(prev_pivot)
     end
-    V = @view M[k+1:end, :]
-    V .= @views exactdiv.(V .* pivot .- M[k+1:end, swapto[2]] * M[k, :]', prev_pivot)
-    zero!(M, k+1:size(M, 1), swapto[2])
+    V = @view M[(k + 1):end, :]
+    V .= @views exactdiv.(V .* pivot .- M[(k + 1):end, swapto[2]] * M[k, :]', prev_pivot)
+    zero!(M, (k + 1):size(M, 1), swapto[2])
 end
 
-bareiss_zero!(M, i, j) = M[i,j] .= zero(eltype(M))
+bareiss_zero!(M, i, j) = M[i, j] .= zero(eltype(M))
 
 function find_pivot_col(M, i)
-    p = findfirst(!iszero, @view M[i,i:end])
+    p = findfirst(!iszero, @view M[i, i:end])
     p === nothing && return nothing
     idx = CartesianIndex(i, p + i - 1)
     (idx, M[idx])
 end
 
 function find_pivot_any(M, i)
-    p = findfirst(!iszero, @view M[i:end,i:end])
+    p = findfirst(!iszero, @view M[i:end, i:end])
     p === nothing && return nothing
     idx = p + CartesianIndex(i - 1, i - 1)
     (idx, M[idx])
 end
 
 const bareiss_colswap = (Base.swapcols!, swaprows!, bareiss_update!, bareiss_zero!)
-const bareiss_virtcolswap = ((M,i,j)->nothing, swaprows!, bareiss_update_virtual_colswap!, bareiss_zero!)
+const bareiss_virtcolswap = ((M, i, j) -> nothing, swaprows!,
+                             bareiss_update_virtual_colswap!, bareiss_zero!)
 
 """
     bareiss!(M, [swap_strategy])
@@ -182,8 +185,8 @@ swap_strategy is an optional argument that determines how the swapping of rows a
 bareiss_colswap (the default) swaps the columns and rows normally.
 bareiss_virtcolswap pretends to swap the columns which can be faster for sparse matrices.
 """
-function bareiss!(M::AbstractMatrix{T}, swap_strategy=bareiss_colswap;
-                  find_pivot=find_pivot_any, column_pivots=nothing) where T
+function bareiss!(M::AbstractMatrix{T}, swap_strategy = bareiss_colswap;
+                  find_pivot = find_pivot_any, column_pivots = nothing) where {T}
     swapcols!, swaprows!, update!, zero! = swap_strategy
     prev = one(eltype(M))
     n = size(M, 1)
@@ -207,7 +210,7 @@ function bareiss!(M::AbstractMatrix{T}, swap_strategy=bareiss_colswap;
     return (n, pivot, column_permuted)
 end
 
-function nullspace(A; col_order=nothing)
+function nullspace(A; col_order = nothing)
     column_pivots = collect(1:size(A, 2))
     B = copy(A)
     (rank, d, column_permuted) = bareiss!(B; column_pivots)
@@ -216,10 +219,10 @@ function nullspace(A; col_order=nothing)
     # The first rank entries in col_order are columns that give a basis
     # for the column space. The remainder give the free variables.
     if col_order !== nothing
-        resize!(col_order, size(A,2))
-        col_order .= 1:size(A,2)
-        for (i,cp) in enumerate(column_pivots)
-            @swap(col_order[i],col_order[cp])
+        resize!(col_order, size(A, 2))
+        col_order .= 1:size(A, 2)
+        for (i, cp) in enumerate(column_pivots)
+            @swap(col_order[i], col_order[cp])
         end
     end
 
@@ -238,10 +241,10 @@ end
 ### Modified from AbstractAlgebra.jl
 ###
 ### https://github.com/Nemocas/AbstractAlgebra.jl/blob/4803548c7a945f3f7bd8c63f8bb7c79fac92b11a/LICENSE.md
-function reduce_echelon!(A::AbstractMatrix{T}, rank, d) where T
+function reduce_echelon!(A::AbstractMatrix{T}, rank, d) where {T}
     m, n = size(A)
-    for i = rank + 1:m
-        for j = 1:n
+    for i in (rank + 1):m
+        for j in 1:n
             A[i, j] = zero(T)
         end
     end
@@ -252,7 +255,7 @@ function reduce_echelon!(A::AbstractMatrix{T}, rank, d) where T
         pivots = zeros(Int, n)
         np = rank
         j = k = 1
-        for i = 1:rank
+        for i in 1:rank
             while iszero(A[i, j])
                 pivots[np + k] = j
                 j += 1
@@ -266,18 +269,18 @@ function reduce_echelon!(A::AbstractMatrix{T}, rank, d) where T
             j += 1
             k += 1
         end
-        for k = 1:n - rank
-            for i = rank - 1:-1:1
+        for k in 1:(n - rank)
+            for i in (rank - 1):-1:1
                 t = A[i, pivots[np + k]] * d
-                for j = i + 1:rank
+                for j in (i + 1):rank
                     t += A[i, pivots[j]] * A[j, pivots[np + k]] + q
                 end
                 A[i, pivots[np + k]] = exactdiv(-t, A[i, pivots[i]])
             end
         end
         d = -d
-        for i = 1:rank
-            for j = 1:rank
+        for i in 1:rank
+            for j in 1:rank
                 if i == j
                     A[j, pivots[i]] = d
                 else
@@ -289,19 +292,19 @@ function reduce_echelon!(A::AbstractMatrix{T}, rank, d) where T
     return A
 end
 
-function reduced_echelon_nullspace(rank, A::AbstractMatrix{T}) where T
+function reduced_echelon_nullspace(rank, A::AbstractMatrix{T}) where {T}
     n = size(A, 2)
     nullity = n - rank
     U = zeros(T, n, nullity)
     if rank == 0
-        for i = 1:nullity
+        for i in 1:nullity
             U[i, i] = one(T)
         end
     elseif nullity != 0
         pivots = zeros(Int, rank)
         nonpivots = zeros(Int, nullity)
         j = k = 1
-        for i = 1:rank
+        for i in 1:rank
             while iszero(A[i, j])
                 nonpivots[k] = j
                 j += 1
@@ -316,8 +319,8 @@ function reduced_echelon_nullspace(rank, A::AbstractMatrix{T}) where T
             k += 1
         end
         d = -A[1, pivots[1]]
-        for i = 1:nullity
-            for j = 1:rank
+        for i in 1:nullity
+            for j in 1:rank
                 U[pivots[j], i] = A[j, nonpivots[i]]
             end
             U[nonpivots[i], i] = d

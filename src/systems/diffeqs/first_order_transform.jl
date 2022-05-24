@@ -21,13 +21,13 @@ function dae_order_lowering(sys::ODESystem)
 end
 
 function ode_order_lowering(eqs, iv, states)
-    var_order = OrderedDict{Any,Int}()
+    var_order = OrderedDict{Any, Int}()
     D = Differential(iv)
     diff_eqs = Equation[]
     diff_vars = []
     alge_eqs = Equation[]
 
-    for (i, eq) ∈ enumerate(eqs)
+    for (i, eq) in enumerate(eqs)
         if !isdiffeq(eq)
             push!(alge_eqs, eq)
         else
@@ -40,9 +40,9 @@ function ode_order_lowering(eqs, iv, states)
         end
     end
 
-    for (var, order) ∈ var_order
-        for o in (order-1):-1:1
-            lvar = lower_varname(var, iv, o-1)
+    for (var, order) in var_order
+        for o in (order - 1):-1:1
+            lvar = lower_varname(var, iv, o - 1)
             rvar = lower_varname(var, iv, o)
             push!(diff_vars, lvar)
 
@@ -57,7 +57,7 @@ function ode_order_lowering(eqs, iv, states)
 end
 
 function dae_order_lowering(eqs, iv, states)
-    var_order = OrderedDict{Any,Int}()
+    var_order = OrderedDict{Any, Int}()
     D = Differential(iv)
     diff_eqs = Equation[]
     diff_vars = OrderedSet()
@@ -65,7 +65,7 @@ function dae_order_lowering(eqs, iv, states)
     vars = Set()
     subs = Dict()
 
-    for (i, eq) ∈ enumerate(eqs)
+    for (i, eq) in enumerate(eqs)
         vars!(vars, eq)
         n_diffvars = 0
         for vv in vars
@@ -89,9 +89,9 @@ function dae_order_lowering(eqs, iv, states)
         empty!(vars)
     end
 
-    for (var, order) ∈ var_order
-        for o in (order-1):-1:1
-            lvar = lower_varname(var, iv, o-1)
+    for (var, order) in var_order
+        for o in (order - 1):-1:1
+            lvar = lower_varname(var, iv, o - 1)
             rvar = lower_varname(var, iv, o)
             push!(diff_vars, lvar)
 
@@ -101,5 +101,6 @@ function dae_order_lowering(eqs, iv, states)
         end
     end
 
-    return ([diff_eqs; substitute.(eqs, (subs,))], vcat(collect(diff_vars), setdiff(states, diff_vars)))
+    return ([diff_eqs; substitute.(eqs, (subs,))],
+            vcat(collect(diff_vars), setdiff(states, diff_vars)))
 end
