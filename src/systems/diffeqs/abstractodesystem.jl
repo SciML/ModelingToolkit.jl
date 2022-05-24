@@ -18,7 +18,7 @@ function calculate_tgrad(sys::AbstractODESystem;
 end
 
 function calculate_jacobian(sys::AbstractODESystem;
-                            sparse=false, simplify=false, dvs=states(sys))
+                            sparse=false, split=false, simplify=false, dvs=states(sys))
 
     if isequal(dvs, states(sys))
         cache = get_jac(sys)[]
@@ -31,10 +31,25 @@ function calculate_jacobian(sys::AbstractODESystem;
 
     iv = get_iv(sys)
 
+    if split
+        rhs_sp = [eq.rhs for eq ∈ full_equations(sys)]
+        A, f_n = semilinear_form(rhs_sp, dvs)
+    end
+
     if sparse
-        jac = sparsejacobian(rhs, dvs, simplify=simplify)
+        if split
+            jac_f = sparsejacobian(f_n, dvs, simplify=simplify)
+            jac = A + jac_f
+        else
+            jac = sparsejacobian(rhs, dvs, simplify=simplify)
+        end
     else
-        jac = jacobian(rhs, dvs, simplify=simplify)
+        if split
+            jac_f = jacobian(f_n, dvs, simplify=simplify)
+            jac = A + jac_f
+        else
+            jac = jacobian(rhs, dvs, simplify=simplify)
+        end
     end
 
     if isequal(dvs, states(sys))
@@ -73,8 +88,8 @@ function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = paramete
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
-                           simplify=false, sparse = false, kwargs...)
-    jac = calculate_jacobian(sys;simplify=simplify,sparse=sparse)
+                           simplify=false, sparse = false, split=false, kwargs...)
+    jac = calculate_jacobian(sys;simplify=simplify,sparse=sparse, split=false)
     return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
@@ -579,7 +594,7 @@ function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps;
-                                    simplify=simplify, sparse = sparse,
+                                    simplify=simplify, sparse = sparse, split=true,
                                     expression=Val{eval_expression}, expression_module=eval_module,
                                     checkbounds=checkbounds, kwargs...)
         jac_oop, jac_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in jac_gen) : jac_gen
