@@ -31,11 +31,21 @@ D = Differential(tv)
 @test !is_bound(sys2, sys.u)
 @test !is_bound(sys2, sys2.sys.u)
 
+fsys2 = flatten(sys2)
+@test is_bound(fsys2, sys.x)
+@test !is_bound(fsys2, sys.u)
+@test !is_bound(fsys2, sys2.sys.u)
+
+
 @test is_bound(sys3, sys.u) # I would like to write sys3.sys.u here but that's not how the variable is stored in the equations
 @test is_bound(sys3, sys.x)
 
 @test is_bound(sys4, sys.u)
 @test !is_bound(sys4, u)
+
+fsys4 = flatten(sys4)
+@test  is_bound(fsys4, sys.u)
+@test !is_bound(fsys4, u)
 
 @test isequal(inputs(sys), [u])
 @test isequal(inputs(sys2), [sys.u])
@@ -44,7 +54,9 @@ D = Differential(tv)
 @test isequal(unbound_inputs(sys), [u])
 
 @test isempty(bound_inputs(sys2))
+@test isempty(bound_inputs(fsys2))
 @test isequal(unbound_inputs(sys2), [sys.u])
+@test isequal(unbound_inputs(fsys2), [sys.u])
 
 @test isequal(bound_inputs(sys3), [sys.u])
 @test isempty(unbound_inputs(sys3))
