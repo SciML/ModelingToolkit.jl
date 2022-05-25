@@ -115,7 +115,6 @@ using .BipartiteGraphs
 
 include("variables.jl")
 include("parameters.jl")
-include("inputoutput.jl")
 
 include("utils.jl")
 include("domains.jl")
@@ -152,6 +151,7 @@ include("systems/alias_elimination.jl")
 include("structural_transformation/StructuralTransformations.jl")
 
 @reexport using .StructuralTransformations
+include("inputoutput.jl")
 
 for S in subtypes(ModelingToolkit.AbstractSystem)
     S = nameof(S)

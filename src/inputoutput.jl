@@ -239,3 +239,65 @@ function toparam(sys, ctrls::AbstractVector)
     end
     ODESystem(eqs, name = nameof(sys))
 end
+
+function inputs_to_parameters!(state::TransformationState)
+    @unpack structure, fullvars, sys = state
+    @unpack var_to_diff, graph, solvable_graph = structure
+    @assert solvable_graph === nothing
+
+    inputs = BitSet()
+    var_reidx = zeros(Int, length(fullvars))
+    ninputs = 0
+    nvar = 0
+    new_parameters = []
+    input_to_parameters = Dict()
+    new_fullvars = []
+    for (i, v) in enumerate(fullvars)
+        if isinput(v) && !is_bound(sys, v)
+            if var_to_diff[i] !== nothing
+                error("Input $(fullvars[i]) is differentiated!")
+            end
+            push!(inputs, i)
+            ninputs += 1
+            var_reidx[i] = -1
+            p = toparam(v)
+            push!(new_parameters, p)
+            input_to_parameters[v] = p
+        else
+            nvar += 1
+            var_reidx[i] = nvar
+            push!(new_fullvars, v)
+        end
+    end
+    ninputs == 0 && return state
+
+    nvars = ndsts(graph) - ninputs
+    new_graph = BipartiteGraph(nsrcs(graph), nvars, Val(false))
+
+    for ie in 1:nsrcs(graph)
+        for iv in 𝑠neighbors(graph, ie)
+            iv = var_reidx[iv]
+            iv > 0 || continue
+            add_edge!(new_graph, ie, iv)
+        end
+    end
+
+    new_var_to_diff = DiffGraph(nvars, true)
+    for (i, v) in enumerate(var_to_diff)
+        new_i = var_reidx[i]
+        (new_i < 1 || v === nothing) && continue
+        new_v = var_reidx[v]
+        @assert new_v > 0
+        new_var_to_diff[new_i] = new_v
+    end
+    @set! structure.var_to_diff = new_var_to_diff
+    @set! structure.graph = new_graph
+
+    @set! sys.eqs = map(Base.Fix2(substitute, input_to_parameters), equations(sys))
+    @set! sys.states = setdiff(states(sys), keys(input_to_parameters))
+    @set! sys.ps = [parameters(sys); new_parameters]
+
+    @set! state.sys = sys
+    @set! state.fullvars = new_fullvars
+    @set! state.structure = structure
+end

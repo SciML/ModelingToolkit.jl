@@ -240,10 +240,9 @@ D = Differential(t)
 
 eqs = [D(x) ~ σ * (y - x)
        D(y) ~ x * (ρ - z) - y + β
-       0 ~ z - x + y
        0 ~ a + z
        u ~ z + a]
 
 lorenz1 = ODESystem(eqs, t, name = :lorenz1)
 lorenz1_reduced = structural_simplify(lorenz1)
-@test z in Set(states(lorenz1_reduced))
+@test z in Set(parameters(lorenz1_reduced))
