@@ -36,7 +36,6 @@ fsys2 = flatten(sys2)
 @test !is_bound(fsys2, sys.u)
 @test !is_bound(fsys2, sys2.sys.u)
 
-
 @test is_bound(sys3, sys.u) # I would like to write sys3.sys.u here but that's not how the variable is stored in the equations
 @test is_bound(sys3, sys.x)
 
@@ -44,7 +43,7 @@ fsys2 = flatten(sys2)
 @test !is_bound(sys4, u)
 
 fsys4 = flatten(sys4)
-@test  is_bound(fsys4, sys.u)
+@test is_bound(fsys4, sys.u)
 @test !is_bound(fsys4, u)
 
 @test isequal(inputs(sys), [u])
@@ -175,7 +174,7 @@ u = [rand()]
 @test f[1](x, u, p, 1) == [u; 0; 0; 0]
 
 @parameters t
-@variables x(t) u(t) [input=true]
+@variables x(t) u(t) [input = true]
 eqs = [Differential(t)(x) ~ u]
 @named sys = ODESystem(eqs, t)
 structural_simplify(sys)
