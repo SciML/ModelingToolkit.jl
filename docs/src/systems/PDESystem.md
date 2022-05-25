@@ -8,7 +8,7 @@ It is currently being built as a component of the ModelingToolkit ecosystem,
 The vision for the common PDE interface is that a user should only have to specify
 their PDE once, mathematically, and have instant access to everything as simple
 as a finite difference method with constant grid spacing, to something as complex
-as a distributed multi-GPU discrete Galerkin method.
+as a distributed multi-GPU discontinuous Galerkin method.
 
 The key to the common PDE interface is a separation of the symbolic handling from
 the numerical world. All of the discretizers should not "solve" the PDE, but
@@ -20,12 +20,12 @@ the other choice.
 These elementary problems, such as solving linear systems `Ax=b`, solving nonlinear
 systems `f(x)=0`, ODEs, etc. are all defined by SciMLBase.jl, which then numerical
 solvers can all target these common forms. Thus someone who works on linear solvers
-doesn't necessarily need to be working on a Discontinuous Galerkin or finite element
+doesn't necessarily need to be working on a discontinuous Galerkin or finite element
 library, but instead "linear solvers that are good for matrices A with
 properties ..." which are then accessible by every other discretization method
 in the common PDE interface.
 
-Similar to the rest of the `AbstractSystem` types, transformation and analyses
+Similar to the rest of the `AbstractSystem` types, transformation and analysis
 functions will allow for simplifying the PDE before solving it, and constructing
 block symbolic functions like Jacobians.
 

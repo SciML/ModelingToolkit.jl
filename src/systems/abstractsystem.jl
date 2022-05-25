@@ -1002,6 +1002,8 @@ function structural_simplify(sys::AbstractSystem; simplify = false, kwargs...)
     sys = expand_connections(sys)
     sys = alias_elimination(sys)
     state = TearingState(sys)
+    state = inputs_to_parameters!(state)
+    sys = state.sys
     check_consistency(state)
     if sys isa ODESystem
         sys = dae_order_lowering(dummy_derivative(sys, state))
