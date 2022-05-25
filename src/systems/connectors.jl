@@ -51,7 +51,7 @@ function connector_type(sys::AbstractSystem)
     (n_stream > 0 && n_flow > 1) &&
         error("There are multiple flow variables in $(nameof(sys))!")
     if n_flow != n_regular
-        @warn "$(nameof(sys)) contains $n_flow variables, yet $n_regular regular " *
+        @warn "$(nameof(sys)) contains $n_flow flow variables, yet $n_regular regular " *
               "(non-flow, non-stream, non-input, non-output) variables." *
               "This could lead to imbalanced model that are difficult to debug." *
               "Consider marking some of the regular variables as input/output variables."
