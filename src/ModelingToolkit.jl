@@ -159,7 +159,7 @@ for S in subtypes(ModelingToolkit.AbstractSystem)
 end
 
 export AbstractTimeDependentSystem, AbstractTimeIndependentSystem, AbstractMultivariateSystem
-export ODESystem, ODEFunction, SplitFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
+export ODESystem, ODEFunction, SplitFunction, ODEFunctionExpr, ODEProblemExpr, convert_system, SplitODEProblemExpr, SplitFunctionExpr
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
 export SystemStructure
@@ -188,7 +188,7 @@ export independent_variables, independent_variable, states, parameters, equation
 export structural_simplify, expand_connections
 export DiscreteSystem, DiscreteProblem
 
-export calculate_jacobian, generate_jacobian, generate_function
+export calculate_jacobian, calculate_split_jacobian, generate_jacobian, generate_split_jacobian, generate_function, generate_split_function
 export calculate_control_jacobian, generate_control_jacobian
 export calculate_tgrad, generate_tgrad
 export calculate_gradient, generate_gradient

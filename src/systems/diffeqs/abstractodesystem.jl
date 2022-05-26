@@ -646,7 +646,6 @@ function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         jac_oop, jac_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in jac_gen) : jac_gen
         _jac(u,p,t) = jac_oop(u,p,t)
         _jac(J,u,p,t) = jac_iip(J,u,p,t)
-
     else
         _jac = nothing
     end
@@ -685,7 +684,7 @@ function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
         if jac
-            similar(calculate_jacobian(sys, sparse=sparse), uElType)
+            similar(calculate_split_jacobian(sys, A, f_n, sparse=sparse), uElType)
         else
             similar(jacobian_sparsity(sys), uElType)
         end
@@ -694,14 +693,14 @@ function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     SplitFunction{iip}( f1,
-                        f2,
-                        jac = _jac === nothing ? nothing : _jac,
-                        tgrad = _tgrad === nothing ? nothing : _tgrad,
+                        f2;
                         mass_matrix = _M,
+                        tgrad = _tgrad === nothing ? nothing : _tgrad,
+                        jac = _jac === nothing ? nothing : _jac,
                         jac_prototype = jac_prototype,
+                        sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
                         syms = Symbol.(states(sys)),
-                        observed = observedfun,
-                        sparsity = sparsity ? jacobian_sparsity(sys) : nothing
+                        observed = observedfun
                       )
 end
 
@@ -909,15 +908,19 @@ function SplitFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      sparse = false, simplify=false,
                                      steady_state = false,
                                      kwargs...) where {iip}
-
-    A_oop, A_iip, f_oop, f_iip = generate_split_function(sys, dvs, ps; expression=Val{true}, kwargs...)
+    eqs = [eq for eq in equations(sys) if !isdifference(eq)]
+    rhs = [eq.rhs for eq in eqs]
+    check_operator_variables(eqs, Differential)
+    check_lhs(eqs, Differential, Set(dvs))
+    A, f_n = semilinear_form(rhs, dvs)
+    f1_oop, f1_iip, f2_oop, f2_iip = generate_split_function(sys, A, f_n, dvs, ps; expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
 
     dict = Dict()
 
-    fsym = gensym(:f)
-    _f = :($fsym = $SplitFunctionClosure($f_oop, $f_iip))
-    Asym = gensym(:A)
-    _A = :($Asym = $SplitFunctionClosure($A_oop, $A_iip))
+    f1sym = gensym(:f1)
+    _f1 = :($f1sym = $SplitFunctionClosure($f1_oop, $f1_iip))
+    f2sym = gensym(:f2)
+    _f2 = :($f2sym = $SplitFunctionClosure($f2_oop, $f2_iip))
     tgradsym = gensym(:tgrad)
     if tgrad
         tgrad_oop, tgrad_iip = generate_tgrad(sys, dvs, ps;
@@ -930,7 +933,7 @@ function SplitFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     jacsym = gensym(:jac)
     if jac
-        jac_oop,jac_iip = generate_jacobian(sys, dvs, ps;
+        jac_oop,jac_iip = generate_split_jacobian(sys, A, f_n, dvs, ps;
                                  sparse=sparse, simplify=simplify,
                                  expression=Val{true}, kwargs...)
         _jac = :($jacsym = $SplitFunctionClosure($jac_oop, $jac_iip))
@@ -950,16 +953,17 @@ function SplitFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     jp_expr = sparse ? :(similar($(get_jac(sys)[]),Float64)) : :nothing
     ex = quote
-        $_f
+        $_f1
+        $_f2
         $_tgrad
         $_jac
         M = $_M
         SplitFunction{$iip}(
-                        $Asym,
-                        $fsym,
-                        jac = $jacsym,
-                        tgrad = $tgradsym,
+                        $f1sym,
+                        $f2sym;
                         mass_matrix = M,
+                        tgrad = $tgradsym,
+                        jac = $jacsym,
                         jac_prototype = $jp_expr,
                         syms = $(Symbol.(states(sys)))
                        )
