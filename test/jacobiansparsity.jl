@@ -50,6 +50,7 @@ JP = prob.f.jac_prototype
 
 # test sparse jacobian
 prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = true)
+@test_nowarn solve(prob, Rosenbrock23())
 @test findnz(calculate_jacobian(sys, sparse = true))[1:2] ==
       findnz(prob.f.jac_prototype)[1:2]
 
