@@ -18,19 +18,17 @@ using ModelingToolkit
 D = Differential(t) # define an operator for the differentiation w.r.t. time
 
 # your first ODE, consisting of a single equation, indicated by ~
-@named fol_separate = ODESystem([ RHS  ~ (1 - x)/τ,
-                                  D(x) ~ RHS ])
+@named fol = ODESystem([ D(x)  ~ (1 - x)/τ])
 
 using DifferentialEquations: solve
 using Plots: plot
 
-prob = ODEProblem(structural_simplify(fol_separate), [x => 0.0], (0.0,10.0), [τ => 3.0])
+prob = ODEProblem(fol, [x => 0.0], (0.0,10.0), [τ => 3.0])
 sol = solve(prob)
-plot(sol, vars=[x,RHS])
+plot(sol)
 ```
 
-![Simulation result of first-order lag element, with right-hand side](https://user-images.githubusercontent.com/13935112/111958403-7e8d3e00-8aed-11eb-9d18-08b5180a59f9.png)
-
+![Simulation result of first-order lag element, with right-hand side](https://user-images.githubusercontent.com/13935112/111958369-703f2200-8aed-11eb-8bb4-0abe9652e850.png)
 Now let's start digging into MTK!
 
 ## Your very first ODE
