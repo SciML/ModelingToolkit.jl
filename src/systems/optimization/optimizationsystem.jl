@@ -187,8 +187,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     _f = DiffEqBase.OptimizationFunction{iip}(f,
                                               SciMLBase.NoAD();
                                               grad = _grad,
-                                              hess = _hess,
-                                              )
+                                              hess = _hess)
 
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)
@@ -269,9 +268,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         lb = $lb
         ub = $ub
         _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
-                                        grad = grad,
-                                        hess = hess,
-                     )
+                                       grad = grad,
+                                       hess = hess)
         OptimizationProblem{$iip}(_f, u0, p; lb = lb, ub = ub, kwargs...)
     end
 end
