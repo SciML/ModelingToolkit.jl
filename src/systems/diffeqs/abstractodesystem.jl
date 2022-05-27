@@ -1,3 +1,10 @@
+function filter_kwargs(kwargs)
+    kwargs = Dict(kwargs)
+    for key in keys(kwargs)
+        key in DiffEqBase.allowedkeywords || delete!(kwargs, key)
+    end
+    pairs(NamedTuple(kwargs))
+end
 function calculate_tgrad(sys::AbstractODESystem;
                          simplify = false)
     isempty(get_tgrad(sys)[]) || return get_tgrad(sys)[]  # use cached tgrad, if possible
@@ -737,6 +744,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
     cb = merge_cb(event_cb, difference_cb)
     cb = merge_cb(cb, callback)
 
+    kwargs = filter_kwargs(kwargs)
     if cb === nothing
         ODEProblem{iip}(f, u0, tspan, p; kwargs...)
     else
@@ -774,6 +782,8 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     diffvars = collect_differential_variables(sys)
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
+    kwargs = filter_kwargs(kwargs)
+
     if has_difference
         DAEProblem{iip}(f, du0, u0, tspan, p;
                         difference_cb = generate_difference_cb(sys; kwargs...),
@@ -809,6 +819,7 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem, u0map, tspan,
     f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap; check_length,
                                  kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
+    kwargs = filter_kwargs(kwargs)
 
     ex = quote
         f = $f
@@ -853,6 +864,7 @@ function DAEProblemExpr{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
     diffvars = collect_differential_variables(sys)
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
+    kwargs = filter_kwargs(kwargs)
 
     ex = quote
         f = $f
@@ -895,6 +907,7 @@ function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem, u0map,
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap;
                                  steady_state = true,
                                  check_length, kwargs...)
+    kwargs = filter_kwargs(kwargs)
     SteadyStateProblem{iip}(f, u0, p; kwargs...)
 end
 
@@ -923,6 +936,7 @@ function SteadyStateProblemExpr{iip}(sys::AbstractODESystem, u0map,
                                  steady_state = true,
                                  check_length, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
+    kwargs = filter_kwargs(kwargs)
     ex = quote
         f = $f
         u0 = $u0
