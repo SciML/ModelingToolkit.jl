@@ -248,14 +248,14 @@ connected_simp = structural_simplify(connected)
       #   [1, 3]  =  ×
       #   [2, 4]  =  ×
 
-equations(connected_simp)
+full_equations(connected_simp)
       # 2-element Array{Equation,1}:
       #  Differential(t)(fol_1₊x(t)) ~ (fol_1₊τ^-1)*(1.5 - fol_1₊x(t))
       #  Differential(t)(fol_2₊x(t)) ~ (fol_2₊τ^-1)*(fol_1₊x(t) - fol_2₊x(t))
 ```
-
 As expected, only the two state-derivative equations remain,
 as if you had manually eliminated as many variables as possible from the equations.
+Some observed variables are not expanded unless `full_equations` is used.
 As mentioned above, the hierarchical structure is preserved though. So the
 initial state and the parameter values can be specified accordingly when
 building the `ODEProblem`:
