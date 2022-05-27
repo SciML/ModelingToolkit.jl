@@ -72,6 +72,12 @@ jac = calculate_jacobian(ns)
 
 jac = generate_jacobian(ns)
 
+sH = calculate_hessian(ns)
+@test getfield.(ModelingToolkit.hessian_sparsity(ns), :colptr) ==
+      getfield.(sparse.(sH), :colptr)
+@test getfield.(ModelingToolkit.hessian_sparsity(ns), :rowval) ==
+      getfield.(sparse.(sH), :rowval)
+
 prob = NonlinearProblem(ns, ones(3), ones(3))
 sol = solve(prob, NewtonRaphson())
 @test sol.u[1] ≈ sol.u[2]

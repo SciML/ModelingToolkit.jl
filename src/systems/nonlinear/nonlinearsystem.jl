@@ -172,6 +172,11 @@ function jacobian_sparsity(sys::NonlinearSystem)
                       states(sys))
 end
 
+function hessian_sparsity(sys::NonlinearSystem)
+    [hessian_sparsity(eq.rhs,
+                      states(sys)) for eq in equations(sys)]
+end
+
 function DiffEqBase.NonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
     NonlinearFunction{true}(sys, args...; kwargs...)
 end
