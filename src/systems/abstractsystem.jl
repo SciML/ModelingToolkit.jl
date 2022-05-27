@@ -409,6 +409,9 @@ function renamespace(sys, x)
     sys === nothing && return x
     x = unwrap(x)
     if x isa Symbolic
+        if isdifferential(x)
+            return similarterm(x, operation(x), Any[renamespace(sys, only(arguments(x)))])
+        end
         let scope = getmetadata(x, SymScope, LocalScope())
             if scope isa LocalScope
                 rename(x, renamespace(getname(sys), getname(x)))

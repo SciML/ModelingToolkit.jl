@@ -772,3 +772,25 @@ let
     oprob = ODEProblem(osys, [A => 1.0], (0.0, 10.0), [k => 1.0]; check_length = false)
     @test_nowarn sol = solve(oprob, Tsit5())
 end
+
+let
+    function sys1(; name)
+        vars = @variables x(t)=0.0 dx(t)=0.0
+
+        ODESystem([D(x) ~ dx], t, vars, []; name, defaults = [D(x) => x])
+    end
+
+    function sys2(; name)
+        @named s1 = sys1()
+
+        ODESystem(Equation[], t, [], []; systems = [s1], name)
+    end
+
+    s1′ = sys1(; name = :s1)
+    @named s2 = sys2()
+    @unpack s1 = s2
+    @test isequal(s1, s1′)
+
+    defs = Dict(s1.dx => 0.0, D(s1.x) => s1.x, s1.x => 0.0)
+    @test isequal(ModelingToolkit.defaults(s2), defs)
+end
