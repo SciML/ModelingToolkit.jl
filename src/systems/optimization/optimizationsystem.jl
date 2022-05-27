@@ -185,10 +185,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     end
 
     if sparse
-        _hess_prototype = hessian_sparsity(sys)
-        hess_prototype = SparseArrays.sparse(findnz(_hess_prototype)[1],
-                                             findnz(_hess_prototype)[2],
-                                             zeros(nnz(_hess_prototype)))
+        hess_prototype = hessian_sparsity(sys)
     else
         hess_prototype = nothing
     end
@@ -262,9 +259,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     end
 
     if sparse
-        _hess_prototype = hessian_sparsity(sys)
-        hess_prototype = sparse(findnz(_hess_prototype)[1], findnz(_hess_prototype)[2],
-                                zeros(findnz(_hess_prototype)[3]))
+        hess_prototype = hessian_sparsity(sys)
     else
         hess_prototype = nothing
     end
