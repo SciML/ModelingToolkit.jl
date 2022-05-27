@@ -18,19 +18,17 @@ using ModelingToolkit
 D = Differential(t) # define an operator for the differentiation w.r.t. time
 
 # your first ODE, consisting of a single equation, indicated by ~
-@named fol_separate = ODESystem([ RHS  ~ (1 - x)/τ,
-                                  D(x) ~ RHS ])
+@named fol = ODESystem([ D(x)  ~ (1 - x)/τ])
 
 using DifferentialEquations: solve
 using Plots: plot
 
-prob = ODEProblem(structural_simplify(fol_separate), [x => 0.0], (0.0,10.0), [τ => 3.0])
+prob = ODEProblem(fol, [x => 0.0], (0.0,10.0), [τ => 3.0])
 sol = solve(prob)
-plot(sol, vars=[x,RHS])
+plot(sol)
 ```
 
-![Simulation result of first-order lag element, with right-hand side](https://user-images.githubusercontent.com/13935112/111958403-7e8d3e00-8aed-11eb-9d18-08b5180a59f9.png)
-
+![Simulation result of first-order lag element, with right-hand side](https://user-images.githubusercontent.com/13935112/111958369-703f2200-8aed-11eb-8bb4-0abe9652e850.png)
 Now let's start digging into MTK!
 
 ## Your very first ODE
@@ -203,6 +201,7 @@ but allows for customization:
 @named fol_2 = fol_factory(true) # has observable RHS
 ```
 
+The `@named` macro rewrites `fol_2 = fol_factory(true)` into `fol_2 = fol_factory(true,:fol_2)`.
 Now, these two components can be used as subsystems of a parent system, i.e.
 one level higher in the model hierarchy. The connections between the components
 again are just algebraic relations:
@@ -218,7 +217,7 @@ connected = compose(ODESystem(connections,name=:connected), fol_1, fol_2)
       #   fol_2₊f(t)
       #   fol_1₊x(t)
       #   fol_2₊x(t)
-      # ⋮
+      #   fol_2₊RHS(t)
       # Parameters (2):
       #   fol_1₊τ
       #   fol_2₊τ
@@ -247,14 +246,14 @@ connected_simp = structural_simplify(connected)
       #   [1, 3]  =  ×
       #   [2, 4]  =  ×
 
-equations(connected_simp)
+full_equations(connected_simp)
       # 2-element Array{Equation,1}:
       #  Differential(t)(fol_1₊x(t)) ~ (fol_1₊τ^-1)*(1.5 - fol_1₊x(t))
       #  Differential(t)(fol_2₊x(t)) ~ (fol_2₊τ^-1)*(fol_1₊x(t) - fol_2₊x(t))
 ```
-
 As expected, only the two state-derivative equations remain,
 as if you had manually eliminated as many variables as possible from the equations.
+Some observed variables are not expanded unless `full_equations` is used.
 As mentioned above, the hierarchical structure is preserved though. So the
 initial state and the parameter values can be specified accordingly when
 building the `ODEProblem`:
@@ -350,7 +349,7 @@ Here are some notes that may be helpful during your initial steps with MTK:
 Where to go next?
 
 * Not sure how MTK relates to similar tools and packages? Read
-  [Comparison of ModelingToolkit vs Equation-Based Modeling Languages](@ref).
+  [Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages](@ref).
 * Depending on what you want to do with MTK, have a look at some of the other
   **Symbolic Modeling Tutorials**.
 * If you want to automatically convert an existing function to a symbolic
