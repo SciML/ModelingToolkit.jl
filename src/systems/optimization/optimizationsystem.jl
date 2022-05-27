@@ -184,10 +184,20 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         _hess = nothing
     end
 
+    if sparse
+        _hess_prototype = hessian_sparsity(sys)
+        hess_prototype = SparseArrays.sparse(findnz(_hess_prototype)[1],
+                                             findnz(_hess_prototype)[2],
+                                             zeros(nnz(_hess_prototype)))
+    else
+        hess_prototype = nothing
+    end
+
     _f = DiffEqBase.OptimizationFunction{iip}(f,
                                               SciMLBase.NoAD();
                                               grad = _grad,
-                                              hess = _hess)
+                                              hess = _hess,
+                                              hess_prototype = hess_prototype)
 
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)
@@ -251,6 +261,14 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         _hess = :nothing
     end
 
+    if sparse
+        _hess_prototype = hessian_sparsity(sys)
+        hess_prototype = sparse(findnz(_hess_prototype)[1], findnz(_hess_prototype)[2],
+                                zeros(findnz(_hess_prototype)[3]))
+    else
+        hess_prototype = nothing
+    end
+
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)
     defs = mergedefaults(defs, u0map, dvs)
@@ -269,7 +287,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         ub = $ub
         _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
                                        grad = grad,
-                                       hess = hess)
+                                       hess = hess,
+                                       hess_prototype = hess_prototype)
         OptimizationProblem{$iip}(_f, u0, p; lb = lb, ub = ub, kwargs...)
     end
 end
