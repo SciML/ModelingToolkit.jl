@@ -74,7 +74,7 @@ We can see that all states (except $x_7$) and all parameters are locally identif
 Let's try to check specific parameters and their combinations
 ```julia
 to_check = [k5, k7, k10/k9, k5+k6]
-local_id_some = assess_local_identifiability(de, funcs_to_check=to_check, p=0.99)
+local_id_some = assess_local_identifiability(de, measured_quantities=measured_quantities, funcs_to_check=to_check, p=0.99)
                 # 4-element Vector{Bool}:
                 #  1
                 #  1
