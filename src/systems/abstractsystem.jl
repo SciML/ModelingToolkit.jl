@@ -1021,7 +1021,9 @@ end
     return latexify(equations(sys))
 end
 
-Base.show(io::IO, ::MIME"text/latex", x::AbstractSystem) = print(io, "\$\$ "*latexify(x)*" \$\$")
+function Base.show(io::IO, ::MIME"text/latex", x::AbstractSystem)
+    print(io, "\$\$ " * latexify(x) * " \$\$")
+end
 
 struct InvalidSystemException <: Exception
     msg::String
