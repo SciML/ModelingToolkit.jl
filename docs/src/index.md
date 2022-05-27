@@ -91,7 +91,7 @@ a standard library of prebuilt components for the ModelingToolkit ecosystem.
       Hepatology, Immunology, Ion Transport, Mechanical Constitutive Laws,
       Metabolism, Myofilament Mechanics, Neurobiology, pH Regulation, PKPD,
       Protein Modules, Signal Transduction, and Synthetic Biology.
-- [SBMLToolkit.jl](https://github.com/SciML/SBMLToolkit.jl): Import [SBML](http://sbml.org/Main_Page) models into ModelingToolkit
+- [SBMLToolkit.jl](https://github.com/SciML/SBMLToolkit.jl): Import [SBML](http://sbml.org/) models into ModelingToolkit
     - Uses the robust libsbml library for parsing and transforming the SBML
 - [ReactionNetworkImporters.jl](https://github.com/SciML/ReactionNetworkImporters.jl): Import various models into ModelingToolkit
     - Supports the BioNetGen `.net` file
