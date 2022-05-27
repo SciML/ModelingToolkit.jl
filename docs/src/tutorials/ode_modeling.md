@@ -203,6 +203,7 @@ but allows for customization:
 @named fol_2 = fol_factory(true) # has observable RHS
 ```
 
+The `@named` macro rewrites `fol_2 = fol_factory(true)` into `fol_2 = fol_factory(true,:fol_2)`.
 Now, these two components can be used as subsystems of a parent system, i.e.
 one level higher in the model hierarchy. The connections between the components
 again are just algebraic relations:
@@ -218,7 +219,7 @@ connected = compose(ODESystem(connections,name=:connected), fol_1, fol_2)
       #   fol_2₊f(t)
       #   fol_1₊x(t)
       #   fol_2₊x(t)
-      # ⋮
+      #   fol_2₊RHS(t)
       # Parameters (2):
       #   fol_1₊τ
       #   fol_2₊τ
@@ -350,7 +351,7 @@ Here are some notes that may be helpful during your initial steps with MTK:
 Where to go next?
 
 * Not sure how MTK relates to similar tools and packages? Read
-  [Comparison of ModelingToolkit vs Equation-Based Modeling Languages](@ref).
+  [Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages](@ref).
 * Depending on what you want to do with MTK, have a look at some of the other
   **Symbolic Modeling Tutorials**.
 * If you want to automatically convert an existing function to a symbolic
