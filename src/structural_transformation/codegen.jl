@@ -496,7 +496,7 @@ ODAEProblem(args...; kw...) = ODAEProblem{true}(args...; kw...)
 
 This constructor acts similar to the one for [`ODEProblem`](@ref) with the following changes:
 `ODESystem`s can sometimes be further reduced if `structural_simplify` has
-already been applied to them. This is done this constructor.
+already been applied to them.
 In these cases, the constructor uses the knowledge of the strongly connected
 components calculated during the process of simplification as the basis for
 building pre-simplified nonlinear systems in the implicit solving.
