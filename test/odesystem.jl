@@ -605,6 +605,7 @@ let
     @test prob.du0 ≈ du0
     @test prob.p ≈ [1]
     sol = solve(prob, IDA())
+    @test sol[y] ≈ 0.9 * sol[x[1]] + sol[x[2]]
     @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
 
     prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0], Pair[x[1] => 0.5],

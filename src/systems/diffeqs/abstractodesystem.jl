@@ -539,8 +539,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      jac_prototype = jac_prototype,
                      # missing fields in `DAEFunction`
                      #indepsym = Symbol(get_iv(sys)),
-                     observed = observedfun,
-                     )
+                     observed = observedfun)
 end
 
 """
