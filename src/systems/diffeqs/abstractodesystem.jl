@@ -509,6 +509,16 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         _jac = nothing
     end
 
+    obs = observed(sys)
+    observedfun = let sys = sys, dict = Dict()
+        function generated_observed(obsvar, u, p, t)
+            obs = get!(dict, value(obsvar)) do
+                build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
+            end
+            obs(u, p, t)
+        end
+    end
+
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
         if jac
@@ -526,11 +536,10 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     DAEFunction{iip}(f,
                      jac = _jac === nothing ? nothing : _jac,
                      syms = Symbol.(dvs),
-                     jac_prototype = jac_prototype
+                     jac_prototype = jac_prototype,
                      # missing fields in `DAEFunction`
                      #indepsym = Symbol(get_iv(sys)),
-                     #observed = observedfun,
-                     )
+                     observed = observedfun)
 end
 
 """
