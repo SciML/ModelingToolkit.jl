@@ -1,5 +1,7 @@
 using Documenter, ModelingToolkit
 
+include("pages.jl")
+
 makedocs(sitename = "ModelingToolkit.jl",
          authors = "Chris Rackauckas",
          modules = [ModelingToolkit],
