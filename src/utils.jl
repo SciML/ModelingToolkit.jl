@@ -102,8 +102,24 @@ function _readable_code(ex)
     end
     expr
 end
+
+function rec_remove_macro_linenums!(expr)
+    if expr isa Expr
+        if expr.head === :macrocall
+            expr.args[2] = nothing
+            rec_remove_macro_linenums!(expr.args[3])
+        else
+            for ex in expr.args
+                rec_remove_macro_linenums!(ex)
+            end
+        end
+    end
+    expr
+end
 function readable_code(expr)
-    JuliaFormatter.format_text(string(Base.remove_linenums!(_readable_code(expr))))
+    expr = Base.remove_linenums!(_readable_code(expr))
+    rec_remove_macro_linenums!(expr)
+    JuliaFormatter.format_text(string(expr), JuliaFormatter.SciMLStyle())
 end
 
 function check_parameters(ps, iv)
