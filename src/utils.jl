@@ -541,7 +541,7 @@ function promote_to_concrete(vs; tofloat = true, use_union = false)
     if Base.isconcretetype(T) && (!tofloat || T === float(T)) # nothing to do
         vs
     else
-        sym_vs = filter(x->SymbolicUtils.issym(x) || SymbolicUtils.istree(x), vs)
+        sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.istree(x), vs)
         isempty(sym_vs) || throw_missingvars_in_sys(sym_vs)
         C = typeof(first(vs))
         I = Int8

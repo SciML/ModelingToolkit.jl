@@ -46,6 +46,33 @@ prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 check_rc_sol(sol)
 
+# https://discourse.julialang.org/t/using-optimization-parameters-in-modelingtoolkit/82099
+let
+    @parameters param_r1 param_c1
+    @named resistor = Resistor(R = param_r1)
+    @named capacitor = Capacitor(C = param_c1)
+    @named source = ConstantVoltage(V = 1.0)
+    @named ground = Ground()
+
+    rc_eqs = [connect(source.p, resistor.p)
+              connect(resistor.n, capacitor.p)
+              connect(capacitor.n, source.n)
+              connect(capacitor.n, ground.g)]
+
+    @named _rc_model = ODESystem(rc_eqs, t)
+    @named rc_model = compose(_rc_model,
+                              [resistor, capacitor, source, ground])
+    sys = structural_simplify(rc_model)
+    u0 = [
+        capacitor.v => 0.0,
+    ]
+
+    params = [param_r1 => 1.0, param_c1 => 1.0]
+    tspan = (0.0, 10.0)
+
+    @test_throws Any prob=ODAEProblem(sys, u0, tspan, params)
+end
+
 let
     # 1478
     @named resistor2 = Resistor(R = R)
