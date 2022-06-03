@@ -545,6 +545,10 @@ function mergedefaults(defaults, varmap, vars)
     end
 end
 
+@noinline function throw_missingvars_in_sys(vars)
+    throw(ArgumentError("$vars are either missing from the variable map or missing from the system's states/parameters list."))
+end
+
 function promote_to_concrete(vs; tofloat = true, use_union = false)
     if isempty(vs)
         return vs
@@ -553,6 +557,8 @@ function promote_to_concrete(vs; tofloat = true, use_union = false)
     if Base.isconcretetype(T) && (!tofloat || T === float(T)) # nothing to do
         vs
     else
+        sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.istree(x), vs)
+        isempty(sym_vs) || throw_missingvars_in_sys(sym_vs)
         C = typeof(first(vs))
         I = Int8
         has_int = false
