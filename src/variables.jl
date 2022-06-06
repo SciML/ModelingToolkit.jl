@@ -4,12 +4,14 @@ struct VariableNoiseType end
 struct VariableDescriptionType end
 struct VariableInput end
 struct VariableOutput end
+struct VariableIrreducible end
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
 Symbolics.option_to_metadata_type(::Val{:noise}) = VariableNoiseType
 Symbolics.option_to_metadata_type(::Val{:description}) = VariableDescriptionType
 Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
+Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
 
 abstract type AbstractConnectType end
 struct Equality <: AbstractConnectType end # Equality connection
@@ -25,6 +27,7 @@ end
 
 isinput(x) = isvarkind(VariableInput, x)
 isoutput(x) = isvarkind(VariableOutput, x)
+isirreducible(x) = isvarkind(VariableIrreducible, x) || isinput(x)
 
 """
 $(SIGNATURES)
