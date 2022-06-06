@@ -8,8 +8,8 @@ using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
                           isparameter,
-                          independent_variables, isinput, SparseMatrixCLIL, AbstractSystem,
-                          equations
+                          independent_variables, SparseMatrixCLIL, AbstractSystem,
+                          equations, isirreducible
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -358,7 +358,7 @@ function linear_subsys_adjmat(state::TransformationState)
             var = fullvars[j]
             a, b, islinear = linear_expansion(term, var)
             a = unwrap(a)
-            if islinear && !(a isa Symbolic) && a isa Number && !isinput(var)
+            if islinear && !(a isa Symbolic) && a isa Number && !isirreducible(var)
                 if a == 1 || a == -1
                     a = convert(Integer, a)
                     linear_term += a * var

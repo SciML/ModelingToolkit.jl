@@ -170,7 +170,7 @@ function find_eq_solvables!(state::TearingState, ieq; may_be_zero = false,
     to_rm = Int[]
     for j in 𝑠neighbors(graph, ieq)
         var = fullvars[j]
-        #isinput(var) && continue
+        isirreducible(var) && continue
         a, b, islinear = linear_expansion(term, var)
         a = unwrap(a)
         islinear || continue

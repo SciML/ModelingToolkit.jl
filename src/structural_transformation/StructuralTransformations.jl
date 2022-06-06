@@ -13,7 +13,7 @@ using ModelingToolkit
 using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Differential,
                        states, equations, vars, Symbolic, diff2term, value,
                        operation, arguments, Sym, Term, simplify, solve_for,
-                       isdiffeq, isdifferential, isinput,
+                       isdiffeq, isdifferential, isirreducible,
                        empty_substitutions, get_substitutions,
                        get_tearing_state, get_iv, independent_variables,
                        has_tearing_state, defaults, InvalidSystemException,
