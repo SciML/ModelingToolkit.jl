@@ -1,4 +1,4 @@
-using ModelingToolkit, SparseArrays, Test, GalacticOptim, GalacticOptimJL
+using ModelingToolkit, SparseArrays, Test, Optimization, OptimizationOptimJL
 
 @variables x y
 @parameters a b
@@ -51,7 +51,7 @@ rosenbrock(x, p) = (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
 x0 = zeros(2)
 _p = [1.0, 100.0]
 
-f = OptimizationFunction(rosenbrock, GalacticOptim.AutoModelingToolkit())
+f = OptimizationFunction(rosenbrock, Optimization.AutoModelingToolkit())
 prob = OptimizationProblem(f, x0, _p)
 sol = solve(prob, Newton())
 

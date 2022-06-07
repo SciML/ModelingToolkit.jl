@@ -145,7 +145,7 @@ system:
       `SDESystem`, and `JumpSystem`
 - [NonlinearSolve.jl](https://github.com/JuliaComputing/NonlinearSolve.jl)
     - High performance numerical solving of `NonlinearSystem`
-- [GalacticOptim.jl](https://github.com/SciML/GalacticOptim.jl)
+- [Optimization.jl](https://github.com/SciML/Optimization.jl)
     - Multi-package interface for numerical solving `OptimizationSystem`
 - [NeuralPDE.jl](https://github.com/SciML/NeuralPDE.jl)
     - Physics-Informed Neural Network (PINN) training on `PDESystem`
