@@ -106,6 +106,10 @@ plot(sol)
 
 ## Explanation
 
+We wish to build the following RC circuit by building individual components and connecting the pins:
+
+![](https://user-images.githubusercontent.com/1814174/172466302-907d39f3-6d2c-4d16-84a8-6de32bca757e.png)
+
 ### Building the Component Library
 
 For each of our components we use a Julia function which emits an `ODESystem`.
