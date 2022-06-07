@@ -81,13 +81,13 @@ sys = runge_kutta_discretize(sys,dt,tspan)
 
 Now `sys` is an `OptimizationSystem` which, when solved, gives the values of
 `x(t)`, `v(t)`, and `u(t)`. Thus we solve the `OptimizationSystem` using
-GalacticOptim.jl:
+Optimization.jl:
 
 ```julia
 u0 = rand(length(states(sys))) # guess for the state values
 prob = OptimizationProblem(sys,u0,[0.1,0.1],grad=true)
 
-using GalacticOptim, Optim
+using Optimization, Optim
 sol = solve(prob,BFGS())
 ```
 
