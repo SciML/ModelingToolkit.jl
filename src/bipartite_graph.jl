@@ -546,7 +546,7 @@ function Base.iterate(c::CMONeighbors{false}, (l, state...))
         # directed graph. Otherwise, if there is no matching for this destination
         # edge, also skip it, since it got delted in the contraction.
         vsrc = c.g.matching[r[1]]
-        if vsrc === c.v || vsrc === unassigned
+        if vsrc === c.v || !isa(vsrc, Int)
             state = (r[2],)
             continue
         end
