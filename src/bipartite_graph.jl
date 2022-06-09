@@ -49,6 +49,10 @@ end
 function Matching(m::Int)
     Matching{Unassigned}(Union{Int, Unassigned}[unassigned for _ in 1:m], nothing)
 end
+function Matching{U}(m::Int) where {U}
+    Matching{Union{Unassigned, U}}(Union{Int, Unassigned, U}[unassigned for _ in 1:m],
+                                   nothing)
+end
 
 Base.size(m::Matching) = Base.size(m.match)
 Base.getindex(m::Matching, i::Integer) = m.match[i]
@@ -299,8 +303,8 @@ vertices, subject to the constraint that vertices for which `srcfilter` or `dstf
 return `false` may not be matched.
 """
 function maximal_matching(g::BipartiteGraph, srcfilter = vsrc -> true,
-                          dstfilter = vdst -> true)
-    matching = Matching(ndsts(g))
+                          dstfilter = vdst -> true, ::Type{U} = Unassigned) where {U}
+    matching = Matching{U}(ndsts(g))
     foreach(Iterators.filter(srcfilter, 𝑠vertices(g))) do vsrc
         construct_augmenting_path!(matching, g, vsrc, dstfilter)
     end

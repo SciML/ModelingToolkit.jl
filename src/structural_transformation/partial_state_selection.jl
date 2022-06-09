@@ -146,7 +146,8 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
     var_eq_matching
 end
 
-function dummy_derivative_graph!(state::TransformationState, jac = nothing)
+function dummy_derivative_graph!(state::TransformationState, jac = nothing; kwargs...)
+    state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     var_eq_matching = complete(pantelides!(state))
     complete!(state.structure)
     dummy_derivative_graph!(state.structure, var_eq_matching, jac)
@@ -239,5 +240,22 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         end
     end
 
-    dummy_derivatives
+    # We can eliminate variables that are not a selected state (differential
+    # variables). Selected states are differentiated variables that are not
+    # dummy derivatives.
+    can_eliminate = let dummy_derivatives = BitSet(dummy_derivatives),
+        var_to_diff = var_to_diff
+
+        v -> var_to_diff[v] === nothing || var_to_diff[v] in dummy_derivatives
+    end
+
+    var_eq_matching = tear_graph_modia(structure, Union{Unassigned, SelectedState};
+                                       varfilter = can_eliminate)
+
+    for v in eachindex(var_eq_matching)
+        can_eliminate(v) && continue
+        var_eq_matching[v] = SelectedState()
+    end
+
+    return var_eq_matching
 end

@@ -35,10 +35,10 @@ function tear_graph_block_modia!(var_eq_matching, graph, solvable_graph, eqs, va
     return nothing
 end
 
-function tear_graph_modia(structure::SystemStructure; varfilter = v -> true,
-                          eqfilter = eq -> true)
+function tear_graph_modia(structure::SystemStructure, ::Type{U} = Unassigned;
+                          varfilter = v -> true, eqfilter = eq -> true) where {U}
     @unpack graph, solvable_graph = structure
-    var_eq_matching = complete(maximal_matching(graph, eqfilter, varfilter))
+    var_eq_matching = complete(maximal_matching(graph, eqfilter, varfilter, U))
     var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, var_eq_matching)
 
     for vars in var_sccs
