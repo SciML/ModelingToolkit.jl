@@ -213,6 +213,99 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     # As a final note, in all the above cases where we need to introduce new
     # variables and equations, don't add them when they already exist.
 
+    var_to_idx = Dict{Any, Int}(reverse(en) for en in enumerate(fullvars))
+    iv = independent_variable(state.sys)
+    D = Differential(iv)
+    nvars = ndsts(graph)
+    processed = falses(nvars)
+    for i in 1:nvars
+        processed[i] && continue
+
+        v = i
+        # descend to the bottom of differentiation chain
+        while diff_to_var[v] !== nothing
+            v = diff_to_var[v]
+        end
+
+        # `v` is now not differentiated at level 0.
+        diffvar = v
+        processed[v] = true
+        level = 0
+        order = 0
+        # ascend to the top of differentiation chain
+        while true
+            if !isempty(𝑑neighbors(graph, v))
+                order = level
+            end
+            var_to_diff[v] === nothing && break
+            processed[v] = true
+            v = var_to_diff[v]
+            level += 1
+        end
+
+        # `diffvar` is a order `order` variable
+        order > 1 || continue
+
+        # add `D(t) ~ x_t` etc
+        subs = Dict()
+        ogx = x = fullvars[diffvar] # x
+        ogidx = xidx = diffvar
+        for o in 1:order
+            # D(x) ~ x_t
+            x_t = ModelingToolkit.lower_varname(ogx, iv, o)
+            dx = D(x)
+            ogidx = var_to_diff[ogidx]
+
+            x_t_idx = get(var_to_idx, x_t, nothing)
+            x_t_idx !== nothing && continue
+
+            # TODO: check x_t is legal when `x_t_idx isa Int`
+            push!(fullvars, x_t)
+            x_t_idx = add_vertex!(var_to_diff)
+            add_vertex!(graph, DST)
+            add_vertex!(solvable_graph, DST)
+            @assert x_t_idx == ndsts(graph) == length(fullvars)
+            push!(var_eq_matching, unassigned)
+
+            dx_idx = get(var_to_idx, dx, nothing)
+            if dx_idx === nothing
+                push!(fullvars, dx)
+                dx_idx = add_vertex!(var_to_diff)
+                add_vertex!(graph, DST)
+                add_vertex!(solvable_graph, DST)
+                @assert dx_idx == ndsts(graph) == length(fullvars)
+                push!(var_eq_matching, SelectedState())
+            end
+            add_edge!(var_to_diff, xidx, dx_idx)
+
+            push!(neweqs, dx ~ x_t)
+            eq_idx = add_vertex!(eq_to_diff)
+            add_vertex!(graph, SRC)
+            add_vertex!(solvable_graph, SRC)
+            @assert eq_idx == nsrcs(graph) == length(neweqs)
+
+            add_edge!(solvable_graph, eq_idx, x_t_idx)
+            add_edge!(solvable_graph, eq_idx, dx_idx)
+            add_edge!(graph, eq_idx, x_t_idx)
+            add_edge!(graph, eq_idx, dx_idx)
+
+            o > 1 && for eq in 𝑑neighbors(graph, ogidx)
+                eq == eq_idx && continue # skip the equation that we just added
+                rem_edge!(graph, eq, ogidx)
+                BipartiteEdge(eq, ogidx) in solvable_graph && rem_edge!(solvable_graph, eq, ogidx)
+                # TODO: what about `solvable_graph`?
+                add_edge!(graph, eq, x_t_idx)
+                subs[fullvars[ogidx]] = x_t
+                neweqs[eq] = substitute(neweqs[eq], subs)
+                empty!(subs)
+            end
+
+            # D(x_t) ~ x_tt
+            x = x_t
+            xidx = x_t_idx
+        end
+    end
+
     # Rewrite remaining equations in terms of solved variables
     function to_mass_matrix_form(ieq)
         eq = neweqs[ieq]

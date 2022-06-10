@@ -69,9 +69,9 @@ function Base.setindex!(m::Matching{U}, v::Union{Integer, U}, i::Integer) where 
     return m.match[i] = v
 end
 
-function Base.push!(m::Matching{U}, v::Union{Integer, U}) where {U}
+function Base.push!(m::Matching, v)
     push!(m.match, v)
-    if v !== unassigned && m.inv_match !== nothing
+    if v isa Integer && m.inv_match !== nothing
         m.inv_match[v] = length(m.match)
     end
 end

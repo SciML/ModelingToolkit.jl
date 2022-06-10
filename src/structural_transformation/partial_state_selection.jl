@@ -153,21 +153,21 @@ function dummy_derivative_graph!(state::TransformationState, jac = nothing; kwar
     dummy_derivative_graph!(state.structure, var_eq_matching, jac)
 end
 
-function compute_diff_level(diff_to_eq)
-    neqs = length(diff_to_eq)
-    eqlevel = zeros(Int, neqs)
+function compute_diff_level(diff_to_x)
+    nxs = length(diff_to_x)
+    xlevel = zeros(Int, nxs)
     maxlevel = 0
-    for i in 1:neqs
+    for i in 1:nxs
         level = 0
-        eq = i
-        while diff_to_eq[eq] !== nothing
-            eq = diff_to_eq[eq]
+        x = i
+        while diff_to_x[x] !== nothing
+            x = diff_to_x[x]
             level += 1
         end
         maxlevel = max(maxlevel, level)
-        eqlevel[i] = level
+        xlevel[i] = level
     end
-    return eqlevel, maxlevel
+    return xlevel, maxlevel
 end
 
 function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac)
