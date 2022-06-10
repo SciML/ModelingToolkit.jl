@@ -44,7 +44,7 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
-AbstractTrees = "0.3"
+AbstractTrees = "0.3, 0.4"
 ArrayInterfaceCore = "0.1.1"
 Combinatorics = "1"
 ConstructionBase = "1"
