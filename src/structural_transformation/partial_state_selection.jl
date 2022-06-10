@@ -153,13 +153,8 @@ function dummy_derivative_graph!(state::TransformationState, jac = nothing; kwar
     dummy_derivative_graph!(state.structure, var_eq_matching, jac)
 end
 
-function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac)
-    @unpack eq_to_diff, var_to_diff, graph = structure
-    diff_to_eq = invview(eq_to_diff)
-    diff_to_var = invview(var_to_diff)
-    invgraph = invview(graph)
-
-    neqs = nsrcs(graph)
+function compute_diff_level(diff_to_eq)
+    neqs = length(diff_to_eq)
     eqlevel = zeros(Int, neqs)
     maxlevel = 0
     for i in 1:neqs
@@ -172,28 +167,27 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         maxlevel = max(maxlevel, level)
         eqlevel[i] = level
     end
+    return eqlevel, maxlevel
+end
 
-    nvars = ndsts(graph)
-    varlevel = zeros(Int, nvars)
-    for i in 1:nvars
-        level = 0
-        var = i
-        while diff_to_var[var] !== nothing
-            var = diff_to_var[var]
-            level += 1
-        end
-        maxlevel = max(maxlevel, level)
-        varlevel[i] = level
-    end
+function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac)
+    @unpack eq_to_diff, var_to_diff, graph = structure
+    diff_to_eq = invview(eq_to_diff)
+    diff_to_var = invview(var_to_diff)
+    invgraph = invview(graph)
+
+    eqlevel, _ = compute_diff_level(diff_to_eq)
+    varlevel, _ = compute_diff_level(diff_to_var)
 
     var_sccs = find_var_sccs(graph, var_eq_matching)
-    eqcolor = falses(neqs)
+    eqcolor = falses(nsrcs(graph))
     dummy_derivatives = Int[]
     col_order = Int[]
+    nvars = ndsts(graph)
     for vars in var_sccs
         eqs = [var_eq_matching[var] for var in vars if var_eq_matching[var] !== unassigned]
         isempty(eqs) && continue
-        maxlevel = maximum(map(x -> eqlevel[x], eqs))
+        maxlevel = maximum(Base.Fix1(getindex, eqlevel), eqs)
         iszero(maxlevel) && continue
 
         rank_matching = Matching(nvars)

@@ -48,7 +48,7 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int)
     # Analyze the new equation and update the graph/solvable_graph
     # First, copy the previous incidence and add the derivative terms.
     # That's a superset of all possible occurrences. find_solvables! will
-    # remove those that doen't actually occur.
+    # remove those that doesn't actually occur.
     eq_diff = length(equations(ts))
     for var in 𝑠neighbors(s.graph, ieq)
         add_edge!(s.graph, eq_diff, var)
@@ -121,15 +121,33 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
 
     neweqs = collect(equations(state))
 
-    ### Replace derivatives of non-selected states by dumy derivatives
+    # Terminology and Definition:
+    #
+    # A general DAE is in the form of `F(u'(t), u(t), p, t) == 0`. We can
+    # characterize variables in `u(t)` into two classes: differential variables
+    # (denoted `v(t)`) and algebraic variables (denoted `z(t)`). Differential
+    # variables are marked as `SelectedState` and they are differentiated in the
+    # DAE system, i.e. `v'(t)` are all the variables in `u'(t)` that actually
+    # appear in the system. Algebraic variables are variables that are not
+    # differential variables.
+    #
+    # Dummy derivatives may determine that some differential variables are
+    # algebraic variables in disguise. The derivative of such variables are
+    # called dummy derivatives.
+
+    # Step 1:
+    # Replace derivatives of non-selected states by dummy derivatives
     dummy_subs = Dict()
+    diff_to_var = invview(var_to_diff)
     for var in 1:length(fullvars)
-        invview(var_to_diff)[var] === nothing && continue
-        if var_eq_matching[invview(var_to_diff)[var]] !== SelectedState()
-            fullvar = fullvars[var]
-            subst_fullvar = tearing_sub(fullvar, dummy_subs, simplify)
-            dummy_subs[fullvar] = fullvars[var] = diff2term(unwrap(subst_fullvar))
-            var_to_diff[invview(var_to_diff)[var]] = nothing
+        diff_to_var[var] === nothing && continue
+        if var_eq_matching[diff_to_var[var]] !== SelectedState()
+            v = fullvars[var]
+            # convert `D(x)` to `x_t` (don't rely on the specific spelling of
+            # the name)
+            dummy_subs[v] = fullvars[var] = diff2term(unwrap(v))
+            # update the structural information
+            diff_to_var[var] = nothing
         end
     end
     if !isempty(dummy_subs)
@@ -145,10 +163,55 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     solved_variables = Int[]
 
     # if var is like D(x)
-    function isdiffvar(var)
-        invview(var_to_diff)[var] !== nothing &&
-            var_eq_matching[invview(var_to_diff)[var]] === SelectedState()
+    isdiffvar = let diff_to_var = diff_to_var
+        var -> diff_to_var[var] !== nothing
     end
+
+    # There are three cases where we want to generate new variables to convert
+    # the system into first order (semi-implicit) ODEs.
+    #
+    # 1. To first order:
+    # Whenever higher order differentiated variable like `D(D(D(x)))` appears,
+    # we introduce new variables `x_t`, `x_tt`, and `x_ttt` and new equations
+    # ```
+    # D(x_tt) = x_ttt
+    # D(x_t) = x_tt
+    # D(x) = x_t
+    # ```
+    # and replace `D(x)` to `x_t`, `D(D(x))` to `x_tt`, and `D(D(D(x)))` to
+    # `x_ttt`.
+    #
+    # 2. To implicit to semi-implicit ODEs:
+    # 2.1: Unsolvable derivative:
+    # If one derivative variable `D(x)` are unsolvable in all the equations it
+    # appears in, then we introduce a new variable `x_t`, a new equation
+    # ```
+    # D(x) ~ x_t
+    # ```
+    # and replace all other `D(x)` to `x_t`.
+    #
+    # 2.2: Solvable derivative:
+    # If one derivative variable `D(x)` is solvable in at least one of the
+    # equations it appears in, then we introduce a new variable `x_t`. One of
+    # the solvable equations must be in the form of `0 ~ L(D(x), u...)` and
+    # there exists a function `l` such that `D(x) ~ l(u...)`. We should replace
+    # it to
+    # ```
+    # 0 ~ x_t - l(u...)
+    # D(x) ~ x_t
+    # ```
+    # and replace all other `D(x)` to `x_t`.
+    #
+    # Observe that we don't need to actually introduce a new variable `x_t`, as
+    # the above equations can be lowered to
+    # ```
+    # x_t := l(u...)
+    # D(x) ~ x_t
+    # ```
+    # where `:=` denotes assignment.
+    #
+    # As a final note, in all the above cases where we need to introduce new
+    # variables and equations, don't add them when they already exist.
 
     # Rewrite remaining equations in terms of solved variables
     function to_mass_matrix_form(ieq)
@@ -158,7 +221,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         end
         rhs = eq.rhs
         if rhs isa Symbolic
-            # Check if the rhs is solvable in all state derivatives and if those
+            # Check if the RHS is solvable in all state derivatives and if those
             # the linear terms for them are all zero. If so, move them to the
             # LHS.
             dterms = [var for var in 𝑠neighbors(graph, ieq) if isdiffvar(var)]
@@ -213,7 +276,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         subeqs = Equation[solve_equation(neweqs[solved_equations[i]],
                                          fullvars[solved_variables[i]],
                                          simplify) for i in toporder]
-        # find the dependency of solved variables. we will need this for ODAEProblem
+        # Find the dependency of solved variables. We will need this for ODAEProblem
         invtoporder = invperm(toporder)
         deps = [Int[invtoporder[n]
                     for n in neighborhood(subgraph, j, Inf, dir = :in) if n != j]
@@ -300,14 +363,14 @@ end
 """
     dummy_derivative(sys)
 
-Perform index reduction and use the dummy derivative techinque to ensure that
+Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
-function dummy_derivative(sys, state = TearingState(sys); kwargs...)
+function dummy_derivative(sys, state = TearingState(sys); simplify = false, kwargs...)
     function jac(eqs, vars)
         symeqs = EquationsView(state)[eqs]
         Symbolics.jacobian((x -> x.rhs).(symeqs), state.fullvars[vars])
     end
     var_eq_matching = dummy_derivative_graph!(state, jac; kwargs...)
-    tearing_reassemble(state, var_eq_matching)
+    tearing_reassemble(state, var_eq_matching; simplify = simplify)
 end
