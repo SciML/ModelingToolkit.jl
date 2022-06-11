@@ -138,6 +138,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     # Step 1:
     # Replace derivatives of non-selected states by dummy derivatives
     dummy_subs = Dict()
+    dds = BitSet()
     diff_to_var = invview(var_to_diff)
     for var in 1:length(fullvars)
         diff_to_var[var] === nothing && continue
@@ -148,13 +149,16 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             dummy_subs[v] = fullvars[var] = diff2term(unwrap(v))
             # update the structural information
             diff_to_var[var] = nothing
+            push!(dds, var)
         end
     end
-    if !isempty(dummy_subs)
-        neweqs = map(neweqs) do eq
-            0 ~ tearing_sub(eq.rhs - eq.lhs, dummy_subs, simplify)
-        end
+
+    for dd in dds, eq in 𝑑neighbors(graph, dd)
+        neweqs[eq] = substitute(neweqs[eq], dummy_subs)
     end
+    # `SelectedState` information is no longer needed past here. State selection
+    # is done. All non-differentiated variables are algebraic variables, and all
+    # variables that appear differentiated are differential variables.
 
     ### extract partition information
     is_solvable(eq, iv) = isa(eq, Int) && BipartiteEdge(eq, iv) in solvable_graph
