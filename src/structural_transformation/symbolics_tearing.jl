@@ -222,6 +222,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     D = Differential(iv)
     nvars = ndsts(graph)
     processed = falses(nvars)
+    subinfo = NTuple{4, Int}[]
     for i in 1:nvars
         processed[i] && continue
 
@@ -278,7 +279,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 add_vertex!(graph, DST)
                 add_vertex!(solvable_graph, DST)
                 @assert dx_idx == ndsts(graph) == length(fullvars)
-                push!(var_eq_matching, SelectedState())
+                push!(var_eq_matching, unassigned)
             end
             add_edge!(var_to_diff, xidx, dx_idx)
 
@@ -293,21 +294,33 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             add_edge!(graph, eq_idx, x_t_idx)
             add_edge!(graph, eq_idx, dx_idx)
 
-            o > 1 && for eq in 𝑑neighbors(graph, ogidx)
-                eq == eq_idx && continue # skip the equation that we just added
-                rem_edge!(graph, eq, ogidx)
-                BipartiteEdge(eq, ogidx) in solvable_graph && rem_edge!(solvable_graph, eq, ogidx)
-                # TODO: what about `solvable_graph`?
-                add_edge!(graph, eq, x_t_idx)
-                subs[fullvars[ogidx]] = x_t
-                neweqs[eq] = substitute(neweqs[eq], subs)
-                empty!(subs)
-            end
+            #              D(D(x))  D(x_t)    x_tt   `D(D(x)) ~ x_tt`
+            push!(subinfo, (ogidx, dx_idx, x_t_idx, eq_idx))
 
             # D(x_t) ~ x_tt
             x = x_t
             xidx = x_t_idx
         end
+
+        # Go backward from high order to lower order so that we substitute
+        # something like `D(D(x)) -> x_tt` first, otherwise we get `D(x_t)`
+        # which would be hard to fix up before we finish lower the order of
+        # variable `x`.
+        for (ogidx, dx_idx, x_t_idx, eq_idx) in Iterators.reverse(subinfo)
+            # Note that this assumes the iterator is robust under deletion and
+            # insertion.
+            for idx in (ogidx, dx_idx), eq in 𝑑neighbors(graph, idx)
+                eq == eq_idx && continue # skip the equation that we just added
+                rem_edge!(graph, eq, idx)
+                BipartiteEdge(eq, idx) in solvable_graph && rem_edge!(solvable_graph, eq, idx)
+                # TODO: what about `solvable_graph`?
+                add_edge!(graph, eq, x_t_idx)
+                subs[fullvars[idx]] = fullvars[x_t_idx]
+                oldeq = neweqs[eq]
+                neweq = neweqs[eq] = substitute(oldeq, subs)
+            end
+        end
+        empty!(subs)
     end
 
     # Rewrite remaining equations in terms of solved variables
@@ -401,11 +414,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
 
     sys = state.sys
     @set! sys.eqs = neweqs
-    function isstatediff(i)
-        var_eq_matching[i] !== SelectedState() && invview(var_to_diff)[i] !== nothing &&
-            var_eq_matching[invview(var_to_diff)[i]] === SelectedState()
-    end
-    @set! sys.states = [fullvars[i] for i in active_vars if !isstatediff(i)]
+    @set! sys.states = [fullvars[i] for i in active_vars if diff_to_var[i] === nothing]
     @set! sys.observed = [observed(sys); subeqs]
     @set! sys.substitutions = Substitutions(subeqs, deps)
     @set! state.sys = sys
