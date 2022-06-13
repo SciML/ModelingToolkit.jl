@@ -253,7 +253,13 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         solved = Dict(eq.lhs => eq.rhs for eq in subeqs)
         @set! sys.eqs = apply_substitutions(neweqs, solved)
         noiseeqs = ModelingToolkit.get_noiseeqs(sys)
-        @set! sys.noiseeqs = apply_substitutions(noiseeqs, solved)
+        newnoiseeqs = Vector{Num}(undef, 0)
+        v2i = Dict(reverse(en) for en in enumerate(fullvars))
+        for (idx, v) in enumerate(states(sys))
+            v2i[v] in active_vars || continue
+            push!(newnoiseeqs, noiseeqs[idx])
+        end
+        @set! sys.noiseeqs = apply_substitutions(newnoiseeqs, solved)
     else
         @set! sys.eqs = neweqs
         @set! sys.substitutions = Substitutions(subeqs, deps)
