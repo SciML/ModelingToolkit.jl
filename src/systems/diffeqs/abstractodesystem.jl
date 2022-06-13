@@ -884,7 +884,7 @@ function DAEProblemExpr{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
     differential_vars = map(Base.Fix2(in, diffvars), sts)
     kwargs = filter_kwargs(kwargs)
     kwarg_params = gen_quoted_kwargs(kwargs)
-    push!(kwarg_params, Expr(:kw, :differential_vars, :differential_vars))
+    push!(kwarg_params.args, Expr(:kw, :differential_vars, :differential_vars))
     prob = Expr(:call, :(DAEProblem{$iip}), kwarg_params, :f, :du0, :u0, :tspan, :p)
     ex = quote
         f = $f
