@@ -471,3 +471,25 @@ D = Differential(t)
 RHS2 = RHS
 @unpack RHS = fol
 @test isequal(RHS, RHS2)
+
+###
+###
+###
+@variables t u[1:3](t)
+
+params = @parameters ß=0.2 µ=0.1
+
+D = Differential(t)
+
+eqs = [D(u[1]) ~ -ß * u[1] * u[2],
+    D(u[2]) ~ ß * u[1] * u[2] - µ * u[2],
+    0 ~ u[1] + u[2] + u[3] - 1]
+
+neqs = [-1 / 2 * u[1] * u[2] * u[3]
+        u[1] * u[2] * u[3]
+        0]
+
+@named stochsys = SDESystem(eqs, neqs, t, collect(u), params)
+sys = structural_simplify(stochsys)
+prob = SDEProblem(sys, [u[1]=>0.2, u[2]=>0.3], (0.0, 100.0))
+@test_nowarn sol = solve(prob, SRIW1())
