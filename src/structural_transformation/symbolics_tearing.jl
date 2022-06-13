@@ -63,16 +63,30 @@ function tearing_sub(expr, dict, s)
     s ? simplify(expr) : expr
 end
 
-function full_equations(sys::AbstractSystem; simplify = false)
-    empty_substitutions(sys) && return equations(sys)
-    substitutions = get_substitutions(sys)
-    substitutions.subed_eqs === nothing || return substitutions.subed_eqs
-    @unpack subs = substitutions
-    solved = Dict(eq.lhs => eq.rhs for eq in subs)
-    neweqs = map(equations(sys)) do eq
-        if isdiffeq(eq)
-            return tearing_sub(eq.lhs, solved, simplify) ~ tearing_sub(eq.rhs, solved,
-                                                                       simplify)
+function get_sorted_solved_vars(neweqs, fullvars, graph, solved_equations, solved_variables, var_eq_matching, simplify)
+    if isempty(solved_equations)
+        subeqs = Equation[]
+        deps = Vector{Int}[]
+    else
+        subgraph = substitution_graph(graph, solved_equations, solved_variables,
+                                      var_eq_matching)
+        toporder = topological_sort_by_dfs(subgraph)
+        subeqs = Equation[solve_equation(neweqs[solved_equations[i]],
+                                         fullvars[solved_variables[i]],
+                                         simplify) for i in toporder]
+        # find the dependency of solved variables. we will need this for ODAEProblem
+        invtoporder = invperm(toporder)
+        deps = [Int[invtoporder[n]
+                    for n in neighborhood(subgraph, j, Inf, dir = :in) if n != j]
+                for (i, j) in enumerate(toporder)]
+    end
+    subeqs, deps
+end
+
+function apply_substitutions(eqs, solved; simplify = false)
+    neweqs = map(eqs) do eq
+        if !(eq isa Equation) || isdiffeq(eq)
+            return tearing_sub(eq, solved, simplify)
         else
             if !(eq.lhs isa Number && eq.lhs == 0)
                 eq = 0 ~ eq.rhs - eq.lhs
@@ -86,6 +100,16 @@ function full_equations(sys::AbstractSystem; simplify = false)
         end
         eq
     end
+    return neweqs
+end
+
+function full_equations(sys::AbstractSystem; simplify = false)
+    empty_substitutions(sys) && return equations(sys)
+    substitutions = get_substitutions(sys)
+    substitutions.subed_eqs === nothing || return substitutions.subed_eqs
+    @unpack subs = substitutions
+    solved = Dict(eq.lhs => eq.rhs for eq in subs)
+    neweqs = apply_substitutions(equations(sys), solved; simplify = simplify)
     substitutions.subed_eqs = neweqs
     return neweqs
 end
@@ -203,22 +227,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         push!(solved_variables, iv)
     end
 
-    if isempty(solved_equations)
-        subeqs = Equation[]
-        deps = Vector{Int}[]
-    else
-        subgraph = substitution_graph(graph, solved_equations, solved_variables,
-                                      var_eq_matching)
-        toporder = topological_sort_by_dfs(subgraph)
-        subeqs = Equation[solve_equation(neweqs[solved_equations[i]],
-                                         fullvars[solved_variables[i]],
-                                         simplify) for i in toporder]
-        # find the dependency of solved variables. we will need this for ODAEProblem
-        invtoporder = invperm(toporder)
-        deps = [Int[invtoporder[n]
-                    for n in neighborhood(subgraph, j, Inf, dir = :in) if n != j]
-                for (i, j) in enumerate(toporder)]
-    end
+    subeqs, deps = get_sorted_solved_vars(neweqs, fullvars, graph, solved_equations, solved_variables, var_eq_matching, simplify)
 
     # TODO: BLT sorting
     # Rewrite remaining equations in terms of solved variables
@@ -240,16 +249,23 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     @set! state.fullvars = [v for (i, v) in enumerate(fullvars) if i in active_vars]
 
     sys = state.sys
-    @set! sys.eqs = neweqs
+    if sys isa SDESystem
+        solved = Dict(eq.lhs => eq.rhs for eq in subeqs)
+        @set! sys.eqs = apply_substitutions(neweqs, solved)
+        noiseeqs = ModelingToolkit.get_noiseeqs(sys)
+        @set! sys.noiseeqs = apply_substitutions(noiseeqs, solved)
+    else
+        @set! sys.eqs = neweqs
+        @set! sys.substitutions = Substitutions(subeqs, deps)
+        @set! sys.tearing_state = state
+    end
     function isstatediff(i)
         var_eq_matching[i] !== SelectedState() && invview(var_to_diff)[i] !== nothing &&
             var_eq_matching[invview(var_to_diff)[i]] === SelectedState()
     end
     @set! sys.states = [fullvars[i] for i in active_vars if !isstatediff(i)]
     @set! sys.observed = [observed(sys); subeqs]
-    @set! sys.substitutions = Substitutions(subeqs, deps)
     @set! state.sys = sys
-    @set! sys.tearing_state = state
 
     return invalidate_cache!(sys)
 end
