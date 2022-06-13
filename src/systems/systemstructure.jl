@@ -225,11 +225,26 @@ function TearingState(sys; quick_cancel = false, check = true)
     symbolic_incidence = []
     fullvars = []
     var_counter = Ref(0)
-    addvar! = let fullvars = fullvars, var_counter = var_counter
-        var -> begin get!(var2idx, var) do
+
+    addvar! = let fullvars = fullvars, var_counter = var_counter,
+        noiseqs_s2i = if sys isa SDESystem
+            sts2idx = Dict(reverse(en) for en in enumerate(states(sys)))
+            ModelingToolkit.get_noiseeqs(sys), sts2idx
+        else
+            nothing
+        end
+
+        var -> get!(var2idx, var) do
+            if noiseqs_s2i !== nothing
+                noiseqs, s2i = noiseqs_s2i
+                idx = get(s2i, var, nothing)
+                if !(idx !== nothing && _iszero(noiseqs[idx]))
+                    var = setmetadata(var, ModelingToolkit.VariableIrreducible, true)
+                end
+            end
             push!(fullvars, var)
             var_counter[] += 1
-        end end
+        end
     end
 
     vars = OrderedSet()
