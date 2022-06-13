@@ -1055,7 +1055,12 @@ end
 function AbstractTrees.printnode(io::IO, sys::ModelingToolkit.AbstractSystem)
     print(io, nameof(sys))
 end
-AbstractTrees.nodetype(::ModelingToolkit.AbstractSystem) = ModelingToolkit.AbstractSystem
+function Base.IteratorEltype(::Type{<:TreeIterator{ModelingToolkit.AbstractSystem}})
+    Base.HasEltype()
+end
+function Base.eltype(::Type{<:TreeIterator{ModelingToolkit.AbstractSystem}})
+    ModelingToolkit.AbstractSystem
+end
 
 function check_eqs_u0(eqs, dvs, u0; check_length = true, kwargs...)
     if u0 !== nothing
