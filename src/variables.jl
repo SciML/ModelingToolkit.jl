@@ -91,7 +91,15 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
     end
 
     missingvars = setdiff(varlist, keys(varmap))
-    check && (isempty(missingvars) || throw_missingvars(missingvars))
+    if !check
+        # adding 0 initialization for potentially added derivative variables with _t
+        for missingvar in missingvars
+            @warn "adding missing var initialization" missingvar
+            push!(defaults, missingvar => 0.0)
+        end
+    else
+        (isempty(missingvars) || throw_missingvars(missingvars))
+    end
 
     out = [varmap[var] for var in varlist]
 end
