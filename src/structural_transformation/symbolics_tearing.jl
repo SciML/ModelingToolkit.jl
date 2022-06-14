@@ -187,7 +187,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     #
     # 2. To implicit to semi-implicit ODEs:
     # 2.1: Unsolvable derivative:
-    # If one derivative variable `D(x)` are unsolvable in all the equations it
+    # If one derivative variable `D(x)` is unsolvable in all the equations it
     # appears in, then we introduce a new variable `x_t`, a new equation
     # ```
     # D(x) ~ x_t
@@ -237,10 +237,13 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         processed[v] = true
         level = 0
         order = 0
+        isimplicit = false
         # ascend to the top of differentiation chain
         while true
-            if !isempty(𝑑neighbors(graph, v))
+            eqs_with_v = 𝑑neighbors(graph, v)
+            if !isempty(eqs_with_v)
                 order = level
+                isimplicit = length(eqs_with_v) > 1 || !is_solvable(only(eqs_with_v), v)
             end
             var_to_diff[v] === nothing && break
             processed[v] = true
@@ -249,7 +252,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         end
 
         # `diffvar` is a order `order` variable
-        order > 1 || continue
+        (isimplicit || order > 1) || continue
 
         # add `D(t) ~ x_t` etc
         subs = Dict()
@@ -294,6 +297,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             add_edge!(graph, eq_idx, x_t_idx)
             add_edge!(graph, eq_idx, dx_idx)
 
+            # We use this info to substitute all `D(D(x))` or `D(x_t)` except
+            # the `D(D(x)) ~ x_tt` equation to `x_tt`.
             #              D(D(x))  D(x_t)    x_tt   `D(D(x)) ~ x_tt`
             push!(subinfo, (ogidx, dx_idx, x_t_idx, eq_idx))
 
