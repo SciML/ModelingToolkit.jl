@@ -366,19 +366,26 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
 
     diffeq_idxs = BitSet()
     diffeqs = Equation[]
+    var_rename = zeros(Int, length(var_eq_matching))
+    idx = 0
     # Solve solvable equations
     for (iv, ieq) in enumerate(var_eq_matching)
-        is_solvable(ieq, iv) || continue
-        # We don't solve differential equations, but we will need to try to
-        # convert it into the mass matrix form.
-        # We cannot solve the differential variable like D(x)
-        if isdiffvar(iv)
-            push!(diffeqs, to_mass_matrix_form(ieq))
-            push!(diffeq_idxs, ieq)
-            continue
+        if is_solvable(ieq, iv)
+            # We don't solve differential equations, but we will need to try to
+            # convert it into the mass matrix form.
+            # We cannot solve the differential variable like D(x)
+            if isdiffvar(iv)
+                push!(diffeqs, to_mass_matrix_form(ieq))
+                push!(diffeq_idxs, ieq)
+                var_rename[iv] = (idx += 1)
+                continue
+            end
+            push!(solved_equations, ieq)
+            push!(solved_variables, iv)
+            var_rename[iv] = -1
+        else
+            var_rename[iv] = (idx += 1)
         end
-        push!(solved_equations, ieq)
-        push!(solved_variables, iv)
     end
 
     if isempty(solved_equations)
@@ -412,9 +419,20 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     graph = contract_variables(graph, var_eq_matching, solved_variables)
 
     # Update system
-    active_vars = setdiff(BitSet(1:length(fullvars)), solved_variables)
+    solved_variables_set = BitSet(solved_variables)
+    active_vars = setdiff(BitSet(1:length(fullvars)), solved_variables_set)
+    new_var_to_diff = complete(DiffGraph(length(active_vars)))
+    idx = 0
+    for (v, d) in enumerate(var_to_diff)
+        v′ = var_rename[v]
+        (v′ > 0 && d !== nothing) || continue
+        d′ = var_rename[d]
+        new_var_to_diff[v′] = d′ > 0 ? d′ : nothing
+    end
 
     @set! state.structure.graph = graph
+    # Note that `eq_to_diff` is not updated
+    @set! state.structure.var_to_diff = new_var_to_diff
     @set! state.fullvars = [v for (i, v) in enumerate(fullvars) if i in active_vars]
 
     sys = state.sys
