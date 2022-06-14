@@ -5,6 +5,14 @@ function filter_kwargs(kwargs)
     end
     pairs(NamedTuple(kwargs))
 end
+function gen_quoted_kwargs(kwargs)
+    kwargparam = Expr(:parameters)
+    for kw in kwargs
+        push!(kwargparam.args, Expr(:kw, kw[1], kw[2]))
+    end
+    kwargparam
+end
+
 function calculate_tgrad(sys::AbstractODESystem;
                          simplify = false)
     isempty(get_tgrad(sys)[]) || return get_tgrad(sys)[]  # use cached tgrad, if possible
@@ -829,13 +837,14 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem, u0map, tspan,
                                  kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
     kwargs = filter_kwargs(kwargs)
-
+    kwarg_params = gen_quoted_kwargs(kwargs)
+    odep = Expr(:call, :ODEProblem, kwarg_params, :f, :u0, :tspan, :p)
     ex = quote
         f = $f
         u0 = $u0
         tspan = $tspan
         p = $p
-        ODEProblem(f, u0, tspan, p; $(kwargs...))
+        $odep
     end
     !linenumbers ? striplines(ex) : ex
 end
@@ -874,7 +883,9 @@ function DAEProblemExpr{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
     kwargs = filter_kwargs(kwargs)
-
+    kwarg_params = gen_quoted_kwargs(kwargs)
+    push!(kwarg_params.args, Expr(:kw, :differential_vars, :differential_vars))
+    prob = Expr(:call, :(DAEProblem{$iip}), kwarg_params, :f, :du0, :u0, :tspan, :p)
     ex = quote
         f = $f
         u0 = $u0
@@ -882,8 +893,7 @@ function DAEProblemExpr{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
         tspan = $tspan
         p = $p
         differential_vars = $differential_vars
-        DAEProblem{$iip}(f, du0, u0, tspan, p; differential_vars = differential_vars,
-                         $(kwargs...))
+        $prob
     end
     !linenumbers ? striplines(ex) : ex
 end
@@ -946,11 +956,13 @@ function SteadyStateProblemExpr{iip}(sys::AbstractODESystem, u0map,
                                  check_length, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
     kwargs = filter_kwargs(kwargs)
+    kwarg_params = gen_quoted_kwargs(kwargs)
+    prob = Expr(:call, :SteadyStateProblem, kwarg_params, :f, :u0, :p)
     ex = quote
         f = $f
         u0 = $u0
         p = $p
-        SteadyStateProblem(f, u0, p; $(kwargs...))
+        $prob
     end
     !linenumbers ? striplines(ex) : ex
 end
