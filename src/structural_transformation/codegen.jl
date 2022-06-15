@@ -1,7 +1,7 @@
 using LinearAlgebra
 
 using ModelingToolkit: isdifferenceeq, has_continuous_events, generate_rootfinding_callback,
-                       generate_difference_cb, merge_cb
+                       generate_difference_cb, merge_cb, has_periodic_events, generate_periodic_callbacks
 
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
@@ -529,8 +529,15 @@ function ODAEProblem{iip}(sys,
     else
         event_cb = nothing
     end
+    if has_periodic_events(sys)
+        periodic_event_cb = generate_periodic_callbacks(sys; kwargs...)
+    else
+        periodic_event_cb = nothing
+    end
+
     difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
     cb = merge_cb(event_cb, difference_cb)
+    cb = reduce(merge_cb, periodic_event_cb; init=cb)
     cb = merge_cb(cb, callback)
 
     if cb === nothing

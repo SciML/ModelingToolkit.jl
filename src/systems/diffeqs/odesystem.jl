@@ -101,6 +101,11 @@ struct ODESystem <: AbstractODESystem
     The integrator will use root finding to guarantee that it steps at each zero crossing.
     """
     continuous_events::Vector{SymbolicContinuousCallback}
+    # Added
+    """
+    events: A `Vector{PeriodicEventCallback}` that supports generalized affect functions
+    """
+    periodic_events::Vector{PeriodicEventCallback}
     """
     tearing_state: cache for intermediate tearing state
     """
@@ -110,9 +115,10 @@ struct ODESystem <: AbstractODESystem
     """
     substitutions::Any
 
+
     function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad,
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
-                       torn_matching, connector_type, connections, preface, events,
+                       torn_matching, connector_type, connections, preface, events, periodic_events,
                        tearing_state = nothing, substitutions = nothing;
                        checks::Bool = true)
         if checks
@@ -124,7 +130,7 @@ struct ODESystem <: AbstractODESystem
         end
         new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
-            connector_type, connections, preface, events, tearing_state, substitutions)
+            connector_type, connections, preface, events, periodic_events, tearing_state, substitutions)
     end
 end
 
@@ -139,6 +145,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    connector_type = nothing,
                    preface = nothing,
                    continuous_events = nothing,
+                   periodic_events = nothing,
                    checks = true)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
@@ -172,9 +179,11 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         throw(ArgumentError("System names must be unique."))
     end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
+
+    periodic_callbacks = PeriodicEventCallbacks(periodic_events, )
     ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
-              connector_type, nothing, preface, cont_callbacks, checks = checks)
+              connector_type, nothing, preface, cont_callbacks, periodic_callbacks, checks = checks)
 end
 
 function ODESystem(eqs, iv = nothing; kwargs...)
@@ -244,6 +253,7 @@ function flatten(sys::ODESystem, noeqs = false)
                          parameters(sys),
                          observed = observed(sys),
                          continuous_events = continuous_events(sys),
+                         periodic_events = periodic_events(sys),
                          defaults = defaults(sys),
                          name = nameof(sys),
                          checks = false)
@@ -256,6 +266,11 @@ get_continuous_events(sys::AbstractSystem) = Equation[]
 get_continuous_events(sys::AbstractODESystem) = getfield(sys, :continuous_events)
 has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
+
+get_periodic_events(sys::AbstractSystem) = Number[]
+get_periodic_events(sys::AbstractODESystem) = getfield(sys, :periodic_events)
+has_periodic_events(sys::AbstractSystem) = isdefined(sys, :periodic_events)
+
 
 """
 $(SIGNATURES)

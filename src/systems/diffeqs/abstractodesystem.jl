@@ -253,6 +253,90 @@ function generate_rootfinding_callback(cbs, sys::ODESystem, dvs = states(sys),
     end
 end
 
+function generate_periodic_callbacks(sys::ODESystem; kwargs...)
+    cbs = periodic_events(sys)
+    isempty(cbs) && return nothing
+    generate_periodic_callbacks(cbs, sys; kwargs...)
+end
+
+function generate_periodic_callbacks(cbs, sys::ODESystem; kwargs...)    
+    Δts = map(cb -> cb.Δt, cbs)
+
+    affect_functions = map(cbs) do cb
+        af_f = affect_function(cb)
+        st_f = state(cb)
+        dvs = states(cb)
+        ps = parameters(cb)
+        affect = compile_affect(sys, af_f, st_f, dvs, ps; kwargs...)
+    end
+
+    PeriodicCallback.(affect_functions, Δts)
+end
+
+function compile_affect(sys::ODESystem, cb::PeriodicEventCallback, args...; kwargs...)
+    compile_affect(sys, affect_function(cb), state(cb), states(cb), parameters(cb), args...; kwargs...)
+end
+
+# helper for affect
+struct VarDict
+    ₊v::Base.RefValue{Vector}
+    ₊d::Dict{Symbol, Int}
+    function VarDict(idx::Vector, sym::Vector)
+        @assert length(idx) == length(sym)
+        new(Ref{Vector}(), Dict(zip(sym, idx)))
+    end
+end
+
+function setvec!(vd::VarDict, v)
+    vd.₊v[] = v
+end
+
+function Base.getproperty(vd::VarDict, name::Symbol)
+    if isdefined(vd, name)
+        return getfield(vd, name)
+    else
+        ₊v = getfield(vd, :₊v)
+        ₊d = getfield(vd, :₊d)
+        return ₊v[][₊d[name]]
+    end
+end
+function Base.setproperty!(vd::VarDict, name::Symbol, v)
+    if isdefined(vd, name)
+        return setfield!(vd, name,v)
+    else
+        ₊v = getfield(vd, :₊v)
+        ₊d = getfield(vd, :₊d)
+        ₊v[][₊d[name]] = v
+    end
+end
+
+function compile_affect(sys::ODESystem, cb::Function, cb_state, dvs, ps, args...; kwargs...)
+    all_dvs = states(sys)
+    all_ps = parameters(sys)
+
+    prefix = common_namespace(vcat(dvs, ps))
+
+    # find indexes
+    ind(sym, v) = findfirst(isequal(sym), v)
+    inds(syms, v) = filter(!isnothing,map(sym -> ind(sym, v), syms)) # filter out eliminated symbols
+    tr_name(v) = Symbol(unnamespace(prefix, v))
+
+    v_inds = inds(dvs, all_dvs)
+    p_inds = inds(ps, all_ps)
+    v_sym = [tr_name(all_dvs[i]) for i in v_inds]
+    p_sym = [tr_name(all_ps[i]) for i in p_inds]
+
+    rvdict = VarDict(v_inds, v_sym)
+    rpdict = VarDict(p_inds, p_sym)
+    let rvdict=rvdict, rpdict=rpdict
+        function (integ)
+            isnothing(integ.u) || setvec!(rvdict, integ.u)
+            isnothing(integ.p) || setvec!(rpdict, integ.p)
+            cb(rvdict, rpdict, integ.t, cb_state)
+        end
+    end
+end
+
 function compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
     compile_affect(affect_equations(cb), args...; kwargs...)
 end
@@ -757,8 +841,16 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
     else
         event_cb = nothing
     end
+
+    if has_periodic_events(sys)
+        periodic_event_cb = generate_periodic_callbacks(sys; kwargs...)
+    else
+        periodic_event_cb = nothing
+    end
+
     difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
     cb = merge_cb(event_cb, difference_cb)
+    cb = reduce(merge_cb, periodic_event_cb; init=cb)
     cb = merge_cb(cb, callback)
 
     kwargs = filter_kwargs(kwargs)

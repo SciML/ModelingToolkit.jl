@@ -217,6 +217,65 @@ namespace_equation(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallbac
                                                                                                                namespace_equation.(affect_equations(cb),
                                                                                                                                    (s,)))
 
+const PR_NULL_AFFECT = (args...; kwargs...) -> nothing
+
+struct PeriodicEventCallback
+    Δt::Number
+    affect::Function
+    state # state passed to affect function
+    states::Union{Vector, Nothing} # dependent variables we're interested in
+    ps::Union{Vector, Nothing} # parameters we're interestred in
+    function PeriodicEventCallback(Δt, affect = PR_NULL_AFFECT, state=nothing, states=nothing, ps=nothing)
+        new(Δt, affect, state, states, ps)
+    end
+end
+
+Base.isempty(cb::PeriodicEventCallback) = iszero(cb.Δt)
+period(cb::PeriodicEventCallback) = cb.Δt
+affect(cb::PeriodicEventCallback) = cb.affect
+state(cb::PeriodicEventCallback) = cb.state
+states(cb::PeriodicEventCallback) = cb.states
+parameters(cb::PeriodicEventCallback) = cb.ps
+
+
+function Base.:(==)(e1::PeriodicEventCallback, e2::PeriodicEventCallback)
+    isequal(period(e1), period(e2)) && isequal(affect(e1), affect(e2)) && isequal(state(e1), state(e2)) && \ 
+                isequal(states(e1), states(e2)) && isequal(parameters(e1), parameters(e2))
+end
+
+function Base.hash(cb::PeriodicEventCallback, s::UInt)
+    s = foldr(hash, [period(cb)], init = s)
+    s = foldr(hash, [affect(cb)], init = s)
+    s = foldr(hash, [state(cb)], init = s)
+    s = foldr(hash, [states(cb)], init = s)
+    foldr(hash, [parameters(cb)], init = s)
+end
+
+PeriodicEventCallback(p::Pair) = PeriodicEventCallback(p[1], p[2])
+PeriodicEventCallback(p::Tuple) = PeriodicEventCallback(p...)
+
+PeriodicEventCallback(cb::PeriodicEventCallback) = cb # passthrough
+
+PeriodicEventCallback(cbs::Vector{<:PeriodicEventCallback}) = cbs
+PeriodicEventCallbacks(cbs::Vector) = PeriodicEventCallback.(cbs)
+PeriodicEventCallbacks(cb::PeriodicEventCallback) = [cb]
+
+function PeriodicEventCallbacks(others)
+    PeriodicEventCallbacks(PeriodicEventCallback(others))
+end
+PeriodicEventCallbacks(::Nothing) = PeriodicEventCallbacks(PeriodicEventCallback[])
+
+function period(cbs::Vector{<:PeriodicEventCallback})
+    reduce(vcat, [period(cb) for cb in cbs])
+end
+
+affect_function(cb::PeriodicEventCallback) = affect(cb)
+
+function affect_functions(cbs::Vector{PeriodicEventCallback})
+    reduce(vcat, [affect_function(cb) for cb in cbs])
+end
+
+
 for prop in [:eqs
              :noiseeqs
              :iv
@@ -518,6 +577,40 @@ function continuous_events(sys::AbstractSystem)
                   init = SymbolicContinuousCallback[])]
     filter(!isempty, cbs)
 end
+
+function namespace_periodic_event(sys::AbstractSystem, cb::PeriodicEventCallback)
+    st = isnothing(cb.states) ? nothing :  [renamespace(sys, s) for s in cb.states]
+    ps = isnothing(cb.ps) ? nothing :  [renamespace(sys, p) for p in cb.ps]
+    PeriodicEventCallback(cb.Δt, cb.affect, cb.state, st, ps)
+end
+
+function updated_periodic_event(sys::AbstractSystem, cb::PeriodicEventCallback)
+    !isnothing(cb.states) && !isnothing(cb.ps) && return cb
+
+    st = isnothing(cb.states) ? states(sys) : cb.states
+    ps = isnothing(cb.ps) ? parameters(sys) : cb.ps
+    return PeriodicEventCallback(cb.Δt, cb.affect, cb.state, st, ps)
+end
+
+function updated_periodic_events(sys::AbstractSystem, cbs::Vector{PeriodicEventCallback})
+    map(c -> updated_periodic_event(sys, c), cbs)
+end
+
+function periodic_events(sys::AbstractSystem)
+    obs = get_periodic_events(sys)
+    filter(!isempty, obs)
+
+    obs = updated_periodic_events(sys, obs)
+    
+    systems = get_systems(sys)
+    cbs = [obs;
+           reduce(vcat,
+                  (map(o -> namespace_periodic_event(s, o), periodic_events(s))
+                   for s in systems),
+                  init = PeriodicEventCallback[])]
+    filter(!isempty, cbs)
+end
+
 
 Base.@deprecate default_u0(x) defaults(x) false
 Base.@deprecate default_p(x) defaults(x) false
@@ -1092,6 +1185,7 @@ function Base.hash(sys::AbstractSystem, s::UInt)
     end
     s = foldr(hash, get_observed(sys), init = s)
     s = foldr(hash, get_continuous_events(sys), init = s)
+    s = foldr(hash, get_periodic_events(sys), init = s)
     s = hash(independent_variables(sys), s)
     return s
 end
@@ -1120,15 +1214,16 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     ps = union(get_ps(basesys), get_ps(sys))
     obs = union(get_observed(basesys), get_observed(sys))
     evs = union(get_continuous_events(basesys), get_continuous_events(sys))
+    pevs = union(get_periodic_events(basesys), get_periodic_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
     syss = union(get_systems(basesys), get_systems(sys))
 
     if length(ivs) == 0
         T(eqs, sts, ps, observed = obs, defaults = defs, name = name, systems = syss,
-          continuous_events = evs)
+          continuous_events = evs, periodic_events=pevs)
     elseif length(ivs) == 1
         T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name,
-          systems = syss, continuous_events = evs)
+          systems = syss, continuous_events = evs, periodic_events=pevs)
     end
 end
 

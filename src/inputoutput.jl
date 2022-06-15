@@ -129,6 +129,21 @@ function inner_namespace(u, var)
         occursin('₊', var) && !occursin('₊', u) # or u is top level but var is internal
 end
 
+
+function common_namespace(vs, include_trailing=true)
+    common = []
+    nss = split.(get_namespace.(vs), "₊")
+    min_len = minimum(length.(nss))
+
+    for i in 1:min_len
+        s = unique([p[i] for p in nss])
+        length(s) == 1 || break
+        push!(common, s[1])
+    end
+    ns = join(common, "₊")
+    return include_trailing ? (ns * "₊") : ns
+end
+
 """
     get_namespace(x)
 
