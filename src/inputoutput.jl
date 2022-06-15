@@ -141,7 +141,7 @@ function common_namespace(vs, include_trailing=true)
         push!(common, s[1])
     end
     ns = join(common, "₊")
-    return include_trailing ? (ns * "₊") : ns
+    return include_trailing && length(ns) > 0 ? (ns * "₊") : ns
 end
 
 """
