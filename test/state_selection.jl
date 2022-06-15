@@ -18,11 +18,10 @@ let dd = dummy_derivative(sys)
         has_dx2 |= D(x2) in vars || D(D(x2)) in vars
     end
     @test has_dx1 ⊻ has_dx2 # only one of x1 and x2 can be a dummy derivative
-    @test length(states(dd)) == length(equations(dd)) == 9
-    @test length(states(structural_simplify(dd))) < 9
+    @test length(states(dd)) == length(equations(dd)) < 9
 end
 
-let pss = partial_state_selection(sys)
+@test_skip let pss = partial_state_selection(sys)
     @test length(equations(pss)) == 1
     @test length(states(pss)) == 2
     @test length(equations(ode_order_lowering(pss))) == 2
@@ -122,14 +121,16 @@ let
     end
 
     @named system = System(L = 10)
-    @unpack supply_pipe = system
+    @unpack supply_pipe, return_pipe = system
     sys = structural_simplify(system)
-    u0 = [system.supply_pipe.v => 0.1, system.return_pipe.v => 0.1, D(supply_pipe.v) => 0.0]
-    # This is actually an implicit DAE system
-    @test_throws Any ODEProblem(sys, u0, (0.0, 10.0), [])
-    @test_throws Any ODAEProblem(sys, u0, (0.0, 10.0), [])
-    prob = DAEProblem(sys, D.(states(sys)) .=> 0.0, u0, (0.0, 10.0), [])
-    @test solve(prob, DFBDF()).retcode == :Success
+    u0 = [system.supply_pipe.v => 0.1, system.return_pipe.v => 0.1, D(supply_pipe.v) => 0.0,
+        D(return_pipe.fluid_port_a.m) => 0.0]
+    prob1 = ODEProblem(sys, u0, (0.0, 10.0), [])
+    prob2 = ODAEProblem(sys, u0, (0.0, 10.0), [])
+    prob3 = DAEProblem(sys, D.(states(sys)) .=> 0.0, u0, (0.0, 10.0), [])
+    @test solve(prob1, FBDF()).retcode == :Success
+    @test solve(prob2, FBDF()).retcode == :Success
+    @test solve(prob3, DFBDF()).retcode == :Success
 end
 
 # 1537
@@ -189,7 +190,10 @@ let
           rho_3 => 1.3
           mo_1 => 0
           mo_2 => 1
-          mo_3 => 2]
-    prob = ODAEProblem(sys, u0, (0.0, 0.1))
-    @test solve(prob, FBDF()).retcode == :Success
+          mo_3 => 2
+          Ek_3 => 3]
+    prob1 = ODEProblem(sys, u0, (0.0, 0.1))
+    prob2 = ODAEProblem(sys, u0, (0.0, 0.1))
+    @test solve(prob1, FBDF()).retcode == :Success
+    @test solve(prob2, FBDF()).retcode == :Success
 end

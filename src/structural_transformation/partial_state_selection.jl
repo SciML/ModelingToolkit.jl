@@ -234,21 +234,23 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         end
     end
 
-    # We can eliminate variables that are not a selected state (differential
-    # variables). Selected states are differentiated variables that are not
-    # dummy derivatives.
-    can_eliminate = let dummy_derivatives = BitSet(dummy_derivatives),
-        var_to_diff = var_to_diff
+    dummy_derivatives_set = BitSet(dummy_derivatives)
+    # We can eliminate variables that are never differentiated or is a dummy
+    # derivative or its derivative is a dummy derivative.
+    can_eliminate = let var_eq_matching = var_eq_matching, var_to_diff = var_to_diff,
+        diff_to_var = diff_to_var, dummy_derivatives_set = dummy_derivatives_set
 
-        v -> var_to_diff[v] === nothing || var_to_diff[v] in dummy_derivatives
+        v -> (var_to_diff[v] === nothing && diff_to_var[v] === nothing) ||
+            (var_to_diff[v] in dummy_derivatives_set || v in dummy_derivatives_set)
     end
 
     var_eq_matching = tear_graph_modia(structure, Union{Unassigned, SelectedState};
                                        varfilter = can_eliminate)
-
     for v in eachindex(var_eq_matching)
-        can_eliminate(v) && continue
-        var_eq_matching[v] = SelectedState()
+        dv = var_to_diff[v]
+        if dv !== nothing && !(dv in dummy_derivatives_set)
+            var_eq_matching[v] = SelectedState()
+        end
     end
 
     return var_eq_matching

@@ -142,7 +142,9 @@ sys = structural_simplify(pendulum2)
 
 u0 = [
     D(x) => 0.0,
+    D(D(x)) => 0.0,
     D(y) => 0.0,
+    D(D(y)) => 0.0,
     x => sqrt(2) / 2,
     y => sqrt(2) / 2,
     T => 0.0,
@@ -152,6 +154,6 @@ p = [
     g => 9.8,
 ]
 
-prob_auto = DAEProblem(sys, zeros(length(u0)), u0, (0.0, 0.2), p)
+prob_auto = DAEProblem(sys, D.(states(sys)) .=> 0, u0, (0.0, 0.2), p)
 sol = solve(prob_auto, DFBDF())
 @test norm(sol[x] .^ 2 + sol[y] .^ 2 .- 1) < 1e-2

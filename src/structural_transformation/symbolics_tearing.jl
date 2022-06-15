@@ -141,15 +141,16 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     dds = BitSet()
     diff_to_var = invview(var_to_diff)
     for var in 1:length(fullvars)
-        diff_to_var[var] === nothing && continue
-        if var_eq_matching[diff_to_var[var]] !== SelectedState()
-            v = fullvars[var]
+        dv = var_to_diff[var]
+        dv === nothing && continue
+        if var_eq_matching[var] !== SelectedState()
+            dd = fullvars[dv]
             # convert `D(x)` to `x_t` (don't rely on the specific spelling of
             # the name)
-            dummy_subs[v] = fullvars[var] = diff2term(unwrap(v))
+            dummy_subs[dd] = fullvars[dv] = diff2term(unwrap(dd))
             # update the structural information
-            diff_to_var[var] = nothing
-            push!(dds, var)
+            diff_to_var[dv] = nothing
+            push!(dds, dv)
         end
     end
 
@@ -317,7 +318,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             for idx in (ogidx, dx_idx), eq in 𝑑neighbors(graph, idx)
                 eq == eq_idx && continue # skip the equation that we just added
                 rem_edge!(graph, eq, idx)
-                BipartiteEdge(eq, idx) in solvable_graph && rem_edge!(solvable_graph, eq, idx)
+                BipartiteEdge(eq, idx) in solvable_graph &&
+                    rem_edge!(solvable_graph, eq, idx)
                 # TODO: what about `solvable_graph`?
                 add_edge!(graph, eq, x_t_idx)
                 subs[fullvars[idx]] = fullvars[x_t_idx]
