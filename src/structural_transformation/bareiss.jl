@@ -211,10 +211,16 @@ function bareiss!(M::AbstractMatrix{T}, swap_strategy = bareiss_colswap;
 end
 
 function nullspace(A; col_order = nothing)
-    column_pivots = collect(1:size(A, 2))
+    n = size(A, 2)
+    workspace = zeros(Int, 2 * n)
+    column_pivots = @view workspace[1:n]
+    pivots_cache = @view workspace[(n + 1):(2n)]
+    @inbounds for i in 1:n
+        column_pivots[i] = i
+    end
     B = copy(A)
     (rank, d, column_permuted) = bareiss!(B; column_pivots)
-    reduce_echelon!(B, rank, d)
+    reduce_echelon!(B, rank, d, pivots_cache)
 
     # The first rank entries in col_order are columns that give a basis
     # for the column space. The remainder give the free variables.
@@ -226,7 +232,8 @@ function nullspace(A; col_order = nothing)
         end
     end
 
-    N = ModelingToolkit.reduced_echelon_nullspace(rank, B)
+    fill!(pivots_cache, 0)
+    N = ModelingToolkit.reduced_echelon_nullspace(rank, B, pivots_cache)
     apply_inv_pivot_rows!(N, column_pivots)
 end
 
@@ -241,18 +248,33 @@ end
 ### Modified from AbstractAlgebra.jl
 ###
 ### https://github.com/Nemocas/AbstractAlgebra.jl/blob/4803548c7a945f3f7bd8c63f8bb7c79fac92b11a/LICENSE.md
-function reduce_echelon!(A::AbstractMatrix{T}, rank, d) where {T}
+function reduce_echelon!(A::AbstractMatrix{T}, rank, d,
+                         pivots_cache = zeros(Int, size(A, 2))) where {T}
     m, n = size(A)
-    for i in (rank + 1):m
-        for j in 1:n
-            A[i, j] = zero(T)
+    isreduced = true
+    @inbounds for i in 1:rank
+        for j in 1:(i - 1)
+            if A[j, i] != zero(T)
+                isreduced = false
+                @goto out
+            end
+        end
+        if A[i, i] != one(T)
+            isreduced = false
+            @goto out
         end
     end
-    if rank > 1
+    @label out
+    @inbounds for i in (rank + 1):m, j in 1:n
+        A[i, j] = zero(T)
+    end
+    isreduced && return A
+
+    @inbounds if rank > 1
         t = zero(T)
         q = zero(T)
         d = -d
-        pivots = zeros(Int, n)
+        pivots = pivots_cache
         np = rank
         j = k = 1
         for i in 1:rank
@@ -292,17 +314,18 @@ function reduce_echelon!(A::AbstractMatrix{T}, rank, d) where {T}
     return A
 end
 
-function reduced_echelon_nullspace(rank, A::AbstractMatrix{T}) where {T}
+function reduced_echelon_nullspace(rank, A::AbstractMatrix{T},
+                                   pivots_cache = zeros(Int, size(A, 2))) where {T}
     n = size(A, 2)
     nullity = n - rank
     U = zeros(T, n, nullity)
-    if rank == 0
+    @inbounds if rank == 0
         for i in 1:nullity
             U[i, i] = one(T)
         end
     elseif nullity != 0
-        pivots = zeros(Int, rank)
-        nonpivots = zeros(Int, nullity)
+        pivots = @view pivots_cache[1:rank]
+        nonpivots = @view pivots_cache[(rank + 1):n]
         j = k = 1
         for i in 1:rank
             while iszero(A[i, j])
