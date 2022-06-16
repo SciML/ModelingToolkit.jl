@@ -837,7 +837,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
     if has_periodic_events(sys)
         periodic_event_cb = generate_periodic_callbacks(sys; kwargs...)
     else
-        periodic_event_cb = nothing
+        periodic_event_cb = []
     end
 
     difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing

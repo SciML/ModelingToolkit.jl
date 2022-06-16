@@ -87,14 +87,21 @@ rc_eqs = [
           connect(capacitor.n, ground.g)
          ]
 
-@named _rc_model = ODESystem(rc_eqs, t)
+st2 = Float64[]
+
+function affect2!(u,p, t, state)
+    #@show(u, p, t, state)
+end
+
+
+@named _rc_model = ODESystem(rc_eqs, t, periodic_events=(5, affect2!))
 @named rc_model = compose(_rc_model,
                           [resistor, capacitor, source, ground])
 
-@test length(ModelingToolkit.periodic_events(rc_model)) == 1
+@test length(ModelingToolkit.periodic_events(rc_model)) == 2
 
 sys = structural_simplify(rc_model)
-@test length(ModelingToolkit.periodic_events(sys)) == 1
+@test length(ModelingToolkit.periodic_events(sys)) == 2
 u0 = [
       capacitor.v => 0.0
      ]
