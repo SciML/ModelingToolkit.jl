@@ -166,12 +166,11 @@ eqs = [connect_sd(sd, mass1, mass2)
 
 f, dvs, ps = ModelingToolkit.generate_control_function(model, expression = Val{false},
                                                        simplify = true)
-@test length(dvs) == 4
 @test length(ps) == length(parameters(model))
 p = ModelingToolkit.varmap_to_vars(ModelingToolkit.defaults(model), ps)
 x = ModelingToolkit.varmap_to_vars(ModelingToolkit.defaults(model), dvs)
 u = [rand()]
-@test f[1](x, u, p, 1) == [u; 0; 0; 0]
+@test f[1](x, u, p, 1) == [u; 0; 0; 0; 0; 0]
 
 @parameters t
 @variables x(t) u(t) [input = true]

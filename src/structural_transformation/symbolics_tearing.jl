@@ -219,7 +219,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     # variables and equations, don't add them when they already exist.
 
     var_to_idx = Dict{Any, Int}(reverse(en) for en in enumerate(fullvars))
-    iv = independent_variable(state.sys)
+    iv = get_iv(state.sys)
     D = Differential(iv)
     nvars = ndsts(graph)
     processed = falses(nvars)
@@ -266,7 +266,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             ogidx = var_to_diff[ogidx]
 
             x_t_idx = get(var_to_idx, x_t, nothing)
-            x_t_idx !== nothing && continue
 
             # TODO: check x_t is legal when `x_t_idx isa Int`
             push!(fullvars, x_t)
@@ -397,9 +396,11 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         subgraph = substitution_graph(graph, solved_equations, solved_variables,
                                       var_eq_matching)
         toporder = topological_sort_by_dfs(subgraph)
+        @show neweqs[solved_equations]
         subeqs = Equation[solve_equation(neweqs[solved_equations[i]],
                                          fullvars[solved_variables[i]],
                                          simplify) for i in toporder]
+        @show subeqs
         # Find the dependency of solved variables. We will need this for ODAEProblem
         invtoporder = invperm(toporder)
         deps = [Int[invtoporder[n]
