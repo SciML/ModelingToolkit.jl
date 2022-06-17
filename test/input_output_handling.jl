@@ -31,6 +31,12 @@ D = Differential(tv)
 @test !is_bound(sys2, sys.u)
 @test !is_bound(sys2, sys2.sys.u)
 
+# simplification turns input variables into parameters
+ssys = structural_simplify(sys)
+@test ModelingToolkit.isparameter(unbound_inputs(ssys)[])
+@test !is_bound(ssys, u)
+@test u ∈ Set(unbound_inputs(ssys))
+
 fsys2 = flatten(sys2)
 @test is_bound(fsys2, sys.x)
 @test !is_bound(fsys2, sys.u)
