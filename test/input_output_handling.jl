@@ -118,12 +118,12 @@ u = [rand()]
 @variables u(t) [input = true]
 
 function Mass(; name, m = 1.0, p = 0, v = 0)
-    @variables y(t) [output = true]
+    @variables y(t)=0 [output = true]
     ps = @parameters m = m
     sts = @variables pos(t)=p vel(t)=v
     eqs = [D(pos) ~ vel
            y ~ pos]
-    ODESystem(eqs, t, [pos, vel], ps; name)
+    ODESystem(eqs, t, [pos, vel, y], ps; name)
 end
 
 function Spring(; name, k = 1e4)
@@ -170,10 +170,11 @@ f, dvs, ps = ModelingToolkit.generate_control_function(model, expression = Val{f
 p = ModelingToolkit.varmap_to_vars(ModelingToolkit.defaults(model), ps)
 x = ModelingToolkit.varmap_to_vars(ModelingToolkit.defaults(model), dvs)
 u = [rand()]
-@test f[1](x, u, p, 1) == [u; 0; 0; 0; 0; 0]
+out = f[1](x, u, p, 1)
+@test out[1] == u[1] && iszero(out[2:end])
 
 @parameters t
 @variables x(t) u(t) [input = true]
 eqs = [Differential(t)(x) ~ u]
 @named sys = ODESystem(eqs, t)
-structural_simplify(sys)
+@test_nowarn structural_simplify(sys)
