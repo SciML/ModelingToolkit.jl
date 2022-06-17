@@ -215,8 +215,10 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             else
                 rank = 0
                 for var in vars
+                    # We need `invgraph` here because we are matching from
+                    # variables to equations.
                     pathfound = construct_augmenting_path!(rank_matching, invgraph, var,
-                                                           eq -> eq in eqs_set, eqcolor)
+                                                           Base.Fix2(in, eqs_set), eqcolor)
                     pathfound || continue
                     push!(dummy_derivatives, var)
                     rank += 1
@@ -243,9 +245,13 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         v -> (var_to_diff[v] === nothing && diff_to_var[v] === nothing) ||
             (var_to_diff[v] in dummy_derivatives_set || v in dummy_derivatives_set)
     end
+    should_consider = let can_eliminate = can_eliminate, graph = graph
+        e -> all(can_eliminate, 𝑠neighbors(graph, e))
+    end
 
     var_eq_matching = tear_graph_modia(structure, Union{Unassigned, SelectedState};
-                                       varfilter = can_eliminate)
+                                       varfilter = can_eliminate,
+                                       eqfilter = should_consider)
     for v in eachindex(var_eq_matching)
         dv = var_to_diff[v]
         if dv !== nothing && !(dv in dummy_derivatives_set)
