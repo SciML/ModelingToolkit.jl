@@ -368,11 +368,6 @@ function SDEFunctionExpr(sys::SDESystem, args...; kwargs...)
     SDEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
-function rename(sys::SDESystem, name)
-    SDESystem(sys.eqs, sys.noiseeqs, sys.iv, sys.states, sys.ps, sys.tgrad, sys.jac,
-              sys.Wfact, sys.Wfact_t, name, sys.systems, checks = false)
-end
-
 """
 ```julia
 function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
