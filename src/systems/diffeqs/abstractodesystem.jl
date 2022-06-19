@@ -269,39 +269,6 @@ function compile_affect(sys::ODESystem, cb::PeriodicEventCallback, args...; kwar
     compile_affect(sys, affect_function(cb), state(cb), states(cb), parameters(cb), args...; kwargs...)
 end
 
-# helper for affect
-struct VarDict
-    ₊v::Base.RefValue{Vector}
-    ₊d::Dict{Symbol, Int}
-    function VarDict(idx::Vector, sym::Vector)
-        @assert length(idx) == length(sym)
-        new(Ref{Vector}(), Dict(zip(sym, idx)))
-    end
-end
-
-function setvec!(vd::VarDict, v)
-    vd.₊v[] = v
-end
-
-function Base.getproperty(vd::VarDict, name::Symbol)
-    if isdefined(vd, name)
-        return getfield(vd, name)
-    else
-        ₊v = getfield(vd, :₊v)
-        ₊d = getfield(vd, :₊d)
-        return ₊v[][₊d[name]]
-    end
-end
-function Base.setproperty!(vd::VarDict, name::Symbol, v)
-    if isdefined(vd, name)
-        return setfield!(vd, name,v)
-    else
-        ₊v = getfield(vd, :₊v)
-        ₊d = getfield(vd, :₊d)
-        ₊v[][₊d[name]] = v
-    end
-end
-
 function compile_affect(sys::ODESystem, cb::Function, cb_state, dvs, ps, args...; kwargs...)
     all_dvs = states(sys)
     all_ps = parameters(sys)
@@ -315,16 +282,19 @@ function compile_affect(sys::ODESystem, cb::Function, cb_state, dvs, ps, args...
 
     v_inds = inds(dvs, all_dvs)
     p_inds = inds(ps, all_ps)
-    v_sym = [tr_name(all_dvs[i]) for i in v_inds]
-    p_sym = [tr_name(all_ps[i]) for i in p_inds]
+    v_sym = Tuple([tr_name(all_dvs[i]) for i in v_inds])
+    p_sym = Tuple([tr_name(all_ps[i]) for i in p_inds])
 
-    rvdict = VarDict(v_inds, v_sym)
-    rpdict = VarDict(p_inds, p_sym)
-    let rvdict=rvdict, rpdict=rpdict
+    let v_inds=v_inds, p_inds=p_inds, v_sym=v_sym, p_sym=p_sym
         function (integ)
-            isnothing(integ.u) || setvec!(rvdict, integ.u)
-            isnothing(integ.p) || setvec!(rpdict, integ.p)
-            cb(rvdict, rpdict, integ.t, cb_state)
+            @assert !isnothing(integ.u) && !isnothing(integ.p) # can we get `nothing`?
+            
+            uv = @views integ.u[v_inds]
+            pv = @views integ.p[p_inds]
+
+            u = LArray{v_sym}(uv)
+            p = LArray{p_sym}(pv)
+            cb(u, p, integ.t, cb_state)
         end
     end
 end
