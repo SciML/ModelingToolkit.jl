@@ -184,6 +184,53 @@ function complete(g::BipartiteGraph{I}) where {I}
     BipartiteGraph(g.ne, g.fadjlist, badjlist)
 end
 
+# Matrix whose only purpose is to pretty-print the bipartite graph
+struct BipartiteAdjacencyList
+    u::Union{Vector{Int}, Nothing}
+end
+function Base.show(io::IO, l::BipartiteAdjacencyList)
+    if l.u === nothing
+        printstyled(io, '⋅', color = :light_black)
+    elseif isempty(l.u)
+        printstyled(io, '∅', color = :light_black)
+    else
+        print(io, l.u)
+    end
+end
+
+struct Label
+    s::String
+end
+Base.show(io::IO, l::Label) = print(io, l.s)
+
+struct BipartiteGraphPrintMatrix <:
+       AbstractMatrix{Union{Label, Int, BipartiteAdjacencyList}}
+    bpg::BipartiteGraph
+end
+Base.size(bgpm::BipartiteGraphPrintMatrix) = (max(nsrcs(bgpm.bpg), ndsts(bgpm.bpg)) + 1, 3)
+function Base.getindex(bgpm::BipartiteGraphPrintMatrix, i::Integer, j::Integer)
+    checkbounds(bgpm, i, j)
+    if i == 1
+        return (Label.(("#", "src", "dst")))[j]
+    elseif j == 1
+        return i - 1
+    elseif j == 2
+        return BipartiteAdjacencyList(i - 1 <= nsrcs(bgpm.bpg) ?
+                                      𝑠neighbors(bgpm.bpg, i - 1) : nothing)
+    elseif j == 3
+        return BipartiteAdjacencyList(i - 1 <= ndsts(bgpm.bpg) ?
+                                      𝑑neighbors(bgpm.bpg, i - 1) : nothing)
+    else
+        @assert false
+    end
+end
+
+function Base.show(io::IO, b::BipartiteGraph)
+    print(io, "BipartiteGraph with (", length(b.fadjlist), ", ",
+          isa(b.badjlist, Int) ? b.badjlist : length(b.badjlist), ") (𝑠,𝑑)-vertices\n")
+    Base.print_matrix(io, BipartiteGraphPrintMatrix(b))
+end
+
 """
 ```julia
 Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T<:Integer}
