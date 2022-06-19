@@ -471,3 +471,11 @@ D = Differential(t)
 RHS2 = RHS
 @unpack RHS = fol
 @test isequal(RHS, RHS2)
+
+# issue #1644
+using ModelingToolkit: rename
+@variables t
+eqs = [D(x) ~ x]
+noiseeqs = [0.1 * x]
+@named de = SDESystem(eqs, noiseeqs, t, [x], [])
+@test nameof(rename(de, :newname)) == :newname
