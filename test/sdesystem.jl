@@ -528,11 +528,11 @@ end
 
   @named de = SDESystem(eqs,noiseeqs,t,[x],[α,β])
 
-  h(x) = x[1]^2
+  g(x) = x[2]^2
   dt = 1 //2 ^(7)
   x0 = 0.1
 
-  ## Standard approach 
+  ## Standard approach
   # EM with 1`000 trajectories for stepsize 2^-7
   u0map = [
       x => x0
@@ -554,7 +554,7 @@ end
   seeds = rand(UInt, numtraj)
 
   ensemble_prob = EnsembleProblem(prob;
-          output_func = (sol,i) -> (h(sol[end]),false),
+          output_func = (sol,i) -> (g(sol[end]),false),
           prob_func = prob_func
           )
 
@@ -563,19 +563,13 @@ end
   σ = std(sim)/sqrt(numtraj)
 
   ## Variance reduction method
-  u = x 
-  demod = ModelingToolkit.Girsanov_transform(de, u)
-  @variables θ(t)
-  θ0 = 0.1
-  u0modmap = [
-      x => x0
-      θ => θ0
-  ]
+  u = x
+  demod = ModelingToolkit.Girsanov_transform(de, u; θ0=0.1)
 
-  probmod = SDEProblem(demod,u0modmap,(0.0,1.0),parammap)
+  probmod = SDEProblem(demod,u0map,(0.0,1.0),parammap)
 
   ensemble_probmod = EnsembleProblem(probmod;
-          output_func = (sol,i) -> (h(sol[x,end])*sol[θ,end]/θ0,false),
+          output_func = (sol,i) -> (g(sol[x,end])*sol[weight,end],false),
           prob_func = prob_func
           )
 
@@ -583,8 +577,8 @@ end
   μmod = mean(simmod)
   σmod = std(simmod)/sqrt(numtraj)
 
-  display("μ = $(round(μ, digits=2)) ± $(round(σ, digits=2))") 
-  display("μmod = $(round(μmod, digits=2)) ± $(round(σmod, digits=2))") 
+  display("μ = $(round(μ, digits=2)) ± $(round(σ, digits=2))")
+  display("μmod = $(round(μmod, digits=2)) ± $(round(σmod, digits=2))")
 
   @test μ ≈ μmod atol = 2σ
   @test σ > σmod

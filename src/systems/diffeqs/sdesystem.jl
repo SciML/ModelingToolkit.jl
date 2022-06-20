@@ -153,7 +153,7 @@ function generate_diffusion_function(sys::SDESystem, dvs = states(sys),
     return build_function(get_noiseeqs(sys),
                           map(x -> time_varying_as_func(value(x), sys), dvs),
                           map(x -> time_varying_as_func(value(x), sys), ps),
-                          get_iv(sys); kwargs...)
+        get_iv(sys); kwargs...)
 end
 
 """
@@ -210,13 +210,15 @@ end
 $(TYPEDSIGNATURES)
 
 Measure transformation method that allows for a reduction in the variance of an estimator `Exp(g(X_t))`.
-Input:  Original SDE system and symbolic function `u(t,x)` with scalar output that defines the 
-        adjustable parameters `d` in the Girsanov transformation. 
-Output: Modified SDESystem with additional component `θ_t` and initial value `θ0`, 
-        such that the estimator `Exp(g(X_t)θ_t/θ0)` has a smaller variance. 
+Input:  Original SDE system and symbolic function `u(t,x)` with scalar output that
+        defines the adjustable parameters `d` in the Girsanov transformation. Optional: initial
+        condition for `θ0`.
+Output: Modified SDESystem with additional component `θ_t` and initial value `θ0`, as well as
+        the weight `θ_t/θ0` as observed equation, such that the estimator `Exp(g(X_t)θ_t/θ0)`
+        has a smaller variance.
 
-Reference: 
-Kloeden, P. E., Platen, E., & Schurz, H. (2012). Numerical solution of SDE through computer 
+Reference:
+Kloeden, P. E., Platen, E., & Schurz, H. (2012). Numerical solution of SDE through computer
 experiments. Springer Science & Business Media.
 
 # Example
@@ -234,22 +236,40 @@ noiseeqs = [β*x]
 @named de = SDESystem(eqs,noiseeqs,t,[x],[α,β])
 
 # define u (user choice)
-u = x 
-demod = ModelingToolkit.Girsanov_transform(de, u)
+u = x
+θ0 = 0.1
+g(x) = x[1]^2
+demod = ModelingToolkit.Girsanov_transform(de, u; θ0=0.1)
+
+u0modmap = [
+    x => x0
+]
+
+parammap = [
+    α => 1.5,
+    β => 1.0
+]
+
+probmod = SDEProblem(demod,u0modmap,(0.0,1.0),parammap)
+ensemble_probmod = EnsembleProblem(probmod;
+          output_func = (sol,i) -> (g(sol[x,end])*sol[weight,end],false),
+          )
+
+simmod = solve(ensemble_probmod,EM(),dt=dt,trajectories=numtraj)
 ```
 
 """
-function Girsanov_transform(sys::SDESystem, u)
+function Girsanov_transform(sys::SDESystem, u; θ0=1.0)
     name = nameof(sys)
 
     # register new varible θ corresponding to 1D correction process θ(t)
     t = get_iv(sys)
-    @variables θ(t)
     D = Differential(t)
-    
+    @variables θ(t), weight(t)
+
     # determine the adjustable parameters `d` given `u`
-    # gradient of u with respect to states 
-    grad = Symbolics.gradient(u,states(sys)) 
+    # gradient of u with respect to states
+    grad = Symbolics.gradient(u,states(sys))
 
     noiseeqs = get_noiseeqs(sys)
     if typeof(noiseeqs) <: Vector
@@ -288,7 +308,9 @@ function Girsanov_transform(sys::SDESystem, u)
     state = [states(sys);θ]
 
     # return modified SDE System
-    SDESystem(deqs, noiseeqs, get_iv(sys), state, parameters(sys), name = name, checks = false)
+    SDESystem(deqs, noiseeqs, get_iv(sys), state, parameters(sys);
+        defaults = Dict(θ => θ0), observed = [weight ~ θ/θ0],
+        name=name, checks=false)
 end
 
 """
