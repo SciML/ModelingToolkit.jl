@@ -260,49 +260,79 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         # add `D(t) ~ x_t` etc
         subs = Dict()
         ogx = x = fullvars[diffvar] # x
+        @show x, order
         ogidx = xidx = diffvar
+        # We shouldn't apply substitution to `order_lowering_eqs`
+        order_lowering_eqs = BitSet()
         for o in 1:order
             # D(x) ~ x_t
-            x_t = ModelingToolkit.lower_varname(ogx, iv, o)
-            dx = D(x)
             ogidx = var_to_diff[ogidx]
 
-            x_t_idx = get(var_to_idx, x_t, nothing)
-
-            # TODO: check x_t is legal when `x_t_idx isa Int`
-            push!(fullvars, x_t)
-            x_t_idx = add_vertex!(var_to_diff)
-            add_vertex!(graph, DST)
-            add_vertex!(solvable_graph, DST)
-            @assert x_t_idx == ndsts(graph) == length(fullvars)
-            push!(var_eq_matching, unassigned)
-
-            dx_idx = get(var_to_idx, dx, nothing)
+            has_x_t = false
+            x_t_idx::Union{Nothing, Int} = nothing
+            dx_idx = var_to_diff[xidx]
             if dx_idx === nothing
+                dx = D(x)
                 push!(fullvars, dx)
                 dx_idx = add_vertex!(var_to_diff)
                 add_vertex!(graph, DST)
                 add_vertex!(solvable_graph, DST)
                 @assert dx_idx == ndsts(graph) == length(fullvars)
                 push!(var_eq_matching, unassigned)
+
+                var_to_diff[xidx] = dx_idx
+            else
+                dx = fullvars[dx_idx]
+                var_eq_matching[dx_idx] = unassigned
+
+                for eq in 𝑑neighbors(graph, dx_idx)
+                    vs = 𝑠neighbors(graph, eq)
+                    length(vs) == 2 || continue
+                    maybe_x_t_idx = vs[1] == dx_idx ? vs[2] : vs[1]
+                    maybe_x_t = fullvars[maybe_x_t_idx]
+                    difference = (neweqs[eq].lhs - neweqs[eq].rhs) - (dx - maybe_x_t)
+                    @show neweqs[eq], difference, dx, maybe_x_t, o, eq
+                    # if `eq` is in the form of `D(x) ~ x_t`
+                    if ModelingToolkit._iszero(difference)
+                        x_t_idx = maybe_x_t_idx
+                        x_t = maybe_x_t
+                        eq_idx = eq
+                        push!(order_lowering_eqs, eq_idx)
+                        has_x_t = true
+                        break
+                    end
+                end
             end
-            add_edge!(var_to_diff, xidx, dx_idx)
 
-            push!(neweqs, dx ~ x_t)
-            eq_idx = add_vertex!(eq_to_diff)
-            add_vertex!(graph, SRC)
-            add_vertex!(solvable_graph, SRC)
-            @assert eq_idx == nsrcs(graph) == length(neweqs)
+            if x_t_idx === nothing
+                x_t = ModelingToolkit.lower_varname(ogx, iv, o)
+                push!(fullvars, x_t)
+                x_t_idx = add_vertex!(var_to_diff)
+                add_vertex!(graph, DST)
+                add_vertex!(solvable_graph, DST)
+                @assert x_t_idx == ndsts(graph) == length(fullvars)
+                push!(var_eq_matching, unassigned)
+            end
+            x_t_idx::Int
 
-            add_edge!(solvable_graph, eq_idx, x_t_idx)
-            add_edge!(solvable_graph, eq_idx, dx_idx)
-            add_edge!(graph, eq_idx, x_t_idx)
-            add_edge!(graph, eq_idx, dx_idx)
+            if !has_x_t
+                push!(neweqs, dx ~ x_t)
+                eq_idx = add_vertex!(eq_to_diff)
+                push!(order_lowering_eqs, eq_idx)
+                add_vertex!(graph, SRC)
+                add_vertex!(solvable_graph, SRC)
+                @assert eq_idx == nsrcs(graph) == length(neweqs)
 
-            # We use this info to substitute all `D(D(x))` or `D(x_t)` except
-            # the `D(D(x)) ~ x_tt` equation to `x_tt`.
-            #              D(D(x))  D(x_t)    x_tt   `D(D(x)) ~ x_tt`
-            push!(subinfo, (ogidx, dx_idx, x_t_idx, eq_idx))
+                add_edge!(solvable_graph, eq_idx, x_t_idx)
+                add_edge!(solvable_graph, eq_idx, dx_idx)
+                add_edge!(graph, eq_idx, x_t_idx)
+                add_edge!(graph, eq_idx, dx_idx)
+
+                # We use this info to substitute all `D(D(x))` or `D(x_t)` except
+                # the `D(D(x)) ~ x_tt` equation to `x_tt`.
+                #              D(D(x))  D(x_t)    x_tt   `D(D(x)) ~ x_tt`
+                push!(subinfo, (ogidx, dx_idx, x_t_idx, eq_idx))
+            end
 
             # D(x_t) ~ x_tt
             x = x_t
@@ -317,7 +347,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             # Note that this assumes the iterator is robust under deletion and
             # insertion.
             for idx in (ogidx, dx_idx), eq in 𝑑neighbors(graph, idx)
-                eq == eq_idx && continue # skip the equation that we just added
+                eq in order_lowering_eqs && continue # skip the equation that we just added
                 rem_edge!(graph, eq, idx)
                 BipartiteEdge(eq, idx) in solvable_graph &&
                     rem_edge!(solvable_graph, eq, idx)
@@ -328,6 +358,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 neweq = neweqs[eq] = substitute(oldeq, subs)
             end
         end
+        @show order_lowering_eqs
+        empty!(subinfo)
         empty!(subs)
     end
 
