@@ -246,8 +246,10 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 order = level
                 isimplicit = length(eqs_with_v) > 1 || !is_solvable(only(eqs_with_v), v)
             end
+            if v <= length(processed)
+                processed[v] = true
+            end
             var_to_diff[v] === nothing && break
-            processed[v] = true
             v = var_to_diff[v]
             level += 1
         end
