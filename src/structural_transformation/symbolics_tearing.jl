@@ -223,7 +223,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     D = Differential(iv)
     nvars = ndsts(graph)
     processed = falses(nvars)
-    subinfo = NTuple{4, Int}[]
+    subinfo = NTuple{3, Int}[]
+    idx_buffer = Int[]
     for i in 1:nvars
         processed[i] && continue
 
@@ -328,11 +329,11 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 add_edge!(graph, eq_idx, x_t_idx)
                 add_edge!(graph, eq_idx, dx_idx)
 
-                # We use this info to substitute all `D(D(x))` or `D(x_t)` except
-                # the `D(D(x)) ~ x_tt` equation to `x_tt`.
-                #              D(D(x))  D(x_t)    x_tt   `D(D(x)) ~ x_tt`
-                push!(subinfo, (ogidx, dx_idx, x_t_idx, eq_idx))
             end
+            # We use this info to substitute all `D(D(x))` or `D(x_t)` except
+            # the `D(D(x)) ~ x_tt` equation to `x_tt`.
+            #              D(D(x))  D(x_t)    x_tt
+            push!(subinfo, (ogidx, dx_idx, x_t_idx))
 
             # D(x_t) ~ x_tt
             x = x_t
@@ -343,22 +344,27 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         # something like `D(D(x)) -> x_tt` first, otherwise we get `D(x_t)`
         # which would be hard to fix up before we finish lower the order of
         # variable `x`.
-        for (ogidx, dx_idx, x_t_idx, eq_idx) in Iterators.reverse(subinfo)
-            # Note that this assumes the iterator is robust under deletion and
-            # insertion.
-            for idx in (ogidx, dx_idx), eq in 𝑑neighbors(graph, idx)
-                eq in order_lowering_eqs && continue # skip the equation that we just added
-                rem_edge!(graph, eq, idx)
-                BipartiteEdge(eq, idx) in solvable_graph &&
-                    rem_edge!(solvable_graph, eq, idx)
-                # TODO: what about `solvable_graph`?
-                add_edge!(graph, eq, x_t_idx)
-                subs[fullvars[idx]] = fullvars[x_t_idx]
-                oldeq = neweqs[eq]
-                neweq = neweqs[eq] = substitute(oldeq, subs)
+        for (ogidx, dx_idx, x_t_idx) in Iterators.reverse(subinfo)
+            # We need a loop here because both `D(D(x))` and `D(x_t)` need to be
+            # substituted to `x_tt`.
+            for idx in (ogidx, dx_idx)
+                eqs_with_v = 𝑑neighbors(graph, idx)
+                resize!(idx_buffer, length(eqs_with_v))
+                # Note that the iterator is not robust under deletion and
+                # insertion. Hence, we have a copy here.
+                for eq in copy!(idx_buffer, eqs_with_v)
+                    eq in order_lowering_eqs && continue # skip the equation that we just added
+                    rem_edge!(graph, eq, idx)
+                    BipartiteEdge(eq, idx) in solvable_graph &&
+                        rem_edge!(solvable_graph, eq, idx)
+                    # TODO: what about `solvable_graph`?
+                    add_edge!(graph, eq, x_t_idx)
+                    subs[fullvars[idx]] = fullvars[x_t_idx]
+                    oldeq = neweqs[eq]
+                    neweq = neweqs[eq] = substitute(oldeq, subs)
+                end
             end
         end
-        @show order_lowering_eqs
         empty!(subinfo)
         empty!(subs)
     end
@@ -400,23 +406,39 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     end
 
     diffeq_idxs = BitSet()
-    diffeqs = Equation[]
+    final_eqs = Equation[]
     var_rename = zeros(Int, length(var_eq_matching))
+    removed_eqs = Int[]
+    subeqs = Equation[]
     idx = 0
     # Solve solvable equations
     for (iv, ieq) in enumerate(var_eq_matching)
         if is_solvable(ieq, iv)
+            @info "solve" ieq iv neweqs[ieq] fullvars[iv]
             # We don't solve differential equations, but we will need to try to
             # convert it into the mass matrix form.
             # We cannot solve the differential variable like D(x)
             if isdiffvar(iv)
-                push!(diffeqs, to_mass_matrix_form(ieq))
+                push!(final_eqs, to_mass_matrix_form(ieq))
                 push!(diffeq_idxs, ieq)
                 var_rename[iv] = (idx += 1)
                 continue
             end
-            push!(solved_equations, ieq)
-            push!(solved_variables, iv)
+            eq = neweqs[ieq]
+            var = fullvars[iv]
+            residual = eq.lhs - eq.rhs
+            a, b, islinear = linear_expansion(residual, var)
+            # 0 ~ a * var + b
+            # var ~ -b/a
+            if ModelingToolkit._iszero(a)
+                push!(removed_eqs, ieq)
+            else
+                rhs = -b/a
+                neweq = var ~ simplify ? Symbolics.simplify(rhs) : rhs
+                push!(subeqs, neweq)
+                push!(solved_equations, ieq)
+                push!(solved_variables, iv)
+            end
             var_rename[iv] = -1
         else
             var_rename[iv] = (idx += 1)
@@ -424,17 +446,12 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     end
 
     if isempty(solved_equations)
-        subeqs = Equation[]
         deps = Vector{Int}[]
     else
         subgraph = substitution_graph(graph, solved_equations, solved_variables,
                                       var_eq_matching)
         toporder = topological_sort_by_dfs(subgraph)
-        @show neweqs[solved_equations]
-        subeqs = Equation[solve_equation(neweqs[solved_equations[i]],
-                                         fullvars[solved_variables[i]],
-                                         simplify) for i in toporder]
-        @show subeqs
+        subeqs = subeqs[toporder]
         # Find the dependency of solved variables. We will need this for ODAEProblem
         invtoporder = invperm(toporder)
         deps = [Int[invtoporder[n]
@@ -445,14 +462,17 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     # TODO: BLT sorting
     # Rewrite remaining equations in terms of solved variables
     solved_eq_set = BitSet(solved_equations)
-    neweqs = Equation[to_mass_matrix_form(ieq)
-                      for ieq in 1:length(neweqs)
-                      if !(ieq in diffeq_idxs || ieq in solved_eq_set)]
-    filter!(!isnothing, neweqs)
-    prepend!(neweqs, diffeqs)
+    for ieq in 1:length(neweqs)
+        (ieq in diffeq_idxs || ieq in solved_eq_set) && continue
+        maybe_eq = to_mass_matrix_form(ieq)
+        maybe_eq === nothing || push!(final_eqs, maybe_eq)
+    end
+    neweqs = final_eqs
 
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
+    #
+    # TODO: fix ordering and remove equations
     graph = contract_variables(graph, var_eq_matching, solved_variables)
 
     # Update system
