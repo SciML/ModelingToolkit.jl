@@ -153,7 +153,7 @@ function generate_diffusion_function(sys::SDESystem, dvs = states(sys),
     return build_function(get_noiseeqs(sys),
                           map(x -> time_varying_as_func(value(x), sys), dvs),
                           map(x -> time_varying_as_func(value(x), sys), ps),
-        get_iv(sys); kwargs...)
+                          get_iv(sys); kwargs...)
 end
 
 """
@@ -204,7 +204,6 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     SDESystem(deqs, get_noiseeqs(sys), get_iv(sys), states(sys), parameters(sys),
               name = name, checks = false)
 end
-
 
 """
 $(TYPEDSIGNATURES)
@@ -259,7 +258,7 @@ simmod = solve(ensemble_probmod,EM(),dt=dt,trajectories=numtraj)
 ```
 
 """
-function Girsanov_transform(sys::SDESystem, u; θ0=1.0)
+function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
     name = nameof(sys)
 
     # register new varible θ corresponding to 1D correction process θ(t)
@@ -269,35 +268,36 @@ function Girsanov_transform(sys::SDESystem, u; θ0=1.0)
 
     # determine the adjustable parameters `d` given `u`
     # gradient of u with respect to states
-    grad = Symbolics.gradient(u,states(sys))
+    grad = Symbolics.gradient(u, states(sys))
 
     noiseeqs = get_noiseeqs(sys)
     if typeof(noiseeqs) <: Vector
-        d = simplify.(-(noiseeqs.*grad)/u)
-        drift_correction = noiseeqs.*d
+        d = simplify.(-(noiseeqs .* grad) / u)
+        drift_correction = noiseeqs .* d
     else
-        d = simplify.(-noiseeqs*grad/u)
-        drift_correction = noiseeqs*d
+        d = simplify.(-noiseeqs * grad / u)
+        drift_correction = noiseeqs * d
     end
 
     # transformation adds additional state θ: newX = (X,θ)
     # drift function for state is modified
     # θ has zero drift
-    deqs = vcat([equations(sys)[i].lhs ~ equations(sys)[i].rhs - drift_correction[i] for i in eachindex(states(sys))]...)
+    deqs = vcat([equations(sys)[i].lhs ~ equations(sys)[i].rhs - drift_correction[i]
+                 for i in eachindex(states(sys))]...)
     deqsθ = D(θ) ~ 0
-    push!(deqs,deqsθ)
+    push!(deqs, deqsθ)
 
     # diffusion matrix is of size d x m (d states, m noise), with diagonal noise represented as a d-dimensional vector
     # for diagonal noise processes with m>1, the noise process will become non-diagonal; extra state component but no new noise process.
     # new diffusion matrix is of size d+1 x M
     # diffusion for state is unchanged
 
-    noiseqsθ = θ*d
+    noiseqsθ = θ * d
 
     if typeof(noiseeqs) <: Vector
         m = size(noiseeqs)
         if m == 1
-            push!(noiseeqs,noiseqsθ)
+            push!(noiseeqs, noiseqsθ)
         else
             noiseeqs = [Array(Diagonal(noiseeqs)); noiseqsθ']
         end
@@ -305,12 +305,12 @@ function Girsanov_transform(sys::SDESystem, u; θ0=1.0)
         noiseeqs = [Array(noiseeqs); noiseqsθ']
     end
 
-    state = [states(sys);θ]
+    state = [states(sys); θ]
 
     # return modified SDE System
     SDESystem(deqs, noiseeqs, get_iv(sys), state, parameters(sys);
-        defaults = Dict(θ => θ0), observed = [weight ~ θ/θ0],
-        name=name, checks=false)
+              defaults = Dict(θ => θ0), observed = [weight ~ θ / θ0],
+              name = name, checks = false)
 end
 
 """
