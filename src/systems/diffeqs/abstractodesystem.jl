@@ -275,15 +275,16 @@ function compile_affect(sys::ODESystem, cb::Function, cb_state, dvs, ps, args...
 
     prefix = common_namespace(vcat(dvs, ps))
 
-    # find indexes
-    ind(sym, v) = findfirst(isequal(sym), v)
-    inds(syms, v) = filter(!isnothing,map(sym -> ind(sym, v), syms)) # filter out eliminated symbols
+    inds(subsyms, allsyms) = [en[1] for en in enumerate(allsyms) 
+                                            if getname(en[2]) in Set(getname(s) 
+                                                for s in subsyms)]
+
     tr_name(v) = Symbol(unnamespace(prefix, getname(v)))
 
     v_inds = inds(dvs, all_dvs)
     p_inds = inds(ps, all_ps)
-    v_sym = Tuple([tr_name(all_dvs[i]) for i in v_inds])
-    p_sym = Tuple([tr_name(all_ps[i]) for i in p_inds])
+    v_sym = Tuple(map(tr_name, all_dvs[v_inds]))
+    p_sym = Tuple(map(tr_name, all_ps[p_inds]))
 
     let v_inds=v_inds, p_inds=p_inds, v_sym=v_sym, p_sym=p_sym
         function (integ)
