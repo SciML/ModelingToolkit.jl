@@ -265,6 +265,27 @@ function generate_periodic_callbacks(cbs, sys::ODESystem; kwargs...)
     PeriodicCallback.(affect_functions, Δts)
 end
 
+# helper for affect
+struct VarDict
+    ₊v::T where {T<:AbstractVector}
+    ₊d::Dict{Symbol, Int}
+end
+
+function Base.getindex(vd::VarDict, name::Symbol)
+    ₊v = getfield(vd, :₊v)
+    ₊d = getfield(vd, :₊d)
+    return ₊v[₊d[name]]
+end
+
+function Base.setindex!(vd::VarDict, val, name::Symbol)
+    ₊v = getfield(vd, :₊v)
+    ₊d = getfield(vd, :₊d)
+    ₊v[₊d[name]] = val
+end
+
+Base.getproperty(vd::VarDict, name::Symbol) = vd[name]
+Base.setproperty!(vd::VarDict, name::Symbol, v) = vd[name] = v
+
 function compile_affect(sys::ODESystem, cb::PeriodicEventCallback, args...; kwargs...)
     compile_affect(sys, affect_function(cb), state(cb), states(cb), parameters(cb), args...; kwargs...)
 end
@@ -286,15 +307,18 @@ function compile_affect(sys::ODESystem, cb::Function, cb_state, dvs, ps, args...
     v_sym = Tuple(map(tr_name, all_dvs[v_inds]))
     p_sym = Tuple(map(tr_name, all_ps[p_inds]))
 
-    let v_inds=v_inds, p_inds=p_inds, v_sym=v_sym, p_sym=p_sym
+    v_map = Dict(zip(v_sym, v_inds)) # Symbol -> Int
+    p_map = Dict(zip(p_sym, p_inds))
+
+    let v_inds=v_inds, p_inds=p_inds, v_map=v_map, p_map=p_map
         function (integ)
             @assert !isnothing(integ.u) && !isnothing(integ.p) # can we get `nothing`?
             
             uv = @views integ.u[v_inds]
             pv = @views integ.p[p_inds]
 
-            u = LArray{v_sym}(uv)
-            p = LArray{p_sym}(pv)
+            u = VarDict(uv, v_map)
+            p = VarDict(pv, p_map)
             cb(u, p, integ.t, cb_state)
         end
     end

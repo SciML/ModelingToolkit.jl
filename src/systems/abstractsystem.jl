@@ -587,8 +587,8 @@ end
 function updated_periodic_event(sys::AbstractSystem, cb::PeriodicEventCallback)
     !isnothing(cb.states) && !isnothing(cb.ps) && return cb
 
-    st = isnothing(cb.states) ? states(sys) : cb.states
-    ps = isnothing(cb.ps) ? parameters(sys) : cb.ps
+    st = isnothing(cb.states) ? get_states(sys) : cb.states
+    ps = isnothing(cb.ps) ? get_ps(sys) : cb.ps
     return PeriodicEventCallback(cb.Δt, cb.affect, cb.state, st, ps)
 end
 
