@@ -79,6 +79,62 @@ function continuous_events(sys::AbstractSystem)
     filter(!isempty, cbs)
 end
 
+#################################### continuous events #####################################
+
+struct SymbolicDiscreteCallback
+    condition
+    affects::Vector{Equation}
+    function SymbolicDiscreteCallback(condition, affects = NULL_AFFECT)
+        c = value(scalarize(condition))
+        a = scalarize(affects)
+        new(c, a)
+    end # Default affect to nothing
+end
+
+SymbolicDiscreteCallback(p::Pair) = SymbolicDiscreteCallback(p[1], p[2])
+SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback) = cb # passthrough
+
+function Base.show(io::IO, db::SymbolicDiscreteCallback)
+    println(io, "condition: ", db.condition)
+    println(io, "affects:")
+    for affect in db.affects
+        println(io, "  ", affect)
+    end
+end
+
+function Base.:(==)(e1::SymbolicDiscreteCallback, e2::SymbolicDiscreteCallback)
+    isequal(e1.condition, e2.condition) && isequal(e1.affects, e2.affects)
+end
+function Base.hash(cb::SymbolicDiscreteCallback, s::UInt)
+    s = foldr(hash, cb.condition, init = s)
+    foldr(hash, cb.affects, init = s)
+end
+
+condition(cb::SymbolicDiscreteCallback) = cb.condition
+function conditions(cbs::Vector{<:SymbolicDiscreteCallback})
+    reduce(vcat, condition(cb) for cb in cbs)
+end
+
+affect_equations(cb::SymbolicDiscreteCallback) = cb.affects
+function affect_equations(cbs::Vector{SymbolicDiscreteCallback})
+    reduce(vcat, affect_equations(cb) for cb in cbs)
+end
+function namespace_equation(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCallback
+    SymbolicDiscreteCallback(namespace_expr(condition(cb), s),
+                             namespace_equation.(affect_equations(cb), Ref(s)))
+end
+
+function discrete_events(sys::AbstractSystem)
+    obs = get_discrete_events(sys)
+    systems = get_systems(sys)
+    cbs = [obs;
+           reduce(vcat,
+                  (map(o -> namespace_equation(o, s), discrete_events(s)) for s in systems),
+                  init = SymbolicDiscreteCallback[])]
+    filter(!isempty, cbs)
+end
+
+
 ################################# compilation functions ####################################
 
 # handles ensuring that affect! functions work with integrator arguments
@@ -89,6 +145,26 @@ function add_integrator_header()
                  expr.body),
     expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :u, :p, :t])], [],
                  expr.body)
+end
+
+"""
+    compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps; expression, kwargs...)
+
+Returns a function `condition(u,p,t)` returning the `condition(cb)`.
+
+Notes
+- `expression = Val{true}`, causes the generated function to be returned as an expression.
+  If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
+- `kwargs` are passed through to `Symbolics.build_function`.
+"""
+function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
+                           expression = Val{true}, kwargs...)
+
+    u = map(x -> time_varying_as_func(value(x), sys), dvs)
+    p = map(x -> time_varying_as_func(value(x), sys), ps)
+    t = get_iv(sys)
+    condit = condition(cb)
+    build_function(condit, u, p, t; expression, kwargs...)
 end
 
 function compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
