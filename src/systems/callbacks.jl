@@ -3,6 +3,13 @@ get_continuous_events(sys::AbstractSystem) = Equation[]
 get_continuous_events(sys::AbstractODESystem) = getfield(sys, :continuous_events)
 has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
 
+has_discrete_events(sys::AbstractSystem) = isdefined(sys, :discrete_events)
+function get_discrete_events(sys::AbstractSystem)
+    has_discrete_events(sys) ||
+        error("Systems of type $(typeof(sys)) do not support discrete events.")
+    getfield(sys, :discrete_events)
+end
+
 #################################### continuous events #####################################
 
 const NULL_AFFECT = Equation[]
