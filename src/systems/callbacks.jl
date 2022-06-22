@@ -282,3 +282,19 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states
         VectorContinuousCallback(cond, affect, length(eqs))
     end
 end
+
+function generate_discrete_callbacks(sys::AbstractSystem, dvs = states(sys),
+                                    ps = parameters(sys); kwargs...)
+    has_discrete_events(sys) || return nothing
+    symcbs = discrete_events(sys)
+    isempty(symcbs) && return nothing
+
+    dbs = map(symcbs) do cb
+        c = compile_condition(cb, sys, dvs, ps; expression=Val{false}, kwargs...)
+        as = compile_affect(affect_equations(cb), sys, dvs, ps; expression = Val{false},
+                            kwargs...)
+        DiscreteCallback(c, as)
+    end
+
+    dbs
+end
