@@ -138,14 +138,14 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
 end
 
 
-function generate_rootfinding_callback(sys::ODESystem, dvs = states(sys),
+function generate_rootfinding_callback(sys::AbstractODESystem, dvs = states(sys),
                                        ps = parameters(sys); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
     generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
 end
 
-function generate_rootfinding_callback(cbs, sys::ODESystem, dvs = states(sys),
+function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states(sys),
                                        ps = parameters(sys); kwargs...)
     eqs = map(cb -> cb.eqs, cbs)
     num_eqs = length.(eqs)
