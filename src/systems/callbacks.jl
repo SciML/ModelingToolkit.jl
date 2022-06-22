@@ -76,46 +76,64 @@ end
 
 ################################# compilation functions ####################################
 
+# handles ensuring that affect! functions work with integrator arguments
+function add_integrator_header()
+    integrator = gensym(:MTKIntegrator)
+
+    expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
+                 expr.body),
+    expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :u, :p, :t])], [],
+                 expr.body)
+end
+
 function compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
     compile_affect(affect_equations(cb), args...; kwargs...)
 end
 
 """
-    compile_affect(eqs::Vector{Equation}, sys, dvs, ps; kwargs...)
+    compile_affect(eqs::Vector{Equation}, sys, dvs, ps; expression, outputidxs, kwargs...)
     compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
 
-Returns a function that takes an integrator as argument and modifies the state with the affect.
+Returns a function that takes an integrator as argument and modifies the state with the
+affect. The generated function has the signature `affect!(integrator)`.
+
+Notes
+- `expression = Val{true}`, causes the generated function to be returned as an expression.
+  If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
+- `outputidxs`, a vector of indices of the output variables.
+- `kwargs` are passed through to `Symbolics.build_function`.
 """
-function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; expression = Val{false}, kwargs...)
+function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothing,
+                                                             expression = Val{true},
+                                                             kwargs...)
     if isempty(eqs)
-        return (args...) -> () # We don't do anything in the callback, we're just after the event
+        if expression == Val{true}
+            return :((args...) -> ())
+        else
+            return (args...) -> () # We don't do anything in the callback, we're just after the event
+        end
     else
         rhss = map(x -> x.rhs, eqs)
-        lhss = map(x -> x.lhs, eqs)
-        update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're chaning
-        length(update_vars) == length(unique(update_vars)) == length(eqs) ||
-            error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
-        vars = states(sys)
 
-        u = map(x -> time_varying_as_func(value(x), sys), vars)
+        if outputidxs === nothing
+            lhss = map(x -> x.lhs, eqs)
+            update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're chaning
+            length(update_vars) == length(unique(update_vars)) == length(eqs) ||
+                error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
+            stateind(sym) = findfirst(isequal(sym), dvs)
+            update_inds = stateind.(update_vars)
+        else
+            update_inds = outputidxs
+        end
+
+        u = map(x -> time_varying_as_func(value(x), sys), dvs)
         p = map(x -> time_varying_as_func(value(x), sys), ps)
         t = get_iv(sys)
-        # stateind(sym) = findfirst(isequal(sym), vars)
-        # update_inds = stateind.(update_vars)
-        # rf_oop, rf_ip = build_function(rhss, u, p, t; expression = expression, wrap_code=add_integrator_header(), outputidxs = update_inds, kwargs...)
-        # rf_ip
-
-        rf_oop, rf_ip = build_function(rhss, u, p, t; expression = expression, kwargs...)
-
-        stateind(sym) = findfirst(isequal(sym), vars)
-
-        update_inds = stateind.(update_vars)
-        let update_inds = update_inds
-            function (integ)
-                lhs = @views integ.u[update_inds]
-                rf_ip(lhs, integ.u, integ.p, integ.t)
-            end
-        end
+        rf_oop, rf_ip = build_function(rhss, u, p, t; expression = expression,
+                                                      wrap_code = add_integrator_header(),
+                                                      outputidxs = update_inds,
+                                                      kwargs...)
+        rf_ip
     end
 end
 
@@ -150,7 +168,7 @@ function generate_rootfinding_callback(cbs, sys::ODESystem, dvs = states(sys),
 
     affect_functions = map(cbs) do cb # Keep affect function separate
         eq_aff = affect_equations(cb)
-        affect = compile_affect(eq_aff, sys, dvs, ps; kwargs...)
+        affect = compile_affect(eq_aff, sys, dvs, ps; expression = Val{false}, kwargs...)
     end
 
     if length(eqs) == 1

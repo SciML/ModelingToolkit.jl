@@ -118,23 +118,10 @@ function generate_rate_function(js::JumpSystem, rate)
                         conv = states_to_sym(states(js)),
                         expression = Val{true})
 end
-function add_integrator_header()
-    integrator = gensym(:MTKIntegrator)
-
-    expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
-                 expr.body),
-    expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :u, :p, :t])], [],
-                 expr.body)
-end
 
 function generate_affect_function(js::JumpSystem, affect, outputidxs)
-    compile_affect(affect, js, states(js), parameters(js); expression = Val{true})
-    # bf = build_function(map(x -> x isa Equation ? x.rhs : x, affect), states(js),
-    #                     parameters(js),
-    #                     get_iv(js),
-    #                     expression = Val{true},
-    #                     wrap_code = add_integrator_header(),
-    #                     outputidxs = outputidxs)[2]
+    compile_affect(affect, js, states(js), parameters(js); outputidxs = outputidxs,
+                                                           expression = Val{true})
 end
 
 function assemble_vrj(js, vrj, statetoid)
