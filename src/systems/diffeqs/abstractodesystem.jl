@@ -657,7 +657,6 @@ merge_cb(x, ::Nothing) = x
 merge_cb(x, y) = CallbackSet(x, y)
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 
-
 """
 ```julia
 function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,

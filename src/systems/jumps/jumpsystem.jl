@@ -121,7 +121,7 @@ end
 
 function generate_affect_function(js::JumpSystem, affect, outputidxs)
     compile_affect(affect, js, states(js), parameters(js); outputidxs = outputidxs,
-                                                           expression = Val{true})
+                   expression = Val{true})
 end
 
 function assemble_vrj(js, vrj, statetoid)

@@ -3,7 +3,6 @@ get_continuous_events(sys::AbstractSystem) = Equation[]
 get_continuous_events(sys::AbstractODESystem) = getfield(sys, :continuous_events)
 has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
 
-
 #################################### continuous events #####################################
 
 const NULL_AFFECT = Equation[]
@@ -73,7 +72,6 @@ function continuous_events(sys::AbstractSystem)
     filter(!isempty, cbs)
 end
 
-
 ################################# compilation functions ####################################
 
 # handles ensuring that affect! functions work with integrator arguments
@@ -104,8 +102,8 @@ Notes
 - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothing,
-                                                             expression = Val{true},
-                                                             kwargs...)
+                        expression = Val{true},
+                        kwargs...)
     if isempty(eqs)
         if expression == Val{true}
             return :((args...) -> ())
@@ -130,13 +128,12 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         p = map(x -> time_varying_as_func(value(x), sys), ps)
         t = get_iv(sys)
         rf_oop, rf_ip = build_function(rhss, u, p, t; expression = expression,
-                                                      wrap_code = add_integrator_header(),
-                                                      outputidxs = update_inds,
-                                                      kwargs...)
+                                       wrap_code = add_integrator_header(),
+                                       outputidxs = update_inds,
+                                       kwargs...)
         rf_ip
     end
 end
-
 
 function generate_rootfinding_callback(sys::AbstractODESystem, dvs = states(sys),
                                        ps = parameters(sys); kwargs...)
