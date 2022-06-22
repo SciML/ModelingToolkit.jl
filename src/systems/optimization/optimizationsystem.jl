@@ -177,7 +177,12 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                           expression = Val{false})
 
     obj_expr = toexpr(equations(sys))
-    pairs_arr = p isa SciMLBase.NullParameters ? [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)] : [[Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)]..., [Symbol(_p) => p[i] for (i, _p) in enumerate(ps)]...]
+    pairs_arr = p isa SciMLBase.NullParameters ?
+                [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)] :
+                [
+        [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)]...,
+        [Symbol(_p) => p[i] for (i, _p) in enumerate(ps)]...,
+    ]
     rep_pars_vals!(obj_expr, pairs_arr)
     if grad
         grad_oop, grad_iip = generate_gradient(sys, checkbounds = checkbounds,
@@ -208,10 +213,11 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
 
     if length(sys.constraints) > 0
         @named cons_sys = NonlinearSystem(sys.constraints, dvs, ps)
-        cons = generate_function(cons_sys, checkbounds = checkbounds, linenumbers = linenumbers,
-                                                expression = Val{false})[1]
-        cons_j = generate_jacobian(cons_sys; expression=Val{false}, sparse=sparse)[2]
-        cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse =sparse)[2]
+        cons = generate_function(cons_sys, checkbounds = checkbounds,
+                                 linenumbers = linenumbers,
+                                 expression = Val{false})[1]
+        cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+        cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 
         cons_expr = toexpr(equations(cons_sys))
         rep_pars_vals!.(cons_expr, Ref(pairs_arr))
@@ -225,24 +231,24 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         end
 
         _f = DiffEqBase.OptimizationFunction{iip}(f,
-                                              SciMLBase.NoAD();
-                                              grad = _grad,
-                                              hess = _hess,
-                                              hess_prototype = hess_prototype,
-                                              cons = cons,
-                                              cons_j = cons_j,
-                                              cons_h = cons_h,
-                                              cons_jac_prototype = cons_jac_prototype,
-                                              cons_hess_prototype = cons_hess_prototype,
-                                              expr = obj_expr,
-                                              cons_expr = cons_expr)
+                                                  SciMLBase.NoAD();
+                                                  grad = _grad,
+                                                  hess = _hess,
+                                                  hess_prototype = hess_prototype,
+                                                  cons = cons,
+                                                  cons_j = cons_j,
+                                                  cons_h = cons_h,
+                                                  cons_jac_prototype = cons_jac_prototype,
+                                                  cons_hess_prototype = cons_hess_prototype,
+                                                  expr = obj_expr,
+                                                  cons_expr = cons_expr)
     else
         _f = DiffEqBase.OptimizationFunction{iip}(f,
-                                              SciMLBase.NoAD();
-                                              grad = _grad,
-                                              hess = _hess,
-                                              hess_prototype = hess_prototype,
-                                              expr = obj_expr)
+                                                  SciMLBase.NoAD();
+                                                  grad = _grad,
+                                                  hess = _hess,
+                                                  hess_prototype = hess_prototype,
+                                                  expr = obj_expr)
     end
 
     OptimizationProblem{iip}(_f, u0, p; lb = lb, ub = ub, kwargs...)
@@ -315,16 +321,22 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     ub = varmap_to_vars(ub, dvs; check = false, tofloat = false, use_union)
 
     obj_expr = toexpr(equations(sys))
-    pairs_arr = p isa SciMLBase.NullParameters ? [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)] : [[Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)]..., [Symbol(_p) => p[i] for (i, _p) in enumerate(ps)]...]
+    pairs_arr = p isa SciMLBase.NullParameters ?
+                [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)] :
+                [
+        [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)]...,
+        [Symbol(_p) => p[i] for (i, _p) in enumerate(ps)]...,
+    ]
     rep_pars_vals!(obj_expr, pairs_arr)
 
     if length(sys.constraints) > 0
         @named cons_sys = NonlinearSystem(sys.constraints, dvs, ps)
-        cons = generate_function(cons_sys, checkbounds = checkbounds, linenumbers = linenumbers,
-                                                expression = Val{false})[1]
-        cons_j = generate_jacobian(cons_sys; expression=Val{false}, sparse=sparse)[2]
+        cons = generate_function(cons_sys, checkbounds = checkbounds,
+                                 linenumbers = linenumbers,
+                                 expression = Val{false})[1]
+        cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 
-        cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse =sparse)[2]
+        cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 
         cons_expr = toexpr(equations(cons_sys))
         rep_pars_vals!.(cons_expr, Ref(pairs_arr))
