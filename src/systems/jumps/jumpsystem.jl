@@ -128,12 +128,13 @@ function add_integrator_header()
 end
 
 function generate_affect_function(js::JumpSystem, affect, outputidxs)
-    bf = build_function(map(x -> x isa Equation ? x.rhs : x, affect), states(js),
-                        parameters(js),
-                        get_iv(js),
-                        expression = Val{true},
-                        wrap_code = add_integrator_header(),
-                        outputidxs = outputidxs)[2]
+    compile_affect(affect, js, states(js), parameters(js); expression = Val{true})
+    # bf = build_function(map(x -> x isa Equation ? x.rhs : x, affect), states(js),
+    #                     parameters(js),
+    #                     get_iv(js),
+    #                     expression = Val{true},
+    #                     wrap_code = add_integrator_header(),
+    #                     outputidxs = outputidxs)[2]
 end
 
 function assemble_vrj(js, vrj, statetoid)

@@ -121,6 +121,7 @@ include("domains.jl")
 
 include("systems/abstractsystem.jl")
 include("systems/connectors.jl")
+include("systems/callbacks.jl")
 
 include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")
