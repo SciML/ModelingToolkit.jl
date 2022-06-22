@@ -524,18 +524,11 @@ function ODAEProblem{iip}(sys,
                                        use_union)
 
     has_difference = any(isdifferenceeq, eqs)
-    if has_continuous_events(sys)
-        event_cb = generate_rootfinding_callback(sys; kwargs...)
-    else
-        event_cb = nothing
-    end
-    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
-    cb = merge_cb(event_cb, difference_cb)
-    cb = merge_cb(cb, callback)
+    cbs = process_events(sys; callback, has_difference, kwargs...)
 
-    if cb === nothing
+    if cbs === nothing
         ODEProblem{iip}(fun, u0, tspan, p; kwargs...)
     else
-        ODEProblem{iip}(fun, u0, tspan, p; callback = cb, kwargs...)
+        ODEProblem{iip}(fun, u0, tspan, p; callback = cbs, kwargs...)
     end
 end

@@ -298,3 +298,26 @@ function generate_discrete_callbacks(sys::AbstractSystem, dvs = states(sys),
 
     dbs
 end
+
+merge_cb(::Nothing, ::Nothing) = nothing
+merge_cb(::Nothing, x) = merge_cb(x, nothing)
+merge_cb(x, ::Nothing) = x
+merge_cb(x, y) = CallbackSet(x, y)
+
+function process_events(sys; callback = nothing, has_difference = false, kwargs...)
+    if has_continuous_events(sys)
+        contin_cb = generate_rootfinding_callback(sys; kwargs...)
+    else
+        contin_cb = nothing
+    end
+    if has_discrete_events(sys)
+        discrete_cb = generate_discrete_callbacks(sys; kwargs...)
+    else
+        discrete_cb = nothing
+    end
+    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
+
+    cb = merge_cb(contin_cb, discrete_cb)
+    cb = merge_cb(cb, difference_cb)
+    merge_cb(cb, callback)
+end
