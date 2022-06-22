@@ -1,7 +1,6 @@
 using LinearAlgebra
 
-using ModelingToolkit: isdifferenceeq, has_continuous_events, generate_rootfinding_callback,
-                       generate_difference_cb, merge_cb
+using ModelingToolkit: isdifferenceeq, has_continuous_events, process_events
 
 const MAX_INLINE_NLSOLVE_SIZE = 8
 

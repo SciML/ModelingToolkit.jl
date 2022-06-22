@@ -317,7 +317,5 @@ function process_events(sys; callback = nothing, has_difference = false, kwargs.
     end
     difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
 
-    cb = merge_cb(contin_cb, discrete_cb)
-    cb = merge_cb(cb, difference_cb)
-    merge_cb(cb, callback)
+    foldl(merge_cb, (contin_cb, discrete_cb, difference_cb, callback))
 end
