@@ -151,6 +151,12 @@ function add_integrator_header(out=:u)
                  expr.body)
 end
 
+function condition_header()
+    integrator = gensym(:MTKIntegrator)
+    expr -> Func([expr.args[1], expr.args[2],
+                  DestructuredArgs(expr.args[3:end], integrator, inds = [:p])], [], expr.body)
+end
+
 """
     compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps; expression, kwargs...)
 
@@ -168,7 +174,7 @@ function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
     p = map(x -> time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
     condit = condition(cb)
-    build_function(condit, u, p, t; expression, kwargs...)
+    build_function(condit, u, t, p; expression, wrap_code = condition_header(), kwargs...)
 end
 
 function compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
@@ -199,7 +205,6 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         end
     else
         rhss = map(x -> x.rhs, eqs)
-
         outvar = :u
         if outputidxs === nothing
             lhss = map(x -> x.lhs, eqs)
@@ -332,5 +337,10 @@ function process_events(sys; callback = nothing, has_difference = false, kwargs.
     end
     difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
 
-    foldl(merge_cb, (contin_cb, discrete_cb, difference_cb, callback))
+    cb = CallbackSet(contin_cb, difference_cb, callback, discrete_cb...)
+    # cb = merge_cb(contin_cb, discrete_cb...)
+    # cb = merge_cb(cb, difference_cb)
+    # cb = merge_cb(cb, callback)
+    # @show typeof(cbs),cbs
+    cb
 end
