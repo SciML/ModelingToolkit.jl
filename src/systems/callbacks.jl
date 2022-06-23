@@ -123,9 +123,10 @@ function namespace_equation(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCa
                              namespace_equation.(affect_equations(cb), Ref(s)))
 end
 
+SymbolicDiscreteCallbacks(cb::Pair) = SymbolicDiscreteCallback[SymbolicDiscreteCallback(cb)]
+SymbolicDiscreteCallbacks(cbs::Vector) = SymbolicDiscreteCallback.(cbs)
 SymbolicDiscreteCallbacks(cb::SymbolicDiscreteCallback) = [cb]
 SymbolicDiscreteCallbacks(cbs::Vector{<:SymbolicDiscreteCallback}) = cbs
-SymbolicDiscreteCallbacks(cbs::Vector) = SymbolicDiscreteCallback.(cbs)
 SymbolicDiscreteCallbacks(::Nothing) = SymbolicDiscreteCallback[]
 
 function discrete_events(sys::AbstractSystem)
@@ -135,19 +136,18 @@ function discrete_events(sys::AbstractSystem)
            reduce(vcat,
                   (map(o -> namespace_equation(o, s), discrete_events(s)) for s in systems),
                   init = SymbolicDiscreteCallback[])]
-    filter(!isempty, cbs)
+    cbs
 end
-
 
 ################################# compilation functions ####################################
 
 # handles ensuring that affect! functions work with integrator arguments
-function add_integrator_header()
+function add_integrator_header(out=:u)
     integrator = gensym(:MTKIntegrator)
 
     expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
                  expr.body),
-    expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :u, :p, :t])], [],
+    expr -> Func([DestructuredArgs(expr.args, integrator, inds = [out, :u, :p, :t])], [],
                  expr.body)
 end
 
@@ -185,7 +185,7 @@ affect. The generated function has the signature `affect!(integrator)`.
 Notes
 - `expression = Val{true}`, causes the generated function to be returned as an expression.
   If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
-- `outputidxs`, a vector of indices of the output variables.
+- `outputidxs`, a vector of indices of the states that correspond to outputs.
 - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothing,
@@ -200,13 +200,24 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
     else
         rhss = map(x -> x.rhs, eqs)
 
+        outvar = :u
         if outputidxs === nothing
             lhss = map(x -> x.lhs, eqs)
             update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're chaning
             length(update_vars) == length(unique(update_vars)) == length(eqs) ||
                 error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
-            stateind(sym) = findfirst(isequal(sym), dvs)
-            update_inds = stateind.(update_vars)
+            alleq = all(isequal(isparameter(first(update_vars))),
+                        Iterators.map(isparameter, update_vars))
+            if !isparameter(first(lhss)) && alleq
+                stateind(sym) = findfirst(isequal(sym), dvs)
+                update_inds = stateind.(update_vars)
+            elseif isparameter(first(lhss)) && alleq
+                psind(sym) = findfirst(isequal(sym), ps)
+                update_inds = psind.(update_vars)
+                outvar = :p
+            else
+                error("Error, building an affect function for a callback that wants to modify both parameters and states. This is not currently allowed in one individual callback.")
+            end
         else
             update_inds = outputidxs
         end
@@ -215,7 +226,7 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         p = map(x -> time_varying_as_func(value(x), sys), ps)
         t = get_iv(sys)
         rf_oop, rf_ip = build_function(rhss, u, p, t; expression = expression,
-                                       wrap_code = add_integrator_header(),
+                                       wrap_code = add_integrator_header(outvar),
                                        outputidxs = update_inds,
                                        kwargs...)
         rf_ip
