@@ -179,10 +179,12 @@ function tearing_reassemble(state::TearingState, var_eq_matching, var2var_t = va
     # substitution utilities
     idx_buffer = Int[]
     sub_callback! = let eqs = neweqs, fullvars = fullvars
-        (ieq, s) -> eqs[ieq] = substitute(eqs[ieq], fullvars[s[1]] => fullvars[s[2]])
+        (ieq, s) -> begin
+            neweq = substitute(eqs[ieq], fullvars[s[1]] => fullvars[s[2]])
+            @info "substitute" eqs[ieq] neweq
+            eqs[ieq] = neweq
+        end
     end
-
-    @info "" neweqs
 
     # Terminology and Definition:
     #
@@ -201,33 +203,61 @@ function tearing_reassemble(state::TearingState, var_eq_matching, var2var_t = va
     # Step 1:
     # Replace derivatives of non-selected states by dummy derivatives
 
-    remove_eqs = Int[]
+    null_eq = 0 ~ 0
+    @info "Before" neweqs
+    @info "" fullvars
+    removed_eqs = Int[]
+    removed_vars = Int[]
     diff_to_var = invview(var_to_diff)
+    var2idx = Dict(reverse(en) for en in enumerate(fullvars))
     for var in 1:length(fullvars)
         dv = var_to_diff[var]
         dv === nothing && continue
         if var_eq_matching[var] !== SelectedState()
+            @warn "processing" fullvars[dv]
             dd = fullvars[dv]
             # convert `D(x)` to `x_t` (don't rely on the specific spelling of
             # the name)
             eq_var_t = var2var_t[dv]
+            idx = findfirst(x->x !== nothing && x[2] == var, var2var_t)
+            has_dummy_var = idx !== nothing && var_to_diff[var2var_t[idx][2]] !== nothing && var_eq_matching[idx] !== SelectedState()
             if eq_var_t !== nothing # if we already have `v_t`
                 eq_idx, v_t = eq_var_t
-                push!(remove_eqs, eq_idx)
-                @show v_t, fullvars[dv], fullvars[v_t]
+                push!(removed_eqs, eq_idx)
+                push!(removed_vars, dv)
                 substitute_vars!(graph, ((dv => v_t),), idx_buffer, sub_callback!; exclude = eq_idx)
-            else
-                v_t = diff2term(unwrap(dd))
-                for eq in 𝑑neighbors(graph, dv)
-                    neweqs[eq] = substitute(neweqs[eq], fullvars[dv] => v_t)
+                substitute_vars!(solvable_graph, ((dv => v_t),), idx_buffer; exclude = eq_idx)
+                for g in (graph, solvable_graph)
+                    vs = 𝑠neighbors(g, eq_idx)
+                    resize!(idx_buffer, length(vs))
+                    for v in copyto!(idx_buffer, vs)
+                        rem_edge!(g, eq_idx, v)
+                    end
                 end
-                fullvars[dv] = v_t
+                neweqs[eq_idx] = null_eq # TODO: we don't have to do this
+            #elseif has_dummy_var
+            #    #eq_idx, v_t = eq_var_t
+            #    #push!(removed_eqs, eq_idx)
+            #    push!(removed_vars, dv)
+            #    substitute_vars!(graph, ((dv => idx),), idx_buffer, sub_callback!)
+            else
+                # TODO: figure this out structurally
+                v_t = diff2term(unwrap(dd))
+                v_t_idx = get(var2idx, v_t, nothing)
+                if v_t_idx isa Int
+                    substitute_vars!(graph, ((dv => v_t_idx),), idx_buffer, sub_callback!)
+                else
+                    for eq in 𝑑neighbors(graph, dv)
+                        neweqs[eq] = substitute(neweqs[eq], fullvars[dv] => v_t)
+                    end
+                    fullvars[dv] = v_t
+                end
             end
             # update the structural information
             diff_to_var[dv] = nothing
         end
     end
-    @info "" fullvars
+    @info "" fullvars fullvars[removed_vars]
 
     # `SelectedState` information is no longer needed past here. State selection
     # is done. All non-differentiated variables are algebraic variables, and all
@@ -290,9 +320,14 @@ function tearing_reassemble(state::TearingState, var_eq_matching, var2var_t = va
     # As a final note, in all the above cases where we need to introduce new
     # variables and equations, don't add them when they already exist.
 
+    @info "After dummy der" neweqs
     var_to_idx = Dict{Any, Int}(reverse(en) for en in enumerate(fullvars))
-    iv = get_iv(state.sys)
-    D = Differential(iv)
+    if ModelingToolkit.has_iv(state.sys)
+        iv = get_iv(state.sys)
+        D = Differential(iv)
+    else
+        iv = D = nothing
+    end
     nvars = ndsts(graph)
     processed = falses(nvars)
     subinfo = NTuple{3, Int}[]
@@ -426,8 +461,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching, var2var_t = va
         empty!(subs)
     end
 
-    @info "" neweqs
-
+    @info "After implicit to semi-implicit" neweqs
     # Rewrite remaining equations in terms of solved variables
     function to_mass_matrix_form(ieq)
         eq = neweqs[ieq]
@@ -467,8 +501,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching, var2var_t = va
     diffeq_idxs = BitSet()
     final_eqs = Equation[]
     var_rename = zeros(Int, length(var_eq_matching))
-    removed_eqs = Int[]
-    removed_vars = Int[]
     subeqs = Equation[]
     idx = 0
     # Solve solvable equations
@@ -505,9 +537,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching, var2var_t = va
             var_rename[iv] = (idx += 1)
         end
     end
-    @info "" fullvars
-    @show fullvars[solved_variables]
-    @show fullvars[removed_vars]
 
     if isempty(solved_equations)
         deps = Vector{Int}[]
@@ -529,7 +558,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching, var2var_t = va
     for ieq in 1:length(neweqs)
         (ieq in diffeq_idxs || ieq in solved_eq_set) && continue
         maybe_eq = to_mass_matrix_form(ieq)
-        @show maybe_eq, neweqs[ieq]
         maybe_eq === nothing || push!(final_eqs, maybe_eq)
     end
     neweqs = final_eqs
@@ -542,7 +570,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching, var2var_t = va
 
     # Update system
     solved_variables_set = BitSet(solved_variables)
-    active_vars = setdiff(BitSet(1:length(fullvars)), solved_variables_set)
+    active_vars = setdiff!(setdiff(BitSet(1:length(fullvars)), solved_variables_set), removed_vars)
     new_var_to_diff = complete(DiffGraph(length(active_vars)))
     idx = 0
     for (v, d) in enumerate(var_to_diff)

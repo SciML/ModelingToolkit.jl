@@ -237,26 +237,32 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     end
 
     dummy_derivatives_set = BitSet(dummy_derivatives)
-    # We can eliminate variables that are never differentiated or is a dummy
-    # derivative or its derivative is a dummy derivative.
-    can_eliminate = let var_eq_matching = var_eq_matching, var_to_diff = var_to_diff,
-        diff_to_var = diff_to_var, dummy_derivatives_set = dummy_derivatives_set
+    # We can eliminate variables that are not a selected state (differential
+    # variables). Selected states are differentiated variables that are not
+    # dummy derivatives.
+    can_eliminate = let var_to_diff = var_to_diff, dummy_derivatives_set = dummy_derivatives_set
 
-        v -> (var_to_diff[v] === nothing && diff_to_var[v] === nothing) ||
-            (var_to_diff[v] in dummy_derivatives_set || v in dummy_derivatives_set)
+        v -> begin
+            dv = var_to_diff[v]
+            dv === nothing || dv in dummy_derivatives_set
+        end
     end
-    should_consider = let can_eliminate = can_eliminate, graph = graph
-        e -> all(can_eliminate, 𝑠neighbors(graph, e))
+
+    # We don't want tearing to give us `y_t ~ D(y)`, so we skip equations with
+    # actually differentiated variables.
+    isdiffed = let diff_to_var = diff_to_var, dummy_derivatives_set = dummy_derivatives_set
+        v -> diff_to_var[v] !== nothing && !(v in dummy_derivatives_set)
+    end
+    should_consider = let graph = graph, isdiffed = isdiffed
+        eq -> !any(isdiffed, 𝑠neighbors(graph, eq))
     end
 
     var_eq_matching = tear_graph_modia(structure, Union{Unassigned, SelectedState};
                                        varfilter = can_eliminate,
                                        eqfilter = should_consider)
     for v in eachindex(var_eq_matching)
-        dv = var_to_diff[v]
-        if dv !== nothing && !(dv in dummy_derivatives_set)
-            var_eq_matching[v] = SelectedState()
-        end
+        can_eliminate(v) && continue
+        var_eq_matching[v] = SelectedState()
     end
 
     return var_eq_matching
