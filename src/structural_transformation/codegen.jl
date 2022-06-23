@@ -1,6 +1,6 @@
 using LinearAlgebra
 
-using ModelingToolkit: isdifferenceeq, has_continuous_events, process_events
+using ModelingToolkit: isdifferenceeq, process_events
 
 const MAX_INLINE_NLSOLVE_SIZE = 8
 

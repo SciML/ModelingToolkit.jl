@@ -102,6 +102,12 @@ struct ODESystem <: AbstractODESystem
     """
     continuous_events::Vector{SymbolicContinuousCallback}
     """
+    discrete_events: A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
+    analog to `SciMLBase.DiscreteCallback` that exectues an affect when a given condition is
+    true at the end of an integration step.
+    """
+    discrete_events::Vector{SymbolicDiscreteCallback}
+    """
     tearing_state: cache for intermediate tearing state
     """
     tearing_state::Any
@@ -112,19 +118,20 @@ struct ODESystem <: AbstractODESystem
 
     function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad,
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
-                       torn_matching, connector_type, connections, preface, events,
-                       tearing_state = nothing, substitutions = nothing;
+                       torn_matching, connector_type, connections, preface, cevents,
+                       devents, tearing_state = nothing, substitutions = nothing;
                        checks::Bool = true)
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             check_equations(deqs, iv)
-            check_equations(equations(events), iv)
+            check_equations(equations(cevents), iv)
             all_dimensionless([dvs; ps; iv]) || check_units(deqs)
         end
         new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
-            connector_type, connections, preface, events, tearing_state, substitutions)
+            connector_type, connections, preface, cevents, devents, tearing_state,
+            substitutions)
     end
 end
 
@@ -139,6 +146,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    connector_type = nothing,
                    preface = nothing,
                    continuous_events = nothing,
+                   discrete_events = nothing,
                    checks = true)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
@@ -172,9 +180,11 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         throw(ArgumentError("System names must be unique."))
     end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
+    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
     ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
-              connector_type, nothing, preface, cont_callbacks, checks = checks)
+              connector_type, nothing, preface, cont_callbacks, disc_callbacks,
+              checks = checks)
 end
 
 function ODESystem(eqs, iv = nothing; kwargs...)
@@ -244,6 +254,7 @@ function flatten(sys::ODESystem, noeqs = false)
                          parameters(sys),
                          observed = observed(sys),
                          continuous_events = continuous_events(sys),
+                         discrete_events = discrete_events(sys),
                          defaults = defaults(sys),
                          name = nameof(sys),
                          checks = false)

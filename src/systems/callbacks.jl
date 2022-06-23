@@ -5,8 +5,7 @@ has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
 
 has_discrete_events(sys::AbstractSystem) = isdefined(sys, :discrete_events)
 function get_discrete_events(sys::AbstractSystem)
-    has_discrete_events(sys) ||
-        error("Systems of type $(typeof(sys)) do not support discrete events.")
+    has_discrete_events(sys) || return SymbolicDiscreteCallback[]
     getfield(sys, :discrete_events)
 end
 
@@ -62,10 +61,10 @@ affect_equations(cb::SymbolicContinuousCallback) = cb.affect
 function affect_equations(cbs::Vector{SymbolicContinuousCallback})
     reduce(vcat, [affect_equations(cb) for cb in cbs])
 end
-namespace_equation(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback = SymbolicContinuousCallback(namespace_equation.(equations(cb),
-                                                                                                                                   (s,)),
-                                                                                                               namespace_equation.(affect_equations(cb),
-                                                                                                                                   (s,)))
+function namespace_equation(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback
+    SymbolicContinuousCallback(namespace_equation.(equations(cb), (s,)),
+                               namespace_equation.(affect_equations(cb), (s,)))
+end
 
 function continuous_events(sys::AbstractSystem)
     obs = get_continuous_events(sys)
@@ -123,6 +122,11 @@ function namespace_equation(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCa
     SymbolicDiscreteCallback(namespace_expr(condition(cb), s),
                              namespace_equation.(affect_equations(cb), Ref(s)))
 end
+
+SymbolicDiscreteCallbacks(cb::SymbolicDiscreteCallback) = [cb]
+SymbolicDiscreteCallbacks(cbs::Vector{<:SymbolicDiscreteCallback}) = cbs
+SymbolicDiscreteCallbacks(cbs::Vector) = SymbolicDiscreteCallback.(cbs)
+SymbolicDiscreteCallbacks(::Nothing) = SymbolicDiscreteCallback[]
 
 function discrete_events(sys::AbstractSystem)
     obs = get_discrete_events(sys)
