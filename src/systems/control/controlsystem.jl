@@ -223,6 +223,6 @@ function runge_kutta_discretize(sys::ControlSystem, dt, tspan;
                       reduce(vcat, reduce(vcat, control_timeseries)))
 
     OptimizationSystem(reduce(+, losses, init = 0), opt_states, ps,
-                       equality_constraints = equalities, name = nameof(sys),
+                       constraints = equalities, name = nameof(sys),
                        checks = false)
 end

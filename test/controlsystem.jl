@@ -16,6 +16,7 @@ sys = runge_kutta_discretize(sys, dt, tspan)
 u0 = rand(length(states(sys))) # guess for the state values
 prob = OptimizationProblem(sys, u0, [0.1, 0.1], grad = true)
 sol = solve(prob, BFGS())
+@test prob.f(sol.minimizer, prob.p) < prob.f(u0, prob.p)
 
 # issue #819
 @testset "Combined system name collisions" begin
