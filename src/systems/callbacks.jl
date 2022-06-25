@@ -99,7 +99,7 @@ Notes
 - `expression = Val{true}`, causes the generated function to be returned as an expression.
   If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
 - `outputidxs`, a vector of indices of the output variables which should correspond to
-  `states(sys)`. If provided checks that the LHS of affect equations are variables are
+  `states(sys)`. If provided, checks that the LHS of affect equations are variables are
   dropped, i.e. it is assumed these indices are correct and affect equations are
   well-formed.
 - `kwargs` are passed through to `Symbolics.build_function`.
