@@ -98,12 +98,14 @@ affect. The generated function has the signature `affect!(integrator)`.
 Notes
 - `expression = Val{true}`, causes the generated function to be returned as an expression.
   If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
-- `outputidxs`, a vector of indices of the output variables.
+- `outputidxs`, a vector of indices of the output variables which should correspond to
+  `states(sys)`. If provided checks that the LHS of affect equations are variables are
+  dropped, i.e. it is assumed these indices are correct and affect equations are
+  well-formed.
 - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothing,
-                        expression = Val{true},
-                        kwargs...)
+                        expression = Val{true}, kwargs...)
     if isempty(eqs)
         if expression == Val{true}
             return :((args...) -> ())
@@ -115,6 +117,8 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
 
         if outputidxs === nothing
             lhss = map(x -> x.lhs, eqs)
+            all(isvariable, lhss) ||
+                error("Non-variable symbolic expression found on the left hand side of an affect equation. Such equations must be of the form variable ~ symbolic expression for the new value of the variable.")
             update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're chaning
             length(update_vars) == length(unique(update_vars)) == length(eqs) ||
                 error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
