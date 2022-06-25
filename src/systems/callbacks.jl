@@ -105,7 +105,7 @@ Notes
 - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothing,
-                        expression = Val{true}, kwargs...)
+                        expression = Val{true}, checkvars = true, kwargs...)
     if isempty(eqs)
         if expression == Val{true}
             return :((args...) -> ())
@@ -128,8 +128,13 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
             update_inds = outputidxs
         end
 
-        u = map(x -> time_varying_as_func(value(x), sys), dvs)
-        p = map(x -> time_varying_as_func(value(x), sys), ps)
+        if checkvars
+            u = map(x -> time_varying_as_func(value(x), sys), dvs)
+            p = map(x -> time_varying_as_func(value(x), sys), ps)
+        else
+            u = dvs
+            p = ps
+        end
         t = get_iv(sys)
         rf_oop, rf_ip = build_function(rhss, u, p, t; expression = expression,
                                        wrap_code = add_integrator_header(),
