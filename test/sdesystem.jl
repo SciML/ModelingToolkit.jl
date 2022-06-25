@@ -1,5 +1,5 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
-using StochasticDiffEq, SparseArrays
+using StochasticDiffEq, OrdinaryDiffEq, SparseArrays
 using Random, Test
 
 # Define some variables
