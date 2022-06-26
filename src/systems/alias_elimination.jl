@@ -217,10 +217,11 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         is_linear_equations[e] = true
     end
 
-    # For now, onlt consider variables linear that are not differentiated.
+    # For now, only consider variables linear that are not differentiated.
     # We could potentially apply the same logic to variables whose derivative
     # is also linear, but that's a TODO.
-    is_linear_variables = isnothing.(var_to_diff)
+    diff_to_var = invview(var_to_diff)
+    is_linear_variables = .&(isnothing.(var_to_diff), isnothing.(diff_to_var))
     for i in 𝑠vertices(graph)
         is_linear_equations[i] && continue
         for j in 𝑠neighbors(graph, i)
