@@ -267,5 +267,5 @@ eqs = [D(x) ~ 0]
 trivialconst = ODESystem(eqs, t, name = :trivial0)
 let trivialconst = alias_elimination(trivialconst)
     # Test that alias elimination doesn't eliminate a D(x) that is needed.
-    @test length(equations(trivial0)) == length(states(trivial0)) == 1
+    @test length(equations(trivialconst)) == length(states(trivialconst)) == 1
 end
