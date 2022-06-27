@@ -515,7 +515,6 @@ noiseeqs = [0.1 * x]
     @test solode[weight] == 10 * solode[x]
 end
 
-
 @testset "Measure Transformation for variance reduction" begin
     @parameters α β
     @variables t x(t) y(t) z(t)
@@ -569,8 +568,8 @@ end
 
     ensemble_probmod = EnsembleProblem(probmod;
                                        output_func = (sol, i) -> (g(sol[x, end]) *
-                                                                  sol[demod.θ, end] /
-                                                                  sol[demod.θ, 1], false),
+                                                                  sol[demod.weight, end],
+                                                                  false),
                                        prob_func = prob_func)
 
     simmod = solve(ensemble_probmod, EM(), dt = dt, trajectories = numtraj)
