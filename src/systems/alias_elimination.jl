@@ -19,7 +19,8 @@ function aag_bareiss(sys::AbstractSystem)
     return aag_bareiss!(state.structure.graph, complete(state.structure.var_to_diff), mm)
 end
 
-function walk_to_root(ag, v::Integer)
+function walk_to_root(ag, var_to_diff, v::Integer)
+    diff_to_var = invview(var_to_diff)
     has_branch = true
     lowest_v = v
     while has_branch
@@ -41,9 +42,13 @@ function walk_to_root(ag, v::Integer)
 end
 
 function visit_differential_aliases!(ag, level_to_var, processed, invag, var_to_diff, v, level=0)
+    # FIXME: we need to find the alias coefficient and propagate it back
+    processed[v] && return nothing
     for n in neighbors(invag, v)
         if length(level_to_var) <= level + 1
-            ag[n] = level_to_var[level + 1]
+            root_var = level_to_var[level + 1]
+            ag[n] == root_var && continue
+            ag[n] = ag[n][1] => root_var
         else
             @assert length(level_to_var) == level + 2
             push!(level_to_var, n)
@@ -51,6 +56,7 @@ function visit_differential_aliases!(ag, level_to_var, processed, invag, var_to_
         # Note that we don't need to update `invag`
         processed[n] = true
     end
+    processed[v] = true
     if (dv = var_to_diff[v]) !== nothing
         visit_differential_aliases!(ag, level_to_var, processed, invag, var_to_diff, dv, level + 1)
     end
@@ -62,12 +68,11 @@ end
 
 function alias_elimination(sys)
     state = TearingState(sys; quick_cancel = true)
-    Main._state[] = state
     ag, mm = alias_eliminate_graph!(state)
     ag === nothing && return sys
 
     fullvars = state.fullvars
-    graph = state.structure.graph
+    @unpack var_to_diff, graph = state.structure
 
     # After `alias_eliminate_graph!`, `var_to_diff` and `ag` form a tree
     # structure like the following:
@@ -98,18 +103,16 @@ function alias_elimination(sys)
         iszero(coeff) && continue
         add_edge!(invag, alias, v)
     end
-    processed = falses(length)
-    for (v, dv) in enuemrate(var_to_diff)
+    processed = falses(length(var_to_diff))
+    for (v, dv) in enumerate(var_to_diff)
         processed[v] && continue
-        (dv === nothing && iv === diff_to_var[v]) && continue
+        (dv === nothing && diff_to_var[v] === nothing) && continue
 
-        r = walk_to_root(ag, v)
-        processed[r] = true
+        r = walk_to_root(ag, var_to_diff, v)
         level_to_var = Int[r]
         v′′::Union{Nothing, Int} = v′::Int = r
         while (v′′ = var_to_diff[v′]) !== nothing
             v′ = v′′
-            processed[v′] = true
             push!(level_to_var, v′)
         end
         nlevels = length(level_to_var)
@@ -127,7 +130,6 @@ function alias_elimination(sys)
     for (v, (coeff, alias)) in pairs(ag)
         subs[fullvars[v]] = iszero(coeff) ? 0 : coeff * fullvars[alias]
     end
-    @info "" subs
 
     dels = Set{Int}()
     eqs = collect(equations(state))
@@ -153,17 +155,7 @@ function alias_elimination(sys)
 
     newstates = []
     for j in eachindex(fullvars)
-        if j in keys(ag)
-            val, var = ag[j]
-            iszero(var) && continue
-            # Put back equations for alias eliminated dervars
-            if isdervar(state.structure, var) #&&
-               #!(invview(state.structure.var_to_diff)[var] in keys(ag))
-                push!(eqs, subs[fullvars[j]] ~ fullvars[j])
-            end
-        else
-            isdervar(state.structure, j) || push!(newstates, fullvars[j])
-        end
+        isdervar(state.structure, j) || push!(newstates, fullvars[j])
     end
 
     sys = state.sys
@@ -310,7 +302,6 @@ count_nonzeros(a::SparseVector) = nnz(a)
 
 function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     mm = copy(mm_orig)
-    @info "" mm
     is_linear_equations = falses(size(AsSubMatrix(mm_orig), 1))
     for e in mm_orig.nzrows
         is_linear_equations[e] = true
@@ -392,14 +383,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # completely from the coefficient matrix. These are technically singularities in
     # the matrix, but assigning them to 0 is a feasible assignment and works well in
     # practice.
-    for v in solvable_variables
-        @info "solvable" Main._state[].fullvars[v]
-    end
-    for v in @view pivots[1:rank1]
-        @info "rank1 vars" Main._state[].fullvars[v]
-    end
     for v in setdiff(solvable_variables, @view pivots[1:rank1])
-        @info "zeroed vars" Main._state[].fullvars[v]
         ag[v] = 0
     end
 
@@ -409,8 +393,6 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     diff_to_var = invview(var_to_diff)
     function lss!(ei::Integer)
         vi = pivots[ei]
-        may_eliminate = true
-        @info "" mm[ei, :] equations(Main._state[])[ei] Main._state[].fullvars
         locally_structure_simplify!((@view mm[ei, :]), vi, ag, var_to_diff)
     end
 
@@ -454,7 +436,6 @@ function exactdiv(a::Integer, b)
 end
 
 function locally_structure_simplify!(adj_row, pivot_var, ag, var_to_diff)
-    @show "hi"
     pivot_val = adj_row[pivot_var]
     iszero(pivot_val) && return false
 
@@ -528,7 +509,6 @@ function locally_structure_simplify!(adj_row, pivot_var, ag, var_to_diff)
             pivot_val, alias_val = alias_val, pivot_val
         end
 
-        @info "" Main._state[].fullvars[[alias_var, pivot_var]]
         # `p` is the pivot variable, `a` is the alias variable, `v` and `c` are
         # their coefficients.
         # v * p + c * a = 0
@@ -542,39 +522,7 @@ function locally_structure_simplify!(adj_row, pivot_var, ag, var_to_diff)
         end
     end
 
-    fullvars = Main._state[].fullvars
-    for (e, (c, v)) in pairs(ag)
-        vv = iszero(c) ? 0 : fullvars[v]
-        @info "" fullvars[e], vv
-    end
-    #=
-    if alias_candidate !== 0
-        alias_candidate::Pair
-        # Verify that the derivative depth of the variable is at least
-        # as deep as that of the alias, otherwise, we can't eliminate.
-        pivot_var = pivot_col
-        alias_var = alias_candidate[2]
-        while (pivot_var = diff_to_var[pivot_col]) !== nothing
-            alias_var = diff_to_var[alias_var]
-            alias_var === nothing && return false
-        end
-        d, r = divrem(alias_candidate[1], pivot_val)
-        if r == 0 && (d == 1 || d == -1)
-            alias_candidate = -d => alias_candidate[2]
-        else
-            return false
-        end
-    end
-    @info "" Main._state[].fullvars[[pivot_col]]
-    diff_alias_candidate(ac) = ac === 0 ? 0 : ac[1] => diff_to_var[ac[2]]
-    while true
-        @assert !haskey(ag, pivot_col)
-        ag[pivot_col] = alias_candidate
-        pivot_col = diff_to_var[pivot_col]
-        pivot_col === nothing && break
-        alias_candidate = diff_alias_candidate(alias_candidate)
-    end
-    =#
+    ag[pivot_var] = alias_candidate
     zero!(adj_row)
     return true
 end
