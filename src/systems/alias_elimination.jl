@@ -21,24 +21,26 @@ end
 
 function walk_to_root(ag, var_to_diff, v::Integer)
     diff_to_var = invview(var_to_diff)
-    has_branch = true
-    lowest_v = v
-    while has_branch
-        v′::Union{Nothing, Int} = v
-        while (v′ = diff_to_var[v]) !== nothing
-            v = v′
-        end
-        # `v` is now not differentiated in the current chain.
-        # Now we visit the current chain.
-        lowest_v = v
-        while (v′ = var_to_diff[v]) !== nothing
-            v = v′
-            next_v = get(ag, v, nothing)
-            next_v === nothing || (v = next_v; continue)
-        end
-        has_branch = false
+
+    v′::Union{Nothing, Int} = v
+    @label HAS_BRANCH
+    while (v′ = diff_to_var[v]) !== nothing
+        v = v′
     end
-    lowest_v
+    # `v` is now not differentiated in the current chain.
+    # Now we recursively walk to root variable's chain.
+    while true
+        next_v = get(ag, v, nothing)
+        next_v === nothing || (v = next_v[2]; @goto HAS_BRANCH)
+        (v′ = var_to_diff[v]) === nothing && break
+        v = v′
+    end
+
+    # Descend to the root from the chain
+    while (v′ = diff_to_var[v]) !== nothing
+        v = v′
+    end
+    v
 end
 
 function visit_differential_aliases!(ag, level_to_var, processed, invag, var_to_diff, v, level=0)
@@ -168,16 +170,17 @@ function alias_elimination(sys)
                 while (v = var_to_diff[v]) !== nothing
                     if !(v in keys(ag))
                         has_higher_order = true
+                        break
                     end
                 end
                 if !has_higher_order
                     rhs = fullvars[j]
                     push!(eqs, subs[fullvars[j]] ~ rhs)
-                    push!(newstates, rhs)
+                    diff_to_var[j] === nothing && push!(newstates, rhs)
                 end
             end
         else
-            isdervar(state.structure, j) || push!(newstates, fullvars[j])
+            diff_to_var[j] === nothing && push!(newstates, fullvars[j])
         end
     end
 
