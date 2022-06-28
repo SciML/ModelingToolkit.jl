@@ -17,7 +17,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     params = if has_p
         _params = define_params(p)
         p isa Number ? _params[1] :
-        (p isa Tuple || p isa NamedTuple ? _params :
+        (p isa Tuple || p isa NamedTuple || p isa AbstractDict ? _params :
          ArrayInterfaceCore.restructure(p, _params))
     else
         []
@@ -44,6 +44,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
 
     if DiffEqBase.isinplace(prob)
         rhs = ArrayInterfaceCore.restructure(prob.u0, similar(vars, Num))
+        fill!(rhs, 0)
         prob.f(rhs, vars, params, t)
     else
         rhs = prob.f(vars, params, t)
@@ -53,6 +54,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
 
     sts = vec(collect(vars))
 
+    params = values(params)
     params = if params isa Number || (params isa Array && ndims(params) == 0)
         [params[1]]
     else
@@ -69,27 +71,31 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     de
 end
 
-_defvaridx(x, i, t) = variable(x, i, T = SymbolicUtils.FnType{Tuple, Real})
-_defvar(x, t) = variable(x, T = SymbolicUtils.FnType{Tuple, Real})
+_defvaridx(x, i) = variable(x, i, T = SymbolicUtils.FnType{Tuple, Real})
+_defvar(x) = variable(x, T = SymbolicUtils.FnType{Tuple, Real})
 
 function define_vars(u, t)
-    _vars = [_defvaridx(:x, i, t)(t) for i in eachindex(u)]
+    [_defvaridx(:x, i)(t) for i in eachindex(u)]
 end
 
 function define_vars(u::Union{SLArray, LArray}, t)
-    _vars = [_defvar(x, t)(t) for x in LabelledArrays.symnames(typeof(u))]
+    [_defvar(x)(t) for x in LabelledArrays.symnames(typeof(u))]
 end
 
 function define_vars(u::Tuple, t)
-    _vars = tuple((_defvaridx(:x, i, t)(ModelingToolkit.value(t)) for i in eachindex(u))...)
+    tuple((_defvaridx(:x, i)(ModelingToolkit.value(t)) for i in eachindex(u))...)
 end
 
 function define_vars(u::NamedTuple, t)
-    _vars = NamedTuple(x => _defvar(x, t)(ModelingToolkit.value(t)) for x in keys(u))
+    NamedTuple(x => _defvar(x)(ModelingToolkit.value(t)) for x in keys(u))
 end
 
 function define_params(p)
     [toparam(variable(:α, i)) for i in eachindex(p)]
+end
+
+function define_params(p::AbstractDict)
+    Dict(k => toparam(variable(:α, i)) for (i, k) in zip(1:length(p), keys(p)))
 end
 
 function define_params(p::Union{SLArray, LArray})
