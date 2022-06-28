@@ -263,14 +263,16 @@ function Base.getindex(ag::AliasGraph, i::Integer)
     r = ag.aliasto[i]
     r === nothing && throw(KeyError(i))
     coeff, var = (sign(r), abs(r))
+    nc = coeff
+    av = var
     if var in keys(ag)
         # Amortized lookup. Check if since we last looked this up, our alias was
         # itself aliased. If so, just adjust the alias table.
         ac, av = ag[var]
         nc = ac * coeff
-        ag.aliasto[var] = nc > 0 ? av : -av
+        ag.aliasto[i] = nc > 0 ? av : -av
     end
-    return (coeff, var)
+    return (nc, av)
 end
 
 function Base.iterate(ag::AliasGraph, state...)
