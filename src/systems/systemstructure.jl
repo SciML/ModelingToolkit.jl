@@ -119,8 +119,8 @@ function Base.setindex!(dg::DiffGraph, val::Union{Integer, Nothing}, var::Intege
             dg.diff_to_primal[old_pd] = nothing
         end
         if val !== nothing
-            old_dp = dg.diff_to_primal[val]
-            old_dp === nothing || error("Variable already assigned.")
+            #old_dp = dg.diff_to_primal[val]
+            #old_dp === nothing || error("Variable already assigned.")
             dg.diff_to_primal[val] = var
         end
     end

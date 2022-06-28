@@ -42,19 +42,22 @@ function walk_to_root(ag, var_to_diff, v::Integer)
 end
 
 function visit_differential_aliases!(ag, level_to_var, processed, invag, var_to_diff, v, level=0)
-    # FIXME: we need to find the alias coefficient and propagate it back
     processed[v] && return nothing
     for n in neighbors(invag, v)
-        if length(level_to_var) <= level + 1
-            root_var = level_to_var[level + 1]
-            ag[n] == root_var && continue
-            ag[n] = ag[n][1] => root_var
-        else
-            @assert length(level_to_var) == level + 2
-            push!(level_to_var, n)
+        # TODO: we currently only handle `coeff == 1`
+        if isone(ag[n][1])
+            visit_differential_aliases!(ag, level_to_var, processed, invag, var_to_diff, n, level)
         end
-        # Note that we don't need to update `invag`
-        processed[n] = true
+    end
+    # Note that we don't need to update `invag`
+    if 1 <= level + 1 <= length(level_to_var)
+        root_var = level_to_var[level + 1]
+        if v != root_var
+            ag[v] = 1 => root_var
+        end
+    else
+        @assert length(level_to_var) == level
+        push!(level_to_var, v)
     end
     processed[v] = true
     if (dv = var_to_diff[v]) !== nothing
@@ -150,12 +153,32 @@ function alias_elimination(sys)
     deleteat!(eqs, dels)
 
     for (ieq, eq) in enumerate(eqs)
-        eqs[ieq] = fixpoint_sub(eq.lhs, subs) ~ fixpoint_sub(eq.rhs, subs)
+        eqs[ieq] = substitute(eq, subs)
     end
 
     newstates = []
-    for j in eachindex(fullvars)
-        isdervar(state.structure, j) || push!(newstates, fullvars[j])
+   for j in eachindex(fullvars)
+        if j in keys(ag)
+            _, var = ag[j]
+            iszero(var) && continue
+            # Put back equations for alias eliminated dervars
+            if isdervar(state.structure, var)
+                has_higher_order = false
+                v = var
+                while (v = var_to_diff[v]) !== nothing
+                    if !(v in keys(ag))
+                        has_higher_order = true
+                    end
+                end
+                if !has_higher_order
+                    rhs = fullvars[j]
+                    push!(eqs, subs[fullvars[j]] ~ rhs)
+                    push!(newstates, rhs)
+                end
+            end
+        else
+            isdervar(state.structure, j) || push!(newstates, fullvars[j])
+        end
     end
 
     sys = state.sys
