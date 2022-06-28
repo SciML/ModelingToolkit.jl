@@ -54,6 +54,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
 
     sts = vec(collect(vars))
 
+    _params = params
     params = values(params)
     params = if params isa Number || (params isa Array && ndims(params) == 0)
         [params[1]]
@@ -61,7 +62,15 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
         vec(collect(params))
     end
     default_u0 = Dict(sts .=> vec(collect(prob.u0)))
-    default_p = has_p ? Dict(params .=> vec(collect(prob.p))) : Dict()
+    default_p = if has_p
+        if prob.p isa AbstractDict
+            Dict(v => prob.p[k] for (k, v) in pairs(_params))
+        else
+            Dict(params .=> vec(collect(prob.p)))
+        end
+    else
+        Dict()
+    end
 
     de = ODESystem(eqs, t, sts, params,
                    defaults = merge(default_u0, default_p);
@@ -95,7 +104,7 @@ function define_params(p)
 end
 
 function define_params(p::AbstractDict)
-    Dict(k => toparam(variable(:α, i)) for (i, k) in zip(1:length(p), keys(p)))
+    OrderedDict(k => toparam(variable(:α, i)) for (i, k) in zip(1:length(p), keys(p)))
 end
 
 function define_params(p::Union{SLArray, LArray})
