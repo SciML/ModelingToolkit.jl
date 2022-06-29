@@ -3,10 +3,69 @@ get_continuous_events(sys::AbstractSystem) = Equation[]
 get_continuous_events(sys::AbstractODESystem) = getfield(sys, :continuous_events)
 has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
 
-has_discrete_events(sys::AbstractSystem) = isdefined(sys, :discrete_events)
+has_discrete_events(sys::AbstractSystem) = isdefined(sys, :discrete_events) && length(sys.discrete_events) > 0
 function get_discrete_events(sys::AbstractSystem)
     has_discrete_events(sys) || return SymbolicDiscreteCallback[]
     getfield(sys, :discrete_events)
+end
+
+struct FunctionalAffect
+    f::Function
+    sts::Vector
+    sts_syms::Vector{Symbol}
+    pars::Vector
+    pars_syms::Vector{Symbol}
+    ctx
+    FunctionalAffect(f, sts, sts_syms, pars, pars_syms, ctx = nothing) = new(f,sts, sts_syms, pars, pars_syms, ctx)
+end
+
+function FunctionalAffect(f, sts, pars, ctx = nothing)
+    # sts & pars contain either pairs: resistor.R => R, or Syms: R
+    vs = [x isa Pair ? x.first : x for x in sts]
+    vs_syms = [x isa Pair ? Symbol(x.second) : getname(x) for x in sts]
+    length(vs_syms) == length(unique(vs_syms)) || error("Variables are not unique.")
+
+    ps = [x isa Pair ? x.first : x for x in pars]
+    ps_syms = [x isa Pair ? Symbol(x.second) : getname(x) for x in pars]
+    length(ps_syms) == length(unique(ps_syms)) || error("Parameters are not unique.")
+    
+    FunctionalAffect(f, vs, vs_syms, ps, ps_syms, ctx)
+end
+
+FunctionalAffect(;f, sts, pars, ctx = nothing) = FunctionalAffect(f, sts, pars, ctx)
+
+func(f::FunctionalAffect) = f.f
+context(a::FunctionalAffect) = a.ctx
+parameters(a::FunctionalAffect) = a.pars
+parameters_syms(a::FunctionalAffect) = a.pars_syms
+states(a::FunctionalAffect) = a.sts
+states_syms(a::FunctionalAffect) = a.sts_syms
+
+function Base.:(==)(a1::FunctionalAffect, a2::FunctionalAffect)
+    isequal(a1.f, a2.f) && isequal(a1.sts, a2.sts) && isequal(a1.pars, a2.pars) && 
+        isequal(a1.sts_syms, a2.sts_syms) && isequal(a1.pars_syms, a2.pars_syms) && 
+            isequal(a1.ctx, a2.ctx)
+end
+
+function Base.hash(a::FunctionalAffect, s::UInt)
+    s = hash(a.f, s)
+    s = hash(a.sts, s)
+    s = hash(a.sts_syms, s)
+    s = hash(a.pars, s)
+    s = hash(a.pars_syms, s)
+    hash(a.ctx, s)
+end
+
+has_functional_affect(cb) = affects(cb) isa FunctionalAffect
+
+namespace_affect(affect, s) = namespace_equation(affect, s)
+function namespace_affect(affect::FunctionalAffect, s)
+    FunctionalAffect(func(affect), 
+            renamespace.((s,), states(affect)), 
+            states_syms(affect),
+            renamespace.((s,), parameters(affect)),
+            parameters_syms(affect),
+            context(affect))
 end
 
 #################################### continuous events #####################################
@@ -14,11 +73,13 @@ end
 const NULL_AFFECT = Equation[]
 struct SymbolicContinuousCallback
     eqs::Vector{Equation}
-    affect::Vector{Equation}
+    affect
     function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT)
         new(eqs, affect)
     end # Default affect to nothing
 end
+
+SymbolicContinuousCallback(eqs::Vector{Equation}, affect::Function) = SymbolicContinuousCallback(eqs, SymbolicContinuousCallback(affect))
 
 function Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback)
     isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect)
@@ -57,22 +118,26 @@ equations(cb::SymbolicContinuousCallback) = cb.eqs
 function equations(cbs::Vector{<:SymbolicContinuousCallback})
     reduce(vcat, [equations(cb) for cb in cbs])
 end
-affect_equations(cb::SymbolicContinuousCallback) = cb.affect
-function affect_equations(cbs::Vector{SymbolicContinuousCallback})
-    reduce(vcat, [affect_equations(cb) for cb in cbs])
+affects(cb::SymbolicContinuousCallback) = cb.affect
+function affects(cbs::Vector{SymbolicContinuousCallback})
+    reduce(vcat, [affects(cb) for cb in cbs])
 end
-function namespace_equation(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback
+
+function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback
     SymbolicContinuousCallback(namespace_equation.(equations(cb), (s,)),
-                               namespace_equation.(affect_equations(cb), (s,)))
+                               namespace_affect.(affects(cb), (s,)))
 end
+
+cb_add_context(cb::SymbolicContinuousCallback, s) = SymbolicContinuousCallback(equations(cb), af_add_context(affects(cb), s))
 
 function continuous_events(sys::AbstractSystem)
     obs = get_continuous_events(sys)
     filter(!isempty, obs)
+
     systems = get_systems(sys)
     cbs = [obs;
            reduce(vcat,
-                  (map(o -> namespace_equation(o, s), continuous_events(s))
+                  (map(o -> namespace_callback(o, s), continuous_events(s))
                    for s in systems),
                   init = SymbolicContinuousCallback[])]
     filter(!isempty, cbs)
@@ -81,14 +146,33 @@ end
 #################################### continuous events #####################################
 
 struct SymbolicDiscreteCallback
+    # condition can be one of:
+    # TODO: Iterative
+    #   Δt::Real - Periodic with period Δt
+    #   Δts::Vector{Real} - events trigger in this times (Preset)
+    #   condition::Vector{Equation} - event triggered when condition is true
     condition
-    affects::Vector{Equation}
+    affects
+
     function SymbolicDiscreteCallback(condition, affects = NULL_AFFECT)
-        c = value(scalarize(condition))
-        a = scalarize(affects)
-        new(c, a)
+        c = scalarize_condition(condition)
+        a = scalarize_affects(affects)
+        new(c,a)
     end # Default affect to nothing
 end
+
+is_timed_condition(cb) = false
+is_timed_condition(::R) where {R<:Real} = true
+is_timed_condition(::V) where {V<:AbstractVector} = eltype(V) <: Real
+is_timed_condition(cb::SymbolicDiscreteCallback) = is_timed_condition(condition(cb))
+
+scalarize_condition(condition) = is_timed_condition(condition) ? condition : value(scalarize(condition))
+namespace_condition(condition, s) = is_timed_condition(condition) ? condition : namespace_expr(condition, s)
+
+scalarize_affects(affects) = scalarize(affects)
+scalarize_affects(affects::Tuple) = FunctionalAffect(affects...)
+scalarize_affects(affects::NamedTuple) = FunctionalAffect(;affects...)
+scalarize_affects(affects::FunctionalAffect) = affects
 
 SymbolicDiscreteCallback(p::Pair) = SymbolicDiscreteCallback(p[1], p[2])
 SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback) = cb # passthrough
@@ -96,8 +180,13 @@ SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback) = cb # passthrough
 function Base.show(io::IO, db::SymbolicDiscreteCallback)
     println(io, "condition: ", db.condition)
     println(io, "affects:")
-    for affect in db.affects
-        println(io, "  ", affect)
+    if db.affects isa FunctionalAffect
+        # TODO
+        println(io, " ", db.affects)
+    else
+        for affect in db.affects
+            println(io, "  ", affect)
+        end
     end
 end
 
@@ -106,7 +195,7 @@ function Base.:(==)(e1::SymbolicDiscreteCallback, e2::SymbolicDiscreteCallback)
 end
 function Base.hash(cb::SymbolicDiscreteCallback, s::UInt)
     s = foldr(hash, cb.condition, init = s)
-    foldr(hash, cb.affects, init = s)
+    cb.affects isa AbstractVector ? foldr(hash, cb.affects, init = s) : hash(cb.affects, s)
 end
 
 condition(cb::SymbolicDiscreteCallback) = cb.condition
@@ -114,13 +203,16 @@ function conditions(cbs::Vector{<:SymbolicDiscreteCallback})
     reduce(vcat, condition(cb) for cb in cbs)
 end
 
-affect_equations(cb::SymbolicDiscreteCallback) = cb.affects
-function affect_equations(cbs::Vector{SymbolicDiscreteCallback})
-    reduce(vcat, affect_equations(cb) for cb in cbs)
+affects(cb::SymbolicDiscreteCallback) = cb.affects
+
+function affects(cbs::Vector{SymbolicDiscreteCallback})
+    reduce(vcat, affects(cb) for cb in cbs)
 end
-function namespace_equation(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCallback
-    SymbolicDiscreteCallback(namespace_expr(condition(cb), s),
-                             namespace_equation.(affect_equations(cb), Ref(s)))
+
+function namespace_callback(cb::SymbolicDiscreteCallback, s)::SymbolicDiscreteCallback
+    af = affects(cb)
+    af = af isa AbstractVector ? namespace_affect.(af, Ref(s)) : namespace_affect(af, s)
+    SymbolicDiscreteCallback(namespace_condition(condition(cb), s), af)
 end
 
 SymbolicDiscreteCallbacks(cb::Pair) = SymbolicDiscreteCallback[SymbolicDiscreteCallback(cb)]
@@ -134,7 +226,7 @@ function discrete_events(sys::AbstractSystem)
     systems = get_systems(sys)
     cbs = [obs;
            reduce(vcat,
-                  (map(o -> namespace_equation(o, s), discrete_events(s)) for s in systems),
+                  (map(o -> namespace_callback(o, s), discrete_events(s)) for s in systems),
                   init = SymbolicDiscreteCallback[])]
     cbs
 end
@@ -178,7 +270,7 @@ function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
 end
 
 function compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
-    compile_affect(affect_equations(cb), args...; kwargs...)
+    compile_affect(affects(cb), args...; kwargs...)
 end
 
 """
@@ -208,7 +300,7 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         outvar = :u
         if outputidxs === nothing
             lhss = map(x -> x.lhs, eqs)
-            update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're chaning
+            update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're changing
             length(update_vars) == length(unique(update_vars)) == length(eqs) ||
                 error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
             alleq = all(isequal(isparameter(first(update_vars))),
@@ -303,6 +395,62 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states
     end
 end
 
+function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
+    ind(sym, v) = findfirst(isequal(sym), v)
+    inds(syms, v) = map(sym -> ind(sym, v), syms)
+    v_inds = inds(states(affect), dvs)
+    p_inds = inds(parameters(affect), ps)
+
+    # HACK: filter out eliminated symbols. Not clear this is the right thing to do
+    # (MTK should keep these symbols)
+    v = filter(x -> !isnothing(x[1]), collect(zip(v_inds, states_syms(affect))))
+    v_inds = [x[1] for x in v]
+    v_syms = Tuple([x[2] for x in v])
+    p = filter(x -> !isnothing(x[1]), collect(zip(p_inds, parameters_syms(affect))))
+    p_inds = [x[1] for x in p]
+    p_syms = Tuple([x[2] for x in p])
+
+    let v_inds=v_inds, p_inds=p_inds, v_syms=v_syms, p_syms=p_syms, user_affect=func(affect), ctx = context(affect)
+        function (integ)
+            uv = @views integ.u[v_inds]
+            pv = @views integ.p[p_inds]
+
+            u = LArray{v_syms}(uv)
+            p = LArray{p_syms}(pv)
+
+            user_affect(integ.t, u, p, ctx)
+        end
+    end
+end
+
+function compile_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
+    compile_user_affect(affect, sys, dvs, ps; kwargs...)
+end
+
+function generate_timed_callback(cb, sys, dvs, ps; kwargs...)
+    cond = condition(cb)
+    as = compile_affect(affects(cb), sys, dvs, ps; expression = Val{false},
+                    kwargs...)
+    if cond isa AbstractVector
+        # Preset Time
+        return PresetTimeCallback(cond, as)
+    else
+        # Periodic
+        return PeriodicCallback(as, cond)
+    end
+end
+
+function generate_discrete_callback(cb, sys, dvs, ps; kwargs...)
+    if is_timed_condition(cb)
+        return generate_timed_callback(cb, sys, dvs, ps, kwargs...)
+    else
+        c = compile_condition(cb, sys, dvs, ps; expression=Val{false}, kwargs...)
+        as = compile_affect(affects(cb), sys, dvs, ps; expression = Val{false},
+                        kwargs...)
+        return DiscreteCallback(c, as)
+    end
+end
+
 function generate_discrete_callbacks(sys::AbstractSystem, dvs = states(sys),
                                     ps = parameters(sys); kwargs...)
     has_discrete_events(sys) || return nothing
@@ -310,10 +458,7 @@ function generate_discrete_callbacks(sys::AbstractSystem, dvs = states(sys),
     isempty(symcbs) && return nothing
 
     dbs = map(symcbs) do cb
-        c = compile_condition(cb, sys, dvs, ps; expression=Val{false}, kwargs...)
-        as = compile_affect(affect_equations(cb), sys, dvs, ps; expression = Val{false},
-                            kwargs...)
-        DiscreteCallback(c, as)
+        generate_discrete_callback(cb, sys, dvs, ps; kwargs...)
     end
 
     dbs
@@ -333,7 +478,7 @@ function process_events(sys; callback = nothing, has_difference = false, kwargs.
     if has_discrete_events(sys)
         discrete_cb = generate_discrete_callbacks(sys; kwargs...)
     else
-        discrete_cb = nothing
+        discrete_cb = []
     end
     difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
 
