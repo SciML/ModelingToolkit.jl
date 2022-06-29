@@ -269,3 +269,10 @@ let trivialconst = alias_elimination(trivialconst)
     # Test that alias elimination doesn't eliminate a D(x) that is needed.
     @test length(equations(trivialconst)) == length(states(trivialconst)) == 1
 end
+
+@variables x(t) y(t)
+eqs = [0 ~ x - y
+       0 ~ y - x]
+@named sys = ODESystem(eqs, t)
+sys = structural_simplify(sys)
+@test length(equations(sys)) == length(states(sys)) == 0
