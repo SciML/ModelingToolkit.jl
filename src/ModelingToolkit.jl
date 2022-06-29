@@ -4,7 +4,7 @@ $(DocStringExtensions.README)
 module ModelingToolkit
 using DocStringExtensions
 using AbstractTrees
-using DiffEqBase, SciMLBase, Reexport
+using DiffEqBase, SciMLBase, ForwardDiff, Reexport
 using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using InteractiveUtils

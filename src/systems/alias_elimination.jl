@@ -19,8 +19,9 @@ function aag_bareiss(sys::AbstractSystem)
     return aag_bareiss!(state.structure.graph, complete(state.structure.var_to_diff), mm)
 end
 
-function alias_elimination(sys)
-    state = TearingState(sys; quick_cancel = true)
+alias_elimination(sys) = alias_elimination!(TearingState(sys; quick_cancel = true))
+function alias_elimination!(state::TearingState)
+    sys = state.sys
     ag, mm = alias_eliminate_graph!(state)
     ag === nothing && return sys
 

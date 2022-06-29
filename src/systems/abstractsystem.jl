@@ -950,10 +950,10 @@ types during tearing.
 """
 function structural_simplify(sys::AbstractSystem; simplify = false, kwargs...)
     sys = expand_connections(sys)
-    sys = alias_elimination(sys)
     state = TearingState(sys)
-    state = inputs_to_parameters!(state)
-    sys = state.sys
+    state, = inputs_to_parameters!(state)
+    sys = alias_elimination!(state)
+    state = TearingState(sys)
     check_consistency(state)
     if sys isa ODESystem
         sys = dae_order_lowering(dummy_derivative(sys, state))
@@ -965,6 +965,87 @@ function structural_simplify(sys::AbstractSystem; simplify = false, kwargs...)
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     invalidate_cache!(sys)
     return sys
+end
+
+export linearize
+# TODO: The order of the states and equations should match so that the Jacobians are ẋ = Ax
+function linearize(sys::AbstractSystem, inputs, outputs; simplify = false, kwargs...)
+    sys = expand_connections(sys)
+    state = TearingState(sys)
+    markio!(state, inputs, outputs)
+    state, input_idxs = inputs_to_parameters!(state, false)
+    sys = alias_elimination!(state)
+    state = TearingState(sys)
+    check_consistency(state)
+    if sys isa ODESystem
+        sys = dae_order_lowering(dummy_derivative(sys, state))
+    end
+    state = TearingState(sys)
+    find_solvables!(state; kwargs...)
+    sys = tearing_reassemble(state, tearing(state), simplify = simplify)
+    fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
+    @set! sys.observed = topsort_equations(observed(sys), fullstates)
+    invalidate_cache!(sys)
+
+    eqs = equations(sys)
+    check_operator_variables(eqs, Differential)
+    # Sort equations and states such that diff.eqs. match differential states and the rest are algebraic
+    diffstates = collect_operator_variables(sys, Differential)
+    eqs = sort(eqs, by = e -> !isoperator(e.lhs, Differential),
+               alg = Base.Sort.DEFAULT_STABLE)
+    @set! sys.eqs = eqs
+    diffstates = [arguments(e.lhs)[1] for e in eqs[1:length(diffstates)]]
+    sts = [diffstates; setdiff(states(sys), diffstates)]
+    @set! sys.states = sts
+
+    diff_idxs = 1:length(diffstates)
+    alge_idxs = (length(diffstates) + 1):length(sts)
+    fun = ODEFunction(sys)
+    lin_fun = let fun = fun,
+        h = ModelingToolkit.build_explicit_observed_function(sys, outputs)
+
+        (u, p, t) -> begin
+            uf = SciMLBase.UJacobianWrapper(fun, t, p)
+            fg_xz = ForwardDiff.jacobian(uf, u)
+            pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
+            # TODO: this is very inefficient, p contains all parameters of the system
+            fg_u = ForwardDiff.jacobian(pf, p)[:, input_idxs]
+            h_xz = ForwardDiff.jacobian(xz -> h(xz, p, t), u)
+            h_u = ForwardDiff.jacobian(p -> h(u, p, t), p)[:, input_idxs]
+            (f_x = fg_xz[diff_idxs, diff_idxs],
+             f_z = fg_xz[diff_idxs, alge_idxs],
+             g_x = fg_xz[alge_idxs, diff_idxs],
+             g_z = fg_xz[alge_idxs, alge_idxs],
+             f_u = fg_u[diff_idxs, :],
+             g_u = fg_u[alge_idxs, :],
+             h_x = h_xz[:, diff_idxs],
+             h_z = h_xz[:, alge_idxs],
+             h_u = h_u)
+        end
+    end
+    return sys, lin_fun
+end
+
+function markio!(state::TearingState, inputs, outputs)
+    fullvars = state.fullvars
+    inputset = Set(inputs)
+    outputset = Set(outputs)
+    for (i, v) in enumerate(fullvars)
+        if v in inputset
+            v = setmetadata(v, ModelingToolkit.VariableInput, true)
+            v = setmetadata(v, ModelingToolkit.VariableOutput, false)
+            fullvars[i] = v
+        elseif v in outputset
+            v = setmetadata(v, ModelingToolkit.VariableInput, false)
+            v = setmetadata(v, ModelingToolkit.VariableOutput, true)
+            fullvars[i] = v
+        else
+            v = setmetadata(v, ModelingToolkit.VariableInput, false)
+            v = setmetadata(v, ModelingToolkit.VariableOutput, false)
+            fullvars[i] = v
+        end
+    end
+    state
 end
 
 @latexrecipe function f(sys::AbstractSystem)
