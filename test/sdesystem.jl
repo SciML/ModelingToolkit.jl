@@ -1,5 +1,5 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
-using StochasticDiffEq, SparseArrays
+using StochasticDiffEq, OrdinaryDiffEq, SparseArrays
 using Random, Test
 
 # Define some variables
@@ -479,3 +479,37 @@ eqs = [D(x) ~ x]
 noiseeqs = [0.1 * x]
 @named de = SDESystem(eqs, noiseeqs, t, [x], [])
 @test nameof(rename(de, :newname)) == :newname
+
+@testset "observed functionality" begin
+    @parameters α β
+    @variables t x(t) y(t) z(t)
+    @variables weight(t)
+    D = Differential(t)
+
+    eqs = [D(x) ~ α * x]
+    noiseeqs = [β * x]
+    dt = 1 // 2^(7)
+    x0 = 0.1
+
+    u0map = [
+        x => x0,
+    ]
+
+    parammap = [
+        α => 1.5,
+        β => 1.0,
+    ]
+
+    @named de = SDESystem(eqs, noiseeqs, t, [x], [α, β], observed = [weight ~ x * 10])
+
+    prob = SDEProblem(de, u0map, (0.0, 1.0), parammap)
+    sol = solve(prob, EM(), dt = dt)
+    @test observed(de) == [weight ~ x * 10]
+    @test sol[weight] == 10 * sol[x]
+
+    @named ode = ODESystem(eqs, t, [x], [α, β], observed = [weight ~ x * 10])
+    odeprob = ODEProblem(ode, u0map, (0.0, 1.0), parammap)
+    solode = solve(odeprob, Tsit5())
+    @test observed(ode) == [weight ~ x * 10]
+    @test solode[weight] == 10 * solode[x]
+end

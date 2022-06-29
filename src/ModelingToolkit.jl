@@ -60,8 +60,6 @@ import DiffEqBase: @add_kwonly
 
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 
-using Requires
-
 for fun in [:toexpr]
     @eval begin
         function $fun(eq::Equation; kw...)
@@ -137,8 +135,6 @@ include("systems/nonlinear/modelingtoolkitize.jl")
 
 include("systems/optimization/optimizationsystem.jl")
 
-include("systems/control/controlsystem.jl")
-
 include("systems/pde/pdesystem.jl")
 
 include("systems/sparsematrixclil.jl")
@@ -173,13 +169,11 @@ export AutoModelingToolkit
 export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
-export ControlSystem
 export alias_elimination, flatten
 export connect, @connector, Connection, Flow, Stream, instream
 export isinput, isoutput, getbounds, hasbounds, isdisturbance, istunable, getdist, hasdist,
        tunable_parameters, isirreducible
 export ode_order_lowering, dae_order_lowering, liouville_transform
-export runge_kutta_discretize
 export PDESystem
 export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation

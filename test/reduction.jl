@@ -246,3 +246,26 @@ eqs = [D(x) ~ σ * (y - x)
 lorenz1 = ODESystem(eqs, t, name = :lorenz1)
 lorenz1_reduced = structural_simplify(lorenz1)
 @test z in Set(parameters(lorenz1_reduced))
+
+# Test that alias elimination can propagate `x ~ 0` to derivatives
+@parameters t
+@variables x(t) y(t)
+
+eqs = [x ~ 0
+       D(x) ~ x + y]
+trivial0 = ODESystem(eqs, t, name = :trivial0)
+let trivial0 = alias_elimination(trivial0)
+    # For symbolic systems, we currently don't let
+    # alias elimination touch differential eqs, so
+    # this leaves one equation left over. In theory,
+    # the whole system would get eliminated.
+    @test length(equations(trivial0)) <= 1
+    @test length(states(trivial0)) <= 1
+end
+
+eqs = [D(x) ~ 0]
+trivialconst = ODESystem(eqs, t, name = :trivial0)
+let trivialconst = alias_elimination(trivialconst)
+    # Test that alias elimination doesn't eliminate a D(x) that is needed.
+    @test length(equations(trivialconst)) == length(states(trivialconst)) == 1
+end
