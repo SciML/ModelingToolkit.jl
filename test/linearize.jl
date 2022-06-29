@@ -80,4 +80,5 @@ ModelingToolkit.unbound_inputs(pid)
 @unpack reference, measurement, ctr_output = pid
 lin = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
 lin, lin_fun = linearize(pid, [reference.u, measurement.u], [ctr_output.u]);
+prob = ODEProblem(lin, [], (0.0, 1.0))
 lin_fun(prob.u0, prob.p, 0.0)

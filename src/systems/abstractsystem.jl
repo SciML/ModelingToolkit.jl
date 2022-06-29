@@ -967,7 +967,6 @@ function structural_simplify(sys::AbstractSystem; simplify = false, kwargs...)
     return sys
 end
 
-export linearize
 # TODO: The order of the states and equations should match so that the Jacobians are ẋ = Ax
 function linearize(sys::AbstractSystem, inputs, outputs; simplify = false, kwargs...)
     sys = expand_connections(sys)
@@ -1026,7 +1025,7 @@ function linearize(sys::AbstractSystem, inputs, outputs; simplify = false, kwarg
     return sys, lin_fun
 end
 
-function markio!(state::TearingState, inputs, outputs)
+function markio!(state, inputs, outputs)
     fullvars = state.fullvars
     inputset = Set(inputs)
     outputset = Set(outputs)
