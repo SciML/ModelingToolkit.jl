@@ -162,61 +162,6 @@ independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
 independent_variables(sys::AbstractTimeIndependentSystem) = []
 independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
 
-const NULL_AFFECT = Equation[]
-struct SymbolicContinuousCallback
-    eqs::Vector{Equation}
-    affect::Vector{Equation}
-    function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT)
-        new(eqs, affect)
-    end # Default affect to nothing
-end
-
-function Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback)
-    isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect)
-end
-Base.isempty(cb::SymbolicContinuousCallback) = isempty(cb.eqs)
-function Base.hash(cb::SymbolicContinuousCallback, s::UInt)
-    s = foldr(hash, cb.eqs, init = s)
-    foldr(hash, cb.affect, init = s)
-end
-
-to_equation_vector(eq::Equation) = [eq]
-to_equation_vector(eqs::Vector{Equation}) = eqs
-function to_equation_vector(eqs::Vector{Any})
-    isempty(eqs) || error("This should never happen")
-    Equation[]
-end
-
-function SymbolicContinuousCallback(args...)
-    SymbolicContinuousCallback(to_equation_vector.(args)...)
-end # wrap eq in vector
-SymbolicContinuousCallback(p::Pair) = SymbolicContinuousCallback(p[1], p[2])
-SymbolicContinuousCallback(cb::SymbolicContinuousCallback) = cb # passthrough
-
-SymbolicContinuousCallbacks(cb::SymbolicContinuousCallback) = [cb]
-SymbolicContinuousCallbacks(cbs::Vector{<:SymbolicContinuousCallback}) = cbs
-SymbolicContinuousCallbacks(cbs::Vector) = SymbolicContinuousCallback.(cbs)
-function SymbolicContinuousCallbacks(ve::Vector{Equation})
-    SymbolicContinuousCallbacks(SymbolicContinuousCallback(ve))
-end
-function SymbolicContinuousCallbacks(others)
-    SymbolicContinuousCallbacks(SymbolicContinuousCallback(others))
-end
-SymbolicContinuousCallbacks(::Nothing) = SymbolicContinuousCallbacks(Equation[])
-
-equations(cb::SymbolicContinuousCallback) = cb.eqs
-function equations(cbs::Vector{<:SymbolicContinuousCallback})
-    reduce(vcat, [equations(cb) for cb in cbs])
-end
-affect_equations(cb::SymbolicContinuousCallback) = cb.affect
-function affect_equations(cbs::Vector{SymbolicContinuousCallback})
-    reduce(vcat, [affect_equations(cb) for cb in cbs])
-end
-namespace_equation(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback = SymbolicContinuousCallback(namespace_equation.(equations(cb),
-                                                                                                                                   (s,)),
-                                                                                                               namespace_equation.(affect_equations(cb),
-                                                                                                                                   (s,)))
-
 for prop in [:eqs
              :noiseeqs
              :iv
@@ -507,18 +452,6 @@ function observed(sys::AbstractSystem)
             init = Equation[])]
 end
 
-function continuous_events(sys::AbstractSystem)
-    obs = get_continuous_events(sys)
-    filter(!isempty, obs)
-    systems = get_systems(sys)
-    cbs = [obs;
-           reduce(vcat,
-                  (map(o -> namespace_equation(o, s), continuous_events(s))
-                   for s in systems),
-                  init = SymbolicContinuousCallback[])]
-    filter(!isempty, cbs)
-end
-
 Base.@deprecate default_u0(x) defaults(x) false
 Base.@deprecate default_p(x) defaults(x) false
 function defaults(sys::AbstractSystem)
@@ -584,6 +517,20 @@ function isaffine(sys::AbstractSystem)
     rhs = [eq.rhs for eq in equations(sys)]
 
     all(isaffine(r, states(sys)) for r in rhs)
+end
+
+function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
+    # if something is not x(t) (the current state)
+    # but is `x(t-1)` or something like that, pass in `x` as a callable function rather
+    # than pass in a value in place of x(t).
+    #
+    # This is done by just making `x` the argument of the function.
+    if istree(x) &&
+       operation(x) isa Sym &&
+       !(length(arguments(x)) == 1 && isequal(arguments(x)[1], get_iv(sys)))
+        return operation(x)
+    end
+    return x
 end
 
 struct AbstractSysToExpr

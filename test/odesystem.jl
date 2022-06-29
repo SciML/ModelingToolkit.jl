@@ -608,10 +608,9 @@ let
     @test sol[y] ≈ 0.9 * sol[x[1]] + sol[x[2]]
     @test isapprox(sol[x[1]][end], 1, atol = 1e-3)
 
-    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0], [x[1] => 0.5],
+    prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0], Pair[x[1] => 0.5],
                       (0, 50))
-    u0_dict = Dict(x[1] => 0.5, x[2] => 0.0)
-    @test prob.u0 ≈ [u0_dict[x] for x in states(sys)]
+    @test prob.u0 ≈ [0.5, 0]
     @test prob.du0 ≈ [0, 0]
     @test prob.p ≈ [1]
     sol = solve(prob, IDA())
@@ -619,7 +618,7 @@ let
 
     prob = DAEProblem(sys, [D(y) => 0, D(x[1]) => 0, D(x[2]) => 0], Pair[x[1] => 0.5],
                       (0, 50), [k => 2])
-    @test prob.u0 ≈ [u0_dict[x] for x in states(sys)]
+    @test prob.u0 ≈ [0.5, 0]
     @test prob.du0 ≈ [0, 0]
     @test prob.p ≈ [2]
     sol = solve(prob, IDA())

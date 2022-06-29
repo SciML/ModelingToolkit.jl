@@ -52,41 +52,12 @@ function tear_graph_modia(structure::SystemStructure, ::Type{U} = Unassigned;
     var_eq_matching = complete(maximal_matching(graph, eqfilter, varfilter, U))
     var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, var_eq_matching)
 
-    # Here, we're using a maximal matching on the post-pantelides system to find
-    # the strongly connected components of the system (of variables that depend
-    # on each other). The strongly connected components are unique, however, the
-    # maximal matching itself is not. Every maximal matching gives rise to the
-    # same set of strongly connected components, but the associated equations need
-    # not be the same. In the absence of solvability constraints, this may be a
-    # small issue, but here it is possible that an equation got assigned to an
-    # scc that cannot actually use it for solving a variable, but still precludes
-    # another scc from using it. To avoid this, we delete any assignments that
-    # are not in the solvable graph and extend the set of considered eqauations
-    # below.
-    for var in ndsts(solvable_graph)
-        var_eq_matching[var] === unassigned && continue
-        if !(BipartiteEdge(var, var_eq_matching[var]) in solvable_graph)
-            var_eq_matching[var] = unassigned
-        end
-    end
-
     for vars in var_sccs
         filtered_vars = filter(varfilter, vars)
         ieqs = Int[var_eq_matching[v]
                    for v in filtered_vars if var_eq_matching[v] !== unassigned]
         for var in vars
             var_eq_matching[var] = unassigned
-        end
-        for var in filtered_vars
-            # Add any equations that we may not have been able to use earlier to see
-            # if a different matching may have been possible.
-            for eq′ in 𝑑neighbors(solvable_graph, var)
-                eqfilter(eq′) || continue
-                eq′ in ieqs && continue
-                if invview(var_eq_matching)[eq′] === unassigned
-                    push!(ieqs, eq′)
-                end
-            end
         end
         tear_graph_block_modia!(var_eq_matching, graph, solvable_graph, ieqs, filtered_vars)
     end

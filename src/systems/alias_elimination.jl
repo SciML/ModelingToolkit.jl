@@ -316,7 +316,6 @@ struct AliasGraphKeySet <: AbstractSet{Int}
 end
 Base.keys(ag::AliasGraph) = AliasGraphKeySet(ag)
 Base.iterate(agk::AliasGraphKeySet, state...) = Base.iterate(agk.ag.eliminated, state...)
-Base.length(agk::AliasGraphKeySet) = Base.length(agk.ag.eliminated)
 function Base.in(i::Int, agk::AliasGraphKeySet)
     aliasto = agk.ag.aliasto
     1 <= i <= length(aliasto) && aliasto[i] !== nothing
@@ -335,11 +334,9 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         is_linear_equations[e] = true
     end
 
-    # For now, only consider variables linear that are not differentiated.
-    # We could potentially apply the same logic to variables whose derivative
-    # is also linear, but that's a TODO.
-    diff_to_var = invview(var_to_diff)
-    is_linear_variables = .&(isnothing.(var_to_diff), isnothing.(diff_to_var))
+    # Variables that are highest order differentiated cannot be states of an ODE
+    is_not_potential_state = isnothing.(var_to_diff)
+    is_linear_variables = copy(is_not_potential_state)
     for i in 𝑠vertices(graph)
         is_linear_equations[i] && continue
         for j in 𝑠neighbors(graph, i)
@@ -357,9 +354,11 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                 r !== nothing && return r
                 rank1 = k - 1
             end
-            # TODO: It would be better to sort the variables by
-            # derivative order here to enable more elimination
-            # opportunities.
+            if rank2 === nothing
+                r = find_masked_pivot(is_not_potential_state, M, k)
+                r !== nothing && return r
+                rank2 = k - 1
+            end
             return find_masked_pivot(nothing, M, k)
         end
         function find_and_record_pivot(M, k)
@@ -374,9 +373,10 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         end
         bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
                        bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
-        rank2, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
-        rank1 = something(rank1, rank2)
-        (rank1, rank2, pivots)
+        rank3, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
+        rank1 = something(rank1, rank3)
+        rank2 = something(rank2, rank3)
+        (rank1, rank2, rank3, pivots)
     end
 
     return mm, solvable_variables, do_bareiss!(mm, mm_orig)
@@ -390,27 +390,16 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # variables`.
     #
     # `do_bareiss` conceptually gives us this system:
-    # rank1 | [ M₁₁  M₁₂ | M₁₃ ]   [v₁] = [0]
-    # rank2 | [ 0    M₂₂ | M₂₃ ] P [v₂] = [0]
+    # rank1 | [ M₁₁  M₁₂ | M₁₃  M₁₄ ]   [v₁] = [0]
+    # rank2 | [ 0    M₂₂ | M₂₃  M₂₄ ] P [v₂] = [0]
     # -------------------|------------------------
-    #         [ 0    0   | 0   ]   [v₃] = [0]
-    #
-    # Where `v₁` are the purely linear variables (i.e. those that only appear in linear equations),
-    # `v₂` are the variables that may be potentially solved by the linear system and v₃ are the variables
-    # that contribute to the equations, but are not solved by the linear system. Note
-    # that the complete system may be larger than the linear subsystem and include variables
-    # that do not appear here.
-    mm, solvable_variables, (rank1, rank2, pivots) = aag_bareiss!(graph, var_to_diff,
-                                                                  mm_orig)
+    # rank3 | [ 0    0   | M₃₃  M₃₄ ]   [v₃] = [0]
+    #         [ 0    0   | 0    0   ]   [v₄] = [0]
+    mm, solvable_variables, (rank1, rank2, rank3, pivots) = aag_bareiss!(graph, var_to_diff,
+                                                                         mm_orig)
 
     # Step 2: Simplify the system using the Bareiss factorization
-
     ag = AliasGraph(size(mm, 2))
-
-    # First, eliminate variables that only appear in linear equations and were removed
-    # completely from the coefficient matrix. These are technically singularities in
-    # the matrix, but assigning them to 0 is a feasible assignment and works well in
-    # practice.
     for v in setdiff(solvable_variables, @view pivots[1:rank1])
         ag[v] = 0
     end

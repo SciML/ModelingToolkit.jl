@@ -43,7 +43,6 @@ println("Last test requires gcc available in the path!")
 @safetestset "root_equations" begin include("root_equations.jl") end
 @safetestset "state_selection" begin include("state_selection.jl") end
 @safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
-@safetestset "ControlSystem Test" begin include("controlsystem.jl") end
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 
 # Reference tests go Last
