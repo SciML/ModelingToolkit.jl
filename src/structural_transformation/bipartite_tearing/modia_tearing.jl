@@ -63,7 +63,7 @@ function tear_graph_modia(structure::SystemStructure; varfilter = v -> true,
     # another scc from using it. To avoid this, we delete any assignments that
     # are not in the solvable graph and extend the set of considered eqauations
     # below.
-    for var in ndsts(solvable_graph)
+    for var in 1:ndsts(solvable_graph)
         var_eq_matching[var] === unassigned && continue
         if !(BipartiteEdge(var, var_eq_matching[var]) in solvable_graph)
             var_eq_matching[var] = unassigned
