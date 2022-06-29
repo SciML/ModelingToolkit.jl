@@ -1,5 +1,5 @@
 using Test
-using ModelingToolkit, Graphs, DiffEqJump
+using ModelingToolkit, Graphs, JumpProcesses
 
 import ModelingToolkit: value
 
