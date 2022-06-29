@@ -60,8 +60,6 @@ import DiffEqBase: @add_kwonly
 
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 
-using Requires
-
 for fun in [:toexpr]
     @eval begin
         function $fun(eq::Equation; kw...)
