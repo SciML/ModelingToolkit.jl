@@ -12,7 +12,7 @@ using Latexify, Unitful, ArrayInterfaceCore
 using MacroTools
 @reexport using UnPack
 using Setfield, ConstructionBase
-using DiffEqJump
+using JumpProcesses
 using DataStructures
 using SpecialFunctions, NaNMath
 using RuntimeGeneratedFunctions
