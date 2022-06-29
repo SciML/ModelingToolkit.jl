@@ -121,7 +121,7 @@ end
 
 function generate_affect_function(js::JumpSystem, affect, outputidxs)
     compile_affect(affect, js, states(js), parameters(js); outputidxs = outputidxs,
-                   expression = Val{true})
+                   expression = Val{true}, checkvars = false)
 end
 
 function assemble_vrj(js, vrj, statetoid)
@@ -212,7 +212,7 @@ and no SDEs associated with the system.
 
 Continuing the example from the [`JumpSystem`](@ref) definition:
 ```julia
-using DiffEqBase, DiffEqJump
+using DiffEqBase, JumpProcesses
 u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => .1/1000, γ => .01]
 tspan = (0.0, 250.0)
@@ -264,7 +264,7 @@ and no SDEs associated with the system.
 
 Continuing the example from the [`JumpSystem`](@ref) definition:
 ```julia
-using DiffEqBase, DiffEqJump
+using DiffEqBase, JumpProcesses
 u₀map = [S => 999, I => 1, R => 0]
 parammap = [β => .1/1000, γ => .01]
 tspan = (0.0, 250.0)
@@ -305,7 +305,7 @@ jprob = JumpProblem(js, dprob, Direct())
 sol = solve(jprob, SSAStepper())
 ```
 """
-function DiffEqJump.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
+function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
     statetoid = Dict(value(state) => i for (i, state) in enumerate(states(js)))
     eqs = equations(js)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
@@ -421,6 +421,6 @@ function (ratemap::JumpSysMajParamMapper{U, V, W})(maj::MassActionJump, newparam
                                       value(substitute(ratemap.paramexprs[i],
                                                        ratemap.subdict)))
     end
-    scale_rates && DiffEqJump.scalerates!(maj.scaled_rates, maj.reactant_stoch)
+    scale_rates && JumpProcesses.scalerates!(maj.scaled_rates, maj.reactant_stoch)
     nothing
 end

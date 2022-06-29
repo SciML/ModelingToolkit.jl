@@ -221,6 +221,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
                                      u0 = nothing;
                                      version = nothing, tgrad = false, sparse = false,
                                      jac = false, Wfact = false, eval_expression = true,
+                                     checkbounds = false,
                                      kwargs...) where {iip}
     dvs = scalarize.(dvs)
     ps = scalarize.(ps)
@@ -279,6 +280,16 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
     M = calculate_massmatrix(sys)
     _M = (u0 === nothing || M == I) ? M : ArrayInterfaceCore.restructure(u0 .* u0', M)
 
+    obs = observed(sys)
+    observedfun = let sys = sys, dict = Dict()
+        function generated_observed(obsvar, u, p, t)
+            obs = get!(dict, value(obsvar)) do
+                build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
+            end
+            obs(u, p, t)
+        end
+    end
+
     sts = states(sys)
     SDEFunction{iip}(f, g,
                      jac = _jac === nothing ? nothing : _jac,
@@ -286,7 +297,8 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
                      Wfact = _Wfact === nothing ? nothing : _Wfact,
                      Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
                      mass_matrix = _M,
-                     syms = Symbol.(states(sys)))
+                     syms = Symbol.(states(sys)),
+                     observed = observedfun)
 end
 
 function DiffEqBase.SDEFunction(sys::SDESystem, args...; kwargs...)
