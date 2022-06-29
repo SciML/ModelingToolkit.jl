@@ -1,4 +1,4 @@
-using OrdinaryDiffEq, ModelingToolkit, Test
+using OrdinaryDiffEq, ModelingToolkit, DataStructures, Test
 using Optimization, RecursiveArrayTools, OptimizationOptimJL
 
 N = 32
@@ -277,3 +277,15 @@ params = (1, 1)
 prob = ODEProblem(ode_prob, [1 1], (0, 1), params)
 sys = modelingtoolkitize(prob)
 @test nameof.(parameters(sys)) == [:α₁, :α₂]
+
+function ode_prob_dict(du, u, p, t)
+    du[1] = u[1] + p[:a]
+    du[2] = u[2] + p[:b]
+    nothing
+end
+params = OrderedDict(:a => 10, :b => 20)
+u0 = [1, 2.0]
+prob = ODEProblem(ode_prob_dict, u0, (0.0, 1.0), params)
+sys = modelingtoolkitize(prob)
+@test [ModelingToolkit.defaults(sys)[s] for s in states(sys)] == u0
+@test [ModelingToolkit.defaults(sys)[s] for s in parameters(sys)] == [10, 20]
