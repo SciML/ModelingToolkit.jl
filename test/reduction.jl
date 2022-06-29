@@ -276,3 +276,10 @@ eqs = [0 ~ x - y
 @named sys = ODESystem(eqs, t)
 sys = structural_simplify(sys)
 @test length(equations(sys)) == length(states(sys)) == 0
+
+@variables x y
+eqs = [0 ~ x - y
+       0 ~ y - x]
+@named sys = NonlinearSystem(eqs, [x, y], [])
+sys = structural_simplify(sys)
+@test length(equations(sys)) == length(states(sys)) == 0
