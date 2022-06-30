@@ -104,6 +104,16 @@ lsys = ModelingToolkit.reorder_states(lsys, states(ssys), reverse(desired_order)
 @test lsys.C == [-4000 400]
 @test lsys.D == [4400 -4400]
 
+## Test that there is a warning when input is misspecified
+@test_throws "Some specified inputs were not found" linearize(pid,
+                                                              [
+                                                                  pid.reference.u,
+                                                                  pid.measurement.u,
+                                                              ], [ctr_output.u])
+@test_throws "Some specified outputs were not found" linearize(pid,
+                                                               [reference.u, measurement.u],
+                                                               [pid.ctr_output.u])
+
 ## Test operating points
 
 # The saturation has no dynamics

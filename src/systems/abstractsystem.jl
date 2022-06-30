@@ -991,7 +991,8 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
 
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
-function linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false,
+function linearization_function(sys::AbstractSystem, inputs,
+                                outputs; simplify = false,
                                 kwargs...)
     sys = expand_connections(sys)
     state = TearingState(sys)
@@ -1030,7 +1031,7 @@ function linearization_function(sys::AbstractSystem, inputs, outputs; simplify =
         function (u, p, t)
             if u !== nothing # Handle systems without states
                 length(sts) == length(u) ||
-                    error("Number of state variables does not match the number of input states")
+                    error("Number of state variables ($(length(sts))) does not match the number of input states ($(length(u)))")
                 uf = SciMLBase.UJacobianWrapper(fun, t, p)
                 fg_xz = ForwardDiff.jacobian(uf, u)
                 h_xz = ForwardDiff.jacobian(xz -> h(xz, p, t), u)
@@ -1039,7 +1040,7 @@ function linearization_function(sys::AbstractSystem, inputs, outputs; simplify =
                 fg_u = ForwardDiff.jacobian(pf, p)[:, input_idxs]
             else
                 length(sts) == 0 ||
-                    error("Number of state variables does not match the number of input states")
+                    error("Number of state variables (0) does not match the number of input states ($(length(u)))")
                 fg_xz = zeros(0, 0)
                 h_xz = fg_u = zeros(0, length(inputs))
             end
@@ -1060,16 +1061,18 @@ end
 
 function markio!(state, inputs, outputs)
     fullvars = state.fullvars
-    inputset = Set(inputs)
-    outputset = Set(outputs)
+    inputset = Dict(inputs .=> false)
+    outputset = Dict(outputs .=> false)
     for (i, v) in enumerate(fullvars)
-        if v in inputset
+        if v in keys(inputset)
             v = setmetadata(v, ModelingToolkit.VariableInput, true)
             v = setmetadata(v, ModelingToolkit.VariableOutput, false)
+            inputset[v] = true
             fullvars[i] = v
-        elseif v in outputset
+        elseif v in keys(outputset)
             v = setmetadata(v, ModelingToolkit.VariableInput, false)
             v = setmetadata(v, ModelingToolkit.VariableOutput, true)
+            outputset[v] = true
             fullvars[i] = v
         else
             v = setmetadata(v, ModelingToolkit.VariableInput, false)
@@ -1077,6 +1080,12 @@ function markio!(state, inputs, outputs)
             fullvars[i] = v
         end
     end
+    all(values(inputset)) ||
+        error("Some specified inputs were not found in system. The following Dict indicates the found variables",
+              inputset)
+    all(values(outputset)) ||
+        error("Some specified outputs were not found in system. The following Dict indicates the found variables",
+              outputset)
     state
 end
 
