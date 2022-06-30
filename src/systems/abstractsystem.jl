@@ -1208,6 +1208,57 @@ function linearize(sys, inputs, outputs; op = Dict(), allow_input_derivatives = 
     linearize(ssys, lin_fun; op, allow_input_derivatives), ssys
 end
 
+"""
+    (; Ã, B̃, C̃, D̃) = similarity_transform(sys, T; unitary=false)
+
+Perform a similarity transform `T : Tx̃ = x` on linear system represented by matrices in NamedTuple `sys` such that
+```
+Ã = T⁻¹AT
+B̃ = T⁻¹ B
+C̃ = CT
+D̃ = D
+```
+
+If `unitary=true`, `T` is assumed unitary and the matrix adjoint is used instead of the inverse.
+"""
+function similarity_transform(sys::NamedTuple, T; unitary = false)
+    if unitary
+        A = T'sys.A * T
+        B = T'sys.B
+    else
+        Tf = lu(T)
+        A = Tf \ sys.A * T
+        B = Tf \ sys.B
+    end
+    C = sys.C * T
+    D = sys.D
+    (; A, B, C, D)
+end
+
+"""
+    reorder_states(sys::NamedTuple, old, new)
+
+Permute the state representation of `sys` obtained from [`linearize`](@ref) so that the state order is changed from `old` to `new`
+Example:
+```
+lsys, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
+desired_order = [int.x, der.x] # States that are present in states(ssys)
+lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
+```
+See also [`ModelingToolkit.similarity_transform`](@ref)
+"""
+function reorder_states(sys::NamedTuple, old, new)
+    nx = length(old)
+    length(new) == nx || error("old and new must have the same length")
+    perm = [findfirst(isequal(n), old) for n in new]
+    issorted(perm) && return sys # shortcut return, no reordering
+    P = zeros(Int, nx, nx)
+    for i in 1:nx # Build permutation matrix
+        P[i, perm[i]] = 1
+    end
+    similarity_transform(sys, P; unitary = true)
+end
+
 @latexrecipe function f(sys::AbstractSystem)
     return latexify(equations(sys))
 end
