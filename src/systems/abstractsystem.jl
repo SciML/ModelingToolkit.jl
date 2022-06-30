@@ -1096,6 +1096,9 @@ See also [`linearization_function`](@ref) which provides a lower-level interface
 
 See extended help for an example.
 
+The implementation and notation follows that of
+["Linear Analysis Approach for Modelica Models", Allain et al. 2009](https://ep.liu.se/ecp/043/075/ecp09430097.pdf)
+
 # Extended help
 This example builds the following feedback interconnection and linearizes it from the input of `F` to the output of `P`.
 ```
