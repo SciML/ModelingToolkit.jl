@@ -304,7 +304,7 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
             lhss = map(x -> x.lhs, eqs)
             all(isvariable, lhss) ||
                 error("Non-variable symbolic expression found on the left hand side of an affect equation. Such equations must be of the form variable ~ symbolic expression for the new value of the variable.")
-            update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're chaning
+            update_vars = collect(Iterators.flatten(map(ModelingToolkit.vars, lhss))) # these are the ones we're changing
             length(update_vars) == length(unique(update_vars)) == length(eqs) ||
                 error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
             alleq = all(isequal(isparameter(first(update_vars))),
