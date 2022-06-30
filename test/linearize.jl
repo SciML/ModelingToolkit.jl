@@ -107,22 +107,29 @@ lsys = ModelingToolkit.reorder_states(lsys, states(ssys), reverse(desired_order)
 ## Test operating points
 
 # The saturation has no dynamics
-function saturation(; y_max, y_min=y_max > 0 ? -y_max : -Inf, name)
+function saturation(; y_max, y_min = y_max > 0 ? -y_max : -Inf, name)
     @variables u(t)=0 y(t)=0
     @parameters y_max=y_max y_min=y_min
     ie = ModelingToolkit.IfElse.ifelse
     eqs = [
         # The equation below is equivalent to y ~ clamp(u, y_min, y_max)
-        y ~ ie(u > y_max, y_max, ie( (y_min < u) & (u < y_max), u, y_min))
+        y ~ ie(u > y_max, y_max, ie((y_min < u) & (u < y_max), u, y_min)),
     ]
-    ODESystem(eqs, t, name=name)
+    ODESystem(eqs, t, name = name)
 end
 
-@named sat = saturation(; y_max=1)
+@named sat = saturation(; y_max = 1)
 # inside the linear region, the function is identity
-@unpack u,y = sat
+@unpack u, y = sat
 lsys, ssys = linearize(sat, [u], [y])
 @test isempty(lsys.A) # there are no differential variables in this system
 @test isempty(lsys.B)
 @test isempty(lsys.C)
 @test lsys.D[] == 1
+
+# outside the linear region the derivative is 0
+lsys, ssys = linearize(sat, [u], [y]; op = Dict(u => 2))
+@test isempty(lsys.A) # there are no differential variables in this system
+@test isempty(lsys.B)
+@test isempty(lsys.C)
+@test lsys.D[] == 0

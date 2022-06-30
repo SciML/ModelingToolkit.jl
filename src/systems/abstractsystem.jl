@@ -1040,7 +1040,7 @@ function linearization_function(sys::AbstractSystem, inputs, outputs; simplify =
             else
                 length(sts) == 0 ||
                     error("Number of state variables does not match the number of input states")
-                fg_xz = zeros(0,0)
+                fg_xz = zeros(0, 0)
                 h_xz = fg_u = zeros(0, length(inputs))
             end
             h_u = ForwardDiff.jacobian(p -> h(u, p, t), p)[:, input_idxs]
