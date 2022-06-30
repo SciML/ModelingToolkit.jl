@@ -967,8 +967,32 @@ function structural_simplify(sys::AbstractSystem; simplify = false, kwargs...)
     return sys
 end
 
-# TODO: The order of the states and equations should match so that the Jacobians are ẋ = Ax
-function linearize(sys::AbstractSystem, inputs, outputs; simplify = false, kwargs...)
+"""
+    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, kwargs...)
+
+Return a function that linearizes system `sys`.
+
+`lin_fun` is a function `(u,p,t) -> (; f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u)`, i.e., it returns a NamedTuple with the Jacobians of `f,g,h` for the nonlinear `sys` on the form
+```math
+ẋ = f(x, z, u)
+0 = g(x, z, u)
+y = h(x, z, u)
+```
+where `x` are differential states, `z` algebraic states, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref).
+
+The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The states of this system also indicates the order of the states that holds for the linearized matrices.
+
+# Arguments:
+- `sys`: An [`ODESystem`](@ref). This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.
+- `inputs`: A vector of variables that indicate the inputs of the linearized input-output model.
+- `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
+- `simplify`: Apply simplification in tearing.
+- `kwargs`: Are passed on to `find_solvables!`
+
+See also [`linearize`](@ref) which provides a higher-level interface.
+"""
+function linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false,
+                                kwargs...)
     sys = expand_connections(sys)
     state = TearingState(sys)
     markio!(state, inputs, outputs)
@@ -1022,7 +1046,7 @@ function linearize(sys::AbstractSystem, inputs, outputs; simplify = false, kwarg
              h_u = h_u)
         end
     end
-    return sys, lin_fun
+    return lin_fun, sys
 end
 
 function markio!(state, inputs, outputs)
@@ -1045,6 +1069,143 @@ function markio!(state, inputs, outputs)
         end
     end
     state
+end
+
+"""
+    (; A, B, C, D), simplified_sys = linearize(sys, inputs, outputs;    op = Dict(), allow_input_derivatives = false, kwargs...)
+    (; A, B, C, D)                 = linearize(simplified_sys, lin_fun; op = Dict(), allow_input_derivatives = false)
+
+Return a NamedTuple with the matrices of a linear statespace representation
+on the form
+```math
+\\begin{aligned}
+ẋ &= Ax + Bu\\\\
+y &= Cx + Du
+\\end{aligned}
+```
+
+The first signature automatically calls [`linearization_function`](@ref) internally,
+while the second signature expects the outputs of [`linearization_function`](@ref) as input.
+
+`op` denotes the operating point around which to linearize. If none is provided,
+the default values of `sys` are used.
+
+If `allow_input_derivatives = false`, an error will be thrown if input derivatives (``u̇``) appear as inputs in the linearized equations. If input derivatives are allowed, the returned `B` matrix will be of double width, corresponding to the input `[u; u̇]`.
+
+See also [`linearization_function`](@ref) which provides a lower-level interface, and [`ModelingToolkit.reorder_states`](@ref).
+
+See extended help for an example.
+
+# Extended help
+This example builds the following feedback interconnection and linearizes it from the input of `F` to the output of `P`.
+```
+
+  r ┌─────┐       ┌─────┐     ┌─────┐
+───►│     ├──────►│     │  u  │     │
+    │  F  │       │  C  ├────►│  P  │ y
+    └─────┘     ┌►│     │     │     ├─┬─►
+                │ └─────┘     └─────┘ │
+                │                     │
+                └─────────────────────┘
+```
+```
+using ModelingToolkit
+@variables t
+function plant(; name)
+    @variables x(t) = 1
+    @variables u(t)=0 y(t)=0 
+    D = Differential(t)
+    eqs = [D(x) ~ -x + u
+           y ~ x]
+    ODESystem(eqs, t; name = name)
+end
+
+function ref_filt(; name)
+    @variables x(t)=0 y(t)=0 
+    @variables u(t)=0 [input=true]
+    D = Differential(t)
+    eqs = [D(x) ~ -2 * x + u
+           y ~ x]
+    ODESystem(eqs, t, name = name)
+end
+
+function controller(kp; name)
+    @variables y(t)=0 r(t)=0 u(t)=0
+    @parameters kp = kp
+    eqs = [
+        u ~ kp * (r - y),
+    ]
+    ODESystem(eqs, t; name = name)
+end
+
+@named f = ref_filt()
+@named c = controller(1)
+@named p = plant()
+
+connections = [f.y ~ c.r # filtered reference to controller reference
+               c.u ~ p.u # controller output to plant input
+               p.y ~ c.y]
+
+@named cl = ODESystem(connections, t, systems = [f, c, p])
+
+lsys, ssys = linearize(cl, [f.u], [p.x])
+desired_order =  [f.x, p.x]
+lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
+
+@assert lsys.A == [-2 0; 1 -2]
+@assert lsys.B == [1; 0;;]
+@assert lsys.C == [0 1]
+@assert lsys.D[] == 0
+```
+"""
+function linearize(sys, lin_fun; op = Dict(), allow_input_derivatives = false)
+    x0 = merge(defaults(sys), op)
+    prob = ODEProblem(sys, x0, (0.0, 1.0))
+    linres = lin_fun(prob.u0, prob.p, 0.0)
+    f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
+
+    nx, nu = size(f_u)
+    nz = size(f_z, 2)
+    ny = size(h_x, 1)
+
+    if isempty(g_z)
+        A = f_x
+        B = f_u
+        C = h_x
+        @assert iszero(g_x)
+        @assert iszero(g_z)
+        @assert iszero(g_u)
+    else
+        gz = lu(g_z; check = false)
+        issuccess(gz) ||
+            error("g_z not invertible, this indicates that the DAE is of index > 1.")
+        gzgx = -(gz \ g_x)
+        A = [f_x f_z
+             gzgx*f_x gzgx*f_z]
+        B = [f_u
+             zeros(nz, nu)]
+        C = [
+        h_x h_z
+]
+        Bs = -(gz \ (f_x * f_u + g_u))
+        if !iszero(Bs)
+            if !allow_input_derivatives
+                der_inds = findall(vec(any(!=(0), Bs, dims = 1)))
+                error("Input derivatives appeared in expressions (-g_z\\(f_x*f_u + g_u) != 0), the following inputs appeared differentiated: $(inputs(sys)[der_inds]). Call `linear_staespace` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
+            end
+            B = [B Bs]
+        end
+    end
+
+    D = h_u
+
+    (; A, B, C, D)
+end
+
+function linearize(sys, inputs, outputs; op = Dict(), allow_input_derivatives = false,
+                   kwargs...)
+    lin_fun, ssys = linearization_function(sys, inputs, outputs; kwargs...)
+    linearize(ssys, lin_fun; op, allow_input_derivatives), ssys
 end
 
 @latexrecipe function f(sys::AbstractSystem)

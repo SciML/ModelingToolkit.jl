@@ -270,7 +270,7 @@ function inputs_to_parameters!(state::TransformationState, check_bound = true)
             push!(new_fullvars, v)
         end
     end
-    ninputs == 0 && return state, 1:0
+    ninputs == 0 && return (state, 1:0)
 
     nvars = ndsts(graph) - ninputs
     new_graph = BipartiteGraph(nsrcs(graph), nvars, Val(false))
