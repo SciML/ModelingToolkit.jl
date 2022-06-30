@@ -1027,13 +1027,22 @@ function linearization_function(sys::AbstractSystem, inputs, outputs; simplify =
     lin_fun = let fun = fun,
         h = ModelingToolkit.build_explicit_observed_function(sys, outputs)
 
-        (u, p, t) -> begin
-            uf = SciMLBase.UJacobianWrapper(fun, t, p)
-            fg_xz = ForwardDiff.jacobian(uf, u)
-            pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
-            # TODO: this is very inefficient, p contains all parameters of the system
-            fg_u = ForwardDiff.jacobian(pf, p)[:, input_idxs]
-            h_xz = ForwardDiff.jacobian(xz -> h(xz, p, t), u)
+        function (u, p, t)
+            if u !== nothing # Handle systems without states
+                length(sts) == length(u) ||
+                    error("Number of state variables does not match the number of input states")
+                uf = SciMLBase.UJacobianWrapper(fun, t, p)
+                fg_xz = ForwardDiff.jacobian(uf, u)
+                h_xz = ForwardDiff.jacobian(xz -> h(xz, p, t), u)
+                pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
+                # TODO: this is very inefficient, p contains all parameters of the system
+                fg_u = ForwardDiff.jacobian(pf, p)[:, input_idxs]
+            else
+                length(sts) == 0 ||
+                    error("Number of state variables does not match the number of input states")
+                fg_xz = zeros(0,0)
+                h_xz = fg_u = zeros(0, length(inputs))
+            end
             h_u = ForwardDiff.jacobian(p -> h(u, p, t), p)[:, input_idxs]
             (f_x = fg_xz[diff_idxs, diff_idxs],
              f_z = fg_xz[diff_idxs, alge_idxs],
