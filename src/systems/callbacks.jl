@@ -346,10 +346,7 @@ function process_events(sys; callback = nothing, has_difference = false, kwargs.
     end
     difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
 
-    cb = CallbackSet(contin_cb, difference_cb, callback, discrete_cb...)
-    # cb = merge_cb(contin_cb, discrete_cb...)
-    # cb = merge_cb(cb, difference_cb)
-    # cb = merge_cb(cb, callback)
-    # @show typeof(cbs),cbs
-    cb
+    cb = merge_cb(contin_cb, difference_cb)
+    cb = merge_cb(cb, callback)
+    (discrete_cb === nothing) ? cb : CallbackSet(cb, discrete_cb...)
 end
