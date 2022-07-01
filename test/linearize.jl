@@ -105,14 +105,28 @@ lsys = ModelingToolkit.reorder_states(lsys, states(ssys), reverse(desired_order)
 @test lsys.D == [4400 -4400]
 
 ## Test that there is a warning when input is misspecified
-@test_throws "Some specified inputs were not found" linearize(pid,
-                                                              [
-                                                                  pid.reference.u,
-                                                                  pid.measurement.u,
-                                                              ], [ctr_output.u])
-@test_throws "Some specified outputs were not found" linearize(pid,
-                                                               [reference.u, measurement.u],
-                                                               [pid.ctr_output.u])
+if VERSION >= v"1.7"
+    @test_throws "Some specified inputs were not found" linearize(pid,
+                                                                  [
+                                                                      pid.reference.u,
+                                                                      pid.measurement.u,
+                                                                  ], [ctr_output.u])
+    @test_throws "Some specified outputs were not found" linearize(pid,
+                                                                   [
+                                                                       reference.u,
+                                                                       measurement.u,
+                                                                   ],
+                                                                   [pid.ctr_output.u])
+else # v1.6 does not have the feature to match error message
+    @test_throws ErrorException linearize(pid,
+                                          [
+                                              pid.reference.u,
+                                              pid.measurement.u,
+                                          ], [ctr_output.u])
+    @test_throws ErrorException linearize(pid,
+                                          [reference.u, measurement.u],
+                                          [pid.ctr_output.u])
+end
 
 ## Test operating points
 
