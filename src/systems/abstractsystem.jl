@@ -970,15 +970,15 @@ end
 """
     lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, kwargs...)
 
-Return a function that linearizes system `sys`.
+Return a function that linearizes system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
 
-`lin_fun` is a function `(u,p,t) -> (; f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u)`, i.e., it returns a NamedTuple with the Jacobians of `f,g,h` for the nonlinear `sys` on the form
+`lin_fun` is a function `(variables, p, t) -> (; f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u)`, i.e., it returns a NamedTuple with the Jacobians of `f,g,h` for the nonlinear `sys` (technically for `simplified_sys`) on the form
 ```math
 ẋ = f(x, z, u)
 0 = g(x, z, u)
 y = h(x, z, u)
 ```
-where `x` are differential states, `z` algebraic states, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref).
+where `x` are differential states, `z` algebraic states, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `states(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
 
 The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The states of this system also indicates the order of the states that holds for the linearized matrices.
 
@@ -1081,10 +1081,10 @@ function markio!(state, inputs, outputs)
         end
     end
     all(values(inputset)) ||
-        error("Some specified inputs were not found in system. The following Dict indicates the found variables",
+        error("Some specified inputs were not found in system. The following Dict indicates the found variables ",
               inputset)
     all(values(outputset)) ||
-        error("Some specified outputs were not found in system. The following Dict indicates the found variables",
+        error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
               outputset)
     state
 end
@@ -1129,7 +1129,7 @@ This example builds the following feedback interconnection and linearizes it fro
                 │                     │
                 └─────────────────────┘
 ```
-```
+```julia
 using ModelingToolkit
 @variables t
 function plant(; name)
