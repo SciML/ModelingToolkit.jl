@@ -348,6 +348,7 @@ function linear_subsys_adjmat(state::TransformationState)
     cadj = Vector{Int}[]
     coeffs = Int[]
     for (i, eq) in enumerate(eqs)
+        isdiffeq(eq) && continue
         empty!(coeffs)
         linear_term = 0
         all_int_vars = true
