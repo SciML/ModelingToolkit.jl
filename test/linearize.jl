@@ -105,7 +105,7 @@ lsys = ModelingToolkit.reorder_states(lsys, states(ssys), reverse(desired_order)
 @test lsys.D == [4400 -4400]
 
 ## Test that there is a warning when input is misspecified
-if VERSION >= v"1.7"
+if VERSION >= v"1.8"
     @test_throws "Some specified inputs were not found" linearize(pid,
                                                                   [
                                                                       pid.reference.u,

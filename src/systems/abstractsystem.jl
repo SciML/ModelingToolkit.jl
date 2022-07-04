@@ -1090,8 +1090,8 @@ function markio!(state, inputs, outputs)
 end
 
 """
-    (; A, B, C, D), simplified_sys = linearize(sys, inputs, outputs;    op = Dict(), allow_input_derivatives = false, kwargs...)
-    (; A, B, C, D)                 = linearize(simplified_sys, lin_fun; op = Dict(), allow_input_derivatives = false)
+    (; A, B, C, D), simplified_sys = linearize(sys, inputs, outputs;    t=0.0, op = Dict(), allow_input_derivatives = false, kwargs...)
+    (; A, B, C, D)                 = linearize(simplified_sys, lin_fun; t=0.0, op = Dict(), allow_input_derivatives = false)
 
 Return a NamedTuple with the matrices of a linear statespace representation
 on the form
@@ -1179,10 +1179,12 @@ lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
 @assert lsys.D[] == 0
 ```
 """
-function linearize(sys, lin_fun; op = Dict(), allow_input_derivatives = false)
+function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives = false,
+                   p = DiffEqBase.NullParameters())
     x0 = merge(defaults(sys), op)
-    prob = ODEProblem(sys, x0, (0.0, 1.0))
-    linres = lin_fun(prob.u0, prob.p, 0.0)
+    f, u0, p = process_DEProblem(ODEFunction{true}, sys, x0, p)
+
+    linres = lin_fun(u0, p, t)
     f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
 
     nx, nu = size(f_u)
