@@ -108,8 +108,7 @@ eqs = [
 ]
 
 @named sys = ODESystem(eqs)
-f, dvs, ps = ModelingToolkit.generate_control_function(sys, expression = Val{false},
-                                                       simplify = true)
+f, dvs, ps = ModelingToolkit.generate_control_function(sys, simplify = true)
 
 @test isequal(dvs[], x)
 @test isempty(ps)
@@ -170,8 +169,7 @@ eqs = [connect_sd(sd, mass1, mass2)
 @named _model = ODESystem(eqs, t)
 @named model = compose(_model, mass1, mass2, sd);
 
-f, dvs, ps = ModelingToolkit.generate_control_function(model, expression = Val{false},
-                                                       simplify = true)
+f, dvs, ps = ModelingToolkit.generate_control_function(model, simplify = true)
 @test length(dvs) == 4
 @test length(ps) == length(parameters(model))
 p = ModelingToolkit.varmap_to_vars(ModelingToolkit.defaults(model), ps)
