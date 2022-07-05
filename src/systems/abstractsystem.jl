@@ -948,10 +948,17 @@ function will be applied during the tearing process. It also takes kwargs
 `allow_symbolic=false` and `allow_parameter=true` which limits the coefficient
 types during tearing.
 """
-function structural_simplify(sys::AbstractSystem; simplify = false, kwargs...)
+function structural_simplify(sys::AbstractSystem, args...; kwargs...)
     sys = expand_connections(sys)
     state = TearingState(sys)
-    state, = inputs_to_parameters!(state)
+    sys, input_idxs = _structural_simplify(sys, state, args...; kwargs...)
+    sys
+end
+
+function _structural_simplify(sys::AbstractSystem, state; simplify = false,
+                              check_bound = true,
+                              kwargs...)
+    state, input_idxs = inputs_to_parameters!(state, check_bound)
     sys = alias_elimination!(state)
     state = TearingState(sys)
     check_consistency(state)
@@ -964,7 +971,31 @@ function structural_simplify(sys::AbstractSystem; simplify = false, kwargs...)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     invalidate_cache!(sys)
-    return sys
+    return sys, input_idxs
+end
+
+function io_preprocessing(sys::AbstractSystem, inputs,
+                          outputs; simplify = false, kwargs...)
+    sys = expand_connections(sys)
+    state = TearingState(sys)
+    markio!(state, inputs, outputs)
+    sys, input_idxs = _structural_simplify(sys, state; simplify, check_bound = false,
+                                           kwargs...)
+
+    eqs = equations(sys)
+    check_operator_variables(eqs, Differential)
+    # Sort equations and states such that diff.eqs. match differential states and the rest are algebraic
+    diffstates = collect_operator_variables(sys, Differential)
+    eqs = sort(eqs, by = e -> !isoperator(e.lhs, Differential),
+               alg = Base.Sort.DEFAULT_STABLE)
+    @set! sys.eqs = eqs
+    diffstates = [arguments(e.lhs)[1] for e in eqs[1:length(diffstates)]]
+    sts = [diffstates; setdiff(states(sys), diffstates)]
+    @set! sys.states = sts
+    diff_idxs = 1:length(diffstates)
+    alge_idxs = (length(diffstates) + 1):length(sts)
+
+    sys, diff_idxs, alge_idxs, input_idxs
 end
 
 """
@@ -994,36 +1025,9 @@ See also [`linearize`](@ref) which provides a higher-level interface.
 function linearization_function(sys::AbstractSystem, inputs,
                                 outputs; simplify = false,
                                 kwargs...)
-    sys = expand_connections(sys)
-    state = TearingState(sys)
-    markio!(state, inputs, outputs)
-    state, input_idxs = inputs_to_parameters!(state, false)
-    sys = alias_elimination!(state)
-    state = TearingState(sys)
-    check_consistency(state)
-    if sys isa ODESystem
-        sys = dae_order_lowering(dummy_derivative(sys, state))
-    end
-    state = TearingState(sys)
-    find_solvables!(state; kwargs...)
-    sys = tearing_reassemble(state, tearing(state), simplify = simplify)
-    fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
-    @set! sys.observed = topsort_equations(observed(sys), fullstates)
-    invalidate_cache!(sys)
-
-    eqs = equations(sys)
-    check_operator_variables(eqs, Differential)
-    # Sort equations and states such that diff.eqs. match differential states and the rest are algebraic
-    diffstates = collect_operator_variables(sys, Differential)
-    eqs = sort(eqs, by = e -> !isoperator(e.lhs, Differential),
-               alg = Base.Sort.DEFAULT_STABLE)
-    @set! sys.eqs = eqs
-    diffstates = [arguments(e.lhs)[1] for e in eqs[1:length(diffstates)]]
-    sts = [diffstates; setdiff(states(sys), diffstates)]
-    @set! sys.states = sts
-
-    diff_idxs = 1:length(diffstates)
-    alge_idxs = (length(diffstates) + 1):length(sts)
+    sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
+                                                             kwargs...)
+    sts = states(sys)
     fun = ODEFunction(sys)
     lin_fun = let fun = fun,
         h = ModelingToolkit.build_explicit_observed_function(sys, outputs)
