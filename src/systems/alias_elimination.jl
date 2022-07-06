@@ -19,56 +19,53 @@ function aag_bareiss(sys::AbstractSystem)
     return aag_bareiss!(state.structure.graph, complete(state.structure.var_to_diff), mm)
 end
 
-function walk_to_root(ag, var_to_diff, v::Integer)
-    diff_to_var = invview(var_to_diff)
-
-    v′::Union{Nothing, Int} = v
-    @label HAS_BRANCH
-    while (v′ = diff_to_var[v]) !== nothing
+function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true)) where descend
+    g = descend ? invview(var_to_diff) : var_to_diff
+    while (v′ = g[v]) !== nothing
         v = v′
+        if level !== nothing
+            descend ? (level -= 1) : (level += 1)
+        end
     end
-    # `v` is now not differentiated in the current chain.
-    # Now we recursively walk to root variable's chain.
-    while true
-        next_v = get(ag, v, nothing)
-        next_v === nothing || (v = next_v[2]; @goto HAS_BRANCH)
-        (v′ = var_to_diff[v]) === nothing && break
-        v = v′
-    end
-
-    # Descend to the root from the chain
-    while (v′ = diff_to_var[v]) !== nothing
-        v = v′
-    end
-    v
+    level === nothing ? v : (v => level)
 end
 
-function visit_differential_aliases!(ag, level_to_var, processed, invag, var_to_diff, v, level=0)
-    processed[v] && return nothing
-    for n in neighbors(invag, v)
-        # TODO: we currently only handle `coeff == 1`
-        if isone(ag[n][1])
-            visit_differential_aliases!(ag, level_to_var, processed, invag, var_to_diff, n, level)
+function neighbor_branches!(visited, (ag, invag), var_to_diff, v, level = 0)
+    ns = Pair{Int, Int}[]
+    visited[v] && return ns
+    v′::Union{Nothing, Int} = v
+    diff_to_var = invview(var_to_diff)
+    while (v′ = diff_to_var[v]) !== nothing
+        v = v′
+        level -= 1
+    end
+    while true
+        if (_n = get(ag, v, nothing)) !== nothing
+            n = _n[2]
+            visited[n] || push!(ns, n => level)
+        end
+        for n in neighbors(invag, v)
+            visited[n] || push!(ns, n => level)
+        end
+        visited[v] = true
+        (v′ = var_to_diff[v]) === nothing && break
+        v = v′
+        level += 1
+    end
+    ns
+end
+
+function walk_to_root!(visited, ags, var_to_diff, v::Integer, level = 0)
+    brs = neighbor_branches!(visited, ags, var_to_diff, v, level)
+    min_var_level = v => level
+    isempty(brs) && return extreme_var(var_to_diff, min_var_level...)
+    for (x, lv) in brs
+        x, lv = walk_to_root!(visited, ags, var_to_diff, x, lv)
+        if min_var_level[2] > lv
+            min_var_level = x => lv
         end
     end
-    # Note that we don't need to update `invag`
-    if 1 <= level + 1 <= length(level_to_var)
-        root_var = level_to_var[level + 1]
-        if v != root_var
-            ag[v] = 1 => root_var
-        end
-    else
-        @assert length(level_to_var) == level
-        push!(level_to_var, v)
-    end
-    processed[v] = true
-    if (dv = var_to_diff[v]) !== nothing
-        visit_differential_aliases!(ag, level_to_var, processed, invag, var_to_diff, dv, level + 1)
-    end
-    if (iv = invview(var_to_diff)[v]) !== nothing
-        visit_differential_aliases!(ag, level_to_var, processed, invag, var_to_diff, iv, level - 1)
-    end
-    return nothing
+    return extreme_var(var_to_diff, min_var_level...)
 end
 
 function alias_elimination(sys)
@@ -86,7 +83,7 @@ function alias_elimination(sys)
     #         ⇓          ⇑
     #         ⇓         x_t   -->   D(x_t)
     #         ⇓               |---------------|
-    # z --> D(z)  --> D(D(z)) |--> D(D(D(z))) |
+    # z --> D(z)  --> D(D(z))  |--> D(D(D(z))) |
     #         ⇑               |---------------|
     # k --> D(k)
     #
@@ -102,18 +99,31 @@ function alias_elimination(sys)
     # with a tie breaking strategy. The root variable (in this case `z`) is
     # always uniquely determined. Thus, the result is well-defined.
     D = has_iv(sys) ? Differential(get_iv(sys)) : nothing
+    nvars = length(fullvars)
     diff_to_var = invview(var_to_diff)
-    invag = SimpleDiGraph(length(fullvars))
+    invag = SimpleDiGraph(nvars)
     for (v, (coeff, alias)) in pairs(ag)
         iszero(coeff) && continue
         add_edge!(invag, alias, v)
     end
-    processed = falses(length(var_to_diff))
+    Main._a[] = ag, invag
+    processed = falses(nvars)
+    visited = falses(nvars)
+    newag = AliasGraph(nvars)
     for (v, dv) in enumerate(var_to_diff)
         processed[v] && continue
         (dv === nothing && diff_to_var[v] === nothing) && continue
 
-        r = walk_to_root(ag, var_to_diff, v)
+        # TODO: use an iterator, and get a relative level vector for `processed`
+        # variabels.
+        r, lv = walk_to_root!(processed, (ag, invag), var_to_diff, v)
+        #lv = extreme_var(var_to_diff, v, -lv, Val(false))
+        lv′ = extreme_var(var_to_diff, v, 0, Val(false))[2]
+        let
+            sv = fullvars[v]
+            root = fullvars[r]
+            @warn "" sv => root level = lv levelv = lv′
+        end
         level_to_var = Int[r]
         v′′::Union{Nothing, Int} = v′::Int = r
         while (v′′ = var_to_diff[v′]) !== nothing
@@ -121,7 +131,6 @@ function alias_elimination(sys)
             push!(level_to_var, v′)
         end
         nlevels = length(level_to_var)
-        visit_differential_aliases!(ag, level_to_var, processed, invag, var_to_diff, r)
         if nlevels < (new_nlevels = length(level_to_var))
             @assert !(D isa Nothing)
             for i in (nlevels + 1):new_nlevels
@@ -502,6 +511,7 @@ function locally_structure_simplify!(adj_row, pivot_var, ag, var_to_diff)
     if alias_candidate isa Pair
         alias_val, alias_var = alias_candidate
         #preferred_var = pivot_var
+        #=
         switch = false # we prefer `alias_var` by default, unless we switch
         diff_to_var = invview(var_to_diff)
         pivot_var′′::Union{Nothing, Int} = pivot_var′::Int = pivot_var
@@ -525,6 +535,7 @@ function locally_structure_simplify!(adj_row, pivot_var, ag, var_to_diff)
             pivot_var, alias_var = alias_var, pivot_var
             pivot_val, alias_val = alias_val, pivot_val
         end
+        =#
 
         # `p` is the pivot variable, `a` is the alias variable, `v` and `c` are
         # their coefficients.
