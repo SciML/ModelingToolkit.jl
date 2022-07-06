@@ -23,12 +23,11 @@ function FunctionalAffect(f, sts, pars, ctx = nothing)
     # sts & pars contain either pairs: resistor.R => R, or Syms: R
     vs = [x isa Pair ? x.first : x for x in sts]
     vs_syms = [x isa Pair ? Symbol(x.second) : getname(x) for x in sts]
-    length(vs_syms) == length(unique(vs_syms)) || error("Variables are not unique.")
 
     ps = [x isa Pair ? x.first : x for x in pars]
     ps_syms = [x isa Pair ? Symbol(x.second) : getname(x) for x in pars]
-    length(ps_syms) == length(unique(ps_syms)) || error("Parameters are not unique.")
-    
+    length(vs_syms) + length(ps_syms) == length(unique(vcat(vs_syms, ps_syms))) || error("All symbols for variables & parameters must be unique.")
+
     FunctionalAffect(f, vs, vs_syms, ps, ps_syms, ctx)
 end
 
@@ -405,20 +404,16 @@ function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
     # (MTK should keep these symbols)
     v = filter(x -> !isnothing(x[1]), collect(zip(v_inds, states_syms(affect))))
     v_inds = [x[1] for x in v]
-    v_syms = Tuple([x[2] for x in v])
+    v_syms = [x[2] for x in v]
     p = filter(x -> !isnothing(x[1]), collect(zip(p_inds, parameters_syms(affect))))
     p_inds = [x[1] for x in p]
-    p_syms = Tuple([x[2] for x in p])
+    p_syms = [x[2] for x in p]
 
-    let v_inds=v_inds, p_inds=p_inds, v_syms=v_syms, p_syms=p_syms, user_affect=func(affect), ctx = context(affect)
+    kwargs = zip(vcat(v_syms, p_syms), vcat(v_inds, p_inds))
+
+    let kwargs=kwargs, user_affect=func(affect), ctx = context(affect)
         function (integ)
-            uv = @views integ.u[v_inds]
-            pv = @views integ.p[p_inds]
-
-            u = LArray{v_syms}(uv)
-            p = LArray{p_syms}(pv)
-
-            user_affect(integ.t, u, p, ctx)
+            user_affect(integ, ctx; kwargs...)
         end
     end
 end
