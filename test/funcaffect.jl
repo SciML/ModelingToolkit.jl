@@ -1,6 +1,6 @@
 using ModelingToolkit, Test, DifferentialEquations
 
-@parameters t a b
+@parameters t
 @variables u(t)
 D = Differential(t)
 
@@ -28,6 +28,41 @@ i4 = findfirst(==(4.0), sol[:t])
 i8 = findfirst(==(8.0), sol[:t])
 @test sol.u[i8+1][1] > 20.0
 @test ctx1[1] == 40.0
+
+# parameter
+function affect3!(integ, ctx; u, a)
+    integ.u[u] += integ.p[a]
+    integ.p[a] *= 2
+end
+
+@parameters a = 10.0
+@named sys = ODESystem(eqs, t, [u], [a], discrete_events=[[4.0, 8.0]=>(affect3!, [u], [a], nothing)])
+prob = ODEProblem(sys, [u=> 10.0], (0, 10.0))
+
+sol = solve(prob, Tsit5())
+i4 = findfirst(==(4.0), sol[:t])
+@test sol.u[i4+1][1] > 10.0
+i8 = findfirst(==(8.0), sol[:t])
+@test sol.u[i8+1][1] > 20.0
+
+# rename parameter
+function affect3!(integ, ctx; u, b)
+    integ.u[u] += integ.p[b]
+    integ.p[b] *= 2
+end
+
+@named sys = ODESystem(eqs, t, [u], [a], discrete_events=[[4.0, 8.0]=>(affect3!, [u], [a=> :b], nothing)])
+prob = ODEProblem(sys, [u=> 10.0], (0, 10.0))
+
+sol = solve(prob, Tsit5())
+i4 = findfirst(==(4.0), sol[:t])
+@test sol.u[i4+1][1] > 10.0
+i8 = findfirst(==(8.0), sol[:t])
+@test sol.u[i8+1][1] > 20.0
+
+# same name
+@test_throws ErrorException ODESystem(eqs, t, [u], [a], discrete_events=[[4.0, 8.0]=>(affect3!, [u], [a=> :u], nothing)]; name=:sys)
+
 
 
 
