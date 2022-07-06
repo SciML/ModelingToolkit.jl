@@ -99,27 +99,38 @@ function alias_elimination(sys)
 
         # TODO: use an iterator, and get a relative level vector for `processed`
         # variabels.
-        r, lv = walk_to_root!(relative_level, iag, v)
-        fill!(processed, false)
-        #lv = extreme_var(var_to_diff, v, -lv, Val(false))
-        lv′ = extreme_var(var_to_diff, v, 0)[2]
+        # Note that `rootlv` is non-positive
+        r, rootlv = walk_to_root!(relative_level, iag, v)
         let
             sv = fullvars[v]
             root = fullvars[r]
-            @warn "" sv=>root level=lv levelv=lv′
-            for (v, rl) in pairs(relative_level)
-                @show v, rl
-                @show fullvars[v], rl - lv, rl, lv
+            @warn "" sv=>root level=rootlv
+        end
+        level_to_var = Int[]
+        extreme_var(var_to_diff, r, nothing, Val(false), callback = Base.Fix1(push!, level_to_var))
+        nlevels = length(level_to_var)
+        current_level = Ref(0)
+        add_alias! = let current_level = current_level, level_to_var = level_to_var, newag = newag
+            v -> begin
+                level = current_level[]
+                # FIXME: only alias variables in the reachable set
+                if level + 1 <= length(level_to_var)
+                    # TODO: make sure the coefficient is 1
+                    newag[v] = 1 => level_to_var[level + 1]
+                else
+                    @assert length(level_to_var) == level
+                    push!(level_to_var, v)
+                end
+                current_level[] += 1
             end
         end
-        empty!(relative_level)
-        level_to_var = Int[r]
-        v′′::Union{Nothing, Int} = v′::Int = r
-        while (v′′ = var_to_diff[v′]) !== nothing
-            v′ = v′′
-            push!(level_to_var, v′)
+        for (v, rl) in pairs(relative_level)
+            @assert diff_to_var[v] === nothing
+            v == r && continue
+            current_level[] = rl - rootlv
+            extreme_var(var_to_diff, v, nothing, Val(false), callback = add_alias!)
         end
-        nlevels = length(level_to_var)
+        empty!(relative_level)
         if nlevels < (new_nlevels = length(level_to_var))
             @assert !(D isa Nothing)
             for i in (nlevels + 1):new_nlevels
@@ -127,6 +138,15 @@ function alias_elimination(sys)
                 fullvars[level_to_var[i]] = D(fullvars[level_to_var[i - 1]])
             end
         end
+    end
+    newkeys = keys(newag)
+    for (v, (c, a)) in ag
+        (v in newkeys || a in newkeys) && continue
+        newag[v] = c => a
+    end
+    ag = newag
+    for (v, (c, a)) in ag
+        @warn "new alias" fullvars[v] => (c, fullvars[a])
     end
 
     subs = Dict()
@@ -471,7 +491,6 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # Kind of like the backward substitution, but we don't actually rely on it
     # being lower triangular. We eliminate a variable if there are at most 2
     # variables left after the substitution.
-    diff_to_var = invview(var_to_diff)
     function lss!(ei::Integer)
         vi = pivots[ei]
         locally_structure_simplify!((@view mm[ei, :]), vi, ag, var_to_diff)
