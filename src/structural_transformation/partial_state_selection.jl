@@ -240,7 +240,8 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     # We can eliminate variables that are not a selected state (differential
     # variables). Selected states are differentiated variables that are not
     # dummy derivatives.
-    can_eliminate = let var_to_diff = var_to_diff, dummy_derivatives_set = dummy_derivatives_set
+    can_eliminate = let var_to_diff = var_to_diff,
+        dummy_derivatives_set = dummy_derivatives_set
 
         v -> begin
             dv = var_to_diff[v]

@@ -590,3 +590,42 @@ function promote_to_concrete(vs; tofloat = true, use_union = false)
         convert.(C, vs)
     end
 end
+
+struct BitDict <: AbstractDict{Int, Int}
+    keys::Vector{Int}
+    values::Vector{Union{Nothing, Int}}
+end
+BitDict(n::Integer) = BitDict(Int[], Union{Nothing, Int}[nothing for _ in 1:n])
+struct BitDictKeySet <: AbstractSet{Int}
+    d::BitDict
+end
+
+Base.keys(d::BitDict) = BitDictKeySet(d)
+Base.in(v::Integer, s::BitDictKeySet) = s.d.values[v] !== nothing
+Base.iterate(s::BitDictKeySet, state...) = iterate(s.d.keys, state...)
+function Base.setindex!(d::BitDict, val::Integer, ind::Integer)
+    if 1 <= ind <= length(d.values) && d.values[ind] === nothing
+        push!(d.keys, ind)
+    end
+    d.values[ind] = val
+end
+function Base.getindex(d::BitDict, ind::Integer)
+    if 1 <= ind <= length(d.values) && d.values[ind] === nothing
+        return d.values[ind]
+    else
+        throw(KeyError(ind))
+    end
+end
+function Base.iterate(d::BitDict, state...)
+    r = Base.iterate(d.keys, state...)
+    r === nothing && return nothing
+    k, state = r
+    (k => d.values[k]), state
+end
+function Base.empty!(d::BitDict)
+    for v in d.keys
+        d.values[v] = nothing
+    end
+    empty!(d.keys)
+    d
+end

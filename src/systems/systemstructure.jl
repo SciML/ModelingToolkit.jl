@@ -147,7 +147,7 @@ struct DiffChainIterator{Descend}
     v::Int
 end
 
-function Base.iterate(di::DiffChainIterator{Descend}, v=nothing) where Descend
+function Base.iterate(di::DiffChainIterator{Descend}, v = nothing) where {Descend}
     if v === nothing
         vv = di.v
         return (vv, vv)

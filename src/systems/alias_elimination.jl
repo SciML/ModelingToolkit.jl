@@ -19,7 +19,8 @@ function aag_bareiss(sys::AbstractSystem)
     return aag_bareiss!(state.structure.graph, complete(state.structure.var_to_diff), mm)
 end
 
-function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true); callback = _ -> nothing) where descend
+function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true);
+                     callback = _ -> nothing) where {descend}
     g = descend ? invview(var_to_diff) : var_to_diff
     callback(v)
     while (v′ = g[v]) !== nothing
@@ -32,17 +33,20 @@ function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true)
     level === nothing ? v : (v => level)
 end
 
-function walk_to_root!(iag, v::Integer, level = 0)
+function walk_to_root!(relative_level, iag, v::Integer, level = 0)
     brs = neighbors(iag, v)
     min_var_level = v => level
     for (x, lv′) in brs
         lv = lv′ + level
-        x, lv = walk_to_root!(iag, x, lv)
+        x, lv = walk_to_root!(relative_level, iag, x, lv)
+        relative_level[x] = lv
         if min_var_level[2] > lv
             min_var_level = x => lv
         end
     end
-    return extreme_var(iag.var_to_diff, min_var_level...)
+    x, lv = extreme_var(iag.var_to_diff, min_var_level...)
+    relative_level[x] = lv
+    return x => lv
 end
 
 function alias_elimination(sys)
@@ -87,6 +91,7 @@ function alias_elimination(sys)
     Main._a[] = ag, invag
     processed = falses(nvars)
     iag = InducedAliasGraph(ag, invag, var_to_diff, processed)
+    relative_level = BitDict(nvars)
     newag = AliasGraph(nvars)
     for (v, dv) in enumerate(var_to_diff)
         processed[v] && continue
@@ -94,15 +99,20 @@ function alias_elimination(sys)
 
         # TODO: use an iterator, and get a relative level vector for `processed`
         # variabels.
-        r, lv = walk_to_root!(iag, v)
+        r, lv = walk_to_root!(relative_level, iag, v)
         fill!(processed, false)
         #lv = extreme_var(var_to_diff, v, -lv, Val(false))
-        lv′ = extreme_var(var_to_diff, v, 0, Val(false))[2]
+        lv′ = extreme_var(var_to_diff, v, 0)[2]
         let
             sv = fullvars[v]
             root = fullvars[r]
-            @warn "" sv => root level = lv levelv = lv′
+            @warn "" sv=>root level=lv levelv=lv′
+            for (v, rl) in pairs(relative_level)
+                @show v, rl
+                @show fullvars[v], rl - lv, rl, lv
+            end
         end
+        empty!(relative_level)
         level_to_var = Int[r]
         v′′::Union{Nothing, Int} = v′::Int = r
         while (v′′ = var_to_diff[v′]) !== nothing
@@ -113,7 +123,7 @@ function alias_elimination(sys)
         if nlevels < (new_nlevels = length(level_to_var))
             @assert !(D isa Nothing)
             for i in (nlevels + 1):new_nlevels
-                var_to_diff[level_to_var[i-1]] = level_to_var[i]
+                var_to_diff[level_to_var[i - 1]] = level_to_var[i]
                 fullvars[level_to_var[i]] = D(fullvars[level_to_var[i - 1]])
             end
         end
@@ -147,7 +157,7 @@ function alias_elimination(sys)
     end
 
     newstates = []
-   for j in eachindex(fullvars)
+    for j in eachindex(fullvars)
         if j in keys(ag)
             _, var = ag[j]
             iszero(var) && continue
@@ -316,7 +326,9 @@ struct InducedAliasGraph
     visited::BitVector
 end
 
-InducedAliasGraph(ag, invag, var_to_diff) = InducedAliasGraph(ag, invag, var_to_diff, falses(nv(invag)))
+function InducedAliasGraph(ag, invag, var_to_diff)
+    InducedAliasGraph(ag, invag, var_to_diff, falses(nv(invag)))
+end
 
 struct IAGNeighbors
     iag::InducedAliasGraph
@@ -540,7 +552,8 @@ function locally_structure_simplify!(adj_row, pivot_var, ag, var_to_diff)
                 # loop.
                 #
                 # We're relying on `var` being produced in sorted order here.
-                nirreducible += !(alias_candidate isa Pair) || alias_var != alias_candidate[2]
+                nirreducible += !(alias_candidate isa Pair) ||
+                                alias_var != alias_candidate[2]
                 alias_candidate = new_coeff => alias_var
             end
         end

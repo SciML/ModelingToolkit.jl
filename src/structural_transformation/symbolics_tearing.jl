@@ -115,7 +115,8 @@ function solve_equation(eq, var, simplify)
     var ~ rhs
 end
 
-function substitute_vars!(graph::BipartiteGraph, subs, cache=Int[], callback! = nothing; exclude = ())
+function substitute_vars!(graph::BipartiteGraph, subs, cache = Int[], callback! = nothing;
+                          exclude = ())
     for su in subs
         su === nothing && continue
         v, v′ = su
@@ -361,7 +362,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 add_edge!(solvable_graph, eq_idx, dx_idx)
                 add_edge!(graph, eq_idx, x_t_idx)
                 add_edge!(graph, eq_idx, dx_idx)
-
             end
             # We use this info to substitute all `D(D(x))` or `D(x_t)` except
             # the `D(D(x)) ~ x_tt` equation to `x_tt`.
@@ -382,8 +382,10 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             # substituted to `x_tt`.
             for idx in (ogidx, dx_idx)
                 subidx = ((idx => x_t_idx),)
-                substitute_vars!(graph, subidx, idx_buffer, sub_callback!; exclude = order_lowering_eqs)
-                substitute_vars!(solvable_graph, subidx, idx_buffer; exclude = order_lowering_eqs)
+                substitute_vars!(graph, subidx, idx_buffer, sub_callback!;
+                                 exclude = order_lowering_eqs)
+                substitute_vars!(solvable_graph, subidx, idx_buffer;
+                                 exclude = order_lowering_eqs)
             end
         end
         empty!(subinfo)
@@ -453,7 +455,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 push!(removed_eqs, ieq)
                 push!(removed_vars, iv)
             else
-                rhs = -b/a
+                rhs = -b / a
                 neweq = var ~ simplify ? Symbolics.simplify(rhs) : rhs
                 push!(subeqs, neweq)
                 push!(solved_equations, ieq)
@@ -497,7 +499,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
 
     # Update system
     solved_variables_set = BitSet(solved_variables)
-    active_vars = setdiff!(setdiff(BitSet(1:length(fullvars)), solved_variables_set), removed_vars)
+    active_vars = setdiff!(setdiff(BitSet(1:length(fullvars)), solved_variables_set),
+                           removed_vars)
     new_var_to_diff = complete(DiffGraph(length(active_vars)))
     idx = 0
     for (v, d) in enumerate(var_to_diff)
