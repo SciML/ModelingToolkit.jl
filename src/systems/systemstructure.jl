@@ -142,6 +142,21 @@ function invview(dg::DiffGraph)
     return DiffGraph(dg.diff_to_primal, dg.primal_to_diff)
 end
 
+struct DiffChainIterator{Descend}
+    var_to_diff::DiffGraph
+    v::Int
+end
+
+function Base.iterate(di::DiffChainIterator{Descend}, v=nothing) where Descend
+    if v === nothing
+        vv = di.v
+        return (vv, vv)
+    end
+    g = Descend ? invview(di.var_to_diff) : di.var_to_diff
+    v′ = g[v]
+    v′ === nothing ? nothing : (v′, v′)
+end
+
 abstract type TransformationState{T} end
 abstract type AbstractTearingState{T} <: TransformationState{T} end
 

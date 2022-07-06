@@ -19,10 +19,12 @@ function aag_bareiss(sys::AbstractSystem)
     return aag_bareiss!(state.structure.graph, complete(state.structure.var_to_diff), mm)
 end
 
-function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true)) where descend
+function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true); callback = _ -> nothing) where descend
     g = descend ? invview(var_to_diff) : var_to_diff
+    callback(v)
     while (v′ = g[v]) !== nothing
-        v = v′
+        v::Int = v′
+        callback(v)
         if level !== nothing
             descend ? (level -= 1) : (level += 1)
         end
@@ -30,46 +32,22 @@ function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true)
     level === nothing ? v : (v => level)
 end
 
-function neighbor_branches!(visited, (ag, invag), var_to_diff, v, level = 0)
-    ns = Pair{Int, Int}[]
-    visited[v] && return ns
-    v′::Union{Nothing, Int} = v
-    diff_to_var = invview(var_to_diff)
-    while (v′ = diff_to_var[v]) !== nothing
-        v = v′
-        level -= 1
-    end
-    while true
-        if (_n = get(ag, v, nothing)) !== nothing
-            n = _n[2]
-            visited[n] || push!(ns, n => level)
-        end
-        for n in neighbors(invag, v)
-            visited[n] || push!(ns, n => level)
-        end
-        visited[v] = true
-        (v′ = var_to_diff[v]) === nothing && break
-        v = v′
-        level += 1
-    end
-    ns
-end
-
-function walk_to_root!(visited, ags, var_to_diff, v::Integer, level = 0)
-    brs = neighbor_branches!(visited, ags, var_to_diff, v, level)
+function walk_to_root!(iag, v::Integer, level = 0)
+    brs = neighbors(iag, v)
     min_var_level = v => level
-    isempty(brs) && return extreme_var(var_to_diff, min_var_level...)
-    for (x, lv) in brs
-        x, lv = walk_to_root!(visited, ags, var_to_diff, x, lv)
+    for (x, lv′) in brs
+        lv = lv′ + level
+        x, lv = walk_to_root!(iag, x, lv)
         if min_var_level[2] > lv
             min_var_level = x => lv
         end
     end
-    return extreme_var(var_to_diff, min_var_level...)
+    return extreme_var(iag.var_to_diff, min_var_level...)
 end
 
 function alias_elimination(sys)
     state = TearingState(sys; quick_cancel = true)
+    Main._state[] = state
     ag, mm = alias_eliminate_graph!(state)
     ag === nothing && return sys
 
@@ -108,7 +86,7 @@ function alias_elimination(sys)
     end
     Main._a[] = ag, invag
     processed = falses(nvars)
-    visited = falses(nvars)
+    iag = InducedAliasGraph(ag, invag, var_to_diff, processed)
     newag = AliasGraph(nvars)
     for (v, dv) in enumerate(var_to_diff)
         processed[v] && continue
@@ -116,7 +94,8 @@ function alias_elimination(sys)
 
         # TODO: use an iterator, and get a relative level vector for `processed`
         # variabels.
-        r, lv = walk_to_root!(processed, (ag, invag), var_to_diff, v)
+        r, lv = walk_to_root!(iag, v)
+        fill!(processed, false)
         #lv = extreme_var(var_to_diff, v, -lv, Val(false))
         lv′ = extreme_var(var_to_diff, v, 0, Val(false))[2]
         let
@@ -329,6 +308,70 @@ function Base.in(i::Int, agk::AliasGraphKeySet)
     aliasto = agk.ag.aliasto
     1 <= i <= length(aliasto) && aliasto[i] !== nothing
 end
+
+struct InducedAliasGraph
+    ag::AliasGraph
+    invag::SimpleDiGraph{Int}
+    var_to_diff::DiffGraph
+    visited::BitVector
+end
+
+InducedAliasGraph(ag, invag, var_to_diff) = InducedAliasGraph(ag, invag, var_to_diff, falses(nv(invag)))
+
+struct IAGNeighbors
+    iag::InducedAliasGraph
+    v::Int
+end
+
+function Base.iterate(it::IAGNeighbors, state = nothing)
+    @unpack ag, invag, var_to_diff, visited = it.iag
+    callback! = let visited = visited
+        var -> visited[var] = true
+    end
+    if state === nothing
+        v, lv = extreme_var(var_to_diff, it.v, 0)
+        used_ag = false
+        nb = neighbors(invag, v)
+        nit = iterate(nb)
+        state = (v, lv, used_ag, nb, nit)
+    end
+
+    v, level, used_ag, nb, nit = state
+    visited[v] && return nothing
+    while true
+        @label TRYAGIN
+        if used_ag
+            if nit !== nothing
+                n, ns = nit
+                if !visited[n]
+                    n, lv = extreme_var(var_to_diff, n, level)
+                    extreme_var(var_to_diff, n, nothing, Val(false), callback = callback!)
+                    nit = iterate(nb, ns)
+                    return n => lv, (v, level, used_ag, nb, nit)
+                end
+            end
+        else
+            used_ag = true
+            if (_n = get(ag, v, nothing)) !== nothing
+                n = _n[2]
+                if !visited[n]
+                    n, lv = extreme_var(var_to_diff, n, level)
+                    extreme_var(var_to_diff, n, nothing, Val(false), callback = callback!)
+                    return n => lv, (v, level, used_ag, nb, nit)
+                end
+            else
+                @goto TRYAGIN
+            end
+        end
+        visited[v] = true
+        (v′ = var_to_diff[v]) === nothing && return nothing
+        v::Int = v′
+        level += 1
+        used_ag = false
+    end
+end
+
+Graphs.neighbors(iag::InducedAliasGraph, v::Integer) = IAGNeighbors(iag, v)
 
 count_nonzeros(a::AbstractArray) = count(!iszero, a)
 
