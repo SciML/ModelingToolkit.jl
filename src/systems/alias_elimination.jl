@@ -90,7 +90,8 @@ function alias_elimination(sys)
     end
     Main._a[] = ag, invag
     processed = falses(nvars)
-    iag = InducedAliasGraph(ag, invag, var_to_diff, processed)
+    #iag = InducedAliasGraph(ag, invag, var_to_diff, processed)
+    iag = InducedAliasGraph(ag, invag, var_to_diff)
     relative_level = BitDict(nvars)
     newag = AliasGraph(nvars)
     for (v, dv) in enumerate(var_to_diff)
@@ -101,10 +102,14 @@ function alias_elimination(sys)
         # variabels.
         # Note that `rootlv` is non-positive
         r, rootlv = walk_to_root!(relative_level, iag, v)
+        fill!(iag.visited, false)
         let
             sv = fullvars[v]
             root = fullvars[r]
-            @warn "" sv=>root level=rootlv
+            @info "Found root $r" sv=>root level=rootlv
+            for vv in relative_level
+                @show fullvars[vv[1]]
+            end
         end
         level_to_var = Int[]
         extreme_var(var_to_diff, r, nothing, Val(false), callback = Base.Fix1(push!, level_to_var))
@@ -116,11 +121,16 @@ function alias_elimination(sys)
                 # FIXME: only alias variables in the reachable set
                 if level + 1 <= length(level_to_var)
                     # TODO: make sure the coefficient is 1
-                    newag[v] = 1 => level_to_var[level + 1]
+                    av = level_to_var[level + 1]
+                    if v != av # if the level_to_var isn't from the root branch
+                        newag[v] = 1 => av
+                        #@info "create alias" fullvars[v] => fullvars[level_to_var[level + 1]]
+                    end
                 else
                     @assert length(level_to_var) == level
                     push!(level_to_var, v)
                 end
+                processed[v] = true
                 current_level[] += 1
             end
         end
@@ -139,14 +149,30 @@ function alias_elimination(sys)
             end
         end
     end
+    #=
+    for (v, (c, a)) in ag
+        va = iszero(a) ? a : fullvars[a]
+        @warn "old alias" fullvars[v] => (c, va)
+    end
+    for (v, (c, a)) in newag
+        va = iszero(a) ? a : fullvars[a]
+        @warn "new alias" fullvars[v] => (c, va)
+    end
+    =#
+    println("================")
     newkeys = keys(newag)
     for (v, (c, a)) in ag
         (v in newkeys || a in newkeys) && continue
-        newag[v] = c => a
+        if iszero(c)
+            newag[v] = c
+        else
+            newag[v] = c => a
+        end
     end
     ag = newag
     for (v, (c, a)) in ag
-        @warn "new alias" fullvars[v] => (c, fullvars[a])
+        va = iszero(a) ? a : fullvars[a]
+        @warn "new alias" fullvars[v] => (c, va)
     end
 
     subs = Dict()
@@ -179,6 +205,7 @@ function alias_elimination(sys)
     newstates = []
     for j in eachindex(fullvars)
         if j in keys(ag)
+            #=
             _, var = ag[j]
             iszero(var) && continue
             # Put back equations for alias eliminated dervars
@@ -186,7 +213,7 @@ function alias_elimination(sys)
                 has_higher_order = false
                 v = var
                 while (v = var_to_diff[v]) !== nothing
-                    if !(v in keys(ag))
+                    if !(v::Int in keys(ag))
                         has_higher_order = true
                         break
                     end
@@ -197,6 +224,7 @@ function alias_elimination(sys)
                     diff_to_var[j] === nothing && push!(newstates, rhs)
                 end
             end
+            =#
         else
             diff_to_var[j] === nothing && push!(newstates, fullvars[j])
         end
@@ -404,6 +432,49 @@ function Base.iterate(it::IAGNeighbors, state = nothing)
 end
 
 Graphs.neighbors(iag::InducedAliasGraph, v::Integer) = IAGNeighbors(iag, v)
+
+struct RootedAliasTree
+    iag::InducedAliasGraph
+    root::Int
+end
+
+AbstractTrees.childtype(::Type{<:RootedAliasTree}) = Union{RootedAliasTree, Int}
+AbstractTrees.children(rat::RootedAliasTree) = RootedAliasChildren(rat)
+AbstractTrees.nodevalue(rat::RootedAliasTree) = rat.root
+AbstractTrees.shouldprintkeys(rat::RootedAliasTree) = false
+has_fast_reverse(::Type{<:AbstractSimpleTreeIter{<:RootedAliasTree}}) = false
+
+struct RootedAliasChildren
+    t::RootedAliasTree
+end
+
+function Base.iterate(c::RootedAliasChildren, s = nothing)
+    rat = c.t
+    @unpack iag, root = rat
+    @unpack ag, invag, var_to_diff, visited = iag
+    (root = var_to_diff[root]) === nothing && return nothing
+    root::Int
+    if s === nothing
+        stage = 1
+        it = iterate(neighbors(invag, root))
+        s = (stage, it)
+    end
+    (stage, it) = s
+    if stage == 1 # root
+        stage += 1
+        return root, (stage, it)
+    elseif stage == 2 # ag
+        stage += 1
+        cv = get(ag, root, nothing)
+        if cv !== nothing
+            return RootedAliasTree(iag, cv[2]), (stage, it)
+        end
+    end
+    # invag (stage 3)
+    it === nothing && return nothing
+    e, ns = it
+    return RootedAliasTree(iag, e), (stage, iterate(invag, ns))
+end
 
 count_nonzeros(a::AbstractArray) = count(!iszero, a)
 

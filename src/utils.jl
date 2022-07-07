@@ -629,3 +629,65 @@ function Base.empty!(d::BitDict)
     empty!(d.keys)
     d
 end
+
+abstract type AbstractSimpleTreeIter{T} end
+Base.IteratorSize(::Type{<:AbstractSimpleTreeIter}) = Base.SizeUnknown()
+Base.eltype(::Type{<:AbstractSimpleTreeIter{T}}) where T = childtype(T)
+has_fast_reverse(::Type{<:AbstractSimpleTreeIter}) = true
+has_fast_reverse(::T) where T<:AbstractSimpleTreeIter = has_fast_reverse(T)
+reverse_buffer(it::AbstractSimpleTreeIter) = has_fast_reverse(it) ? nothing : eltype(it)[]
+reverse_children!(::Nothing, cs) = Iterators.reverse(cs)
+function reverse_children!(rev_buff, cs)
+    Iterators.reverse(cs)
+    empty!(rev_buff)
+    for c in cs
+        push!(rev_buff, c)
+    end
+    Iterators.reverse(rev_buff)
+end
+
+struct StatefulPreOrderDFS{T} <: AbstractSimpleTreeIter{T}
+    t::T
+end
+function Base.iterate(it::StatefulPreOrderDFS, state = (eltype(it)[it.t], reverse_buffer(it)))
+    stack, rev_buff = state
+    isempty(stack) && return nothing
+    t = pop!(stack)
+    for c in reverse_children!(rev_buff, children(t))
+        push!(stack, c)
+    end
+    return t, state
+end
+struct StatefulPostOrderDFS{T} <: AbstractSimpleTreeIter{T}
+    t::T
+end
+function Base.iterate(it::StatefulPostOrderDFS, state = (eltype(it)[it.t], falses(1), reverse_buffer(it)))
+    isempty(state[2]) && return nothing
+    vstack, sstack, rev_buff = state
+    while true
+        t = pop!(vstack)
+        isresume = pop!(sstack)
+        isresume && return t, state
+        push!(vstack, t)
+        push!(sstack, true)
+        for c in reverse_children!(rev_buff, children(t))
+            push!(vstack, c)
+            push!(sstack, false)
+        end
+    end
+end
+
+# Note that StatefulBFS also returns the depth.
+struct StatefulBFS{T} <: AbstractSimpleTreeIter{T}
+    t::T
+end
+Base.eltype(::Type{<:StatefulBFS{T}}) where T = Tuple{Int, childtype(T)}
+function Base.iterate(it::StatefulBFS, queue = (eltype(it)[(0, it.t)]))
+    isempty(queue) && return nothing
+    lv, t = popfirst!(queue)
+    lv += 1
+    for c in children(t)
+        push!(queue, (lv, c))
+    end
+    return (lv, t), queue
+end
