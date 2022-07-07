@@ -685,9 +685,9 @@ Base.eltype(::Type{<:StatefulBFS{T}}) where T = Tuple{Int, childtype(T)}
 function Base.iterate(it::StatefulBFS, queue = (eltype(it)[(0, it.t)]))
     isempty(queue) && return nothing
     lv, t = popfirst!(queue)
-    lv += 1
+    nextlv = lv + 1
     for c in children(t)
-        push!(queue, (lv, c))
+        push!(queue, (nextlv, c))
     end
     return (lv, t), queue
 end

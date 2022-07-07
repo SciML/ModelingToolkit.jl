@@ -33,22 +33,6 @@ function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true)
     level === nothing ? v : (v => level)
 end
 
-function walk_to_root!(relative_level, iag, v::Integer, level = 0)
-    brs = neighbors(iag, v)
-    min_var_level = v => level
-    for (x, lv′) in brs
-        lv = lv′ + level
-        x, lv = walk_to_root!(relative_level, iag, x, lv)
-        relative_level[x] = lv
-        if min_var_level[2] > lv
-            min_var_level = x => lv
-        end
-    end
-    x, lv = extreme_var(iag.var_to_diff, min_var_level...)
-    relative_level[x] = lv
-    return x => lv
-end
-
 function alias_elimination(sys)
     state = TearingState(sys; quick_cancel = true)
     Main._state[] = state
@@ -92,39 +76,29 @@ function alias_elimination(sys)
     processed = falses(nvars)
     #iag = InducedAliasGraph(ag, invag, var_to_diff, processed)
     iag = InducedAliasGraph(ag, invag, var_to_diff)
-    relative_level = BitDict(nvars)
     newag = AliasGraph(nvars)
     for (v, dv) in enumerate(var_to_diff)
         processed[v] && continue
         (dv === nothing && diff_to_var[v] === nothing) && continue
 
-        # TODO: use an iterator, and get a relative level vector for `processed`
-        # variabels.
-        # Note that `rootlv` is non-positive
-        r, rootlv = walk_to_root!(relative_level, iag, v)
-        fill!(iag.visited, false)
+        r, _ = find_root!(iag, v)
         let
             sv = fullvars[v]
             root = fullvars[r]
-            @info "Found root $r" sv=>root level=rootlv
-            for vv in relative_level
-                @show fullvars[vv[1]]
-            end
+            @info "Found root $r" sv=>root
         end
         level_to_var = Int[]
         extreme_var(var_to_diff, r, nothing, Val(false), callback = Base.Fix1(push!, level_to_var))
         nlevels = length(level_to_var)
         current_level = Ref(0)
-        add_alias! = let current_level = current_level, level_to_var = level_to_var, newag = newag
+        add_alias! = let current_level = current_level, level_to_var = level_to_var, newag = newag, processed = processed
             v -> begin
                 level = current_level[]
-                # FIXME: only alias variables in the reachable set
                 if level + 1 <= length(level_to_var)
                     # TODO: make sure the coefficient is 1
                     av = level_to_var[level + 1]
                     if v != av # if the level_to_var isn't from the root branch
                         newag[v] = 1 => av
-                        #@info "create alias" fullvars[v] => fullvars[level_to_var[level + 1]]
                     end
                 else
                     @assert length(level_to_var) == level
@@ -134,13 +108,18 @@ function alias_elimination(sys)
                 current_level[] += 1
             end
         end
-        for (v, rl) in pairs(relative_level)
-            @assert diff_to_var[v] === nothing
+        for (lv, t) in StatefulBFS(RootedAliasTree(iag, r))
+            v = nodevalue(t)
+            processed[v] = true
             v == r && continue
-            current_level[] = rl - rootlv
+            if lv < length(level_to_var)
+                if level_to_var[lv + 1] == v
+                    continue
+                end
+            end
+            current_level[] = lv
             extreme_var(var_to_diff, v, nothing, Val(false), callback = add_alias!)
         end
-        empty!(relative_level)
         if nlevels < (new_nlevels = length(level_to_var))
             @assert !(D isa Nothing)
             for i in (nlevels + 1):new_nlevels
@@ -384,6 +363,7 @@ struct IAGNeighbors
 end
 
 function Base.iterate(it::IAGNeighbors, state = nothing)
+    Main._a[] = it, state
     @unpack ag, invag, var_to_diff, visited = it.iag
     callback! = let visited = visited
         var -> visited[var] = true
@@ -424,14 +404,33 @@ function Base.iterate(it::IAGNeighbors, state = nothing)
             end
         end
         visited[v] = true
-        (v′ = var_to_diff[v]) === nothing && return nothing
-        v::Int = v′
+        (v = var_to_diff[v]) === nothing && return nothing
         level += 1
         used_ag = false
     end
 end
 
 Graphs.neighbors(iag::InducedAliasGraph, v::Integer) = IAGNeighbors(iag, v)
+
+function _find_root!(iag::InducedAliasGraph, v::Integer, level = 0)
+    brs = neighbors(iag, v)
+    min_var_level = v => level
+    for (x, lv′) in brs
+        lv = lv′ + level
+        x, lv = _find_root!(iag, x, lv)
+        if min_var_level[2] > lv
+            min_var_level = x => lv
+        end
+    end
+    x, lv = extreme_var(iag.var_to_diff, min_var_level...)
+    return x => lv
+end
+
+function find_root!(iag::InducedAliasGraph, v::Integer)
+    ret = _find_root!(iag, v)
+    fill!(iag.visited, false)
+    ret
+end
 
 struct RootedAliasTree
     iag::InducedAliasGraph
@@ -440,6 +439,7 @@ end
 
 AbstractTrees.childtype(::Type{<:RootedAliasTree}) = Union{RootedAliasTree, Int}
 AbstractTrees.children(rat::RootedAliasTree) = RootedAliasChildren(rat)
+AbstractTrees.nodetype(::Type{<:RootedAliasTree}) = Int
 AbstractTrees.nodevalue(rat::RootedAliasTree) = rat.root
 AbstractTrees.shouldprintkeys(rat::RootedAliasTree) = false
 has_fast_reverse(::Type{<:AbstractSimpleTreeIter{<:RootedAliasTree}}) = false
