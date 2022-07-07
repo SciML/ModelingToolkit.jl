@@ -148,7 +148,7 @@ function check_variables(dvs, iv)
     for dv in dvs
         isequal(iv, dv) &&
             throw(ArgumentError("Independent variable $iv not allowed in dependent variables."))
-        (is_delay_var(iv, dv) || occursin(iv, iv_from_nested_derivative(dv))) ||
+        (is_delay_var(iv, dv) || occursin(iv, dv)) ||
             throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
     end
 end
@@ -201,19 +201,26 @@ function check_equations(eqs, iv)
     end
 end
 "Get all the independent variables with respect to which differentials/differences are taken."
-function collect_ivs_from_nested_operator!(ivs, x::Term, target_op)
-    op = operation(x)
+function collect_ivs_from_nested_operator!(ivs, x, target_op)
+    if !istree(x)
+        return
+    end
+    op = operation(unwrap(x))
     if op isa target_op
         push!(ivs, get_iv(op))
-        collect_ivs_from_nested_operator!(ivs, arguments(x)[1], target_op)
+        collect_ivs_from_nested_operator!(ivs, op.x, target_op)
     end
 end
 
-function iv_from_nested_derivative(x::Term, op = Differential)
-    operation(x) isa op ? iv_from_nested_derivative(arguments(x)[1], op) : arguments(x)[1]
+function iv_from_nested_derivative(x, op = Differential)
+    if istree(x) && operation(x) isa op
+        iv_from_nested_derivative(operation(x).x, op)
+    elseif SymbolicUtils.issym(x)
+        return x
+    else
+        return nothing
+    end
 end
-iv_from_nested_derivative(x::Sym, op = Differential) = x
-iv_from_nested_derivative(x, op = Differential) = nothing
 
 hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
 getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))

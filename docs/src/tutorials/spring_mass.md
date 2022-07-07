@@ -13,14 +13,14 @@ D = Differential(t)
 
 function Mass(; name, m = 1.0, xy = [0., 0.], u = [0., 0.])
     ps = @parameters m=m
-    sts = @variables pos[1:2](t)=xy v[1:2](t)=u
+    sts = @variables pos(t)[1:2]=xy v(t)[1:2]=u
     eqs = scalarize(D.(pos) .~ v)
     ODESystem(eqs, t, [pos..., v...], ps; name)
 end
 
 function Spring(; name, k = 1e4, l = 1.)
     ps = @parameters k=k l=l
-    @variables x(t), dir[1:2](t)
+    @variables x(t), dir(t)[1:2]
     ODESystem(Equation[], t, [x, dir...], ps; name)
 end
 
@@ -63,7 +63,7 @@ For each component we use a Julia function that returns an `ODESystem`. At the t
 ```@example component
 function Mass(; name, m = 1.0, xy = [0., 0.], u = [0., 0.])
     ps = @parameters m=m
-    sts = @variables pos[1:2](t)=xy v[1:2](t)=u
+    sts = @variables pos(t)[1:2]=xy v(t)[1:2]=u
     eqs = scalarize(D.(pos) .~ v)
     ODESystem(eqs, t, [pos..., v...], ps; name)
 end
@@ -86,7 +86,7 @@ Next we build the spring component. It is characterised by the spring constant `
 ```@example component
 function Spring(; name, k = 1e4, l = 1.)
     ps = @parameters k=k l=l
-    @variables x(t), dir[1:2](t)
+    @variables x(t), dir(t)[1:2]
     ODESystem(Equation[], t, [x, dir...], ps; name)
 end
 ```
