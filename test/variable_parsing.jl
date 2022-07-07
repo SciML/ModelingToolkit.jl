@@ -45,7 +45,7 @@ D1 = Differential(t)
     t[1:2]
     s[1:4, 1:2]
 end
-@parameters σ[1:2](..)
+@parameters σ(..)[1:2]
 
 @test all(ModelingToolkit.isparameter, collect(t))
 @test all(ModelingToolkit.isparameter, collect(s))

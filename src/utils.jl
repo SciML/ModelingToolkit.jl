@@ -213,7 +213,9 @@ function collect_ivs_from_nested_operator!(ivs, x, target_op)
 end
 
 function iv_from_nested_derivative(x, op = Differential)
-    if istree(x)
+    if istree(x) && operation(x) == getindex
+        iv_from_nested_derivative(arguments(x)[1], op)
+    elseif istree(x)
         operation(x) isa op ? iv_from_nested_derivative(arguments(x)[1], op) : arguments(x)[1]
     elseif issym(x)
         x
