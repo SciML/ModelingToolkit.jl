@@ -33,9 +33,8 @@ function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true)
     level === nothing ? v : (v => level)
 end
 
-function alias_elimination(sys)
+function alias_elimination(sys; debug = false)
     state = TearingState(sys; quick_cancel = true)
-    Main._state[] = state
     ag, mm = alias_eliminate_graph!(state)
     ag === nothing && return sys
 
@@ -72,7 +71,6 @@ function alias_elimination(sys)
         iszero(coeff) && continue
         add_edge!(invag, alias, v)
     end
-    Main._a[] = ag, invag
     processed = falses(nvars)
     #iag = InducedAliasGraph(ag, invag, var_to_diff, processed)
     iag = InducedAliasGraph(ag, invag, var_to_diff)
@@ -82,7 +80,7 @@ function alias_elimination(sys)
         (dv === nothing && diff_to_var[v] === nothing) && continue
 
         r, _ = find_root!(iag, v)
-        let
+        if debug
             sv = fullvars[v]
             root = fullvars[r]
             @info "Found root $r" sv=>root
@@ -90,25 +88,25 @@ function alias_elimination(sys)
         level_to_var = Int[]
         extreme_var(var_to_diff, r, nothing, Val(false), callback = Base.Fix1(push!, level_to_var))
         nlevels = length(level_to_var)
-        current_level = Ref(0)
-        add_alias! = let current_level = current_level, level_to_var = level_to_var, newag = newag, processed = processed
+        current_coeff_level = Ref((0, 0))
+        add_alias! = let current_coeff_level = current_coeff_level, level_to_var = level_to_var, newag = newag, processed = processed
             v -> begin
-                level = current_level[]
+                coeff, level = current_coeff_level[]
                 if level + 1 <= length(level_to_var)
                     # TODO: make sure the coefficient is 1
                     av = level_to_var[level + 1]
                     if v != av # if the level_to_var isn't from the root branch
-                        newag[v] = 1 => av
+                        newag[v] = coeff => av
                     end
                 else
                     @assert length(level_to_var) == level
                     push!(level_to_var, v)
                 end
                 processed[v] = true
-                current_level[] += 1
+                current_coeff_level[] = (coeff, level + 1)
             end
         end
-        for (lv, t) in StatefulBFS(RootedAliasTree(iag, r))
+        for (coeff, lv, t) in StatefulAliasBFS(RootedAliasTree(iag, r))
             v = nodevalue(t)
             processed[v] = true
             v == r && continue
@@ -117,7 +115,7 @@ function alias_elimination(sys)
                     continue
                 end
             end
-            current_level[] = lv
+            current_coeff_level[] = coeff, lv
             extreme_var(var_to_diff, v, nothing, Val(false), callback = add_alias!)
         end
         if nlevels < (new_nlevels = length(level_to_var))
@@ -128,17 +126,7 @@ function alias_elimination(sys)
             end
         end
     end
-    #=
-    for (v, (c, a)) in ag
-        va = iszero(a) ? a : fullvars[a]
-        @warn "old alias" fullvars[v] => (c, va)
-    end
-    for (v, (c, a)) in newag
-        va = iszero(a) ? a : fullvars[a]
-        @warn "new alias" fullvars[v] => (c, va)
-    end
-    =#
-    println("================")
+
     newkeys = keys(newag)
     for (v, (c, a)) in ag
         (v in newkeys || a in newkeys) && continue
@@ -149,9 +137,10 @@ function alias_elimination(sys)
         end
     end
     ag = newag
-    for (v, (c, a)) in ag
+
+    debug && for (v, (c, a)) in ag
         va = iszero(a) ? a : fullvars[a]
-        @warn "new alias" fullvars[v] => (c, va)
+        @info "new alias" fullvars[v] => (c, va)
     end
 
     subs = Dict()
@@ -363,7 +352,6 @@ struct IAGNeighbors
 end
 
 function Base.iterate(it::IAGNeighbors, state = nothing)
-    Main._a[] = it, state
     @unpack ag, invag, var_to_diff, visited = it.iag
     callback! = let visited = visited
         var -> visited[var] = true
@@ -444,6 +432,22 @@ AbstractTrees.nodevalue(rat::RootedAliasTree) = rat.root
 AbstractTrees.shouldprintkeys(rat::RootedAliasTree) = false
 has_fast_reverse(::Type{<:AbstractSimpleTreeIter{<:RootedAliasTree}}) = false
 
+struct StatefulAliasBFS{T} <: AbstractSimpleTreeIter{T}
+    t::T
+end
+# alias coefficient, depth, children
+Base.eltype(::Type{<:StatefulAliasBFS{T}}) where T = Tuple{Int, Int, childtype(T)}
+function Base.iterate(it::StatefulAliasBFS, queue = (eltype(it)[(1, 0, it.t)]))
+    isempty(queue) && return nothing
+    coeff, lv, t = popfirst!(queue)
+    nextlv = lv + 1
+    for (coeff′, c) in children(t)
+        # -1 <= coeff <= 1
+        push!(queue, (coeff * coeff′, nextlv, c))
+    end
+    return (coeff, lv, t), queue
+end
+
 struct RootedAliasChildren
     t::RootedAliasTree
 end
@@ -462,18 +466,19 @@ function Base.iterate(c::RootedAliasChildren, s = nothing)
     (stage, it) = s
     if stage == 1 # root
         stage += 1
-        return root, (stage, it)
+        return (1, root), (stage, it)
     elseif stage == 2 # ag
         stage += 1
         cv = get(ag, root, nothing)
         if cv !== nothing
-            return RootedAliasTree(iag, cv[2]), (stage, it)
+            return (cv[1], RootedAliasTree(iag, cv[2])), (stage, it)
         end
     end
     # invag (stage 3)
     it === nothing && return nothing
     e, ns = it
-    return RootedAliasTree(iag, e), (stage, iterate(invag, ns))
+    # c * a = b <=> a = c * b when -1 <= c <= 1
+    return (ag[e], RootedAliasTree(iag, e)), (stage, iterate(invag, ns))
 end
 
 count_nonzeros(a::AbstractArray) = count(!iszero, a)
@@ -656,32 +661,6 @@ function locally_structure_simplify!(adj_row, pivot_var, ag, var_to_diff)
 
     if alias_candidate isa Pair
         alias_val, alias_var = alias_candidate
-        #preferred_var = pivot_var
-        #=
-        switch = false # we prefer `alias_var` by default, unless we switch
-        diff_to_var = invview(var_to_diff)
-        pivot_var′′::Union{Nothing, Int} = pivot_var′::Int = pivot_var
-        alias_var′′::Union{Nothing, Int} = alias_var′::Int = alias_var
-        # We prefer the higher differenitated variable. Note that `{⋅}′′` vars
-        # could be `nothing` while `{⋅}′` vars are always `Int`.
-        while (pivot_var′′ = diff_to_var[pivot_var′]) !== nothing
-            pivot_var′ = pivot_var′′
-            if (alias_var′′ = diff_to_var[alias_var′]) === nothing
-                switch = true
-                break
-            end
-            pivot_var′ = pivot_var′′
-        end
-        # If we have a tie, then we prefer the lower variable.
-        if alias_var′′ === pivot_var′′ === nothing
-            @assert pivot_var′ != alias_var′
-            switch = pivot_var′ < alias_var′
-        end
-        if switch
-            pivot_var, alias_var = alias_var, pivot_var
-            pivot_val, alias_val = alias_val, pivot_val
-        end
-        =#
 
         # `p` is the pivot variable, `a` is the alias variable, `v` and `c` are
         # their coefficients.
