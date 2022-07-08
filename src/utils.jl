@@ -208,7 +208,14 @@ function collect_ivs_from_nested_operator!(ivs, x, target_op)
     op = operation(unwrap(x))
     if op isa target_op
         push!(ivs, get_iv(op))
-        collect_ivs_from_nested_operator!(ivs, op.x, target_op)
+        x = if target_op <: Differential
+            op.x
+        elseif target_op <: Difference
+            op.t
+        else
+            error("Unknown target op type in collect_ivs $target_op. Pass Difference or Differential")
+        end
+        collect_ivs_from_nested_operator!(ivs, x, target_op)
     end
 end
 
