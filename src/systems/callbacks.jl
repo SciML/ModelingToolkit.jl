@@ -23,10 +23,11 @@ function FunctionalAffect(f, sts, pars, ctx = nothing)
     # sts & pars contain either pairs: resistor.R => R, or Syms: R
     vs = [x isa Pair ? x.first : x for x in sts]
     vs_syms = [x isa Pair ? Symbol(x.second) : getname(x) for x in sts]
+    length(vs_syms) == length(unique(vs_syms)) || error("Variables are not unique")
 
     ps = [x isa Pair ? x.first : x for x in pars]
     ps_syms = [x isa Pair ? Symbol(x.second) : getname(x) for x in pars]
-    length(vs_syms) + length(ps_syms) == length(unique(vcat(vs_syms, ps_syms))) || error("All symbols for variables & parameters must be unique.")
+    length(ps_syms) == length(unique(ps_syms)) || error("Parameters are not unique")
 
     FunctionalAffect(f, vs, vs_syms, ps, ps_syms, ctx)
 end
@@ -146,10 +147,10 @@ end
 
 struct SymbolicDiscreteCallback
     # condition can be one of:
-    # TODO: Iterative
     #   Δt::Real - Periodic with period Δt
     #   Δts::Vector{Real} - events trigger in this times (Preset)
     #   condition::Vector{Equation} - event triggered when condition is true
+    # TODO: Iterative
     condition
     affects
 
@@ -411,18 +412,14 @@ function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
 
     # HACK: filter out eliminated symbols. Not clear this is the right thing to do
     # (MTK should keep these symbols)
-    v = filter(x -> !isnothing(x[1]), collect(zip(v_inds, states_syms(affect))))
-    v_inds = [x[1] for x in v]
-    v_syms = [x[2] for x in v]
-    p = filter(x -> !isnothing(x[1]), collect(zip(p_inds, parameters_syms(affect))))
-    p_inds = [x[1] for x in p]
-    p_syms = [x[2] for x in p]
+    u = filter(x -> !isnothing(x[2]), collect(zip(states_syms(affect), v_inds)))
+    p = filter(x -> !isnothing(x[2]), collect(zip(parameters_syms(affect), p_inds)))
+    u = NamedTuple(u)
+    p = NamedTuple(p)
 
-    kwargs = zip(vcat(v_syms, p_syms), vcat(v_inds, p_inds))
-
-    let kwargs=kwargs, user_affect=func(affect), ctx = context(affect)
+    let u=u, p=p, user_affect=func(affect), ctx = context(affect)
         function (integ)
-            user_affect(integ, ctx; kwargs...)
+            user_affect(integ, u, p, ctx)
         end
     end
 end
