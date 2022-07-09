@@ -412,12 +412,10 @@ function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
 
     # HACK: filter out eliminated symbols. Not clear this is the right thing to do
     # (MTK should keep these symbols)
-    u = filter(x -> !isnothing(x[2]), collect(zip(states_syms(affect), v_inds)))
-    p = filter(x -> !isnothing(x[2]), collect(zip(parameters_syms(affect), p_inds)))
-    u = NamedTuple(u)
-    p = NamedTuple(p)
+    u = filter(x -> !isnothing(x[2]), collect(zip(states_syms(affect), v_inds))) |> NamedTuple
+    p = filter(x -> !isnothing(x[2]), collect(zip(parameters_syms(affect), p_inds))) |> NamedTuple
 
-    let u=u, p=p, user_affect=func(affect), ctx = context(affect)
+    let u=u, p=p, user_affect=func(affect), ctx=context(affect)
         function (integ)
             user_affect(integ, u, p, ctx)
         end

@@ -64,6 +64,8 @@ i8 = findfirst(==(8.0), sol[:t])
 @variables v(t)
 @test_throws ErrorException ODESystem(eqs, t, [u], [a], discrete_events=[[4.0, 8.0]=>(affect3!, [u, v => :u], [a], nothing)]; name=:sys)
 
+@test_nowarn ODESystem(eqs, t, [u], [a], discrete_events=[[4.0, 8.0]=>(affect3!, [u], [a => :u], nothing)]; name=:sys)
+
 @named resistor = ODESystem(D(v) ~ v, t, [v], [])
 
 # nested namespace
