@@ -162,61 +162,6 @@ independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
 independent_variables(sys::AbstractTimeIndependentSystem) = []
 independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
 
-const NULL_AFFECT = Equation[]
-struct SymbolicContinuousCallback
-    eqs::Vector{Equation}
-    affect::Vector{Equation}
-    function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT)
-        new(eqs, affect)
-    end # Default affect to nothing
-end
-
-function Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback)
-    isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect)
-end
-Base.isempty(cb::SymbolicContinuousCallback) = isempty(cb.eqs)
-function Base.hash(cb::SymbolicContinuousCallback, s::UInt)
-    s = foldr(hash, cb.eqs, init = s)
-    foldr(hash, cb.affect, init = s)
-end
-
-to_equation_vector(eq::Equation) = [eq]
-to_equation_vector(eqs::Vector{Equation}) = eqs
-function to_equation_vector(eqs::Vector{Any})
-    isempty(eqs) || error("This should never happen")
-    Equation[]
-end
-
-function SymbolicContinuousCallback(args...)
-    SymbolicContinuousCallback(to_equation_vector.(args)...)
-end # wrap eq in vector
-SymbolicContinuousCallback(p::Pair) = SymbolicContinuousCallback(p[1], p[2])
-SymbolicContinuousCallback(cb::SymbolicContinuousCallback) = cb # passthrough
-
-SymbolicContinuousCallbacks(cb::SymbolicContinuousCallback) = [cb]
-SymbolicContinuousCallbacks(cbs::Vector{<:SymbolicContinuousCallback}) = cbs
-SymbolicContinuousCallbacks(cbs::Vector) = SymbolicContinuousCallback.(cbs)
-function SymbolicContinuousCallbacks(ve::Vector{Equation})
-    SymbolicContinuousCallbacks(SymbolicContinuousCallback(ve))
-end
-function SymbolicContinuousCallbacks(others)
-    SymbolicContinuousCallbacks(SymbolicContinuousCallback(others))
-end
-SymbolicContinuousCallbacks(::Nothing) = SymbolicContinuousCallbacks(Equation[])
-
-equations(cb::SymbolicContinuousCallback) = cb.eqs
-function equations(cbs::Vector{<:SymbolicContinuousCallback})
-    reduce(vcat, [equations(cb) for cb in cbs])
-end
-affect_equations(cb::SymbolicContinuousCallback) = cb.affect
-function affect_equations(cbs::Vector{SymbolicContinuousCallback})
-    reduce(vcat, [affect_equations(cb) for cb in cbs])
-end
-namespace_equation(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback = SymbolicContinuousCallback(namespace_equation.(equations(cb),
-                                                                                                                                   (s,)),
-                                                                                                               namespace_equation.(affect_equations(cb),
-                                                                                                                                   (s,)))
-
 for prop in [:eqs
              :noiseeqs
              :iv
@@ -507,18 +452,6 @@ function observed(sys::AbstractSystem)
             init = Equation[])]
 end
 
-function continuous_events(sys::AbstractSystem)
-    obs = get_continuous_events(sys)
-    filter(!isempty, obs)
-    systems = get_systems(sys)
-    cbs = [obs;
-           reduce(vcat,
-                  (map(o -> namespace_equation(o, s), continuous_events(s))
-                   for s in systems),
-                  init = SymbolicContinuousCallback[])]
-    filter(!isempty, cbs)
-end
-
 Base.@deprecate default_u0(x) defaults(x) false
 Base.@deprecate default_p(x) defaults(x) false
 function defaults(sys::AbstractSystem)
@@ -584,6 +517,20 @@ function isaffine(sys::AbstractSystem)
     rhs = [eq.rhs for eq in equations(sys)]
 
     all(isaffine(r, states(sys)) for r in rhs)
+end
+
+function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
+    # if something is not x(t) (the current state)
+    # but is `x(t-1)` or something like that, pass in `x` as a callable function rather
+    # than pass in a value in place of x(t).
+    #
+    # This is done by just making `x` the argument of the function.
+    if istree(x) &&
+       operation(x) isa Sym &&
+       !(length(arguments(x)) == 1 && isequal(arguments(x)[1], get_iv(sys)))
+        return operation(x)
+    end
+    return x
 end
 
 struct AbstractSysToExpr
@@ -1003,10 +950,10 @@ types during tearing.
 """
 function structural_simplify(sys::AbstractSystem; simplify = false, kwargs...)
     sys = expand_connections(sys)
-    sys = alias_elimination(sys)
     state = TearingState(sys)
-    state = inputs_to_parameters!(state)
-    sys = state.sys
+    state, = inputs_to_parameters!(state)
+    sys = alias_elimination!(state)
+    state = TearingState(sys)
     check_consistency(state)
     if sys isa ODESystem
         sys = dae_order_lowering(dummy_derivative(sys, state))
@@ -1018,6 +965,321 @@ function structural_simplify(sys::AbstractSystem; simplify = false, kwargs...)
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     invalidate_cache!(sys)
     return sys
+end
+
+"""
+    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, kwargs...)
+
+Return a function that linearizes system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
+
+`lin_fun` is a function `(variables, p, t) -> (; f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u)`, i.e., it returns a NamedTuple with the Jacobians of `f,g,h` for the nonlinear `sys` (technically for `simplified_sys`) on the form
+```math
+ẋ = f(x, z, u)
+0 = g(x, z, u)
+y = h(x, z, u)
+```
+where `x` are differential states, `z` algebraic states, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `states(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
+
+The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The states of this system also indicates the order of the states that holds for the linearized matrices.
+
+# Arguments:
+- `sys`: An [`ODESystem`](@ref). This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.
+- `inputs`: A vector of variables that indicate the inputs of the linearized input-output model.
+- `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
+- `simplify`: Apply simplification in tearing.
+- `kwargs`: Are passed on to `find_solvables!`
+
+See also [`linearize`](@ref) which provides a higher-level interface.
+"""
+function linearization_function(sys::AbstractSystem, inputs,
+                                outputs; simplify = false,
+                                kwargs...)
+    sys = expand_connections(sys)
+    state = TearingState(sys)
+    markio!(state, inputs, outputs)
+    state, input_idxs = inputs_to_parameters!(state, false)
+    sys = alias_elimination!(state)
+    state = TearingState(sys)
+    check_consistency(state)
+    if sys isa ODESystem
+        sys = dae_order_lowering(dummy_derivative(sys, state))
+    end
+    state = TearingState(sys)
+    find_solvables!(state; kwargs...)
+    sys = tearing_reassemble(state, tearing(state), simplify = simplify)
+    fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
+    @set! sys.observed = topsort_equations(observed(sys), fullstates)
+    invalidate_cache!(sys)
+
+    eqs = equations(sys)
+    check_operator_variables(eqs, Differential)
+    # Sort equations and states such that diff.eqs. match differential states and the rest are algebraic
+    diffstates = collect_operator_variables(sys, Differential)
+    eqs = sort(eqs, by = e -> !isoperator(e.lhs, Differential),
+               alg = Base.Sort.DEFAULT_STABLE)
+    @set! sys.eqs = eqs
+    diffstates = [arguments(e.lhs)[1] for e in eqs[1:length(diffstates)]]
+    sts = [diffstates; setdiff(states(sys), diffstates)]
+    @set! sys.states = sts
+
+    diff_idxs = 1:length(diffstates)
+    alge_idxs = (length(diffstates) + 1):length(sts)
+    fun = ODEFunction(sys)
+    lin_fun = let fun = fun,
+        h = ModelingToolkit.build_explicit_observed_function(sys, outputs)
+
+        function (u, p, t)
+            if u !== nothing # Handle systems without states
+                length(sts) == length(u) ||
+                    error("Number of state variables ($(length(sts))) does not match the number of input states ($(length(u)))")
+                uf = SciMLBase.UJacobianWrapper(fun, t, p)
+                fg_xz = ForwardDiff.jacobian(uf, u)
+                h_xz = ForwardDiff.jacobian(xz -> h(xz, p, t), u)
+                pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
+                # TODO: this is very inefficient, p contains all parameters of the system
+                fg_u = ForwardDiff.jacobian(pf, p)[:, input_idxs]
+            else
+                length(sts) == 0 ||
+                    error("Number of state variables (0) does not match the number of input states ($(length(u)))")
+                fg_xz = zeros(0, 0)
+                h_xz = fg_u = zeros(0, length(inputs))
+            end
+            h_u = ForwardDiff.jacobian(p -> h(u, p, t), p)[:, input_idxs]
+            (f_x = fg_xz[diff_idxs, diff_idxs],
+             f_z = fg_xz[diff_idxs, alge_idxs],
+             g_x = fg_xz[alge_idxs, diff_idxs],
+             g_z = fg_xz[alge_idxs, alge_idxs],
+             f_u = fg_u[diff_idxs, :],
+             g_u = fg_u[alge_idxs, :],
+             h_x = h_xz[:, diff_idxs],
+             h_z = h_xz[:, alge_idxs],
+             h_u = h_u)
+        end
+    end
+    return lin_fun, sys
+end
+
+function markio!(state, inputs, outputs)
+    fullvars = state.fullvars
+    inputset = Dict(inputs .=> false)
+    outputset = Dict(outputs .=> false)
+    for (i, v) in enumerate(fullvars)
+        if v in keys(inputset)
+            v = setmetadata(v, ModelingToolkit.VariableInput, true)
+            v = setmetadata(v, ModelingToolkit.VariableOutput, false)
+            inputset[v] = true
+            fullvars[i] = v
+        elseif v in keys(outputset)
+            v = setmetadata(v, ModelingToolkit.VariableInput, false)
+            v = setmetadata(v, ModelingToolkit.VariableOutput, true)
+            outputset[v] = true
+            fullvars[i] = v
+        else
+            v = setmetadata(v, ModelingToolkit.VariableInput, false)
+            v = setmetadata(v, ModelingToolkit.VariableOutput, false)
+            fullvars[i] = v
+        end
+    end
+    all(values(inputset)) ||
+        error("Some specified inputs were not found in system. The following Dict indicates the found variables ",
+              inputset)
+    all(values(outputset)) ||
+        error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
+              outputset)
+    state
+end
+
+"""
+    (; A, B, C, D), simplified_sys = linearize(sys, inputs, outputs;    t=0.0, op = Dict(), allow_input_derivatives = false, kwargs...)
+    (; A, B, C, D)                 = linearize(simplified_sys, lin_fun; t=0.0, op = Dict(), allow_input_derivatives = false)
+
+Return a NamedTuple with the matrices of a linear statespace representation
+on the form
+```math
+\\begin{aligned}
+ẋ &= Ax + Bu\\\\
+y &= Cx + Du
+\\end{aligned}
+```
+
+The first signature automatically calls [`linearization_function`](@ref) internally,
+while the second signature expects the outputs of [`linearization_function`](@ref) as input.
+
+`op` denotes the operating point around which to linearize. If none is provided,
+the default values of `sys` are used.
+
+If `allow_input_derivatives = false`, an error will be thrown if input derivatives (``u̇``) appear as inputs in the linearized equations. If input derivatives are allowed, the returned `B` matrix will be of double width, corresponding to the input `[u; u̇]`.
+
+See also [`linearization_function`](@ref) which provides a lower-level interface, and [`ModelingToolkit.reorder_states`](@ref).
+
+See extended help for an example.
+
+The implementation and notation follows that of
+["Linear Analysis Approach for Modelica Models", Allain et al. 2009](https://ep.liu.se/ecp/043/075/ecp09430097.pdf)
+
+# Extended help
+This example builds the following feedback interconnection and linearizes it from the input of `F` to the output of `P`.
+```
+
+  r ┌─────┐       ┌─────┐     ┌─────┐
+───►│     ├──────►│     │  u  │     │
+    │  F  │       │  C  ├────►│  P  │ y
+    └─────┘     ┌►│     │     │     ├─┬─►
+                │ └─────┘     └─────┘ │
+                │                     │
+                └─────────────────────┘
+```
+```julia
+using ModelingToolkit
+@variables t
+function plant(; name)
+    @variables x(t) = 1
+    @variables u(t)=0 y(t)=0 
+    D = Differential(t)
+    eqs = [D(x) ~ -x + u
+           y ~ x]
+    ODESystem(eqs, t; name = name)
+end
+
+function ref_filt(; name)
+    @variables x(t)=0 y(t)=0 
+    @variables u(t)=0 [input=true]
+    D = Differential(t)
+    eqs = [D(x) ~ -2 * x + u
+           y ~ x]
+    ODESystem(eqs, t, name = name)
+end
+
+function controller(kp; name)
+    @variables y(t)=0 r(t)=0 u(t)=0
+    @parameters kp = kp
+    eqs = [
+        u ~ kp * (r - y),
+    ]
+    ODESystem(eqs, t; name = name)
+end
+
+@named f = ref_filt()
+@named c = controller(1)
+@named p = plant()
+
+connections = [f.y ~ c.r # filtered reference to controller reference
+               c.u ~ p.u # controller output to plant input
+               p.y ~ c.y]
+
+@named cl = ODESystem(connections, t, systems = [f, c, p])
+
+lsys, ssys = linearize(cl, [f.u], [p.x])
+desired_order =  [f.x, p.x]
+lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
+
+@assert lsys.A == [-2 0; 1 -2]
+@assert lsys.B == [1; 0;;]
+@assert lsys.C == [0 1]
+@assert lsys.D[] == 0
+```
+"""
+function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives = false,
+                   p = DiffEqBase.NullParameters())
+    x0 = merge(defaults(sys), op)
+    f, u0, p = process_DEProblem(ODEFunction{true}, sys, x0, p)
+
+    linres = lin_fun(u0, p, t)
+    f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
+
+    nx, nu = size(f_u)
+    nz = size(f_z, 2)
+    ny = size(h_x, 1)
+
+    if isempty(g_z)
+        A = f_x
+        B = f_u
+        C = h_x
+        @assert iszero(g_x)
+        @assert iszero(g_z)
+        @assert iszero(g_u)
+    else
+        gz = lu(g_z; check = false)
+        issuccess(gz) ||
+            error("g_z not invertible, this indicates that the DAE is of index > 1.")
+        gzgx = -(gz \ g_x)
+        A = [f_x f_z
+             gzgx*f_x gzgx*f_z]
+        B = [f_u
+             zeros(nz, nu)]
+        C = [
+        h_x h_z
+]
+        Bs = -(gz \ (f_x * f_u + g_u))
+        if !iszero(Bs)
+            if !allow_input_derivatives
+                der_inds = findall(vec(any(!=(0), Bs, dims = 1)))
+                error("Input derivatives appeared in expressions (-g_z\\(f_x*f_u + g_u) != 0), the following inputs appeared differentiated: $(inputs(sys)[der_inds]). Call `linear_staespace` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
+            end
+            B = [B Bs]
+        end
+    end
+
+    D = h_u
+
+    (; A, B, C, D)
+end
+
+function linearize(sys, inputs, outputs; op = Dict(), allow_input_derivatives = false,
+                   kwargs...)
+    lin_fun, ssys = linearization_function(sys, inputs, outputs; kwargs...)
+    linearize(ssys, lin_fun; op, allow_input_derivatives), ssys
+end
+
+"""
+    (; Ã, B̃, C̃, D̃) = similarity_transform(sys, T; unitary=false)
+
+Perform a similarity transform `T : Tx̃ = x` on linear system represented by matrices in NamedTuple `sys` such that
+```
+Ã = T⁻¹AT
+B̃ = T⁻¹ B
+C̃ = CT
+D̃ = D
+```
+
+If `unitary=true`, `T` is assumed unitary and the matrix adjoint is used instead of the inverse.
+"""
+function similarity_transform(sys::NamedTuple, T; unitary = false)
+    if unitary
+        A = T'sys.A * T
+        B = T'sys.B
+    else
+        Tf = lu(T)
+        A = Tf \ sys.A * T
+        B = Tf \ sys.B
+    end
+    C = sys.C * T
+    D = sys.D
+    (; A, B, C, D)
+end
+
+"""
+    reorder_states(sys::NamedTuple, old, new)
+
+Permute the state representation of `sys` obtained from [`linearize`](@ref) so that the state order is changed from `old` to `new`
+Example:
+```
+lsys, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
+desired_order = [int.x, der.x] # States that are present in states(ssys)
+lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
+```
+See also [`ModelingToolkit.similarity_transform`](@ref)
+"""
+function reorder_states(sys::NamedTuple, old, new)
+    nx = length(old)
+    length(new) == nx || error("old and new must have the same length")
+    perm = [findfirst(isequal(n), old) for n in new]
+    issorted(perm) && return sys # shortcut return, no reordering
+    P = zeros(Int, nx, nx)
+    for i in 1:nx # Build permutation matrix
+        P[i, perm[i]] = 1
+    end
+    similarity_transform(sys, P; unitary = true)
 end
 
 @latexrecipe function f(sys::AbstractSystem)

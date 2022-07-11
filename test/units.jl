@@ -1,4 +1,4 @@
-using ModelingToolkit, Unitful, OrdinaryDiffEq, DiffEqJump, IfElse
+using ModelingToolkit, Unitful, OrdinaryDiffEq, JumpProcesses, IfElse
 using Test
 MT = ModelingToolkit
 @parameters τ [unit = u"ms"] γ
@@ -88,7 +88,7 @@ noiseeqs = [0.1u"MW" 0.1u"MW"
             0.1u"MW" 0.1u"MW"]
 @named sys = SDESystem(eqs, noiseeqs, t, [P, E], [τ, Q])
 
-# Invalid noise matrix 
+# Invalid noise matrix
 noiseeqs = [0.1u"MW" 0.1u"MW"
             0.1u"MW" 0.1u"s"]
 @test !MT.validate(eqs, noiseeqs)
