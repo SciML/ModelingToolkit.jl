@@ -1,4 +1,4 @@
-using ModelingToolkit, DiffEqBase, DiffEqJump, Test, LinearAlgebra
+using ModelingToolkit, DiffEqBase, JumpProcesses, Test, LinearAlgebra
 MT = ModelingToolkit
 
 # basic MT SIR model with tweaks

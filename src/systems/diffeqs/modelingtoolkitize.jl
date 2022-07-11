@@ -17,7 +17,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     params = if has_p
         _params = define_params(p)
         p isa Number ? _params[1] :
-        (p isa Tuple || p isa NamedTuple ? _params :
+        (p isa Tuple || p isa NamedTuple || p isa AbstractDict ? _params :
          ArrayInterfaceCore.restructure(p, _params))
     else
         []
@@ -44,6 +44,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
 
     if DiffEqBase.isinplace(prob)
         rhs = ArrayInterfaceCore.restructure(prob.u0, similar(vars, Num))
+        fill!(rhs, 0)
         prob.f(rhs, vars, params, t)
     else
         rhs = prob.f(vars, params, t)
@@ -53,13 +54,23 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
 
     sts = vec(collect(vars))
 
+    _params = params
+    params = values(params)
     params = if params isa Number || (params isa Array && ndims(params) == 0)
         [params[1]]
     else
         vec(collect(params))
     end
     default_u0 = Dict(sts .=> vec(collect(prob.u0)))
-    default_p = has_p ? Dict(params .=> vec(collect(prob.p))) : Dict()
+    default_p = if has_p
+        if prob.p isa AbstractDict
+            Dict(v => prob.p[k] for (k, v) in pairs(_params))
+        else
+            Dict(params .=> vec(collect(prob.p)))
+        end
+    else
+        Dict()
+    end
 
     de = ODESystem(eqs, t, sts, params,
                    defaults = merge(default_u0, default_p);
@@ -69,27 +80,60 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     de
 end
 
-_defvaridx(x, i, t) = variable(x, i, T = SymbolicUtils.FnType{Tuple, Real})
-_defvar(x, t) = variable(x, T = SymbolicUtils.FnType{Tuple, Real})
+_defvaridx(x, i) = variable(x, i, T = SymbolicUtils.FnType{Tuple, Real})
+_defvar(x) = variable(x, T = SymbolicUtils.FnType{Tuple, Real})
 
 function define_vars(u, t)
-    _vars = [_defvaridx(:x, i, t)(t) for i in eachindex(u)]
+    [_defvaridx(:x, i)(t) for i in eachindex(u)]
 end
 
 function define_vars(u::Union{SLArray, LArray}, t)
-    _vars = [_defvar(x, t)(t) for x in LabelledArrays.symnames(typeof(u))]
+    [_defvar(x)(t) for x in LabelledArrays.symnames(typeof(u))]
 end
 
-function define_vars(u::Tuple, t)
-    _vars = tuple((_defvaridx(:x, i, t)(ModelingToolkit.value(t)) for i in eachindex(u))...)
+function define_vars(u::NTuple{<:Number}, t)
+    tuple((_defvaridx(:x, i)(ModelingToolkit.value(t)) for i in eachindex(u))...)
 end
 
 function define_vars(u::NamedTuple, t)
-    _vars = NamedTuple(x => _defvar(x, t)(ModelingToolkit.value(t)) for x in keys(u))
+    NamedTuple(x => _defvar(x)(ModelingToolkit.value(t)) for x in keys(u))
+end
+
+const PARAMETERS_NOT_SUPPORTED_MESSAGE = """
+                                         The chosen parameter type is currently not supported by `modelingtoolkitize`. The
+                                         current supported types are:
+
+                                         - AbstractArrays
+                                         - AbstractDicts
+                                         - LabelledArrays (SLArray, LArray)
+                                         - Flat tuples (tuples of numbers)
+                                         - Flat named tuples (namedtuples of numbers)
+                                         """
+
+struct ModelingtoolkitizeParametersNotSupportedError <: Exception
+    type::Any
+end
+
+function Base.showerror(io::IO, e::ModelingtoolkitizeParametersNotSupportedError)
+    println(io, PARAMETERS_NOT_SUPPORTED_MESSAGE)
+    print(io, "Parameter type: ")
+    println(io, e.type)
 end
 
 function define_params(p)
+    throw(ModelingtoolkitizeParametersNotSupportedError(typeof(p)))
+end
+
+function define_params(p::AbstractArray)
     [toparam(variable(:α, i)) for i in eachindex(p)]
+end
+
+function define_params(p::Number)
+    [toparam(variable(:α))]
+end
+
+function define_params(p::AbstractDict)
+    OrderedDict(k => toparam(variable(:α, i)) for (i, k) in zip(1:length(p), keys(p)))
 end
 
 function define_params(p::Union{SLArray, LArray})

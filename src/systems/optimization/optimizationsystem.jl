@@ -26,8 +26,7 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     """Array variables."""
     var_to_name::Any
     observed::Vector{Equation}
-    equality_constraints::Vector{Equation}
-    inequality_constraints::Vector
+    constraints::Vector
     """
     Name: the name of the system.  These are required to have unique names.
     """
@@ -41,24 +40,22 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
-    function OptimizationSystem(op, states, ps, var_to_name, observed, equality_constraints,
-                                inequality_constraints, name, systems, defaults;
+    function OptimizationSystem(op, states, ps, var_to_name, observed,
+                                constraints, name, systems, defaults;
                                 checks::Bool = true)
         if checks
             check_units(op)
             check_units(observed)
-            check_units(equality_constraints)
-            all_dimensionless([states; ps]) || check_units(inequality_constraints)
+            all_dimensionless([states; ps]) || check_units(constraints)
         end
-        new(op, states, ps, var_to_name, observed, equality_constraints,
-            inequality_constraints, name, systems, defaults)
+        new(op, states, ps, var_to_name, observed,
+            constraints, name, systems, defaults)
     end
 end
 
 function OptimizationSystem(op, states, ps;
                             observed = [],
-                            equality_constraints = Equation[],
-                            inequality_constraints = [],
+                            constraints = [],
                             default_u0 = Dict(),
                             default_p = Dict(),
                             defaults = _merge(Dict(default_u0), Dict(default_p)),
@@ -85,7 +82,7 @@ function OptimizationSystem(op, states, ps;
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
     OptimizationSystem(value(op), states, ps, var_to_name,
                        observed,
-                       equality_constraints, inequality_constraints,
+                       constraints,
                        name, systems, defaults; checks = checks)
 end
 
@@ -133,6 +130,13 @@ function DiffEqBase.OptimizationProblem(sys::OptimizationSystem, args...; kwargs
     DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem, args...; kwargs...)
 end
 
+function rep_pars_vals!(e::Expr, p)
+    rep_pars_vals!.(e.args, Ref(p))
+    replace!(e.args, p...)
+end
+
+function rep_pars_vals!(e, p) end
+
 """
 ```julia
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
@@ -160,9 +164,26 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     dvs = states(sys)
     ps = parameters(sys)
 
+    defs = defaults(sys)
+    defs = mergedefaults(defs, parammap, ps)
+    defs = mergedefaults(defs, u0map, dvs)
+
+    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
+    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    lb = varmap_to_vars(lb, dvs; check = false, tofloat = false, use_union)
+    ub = varmap_to_vars(ub, dvs; check = false, tofloat = false, use_union)
+
     f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
                           expression = Val{false})
 
+    obj_expr = toexpr(equations(sys))
+    pairs_arr = p isa SciMLBase.NullParameters ?
+                [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)] :
+                [
+        [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)]...,
+        [Symbol(_p) => p[i] for (i, _p) in enumerate(ps)]...,
+    ]
+    rep_pars_vals!(obj_expr, pairs_arr)
     if grad
         grad_oop, grad_iip = generate_gradient(sys, checkbounds = checkbounds,
                                                linenumbers = linenumbers,
@@ -190,20 +211,46 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         hess_prototype = nothing
     end
 
-    _f = DiffEqBase.OptimizationFunction{iip}(f,
-                                              SciMLBase.NoAD();
-                                              grad = _grad,
-                                              hess = _hess,
-                                              hess_prototype = hess_prototype)
+    if length(sys.constraints) > 0
+        @named cons_sys = NonlinearSystem(sys.constraints, dvs, ps)
+        cons = generate_function(cons_sys, checkbounds = checkbounds,
+                                 linenumbers = linenumbers,
+                                 expression = Val{false})[1]
+        cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+        cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 
-    defs = defaults(sys)
-    defs = mergedefaults(defs, parammap, ps)
-    defs = mergedefaults(defs, u0map, dvs)
+        cons_expr = toexpr(equations(cons_sys))
+        rep_pars_vals!.(cons_expr, Ref(pairs_arr))
 
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
-    lb = varmap_to_vars(lb, dvs; check = false, tofloat = false, use_union)
-    ub = varmap_to_vars(ub, dvs; check = false, tofloat = false, use_union)
+        if sparse
+            cons_jac_prototype = jacobian_sparsity(cons_sys)
+            cons_hess_prototype = hessian_sparsity(cons_sys)
+        else
+            cons_jac_prototype = nothing
+            cons_hess_prototype = nothing
+        end
+
+        _f = DiffEqBase.OptimizationFunction{iip}(f,
+                                                  SciMLBase.NoAD();
+                                                  grad = _grad,
+                                                  hess = _hess,
+                                                  hess_prototype = hess_prototype,
+                                                  cons = cons,
+                                                  cons_j = cons_j,
+                                                  cons_h = cons_h,
+                                                  cons_jac_prototype = cons_jac_prototype,
+                                                  cons_hess_prototype = cons_hess_prototype,
+                                                  expr = obj_expr,
+                                                  cons_expr = cons_expr)
+    else
+        _f = DiffEqBase.OptimizationFunction{iip}(f,
+                                                  SciMLBase.NoAD();
+                                                  grad = _grad,
+                                                  hess = _hess,
+                                                  hess_prototype = hess_prototype,
+                                                  expr = obj_expr)
+    end
+
     OptimizationProblem{iip}(_f, u0, p; lb = lb, ub = ub, kwargs...)
 end
 
@@ -272,18 +319,74 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
     lb = varmap_to_vars(lb, dvs; check = false, tofloat = false, use_union)
     ub = varmap_to_vars(ub, dvs; check = false, tofloat = false, use_union)
-    quote
-        f = $f
-        p = $p
-        u0 = $u0
-        grad = $_grad
-        hess = $_hess
-        lb = $lb
-        ub = $ub
-        _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
-                                       grad = grad,
-                                       hess = hess,
-                                       hess_prototype = hess_prototype)
-        OptimizationProblem{$iip}(_f, u0, p; lb = lb, ub = ub, kwargs...)
+
+    obj_expr = toexpr(equations(sys))
+    pairs_arr = p isa SciMLBase.NullParameters ?
+                [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)] :
+                [
+        [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)]...,
+        [Symbol(_p) => p[i] for (i, _p) in enumerate(ps)]...,
+    ]
+    rep_pars_vals!(obj_expr, pairs_arr)
+
+    if length(sys.constraints) > 0
+        @named cons_sys = NonlinearSystem(sys.constraints, dvs, ps)
+        cons = generate_function(cons_sys, checkbounds = checkbounds,
+                                 linenumbers = linenumbers,
+                                 expression = Val{false})[1]
+        cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+
+        cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+
+        cons_expr = toexpr(equations(cons_sys))
+        rep_pars_vals!.(cons_expr, Ref(pairs_arr))
+
+        if sparse
+            cons_jac_prototype = jacobian_sparsity(cons_sys)
+            cons_hess_prototype = hessian_sparsity(cons_sys)
+        else
+            cons_jac_prototype = nothing
+            cons_hess_prototype = nothing
+        end
+        quote
+            f = $f
+            p = $p
+            u0 = $u0
+            grad = $_grad
+            hess = $_hess
+            lb = $lb
+            ub = $ub
+            cons = $cons
+            cons_j = $cons_j
+            cons_h = $cons_h
+            _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
+                                           grad = grad,
+                                           hess = hess,
+                                           hess_prototype = hess_prototype,
+                                           cons = cons,
+                                           cons_j = cons_j,
+                                           cons_h = cons_h,
+                                           cons_jac_prototype = cons_jac_prototype,
+                                           cons_hess_prototype = cons_hess_prototype,
+                                           expr = obj_expr,
+                                           cons_expr = cons_expr)
+            OptimizationProblem{$iip}(_f, u0, p; lb = lb, ub = ub, kwargs...)
+        end
+    else
+        quote
+            f = $f
+            p = $p
+            u0 = $u0
+            grad = $_grad
+            hess = $_hess
+            lb = $lb
+            ub = $ub
+            _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
+                                           grad = grad,
+                                           hess = hess,
+                                           hess_prototype = hess_prototype,
+                                           expr = obj_expr)
+            OptimizationProblem{$iip}(_f, u0, p; lb = lb, ub = ub, kwargs...)
+        end
     end
 end

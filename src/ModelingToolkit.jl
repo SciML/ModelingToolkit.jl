@@ -4,7 +4,7 @@ $(DocStringExtensions.README)
 module ModelingToolkit
 using DocStringExtensions
 using AbstractTrees
-using DiffEqBase, SciMLBase, Reexport
+using DiffEqBase, SciMLBase, ForwardDiff, Reexport
 using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using InteractiveUtils
@@ -12,7 +12,7 @@ using Latexify, Unitful, ArrayInterfaceCore
 using MacroTools
 @reexport using UnPack
 using Setfield, ConstructionBase
-using DiffEqJump
+using JumpProcesses
 using DataStructures
 using SpecialFunctions, NaNMath
 using RuntimeGeneratedFunctions
@@ -59,8 +59,6 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
 import DiffEqBase: @add_kwonly
 
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
-
-using Requires
 
 for fun in [:toexpr]
     @eval begin
@@ -121,6 +119,7 @@ include("domains.jl")
 
 include("systems/abstractsystem.jl")
 include("systems/connectors.jl")
+include("systems/callbacks.jl")
 
 include("systems/diffeqs/odesystem.jl")
 include("systems/diffeqs/sdesystem.jl")
@@ -135,8 +134,6 @@ include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/nonlinear/modelingtoolkitize.jl")
 
 include("systems/optimization/optimizationsystem.jl")
-
-include("systems/control/controlsystem.jl")
 
 include("systems/pde/pdesystem.jl")
 
@@ -172,13 +169,11 @@ export AutoModelingToolkit
 export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem
-export ControlSystem
 export alias_elimination, flatten
 export connect, @connector, Connection, Flow, Stream, instream
 export isinput, isoutput, getbounds, hasbounds, isdisturbance, istunable, getdist, hasdist,
        tunable_parameters, isirreducible
 export ode_order_lowering, dae_order_lowering, liouville_transform
-export runge_kutta_discretize
 export PDESystem
 export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
@@ -186,7 +181,7 @@ export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variables, independent_variable, states, parameters, equations, controls,
        observed, structure, full_equations
-export structural_simplify, expand_connections
+export structural_simplify, expand_connections, linearize, linear_statespace
 export DiscreteSystem, DiscreteProblem
 
 export calculate_jacobian, generate_jacobian, generate_function
