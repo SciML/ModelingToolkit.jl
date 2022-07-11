@@ -99,26 +99,25 @@ function define_vars(u::NamedTuple, t)
     NamedTuple(x => _defvar(x)(ModelingToolkit.value(t)) for x in keys(u))
 end
 
-const PARAMETERS_NOT_SUPPORTED_MESSAGE = 
-"""
-The chosen parameter type is currently not supported by `modelingtoolkitize`. The
-current supported types are:
+const PARAMETERS_NOT_SUPPORTED_MESSAGE = """
+                                         The chosen parameter type is currently not supported by `modelingtoolkitize`. The
+                                         current supported types are:
 
-- AbstractArrays
-- AbstractDicts
-- LabelledArrays (SLArray, LArray)
-- Flat tuples (tuples of numbers)
-- Flat named tuples (namedtuples of numbers)
-"""
+                                         - AbstractArrays
+                                         - AbstractDicts
+                                         - LabelledArrays (SLArray, LArray)
+                                         - Flat tuples (tuples of numbers)
+                                         - Flat named tuples (namedtuples of numbers)
+                                         """
 
-struct ModelingtoolkitizeParametersNotSupportedError <: Exception 
+struct ModelingtoolkitizeParametersNotSupportedError <: Exception
     type::Any
 end
 
 function Base.showerror(io::IO, e::ModelingtoolkitizeParametersNotSupportedError)
     println(io, PARAMETERS_NOT_SUPPORTED_MESSAGE)
     print(io, "Parameter type: ")
-    println(io,e.type)
+    println(io, e.type)
 end
 
 function define_params(p)
@@ -127,6 +126,10 @@ end
 
 function define_params(p::AbstractArray)
     [toparam(variable(:α, i)) for i in eachindex(p)]
+end
+
+function define_params(p::Number)
+    [:α]
 end
 
 function define_params(p::AbstractDict)
