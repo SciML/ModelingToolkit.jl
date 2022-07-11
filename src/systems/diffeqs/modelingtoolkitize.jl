@@ -129,7 +129,7 @@ function define_params(p::AbstractArray)
 end
 
 function define_params(p::Number)
-    [:α]
+    [toparam(variable(:α))]
 end
 
 function define_params(p::AbstractDict)
