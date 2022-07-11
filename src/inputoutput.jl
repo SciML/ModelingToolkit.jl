@@ -61,20 +61,20 @@ unbound_outputs(sys) = filter(x -> !is_bound(sys, x), outputs(sys))
 Determine whether or not input/output variable `u` is "bound" within the system, i.e., if it's to be considered internal to `sys`.
 A variable/signal is considered bound if it appears in an equation together with variables from other subsystems.
 The typical usecase for this function is to determine whether the input to an IO component is connected to another component,
-or if it remains an external input that the user has to supply before simulating the system. 
+or if it remains an external input that the user has to supply before simulating the system.
 
 See also [`bound_inputs`](@ref), [`unbound_inputs`](@ref), [`bound_outputs`](@ref), [`unbound_outputs`](@ref)
 """
 function is_bound(sys, u, stack = [])
     #=
-    For observed quantities, we check if a variable is connected to something that is bound to something further out. 
+    For observed quantities, we check if a variable is connected to something that is bound to something further out.
     In the following scenario
     julia> observed(syss)
         2-element Vector{Equation}:
         sys₊y(tv) ~ sys₊x(tv)
         y(tv) ~ sys₊x(tv)
     sys₊y(t) is bound to the outer y(t) through the variable sys₊x(t) and should thus return is_bound(sys₊y(t)) = true.
-    When asking is_bound(sys₊y(t)), we know that we are looking through observed equations and can thus ask 
+    When asking is_bound(sys₊y(t)), we know that we are looking through observed equations and can thus ask
     if var is bound, if it is, then sys₊y(t) is also bound. This can lead to an infinite recursion, so we maintain a stack of variables we have previously asked about to be able to break cycles
     =#
     u ∈ Set(stack) && return false # Cycle detected
@@ -241,7 +241,7 @@ function toparam(sys, ctrls::AbstractVector)
     ODESystem(eqs, name = nameof(sys))
 end
 
-function inputs_to_parameters!(state::TransformationState)
+function inputs_to_parameters!(state::TransformationState, check_bound = true)
     @unpack structure, fullvars, sys = state
     @unpack var_to_diff, graph, solvable_graph = structure
     @assert solvable_graph === nothing
@@ -254,7 +254,7 @@ function inputs_to_parameters!(state::TransformationState)
     input_to_parameters = Dict()
     new_fullvars = []
     for (i, v) in enumerate(fullvars)
-        if isinput(v) && !is_bound(sys, v)
+        if isinput(v) && !(check_bound && is_bound(sys, v))
             if var_to_diff[i] !== nothing
                 error("Input $(fullvars[i]) is differentiated!")
             end
@@ -270,7 +270,7 @@ function inputs_to_parameters!(state::TransformationState)
             push!(new_fullvars, v)
         end
     end
-    ninputs == 0 && return state
+    ninputs == 0 && return (state, 1:0)
 
     nvars = ndsts(graph) - ninputs
     new_graph = BipartiteGraph(nsrcs(graph), nvars, Val(false))
@@ -296,9 +296,12 @@ function inputs_to_parameters!(state::TransformationState)
 
     @set! sys.eqs = map(Base.Fix2(substitute, input_to_parameters), equations(sys))
     @set! sys.states = setdiff(states(sys), keys(input_to_parameters))
-    @set! sys.ps = [parameters(sys); new_parameters]
+    ps = parameters(sys)
+    @set! sys.ps = [ps; new_parameters]
 
     @set! state.sys = sys
     @set! state.fullvars = new_fullvars
     @set! state.structure = structure
+    base_params = length(ps)
+    return state, (base_params + 1):(base_params + length(new_parameters)) # (1:length(new_parameters)) .+ base_params
 end
