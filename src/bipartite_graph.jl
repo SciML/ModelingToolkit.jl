@@ -6,7 +6,7 @@ export BipartiteEdge, BipartiteGraph, DiCMOBiGraph, Unassigned, unassigned,
 
 export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors, 𝑑neighbors,
        𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST, set_neighbors!, invview,
-       complete
+       complete, delete_srcs!, delete_dsts!
 
 using DocStringExtensions
 using UnPack
@@ -424,11 +424,15 @@ function Graphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where {T}
     return true  # vertex successfully added
 end
 
-function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors::AbstractVector)
+function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors)
     old_neighbors = g.fadjlist[i]
     old_nneighbors = length(old_neighbors)
     new_nneighbors = length(new_neighbors)
-    g.fadjlist[i] = new_neighbors
+    if iszero(new_nneighbors) # this handles Tuple as well
+        empty!(g.fadjlist[i])
+    else
+        g.fadjlist[i] = new_neighbors
+    end
     g.ne += new_nneighbors - old_nneighbors
     if isa(g.badjlist, AbstractVector)
         for n in old_neighbors
@@ -443,6 +447,14 @@ function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors::AbstractVe
         end
     end
 end
+
+function delete_srcs!(g::BipartiteGraph, srcs)
+    for s in srcs
+        set_neighbors!(g, s, ())
+    end
+    g
+end
+delete_dsts!(g::BipartiteGraph, srcs) = delete_srcs!(invview(g), srcs)
 
 ###
 ### Edges iteration
