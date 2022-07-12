@@ -955,6 +955,7 @@ function structural_simplify(sys::AbstractSystem; simplify = false, kwargs...)
     state = inputs_to_parameters!(state)
     sys = state.sys
     check_consistency(state)
+    find_solvables!(state; kwargs...)
     sys = dummy_derivative(sys, state)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)

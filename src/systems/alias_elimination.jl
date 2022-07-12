@@ -50,6 +50,11 @@ function alias_elimination(sys; debug = false)
         end
     end
 
+    subs = Dict()
+    for (v, (coeff, alias)) in pairs(ag)
+        subs[fullvars[v]] = iszero(coeff) ? 0 : coeff * fullvars[alias]
+    end
+
     dels = Int[]
     eqs = collect(equations(state))
     for (ei, e) in enumerate(mm.nzrows)
@@ -67,10 +72,6 @@ function alias_elimination(sys; debug = false)
     end
     deleteat!(eqs, sort!(dels))
 
-    subs = Dict()
-    for (v, (coeff, alias)) in pairs(ag)
-        subs[fullvars[v]] = iszero(coeff) ? 0 : coeff * fullvars[alias]
-    end
     for (ieq, eq) in enumerate(eqs)
         eqs[ieq] = substitute(eq, subs)
     end
@@ -229,22 +230,29 @@ end
 function reduce!(mm::SparseMatrixCLIL, ag::AliasGraph)
     dels = Int[]
     for (i, rs) in enumerate(mm.row_cols)
+        p = i == 7
         rvals = mm.row_vals[i]
-        for (j, c) in enumerate(rs)
+        j = 1
+        while j <= length(rs)
+            c = rs[j]
             _alias = get(ag, c, nothing)
             if _alias !== nothing
                 push!(dels, j)
                 coeff, alias = _alias
-                iszero(coeff) && continue
+                iszero(coeff) && (j += 1; continue)
                 inc = coeff * rvals[j]
                 i = searchsortedfirst(rs, alias)
-                if i > length(rvals)
-                    push!(rs, alias)
-                    push!(rvals, inc)
+                if i > length(rs) || rs[i] != alias
+                    if i <= j
+                        j += 1
+                    end
+                    insert!(rs, i, alias)
+                    insert!(rvals, i, inc)
                 else
                     rvals[i] += inc
                 end
             end
+            j += 1
         end
         deleteat!(rs, dels)
         deleteat!(rvals, dels)
@@ -304,8 +312,9 @@ function Base.iterate(it::IAGNeighbors, state = nothing)
             end
         else
             used_ag = true
-            if (_n = get(ag, v, nothing)) !== nothing
-                n = _n[2]
+            # We don't care about the alising value because we only use this to
+            # find the root of the tree.
+            if (_n = get(ag, v, nothing)) !== nothing && (n = _n[2]) > 0
                 if !visited[n]
                     n, lv = extreme_var(var_to_diff, n, level)
                     extreme_var(var_to_diff, n, nothing, Val(false), callback = callback!)
@@ -366,7 +375,7 @@ function Base.iterate(it::StatefulAliasBFS, queue = (eltype(it)[(1, 0, it.t)]))
     coeff, lv, t = popfirst!(queue)
     nextlv = lv + 1
     for (coeff′, c) in children(t)
-        # TODO: maybe fix the children iterator instead.
+        # FIXME: use the visited cache!
         # A "cycle" might occur when we have `x ~ D(x)`.
         nodevalue(c) == t.root && continue
         # -1 <= coeff <= 1
@@ -383,7 +392,7 @@ function Base.iterate(c::RootedAliasChildren, s = nothing)
     rat = c.t
     @unpack iag, root = rat
     @unpack ag, invag, var_to_diff, visited = iag
-    (root = var_to_diff[root]) === nothing && return nothing
+    (iszero(root) || (root = var_to_diff[root]) === nothing) && return nothing
     if s === nothing
         stage = 1
         it = iterate(neighbors(invag, root))
@@ -404,7 +413,7 @@ function Base.iterate(c::RootedAliasChildren, s = nothing)
     it === nothing && return nothing
     e, ns = it
     # c * a = b <=> a = c * b when -1 <= c <= 1
-    return (ag[e], RootedAliasTree(iag, e)), (stage, iterate(invag, ns))
+    return (ag[e][1], RootedAliasTree(iag, e)), (stage, iterate(it, ns))
 end
 
 count_nonzeros(a::AbstractArray) = count(!iszero, a)
@@ -413,22 +422,21 @@ count_nonzeros(a::AbstractArray) = count(!iszero, a)
 # Here we have a guarantee that they won't, so we can make this identification
 count_nonzeros(a::SparseVector) = nnz(a)
 
-function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
+function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, only_linear_algebraic = false, irreducibles = ())
     mm = copy(mm_orig)
     is_linear_equations = falses(size(AsSubMatrix(mm_orig), 1))
+    diff_to_var = invview(var_to_diff)
+    islowest = let diff_to_var = diff_to_var
+        v -> diff_to_var[v] === nothing
+    end
     for e in mm_orig.nzrows
-        is_linear_equations[e] = true
+        is_linear_equations[e] = all(islowest, 𝑠neighbors(graph, e))
     end
 
-    # Variables that are highest order differentiated cannot be states of an ODE
-    is_not_potential_state = isnothing.(var_to_diff)
-    is_linear_variables = copy(is_not_potential_state)
-    for i in 𝑠vertices(graph)
-        is_linear_equations[i] && continue
-        for j in 𝑠neighbors(graph, i)
-            is_linear_variables[j] = false
-        end
+    var_to_eq = let is_linear_equations = is_linear_equations, islowest = islowest, irreducibles = irreducibles
+         maximal_matching(graph, eq -> is_linear_equations[eq], var -> islowest(var) && !(var in irreducibles))
     end
+    is_linear_variables = isa.(var_to_eq, Int)
     solvable_variables = findall(is_linear_variables)
 
     function do_bareiss!(M, Mold = nothing)
@@ -440,11 +448,10 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                 r !== nothing && return r
                 rank1 = k - 1
             end
-            if rank2 === nothing
-                r = find_masked_pivot(is_not_potential_state, M, k)
-                r !== nothing && return r
-                rank2 = k - 1
-            end
+            only_linear_algebraic && return nothing
+            # TODO: It would be better to sort the variables by
+            # derivative order here to enable more elimination
+            # opportunities.
             return find_masked_pivot(nothing, M, k)
         end
         function find_and_record_pivot(M, k)
@@ -459,46 +466,58 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         end
         bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
                        bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
-        rank3, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
-        rank1 = something(rank1, rank3)
-        rank2 = something(rank2, rank3)
-        (rank1, rank2, rank3, pivots)
+        rank2, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
+        rank1 = something(rank1, rank2)
+        (rank1, rank2, pivots)
     end
 
     return mm, solvable_variables, do_bareiss!(mm, mm_orig)
 end
 
-function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL;
-                                debug = false)
-    # Step 1: Perform bareiss factorization on the adjacency matrix of the linear
-    #         subsystem of the system we're interested in.
-    #
+# Kind of like the backward substitution, but we don't actually rely on it
+# being lower triangular. We eliminate a variable if there are at most 2
+# variables left after the substitution.
+function lss(mm, pivots, ag)
+    ei -> let mm = mm, pivots = pivots, ag = ag
+        vi = pivots[ei]
+        locally_structure_simplify!((@view mm[ei, :]), vi, ag)
+    end
+end
+
+function simple_aliases!(ag, graph, var_to_diff, mm_orig, only_linear_algebraic = false, irreducibles = ())
     # Let `m = the number of linear equations` and `n = the number of
     # variables`.
     #
     # `do_bareiss` conceptually gives us this system:
-    # rank1 | [ M₁₁  M₁₂ | M₁₃  M₁₄ ]   [v₁] = [0]
-    # rank2 | [ 0    M₂₂ | M₂₃  M₂₄ ] P [v₂] = [0]
-    # -------------------|------------------------
-    # rank3 | [ 0    0   | M₃₃  M₃₄ ]   [v₃] = [0]
-    #         [ 0    0   | 0    0   ]   [v₄] = [0]
-    mm, solvable_variables, (rank1, rank2, rank3, pivots) = aag_bareiss!(graph, var_to_diff,
-                                                                         mm_orig)
+    # rank1 | [ M₁₁  M₁₂ | M₁₃ ]   [v₁] = [0]
+    # rank2 | [ 0    M₂₂ | M₂₃ ] P [v₂] = [0]
+    # -------------------|-------------------
+    #         [ 0    0   | 0   ]   [v₃] = [0]
+
+    # Where `v₁` are the purely linear algebraic variables (i.e. those that only
+    # appear in linear algebraic equations), `v₂` are the variables that may be
+    # potentially solved by the linear system, and `v₃` are the variables that
+    # contribute to the equations, but are not solved by the linear system. Note
+    # that the complete system may be larger than the linear subsystem and
+    # include variables that do not appear here.
+    mm, solvable_variables, (rank1, rank2, pivots) = aag_bareiss!(graph, var_to_diff,
+                                                                  mm_orig, only_linear_algebraic, irreducibles)
 
     # Step 2: Simplify the system using the Bareiss factorization
-    ag = AliasGraph(size(mm, 2))
-    for v in setdiff(solvable_variables, @view pivots[1:rank1])
-        ag[v] = 0
+    ks = keys(ag)
+    if !only_linear_algebraic
+        for v in setdiff(solvable_variables, @view pivots[1:rank1])
+            ag[v] = 0
+        end
+    else
+        for v in setdiff(solvable_variables, @view pivots[1:rank1])
+            if !(v in ks)
+                ag[v] = 0
+            end
+        end
     end
 
-    # Kind of like the backward substitution, but we don't actually rely on it
-    # being lower triangular. We eliminate a variable if there are at most 2
-    # variables left after the substitution.
-    function lss!(ei::Integer)
-        vi = pivots[ei]
-        locally_structure_simplify!((@view mm[ei, :]), vi, ag, var_to_diff)
-    end
-
+    lss! = lss(mm, pivots, ag)
     # Step 2.1: Go backwards, collecting eliminated variables and substituting
     #         alias as we go.
     foreach(lss!, reverse(1:rank2))
@@ -524,6 +543,18 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL;
     reduced && while any(lss!, 1:rank2)
     end
 
+    return mm
+end
+
+function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL;
+                                debug = false)
+    # Step 1: Perform bareiss factorization on the adjacency matrix of the linear
+    #         subsystem of the system we're interested in.
+    #
+    nvars = ndsts(graph)
+    ag = AliasGraph(nvars)
+    mm = simple_aliases!(ag, graph, var_to_diff, mm_orig)
+
     # Step 3: Handle differentiated variables
     # At this point, `var_to_diff` and `ag` form a tree structure like the
     # following:
@@ -547,7 +578,6 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL;
     # Note that since we always prefer the higher differentiated variable and
     # with a tie breaking strategy. The root variable (in this case `z`) is
     # always uniquely determined. Thus, the result is well-defined.
-    nvars = ndsts(graph)
     diff_to_var = invview(var_to_diff)
     invag = SimpleDiGraph(nvars)
     for (v, (coeff, alias)) in pairs(ag)
@@ -592,8 +622,11 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL;
                 current_coeff_level[] = (coeff, level + 1)
             end
         end
+        max_lv = 0
         for (coeff, lv, t) in StatefulAliasBFS(RootedAliasTree(iag, r))
+            max_lv = max(max_lv, lv)
             v = nodevalue(t)
+            iszero(v) && continue
             processed[v] = true
             v == r && continue
             if lv < length(level_to_var)
@@ -604,8 +637,20 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL;
             current_coeff_level[] = coeff, lv
             extreme_var(var_to_diff, v, nothing, Val(false), callback = add_alias!)
         end
-        for v in level_to_var
+        max_lv > 0 || continue
+
+        set_v_zero! = let newag = newag
+            v -> newag[v] = 0
+        end
+        for (i, v) in enumerate(level_to_var)
+            _alias = get(ag, v, nothing)
             push!(irreducibles, v)
+            if _alias !== nothing && iszero(_alias[1]) && i < length(level_to_var)
+                # we have `x = 0`
+                v = level_to_var[i + 1]
+                extreme_var(var_to_diff, v, nothing, Val(false), callback = set_v_zero!)
+                break
+            end
         end
         if nlevels < (new_nlevels = length(level_to_var))
             for i in (nlevels + 1):new_nlevels
@@ -616,20 +661,26 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL;
     end
 
     # There might be "cycles" like `D(x) = x`
-    remove_aliases = BitSet()
     for v in irreducibles
+        if v in keys(newag)
+            newag[v] = nothing
+        end
         if v in keys(ag)
-            push!(remove_aliases, v)
+            ag[v] = nothing
         end
     end
+    for v in keys(ag)
+        push!(irreducibles, v)
+    end
 
-    for v in remove_aliases
-        ag[v] = nothing
+    for (v, (c, a)) in newag
+        va = iszero(a) ? a : fullvars[a]
+        @info "new alias" fullvars[v]=>(c, va)
     end
     newkeys = keys(newag)
     if !isempty(irreducibles)
         for (v, (c, a)) in ag
-            (v in newkeys || a in newkeys || v in irreducibles) && continue
+            (a in irreducibles || v in irreducibles) && continue
             if iszero(c)
                 newag[v] = c
             else
@@ -640,8 +691,9 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL;
 
         # We cannot use the `mm` from Bareiss because it doesn't consider
         # irreducibles
-        mm_new = copy(mm_orig)
-        mm = reduce!(mm_new, ag)
+        mm_orig2 = reduce!(copy(mm_orig), ag)
+        mm = mm_orig2
+        mm = simple_aliases!(ag, graph, var_to_diff, mm_orig2, true, irreducibles)
     end
 
     debug && for (v, (c, a)) in ag
@@ -664,7 +716,7 @@ function exactdiv(a::Integer, b)
     return d
 end
 
-function locally_structure_simplify!(adj_row, pivot_var, ag, var_to_diff)
+function locally_structure_simplify!(adj_row, pivot_var, ag)
     pivot_val = adj_row[pivot_var]
     iszero(pivot_val) && return false
 
