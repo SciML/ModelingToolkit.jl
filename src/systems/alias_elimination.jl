@@ -474,8 +474,8 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, only_algebr
         bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
                        bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
         rank3, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
-        rank1 = something(rank1, rank2)
         rank2 = something(rank2, rank3)
+        rank1 = something(rank1, rank2)
         (rank1, rank2, rank3, pivots)
     end
 
