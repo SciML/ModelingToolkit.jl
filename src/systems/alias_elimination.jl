@@ -2,13 +2,13 @@ using SymbolicUtils: Rewriters
 
 const KEEP = typemin(Int)
 
-function alias_eliminate_graph!(state::TransformationState; debug = false)
+function alias_eliminate_graph!(state::TransformationState)
     mm = linear_subsys_adjmat(state)
     size(mm, 1) == 0 && return nothing, mm, BitSet() # No linear subsystems
 
     @unpack graph, var_to_diff = state.structure
 
-    return alias_eliminate_graph!(complete(graph), complete(var_to_diff), mm; debug)
+    return alias_eliminate_graph!(complete(graph), complete(var_to_diff), mm)
 end
 
 # For debug purposes
@@ -32,9 +32,10 @@ function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true)
     level === nothing ? v : (v => level)
 end
 
-function alias_elimination(sys; debug = false)
-    state = TearingState(sys; quick_cancel = true)
-    ag, mm, updated_diff_vars = alias_eliminate_graph!(state; debug)
+alias_elimination(sys) = alias_elimination!(TearingState(sys; quick_cancel = true))
+function alias_elimination!(state::TearingState)
+    sys = state.sys
+    ag, mm, updated_diff_vars = alias_eliminate_graph!(state)
     ag === nothing && return sys
 
     fullvars = state.fullvars
@@ -547,8 +548,7 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig, only_algebraic, irredu
     return mm
 end
 
-function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL;
-                                debug = false)
+function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # Step 1: Perform bareiss factorization on the adjacency matrix of the linear
     #         subsystem of the system we're interested in.
     #
@@ -595,11 +595,9 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL;
         (dv === nothing && diff_to_var[v] === nothing) && continue
 
         r, _ = find_root!(iag, v)
-        if debug
-            sv = fullvars[v]
-            root = fullvars[r]
-            @info "Found root $r" sv=>root
-        end
+        #   sv = fullvars[v]
+        #   root = fullvars[r]
+        #   @info "Found root $r" sv=>root
         level_to_var = Int[]
         extreme_var(var_to_diff, r, nothing, Val(false),
                     callback = Base.Fix1(push!, level_to_var))
@@ -667,10 +665,10 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL;
         mm = simple_aliases!(ag, graph, var_to_diff, mm_orig2, true, irreducibles)
     end
 
-    debug && for (v, (c, a)) in ag
-        va = iszero(a) ? a : fullvars[a]
-        @info "new alias" fullvars[v]=>(c, va)
-    end
+    # for (v, (c, a)) in ag
+    #     va = iszero(a) ? a : fullvars[a]
+    #     @info "new alias" fullvars[v]=>(c, va)
+    # end
 
     # Step 4: Reflect our update decisions back into the graph
     for (ei, e) in enumerate(mm.nzrows)

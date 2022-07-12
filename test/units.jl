@@ -48,7 +48,7 @@ eqs = [D(E) ~ P - E / τ
 @test !MT.validate(0 ~ P + E * τ)
 
 # Array variables
-@variables t [unit = u"s"] x[1:3](t) [unit = u"m"]
+@variables t [unit = u"s"] x(t)[1:3] [unit = u"m"]
 @parameters v[1:3]=[1, 2, 3] [unit = u"m/s"]
 D = Differential(t)
 eqs = D.(x) .~ v

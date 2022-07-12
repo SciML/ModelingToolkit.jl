@@ -30,7 +30,7 @@ eqs = [D(x) ~ σ * (y - x) * D(x - y) / D(z),
 # Latexify.@generate_test latexify(eqs)
 @test_reference "latexify/10.tex" latexify(eqs)
 
-@variables u[1:3](t)
+@variables u(t)[1:3]
 @parameters p[1:3]
 eqs = [D(u[1]) ~ p[3] * (u[2] - u[1]),
     0 ~ p[2] * p[3] * u[1] * (p[1] - u[1]) / 10 - u[2],
