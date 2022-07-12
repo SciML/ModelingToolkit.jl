@@ -231,7 +231,6 @@ end
 function reduce!(mm::SparseMatrixCLIL, ag::AliasGraph)
     dels = Int[]
     for (i, rs) in enumerate(mm.row_cols)
-        p = i == 7
         rvals = mm.row_vals[i]
         j = 1
         while j <= length(rs)
@@ -244,9 +243,9 @@ function reduce!(mm::SparseMatrixCLIL, ag::AliasGraph)
                 inc = coeff * rvals[j]
                 i = searchsortedfirst(rs, alias)
                 if i > length(rs) || rs[i] != alias
-                    if i <= j
-                        j += 1
-                    end
+                    # if we add a variable to what we already visited, make sure
+                    # to bump the cursor.
+                    j += i <= j
                     insert!(rs, i, alias)
                     insert!(rvals, i, inc)
                 else
@@ -272,11 +271,11 @@ struct InducedAliasGraph
     ag::AliasGraph
     invag::SimpleDiGraph{Int}
     var_to_diff::DiffGraph
-    visited::BitVector
+    visited::BitSet
 end
 
 function InducedAliasGraph(ag, invag, var_to_diff)
-    InducedAliasGraph(ag, invag, var_to_diff, falses(nv(invag)))
+    InducedAliasGraph(ag, invag, var_to_diff, BitSet())
 end
 
 struct IAGNeighbors
@@ -286,9 +285,7 @@ end
 
 function Base.iterate(it::IAGNeighbors, state = nothing)
     @unpack ag, invag, var_to_diff, visited = it.iag
-    callback! = let visited = visited
-        var -> visited[var] = true
-    end
+    callback! = Base.Fix1(push!, visited)
     if state === nothing
         v, lv = extreme_var(var_to_diff, it.v, 0)
         used_ag = false
@@ -298,13 +295,13 @@ function Base.iterate(it::IAGNeighbors, state = nothing)
     end
 
     v, level, used_ag, nb, nit = state
-    visited[v] && return nothing
+    v in visited && return nothing
     while true
         @label TRYAGIN
         if used_ag
             if nit !== nothing
                 n, ns = nit
-                if !visited[n]
+                if !(n in visited)
                     n, lv = extreme_var(var_to_diff, n, level)
                     extreme_var(var_to_diff, n, nothing, Val(false), callback = callback!)
                     nit = iterate(nb, ns)
@@ -316,7 +313,7 @@ function Base.iterate(it::IAGNeighbors, state = nothing)
             # We don't care about the alising value because we only use this to
             # find the root of the tree.
             if (_n = get(ag, v, nothing)) !== nothing && (n = _n[2]) > 0
-                if !visited[n]
+                if !(n in visited)
                     n, lv = extreme_var(var_to_diff, n, level)
                     extreme_var(var_to_diff, n, nothing, Val(false), callback = callback!)
                     return n => lv, (v, level, used_ag, nb, nit)
@@ -325,7 +322,7 @@ function Base.iterate(it::IAGNeighbors, state = nothing)
                 @goto TRYAGIN
             end
         end
-        visited[v] = true
+        push!(visited, v)
         (v = var_to_diff[v]) === nothing && return nothing
         level += 1
         used_ag = false
@@ -349,10 +346,11 @@ function _find_root!(iag::InducedAliasGraph, v::Integer, level = 0)
 end
 
 function find_root!(iag::InducedAliasGraph, v::Integer)
-    ret = _find_root!(iag, v)
-    fill!(iag.visited, false)
-    ret
+    clear_visited!(iag)
+    _find_root!(iag, v)
 end
+
+clear_visited!(iag::InducedAliasGraph) = (empty!(iag.visited); iag)
 
 struct RootedAliasTree
     iag::InducedAliasGraph
@@ -376,9 +374,6 @@ function Base.iterate(it::StatefulAliasBFS, queue = (eltype(it)[(1, 0, it.t)]))
     coeff, lv, t = popfirst!(queue)
     nextlv = lv + 1
     for (coeff′, c) in children(t)
-        # FIXME: use the visited cache!
-        # A "cycle" might occur when we have `x ~ D(x)`.
-        nodevalue(c) == t.root && continue
         # -1 <= coeff <= 1
         push!(queue, (coeff * coeff′, nextlv, c))
     end
@@ -392,7 +387,26 @@ end
 function Base.iterate(c::RootedAliasChildren, s = nothing)
     rat = c.t
     @unpack iag, root = rat
-    @unpack ag, invag, var_to_diff, visited = iag
+    @unpack visited = iag
+    push!(visited, root)
+    it = _iterate(c, s)
+    it === nothing && return nothing
+    while true
+        node = nodevalue(it[1][2])
+        if node in visited
+            it = _iterate(c, it[2])
+            it === nothing && return nothing
+        else
+            push!(visited, node)
+            return it
+        end
+    end
+end
+
+@inline function _iterate(c::RootedAliasChildren, s = nothing)
+    rat = c.t
+    @unpack iag, root = rat
+    @unpack ag, invag, var_to_diff = iag
     (iszero(root) || (root = var_to_diff[root]) === nothing) && return nothing
     if s === nothing
         stage = 1
@@ -516,7 +530,6 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig, only_algebraic, irredu
                                                                          irreducibles)
 
     # Step 2: Simplify the system using the Bareiss factorization
-    ks = keys(ag)
     for v in setdiff(solvable_variables, @view pivots[1:rank1])
         ag[v] = 0
     end
@@ -624,6 +637,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             end
         end
         max_lv = 0
+        clear_visited!(iag)
         for (coeff, lv, t) in StatefulAliasBFS(RootedAliasTree(iag, r))
             max_lv = max(max_lv, lv)
             v = nodevalue(t)
@@ -692,7 +706,7 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
     iszero(pivot_val) && return false
 
     nirreducible = 0
-    alias_candidate::Union{Int, Pair{Int, Int}} = 0
+    alias_candidate::Pair{Int, Int} = 0 => 0
 
     # N.B.: Assumes that the non-zeros iterator is robust to modification
     # of the underlying array datastructure.
