@@ -282,9 +282,7 @@ function generate_connection_equations_and_stream_connections(csets::AbstractVec
 
     for cset in csets
         v = cset.set[1].v
-        if hasmetadata(v, Symbolics.GetindexParent)
-            v = getparent(v)
-        end
+        v = getparent(v, v)
         vtype = get_connection_type(v)
         if vtype === Stream
             push!(stream_connections, cset)

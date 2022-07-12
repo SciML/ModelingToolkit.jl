@@ -1,6 +1,6 @@
 using OrdinaryDiffEq, ModelingToolkit, Test, LinearAlgebra
 @parameters t
-@variables y[1:3](t)
+@variables y(t)[1:3]
 @parameters k[1:3]
 D = Differential(t)
 
