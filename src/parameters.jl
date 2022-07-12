@@ -5,7 +5,7 @@ function isparameter(x)
     x = unwrap(x)
     if istree(x) && operation(x) isa Symbolic
         getmetadata(x, MTKParameterCtx, false) ||
-        isparameter(operation(x))
+            isparameter(operation(x))
     elseif istree(x) && operation(x) == (getindex)
         isparameter(arguments(x)[1])
     elseif x isa Symbolic
