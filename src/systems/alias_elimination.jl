@@ -420,25 +420,23 @@ count_nonzeros(a::AbstractArray) = count(!iszero, a)
 # Here we have a guarantee that they won't, so we can make this identification
 count_nonzeros(a::SparseVector) = nnz(a)
 
-function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL,
-                      only_linear_algebraic = false, irreducibles = ())
+function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, only_algebraic,
+                      irreducibles)
     mm = copy(mm_orig)
     is_linear_equations = falses(size(AsSubMatrix(mm_orig), 1))
-    diff_to_var = invview(var_to_diff)
-    islowest = let diff_to_var = diff_to_var
-        v -> diff_to_var[v] === nothing
-    end
-    for e in mm_orig.nzrows
-        is_linear_equations[e] = all(islowest, 𝑠neighbors(graph, e))
-    end
 
-    var_to_eq = let is_linear_equations = is_linear_equations, islowest = islowest,
-        irreducibles = irreducibles
-
-        maximal_matching(graph, eq -> is_linear_equations[eq],
-                         var -> islowest(var) && !(var in irreducibles))
+    is_not_potential_state = isnothing.(var_to_diff)
+    for v in irreducibles
+        is_not_potential_state[v] = false
     end
-    is_linear_variables = isa.(var_to_eq, Int)
+    is_linear_variables = only_algebraic ? copy(is_not_potential_state) :
+                          is_not_potential_state
+    for i in 𝑠vertices(graph)
+        is_linear_equations[i] && continue
+        for j in 𝑠neighbors(graph, i)
+            is_linear_variables[j] = false
+        end
+    end
     solvable_variables = findall(is_linear_variables)
 
     function do_bareiss!(M, Mold = nothing)
@@ -450,7 +448,13 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL,
                 r !== nothing && return r
                 rank1 = k - 1
             end
-            only_linear_algebraic && return nothing
+            if only_algebraic
+                if rank2 === nothing
+                    r = find_masked_pivot(is_not_potential_state, M, k)
+                    r !== nothing && return r
+                    rank2 = k - 1
+                end
+            end
             # TODO: It would be better to sort the variables by
             # derivative order here to enable more elimination
             # opportunities.
@@ -468,9 +472,10 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL,
         end
         bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
                        bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
-        rank2, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
+        rank3, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
         rank1 = something(rank1, rank2)
-        (rank1, rank2, pivots)
+        rank2 = something(rank2, rank3)
+        (rank1, rank2, rank3, pivots)
     end
 
     return mm, solvable_variables, do_bareiss!(mm, mm_orig)
@@ -486,8 +491,7 @@ function lss(mm, pivots, ag)
     end
 end
 
-function simple_aliases!(ag, graph, var_to_diff, mm_orig, only_linear_algebraic = false,
-                         irreducibles = ())
+function simple_aliases!(ag, graph, var_to_diff, mm_orig, only_algebraic, irreducibles = ())
     # Let `m = the number of linear equations` and `n = the number of
     # variables`.
     #
@@ -503,23 +507,15 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig, only_linear_algebraic 
     # contribute to the equations, but are not solved by the linear system. Note
     # that the complete system may be larger than the linear subsystem and
     # include variables that do not appear here.
-    mm, solvable_variables, (rank1, rank2, pivots) = aag_bareiss!(graph, var_to_diff,
-                                                                  mm_orig,
-                                                                  only_linear_algebraic,
-                                                                  irreducibles)
+    mm, solvable_variables, (rank1, rank2, rank3, pivots) = aag_bareiss!(graph, var_to_diff,
+                                                                         mm_orig,
+                                                                         only_algebraic,
+                                                                         irreducibles)
 
     # Step 2: Simplify the system using the Bareiss factorization
     ks = keys(ag)
-    if !only_linear_algebraic
-        for v in setdiff(solvable_variables, @view pivots[1:rank1])
-            ag[v] = 0
-        end
-    else
-        for v in setdiff(solvable_variables, @view pivots[1:rank1])
-            if !(v in ks)
-                ag[v] = 0
-            end
-        end
+    for v in setdiff(solvable_variables, @view pivots[1:rank1])
+        ag[v] = 0
     end
 
     lss! = lss(mm, pivots, ag)
@@ -558,7 +554,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL;
     #
     nvars = ndsts(graph)
     ag = AliasGraph(nvars)
-    mm = simple_aliases!(ag, graph, var_to_diff, mm_orig)
+    mm = simple_aliases!(ag, graph, var_to_diff, mm_orig, false)
 
     # Step 3: Handle differentiated variables
     # At this point, `var_to_diff` and `ag` form a tree structure like the
@@ -665,39 +661,9 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL;
         end
     end
 
-    # There might be "cycles" like `D(x) = x`
-    for v in irreducibles
-        if v in keys(newag)
-            newag[v] = nothing
-        end
-        if v in keys(ag)
-            ag[v] = nothing
-        end
-    end
-    for v in keys(ag)
-        push!(irreducibles, v)
-    end
-
-    for (v, (c, a)) in newag
-        va = iszero(a) ? a : fullvars[a]
-        @info "new alias" fullvars[v]=>(c, va)
-    end
-    newkeys = keys(newag)
     if !isempty(irreducibles)
-        for (v, (c, a)) in ag
-            (a in irreducibles || v in irreducibles) && continue
-            if iszero(c)
-                newag[v] = c
-            else
-                newag[v] = c => a
-            end
-        end
         ag = newag
-
-        # We cannot use the `mm` from Bareiss because it doesn't consider
-        # irreducibles
-        mm_orig2 = reduce!(copy(mm_orig), ag)
-        mm = mm_orig2
+        mm_orig2 = isempty(ag) ? mm_orig : reduce!(copy(mm_orig), ag)
         mm = simple_aliases!(ag, graph, var_to_diff, mm_orig2, true, irreducibles)
     end
 
