@@ -420,7 +420,8 @@ count_nonzeros(a::AbstractArray) = count(!iszero, a)
 # Here we have a guarantee that they won't, so we can make this identification
 count_nonzeros(a::SparseVector) = nnz(a)
 
-function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, only_linear_algebraic = false, irreducibles = ())
+function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL,
+                      only_linear_algebraic = false, irreducibles = ())
     mm = copy(mm_orig)
     is_linear_equations = falses(size(AsSubMatrix(mm_orig), 1))
     diff_to_var = invview(var_to_diff)
@@ -431,8 +432,11 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, only_linear
         is_linear_equations[e] = all(islowest, 𝑠neighbors(graph, e))
     end
 
-    var_to_eq = let is_linear_equations = is_linear_equations, islowest = islowest, irreducibles = irreducibles
-         maximal_matching(graph, eq -> is_linear_equations[eq], var -> islowest(var) && !(var in irreducibles))
+    var_to_eq = let is_linear_equations = is_linear_equations, islowest = islowest,
+        irreducibles = irreducibles
+
+        maximal_matching(graph, eq -> is_linear_equations[eq],
+                         var -> islowest(var) && !(var in irreducibles))
     end
     is_linear_variables = isa.(var_to_eq, Int)
     solvable_variables = findall(is_linear_variables)
@@ -482,7 +486,8 @@ function lss(mm, pivots, ag)
     end
 end
 
-function simple_aliases!(ag, graph, var_to_diff, mm_orig, only_linear_algebraic = false, irreducibles = ())
+function simple_aliases!(ag, graph, var_to_diff, mm_orig, only_linear_algebraic = false,
+                         irreducibles = ())
     # Let `m = the number of linear equations` and `n = the number of
     # variables`.
     #
@@ -499,7 +504,9 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig, only_linear_algebraic 
     # that the complete system may be larger than the linear subsystem and
     # include variables that do not appear here.
     mm, solvable_variables, (rank1, rank2, pivots) = aag_bareiss!(graph, var_to_diff,
-                                                                  mm_orig, only_linear_algebraic, irreducibles)
+                                                                  mm_orig,
+                                                                  only_linear_algebraic,
+                                                                  irreducibles)
 
     # Step 2: Simplify the system using the Bareiss factorization
     ks = keys(ag)
