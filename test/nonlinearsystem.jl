@@ -195,7 +195,7 @@ let
         u[4] ~ 1]
 
     sys = NonlinearSystem(eqs, collect(u[1:4]), Num[], defaults = Dict([]), name = :test)
-    prob = NonlinearProblem(sys, ones(length(states(sys))))
+    prob = NonlinearProblem(sys, ones(length(sys.states)))
 
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 

@@ -49,10 +49,6 @@ end
 function Matching(m::Int)
     Matching{Unassigned}(Union{Int, Unassigned}[unassigned for _ in 1:m], nothing)
 end
-function Matching{U}(m::Int) where {U}
-    Matching{Union{Unassigned, U}}(Union{Int, Unassigned, U}[unassigned for _ in 1:m],
-                                   nothing)
-end
 
 Base.size(m::Matching) = Base.size(m.match)
 Base.getindex(m::Matching, i::Integer) = m.match[i]
@@ -69,9 +65,9 @@ function Base.setindex!(m::Matching{U}, v::Union{Integer, U}, i::Integer) where 
     return m.match[i] = v
 end
 
-function Base.push!(m::Matching, v)
+function Base.push!(m::Matching{U}, v::Union{Integer, U}) where {U}
     push!(m.match, v)
-    if v isa Integer && m.inv_match !== nothing
+    if v !== unassigned && m.inv_match !== nothing
         m.inv_match[v] = length(m.match)
     end
 end
@@ -350,8 +346,8 @@ vertices, subject to the constraint that vertices for which `srcfilter` or `dstf
 return `false` may not be matched.
 """
 function maximal_matching(g::BipartiteGraph, srcfilter = vsrc -> true,
-                          dstfilter = vdst -> true, ::Type{U} = Unassigned) where {U}
-    matching = Matching{U}(ndsts(g))
+                          dstfilter = vdst -> true)
+    matching = Matching(ndsts(g))
     foreach(Iterators.filter(srcfilter, 𝑠vertices(g))) do vsrc
         construct_augmenting_path!(matching, g, vsrc, dstfilter)
     end

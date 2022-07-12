@@ -955,8 +955,12 @@ function structural_simplify(sys::AbstractSystem; simplify = false, kwargs...)
     state = inputs_to_parameters!(state)
     sys = state.sys
     check_consistency(state)
+    if sys isa ODESystem
+        sys = dae_order_lowering(dummy_derivative(sys, state))
+    end
+    state = TearingState(sys)
     find_solvables!(state; kwargs...)
-    sys = dummy_derivative(sys, state)
+    sys = tearing_reassemble(state, tearing(state), simplify = simplify)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     invalidate_cache!(sys)

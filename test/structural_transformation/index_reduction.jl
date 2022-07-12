@@ -136,28 +136,22 @@ let pss_pendulum = partial_state_selection(pendulum)
     @test_broken length(equations(pss_pendulum)) == 3
 end
 
-for sys in [
-    structural_simplify(pendulum2),
-    structural_simplify(ode_order_lowering(pendulum2)),
+sys = structural_simplify(pendulum2)
+@test length(equations(sys)) == 5
+@test length(states(sys)) == 5
+
+u0 = [
+    D(x) => 0.0,
+    D(y) => 0.0,
+    x => sqrt(2) / 2,
+    y => sqrt(2) / 2,
+    T => 0.0,
 ]
-    @test length(equations(sys)) <= 6
-    @test length(states(sys)) <= 6
+p = [
+    L => 1.0,
+    g => 9.8,
+]
 
-    u0 = [
-        D(x) => 0.0,
-        D(D(x)) => 0.0,
-        D(y) => 0.0,
-        D(D(y)) => 0.0,
-        x => sqrt(2) / 2,
-        y => sqrt(2) / 2,
-        T => 0.0,
-    ]
-    p = [
-        L => 1.0,
-        g => 9.8,
-    ]
-
-    prob_auto = ODEProblem(sys, u0, (0.0, 1.0), p)
-    sol = solve(prob_auto, FBDF())
-    @test norm(sol[x] .^ 2 + sol[y] .^ 2 .- 1) < 1e-2
-end
+prob_auto = DAEProblem(sys, zeros(length(u0)), u0, (0.0, 0.2), p)
+sol = solve(prob_auto, DFBDF())
+@test norm(sol[x] .^ 2 + sol[y] .^ 2 .- 1) < 1e-2
