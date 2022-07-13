@@ -37,12 +37,12 @@ show(io, MIME("text/plain"), lorenz1_aliased);
 str = String(take!(io));
 @test all(s -> occursin(s, str), ["lorenz1", "States (2)", "Parameters (3)"])
 reduced_eqs = [D(x) ~ σ * (y - x)
-               D(y) ~ β + x * (ρ - z) - y]
+               D(y) ~ β + x * (ρ + a) - y]
 test_equal.(equations(lorenz1_aliased), reduced_eqs)
 @test isempty(setdiff(states(lorenz1_aliased), [x, y, z]))
 test_equal.(observed(lorenz1_aliased), [u ~ 0
-                                        z ~ x - y
-                                        a ~ -z])
+                                        a ~ y - x
+                                        z ~ -a])
 
 # Multi-System Reduction
 

@@ -143,8 +143,8 @@ include("../examples/serial_inductor.jl")
 sys = structural_simplify(ll_model)
 check_contract(sys)
 u0 = states(sys) .=> 0
-@test_throws Any ODEProblem(sys, u0, (0, 10.0))
-@test_throws Any ODAEProblem(sys, u0, (0, 10.0))
+@test_nowarn ODEProblem(sys, u0, (0, 10.0))
+@test_nowarn ODAEProblem(sys, u0, (0, 10.0))
 prob = DAEProblem(sys, Differential(t).(states(sys)) .=> 0, u0, (0, 0.5))
 @test_nowarn sol = solve(prob, DFBDF())
 
