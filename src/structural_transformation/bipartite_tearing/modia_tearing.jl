@@ -34,17 +34,14 @@ function tearEquations!(ict::IncrementalCycleTracker, Gsolvable, es::Vector{Int}
     end
     for eq in es  # iterate only over equations that are not in eSolvedFixed
         vs = Gsolvable[eq]
-        #=
         if check_der
             # if there're differentiated variables, then only consider them
             try_assign_eq!(ict, vs, v_active, eq, isder)
-            @show has_der[]
             if has_der[]
                 has_der[] = false
                 continue
             end
         end
-        =#
         try_assign_eq!(ict, vs, v_active, eq)
     end
 
