@@ -286,7 +286,3 @@ end
 function hasdescription(x)
     getdescription(x) != ""
 end
-
-function Base.Docs.getdoc(p::Num)
-    string(Base.Docs.@doc(p), " ", getdescription(p))
-end
