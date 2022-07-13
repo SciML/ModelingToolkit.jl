@@ -948,19 +948,21 @@ function will be applied during the tearing process. It also takes kwargs
 `allow_symbolic=false` and `allow_parameter=true` which limits the coefficient
 types during tearing.
 """
-function structural_simplify(sys::AbstractSystem; simplify = false, kwargs...)
+function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false, kwargs...)
     sys = expand_connections(sys)
     state = TearingState(sys)
-    state, = inputs_to_parameters!(state)
+    has_io = io !== nothing
+    has_io && markio!(state, io...)
+    state, input_idxs = inputs_to_parameters!(state, !has_io)
     sys = alias_elimination!(state)
     state = TearingState(sys)
     check_consistency(state)
     find_solvables!(state; kwargs...)
-    sys = dummy_derivative(sys, state)
+    sys = dummy_derivative(sys, state; simplify)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     invalidate_cache!(sys)
-    return sys
+    return has_io ? (sys, input_idxs) : sys
 end
 
 """
@@ -988,25 +990,8 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
 function linearization_function(sys::AbstractSystem, inputs,
-                                outputs; simplify = false,
-                                kwargs...)
-    sys = expand_connections(sys)
-    state = TearingState(sys)
-    markio!(state, inputs, outputs)
-    state, input_idxs = inputs_to_parameters!(state, false)
-    sys = alias_elimination!(state)
-    state = TearingState(sys)
-    check_consistency(state)
-    if sys isa ODESystem
-        sys = dae_order_lowering(dummy_derivative(sys, state))
-    end
-    state = TearingState(sys)
-    find_solvables!(state; kwargs...)
-    sys = tearing_reassemble(state, tearing(state), simplify = simplify)
-    fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
-    @set! sys.observed = topsort_equations(observed(sys), fullstates)
-    invalidate_cache!(sys)
-
+                                outputs; kwargs...)
+    sys, input_idxs = structural_simplify(sys, (inputs, outputs); kwargs...)
     eqs = equations(sys)
     check_operator_variables(eqs, Differential)
     # Sort equations and states such that diff.eqs. match differential states and the rest are algebraic
@@ -1130,7 +1115,7 @@ using ModelingToolkit
 @variables t
 function plant(; name)
     @variables x(t) = 1
-    @variables u(t)=0 y(t)=0 
+    @variables u(t)=0 y(t)=0
     D = Differential(t)
     eqs = [D(x) ~ -x + u
            y ~ x]
@@ -1138,7 +1123,7 @@ function plant(; name)
 end
 
 function ref_filt(; name)
-    @variables x(t)=0 y(t)=0 
+    @variables x(t)=0 y(t)=0
     @variables u(t)=0 [input=true]
     D = Differential(t)
     eqs = [D(x) ~ -2 * x + u
@@ -1203,9 +1188,7 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
              gzgx*f_x gzgx*f_z]
         B = [f_u
              zeros(nz, nu)]
-        C = [
-        h_x h_z
-]
+        C = [h_x h_z]
         Bs = -(gz \ (f_x * f_u + g_u))
         if !iszero(Bs)
             if !allow_input_derivatives
