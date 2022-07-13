@@ -41,6 +41,7 @@ import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
 import JuliaFormatter
 
 using Reexport
+using Symbolics: degree
 @reexport using Symbolics
 export @derivatives
 using Symbolics: _parse_vars, value, @derivatives, get_variables,
