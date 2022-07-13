@@ -1032,6 +1032,10 @@ function linearization_function(sys::AbstractSystem, inputs,
     lin_fun = let fun = fun,
         h = ModelingToolkit.build_explicit_observed_function(sys, outputs)
 
+        ps = parameters(sys)
+        fg_u = zeros(length(sts), length(input_idxs))
+        colorvec = eachindex(ps)
+
         function (u, p, t)
             if u !== nothing # Handle systems without states
                 length(sts) == length(u) ||
@@ -1040,8 +1044,19 @@ function linearization_function(sys::AbstractSystem, inputs,
                 fg_xz = ForwardDiff.jacobian(uf, u)
                 h_xz = ForwardDiff.jacobian(xz -> h(xz, p, t), u)
                 pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
-                # TODO: this is very inefficient, p contains all parameters of the system
-                fg_u = ForwardDiff.jacobian(pf, p)[:, input_idxs]
+
+                p_closure = function (p_small_inner)
+                    p_big[input_idxs] .= p_small_inner
+                    pf(p_big)
+                end
+                p_small = p[input_idxs]
+                chunk = ForwardDiff.Chunk(p_small)
+                cfg = ForwardDiff.JacobianConfig(p_closure, p_small, chunk)
+                dualtype = ForwardDiff.Dual{ForwardDiff.Tag{typeof(p_closure), eltype(p)},
+                                            eltype(p), ForwardDiff.chunksize(chunk)}
+                p_big = zeros(dualtype, length(p))
+                p_big .= p
+                ForwardDiff.jacobian!(fg_u, p_closure, p_small, cfg)
             else
                 length(sts) == 0 ||
                     error("Number of state variables (0) does not match the number of input states ($(length(u)))")
