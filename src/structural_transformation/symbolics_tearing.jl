@@ -185,7 +185,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         dv === nothing && continue
         if var_eq_matching[var] !== SelectedState()
             dd = fullvars[dv]
-            if (i_v_t = get(possible_x_t, rhs, nothing)) === nothing
+            if (i_v_t = get(possible_x_t, dd, nothing)) === nothing
                 v_t = diff2term(unwrap(dd))
             else
                 idx, v_t = i_v_t
