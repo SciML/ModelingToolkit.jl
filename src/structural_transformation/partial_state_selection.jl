@@ -84,7 +84,8 @@ function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
             end
             filter!(var -> ict.graph.matching[var] === unassigned, to_tear_vars)
             filter!(eq -> invview(ict.graph.matching)[eq] === unassigned, to_tear_eqs)
-            tearEquations!(ict, solvable_graph.fadjlist, to_tear_eqs, to_tear_vars)
+            tearEquations!(ict, solvable_graph.fadjlist, to_tear_eqs, BitSet(to_tear_vars),
+                           nothing)
             for var in to_tear_vars
                 var_eq_matching[var] = ict.graph.matching[var]
             end
@@ -177,7 +178,6 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     invgraph = invview(graph)
 
     eqlevel, _ = compute_diff_level(diff_to_eq)
-    varlevel, _ = compute_diff_level(diff_to_var)
 
     var_sccs = find_var_sccs(graph, var_eq_matching)
     eqcolor = falses(nsrcs(graph))
@@ -191,7 +191,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         iszero(maxlevel) && continue
 
         rank_matching = Matching(nvars)
-        for level in maxlevel:-1:1
+        for _ in maxlevel:-1:1
             eqs = filter(eq -> diff_to_eq[eq] !== nothing, eqs)
             nrows = length(eqs)
             iszero(nrows) && break
@@ -254,13 +254,10 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     isdiffed = let diff_to_var = diff_to_var, dummy_derivatives_set = dummy_derivatives_set
         v -> diff_to_var[v] !== nothing && !(v in dummy_derivatives_set)
     end
-    should_consider = let graph = graph, isdiffed = isdiffed
-        eq -> !any(isdiffed, 𝑠neighbors(graph, eq))
-    end
 
-    var_eq_matching = tear_graph_modia(structure, Union{Unassigned, SelectedState};
-                                       varfilter = can_eliminate,
-                                       eqfilter = should_consider)
+    var_eq_matching = tear_graph_modia(structure, isdiffed,
+                                       Union{Unassigned, SelectedState};
+                                       varfilter = can_eliminate)
     for v in eachindex(var_eq_matching)
         can_eliminate(v) && continue
         var_eq_matching[v] = SelectedState()
