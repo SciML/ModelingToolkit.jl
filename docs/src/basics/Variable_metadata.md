@@ -2,6 +2,23 @@
 It is possible to add metadata to symbolic variables. The following
 information can be added (note, it's possible to extend this to user-defined metadata as well)
 
+## Variable descriptions
+Descriptive strings can be attached to variables using the `[description = "descriptive string"]` syntax:
+```@example metadata
+using ModelingToolkit
+@variables u [description = "This is my input"]
+getdescription(u)
+```
+
+When variables with descriptions are present in systems, they will be printed when the system is shown in the terminal:
+```@example metadata
+@parameters t
+@variables u(t) [description = "A short description of u"]
+@parameters p   [description = "A description of p"]
+@named sys = ODESystem([u ~ p], t)
+show(stdout, "text/plain", sys) # hide
+```
+
 ## Input or output
 Designate a variable as either an input or an output using the following
 ```@example metadata

@@ -267,3 +267,24 @@ function getbounds(p::AbstractVector)
     ub = last.(bounds)
     (; lb, ub)
 end
+
+## Description =================================================================
+struct VariableDescription end
+Symbolics.option_to_metadata_type(::Val{:description}) = VariableDescription
+
+getdescription(x::Num) = getdescription(Symbolics.unwrap(x))
+
+"""
+    getdescription(x)
+
+Return any description attached to variables `x`. If no description is attached, an empty string is returned.
+"""
+function getdescription(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    Symbolics.getmetadata(x, VariableDescription, "")
+end
+
+function hasdescription(x)
+    getdescription(x) != ""
+end
