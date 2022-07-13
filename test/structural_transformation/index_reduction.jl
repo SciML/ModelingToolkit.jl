@@ -157,7 +157,8 @@ for sys in [
         g => 9.8,
     ]
 
-    prob_auto = ODEProblem(sys, u0, (0.0, 1.0), p)
+    prob_auto = ODEProblem(sys, u0, (0.0, 0.5), p)
     sol = solve(prob_auto, FBDF())
+    @test sol.retcode === :Success
     @test norm(sol[x] .^ 2 + sol[y] .^ 2 .- 1) < 1e-2
 end

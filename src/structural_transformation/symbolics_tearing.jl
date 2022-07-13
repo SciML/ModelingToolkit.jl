@@ -168,23 +168,17 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     removed_eqs = Int[]
     removed_vars = Int[]
     diff_to_var = invview(var_to_diff)
-    var2idx = Dict(reverse(en) for en in enumerate(fullvars))
     for var in 1:length(fullvars)
         dv = var_to_diff[var]
         dv === nothing && continue
         if var_eq_matching[var] !== SelectedState()
             dd = fullvars[dv]
-            # TODO: figure this out structurally
+            # TODO: check if observed has it
             v_t = diff2term(unwrap(dd))
-            v_t_idx = get(var2idx, v_t, nothing)
-            if v_t_idx isa Int
-                substitute_vars!(graph, ((dv => v_t_idx),), idx_buffer, sub_callback!)
-            else
-                for eq in 𝑑neighbors(graph, dv)
-                    neweqs[eq] = substitute(neweqs[eq], fullvars[dv] => v_t)
-                end
-                fullvars[dv] = v_t
+            for eq in 𝑑neighbors(graph, dv)
+                neweqs[eq] = substitute(neweqs[eq], fullvars[dv] => v_t)
             end
+            fullvars[dv] = v_t
             # update the structural information
             diff_to_var[dv] = nothing
         end
@@ -251,7 +245,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     # As a final note, in all the above cases where we need to introduce new
     # variables and equations, don't add them when they already exist.
 
-    var_to_idx = Dict{Any, Int}(reverse(en) for en in enumerate(fullvars))
     if ModelingToolkit.has_iv(state.sys)
         iv = get_iv(state.sys)
         D = Differential(iv)
@@ -304,8 +297,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             # D(x) ~ x_t
             ogidx = var_to_diff[ogidx]
 
-            has_x_t = false
-            x_t_idx::Union{Nothing, Int} = nothing
             dx_idx = var_to_diff[xidx]
             if dx_idx === nothing
                 dx = D(x)
@@ -319,50 +310,28 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 var_to_diff[xidx] = dx_idx
             else
                 dx = fullvars[dx_idx]
-                var_eq_matching[dx_idx] = unassigned
-
-                for eq in 𝑑neighbors(graph, dx_idx)
-                    vs = 𝑠neighbors(graph, eq)
-                    length(vs) == 2 || continue
-                    maybe_x_t_idx = vs[1] == dx_idx ? vs[2] : vs[1]
-                    maybe_x_t = fullvars[maybe_x_t_idx]
-                    difference = (neweqs[eq].lhs - neweqs[eq].rhs) - (dx - maybe_x_t)
-                    # if `eq` is in the form of `D(x) ~ x_t`
-                    if ModelingToolkit._iszero(difference)
-                        x_t_idx = maybe_x_t_idx
-                        x_t = maybe_x_t
-                        eq_idx = eq
-                        push!(order_lowering_eqs, eq_idx)
-                        has_x_t = true
-                        break
-                    end
-                end
             end
 
-            if x_t_idx === nothing
-                x_t = ModelingToolkit.lower_varname(ogx, iv, o)
-                push!(fullvars, x_t)
-                x_t_idx = add_vertex!(var_to_diff)
-                add_vertex!(graph, DST)
-                add_vertex!(solvable_graph, DST)
-                @assert x_t_idx == ndsts(graph) == length(fullvars)
-                push!(var_eq_matching, unassigned)
-            end
-            x_t_idx::Int
+            # TODO: check if it's already in observed
+            x_t = ModelingToolkit.lower_varname(ogx, iv, o)
+            push!(fullvars, x_t)
+            x_t_idx = add_vertex!(var_to_diff)
+            add_vertex!(graph, DST)
+            add_vertex!(solvable_graph, DST)
+            @assert x_t_idx == ndsts(graph) == length(fullvars)
+            push!(var_eq_matching, unassigned)
 
-            if !has_x_t
-                push!(neweqs, dx ~ x_t)
-                eq_idx = add_vertex!(eq_to_diff)
-                push!(order_lowering_eqs, eq_idx)
-                add_vertex!(graph, SRC)
-                add_vertex!(solvable_graph, SRC)
-                @assert eq_idx == nsrcs(graph) == length(neweqs)
+            push!(neweqs, dx ~ x_t)
+            eq_idx = add_vertex!(eq_to_diff)
+            push!(order_lowering_eqs, eq_idx)
+            add_vertex!(graph, SRC)
+            add_vertex!(solvable_graph, SRC)
+            @assert eq_idx == nsrcs(graph) == length(neweqs)
 
-                add_edge!(solvable_graph, eq_idx, x_t_idx)
-                add_edge!(solvable_graph, eq_idx, dx_idx)
-                add_edge!(graph, eq_idx, x_t_idx)
-                add_edge!(graph, eq_idx, dx_idx)
-            end
+            add_edge!(solvable_graph, eq_idx, x_t_idx)
+            add_edge!(solvable_graph, eq_idx, dx_idx)
+            add_edge!(graph, eq_idx, x_t_idx)
+            add_edge!(graph, eq_idx, dx_idx)
             # We use this info to substitute all `D(D(x))` or `D(x_t)` except
             # the `D(D(x)) ~ x_tt` equation to `x_tt`.
             #              D(D(x))  D(x_t)    x_tt
@@ -382,6 +351,10 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             # substituted to `x_tt`.
             for idx in (ogidx, dx_idx)
                 subidx = ((idx => x_t_idx),)
+                # This handles case 2.2
+                if var_eq_matching[idx] isa Int
+                    var_eq_matching[x_t_idx] = var_eq_matching[idx]
+                end
                 substitute_vars!(graph, subidx, idx_buffer, sub_callback!;
                                  exclude = order_lowering_eqs)
                 substitute_vars!(solvable_graph, subidx, idx_buffer;
