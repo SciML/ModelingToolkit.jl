@@ -1,14 +1,12 @@
 struct VariableUnit end
 struct VariableConnectType end
 struct VariableNoiseType end
-struct VariableDescriptionType end
 struct VariableInput end
 struct VariableOutput end
 struct VariableIrreducible end
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
 Symbolics.option_to_metadata_type(::Val{:noise}) = VariableNoiseType
-Symbolics.option_to_metadata_type(::Val{:description}) = VariableDescriptionType
 Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
@@ -287,4 +285,8 @@ end
 
 function hasdescription(x)
     getdescription(x) != ""
+end
+
+function Base.Docs.getdoc(p::Num)
+    string(Base.Docs.@doc(p), " ", getdescription(p))
 end
