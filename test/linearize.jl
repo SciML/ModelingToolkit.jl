@@ -73,7 +73,7 @@ desired_order = [f.x, p.x]
 lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
 
 @test lsys.A == [-2 0; 1 -2]
-@test lsys.B == reshape([1; 0;;], 2, 1) # reshape required when testing on Julia v1.6
+@test lsys.B == reshape([1, 0], 2, 1)
 @test lsys.C == [0 1]
 @test lsys.D[] == 0
 
