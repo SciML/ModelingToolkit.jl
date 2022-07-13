@@ -357,11 +357,24 @@ struct RootedAliasTree
     root::Int
 end
 
-AbstractTrees.childtype(::Type{<:RootedAliasTree}) = Union{RootedAliasTree, Int}
+if Base.isdefined(AbstractTrees, :childtype)
+    AbstractTrees.childtype(::Type{<:RootedAliasTree}) = Union{RootedAliasTree, Int}
+else
+    childtype(::Type{<:RootedAliasTree}) = Union{RootedAliasTree, Int}
+end
 AbstractTrees.children(rat::RootedAliasTree) = RootedAliasChildren(rat)
 AbstractTrees.nodetype(::Type{<:RootedAliasTree}) = Int
-AbstractTrees.nodevalue(rat::RootedAliasTree) = rat.root
-AbstractTrees.shouldprintkeys(rat::RootedAliasTree) = false
+if Base.isdefined(AbstractTrees, :nodevalue)
+    AbstractTrees.nodevalue(rat::RootedAliasTree) = rat.root
+else
+    nodevalue(rat::RootedAliasTree) = rat.root
+    nodevalue(a) = a
+end
+if Base.isdefined(AbstractTrees, :shouldprintkeys)
+    AbstractTrees.shouldprintkeys(rat::RootedAliasTree) = false
+else
+    shouldprintkeys(rat::RootedAliasTree) = false
+end
 has_fast_reverse(::Type{<:AbstractSimpleTreeIter{<:RootedAliasTree}}) = false
 
 struct StatefulAliasBFS{T} <: AbstractSimpleTreeIter{T}
