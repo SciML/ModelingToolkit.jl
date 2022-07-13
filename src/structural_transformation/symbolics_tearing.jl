@@ -135,7 +135,7 @@ function substitute_vars!(graph::BipartiteGraph, subs, cache = Int[], callback! 
 end
 
 function tearing_reassemble(state::TearingState, var_eq_matching; simplify = false)
-    fullvars = state.fullvars
+    @unpack fullvars, sys = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
 
     neweqs = collect(equations(state))
@@ -165,16 +165,32 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     # Step 1:
     # Replace derivatives of non-selected states by dummy derivatives
 
+    possible_x_t = Dict()
+    oldobs = observed(sys)
+    for (i, eq) in enumerate(oldobs)
+        lhs = eq.lhs
+        rhs = eq.rhs
+        isdifferential(lhs) && continue
+        # TODO: should we hanlde negative alias as well?
+        isdifferential(rhs) || continue
+        possible_x_t[rhs] = i, lhs
+    end
+
     removed_eqs = Int[]
     removed_vars = Int[]
+    removed_obs = Int[]
     diff_to_var = invview(var_to_diff)
     for var in 1:length(fullvars)
         dv = var_to_diff[var]
         dv === nothing && continue
         if var_eq_matching[var] !== SelectedState()
             dd = fullvars[dv]
-            # TODO: check if observed has it
-            v_t = diff2term(unwrap(dd))
+            if (i_v_t = get(possible_x_t, rhs, nothing)) === nothing
+                v_t = diff2term(unwrap(dd))
+            else
+                idx, v_t = i_v_t
+                push!(removed_obs, idx)
+            end
             for eq in 𝑑neighbors(graph, dv)
                 neweqs[eq] = substitute(neweqs[eq], fullvars[dv] => v_t)
             end
@@ -312,8 +328,14 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 dx = fullvars[dx_idx]
             end
 
-            # TODO: check if it's already in observed
-            x_t = ModelingToolkit.lower_varname(ogx, iv, o)
+            if (i_x_t = get(possible_x_t, dx, nothing)) === nothing &&
+               (ogidx !== nothing &&
+                (i_x_t = get(possible_x_t, fullvars[ogidx], nothing)) === nothing)
+                x_t = ModelingToolkit.lower_varname(ogx, iv, o)
+            else
+                idx, x_t = i_x_t
+                push!(removed_obs, idx)
+            end
             push!(fullvars, x_t)
             x_t_idx = add_vertex!(var_to_diff)
             add_vertex!(graph, DST)
@@ -491,7 +513,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     sys = state.sys
     @set! sys.eqs = neweqs
     @set! sys.states = [fullvars[i] for i in active_vars if diff_to_var[i] === nothing]
-    @set! sys.observed = [observed(sys); subeqs]
+    deleteat!(oldobs, sort!(removed_obs))
+    @set! sys.observed = [oldobs; subeqs]
     @set! sys.substitutions = Substitutions(subeqs, deps)
     @set! state.sys = sys
     @set! sys.tearing_state = state
