@@ -376,7 +376,7 @@ end
 
 # issue 1109
 let
-    @variables t x(t)[1:3, 1:3]
+    @variables t x[1:3, 1:3](t)
     D = Differential(t)
     @named sys = ODESystem(D.(x) .~ x)
     @test_nowarn structural_simplify(sys)
@@ -386,7 +386,7 @@ end
 using Symbolics: unwrap, wrap
 using LinearAlgebra
 @variables t
-sts = @variables x(t)[1:3]=[1, 2, 3.0] y(t)=1.0
+sts = @variables x[1:3](t)=[1, 2, 3.0] y(t)=1.0
 ps = @parameters p[1:3] = [1, 2, 3]
 D = Differential(t)
 eqs = [collect(D.(x) .~ x)
@@ -487,7 +487,7 @@ function foo(a::Num, ms::AbstractVector)
     wrap(term(foo, a, term(SVector, ms...)))
 end
 foo(a, ms::AbstractVector) = a + sum(ms)
-@variables t x(t) ms(t)[1:3]
+@variables t x(t) ms[1:3](t)
 D = Differential(t)
 ms = collect(ms)
 eqs = [D(x) ~ foo(x, ms); D.(ms) .~ 1]
@@ -589,7 +589,7 @@ end
 let
     @parameters t
     D = Differential(t)
-    @variables x(t)[1:2] = zeros(2)
+    @variables x[1:2](t) = zeros(2)
     @variables y(t) = 0
     @parameters k = 1
     eqs = [D(x[1]) ~ x[2]
@@ -680,7 +680,7 @@ let
     eqs_to_lhs(eqs) = eq_to_lhs.(eqs)
 
     @parameters σ=10 ρ=28 β=8 / 3 sigma rho beta
-    @variables t t2 x(t)=1 y(t)=0 z(t)=0 x2(t2)=1 y2(t2)=0 z2(t2)=0 u(t2)[1:3]
+    @variables t t2 x(t)=1 y(t)=0 z(t)=0 x2(t2)=1 y2(t2)=0 z2(t2)=0 u[1:3](t2)
 
     D = Differential(t)
     D2 = Differential(t2)
@@ -749,7 +749,7 @@ end
 let
     @parameters t
 
-    u = collect(first(@variables u(t)[1:4]))
+    u = collect(first(@variables u[1:4](t)))
     Dt = Differential(t)
 
     eqs = [Differential(t)(u[2]) - 1.1u[1] ~ 0
