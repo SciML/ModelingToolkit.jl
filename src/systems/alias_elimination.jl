@@ -450,8 +450,8 @@ count_nonzeros(a::AbstractArray) = count(!iszero, a)
 # Here we have a guarantee that they won't, so we can make this identification
 count_nonzeros(a::SparseVector) = nnz(a)
 
-function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, only_algebraic,
-                      irreducibles)
+function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, only_algebraic = true,
+                      irreducibles = ())
     mm = copy(mm_orig)
     is_linear_equations = falses(size(AsSubMatrix(mm_orig), 1))
 

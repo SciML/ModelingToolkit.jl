@@ -171,15 +171,14 @@ Base.@kwdef mutable struct SystemStructure
     graph::BipartiteGraph{Int, Nothing}
     solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
 end
-function isdervar(s::SystemStructure, i)
-    s.var_to_diff[i] === nothing &&
-        invview(s.var_to_diff)[i] !== nothing
-end
+isdervar(s::SystemStructure, i) = invview(s.var_to_diff)[i] !== nothing
 function isalgvar(s::SystemStructure, i)
     s.var_to_diff[i] === nothing &&
         invview(s.var_to_diff)[i] === nothing
 end
-isdiffvar(s::SystemStructure, i) = s.var_to_diff[i] !== nothing
+function isdiffvar(s::SystemStructure, i)
+    s.var_to_diff[i] !== nothing && invview(s.var_to_diff)[i] === nothing
+end
 
 function dervars_range(s::SystemStructure)
     Iterators.filter(Base.Fix1(isdervar, s), Base.OneTo(ndsts(s.graph)))

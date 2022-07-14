@@ -134,6 +134,43 @@ function substitute_vars!(graph::BipartiteGraph, subs, cache = Int[], callback! 
     graph
 end
 
+function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F) where F
+    eq = neweqs[ieq]
+    if !(eq.lhs isa Number && eq.lhs == 0)
+        eq = 0 ~ eq.rhs - eq.lhs
+    end
+    rhs = eq.rhs
+    if rhs isa Symbolic
+        # Check if the RHS is solvable in all state derivatives and if those
+        # the linear terms for them are all zero. If so, move them to the
+        # LHS.
+        dervar::Union{Nothing, Int} = nothing
+        for var in 𝑠neighbors(graph, ieq)
+            if isdervar(var)
+                if dervar !== nothing
+                    error("$eq has more than one differentiated variable!")
+                end
+                dervar = var
+            end
+        end
+        dervar === nothing && return 0 ~ rhs
+        new_lhs = var = fullvars[dervar]
+        # 0 ~ a * D(x) + b
+        # D(x) ~ -b/a
+        a, b, islinear = linear_expansion(rhs, var)
+        if !islinear
+            return 0 ~ rhs
+        end
+        new_rhs = -b / a
+        return new_lhs ~ new_rhs
+    else # a number
+        if abs(rhs) > 100eps(float(rhs))
+            @warn "The equation $eq is not consistent. It simplifed to 0 == $rhs."
+        end
+        return nothing
+    end
+end
+
 function tearing_reassemble(state::TearingState, var_eq_matching; simplify = false)
     @unpack fullvars, sys = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
@@ -205,13 +242,12 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     # variables that appear differentiated are differential variables.
 
     ### extract partition information
-    is_solvable(eq, iv) = isa(eq, Int) && BipartiteEdge(eq, iv) in solvable_graph
-
-    solved_equations = Int[]
-    solved_variables = Int[]
+    is_solvable = let solvable_graph = solvable_graph
+        (eq, iv) -> eq isa Int && iv isa Int && BipartiteEdge(eq, iv) in solvable_graph
+    end
 
     # if var is like D(x)
-    isdiffvar = let diff_to_var = diff_to_var
+    isdervar = let diff_to_var = diff_to_var
         var -> diff_to_var[var] !== nothing
     end
 
@@ -387,57 +423,35 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         empty!(subs)
     end
 
-    # Rewrite remaining equations in terms of solved variables
-    function to_mass_matrix_form(ieq)
-        eq = neweqs[ieq]
-        if !(eq.lhs isa Number && eq.lhs == 0)
-            eq = 0 ~ eq.rhs - eq.lhs
-        end
-        rhs = eq.rhs
-        if rhs isa Symbolic
-            # Check if the RHS is solvable in all state derivatives and if those
-            # the linear terms for them are all zero. If so, move them to the
-            # LHS.
-            dterms = [var for var in 𝑠neighbors(graph, ieq) if isdiffvar(var)]
-            length(dterms) == 0 && return 0 ~ rhs
-            new_rhs = rhs
-            new_lhs = 0
-            for iv in dterms
-                var = fullvars[iv]
-                # 0 ~ a * D(x) + b
-                # D(x) ~ -b/a
-                a, b, islinear = linear_expansion(new_rhs, var)
-                if !islinear
-                    return 0 ~ rhs
-                end
-                new_lhs += var
-                new_rhs = -b / a
-            end
-            return new_lhs ~ new_rhs
-        else # a number
-            if abs(rhs) > 100eps(float(rhs))
-                @warn "The equation $eq is not consistent. It simplifed to 0 == $rhs."
-            end
-            return nothing
-        end
-    end
-
     diffeq_idxs = BitSet()
     final_eqs = Equation[]
     var_rename = zeros(Int, length(var_eq_matching))
     subeqs = Equation[]
+    solved_equations = Int[]
+    solved_variables = Int[]
     idx = 0
     # Solve solvable equations
     for (iv, ieq) in enumerate(var_eq_matching)
         if is_solvable(ieq, iv)
+            if isdervar(iv)
+                var_rename[iv] = (idx += 1)
+            end
+            var_rename[iv] = -1
+        else
+            var_rename[iv] = (idx += 1)
+        end
+    end
+    neqs = nsrcs(graph)
+    for (ieq, iv) in enumerate(invview(var_eq_matching))
+        ieq > neqs && break
+        if is_solvable(ieq, iv)
             # We don't solve differential equations, but we will need to try to
             # convert it into the mass matrix form.
             # We cannot solve the differential variable like D(x)
-            if isdiffvar(iv)
+            if isdervar(iv)
                 # TODO: what if `to_mass_matrix_form(ieq)` returns `nothing`?
-                push!(final_eqs, to_mass_matrix_form(ieq))
+                push!(final_eqs, to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar))
                 push!(diffeq_idxs, ieq)
-                var_rename[iv] = (idx += 1)
                 continue
             end
             eq = neweqs[ieq]
@@ -456,11 +470,12 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 push!(solved_equations, ieq)
                 push!(solved_variables, iv)
             end
-            var_rename[iv] = -1
         else
-            var_rename[iv] = (idx += 1)
+            push!(final_eqs, to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar))
         end
     end
+    # TODO: BLT sorting
+    neweqs = final_eqs
 
     if isempty(solved_equations)
         deps = Vector{Int}[]
@@ -476,16 +491,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 for j in toporder]
     end
 
-    # TODO: BLT sorting
-    # Rewrite remaining equations in terms of solved variables
-    solved_eq_set = BitSet(solved_equations)
-    for ieq in 1:length(neweqs)
-        (ieq in diffeq_idxs || ieq in solved_eq_set) && continue
-        maybe_eq = to_mass_matrix_form(ieq)
-        maybe_eq === nothing || push!(final_eqs, maybe_eq)
-    end
-    neweqs = final_eqs
-
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
     #
@@ -494,7 +499,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
 
     # Update system
     solved_variables_set = BitSet(solved_variables)
-    active_vars = setdiff!(setdiff(BitSet(1:length(fullvars)), solved_variables_set),
+    active_vars = setdiff!(setdiff!(BitSet(1:length(fullvars)), solved_variables_set),
                            removed_vars)
     new_var_to_diff = complete(DiffGraph(length(active_vars)))
     idx = 0
@@ -525,7 +530,7 @@ end
 function tearing(state::TearingState; kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     complete!(state.structure)
-    @unpack graph, solvable_graph = state.structure
+    @unpack graph = state.structure
     algvars = BitSet(findall(v -> isalgvar(state.structure, v), 1:ndsts(graph)))
     aeqs = algeqs(state.structure)
     var_eq_matching′ = tear_graph_modia(state.structure;
