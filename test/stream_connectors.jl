@@ -192,7 +192,7 @@ eqns = [connect(source.port, n2m2.port_a)
 
 # array var
 @connector function VecPin(; name)
-    sts = @variables v[1:2](t)=[1.0, 0.0] i[1:2](t)=1.0 [connect = Flow]
+    sts = @variables v(t)[1:2]=[1.0, 0.0] i(t)[1:2]=1.0 [connect = Flow]
     ODESystem(Equation[], t, [sts...;], []; name = name)
 end
 

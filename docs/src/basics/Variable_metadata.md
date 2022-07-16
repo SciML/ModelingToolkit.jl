@@ -34,7 +34,7 @@ isdisturbance(u)
 ```
 
 ## Mark parameter as tunable
-Indicate that a parameter can be automatically tuned by automatic control tuning apps.
+Indicate that a parameter can be automatically tuned by parameter optimization or automatic control tuning apps.
 
 ```@example metadata
 @parameters Kp [tunable=true]

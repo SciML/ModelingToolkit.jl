@@ -8,6 +8,7 @@ using SafeTestsets, Test
 @safetestset "Simplify Test" begin include("simplify.jl") end
 @safetestset "Direct Usage Test" begin include("direct.jl") end
 @safetestset "System Linearity Test" begin include("linearity.jl") end
+@safetestset "Linearization tests" begin include("linearize.jl") end
 @safetestset "Input Output Test" begin include("input_output_handling.jl") end
 @safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
 @safetestset "ODESystem Test" begin include("odesystem.jl") end
@@ -42,7 +43,6 @@ println("Last test requires gcc available in the path!")
 @safetestset "root_equations" begin include("root_equations.jl") end
 @safetestset "state_selection" begin include("state_selection.jl") end
 @safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
-@safetestset "ControlSystem Test" begin include("controlsystem.jl") end
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 
 # Reference tests go Last
