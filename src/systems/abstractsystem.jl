@@ -752,6 +752,10 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
                                :displaysize => (1, displaysize(io)[2])), val)
                 print(io, "]")
             end
+            description = getdescription(s)
+            if description !== nothing && description != ""
+                print(io, ": ", description)
+            end
         end
     end
     limited && print(io, "\n⋮")
@@ -773,6 +777,10 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
                 show(IOContext(io, :compact => true, :limit => true,
                                :displaysize => (1, displaysize(io)[2])), val)
                 print(io, "]")
+            end
+            description = getdescription(s)
+            if description !== nothing && description != ""
+                print(io, ": ", description)
             end
         end
     end

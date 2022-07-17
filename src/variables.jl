@@ -1,14 +1,12 @@
 struct VariableUnit end
 struct VariableConnectType end
 struct VariableNoiseType end
-struct VariableDescriptionType end
 struct VariableInput end
 struct VariableOutput end
 struct VariableIrreducible end
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
 Symbolics.option_to_metadata_type(::Val{:noise}) = VariableNoiseType
-Symbolics.option_to_metadata_type(::Val{:description}) = VariableDescriptionType
 Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
@@ -266,4 +264,25 @@ function getbounds(p::AbstractVector)
     lb = first.(bounds)
     ub = last.(bounds)
     (; lb, ub)
+end
+
+## Description =================================================================
+struct VariableDescription end
+Symbolics.option_to_metadata_type(::Val{:description}) = VariableDescription
+
+getdescription(x::Num) = getdescription(Symbolics.unwrap(x))
+
+"""
+    getdescription(x)
+
+Return any description attached to variables `x`. If no description is attached, an empty string is returned.
+"""
+function getdescription(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    Symbolics.getmetadata(x, VariableDescription, "")
+end
+
+function hasdescription(x)
+    getdescription(x) != ""
 end
