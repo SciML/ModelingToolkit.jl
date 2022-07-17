@@ -477,7 +477,7 @@ function process_events(sys; callback = nothing, has_difference = false, kwargs.
     if has_discrete_events(sys)
         discrete_cb = generate_discrete_callbacks(sys; kwargs...)
     else
-        discrete_cb = []
+        discrete_cb = nothing
     end
     difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
 
