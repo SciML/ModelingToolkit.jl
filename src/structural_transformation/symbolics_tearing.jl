@@ -134,7 +134,7 @@ function substitute_vars!(graph::BipartiteGraph, subs, cache = Int[], callback! 
     graph
 end
 
-function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F) where F
+function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F, var_to_diff) where F
     eq = neweqs[ieq]
     if !(eq.lhs isa Number && eq.lhs == 0)
         eq = 0 ~ eq.rhs - eq.lhs
@@ -153,16 +153,16 @@ function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F) where F
                 dervar = var
             end
         end
-        dervar === nothing && return 0 ~ rhs
+        dervar === nothing && return (0 ~ rhs), dervar
         new_lhs = var = fullvars[dervar]
         # 0 ~ a * D(x) + b
         # D(x) ~ -b/a
         a, b, islinear = linear_expansion(rhs, var)
         if !islinear
-            return 0 ~ rhs
+            return (0 ~ rhs), nothing
         end
         new_rhs = -b / a
-        return new_lhs ~ new_rhs
+        return (new_lhs ~ new_rhs), invview(var_to_diff)[dervar]
     else # a number
         if abs(rhs) > 100eps(float(rhs))
             @warn "The equation $eq is not consistent. It simplifed to 0 == $rhs."
@@ -423,24 +423,16 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         empty!(subs)
     end
 
-    diffeq_idxs = BitSet()
-    final_eqs = Equation[]
-    var_rename = zeros(Int, length(var_eq_matching))
+    diffeq_idxs = Int[]
+    algeeq_idxs = Int[]
+    diff_eqs = Equation[]
+    alge_eqs = Equation[]
+    diff_vars = Int[]
     subeqs = Equation[]
     solved_equations = Int[]
     solved_variables = Int[]
     idx = 0
     # Solve solvable equations
-    for (iv, ieq) in enumerate(var_eq_matching)
-        if is_solvable(ieq, iv)
-            if isdervar(iv)
-                var_rename[iv] = (idx += 1)
-            end
-            var_rename[iv] = -1
-        else
-            var_rename[iv] = (idx += 1)
-        end
-    end
     neqs = nsrcs(graph)
     for (ieq, iv) in enumerate(invview(var_eq_matching))
         ieq > neqs && break
@@ -450,14 +442,17 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             # We cannot solve the differential variable like D(x)
             if isdervar(iv)
                 # TODO: what if `to_mass_matrix_form(ieq)` returns `nothing`?
-                push!(final_eqs, to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar))
+                eq, diffidx = to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar, var_to_diff)
+                push!(diff_eqs, eq)
                 push!(diffeq_idxs, ieq)
+                push!(diff_vars, diffidx)
                 continue
             end
             eq = neweqs[ieq]
             var = fullvars[iv]
             residual = eq.lhs - eq.rhs
             a, b, islinear = linear_expansion(residual, var)
+            @assert islinear
             # 0 ~ a * var + b
             # var ~ -b/a
             if ModelingToolkit._iszero(a)
@@ -471,11 +466,30 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 push!(solved_variables, iv)
             end
         else
-            push!(final_eqs, to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar))
+            eq, diffidx = to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar, var_to_diff)
+            if diffidx === nothing
+                push!(alge_eqs, eq)
+                push!(algeeq_idxs, ieq)
+            else
+                push!(diff_eqs, eq)
+                push!(diffeq_idxs, ieq)
+                push!(diff_vars, diffidx)
+            end
         end
     end
     # TODO: BLT sorting
-    neweqs = final_eqs
+    neweqs = [diff_eqs; alge_eqs]
+    eqsperm = [diffeq_idxs; algeeq_idxs]
+    diff_vars_set = BitSet(diff_vars)
+    if length(diff_vars_set) != length(diff_vars)
+        error("Tearing internal error: lowering DAE into semi-implicit ODE failed!")
+    end
+    invvarsperm = [diff_vars; setdiff(setdiff(1:ndsts(graph), diff_vars_set), BitSet(solved_variables))]
+    varsperm = zeros(Int, ndsts(graph))
+    for (i, v) in enumerate(invvarsperm)
+        varsperm[v] = i
+    end
+    @show varsperm
 
     if isempty(solved_equations)
         deps = Vector{Int}[]
@@ -493,31 +507,28 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
 
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
-    #
-    # TODO: fix ordering and remove equations
-    graph = contract_variables(graph, var_eq_matching, solved_variables)
+    graph = contract_variables(graph, var_eq_matching, varsperm, solved_variables, eqsperm)
 
     # Update system
-    solved_variables_set = BitSet(solved_variables)
-    active_vars = setdiff!(setdiff!(BitSet(1:length(fullvars)), solved_variables_set),
-                           removed_vars)
-    new_var_to_diff = complete(DiffGraph(length(active_vars)))
+    new_var_to_diff = complete(DiffGraph(length(invvarsperm)))
     idx = 0
     for (v, d) in enumerate(var_to_diff)
-        v′ = var_rename[v]
+        v′ = varsperm[v]
         (v′ > 0 && d !== nothing) || continue
-        d′ = var_rename[d]
+        d′ = varsperm[d]
         new_var_to_diff[v′] = d′ > 0 ? d′ : nothing
     end
+    var_to_diff = new_var_to_diff
+    diff_to_var = invview(var_to_diff)
 
     @set! state.structure.graph = graph
     # Note that `eq_to_diff` is not updated
-    @set! state.structure.var_to_diff = new_var_to_diff
-    @set! state.fullvars = [v for (i, v) in enumerate(fullvars) if i in active_vars]
+    @set! state.structure.var_to_diff = var_to_diff
+    @set! state.fullvars = fullvars = fullvars[invvarsperm]
 
     sys = state.sys
     @set! sys.eqs = neweqs
-    @set! sys.states = [fullvars[i] for i in active_vars if diff_to_var[i] === nothing]
+    @set! sys.states = [v for (i, v) in enumerate(fullvars) if diff_to_var[i] === nothing]
     deleteat!(oldobs, sort!(removed_obs))
     @set! sys.observed = [oldobs; subeqs]
     @set! sys.substitutions = Substitutions(subeqs, deps)
