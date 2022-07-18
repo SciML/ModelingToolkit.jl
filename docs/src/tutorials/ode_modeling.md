@@ -125,7 +125,7 @@ algebraic variables as "observables" (see
 That means, MTK still knows how to calculate them out of the information available
 in a simulation result. The intermediate variable `RHS` therefore can be plotted
 along with the state variable. Note that this has to be requested explicitly,
-though:
+through:
 
 ```julia
 prob = ODEProblem(fol_simplified, [x => 0.0], (0.0,10.0), [τ => 3.0])
