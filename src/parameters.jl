@@ -8,8 +8,8 @@ function isparameter(x)
     if x isa Symbolic && Symbolics.getparent(x, false) !== false
         p = Symbolics.getparent(x)
         isparameter(p) ||
-        (hasmetadata(p, Symbolics.VariableSource) &&
-         getmetadata(p, Symbolics.VariableSource)[1] == :parameters)
+            (hasmetadata(p, Symbolics.VariableSource) &&
+             getmetadata(p, Symbolics.VariableSource)[1] == :parameters)
     elseif istree(x) && operation(x) isa Symbolic
         getmetadata(x, MTKParameterCtx, false) ||
             isparameter(operation(x))

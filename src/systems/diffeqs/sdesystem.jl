@@ -206,6 +206,114 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
 end
 
 """
+$(TYPEDSIGNATURES)
+
+Measure transformation method that allows for a reduction in the variance of an estimator `Exp(g(X_t))`.
+Input:  Original SDE system and symbolic function `u(t,x)` with scalar output that
+        defines the adjustable parameters `d` in the Girsanov transformation. Optional: initial
+        condition for `θ0`.
+Output: Modified SDESystem with additional component `θ_t` and initial value `θ0`, as well as
+        the weight `θ_t/θ0` as observed equation, such that the estimator `Exp(g(X_t)θ_t/θ0)`
+        has a smaller variance.
+
+Reference:
+Kloeden, P. E., Platen, E., & Schurz, H. (2012). Numerical solution of SDE through computer
+experiments. Springer Science & Business Media.
+
+# Example
+
+```julia
+using ModelingToolkit
+
+@parameters α β
+@variables t x(t) y(t) z(t)
+D = Differential(t)
+
+eqs = [D(x) ~ α*x]
+noiseeqs = [β*x]
+
+@named de = SDESystem(eqs,noiseeqs,t,[x],[α,β])
+
+# define u (user choice)
+u = x
+θ0 = 0.1
+g(x) = x[1]^2
+demod = ModelingToolkit.Girsanov_transform(de, u; θ0=0.1)
+
+u0modmap = [
+    x => x0
+]
+
+parammap = [
+    α => 1.5,
+    β => 1.0
+]
+
+probmod = SDEProblem(demod,u0modmap,(0.0,1.0),parammap)
+ensemble_probmod = EnsembleProblem(probmod;
+          output_func = (sol,i) -> (g(sol[x,end])*sol[demod.weight,end],false),
+          )
+
+simmod = solve(ensemble_probmod,EM(),dt=dt,trajectories=numtraj)
+```
+
+"""
+function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
+    name = nameof(sys)
+
+    # register new varible θ corresponding to 1D correction process θ(t)
+    t = get_iv(sys)
+    D = Differential(t)
+    @variables θ(t), weight(t)
+
+    # determine the adjustable parameters `d` given `u`
+    # gradient of u with respect to states
+    grad = Symbolics.gradient(u, states(sys))
+
+    noiseeqs = get_noiseeqs(sys)
+    if typeof(noiseeqs) <: Vector
+        d = simplify.(-(noiseeqs .* grad) / u)
+        drift_correction = noiseeqs .* d
+    else
+        d = simplify.(-noiseeqs * grad / u)
+        drift_correction = noiseeqs * d
+    end
+
+    # transformation adds additional state θ: newX = (X,θ)
+    # drift function for state is modified
+    # θ has zero drift
+    deqs = vcat([equations(sys)[i].lhs ~ equations(sys)[i].rhs - drift_correction[i]
+                 for i in eachindex(states(sys))]...)
+    deqsθ = D(θ) ~ 0
+    push!(deqs, deqsθ)
+
+    # diffusion matrix is of size d x m (d states, m noise), with diagonal noise represented as a d-dimensional vector
+    # for diagonal noise processes with m>1, the noise process will become non-diagonal; extra state component but no new noise process.
+    # new diffusion matrix is of size d+1 x M
+    # diffusion for state is unchanged
+
+    noiseqsθ = θ * d
+
+    if typeof(noiseeqs) <: Vector
+        m = size(noiseeqs)
+        if m == 1
+            push!(noiseeqs, noiseqsθ)
+        else
+            noiseeqs = [Array(Diagonal(noiseeqs)); noiseqsθ']
+        end
+    else
+        noiseeqs = [Array(noiseeqs); noiseqsθ']
+    end
+
+    state = [states(sys); θ]
+
+    # return modified SDE System
+    SDESystem(deqs, noiseeqs, get_iv(sys), state, parameters(sys);
+              defaults = Dict(θ => θ0), observed = [weight ~ θ / θ0],
+              name = name, checks = false)
+end
+
+"""
 ```julia
 function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
                                      version = nothing, tgrad=false, sparse = false,

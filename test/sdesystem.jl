@@ -1,6 +1,7 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
 using StochasticDiffEq, OrdinaryDiffEq, SparseArrays
 using Random, Test
+using Statistics
 
 # Define some variables
 @parameters t σ ρ β
@@ -512,4 +513,72 @@ noiseeqs = [0.1 * x]
     solode = solve(odeprob, Tsit5())
     @test observed(ode) == [weight ~ x * 10]
     @test solode[weight] == 10 * solode[x]
+end
+
+@testset "Measure Transformation for variance reduction" begin
+    @parameters α β
+    @variables t x(t) y(t) z(t)
+    D = Differential(t)
+
+    # Evaluate Exp [(X_T)^2]
+    # SDE: X_t = x + \int_0^t α X_z dz + \int_0^t b X_z dW_z
+    eqs = [D(x) ~ α * x]
+    noiseeqs = [β * x]
+
+    @named de = SDESystem(eqs, noiseeqs, t, [x], [α, β])
+
+    g(x) = x[1]^2
+    dt = 1 // 2^(7)
+    x0 = 0.1
+
+    ## Standard approach
+    # EM with 1`000 trajectories for stepsize 2^-7
+    u0map = [
+        x => x0,
+    ]
+
+    parammap = [
+        α => 1.5,
+        β => 1.0,
+    ]
+
+    prob = SDEProblem(de, u0map, (0.0, 1.0), parammap)
+
+    function prob_func(prob, i, repeat)
+        remake(prob, seed = seeds[i])
+    end
+    numtraj = Int(1e3)
+    seed = 100
+    Random.seed!(seed)
+    seeds = rand(UInt, numtraj)
+
+    ensemble_prob = EnsembleProblem(prob;
+                                    output_func = (sol, i) -> (g(sol[end]), false),
+                                    prob_func = prob_func)
+
+    sim = solve(ensemble_prob, EM(), dt = dt, trajectories = numtraj)
+    μ = mean(sim)
+    σ = std(sim) / sqrt(numtraj)
+
+    ## Variance reduction method
+    u = x
+    demod = ModelingToolkit.Girsanov_transform(de, u; θ0 = 0.1)
+
+    probmod = SDEProblem(demod, u0map, (0.0, 1.0), parammap)
+
+    ensemble_probmod = EnsembleProblem(probmod;
+                                       output_func = (sol, i) -> (g(sol[x, end]) *
+                                                                  sol[demod.weight, end],
+                                                                  false),
+                                       prob_func = prob_func)
+
+    simmod = solve(ensemble_probmod, EM(), dt = dt, trajectories = numtraj)
+    μmod = mean(simmod)
+    σmod = std(simmod) / sqrt(numtraj)
+
+    display("μ = $(round(μ, digits=2)) ± $(round(σ, digits=2))")
+    display("μmod = $(round(μmod, digits=2)) ± $(round(σmod, digits=2))")
+
+    @test μ≈μmod atol=2σ
+    @test σ > σmod
 end
