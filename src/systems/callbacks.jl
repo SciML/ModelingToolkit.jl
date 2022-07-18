@@ -73,13 +73,11 @@ end
 const NULL_AFFECT = Equation[]
 struct SymbolicContinuousCallback
     eqs::Vector{Equation}
-    affect
+    affect::Union{Vector{Equation}, FunctionalAffect}
     function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT)
         new(eqs, affect)
     end # Default affect to nothing
 end
-
-SymbolicContinuousCallback(eqs::Vector{Equation}, affect::Function) = SymbolicContinuousCallback(eqs, SymbolicContinuousCallback(affect))
 
 function Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback)
     isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect)
@@ -123,9 +121,12 @@ function affects(cbs::Vector{SymbolicContinuousCallback})
     reduce(vcat, [affects(cb) for cb in cbs])
 end
 
+namespace_affects(af::Vector, s) = Equation[namespace_affact(a, s) for a in af]
+namespace_affects(af::FunctionalAffect, s) = namespace_affect(af, s)
+
 function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback
     SymbolicContinuousCallback(namespace_equation.(equations(cb), (s,)),
-                               namespace_affect.(affects(cb), (s,)))
+                               namespace_affects(affects(cb), s))
 end
 
 cb_add_context(cb::SymbolicContinuousCallback, s) = SymbolicContinuousCallback(equations(cb), af_add_context(affects(cb), s))
@@ -164,6 +165,7 @@ end
 is_timed_condition(cb) = false
 is_timed_condition(::R) where {R<:Real} = true
 is_timed_condition(::V) where {V<:AbstractVector} = eltype(V) <: Real
+is_timed_condition(::Num) = false
 is_timed_condition(cb::SymbolicDiscreteCallback) = is_timed_condition(condition(cb))
 
 scalarize_condition(condition) = is_timed_condition(condition) ? condition : value(scalarize(condition))
@@ -368,7 +370,7 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states
     rf_oop, rf_ip = build_function(rhss, u, p, t; expression = Val{false}, kwargs...)
 
     affect_functions = map(cbs) do cb # Keep affect function separate
-        eq_aff = affect_equations(cb)
+        eq_aff = affects(cb)
         affect = compile_affect(eq_aff, sys, dvs, ps; expression = Val{false}, kwargs...)
     end
 
