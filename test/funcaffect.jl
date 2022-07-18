@@ -80,4 +80,50 @@ prob = ODEProblem(s2, [resistor.v=> 10.0], (0, 2.01))
 sol = solve(prob, Tsit5())
 @test ctx[1] == 2
 
+include("../examples/rc_model.jl")
 
+function affect5!(integ, u,p,ctx)
+    @test integ.u[u.capacitor₊v] ≈ 0.3
+    integ.p[p.C] *= 200
+end
+
+@named rc_model = ODESystem(rc_eqs, t, continuous_events=[[capacitor.v ~ 0.3]=>(affect5!, [capacitor.v], [capacitor.C => :C], nothing)])
+rc_model = compose(rc_model, [resistor, capacitor, source, ground])
+
+sys = structural_simplify(rc_model)
+u0 = [capacitor.v => 0.0
+      capacitor.p.i => 0.0
+      resistor.v => 0.0]
+
+prob = ODEProblem(sys, u0, (0, 10.0))
+sol = solve(prob, Rodas4())
+@test all(sol[rc_model.capacitor.v] .< 0.4)
+
+function affect6!(integ, u,p,ctx)
+    @test integ.u[u.v] ≈ 0.3
+    integ.p[p.C] *= 200
+end
+
+function Capacitor(; name, C = 1.0)
+    @named oneport = OnePort()
+    @unpack v, i = oneport
+    ps = @parameters C = C
+    D = Differential(t)
+    eqs = [
+        D(v) ~ i / C,
+    ]
+    extend(ODESystem(eqs, t, [], ps; name = name, continuous_events=[[v ~ 0.3]=>(affect6!, [v], [C], nothing)]), oneport)
+end
+
+@named capacitor = Capacitor(C = C)
+@named rc_model = ODESystem(rc_eqs, t)
+rc_model = compose(rc_model, [resistor, capacitor, source, ground])
+
+sys = structural_simplify(rc_model)
+u0 = [capacitor.v => 0.0
+      capacitor.p.i => 0.0
+      resistor.v => 0.0]
+
+prob = ODEProblem(sys, u0, (0, 10.0))
+sol = solve(prob, Rodas4())
+@test all(sol[rc_model.capacitor.v] .< 0.4)

@@ -75,9 +75,12 @@ struct SymbolicContinuousCallback
     eqs::Vector{Equation}
     affect::Union{Vector{Equation}, FunctionalAffect}
     function SymbolicContinuousCallback(eqs::Vector{Equation}, affect = NULL_AFFECT)
-        new(eqs, affect)
+        new(eqs, make_affect(affect))
     end # Default affect to nothing
 end
+make_affect(affect) = affect
+make_affect(affect::Tuple) = FunctionalAffect(affect...)
+make_affect(affect::NamedTuple) = FunctionalAffect(;affect...)
 
 function Base.:(==)(e1::SymbolicContinuousCallback, e2::SymbolicContinuousCallback)
     isequal(e1.eqs, e2.eqs) && isequal(e1.affect, e2.affect)
@@ -85,7 +88,7 @@ end
 Base.isempty(cb::SymbolicContinuousCallback) = isempty(cb.eqs)
 function Base.hash(cb::SymbolicContinuousCallback, s::UInt)
     s = foldr(hash, cb.eqs, init = s)
-    foldr(hash, cb.affect, init = s)
+    cb.affect isa AbstractVector ? foldr(hash, cb.affect, init = s) : hash(cb.affect, s)
 end
 
 to_equation_vector(eq::Equation) = [eq]
@@ -116,6 +119,7 @@ equations(cb::SymbolicContinuousCallback) = cb.eqs
 function equations(cbs::Vector{<:SymbolicContinuousCallback})
     reduce(vcat, [equations(cb) for cb in cbs])
 end
+
 affects(cb::SymbolicContinuousCallback) = cb.affect
 function affects(cbs::Vector{SymbolicContinuousCallback})
     reduce(vcat, [affects(cb) for cb in cbs])
@@ -128,8 +132,6 @@ function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuo
     SymbolicContinuousCallback(namespace_equation.(equations(cb), (s,)),
                                namespace_affects(affects(cb), s))
 end
-
-cb_add_context(cb::SymbolicContinuousCallback, s) = SymbolicContinuousCallback(equations(cb), af_add_context(affects(cb), s))
 
 function continuous_events(sys::AbstractSystem)
     obs = get_continuous_events(sys)
