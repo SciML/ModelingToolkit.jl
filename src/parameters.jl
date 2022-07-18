@@ -3,9 +3,16 @@ struct MTKParameterCtx end
 
 function isparameter(x)
     x = unwrap(x)
-    if istree(x) && operation(x) isa Symbolic
+
+    #TODO: Delete this branch
+    if x isa Symbolic && Symbolics.getparent(x, false) !== false
+        p = Symbolics.getparent(x)
+        isparameter(p) ||
+        (hasmetadata(p, Symbolics.VariableSource) &&
+         getmetadata(p, Symbolics.VariableSource)[1] == :parameters)
+    elseif istree(x) && operation(x) isa Symbolic
         getmetadata(x, MTKParameterCtx, false) ||
-        isparameter(operation(x))
+            isparameter(operation(x))
     elseif istree(x) && operation(x) == (getindex)
         isparameter(arguments(x)[1])
     elseif x isa Symbolic
