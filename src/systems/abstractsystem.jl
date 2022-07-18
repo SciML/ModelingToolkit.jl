@@ -1045,9 +1045,11 @@ function linearization_function(sys::AbstractSystem, inputs,
                 h_xz = ForwardDiff.jacobian(xz -> h(xz, p, t), u)
                 pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
 
-                p_closure = function (p_small_inner)
-                    p_big[input_idxs] .= p_small_inner
-                    pf(p_big)
+                p_closure = let pf = pf
+                    function (p_small_inner::T) where {T}
+                        p_big[input_idxs] .= p_small_inner
+                        pf(p_big)::T
+                    end
                 end
                 p_small = p[input_idxs]
                 chunk = ForwardDiff.Chunk(p_small)
@@ -1233,7 +1235,7 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
         if !iszero(Bs)
             if !allow_input_derivatives
                 der_inds = findall(vec(any(!=(0), Bs, dims = 1)))
-                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(inputs(sys)[der_inds]). Call `linear_staespace` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
+                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(inputs(sys)[der_inds]). Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
             end
             B = [B Bs]
         end
