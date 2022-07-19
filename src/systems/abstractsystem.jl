@@ -752,6 +752,10 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
                                :displaysize => (1, displaysize(io)[2])), val)
                 print(io, "]")
             end
+            description = getdescription(s)
+            if description !== nothing && description != ""
+                print(io, ": ", description)
+            end
         end
     end
     limited && print(io, "\n⋮")
@@ -773,6 +777,10 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
                 show(IOContext(io, :compact => true, :limit => true,
                                :displaysize => (1, displaysize(io)[2])), val)
                 print(io, "]")
+            end
+            description = getdescription(s)
+            if description !== nothing && description != ""
+                print(io, ": ", description)
             end
         end
     end
@@ -965,6 +973,21 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     return has_io ? (sys, input_idxs) : sys
 end
 
+function io_preprocessing(sys::AbstractSystem, inputs,
+                          outputs; simplify = false, kwargs...)
+    sys, input_idxs = structural_simplify(sys, (inputs, outputs); simplify, kwargs...)
+
+    eqs = equations(sys)
+    alg_start_idx = findfirst(!isdiffeq, eqs)
+    if alg_start_idx === nothing
+        alg_start_idx = length(eqs) + 1
+    end
+    diff_idxs = 1:alg_start_idx - 1
+    alge_idxs = alg_start_idx:length(eqs)
+
+    sys, diff_idxs, alge_idxs, input_idxs
+end
+
 """
     lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, kwargs...)
 
@@ -990,21 +1013,11 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
 function linearization_function(sys::AbstractSystem, inputs,
-                                outputs; kwargs...)
-    sys, input_idxs = structural_simplify(sys, (inputs, outputs); kwargs...)
-    eqs = equations(sys)
-    check_operator_variables(eqs, Differential)
-    # Sort equations and states such that diff.eqs. match differential states and the rest are algebraic
-    diffstates = collect_operator_variables(sys, Differential)
-    eqs = sort(eqs, by = e -> !isoperator(e.lhs, Differential),
-               alg = Base.Sort.DEFAULT_STABLE)
-    @set! sys.eqs = eqs
-    diffstates = [arguments(e.lhs)[1] for e in eqs[1:length(diffstates)]]
-    sts = [diffstates; setdiff(states(sys), diffstates)]
-    @set! sys.states = sts
-
-    diff_idxs = 1:length(diffstates)
-    alge_idxs = (length(diffstates) + 1):length(sts)
+                                outputs; simplify = false,
+                                kwargs...)
+    sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
+                                                             kwargs...)
+    sts = states(sys)
     fun = ODEFunction(sys)
     lin_fun = let fun = fun,
         h = ModelingToolkit.build_explicit_observed_function(sys, outputs)

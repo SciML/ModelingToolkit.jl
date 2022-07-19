@@ -66,3 +66,19 @@ sp = Set(p)
 @test T ∈ sp
 @test k2 ∈ sp
 @test length(p) == 3
+
+## Descriptions
+@variables u [description = "This is my input"]
+@test getdescription(u) == "This is my input"
+@test hasdescription(u)
+
+@variables u
+@test getdescription(u) == ""
+@test !hasdescription(u)
+
+@parameters t
+@variables u(t) [description = "A short description of u"]
+@parameters p [description = "A description of p"]
+@named sys = ODESystem([u ~ p], t)
+
+@test_nowarn show(stdout, "text/plain", sys)
