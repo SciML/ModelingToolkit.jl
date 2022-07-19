@@ -213,8 +213,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         possible_x_t[rhs] = i, lhs
     end
 
-    removed_eqs = Int[]
-    removed_vars = Int[]
+    #removed_eqs = Int[]
+    #removed_vars = Int[]
     removed_obs = Int[]
     diff_to_var = invview(var_to_diff)
     for var in 1:length(fullvars)
@@ -423,6 +423,12 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         empty!(subs)
     end
 
+    # Will reorder equations and states to be:
+    # [diffeqs; ...]
+    # [diffvars; ...]
+    # such that the mass matrix is:
+    # [I  0
+    #  0  0].
     diffeq_idxs = Int[]
     algeeq_idxs = Int[]
     diff_eqs = Equation[]
@@ -431,7 +437,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     subeqs = Equation[]
     solved_equations = Int[]
     solved_variables = Int[]
-    idx = 0
     # Solve solvable equations
     neqs = nsrcs(graph)
     for (ieq, iv) in enumerate(invview(var_eq_matching))
@@ -456,8 +461,9 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             # 0 ~ a * var + b
             # var ~ -b/a
             if ModelingToolkit._iszero(a)
-                push!(removed_eqs, ieq)
-                push!(removed_vars, iv)
+                @warn "Tearing: $eq is a singular equation!"
+                #push!(removed_eqs, ieq)
+                #push!(removed_vars, iv)
             else
                 rhs = -b / a
                 neweq = var ~ simplify ? Symbolics.simplify(rhs) : rhs
@@ -479,17 +485,20 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     end
     # TODO: BLT sorting
     neweqs = [diff_eqs; alge_eqs]
-    eqsperm = [diffeq_idxs; algeeq_idxs]
+    inveqsperm = [diffeq_idxs; algeeq_idxs]
+    eqsperm = zeros(Int, nsrcs(graph))
+    for (i, v) in enumerate(inveqsperm)
+        eqsperm[v] = i
+    end
     diff_vars_set = BitSet(diff_vars)
     if length(diff_vars_set) != length(diff_vars)
         error("Tearing internal error: lowering DAE into semi-implicit ODE failed!")
     end
-    invvarsperm = [diff_vars; setdiff(setdiff(1:ndsts(graph), diff_vars_set), BitSet(solved_variables))]
+    invvarsperm = [diff_vars; setdiff!(setdiff(1:ndsts(graph), diff_vars_set), BitSet(solved_variables))]
     varsperm = zeros(Int, ndsts(graph))
     for (i, v) in enumerate(invvarsperm)
         varsperm[v] = i
     end
-    @show varsperm
 
     if isempty(solved_equations)
         deps = Vector{Int}[]
@@ -507,23 +516,31 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
 
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
-    graph = contract_variables(graph, var_eq_matching, varsperm, solved_variables, eqsperm)
+    graph = contract_variables(graph, var_eq_matching, varsperm, eqsperm, length(solved_variables))
 
     # Update system
     new_var_to_diff = complete(DiffGraph(length(invvarsperm)))
-    idx = 0
     for (v, d) in enumerate(var_to_diff)
         v′ = varsperm[v]
         (v′ > 0 && d !== nothing) || continue
         d′ = varsperm[d]
         new_var_to_diff[v′] = d′ > 0 ? d′ : nothing
     end
+    new_eq_to_diff = complete(DiffGraph(length(inveqsperm)))
+    for (v, d) in enumerate(eq_to_diff)
+        v′ = eqsperm[v]
+        (v′ > 0 && d !== nothing) || continue
+        d′ = eqsperm[d]
+        new_eq_to_diff[v′] = d′ > 0 ? d′ : nothing
+    end
+
     var_to_diff = new_var_to_diff
+    eq_to_diff = new_eq_to_diff
     diff_to_var = invview(var_to_diff)
 
     @set! state.structure.graph = graph
-    # Note that `eq_to_diff` is not updated
     @set! state.structure.var_to_diff = var_to_diff
+    @set! state.structure.eq_to_diff = eq_to_diff
     @set! state.fullvars = fullvars = fullvars[invvarsperm]
 
     sys = state.sys

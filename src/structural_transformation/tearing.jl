@@ -22,14 +22,7 @@ function masked_cumsum!(A::Vector)
 end
 
 function contract_variables(graph::BipartiteGraph, var_eq_matching::Matching,
-                            var_rename, eliminated_variables, eqsperm = nothing)
-    eq_rename = ones(Int64, nsrcs(graph))
-    for v in eliminated_variables
-        eq_rename[var_eq_matching[v]] = 0
-        var_rename[v] = 0
-    end
-    masked_cumsum!(eq_rename)
-
+                            var_rename, eq_rename, nelim)
     dig = DiCMOBiGraph{true}(graph, var_eq_matching)
 
     # Update bipartite graph
@@ -38,14 +31,10 @@ function contract_variables(graph::BipartiteGraph, var_eq_matching::Matching,
          for v′ in neighborhood(dig, v, Inf; dir = :in) if var_rename[v′] != 0]
     end
 
-    nelim = length(eliminated_variables)
     newgraph = BipartiteGraph(nsrcs(graph) - nelim, ndsts(graph) - nelim)
     for e in 𝑠vertices(graph)
         ne = eq_rename[e]
         ne == 0 && continue
-        if eqsperm !== nothing
-            ne = eq_rename[eqsperm[ne]]
-        end
         for v in 𝑠neighbors(graph, e)
             newvar = var_rename[v]
             if newvar != 0
