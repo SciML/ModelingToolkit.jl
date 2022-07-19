@@ -115,15 +115,23 @@ function Capacitor(; name, C = 1.0)
     extend(ODESystem(eqs, t, [], ps; name = name, continuous_events=[[v ~ 0.3]=>(affect6!, [v], [C], nothing)]), oneport)
 end
 
-@named capacitor = Capacitor(C = C)
-@named rc_model = ODESystem(rc_eqs, t)
-rc_model = compose(rc_model, [resistor, capacitor, source, ground])
+# hyerarchical - result should be identical
 
-sys = structural_simplify(rc_model)
-u0 = [capacitor.v => 0.0
-      capacitor.p.i => 0.0
+@named capacitor2 = Capacitor(C = C)
+
+rc_eqs2 = [connect(source.p, resistor.p)
+          connect(resistor.n, capacitor2.p)
+          connect(capacitor2.n, source.n)
+          connect(capacitor2.n, ground.g)]
+
+@named rc_model2 = ODESystem(rc_eqs2, t)
+rc_model2 = compose(rc_model2, [resistor, capacitor2, source, ground])
+
+sys2 = structural_simplify(rc_model2)
+u0 = [capacitor2.v => 0.0
+      capacitor2.p.i => 0.0
       resistor.v => 0.0]
 
-prob = ODEProblem(sys, u0, (0, 10.0))
-sol = solve(prob, Rodas4())
-@test all(sol[rc_model.capacitor.v] .< 0.4)
+prob2 = ODEProblem(sys2, u0, (0, 10.0))
+sol2 = solve(prob2, Rodas4())
+@test all(sol2[rc_model2.capacitor2.v] .== sol[rc_model.capacitor.v])
