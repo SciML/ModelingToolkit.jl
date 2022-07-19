@@ -99,6 +99,8 @@ prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 @test all(sol[rc_model.capacitor.v] .< 0.4)
 
+# hierarchical - result should be identical
+
 function affect6!(integ, u,p,ctx)
     @test integ.u[u.v] ≈ 0.3
     integ.p[p.C] *= 200
@@ -114,8 +116,6 @@ function Capacitor2(; name, C = 1.0)
     ]
     extend(ODESystem(eqs, t, [], ps; name = name, continuous_events=[[v ~ 0.3]=>(affect6!, [v], [C], nothing)]), oneport)
 end
-
-# hierarchical - result should be identical
 
 @named capacitor2 = Capacitor2(C = C)
 
@@ -164,7 +164,7 @@ sol_ = solve(prob_,Tsit5(),callback=cb_)
 
 # same - with MTK
 sts = @variables y(t), v(t)
-par = @parameters g
+par = @parameters g = 9.8
 bb_eqs = [
     D(y) ~ v
     D(v) ~ -g
@@ -177,7 +177,7 @@ end
 @named bb_model = ODESystem(bb_eqs, t, sts, par, continuous_events=[[y ~ 0] => (bb_affect!, [v], [], nothing)])
 
 bb_sys = structural_simplify(bb_model)
-u0 = [v => 0.0, y => 50.0, g=>9.8]
+u0 = [v => 0.0, y => 50.0]
 
 bb_prob = ODEProblem(bb_sys, u0, (0, 15.0))
 bb_sol = solve(bb_prob, Tsit5())
