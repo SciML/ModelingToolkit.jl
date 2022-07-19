@@ -552,6 +552,16 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     sys = state.sys
     @set! sys.eqs = neweqs
     @set! sys.states = [v for (i, v) in enumerate(fullvars) if diff_to_var[i] === nothing]
+    removed_obs_set = BitSet(removed_obs)
+    var_to_idx = Dict(reverse(en) for en in enumerate(fullvars))
+    # Make sure differentiated variables don't appear in observed equations
+    for (dx, (idx, lhs)) in possible_x_t
+        idx in removed_obs_set && continue
+        # Because it's a differential variable, and by sorting, its
+        # corresponding differential equation would have the same index.
+        eqidx = diff_to_var[var_to_idx[dx]]
+        oldobs[idx] = (lhs ~ neweqs[eqidx].rhs)
+    end
     deleteat!(oldobs, sort!(removed_obs))
     @set! sys.observed = [oldobs; subeqs]
     @set! sys.substitutions = Substitutions(subeqs, deps)
