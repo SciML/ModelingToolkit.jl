@@ -104,7 +104,7 @@ function affect6!(integ, u,p,ctx)
     integ.p[p.C] *= 200
 end
 
-function Capacitor(; name, C = 1.0)
+function Capacitor2(; name, C = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
     ps = @parameters C = C
@@ -115,9 +115,9 @@ function Capacitor(; name, C = 1.0)
     extend(ODESystem(eqs, t, [], ps; name = name, continuous_events=[[v ~ 0.3]=>(affect6!, [v], [C], nothing)]), oneport)
 end
 
-# hyerarchical - result should be identical
+# hierarchical - result should be identical
 
-@named capacitor2 = Capacitor(C = C)
+@named capacitor2 = Capacitor2(C = C)
 
 rc_eqs2 = [connect(source.p, resistor.p)
           connect(resistor.n, capacitor2.p)
@@ -135,3 +135,52 @@ u0 = [capacitor2.v => 0.0
 prob2 = ODEProblem(sys2, u0, (0, 10.0))
 sol2 = solve(prob2, Rodas4())
 @test all(sol2[rc_model2.capacitor2.v] .== sol[rc_model.capacitor.v])
+
+
+# bouncing ball
+
+# DiffEq implementation
+
+function f_(du,u,p,t)
+    du[1] = u[2]
+    du[2] = -p
+end
+
+function condition_(u,t,integrator) # Event when event_f(u,t) == 0
+    u[1]
+end
+
+function affect_!(integrator)
+    integrator.u[2] = -integrator.u[2]
+end
+
+cb_ = ContinuousCallback(condition_,affect_!)
+
+u0 = [50.0,0.0]
+tspan = (0.0,15.0)
+p = 9.8
+prob_ = ODEProblem(f_,u0,tspan,p)
+sol_ = solve(prob_,Tsit5(),callback=cb_)
+
+# same - with MTK
+sts = @variables y(t), v(t)
+par = @parameters g
+bb_eqs = [
+    D(y) ~ v
+    D(v) ~ -g
+    ]
+
+function bb_affect!(integ, u, p, ctx)
+  integ.u[u.v] = -integ.u[u.v]
+end
+
+@named bb_model = ODESystem(bb_eqs, t, sts, par, continuous_events=[[y ~ 0] => (bb_affect!, [v], [], nothing)])
+
+bb_sys = structural_simplify(bb_model)
+u0 = [v => 0.0, y => 50.0, g=>9.8]
+
+bb_prob = ODEProblem(bb_sys, u0, (0, 15.0))
+bb_sol = solve(bb_prob, Tsit5())
+
+@test bb_sol[y] ≈ map(u -> u[1], sol_.u)
+@test bb_sol[v] ≈ map(u -> u[2], sol_.u)
