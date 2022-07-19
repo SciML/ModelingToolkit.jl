@@ -454,6 +454,9 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, only_algebr
                       irreducibles = ())
     mm = copy(mm_orig)
     is_linear_equations = falses(size(AsSubMatrix(mm_orig), 1))
+    for e in mm_orig.nzrows
+        is_linear_equations[e] = true
+    end
 
     is_not_potential_state = isnothing.(var_to_diff)
     for v in irreducibles
