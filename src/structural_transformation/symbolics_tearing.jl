@@ -134,7 +134,8 @@ function substitute_vars!(graph::BipartiteGraph, subs, cache = Int[], callback! 
     graph
 end
 
-function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F, var_to_diff) where F
+function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F,
+                             var_to_diff) where {F}
     eq = neweqs[ieq]
     if !(eq.lhs isa Number && eq.lhs == 0)
         eq = 0 ~ eq.rhs - eq.lhs
@@ -447,7 +448,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             # We cannot solve the differential variable like D(x)
             if isdervar(iv)
                 # TODO: what if `to_mass_matrix_form(ieq)` returns `nothing`?
-                eq, diffidx = to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar, var_to_diff)
+                eq, diffidx = to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar,
+                                                  var_to_diff)
                 push!(diff_eqs, eq)
                 push!(diffeq_idxs, ieq)
                 push!(diff_vars, diffidx)
@@ -472,7 +474,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 push!(solved_variables, iv)
             end
         else
-            eq, diffidx = to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar, var_to_diff)
+            eq, diffidx = to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar,
+                                              var_to_diff)
             if diffidx === nothing
                 push!(alge_eqs, eq)
                 push!(algeeq_idxs, ieq)
@@ -494,7 +497,9 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     if length(diff_vars_set) != length(diff_vars)
         error("Tearing internal error: lowering DAE into semi-implicit ODE failed!")
     end
-    invvarsperm = [diff_vars; setdiff!(setdiff(1:ndsts(graph), diff_vars_set), BitSet(solved_variables))]
+    invvarsperm = [diff_vars;
+                   setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
+                            BitSet(solved_variables))]
     varsperm = zeros(Int, ndsts(graph))
     for (i, v) in enumerate(invvarsperm)
         varsperm[v] = i
@@ -516,7 +521,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
 
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
-    graph = contract_variables(graph, var_eq_matching, varsperm, eqsperm, length(solved_variables))
+    graph = contract_variables(graph, var_eq_matching, varsperm, eqsperm,
+                               length(solved_variables))
 
     # Update system
     new_var_to_diff = complete(DiffGraph(length(invvarsperm)))

@@ -982,7 +982,7 @@ function io_preprocessing(sys::AbstractSystem, inputs,
     if alg_start_idx === nothing
         alg_start_idx = length(eqs) + 1
     end
-    diff_idxs = 1:alg_start_idx - 1
+    diff_idxs = 1:(alg_start_idx - 1)
     alge_idxs = alg_start_idx:length(eqs)
 
     sys, diff_idxs, alge_idxs, input_idxs
