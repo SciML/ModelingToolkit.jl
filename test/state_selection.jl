@@ -195,7 +195,7 @@ let
     prob1 = ODEProblem(sys, u0, (0.0, 0.1))
     prob2 = ODAEProblem(sys, u0, (0.0, 0.1))
     @test solve(prob1, FBDF()).retcode == :Success
-    @test_broken solve(prob2, FBDF()).retcode == :Success
+    @test solve(prob2, FBDF()).retcode == :Success
 end
 
 let

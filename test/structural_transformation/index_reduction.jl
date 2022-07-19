@@ -120,8 +120,8 @@ sol = solve(prob_auto, Rodas5());
 
 let pss_pendulum2 = partial_state_selection(pendulum2)
     # This currently selects `T` rather than `x` at top level. Needs tearing priorities to fix.
-    @test_broken length(equations(pss_pendulum2)) == 3
-    @test_broken length(equations(ModelingToolkit.ode_order_lowering(pss_pendulum2))) == 4
+    @test length(equations(pss_pendulum2)) == 4
+    @test length(equations(ModelingToolkit.ode_order_lowering(pss_pendulum2))) == 4
 end
 
 eqs = [D(x) ~ w,
