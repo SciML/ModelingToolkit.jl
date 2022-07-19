@@ -559,7 +559,11 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         idx in removed_obs_set && continue
         # Because it's a differential variable, and by sorting, its
         # corresponding differential equation would have the same index.
-        eqidx = diff_to_var[var_to_idx[dx]]
+        dxidx = get(var_to_idx, dx, nothing)
+        # TODO: use alias graph to handle the dxidx === nothing case for
+        # mechanical systems.
+        dxidx === nothing && continue
+        eqidx = diff_to_var[dxidx]
         oldobs[idx] = (lhs ~ neweqs[eqidx].rhs)
     end
     deleteat!(oldobs, sort!(removed_obs))
