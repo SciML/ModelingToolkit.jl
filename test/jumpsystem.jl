@@ -198,7 +198,6 @@ OBS2 = OBS
 @unpack OBS = js5
 @test isequal(OBS2, OBS)
 
-
 # test to make sure dep graphs are correct
 let
     # A + 2X --> 3X
@@ -207,9 +206,9 @@ let
     # X --> B
     @variables t A(t) X(t) B(t)
     jumps = [MassActionJump(1.0, [A => 1, X => 2], [A => -1, X => 1]),
-             MassActionJump(1.0, [X => 3], [A => 1, X => -1]),
-             MassActionJump(1.0, [B => 1], [B => -1, X => 1]),
-             MassActionJump(1.0, [X => 1], [B => 1, X => -1])]
+        MassActionJump(1.0, [X => 3], [A => 1, X => -1]),
+        MassActionJump(1.0, [B => 1], [B => -1, X => 1]),
+        MassActionJump(1.0, [X => 1], [B => 1, X => -1])]
     @named js = JumpSystem(jumps, t, [A, X, B], [])
     jdeps = asgraph(js)
     vdeps = variable_dependencies(js)
