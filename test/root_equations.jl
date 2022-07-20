@@ -357,4 +357,17 @@ let
     @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-6)
     @test oprob.p[1] == 1.0
     @test isapprox(sol(4.0)[1], 2 * exp(-2.0))
+
+    # same as above - but with set-time event syntax
+    cb1‵ = [1.0,] => affect1 # needs to be a Vector for the event to happen only once
+    cb2‵ = [2.0,] => affect2
+
+    @named osys‵ = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1‵, cb2‵])
+    oprob‵ = ODEProblem(osys‵, u0, tspan, p)
+    sol‵ = solve(oprob‵, Tsit5(); abstol = 1e-10, reltol = 1e-10)
+
+    @test isapprox(sol‵(1.0000000001)[1] - sol‵(0.999999999)[1], 1.0; rtol = 1e-6)
+    @test oprob‵.p[1] == 1.0
+    @test isapprox(sol‵(4.0)[1], 2 * exp(-2.0))
 end
+
