@@ -10,7 +10,7 @@ function get_discrete_events(sys::AbstractSystem)
 end
 
 struct FunctionalAffect
-    f::Function
+    f::Any
     sts::Vector
     sts_syms::Vector{Symbol}
     pars::Vector
@@ -316,11 +316,11 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
             alleq = all(isequal(isparameter(first(update_vars))),
                         Iterators.map(isparameter, update_vars))
             if !isparameter(first(lhss)) && alleq
-                stateind(sym) = findfirst(isequal(sym), dvs)
-                update_inds = stateind.(update_vars)
+                stateind = Dict(map(a -> reverse(a), enumerate(dvs)))
+                update_inds = map(sym -> stateind[sym], update_vars)
             elseif isparameter(first(lhss)) && alleq
-                psind(sym) = findfirst(isequal(sym), ps)
-                update_inds = psind.(update_vars)
+                psind = Dict(map(a -> reverse(a), enumerate(ps)))
+                update_inds = map(sym -> psind[sym], update_vars)
                 outvar = :p
             else
                 error("Error, building an affect function for a callback that wants to modify both parameters and states. This is not currently allowed in one individual callback.")
@@ -411,10 +411,11 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states
 end
 
 function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
-    ind(sym, v) = findfirst(isequal(sym), v)
-    inds(syms, v) = map(sym -> ind(sym, v), syms)
-    v_inds = inds(states(affect), dvs)
-    p_inds = inds(parameters(affect), ps)
+    dvs_ind = Dict(map(a -> reverse(a), enumerate(dvs)))
+    v_inds = map(sym -> dvs_ind[sym], states(affect))
+
+    ps_ind = Dict(map(a -> reverse(a), enumerate(ps)))
+    p_inds = map(sym -> ps_ind[sym], parameters(affect))
 
     # HACK: filter out eliminated symbols. Not clear this is the right thing to do
     # (MTK should keep these symbols)
