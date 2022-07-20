@@ -3,9 +3,7 @@ get_continuous_events(sys::AbstractSystem) = Equation[]
 get_continuous_events(sys::AbstractODESystem) = getfield(sys, :continuous_events)
 has_continuous_events(sys::AbstractSystem) = isdefined(sys, :continuous_events)
 
-function has_discrete_events(sys::AbstractSystem)
-    isdefined(sys, :discrete_events) && length(sys.discrete_events) > 0
-end
+has_discrete_events(sys::AbstractSystem) = isdefined(sys, :discrete_events)
 function get_discrete_events(sys::AbstractSystem)
     has_discrete_events(sys) || return SymbolicDiscreteCallback[]
     getfield(sys, :discrete_events)

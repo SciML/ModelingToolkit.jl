@@ -15,6 +15,24 @@ sol = solve(prob, Tsit5())
 i4 = findfirst(==(4.0), sol[:t])
 @test sol.u[i4 + 1][1] > 10.0
 
+# named tuple
+sys1 = ODESystem(eqs, t, [u], [], name = :sys,
+                 discrete_events = [
+                     [4.0] => (f = affect1!, sts = [u], pars = [], ctx = nothing),
+                 ])
+@test sys == sys1
+
+# has_functional_affect
+de = ModelingToolkit.get_discrete_events(sys1)
+@test length(de) == 1
+de = de[1]
+@test ModelingToolkit.condition(de) == [4.0]
+@test ModelingToolkit.has_functional_affect(de)
+
+sys2 = ODESystem(eqs, t, [u], [], name = :sys,
+                 discrete_events = [[4.0] => [u ~ -u]])
+@test !ModelingToolkit.has_functional_affect(ModelingToolkit.get_discrete_events(sys2)[1])
+
 # context
 function affect2!(integ, u, p, ctx)
     integ.u[u.u] += ctx[1]
@@ -157,10 +175,41 @@ prob2 = ODEProblem(sys2, u0, (0, 10.0))
 sol2 = solve(prob2, Rodas4())
 @test all(sol2[rc_model2.capacitor2.v] .== sol[rc_model.capacitor.v])
 
+# discrete events
+
+function affect7!(integ, u, p, ctx)
+    integ.p[p.g] = 0
+end
+
+function Ball(; name, g = 9.8, anti_gravity_time = 1.0)
+    pars = @parameters g = g
+    sts = @variables x(t), v(t)
+    eqs = [D(x) ~ v, D(v) ~ g]
+    ODESystem(eqs, t, sts, pars; name = name,
+              discrete_events = [[anti_gravity_time] => (affect7!, [], [g], nothing)])
+end
+
+@named ball1 = Ball(anti_gravity_time = 1.0)
+@named ball2 = Ball(anti_gravity_time = 2.0)
+
+@named balls = ODESystem(Equation[], t)
+balls = compose(balls, [ball1, ball2])
+
+@test ModelingToolkit.has_discrete_events(balls)
+
+prob = ODEProblem(balls, [ball1.x => 10.0, ball1.v => 0, ball2.x => 10.0, ball2.v => 0],
+                  (0, 3.0))
+sol = solve(prob, Tsit5())
+
+@test sol(0.99)[1] == sol(0.99)[3]
+@test sol(1.01)[4] > sol(1.01)[2]
+@test sol(1.99)[2] == sol(1.01)[2]
+@test sol(1.99)[4] > sol(1.01)[4]
+@test sol(2.5)[4] == sol(3.0)[4]
+
 # bouncing ball
 
 # DiffEq implementation
-
 function f_(du, u, p, t)
     du[1] = u[2]
     du[2] = -p
