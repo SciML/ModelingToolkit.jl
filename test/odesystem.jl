@@ -589,13 +589,13 @@ end
 let
     @parameters t
     D = Differential(t)
-    @variables x(t)[1:2] = zeros(2)
+    x = map(xx -> xx(t), Symbolics.variables(:x, 1:2, T = SymbolicUtils.FnType))
     @variables y(t) = 0
     @parameters k = 1
     eqs = [D(x[1]) ~ x[2]
            D(x[2]) ~ -x[1] - 0.5 * x[2] + k
            y ~ 0.9 * x[1] + x[2]]
-    @named sys = ODESystem(eqs, t, vcat(x, [y]), [k])
+    @named sys = ODESystem(eqs, t, vcat(x, [y]), [k], defaults = Dict(x .=> 0))
     sys = structural_simplify(sys)
 
     u0 = [0.5, 0]

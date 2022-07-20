@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq, Test
+using ModelingToolkit, OrdinaryDiffEq, IfElse, Test
 
 @variables t
 sts = @variables x1(t) x2(t) x3(t) x4(t)
@@ -18,11 +18,10 @@ let dd = dummy_derivative(sys)
         has_dx2 |= D(x2) in vars || D(D(x2)) in vars
     end
     @test has_dx1 ⊻ has_dx2 # only one of x1 and x2 can be a dummy derivative
-    @test length(states(dd)) == length(equations(dd)) == 9
-    @test length(states(structural_simplify(dd))) < 9
+    @test length(states(dd)) == length(equations(dd)) < 9
 end
 
-let pss = partial_state_selection(sys)
+@test_skip let pss = partial_state_selection(sys)
     @test length(equations(pss)) == 1
     @test length(states(pss)) == 2
     @test length(equations(ode_order_lowering(pss))) == 2
@@ -122,14 +121,16 @@ let
     end
 
     @named system = System(L = 10)
-    @unpack supply_pipe = system
+    @unpack supply_pipe, return_pipe = system
     sys = structural_simplify(system)
-    u0 = [system.supply_pipe.v => 0.1, system.return_pipe.v => 0.1, D(supply_pipe.v) => 0.0]
-    # This is actually an implicit DAE system
-    @test_throws Any ODEProblem(sys, u0, (0.0, 10.0), [])
-    @test_throws Any ODAEProblem(sys, u0, (0.0, 10.0), [])
-    prob = DAEProblem(sys, D.(states(sys)) .=> 0.0, u0, (0.0, 10.0), [])
-    @test solve(prob, DFBDF()).retcode == :Success
+    u0 = [system.supply_pipe.v => 0.1, system.return_pipe.v => 0.1, D(supply_pipe.v) => 0.0,
+        D(return_pipe.fluid_port_a.m) => 0.0]
+    prob1 = ODEProblem(sys, u0, (0.0, 10.0), [])
+    prob2 = ODAEProblem(sys, u0, (0.0, 10.0), [])
+    prob3 = DAEProblem(sys, D.(states(sys)) .=> 0.0, u0, (0.0, 10.0), [])
+    @test solve(prob1, FBDF()).retcode == :Success
+    @test solve(prob2, FBDF()).retcode == :Success
+    @test solve(prob3, DFBDF()).retcode == :Success
 end
 
 # 1537
@@ -189,7 +190,96 @@ let
           rho_3 => 1.3
           mo_1 => 0
           mo_2 => 1
-          mo_3 => 2]
-    prob = ODAEProblem(sys, u0, (0.0, 0.1))
-    @test solve(prob, FBDF()).retcode == :Success
+          mo_3 => 2
+          Ek_3 => 3]
+    prob1 = ODEProblem(sys, u0, (0.0, 0.1))
+    prob2 = ODAEProblem(sys, u0, (0.0, 0.1))
+    @test solve(prob1, FBDF()).retcode == :Success
+    @test solve(prob2, FBDF()).retcode == :Success
+end
+
+let
+    # constant parameters ----------------------------------------------------
+    A_1f = 0.0908
+    A_2f = 0.036
+    p_1f_0 = 1.8e6
+    p_2f_0 = p_1f_0 * A_1f / A_2f
+    m_total = 3245
+    K1 = 4.60425e-5
+    K2 = 0.346725
+    K3 = 0
+    density = 876
+    bulk = 1.2e9
+    l_1f = 0.7
+    x_f_fullscale = 0.025
+    p_s = 200e5
+    # --------------------------------------------------------------------------
+
+    # modelingtoolkit setup ----------------------------------------------------
+    @parameters t
+    params = @parameters l_2f=0.7 damp=1e3
+    vars = @variables begin
+        p1(t)
+        p2(t)
+        dp1(t) = 0
+        dp2(t) = 0
+        xf(t) = 0
+        rho1(t)
+        rho2(t)
+        drho1(t) = 0
+        drho2(t) = 0
+        V1(t)
+        V2(t)
+        dV1(t) = 0
+        dV2(t) = 0
+        w(t) = 0
+        dw(t) = 0
+        ddw(t) = 0
+    end
+    D = Differential(t)
+
+    defs = [p1 => p_1f_0
+            p2 => p_2f_0
+            rho1 => density * (1 + p_1f_0 / bulk)
+            rho2 => density * (1 + p_2f_0 / bulk)
+            V1 => l_1f * A_1f
+            V2 => l_2f * A_2f
+            D(p1) => dp1
+            D(p2) => dp2
+            D(w) => dw
+            D(dw) => ddw]
+
+    # equations ------------------------------------------------------------------
+    flow(x, dp) = K1 * abs(dp) * abs(x) + K2 * sqrt(abs(dp)) * abs(x) + K3 * abs(dp) * x^2
+    xm = xf / x_f_fullscale
+    Δp1 = p_s - p1
+    Δp2 = p2
+
+    eqs = [+flow(xm, Δp1) ~ rho1 * dV1 + drho1 * V1
+           0 ~ IfElse.ifelse(w > 0.5,
+                             (0) - (rho2 * dV2 + drho2 * V2),
+                             (-flow(xm, Δp2)) - (rho2 * dV2 + drho2 * V2))
+           V1 ~ (l_1f + w) * A_1f
+           V2 ~ (l_2f - w) * A_2f
+           dV1 ~ +dw * A_1f
+           dV2 ~ -dw * A_2f
+           rho1 ~ density * (1.0 + p1 / bulk)
+           rho2 ~ density * (1.0 + p2 / bulk)
+           drho1 ~ density * (dp1 / bulk)
+           drho2 ~ density * (dp2 / bulk)
+           D(p1) ~ dp1
+           D(p2) ~ dp2
+           D(w) ~ dw
+           D(dw) ~ ddw
+           xf ~ 20e-3 * (1 - cos(2 * π * 5 * t))
+           0 ~ IfElse.ifelse(w > 0.5,
+                             (m_total * ddw) - (p1 * A_1f - p2 * A_2f - damp * dw),
+                             (m_total * ddw) - (p1 * A_1f - p2 * A_2f))]
+    # ----------------------------------------------------------------------------
+
+    # solution -------------------------------------------------------------------
+    @named catapult = ODESystem(eqs, t, vars, params, defaults = defs)
+    sys = structural_simplify(catapult)
+    prob = ODEProblem(sys, [], (0.0, 0.1), [l_2f => 0.55, damp => 1e7]; jac = true)
+    @test solve(prob, Rodas4()).retcode == :Success
 end

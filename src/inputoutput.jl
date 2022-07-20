@@ -185,8 +185,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         error("No unbound inputs were found in system.")
     end
 
-    sys, diff_idxs, alge_idxs = io_preprocessing(sys, inputs, []; simplify,
-                                                 check_bound = false, kwargs...)
+    sys, diff_idxs, alge_idxs = io_preprocessing(sys, inputs, []; simplify, kwargs...)
 
     dvs = states(sys)
     ps = parameters(sys)

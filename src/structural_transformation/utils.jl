@@ -113,7 +113,6 @@ end
 function sorted_incidence_matrix(ts::TransformationState, val = true; only_algeqs = false,
                                  only_algvars = false)
     var_eq_matching, var_scc = algebraic_variables_scc(ts)
-    fullvars = ts.fullvars
     s = ts.structure
     graph = ts.structure.graph
     varsmap = zeros(Int, ndsts(graph))

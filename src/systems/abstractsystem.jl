@@ -956,52 +956,36 @@ function will be applied during the tearing process. It also takes kwargs
 `allow_symbolic=false` and `allow_parameter=true` which limits the coefficient
 types during tearing.
 """
-function structural_simplify(sys::AbstractSystem, args...; kwargs...)
+function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false, kwargs...)
     sys = expand_connections(sys)
     state = TearingState(sys)
-    sys, input_idxs = _structural_simplify(sys, state, args...; kwargs...)
-    sys
-end
-
-function _structural_simplify(sys::AbstractSystem, state; simplify = false,
-                              check_bound = true,
-                              kwargs...)
-    state, input_idxs = inputs_to_parameters!(state, check_bound)
+    has_io = io !== nothing
+    has_io && markio!(state, io...)
+    state, input_idxs = inputs_to_parameters!(state, !has_io)
     sys = alias_elimination!(state)
+    # TODO: avoid construct `TearingState` again.
     state = TearingState(sys)
+    has_io && markio!(state, io..., check = false)
     check_consistency(state)
-    if sys isa ODESystem
-        sys = dae_order_lowering(dummy_derivative(sys, state))
-    end
-    state = TearingState(sys)
     find_solvables!(state; kwargs...)
-    sys = tearing_reassemble(state, tearing(state), simplify = simplify)
+    sys = dummy_derivative(sys, state; simplify)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     invalidate_cache!(sys)
-    return sys, input_idxs
+    return has_io ? (sys, input_idxs) : sys
 end
 
 function io_preprocessing(sys::AbstractSystem, inputs,
                           outputs; simplify = false, kwargs...)
-    sys = expand_connections(sys)
-    state = TearingState(sys)
-    markio!(state, inputs, outputs)
-    sys, input_idxs = _structural_simplify(sys, state; simplify, check_bound = false,
-                                           kwargs...)
+    sys, input_idxs = structural_simplify(sys, (inputs, outputs); simplify, kwargs...)
 
     eqs = equations(sys)
-    check_operator_variables(eqs, Differential)
-    # Sort equations and states such that diff.eqs. match differential states and the rest are algebraic
-    diffstates = collect_operator_variables(sys, Differential)
-    eqs = sort(eqs, by = e -> !isoperator(e.lhs, Differential),
-               alg = Base.Sort.DEFAULT_STABLE)
-    @set! sys.eqs = eqs
-    diffstates = [arguments(e.lhs)[1] for e in eqs[1:length(diffstates)]]
-    sts = [diffstates; setdiff(states(sys), diffstates)]
-    @set! sys.states = sts
-    diff_idxs = 1:length(diffstates)
-    alge_idxs = (length(diffstates) + 1):length(sts)
+    alg_start_idx = findfirst(!isdiffeq, eqs)
+    if alg_start_idx === nothing
+        alg_start_idx = length(eqs) + 1
+    end
+    diff_idxs = 1:(alg_start_idx - 1)
+    alge_idxs = alg_start_idx:length(eqs)
 
     sys, diff_idxs, alge_idxs, input_idxs
 end
@@ -1071,7 +1055,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     return lin_fun, sys
 end
 
-function markio!(state, inputs, outputs)
+function markio!(state, inputs, outputs; check = true)
     fullvars = state.fullvars
     inputset = Dict(inputs .=> false)
     outputset = Dict(outputs .=> false)
@@ -1092,12 +1076,12 @@ function markio!(state, inputs, outputs)
             fullvars[i] = v
         end
     end
-    all(values(inputset)) ||
-        error("Some specified inputs were not found in system. The following Dict indicates the found variables ",
-              inputset)
-    all(values(outputset)) ||
-        error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
-              outputset)
+    check && (all(values(inputset)) ||
+     error("Some specified inputs were not found in system. The following Dict indicates the found variables ",
+           inputset))
+    check && (all(values(outputset)) ||
+     error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
+           outputset))
     state
 end
 
@@ -1146,7 +1130,7 @@ using ModelingToolkit
 @variables t
 function plant(; name)
     @variables x(t) = 1
-    @variables u(t)=0 y(t)=0 
+    @variables u(t)=0 y(t)=0
     D = Differential(t)
     eqs = [D(x) ~ -x + u
            y ~ x]
@@ -1154,7 +1138,7 @@ function plant(; name)
 end
 
 function ref_filt(; name)
-    @variables x(t)=0 y(t)=0 
+    @variables x(t)=0 y(t)=0
     @variables u(t)=0 [input=true]
     D = Differential(t)
     eqs = [D(x) ~ -2 * x + u
@@ -1219,9 +1203,7 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
              gzgx*f_x gzgx*f_z]
         B = [f_u
              zeros(nz, nu)]
-        C = [
-        h_x h_z
-]
+        C = [h_x h_z]
         Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
         if !iszero(Bs)
             if !allow_input_derivatives

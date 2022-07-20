@@ -4,13 +4,12 @@ using ModelingToolkit.BipartiteGraphs
 using ModelingToolkit.StructuralTransformations
 
 function check_contract(sys)
-    graph = ModelingToolkit.get_tearing_state(sys).structure.graph
-    sys = tearing_substitution(sys)
-    state = TearingState(sys)
+    state = ModelingToolkit.get_tearing_state(sys)
+    graph = state.structure.graph
     fullvars = state.fullvars
+    sys = tearing_substitution(sys)
 
     eqs = equations(sys)
-    var2idx = Dict(enumerate(fullvars))
     for (i, eq) in enumerate(eqs)
         actual = union(ModelingToolkit.vars(eq.lhs), ModelingToolkit.vars(eq.rhs))
         actual = filter(!ModelingToolkit.isparameter, collect(actual))
@@ -143,11 +142,9 @@ sol = solve(prob, Tsit5())
 include("../examples/serial_inductor.jl")
 sys = structural_simplify(ll_model)
 check_contract(sys)
-u0 = [inductor1.i => 0.0
-      inductor2.i => 0.0
-      inductor2.v => 0.0]
-@test_throws Any ODEProblem(sys, u0, (0, 10.0))
-@test_throws Any ODAEProblem(sys, u0, (0, 10.0))
+u0 = states(sys) .=> 0
+@test_nowarn ODEProblem(sys, u0, (0, 10.0))
+@test_nowarn ODAEProblem(sys, u0, (0, 10.0))
 prob = DAEProblem(sys, Differential(t).(states(sys)) .=> 0, u0, (0, 0.5))
 @test_nowarn sol = solve(prob, DFBDF())
 

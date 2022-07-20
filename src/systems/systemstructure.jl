@@ -119,8 +119,8 @@ function Base.setindex!(dg::DiffGraph, val::Union{Integer, Nothing}, var::Intege
             dg.diff_to_primal[old_pd] = nothing
         end
         if val !== nothing
-            old_dp = dg.diff_to_primal[val]
-            old_dp === nothing || error("Variable already assigned.")
+            #old_dp = dg.diff_to_primal[val]
+            #old_dp === nothing || error("Variable already assigned.")
             dg.diff_to_primal[val] = var
         end
     end
@@ -142,6 +142,21 @@ function invview(dg::DiffGraph)
     return DiffGraph(dg.diff_to_primal, dg.primal_to_diff)
 end
 
+struct DiffChainIterator{Descend}
+    var_to_diff::DiffGraph
+    v::Int
+end
+
+function Base.iterate(di::DiffChainIterator{Descend}, v = nothing) where {Descend}
+    if v === nothing
+        vv = di.v
+        return (vv, vv)
+    end
+    g = Descend ? invview(di.var_to_diff) : di.var_to_diff
+    v′ = g[v]
+    v′ === nothing ? nothing : (v′, v′)
+end
+
 abstract type TransformationState{T} end
 abstract type AbstractTearingState{T} <: TransformationState{T} end
 
@@ -156,15 +171,14 @@ Base.@kwdef mutable struct SystemStructure
     graph::BipartiteGraph{Int, Nothing}
     solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
 end
-function isdervar(s::SystemStructure, i)
-    s.var_to_diff[i] === nothing &&
-        invview(s.var_to_diff)[i] !== nothing
-end
+isdervar(s::SystemStructure, i) = invview(s.var_to_diff)[i] !== nothing
 function isalgvar(s::SystemStructure, i)
     s.var_to_diff[i] === nothing &&
         invview(s.var_to_diff)[i] === nothing
 end
-isdiffvar(s::SystemStructure, i) = s.var_to_diff[i] !== nothing
+function isdiffvar(s::SystemStructure, i)
+    s.var_to_diff[i] !== nothing && invview(s.var_to_diff)[i] === nothing
+end
 
 function dervars_range(s::SystemStructure)
     Iterators.filter(Base.Fix1(isdervar, s), Base.OneTo(ndsts(s.graph)))
@@ -348,7 +362,6 @@ function linear_subsys_adjmat(state::TransformationState)
     cadj = Vector{Int}[]
     coeffs = Int[]
     for (i, eq) in enumerate(eqs)
-        isdiffeq(eq) && continue
         empty!(coeffs)
         linear_term = 0
         all_int_vars = true

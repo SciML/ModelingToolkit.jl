@@ -607,3 +607,106 @@ function promote_to_concrete(vs; tofloat = true, use_union = false)
         convert.(C, vs)
     end
 end
+
+struct BitDict <: AbstractDict{Int, Int}
+    keys::Vector{Int}
+    values::Vector{Union{Nothing, Int}}
+end
+BitDict(n::Integer) = BitDict(Int[], Union{Nothing, Int}[nothing for _ in 1:n])
+struct BitDictKeySet <: AbstractSet{Int}
+    d::BitDict
+end
+
+Base.keys(d::BitDict) = BitDictKeySet(d)
+Base.in(v::Integer, s::BitDictKeySet) = s.d.values[v] !== nothing
+Base.iterate(s::BitDictKeySet, state...) = iterate(s.d.keys, state...)
+function Base.setindex!(d::BitDict, val::Integer, ind::Integer)
+    if 1 <= ind <= length(d.values) && d.values[ind] === nothing
+        push!(d.keys, ind)
+    end
+    d.values[ind] = val
+end
+function Base.getindex(d::BitDict, ind::Integer)
+    if 1 <= ind <= length(d.values) && d.values[ind] === nothing
+        return d.values[ind]
+    else
+        throw(KeyError(ind))
+    end
+end
+function Base.iterate(d::BitDict, state...)
+    r = Base.iterate(d.keys, state...)
+    r === nothing && return nothing
+    k, state = r
+    (k => d.values[k]), state
+end
+function Base.empty!(d::BitDict)
+    for v in d.keys
+        d.values[v] = nothing
+    end
+    empty!(d.keys)
+    d
+end
+
+abstract type AbstractSimpleTreeIter{T} end
+Base.IteratorSize(::Type{<:AbstractSimpleTreeIter}) = Base.SizeUnknown()
+Base.eltype(::Type{<:AbstractSimpleTreeIter{T}}) where {T} = childtype(T)
+has_fast_reverse(::Type{<:AbstractSimpleTreeIter}) = true
+has_fast_reverse(::T) where {T <: AbstractSimpleTreeIter} = has_fast_reverse(T)
+reverse_buffer(it::AbstractSimpleTreeIter) = has_fast_reverse(it) ? nothing : eltype(it)[]
+reverse_children!(::Nothing, cs) = Iterators.reverse(cs)
+function reverse_children!(rev_buff, cs)
+    Iterators.reverse(cs)
+    empty!(rev_buff)
+    for c in cs
+        push!(rev_buff, c)
+    end
+    Iterators.reverse(rev_buff)
+end
+
+struct StatefulPreOrderDFS{T} <: AbstractSimpleTreeIter{T}
+    t::T
+end
+function Base.iterate(it::StatefulPreOrderDFS,
+                      state = (eltype(it)[it.t], reverse_buffer(it)))
+    stack, rev_buff = state
+    isempty(stack) && return nothing
+    t = pop!(stack)
+    for c in reverse_children!(rev_buff, children(t))
+        push!(stack, c)
+    end
+    return t, state
+end
+struct StatefulPostOrderDFS{T} <: AbstractSimpleTreeIter{T}
+    t::T
+end
+function Base.iterate(it::StatefulPostOrderDFS,
+                      state = (eltype(it)[it.t], falses(1), reverse_buffer(it)))
+    isempty(state[2]) && return nothing
+    vstack, sstack, rev_buff = state
+    while true
+        t = pop!(vstack)
+        isresume = pop!(sstack)
+        isresume && return t, state
+        push!(vstack, t)
+        push!(sstack, true)
+        for c in reverse_children!(rev_buff, children(t))
+            push!(vstack, c)
+            push!(sstack, false)
+        end
+    end
+end
+
+# Note that StatefulBFS also returns the depth.
+struct StatefulBFS{T} <: AbstractSimpleTreeIter{T}
+    t::T
+end
+Base.eltype(::Type{<:StatefulBFS{T}}) where {T} = Tuple{Int, childtype(T)}
+function Base.iterate(it::StatefulBFS, queue = (eltype(it)[(0, it.t)]))
+    isempty(queue) && return nothing
+    lv, t = popfirst!(queue)
+    nextlv = lv + 1
+    for c in children(t)
+        push!(queue, (nextlv, c))
+    end
+    return (lv, t), queue
+end
