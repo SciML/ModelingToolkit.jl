@@ -337,3 +337,84 @@ plot(sol(tv)[y], sol(tv)[x], line_z=tv)
 vline!([-1.5, 1.5], l=(:black, 5), primary=false)
 hline!([0], l=(:black, 5), primary=false)
 ```
+
+### Generalized affect support
+In some instances, a more flexible response to events is needed, which cannot be encapsulated by
+an equation. For example, a component may implement complex behavior that it is inconvenient or
+impossible to capture in equations.
+
+ModelingToolkit therefore supports Julia functions as affects: instead of an equation, an affect is
+defined as a `tuple`:
+```
+[x ~ 0] => (affect!, [v, x], [p, q], ctx)
+```
+
+where, `affect!` is a Julia function with the signature: `affect!(integ, u, p, ctx)`; `[u,v]` and `[p,q]` 
+are the states (variables) and parameters that are accessed by `affect!`, respectively; and `ctx` is a 
+context that is passed to `affect!` as the `ctx` argument.
+
+`affect!` receives the `DiffEqs` integrator as its first argument, which can then be used to access states
+and parameters that are provided in the `u` and `p` arguments (implemented as `NamedTuple`s):
+
+```
+function affect!(integ, u, v, ctx)
+    # integ.t is the current time
+    # integ.u[u.v] is the value of the state `v` above
+    # integ.p[p.q] is the value of the parameter `q` above
+end
+```
+
+When accessing variables of a sub-system, it could be useful to rename them (alternatively, an affect function
+may be reused in different contexts):
+```
+[x ~ 0] => (affect!, [resistor₊v => :v, x], [p, q => :p2], ctx)
+```
+
+Here, `resistor₊v` is passed as `v` while `q` has been renamed `p2`.
+
+As an example, here is the bouncing ball example from `DiffEqs` using ModelingToolkit:
+
+```@example events
+sts = @variables y(t), v(t)
+par = @parameters g = 9.8
+bb_eqs = [D(y) ~ v
+          D(v) ~ -g]
+
+function bb_affect!(integ, u, p, ctx)
+    integ.u[u.v] = -integ.u[u.v]
+end
+
+@named bb_model = ODESystem(bb_eqs, t, sts, par,
+                            continuous_events = [[y ~ 0] => (bb_affect!, [v], [], nothing)])
+
+bb_sys = structural_simplify(bb_model)
+u0 = [v => 0.0, y => 50.0]
+
+bb_prob = ODEProblem(bb_sys, u0, (0, 15.0))
+bb_sol = solve(bb_prob, Tsit5())
+
+plot(bb_sol)
+```
+
+### Discrete events support
+In addition to continuous events, discrete events are also supported.
+
+TBD
+
+Two important sub-classes of discrete events are periodic and set-time events. A periodic event is triggered at
+fixed intervals (e.g. every Δt seconds). To specify a periodic interval, pass the interval as the condition for
+the event:
+
+```
+discrete_events=[1.0 => [v ~ -v]]
+```
+
+will change the sign of `v` at t=1.0, 2.0, ...
+
+Alternatively, the event may be triggered at specific set times:
+```
+discrete_events=[[1.0, 4.0] => [v ~ -v]]
+```
+
+will change the sign of `v` *only* at t=1.0, 4.0.
+
