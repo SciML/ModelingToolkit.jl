@@ -1,4 +1,4 @@
-using ModelingToolkit, Test, DifferentialEquations
+using ModelingToolkit, Test, OrdinaryDiffEq
 
 @parameters t
 @variables u(t)
