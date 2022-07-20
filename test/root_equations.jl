@@ -359,8 +359,8 @@ let
     @test isapprox(sol(4.0)[1], 2 * exp(-2.0))
 
     # same as above - but with set-time event syntax
-    cb1‵ = [1.0,] => affect1 # needs to be a Vector for the event to happen only once
-    cb2‵ = [2.0,] => affect2
+    cb1‵ = [1.0] => affect1 # needs to be a Vector for the event to happen only once
+    cb2‵ = [2.0] => affect2
 
     @named osys‵ = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1‵, cb2‵])
     oprob‵ = ODEProblem(osys‵, u0, tspan, p)
@@ -370,4 +370,3 @@ let
     @test oprob‵.p[1] == 1.0
     @test isapprox(sol‵(4.0)[1], 2 * exp(-2.0))
 end
-
