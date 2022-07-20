@@ -16,9 +16,6 @@ struct FunctionalAffect
     pars::Vector
     pars_syms::Vector{Symbol}
     ctx::Any
-    function FunctionalAffect(f, sts, sts_syms, pars, pars_syms, ctx = nothing)
-        new(f, sts, sts_syms, pars, pars_syms, ctx)
-    end
 end
 
 function FunctionalAffect(f, sts, pars, ctx = nothing)
