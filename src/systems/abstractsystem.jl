@@ -963,7 +963,9 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     has_io && markio!(state, io...)
     state, input_idxs = inputs_to_parameters!(state, !has_io)
     sys = alias_elimination!(state)
+    # TODO: avoid construct `TearingState` again.
     state = TearingState(sys)
+    has_io && markio!(state, io..., check=false)
     check_consistency(state)
     find_solvables!(state; kwargs...)
     sys = dummy_derivative(sys, state; simplify)
@@ -1053,7 +1055,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     return lin_fun, sys
 end
 
-function markio!(state, inputs, outputs)
+function markio!(state, inputs, outputs; check = true)
     fullvars = state.fullvars
     inputset = Dict(inputs .=> false)
     outputset = Dict(outputs .=> false)
@@ -1074,12 +1076,12 @@ function markio!(state, inputs, outputs)
             fullvars[i] = v
         end
     end
-    all(values(inputset)) ||
+    check && (all(values(inputset)) ||
         error("Some specified inputs were not found in system. The following Dict indicates the found variables ",
-              inputset)
-    all(values(outputset)) ||
+              inputset))
+    check && (all(values(outputset)) ||
         error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
-              outputset)
+              outputset))
     state
 end
 
