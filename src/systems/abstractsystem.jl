@@ -965,7 +965,7 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     sys = alias_elimination!(state)
     # TODO: avoid construct `TearingState` again.
     state = TearingState(sys)
-    has_io && markio!(state, io..., check=false)
+    has_io && markio!(state, io..., check = false)
     check_consistency(state)
     find_solvables!(state; kwargs...)
     sys = dummy_derivative(sys, state; simplify)
@@ -1077,11 +1077,11 @@ function markio!(state, inputs, outputs; check = true)
         end
     end
     check && (all(values(inputset)) ||
-        error("Some specified inputs were not found in system. The following Dict indicates the found variables ",
-              inputset))
+     error("Some specified inputs were not found in system. The following Dict indicates the found variables ",
+           inputset))
     check && (all(values(outputset)) ||
-        error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
-              outputset))
+     error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
+           outputset))
     state
 end
 
