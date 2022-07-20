@@ -177,16 +177,22 @@ sol2 = solve(prob2, Rodas4())
 
 # discrete events
 
+a7_count = 0
 function affect7!(integ, u, p, ctx)
     integ.p[p.g] = 0
+    ctx[1] += 1
+    @test ctx[1] <= 2
+    @test (ctx[1] == 1 && integ.t == 1.0) || (ctx[1] == 2 && integ.t == 2.0)
+    global a7_count += 1
 end
 
+a7_ctx = [0]
 function Ball(; name, g = 9.8, anti_gravity_time = 1.0)
     pars = @parameters g = g
     sts = @variables x(t), v(t)
     eqs = [D(x) ~ v, D(v) ~ g]
     ODESystem(eqs, t, sts, pars; name = name,
-              discrete_events = [[anti_gravity_time] => (affect7!, [], [g], nothing)])
+              discrete_events = [[anti_gravity_time] => (affect7!, [], [g], a7_ctx)])
 end
 
 @named ball1 = Ball(anti_gravity_time = 1.0)
@@ -201,6 +207,7 @@ prob = ODEProblem(balls, [ball1.x => 10.0, ball1.v => 0, ball2.x => 10.0, ball2.
                   (0, 3.0))
 sol = solve(prob, Tsit5())
 
+@test a7_count == 2
 @test sol(0.99)[1] == sol(0.99)[3]
 @test sol(1.01)[4] > sol(1.01)[2]
 @test sol(1.99)[2] == sol(1.01)[2]
