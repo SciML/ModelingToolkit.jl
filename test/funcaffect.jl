@@ -15,6 +15,22 @@ sol = solve(prob, Tsit5())
 i4 = findfirst(==(4.0), sol[:t])
 @test sol.u[i4 + 1][1] > 10.0
 
+# callback
+cb = ModelingToolkit.SymbolicDiscreteCallback([t ~ 0],
+                                              (f = affect1!, sts = [], pars = [],
+                                               ctx = [1]))
+cb1 = ModelingToolkit.SymbolicDiscreteCallback([t ~ 0], (affect1!, [], [], [1]))
+@test ModelingToolkit.affects(cb) isa ModelingToolkit.FunctionalAffect
+@test cb == cb1
+@test ModelingToolkit.SymbolicDiscreteCallback(cb) === cb # passthrough
+
+cb = ModelingToolkit.SymbolicContinuousCallback([t ~ 0],
+                                                (f = affect1!, sts = [], pars = [],
+                                                 ctx = [1]))
+cb1 = ModelingToolkit.SymbolicContinuousCallback([t ~ 0], (affect1!, [], [], [1]))
+@test cb == cb1
+@test ModelingToolkit.SymbolicContinuousCallback(cb) === cb # passthrough
+
 # named tuple
 sys1 = ODESystem(eqs, t, [u], [], name = :sys,
                  discrete_events = [
@@ -202,6 +218,7 @@ end
 balls = compose(balls, [ball1, ball2])
 
 @test ModelingToolkit.has_discrete_events(balls)
+@test length(ModelingToolkit.affects(ModelingToolkit.discrete_events(balls))) == 2
 
 prob = ODEProblem(balls, [ball1.x => 10.0, ball1.v => 0, ball2.x => 10.0, ball2.v => 0],
                   (0, 3.0))
@@ -252,6 +269,9 @@ end
                             continuous_events = [[y ~ 0] => (bb_affect!, [v], [], nothing)])
 
 bb_sys = structural_simplify(bb_model)
+@test ModelingToolkit.affects(ModelingToolkit.continuous_events(bb_sys)) isa
+      ModelingToolkit.FunctionalAffect
+
 u0 = [v => 0.0, y => 50.0]
 
 bb_prob = ODEProblem(bb_sys, u0, (0, 15.0))

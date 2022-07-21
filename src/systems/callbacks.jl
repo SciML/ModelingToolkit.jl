@@ -21,11 +21,11 @@ end
 function FunctionalAffect(f, sts, pars, ctx = nothing)
     # sts & pars contain either pairs: resistor.R => R, or Syms: R
     vs = [x isa Pair ? x.first : x for x in sts]
-    vs_syms = [x isa Pair ? Symbol(x.second) : getname(x) for x in sts]
+    vs_syms = Symbol[x isa Pair ? Symbol(x.second) : getname(x) for x in sts]
     length(vs_syms) == length(unique(vs_syms)) || error("Variables are not unique")
 
     ps = [x isa Pair ? x.first : x for x in pars]
-    ps_syms = [x isa Pair ? Symbol(x.second) : getname(x) for x in pars]
+    ps_syms = Symbol[x isa Pair ? Symbol(x.second) : getname(x) for x in pars]
     length(ps_syms) == length(unique(ps_syms)) || error("Parameters are not unique")
 
     FunctionalAffect(f, vs, vs_syms, ps, ps_syms, ctx)
