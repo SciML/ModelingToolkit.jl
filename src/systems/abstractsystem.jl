@@ -1219,9 +1219,7 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
              gzgx*f_x gzgx*f_z]
         B = [f_u
              zeros(nz, nu)]
-        C = [
-        h_x h_z
-]
+        C = [h_x h_z]
         Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
         if !iszero(Bs)
             if !allow_input_derivatives
