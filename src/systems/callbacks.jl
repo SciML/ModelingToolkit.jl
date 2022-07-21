@@ -316,10 +316,10 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
             alleq = all(isequal(isparameter(first(update_vars))),
                         Iterators.map(isparameter, update_vars))
             if !isparameter(first(lhss)) && alleq
-                stateind = Dict(map(a -> reverse(a), enumerate(dvs)))
+                stateind = Dict(reverse(en) for en in enumerate(dvs))
                 update_inds = map(sym -> stateind[sym], update_vars)
             elseif isparameter(first(lhss)) && alleq
-                psind = Dict(map(a -> reverse(a), enumerate(ps)))
+                psind = Dict(reverse(en) for en in enumerate(ps))
                 update_inds = map(sym -> psind[sym], update_vars)
                 outvar = :p
             else
@@ -411,10 +411,10 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states
 end
 
 function compile_user_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
-    dvs_ind = Dict(map(a -> reverse(a), enumerate(dvs)))
+    dvs_ind = Dict(reverse(en) for en in enumerate(dvs))
     v_inds = map(sym -> dvs_ind[sym], states(affect))
 
-    ps_ind = Dict(map(a -> reverse(a), enumerate(ps)))
+    ps_ind = Dict(reverse(en) for en in enumerate(ps))
     p_inds = map(sym -> ps_ind[sym], parameters(affect))
 
     # HACK: filter out eliminated symbols. Not clear this is the right thing to do
