@@ -84,7 +84,8 @@ function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
             end
             filter!(var -> ict.graph.matching[var] === unassigned, to_tear_vars)
             filter!(eq -> invview(ict.graph.matching)[eq] === unassigned, to_tear_eqs)
-            tearEquations!(ict, solvable_graph.fadjlist, to_tear_eqs, to_tear_vars)
+            tearEquations!(ict, solvable_graph.fadjlist, to_tear_eqs, BitSet(to_tear_vars),
+                           nothing)
             for var in to_tear_vars
                 var_eq_matching[var] = ict.graph.matching[var]
             end
@@ -146,10 +147,28 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
     var_eq_matching
 end
 
-function dummy_derivative_graph!(state::TransformationState, jac = nothing)
+function dummy_derivative_graph!(state::TransformationState, jac = nothing; kwargs...)
+    state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     var_eq_matching = complete(pantelides!(state))
     complete!(state.structure)
     dummy_derivative_graph!(state.structure, var_eq_matching, jac)
+end
+
+function compute_diff_level(diff_to_x)
+    nxs = length(diff_to_x)
+    xlevel = zeros(Int, nxs)
+    maxlevel = 0
+    for i in 1:nxs
+        level = 0
+        x = i
+        while diff_to_x[x] !== nothing
+            x = diff_to_x[x]
+            level += 1
+        end
+        maxlevel = max(maxlevel, level)
+        xlevel[i] = level
+    end
+    return xlevel, maxlevel
 end
 
 function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac)
@@ -158,45 +177,21 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     diff_to_var = invview(var_to_diff)
     invgraph = invview(graph)
 
-    neqs = nsrcs(graph)
-    eqlevel = zeros(Int, neqs)
-    maxlevel = 0
-    for i in 1:neqs
-        level = 0
-        eq = i
-        while diff_to_eq[eq] !== nothing
-            eq = diff_to_eq[eq]
-            level += 1
-        end
-        maxlevel = max(maxlevel, level)
-        eqlevel[i] = level
-    end
-
-    nvars = ndsts(graph)
-    varlevel = zeros(Int, nvars)
-    for i in 1:nvars
-        level = 0
-        var = i
-        while diff_to_var[var] !== nothing
-            var = diff_to_var[var]
-            level += 1
-        end
-        maxlevel = max(maxlevel, level)
-        varlevel[i] = level
-    end
+    eqlevel, _ = compute_diff_level(diff_to_eq)
 
     var_sccs = find_var_sccs(graph, var_eq_matching)
-    eqcolor = falses(neqs)
+    eqcolor = falses(nsrcs(graph))
     dummy_derivatives = Int[]
     col_order = Int[]
+    nvars = ndsts(graph)
     for vars in var_sccs
         eqs = [var_eq_matching[var] for var in vars if var_eq_matching[var] !== unassigned]
         isempty(eqs) && continue
-        maxlevel = maximum(map(x -> eqlevel[x], eqs))
+        maxlevel = maximum(Base.Fix1(getindex, eqlevel), eqs)
         iszero(maxlevel) && continue
 
         rank_matching = Matching(nvars)
-        for level in maxlevel:-1:1
+        for _ in maxlevel:-1:1
             eqs = filter(eq -> diff_to_eq[eq] !== nothing, eqs)
             nrows = length(eqs)
             iszero(nrows) && break
@@ -220,8 +215,10 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             else
                 rank = 0
                 for var in vars
+                    # We need `invgraph` here because we are matching from
+                    # variables to equations.
                     pathfound = construct_augmenting_path!(rank_matching, invgraph, var,
-                                                           eq -> eq in eqs_set, eqcolor)
+                                                           Base.Fix2(in, eqs_set), eqcolor)
                     pathfound || continue
                     push!(dummy_derivatives, var)
                     rank += 1
@@ -239,5 +236,32 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         end
     end
 
-    dummy_derivatives
+    dummy_derivatives_set = BitSet(dummy_derivatives)
+    # We can eliminate variables that are not a selected state (differential
+    # variables). Selected states are differentiated variables that are not
+    # dummy derivatives.
+    can_eliminate = let var_to_diff = var_to_diff,
+        dummy_derivatives_set = dummy_derivatives_set
+
+        v -> begin
+            dv = var_to_diff[v]
+            dv === nothing || dv in dummy_derivatives_set
+        end
+    end
+
+    # We don't want tearing to give us `y_t ~ D(y)`, so we skip equations with
+    # actually differentiated variables.
+    isdiffed = let diff_to_var = diff_to_var, dummy_derivatives_set = dummy_derivatives_set
+        v -> diff_to_var[v] !== nothing && !(v in dummy_derivatives_set)
+    end
+
+    var_eq_matching = tear_graph_modia(structure, isdiffed,
+                                       Union{Unassigned, SelectedState};
+                                       varfilter = can_eliminate)
+    for v in eachindex(var_eq_matching)
+        can_eliminate(v) && continue
+        var_eq_matching[v] = SelectedState()
+    end
+
+    return var_eq_matching
 end

@@ -293,7 +293,7 @@ function build_explicit_observed_function(sys, ts;
     # the expression depends on everything before the `maxidx`.
     subs = Dict()
     maxidx = 0
-    for (i, s) in enumerate(dep_vars)
+    for s in dep_vars
         idx = get(observed_idx, s, nothing)
         if idx !== nothing
             idx > maxidx && (maxidx = idx)
@@ -318,7 +318,27 @@ function build_explicit_observed_function(sys, ts;
         end
     end
     ts = map(t -> substitute(t, subs), ts)
-    obsexprs = map(eq -> eq.lhs ← eq.rhs, obs[1:maxidx])
+    obsexprs = []
+    eqs_cache = Ref{Any}(nothing)
+    for i in 1:maxidx
+        eq = obs[i]
+        lhs = eq.lhs
+        rhs = eq.rhs
+        vars!(vars, rhs)
+        for v in vars
+            isdifferential(v) || continue
+            if eqs_cache[] === nothing
+                eqs_cache[] = Dict(eq.lhs => eq.rhs for eq in equations(sys))
+            end
+            eqs_dict = eqs_cache[]
+            rhs = get(eqs_dict, v, nothing)
+            if rhs === nothing
+                error("Observed variables depends on differentiated variable $v, but it's not explicit solved. Fix file an issue if you are sure that the system is valid.")
+            end
+        end
+        empty!(vars)
+        push!(obsexprs, lhs ← rhs)
+    end
 
     dvs = DestructuredArgs(states(sys), inbounds = !checkbounds)
     ps = DestructuredArgs(parameters(sys), inbounds = !checkbounds)

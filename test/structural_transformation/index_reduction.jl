@@ -120,8 +120,8 @@ sol = solve(prob_auto, Rodas5());
 
 let pss_pendulum2 = partial_state_selection(pendulum2)
     # This currently selects `T` rather than `x` at top level. Needs tearing priorities to fix.
-    @test_broken length(equations(pss_pendulum2)) == 3
-    @test_broken length(equations(ModelingToolkit.ode_order_lowering(pss_pendulum2))) == 4
+    @test length(equations(pss_pendulum2)) == 4
+    @test length(equations(ModelingToolkit.ode_order_lowering(pss_pendulum2))) == 4
 end
 
 eqs = [D(x) ~ w,
@@ -136,22 +136,29 @@ let pss_pendulum = partial_state_selection(pendulum)
     @test_broken length(equations(pss_pendulum)) == 3
 end
 
-sys = structural_simplify(pendulum2)
-@test length(equations(sys)) == 5
-@test length(states(sys)) == 5
-
-u0 = [
-    D(x) => 0.0,
-    D(y) => 0.0,
-    x => sqrt(2) / 2,
-    y => sqrt(2) / 2,
-    T => 0.0,
+for sys in [
+    structural_simplify(pendulum2),
+    structural_simplify(ode_order_lowering(pendulum2)),
 ]
-p = [
-    L => 1.0,
-    g => 9.8,
-]
+    @test length(equations(sys)) <= 6
+    @test length(states(sys)) <= 6
 
-prob_auto = DAEProblem(sys, zeros(length(u0)), u0, (0.0, 0.2), p)
-sol = solve(prob_auto, DFBDF())
-@test norm(sol[x] .^ 2 + sol[y] .^ 2 .- 1) < 1e-2
+    u0 = [
+        D(x) => 0.0,
+        D(D(x)) => 0.0,
+        D(y) => 0.0,
+        D(D(y)) => 0.0,
+        x => sqrt(2) / 2,
+        y => sqrt(2) / 2,
+        T => 0.0,
+    ]
+    p = [
+        L => 1.0,
+        g => 9.8,
+    ]
+
+    prob_auto = ODEProblem(sys, u0, (0.0, 0.5), p)
+    sol = solve(prob_auto, FBDF())
+    @test sol.retcode === :Success
+    @test norm(sol[x] .^ 2 + sol[y] .^ 2 .- 1) < 1e-2
+end

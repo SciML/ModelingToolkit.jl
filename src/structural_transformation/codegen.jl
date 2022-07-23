@@ -6,7 +6,6 @@ const MAX_INLINE_NLSOLVE_SIZE = 8
 
 function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_sccs,
                                                     nlsolve_scc_idxs, eqs_idxs, states_idxs)
-    fullvars = state.fullvars
     graph = state.structure.graph
 
     # The sparsity pattern of `nlsolve(f, u, p)` w.r.t `p` is difficult to
@@ -71,7 +70,6 @@ function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_
 
     var2idx = Dict{Int, Int}(v => i for (i, v) in enumerate(states_idxs))
     eqs2idx = Dict{Int, Int}(v => i for (i, v) in enumerate(eqs_idxs))
-    nlsolve_vars_set = BitSet(nlsolve_vars)
 
     I = Int[]
     J = Int[]
