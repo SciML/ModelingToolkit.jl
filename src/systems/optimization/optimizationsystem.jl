@@ -215,7 +215,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         @named cons_sys = NonlinearSystem(sys.constraints, dvs, ps)
         cons = generate_function(cons_sys, checkbounds = checkbounds,
                                  linenumbers = linenumbers,
-                                 expression = Val{false})[1]
+                                 expression = Val{false})[2]
         cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
         cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 

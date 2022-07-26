@@ -1348,6 +1348,7 @@ function Base.hash(sys::AbstractSystem, s::UInt)
     end
     s = foldr(hash, get_observed(sys), init = s)
     s = foldr(hash, get_continuous_events(sys), init = s)
+    s = foldr(hash, get_discrete_events(sys), init = s)
     s = hash(independent_variables(sys), s)
     return s
 end
@@ -1375,16 +1376,17 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
     sts = union(get_states(basesys), get_states(sys))
     ps = union(get_ps(basesys), get_ps(sys))
     obs = union(get_observed(basesys), get_observed(sys))
-    evs = union(get_continuous_events(basesys), get_continuous_events(sys))
+    cevs = union(get_continuous_events(basesys), get_continuous_events(sys))
+    devs = union(get_discrete_events(basesys), get_discrete_events(sys))
     defs = merge(get_defaults(basesys), get_defaults(sys)) # prefer `sys`
     syss = union(get_systems(basesys), get_systems(sys))
 
     if length(ivs) == 0
         T(eqs, sts, ps, observed = obs, defaults = defs, name = name, systems = syss,
-          continuous_events = evs)
+          continuous_events = cevs, discrete_events = devs)
     elseif length(ivs) == 1
         T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name,
-          systems = syss, continuous_events = evs)
+          systems = syss, continuous_events = cevs, discrete_events = devs)
     end
 end
 

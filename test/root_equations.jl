@@ -225,7 +225,7 @@ continuous_events = [[x ~ 0] => [vx ~ -vx]
 @named ball = ODESystem([D(x) ~ vx
                          D(y) ~ vy
                          D(vx) ~ -9.8
-                         D(vy) ~ -0.01vy;], t; continuous_events)
+                         D(vy) ~ -0.01vy], t; continuous_events)
 
 ball = structural_simplify(ball)
 
@@ -262,7 +262,7 @@ continuous_events = [
 @named ball = ODESystem([D(x) ~ vx
                          D(y) ~ vy
                          D(vx) ~ -1
-                         D(vy) ~ 0;], t; continuous_events)
+                         D(vy) ~ 0], t; continuous_events)
 
 ball = structural_simplify(ball)
 
@@ -334,3 +334,39 @@ end
 model = Model(sin(30t))
 sys = structural_simplify(model)
 @test isempty(ModelingToolkit.continuous_events(sys))
+
+let
+    @parameters k t1 t2
+    @variables t A(t)
+
+    cond1 = (t == t1)
+    affect1 = [A ~ A + 1]
+    cb1 = cond1 => affect1
+    cond2 = (t == t2)
+    affect2 = [k ~ 1.0]
+    cb2 = cond2 => affect2
+
+    ∂ₜ = Differential(t)
+    eqs = [∂ₜ(A) ~ -k * A]
+    @named osys = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2])
+    u0 = [A => 1.0]
+    p = [k => 0.0, t1 => 1.0, t2 => 2.0]
+    tspan = (0.0, 4.0)
+    oprob = ODEProblem(osys, u0, tspan, p)
+    sol = solve(oprob, Tsit5(), tstops = [1.0, 2.0]; abstol = 1e-10, reltol = 1e-10)
+    @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-6)
+    @test oprob.p[1] == 1.0
+    @test isapprox(sol(4.0)[1], 2 * exp(-2.0))
+
+    # same as above - but with set-time event syntax
+    cb1‵ = [1.0] => affect1 # needs to be a Vector for the event to happen only once
+    cb2‵ = [2.0] => affect2
+
+    @named osys‵ = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1‵, cb2‵])
+    oprob‵ = ODEProblem(osys‵, u0, tspan, p)
+    sol‵ = solve(oprob‵, Tsit5(); abstol = 1e-10, reltol = 1e-10)
+
+    @test isapprox(sol‵(1.0000000001)[1] - sol‵(0.999999999)[1], 1.0; rtol = 1e-6)
+    @test oprob‵.p[1] == 1.0
+    @test isapprox(sol‵(4.0)[1], 2 * exp(-2.0))
+end

@@ -635,26 +635,14 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap;
                                  has_difference = has_difference,
                                  check_length, kwargs...)
-    if has_continuous_events(sys)
-        event_cb = generate_rootfinding_callback(sys; kwargs...)
-    else
-        event_cb = nothing
-    end
-    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
-    cb = merge_cb(event_cb, difference_cb)
-    cb = merge_cb(cb, callback)
-
+    cbs = process_events(sys; callback, has_difference, kwargs...)
     kwargs = filter_kwargs(kwargs)
-    if cb === nothing
+    if cbs === nothing
         ODEProblem{iip}(f, u0, tspan, p; kwargs...)
     else
-        ODEProblem{iip}(f, u0, tspan, p; callback = cb, kwargs...)
+        ODEProblem{iip}(f, u0, tspan, p; callback = cbs, kwargs...)
     end
 end
-merge_cb(::Nothing, ::Nothing) = nothing
-merge_cb(::Nothing, x) = merge_cb(x, nothing)
-merge_cb(x, ::Nothing) = x
-merge_cb(x, y) = CallbackSet(x, y)
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 
 """
