@@ -124,7 +124,7 @@ function affects(cbs::Vector{SymbolicContinuousCallback})
     reduce(vcat, [affects(cb) for cb in cbs])
 end
 
-namespace_affects(af::Vector, s) = Equation[namespace_affact(a, s) for a in af]
+namespace_affects(af::Vector, s) = Equation[namespace_affect(a, s) for a in af]
 namespace_affects(af::FunctionalAffect, s) = namespace_affect(af, s)
 
 function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback
