@@ -842,20 +842,10 @@ let
     true_eqs = [0 ~ sys.v - D(sys.x)
                 0 ~ ctrl.kv * D(sys.x) + ctrl.kx * sys.x - D(sys.v)]
     @test isequal(full_equations(sys_alias), true_eqs)
-    true_obs = [ctrl.x ~ sys.x
-                sys.u ~ D(sys.v)
-                ctrl.u ~ D(sys.v)
-                ctrl.v ~ D(sys.x)]
-    @test isequal(observed(sys_alias), true_obs)
 
     sys_simp = structural_simplify(sys_con)
     D = Differential(t)
     true_eqs = [D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x
                 D(sys.x) ~ sys.v]
     @test isequal(full_equations(sys_simp), true_eqs)
-    true_obs = [ctrl.x ~ sys.x
-                sys.u ~ D(sys.v)
-                ctrl.v ~ sys.v
-                ctrl.u ~ ctrl.kv * ctrl.v + ctrl.kx * sys.x]
-    @test isequal(observed(sys_simp), true_obs)
 end
