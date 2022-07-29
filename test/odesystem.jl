@@ -450,6 +450,43 @@ sol2 = solve(prob2, Tsit5(); callback = difference_cb,
 @test sol(0:0.01:1)[x] ≈ sol2(0:0.01:1)[1, :]
 @test sol(0:0.01:1)[y] ≈ sol2(0:0.01:1)[2, :]
 
+@testset "SplitODEProblem tests" begin
+    #Van Der Pol oscillator
+    @parameters μ
+    @variables t x1(t) x2(t)
+    D = Differential(t)
+
+    eqs = [D(x1) ~ x2,
+        D(x2) ~ μ*(1 - x1^2)*x2 - x1]
+
+    @named sys = ODESystem(eqs)
+
+    u0 = [4.0,
+        6.0]
+
+    p = [μ => 0.2]
+
+    tspan = (0.0, 80.0)
+
+    oprob = ODEProblem(sys, u0, tspan, p)
+    soprob = SplitODEProblem(sys, u0, tspan, p)
+    densejac_oprob = ODEProblem(sys, u0, tspan, p, jac = true)
+    densejac_soprob = SplitODEProblem(sys, u0, tspan, p, jac = true)
+    sparsejac_oprob = ODEProblem(sys, u0, tspan, p, jac = true, sparse = true)
+    sparsejac_soprob = SplitODEProblem(sys, u0, tspan, p, jac = true, sparse = true)
+
+    #jacobian generation tests
+    u = states(sys)
+    t = 0.1
+    densejac_ode = densejac_oprob.f.jac(u, 0.2, t)
+    densejac_splitode = densejac_soprob.f.jac(u, 0.2, t)
+    sparsejac_ode = sparsejac_oprob.f.jac(u, 0.2, t)
+    sparsejac_splitode = sparsejac_soprob.f.jac(u, 0.2, t)
+
+    @test densejac_ode == densejac_splitode
+    @test sparsejac_ode == sparsejac_splitode
+end
+
 using ModelingToolkit
 
 function submodel(; name)

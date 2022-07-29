@@ -80,6 +80,33 @@ function calculate_control_jacobian(sys::AbstractODESystem;
     return jac
 end
 
+function calculate_split_jacobian(sys::AbstractODESystem, A, f_n;
+    sparse=false, simplify=false, dvs=states(sys))
+
+    if isequal(dvs, states(sys))
+        cache = get_jac(sys)[]
+        if cache isa Tuple && cache[2] == (sparse, simplify)
+            return cache[1]
+        end
+    end
+
+    iv = get_iv(sys)
+
+    if sparse
+        jac = sparsejacobian(f_n, dvs, simplify=simplify)
+    else
+        jac = jacobian(f_n, dvs, simplify=simplify)
+    end
+
+    jac += A
+
+    if isequal(dvs, states(sys))
+        get_jac(sys)[] = jac, (sparse, simplify) # cache Jacobian
+    end
+
+    return jac
+end
+
 function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                         simplify = false, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
@@ -112,12 +139,21 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = states(sys),
     return build_function(jac, derivatives, dvs, ps, ˍ₋gamma, get_iv(sys); kwargs...)
 end
 
+
+function generate_split_jacobian(sys::AbstractODESystem, A, f_n, dvs = states(sys), ps = parameters(sys);
+    simplify=false, sparse = false, kwargs...)
+    jac = calculate_split_jacobian(sys, A, f_n; sparse=sparse, simplify=simplify)
+    return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
+end
+
+
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
                            implicit_dae = false,
                            ddvs = implicit_dae ? map(Differential(get_iv(sys)), dvs) :
                                   nothing,
                            has_difference = false,
                            kwargs...)
+
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     if !implicit_dae
         check_operator_variables(eqs, Differential)
@@ -144,8 +180,27 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
     end
 end
 
+
+function generate_split_function(
+        sys::AbstractODESystem, A, f_n, dvs = states(sys), ps = parameters(sys);
+        has_difference = false,
+        kwargs...
+    )
+    u = map(x->time_varying_as_func(value(x), sys), dvs)
+    p = map(x->time_varying_as_func(value(x), sys), ps)
+    t = get_iv(sys)
+
+    A = DiffEqArrayOperator(A)
+
+    pre, sol_states = get_substitutions_and_solved_states(sys, no_postprocess = has_difference)
+
+    build_function(A(u,p,t), u, p, t; postprocess_fbody=pre, states=sol_states, kwargs...), build_function(f_n, u, p, t; postprocess_fbody=pre, states=sol_states, kwargs...)
+end
+
+
 function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = parameters(sys);
                                 kwargs...)
+
     eqs = equations(sys)
     check_operator_variables(eqs, Difference)
 
@@ -232,6 +287,12 @@ end
 
 for F in [:ODEFunction, :DAEFunction]
     @eval function DiffEqBase.$F(sys::AbstractODESystem, args...; kwargs...)
+        $F{true}(sys, args...; kwargs...)
+    end
+end
+
+for F in [:SplitFunction]
+    @eval function SciMLBase.$F(sys::AbstractODESystem, args...; kwargs...)
         $F{true}(sys, args...; kwargs...)
     end
 end
@@ -435,6 +496,123 @@ end
 
 """
 ```julia
+function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                ps = parameters(sys);
+                                version = nothing, tgrad = false,
+                                jac = false,
+                                sparse = false,
+                                kwargs...) where {iip}
+```
+
+Create a `SplitFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `ps`
+are used to set the order of the dependent variable and parameter vectors,
+respectively.
+"""
+function SciMLBase.SplitFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                      ps = parameters(sys), u0 = nothing;
+                                      version = nothing, tgrad=false,
+                                      jac = false,
+                                      eval_expression = true,
+                                      sparse = false, simplify = false,
+                                      eval_module = @__MODULE__,
+                                      steady_state = false,
+                                      checkbounds = false,
+                                      sparsity = false,
+                                      kwargs...) where {iip}
+    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
+    rhs = [eq.rhs for eq in eqs]
+    check_operator_variables(eqs, Differential)
+    check_lhs(eqs, Differential, Set(dvs))
+    A, f_n = semilinear_form(rhs, dvs)
+    # f1 and f2 are generated from the linear and non-linear splits of the operator respectively
+    f1_gen, f2_gen = generate_split_function(sys, A, f_n, dvs, ps; expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
+    f1_oop, f1_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in f1_gen) : f1_gen
+    f1(u,p,t) = f1_oop(u,p,t)
+    f1(du,u,p,t) = f1_iip(du,u,p,t)
+    f2_oop, f2_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in f2_gen) : f2_gen
+    f2(u,p,t) = f2_oop(u,p,t)
+    f2(du,u,p,t) = f2_iip(du,u,p,t)
+
+    if tgrad
+        tgrad_gen = generate_tgrad(sys, dvs, ps;
+                                   simplify=simplify,
+                                   expression=Val{eval_expression}, expression_module=eval_module,
+                                   checkbounds=checkbounds, kwargs...)
+        tgrad_oop,tgrad_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in tgrad_gen) : tgrad_gen
+        _tgrad(u,p,t) = tgrad_oop(u,p,t)
+        _tgrad(J,u,p,t) = tgrad_iip(J,u,p,t)
+    else
+        _tgrad = nothing
+    end
+
+    if jac
+        jac_gen = generate_split_jacobian(sys, A, f_n, dvs, ps;
+                                    simplify=simplify, sparse = sparse,
+                                    expression=Val{eval_expression}, expression_module=eval_module,
+                                    checkbounds=checkbounds, kwargs...)
+        jac_oop, jac_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in jac_gen) : jac_gen
+        _jac(u,p,t) = jac_oop(u,p,t)
+        _jac(J,u,p,t) = jac_iip(J,u,p,t)
+    else
+        _jac = nothing
+    end
+
+    M = calculate_massmatrix(sys)
+
+    _M = if sparse && !(u0 === nothing || M === I)
+      SparseArrays.sparse(M)
+    elseif u0 === nothing || M === I
+      M
+    else
+      ArrayInterface.restructure(u0 .* u0',M)
+    end
+
+    obs = observed(sys)
+    observedfun = if steady_state
+        let sys = sys, dict = Dict()
+            function generated_observed(obsvar, u, p, t=Inf)
+                obs = get!(dict, value(obsvar)) do
+                    build_explicit_observed_function(sys, obsvar)
+                end
+                obs(u, p, t)
+            end
+        end
+    else
+        let sys = sys, dict = Dict()
+            function generated_observed(obsvar, u, p, t)
+                obs = get!(dict, value(obsvar)) do
+                    build_explicit_observed_function(sys, obsvar; checkbounds=checkbounds)
+                end
+                obs(u, p, t)
+            end
+        end
+    end
+
+    jac_prototype = if sparse
+        uElType = u0 === nothing ? Float64 : eltype(u0)
+        if jac
+            similar(calculate_split_jacobian(sys, A, f_n, sparse=sparse), uElType)
+        else
+            similar(jacobian_sparsity(sys), uElType)
+        end
+    else
+        nothing
+    end
+
+    SplitFunction{iip}( f1,
+                        f2;
+                        mass_matrix = _M,
+                        tgrad = _tgrad === nothing ? nothing : _tgrad,
+                        jac = _jac === nothing ? nothing : _jac,
+                        jac_prototype = jac_prototype,
+                        sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
+                        syms = Symbol.(states(sys)),
+                        observed = observedfun
+                      )
+end
+
+"""
+```julia
 function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing, tgrad=false,
@@ -606,9 +784,113 @@ function DAEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
     DAEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
+"""
+```julia
+function SplitFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                     ps = parameters(sys);
+                                     version = nothing, tgrad=false,
+                                     jac = false,
+                                     sparse = false,
+                                     kwargs...) where {iip}
+```
+
+Create a Julia expression for a `SplitFunction` from the [`ODESystem`](@ref).
+The arguments `dvs` and `ps` are used to set the order of the dependent
+variable and parameter vectors, respectively.
+"""
+struct SplitFunctionExpr{iip} end
+
+struct SplitFunctionClosure{O, I} <: Function
+    f_oop::O
+    f_iip::I
+end
+(f::SplitFunctionClosure)(u,p,t) = f.f_oop(u,p,t)
+(f::SplitFunctionClosure)(du,u,p,t) = f.f_iip(du,u,p,t)
+
+function SplitFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                     ps = parameters(sys), u0 = nothing;
+                                     version = nothing, tgrad=false,
+                                     jac = false,
+                                     linenumbers = false,
+                                     sparse = false, simplify=false,
+                                     steady_state = false,
+                                     kwargs...) where {iip}
+    eqs = [eq for eq in equations(sys) if !isdifference(eq)]
+    rhs = [eq.rhs for eq in eqs]
+    check_operator_variables(eqs, Differential)
+    check_lhs(eqs, Differential, Set(dvs))
+    A, f_n = semilinear_form(rhs, dvs)
+    f1_oop, f1_iip, f2_oop, f2_iip = generate_split_function(sys, A, f_n, dvs, ps; expression=Val{eval_expression}, expression_module=eval_module, checkbounds=checkbounds, kwargs...)
+
+    dict = Dict()
+
+    f1sym = gensym(:f1)
+    _f1 = :($f1sym = $SplitFunctionClosure($f1_oop, $f1_iip))
+    f2sym = gensym(:f2)
+    _f2 = :($f2sym = $SplitFunctionClosure($f2_oop, $f2_iip))
+    tgradsym = gensym(:tgrad)
+    if tgrad
+        tgrad_oop, tgrad_iip = generate_tgrad(sys, dvs, ps;
+                                simplify=simplify,
+                                expression=Val{true}, kwargs...)
+        _tgrad = :($tgradsym = $SplitFunctionClosure($tgrad_oop, $tgrad_iip))
+    else
+        _tgrad = :($tgradsym = nothing)
+    end
+
+    jacsym = gensym(:jac)
+    if jac
+        jac_oop,jac_iip = generate_split_jacobian(sys, A, f_n, dvs, ps;
+                                 sparse=sparse, simplify=simplify,
+                                 expression=Val{true}, kwargs...)
+        _jac = :($jacsym = $SplitFunctionClosure($jac_oop, $jac_iip))
+    else
+        _jac = :($jacsym = nothing)
+    end
+
+    M = calculate_massmatrix(sys)
+
+    _M = if sparse && !(u0 === nothing || M === I)
+      SparseArrays.sparse(M)
+    elseif u0 === nothing || M === I
+      M
+    else
+      ArrayInterface.restructure(u0 .* u0',M)
+    end
+
+    jp_expr = sparse ? :(similar($(get_jac(sys)[]),Float64)) : :nothing
+    ex = quote
+        $_f1
+        $_f2
+        $_tgrad
+        $_jac
+        M = $_M
+        SplitFunction{$iip}(
+                        $f1sym,
+                        $f2sym;
+                        mass_matrix = M,
+                        tgrad = $tgradsym,
+                        jac = $jacsym,
+                        jac_prototype = $jp_expr,
+                        syms = $(Symbol.(states(sys)))
+                       )
+    end
+    !linenumbers ? striplines(ex) : ex
+end
+
+function SplitFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
+    SplitFunctionExpr{true}(sys, args...; kwargs...)
+end
+
 for P in [:ODEProblem, :DAEProblem]
     @eval function DiffEqBase.$P(sys::AbstractODESystem, args...; kwargs...)
         $P{true}(sys, args...; kwargs...)
+    end
+end
+
+for Pr in [:SplitODEProblem]
+    @eval function SciMLBase.$Pr(sys::AbstractODESystem, args...; kwargs...)
+        $Pr{true}(sys, args...; kwargs...)
     end
 end
 
@@ -680,6 +962,42 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     else
         DAEProblem{iip}(f, du0, u0, tspan, p; differential_vars = differential_vars,
                         kwargs...)
+    end
+end
+
+"""
+```julia
+function SciMLBase.SplitODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
+                                        parammap=DiffEqBase.NullParameters();
+                                        version=nothing, tgrad=false,
+                                        jac=false,
+                                        checkbounds=false, sparse=false,
+                                        simplify=false,
+                                        linenumbers=true, parallel=SerialForm(),
+                                        kwargs...) where iip
+```
+
+Generates a SplitODEProblem from an ODESystem and allows for automatically
+symbolically calculating numerical enhancements.
+"""
+function SciMLBase.SplitODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
+    parammap=DiffEqBase.NullParameters(); callback=nothing, kwargs...) where iip
+
+    has_difference = any(isdifferenceeq, equations(sys))
+    f, u0, p = process_DEProblem(SplitFunction{iip}, sys, u0map, parammap; has_difference=has_difference, kwargs...)
+    if has_continuous_events(sys)
+        event_cb = generate_rootfinding_callback(sys; kwargs...)
+    else
+        event_cb = nothing
+    end
+    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
+    cb = merge_cb(event_cb, difference_cb)
+    cb = merge_cb(cb, callback)
+
+    if cb === nothing
+        SplitODEProblem{iip}(f,u0,tspan,p;kwargs...)
+    else
+        SplitODEProblem{iip}(f,u0,tspan,p;callback=cb,kwargs...)
     end
 end
 
@@ -772,6 +1090,47 @@ end
 
 function DAEProblemExpr(sys::AbstractODESystem, args...; kwargs...)
     DAEProblemExpr{true}(sys, args...; kwargs...)
+end
+
+
+"""
+```julia
+function SplitODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
+                                    parammap=DiffEqBase.NullParameters();
+                                    version = nothing, tgrad=false,
+                                    jac = false,
+                                    checkbounds = false, sparse = false,
+                                    linenumbers = true, parallel=SerialForm(),
+                                    skipzeros=true, fillzeros=true,
+                                    simplify=false,
+                                    kwargs...) where iip
+```
+
+Generates a Julia expression for constructing a SplitODEProblem from an
+ODESystem and allows for automatically symbolically calculating
+numerical enhancements.
+"""
+struct SplitODEProblemExpr{iip} end
+
+function SplitODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
+                             parammap=DiffEqBase.NullParameters();
+                             kwargs...) where iip
+
+    f, u0, p = process_DEProblem(SplitFunctionExpr{iip}, sys, u0map, parammap; kwargs...)
+    linenumbers = get(kwargs, :linenumbers, true)
+
+    ex = quote
+        f = $f
+        u0 = $u0
+        tspan = $tspan
+        p = $p
+        SplitODEProblem(f,u0,tspan,p;$(kwargs...))
+    end
+    !linenumbers ? striplines(ex) : ex
+end
+
+function SplitODEProblemExpr(sys::AbstractODESystem, args...; kwargs...)
+    SplitODEProblemExpr{true}(sys, args...; kwargs...)
 end
 
 ### Enables Steady State Problems ###

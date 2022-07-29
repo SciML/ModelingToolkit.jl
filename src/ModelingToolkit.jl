@@ -156,14 +156,13 @@ for S in subtypes(ModelingToolkit.AbstractSystem)
     @eval convert_system(::Type{<:$S}, sys::$S) = sys
 end
 
-export AbstractTimeDependentSystem, AbstractTimeIndependentSystem,
-       AbstractMultivariateSystem
-export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
+export AbstractTimeDependentSystem, AbstractTimeIndependentSystem, AbstractMultivariateSystem
+export ODESystem, ODEFunction, SplitFunction, ODEFunctionExpr, ODEProblemExpr, convert_system, SplitODEProblemExpr, SplitFunctionExpr
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
 export SystemStructure
 export JumpSystem
-export ODEProblem, SDEProblem
+export ODEProblem, SplitODEProblem, SDEProblem
 export NonlinearProblem, NonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr
 export AutoModelingToolkit
@@ -185,7 +184,7 @@ export independent_variables, independent_variable, states, parameters, equation
 export structural_simplify, expand_connections, linearize, linear_statespace
 export DiscreteSystem, DiscreteProblem
 
-export calculate_jacobian, generate_jacobian, generate_function
+export calculate_jacobian, calculate_split_jacobian, generate_jacobian, generate_split_jacobian, generate_function, generate_split_function
 export calculate_control_jacobian, generate_control_jacobian
 export calculate_tgrad, generate_tgrad
 export calculate_gradient, generate_gradient
