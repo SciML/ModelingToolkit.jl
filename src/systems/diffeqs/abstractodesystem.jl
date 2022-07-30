@@ -657,7 +657,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
                                     kwargs...) where iip
 ```
 
-Generates an DAEProblem from an ODESystem and allows for automatically
+Generates a DAEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.DAEProblem(sys::AbstractODESystem, args...; kwargs...)
@@ -742,7 +742,7 @@ function DAEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     kwargs...) where iip
 ```
 
-Generates a Julia expression for constructing an ODEProblem from an
+Generates a Julia expression for constructing an DAEProblem from an
 ODESystem and allows for automatically symbolically calculating
 numerical enhancements.
 """
@@ -780,7 +780,7 @@ end
 
 """
 ```julia
-function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
+function SciMLBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false,
@@ -791,12 +791,12 @@ function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
 Generates an SteadyStateProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
-function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem, args...; kwargs...)
+function SciMLBase.SteadyStateProblem(sys::AbstractODESystem, args...; kwargs...)
     SteadyStateProblem{true}(sys, args...; kwargs...)
 end
 
 function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem, u0map,
-                                            parammap = DiffEqBase.NullParameters();
+                                            parammap = SciMLBase.NullParameters();
                                             check_length = true, kwargs...) where {iip}
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap;
                                  steady_state = true,
@@ -807,7 +807,7 @@ end
 
 """
 ```julia
-function DiffEqBase.SteadyStateProblemExpr(sys::AbstractODESystem,u0map,
+function SciMLBase.SteadyStateProblemExpr(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false,
@@ -823,7 +823,7 @@ numerical enhancements.
 struct SteadyStateProblemExpr{iip} end
 
 function SteadyStateProblemExpr{iip}(sys::AbstractODESystem, u0map,
-                                     parammap = DiffEqBase.NullParameters();
+                                     parammap = SciMLBase.NullParameters();
                                      check_length = true,
                                      kwargs...) where {iip}
     f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap;
