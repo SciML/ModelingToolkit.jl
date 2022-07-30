@@ -742,7 +742,7 @@ function DAEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     kwargs...) where iip
 ```
 
-Generates a Julia expression for constructing an DAEProblem from an
+Generates a Julia expression for constructing a DAEProblem from an
 ODESystem and allows for automatically symbolically calculating
 numerical enhancements.
 """
