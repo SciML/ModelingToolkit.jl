@@ -38,11 +38,19 @@ jacobian_sparsity
 ## Problem Constructors
 
 ```@docs
-NonlinearProblem
+NonlinearFunction(sys::ModelingToolkit.NonlinearSystem, args...)
+NonlinearProblem(sys::ModelingToolkit.NonlinearSystem, args...)
 ```
 
 ## Torn Problem Constructors
 
 ```@docs
 BlockNonlinearProblem
+```
+
+## Expression Constructors
+
+```@docs
+NonlinearFunctionExpr
+NonlinearProblemExpr
 ```

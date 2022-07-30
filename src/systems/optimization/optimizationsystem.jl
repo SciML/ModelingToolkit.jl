@@ -126,10 +126,6 @@ namespace_expr(sys::OptimizationSystem) = namespace_expr(get_op(sys), sys)
 
 hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
 
-function DiffEqBase.OptimizationProblem(sys::OptimizationSystem, args...; kwargs...)
-    DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem, args...; kwargs...)
-end
-
 function rep_pars_vals!(e::Expr, p)
     rep_pars_vals!.(e.args, Ref(p))
     replace!(e.args, p...)
@@ -152,6 +148,10 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
 Generates an OptimizationProblem from an OptimizationSystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
+function DiffEqBase.OptimizationProblem(sys::OptimizationSystem, args...; kwargs...)
+    DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem, args...; kwargs...)
+end
+
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              parammap = DiffEqBase.NullParameters();
                                              lb = nothing, ub = nothing,

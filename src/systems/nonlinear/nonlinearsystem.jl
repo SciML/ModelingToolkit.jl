@@ -181,10 +181,6 @@ function hessian_sparsity(sys::NonlinearSystem)
                       states(sys)) for eq in equations(sys)]
 end
 
-function DiffEqBase.NonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
-    NonlinearFunction{true}(sys, args...; kwargs...)
-end
-
 """
 ```julia
 function DiffEqBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys),
@@ -199,6 +195,10 @@ Create an `NonlinearFunction` from the [`NonlinearSystem`](@ref). The arguments
 `dvs` and `ps` are used to set the order of the dependent variable and parameter
 vectors, respectively.
 """
+function DiffEqBase.NonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
+    NonlinearFunction{true}(sys, args...; kwargs...)
+end
+
 function DiffEqBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys),
                                            ps = parameters(sys), u0 = nothing;
                                            version = nothing,
@@ -315,10 +315,6 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
     return f, u0, p
 end
 
-function DiffEqBase.NonlinearProblem(sys::NonlinearSystem, args...; kwargs...)
-    NonlinearProblem{true}(sys, args...; kwargs...)
-end
-
 """
 ```julia
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,
@@ -332,6 +328,10 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,
 Generates an NonlinearProblem from a NonlinearSystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
+function DiffEqBase.NonlinearProblem(sys::NonlinearSystem, args...; kwargs...)
+    NonlinearProblem{true}(sys, args...; kwargs...)
+end
+
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
                                           parammap = DiffEqBase.NullParameters();
                                           check_length = true, kwargs...) where {iip}

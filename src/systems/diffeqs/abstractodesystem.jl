@@ -230,12 +230,6 @@ function isautonomous(sys::AbstractODESystem)
     all(iszero, tgrad)
 end
 
-for F in [:ODEFunction, :DAEFunction]
-    @eval function DiffEqBase.$F(sys::AbstractODESystem, args...; kwargs...)
-        $F{true}(sys, args...; kwargs...)
-    end
-end
-
 """
 ```julia
 function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
@@ -250,6 +244,10 @@ Create an `ODEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `p
 are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
+function DiffEqBase.ODEFunction(sys::AbstractODESystem, args...; kwargs...)
+   ODEFunction{true}(sys, args...; kwargs...)
+end
+
 function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
                                      version = nothing, tgrad = false,
@@ -365,6 +363,10 @@ Create an `DAEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and
 `ps` are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
+function DiffEqBase.DAEFunction(sys::AbstractODESystem, args...; kwargs...)
+   DAEFunction{true}(sys, args...; kwargs...)
+end
+
 function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
                                      ddvs = map(diff2term ∘ Differential(get_iv(sys)), dvs),
@@ -606,12 +608,6 @@ function DAEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
     DAEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
-for P in [:ODEProblem, :DAEProblem]
-    @eval function DiffEqBase.$P(sys::AbstractODESystem, args...; kwargs...)
-        $P{true}(sys, args...; kwargs...)
-    end
-end
-
 """
 ```julia
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
@@ -627,6 +623,10 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
 Generates an ODEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
+function DiffEqBase.ODEProblem(sys::AbstractODESystem, args...; kwargs...)
+    ODEProblem{true}(sys, args...; kwargs...)
+end
+
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                                     parammap = DiffEqBase.NullParameters();
                                     callback = nothing,
@@ -660,6 +660,10 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
 Generates an DAEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
+function DiffEqBase.DAEProblem(sys::AbstractODESystem, args...; kwargs...)
+    DAEProblem{true}(sys, args...; kwargs...)
+end
+
 function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
                                     parammap = DiffEqBase.NullParameters();
                                     check_length = true, kwargs...) where {iip}
@@ -774,11 +778,6 @@ function DAEProblemExpr(sys::AbstractODESystem, args...; kwargs...)
     DAEProblemExpr{true}(sys, args...; kwargs...)
 end
 
-### Enables Steady State Problems ###
-function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem, args...; kwargs...)
-    SteadyStateProblem{true}(sys, args...; kwargs...)
-end
-
 """
 ```julia
 function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
@@ -792,6 +791,10 @@ function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
 Generates an SteadyStateProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
+function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem, args...; kwargs...)
+    SteadyStateProblem{true}(sys, args...; kwargs...)
+end
+
 function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem, u0map,
                                             parammap = DiffEqBase.NullParameters();
                                             check_length = true, kwargs...) where {iip}
