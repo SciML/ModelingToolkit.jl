@@ -795,3 +795,57 @@ let
     defs = Dict(s1.dx => 0.0, D(s1.x) => s1.x, s1.x => 0.0)
     @test isequal(ModelingToolkit.defaults(s2), defs)
 end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/1705
+let
+    x0 = 0.0
+    v0 = 1.0
+
+    kx = -1.0
+    kv = -1.0
+
+    tf = 10.0
+
+    ## controller
+
+    function pd_ctrl(; name)
+        @parameters kx kv
+        @variables t u(t) x(t) v(t)
+
+        eqs = [u ~ kx * x + kv * v]
+        ODESystem(eqs; name)
+    end
+
+    @named ctrl = pd_ctrl()
+
+    ## double integrator
+
+    function double_int(; name)
+        @variables t u(t) x(t) v(t)
+        D = Differential(t)
+
+        eqs = [D(x) ~ v, D(v) ~ u]
+        ODESystem(eqs; name)
+    end
+
+    @named sys = double_int()
+
+    ## connections
+
+    connections = [sys.u ~ ctrl.u, ctrl.x ~ sys.x, ctrl.v ~ sys.v]
+
+    @named connected = ODESystem(connections)
+    @named sys_con = compose(connected, sys, ctrl)
+
+    sys_alias = alias_elimination(sys_con)
+    D = Differential(t)
+    true_eqs = [0 ~ sys.v - D(sys.x)
+                0 ~ ctrl.kv * D(sys.x) + ctrl.kx * sys.x - D(sys.v)]
+    @test isequal(full_equations(sys_alias), true_eqs)
+
+    sys_simp = structural_simplify(sys_con)
+    D = Differential(t)
+    true_eqs = [D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x
+                D(sys.x) ~ sys.v]
+    @test isequal(full_equations(sys_simp), true_eqs)
+end

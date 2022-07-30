@@ -246,6 +246,9 @@ function reduce!(mm::SparseMatrixCLIL, ag::AliasGraph)
                     # if we add a variable to what we already visited, make sure
                     # to bump the cursor.
                     j += i <= j
+                    for (i, e) in enumerate(dels)
+                        e >= i && (dels[i] += 1)
+                    end
                     insert!(rs, i, alias)
                     insert!(rvals, i, inc)
                 else
