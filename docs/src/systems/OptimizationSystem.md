@@ -29,5 +29,11 @@ hessian_sparsity
 ## Problem Constructors
 
 ```@docs
-OptimizationProblem
+OptimizationProblem(sys::ModelingToolkit.OptimizationSystem, args...)
+```
+
+## Expression Constructors
+
+```@docs
+OptimizationProblemExpr
 ```

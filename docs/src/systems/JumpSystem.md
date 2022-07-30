@@ -24,6 +24,6 @@ structural_simplify
 ## Problem Constructors
 
 ```@docs
-DiscreteProblem
-JumpProblem
+DiscreteProblem(::JumpSystem,args...)
+JumpProblem(::JumpSystem,args...)
 ```
