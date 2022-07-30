@@ -245,7 +245,7 @@ are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
 function DiffEqBase.ODEFunction(sys::AbstractODESystem, args...; kwargs...)
-   ODEFunction{true}(sys, args...; kwargs...)
+    ODEFunction{true}(sys, args...; kwargs...)
 end
 
 function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
@@ -364,7 +364,7 @@ Create an `DAEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and
 respectively.
 """
 function DiffEqBase.DAEFunction(sys::AbstractODESystem, args...; kwargs...)
-   DAEFunction{true}(sys, args...; kwargs...)
+    DAEFunction{true}(sys, args...; kwargs...)
 end
 
 function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
