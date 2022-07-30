@@ -336,8 +336,17 @@ sys = structural_simplify(model)
 @test isempty(ModelingToolkit.continuous_events(sys))
 
 let
+    function testsol(osys, u0, p, tspan; tstops = Float64[], kwargs...)
+        oprob = ODEProblem(osys, u0, tspan, p; kwargs...)
+        sol = solve(oprob, Tsit5(); tstops = tstops, abstol = 1e-10, reltol = 1e-10)
+        @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-6)
+        @test oprob.p[1] == 1.0
+        @test isapprox(sol(4.0)[1], 2 * exp(-2.0))
+        sol
+    end
+
     @parameters k t1 t2
-    @variables t A(t)
+    @variables t A(t) B(t)
 
     cond1 = (t == t1)
     affect1 = [A ~ A + 1]
@@ -352,21 +361,37 @@ let
     u0 = [A => 1.0]
     p = [k => 0.0, t1 => 1.0, t2 => 2.0]
     tspan = (0.0, 4.0)
-    oprob = ODEProblem(osys, u0, tspan, p)
-    sol = solve(oprob, Tsit5(), tstops = [1.0, 2.0]; abstol = 1e-10, reltol = 1e-10)
-    @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-6)
-    @test oprob.p[1] == 1.0
-    @test isapprox(sol(4.0)[1], 2 * exp(-2.0))
+    testsol(osys, u0, p, tspan; tstops = [1.0, 2.0])
+
+    cond1a = (t == t1)
+    affect1a = [A ~ A + 1, B ~ A]
+    cb1a = cond1a => affect1a
+    @named osys1 = ODESystem(eqs, t, [A, B], [k, t1, t2], discrete_events = [cb1a, cb2])
+    u0′ = [A => 1.0, B => 0.0]
+    sol = testsol(osys1, u0′, p, tspan; tstops = [1.0, 2.0], check_length = false)
+    @test sol(1.0000001, idxs = B) == 2.0
 
     # same as above - but with set-time event syntax
     cb1‵ = [1.0] => affect1 # needs to be a Vector for the event to happen only once
     cb2‵ = [2.0] => affect2
+    @named osys‵ = ODESystem(eqs, t, [A], [k], discrete_events = [cb1‵, cb2‵])
+    testsol(osys‵, u0, p, tspan)
 
-    @named osys‵ = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1‵, cb2‵])
-    oprob‵ = ODEProblem(osys‵, u0, tspan, p)
-    sol‵ = solve(oprob‵, Tsit5(); abstol = 1e-10, reltol = 1e-10)
+    # mixing discrete affects
+    @named osys3 = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵])
+    testsol(osys3, u0, p, tspan; tstops = [1.0])
 
-    @test isapprox(sol‵(1.0000000001)[1] - sol‵(0.999999999)[1], 1.0; rtol = 1e-6)
-    @test oprob‵.p[1] == 1.0
-    @test isapprox(sol‵(4.0)[1], 2 * exp(-2.0))
+    # mixing with a func affect
+    function affect!(integrator, u, p, ctx)
+        integrator.p[p.k] = 1.0
+        nothing
+    end
+    cb2‵‵ = [2.0] => (affect!, [], [k], nothing)
+    @named osys4 = ODESystem(eqs, t, [A], [k, t1], discrete_events = [cb1, cb2‵‵])
+    oprob4 = ODEProblem(osys4, u0, tspan, p)
+    testsol(osys4, u0, p, tspan; tstops = [1.0])
+    # mixing with symbolic condition in the func affect
+    cb2‵‵‵ = (t == t2) => (affect!, [], [k], nothing)
+    @named osys5 = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵])
+    testsol(osys5, u0, p, tspan; tstops = [1.0, 2.0])
 end
