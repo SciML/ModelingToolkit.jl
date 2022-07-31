@@ -440,10 +440,11 @@ function compile_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
     compile_user_affect(affect, sys, dvs, ps; kwargs...)
 end
 
-function generate_timed_callback(cb, sys, dvs, ps; kwargs...)
+function generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr! = nothing,
+                                                   kwargs...)
     cond = condition(cb)
     as = compile_affect(affects(cb), sys, dvs, ps; expression = Val{false},
-                        kwargs...)
+                        postprocess_affect_expr!, kwargs...)
     if cond isa AbstractVector
         # Preset Time
         return PresetTimeCallback(cond, as)
@@ -453,13 +454,15 @@ function generate_timed_callback(cb, sys, dvs, ps; kwargs...)
     end
 end
 
-function generate_discrete_callback(cb, sys, dvs, ps; kwargs...)
+function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! = nothing,
+                                                      kwargs...)
     if is_timed_condition(cb)
-        return generate_timed_callback(cb, sys, dvs, ps, kwargs...)
+        return generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr!,
+                                       kwargs...)
     else
         c = compile_condition(cb, sys, dvs, ps; expression = Val{false}, kwargs...)
         as = compile_affect(affects(cb), sys, dvs, ps; expression = Val{false},
-                            kwargs...)
+                            postprocess_affect_expr!, kwargs...)
         return DiscreteCallback(c, as)
     end
 end

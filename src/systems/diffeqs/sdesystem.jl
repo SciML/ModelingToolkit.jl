@@ -527,10 +527,10 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map, tspan,
                                     parammap = DiffEqBase.NullParameters();
                                     sparsenoise = nothing, check_length = true,
-                                    kwargs...) where {iip}
+                                    callback = nothing, kwargs...) where {iip}
     f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; check_length,
                                  kwargs...)
-    cbs = process_events(sys; kwargs...)
+    cbs = process_events(sys; callback)
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
     noiseeqs = get_noiseeqs(sys)
