@@ -241,17 +241,14 @@ end
 ################################# compilation functions ####################################
 
 # handles ensuring that affect! functions work with integrator arguments
-function add_integrator_header(out = :u)
-    integrator = gensym(:MTKIntegrator)
-
+function add_integrator_header(integrator = gensym(:MTKIntegrator), out = :u)
     expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
                  expr.body),
     expr -> Func([DestructuredArgs(expr.args, integrator, inds = [out, :u, :p, :t])], [],
                  expr.body)
 end
 
-function condition_header()
-    integrator = gensym(:MTKIntegrator)
+function condition_header(integrator = gensym(:MTKIntegrator))
     expr -> Func([expr.args[1], expr.args[2],
                      DestructuredArgs(expr.args[3:end], integrator, inds = [:p])], [], expr.body)
 end
@@ -296,7 +293,8 @@ Notes
 - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothing,
-                        expression = Val{true}, checkvars = true, kwargs...)
+                        expression = Val{true}, checkvars = true,
+                        postprocess_affect_expr! = nothing, kwargs...)
     if isempty(eqs)
         if expression == Val{true}
             return :((args...) -> ())
@@ -337,10 +335,17 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
             p = ps
         end
         t = get_iv(sys)
-        rf_oop, rf_ip = build_function(rhss, u, p, t; expression = expression,
-                                       wrap_code = add_integrator_header(outvar),
+        integ = gensym(:MTKIntegrator)
+        getexpr = (postprocess_affect_expr! === nothing) ? expression : Val{true}
+        rf_oop, rf_ip = build_function(rhss, u, p, t; expression = getexpr,
+                                       wrap_code = add_integrator_header(integ, outvar),
                                        outputidxs = update_inds,
                                        kwargs...)
+        # applied user-provided function to the generated expression
+        if postprocess_affect_expr! !== nothing
+            postprocess_affect_expr!(rf_ip, integ)
+            (expression == Val{false}) && (return @RuntimeGeneratedFunction(rf_ip))
+        end
         rf_ip
     end
 end

@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq, Test
+using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, Test
 using ModelingToolkit: SymbolicContinuousCallback, SymbolicContinuousCallbacks, NULL_AFFECT,
                        get_callback
 
@@ -405,5 +405,78 @@ let
     @named osys7 = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵],
                              continuous_events = [cb3])
     sol = testsol(osys7, u0, p, (0.0, 10.0); tstops = [1.0, 2.0], skipparamtest = true)
+    @test isapprox(sol(10.0)[1], .1; atol=1e-10, rtol=1e-10)
+end
+
+let
+    function testsol(ssys, u0, p, tspan; tstops = Float64[], skipparamtest = false, kwargs...)
+        sprob = SDEProblem(ssys, u0, tspan, p; kwargs...)
+        sol = solve(sprob, RI5(); tstops = tstops, abstol = 1e-10, reltol = 1e-10)
+        @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-4)
+        !skipparamtest && (@test sprob.p[1] == 1.0)
+        @test isapprox(sol(4.0)[1], 2 * exp(-2.0), atol=1e-4)
+        sol
+    end
+
+    @parameters k t1 t2
+    @variables t A(t) B(t)
+
+    cond1 = (t == t1)
+    affect1 = [A ~ A + 1]
+    cb1 = cond1 => affect1
+    cond2 = (t == t2)
+    affect2 = [k ~ 1.0]
+    cb2 = cond2 => affect2
+
+    ∂ₜ = Differential(t)
+    eqs = [∂ₜ(A) ~ -k * A]
+    @named ssys = SDESystem(eqs, Equation[], t, [A], [k, t1, t2], discrete_events = [cb1, cb2])
+    u0 = [A => 1.0]
+    p = [k => 0.0, t1 => 1.0, t2 => 2.0]
+    tspan = (0.0, 4.0)
+    testsol(ssys, u0, p, tspan; tstops = [1.0, 2.0])
+
+    cond1a = (t == t1)
+    affect1a = [A ~ A + 1, B ~ A]
+    cb1a = cond1a => affect1a
+    @named ssys1 = SDESystem(eqs, Equation[], t, [A, B], [k, t1, t2], discrete_events = [cb1a, cb2])
+    u0′ = [A => 1.0, B => 0.0]
+    sol = testsol(ssys1, u0′, p, tspan; tstops = [1.0, 2.0], check_length = false)
+    @test sol(1.0000001, idxs = 2) == 2.0
+
+    # same as above - but with set-time event syntax
+    cb1‵ = [1.0] => affect1 # needs to be a Vector for the event to happen only once
+    cb2‵ = [2.0] => affect2
+    @named ssys‵ = SDESystem(eqs, Equation[], t, [A], [k], discrete_events = [cb1‵, cb2‵])
+    testsol(ssys‵, u0, p, tspan)
+
+    # mixing discrete affects
+    @named ssys3 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵])
+    testsol(ssys3, u0, p, tspan; tstops = [1.0])
+
+    # mixing with a func affect
+    function affect!(integrator, u, p, ctx)
+        integrator.p[p.k] = 1.0
+        nothing
+    end
+    cb2‵‵ = [2.0] => (affect!, [], [k], nothing)
+    @named ssys4 = SDESystem(eqs, Equation[], t, [A], [k, t1], discrete_events = [cb1, cb2‵‵])
+    oprob4 = ODEProblem(ssys4, u0, tspan, p)
+    testsol(ssys4, u0, p, tspan; tstops = [1.0])
+
+    # mixing with symbolic condition in the func affect
+    cb2‵‵‵ = (t == t2) => (affect!, [], [k], nothing)
+    @named ssys5 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵])
+    testsol(ssys5, u0, p, tspan; tstops = [1.0, 2.0])
+    @named ssys6 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2], discrete_events = [cb2‵‵‵, cb1])
+    testsol(ssys6, u0, p, tspan; tstops = [1.0, 2.0])
+
+    # mix a continuous event too
+    cond3 = A ~ .1
+    affect3 = [k ~ 0.0]
+    cb3 = cond3 => affect3
+    @named ssys7 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵],
+                             continuous_events = [cb3])
+    sol = testsol(ssys7, u0, p, (0.0, 10.0); tstops = [1.0, 2.0], skipparamtest = true)
     @test isapprox(sol(10.0)[1], .1; atol=1e-10, rtol=1e-10)
 end

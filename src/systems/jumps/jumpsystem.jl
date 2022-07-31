@@ -1,5 +1,25 @@
 const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
 
+# assumes iip
+function add_jump_resetting!(expr, integrator)
+    if expr isa Symbol
+        error("Error, encountered a symbol. This should not happen.")
+    end
+
+    if (expr.head == :function)
+        add_jump_resetting!(expr.args[end], integrator)
+    else
+        if expr.args[end] == :nothing
+            expr.args[end] = :(reset_aggregated_jumps!($integrator))
+            push!(expr.args, :nothing)
+        else
+            add_jump_resetting!(expr.args[end], integrator)
+        end
+    end
+
+    nothing
+end
+
 """
 $(TYPEDEF)
 
