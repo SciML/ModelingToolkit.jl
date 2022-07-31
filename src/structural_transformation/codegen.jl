@@ -484,10 +484,6 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
     expression ? ex : @RuntimeGeneratedFunction(ex)
 end
 
-struct ODAEProblem{iip} end
-
-ODAEProblem(args...; kw...) = ODAEProblem{true}(args...; kw...)
-
 """
     ODAEProblem{iip}(sys, u0map, tspan, parammap = DiffEqBase.NullParameters(); kw...)
 
@@ -497,9 +493,15 @@ already been applied to them.
 In these cases, the constructor uses the knowledge of the strongly connected
 components calculated during the process of simplification as the basis for
 building pre-simplified nonlinear systems in the implicit solving.
+
 In summary: these problems are structurally modified, but could be
-more efficient and more stable. Note, the returned object is still of type [`ODEProblem`](@ref).
+more efficient and more stable. Note, the returned object is still of type
+[`ODEProblem`](@ref).
 """
+struct ODAEProblem{iip} end
+
+ODAEProblem(args...; kw...) = ODAEProblem{true}(args...; kw...)
+
 function ODAEProblem{iip}(sys,
                           u0map,
                           tspan,

@@ -183,7 +183,7 @@ end
 
 """
 ```julia
-function DiffEqBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys),
+function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing,
                                      jac = false,
@@ -195,17 +195,17 @@ Create an `NonlinearFunction` from the [`NonlinearSystem`](@ref). The arguments
 `dvs` and `ps` are used to set the order of the dependent variable and parameter
 vectors, respectively.
 """
-function DiffEqBase.NonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
+function SciMLBase.NonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
     NonlinearFunction{true}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys),
-                                           ps = parameters(sys), u0 = nothing;
-                                           version = nothing,
-                                           jac = false,
-                                           eval_expression = true,
-                                           sparse = false, simplify = false,
-                                           kwargs...) where {iip}
+function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys),
+                                          ps = parameters(sys), u0 = nothing;
+                                          version = nothing,
+                                          jac = false,
+                                          eval_expression = true,
+                                          sparse = false, simplify = false,
+                                          kwargs...) where {iip}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression}, kwargs...)
     f_oop, f_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in f_gen) : f_gen
     f(u, p) = f_oop(u, p)
@@ -242,7 +242,7 @@ end
 
 """
 ```julia
-function DiffEqBase.NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = states(sys),
+function SciMLBase.NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing,
                                      jac = false,

@@ -172,12 +172,12 @@ end
 
 Generates an DiscreteProblem from an DiscreteSystem.
 """
-function DiffEqBase.DiscreteProblem(sys::DiscreteSystem, u0map, tspan,
-                                    parammap = DiffEqBase.NullParameters();
-                                    eval_module = @__MODULE__,
-                                    eval_expression = true,
-                                    use_union = false,
-                                    kwargs...)
+function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map, tspan,
+                                   parammap = SciMLBase.NullParameters();
+                                   eval_module = @__MODULE__,
+                                   eval_expression = true,
+                                   use_union = false,
+                                   kwargs...)
     dvs = states(sys)
     ps = parameters(sys)
     eqs = equations(sys)

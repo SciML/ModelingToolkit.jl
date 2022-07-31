@@ -160,11 +160,12 @@ export AbstractTimeDependentSystem, AbstractTimeIndependentSystem,
        AbstractMultivariateSystem
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
 export DAEFunctionExpr, DAEProblemExpr
-export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
+export SDESystem, SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
 export JumpSystem
 export ODEProblem, SDEProblem
-export NonlinearProblem, NonlinearProblemExpr
+export NonlinearFunction, NonlinearFunctionExpr
+export NonlinearProblem, BlockNonlinearProblem, NonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr
 export AutoModelingToolkit
 export SteadyStateProblem, SteadyStateProblemExpr
