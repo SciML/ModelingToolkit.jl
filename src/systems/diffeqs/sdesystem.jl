@@ -85,18 +85,30 @@ struct SDESystem <: AbstractODESystem
     type: type of the system
     """
     connector_type::Any
+    """
+    continuous_events: A `Vector{SymbolicContinuousCallback}` that model events.
+    The integrator will use root finding to guarantee that it steps at each zero crossing.
+    """
+    continuous_events::Vector{SymbolicContinuousCallback}
+    """
+    discrete_events: A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
+    analog to `SciMLBase.DiscreteCallback` that exectues an affect when a given condition is
+    true at the end of an integration step.
+    """
+    discrete_events::Vector{SymbolicDiscreteCallback}
 
     function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
-                       ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type;
-                       checks::Bool = true)
+                       ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
+                       cevents, devents; checks::Bool = true)
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             check_equations(deqs, iv)
+            check_equations(equations(cevents), iv)
             all_dimensionless([dvs; ps; iv]) || check_units(deqs, neqs)
         end
         new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac,
-            Wfact, Wfact_t, name, systems, defaults, connector_type)
+            Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents)
     end
 end
 
@@ -109,7 +121,9 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    defaults = _merge(Dict(default_u0), Dict(default_p)),
                    name = nothing,
                    connector_type = nothing,
-                   checks = true)
+                   checks = true,
+                   continuous_events = nothing,
+                   discrete_events = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = scalarize(deqs)
@@ -139,9 +153,12 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     ctrl_jac = RefValue{Any}(EMPTY_JAC)
     Wfact = RefValue(EMPTY_JAC)
     Wfact_t = RefValue(EMPTY_JAC)
+    cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
+    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
+
     SDESystem(deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-              checks = checks)
+              cont_callbacks, disc_callbacks; checks = checks)
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
@@ -491,9 +508,10 @@ end
 function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map, tspan,
                                     parammap = DiffEqBase.NullParameters();
                                     sparsenoise = nothing, check_length = true,
-                                    kwargs...) where {iip}
+                                    callback = nothing, kwargs...) where {iip}
     f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; check_length,
                                  kwargs...)
+    cbs = process_events(sys; callback)
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
     noiseeqs = get_noiseeqs(sys)
@@ -506,8 +524,8 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map, tspan,
         noise_rate_prototype = zeros(eltype(u0), size(noiseeqs))
     end
 
-    SDEProblem{iip}(f, f.g, u0, tspan, p; noise_rate_prototype = noise_rate_prototype,
-                    kwargs...)
+    SDEProblem{iip}(f, f.g, u0, tspan, p; callback = cbs,
+                    noise_rate_prototype = noise_rate_prototype, kwargs...)
 end
 
 """

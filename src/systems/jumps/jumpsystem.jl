@@ -1,5 +1,27 @@
 const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
 
+# modifies the expression representating an affect function to
+# call reset_aggregated_jumps!(integrator).
+# assumes iip
+function _reset_aggregator!(expr, integrator)
+    if expr isa Symbol
+        error("Error, encountered a symbol. This should not happen.")
+    end
+
+    if (expr.head == :function)
+        _reset_aggregator!(expr.args[end], integrator)
+    else
+        if expr.args[end] == :nothing
+            expr.args[end] = :(reset_aggregated_jumps!($integrator))
+            push!(expr.args, :nothing)
+        else
+            _reset_aggregator!(expr.args[end], integrator)
+        end
+    end
+
+    nothing
+end
+
 """
 $(TYPEDEF)
 
@@ -53,8 +75,17 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     type: type of the system
     """
     connector_type::Any
+    """
+    discrete_events: A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
+    analog to `SciMLBase.DiscreteCallback` that exectues an affect when a given condition is
+    true at the end of an integration step. *Note, one must make sure to call
+    `reset_aggregated_jumps!(integrator)` if using a custom affect function that changes any
+    state value or parameter.*
+    """
+    discrete_events::Vector{SymbolicDiscreteCallback}
+
     function JumpSystem{U}(ap::U, iv, states, ps, var_to_name, observed, name, systems,
-                           defaults, connector_type;
+                           defaults, connector_type, devents;
                            checks::Bool = true) where {U <: ArrayPartition}
         if checks
             check_variables(states, iv)
@@ -62,7 +93,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             all_dimensionless([states; ps; iv]) || check_units(ap, iv)
         end
         new{U}(ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
-               connector_type)
+               connector_type, devents)
     end
 end
 
@@ -75,6 +106,8 @@ function JumpSystem(eqs, iv, states, ps;
                     name = nothing,
                     connector_type = nothing,
                     checks = true,
+                    continuous_events = nothing,
+                    discrete_events = nothing,
                     kwargs...)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
@@ -107,9 +140,12 @@ function JumpSystem(eqs, iv, states, ps;
     process_variables!(var_to_name, defaults, states)
     process_variables!(var_to_name, defaults, ps)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
+    (continuous_events === nothing) ||
+        error("JumpSystems currently only support discrete events.")
+    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
 
     JumpSystem{typeof(ap)}(ap, value(iv), states, ps, var_to_name, observed, name, systems,
-                           defaults, connector_type, checks = checks)
+                           defaults, connector_type, disc_callbacks; checks = checks)
 end
 
 function generate_rate_function(js::JumpSystem, rate)
@@ -305,7 +341,8 @@ jprob = JumpProblem(js, dprob, Direct())
 sol = solve(jprob, SSAStepper())
 ```
 """
-function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
+function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = nothing,
+                                   kwargs...)
     statetoid = Dict(value(state) => i for (i, state) in enumerate(states(js)))
     eqs = equations(js)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
@@ -334,9 +371,12 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; kwargs...)
         jtoj = nothing
     end
 
+    # handle events, making sure to reset aggregators in the generated affect functions
+    cbs = process_events(js; callback, postprocess_affect_expr! = _reset_aggregator!)
+
     JumpProblem(prob, aggregator, jset; dep_graph = jtoj, vartojumps_map = vtoj,
-                jumptovars_map = jtov,
-                scale_rates = false, nocopy = true, kwargs...)
+                jumptovars_map = jtov, scale_rates = false, nocopy = true,
+                callback = cbs, kwargs...)
 end
 
 ### Functions to determine which states a jump depends on
