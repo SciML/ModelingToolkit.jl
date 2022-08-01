@@ -153,10 +153,6 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     ctrl_jac = RefValue{Any}(EMPTY_JAC)
     Wfact = RefValue(EMPTY_JAC)
     Wfact_t = RefValue(EMPTY_JAC)
-    sysnames = nameof.(systems)
-    if length(unique(sysnames)) != length(sysnames)
-        throw(ArgumentError("System names must be unique."))
-    end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
 
