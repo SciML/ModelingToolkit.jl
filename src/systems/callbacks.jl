@@ -441,7 +441,7 @@ function compile_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
 end
 
 function generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr! = nothing,
-                                                   kwargs...)
+                                 kwargs...)
     cond = condition(cb)
     as = compile_affect(affects(cb), sys, dvs, ps; expression = Val{false},
                         postprocess_affect_expr!, kwargs...)
@@ -455,7 +455,7 @@ function generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr! = no
 end
 
 function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! = nothing,
-                                                      kwargs...)
+                                    kwargs...)
     if is_timed_condition(cb)
         return generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr!,
                                        kwargs...)

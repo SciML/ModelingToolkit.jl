@@ -342,7 +342,7 @@ sol = solve(jprob, SSAStepper())
 ```
 """
 function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = nothing,
-                                                                     kwargs...)
+                                   kwargs...)
     statetoid = Dict(value(state) => i for (i, state) in enumerate(states(js)))
     eqs = equations(js)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
