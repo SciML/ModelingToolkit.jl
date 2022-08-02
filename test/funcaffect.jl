@@ -16,13 +16,14 @@ i4 = findfirst(==(4.0), sol[:t])
 @test sol.u[i4 + 1][1] > 10.0
 
 # callback
-cb = ModelingToolkit.SymbolicDiscreteCallback([t ~ 0],
+cb = ModelingToolkit.SymbolicDiscreteCallback(t == 0,
                                               (f = affect1!, sts = [], pars = [],
                                                ctx = [1]))
-cb1 = ModelingToolkit.SymbolicDiscreteCallback([t ~ 0], (affect1!, [], [], [1]))
+cb1 = ModelingToolkit.SymbolicDiscreteCallback(t == 0, (affect1!, [], [], [1]))
 @test ModelingToolkit.affects(cb) isa ModelingToolkit.FunctionalAffect
 @test cb == cb1
 @test ModelingToolkit.SymbolicDiscreteCallback(cb) === cb # passthrough
+@test hash(cb) == hash(cb1)
 
 cb = ModelingToolkit.SymbolicContinuousCallback([t ~ 0],
                                                 (f = affect1!, sts = [], pars = [],
@@ -30,6 +31,7 @@ cb = ModelingToolkit.SymbolicContinuousCallback([t ~ 0],
 cb1 = ModelingToolkit.SymbolicContinuousCallback([t ~ 0], (affect1!, [], [], [1]))
 @test cb == cb1
 @test ModelingToolkit.SymbolicContinuousCallback(cb) === cb # passthrough
+@test hash(cb) == hash(cb1)
 
 # named tuple
 sys1 = ODESystem(eqs, t, [u], [], name = :sys,
