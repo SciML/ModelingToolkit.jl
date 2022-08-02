@@ -35,6 +35,7 @@ end
 alias_elimination(sys) = alias_elimination!(TearingState(sys; quick_cancel = true))
 function alias_elimination!(state::TearingState)
     sys = state.sys
+    complete!(state.structure)
     ag, mm, updated_diff_vars = alias_eliminate_graph!(state)
     ag === nothing && return sys
 
@@ -52,8 +53,20 @@ function alias_elimination!(state::TearingState)
     end
 
     subs = Dict()
+    # If we encounter y = -D(x), then we need to expand the derivative when
+    # D(y) appears in the equation, so that D(-D(x)) becomes -D(D(x)).
+    to_expand = Int[]
+    diff_to_var = invview(var_to_diff)
     for (v, (coeff, alias)) in pairs(ag)
         subs[fullvars[v]] = iszero(coeff) ? 0 : coeff * fullvars[alias]
+        if coeff == -1
+            # if `alias` is like -D(x)
+            diff_to_var[alias] === nothing && continue
+            # if `v` is like y, and D(y) also exists
+            (dv = var_to_diff[v]) === nothing && continue
+            # all equations that contains D(y) needs to be expanded.
+            append!(to_expand, 𝑑neighbors(graph, dv))
+        end
     end
 
     dels = Int[]
@@ -72,9 +85,27 @@ function alias_elimination!(state::TearingState)
         end
     end
     deleteat!(eqs, sort!(dels))
+    old_to_new = Vector{Int}(undef, length(var_to_diff))
+    idx = 0
+    cursor = 1
+    ndels = length(dels)
+    for (i, e) in enumerate(old_to_new)
+        if cursor <= ndels && i == dels[cursor]
+            cursor += 1
+            old_to_new[i] = -1
+            continue
+        end
+        idx += 1
+        old_to_new[i] = idx
+    end
 
     for (ieq, eq) in enumerate(eqs)
         eqs[ieq] = substitute(eq, subs)
+    end
+
+    for old_ieq in to_expand
+        ieq = old_to_new[old_ieq]
+        eqs[ieq] = expand_derivatives(eqs[ieq])
     end
 
     newstates = []
