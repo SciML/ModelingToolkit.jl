@@ -201,7 +201,7 @@ function Base.:(==)(e1::SymbolicDiscreteCallback, e2::SymbolicDiscreteCallback)
     isequal(e1.condition, e2.condition) && isequal(e1.affects, e2.affects)
 end
 function Base.hash(cb::SymbolicDiscreteCallback, s::UInt)
-    s = foldr(hash, cb.condition, init = s)
+    s = hash(cb.condition, s)
     cb.affects isa AbstractVector ? foldr(hash, cb.affects, init = s) : hash(cb.affects, s)
 end
 
