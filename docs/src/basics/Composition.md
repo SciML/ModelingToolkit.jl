@@ -254,4 +254,5 @@ causes the solver to take very small steps around the discontinuity, and
 sometimes leads to early stopping due to `dt <= dt_min`. The correct way to
 handle such dynamics is to tell the solver about the discontinuity by means of a
 root-finding equation, which can be modeling using [`ODESystem`](@ref)'s event
-support. Please see the tutorial on [Callbacks and Events](@ref events).
+support. Please see the tutorial on [Callbacks and Events](@ref events) for
+details and examples.
