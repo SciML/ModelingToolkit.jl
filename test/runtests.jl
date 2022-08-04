@@ -5,6 +5,7 @@ using SafeTestsets, Test
 @safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
 @safetestset "Variable scope tests" begin include("variable_scope.jl") end
 @safetestset "Symbolic parameters test" begin include("symbolic_parameters.jl") end
+@safetestset "Symbolic event test" begin include("symbolic_events.jl") end
 @safetestset "Parsing Test" begin include("variable_parsing.jl") end
 @safetestset "Simplify Test" begin include("simplify.jl") end
 @safetestset "Direct Usage Test" begin include("direct.jl") end
@@ -41,7 +42,6 @@ println("Last test requires gcc available in the path!")
 @testset "Serialization" begin include("serialization.jl") end
 @safetestset "print_tree" begin include("print_tree.jl") end
 @safetestset "error_handling" begin include("error_handling.jl") end
-@safetestset "root_equations" begin include("root_equations.jl") end
 @safetestset "state_selection" begin include("state_selection.jl") end
 @safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
