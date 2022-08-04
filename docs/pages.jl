@@ -16,6 +16,7 @@ pages = [
                     "basics/ContextualVariables.md",
                     "basics/Variable_metadata.md",
                     "basics/Composition.md",
+                    "basics/Events.md",
                     "basics/Validation.md",
                     "basics/DependencyGraphs.md",
                     "basics/FAQ.md"],
