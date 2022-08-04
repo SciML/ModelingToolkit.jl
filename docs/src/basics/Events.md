@@ -206,7 +206,7 @@ AbstractSystem(eqs, ...; discrete_events = [condition1 => affect1, condition2 =>
 where conditions are symbolic expressions that should evaluate to `true` when an
 individual affect should be executed. Here `affect1` and `affect2` are each
 either a vector of one or more symbolic equations, or a functional affect, just
-as for continuous events. As before for any *one* event the symbolic affect
+as for continuous events. As before, for any *one* event the symbolic affect
 equations can either all change states (i.e. variables) or all change
 parameters, but one can not currently mix state and parameter changes within one
 individual event.
@@ -235,7 +235,7 @@ plot(sol)
 Notice, with generic discrete events that we want to occur at one or more fixed
 times, we need to also set the `tstops` keyword argument to `solve` to ensure
 the integrator stops at that time. In the next section we show how one can
-bypass this needed by using a preset-time callback.
+avoid this by using a preset-time callback.
 
 Note that more general logical expressions can be built, for example, suppose we
 want the event to occur at that time only if the solution is smaller than 50% of
@@ -250,7 +250,9 @@ sol = solve(oprob, Tsit5(); tstops = 10.0)
 plot(sol)
 ```
 Since the solution is *not* smaller than half its steady-state value at the
-event time, the event condition now returns false.
+event time, the event condition now returns false. Here we used logical and,
+`&`, instead of the short-circuiting logical and, `&&`, as currently the latter
+can not be used within symbolic expressions.
 
 Let's now also add a drug at time `tkill` that turns off production of new
 cells, modeled by setting `α = 0.0`
