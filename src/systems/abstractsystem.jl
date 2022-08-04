@@ -1019,10 +1019,13 @@ function linearization_function(sys::AbstractSystem, inputs,
                                 kwargs...)
     sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
                                                              kwargs...)
-    sts = states(sys)
-    fun = ODEFunction(sys)
-    lin_fun = let fun = fun,
-        h = ModelingToolkit.build_explicit_observed_function(sys, outputs)
+    lin_fun = let diff_idxs = diff_idxs,
+        alge_idxs = alge_idxs,
+        input_idxs = input_idxs,
+        sts = states(sys),
+        fun = ODEFunction(sys),
+        h = ModelingToolkit.build_explicit_observed_function(sys, outputs),
+        chunk = ForwardDiff.Chunk(input_idxs)
 
         function (u, p, t)
             if u !== nothing # Handle systems without states
@@ -1030,17 +1033,21 @@ function linearization_function(sys::AbstractSystem, inputs,
                     error("Number of state variables ($(length(sts))) does not match the number of input states ($(length(u)))")
                 uf = SciMLBase.UJacobianWrapper(fun, t, p)
                 fg_xz = ForwardDiff.jacobian(uf, u)
-                h_xz = ForwardDiff.jacobian(xz -> h(xz, p, t), u)
+                h_xz = ForwardDiff.jacobian(let p = p, t = t
+                                                xz -> h(xz, p, t)
+                                            end, u)
                 pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
-                # TODO: this is very inefficient, p contains all parameters of the system
-                fg_u = ForwardDiff.jacobian(pf, p)[:, input_idxs]
+                fg_u = jacobian_wrt_vars(pf, p, input_idxs, chunk)
             else
                 length(sts) == 0 ||
                     error("Number of state variables (0) does not match the number of input states ($(length(u)))")
                 fg_xz = zeros(0, 0)
                 h_xz = fg_u = zeros(0, length(inputs))
             end
-            h_u = ForwardDiff.jacobian(p -> h(u, p, t), p)[:, input_idxs]
+            hp = let u = u, t = t
+                p -> h(u, p, t)
+            end
+            h_u = jacobian_wrt_vars(hp, p, input_idxs, chunk)
             (f_x = fg_xz[diff_idxs, diff_idxs],
              f_z = fg_xz[diff_idxs, alge_idxs],
              g_x = fg_xz[alge_idxs, diff_idxs],
