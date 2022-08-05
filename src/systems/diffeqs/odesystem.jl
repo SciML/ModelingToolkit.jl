@@ -333,7 +333,7 @@ function build_explicit_observed_function(sys, ts;
             eqs_dict = eqs_cache[]
             rhs = get(eqs_dict, v, nothing)
             if rhs === nothing
-                error("Observed variables depends on differentiated variable $v, but it's not explicit solved. Fix file an issue if you are sure that the system is valid.")
+                error("The observed variable $(eq.lhs) depends on the differentiated variable $v, but it's not explicit solved. Fix file an issue if you are sure that the system is valid.")
             end
         end
         empty!(vars)
