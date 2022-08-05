@@ -93,7 +93,7 @@ function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_
             end
         end
     end
-    sparse(I, J, true)
+    sparse(I, J, true, length(eqs_idxs), length(states_idxs))
 end
 
 function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDict,
