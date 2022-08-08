@@ -861,5 +861,7 @@ let
     @test length(equations(as)) == 1
     @test isequal(equations(as)[1].lhs, -der(der(x)))
     # TODO: maybe do not emit x_t
-    @test_nowarn sys4s = structural_simplify(sys4)
+    sys4s = structural_simplify(sys4)
+    prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
+    @test string.(prob.f.syms) == ["x(t)", "xˍt(t)"]
 end
