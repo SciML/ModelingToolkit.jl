@@ -291,7 +291,7 @@ function build_torn_function(sys;
                        rhss)
 
     states = fullvars[states_idxs]
-    syms = map(Symbol, states_idxs)
+    syms = map(Symbol, states)
 
     pre = get_postprocess_fbody(sys)
 
