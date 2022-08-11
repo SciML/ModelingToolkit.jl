@@ -570,7 +570,9 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig, irreducibles = ())
                                                                          irreducibles)
 
     # Step 2: Simplify the system using the Bareiss factorization
-    for v in setdiff(solvable_variables, @view pivots[1:rank1])
+    rk1vars = BitSet(@view pivots[1:rank1])
+    for v in solvable_variables
+        v in rk1vars && continue
         ag[v] = 0
     end
 
@@ -699,6 +701,16 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         end
         for (i, v) in enumerate(level_to_var)
             _alias = get(ag, v, nothing)
+            v_eqs = 𝑑neighbors(graph, v)
+            # if an irreducible appears in only one equation, we need to make
+            # sure that the other variables don't get eliminated
+            if length(v_eqs) == 1
+                eq = v_eqs[1]
+                for av in 𝑠neighbors(graph, eq)
+                    push!(irreducibles, av)
+                end
+                ag[v] = nothing
+            end
             push!(irreducibles, v)
             if _alias !== nothing && iszero(_alias[1]) && i < length(level_to_var)
                 # we have `x = 0`
@@ -709,7 +721,8 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         end
         if nlevels < (new_nlevels = length(level_to_var))
             for i in (nlevels + 1):new_nlevels
-                var_to_diff[level_to_var[i - 1]] = level_to_var[i]
+                li = level_to_var[i]
+                var_to_diff[level_to_var[i - 1]] = li
                 push!(updated_diff_vars, level_to_var[i - 1])
             end
         end
