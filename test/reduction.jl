@@ -244,3 +244,14 @@ eqs = [D(x) ~ σ * (y - x)
 lorenz1 = ODESystem(eqs, t, name = :lorenz1)
 lorenz1_reduced = structural_simplify(lorenz1)
 @test z in Set(parameters(lorenz1_reduced))
+
+# MWE for #1722
+@variables t
+vars = @variables a(t) w(t) phi(t)
+eqs = [a ~ D(w)
+       w ~ D(phi)
+       w ~ sin(t)]
+@named sys = ODESystem(eqs, t, vars, [])
+ss = alias_elimination(sys)
+@test equations(ss) == [0 ~ D(D(phi)) - a, 0 ~ sin(t) - D(phi)]
+@test observed(ss) == [w ~ D(phi)]
