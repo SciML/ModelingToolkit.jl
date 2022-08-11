@@ -309,7 +309,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = false)
         obs = get_observed(sys)
         i = findfirst(x -> getname(x.lhs) == name, obs)
         if i !== nothing
-            return namespace ? renamespace(sys, obs[i]) : obs[i]
+            return namespace ? renamespace(sys, obs[i].lhs) : obs[i].lhs
         end
     end
 
