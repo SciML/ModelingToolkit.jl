@@ -867,3 +867,13 @@ let
     prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
     @test string.(prob.f.syms) == ["x(t)", "xˍt(t)"]
 end
+
+let
+    @variables t
+    @parameters P(t) Q(t)
+    ∂t = Differential(t)
+
+    eqs = [∂t(Q) ~ 0.2P
+           ∂t(P) ~ -80.0sin(Q)]
+    @test_throws ArgumentError @named sys = ODESystem(eqs)
+end
