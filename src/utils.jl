@@ -126,6 +126,8 @@ function check_parameters(ps, iv)
     for p in ps
         isequal(iv, p) &&
             throw(ArgumentError("Independent variable $iv not allowed in parameters."))
+        isparameter(p) ||
+            throw(ArgumentError("$p is not a parameter."))
     end
 end
 
@@ -150,6 +152,8 @@ function check_variables(dvs, iv)
             throw(ArgumentError("Independent variable $iv not allowed in dependent variables."))
         (is_delay_var(iv, dv) || occursin(iv, dv)) ||
             throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
+        isparameter(dv) &&
+            throw(ArgumentError("$dv is not a state. It is a parameter."))
     end
 end
 
