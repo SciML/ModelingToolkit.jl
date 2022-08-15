@@ -14,14 +14,14 @@ discrete callbacks. [`JumpSystem`](@ref)s currently support only
 `discrete_events`. Continuous events are applied when a given condition becomes
 zero, with root finding used to determine the time at which a zero crossing
 occurred. Discrete events are applied when a condition tested after each
-timestep evalutes to true. See the [DifferentialEquations
+timestep evaluates to true. See the [DifferentialEquations
 docs](https://docs.sciml.ai/stable/modules/DiffEqDocs/features/callback_functions/)
 for more detail.
 
 Events involve both a *condition* function (for the zero crossing or truth
 test), and an *affect* function (for determining how to update the system when
 the event occurs). These can both be specified symbolically, but a more [general
-functional affect](@id func_affects) representation is also allowed as described
+functional affect](@ref func_affects) representation is also allowed as described
 below.
 
 ## Continuous Events
@@ -145,7 +145,7 @@ of one or more equations, an affect is defined as a `tuple`:
 ```
 where, `affect!` is a Julia function with the signature: `affect!(integ, u, p,
 ctx)`; `[u,v]` and `[p,q]` are the symbolic states (variables) and parameters
-that are accessed by `affect!`, respectively; and `ctx` is a context that is
+that are accessed by `affect!`, respectively; and `ctx` is any context that is
 passed to `affect!` as the `ctx` argument.
 
 `affect!` receives a [DifferentialEquations.jl
@@ -157,7 +157,7 @@ behavior, see the [integrator
 interface](https://docs.sciml.ai/stable/modules/DiffEqDocs/basics/integrator/)
 documentation. In affect functions we have that
 ```julia
-function affect!(integ, u, v, ctx)
+function affect!(integ, u, p, ctx)
     # integ.t is the current time
     # integ.u[u.v] is the value of the state `v` above
     # integ.p[p.q] is the value of the parameter `q` above
