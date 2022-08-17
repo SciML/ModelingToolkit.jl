@@ -79,6 +79,7 @@ sH = calculate_hessian(ns)
       getfield.(sparse.(sH), :rowval)
 
 prob = NonlinearProblem(ns, ones(3), ones(3))
+@test prob.f.sys === ns
 sol = solve(prob, NewtonRaphson())
 @test sol.u[1] ≈ sol.u[2]
 

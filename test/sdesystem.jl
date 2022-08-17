@@ -71,6 +71,7 @@ parammap = [
 ]
 
 prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+@test prob.f.sys === de
 @test size(prob.noise_rate_prototype) == (3, 3)
 @test prob.noise_rate_prototype isa Matrix
 sol = solve(prob, EM(), dt = 0.001)

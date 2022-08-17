@@ -233,6 +233,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys
     end
 
     NonlinearFunction{iip}(f,
+                           sys = sys,
                            jac = _jac === nothing ? nothing : _jac,
                            jac_prototype = sparse ?
                                            similar(calculate_jacobian(sys, sparse = sparse),

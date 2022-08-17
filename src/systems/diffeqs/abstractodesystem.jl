@@ -339,6 +339,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         nothing
     end
     ODEFunction{iip}(f,
+                     sys = sys,
                      jac = _jac === nothing ? nothing : _jac,
                      tgrad = _tgrad === nothing ? nothing : _tgrad,
                      mass_matrix = _M,
@@ -427,6 +428,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     DAEFunction{iip}(f,
+                     sys = sys,
                      jac = _jac === nothing ? nothing : _jac,
                      syms = Symbol.(dvs),
                      jac_prototype = jac_prototype,

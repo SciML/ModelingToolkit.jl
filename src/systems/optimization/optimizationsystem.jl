@@ -231,6 +231,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         end
 
         _f = DiffEqBase.OptimizationFunction{iip}(f,
+                                                  sys = sys,
                                                   SciMLBase.NoAD();
                                                   grad = _grad,
                                                   hess = _hess,
@@ -244,6 +245,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                                   cons_expr = cons_expr)
     else
         _f = DiffEqBase.OptimizationFunction{iip}(f,
+                                                  sys = sys,
                                                   SciMLBase.NoAD();
                                                   grad = _grad,
                                                   hess = _hess,
