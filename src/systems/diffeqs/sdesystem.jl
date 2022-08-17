@@ -406,6 +406,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
 
     sts = states(sys)
     SDEFunction{iip}(f, g,
+                     sys = sys,
                      jac = _jac === nothing ? nothing : _jac,
                      tgrad = _tgrad === nothing ? nothing : _tgrad,
                      Wfact = _Wfact === nothing ? nothing : _Wfact,

@@ -283,7 +283,7 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         end
     end
 
-    df = DiscreteFunction{true, true}(f, syms = Symbol.(states(sys)),
+    df = DiscreteFunction{true, true}(f; syms = Symbol.(states(sys)), sys = sys,
                                       observed = observedfun)
     DiscreteProblem(df, u0, tspan, p; kwargs...)
 end
