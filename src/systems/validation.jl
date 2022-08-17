@@ -93,9 +93,9 @@ end
 function get_unit(op::Conditional, args)
     terms = get_unit.(args)
     terms[1] == unitless ||
-        throw(ValidationError(", in $x, [$(terms[1])] is not dimensionless."))
+        throw(ValidationError(", in $op, [$(terms[1])] is not dimensionless."))
     equivalent(terms[2], terms[3]) ||
-        throw(ValidationError(", in $x, units [$(terms[2])] and [$(terms[3])] do not match."))
+        throw(ValidationError(", in $op, units [$(terms[2])] and [$(terms[3])] do not match."))
     return terms[2]
 end
 
