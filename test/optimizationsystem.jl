@@ -41,6 +41,7 @@ p = [sys1.a => 6.0
      β => 10.0]
 
 prob = OptimizationProblem(combinedsys, u0, p, grad = true)
+@test prob.f.sys === combinedsys
 sol = solve(prob, NelderMead())
 @test sol.minimum < -1e5
 
@@ -54,6 +55,7 @@ sol = solve(prob2, BFGS(initial_stepnorm = 0.0001), allow_f_increases = true)
 prob = OptimizationProblem(sys2, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
                            lcons = [-1.0, -1.0], ucons = [500.0, 500.0], grad = true,
                            hess = true)
+@test prob.f.sys === sys2
 sol = solve(prob, IPNewton(), allow_f_increases = true)
 @test sol.minimum < 1.0
 sol = solve(prob, Ipopt.Optimizer())

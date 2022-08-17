@@ -213,6 +213,7 @@ p2 = (k₁ => 0.04,
       k₃ => 1e4)
 tspan = (0.0, 100000.0)
 prob1 = ODEProblem(sys, u0, tspan, p)
+@test prob1.f.sys === sys
 prob12 = ODEProblem(sys, u0, tspan, [0.04, 3e7, 1e4])
 prob13 = ODEProblem(sys, u0, tspan, (0.04, 3e7, 1e4))
 prob14 = ODEProblem(sys, u0, tspan, p2)
