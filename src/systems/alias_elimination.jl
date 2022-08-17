@@ -475,7 +475,7 @@ end
     it === nothing && return nothing
     e, ns = it
     # c * a = b <=> a = c * b when -1 <= c <= 1
-    return (ag[e][1], RootedAliasTree(iag, e)), (stage, iterate(it, ns))
+    return (ag[e][1], RootedAliasTree(iag, e)), (stage, iterate(neighbors(invag, root), ns))
 end
 
 count_nonzeros(a::AbstractArray) = count(!iszero, a)
@@ -739,6 +739,9 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
 
     if !isempty(irreducibles)
         ag = newag
+        for k in keys(ag)
+            push!(irreducibles, k)
+        end
         mm_orig2 = isempty(ag) ? mm_orig : reduce!(copy(mm_orig), ag)
         mm = simple_aliases!(ag, graph, var_to_diff, mm_orig2, irreducibles)
     end
