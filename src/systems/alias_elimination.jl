@@ -475,7 +475,8 @@ end
     it === nothing && return nothing
     e, ns = it
     # c * a = b <=> a = c * b when -1 <= c <= 1
-    return (ag[e][1], RootedAliasTree(iag, e)), (stage, iterate(neighbors(invag, root), ns))
+    return (ag[e][1], RootedAliasTree(iag, e)), (stage,
+                                                 iterate(neighbors(invag, root), ns))
 end
 
 count_nonzeros(a::AbstractArray) = count(!iszero, a)
