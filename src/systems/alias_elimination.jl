@@ -605,6 +605,15 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig, irreducibles = ())
     return mm
 end
 
+function mark_processed!(processed, var_to_diff, v)
+    diff_to_var = invview(var_to_diff)
+    processed[v] = true
+    while (v = diff_to_var[v]) !== nothing
+        processed[v] = true
+    end
+    return nothing
+end
+
 function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # Step 1: Perform bareiss factorization on the adjacency matrix of the linear
     #         subsystem of the system we're interested in.
@@ -674,7 +683,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                     @assert length(level_to_var) == level
                     push!(level_to_var, v)
                 end
-                processed[v] = true
+                mark_processed!(processed, var_to_diff, v)
                 current_coeff_level[] = (coeff, level + 1)
             end
         end
@@ -684,7 +693,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             max_lv = max(max_lv, lv)
             v = nodevalue(t)
             iszero(v) && continue
-            processed[v] = true
+            mark_processed!(processed, var_to_diff, v)
             v == r && continue
             if lv < length(level_to_var)
                 if level_to_var[lv + 1] == v
