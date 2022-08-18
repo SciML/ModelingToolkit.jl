@@ -255,3 +255,17 @@ eqs = [a ~ D(w)
 ss = alias_elimination(sys)
 @test equations(ss) == [0 ~ D(D(phi)) - a, 0 ~ sin(t) - D(phi)]
 @test observed(ss) == [w ~ D(phi)]
+
+@variables t x(t) y(t)
+D = Differential(t)
+@named sys = ODESystem([D(x) ~ 1 - x,
+                           D(y) + D(x) ~ 0])
+new_sys = structural_simplify(sys)
+@test equations(new_sys) == [D(x) ~ 1 - x]
+@test observed(new_sys) == [D(y) ~ -D(x)]
+
+@named sys = ODESystem([D(x) ~ 1 - x,
+                           y + D(x) ~ 0])
+new_sys = structural_simplify(sys)
+@test equations(new_sys) == [D(x) ~ 1 - x]
+@test observed(new_sys) == [y ~ -D(x)]

@@ -475,7 +475,8 @@ end
     it === nothing && return nothing
     e, ns = it
     # c * a = b <=> a = c * b when -1 <= c <= 1
-    return (ag[e][1], RootedAliasTree(iag, e)), (stage, iterate(it, ns))
+    return (ag[e][1], RootedAliasTree(iag, e)), (stage,
+                                                 iterate(neighbors(invag, root), ns))
 end
 
 count_nonzeros(a::AbstractArray) = count(!iszero, a)
@@ -605,6 +606,15 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig, irreducibles = ())
     return mm
 end
 
+function mark_processed!(processed, var_to_diff, v)
+    diff_to_var = invview(var_to_diff)
+    processed[v] = true
+    while (v = diff_to_var[v]) !== nothing
+        processed[v] = true
+    end
+    return nothing
+end
+
 function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # Step 1: Perform bareiss factorization on the adjacency matrix of the linear
     #         subsystem of the system we're interested in.
@@ -674,7 +684,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                     @assert length(level_to_var) == level
                     push!(level_to_var, v)
                 end
-                processed[v] = true
+                mark_processed!(processed, var_to_diff, v)
                 current_coeff_level[] = (coeff, level + 1)
             end
         end
@@ -684,7 +694,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             max_lv = max(max_lv, lv)
             v = nodevalue(t)
             iszero(v) && continue
-            processed[v] = true
+            mark_processed!(processed, var_to_diff, v)
             v == r && continue
             if lv < length(level_to_var)
                 if level_to_var[lv + 1] == v
@@ -730,6 +740,9 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
 
     if !isempty(irreducibles)
         ag = newag
+        for k in keys(ag)
+            push!(irreducibles, k)
+        end
         mm_orig2 = isempty(ag) ? mm_orig : reduce!(copy(mm_orig), ag)
         mm = simple_aliases!(ag, graph, var_to_diff, mm_orig2, irreducibles)
     end
