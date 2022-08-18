@@ -152,9 +152,8 @@ end
 
 "Coerce the units of an equation to match, overriding the right-hand side."
 function coerce_units(eq::Equation)
-    (; lhs, rhs) = eq
-    rhs = setmetadata(rhs, VariableUnit, safe_get_unit(lhs, "left"))
-    return lhs ~ rhs
+    new_rhs = setmetadata(eq.rhs, VariableUnit, safe_get_unit(eq.lhs, "left"))
+    return eq.lhs ~ new_rhs
 end
 
 function _validate(terms::Vector, labels::Vector{String}; info::String = "")
