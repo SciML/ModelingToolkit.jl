@@ -132,6 +132,7 @@ end
 
 "Get unit of term, returning nothing & showing warning instead of throwing errors."
 function safe_get_unit(term, info)
+    hasmetadata(term, VariableUnit) && return getmetadata(term, VariableUnit)
     side = nothing
     try
         side = get_unit(term)
@@ -147,6 +148,13 @@ function safe_get_unit(term, info)
         end
     end
     side
+end
+
+"Coerce the units of an equation to match, overriding the right-hand side."
+function coerce_units(eq::Equation)
+    (; lhs, rhs) = eq
+    rhs = setmetadata(rhs, VariableUnit, safe_get_unit(lhs, "left"))
+    return lhs ~ rhs
 end
 
 function _validate(terms::Vector, labels::Vector{String}; info::String = "")

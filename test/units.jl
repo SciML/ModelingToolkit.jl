@@ -47,6 +47,12 @@ eqs = [D(E) ~ P - E / τ
 @test !MT.validate(D(D(E)) ~ P)
 @test !MT.validate(0 ~ P + E * τ)
 
+# Equation unit coercion
+@variables X
+eq1 = D(X) ~ 3P - 5
+eq2 = MT.coerce_units(eq1)
+@test !MT.validate(eq1) && MT.validate(eq2)
+
 # Array variables
 @variables t [unit = u"s"] x(t)[1:3] [unit = u"m"]
 @parameters v[1:3]=[1, 2, 3] [unit = u"m/s"]
