@@ -132,7 +132,9 @@ end
 
 "Get unit of term, returning nothing & showing warning instead of throwing errors."
 function safe_get_unit(term, info)
-    hasmetadata(term, VariableUnit) && return getmetadata(term, VariableUnit)
+    if term isa Union{Num,Complex{Num},Symbolic} && hasmetadata(term, VariableUnit)
+        return getmetadata(term, VariableUnit)
+    end
     side = nothing
     try
         side = get_unit(term)
