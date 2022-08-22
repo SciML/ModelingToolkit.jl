@@ -29,21 +29,42 @@ function substitution_graph(graph, slist, dlist, var_eq_matching)
     return DiCMOBiGraph{true}(newgraph, complete(newmatching))
 end
 
+function var_derivative_graph!(s::SystemStructure, v::Int)
+    sg = g = add_vertex!(s.graph, DST)
+    var_diff = add_vertex!(s.var_to_diff)
+    add_edge!(s.var_to_diff, v, var_diff)
+    s.solvable_graph === nothing || (sg = add_vertex!(s.solvable_graph, DST))
+    @assert sg == g == var_diff
+    return var_diff
+end
+
 function var_derivative!(ts::TearingState{ODESystem}, v::Int)
-    sys = ts.sys
     s = ts.structure
+    var_diff = var_derivative_graph!(s, v)
+    sys = ts.sys
     D = Differential(get_iv(sys))
-    s.solvable_graph === nothing || add_vertex!(s.solvable_graph, DST)
     push!(ts.fullvars, D(ts.fullvars[v]))
+    return var_diff
+end
+
+function eq_derivative_graph!(s::SystemStructure, eq::Int)
+    add_vertex!(s.graph, SRC)
+    s.solvable_graph === nothing || add_vertex!(s.solvable_graph, SRC)
+    # the new equation is created by differentiating `eq`
+    eq_diff = add_vertex!(s.eq_to_diff)
+    add_edge!(s.eq_to_diff, eq, eq_diff)
+    return eq_diff
 end
 
 function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int)
-    sys = ts.sys
     s = ts.structure
+
+    eq_diff = eq_derivative_graph!(s, ieq)
+
+    sys = ts.sys
     D = Differential(get_iv(sys))
     eq = equations(ts)[ieq]
     eq = ModelingToolkit.expand_derivatives(0 ~ D(eq.rhs - eq.lhs))
-    s.solvable_graph === nothing || add_vertex!(s.solvable_graph, SRC)
     push!(equations(ts), eq)
     # Analyze the new equation and update the graph/solvable_graph
     # First, copy the previous incidence and add the derivative terms.
@@ -56,6 +77,8 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int)
     end
     s.solvable_graph === nothing ||
         find_eq_solvables!(ts, eq_diff; may_be_zero = true, allow_symbolic = true)
+
+    return eq_diff
 end
 
 function tearing_sub(expr, dict, s)
