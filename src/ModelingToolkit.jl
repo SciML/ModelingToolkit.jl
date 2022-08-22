@@ -26,6 +26,7 @@ using Base: RefValue
 using Combinatorics
 import IfElse
 import Distributions
+import FunctionWrappersWrappers
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
