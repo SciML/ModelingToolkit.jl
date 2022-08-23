@@ -45,7 +45,12 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     if DiffEqBase.isinplace(prob)
         rhs = ArrayInterfaceCore.restructure(prob.u0, similar(vars, Num))
         fill!(rhs, 0)
-        prob.f(rhs, vars, params, t)
+        if prob.f isa ODEFunction &&
+           prob.f.f isa FunctionWrappersWrappers.FunctionWrappersWrapper
+            prob.f.f.fw[1].obj[](rhs, vars, params, t)
+        else
+            prob.f(rhs, vars, params, t)
+        end
     else
         rhs = prob.f(vars, params, t)
     end
