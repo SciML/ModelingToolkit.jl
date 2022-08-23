@@ -428,11 +428,6 @@ function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors)
     old_neighbors = g.fadjlist[i]
     old_nneighbors = length(old_neighbors)
     new_nneighbors = length(new_neighbors)
-    if iszero(new_nneighbors) # this handles Tuple as well
-        empty!(g.fadjlist[i])
-    else
-        g.fadjlist[i] = copy(new_neighbors)
-    end
     g.ne += new_nneighbors - old_nneighbors
     if isa(g.badjlist, AbstractVector)
         for n in old_neighbors
@@ -445,6 +440,12 @@ function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors)
             index = searchsortedfirst(list, i)
             insert!(list, index, i)
         end
+    end
+    if iszero(new_nneighbors) # this handles Tuple as well
+        # Warning: Aliases old_neighbors
+        empty!(g.fadjlist[i])
+    else
+        g.fadjlist[i] = copy(new_neighbors)
     end
 end
 
