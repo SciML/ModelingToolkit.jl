@@ -24,6 +24,6 @@ structural_simplify
 ## Problem Constructors
 
 ```@docs
-DiscreteProblem
-JumpProblem
+SciMLBase.DiscreteProblem(sys::JumpSystem,args...)
+JumpProcesses.JumpProblem(sys::JumpSystem,args...)
 ```

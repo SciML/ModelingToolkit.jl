@@ -1,6 +1,8 @@
-using ModelingToolkit, OrdinaryDiffEq, Test
+using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
 using ModelingToolkit: SymbolicContinuousCallback, SymbolicContinuousCallbacks, NULL_AFFECT,
                        get_callback
+using StableRNGs
+rng = StableRNG(12345)
 
 @parameters t
 @variables x(t) = 0
@@ -225,7 +227,7 @@ continuous_events = [[x ~ 0] => [vx ~ -vx]
 @named ball = ODESystem([D(x) ~ vx
                          D(y) ~ vy
                          D(vx) ~ -9.8
-                         D(vy) ~ -0.01vy;], t; continuous_events)
+                         D(vy) ~ -0.01vy], t; continuous_events)
 
 ball = structural_simplify(ball)
 
@@ -262,7 +264,7 @@ continuous_events = [
 @named ball = ODESystem([D(x) ~ vx
                          D(y) ~ vy
                          D(vx) ~ -1
-                         D(vy) ~ 0;], t; continuous_events)
+                         D(vy) ~ 0], t; continuous_events)
 
 ball = structural_simplify(ball)
 
@@ -334,3 +336,248 @@ end
 model = Model(sin(30t))
 sys = structural_simplify(model)
 @test isempty(ModelingToolkit.continuous_events(sys))
+
+let
+    function testsol(osys, u0, p, tspan; tstops = Float64[], skipparamtest = false,
+                     kwargs...)
+        oprob = ODEProblem(osys, u0, tspan, p; kwargs...)
+        sol = solve(oprob, Tsit5(); tstops = tstops, abstol = 1e-10, reltol = 1e-10)
+        @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-6)
+        !skipparamtest && (@test oprob.p[1] == 1.0)
+        @test isapprox(sol(4.0)[1], 2 * exp(-2.0))
+        sol
+    end
+
+    @parameters k t1 t2
+    @variables t A(t) B(t)
+
+    cond1 = (t == t1)
+    affect1 = [A ~ A + 1]
+    cb1 = cond1 => affect1
+    cond2 = (t == t2)
+    affect2 = [k ~ 1.0]
+    cb2 = cond2 => affect2
+
+    ∂ₜ = Differential(t)
+    eqs = [∂ₜ(A) ~ -k * A]
+    @named osys = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2])
+    u0 = [A => 1.0]
+    p = [k => 0.0, t1 => 1.0, t2 => 2.0]
+    tspan = (0.0, 4.0)
+    testsol(osys, u0, p, tspan; tstops = [1.0, 2.0])
+
+    cond1a = (t == t1)
+    affect1a = [A ~ A + 1, B ~ A]
+    cb1a = cond1a => affect1a
+    @named osys1 = ODESystem(eqs, t, [A, B], [k, t1, t2], discrete_events = [cb1a, cb2])
+    u0′ = [A => 1.0, B => 0.0]
+    sol = testsol(osys1, u0′, p, tspan; tstops = [1.0, 2.0], check_length = false)
+    @test sol(1.0000001, idxs = B) == 2.0
+
+    # same as above - but with set-time event syntax
+    cb1‵ = [1.0] => affect1 # needs to be a Vector for the event to happen only once
+    cb2‵ = [2.0] => affect2
+    @named osys‵ = ODESystem(eqs, t, [A], [k], discrete_events = [cb1‵, cb2‵])
+    testsol(osys‵, u0, p, tspan)
+
+    # mixing discrete affects
+    @named osys3 = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵])
+    testsol(osys3, u0, p, tspan; tstops = [1.0])
+
+    # mixing with a func affect
+    function affect!(integrator, u, p, ctx)
+        integrator.p[p.k] = 1.0
+        nothing
+    end
+    cb2‵‵ = [2.0] => (affect!, [], [k], nothing)
+    @named osys4 = ODESystem(eqs, t, [A], [k, t1], discrete_events = [cb1, cb2‵‵])
+    oprob4 = ODEProblem(osys4, u0, tspan, p)
+    testsol(osys4, u0, p, tspan; tstops = [1.0])
+
+    # mixing with symbolic condition in the func affect
+    cb2‵‵‵ = (t == t2) => (affect!, [], [k], nothing)
+    @named osys5 = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵])
+    testsol(osys5, u0, p, tspan; tstops = [1.0, 2.0])
+    @named osys6 = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb2‵‵‵, cb1])
+    testsol(osys6, u0, p, tspan; tstops = [1.0, 2.0])
+
+    # mix a continuous event too
+    cond3 = A ~ 0.1
+    affect3 = [k ~ 0.0]
+    cb3 = cond3 => affect3
+    @named osys7 = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵],
+                             continuous_events = [cb3])
+    sol = testsol(osys7, u0, p, (0.0, 10.0); tstops = [1.0, 2.0], skipparamtest = true)
+    @test isapprox(sol(10.0)[1], 0.1; atol = 1e-10, rtol = 1e-10)
+end
+
+let
+    function testsol(ssys, u0, p, tspan; tstops = Float64[], skipparamtest = false,
+                     kwargs...)
+        sprob = SDEProblem(ssys, u0, tspan, p; kwargs...)
+        sol = solve(sprob, RI5(); tstops = tstops, abstol = 1e-10, reltol = 1e-10)
+        @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-4)
+        !skipparamtest && (@test sprob.p[1] == 1.0)
+        @test isapprox(sol(4.0)[1], 2 * exp(-2.0), atol = 1e-4)
+        sol
+    end
+
+    @parameters k t1 t2
+    @variables t A(t) B(t)
+
+    cond1 = (t == t1)
+    affect1 = [A ~ A + 1]
+    cb1 = cond1 => affect1
+    cond2 = (t == t2)
+    affect2 = [k ~ 1.0]
+    cb2 = cond2 => affect2
+
+    ∂ₜ = Differential(t)
+    eqs = [∂ₜ(A) ~ -k * A]
+    @named ssys = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
+                            discrete_events = [cb1, cb2])
+    u0 = [A => 1.0]
+    p = [k => 0.0, t1 => 1.0, t2 => 2.0]
+    tspan = (0.0, 4.0)
+    testsol(ssys, u0, p, tspan; tstops = [1.0, 2.0])
+
+    cond1a = (t == t1)
+    affect1a = [A ~ A + 1, B ~ A]
+    cb1a = cond1a => affect1a
+    @named ssys1 = SDESystem(eqs, Equation[], t, [A, B], [k, t1, t2],
+                             discrete_events = [cb1a, cb2])
+    u0′ = [A => 1.0, B => 0.0]
+    sol = testsol(ssys1, u0′, p, tspan; tstops = [1.0, 2.0], check_length = false)
+    @test sol(1.0000001, idxs = 2) == 2.0
+
+    # same as above - but with set-time event syntax
+    cb1‵ = [1.0] => affect1 # needs to be a Vector for the event to happen only once
+    cb2‵ = [2.0] => affect2
+    @named ssys‵ = SDESystem(eqs, Equation[], t, [A], [k], discrete_events = [cb1‵, cb2‵])
+    testsol(ssys‵, u0, p, tspan)
+
+    # mixing discrete affects
+    @named ssys3 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
+                             discrete_events = [cb1, cb2‵])
+    testsol(ssys3, u0, p, tspan; tstops = [1.0])
+
+    # mixing with a func affect
+    function affect!(integrator, u, p, ctx)
+        integrator.p[p.k] = 1.0
+        nothing
+    end
+    cb2‵‵ = [2.0] => (affect!, [], [k], nothing)
+    @named ssys4 = SDESystem(eqs, Equation[], t, [A], [k, t1],
+                             discrete_events = [cb1, cb2‵‵])
+    testsol(ssys4, u0, p, tspan; tstops = [1.0])
+
+    # mixing with symbolic condition in the func affect
+    cb2‵‵‵ = (t == t2) => (affect!, [], [k], nothing)
+    @named ssys5 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
+                             discrete_events = [cb1, cb2‵‵‵])
+    testsol(ssys5, u0, p, tspan; tstops = [1.0, 2.0])
+    @named ssys6 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
+                             discrete_events = [cb2‵‵‵, cb1])
+    testsol(ssys6, u0, p, tspan; tstops = [1.0, 2.0])
+
+    # mix a continuous event too
+    cond3 = A ~ 0.1
+    affect3 = [k ~ 0.0]
+    cb3 = cond3 => affect3
+    @named ssys7 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
+                             discrete_events = [cb1, cb2‵‵‵],
+                             continuous_events = [cb3])
+    sol = testsol(ssys7, u0, p, (0.0, 10.0); tstops = [1.0, 2.0], skipparamtest = true)
+    @test isapprox(sol(10.0)[1], 0.1; atol = 1e-10, rtol = 1e-10)
+end
+
+let rng = rng
+    function testsol(jsys, u0, p, tspan; tstops = Float64[], skipparamtest = false,
+                     N = 40000, kwargs...)
+        dprob = DiscreteProblem(jsys, u0, tspan, p)
+        jprob = JumpProblem(jsys, dprob, Direct(); kwargs...)
+        sol = solve(jprob, SSAStepper(); tstops = tstops)
+        @test (sol(1.000000000001)[1] - sol(0.99999999999)[1]) == 1
+        !skipparamtest && (@test dprob.p[1] == 1.0)
+        @test sol(40.0)[1] == 0
+        sol
+    end
+
+    @parameters k t1 t2
+    @variables t A(t) B(t)
+
+    cond1 = (t == t1)
+    affect1 = [A ~ A + 1]
+    cb1 = cond1 => affect1
+    cond2 = (t == t2)
+    affect2 = [k ~ 1.0]
+    cb2 = cond2 => affect2
+
+    eqs = [MassActionJump(k, [A => 1], [A => -1])]
+    @named jsys = JumpSystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2])
+    u0 = [A => 1]
+    p = [k => 0.0, t1 => 1.0, t2 => 2.0]
+    tspan = (0.0, 40.0)
+    testsol(jsys, u0, p, tspan; tstops = [1.0, 2.0], rng)
+
+    cond1a = (t == t1)
+    affect1a = [A ~ A + 1, B ~ A]
+    cb1a = cond1a => affect1a
+    @named jsys1 = JumpSystem(eqs, t, [A, B], [k, t1, t2], discrete_events = [cb1a, cb2])
+    u0′ = [A => 1, B => 0]
+    sol = testsol(jsys1, u0′, p, tspan; tstops = [1.0, 2.0], check_length = false, rng)
+    @test sol(1.000000001, idxs = B) == 2
+
+    # same as above - but with set-time event syntax
+    cb1‵ = [1.0] => affect1 # needs to be a Vector for the event to happen only once
+    cb2‵ = [2.0] => affect2
+    @named jsys‵ = JumpSystem(eqs, t, [A], [k], discrete_events = [cb1‵, cb2‵])
+    testsol(jsys‵, u0, [p[1]], tspan; rng)
+
+    # mixing discrete affects
+    @named jsys3 = JumpSystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵])
+    testsol(jsys3, u0, p, tspan; tstops = [1.0], rng)
+
+    # mixing with a func affect
+    function affect!(integrator, u, p, ctx)
+        integrator.p[p.k] = 1.0
+        reset_aggregated_jumps!(integrator)
+        nothing
+    end
+    cb2‵‵ = [2.0] => (affect!, [], [k], nothing)
+    @named jsys4 = JumpSystem(eqs, t, [A], [k, t1], discrete_events = [cb1, cb2‵‵])
+    testsol(jsys4, u0, p, tspan; tstops = [1.0], rng)
+
+    # mixing with symbolic condition in the func affect
+    cb2‵‵‵ = (t == t2) => (affect!, [], [k], nothing)
+    @named jsys5 = JumpSystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵])
+    testsol(jsys5, u0, p, tspan; tstops = [1.0, 2.0], rng)
+    @named jsys6 = JumpSystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb2‵‵‵, cb1])
+    testsol(jsys6, u0, p, tspan; tstops = [1.0, 2.0], rng)
+end
+
+let
+    @variables t
+    D = Differential(t)
+
+    function oscillator_ce(k = 1.0; name)
+        sts = @variables x(t)=1.0 v(t)=0.0 F(t)
+        ps = @parameters k=k Θ=0.5
+        eqs = [D(x) ~ v, D(v) ~ -k * x + F]
+        ev = [x ~ Θ] => [x ~ 1.0, v ~ 0.0]
+        ODESystem(eqs, t, sts, ps, continuous_events = [ev]; name)
+    end
+
+    @named oscce = oscillator_ce()
+    eqs = [oscce.F ~ 0]
+    @named eqs_sys = ODESystem(eqs, t)
+    @named oneosc_ce = compose(eqs_sys, oscce)
+    oneosc_ce_simpl = structural_simplify(oneosc_ce)
+
+    prob = ODEProblem(oneosc_ce_simpl, [], (0.0, 2.0), [])
+    sol = solve(prob, Tsit5(), saveat = 0.1)
+
+    @test typeof(oneosc_ce_simpl) == ODESystem
+    @test sol[1, 6] < 1.0 # test whether x(t) decreases over time
+    @test sol[1, 18] > 0.5 # test whether event happened
+end

@@ -6,7 +6,7 @@ export BipartiteEdge, BipartiteGraph, DiCMOBiGraph, Unassigned, unassigned,
 
 export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors, 𝑑neighbors,
        𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST, set_neighbors!, invview,
-       complete
+       complete, delete_srcs!, delete_dsts!
 
 using DocStringExtensions
 using UnPack
@@ -49,6 +49,10 @@ end
 function Matching(m::Int)
     Matching{Unassigned}(Union{Int, Unassigned}[unassigned for _ in 1:m], nothing)
 end
+function Matching{U}(m::Int) where {U}
+    Matching{Union{Unassigned, U}}(Union{Int, Unassigned, U}[unassigned for _ in 1:m],
+                                   nothing)
+end
 
 Base.size(m::Matching) = Base.size(m.match)
 Base.getindex(m::Matching, i::Integer) = m.match[i]
@@ -65,9 +69,9 @@ function Base.setindex!(m::Matching{U}, v::Union{Integer, U}, i::Integer) where 
     return m.match[i] = v
 end
 
-function Base.push!(m::Matching{U}, v::Union{Integer, U}) where {U}
+function Base.push!(m::Matching, v)
     push!(m.match, v)
-    if v !== unassigned && m.inv_match !== nothing
+    if v isa Integer && m.inv_match !== nothing
         m.inv_match[v] = length(m.match)
     end
 end
@@ -346,8 +350,8 @@ vertices, subject to the constraint that vertices for which `srcfilter` or `dstf
 return `false` may not be matched.
 """
 function maximal_matching(g::BipartiteGraph, srcfilter = vsrc -> true,
-                          dstfilter = vdst -> true)
-    matching = Matching(ndsts(g))
+                          dstfilter = vdst -> true, ::Type{U} = Unassigned) where {U}
+    matching = Matching{U}(ndsts(g))
     foreach(Iterators.filter(srcfilter, 𝑠vertices(g))) do vsrc
         construct_augmenting_path!(matching, g, vsrc, dstfilter)
     end
@@ -420,11 +424,15 @@ function Graphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where {T}
     return true  # vertex successfully added
 end
 
-function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors::AbstractVector)
+function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors)
     old_neighbors = g.fadjlist[i]
     old_nneighbors = length(old_neighbors)
     new_nneighbors = length(new_neighbors)
-    g.fadjlist[i] = new_neighbors
+    if iszero(new_nneighbors) # this handles Tuple as well
+        empty!(g.fadjlist[i])
+    else
+        g.fadjlist[i] = new_neighbors
+    end
     g.ne += new_nneighbors - old_nneighbors
     if isa(g.badjlist, AbstractVector)
         for n in old_neighbors
@@ -439,6 +447,14 @@ function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors::AbstractVe
         end
     end
 end
+
+function delete_srcs!(g::BipartiteGraph, srcs)
+    for s in srcs
+        set_neighbors!(g, s, ())
+    end
+    g
+end
+delete_dsts!(g::BipartiteGraph, srcs) = delete_srcs!(invview(g), srcs)
 
 ###
 ### Edges iteration

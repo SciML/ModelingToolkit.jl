@@ -197,3 +197,25 @@ OBS2 = OBS
 @test isequal(OBS2, @nonamespace js5.OBS)
 @unpack OBS = js5
 @test isequal(OBS2, OBS)
+
+# test to make sure dep graphs are correct
+let
+    # A + 2X --> 3X
+    # 3X --> A + 2X
+    # B --> X
+    # X --> B
+    @variables t A(t) X(t) B(t)
+    jumps = [MassActionJump(1.0, [A => 1, X => 2], [A => -1, X => 1]),
+        MassActionJump(1.0, [X => 3], [A => 1, X => -1]),
+        MassActionJump(1.0, [B => 1], [B => -1, X => 1]),
+        MassActionJump(1.0, [X => 1], [B => 1, X => -1])]
+    @named js = JumpSystem(jumps, t, [A, X, B], [])
+    jdeps = asgraph(js)
+    vdeps = variable_dependencies(js)
+    vtoj = jdeps.badjlist
+    @test vtoj == [[1], [1, 2, 4], [3]]
+    jtov = vdeps.badjlist
+    @test jtov == [[1, 2], [1, 2], [2, 3], [2, 3]]
+    jtoj = eqeq_dependencies(jdeps, vdeps).fadjlist
+    @test jtoj == [[1, 2, 4], [1, 2, 4], [1, 2, 3, 4], [1, 2, 3, 4]]
+end

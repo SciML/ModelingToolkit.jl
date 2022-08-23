@@ -41,6 +41,7 @@ p = [sys1.a => 6.0
      β => 10.0]
 
 prob = OptimizationProblem(combinedsys, u0, p, grad = true)
+@test prob.f.sys === combinedsys
 sol = solve(prob, NelderMead())
 @test sol.minimum < -1e5
 
@@ -54,6 +55,7 @@ sol = solve(prob2, BFGS(initial_stepnorm = 0.0001), allow_f_increases = true)
 prob = OptimizationProblem(sys2, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
                            lcons = [-1.0, -1.0], ucons = [500.0, 500.0], grad = true,
                            hess = true)
+@test prob.f.sys === sys2
 sol = solve(prob, IPNewton(), allow_f_increases = true)
 @test sol.minimum < 1.0
 sol = solve(prob, Ipopt.Optimizer())
@@ -63,18 +65,22 @@ sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
 
 #equality constraint, lcons == ucons
 cons2 = [0.0 ~ x^2 + y^2]
+out = zeros(1)
 sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys2, constraints = cons2)
 prob = OptimizationProblem(sys2, [x => 0.0, y => 0.0], [a => 1.0, b => 1.0], lcons = [1.0],
                            ucons = [1.0], grad = true, hess = true)
 sol = solve(prob, IPNewton())
 @test sol.minimum < 1.0
-@test prob.f.cons(sol.minimizer, [1.0, 1.0]) ≈ [1.0]
+prob.f.cons(out, sol.minimizer, [1.0, 1.0])
+@test out ≈ [1.0]
 sol = solve(prob, Ipopt.Optimizer())
 @test sol.minimum < 1.0
-@test prob.f.cons(sol.minimizer, [1.0, 1.0]) ≈ [1.0]
+prob.f.cons(out, sol.minimizer, [1.0, 1.0])
+@test out ≈ [1.0]
 sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
 @test sol.minimum < 1.0
-@test prob.f.cons(sol.minimizer, [1.0, 1.0]) ≈ [1.0]
+prob.f.cons(out, sol.minimizer, [1.0, 1.0])
+@test out ≈ [1.0]
 
 rosenbrock(x, p) = (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
 x0 = zeros(2)

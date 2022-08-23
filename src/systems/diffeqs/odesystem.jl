@@ -102,6 +102,12 @@ struct ODESystem <: AbstractODESystem
     """
     continuous_events::Vector{SymbolicContinuousCallback}
     """
+    discrete_events: A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
+    analog to `SciMLBase.DiscreteCallback` that exectues an affect when a given condition is
+    true at the end of an integration step.
+    """
+    discrete_events::Vector{SymbolicDiscreteCallback}
+    """
     tearing_state: cache for intermediate tearing state
     """
     tearing_state::Any
@@ -116,19 +122,21 @@ struct ODESystem <: AbstractODESystem
 
     function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad,
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
-                       torn_matching, connector_type, connections, preface, events,
+                       torn_matching, connector_type, connections, preface, cevents, devents,
                        tearing_state = nothing, substitutions = nothing; metadata = nothing,
+
                        checks::Bool = true)
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             check_equations(deqs, iv)
-            check_equations(equations(events), iv)
+            check_equations(equations(cevents), iv)
             all_dimensionless([dvs; ps; iv]) || check_units(deqs)
         end
         new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
-            connector_type, connections, preface, events, tearing_state, substitutions, metadata)
+            connector_type, connections, preface, cevents, devents, tearing_state, 
+            substitutions, metadata)
     end
 end
 
@@ -143,6 +151,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    connector_type = nothing,
                    preface = nothing,
                    continuous_events = nothing,
+                   discrete_events = nothing,
                    checks = true,
                    metadata = nothing)
     name === nothing &&
@@ -177,9 +186,12 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
         throw(ArgumentError("System names must be unique."))
     end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
+    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
     ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
-              connector_type, nothing, preface, cont_callbacks, metadata=metadata, checks = checks)
+              connector_type, nothing, preface, cont_callbacks, disc_callbacks,
+              checks = checks)
+              connector_type, nothing, preface, cont_callbacks, disc_callbacks, metadata=metadata, checks = checks)
 end
 
 function ODESystem(eqs, iv = nothing; kwargs...)
@@ -249,6 +261,7 @@ function flatten(sys::ODESystem, noeqs = false)
                          parameters(sys),
                          observed = observed(sys),
                          continuous_events = continuous_events(sys),
+                         discrete_events = discrete_events(sys),
                          defaults = defaults(sys),
                          name = nameof(sys),
                          checks = false)
@@ -287,7 +300,7 @@ function build_explicit_observed_function(sys, ts;
     # the expression depends on everything before the `maxidx`.
     subs = Dict()
     maxidx = 0
-    for (i, s) in enumerate(dep_vars)
+    for s in dep_vars
         idx = get(observed_idx, s, nothing)
         if idx !== nothing
             idx > maxidx && (maxidx = idx)
@@ -312,7 +325,27 @@ function build_explicit_observed_function(sys, ts;
         end
     end
     ts = map(t -> substitute(t, subs), ts)
-    obsexprs = map(eq -> eq.lhs ← eq.rhs, obs[1:maxidx])
+    obsexprs = []
+    eqs_cache = Ref{Any}(nothing)
+    for i in 1:maxidx
+        eq = obs[i]
+        lhs = eq.lhs
+        rhs = eq.rhs
+        vars!(vars, rhs)
+        for v in vars
+            isdifferential(v) || continue
+            if eqs_cache[] === nothing
+                eqs_cache[] = Dict(eq.lhs => eq.rhs for eq in equations(sys))
+            end
+            eqs_dict = eqs_cache[]
+            rhs = get(eqs_dict, v, nothing)
+            if rhs === nothing
+                error("The observed variable $(eq.lhs) depends on the differentiated variable $v, but it's not explicit solved. Fix file an issue if you are sure that the system is valid.")
+            end
+        end
+        empty!(vars)
+        push!(obsexprs, lhs ← rhs)
+    end
 
     dvs = DestructuredArgs(states(sys), inbounds = !checkbounds)
     ps = DestructuredArgs(parameters(sys), inbounds = !checkbounds)

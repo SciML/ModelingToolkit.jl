@@ -4,13 +4,12 @@ using ModelingToolkit.BipartiteGraphs
 using ModelingToolkit.StructuralTransformations
 
 function check_contract(sys)
-    graph = ModelingToolkit.get_tearing_state(sys).structure.graph
-    sys = tearing_substitution(sys)
-    state = TearingState(sys)
+    state = ModelingToolkit.get_tearing_state(sys)
+    graph = state.structure.graph
     fullvars = state.fullvars
+    sys = tearing_substitution(sys)
 
     eqs = equations(sys)
-    var2idx = Dict(enumerate(fullvars))
     for (i, eq) in enumerate(eqs)
         actual = union(ModelingToolkit.vars(eq.lhs), ModelingToolkit.vars(eq.rhs))
         actual = filter(!ModelingToolkit.isparameter, collect(actual))
@@ -20,6 +19,8 @@ function check_contract(sys)
 end
 
 function check_rc_sol(sol)
+    rpi = sol[rc_model.resistor.p.i]
+    @test any(!isequal(rpi[1]), rpi) # test that we don't have a constant system
     @test sol[rc_model.resistor.p.i] == sol[resistor.p.i] == sol[capacitor.p.i]
     @test sol[rc_model.resistor.n.i] == sol[resistor.n.i] == -sol[capacitor.p.i]
     @test sol[rc_model.capacitor.n.i] == sol[capacitor.n.i] == -sol[capacitor.p.i]
@@ -32,8 +33,9 @@ end
 include("../examples/rc_model.jl")
 
 @test ModelingToolkit.n_extra_equations(capacitor) == 2
-@test length(equations(structural_simplify(rc_model, allow_parameter = false))) > 1
+@test length(equations(structural_simplify(rc_model, allow_parameter = false))) == 2
 sys = structural_simplify(rc_model)
+@test length(equations(sys)) == 1
 check_contract(sys)
 @test !isempty(ModelingToolkit.defaults(sys))
 u0 = [capacitor.v => 0.0
@@ -142,12 +144,11 @@ sol = solve(prob, Tsit5())
 
 include("../examples/serial_inductor.jl")
 sys = structural_simplify(ll_model)
+@test length(equations(sys)) == 2
 check_contract(sys)
-u0 = [inductor1.i => 0.0
-      inductor2.i => 0.0
-      inductor2.v => 0.0]
-@test_throws Any ODEProblem(sys, u0, (0, 10.0))
-@test_throws Any ODAEProblem(sys, u0, (0, 10.0))
+u0 = states(sys) .=> 0
+@test_nowarn ODEProblem(sys, u0, (0, 10.0))
+@test_nowarn ODAEProblem(sys, u0, (0, 10.0))
 prob = DAEProblem(sys, Differential(t).(states(sys)) .=> 0, u0, (0, 0.5))
 @test_nowarn sol = solve(prob, DFBDF())
 

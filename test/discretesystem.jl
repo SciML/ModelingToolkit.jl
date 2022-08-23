@@ -32,6 +32,7 @@ u0 = [S => 990.0, I => 10.0, R => 0.0]
 p = [β => 0.05, c => 10.0, γ => 0.25, δt => 0.1, nsteps => 400]
 tspan = (0.0, ModelingToolkit.value(substitute(nsteps, p))) # value function (from Symbolics) is used to convert a Num to Float64
 prob_map = DiscreteProblem(sys, u0, tspan, p)
+@test prob_map.f.sys === sys
 
 # Solution
 using OrdinaryDiffEq

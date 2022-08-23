@@ -1,6 +1,38 @@
 # Symbolic metadata
-It is possible to add metadata to symbolic variables. The following
-information can be added (note, it's possible to extend this to user-defined metadata as well)
+It is possible to add metadata to symbolic variables, the metadata will be displayed when calling help on a variable.
+
+The following information can be added (note, it's possible to extend this to user-defined metadata as well)
+
+## Variable descriptions
+Descriptive strings can be attached to variables using the `[description = "descriptive string"]` syntax:
+```@example metadata
+using ModelingToolkit
+@variables u [description = "This is my input"]
+getdescription(u)
+```
+
+When variables with descriptions are present in systems, they will be printed when the system is shown in the terminal:
+```@example metadata
+@parameters t
+@variables u(t) [description = "A short description of u"]
+@parameters p   [description = "A description of p"]
+@named sys = ODESystem([u ~ p], t)
+show(stdout, "text/plain", sys) # hide
+```
+
+Calling help on the variable `u` displays the description, alongside other metadata:
+```julia
+help?> u
+
+  A variable of type Symbolics.Num (Num wraps anything in a type that is a subtype of Real)
+
+  Metadata
+  ≡≡≡≡≡≡≡≡≡≡
+
+  ModelingToolkit.VariableDescription: This is my input
+
+  Symbolics.VariableSource: (:variables, :u)
+```
 
 ## Input or output
 Designate a variable as either an input or an output using the following
@@ -34,7 +66,7 @@ isdisturbance(u)
 ```
 
 ## Mark parameter as tunable
-Indicate that a parameter can be automatically tuned by automatic control tuning apps.
+Indicate that a parameter can be automatically tuned by parameter optimization or automatic control tuning apps.
 
 ```@example metadata
 @parameters Kp [tunable=true]

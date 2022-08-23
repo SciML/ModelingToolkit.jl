@@ -230,12 +230,6 @@ function isautonomous(sys::AbstractODESystem)
     all(iszero, tgrad)
 end
 
-for F in [:ODEFunction, :DAEFunction]
-    @eval function DiffEqBase.$F(sys::AbstractODESystem, args...; kwargs...)
-        $F{true}(sys, args...; kwargs...)
-    end
-end
-
 """
 ```julia
 function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
@@ -250,6 +244,10 @@ Create an `ODEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `p
 are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
+function DiffEqBase.ODEFunction(sys::AbstractODESystem, args...; kwargs...)
+    ODEFunction{true}(sys, args...; kwargs...)
+end
+
 function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
                                      version = nothing, tgrad = false,
@@ -341,6 +339,7 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         nothing
     end
     ODEFunction{iip}(f,
+                     sys = sys,
                      jac = _jac === nothing ? nothing : _jac,
                      tgrad = _tgrad === nothing ? nothing : _tgrad,
                      mass_matrix = _M,
@@ -365,6 +364,10 @@ Create an `DAEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and
 `ps` are used to set the order of the dependent variable and parameter vectors,
 respectively.
 """
+function DiffEqBase.DAEFunction(sys::AbstractODESystem, args...; kwargs...)
+    DAEFunction{true}(sys, args...; kwargs...)
+end
+
 function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
                                      ddvs = map(diff2term ∘ Differential(get_iv(sys)), dvs),
@@ -425,6 +428,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     end
 
     DAEFunction{iip}(f,
+                     sys = sys,
                      jac = _jac === nothing ? nothing : _jac,
                      syms = Symbol.(dvs),
                      jac_prototype = jac_prototype,
@@ -606,12 +610,6 @@ function DAEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)
     DAEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
-for P in [:ODEProblem, :DAEProblem]
-    @eval function DiffEqBase.$P(sys::AbstractODESystem, args...; kwargs...)
-        $P{true}(sys, args...; kwargs...)
-    end
-end
-
 """
 ```julia
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
@@ -627,6 +625,10 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
 Generates an ODEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
+function DiffEqBase.ODEProblem(sys::AbstractODESystem, args...; kwargs...)
+    ODEProblem{true}(sys, args...; kwargs...)
+end
+
 function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                                     parammap = DiffEqBase.NullParameters();
                                     callback = nothing,
@@ -635,26 +637,14 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap;
                                  has_difference = has_difference,
                                  check_length, kwargs...)
-    if has_continuous_events(sys)
-        event_cb = generate_rootfinding_callback(sys; kwargs...)
-    else
-        event_cb = nothing
-    end
-    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
-    cb = merge_cb(event_cb, difference_cb)
-    cb = merge_cb(cb, callback)
-
+    cbs = process_events(sys; callback, has_difference, kwargs...)
     kwargs = filter_kwargs(kwargs)
-    if cb === nothing
+    if cbs === nothing
         ODEProblem{iip}(f, u0, tspan, p; kwargs...)
     else
-        ODEProblem{iip}(f, u0, tspan, p; callback = cb, kwargs...)
+        ODEProblem{iip}(f, u0, tspan, p; callback = cbs, kwargs...)
     end
 end
-merge_cb(::Nothing, ::Nothing) = nothing
-merge_cb(::Nothing, x) = merge_cb(x, nothing)
-merge_cb(x, ::Nothing) = x
-merge_cb(x, y) = CallbackSet(x, y)
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 
 """
@@ -669,9 +659,13 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
                                     kwargs...) where iip
 ```
 
-Generates an DAEProblem from an ODESystem and allows for automatically
+Generates a DAEProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
+function DiffEqBase.DAEProblem(sys::AbstractODESystem, args...; kwargs...)
+    DAEProblem{true}(sys, args...; kwargs...)
+end
+
 function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
                                     parammap = DiffEqBase.NullParameters();
                                     check_length = true, kwargs...) where {iip}
@@ -750,7 +744,7 @@ function DAEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     kwargs...) where iip
 ```
 
-Generates a Julia expression for constructing an ODEProblem from an
+Generates a Julia expression for constructing a DAEProblem from an
 ODESystem and allows for automatically symbolically calculating
 numerical enhancements.
 """
@@ -786,14 +780,9 @@ function DAEProblemExpr(sys::AbstractODESystem, args...; kwargs...)
     DAEProblemExpr{true}(sys, args...; kwargs...)
 end
 
-### Enables Steady State Problems ###
-function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem, args...; kwargs...)
-    SteadyStateProblem{true}(sys, args...; kwargs...)
-end
-
 """
 ```julia
-function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
+function SciMLBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false,
@@ -804,8 +793,12 @@ function DiffEqBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
 Generates an SteadyStateProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
+function SciMLBase.SteadyStateProblem(sys::AbstractODESystem, args...; kwargs...)
+    SteadyStateProblem{true}(sys, args...; kwargs...)
+end
+
 function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem, u0map,
-                                            parammap = DiffEqBase.NullParameters();
+                                            parammap = SciMLBase.NullParameters();
                                             check_length = true, kwargs...) where {iip}
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap;
                                  steady_state = true,
@@ -816,7 +809,7 @@ end
 
 """
 ```julia
-function DiffEqBase.SteadyStateProblemExpr(sys::AbstractODESystem,u0map,
+function SciMLBase.SteadyStateProblemExpr(sys::AbstractODESystem,u0map,
                                     parammap=DiffEqBase.NullParameters();
                                     version = nothing, tgrad=false,
                                     jac = false,
@@ -832,7 +825,7 @@ numerical enhancements.
 struct SteadyStateProblemExpr{iip} end
 
 function SteadyStateProblemExpr{iip}(sys::AbstractODESystem, u0map,
-                                     parammap = DiffEqBase.NullParameters();
+                                     parammap = SciMLBase.NullParameters();
                                      check_length = true,
                                      kwargs...) where {iip}
     f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap;

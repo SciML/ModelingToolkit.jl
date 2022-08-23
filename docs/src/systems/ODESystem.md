@@ -47,14 +47,21 @@ jacobian_sparsity
 ## Standard Problem Constructors
 
 ```@docs
-ODEFunction
-ODEProblem
-SteadyStateFunction
-SteadyStateProblem
+ODEFunction(sys::ModelingToolkit.AbstractODESystem, args...)
+ODEProblem(sys::ModelingToolkit.AbstractODESystem, args...)
+SteadyStateProblem(sys::ModelingToolkit.AbstractODESystem, args...)
 ```
 
 ## Torn Problem Constructors
 
 ```@docs
-ODAEProblem
+ODAEProblem(sys::ModelingToolkit.AbstractODESystem, args...)
+```
+
+## Expression Constructors
+
+```@docs
+ODEFunctionExpr
+DAEFunctionExpr
+SteadyStateProblemExpr
 ```

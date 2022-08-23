@@ -107,7 +107,7 @@ function _positivemax(m, si)
     end
     alpha * max(m, 0) + (1 - alpha) * eps
 end
-@register _positivemax(m, tol)
+@register_symbolic _positivemax(m, tol)
 positivemax(m, ::Any; tol = nothing) = _positivemax(m, tol)
 mydiv(num, den) =
     if den == 0
@@ -115,7 +115,7 @@ mydiv(num, den) =
     else
         num / den
     end
-@register mydiv(n, d)
+@register_symbolic mydiv(n, d)
 
 function generate_isouter(sys::AbstractSystem)
     outer_connectors = Symbol[]
@@ -282,9 +282,7 @@ function generate_connection_equations_and_stream_connections(csets::AbstractVec
 
     for cset in csets
         v = cset.set[1].v
-        if hasmetadata(v, Symbolics.GetindexParent)
-            v = getparent(v)
-        end
+        v = getparent(v, v)
         vtype = get_connection_type(v)
         if vtype === Stream
             push!(stream_connections, cset)

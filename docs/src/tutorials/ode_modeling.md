@@ -13,11 +13,11 @@ But if you want to just see some code and run, here's an example:
 ```julia
 using ModelingToolkit
 
-@variables t x(t) RHS(t)  # independent and dependent variables
+@variables t x(t)   # independent and dependent variables
 @parameters τ       # parameters
 D = Differential(t) # define an operator for the differentiation w.r.t. time
 
-# your first ODE, consisting of a single equation, indicated by ~
+# your first ODE, consisting of a single equation, the equality indicated by ~
 @named fol = ODESystem([ D(x)  ~ (1 - x)/τ])
 
 using DifferentialEquations: solve
@@ -125,7 +125,7 @@ algebraic variables as "observables" (see
 That means, MTK still knows how to calculate them out of the information available
 in a simulation result. The intermediate variable `RHS` therefore can be plotted
 along with the state variable. Note that this has to be requested explicitly,
-though:
+through:
 
 ```julia
 prob = ODEProblem(fol_simplified, [x => 0.0], (0.0,10.0), [τ => 3.0])

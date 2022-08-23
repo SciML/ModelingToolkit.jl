@@ -4,7 +4,7 @@ $(DocStringExtensions.README)
 module ModelingToolkit
 using DocStringExtensions
 using AbstractTrees
-using DiffEqBase, SciMLBase, Reexport
+using DiffEqBase, SciMLBase, ForwardDiff, Reexport
 using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using InteractiveUtils
@@ -26,6 +26,7 @@ using Base: RefValue
 using Combinatorics
 import IfElse
 import Distributions
+import FunctionWrappersWrappers
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
@@ -41,6 +42,7 @@ import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
 import JuliaFormatter
 
 using Reexport
+using Symbolics: degree
 @reexport using Symbolics
 export @derivatives
 using Symbolics: _parse_vars, value, @derivatives, get_variables,
@@ -159,11 +161,12 @@ export AbstractTimeDependentSystem, AbstractTimeIndependentSystem,
        AbstractMultivariateSystem
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
 export DAEFunctionExpr, DAEProblemExpr
-export SDESystem, SDEFunction, SDEFunctionExpr, SDESystemExpr
+export SDESystem, SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
 export JumpSystem
 export ODEProblem, SDEProblem
-export NonlinearProblem, NonlinearProblemExpr
+export NonlinearFunction, NonlinearFunctionExpr
+export NonlinearProblem, BlockNonlinearProblem, NonlinearProblemExpr
 export OptimizationProblem, OptimizationProblemExpr
 export AutoModelingToolkit
 export SteadyStateProblem, SteadyStateProblemExpr
@@ -172,7 +175,7 @@ export NonlinearSystem, OptimizationSystem
 export alias_elimination, flatten
 export connect, @connector, Connection, Flow, Stream, instream
 export isinput, isoutput, getbounds, hasbounds, isdisturbance, istunable, getdist, hasdist,
-       tunable_parameters, isirreducible
+       tunable_parameters, isirreducible, getdescription, hasdescription
 export ode_order_lowering, dae_order_lowering, liouville_transform
 export PDESystem
 export Differential, expand_derivatives, @derivatives
@@ -181,7 +184,7 @@ export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variables, independent_variable, states, parameters, equations, controls,
        observed, structure, full_equations
-export structural_simplify, expand_connections
+export structural_simplify, expand_connections, linearize, linear_statespace
 export DiscreteSystem, DiscreteProblem
 
 export calculate_jacobian, generate_jacobian, generate_function

@@ -177,12 +177,12 @@ end
 
 Generates an DiscreteProblem from an DiscreteSystem.
 """
-function DiffEqBase.DiscreteProblem(sys::DiscreteSystem, u0map, tspan,
-                                    parammap = DiffEqBase.NullParameters();
-                                    eval_module = @__MODULE__,
-                                    eval_expression = true,
-                                    use_union = false,
-                                    kwargs...)
+function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map, tspan,
+                                   parammap = SciMLBase.NullParameters();
+                                   eval_module = @__MODULE__,
+                                   eval_expression = true,
+                                   use_union = false,
+                                   kwargs...)
     dvs = states(sys)
     ps = parameters(sys)
     eqs = equations(sys)
@@ -203,7 +203,7 @@ function DiffEqBase.DiscreteProblem(sys::DiscreteSystem, u0map, tspan,
                               expression_module = eval_module)
     f_oop, _ = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
     f(u, p, iv) = f_oop(u, p, iv)
-    fd = DiscreteFunction(f, syms = Symbol.(dvs))
+    fd = DiscreteFunction(f; syms = Symbol.(dvs), sys = sys)
     DiscreteProblem(fd, u0, tspan, p; kwargs...)
 end
 

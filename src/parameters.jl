@@ -1,9 +1,26 @@
-import SymbolicUtils: symtype, term, hasmetadata
+import SymbolicUtils: symtype, term, hasmetadata, issym
 struct MTKParameterCtx end
 
-isparameter(x::Num) = isparameter(value(x))
-isparameter(x::Symbolic) = getmetadata(x, MTKParameterCtx, false)
-isparameter(x) = false
+function isparameter(x)
+    x = unwrap(x)
+
+    #TODO: Delete this branch
+    if x isa Symbolic && Symbolics.getparent(x, false) !== false
+        p = Symbolics.getparent(x)
+        isparameter(p) ||
+            (hasmetadata(p, Symbolics.VariableSource) &&
+             getmetadata(p, Symbolics.VariableSource)[1] == :parameters)
+    elseif istree(x) && operation(x) isa Symbolic
+        getmetadata(x, MTKParameterCtx, false) ||
+            isparameter(operation(x))
+    elseif istree(x) && operation(x) == (getindex)
+        isparameter(arguments(x)[1])
+    elseif x isa Symbolic
+        getmetadata(x, MTKParameterCtx, false)
+    else
+        false
+    end
+end
 
 """
     toparam(s::Sym)
@@ -15,13 +32,11 @@ function toparam(s)
         Symbolics.wrap(toparam(Symbolics.unwrap(s)))
     elseif s isa AbstractArray
         map(toparam, s)
-    elseif symtype(s) <: AbstractArray
-        Symbolics.recurse_and_apply(toparam, s)
     else
         setmetadata(s, MTKParameterCtx, true)
     end
 end
-toparam(s::Num) = Num(toparam(value(s)))
+toparam(s::Num) = wrap(toparam(value(s)))
 
 """
     tovar(s::Sym)

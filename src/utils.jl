@@ -126,6 +126,8 @@ function check_parameters(ps, iv)
     for p in ps
         isequal(iv, p) &&
             throw(ArgumentError("Independent variable $iv not allowed in parameters."))
+        isparameter(p) ||
+            throw(ArgumentError("$p is not a parameter."))
     end
 end
 
@@ -148,8 +150,10 @@ function check_variables(dvs, iv)
     for dv in dvs
         isequal(iv, dv) &&
             throw(ArgumentError("Independent variable $iv not allowed in dependent variables."))
-        (is_delay_var(iv, dv) || occursin(iv, iv_from_nested_derivative(dv))) ||
+        (is_delay_var(iv, dv) || occursin(iv, dv)) ||
             throw(ArgumentError("Variable $dv is not a function of independent variable $iv."))
+        isparameter(dv) &&
+            throw(ArgumentError("$dv is not a state. It is a parameter."))
     end
 end
 
@@ -201,19 +205,36 @@ function check_equations(eqs, iv)
     end
 end
 "Get all the independent variables with respect to which differentials/differences are taken."
-function collect_ivs_from_nested_operator!(ivs, x::Term, target_op)
-    op = operation(x)
+function collect_ivs_from_nested_operator!(ivs, x, target_op)
+    if !istree(x)
+        return
+    end
+    op = operation(unwrap(x))
     if op isa target_op
         push!(ivs, get_iv(op))
-        collect_ivs_from_nested_operator!(ivs, arguments(x)[1], target_op)
+        x = if target_op <: Differential
+            op.x
+        elseif target_op <: Difference
+            op.t
+        else
+            error("Unknown target op type in collect_ivs $target_op. Pass Difference or Differential")
+        end
+        collect_ivs_from_nested_operator!(ivs, x, target_op)
     end
 end
 
-function iv_from_nested_derivative(x::Term, op = Differential)
-    operation(x) isa op ? iv_from_nested_derivative(arguments(x)[1], op) : arguments(x)[1]
+function iv_from_nested_derivative(x, op = Differential)
+    if istree(x) && operation(x) == getindex
+        iv_from_nested_derivative(arguments(x)[1], op)
+    elseif istree(x)
+        operation(x) isa op ? iv_from_nested_derivative(arguments(x)[1], op) :
+        arguments(x)[1]
+    elseif issym(x)
+        x
+    else
+        nothing
+    end
 end
-iv_from_nested_derivative(x::Sym, op = Differential) = x
-iv_from_nested_derivative(x, op = Differential) = nothing
 
 hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
 getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))
@@ -589,4 +610,128 @@ function promote_to_concrete(vs; tofloat = true, use_union = false)
         end
         convert.(C, vs)
     end
+end
+
+struct BitDict <: AbstractDict{Int, Int}
+    keys::Vector{Int}
+    values::Vector{Union{Nothing, Int}}
+end
+BitDict(n::Integer) = BitDict(Int[], Union{Nothing, Int}[nothing for _ in 1:n])
+struct BitDictKeySet <: AbstractSet{Int}
+    d::BitDict
+end
+
+Base.keys(d::BitDict) = BitDictKeySet(d)
+Base.in(v::Integer, s::BitDictKeySet) = s.d.values[v] !== nothing
+Base.iterate(s::BitDictKeySet, state...) = iterate(s.d.keys, state...)
+function Base.setindex!(d::BitDict, val::Integer, ind::Integer)
+    if 1 <= ind <= length(d.values) && d.values[ind] === nothing
+        push!(d.keys, ind)
+    end
+    d.values[ind] = val
+end
+function Base.getindex(d::BitDict, ind::Integer)
+    if 1 <= ind <= length(d.values) && d.values[ind] === nothing
+        return d.values[ind]
+    else
+        throw(KeyError(ind))
+    end
+end
+function Base.iterate(d::BitDict, state...)
+    r = Base.iterate(d.keys, state...)
+    r === nothing && return nothing
+    k, state = r
+    (k => d.values[k]), state
+end
+function Base.empty!(d::BitDict)
+    for v in d.keys
+        d.values[v] = nothing
+    end
+    empty!(d.keys)
+    d
+end
+
+abstract type AbstractSimpleTreeIter{T} end
+Base.IteratorSize(::Type{<:AbstractSimpleTreeIter}) = Base.SizeUnknown()
+Base.eltype(::Type{<:AbstractSimpleTreeIter{T}}) where {T} = childtype(T)
+has_fast_reverse(::Type{<:AbstractSimpleTreeIter}) = true
+has_fast_reverse(::T) where {T <: AbstractSimpleTreeIter} = has_fast_reverse(T)
+reverse_buffer(it::AbstractSimpleTreeIter) = has_fast_reverse(it) ? nothing : eltype(it)[]
+reverse_children!(::Nothing, cs) = Iterators.reverse(cs)
+function reverse_children!(rev_buff, cs)
+    Iterators.reverse(cs)
+    empty!(rev_buff)
+    for c in cs
+        push!(rev_buff, c)
+    end
+    Iterators.reverse(rev_buff)
+end
+
+struct StatefulPreOrderDFS{T} <: AbstractSimpleTreeIter{T}
+    t::T
+end
+function Base.iterate(it::StatefulPreOrderDFS,
+                      state = (eltype(it)[it.t], reverse_buffer(it)))
+    stack, rev_buff = state
+    isempty(stack) && return nothing
+    t = pop!(stack)
+    for c in reverse_children!(rev_buff, children(t))
+        push!(stack, c)
+    end
+    return t, state
+end
+struct StatefulPostOrderDFS{T} <: AbstractSimpleTreeIter{T}
+    t::T
+end
+function Base.iterate(it::StatefulPostOrderDFS,
+                      state = (eltype(it)[it.t], falses(1), reverse_buffer(it)))
+    isempty(state[2]) && return nothing
+    vstack, sstack, rev_buff = state
+    while true
+        t = pop!(vstack)
+        isresume = pop!(sstack)
+        isresume && return t, state
+        push!(vstack, t)
+        push!(sstack, true)
+        for c in reverse_children!(rev_buff, children(t))
+            push!(vstack, c)
+            push!(sstack, false)
+        end
+    end
+end
+
+# Note that StatefulBFS also returns the depth.
+struct StatefulBFS{T} <: AbstractSimpleTreeIter{T}
+    t::T
+end
+Base.eltype(::Type{<:StatefulBFS{T}}) where {T} = Tuple{Int, childtype(T)}
+function Base.iterate(it::StatefulBFS, queue = (eltype(it)[(0, it.t)]))
+    isempty(queue) && return nothing
+    lv, t = popfirst!(queue)
+    nextlv = lv + 1
+    for c in children(t)
+        push!(queue, (nextlv, c))
+    end
+    return (lv, t), queue
+end
+
+function jacobian_wrt_vars(pf::F, p, input_idxs, chunk::C) where {F, C}
+    E = eltype(p)
+    tag = ForwardDiff.Tag(pf, E)
+    T = typeof(tag)
+    dualtype = ForwardDiff.Dual{T, E, ForwardDiff.chunksize(chunk)}
+    p_big = similar(p, dualtype)
+    copyto!(p_big, p)
+    p_closure = let pf = pf,
+        input_idxs = input_idxs,
+        p_big = p_big
+
+        function (p_small_inner)
+            p_big[input_idxs] .= p_small_inner
+            pf(p_big)
+        end
+    end
+    p_small = p[input_idxs]
+    cfg = ForwardDiff.JacobianConfig(p_closure, p_small, chunk, tag)
+    ForwardDiff.jacobian(p_closure, p_small, cfg, Val(false))
 end

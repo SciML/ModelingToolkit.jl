@@ -9,46 +9,90 @@ function try_assign_eq!(ict::IncrementalCycleTracker, vj::Integer, eq::Integer)
     end
 end
 
-function tearEquations!(ict::IncrementalCycleTracker, Gsolvable, es::Vector{Int},
-                        vs::Vector{Int})
+function try_assign_eq!(ict::IncrementalCycleTracker, vars, v_active, eq::Integer,
+                        condition::F = _ -> true) where {F}
     G = ict.graph
-    vActive = BitSet(vs)
+    for vj in vars
+        (vj in v_active && G.matching[vj] === unassigned && condition(vj)) || continue
+        try_assign_eq!(ict, vj, eq) && return true
+    end
+    return false
+end
 
-    for eq in es  # iterate only over equations that are not in eSolvedFixed
-        for vj in Gsolvable[eq]
-            if G.matching[vj] === unassigned && (vj in vActive)
-                r = try_assign_eq!(ict, vj, eq)
-                r && break
+function tearEquations!(ict::IncrementalCycleTracker, Gsolvable, es::Vector{Int},
+                        v_active::BitSet, isder′::F) where {F}
+    check_der = isder′ !== nothing
+    if check_der
+        has_der = Ref(false)
+        isder = let has_der = has_der, isder′ = isder′
+            v -> begin
+                r = isder′(v)
+                has_der[] |= r
+                r
             end
         end
+    end
+    for eq in es  # iterate only over equations that are not in eSolvedFixed
+        vs = Gsolvable[eq]
+        if check_der
+            # if there're differentiated variables, then only consider them
+            try_assign_eq!(ict, vs, v_active, eq, isder)
+            if has_der[]
+                has_der[] = false
+                continue
+            end
+        end
+        try_assign_eq!(ict, vs, v_active, eq)
     end
 
     return ict
 end
 
-function tear_graph_block_modia!(var_eq_matching, graph, solvable_graph, eqs, vars)
+function tear_graph_block_modia!(var_eq_matching, graph, solvable_graph, eqs, vars,
+                                 isder::F) where {F}
     ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph); dir = :in)
-    tearEquations!(ict, solvable_graph.fadjlist, eqs, vars)
+    tearEquations!(ict, solvable_graph.fadjlist, eqs, vars, isder)
     for var in vars
         var_eq_matching[var] = ict.graph.matching[var]
     end
     return nothing
 end
 
-function tear_graph_modia(structure::SystemStructure; varfilter = v -> true,
-                          eqfilter = eq -> true)
+function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
+                          ::Type{U} = Unassigned;
+                          varfilter::F2 = v -> true,
+                          eqfilter::F3 = eq -> true) where {F, U, F2, F3}
+    # It would be possible here to simply iterate over all variables and attempt to
+    # use tearEquations! to produce a matching that greedily selects the minimal
+    # number of torn variables. However, we can do this process faster if we first
+    # compute the strongly connected components. In the absence of cycles and
+    # non-solvability, a maximal matching on the original graph will give us an
+    # optimal assignment. However, even with cycles, we can use the maximal matching
+    # to give us a good starting point for a good matching and then proceed to
+    # reverse edges in each scc to improve the solution. Note that it is possible
+    # to have optimal solutions that cannot be found by this process. We will not
+    # find them here [TODO: It would be good to have an explicit example of this.]
+
     @unpack graph, solvable_graph = structure
-    var_eq_matching = complete(maximal_matching(graph, eqfilter, varfilter))
+    var_eq_matching = complete(maximal_matching(graph, eqfilter, varfilter, U))
     var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, var_eq_matching)
 
+    ieqs = Int[]
+    filtered_vars = BitSet()
     for vars in var_sccs
-        filtered_vars = filter(varfilter, vars)
-        ieqs = Int[var_eq_matching[v]
-                   for v in filtered_vars if var_eq_matching[v] !== unassigned]
         for var in vars
+            if varfilter(var)
+                push!(filtered_vars, var)
+                if var_eq_matching[var] !== unassigned
+                    push!(ieqs, var_eq_matching[var])
+                end
+            end
             var_eq_matching[var] = unassigned
         end
-        tear_graph_block_modia!(var_eq_matching, graph, solvable_graph, ieqs, filtered_vars)
+        tear_graph_block_modia!(var_eq_matching, graph, solvable_graph, ieqs, filtered_vars,
+                                isder)
+        empty!(ieqs)
+        empty!(filtered_vars)
     end
 
     return var_eq_matching

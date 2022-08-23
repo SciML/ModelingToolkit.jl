@@ -85,18 +85,30 @@ struct SDESystem <: AbstractODESystem
     type: type of the system
     """
     connector_type::Any
+    """
+    continuous_events: A `Vector{SymbolicContinuousCallback}` that model events.
+    The integrator will use root finding to guarantee that it steps at each zero crossing.
+    """
+    continuous_events::Vector{SymbolicContinuousCallback}
+    """
+    discrete_events: A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
+    analog to `SciMLBase.DiscreteCallback` that exectues an affect when a given condition is
+    true at the end of an integration step.
+    """
+    discrete_events::Vector{SymbolicDiscreteCallback}
 
     function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
-                       ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type;
-                       checks::Bool = true)
+                       ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
+                       cevents, devents; checks::Bool = true)
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             check_equations(deqs, iv)
+            check_equations(equations(cevents), iv)
             all_dimensionless([dvs; ps; iv]) || check_units(deqs, neqs)
         end
         new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac,
-            Wfact, Wfact_t, name, systems, defaults, connector_type)
+            Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents)
     end
 end
 
@@ -109,7 +121,9 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    defaults = _merge(Dict(default_u0), Dict(default_p)),
                    name = nothing,
                    connector_type = nothing,
-                   checks = true)
+                   checks = true,
+                   continuous_events = nothing,
+                   discrete_events = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = scalarize(deqs)
@@ -139,9 +153,12 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     ctrl_jac = RefValue{Any}(EMPTY_JAC)
     Wfact = RefValue(EMPTY_JAC)
     Wfact_t = RefValue(EMPTY_JAC)
+    cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
+    disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
+
     SDESystem(deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-              checks = checks)
+              cont_callbacks, disc_callbacks; checks = checks)
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
@@ -206,16 +223,113 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
 end
 
 """
+$(TYPEDSIGNATURES)
+
+Measure transformation method that allows for a reduction in the variance of an estimator `Exp(g(X_t))`.
+Input:  Original SDE system and symbolic function `u(t,x)` with scalar output that
+        defines the adjustable parameters `d` in the Girsanov transformation. Optional: initial
+        condition for `θ0`.
+Output: Modified SDESystem with additional component `θ_t` and initial value `θ0`, as well as
+        the weight `θ_t/θ0` as observed equation, such that the estimator `Exp(g(X_t)θ_t/θ0)`
+        has a smaller variance.
+
+Reference:
+Kloeden, P. E., Platen, E., & Schurz, H. (2012). Numerical solution of SDE through computer
+experiments. Springer Science & Business Media.
+
+# Example
+
 ```julia
-function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
-                                     version = nothing, tgrad=false, sparse = false,
-                                     jac = false, Wfact = false, kwargs...) where {iip}
+using ModelingToolkit
+
+@parameters α β
+@variables t x(t) y(t) z(t)
+D = Differential(t)
+
+eqs = [D(x) ~ α*x]
+noiseeqs = [β*x]
+
+@named de = SDESystem(eqs,noiseeqs,t,[x],[α,β])
+
+# define u (user choice)
+u = x
+θ0 = 0.1
+g(x) = x[1]^2
+demod = ModelingToolkit.Girsanov_transform(de, u; θ0=0.1)
+
+u0modmap = [
+    x => x0
+]
+
+parammap = [
+    α => 1.5,
+    β => 1.0
+]
+
+probmod = SDEProblem(demod,u0modmap,(0.0,1.0),parammap)
+ensemble_probmod = EnsembleProblem(probmod;
+          output_func = (sol,i) -> (g(sol[x,end])*sol[demod.weight,end],false),
+          )
+
+simmod = solve(ensemble_probmod,EM(),dt=dt,trajectories=numtraj)
 ```
 
-Create an `SDEFunction` from the [`SDESystem`](@ref). The arguments `dvs` and `ps`
-are used to set the order of the dependent variable and parameter vectors,
-respectively.
 """
+function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
+    name = nameof(sys)
+
+    # register new varible θ corresponding to 1D correction process θ(t)
+    t = get_iv(sys)
+    D = Differential(t)
+    @variables θ(t), weight(t)
+
+    # determine the adjustable parameters `d` given `u`
+    # gradient of u with respect to states
+    grad = Symbolics.gradient(u, states(sys))
+
+    noiseeqs = get_noiseeqs(sys)
+    if typeof(noiseeqs) <: Vector
+        d = simplify.(-(noiseeqs .* grad) / u)
+        drift_correction = noiseeqs .* d
+    else
+        d = simplify.(-noiseeqs * grad / u)
+        drift_correction = noiseeqs * d
+    end
+
+    # transformation adds additional state θ: newX = (X,θ)
+    # drift function for state is modified
+    # θ has zero drift
+    deqs = vcat([equations(sys)[i].lhs ~ equations(sys)[i].rhs - drift_correction[i]
+                 for i in eachindex(states(sys))]...)
+    deqsθ = D(θ) ~ 0
+    push!(deqs, deqsθ)
+
+    # diffusion matrix is of size d x m (d states, m noise), with diagonal noise represented as a d-dimensional vector
+    # for diagonal noise processes with m>1, the noise process will become non-diagonal; extra state component but no new noise process.
+    # new diffusion matrix is of size d+1 x M
+    # diffusion for state is unchanged
+
+    noiseqsθ = θ * d
+
+    if typeof(noiseeqs) <: Vector
+        m = size(noiseeqs)
+        if m == 1
+            push!(noiseeqs, noiseqsθ)
+        else
+            noiseeqs = [Array(Diagonal(noiseeqs)); noiseqsθ']
+        end
+    else
+        noiseeqs = [Array(noiseeqs); noiseqsθ']
+    end
+
+    state = [states(sys); θ]
+
+    # return modified SDE System
+    SDESystem(deqs, noiseeqs, get_iv(sys), state, parameters(sys);
+              defaults = Dict(θ => θ0), observed = [weight ~ θ / θ0],
+              name = name, checks = false)
+end
+
 function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
                                      ps = parameters(sys),
                                      u0 = nothing;
@@ -292,6 +406,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
 
     sts = states(sys)
     SDEFunction{iip}(f, g,
+                     sys = sys,
                      jac = _jac === nothing ? nothing : _jac,
                      tgrad = _tgrad === nothing ? nothing : _tgrad,
                      Wfact = _Wfact === nothing ? nothing : _Wfact,
@@ -301,6 +416,17 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
                      observed = observedfun)
 end
 
+"""
+```julia
+function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
+                                     version = nothing, tgrad=false, sparse = false,
+                                     jac = false, Wfact = false, kwargs...) where {iip}
+```
+
+Create an `SDEFunction` from the [`SDESystem`](@ref). The arguments `dvs` and `ps`
+are used to set the order of the dependent variable and parameter vectors,
+respectively.
+"""
 function DiffEqBase.SDEFunction(sys::SDESystem, args...; kwargs...)
     SDEFunction{true}(sys, args...; kwargs...)
 end
@@ -380,6 +506,29 @@ function SDEFunctionExpr(sys::SDESystem, args...; kwargs...)
     SDEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
+function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map, tspan,
+                                    parammap = DiffEqBase.NullParameters();
+                                    sparsenoise = nothing, check_length = true,
+                                    callback = nothing, kwargs...) where {iip}
+    f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; check_length,
+                                 kwargs...)
+    cbs = process_events(sys; callback)
+    sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
+
+    noiseeqs = get_noiseeqs(sys)
+    if noiseeqs isa AbstractVector
+        noise_rate_prototype = nothing
+    elseif sparsenoise
+        I, J, V = findnz(SparseArrays.sparse(noiseeqs))
+        noise_rate_prototype = SparseArrays.sparse(I, J, zero(eltype(u0)))
+    else
+        noise_rate_prototype = zeros(eltype(u0), size(noiseeqs))
+    end
+
+    SDEProblem{iip}(f, f.g, u0, tspan, p; callback = cbs,
+                    noise_rate_prototype = noise_rate_prototype, kwargs...)
+end
+
 """
 ```julia
 function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
@@ -395,28 +544,6 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
 Generates an SDEProblem from an SDESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
-function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map, tspan,
-                                    parammap = DiffEqBase.NullParameters();
-                                    sparsenoise = nothing, check_length = true,
-                                    kwargs...) where {iip}
-    f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; check_length,
-                                 kwargs...)
-    sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
-
-    noiseeqs = get_noiseeqs(sys)
-    if noiseeqs isa AbstractVector
-        noise_rate_prototype = nothing
-    elseif sparsenoise
-        I, J, V = findnz(SparseArrays.sparse(noiseeqs))
-        noise_rate_prototype = SparseArrays.sparse(I, J, zero(eltype(u0)))
-    else
-        noise_rate_prototype = zeros(eltype(u0), size(noiseeqs))
-    end
-
-    SDEProblem{iip}(f, f.g, u0, tspan, p; noise_rate_prototype = noise_rate_prototype,
-                    kwargs...)
-end
-
 function DiffEqBase.SDEProblem(sys::SDESystem, args...; kwargs...)
     SDEProblem{true}(sys, args...; kwargs...)
 end

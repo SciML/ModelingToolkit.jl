@@ -24,6 +24,7 @@ sde = SDESystem(ode, noiseeqs)
 ```@docs
 structural_simplify
 alias_elimination
+Girsanov_transform
 ```
 
 ## Analyses
@@ -43,6 +44,13 @@ jacobian_sparsity
 ## Problem Constructors
 
 ```@docs
-SDEFunction
-SDEProblem
+SDEFunction(sys::ModelingToolkit.SDESystem, args...)
+SDEProblem(sys::ModelingToolkit.SDESystem, args...)
+```
+
+## Expression Constructors
+
+```@docs
+SDEFunctionExpr
+SDEProblemExpr
 ```

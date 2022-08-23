@@ -1,13 +1,11 @@
 using LinearAlgebra
 
-using ModelingToolkit: isdifferenceeq, has_continuous_events, generate_rootfinding_callback,
-                       generate_difference_cb, merge_cb
+using ModelingToolkit: isdifferenceeq, process_events
 
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
 function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_sccs,
                                                     nlsolve_scc_idxs, eqs_idxs, states_idxs)
-    fullvars = state.fullvars
     graph = state.structure.graph
 
     # The sparsity pattern of `nlsolve(f, u, p)` w.r.t `p` is difficult to
@@ -72,7 +70,6 @@ function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_
 
     var2idx = Dict{Int, Int}(v => i for (i, v) in enumerate(states_idxs))
     eqs2idx = Dict{Int, Int}(v => i for (i, v) in enumerate(eqs_idxs))
-    nlsolve_vars_set = BitSet(nlsolve_vars)
 
     I = Int[]
     J = Int[]
@@ -96,7 +93,7 @@ function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_
             end
         end
     end
-    sparse(I, J, true)
+    sparse(I, J, true, length(eqs_idxs), length(states_idxs))
 end
 
 function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDict,
@@ -294,7 +291,7 @@ function build_torn_function(sys;
                        rhss)
 
     states = fullvars[states_idxs]
-    syms = map(Symbol, states_idxs)
+    syms = map(Symbol, states)
 
     pre = get_postprocess_fbody(sys)
 
@@ -487,10 +484,6 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
     expression ? ex : @RuntimeGeneratedFunction(ex)
 end
 
-struct ODAEProblem{iip} end
-
-ODAEProblem(args...; kw...) = ODAEProblem{true}(args...; kw...)
-
 """
     ODAEProblem{iip}(sys, u0map, tspan, parammap = DiffEqBase.NullParameters(); kw...)
 
@@ -500,9 +493,15 @@ already been applied to them.
 In these cases, the constructor uses the knowledge of the strongly connected
 components calculated during the process of simplification as the basis for
 building pre-simplified nonlinear systems in the implicit solving.
+
 In summary: these problems are structurally modified, but could be
-more efficient and more stable. Note, the returned object is still of type [`ODEProblem`](@ref).
+more efficient and more stable. Note, the returned object is still of type
+[`ODEProblem`](@ref).
 """
+struct ODAEProblem{iip} end
+
+ODAEProblem(args...; kw...) = ODAEProblem{true}(args...; kw...)
+
 function ODAEProblem{iip}(sys,
                           u0map,
                           tspan,
@@ -524,18 +523,11 @@ function ODAEProblem{iip}(sys,
                                        use_union)
 
     has_difference = any(isdifferenceeq, eqs)
-    if has_continuous_events(sys)
-        event_cb = generate_rootfinding_callback(sys; kwargs...)
-    else
-        event_cb = nothing
-    end
-    difference_cb = has_difference ? generate_difference_cb(sys; kwargs...) : nothing
-    cb = merge_cb(event_cb, difference_cb)
-    cb = merge_cb(cb, callback)
+    cbs = process_events(sys; callback, has_difference, kwargs...)
 
-    if cb === nothing
+    if cbs === nothing
         ODEProblem{iip}(fun, u0, tspan, p; kwargs...)
     else
-        ODEProblem{iip}(fun, u0, tspan, p; callback = cb, kwargs...)
+        ODEProblem{iip}(fun, u0, tspan, p; callback = cbs, kwargs...)
     end
 end

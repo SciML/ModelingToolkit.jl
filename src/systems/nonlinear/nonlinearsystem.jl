@@ -87,10 +87,14 @@ function NonlinearSystem(eqs, states, ps;
                          systems = NonlinearSystem[],
                          connector_type = nothing,
                          continuous_events = nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
+                         discrete_events = nothing,   # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
                          checks = true,
                          metadata = nothing)
     continuous_events === nothing || isempty(continuous_events) ||
         throw(ArgumentError("NonlinearSystem does not accept `continuous_events`, you provided $continuous_events"))
+    discrete_events === nothing || isempty(discrete_events) ||
+        throw(ArgumentError("NonlinearSystem does not accept `discrete_events`, you provided $discrete_events"))
+
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     # Move things over, but do not touch array expressions
@@ -182,13 +186,9 @@ function hessian_sparsity(sys::NonlinearSystem)
                       states(sys)) for eq in equations(sys)]
 end
 
-function DiffEqBase.NonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
-    NonlinearFunction{true}(sys, args...; kwargs...)
-end
-
 """
 ```julia
-function DiffEqBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys),
+function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing,
                                      jac = false,
@@ -200,13 +200,17 @@ Create an `NonlinearFunction` from the [`NonlinearSystem`](@ref). The arguments
 `dvs` and `ps` are used to set the order of the dependent variable and parameter
 vectors, respectively.
 """
-function DiffEqBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys),
-                                           ps = parameters(sys), u0 = nothing;
-                                           version = nothing,
-                                           jac = false,
-                                           eval_expression = true,
-                                           sparse = false, simplify = false,
-                                           kwargs...) where {iip}
+function SciMLBase.NonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
+    NonlinearFunction{true}(sys, args...; kwargs...)
+end
+
+function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys),
+                                          ps = parameters(sys), u0 = nothing;
+                                          version = nothing,
+                                          jac = false,
+                                          eval_expression = true,
+                                          sparse = false, simplify = false,
+                                          kwargs...) where {iip}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression}, kwargs...)
     f_oop, f_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in f_gen) : f_gen
     f(u, p) = f_oop(u, p)
@@ -234,6 +238,7 @@ function DiffEqBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sy
     end
 
     NonlinearFunction{iip}(f,
+                           sys = sys,
                            jac = _jac === nothing ? nothing : _jac,
                            jac_prototype = sparse ?
                                            similar(calculate_jacobian(sys, sparse = sparse),
@@ -243,7 +248,7 @@ end
 
 """
 ```julia
-function DiffEqBase.NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = states(sys),
+function SciMLBase.NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing,
                                      jac = false,
@@ -316,10 +321,6 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
     return f, u0, p
 end
 
-function DiffEqBase.NonlinearProblem(sys::NonlinearSystem, args...; kwargs...)
-    NonlinearProblem{true}(sys, args...; kwargs...)
-end
-
 """
 ```julia
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,
@@ -333,6 +334,10 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,
 Generates an NonlinearProblem from a NonlinearSystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
+function DiffEqBase.NonlinearProblem(sys::NonlinearSystem, args...; kwargs...)
+    NonlinearProblem{true}(sys, args...; kwargs...)
+end
+
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
                                           parammap = DiffEqBase.NullParameters();
                                           check_length = true, kwargs...) where {iip}

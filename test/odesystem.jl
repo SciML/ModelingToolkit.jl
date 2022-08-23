@@ -213,6 +213,7 @@ p2 = (k₁ => 0.04,
       k₃ => 1e4)
 tspan = (0.0, 100000.0)
 prob1 = ODEProblem(sys, u0, tspan, p)
+@test prob1.f.sys === sys
 prob12 = ODEProblem(sys, u0, tspan, [0.04, 3e7, 1e4])
 prob13 = ODEProblem(sys, u0, tspan, (0.04, 3e7, 1e4))
 prob14 = ODEProblem(sys, u0, tspan, p2)
@@ -376,7 +377,7 @@ end
 
 # issue 1109
 let
-    @variables t x[1:3, 1:3](t)
+    @variables t x(t)[1:3, 1:3]
     D = Differential(t)
     @named sys = ODESystem(D.(x) .~ x)
     @test_nowarn structural_simplify(sys)
@@ -386,7 +387,7 @@ end
 using Symbolics: unwrap, wrap
 using LinearAlgebra
 @variables t
-sts = @variables x[1:3](t)=[1, 2, 3.0] y(t)=1.0
+sts = @variables x(t)[1:3]=[1, 2, 3.0] y(t)=1.0
 ps = @parameters p[1:3] = [1, 2, 3]
 D = Differential(t)
 eqs = [collect(D.(x) .~ x)
@@ -487,7 +488,7 @@ function foo(a::Num, ms::AbstractVector)
     wrap(term(foo, a, term(SVector, ms...)))
 end
 foo(a, ms::AbstractVector) = a + sum(ms)
-@variables t x(t) ms[1:3](t)
+@variables t x(t) ms(t)[1:3]
 D = Differential(t)
 ms = collect(ms)
 eqs = [D(x) ~ foo(x, ms); D.(ms) .~ 1]
@@ -589,13 +590,13 @@ end
 let
     @parameters t
     D = Differential(t)
-    @variables x[1:2](t) = zeros(2)
+    x = map(xx -> xx(t), Symbolics.variables(:x, 1:2, T = SymbolicUtils.FnType))
     @variables y(t) = 0
     @parameters k = 1
     eqs = [D(x[1]) ~ x[2]
            D(x[2]) ~ -x[1] - 0.5 * x[2] + k
            y ~ 0.9 * x[1] + x[2]]
-    @named sys = ODESystem(eqs, t, vcat(x, [y]), [k])
+    @named sys = ODESystem(eqs, t, vcat(x, [y]), [k], defaults = Dict(x .=> 0))
     sys = structural_simplify(sys)
 
     u0 = [0.5, 0]
@@ -680,7 +681,7 @@ let
     eqs_to_lhs(eqs) = eq_to_lhs.(eqs)
 
     @parameters σ=10 ρ=28 β=8 / 3 sigma rho beta
-    @variables t t2 x(t)=1 y(t)=0 z(t)=0 x2(t2)=1 y2(t2)=0 z2(t2)=0 u[1:3](t2)
+    @variables t t2 x(t)=1 y(t)=0 z(t)=0 x2(t2)=1 y2(t2)=0 z2(t2)=0 u(t2)[1:3]
 
     D = Differential(t)
     D2 = Differential(t2)
@@ -749,7 +750,7 @@ end
 let
     @parameters t
 
-    u = collect(first(@variables u[1:4](t)))
+    u = collect(first(@variables u(t)[1:4]))
     Dt = Differential(t)
 
     eqs = [Differential(t)(u[2]) - 1.1u[1] ~ 0
@@ -794,4 +795,86 @@ let
 
     defs = Dict(s1.dx => 0.0, D(s1.x) => s1.x, s1.x => 0.0)
     @test isequal(ModelingToolkit.defaults(s2), defs)
+end
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/1705
+let
+    x0 = 0.0
+    v0 = 1.0
+
+    kx = -1.0
+    kv = -1.0
+
+    tf = 10.0
+
+    ## controller
+
+    function pd_ctrl(; name)
+        @parameters kx kv
+        @variables t u(t) x(t) v(t)
+
+        eqs = [u ~ kx * x + kv * v]
+        ODESystem(eqs; name)
+    end
+
+    @named ctrl = pd_ctrl()
+
+    ## double integrator
+
+    function double_int(; name)
+        @variables t u(t) x(t) v(t)
+        D = Differential(t)
+
+        eqs = [D(x) ~ v, D(v) ~ u]
+        ODESystem(eqs; name)
+    end
+
+    @named sys = double_int()
+
+    ## connections
+
+    connections = [sys.u ~ ctrl.u, ctrl.x ~ sys.x, ctrl.v ~ sys.v]
+
+    @named connected = ODESystem(connections)
+    @named sys_con = compose(connected, sys, ctrl)
+
+    sys_alias = alias_elimination(sys_con)
+    D = Differential(t)
+    true_eqs = [0 ~ D(sys.v) - sys.u
+                0 ~ sys.x - ctrl.x
+                0 ~ sys.v - D(sys.x)
+                0 ~ ctrl.kv * D(sys.x) + ctrl.kx * ctrl.x - D(sys.v)]
+    @test isequal(full_equations(sys_alias), true_eqs)
+
+    sys_simp = structural_simplify(sys_con)
+    D = Differential(t)
+    true_eqs = [D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x
+                D(sys.x) ~ sys.v]
+    @test isequal(full_equations(sys_simp), true_eqs)
+end
+
+let
+    @variables t
+    @variables x(t) = 1
+    @variables y(t) = 1
+    @parameters pp = -1
+    der = Differential(t)
+    @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 - y + x], t)
+    as = alias_elimination(sys4)
+    @test length(equations(as)) == 1
+    @test isequal(equations(as)[1].lhs, -der(der(x)))
+    # TODO: maybe do not emit x_t
+    sys4s = structural_simplify(sys4)
+    prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
+    @test string.(prob.f.syms) == ["x(t)", "xˍt(t)"]
+end
+
+let
+    @variables t
+    @parameters P(t) Q(t)
+    ∂t = Differential(t)
+
+    eqs = [∂t(Q) ~ 0.2P
+           ∂t(P) ~ -80.0sin(Q)]
+    @test_throws ArgumentError @named sys = ODESystem(eqs)
 end

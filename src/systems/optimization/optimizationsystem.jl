@@ -131,10 +131,6 @@ namespace_expr(sys::OptimizationSystem) = namespace_expr(get_op(sys), sys)
 
 hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
 
-function DiffEqBase.OptimizationProblem(sys::OptimizationSystem, args...; kwargs...)
-    DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem, args...; kwargs...)
-end
-
 function rep_pars_vals!(e::Expr, p)
     rep_pars_vals!.(e.args, Ref(p))
     replace!(e.args, p...)
@@ -157,6 +153,10 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
 Generates an OptimizationProblem from an OptimizationSystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
+function DiffEqBase.OptimizationProblem(sys::OptimizationSystem, args...; kwargs...)
+    DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem, args...; kwargs...)
+end
+
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              parammap = DiffEqBase.NullParameters();
                                              lb = nothing, ub = nothing,
@@ -220,7 +220,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         @named cons_sys = NonlinearSystem(sys.constraints, dvs, ps)
         cons = generate_function(cons_sys, checkbounds = checkbounds,
                                  linenumbers = linenumbers,
-                                 expression = Val{false})[1]
+                                 expression = Val{false})[2]
         cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
         cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 
@@ -236,6 +236,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         end
 
         _f = DiffEqBase.OptimizationFunction{iip}(f,
+                                                  sys = sys,
                                                   SciMLBase.NoAD();
                                                   grad = _grad,
                                                   hess = _hess,
@@ -249,6 +250,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                                   cons_expr = cons_expr)
     else
         _f = DiffEqBase.OptimizationFunction{iip}(f,
+                                                  sys = sys,
                                                   SciMLBase.NoAD();
                                                   grad = _grad,
                                                   hess = _hess,
