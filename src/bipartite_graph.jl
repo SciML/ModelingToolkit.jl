@@ -431,7 +431,7 @@ function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors)
     if iszero(new_nneighbors) # this handles Tuple as well
         empty!(g.fadjlist[i])
     else
-        g.fadjlist[i] = new_neighbors
+        g.fadjlist[i] = copy(new_neighbors)
     end
     g.ne += new_nneighbors - old_nneighbors
     if isa(g.badjlist, AbstractVector)
