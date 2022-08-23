@@ -46,14 +46,14 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     metadata::Any
     function OptimizationSystem(op, states, ps, var_to_name, observed,
                                 constraints, name, systems, defaults;
-                                checks::Bool = true)
+                                metadata = metadata, checks::Bool = true)
         if checks
             check_units(op)
             check_units(observed)
             all_dimensionless([states; ps]) || check_units(constraints)
         end
         new(op, states, ps, var_to_name, observed,
-            constraints, name, systems, defaults)
+            constraints, name, systems, defaults, metadata)
     end
 end
 
