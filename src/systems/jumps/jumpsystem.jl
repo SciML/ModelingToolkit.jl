@@ -53,16 +53,20 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     type: type of the system
     """
     connector_type::Any
+    """
+    metadata: metadata for the system, to be used by downstream packages.
+    """
+    metadata::Any
     function JumpSystem{U}(ap::U, iv, states, ps, var_to_name, observed, name, systems,
                            defaults, connector_type;
-                           checks::Bool = true) where {U <: ArrayPartition}
+                           metadata = nothing, checks::Bool = true) where {U <: ArrayPartition}
         if checks
             check_variables(states, iv)
             check_parameters(ps, iv)
             all_dimensionless([states; ps; iv]) || check_units(ap, iv)
         end
         new{U}(ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
-               connector_type)
+               connector_type, metadata)
     end
 end
 
@@ -75,6 +79,7 @@ function JumpSystem(eqs, iv, states, ps;
                     name = nothing,
                     connector_type = nothing,
                     checks = true,
+                    metadata = nothing,
                     kwargs...)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
@@ -109,7 +114,7 @@ function JumpSystem(eqs, iv, states, ps;
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     JumpSystem{typeof(ap)}(ap, value(iv), states, ps, var_to_name, observed, name, systems,
-                           defaults, connector_type, checks = checks)
+                           defaults, connector_type, metadata = metadata, checks = checks)
 end
 
 function generate_rate_function(js::JumpSystem, rate)
