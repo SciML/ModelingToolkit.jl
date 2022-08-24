@@ -34,6 +34,7 @@ end
 
 alias_elimination(sys) = alias_elimination!(TearingState(sys; quick_cancel = true))
 function alias_elimination!(state::TearingState)
+    # Main._state[] = state
     sys = state.sys
     complete!(state.structure)
     ag, mm, updated_diff_vars = alias_eliminate_graph!(state)
@@ -616,12 +617,19 @@ function mark_processed!(processed, var_to_diff, v)
 end
 
 function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
-    # Step 1: Perform bareiss factorization on the adjacency matrix of the linear
+    # Step 1: Perform Bareiss factorization on the adjacency matrix of the linear
     #         subsystem of the system we're interested in.
     #
     nvars = ndsts(graph)
     ag = AliasGraph(nvars)
     mm = simple_aliases!(ag, graph, var_to_diff, mm_orig)
+    # state = Main._state[]
+    # fullvars = state.fullvars
+    # for (v, (c, a)) in ag
+    #     a = a == 0 ? 0 : c * fullvars[a]
+    #     v = fullvars[v]
+    #     @info "simple alias" v => a
+    # end
 
     # Step 3: Handle differentiated variables
     # At this point, `var_to_diff` and `ag` form a tree structure like the
@@ -711,6 +719,18 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         end
         for (i, v) in enumerate(level_to_var)
             _alias = get(ag, v, nothing)
+
+            # if a chain starts to equal to zero, then all its descendants must
+            # be zero and reducible
+            if _alias !== nothing && iszero(_alias[1])
+                if i < length(level_to_var)
+                    # we have `x = 0`
+                    v = level_to_var[i + 1]
+                    extreme_var(var_to_diff, v, nothing, Val(false), callback = set_v_zero!)
+                end
+                break
+            end
+
             v_eqs = 𝑑neighbors(graph, v)
             # if an irreducible appears in only one equation, we need to make
             # sure that the other variables don't get eliminated
@@ -722,12 +742,6 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                 ag[v] = nothing
             end
             push!(irreducibles, v)
-            if _alias !== nothing && iszero(_alias[1]) && i < length(level_to_var)
-                # we have `x = 0`
-                v = level_to_var[i + 1]
-                extreme_var(var_to_diff, v, nothing, Val(false), callback = set_v_zero!)
-                break
-            end
         end
         if nlevels < (new_nlevels = length(level_to_var))
             for i in (nlevels + 1):new_nlevels
@@ -737,6 +751,10 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             end
         end
     end
+    # for (v, (c, a)) in ag
+    #     a = a == 0 ? 0 : c * fullvars[a]
+    #     @info "differential aliases" fullvars[v] => a
+    # end
 
     if !isempty(irreducibles)
         ag = newag
