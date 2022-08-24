@@ -413,15 +413,17 @@ function Graphs.add_vertex!(g::BipartiteGraph{T}, type::VertType) where {T}
     if type === DST
         if g.badjlist isa AbstractVector
             push!(g.badjlist, T[])
+            return length(g.badjlist)
         else
             g.badjlist += 1
+            return g.badjlist
         end
     elseif type === SRC
         push!(g.fadjlist, T[])
+        return length(g.fadjlist)
     else
         error("type ($type) must be either `DST` or `SRC`")
     end
-    return true  # vertex successfully added
 end
 
 function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors)
