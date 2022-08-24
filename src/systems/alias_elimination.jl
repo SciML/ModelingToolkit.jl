@@ -845,11 +845,13 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
         # p = -(c / v) * a
         if iszero(alias_val)
             alias_candidate = 0
-        elseif r == 0 && (d == 1 || d == -1)
-            d, r = divrem(alias_val, pivot_val)
-            alias_candidate = -d => alias_var
         else
-            return false
+            d, r = divrem(alias_val, pivot_val)
+            if r == 0 && (d == 1 || d == -1)
+                alias_candidate = -d => alias_var
+            else
+                return false
+            end
         end
     end
 

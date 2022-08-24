@@ -269,3 +269,20 @@ new_sys = structural_simplify(sys)
 new_sys = structural_simplify(sys)
 @test equations(new_sys) == [D(x) ~ 1 - x]
 @test observed(new_sys) == [y ~ -D(x)]
+
+@variables t x(t) y(t) a(t) b(t)
+D = Differential(t)
+eqs = [x ~ 0
+       D(x) ~ y
+       a ~ b + y]
+@named sys = ODESystem(eqs, t, [x, y, a, b], [])
+ss = alias_elimination(sys)
+@test isempty(equations(ss))
+@test observed(ss) == ([a, x, D(x), b, y] .~ 0)
+
+eqs = [x ~ 0
+       D(x) ~ x + y]
+@named sys = ODESystem(eqs, t, [x, y], [])
+ss = alias_elimination(sys)
+@test isempty(equations(ss))
+@test observed(ss) == ([x, D(x), y] .~ 0)
