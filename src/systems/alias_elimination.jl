@@ -772,7 +772,9 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
     iszero(pivot_val) && return false
 
     nirreducible = 0
-    alias_candidate::Pair{Int, Int} = 0 => 0
+    # When this row only as the pivot element, the pivot is zero by homogeneity
+    # of the linear system.
+    alias_candidate::Union{Int, Pair{Int, Int}} = 0
 
     # N.B.: Assumes that the non-zeros iterator is robust to modification
     # of the underlying array datastructure.
@@ -823,8 +825,10 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
         # v * p + c * a = 0
         # v * p = -c * a
         # p = -(c / v) * a
-        d, r = divrem(alias_val, pivot_val)
-        if r == 0 && (d == 1 || d == -1)
+        if iszero(alias_val)
+            alias_candidate = 0
+        elseif r == 0 && (d == 1 || d == -1)
+            d, r = divrem(alias_val, pivot_val)
             alias_candidate = -d => alias_var
         else
             return false
