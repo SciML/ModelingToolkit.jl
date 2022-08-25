@@ -97,7 +97,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             all_dimensionless([states; ps; iv]) || check_units(ap, iv)
         end
         new{U}(ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
-               connector_type, devents.metadata)
+               connector_type, devents, metadata)
     end
 end
 
