@@ -69,7 +69,7 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
 
     function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems,
                              defaults, connector_type, connections, tearing_state = nothing,
-                             substitutions = nothing; metadata = nothing,
+                             substitutions = nothing, metadata = nothing;
                              checks::Bool = true)
         if checks
             all_dimensionless([states; ps]) || check_units(eqs)
@@ -125,7 +125,7 @@ function NonlinearSystem(eqs, states, ps;
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
-                    connector_type, nothing, metadata = metadata, checks = checks)
+                    connector_type, nothing, metadata, checks = checks)
 end
 
 function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = false)

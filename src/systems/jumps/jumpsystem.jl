@@ -88,8 +88,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     metadata::Any
     function JumpSystem{U}(ap::U, iv, states, ps, var_to_name, observed, name, systems,
-                           defaults, connector_type, devents;
-                           metadata = nothing,
+                           defaults, connector_type, devents,
+                           metadata = nothing;
                            checks::Bool = true) where {U <: ArrayPartition}
         if checks
             check_variables(states, iv)
@@ -150,7 +150,7 @@ function JumpSystem(eqs, iv, states, ps;
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
 
     JumpSystem{typeof(ap)}(ap, value(iv), states, ps, var_to_name, observed, name, systems,
-                           defaults, connector_type, disc_callbacks, metadata = metadata,
+                           defaults, connector_type, disc_callbacks, metadata,
                            checks = checks)
 end
 

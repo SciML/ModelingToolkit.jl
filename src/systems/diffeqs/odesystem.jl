@@ -124,7 +124,7 @@ struct ODESystem <: AbstractODESystem
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
                        torn_matching, connector_type, connections, preface, cevents,
                        devents,
-                       tearing_state = nothing, substitutions = nothing; metadata = nothing,
+                       tearing_state = nothing, substitutions = nothing, metadata = nothing;
                        checks::Bool = true)
         if checks
             check_variables(dvs, iv)
@@ -190,7 +190,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
               connector_type, nothing, preface, cont_callbacks, disc_callbacks,
-              metadata = metadata, checks = checks)
+              metadata, checks = checks)
 end
 
 function ODESystem(eqs, iv = nothing; kwargs...)

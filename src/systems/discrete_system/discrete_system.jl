@@ -74,8 +74,9 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
 
     function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name,
                             systems, defaults, preface, connector_type,
-                            tearing_state = nothing, substitutions = nothing;
-                            checks::Bool = true, metadata = nothing)
+                            tearing_state = nothing, substitutions = nothing,
+                            metadata = nothing;
+                            checks::Bool = true)
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -128,7 +129,7 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
         throw(ArgumentError("System names must be unique."))
     end
     DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems,
-                   defaults, preface, connector_type, metadata = metadata, kwargs...)
+                   defaults, preface, connector_type, metadata, kwargs...)
 end
 
 function DiscreteSystem(eqs, iv = nothing; kwargs...)

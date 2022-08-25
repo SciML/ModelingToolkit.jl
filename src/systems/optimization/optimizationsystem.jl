@@ -45,8 +45,8 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     """
     metadata::Any
     function OptimizationSystem(op, states, ps, var_to_name, observed,
-                                constraints, name, systems, defaults;
-                                metadata = metadata, checks::Bool = true)
+                                constraints, name, systems, defaults, metadata = nothing;
+                                checks::Bool = true)
         if checks
             check_units(op)
             check_units(observed)
@@ -88,7 +88,7 @@ function OptimizationSystem(op, states, ps;
     OptimizationSystem(value(op), states, ps, var_to_name,
                        observed,
                        constraints,
-                       name, systems, defaults; metadata = metadata, checks = checks)
+                       name, systems, defaults, metadata; checks = checks)
 end
 
 function calculate_gradient(sys::OptimizationSystem)

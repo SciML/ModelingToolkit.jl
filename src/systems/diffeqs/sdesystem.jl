@@ -102,7 +102,7 @@ struct SDESystem <: AbstractODESystem
     metadata::Any
     function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
                        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-                       cevents, devents; metadata=nothing, checks::Bool = true)
+                       cevents, devents, metadata=nothing; checks::Bool = true)
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -162,7 +162,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
 
     SDESystem(deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-              cont_callbacks, disc_callbacks; metadata = metadata, checks = checks)
+              cont_callbacks, disc_callbacks, metadata; checks = checks)
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
