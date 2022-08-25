@@ -124,7 +124,6 @@ struct ODESystem <: AbstractODESystem
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
                        torn_matching, connector_type, connections, preface, cevents, devents,
                        tearing_state = nothing, substitutions = nothing; metadata = nothing,
-
                        checks::Bool = true)
         if checks
             check_variables(dvs, iv)
