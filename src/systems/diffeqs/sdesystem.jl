@@ -102,7 +102,7 @@ struct SDESystem <: AbstractODESystem
     metadata::Any
     function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
                        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-                       cevents, devents, metadata=nothing; checks::Bool = true)
+                       cevents, devents, metadata = nothing; checks::Bool = true)
         if checks
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -111,7 +111,8 @@ struct SDESystem <: AbstractODESystem
             all_dimensionless([dvs; ps; iv]) || check_units(deqs, neqs)
         end
         new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac,
-            Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents, metadata)
+            Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
+            metadata)
     end
 end
 
