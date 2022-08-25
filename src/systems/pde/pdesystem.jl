@@ -73,8 +73,9 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                                    defaults = Dict(),
                                    systems = [],
                                    connector_type = nothing,
+                                   metadata = nothing,
                                    checks::Bool = true,
-                                   name, metadata = nothing)
+                                   name)
         if checks
             all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
         end
