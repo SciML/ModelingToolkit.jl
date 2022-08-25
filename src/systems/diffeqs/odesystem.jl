@@ -122,7 +122,8 @@ struct ODESystem <: AbstractODESystem
 
     function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad,
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
-                       torn_matching, connector_type, connections, preface, cevents, devents,
+                       torn_matching, connector_type, connections, preface, cevents,
+                       devents,
                        tearing_state = nothing, substitutions = nothing; metadata = nothing,
                        checks::Bool = true)
         if checks
@@ -188,7 +189,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
     ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
-              connector_type, nothing, preface, cont_callbacks, disc_callbacks, metadata=metadata, checks = checks)
+              connector_type, nothing, preface, cont_callbacks, disc_callbacks,
+              metadata = metadata, checks = checks)
 end
 
 function ODESystem(eqs, iv = nothing; kwargs...)

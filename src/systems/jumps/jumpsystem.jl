@@ -89,14 +89,15 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     metadata::Any
     function JumpSystem{U}(ap::U, iv, states, ps, var_to_name, observed, name, systems,
                            defaults, connector_type, devents;
-                           metadata = nothing, checks::Bool = true) where {U <: ArrayPartition}
+                           metadata = nothing,
+                           checks::Bool = true) where {U <: ArrayPartition}
         if checks
             check_variables(states, iv)
             check_parameters(ps, iv)
             all_dimensionless([states; ps; iv]) || check_units(ap, iv)
         end
         new{U}(ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
-               connector_type, devents. metadata)
+               connector_type, devents.metadata)
     end
 end
 
@@ -149,7 +150,8 @@ function JumpSystem(eqs, iv, states, ps;
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
 
     JumpSystem{typeof(ap)}(ap, value(iv), states, ps, var_to_name, observed, name, systems,
-                           defaults, connector_type, disc_callbacks, metadata = metadata, checks = checks)
+                           defaults, connector_type, disc_callbacks, metadata = metadata,
+                           checks = checks)
 end
 
 function generate_rate_function(js::JumpSystem, rate)

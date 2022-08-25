@@ -66,7 +66,7 @@ function OptimizationSystem(op, states, ps;
                             name = nothing,
                             systems = OptimizationSystem[],
                             checks = true,
-                            metadata=nothing)
+                            metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     if !(isempty(default_u0) && isempty(default_p))
