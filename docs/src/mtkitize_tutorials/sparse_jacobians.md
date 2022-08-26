@@ -50,7 +50,7 @@ prob = ODEProblem(brusselator_2d_loop,u0,(0.,11.5),p)
 Now let's use `modelingtoolkitize` to generate the symbolic version:
 
 ```@example sparsejac
-sys = modelingtoolkitize(prob)
+sys = modelingtoolkitize(prob);
 ```
 
 Now we regenerate the problem using `jac=true` for the analytical Jacobian
