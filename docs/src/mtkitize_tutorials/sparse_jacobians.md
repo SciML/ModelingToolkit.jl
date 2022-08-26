@@ -51,6 +51,7 @@ Now let's use `modelingtoolkitize` to generate the symbolic version:
 
 ```@example sparsejac
 sys = modelingtoolkitize(prob);
+nothing # hide
 ```
 
 Now we regenerate the problem using `jac=true` for the analytical Jacobian
