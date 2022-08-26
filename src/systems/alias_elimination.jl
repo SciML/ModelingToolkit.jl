@@ -508,10 +508,22 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, irreducible
         is_linear_variables[v] = false
         is_reducible[v] = false
     end
+    # TODO/FIXME: This needs a proper recursion to compute the transitive
+    # closure.
+    @label restart
     for i in 𝑠vertices(graph)
         is_linear_equations[i] && continue
+        # This needs recursion
         for j in 𝑠neighbors(graph, i)
-            is_linear_variables[j] = false
+            if is_linear_variables[j]
+                is_linear_variables[j] = false
+                for k in 𝑑neighbors(graph, j)
+                    if is_linear_equations[k]
+                        is_linear_equations[k] = false
+                        @goto restart
+                    end
+                end
+            end
         end
     end
     solvable_variables = findall(is_linear_variables)
