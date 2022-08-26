@@ -547,6 +547,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = !use_union, use_union)
+    p = p === nothing : SciMLBase.NullParameters() : p
+    
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
         defs = mergedefaults(defs, du0map, ddvs)
