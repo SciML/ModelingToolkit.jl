@@ -58,8 +58,19 @@ function alias_elimination!(state::TearingState)
     # D(y) appears in the equation, so that D(-D(x)) becomes -D(D(x)).
     to_expand = Int[]
     diff_to_var = invview(var_to_diff)
+    # TODO/FIXME: this also needs to be computed recursively because we need to
+    # follow the alias graph like `a => b => c` and make sure that the final
+    # graph always contains the destination.
+    extra_eqs = Equation[]
+    extra_vars = BitSet()
     for (v, (coeff, alias)) in pairs(ag)
-        subs[fullvars[v]] = iszero(coeff) ? 0 : coeff * fullvars[alias]
+        if iszero(alias) || !(isempty(𝑑neighbors(graph, alias)) && isempty(𝑑neighbors(graph, v)))
+            subs[fullvars[v]] = iszero(coeff) ? 0 : coeff * fullvars[alias]
+        else
+            push!(extra_eqs, 0 ~ coeff * fullvars[alias] - fullvars[v])
+            push!(extra_vars, v)
+            #@show fullvars[v] => fullvars[alias]
+        end
         if coeff == -1
             # if `alias` is like -D(x)
             diff_to_var[alias] === nothing && continue
