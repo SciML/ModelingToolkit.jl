@@ -142,7 +142,7 @@ get_constraints(sys::OptimizationSystem) = value(sys.constraints)
 function constraints(sys::OptimizationSystem)
     cs = get_constraints(sys)
     systems = get_systems(sys)
-    unique(isempty(systems) ? cs : [cs; reduce(vcat, namespace_constraints.(systems))])
+    isempty(systems) ? cs : [cs; reduce(vcat, namespace_constraints.(systems))]
 end
 
 hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
