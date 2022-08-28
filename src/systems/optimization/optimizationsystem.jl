@@ -10,14 +10,14 @@ $(FIELDS)
 
 ```julia
 @variables x y z
-@parameters σ ρ β
+@parameters a b c
 
-op = σ*(y-x) + x*(ρ-z)-y + x*y - β*z
-@named os = OptimizationSystem(op, [x,y,z],[σ,ρ,β])
+op = a*(y-x) + x*(b-z)-y + x*y - c*z
+@named os = OptimizationSystem(op, [x,y,z], [a,b,c])
 ```
 """
 struct OptimizationSystem <: AbstractTimeIndependentSystem
-    """Vector of equations defining the system."""
+    """Objective function of the system."""
     op::Any
     """Unknown variables."""
     states::Vector
@@ -26,25 +26,22 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     """Array variables."""
     var_to_name::Any
     observed::Vector{Equation}
+    """List of constraint equations of the system."""
     constraints::Vector # {Union{Equation,Inequality}}
-    """
-    Name: the name of the system.  These are required to have unique names.
-    """
+    """The unique name of the system."""
     name::Symbol
-    """
-    systems: The internal systems
-    """
+    """The internal systems."""
     systems::Vector{OptimizationSystem}
     """
-    defaults: The default values to use when initial conditions and/or
-    parameters are not supplied in `ODEProblem`.
+    The default values to use when initial guess and/or
+    parameters are not supplied in `OptimizationProblem`.
     """
     defaults::Dict
     function OptimizationSystem(op, states, ps, var_to_name, observed,
                                 constraints, name, systems, defaults;
                                 checks::Bool = true)
         if checks
-            check_units(op)
+            op isa Num && check_units(op)
             check_units(observed)
             all_dimensionless([states; ps]) || check_units(constraints)
         end
