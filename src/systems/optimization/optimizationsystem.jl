@@ -84,7 +84,7 @@ function OptimizationSystem(op, states, ps;
     process_variables!(var_to_name, defaults, states′)
     process_variables!(var_to_name, defaults, ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
-    
+
     OptimizationSystem(value(op), states′, ps′, var_to_name,
                        observed,
                        constraints,
@@ -129,16 +129,18 @@ function equations(sys::OptimizationSystem)
 end
 namespace_expr(sys::OptimizationSystem) = namespace_expr(get_op(sys), sys)
 
-namespace_constraint(eq::Equation, sys) = Equation(
-    namespace_expr(eq.lhs, sys), 
-    namespace_expr(eq.rhs, sys),
-)
+function namespace_constraint(eq::Equation, sys)
+    Equation(namespace_expr(eq.lhs, sys),
+             namespace_expr(eq.rhs, sys))
+end
 # namespace_constraint(ineq::Inequality, sys) = Inequality(
 #     namespace_expr(ineq.lhs, sys), 
 #     namespace_expr(ineq.rhs, sys),
 #     ineq.relational_op,
 # )
-namespace_constraints(sys::OptimizationSystem) = namespace_constraint.(get_constraints(sys), Ref(sys))
+function namespace_constraints(sys::OptimizationSystem)
+    namespace_constraint.(get_constraints(sys), Ref(sys))
+end
 get_constraints(sys::OptimizationSystem) = value(sys.constraints)
 function constraints(sys::OptimizationSystem)
     cs = get_constraints(sys)
