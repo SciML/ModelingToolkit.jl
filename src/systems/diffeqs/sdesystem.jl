@@ -421,6 +421,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
                      Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
                      mass_matrix = _M,
                      syms = Symbol.(states(sys)),
+                     paramsyms = Symbol.(ps),
                      observed = observedfun)
 end
 

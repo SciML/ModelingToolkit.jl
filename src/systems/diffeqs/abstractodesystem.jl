@@ -364,6 +364,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                  jac_prototype = jac_prototype,
                                  syms = Symbol.(states(sys)),
                                  indepsym = Symbol(get_iv(sys)),
+                                 paramsyms = Symbol.(ps),
                                  observed = observedfun,
                                  sparsity = sparsity ? jacobian_sparsity(sys) : nothing)
 end
@@ -449,6 +450,7 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      sys = sys,
                      jac = _jac === nothing ? nothing : _jac,
                      syms = Symbol.(dvs),
+                     paramsyms = Symbol.(ps),
                      jac_prototype = jac_prototype,
                      # missing fields in `DAEFunction`
                      #indepsym = Symbol(get_iv(sys)),
