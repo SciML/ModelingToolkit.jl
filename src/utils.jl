@@ -122,6 +122,12 @@ function readable_code(expr)
     JuliaFormatter.format_text(string(expr), JuliaFormatter.SciMLStyle())
 end
 
+# System validation enums
+const CheckNone = 0
+const CheckAll = 1 << 0
+const CheckComponents = 1 << 1
+const CheckUnits = 1 << 2
+
 function check_parameters(ps, iv)
     for p in ps
         isequal(iv, p) &&

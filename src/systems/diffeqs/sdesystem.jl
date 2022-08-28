@@ -99,12 +99,14 @@ struct SDESystem <: AbstractODESystem
 
     function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
                        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-                       cevents, devents; checks::Bool = true)
-        if checks
+                       cevents, devents; checks::Union{Bool, Int} = true)
+        if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             check_equations(deqs, iv)
             check_equations(equations(cevents), iv)
+        end
+        if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv]) || check_units(deqs, neqs)
         end
         new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac,

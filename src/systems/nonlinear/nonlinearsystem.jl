@@ -65,8 +65,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
 
     function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems,
                              defaults, connector_type, connections, tearing_state = nothing,
-                             substitutions = nothing; checks::Bool = true)
-        if checks
+                             substitutions = nothing; checks::Union{Bool, Int} = true)
+        if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([states; ps]) || check_units(eqs)
         end
         new(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
