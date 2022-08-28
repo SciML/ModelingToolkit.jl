@@ -26,7 +26,7 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     """Array variables."""
     var_to_name::Any
     observed::Vector{Equation}
-    constraints::Vector
+    constraints::Vector # {Union{Equation,Inequality}}
     """
     Name: the name of the system.  These are required to have unique names.
     """
@@ -64,6 +64,11 @@ function OptimizationSystem(op, states, ps;
                             checks = true)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
+
+    constraints = value.(scalarize(constraints))
+    states′ = value.(scalarize(states))
+    ps′ = value.(scalarize(ps))
+
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
                      :OptimizationSystem, force = true)
@@ -75,12 +80,12 @@ function OptimizationSystem(op, states, ps;
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    states, ps = value.(states), value.(ps)
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, states)
-    process_variables!(var_to_name, defaults, ps)
+    process_variables!(var_to_name, defaults, states′)
+    process_variables!(var_to_name, defaults, ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
-    OptimizationSystem(value(op), states, ps, var_to_name,
+    
+    OptimizationSystem(value(op), states′, ps′, var_to_name,
                        observed,
                        constraints,
                        name, systems, defaults; checks = checks)
@@ -124,6 +129,23 @@ function equations(sys::OptimizationSystem)
 end
 namespace_expr(sys::OptimizationSystem) = namespace_expr(get_op(sys), sys)
 
+namespace_constraint(eq::Equation, sys) = Equation(
+    namespace_expr(eq.lhs, sys), 
+    namespace_expr(eq.rhs, sys),
+)
+# namespace_constraint(ineq::Inequality, sys) = Inequality(
+#     namespace_expr(ineq.lhs, sys), 
+#     namespace_expr(ineq.rhs, sys),
+#     ineq.relational_op,
+# )
+namespace_constraints(sys::OptimizationSystem) = namespace_constraint.(get_constraints(sys), Ref(sys))
+get_constraints(sys::OptimizationSystem) = value(sys.constraints)
+function constraints(sys::OptimizationSystem)
+    cs = get_constraints(sys)
+    systems = get_systems(sys)
+    unique(isempty(systems) ? cs : [cs; reduce(vcat, namespace_constraints.(systems))])
+end
+
 hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
 
 function rep_pars_vals!(e::Expr, p)
@@ -163,6 +185,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              kwargs...) where {iip}
     dvs = states(sys)
     ps = parameters(sys)
+    cstr = constraints(sys)
 
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)
@@ -211,8 +234,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         hess_prototype = nothing
     end
 
-    if length(sys.constraints) > 0
-        @named cons_sys = NonlinearSystem(sys.constraints, dvs, ps)
+    if length(cstr) > 0
+        @named cons_sys = NonlinearSystem(cstr, dvs, ps)
         cons = generate_function(cons_sys, checkbounds = checkbounds,
                                  linenumbers = linenumbers,
                                  expression = Val{false})[2]
@@ -232,6 +255,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
 
         _f = DiffEqBase.OptimizationFunction{iip}(f,
                                                   sys = sys,
+                                                  syms = nameof.(states(sys)),
                                                   SciMLBase.NoAD();
                                                   grad = _grad,
                                                   hess = _hess,
@@ -246,6 +270,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     else
         _f = DiffEqBase.OptimizationFunction{iip}(f,
                                                   sys = sys,
+                                                  syms = nameof.(states(sys)),
                                                   SciMLBase.NoAD();
                                                   grad = _grad,
                                                   hess = _hess,

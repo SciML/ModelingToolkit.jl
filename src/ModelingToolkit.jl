@@ -167,7 +167,7 @@ export JumpSystem
 export ODEProblem, SDEProblem
 export NonlinearFunction, NonlinearFunctionExpr
 export NonlinearProblem, BlockNonlinearProblem, NonlinearProblemExpr
-export OptimizationProblem, OptimizationProblemExpr
+export OptimizationProblem, OptimizationProblemExpr, constraints
 export AutoModelingToolkit
 export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
