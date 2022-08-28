@@ -179,8 +179,6 @@ for prop in [:eqs
              :systems
              :structure
              :op
-             :equality_constraints
-             :inequality_constraints
              :controls
              :loss
              :bcs
