@@ -41,7 +41,7 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
                                 constraints, name, systems, defaults;
                                 checks::Bool = true)
         if checks
-            op isa Num && check_units(op)
+            unwrap(op) isa Symbolic && check_units(op)
             check_units(observed)
             all_dimensionless([states; ps]) || check_units(constraints)
         end
