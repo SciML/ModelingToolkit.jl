@@ -4,7 +4,7 @@ const KEEP = typemin(Int)
 
 function alias_eliminate_graph!(state::TransformationState)
     mm = linear_subsys_adjmat(state)
-    size(mm, 1) == 0 && return nothing, mm, BitSet() # No linear subsystems
+    size(mm, 1) == 0 && return AliasGraph(ndsts(state.structure.graph)), mm, BitSet() # No linear subsystems
 
     @unpack graph, var_to_diff = state.structure
 
@@ -37,7 +37,7 @@ function alias_elimination!(state::TearingState)
     sys = state.sys
     complete!(state.structure)
     ag, mm, updated_diff_vars = alias_eliminate_graph!(state)
-    ag === nothing && return sys
+    isempty(ag) && return sys
 
     fullvars = state.fullvars
     @unpack var_to_diff, graph = state.structure

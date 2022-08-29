@@ -123,14 +123,16 @@ struct ODESystem <: AbstractODESystem
     function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad,
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
                        torn_matching, connector_type, connections, preface, cevents,
-                       devents,
-                       tearing_state = nothing, substitutions = nothing, metadata = nothing;
-                       checks::Bool = true)
-        if checks
+                       devents, tearing_state = nothing, substitutions = nothing,
+                       metadata = nothing;
+                       checks::Union{Bool, Int} = true)
+        if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             check_equations(deqs, iv)
             check_equations(equations(cevents), iv)
+        end
+        if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv]) || check_units(deqs)
         end
         new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,

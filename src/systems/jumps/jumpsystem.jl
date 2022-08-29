@@ -90,10 +90,12 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     function JumpSystem{U}(ap::U, iv, states, ps, var_to_name, observed, name, systems,
                            defaults, connector_type, devents,
                            metadata = nothing;
-                           checks::Bool = true) where {U <: ArrayPartition}
-        if checks
+                           checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
+        if checks == true || (checks & CheckComponents) > 0
             check_variables(states, iv)
             check_parameters(ps, iv)
+        end
+        if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([states; ps; iv]) || check_units(ap, iv)
         end
         new{U}(ap, iv, states, ps, var_to_name, observed, name, systems, defaults,

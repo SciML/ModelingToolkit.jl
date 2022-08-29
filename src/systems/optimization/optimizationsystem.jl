@@ -46,8 +46,8 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     metadata::Any
     function OptimizationSystem(op, states, ps, var_to_name, observed,
                                 constraints, name, systems, defaults, metadata = nothing;
-                                checks::Bool = true)
-        if checks
+                                checks::Union{Bool, Int} = true)
+        if checks == true || (checks & CheckUnits) > 0
             check_units(op)
             check_units(observed)
             all_dimensionless([states; ps]) || check_units(constraints)
@@ -146,7 +146,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
                                           grad = false,
                                           hess = false, sparse = false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=SerialForm(),
+                                          linenumbers = true, parallel=nothing,
                                           kwargs...) where iip
 ```
 
@@ -163,7 +163,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              grad = false,
                                              hess = false, sparse = false,
                                              checkbounds = false,
-                                             linenumbers = true, parallel = SerialForm(),
+                                             linenumbers = true, parallel = nothing,
                                              use_union = false,
                                              kwargs...) where {iip}
     dvs = states(sys)
@@ -269,7 +269,7 @@ function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
                                           grad = false,
                                           hes = false, sparse = false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=SerialForm(),
+                                          linenumbers = true, parallel=nothing,
                                           kwargs...) where iip
 ```
 
@@ -289,7 +289,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
                                       grad = false,
                                       hess = false, sparse = false,
                                       checkbounds = false,
-                                      linenumbers = false, parallel = SerialForm(),
+                                      linenumbers = false, parallel = nothing,
                                       use_union = false,
                                       kwargs...) where {iip}
     dvs = states(sys)

@@ -47,6 +47,21 @@ eqs = [D(E) ~ P - E / τ
 @test !MT.validate(D(D(E)) ~ P)
 @test !MT.validate(0 ~ P + E * τ)
 
+# Disabling unit validation/checks selectively
+@test_throws MT.ArgumentError ODESystem(eqs, t, [E, P, t], [τ], name = :sys)
+ODESystem(eqs, t, [E, P, t], [τ], name = :sys, checks = MT.CheckUnits)
+eqs = [D(E) ~ P - E / τ
+       0 ~ P + E * τ]
+@test_throws MT.ValidationError ODESystem(eqs, name = :sys, checks = MT.CheckAll)
+@test_throws MT.ValidationError ODESystem(eqs, name = :sys, checks = true)
+ODESystem(eqs, name = :sys, checks = MT.CheckNone)
+ODESystem(eqs, name = :sys, checks = false)
+@test_throws MT.ValidationError ODESystem(eqs, name = :sys,
+                                          checks = MT.CheckComponents | MT.CheckUnits)
+@named sys = ODESystem(eqs, checks = MT.CheckComponents)
+@test_throws MT.ValidationError ODESystem(eqs, t, [E, P, t], [τ], name = :sys,
+                                          checks = MT.CheckUnits)
+
 # Array variables
 @variables t [unit = u"s"] x(t)[1:3] [unit = u"m"]
 @parameters v[1:3]=[1, 2, 3] [unit = u"m/s"]

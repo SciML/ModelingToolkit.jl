@@ -76,10 +76,12 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
                             systems, defaults, preface, connector_type,
                             tearing_state = nothing, substitutions = nothing,
                             metadata = nothing;
-                            checks::Bool = true)
-        if checks
+                            checks::Union{Bool, Int} = true)
+        if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
+        end
+        if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv; ctrls]) || check_units(discreteEqs)
         end
         new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults,

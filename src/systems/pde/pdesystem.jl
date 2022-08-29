@@ -74,9 +74,9 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                                    systems = [],
                                    connector_type = nothing,
                                    metadata = nothing,
-                                   checks::Bool = true,
+                                   checks::Union{Bool, Int} = true,
                                    name)
-        if checks
+        if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
         end
         eqs = eqs isa Vector ? eqs : [eqs]
