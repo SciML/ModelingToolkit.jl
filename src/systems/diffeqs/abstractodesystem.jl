@@ -278,7 +278,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
     f(du, u, p, t) = f_iip(du, u, p, t)
 
     if specialize === SciMLBase.AutoSpecialize && u0 !== nothing && u0 isa Vector{Float64} &&
-        p !== nothing && typeof(p) <: Union{ScimLBase.NullParameters,Vector{Float64}}
+        p !== nothing && typeof(p) <: Union{SciMLBase.NullParameters,Vector{Float64}}
         f = SciMLBase.wrapfun_iip(f)
     end
 
