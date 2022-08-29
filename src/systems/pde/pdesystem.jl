@@ -64,18 +64,24 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     name: the name of the system
     """
     name::Symbol
+    """
+    metadata: metadata for the system, to be used by downstream packages.
+    """
+    metadata::Any
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
                                    ps = SciMLBase.NullParameters();
                                    defaults = Dict(),
                                    systems = [],
                                    connector_type = nothing,
+                                   metadata = nothing,
                                    checks::Union{Bool, Int} = true,
                                    name)
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
         end
         eqs = eqs isa Vector ? eqs : [eqs]
-        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, name)
+        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, name,
+            metadata)
     end
 end
 
