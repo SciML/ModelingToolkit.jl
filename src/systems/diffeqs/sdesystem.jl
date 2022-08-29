@@ -99,12 +99,14 @@ struct SDESystem <: AbstractODESystem
 
     function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
                        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-                       cevents, devents; checks::Bool = true)
-        if checks
+                       cevents, devents; checks::Union{Bool, Int} = true)
+        if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
             check_equations(deqs, iv)
             check_equations(equations(cevents), iv)
+        end
+        if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv]) || check_units(deqs, neqs)
         end
         new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac,
@@ -537,7 +539,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
                                     checkbounds = false, sparse = false,
                                     sparsenoise = sparse,
                                     skipzeros = true, fillzeros = true,
-                                    linenumbers = true, parallel=SerialForm(),
+                                    linenumbers = true, parallel=nothing,
                                     kwargs...)
 ```
 
@@ -555,7 +557,7 @@ function DiffEqBase.SDEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=SerialForm(),
+                                    linenumbers = true, parallel=nothing,
                                     kwargs...) where iip
 ```
 

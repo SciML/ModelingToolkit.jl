@@ -65,8 +65,8 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
 
     function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems,
                              defaults, connector_type, connections, tearing_state = nothing,
-                             substitutions = nothing; checks::Bool = true)
-        if checks
+                             substitutions = nothing; checks::Union{Bool, Int} = true)
+        if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([states; ps]) || check_units(eqs)
         end
         new(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
@@ -293,7 +293,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
                                   jac = false,
                                   checkbounds = false, sparse = false,
                                   simplify = false,
-                                  linenumbers = true, parallel = SerialForm(),
+                                  linenumbers = true, parallel = nothing,
                                   eval_expression = true,
                                   use_union = false,
                                   kwargs...)
@@ -322,7 +322,7 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=SerialForm(),
+                                          linenumbers = true, parallel=nothing,
                                           kwargs...) where iip
 ```
 
@@ -347,7 +347,7 @@ function DiffEqBase.NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=SerialForm(),
+                                          linenumbers = true, parallel=nothing,
                                           kwargs...) where iip
 ```
 
