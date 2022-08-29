@@ -20,10 +20,10 @@ w(t), [unit = "Hz"]
 end)
 
 # Simultaneously set default value (use plain numbers, not quantities)
-@variable x=10 [unit = u"m"]
+@variables x=10 [unit = u"m"]
 
 # Symbolic array: unit applies to all elements
-@variable x[1:3] [unit = u"m"]
+@variables x[1:3] [unit = u"m"]
 ```
 
 Do not use `quantities` such as  `1u"s"`, `1/u"s"` or `u"1/s"` as these will result in errors; instead use `u"s"`, `u"s^-1"`, or `u"s"^-1`. 
