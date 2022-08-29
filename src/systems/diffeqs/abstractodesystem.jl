@@ -527,7 +527,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
                            jac = false,
                            checkbounds = false, sparse = false,
                            simplify = false,
-                           linenumbers = true, parallel = SerialForm(),
+                           linenumbers = true, parallel = nothing,
                            eval_expression = true,
                            use_union = false,
                            kwargs...)
@@ -618,7 +618,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     jac = false,
                                     checkbounds = false, sparse = false,
                                     simplify=false,
-                                    linenumbers = true, parallel=SerialForm(),
+                                    linenumbers = true, parallel=nothing,
                                     kwargs...) where iip
 ```
 
@@ -655,7 +655,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
                                     jac = false,
                                     checkbounds = false, sparse = false,
                                     simplify=false,
-                                    linenumbers = true, parallel=SerialForm(),
+                                    linenumbers = true, parallel=nothing,
                                     kwargs...) where iip
 ```
 
@@ -696,7 +696,7 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=SerialForm(),
+                                    linenumbers = true, parallel=nothing,
                                     skipzeros=true, fillzeros=true,
                                     simplify=false,
                                     kwargs...) where iip
@@ -738,7 +738,7 @@ function DAEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=SerialForm(),
+                                    linenumbers = true, parallel=nothing,
                                     skipzeros=true, fillzeros=true,
                                     simplify=false,
                                     kwargs...) where iip
@@ -787,7 +787,7 @@ function SciMLBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
                                     version = nothing, tgrad=false,
                                     jac = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=SerialForm(),
+                                    linenumbers = true, parallel=nothing,
                                     kwargs...) where iip
 ```
 Generates an SteadyStateProblem from an ODESystem and allows for automatically
@@ -815,7 +815,7 @@ function SciMLBase.SteadyStateProblemExpr(sys::AbstractODESystem,u0map,
                                     jac = false,
                                     checkbounds = false, sparse = false,
                                     skipzeros=true, fillzeros=true,
-                                    linenumbers = true, parallel=SerialForm(),
+                                    linenumbers = true, parallel=nothing,
                                     kwargs...) where iip
 ```
 Generates a Julia expression for building a SteadyStateProblem from

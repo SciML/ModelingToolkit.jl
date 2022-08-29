@@ -539,7 +539,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
                                     checkbounds = false, sparse = false,
                                     sparsenoise = sparse,
                                     skipzeros = true, fillzeros = true,
-                                    linenumbers = true, parallel=SerialForm(),
+                                    linenumbers = true, parallel=nothing,
                                     kwargs...)
 ```
 
@@ -557,7 +557,7 @@ function DiffEqBase.SDEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=SerialForm(),
+                                    linenumbers = true, parallel=nothing,
                                     kwargs...) where iip
 ```
 
