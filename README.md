@@ -38,7 +38,7 @@ lower it to a first order system, symbolically generate the Jacobian function
 for the numerical integrator, and solve it.
 
 ```julia
-using ModelingToolkit, OrdinaryDiffEq
+using DifferentialEquations, ModelingToolkit
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
@@ -49,7 +49,7 @@ eqs = [D(D(x)) ~ σ*(y-x),
        D(z) ~ x*y - β*z]
 
 @named sys = ODESystem(eqs)
-sys = ode_order_lowering(sys)
+sys = structural_simplify(sys)
 
 u0 = [D(x) => 2.0,
       x => 1.0,
@@ -62,7 +62,7 @@ p  = [σ => 28.0,
 
 tspan = (0.0,100.0)
 prob = ODEProblem(sys,u0,tspan,p,jac=true)
-sol = solve(prob,Tsit5())
+sol = solve(prob)
 using Plots; plot(sol,vars=(x,y))
 ```
 
@@ -75,7 +75,7 @@ interacting Lorenz equations and simulate the resulting Differential-Algebraic
 Equation (DAE):
 
 ```julia
-using ModelingToolkit, OrdinaryDiffEq
+using DifferentialEquations, ModelingToolkit
 
 @parameters t σ ρ β
 @variables x(t) y(t) z(t)
@@ -111,7 +111,7 @@ p  = [lorenz1.σ => 10.0,
 
 tspan = (0.0,100.0)
 prob = ODEProblem(connected,u0,tspan,p)
-sol = solve(prob,Rodas4())
+sol = solve(prob)
 
 using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.z))
 ```
