@@ -179,6 +179,7 @@ for prop in [:eqs
              :systems
              :structure
              :op
+             :constraints
              :controls
              :loss
              :bcs
@@ -398,6 +399,16 @@ function namespace_assignment(eq::Assignment, sys)
     _lhs = namespace_expr(eq.lhs, sys)
     _rhs = namespace_expr(eq.rhs, sys)
     Assignment(_lhs, _rhs)
+end
+    
+function namespace_inequality(ineq::Inequality, sys, n = nameof(sys))
+    _lhs = namespace_expr(ineq.lhs, sys, n)
+    _rhs = namespace_expr(ineq.rhs, sys, n)
+    Inequality(
+        namespace_expr(_lhs, sys, n), 
+        namespace_expr(_rhs, sys, n),
+        ineq.relational_op,
+    )
 end
 
 function namespace_expr(O, sys, n = nameof(sys)) where {T}

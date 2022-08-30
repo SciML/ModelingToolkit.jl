@@ -121,24 +121,20 @@ function generate_function(sys::OptimizationSystem, vs = states(sys), ps = param
 end
 
 function equations(sys::OptimizationSystem)
-    isempty(get_systems(sys)) ? get_op(sys) :
-    get_op(sys) + reduce(+, namespace_expr.(get_systems(sys)))
+    op = get_op(sys)
+    systems = get_systems(sys)
+    if isempty(systems) 
+        op
+    else
+        op + reduce(+, map(sys_ -> namespace_expr.(get_op(sys_), sys_), systems))
+    end
 end
-namespace_expr(sys::OptimizationSystem) = namespace_expr(get_op(sys), sys)
 
-function namespace_constraint(eq::Equation, sys)
-    Equation(namespace_expr(eq.lhs, sys),
-             namespace_expr(eq.rhs, sys))
-end
-# namespace_constraint(ineq::Inequality, sys) = Inequality(
-#     namespace_expr(ineq.lhs, sys), 
-#     namespace_expr(ineq.rhs, sys),
-#     ineq.relational_op,
-# )
+namespace_constraint(eq::Equation, sys) = namespace_equation(eq, sys)
+namespace_constraint(ineq::Inequality, sys) = namespace_inequality(ineq, sys)
 function namespace_constraints(sys::OptimizationSystem)
     namespace_constraint.(get_constraints(sys), Ref(sys))
 end
-get_constraints(sys::OptimizationSystem) = value(sys.constraints)
 function constraints(sys::OptimizationSystem)
     cs = get_constraints(sys)
     systems = get_systems(sys)
