@@ -49,7 +49,7 @@ eqs = [D(D(x)) ~ σ*(y-x),
        D(z) ~ x*y - β*z]
 
 @named sys = ODESystem(eqs)
-sys = ode_order_lowering(sys)
+sys = structural_simplify(sys)
 
 u0 = [D(x) => 2.0,
       x => 1.0,
