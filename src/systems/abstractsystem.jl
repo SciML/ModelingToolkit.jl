@@ -401,16 +401,6 @@ function namespace_assignment(eq::Assignment, sys)
     Assignment(_lhs, _rhs)
 end
     
-function namespace_inequality(ineq::Inequality, sys, n = nameof(sys))
-    _lhs = namespace_expr(ineq.lhs, sys, n)
-    _rhs = namespace_expr(ineq.rhs, sys, n)
-    Inequality(
-        namespace_expr(_lhs, sys, n), 
-        namespace_expr(_rhs, sys, n),
-        ineq.relational_op,
-    )
-end
-
 function namespace_expr(O, sys, n = nameof(sys)) where {T}
     ivs = independent_variables(sys)
     O = unwrap(O)
