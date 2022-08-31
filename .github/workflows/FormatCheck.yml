@@ -32,7 +32,7 @@ jobs:
       - name: Format check
         run: |
           julia -e '
-          out = Cmd(`git diff --name-only`) |> read |> String
+          out = Cmd(`git diff`) |> read |> String
           if out == ""
               exit(0)
           else
