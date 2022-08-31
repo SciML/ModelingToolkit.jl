@@ -103,3 +103,25 @@ OBS2 = OBS
 @test isequal(OBS2, @nonamespace sys2.OBS)
 @unpack OBS = sys2
 @test isequal(OBS2, OBS)
+
+# nested constraints
+@testset "nested systems" begin
+    @variables x y
+    o1 = (x - 1)^2
+    o2 = (y - 1 / 2)^2
+    c1 = [
+        x ~ 1,
+    ]
+    c2 = [
+        y ~ 1,
+    ]
+    sys1 = OptimizationSystem(o1, [x], [], name = :sys1, constraints = c1)
+    sys2 = OptimizationSystem(o2, [y], [], name = :sys2, constraints = c2)
+    sys = OptimizationSystem(0, [], []; name = :sys, systems = [sys1, sys2],
+                             constraints = [sys1.x + sys2.y ~ 2], checks = false)
+    prob = OptimizationProblem(sys, [0.0, 0.0])
+
+    @test isequal(constraints(sys), vcat(sys1.x + sys2.y ~ 2, sys1.x ~ 1, sys2.y ~ 1))
+    @test isequal(equations(sys), (sys1.x - 1)^2 + (sys2.y - 1 / 2)^2)
+    @test isequal(states(sys), [sys1.x, sys2.y])
+end

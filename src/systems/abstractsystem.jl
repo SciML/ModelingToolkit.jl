@@ -179,8 +179,7 @@ for prop in [:eqs
              :systems
              :structure
              :op
-             :equality_constraints
-             :inequality_constraints
+             :constraints
              :controls
              :loss
              :bcs
@@ -1227,7 +1226,8 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
     (; A, B, C, D)
 end
 
-function linearize(sys, inputs, outputs; op = Dict(), t = 0.0, allow_input_derivatives = false,
+function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
+                   allow_input_derivatives = false,
                    kwargs...)
     lin_fun, ssys = linearization_function(sys, inputs, outputs; kwargs...)
     linearize(ssys, lin_fun; op, t, allow_input_derivatives), ssys
