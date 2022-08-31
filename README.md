@@ -63,7 +63,7 @@ p  = [σ => 28.0,
 tspan = (0.0,100.0)
 prob = ODEProblem(sys,u0,tspan,p,jac=true)
 sol = solve(prob)
-using Plots; plot(sol,vars=(x,y))
+using Plots; plot(sol,idxs=(x,y))
 ```
 
 ![Lorenz2](https://user-images.githubusercontent.com/1814174/79118645-744eb580-7d5c-11ea-9c37-13c4efd585ca.png)
@@ -113,7 +113,7 @@ tspan = (0.0,100.0)
 prob = ODEProblem(connected,u0,tspan,p)
 sol = solve(prob)
 
-using Plots; plot(sol,vars=(a,lorenz1.x,lorenz2.z))
+using Plots; plot(sol,idxs=(a,lorenz1.x,lorenz2.z))
 ```
 
 ![](https://user-images.githubusercontent.com/1814174/110242538-87461780-7f24-11eb-983c-4b2c93cfc909.png)
