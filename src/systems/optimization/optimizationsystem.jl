@@ -37,8 +37,12 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     parameters are not supplied in `OptimizationProblem`.
     """
     defaults::Dict
+    """
+    metadata: metadata for the system, to be used by downstream packages.
+    """
+    metadata::Any
     function OptimizationSystem(op, states, ps, var_to_name, observed,
-                                constraints, name, systems, defaults;
+                                constraints, name, systems, defaults, metadata = nothing;
                                 checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             unwrap(op) isa Symbolic && check_units(op)
@@ -46,7 +50,7 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
             all_dimensionless([states; ps]) || check_units(constraints)
         end
         new(op, states, ps, var_to_name, observed,
-            constraints, name, systems, defaults)
+            constraints, name, systems, defaults, metadata)
     end
 end
 
@@ -58,7 +62,8 @@ function OptimizationSystem(op, states, ps;
                             defaults = _merge(Dict(default_u0), Dict(default_p)),
                             name = nothing,
                             systems = OptimizationSystem[],
-                            checks = true)
+                            checks = true,
+                            metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
 
@@ -85,7 +90,7 @@ function OptimizationSystem(op, states, ps;
     OptimizationSystem(value(op), states′, ps′, var_to_name,
                        observed,
                        constraints,
-                       name, systems, defaults; checks = checks)
+                       name, systems, defaults, metadata; checks = checks)
 end
 
 function calculate_gradient(sys::OptimizationSystem)

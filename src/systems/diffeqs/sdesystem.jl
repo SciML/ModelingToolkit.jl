@@ -96,10 +96,14 @@ struct SDESystem <: AbstractODESystem
     true at the end of an integration step.
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
-
+    """
+    metadata: metadata for the system, to be used by downstream packages.
+    """
+    metadata::Any
     function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
                        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-                       cevents, devents; checks::Union{Bool, Int} = true)
+                       cevents, devents, metadata = nothing;
+                       checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -110,7 +114,8 @@ struct SDESystem <: AbstractODESystem
             all_dimensionless([dvs; ps; iv]) || check_units(deqs, neqs)
         end
         new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac,
-            Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents)
+            Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
+            metadata)
     end
 end
 
@@ -125,7 +130,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    connector_type = nothing,
                    checks = true,
                    continuous_events = nothing,
-                   discrete_events = nothing)
+                   discrete_events = nothing,
+                   metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = scalarize(deqs)
@@ -160,7 +166,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
 
     SDESystem(deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-              cont_callbacks, disc_callbacks; checks = checks)
+              cont_callbacks, disc_callbacks, metadata; checks = checks)
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
