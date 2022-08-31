@@ -123,10 +123,10 @@ end
 function equations(sys::OptimizationSystem)
     op = get_op(sys)
     systems = get_systems(sys)
-    if isempty(systems) 
+    if isempty(systems)
         op
     else
-        op + reduce(+, map(sys_ -> namespace_expr.(get_op(sys_), sys_), systems))
+        op + reduce(+, map(sys_ -> namespace_expr(get_op(sys_), sys_), systems))
     end
 end
 

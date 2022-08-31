@@ -400,7 +400,7 @@ function namespace_assignment(eq::Assignment, sys)
     _rhs = namespace_expr(eq.rhs, sys)
     Assignment(_lhs, _rhs)
 end
-    
+
 function namespace_expr(O, sys, n = nameof(sys)) where {T}
     ivs = independent_variables(sys)
     O = unwrap(O)
