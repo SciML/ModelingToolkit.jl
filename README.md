@@ -44,26 +44,27 @@ using DifferentialEquations, ModelingToolkit
 @variables x(t) y(t) z(t)
 D = Differential(t)
 
-eqs = [D(D(x)) ~ σ*(y-x),
-       D(y) ~ x*(ρ-z)-y,
-       D(z) ~ x*y - β*z]
+eqs = [D(D(x)) ~ σ * (y - x),
+    D(y) ~ x * (ρ - z) - y,
+    D(z) ~ x * y - β * z]
 
 @named sys = ODESystem(eqs)
 sys = structural_simplify(sys)
 
 u0 = [D(x) => 2.0,
-      x => 1.0,
-      y => 0.0,
-      z => 0.0]
+    x => 1.0,
+    y => 0.0,
+    z => 0.0]
 
-p  = [σ => 28.0,
-      ρ => 10.0,
-      β => 8/3]
+p = [σ => 28.0,
+    ρ => 10.0,
+    β => 8 / 3]
 
-tspan = (0.0,100.0)
-prob = ODEProblem(sys,u0,tspan,p,jac=true)
+tspan = (0.0, 100.0)
+prob = ODEProblem(sys, u0, tspan, p, jac = true)
 sol = solve(prob)
-using Plots; plot(sol,idxs=(x,y))
+using Plots
+plot(sol, idxs = (x, y))
 ```
 
 ![Lorenz2](https://user-images.githubusercontent.com/1814174/79118645-744eb580-7d5c-11ea-9c37-13c4efd585ca.png)
@@ -81,42 +82,44 @@ using DifferentialEquations, ModelingToolkit
 @variables x(t) y(t) z(t)
 D = Differential(t)
 
-eqs = [D(x) ~ σ*(y-x),
-       D(y) ~ x*(ρ-z)-y,
-       D(z) ~ x*y - β*z]
+eqs = [D(x) ~ σ * (y - x),
+    D(y) ~ x * (ρ - z) - y,
+    D(z) ~ x * y - β * z]
 
 @named lorenz1 = ODESystem(eqs)
 @named lorenz2 = ODESystem(eqs)
 
 @variables a(t)
 @parameters γ
-connections = [0 ~ lorenz1.x + lorenz2.y + a*γ]
-@named connected = ODESystem(connections,t,[a],[γ],systems=[lorenz1,lorenz2])
+connections = [0 ~ lorenz1.x + lorenz2.y + a * γ]
+@named connected = ODESystem(connections, t, [a], [γ], systems = [lorenz1, lorenz2])
+sys = structural_simplify(connected)
 
 u0 = [lorenz1.x => 1.0,
-      lorenz1.y => 0.0,
-      lorenz1.z => 0.0,
-      lorenz2.x => 0.0,
-      lorenz2.y => 1.0,
-      lorenz2.z => 0.0,
-      a => 2.0]
+    lorenz1.y => 0.0,
+    lorenz1.z => 0.0,
+    lorenz2.x => 0.0,
+    lorenz2.y => 1.0,
+    lorenz2.z => 0.0,
+    a => 2.0]
 
-p  = [lorenz1.σ => 10.0,
-      lorenz1.ρ => 28.0,
-      lorenz1.β => 8/3,
-      lorenz2.σ => 10.0,
-      lorenz2.ρ => 28.0,
-      lorenz2.β => 8/3,
-      γ => 2.0]
+p = [lorenz1.σ => 10.0,
+    lorenz1.ρ => 28.0,
+    lorenz1.β => 8 / 3,
+    lorenz2.σ => 10.0,
+    lorenz2.ρ => 28.0,
+    lorenz2.β => 8 / 3,
+    γ => 2.0]
 
-tspan = (0.0,100.0)
-prob = ODEProblem(connected,u0,tspan,p)
+tspan = (0.0, 100.0)
+prob = ODEProblem(sys, u0, tspan, p)
 sol = solve(prob)
 
-using Plots; plot(sol,idxs=(a,lorenz1.x,lorenz2.z))
+using Plots
+plot(sol, idxs = (a, lorenz1.x, lorenz2.z))
 ```
 
-![](https://user-images.githubusercontent.com/1814174/110242538-87461780-7f24-11eb-983c-4b2c93cfc909.png)
+![](https://user-images.githubusercontent.com/17304743/187790221-528046c3-dbdb-4853-b977-799596c147f3.png)
 
 # Citation
 If you use ModelingToolkit.jl in your research, please cite [this paper](https://arxiv.org/abs/2103.05244):
