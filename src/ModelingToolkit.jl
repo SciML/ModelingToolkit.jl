@@ -175,7 +175,7 @@ export NonlinearSystem, OptimizationSystem
 export alias_elimination, flatten
 export connect, @connector, Connection, Flow, Stream, instream
 export isinput, isoutput, getbounds, hasbounds, isdisturbance, istunable, getdist, hasdist,
-       tunable_parameters, isirreducible, getdescription, hasdescription
+       tunable_parameters, isirreducible, getdescription, hasdescription, isbinaryvar, isintegervar
 export ode_order_lowering, dae_order_lowering, liouville_transform
 export PDESystem
 export Differential, expand_derivatives, @derivatives

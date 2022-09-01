@@ -291,14 +291,14 @@ end
 struct VariableBinary end
 Symbolics.option_to_metadata_type(::Val{:binary}) = VariableBinary
 
-isbinary(x::Num) = isbinary(Symbolics.unwrap(x))
+isbinaryvar(x::Num) = isbinaryvar(Symbolics.unwrap(x))
 
 """
-    isbinary(x)
+    isbinaryvar(x)
 
 Determine if a variable is binary.
 """
-function isbinary(x)
+function isbinaryvar(x)
     p = Symbolics.getparent(x, nothing)
     p === nothing || (x = p)
     return Symbolics.getmetadata(x, VariableBinary, false)
@@ -308,14 +308,14 @@ end
 struct VariableInteger end
 Symbolics.option_to_metadata_type(::Val{:integer}) = VariableInteger
 
-isinteger(x::Num) = isinteger(Symbolics.unwrap(x))
+isintegervar(x::Num) = isintegervar(Symbolics.unwrap(x))
 
 """
-    isinteger(x)
+    isintegervar(x)
 
 Determine if a variable is integer.
 """
-function isinteger(x)
+function isintegervar(x)
     p = Symbolics.getparent(x, nothing)
     p === nothing || (x = p)
     return Symbolics.getmetadata(x, VariableInteger, false)
