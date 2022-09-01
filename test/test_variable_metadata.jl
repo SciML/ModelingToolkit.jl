@@ -82,3 +82,19 @@ sp = Set(p)
 @named sys = ODESystem([u ~ p], t)
 
 @test_nowarn show(stdout, "text/plain", sys)
+
+@testset "binary" begin
+    @parameters t
+    @variables u(t) [binary = true]
+    @parameters p [binary = true]
+    @test isbinary(u)
+    @test isbinary(p)
+end
+
+@testset "integer" begin
+    @parameters t
+    @variables u(t) [integer = true]
+    @parameters p [integer = true]
+    @test isinteger(u)
+    @test isinteger(p)
+end

@@ -286,3 +286,37 @@ end
 function hasdescription(x)
     getdescription(x) != ""
 end
+
+## binary variables =================================================================
+struct VariableBinary end
+Symbolics.option_to_metadata_type(::Val{:binary}) = VariableBinary
+
+isbinary(x::Num) = isbinary(Symbolics.unwrap(x))
+
+"""
+    isbinary(x)
+
+Determine if a variable is binary.
+"""
+function isbinary(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    return Symbolics.getmetadata(x, VariableBinary, false)
+end
+
+## integer variables =================================================================
+struct VariableInteger end
+Symbolics.option_to_metadata_type(::Val{:integer}) = VariableInteger
+
+isinteger(x::Num) = isinteger(Symbolics.unwrap(x))
+
+"""
+    isinteger(x)
+
+Determine if a variable is integer.
+"""
+function isinteger(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    return Symbolics.getmetadata(x, VariableInteger, false)
+end
