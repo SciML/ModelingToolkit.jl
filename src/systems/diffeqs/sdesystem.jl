@@ -506,7 +506,8 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
                           Wfact = Wfact,
                           Wfact_t = Wfact_t,
                           mass_matrix = M,
-                          syms = $(Symbol.(states(sys))))
+                          syms = $(Symbol.(states(sys))),
+                          paramsyms = $(Symbol.(parameters(sys))))
     end
     !linenumbers ? striplines(ex) : ex
 end
