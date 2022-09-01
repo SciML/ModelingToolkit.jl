@@ -87,14 +87,14 @@ sp = Set(p)
     @parameters t
     @variables u(t) [binary = true]
     @parameters p [binary = true]
-    @test isbinary(u)
-    @test isbinary(p)
+    @test isbinaryvar(u)
+    @test isbinaryvar(p)
 end
 
 @testset "integer" begin
     @parameters t
     @variables u(t) [integer = true]
     @parameters p [integer = true]
-    @test isinteger(u)
-    @test isinteger(p)
+    @test isintegervar(u)
+    @test isintegervar(p)
 end
