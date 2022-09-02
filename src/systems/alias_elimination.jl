@@ -34,7 +34,7 @@ end
 
 alias_elimination(sys) = alias_elimination!(TearingState(sys; quick_cancel = true))
 function alias_elimination!(state::TearingState)
-    # Main._state[] = state
+    Main._state[] = state
     sys = state.sys
     complete!(state.structure)
     ag, mm, updated_diff_vars = alias_eliminate_graph!(state)
@@ -596,6 +596,11 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig, irreducibles = ())
 
     # Step 2: Simplify the system using the Bareiss factorization
     rk1vars = BitSet(@view pivots[1:rank1])
+    fullvars = Main._state[].fullvars
+    @info "" mm_orig.nzrows mm_orig
+    @show fullvars
+    @show fullvars[pivots[1:rank1]]
+    @show fullvars[solvable_variables]
     for v in solvable_variables
         v in rk1vars && continue
         ag[v] = 0
@@ -646,13 +651,13 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     nvars = ndsts(graph)
     ag = AliasGraph(nvars)
     mm = simple_aliases!(ag, graph, var_to_diff, mm_orig)
-    # state = Main._state[]
-    # fullvars = state.fullvars
-    # for (v, (c, a)) in ag
-    #     a = a == 0 ? 0 : c * fullvars[a]
-    #     v = fullvars[v]
-    #     @info "simple alias" v => a
-    # end
+    state = Main._state[]
+    fullvars = state.fullvars
+    for (v, (c, a)) in ag
+        a = a == 0 ? 0 : c * fullvars[a]
+        v = fullvars[v]
+        @info "simple alias" v => a
+    end
 
     # Step 3: Handle differentiated variables
     # At this point, `var_to_diff` and `ag` form a tree structure like the
@@ -693,9 +698,9 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         (dv === nothing && diff_to_var[v] === nothing) && continue
 
         r, _ = find_root!(iag, v)
-        #   sv = fullvars[v]
-        #   root = fullvars[r]
-        #   @info "Found root $r" sv=>root
+           sv = fullvars[v]
+           root = fullvars[r]
+           @info "Found root $r" sv=>root
         level_to_var = Int[]
         extreme_var(var_to_diff, r, nothing, Val(false),
                     callback = Base.Fix1(push!, level_to_var))
@@ -774,10 +779,10 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             end
         end
     end
-    # for (v, (c, a)) in ag
-    #     a = a == 0 ? 0 : c * fullvars[a]
-    #     @info "differential aliases" fullvars[v] => a
-    # end
+    for (v, (c, a)) in ag
+        a = a == 0 ? 0 : c * fullvars[a]
+        @info "differential aliases" fullvars[v] => a
+    end
 
     if !isempty(irreducibles)
         ag = newag
@@ -788,10 +793,10 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         mm = simple_aliases!(ag, graph, var_to_diff, mm_orig2, irreducibles)
     end
 
-    # for (v, (c, a)) in ag
-    #     va = iszero(a) ? a : fullvars[a]
-    #     @info "new alias" fullvars[v]=>(c, va)
-    # end
+    for (v, (c, a)) in ag
+        va = iszero(a) ? a : fullvars[a]
+        @info "new alias" fullvars[v]=>(c, va)
+    end
 
     # Step 4: Reflect our update decisions back into the graph
     for (ei, e) in enumerate(mm.nzrows)
