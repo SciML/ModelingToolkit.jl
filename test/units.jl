@@ -44,6 +44,9 @@ eqs = [D(E) ~ P - E / τ
 @test MT.validate(eqs)
 @named sys = ODESystem(eqs)
 
+# Issue 1659
+@test MT.get_unit(τ=>1) == u"ms"
+
 @test !MT.validate(D(D(E)) ~ P)
 @test !MT.validate(0 ~ P + E * τ)
 

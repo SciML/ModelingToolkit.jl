@@ -130,6 +130,8 @@ function get_unit(x::Symbolic)
     end
 end
 
+get_unit(parameter::Pair{Num,T}) where T = get_unit(parameter[1]) #Handle parameter/value pairs
+
 "Get unit of term, returning nothing & showing warning instead of throwing errors."
 function safe_get_unit(term, info)
     side = nothing
@@ -228,4 +230,5 @@ function check_units(eqs...)
     validate(eqs...) ||
         throw(ValidationError("Some equations had invalid units. See warnings for details."))
 end
-all_dimensionless(states) = all(x -> safe_get_unit(x, "") in (unitless, nothing), states)
+
+all_dimensionless(states) = all(x -> get_unit(x) in (unitless, nothing), states)
