@@ -8,9 +8,19 @@ function alias_eliminate_graph!(state::TransformationState)
     mm = linear_subsys_adjmat(state)
     size(mm, 1) == 0 && return AliasGraph(ndsts(state.structure.graph)), mm, BitSet() # No linear subsystems
 
-    @unpack graph, var_to_diff = state.structure
+    @unpack graph, var_to_diff, solvable_graph = state.structure
 
-    return alias_eliminate_graph!(complete(graph), complete(var_to_diff), mm)
+    ag, mm, updated_diff_vars = alias_eliminate_graph!(complete(graph), complete(var_to_diff), mm)
+
+    # Update the solvable graph as well, if it happens to already be set
+    if solvable_graph !== nothing
+        for (ei, e) in enumerate(mm.nzrows)
+            set_neighbors!(solvable_graph, e, mm.row_cols[ei])
+        end
+        update_graph_neighbors!(solvable_graph, ag)
+    end
+
+    return ag, mm, updated_diff_vars
 end
 
 # For debug purposes
