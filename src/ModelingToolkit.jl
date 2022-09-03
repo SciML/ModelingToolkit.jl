@@ -115,6 +115,7 @@ using .BipartiteGraphs
 
 include("variables.jl")
 include("parameters.jl")
+include("constants.jl")
 
 include("utils.jl")
 include("domains.jl")
@@ -206,7 +207,7 @@ export toexpr, get_variables
 export simplify, substitute
 export build_function
 export modelingtoolkitize
-export @variables, @parameters
+export @variables, @parameters, @constants
 export @named, @nonamespace, @namespace, extend, compose
 
 end # module

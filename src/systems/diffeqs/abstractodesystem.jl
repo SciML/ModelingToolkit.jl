@@ -127,6 +127,13 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
            [eq.rhs for eq in eqs]
 
+    # Swap constants for their values
+    cs = constants(sys)
+    if !isempty(cs) > 0
+        cmap = map(x -> x => getdefault(x), cs)
+        rhss = map(x -> substitute(x, cmap), rhss)
+    end
+
     # TODO: add an optional check on the ordering of observed equations
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
     p = map(x -> time_varying_as_func(value(x), sys), ps)

@@ -466,38 +466,40 @@ function find_derivatives!(vars, expr, f)
     return vars
 end
 
-function collect_vars!(states, parameters, expr, iv)
+function collect_vars!(states, parameters, constants, expr, iv)
     if expr isa Sym
-        collect_var!(states, parameters, expr, iv)
+        collect_var!(states, parameters, constants, expr, iv)
     else
         for var in vars(expr)
             if istree(var) && operation(var) isa Differential
                 var, _ = var_from_nested_derivative(var)
             end
-            collect_var!(states, parameters, var, iv)
+            collect_var!(states, parameters, constants, var, iv)
         end
     end
     return nothing
 end
 
-function collect_vars_difference!(states, parameters, expr, iv)
+function collect_vars_difference!(states, parameters, constants, expr, iv)
     if expr isa Sym
-        collect_var!(states, parameters, expr, iv)
+        collect_var!(states, parameters, constants, expr, iv)
     else
         for var in vars(expr)
             if istree(var) && operation(var) isa Difference
                 var, _ = var_from_nested_difference(var)
             end
-            collect_var!(states, parameters, var, iv)
+            collect_var!(states, parameters, constants, var, iv)
         end
     end
     return nothing
 end
 
-function collect_var!(states, parameters, var, iv)
+function collect_var!(states, parameters, constants, var, iv)
     isequal(var, iv) && return nothing
     if isparameter(var) || (istree(var) && isparameter(operation(var)))
         push!(parameters, var)
+    elseif isconstant(var)
+        push!(constants,var)
     else
         push!(states, var)
     end

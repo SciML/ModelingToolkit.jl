@@ -36,6 +36,8 @@ struct ODESystem <: AbstractODESystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    """Symbolic constants."""
+    cs::Vector
     """Array variables."""
     var_to_name::Any
     """Control parameters (some subset of `ps`)."""
@@ -120,7 +122,7 @@ struct ODESystem <: AbstractODESystem
     """
     metadata::Any
 
-    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad,
+    function ODESystem(deqs, iv, dvs, ps, cs, var_to_name, ctrls, observed, tgrad,
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
                        torn_matching, connector_type, connections, preface, cevents,
                        devents, tearing_state = nothing, substitutions = nothing,
@@ -133,16 +135,16 @@ struct ODESystem <: AbstractODESystem
             check_equations(equations(cevents), iv)
         end
         if checks == true || (checks & CheckUnits) > 0
-            all_dimensionless([dvs; ps; iv]) || check_units(deqs)
+            all_dimensionless([dvs; ps; iv; cs]) || check_units(deqs)
         end
-        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
+        new(deqs, iv, dvs, ps, cs, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
             connector_type, connections, preface, cevents, devents, tearing_state,
             substitutions, metadata)
     end
 end
 
-function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
+function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps, cs;
                    controls = Num[],
                    observed = Equation[],
                    systems = ODESystem[],
@@ -164,6 +166,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     iv′ = value(scalarize(iv))
     dvs′ = value.(scalarize(dvs))
     ps′ = value.(scalarize(ps))
+    cs′ = value.(scalarize(cs))
     ctrl′ = value.(scalarize(controls))
 
     if !(isempty(default_u0) && isempty(default_p))
@@ -176,6 +179,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     var_to_name = Dict()
     process_variables!(var_to_name, defaults, dvs′)
     process_variables!(var_to_name, defaults, ps′)
+    process_variables!(var_to_name, defaults, cs′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
     tgrad = RefValue(EMPTY_TGRAD)
@@ -189,7 +193,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
-    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
+    ODESystem(deqs, iv′, dvs′, ps′, cs′, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
               connector_type, nothing, preface, cont_callbacks, disc_callbacks,
               metadata, checks = checks)
@@ -201,6 +205,7 @@ function ODESystem(eqs, iv = nothing; kwargs...)
     diffvars = OrderedSet()
     allstates = OrderedSet()
     ps = OrderedSet()
+    cs = OrderedSet() #Constants
     # reorder equations such that it is in the form of `diffeq, algeeq`
     diffeq = Equation[]
     algeeq = Equation[]
@@ -218,8 +223,8 @@ function ODESystem(eqs, iv = nothing; kwargs...)
     compressed_eqs = Equation[] # equations that need to be expanded later, like `connect(a, b)`
     for eq in eqs
         eq.lhs isa Union{Symbolic, Number} || (push!(compressed_eqs, eq); continue)
-        collect_vars!(allstates, ps, eq.lhs, iv)
-        collect_vars!(allstates, ps, eq.rhs, iv)
+        collect_vars!(allstates, ps, cs, eq.lhs, iv)
+        collect_vars!(allstates, ps, cs, eq.rhs, iv)
         if isdiffeq(eq)
             diffvar, _ = var_from_nested_derivative(eq.lhs)
             isequal(iv, iv_from_nested_derivative(eq.lhs)) ||
@@ -235,7 +240,7 @@ function ODESystem(eqs, iv = nothing; kwargs...)
     algevars = setdiff(allstates, diffvars)
     # the orders here are very important!
     return ODESystem(Equation[diffeq; algeeq; compressed_eqs], iv,
-                     collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
+                     collect(Iterators.flatten((diffvars, algevars))), ps, cs; kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian
@@ -260,6 +265,7 @@ function flatten(sys::ODESystem, noeqs = false)
                          get_iv(sys),
                          states(sys),
                          parameters(sys),
+                         constants(sys),
                          observed = observed(sys),
                          continuous_events = continuous_events(sys),
                          discrete_events = discrete_events(sys),

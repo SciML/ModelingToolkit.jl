@@ -5,23 +5,23 @@ function isconstant(x)
     x = unwrap(x)
     x isa Symbolic &&  getmetadata(x, MTKConstantCtx, false)
 end
-
+isconstant(x::Num) = isconstant(unwrap(x))
 """
     toconst(s::Sym)
 
 Maps the parameter to a constant. The parameter must have a default.
 """
-function toconst(s)
+function toconstant(s)
     if s isa Symbolics.Arr
-        Symbolics.wrap(toconst(Symbolics.unwrap(s)))
+        Symbolics.wrap(toconstant(Symbolics.unwrap(s)))
     elseif s isa AbstractArray
-        map(toconst, s)
+        map(toconstant, s)
     else
-        assert(hasmetadata(s,VariableDefaultValue))
-        setmetadata(s, MTKConstCtx, true)
+        hasmetadata(s, Symbolics.VariableDefaultValue) || throw(ArgumentError("Constant `$(s)` must be assigned a default value."))
+        setmetadata(s, MTKConstantCtx, true)
     end
 end
-toconst(s::Num) = wrap(toconst(value(s)))
+toconstant(s::Num) = wrap(toconstant(value(s)))
 
 """
 $(SIGNATURES)
@@ -32,5 +32,5 @@ macro constants(xs...)
     Symbolics._parse_vars(:constants,
                           Real,
                           xs,
-                          toconst) |> esc
+                          toconstant) |> esc
 end
