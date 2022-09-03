@@ -350,7 +350,8 @@ function TearingState(sys; quick_cancel = false, check = true)
     eq_to_diff = DiffGraph(nsrcs(graph))
 
     return TearingState(sys, fullvars,
-                        SystemStructure(var_to_diff, eq_to_diff, graph, nothing), Any[])
+                        SystemStructure(complete(var_to_diff), complete(eq_to_diff),
+                                        complete(graph), nothing), Any[])
 end
 
 function linear_subsys_adjmat(state::TransformationState)
