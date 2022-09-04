@@ -7,7 +7,7 @@ using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
-                          isparameter,
+                          isparameter, isconstant
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
                           equations, isirreducible
 using ..BipartiteGraphs
@@ -266,7 +266,7 @@ function TearingState(sys; quick_cancel = false, check = true)
         for var in vars
             _var, _ = var_from_nested_derivative(var)
             any(isequal(_var), ivs) && continue
-            if isparameter(_var) || (istree(_var) && isparameter(operation(_var)))
+            if isparameter(_var) || (istree(_var) && isparameter(operation(_var)) || isconstant(_var))
                 continue
             end
             varidx = addvar!(var)

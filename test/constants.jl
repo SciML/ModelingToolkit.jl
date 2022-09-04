@@ -12,3 +12,10 @@ eqs = [D(x) ~ a]
 prob = ODEProblem(sys, [0, ], [0.0, 1.0],[])
 sol = solve(prob,Tsit5())
 
+# Test structural_simplify handling
+eqs = [D(x) ~ t,
+    w ~ a]
+@named sys = ODESystem(eqs)
+simp = structural_simplify(sys);
+@test isequal(simp.substitutions.subs[1], w~a)
+
