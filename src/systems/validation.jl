@@ -130,7 +130,7 @@ function get_unit(x::Symbolic)
     end
 end
 
-get_unit(parameter::Pair{Num, T}) where {T} = get_unit(parameter[1]) #Handle parameter/value pairs
+get_unit(parameter::Pair) = get_unit(parameter[1]) #Handle parameter/value pairs
 
 "Get unit of term, returning nothing & showing warning instead of throwing errors."
 function safe_get_unit(term, info)
