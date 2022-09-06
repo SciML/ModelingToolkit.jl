@@ -131,7 +131,7 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
         throw(ArgumentError("System names must be unique."))
     end
     DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems,
-                   defaults, preface, connector_type, metadata, kwargs...)
+                   defaults, preface, connector_type, nothing, nothing, metadata, kwargs...)
 end
 
 function DiscreteSystem(eqs, iv = nothing; kwargs...)

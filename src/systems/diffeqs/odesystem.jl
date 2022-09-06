@@ -192,7 +192,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
               connector_type, nothing, preface, cont_callbacks, disc_callbacks,
-              metadata, checks = checks)
+              nothing, nothing, metadata, checks = checks)
 end
 
 function ODESystem(eqs, iv = nothing; kwargs...)
