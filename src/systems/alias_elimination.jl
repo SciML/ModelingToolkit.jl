@@ -497,12 +497,76 @@ count_nonzeros(a::AbstractArray) = count(!iszero, a)
 # Here we have a guarantee that they won't, so we can make this identification
 count_nonzeros(a::SparseVector) = nnz(a)
 
+# Linear variables are variables that only appear in linear equations with only
+# linear variables. Also, if a variable's any derivaitves is nonlinear, then all
+# of them are not linear variables.
+function find_linear_variables(graph, linear_equations, var_to_diff, irreducibles)
+    fullvars = Main._state[].fullvars
+    stack = Int[]
+    linear_variables = falses(length(var_to_diff))
+    var_to_lineq = Dict{Int, BitSet}()
+    mark_not_linear! = let linear_variables = linear_variables, stack = stack,
+                           var_to_lineq = var_to_lineq
+        v -> begin
+            linear_variables[v] = false
+            push!(stack, v)
+            while !isempty(stack)
+                v = pop!(stack)
+                eqs = get(var_to_lineq, v, nothing)
+                eqs === nothing && continue
+                for eq in eqs, v′ in 𝑠neighbors(graph, eq)
+                    if linear_variables[v′]
+                        @show v′, fullvars[v′]
+                        linear_variables[v′] = false
+                        push!(stack, v′)
+                    end
+                end
+            end
+        end
+    end
+    for eq in linear_equations, v in 𝑠neighbors(graph, eq)
+        linear_variables[v] = true
+        vlineqs = get!(()->BitSet(), var_to_lineq, v)
+        push!(vlineqs, eq)
+    end
+    for v in irreducibles
+        lv = extreme_var(var_to_diff, v)
+        while true
+            mark_not_linear!(lv)
+            lv = var_to_diff[lv]
+            lv === nothing && break
+        end
+    end
+
+    linear_equations_set = BitSet(linear_equations)
+    for (v, islinear) in enumerate(linear_variables)
+        islinear || continue
+        lv = extreme_var(var_to_diff, v)
+        oldlv = lv
+        remove = false
+        while true
+            for eq in 𝑑neighbors(graph, lv)
+                if !(eq in linear_equations_set)
+                    remove = true
+                end
+            end
+            lv = var_to_diff[lv]
+            lv === nothing && break
+        end
+        lv = oldlv
+        remove && while true
+            mark_not_linear!(lv)
+            lv = var_to_diff[lv]
+            lv === nothing && break
+        end
+    end
+
+    return linear_variables
+end
+
 function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, irreducibles = ())
     mm = copy(mm_orig)
-    is_linear_equations = falses(size(AsSubMatrix(mm_orig), 1))
-    for e in mm_orig.nzrows
-        is_linear_equations[e] = true
-    end
+    linear_equations = mm_orig.nzrows
 
     # If linear highest differentiated variables cannot be assigned to a pivot,
     # then we can set it to zero. We use `rank1` to track this.
@@ -513,30 +577,13 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, irreducible
     # For all the other variables, we can update the original system with
     # Bareiss'ed coefficients as Gaussian elimination is nullspace perserving
     # and we are only working on linear homogeneous subsystem.
-    is_linear_variables = isnothing.(var_to_diff)
     is_reducible = trues(length(var_to_diff))
     for v in irreducibles
-        is_linear_variables[v] = false
         is_reducible[v] = false
     end
     # TODO/FIXME: This needs a proper recursion to compute the transitive
     # closure.
-    @label restart
-    for i in 𝑠vertices(graph)
-        is_linear_equations[i] && continue
-        # This needs recursion
-        for j in 𝑠neighbors(graph, i)
-            if is_linear_variables[j]
-                is_linear_variables[j] = false
-                for k in 𝑑neighbors(graph, j)
-                    if is_linear_equations[k]
-                        is_linear_equations[k] = false
-                        @goto restart
-                    end
-                end
-            end
-        end
-    end
+    is_linear_variables = find_linear_variables(graph, linear_equations, var_to_diff, irreducibles)
     solvable_variables = findall(is_linear_variables)
 
     function do_bareiss!(M, Mold = nothing)
