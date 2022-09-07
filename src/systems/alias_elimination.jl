@@ -501,7 +501,6 @@ count_nonzeros(a::SparseVector) = nnz(a)
 # linear variables. Also, if a variable's any derivaitves is nonlinear, then all
 # of them are not linear variables.
 function find_linear_variables(graph, linear_equations, var_to_diff, irreducibles)
-    fullvars = Main._state[].fullvars
     stack = Int[]
     linear_variables = falses(length(var_to_diff))
     var_to_lineq = Dict{Int, BitSet}()
@@ -516,7 +515,6 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
                 eqs === nothing && continue
                 for eq in eqs, v′ in 𝑠neighbors(graph, eq)
                     if linear_variables[v′]
-                        @show v′, fullvars[v′]
                         linear_variables[v′] = false
                         push!(stack, v′)
                     end
@@ -738,6 +736,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     processed = falses(nvars)
     iag = InducedAliasGraph(ag, invag, var_to_diff)
     newag = AliasGraph(nvars)
+    newinvag = SimpleDiGraph(nvars)
     irreducibles = BitSet()
     updated_diff_vars = Int[]
     for (v, dv) in enumerate(var_to_diff)
@@ -754,7 +753,8 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         nlevels = length(level_to_var)
         current_coeff_level = Ref((0, 0))
         add_alias! = let current_coeff_level = current_coeff_level,
-            level_to_var = level_to_var, newag = newag, processed = processed
+            level_to_var = level_to_var, newag = newag, newinvag = newinvag,
+            processed = processed
 
             v -> begin
                 coeff, level = current_coeff_level[]
@@ -762,6 +762,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                     av = level_to_var[level + 1]
                     if v != av # if the level_to_var isn't from the root branch
                         newag[v] = coeff => av
+                        add_edge!(newinvag, av, v)
                     end
                 else
                     @assert length(level_to_var) == level
@@ -792,13 +793,14 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         set_v_zero! = let newag = newag
             v -> newag[v] = 0
         end
+        len = length(level_to_var)
         for (i, v) in enumerate(level_to_var)
             _alias = get(ag, v, nothing)
 
             # if a chain starts to equal to zero, then all its descendants must
             # be zero and reducible
             if _alias !== nothing && iszero(_alias[1])
-                if i < length(level_to_var)
+                if i < len
                     # we have `x = 0`
                     v = level_to_var[i + 1]
                     extreme_var(var_to_diff, v, nothing, Val(false), callback = set_v_zero!)
@@ -806,30 +808,33 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                 break
             end
 
-            v_eqs = 𝑑neighbors(graph, v)
-            # if an irreducible appears in only one equation, we need to make
-            # sure that the other variables don't get eliminated
-            if length(v_eqs) == 1
-                eq = v_eqs[1]
-                for av in 𝑠neighbors(graph, eq)
+            # all non-highest order differentiated variables are reducible.
+            if i == len
+                # if an irreducible alias appears in only one equation, then
+                # it's actually not an alias, but a proper equation. E.g.
+                # D(D(phi)) = a
+                # D(phi) = sin(t)
+                # `a` and `D(D(phi))` are not irreducible state.
+                push!(irreducibles, v)
+                for av in neighbors(newinvag, v)
+                    newag[av] = nothing
                     push!(irreducibles, av)
                 end
-                ag[v] = nothing
             end
-            push!(irreducibles, v)
         end
-        if nlevels < (new_nlevels = length(level_to_var))
-            for i in (nlevels + 1):new_nlevels
+        if nlevels < len
+            for i in (nlevels + 1):len
                 li = level_to_var[i]
                 var_to_diff[level_to_var[i - 1]] = li
                 push!(updated_diff_vars, level_to_var[i - 1])
             end
         end
     end
-    for (v, (c, a)) in ag
+    for (v, (c, a)) in newag
         a = a == 0 ? 0 : c * fullvars[a]
         @info "differential aliases" fullvars[v] => a
     end
+    @show fullvars[collect(irreducibles)]
 
     if !isempty(irreducibles)
         ag = newag
