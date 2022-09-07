@@ -320,7 +320,7 @@ function build_explicit_observed_function(sys, ts;
                     subs[s] = s′
                     continue
                 end
-                throw(ArgumentError("$s is either an observed nor a state variable."))
+                throw(ArgumentError("$s is neither an observed nor a state variable."))
             end
             continue
         end
