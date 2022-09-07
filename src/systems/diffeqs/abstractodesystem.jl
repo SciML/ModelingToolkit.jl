@@ -681,7 +681,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
     kwargs = filter_kwargs(kwargs)
-    if sys.metadata !== nothing
+    if !haskey(kwargs, :problem_type) && sys.metadata !== nothing
         push!(kwargs, :problem_type => sys.metadata)
     end
     if has_difference
