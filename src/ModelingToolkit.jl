@@ -59,6 +59,7 @@ import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
                   substituter, scalarize, getparent
 
 import DiffEqBase: @add_kwonly
+import SciMLBase: StandardODEProblem
 
 import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 

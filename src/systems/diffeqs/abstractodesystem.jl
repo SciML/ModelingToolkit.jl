@@ -639,9 +639,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                                  check_length, kwargs...)
     cbs = process_events(sys; callback, has_difference, kwargs...)
     kwargs = filter_kwargs(kwargs)
-    if sys.metadata !== nothing
-        push!(kwargs, :problem_type => sys.metadata)
-    end
+
     if cbs === nothing
         ODEProblem{iip}(f, u0, tspan, p; kwargs...)
     else
@@ -681,9 +679,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
     kwargs = filter_kwargs(kwargs)
-    if !haskey(kwargs, :problem_type) && sys.metadata !== nothing
-        push!(kwargs, :problem_type => sys.metadata)
-    end
+
     if has_difference
         DAEProblem{iip}(f, du0, u0, tspan, p;
                         difference_cb = generate_difference_cb(sys; kwargs...),
