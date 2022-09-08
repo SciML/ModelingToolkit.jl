@@ -497,9 +497,9 @@ count_nonzeros(a::AbstractArray) = count(!iszero, a)
 # Here we have a guarantee that they won't, so we can make this identification
 count_nonzeros(a::SparseVector) = nnz(a)
 
-# Linear variables are variables that only appear in linear equations with only
-# linear variables. Also, if a variable's any derivaitves is nonlinear, then all
-# of them are not linear variables.
+# Linear variables are highest order differentiated variables that only appear
+# in linear equations with only linear variables. Also, if a variable's any
+# derivaitves is nonlinear, then all of them are not linear variables.
 function find_linear_variables(graph, linear_equations, var_to_diff, irreducibles)
     stack = Int[]
     linear_variables = falses(length(var_to_diff))
@@ -541,8 +541,8 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
         islinear || continue
         lv = extreme_var(var_to_diff, v)
         oldlv = lv
-        remove = false
-        while true
+        remove = invview(var_to_diff)[v] !== nothing
+        while !remove
             for eq in 𝑑neighbors(graph, lv)
                 if !(eq in linear_equations_set)
                     remove = true
@@ -788,18 +788,22 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             current_coeff_level[] = coeff, lv
             extreme_var(var_to_diff, v, nothing, Val(false), callback = add_alias!)
         end
-        max_lv > 0 || continue
+        len = length(level_to_var)
+        len > 1 || continue
 
         set_v_zero! = let newag = newag
             v -> newag[v] = 0
         end
-        len = length(level_to_var)
-        for (i, v) in enumerate(level_to_var)
-            _alias = get(ag, v, nothing)
-
-            # if a chain starts to equal to zero, then all its descendants must
-            # be zero and reducible
-            if _alias !== nothing && iszero(_alias[1])
+        for (i, av) in enumerate(level_to_var)
+            has_zero = false
+            for v in neighbors(newinvag, av)
+                cv = get(ag, v, nothing)
+                cv === nothing && continue
+                c, v = cv
+                iszero(c) || continue
+                has_zero = true
+                # if a chain starts to equal to zero, then all its descendants
+                # must be zero and reducible
                 if i < len
                     # we have `x = 0`
                     v = level_to_var[i + 1]
@@ -807,6 +811,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                 end
                 break
             end
+            has_zero && break
 
             # all non-highest order differentiated variables are reducible.
             if i == len
@@ -814,11 +819,20 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                 # it's actually not an alias, but a proper equation. E.g.
                 # D(D(phi)) = a
                 # D(phi) = sin(t)
-                # `a` and `D(D(phi))` are not irreducible state.
-                push!(irreducibles, v)
-                for av in neighbors(newinvag, v)
-                    newag[av] = nothing
-                    push!(irreducibles, av)
+                # `a` and `D(D(phi))` are not irreducible state. Hence, we need
+                # to remove `av` from all alias graphs and mark those pairs
+                # irreducible.
+                push!(irreducibles, av)
+                for v in neighbors(newinvag, av)
+                    newag[v] = nothing
+                    push!(irreducibles, v)
+                end
+                for v in neighbors(invag, av)
+                    newag[v] = nothing
+                    push!(irreducibles, v)
+                end
+                if (cv = get(ag, av, nothing)) !== nothing && !iszero(cv[2])
+                    push!(irreducibles, cv[2])
                 end
             end
         end
