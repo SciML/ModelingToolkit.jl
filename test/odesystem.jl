@@ -887,7 +887,7 @@ end
     eqs = [D(q) ~ -p / L - F
            D(p) ~ q / C
            0 ~ q / C - R * F]
-    testdict = Dict(:name => "test")
+    testdict = Dict([:name => "test"])
     @named sys = ODESystem(eqs, t, metadata = testdict)
     @test get_metadata(sys) == testdict
 end

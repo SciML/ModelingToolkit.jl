@@ -179,3 +179,12 @@ RHS2 = RHS
     sol = solve(prob, FunctionMap(); dt = dt)
     @test c[1] + 1 == length(sol)
 end
+
+@testset "Test Metadata in constructor" begin
+    @parameters t
+    @variables x(t) y(t)
+    D = Difference(t; dt = 0.1)
+    testdict = Dict([:test => 1])
+    @named sys = DiscreteSystem([D(x) ~ 1.0]; metadata = testdict)
+    @test sys.metadata == testdict
+end

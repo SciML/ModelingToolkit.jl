@@ -125,3 +125,14 @@ OBS2 = OBS
     @test isequal(equations(sys), (sys1.x - 1)^2 + (sys2.y - 1 / 2)^2)
     @test isequal(states(sys), [sys1.x, sys2.y])
 end
+
+@testset "Test Metadata in constructor" begin
+    @variables x
+    o1 = (x - 1)^2
+    c1 = [
+        x ~ 1,
+    ]
+    testdict = Dict(["test" => 1])
+    sys1 = OptimizationSystem(o1, [x], [], name = :sys1, constraints = c1, metadata = testdict)
+    @test sys1.metadata == testdict
+end
