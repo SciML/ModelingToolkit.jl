@@ -202,3 +202,13 @@ let
 
     @test sol[u] ≈ ones(4)
 end
+
+@testset "Test Metadata in constructor" begin
+    @variables x(t)
+    @parameters a
+    eqs = [0 ~ a * x]
+
+    testdict = Dict(:test => 1)
+    @named sys = NonlinearSystem(eqs, [x], [a], name = :test, defaults = Dict(:a => 1.0), metadata = testdict)
+    @test sys.metadata == testdict
+end
