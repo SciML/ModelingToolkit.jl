@@ -184,7 +184,7 @@ export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variables, independent_variable, states, parameters, equations, controls,
-       observed, structure, full_equations
+       observed, structure, full_equations, get_metadata
 export structural_simplify, expand_connections, linearize, linear_statespace
 export DiscreteSystem, DiscreteProblem
 
