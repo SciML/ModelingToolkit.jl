@@ -249,12 +249,12 @@ function DiffEqBase.ODEFunction(sys::AbstractODESystem, args...; kwargs...)
 end
 
 function DiffEqBase.ODEFunction{true}(sys::AbstractODESystem, args...;
-                                     kwargs...)
+                                      kwargs...)
     ODEFunction{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
 end
 
 function DiffEqBase.ODEFunction{false}(sys::AbstractODESystem, args...;
-    kwargs...)
+                                       kwargs...)
     ODEFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
@@ -262,6 +262,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                                  ps = parameters(sys), u0 = nothing;
                                                  version = nothing, tgrad = false,
                                                  jac = false, p = nothing,
+                                                 t = nothing,
                                                  eval_expression = true,
                                                  sparse = false, simplify = false,
                                                  eval_module = @__MODULE__,
@@ -277,9 +278,11 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
 
-    if specialize === SciMLBase.AutoSpecialize && u0 !== nothing && u0 isa Vector{Float64} &&
-        p !== nothing && typeof(p) <: Union{SciMLBase.NullParameters,Vector{Float64}}
-        f = SciMLBase.wrapfun_iip(f)
+    if specialize === SciMLBase.FunctionWrapperSpecialize && iip
+        if u0 === nothing || p === nothing || t === nothing
+            error("u0, p, and t must be specified for FunctionWrapperSpecialize on ODEFunction.")
+        end
+        f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
     end
 
     if tgrad

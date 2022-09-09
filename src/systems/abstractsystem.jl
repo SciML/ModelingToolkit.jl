@@ -1023,7 +1023,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
         sts = states(sys),
-        fun = ODEFunction{true,SciMLBase.FullSpecialize}(sys),
+        fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys),
         h = ModelingToolkit.build_explicit_observed_function(sys, outputs),
         chunk = ForwardDiff.Chunk(input_idxs)
 
