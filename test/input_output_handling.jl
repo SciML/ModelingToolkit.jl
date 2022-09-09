@@ -5,12 +5,15 @@ using ModelingToolkit: get_namespace, has_var, inputs, outputs, is_bound, bound_
 # Test input handling
 @parameters tv
 D = Differential(tv)
-@variables x(tv) u(tv) [input = true]
+@variables x(tv) u(tv) [input = true] v(tv)[1:2] [input = true]
 @test isinput(u)
 
 @named sys = ODESystem([D(x) ~ -x + u], tv) # both u and x are unbound
+@named sys1 = ODESystem([D(x) ~ -x + v[1] + v[2]], tv) # both v and x are unbound
 @named sys2 = ODESystem([D(x) ~ -sys.x], tv, systems = [sys]) # this binds sys.x in the context of sys2, sys2.x is still unbound
+@named sys21 = ODESystem([D(x) ~ -sys.x], tv, systems = [sys1]) # this binds sys.x in the context of sys2, sys2.x is still unbound
 @named sys3 = ODESystem([D(x) ~ -sys.x + sys.u], tv, systems = [sys]) # This binds both sys.x and sys.u
+@named sys31 = ODESystem([D(x) ~ -sys.x + sys1.v[1]], tv, systems = [sys1]) # This binds both sys.x and sys1.v[1]
 
 @named sys4 = ODESystem([D(x) ~ -sys.x, u ~ sys.u], tv, systems = [sys]) # This binds both sys.x and sys3.u, this system is one layer deeper than the previous. u is directly forwarded to sys.u, and in this case sys.u is bound while u is not
 
@@ -23,6 +26,7 @@ D = Differential(tv)
 @test get_namespace(sys.x) == "sys"
 @test get_namespace(sys2.x) == "sys2"
 @test get_namespace(sys2.sys.x) == "sys2₊sys"
+@test get_namespace(sys21.sys1.v) == "sys21₊sys1"
 
 @test !is_bound(sys, u)
 @test !is_bound(sys, x)
@@ -30,6 +34,11 @@ D = Differential(tv)
 @test is_bound(sys2, sys.x)
 @test !is_bound(sys2, sys.u)
 @test !is_bound(sys2, sys2.sys.u)
+@test is_bound(sys21, sys.x)
+@test !is_bound(sys21, sys1.v[1])
+@test !is_bound(sys21, sys1.v[2])
+@test is_bound(sys31, sys1.v[1])
+@test !is_bound(sys31, sys1.v[2])
 
 # simplification turns input variables into parameters
 ssys = structural_simplify(sys)
