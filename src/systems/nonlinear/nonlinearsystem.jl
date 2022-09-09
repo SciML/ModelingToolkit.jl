@@ -344,7 +344,12 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
                                           check_length = true, kwargs...) where {iip}
     f, u0, p = process_NonlinearProblem(NonlinearFunction{iip}, sys, u0map, parammap;
                                         check_length, kwargs...)
-    NonlinearProblem{iip}(f, u0, p; kwargs...)
+    pt = if get_metadata(sys) === nothing
+        StandardNonlinearProblem()
+    else
+        get_metadata(sys)
+    end
+    NonlinearProblem{iip}(f, u0, p, pt; kwargs...)
 end
 
 """
