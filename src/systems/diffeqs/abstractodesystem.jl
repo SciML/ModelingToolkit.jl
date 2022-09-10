@@ -450,10 +450,9 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      sys = sys,
                      jac = _jac === nothing ? nothing : _jac,
                      syms = Symbol.(dvs),
+                     indepsym = Symbol(get_iv(sys)),
                      paramsyms = Symbol.(ps),
                      jac_prototype = jac_prototype,
-                     # missing fields in `DAEFunction`
-                     #indepsym = Symbol(get_iv(sys)),
                      observed = observedfun)
 end
 
@@ -536,7 +535,8 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                           mass_matrix = M,
                           jac_prototype = $jp_expr,
                           syms = $(Symbol.(states(sys))),
-                          indepsym = $(QuoteNode(Symbol(get_iv(sys)))))
+                          indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
+                          paramsyms = $(QuoteNode(Symbol.(parameters(sys)))))
     end
     !linenumbers ? striplines(ex) : ex
 end
