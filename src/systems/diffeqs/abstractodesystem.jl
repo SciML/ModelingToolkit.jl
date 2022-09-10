@@ -248,17 +248,28 @@ function DiffEqBase.ODEFunction(sys::AbstractODESystem, args...; kwargs...)
     ODEFunction{true}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
-                                     ps = parameters(sys), u0 = nothing;
-                                     version = nothing, tgrad = false,
-                                     jac = false,
-                                     eval_expression = true,
-                                     sparse = false, simplify = false,
-                                     eval_module = @__MODULE__,
-                                     steady_state = false,
-                                     checkbounds = false,
-                                     sparsity = false,
-                                     kwargs...) where {iip}
+function DiffEqBase.ODEFunction{true}(sys::AbstractODESystem, args...;
+                                      kwargs...)
+    ODEFunction{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.ODEFunction{false}(sys::AbstractODESystem, args...;
+                                       kwargs...)
+    ODEFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = states(sys),
+                                                 ps = parameters(sys), u0 = nothing;
+                                                 version = nothing, tgrad = false,
+                                                 jac = false, p = nothing,
+                                                 t = nothing,
+                                                 eval_expression = true,
+                                                 sparse = false, simplify = false,
+                                                 eval_module = @__MODULE__,
+                                                 steady_state = false,
+                                                 checkbounds = false,
+                                                 sparsity = false,
+                                                 kwargs...) where {iip, specialize}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
                               expression_module = eval_module, checkbounds = checkbounds,
                               kwargs...)
@@ -266,6 +277,13 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                    (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen) : f_gen
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
+
+    if specialize === SciMLBase.FunctionWrapperSpecialize && iip
+        if u0 === nothing || p === nothing || t === nothing
+            error("u0, p, and t must be specified for FunctionWrapperSpecialize on ODEFunction.")
+        end
+        f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
+    end
 
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps;
@@ -338,16 +356,16 @@ function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     else
         nothing
     end
-    ODEFunction{iip}(f,
-                     sys = sys,
-                     jac = _jac === nothing ? nothing : _jac,
-                     tgrad = _tgrad === nothing ? nothing : _tgrad,
-                     mass_matrix = _M,
-                     jac_prototype = jac_prototype,
-                     syms = Symbol.(states(sys)),
-                     indepsym = Symbol(get_iv(sys)),
-                     observed = observedfun,
-                     sparsity = sparsity ? jacobian_sparsity(sys) : nothing)
+    ODEFunction{iip, specialize}(f,
+                                 sys = sys,
+                                 jac = _jac === nothing ? nothing : _jac,
+                                 tgrad = _tgrad === nothing ? nothing : _tgrad,
+                                 mass_matrix = _M,
+                                 jac_prototype = jac_prototype,
+                                 syms = Symbol.(states(sys)),
+                                 indepsym = Symbol(get_iv(sys)),
+                                 observed = observedfun,
+                                 sparsity = sparsity ? jacobian_sparsity(sys) : nothing)
 end
 
 """
@@ -371,7 +389,7 @@ end
 function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                                      ps = parameters(sys), u0 = nothing;
                                      ddvs = map(diff2term ∘ Differential(get_iv(sys)), dvs),
-                                     version = nothing,
+                                     version = nothing, p = nothing,
                                      jac = false,
                                      eval_expression = true,
                                      sparse = false, simplify = false,
@@ -463,7 +481,7 @@ end
 function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                               ps = parameters(sys), u0 = nothing;
                               version = nothing, tgrad = false,
-                              jac = false,
+                              jac = false, p = nothing,
                               linenumbers = false,
                               sparse = false, simplify = false,
                               steady_state = false,
@@ -542,6 +560,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = !use_union, use_union)
+    p = p === nothing ? SciMLBase.NullParameters() : p
+
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
         defs = mergedefaults(defs, du0map, ddvs)
@@ -555,7 +575,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     check_eqs_u0(eqs, dvs, u0; kwargs...)
 
     f = constructor(sys, dvs, ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
-                    checkbounds = checkbounds,
+                    checkbounds = checkbounds, p = p,
                     linenumbers = linenumbers, parallel = parallel, simplify = simplify,
                     sparse = sparse, eval_expression = eval_expression, kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
@@ -591,7 +611,7 @@ end
 function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                               ps = parameters(sys), u0 = nothing;
                               version = nothing, tgrad = false,
-                              jac = false,
+                              jac = false, p = nothing,
                               linenumbers = false,
                               sparse = false, simplify = false,
                               kwargs...) where {iip}
@@ -629,12 +649,22 @@ function DiffEqBase.ODEProblem(sys::AbstractODESystem, args...; kwargs...)
     ODEProblem{true}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
-                                    parammap = DiffEqBase.NullParameters();
-                                    callback = nothing,
-                                    check_length = true, kwargs...) where {iip}
+function DiffEqBase.ODEProblem{true}(sys::AbstractODESystem, args...; kwargs...)
+    ODEProblem{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.ODEProblem{false}(sys::AbstractODESystem, args...; kwargs...)
+    ODEProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map, tspan,
+                                                parammap = DiffEqBase.NullParameters();
+                                                callback = nothing,
+                                                check_length = true,
+                                                kwargs...) where {iip, specialize}
     has_difference = any(isdifferenceeq, equations(sys))
-    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap;
+    f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
+                                 t = tspan !== nothing ? tspan[1] : tspan,
                                  has_difference = has_difference,
                                  check_length, kwargs...)
     cbs = process_events(sys; callback, has_difference, kwargs...)
