@@ -663,15 +663,16 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map, t
                                                 check_length = true,
                                                 kwargs...) where {iip, specialize}
     has_difference = any(isdifferenceeq, equations(sys))
-    f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap;
+    f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
+                                 t = tspan[1],
                                  has_difference = has_difference,
                                  check_length, kwargs...)
     cbs = process_events(sys; callback, has_difference, kwargs...)
     kwargs = filter_kwargs(kwargs)
     if cbs === nothing
-        ODEProblem{iip, specialize}(f, u0, tspan, p; kwargs...)
+        ODEProblem{iip}(f, u0, tspan, p; kwargs...)
     else
-        ODEProblem{iip, specialize}(f, u0, tspan, p; callback = cbs, kwargs...)
+        ODEProblem{iip}(f, u0, tspan, p; callback = cbs, kwargs...)
     end
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
