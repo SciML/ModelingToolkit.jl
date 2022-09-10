@@ -664,7 +664,7 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map, t
                                                 kwargs...) where {iip, specialize}
     has_difference = any(isdifferenceeq, equations(sys))
     f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
-                                 t = tspan[1],
+                                 t = tspan !== nothing ? tspan[1] : tspan,
                                  has_difference = has_difference,
                                  check_length, kwargs...)
     cbs = process_events(sys; callback, has_difference, kwargs...)
