@@ -3,7 +3,7 @@ using Test
 MT = ModelingToolkit
 
 @constants a = 1
-@test_throws MT.MissingDefaultError @constants b
+@test_throws MT.ArgumentError @constants b
 
 @variables t x(t) w(t)
 D = Differential(t)

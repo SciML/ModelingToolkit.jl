@@ -7,7 +7,7 @@ using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
-                          isparameter, isconstant
+                          isparameter, isconstant,
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
                           equations, isirreducible
 using ..BipartiteGraphs
