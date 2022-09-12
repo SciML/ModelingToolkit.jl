@@ -466,44 +466,59 @@ function find_derivatives!(vars, expr, f)
     return vars
 end
 
-function collect_vars!(states, parameters, constants, expr, iv)
+function collect_vars!(states, parameters, expr, iv)
     if expr isa Sym
-        collect_var!(states, parameters, constants, expr, iv)
+        collect_var!(states, parameters, expr, iv)
     else
         for var in vars(expr)
             if istree(var) && operation(var) isa Differential
                 var, _ = var_from_nested_derivative(var)
             end
-            collect_var!(states, parameters, constants, var, iv)
+            collect_var!(states, parameters, var, iv)
         end
     end
     return nothing
 end
 
-function collect_vars_difference!(states, parameters, constants, expr, iv)
+function collect_constants!(constants, expr)
     if expr isa Sym
-        collect_var!(states, parameters, constants, expr, iv)
+        collect_constant!(constants, expr)
+    else
+        for var in vars(expr)
+            collect_constant!(constants, var)
+        end
+    end
+    return nothing
+end
+
+function collect_vars_difference!(states, parameters, expr, iv)
+    if expr isa Sym
+        collect_var!(states, parameters, expr, iv)
     else
         for var in vars(expr)
             if istree(var) && operation(var) isa Difference
                 var, _ = var_from_nested_difference(var)
             end
-            collect_var!(states, parameters, constants, var, iv)
+            collect_var!(states, parameters, var, iv)
         end
     end
     return nothing
 end
 
-function collect_var!(states, parameters, constants, var, iv)
+function collect_var!(states, parameters, var, iv)
     isequal(var, iv) && return nothing
     if isparameter(var) || (istree(var) && isparameter(operation(var)))
         push!(parameters, var)
-    elseif isconstant(var)
-        push!(constants,var)
-    else
+    elseif !isconstant(var)
         push!(states, var)
     end
     return nothing
+end
+
+function collect_constant!(constants, var)
+    if isconstant(var)
+        push!(constants,var)
+    end
 end
 
 function get_postprocess_fbody(sys)
@@ -549,6 +564,13 @@ function get_substitutions_and_solved_states(sys; no_postprocess = false)
         pre = no_postprocess ? (ex -> ex) : get_postprocess_fbody(sys)
     else
         @unpack subs = get_substitutions(sys)
+        # Swap constants for their values
+        cs = collect_constants(subs)
+        if !isempty(cs) > 0
+            cmap = map(x -> x => getdefault(x), cs)
+            subs = map(x -> x.lhs ~ substitute(x.rhs, cmap), subs)
+        end
+
         sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
         if no_postprocess
             pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex,

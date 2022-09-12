@@ -9,13 +9,17 @@ MT = ModelingToolkit
 D = Differential(t)
 eqs = [D(x) ~ a]
 @named sys = ODESystem(eqs)
-prob = ODEProblem(sys, [0, ], [0.0, 1.0],[])
-sol = solve(prob,Tsit5())
+prob = ODEProblem(sys, [0, ], [0.0, 1.0], [])
+sol = solve(prob, Tsit5())
 
-# Test structural_simplify handling
-eqs = [D(x) ~ t,
+# Test structural_simplify substitutions & observed values
+eqs = [D(x) ~ 1,
     w ~ a]
 @named sys = ODESystem(eqs)
 simp = structural_simplify(sys);
-@test isequal(simp.substitutions.subs[1], w~a)
+@test isequal(simp.substitutions.subs[1], eqs[2])
+@test isequal(equations(simp)[1], eqs[1])
+prob = ODEProblem(simp, [0, ], [0.0, 1.0], [])
+sol = solve(prob, Tsit5())
+@test sol[w][1] == 1 
 

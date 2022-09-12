@@ -167,7 +167,6 @@ for prop in [:eqs
              :iv
              :states
              :ps
-             :cs
              :var_to_name
              :ctrls
              :defaults
@@ -377,7 +376,6 @@ end
 namespace_variables(sys::AbstractSystem) = states(sys, states(sys))
 namespace_parameters(sys::AbstractSystem) = parameters(sys, parameters(sys))
 namespace_controls(sys::AbstractSystem) = controls(sys, controls(sys))
-namespace_constants(sys::AbstractSystem) = constants(sys, constants(sys))
 
 function namespace_defaults(sys)
     defs = defaults(sys)
@@ -437,12 +435,6 @@ function parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     systems = get_systems(sys)
     unique(isempty(systems) ? ps : [ps; reduce(vcat, namespace_parameters.(systems))])
-end
-
-function constants(sys::AbstractSystem)
-    cs = get_cs(sys)
-    systems = get_systems(sys)
-    unique(isempty(systems) ? cs : [cs; reduce(vcat, namespace_constants.(systems))])
 end
 
 function controls(sys::AbstractSystem)
