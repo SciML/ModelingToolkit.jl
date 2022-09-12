@@ -10,14 +10,14 @@ $(FIELDS)
 
 ```julia
 @variables x y z
-@parameters σ ρ β
+@parameters a b c
 
-op = σ*(y-x) + x*(ρ-z)-y + x*y - β*z
-@named os = OptimizationSystem(op, [x,y,z],[σ,ρ,β])
+op = a*(y-x) + x*(b-z)-y + x*y - c*z
+@named os = OptimizationSystem(op, [x,y,z], [a,b,c])
 ```
 """
 struct OptimizationSystem <: AbstractTimeIndependentSystem
-    """Vector of equations defining the system."""
+    """Objective function of the system."""
     op::Any
     """Unknown variables."""
     states::Vector
@@ -26,30 +26,31 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     """Array variables."""
     var_to_name::Any
     observed::Vector{Equation}
-    constraints::Vector
-    """
-    Name: the name of the system.  These are required to have unique names.
-    """
+    """List of constraint equations of the system."""
+    constraints::Vector # {Union{Equation,Inequality}}
+    """The unique name of the system."""
     name::Symbol
-    """
-    systems: The internal systems
-    """
+    """The internal systems."""
     systems::Vector{OptimizationSystem}
     """
-    defaults: The default values to use when initial conditions and/or
-    parameters are not supplied in `ODEProblem`.
+    The default values to use when initial guess and/or
+    parameters are not supplied in `OptimizationProblem`.
     """
     defaults::Dict
+    """
+    metadata: metadata for the system, to be used by downstream packages.
+    """
+    metadata::Any
     function OptimizationSystem(op, states, ps, var_to_name, observed,
-                                constraints, name, systems, defaults;
-                                checks::Bool = true)
-        if checks
-            check_units(op)
+                                constraints, name, systems, defaults, metadata = nothing;
+                                checks::Union{Bool, Int} = true)
+        if checks == true || (checks & CheckUnits) > 0
+            unwrap(op) isa Symbolic && check_units(op)
             check_units(observed)
             all_dimensionless([states; ps]) || check_units(constraints)
         end
         new(op, states, ps, var_to_name, observed,
-            constraints, name, systems, defaults)
+            constraints, name, systems, defaults, metadata)
     end
 end
 
@@ -61,9 +62,15 @@ function OptimizationSystem(op, states, ps;
                             defaults = _merge(Dict(default_u0), Dict(default_p)),
                             name = nothing,
                             systems = OptimizationSystem[],
-                            checks = true)
+                            checks = true,
+                            metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
+
+    constraints = value.(scalarize(constraints))
+    states′ = value.(scalarize(states))
+    ps′ = value.(scalarize(ps))
+
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
                      :OptimizationSystem, force = true)
@@ -75,15 +82,15 @@ function OptimizationSystem(op, states, ps;
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
 
-    states, ps = value.(states), value.(ps)
     var_to_name = Dict()
-    process_variables!(var_to_name, defaults, states)
-    process_variables!(var_to_name, defaults, ps)
+    process_variables!(var_to_name, defaults, states′)
+    process_variables!(var_to_name, defaults, ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
-    OptimizationSystem(value(op), states, ps, var_to_name,
+
+    OptimizationSystem(value(op), states′, ps′, var_to_name,
                        observed,
                        constraints,
-                       name, systems, defaults; checks = checks)
+                       name, systems, defaults, metadata; checks = checks)
 end
 
 function calculate_gradient(sys::OptimizationSystem)
@@ -119,10 +126,38 @@ function generate_function(sys::OptimizationSystem, vs = states(sys), ps = param
 end
 
 function equations(sys::OptimizationSystem)
-    isempty(get_systems(sys)) ? get_op(sys) :
-    get_op(sys) + reduce(+, namespace_expr.(get_systems(sys)))
+    op = get_op(sys)
+    systems = get_systems(sys)
+    if isempty(systems)
+        op
+    else
+        op + reduce(+, map(sys_ -> namespace_expr(get_op(sys_), sys_), systems))
+    end
 end
-namespace_expr(sys::OptimizationSystem) = namespace_expr(get_op(sys), sys)
+
+namespace_constraint(eq::Equation, sys) = namespace_equation(eq, sys)
+
+# namespace_constraint(ineq::Inequality, sys) = namespace_inequality(ineq, sys)
+
+# function namespace_inequality(ineq::Inequality, sys, n = nameof(sys))
+#     _lhs = namespace_expr(ineq.lhs, sys, n)
+#     _rhs = namespace_expr(ineq.rhs, sys, n)
+#     Inequality(
+#         namespace_expr(_lhs, sys, n), 
+#         namespace_expr(_rhs, sys, n),
+#         ineq.relational_op,
+#     )
+# end
+
+function namespace_constraints(sys::OptimizationSystem)
+    namespace_constraint.(get_constraints(sys), Ref(sys))
+end
+
+function constraints(sys::OptimizationSystem)
+    cs = get_constraints(sys)
+    systems = get_systems(sys)
+    isempty(systems) ? cs : [cs; reduce(vcat, namespace_constraints.(systems))]
+end
 
 hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
 
@@ -141,7 +176,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
                                           grad = false,
                                           hess = false, sparse = false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=SerialForm(),
+                                          linenumbers = true, parallel=nothing,
                                           kwargs...) where iip
 ```
 
@@ -158,11 +193,12 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              grad = false,
                                              hess = false, sparse = false,
                                              checkbounds = false,
-                                             linenumbers = true, parallel = SerialForm(),
+                                             linenumbers = true, parallel = nothing,
                                              use_union = false,
                                              kwargs...) where {iip}
     dvs = states(sys)
     ps = parameters(sys)
+    cstr = constraints(sys)
 
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)
@@ -211,8 +247,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         hess_prototype = nothing
     end
 
-    if length(sys.constraints) > 0
-        @named cons_sys = NonlinearSystem(sys.constraints, dvs, ps)
+    if length(cstr) > 0
+        @named cons_sys = NonlinearSystem(cstr, dvs, ps)
         cons = generate_function(cons_sys, checkbounds = checkbounds,
                                  linenumbers = linenumbers,
                                  expression = Val{false})[2]
@@ -232,6 +268,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
 
         _f = DiffEqBase.OptimizationFunction{iip}(f,
                                                   sys = sys,
+                                                  syms = Symbol.(states(sys)),
                                                   SciMLBase.NoAD();
                                                   grad = _grad,
                                                   hess = _hess,
@@ -246,6 +283,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     else
         _f = DiffEqBase.OptimizationFunction{iip}(f,
                                                   sys = sys,
+                                                  syms = Symbol.(states(sys)),
                                                   SciMLBase.NoAD();
                                                   grad = _grad,
                                                   hess = _hess,
@@ -264,7 +302,7 @@ function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
                                           grad = false,
                                           hes = false, sparse = false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=SerialForm(),
+                                          linenumbers = true, parallel=nothing,
                                           kwargs...) where iip
 ```
 
@@ -284,7 +322,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
                                       grad = false,
                                       hess = false, sparse = false,
                                       checkbounds = false,
-                                      linenumbers = false, parallel = SerialForm(),
+                                      linenumbers = false, parallel = nothing,
                                       use_union = false,
                                       kwargs...) where {iip}
     dvs = states(sys)

@@ -135,7 +135,7 @@ See also [`getbounds`](@ref).
 """
 function hasbounds(x)
     b = getbounds(x)
-    isfinite(b[1]) && isfinite(b[2])
+    isfinite(b[1]) || isfinite(b[2])
 end
 
 ## Disturbance =================================================================

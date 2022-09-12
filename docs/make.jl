@@ -2,6 +2,16 @@ using Documenter, ModelingToolkit
 
 include("pages.jl")
 
+mathengine = MathJax3(Dict(:loader => Dict("load" => ["[tex]/require", "[tex]/mathtools"]),
+                           :tex => Dict("inlineMath" => [["\$", "\$"], ["\\(", "\\)"]],
+                                        "packages" => [
+                                            "base",
+                                            "ams",
+                                            "autoload",
+                                            "mathtools",
+                                            "require",
+                                        ])))
+
 makedocs(sitename = "ModelingToolkit.jl",
          authors = "Chris Rackauckas",
          modules = [ModelingToolkit],
@@ -16,6 +26,7 @@ makedocs(sitename = "ModelingToolkit.jl",
          ],
          format = Documenter.HTML(; analytics = "UA-90474609-3",
                                   assets = ["assets/favicon.ico"],
+                                  mathengine,
                                   canonical = "https://mtk.sciml.ai/stable/",
                                   prettyurls = (get(ENV, "CI", nothing) == "true")),
          pages = pages)

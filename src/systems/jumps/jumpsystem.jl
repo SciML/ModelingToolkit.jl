@@ -83,17 +83,23 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     state value or parameter.*
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
-
+    """
+    metadata: metadata for the system, to be used by downstream packages.
+    """
+    metadata::Any
     function JumpSystem{U}(ap::U, iv, states, ps, var_to_name, observed, name, systems,
-                           defaults, connector_type, devents;
-                           checks::Bool = true) where {U <: ArrayPartition}
-        if checks
+                           defaults, connector_type, devents,
+                           metadata = nothing;
+                           checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
+        if checks == true || (checks & CheckComponents) > 0
             check_variables(states, iv)
             check_parameters(ps, iv)
+        end
+        if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([states; ps; iv]) || check_units(ap, iv)
         end
         new{U}(ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
-               connector_type, devents)
+               connector_type, devents, metadata)
     end
 end
 
@@ -108,6 +114,7 @@ function JumpSystem(eqs, iv, states, ps;
                     checks = true,
                     continuous_events = nothing,
                     discrete_events = nothing,
+                    metadata = nothing,
                     kwargs...)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
@@ -145,7 +152,8 @@ function JumpSystem(eqs, iv, states, ps;
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
 
     JumpSystem{typeof(ap)}(ap, value(iv), states, ps, var_to_name, observed, name, systems,
-                           defaults, connector_type, disc_callbacks; checks = checks)
+                           defaults, connector_type, disc_callbacks, metadata,
+                           checks = checks)
 end
 
 function generate_rate_function(js::JumpSystem, rate)

@@ -3,14 +3,13 @@ using SafeTestsets, Test
 @safetestset "AliasGraph Test" begin include("alias.jl") end
 @safetestset "Linear Algebra Test" begin include("linalg.jl") end
 @safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
-@safetestset "Variable scope tests" begin include("variable_scope.jl") end
-@safetestset "Symbolic parameters test" begin include("symbolic_parameters.jl") end
-@safetestset "Symbolic event test" begin include("symbolic_events.jl") end
+@safetestset "Variable Scope Tests" begin include("variable_scope.jl") end
+@safetestset "Symbolic Parameters Test" begin include("symbolic_parameters.jl") end
 @safetestset "Parsing Test" begin include("variable_parsing.jl") end
 @safetestset "Simplify Test" begin include("simplify.jl") end
 @safetestset "Direct Usage Test" begin include("direct.jl") end
 @safetestset "System Linearity Test" begin include("linearity.jl") end
-@safetestset "Linearization tests" begin include("linearize.jl") end
+@safetestset "Linearization Tests" begin include("linearize.jl") end
 @safetestset "Input Output Test" begin include("input_output_handling.jl") end
 @safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
 @safetestset "ODESystem Test" begin include("odesystem.jl") end
@@ -24,6 +23,11 @@ using SafeTestsets, Test
 @safetestset "Constraints Test" begin include("constraints.jl") end
 @safetestset "Reduction Test" begin include("reduction.jl") end
 @safetestset "Components Test" begin include("components.jl") end
+@safetestset "print_tree" begin include("print_tree.jl") end
+@safetestset "Error Handling" begin include("error_handling.jl") end
+@safetestset "StructuralTransformations" begin include("structural_transformation/runtests.jl") end
+@safetestset "State Selection Test" begin include("state_selection.jl") end
+@safetestset "Symbolic Event Test" begin include("symbolic_events.jl") end
 @safetestset "Stream Connnect Test" begin include("stream_connectors.jl") end
 @safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "Lowering Integration Test" begin include("lowering_solving.jl") end
@@ -38,11 +42,7 @@ using SafeTestsets, Test
 @safetestset "Jacobian Sparsity" begin include("jacobiansparsity.jl") end
 println("Last test requires gcc available in the path!")
 @safetestset "C Compilation Test" begin include("ccompile.jl") end
-@safetestset "StructuralTransformations" begin include("structural_transformation/runtests.jl") end
 @testset "Serialization" begin include("serialization.jl") end
-@safetestset "print_tree" begin include("print_tree.jl") end
-@safetestset "error_handling" begin include("error_handling.jl") end
-@safetestset "state_selection" begin include("state_selection.jl") end
 @safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 @safetestset "FuncAffect Test" begin include("funcaffect.jl") end
