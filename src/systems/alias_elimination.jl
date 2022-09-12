@@ -888,6 +888,16 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     return ag, mm, updated_diff_vars
 end
 
+function update_graph_neighbors!(graph, ag)
+    for eq in 1:nsrcs(graph)
+        set_neighbors!(graph, eq,
+                       [get(ag, n, (1, n))[2]
+                        for n in 𝑠neighbors(graph, eq)
+                        if !haskey(ag, n) || ag[n][2] != 0])
+    end
+    return graph
+end
+
 function exactdiv(a::Integer, b)
     d, r = divrem(a, b)
     @assert r == 0
