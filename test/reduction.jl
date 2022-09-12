@@ -231,7 +231,7 @@ eq = equations(tearing_substitution(sys))[1]
 vv = only(states(sys))
 @test isequal(eq.lhs, D(vv))
 dvv = ModelingToolkit.value(ModelingToolkit.derivative(eq.rhs, vv))
-@test dv25 ≈ -60
+@test dvv ≈ -60
 
 # Don't reduce inputs
 @parameters t σ ρ β
@@ -262,9 +262,15 @@ ss = alias_elimination(sys)
 D = Differential(t)
 @named sys = ODESystem([D(x) ~ 1 - x,
                            D(y) + D(x) ~ 0])
-new_sys = structural_simplify(sys)
-@test equations(new_sys) == [D(x) ~ 1 - x]
-@test observed(new_sys) == [D(y) ~ -D(x)]
+new_sys = alias_elimination(sys)
+@test equations(new_sys) == [D(x) ~ 1 - x; 0 ~ -D(x) - D(y)]
+@test isempty(observed(new_sys))
+
+@named sys = ODESystem([D(x) ~ x,
+                           D(y) + D(x) ~ 0])
+new_sys = alias_elimination(sys)
+@test equations(new_sys) == [0 ~ D(D(y)) - D(y)]
+@test observed(new_sys) == [x ~ -D(y)]
 
 @named sys = ODESystem([D(x) ~ 1 - x,
                            y + D(x) ~ 0])
@@ -279,12 +285,12 @@ eqs = [x ~ 0
        a ~ b + y]
 @named sys = ODESystem(eqs, t, [x, y, a, b], [])
 ss = alias_elimination(sys)
-@test isempty(equations(ss))
-@test observed(ss) == ([a, x, D(x), b, y] .~ 0)
+@test equations(ss) == [0 ~ b - a]
+@test sort(observed(ss), by=string) == ([D(x), x, y] .~ 0)
 
 eqs = [x ~ 0
        D(x) ~ x + y]
 @named sys = ODESystem(eqs, t, [x, y], [])
 ss = alias_elimination(sys)
 @test isempty(equations(ss))
-@test observed(ss) == ([x, D(x), y] .~ 0)
+@test sort(observed(ss), by=string) == ([D(x), x, y] .~ 0)

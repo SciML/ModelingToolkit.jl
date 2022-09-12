@@ -54,23 +54,16 @@ function alias_elimination!(state::TearingState)
     end
 
     subs = Dict()
+    obs = Equation[]
     # If we encounter y = -D(x), then we need to expand the derivative when
     # D(y) appears in the equation, so that D(-D(x)) becomes -D(D(x)).
     to_expand = Int[]
     diff_to_var = invview(var_to_diff)
-    # TODO/FIXME: this also needs to be computed recursively because we need to
-    # follow the alias graph like `a => b => c` and make sure that the final
-    # graph always contains the destination.
-    extra_eqs = Equation[]
-    extra_vars = BitSet()
     for (v, (coeff, alias)) in pairs(ag)
-        if iszero(alias) || !(isempty(𝑑neighbors(graph, alias)) && isempty(𝑑neighbors(graph, v)))
-            subs[fullvars[v]] = iszero(coeff) ? 0 : coeff * fullvars[alias]
-        else
-            push!(extra_eqs, 0 ~ coeff * fullvars[alias] - fullvars[v])
-            push!(extra_vars, v)
-            #@show fullvars[v] => fullvars[alias]
-        end
+        lhs = fullvars[v]
+        rhs = iszero(coeff) ? 0 : coeff * fullvars[alias]
+        subs[lhs] = rhs
+        v != alias && push!(obs, lhs ~ rhs)
         if coeff == -1
             # if `alias` is like -D(x)
             diff_to_var[alias] === nothing && continue
@@ -101,7 +94,7 @@ function alias_elimination!(state::TearingState)
     idx = 0
     cursor = 1
     ndels = length(dels)
-    for (i, e) in enumerate(old_to_new)
+    for i in eachindex(old_to_new)
         if cursor <= ndels && i == dels[cursor]
             cursor += 1
             old_to_new[i] = -1
@@ -111,7 +104,9 @@ function alias_elimination!(state::TearingState)
         old_to_new[i] = idx
     end
 
+    lineqs = BitSet(old_to_new[e] for e in mm.nzrows)
     for (ieq, eq) in enumerate(eqs)
+        ieq in lineqs && continue
         eqs[ieq] = substitute(eq, subs)
     end
 
@@ -131,7 +126,7 @@ function alias_elimination!(state::TearingState)
     sys = state.sys
     @set! sys.eqs = eqs
     @set! sys.states = newstates
-    @set! sys.observed = [observed(sys); [lhs ~ rhs for (lhs, rhs) in pairs(subs)]]
+    @set! sys.observed = [observed(sys); obs]
     return invalidate_cache!(sys)
 end
 
@@ -212,7 +207,8 @@ function Base.getindex(ag::AliasGraph, i::Integer)
     coeff, var = (sign(r), abs(r))
     nc = coeff
     av = var
-    if var in keys(ag)
+    # We support `x -> -x` as an alias.
+    if var != i && var in keys(ag)
         # Amortized lookup. Check if since we last looked this up, our alias was
         # itself aliased. If so, just adjust the alias table.
         ac, av = ag[var]
@@ -248,6 +244,10 @@ end
 
 function Base.setindex!(ag::AliasGraph, p::Pair{Int, Int}, i::Integer)
     (c, v) = p
+    if c == 0 || v == 0
+        ag[i] = 0
+        return p
+    end
     @assert v != 0 && c in (-1, 1)
     if ag.aliasto[i] === nothing
         push!(ag.eliminated, i)
@@ -280,22 +280,27 @@ function reduce!(mm::SparseMatrixCLIL, ag::AliasGraph)
             c = rs[j]
             _alias = get(ag, c, nothing)
             if _alias !== nothing
-                push!(dels, j)
                 coeff, alias = _alias
-                iszero(coeff) && (j += 1; continue)
-                inc = coeff * rvals[j]
-                i = searchsortedfirst(rs, alias)
-                if i > length(rs) || rs[i] != alias
-                    # if we add a variable to what we already visited, make sure
-                    # to bump the cursor.
-                    j += i <= j
-                    for (i, e) in enumerate(dels)
-                        e >= i && (dels[i] += 1)
-                    end
-                    insert!(rs, i, alias)
-                    insert!(rvals, i, inc)
+                if alias == c
+                    i = searchsortedfirst(rs, alias)
+                    rvals[i] *= coeff
                 else
-                    rvals[i] += inc
+                    push!(dels, j)
+                    iszero(coeff) && (j += 1; continue)
+                    inc = coeff * rvals[j]
+                    i = searchsortedfirst(rs, alias)
+                    if i > length(rs) || rs[i] != alias
+                        # if we add a variable to what we already visited, make sure
+                        # to bump the cursor.
+                        j += i <= j
+                        for (i, e) in enumerate(dels)
+                            e >= i && (dels[i] += 1)
+                        end
+                        insert!(rs, i, alias)
+                        insert!(rvals, i, inc)
+                    else
+                        rvals[i] += inc
+                    end
                 end
             end
             j += 1
@@ -651,6 +656,7 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig, irreducibles = ())
         ag[v] = 0
     end
 
+    echelon_mm = copy(mm)
     lss! = lss(mm, pivots, ag)
     # Step 2.1: Go backwards, collecting eliminated variables and substituting
     #         alias as we go.
@@ -677,7 +683,7 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig, irreducibles = ())
     reduced && while any(lss!, 1:rank2)
     end
 
-    return mm
+    return mm, echelon_mm
 end
 
 function mark_processed!(processed, var_to_diff, v)
@@ -695,7 +701,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     #
     nvars = ndsts(graph)
     ag = AliasGraph(nvars)
-    mm = simple_aliases!(ag, graph, var_to_diff, mm_orig)
+    mm, echelon_mm = simple_aliases!(ag, graph, var_to_diff, mm_orig)
     state = Main._state[]
     fullvars = state.fullvars
     for (v, (c, a)) in ag
@@ -718,14 +724,14 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     #
     # where `-->` is an edge in `var_to_diff`, `⇒` is an edge in `ag`, and the
     # part in the box are purely conceptual, i.e. `D(D(D(z)))` doesn't appear in
-    # the system.
+    # the system. We call the variables in the box "virtual" variables.
     #
     # To finish the algorithm, we backtrack to the root differentiation chain.
     # If the variable already exists in the chain, then we alias them
     # (e.g. `x_t ⇒ D(D(z))`), else, we substitute and update `var_to_diff`.
     #
     # Note that since we always prefer the higher differentiated variable and
-    # with a tie breaking strategy. The root variable (in this case `z`) is
+    # with a tie breaking strategy, the root variable (in this case `z`) is
     # always uniquely determined. Thus, the result is well-defined.
     diff_to_var = invview(var_to_diff)
     invag = SimpleDiGraph(nvars)
@@ -735,10 +741,11 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     end
     processed = falses(nvars)
     iag = InducedAliasGraph(ag, invag, var_to_diff)
-    newag = AliasGraph(nvars)
+    dag = AliasGraph(nvars) # alias graph for differentiated variables
     newinvag = SimpleDiGraph(nvars)
-    irreducibles = BitSet()
+    removed_aliases = BitSet()
     updated_diff_vars = Int[]
+    irreducibles = Int[]
     for (v, dv) in enumerate(var_to_diff)
         processed[v] && continue
         (dv === nothing && diff_to_var[v] === nothing) && continue
@@ -753,7 +760,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         nlevels = length(level_to_var)
         current_coeff_level = Ref((0, 0))
         add_alias! = let current_coeff_level = current_coeff_level,
-            level_to_var = level_to_var, newag = newag, newinvag = newinvag,
+            level_to_var = level_to_var, dag = dag, newinvag = newinvag,
             processed = processed
 
             v -> begin
@@ -761,11 +768,14 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                 if level + 1 <= length(level_to_var)
                     av = level_to_var[level + 1]
                     if v != av # if the level_to_var isn't from the root branch
-                        newag[v] = coeff => av
+                        dag[v] = coeff => av
                         add_edge!(newinvag, av, v)
                     end
                 else
                     @assert length(level_to_var) == level
+                    if coeff != 1
+                        dag[v] = coeff => v
+                    end
                     push!(level_to_var, v)
                 end
                 mark_processed!(processed, var_to_diff, v)
@@ -788,54 +798,38 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             current_coeff_level[] = coeff, lv
             extreme_var(var_to_diff, v, nothing, Val(false), callback = add_alias!)
         end
+
+        @show processed
         len = length(level_to_var)
-        len > 1 || continue
-
-        set_v_zero! = let newag = newag
-            v -> newag[v] = 0
+        set_v_zero! = let dag = dag
+            v -> dag[v] = 0
         end
+        zero_av_idx = 0
         for (i, av) in enumerate(level_to_var)
-            has_zero = false
+            has_zero = iszero(get(ag, av, (1, 0))[1])
+            push!(removed_aliases, av)
             for v in neighbors(newinvag, av)
-                cv = get(ag, v, nothing)
-                cv === nothing && continue
-                c, v = cv
-                iszero(c) || continue
-                has_zero = true
-                # if a chain starts to equal to zero, then all its descendants
-                # must be zero and reducible
-                if i < len
-                    # we have `x = 0`
-                    v = level_to_var[i + 1]
-                    extreme_var(var_to_diff, v, nothing, Val(false), callback = set_v_zero!)
-                end
-                break
+                has_zero = has_zero || iszero(get(ag, v, (1, 0))[1])
+                push!(removed_aliases, v)
             end
-            has_zero && break
-
-            # all non-highest order differentiated variables are reducible.
-            if i == len
-                # if an irreducible alias appears in only one equation, then
-                # it's actually not an alias, but a proper equation. E.g.
-                # D(D(phi)) = a
-                # D(phi) = sin(t)
-                # `a` and `D(D(phi))` are not irreducible state. Hence, we need
-                # to remove `av` from all alias graphs and mark those pairs
-                # irreducible.
-                push!(irreducibles, av)
-                for v in neighbors(newinvag, av)
-                    newag[v] = nothing
-                    push!(irreducibles, v)
-                end
-                for v in neighbors(invag, av)
-                    newag[v] = nothing
-                    push!(irreducibles, v)
-                end
-                if (cv = get(ag, av, nothing)) !== nothing && !iszero(cv[2])
-                    push!(irreducibles, cv[2])
-                end
+            if zero_av_idx == 0 && has_zero
+                zero_av_idx = i
             end
         end
+        # If a chain starts to equal to zero, then all its derivatives must be
+        # zero. Irreducible variables are highest differentiated variables (with
+        # order >= 1) that are not zero.
+        if zero_av_idx > 0
+            extreme_var(var_to_diff, level_to_var[zero_av_idx], nothing, Val(false), callback = set_v_zero!)
+            if zero_av_idx > 2
+                @warn "1"
+                push!(irreducibles, level_to_var[zero_av_idx - 1])
+            end
+        elseif len >= 2
+            @warn "2"
+            push!(irreducibles, level_to_var[len])
+        end
+        # Handle virtual variables
         if nlevels < len
             for i in (nlevels + 1):len
                 li = level_to_var[i]
@@ -844,20 +838,42 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             end
         end
     end
-    for (v, (c, a)) in newag
-        a = a == 0 ? 0 : c * fullvars[a]
-        @info "differential aliases" fullvars[v] => a
-    end
-    @show fullvars[collect(irreducibles)]
 
-    if !isempty(irreducibles)
-        ag = newag
-        for k in keys(ag)
-            push!(irreducibles, k)
+    # Merge dag and ag
+    freshag = AliasGraph(nvars)
+    @show irreducibles
+    @show dag
+    for (v, (c, a)) in dag
+        # TODO: make sure that `irreducibles` are
+        # D(x) ~ D(y) cannot be removed if x and y are not aliases
+        if v != a && a in irreducibles
+            push!(removed_aliases, v)
+            @goto NEXT_ITER
+        elseif v != a && !iszero(a)
+            vv = v
+            aa = a
+            while true
+                vv′ = vv
+                vv = diff_to_var[vv]
+                vv === nothing && break
+                if !(haskey(dag, vv) && dag[vv][2] == diff_to_var[aa])
+                    push!(removed_aliases, vv′)
+                    @goto NEXT_ITER
+                end
+            end
         end
-        mm_orig2 = isempty(ag) ? mm_orig : reduce!(copy(mm_orig), ag)
-        mm = simple_aliases!(ag, graph, var_to_diff, mm_orig2, irreducibles)
+        freshag[v] = c => a
+        @label NEXT_ITER
     end
+    for (v, (c, a)) in ag
+        v in removed_aliases && continue
+        freshag[v] = c => a
+    end
+    if freshag != ag
+        ag = freshag
+        mm = reduce!(copy(echelon_mm), ag)
+    end
+    @info "" echelon_mm mm
 
     for (v, (c, a)) in ag
         va = iszero(a) ? a : fullvars[a]
@@ -869,7 +885,6 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         set_neighbors!(graph, e, mm.row_cols[ei])
     end
 
-    # because of `irreducibles`, `mm` cannot always be trusted.
     return ag, mm, updated_diff_vars
 end
 
