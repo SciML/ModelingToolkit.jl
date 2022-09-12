@@ -34,7 +34,6 @@ end
 
 alias_elimination(sys) = alias_elimination!(TearingState(sys; quick_cancel = true))
 function alias_elimination!(state::TearingState)
-    Main._state[] = state
     sys = state.sys
     complete!(state.structure)
     ag, mm, updated_diff_vars = alias_eliminate_graph!(state)
@@ -510,7 +509,8 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
     linear_variables = falses(length(var_to_diff))
     var_to_lineq = Dict{Int, BitSet}()
     mark_not_linear! = let linear_variables = linear_variables, stack = stack,
-                           var_to_lineq = var_to_lineq
+        var_to_lineq = var_to_lineq
+
         v -> begin
             linear_variables[v] = false
             push!(stack, v)
@@ -529,7 +529,7 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
     end
     for eq in linear_equations, v in 𝑠neighbors(graph, eq)
         linear_variables[v] = true
-        vlineqs = get!(()->BitSet(), var_to_lineq, v)
+        vlineqs = get!(() -> BitSet(), var_to_lineq, v)
         push!(vlineqs, eq)
     end
     for v in irreducibles
@@ -586,7 +586,8 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, irreducible
     end
     # TODO/FIXME: This needs a proper recursion to compute the transitive
     # closure.
-    is_linear_variables = find_linear_variables(graph, linear_equations, var_to_diff, irreducibles)
+    is_linear_variables = find_linear_variables(graph, linear_equations, var_to_diff,
+                                                irreducibles)
     solvable_variables = findall(is_linear_variables)
 
     function do_bareiss!(M, Mold = nothing)
@@ -646,11 +647,6 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig, irreducibles = ())
 
     # Step 2: Simplify the system using the Bareiss factorization
     rk1vars = BitSet(@view pivots[1:rank1])
-    fullvars = Main._state[].fullvars
-    @info "" mm_orig.nzrows mm_orig
-    @show fullvars
-    @show fullvars[pivots[1:rank1]]
-    @show fullvars[solvable_variables]
     for v in solvable_variables
         v in rk1vars && continue
         ag[v] = 0
@@ -702,13 +698,6 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     nvars = ndsts(graph)
     ag = AliasGraph(nvars)
     mm, echelon_mm = simple_aliases!(ag, graph, var_to_diff, mm_orig)
-    state = Main._state[]
-    fullvars = state.fullvars
-    for (v, (c, a)) in ag
-        a = a == 0 ? 0 : c * fullvars[a]
-        v = fullvars[v]
-        @info "simple alias" v => a
-    end
 
     # Step 3: Handle differentiated variables
     # At this point, `var_to_diff` and `ag` form a tree structure like the
@@ -745,15 +734,14 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     newinvag = SimpleDiGraph(nvars)
     removed_aliases = BitSet()
     updated_diff_vars = Int[]
-    irreducibles = Int[]
     for (v, dv) in enumerate(var_to_diff)
         processed[v] && continue
         (dv === nothing && diff_to_var[v] === nothing) && continue
 
         r, _ = find_root!(iag, v)
-           sv = fullvars[v]
-           root = fullvars[r]
-           @info "Found root $r" sv=>root
+        #   sv = fullvars[v]
+        #   root = fullvars[r]
+        #   @info "Found root $r" sv=>root
         level_to_var = Int[]
         extreme_var(var_to_diff, r, nothing, Val(false),
                     callback = Base.Fix1(push!, level_to_var))
@@ -799,7 +787,6 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             extreme_var(var_to_diff, v, nothing, Val(false), callback = add_alias!)
         end
 
-        @show processed
         len = length(level_to_var)
         set_v_zero! = let dag = dag
             v -> dag[v] = 0
@@ -820,14 +807,8 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         # zero. Irreducible variables are highest differentiated variables (with
         # order >= 1) that are not zero.
         if zero_av_idx > 0
-            extreme_var(var_to_diff, level_to_var[zero_av_idx], nothing, Val(false), callback = set_v_zero!)
-            if zero_av_idx > 2
-                @warn "1"
-                push!(irreducibles, level_to_var[zero_av_idx - 1])
-            end
-        elseif len >= 2
-            @warn "2"
-            push!(irreducibles, level_to_var[len])
+            extreme_var(var_to_diff, level_to_var[zero_av_idx], nothing, Val(false),
+                        callback = set_v_zero!)
         end
         # Handle virtual variables
         if nlevels < len
@@ -839,17 +820,11 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         end
     end
 
-    # Merge dag and ag
+    # Step 4: Merge dag and ag
     freshag = AliasGraph(nvars)
-    @show irreducibles
-    @show dag
     for (v, (c, a)) in dag
-        # TODO: make sure that `irreducibles` are
         # D(x) ~ D(y) cannot be removed if x and y are not aliases
-        if v != a && a in irreducibles
-            push!(removed_aliases, v)
-            @goto NEXT_ITER
-        elseif v != a && !iszero(a)
+        if v != a && !iszero(a)
             vv = v
             aa = a
             while true
@@ -873,16 +848,31 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         ag = freshag
         mm = reduce!(copy(echelon_mm), ag)
     end
-    @info "" echelon_mm mm
 
-    for (v, (c, a)) in ag
-        va = iszero(a) ? a : fullvars[a]
-        @info "new alias" fullvars[v]=>(c, va)
-    end
-
-    # Step 4: Reflect our update decisions back into the graph
+    # Step 5: Reflect our update decisions back into the graph, and make sure
+    # that the RHS of observable variables are defined.
     for (ei, e) in enumerate(mm.nzrows)
         set_neighbors!(graph, e, mm.row_cols[ei])
+    end
+    update_graph_neighbors!(graph, ag)
+    finalag = AliasGraph(nvars)
+    # RHS must still exist in the system to be valid aliases.
+    needs_update = false
+    for (v, (c, a)) in ag
+        if iszero(a) || !isempty(𝑑neighbors(graph, a))
+            finalag[v] = c => a
+        else
+            needs_update = true
+        end
+    end
+    ag = finalag
+
+    if needs_update
+        mm = reduce!(copy(echelon_mm), ag)
+        for (ei, e) in enumerate(mm.nzrows)
+            set_neighbors!(graph, e, mm.row_cols[ei])
+        end
+        update_graph_neighbors!(graph, ag)
     end
 
     return ag, mm, updated_diff_vars

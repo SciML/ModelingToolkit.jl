@@ -286,11 +286,11 @@ eqs = [x ~ 0
 @named sys = ODESystem(eqs, t, [x, y, a, b], [])
 ss = alias_elimination(sys)
 @test equations(ss) == [0 ~ b - a]
-@test sort(observed(ss), by=string) == ([D(x), x, y] .~ 0)
+@test sort(observed(ss), by = string) == ([D(x), x, y] .~ 0)
 
 eqs = [x ~ 0
        D(x) ~ x + y]
 @named sys = ODESystem(eqs, t, [x, y], [])
 ss = alias_elimination(sys)
 @test isempty(equations(ss))
-@test sort(observed(ss), by=string) == ([D(x), x, y] .~ 0)
+@test sort(observed(ss), by = string) == ([D(x), x, y] .~ 0)

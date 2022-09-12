@@ -435,7 +435,9 @@ function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors)
         for n in old_neighbors
             @inbounds list = g.badjlist[n]
             index = searchsortedfirst(list, i)
-            deleteat!(list, index)
+            if 1 <= index <= length(list) && list[index] == i
+                deleteat!(list, index)
+            end
         end
         for n in new_neighbors
             @inbounds list = g.badjlist[n]
