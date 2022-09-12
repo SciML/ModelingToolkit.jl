@@ -142,7 +142,6 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
     pre, sol_states = get_substitutions_and_solved_states(sys,
                                                           no_postprocess = has_difference)
 
-
     if implicit_dae
         build_function(rhss, ddvs, u, p, t; postprocess_fbody = pre, states = sol_states,
                        kwargs...)

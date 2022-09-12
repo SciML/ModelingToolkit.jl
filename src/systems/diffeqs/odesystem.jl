@@ -241,8 +241,8 @@ end
 function collect_constants(eqs) #Does this need to be different for other system types?
     constants = Set()
     for eq in eqs
-        collect_constants!(constants,eq.lhs)
-        collect_constants!(constants,eq.rhs)
+        collect_constants!(constants, eq.lhs)
+        collect_constants!(constants, eq.rhs)
     end
     return collect(constants)
 end
