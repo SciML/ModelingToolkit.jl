@@ -329,18 +329,18 @@ function build_torn_function(sys;
             end
         end
 
-        ODEFunction{true}(@RuntimeGeneratedFunction(expr),
-                          sparsity = jacobian_sparsity ?
-                                     torn_system_with_nlsolve_jacobian_sparsity(state,
-                                                                                var_eq_matching,
-                                                                                var_sccs,
-                                                                                nlsolve_scc_idxs,
-                                                                                eqs_idxs,
-                                                                                states_idxs) :
-                                     nothing,
-                          syms = syms,
-                          observed = observedfun,
-                          mass_matrix = mass_matrix), states
+        ODEFunction{true, SciMLBase.AutoSpecialize}(@RuntimeGeneratedFunction(expr),
+                                                    sparsity = jacobian_sparsity ?
+                                                               torn_system_with_nlsolve_jacobian_sparsity(state,
+                                                                                                          var_eq_matching,
+                                                                                                          var_sccs,
+                                                                                                          nlsolve_scc_idxs,
+                                                                                                          eqs_idxs,
+                                                                                                          states_idxs) :
+                                                               nothing,
+                                                    syms = syms,
+                                                    observed = observedfun,
+                                                    mass_matrix = mass_matrix), states
     end
 end
 

@@ -136,3 +136,52 @@ end
     sys1 = OptimizationSystem(o1, [x], [], name = :sys1, constraints = c1, metadata = testdict)
     @test sys1.metadata == testdict
 end
+
+@testset "time dependent var" begin
+    @parameters t
+    @variables x(t) y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    sys1 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
+
+    cons2 = [x^2 + y^2 ~ 0, y * sin(x) - x ~ 0]
+    sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys2, constraints = cons2)
+
+    @variables z
+    @parameters β
+    loss2 = sys1.x - sys2.y + z * β
+    combinedsys = OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2],
+                                     name = :combinedsys)
+
+    u0 = [sys1.x => 1.0
+          sys1.y => 2.0
+          sys2.x => 3.0
+          sys2.y => 4.0
+          z => 5.0]
+    p = [sys1.a => 6.0
+         sys1.b => 7.0
+         sys2.a => 8.0
+         sys2.b => 9.0
+         β => 10.0]
+
+    prob = OptimizationProblem(combinedsys, u0, p, grad = true)
+    @test prob.f.sys === combinedsys
+    sol = solve(prob, NelderMead())
+    @test sol.minimum < -1e5
+
+    prob2 = remake(prob, u0 = sol.minimizer)
+    sol = solve(prob, BFGS(initial_stepnorm = 0.0001), allow_f_increases = true)
+    @test sol.minimum < -1e8
+    sol = solve(prob2, BFGS(initial_stepnorm = 0.0001), allow_f_increases = true)
+    @test sol.minimum < -1e9
+
+    #inequality constraint, the bounds for constraints lcons !== ucons
+    prob = OptimizationProblem(sys2, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
+                               lcons = [-1.0, -1.0], ucons = [500.0, 500.0], grad = true,
+                               hess = true)
+    @test prob.f.sys === sys2
+    sol = solve(prob, IPNewton(), allow_f_increases = true)
+    @test sol.minimum < 1.0
+    sol = solve(prob, Ipopt.Optimizer())
+    @test sol.minimum < 1.0
+end

@@ -955,6 +955,10 @@ topological sort of the observed equations. When `simplify=true`, the `simplify`
 function will be applied during the tearing process. It also takes kwargs
 `allow_symbolic=false` and `allow_parameter=true` which limits the coefficient
 types during tearing.
+
+The optional argument `io` may take a tuple `(inputs, outputs)`.
+This will convert all `inputs` to parameters and allow them to be unconnected, i.e.,
+simplification will allow models where `n_states = n_equations - n_inputs`.
 """
 function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false, kwargs...)
     sys = expand_connections(sys)
@@ -1023,7 +1027,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
         sts = states(sys),
-        fun = ODEFunction(sys),
+        fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys),
         h = ModelingToolkit.build_explicit_observed_function(sys, outputs),
         chunk = ForwardDiff.Chunk(input_idxs)
 

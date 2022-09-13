@@ -1,4 +1,4 @@
-using ModelingToolkit
+using ModelingToolkit, Test
 
 # r is an input, and y is an output.
 @variables t x(t)=0 y(t)=0 u(t)=0 r(t)=0
