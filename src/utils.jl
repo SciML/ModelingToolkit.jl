@@ -559,18 +559,21 @@ function empty_substitutions(sys)
 end
 
 function get_substitutions_and_solved_states(sys; no_postprocess = false)
-    if empty_substitutions(sys)
+    #Inject substitutions for constants => values
+    cs = collect_constants([sys.eqs; sys.observed]) #ctrls? what else?
+    # Swap constants for their values
+    cmap = map(x -> x ~ getdefault(x), cs)
+
+    if empty_substitutions(sys) && isempty(cs)
         sol_states = Code.LazyState()
         pre = no_postprocess ? (ex -> ex) : get_postprocess_fbody(sys)
-    else
-        @unpack subs = get_substitutions(sys)
-        # Swap constants for their values
-        cs = collect_constants(subs)
-        if !isempty(cs) > 0
-            cmap = map(x -> x => getdefault(x), cs)
-            subs = map(x -> x.lhs ~ substitute(x.rhs, cmap), subs)
+    else # Have to do some work
+        if !empty_substitutions(sys)
+            @unpack subs = get_substitutions(sys)
+        else 
+            subs = []
         end
-
+        subs = [cmap; subs] # The constants need to go first
         sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
         if no_postprocess
             pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex,
