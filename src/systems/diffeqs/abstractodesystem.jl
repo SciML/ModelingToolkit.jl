@@ -671,7 +671,6 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map, t
     kwargs = filter_kwargs(kwargs)
     pt = something(get_metadata(sys), StandardODEProblem())
 
-
     if cbs === nothing
         ODEProblem{iip}(f, u0, tspan, p, pt; kwargs...)
     else

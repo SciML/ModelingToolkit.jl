@@ -209,6 +209,6 @@ end
     eqs = [0 ~ a * x]
 
     testdict = Dict([:test => 1])
-    @named sys = NonlinearSystem(eqs, [x], [a], name = :test, defaults = Dict(:a => 1.0), metadata = testdict)
+    @named sys = NonlinearSystem(eqs, [x], [a], name = :test, metadata = testdict)
     @test sys.metadata == testdict
 end

@@ -133,7 +133,8 @@ end
         x ~ 1,
     ]
     testdict = Dict(["test" => 1])
-    sys1 = OptimizationSystem(o1, [x], [], name = :sys1, constraints = c1, metadata = testdict)
+    sys1 = OptimizationSystem(o1, [x], [], name = :sys1, constraints = c1,
+                              metadata = testdict)
     @test sys1.metadata == testdict
 end
 
