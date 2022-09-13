@@ -304,6 +304,7 @@ function reduce!(mm::SparseMatrixCLIL, ag::AliasGraph)
             end
             j += 1
         end
+        unique!(sort!(dels))
         deleteat!(rs, dels)
         deleteat!(rvals, dels)
         empty!(dels)
