@@ -1,4 +1,5 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
+using ModelingToolkit: get_metadata
 using DiffEqBase, SparseArrays
 using Test
 using NonlinearSolve
@@ -202,3 +203,11 @@ let
 
     @test sol[u] ≈ ones(4)
 end
+
+@variables x(t)
+@parameters a
+eqs = [0 ~ a * x]
+
+testdict = Dict([:test => 1])
+@named sys = NonlinearSystem(eqs, [x], [a], metadata = testdict)
+@test get_metadata(sys) == testdict
