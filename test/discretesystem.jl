@@ -4,6 +4,7 @@
 - https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#Deterministic_versus_stochastic_epidemic_models
 =#
 using ModelingToolkit, Test
+using ModelingToolkit: get_metadata
 
 @inline function rate_to_proportion(r, t)
     1 - exp(-r * t)
@@ -179,3 +180,10 @@ RHS2 = RHS
     sol = solve(prob, FunctionMap(); dt = dt)
     @test c[1] + 1 == length(sol)
 end
+
+@parameters t
+@variables x(t) y(t)
+D = Difference(t; dt = 0.1)
+testdict = Dict([:test => 1])
+@named sys = DiscreteSystem([D(x) ~ 1.0]; metadata = testdict)
+@test get_metadata(sys) == testdict

@@ -1,4 +1,5 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
+using ModelingToolkit: get_metadata
 using OrdinaryDiffEq, Sundials
 using DiffEqBase, SparseArrays
 using StaticArrays
@@ -878,3 +879,14 @@ let
            ∂t(P) ~ -80.0sin(Q)]
     @test_throws ArgumentError @named sys = ODESystem(eqs)
 end
+
+@parameters C L R
+@variables t q(t) p(t) F(t)
+D = Differential(t)
+
+eqs = [D(q) ~ -p / L - F
+       D(p) ~ q / C
+       0 ~ q / C - R * F]
+testdict = Dict([:name => "test"])
+@named sys = ODESystem(eqs, t, metadata = testdict)
+@test get_metadata(sys) == testdict

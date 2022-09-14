@@ -669,10 +669,12 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map, t
                                  check_length, kwargs...)
     cbs = process_events(sys; callback, has_difference, kwargs...)
     kwargs = filter_kwargs(kwargs)
+    pt = something(get_metadata(sys), StandardODEProblem())
+
     if cbs === nothing
-        ODEProblem{iip}(f, u0, tspan, p; kwargs...)
+        ODEProblem{iip}(f, u0, tspan, p, pt; kwargs...)
     else
-        ODEProblem{iip}(f, u0, tspan, p; callback = cbs, kwargs...)
+        ODEProblem{iip}(f, u0, tspan, p, pt; callback = cbs, kwargs...)
     end
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
