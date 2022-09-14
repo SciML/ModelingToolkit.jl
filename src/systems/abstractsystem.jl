@@ -965,7 +965,7 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     state = TearingState(sys)
     has_io = io !== nothing
     has_io && markio!(state, io...)
-    state, input_idxs = inputs_to_parameters!(state, !has_io)
+    state, input_idxs = inputs_to_parameters!(state, io)
     sys = alias_elimination!(state)
     # TODO: avoid construct `TearingState` again.
     state = TearingState(sys)
@@ -981,7 +981,7 @@ end
 
 function io_preprocessing(sys::AbstractSystem, inputs,
                           outputs; simplify = false, kwargs...)
-    sys, input_idxs = structural_simplify(sys, (inputs, outputs); simplify, kwargs...)
+    sys, input_idxs = structural_simplify(sys, (; inputs, outputs); simplify, kwargs...)
 
     eqs = equations(sys)
     alg_start_idx = findfirst(!isdiffeq, eqs)
@@ -1215,7 +1215,7 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
         A = [f_x f_z
              gzgx*f_x gzgx*f_z]
         B = [f_u
-             gzgx*f_u]
+             gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
 
         C = [h_x h_z]
         Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
