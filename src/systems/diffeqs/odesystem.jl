@@ -238,14 +238,6 @@ function ODESystem(eqs, iv = nothing; kwargs...)
                      collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
 end
 
-function collect_constants(eqs) #Does this need to be different for other system types?
-    constants = Set()
-    for eq in eqs
-        collect_constants!(constants, eq.lhs)
-        collect_constants!(constants, eq.rhs)
-    end
-    return collect(constants)
-end
 
 # NOTE: equality does not check cached Jacobian
 function Base.:(==)(sys1::ODESystem, sys2::ODESystem)

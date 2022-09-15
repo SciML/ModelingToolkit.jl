@@ -8,13 +8,14 @@ using ModelingToolkit: value
 
 # Define some variables
 @parameters t σ ρ β
+@constants κ = 1
 @variables x(t) y(t) z(t)
 D = Differential(t)
 
 # Define a differential equation
 eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z]
+    D(z) ~ x * y - β * z * κ]
 
 ModelingToolkit.toexpr.(eqs)[1]
 @named de = ODESystem(eqs; defaults = Dict(x => 1))
@@ -71,7 +72,7 @@ end
 
 eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y * t,
-    D(z) ~ x * y - β * z]
+    D(z) ~ x * y - β * z * κ]
 @named de = ODESystem(eqs)
 ModelingToolkit.calculate_tgrad(de)
 
@@ -87,7 +88,7 @@ tgrad_iip(du, u, p, t)
 @parameters σ′(t - 1)
 eqs = [D(x) ~ σ′ * (y - x),
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z]
+    D(z) ~ x * y - β * z * κ]
 @named de = ODESystem(eqs)
 test_diffeq_inference("global iv-varying", de, t, (x, y, z), (σ′, ρ, β))
 
@@ -99,7 +100,7 @@ f(du, [1.0, 2.0, 3.0], [x -> x + 7, 2, 3], 5.0)
 @parameters σ(..)
 eqs = [D(x) ~ σ(t - 1) * (y - x),
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z]
+    D(z) ~ x * y - β * z * κ]
 @named de = ODESystem(eqs)
 test_diffeq_inference("single internal iv-varying", de, t, (x, y, z), (σ(t - 1), ρ, β))
 f = eval(generate_function(de, [x, y, z], [σ, ρ, β])[2])
@@ -146,7 +147,7 @@ ODEFunction(de1, [uˍtt, xˍt, uˍt, u, x], [])(du, ones(5), nothing, 0.1)
 a = y - x
 eqs = [D(x) ~ σ * a,
     D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y - β * z]
+    D(z) ~ x * y - β * z * κ]
 @named de = ODESystem(eqs)
 generate_function(de, [x, y, z], [σ, ρ, β])
 jac = calculate_jacobian(de)
@@ -201,7 +202,7 @@ D = Differential(t)
 # reorder the system just to be a little spicier
 eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃,
     0 ~ y₁ + y₂ + y₃ - 1,
-    D(y₂) ~ k₁ * y₁ - k₂ * y₂^2 - k₃ * y₂ * y₃]
+    D(y₂) ~ k₁ * y₁ - k₂ * y₂^2 - k₃ * y₂ * y₃ * κ]
 @named sys = ODESystem(eqs, defaults = [k₁ => 100, k₂ => 3e7, y₁ => 1.0])
 u0 = Pair[]
 push!(u0, y₂ => 0.0)
@@ -222,7 +223,7 @@ for p in [prob1, prob14]
     @test Set(Num.(states(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 0, y₃ => 0])
 end
 prob2 = ODEProblem(sys, u0, tspan, p, jac = true)
-prob3 = ODEProblem(sys, u0, tspan, p, jac = true, sparse = true)
+prob3 = ODEProblem(sys, u0, tspan, p, jac = true, sparse = true) #SparseMatrixCSC need to handle
 @test prob3.f.jac_prototype isa SparseMatrixCSC
 prob3 = ODEProblem(sys, u0, tspan, p, jac = true, sparsity = true)
 @test prob3.f.sparsity isa SparseMatrixCSC

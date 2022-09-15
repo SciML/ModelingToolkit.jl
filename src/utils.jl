@@ -480,17 +480,6 @@ function collect_vars!(states, parameters, expr, iv)
     return nothing
 end
 
-function collect_constants!(constants, expr)
-    if expr isa Sym
-        collect_constant!(constants, expr)
-    else
-        for var in vars(expr)
-            collect_constant!(constants, var)
-        end
-    end
-    return nothing
-end
-
 function collect_vars_difference!(states, parameters, expr, iv)
     if expr isa Sym
         collect_var!(states, parameters, expr, iv)
@@ -515,10 +504,46 @@ function collect_var!(states, parameters, var, iv)
     return nothing
 end
 
+function collect_constants(eqs::Vector{Equation}) #For get_substitutions_and_solved_states
+    constants = []
+    for eq in eqs
+        collect_constants!(constants, eq.lhs)
+        collect_constants!(constants, eq.rhs)
+    end
+    return constants
+end
+
+function collect_constants(eqs::AbstractArray{T}) where T # For generate_tgrad / generate_jacobian / generate_difference_cb
+    constants = T[]
+    for eq in eqs
+        collect_constants!(constants, unwrap(eq))
+    end
+    return constants
+end
+
 function collect_constant!(constants, var)
     if isconstant(var)
-        push!(constants,var)
+        push!(constants, var)
     end
+    return nothing
+end
+
+function collect_constants!(constants, expr)
+    if expr isa Sym
+        collect_constant!(constants, expr)
+    else
+        for var in vars(expr)
+            collect_constant!(constants, var)
+        end
+    end
+    return nothing
+end
+
+function get_preprocess_constants(eqs)
+    cs = collect_constants(eqs)
+    pre = ex -> Let(Assignment[Assignment(x, getdefault(x)) for x in cs],
+                           ex, false)
+    return pre
 end
 
 function get_postprocess_fbody(sys)
@@ -561,6 +586,9 @@ end
 function get_substitutions_and_solved_states(sys; no_postprocess = false)
     #Inject substitutions for constants => values
     cs = collect_constants([sys.eqs; sys.observed]) #ctrls? what else?
+    if !empty_substitutions(sys) 
+        cs = [cs; collect_constants(sys.substitutions.subs)]
+    end
     # Swap constants for their values
     cmap = map(x -> x ~ getdefault(x), cs)
 
