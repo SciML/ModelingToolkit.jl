@@ -442,14 +442,16 @@ function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors)
         for n in new_neighbors
             @inbounds list = g.badjlist[n]
             index = searchsortedfirst(list, i)
-            insert!(list, index, i)
+            if !(1 <= index <= length(list) && list[index] == i)
+                insert!(list, index, i)
+            end
         end
     end
     if iszero(new_nneighbors) # this handles Tuple as well
         # Warning: Aliases old_neighbors
         empty!(g.fadjlist[i])
     else
-        g.fadjlist[i] = copy(new_neighbors)
+        g.fadjlist[i] = unique!(sort(new_neighbors))
     end
 end
 
