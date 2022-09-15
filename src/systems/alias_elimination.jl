@@ -241,7 +241,7 @@ function Base.setindex!(ag::AliasGraph, v::Integer, i::Integer)
     return 0 => 0
 end
 
-function Base.setindex!(ag::AliasGraph, p::Pair{Int, Int}, i::Integer)
+function Base.setindex!(ag::AliasGraph, p::Union{Pair{Int, Int}, Tuple{Int, Int}}, i::Integer)
     (c, v) = p
     if c == 0 || v == 0
         ag[i] = 0
@@ -271,49 +271,9 @@ function Base.in(i::Int, agk::AliasGraphKeySet)
 end
 
 function reduce!(mm::SparseMatrixCLIL, ag::AliasGraph)
-    dels = Int[]
-    for (i, rs) in enumerate(mm.row_cols)
-        rvals = mm.row_vals[i]
-        j = 1
-        while j <= length(rs)
-            c = rs[j]
-            _alias = get(ag, c, nothing)
-            if _alias !== nothing
-                coeff, alias = _alias
-                if alias == c
-                    i = searchsortedfirst(rs, alias)
-                    rvals[i] *= coeff
-                else
-                    push!(dels, j)
-                    iszero(coeff) && (j += 1; continue)
-                    inc = coeff * rvals[j]
-                    i = searchsortedfirst(rs, alias)
-                    if i > length(rs) || rs[i] != alias
-                        # if we add a variable to what we already visited, make sure
-                        # to bump the cursor.
-                        j += i <= j
-                        for (i, e) in enumerate(dels)
-                            e >= i && (dels[i] += 1)
-                        end
-                        insert!(rs, i, alias)
-                        insert!(rvals, i, inc)
-                    else
-                        rvals[i] += inc
-                    end
-                end
-            end
-            j += 1
-        end
-        unique!(sort!(dels))
-        deleteat!(rs, dels)
-        deleteat!(rvals, dels)
-        empty!(dels)
-        for (j, v) in enumerate(rvals)
-            iszero(v) && push!(dels, j)
-        end
-        deleteat!(rs, dels)
-        deleteat!(rvals, dels)
-        empty!(dels)
+    for i in 1:size(mm, 1)
+        adj_row = @view mm[i, :]
+        locally_structure_simplify!(adj_row, nothing, ag)
     end
     mm
 end
@@ -896,8 +856,12 @@ function exactdiv(a::Integer, b)
 end
 
 function locally_structure_simplify!(adj_row, pivot_var, ag)
-    pivot_val = adj_row[pivot_var]
-    iszero(pivot_val) && return false
+    if pivot_var === nothing
+        pivot_val = nothing
+    else
+        pivot_val = adj_row[pivot_var]
+        iszero(pivot_val) && return false
+    end
 
     nirreducible = 0
     # When this row only as the pivot element, the pivot is zero by homogeneity
@@ -940,10 +904,21 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
         end
     end
 
+    if pivot_var === nothing
+        if iszero(nirreducible)
+            zero!(adj_row)
+        else
+            dropzeros!(adj_row)
+        end
+        return true
+    end
     # If there were only one or two terms left in the equation (including the
     # pivot variable). We can eliminate the pivot variable. Note that when
     # `nirreducible <= 1`, `alias_candidate` is uniquely determined.
-    nirreducible <= 1 || return false
+    if nirreducible > 1
+        dropzeros!(adj_row)
+        return false
+    end
 
     if alias_candidate isa Pair
         alias_val, alias_var = alias_candidate

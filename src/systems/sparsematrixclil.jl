@@ -65,6 +65,7 @@ end
 zero!(a::AbstractArray{T}) where {T} = a[:] .= zero(T)
 zero!(a::SparseVector) = (empty!(a.nzind); empty!(a.nzval))
 zero!(a::CLILVector) = zero!(a.vec)
+SparseArrays.dropzeros!(a::CLILVector) = SparseArrays.dropzeros!(a.vec)
 
 struct NonZeros{T <: AbstractArray}
     v::T
@@ -75,6 +76,7 @@ struct NonZerosPairs{T <: AbstractArray}
     v::T
 end
 
+Base.IteratorSize(::Type{<:NonZerosPairs}) = Base.SizeUnknown()
 # N.B.: Because of how we're using this, this must be robust to modification of
 # the underlying vector. As such, we treat this as an iteration over indices
 # that happens to short cut using the sparse structure and sortedness of the
