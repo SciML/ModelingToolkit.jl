@@ -238,7 +238,6 @@ function ODESystem(eqs, iv = nothing; kwargs...)
                      collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
 end
 
-
 # NOTE: equality does not check cached Jacobian
 function Base.:(==)(sys1::ODESystem, sys2::ODESystem)
     sys1 === sys2 && return true

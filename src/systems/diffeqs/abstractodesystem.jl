@@ -113,7 +113,8 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = states(sys),
     @variables ˍ₋gamma
     jac = ˍ₋gamma * jac_du + jac_u
     pre = get_preprocess_constants(jac)
-    return build_function(jac, derivatives, dvs, ps, ˍ₋gamma, get_iv(sys); postprocess_fbody = pre, kwargs...)
+    return build_function(jac, derivatives, dvs, ps, ˍ₋gamma, get_iv(sys);
+                          postprocess_fbody = pre, kwargs...)
 end
 
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);

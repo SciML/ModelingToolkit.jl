@@ -3,7 +3,7 @@ struct MTKConstantCtx end
 
 function isconstant(x)
     x = unwrap(x)
-    x isa Symbolic &&  getmetadata(x, MTKConstantCtx, false)
+    x isa Symbolic && getmetadata(x, MTKConstantCtx, false)
 end
 isconstant(x::Num) = isconstant(unwrap(x))
 """
@@ -17,7 +17,8 @@ function toconstant(s)
     elseif s isa AbstractArray
         map(toconstant, s)
     else
-        hasmetadata(s, Symbolics.VariableDefaultValue) || throw(ArgumentError("Constant `$(s)` must be assigned a default value."))
+        hasmetadata(s, Symbolics.VariableDefaultValue) ||
+            throw(ArgumentError("Constant `$(s)` must be assigned a default value."))
         setmetadata(s, MTKConstantCtx, true)
     end
 end

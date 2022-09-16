@@ -513,7 +513,7 @@ function collect_constants(eqs::Vector{Equation}) #For get_substitutions_and_sol
     return constants
 end
 
-function collect_constants(eqs::AbstractArray{T}) where T # For generate_tgrad / generate_jacobian / generate_difference_cb
+function collect_constants(eqs::AbstractArray{T}) where {T} # For generate_tgrad / generate_jacobian / generate_difference_cb
     constants = T[]
     for eq in eqs
         collect_constants!(constants, unwrap(eq))
@@ -542,7 +542,7 @@ end
 function get_preprocess_constants(eqs)
     cs = collect_constants(eqs)
     pre = ex -> Let(Assignment[Assignment(x, getdefault(x)) for x in cs],
-                           ex, false)
+                    ex, false)
     return pre
 end
 
@@ -586,7 +586,7 @@ end
 function get_substitutions_and_solved_states(sys; no_postprocess = false)
     #Inject substitutions for constants => values
     cs = collect_constants([sys.eqs; sys.observed]) #ctrls? what else?
-    if !empty_substitutions(sys) 
+    if !empty_substitutions(sys)
         cs = [cs; collect_constants(sys.substitutions.subs)]
     end
     # Swap constants for their values
@@ -598,7 +598,7 @@ function get_substitutions_and_solved_states(sys; no_postprocess = false)
     else # Have to do some work
         if !empty_substitutions(sys)
             @unpack subs = get_substitutions(sys)
-        else 
+        else
             subs = []
         end
         subs = [cmap; subs] # The constants need to go first

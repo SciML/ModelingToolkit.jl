@@ -21,5 +21,4 @@ simp = structural_simplify(sys);
 @test isequal(equations(simp)[1], eqs[1])
 prob = ODEProblem(simp, [0, ], [0.0, 1.0], [])
 sol = solve(prob, Tsit5())
-@test sol[w][1] == 1 
-
+@test sol[w][1] == 1
