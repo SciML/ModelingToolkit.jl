@@ -98,8 +98,7 @@ function generate_control_jacobian(sys::AbstractODESystem, dvs = states(sys),
                                    ps = parameters(sys);
                                    simplify = false, sparse = false, kwargs...)
     jac = calculate_control_jacobian(sys; simplify = simplify, sparse = sparse)
-    pre = get_preprocess_constants(jac)
-    return build_function(jac, dvs, ps, get_iv(sys); postprocess_fbody = pre, kwargs...)
+    return build_function(jac, dvs, ps, get_iv(sys); kwargs...)
 end
 
 function generate_dae_jacobian(sys::AbstractODESystem, dvs = states(sys),
