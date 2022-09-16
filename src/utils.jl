@@ -585,9 +585,9 @@ end
 
 function get_substitutions_and_solved_states(sys; no_postprocess = false)
     #Inject substitutions for constants => values
-    cs = collect_constants([sys.eqs; sys.observed]) #ctrls? what else?
+    cs = collect_constants([get_eqs(sys); get_observed(sys)]) #ctrls? what else?
     if !empty_substitutions(sys)
-        cs = [cs; collect_constants(sys.substitutions.subs)]
+        cs = [cs; collect_constants(get_substitutions(sys).subs)]
     end
     # Swap constants for their values
     cmap = map(x -> x ~ getdefault(x), cs)
