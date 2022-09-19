@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit, OrdinaryDiffEq, Unitful
 using Test
 MT = ModelingToolkit
 
@@ -22,3 +22,13 @@ simp = structural_simplify(sys);
 prob = ODEProblem(simp, [0, ], [0.0, 1.0], [])
 sol = solve(prob, Tsit5())
 @test sol[w][1] == 1
+
+#Constant with units
+@constants β = 1 [unit = u"m/s"]
+MT.get_unit(β)
+@test MT.isconstant(β)
+@variables t [unit = u"s"] x(t) [unit = u"m"]
+D = Differential(t)
+eqs = [D(x) ~ β]
+sys = ODESystem(eqs,name=:sys)
+
