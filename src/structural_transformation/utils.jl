@@ -218,7 +218,7 @@ highest_order_variable_mask(ts) =
 
 lowest_order_variable_mask(ts) =
     let v2d = ts.structure.var_to_diff
-        v -> isempty(outneighbors(v2d, v))
+        v -> isempty(inneighbors(v2d, v))
     end
 
 function but_ordered_incidence(ts::TearingState, varmask = highest_order_variable_mask(ts))
