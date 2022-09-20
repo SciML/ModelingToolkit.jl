@@ -267,7 +267,7 @@ function TearingState(sys; quick_cancel = false, check = true)
             _var, _ = var_from_nested_derivative(var)
             any(isequal(_var), ivs) && continue
             if isparameter(_var) ||
-                (istree(_var) && isparameter(operation(_var)) || isconstant(_var))
+               (istree(_var) && isparameter(operation(_var)) || isconstant(_var))
                 continue
             end
             varidx = addvar!(var)

@@ -9,7 +9,7 @@ MT = ModelingToolkit
 D = Differential(t)
 eqs = [D(x) ~ a]
 @named sys = ODESystem(eqs)
-prob = ODEProblem(sys, [0, ], [0.0, 1.0], [])
+prob = ODEProblem(sys, [0], [0.0, 1.0], [])
 sol = solve(prob, Tsit5())
 
 # Test structural_simplify substitutions & observed values
@@ -19,16 +19,15 @@ eqs = [D(x) ~ 1,
 simp = structural_simplify(sys);
 @test isequal(simp.substitutions.subs[1], eqs[2])
 @test isequal(equations(simp)[1], eqs[1])
-prob = ODEProblem(simp, [0, ], [0.0, 1.0], [])
+prob = ODEProblem(simp, [0], [0.0, 1.0], [])
 sol = solve(prob, Tsit5())
 @test sol[w][1] == 1
 
 #Constant with units
-@constants β = 1 [unit = u"m/s"]
+@constants β=1 [unit = u"m/s"]
 MT.get_unit(β)
 @test MT.isconstant(β)
 @variables t [unit = u"s"] x(t) [unit = u"m"]
 D = Differential(t)
 eqs = [D(x) ~ β]
-sys = ODESystem(eqs,name=:sys)
-
+sys = ODESystem(eqs, name = :sys)
