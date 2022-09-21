@@ -421,6 +421,8 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
                      Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
                      mass_matrix = _M,
                      syms = Symbol.(states(sys)),
+                     indepsym = Symbol(get_iv(sys)),
+                     paramsyms = Symbol.(ps),
                      observed = observedfun)
 end
 
@@ -505,7 +507,9 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
                           Wfact = Wfact,
                           Wfact_t = Wfact_t,
                           mass_matrix = M,
-                          syms = $(Symbol.(states(sys))))
+                          syms = $(Symbol.(states(sys))),
+                          indepsym = $(Symbol(get_iv(sys))),
+                          paramsyms = $(Symbol.(parameters(sys))))
     end
     !linenumbers ? striplines(ex) : ex
 end

@@ -1,5 +1,6 @@
 using ModelingToolkit, SparseArrays, Test, Optimization, OptimizationOptimJL,
       OptimizationMOI, Ipopt, AmplNLWriter, Ipopt_jll
+using ModelingToolkit: get_metadata
 
 @variables x y
 @parameters a b
@@ -174,3 +175,13 @@ end
     sol = solve(prob, Ipopt.Optimizer())
     @test sol.minimum < 1.0
 end
+
+@variables x
+o1 = (x - 1)^2
+c1 = [
+    x ~ 1,
+]
+testdict = Dict(["test" => 1])
+sys1 = OptimizationSystem(o1, [x], [], name = :sys1, constraints = c1,
+                          metadata = testdict)
+@test get_metadata(sys1) == testdict

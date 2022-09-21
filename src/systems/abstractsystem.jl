@@ -304,6 +304,9 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = false)
 
     sts = get_states(sys)
     i = findfirst(x -> getname(x) == name, sts)
+    if i !== nothing
+        return namespace ? renamespace(sys, sts[i]) : sts[i]
+    end
 
     if has_observed(sys)
         obs = get_observed(sys)

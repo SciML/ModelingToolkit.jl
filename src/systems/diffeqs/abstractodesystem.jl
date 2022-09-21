@@ -364,6 +364,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                  jac_prototype = jac_prototype,
                                  syms = Symbol.(states(sys)),
                                  indepsym = Symbol(get_iv(sys)),
+                                 paramsyms = Symbol.(ps),
                                  observed = observedfun,
                                  sparsity = sparsity ? jacobian_sparsity(sys) : nothing)
 end
@@ -449,9 +450,9 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      sys = sys,
                      jac = _jac === nothing ? nothing : _jac,
                      syms = Symbol.(dvs),
+                     indepsym = Symbol(get_iv(sys)),
+                     paramsyms = Symbol.(ps),
                      jac_prototype = jac_prototype,
-                     # missing fields in `DAEFunction`
-                     #indepsym = Symbol(get_iv(sys)),
                      observed = observedfun)
 end
 
@@ -534,7 +535,8 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                           mass_matrix = M,
                           jac_prototype = $jp_expr,
                           syms = $(Symbol.(states(sys))),
-                          indepsym = $(QuoteNode(Symbol(get_iv(sys)))))
+                          indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
+                          paramsyms = $(QuoteNode(Symbol.(parameters(sys)))))
     end
     !linenumbers ? striplines(ex) : ex
 end
@@ -669,10 +671,12 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map, t
                                  check_length, kwargs...)
     cbs = process_events(sys; callback, has_difference, kwargs...)
     kwargs = filter_kwargs(kwargs)
+    pt = something(get_metadata(sys), StandardODEProblem())
+
     if cbs === nothing
-        ODEProblem{iip}(f, u0, tspan, p; kwargs...)
+        ODEProblem{iip}(f, u0, tspan, p, pt; kwargs...)
     else
-        ODEProblem{iip}(f, u0, tspan, p; callback = cbs, kwargs...)
+        ODEProblem{iip}(f, u0, tspan, p, pt; callback = cbs, kwargs...)
     end
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
