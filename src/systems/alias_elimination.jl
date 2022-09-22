@@ -288,12 +288,22 @@ end
 
 function tograph(ag::AliasGraph, var_to_diff::DiffGraph)
     g = SimpleDiGraph{Int}(length(var_to_diff))
+    zero_vars = Int[]
     for (v, (_, a)) in ag
-        iszero(a) && continue
+        if iszero(a)
+            push!(zero_vars, v)
+            continue
+        end
         add_edge!(g, v, a)
         add_edge!(g, a, v)
     end
     transitiveclosure!(g)
+    zero_vars_set = BitSet(zero_vars)
+    for v in zero_vars
+        for a in outneighbors(g, v)
+            push!(zero_vars_set, a)
+        end
+    end
     # Compute the largest transitive closure that doesn't include any diff
     # edges.
     og = g
@@ -319,7 +329,7 @@ function tograph(ag::AliasGraph, var_to_diff::DiffGraph)
         add_edge!(g, v, dv)
         add_edge!(g, dv, v)
     end
-    g, edge_styles
+    g, zero_vars_set, edge_styles
 end
 
 using Graphs.Experimental.Traversals
@@ -780,18 +790,16 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # Note that since we always prefer the higher differentiated variable and
     # with a tie breaking strategy, the root variable (in this case `z`) is
     # always uniquely determined. Thus, the result is well-defined.
+    dag = AliasGraph(nvars) # alias graph for differentiated variables
+    updated_diff_vars = Int[]
     diff_to_var = invview(var_to_diff)
-    invag = SimpleDiGraph(nvars)
-    for (v, (coeff, alias)) in pairs(ag)
-        iszero(coeff) && continue
-        add_edge!(invag, alias, v)
-    end
     processed = falses(nvars)
-    g, = tograph(ag, var_to_diff)
+    g, zero_vars_set = tograph(ag, var_to_diff)
     dls = DiffLevelState(g, var_to_diff)
     is_diff_edge = let var_to_diff = var_to_diff
         (v, w) -> var_to_diff[v] == w || var_to_diff[w] == v
     end
+    diff_aliases = Vector{Pair{Int, Int}}[]
     for (v, dv) in enumerate(var_to_diff)
         processed[v] && continue
         (dv === nothing && diff_to_var[v] === nothing) && continue
@@ -801,15 +809,67 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         extreme_var(var_to_diff, r, nothing, Val(false),
                     callback = Base.Fix1(push!, level_to_var))
         nlevels = length(level_to_var)
-        current_coeff_level = Ref((0, 0))
+        prev_r = -1
+        for _ in 1:10_000 # just to make sure that we don't stuck in an infinite loop
+            reach₌ = Pair{Int, Int}[]
+            r === nothing || for n in neighbors(g, r)
+                (n == r || is_diff_edge(r, n)) && continue
+                c = 1
+                push!(reach₌, c => n)
+            end
+            if (n = length(diff_aliases)) >= 2
+                as = diff_aliases[n-1]
+                for (c, a) in as
+                    (da = var_to_diff[a]) === nothing && continue
+                    da === r && continue
+                    push!(reach₌, c => da)
+                end
+            end
+            for (c, a) in reach₌
+                @info fullvars[r] => c * fullvars[a]
+            end
+            if r === nothing
+                # TODO: updated_diff_vars check
+                isempty(reach₌) && break
+                dr = first(reach₌)
+                var_to_diff[prev_r] = dr
+                push!(updated_diff_vars, prev_r)
+                prev_r = dr
+            else
+                prev_r = r
+                r = var_to_diff[r]
+            end
+            for (c, v) in reach₌
+                v == prev_r && continue
+                dag[v] = c => prev_r
+            end
+            push!(diff_aliases, reach₌)
+        end
+        for v in zero_vars_set
+            dag[v] = 0
+        end
+        @show nlevels
+        display(diff_aliases)
+        @assert length(diff_aliases) == nlevels
+        @show zero_vars_set
+
+        # clean up
         for v in dls.visited
             dls.dists[v] = typemax(Int)
             processed[v] = true
         end
         empty!(dls.visited)
+        empty!(diff_aliases)
     end
+    @show dag
 
+    #=
     processed = falses(nvars)
+    invag = SimpleDiGraph(nvars)
+    for (v, (coeff, alias)) in pairs(ag)
+        iszero(coeff) && continue
+        add_edge!(invag, alias, v)
+    end
     iag = InducedAliasGraph(ag, invag, var_to_diff)
     dag = AliasGraph(nvars) # alias graph for differentiated variables
     newinvag = SimpleDiGraph(nvars)
@@ -920,6 +980,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             end
         end
     end
+    =#
 
     for (v, (c, a)) in dag
         a = iszero(a) ? 0 : c * fullvars[a]
@@ -949,6 +1010,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         push!(removed_aliases, a)
     end
     for (v, (c, a)) in ag
+        (processed[v] || processed[a]) && continue
         v in removed_aliases && continue
         freshag[v] = c => a
     end
@@ -958,6 +1020,10 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         @warn "" echelon_mm
         mm = reduce!(copy(echelon_mm), ag)
         @warn "wow" mm
+    end
+    for (v, (c, a)) in ag
+        a = iszero(a) ? 0 : c * fullvars[a]
+        @info "ag" fullvars[v] => a
     end
 
     # Step 5: Reflect our update decisions back into the graph, and make sure

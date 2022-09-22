@@ -44,6 +44,7 @@ end
 struct CLILVector{T, Ti} <: AbstractSparseVector{T, Ti}
     vec::SparseVector{T, Ti}
 end
+Base.hash(v::CLILVector, s::UInt) = hash(v.vec, s) ⊻ 0xc71be0e9ccb75fbd
 Base.size(v::CLILVector) = Base.size(v.vec)
 Base.getindex(v::CLILVector, idx::Integer...) = Base.getindex(v.vec, idx...)
 Base.setindex!(vec::CLILVector, v, idx::Integer...) = Base.setindex!(vec.vec, v, idx...)
