@@ -323,22 +323,14 @@ function build_explicit_observed_function(sys, ts;
     end
     ts = map(t -> substitute(t, subs), ts)
     obsexprs = []
-    eqs_cache = Ref{Any}(nothing)
     for i in 1:maxidx
         eq = obs[i]
         lhs = eq.lhs
         rhs = eq.rhs
         vars!(vars, rhs)
         for v in vars
-            isdifferential(v) || continue
-            if eqs_cache[] === nothing
-                eqs_cache[] = Dict(eq.lhs => eq.rhs for eq in equations(sys))
-            end
-            eqs_dict = eqs_cache[]
-            rhs = get(eqs_dict, v, nothing)
-            if rhs === nothing
-                error("The observed variable $(eq.lhs) depends on the differentiated variable $v, but it's not explicit solved. Fix file an issue if you are sure that the system is valid.")
-            end
+            isdifferential(v) &&
+                error("Observed `$eq` depends on differentiated variable `$v`. This is not supported.")
         end
         empty!(vars)
         push!(obsexprs, lhs ← rhs)
