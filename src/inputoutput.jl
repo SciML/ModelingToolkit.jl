@@ -278,10 +278,12 @@ function inputs_to_parameters!(state::TransformationState, io)
 
     if io !== nothing
         # Change order of new parameters to correspond to user-provided order in argument `inputs`
-        param_permutation = map(io.inputs) do inp
-            findfirst(isequal(inp), new_parameters)
+        d = Dict{Any, Int}()
+        for (i, inp) in enumerate(new_parameters)
+            d[inp] = i
         end
-        new_parameters = new_parameters[param_permutation]
+        permutation = [d[i] for i in io.inputs]
+        new_parameters = new_parameters[permutation]
     end
 
     @set! sys.ps = [ps; new_parameters]
