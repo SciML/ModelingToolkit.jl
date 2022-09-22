@@ -30,6 +30,12 @@ if VERSION >= v"1.6"
     @test occursin("Incidence matrix:", prt)
     @test occursin("×", prt)
     @test occursin("⋅", prt)
+
+    io = IOContext(IOBuffer(), :mtk_limit => false)
+    show(io, MIME"text/plain"(), state.structure)
+    prt = String(take!(io))
+    prt = String(take!(io))
+    @test occursin("SystemStructure", prt)
 end
 
 # u1 = f1(u5)
