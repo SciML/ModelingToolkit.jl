@@ -157,6 +157,11 @@ function JumpSystem(eqs, iv, states, ps;
 end
 
 function generate_rate_function(js::JumpSystem, rate)
+    consts = collect_constants(rate)
+    if !isempty(consts) # The SymbolicUtils._build_function method of this case doesn't support preprocessing
+        csubs = Dict(c => getdefault(c) for c in consts)
+        rate = substitute(rate, csubs)
+    end
     rf = build_function(rate, states(js), parameters(js),
                         get_iv(js),
                         conv = states_to_sym(states(js)),
@@ -164,6 +169,11 @@ function generate_rate_function(js::JumpSystem, rate)
 end
 
 function generate_affect_function(js::JumpSystem, affect, outputidxs)
+    consts = collect_constants(affect)
+    if !isempty(consts) # The SymbolicUtils._build_function method of this case doesn't support preprocessing
+        csubs = Dict(c => getdefault(c) for c in consts)
+        affect = substitute(affect, csubs)
+    end
     compile_affect(affect, js, states(js), parameters(js); outputidxs = outputidxs,
                    expression = Val{true}, checkvars = false)
 end

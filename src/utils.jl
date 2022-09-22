@@ -521,6 +521,13 @@ function collect_constants(eqs::AbstractArray{T}) where {T} # For generate_tgrad
     return constants
 end
 
+collect_constants(x::Num) = collect_constants(unwrap(x))
+function collect_constants(expr::Symbolic{T}) where {T} # For jump system affect / rate 
+    constants = Symbolic[]
+    collect_constants!(constants,expr)
+    return constants
+end
+
 function collect_constant!(constants, var)
     if isconstant(var)
         push!(constants, var)
