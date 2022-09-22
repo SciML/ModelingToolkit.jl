@@ -218,7 +218,8 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     f, dvs, ps
 end
 
-function inputs_to_parameters!(state::TransformationState, check_bound = true)
+function inputs_to_parameters!(state::TransformationState, io)
+    check_bound = io === nothing
     @unpack structure, fullvars, sys = state
     @unpack var_to_diff, graph, solvable_graph = structure
     @assert solvable_graph === nothing
@@ -274,6 +275,17 @@ function inputs_to_parameters!(state::TransformationState, check_bound = true)
     @set! sys.eqs = map(Base.Fix2(substitute, input_to_parameters), equations(sys))
     @set! sys.states = setdiff(states(sys), keys(input_to_parameters))
     ps = parameters(sys)
+
+    if io !== nothing
+        # Change order of new parameters to correspond to user-provided order in argument `inputs`
+        d = Dict{Any, Int}()
+        for (i, inp) in enumerate(new_parameters)
+            d[inp] = i
+        end
+        permutation = [d[i] for i in io.inputs]
+        new_parameters = new_parameters[permutation]
+    end
+
     @set! sys.ps = [ps; new_parameters]
 
     @set! state.sys = sys
