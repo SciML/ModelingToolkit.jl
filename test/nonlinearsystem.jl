@@ -8,6 +8,7 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
 
 # Define some variables
 @parameters t σ ρ β
+@constants h=1
 @variables x y z
 
 function test_nlsys_inference(name, sys, vs, ps)
@@ -18,7 +19,7 @@ function test_nlsys_inference(name, sys, vs, ps)
 end
 
 # Define a nonlinear system
-eqs = [0 ~ σ * (y - x),
+eqs = [0 ~ σ * (y - x) * h,
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z]
 @named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β], defaults = Dict(x => 2))
@@ -59,7 +60,7 @@ f = @eval eval(nlsys_func)
 # Intermediate calculations
 a = y - x
 # Define a nonlinear system
-eqs = [0 ~ σ * a,
+eqs = [0 ~ σ * a * h,
     0 ~ x * (ρ - z) - y,
     0 ~ x * y - β * z]
 @named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
@@ -87,7 +88,7 @@ sol = solve(prob, NewtonRaphson())
 
 @variables u F s a
 eqs1 = [
-    0 ~ σ * (y - x) + F,
+    0 ~ σ * (y - x) * h +  F,
     0 ~ x * (ρ - z) - u,
     0 ~ x * y - β * z,
     0 ~ x + y - z - u,
@@ -98,7 +99,7 @@ lorenz1 = lorenz(:lorenz1)
 @test_throws ArgumentError NonlinearProblem(lorenz1, zeros(5))
 lorenz2 = lorenz(:lorenz2)
 @named connected = NonlinearSystem([s ~ a + lorenz1.x
-                                    lorenz2.y ~ s
+                                    lorenz2.y ~ s * h
                                     lorenz1.F ~ lorenz2.u
                                     lorenz2.F ~ lorenz1.u], [s, a], [],
                                    systems = [lorenz1, lorenz2])
@@ -123,7 +124,7 @@ sol = solve(prob, Rodas5())
 # Define a nonlinear system
 eqs = [0 ~ σ * (y - x),
     0 ~ x * (ρ - z) - y,
-    0 ~ x * y - β * z]
+    0 ~ x * y - β * z * h]
 @named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
 np = NonlinearProblem(ns, [0, 0, 0], [1, 2, 3], jac = true, sparse = true)
 @test calculate_jacobian(ns, sparse = true) isa SparseMatrixCSC
@@ -170,7 +171,7 @@ end
 # observed variable handling
 @variables t x(t) RHS(t)
 @parameters τ
-@named fol = NonlinearSystem([0 ~ (1 - x) / τ], [x], [τ]; observed = [RHS ~ (1 - x) / τ])
+@named fol = NonlinearSystem([0 ~ (1 - x * h) / τ], [x], [τ]; observed = [RHS ~ (1 - x) / τ])
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
 @unpack RHS = fol
@@ -179,7 +180,7 @@ RHS2 = RHS
 # issue #1358
 @variables t
 @variables v1(t) v2(t) i1(t) i2(t)
-eq = [v1 ~ sin(2pi * t)
+eq = [v1 ~ sin(2pi * t * h)
       v1 - v2 ~ i1
       v2 ~ i2
       i1 ~ i2]
@@ -193,7 +194,7 @@ let
     eqs = [u[1] ~ 1,
         u[2] ~ 1,
         u[3] ~ 1,
-        u[4] ~ 1]
+        u[4] ~ h]
 
     sys = NonlinearSystem(eqs, collect(u[1:4]), Num[], defaults = Dict([]), name = :test)
     prob = NonlinearProblem(sys, ones(length(states(sys))))
