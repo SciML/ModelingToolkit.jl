@@ -531,11 +531,10 @@ function collect_constants(eqs::Vector{Matrix{Num}}) # For nonlinear hessian
     return constants
 end
 
-
 collect_constants(x::Num) = collect_constants(unwrap(x))
 function collect_constants(expr::Symbolic{T}) where {T} # For jump system affect / rate 
     constants = Symbolic[]
-    collect_constants!(constants,expr)
+    collect_constants!(constants, expr)
     return constants
 end
 

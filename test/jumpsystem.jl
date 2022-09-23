@@ -3,7 +3,7 @@ MT = ModelingToolkit
 
 # basic MT SIR model with tweaks
 @parameters β γ t
-@constants h=1
+@constants h = 1
 @variables S(t) I(t) R(t)
 rate₁ = β * S * I * h
 affect₁ = [S ~ S - 1 * h, I ~ I + 1]

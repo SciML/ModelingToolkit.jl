@@ -2,7 +2,7 @@ using ModelingToolkit, SparseArrays, Test, Optimization, OptimizationOptimJL,
       OptimizationMOI, Ipopt, AmplNLWriter, Ipopt_jll
 
 @variables x y
-@constants h=1 
+@constants h = 1 
 @parameters a b
 loss = (a - x)^2 + b * (y * h - x^2)^2
 sys1 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)

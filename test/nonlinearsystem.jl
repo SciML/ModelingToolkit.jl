@@ -8,7 +8,7 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
 
 # Define some variables
 @parameters t σ ρ β
-@constants h=1
+@constants h = 1
 @variables x y z
 
 function test_nlsys_inference(name, sys, vs, ps)
@@ -88,7 +88,7 @@ sol = solve(prob, NewtonRaphson())
 
 @variables u F s a
 eqs1 = [
-    0 ~ σ * (y - x) * h +  F,
+    0 ~ σ * (y - x) * h + F,
     0 ~ x * (ρ - z) - u,
     0 ~ x * y - β * z,
     0 ~ x + y - z - u,
@@ -171,7 +171,8 @@ end
 # observed variable handling
 @variables t x(t) RHS(t)
 @parameters τ
-@named fol = NonlinearSystem([0 ~ (1 - x * h) / τ], [x], [τ]; observed = [RHS ~ (1 - x) / τ])
+@named fol = NonlinearSystem([0 ~ (1 - x * h) / τ], [x], [τ];
+                             observed = [RHS ~ (1 - x) / τ])
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
 @unpack RHS = fol

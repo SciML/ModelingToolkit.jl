@@ -392,7 +392,6 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     rep_pars_vals!(obj_expr, pairs_arr)
     @show sys.constraints
     if length(sys.constraints) > 0
-        
         @named cons_sys = NonlinearSystem(sys.constraints, dvs, ps)
         cons = generate_function(cons_sys, checkbounds = checkbounds,
                                  linenumbers = linenumbers,

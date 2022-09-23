@@ -2,7 +2,7 @@ using ModelingToolkit, DiffEqBase, LinearAlgebra
 
 # Define some variables
 @parameters t x
-@constants h=1
+@constants h = 1
 @variables u(..)
 Dt = Differential(t)
 Dxx = Differential(x)^2
