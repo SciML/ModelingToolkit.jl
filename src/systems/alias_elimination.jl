@@ -815,8 +815,8 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                 c = 1
                 push!(reach₌, c => n)
             end
-            if (n = length(diff_aliases)) >= 2
-                as = diff_aliases[n-1]
+            if (n = length(diff_aliases)) >= 1
+                as = diff_aliases[n]
                 for (c, a) in as
                     (da = var_to_diff[a]) === nothing && continue
                     da === r && continue
@@ -827,6 +827,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                 @info fullvars[r] => c * fullvars[a]
             end
             if r === nothing
+                @warn "hi"
                 # TODO: updated_diff_vars check
                 isempty(reach₌) && break
                 dr = first(reach₌)
@@ -834,6 +835,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                 push!(updated_diff_vars, prev_r)
                 prev_r = dr
             else
+                @warn "" fullvars[r]
                 prev_r = r
                 r = var_to_diff[r]
             end
@@ -873,6 +875,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         dag[k]
     end
     @show dag
+    @show fullvars[updated_diff_vars]
 
     #=
     processed = falses(nvars)
@@ -1032,6 +1035,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         mm = reduce!(copy(echelon_mm), ag)
         @warn "wow" mm
     end
+    @info "" fullvars
     for (v, (c, a)) in ag
         a = iszero(a) ? 0 : c * fullvars[a]
         @info "ag" fullvars[v] => a
