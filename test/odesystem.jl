@@ -228,10 +228,12 @@ p3 = [k₁ => 0.05,
       k₃ => 1.1e4]
 prob_pmap = remake(prob14; p = p3)
 prob_dpmap = remake(prob14; p = Dict(p3))
-for prob in [prob_pmap, prob_dpmap]
-    @test Set(Num.(parameters(sys)) .=> prob.p) == Set([k₁ => 0.05, k₂ => 2e7, k₃ => 1.1e4])
-    @test Set(Num.(states(sys)) .=> prob.u0) == Set([y₁ => 1, y₂ => 0, y₃ => 0])
-end
+
+@test Set(Num.(parameters(sys)) .=> prob_pmap.p) == Set([k₁ => 0.05, k₂ => 2e7, k₃ => 1.1e4])
+@test Set(Num.(states(sys)) .=> prob_pmap.u0) == Set([y₁ => 1, y₂ => 0, y₃ => 0])
+
+@test solve(prob_pmap) ≈ solve(prob_dpmap) atol = 1e-5
+
 # test kwargs
 prob2 = ODEProblem(sys, u0, tspan, p, jac = true)
 prob3 = ODEProblem(sys, u0, tspan, p, jac = true, sparse = true)
