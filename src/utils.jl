@@ -513,13 +513,24 @@ function collect_constants(eqs::Vector{Equation}) #For get_substitutions_and_sol
     return constants
 end
 
-function collect_constants(eqs::AbstractArray{T}) where {T} # For generate_tgrad / generate_jacobian / generate_difference_cb
+function collect_constants(eqs::AbstractArray{T}) where {T <: Union{Num, Symbolic}} # For generate_tgrad / generate_jacobian / generate_difference_cb
     constants = T[]
     for eq in eqs
         collect_constants!(constants, unwrap(eq))
     end
     return constants
 end
+
+function collect_constants(eqs::Vector{Matrix{Num}}) # For nonlinear hessian
+    constants = Num[]
+    for m in eqs
+        for n in m
+            collect_constants!(constants, unwrap(n))
+        end
+    end
+    return constants
+end
+
 
 collect_constants(x::Num) = collect_constants(unwrap(x))
 function collect_constants(expr::Symbolic{T}) where {T} # For jump system affect / rate 

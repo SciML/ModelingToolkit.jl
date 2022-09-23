@@ -100,7 +100,8 @@ end
 function generate_gradient(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
                            kwargs...)
     grad = calculate_gradient(sys)
-    return build_function(grad, vs, ps;
+    pre = get_preprocess_constants(grad)
+    return build_function(grad, vs, ps; postprocess_fbody = pre,
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
@@ -115,13 +116,20 @@ function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parame
     else
         hess = calculate_hessian(sys)
     end
-    return build_function(hess, vs, ps;
+    pre = get_preprocess_constants(hess)
+    return build_function(hess, vs, ps; postprocess_fbody = pre,
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
 function generate_function(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
                            kwargs...)
-    return build_function(equations(sys), vs, ps;
+    eqs = equations(sys)
+    consts = collect_constants(eqs)
+    if !isempty(consts) # The SymbolicUtils._build_function method of this case doesn't support postprocess_fbody
+        csubs = Dict(c => getdefault(c) for c in consts)
+        eqs = substitute(eqs, csubs)
+    end
+    return build_function(eqs, vs, ps;
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
@@ -186,7 +194,6 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.OptimizationProblem(sys::OptimizationSystem, args...; kwargs...)
     DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem, args...; kwargs...)
 end
-
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              parammap = DiffEqBase.NullParameters();
                                              lb = nothing, ub = nothing,
@@ -211,8 +218,13 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
 
     f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
                           expression = Val{false})
-
-    obj_expr = toexpr(equations(sys))
+    eqs = equations(sys)
+    cs = collect_constants(eqs)
+    if !isempty(cs)
+        cmap = map(x -> x => getdefault(x), cs)
+        eqs = substitute(eqs, cmap)
+    end
+    obj_expr = toexpr(eqs)
     pairs_arr = p isa SciMLBase.NullParameters ?
                 [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)] :
                 [
@@ -254,8 +266,13 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                  expression = Val{false})[2]
         cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
         cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
-
-        cons_expr = toexpr(equations(cons_sys))
+        eqs = equations(cons_sys)
+        cs = collect_constants(eqs)
+        if !isempty(cs)
+            cmap = map(x -> x => getdefault(x), cs)
+            eqs = map(x -> x.lhs ~ substitute(x.rhs, cmap), eqs)
+        end
+        cons_expr = toexpr(eqs)
         rep_pars_vals!.(cons_expr, Ref(pairs_arr))
 
         if sparse
@@ -265,7 +282,6 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             cons_jac_prototype = nothing
             cons_hess_prototype = nothing
         end
-
         _f = DiffEqBase.OptimizationFunction{iip}(f,
                                                   sys = sys,
                                                   syms = nameof.(states(sys)),
@@ -360,7 +376,13 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     lb = varmap_to_vars(lb, dvs; check = false, tofloat = false, use_union)
     ub = varmap_to_vars(ub, dvs; check = false, tofloat = false, use_union)
 
-    obj_expr = toexpr(equations(sys))
+    eqs = equations(sys)
+    cs = collect_constants(eqs)
+    if !isempty(cs)
+        cmap = map(x -> x => getdefault(x), cs)
+        eqs = substitute(eqs, cmap)
+    end
+    obj_expr = toexpr(eqs)
     pairs_arr = p isa SciMLBase.NullParameters ?
                 [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)] :
                 [
@@ -368,8 +390,9 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         [Symbol(_p) => p[i] for (i, _p) in enumerate(ps)]...,
     ]
     rep_pars_vals!(obj_expr, pairs_arr)
-
+    @show sys.constraints
     if length(sys.constraints) > 0
+        
         @named cons_sys = NonlinearSystem(sys.constraints, dvs, ps)
         cons = generate_function(cons_sys, checkbounds = checkbounds,
                                  linenumbers = linenumbers,
@@ -378,7 +401,13 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
 
         cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 
-        cons_expr = toexpr(equations(cons_sys))
+        eqs = equations(cons_sys)
+        cs = collect_constants(eqs)
+        if !isempty(cs)
+            cmap = map(x -> x => getdefault(x), cs)
+            eqs = map(x -> x.lhs ~ substitute(x.rhs, cmap), eqs)
+        end
+        cons_expr = toexpr(eqs)
         rep_pars_vals!.(cons_expr, Ref(pairs_arr))
 
         if sparse
