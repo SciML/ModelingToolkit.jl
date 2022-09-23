@@ -21,6 +21,7 @@ struct Stream <: AbstractConnectType end   # special stream connector
 
 Determine if variable `x` is of kind `m`.
 """
+isvarkind(m, x::Num) = isvarkind(m, value(x))
 function isvarkind(m, x)
     p = getparent(x, nothing)
     p === nothing || (x = p)
