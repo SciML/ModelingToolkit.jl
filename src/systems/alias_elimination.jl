@@ -298,12 +298,7 @@ function tograph(ag::AliasGraph, var_to_diff::DiffGraph)
         add_edge!(g, a, v)
     end
     transitiveclosure!(g)
-    zero_vars_set = BitSet(zero_vars)
-    for v in zero_vars
-        for a in outneighbors(g, v)
-            push!(zero_vars_set, a)
-        end
-    end
+    #=
     # Compute the largest transitive closure that doesn't include any diff
     # edges.
     og = g
@@ -320,6 +315,8 @@ function tograph(ag::AliasGraph, var_to_diff::DiffGraph)
         end
     end
     g = newg
+    =#
+    eqg = copy(g)
 
     c = "green"
     edge_styles = Dict{Tuple{Int, Int}, String}()
@@ -329,7 +326,7 @@ function tograph(ag::AliasGraph, var_to_diff::DiffGraph)
         add_edge!(g, v, dv)
         add_edge!(g, dv, v)
     end
-    g, zero_vars_set, edge_styles
+    g, eqg, zero_vars, edge_styles
 end
 
 using Graphs.Experimental.Traversals
@@ -794,7 +791,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     updated_diff_vars = Int[]
     diff_to_var = invview(var_to_diff)
     processed = falses(nvars)
-    g, zero_vars_set = tograph(ag, var_to_diff)
+    g, eqg, zero_vars = tograph(ag, var_to_diff)
     dls = DiffLevelState(g, var_to_diff)
     is_diff_edge = let var_to_diff = var_to_diff
         (v, w) -> var_to_diff[v] == w || var_to_diff[w] == v
@@ -810,6 +807,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                     callback = Base.Fix1(push!, level_to_var))
         nlevels = length(level_to_var)
         prev_r = -1
+        stem = Int[]
         for _ in 1:10_000 # just to make sure that we don't stuck in an infinite loop
             reach₌ = Pair{Int, Int}[]
             r === nothing || for n in neighbors(g, r)
@@ -841,17 +839,27 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             end
             for (c, v) in reach₌
                 v == prev_r && continue
+                add_edge!(eqg, v, prev_r)
+                push!(stem, prev_r)
                 dag[v] = c => prev_r
             end
             push!(diff_aliases, reach₌)
         end
-        for v in zero_vars_set
-            dag[v] = 0
+        @info "" fullvars[stem]
+        transitiveclosure!(eqg)
+        for i in 1:length(stem) - 1
+            r, dr = stem[i], stem[i+1]
+            if has_edge(eqg, r, dr)
+                c = 1
+                dag[dr] = c => r
+            end
+        end
+        for v in zero_vars, a in outneighbors(g, v)
+            dag[a] = 0
         end
         @show nlevels
         display(diff_aliases)
         @assert length(diff_aliases) == nlevels
-        @show zero_vars_set
 
         # clean up
         for v in dls.visited
@@ -860,6 +868,9 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         end
         empty!(dls.visited)
         empty!(diff_aliases)
+    end
+    for k in keys(dag)
+        dag[k]
     end
     @show dag
 
@@ -1010,7 +1021,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         push!(removed_aliases, a)
     end
     for (v, (c, a)) in ag
-        (processed[v] || processed[a]) && continue
+        (processed[v] || (!iszero(a) && processed[a])) && continue
         v in removed_aliases && continue
         freshag[v] = c => a
     end

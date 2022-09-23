@@ -148,6 +148,7 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
 end
 
 function dummy_derivative_graph!(state::TransformationState, jac = nothing; kwargs...)
+    Main._state[] = state
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     var_eq_matching = complete(pantelides!(state))
     complete!(state.structure)
@@ -191,6 +192,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         iszero(maxlevel) && continue
 
         rank_matching = Matching(nvars)
+        isfirst = true
         for _ in maxlevel:-1:1
             eqs = filter(eq -> diff_to_eq[eq] !== nothing, eqs)
             nrows = length(eqs)
@@ -205,6 +207,10 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             # state selection.)
             #
             # 3. If the Jacobian is a polynomial matrix, use Gröbner basis (?)
+            if isfirst
+                vars = sort(vars, by=i->occursin("A", string(Main._state[].fullvars[i])))
+            end
+            isfirst = false
             if jac !== nothing && (_J = jac(eqs, vars); all(x -> unwrap(x) isa Integer, _J))
                 J = Int.(unwrap.(_J))
                 N = ModelingToolkit.nullspace(J; col_order) # modifies col_order
@@ -229,6 +235,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             if rank != nrows
                 @warn "The DAE system is structurally singular!"
             end
+            @info Main._state[].fullvars[vars]
 
             # prepare the next iteration
             eqs = map(eq -> diff_to_eq[eq], eqs)
