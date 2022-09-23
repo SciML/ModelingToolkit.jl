@@ -66,6 +66,12 @@ SymbolicUtils.promote_symtype(::typeof(instream), _) = Real
 
 isconnector(s::AbstractSystem) = has_connector_type(s) && get_connector_type(s) !== nothing
 
+function namespace_expr(c::Connection, sys, n = nameof(sys))
+    c.systems === nothing && return c
+    systems = renamespace.(Ref(sys), c.systems)
+    Connection(systems)
+end
+
 function flowvar(sys::AbstractSystem)
     sts = get_states(sys)
     for s in sts
