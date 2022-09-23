@@ -23,9 +23,9 @@ julia> Δ = Shift(t)
 """
 struct Shift <: Operator
     """Fixed Shift"""
-    t
+    t::Any
     steps::Int
-    Shift(t, steps=1) = new(value(t), steps)
+    Shift(t, steps = 1) = new(value(t), steps)
 end
 function (D::Shift)(x, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
@@ -53,11 +53,10 @@ Base.show(io::IO, D::Shift) = print(io, "Shift(", D.t, ", ", D.steps, ")")
 Base.:(==)(D1::Shift, D2::Shift) = isequal(D1.t, D2.t) && isequal(D1.steps, D2.steps)
 Base.hash(D::Shift, u::UInt) = hash(D.steps, hash(D.t, xor(u, 0x055640d6d952f101)))
 
-Base.:^(D::Shift, n::Integer) = Shift(D.t, D.steps*n)
-Base.literal_pow(f::typeof(^), D::Shift, ::Val{n}) where n = Shift(D.t, D.steps*n)
+Base.:^(D::Shift, n::Integer) = Shift(D.t, D.steps * n)
+Base.literal_pow(f::typeof(^), D::Shift, ::Val{n}) where {n} = Shift(D.t, D.steps * n)
 
 hasshift(eq::Equation) = hasshift(eq.lhs) || hasshift(eq.rhs)
-
 
 """
     hasshift(O)
@@ -65,7 +64,6 @@ hasshift(eq::Equation) = hasshift(eq.lhs) || hasshift(eq.rhs)
 Returns true if the expression or equation `O` contains [`Shift`](@ref) terms.
 """
 hasshift(O) = recursive_hasoperator(Shift, O)
-
 
 # Sample
 
@@ -95,7 +93,7 @@ julia> Δ = Sample(t, 0.01)
 ```
 """
 struct Sample <: Operator
-    clock
+    clock::Any
     Sample(clock::TimeDomain = InferredDiscrete()) = new(clock)
     Sample(t, dt::Real) = new(Clock(t, dt))
 end
@@ -115,7 +113,6 @@ Base.hash(D::Sample, u::UInt) = hash(D.clock, xor(u, 0x055640d6d952f101))
 Returns true if the expression or equation `O` contains [`Sample`](@ref) terms.
 """
 hassample(O) = recursive_hasoperator(Sample, O)
-
 
 # Hold
 
@@ -166,10 +163,9 @@ Shift(t, 1)(x(t))
 struct ShiftIndex
     clock::TimeDomain
     steps::Int
-    ShiftIndex(clock::TimeDomain=Inferred(), steps::Int=0) = new(clock, steps)
-    ShiftIndex(t::Num, dt::Real, steps::Int=0) = new(Clock(t, dt), steps)
+    ShiftIndex(clock::TimeDomain = Inferred(), steps::Int = 0) = new(clock, steps)
+    ShiftIndex(t::Num, dt::Real, steps::Int = 0) = new(Clock(t, dt), steps)
 end
-
 
 function (xn::Num)(k::ShiftIndex)
     @unpack clock, steps = k
@@ -200,15 +196,12 @@ end
 Base.:+(k::ShiftIndex, i::Int) = ShiftIndex(k.clock, k.steps + i)
 Base.:-(k::ShiftIndex, i::Int) = k + (-i)
 
-
-
-
 """
     input_timedomain(op::Operator)
 
 Return the time-domain type (`Continuous()` or `Discrete()`) that `op` operates on. 
 """
-function input_timedomain(s::Shift, arg=nothing)
+function input_timedomain(s::Shift, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
@@ -220,26 +213,26 @@ end
 
 Return the time-domain type (`Continuous()` or `Discrete()`) that `op` results in. 
 """
-function output_timedomain(s::Shift, arg=nothing)
+function output_timedomain(s::Shift, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
     InferredDiscrete()
 end
 
-input_timedomain(::Sample, arg=nothing) = Continuous()
-output_timedomain(s::Sample, arg=nothing) = s.clock
+input_timedomain(::Sample, arg = nothing) = Continuous()
+output_timedomain(s::Sample, arg = nothing) = s.clock
 
-function input_timedomain(h::Hold, arg=nothing)
+function input_timedomain(h::Hold, arg = nothing)
     if has_time_domain(arg)
         return get_time_domain(arg)
     end
     InferredDiscrete() # the Hold accepts any discrete
 end
-output_timedomain(::Hold, arg=nothing) = Continuous()
+output_timedomain(::Hold, arg = nothing) = Continuous()
 
-sampletime(op::Sample, arg=nothing) = sampletime(op.clock)
-sampletime(op::ShiftIndex, arg=nothing) = sampletime(op.clock)
+sampletime(op::Sample, arg = nothing) = sampletime(op.clock)
+sampletime(op::ShiftIndex, arg = nothing) = sampletime(op.clock)
 
 changes_domain(op) = isoperator(op, Union{Sample, Hold})
 

@@ -5,10 +5,8 @@ using Test
 
 @variables t x
 
-
-op = Difference(t; dt=0.01)
+op = Difference(t; dt = 0.01)
 @test sampletime(op) == 0.01
-
 
 @test has_continuous_domain(op(x) ~ x)
 @test has_continuous_domain(x ~ op(x))
@@ -23,17 +21,13 @@ op = Difference(t; dt=0.01)
 @test !is_hybrid_domain(op(x) ~ x)
 @test !is_hybrid_domain(x ~ op(x))
 
-
 @test is_continuous_domain(op(x) ~ x)
 @test !is_discrete_domain(op(x) ~ x)
 
-
-
 ## Shift
 
-op = Shift(t; dt=0.01)
+op = Shift(t; dt = 0.01)
 @test sampletime(op) == 0.01
-
 
 @test !has_continuous_domain(op(x) ~ x)
 @test !has_continuous_domain(x ~ op(x))
@@ -49,10 +43,9 @@ op = Shift(t; dt=0.01)
 @test !is_continuous_domain(op(x) ~ x)
 @test is_discrete_domain(op(x) ~ x)
 
-
 ## Sample
 
-op = Sample(t; dt=0.01)
+op = Sample(t; dt = 0.01)
 @test sampletime(op) == 0.01
 
 @test has_continuous_domain(op(x) ~ x)
@@ -66,7 +59,6 @@ op = Sample(t; dt=0.01)
 
 @test !is_continuous_domain(op(x) ~ x)
 @test !is_discrete_domain(op(x) ~ x)
-
 
 ## Hold
 

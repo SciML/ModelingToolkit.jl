@@ -7,7 +7,6 @@ abstract type AbstractDiscrete <: TimeDomain end
 
 Base.Broadcast.broadcastable(d::TimeDomain) = Ref(d)
 
-
 struct Inferred <: TimeDomain end
 struct InferredDiscrete <: AbstractDiscrete end
 struct Continuous <: TimeDomain end
@@ -33,7 +32,6 @@ Determine if variable `x` is a discrete-time variable.
 is_discrete_domain(x::Sym) = getmetadata(x, TimeDomain, false) isa Discrete
 # is_discrete_domain(x::Sym) = isvarkind(Discrete, x)
 
-
 has_continuous_domain(x::Sym) = is_continuous_domain(x)
 has_discrete_domain(x::Sym) = is_discrete_domain(x)
 
@@ -53,14 +51,10 @@ end
 has_time_domain(x::Num) = has_time_domain(value(x))
 has_time_domain(x) = false
 
-
-
-
 for op in [Differential, Difference]
-    @eval input_timedomain(::$op, arg=nothing) = Continuous()
-    @eval output_timedomain(::$op, arg=nothing) = Continuous()
+    @eval input_timedomain(::$op, arg = nothing) = Continuous()
+    @eval output_timedomain(::$op, arg = nothing) = Continuous()
 end
-
 
 """
     sampletime(op::Operator)
@@ -84,7 +78,6 @@ true if `x` contains continuous signals (`x` may or may not contain discrete-dom
 See also [`is_continuous_domain`](@ref)
 """
 has_continuous_domain(x) = hasderiv(x) || hasdiff(x) || hassample(x) || hashold(x)
-
 
 """
     is_hybrid_domain(x)

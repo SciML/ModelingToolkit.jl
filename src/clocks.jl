@@ -9,18 +9,16 @@ In particular
 > Correspondingly, variables u and y in y = sample(uc), y = subSample(u), y = superSample(u), y = shiftSample(u), y = backSample(u), y = previous(u), are in a clocked partition. Equations in a clocked when clause are also in a clocked partition. Other partitions where none of the variables in the partition are associated with any of the operators above have an unspecified partition kind and are considered continuous-time partitions.
 >Since sample(u) returns the left limit of u, and the left limit of u is a known value, all inputs to a base-clock partition are treated as known during sorting.
 
-
 =#
 using Symbolics: value
 using SymbolicUtils.Rewriters: Postwalk, Prewalk, PassThrough, Empty
 import SymbolicUtils.Rewriters
 
 struct ClockInferenceException <: Exception
-    msg
+    msg::Any
 end
 
 abstract type AbstractClock <: AbstractDiscrete end
-
 
 """
     Clock <: AbstractClock
@@ -31,10 +29,10 @@ If `dt` is left unspecified, it will be inferred (if possible).
 """
 struct Clock <: AbstractClock
     "Independent variable"
-    t
+    t::Any
     "Period"
-    dt
-    Clock(t, dt=nothing) = new(value(t), dt)
+    dt::Any
+    Clock(t, dt = nothing) = new(value(t), dt)
 end
 
 sampletime(c::AbstractClock) = c.dt
@@ -49,7 +47,7 @@ struct AbortablePrewalk{C, F, CO}
     cond::CO
 end
 
-function AbortablePrewalk(rw; similarterm=similarterm, cond)
+function AbortablePrewalk(rw; similarterm = similarterm, cond)
     AbortablePrewalk{typeof(rw), typeof(similarterm), typeof(cond)}(rw, similarterm, cond)
 end
 
@@ -59,7 +57,8 @@ function (p::AbortablePrewalk{C, F})(x) where {C, F}
         x = p.rw(x)
         p.cond(x) && return x
         if istree(x)
-            x = p.similarterm(x, operation(x), map(PassThrough(p), Rewriters.unsorted_arguments(x)))
+            x = p.similarterm(x, operation(x),
+                              map(PassThrough(p), Rewriters.unsorted_arguments(x)))
             p.cond(x) && return x
         end
         return x
@@ -75,14 +74,14 @@ struct ClockPartitioning
     "A vector of TimeDomain of the same length as the number of equations"
     eqmap::Vector{TimeDomain}
     "A vector of all variables in the inferred equation set"
-    vars
+    vars::Any
     "A dict that maps variables to TimeDomain"
     varmap::Dict
 end
 struct ClockInferenceResult
     clockpart::ClockPartitioning
     "A Vector{Vector{Int}}. incidences[i] points to the unknown variables, as well as variables x in Differential(x), and Shift(x), which lexically appear in eqs[i] except as first argument of base-clock conversion operators: Sample() and Hold(). Example, if j ∈ incidences[eq_ind], then allvars[j] appears in eqs[eq_ind]"
-    incidences
+    incidences::Any
     "A vector of vectors with equation indices that form each connected component"
     ccs::Vector{Vector{Int}}
     bg::BipartiteGraph
@@ -92,8 +91,6 @@ function Base.getproperty(cir::ClockInferenceResult, s::Symbol)
     s ∈ fieldnames(typeof(cir)) && return getfield(cir, s)
     getproperty(getfield(cir, :clockpart), s)
 end
-
-
 
 # The rules are, `nothing` loses to everything, Inferred loses to everything else, then InferredDiscrete and so on
 function merge_inferred(x, y)
@@ -107,12 +104,10 @@ function merge_inferred(x, y)
     x
 end
 
-
 # nothing cases
 merge_domains(::Nothing, ::Nothing, args...) = nothing
 merge_domains(x::Any, ::Nothing, args...) = x
 merge_domains(::Nothing, x::Any, args...) = x
-
 
 """
     merge_domains(above::A, below::B, ex)
@@ -138,7 +133,6 @@ function merge_domains(above::A, below::B, ex) where {A <: TimeDomain, B <: Time
 
     throw(ClockInferenceException(emsg))
 end
-
 
 """
     preprocess_hybrid_equations(eqs, states)
@@ -170,8 +164,8 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation}, original_var
     # QUESTION: we now process each clock partition independently. We possibly want to perform additional simplification on clock partitions independently?
     # TODO: If we want to handle discrete and continuous states separately, we definitely want to separate them
     new_eqs_and_vars = map(clocks) do clock
-        cp_inds  = findall(==(clock), eqmap) 
-        cp_eqs   = eqs[cp_inds] # get all equations that belong to this particular clock partition
+        cp_inds = findall(==(clock), eqmap)
+        cp_eqs = eqs[cp_inds] # get all equations that belong to this particular clock partition
         clock isa Continuous && return (cp_eqs, []) # only work on discrete eqs
         alg_inds = [!isoperator(eq.lhs, Operator) for eq in cp_eqs] # only expand shifts for non-algeraic equations
         new_eqs, new_vars = shift_order_lowering(cp_eqs[.!alg_inds], clock)
@@ -179,25 +173,24 @@ function preprocess_hybrid_equations(eqs::AbstractVector{Equation}, original_var
             varmap[nv] = clock # add the new variables to the varmap
         end
         @assert !any(hassample, new_eqs)
-        new_eqs  = discrete2continuous_operators.(new_eqs, clock)
+        new_eqs = discrete2continuous_operators.(new_eqs, clock)
         # new_eqs = reduce(vcat, new_eqs)
         @assert !any(hassample, new_eqs)
-        new_eqs  = [new_eqs; cp_eqs[alg_inds]]
-        
+        new_eqs = [new_eqs; cp_eqs[alg_inds]]
+
         new_eqs, new_vars
     end
 
     new_eqs, new_vars = first.(new_eqs_and_vars), last.(new_eqs_and_vars)
-    eqmap = reduce(vcat, [fill(c, length(eqs)) for (c,eqs) in zip(clocks, new_eqs)]) # recreate shuffled eqmap
+    eqmap = reduce(vcat, [fill(c, length(eqs)) for (c, eqs) in zip(clocks, new_eqs)]) # recreate shuffled eqmap
     new_eqs = reduce(vcat, new_eqs)
     new_vars = reduce(vcat, new_vars)
     # new_eqs, eqmap, removed_vars = substitute_algebraic_eqs(new_eqs, eqmap) # broken
     removed_vars = []
     # sort equations so that all operator equations come first
-    perm = sortperm(new_eqs, by = eq->!isoperator(eq.lhs, Operator))
+    perm = sortperm(new_eqs, by = eq -> !isoperator(eq.lhs, Operator))
     new_eqs = new_eqs[perm]
     eqmap = eqmap[perm]
-
 
     allvars = [setdiff(original_vars, removed_vars); new_vars]
     part = ClockPartitioning(new_eqs, clocks, eqmap, allvars, varmap)
@@ -231,24 +224,23 @@ Equations have a "floating" shift index, meaning that a shift equation is equiva
 function normalize_shifts(eq0::Equation, varmap)
     eq = insert_zero_shifts(eq0, varmap)
     is_discrete_algebraic(eq) && !hassample(eq) && return eq0
-    ops = collect(collect_applied_operators(eq, Shift)) 
+    ops = collect(collect_applied_operators(eq, Shift))
 
-    maxshift, maxind = findmax(op->op.f.steps, ops)
-    minshift = minimum(op->op.f.steps, ops)
+    maxshift, maxind = findmax(op -> op.f.steps, ops)
+    minshift = minimum(op -> op.f.steps, ops)
     maxshift == minshift == 0 && return strip_operator(eq, Sample) # This implies an algebraic equation without delay
     newops = map(ops) do op
         s = op.f
-        Shift(s.t, s.steps-maxshift+1)(op.arguments[1]) # arguments[1] is the shifted variable
+        Shift(s.t, s.steps - maxshift + 1)(op.arguments[1]) # arguments[1] is the shifted variable
     end
     subs = Dict(ops .=> newops)
     eq = substitute(eq, subs) # eq now has normalized shifts
     highest_order_term = ops[maxind].arguments[1]
     @variables __placeholder__
-    eq = substitute(eq, Dict(newops[maxind]=>__placeholder__)) # solve_for can not solve for general terms, so we replace temporarily
+    eq = substitute(eq, Dict(newops[maxind] => __placeholder__)) # solve_for can not solve for general terms, so we replace temporarily
     rhs = solve_for(eq, __placeholder__)
     strip_operator(newops[maxind] ~ rhs, Sample)
 end
-
 
 """
     insert_zero_shifts(eq)
@@ -268,8 +260,8 @@ function insert_zero_shifts(eq, varmap)
     end
     discrete_vars = Set(discrete_vars)
     predicate = var -> var ∈ discrete_vars
-    r1 = @rule ~var::predicate => Shift(t,0)(~var, true)
-    r = AbortablePrewalk(PassThrough(r1), cond=isoperator(Operator)) # We should not insert a shift inside another operator
+    r1 = @rule ~var::predicate => Shift(t, 0)(~var, true)
+    r = AbortablePrewalk(PassThrough(r1), cond = isoperator(Operator)) # We should not insert a shift inside another operator
     r(eq.lhs) ~ r(eq.rhs)
 end
 
@@ -295,31 +287,32 @@ function shift_order_lowering(eqs::Vector{Equation}, clock::AbstractDiscrete)
     shift(x) = Shift(t)(x)
     vars = collect(union(collect_operator_variables.(eqs, Ref(Shift))...))
     # eqs = insert_zero_shifts(eqs, vars)
-    ops  = collect(union(collect_applied_operators.(eqs, Ref(Shift))...))
-    
+    ops = collect(union(collect_applied_operators.(eqs, Ref(Shift))...))
+
     new_eqs = Equation[]
     new_vars = []
     # for each variable that appears shifted, find the maximum (negative) shift, introduce new states and substitute shifted occurances by new variables
-    for var in vars       
+    for var in vars
         varops = filter(ops) do op # extract shifted var terms 
             isequal(arguments(op)[1], var)
         end
-        maximum(op->op.f.steps, varops) <= 1 || throw(ArgumentError("Shift equations must be normalized to have shifts <= 1, see normalize_shifts(eq)"))
-        n_new_states = -minimum(op->op.f.steps, varops) # number of new states required is maximum negative shift
+        maximum(op -> op.f.steps, varops) <= 1 ||
+            throw(ArgumentError("Shift equations must be normalized to have shifts <= 1, see normalize_shifts(eq)"))
+        n_new_states = -minimum(op -> op.f.steps, varops) # number of new states required is maximum negative shift
         n_new_states < 1 && continue
-        varname = Symbol(string(value(var).f)*"_delay")
-        new_eq_vars = @variables $varname[1:n_new_states](t) [timedomain=clock]
+        varname = Symbol(string(value(var).f) * "_delay")
+        new_eq_vars = @variables $varname[1:n_new_states](t) [timedomain = clock]
         new_eqvars = collect(new_eq_vars[]) # @variables returns a vector wrapper
-        new_vareqs = map(1:n_new_states-1) do i
-            shift(new_eqvars[i+1]) ~ new_eqvars[i]
+        new_vareqs = map(1:(n_new_states - 1)) do i
+            shift(new_eqvars[i + 1]) ~ new_eqvars[i]
         end
         pushfirst!(new_vareqs, shift(new_eqvars[1]) ~ var)
-        sort!(varops, by=op->operation(op).steps, rev=true) # highest shift first
-        startind = findfirst(op->operation(op).steps <= -1, varops) # we should not replace shifts 1 and 0
+        sort!(varops, by = op -> operation(op).steps, rev = true) # highest shift first
+        startind = findfirst(op -> operation(op).steps <= -1, varops) # we should not replace shifts 1 and 0
 
         subs = Dict(varops[startind:end] .=> new_eqvars)
         eqs = substitute.(eqs, Ref(subs))
-        
+
         append!(new_eqs, new_vareqs)
         append!(new_vars, new_eqvars)
     end
@@ -348,8 +341,7 @@ function strip_operator(eq::Equation, operator)
     eq = substitute(eq, subs)
 end
 
-strip_operator(ex, operator) = strip_operator(ex~0, operator).lhs
-
+strip_operator(ex, operator) = strip_operator(ex ~ 0, operator).lhs
 
 """
     is_discrete_algebraic(eq)
@@ -360,7 +352,6 @@ function is_discrete_algebraic(eq)
     t = eq.lhs
     t isa Term && operation(t) isa Shift && operation(t).steps == 0
 end
-
 
 """
     discrete2continuous_operators(eq, clock)
@@ -374,9 +365,9 @@ function discrete2continuous_operators(eq, clock)
     var = arguments(term)[1]
     @assert !hassample(eq)
     if is_discrete_algebraic(eq)
-        deq = DiscreteUpdate(t; dt=dt)(var) ~ strip_operator(eq.rhs, Shift)
+        deq = DiscreteUpdate(t; dt = dt)(var) ~ strip_operator(eq.rhs, Shift)
     else
-        deq = DiscreteUpdate(t; dt=dt)(var) ~ eq.rhs
+        deq = DiscreteUpdate(t; dt = dt)(var) ~ eq.rhs
     end
     # [deq; Differential(t)(var) ~ 0] # get segfault if simulating with D(x) ~ 0 equaiton added
     deq
@@ -400,13 +391,12 @@ function substitute_algebraic_eqs(eqs, eqmap)
                 eqs[i] = 0 ~ 0
             end
         end
-        keep_inds = map(eq->!(isequal(eq.rhs, 0) && isequal(eq.lhs, 0)), eqs)
+        keep_inds = map(eq -> !(isequal(eq.rhs, 0) && isequal(eq.lhs, 0)), eqs)
         eqs = eqs[keep_inds] # remove empty equations
         eqmap = eqmap[keep_inds]
     end
     eqs, eqmap, removed_states
 end
-
 
 """
     hybrid_simplify(sys::ODESystem)
@@ -414,7 +404,7 @@ end
 Simplification of hybrid systems (containing both discrete and continuous states).
 The equations of the returned system will not contain any discrete operators, and shift equations have been rewritten into [`DiscreteUpdate`](@ref) equations. This simplification pass may introduce new variables and equations for equations with relative shifts larger than 1, corresponding to [`ode_order_lowering`](@ref) for continuous systems.
 """
-function hybrid_simplify(sys::ODESystem; param=false)
+function hybrid_simplify(sys::ODESystem; param = false)
     part = preprocess_hybrid_equations(equations(sys), states(sys))
     # @set! sys.eqs = new_eqs # this only modifies the equations of the outer system, not inner systems
     # @set! sys.states = [states(sys); new_vars]
@@ -423,13 +413,15 @@ function hybrid_simplify(sys::ODESystem; param=false)
         part = discrete_var2param(part)
         new_params = filter(isparameter, part.vars)
         new_states = filter(!isparameter, part.vars)
-        return ODESystem(part.eqs, get_iv(sys), new_states, [new_params; parameters(sys)], name=sys.name, clock_partitioning=part)
+        return ODESystem(part.eqs, get_iv(sys), new_states, [new_params; parameters(sys)],
+                         name = sys.name, clock_partitioning = part)
     else
-        return ODESystem(part.eqs, get_iv(sys), part.vars, parameters(sys), name=sys.name, clock_partitioning=part)
+        return ODESystem(part.eqs, get_iv(sys), part.vars, parameters(sys), name = sys.name,
+                         clock_partitioning = part)
     end
 end
 
-function get_eq_domain(x::Num, domain_above=Inferred())
+function get_eq_domain(x::Num, domain_above = Inferred())
     v = value(x)
     if v isa Term && operation(v) isa Sym
         return merge_domains(domain_above, get_time_domain(v), x)
@@ -443,13 +435,13 @@ end
 
 Determine the time-domain (clock inference) of an expression or equation `e`.
 """
-function get_eq_domain(eq, domain_above=Inferred())
+function get_eq_domain(eq, domain_above = Inferred())
     ovars = collect_applied_operators(eq, Operator)
     for op in ovars
         while isoperator(op, Operator) # handle nested operators
             odom = output_timedomain(op)
             domain_above = merge_domains(domain_above, odom, eq)
-            changes_domain(op) && break 
+            changes_domain(op) && break
             op = arguments(op)[1] # unwrap operator in case there are wrapped operators with a more specific output
         end
         if op isa Num
@@ -472,14 +464,14 @@ function clock_inference(eqs::Vector{Equation}, domain_above::TimeDomain = Infer
     varmap = Dict{Any, Any}()
     eq2dom = Vector{Any}(undef, length(eqs)) .= domain_above
 
-    innervars = vars(eqs; op=Nothing) |> collect
+    innervars = vars(eqs; op = Nothing) |> collect
     filter!(istree, innervars) # only keep variables of time
     varinds = Dict(innervars .=> 1:length(innervars))
 
     # Build graph
     incidences = [Int[] for _ in eachindex(eqs)]
     for (eqind, eq) in pairs(eqs)
-        eqvars = vars(eq; op=Operator)
+        eqvars = vars(eq; op = Operator)
         for var in eqvars
             changes_domain(var) && continue # Sample and Hold change the time domain
             while isoperator(var, Operator) # handle nested operators
@@ -492,7 +484,7 @@ function clock_inference(eqs::Vector{Equation}, domain_above::TimeDomain = Infer
     end
 
     # Infer variable and equation time domains
-    allvars = vars(eqs; op=Operator) |> collect
+    allvars = vars(eqs; op = Operator) |> collect
     for var in allvars
         if has_time_domain(var)
             varmap[var] = get_time_domain(var)
@@ -539,26 +531,24 @@ function clock_inference(eqs::Vector{Equation}, domain_above::TimeDomain = Infer
     ClockInferenceResult(part, incidences, ccs, bg)
 end
 
-
-function get_clocked_partitions(sys,  part = sys.clock_partitioning)
+function get_clocked_partitions(sys, part = sys.clock_partitioning)
     t = independent_variable(sys)
     @unpack eqs, clocks, eqmap, vars, varmap = part
-    sort!(clocks, by = c->c === Continuous() ? 0.0 : sampletime(c)) # cont., then ascending sampletime
+    sort!(clocks, by = c -> c === Continuous() ? 0.0 : sampletime(c)) # cont., then ascending sampletime
 
     if clocks[1] === Continuous()
         continds = eqmap .== Continuous()
-        cont = ODESystem(eqs[continds], t; name=sys.name) # TODO: propagate other properties
+        cont = ODESystem(eqs[continds], t; name = sys.name) # TODO: propagate other properties
         clocks = clocks[2:end]
     else
         error("This function should not be called for completely discrete systems.")
     end
     disc = map(clocks) do clock
         inds = eqmap .== clock
-        DiscreteSystem(eqs[inds], t; name=sys.name) # TODO: propagate other properties
+        DiscreteSystem(eqs[inds], t; name = sys.name) # TODO: propagate other properties
     end
     cont, disc
 end
-
 
 # struct ClockPartitioning
 #     eqs::Vector{Equation}

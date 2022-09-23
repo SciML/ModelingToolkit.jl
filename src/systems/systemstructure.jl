@@ -8,7 +8,8 @@ using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
                           isparameter,
-                          independent_variables, SparseMatrixCLIL, isoperator, AbstractSystem,
+                          independent_variables, SparseMatrixCLIL, isoperator,
+                          AbstractSystem,
                           equations, isirreducible
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
@@ -260,7 +261,7 @@ function TearingState(sys; quick_cancel = false, check = true)
             rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
             eq = 0 ~ rhs - lhs
         end
-        vars!(vars, eq.rhs, op=Operator)
+        vars!(vars, eq.rhs, op = Operator)
         isalgeq = true
         statevars = []
         for var in vars
