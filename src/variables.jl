@@ -104,15 +104,11 @@ $(SIGNATURES)
 Intercept the call to `handle_varmap` and convert it to an ordered list if the user has
   ModelingToolkit loaded, and the problem has a symbolic origin.
 """
-function SciMLBase.handle_varmap(prob::SciMLBase.AbstractSciMLProblem, varmap)
-    if hasproperty(prob, :f) && hasproperty(prob.f, :sys) && hasproperty(prob.f.sys, :ps)
-        return varmap_to_vars(varmap, collect(keys(prob.f.sys.ps)))
-    else
-        if varmap <: Dict || eltype(varmap) <: Pair
-            throw(ArgumentError("This problem does not support symbolic parameter maps with `remake`, i.e. it does not have a symbolic origin. Please use `remake` with the `p` keyword argument as a vector of values, paying attention to parameter order."))
-        end
-        return varmap
-    end
+function SciMLBase.handle_varmap(varmap, ps)
+    println("ping")
+    out = varmap_to_vars(varmap, ps)
+    @show out
+    return out
 end
 
 struct IsHistory end
