@@ -31,10 +31,10 @@ if VERSION >= v"1.6"
     @test occursin("×", prt)
     @test occursin("⋅", prt)
 
-    io = IOContext(IOBuffer(), :mtk_limit => false)
+    buff = IOBuffer()
+    io = IOContext(buff, :mtk_limit => false)
     show(io, MIME"text/plain"(), state.structure)
-    prt = String(take!(io))
-    prt = String(take!(io))
+    prt = String(take!(buff))
     @test occursin("SystemStructure", prt)
 end
 
