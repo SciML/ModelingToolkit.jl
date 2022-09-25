@@ -1,7 +1,7 @@
 using ModelingToolkit, Test, OrdinaryDiffEq
 
 @parameters t
-@constants h = 1 zr = 0
+@constants h=1 zr=0
 @variables u(t)
 D = Differential(t)
 
@@ -269,7 +269,9 @@ function bb_affect!(integ, u, p, ctx)
 end
 
 @named bb_model = ODESystem(bb_eqs, t, sts, par,
-                            continuous_events = [[y ~ zr] => (bb_affect!, [v], [], nothing)])
+                            continuous_events = [
+                                [y ~ zr] => (bb_affect!, [v], [], nothing),
+                            ])
 
 bb_sys = structural_simplify(bb_model)
 @test ModelingToolkit.affects(ModelingToolkit.continuous_events(bb_sys)) isa

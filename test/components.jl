@@ -269,7 +269,7 @@ function FixedResistor(; name, R = 1.0)
     ]
     extend(ODESystem(eqs, t, [], []; name = name), oneport)
 end
-capacitor = Capacitor(;name = :c1)
+capacitor = Capacitor(; name = :c1)
 resistor = FixedResistor(; name = :r1)
 ground = Ground(; name = :ground)
 rc_eqs = [connect(capacitor.n, resistor.p)
@@ -278,7 +278,7 @@ rc_eqs = [connect(capacitor.n, resistor.p)
 
 @named _rc_model = ODESystem(rc_eqs, t)
 @named rc_model = compose(_rc_model,
-                           [resistor, capacitor, ground])
+                          [resistor, capacitor, ground])
 sys = structural_simplify(rc_model)
 prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Tsit5())

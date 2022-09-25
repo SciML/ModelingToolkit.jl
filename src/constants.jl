@@ -2,13 +2,14 @@ import SymbolicUtils: symtype, term, hasmetadata, issym
 struct MTKConstantCtx end
 
 isconstant(x::Num) = isconstant(unwrap(x))
+""" Test whether `x` is a constant-type Sym. """
 function isconstant(x)
     x = unwrap(x)
     x isa Symbolic && getmetadata(x, MTKConstantCtx, false)
 end
 
 """
-    toconst(s::Sym)
+    toconstant(s::Sym)
 
 Maps the parameter to a constant. The parameter must have a default.
 """
@@ -23,7 +24,7 @@ toconstant(s::Num) = wrap(toconstant(value(s)))
 """
 $(SIGNATURES)
 
-Define one or more known variables.
+Define one or more constants.
 """
 macro constants(xs...)
     Symbolics._parse_vars(:constants,

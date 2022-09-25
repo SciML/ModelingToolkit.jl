@@ -961,7 +961,8 @@ The optional argument `io` may take a tuple `(inputs, outputs)`.
 This will convert all `inputs` to parameters and allow them to be unconnected, i.e.,
 simplification will allow models where `n_states = n_equations - n_inputs`.
 """
-function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false, simplify_constants = true, kwargs...)
+function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
+                             simplify_constants = true, kwargs...)
     sys = expand_connections(sys)
     if simplify_constants
         sys = eliminate_constants(sys)
@@ -983,8 +984,6 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     return has_io ? (sys, input_idxs) : sys
 end
 
-
-""" Replace constants in dynamical equations with their literal values."""
 function eliminate_constants(sys::AbstractSystem)
     if has_eqs(sys)
         eqs = get_eqs(sys)

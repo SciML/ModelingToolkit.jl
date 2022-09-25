@@ -193,9 +193,9 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
     f = Func([DestructuredArgs(vars, inbounds = !checkbounds)
               DestructuredArgs(params, inbounds = !checkbounds)],
              [],
-              pre(Let(needed_assignments[inner_idxs],
-                  funex,
-                  false))) |> SymbolicUtils.Code.toexpr
+             pre(Let(needed_assignments[inner_idxs],
+                     funex,
+                     false))) |> SymbolicUtils.Code.toexpr
 
     # solver call contains code to call the root-finding solver on the function f
     solver_call = LiteralExpr(quote
@@ -302,15 +302,15 @@ function build_torn_function(sys;
 
     expr = SymbolicUtils.Code.toexpr(Func([out
                                            DestructuredArgs(states,
-                                                 inbounds = !checkbounds)
+                                                            inbounds = !checkbounds)
                                            DestructuredArgs(parameters(sys),
-                                                 inbounds = !checkbounds)
+                                                            inbounds = !checkbounds)
                                            independent_variables(sys)],
                                           [],
                                           pre2(Let([torn_expr;
-                                                   assignments[is_not_prepended_assignment]],
-                                                  funbody,
-                                                  false))),
+                                                    assignments[is_not_prepended_assignment]],
+                                                   funbody,
+                                                   false))),
                                      sol_states)
     if expression
         expr, states
@@ -474,18 +474,19 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
         push!(subs, sym ← obs[eqidx].rhs)
     end
     pre = get_postprocess_fbody(sys)
-    cpre = get_preprocess_constants([obs[1:maxidx];  isscalar ? ts[1] : MakeArray(ts, output_type) ])
+    cpre = get_preprocess_constants([obs[1:maxidx];
+                                     isscalar ? ts[1] : MakeArray(ts, output_type)])
     pre2 = x -> pre(cpre(x))
     ex = Code.toexpr(Func([DestructuredArgs(solver_states, inbounds = !checkbounds)
                            DestructuredArgs(parameters(sys), inbounds = !checkbounds)
                            independent_variables(sys)],
                           [],
                           pre2(Let([collect(Iterators.flatten(solves))
-                                   assignments[is_not_prepended_assignment]
-                                   map(eq -> eq.lhs ← eq.rhs, obs[1:maxidx])
-                                   subs],
-                                  isscalar ? ts[1] : MakeArray(ts, output_type),
-                                  false))), sol_states)
+                                    assignments[is_not_prepended_assignment]
+                                    map(eq -> eq.lhs ← eq.rhs, obs[1:maxidx])
+                                    subs],
+                                   isscalar ? ts[1] : MakeArray(ts, output_type),
+                                   false))), sol_states)
 
     expression ? ex : @RuntimeGeneratedFunction(ex)
 end

@@ -504,6 +504,7 @@ function collect_var!(states, parameters, var, iv)
     return nothing
 end
 
+""" Find all the symbolic constants of some equations or terms and return them as a vector. """
 function collect_constants(x)
     constants = Symbolics.Sym[]
     collect_constants!(constants, x)
@@ -546,6 +547,7 @@ function eliminate_constants(eqs::AbstractArray{<:Union{Equation, Symbolic}}, cs
     return substitute(eqs, cmap)
 end
 
+""" Create a function preface containing assignments of default values to constants. """
 function get_preprocess_constants(eqs)
     cs = collect_constants(eqs)
     pre = ex -> Let(Assignment[Assignment(x, getdefault(x)) for x in cs],
