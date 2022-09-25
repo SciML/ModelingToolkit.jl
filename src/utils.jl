@@ -504,56 +504,46 @@ function collect_var!(states, parameters, var, iv)
     return nothing
 end
 
-function collect_constants(eqs::Vector{Equation}) #For get_substitutions_and_solved_states
-    constants = []
-    for eq in eqs
-        collect_constants!(constants, eq.lhs)
-        collect_constants!(constants, eq.rhs)
-    end
+function collect_constants(x)
+    constants = Symbolics.Sym[]
+    collect_constants!(constants, x)
     return constants
 end
 
-function collect_constants(eqs::AbstractArray{T}) where {T <: Union{Num, Symbolic}} # For generate_tgrad / generate_jacobian / generate_difference_cb
-    constants = T[]
-    for eq in eqs
-        collect_constants!(constants, unwrap(eq))
+function collect_constants!(constants, arr::AbstractArray{T}) where {T}
+    for el in arr
+        collect_constants!(constants, el)
     end
-    return constants
 end
 
-function collect_constants(eqs::Vector{Matrix{Num}}) # For nonlinear hessian
-    constants = Num[]
-    for m in eqs
-        for n in m
-            collect_constants!(constants, unwrap(n))
-        end
-    end
-    return constants
+function collect_constants!(constants, eq::Equation)
+    collect_constants!(constants, eq.lhs)
+    collect_constants!(constants, eq.rhs)
 end
 
-collect_constants(x::Num) = collect_constants(unwrap(x))
-function collect_constants(expr::Symbolic{T}) where {T} # For jump system affect / rate 
-    constants = Symbolic[]
-    collect_constants!(constants, expr)
-    return constants
-end
+collect_constants!(constants, x::Num) = collect_constants!(constants, unwrap(x))
+collect_constants!(constants, x::Real) = nothing
+collect_constants(n::Nothing) = Symbolics.Sym[]
 
-function collect_constant!(constants, var)
-    if isconstant(var)
-        push!(constants, var)
-    end
-    return nothing
-end
-
-function collect_constants!(constants, expr)
-    if expr isa Sym
-        collect_constant!(constants, expr)
+function collect_constants!(constants, expr::Symbolics.Symbolic{T}) where {T}
+    if expr isa Sym && isconstant(expr)
+        push!(constants, expr)
     else
-        for var in vars(expr)
-            collect_constant!(constants, var)
+        evars = vars(expr)
+        if length(evars) == 1 && isequal(only(evars), expr)
+            return nothing #avoid infinite recursion for vars(x(t)) == [x(t)]
+        else
+            for var in evars
+                collect_constants!(constants, var)
+            end
         end
     end
-    return nothing
+end
+
+""" Replace symbolic constants with their literal values """
+function eliminate_constants(eqs::AbstractArray{<:Union{Equation, Symbolic}}, cs::Vector{Sym})
+    cmap = Dict(x => getdefault(x) for x in cs)
+    return substitute(eqs, cmap)
 end
 
 function get_preprocess_constants(eqs)
