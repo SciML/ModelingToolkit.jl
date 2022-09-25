@@ -952,7 +952,8 @@ $(SIGNATURES)
 
 Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations. When `simplify=true`, the `simplify`
-function will be applied during the tearing process. It also takes kwargs
+function will be applied during the tearing process. When `simplify_constants=true`
+`eliminate_constants` will be applied prior to tearing. It also takes kwargs
 `allow_symbolic=false` and `allow_parameter=true` which limits the coefficient
 types during tearing.
 
@@ -960,8 +961,11 @@ The optional argument `io` may take a tuple `(inputs, outputs)`.
 This will convert all `inputs` to parameters and allow them to be unconnected, i.e.,
 simplification will allow models where `n_states = n_equations - n_inputs`.
 """
-function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false, kwargs...)
+function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false, simplify_constants = true, kwargs...)
     sys = expand_connections(sys)
+    if simplify_constants
+        sys = eliminate_constants(sys)
+    end
     state = TearingState(sys)
     has_io = io !== nothing
     has_io && markio!(state, io...)
@@ -977,6 +981,20 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     invalidate_cache!(sys)
     return has_io ? (sys, input_idxs) : sys
+end
+
+
+""" Replace constants in dynamical equations with their literal values."""
+function eliminate_constants(sys::AbstractSystem)
+    if has_eqs(sys)
+        eqs = get_eqs(sys)
+        eq_cs = collect_constants(eqs)
+        if !isempty(eq_cs)
+            new_eqs = eliminate_constants(eqs, eq_cs)
+            @set! sys.eqs = new_eqs
+        end
+    end
+    return sys
 end
 
 function io_preprocessing(sys::AbstractSystem, inputs,
