@@ -1,6 +1,7 @@
 using ModelingToolkit, Test, OrdinaryDiffEq
 
 @parameters t
+@constants h = 1 zr = 0
 @variables u(t)
 D = Differential(t)
 
@@ -16,19 +17,19 @@ i4 = findfirst(==(4.0), sol[:t])
 @test sol.u[i4 + 1][1] > 10.0
 
 # callback
-cb = ModelingToolkit.SymbolicDiscreteCallback(t == 0,
+cb = ModelingToolkit.SymbolicDiscreteCallback(t == zr,
                                               (f = affect1!, sts = [], pars = [],
                                                ctx = [1]))
-cb1 = ModelingToolkit.SymbolicDiscreteCallback(t == 0, (affect1!, [], [], [1]))
+cb1 = ModelingToolkit.SymbolicDiscreteCallback(t == zr, (affect1!, [], [], [1]))
 @test ModelingToolkit.affects(cb) isa ModelingToolkit.FunctionalAffect
 @test cb == cb1
 @test ModelingToolkit.SymbolicDiscreteCallback(cb) === cb # passthrough
 @test hash(cb) == hash(cb1)
 
-cb = ModelingToolkit.SymbolicContinuousCallback([t ~ 0],
+cb = ModelingToolkit.SymbolicContinuousCallback([t ~ zr],
                                                 (f = affect1!, sts = [], pars = [],
                                                  ctx = [1]))
-cb1 = ModelingToolkit.SymbolicContinuousCallback([t ~ 0], (affect1!, [], [], [1]))
+cb1 = ModelingToolkit.SymbolicContinuousCallback([t ~ zr], (affect1!, [], [], [1]))
 @test cb == cb1
 @test ModelingToolkit.SymbolicContinuousCallback(cb) === cb # passthrough
 @test hash(cb) == hash(cb1)
@@ -48,7 +49,7 @@ de = de[1]
 @test ModelingToolkit.has_functional_affect(de)
 
 sys2 = ODESystem(eqs, t, [u], [], name = :sys,
-                 discrete_events = [[4.0] => [u ~ -u]])
+                 discrete_events = [[4.0] => [u ~ -u * h]])
 @test !ModelingToolkit.has_functional_affect(ModelingToolkit.get_discrete_events(sys2)[1])
 
 # context
@@ -121,7 +122,7 @@ i8 = findfirst(==(8.0), sol[:t])
 ctx = [0]
 function affect4!(integ, u, p, ctx)
     ctx[1] += 1
-    @test u.resistor₊v == 1
+    @test u.resistor₊v == h
 end
 s1 = compose(ODESystem(Equation[], t, [], [], name = :s1,
                        discrete_events = 1.0 => (affect4!, [resistor.v], [], ctx)),
@@ -268,7 +269,7 @@ function bb_affect!(integ, u, p, ctx)
 end
 
 @named bb_model = ODESystem(bb_eqs, t, sts, par,
-                            continuous_events = [[y ~ 0] => (bb_affect!, [v], [], nothing)])
+                            continuous_events = [[y ~ zr] => (bb_affect!, [v], [], nothing)])
 
 bb_sys = structural_simplify(bb_model)
 @test ModelingToolkit.affects(ModelingToolkit.continuous_events(bb_sys)) isa
