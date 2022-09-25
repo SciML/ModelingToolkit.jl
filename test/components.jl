@@ -258,3 +258,27 @@ eqs = [
 @named big_rc = compose(_big_rc, rc_systems)
 ts = TearingState(expand_connections(big_rc))
 @test istriu(but_ordered_incidence(ts)[1])
+
+# Test using constants inside subsystems
+function FixedResistor(; name, R = 1.0)
+    @named oneport = OnePort()
+    @unpack v, i = oneport
+    @constants R = R
+    eqs = [
+        v ~ i * R,
+    ]
+    extend(ODESystem(eqs, t, [], []; name = name), oneport)
+end
+capacitor = Capacitor(;name = :c1)
+resistor = FixedResistor(; name = :r1)
+ground = Ground(; name = :ground)
+rc_eqs = [connect(capacitor.n, resistor.p)
+          connect(resistor.n, capacitor.p)
+          connect(capacitor.n, ground.g)]
+
+@named _rc_model = ODESystem(rc_eqs, t)
+@named rc_model = compose(_rc_model,
+                           [resistor, capacitor, ground])
+sys = structural_simplify(rc_model)
+prob = ODAEProblem(sys, u0, (0, 10.0))
+sol = solve(prob, Tsit5())
