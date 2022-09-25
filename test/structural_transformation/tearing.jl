@@ -10,9 +10,10 @@ using UnPack
 ### Nonlinear system
 ###
 @parameters t
+@constants h = 1
 @variables u1(t) u2(t) u3(t) u4(t) u5(t)
 eqs = [
-    0 ~ u1 - sin(u5),
+    0 ~ u1 - sin(u5) * h,
     0 ~ u2 - cos(u1),
     0 ~ u3 - hypot(u1, u2),
     0 ~ u4 - hypot(u2, u3),
@@ -147,13 +148,13 @@ using ModelingToolkit, OrdinaryDiffEq, BenchmarkTools
 @parameters t p
 @variables x(t) y(t) z(t)
 D = Differential(t)
-eqs = [D(x) ~ z
+eqs = [D(x) ~ z * h
        0 ~ x - y
        0 ~ sin(z) + y - p * t]
 @named daesys = ODESystem(eqs, t)
 newdaesys = tearing(daesys)
-@test equations(newdaesys) == [D(x) ~ z; 0 ~ y + sin(z) - p * t]
-@test equations(tearing_substitution(newdaesys)) == [D(x) ~ z; 0 ~ x + sin(z) - p * t]
+@test equations(newdaesys) == [D(x) ~ h * z; 0 ~ y + sin(z) - p * t]
+@test equations(tearing_substitution(newdaesys)) == [D(x) ~ h * z; 0 ~ x + sin(z) - p * t]
 @test isequal(states(newdaesys), [x, z])
 prob = ODAEProblem(newdaesys, [x => 1.0], (0, 1.0), [p => 0.2])
 du = [0.0];
