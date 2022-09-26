@@ -91,7 +91,7 @@ function alias_elimination!(state::TearingState)
         end
     end
     deleteat!(eqs, sort!(dels))
-    old_to_new = Vector{Int}(undef, length(var_to_diff))
+    old_to_new = Vector{Int}(undef, nsrcs(graph))
     idx = 0
     cursor = 1
     ndels = length(dels)
