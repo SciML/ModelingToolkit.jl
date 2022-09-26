@@ -1,4 +1,6 @@
 using SymbolicUtils: Rewriters
+using SimpleWeightedGraphs
+using Graphs.Experimental.Traversals
 
 const KEEP = typemin(Int)
 
@@ -288,35 +290,22 @@ end
 
 function tograph(ag::AliasGraph, var_to_diff::DiffGraph)
     g = SimpleDiGraph{Int}(length(var_to_diff))
+    eqg = SimpleWeightedGraph{Int, Int}(length(var_to_diff))
     zero_vars = Int[]
-    for (v, (_, a)) in ag
+    for (v, (c, a)) in ag
         if iszero(a)
             push!(zero_vars, v)
             continue
         end
         add_edge!(g, v, a)
         add_edge!(g, a, v)
+
+        add_edge!(eqg, v, a, c)
+        add_edge!(eqg, a, v, c)
     end
     transitiveclosure!(g)
-    #=
-    # Compute the largest transitive closure that doesn't include any diff
-    # edges.
-    og = g
-    newg = SimpleDiGraph{Int}(length(var_to_diff))
-    for e in Graphs.edges(og)
-        s, d = src(e), dst(e)
-        (var_to_diff[s] == d || var_to_diff[d] == s) && continue
-        oldg = copy(newg)
-        add_edge!(newg, s, d)
-        add_edge!(newg, d, s)
-        transitiveclosure!(newg)
-        if any(e->(var_to_diff[src(e)] == dst(e) || var_to_diff[dst(e)] == src(e)), edges(newg))
-            newg = oldg
-        end
-    end
-    g = newg
-    =#
-    eqg = copy(g)
+    Main._a[] = copy(eqg)
+    weighted_transitiveclosure!(eqg)
 
     c = "green"
     edge_styles = Dict{Tuple{Int, Int}, String}()
@@ -329,7 +318,17 @@ function tograph(ag::AliasGraph, var_to_diff::DiffGraph)
     g, eqg, zero_vars, edge_styles
 end
 
-using Graphs.Experimental.Traversals
+function weighted_transitiveclosure!(g)
+    cps = connected_components(g)
+    for cp in cps
+        for k in cp, i in cp, j in cp
+            (has_edge(g, i, k) && has_edge(g, k, j)) || continue
+            add_edge!(g, i, j, get_weight(g, i, k) * get_weight(g, k, j))
+        end
+    end
+    return g
+end
+
 struct DiffLevelState <: Traversals.AbstractTraversalState
     dists::Vector{Int}
     var_to_diff::DiffGraph
@@ -763,6 +762,10 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     ag = AliasGraph(nvars)
     mm, echelon_mm = simple_aliases!(ag, graph, var_to_diff, mm_orig)
     fullvars = Main._state[].fullvars
+    for (v, (c, a)) in ag
+        a = iszero(a) ? 0 : c * fullvars[a]
+        @info "ag" fullvars[v] => a
+    end
 
     # Step 3: Handle differentiated variables
     # At this point, `var_to_diff` and `ag` form a tree structure like the
@@ -802,17 +805,14 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         (dv === nothing && diff_to_var[v] === nothing) && continue
         r = find_root!(dls, g, v)
         @show fullvars[r]
-        level_to_var = Int[]
-        extreme_var(var_to_diff, r, nothing, Val(false),
-                    callback = Base.Fix1(push!, level_to_var))
-        nlevels = length(level_to_var)
         prev_r = -1
         stem = Int[]
+        stem_set = BitSet()
         for _ in 1:10_000 # just to make sure that we don't stuck in an infinite loop
             reach₌ = Pair{Int, Int}[]
-            r === nothing || for n in neighbors(g, r)
+            r === nothing || for n in neighbors(eqg, r)
                 (n == r || is_diff_edge(r, n)) && continue
-                c = 1
+                c = get_weight(eqg, r, n)
                 push!(reach₌, c => n)
             end
             if (n = length(diff_aliases)) >= 1
@@ -823,45 +823,80 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                     push!(reach₌, c => da)
                 end
             end
-            for (c, a) in reach₌
-                @info fullvars[r] => c * fullvars[a]
-            end
             if r === nothing
-                @warn "hi"
-                # TODO: updated_diff_vars check
                 isempty(reach₌) && break
-                dr = first(reach₌)
+                idx = findfirst(x->x[1] == 1, reach₌)
+                if idx === nothing
+                    c, dr = reach₌[1]
+                    @assert c == -1
+                    dag[dr] = (c, dr)
+                else
+                    c, dr = reach₌[idx]
+                    @assert c == 1
+                end
                 var_to_diff[prev_r] = dr
                 push!(updated_diff_vars, prev_r)
                 prev_r = dr
             else
-                @warn "" fullvars[r]
                 prev_r = r
                 r = var_to_diff[r]
             end
-            for (c, v) in reach₌
+            for (c, a) in reach₌
+                if r === nothing
+                    var_to_diff[prev_r] === nothing && continue
+                    @info fullvars[var_to_diff[prev_r]] => c * fullvars[a]
+                else
+                    @info fullvars[r] => c * fullvars[a]
+                end
+            end
+            prev_r in stem_set && break
+            push!(stem_set, prev_r)
+            push!(stem, prev_r)
+            push!(diff_aliases, reach₌)
+            for (_, v) in reach₌
                 v == prev_r && continue
                 add_edge!(eqg, v, prev_r)
-                push!(stem, prev_r)
-                dag[v] = c => prev_r
             end
-            push!(diff_aliases, reach₌)
         end
+
+        @show fullvars[updated_diff_vars]
+        @info "" fullvars
+        @show stem
+        @show diff_aliases
         @info "" fullvars[stem]
-        transitiveclosure!(eqg)
-        for i in 1:length(stem) - 1
-            r, dr = stem[i], stem[i+1]
-            if has_edge(eqg, r, dr)
-                c = 1
-                dag[dr] = c => r
+        display(diff_aliases)
+        @assert length(stem) == length(diff_aliases)
+        for i in eachindex(stem)
+            a = stem[i]
+            for (c, v) in diff_aliases[i]
+                # alias edges that coincide with diff edges are handled later
+                v in stem_set && continue
+                dag[v] = c => a
             end
         end
-        for v in zero_vars, a in outneighbors(g, v)
-            dag[a] = 0
+        # Obtain transitive closure after completing the alias edges from diff
+        # edges.
+        weighted_transitiveclosure!(eqg)
+        # Canonicalize by preferring the lower differentiated variable
+        for i in 1:length(stem) - 1
+            r = stem[i]
+            for dr in @view stem[i+1:end]
+                if has_edge(eqg, r, dr)
+                    c = get_weight(eqg, r, dr)
+                    dag[dr] = c => r
+                end
+            end
         end
-        @show nlevels
-        display(diff_aliases)
-        @assert length(diff_aliases) == nlevels
+        for v in zero_vars
+            for a in Iterators.flatten((v, outneighbors(eqg, v)))
+                while true
+                    dag[a] = 0
+                    da = var_to_diff[a]
+                    da === nothing && break
+                    a = da
+                end
+            end
+        end
 
         # clean up
         for v in dls.visited
@@ -871,6 +906,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         empty!(dls.visited)
         empty!(diff_aliases)
     end
+    @show dag
     for k in keys(dag)
         dag[k]
     end

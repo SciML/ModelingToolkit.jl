@@ -263,14 +263,14 @@ D = Differential(t)
 @named sys = ODESystem([D(x) ~ 1 - x,
                            D(y) + D(x) ~ 0])
 new_sys = alias_elimination(sys)
-@test equations(new_sys) == [D(x) ~ 1 - x; 0 ~ -D(x) - D(y)]
+@test equations(new_sys) == [D(x) ~ 1 - x; D(x) + D(y) ~ 0]
 @test isempty(observed(new_sys))
 
 @named sys = ODESystem([D(x) ~ x,
                            D(y) + D(x) ~ 0])
 new_sys = alias_elimination(sys)
-@test equations(new_sys) == [0 ~ D(D(y)) - D(y)]
-@test observed(new_sys) == [x ~ -D(y)]
+@test equations(new_sys) == equations(sys)
+@test isempty(observed(new_sys))
 
 @named sys = ODESystem([D(x) ~ 1 - x,
                            y + D(x) ~ 0])
