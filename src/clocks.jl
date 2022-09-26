@@ -301,7 +301,7 @@ function shift_order_lowering(eqs::Vector{Equation}, clock::AbstractDiscrete)
         n_new_states = -minimum(op -> op.f.steps, varops) # number of new states required is maximum negative shift
         n_new_states < 1 && continue
         varname = Symbol(string(value(var).f) * "_delay")
-        new_eq_vars = @variables $varname[1:n_new_states](t) [timedomain = clock]
+        new_eq_vars = @variables (($varname)(t))[1:n_new_states] [timedomain = clock]
         new_eqvars = collect(new_eq_vars[]) # @variables returns a vector wrapper
         new_vareqs = map(1:(n_new_states - 1)) do i
             shift(new_eqvars[i + 1]) ~ new_eqvars[i]
