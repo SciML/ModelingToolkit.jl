@@ -400,7 +400,7 @@ end
 
     prob = ODEProblem(sysr, [x => 1, kp => 1, ud => -1], (0.0, 4.0))
     sol_manual = solve(prob, Rosenbrock23(), tstops = timevec)
-    plot(sol_manual)
+    # plot(sol_manual)
     @test issubset(timevec, sol_manual.t) # this will be false if the solver stopped early
 
     dt_timevec = (prob.tspan[1]:dt:prob.tspan[2])
@@ -439,7 +439,7 @@ end
         # Error due to incorrect handling of difference variable
         prob = ODEProblem(sysrr, [x => 1, kp => 1, yd => 1, ud => -1.0], (0.0, 4.0))
         sol = solve(prob, Rosenbrock23(), tstops = timevec)
-        isinteractive() && plot(sol) |> display
+        # isinteractive() && plot(sol) |> display
 
         @test sol(timevec)[ud] ≈ sol_manual(timevec)[ud]
         @test issubset(timevec, sol.t) # this will be false if the solver stopped early
@@ -464,7 +464,7 @@ end
     # sysrr = structural_simplify(sysr)
     prob = ODEProblem(sysr, [], (0.0, 4.1))
     sol = solve(prob, Rosenbrock23(), tstops = timevec)
-    isinteractive() && plot(sol) |> display
+    # isinteractive() && plot(sol) |> display
     @test issubset(timevec, sol.t)
 
     @test sol[u, timevec[2:end]] ≈ 0.5sol[u, timevec[1:(end - 1)]]
@@ -556,7 +556,7 @@ dvs = collect(vars(eqs))
 
     sol = solve(prob, Rosenbrock23(), tstops = timevec)
     @test issubset(timevec, sol.t)
-    isinteractive() && plot(sol) |> display
+    # isinteractive() && plot(sol) |> display
     @test_broken all(sol[f.u, timevec[2:end]] .== -1)
     # @test sol[u, timevec[2:end]] ≈ 0.5sol[u, timevec[1:end-1]]
 end

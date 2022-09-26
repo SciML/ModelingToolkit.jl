@@ -46,13 +46,9 @@ println("Last test requires gcc available in the path!")
 @safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 @safetestset "FuncAffect Test" begin include("funcaffect.jl") end
+@safetestset "Time domain" begin include("test_timedomain.jl") end
+@safetestset "Discrete domain" begin include("test_discrete_domain.jl") end
+@safetestset "Clocks" begin include("test_clock.jl") end
 
 # Reference tests go Last
 @safetestset "Latexify recipes Test" begin include("latexify.jl") end
-@safetestset "StructuralTransformations" begin include("structural_transformation/runtests.jl") end
-@testset "Serialization" begin include("serialization.jl") end
-@safetestset "print_tree" begin include("print_tree.jl") end
-@safetestset "error_handling" begin include("error_handling.jl") end
-@safetestset "root_equations" begin include("root_equations.jl") end
-@safetestset "Discrete domain" begin include("test_discrete_domain.jl") end
-@safetestset "Time domain" begin include("test_timedomain.jl") end
