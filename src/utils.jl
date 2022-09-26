@@ -542,7 +542,8 @@ function collect_constants!(constants, expr::Symbolics.Symbolic{T}) where {T}
 end
 
 """ Replace symbolic constants with their literal values """
-function eliminate_constants(eqs::AbstractArray{<:Union{Equation, Symbolic}}, cs::Vector{Sym})
+function eliminate_constants(eqs::AbstractArray{<:Union{Equation, Symbolic}},
+                             cs::Vector{Sym})
     cmap = Dict(x => getdefault(x) for x in cs)
     return substitute(eqs, cmap)
 end
