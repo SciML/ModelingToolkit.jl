@@ -226,12 +226,13 @@ end
 p3 = [k₁ => 0.05,
     k₂ => 2e7,
     k₃ => 1.1e4]
-prob_pmap = remake(prob14; p = p3)
-prob_dpmap = remake(prob14; p = Dict(p3))
-
-@test Set(Num.(parameters(sys)) .=> prob_pmap.p) ==
-      Set([k₁ => 0.05, k₂ => 2e7, k₃ => 1.1e4])
-@test Set(Num.(states(sys)) .=> prob_pmap.u0) == Set([y₁ => 1, y₂ => 0, y₃ => 0])
+u01 = [y₁ => 1, y₂ => 1, y₃ => 1]
+prob_pmap = remake(prob14; p = p3, u0 = u01)
+prob_dpmap = remake(prob14; p = Dict(p3), u0 = Dict(u01))
+for p in [prob_pmap, prob_dpmap]
+    @test Set(Num.(parameters(sys)) .=> p.p) == Set([k₁ => 0.05, k₂ => 2e7, k₃ => 1.1e4])
+    @test Set(Num.(states(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 1, y₃ => 1])
+end
 
 @test solve(prob_pmap, Rodas5())≈solve(prob_dpmap, Rodas5()) atol=1e-5
 
