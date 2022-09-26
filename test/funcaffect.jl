@@ -122,7 +122,7 @@ i8 = findfirst(==(8.0), sol[:t])
 ctx = [0]
 function affect4!(integ, u, p, ctx)
     ctx[1] += 1
-    @test u.resistor₊v == h
+    @test u.resistor₊v == 1
 end
 s1 = compose(ODESystem(Equation[], t, [], [], name = :s1,
                        discrete_events = 1.0 => (affect4!, [resistor.v], [], ctx)),

@@ -188,7 +188,6 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
     fname = gensym("fun")
     # f is the function to find roots on
     funex = isscalar ? rhss[1] : MakeArray(rhss, SVector)
-    @show funex
     pre = get_preprocess_constants(funex)
     f = Func([DestructuredArgs(vars, inbounds = !checkbounds)
               DestructuredArgs(params, inbounds = !checkbounds)],

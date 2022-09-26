@@ -12,7 +12,7 @@ eqs = [D(x) ~ a]
 prob = ODEProblem(sys, [0], [0.0, 1.0], [])
 sol = solve(prob, Tsit5())
 
-newsys = eliminate_constants(sys)
+newsys = MT.eliminate_constants(sys)
 @test isequal(equations(newsys), [D(x) ~ 1])
 
 # Test structural_simplify substitutions & observed values
