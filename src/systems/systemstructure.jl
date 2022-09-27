@@ -441,15 +441,17 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
                                       (i - 1 <= length(invview(bgpm.var_eq_matching))) ?
                                       invview(bgpm.var_eq_matching)[i - 1] : unassigned)
     elseif j == 5
+        match = unassigned
+        if bgpm.var_eq_matching !== nothing && i - 1 <= length(bgpm.var_eq_matching)
+            match = bgpm.var_eq_matching[i - 1]
+            isa(match, Union{Int, Unassigned}) || (match = true) # Selected State
+        end
         return BipartiteAdjacencyList(i - 1 <= ndsts(bgpm.bpg) ?
                                       𝑑neighbors(bgpm.bpg, i - 1) : nothing,
                                       bgpm.highlight_graph !== nothing &&
                                       i - 1 <= ndsts(bgpm.highlight_graph) ?
                                       Set(𝑑neighbors(bgpm.highlight_graph, i - 1)) :
-                                      nothing,
-                                      bgpm.var_eq_matching !== nothing &&
-                                      (i - 1 <= length(bgpm.var_eq_matching)) ?
-                                      bgpm.var_eq_matching[i - 1] : unassigned)
+                                      nothing, match)
     else
         @assert false
     end
