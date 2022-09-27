@@ -63,7 +63,10 @@ end
 function Base.setindex!(m::Matching{U}, v::Union{Integer, U}, i::Integer) where {U}
     if m.inv_match !== nothing
         oldv = m.match[i]
-        isa(oldv, Int) && (m.inv_match[oldv] = unassigned)
+        if isa(oldv, Int)
+            @assert m.inv_match[oldv] == i
+            m.inv_match[oldv] = unassigned
+        end
         isa(v, Int) && (m.inv_match[v] = i)
     end
     return m.match[i] = v
