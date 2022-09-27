@@ -243,7 +243,8 @@ function Base.setindex!(ag::AliasGraph, v::Integer, i::Integer)
     return 0 => 0
 end
 
-function Base.setindex!(ag::AliasGraph, p::Union{Pair{Int, Int}, Tuple{Int, Int}}, i::Integer)
+function Base.setindex!(ag::AliasGraph, p::Union{Pair{Int, Int}, Tuple{Int, Int}},
+                        i::Integer)
     (c, v) = p
     if c == 0 || v == 0
         ag[i] = 0
@@ -323,7 +324,9 @@ struct DiffLevelState <: Traversals.AbstractTraversalState
     visited::BitSet
 end
 
-DiffLevelState(g::SimpleDiGraph, var_to_diff) = DiffLevelState(fill(typemax(Int), nv(g)), var_to_diff, BitSet())
+function DiffLevelState(g::SimpleDiGraph, var_to_diff)
+    DiffLevelState(fill(typemax(Int), nv(g)), var_to_diff, BitSet())
+end
 
 @inline function Traversals.initfn!(s::DiffLevelState, u)
     push!(s.visited, u)
@@ -601,7 +604,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             end
             if r === nothing
                 isempty(reach₌) && break
-                idx = findfirst(x->x[1] == 1, reach₌)
+                idx = findfirst(x -> x[1] == 1, reach₌)
                 if idx === nothing
                     c, dr = reach₌[1]
                     @assert c == -1
@@ -640,9 +643,9 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         # edges.
         weighted_transitiveclosure!(eqg)
         # Canonicalize by preferring the lower differentiated variable
-        for i in 1:length(stem) - 1
+        for i in 1:(length(stem) - 1)
             r = stem[i]
-            for dr in @view stem[i+1:end]
+            for dr in @view stem[(i + 1):end]
                 if has_edge(eqg, r, dr)
                     c = get_weight(eqg, r, dr)
                     dag[dr] = c => r
