@@ -25,6 +25,8 @@ cb1 = ModelingToolkit.SymbolicDiscreteCallback(t == zr, (affect1!, [], [], [1]))
 @test cb == cb1
 @test ModelingToolkit.SymbolicDiscreteCallback(cb) === cb # passthrough
 @test hash(cb) == hash(cb1)
+ModelingToolkit.generate_discrete_callback(cb, sys, ModelingToolkit.get_variables(sys),
+                                           ModelingToolkit.get_ps(sys));
 
 cb = ModelingToolkit.SymbolicContinuousCallback([t ~ zr],
                                                 (f = affect1!, sts = [], pars = [],

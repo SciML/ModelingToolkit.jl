@@ -42,3 +42,5 @@ sys = ODESystem(eqs, name = :sys)
 #    Testing that units checking is bypassed in the constructors
 simp = structural_simplify(sys)
 @test_throws MT.ValidationError MT.check_units(simp.eqs...)
+
+@test MT.collect_constants(nothing) == Symbolics.Sym[]
