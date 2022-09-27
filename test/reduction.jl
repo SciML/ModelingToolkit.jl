@@ -285,8 +285,9 @@ eqs = [x ~ 0
        a ~ b + y]
 @named sys = ODESystem(eqs, t, [x, y, a, b], [])
 ss = alias_elimination(sys)
-@test equations(ss) == [0 ~ b - a]
-@test sort(observed(ss), by = string) == ([D(x), x, y] .~ 0)
+# a and b will be set to 0
+@test isempty(equations(ss))
+@test sort(observed(ss), by = string) == ([D(x), a, b, x, y] .~ 0)
 
 eqs = [x ~ 0
        D(x) ~ x + y]

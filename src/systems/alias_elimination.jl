@@ -108,7 +108,6 @@ function alias_elimination!(state::TearingState)
 
     lineqs = BitSet(old_to_new[e] for e in mm.nzrows)
     for (ieq, eq) in enumerate(eqs)
-        # TODO: fix this
         ieq in lineqs && continue
         eqs[ieq] = substitute(eq, subs)
     end
@@ -273,14 +272,6 @@ Base.iterate(agk::AliasGraphKeySet, state...) = Base.iterate(agk.ag.eliminated, 
 function Base.in(i::Int, agk::AliasGraphKeySet)
     aliasto = agk.ag.aliasto
     1 <= i <= length(aliasto) && aliasto[i] !== nothing
-end
-
-function reduce!(mm::SparseMatrixCLIL, ag::AliasGraph)
-    for i in 1:size(mm, 1)
-        adj_row = @view mm[i, :]
-        locally_structure_simplify!(adj_row, nothing, ag)
-    end
-    mm
 end
 
 function equality_diff_graph(ag::AliasGraph, var_to_diff::DiffGraph)
@@ -484,7 +475,7 @@ function do_bareiss!(M, Mold, is_linear_variables)
         end
     end
     bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
-                    bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
+                   bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
     rank2, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
     rank1 = something(rank1r[], rank2)
     (rank1, rank2, pivots)
@@ -531,7 +522,9 @@ function reduce!(mm, mm_orig, ag, rank2, pivots = nothing)
 end
 
 function simple_aliases!(ag, graph, var_to_diff, mm_orig)
-    echelon_mm, solvable_variables, (rank1, rank2, pivots) = aag_bareiss!(graph, var_to_diff, mm_orig)
+    echelon_mm, solvable_variables, (rank1, rank2, pivots) = aag_bareiss!(graph,
+                                                                          var_to_diff,
+                                                                          mm_orig)
 
     # Step 2: Simplify the system using the Bareiss factorization
     rk1vars = BitSet(@view pivots[1:rank1])
