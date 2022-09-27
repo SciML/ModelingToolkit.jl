@@ -16,8 +16,9 @@ end
 # For debug purposes
 function aag_bareiss(sys::AbstractSystem)
     state = TearingState(sys)
+    complete!(state.structure)
     mm = linear_subsys_adjmat(state)
-    return aag_bareiss!(state.structure.graph, complete(state.structure.var_to_diff), mm)
+    return aag_bareiss!(state.structure.graph, state.structure.var_to_diff, mm)
 end
 
 function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true);
@@ -441,8 +442,6 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, irreducible
     for v in irreducibles
         is_reducible[v] = false
     end
-    # TODO/FIXME: This needs a proper recursion to compute the transitive
-    # closure.
     is_linear_variables = find_linear_variables(graph, linear_equations, var_to_diff,
                                                 irreducibles)
     solvable_variables = findall(is_linear_variables)
@@ -652,14 +651,49 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                 end
             end
         end
+        # If a non-differentiated variable equals to 0, then we can eliminate
+        # the whole differentiation chain. Otherwise, we can have to keep the
+        # lowest differentiate variable in the differentiation chain.
+        # E.g.
+        # ```
+        # D(x) ~ 0
+        # D(D(x)) ~ y
+        # ```
+        # reduces to
+        # ```
+        # D(x) ~ 0
+        # y := 0
+        # ```
+        # but
+        # ```
+        # x ~ 0
+        # D(x) ~ y
+        # ```
+        # reduces to
+        # ```
+        # x := 0
+        # y := 0
+        # ```
+        zero_vars_set = BitSet()
         for v in zero_vars
             for a in Iterators.flatten((v, outneighbors(eqg, v)))
                 while true
-                    dag[a] = 0
-                    da = var_to_diff[a]
-                    da === nothing && break
-                    a = da
+                    push!(zero_vars_set, a)
+                    a = var_to_diff[a]
+                    a === nothing && break
                 end
+            end
+        end
+        for v in zero_vars_set
+            while (iv = diff_to_var[v]) in zero_vars_set
+                v = iv
+            end
+            if diff_to_var[v] === nothing # `v` is reducible
+                dag[v] = 0
+            end
+            # reducible after v
+            while (v = var_to_diff[v]) !== nothing
+                dag[v] = 0
             end
         end
 
@@ -715,10 +749,17 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     end
     update_graph_neighbors!(graph, ag)
     finalag = AliasGraph(nvars)
-    # RHS must still exist in the system to be valid aliases.
+    # RHS or its derivaitves must still exist in the system to be valid aliases.
     needs_update = false
+    function contains_v_or_dv(var_to_diff, graph, v)
+        while true
+            isempty(𝑑neighbors(graph, v)) || return true
+            v = var_to_diff[v]
+            v === nothing && return false
+        end
+    end
     for (v, (c, a)) in ag
-        if iszero(a) || !isempty(𝑑neighbors(graph, a))
+        if iszero(a) || contains_v_or_dv(var_to_diff, graph, a)
             finalag[v] = c => a
         else
             needs_update = true
