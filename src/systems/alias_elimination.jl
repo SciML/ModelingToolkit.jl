@@ -426,98 +426,82 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
     return linear_variables
 end
 
-function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, irreducibles = ())
+function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     mm = copy(mm_orig)
-    linear_equations = mm_orig.nzrows
-    is_linear_equations = falses(size(AsSubMatrix(mm_orig), 1))
-    for e in mm_orig.nzrows
-        is_linear_equations[e] = true
-    end
+    linear_equations_set = BitSet(mm_orig.nzrows)
 
-    # If linear highest differentiated variables cannot be assigned to a pivot,
-    # then we can set it to zero. We use `rank1` to track this.
-    #
-    # We only use alias graph to record reducible variables. We use `rank2` to
-    # track this.
+    # All unassigned (not a pivot) algebraic variables that only appears in
+    # linear algebraic equations can be set to 0.
     #
     # For all the other variables, we can update the original system with
     # Bareiss'ed coefficients as Gaussian elimination is nullspace perserving
     # and we are only working on linear homogeneous subsystem.
-    is_reducible = trues(length(var_to_diff))
-    #TODO: what's the correct criterion here?
-    is_linear_variables = isnothing.(var_to_diff) .& isnothing.(invview(var_to_diff))
+
+    is_algebraic = let var_to_diff = var_to_diff
+        v -> var_to_diff[v] === nothing === invview(var_to_diff)[v]
+    end
+    is_linear_variables = is_algebraic.(1:length(var_to_diff))
     for i in 𝑠vertices(graph)
-        is_linear_equations[i] && continue
+        # only consider linear algebraic equations
+        (i in linear_equations_set && all(is_algebraic, 𝑠neighbors(graph, i))) && continue
         for j in 𝑠neighbors(graph, i)
             is_linear_variables[j] = false
         end
     end
     solvable_variables = findall(is_linear_variables)
 
-    function do_bareiss!(M, Mold = nothing)
-        rank1 = rank2 = nothing
-        pivots = Int[]
-        function find_pivot(M, k)
-            if rank1 === nothing
+    return mm, solvable_variables, do_bareiss!(mm, mm_orig, is_linear_variables)
+end
+
+function do_bareiss!(M, Mold, is_linear_variables)
+    rank1r = Ref{Union{Nothing, Int}}(nothing)
+    find_pivot = let rank1r = rank1r
+        (M, k) -> begin
+            if rank1r[] === nothing
                 r = find_masked_pivot(is_linear_variables, M, k)
                 r !== nothing && return r
-                rank1 = k - 1
-            end
-            if rank2 === nothing
-                r = find_masked_pivot(is_reducible, M, k)
-                r !== nothing && return r
-                rank2 = k - 1
+                rank1r[] = k - 1
             end
             # TODO: It would be better to sort the variables by
             # derivative order here to enable more elimination
             # opportunities.
             return find_masked_pivot(nothing, M, k)
         end
-        function find_and_record_pivot(M, k)
+    end
+    pivots = Int[]
+    find_and_record_pivot = let pivots = pivots
+        (M, k) -> begin
             r = find_pivot(M, k)
             r === nothing && return nothing
             push!(pivots, r[1][2])
             return r
         end
-        function myswaprows!(M, i, j)
+    end
+    myswaprows! = let Mold = Mold
+        (M, i, j) -> begin
             Mold !== nothing && swaprows!(Mold, i, j)
             swaprows!(M, i, j)
         end
-        bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
-                       bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
-        rank3, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
-        rank2 = something(rank2, rank3)
-        rank1 = something(rank1, rank2)
-        (rank1, rank2, rank3, pivots)
     end
-
-    return mm, solvable_variables, do_bareiss!(mm, mm_orig)
+    bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
+                    bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
+    rank2, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
+    rank1 = something(rank1r[], rank2)
+    (rank1, rank2, pivots)
 end
 
 # Kind of like the backward substitution, but we don't actually rely on it
 # being lower triangular. We eliminate a variable if there are at most 2
 # variables left after the substitution.
-function lss(mm, pivots, ag)
+function lss(mm, ag, pivots)
     ei -> let mm = mm, pivots = pivots, ag = ag
-        vi = pivots[ei]
+        vi = pivots === nothing ? nothing : pivots[ei]
         locally_structure_simplify!((@view mm[ei, :]), vi, ag)
     end
 end
 
-function simple_aliases!(ag, graph, var_to_diff, mm_orig, irreducibles = ())
-    mm, solvable_variables, (rank1, rank2, rank3, pivots) = aag_bareiss!(graph, var_to_diff,
-                                                                         mm_orig,
-                                                                         irreducibles)
-
-    # Step 2: Simplify the system using the Bareiss factorization
-    rk1vars = BitSet(@view pivots[1:rank1])
-    for v in solvable_variables
-        v in rk1vars && continue
-        ag[v] = 0
-    end
-
-    echelon_mm = copy(mm)
-    lss! = lss(mm, pivots, ag)
+function reduce!(mm, mm_orig, ag, rank2, pivots = nothing)
+    lss! = lss(mm, ag, pivots)
     # Step 2.1: Go backwards, collecting eliminated variables and substituting
     #         alias as we go.
     foreach(lss!, reverse(1:rank2))
@@ -543,6 +527,20 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig, irreducibles = ())
     reduced && while any(lss!, 1:rank2)
     end
 
+    return mm
+end
+
+function simple_aliases!(ag, graph, var_to_diff, mm_orig)
+    echelon_mm, solvable_variables, (rank1, rank2, pivots) = aag_bareiss!(graph, var_to_diff, mm_orig)
+
+    # Step 2: Simplify the system using the Bareiss factorization
+    rk1vars = BitSet(@view pivots[1:rank1])
+    for v in solvable_variables
+        v in rk1vars && continue
+        ag[v] = 0
+    end
+
+    mm = reduce!(copy(echelon_mm), mm_orig, ag, rank2, pivots)
     return mm, echelon_mm
 end
 
@@ -587,13 +585,13 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         (v, w) -> var_to_diff[v] == w || var_to_diff[w] == v
     end
     diff_aliases = Vector{Pair{Int, Int}}[]
+    stem = Int[]
+    stem_set = BitSet()
     for (v, dv) in enumerate(var_to_diff)
         processed[v] && continue
         (dv === nothing && diff_to_var[v] === nothing) && continue
         r = find_root!(dls, g, v)
         prev_r = -1
-        stem = Int[]
-        stem_set = BitSet()
         for _ in 1:10_000 # just to make sure that we don't stuck in an infinite loop
             reach₌ = Pair{Int, Int}[]
             r === nothing || for n in neighbors(eqg, r)
@@ -650,6 +648,21 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         # edges.
         weighted_transitiveclosure!(eqg)
         # Canonicalize by preferring the lower differentiated variable
+        # If we have the system
+        # ```
+        # D(x) ~ x
+        # D(x) + D(y) ~ 0
+        # ```
+        # preferring the lower variable would lead to
+        # ```
+        # D(x) ~ x      <== added back because `x := D(x)` removes `D(x)`
+        # D(y) ~ -x
+        # ```
+        # while preferring the higher variable would lead to
+        # ```
+        # D(x) + D(y) ~ 0
+        # ```
+        # which is not correct.
         for i in 1:(length(stem) - 1)
             r = stem[i]
             for dr in @view stem[(i + 1):end]
@@ -712,6 +725,8 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         end
         empty!(dls.visited)
         empty!(diff_aliases)
+        empty!(stem)
+        empty!(stem_set)
     end
     # update `dag`
     for k in keys(dag)
@@ -720,7 +735,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
 
     # Step 4: Merge dag and ag
     removed_aliases = BitSet()
-    freshag = AliasGraph(nvars)
+    merged_ag = AliasGraph(nvars)
     for (v, (c, a)) in dag
         # D(x) ~ D(y) cannot be removed if x and y are not aliases
         if v != a && !iszero(a)
@@ -732,23 +747,21 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                 vv === nothing && break
                 if !(haskey(dag, vv) && dag[vv][2] == diff_to_var[aa])
                     push!(removed_aliases, vv′)
-                    @goto SKIP_FRESHAG
+                    @goto SKIP_merged_ag
                 end
             end
         end
-        freshag[v] = c => a
-        @label SKIP_FRESHAG
+        merged_ag[v] = c => a
+        @label SKIP_merged_ag
         push!(removed_aliases, a)
     end
     for (v, (c, a)) in ag
         (processed[v] || (!iszero(a) && processed[a])) && continue
         v in removed_aliases && continue
-        freshag[v] = c => a
+        merged_ag[v] = c => a
     end
-    if freshag != ag
-        ag = freshag
-        mm = reduce!(copy(echelon_mm), ag)
-    end
+    ag = merged_ag
+    mm = reduce!(copy(echelon_mm), mm_orig, ag, size(echelon_mm, 1))
 
     # Step 5: Reflect our update decisions back into the graph, and make sure
     # that the RHS of observable variables are defined.
@@ -776,7 +789,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     ag = finalag
 
     if needs_update
-        mm = reduce!(copy(echelon_mm), ag)
+        mm = reduce!(copy(echelon_mm), mm_orig, ag, size(echelon_mm, 1))
         for (ei, e) in enumerate(mm.nzrows)
             set_neighbors!(graph, e, mm.row_cols[ei])
         end
@@ -803,6 +816,7 @@ function exactdiv(a::Integer, b)
 end
 
 function locally_structure_simplify!(adj_row, pivot_var, ag)
+    # If `pivot_var === nothing`, then we only apply `ag` to `adj_row`
     if pivot_var === nothing
         pivot_val = nothing
     else
@@ -857,7 +871,7 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
         else
             dropzeros!(adj_row)
         end
-        return true
+        return false
     end
     # If there were only one or two terms left in the equation (including the
     # pivot variable). We can eliminate the pivot variable. Note that when
