@@ -108,6 +108,7 @@ function alias_elimination!(state::TearingState)
 
     lineqs = BitSet(old_to_new[e] for e in mm.nzrows)
     for (ieq, eq) in enumerate(eqs)
+        # TODO: fix this
         ieq in lineqs && continue
         eqs[ieq] = substitute(eq, subs)
     end
@@ -428,6 +429,10 @@ end
 function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, irreducibles = ())
     mm = copy(mm_orig)
     linear_equations = mm_orig.nzrows
+    is_linear_equations = falses(size(AsSubMatrix(mm_orig), 1))
+    for e in mm_orig.nzrows
+        is_linear_equations[e] = true
+    end
 
     # If linear highest differentiated variables cannot be assigned to a pivot,
     # then we can set it to zero. We use `rank1` to track this.
@@ -439,11 +444,14 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, irreducible
     # Bareiss'ed coefficients as Gaussian elimination is nullspace perserving
     # and we are only working on linear homogeneous subsystem.
     is_reducible = trues(length(var_to_diff))
-    for v in irreducibles
-        is_reducible[v] = false
+    #TODO: what's the correct criterion here?
+    is_linear_variables = isnothing.(var_to_diff) .& isnothing.(invview(var_to_diff))
+    for i in 𝑠vertices(graph)
+        is_linear_equations[i] && continue
+        for j in 𝑠neighbors(graph, i)
+            is_linear_variables[j] = false
+        end
     end
-    is_linear_variables = find_linear_variables(graph, linear_equations, var_to_diff,
-                                                irreducibles)
     solvable_variables = findall(is_linear_variables)
 
     function do_bareiss!(M, Mold = nothing)
