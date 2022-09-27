@@ -335,7 +335,8 @@ function build_explicit_observed_function(sys, ts;
                 eqs_cache[] = Dict(eq.lhs => eq.rhs for eq in equations(sys))
             end
             eqs_dict = eqs_cache[]
-            rhs = get(eqs_dict, v, nothing)
+            rhs_diffeq = get(eqs_dict, v, nothing)
+            push!(obsexprs, v ← rhs_diffeq)
             if rhs === nothing
                 error("The observed variable $(eq.lhs) depends on the differentiated variable $v, but it's not explicit solved. Fix file an issue if you are sure that the system is valid.")
             end

@@ -841,16 +841,15 @@ let
 
     sys_alias = alias_elimination(sys_con)
     D = Differential(t)
-    true_eqs = [0 ~ D(sys.v) - sys.u
-                0 ~ sys.x - ctrl.x
-                0 ~ sys.v - D(sys.x)
-                0 ~ ctrl.kv * D(sys.x) + ctrl.kx * ctrl.x - D(sys.v)]
+    true_eqs = [0 ~ ctrl.u - sys.u
+                0 ~ D(D(sys.x)) - ctrl.u
+                0 ~ ctrl.kv * D(sys.x) + ctrl.kx * sys.x - ctrl.u]
     @test isequal(full_equations(sys_alias), true_eqs)
 
     sys_simp = structural_simplify(sys_con)
     D = Differential(t)
-    true_eqs = [D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x
-                D(sys.x) ~ sys.v]
+    true_eqs = [D(sys.x) ~ ctrl.v
+                D(ctrl.v) ~ ctrl.kv * ctrl.v + ctrl.kx * sys.x]
     @test isequal(full_equations(sys_simp), true_eqs)
 end
 
