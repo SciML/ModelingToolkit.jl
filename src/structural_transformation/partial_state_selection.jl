@@ -116,12 +116,15 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
     end
 
     varlevel = map(1:ndsts(graph)) do var
-        level = 0
+        graph_level = level = 0
         while var_to_diff[var] !== nothing
             var = var_to_diff[var]
             level += 1
+            if !isempty(𝑑neighbors(graph, var))
+                graph_level = level
+            end
         end
-        level
+        graph_level
     end
 
     inv_varlevel = map(1:ndsts(graph)) do var
@@ -135,7 +138,7 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
 
     # TODO: Should pantelides just return this?
     for var in 1:ndsts(graph)
-        if var_to_diff[var] !== nothing
+        if varlevel[var] !== 0
             var_eq_matching[var] = unassigned
         end
     end
