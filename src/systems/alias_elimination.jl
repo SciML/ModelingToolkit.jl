@@ -8,7 +8,7 @@ function alias_eliminate_graph!(state::TransformationState)
     mm = linear_subsys_adjmat(state)
     if size(mm, 1) == 0
         ag = AliasGraph(ndsts(state.structure.graph))
-        return ag, ag, mm, BitSet() # No linear subsystems
+        return ag, ag, mm, mm, BitSet() # No linear subsystems
     end
 
     @unpack graph, var_to_diff = state.structure
@@ -42,7 +42,7 @@ alias_elimination(sys) = alias_elimination!(TearingState(sys; quick_cancel = tru
 function alias_elimination!(state::TearingState)
     sys = state.sys
     complete!(state.structure)
-    ag, complete_ag, mm, updated_diff_vars = alias_eliminate_graph!(state)
+    ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(state)
     isempty(ag) && return sys
 
     fullvars = state.fullvars
@@ -801,7 +801,8 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         update_graph_neighbors!(graph, ag)
     end
 
-    return ag, complete_ag, mm, updated_diff_vars
+    complete_mm = reduce!(copy(echelon_mm), mm_orig, complete_ag, size(echelon_mm, 1))
+    return ag, mm, complete_ag, complete_mm, updated_diff_vars
 end
 
 function update_graph_neighbors!(graph, ag)
