@@ -88,6 +88,9 @@ function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
             tearEquations!(ict, solvable_graph.fadjlist, to_tear_eqs, BitSet(to_tear_vars),
                            nothing)
             for var in to_tear_vars
+                var_eq_matching[var] = unassigned
+            end
+            for var in to_tear_vars
                 var_eq_matching[var] = ict.graph.matching[var]
             end
             old_level_vars = to_tear_vars
