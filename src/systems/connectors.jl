@@ -217,14 +217,14 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, find, rep
     for eq in eqs′
         lhs = eq.lhs
         rhs = eq.rhs
-        if find !== nothing && find(rhs)
+        if find !== nothing && find(rhs, namespace)
             neweq, extra_state = replace(rhs, namespace)
             if extra_state isa AbstractArray
                 append!(extra_states, unwrap.(extra_state))
-            else
-                put!(extra_states, extra_state)
+            elseif extra_state !== nothing
+                push!(extra_states, extra_state)
             end
-            push!(eqs, neweq)
+            neweq isa AbstractArray ? append!(eqs, neweq) : push!(eqs, neweq)
         else
             if lhs isa Number || lhs isa Symbolic
                 push!(eqs, eq) # split connections and equations
