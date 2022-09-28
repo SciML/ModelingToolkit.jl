@@ -4,12 +4,14 @@ struct VariableNoiseType end
 struct VariableInput end
 struct VariableOutput end
 struct VariableIrreducible end
+struct VariableStatePriority end
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
 Symbolics.option_to_metadata_type(::Val{:noise}) = VariableNoiseType
 Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
+Symbolics.option_to_metadata_type(::Val{:state_priority}) = VariableStatePriority
 
 abstract type AbstractConnectType end
 struct Equality <: AbstractConnectType end # Equality connection
@@ -26,6 +28,7 @@ end
 isinput(x) = isvarkind(VariableInput, x)
 isoutput(x) = isvarkind(VariableOutput, x)
 isirreducible(x) = isvarkind(VariableIrreducible, x) || isinput(x)
+state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
 """
 $(SIGNATURES)

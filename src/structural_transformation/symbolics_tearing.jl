@@ -648,10 +648,27 @@ Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
 function dummy_derivative(sys, state = TearingState(sys); simplify = false, kwargs...)
-    function jac(eqs, vars)
-        symeqs = EquationsView(state)[eqs]
-        Symbolics.jacobian((x -> x.rhs).(symeqs), state.fullvars[vars])
+    jac = let state = state
+        (eqs, vars) -> begin
+            symeqs = EquationsView(state)[eqs]
+            Symbolics.jacobian((x -> x.rhs).(symeqs), state.fullvars[vars])
+        end
     end
-    var_eq_matching = dummy_derivative_graph!(state, jac; kwargs...)
+    state_priority = let state = state
+        var -> begin
+            p = 0.0
+            var_to_diff = state.structure.var_to_diff
+            diff_to_var = invview(var_to_diff)
+            while var_to_diff[var] !== nothing
+                var = var_to_diff[var]
+            end
+            while true
+                p = max(p, ModelingToolkit.state_priority(state.fullvars[var]))
+                (var = diff_to_var[var]) === nothing && break
+            end
+            p
+        end
+    end
+    var_eq_matching = dummy_derivative_graph!(state, jac, state_priority; kwargs...)
     tearing_reassemble(state, var_eq_matching; simplify = simplify)
 end
