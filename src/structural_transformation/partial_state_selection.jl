@@ -94,7 +94,10 @@ function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
         end
     end
     for var in 1:ndsts(graph)
-        if varlevel[var] !== 0 && var_eq_matching[var] === unassigned
+        dv = var_to_diff[var]
+        # If `var` is not algebraic (not differentiated nor a dummy derivative),
+        # then it's a SelectedState
+        if !(dv === nothing || (varlevel[dv] !== 0 && var_eq_matching[dv] === unassigned))
             var_eq_matching[var] = SelectedState()
         end
     end

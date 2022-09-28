@@ -6,7 +6,10 @@ const KEEP = typemin(Int)
 
 function alias_eliminate_graph!(state::TransformationState)
     mm = linear_subsys_adjmat(state)
-    size(mm, 1) == 0 && return AliasGraph(ndsts(state.structure.graph)), mm, BitSet() # No linear subsystems
+    if size(mm, 1) == 0
+        ag = AliasGraph(ndsts(state.structure.graph))
+        return ag, ag, mm, BitSet() # No linear subsystems
+    end
 
     @unpack graph, var_to_diff = state.structure
 
