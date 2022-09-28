@@ -269,8 +269,8 @@ function inputs_to_parameters!(state::TransformationState, io)
         @assert new_v > 0
         new_var_to_diff[new_i] = new_v
     end
-    @set! structure.var_to_diff = new_var_to_diff
-    @set! structure.graph = new_graph
+    @set! structure.var_to_diff = complete(new_var_to_diff)
+    @set! structure.graph = complete(new_graph)
 
     @set! sys.eqs = map(Base.Fix2(substitute, input_to_parameters), equations(sys))
     @set! sys.states = setdiff(states(sys), keys(input_to_parameters))

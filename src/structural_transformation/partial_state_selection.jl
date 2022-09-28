@@ -1,6 +1,7 @@
-function partial_state_selection_graph!(state::TransformationState)
+function partial_state_selection_graph!(state::TransformationState;
+                                        ag::Union{AliasGraph, Nothing} = nothing)
     find_solvables!(state; allow_symbolic = true)
-    var_eq_matching = complete(pantelides!(state))
+    var_eq_matching = complete(pantelides!(state, ag))
     complete!(state.structure)
     partial_state_selection_graph!(state.structure, var_eq_matching)
 end
@@ -87,6 +88,9 @@ function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
             tearEquations!(ict, solvable_graph.fadjlist, to_tear_eqs, BitSet(to_tear_vars),
                            nothing)
             for var in to_tear_vars
+                var_eq_matching[var] = unassigned
+            end
+            for var in to_tear_vars
                 var_eq_matching[var] = ict.graph.matching[var]
             end
             old_level_vars = to_tear_vars
@@ -119,12 +123,15 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
     end
 
     varlevel = map(1:ndsts(graph)) do var
-        level = 0
+        graph_level = level = 0
         while var_to_diff[var] !== nothing
             var = var_to_diff[var]
             level += 1
+            if !isempty(𝑑neighbors(graph, var))
+                graph_level = level
+            end
         end
-        level
+        graph_level
     end
 
     inv_varlevel = map(1:ndsts(graph)) do var
@@ -138,7 +145,7 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
 
     # TODO: Should pantelides just return this?
     for var in 1:ndsts(graph)
-        if var_to_diff[var] !== nothing
+        if varlevel[var] !== 0
             var_eq_matching[var] = unassigned
         end
     end

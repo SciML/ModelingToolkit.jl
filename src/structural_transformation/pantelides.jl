@@ -74,7 +74,8 @@ end
 
 Perform Pantelides algorithm.
 """
-function pantelides!(state::TransformationState; maxiters = 8000)
+function pantelides!(state::TransformationState, ag::Union{AliasGraph, Nothing} = nothing;
+                     maxiters = 8000)
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = state.structure
     neqs = nsrcs(graph)
     nvars = nv(var_to_diff)
@@ -82,6 +83,28 @@ function pantelides!(state::TransformationState; maxiters = 8000)
     ecolor = falses(neqs)
     var_eq_matching = Matching(nvars)
     neqs′ = neqs
+    nnonemptyeqs = count(eq -> !isempty(𝑠neighbors(graph, eq)), 1:neqs′)
+
+    # Allow matching for the highest differentiated variable that
+    # currently appears in an equation (or implicit equation in a side ag)
+    varwhitelist = falses(nvars)
+    for var in 1:nvars
+        if var_to_diff[var] === nothing
+            while isempty(𝑑neighbors(graph, var)) && (ag === nothing || !haskey(ag, var))
+                var′ = invview(var_to_diff)[var]
+                var′ === nothing && break
+                var = var′
+            end
+            if !isempty(𝑑neighbors(graph, var)) || (ag !== nothing && haskey(ag, var))
+                varwhitelist[var] = true
+            end
+        end
+    end
+
+    if nnonemptyeqs > count(varwhitelist)
+        throw(InvalidSystemException("System is structurally singular"))
+    end
+
     for k in 1:neqs′
         eq′ = k
         isempty(𝑠neighbors(graph, eq′)) && continue
@@ -93,7 +116,6 @@ function pantelides!(state::TransformationState; maxiters = 8000)
             #
             # the derivatives and algebraic variables are zeros in the variable
             # association list
-            varwhitelist = var_to_diff .== nothing
             resize!(vcolor, nvars)
             fill!(vcolor, false)
             resize!(ecolor, neqs)
@@ -103,11 +125,16 @@ function pantelides!(state::TransformationState; maxiters = 8000)
             pathfound && break # terminating condition
             for var in eachindex(vcolor)
                 vcolor[var] || continue
-                # introduce a new variable
-                nvars += 1
-                var_diff = var_derivative!(state, var)
-                push!(var_eq_matching, unassigned)
-                @assert length(var_eq_matching) == var_diff
+                if var_to_diff[var] === nothing
+                    # introduce a new variable
+                    nvars += 1
+                    var_diff = var_derivative!(state, var)
+                    push!(var_eq_matching, unassigned)
+                    push!(varwhitelist, false)
+                    @assert length(var_eq_matching) == var_diff
+                end
+                varwhitelist[var] = false
+                varwhitelist[var_to_diff[var]] = true
             end
 
             for eq in eachindex(ecolor)
