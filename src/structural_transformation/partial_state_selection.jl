@@ -1,6 +1,7 @@
-function partial_state_selection_graph!(state::TransformationState)
+function partial_state_selection_graph!(state::TransformationState;
+                                        ag::Union{AliasGraph, Nothing} = nothing)
     find_solvables!(state; allow_symbolic = true)
-    var_eq_matching = complete(pantelides!(state))
+    var_eq_matching = complete(pantelides!(state, ag))
     complete!(state.structure)
     partial_state_selection_graph!(state.structure, var_eq_matching)
 end
