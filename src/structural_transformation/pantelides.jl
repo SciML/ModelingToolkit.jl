@@ -96,8 +96,8 @@ function pantelides!(state::TransformationState, ag::Union{AliasGraph, Nothing} 
                 var′ === nothing && break
                 var = var′
             end
-            if !isempty(𝑑neighbors(graph, var)) || (ag !== nothing && haskey(ag, var))
-                if haskey(ag, var)
+            if !isempty(𝑑neighbors(graph, var))
+                if ag !== nothing && haskey(ag, var)
                     # TODO: remove lower diff vars from whitelist
                     c, a = ag[var]
                     iszero(c) || (varwhitelist[a] = true)
@@ -107,7 +107,6 @@ function pantelides!(state::TransformationState, ag::Union{AliasGraph, Nothing} 
             end
         end
     end
-    @show varwhitelist
 
     if nnonemptyeqs > count(varwhitelist)
         throw(InvalidSystemException("System is structurally singular"))
