@@ -98,7 +98,10 @@ function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
         end
     end
     for var in 1:ndsts(graph)
-        if varlevel[var] !== 0 && var_eq_matching[var] === unassigned
+        dv = var_to_diff[var]
+        # If `var` is not algebraic (not differentiated nor a dummy derivative),
+        # then it's a SelectedState
+        if !(dv === nothing || (varlevel[dv] !== 0 && var_eq_matching[dv] === unassigned))
             var_eq_matching[var] = SelectedState()
         end
     end
@@ -154,11 +157,13 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
     var_eq_matching
 end
 
-function dummy_derivative_graph!(state::TransformationState, jac = nothing; kwargs...)
+function dummy_derivative_graph!(state::TransformationState, jac = nothing,
+                                 (ag, diff_va) = (nothing, nothing);
+                                 kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
-    var_eq_matching = complete(pantelides!(state))
+    var_eq_matching = complete(pantelides!(state, ag))
     complete!(state.structure)
-    dummy_derivative_graph!(state.structure, var_eq_matching, jac)
+    dummy_derivative_graph!(state.structure, var_eq_matching, jac, (ag, diff_va))
 end
 
 function compute_diff_level(diff_to_x)
@@ -178,7 +183,8 @@ function compute_diff_level(diff_to_x)
     return xlevel, maxlevel
 end
 
-function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac)
+function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac,
+                                 (ag, diff_va))
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
@@ -242,6 +248,18 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             vars = [diff_to_var[var] for var in vars if diff_to_var[var] !== nothing]
         end
     end
+    if diff_va !== nothing
+        n_dummys = length(dummy_derivatives)
+        needed = count(x -> x isa Int, diff_to_eq) - n_dummys
+        n = 0
+        for v in diff_va
+            c, a = ag[v]
+            n += 1
+            push!(dummy_derivatives, iszero(c) ? v : a)
+            needed == n && break
+            continue
+        end
+    end
 
     dummy_derivatives_set = BitSet(dummy_derivatives)
     # We can eliminate variables that are not a selected state (differential
@@ -251,6 +269,9 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         dummy_derivatives_set = dummy_derivatives_set
 
         v -> begin
+            if ag !== nothing
+                haskey(ag, v) && return false
+            end
             dv = var_to_diff[v]
             dv === nothing || dv in dummy_derivatives_set
         end
@@ -266,7 +287,8 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
                                        Union{Unassigned, SelectedState};
                                        varfilter = can_eliminate)
     for v in eachindex(var_eq_matching)
-        can_eliminate(v) && continue
+        dv = var_to_diff[v]
+        (dv === nothing || dv in dummy_derivatives_set) && continue
         var_eq_matching[v] = SelectedState()
     end
 

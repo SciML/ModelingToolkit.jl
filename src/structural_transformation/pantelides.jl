@@ -83,20 +83,27 @@ function pantelides!(state::TransformationState, ag::Union{AliasGraph, Nothing} 
     ecolor = falses(neqs)
     var_eq_matching = Matching(nvars)
     neqs′ = neqs
-    nnonemptyeqs = count(eq -> !isempty(𝑠neighbors(graph, eq)), 1:neqs′)
+    nnonemptyeqs = count(eq -> !isempty(𝑠neighbors(graph, eq)) && eq_to_diff[eq] === nothing,
+                         1:neqs′)
 
     # Allow matching for the highest differentiated variable that
     # currently appears in an equation (or implicit equation in a side ag)
     varwhitelist = falses(nvars)
     for var in 1:nvars
-        if var_to_diff[var] === nothing
+        if var_to_diff[var] === nothing && !varwhitelist[var]
             while isempty(𝑑neighbors(graph, var)) && (ag === nothing || !haskey(ag, var))
                 var′ = invview(var_to_diff)[var]
                 var′ === nothing && break
                 var = var′
             end
-            if !isempty(𝑑neighbors(graph, var)) || (ag !== nothing && haskey(ag, var))
-                varwhitelist[var] = true
+            if !isempty(𝑑neighbors(graph, var))
+                if ag !== nothing && haskey(ag, var)
+                    # TODO: remove lower diff vars from whitelist
+                    c, a = ag[var]
+                    iszero(c) || (varwhitelist[a] = true)
+                else
+                    varwhitelist[var] = true
+                end
             end
         end
     end
@@ -107,6 +114,7 @@ function pantelides!(state::TransformationState, ag::Union{AliasGraph, Nothing} 
 
     for k in 1:neqs′
         eq′ = k
+        eq_to_diff[eq′] === nothing || continue
         isempty(𝑠neighbors(graph, eq′)) && continue
         pathfound = false
         # In practice, `maxiters=8000` should never be reached, otherwise, the
