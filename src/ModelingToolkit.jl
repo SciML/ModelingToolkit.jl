@@ -185,7 +185,7 @@ export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variables, independent_variable, states, parameters, equations, controls,
        observed, structure, full_equations
-export structural_simplify, expand_connections, linearize, linear_statespace
+export structural_simplify, expand_connections, linearize, linearization_function
 export DiscreteSystem, DiscreteProblem
 
 export calculate_jacobian, generate_jacobian, generate_function
