@@ -160,9 +160,9 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
 # Build control function
 
 """
-    (f_oop, f_ip), dvs, p = generate_control_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); implicit_dae = false, ddvs = if implicit_dae
+    (f_oop, f_ip), dvs, p = generate_control_function(sys::AbstractODESystem, inputs = unbound_inputs(sys); implicit_dae = false, ddvs = if implicit_dae
 
-For a system `sys` that has unbound inputs (as determined by [`unbound_inputs`](@ref)), generate a function with additional input argument `in`
+For a system `sys` with inputs (as determined by [`unbound_inputs`](@ref) or user specified), generate a function with additional input argument `in`
 ```
 f_oop : (u,in,p,t)      -> rhs
 f_ip  : (uout,u,in,p,t) -> nothing
@@ -187,7 +187,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         error("No unbound inputs were found in system.")
     end
 
-    sys, diff_idxs, alge_idxs = io_preprocessing(sys, inputs, []; simplify, kwargs...)
+    sys, _ = io_preprocessing(sys, inputs, []; simplify, kwargs...)
 
     dvs = states(sys)
     ps = parameters(sys)
