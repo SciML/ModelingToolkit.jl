@@ -567,7 +567,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     eq_to_diff = new_eq_to_diff
     diff_to_var = invview(var_to_diff)
 
-    @set! state.structure.graph = graph
+    @set! state.structure.graph = complete(graph)
     @set! state.structure.var_to_diff = var_to_diff
     @set! state.structure.eq_to_diff = eq_to_diff
     @set! state.fullvars = fullvars = fullvars[invvarsperm]
@@ -669,6 +669,6 @@ function dummy_derivative(sys, state = TearingState(sys); simplify = false, kwar
             p
         end
     end
-    var_eq_matching = dummy_derivative_graph!(state, jac, state_priority; kwargs...)
+    var_eq_matching = dummy_derivative_graph!(state, jac; state_priority, kwargs...)
     tearing_reassemble(state, var_eq_matching; simplify = simplify)
 end

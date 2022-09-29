@@ -405,7 +405,7 @@ function namespace_assignment(eq::Assignment, sys)
     Assignment(_lhs, _rhs)
 end
 
-function namespace_expr(O, sys, n = nameof(sys)) where {T}
+function namespace_expr(O, sys, n = nameof(sys))
     ivs = independent_variables(sys)
     O = unwrap(O)
     if any(isequal(O), ivs)

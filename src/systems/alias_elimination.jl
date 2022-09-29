@@ -6,7 +6,10 @@ const KEEP = typemin(Int)
 
 function alias_eliminate_graph!(state::TransformationState)
     mm = linear_subsys_adjmat(state)
-    size(mm, 1) == 0 && return AliasGraph(ndsts(state.structure.graph)), mm, BitSet() # No linear subsystems
+    if size(mm, 1) == 0
+        ag = AliasGraph(ndsts(state.structure.graph))
+        return ag, mm, ag, mm, BitSet() # No linear subsystems
+    end
 
     @unpack graph, var_to_diff = state.structure
 
@@ -39,7 +42,7 @@ alias_elimination(sys) = alias_elimination!(TearingState(sys; quick_cancel = tru
 function alias_elimination!(state::TearingState)
     sys = state.sys
     complete!(state.structure)
-    ag, mm, updated_diff_vars = alias_eliminate_graph!(state)
+    ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(state)
     isempty(ag) && return sys
 
     fullvars = state.fullvars
@@ -543,6 +546,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     #
     nvars = ndsts(graph)
     ag = AliasGraph(nvars)
+    complete_ag = AliasGraph(nvars)
     mm, echelon_mm = simple_aliases!(ag, graph, var_to_diff, mm_orig)
 
     # Step 3: Handle differentiated variables
@@ -702,6 +706,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             while (iv = diff_to_var[v]) in zero_vars_set
                 v = iv
             end
+            complete_ag[v] = 0
             if diff_to_var[v] === nothing # `v` is reducible
                 dag[v] = 0
             end
@@ -729,6 +734,13 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # Step 4: Merge dag and ag
     removed_aliases = BitSet()
     merged_ag = AliasGraph(nvars)
+    for (v, (c, a)) in dag
+        complete_ag[v] = c => a
+    end
+    for (v, (c, a)) in ag
+        (processed[v] || (!iszero(a) && processed[a])) && continue
+        complete_ag[v] = c => a
+    end
     for (v, (c, a)) in dag
         # D(x) ~ D(y) cannot be removed if x and y are not aliases
         if v != a && !iszero(a)
@@ -789,7 +801,8 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         update_graph_neighbors!(graph, ag)
     end
 
-    return ag, mm, updated_diff_vars
+    complete_mm = reduce!(copy(echelon_mm), mm_orig, complete_ag, size(echelon_mm, 1))
+    return ag, mm, complete_ag, complete_mm, updated_diff_vars
 end
 
 function update_graph_neighbors!(graph, ag)
