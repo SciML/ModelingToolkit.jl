@@ -23,7 +23,7 @@ end
 
 function logged_fun(f, args...)
     # Currently we don't really support complex numbers
-    term(LoggedFun(f, args), args..., type=Real)
+    term(LoggedFun(f, args), args..., type = Real)
 end
 
 debug_sub(eq::Equation) = debug_sub(eq.lhs) ~ debug_sub(eq.rhs)
@@ -31,5 +31,6 @@ function debug_sub(ex)
     istree(ex) || return ex
     f = operation(ex)
     args = map(debug_sub, arguments(ex))
-    f in LOGGED_FUN ? logged_fun(f, args...) : similarterm(ex, f, args, metadata=metadata(ex))
+    f in LOGGED_FUN ? logged_fun(f, args...) :
+    similarterm(ex, f, args, metadata = metadata(ex))
 end

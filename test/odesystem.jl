@@ -889,3 +889,15 @@ eqs = [D(q) ~ -p / L - F
 testdict = Dict([:name => "test"])
 @named sys = ODESystem(eqs, t, metadata = testdict)
 @test get_metadata(sys) == testdict
+
+@variables t P(t)=0 Q(t)=2
+∂t = Differential(t)
+
+eqs = [∂t(Q) ~ 1 / sin(P)
+       ∂t(P) ~ log(-cos(Q))]
+@named sys = ODESystem(eqs, t, [P, Q], [])
+sys = debug_system(sys);
+prob = ODEProblem(sys, [], (0, 1.0));
+du = zero(prob.u0);
+@test_throws "-cos(Q(t))" prob.f(du, [1, 0], prob.p, 0.0)
+@test_throws "sin(P(t))" prob.f(du, [0, 2], prob.p, 0.0)
