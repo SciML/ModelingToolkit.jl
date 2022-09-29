@@ -159,11 +159,12 @@ end
 
 function dummy_derivative_graph!(state::TransformationState, jac = nothing,
                                  (ag, diff_va) = (nothing, nothing);
-                                 kwargs...)
+                                 state_priority = nothing, kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     var_eq_matching = complete(pantelides!(state, ag))
     complete!(state.structure)
-    dummy_derivative_graph!(state.structure, var_eq_matching, jac, (ag, diff_va))
+    dummy_derivative_graph!(state.structure, var_eq_matching, jac, (ag, diff_va),
+                            state_priority)
 end
 
 function compute_diff_level(diff_to_x)
@@ -184,7 +185,7 @@ function compute_diff_level(diff_to_x)
 end
 
 function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac,
-                                 (ag, diff_va))
+                                 (ag, diff_va), state_priority)
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
@@ -204,12 +205,17 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         iszero(maxlevel) && continue
 
         rank_matching = Matching(nvars)
+        isfirst = true
         for _ in maxlevel:-1:1
             eqs = filter(eq -> diff_to_eq[eq] !== nothing, eqs)
             nrows = length(eqs)
             iszero(nrows) && break
             eqs_set = BitSet(eqs)
 
+            if state_priority !== nothing && isfirst
+                sort!(vars, by = state_priority)
+            end
+            isfirst = false
             # TODO: making the algorithm more robust
             # 1. If the Jacobian is a integer matrix, use Bareiss to check
             # linear independence. (done)
