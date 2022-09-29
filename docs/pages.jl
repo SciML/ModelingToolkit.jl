@@ -17,6 +17,7 @@ pages = [
                     "basics/Variable_metadata.md",
                     "basics/Composition.md",
                     "basics/Events.md",
+                    "basics/Linearization.md",
                     "basics/Validation.md",
                     "basics/DependencyGraphs.md",
                     "basics/FAQ.md"],
