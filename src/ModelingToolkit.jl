@@ -147,6 +147,7 @@ include("systems/dependency_graphs.jl")
 include("systems/systemstructure.jl")
 using .SystemStructures
 
+include("debugging.jl")
 include("systems/alias_elimination.jl")
 include("structural_transformation/StructuralTransformations.jl")
 
@@ -209,5 +210,6 @@ export build_function
 export modelingtoolkitize
 export @variables, @parameters
 export @named, @nonamespace, @namespace, extend, compose
+export debug_system
 
 end # module
