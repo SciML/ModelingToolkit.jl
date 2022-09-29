@@ -899,5 +899,10 @@ eqs = [∂t(Q) ~ 1 / sin(P)
 sys = debug_system(sys);
 prob = ODEProblem(sys, [], (0, 1.0));
 du = zero(prob.u0);
-@test_throws "-cos(Q(t))" prob.f(du, [1, 0], prob.p, 0.0)
-@test_throws "sin(P(t))" prob.f(du, [0, 2], prob.p, 0.0)
+if VERSION < v"1.8"
+    @test_throws DomainError prob.f(du, [1, 0], prob.p, 0.0)
+    @test_throws DomainError prob.f(du, [0, 2], prob.p, 0.0)
+else
+    @test_throws "-cos(Q(t))" prob.f(du, [1, 0], prob.p, 0.0)
+    @test_throws "sin(P(t))" prob.f(du, [0, 2], prob.p, 0.0)
+end
