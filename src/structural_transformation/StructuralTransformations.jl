@@ -21,7 +21,8 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
                        ExtraVariablesSystemException,
                        get_postprocess_fbody, vars!,
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
-                       invalidate_cache!, Substitutions, get_or_construct_tearing_state
+                       invalidate_cache!, Substitutions, get_or_construct_tearing_state,
+                       AliasGraph
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview

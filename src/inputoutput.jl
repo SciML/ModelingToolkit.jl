@@ -160,9 +160,9 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
 # Build control function
 
 """
-    (f_oop, f_ip), dvs, p = generate_control_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys); implicit_dae = false, ddvs = if implicit_dae
+    (f_oop, f_ip), dvs, p = generate_control_function(sys::AbstractODESystem, inputs = unbound_inputs(sys); implicit_dae = false, ddvs = if implicit_dae
 
-For a system `sys` that has unbound inputs (as determined by [`unbound_inputs`](@ref)), generate a function with additional input argument `in`
+For a system `sys` with inputs (as determined by [`unbound_inputs`](@ref) or user specified), generate a function with additional input argument `in`
 ```
 f_oop : (u,in,p,t)      -> rhs
 f_ip  : (uout,u,in,p,t) -> nothing
@@ -187,7 +187,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         error("No unbound inputs were found in system.")
     end
 
-    sys, diff_idxs, alge_idxs = io_preprocessing(sys, inputs, []; simplify, kwargs...)
+    sys, _ = io_preprocessing(sys, inputs, []; simplify, kwargs...)
 
     dvs = states(sys)
     ps = parameters(sys)
@@ -269,8 +269,8 @@ function inputs_to_parameters!(state::TransformationState, io)
         @assert new_v > 0
         new_var_to_diff[new_i] = new_v
     end
-    @set! structure.var_to_diff = new_var_to_diff
-    @set! structure.graph = new_graph
+    @set! structure.var_to_diff = complete(new_var_to_diff)
+    @set! structure.graph = complete(new_graph)
 
     @set! sys.eqs = map(Base.Fix2(substitute, input_to_parameters), equations(sys))
     @set! sys.states = setdiff(states(sys), keys(input_to_parameters))

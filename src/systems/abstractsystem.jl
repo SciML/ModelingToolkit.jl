@@ -405,7 +405,7 @@ function namespace_assignment(eq::Assignment, sys)
     Assignment(_lhs, _rhs)
 end
 
-function namespace_expr(O, sys, n = nameof(sys)) where {T}
+function namespace_expr(O, sys, n = nameof(sys))
     ivs = independent_variables(sys)
     O = unwrap(O)
     if any(isequal(O), ivs)
@@ -953,6 +953,40 @@ end
 """
 $(SIGNATURES)
 
+Replace functions with singularities with a function that errors with symbolic
+information. E.g.
+
+```julia-repl
+julia> sys = debug_system(sys);
+
+julia> prob = ODEProblem(sys, [], (0, 1.0));
+
+julia> du = zero(prob.u0);
+
+julia> prob.f(du, prob.u0, prob.p, 0.0)
+ERROR: DomainError with (-1.0,):
+log errors with input(s): -cos(Q(t)) => -1.0
+Stacktrace:
+  [1] (::ModelingToolkit.LoggedFun{typeof(log)})(args::Float64)
+  ...
+```
+"""
+function debug_system(sys::AbstractSystem)
+    if has_systems(sys) && !isempty(get_systems(sys))
+        error("debug_system only works on systems with no sub-systems!")
+    end
+    if has_eqs(sys)
+        @set! sys.eqs = debug_sub.(equations(sys))
+    end
+    if has_observed(sys)
+        @set! sys.observed = debug_sub.(observed(sys))
+    end
+    return sys
+end
+
+"""
+$(SIGNATURES)
+
 Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations. When `simplify=true`, the `simplify`
 function will be applied during the tearing process. It also takes kwargs
@@ -1031,7 +1065,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         input_idxs = input_idxs,
         sts = states(sys),
         fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys),
-        h = ModelingToolkit.build_explicit_observed_function(sys, outputs),
+        h = build_explicit_observed_function(sys, outputs),
         chunk = ForwardDiff.Chunk(input_idxs)
 
         function (u, p, t)

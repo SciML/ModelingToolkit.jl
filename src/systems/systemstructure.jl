@@ -350,7 +350,8 @@ function TearingState(sys; quick_cancel = false, check = true)
     eq_to_diff = DiffGraph(nsrcs(graph))
 
     return TearingState(sys, fullvars,
-                        SystemStructure(var_to_diff, eq_to_diff, graph, nothing), Any[])
+                        SystemStructure(complete(var_to_diff), complete(eq_to_diff),
+                                        complete(graph), nothing), Any[])
 end
 
 function linear_subsys_adjmat(state::TransformationState)
@@ -403,11 +404,93 @@ function linear_subsys_adjmat(state::TransformationState)
                             linear_equations, eadj, cadj)
 end
 
+using .BipartiteGraphs: Label, BipartiteAdjacencyList
+struct SystemStructurePrintMatrix <:
+       AbstractMatrix{Union{Label, Int, BipartiteAdjacencyList}}
+    bpg::BipartiteGraph
+    highlight_graph::BipartiteGraph
+    var_to_diff::DiffGraph
+    eq_to_diff::DiffGraph
+    var_eq_matching::Union{Matching, Nothing}
+end
+Base.size(bgpm::SystemStructurePrintMatrix) = (max(nsrcs(bgpm.bpg), ndsts(bgpm.bpg)) + 1, 5)
+function compute_diff_label(diff_graph, i)
+    di = i - 1 <= length(diff_graph) ? diff_graph[i - 1] : nothing
+    ii = i - 1 <= length(invview(diff_graph)) ? invview(diff_graph)[i - 1] : nothing
+    return Label(string(di === nothing ? "" : string(di, '↓'),
+                        di !== nothing && ii !== nothing ? " " : "",
+                        ii === nothing ? "" : string(ii, '↑')))
+end
+function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
+    checkbounds(bgpm, i, j)
+    if i <= 1
+        return (Label.(("#", "∂ₜ", "eq", "∂ₜ", "v")))[j]
+    elseif j == 2
+        return compute_diff_label(bgpm.eq_to_diff, i)
+    elseif j == 4
+        return compute_diff_label(bgpm.var_to_diff, i)
+    elseif j == 1
+        return i - 1
+    elseif j == 3
+        return BipartiteAdjacencyList(i - 1 <= nsrcs(bgpm.bpg) ?
+                                      𝑠neighbors(bgpm.bpg, i - 1) : nothing,
+                                      bgpm.highlight_graph !== nothing &&
+                                      i - 1 <= nsrcs(bgpm.highlight_graph) ?
+                                      Set(𝑠neighbors(bgpm.highlight_graph, i - 1)) :
+                                      nothing,
+                                      bgpm.var_eq_matching !== nothing &&
+                                      (i - 1 <= length(invview(bgpm.var_eq_matching))) ?
+                                      invview(bgpm.var_eq_matching)[i - 1] : unassigned)
+    elseif j == 5
+        return BipartiteAdjacencyList(i - 1 <= ndsts(bgpm.bpg) ?
+                                      𝑑neighbors(bgpm.bpg, i - 1) : nothing,
+                                      bgpm.highlight_graph !== nothing &&
+                                      i - 1 <= ndsts(bgpm.highlight_graph) ?
+                                      Set(𝑑neighbors(bgpm.highlight_graph, i - 1)) :
+                                      nothing,
+                                      bgpm.var_eq_matching !== nothing &&
+                                      (i - 1 <= length(bgpm.var_eq_matching)) ?
+                                      bgpm.var_eq_matching[i - 1] : unassigned)
+    else
+        @assert false
+    end
+end
+
 function Base.show(io::IO, mime::MIME"text/plain", s::SystemStructure)
-    @unpack graph = s
-    S = incidence_matrix(graph, Num(Sym{Real}(:×)))
-    print(io, "Incidence matrix:")
-    show(io, mime, S)
+    @unpack graph, solvable_graph, var_to_diff, eq_to_diff = s
+    if !get(io, :limit, true) || !get(io, :mtk_limit, true)
+        print(io, "SystemStructure with ", length(graph.fadjlist), " equations and ",
+              isa(graph.badjlist, Int) ? graph.badjlist : length(graph.badjlist),
+              " variables\n")
+        Base.print_matrix(io,
+                          SystemStructurePrintMatrix(complete(graph),
+                                                     complete(solvable_graph),
+                                                     complete(var_to_diff),
+                                                     complete(eq_to_diff), nothing))
+    else
+        S = incidence_matrix(graph, Num(Sym{Real}(:×)))
+        print(io, "Incidence matrix:")
+        show(io, mime, S)
+    end
+end
+
+struct MatchedSystemStructure
+    structure::SystemStructure
+    var_eq_matching::Matching
+end
+
+function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
+    s = ms.structure
+    @unpack graph, solvable_graph, var_to_diff, eq_to_diff = s
+    print(io, "Matched SystemStructure with ", length(graph.fadjlist), " equations and ",
+          isa(graph.badjlist, Int) ? graph.badjlist : length(graph.badjlist),
+          " variables\n")
+    Base.print_matrix(io,
+                      SystemStructurePrintMatrix(complete(graph),
+                                                 complete(solvable_graph),
+                                                 complete(var_to_diff),
+                                                 complete(eq_to_diff),
+                                                 complete(ms.var_eq_matching, nsrcs(graph))))
 end
 
 end # module

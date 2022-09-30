@@ -4,12 +4,14 @@ struct VariableNoiseType end
 struct VariableInput end
 struct VariableOutput end
 struct VariableIrreducible end
+struct VariableStatePriority end
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
 Symbolics.option_to_metadata_type(::Val{:noise}) = VariableNoiseType
 Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
+Symbolics.option_to_metadata_type(::Val{:state_priority}) = VariableStatePriority
 
 abstract type AbstractConnectType end
 struct Equality <: AbstractConnectType end # Equality connection
@@ -26,6 +28,7 @@ end
 isinput(x) = isvarkind(VariableInput, x)
 isoutput(x) = isvarkind(VariableOutput, x)
 isirreducible(x) = isvarkind(VariableIrreducible, x) || isinput(x)
+state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
 """
 $(SIGNATURES)
@@ -285,4 +288,38 @@ end
 
 function hasdescription(x)
     getdescription(x) != ""
+end
+
+## binary variables =================================================================
+struct VariableBinary end
+Symbolics.option_to_metadata_type(::Val{:binary}) = VariableBinary
+
+isbinaryvar(x::Num) = isbinaryvar(Symbolics.unwrap(x))
+
+"""
+    isbinaryvar(x)
+
+Determine if a variable is binary.
+"""
+function isbinaryvar(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    return Symbolics.getmetadata(x, VariableBinary, false)
+end
+
+## integer variables =================================================================
+struct VariableInteger end
+Symbolics.option_to_metadata_type(::Val{:integer}) = VariableInteger
+
+isintegervar(x::Num) = isintegervar(Symbolics.unwrap(x))
+
+"""
+    isintegervar(x)
+
+Determine if a variable is integer.
+"""
+function isintegervar(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    return Symbolics.getmetadata(x, VariableInteger, false)
 end

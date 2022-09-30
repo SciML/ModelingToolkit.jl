@@ -147,6 +147,7 @@ include("systems/dependency_graphs.jl")
 include("systems/systemstructure.jl")
 using .SystemStructures
 
+include("debugging.jl")
 include("systems/alias_elimination.jl")
 include("structural_transformation/StructuralTransformations.jl")
 
@@ -176,7 +177,8 @@ export NonlinearSystem, OptimizationSystem
 export alias_elimination, flatten
 export connect, @connector, Connection, Flow, Stream, instream
 export isinput, isoutput, getbounds, hasbounds, isdisturbance, istunable, getdist, hasdist,
-       tunable_parameters, isirreducible, getdescription, hasdescription
+       tunable_parameters, isirreducible, getdescription, hasdescription, isbinaryvar,
+       isintegervar
 export ode_order_lowering, dae_order_lowering, liouville_transform
 export PDESystem
 export Differential, expand_derivatives, @derivatives
@@ -185,7 +187,7 @@ export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variables, independent_variable, states, parameters, equations, controls,
        observed, structure, full_equations
-export structural_simplify, expand_connections, linearize, linear_statespace
+export structural_simplify, expand_connections, linearize, linearization_function
 export DiscreteSystem, DiscreteProblem
 
 export calculate_jacobian, generate_jacobian, generate_function
@@ -209,5 +211,6 @@ export build_function
 export modelingtoolkitize
 export @variables, @parameters
 export @named, @nonamespace, @namespace, extend, compose
+export debug_system
 
 end # module
