@@ -591,12 +591,12 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     end
     deleteat!(oldobs, sort!(removed_obs))
     @set! sys.substitutions = Substitutions(subeqs, deps)
-    @set! state.sys = sys
-    @set! sys.tearing_state = state
 
     der2expr = Dict(eq.lhs => eq.rhs for eq in equations(sys) if isdiffeq(eq))
     obs = substitute.([oldobs; subeqs], (der2expr,))
     @set! sys.observed = obs
+    @set! state.sys = sys
+    @set! sys.tearing_state = state
     return invalidate_cache!(sys)
 end
 
