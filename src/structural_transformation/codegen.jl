@@ -384,7 +384,6 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
 
     fullvars = state.fullvars
     s = state.structure
-    graph = s.graph
     solver_states = fullvars[is_solver_state_idxs]
     algvars = fullvars[.!is_solver_state_idxs]
 
@@ -525,6 +524,7 @@ function ODAEProblem{iip}(sys,
     has_difference = any(isdifferenceeq, eqs)
     cbs = process_events(sys; callback, has_difference, kwargs...)
 
+    kwargs = filter_kwargs(kwargs)
     if cbs === nothing
         ODEProblem{iip}(fun, u0, tspan, p; kwargs...)
     else
