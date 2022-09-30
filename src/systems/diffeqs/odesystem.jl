@@ -327,12 +327,6 @@ function build_explicit_observed_function(sys, ts;
         eq = obs[i]
         lhs = eq.lhs
         rhs = eq.rhs
-        vars!(vars, rhs)
-        for v in vars
-            isdifferential(v) &&
-                error("Observed `$eq` depends on differentiated variable `$v`. This is not supported.")
-        end
-        empty!(vars)
         push!(obsexprs, lhs ← rhs)
     end
 

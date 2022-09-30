@@ -241,6 +241,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     #removed_vars = Int[]
     removed_obs = Int[]
     diff_to_var = invview(var_to_diff)
+    dummy_sub = Dict()
     for var in 1:length(fullvars)
         dv = var_to_diff[var]
         dv === nothing && continue
@@ -253,7 +254,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 push!(removed_obs, idx)
             end
             for eq in 𝑑neighbors(graph, dv)
-                neweqs[eq] = substitute(neweqs[eq], fullvars[dv] => v_t)
+                dummy_sub[dd] = v_t
+                neweqs[eq] = substitute(neweqs[eq], dd => v_t)
             end
             fullvars[dv] = v_t
             # update the structural information
@@ -592,8 +594,12 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     deleteat!(oldobs, sort!(removed_obs))
     @set! sys.substitutions = Substitutions(subeqs, deps)
 
-    der2expr = Dict(eq.lhs => eq.rhs for eq in equations(sys) if isdiffeq(eq))
-    obs = substitute.([oldobs; subeqs], (der2expr,))
+    obs_sub = dummy_sub
+    for eq in equations(sys)
+        isdiffeq(eq) || continue
+        obs_sub[eq.lhs] = eq.rhs
+    end
+    obs = substitute.([oldobs; subeqs], (obs_sub,))
     @set! sys.observed = obs
     @set! state.sys = sys
     @set! sys.tearing_state = state
