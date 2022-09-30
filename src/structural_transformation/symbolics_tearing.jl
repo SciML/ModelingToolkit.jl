@@ -76,7 +76,7 @@ function eq_derivative!(ts::TearingState{ODESystem}, ieq::Int)
         add_edge!(s.graph, eq_diff, s.var_to_diff[var])
     end
     s.solvable_graph === nothing ||
-        find_eq_solvables!(ts, eq_diff; may_be_zero = true, allow_symbolic = false)
+        find_eq_solvables!(ts, eq_diff; may_be_zero = true, allow_symbolic = true)
 
     return eq_diff
 end
@@ -607,7 +607,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
 end
 
 function tearing(state::TearingState; kwargs...)
-    state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
+    state.structure.solvable_graph = nothing
+    find_solvables!(state; kwargs...)
     complete!(state.structure)
     @unpack graph = state.structure
     algvars = BitSet(findall(v -> isalgvar(state.structure, v), 1:ndsts(graph)))
@@ -631,9 +632,9 @@ Tear the nonlinear equations in system. When `simplify=true`, we simplify the
 new residual residual equations after tearing. End users are encouraged to call [`structural_simplify`](@ref)
 instead, which calls this function internally.
 """
-function tearing(sys::AbstractSystem; simplify = false)
+function tearing(sys::AbstractSystem; simplify = false, kw...)
     state = TearingState(sys)
-    var_eq_matching = tearing(state)
+    var_eq_matching = tearing(state; kw...)
     invalidate_cache!(tearing_reassemble(state, var_eq_matching; simplify = simplify))
 end
 

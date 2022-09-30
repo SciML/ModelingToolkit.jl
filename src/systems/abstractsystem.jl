@@ -1019,6 +1019,7 @@ end
 function io_preprocessing(sys::AbstractSystem, inputs,
                           outputs; simplify = false, kwargs...)
     sys, input_idxs = structural_simplify(sys, (; inputs, outputs); simplify, kwargs...)
+    sys = structural_simplify(tearing_substitution(sys); simplify, kwargs...)
 
     eqs = equations(sys)
     alg_start_idx = findfirst(!isdiffeq, eqs)
