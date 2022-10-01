@@ -188,7 +188,8 @@ t = 0
 f[1](x, inputs, p, t)
 ```
 """
-function generate_control_function(sys::AbstractODESystem, inputs = unbound_inputs(sys), disturbance_inputs = nothing;
+function generate_control_function(sys::AbstractODESystem, inputs = unbound_inputs(sys),
+                                   disturbance_inputs = disturbances(sys);
                                    implicit_dae = false,
                                    simplify = false,
                                    kwargs...)
@@ -329,7 +330,7 @@ The structure represents a model of a disturbance, along with the input variable
 - `model::M`: A model of the disturbance. This is typically an `ODESystem`, but type that implements [`ModelingToolkit.get_disturbance_system`](@ref)`(dist::DisturbanceModel) -> ::ODESystem` is supported.
 """
 struct DisturbanceModel{M}
-    input
+    input::Any
     model::M
 end
 
@@ -387,18 +388,17 @@ dist = ModelingToolkit.DisturbanceModel(model.torque.tau.u, dmodel)
 `f_oop` will have an extra state corresponding to the integrator in the disturbance model. This state will not be affected by any input, but will affect the dynamics from where it enters, in this case it will affect additively from `model.torque.tau.u`.
 """
 function add_input_disturbance(sys, dist::DisturbanceModel)
-    t = ModelingToolkit.get_iv(sys)
-    @variables d(t)=0 
-    @variables u(t)=0 [input=true]
+    t = get_iv(sys)
+    @variables d(t)=0 [disturbance = true]
+    @variables u(t)=0 [input = true]
     dsys = get_disturbance_system(dist)
 
-    eqs = [
-        dsys.input.u[1] ~ d
-        dist.input ~ u + dsys.output.u[1]
-    ]
+    eqs = [dsys.input.u[1] ~ d
+           dist.input ~ u + dsys.output.u[1]]
 
-    augmented_sys = ODESystem(eqs, t, systems=[sys, dsys], name=gensym(:outer))
-    
-    (f_oop, f_ip), dvs, p = ModelingToolkit.generate_control_function(augmented_sys, [u], [d])
+    augmented_sys = ODESystem(eqs, t, systems = [sys, dsys], name = gensym(:outer))
+
+    (f_oop, f_ip), dvs, p = generate_control_function(augmented_sys, [u],
+                                                      [d])
     (f_oop, f_ip), augmented_sys, dvs, p
 end

@@ -196,8 +196,6 @@ eqs = [Differential(t)(x) ~ u]
 @named sys = ODESystem(eqs, t)
 @test_nowarn structural_simplify(sys)
 
-
-
 #=
 ## Disturbance input handling
 We test that the generated disturbance dynamics is correct by calling the dynamics in two different points that differ in the disturbance state, and check that we get the same result as when we call the linearized dynamics in the same two points. The true system is linear so the linearized dynamics are exact.
@@ -222,15 +220,21 @@ c = 10   # Damping coefficient
 @named damper = Rotational.Damper(; d = c)
 @named torque = Rotational.Torque()
 
-function SystemModel(u=nothing; name=:model)
-    eqs = [
-        connect(torque.flange, inertia1.flange_a)
-        connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
-    ]
+function SystemModel(u = nothing; name = :model)
+    eqs = [connect(torque.flange, inertia1.flange_a)
+           connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+           connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
     if u !== nothing
         push!(eqs, connect(torque.tau, u.output))
-        return @named model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper, u])
+        return @named model = ODESystem(eqs, t;
+                                        systems = [
+                                            torque,
+                                            inertia1,
+                                            inertia2,
+                                            spring,
+                                            damper,
+                                            u,
+                                        ])
     end
     ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
 end
@@ -259,7 +263,5 @@ pn = ModelingToolkit.varmap_to_vars(def, p)
 xp0 = f_oop(x0, u, pn, 0)
 xp1 = f_oop(x1, u, pn, 0)
 
-@test xp0 ≈ matrices.A*x0 + matrices.B*[u; 0]
-@test xp1 ≈ matrices.A*x1 + matrices.B*[u; 0]
-
-
+@test xp0 ≈ matrices.A * x0 + matrices.B * [u; 0]
+@test xp1 ≈ matrices.A * x1 + matrices.B * [u; 0]
