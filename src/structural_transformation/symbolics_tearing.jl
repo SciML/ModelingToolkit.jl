@@ -195,6 +195,23 @@ function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F,
     end
 end
 
+#=
+function check_diff_graph(var_to_diff, fullvars)
+    diff_to_var = invview(var_to_diff)
+    for (iv, v) in enumerate(fullvars)
+        ov, order = var_from_nested_derivative(v)
+        graph_order = 0
+        vv = iv
+        while true
+            vv = diff_to_var[vv]
+            vv === nothing && break
+            graph_order += 1
+        end
+        @assert graph_order==order "graph_order: $graph_order, order: $order for variable $v"
+    end
+end
+=#
+
 function tearing_reassemble(state::TearingState, var_eq_matching; simplify = false)
     @unpack fullvars, sys = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
@@ -237,8 +254,12 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         possible_x_t[rhs] = i, lhs
     end
 
-    #removed_eqs = Int[]
-    #removed_vars = Int[]
+    if ModelingToolkit.has_iv(state.sys)
+        iv = get_iv(state.sys)
+        D = Differential(iv)
+    else
+        iv = D = nothing
+    end
     removed_obs = Int[]
     diff_to_var = invview(var_to_diff)
     dummy_sub = Dict()
@@ -258,7 +279,22 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 neweqs[eq] = substitute(neweqs[eq], dd => v_t)
             end
             fullvars[dv] = v_t
+            # If we have:
+            # x -> D(x) -> D(D(x))
+            # We need to to transform it to:
+            # x   x_t -> D(x_t)
             # update the structural information
+            dx = dv
+            x_t = v_t
+            while (ddx = var_to_diff[dx]) !== nothing
+                dx_t = D(x_t)
+                for eq in 𝑑neighbors(graph, ddx)
+                    neweqs[eq] = substitute(neweqs[eq], fullvars[ddx] => dx_t)
+                end
+                fullvars[ddx] = dx_t
+                dx = ddx
+                x_t = dx_t
+            end
             diff_to_var[dv] = nothing
         end
     end
@@ -323,12 +359,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     # As a final note, in all the above cases where we need to introduce new
     # variables and equations, don't add them when they already exist.
 
-    if ModelingToolkit.has_iv(state.sys)
-        iv = get_iv(state.sys)
-        D = Differential(iv)
-    else
-        iv = D = nothing
-    end
     nvars = ndsts(graph)
     processed = falses(nvars)
     subinfo = NTuple{3, Int}[]
@@ -488,7 +518,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             # 0 ~ a * var + b
             # var ~ -b/a
             if ModelingToolkit._iszero(a)
-                @warn "Tearing: $eq is a singular equation!"
+                @warn "Tearing: solving $eq for $var is singular!"
                 #push!(removed_eqs, ieq)
                 #push!(removed_vars, iv)
             else

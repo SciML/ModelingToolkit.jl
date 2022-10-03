@@ -315,10 +315,8 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     nvars = length(fullvars)
     diffvars = []
-    vartype = fill(DIFFERENTIAL_VARIABLE, nvars)
     var_to_diff = DiffGraph(nvars, true)
     for dervaridx in dervaridxs
-        vartype[dervaridx] = DERIVATIVE_VARIABLE
         dervar = fullvars[dervaridx]
         diffvar = arguments(dervar)[1]
         diffvaridx = var2idx[diffvar]
@@ -326,6 +324,7 @@ function TearingState(sys; quick_cancel = false, check = true)
         var_to_diff[diffvaridx] = dervaridx
     end
 
+    #=
     algvars = setdiff(states(sys), diffvars)
     for algvar in algvars
         # it could be that a variable appeared in the states, but never appeared
@@ -334,10 +333,8 @@ function TearingState(sys; quick_cancel = false, check = true)
         #if algvaridx == 0
         #    check ? throw(InvalidSystemException("The system is missing an equation for $algvar.")) : return nothing
         #end
-        if algvaridx != 0
-            vartype[algvaridx] = ALGEBRAIC_VARIABLE
-        end
     end
+    =#
 
     graph = BipartiteGraph(neqs, nvars, Val(false))
     for (ie, vars) in enumerate(symbolic_incidence), v in vars

@@ -143,13 +143,6 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
         level
     end
 
-    # TODO: Should pantelides just return this?
-    for var in 1:ndsts(graph)
-        if varlevel[var] !== 0
-            var_eq_matching[var] = unassigned
-        end
-    end
-
     var_eq_matching = pss_graph_modia!(structure,
                                        complete(var_eq_matching), varlevel, inv_varlevel,
                                        inv_eqlevel)
@@ -267,6 +260,10 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         end
     end
 
+    if (n_diff_eqs = count(!isnothing, diff_to_eq)) !=
+       (n_dummys = length(dummy_derivatives))
+        @warn "The number of dummy derivatives ($n_dummys) does not match the number of differentiated equations ($n_diff_eqs)."
+    end
     dummy_derivatives_set = BitSet(dummy_derivatives)
     # We can eliminate variables that are not a selected state (differential
     # variables). Selected states are differentiated variables that are not

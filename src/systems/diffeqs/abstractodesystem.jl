@@ -189,7 +189,7 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
 end
 
 function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
-    eqs = [eq for eq in full_equations(sys) if !isdifferenceeq(eq)]
+    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     dvs = states(sys)
     M = zeros(length(eqs), length(eqs))
     state2idx = Dict(s => i for (i, s) in enumerate(dvs))

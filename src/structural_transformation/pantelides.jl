@@ -75,7 +75,7 @@ end
 Perform Pantelides algorithm.
 """
 function pantelides!(state::TransformationState, ag::Union{AliasGraph, Nothing} = nothing;
-                     maxiters = 8000)
+                     finalize = true, maxiters = 8000)
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = state.structure
     neqs = nsrcs(graph)
     nvars = nv(var_to_diff)
@@ -163,6 +163,11 @@ function pantelides!(state::TransformationState, ag::Union{AliasGraph, Nothing} 
         pathfound ||
             error("maxiters=$maxiters reached! File a bug report if your system has a reasonable index (<100), and you are using the default `maxiters`. Try to increase the maxiters by `pantelides(sys::ODESystem; maxiters=1_000_000)` if your system has an incredibly high index and it is truly extremely large.")
     end # for k in 1:neqs′
+
+    finalize && for var in 1:ndsts(graph)
+        varwhitelist[var] && continue
+        var_eq_matching[var] = unassigned
+    end
     return var_eq_matching
 end
 
@@ -175,6 +180,6 @@ instead, which calls this function internally.
 """
 function dae_index_lowering(sys::ODESystem; kwargs...)
     state = TearingState(sys)
-    var_eq_matching = pantelides!(state; kwargs...)
+    var_eq_matching = pantelides!(state; finalize = false, kwargs...)
     return invalidate_cache!(pantelides_reassemble(state, var_eq_matching))
 end
