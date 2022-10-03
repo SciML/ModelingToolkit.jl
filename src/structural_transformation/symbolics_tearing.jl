@@ -284,13 +284,16 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             # We need to to transform it to:
             # x   x_t -> D(x_t)
             # update the structural information
-            if (ddx = var_to_diff[dv]) !== nothing
-                dv_t = D(v_t)
-                # TODO: handle this recursively
+            dx = dv
+            x_t = v_t
+            while (ddx = var_to_diff[dx]) !== nothing
+                dx_t = D(x_t)
                 for eq in 𝑑neighbors(graph, ddx)
-                    neweqs[eq] = substitute(neweqs[eq], fullvars[ddx] => dv_t)
+                    neweqs[eq] = substitute(neweqs[eq], fullvars[ddx] => dx_t)
                 end
-                fullvars[ddx] = dv_t
+                fullvars[ddx] = dx_t
+                dx = ddx
+                x_t = dx_t
             end
             diff_to_var[dv] = nothing
         end
