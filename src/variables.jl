@@ -158,6 +158,10 @@ function isdisturbance(x)
     Symbolics.getmetadata(x, VariableDisturbance, false)
 end
 
+function disturbances(sys)
+    [filter(isdisturbance, states(sys)); filter(isdisturbance, parameters(sys))]
+end
+
 ## Tunable =====================================================================
 struct VariableTunable end
 Symbolics.option_to_metadata_type(::Val{:tunable}) = VariableTunable
