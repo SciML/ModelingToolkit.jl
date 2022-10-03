@@ -163,6 +163,11 @@ function pantelides!(state::TransformationState, ag::Union{AliasGraph, Nothing} 
         pathfound ||
             error("maxiters=$maxiters reached! File a bug report if your system has a reasonable index (<100), and you are using the default `maxiters`. Try to increase the maxiters by `pantelides(sys::ODESystem; maxiters=1_000_000)` if your system has an incredibly high index and it is truly extremely large.")
     end # for k in 1:neqs′
+
+    for var in 1:ndsts(graph)
+        varwhitelist[var] && continue
+        var_eq_matching[var] = unassigned
+    end
     return var_eq_matching
 end
 
