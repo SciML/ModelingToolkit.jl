@@ -244,7 +244,7 @@ model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.i
 
 @named dmodel = Blocks.StateSpace([0.0], [1.0], [1.0], [0.0]) # An integrating disturbance
 
-dist = ModelingToolkit.DisturbanceModel(model.torque.tau.u, dmodel)
+@named dist = ModelingToolkit.DisturbanceModel(model.torque.tau.u, dmodel)
 (f_oop, f_ip), outersys, dvs, p = ModelingToolkit.add_input_disturbance(model, dist)
 
 @unpack u, d = outersys
