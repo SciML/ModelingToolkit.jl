@@ -278,8 +278,8 @@ eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
        y₁ + y₂ + y₃ ~ 1]
 
 @named sys = ODESystem(eqs, t)
-inputs = [u[1], u[2]]
-outputs = [y₂]
-sys_simp, input_idxs = structural_simplify(sys, (; inputs, outputs))
+m_inputs = [u[1], u[2]]
+m_outputs = [y₂]
+sys_simp, input_idxs = structural_simplify(sys, (; inputs = m_inputs, outputs = m_outputs))
 @test isequal(states(sys_simp), collect(x[1:2]))
 @test length(input_idxs) == 2
