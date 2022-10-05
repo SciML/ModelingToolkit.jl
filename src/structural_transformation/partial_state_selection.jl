@@ -290,6 +290,9 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
                                        Union{Unassigned, SelectedState};
                                        varfilter = can_eliminate)
     for v in eachindex(var_eq_matching)
+        if ag !== nothing && haskey(ag, v) && iszero(ag[v][1])
+            continue
+        end
         dv = var_to_diff[v]
         (dv === nothing || dv in dummy_derivatives_set) && continue
         var_eq_matching[v] = SelectedState()
