@@ -26,6 +26,9 @@ function isvarkind(m, x)
     getmetadata(x, m, false)
 end
 
+setinput(x, v) = setmetadata(x, VariableInput, v)
+setoutput(x, v) = setmetadata(x, VariableOutput, v)
+setio(x, i, o) = setoutput(setinput(x, i), o)
 isinput(x) = isvarkind(VariableInput, x)
 isoutput(x) = isvarkind(VariableOutput, x)
 isirreducible(x) = isvarkind(VariableIrreducible, x) || isinput(x)

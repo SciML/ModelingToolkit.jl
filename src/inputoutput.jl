@@ -354,9 +354,10 @@ The generated dynamics functions `(f_oop, f_ip)` will preserve any state and dyn
 The example below builds a double-mass model and adds an integrating disturbance to the input
 ```julia
 using ModelingToolkit
+using ModelingToolkitStandardLibrary
 using ModelingToolkitStandardLibrary.Mechanical.Rotational
 using ModelingToolkitStandardLibrary.Blocks
-using ModelingToolkitStandardLibrary.Blocks: t
+t = ModelingToolkitStandardLibrary.Blocks.t
 
 # Parameters
 m1 = 1

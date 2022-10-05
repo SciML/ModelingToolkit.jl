@@ -269,7 +269,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         if var_eq_matching[var] !== SelectedState()
             dd = fullvars[dv]
             if (i_v_t = get(possible_x_t, dd, nothing)) === nothing
-                v_t = diff2term(unwrap(dd))
+                v_t = setio(diff2term(unwrap(dd)), false, false)
             else
                 idx, v_t = i_v_t
                 push!(removed_obs, idx)
@@ -423,7 +423,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
             if (i_x_t = get(possible_x_t, dx, nothing)) === nothing &&
                (ogidx !== nothing &&
                 (i_x_t = get(possible_x_t, fullvars[ogidx], nothing)) === nothing)
-                x_t = ModelingToolkit.lower_varname(ogx, iv, o)
+                x_t = setio(lower_varname(ogx, iv, o), false, false)
             else
                 idx, x_t = i_x_t
                 push!(removed_obs, idx)

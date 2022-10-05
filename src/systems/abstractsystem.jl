@@ -1109,18 +1109,15 @@ function markio!(state, inputs, outputs; check = true)
     outputset = Dict(outputs .=> false)
     for (i, v) in enumerate(fullvars)
         if v in keys(inputset)
-            v = setmetadata(v, ModelingToolkit.VariableInput, true)
-            v = setmetadata(v, ModelingToolkit.VariableOutput, false)
+            v = setio(v, true, false)
             inputset[v] = true
             fullvars[i] = v
         elseif v in keys(outputset)
-            v = setmetadata(v, ModelingToolkit.VariableInput, false)
-            v = setmetadata(v, ModelingToolkit.VariableOutput, true)
+            v = setio(v, false, true)
             outputset[v] = true
             fullvars[i] = v
         else
-            v = setmetadata(v, ModelingToolkit.VariableInput, false)
-            v = setmetadata(v, ModelingToolkit.VariableOutput, false)
+            v = setio(v, false, false)
             fullvars[i] = v
         end
     end
