@@ -1,12 +1,14 @@
 module BipartiteGraphs
 
+import ModelingToolkit: complete
+
 export BipartiteEdge, BipartiteGraph, DiCMOBiGraph, Unassigned, unassigned,
        Matching, ResidualCMOGraph, InducedCondensationGraph, maximal_matching,
        construct_augmenting_path!, MatchedCondensationGraph
 
 export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors, 𝑑neighbors,
        𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST, set_neighbors!, invview,
-       complete, delete_srcs!, delete_dsts!
+       delete_srcs!, delete_dsts!
 
 using DocStringExtensions
 using UnPack

@@ -100,9 +100,14 @@ struct SDESystem <: AbstractODESystem
     metadata: metadata for the system, to be used by downstream packages.
     """
     metadata::Any
+    """
+    complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    """
+    complete::Bool
+
     function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
                        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-                       cevents, devents, metadata = nothing;
+                       cevents, devents, metadata = nothing, complete = false;
                        checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
@@ -115,7 +120,7 @@ struct SDESystem <: AbstractODESystem
         end
         new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac,
             Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
-            metadata)
+            metadata, complete)
     end
 end
 

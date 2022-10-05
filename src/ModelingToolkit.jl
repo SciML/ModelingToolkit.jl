@@ -111,6 +111,7 @@ function parameters end
 
 # this has to be included early to deal with depency issues
 include("structural_transformation/bareiss.jl")
+function complete end
 include("bipartite_graph.jl")
 using .BipartiteGraphs
 
@@ -210,7 +211,7 @@ export simplify, substitute
 export build_function
 export modelingtoolkitize
 export @variables, @parameters
-export @named, @nonamespace, @namespace, extend, compose
+export @named, @nonamespace, @namespace, extend, compose, complete
 export debug_system
 
 end # module

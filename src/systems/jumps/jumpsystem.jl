@@ -87,9 +87,14 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     metadata: metadata for the system, to be used by downstream packages.
     """
     metadata::Any
+    """
+    complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    """
+    complete::Bool
+
     function JumpSystem{U}(ap::U, iv, states, ps, var_to_name, observed, name, systems,
                            defaults, connector_type, devents,
-                           metadata = nothing;
+                           metadata = nothing, complete = false;
                            checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
             check_variables(states, iv)
@@ -99,7 +104,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             all_dimensionless([states; ps; iv]) || check_units(ap, iv)
         end
         new{U}(ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
-               connector_type, devents, metadata)
+               connector_type, devents, metadata, complete)
     end
 end
 

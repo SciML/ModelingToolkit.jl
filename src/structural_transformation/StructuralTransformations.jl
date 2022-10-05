@@ -25,7 +25,7 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
                        AliasGraph, filter_kwargs, lower_varname, setio
 
 using ModelingToolkit.BipartiteGraphs
-import .BipartiteGraphs: invview
+import .BipartiteGraphs: invview, complete
 using Graphs
 using ModelingToolkit.SystemStructures
 using ModelingToolkit.SystemStructures: algeqs, EquationsView
