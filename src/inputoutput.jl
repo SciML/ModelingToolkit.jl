@@ -332,7 +332,9 @@ The structure represents a model of a disturbance, along with the input variable
 struct DisturbanceModel{M}
     input::Any
     model::M
+    name::Symbol
 end
+DisturbanceModel(input, model; name) = DisturbanceModel(input, model, name)
 
 # Point of overloading for libraries, e.g., to be able to support disturbance models from ControlSystemsBase
 function get_disturbance_system(dist::DisturbanceModel{<:ODESystem})
