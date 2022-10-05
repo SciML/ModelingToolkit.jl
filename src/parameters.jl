@@ -6,7 +6,7 @@ function isparameter(x)
 
     if x isa Symbolic && (isp = getmetadata(x, MTKParameterCtx, nothing)) !== nothing
         return isp
-    #TODO: Delete this branch
+        #TODO: Delete this branch
     elseif x isa Symbolic && Symbolics.getparent(x, false) !== false
         p = Symbolics.getparent(x)
         isparameter(p) ||
