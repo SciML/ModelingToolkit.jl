@@ -108,6 +108,25 @@ syss = structural_simplify(sys2)
 #@test isequal(unbound_outputs(syss), [y])
 @test isequal(bound_outputs(syss), [sys.y])
 
+using ModelingToolkitStandardLibrary
+using ModelingToolkitStandardLibrary.Mechanical.Rotational
+t = ModelingToolkitStandardLibrary.Mechanical.Rotational.t
+@named inertia1 = Inertia(; J = 1)
+@named inertia2 = Inertia(; J = 1)
+@named spring = Spring(; c = 10)
+@named damper = Damper(; d = 3)
+@named torque = Torque()
+eqs = [
+       connect(torque.flange, inertia1.flange_a)
+       connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+       connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
+]
+model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name=:name)
+model_outputs = [inertia1.w, inertia2.w, inertia1.phi, inertia2.phi]
+model_inputs = [torque.tau.u]
+matrices, ssys = linearize(model, model_inputs, model_outputs)
+@test length(ModelingToolkit.outputs(ssys)) == 4
+
 ## Code generation with unbound inputs
 
 @variables t x(t)=0 u(t)=0 [input = true]
