@@ -32,6 +32,8 @@ end
 
 include("../examples/rc_model.jl")
 
+completed_rc_model = complete(rc_model)
+@test isequal(completed_rc_model.resistor.n.i, resistor.n.i)
 @test ModelingToolkit.n_extra_equations(capacitor) == 2
 @test length(equations(structural_simplify(rc_model, allow_parameter = false))) == 2
 sys = structural_simplify(rc_model)

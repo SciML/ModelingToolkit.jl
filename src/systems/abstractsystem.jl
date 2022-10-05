@@ -163,7 +163,9 @@ independent_variables(sys::AbstractTimeIndependentSystem) = []
 independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
 
 iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :complete)
-complete(sys::AbstractSystem) = isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
+function complete(sys::AbstractSystem)
+    isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
+end
 
 for prop in [:eqs
              :noiseeqs
