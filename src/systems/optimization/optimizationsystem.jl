@@ -41,16 +41,21 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     metadata: metadata for the system, to be used by downstream packages.
     """
     metadata::Any
+    """
+    complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    """
+    complete::Bool
+
     function OptimizationSystem(op, states, ps, var_to_name, observed,
-                                constraints, name, systems, defaults, metadata = nothing;
-                                checks::Union{Bool, Int} = true)
+                                constraints, name, systems, defaults, metadata = nothing,
+                                complete = false; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             unwrap(op) isa Symbolic && check_units(op)
             check_units(observed)
             all_dimensionless([states; ps]) || check_units(constraints)
         end
         new(op, states, ps, var_to_name, observed,
-            constraints, name, systems, defaults, metadata)
+            constraints, name, systems, defaults, metadata, complete)
     end
 end
 
@@ -143,7 +148,7 @@ namespace_constraint(eq::Equation, sys) = namespace_equation(eq, sys)
 #     _lhs = namespace_expr(ineq.lhs, sys, n)
 #     _rhs = namespace_expr(ineq.rhs, sys, n)
 #     Inequality(
-#         namespace_expr(_lhs, sys, n), 
+#         namespace_expr(_lhs, sys, n),
 #         namespace_expr(_rhs, sys, n),
 #         ineq.relational_op,
 #     )

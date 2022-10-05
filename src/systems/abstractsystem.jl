@@ -162,6 +162,9 @@ independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
 independent_variables(sys::AbstractTimeIndependentSystem) = []
 independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
 
+iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :complete)
+complete(sys::AbstractSystem) = isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
+
 for prop in [:eqs
              :noiseeqs
              :iv
@@ -266,10 +269,10 @@ function Base.propertynames(sys::AbstractSystem; private = false)
     end
 end
 
-function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace = true)
+function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
     wrap(getvar(sys, name; namespace = namespace))
 end
-function getvar(sys::AbstractSystem, name::Symbol; namespace = false)
+function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
     systems = get_systems(sys)
     if isdefined(sys, name)
         Base.depwarn("`sys.name` like `sys.$name` is deprecated. Use getters like `get_$name` instead.",
