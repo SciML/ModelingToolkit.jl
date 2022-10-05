@@ -160,7 +160,7 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
 # Build control function
 
 """
-    (f_oop, f_ip), dvs, p = generate_control_function(
+    (f_oop, f_ip), dvs, p, io_sys = generate_control_function(
             sys::AbstractODESystem,
             inputs             = unbound_inputs(sys),
             disturbance_inputs = nothing;
@@ -240,7 +240,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     pre, sol_states = get_substitutions_and_solved_states(sys)
     f = build_function(rhss, args...; postprocess_fbody = pre, states = sol_states,
                        expression = Val{false}, kwargs...)
-    f, dvs, ps
+    (; f, dvs, ps, io_sys = sys)
 end
 
 function inputs_to_parameters!(state::TransformationState, io)
