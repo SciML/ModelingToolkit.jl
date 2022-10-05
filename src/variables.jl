@@ -20,8 +20,9 @@ struct Stream <: AbstractConnectType end   # special stream connector
 
 isvarkind(m, x::Num) = isvarkind(m, value(x))
 function isvarkind(m, x)
-    p = getparent(x, nothing)
-    p === nothing || (x = p)
+    iskind = getmetadata(x, m, nothing)
+    iskind !== nothing && return iskind
+    x = getparent(x, x)
     getmetadata(x, m, false)
 end
 

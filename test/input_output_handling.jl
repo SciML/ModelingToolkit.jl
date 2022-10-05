@@ -265,3 +265,21 @@ xp1 = f_oop(x1, u, pn, 0)
 
 @test xp0 ≈ matrices.A * x0 + matrices.B * [u; 0]
 @test xp1 ≈ matrices.A * x1 + matrices.B * [u; 0]
+
+@parameters t
+@variables x(t)[1:3] = 0
+@variables u(t)[1:2]
+D = Differential(t)
+y₁, y₂, y₃ = x
+u1, u2 = u
+k₁, k₂, k₃ = 1, 1, 1
+eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
+       D(y₂) ~ k₁ * y₁ - k₃ * y₂ * y₃ - k₂ * y₂^2 + u2
+       y₁ + y₂ + y₃ ~ 1]
+
+@named sys = ODESystem(eqs, t)
+m_inputs = [u[1], u[2]]
+m_outputs = [y₂]
+sys_simp, input_idxs = structural_simplify(sys, (; inputs = m_inputs, outputs = m_outputs))
+@test isequal(states(sys_simp), collect(x[1:2]))
+@test length(input_idxs) == 2
