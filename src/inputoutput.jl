@@ -192,6 +192,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
                                    disturbance_inputs = disturbances(sys);
                                    implicit_dae = false,
                                    simplify = false,
+                                   force_SA = false,
                                    kwargs...)
     if isempty(inputs)
         error("No unbound inputs were found in system.")
@@ -239,7 +240,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     end
     pre, sol_states = get_substitutions_and_solved_states(sys)
     f = build_function(rhss, args...; postprocess_fbody = pre, states = sol_states,
-                       expression = Val{false}, kwargs...)
+                       expression = Val{false}, force_SA, kwargs...)
     (; f, dvs, ps, io_sys = sys)
 end
 
