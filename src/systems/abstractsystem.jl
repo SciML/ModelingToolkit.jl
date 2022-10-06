@@ -1,3 +1,5 @@
+const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
+
 """
 ```julia
 calculate_tgrad(sys::AbstractTimeDependentSystem)
@@ -175,6 +177,7 @@ function complete(sys::AbstractSystem)
 end
 
 for prop in [:eqs
+             :tag
              :noiseeqs
              :iv
              :states
@@ -911,7 +914,12 @@ macro named(expr)
     if Meta.isexpr(name, :ref)
         name, idxs = name.args
         check_name(name)
-        esc(_named_idxs(name, idxs, :($(gensym()) -> $call)))
+        var = gensym(name)
+        ex = quote
+            $var = $(_named(name, call))
+            $name = map(i->$rename($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
+        end
+        esc(ex)
     else
         check_name(name)
         esc(:($name = $(_named(name, call))))

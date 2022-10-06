@@ -23,6 +23,11 @@ eqs = [D(x) ~ σ*(y-x),
 ```
 """
 struct ODESystem <: AbstractODESystem
+    """
+    tag: a tag for the system. If two system have the same tag, then they are
+    structurally identical.
+    """
+    tag::UInt
     """The ODEs defining the system."""
     eqs::Vector{Equation}
     """Independent variable."""
@@ -120,7 +125,7 @@ struct ODESystem <: AbstractODESystem
     """
     complete::Bool
 
-    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad,
+    function ODESystem(tag, deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad,
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
                        torn_matching, connector_type, preface, cevents,
                        devents, metadata = nothing, tearing_state = nothing,
@@ -135,7 +140,7 @@ struct ODESystem <: AbstractODESystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv]) || check_units(deqs)
         end
-        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
+        new(tag, deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
             connector_type, preface, cevents, devents, metadata, tearing_state,
             substitutions, complete)
@@ -189,7 +194,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
-    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
+    ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+              deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
               connector_type, preface, cont_callbacks, disc_callbacks,
               metadata, checks = checks)
