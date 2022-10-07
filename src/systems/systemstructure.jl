@@ -53,7 +53,7 @@ end
 =#
 
 export SystemStructure, TransformationState, TearingState
-export initialize_system_structure, find_linear_equations, linear_subsys_adjmat
+export initialize_system_structure, find_linear_equations
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq, algeqs
 export dervars_range, diffvars_range, algvars_range
 export DiffGraph, complete!
@@ -349,56 +349,6 @@ function TearingState(sys; quick_cancel = false, check = true)
     return TearingState(sys, fullvars,
                         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
                                         complete(graph), nothing), Any[])
-end
-
-function linear_subsys_adjmat(state::TransformationState)
-    fullvars = state.fullvars
-    graph = state.structure.graph
-    is_linear_equations = falses(nsrcs(graph))
-    eqs = equations(state.sys)
-    eadj = Vector{Int}[]
-    cadj = Vector{Int}[]
-    coeffs = Int[]
-    for (i, eq) in enumerate(eqs)
-        empty!(coeffs)
-        linear_term = 0
-        all_int_vars = true
-
-        term = value(eq.rhs - eq.lhs)
-        for j in 𝑠neighbors(graph, i)
-            var = fullvars[j]
-            a, b, islinear = linear_expansion(term, var)
-            a = unwrap(a)
-            if islinear && !(a isa Symbolic) && a isa Number && !isirreducible(var)
-                if a == 1 || a == -1
-                    a = convert(Integer, a)
-                    linear_term += a * var
-                    push!(coeffs, a)
-                else
-                    all_int_vars = false
-                end
-            end
-        end
-
-        # Check if all states in the equation is both linear and homogeneous,
-        # i.e. it is in the form of
-        #
-        #       ``∑ c_i * v_i = 0``,
-        #
-        # where ``c_i`` ∈ ℤ and ``v_i`` denotes states.
-        if all_int_vars && isequal(linear_term, term)
-            is_linear_equations[i] = true
-            push!(eadj, copy(𝑠neighbors(graph, i)))
-            push!(cadj, copy(coeffs))
-        else
-            is_linear_equations[i] = false
-        end
-    end
-
-    linear_equations = findall(is_linear_equations)
-    return SparseMatrixCLIL(nsrcs(graph),
-                            ndsts(graph),
-                            linear_equations, eadj, cadj)
 end
 
 using .BipartiteGraphs: Label, BipartiteAdjacencyList

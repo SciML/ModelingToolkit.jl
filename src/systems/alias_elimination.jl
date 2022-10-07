@@ -5,22 +5,31 @@ using Graphs.Experimental.Traversals
 const KEEP = typemin(Int)
 
 function alias_eliminate_graph!(state::TransformationState)
-    mm = linear_subsys_adjmat(state)
+    mm = linear_subsys_adjmat!(state)
     if size(mm, 1) == 0
         ag = AliasGraph(ndsts(state.structure.graph))
         return ag, mm, ag, mm, BitSet() # No linear subsystems
     end
 
-    @unpack graph, var_to_diff = state.structure
+    @unpack graph, var_to_diff, solvable_graph = state.structure
+    ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(complete(graph),
+                                                                                 complete(var_to_diff),
+                                                                                 mm)
+    if solvable_graph !== nothing
+        for (ei, e) in enumerate(mm.nzrows)
+            set_neighbors!(solvable_graph, e, mm.row_cols[ei])
+        end
+        update_graph_neighbors!(solvable_graph, ag)
+    end
 
-    return alias_eliminate_graph!(complete(graph), complete(var_to_diff), mm)
+    return ag, mm, complete_ag, complete_mm, updated_diff_vars
 end
 
 # For debug purposes
 function aag_bareiss(sys::AbstractSystem)
     state = TearingState(sys)
     complete!(state.structure)
-    mm = linear_subsys_adjmat(state)
+    mm = linear_subsys_adjmat!(state)
     return aag_bareiss!(state.structure.graph, state.structure.var_to_diff, mm)
 end
 

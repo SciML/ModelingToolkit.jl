@@ -160,20 +160,24 @@ end
 ### Structural and symbolic utilities
 ###
 
-function find_eq_solvables!(state::TearingState, ieq; may_be_zero = false,
+function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = nothing;
+                            may_be_zero = false,
                             allow_symbolic = false, allow_parameter = true, kwargs...)
     fullvars = state.fullvars
     @unpack graph, solvable_graph = state.structure
     eq = equations(state)[ieq]
     term = value(eq.rhs - eq.lhs)
-    to_rm = Int[]
+    all_int_vars = true
+    coeffs === nothing || empty!(coeffs)
+    empty!(to_rm)
     for j in 𝑠neighbors(graph, ieq)
         var = fullvars[j]
-        isirreducible(var) && continue
+        isirreducible(var) && (all_int_vars = false; continue)
         a, b, islinear = linear_expansion(term, var)
-        a = unwrap(a)
-        islinear || continue
+        a, b = unwrap(a), unwrap(b)
+        islinear || (all_int_vars = false; continue)
         if a isa Symbolic
+            all_int_vars = false
             if !allow_symbolic
                 if allow_parameter
                     all(ModelingToolkit.isparameter, vars(a)) || continue
@@ -184,7 +188,18 @@ function find_eq_solvables!(state::TearingState, ieq; may_be_zero = false,
             add_edge!(solvable_graph, ieq, j)
             continue
         end
-        (a isa Number) || continue
+        if !(a isa Number)
+            all_int_vars = false
+            continue
+        end
+        # When the expression is linear with numeric `a`, then we can safely
+        # only consider `b` for the following iterations.
+        term = b
+        if isone(abs(a))
+            coeffs === nothing || push!(coeffs, convert(Int, a))
+        else
+            all_int_vars = false
+        end
         if a != 0
             add_edge!(solvable_graph, ieq, j)
         else
@@ -198,6 +213,7 @@ function find_eq_solvables!(state::TearingState, ieq; may_be_zero = false,
     for j in to_rm
         rem_edge!(graph, ieq, j)
     end
+    all_int_vars, term
 end
 
 function find_solvables!(state::TearingState; kwargs...)
@@ -205,10 +221,44 @@ function find_solvables!(state::TearingState; kwargs...)
     eqs = equations(state)
     graph = state.structure.graph
     state.structure.solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
+    to_rm = Int[]
     for ieq in 1:length(eqs)
-        find_eq_solvables!(state, ieq; kwargs...)
+        find_eq_solvables!(state, ieq, to_rm; kwargs...)
     end
     return nothing
+end
+
+function linear_subsys_adjmat!(state::TransformationState)
+    graph = state.structure.graph
+    if state.structure.solvable_graph === nothing
+        state.structure.solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
+    end
+    linear_equations = Int[]
+    eqs = equations(state.sys)
+    eadj = Vector{Int}[]
+    cadj = Vector{Int}[]
+    coeffs = Int[]
+    to_rm = Int[]
+    for i in eachindex(eqs)
+        all_int_vars, rhs = find_eq_solvables!(state, i, to_rm, coeffs)
+
+        # Check if all states in the equation is both linear and homogeneous,
+        # i.e. it is in the form of
+        #
+        #       ``∑ c_i * v_i = 0``,
+        #
+        # where ``c_i`` ∈ ℤ and ``v_i`` denotes states.
+        if all_int_vars && Symbolics._iszero(rhs)
+            push!(linear_equations, i)
+            push!(eadj, copy(𝑠neighbors(graph, i)))
+            push!(cadj, copy(coeffs))
+        end
+    end
+
+    mm = SparseMatrixCLIL(nsrcs(graph),
+                          ndsts(graph),
+                          linear_equations, eadj, cadj)
+    return mm
 end
 
 highest_order_variable_mask(ts) =
