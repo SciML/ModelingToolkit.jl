@@ -2,6 +2,7 @@ using Test
 using ModelingToolkit, OrdinaryDiffEq
 using ModelingToolkit.BipartiteGraphs
 using ModelingToolkit.StructuralTransformations
+include("../examples/rc_model.jl")
 
 function check_contract(sys)
     state = ModelingToolkit.get_tearing_state(sys)
@@ -74,7 +75,8 @@ let
     params = [param_r1 => 1.0, param_c1 => 1.0]
     tspan = (0.0, 10.0)
 
-    @test_throws Any prob=ODAEProblem(sys, u0, tspan, params)
+    prob = ODAEProblem(sys, u0, tspan, params)
+    @test solve(prob, Tsit5()).retcode == :Success
 end
 
 let
@@ -96,17 +98,16 @@ let
 end
 
 # Outer/inner connections
-function rc_component(; name)
-    R = 1
-    C = 1
+function rc_component(; name, R = 1, C = 1)
+    @parameters R=R C=C
     @named p = Pin()
     @named n = Pin()
-    @named resistor = Resistor(R = R)
-    @named capacitor = Capacitor(C = C)
+    @named resistor = Resistor(R = R) # test parent scope default of @named
+    @named capacitor = Capacitor(C = ParentScope(C))
     eqs = [connect(p, resistor.p);
            connect(resistor.n, capacitor.p);
            connect(capacitor.n, n)]
-    @named sys = ODESystem(eqs, t)
+    @named sys = ODESystem(eqs, t, [], [R, C])
     compose(sys, [p, n, resistor, capacitor]; name = name)
 end
 

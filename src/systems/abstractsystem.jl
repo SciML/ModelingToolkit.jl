@@ -845,12 +845,21 @@ function _named(name, call, runtime = false)
         end
     end
 
+    is_sys_construction = Symbol("###__is_system_construction###")
     kws = call.args[2].args
+    for kw in kws
+        kw.args[2] = :($is_sys_construction ? $(kw.args[2]) :
+                       $default_to_parentscope($(kw.args[2])))
+    end
 
     if !any(kw -> (kw isa Symbol ? kw : kw.args[1]) == :name, kws) # don't overwrite `name` kwarg
         pushfirst!(kws, Expr(:kw, :name, runtime ? name : Meta.quot(name)))
     end
-    call
+    op = call.args[1]
+    quote
+        $is_sys_construction = ($op isa $DataType) && ($op <: $AbstractSystem)
+        $call
+    end
 end
 
 function _named_idxs(name::Symbol, idxs, call)
@@ -877,7 +886,10 @@ end
     @named y[1:10] = foo(x)
     @named y 1:10 i -> foo(x*i)  # This is not recommended
 
-Pass the LHS name to the model.
+Pass the LHS name to the model. When it's calling anything that's not an
+AbstractSystem, it wraps all keyword arguments in `default_to_parentscope` so
+that namespacing works intuitively when passing a symbolic default into a
+component.
 
 Examples:
 ```julia-repl
@@ -918,6 +930,11 @@ end
 
 macro named(name::Symbol, idxs, call)
     esc(_named_idxs(name, idxs, call))
+end
+
+function default_to_parentscope(v)
+    uv = unwrap(v)
+    uv isa Symbolic && !hasmetadata(uv, SymScope) ? ParentScope(v) : v
 end
 
 function _config(expr, namespace)
