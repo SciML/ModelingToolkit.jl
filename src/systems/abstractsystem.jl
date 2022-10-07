@@ -847,9 +847,14 @@ function _named(name, call, runtime = false)
 
     is_sys_construction = Symbol("###__is_system_construction###")
     kws = call.args[2].args
-    for kw in kws
-        kw.args[2] = :($is_sys_construction ? $(kw.args[2]) :
-                       $default_to_parentscope($(kw.args[2])))
+    for (i, kw) in enumerate(kws)
+        if Meta.isexpr(kw, (:(=), :kw))
+            kw.args[2] = :($is_sys_construction ? $(kw.args[2]) :
+                           $default_to_parentscope($(kw.args[2])))
+        elseif kw isa Symbol
+            rhs = :($is_sys_construction ? $(kw) : $default_to_parentscope($(kw)))
+            kws[i] = Expr(:kw, kw, rhs)
+        end
     end
 
     if !any(kw -> (kw isa Symbol ? kw : kw.args[1]) == :name, kws) # don't overwrite `name` kwarg
