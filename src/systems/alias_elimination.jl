@@ -11,9 +11,18 @@ function alias_eliminate_graph!(state::TransformationState)
         return ag, mm, ag, mm, BitSet() # No linear subsystems
     end
 
-    @unpack graph, var_to_diff = state.structure
+    @unpack graph, var_to_diff, solvable_graph = state.structure
+    ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(complete(graph),
+                                                                                 complete(var_to_diff),
+                                                                                 mm)
+    if solvable_graph !== nothing
+        for (ei, e) in enumerate(mm.nzrows)
+            set_neighbors!(solvable_graph, e, mm.row_cols[ei])
+        end
+        update_graph_neighbors!(solvable_graph, ag)
+    end
 
-    return alias_eliminate_graph!(complete(graph), complete(var_to_diff), mm)
+    return ag, mm, complete_ag, complete_mm, updated_diff_vars
 end
 
 # For debug purposes
