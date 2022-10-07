@@ -1,3 +1,5 @@
+const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
+
 """
 ```julia
 calculate_tgrad(sys::AbstractTimeDependentSystem)
@@ -175,6 +177,7 @@ function complete(sys::AbstractSystem)
 end
 
 for prop in [:eqs
+             :tag
              :noiseeqs
              :iv
              :states
@@ -255,7 +258,7 @@ end
     end
 end
 
-rename(x::AbstractSystem, name) = @set x.name = name
+rename(x, name) = @set x.name = name
 
 function Base.propertynames(sys::AbstractSystem; private = false)
     if private
@@ -842,12 +845,26 @@ function _named(name, call, runtime = false)
         end
     end
 
+    is_sys_construction = Symbol("###__is_system_construction###")
     kws = call.args[2].args
+    for (i, kw) in enumerate(kws)
+        if Meta.isexpr(kw, (:(=), :kw))
+            kw.args[2] = :($is_sys_construction ? $(kw.args[2]) :
+                           $default_to_parentscope($(kw.args[2])))
+        elseif kw isa Symbol
+            rhs = :($is_sys_construction ? $(kw) : $default_to_parentscope($(kw)))
+            kws[i] = Expr(:kw, kw, rhs)
+        end
+    end
 
     if !any(kw -> (kw isa Symbol ? kw : kw.args[1]) == :name, kws) # don't overwrite `name` kwarg
         pushfirst!(kws, Expr(:kw, :name, runtime ? name : Meta.quot(name)))
     end
-    call
+    op = call.args[1]
+    quote
+        $is_sys_construction = ($op isa $DataType) && ($op <: $AbstractSystem)
+        $call
+    end
 end
 
 function _named_idxs(name::Symbol, idxs, call)
@@ -872,38 +889,31 @@ end
 """
     @named y = foo(x)
     @named y[1:10] = foo(x)
-    @named y 1:10 i -> foo(x*i)
+    @named y 1:10 i -> foo(x*i)  # This is not recommended
 
-Rewrite `@named y = foo(x)` to `y = foo(x; name=:y)`.
-
-Rewrite `@named y[1:10] = foo(x)` to `y = map(i′->foo(x; name=Symbol(:y_, i′)), 1:10)`.
-
-Rewrite `@named y 1:10 i -> foo(x*i)` to `y = map(i->foo(x*i; name=Symbol(:y_, i)), 1:10)`.
+Pass the LHS name to the model. When it's calling anything that's not an
+AbstractSystem, it wraps all keyword arguments in `default_to_parentscope` so
+that namespacing works intuitively when passing a symbolic default into a
+component.
 
 Examples:
-```julia
+```julia-repl
 julia> using ModelingToolkit
 
-julia> foo(i; name) = i, name
+julia> foo(i; name) = (; i, name)
 foo (generic function with 1 method)
 
 julia> x = 41
 41
 
 julia> @named y = foo(x)
-(41, :y)
+(i = 41, name = :y)
 
 julia> @named y[1:3] = foo(x)
-3-element Vector{Tuple{Int64, Symbol}}:
- (41, :y_1)
- (41, :y_2)
- (41, :y_3)
-
-julia> @named y 1:3 i -> foo(x*i)
-3-element Vector{Tuple{Int64, Symbol}}:
- (41, :y_1)
- (82, :y_2)
- (123, :y_3)
+3-element Vector{NamedTuple{(:i, :name), Tuple{Int64, Symbol}}}:
+ (i = 41, name = :y_1)
+ (i = 41, name = :y_2)
+ (i = 41, name = :y_3)
 ```
 """
 macro named(expr)
@@ -911,7 +921,12 @@ macro named(expr)
     if Meta.isexpr(name, :ref)
         name, idxs = name.args
         check_name(name)
-        esc(_named_idxs(name, idxs, :($(gensym()) -> $call)))
+        var = gensym(name)
+        ex = quote
+            $var = $(_named(name, call))
+            $name = map(i -> $rename($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
+        end
+        esc(ex)
     else
         check_name(name)
         esc(:($name = $(_named(name, call))))
@@ -920,6 +935,11 @@ end
 
 macro named(name::Symbol, idxs, call)
     esc(_named_idxs(name, idxs, call))
+end
+
+function default_to_parentscope(v)
+    uv = unwrap(v)
+    uv isa Symbolic && !hasmetadata(uv, SymScope) ? ParentScope(v) : v
 end
 
 function _config(expr, namespace)

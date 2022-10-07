@@ -27,6 +27,11 @@ noiseeqs = [0.1*x,
 ```
 """
 struct SDESystem <: AbstractODESystem
+    """
+    tag: a tag for the system. If two system have the same tag, then they are
+    structurally identical.
+    """
+    tag::UInt
     """The expressions defining the drift term."""
     eqs::Vector{Equation}
     """The expressions defining the diffusion term."""
@@ -105,7 +110,8 @@ struct SDESystem <: AbstractODESystem
     """
     complete::Bool
 
-    function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
+    function SDESystem(tag, deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad,
+                       jac,
                        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
                        cevents, devents, metadata = nothing, complete = false;
                        checks::Union{Bool, Int} = true)
@@ -118,7 +124,8 @@ struct SDESystem <: AbstractODESystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv]) || check_units(deqs, neqs)
         end
-        new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac,
+        new(tag, deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
+            ctrl_jac,
             Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
             metadata, complete)
     end
@@ -169,7 +176,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
 
-    SDESystem(deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
+    SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+              deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
               cont_callbacks, disc_callbacks, metadata; checks = checks)
 end

@@ -24,6 +24,11 @@ eqs = [D(x) ~ σ*(y-x),
 ```
 """
 struct DiscreteSystem <: AbstractTimeDependentSystem
+    """
+    tag: a tag for the system. If two system have the same tag, then they are
+    structurally identical.
+    """
+    tag::UInt
     """The differential equations defining the discrete system."""
     eqs::Vector{Equation}
     """Independent variable."""
@@ -76,7 +81,8 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     complete::Bool
 
-    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name,
+    function DiscreteSystem(tag, discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed,
+                            name,
                             systems, defaults, preface, connector_type,
                             metadata = nothing,
                             tearing_state = nothing, substitutions = nothing,
@@ -88,7 +94,8 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv; ctrls]) || check_units(discreteEqs)
         end
-        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults,
+        new(tag, discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems,
+            defaults,
             preface, connector_type, metadata, tearing_state, substitutions, complete)
     end
 end
@@ -134,7 +141,8 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems,
+    DiscreteSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+                   eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems,
                    defaults, preface, connector_type, metadata, kwargs...)
 end
 

@@ -49,6 +49,11 @@ j₃      = MassActionJump(2*β+γ, [R => 1], [S => 1, R => -1])
 """
 struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
+    tag: a tag for the system. If two system have the same tag, then they are
+    structurally identical.
+    """
+    tag::UInt
+    """
     The jumps of the system. Allowable types are `ConstantRateJump`,
     `VariableRateJump`, `MassActionJump`.
     """
@@ -92,7 +97,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     complete::Bool
 
-    function JumpSystem{U}(ap::U, iv, states, ps, var_to_name, observed, name, systems,
+    function JumpSystem{U}(tag, ap::U, iv, states, ps, var_to_name, observed, name, systems,
                            defaults, connector_type, devents,
                            metadata = nothing, complete = false;
                            checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
@@ -103,7 +108,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([states; ps; iv]) || check_units(ap, iv)
         end
-        new{U}(ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
+        new{U}(tag, ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
                connector_type, devents, metadata, complete)
     end
 end
@@ -156,7 +161,8 @@ function JumpSystem(eqs, iv, states, ps;
         error("JumpSystems currently only support discrete events.")
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
 
-    JumpSystem{typeof(ap)}(ap, value(iv), states, ps, var_to_name, observed, name, systems,
+    JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+                           ap, value(iv), states, ps, var_to_name, observed, name, systems,
                            defaults, connector_type, disc_callbacks, metadata,
                            checks = checks)
 end
