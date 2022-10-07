@@ -5,7 +5,7 @@ using Graphs.Experimental.Traversals
 const KEEP = typemin(Int)
 
 function alias_eliminate_graph!(state::TransformationState)
-    mm = linear_subsys_adjmat(state)
+    mm = linear_subsys_adjmat!(state)
     if size(mm, 1) == 0
         ag = AliasGraph(ndsts(state.structure.graph))
         return ag, mm, ag, mm, BitSet() # No linear subsystems

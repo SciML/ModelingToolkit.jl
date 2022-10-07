@@ -22,7 +22,7 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
                        get_postprocess_fbody, vars!,
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
                        invalidate_cache!, Substitutions, get_or_construct_tearing_state,
-                       AliasGraph, filter_kwargs, lower_varname, setio
+                       AliasGraph, filter_kwargs, lower_varname, setio, SparseMatrixCLIL
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview, complete
@@ -43,7 +43,8 @@ using NonlinearSolve
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export dummy_derivative
 export build_torn_function, build_observed_function, ODAEProblem
-export sorted_incidence_matrix, pantelides!, tearing_reassemble, find_solvables!
+export sorted_incidence_matrix, pantelides!, tearing_reassemble, find_solvables!,
+       linear_subsys_adjmat!
 export tearing_assignments, tearing_substitution
 export torn_system_jacobian_sparsity
 export full_equations
