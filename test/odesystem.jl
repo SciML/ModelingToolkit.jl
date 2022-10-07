@@ -19,6 +19,8 @@ eqs = [D(x) ~ σ * (y - x),
 
 ModelingToolkit.toexpr.(eqs)[1]
 @named de = ODESystem(eqs; defaults = Dict(x => 1))
+@named des[1:3] = ODESystem(eqs)
+@test length(unique(x -> ModelingToolkit.get_tag(x), des)) == 1
 @test eval(toexpr(de)) == de
 @test hash(deepcopy(de)) == hash(de)
 

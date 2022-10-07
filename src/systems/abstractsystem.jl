@@ -258,7 +258,7 @@ end
     end
 end
 
-rename(x::AbstractSystem, name) = @set x.name = name
+rename(x, name) = @set x.name = name
 
 function Base.propertynames(sys::AbstractSystem; private = false)
     if private
@@ -875,38 +875,28 @@ end
 """
     @named y = foo(x)
     @named y[1:10] = foo(x)
-    @named y 1:10 i -> foo(x*i)
+    @named y 1:10 i -> foo(x*i)  # This is not recommended
 
-Rewrite `@named y = foo(x)` to `y = foo(x; name=:y)`.
-
-Rewrite `@named y[1:10] = foo(x)` to `y = map(i′->foo(x; name=Symbol(:y_, i′)), 1:10)`.
-
-Rewrite `@named y 1:10 i -> foo(x*i)` to `y = map(i->foo(x*i; name=Symbol(:y_, i)), 1:10)`.
+Pass the LHS name to the model.
 
 Examples:
-```julia
+```julia-repl
 julia> using ModelingToolkit
 
-julia> foo(i; name) = i, name
+julia> foo(i; name) = (; i, name)
 foo (generic function with 1 method)
 
 julia> x = 41
 41
 
 julia> @named y = foo(x)
-(41, :y)
+(i = 41, name = :y)
 
 julia> @named y[1:3] = foo(x)
-3-element Vector{Tuple{Int64, Symbol}}:
- (41, :y_1)
- (41, :y_2)
- (41, :y_3)
-
-julia> @named y 1:3 i -> foo(x*i)
-3-element Vector{Tuple{Int64, Symbol}}:
- (41, :y_1)
- (82, :y_2)
- (123, :y_3)
+3-element Vector{NamedTuple{(:i, :name), Tuple{Int64, Symbol}}}:
+ (i = 41, name = :y_1)
+ (i = 41, name = :y_2)
+ (i = 41, name = :y_3)
 ```
 """
 macro named(expr)
