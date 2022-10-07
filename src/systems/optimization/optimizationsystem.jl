@@ -17,6 +17,11 @@ op = a*(y-x) + x*(b-z)-y + x*y - c*z
 ```
 """
 struct OptimizationSystem <: AbstractTimeIndependentSystem
+    """
+    tag: a tag for the system. If two system have the same tag, then they are
+    structurally identical.
+    """
+    tag::UInt
     """Objective function of the system."""
     op::Any
     """Unknown variables."""
@@ -46,7 +51,7 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     """
     complete::Bool
 
-    function OptimizationSystem(op, states, ps, var_to_name, observed,
+    function OptimizationSystem(tag, op, states, ps, var_to_name, observed,
                                 constraints, name, systems, defaults, metadata = nothing,
                                 complete = false; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
@@ -54,7 +59,7 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
             check_units(observed)
             all_dimensionless([states; ps]) || check_units(constraints)
         end
-        new(op, states, ps, var_to_name, observed,
+        new(tag, op, states, ps, var_to_name, observed,
             constraints, name, systems, defaults, metadata, complete)
     end
 end
@@ -92,7 +97,8 @@ function OptimizationSystem(op, states, ps;
     process_variables!(var_to_name, defaults, ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
-    OptimizationSystem(value(op), states′, ps′, var_to_name,
+    OptimizationSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+                       value(op), states′, ps′, var_to_name,
                        observed,
                        constraints,
                        name, systems, defaults, metadata; checks = checks)

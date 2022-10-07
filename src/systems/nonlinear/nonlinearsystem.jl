@@ -19,6 +19,11 @@ eqs = [0 ~ σ*(y-x),
 ```
 """
 struct NonlinearSystem <: AbstractTimeIndependentSystem
+    """
+    tag: a tag for the system. If two system have the same tag, then they are
+    structurally identical.
+    """
+    tag::UInt
     """Vector of equations defining the system."""
     eqs::Vector{Equation}
     """Unknown variables."""
@@ -67,14 +72,15 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     complete::Bool
 
-    function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems,
+    function NonlinearSystem(tag, eqs, states, ps, var_to_name, observed, jac, name,
+                             systems,
                              defaults, connector_type, metadata = nothing,
                              tearing_state = nothing, substitutions = nothing,
                              complete = false; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([states; ps]) || check_units(eqs)
         end
-        new(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
+        new(tag, eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
             connector_type, metadata, tearing_state, substitutions, complete)
     end
 end
@@ -124,7 +130,8 @@ function NonlinearSystem(eqs, states, ps;
     process_variables!(var_to_name, defaults, ps)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
-    NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
+    NonlinearSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+                    eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
                     connector_type, metadata, checks = checks)
 end
 

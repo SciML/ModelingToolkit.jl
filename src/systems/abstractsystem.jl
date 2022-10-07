@@ -917,7 +917,7 @@ macro named(expr)
         var = gensym(name)
         ex = quote
             $var = $(_named(name, call))
-            $name = map(i->$rename($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
+            $name = map(i -> $rename($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
         end
         esc(ex)
     else
