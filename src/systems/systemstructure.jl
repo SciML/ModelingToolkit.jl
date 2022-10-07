@@ -53,7 +53,7 @@ end
 =#
 
 export SystemStructure, TransformationState, TearingState
-export initialize_system_structure, find_linear_equations, linear_subsys_adjmat
+export initialize_system_structure, find_linear_equations
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq, algeqs
 export dervars_range, diffvars_range, algvars_range
 export DiffGraph, complete!

@@ -29,7 +29,7 @@ end
 function aag_bareiss(sys::AbstractSystem)
     state = TearingState(sys)
     complete!(state.structure)
-    mm = linear_subsys_adjmat(state)
+    mm = linear_subsys_adjmat!(state)
     return aag_bareiss!(state.structure.graph, state.structure.var_to_diff, mm)
 end
 
