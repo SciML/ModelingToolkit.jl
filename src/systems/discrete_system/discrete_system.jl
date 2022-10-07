@@ -141,7 +141,7 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(hreads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+    DiscreteSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
                    eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems,
                    defaults, preface, connector_type, metadata, kwargs...)
 end
