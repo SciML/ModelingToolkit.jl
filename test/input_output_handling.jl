@@ -301,3 +301,20 @@ m_outputs = [y₂]
 sys_simp, input_idxs = structural_simplify(sys, (; inputs = m_inputs, outputs = m_outputs))
 @test isequal(states(sys_simp), collect(x[1:2]))
 @test length(input_idxs) == 2
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/1577
+@parameters t
+@named c = Constant(; k = 2)
+@named gain = Gain(1;)
+@named int = Integrator(; k = 1)
+@named fb = Feedback(;)
+@named model = ODESystem([
+                             connect(c.output, fb.input1),
+                             connect(fb.input2, int.output),
+                             connect(fb.output, gain.input),
+                             connect(gain.output, int.input),
+                         ],
+                         t,
+                         systems = [int, gain, c, fb])
+sys = structural_simplify(model)
+@test length(states(sys)) == length(equations(sys)) == 1
