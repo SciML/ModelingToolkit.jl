@@ -31,7 +31,9 @@ setoutput(x, v) = setmetadata(x, VariableOutput, v)
 setio(x, i, o) = setoutput(setinput(x, i), o)
 isinput(x) = isvarkind(VariableInput, x)
 isoutput(x) = isvarkind(VariableOutput, x)
-isirreducible(x) = isvarkind(VariableIrreducible, x) || isinput(x)
+# Before the solvability check, we already have handled IO varibales, so
+# irreducibility is independent from IO.
+isirreducible(x) = isvarkind(VariableIrreducible, x)
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
 """
