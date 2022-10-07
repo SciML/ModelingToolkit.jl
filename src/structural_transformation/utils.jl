@@ -161,7 +161,7 @@ end
 ###
 
 function find_eq_solvables!(state::TearingState, ieq; may_be_zero = false,
-                            allow_symbolic = false, allow_parameter = true)
+                            allow_symbolic = false, allow_parameter = true, kwargs...)
     fullvars = state.fullvars
     @unpack graph, solvable_graph = state.structure
     eq = equations(state)[ieq]
