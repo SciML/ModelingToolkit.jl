@@ -204,7 +204,7 @@ end
 struct BipartiteAdjacencyList
     u::Union{Vector{Int}, Nothing}
     highligh_u::Union{Set{Int}, Nothing}
-    match::Union{Int, Unassigned}
+    match::Union{Int, Bool, Unassigned}
 end
 function BipartiteAdjacencyList(u::Union{Vector{Int}, Nothing})
     BipartiteAdjacencyList(u, nothing, unassigned)
@@ -225,6 +225,9 @@ function Base.show(io::IO, hi::HighlightInt)
 end
 
 function Base.show(io::IO, l::BipartiteAdjacencyList)
+    if l.match === true
+        printstyled(io, "∫ ", color = :light_blue, bold = true)
+    end
     if l.u === nothing
         printstyled(io, '⋅', color = :light_black)
     elseif isempty(l.u)
@@ -232,9 +235,11 @@ function Base.show(io::IO, l::BipartiteAdjacencyList)
     elseif l.highligh_u === nothing
         print(io, l.u)
     else
+        match = l.match
+        isa(match, Bool) && (match = unassigned)
         function choose_color(i)
-            i in l.highligh_u ? (i == l.match ? :light_yellow : :green) :
-            (i == l.match ? :yellow : nothing)
+            i in l.highligh_u ? (i == match ? :light_yellow : :green) :
+            (i == match ? :yellow : nothing)
         end
         if !isempty(setdiff(l.highligh_u, l.u))
             # Only for debugging, shouldn't happen in practice
