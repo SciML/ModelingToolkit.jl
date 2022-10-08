@@ -217,7 +217,7 @@ function check_diff_graph(var_to_diff, fullvars)
 end
 =#
 
-function tearing_reassemble(state::TearingState, var_eq_matching; simplify = false)
+function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing; simplify = false)
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
 
@@ -557,7 +557,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     end
     invvarsperm = [diff_vars;
                    setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
-                            BitSet(solved_variables))]
+                            union!(BitSet(solved_variables), keys(ag)))]
     varsperm = zeros(Int, ndsts(graph))
     for (i, v) in enumerate(invvarsperm)
         varsperm[v] = i
@@ -632,6 +632,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         isdiffeq(eq) || continue
         obs_sub[eq.lhs] = eq.rhs
     end
+    # TODO: compute the dependency correctly so that we don't have to do this
     obs = substitute.([oldobs; subeqs], (obs_sub,))
     @set! sys.observed = obs
     @set! state.sys = sys
@@ -688,7 +689,7 @@ end
 Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
-function dummy_derivative(sys, state = TearingState(sys); simplify = false, kwargs...)
+function dummy_derivative(sys, state = TearingState(sys), ag = nothing; simplify = false, kwargs...)
     jac = let state = state
         (eqs, vars) -> begin
             symeqs = EquationsView(state)[eqs]
@@ -710,6 +711,6 @@ function dummy_derivative(sys, state = TearingState(sys); simplify = false, kwar
             p
         end
     end
-    var_eq_matching = dummy_derivative_graph!(state, jac; state_priority, kwargs...)
-    tearing_reassemble(state, var_eq_matching; simplify = simplify)
+    var_eq_matching = dummy_derivative_graph!(state, jac, (ag, nothing); state_priority, kwargs...)
+    tearing_reassemble(state, var_eq_matching, ag; simplify = simplify)
 end

@@ -46,12 +46,13 @@ end
 function check_consistency(state::TearingState, ag = nothing)
     fullvars = state.fullvars
     @unpack graph, var_to_diff = state.structure
-    #n_highest_vars = count(v -> length(outneighbors(var_to_diff, v)) == 0 && !isempty(𝑑neighbors(graph, v)),
-    #                       vertices(var_to_diff))
-    #n_highest_vars = count(v -> length(outneighbors(var_to_diff, v)) == 0 && !haskey(ag, v),
-    #                       vertices(var_to_diff))
-    n_highest_vars = count(v -> length(outneighbors(var_to_diff, v)) == 0,
-                           vertices(var_to_diff))
+    if ag === nothing
+        n_highest_vars = count(v -> length(outneighbors(var_to_diff, v)) == 0,
+                            vertices(var_to_diff))
+    else
+        n_highest_vars = count(v -> length(outneighbors(var_to_diff, v)) == 0 && !haskey(ag, v),
+                            vertices(var_to_diff))
+    end
     neqs = nsrcs(graph)
     is_balanced = n_highest_vars == neqs
 
@@ -73,7 +74,7 @@ function check_consistency(state::TearingState, ag = nothing)
     # details, check the equation (15) of the original paper.
     extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist;
                                                         map(collect, edges(var_to_diff))])
-    extended_var_eq_matching = maximal_matching(extended_graph, eq->true, v->!haskey(ag, v))
+    extended_var_eq_matching = maximal_matching(extended_graph, eq->true, v->ag !== nothing || !haskey(ag, v))
 
     unassigned_var = []
     for (vj, eq) in enumerate(extended_var_eq_matching)

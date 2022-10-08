@@ -1041,7 +1041,7 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     #has_io && markio!(state, io..., check = false)
     check_consistency(state, ag)
     #find_solvables!(state; kwargs...)
-    sys = dummy_derivative(sys, state; simplify)
+    sys = dummy_derivative(sys, state, ag; simplify)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     invalidate_cache!(sys)

@@ -248,6 +248,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         end
     end
     if diff_va !== nothing
+        # differentiated alias
         n_dummys = length(dummy_derivatives)
         needed = count(x -> x isa Int, diff_to_eq) - n_dummys
         n = 0

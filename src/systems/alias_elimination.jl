@@ -167,7 +167,6 @@ function alias_elimination!(state::TearingState)
             diff_to_var[j] === nothing && push!(newstates, fullvars[j])
         end
     end
-    #=
     new_graph = BipartiteGraph(n_new_eqs, ndsts(graph))
     new_solvable_graph = BipartiteGraph(n_new_eqs, ndsts(graph))
     new_eq_to_diff = DiffGraph(n_new_eqs)
@@ -182,8 +181,8 @@ function alias_elimination!(state::TearingState)
     state.structure.solvable_graph = new_solvable_graph
     state.structure.eq_to_diff = new_eq_to_diff
     @show length(new_eq_to_diff), nsrcs(new_graph), nsrcs(new_solvable_graph), length(eqs)
-    =#
 
+    #=
     new_graph = BipartiteGraph(n_new_eqs, n_new_vars)
     new_solvable_graph = BipartiteGraph(n_new_eqs, n_new_vars)
     new_eq_to_diff = DiffGraph(n_new_eqs)
@@ -207,6 +206,7 @@ function alias_elimination!(state::TearingState)
     state.structure.eq_to_diff = complete(new_eq_to_diff)
     state.structure.var_to_diff = complete(new_var_to_diff)
     state.fullvars = new_fullvars
+    =#
 
     sys = state.sys
     @set! sys.eqs = eqs
