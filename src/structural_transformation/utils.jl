@@ -43,9 +43,13 @@ end
 ###
 ### Structural check
 ###
-function check_consistency(state::TearingState)
+function check_consistency(state::TearingState, ag = nothing)
     fullvars = state.fullvars
     @unpack graph, var_to_diff = state.structure
+    #n_highest_vars = count(v -> length(outneighbors(var_to_diff, v)) == 0 && !isempty(𝑑neighbors(graph, v)),
+    #                       vertices(var_to_diff))
+    #n_highest_vars = count(v -> length(outneighbors(var_to_diff, v)) == 0 && !haskey(ag, v),
+    #                       vertices(var_to_diff))
     n_highest_vars = count(v -> length(outneighbors(var_to_diff, v)) == 0,
                            vertices(var_to_diff))
     neqs = nsrcs(graph)
@@ -69,11 +73,11 @@ function check_consistency(state::TearingState)
     # details, check the equation (15) of the original paper.
     extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist;
                                                         map(collect, edges(var_to_diff))])
-    extended_var_eq_matching = maximal_matching(extended_graph)
+    extended_var_eq_matching = maximal_matching(extended_graph, eq->true, v->!haskey(ag, v))
 
     unassigned_var = []
     for (vj, eq) in enumerate(extended_var_eq_matching)
-        if eq === unassigned
+        if eq === unassigned && !haskey(ag, vj)
             push!(unassigned_var, fullvars[vj])
         end
     end

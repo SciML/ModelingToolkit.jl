@@ -1035,12 +1035,12 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     has_io = io !== nothing
     has_io && markio!(state, io...)
     state, input_idxs = inputs_to_parameters!(state, io)
-    sys = alias_elimination!(state)
+    sys, ag = alias_elimination!(state)
     # TODO: avoid construct `TearingState` again.
-    state = TearingState(sys)
-    has_io && markio!(state, io..., check = false)
-    check_consistency(state)
-    find_solvables!(state; kwargs...)
+    #state = TearingState(sys)
+    #has_io && markio!(state, io..., check = false)
+    check_consistency(state, ag)
+    #find_solvables!(state; kwargs...)
     sys = dummy_derivative(sys, state; simplify)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
