@@ -217,7 +217,8 @@ function check_diff_graph(var_to_diff, fullvars)
 end
 =#
 
-function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing; simplify = false)
+function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
+                            simplify = false)
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
 
@@ -555,9 +556,11 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing; 
     if length(diff_vars_set) != length(diff_vars)
         error("Tearing internal error: lowering DAE into semi-implicit ODE failed!")
     end
+    solved_variables_set = BitSet(solved_variables)
+    ag === nothing || union!(solved_variables_set, keys(ag))
     invvarsperm = [diff_vars;
                    setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
-                            union!(BitSet(solved_variables), keys(ag)))]
+                            solved_variables_set)]
     varsperm = zeros(Int, ndsts(graph))
     for (i, v) in enumerate(invvarsperm)
         varsperm[v] = i
@@ -689,7 +692,8 @@ end
 Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
-function dummy_derivative(sys, state = TearingState(sys), ag = nothing; simplify = false, kwargs...)
+function dummy_derivative(sys, state = TearingState(sys), ag = nothing; simplify = false,
+                          kwargs...)
     jac = let state = state
         (eqs, vars) -> begin
             symeqs = EquationsView(state)[eqs]
@@ -711,6 +715,7 @@ function dummy_derivative(sys, state = TearingState(sys), ag = nothing; simplify
             p
         end
     end
-    var_eq_matching = dummy_derivative_graph!(state, jac, (ag, nothing); state_priority, kwargs...)
+    var_eq_matching = dummy_derivative_graph!(state, jac, (ag, nothing); state_priority,
+                                              kwargs...)
     tearing_reassemble(state, var_eq_matching, ag; simplify = simplify)
 end

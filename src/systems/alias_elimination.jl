@@ -53,7 +53,7 @@ function alias_elimination!(state::TearingState)
     complete!(state.structure)
     graph_orig = copy(state.structure.graph)
     ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(state)
-    isempty(ag) && return sys
+    isempty(ag) && return sys, ag
 
     fullvars = state.fullvars
     @unpack var_to_diff, graph, solvable_graph = state.structure
@@ -180,7 +180,6 @@ function alias_elimination!(state::TearingState)
     state.structure.graph = new_graph
     state.structure.solvable_graph = new_solvable_graph
     state.structure.eq_to_diff = new_eq_to_diff
-    @show length(new_eq_to_diff), nsrcs(new_graph), nsrcs(new_solvable_graph), length(eqs)
 
     #=
     new_graph = BipartiteGraph(n_new_eqs, n_new_vars)
