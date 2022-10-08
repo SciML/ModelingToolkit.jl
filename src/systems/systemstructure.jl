@@ -25,33 +25,6 @@ function quick_cancel_expr(expr)
                                                                          kws...))(expr)
 end
 
-#=
-When we don't do subsitution, variable information is split into two different
-places, i.e. `states` and the right-hand-side of `observed`.
-
-eqs = [0 ~ z + x; 0 ~ y + z^2]
-states = [y, z]
-observed = [x ~ sin(y) + z]
-struct Reduced
-    var
-    expr
-    idxs
-end
-fullvars = [Reduced(x, sin(y) + z, [2, 3]), y, z]
-active_𝑣vertices = [false, true, true]
-      x   y   z
-eq1:  1       1
-eq2:      1   1
-
-      x   y   z
-eq1:      1   1
-eq2:      1   1
-
-for v in 𝑣vertices(graph); active_𝑣vertices[v] || continue
-
-end
-=#
-
 export SystemStructure, TransformationState, TearingState
 export initialize_system_structure, find_linear_equations
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq, algeqs

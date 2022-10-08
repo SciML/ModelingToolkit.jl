@@ -137,8 +137,9 @@ function solve_equation(eq, var, simplify)
     var ~ rhs
 end
 
-function substitute_vars!(graph::BipartiteGraph, subs, cache = Int[], callback! = nothing;
+function substitute_vars!(structure, subs, cache = Int[], callback! = nothing;
                           exclude = ())
+    @unpack graph, solvable_graph = structure
     for su in subs
         su === nothing && continue
         v, v′ = su
@@ -150,10 +151,15 @@ function substitute_vars!(graph::BipartiteGraph, subs, cache = Int[], callback! 
             eq in exclude && continue
             rem_edge!(graph, eq, v)
             add_edge!(graph, eq, v′)
+
+            if BipartiteEdge(eq, v) in solvable_graph
+                rem_edge!(solvable_graph, eq, v)
+                add_edge!(solvable_graph, eq, v′)
+            end
             callback! !== nothing && callback!(eq, su)
         end
     end
-    graph
+    return structure
 end
 
 function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F,
@@ -212,8 +218,8 @@ end
 =#
 
 function tearing_reassemble(state::TearingState, var_eq_matching; simplify = false)
-    @unpack fullvars, sys = state
-    @unpack solvable_graph, var_to_diff, eq_to_diff, graph = state.structure
+    @unpack fullvars, sys, structure = state
+    @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
 
     neweqs = collect(equations(state))
     # substitution utilities
@@ -468,9 +474,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
                 if var_eq_matching[idx] isa Int
                     var_eq_matching[x_t_idx] = var_eq_matching[idx]
                 end
-                substitute_vars!(graph, subidx, idx_buffer, sub_callback!;
-                                 exclude = order_lowering_eqs)
-                substitute_vars!(solvable_graph, subidx, idx_buffer;
+                substitute_vars!(structure, subidx, idx_buffer, sub_callback!;
                                  exclude = order_lowering_eqs)
             end
         end

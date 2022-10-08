@@ -314,7 +314,8 @@ function BipartiteGraph(nsrcs::T, ndsts::T, backedge::Val{B} = Val(true);
 end
 
 function Base.copy(bg::BipartiteGraph)
-    BipartiteGraph(bg.ne, copy(bg.fadjlist), copy(bg.badjlist), deepcopy(bg.metadata))
+    BipartiteGraph(bg.ne, map(copy, bg.fadjlist), map(copy, bg.badjlist),
+                   deepcopy(bg.metadata))
 end
 Base.eltype(::Type{<:BipartiteGraph{I}}) where {I} = I
 function Base.empty!(g::BipartiteGraph)

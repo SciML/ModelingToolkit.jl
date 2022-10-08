@@ -47,10 +47,11 @@ function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true)
     level === nothing ? v : (v => level)
 end
 
-alias_elimination(sys) = alias_elimination!(TearingState(sys; quick_cancel = true))
+alias_elimination(sys) = alias_elimination!(TearingState(sys))
 function alias_elimination!(state::TearingState)
     sys = state.sys
     complete!(state.structure)
+    graph_orig = copy(state.structure.graph)
     ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(state)
     isempty(ag) && return sys
 
@@ -118,10 +119,23 @@ function alias_elimination!(state::TearingState)
         old_to_new[i] = idx
     end
 
-    lineqs = BitSet(old_to_new[e] for e in mm.nzrows)
-    for (ieq, eq) in enumerate(eqs)
-        ieq in lineqs && continue
-        eqs[ieq] = substitute(eq, subs)
+    lineqs = BitSet(mm.nzrows)
+    eqs_to_update = BitSet()
+    for k in keys(ag)
+        # We need to update `D(D(x))` when we subsitute `D(x)` as well.
+        while true
+            for ieq in 𝑑neighbors(graph_orig, k)
+                ieq in lineqs && continue
+                new_eq = old_to_new[ieq]
+                new_eq < 1 && continue
+                push!(eqs_to_update, new_eq)
+            end
+            k = var_to_diff[k]
+            k === nothing && break
+        end
+    end
+    for ieq in eqs_to_update
+        eqs[ieq] = substitute(eqs[ieq], subs)
     end
 
     for old_ieq in to_expand
@@ -817,9 +831,9 @@ end
 function update_graph_neighbors!(graph, ag)
     for eq in 1:nsrcs(graph)
         set_neighbors!(graph, eq,
-                       [get(ag, n, (1, n))[2]
-                        for n in 𝑠neighbors(graph, eq)
-                        if !haskey(ag, n) || ag[n][2] != 0])
+                       Int[get(ag, n, (1, n))[2]
+                           for n in 𝑠neighbors(graph, eq)
+                           if !haskey(ag, n) || ag[n][2] != 0])
     end
     return graph
 end
