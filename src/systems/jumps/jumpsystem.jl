@@ -49,6 +49,11 @@ j₃      = MassActionJump(2*β+γ, [R => 1], [S => 1, R => -1])
 """
 struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
+    tag: a tag for the system. If two system have the same tag, then they are
+    structurally identical.
+    """
+    tag::UInt
+    """
     The jumps of the system. Allowable types are `ConstantRateJump`,
     `VariableRateJump`, `MassActionJump`.
     """
@@ -87,9 +92,14 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     metadata: metadata for the system, to be used by downstream packages.
     """
     metadata::Any
-    function JumpSystem{U}(ap::U, iv, states, ps, var_to_name, observed, name, systems,
+    """
+    complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    """
+    complete::Bool
+
+    function JumpSystem{U}(tag, ap::U, iv, states, ps, var_to_name, observed, name, systems,
                            defaults, connector_type, devents,
-                           metadata = nothing;
+                           metadata = nothing, complete = false;
                            checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
             check_variables(states, iv)
@@ -98,8 +108,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([states; ps; iv]) || check_units(ap, iv)
         end
-        new{U}(ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
-               connector_type, devents, metadata)
+        new{U}(tag, ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
+               connector_type, devents, metadata, complete)
     end
 end
 
@@ -151,7 +161,8 @@ function JumpSystem(eqs, iv, states, ps;
         error("JumpSystems currently only support discrete events.")
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
 
-    JumpSystem{typeof(ap)}(ap, value(iv), states, ps, var_to_name, observed, name, systems,
+    JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+                           ap, value(iv), states, ps, var_to_name, observed, name, systems,
                            defaults, connector_type, disc_callbacks, metadata,
                            checks = checks)
 end
@@ -291,7 +302,9 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         end
     end
 
-    df = DiscreteFunction{true, true}(f; syms = Symbol.(states(sys)), sys = sys,
+    df = DiscreteFunction{true, true}(f; syms = Symbol.(states(sys)),
+                                      indepsym = Symbol(get_iv(sys)),
+                                      paramsyms = Symbol.(ps), sys = sys,
                                       observed = observedfun)
     DiscreteProblem(df, u0, tspan, p; kwargs...)
 end
@@ -331,7 +344,9 @@ function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing
         u0 = $u0
         p = $p
         tspan = $tspan
-        df = DiscreteFunction{true, true}(f, syms = $(Symbol.(states(sys))))
+        df = DiscreteFunction{true, true}(f, syms = $(Symbol.(states(sys))),
+                                          indepsym = $(Symbol(get_iv(sys))),
+                                          paramsyms = $(Symbol.(parameters(sys))))
         DiscreteProblem(df, u0, tspan, p)
     end
 end

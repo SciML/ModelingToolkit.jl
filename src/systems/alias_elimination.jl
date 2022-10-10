@@ -1,21 +1,36 @@
 using SymbolicUtils: Rewriters
+using SimpleWeightedGraphs
+using Graphs.Experimental.Traversals
 
 const KEEP = typemin(Int)
 
 function alias_eliminate_graph!(state::TransformationState)
-    mm = linear_subsys_adjmat(state)
-    size(mm, 1) == 0 && return AliasGraph(ndsts(state.structure.graph)), mm, BitSet() # No linear subsystems
+    mm = linear_subsys_adjmat!(state)
+    if size(mm, 1) == 0
+        ag = AliasGraph(ndsts(state.structure.graph))
+        return ag, mm, ag, mm, BitSet() # No linear subsystems
+    end
 
-    @unpack graph, var_to_diff = state.structure
+    @unpack graph, var_to_diff, solvable_graph = state.structure
+    ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(complete(graph),
+                                                                                 complete(var_to_diff),
+                                                                                 mm)
+    if solvable_graph !== nothing
+        for (ei, e) in enumerate(mm.nzrows)
+            set_neighbors!(solvable_graph, e, mm.row_cols[ei])
+        end
+        update_graph_neighbors!(solvable_graph, ag)
+    end
 
-    return alias_eliminate_graph!(complete(graph), complete(var_to_diff), mm)
+    return ag, mm, complete_ag, complete_mm, updated_diff_vars
 end
 
 # For debug purposes
 function aag_bareiss(sys::AbstractSystem)
     state = TearingState(sys)
-    mm = linear_subsys_adjmat(state)
-    return aag_bareiss!(state.structure.graph, complete(state.structure.var_to_diff), mm)
+    complete!(state.structure)
+    mm = linear_subsys_adjmat!(state)
+    return aag_bareiss!(state.structure.graph, state.structure.var_to_diff, mm)
 end
 
 function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true);
@@ -32,11 +47,12 @@ function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true)
     level === nothing ? v : (v => level)
 end
 
-alias_elimination(sys) = alias_elimination!(TearingState(sys; quick_cancel = true))
+alias_elimination(sys) = alias_elimination!(TearingState(sys))
 function alias_elimination!(state::TearingState)
     sys = state.sys
     complete!(state.structure)
-    ag, mm, updated_diff_vars = alias_eliminate_graph!(state)
+    graph_orig = copy(state.structure.graph)
+    ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(state)
     isempty(ag) && return sys
 
     fullvars = state.fullvars
@@ -53,12 +69,16 @@ function alias_elimination!(state::TearingState)
     end
 
     subs = Dict()
+    obs = Equation[]
     # If we encounter y = -D(x), then we need to expand the derivative when
     # D(y) appears in the equation, so that D(-D(x)) becomes -D(D(x)).
     to_expand = Int[]
     diff_to_var = invview(var_to_diff)
     for (v, (coeff, alias)) in pairs(ag)
-        subs[fullvars[v]] = iszero(coeff) ? 0 : coeff * fullvars[alias]
+        lhs = fullvars[v]
+        rhs = iszero(coeff) ? 0 : coeff * fullvars[alias]
+        subs[lhs] = rhs
+        v != alias && push!(obs, lhs ~ rhs)
         if coeff == -1
             # if `alias` is like -D(x)
             diff_to_var[alias] === nothing && continue
@@ -85,11 +105,11 @@ function alias_elimination!(state::TearingState)
         end
     end
     deleteat!(eqs, sort!(dels))
-    old_to_new = Vector{Int}(undef, length(var_to_diff))
+    old_to_new = Vector{Int}(undef, nsrcs(graph))
     idx = 0
     cursor = 1
     ndels = length(dels)
-    for (i, e) in enumerate(old_to_new)
+    for i in eachindex(old_to_new)
         if cursor <= ndels && i == dels[cursor]
             cursor += 1
             old_to_new[i] = -1
@@ -99,8 +119,23 @@ function alias_elimination!(state::TearingState)
         old_to_new[i] = idx
     end
 
-    for (ieq, eq) in enumerate(eqs)
-        eqs[ieq] = substitute(eq, subs)
+    lineqs = BitSet(mm.nzrows)
+    eqs_to_update = BitSet()
+    for k in keys(ag)
+        # We need to update `D(D(x))` when we subsitute `D(x)` as well.
+        while true
+            for ieq in 𝑑neighbors(graph_orig, k)
+                ieq in lineqs && continue
+                new_eq = old_to_new[ieq]
+                new_eq < 1 && continue
+                push!(eqs_to_update, new_eq)
+            end
+            k = var_to_diff[k]
+            k === nothing && break
+        end
+    end
+    for ieq in eqs_to_update
+        eqs[ieq] = substitute(eqs[ieq], subs)
     end
 
     for old_ieq in to_expand
@@ -119,7 +154,7 @@ function alias_elimination!(state::TearingState)
     sys = state.sys
     @set! sys.eqs = eqs
     @set! sys.states = newstates
-    @set! sys.observed = [observed(sys); [lhs ~ rhs for (lhs, rhs) in pairs(subs)]]
+    @set! sys.observed = [observed(sys); obs]
     return invalidate_cache!(sys)
 end
 
@@ -200,7 +235,8 @@ function Base.getindex(ag::AliasGraph, i::Integer)
     coeff, var = (sign(r), abs(r))
     nc = coeff
     av = var
-    if var in keys(ag)
+    # We support `x -> -x` as an alias.
+    if var != i && var in keys(ag)
         # Amortized lookup. Check if since we last looked this up, our alias was
         # itself aliased. If so, just adjust the alias table.
         ac, av = ag[var]
@@ -234,8 +270,13 @@ function Base.setindex!(ag::AliasGraph, v::Integer, i::Integer)
     return 0 => 0
 end
 
-function Base.setindex!(ag::AliasGraph, p::Pair{Int, Int}, i::Integer)
+function Base.setindex!(ag::AliasGraph, p::Union{Pair{Int, Int}, Tuple{Int, Int}},
+                        i::Integer)
     (c, v) = p
+    if c == 0 || v == 0
+        ag[i] = 0
+        return p
+    end
     @assert v != 0 && c in (-1, 1)
     if ag.aliasto[i] === nothing
         push!(ag.eliminated, i)
@@ -259,224 +300,75 @@ function Base.in(i::Int, agk::AliasGraphKeySet)
     1 <= i <= length(aliasto) && aliasto[i] !== nothing
 end
 
-function reduce!(mm::SparseMatrixCLIL, ag::AliasGraph)
-    dels = Int[]
-    for (i, rs) in enumerate(mm.row_cols)
-        rvals = mm.row_vals[i]
-        j = 1
-        while j <= length(rs)
-            c = rs[j]
-            _alias = get(ag, c, nothing)
-            if _alias !== nothing
-                push!(dels, j)
-                coeff, alias = _alias
-                iszero(coeff) && (j += 1; continue)
-                inc = coeff * rvals[j]
-                i = searchsortedfirst(rs, alias)
-                if i > length(rs) || rs[i] != alias
-                    # if we add a variable to what we already visited, make sure
-                    # to bump the cursor.
-                    j += i <= j
-                    for (i, e) in enumerate(dels)
-                        e >= i && (dels[i] += 1)
-                    end
-                    insert!(rs, i, alias)
-                    insert!(rvals, i, inc)
-                else
-                    rvals[i] += inc
-                end
-            end
-            j += 1
+function equality_diff_graph(ag::AliasGraph, var_to_diff::DiffGraph)
+    g = SimpleDiGraph{Int}(length(var_to_diff))
+    eqg = SimpleWeightedGraph{Int, Int}(length(var_to_diff))
+    zero_vars = Int[]
+    for (v, (c, a)) in ag
+        if iszero(a)
+            push!(zero_vars, v)
+            continue
         end
-        deleteat!(rs, dels)
-        deleteat!(rvals, dels)
-        empty!(dels)
-        for (j, v) in enumerate(rvals)
-            iszero(v) && push!(dels, j)
-        end
-        deleteat!(rs, dels)
-        deleteat!(rvals, dels)
-        empty!(dels)
+        add_edge!(g, v, a)
+        add_edge!(g, a, v)
+
+        add_edge!(eqg, v, a, c)
+        add_edge!(eqg, a, v, c)
     end
-    mm
+    transitiveclosure!(g)
+    weighted_transitiveclosure!(eqg)
+
+    for (v, dv) in enumerate(var_to_diff)
+        dv isa Int || continue
+        add_edge!(g, v, dv)
+        add_edge!(g, dv, v)
+    end
+    g, eqg, zero_vars
 end
 
-struct InducedAliasGraph
-    ag::AliasGraph
-    invag::SimpleDiGraph{Int}
+function weighted_transitiveclosure!(g)
+    cps = connected_components(g)
+    for cp in cps
+        for k in cp, i in cp, j in cp
+            (has_edge(g, i, k) && has_edge(g, k, j)) || continue
+            add_edge!(g, i, j, get_weight(g, i, k) * get_weight(g, k, j))
+        end
+    end
+    return g
+end
+
+struct DiffLevelState <: Traversals.AbstractTraversalState
+    dists::Vector{Int}
     var_to_diff::DiffGraph
     visited::BitSet
 end
 
-function InducedAliasGraph(ag, invag, var_to_diff)
-    InducedAliasGraph(ag, invag, var_to_diff, BitSet())
+function DiffLevelState(g::SimpleDiGraph, var_to_diff)
+    DiffLevelState(fill(typemax(Int), nv(g)), var_to_diff, BitSet())
 end
 
-struct IAGNeighbors
-    iag::InducedAliasGraph
-    v::Int
+@inline function Traversals.initfn!(s::DiffLevelState, u)
+    push!(s.visited, u)
+    s.dists[u] = 0
+    return true
 end
 
-function Base.iterate(it::IAGNeighbors, state = nothing)
-    @unpack ag, invag, var_to_diff, visited = it.iag
-    callback! = Base.Fix1(push!, visited)
-    if state === nothing
-        v, lv = extreme_var(var_to_diff, it.v, 0)
-        used_ag = false
-        nb = neighbors(invag, v)
-        nit = iterate(nb)
-        state = (v, lv, used_ag, nb, nit)
-    end
-
-    v, level, used_ag, nb, nit = state
-    v in visited && return nothing
-    while true
-        @label TRYAGIN
-        if used_ag
-            if nit !== nothing
-                n, ns = nit
-                if !(n in visited)
-                    n, lv = extreme_var(var_to_diff, n, level)
-                    extreme_var(var_to_diff, n, nothing, Val(false), callback = callback!)
-                    nit = iterate(nb, ns)
-                    return n => lv, (v, level, used_ag, nb, nit)
-                end
-            end
-        else
-            used_ag = true
-            # We don't care about the alising value because we only use this to
-            # find the root of the tree.
-            if (_n = get(ag, v, nothing)) !== nothing && (n = _n[2]) > 0
-                if !(n in visited)
-                    n, lv = extreme_var(var_to_diff, n, level)
-                    extreme_var(var_to_diff, n, nothing, Val(false), callback = callback!)
-                    return n => lv, (v, level, used_ag, nb, nit)
-                end
-            else
-                @goto TRYAGIN
-            end
-        end
-        push!(visited, v)
-        (v = var_to_diff[v]) === nothing && return nothing
-        level += 1
-        used_ag = false
-    end
+@inline function Traversals.newvisitfn!(s::DiffLevelState, u, v)
+    push!(s.visited, v)
+    w = s.var_to_diff[u] == v ? 1 : s.var_to_diff[v] == u ? -1 : 0
+    s.dists[v] = s.dists[u] + w
+    return true
 end
 
-Graphs.neighbors(iag::InducedAliasGraph, v::Integer) = IAGNeighbors(iag, v)
-
-function _find_root!(iag::InducedAliasGraph, v::Integer, level = 0)
-    brs = neighbors(iag, v)
-    min_var_level = v => level
-    for (x, lv′) in brs
-        lv = lv′ + level
-        x, lv = _find_root!(iag, x, lv)
-        if min_var_level[2] > lv
-            min_var_level = x => lv
-        end
-    end
-    x, lv = extreme_var(iag.var_to_diff, min_var_level...)
-    return x => lv
+function find_root!(ss::DiffLevelState, g, s)
+    Traversals.traverse_graph!(g, s, Traversals.BFS(), ss)
+    argmin(Base.Fix1(getindex, ss.dists), ss.visited)
 end
 
-function find_root!(iag::InducedAliasGraph, v::Integer)
-    clear_visited!(iag)
-    _find_root!(iag, v)
-end
-
-clear_visited!(iag::InducedAliasGraph) = (empty!(iag.visited); iag)
-
-struct RootedAliasTree
-    iag::InducedAliasGraph
-    root::Int
-end
-
-if Base.isdefined(AbstractTrees, :childtype)
-    AbstractTrees.childtype(::Type{<:RootedAliasTree}) = Union{RootedAliasTree, Int}
-else
-    childtype(::Type{<:RootedAliasTree}) = Union{RootedAliasTree, Int}
-end
-AbstractTrees.children(rat::RootedAliasTree) = RootedAliasChildren(rat)
-AbstractTrees.nodetype(::Type{<:RootedAliasTree}) = Int
-if Base.isdefined(AbstractTrees, :nodevalue)
-    AbstractTrees.nodevalue(rat::RootedAliasTree) = rat.root
-else
-    nodevalue(rat::RootedAliasTree) = rat.root
-    nodevalue(a) = a
-end
-if Base.isdefined(AbstractTrees, :shouldprintkeys)
-    AbstractTrees.shouldprintkeys(rat::RootedAliasTree) = false
-else
-    shouldprintkeys(rat::RootedAliasTree) = false
-end
-has_fast_reverse(::Type{<:AbstractSimpleTreeIter{<:RootedAliasTree}}) = false
-
-struct StatefulAliasBFS{T} <: AbstractSimpleTreeIter{T}
-    t::T
-end
-# alias coefficient, depth, children
-Base.eltype(::Type{<:StatefulAliasBFS{T}}) where {T} = Tuple{Int, Int, childtype(T)}
-function Base.iterate(it::StatefulAliasBFS, queue = (eltype(it)[(1, 0, it.t)]))
-    isempty(queue) && return nothing
-    coeff, lv, t = popfirst!(queue)
-    nextlv = lv + 1
-    for (coeff′, c) in children(t)
-        # -1 <= coeff <= 1
-        push!(queue, (coeff * coeff′, nextlv, c))
-    end
-    return (coeff, lv, t), queue
-end
-
-struct RootedAliasChildren
-    t::RootedAliasTree
-end
-
-function Base.iterate(c::RootedAliasChildren, s = nothing)
-    rat = c.t
-    @unpack iag, root = rat
-    @unpack visited = iag
-    push!(visited, root)
-    it = _iterate(c, s)
-    it === nothing && return nothing
-    while true
-        node = nodevalue(it[1][2])
-        if node in visited
-            it = _iterate(c, it[2])
-            it === nothing && return nothing
-        else
-            push!(visited, node)
-            return it
-        end
-    end
-end
-
-@inline function _iterate(c::RootedAliasChildren, s = nothing)
-    rat = c.t
-    @unpack iag, root = rat
-    @unpack ag, invag, var_to_diff = iag
-    (iszero(root) || (root = var_to_diff[root]) === nothing) && return nothing
-    if s === nothing
-        stage = 1
-        it = iterate(neighbors(invag, root))
-        s = (stage, it)
-    end
-    (stage, it) = s
-    if stage == 1 # root
-        stage += 1
-        return (1, root), (stage, it)
-    elseif stage == 2 # ag
-        stage += 1
-        cv = get(ag, root, nothing)
-        if cv !== nothing
-            return (cv[1], RootedAliasTree(iag, cv[2])), (stage, it)
-        end
-    end
-    # invag (stage 3)
-    it === nothing && return nothing
-    e, ns = it
-    # c * a = b <=> a = c * b when -1 <= c <= 1
-    return (ag[e][1], RootedAliasTree(iag, e)), (stage,
-                                                 iterate(neighbors(invag, root), ns))
+function get_levels(g, var_to_diff, s)
+    ss = DiffLevelState(g, var_to_diff)
+    Traversals.traverse_graph!(g, s, Traversals.BFS(), ss)
+    return dists
 end
 
 count_nonzeros(a::AbstractArray) = count(!iszero, a)
@@ -485,99 +377,148 @@ count_nonzeros(a::AbstractArray) = count(!iszero, a)
 # Here we have a guarantee that they won't, so we can make this identification
 count_nonzeros(a::SparseVector) = nnz(a)
 
-function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL, irreducibles = ())
-    mm = copy(mm_orig)
-    is_linear_equations = falses(size(AsSubMatrix(mm_orig), 1))
-    for e in mm_orig.nzrows
-        is_linear_equations[e] = true
+# Linear variables are highest order differentiated variables that only appear
+# in linear equations with only linear variables. Also, if a variable's any
+# derivaitves is nonlinear, then all of them are not linear variables.
+function find_linear_variables(graph, linear_equations, var_to_diff, irreducibles)
+    stack = Int[]
+    linear_variables = falses(length(var_to_diff))
+    var_to_lineq = Dict{Int, BitSet}()
+    mark_not_linear! = let linear_variables = linear_variables, stack = stack,
+        var_to_lineq = var_to_lineq
+
+        v -> begin
+            linear_variables[v] = false
+            push!(stack, v)
+            while !isempty(stack)
+                v = pop!(stack)
+                eqs = get(var_to_lineq, v, nothing)
+                eqs === nothing && continue
+                for eq in eqs, v′ in 𝑠neighbors(graph, eq)
+                    if linear_variables[v′]
+                        linear_variables[v′] = false
+                        push!(stack, v′)
+                    end
+                end
+            end
+        end
+    end
+    for eq in linear_equations, v in 𝑠neighbors(graph, eq)
+        linear_variables[v] = true
+        vlineqs = get!(() -> BitSet(), var_to_lineq, v)
+        push!(vlineqs, eq)
+    end
+    for v in irreducibles
+        lv = extreme_var(var_to_diff, v)
+        while true
+            mark_not_linear!(lv)
+            lv = var_to_diff[lv]
+            lv === nothing && break
+        end
     end
 
-    # If linear highest differentiated variables cannot be assigned to a pivot,
-    # then we can set it to zero. We use `rank1` to track this.
-    #
-    # We only use alias graph to record reducible variables. We use `rank2` to
-    # track this.
+    linear_equations_set = BitSet(linear_equations)
+    for (v, islinear) in enumerate(linear_variables)
+        islinear || continue
+        lv = extreme_var(var_to_diff, v)
+        oldlv = lv
+        remove = invview(var_to_diff)[v] !== nothing
+        while !remove
+            for eq in 𝑑neighbors(graph, lv)
+                if !(eq in linear_equations_set)
+                    remove = true
+                end
+            end
+            lv = var_to_diff[lv]
+            lv === nothing && break
+        end
+        lv = oldlv
+        remove && while true
+            mark_not_linear!(lv)
+            lv = var_to_diff[lv]
+            lv === nothing && break
+        end
+    end
+
+    return linear_variables
+end
+
+function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
+    mm = copy(mm_orig)
+    linear_equations_set = BitSet(mm_orig.nzrows)
+
+    # All unassigned (not a pivot) algebraic variables that only appears in
+    # linear algebraic equations can be set to 0.
     #
     # For all the other variables, we can update the original system with
     # Bareiss'ed coefficients as Gaussian elimination is nullspace perserving
     # and we are only working on linear homogeneous subsystem.
-    is_linear_variables = isnothing.(var_to_diff)
-    is_reducible = trues(length(var_to_diff))
-    for v in irreducibles
-        is_linear_variables[v] = false
-        is_reducible[v] = false
+
+    is_algebraic = let var_to_diff = var_to_diff
+        v -> var_to_diff[v] === nothing === invview(var_to_diff)[v]
     end
+    is_linear_variables = is_algebraic.(1:length(var_to_diff))
     for i in 𝑠vertices(graph)
-        is_linear_equations[i] && continue
+        # only consider linear algebraic equations
+        (i in linear_equations_set && all(is_algebraic, 𝑠neighbors(graph, i))) && continue
         for j in 𝑠neighbors(graph, i)
             is_linear_variables[j] = false
         end
     end
     solvable_variables = findall(is_linear_variables)
 
-    function do_bareiss!(M, Mold = nothing)
-        rank1 = rank2 = nothing
-        pivots = Int[]
-        function find_pivot(M, k)
-            if rank1 === nothing
+    return mm, solvable_variables, do_bareiss!(mm, mm_orig, is_linear_variables)
+end
+
+function do_bareiss!(M, Mold, is_linear_variables)
+    rank1r = Ref{Union{Nothing, Int}}(nothing)
+    find_pivot = let rank1r = rank1r
+        (M, k) -> begin
+            if rank1r[] === nothing
                 r = find_masked_pivot(is_linear_variables, M, k)
                 r !== nothing && return r
-                rank1 = k - 1
-            end
-            if rank2 === nothing
-                r = find_masked_pivot(is_reducible, M, k)
-                r !== nothing && return r
-                rank2 = k - 1
+                rank1r[] = k - 1
             end
             # TODO: It would be better to sort the variables by
             # derivative order here to enable more elimination
             # opportunities.
             return find_masked_pivot(nothing, M, k)
         end
-        function find_and_record_pivot(M, k)
+    end
+    pivots = Int[]
+    find_and_record_pivot = let pivots = pivots
+        (M, k) -> begin
             r = find_pivot(M, k)
             r === nothing && return nothing
             push!(pivots, r[1][2])
             return r
         end
-        function myswaprows!(M, i, j)
+    end
+    myswaprows! = let Mold = Mold
+        (M, i, j) -> begin
             Mold !== nothing && swaprows!(Mold, i, j)
             swaprows!(M, i, j)
         end
-        bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
-                       bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
-        rank3, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
-        rank2 = something(rank2, rank3)
-        rank1 = something(rank1, rank2)
-        (rank1, rank2, rank3, pivots)
     end
-
-    return mm, solvable_variables, do_bareiss!(mm, mm_orig)
+    bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
+                   bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
+    rank2, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
+    rank1 = something(rank1r[], rank2)
+    (rank1, rank2, pivots)
 end
 
 # Kind of like the backward substitution, but we don't actually rely on it
 # being lower triangular. We eliminate a variable if there are at most 2
 # variables left after the substitution.
-function lss(mm, pivots, ag)
+function lss(mm, ag, pivots)
     ei -> let mm = mm, pivots = pivots, ag = ag
-        vi = pivots[ei]
+        vi = pivots === nothing ? nothing : pivots[ei]
         locally_structure_simplify!((@view mm[ei, :]), vi, ag)
     end
 end
 
-function simple_aliases!(ag, graph, var_to_diff, mm_orig, irreducibles = ())
-    mm, solvable_variables, (rank1, rank2, rank3, pivots) = aag_bareiss!(graph, var_to_diff,
-                                                                         mm_orig,
-                                                                         irreducibles)
-
-    # Step 2: Simplify the system using the Bareiss factorization
-    rk1vars = BitSet(@view pivots[1:rank1])
-    for v in solvable_variables
-        v in rk1vars && continue
-        ag[v] = 0
-    end
-
-    lss! = lss(mm, pivots, ag)
+function reduce!(mm, mm_orig, ag, rank2, pivots = nothing)
+    lss! = lss(mm, ag, pivots)
     # Step 2.1: Go backwards, collecting eliminated variables and substituting
     #         alias as we go.
     foreach(lss!, reverse(1:rank2))
@@ -606,22 +547,30 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig, irreducibles = ())
     return mm
 end
 
-function mark_processed!(processed, var_to_diff, v)
-    diff_to_var = invview(var_to_diff)
-    processed[v] = true
-    while (v = diff_to_var[v]) !== nothing
-        processed[v] = true
+function simple_aliases!(ag, graph, var_to_diff, mm_orig)
+    echelon_mm, solvable_variables, (rank1, rank2, pivots) = aag_bareiss!(graph,
+                                                                          var_to_diff,
+                                                                          mm_orig)
+
+    # Step 2: Simplify the system using the Bareiss factorization
+    rk1vars = BitSet(@view pivots[1:rank1])
+    for v in solvable_variables
+        v in rk1vars && continue
+        ag[v] = 0
     end
-    return nothing
+
+    mm = reduce!(copy(echelon_mm), mm_orig, ag, rank2, pivots)
+    return mm, echelon_mm
 end
 
 function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
-    # Step 1: Perform bareiss factorization on the adjacency matrix of the linear
+    # Step 1: Perform Bareiss factorization on the adjacency matrix of the linear
     #         subsystem of the system we're interested in.
     #
     nvars = ndsts(graph)
     ag = AliasGraph(nvars)
-    mm = simple_aliases!(ag, graph, var_to_diff, mm_orig)
+    complete_ag = AliasGraph(nvars)
+    mm, echelon_mm = simple_aliases!(ag, graph, var_to_diff, mm_orig)
 
     # Step 3: Handle differentiated variables
     # At this point, `var_to_diff` and `ag` form a tree structure like the
@@ -637,128 +586,256 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     #
     # where `-->` is an edge in `var_to_diff`, `⇒` is an edge in `ag`, and the
     # part in the box are purely conceptual, i.e. `D(D(D(z)))` doesn't appear in
-    # the system.
+    # the system. We call the variables in the box "virtual" variables.
     #
     # To finish the algorithm, we backtrack to the root differentiation chain.
     # If the variable already exists in the chain, then we alias them
     # (e.g. `x_t ⇒ D(D(z))`), else, we substitute and update `var_to_diff`.
     #
     # Note that since we always prefer the higher differentiated variable and
-    # with a tie breaking strategy. The root variable (in this case `z`) is
+    # with a tie breaking strategy, the root variable (in this case `z`) is
     # always uniquely determined. Thus, the result is well-defined.
-    diff_to_var = invview(var_to_diff)
-    invag = SimpleDiGraph(nvars)
-    for (v, (coeff, alias)) in pairs(ag)
-        iszero(coeff) && continue
-        add_edge!(invag, alias, v)
-    end
-    processed = falses(nvars)
-    iag = InducedAliasGraph(ag, invag, var_to_diff)
-    newag = AliasGraph(nvars)
-    irreducibles = BitSet()
+    dag = AliasGraph(nvars) # alias graph for differentiated variables
     updated_diff_vars = Int[]
+    diff_to_var = invview(var_to_diff)
+    processed = falses(nvars)
+    g, eqg, zero_vars = equality_diff_graph(ag, var_to_diff)
+    dls = DiffLevelState(g, var_to_diff)
+    is_diff_edge = let var_to_diff = var_to_diff
+        (v, w) -> var_to_diff[v] == w || var_to_diff[w] == v
+    end
+    diff_aliases = Vector{Pair{Int, Int}}[]
+    stem = Int[]
+    stem_set = BitSet()
     for (v, dv) in enumerate(var_to_diff)
         processed[v] && continue
         (dv === nothing && diff_to_var[v] === nothing) && continue
-
-        r, _ = find_root!(iag, v)
-        #   sv = fullvars[v]
-        #   root = fullvars[r]
-        #   @info "Found root $r" sv=>root
-        level_to_var = Int[]
-        extreme_var(var_to_diff, r, nothing, Val(false),
-                    callback = Base.Fix1(push!, level_to_var))
-        nlevels = length(level_to_var)
-        current_coeff_level = Ref((0, 0))
-        add_alias! = let current_coeff_level = current_coeff_level,
-            level_to_var = level_to_var, newag = newag, processed = processed
-
-            v -> begin
-                coeff, level = current_coeff_level[]
-                if level + 1 <= length(level_to_var)
-                    av = level_to_var[level + 1]
-                    if v != av # if the level_to_var isn't from the root branch
-                        newag[v] = coeff => av
-                    end
+        r = find_root!(dls, g, v)
+        prev_r = -1
+        for _ in 1:10_000 # just to make sure that we don't stuck in an infinite loop
+            reach₌ = Pair{Int, Int}[]
+            r === nothing || for n in neighbors(eqg, r)
+                (n == r || is_diff_edge(r, n)) && continue
+                c = get_weight(eqg, r, n)
+                push!(reach₌, c => n)
+            end
+            if (n = length(diff_aliases)) >= 1
+                as = diff_aliases[n]
+                for (c, a) in as
+                    (da = var_to_diff[a]) === nothing && continue
+                    da === r && continue
+                    push!(reach₌, c => da)
+                end
+            end
+            if r === nothing
+                isempty(reach₌) && break
+                idx = findfirst(x -> x[1] == 1, reach₌)
+                if idx === nothing
+                    c, dr = reach₌[1]
+                    @assert c == -1
+                    dag[dr] = (c, dr)
                 else
-                    @assert length(level_to_var) == level
-                    push!(level_to_var, v)
+                    c, dr = reach₌[idx]
+                    @assert c == 1
                 end
-                mark_processed!(processed, var_to_diff, v)
-                current_coeff_level[] = (coeff, level + 1)
+                var_to_diff[prev_r] = dr
+                push!(updated_diff_vars, prev_r)
+                prev_r = dr
+            else
+                prev_r = r
+                r = var_to_diff[r]
+            end
+            prev_r in stem_set && break
+            push!(stem_set, prev_r)
+            push!(stem, prev_r)
+            push!(diff_aliases, reach₌)
+            for (_, v) in reach₌
+                v == prev_r && continue
+                add_edge!(eqg, v, prev_r)
             end
         end
-        max_lv = 0
-        clear_visited!(iag)
-        for (coeff, lv, t) in StatefulAliasBFS(RootedAliasTree(iag, r))
-            max_lv = max(max_lv, lv)
-            v = nodevalue(t)
-            iszero(v) && continue
-            mark_processed!(processed, var_to_diff, v)
-            v == r && continue
-            if lv < length(level_to_var)
-                if level_to_var[lv + 1] == v
-                    continue
-                end
-            end
-            current_coeff_level[] = coeff, lv
-            extreme_var(var_to_diff, v, nothing, Val(false), callback = add_alias!)
-        end
-        max_lv > 0 || continue
 
-        set_v_zero! = let newag = newag
-            v -> newag[v] = 0
+        @assert length(stem) == length(diff_aliases)
+        for i in eachindex(stem)
+            a = stem[i]
+            for (c, v) in diff_aliases[i]
+                # alias edges that coincide with diff edges are handled later
+                v in stem_set && continue
+                dag[v] = c => a
+            end
         end
-        for (i, v) in enumerate(level_to_var)
-            _alias = get(ag, v, nothing)
-            v_eqs = 𝑑neighbors(graph, v)
-            # if an irreducible appears in only one equation, we need to make
-            # sure that the other variables don't get eliminated
-            if length(v_eqs) == 1
-                eq = v_eqs[1]
-                for av in 𝑠neighbors(graph, eq)
-                    push!(irreducibles, av)
+        # Obtain transitive closure after completing the alias edges from diff
+        # edges.
+        weighted_transitiveclosure!(eqg)
+        # Canonicalize by preferring the lower differentiated variable
+        # If we have the system
+        # ```
+        # D(x) ~ x
+        # D(x) + D(y) ~ 0
+        # ```
+        # preferring the lower variable would lead to
+        # ```
+        # D(x) ~ x      <== added back because `x := D(x)` removes `D(x)`
+        # D(y) ~ -x
+        # ```
+        # while preferring the higher variable would lead to
+        # ```
+        # D(x) + D(y) ~ 0
+        # ```
+        # which is not correct.
+        for i in 1:(length(stem) - 1)
+            r = stem[i]
+            for dr in @view stem[(i + 1):end]
+                if has_edge(eqg, r, dr)
+                    c = get_weight(eqg, r, dr)
+                    dag[dr] = c => r
                 end
-                ag[v] = nothing
-            end
-            push!(irreducibles, v)
-            if _alias !== nothing && iszero(_alias[1]) && i < length(level_to_var)
-                # we have `x = 0`
-                v = level_to_var[i + 1]
-                extreme_var(var_to_diff, v, nothing, Val(false), callback = set_v_zero!)
-                break
             end
         end
-        if nlevels < (new_nlevels = length(level_to_var))
-            for i in (nlevels + 1):new_nlevels
-                li = level_to_var[i]
-                var_to_diff[level_to_var[i - 1]] = li
-                push!(updated_diff_vars, level_to_var[i - 1])
+        # If a non-differentiated variable equals to 0, then we can eliminate
+        # the whole differentiation chain. Otherwise, we can have to keep the
+        # lowest differentiate variable in the differentiation chain.
+        # E.g.
+        # ```
+        # D(x) ~ 0
+        # D(D(x)) ~ y
+        # ```
+        # reduces to
+        # ```
+        # D(x) ~ 0
+        # y := 0
+        # ```
+        # but
+        # ```
+        # x ~ 0
+        # D(x) ~ y
+        # ```
+        # reduces to
+        # ```
+        # x := 0
+        # y := 0
+        # ```
+        zero_vars_set = BitSet()
+        for v in zero_vars
+            for a in Iterators.flatten((v, outneighbors(eqg, v)))
+                while true
+                    push!(zero_vars_set, a)
+                    a = var_to_diff[a]
+                    a === nothing && break
+                end
             end
         end
+        for v in zero_vars_set
+            while (iv = diff_to_var[v]) in zero_vars_set
+                v = iv
+            end
+            complete_ag[v] = 0
+            if diff_to_var[v] === nothing # `v` is reducible
+                dag[v] = 0
+            end
+            # reducible after v
+            while (v = var_to_diff[v]) !== nothing
+                dag[v] = 0
+            end
+        end
+
+        # clean up
+        for v in dls.visited
+            dls.dists[v] = typemax(Int)
+            processed[v] = true
+        end
+        empty!(dls.visited)
+        empty!(diff_aliases)
+        empty!(stem)
+        empty!(stem_set)
+    end
+    # update `dag`
+    for k in keys(dag)
+        dag[k]
     end
 
-    if !isempty(irreducibles)
-        ag = newag
-        for k in keys(ag)
-            push!(irreducibles, k)
-        end
-        mm_orig2 = isempty(ag) ? mm_orig : reduce!(copy(mm_orig), ag)
-        mm = simple_aliases!(ag, graph, var_to_diff, mm_orig2, irreducibles)
+    # Step 4: Merge dag and ag
+    removed_aliases = BitSet()
+    merged_ag = AliasGraph(nvars)
+    for (v, (c, a)) in dag
+        complete_ag[v] = c => a
     end
+    for (v, (c, a)) in ag
+        (processed[v] || (!iszero(a) && processed[a])) && continue
+        complete_ag[v] = c => a
+    end
+    for (v, (c, a)) in dag
+        # D(x) ~ D(y) cannot be removed if x and y are not aliases
+        if v != a && !iszero(a)
+            vv = v
+            aa = a
+            while true
+                vv′ = vv
+                vv = diff_to_var[vv]
+                vv === nothing && break
+                if !(haskey(dag, vv) && dag[vv][2] == diff_to_var[aa])
+                    push!(removed_aliases, vv′)
+                    @goto SKIP_merged_ag
+                end
+            end
+        end
+        merged_ag[v] = c => a
+        @label SKIP_merged_ag
+        push!(removed_aliases, a)
+    end
+    for (v, (c, a)) in ag
+        (processed[v] || (!iszero(a) && processed[a])) && continue
+        v in removed_aliases && continue
+        merged_ag[v] = c => a
+    end
+    ag = merged_ag
+    mm = reduce!(copy(echelon_mm), mm_orig, ag, size(echelon_mm, 1))
 
-    # for (v, (c, a)) in ag
-    #     va = iszero(a) ? a : fullvars[a]
-    #     @info "new alias" fullvars[v]=>(c, va)
-    # end
-
-    # Step 4: Reflect our update decisions back into the graph
+    # Step 5: Reflect our update decisions back into the graph, and make sure
+    # that the RHS of observable variables are defined.
     for (ei, e) in enumerate(mm.nzrows)
         set_neighbors!(graph, e, mm.row_cols[ei])
     end
+    update_graph_neighbors!(graph, ag)
+    finalag = AliasGraph(nvars)
+    # RHS or its derivaitves must still exist in the system to be valid aliases.
+    needs_update = false
+    function contains_v_or_dv(var_to_diff, graph, v)
+        while true
+            isempty(𝑑neighbors(graph, v)) || return true
+            v = var_to_diff[v]
+            v === nothing && return false
+        end
+    end
+    for (v, (c, a)) in ag
+        if iszero(a) || contains_v_or_dv(var_to_diff, graph, a)
+            finalag[v] = c => a
+        else
+            needs_update = true
+        end
+    end
+    ag = finalag
 
-    # because of `irreducibles`, `mm` cannot always be trusted.
-    return ag, mm, updated_diff_vars
+    if needs_update
+        mm = reduce!(copy(echelon_mm), mm_orig, ag, size(echelon_mm, 1))
+        for (ei, e) in enumerate(mm.nzrows)
+            set_neighbors!(graph, e, mm.row_cols[ei])
+        end
+        update_graph_neighbors!(graph, ag)
+    end
+
+    complete_mm = reduce!(copy(echelon_mm), mm_orig, complete_ag, size(echelon_mm, 1))
+    return ag, mm, complete_ag, complete_mm, updated_diff_vars
+end
+
+function update_graph_neighbors!(graph, ag)
+    for eq in 1:nsrcs(graph)
+        set_neighbors!(graph, eq,
+                       Int[get(ag, n, (1, n))[2]
+                           for n in 𝑠neighbors(graph, eq)
+                           if !haskey(ag, n) || ag[n][2] != 0])
+    end
+    return graph
 end
 
 function exactdiv(a::Integer, b)
@@ -768,11 +845,18 @@ function exactdiv(a::Integer, b)
 end
 
 function locally_structure_simplify!(adj_row, pivot_var, ag)
-    pivot_val = adj_row[pivot_var]
-    iszero(pivot_val) && return false
+    # If `pivot_var === nothing`, then we only apply `ag` to `adj_row`
+    if pivot_var === nothing
+        pivot_val = nothing
+    else
+        pivot_val = adj_row[pivot_var]
+        iszero(pivot_val) && return false
+    end
 
     nirreducible = 0
-    alias_candidate::Pair{Int, Int} = 0 => 0
+    # When this row only as the pivot element, the pivot is zero by homogeneity
+    # of the linear system.
+    alias_candidate::Union{Int, Pair{Int, Int}} = 0
 
     # N.B.: Assumes that the non-zeros iterator is robust to modification
     # of the underlying array datastructure.
@@ -810,10 +894,21 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
         end
     end
 
+    if pivot_var === nothing
+        if iszero(nirreducible)
+            zero!(adj_row)
+        else
+            dropzeros!(adj_row)
+        end
+        return false
+    end
     # If there were only one or two terms left in the equation (including the
     # pivot variable). We can eliminate the pivot variable. Note that when
     # `nirreducible <= 1`, `alias_candidate` is uniquely determined.
-    nirreducible <= 1 || return false
+    if nirreducible > 1
+        dropzeros!(adj_row)
+        return false
+    end
 
     if alias_candidate isa Pair
         alias_val, alias_var = alias_candidate
@@ -823,11 +918,15 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
         # v * p + c * a = 0
         # v * p = -c * a
         # p = -(c / v) * a
-        d, r = divrem(alias_val, pivot_val)
-        if r == 0 && (d == 1 || d == -1)
-            alias_candidate = -d => alias_var
+        if iszero(alias_val)
+            alias_candidate = 0
         else
-            return false
+            d, r = divrem(alias_val, pivot_val)
+            if r == 0 && (d == 1 || d == -1)
+                alias_candidate = -d => alias_var
+            else
+                return false
+            end
         end
     end
 

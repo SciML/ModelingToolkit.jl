@@ -19,6 +19,8 @@ eqs = [D(x) ~ σ * (y - x),
 
 ModelingToolkit.toexpr.(eqs)[1]
 @named de = ODESystem(eqs; defaults = Dict(x => 1))
+@named des[1:3] = ODESystem(eqs)
+@test length(unique(x -> ModelingToolkit.get_tag(x), des)) == 1
 @test eval(toexpr(de)) == de
 @test hash(deepcopy(de)) == hash(de)
 
@@ -856,16 +858,15 @@ let
 
     sys_alias = alias_elimination(sys_con)
     D = Differential(t)
-    true_eqs = [0 ~ D(sys.v) - sys.u
-                0 ~ sys.x - ctrl.x
-                0 ~ sys.v - D(sys.x)
-                0 ~ ctrl.kv * D(sys.x) + ctrl.kx * ctrl.x - D(sys.v)]
+    true_eqs = [0 ~ ctrl.u - sys.u
+                0 ~ D(D(sys.x)) - ctrl.u
+                0 ~ ctrl.kv * D(sys.x) + ctrl.kx * sys.x - ctrl.u]
     @test isequal(full_equations(sys_alias), true_eqs)
 
     sys_simp = structural_simplify(sys_con)
     D = Differential(t)
-    true_eqs = [D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x
-                D(sys.x) ~ sys.v]
+    true_eqs = [D(sys.x) ~ ctrl.v
+                D(ctrl.v) ~ ctrl.kv * ctrl.v + ctrl.kx * sys.x]
     @test isequal(full_equations(sys_simp), true_eqs)
 end
 
@@ -875,7 +876,7 @@ let
     @variables y(t) = 1
     @parameters pp = -1
     der = Differential(t)
-    @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 - y + x], t)
+    @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 + pp * y + x], t)
     as = alias_elimination(sys4)
     @test length(equations(as)) == 1
     @test isequal(equations(as)[1].lhs, -der(der(x)))
@@ -883,6 +884,8 @@ let
     sys4s = structural_simplify(sys4)
     prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
     @test string.(prob.f.syms) == ["x(t)", "xˍt(t)"]
+    @test string.(prob.f.paramsyms) == ["pp"]
+    @test string(prob.f.indepsym) == "t"
 end
 
 let
@@ -905,3 +908,20 @@ eqs = [D(q) ~ -p / L - F
 testdict = Dict([:name => "test"])
 @named sys = ODESystem(eqs, t, metadata = testdict)
 @test get_metadata(sys) == testdict
+
+@variables t P(t)=0 Q(t)=2
+∂t = Differential(t)
+
+eqs = [∂t(Q) ~ 1 / sin(P)
+       ∂t(P) ~ log(-cos(Q))]
+@named sys = ODESystem(eqs, t, [P, Q], [])
+sys = debug_system(sys);
+prob = ODEProblem(sys, [], (0, 1.0));
+du = zero(prob.u0);
+if VERSION < v"1.8"
+    @test_throws DomainError prob.f(du, [1, 0], prob.p, 0.0)
+    @test_throws DomainError prob.f(du, [0, 2], prob.p, 0.0)
+else
+    @test_throws "-cos(Q(t))" prob.f(du, [1, 0], prob.p, 0.0)
+    @test_throws "sin(P(t))" prob.f(du, [0, 2], prob.p, 0.0)
+end

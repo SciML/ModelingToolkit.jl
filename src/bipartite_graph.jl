@@ -1,12 +1,14 @@
 module BipartiteGraphs
 
+import ModelingToolkit: complete
+
 export BipartiteEdge, BipartiteGraph, DiCMOBiGraph, Unassigned, unassigned,
        Matching, ResidualCMOGraph, InducedCondensationGraph, maximal_matching,
        construct_augmenting_path!, MatchedCondensationGraph
 
 export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors, 𝑑neighbors,
        𝑠edges, 𝑑edges, nsrcs, ndsts, SRC, DST, set_neighbors!, invview,
-       complete, delete_srcs!, delete_dsts!
+       delete_srcs!, delete_dsts!
 
 using DocStringExtensions
 using UnPack
@@ -63,7 +65,17 @@ end
 function Base.setindex!(m::Matching{U}, v::Union{Integer, U}, i::Integer) where {U}
     if m.inv_match !== nothing
         oldv = m.match[i]
-        isa(oldv, Int) && (m.inv_match[oldv] = unassigned)
+        # TODO: maybe default Matching to always have an `inv_match`?
+
+        # To maintain the invariant that `m.inv_match[m.match[i]] == i`, we need
+        # to unassign the matching at `m.inv_match[v]` if it exists.
+        if v isa Int && (iv = m.inv_match[v]) isa Int
+            m.match[iv] = unassigned
+        end
+        if isa(oldv, Int)
+            @assert m.inv_match[oldv] == i
+            m.inv_match[oldv] = unassigned
+        end
         isa(v, Int) && (m.inv_match[v] = i)
     end
     return m.match[i] = v
@@ -191,14 +203,54 @@ end
 # Matrix whose only purpose is to pretty-print the bipartite graph
 struct BipartiteAdjacencyList
     u::Union{Vector{Int}, Nothing}
+    highligh_u::Union{Set{Int}, Nothing}
+    match::Union{Int, Bool, Unassigned}
 end
+function BipartiteAdjacencyList(u::Union{Vector{Int}, Nothing})
+    BipartiteAdjacencyList(u, nothing, unassigned)
+end
+
+struct HighlightInt
+    i::Int
+    highlight::Union{Symbol, Nothing}
+end
+Base.typeinfo_implicit(::Type{HighlightInt}) = true
+
+function Base.show(io::IO, hi::HighlightInt)
+    if hi.highlight !== nothing
+        printstyled(io, hi.i, color = hi.highlight)
+    else
+        print(io, hi.i)
+    end
+end
+
 function Base.show(io::IO, l::BipartiteAdjacencyList)
+    if l.match === true
+        printstyled(io, "∫ ", color = :light_blue, bold = true)
+    end
     if l.u === nothing
         printstyled(io, '⋅', color = :light_black)
     elseif isempty(l.u)
         printstyled(io, '∅', color = :light_black)
-    else
+    elseif l.highligh_u === nothing
         print(io, l.u)
+    else
+        match = l.match
+        isa(match, Bool) && (match = unassigned)
+        function choose_color(i)
+            i in l.highligh_u ? (i == match ? :light_yellow : :green) :
+            (i == match ? :yellow : nothing)
+        end
+        if !isempty(setdiff(l.highligh_u, l.u))
+            # Only for debugging, shouldn't happen in practice
+            print(io, map(union(l.u, l.highligh_u)) do i
+                      HighlightInt(i, !(i in l.u) ? :light_red : choose_color(i))
+                  end)
+        else
+            print(io, map(l.u) do i
+                      HighlightInt(i, choose_color(i))
+                  end)
+        end
     end
 end
 
@@ -262,7 +314,8 @@ function BipartiteGraph(nsrcs::T, ndsts::T, backedge::Val{B} = Val(true);
 end
 
 function Base.copy(bg::BipartiteGraph)
-    BipartiteGraph(bg.ne, copy(bg.fadjlist), copy(bg.badjlist), deepcopy(bg.metadata))
+    BipartiteGraph(bg.ne, map(copy, bg.fadjlist), map(copy, bg.badjlist),
+                   deepcopy(bg.metadata))
 end
 Base.eltype(::Type{<:BipartiteGraph{I}}) where {I} = I
 function Base.empty!(g::BipartiteGraph)
@@ -435,19 +488,23 @@ function set_neighbors!(g::BipartiteGraph, i::Integer, new_neighbors)
         for n in old_neighbors
             @inbounds list = g.badjlist[n]
             index = searchsortedfirst(list, i)
-            deleteat!(list, index)
+            if 1 <= index <= length(list) && list[index] == i
+                deleteat!(list, index)
+            end
         end
         for n in new_neighbors
             @inbounds list = g.badjlist[n]
             index = searchsortedfirst(list, i)
-            insert!(list, index, i)
+            if !(1 <= index <= length(list) && list[index] == i)
+                insert!(list, index, i)
+            end
         end
     end
     if iszero(new_nneighbors) # this handles Tuple as well
         # Warning: Aliases old_neighbors
         empty!(g.fadjlist[i])
     else
-        g.fadjlist[i] = copy(new_neighbors)
+        g.fadjlist[i] = unique!(sort(new_neighbors))
     end
 end
 

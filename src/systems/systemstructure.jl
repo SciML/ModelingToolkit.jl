@@ -25,35 +25,8 @@ function quick_cancel_expr(expr)
                                                                          kws...))(expr)
 end
 
-#=
-When we don't do subsitution, variable information is split into two different
-places, i.e. `states` and the right-hand-side of `observed`.
-
-eqs = [0 ~ z + x; 0 ~ y + z^2]
-states = [y, z]
-observed = [x ~ sin(y) + z]
-struct Reduced
-    var
-    expr
-    idxs
-end
-fullvars = [Reduced(x, sin(y) + z, [2, 3]), y, z]
-active_𝑣vertices = [false, true, true]
-      x   y   z
-eq1:  1       1
-eq2:      1   1
-
-      x   y   z
-eq1:      1   1
-eq2:      1   1
-
-for v in 𝑣vertices(graph); active_𝑣vertices[v] || continue
-
-end
-=#
-
 export SystemStructure, TransformationState, TearingState
-export initialize_system_structure, find_linear_equations, linear_subsys_adjmat
+export initialize_system_structure, find_linear_equations
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq, algeqs
 export dervars_range, diffvars_range, algvars_range
 export DiffGraph, complete!
@@ -315,10 +288,8 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     nvars = length(fullvars)
     diffvars = []
-    vartype = fill(DIFFERENTIAL_VARIABLE, nvars)
     var_to_diff = DiffGraph(nvars, true)
     for dervaridx in dervaridxs
-        vartype[dervaridx] = DERIVATIVE_VARIABLE
         dervar = fullvars[dervaridx]
         diffvar = arguments(dervar)[1]
         diffvaridx = var2idx[diffvar]
@@ -326,6 +297,7 @@ function TearingState(sys; quick_cancel = false, check = true)
         var_to_diff[diffvaridx] = dervaridx
     end
 
+    #=
     algvars = setdiff(states(sys), diffvars)
     for algvar in algvars
         # it could be that a variable appeared in the states, but never appeared
@@ -334,10 +306,8 @@ function TearingState(sys; quick_cancel = false, check = true)
         #if algvaridx == 0
         #    check ? throw(InvalidSystemException("The system is missing an equation for $algvar.")) : return nothing
         #end
-        if algvaridx != 0
-            vartype[algvaridx] = ALGEBRAIC_VARIABLE
-        end
     end
+    =#
 
     graph = BipartiteGraph(neqs, nvars, Val(false))
     for (ie, vars) in enumerate(symbolic_incidence), v in vars
@@ -350,64 +320,99 @@ function TearingState(sys; quick_cancel = false, check = true)
     eq_to_diff = DiffGraph(nsrcs(graph))
 
     return TearingState(sys, fullvars,
-                        SystemStructure(var_to_diff, eq_to_diff, graph, nothing), Any[])
+                        SystemStructure(complete(var_to_diff), complete(eq_to_diff),
+                                        complete(graph), nothing), Any[])
 end
 
-function linear_subsys_adjmat(state::TransformationState)
-    fullvars = state.fullvars
-    graph = state.structure.graph
-    is_linear_equations = falses(nsrcs(graph))
-    eqs = equations(state.sys)
-    eadj = Vector{Int}[]
-    cadj = Vector{Int}[]
-    coeffs = Int[]
-    for (i, eq) in enumerate(eqs)
-        empty!(coeffs)
-        linear_term = 0
-        all_int_vars = true
-
-        term = value(eq.rhs - eq.lhs)
-        for j in 𝑠neighbors(graph, i)
-            var = fullvars[j]
-            a, b, islinear = linear_expansion(term, var)
-            a = unwrap(a)
-            if islinear && !(a isa Symbolic) && a isa Number && !isirreducible(var)
-                if a == 1 || a == -1
-                    a = convert(Integer, a)
-                    linear_term += a * var
-                    push!(coeffs, a)
-                else
-                    all_int_vars = false
-                end
-            end
+using .BipartiteGraphs: Label, BipartiteAdjacencyList
+struct SystemStructurePrintMatrix <:
+       AbstractMatrix{Union{Label, Int, BipartiteAdjacencyList}}
+    bpg::BipartiteGraph
+    highlight_graph::BipartiteGraph
+    var_to_diff::DiffGraph
+    eq_to_diff::DiffGraph
+    var_eq_matching::Union{Matching, Nothing}
+end
+Base.size(bgpm::SystemStructurePrintMatrix) = (max(nsrcs(bgpm.bpg), ndsts(bgpm.bpg)) + 1, 5)
+function compute_diff_label(diff_graph, i)
+    di = i - 1 <= length(diff_graph) ? diff_graph[i - 1] : nothing
+    ii = i - 1 <= length(invview(diff_graph)) ? invview(diff_graph)[i - 1] : nothing
+    return Label(string(di === nothing ? "" : string(di, '↓'),
+                        di !== nothing && ii !== nothing ? " " : "",
+                        ii === nothing ? "" : string(ii, '↑')))
+end
+function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
+    checkbounds(bgpm, i, j)
+    if i <= 1
+        return (Label.(("#", "∂ₜ", "eq", "∂ₜ", "v")))[j]
+    elseif j == 2
+        return compute_diff_label(bgpm.eq_to_diff, i)
+    elseif j == 4
+        return compute_diff_label(bgpm.var_to_diff, i)
+    elseif j == 1
+        return i - 1
+    elseif j == 3
+        return BipartiteAdjacencyList(i - 1 <= nsrcs(bgpm.bpg) ?
+                                      𝑠neighbors(bgpm.bpg, i - 1) : nothing,
+                                      bgpm.highlight_graph !== nothing &&
+                                      i - 1 <= nsrcs(bgpm.highlight_graph) ?
+                                      Set(𝑠neighbors(bgpm.highlight_graph, i - 1)) :
+                                      nothing,
+                                      bgpm.var_eq_matching !== nothing &&
+                                      (i - 1 <= length(invview(bgpm.var_eq_matching))) ?
+                                      invview(bgpm.var_eq_matching)[i - 1] : unassigned)
+    elseif j == 5
+        match = unassigned
+        if bgpm.var_eq_matching !== nothing && i - 1 <= length(bgpm.var_eq_matching)
+            match = bgpm.var_eq_matching[i - 1]
+            isa(match, Union{Int, Unassigned}) || (match = true) # Selected State
         end
-
-        # Check if all states in the equation is both linear and homogeneous,
-        # i.e. it is in the form of
-        #
-        #       ``∑ c_i * v_i = 0``,
-        #
-        # where ``c_i`` ∈ ℤ and ``v_i`` denotes states.
-        if all_int_vars && isequal(linear_term, term)
-            is_linear_equations[i] = true
-            push!(eadj, copy(𝑠neighbors(graph, i)))
-            push!(cadj, copy(coeffs))
-        else
-            is_linear_equations[i] = false
-        end
+        return BipartiteAdjacencyList(i - 1 <= ndsts(bgpm.bpg) ?
+                                      𝑑neighbors(bgpm.bpg, i - 1) : nothing,
+                                      bgpm.highlight_graph !== nothing &&
+                                      i - 1 <= ndsts(bgpm.highlight_graph) ?
+                                      Set(𝑑neighbors(bgpm.highlight_graph, i - 1)) :
+                                      nothing, match)
+    else
+        @assert false
     end
-
-    linear_equations = findall(is_linear_equations)
-    return SparseMatrixCLIL(nsrcs(graph),
-                            ndsts(graph),
-                            linear_equations, eadj, cadj)
 end
 
 function Base.show(io::IO, mime::MIME"text/plain", s::SystemStructure)
-    @unpack graph = s
-    S = incidence_matrix(graph, Num(Sym{Real}(:×)))
-    print(io, "Incidence matrix:")
-    show(io, mime, S)
+    @unpack graph, solvable_graph, var_to_diff, eq_to_diff = s
+    if !get(io, :limit, true) || !get(io, :mtk_limit, true)
+        print(io, "SystemStructure with ", length(graph.fadjlist), " equations and ",
+              isa(graph.badjlist, Int) ? graph.badjlist : length(graph.badjlist),
+              " variables\n")
+        Base.print_matrix(io,
+                          SystemStructurePrintMatrix(complete(graph),
+                                                     complete(solvable_graph),
+                                                     complete(var_to_diff),
+                                                     complete(eq_to_diff), nothing))
+    else
+        S = incidence_matrix(graph, Num(Sym{Real}(:×)))
+        print(io, "Incidence matrix:")
+        show(io, mime, S)
+    end
+end
+
+struct MatchedSystemStructure
+    structure::SystemStructure
+    var_eq_matching::Matching
+end
+
+function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
+    s = ms.structure
+    @unpack graph, solvable_graph, var_to_diff, eq_to_diff = s
+    print(io, "Matched SystemStructure with ", length(graph.fadjlist), " equations and ",
+          isa(graph.badjlist, Int) ? graph.badjlist : length(graph.badjlist),
+          " variables\n")
+    Base.print_matrix(io,
+                      SystemStructurePrintMatrix(complete(graph),
+                                                 complete(solvable_graph),
+                                                 complete(var_to_diff),
+                                                 complete(eq_to_diff),
+                                                 complete(ms.var_eq_matching, nsrcs(graph))))
 end
 
 end # module

@@ -189,7 +189,7 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
 end
 
 function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
-    eqs = [eq for eq in full_equations(sys) if !isdifferenceeq(eq)]
+    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     dvs = states(sys)
     M = zeros(length(eqs), length(eqs))
     state2idx = Dict(s => i for (i, s) in enumerate(dvs))
@@ -364,6 +364,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                  jac_prototype = jac_prototype,
                                  syms = Symbol.(states(sys)),
                                  indepsym = Symbol(get_iv(sys)),
+                                 paramsyms = Symbol.(ps),
                                  observed = observedfun,
                                  sparsity = sparsity ? jacobian_sparsity(sys) : nothing)
 end
@@ -449,9 +450,9 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      sys = sys,
                      jac = _jac === nothing ? nothing : _jac,
                      syms = Symbol.(dvs),
+                     indepsym = Symbol(get_iv(sys)),
+                     paramsyms = Symbol.(ps),
                      jac_prototype = jac_prototype,
-                     # missing fields in `DAEFunction`
-                     #indepsym = Symbol(get_iv(sys)),
                      observed = observedfun)
 end
 
@@ -534,7 +535,8 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                           mass_matrix = M,
                           jac_prototype = $jp_expr,
                           syms = $(Symbol.(states(sys))),
-                          indepsym = $(QuoteNode(Symbol(get_iv(sys)))))
+                          indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
+                          paramsyms = $(QuoteNode(Symbol.(parameters(sys)))))
     end
     !linenumbers ? striplines(ex) : ex
 end

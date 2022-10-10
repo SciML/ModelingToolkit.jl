@@ -1,3 +1,5 @@
+const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
+
 """
 ```julia
 calculate_tgrad(sys::AbstractTimeDependentSystem)
@@ -162,7 +164,20 @@ independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
 independent_variables(sys::AbstractTimeIndependentSystem) = []
 independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
 
+iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :complete)
+
+"""
+$(TYPEDSIGNATURES)
+
+Mark a system as completed. If a system is complete, the system will no longer
+namespace its subsystems or variables, i.e. `isequal(complete(sys).v.i, v.i)`.
+"""
+function complete(sys::AbstractSystem)
+    isdefined(sys, :complete) ? (@set! sys.complete = true) : sys
+end
+
 for prop in [:eqs
+             :tag
              :noiseeqs
              :iv
              :states
@@ -243,7 +258,7 @@ end
     end
 end
 
-rename(x::AbstractSystem, name) = @set x.name = name
+rename(x, name) = @set x.name = name
 
 function Base.propertynames(sys::AbstractSystem; private = false)
     if private
@@ -266,10 +281,10 @@ function Base.propertynames(sys::AbstractSystem; private = false)
     end
 end
 
-function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace = true)
+function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
     wrap(getvar(sys, name; namespace = namespace))
 end
-function getvar(sys::AbstractSystem, name::Symbol; namespace = false)
+function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
     systems = get_systems(sys)
     if isdefined(sys, name)
         Base.depwarn("`sys.name` like `sys.$name` is deprecated. Use getters like `get_$name` instead.",
@@ -304,6 +319,9 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = false)
 
     sts = get_states(sys)
     i = findfirst(x -> getname(x) == name, sts)
+    if i !== nothing
+        return namespace ? renamespace(sys, sts[i]) : sts[i]
+    end
 
     if has_observed(sys)
         obs = get_observed(sys)
@@ -402,7 +420,7 @@ function namespace_assignment(eq::Assignment, sys)
     Assignment(_lhs, _rhs)
 end
 
-function namespace_expr(O, sys, n = nameof(sys)) where {T}
+function namespace_expr(O, sys, n = nameof(sys))
     ivs = independent_variables(sys)
     O = unwrap(O)
     if any(isequal(O), ivs)
@@ -827,12 +845,26 @@ function _named(name, call, runtime = false)
         end
     end
 
+    is_sys_construction = Symbol("###__is_system_construction###")
     kws = call.args[2].args
+    for (i, kw) in enumerate(kws)
+        if Meta.isexpr(kw, (:(=), :kw))
+            kw.args[2] = :($is_sys_construction ? $(kw.args[2]) :
+                           $default_to_parentscope($(kw.args[2])))
+        elseif kw isa Symbol
+            rhs = :($is_sys_construction ? $(kw) : $default_to_parentscope($(kw)))
+            kws[i] = Expr(:kw, kw, rhs)
+        end
+    end
 
     if !any(kw -> (kw isa Symbol ? kw : kw.args[1]) == :name, kws) # don't overwrite `name` kwarg
         pushfirst!(kws, Expr(:kw, :name, runtime ? name : Meta.quot(name)))
     end
-    call
+    op = call.args[1]
+    quote
+        $is_sys_construction = ($op isa $DataType) && ($op <: $AbstractSystem)
+        $call
+    end
 end
 
 function _named_idxs(name::Symbol, idxs, call)
@@ -857,38 +889,31 @@ end
 """
     @named y = foo(x)
     @named y[1:10] = foo(x)
-    @named y 1:10 i -> foo(x*i)
+    @named y 1:10 i -> foo(x*i)  # This is not recommended
 
-Rewrite `@named y = foo(x)` to `y = foo(x; name=:y)`.
-
-Rewrite `@named y[1:10] = foo(x)` to `y = map(i′->foo(x; name=Symbol(:y_, i′)), 1:10)`.
-
-Rewrite `@named y 1:10 i -> foo(x*i)` to `y = map(i->foo(x*i; name=Symbol(:y_, i)), 1:10)`.
+Pass the LHS name to the model. When it's calling anything that's not an
+AbstractSystem, it wraps all keyword arguments in `default_to_parentscope` so
+that namespacing works intuitively when passing a symbolic default into a
+component.
 
 Examples:
-```julia
+```julia-repl
 julia> using ModelingToolkit
 
-julia> foo(i; name) = i, name
+julia> foo(i; name) = (; i, name)
 foo (generic function with 1 method)
 
 julia> x = 41
 41
 
 julia> @named y = foo(x)
-(41, :y)
+(i = 41, name = :y)
 
 julia> @named y[1:3] = foo(x)
-3-element Vector{Tuple{Int64, Symbol}}:
- (41, :y_1)
- (41, :y_2)
- (41, :y_3)
-
-julia> @named y 1:3 i -> foo(x*i)
-3-element Vector{Tuple{Int64, Symbol}}:
- (41, :y_1)
- (82, :y_2)
- (123, :y_3)
+3-element Vector{NamedTuple{(:i, :name), Tuple{Int64, Symbol}}}:
+ (i = 41, name = :y_1)
+ (i = 41, name = :y_2)
+ (i = 41, name = :y_3)
 ```
 """
 macro named(expr)
@@ -896,7 +921,12 @@ macro named(expr)
     if Meta.isexpr(name, :ref)
         name, idxs = name.args
         check_name(name)
-        esc(_named_idxs(name, idxs, :($(gensym()) -> $call)))
+        var = gensym(name)
+        ex = quote
+            $var = $(_named(name, call))
+            $name = map(i -> $rename($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
+        end
+        esc(ex)
     else
         check_name(name)
         esc(:($name = $(_named(name, call))))
@@ -905,6 +935,11 @@ end
 
 macro named(name::Symbol, idxs, call)
     esc(_named_idxs(name, idxs, call))
+end
+
+function default_to_parentscope(v)
+    uv = unwrap(v)
+    uv isa Symbolic && !hasmetadata(uv, SymScope) ? ParentScope(v) : v
 end
 
 function _config(expr, namespace)
@@ -950,6 +985,40 @@ end
 """
 $(SIGNATURES)
 
+Replace functions with singularities with a function that errors with symbolic
+information. E.g.
+
+```julia-repl
+julia> sys = debug_system(sys);
+
+julia> prob = ODEProblem(sys, [], (0, 1.0));
+
+julia> du = zero(prob.u0);
+
+julia> prob.f(du, prob.u0, prob.p, 0.0)
+ERROR: DomainError with (-1.0,):
+log errors with input(s): -cos(Q(t)) => -1.0
+Stacktrace:
+  [1] (::ModelingToolkit.LoggedFun{typeof(log)})(args::Float64)
+  ...
+```
+"""
+function debug_system(sys::AbstractSystem)
+    if has_systems(sys) && !isempty(get_systems(sys))
+        error("debug_system only works on systems with no sub-systems!")
+    end
+    if has_eqs(sys)
+        @set! sys.eqs = debug_sub.(equations(sys))
+    end
+    if has_observed(sys)
+        @set! sys.observed = debug_sub.(observed(sys))
+    end
+    return sys
+end
+
+"""
+$(SIGNATURES)
+
 Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations. When `simplify=true`, the `simplify`
 function will be applied during the tearing process. It also takes kwargs
@@ -965,7 +1034,7 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     state = TearingState(sys)
     has_io = io !== nothing
     has_io && markio!(state, io...)
-    state, input_idxs = inputs_to_parameters!(state, !has_io)
+    state, input_idxs = inputs_to_parameters!(state, io)
     sys = alias_elimination!(state)
     # TODO: avoid construct `TearingState` again.
     state = TearingState(sys)
@@ -981,7 +1050,7 @@ end
 
 function io_preprocessing(sys::AbstractSystem, inputs,
                           outputs; simplify = false, kwargs...)
-    sys, input_idxs = structural_simplify(sys, (inputs, outputs); simplify, kwargs...)
+    sys, input_idxs = structural_simplify(sys, (; inputs, outputs); simplify, kwargs...)
 
     eqs = equations(sys)
     alg_start_idx = findfirst(!isdiffeq, eqs)
@@ -1028,7 +1097,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         input_idxs = input_idxs,
         sts = states(sys),
         fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys),
-        h = ModelingToolkit.build_explicit_observed_function(sys, outputs),
+        h = build_explicit_observed_function(sys, outputs),
         chunk = ForwardDiff.Chunk(input_idxs)
 
         function (u, p, t)
@@ -1072,18 +1141,15 @@ function markio!(state, inputs, outputs; check = true)
     outputset = Dict(outputs .=> false)
     for (i, v) in enumerate(fullvars)
         if v in keys(inputset)
-            v = setmetadata(v, ModelingToolkit.VariableInput, true)
-            v = setmetadata(v, ModelingToolkit.VariableOutput, false)
+            v = setio(v, true, false)
             inputset[v] = true
             fullvars[i] = v
         elseif v in keys(outputset)
-            v = setmetadata(v, ModelingToolkit.VariableInput, false)
-            v = setmetadata(v, ModelingToolkit.VariableOutput, true)
+            v = setio(v, false, true)
             outputset[v] = true
             fullvars[i] = v
         else
-            v = setmetadata(v, ModelingToolkit.VariableInput, false)
-            v = setmetadata(v, ModelingToolkit.VariableOutput, false)
+            v = setio(v, false, false)
             fullvars[i] = v
         end
     end
@@ -1198,6 +1264,8 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
     nz = size(f_z, 2)
     ny = size(h_x, 1)
 
+    D = h_u
+
     if isempty(g_z)
         A = f_x
         B = f_u
@@ -1213,19 +1281,19 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
         A = [f_x f_z
              gzgx*f_x gzgx*f_z]
         B = [f_u
-             zeros(nz, nu)]
+             gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
+
         C = [h_x h_z]
         Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
         if !iszero(Bs)
             if !allow_input_derivatives
                 der_inds = findall(vec(any(!=(0), Bs, dims = 1)))
-                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(inputs(sys)[der_inds]). Call `linear_staespace` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
+                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(inputs(sys)[der_inds]). Call `linear_statespace` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
             end
-            B = [B Bs]
+            B = [B [zeros(nx, nu); Bs]]
+            D = [D zeros(ny, nu)]
         end
     end
-
-    D = h_u
 
     (; A, B, C, D)
 end

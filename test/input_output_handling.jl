@@ -108,6 +108,24 @@ syss = structural_simplify(sys2)
 #@test isequal(unbound_outputs(syss), [y])
 @test isequal(bound_outputs(syss), [sys.y])
 
+using ModelingToolkitStandardLibrary
+using ModelingToolkitStandardLibrary.Mechanical.Rotational
+t = ModelingToolkitStandardLibrary.Mechanical.Rotational.t
+@named inertia1 = Inertia(; J = 1)
+@named inertia2 = Inertia(; J = 1)
+@named spring = Spring(; c = 10)
+@named damper = Damper(; d = 3)
+@named torque = Torque()
+eqs = [connect(torque.flange, inertia1.flange_a)
+       connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+       connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
+model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
+                  name = :name)
+model_outputs = [inertia1.w, inertia2.w, inertia1.phi, inertia2.phi]
+model_inputs = [torque.tau.u]
+matrices, ssys = linearize(model, model_inputs, model_outputs)
+@test length(ModelingToolkit.outputs(ssys)) == 4
+
 ## Code generation with unbound inputs
 
 @variables t x(t)=0 u(t)=0 [input = true]
@@ -140,21 +158,21 @@ function Mass(; name, m = 1.0, p = 0, v = 0)
     ODESystem(eqs, t, [pos, vel, y], ps; name)
 end
 
-function Spring(; name, k = 1e4)
+function MySpring(; name, k = 1e4)
     ps = @parameters k = k
     @variables x(t) = 0 # Spring deflection
     ODESystem(Equation[], t, [x], ps; name)
 end
 
-function Damper(; name, c = 10)
+function MyDamper(; name, c = 10)
     ps = @parameters c = c
     @variables vel(t) = 0
     ODESystem(Equation[], t, [vel], ps; name)
 end
 
 function SpringDamper(; name, k = false, c = false)
-    spring = Spring(; name = :spring, k)
-    damper = Damper(; name = :damper, c)
+    spring = MySpring(; name = :spring, k)
+    damper = MyDamper(; name = :damper, c)
     compose(ODESystem(Equation[], t; name),
             spring, damper)
 end
@@ -195,3 +213,108 @@ i = findfirst(isequal(u[1]), out)
 eqs = [Differential(t)(x) ~ u]
 @named sys = ODESystem(eqs, t)
 @test_nowarn structural_simplify(sys)
+
+#=
+## Disturbance input handling
+We test that the generated disturbance dynamics is correct by calling the dynamics in two different points that differ in the disturbance state, and check that we get the same result as when we call the linearized dynamics in the same two points. The true system is linear so the linearized dynamics are exact.
+
+The test below builds a double-mass model and adds an integrating disturbance to the input
+=#
+
+using ModelingToolkit
+using ModelingToolkitStandardLibrary.Mechanical.Rotational
+using ModelingToolkitStandardLibrary.Blocks
+@parameters t
+
+# Parameters
+m1 = 1
+m2 = 1
+k = 1000 # Spring stiffness
+c = 10   # Damping coefficient
+
+@named inertia1 = Rotational.Inertia(; J = m1)
+@named inertia2 = Rotational.Inertia(; J = m2)
+@named spring = Rotational.Spring(; c = k)
+@named damper = Rotational.Damper(; d = c)
+@named torque = Rotational.Torque()
+
+function SystemModel(u = nothing; name = :model)
+    eqs = [connect(torque.flange, inertia1.flange_a)
+           connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+           connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
+    if u !== nothing
+        push!(eqs, connect(torque.tau, u.output))
+        return @named model = ODESystem(eqs, t;
+                                        systems = [
+                                            torque,
+                                            inertia1,
+                                            inertia2,
+                                            spring,
+                                            damper,
+                                            u,
+                                        ])
+    end
+    ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
+end
+
+model = SystemModel() # Model with load disturbance
+model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.inertia2.phi]
+
+@named dmodel = Blocks.StateSpace([0.0], [1.0], [1.0], [0.0]) # An integrating disturbance
+
+@named dist = ModelingToolkit.DisturbanceModel(model.torque.tau.u, dmodel)
+(f_oop, f_ip), outersys, dvs, p = ModelingToolkit.add_input_disturbance(model, dist)
+
+@unpack u, d = outersys
+matrices, ssys = linearize(outersys, [u, d], model_outputs)
+
+def = ModelingToolkit.defaults(outersys)
+
+# Create a perturbation in the disturbance state
+dstate = setdiff(dvs, model_outputs)[]
+x_add = ModelingToolkit.varmap_to_vars(merge(Dict(dvs .=> 0), Dict(dstate => 1)), dvs)
+
+x0 = randn(5)
+x1 = copy(x0) + x_add # add disturbance state perturbation
+u = randn(1)
+pn = ModelingToolkit.varmap_to_vars(def, p)
+xp0 = f_oop(x0, u, pn, 0)
+xp1 = f_oop(x1, u, pn, 0)
+
+@test xp0 ≈ matrices.A * x0 + matrices.B * [u; 0]
+@test xp1 ≈ matrices.A * x1 + matrices.B * [u; 0]
+
+@parameters t
+@variables x(t)[1:3] = 0
+@variables u(t)[1:2]
+D = Differential(t)
+y₁, y₂, y₃ = x
+u1, u2 = u
+k₁, k₂, k₃ = 1, 1, 1
+eqs = [D(y₁) ~ -k₁ * y₁ + k₃ * y₂ * y₃ + u1
+       D(y₂) ~ k₁ * y₁ - k₃ * y₂ * y₃ - k₂ * y₂^2 + u2
+       y₁ + y₂ + y₃ ~ 1]
+
+@named sys = ODESystem(eqs, t)
+m_inputs = [u[1], u[2]]
+m_outputs = [y₂]
+sys_simp, input_idxs = structural_simplify(sys, (; inputs = m_inputs, outputs = m_outputs))
+@test isequal(states(sys_simp), collect(x[1:2]))
+@test length(input_idxs) == 2
+
+# https://github.com/SciML/ModelingToolkit.jl/issues/1577
+@parameters t
+@named c = Constant(; k = 2)
+@named gain = Gain(1;)
+@named int = Integrator(; k = 1)
+@named fb = Feedback(;)
+@named model = ODESystem([
+                             connect(c.output, fb.input1),
+                             connect(fb.input2, int.output),
+                             connect(fb.output, gain.input),
+                             connect(gain.output, int.input),
+                         ],
+                         t,
+                         systems = [int, gain, c, fb])
+sys = structural_simplify(model)
+@test length(states(sys)) == length(equations(sys)) == 1
