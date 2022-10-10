@@ -114,8 +114,8 @@ $(SIGNATURES)
 Intercept the call to `handle_varmap` and convert it to an ordered list if the user has
   ModelingToolkit loaded, and the problem has a symbolic origin.
 """
-function SciMLBase.handle_varmap(varmap, sys::AbstractSystem; field = :states)
-    out = varmap_to_vars(varmap, getfield(sys, field))
+function SciMLBase.handle_varmap(varmap, sys::AbstractSystem; field = :states, kwargs...)
+    out = varmap_to_vars(varmap, getfield(sys, field); kwargs...)
     return out
 end
 
