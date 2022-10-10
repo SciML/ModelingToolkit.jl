@@ -861,7 +861,7 @@ let
     @variables y(t) = 1
     @parameters pp = -1
     der = Differential(t)
-    @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 - y + x], t)
+    @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 + pp * y + x], t)
     as = alias_elimination(sys4)
     @test length(equations(as)) == 1
     @test isequal(equations(as)[1].lhs, -der(der(x)))
@@ -869,6 +869,8 @@ let
     sys4s = structural_simplify(sys4)
     prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
     @test string.(prob.f.syms) == ["x(t)", "xˍt(t)"]
+    @test string.(prob.f.paramsyms) == ["pp"]
+    @test string(prob.f.indepsym) == "t"
 end
 
 let
