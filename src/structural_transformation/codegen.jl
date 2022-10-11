@@ -96,7 +96,7 @@ function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_
     sparse(I, J, true, length(eqs_idxs), length(states_idxs))
 end
 
-function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDict,
+function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, iv, u0map::AbstractDict,
                       assignments, (deps, invdeps), var2assignment; checkbounds = true)
     isempty(vars) && throw(ArgumentError("vars may not be empty"))
     length(eqs) == length(vars) ||
@@ -167,6 +167,7 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
     setdiff!(paramset, vars)
     setdiff!(paramset, [needed_assignments[i].lhs for i in inner_idxs])
     union!(paramset, [needed_assignments[i].lhs for i in outer_idxs])
+    push!(paramset, iv)
     params = collect(paramset)
 
     # splatting to tighten the type
@@ -268,7 +269,8 @@ function build_torn_function(sys;
         isempty(torn_eqs_idxs) && continue
         if length(torn_eqs_idxs) <= max_inlining_size
             nlsolve_expr = gen_nlsolve!(is_not_prepended_assignment, eqs[torn_eqs_idxs],
-                                        fullvars[torn_vars_idxs], defs, assignments,
+                                        fullvars[torn_vars_idxs],
+                                        independent_variables(sys)[], defs, assignments,
                                         (deps, invdeps), var2assignment,
                                         checkbounds = checkbounds)
             append!(torn_expr, nlsolve_expr)
@@ -454,6 +456,7 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
         assignments = copy(assignments)
         solves = map(zip(torn_eqs, torn_vars)) do (eqs, vars)
             gen_nlsolve!(is_not_prepended_assignment, eqs, vars,
+                         independent_variables(sys)[],
                          u0map, assignments, deps, var2assignment;
                          checkbounds = checkbounds)
         end
