@@ -227,7 +227,7 @@ continuous_events = [[x ~ 0] => [vx ~ -vx]
 @named ball = ODESystem([D(x) ~ vx
                          D(y) ~ vy
                          D(vx) ~ -9.8
-                         D(vy) ~ -0.01vy], t; continuous_events)
+                         D(vy) ~ -0.01vy;], t; continuous_events)
 
 ball = structural_simplify(ball)
 
@@ -264,7 +264,7 @@ continuous_events = [
 @named ball = ODESystem([D(x) ~ vx
                          D(y) ~ vy
                          D(vx) ~ -1
-                         D(vy) ~ 0], t; continuous_events)
+                         D(vy) ~ 0;], t; continuous_events)
 
 ball = structural_simplify(ball)
 
