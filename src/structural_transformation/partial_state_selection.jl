@@ -265,6 +265,19 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         @warn "The number of dummy derivatives ($n_dummys) does not match the number of differentiated equations ($n_diff_eqs)."
     end
     dummy_derivatives_set = BitSet(dummy_derivatives)
+
+    # Derivatives that are either in the dummy derivatives set or ended up not
+    # participating in the system at all are not considered differential
+    is_some_diff(v) = !(v in dummy_derivatives_set) && !(var_to_diff[v] === nothing && isempty(𝑑neighbors(graph, v)))
+
+    # We don't want tearing to give us `y_t ~ D(y)`, so we skip equations with
+    # actually differentiated variables.
+    isdiffed = let diff_to_var = diff_to_var, dummy_derivatives_set = dummy_derivatives_set
+        function (v)
+            diff_to_var[v] !== nothing && is_some_diff(v)
+        end
+    end
+
     # We can eliminate variables that are not a selected state (differential
     # variables). Selected states are differentiated variables that are not
     # dummy derivatives.
@@ -276,14 +289,10 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
                 haskey(ag, v) && return false
             end
             dv = var_to_diff[v]
-            dv === nothing || dv in dummy_derivatives_set
+            dv === nothing && return true
+            is_some_diff(dv) || return true
+            return false
         end
-    end
-
-    # We don't want tearing to give us `y_t ~ D(y)`, so we skip equations with
-    # actually differentiated variables.
-    isdiffed = let diff_to_var = diff_to_var, dummy_derivatives_set = dummy_derivatives_set
-        v -> diff_to_var[v] !== nothing && !(v in dummy_derivatives_set)
     end
 
     var_eq_matching = tear_graph_modia(structure, isdiffed,
@@ -294,7 +303,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             continue
         end
         dv = var_to_diff[v]
-        (dv === nothing || dv in dummy_derivatives_set) && continue
+        (dv === nothing || !is_some_diff(dv)) && continue
         var_eq_matching[v] = SelectedState()
     end
 
