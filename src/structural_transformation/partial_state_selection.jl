@@ -266,24 +266,48 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     end
     dummy_derivatives_set = BitSet(dummy_derivatives)
 
+    if ag !== nothing
+        function isreducible(x)
+            # `k` is reducible if all lower differentiated variables are.
+            isred = true
+            while isred
+                if x in dummy_derivatives_set
+                    break
+                end
+                x = diff_to_var[x]
+                x === nothing && break
+                if !haskey(ag, x)
+                    isred = false
+                end
+            end
+            isred
+        end
+        irreducible_set = BitSet()
+        for (k, (_, v)) in ag
+            isreducible(k) || push!(irreducible_set, k)
+            isreducible(k) || push!(irreducible_set, k)
+            push!(irreducible_set, v)
+        end
+    end
+
     # Derivatives that are either in the dummy derivatives set or ended up not
     # participating in the system at all are not considered differential
-    is_some_diff(v) = !(v in dummy_derivatives_set) && !(var_to_diff[v] === nothing && isempty(𝑑neighbors(graph, v)))
+    is_some_diff = let dummy_derivatives_set = dummy_derivatives_set
+        v -> !(v in dummy_derivatives_set) &&
+            !(var_to_diff[v] === nothing && isempty(𝑑neighbors(graph, v)) &&
+              (ag === nothing || !(v in irreducible_set)))
+    end
 
     # We don't want tearing to give us `y_t ~ D(y)`, so we skip equations with
     # actually differentiated variables.
-    isdiffed = let diff_to_var = diff_to_var, dummy_derivatives_set = dummy_derivatives_set
-        function (v)
-            diff_to_var[v] !== nothing && is_some_diff(v)
-        end
+    isdiffed = let diff_to_var = diff_to_var
+        v -> diff_to_var[v] !== nothing && is_some_diff(v)
     end
 
     # We can eliminate variables that are not a selected state (differential
     # variables). Selected states are differentiated variables that are not
     # dummy derivatives.
-    can_eliminate = let var_to_diff = var_to_diff,
-        dummy_derivatives_set = dummy_derivatives_set
-
+    can_eliminate = let var_to_diff = var_to_diff
         v -> begin
             if ag !== nothing
                 haskey(ag, v) && return false
