@@ -319,6 +319,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
         var -> diff_to_var[var] !== nothing
     end
 
+    retear = BitSet()
     # There are three cases where we want to generate new variables to convert
     # the system into first order (semi-implicit) ODEs.
     #
@@ -469,18 +470,36 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
         for (ogidx, dx_idx, x_t_idx) in Iterators.reverse(subinfo)
             # We need a loop here because both `D(D(x))` and `D(x_t)` need to be
             # substituted to `x_tt`.
-            for idx in (ogidx, dx_idx)
+            for idx in (ogidx == dx_idx ? ogidx : (ogidx, dx_idx))
                 subidx = ((idx => x_t_idx),)
                 # This handles case 2.2
-                if var_eq_matching[idx] isa Int
-                    var_eq_matching[x_t_idx] = var_eq_matching[idx]
-                end
                 substitute_vars!(structure, subidx, idx_buffer, sub_callback!;
                                  exclude = order_lowering_eqs)
+                if var_eq_matching[idx] isa Int
+                    original_assigned_eq = var_eq_matching[idx]
+                    # This removes the assignment of the variable `idx`, so we
+                    # should consider assign them again later.
+                    var_eq_matching[x_t_idx] = original_assigned_eq
+                    if !isempty(𝑑neighbors(graph, idx))
+                        push!(retear, idx)
+                    end
+                end
             end
         end
         empty!(subinfo)
         empty!(subs)
+    end
+
+    ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph, var_eq_matching); dir = :in)
+    for idx in retear
+        for alternative_eq in 𝑑neighbors(solvable_graph, idx)
+            # skip actually differentiated variables
+            any(𝑠neighbors(graph, alternative_eq)) do alternative_v
+                ((vv = diff_to_var[alternative_v]) !== nothing &&
+                 var_eq_matching[vv] === SelectedState())
+            end && continue
+            try_assign_eq!(ict, idx, alternative_eq) && break
+        end
     end
 
     # Will reorder equations and states to be:
