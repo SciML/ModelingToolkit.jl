@@ -309,7 +309,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
                                   jac = false,
                                   checkbounds = false, sparse = false,
                                   simplify = false,
-                                  linenumbers = true, parallel = nothing,
+                                  linenumbers = true, parallel = SerialForm(),
                                   eval_expression = true,
                                   use_union = false,
                                   kwargs...)
@@ -339,7 +339,7 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=nothing,
+                                          linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
 ```
 
@@ -365,7 +365,7 @@ function DiffEqBase.NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=nothing,
+                                          linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
 ```
 

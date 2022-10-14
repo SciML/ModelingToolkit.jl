@@ -187,7 +187,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
                                           grad = false,
                                           hess = false, sparse = false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=nothing,
+                                          linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
 ```
 
@@ -204,7 +204,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              grad = false,
                                              hess = false, sparse = false,
                                              checkbounds = false,
-                                             linenumbers = true, parallel = nothing,
+                                             linenumbers = true, parallel = SerialForm(),
                                              use_union = false,
                                              kwargs...) where {iip}
     dvs = states(sys)
@@ -315,7 +315,7 @@ function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
                                           grad = false,
                                           hes = false, sparse = false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=nothing,
+                                          linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
 ```
 
@@ -335,7 +335,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
                                       grad = false,
                                       hess = false, sparse = false,
                                       checkbounds = false,
-                                      linenumbers = false, parallel = nothing,
+                                      linenumbers = false, parallel = SerialForm(),
                                       use_union = false,
                                       kwargs...) where {iip}
     dvs = states(sys)
