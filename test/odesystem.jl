@@ -910,3 +910,16 @@ else
     @test_throws "-cos(Q(t))" prob.f(du, [1, 0], prob.p, 0.0)
     @test_throws "sin(P(t))" prob.f(du, [0, 2], prob.p, 0.0)
 end
+
+let
+    @variables t
+    D = Differential(t)
+    @variables x(t) = 1
+    @variables y(t) = 1
+    @parameters pp = -1
+    der = Differential(t)
+    @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 + pp * y + x], t)
+    sys4s = structural_simplify(sys4)
+    prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
+    @test !isnothing(prob.f.sys)
+end
