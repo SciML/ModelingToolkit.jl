@@ -529,8 +529,8 @@ function ODAEProblem{iip}(sys,
 
     kwargs = filter_kwargs(kwargs)
     if cbs === nothing
-        ODEProblem{iip}(fun, u0, tspan, p; sys, kwargs...)
+        ODEProblem{iip}(fun, u0, tspan, p; kwargs...)
     else
-        ODEProblem{iip}(fun, u0, tspan, p; callback = cbs, sys, kwargs...)
+        ODEProblem{iip}(fun, u0, tspan, p; callback = cbs, kwargs...)
     end
 end
