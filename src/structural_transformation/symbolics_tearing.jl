@@ -602,7 +602,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
     graph = contract_variables(graph, var_eq_matching, varsperm, eqsperm,
-                               length(solved_variables))
+                               length(solved_variables), length(solved_variables_set))
 
     # Update system
     new_var_to_diff = complete(DiffGraph(length(invvarsperm)))
