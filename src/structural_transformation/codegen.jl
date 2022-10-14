@@ -342,7 +342,8 @@ function build_torn_function(sys;
                                                     paramsyms = Symbol.(parameters(sys)),
                                                     indepsym = Symbol(get_iv(sys)),
                                                     observed = observedfun,
-                                                    mass_matrix = mass_matrix), states
+                                                    mass_matrix = mass_matrix,
+                                                    sys=sys), states
     end
 end
 
@@ -528,8 +529,8 @@ function ODAEProblem{iip}(sys,
 
     kwargs = filter_kwargs(kwargs)
     if cbs === nothing
-        ODEProblem{iip}(fun, u0, tspan, p; kwargs...)
+        ODEProblem{iip}(fun, u0, tspan, p; sys, kwargs...)
     else
-        ODEProblem{iip}(fun, u0, tspan, p; callback = cbs, kwargs...)
+        ODEProblem{iip}(fun, u0, tspan, p; callback = cbs, sys, kwargs...)
     end
 end
