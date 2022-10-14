@@ -46,8 +46,9 @@ end
 function check_consistency(state::TearingState, ag = nothing)
     fullvars = state.fullvars
     @unpack graph, var_to_diff = state.structure
-    n_highest_vars = count(v -> length(outneighbors(var_to_diff, v)) == 0 &&
-                               (ag === nothing || !haskey(ag, v)),
+    n_highest_vars = count(v -> var_to_diff[v] === nothing &&
+                                    !isempty(𝑑neighbors(graph, v)) &&
+                                    (ag === nothing || !haskey(ag, v) || ag[v] != v),
                            vertices(var_to_diff))
     neqs = nsrcs(graph)
     is_balanced = n_highest_vars == neqs
