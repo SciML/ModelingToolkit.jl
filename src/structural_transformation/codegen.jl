@@ -343,7 +343,7 @@ function build_torn_function(sys;
                                                     indepsym = Symbol(get_iv(sys)),
                                                     observed = observedfun,
                                                     mass_matrix = mass_matrix,
-                                                    sys=sys), states
+                                                    sys = sys), states
     end
 end
 
