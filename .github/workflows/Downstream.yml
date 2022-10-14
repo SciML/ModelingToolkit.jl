@@ -25,6 +25,7 @@ jobs:
           - {user: SciML, repo: DataDrivenDiffEq.jl, group: Standard}
           - {user: SciML, repo: StructuralIdentifiability.jl, group: All}
           - {user: SciML, repo: ModelingToolkitStandardLibrary.jl}
+          - {user: SciML, repo: ModelOrderReduction.jl, group: All}
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v1

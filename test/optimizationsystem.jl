@@ -41,23 +41,17 @@ p = [sys1.a => 6.0
      sys2.b => 9.0
      β => 10.0]
 
-prob = OptimizationProblem(combinedsys, u0, p, grad = true)
+prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true)
 @test prob.f.sys === combinedsys
-sol = solve(prob, NelderMead())
+sol = solve(prob, Ipopt.Optimizer())
 @test sol.minimum < -1e5
-
-prob2 = remake(prob, u0 = sol.minimizer)
-sol = solve(prob, BFGS(initial_stepnorm = 0.0001), allow_f_increases = true)
-@test sol.minimum < -1e8
-sol = solve(prob2, BFGS(initial_stepnorm = 0.0001), allow_f_increases = true)
-@test sol.minimum < -1e9
 
 #inequality constraint, the bounds for constraints lcons !== ucons
 prob = OptimizationProblem(sys2, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
                            lcons = [-1.0, -1.0], ucons = [500.0, 500.0], grad = true,
                            hess = true)
 @test prob.f.sys === sys2
-sol = solve(prob, IPNewton(), allow_f_increases = true)
+sol = solve(prob, IPNewton())
 @test sol.minimum < 1.0
 sol = solve(prob, Ipopt.Optimizer())
 @test sol.minimum < 1.0
@@ -154,23 +148,17 @@ end
          sys2.b => 9.0
          β => 10.0]
 
-    prob = OptimizationProblem(combinedsys, u0, p, grad = true)
+    prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true)
     @test prob.f.sys === combinedsys
-    sol = solve(prob, NelderMead())
+    sol = solve(prob, Ipopt.Optimizer())
     @test sol.minimum < -1e5
-
-    prob2 = remake(prob, u0 = sol.minimizer)
-    sol = solve(prob, BFGS(initial_stepnorm = 0.0001), allow_f_increases = true)
-    @test sol.minimum < -1e8
-    sol = solve(prob2, BFGS(initial_stepnorm = 0.0001), allow_f_increases = true)
-    @test sol.minimum < -1e9
 
     #inequality constraint, the bounds for constraints lcons !== ucons
     prob = OptimizationProblem(sys2, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
                                lcons = [-1.0, -1.0], ucons = [500.0, 500.0], grad = true,
                                hess = true)
     @test prob.f.sys === sys2
-    sol = solve(prob, IPNewton(), allow_f_increases = true)
+    sol = solve(prob, IPNewton())
     @test sol.minimum < 1.0
     sol = solve(prob, Ipopt.Optimizer())
     @test sol.minimum < 1.0
