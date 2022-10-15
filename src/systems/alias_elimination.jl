@@ -4,8 +4,8 @@ using Graphs.Experimental.Traversals
 
 const KEEP = typemin(Int)
 
-function alias_eliminate_graph!(state::TransformationState)
-    mm = linear_subsys_adjmat!(state)
+function alias_eliminate_graph!(state::TransformationState; kwargs...)
+    mm = linear_subsys_adjmat!(state; kwargs...)
     if size(mm, 1) == 0
         ag = AliasGraph(ndsts(state.structure.graph))
         return ag, mm, ag, mm, BitSet() # No linear subsystems
@@ -47,16 +47,17 @@ function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true)
     level === nothing ? v : (v => level)
 end
 
-alias_elimination(sys) = alias_elimination!(TearingState(sys))
-function alias_elimination!(state::TearingState)
+alias_elimination(sys) = alias_elimination!(TearingState(sys))[1]
+function alias_elimination!(state::TearingState; kwargs...)
     sys = state.sys
     complete!(state.structure)
     graph_orig = copy(state.structure.graph)
-    ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(state)
-    isempty(ag) && return sys
+    ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(state;
+                                                                                 kwargs...)
+    isempty(ag) && return sys, ag
 
     fullvars = state.fullvars
-    @unpack var_to_diff, graph = state.structure
+    @unpack var_to_diff, graph, solvable_graph = state.structure
 
     if !isempty(updated_diff_vars)
         has_iv(sys) ||
@@ -105,19 +106,36 @@ function alias_elimination!(state::TearingState)
         end
     end
     deleteat!(eqs, sort!(dels))
-    old_to_new = Vector{Int}(undef, nsrcs(graph))
+    old_to_new_eq = Vector{Int}(undef, nsrcs(graph))
     idx = 0
     cursor = 1
     ndels = length(dels)
-    for i in eachindex(old_to_new)
+    for i in eachindex(old_to_new_eq)
         if cursor <= ndels && i == dels[cursor]
             cursor += 1
-            old_to_new[i] = -1
+            old_to_new_eq[i] = -1
             continue
         end
         idx += 1
-        old_to_new[i] = idx
+        old_to_new_eq[i] = idx
     end
+    n_new_eqs = idx
+
+    old_to_new_var = Vector{Int}(undef, ndsts(graph))
+    idx = 0
+    for i in eachindex(old_to_new_var)
+        if haskey(ag, i)
+            old_to_new_var[i] = -1
+        else
+            idx += 1
+            old_to_new_var[i] = idx
+        end
+    end
+    n_new_vars = idx
+    #for d in dels
+    #    set_neighbors!(graph, d, ())
+    #    set_neighbors!(solvable_graph, d, ())
+    #end
 
     lineqs = BitSet(mm.nzrows)
     eqs_to_update = BitSet()
@@ -126,7 +144,7 @@ function alias_elimination!(state::TearingState)
         while true
             for ieq in 𝑑neighbors(graph_orig, k)
                 ieq in lineqs && continue
-                new_eq = old_to_new[ieq]
+                new_eq = old_to_new_eq[ieq]
                 new_eq < 1 && continue
                 push!(eqs_to_update, new_eq)
             end
@@ -139,7 +157,7 @@ function alias_elimination!(state::TearingState)
     end
 
     for old_ieq in to_expand
-        ieq = old_to_new[old_ieq]
+        ieq = old_to_new_eq[old_ieq]
         eqs[ieq] = expand_derivatives(eqs[ieq])
     end
 
@@ -150,12 +168,59 @@ function alias_elimination!(state::TearingState)
             diff_to_var[j] === nothing && push!(newstates, fullvars[j])
         end
     end
+    new_graph = BipartiteGraph(n_new_eqs, ndsts(graph))
+    new_solvable_graph = BipartiteGraph(n_new_eqs, ndsts(graph))
+    new_eq_to_diff = DiffGraph(n_new_eqs)
+    eq_to_diff = state.structure.eq_to_diff
+    for (i, ieq) in enumerate(old_to_new_eq)
+        ieq > 0 || continue
+        set_neighbors!(new_graph, ieq, 𝑠neighbors(graph, i))
+        set_neighbors!(new_solvable_graph, ieq, 𝑠neighbors(solvable_graph, i))
+        new_eq_to_diff[ieq] = eq_to_diff[i]
+    end
+    # update DiffGraph
+    new_var_to_diff = DiffGraph(length(var_to_diff))
+    for v in 1:length(var_to_diff)
+        (haskey(ag, v)) && continue
+        new_var_to_diff[v] = var_to_diff[v]
+    end
+    state.structure.graph = new_graph
+    state.structure.solvable_graph = new_solvable_graph
+    state.structure.eq_to_diff = new_eq_to_diff
+    state.structure.var_to_diff = new_var_to_diff
+
+    #=
+    new_graph = BipartiteGraph(n_new_eqs, n_new_vars)
+    new_solvable_graph = BipartiteGraph(n_new_eqs, n_new_vars)
+    new_eq_to_diff = DiffGraph(n_new_eqs)
+    eq_to_diff = state.structure.eq_to_diff
+    new_var_to_diff = DiffGraph(n_new_vars)
+    var_to_diff = state.structure.var_to_diff
+    for (i, ieq) in enumerate(old_to_new_eq)
+        ieq > 0 || continue
+        set_neighbors!(new_graph, ieq, [old_to_new_var[v] for v in 𝑠neighbors(graph, i) if old_to_new_var[v] > 0])
+        set_neighbors!(new_solvable_graph, ieq, [old_to_new_var[v] for v in 𝑠neighbors(solvable_graph, i) if old_to_new_var[v] > 0])
+        new_eq_to_diff[ieq] = eq_to_diff[i]
+    end
+    new_fullvars = Vector{Any}(undef, n_new_vars)
+    for (i, iv) in enumerate(old_to_new_var)
+        iv > 0 || continue
+        new_var_to_diff[iv] = var_to_diff[i]
+        new_fullvars[iv] = fullvars[i]
+    end
+    state.structure.graph = new_graph
+    state.structure.solvable_graph = new_solvable_graph
+    state.structure.eq_to_diff = complete(new_eq_to_diff)
+    state.structure.var_to_diff = complete(new_var_to_diff)
+    state.fullvars = new_fullvars
+    =#
 
     sys = state.sys
     @set! sys.eqs = eqs
     @set! sys.states = newstates
     @set! sys.observed = [observed(sys); obs]
-    return invalidate_cache!(sys)
+    state.sys = sys
+    return invalidate_cache!(sys), ag
 end
 
 """

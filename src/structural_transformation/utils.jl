@@ -43,10 +43,12 @@ end
 ###
 ### Structural check
 ###
-function check_consistency(state::TearingState)
+function check_consistency(state::TearingState, ag = nothing)
     fullvars = state.fullvars
     @unpack graph, var_to_diff = state.structure
-    n_highest_vars = count(v -> length(outneighbors(var_to_diff, v)) == 0,
+    n_highest_vars = count(v -> var_to_diff[v] === nothing &&
+                                    !isempty(𝑑neighbors(graph, v)) &&
+                                    (ag === nothing || !haskey(ag, v) || ag[v] != v),
                            vertices(var_to_diff))
     neqs = nsrcs(graph)
     is_balanced = n_highest_vars == neqs
@@ -69,11 +71,12 @@ function check_consistency(state::TearingState)
     # details, check the equation (15) of the original paper.
     extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist;
                                                         map(collect, edges(var_to_diff))])
-    extended_var_eq_matching = maximal_matching(extended_graph)
+    extended_var_eq_matching = maximal_matching(extended_graph, eq -> true,
+                                                v -> ag === nothing || !haskey(ag, v))
 
     unassigned_var = []
     for (vj, eq) in enumerate(extended_var_eq_matching)
-        if eq === unassigned
+        if eq === unassigned && (ag === nothing || !haskey(ag, vj))
             push!(unassigned_var, fullvars[vj])
         end
     end
@@ -228,7 +231,7 @@ function find_solvables!(state::TearingState; kwargs...)
     return nothing
 end
 
-function linear_subsys_adjmat!(state::TransformationState)
+function linear_subsys_adjmat!(state::TransformationState; kwargs...)
     graph = state.structure.graph
     if state.structure.solvable_graph === nothing
         state.structure.solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
@@ -240,7 +243,7 @@ function linear_subsys_adjmat!(state::TransformationState)
     coeffs = Int[]
     to_rm = Int[]
     for i in eachindex(eqs)
-        all_int_vars, rhs = find_eq_solvables!(state, i, to_rm, coeffs)
+        all_int_vars, rhs = find_eq_solvables!(state, i, to_rm, coeffs; kwargs...)
 
         # Check if all states in the equation is both linear and homogeneous,
         # i.e. it is in the form of

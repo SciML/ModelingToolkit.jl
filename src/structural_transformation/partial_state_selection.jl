@@ -248,6 +248,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         end
     end
     if diff_va !== nothing
+        # differentiated alias
         n_dummys = length(dummy_derivatives)
         needed = count(x -> x isa Int, diff_to_eq) - n_dummys
         n = 0
@@ -265,36 +266,68 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         @warn "The number of dummy derivatives ($n_dummys) does not match the number of differentiated equations ($n_diff_eqs)."
     end
     dummy_derivatives_set = BitSet(dummy_derivatives)
+
+    if ag !== nothing
+        function isreducible(x)
+            # `k` is reducible if all lower differentiated variables are.
+            isred = true
+            while isred
+                if x in dummy_derivatives_set
+                    break
+                end
+                x = diff_to_var[x]
+                x === nothing && break
+                if !haskey(ag, x)
+                    isred = false
+                end
+            end
+            isred
+        end
+        irreducible_set = BitSet()
+        for (k, (_, v)) in ag
+            isreducible(k) || push!(irreducible_set, k)
+            isreducible(k) || push!(irreducible_set, k)
+            push!(irreducible_set, v)
+        end
+    end
+
+    is_not_present = v -> isempty(𝑑neighbors(graph, v)) &&
+        (ag === nothing || (haskey(ag, v) && !(v in irreducible_set)))
+    # Derivatives that are either in the dummy derivatives set or ended up not
+    # participating in the system at all are not considered differential
+    is_some_diff = let dummy_derivatives_set = dummy_derivatives_set
+        v -> !(v in dummy_derivatives_set) &&
+            !(var_to_diff[v] === nothing && is_not_present(v))
+    end
+
+    # We don't want tearing to give us `y_t ~ D(y)`, so we skip equations with
+    # actually differentiated variables.
+    isdiffed = let diff_to_var = diff_to_var
+        v -> diff_to_var[v] !== nothing && is_some_diff(v)
+    end
+
     # We can eliminate variables that are not a selected state (differential
     # variables). Selected states are differentiated variables that are not
     # dummy derivatives.
-    can_eliminate = let var_to_diff = var_to_diff,
-        dummy_derivatives_set = dummy_derivatives_set
-
+    can_eliminate = let var_to_diff = var_to_diff
         v -> begin
             if ag !== nothing
                 haskey(ag, v) && return false
             end
             dv = var_to_diff[v]
-            dv === nothing || dv in dummy_derivatives_set
+            dv === nothing && return true
+            is_some_diff(dv) || return true
+            return false
         end
-    end
-
-    # We don't want tearing to give us `y_t ~ D(y)`, so we skip equations with
-    # actually differentiated variables.
-    isdiffed = let diff_to_var = diff_to_var, dummy_derivatives_set = dummy_derivatives_set
-        v -> diff_to_var[v] !== nothing && !(v in dummy_derivatives_set)
     end
 
     var_eq_matching = tear_graph_modia(structure, isdiffed,
                                        Union{Unassigned, SelectedState};
                                        varfilter = can_eliminate)
     for v in eachindex(var_eq_matching)
-        if ag !== nothing && haskey(ag, v) && iszero(ag[v][1])
-            continue
-        end
+        is_not_present(v) && continue
         dv = var_to_diff[v]
-        (dv === nothing || dv in dummy_derivatives_set) && continue
+        (dv === nothing || !is_some_diff(dv)) && continue
         var_eq_matching[v] = SelectedState()
     end
 

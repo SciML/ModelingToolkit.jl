@@ -217,7 +217,8 @@ function check_diff_graph(var_to_diff, fullvars)
 end
 =#
 
-function tearing_reassemble(state::TearingState, var_eq_matching; simplify = false)
+function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
+                            simplify = false)
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
 
@@ -318,6 +319,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         var -> diff_to_var[var] !== nothing
     end
 
+    #retear = BitSet()
     # There are three cases where we want to generate new variables to convert
     # the system into first order (semi-implicit) ODEs.
     #
@@ -468,19 +470,37 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         for (ogidx, dx_idx, x_t_idx) in Iterators.reverse(subinfo)
             # We need a loop here because both `D(D(x))` and `D(x_t)` need to be
             # substituted to `x_tt`.
-            for idx in (ogidx, dx_idx)
+            for idx in (ogidx == dx_idx ? ogidx : (ogidx, dx_idx))
                 subidx = ((idx => x_t_idx),)
                 # This handles case 2.2
-                if var_eq_matching[idx] isa Int
-                    var_eq_matching[x_t_idx] = var_eq_matching[idx]
-                end
                 substitute_vars!(structure, subidx, idx_buffer, sub_callback!;
                                  exclude = order_lowering_eqs)
+                if var_eq_matching[idx] isa Int
+                    original_assigned_eq = var_eq_matching[idx]
+                    # This removes the assignment of the variable `idx`, so we
+                    # should consider assign them again later.
+                    var_eq_matching[x_t_idx] = original_assigned_eq
+                    #if !isempty(𝑑neighbors(graph, idx))
+                    #    push!(retear, idx)
+                    #end
+                end
             end
         end
         empty!(subinfo)
         empty!(subs)
     end
+
+    #ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph, var_eq_matching); dir = :in)
+    #for idx in retear
+    #    for alternative_eq in 𝑑neighbors(solvable_graph, idx)
+    #        # skip actually differentiated variables
+    #        any(𝑠neighbors(graph, alternative_eq)) do alternative_v
+    #            ((vv = diff_to_var[alternative_v]) !== nothing &&
+    #             var_eq_matching[vv] === SelectedState())
+    #        end && continue
+    #        try_assign_eq!(ict, idx, alternative_eq) && break
+    #    end
+    #end
 
     # Will reorder equations and states to be:
     # [diffeqs; ...]
@@ -555,9 +575,11 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     if length(diff_vars_set) != length(diff_vars)
         error("Tearing internal error: lowering DAE into semi-implicit ODE failed!")
     end
+    solved_variables_set = BitSet(solved_variables)
+    ag === nothing || union!(solved_variables_set, keys(ag))
     invvarsperm = [diff_vars;
                    setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
-                            BitSet(solved_variables))]
+                            solved_variables_set)]
     varsperm = zeros(Int, ndsts(graph))
     for (i, v) in enumerate(invvarsperm)
         varsperm[v] = i
@@ -580,7 +602,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
     graph = contract_variables(graph, var_eq_matching, varsperm, eqsperm,
-                               length(solved_variables))
+                               length(solved_variables), length(solved_variables_set))
 
     # Update system
     new_var_to_diff = complete(DiffGraph(length(invvarsperm)))
@@ -632,6 +654,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching; simplify = fal
         isdiffeq(eq) || continue
         obs_sub[eq.lhs] = eq.rhs
     end
+    # TODO: compute the dependency correctly so that we don't have to do this
     obs = substitute.([oldobs; subeqs], (obs_sub,))
     @set! sys.observed = obs
     @set! state.sys = sys
@@ -688,7 +711,8 @@ end
 Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
-function dummy_derivative(sys, state = TearingState(sys); simplify = false, kwargs...)
+function dummy_derivative(sys, state = TearingState(sys), ag = nothing; simplify = false,
+                          kwargs...)
     jac = let state = state
         (eqs, vars) -> begin
             symeqs = EquationsView(state)[eqs]
@@ -710,6 +734,7 @@ function dummy_derivative(sys, state = TearingState(sys); simplify = false, kwar
             p
         end
     end
-    var_eq_matching = dummy_derivative_graph!(state, jac; state_priority, kwargs...)
-    tearing_reassemble(state, var_eq_matching; simplify = simplify)
+    var_eq_matching = dummy_derivative_graph!(state, jac, (ag, nothing); state_priority,
+                                              kwargs...)
+    tearing_reassemble(state, var_eq_matching, ag; simplify = simplify)
 end
