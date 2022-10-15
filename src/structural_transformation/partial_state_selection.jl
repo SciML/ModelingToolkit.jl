@@ -291,12 +291,13 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         end
     end
 
+    is_not_present = v -> isempty(𝑑neighbors(graph, v)) &&
+        (ag === nothing || (haskey(ag, v) && !(v in irreducible_set)))
     # Derivatives that are either in the dummy derivatives set or ended up not
     # participating in the system at all are not considered differential
     is_some_diff = let dummy_derivatives_set = dummy_derivatives_set
         v -> !(v in dummy_derivatives_set) &&
-            !(var_to_diff[v] === nothing && isempty(𝑑neighbors(graph, v)) &&
-              (ag === nothing || !(v in irreducible_set)))
+            !(var_to_diff[v] === nothing && is_not_present(v))
     end
 
     # We don't want tearing to give us `y_t ~ D(y)`, so we skip equations with
@@ -324,9 +325,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
                                        Union{Unassigned, SelectedState};
                                        varfilter = can_eliminate)
     for v in eachindex(var_eq_matching)
-        if ag !== nothing && haskey(ag, v) && iszero(ag[v][1])
-            continue
-        end
+        is_not_present(v) && continue
         dv = var_to_diff[v]
         (dv === nothing || !is_some_diff(dv)) && continue
         var_eq_matching[v] = SelectedState()

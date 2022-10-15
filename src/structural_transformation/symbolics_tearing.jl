@@ -319,7 +319,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
         var -> diff_to_var[var] !== nothing
     end
 
-    retear = BitSet()
+    #retear = BitSet()
     # There are three cases where we want to generate new variables to convert
     # the system into first order (semi-implicit) ODEs.
     #
@@ -480,9 +480,9 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
                     # This removes the assignment of the variable `idx`, so we
                     # should consider assign them again later.
                     var_eq_matching[x_t_idx] = original_assigned_eq
-                    if !isempty(𝑑neighbors(graph, idx))
-                        push!(retear, idx)
-                    end
+                    #if !isempty(𝑑neighbors(graph, idx))
+                    #    push!(retear, idx)
+                    #end
                 end
             end
         end
@@ -490,17 +490,17 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
         empty!(subs)
     end
 
-    ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph, var_eq_matching); dir = :in)
-    for idx in retear
-        for alternative_eq in 𝑑neighbors(solvable_graph, idx)
-            # skip actually differentiated variables
-            any(𝑠neighbors(graph, alternative_eq)) do alternative_v
-                ((vv = diff_to_var[alternative_v]) !== nothing &&
-                 var_eq_matching[vv] === SelectedState())
-            end && continue
-            try_assign_eq!(ict, idx, alternative_eq) && break
-        end
-    end
+    #ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph, var_eq_matching); dir = :in)
+    #for idx in retear
+    #    for alternative_eq in 𝑑neighbors(solvable_graph, idx)
+    #        # skip actually differentiated variables
+    #        any(𝑠neighbors(graph, alternative_eq)) do alternative_v
+    #            ((vv = diff_to_var[alternative_v]) !== nothing &&
+    #             var_eq_matching[vv] === SelectedState())
+    #        end && continue
+    #        try_assign_eq!(ict, idx, alternative_eq) && break
+    #    end
+    #end
 
     # Will reorder equations and states to be:
     # [diffeqs; ...]
