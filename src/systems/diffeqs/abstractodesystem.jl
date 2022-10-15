@@ -561,7 +561,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     defs = mergedefaults(defs, parammap, ps)
     defs = mergedefaults(defs, u0map, dvs)
 
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat)
+    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
 
