@@ -231,7 +231,7 @@ function find_solvables!(state::TearingState; kwargs...)
     return nothing
 end
 
-function linear_subsys_adjmat!(state::TransformationState)
+function linear_subsys_adjmat!(state::TransformationState; kwargs...)
     graph = state.structure.graph
     if state.structure.solvable_graph === nothing
         state.structure.solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
@@ -243,7 +243,7 @@ function linear_subsys_adjmat!(state::TransformationState)
     coeffs = Int[]
     to_rm = Int[]
     for i in eachindex(eqs)
-        all_int_vars, rhs = find_eq_solvables!(state, i, to_rm, coeffs)
+        all_int_vars, rhs = find_eq_solvables!(state, i, to_rm, coeffs; kwargs...)
 
         # Check if all states in the equation is both linear and homogeneous,
         # i.e. it is in the form of

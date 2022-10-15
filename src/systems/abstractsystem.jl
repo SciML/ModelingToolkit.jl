@@ -1035,7 +1035,7 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     has_io = io !== nothing
     has_io && markio!(state, io...)
     state, input_idxs = inputs_to_parameters!(state, io)
-    sys, ag = alias_elimination!(state)
+    sys, ag = alias_elimination!(state; kwargs...)
     #ag = AliasGraph(length(ag))
     # TODO: avoid construct `TearingState` again.
     #state = TearingState(sys)

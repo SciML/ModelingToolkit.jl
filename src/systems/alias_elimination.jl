@@ -4,8 +4,8 @@ using Graphs.Experimental.Traversals
 
 const KEEP = typemin(Int)
 
-function alias_eliminate_graph!(state::TransformationState)
-    mm = linear_subsys_adjmat!(state)
+function alias_eliminate_graph!(state::TransformationState; kwargs...)
+    mm = linear_subsys_adjmat!(state; kwargs...)
     if size(mm, 1) == 0
         ag = AliasGraph(ndsts(state.structure.graph))
         return ag, mm, ag, mm, BitSet() # No linear subsystems
@@ -48,11 +48,12 @@ function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true)
 end
 
 alias_elimination(sys) = alias_elimination!(TearingState(sys))[1]
-function alias_elimination!(state::TearingState)
+function alias_elimination!(state::TearingState; kwargs...)
     sys = state.sys
     complete!(state.structure)
     graph_orig = copy(state.structure.graph)
-    ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(state)
+    ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(state;
+                                                                                 kwargs...)
     isempty(ag) && return sys, ag
 
     fullvars = state.fullvars
