@@ -178,9 +178,16 @@ function alias_elimination!(state::TearingState; kwargs...)
         set_neighbors!(new_solvable_graph, ieq, 𝑠neighbors(solvable_graph, i))
         new_eq_to_diff[ieq] = eq_to_diff[i]
     end
+    # update DiffGraph
+    new_var_to_diff = DiffGraph(length(var_to_diff))
+    for v in 1:length(var_to_diff)
+        (haskey(ag, v)) && continue
+        new_var_to_diff[v] = var_to_diff[v]
+    end
     state.structure.graph = new_graph
     state.structure.solvable_graph = new_solvable_graph
     state.structure.eq_to_diff = new_eq_to_diff
+    state.structure.var_to_diff = new_var_to_diff
 
     #=
     new_graph = BipartiteGraph(n_new_eqs, n_new_vars)
