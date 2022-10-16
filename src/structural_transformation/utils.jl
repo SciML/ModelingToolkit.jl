@@ -387,7 +387,7 @@ function numerical_nlsolve(f, u0, p)
     prob = NonlinearProblem{false}(f, u0, p)
     sol = solve(prob, NewtonRaphson())
     rc = sol.retcode
-    rc === :DEFAULT || nlsolve_failure(rc)
+    rc == :DEFAULT || nlsolve_failure(rc)
     # TODO: robust initial guess, better debugging info, and residual check
     sol.u
 end
