@@ -235,8 +235,10 @@ for p in [prob_pmap, prob_dpmap]
     @test Set(Num.(parameters(sys)) .=> p.p) == Set([k₁ => 0.05, k₂ => 2e7, k₃ => 1.1e4])
     @test Set(Num.(states(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 1, y₃ => 1])
 end
+sol_pmap = solve(prob_pmap, Rodas5())
+sol_dpmap = solve(prob_dpmap, Rodas5())
 
-@test solve(prob_pmap, Rodas5())≈solve(prob_dpmap, Rodas5()) atol=1e-5
+@test sol_pmap.u ≈ sol_dpmap.u
 
 # test kwargs
 prob2 = ODEProblem(sys, u0, tspan, p, jac = true)
