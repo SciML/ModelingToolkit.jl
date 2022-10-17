@@ -166,7 +166,7 @@ du = [0.0];
 u = [1.0];
 pr = 0.2;
 tt = 0.1;
-@test (@ballocated $(prob.f)($du, $u, $pr, $tt)) == 0
+@test_skip (@ballocated $(prob.f)($du, $u, $pr, $tt)) == 0
 @test du≈[-asin(u[1] - pr * tt)] atol=1e-5
 
 # test the initial guess is respected
