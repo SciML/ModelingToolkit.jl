@@ -486,6 +486,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                               linenumbers = false,
                               sparse = false, simplify = false,
                               steady_state = false,
+                              sparsity = false,
                               kwargs...) where {iip}
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
 
@@ -523,7 +524,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
         ArrayInterfaceCore.restructure(u0 .* u0', M)
     end
 
-    jp_expr = sparse ? :(similar($(get_jac(sys)[]), Float64)) : :nothing
+    jp_expr = sparse ? :($similar($(get_jac(sys)[]), Float64)) : :nothing
     ex = quote
         $_f
         $_tgrad
@@ -536,7 +537,8 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                           jac_prototype = $jp_expr,
                           syms = $(Symbol.(states(sys))),
                           indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
-                          paramsyms = $(QuoteNode(Symbol.(parameters(sys)))))
+                          paramsyms = $(QuoteNode(Symbol.(parameters(sys)))),
+                          sparsity = $(jacobian_sparsity(sys)))
     end
     !linenumbers ? striplines(ex) : ex
 end
