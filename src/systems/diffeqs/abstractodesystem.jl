@@ -487,8 +487,10 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                               sparse = false, simplify = false,
                               steady_state = false,
                               sparsity = false,
+                              iip_config = (true, true),
                               kwargs...) where {iip}
-    f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
+    f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, iip_config,
+                                     kwargs...)
 
     dict = Dict()
 
@@ -498,7 +500,8 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     if tgrad
         tgrad_oop, tgrad_iip = generate_tgrad(sys, dvs, ps;
                                               simplify = simplify,
-                                              expression = Val{true}, kwargs...)
+                                              expression = Val{true},
+                                              iip_config, kwargs...)
         _tgrad = :($tgradsym = $ODEFunctionClosure($tgrad_oop, $tgrad_iip))
     else
         _tgrad = :($tgradsym = nothing)
@@ -508,7 +511,8 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     if jac
         jac_oop, jac_iip = generate_jacobian(sys, dvs, ps;
                                              sparse = sparse, simplify = simplify,
-                                             expression = Val{true}, kwargs...)
+                                             expression = Val{true},
+                                             iip_config, kwargs...)
         _jac = :($jacsym = $ODEFunctionClosure($jac_oop, $jac_iip))
     else
         _jac = :($jacsym = nothing)
@@ -537,7 +541,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                           jac_prototype = $jp_expr,
                           syms = $(Symbol.(states(sys))),
                           indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
-                          paramsyms = $((Symbol.(parameters(sys))),
+                          paramsyms = $(Symbol.(parameters(sys))),
                           sparsity = $(jacobian_sparsity(sys)))
     end
     !linenumbers ? striplines(ex) : ex
