@@ -1,5 +1,4 @@
 using SymbolicUtils: Rewriters
-using SimpleWeightedGraphs
 using Graphs.Experimental.Traversals
 
 const KEEP = typemin(Int)
@@ -365,9 +364,33 @@ function Base.in(i::Int, agk::AliasGraphKeySet)
     1 <= i <= length(aliasto) && aliasto[i] !== nothing
 end
 
+canonicalize(a, b) = a <= b ? (a, b) : (b, a)
+struct WeightedGraph{T, W} <: AbstractGraph{Int64}
+    graph::SimpleGraph{T}
+    dict::Dict{Tuple{T, T}, W}
+end
+function WeightedGraph{T, W}(n) where {T, W}
+    WeightedGraph{T, W}(SimpleGraph{T}(n), Dict{Tuple{T, T}, W}())
+end
+
+function Graphs.add_edge!(g::WeightedGraph, u, v, w)
+    r = add_edge!(g.graph, u, v)
+    r && (g.dict[canonicalize(u, v)] = w)
+    r
+end
+Graphs.has_edge(g::WeightedGraph, u, v) = has_edge(g.graph, u, v)
+Graphs.ne(g::WeightedGraph) = ne(g.graph)
+Graphs.nv(g::WeightedGraph) = nv(g.graph)
+get_weight(g::WeightedGraph, u, v) = g.dict[canonicalize(u, v)]
+Graphs.is_directed(::Type{<:WeightedGraph}) = false
+Graphs.inneighbors(g::WeightedGraph, v) = inneighbors(g.graph, v)
+Graphs.outneighbors(g::WeightedGraph, v) = outneighbors(g.graph, v)
+Graphs.vertices(g::WeightedGraph) = vertices(g.graph)
+Graphs.edges(g::WeightedGraph) = vertices(g.graph)
+
 function equality_diff_graph(ag::AliasGraph, var_to_diff::DiffGraph)
     g = SimpleDiGraph{Int}(length(var_to_diff))
-    eqg = SimpleWeightedGraph{Int, Int}(length(var_to_diff))
+    eqg = WeightedGraph{Int, Int}(length(var_to_diff))
     zero_vars = Int[]
     for (v, (c, a)) in ag
         if iszero(a)
@@ -378,7 +401,6 @@ function equality_diff_graph(ag::AliasGraph, var_to_diff::DiffGraph)
         add_edge!(g, a, v)
 
         add_edge!(eqg, v, a, c)
-        add_edge!(eqg, a, v, c)
     end
     transitiveclosure!(g)
     weighted_transitiveclosure!(eqg)
@@ -394,9 +416,14 @@ end
 function weighted_transitiveclosure!(g)
     cps = connected_components(g)
     for cp in cps
-        for k in cp, i in cp, j in cp
-            (has_edge(g, i, k) && has_edge(g, k, j)) || continue
-            add_edge!(g, i, j, get_weight(g, i, k) * get_weight(g, k, j))
+        n = length(cp)
+        for k in cp
+            for i′ in 1:n, j′ in (i′ + 1):n
+                i = cp[i′]
+                j = cp[j′]
+                (has_edge(g, i, k) && has_edge(g, k, j)) || continue
+                add_edge!(g, i, j, get_weight(g, i, k) * get_weight(g, k, j))
+            end
         end
     end
     return g
@@ -714,9 +741,9 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             push!(stem_set, prev_r)
             push!(stem, prev_r)
             push!(diff_aliases, reach₌)
-            for (_, v) in reach₌
+            for (c, v) in reach₌
                 v == prev_r && continue
-                add_edge!(eqg, v, prev_r)
+                add_edge!(eqg, v, prev_r, c)
             end
         end
 
