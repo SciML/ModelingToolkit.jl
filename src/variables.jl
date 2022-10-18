@@ -46,7 +46,8 @@ applicable.
 function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
                         toterm = Symbolics.diff2term, promotetoconcrete = nothing,
                         tofloat = true, use_union = false)
-    varlist = map(unwrap, varlist)
+    varlist = collect(map(unwrap, varlist))
+
     # Edge cases where one of the arguments is effectively empty.
     is_incomplete_initialization = varmap isa DiffEqBase.NullParameters ||
                                    varmap === nothing
@@ -97,7 +98,7 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
         varmap[p] = fixpoint_sub(v, varmap)
     end
 
-    missingvars = setdiff(varlist, keys(varmap))
+    missingvars = setdiff(varlist, collect(keys(varmap)))
     check && (isempty(missingvars) || throw_missingvars(missingvars))
 
     out = [varmap[var] for var in varlist]
@@ -105,6 +106,17 @@ end
 
 @noinline function throw_missingvars(vars)
     throw(ArgumentError("$vars are missing from the variable map."))
+end
+
+"""
+$(SIGNATURES)
+
+Intercept the call to `handle_varmap` and convert it to an ordered list if the user has
+  ModelingToolkit loaded, and the problem has a symbolic origin.
+"""
+function SciMLBase.handle_varmap(varmap, sys::AbstractSystem; field = :states, kwargs...)
+    out = varmap_to_vars(varmap, getfield(sys, field); kwargs...)
+    return out
 end
 
 struct IsHistory end

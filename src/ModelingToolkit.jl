@@ -5,7 +5,7 @@ module ModelingToolkit
 using DocStringExtensions
 using AbstractTrees
 using DiffEqBase, SciMLBase, ForwardDiff, Reexport
-using SciMLBase: StandardODEProblem, StandardNonlinearProblem
+using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap
 using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using InteractiveUtils
