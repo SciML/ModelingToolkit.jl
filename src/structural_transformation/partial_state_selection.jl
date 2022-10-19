@@ -296,11 +296,9 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     is_not_present_non_rec = let graph = graph, irreducible_set = irreducible_set
         v -> begin
             not_in_eqs = isempty(𝑑neighbors(graph, v))
-            isirreducible = false
-            if ag !== nothing
-                isirreducible = haskey(ag, v) && (v in irreducible_set)
-            end
-            not_in_eqs && !isirreducible
+            ag === nothing && return not_in_eqs
+            isirreducible = v in irreducible_set
+            return not_in_eqs && !isirreducible
         end
     end
 
