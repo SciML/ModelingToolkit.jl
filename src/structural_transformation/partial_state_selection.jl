@@ -277,6 +277,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
                 end
                 x = diff_to_var[x]
                 x === nothing && break
+                isempty(𝑑neighbors(graph, x)) && continue
                 if !haskey(ag, x)
                     isred = false
                 end
@@ -284,15 +285,17 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             isred
         end
         irreducible_set = BitSet()
-        for (k, (_, v)) in ag
+        for (k, (c, v)) in ag
             isreducible(k) || push!(irreducible_set, k)
             isreducible(k) || push!(irreducible_set, k)
+            iszero(c) && continue
             push!(irreducible_set, v)
         end
     end
 
     is_not_present = v -> isempty(𝑑neighbors(graph, v)) &&
-        (ag === nothing || (haskey(ag, v) && !(v in irreducible_set)))
+        (ag === nothing || !haskey(ag, v) || !(v in irreducible_set))
+
     # Derivatives that are either in the dummy derivatives set or ended up not
     # participating in the system at all are not considered differential
     is_some_diff = let dummy_derivatives_set = dummy_derivatives_set
