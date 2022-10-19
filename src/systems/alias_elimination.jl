@@ -366,7 +366,7 @@ function Base.in(i::Int, agk::AliasGraphKeySet)
 end
 
 canonicalize(a, b) = a <= b ? (a, b) : (b, a)
-struct WeightedGraph{T, W} <: AbstractGraph{Int64}
+struct WeightedGraph{T, W} <: AbstractGraph{T}
     graph::SimpleGraph{T}
     dict::Dict{Tuple{T, T}, W}
 end
