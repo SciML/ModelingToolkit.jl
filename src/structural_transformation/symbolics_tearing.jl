@@ -227,7 +227,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
     idx_buffer = Int[]
     sub_callback! = let eqs = neweqs, fullvars = fullvars
         (ieq, s) -> begin
-            neweq = substitute(eqs[ieq], fullvars[s[1]] => fullvars[s[2]])
+            neweq = fast_substitute(eqs[ieq], fullvars[s[1]] => fullvars[s[2]])
             eqs[ieq] = neweq
         end
     end
@@ -282,7 +282,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
             end
             for eq in 𝑑neighbors(graph, dv)
                 dummy_sub[dd] = v_t
-                neweqs[eq] = substitute(neweqs[eq], dd => v_t)
+                neweqs[eq] = fast_substitute(neweqs[eq], dd => v_t)
             end
             fullvars[dv] = v_t
             # If we have:
@@ -295,7 +295,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
             while (ddx = var_to_diff[dx]) !== nothing
                 dx_t = D(x_t)
                 for eq in 𝑑neighbors(graph, ddx)
-                    neweqs[eq] = substitute(neweqs[eq], fullvars[ddx] => dx_t)
+                    neweqs[eq] = fast_substitute(neweqs[eq], fullvars[ddx] => dx_t)
                 end
                 fullvars[ddx] = dx_t
                 dx = ddx
@@ -655,7 +655,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
         obs_sub[eq.lhs] = eq.rhs
     end
     # TODO: compute the dependency correctly so that we don't have to do this
-    obs = substitute.([oldobs; subeqs], (obs_sub,))
+    obs = fast_substitute([oldobs; subeqs], obs_sub)
     @set! sys.observed = obs
     @set! state.sys = sys
     @set! sys.tearing_state = state

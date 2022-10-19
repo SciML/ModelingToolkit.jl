@@ -741,3 +741,36 @@ function jacobian_wrt_vars(pf::F, p, input_idxs, chunk::C) where {F, C}
     cfg = ForwardDiff.JacobianConfig(p_closure, p_small, chunk, tag)
     ForwardDiff.jacobian(p_closure, p_small, cfg, Val(false))
 end
+
+# Symbolics needs to call unwrap on the substitution rules, but most of the time
+# we don't want to do that in MTK.
+function fast_substitute(eq::Equation, subs)
+    fast_substitute(eq.lhs, subs) ~ fast_substitute(eq.rhs, subs)
+end
+function fast_substitute(eq::Equation, subs::Pair)
+    fast_substitute(eq.lhs, subs) ~ fast_substitute(eq.rhs, subs)
+end
+fast_substitute(eqs::AbstractArray{Equation}, subs) = fast_substitute.(eqs, (subs,))
+fast_substitute(a, b) = substitute(a, b)
+function fast_substitute(expr, pair::Pair)
+    a, b = pair
+    isequal(expr, a) && return b
+
+    istree(expr) || return expr
+    op = fast_substitute(operation(expr), pair)
+    canfold = Ref(!(op isa Symbolic))
+    args = let canfold = canfold
+        map(SymbolicUtils.unsorted_arguments(expr)) do x
+            x′ = fast_substitute(x, pair)
+            canfold[] = canfold[] && !(x′ isa Symbolic)
+            x′
+        end
+    end
+    canfold[] && return op(args...)
+
+    similarterm(expr,
+                op,
+                args,
+                symtype(expr);
+                metadata = metadata(expr))
+end

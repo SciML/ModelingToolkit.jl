@@ -151,10 +151,9 @@ function alias_elimination!(state::TearingState; kwargs...)
             k === nothing && break
         end
     end
-    subfun = Base.Fix2(substitute, subs)
     for ieq in eqs_to_update
         eq = eqs[ieq]
-        eqs[ieq] = subfun(eq.lhs) ~ subfun(eq.rhs)
+        eqs[ieq] = fast_substitute(eq, subs)
     end
 
     for old_ieq in to_expand
