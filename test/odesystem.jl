@@ -72,6 +72,15 @@ for f in [
     @test J == f.jac(u, p, t)
 end
 
+#check iip_config
+f = eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], iip_config = (false, true)))
+du = zeros(3)
+u = collect(1:3)
+p = collect(4:6)
+f.f(du, u, p, 0.1)
+@test du == [4, 0, -16]
+@test_throws ArgumentError f.f(u, p, 0.1)
+
 eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y * t,
     D(z) ~ x * y - β * z]

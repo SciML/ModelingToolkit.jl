@@ -537,7 +537,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                           jac_prototype = $jp_expr,
                           syms = $(Symbol.(states(sys))),
                           indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
-                          paramsyms = $(QuoteNode(Symbol.(parameters(sys)))),
+                          paramsyms = $(Symbol.(parameters(sys))),
                           sparsity = $(jacobian_sparsity(sys)))
     end
     !linenumbers ? striplines(ex) : ex
