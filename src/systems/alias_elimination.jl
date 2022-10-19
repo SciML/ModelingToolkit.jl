@@ -468,7 +468,7 @@ count_nonzeros(a::AbstractArray) = count(!iszero, a)
 
 # N.B.: Ordinarily sparse vectors allow zero stored elements.
 # Here we have a guarantee that they won't, so we can make this identification
-count_nonzeros(a::SparseVector) = nnz(a)
+count_nonzeros(a::CLILVector) = nnz(a)
 
 # Linear variables are highest order differentiated variables that only appear
 # in linear equations with only linear variables. Also, if a variable's any

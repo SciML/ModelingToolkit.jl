@@ -48,9 +48,8 @@ function tearEquations!(ict::IncrementalCycleTracker, Gsolvable, es::Vector{Int}
     return ict
 end
 
-function tear_graph_block_modia!(var_eq_matching, graph, solvable_graph, eqs, vars,
+function tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, eqs, vars,
                                  isder::F) where {F}
-    ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph); dir = :in)
     tearEquations!(ict, solvable_graph.fadjlist, eqs, vars, isder)
     for var in vars
         var_eq_matching[var] = ict.graph.matching[var]
@@ -76,6 +75,8 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
     @unpack graph, solvable_graph = structure
     var_eq_matching = complete(maximal_matching(graph, eqfilter, varfilter, U))
     var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, var_eq_matching)
+    vargraph = DiCMOBiGraph{true}(graph)
+    ict = IncrementalCycleTracker(vargraph; dir = :in)
 
     ieqs = Int[]
     filtered_vars = BitSet()
@@ -89,8 +90,15 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
             end
             var_eq_matching[var] = unassigned
         end
-        tear_graph_block_modia!(var_eq_matching, graph, solvable_graph, ieqs, filtered_vars,
+        tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, ieqs,
+                                filtered_vars,
                                 isder)
+
+        # clear cache
+        vargraph.ne = 0
+        for var in vars
+            vargraph.matching[var] = unassigned
+        end
         empty!(ieqs)
         empty!(filtered_vars)
     end
