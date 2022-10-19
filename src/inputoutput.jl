@@ -119,8 +119,8 @@ function same_or_inner_namespace(u, var)
     nv = get_namespace(var)
     nu == nv ||           # namespaces are the same
         startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namepsace to nu
-        occursin('₊', string(Symbolics.getname(var))) &&
-            !occursin('₊', string(Symbolics.getname(u))) # or u is top level but var is internal
+        occursin('₊', string(getname(var))) &&
+            !occursin('₊', string(getname(u))) # or u is top level but var is internal
 end
 
 function inner_namespace(u, var)
@@ -128,8 +128,8 @@ function inner_namespace(u, var)
     nv = get_namespace(var)
     nu == nv && return false
     startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namepsace to nu
-        occursin('₊', string(Symbolics.getname(var))) &&
-            !occursin('₊', string(Symbolics.getname(u))) # or u is top level but var is internal
+        occursin('₊', string(getname(var))) &&
+            !occursin('₊', string(getname(u))) # or u is top level but var is internal
 end
 
 """
@@ -138,7 +138,7 @@ end
 Return the namespace of a variable as a string. If the variable is not namespaced, the string is empty.
 """
 function get_namespace(x)
-    sname = string(Symbolics.getname(x))
+    sname = string(getname(x))
     parts = split(sname, '₊')
     if length(parts) == 1
         return ""
