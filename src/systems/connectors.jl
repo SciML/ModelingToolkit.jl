@@ -172,7 +172,7 @@ function Base.show(io::IO, c::ConnectionSet)
 end
 
 @noinline function connection_error(ss)
-    error("Different types of connectors are in one conenction statement: <$(map(nameof, ss))>")
+    error("Different types of connectors are in one connection statement: <$(map(nameof, ss))>")
 end
 
 function connection2set!(connectionsets, namespace, ss, isouter)
