@@ -53,6 +53,7 @@ function Base.view(a::SparseMatrixCLIL, i::Integer, ::Colon)
 end
 SparseArrays.nonzeroinds(a::CLILVector) = SparseArrays.nonzeroinds(a.vec)
 SparseArrays.nonzeros(a::CLILVector) = SparseArrays.nonzeros(a.vec)
+SparseArrays.nnz(a::CLILVector) = nnz(a.vec)
 
 function Base.setindex!(S::SparseMatrixCLIL, v::CLILVector, i::Integer, c::Colon)
     if v.vec.n != S.ncols
