@@ -732,6 +732,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                     c, dr = reach₌[idx]
                     @assert c == 1
                 end
+                dr in stem_set && break
                 var_to_diff[prev_r] = dr
                 push!(updated_diff_vars, prev_r)
                 prev_r = dr
@@ -901,10 +902,14 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # RHS or its derivaitves must still exist in the system to be valid aliases.
     needs_update = false
     function contains_v_or_dv(var_to_diff, graph, v)
+        counter = 0
         while true
             isempty(𝑑neighbors(graph, v)) || return true
             v = var_to_diff[v]
             v === nothing && return false
+            counter += 1
+            counter > 10_000 &&
+                error("Internal error: there's an infinite loop in the `var_to_diff` graph.")
         end
     end
     for (v, (c, a)) in ag
