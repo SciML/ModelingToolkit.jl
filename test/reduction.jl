@@ -295,3 +295,10 @@ eqs = [x ~ 0
 ss = alias_elimination(sys)
 @test isempty(equations(ss))
 @test sort(observed(ss), by = string) == ([D(x), x, y] .~ 0)
+
+eqs = [D(D(x)) ~ -x]
+@named sys = ODESystem(eqs, t, [x], [])
+ss = alias_elimination(sys)
+@test length(equations(ss)) == length(states(ss)) == 1
+ss = structural_simplify(sys)
+@test length(equations(ss)) == length(states(ss)) == 2
