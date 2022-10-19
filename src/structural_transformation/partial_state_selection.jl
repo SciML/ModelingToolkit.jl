@@ -278,7 +278,10 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
                 end
                 x = diff_to_var[x]
                 x === nothing && break
-                isempty(𝑑neighbors(graph, x)) && continue
+                # We deliberately do not check `isempty(𝑑neighbors(graph, x))`
+                # because when `D(x)` appears in the alias graph, and `x`
+                # doesn't appear in any equations nor in the alias graph, `D(x)`
+                # is not reducible. Consider the system `D(x) ~ 0`.
                 if !haskey(ag, x)
                     isred = false
                 end
