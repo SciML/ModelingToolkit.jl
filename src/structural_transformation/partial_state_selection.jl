@@ -267,6 +267,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     end
     dummy_derivatives_set = BitSet(dummy_derivatives)
 
+    irreducible_set = BitSet()
     if ag !== nothing
         function isreducible(x)
             # `k` is reducible if all lower differentiated variables are.
@@ -284,7 +285,6 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             end
             isred
         end
-        irreducible_set = BitSet()
         for (k, (c, v)) in ag
             isreducible(k) || push!(irreducible_set, k)
             isreducible(k) || push!(irreducible_set, k)
@@ -293,14 +293,30 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         end
     end
 
-    is_not_present = v -> isempty(𝑑neighbors(graph, v)) &&
-        (ag === nothing || !haskey(ag, v) || !(v in irreducible_set))
+    is_not_present_non_rec = let graph = graph, irreducible_set = irreducible_set
+        v -> begin
+            not_in_eqs = isempty(𝑑neighbors(graph, v))
+            isirreducible = false
+            if ag !== nothing
+                isirreducible = haskey(ag, v) && (v in irreducible_set)
+            end
+            not_in_eqs && !isirreducible
+        end
+    end
+
+    is_not_present = let var_to_diff = var_to_diff
+        v -> while true
+            # if a higher derivative is present, then it's present
+            is_not_present_non_rec(v) || return false
+            v = var_to_diff[v]
+            v === nothing && return true
+        end
+    end
 
     # Derivatives that are either in the dummy derivatives set or ended up not
     # participating in the system at all are not considered differential
     is_some_diff = let dummy_derivatives_set = dummy_derivatives_set
-        v -> !(v in dummy_derivatives_set) &&
-            !(var_to_diff[v] === nothing && is_not_present(v))
+        v -> !(v in dummy_derivatives_set) && !is_not_present(v)
     end
 
     # We don't want tearing to give us `y_t ~ D(y)`, so we skip equations with
@@ -312,7 +328,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     # We can eliminate variables that are not a selected state (differential
     # variables). Selected states are differentiated variables that are not
     # dummy derivatives.
-    can_eliminate = let var_to_diff = var_to_diff
+    can_eliminate = let var_to_diff = var_to_diff, ag = ag
         v -> begin
             if ag !== nothing
                 haskey(ag, v) && return false
