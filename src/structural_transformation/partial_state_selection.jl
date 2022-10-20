@@ -290,9 +290,8 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         end
         for (k, (c, v)) in ag
             isreducible(k) || push!(irreducible_set, k)
-            isreducible(k) || push!(irreducible_set, k)
             iszero(c) && continue
-            push!(irreducible_set, v)
+            isempty(𝑑neighbors(graph, v)) || push!(irreducible_set, v)
         end
     end
 

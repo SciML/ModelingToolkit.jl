@@ -206,7 +206,6 @@ function TearingState(sys; quick_cancel = false, check = true)
     ivs = independent_variables(sys)
     eqs = copy(equations(sys))
     neqs = length(eqs)
-    algeqs = trues(neqs)
     dervaridxs = OrderedSet{Int}()
     var2idx = Dict{Any, Int}()
     symbolic_incidence = []
@@ -259,7 +258,6 @@ function TearingState(sys; quick_cancel = false, check = true)
         push!(symbolic_incidence, copy(statevars))
         empty!(statevars)
         empty!(vars)
-        algeqs[i] = isalgeq
         if isalgeq
             eqs[i] = eq
         else
