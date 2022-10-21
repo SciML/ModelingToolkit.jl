@@ -41,6 +41,8 @@ struct ODESystem <: AbstractODESystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    """Time span."""
+    tspan::Union{NTuple{2, Any}, Nothing}
     """Array variables."""
     var_to_name::Any
     """Control parameters (some subset of `ps`)."""
@@ -125,7 +127,7 @@ struct ODESystem <: AbstractODESystem
     """
     complete::Bool
 
-    function ODESystem(tag, deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad,
+    function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
                        torn_matching, connector_type, preface, cevents,
                        devents, metadata = nothing, tearing_state = nothing,
@@ -140,7 +142,7 @@ struct ODESystem <: AbstractODESystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv]) || check_units(deqs)
         end
-        new(tag, deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
+        new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
             connector_type, preface, cevents, devents, metadata, tearing_state,
             substitutions, complete)
@@ -151,6 +153,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    controls = Num[],
                    observed = Equation[],
                    systems = ODESystem[],
+                   tspan = nothing,
                    name = nothing,
                    default_u0 = Dict(),
                    default_p = Dict(),
@@ -195,7 +198,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-              deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
+              deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
               connector_type, preface, cont_callbacks, disc_callbacks,
               metadata, checks = checks)

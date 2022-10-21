@@ -42,6 +42,8 @@ struct SDESystem <: AbstractODESystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    """Time span."""
+    tspan::Union{NTuple{2, Any}, Nothing}
     """Array variables."""
     var_to_name::Any
     """Control parameters (some subset of `ps`)."""
@@ -110,7 +112,8 @@ struct SDESystem <: AbstractODESystem
     """
     complete::Bool
 
-    function SDESystem(tag, deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad,
+    function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
+                       tgrad,
                        jac,
                        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
                        cevents, devents, metadata = nothing, complete = false;
@@ -124,7 +127,7 @@ struct SDESystem <: AbstractODESystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv]) || check_units(deqs, neqs)
         end
-        new(tag, deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
+        new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac,
             Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
             metadata, complete)
@@ -135,6 +138,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    controls = Num[],
                    observed = Num[],
                    systems = SDESystem[],
+                   tspan = nothing,
                    default_u0 = Dict(),
                    default_p = Dict(),
                    defaults = _merge(Dict(default_u0), Dict(default_p)),
@@ -177,7 +181,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
 
     SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-              deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
+              deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
               cont_callbacks, disc_callbacks, metadata; checks = checks)
 end
@@ -531,7 +535,7 @@ function SDEFunctionExpr(sys::SDESystem, args...; kwargs...)
     SDEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map, tspan,
+function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map = [], tspan = get_tspan(sys),
                                     parammap = DiffEqBase.NullParameters();
                                     sparsenoise = nothing, check_length = true,
                                     callback = nothing, kwargs...) where {iip}
