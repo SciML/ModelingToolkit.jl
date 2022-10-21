@@ -36,6 +36,7 @@ solexpr = solve(eval(probexpr), SRIW1(), seed = 1)
 
 # Test no error
 @test_nowarn SDEProblem(de, nothing, (0, 10.0))
+@test_nowarn SDEProblem(de)
 
 noiseeqs_nd = [0.01*x 0.01*x*y 0.02*x*z
                σ 0.01*y 0.02*x*z
