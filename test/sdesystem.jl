@@ -20,7 +20,7 @@ noiseeqs = [0.1 * x,
 @named sys = ODESystem(eqs, t, [x, y, z], [σ, ρ, β])
 @test SDESystem(sys, noiseeqs, name = :foo) isa SDESystem
 
-@named de = SDESystem(eqs, noiseeqs, t, [x, y, z], [σ, ρ, β])
+@named de = SDESystem(eqs, noiseeqs, t, [x, y, z], [σ, ρ, β], tspan = (0.0, 10.0))
 f = eval(generate_diffusion_function(de)[1])
 @test f(ones(3), rand(3), nothing) == 0.1ones(3)
 
@@ -36,7 +36,7 @@ solexpr = solve(eval(probexpr), SRIW1(), seed = 1)
 
 # Test no error
 @test_nowarn SDEProblem(de, nothing, (0, 10.0))
-@test_nowarn SDEProblem(de)
+@test SDEProblem(de, nothing).tspan == (0.0, 10.0)
 
 noiseeqs_nd = [0.01*x 0.01*x*y 0.02*x*z
                σ 0.01*y 0.02*x*z
