@@ -19,7 +19,7 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]) # or
+@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]; tspan = (0, 1000.0)) # or
 @named de = DiscreteSystem(eqs)
 ```
 """
@@ -37,6 +37,8 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    """Time span."""
+    tspan::Union{NTuple{2, Any}, Nothing}
     """Array variables."""
     var_to_name::Any
     """Control parameters (some subset of `ps`)."""
@@ -81,7 +83,8 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     complete::Bool
 
-    function DiscreteSystem(tag, discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed,
+    function DiscreteSystem(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name, ctrls,
+                            observed,
                             name,
                             systems, defaults, preface, connector_type,
                             metadata = nothing,
@@ -94,7 +97,8 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv; ctrls]) || check_units(discreteEqs)
         end
-        new(tag, discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems,
+        new(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, name,
+            systems,
             defaults,
             preface, connector_type, metadata, tearing_state, substitutions, complete)
     end
@@ -109,6 +113,7 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
                         controls = Num[],
                         observed = Num[],
                         systems = DiscreteSystem[],
+                        tspan = nothing,
                         name = nothing,
                         default_u0 = Dict(),
                         default_p = Dict(),
@@ -142,7 +147,7 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
         throw(ArgumentError("System names must be unique."))
     end
     DiscreteSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-                   eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems,
+                   eqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, name, systems,
                    defaults, preface, connector_type, metadata, kwargs...)
 end
 
@@ -192,7 +197,7 @@ end
 
 Generates an DiscreteProblem from an DiscreteSystem.
 """
-function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map, tspan,
+function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map = [], tspan = get_tspan(sys),
                                    parammap = SciMLBase.NullParameters();
                                    eval_module = @__MODULE__,
                                    eval_expression = true,

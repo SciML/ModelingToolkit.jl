@@ -680,7 +680,8 @@ function DiffEqBase.ODEProblem{false}(sys::AbstractODESystem, args...; kwargs...
     ODEProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map, tspan,
+function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
+                                                tspan = get_tspan(sys),
                                                 parammap = DiffEqBase.NullParameters();
                                                 callback = nothing,
                                                 check_length = true,

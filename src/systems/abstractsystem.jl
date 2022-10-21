@@ -182,6 +182,7 @@ for prop in [:eqs
              :iv
              :states
              :ps
+             :tspan
              :var_to_name
              :ctrls
              :defaults
