@@ -19,7 +19,7 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]) # or
+@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]; tspan = (0, 1000.0)) # or
 @named de = DiscreteSystem(eqs)
 ```
 """

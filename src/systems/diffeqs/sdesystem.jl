@@ -23,7 +23,7 @@ noiseeqs = [0.1*x,
             0.1*y,
             0.1*z]
 
-@named de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β])
+@named de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β]; tspan = (0, 1000.0))
 ```
 """
 struct SDESystem <: AbstractODESystem
