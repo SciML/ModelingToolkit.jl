@@ -724,8 +724,8 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
                     push!(reach₌, c => da)
                     # `r` is aliased to its previous differentiation level's
                     # aliases' derivative's equality aliases
-                    for n in neighbors(eqg, da)
-                        (n == da || n == r || is_diff_edge(r, n)) && continue
+                    r === nothing || for n in neighbors(eqg, da)
+                        (n == da || n == prev_r || is_diff_edge(prev_r, n)) && continue
                         c′ = get_weight(eqg, da, n)
                         push!(reach₌, c * c′ => n)
                     end
