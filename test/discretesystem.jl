@@ -52,10 +52,10 @@ eqs2 = [D(S) ~ S - infection2,
     D(I) ~ I + infection2 - recovery2,
     D(R) ~ R + recovery2]
 
-@named sys = DiscreteSystem(eqs2; controls = [β, γ])
+@named sys = DiscreteSystem(eqs2; controls = [β, γ], tspan)
 @test ModelingToolkit.defaults(sys) != Dict()
 
-prob_map2 = DiscreteProblem(sys, [], tspan)
+prob_map2 = DiscreteProblem(sys)
 sol_map2 = solve(prob_map, FunctionMap());
 
 @test sol_map.u == sol_map2.u

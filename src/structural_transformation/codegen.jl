@@ -318,14 +318,20 @@ function build_torn_function(sys;
             sol_states = sol_states,
             var2assignment = var2assignment
 
-            function generated_observed(obsvar, u, p, t)
+            function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
                     build_observed_function(state, obsvar, var_eq_matching, var_sccs,
                                             is_solver_state_idxs, assignments, deps,
                                             sol_states, var2assignment,
                                             checkbounds = checkbounds)
                 end
-                obs(u, p, t)
+                if args === ()
+                    let obs = obs
+                        (u, p, t) -> obs(u, p, t)
+                    end
+                else
+                    obs(args...)
+                end
             end
         end
 

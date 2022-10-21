@@ -21,6 +21,8 @@ end
 
 function check_rc_sol(sol)
     rpi = sol[rc_model.resistor.p.i]
+    rpifun = sol.prob.f.observed(rc_model.resistor.p.i)
+    @test rpifun.(sol.u, (sol.prob.p,), sol.t) == rpi
     @test any(!isequal(rpi[1]), rpi) # test that we don't have a constant system
     @test sol[rc_model.resistor.p.i] == sol[resistor.p.i] == sol[capacitor.p.i]
     @test sol[rc_model.resistor.n.i] == sol[resistor.n.i] == -sol[capacitor.p.i]

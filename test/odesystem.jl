@@ -374,10 +374,11 @@ eqs = [D(D(x)) ~ -b / M * D(x) - k / M * x]
 ps = [M, b, k]
 default_u0 = [D(x) => 0.0, x => 10.0]
 default_p = [M => 1.0, b => 1.0, k => 1.0]
-@named sys = ODESystem(eqs, t, [x], ps, defaults = [default_u0; default_p])
+@named sys = ODESystem(eqs, t, [x], ps; defaults = [default_u0; default_p], tspan)
 sys = ode_order_lowering(sys)
-prob = ODEProblem(sys, [], tspan)
+prob = ODEProblem(sys)
 sol = solve(prob, Tsit5())
+@test sol.t[end] == tspan[end]
 @test sum(abs, sol[end]) < 1
 
 # check_eqs_u0 kwarg test

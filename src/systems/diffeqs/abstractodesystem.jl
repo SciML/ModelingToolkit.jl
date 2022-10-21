@@ -328,20 +328,32 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
     obs = observed(sys)
     observedfun = if steady_state
         let sys = sys, dict = Dict()
-            function generated_observed(obsvar, u, p, t = Inf)
+            function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
                     build_explicit_observed_function(sys, obsvar)
                 end
-                obs(u, p, t)
+                if args === ()
+                    let obs = obs
+                        (u, p, t = Inf) -> obs(u, p, t)
+                    end
+                else
+                    length(args) == 2 ? obs(args..., Inf) : obs(args...)
+                end
             end
         end
     else
         let sys = sys, dict = Dict()
-            function generated_observed(obsvar, u, p, t)
+            function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
                     build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
                 end
-                obs(u, p, t)
+                if args === ()
+                    let obs = obs
+                        (u, p, t) -> obs(u, p, t)
+                    end
+                else
+                    obs(args...)
+                end
             end
         end
     end
@@ -424,11 +436,17 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     obs = observed(sys)
     observedfun = let sys = sys, dict = Dict()
-        function generated_observed(obsvar, u, p, t)
+        function generated_observed(obsvar, args...)
             obs = get!(dict, value(obsvar)) do
                 build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
             end
-            obs(u, p, t)
+            if args === ()
+                let obs = obs
+                    (u, p, t) -> obs(u, p, t)
+                end
+            else
+                obs(args...)
+            end
         end
     end
 
@@ -662,7 +680,8 @@ function DiffEqBase.ODEProblem{false}(sys::AbstractODESystem, args...; kwargs...
     ODEProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map, tspan,
+function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
+                                                tspan = get_tspan(sys),
                                                 parammap = DiffEqBase.NullParameters();
                                                 callback = nothing,
                                                 check_length = true,
