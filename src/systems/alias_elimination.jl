@@ -708,17 +708,27 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         prev_r = -1
         for _ in 1:10_000 # just to make sure that we don't stuck in an infinite loop
             reach₌ = Pair{Int, Int}[]
+            # `r` is aliased to its equality aliases
             r === nothing || for n in neighbors(eqg, r)
                 (n == r || is_diff_edge(r, n)) && continue
                 c = get_weight(eqg, r, n)
                 push!(reach₌, c => n)
             end
+            # `r` is aliased to its previous differentiation level's aliases'
+            # derivative
             if (n = length(diff_aliases)) >= 1
                 as = diff_aliases[n]
                 for (c, a) in as
                     (da = var_to_diff[a]) === nothing && continue
                     da === r && continue
                     push!(reach₌, c => da)
+                    # `r` is aliased to its previous differentiation level's
+                    # aliases' derivative's equality aliases
+                    r === nothing || for n in neighbors(eqg, da)
+                        (n == da || n == prev_r || is_diff_edge(prev_r, n)) && continue
+                        c′ = get_weight(eqg, da, n)
+                        push!(reach₌, c * c′ => n)
+                    end
                 end
             end
             if r === nothing
