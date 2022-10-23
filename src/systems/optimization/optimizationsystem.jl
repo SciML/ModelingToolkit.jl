@@ -329,7 +329,7 @@ function OptimizationProblemExpr(sys::OptimizationSystem, args...; kwargs...)
     OptimizationProblemExpr{true}(sys::OptimizationSystem, args...; kwargs...)
 end
 
-function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
+function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
                                       parammap = DiffEqBase.NullParameters();
                                       lb = nothing, ub = nothing,
                                       grad = false,
@@ -366,7 +366,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
 
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)
-    defs = mergedefaults(defs, u0, dvs)
+    defs = mergedefaults(defs, u0map, dvs)
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
