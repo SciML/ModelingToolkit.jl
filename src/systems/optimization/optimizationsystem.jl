@@ -366,7 +366,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
 
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)
-    defs = mergedefaults(defs, u0map, dvs)
+    defs = mergedefaults(defs, u0, dvs)
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
