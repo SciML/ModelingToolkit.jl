@@ -4,6 +4,7 @@
 - https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#Deterministic_versus_stochastic_epidemic_models
 =#
 using ModelingToolkit, Test
+using ModelingToolkit: get_metadata
 
 @inline function rate_to_proportion(r, t)
     1 - exp(-r * t)
@@ -52,10 +53,10 @@ eqs2 = [D(S) ~ S - infection2,
     D(I) ~ I + infection2 - recovery2,
     D(R) ~ R + recovery2]
 
-@named sys = DiscreteSystem(eqs2; controls = [β, γ])
+@named sys = DiscreteSystem(eqs2; controls = [β, γ], tspan)
 @test ModelingToolkit.defaults(sys) != Dict()
 
-prob_map2 = DiscreteProblem(sys, [], tspan)
+prob_map2 = DiscreteProblem(sys)
 sol_map2 = solve(prob_map, FunctionMap());
 
 @test sol_map.u == sol_map2.u
@@ -180,3 +181,10 @@ RHS2 = RHS
     sol = solve(prob, FunctionMap(); dt = dt)
     @test c[1] + 1 == length(sol)
 end
+
+@parameters t
+@variables x(t) y(t)
+D = Difference(t; dt = 0.1)
+testdict = Dict([:test => 1])
+@named sys = DiscreteSystem([D(x) ~ 1.0]; metadata = testdict)
+@test get_metadata(sys) == testdict

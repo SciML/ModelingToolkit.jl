@@ -172,7 +172,7 @@ function Base.show(io::IO, c::ConnectionSet)
 end
 
 @noinline function connection_error(ss)
-    error("Different types of connectors are in one conenction statement: <$(map(nameof, ss))>")
+    error("Different types of connectors are in one connection statement: <$(map(nameof, ss))>")
 end
 
 function connection2set!(connectionsets, namespace, ss, isouter)
@@ -198,13 +198,14 @@ function connection2set!(connectionsets, namespace, ss, isouter)
     end
 end
 
-function generate_connection_set(sys::AbstractSystem)
+function generate_connection_set(sys::AbstractSystem, find = nothing, replace = nothing)
     connectionsets = ConnectionSet[]
-    sys = generate_connection_set!(connectionsets, sys)
+    sys = generate_connection_set!(connectionsets, sys, find, replace)
     sys, merge(connectionsets)
 end
 
-function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace = nothing)
+function generate_connection_set!(connectionsets, sys::AbstractSystem, find, replace,
+                                  namespace = nothing)
     subsys = get_systems(sys)
 
     isouter = generate_isouter(sys)
@@ -212,11 +213,24 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace
     eqs = Equation[]
 
     cts = [] # connections
+    extra_states = []
     for eq in eqs′
-        if eq.lhs isa Connection
-            push!(cts, get_systems(eq.rhs))
+        lhs = eq.lhs
+        rhs = eq.rhs
+        if find !== nothing && find(rhs, namespace)
+            neweq, extra_state = replace(rhs, namespace)
+            if extra_state isa AbstractArray
+                append!(extra_states, unwrap.(extra_state))
+            elseif extra_state !== nothing
+                push!(extra_states, extra_state)
+            end
+            neweq isa AbstractArray ? append!(eqs, neweq) : push!(eqs, neweq)
         else
-            push!(eqs, eq) # split connections and equations
+            if lhs isa Number || lhs isa Symbolic
+                push!(eqs, eq) # split connections and equations
+            else
+                push!(cts, get_systems(rhs))
+            end
         end
     end
 
@@ -235,7 +249,10 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, namespace
     end
 
     # pre order traversal
-    @set! sys.systems = map(s -> generate_connection_set!(connectionsets, s,
+    if !isempty(extra_states)
+        @set! sys.states = [get_states(sys); extra_states]
+    end
+    @set! sys.systems = map(s -> generate_connection_set!(connectionsets, s, find, replace,
                                                           renamespace(namespace, nameof(s))),
                             subsys)
     @set! sys.eqs = eqs
@@ -305,8 +322,9 @@ function generate_connection_equations_and_stream_connections(csets::AbstractVec
     eqs, stream_connections
 end
 
-function expand_connections(sys::AbstractSystem; debug = false, tol = 1e-10)
-    sys, csets = generate_connection_set(sys)
+function expand_connections(sys::AbstractSystem, find = nothing, replace = nothing;
+                            debug = false, tol = 1e-10)
+    sys, csets = generate_connection_set(sys, find, replace)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     _sys = expand_instream(instream_csets, sys; debug = debug, tol = tol)
     sys = flatten(sys, true)

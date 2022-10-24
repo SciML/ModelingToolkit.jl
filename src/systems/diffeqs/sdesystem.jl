@@ -23,10 +23,15 @@ noiseeqs = [0.1*x,
             0.1*y,
             0.1*z]
 
-@named de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β])
+@named de = SDESystem(eqs,noiseeqs,t,[x,y,z],[σ,ρ,β]; tspan = (0, 1000.0))
 ```
 """
 struct SDESystem <: AbstractODESystem
+    """
+    tag: a tag for the system. If two system have the same tag, then they are
+    structurally identical.
+    """
+    tag::UInt
     """The expressions defining the drift term."""
     eqs::Vector{Equation}
     """The expressions defining the diffusion term."""
@@ -37,6 +42,8 @@ struct SDESystem <: AbstractODESystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    """Time span."""
+    tspan::Union{NTuple{2, Any}, Nothing}
     """Array variables."""
     var_to_name::Any
     """Control parameters (some subset of `ps`)."""
@@ -100,9 +107,16 @@ struct SDESystem <: AbstractODESystem
     metadata: metadata for the system, to be used by downstream packages.
     """
     metadata::Any
-    function SDESystem(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
+    """
+    complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    """
+    complete::Bool
+
+    function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
+                       tgrad,
+                       jac,
                        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-                       cevents, devents, metadata = nothing;
+                       cevents, devents, metadata = nothing, complete = false;
                        checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
@@ -113,9 +127,10 @@ struct SDESystem <: AbstractODESystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv]) || check_units(deqs, neqs)
         end
-        new(deqs, neqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac, ctrl_jac,
+        new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
+            ctrl_jac,
             Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
-            metadata)
+            metadata, complete)
     end
 end
 
@@ -123,6 +138,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
                    controls = Num[],
                    observed = Num[],
                    systems = SDESystem[],
+                   tspan = nothing,
                    default_u0 = Dict(),
                    default_p = Dict(),
                    defaults = _merge(Dict(default_u0), Dict(default_p)),
@@ -164,7 +180,8 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
 
-    SDESystem(deqs, neqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
+    SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+              deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
               cont_callbacks, disc_callbacks, metadata; checks = checks)
 end
@@ -421,6 +438,8 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
                      Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
                      mass_matrix = _M,
                      syms = Symbol.(states(sys)),
+                     indepsym = Symbol(get_iv(sys)),
+                     paramsyms = Symbol.(ps),
                      observed = observedfun)
 end
 
@@ -505,7 +524,9 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
                           Wfact = Wfact,
                           Wfact_t = Wfact_t,
                           mass_matrix = M,
-                          syms = $(Symbol.(states(sys))))
+                          syms = $(Symbol.(states(sys))),
+                          indepsym = $(Symbol(get_iv(sys))),
+                          paramsyms = $(Symbol.(parameters(sys))))
     end
     !linenumbers ? striplines(ex) : ex
 end
@@ -514,7 +535,7 @@ function SDEFunctionExpr(sys::SDESystem, args...; kwargs...)
     SDEFunctionExpr{true}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map, tspan,
+function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map = [], tspan = get_tspan(sys),
                                     parammap = DiffEqBase.NullParameters();
                                     sparsenoise = nothing, check_length = true,
                                     callback = nothing, kwargs...) where {iip}
@@ -545,7 +566,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
                                     checkbounds = false, sparse = false,
                                     sparsenoise = sparse,
                                     skipzeros = true, fillzeros = true,
-                                    linenumbers = true, parallel=nothing,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...)
 ```
 
@@ -563,7 +584,7 @@ function DiffEqBase.SDEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false, Wfact = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=nothing,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 ```
 

@@ -1,6 +1,7 @@
-function partial_state_selection_graph!(state::TransformationState)
+function partial_state_selection_graph!(state::TransformationState;
+                                        ag::Union{AliasGraph, Nothing} = nothing)
     find_solvables!(state; allow_symbolic = true)
-    var_eq_matching = complete(pantelides!(state))
+    var_eq_matching = complete(pantelides!(state, ag))
     complete!(state.structure)
     partial_state_selection_graph!(state.structure, var_eq_matching)
 end
@@ -87,6 +88,9 @@ function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
             tearEquations!(ict, solvable_graph.fadjlist, to_tear_eqs, BitSet(to_tear_vars),
                            nothing)
             for var in to_tear_vars
+                var_eq_matching[var] = unassigned
+            end
+            for var in to_tear_vars
                 var_eq_matching[var] = ict.graph.matching[var]
             end
             old_level_vars = to_tear_vars
@@ -94,7 +98,10 @@ function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
         end
     end
     for var in 1:ndsts(graph)
-        if varlevel[var] !== 0 && var_eq_matching[var] === unassigned
+        dv = var_to_diff[var]
+        # If `var` is not algebraic (not differentiated nor a dummy derivative),
+        # then it's a SelectedState
+        if !(dv === nothing || (varlevel[dv] !== 0 && var_eq_matching[dv] === unassigned))
             var_eq_matching[var] = SelectedState()
         end
     end
@@ -116,12 +123,15 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
     end
 
     varlevel = map(1:ndsts(graph)) do var
-        level = 0
+        graph_level = level = 0
         while var_to_diff[var] !== nothing
             var = var_to_diff[var]
             level += 1
+            if !isempty(𝑑neighbors(graph, var))
+                graph_level = level
+            end
         end
-        level
+        graph_level
     end
 
     inv_varlevel = map(1:ndsts(graph)) do var
@@ -133,13 +143,6 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
         level
     end
 
-    # TODO: Should pantelides just return this?
-    for var in 1:ndsts(graph)
-        if var_to_diff[var] !== nothing
-            var_eq_matching[var] = unassigned
-        end
-    end
-
     var_eq_matching = pss_graph_modia!(structure,
                                        complete(var_eq_matching), varlevel, inv_varlevel,
                                        inv_eqlevel)
@@ -147,11 +150,14 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
     var_eq_matching
 end
 
-function dummy_derivative_graph!(state::TransformationState, jac = nothing; kwargs...)
+function dummy_derivative_graph!(state::TransformationState, jac = nothing,
+                                 (ag, diff_va) = (nothing, nothing);
+                                 state_priority = nothing, kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
-    var_eq_matching = complete(pantelides!(state))
+    var_eq_matching = complete(pantelides!(state, ag))
     complete!(state.structure)
-    dummy_derivative_graph!(state.structure, var_eq_matching, jac)
+    dummy_derivative_graph!(state.structure, var_eq_matching, jac, (ag, diff_va),
+                            state_priority)
 end
 
 function compute_diff_level(diff_to_x)
@@ -171,7 +177,8 @@ function compute_diff_level(diff_to_x)
     return xlevel, maxlevel
 end
 
-function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac)
+function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac,
+                                 (ag, diff_va), state_priority)
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
@@ -191,12 +198,17 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         iszero(maxlevel) && continue
 
         rank_matching = Matching(nvars)
+        isfirst = true
         for _ in maxlevel:-1:1
             eqs = filter(eq -> diff_to_eq[eq] !== nothing, eqs)
             nrows = length(eqs)
             iszero(nrows) && break
             eqs_set = BitSet(eqs)
 
+            if state_priority !== nothing && isfirst
+                sort!(vars, by = state_priority)
+            end
+            isfirst = false
             # TODO: making the algorithm more robust
             # 1. If the Jacobian is a integer matrix, use Bareiss to check
             # linear independence. (done)
@@ -235,31 +247,106 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             vars = [diff_to_var[var] for var in vars if diff_to_var[var] !== nothing]
         end
     end
-
-    dummy_derivatives_set = BitSet(dummy_derivatives)
-    # We can eliminate variables that are not a selected state (differential
-    # variables). Selected states are differentiated variables that are not
-    # dummy derivatives.
-    can_eliminate = let var_to_diff = var_to_diff,
-        dummy_derivatives_set = dummy_derivatives_set
-
-        v -> begin
-            dv = var_to_diff[v]
-            dv === nothing || dv in dummy_derivatives_set
+    if diff_va !== nothing
+        # differentiated alias
+        n_dummys = length(dummy_derivatives)
+        needed = count(x -> x isa Int, diff_to_eq) - n_dummys
+        n = 0
+        for v in diff_va
+            c, a = ag[v]
+            n += 1
+            push!(dummy_derivatives, iszero(c) ? v : a)
+            needed == n && break
+            continue
         end
+    end
+
+    if (n_diff_eqs = count(!isnothing, diff_to_eq)) !=
+       (n_dummys = length(dummy_derivatives))
+        @warn "The number of dummy derivatives ($n_dummys) does not match the number of differentiated equations ($n_diff_eqs)."
+    end
+    dummy_derivatives_set = BitSet(dummy_derivatives)
+
+    irreducible_set = BitSet()
+    if ag !== nothing
+        function isreducible(x)
+            # `k` is reducible if all lower differentiated variables are.
+            isred = true
+            while isred
+                if x in dummy_derivatives_set
+                    break
+                end
+                x = diff_to_var[x]
+                x === nothing && break
+                # We deliberately do not check `isempty(𝑑neighbors(graph, x))`
+                # because when `D(x)` appears in the alias graph, and `x`
+                # doesn't appear in any equations nor in the alias graph, `D(x)`
+                # is not reducible. Consider the system `D(x) ~ 0`.
+                if !haskey(ag, x)
+                    isred = false
+                end
+            end
+            isred
+        end
+        for (k, (c, v)) in ag
+            isreducible(k) || push!(irreducible_set, k)
+            iszero(c) && continue
+            isempty(𝑑neighbors(graph, v)) || push!(irreducible_set, v)
+        end
+    end
+
+    is_not_present_non_rec = let graph = graph, irreducible_set = irreducible_set
+        v -> begin
+            not_in_eqs = isempty(𝑑neighbors(graph, v))
+            ag === nothing && return not_in_eqs
+            isirreducible = v in irreducible_set
+            return not_in_eqs && !isirreducible
+        end
+    end
+
+    is_not_present = let var_to_diff = var_to_diff
+        v -> while true
+            # if a higher derivative is present, then it's present
+            is_not_present_non_rec(v) || return false
+            v = var_to_diff[v]
+            v === nothing && return true
+        end
+    end
+
+    # Derivatives that are either in the dummy derivatives set or ended up not
+    # participating in the system at all are not considered differential
+    is_some_diff = let dummy_derivatives_set = dummy_derivatives_set
+        v -> !(v in dummy_derivatives_set) && !is_not_present(v)
     end
 
     # We don't want tearing to give us `y_t ~ D(y)`, so we skip equations with
     # actually differentiated variables.
-    isdiffed = let diff_to_var = diff_to_var, dummy_derivatives_set = dummy_derivatives_set
-        v -> diff_to_var[v] !== nothing && !(v in dummy_derivatives_set)
+    isdiffed = let diff_to_var = diff_to_var
+        v -> diff_to_var[v] !== nothing && is_some_diff(v)
+    end
+
+    # We can eliminate variables that are not a selected state (differential
+    # variables). Selected states are differentiated variables that are not
+    # dummy derivatives.
+    can_eliminate = let var_to_diff = var_to_diff, ag = ag
+        v -> begin
+            if ag !== nothing
+                haskey(ag, v) && return false
+            end
+            dv = var_to_diff[v]
+            dv === nothing && return true
+            is_some_diff(dv) || return true
+            return false
+        end
     end
 
     var_eq_matching = tear_graph_modia(structure, isdiffed,
                                        Union{Unassigned, SelectedState};
                                        varfilter = can_eliminate)
     for v in eachindex(var_eq_matching)
-        can_eliminate(v) && continue
+        is_not_present(v) && continue
+        dv = var_to_diff[v]
+        (dv === nothing || !is_some_diff(dv)) && continue
         var_eq_matching[v] = SelectedState()
     end
 

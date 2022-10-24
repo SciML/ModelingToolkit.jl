@@ -17,6 +17,11 @@ op = a*(y-x) + x*(b-z)-y + x*y - c*z
 ```
 """
 struct OptimizationSystem <: AbstractTimeIndependentSystem
+    """
+    tag: a tag for the system. If two system have the same tag, then they are
+    structurally identical.
+    """
+    tag::UInt
     """Objective function of the system."""
     op::Any
     """Unknown variables."""
@@ -41,16 +46,21 @@ struct OptimizationSystem <: AbstractTimeIndependentSystem
     metadata: metadata for the system, to be used by downstream packages.
     """
     metadata::Any
-    function OptimizationSystem(op, states, ps, var_to_name, observed,
-                                constraints, name, systems, defaults, metadata = nothing;
-                                checks::Union{Bool, Int} = true)
+    """
+    complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    """
+    complete::Bool
+
+    function OptimizationSystem(tag, op, states, ps, var_to_name, observed,
+                                constraints, name, systems, defaults, metadata = nothing,
+                                complete = false; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             unwrap(op) isa Symbolic && check_units(op)
             check_units(observed)
             all_dimensionless([states; ps]) || check_units(constraints)
         end
-        new(op, states, ps, var_to_name, observed,
-            constraints, name, systems, defaults, metadata)
+        new(tag, op, states, ps, var_to_name, observed,
+            constraints, name, systems, defaults, metadata, complete)
     end
 end
 
@@ -87,7 +97,8 @@ function OptimizationSystem(op, states, ps;
     process_variables!(var_to_name, defaults, ps′)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
-    OptimizationSystem(value(op), states′, ps′, var_to_name,
+    OptimizationSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+                       value(op), states′, ps′, var_to_name,
                        observed,
                        constraints,
                        name, systems, defaults, metadata; checks = checks)
@@ -151,7 +162,7 @@ namespace_constraint(eq::Equation, sys) = namespace_equation(eq, sys)
 #     _lhs = namespace_expr(ineq.lhs, sys, n)
 #     _rhs = namespace_expr(ineq.rhs, sys, n)
 #     Inequality(
-#         namespace_expr(_lhs, sys, n), 
+#         namespace_expr(_lhs, sys, n),
 #         namespace_expr(_rhs, sys, n),
 #         ineq.relational_op,
 #     )
@@ -184,7 +195,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
                                           grad = false,
                                           hess = false, sparse = false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=nothing,
+                                          linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
 ```
 
@@ -200,7 +211,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              grad = false,
                                              hess = false, sparse = false,
                                              checkbounds = false,
-                                             linenumbers = true, parallel = nothing,
+                                             linenumbers = true, parallel = SerialForm(),
                                              use_union = false,
                                              kwargs...) where {iip}
     dvs = states(sys)
@@ -284,11 +295,12 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         end
         _f = DiffEqBase.OptimizationFunction{iip}(f,
                                                   sys = sys,
-                                                  syms = nameof.(states(sys)),
                                                   SciMLBase.NoAD();
                                                   grad = _grad,
                                                   hess = _hess,
                                                   hess_prototype = hess_prototype,
+                                                  syms = Symbol.(states(sys)),
+                                                  paramsyms = Symbol.(parameters(sys)),
                                                   cons = cons,
                                                   cons_j = cons_j,
                                                   cons_h = cons_h,
@@ -299,10 +311,11 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     else
         _f = DiffEqBase.OptimizationFunction{iip}(f,
                                                   sys = sys,
-                                                  syms = nameof.(states(sys)),
                                                   SciMLBase.NoAD();
                                                   grad = _grad,
                                                   hess = _hess,
+                                                  syms = Symbol.(states(sys)),
+                                                  paramsyms = Symbol.(parameters(sys)),
                                                   hess_prototype = hess_prototype,
                                                   expr = obj_expr)
     end
@@ -318,7 +331,7 @@ function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
                                           grad = false,
                                           hes = false, sparse = false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=nothing,
+                                          linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
 ```
 
@@ -338,7 +351,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
                                       grad = false,
                                       hess = false, sparse = false,
                                       checkbounds = false,
-                                      linenumbers = false, parallel = nothing,
+                                      linenumbers = false, parallel = SerialForm(),
                                       use_union = false,
                                       kwargs...) where {iip}
     dvs = states(sys)
@@ -426,9 +439,13 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             cons = $cons
             cons_j = $cons_j
             cons_h = $cons_h
+            syms = $(Symbol.(states(sys)))
+            paramsyms = $(Symbol.(parameters(sys)))
             _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
                                            grad = grad,
                                            hess = hess,
+                                           syms = syms,
+                                           paramsyms = paramsyms,
                                            hess_prototype = hess_prototype,
                                            cons = cons,
                                            cons_j = cons_j,
@@ -448,9 +465,13 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             hess = $_hess
             lb = $lb
             ub = $ub
+            syms = $(Symbol.(states(sys)))
+            paramsyms = $(Symbol.(parameters(sys)))
             _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
                                            grad = grad,
                                            hess = hess,
+                                           syms = syms,
+                                           paramsyms = paramsyms,
                                            hess_prototype = hess_prototype,
                                            expr = obj_expr)
             OptimizationProblem{$iip}(_f, u0, p; lb = lb, ub = ub, kwargs...)

@@ -195,7 +195,7 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
 end
 
 function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
-    eqs = [eq for eq in full_equations(sys) if !isdifferenceeq(eq)]
+    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     dvs = states(sys)
     M = zeros(length(eqs), length(eqs))
     state2idx = Dict(s => i for (i, s) in enumerate(dvs))
@@ -334,20 +334,32 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
     obs = observed(sys)
     observedfun = if steady_state
         let sys = sys, dict = Dict()
-            function generated_observed(obsvar, u, p, t = Inf)
+            function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
                     build_explicit_observed_function(sys, obsvar)
                 end
-                obs(u, p, t)
+                if args === ()
+                    let obs = obs
+                        (u, p, t = Inf) -> obs(u, p, t)
+                    end
+                else
+                    length(args) == 2 ? obs(args..., Inf) : obs(args...)
+                end
             end
         end
     else
         let sys = sys, dict = Dict()
-            function generated_observed(obsvar, u, p, t)
+            function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
                     build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
                 end
-                obs(u, p, t)
+                if args === ()
+                    let obs = obs
+                        (u, p, t) -> obs(u, p, t)
+                    end
+                else
+                    obs(args...)
+                end
             end
         end
     end
@@ -370,6 +382,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                  jac_prototype = jac_prototype,
                                  syms = Symbol.(states(sys)),
                                  indepsym = Symbol(get_iv(sys)),
+                                 paramsyms = Symbol.(ps),
                                  observed = observedfun,
                                  sparsity = sparsity ? jacobian_sparsity(sys) : nothing)
 end
@@ -429,11 +442,17 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
 
     obs = observed(sys)
     observedfun = let sys = sys, dict = Dict()
-        function generated_observed(obsvar, u, p, t)
+        function generated_observed(obsvar, args...)
             obs = get!(dict, value(obsvar)) do
                 build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
             end
-            obs(u, p, t)
+            if args === ()
+                let obs = obs
+                    (u, p, t) -> obs(u, p, t)
+                end
+            else
+                obs(args...)
+            end
         end
     end
 
@@ -455,9 +474,9 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
                      sys = sys,
                      jac = _jac === nothing ? nothing : _jac,
                      syms = Symbol.(dvs),
+                     indepsym = Symbol(get_iv(sys)),
+                     paramsyms = Symbol.(ps),
                      jac_prototype = jac_prototype,
-                     # missing fields in `DAEFunction`
-                     #indepsym = Symbol(get_iv(sys)),
                      observed = observedfun)
 end
 
@@ -491,6 +510,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                               linenumbers = false,
                               sparse = false, simplify = false,
                               steady_state = false,
+                              sparsity = false,
                               kwargs...) where {iip}
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
 
@@ -528,7 +548,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
         ArrayInterfaceCore.restructure(u0 .* u0', M)
     end
 
-    jp_expr = sparse ? :(similar($(get_jac(sys)[]), Float64)) : :nothing
+    jp_expr = sparse ? :($similar($(get_jac(sys)[]), Float64)) : :nothing
     ex = quote
         $_f
         $_tgrad
@@ -540,7 +560,9 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                           mass_matrix = M,
                           jac_prototype = $jp_expr,
                           syms = $(Symbol.(states(sys))),
-                          indepsym = $(QuoteNode(Symbol(get_iv(sys)))))
+                          indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
+                          paramsyms = $(Symbol.(parameters(sys))),
+                          sparsity = $(jacobian_sparsity(sys)))
     end
     !linenumbers ? striplines(ex) : ex
 end
@@ -551,9 +573,10 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
                            jac = false,
                            checkbounds = false, sparse = false,
                            simplify = false,
-                           linenumbers = true, parallel = nothing,
+                           linenumbers = true, parallel = SerialForm(),
                            eval_expression = true,
                            use_union = false,
+                           tofloat = !use_union,
                            kwargs...)
     eqs = equations(sys)
     dvs = states(sys)
@@ -565,7 +588,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     defs = mergedefaults(defs, u0map, dvs)
 
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = !use_union, use_union)
+    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
 
     if implicit_dae && du0map !== nothing
@@ -644,7 +667,7 @@ function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
                                     jac = false,
                                     checkbounds = false, sparse = false,
                                     simplify=false,
-                                    linenumbers = true, parallel=nothing,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 ```
 
@@ -663,7 +686,8 @@ function DiffEqBase.ODEProblem{false}(sys::AbstractODESystem, args...; kwargs...
     ODEProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
-function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map, tspan,
+function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
+                                                tspan = get_tspan(sys),
                                                 parammap = DiffEqBase.NullParameters();
                                                 callback = nothing,
                                                 check_length = true,
@@ -675,10 +699,12 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map, t
                                  check_length, kwargs...)
     cbs = process_events(sys; callback, has_difference, kwargs...)
     kwargs = filter_kwargs(kwargs)
+    pt = something(get_metadata(sys), StandardODEProblem())
+
     if cbs === nothing
-        ODEProblem{iip}(f, u0, tspan, p; kwargs...)
+        ODEProblem{iip}(f, u0, tspan, p, pt; kwargs...)
     else
-        ODEProblem{iip}(f, u0, tspan, p; callback = cbs, kwargs...)
+        ODEProblem{iip}(f, u0, tspan, p, pt; callback = cbs, kwargs...)
     end
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
@@ -691,7 +717,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
                                     jac = false,
                                     checkbounds = false, sparse = false,
                                     simplify=false,
-                                    linenumbers = true, parallel=nothing,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 ```
 
@@ -732,7 +758,7 @@ function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=nothing,
+                                    linenumbers = true, parallel=SerialForm(),
                                     skipzeros=true, fillzeros=true,
                                     simplify=false,
                                     kwargs...) where iip
@@ -774,7 +800,7 @@ function DAEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
                                     version = nothing, tgrad=false,
                                     jac = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=nothing,
+                                    linenumbers = true, parallel=SerialForm(),
                                     skipzeros=true, fillzeros=true,
                                     simplify=false,
                                     kwargs...) where iip
@@ -823,7 +849,7 @@ function SciMLBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
                                     version = nothing, tgrad=false,
                                     jac = false,
                                     checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=nothing,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 ```
 Generates an SteadyStateProblem from an ODESystem and allows for automatically
@@ -851,7 +877,7 @@ function SciMLBase.SteadyStateProblemExpr(sys::AbstractODESystem,u0map,
                                     jac = false,
                                     checkbounds = false, sparse = false,
                                     skipzeros=true, fillzeros=true,
-                                    linenumbers = true, parallel=nothing,
+                                    linenumbers = true, parallel=SerialForm(),
                                     kwargs...) where iip
 ```
 Generates a Julia expression for building a SteadyStateProblem from

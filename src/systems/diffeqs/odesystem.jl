@@ -19,10 +19,15 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-@named de = ODESystem(eqs,t,[x,y,z],[σ,ρ,β])
+@named de = ODESystem(eqs,t,[x,y,z],[σ,ρ,β],tspan=(0, 1000.0))
 ```
 """
 struct ODESystem <: AbstractODESystem
+    """
+    tag: a tag for the system. If two system have the same tag, then they are
+    structurally identical.
+    """
+    tag::UInt
     """The ODEs defining the system."""
     eqs::Vector{Equation}
     """Independent variable."""
@@ -36,6 +41,8 @@ struct ODESystem <: AbstractODESystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    """Time span."""
+    tspan::Union{NTuple{2, Any}, Nothing}
     """Array variables."""
     var_to_name::Any
     """Control parameters (some subset of `ps`)."""
@@ -89,10 +96,6 @@ struct ODESystem <: AbstractODESystem
     """
     connector_type::Any
     """
-    connections: connections in a system
-    """
-    connections::Any
-    """
     preface: inject assignment statements before the evaluation of the RHS function.
     """
     preface::Any
@@ -108,6 +111,10 @@ struct ODESystem <: AbstractODESystem
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
+    metadata: metadata for the system, to be used by downstream packages.
+    """
+    metadata::Any
+    """
     tearing_state: cache for intermediate tearing state
     """
     tearing_state::Any
@@ -116,15 +123,15 @@ struct ODESystem <: AbstractODESystem
     """
     substitutions::Any
     """
-    metadata: metadata for the system, to be used by downstream packages.
+    complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
-    metadata::Any
+    complete::Bool
 
-    function ODESystem(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad,
+    function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
-                       torn_matching, connector_type, connections, preface, cevents,
-                       devents, tearing_state = nothing, substitutions = nothing,
-                       metadata = nothing;
+                       torn_matching, connector_type, preface, cevents,
+                       devents, metadata = nothing, tearing_state = nothing,
+                       substitutions = nothing, complete = false;
                        checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
@@ -135,10 +142,10 @@ struct ODESystem <: AbstractODESystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv]) || check_units(deqs)
         end
-        new(deqs, iv, dvs, ps, var_to_name, ctrls, observed, tgrad, jac,
+        new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
-            connector_type, connections, preface, cevents, devents, tearing_state,
-            substitutions, metadata)
+            connector_type, preface, cevents, devents, metadata, tearing_state,
+            substitutions, complete)
     end
 end
 
@@ -146,6 +153,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    controls = Num[],
                    observed = Equation[],
                    systems = ODESystem[],
+                   tspan = nothing,
                    name = nothing,
                    default_u0 = Dict(),
                    default_p = Dict(),
@@ -189,9 +197,10 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
-    ODESystem(deqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, tgrad, jac,
+    ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+              deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
-              connector_type, nothing, preface, cont_callbacks, disc_callbacks,
+              connector_type, preface, cont_callbacks, disc_callbacks,
               metadata, checks = checks)
 end
 
@@ -327,31 +336,17 @@ function build_explicit_observed_function(sys, ts;
                     subs[s] = s′
                     continue
                 end
-                throw(ArgumentError("$s is either an observed nor a state variable."))
+                throw(ArgumentError("$s is neither an observed nor a state variable."))
             end
             continue
         end
     end
     ts = map(t -> substitute(t, subs), ts)
     obsexprs = []
-    eqs_cache = Ref{Any}(nothing)
     for i in 1:maxidx
         eq = obs[i]
         lhs = eq.lhs
         rhs = eq.rhs
-        vars!(vars, rhs)
-        for v in vars
-            isdifferential(v) || continue
-            if eqs_cache[] === nothing
-                eqs_cache[] = Dict(eq.lhs => eq.rhs for eq in equations(sys))
-            end
-            eqs_dict = eqs_cache[]
-            rhs = get(eqs_dict, v, nothing)
-            if rhs === nothing
-                error("The observed variable $(eq.lhs) depends on the differentiated variable $v, but it's not explicit solved. Fix file an issue if you are sure that the system is valid.")
-            end
-        end
-        empty!(vars)
         push!(obsexprs, lhs ← rhs)
     end
 

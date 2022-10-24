@@ -2,6 +2,7 @@ using Test
 using ModelingToolkit, OrdinaryDiffEq
 using ModelingToolkit.BipartiteGraphs
 using ModelingToolkit.StructuralTransformations
+include("../examples/rc_model.jl")
 
 function check_contract(sys)
     state = ModelingToolkit.get_tearing_state(sys)
@@ -20,6 +21,8 @@ end
 
 function check_rc_sol(sol)
     rpi = sol[rc_model.resistor.p.i]
+    rpifun = sol.prob.f.observed(rc_model.resistor.p.i)
+    @test rpifun.(sol.u, (sol.prob.p,), sol.t) == rpi
     @test any(!isequal(rpi[1]), rpi) # test that we don't have a constant system
     @test sol[rc_model.resistor.p.i] == sol[resistor.p.i] == sol[capacitor.p.i]
     @test sol[rc_model.resistor.n.i] == sol[resistor.n.i] == -sol[capacitor.p.i]
@@ -32,6 +35,8 @@ end
 
 include("../examples/rc_model.jl")
 
+completed_rc_model = complete(rc_model)
+@test isequal(completed_rc_model.resistor.n.i, resistor.n.i)
 @test ModelingToolkit.n_extra_equations(capacitor) == 2
 @test length(equations(structural_simplify(rc_model, allow_parameter = false))) == 2
 sys = structural_simplify(rc_model)
@@ -72,7 +77,8 @@ let
     params = [param_r1 => 1.0, param_c1 => 1.0]
     tspan = (0.0, 10.0)
 
-    @test_throws Any prob=ODAEProblem(sys, u0, tspan, params)
+    prob = ODAEProblem(sys, u0, tspan, params)
+    @test solve(prob, Tsit5()).retcode == :Success
 end
 
 let
@@ -94,17 +100,16 @@ let
 end
 
 # Outer/inner connections
-function rc_component(; name)
-    R = 1
-    C = 1
+function rc_component(; name, R = 1, C = 1)
+    @parameters R=R C=C
     @named p = Pin()
     @named n = Pin()
-    @named resistor = Resistor(R = R)
-    @named capacitor = Capacitor(C = C)
+    @named resistor = Resistor(R = R) # test parent scope default of @named
+    @named capacitor = Capacitor(C = ParentScope(C))
     eqs = [connect(p, resistor.p);
            connect(resistor.n, capacitor.p);
            connect(capacitor.n, n)]
-    @named sys = ODESystem(eqs, t)
+    @named sys = ODESystem(eqs, t, [], [R, C])
     compose(sys, [p, n, resistor, capacitor]; name = name)
 end
 

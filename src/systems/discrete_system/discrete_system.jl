@@ -19,11 +19,16 @@ eqs = [D(x) ~ σ*(y-x),
        D(y) ~ x*(ρ-z)-y,
        D(z) ~ x*y - β*z]
 
-@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]) # or
+@named de = DiscreteSystem(eqs,t,[x,y,z],[σ,ρ,β]; tspan = (0, 1000.0)) # or
 @named de = DiscreteSystem(eqs)
 ```
 """
 struct DiscreteSystem <: AbstractTimeDependentSystem
+    """
+    tag: a tag for the system. If two system have the same tag, then they are
+    structurally identical.
+    """
+    tag::UInt
     """The differential equations defining the discrete system."""
     eqs::Vector{Equation}
     """Independent variable."""
@@ -32,6 +37,8 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     states::Vector
     """Parameter variables. Must not contain the independent variable."""
     ps::Vector
+    """Time span."""
+    tspan::Union{NTuple{2, Any}, Nothing}
     """Array variables."""
     var_to_name::Any
     """Control parameters (some subset of `ps`)."""
@@ -60,6 +67,10 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     connector_type::Any
     """
+    metadata: metadata for the system, to be used by downstream packages.
+    """
+    metadata::Any
+    """
     tearing_state: cache for intermediate tearing state
     """
     tearing_state::Any
@@ -68,15 +79,17 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     substitutions::Any
     """
-    metadata: metadata for the system, to be used by downstream packages.
+    complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
-    metadata::Any
+    complete::Bool
 
-    function DiscreteSystem(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name,
+    function DiscreteSystem(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name, ctrls,
+                            observed,
+                            name,
                             systems, defaults, preface, connector_type,
+                            metadata = nothing,
                             tearing_state = nothing, substitutions = nothing,
-                            metadata = nothing;
-                            checks::Union{Bool, Int} = true)
+                            complete = false; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -84,8 +97,10 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv; ctrls]) || check_units(discreteEqs)
         end
-        new(discreteEqs, iv, dvs, ps, var_to_name, ctrls, observed, name, systems, defaults,
-            preface, connector_type, tearing_state, substitutions, metadata)
+        new(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, name,
+            systems,
+            defaults,
+            preface, connector_type, metadata, tearing_state, substitutions, complete)
     end
 end
 
@@ -98,6 +113,7 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
                         controls = Num[],
                         observed = Num[],
                         systems = DiscreteSystem[],
+                        tspan = nothing,
                         name = nothing,
                         default_u0 = Dict(),
                         default_p = Dict(),
@@ -130,7 +146,8 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
     if length(unique(sysnames)) != length(sysnames)
         throw(ArgumentError("System names must be unique."))
     end
-    DiscreteSystem(eqs, iv′, dvs′, ps′, var_to_name, ctrl′, observed, name, systems,
+    DiscreteSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+                   eqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, name, systems,
                    defaults, preface, connector_type, metadata, kwargs...)
 end
 
@@ -180,7 +197,7 @@ end
 
 Generates an DiscreteProblem from an DiscreteSystem.
 """
-function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map, tspan,
+function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map = [], tspan = get_tspan(sys),
                                    parammap = SciMLBase.NullParameters();
                                    eval_module = @__MODULE__,
                                    eval_expression = true,
@@ -206,7 +223,8 @@ function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map, tspan,
                               expression_module = eval_module)
     f_oop, _ = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
     f(u, p, iv) = f_oop(u, p, iv)
-    fd = DiscreteFunction(f; syms = Symbol.(dvs), sys = sys)
+    fd = DiscreteFunction(f; syms = Symbol.(dvs), indepsym = Symbol(iv),
+                          paramsyms = Symbol.(ps), sys = sys)
     DiscreteProblem(fd, u0, tspan, p; kwargs...)
 end
 

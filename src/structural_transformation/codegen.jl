@@ -322,14 +322,20 @@ function build_torn_function(sys;
             sol_states = sol_states,
             var2assignment = var2assignment
 
-            function generated_observed(obsvar, u, p, t)
+            function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
                     build_observed_function(state, obsvar, var_eq_matching, var_sccs,
                                             is_solver_state_idxs, assignments, deps,
                                             sol_states, var2assignment,
                                             checkbounds = checkbounds)
                 end
-                obs(u, p, t)
+                if args === ()
+                    let obs = obs
+                        (u, p, t) -> obs(u, p, t)
+                    end
+                else
+                    obs(args...)
+                end
             end
         end
 
@@ -343,8 +349,11 @@ function build_torn_function(sys;
                                                                                                           states_idxs) :
                                                                nothing,
                                                     syms = syms,
+                                                    paramsyms = Symbol.(parameters(sys)),
+                                                    indepsym = Symbol(get_iv(sys)),
                                                     observed = observedfun,
-                                                    mass_matrix = mass_matrix), states
+                                                    mass_matrix = mass_matrix,
+                                                    sys = sys), states
     end
 end
 
@@ -388,7 +397,6 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
 
     fullvars = state.fullvars
     s = state.structure
-    graph = s.graph
     solver_states = fullvars[is_solver_state_idxs]
     algvars = fullvars[.!is_solver_state_idxs]
 
@@ -531,6 +539,7 @@ function ODAEProblem{iip}(sys,
     has_difference = any(isdifferenceeq, eqs)
     cbs = process_events(sys; callback, has_difference, kwargs...)
 
+    kwargs = filter_kwargs(kwargs)
     if cbs === nothing
         ODEProblem{iip}(fun, u0, tspan, p; kwargs...)
     else

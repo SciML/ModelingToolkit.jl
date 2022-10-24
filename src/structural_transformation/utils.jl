@@ -43,10 +43,12 @@ end
 ###
 ### Structural check
 ###
-function check_consistency(state::TearingState)
+function check_consistency(state::TearingState, ag = nothing)
     fullvars = state.fullvars
     @unpack graph, var_to_diff = state.structure
-    n_highest_vars = count(v -> length(outneighbors(var_to_diff, v)) == 0,
+    n_highest_vars = count(v -> var_to_diff[v] === nothing &&
+                                    !isempty(𝑑neighbors(graph, v)) &&
+                                    (ag === nothing || !haskey(ag, v) || ag[v] != v),
                            vertices(var_to_diff))
     neqs = nsrcs(graph)
     is_balanced = n_highest_vars == neqs
@@ -69,11 +71,12 @@ function check_consistency(state::TearingState)
     # details, check the equation (15) of the original paper.
     extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist;
                                                         map(collect, edges(var_to_diff))])
-    extended_var_eq_matching = maximal_matching(extended_graph)
+    extended_var_eq_matching = maximal_matching(extended_graph, eq -> true,
+                                                v -> ag === nothing || !haskey(ag, v))
 
     unassigned_var = []
     for (vj, eq) in enumerate(extended_var_eq_matching)
-        if eq === unassigned
+        if eq === unassigned && (ag === nothing || !haskey(ag, vj))
             push!(unassigned_var, fullvars[vj])
         end
     end
@@ -160,20 +163,24 @@ end
 ### Structural and symbolic utilities
 ###
 
-function find_eq_solvables!(state::TearingState, ieq; may_be_zero = false,
-                            allow_symbolic = false, allow_parameter = true)
+function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = nothing;
+                            may_be_zero = false,
+                            allow_symbolic = false, allow_parameter = true, kwargs...)
     fullvars = state.fullvars
     @unpack graph, solvable_graph = state.structure
     eq = equations(state)[ieq]
     term = value(eq.rhs - eq.lhs)
-    to_rm = Int[]
+    all_int_vars = true
+    coeffs === nothing || empty!(coeffs)
+    empty!(to_rm)
     for j in 𝑠neighbors(graph, ieq)
         var = fullvars[j]
-        isirreducible(var) && continue
+        isirreducible(var) && (all_int_vars = false; continue)
         a, b, islinear = linear_expansion(term, var)
-        a = unwrap(a)
-        islinear || continue
+        a, b = unwrap(a), unwrap(b)
+        islinear || (all_int_vars = false; continue)
         if a isa Symbolic
+            all_int_vars = false
             if !allow_symbolic
                 if allow_parameter
                     all(ModelingToolkit.isparameter, vars(a)) || continue
@@ -184,7 +191,18 @@ function find_eq_solvables!(state::TearingState, ieq; may_be_zero = false,
             add_edge!(solvable_graph, ieq, j)
             continue
         end
-        (a isa Number) || continue
+        if !(a isa Number)
+            all_int_vars = false
+            continue
+        end
+        # When the expression is linear with numeric `a`, then we can safely
+        # only consider `b` for the following iterations.
+        term = b
+        if isone(abs(a))
+            coeffs === nothing || push!(coeffs, convert(Int, a))
+        else
+            all_int_vars = false
+        end
         if a != 0
             add_edge!(solvable_graph, ieq, j)
         else
@@ -198,6 +216,7 @@ function find_eq_solvables!(state::TearingState, ieq; may_be_zero = false,
     for j in to_rm
         rem_edge!(graph, ieq, j)
     end
+    all_int_vars, term
 end
 
 function find_solvables!(state::TearingState; kwargs...)
@@ -205,10 +224,44 @@ function find_solvables!(state::TearingState; kwargs...)
     eqs = equations(state)
     graph = state.structure.graph
     state.structure.solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
+    to_rm = Int[]
     for ieq in 1:length(eqs)
-        find_eq_solvables!(state, ieq; kwargs...)
+        find_eq_solvables!(state, ieq, to_rm; kwargs...)
     end
     return nothing
+end
+
+function linear_subsys_adjmat!(state::TransformationState; kwargs...)
+    graph = state.structure.graph
+    if state.structure.solvable_graph === nothing
+        state.structure.solvable_graph = BipartiteGraph(nsrcs(graph), ndsts(graph))
+    end
+    linear_equations = Int[]
+    eqs = equations(state.sys)
+    eadj = Vector{Int}[]
+    cadj = Vector{Int}[]
+    coeffs = Int[]
+    to_rm = Int[]
+    for i in eachindex(eqs)
+        all_int_vars, rhs = find_eq_solvables!(state, i, to_rm, coeffs; kwargs...)
+
+        # Check if all states in the equation is both linear and homogeneous,
+        # i.e. it is in the form of
+        #
+        #       ``∑ c_i * v_i = 0``,
+        #
+        # where ``c_i`` ∈ ℤ and ``v_i`` denotes states.
+        if all_int_vars && Symbolics._iszero(rhs)
+            push!(linear_equations, i)
+            push!(eadj, copy(𝑠neighbors(graph, i)))
+            push!(cadj, copy(coeffs))
+        end
+    end
+
+    mm = SparseMatrixCLIL(nsrcs(graph),
+                          ndsts(graph),
+                          linear_equations, eadj, cadj)
+    return mm
 end
 
 highest_order_variable_mask(ts) =
@@ -218,7 +271,7 @@ highest_order_variable_mask(ts) =
 
 lowest_order_variable_mask(ts) =
     let v2d = ts.structure.var_to_diff
-        v -> isempty(outneighbors(v2d, v))
+        v -> isempty(inneighbors(v2d, v))
     end
 
 function but_ordered_incidence(ts::TearingState, varmask = highest_order_variable_mask(ts))
@@ -334,7 +387,7 @@ function numerical_nlsolve(f, u0, p)
     prob = NonlinearProblem{false}(f, u0, p)
     sol = solve(prob, NewtonRaphson())
     rc = sol.retcode
-    rc === :DEFAULT || nlsolve_failure(rc)
+    (rc == :DEFAULT || rc == :Default) || nlsolve_failure(rc)
     # TODO: robust initial guess, better debugging info, and residual check
     sol.u
 end

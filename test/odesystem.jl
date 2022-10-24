@@ -1,4 +1,5 @@
 using ModelingToolkit, StaticArrays, LinearAlgebra
+using ModelingToolkit: get_metadata
 using OrdinaryDiffEq, Sundials
 using DiffEqBase, SparseArrays
 using StaticArrays
@@ -19,6 +20,8 @@ eqs = [D(x) ~ σ * (y - x),
 
 ModelingToolkit.toexpr.(eqs)[1]
 @named de = ODESystem(eqs; defaults = Dict(x => 1))
+@named des[1:3] = ODESystem(eqs)
+@test length(unique(x -> ModelingToolkit.get_tag(x), des)) == 1
 @test eval(toexpr(de)) == de
 @test hash(deepcopy(de)) == hash(de)
 
@@ -69,6 +72,15 @@ for f in [
     f.jac(J, u, p, t)
     @test J == f.jac(u, p, t)
 end
+
+#check iip_config
+f = eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], iip_config = (false, true)))
+du = zeros(3)
+u = collect(1:3)
+p = collect(4:6)
+f.f(du, u, p, 0.1)
+@test du == [4, 0, -16]
+@test_throws ArgumentError f.f(u, p, 0.1)
 
 eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y * t,
@@ -222,6 +234,23 @@ for p in [prob1, prob14]
     @test Set(Num.(parameters(sys)) .=> p.p) == Set([k₁ => 0.04, k₂ => 3e7, k₃ => 1e4])
     @test Set(Num.(states(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 0, y₃ => 0])
 end
+# test remake with symbols
+p3 = [k₁ => 0.05,
+    k₂ => 2e7,
+    k₃ => 1.1e4]
+u01 = [y₁ => 1, y₂ => 1, y₃ => 1]
+prob_pmap = remake(prob14; p = p3, u0 = u01)
+prob_dpmap = remake(prob14; p = Dict(p3), u0 = Dict(u01))
+for p in [prob_pmap, prob_dpmap]
+    @test Set(Num.(parameters(sys)) .=> p.p) == Set([k₁ => 0.05, k₂ => 2e7, k₃ => 1.1e4])
+    @test Set(Num.(states(sys)) .=> p.u0) == Set([y₁ => 1, y₂ => 1, y₃ => 1])
+end
+sol_pmap = solve(prob_pmap, Rodas5())
+sol_dpmap = solve(prob_dpmap, Rodas5())
+
+@test sol_pmap.u ≈ sol_dpmap.u
+
+# test kwargs
 prob2 = ODEProblem(sys, u0, tspan, p, jac = true)
 prob3 = ODEProblem(sys, u0, tspan, p, jac = true, sparse = true) #SparseMatrixCSC need to handle
 @test prob3.f.jac_prototype isa SparseMatrixCSC
@@ -346,10 +375,11 @@ eqs = [D(D(x)) ~ -b / M * D(x) - k / M * x]
 ps = [M, b, k]
 default_u0 = [D(x) => 0.0, x => 10.0]
 default_p = [M => 1.0, b => 1.0, k => 1.0]
-@named sys = ODESystem(eqs, t, [x], ps, defaults = [default_u0; default_p])
+@named sys = ODESystem(eqs, t, [x], ps; defaults = [default_u0; default_p], tspan)
 sys = ode_order_lowering(sys)
-prob = ODEProblem(sys, [], tspan)
+prob = ODEProblem(sys)
 sol = solve(prob, Tsit5())
+@test sol.t[end] == tspan[end]
 @test sum(abs, sol[end]) < 1
 
 # check_eqs_u0 kwarg test
@@ -841,16 +871,15 @@ let
 
     sys_alias = alias_elimination(sys_con)
     D = Differential(t)
-    true_eqs = [0 ~ D(sys.v) - sys.u
-                0 ~ sys.x - ctrl.x
-                0 ~ sys.v - D(sys.x)
-                0 ~ ctrl.kv * D(sys.x) + ctrl.kx * ctrl.x - D(sys.v)]
+    true_eqs = [0 ~ ctrl.u - sys.u
+                0 ~ D(D(sys.x)) - ctrl.u
+                0 ~ ctrl.kv * D(sys.x) + ctrl.kx * sys.x - ctrl.u]
     @test isequal(full_equations(sys_alias), true_eqs)
 
     sys_simp = structural_simplify(sys_con)
     D = Differential(t)
-    true_eqs = [D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x
-                D(sys.x) ~ sys.v]
+    true_eqs = [D(sys.x) ~ ctrl.v
+                D(ctrl.v) ~ ctrl.kv * ctrl.v + ctrl.kx * sys.x]
     @test isequal(full_equations(sys_simp), true_eqs)
 end
 
@@ -860,7 +889,7 @@ let
     @variables y(t) = 1
     @parameters pp = -1
     der = Differential(t)
-    @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 - y + x], t)
+    @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 + pp * y + x], t)
     as = alias_elimination(sys4)
     @test length(equations(as)) == 1
     @test isequal(equations(as)[1].lhs, -der(der(x)))
@@ -868,6 +897,8 @@ let
     sys4s = structural_simplify(sys4)
     prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
     @test string.(prob.f.syms) == ["x(t)", "xˍt(t)"]
+    @test string.(prob.f.paramsyms) == ["pp"]
+    @test string(prob.f.indepsym) == "t"
 end
 
 let
@@ -878,4 +909,45 @@ let
     eqs = [∂t(Q) ~ 0.2P
            ∂t(P) ~ -80.0sin(Q)]
     @test_throws ArgumentError @named sys = ODESystem(eqs)
+end
+
+@parameters C L R
+@variables t q(t) p(t) F(t)
+D = Differential(t)
+
+eqs = [D(q) ~ -p / L - F
+       D(p) ~ q / C
+       0 ~ q / C - R * F]
+testdict = Dict([:name => "test"])
+@named sys = ODESystem(eqs, t, metadata = testdict)
+@test get_metadata(sys) == testdict
+
+@variables t P(t)=0 Q(t)=2
+∂t = Differential(t)
+
+eqs = [∂t(Q) ~ 1 / sin(P)
+       ∂t(P) ~ log(-cos(Q))]
+@named sys = ODESystem(eqs, t, [P, Q], [])
+sys = debug_system(sys);
+prob = ODEProblem(sys, [], (0, 1.0));
+du = zero(prob.u0);
+if VERSION < v"1.8"
+    @test_throws DomainError prob.f(du, [1, 0], prob.p, 0.0)
+    @test_throws DomainError prob.f(du, [0, 2], prob.p, 0.0)
+else
+    @test_throws "-cos(Q(t))" prob.f(du, [1, 0], prob.p, 0.0)
+    @test_throws "sin(P(t))" prob.f(du, [0, 2], prob.p, 0.0)
+end
+
+let
+    @variables t
+    D = Differential(t)
+    @variables x(t) = 1
+    @variables y(t) = 1
+    @parameters pp = -1
+    der = Differential(t)
+    @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 + pp * y + x], t)
+    sys4s = structural_simplify(sys4)
+    prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
+    @test !isnothing(prob.f.sys)
 end

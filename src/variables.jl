@@ -4,12 +4,14 @@ struct VariableNoiseType end
 struct VariableInput end
 struct VariableOutput end
 struct VariableIrreducible end
+struct VariableStatePriority end
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
 Symbolics.option_to_metadata_type(::Val{:noise}) = VariableNoiseType
 Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
+Symbolics.option_to_metadata_type(::Val{:state_priority}) = VariableStatePriority
 
 abstract type AbstractConnectType end
 struct Equality <: AbstractConnectType end # Equality connection
@@ -18,14 +20,21 @@ struct Stream <: AbstractConnectType end   # special stream connector
 
 isvarkind(m, x::Num) = isvarkind(m, value(x))
 function isvarkind(m, x)
-    p = getparent(x, nothing)
-    p === nothing || (x = p)
+    iskind = getmetadata(x, m, nothing)
+    iskind !== nothing && return iskind
+    x = getparent(x, x)
     getmetadata(x, m, false)
 end
 
+setinput(x, v) = setmetadata(x, VariableInput, v)
+setoutput(x, v) = setmetadata(x, VariableOutput, v)
+setio(x, i, o) = setoutput(setinput(x, i), o)
 isinput(x) = isvarkind(VariableInput, x)
 isoutput(x) = isvarkind(VariableOutput, x)
-isirreducible(x) = isvarkind(VariableIrreducible, x) || isinput(x)
+# Before the solvability check, we already have handled IO varibales, so
+# irreducibility is independent from IO.
+isirreducible(x) = isvarkind(VariableIrreducible, x)
+state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
 """
 $(SIGNATURES)
@@ -37,7 +46,8 @@ applicable.
 function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
                         toterm = Symbolics.diff2term, promotetoconcrete = nothing,
                         tofloat = true, use_union = false)
-    varlist = map(unwrap, varlist)
+    varlist = collect(map(unwrap, varlist))
+
     # Edge cases where one of the arguments is effectively empty.
     is_incomplete_initialization = varmap isa DiffEqBase.NullParameters ||
                                    varmap === nothing
@@ -88,7 +98,7 @@ function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false
         varmap[p] = fixpoint_sub(v, varmap)
     end
 
-    missingvars = setdiff(varlist, keys(varmap))
+    missingvars = setdiff(varlist, collect(keys(varmap)))
     check && (isempty(missingvars) || throw_missingvars(missingvars))
 
     out = [varmap[var] for var in varlist]
@@ -96,6 +106,17 @@ end
 
 @noinline function throw_missingvars(vars)
     throw(ArgumentError("$vars are missing from the variable map."))
+end
+
+"""
+$(SIGNATURES)
+
+Intercept the call to `handle_varmap` and convert it to an ordered list if the user has
+  ModelingToolkit loaded, and the problem has a symbolic origin.
+"""
+function SciMLBase.handle_varmap(varmap, sys::AbstractSystem; field = :states, kwargs...)
+    out = varmap_to_vars(varmap, getfield(sys, field); kwargs...)
+    return out
 end
 
 struct IsHistory end
@@ -135,7 +156,7 @@ See also [`getbounds`](@ref).
 """
 function hasbounds(x)
     b = getbounds(x)
-    isfinite(b[1]) && isfinite(b[2])
+    isfinite(b[1]) || isfinite(b[2])
 end
 
 ## Disturbance =================================================================
@@ -153,6 +174,10 @@ function isdisturbance(x)
     p = Symbolics.getparent(x, nothing)
     p === nothing || (x = p)
     Symbolics.getmetadata(x, VariableDisturbance, false)
+end
+
+function disturbances(sys)
+    [filter(isdisturbance, states(sys)); filter(isdisturbance, parameters(sys))]
 end
 
 ## Tunable =====================================================================
@@ -285,4 +310,38 @@ end
 
 function hasdescription(x)
     getdescription(x) != ""
+end
+
+## binary variables =================================================================
+struct VariableBinary end
+Symbolics.option_to_metadata_type(::Val{:binary}) = VariableBinary
+
+isbinaryvar(x::Num) = isbinaryvar(Symbolics.unwrap(x))
+
+"""
+    isbinaryvar(x)
+
+Determine if a variable is binary.
+"""
+function isbinaryvar(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    return Symbolics.getmetadata(x, VariableBinary, false)
+end
+
+## integer variables =================================================================
+struct VariableInteger end
+Symbolics.option_to_metadata_type(::Val{:integer}) = VariableInteger
+
+isintegervar(x::Num) = isintegervar(Symbolics.unwrap(x))
+
+"""
+    isintegervar(x)
+
+Determine if a variable is integer.
+"""
+function isintegervar(x)
+    p = Symbolics.getparent(x, nothing)
+    p === nothing || (x = p)
+    return Symbolics.getmetadata(x, VariableInteger, false)
 end

@@ -19,6 +19,11 @@ eqs = [0 ~ σ*(y-x),
 ```
 """
 struct NonlinearSystem <: AbstractTimeIndependentSystem
+    """
+    tag: a tag for the system. If two system have the same tag, then they are
+    structurally identical.
+    """
+    tag::UInt
     """Vector of equations defining the system."""
     eqs::Vector{Equation}
     """Unknown variables."""
@@ -51,9 +56,9 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     connector_type::Any
     """
-    connections: connections in a system
+    metadata: metadata for the system, to be used by downstream packages.
     """
-    connections::Any
+    metadata::Any
     """
     tearing_state: cache for intermediate tearing state
     """
@@ -63,19 +68,20 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     substitutions::Any
     """
-    metadata: metadata for the system, to be used by downstream packages.
+    complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
-    metadata::Any
+    complete::Bool
 
-    function NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems,
-                             defaults, connector_type, connections, tearing_state = nothing,
-                             substitutions = nothing, metadata = nothing;
-                             checks::Union{Bool, Int} = true)
+    function NonlinearSystem(tag, eqs, states, ps, var_to_name, observed, jac, name,
+                             systems,
+                             defaults, connector_type, metadata = nothing,
+                             tearing_state = nothing, substitutions = nothing,
+                             complete = false; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([states; ps]) || check_units(eqs)
         end
-        new(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
-            connector_type, connections, tearing_state, substitutions, metadata)
+        new(tag, eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
+            connector_type, metadata, tearing_state, substitutions, complete)
     end
 end
 
@@ -124,8 +130,9 @@ function NonlinearSystem(eqs, states, ps;
     process_variables!(var_to_name, defaults, ps)
     isempty(observed) || collect_var_to_name!(var_to_name, (eq.lhs for eq in observed))
 
-    NonlinearSystem(eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
-                    connector_type, nothing, metadata, checks = checks)
+    NonlinearSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
+                    eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
+                    connector_type, metadata, checks = checks)
 end
 
 function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = false)
@@ -246,7 +253,9 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys
                            jac_prototype = sparse ?
                                            similar(calculate_jacobian(sys, sparse = sparse),
                                                    Float64) : nothing,
-                           syms = Symbol.(states(sys)), observed = observedfun)
+                           syms = Symbol.(states(sys)),
+                           paramsyms = Symbol.(parameters(sys)),
+                           observed = observedfun)
 end
 
 """
@@ -291,7 +300,8 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = states(sys),
         NonlinearFunction{$iip}(f,
                                 jac = jac,
                                 jac_prototype = $jp_expr,
-                                syms = $(Symbol.(states(sys))))
+                                syms = $(Symbol.(states(sys))),
+                                paramsyms = $(Symbol.(parameters(sys))))
     end
     !linenumbers ? striplines(ex) : ex
 end
@@ -301,7 +311,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
                                   jac = false,
                                   checkbounds = false, sparse = false,
                                   simplify = false,
-                                  linenumbers = true, parallel = nothing,
+                                  linenumbers = true, parallel = SerialForm(),
                                   eval_expression = true,
                                   use_union = false,
                                   kwargs...)
@@ -320,6 +330,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
 
     f = constructor(sys, dvs, ps, u0; jac = jac, checkbounds = checkbounds,
                     linenumbers = linenumbers, parallel = parallel, simplify = simplify,
+                    syms = Symbol.(dvs), paramsyms = Symbol.(ps),
                     sparse = sparse, eval_expression = eval_expression, kwargs...)
     return f, u0, p
 end
@@ -330,7 +341,7 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=nothing,
+                                          linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
 ```
 
@@ -346,7 +357,8 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
                                           check_length = true, kwargs...) where {iip}
     f, u0, p = process_NonlinearProblem(NonlinearFunction{iip}, sys, u0map, parammap;
                                         check_length, kwargs...)
-    NonlinearProblem{iip}(f, u0, p; kwargs...)
+    pt = something(get_metadata(sys), StandardNonlinearProblem())
+    NonlinearProblem{iip}(f, u0, p, pt; kwargs...)
 end
 
 """
@@ -355,7 +367,7 @@ function DiffEqBase.NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           jac = false, sparse=false,
                                           checkbounds = false,
-                                          linenumbers = true, parallel=nothing,
+                                          linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
 ```
 

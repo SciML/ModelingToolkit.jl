@@ -4,8 +4,10 @@ struct MTKParameterCtx end
 function isparameter(x)
     x = unwrap(x)
 
-    #TODO: Delete this branch
-    if x isa Symbolic && Symbolics.getparent(x, false) !== false
+    if x isa Symbolic && (isp = getmetadata(x, MTKParameterCtx, nothing)) !== nothing
+        return isp
+        #TODO: Delete this branch
+    elseif x isa Symbolic && Symbolics.getparent(x, false) !== false
         p = Symbolics.getparent(x)
         isparameter(p) ||
             (hasmetadata(p, Symbolics.VariableSource) &&

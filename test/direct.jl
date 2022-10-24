@@ -252,8 +252,8 @@ if VERSION >= v"1.5"
     @test collect(cool_name) == [pp; :ff => ff]
 end
 
-foo(i; name) = i, name
+foo(i; name) = (; i, name)
 @named goo[1:3] = foo(10)
-@test isequal(goo, [(10, Symbol(:goo_, i)) for i in 1:3])
+@test isequal(goo, [(i = 10, name = Symbol(:goo_, i)) for i in 1:3])
 @named koo 1:3 i->foo(10i)
-@test isequal(koo, [(10i, Symbol(:koo_, i)) for i in 1:3])
+@test isequal(koo, [(i = 10i, name = Symbol(:koo_, i)) for i in 1:3])
