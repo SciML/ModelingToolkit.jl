@@ -181,6 +181,46 @@ end
 
 function rep_pars_vals!(e, p) end
 
+function symbolify!(e::Expr)
+    if !(e.args[1] isa Symbol)
+        e.args[1] = Symbol(e.args[1])
+    end
+    symbolify!.(e.args)
+    return e
+end
+
+function symbolify!(e)
+    return e
+end
+
+function expr_map(sys)
+    dvs = states(sys)
+    ps = parameters(sys)
+    pairs_arr = vcat([toexpr(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)],
+                     [toexpr(_p) => Expr(:ref, :p, i) for (i, _p) in enumerate(ps)])
+    return pairs_arr
+end
+
+"""
+Converts the given symbolic expression to a Julia `Expr` and replaces all symbols, i.e. states and 
+parameters with `x[i]` and `p[i]`.
+
+# Arguments:
+- `eq`: Expression to convert
+- `sys`: Reference to the system holding the parameters and states
+- `expand_expr=false`: If `true` the symbolic expression is expanded first.
+"""
+function convert_to_expr(eq, sys; expand_expr=false)
+    pairs_arr = expr_map(sys)
+    if expand_expr 
+        eq = expand(eq)
+    end
+    expr = toexpr(eq)
+    rep_pars_vals!(expr, pairs_arr)
+    symbolify!(expr)
+    return expr
+end
+
 """
 ```julia
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
@@ -246,14 +286,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
                           expression = Val{false})
 
-    obj_expr = toexpr(objective(sys))
-    pairs_arr = if p isa SciMLBase.NullParameters
-        [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)]
-    else
-        vcat([Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)],
-             [Symbol(_p) => p[i] for (i, _p) in enumerate(ps)])
-    end
-    rep_pars_vals!(obj_expr, pairs_arr)
+    obj_expr = convert_to_expr(objective(sys), sys)
     if grad
         grad_oop, grad_iip = generate_gradient(sys, checkbounds = checkbounds,
                                                linenumbers = linenumbers,
@@ -289,8 +322,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
         cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 
-        cons_expr = toexpr.(constraints(cons_sys))
-        rep_pars_vals!.(cons_expr, Ref(pairs_arr))
+        cons_expr = convert_to_expr.(constraints(cons_sys), Ref(sys))
 
         if sparse
             cons_jac_prototype = jacobian_sparsity(cons_sys)
@@ -421,14 +453,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         ub = nothing
     end
 
-    obj_expr = toexpr(objective(sys))
-    pairs_arr = if p isa SciMLBase.NullParameters
-        [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)]
-    else
-        vcat([Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)],
-             [Symbol(_p) => p[i] for (i, _p) in enumerate(ps)])
-    end
-    rep_pars_vals!(obj_expr, pairs_arr)
+    obj_expr = convert_to_expr(objective(sys), sys)
 
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
@@ -438,8 +463,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
         cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 
-        cons_expr = toexpr.(constraints(cons_sys))
-        rep_pars_vals!.(cons_expr, Ref(pairs_arr))
+        cons_expr = convert_to_expr.(constraints(cons_sys), Ref(sys))
 
         if sparse
             cons_jac_prototype = jacobian_sparsity(cons_sys)
