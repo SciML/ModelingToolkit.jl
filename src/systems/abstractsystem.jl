@@ -846,7 +846,7 @@ function _named(name, call, runtime = false)
         end
     end
 
-    is_sys_construction = Symbol("###__is_system_construction###")
+    is_sys_construction = gensym("###__is_system_construction###")
     kws = call.args[2].args
     for (i, kw) in enumerate(kws)
         if Meta.isexpr(kw, (:(=), :kw))
