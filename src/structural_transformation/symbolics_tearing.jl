@@ -677,7 +677,7 @@ function tearing(state::TearingState; kwargs...)
             var_eq_matching[var] = SelectedState()
         end
     end
-    MatchedSystemStructure(structure, var_eq_matching)
+    MatchedSystemStructure(state.structure, var_eq_matching)
 end
 
 """
