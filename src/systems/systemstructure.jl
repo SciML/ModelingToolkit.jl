@@ -25,7 +25,7 @@ function quick_cancel_expr(expr)
                                                                          kws...))(expr)
 end
 
-export SystemStructure, TransformationState, TearingState
+export SystemStructure, MatchedSystemStructure, TransformationState, TearingState
 export initialize_system_structure, find_linear_equations
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq, algeqs
 export dervars_range, diffvars_range, algvars_range
@@ -335,9 +335,9 @@ Base.size(bgpm::SystemStructurePrintMatrix) = (max(nsrcs(bgpm.bpg), ndsts(bgpm.b
 function compute_diff_label(diff_graph, i)
     di = i - 1 <= length(diff_graph) ? diff_graph[i - 1] : nothing
     ii = i - 1 <= length(invview(diff_graph)) ? invview(diff_graph)[i - 1] : nothing
-    return Label(string(di === nothing ? "" : string(di, '↓'),
+    return Label(string(di === nothing ? "" : string(di, '↑'),
                         di !== nothing && ii !== nothing ? " " : "",
-                        ii === nothing ? "" : string(ii, '↑')))
+                        ii === nothing ? "" : string(ii, '↓')))
 end
 function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
     checkbounds(bgpm, i, j)

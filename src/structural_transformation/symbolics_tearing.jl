@@ -677,7 +677,7 @@ function tearing(state::TearingState; kwargs...)
             var_eq_matching[var] = SelectedState()
         end
     end
-    var_eq_matching
+    MatchedSystemStructure(structure, var_eq_matching)
 end
 
 """
@@ -689,7 +689,7 @@ instead, which calls this function internally.
 """
 function tearing(sys::AbstractSystem; simplify = false)
     state = TearingState(sys)
-    var_eq_matching = tearing(state)
+    var_eq_matching = tearing(state).var_eq_matching
     invalidate_cache!(tearing_reassemble(state, var_eq_matching; simplify = simplify))
 end
 
@@ -700,7 +700,7 @@ Perform partial state selection and tearing.
 """
 function partial_state_selection(sys; simplify = false)
     state = TearingState(sys)
-    var_eq_matching = partial_state_selection_graph!(state)
+    var_eq_matching = partial_state_selection_graph!(state).var_eq_matching
 
     tearing_reassemble(state, var_eq_matching; simplify = simplify)
 end
@@ -711,7 +711,13 @@ end
 Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
-function dummy_derivative(sys, state = TearingState(sys), ag = nothing; simplify = false,
+function dummy_derivative(sys::AbstractSystem, state = TearingState(sys), args...;
+                          kwargs...)
+    var_eq_matching = dummy_derivative(state, args...; kwargs...).var_eq_matching
+    tearing_reassemble(state, var_eq_matching, args...; kwargs...)
+end
+
+function dummy_derivative(state::TearingState, ag = nothing; simplify = false,
                           kwargs...)
     jac = let state = state
         (eqs, vars) -> begin
@@ -734,7 +740,6 @@ function dummy_derivative(sys, state = TearingState(sys), ag = nothing; simplify
             p
         end
     end
-    var_eq_matching = dummy_derivative_graph!(state, jac, (ag, nothing); state_priority,
-                                              kwargs...)
-    tearing_reassemble(state, var_eq_matching, ag; simplify = simplify)
+    dummy_derivative_graph!(state, jac, (ag, nothing); state_priority,
+                            kwargs...)
 end
