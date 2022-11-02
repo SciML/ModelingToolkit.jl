@@ -89,6 +89,14 @@ See also [`has_continuous_domain`](@ref)
 """
 is_continuous_domain(x) = !has_discrete_domain(x) && has_continuous_domain(x)
 
+struct ClockInferenceException <: Exception
+    msg::Any
+end
+
+function Base.showerror(io::IO, cie::ClockInferenceException)
+    print(io, "ClockInferenceException: ", cie.msg)
+end
+
 abstract type AbstractClock <: AbstractDiscrete end
 
 """

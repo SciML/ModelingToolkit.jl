@@ -236,13 +236,15 @@ function TearingState(sys; quick_cancel = false, check = true)
         isalgeq = true
         statevars = []
         for var in vars
+            set_incidence = true
+            @label ANOTHER_VAR
             _var, _ = var_from_nested_derivative(var)
             any(isequal(_var), ivs) && continue
             if isparameter(_var) || (istree(_var) && isparameter(operation(_var)))
                 continue
             end
             varidx = addvar!(var)
-            push!(statevars, var)
+            set_incidence && push!(statevars, var)
 
             dvar = var
             idx = varidx
@@ -253,6 +255,14 @@ function TearingState(sys; quick_cancel = false, check = true)
                 isalgeq = false
                 dvar = arguments(dvar)[1]
                 idx = addvar!(dvar)
+            end
+
+            if istree(var) && operation(var) isa Symbolics.Operator &&
+               !isdifferential(var) && (it = input_timedomain(var)) !== nothing
+                set_incidence = false
+                var = only(arguments(var))
+                var = setmetadata(var, ModelingToolkit.TimeDomain, it)
+                @goto ANOTHER_VAR
             end
         end
         push!(symbolic_incidence, copy(statevars))
