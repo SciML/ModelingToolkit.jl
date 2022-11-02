@@ -20,6 +20,17 @@ All modeling projects have some form of parameters. `@parameters` marks a variab
 as being the parameter of some system, which allows automatic detection algorithms
 to ignore such variables when attempting to find the states of a system.
 
+## Wildcard Variable Arguments
+
+```julia
+@variables u(..)
+```
+
+It is possible to define a dependent variable which is an open function as above,
+for which its arguments must be specified each time it is used. This is useful with
+PDEs for example, where one may need to use `u(t, x)` in the equations, but will 
+need to be able to write `u(t, 0.0)` to define a boundary condition at `x = 0`.
+
 ## Variable metadata [Experimental/TODO]
 
 In many engineering systems some variables act like "flows" while others do not.
