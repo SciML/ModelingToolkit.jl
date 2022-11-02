@@ -74,3 +74,59 @@ d2 = Clock(t, dt2)
 @test varmap[x] == Continuous()
 @test varmap[y] == Continuous()
 @test varmap[u] == Continuous()
+
+@info "test composed systems"
+
+dt = 0.5
+@variables t
+d = Clock(t, dt)
+k = ShiftIndex(d)
+timevec = 0:0.1:4
+
+function plant(; name)
+    @variables x(t)=1 u(t)=0 y(t)=0
+    D = Differential(t)
+    eqs = [D(x) ~ -x + u
+           y ~ x]
+    ODESystem(eqs, t; name = name)
+end
+
+function filt(; name)
+    @variables x(t)=0 u(t)=0 y(t)=0
+    a = 1 / exp(dt)
+    eqs = [x(k + 1) ~ a * x + (1 - a) * u(k)
+           y ~ x]
+    ODESystem(eqs, t, name = name)
+end
+
+function controller(kp; name)
+    @variables y(t)=0 r(t)=0 ud(t)=0 yd(t)=0
+    @parameters kp = kp
+    eqs = [yd ~ Sample(y)
+           ud ~ kp * (r - yd)]
+    ODESystem(eqs, t; name = name)
+end
+
+@named f = filt()
+@named c = controller(1)
+@named p = plant()
+
+connections = [f.u ~ -1#(t >= 1)  # step input
+               f.y ~ c.r # filtered reference to controller reference
+               Hold(c.ud) ~ p.u # controller output to plant input
+               p.y ~ c.y]
+
+@named cl = ODESystem(connections, t, systems = [f, c, p])
+
+ci, varmap = infer_clocks(cl)
+
+@test varmap[f.x] == Clock(t, 0.5)
+@test varmap[p.x] == Continuous()
+@test varmap[p.y] == Continuous()
+@test varmap[c.ud] == Clock(t, 0.5)
+@test varmap[c.yd] == Clock(t, 0.5)
+@test varmap[c.y] == Continuous()
+@test varmap[f.y] == Clock(t, 0.5)
+@test varmap[f.u] == Clock(t, 0.5)
+@test varmap[p.u] == Continuous()
+@test varmap[c.r] == Clock(t, 0.5)

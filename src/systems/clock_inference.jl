@@ -14,11 +14,11 @@ function ClockInference(ts::TearingState)
     inferred = Int[]
     for (i, v) in enumerate(fullvars)
         d = get_time_domain(v)
-        if d === nothing
-            dd = Inferred()
-        else
+        if d isa Union{AbstractClock, Continuous}
             push!(inferred, i)
             dd = d
+        else
+            dd = Inferred()
         end
         var_domain[i] = dd
     end
@@ -46,9 +46,6 @@ function infer_clocks!(ci::ClockInference)
         c = BitSet(c′)
         idxs = intersect(c, inferred)
         isempty(idxs) && continue
-        for i in idxs
-            @show var_domain[i]
-        end
         if !allequal(var_domain[i] for i in idxs)
             display(fullvars[c′])
             throw(ClockInferenceException("Clocks are not consistent in connected component $(fullvars[c′])"))
