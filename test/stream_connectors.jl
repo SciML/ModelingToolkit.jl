@@ -202,7 +202,10 @@ end
 
 @named simple = ODESystem([connect(vp1, vp2, vp3)], t)
 sys = expand_connections(compose(simple, [vp1, vp2, vp3]))
-@test sort(equations(sys), by = string) == sort([vp1.v[1] ~ vp2.v[1]
+@test sort(equations(sys), by = string) == sort([0 .~ collect(vp1.i)
+            0 .~ collect(vp2.i)
+            0 .~ collect(vp3.i)
+            vp1.v[1] ~ vp2.v[1]
             vp1.v[2] ~ vp2.v[2]
             vp1.v[1] ~ vp3.v[1]
             vp1.v[2] ~ vp3.v[2]
