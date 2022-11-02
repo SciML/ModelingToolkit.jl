@@ -36,6 +36,8 @@ isoutput(x) = isvarkind(VariableOutput, x)
 isirreducible(x) = isvarkind(VariableIrreducible, x)
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
+const DEFAULT_EMPTY_DICT = Dict()
+
 """
 $(SIGNATURES)
 

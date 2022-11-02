@@ -53,6 +53,16 @@ prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 check_rc_sol(sol)
 
+# test uniform default
+defs = [capacitor.v => 0.0
+        capacitor.p.i => 0.0
+        resistor.v => 0.0
+        resistor.R => 1234.0]
+prob2 = ODEProblem(sys, defs, (0, 10.0))
+@test 1234.0 in prob2.p
+prob3 = ODAEProblem(sys, defs, (0, 10.0))
+@test 1234.0 in prob3.p
+
 # https://discourse.julialang.org/t/using-optimization-parameters-in-modelingtoolkit/82099
 let
     @parameters param_r1 param_c1

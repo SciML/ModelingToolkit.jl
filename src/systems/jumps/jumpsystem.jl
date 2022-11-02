@@ -286,8 +286,8 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
     defs = mergedefaults(defs, parammap, ps)
     defs = mergedefaults(defs, u0map, dvs)
 
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    u0 = varmap_to_vars(DEFAULT_EMPTY_DICT, dvs; defaults = defs, tofloat = false)
+    p = varmap_to_vars(DEFAULT_EMPTY_DICT, ps; defaults = defs, tofloat = false, use_union)
 
     f = DiffEqBase.DISCRETE_INPLACE_DEFAULT
 
@@ -336,8 +336,11 @@ function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing
     ps = parameters(sys)
     defs = defaults(sys)
 
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    defs = mergedefaults(defs, parammap, ps)
+    defs = mergedefaults(defs, u0map, dvs)
+
+    u0 = varmap_to_vars(DEFAULT_EMPTY_DICT, dvs; defaults = defs, tofloat = false)
+    p = varmap_to_vars(DEFAULT_EMPTY_DICT, ps; defaults = defs, tofloat = false, use_union)
     # identity function to make syms works
     quote
         f = DiffEqBase.DISCRETE_INPLACE_DEFAULT

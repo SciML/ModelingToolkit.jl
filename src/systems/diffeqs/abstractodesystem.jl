@@ -580,15 +580,17 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)
     defs = mergedefaults(defs, u0map, dvs)
-
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
-    p = p === nothing ? SciMLBase.NullParameters() : p
-
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
         defs = mergedefaults(defs, du0map, ddvs)
-        du0 = varmap_to_vars(du0map, ddvs; defaults = defs, toterm = identity,
+    end
+
+    u0 = varmap_to_vars(DEFAULT_EMPTY_DICT, dvs; defaults = defs, tofloat = true)
+    p = varmap_to_vars(DEFAULT_EMPTY_DICT, ps; defaults = defs, tofloat, use_union)
+    p = p === nothing ? SciMLBase.NullParameters() : p
+
+    if implicit_dae && du0map !== nothing
+        du0 = varmap_to_vars(DEFAULT_EMPTY_DICT, ddvs; defaults = defs, toterm = identity,
                              tofloat = true)
     else
         du0 = nothing

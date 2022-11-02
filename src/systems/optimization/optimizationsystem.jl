@@ -215,8 +215,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     defs = mergedefaults(defs, parammap, ps)
     defs = mergedefaults(defs, u0map, dvs)
 
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    u0 = varmap_to_vars(DEFAULT_EMPTY_DICT, dvs; defaults = defs, tofloat = false)
+    p = varmap_to_vars(DEFAULT_EMPTY_DICT, ps; defaults = defs, tofloat = false, use_union)
     lb = varmap_to_vars(lb, dvs; check = false, tofloat = false, use_union)
     ub = varmap_to_vars(ub, dvs; check = false, tofloat = false, use_union)
 

@@ -321,8 +321,9 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
     defs = mergedefaults(defs, parammap, ps)
     defs = mergedefaults(defs, u0map, dvs)
 
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = !use_union, use_union)
+    u0 = varmap_to_vars(DEFAULT_EMPTY_DICT, dvs; defaults = defs, tofloat = true)
+    p = varmap_to_vars(DEFAULT_EMPTY_DICT, ps; defaults = defs, tofloat = !use_union,
+                       use_union)
 
     check_eqs_u0(eqs, dvs, u0; kwargs...)
 
