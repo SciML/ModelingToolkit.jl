@@ -3,6 +3,7 @@ $(DocStringExtensions.README)
 """
 module ModelingToolkit
 using DocStringExtensions
+using Compat
 using AbstractTrees
 using DiffEqBase, SciMLBase, ForwardDiff, Reexport
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap
