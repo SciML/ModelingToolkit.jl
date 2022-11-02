@@ -2,8 +2,7 @@ struct ClockInference
     ts::TearingState
     eq_domain::Vector{TimeDomain}
     var_domain::Vector{TimeDomain}
-    # maybe BitSet
-    inferred::Vector{Int}
+    inferred::BitSet
 end
 
 function ClockInference(ts::TearingState)
@@ -11,7 +10,7 @@ function ClockInference(ts::TearingState)
     @unpack graph = structure
     eq_domain = Vector{TimeDomain}(undef, nsrcs(graph))
     var_domain = Vector{TimeDomain}(undef, ndsts(graph))
-    inferred = Int[]
+    inferred = BitSet()
     for (i, v) in enumerate(fullvars)
         d = get_time_domain(v)
         if d isa Union{AbstractClock, Continuous}
@@ -41,7 +40,6 @@ function infer_clocks!(ci::ClockInference)
         end
     end
     cc = connected_components(var_graph)
-    inferred = BitSet(inferred)
     for c′ in cc
         c = BitSet(c′)
         idxs = intersect(c, inferred)
