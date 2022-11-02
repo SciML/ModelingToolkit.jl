@@ -232,7 +232,7 @@ function TearingState(sys; quick_cancel = false, check = true)
             rhs = quick_cancel ? quick_cancel_expr(eq′.rhs) : eq′.rhs
             eq = 0 ~ rhs - lhs
         end
-        vars!(vars, eq.rhs)
+        vars!(vars, eq.rhs, op = Symbolics.Operator)
         isalgeq = true
         statevars = []
         for var in vars
