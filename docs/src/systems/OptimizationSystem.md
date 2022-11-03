@@ -8,9 +8,10 @@ OptimizationSystem
 
 ## Composition and Accessor Functions
 
-- `get_eqs(sys)` or `equations(sys)`: The equation to be minimized.
+- `get_op(sys)` or `objective(sys)`: The objective to be minimized.
 - `get_states(sys)` or `states(sys)`: The set of states for the optimization.
 - `get_ps(sys)` or `parameters(sys)`: The parameters for the optimization.
+- `get_constraints(sys)` or `constraints(sys)`: The constraints for the optimization.
 
 ## Transformations
 

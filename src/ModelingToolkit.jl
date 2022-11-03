@@ -67,7 +67,15 @@ import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 for fun in [:toexpr]
     @eval begin
         function $fun(eq::Equation; kw...)
-            Expr(:(=), $fun(eq.lhs; kw...), $fun(eq.rhs; kw...))
+            Expr(:call, :(==), $fun(eq.lhs; kw...), $fun(eq.rhs; kw...))
+        end
+
+        function $fun(ineq::Inequality; kw...)
+            if ineq.relational_op == Symbolics.leq
+                Expr(:call, :(<=), $fun(ineq.lhs; kw...), $fun(ineq.rhs; kw...))
+            else
+                Expr(:call, :(>=), $fun(ineq.lhs; kw...), $fun(ineq.rhs; kw...))
+            end
         end
 
         $fun(eqs::AbstractArray; kw...) = map(eq -> $fun(eq; kw...), eqs)
@@ -86,6 +94,7 @@ abstract type AbstractTimeDependentSystem <: AbstractSystem end
 abstract type AbstractTimeIndependentSystem <: AbstractSystem end
 abstract type AbstractODESystem <: AbstractTimeDependentSystem end
 abstract type AbstractMultivariateSystem <: AbstractSystem end
+abstract type AbstractOptimizationSystem <: AbstractTimeIndependentSystem end
 
 """
 $(TYPEDSIGNATURES)
@@ -139,6 +148,7 @@ include("systems/jumps/jumpsystem.jl")
 include("systems/nonlinear/nonlinearsystem.jl")
 include("systems/nonlinear/modelingtoolkitize.jl")
 
+include("systems/optimization/constraints_system.jl")
 include("systems/optimization/optimizationsystem.jl")
 
 include("systems/pde/pdesystem.jl")
@@ -179,7 +189,7 @@ export OptimizationProblem, OptimizationProblemExpr, constraints
 export AutoModelingToolkit
 export SteadyStateProblem, SteadyStateProblemExpr
 export JumpProblem, DiscreteProblem
-export NonlinearSystem, OptimizationSystem
+export NonlinearSystem, OptimizationSystem, ConstraintsSystem
 export alias_elimination, flatten
 export connect, @connector, Connection, Flow, Stream, instream
 export isinput, isoutput, getbounds, hasbounds, isdisturbance, istunable, getdist, hasdist,
@@ -192,7 +202,7 @@ export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, GlobalScope
 export independent_variables, independent_variable, states, parameters, equations, controls,
-       observed, structure, full_equations
+       observed, structure, full_equations, objective
 export structural_simplify, expand_connections, linearize, linearization_function
 export DiscreteSystem, DiscreteProblem
 
