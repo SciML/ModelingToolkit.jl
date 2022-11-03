@@ -3,6 +3,7 @@ $(DocStringExtensions.README)
 """
 module ModelingToolkit
 using DocStringExtensions
+using Compat
 using AbstractTrees
 using DiffEqBase, SciMLBase, ForwardDiff, Reexport
 using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap
@@ -146,8 +147,11 @@ include("systems/sparsematrixclil.jl")
 include("systems/discrete_system/discrete_system.jl")
 include("systems/validation.jl")
 include("systems/dependency_graphs.jl")
+include("clock.jl")
+include("discretedomain.jl")
 include("systems/systemstructure.jl")
 using .SystemStructures
+include("systems/clock_inference.jl")
 
 include("debugging.jl")
 include("systems/alias_elimination.jl")
@@ -215,5 +219,11 @@ export modelingtoolkitize
 export @variables, @parameters, @constants
 export @named, @nonamespace, @namespace, extend, compose, complete
 export debug_system
+
+export Continuous, Discrete, sampletime, input_timedomain, output_timedomain
+#export has_discrete_domain, has_continuous_domain
+#export is_discrete_domain, is_continuous_domain, is_hybrid_domain
+export Sample, Hold, Shift, ShiftIndex
+export Clock #, InferredDiscrete,
 
 end # module

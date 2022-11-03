@@ -846,7 +846,7 @@ function _named(name, call, runtime = false)
         end
     end
 
-    is_sys_construction = Symbol("###__is_system_construction###")
+    is_sys_construction = gensym("###__is_system_construction###")
     kws = call.args[2].args
     for (i, kw) in enumerate(kws)
         if Meta.isexpr(kw, (:(=), :kw))
@@ -1022,8 +1022,7 @@ $(SIGNATURES)
 
 Structurally simplify algebraic equations in a system and compute the
 topological sort of the observed equations. When `simplify=true`, the `simplify`
-function will be applied during the tearing process. When `simplify_constants=true`
-`eliminate_constants` will be applied prior to tearing. It also takes kwargs
+function will be applied during the tearing process. It also takes kwargs
 `allow_symbolic=false` and `allow_parameter=true` which limits the coefficient
 types during tearing.
 
@@ -1034,20 +1033,13 @@ simplification will allow models where `n_states = n_equations - n_inputs`.
 function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
                              simplify_constants = true, kwargs...)
     sys = expand_connections(sys)
-    if simplify_constants
-        sys = eliminate_constants(sys)
-    end
+    sys isa DiscreteSystem && return sys
     state = TearingState(sys)
     has_io = io !== nothing
     has_io && markio!(state, io...)
     state, input_idxs = inputs_to_parameters!(state, io)
     sys, ag = alias_elimination!(state; kwargs...)
-    #ag = AliasGraph(length(ag))
-    # TODO: avoid construct `TearingState` again.
-    #state = TearingState(sys)
-    #has_io && markio!(state, io..., check = false)
     check_consistency(state, ag)
-    #find_solvables!(state; kwargs...)
     sys = dummy_derivative(sys, state, ag; simplify)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
