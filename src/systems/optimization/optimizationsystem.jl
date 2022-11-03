@@ -241,8 +241,10 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
     ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
 
-    if !isnothing(lb) && all(lb .== -Inf) && !isnothing(ub) && all(ub .== Inf)
+    if !isnothing(lb) && all(lb .== -Inf) 
         lb = nothing
+    end
+    if  !isnothing(ub) && all(ub .== Inf)
         ub = nothing
     end
 
@@ -395,8 +397,10 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
     ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
 
-    if !isnothing(lb) && all(lb .== -Inf) && !isnothing(ub) && all(ub .== Inf)
+    if !isnothing(lb) && all(lb .== -Inf) 
         lb = nothing
+    end
+    if  !isnothing(ub) && all(ub .== Inf)
         ub = nothing
     end
 
