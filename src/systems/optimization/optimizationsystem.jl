@@ -460,8 +460,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
             ub = $ub
             int = $int
             cons = $cons[1]
-            lbcons = $lbcons
-            ubcons = $ubcons
+            lcons = $lcons
+            ucons = $ucons
             cons_j = $cons_j
             cons_h = $cons_h
             syms = $(Symbol.(states(sys)))
