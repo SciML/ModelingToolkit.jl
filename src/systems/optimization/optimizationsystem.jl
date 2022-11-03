@@ -188,7 +188,6 @@ function rep_pars_vals!(e, p) end
 ```julia
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
-                                          lb=nothing, ub=nothing,
                                           grad = false,
                                           hess = false, sparse = false,
                                           checkbounds = false,
@@ -211,11 +210,6 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              linenumbers = true, parallel = SerialForm(),
                                              use_union = false,
                                              kwargs...) where {iip}
-    if !(isnothing(lb) && isnothing(ub))
-        Base.depwarn("`lb` and `ub` are deprecated. Use the `bounds` metadata for the variables instead.",
-                     :OptimizationProblem, force = true)
-    end
-
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
         Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
                      :OptimizationProblem, force = true)
@@ -225,11 +219,16 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     ps = parameters(sys)
     cstr = constraints(sys)
 
-    lb = first.(getbounds.(dvs))
-    ub = last.(getbounds.(dvs))
+    if isnothing(lb) && isnothing(ub) # use the symbolically specified bounds
+        lb = first.(getbounds.(dvs))
+        ub = last.(getbounds.(dvs))
+        lb[isbinaryvar.(dvs)] .= 0
+        ub[isbinaryvar.(dvs)] .= 1
+    else # use the user supplied variable bounds
+        xor(isnothing(lb), isnothing(ub)) && throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
+    end
+
     int = isintegervar.(dvs) .| isbinaryvar.(dvs)
-    lb[isbinaryvar.(dvs)] .= 0
-    ub[isbinaryvar.(dvs)] .= 1
 
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)
@@ -240,7 +239,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
     ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
 
-    if all(lb .== -Inf) && all(ub .== Inf)
+    if !isnothing(lb) && all(lb .== -Inf) && !isnothing(ub) && all(ub .== Inf)
         lb = nothing
         ub = nothing
     end
@@ -337,7 +336,7 @@ end
 ```julia
 function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
                                           parammap=DiffEqBase.NullParameters();
-                                          u0=nothing, lb=nothing, ub=nothing,
+                                          u0=nothing,
                                           grad = false,
                                           hes = false, sparse = false,
                                           checkbounds = false,
@@ -364,11 +363,6 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
                                       linenumbers = false, parallel = SerialForm(),
                                       use_union = false,
                                       kwargs...) where {iip}
-    if !(isnothing(lb) && isnothing(ub))
-        Base.depwarn("`lb` and `ub` are deprecated. Use the `bounds` metadata for the variables instead.",
-                     :OptimizationProblem, force = true)
-    end
-
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
         Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
                      :OptimizationProblem, force = true)
@@ -377,6 +371,31 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     dvs = states(sys)
     ps = parameters(sys)
     cstr = constraints(sys)
+
+    if isnothing(lb) && isnothing(ub) # use the symbolically specified bounds
+        lb = first.(getbounds.(dvs))
+        ub = last.(getbounds.(dvs))
+        lb[isbinaryvar.(dvs)] .= 0
+        ub[isbinaryvar.(dvs)] .= 1
+    else # use the user supplied variable bounds
+        xor(isnothing(lb), isnothing(ub)) && throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
+    end
+
+    int = isintegervar.(dvs) .| isbinaryvar.(dvs)
+
+    defs = defaults(sys)
+    defs = mergedefaults(defs, parammap, ps)
+    defs = mergedefaults(defs, u0map, dvs)
+
+    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
+    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
+    ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
+
+    if !isnothing(lb) && all(lb .== -Inf) && !isnothing(ub) && all(ub .== Inf)
+        lb = nothing
+        ub = nothing
+    end
 
     idx = iip ? 2 : 1
     f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
@@ -400,26 +419,6 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         hess_prototype = hessian_sparsity(sys)
     else
         hess_prototype = nothing
-    end
-
-    lb = first.(getbounds.(dvs))
-    ub = last.(getbounds.(dvs))
-    int = isintegervar.(dvs) .| isbinaryvar.(dvs)
-    lb[isbinaryvar.(dvs)] .= 0
-    ub[isbinaryvar.(dvs)] .= 1
-
-    defs = defaults(sys)
-    defs = mergedefaults(defs, parammap, ps)
-    defs = mergedefaults(defs, u0map, dvs)
-
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
-    lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
-    ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
-
-    if all(lb .== -Inf) && all(ub .== Inf)
-        lb = nothing
-        ub = nothing
     end
 
     obj_expr = toexpr(subs_constants(objective(sys)))
