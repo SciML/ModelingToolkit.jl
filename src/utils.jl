@@ -522,6 +522,11 @@ function collect_constants!(constants, eq::Equation)
     collect_constants!(constants, eq.rhs)
 end
 
+function collect_constants!(constants, eq::Inequality)
+    collect_constants!(constants, eq.lhs)
+    collect_constants!(constants, eq.rhs)
+end
+
 collect_constants!(constants, x::Num) = collect_constants!(constants, unwrap(x))
 collect_constants!(constants, x::Real) = nothing
 collect_constants(n::Nothing) = Symbolics.Sym[]

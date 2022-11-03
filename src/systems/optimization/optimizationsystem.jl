@@ -225,7 +225,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         lb[isbinaryvar.(dvs)] .= 0
         ub[isbinaryvar.(dvs)] .= 1
     else # use the user supplied variable bounds
-        xor(isnothing(lb), isnothing(ub)) && throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
+        xor(isnothing(lb), isnothing(ub)) &&
+            throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
     end
 
     int = isintegervar.(dvs) .| isbinaryvar.(dvs)
@@ -378,7 +379,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         lb[isbinaryvar.(dvs)] .= 0
         ub[isbinaryvar.(dvs)] .= 1
     else # use the user supplied variable bounds
-        xor(isnothing(lb), isnothing(ub)) && throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
+        xor(isnothing(lb), isnothing(ub)) &&
+            throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
     end
 
     int = isintegervar.(dvs) .| isbinaryvar.(dvs)
