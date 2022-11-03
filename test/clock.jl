@@ -21,9 +21,51 @@ eqs = [yd ~ Sample(t, dt)(y)
        y ~ x]
 @named sys = ODESystem(eqs)
 # compute equation and variables' time domains
+#TODO: test linearize
+
+#=
+ Differential(t)(x(t)) ~ u(t) - x(t)
+ 0 ~ Sample(Clock(t, 0.1))(y(t)) - yd(t)
+ 0 ~ kp*(r(t) - yd(t)) - ud(t)
+ 0 ~ Hold()(ud(t)) - u(t)
+ 0 ~ x(t) - y(t)
+
+====
+By inference:
+
+ Differential(t)(x(t)) ~ u(t) - x(t)
+ 0 ~ Hold()(ud(t)) - u(t) # Hold()(ud(t)) is constant except in an event
+ 0 ~ x(t) - y(t)
+
+ 0 ~ Sample(Clock(t, 0.1))(y(t)) - yd(t)
+ 0 ~ kp*(r(t) - yd(t)) - ud(t)
+
+====
+
+ Differential(t)(x(t)) ~ u(t) - x(t)
+ 0 ~ Hold()(ud(t)) - u(t)
+ 0 ~ x(t) - y(t)
+
+ yd(t) := Sample(Clock(t, 0.1))(y(t))
+ ud(t) := kp*(r(t) - yd(t))
+=#
+
+#=
+     D(x) ~ Shift(x, 0, dt) + 1 # this should never meet with continous variables
+=>   (Shift(x, 0, dt) - Shift(x, -1, dt))/dt ~ Shift(x, 0, dt) + 1
+=>   Shift(x, 0, dt) - Shift(x, -1, dt) ~ Shift(x, 0, dt) * dt + dt
+=>   Shift(x, 0, dt) - Shift(x, 0, dt) * dt ~ Shift(x, -1, dt) + dt
+=>   (1 - dt) * Shift(x, 0, dt) ~ Shift(x, -1, dt) + dt
+=>   Shift(x, 0, dt) := (Shift(x, -1, dt) + dt) / (1 - dt) # Discrete system
+=#
 
 ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
+tss, io = ModelingToolkit.split_system(deepcopy(ci))
+ts_c = deepcopy(tss[1])
+@set! ts_c.structure.solvable_graph = nothing
+sss, = ModelingToolkit.structural_simplify!(ts_c, io)
+@test equations(sss) == [D(x) ~ u - x]
 
 d = Clock(t, dt)
 # Note that TearingState reorders the equations
