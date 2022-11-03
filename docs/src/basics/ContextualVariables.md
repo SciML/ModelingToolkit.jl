@@ -20,6 +20,21 @@ All modeling projects have some form of parameters. `@parameters` marks a variab
 as being the parameter of some system, which allows automatic detection algorithms
 to ignore such variables when attempting to find the states of a system.
 
+## Constants
+
+Constants are like parameters that:
+- always have a default value, which must be assigned when the constants are
+    declared
+- do not show up in the list of parameters of a system.
+
+The intended use-cases for constants are:
+- representing literals (eg, π) symbolically, which results in cleaner
+    Latexification of equations (avoids turning `d ~ 2π*r` into `d = 6.283185307179586 r`)
+- allowing auto-generated unit conversion factors to live outside the list of
+    parameters
+- representing fundamental constants (eg, speed of light `c`) that should never
+     be adjusted inadvertently.
+
 ## Wildcard Variable Arguments
 
 ```julia
@@ -28,7 +43,7 @@ to ignore such variables when attempting to find the states of a system.
 
 It is possible to define a dependent variable which is an open function as above,
 for which its arguments must be specified each time it is used. This is useful with
-PDEs for example, where one may need to use `u(t, x)` in the equations, but will 
+PDEs for example, where one may need to use `u(t, x)` in the equations, but will
 need to be able to write `u(t, 0.0)` to define a boundary condition at `x = 0`.
 
 ## Variable metadata [Experimental/TODO]

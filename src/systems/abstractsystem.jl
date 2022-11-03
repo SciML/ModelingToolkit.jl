@@ -1030,7 +1030,8 @@ The optional argument `io` may take a tuple `(inputs, outputs)`.
 This will convert all `inputs` to parameters and allow them to be unconnected, i.e.,
 simplification will allow models where `n_states = n_equations - n_inputs`.
 """
-function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false, kwargs...)
+function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
+                             simplify_constants = true, kwargs...)
     sys = expand_connections(sys)
     sys isa DiscreteSystem && return sys
     state = TearingState(sys)
@@ -1044,6 +1045,18 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     @set! sys.observed = topsort_equations(observed(sys), fullstates)
     invalidate_cache!(sys)
     return has_io ? (sys, input_idxs) : sys
+end
+
+function eliminate_constants(sys::AbstractSystem)
+    if has_eqs(sys)
+        eqs = get_eqs(sys)
+        eq_cs = collect_constants(eqs)
+        if !isempty(eq_cs)
+            new_eqs = eliminate_constants(eqs, eq_cs)
+            @set! sys.eqs = new_eqs
+        end
+    end
+    return sys
 end
 
 function io_preprocessing(sys::AbstractSystem, inputs,
