@@ -207,5 +207,5 @@ h(x) = 0
 g(x) <= 0
 """
 function generate_canonical_form_lhss(sys)
-    lhss = [Symbolics.canonical_form(eq).lhs for eq in constraints(sys)]
+    lhss = subs_constants([Symbolics.canonical_form(eq).lhs for eq in constraints(sys)])
 end

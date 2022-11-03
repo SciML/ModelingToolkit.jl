@@ -3,9 +3,10 @@ MT = ModelingToolkit
 
 # basic MT SIR model with tweaks
 @parameters β γ t
+@constants h = 1
 @variables S(t) I(t) R(t)
-rate₁ = β * S * I
-affect₁ = [S ~ S - 1, I ~ I + 1]
+rate₁ = β * S * I * h
+affect₁ = [S ~ S - 1 * h, I ~ I + 1]
 rate₂ = γ * I + t
 affect₂ = [I ~ I - 1, R ~ R + 1]
 j₁ = ConstantRateJump(rate₁, affect₁)
@@ -52,8 +53,8 @@ jump2.affect!(integrator)
 @test all(integrator.u .== mtintegrator.u)
 
 # test MT can make and solve a jump problem
-rate₃ = γ * I
-affect₃ = [I ~ I - 1, R ~ R + 1]
+rate₃ = γ * I * h
+affect₃ = [I ~ I * h - 1, R ~ R + 1]
 j₃ = ConstantRateJump(rate₃, affect₃)
 @named js2 = JumpSystem([j₁, j₃], t, [S, I, R], [β, γ])
 u₀ = [999, 1, 0];
@@ -83,6 +84,7 @@ sol = solve(jprob, SSAStepper(), saveat = tspan[2] / 10)
 @test all(2 .* sol[S] .== sol[S2])
 
 # test save_positions is working
+
 jprob = JumpProblem(js2, dprob, Direct(), save_positions = (false, false))
 sol = solve(jprob, SSAStepper(), saveat = 1.0)
 @test all((sol.t) .== collect(0.0:tspan[2]))
@@ -192,7 +194,7 @@ sol = solve(jprob, SSAStepper(), tstops = [1000.0],
 
 # observed variable handling
 @variables OBS(t)
-@named js5 = JumpSystem([maj1, maj2], t, [S], [β, γ]; observed = [OBS ~ 2 * S])
+@named js5 = JumpSystem([maj1, maj2], t, [S], [β, γ]; observed = [OBS ~ 2 * S * h])
 OBS2 = OBS
 @test isequal(OBS2, @nonamespace js5.OBS)
 @unpack OBS = js5

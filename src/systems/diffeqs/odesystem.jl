@@ -206,7 +206,7 @@ end
 
 function ODESystem(eqs, iv = nothing; kwargs...)
     eqs = scalarize(eqs)
-    # NOTE: this assumes that the order of algebric equations doesn't matter
+    # NOTE: this assumes that the order of algebraic equations doesn't matter
     diffvars = OrderedSet()
     allstates = OrderedSet()
     ps = OrderedSet()
@@ -301,6 +301,13 @@ function build_explicit_observed_function(sys, ts;
     dep_vars = scalarize(setdiff(vars, ivs))
 
     obs = observed(sys)
+
+    cs = collect_constants(obs)
+    if !isempty(cs) > 0
+        cmap = map(x -> x => getdefault(x), cs)
+        obs = map(x -> x.lhs ~ substitute(x.rhs, cmap), obs)
+    end
+
     sts = Set(states(sys))
     observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
     namespaced_to_obs = Dict(states(sys, x.lhs) => x.lhs for x in obs)
