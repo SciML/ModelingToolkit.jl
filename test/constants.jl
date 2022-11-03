@@ -30,11 +30,7 @@ MT.get_unit(β)
 @variables t [unit = u"s"] x(t) [unit = u"m"]
 D = Differential(t)
 eqs = [D(x) ~ β]
-sys = ODESystem(eqs, name = :sys)
-# Note that the equation won't unit-check now
-#    b/c the literal value doesn't have units on it
-#    Testing that units checking is bypassed in the constructors
+@named sys = ODESystem(eqs)
 simp = structural_simplify(sys)
-@test_throws MT.ValidationError MT.check_units(simp.eqs...)
 
 @test isempty(MT.collect_constants(nothing))

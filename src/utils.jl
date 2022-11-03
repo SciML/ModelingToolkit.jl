@@ -808,8 +808,8 @@ end
 
 function fold_constants(ex)
     if istree(ex)
-        similarterm(ex, operations(ex), map(fold_constants, arguments(ex)),
-                    symtype(expr); metadata = metadata(expr))
+        similarterm(ex, operation(ex), map(fold_constants, arguments(ex)),
+                    symtype(ex); metadata = metadata(ex))
     elseif issym(ex) && isconstant(ex)
         getdefault(ex)
     else
