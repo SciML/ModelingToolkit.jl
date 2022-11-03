@@ -228,6 +228,10 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     else # use the user supplied variable bounds
         xor(isnothing(lb), isnothing(ub)) &&
             throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
+        !isnothing(lb) && length(lb) != length(dvs) &&
+            throw(ArgumentError("Expected both `lb` to be of the same length as the vector of optimization variables"))
+        !isnothing(ub) && length(ub) != length(dvs) &&
+            throw(ArgumentError("Expected both `ub` to be of the same length as the vector of optimization variables"))
     end
 
     int = isintegervar.(dvs) .| isbinaryvar.(dvs)
@@ -241,10 +245,10 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
     ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
 
-    if !isnothing(lb) && all(lb .== -Inf) 
+    if !isnothing(lb) && all(lb .== -Inf)
         lb = nothing
     end
-    if  !isnothing(ub) && all(ub .== Inf)
+    if !isnothing(ub) && all(ub .== Inf)
         ub = nothing
     end
 
@@ -288,14 +292,24 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
 
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
-        cons, lcons, ucons = generate_function(cons_sys, checkbounds = checkbounds,
-                                               linenumbers = linenumbers,
-                                               expression = Val{false})
+        cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
+                                                 linenumbers = linenumbers,
+                                                 expression = Val{false})
         cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
         cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 
         cons_expr = toexpr.(subs_constants(constraints(cons_sys)))
         rep_pars_vals!.(cons_expr, Ref(pairs_arr))
+
+        if isnothing(lcons) && isnothing(ucons) # use the symbolically specified bounds
+            lcons = lcons_
+            ucons = ucons_
+        else # use the user supplied variable bounds
+            !isnothing(lcons) && length(lcons) != length(cstr) &&
+                throw(ArgumentError("Expected both `lcons` to be of the same length as the vector of constraints"))
+            !isnothing(ucons) && length(ucons) != length(cstr) &&
+                throw(ArgumentError("Expected both `ucons` to be of the same length as the vector of constraints"))
+        end
 
         if sparse
             cons_jac_prototype = jacobian_sparsity(cons_sys)
@@ -384,6 +398,10 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     else # use the user supplied variable bounds
         xor(isnothing(lb), isnothing(ub)) &&
             throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
+        !isnothing(lb) && length(lb) != length(dvs) &&
+            throw(ArgumentError("Expected both `lb` to be of the same length as the vector of optimization variables"))
+        !isnothing(ub) && length(ub) != length(dvs) &&
+            throw(ArgumentError("Expected both `ub` to be of the same length as the vector of optimization variables"))
     end
 
     int = isintegervar.(dvs) .| isbinaryvar.(dvs)
@@ -397,10 +415,10 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
     ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
 
-    if !isnothing(lb) && all(lb .== -Inf) 
+    if !isnothing(lb) && all(lb .== -Inf)
         lb = nothing
     end
-    if  !isnothing(ub) && all(ub .== Inf)
+    if !isnothing(ub) && all(ub .== Inf)
         ub = nothing
     end
 
@@ -439,14 +457,24 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
 
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
-        cons, lcons, ucons = generate_function(cons_sys, checkbounds = checkbounds,
-                                               linenumbers = linenumbers,
-                                               expression = Val{false})
+        cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
+                                                 linenumbers = linenumbers,
+                                                 expression = Val{false})
         cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
         cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 
         cons_expr = toexpr.(subs_constants(constraints(cons_sys)))
         rep_pars_vals!.(cons_expr, Ref(pairs_arr))
+
+        if isnothing(lcons) && isnothing(ucons) # use the symbolically specified bounds
+            lcons = lcons_
+            ucons = ucons_
+        else # use the user supplied variable bounds
+            !isnothing(lcons) && length(lcons) != length(cstr) &&
+                throw(ArgumentError("Expected both `lcons` to be of the same length as the vector of constraints"))
+            !isnothing(ucons) && length(ucons) != length(cstr) &&
+                throw(ArgumentError("Expected both `ucons` to be of the same length as the vector of constraints"))
+        end
 
         if sparse
             cons_jac_prototype = jacobian_sparsity(cons_sys)
