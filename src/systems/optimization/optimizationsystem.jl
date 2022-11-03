@@ -304,7 +304,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         if isnothing(lcons) && isnothing(ucons) # use the symbolically specified bounds
             lcons = lcons_
             ucons = ucons_
-        else # use the user supplied variable bounds
+        else # use the user supplied constraints bounds
             !isnothing(lcons) && length(lcons) != length(cstr) &&
                 throw(ArgumentError("Expected both `lcons` to be of the same length as the vector of constraints"))
             !isnothing(ucons) && length(ucons) != length(cstr) &&
