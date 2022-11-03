@@ -84,12 +84,10 @@ end
     @test sol.minimum < 1.0
     @test sol.u≈[0.808, 0.589] atol=1e-3
     @test sol[x]^2 + sol[y]^2 ≈ 1.0
-    @test_skip begin # MethodError: no method matching MathOptInterface.FileFormats.NL._NLExpr(::Int64)
-        sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
-        @test sol.minimum < 1.0
-        @test sol.u≈[0.808, 0.589] atol=1e-3
-        @test sol[x]^2 + sol[y]^2 ≈ 1.0
-    end
+    sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
+    @test sol.minimum < 1.0
+    @test sol.u≈[0.808, 0.589] atol=1e-3
+    @test sol[x]^2 + sol[y]^2 ≈ 1.0
 end
 
 @testset "rosenbrock" begin
