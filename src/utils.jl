@@ -19,7 +19,7 @@ end
 function detime_dvs(op)
     if !istree(op)
         op
-    elseif operation(op) isa Sym
+    elseif issym(operation(op))
         Sym{Real}(nameof(operation(op)))
     else
         similarterm(op, operation(op), detime_dvs.(arguments(op)))
@@ -60,7 +60,7 @@ function states_to_sym(states::Set)
         elseif istree(O)
             op = operation(O)
             args = arguments(O)
-            if op isa Sym
+            if issym(op)
                 O in states && return tosymbol(O)
                 # dependent variables
                 return build_expr(:call, Any[nameof(op); _states_to_sym.(args)])
@@ -511,7 +511,7 @@ function collect_constants(x)
     return constants
 end
 
-function collect_constants!(constants, arr::AbstractArray{T}) where {T}
+function collect_constants!(constants, arr::AbstractArray)
     for el in arr
         collect_constants!(constants, el)
     end
@@ -526,8 +526,8 @@ collect_constants!(constants, x::Num) = collect_constants!(constants, unwrap(x))
 collect_constants!(constants, x::Real) = nothing
 collect_constants(n::Nothing) = Symbolics.Sym[]
 
-function collect_constants!(constants, expr::Symbolics.Symbolic{T}) where {T}
-    if expr isa Sym && isconstant(expr)
+function collect_constants!(constants, expr::Symbolics.Symbolic)
+    if issym(expr) && isconstant(expr)
         push!(constants, expr)
     else
         evars = vars(expr)
@@ -542,8 +542,7 @@ function collect_constants!(constants, expr::Symbolics.Symbolic{T}) where {T}
 end
 
 """ Replace symbolic constants with their literal values """
-function eliminate_constants(eqs::AbstractArray{<:Union{Equation, Symbolic}},
-                             cs::Vector{Sym})
+function eliminate_constants(eqs, cs)
     cmap = Dict(x => getdefault(x) for x in cs)
     return substitute(eqs, cmap)
 end
@@ -805,6 +804,17 @@ function jacobian_wrt_vars(pf::F, p, input_idxs, chunk::C) where {F, C}
     p_small = p[input_idxs]
     cfg = ForwardDiff.JacobianConfig(p_closure, p_small, chunk, tag)
     ForwardDiff.jacobian(p_closure, p_small, cfg, Val(false))
+end
+
+function fold_constants(ex)
+    if istree(ex)
+        similarterm(ex, operations(ex), map(fold_constants, arguments(ex)),
+                    symtype(expr); metadata = metadata(expr))
+    elseif issym(ex) && isconstant(ex)
+        getdefault(ex)
+    else
+        ex
+    end
 end
 
 # Symbolics needs to call unwrap on the substitution rules, but most of the time

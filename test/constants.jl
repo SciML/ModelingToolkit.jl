@@ -19,15 +19,9 @@ newsys = MT.eliminate_constants(sys)
 eqs = [D(x) ~ 1,
     w ~ a]
 @named sys = ODESystem(eqs)
-simp = structural_simplify(sys, simplify_constants = false);
-@test isequal(simp.substitutions.subs[1], eqs[2])
-@test isequal(equations(simp)[1], eqs[1])
-prob = ODEProblem(simp, [0], [0.0, 1.0], [])
-sol = solve(prob, Tsit5())
-@test sol[w][1] == 1
 # Now eliminate the constants first
-simp = structural_simplify(sys, simplify_constants = true);
-@test isequal(simp.substitutions.subs[1], w ~ 1)
+simp = structural_simplify(sys)
+@test equations(simp) == [D(x) ~ 1.0]
 
 #Constant with units
 @constants β=1 [unit = u"m/s"]
@@ -43,4 +37,4 @@ sys = ODESystem(eqs, name = :sys)
 simp = structural_simplify(sys)
 @test_throws MT.ValidationError MT.check_units(simp.eqs...)
 
-@test MT.collect_constants(nothing) == Symbolics.Sym[]
+@test isempty(MT.collect_constants(nothing))

@@ -179,6 +179,8 @@ function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = no
         a, b, islinear = linear_expansion(term, var)
         a, b = unwrap(a), unwrap(b)
         islinear || (all_int_vars = false; continue)
+        a = ModelingToolkit.fold_constants(a)
+        b = ModelingToolkit.fold_constants(b)
         if a isa Symbolic
             all_int_vars = false
             if !allow_symbolic
