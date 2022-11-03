@@ -38,7 +38,7 @@ Substitute all `@constants` in the given expression
 """
 function subs_constants(eqs)
     consts = collect_constants(eqs)
-    if !isempty(consts) # The SymbolicUtils._build_function method of this case doesn't support postprocess_fbody
+    if !isempty(consts)
         csubs = Dict(c => getdefault(c) for c in consts)
         eqs = substitute(eqs, csubs)
     end
