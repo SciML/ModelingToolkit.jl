@@ -305,10 +305,12 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             lcons = lcons_
             ucons = ucons_
         else # use the user supplied constraints bounds
+            xor(isnothing(lcons), isnothing(lcons)) &&
+                throw(ArgumentError("Expected both `lcons` and `lcons` to be supplied"))
             !isnothing(lcons) && length(lcons) != length(cstr) &&
-                throw(ArgumentError("Expected both `lcons` to be of the same length as the vector of constraints"))
+                throw(ArgumentError("Expected `lcons` to be of the same length as the vector of constraints"))
             !isnothing(ucons) && length(ucons) != length(cstr) &&
-                throw(ArgumentError("Expected both `ucons` to be of the same length as the vector of constraints"))
+                throw(ArgumentError("Expected `ucons` to be of the same length as the vector of constraints"))
         end
 
         if sparse
@@ -399,9 +401,9 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         xor(isnothing(lb), isnothing(ub)) &&
             throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
         !isnothing(lb) && length(lb) != length(dvs) &&
-            throw(ArgumentError("Expected both `lb` to be of the same length as the vector of optimization variables"))
+            throw(ArgumentError("Expected `lb` to be of the same length as the vector of optimization variables"))
         !isnothing(ub) && length(ub) != length(dvs) &&
-            throw(ArgumentError("Expected both `ub` to be of the same length as the vector of optimization variables"))
+            throw(ArgumentError("Expected `ub` to be of the same length as the vector of optimization variables"))
     end
 
     int = isintegervar.(dvs) .| isbinaryvar.(dvs)
@@ -469,11 +471,13 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         if isnothing(lcons) && isnothing(ucons) # use the symbolically specified bounds
             lcons = lcons_
             ucons = ucons_
-        else # use the user supplied variable bounds
+        else # use the user supplied constraints bounds
+            xor(isnothing(lcons), isnothing(lcons)) &&
+                throw(ArgumentError("Expected both `lcons` and `lcons` to be supplied"))
             !isnothing(lcons) && length(lcons) != length(cstr) &&
-                throw(ArgumentError("Expected both `lcons` to be of the same length as the vector of constraints"))
+                throw(ArgumentError("Expected `lcons` to be of the same length as the vector of constraints"))
             !isnothing(ucons) && length(ucons) != length(cstr) &&
-                throw(ArgumentError("Expected both `ucons` to be of the same length as the vector of constraints"))
+                throw(ArgumentError("Expected `ucons` to be of the same length as the vector of constraints"))
         end
 
         if sparse
