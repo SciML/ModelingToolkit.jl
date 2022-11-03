@@ -1,4 +1,10 @@
-get_connection_type(s) = getmetadata(unwrap(s), VariableConnectType, Equality)
+function get_connection_type(s)
+    s = unwrap(s)
+    if istree(s) && operation(s) === getindex
+        s = arguments(s)[1]
+    end
+    getmetadata(s, VariableConnectType, Equality)
+end
 
 function with_connector_type(expr)
     @assert expr isa Expr && (expr.head == :function || (expr.head == :(=) &&
