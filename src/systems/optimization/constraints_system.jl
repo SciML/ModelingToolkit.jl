@@ -178,10 +178,7 @@ end
 function generate_function(sys::ConstraintsSystem, dvs = states(sys), ps = parameters(sys);
                            kwargs...)
     lhss = generate_canonical_form_lhss(sys)
-    pre, sol_states = get_substitutions_and_solved_states(sys)
-
-    func = build_function(lhss, value.(dvs), value.(ps); postprocess_fbody = pre,
-                          states = sol_states, kwargs...)
+    func = build_function(lhss, value.(dvs), value.(ps))
 
     cstr = constraints(sys)
     lcons = fill(-Inf, length(cstr))
