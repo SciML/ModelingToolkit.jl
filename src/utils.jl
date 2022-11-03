@@ -597,7 +597,7 @@ function empty_substitutions(sys)
     isnothing(subs) || isempty(subs.deps)
 end
 
-function get_substitutions_and_solved_states(sys; no_postprocess = false)
+function get_cmap(sys)
     #Inject substitutions for constants => values
     cs = collect_constants([get_eqs(sys); get_observed(sys)]) #ctrls? what else?
     if !empty_substitutions(sys)
@@ -605,7 +605,11 @@ function get_substitutions_and_solved_states(sys; no_postprocess = false)
     end
     # Swap constants for their values
     cmap = map(x -> x ~ getdefault(x), cs)
+    return cmap, cs
+end
 
+function get_substitutions_and_solved_states(sys; no_postprocess = false)
+    cmap, cs = get_cmap(sys)
     if empty_substitutions(sys) && isempty(cs)
         sol_states = Code.LazyState()
         pre = no_postprocess ? (ex -> ex) : get_postprocess_fbody(sys)

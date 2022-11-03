@@ -178,7 +178,10 @@ end
 function generate_function(sys::ConstraintsSystem, dvs = states(sys), ps = parameters(sys);
                            kwargs...)
     lhss = generate_canonical_form_lhss(sys)
-    func = build_function(lhss, value.(dvs), value.(ps))
+    pre, sol_states = get_substitutions_and_solved_states(sys)
+
+    func = build_function(lhss, value.(dvs), value.(ps); postprocess_fbody = pre,
+                          states = sol_states, kwargs...)
 
     cstr = constraints(sys)
     lcons = fill(-Inf, length(cstr))
@@ -205,4 +208,15 @@ g(x) <= 0
 """
 function generate_canonical_form_lhss(sys)
     lhss = subs_constants([Symbolics.canonical_form(eq).lhs for eq in constraints(sys)])
+end
+
+function get_cmap(sys::ConstraintsSystem)
+    #Inject substitutions for constants => values
+    cs = collect_constants([get_constraints(sys); get_observed(sys)]) #ctrls? what else?
+    if !empty_substitutions(sys)
+        cs = [cs; collect_constants(get_substitutions(sys).subs)]
+    end
+    # Swap constants for their values
+    cmap = map(x -> x ~ getdefault(x), cs)
+    return cmap, cs
 end
