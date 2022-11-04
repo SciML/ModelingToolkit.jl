@@ -633,18 +633,6 @@ function get_substitutions_and_solved_states(sys; no_postprocess = false)
     return pre, sol_states
 end
 
-function mergedefaults(defaults, varmap, vars)
-    defs = if varmap isa Dict
-        merge(defaults, varmap)
-    elseif eltype(varmap) <: Pair
-        merge(defaults, Dict(varmap))
-    elseif eltype(varmap) <: Number
-        merge(defaults, Dict(zip(vars, varmap)))
-    else
-        defaults
-    end
-end
-
 @noinline function throw_missingvars_in_sys(vars)
     throw(ArgumentError("$vars are either missing from the variable map or missing from the system's states/parameters list."))
 end

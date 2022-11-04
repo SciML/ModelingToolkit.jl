@@ -6,7 +6,7 @@ using DocStringExtensions
 using Compat
 using AbstractTrees
 using DiffEqBase, SciMLBase, ForwardDiff, Reexport
-using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap
+using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap, mergedefaults
 using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using InteractiveUtils
