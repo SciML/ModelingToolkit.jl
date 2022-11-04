@@ -147,7 +147,7 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
                                        complete(var_eq_matching), varlevel, inv_varlevel,
                                        inv_eqlevel)
 
-    var_eq_matching
+    MatchedSystemStructure(structure, var_eq_matching)
 end
 
 function dummy_derivative_graph!(state::TransformationState, jac = nothing,
@@ -350,5 +350,5 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         var_eq_matching[v] = SelectedState()
     end
 
-    return var_eq_matching
+    return MatchedSystemStructure(structure, var_eq_matching)
 end

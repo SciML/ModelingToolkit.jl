@@ -301,6 +301,9 @@ function but_ordered_incidence(ts::TearingState, varmask = highest_order_variabl
 end
 
 # debugging use
+function reordered_matrix(sys, ms::MatchedSystemStructure)
+    reordered_matrix(sys, ms.var_eq_matching)
+end
 function reordered_matrix(sys, torn_matching)
     s = TearingState(sys)
     complete!(s.structure)
