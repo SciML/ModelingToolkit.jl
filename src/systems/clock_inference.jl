@@ -134,6 +134,7 @@ function split_system(ci::ClockInference)
         @set! ts_i.structure.graph = complete(BipartiteGraph(ne, fadj, ndsts(graph)))
         @set! ts_i.sys.eqs = eqs_i
         tss[id] = ts_i
+        # TODO: just mark past and sample variables as inputs
     end
     return tss, (; inputs, outputs = ())
 
