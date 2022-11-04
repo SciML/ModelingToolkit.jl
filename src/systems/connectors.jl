@@ -309,7 +309,6 @@ function generate_connection_equations_and_stream_connections(csets::AbstractVec
         vtype = get_connection_type(v)
         if vtype === Stream
             push!(stream_connections, cset)
-            continue
         elseif vtype === Flow
             rhs = 0
             for ele in cset.set
@@ -391,8 +390,7 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
             end
         end
         if debug
-            @info "Expanding at [$idx_in_set]" ex ConnectionSet(cset)
-            @show n_inners, n_outers
+            @info "Expanding at [$idx_in_set]" ex ConnectionSet(cset) n_inners n_outers
         end
         if n_inners == 1 && n_outers == 0
             sub[ex] = sv
@@ -511,26 +509,16 @@ function get_cset_sv(namespace, ex, csets)
     ns_sv = only(arguments(ex))
     full_name_sv = renamespace(namespace, ns_sv)
 
-    cidx = -1
-    idx_in_set = -1
-    sv = ns_sv
-    for (i, c) in enumerate(csets)
+    for c in csets
         crep = first(c.set)
         current = namespace == crep.sys.namespace
-        for (j, v) in enumerate(c.set)
+        for (idx_in_set, v) in enumerate(c.set)
             if isequal(namespaced_var(v), full_name_sv) && (current || !v.isouter)
-                cidx = i
-                idx_in_set = j
-                sv = v.v
+                return c.set, idx_in_set, v.v
             end
         end
     end
-    cidx < 0 && error("$ns_sv is not a variable inside stream connectors")
-    cset = csets[cidx].set
-    #if namespace != first(cset).sys.namespace
-    #    cset = map(c->@set(c.isouter = false), cset)
-    #end
-    cset, idx_in_set, sv
+    error("$ns_sv is not a variable inside stream connectors")
 end
 
 # instream runtime
