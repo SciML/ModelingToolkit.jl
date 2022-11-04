@@ -13,7 +13,8 @@ $(FIELDS)
 @parameters a b c
 
 obj = a * (y - x) + x * (b - z) - y + x * y - c * z
-@named os = OptimizationSystem(obj, [x, y, z], [a, b, c])
+cons = [x^2 + y^2 ≲ 1]
+@named os = OptimizationSystem(obj, [x, y, z], [a, b, c]; constraints = cons)
 ```
 """
 struct OptimizationSystem <: AbstractOptimizationSystem
@@ -115,7 +116,8 @@ end
 function generate_gradient(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
                            kwargs...)
     grad = calculate_gradient(sys)
-    return build_function(grad, vs, ps;
+    pre = get_preprocess_constants(grad)
+    return build_function(grad, vs, ps; postprocess_fbody = pre,
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
@@ -130,13 +132,15 @@ function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parame
     else
         hess = calculate_hessian(sys)
     end
-    return build_function(hess, vs, ps;
+    pre = get_preprocess_constants(hess)
+    return build_function(hess, vs, ps; postprocess_fbody = pre,
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
 function generate_function(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
                            kwargs...)
-    return build_function(objective(sys), vs, ps;
+    eqs = subs_constants(objective(sys))
+    return build_function(eqs, vs, ps;
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
@@ -225,7 +229,6 @@ end
 ```julia
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
-                                          lb=nothing, ub=nothing,
                                           grad = false,
                                           hess = false, sparse = false,
                                           checkbounds = false,
@@ -239,7 +242,6 @@ symbolically calculating numerical enhancements.
 function DiffEqBase.OptimizationProblem(sys::OptimizationSystem, args...; kwargs...)
     DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem, args...; kwargs...)
 end
-
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              parammap = DiffEqBase.NullParameters();
                                              lb = nothing, ub = nothing,
@@ -249,11 +251,6 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              linenumbers = true, parallel = SerialForm(),
                                              use_union = false,
                                              kwargs...) where {iip}
-    if !(isnothing(lb) && isnothing(ub))
-        Base.depwarn("`lb` and `ub` are deprecated. Use the `bounds` metadata for the variables instead.",
-                     :OptimizationProblem, force = true)
-    end
-
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
         Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
                      :OptimizationProblem, force = true)
@@ -263,11 +260,21 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     ps = parameters(sys)
     cstr = constraints(sys)
 
-    lb = first.(getbounds.(dvs))
-    ub = last.(getbounds.(dvs))
+    if isnothing(lb) && isnothing(ub) # use the symbolically specified bounds
+        lb = first.(getbounds.(dvs))
+        ub = last.(getbounds.(dvs))
+        lb[isbinaryvar.(dvs)] .= 0
+        ub[isbinaryvar.(dvs)] .= 1
+    else # use the user supplied variable bounds
+        xor(isnothing(lb), isnothing(ub)) &&
+            throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
+        !isnothing(lb) && length(lb) != length(dvs) &&
+            throw(ArgumentError("Expected both `lb` to be of the same length as the vector of optimization variables"))
+        !isnothing(ub) && length(ub) != length(dvs) &&
+            throw(ArgumentError("Expected both `ub` to be of the same length as the vector of optimization variables"))
+    end
+
     int = isintegervar.(dvs) .| isbinaryvar.(dvs)
-    lb[isbinaryvar.(dvs)] .= 0
-    ub[isbinaryvar.(dvs)] .= 1
 
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)
@@ -278,7 +285,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
     ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
 
-    if all(lb .== -Inf) && all(ub .== Inf)
+    if !isnothing(lb) && all(lb .== -Inf) && !isnothing(ub) && all(ub .== Inf)
         lb = nothing
         ub = nothing
     end
@@ -286,7 +293,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
                           expression = Val{false})
 
-    obj_expr = convert_to_expr(objective(sys), sys)
+    obj_expr = convert_to_expr(subs_constants(objective(sys)), sys)
     if grad
         grad_oop, grad_iip = generate_gradient(sys, checkbounds = checkbounds,
                                                linenumbers = linenumbers,
@@ -316,13 +323,27 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
 
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
-        cons, lcons, ucons = generate_function(cons_sys, checkbounds = checkbounds,
-                                               linenumbers = linenumbers,
-                                               expression = Val{false})
+        cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
+                                                 linenumbers = linenumbers,
+                                                 expression = Val{false})
         cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
         cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 
-        cons_expr = convert_to_expr.(constraints(cons_sys), Ref(sys))
+        cons_expr = convert_to_expr.(subs_constants(constraints(cons_sys)), Ref(sys))
+
+        if !haskey(kwargs, :lcons) && !haskey(kwargs, :ucons) # use the symbolically specified bounds
+            lcons = lcons_
+            ucons = ucons_
+        else # use the user supplied constraints bounds
+            haskey(kwargs, :lcons) && haskey(kwargs, :ucons) &&
+                throw(ArgumentError("Expected both `ucons` and `lcons` to be supplied"))
+            haskey(kwargs, :lcons) && length(kwargs[:lcons]) != length(cstr) &&
+                throw(ArgumentError("Expected `lcons` to be of the same length as the vector of constraints"))
+            haskey(kwargs, :ucons) && length(kwargs[:ucons]) != length(cstr) &&
+                throw(ArgumentError("Expected `ucons` to be of the same length as the vector of constraints"))
+            lcons = haskey(kwargs, :lcons)
+            ucons = haskey(kwargs, :ucons)
+        end
 
         if sparse
             cons_jac_prototype = jacobian_sparsity(cons_sys)
@@ -331,7 +352,6 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             cons_jac_prototype = nothing
             cons_hess_prototype = nothing
         end
-
         _f = DiffEqBase.OptimizationFunction{iip}(f,
                                                   sys = sys,
                                                   SciMLBase.NoAD();
@@ -368,7 +388,7 @@ end
 ```julia
 function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
                                           parammap=DiffEqBase.NullParameters();
-                                          u0=nothing, lb=nothing, ub=nothing,
+                                          u0=nothing,
                                           grad = false,
                                           hes = false, sparse = false,
                                           checkbounds = false,
@@ -395,11 +415,6 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
                                       linenumbers = false, parallel = SerialForm(),
                                       use_union = false,
                                       kwargs...) where {iip}
-    if !(isnothing(lb) && isnothing(ub))
-        Base.depwarn("`lb` and `ub` are deprecated. Use the `bounds` metadata for the variables instead.",
-                     :OptimizationProblem, force = true)
-    end
-
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
         Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
                      :OptimizationProblem, force = true)
@@ -408,6 +423,36 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
     dvs = states(sys)
     ps = parameters(sys)
     cstr = constraints(sys)
+
+    if isnothing(lb) && isnothing(ub) # use the symbolically specified bounds
+        lb = first.(getbounds.(dvs))
+        ub = last.(getbounds.(dvs))
+        lb[isbinaryvar.(dvs)] .= 0
+        ub[isbinaryvar.(dvs)] .= 1
+    else # use the user supplied variable bounds
+        xor(isnothing(lb), isnothing(ub)) &&
+            throw(ArgumentError("Expected both `lb` and `ub` to be supplied"))
+        !isnothing(lb) && length(lb) != length(dvs) &&
+            throw(ArgumentError("Expected `lb` to be of the same length as the vector of optimization variables"))
+        !isnothing(ub) && length(ub) != length(dvs) &&
+            throw(ArgumentError("Expected `ub` to be of the same length as the vector of optimization variables"))
+    end
+
+    int = isintegervar.(dvs) .| isbinaryvar.(dvs)
+
+    defs = defaults(sys)
+    defs = mergedefaults(defs, parammap, ps)
+    defs = mergedefaults(defs, u0map, dvs)
+
+    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
+    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
+    lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
+    ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
+
+    if !isnothing(lb) && all(lb .== -Inf) && !isnothing(ub) && all(ub .== Inf)
+        lb = nothing
+        ub = nothing
+    end
 
     idx = iip ? 2 : 1
     f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
@@ -433,37 +478,31 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         hess_prototype = nothing
     end
 
-    lb = first.(getbounds.(dvs))
-    ub = last.(getbounds.(dvs))
-    int = isintegervar.(dvs) .| isbinaryvar.(dvs)
-    lb[isbinaryvar.(dvs)] .= 0
-    ub[isbinaryvar.(dvs)] .= 1
-
-    defs = defaults(sys)
-    defs = mergedefaults(defs, parammap, ps)
-    defs = mergedefaults(defs, u0map, dvs)
-
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = false, use_union)
-    lb = varmap_to_vars(dvs .=> lb, dvs; defaults = defs, tofloat = false, use_union)
-    ub = varmap_to_vars(dvs .=> ub, dvs; defaults = defs, tofloat = false, use_union)
-
-    if all(lb .== -Inf) && all(ub .== Inf)
-        lb = nothing
-        ub = nothing
-    end
-
-    obj_expr = convert_to_expr(objective(sys), sys)
+    obj_expr = convert_to_expr(subs_constants(objective(sys)), sys)
 
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
-        cons, lcons, ucons = generate_function(cons_sys, checkbounds = checkbounds,
-                                               linenumbers = linenumbers,
-                                               expression = Val{false})
+        cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
+                                                 linenumbers = linenumbers,
+                                                 expression = Val{false})
         cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
         cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 
-        cons_expr = convert_to_expr.(constraints(cons_sys), Ref(sys))
+        cons_expr = convert_to_expr.(subs_constants(constraints(cons_sys)), Ref(sys))
+
+        if !haskey(kwargs, :lcons) && !haskey(kwargs, :ucons) # use the symbolically specified bounds
+            lcons = lcons_
+            ucons = ucons_
+        else # use the user supplied constraints bounds
+            haskey(kwargs, :lcons) && haskey(kwargs, :ucons) &&
+                throw(ArgumentError("Expected both `ucons` and `lcons` to be supplied"))
+            haskey(kwargs, :lcons) && length(kwargs[:lcons]) != length(cstr) &&
+                throw(ArgumentError("Expected `lcons` to be of the same length as the vector of constraints"))
+            haskey(kwargs, :ucons) && length(kwargs[:ucons]) != length(cstr) &&
+                throw(ArgumentError("Expected `ucons` to be of the same length as the vector of constraints"))
+            lcons = haskey(kwargs, :lcons)
+            ucons = haskey(kwargs, :ucons)
+        end
 
         if sparse
             cons_jac_prototype = jacobian_sparsity(cons_sys)
@@ -483,8 +522,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
             ub = $ub
             int = $int
             cons = $cons[1]
-            lbcons = $lbcons
-            ubcons = $ubcons
+            lcons = $lcons
+            ucons = $ucons
             cons_j = $cons_j
             cons_h = $cons_h
             syms = $(Symbol.(states(sys)))

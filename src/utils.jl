@@ -19,7 +19,7 @@ end
 function detime_dvs(op)
     if !istree(op)
         op
-    elseif operation(op) isa Sym
+    elseif issym(operation(op))
         Sym{Real}(nameof(operation(op)))
     else
         similarterm(op, operation(op), detime_dvs.(arguments(op)))
@@ -60,7 +60,7 @@ function states_to_sym(states::Set)
         elseif istree(O)
             op = operation(O)
             args = arguments(O)
-            if op isa Sym
+            if issym(op)
                 O in states && return tosymbol(O)
                 # dependent variables
                 return build_expr(:call, Any[nameof(op); _states_to_sym.(args)])
@@ -498,10 +498,66 @@ function collect_var!(states, parameters, var, iv)
     isequal(var, iv) && return nothing
     if isparameter(var) || (istree(var) && isparameter(operation(var)))
         push!(parameters, var)
-    else
+    elseif !isconstant(var)
         push!(states, var)
     end
     return nothing
+end
+
+""" Find all the symbolic constants of some equations or terms and return them as a vector. """
+function collect_constants(x)
+    constants = Symbolics.Sym[]
+    collect_constants!(constants, x)
+    return constants
+end
+
+function collect_constants!(constants, arr::AbstractArray)
+    for el in arr
+        collect_constants!(constants, el)
+    end
+end
+
+function collect_constants!(constants, eq::Equation)
+    collect_constants!(constants, eq.lhs)
+    collect_constants!(constants, eq.rhs)
+end
+
+function collect_constants!(constants, eq::Inequality)
+    collect_constants!(constants, eq.lhs)
+    collect_constants!(constants, eq.rhs)
+end
+
+collect_constants!(constants, x::Num) = collect_constants!(constants, unwrap(x))
+collect_constants!(constants, x::Real) = nothing
+collect_constants(n::Nothing) = Symbolics.Sym[]
+
+function collect_constants!(constants, expr::Symbolics.Symbolic)
+    if issym(expr) && isconstant(expr)
+        push!(constants, expr)
+    else
+        evars = vars(expr)
+        if length(evars) == 1 && isequal(only(evars), expr)
+            return nothing #avoid infinite recursion for vars(x(t)) == [x(t)]
+        else
+            for var in evars
+                collect_constants!(constants, var)
+            end
+        end
+    end
+end
+
+""" Replace symbolic constants with their literal values """
+function eliminate_constants(eqs, cs)
+    cmap = Dict(x => getdefault(x) for x in cs)
+    return substitute(eqs, cmap)
+end
+
+""" Create a function preface containing assignments of default values to constants. """
+function get_preprocess_constants(eqs)
+    cs = collect_constants(eqs)
+    pre = ex -> Let(Assignment[Assignment(x, getdefault(x)) for x in cs],
+                    ex, false)
+    return pre
 end
 
 function get_postprocess_fbody(sys)
@@ -541,12 +597,29 @@ function empty_substitutions(sys)
     isnothing(subs) || isempty(subs.deps)
 end
 
+function get_cmap(sys)
+    #Inject substitutions for constants => values
+    cs = collect_constants([get_eqs(sys); get_observed(sys)]) #ctrls? what else?
+    if !empty_substitutions(sys)
+        cs = [cs; collect_constants(get_substitutions(sys).subs)]
+    end
+    # Swap constants for their values
+    cmap = map(x -> x ~ getdefault(x), cs)
+    return cmap, cs
+end
+
 function get_substitutions_and_solved_states(sys; no_postprocess = false)
-    if empty_substitutions(sys)
+    cmap, cs = get_cmap(sys)
+    if empty_substitutions(sys) && isempty(cs)
         sol_states = Code.LazyState()
         pre = no_postprocess ? (ex -> ex) : get_postprocess_fbody(sys)
-    else
-        @unpack subs = get_substitutions(sys)
+    else # Have to do some work
+        if !empty_substitutions(sys)
+            @unpack subs = get_substitutions(sys)
+        else
+            subs = []
+        end
+        subs = [cmap; subs] # The constants need to go first
         sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
         if no_postprocess
             pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex,
@@ -740,6 +813,17 @@ function jacobian_wrt_vars(pf::F, p, input_idxs, chunk::C) where {F, C}
     p_small = p[input_idxs]
     cfg = ForwardDiff.JacobianConfig(p_closure, p_small, chunk, tag)
     ForwardDiff.jacobian(p_closure, p_small, cfg, Val(false))
+end
+
+function fold_constants(ex)
+    if istree(ex)
+        similarterm(ex, operation(ex), map(fold_constants, arguments(ex)),
+                    symtype(ex); metadata = metadata(ex))
+    elseif issym(ex) && isconstant(ex)
+        getdefault(ex)
+    else
+        ex
+    end
 end
 
 # Symbolics needs to call unwrap on the substitution rules, but most of the time

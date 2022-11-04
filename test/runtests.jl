@@ -11,6 +11,7 @@ using SafeTestsets, Test
 @safetestset "System Linearity Test" begin include("linearity.jl") end
 @safetestset "Linearization Tests" begin include("linearize.jl") end
 @safetestset "Input Output Test" begin include("input_output_handling.jl") end
+@safetestset "Clock Test" begin include("clock.jl") end
 @safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
 @safetestset "ODESystem Test" begin include("odesystem.jl") end
 @safetestset "Unitful Quantities Test" begin include("units.jl") end
@@ -46,6 +47,6 @@ println("Last test requires gcc available in the path!")
 @safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 @safetestset "FuncAffect Test" begin include("funcaffect.jl") end
-
+@safetestset "Constants Test" begin include("constants.jl") end
 # Reference tests go Last
 @safetestset "Latexify recipes Test" begin include("latexify.jl") end

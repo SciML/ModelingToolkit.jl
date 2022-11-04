@@ -24,7 +24,10 @@ using Plots
 x = -2:0.01:2
 y = -1:0.01:3
 contour(x, y, (x,y) -> (1 - x)^2 + 100 * (y - x^2)^2, fill=true, color=:viridis, ratio=:equal, xlims=(-2, 2))
+savefig("obj_fun.png"); nothing # hide
 ```
+
+![plot of the Rosenbrock function](obj_fun.png)
 
 ### Explanation
 Every optimization problem consists of a set of _optimization variables_. In this case we create two variables. Additionally we assign _box constraints_ for each of them. In the next step we create two parameters for the problem with `@parameters`. While it is not needed to do this it makes it easier to `remake` the problem later with different values for the parameters. The _objective function_ is specified as well and finally everything is used to construct an `OptimizationSystem`.
@@ -74,7 +77,10 @@ x = -2:0.01:2
 y = -1:0.01:3
 contour(x, y, (x,y) -> (1 - x)^2 + 100 * (y - x^2)^2, fill=true, color=:viridis, ratio=:equal, xlims=(-2, 2))
 contour!(x, y, (x, y) -> x^2 + y^2, levels=[1], color=:lightblue, line=4)
+savefig("obj_fun_c.png"); nothing # hide
 ```
+
+![plot of the Rosenbrock function with constraint](obj_fun_c.png)
 
 ### Explanation
 Equality and inequality constraints can be added to the `OptimizationSystem`. An equality constraint can be specified via and `Equation`, e.g., `x^2 + y^2 ~ 1`. While inequality constraints via an `Inequality`, e.g., `x^2 + y^2 ≲ 1`. The syntax is here `\lesssim` and `\gtrsim`.

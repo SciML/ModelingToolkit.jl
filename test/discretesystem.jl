@@ -12,14 +12,15 @@ end;
 
 # Independent and dependent variables and parameters
 @parameters t c nsteps δt β γ
+@constants h = 1
 D = Difference(t; dt = 0.1)
 @variables S(t) I(t) R(t)
 
-infection = rate_to_proportion(β * c * I / (S + I + R), δt) * S
-recovery = rate_to_proportion(γ, δt) * I
+infection = rate_to_proportion(β * c * I / (S * h + I + R), δt * h) * S
+recovery = rate_to_proportion(γ * h, δt) * I
 
 # Equations
-eqs = [D(S) ~ S - infection,
+eqs = [D(S) ~ S - infection * h,
     D(I) ~ I + infection - recovery,
     D(R) ~ R + recovery]
 
@@ -100,7 +101,7 @@ D2 = Difference(t; dt = 2)
 # Equations
 eqs = [
     D1(x(t)) ~ 0.4x(t) + 0.3x(t - 1.5) + 0.1x(t - 3),
-    D2(y(t)) ~ 0.3y(t) + 0.7y(t - 2) + 0.1z,
+    D2(y(t)) ~ 0.3y(t) + 0.7y(t - 2) + 0.1z * h,
 ]
 
 # System
@@ -120,7 +121,7 @@ linearized_eqs = [eqs
 # observed variable handling
 @variables t x(t) RHS(t)
 @parameters τ
-@named fol = DiscreteSystem([D(x) ~ (1 - x) / τ]; observed = [RHS ~ (1 - x) / τ])
+@named fol = DiscreteSystem([D(x) ~ (1 - x) / τ]; observed = [RHS ~ (1 - x) / τ * h])
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
 @unpack RHS = fol

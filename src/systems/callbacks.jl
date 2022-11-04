@@ -269,7 +269,13 @@ function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
     p = map(x -> time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
     condit = condition(cb)
-    build_function(condit, u, t, p; expression, wrap_code = condition_header(), kwargs...)
+    cs = collect_constants(condit)
+    if !isempty(cs)
+        cmap = map(x -> x => getdefault(x), cs)
+        condit = substitute(condit, cmap)
+    end
+    build_function(condit, u, t, p; expression, wrap_code = condition_header(),
+                   kwargs...)
 end
 
 function compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
@@ -337,9 +343,11 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         t = get_iv(sys)
         integ = gensym(:MTKIntegrator)
         getexpr = (postprocess_affect_expr! === nothing) ? expression : Val{true}
+        pre = get_preprocess_constants(rhss)
         rf_oop, rf_ip = build_function(rhss, u, p, t; expression = getexpr,
                                        wrap_code = add_integrator_header(integ, outvar),
                                        outputidxs = update_inds,
+                                       postprocess_fbody = pre,
                                        kwargs...)
         # applied user-provided function to the generated expression
         if postprocess_affect_expr! !== nothing
@@ -376,7 +384,9 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
     p = map(x -> time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
-    rf_oop, rf_ip = build_function(rhss, u, p, t; expression = Val{false}, kwargs...)
+    pre = get_preprocess_constants(rhss)
+    rf_oop, rf_ip = build_function(rhss, u, p, t; expression = Val{false},
+                                   postprocess_fbody = pre, kwargs...)
 
     affect_functions = map(cbs) do cb # Keep affect function separate
         eq_aff = affects(cb)

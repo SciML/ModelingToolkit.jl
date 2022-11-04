@@ -14,16 +14,18 @@ But if you want to just see some code and run, here's an example:
 using ModelingToolkit
 
 @variables t x(t)   # independent and dependent variables
-@parameters τ       # parameters
+@parameters τ       # parameters 
+@constants h = 1    # constants have an assigned value
 D = Differential(t) # define an operator for the differentiation w.r.t. time
 
 # your first ODE, consisting of a single equation, the equality indicated by ~
-@named fol = ODESystem([ D(x)  ~ (1 - x)/τ])
+@named fol = ODESystem([ D(x)  ~ (h - x)/τ])
 
 using DifferentialEquations: solve
 using Plots: plot
 
 prob = ODEProblem(fol, [x => 0.0], (0.0,10.0), [τ => 3.0])
+# parameter `τ` can be assigned a value, but constant `h` cannot
 sol = solve(prob)
 plot(sol)
 ```
@@ -42,19 +44,20 @@ first-order lag element:
 ```
 
 Here, ``t`` is the independent variable (time), ``x(t)`` is the (scalar) state
-variable, ``f(t)`` is an external forcing function, and ``\tau`` is a constant
+variable, ``f(t)`` is an external forcing function, and ``\tau`` is a 
 parameter. In MTK, this system can be modelled as follows. For simplicity, we
-first set the forcing function to a constant value.
+first set the forcing function to a time-independent value.
 
 ```julia
 using ModelingToolkit
 
 @variables t x(t)  # independent and dependent variables
 @parameters τ       # parameters
+@constants h = 1    # constants
 D = Differential(t) # define an operator for the differentiation w.r.t. time
 
 # your first ODE, consisting of a single equation, indicated by ~
-@named fol_model = ODESystem(D(x) ~ (1 - x)/τ)
+@named fol_model = ODESystem(D(x) ~ (h - x)/τ)
       # Model fol_model with 1 equations
       # States (1):
       #   x(t)
@@ -89,7 +92,7 @@ intermediate variable `RHS`:
 
 ```julia
 @variables RHS(t)
-@named fol_separate = ODESystem([ RHS  ~ (1 - x)/τ,
+@named fol_separate = ODESystem([ RHS  ~ (h - x)/τ,
                                   D(x) ~ RHS ])
       # Model fol_separate with 2 equations
       # States (2):
@@ -110,7 +113,7 @@ fol_simplified = structural_simplify(fol_separate)
 
 equations(fol_simplified)
       # 1-element Array{Equation,1}:
-      #  Differential(t)(x(t)) ~ (τ^-1)*(1 - x(t))
+      #  Differential(t)(x(t)) ~ (τ^-1)*(h - x(t))
 
 equations(fol_simplified) == equations(fol_model)
       # true
@@ -132,6 +135,12 @@ prob = ODEProblem(fol_simplified, [x => 0.0], (0.0,10.0), [τ => 3.0])
 sol = solve(prob)
 plot(sol, vars=[x, RHS])
 ```
+
+By default, `structural_simplify` also replaces symbolic `constants` with
+their default values. This allows additional simplifications not possible 
+if using `parameters` (eg, solution of linear equations by dividing out
+the constant's value, which cannot be done for parameters since they may
+be zero). 
 
 ![Simulation result of first-order lag element, with right-hand side](https://user-images.githubusercontent.com/13935112/111958403-7e8d3e00-8aed-11eb-9d18-08b5180a59f9.png)
 
