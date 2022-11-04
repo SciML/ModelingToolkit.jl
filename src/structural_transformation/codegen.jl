@@ -530,8 +530,8 @@ function ODAEProblem{iip}(sys,
     ps = parameters(sys)
     defs = defaults(sys)
 
-    defs = ModelingToolkit.mergedefaults(defs, parammap, ps)
-    defs = ModelingToolkit.mergedefaults(defs, u0map, dvs)
+    defs = SciMLBase.mergedefaults(defs, parammap, ps)
+    defs = SciMLBase.mergedefaults(defs, u0map, dvs)
     u0 = ModelingToolkit.varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
     p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults = defs, tofloat = !use_union,
                                        use_union)

@@ -633,16 +633,15 @@ function get_substitutions_and_solved_states(sys; no_postprocess = false)
     return pre, sol_states
 end
 
-function mergedefaults(defaults, varmap, vars)
-    defs = if varmap isa Dict
-        merge(defaults, varmap)
-    elseif eltype(varmap) <: Pair
-        merge(defaults, Dict(varmap))
-    elseif eltype(varmap) <: Number
-        merge(defaults, Dict(zip(vars, varmap)))
+function SciMLBase.mergedefaults(defaults, varmap, var_type::Symbol; sys)
+    vars = if var_type == :states
+        states(sys)
+    elseif var_type == :parameters
+        parameters(sys)
     else
-        defaults
+        throw(ArgumentError("Unsupported var_type: `$var_type`"))
     end
+    return mergedefaults(defaults, varmap, vars)
 end
 
 @noinline function throw_missingvars_in_sys(vars)

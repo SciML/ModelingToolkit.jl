@@ -114,8 +114,14 @@ $(SIGNATURES)
 Intercept the call to `handle_varmap` and convert it to an ordered list if the user has
   ModelingToolkit loaded, and the problem has a symbolic origin.
 """
-function SciMLBase.handle_varmap(varmap, sys::AbstractSystem; field = :states, kwargs...)
-    out = varmap_to_vars(varmap, getfield(sys, field); kwargs...)
+function SciMLBase.handle_varmap(varmap, sys::AbstractSystem; var_type = :states, kwargs...)
+    out = if var_type == :states
+        varmap_to_vars(varmap, states(sys); kwargs...)
+    elseif var_type == :parameters
+        varmap_to_vars(varmap, parameters(sys); kwargs...)
+    else
+        throw(ArgumentError("Unsupported var_type: `$var_type`"))
+    end
     return out
 end
 
