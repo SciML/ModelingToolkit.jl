@@ -1,17 +1,26 @@
-struct VariableUnit end
-struct VariableConnectType end
-struct VariableNoiseType end
-struct VariableInput end
-struct VariableOutput end
-struct VariableIrreducible end
-struct VariableStatePriority end
-Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
-Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
-Symbolics.option_to_metadata_type(::Val{:noise}) = VariableNoiseType
-Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
-Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
-Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
-Symbolics.option_to_metadata_type(::Val{:state_priority}) = VariableStatePriority
+const SYMBOLIC_METADATA_PAIRS = [
+    :unit => :VariableUnit,
+    :connect => :VariableConnectType,
+    :noise => :VariableNoiseType,
+    :input => :VariableInput,
+    :output => :VariableOutput,
+    :irreducible => :VariableIrreducible,
+    :state_priority => :VariableStatePriority,
+    :bounds => :VariableBounds,
+    :disturbance => :VariableDisturbance,
+    :tunable => :VariableTunable,
+    :dist => :VariableDistribution,
+    :description => :VariableDescription,
+    :binary => :VariableBinary,
+    :integer => :VariableInteger,
+]
+
+for (s, t) in SYMBOLIC_METADATA_PAIRS
+    @eval begin
+        struct $t <: Symbolics.AbstractVariableMetadata end
+        Symbolics.option_to_metadata_type(::Val{$(QuoteNode(s))}) = $t
+    end
+end
 
 abstract type AbstractConnectType end
 struct Equality <: AbstractConnectType end # Equality connection
@@ -129,8 +138,6 @@ function hist(x::Symbolic, t)
 end
 
 ## Bounds ======================================================================
-struct VariableBounds end
-Symbolics.option_to_metadata_type(::Val{:bounds}) = VariableBounds
 getbounds(x::Num) = getbounds(Symbolics.unwrap(x))
 
 """
@@ -160,8 +167,6 @@ function hasbounds(x)
 end
 
 ## Disturbance =================================================================
-struct VariableDisturbance end
-Symbolics.option_to_metadata_type(::Val{:disturbance}) = VariableDisturbance
 
 isdisturbance(x::Num) = isdisturbance(Symbolics.unwrap(x))
 
@@ -181,8 +186,6 @@ function disturbances(sys)
 end
 
 ## Tunable =====================================================================
-struct VariableTunable end
-Symbolics.option_to_metadata_type(::Val{:tunable}) = VariableTunable
 
 istunable(x::Num, args...) = istunable(Symbolics.unwrap(x), args...)
 
@@ -206,8 +209,6 @@ function istunable(x, default = false)
 end
 
 ## Dist ========================================================================
-struct VariableDistribution end
-Symbolics.option_to_metadata_type(::Val{:dist}) = VariableDistribution
 getdist(x::Num) = getdist(Symbolics.unwrap(x))
 
 """
@@ -292,8 +293,6 @@ function getbounds(p::AbstractVector)
 end
 
 ## Description =================================================================
-struct VariableDescription end
-Symbolics.option_to_metadata_type(::Val{:description}) = VariableDescription
 
 getdescription(x::Num) = getdescription(Symbolics.unwrap(x))
 
@@ -313,8 +312,6 @@ function hasdescription(x)
 end
 
 ## binary variables =================================================================
-struct VariableBinary end
-Symbolics.option_to_metadata_type(::Val{:binary}) = VariableBinary
 
 isbinaryvar(x::Num) = isbinaryvar(Symbolics.unwrap(x))
 
@@ -330,8 +327,6 @@ function isbinaryvar(x)
 end
 
 ## integer variables =================================================================
-struct VariableInteger end
-Symbolics.option_to_metadata_type(::Val{:integer}) = VariableInteger
 
 isintegervar(x::Num) = isintegervar(Symbolics.unwrap(x))
 
