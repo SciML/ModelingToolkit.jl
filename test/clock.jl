@@ -11,6 +11,7 @@ dt = 0.1
 @variables t x(t) y(t) u(t) yd(t) ud(t) r(t)
 @parameters kp
 D = Differential(t)
+# u(n + 1) := f(u(n))
 
 eqs = [yd ~ Sample(t, dt)(y)
        ud ~ kp * (r - yd)
@@ -84,6 +85,34 @@ d = Clock(t, dt)
 @test varmap[x] == Continuous()
 @test varmap[y] == Continuous()
 @test varmap[u] == Continuous()
+
+@info "Testing shift normalization"
+dt = 0.1
+@variables t x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
+@parameters kp
+D = Differential(t)
+d = Clock(t, dt)
+k = ShiftIndex(d)
+
+eqs = [yd ~ Sample(t, dt)(y)
+       ud ~ kp * (r - yd)
+       r ~ 1.0
+
+       # plant (time continuous part)
+       u ~ Hold(ud)
+       D(x) ~ -x + u
+       y ~ x
+       z(k + 2) ~ z(k) + yd
+       #=
+       z(k + 2) ~ z(k)
+       =>
+       z′(k + 1) ~ z(k)
+       z(k + 1)  ~ z′(k)
+       =#
+       ]
+@named sys = ODESystem(eqs)
+ci, varmap = infer_clocks(sys)
+tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
 
 @info "Testing multi-rate hybrid system"
 dt = 0.1

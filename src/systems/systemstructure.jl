@@ -258,6 +258,30 @@ function TearingState(sys; quick_cancel = false, check = true)
                 idx = addvar!(dvar)
             end
 
+            dvar = var
+            idx = varidx
+            if ModelingToolkit.isoperator(dvar, ModelingToolkit.Shift)
+                if !(idx in dervaridxs)
+                    push!(dervaridxs, idx)
+                end
+                op = operation(dvar)
+                tt = op.t
+                steps = op.steps
+                v = arguments(dvar)[1]
+                for s in (steps - 1):-1:1
+                    sf = Shift(tt, s)
+                    dvar = sf(v)
+                    idx = addvar!(dvar)
+                    if !(idx in dervaridxs)
+                        push!(dervaridxs, idx)
+                    end
+                end
+                idx = addvar!(v)
+                #if !(idx in dervaridxs)
+                #    push!(dervaridxs, idx)
+                #end
+            end
+
             if istree(var) && operation(var) isa Symbolics.Operator &&
                !isdifferential(var) && (it = input_timedomain(var)) !== nothing
                 set_incidence = false

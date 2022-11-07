@@ -130,7 +130,6 @@ function split_system(ci::ClockInference)
         fadj = Vector{Int}[]
         eqs_i = Equation[]
         eq_to_diff = DiffGraph(length(ieqs))
-        var_set_i = BitSet(vars)
         ne = 0
         for (j, eq_i) in enumerate(ieqs)
             vars = copy(graph.fadjlist[eq_i])
