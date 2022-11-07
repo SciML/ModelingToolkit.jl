@@ -342,13 +342,15 @@ function get_disturbance_system(dist::DisturbanceModel{<:ODESystem})
 end
 
 """
-    (f_oop, f_ip), augmented_sys, dvs, p = add_input_disturbance(sys, dist::DisturbanceModel)
+    (f_oop, f_ip), augmented_sys, dvs, p = add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing)
 
 Add a model of an unmeasured disturbance to `sys`. The disturbance model is an instance of [`DisturbanceModel`](@ref).
 
 The generated dynamics functions `(f_oop, f_ip)` will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require state variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
 
 `dvs` will be the states of the simplified augmented system, consisting of the states of `sys` as well as the states of the disturbance model.
+
+For MIMO systems, all inputs to the system has to be specified in the argument `inputs`
 
 # Example
 The example below builds a double-mass model and adds an integrating disturbance to the input
@@ -390,18 +392,29 @@ dist = ModelingToolkit.DisturbanceModel(model.torque.tau.u, dmodel)
 ```
 `f_oop` will have an extra state corresponding to the integrator in the disturbance model. This state will not be affected by any input, but will affect the dynamics from where it enters, in this case it will affect additively from `model.torque.tau.u`.
 """
-function add_input_disturbance(sys, dist::DisturbanceModel)
+function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing)
     t = get_iv(sys)
     @variables d(t)=0 [disturbance = true]
-    @variables u(t)=0 [input = true]
+    @variables u(t)=0 [input = true] # New system input
     dsys = get_disturbance_system(dist)
+
+    if inputs === nothing
+        all_inputs = [u]
+    else
+        i = findfirst(isequal(dist.input), inputs)
+        if i === nothing
+            throw(ArgumentError("Input $(dist.input) indicated in the disturbance model was not found among inputs specified to add_input_disturbance"))
+        end
+        all_inputs = copy(inputs)
+        all_inputs[i] = u # The input where the disturbance acts is no longer an input, the new input is u
+    end
 
     eqs = [dsys.input.u[1] ~ d
            dist.input ~ u + dsys.output.u[1]]
 
     augmented_sys = ODESystem(eqs, t, systems = [sys, dsys], name = gensym(:outer))
 
-    (f_oop, f_ip), dvs, p = generate_control_function(augmented_sys, [u],
+    (f_oop, f_ip), dvs, p = generate_control_function(augmented_sys, all_inputs,
                                                       [d])
     (f_oop, f_ip), augmented_sys, dvs, p
 end
