@@ -25,7 +25,7 @@ function quick_cancel_expr(expr)
                                                                          kws...))(expr)
 end
 
-export SystemStructure, TransformationState, TearingState
+export SystemStructure, TransformationState, TearingState, structural_simplify!
 export initialize_system_structure, find_linear_equations
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq, algeqs
 export dervars_range, diffvars_range, algvars_range
@@ -422,6 +422,21 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
                                                  complete(var_to_diff),
                                                  complete(eq_to_diff),
                                                  complete(ms.var_eq_matching, nsrcs(graph))))
+end
+
+# TODO: clean up
+function structural_simplify!(state::TearingState, io = nothing; simplify = false,
+                              kwargs...)
+    has_io = io !== nothing
+    has_io && ModelingToolkit.markio!(state, io...)
+    state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
+    sys, ag = ModelingToolkit.alias_elimination!(state; kwargs...)
+    #check_consistency(state, ag)
+    sys = ModelingToolkit.dummy_derivative(sys, state, ag; simplify)
+    fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
+    @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullstates)
+    ModelingToolkit.invalidate_cache!(sys)
+    return has_io ? (sys, input_idxs) : sys
 end
 
 end # module

@@ -1,4 +1,4 @@
-using ModelingToolkit, Test
+using ModelingToolkit, Test, Setfield
 
 function infer_clocks(sys)
     ts = TearingState(sys)
@@ -14,6 +14,7 @@ D = Differential(t)
 
 eqs = [yd ~ Sample(t, dt)(y)
        ud ~ kp * (r - yd)
+       r ~ 1.0
 
        # plant (time continuous part)
        u ~ Hold(ud)
@@ -61,19 +62,21 @@ By inference:
 
 ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
-tss, io = ModelingToolkit.split_system(deepcopy(ci))
-ts_c = deepcopy(tss[1])
-@set! ts_c.structure.solvable_graph = nothing
-sss, = ModelingToolkit.structural_simplify!(ts_c, io)
+tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
+sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
 @test equations(sss) == [D(x) ~ u - x]
+sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[2]), (inputs[2], ()))
+@test isempty(equations(sss))
+@test observed(sss) == [r ~ 1.0; yd ~ Sample(t, dt)(y); ud ~ kp * (r - yd)]
 
 d = Clock(t, dt)
 # Note that TearingState reorders the equations
 @test eqmap[1] == Continuous()
 @test eqmap[2] == d
 @test eqmap[3] == d
-@test eqmap[4] == Continuous()
+@test eqmap[4] == d
 @test eqmap[5] == Continuous()
+@test eqmap[6] == Continuous()
 
 @test varmap[yd] == d
 @test varmap[ud] == d

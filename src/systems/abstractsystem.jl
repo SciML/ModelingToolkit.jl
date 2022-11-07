@@ -1038,20 +1038,6 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     structural_simplify!(state, io; simplify, kwargs...)
 end
 
-function structural_simplify!(state::TearingState, io = nothing; simplify = false,
-                              kwargs...)
-    has_io = io !== nothing
-    has_io && markio!(state, io...)
-    state, input_idxs = inputs_to_parameters!(state, io)
-    sys, ag = alias_elimination!(state; kwargs...)
-    #check_consistency(state, ag)
-    sys = dummy_derivative(sys, state, ag; simplify)
-    fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
-    @set! sys.observed = topsort_equations(observed(sys), fullstates)
-    invalidate_cache!(sys)
-    return has_io ? (sys, input_idxs) : sys
-end
-
 function eliminate_constants(sys::AbstractSystem)
     if has_eqs(sys)
         eqs = get_eqs(sys)
@@ -1066,7 +1052,7 @@ end
 
 function io_preprocessing(sys::AbstractSystem, inputs,
                           outputs; simplify = false, kwargs...)
-    sys, input_idxs = structural_simplify(sys, (; inputs, outputs); simplify, kwargs...)
+    sys, input_idxs = structural_simplify(sys, (inputs, outputs); simplify, kwargs...)
 
     eqs = equations(sys)
     alg_start_idx = findfirst(!isdiffeq, eqs)
@@ -1169,9 +1155,13 @@ function markio!(state, inputs, outputs; check = true)
             fullvars[i] = v
         end
     end
-    check && (all(values(inputset)) ||
-     error("Some specified inputs were not found in system. The following Dict indicates the found variables ",
-           inputset))
+    if check
+        ikeys = keys(filter(!last, inputset))
+        if !isempty(ikeys)
+            error("Some specified inputs were not found in system. The following variables were not found ",
+                  ikeys)
+        end
+    end
     check && (all(values(outputset)) ||
      error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
            outputset))

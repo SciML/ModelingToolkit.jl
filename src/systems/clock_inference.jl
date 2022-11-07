@@ -58,8 +58,10 @@ function infer_clocks!(ci::ClockInference)
         vd = var_domain[v]
         eqs = 𝑑neighbors(graph, v)
         isempty(eqs) && continue
-        eq = first(eqs)
-        eq_domain[eq] = vd
+        #eq = first(eqs)
+        for eq in eqs
+            eq_domain[eq] = vd
+        end
     end
 
     return ci
@@ -80,38 +82,42 @@ function split_system(ci::ClockInference)
     @unpack ts, eq_domain, var_domain, inferred = ci
     @unpack fullvars = ts
     @unpack graph = ts.structure
-    continuous_id = 0
+    continuous_id = Ref(0)
     clock_to_id = Dict{TimeDomain, Int}()
     id_to_clock = TimeDomain[]
     eq_to_cid = Vector{Int}(undef, nsrcs(graph))
     cid_to_eq = Vector{Int}[]
     var_to_cid = Vector{Int}(undef, ndsts(graph))
     cid_to_var = Vector{Int}[]
-    cid = 0
+    cid_counter = Ref(0)
     for (i, d) in enumerate(eq_domain)
-        cid = get!(clock_to_id, d) do
-            cid += 1
-            push!(id_to_clock, d)
-            if d isa Continuous
-                continuous_id = cid
+        cid = let cid_counter = cid_counter, id_to_clock = id_to_clock,
+            continuous_id = continuous_id
+
+            get!(clock_to_id, d) do
+                cid = (cid_counter[] += 1)
+                push!(id_to_clock, d)
+                if d isa Continuous
+                    continuous_id[] = cid
+                end
+                cid
             end
-            cid
         end
         eq_to_cid[i] = cid
         resize_or_push!(cid_to_eq, i, cid)
     end
-    input_discrete = Int[]
-    inputs = []
+    input_idxs = map(_ -> Int[], 1:cid_counter[])
+    inputs = map(_ -> Any[], 1:cid_counter[])
     for (i, d) in enumerate(var_domain)
         cid = get(clock_to_id, d, 0)
         @assert cid!==0 "Internal error!"
         var_to_cid[i] = cid
         v = fullvars[i]
         #TODO: remove Inferred*
-        if cid == continuous_id && istree(v) && (o = operation(v)) isa Operator &&
-           !(input_timedomain(o) isa Continuous)
-            push!(input_discrete, i)
-            push!(inputs, fullvars[i])
+        if istree(v) && (o = operation(v)) isa Operator &&
+           input_timedomain(o) != output_timedomain(o)
+            push!(input_idxs[cid], i)
+            push!(inputs[cid], fullvars[i])
         end
         resize_or_push!(cid_to_var, i, cid)
     end
@@ -123,20 +129,23 @@ function split_system(ci::ClockInference)
         ts_i = ts
         fadj = Vector{Int}[]
         eqs_i = Equation[]
+        eq_to_diff = DiffGraph(length(ieqs))
         var_set_i = BitSet(vars)
         ne = 0
-        for eq_i in ieqs
+        for (j, eq_i) in enumerate(ieqs)
             vars = copy(graph.fadjlist[eq_i])
             ne += length(vars)
             push!(fadj, vars)
             push!(eqs_i, eqs[eq_i])
+            eq_to_diff[j] = ts_i.structure.eq_to_diff[eq_i]
         end
         @set! ts_i.structure.graph = complete(BipartiteGraph(ne, fadj, ndsts(graph)))
         @set! ts_i.sys.eqs = eqs_i
+        @set! ts_i.structure.eq_to_diff = eq_to_diff
         tss[id] = ts_i
         # TODO: just mark past and sample variables as inputs
     end
-    return tss, (; inputs, outputs = ())
+    return tss, inputs
 
     #id_to_clock, cid_to_eq, cid_to_var
 end
