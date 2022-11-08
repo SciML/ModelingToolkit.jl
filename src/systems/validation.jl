@@ -170,7 +170,7 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
     valid
 end
 
-function _validate(conn::Connection; info::String="")
+function _validate(conn::Connection; info::String = "")
     valid = true
     syss = get_systems(conn)
     sys = first(syss)
