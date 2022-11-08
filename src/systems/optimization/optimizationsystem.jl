@@ -227,7 +227,7 @@ end
 
 """
 ```julia
-function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
+function DiffEqBase.OptimizationProblem{iip}(sys::AbstractOptimizationSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           grad = false,
                                           hess = false, sparse = false,
@@ -239,10 +239,10 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
 Generates an OptimizationProblem from an OptimizationSystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
-function DiffEqBase.OptimizationProblem(sys::OptimizationSystem, args...; kwargs...)
-    DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem, args...; kwargs...)
+function DiffEqBase.OptimizationProblem(sys::AbstractOptimizationSystem, args...; kwargs...)
+    DiffEqBase.OptimizationProblem{true}(sys::AbstractOptimizationSystem, args...; kwargs...)
 end
-function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
+function DiffEqBase.OptimizationProblem{iip}(sys::AbstractOptimizationSystem, u0map,
                                              parammap = DiffEqBase.NullParameters();
                                              lb = nothing, ub = nothing,
                                              grad = false,
@@ -386,7 +386,7 @@ end
 
 """
 ```julia
-function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
+function DiffEqBase.OptimizationProblemExpr{iip}(sys::AbstractOptimizationSystem,
                                           parammap=DiffEqBase.NullParameters();
                                           u0=nothing,
                                           grad = false,
@@ -402,11 +402,11 @@ calculating numerical enhancements.
 """
 struct OptimizationProblemExpr{iip} end
 
-function OptimizationProblemExpr(sys::OptimizationSystem, args...; kwargs...)
+function OptimizationProblemExpr(sys::AbstractOptimizationSystem, args...; kwargs...)
     OptimizationProblemExpr{true}(sys::OptimizationSystem, args...; kwargs...)
 end
 
-function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
+function OptimizationProblemExpr{iip}(sys::AbstractOptimizationSystem, u0,
                                       parammap = DiffEqBase.NullParameters();
                                       lb = nothing, ub = nothing,
                                       grad = false,
