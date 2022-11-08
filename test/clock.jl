@@ -1,4 +1,4 @@
-using ModelingToolkit, Test
+using ModelingToolkit, Test, Setfield
 
 function infer_clocks(sys)
     ts = TearingState(sys)
@@ -11,9 +11,11 @@ dt = 0.1
 @variables t x(t) y(t) u(t) yd(t) ud(t) r(t)
 @parameters kp
 D = Differential(t)
+# u(n + 1) := f(u(n))
 
 eqs = [yd ~ Sample(t, dt)(y)
        ud ~ kp * (r - yd)
+       r ~ 1.0
 
        # plant (time continuous part)
        u ~ Hold(ud)
@@ -21,17 +23,62 @@ eqs = [yd ~ Sample(t, dt)(y)
        y ~ x]
 @named sys = ODESystem(eqs)
 # compute equation and variables' time domains
+#TODO: test linearize
+
+#=
+ Differential(t)(x(t)) ~ u(t) - x(t)
+ 0 ~ Sample(Clock(t, 0.1))(y(t)) - yd(t)
+ 0 ~ kp*(r(t) - yd(t)) - ud(t)
+ 0 ~ Hold()(ud(t)) - u(t)
+ 0 ~ x(t) - y(t)
+
+====
+By inference:
+
+ Differential(t)(x(t)) ~ u(t) - x(t)
+ 0 ~ Hold()(ud(t)) - u(t) # Hold()(ud(t)) is constant except in an event
+ 0 ~ x(t) - y(t)
+
+ 0 ~ Sample(Clock(t, 0.1))(y(t)) - yd(t)
+ 0 ~ kp*(r(t) - yd(t)) - ud(t)
+
+====
+
+ Differential(t)(x(t)) ~ u(t) - x(t)
+ 0 ~ Hold()(ud(t)) - u(t)
+ 0 ~ x(t) - y(t)
+
+ yd(t) := Sample(Clock(t, 0.1))(y(t))
+ ud(t) := kp*(r(t) - yd(t))
+=#
+
+#=
+     D(x) ~ Shift(x, 0, dt) + 1 # this should never meet with continous variables
+=>   (Shift(x, 0, dt) - Shift(x, -1, dt))/dt ~ Shift(x, 0, dt) + 1
+=>   Shift(x, 0, dt) - Shift(x, -1, dt) ~ Shift(x, 0, dt) * dt + dt
+=>   Shift(x, 0, dt) - Shift(x, 0, dt) * dt ~ Shift(x, -1, dt) + dt
+=>   (1 - dt) * Shift(x, 0, dt) ~ Shift(x, -1, dt) + dt
+=>   Shift(x, 0, dt) := (Shift(x, -1, dt) + dt) / (1 - dt) # Discrete system
+=#
 
 ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
+tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
+sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
+@test equations(sss) == [D(x) ~ u - x]
+sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[2]), (inputs[2], ()),
+                                            check_consistency = false)
+@test isempty(equations(sss))
+@test observed(sss) == [r ~ 1.0; yd ~ Sample(t, dt)(y); ud ~ kp * (r - yd)]
 
 d = Clock(t, dt)
 # Note that TearingState reorders the equations
 @test eqmap[1] == Continuous()
 @test eqmap[2] == d
 @test eqmap[3] == d
-@test eqmap[4] == Continuous()
+@test eqmap[4] == d
 @test eqmap[5] == Continuous()
+@test eqmap[6] == Continuous()
 
 @test varmap[yd] == d
 @test varmap[ud] == d
@@ -39,6 +86,39 @@ d = Clock(t, dt)
 @test varmap[x] == Continuous()
 @test varmap[y] == Continuous()
 @test varmap[u] == Continuous()
+
+@info "Testing shift normalization"
+dt = 0.1
+@variables t x(t) y(t) u(t) yd(t) ud(t) r(t) z(t)
+@parameters kp
+D = Differential(t)
+d = Clock(t, dt)
+k = ShiftIndex(d)
+
+eqs = [yd ~ Sample(t, dt)(y)
+       ud ~ kp * (r - yd)
+       r ~ 1.0
+
+       # plant (time continuous part)
+       u ~ Hold(ud)
+       D(x) ~ -x + u
+       y ~ x
+       z(k + 2) ~ z(k) + yd
+       #=
+       z(k + 2) ~ z(k) + yd
+       =>
+       z′(k + 1) ~ z(k) + yd
+       z(k + 1)  ~ z′(k)
+       =#
+       ]
+@named sys = ODESystem(eqs)
+ci, varmap = infer_clocks(sys)
+tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
+sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[2]), (inputs[2], ()))
+@test length(states(sss)) == 2
+z, z_t = states(sss)
+S = Shift(t, 1)
+@test full_equations(sss) == [S(z) ~ z_t; S(z_t) ~ z + Sample(t, dt)(y)]
 
 @info "Testing multi-rate hybrid system"
 dt = 0.1

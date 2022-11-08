@@ -131,6 +131,9 @@ function pantelides!(state::TransformationState, ag::Union{AliasGraph, Nothing} 
             pathfound = construct_augmenting_path!(var_eq_matching, graph, eq′,
                                                    v -> varwhitelist[v], vcolor, ecolor)
             pathfound && break # terminating condition
+            if is_only_discrete(state.structure)
+                error("The discrete system has high structural index. This is not supported.")
+            end
             for var in eachindex(vcolor)
                 vcolor[var] || continue
                 if var_to_diff[var] === nothing

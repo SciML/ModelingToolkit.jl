@@ -1031,22 +1031,11 @@ This will convert all `inputs` to parameters and allow them to be unconnected, i
 simplification will allow models where `n_states = n_equations - n_inputs`.
 """
 function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
-                             simplify_constants = true, check_consistency = true, kwargs...)
+                             kwargs...)
     sys = expand_connections(sys)
     sys isa DiscreteSystem && return sys
     state = TearingState(sys)
-    has_io = io !== nothing
-    has_io && markio!(state, io...)
-    state, input_idxs = inputs_to_parameters!(state, io)
-    sys, ag = alias_elimination!(state; kwargs...)
-    if check_consistency
-        ModelingToolkit.check_consistency(state, ag)
-    end
-    sys = dummy_derivative(sys, state, ag; simplify)
-    fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
-    @set! sys.observed = topsort_equations(observed(sys), fullstates)
-    invalidate_cache!(sys)
-    return has_io ? (sys, input_idxs) : sys
+    structural_simplify!(state, io; simplify, kwargs...)
 end
 
 function eliminate_constants(sys::AbstractSystem)
@@ -1063,7 +1052,7 @@ end
 
 function io_preprocessing(sys::AbstractSystem, inputs,
                           outputs; simplify = false, kwargs...)
-    sys, input_idxs = structural_simplify(sys, (; inputs, outputs); simplify, kwargs...)
+    sys, input_idxs = structural_simplify(sys, (inputs, outputs); simplify, kwargs...)
 
     eqs = equations(sys)
     alg_start_idx = findfirst(!isdiffeq, eqs)
@@ -1150,8 +1139,8 @@ end
 
 function markio!(state, inputs, outputs; check = true)
     fullvars = state.fullvars
-    inputset = Dict(inputs .=> false)
-    outputset = Dict(outputs .=> false)
+    inputset = Dict{Any, Bool}(i => false for i in inputs)
+    outputset = Dict{Any, Bool}(o => false for o in outputs)
     for (i, v) in enumerate(fullvars)
         if v in keys(inputset)
             v = setio(v, true, false)
@@ -1166,9 +1155,13 @@ function markio!(state, inputs, outputs; check = true)
             fullvars[i] = v
         end
     end
-    check && (all(values(inputset)) ||
-     error("Some specified inputs were not found in system. The following Dict indicates the found variables ",
-           inputset))
+    if check
+        ikeys = keys(filter(!last, inputset))
+        if !isempty(ikeys)
+            error("Some specified inputs were not found in system. The following variables were not found ",
+                  ikeys)
+        end
+    end
     check && (all(values(outputset)) ||
      error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
            outputset))
