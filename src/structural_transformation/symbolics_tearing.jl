@@ -632,12 +632,16 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
     @set! state.structure.var_to_diff = var_to_diff
     @set! state.structure.eq_to_diff = eq_to_diff
     @set! state.fullvars = fullvars = fullvars[invvarsperm]
+    ispresent = let var_to_diff = var_to_diff, graph = graph
+        i -> (!isempty(𝑑neighbors(graph, i)) ||
+              (var_to_diff[i] !== nothing && !isempty(𝑑neighbors(graph, var_to_diff[i]))))
+    end
 
     sys = state.sys
     @set! sys.eqs = neweqs
     @set! sys.states = Any[v
                            for (i, v) in enumerate(fullvars)
-                           if diff_to_var[i] === nothing && !isempty(𝑑neighbors(graph, i))]
+                           if diff_to_var[i] === nothing && ispresent(i)]
     removed_obs_set = BitSet(removed_obs)
     var_to_idx = Dict(reverse(en) for en in enumerate(fullvars))
     # Make sure differentiated variables don't appear in observed equations
