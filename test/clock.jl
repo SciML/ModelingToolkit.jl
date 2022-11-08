@@ -114,8 +114,7 @@ eqs = [yd ~ Sample(t, dt)(y)
 @named sys = ODESystem(eqs)
 ci, varmap = infer_clocks(sys)
 tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
-sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[2]), (inputs[2], ()),
-                                            check_consistency = false)
+sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[2]), (inputs[2], ()))
 @test length(states(sss)) == 2
 z, z_t = states(sss)
 S = Shift(t, 1)

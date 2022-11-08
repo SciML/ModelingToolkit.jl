@@ -76,7 +76,8 @@ function check_consistency(state::TearingState, ag = nothing)
 
     unassigned_var = []
     for (vj, eq) in enumerate(extended_var_eq_matching)
-        if eq === unassigned && (ag === nothing || !haskey(ag, vj))
+        if eq === unassigned && (ag === nothing || !haskey(ag, vj)) &&
+           !isempty(𝑑neighbors(graph, vj))
             push!(unassigned_var, fullvars[vj])
         end
     end
