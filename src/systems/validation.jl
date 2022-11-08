@@ -29,12 +29,12 @@ MT = ModelingToolkit
 ```
 """
 equivalent(x, y) = isequal(1 * x, 1 * y)
-unitless = Unitful.unit(1)
+const unitless = Unitful.unit(1)
 
 #For dispatching get_unit
-Literal = Union{Sym, Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithMetadata}
-Conditional = Union{typeof(ifelse), typeof(IfElse.ifelse)}
-Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
+const Literal = Union{Sym, Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithMetadata}
+const Conditional = Union{typeof(ifelse), typeof(IfElse.ifelse)}
+const Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
 
 "Find the unit of a symbolic item."
 get_unit(x::Real) = unitless
@@ -175,7 +175,8 @@ function _validate(conn::Connection; info::String = "")
     syss = get_systems(conn)
     sys = first(syss)
     st = states(sys)
-    for s in syss[2:end]
+    for i in 2:length(syss)
+        s = syss[i]
         sst = states(s)
         if length(st) != length(sst)
             valid = false
