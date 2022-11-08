@@ -450,12 +450,14 @@ end
 
 # TODO: clean up
 function structural_simplify!(state::TearingState, io = nothing; simplify = false,
-                              kwargs...)
+                              check_consistency = true, kwargs...)
     has_io = io !== nothing
     has_io && ModelingToolkit.markio!(state, io...)
     state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
     sys, ag = ModelingToolkit.alias_elimination!(state; kwargs...)
-    #check_consistency(state, ag)
+    if check_consistency
+        ModelingToolkit.check_consistency(state, ag)
+    end
     sys = ModelingToolkit.dummy_derivative(sys, state, ag; simplify)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullstates)

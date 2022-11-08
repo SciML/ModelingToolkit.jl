@@ -2,104 +2,130 @@ using ModelingToolkit, SparseArrays, Test, Optimization, OptimizationOptimJL,
       OptimizationMOI, Ipopt, AmplNLWriter, Ipopt_jll
 using ModelingToolkit: get_metadata
 
-@variables x y
-@constants h = 1
-@parameters a b
-loss = (a - x)^2 + b * (y * h - x^2)^2
-sys1 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
+@testset "basic" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    sys1 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
 
-cons2 = [x^2 + y^2 ~ 0, y * sin(x) - x * h ~ 0]
-sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys2, constraints = cons2)
+    cons2 = [x^2 + y^2 ~ 0, y * sin(x) - x ~ 0]
+    sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys2, constraints = cons2)
 
-@variables z
-@parameters β
-loss2 = sys1.x - sys2.y + z * β * h
-combinedsys = OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2],
-                                 name = :combinedsys)
+    @variables z
+    @parameters β
+    loss2 = sys1.x - sys2.y + z * β
+    combinedsys = OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2],
+                                     name = :combinedsys)
 
-equations(combinedsys)
-states(combinedsys)
-parameters(combinedsys)
+    equations(combinedsys)
+    states(combinedsys)
+    parameters(combinedsys)
 
-calculate_gradient(combinedsys)
-calculate_hessian(combinedsys)
-generate_function(combinedsys)
-generate_gradient(combinedsys)
-generate_hessian(combinedsys)
-hess_sparsity = ModelingToolkit.hessian_sparsity(sys1)
-sparse_prob = OptimizationProblem(sys1, [x, y], [a, b], grad = true, sparse = true)
-OptimizationProblemExpr{true}(sys1, [x => 0, y => 0], [a => 0, b => 0];);
-@test sparse_prob.f.hess_prototype.rowval == hess_sparsity.rowval
-@test sparse_prob.f.hess_prototype.colptr == hess_sparsity.colptr
+    calculate_gradient(combinedsys)
+    calculate_hessian(combinedsys)
+    generate_function(combinedsys)
+    generate_gradient(combinedsys)
+    generate_hessian(combinedsys)
+    hess_sparsity = ModelingToolkit.hessian_sparsity(sys1)
+    sparse_prob = OptimizationProblem(sys1, [x, y], [a, b], grad = true, sparse = true)
+    @test sparse_prob.f.hess_prototype.rowval == hess_sparsity.rowval
+    @test sparse_prob.f.hess_prototype.colptr == hess_sparsity.colptr
 
-u0 = [sys1.x => 1.0
-      sys1.y => 2.0
-      sys2.x => 3.0
-      sys2.y => 4.0
-      z => 5.0]
-p = [sys1.a => 6.0
-     sys1.b => 7.0
-     sys2.a => 8.0
-     sys2.b => 9.0
-     β => 10.0]
+    u0 = [sys1.x => 1.0
+          sys1.y => 2.0
+          sys2.x => 3.0
+          sys2.y => 4.0
+          z => 5.0]
+    p = [sys1.a => 6.0
+         sys1.b => 7.0
+         sys2.a => 8.0
+         sys2.b => 9.0
+         β => 10.0]
 
-prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true)
-@test prob.f.sys === combinedsys
-sol = solve(prob, Ipopt.Optimizer())
-@test sol.minimum < -1e5
+    prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true)
+    @test prob.f.sys === combinedsys
+    sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
+    @test sol.minimum < -1e5
+end
 
-#inequality constraint, the bounds for constraints lcons !== ucons
-prob = OptimizationProblem(sys2, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
-                           lcons = [-1.0, -1.0], ucons = [500.0, 500.0], grad = true,
-                           hess = true)
-@test prob.f.sys === sys2
-sol = solve(prob, IPNewton())
-@test sol.minimum < 1.0
-sol = solve(prob, Ipopt.Optimizer())
-@test sol.minimum < 1.0
-sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
-@test sol.minimum < 1.0
+@testset "inequality constraint" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    cons = [
+        x^2 + y^2 ≲ 1.0,
+    ]
+    @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
 
-#equality constraint, lcons == ucons
-cons2 = [0.0 ~ h * x^2 + y^2]
-out = zeros(1)
-sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys2, constraints = cons2)
-prob = OptimizationProblem(sys2, [x => 0.0, y => 0.0], [a => 1.0, b => 1.0], lcons = [1.0],
-                           ucons = [1.0], grad = true, hess = true)
-sol = solve(prob, IPNewton())
-@test sol.minimum < 1.0
-prob.f.cons(out, sol.minimizer, [1.0, 1.0])
-@test out ≈ [1.0]
-sol = solve(prob, Ipopt.Optimizer())
-@test sol.minimum < 1.0
-prob.f.cons(out, sol.minimizer, [1.0, 1.0])
-@test out ≈ [1.0]
-sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
-@test sol.minimum < 1.0
-prob.f.cons(out, sol.minimizer, [1.0, 1.0])
-@test out ≈ [1.0]
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 1.0],
+                               grad = true, hess = true)
+    @test prob.f.sys === sys
+    sol = solve(prob, IPNewton())
+    @test sol.minimum < 1.0
+    sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
+    @test sol.minimum < 1.0
+    sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
+    @test sol.minimum < 1.0
+end
 
-rosenbrock(x, p) = (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
-x0 = zeros(2)
-_p = [1.0, 100.0]
+@testset "equality constraint" begin
+    @variables x y z
+    @parameters a b
+    loss = (a - x)^2 + b * z^2
+    cons = [1.0 ~ x^2 + y^2
+            z ~ y - x^2]
+    @named sys = OptimizationSystem(loss, [x, y, z], [a, b], constraints = cons)
+    sys = structural_simplify(sys)
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
+                               grad = true, hess = true)
+    sol = solve(prob, IPNewton())
+    @test sol.minimum < 1.0
+    @test sol.u≈[0.808, -0.064] atol=1e-3
+    @test sol[x]^2 + sol[y]^2 ≈ 1.0
+    sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
+    @test sol.minimum < 1.0
+    @test sol.u≈[0.808, -0.064] atol=1e-3
+    @test sol[x]^2 + sol[y]^2 ≈ 1.0
+    sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
+    @test sol.minimum < 1.0
+    @test sol.u≈[0.808, -0.064] atol=1e-3
+    @test sol[x]^2 + sol[y]^2 ≈ 1.0
+end
 
-f = OptimizationFunction(rosenbrock, Optimization.AutoModelingToolkit())
-prob = OptimizationProblem(f, x0, _p)
-sol = solve(prob, Newton())
+@testset "rosenbrock" begin
+    rosenbrock(x, p) = (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
+    x0 = zeros(2)
+    p = [1.0, 100.0]
+    f = OptimizationFunction(rosenbrock, Optimization.AutoModelingToolkit())
+    prob = OptimizationProblem(f, x0, p)
+    sol = solve(prob, Newton())
+    @test sol.u ≈ [1.0, 1.0]
+end
 
 # issue #819
 @testset "Combined system name collisions" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    sys1 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
     sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
+    @variables z
+    @parameters β
+    loss2 = sys1.x - sys2.y + z * β
     @test_throws ArgumentError OptimizationSystem(loss2, [z], [β], systems = [sys1, sys2])
 end
 
-# observed variable handling
-@variables OBS
-@named sys2 = OptimizationSystem(loss, [x, y], [a, b]; observed = [OBS ~ x * h + y])
-OBS2 = OBS
-@test isequal(OBS2, @nonamespace sys2.OBS)
-@unpack OBS = sys2
-@test isequal(OBS2, OBS)
+@testset "observed variable handling" begin
+    @variables x y
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    @variables OBS
+    @named sys2 = OptimizationSystem(loss, [x, y], [a, b]; observed = [OBS ~ x + y])
+    OBS2 = OBS
+    @test isequal(OBS2, @nonamespace sys2.OBS)
+    @unpack OBS = sys2
+    @test isequal(OBS2, OBS)
+end
 
 # nested constraints
 @testset "nested systems" begin
@@ -130,8 +156,10 @@ end
     loss = (a - x)^2 + b * (y - x^2)^2
     sys1 = OptimizationSystem(loss, [x, y], [a, b], name = :sys1)
 
-    cons2 = [x^2 + y^2 ~ 0, y * sin(x) - x ~ 0]
-    sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys2, constraints = cons2)
+    cons = [
+        x^2 + y^2 ≲ 1.0,
+    ]
+    sys2 = OptimizationSystem(loss, [x, y], [a, b], name = :sys2, constraints = cons)
 
     @variables z
     @parameters β
@@ -152,26 +180,54 @@ end
 
     prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true)
     @test prob.f.sys === combinedsys
-    sol = solve(prob, Ipopt.Optimizer())
+    sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.minimum < -1e5
 
-    #inequality constraint, the bounds for constraints lcons !== ucons
     prob = OptimizationProblem(sys2, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
-                               lcons = [-1.0, -1.0], ucons = [500.0, 500.0], grad = true,
-                               hess = true)
+                               grad = true, hess = true)
     @test prob.f.sys === sys2
     sol = solve(prob, IPNewton())
     @test sol.minimum < 1.0
-    sol = solve(prob, Ipopt.Optimizer())
+    sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.minimum < 1.0
 end
 
-@variables x
-o1 = (x - 1)^2
-c1 = [
-    x ~ 1,
-]
-testdict = Dict(["test" => 1])
-sys1 = OptimizationSystem(o1, [x], [], name = :sys1, constraints = c1,
-                          metadata = testdict)
-@test get_metadata(sys1) == testdict
+@testset "metadata" begin
+    @variables x
+    o1 = (x - 1)^2
+    c1 = [
+        x ~ 1,
+    ]
+    testdict = Dict(["test" => 1])
+    sys1 = OptimizationSystem(o1, [x], [], name = :sys1, constraints = c1,
+                              metadata = testdict)
+    @test get_metadata(sys1) == testdict
+end
+
+@testset "non-convex problem with inequalities" begin
+    @variables x[1:2] [bounds = (0.0, Inf)]
+    @named sys = OptimizationSystem(x[1] + x[2], [x...], [];
+                                    constraints = [
+                                        1.0 ≲ x[1]^2 + x[2]^2,
+                                        x[1]^2 + x[2]^2 ≲ 2.0,
+                                    ])
+
+    prob = OptimizationProblem(sys, [x[1] => 2.0, x[2] => 0.0], [], grad = true,
+                               hess = true)
+    sol = Optimization.solve(prob, Ipopt.Optimizer(); print_level = 0)
+    @test sol.u ≈ [1, 0]
+    @test prob.lb == [0.0, 0.0]
+    @test prob.ub == [Inf, Inf]
+end
+
+@testset "parameter bounds" begin
+    @parameters c = 0.0
+    @variables x y [bounds = (c, Inf)]
+    @parameters a b
+    loss = (a - x)^2 + b * (y - x^2)^2
+    @named sys = OptimizationSystem(loss, [x, y], [a, b, c])
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
+                               grad = true, hess = true)
+    @test prob.lb == [-Inf, 0.0]
+    @test prob.ub == [Inf, Inf]
+end

@@ -318,3 +318,39 @@ sys_simp, input_idxs = structural_simplify(sys, (; inputs = m_inputs, outputs = 
                          systems = [int, gain, c, fb])
 sys = structural_simplify(model)
 @test length(states(sys)) == length(equations(sys)) == 1
+
+## Disturbance models when plant has multiple inputs
+using ModelingToolkit, LinearAlgebra
+using ModelingToolkit: DisturbanceModel, io_preprocessing, get_iv, get_disturbance_system
+using ModelingToolkitStandardLibrary.Blocks
+A, C = [randn(2, 2) for i in 1:2]
+B = [1.0 0; 0 1.0]
+@named model = Blocks.StateSpace(A, B, C)
+@named integrator = Blocks.StateSpace([-0.001;;], [1.0;;], [1.0;;], [0.0;;])
+
+ins = collect(model.input.u)
+outs = collect(model.output.u)
+
+disturbed_input = ins[1]
+@named dist_integ = DisturbanceModel(disturbed_input, integrator)
+
+(f_oop, f_ip), augmented_sys, dvs, p = ModelingToolkit.add_input_disturbance(model,
+                                                                             dist_integ,
+                                                                             ins)
+
+augmented_sys = complete(augmented_sys)
+matrices, ssys = linearize(augmented_sys,
+                           [
+                               augmented_sys.u,
+                               augmented_sys.model.input.u[2],
+                               augmented_sys.d,
+                           ], outs)
+@test matrices.A ≈ [A [1; 0]; zeros(1, 2) -0.001]
+@test matrices.B == I
+@test matrices.C == [C zeros(2)]
+@test matrices.D == zeros(2, 3)
+
+# Verify using ControlSystemsBase
+# P = ss(A,B,C,0)
+# G = ss(matrices...)
+# @test sminreal(G[1, 3]) ≈ sminreal(P[1,1])*dist
