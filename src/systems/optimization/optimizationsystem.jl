@@ -288,6 +288,21 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         hess_prototype = nothing
     end
 
+    observedfun = let sys = sys, dict = Dict()
+        function generated_observed(obsvar, args...)
+            obs = get!(dict, value(obsvar)) do
+                build_explicit_observed_function(sys, obsvar)
+            end
+            if args === ()
+                let obs = obs
+                    (u, p) -> obs(u, p)
+                end
+            else
+                obs(args...)
+            end
+        end
+    end
+
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
@@ -334,7 +349,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                                   cons_jac_prototype = cons_jac_prototype,
                                                   cons_hess_prototype = cons_hess_prototype,
                                                   expr = obj_expr,
-                                                  cons_expr = cons_expr)
+                                                  cons_expr = cons_expr,
+                                                  observed = observedfun)
         OptimizationProblem{iip}(_f, u0, p; lb = lb, ub = ub, int = int,
                                  lcons = lcons, ucons = ucons, kwargs...)
     else
@@ -346,7 +362,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                                   syms = Symbol.(states(sys)),
                                                   paramsyms = Symbol.(parameters(sys)),
                                                   hess_prototype = hess_prototype,
-                                                  expr = obj_expr)
+                                                  expr = obj_expr,
+                                                  observed = observedfun)
         OptimizationProblem{iip}(_f, u0, p; lb = lb, ub = ub, int = int,
                                  kwargs...)
     end

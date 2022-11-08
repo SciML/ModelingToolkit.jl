@@ -81,15 +81,15 @@ end
     sol = solve(prob, IPNewton())
     @test sol.minimum < 1.0
     @test sol.u≈[0.808, -0.064] atol=1e-3
-    @test_broken sol[x]^2 + sol[y]^2 ≈ 1.0
+    @test sol[x]^2 + sol[y]^2 ≈ 1.0
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.minimum < 1.0
     @test sol.u≈[0.808, -0.064] atol=1e-3
-    @test_broken sol[x]^2 + sol[y]^2 ≈ 1.0
+    @test sol[x]^2 + sol[y]^2 ≈ 1.0
     sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
     @test sol.minimum < 1.0
     @test sol.u≈[0.808, -0.064] atol=1e-3
-    @test_broken sol[x]^2 + sol[y]^2 ≈ 1.0
+    @test sol[x]^2 + sol[y]^2 ≈ 1.0
 end
 
 @testset "rosenbrock" begin
