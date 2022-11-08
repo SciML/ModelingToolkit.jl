@@ -170,6 +170,36 @@ function _validate(terms::Vector, labels::Vector{String}; info::String = "")
     valid
 end
 
+function _validate(conn::Connection; info::String="")
+    valid = true
+    syss = get_systems(conn)
+    sys = first(syss)
+    st = states(sys)
+    for s in syss[2:end]
+        sst = states(s)
+        if length(st) != length(sst)
+            valid = false
+            @warn("$info: connected systems $(nameof(sys)) and $(nameof(s)) have $(length(st)) and $(length(sst)) states, cannor connect.")
+            continue
+        end
+        for (i, x) in enumerate(st)
+            j = findfirst(isequal(x), sst)
+            if j == nothing
+                valid = false
+                @warn("$info: connected systems $(nameof(sys)) and $(nameof(s)) do not have the same states.")
+            else
+                aunit = safe_get_unit(x, info * string(nameof(sys)) * "#$i")
+                bunit = safe_get_unit(sst[j], info * string(nameof(s)) * "#$j")
+                if !equivalent(aunit, bunit)
+                    valid = false
+                    @warn("$info: connected system states $x and $(sst[j]) have mismatched units.")
+                end
+            end
+        end
+    end
+    valid
+end
+
 function validate(jump::Union{ModelingToolkit.VariableRateJump,
                               ModelingToolkit.ConstantRateJump}, t::Symbolic;
                   info::String = "")
@@ -195,7 +225,11 @@ function validate(jumps::ArrayPartition{<:Union{Any, Vector{<:JumpType}}}, t::Sy
 end
 
 function validate(eq::ModelingToolkit.Equation; info::String = "")
-    _validate([eq.lhs, eq.rhs], ["left", "right"]; info)
+    if typeof(eq.lhs) == Connection
+        _validate(eq.rhs; info)
+    else
+        _validate([eq.lhs, eq.rhs], ["left", "right"]; info)
+    end
 end
 function validate(eq::ModelingToolkit.Equation,
                   term::Union{Symbolic, Unitful.Quantity, Num}; info::String = "")
