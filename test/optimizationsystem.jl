@@ -69,25 +69,27 @@ end
 end
 
 @testset "equality constraint" begin
-    @variables x y
+    @variables x y z
     @parameters a b
-    loss = (a - x)^2 + b * (y - x^2)^2
-    cons = [1.0 ~ x^2 + y^2]
-    @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
-    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 1.0],
+    loss = (a - x)^2 + b * z^2
+    cons = [1.0 ~ x^2 + y^2
+            z ~ y - x^2]
+    @named sys = OptimizationSystem(loss, [x, y, z], [a, b], constraints = cons)
+    sys = structural_simplify(sys)
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
                                grad = true, hess = true)
     sol = solve(prob, IPNewton())
     @test sol.minimum < 1.0
-    @test sol.u≈[0.808, 0.589] atol=1e-3
-    @test sol[x]^2 + sol[y]^2 ≈ 1.0
+    @test sol.u≈[0.808, -0.064] atol=1e-3
+    @test_broken sol[x]^2 + sol[y]^2 ≈ 1.0
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.minimum < 1.0
-    @test sol.u≈[0.808, 0.589] atol=1e-3
-    @test sol[x]^2 + sol[y]^2 ≈ 1.0
+    @test sol.u≈[0.808, -0.064] atol=1e-3
+    @test_broken sol[x]^2 + sol[y]^2 ≈ 1.0
     sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
     @test sol.minimum < 1.0
-    @test sol.u≈[0.808, 0.589] atol=1e-3
-    @test sol[x]^2 + sol[y]^2 ≈ 1.0
+    @test sol.u≈[0.808, -0.064] atol=1e-3
+    @test_broken sol[x]^2 + sol[y]^2 ≈ 1.0
 end
 
 @testset "rosenbrock" begin

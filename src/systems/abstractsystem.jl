@@ -1031,7 +1031,7 @@ This will convert all `inputs` to parameters and allow them to be unconnected, i
 simplification will allow models where `n_states = n_equations - n_inputs`.
 """
 function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
-                             simplify_constants = true, kwargs...)
+                             simplify_constants = true, check_consistency = true, kwargs...)
     sys = expand_connections(sys)
     sys isa DiscreteSystem && return sys
     state = TearingState(sys)
@@ -1039,7 +1039,9 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     has_io && markio!(state, io...)
     state, input_idxs = inputs_to_parameters!(state, io)
     sys, ag = alias_elimination!(state; kwargs...)
-    check_consistency(state, ag)
+    if check_consistency
+        ModelingToolkit.check_consistency(state, ag)
+    end
     sys = dummy_derivative(sys, state, ag; simplify)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = topsort_equations(observed(sys), fullstates)

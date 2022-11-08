@@ -543,3 +543,32 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
         end
     end
 end
+
+function structural_simplify(sys::OptimizationSystem; kwargs...)
+    sys = flatten(sys)
+    cons = constraints(sys)
+    econs = Equation[]
+    icons = similar(cons, 0)
+    for e in cons
+        if e isa Equation
+            push!(econs, e)
+        else
+            push!(icons, e)
+        end
+    end
+    nlsys = NonlinearSystem(econs, states(sys), parameters(sys); name = :___tmp_nlsystem)
+    snlsys = structural_simplify(nlsys; check_consistency = false, kwargs...)
+    obs = observed(snlsys)
+    subs = Dict(eq.lhs => eq.rhs for eq in observed(snlsys))
+    seqs = equations(snlsys)
+    sizehint!(icons, length(icons) + length(seqs))
+    for eq in seqs
+        push!(icons, substitute(eq, subs))
+    end
+    newsts = setdiff(states(sys), keys(subs))
+    @set! sys.constraints = icons
+    @set! sys.observed = [observed(sys); obs]
+    @set! sys.op = substitute(equations(sys), subs)
+    @set! sys.states = newsts
+    return sys
+end
