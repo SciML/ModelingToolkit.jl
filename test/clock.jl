@@ -66,7 +66,8 @@ eqmap = ci.eq_domain
 tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
 sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
 @test equations(sss) == [D(x) ~ u - x]
-sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[2]), (inputs[2], ()))
+sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[2]), (inputs[2], ()),
+                                            check_consistency = false)
 @test isempty(equations(sss))
 @test observed(sss) == [r ~ 1.0; yd ~ Sample(t, dt)(y); ud ~ kp * (r - yd)]
 
@@ -104,15 +105,21 @@ eqs = [yd ~ Sample(t, dt)(y)
        y ~ x
        z(k + 2) ~ z(k) + yd
        #=
-       z(k + 2) ~ z(k)
+       z(k + 2) ~ z(k) + yd
        =>
-       z′(k + 1) ~ z(k)
+       z′(k + 1) ~ z(k) + yd
        z(k + 1)  ~ z′(k)
        =#
        ]
 @named sys = ODESystem(eqs)
 ci, varmap = infer_clocks(sys)
 tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
+sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[2]), (inputs[2], ()),
+                                            check_consistency = false)
+@test length(states(sss)) == 2
+z, z_t = states(sss)
+S = Shift(t, 1)
+@test full_equations(sss) == [S(z) ~ z_t; S(z_t) ~ z + Sample(t, dt)(y)]
 
 @info "Testing multi-rate hybrid system"
 dt = 0.1

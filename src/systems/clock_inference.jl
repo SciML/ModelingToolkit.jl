@@ -81,7 +81,7 @@ end
 function split_system(ci::ClockInference)
     @unpack ts, eq_domain, var_domain, inferred = ci
     @unpack fullvars = ts
-    @unpack graph = ts.structure
+    @unpack graph, var_to_diff = ts.structure
     continuous_id = Ref(0)
     clock_to_id = Dict{TimeDomain, Int}()
     id_to_clock = TimeDomain[]
@@ -106,11 +106,14 @@ function split_system(ci::ClockInference)
         eq_to_cid[i] = cid
         resize_or_push!(cid_to_eq, i, cid)
     end
+    continuous_id = continuous_id[]
     input_idxs = map(_ -> Int[], 1:cid_counter[])
     inputs = map(_ -> Any[], 1:cid_counter[])
-    for (i, d) in enumerate(var_domain)
+    nvv = length(var_domain)
+    for i in 1:nvv
+        d = var_domain[i]
         cid = get(clock_to_id, d, 0)
-        @assert cid!==0 "Internal error!"
+        @assert cid!==0 "Internal error! Variable $(fullvars[i]) doesn't have a inferred time domain."
         var_to_cid[i] = cid
         v = fullvars[i]
         #TODO: remove Inferred*
@@ -139,10 +142,11 @@ function split_system(ci::ClockInference)
             eq_to_diff[j] = ts_i.structure.eq_to_diff[eq_i]
         end
         @set! ts_i.structure.graph = complete(BipartiteGraph(ne, fadj, ndsts(graph)))
+        @set! ts_i.structure.only_discrete = id != continuous_id
         @set! ts_i.sys.eqs = eqs_i
         @set! ts_i.structure.eq_to_diff = eq_to_diff
         tss[id] = ts_i
-        # TODO: just mark past and sample variables as inputs
+        # TODO: just mark current and sample variables as inputs
     end
     return tss, inputs
 

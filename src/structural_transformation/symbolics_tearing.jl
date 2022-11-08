@@ -92,7 +92,7 @@ function full_equations(sys::AbstractSystem; simplify = false)
     @unpack subs = substitutions
     solved = Dict(eq.lhs => eq.rhs for eq in subs)
     neweqs = map(equations(sys)) do eq
-        if isdiffeq(eq)
+        if istree(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
             return tearing_sub(eq.lhs, solved, simplify) ~ tearing_sub(eq.rhs, solved,
                                                                        simplify)
         else
@@ -262,7 +262,11 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
 
     if ModelingToolkit.has_iv(state.sys)
         iv = get_iv(state.sys)
-        D = Differential(iv)
+        if is_only_discrete(state.structure)
+            D = Shift(iv, 1)
+        else
+            D = Differential(iv)
+        end
     else
         iv = D = nothing
     end
@@ -631,7 +635,9 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
 
     sys = state.sys
     @set! sys.eqs = neweqs
-    @set! sys.states = [v for (i, v) in enumerate(fullvars) if diff_to_var[i] === nothing]
+    @set! sys.states = Any[v
+                           for (i, v) in enumerate(fullvars)
+                           if diff_to_var[i] === nothing && !isempty(𝑑neighbors(graph, i))]
     removed_obs_set = BitSet(removed_obs)
     var_to_idx = Dict(reverse(en) for en in enumerate(fullvars))
     # Make sure differentiated variables don't appear in observed equations
