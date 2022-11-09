@@ -196,7 +196,7 @@ eqs = [connect_sd(sd, mass1, mass2)
 @named _model = ODESystem(eqs, t)
 @named model = compose(_model, mass1, mass2, sd);
 
-f, dvs, ps = ModelingToolkit.generate_control_function(model, simplify = true)
+f, dvs, ps = ModelingToolkit.generate_control_function(model, simplify = true, force_SA=true)
 @test length(dvs) == 4
 @test length(ps) == length(parameters(model))
 p = ModelingToolkit.varmap_to_vars(ModelingToolkit.defaults(model), ps)
@@ -204,6 +204,7 @@ x = ModelingToolkit.varmap_to_vars(merge(ModelingToolkit.defaults(model),
                                          Dict(D.(states(model)) .=> 0.0)), dvs)
 u = [rand()]
 out = f[1](x, u, p, 1)
+@test out isa ModelingToolkit.StaticArrays.SVector # due to force_SA when generating the function
 i = findfirst(isequal(u[1]), out)
 @test i isa Int
 @test iszero(out[[1:(i - 1); (i + 1):end]])
