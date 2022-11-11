@@ -289,7 +289,8 @@ i.e. there are no cycles.
 function build_explicit_observed_function(sys, ts;
                                           expression = false,
                                           output_type = Array,
-                                          checkbounds = true)
+                                          checkbounds = true,
+                                          throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
     end
@@ -336,7 +337,12 @@ function build_explicit_observed_function(sys, ts;
                     subs[s] = s′
                     continue
                 end
-                throw(ArgumentError("$s is neither an observed nor a state variable."))
+                if throw
+                    Base.throw(ArgumentError("$s is neither an observed nor a state variable."))
+                else
+                    # TODO: return variables that don't exist in the system.
+                    return nothing
+                end
             end
             continue
         end

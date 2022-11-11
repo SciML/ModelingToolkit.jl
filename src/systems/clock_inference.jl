@@ -146,9 +146,71 @@ function split_system(ci::ClockInference)
         @set! ts_i.sys.eqs = eqs_i
         @set! ts_i.structure.eq_to_diff = eq_to_diff
         tss[id] = ts_i
-        # TODO: just mark current and sample variables as inputs
     end
-    return tss, inputs
+    return tss, inputs, continuous_id
+end
 
-    #id_to_clock, cid_to_eq, cid_to_var
+function generate_discrete_affect(syss, inputs, continuous_id, check_bounds = true)
+    out = Sym{Any}(:out)
+    appended_parameters = parameters(syss[continuous_id])
+    param_to_idx = Dict{Any, Int}(reverse(en) for en in enumerate(appended_parameters))
+    offset = length(appended_parameters)
+    affect_funs = []
+    svs = []
+    for (i, (sys, input)) in enumerate(zip(syss, inputs))
+        i == continuous_id && continue
+        subs = get_substitutions(sys)
+        assignments = map(s -> Assignment(s.lhs, s.rhs), subs.subs)
+        let_body = SetArray(!check_bounds, out, rhss(equations(sys)))
+        let_block = Let(assignments, let_body, false)
+        needed_cont_to_disc_obs = map(v -> arguments(v)[1], input)
+        # TODO: filter the needed ones
+        needed_disc_to_cont_obs = map(v -> arguments(v)[1], inputs[continuous_id])
+        append!(appended_parameters, input, states(sys))
+        disc_to_cont_idxs = map(Base.Fix1(getindex, param_to_idx), inputs[continuous_id])
+        cont_to_disc_obs = build_explicit_observed_function(syss[continuous_id],
+                                                            needed_cont_to_disc_obs,
+                                                            throw = false,
+                                                            expression = true,
+                                                            output_type = SVector)
+        @set! sys.ps = appended_parameters
+        disc_to_cont_obs = build_explicit_observed_function(sys, needed_disc_to_cont_obs,
+                                                            throw = false,
+                                                            expression = true,
+                                                            output_type = SVector)
+        ni = length(input)
+        ns = length(states(sys))
+        disc = Func([
+                        out,
+                        DestructuredArgs(states(sys)),
+                        DestructuredArgs(appended_parameters),
+                        get_iv(sys),
+                    ], [],
+                    let_block)
+        cont_to_disc_idxs = (offset + 1):(offset += ni)
+        input_offset = offset
+        disc_range = (offset + 1):(offset += ns)
+        affect! = quote
+            function affect!(integrator, saved_values)
+                @unpack u, p, t = integrator
+                c2d_obs = $cont_to_disc_obs
+                d2c_obs = $disc_to_cont_obs
+                c2d_view = view(p, $cont_to_disc_idxs)
+                d2c_view = view(p, $disc_to_cont_idxs)
+                disc_state = view(p, $disc_range)
+                disc = $disc
+                # Write continuous info to discrete
+                # Write discrete info to continuous
+                copyto!(c2d_view, c2d_obs(integrator.u, p, t))
+                copyto!(d2c_view, d2c_obs(disc_state, p, t))
+                push!(saved_values.t, t)
+                push!(saved_values.saveval, Base.@ntuple $ns i->p[$input_offset + i])
+                disc(disc_state, disc_state, p, t)
+            end
+        end
+        sv = SavedValues(Float64, NTuple{ns, Float64})
+        push!(affect_funs, affect!)
+        push!(svs, sv)
+    end
+    return map(a -> toexpr(LiteralExpr(a)), affect_funs), svs, appended_parameters
 end
