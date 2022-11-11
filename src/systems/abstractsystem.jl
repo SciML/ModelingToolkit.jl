@@ -373,7 +373,7 @@ function renamespace(sys, x)
     sys === nothing && return x
     x = unwrap(x)
     if x isa Symbolic
-        if isdifferential(x)
+        if istree(x) && operation(x) isa Operator
             return similarterm(x, operation(x), Any[renamespace(sys, only(arguments(x)))])
         end
         let scope = getmetadata(x, SymScope, LocalScope())

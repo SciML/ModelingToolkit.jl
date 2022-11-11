@@ -66,8 +66,7 @@ eqmap = ci.eq_domain
 tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
 sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
 @test equations(sss) == [D(x) ~ u - x]
-sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[2]), (inputs[2], ()),
-                                            check_consistency = false)
+sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[2]), (inputs[2], ()))
 @test isempty(equations(sss))
 @test observed(sss) == [r ~ 1.0; yd ~ Sample(t, dt)(y); ud ~ kp * (r - yd)]
 
@@ -96,7 +95,7 @@ d = Clock(t, dt)
 k = ShiftIndex(d)
 
 eqs = [yd ~ Sample(t, dt)(y)
-       ud ~ kp * (r - yd)
+       ud ~ kp * (r - yd) + z(k)
        r ~ 1.0
 
        # plant (time continuous part)
@@ -114,11 +113,49 @@ eqs = [yd ~ Sample(t, dt)(y)
 @named sys = ODESystem(eqs)
 ci, varmap = infer_clocks(sys)
 tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
-sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[2]), (inputs[2], ()))
-@test length(states(sss)) == 2
-z, z_t = states(sss)
+syss = map(i -> ModelingToolkit.structural_simplify!(deepcopy(tss[i]), (inputs[i], ()))[1],
+           eachindex(tss))
+sys1, sys2 = syss
+@test length(states(sys2)) == 2
+z, z_t = states(sys2)
 S = Shift(t, 1)
-@test full_equations(sss) == [S(z) ~ z_t; S(z_t) ~ z + Sample(t, dt)(y)]
+@test full_equations(sys2) == [S(z) ~ z_t; S(z_t) ~ z + Sample(t, dt)(y)]
+# TODO: set Hold(ud)
+prob = ODEProblem(sys1, [x => 0.0, y => 0.0], (0.0, 1.0), [kp => 1.0, Hold(ud) => 0.0]);
+exprs, svs, pp = ModelingToolkit.generate_discrete_affect(syss, inputs, 1);
+prob = remake(prob, p = zeros(Float64, length(pp)));
+prob.p[1] = 1.0;
+gen_affect! = Base.Fix2(eval(exprs[1]), svs[1]);
+cb = PeriodicCallback(gen_affect!, 0.1);
+sol2 = solve(prob, Tsit5(), callback = cb);
+
+# kp is the only real parameter
+using OrdinaryDiffEq, DiffEqCallbacks
+function foo!(du, u, p, t)
+    x = u[1]
+    ud = p[2]
+    du[1] = -x + ud
+end
+function affect!(integrator, saved_values)
+    kp = integrator.p[1]
+    yd = integrator.u[1]
+    z_t = integrator.p[3]
+    z = integrator.p[4]
+    r = 1.0
+    ud = kp * (r - yd) + z
+    push!(saved_values.t, integrator.t)
+    push!(saved_values.saveval, (integrator.p[3], integrator.p[4]))
+    @info "" yd ud z=saved_values.saveval[end]
+    integrator.p[2] = ud
+    integrator.p[3] = z + yd
+    integrator.p[4] = z_t
+    nothing
+end
+saved_values = SavedValues(Float64, Tuple{Float64, Float64});
+cb = PeriodicCallback(Base.Fix2(affect!, saved_values), 0.1);
+prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 0.0, 0.0, 0.0], callback = cb);
+sol = solve(prob, Tsit5());
+@test sol.u ≈ sol2.u
 
 @info "Testing multi-rate hybrid system"
 dt = 0.1
