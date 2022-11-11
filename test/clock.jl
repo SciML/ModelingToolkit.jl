@@ -122,6 +122,7 @@ S = Shift(t, 1)
 @test full_equations(sys2) == [S(z) ~ z_t; S(z_t) ~ z + Sample(t, dt)(y)]
 # TODO: set Hold(ud)
 prob = ODEProblem(sys1, [x => 0.0, y => 0.0], (0.0, 1.0), [kp => 1.0, Hold(ud) => 0.0]);
+using OrdinaryDiffEq, DiffEqCallbacks
 exprs, svs, pp = ModelingToolkit.generate_discrete_affect(syss, inputs, 1);
 prob = remake(prob, p = zeros(Float64, length(pp)));
 prob.p[1] = 1.0;
@@ -130,7 +131,6 @@ cb = PeriodicCallback(gen_affect!, 0.1);
 sol2 = solve(prob, Tsit5(), callback = cb);
 
 # kp is the only real parameter
-using OrdinaryDiffEq, DiffEqCallbacks
 function foo!(du, u, p, t)
     x = u[1]
     ud = p[2]
