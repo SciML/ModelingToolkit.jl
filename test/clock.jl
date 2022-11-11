@@ -145,7 +145,6 @@ function affect!(integrator, saved_values)
     ud = kp * (r - yd) + z
     push!(saved_values.t, integrator.t)
     push!(saved_values.saveval, (integrator.p[3], integrator.p[4]))
-    @info "" yd ud z=saved_values.saveval[end]
     integrator.p[2] = ud
     integrator.p[3] = z + yd
     integrator.p[4] = z_t
