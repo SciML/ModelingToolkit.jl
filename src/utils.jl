@@ -633,17 +633,6 @@ function get_substitutions_and_solved_states(sys; no_postprocess = false)
     return pre, sol_states
 end
 
-function SciMLBase.mergedefaults(defaults, varmap, var_type::Symbol; sys)
-    vars = if var_type == :states
-        states(sys)
-    elseif var_type == :parameters
-        parameters(sys)
-    else
-        throw(ArgumentError("Unsupported var_type: `$var_type`"))
-    end
-    return mergedefaults(defaults, varmap, vars)
-end
-
 @noinline function throw_missingvars_in_sys(vars)
     throw(ArgumentError("$vars are either missing from the variable map or missing from the system's states/parameters list."))
 end
