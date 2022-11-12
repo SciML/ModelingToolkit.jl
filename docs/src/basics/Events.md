@@ -3,9 +3,9 @@ ModelingToolkit provides several ways to represent system events, which enable
 system state or parameters to be changed when certain conditions are satisfied,
 or can be used to detect discontinuities. These events are ultimately converted
 into DifferentialEquations.jl [`ContinuousCallback`s or
-`DiscreteCallback`s](https://docs.sciml.ai/stable/modules/DiffEqDocs/features/callback_functions/),
+`DiscreteCallback`s](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/),
 or into more specialized callback types from the
-[DiffEqCallbacks.jl](https://docs.sciml.ai/stable/modules/DiffEqDocs/features/callback_library/)
+[DiffEqCallbacks.jl](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_library/)
 library.
 
 [`ODESystem`](@ref)s and [`SDESystem`](@ref)s accept keyword arguments
@@ -15,7 +15,7 @@ discrete callbacks. [`JumpSystem`](@ref)s currently support only
 zero, with root finding used to determine the time at which a zero crossing
 occurred. Discrete events are applied when a condition tested after each
 timestep evaluates to true. See the [DifferentialEquations
-docs](https://docs.sciml.ai/stable/modules/DiffEqDocs/features/callback_functions/)
+docs](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/)
 for more detail.
 
 Events involve both a *condition* function (for the zero crossing or truth
@@ -73,7 +73,7 @@ plot(sol)
 
 ### Example: Bouncing ball
 In the documentation for
-[DifferentialEquations](https://docs.sciml.ai/stable/modules/DiffEqDocs/features/callback_functions/#Example-1:-Bouncing-Ball),
+[DifferentialEquations](https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/#Example-1:-Bouncing-Ball),
 we have an example where a bouncing ball is simulated using callbacks which have
 an `affect!` on the state. We can model the same system using ModelingToolkit
 like this
@@ -149,12 +149,12 @@ that are accessed by `affect!`, respectively; and `ctx` is any context that is
 passed to `affect!` as the `ctx` argument.
 
 `affect!` receives a [DifferentialEquations.jl
-integrator](https://docs.sciml.ai/stable/modules/DiffEqDocs/basics/integrator/)
+integrator](https://docs.sciml.ai/DiffEqDocs/stable/basics/integrator/)
  as its first argument, which can then be used to access states and parameters
 that are provided in the `u` and `p` arguments (implemented as `NamedTuple`s).
 The integrator can also be manipulated more generally to control solution
 behavior, see the [integrator
-interface](https://docs.sciml.ai/stable/modules/DiffEqDocs/basics/integrator/)
+interface](https://docs.sciml.ai/DiffEqDocs/stable/basics/integrator/)
 documentation. In affect functions we have that
 ```julia
 function affect!(integ, u, p, ctx)

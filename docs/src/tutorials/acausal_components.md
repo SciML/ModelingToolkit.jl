@@ -13,9 +13,9 @@ equalities before solving. Let's see this in action.
 
     This tutorial teaches how to build the entire RC circuit from scratch.
     However, to simulate electrical components with more ease, check out the
-    [ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl)
+    [ModelingToolkitStandardLibrary.jl](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/)
     which includes a 
-    [tutorial for simulating RC circuits with pre-built components](http://mtkstdlib.sciml.ai/dev/tutorials/rc_circuit/)
+    [tutorial for simulating RC circuits with pre-built components](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/tutorials/rc_circuit/)
 
 ## Copy-Paste Example
 
@@ -303,7 +303,7 @@ parameters(rc_model)
 ## Simplifying and Solving this System
 
 This system could be solved directly as a DAE using [one of the DAE solvers
-from DifferentialEquations.jl](https://diffeq.sciml.ai/stable/solvers/dae_solve/).
+from DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/).
 However, let's take a second to symbolically simplify the system before doing the
 solve. Although we can use ODE solvers that handles mass matrices to solve the
 above system directly, we want to run the `structural_simplify` function first,
@@ -324,7 +324,7 @@ with two state variables. One of the equations is a differential equation
 while the other is an algebraic equation. We can then give the values for the
 initial conditions of our states and solve the system by converting it to
 an ODEProblem in mass matrix form and solving it with an [ODEProblem mass matrix
-DAE solver](https://diffeq.sciml.ai/stable/solvers/dae_solve/#OrdinaryDiffEq.jl-(Mass-Matrix)).
+DAE solver](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/#OrdinaryDiffEq.jl-(Mass-Matrix)).
 This is done as follows:
 
 ```@example acausal

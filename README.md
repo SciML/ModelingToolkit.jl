@@ -21,14 +21,14 @@ computations. Automatic transformations, such as index reduction, can be applied
 to the model to make it easier for numerical solvers to handle.
 
 For information on using the package,
-[see the stable documentation](https://mtk.sciml.ai/stable/). Use the
-[in-development documentation](https://mtk.sciml.ai/dev/) for the version of
+[see the stable documentation](https://docs.sciml.ai/ModelingToolkit/stable/). Use the
+[in-development documentation](https://docs.sciml.ai/ModelingToolkit/dev/) for the version of
 the documentation which contains the unreleased features.
 
 ## Standard Library
 
 For a standard library of ModelingToolkit components and blocks, check out the
-[ModelingToolkitStandardLibrary](https://github.com/SciML/ModelingToolkitStandardLibrary.jl)
+[ModelingToolkitStandardLibrary](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/)
 
 ## High-Level Examples
 

@@ -34,7 +34,7 @@ makedocs(sitename = "ModelingToolkit.jl",
          format = Documenter.HTML(; analytics = "UA-90474609-3",
                                   assets = ["assets/favicon.ico"],
                                   mathengine,
-                                  canonical = "https://mtk.sciml.ai/stable/",
+                                  canonical = "https://docs.sciml.ai/ModelingToolkit/stable/",
                                   prettyurls = (get(ENV, "CI", nothing) == "true")),
          pages = pages)
 

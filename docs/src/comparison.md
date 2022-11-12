@@ -40,9 +40,9 @@
   Julia as an order of magnitude or more faster in many cases due to its JIT
   compilation.
 - Simulink uses the MATLAB differential equation solvers while ModelingToolkit.jl
-  uses [DifferentialEquations.jl](https://diffeq.sciml.ai/dev/). For a systematic
+  uses [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/). For a systematic
   comparison between the solvers, consult
-  [open benchmarks](https://benchmarks.sciml.ai/html/MultiLanguage/wrapper_packages.html)
+  [open benchmarks](https://docs.sciml.ai/SciMLBenchmarksOutput/stable/)
   which demonstrate two orders of magnitude performance advantage for the native
   Julia solvers across many benchmark problems.
 - Simulink comes with a Graphical User Interface (GUI), ModelingToolkit.jl
@@ -64,9 +64,9 @@
   interactively in the REPL.
 - CASADI includes limited support for Computer Algebra System (CAS) functionality,
   while ModelingToolkit.jl is built on the full
-  [Symbolics.jl](https://github.com/JuliaSymbolics/Symbolics.jl) CAS.
+  [Symbolics.jl](https://docs.sciml.ai/Symbolics/stable/) CAS.
 - CASADI supports DAE and ODE problems via SUNDIALS IDAS and CVODES. ModelingToolkit.jl
-  supports DAE and ODE problems via [DifferentialEquations.jl](https://diffeq.sciml.ai/dev/),
+  supports DAE and ODE problems via [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/),
   of which Sundials.jl is <1% of the total available solvers and is outperformed
   by the native Julia solvers on the vast majority of the benchmark equations.
   In addition, the DifferentialEquations.jl interface is confederated, meaning
@@ -83,7 +83,7 @@
 ## Comparison Against Modia.jl
 
 - Modia.jl uses Julia's expression objects for representing its equations.
-  ModelingToolkit.jl uses [Symbolics.jl](https://symbolics.juliasymbolics.org/dev/),
+  ModelingToolkit.jl uses [Symbolics.jl](https://docs.sciml.ai/Symbolics/stable/),
   and thus the Julia expressions follow Julia semantics and can be manipulated
   using a computer algebra system (CAS).
 - Modia's compilation pipeline is similar to the
@@ -93,7 +93,7 @@
   `structural_simplify` is an adaptation of the Modia.jl-improved alias elimination
   and tearing algorithms.
 - Both Modia and ModelingToolkit generate `DAEProblem` and `ODEProblem` forms for
-  solving with [DifferentialEquations.jl](https://diffeq.sciml.ai/dev/).
+  solving with [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/).
 - ModelingToolkit.jl integrates with its host language Julia, so Julia code
   can be automatically converted into ModelingToolkit expressions. Users of
   Modia must explicitly create Modia expressions.
@@ -106,7 +106,7 @@
 - Causal.jl is a causal modeling environment, whereas ModelingToolkit.jl is an
   acausal modeling environment. For an overview of the differences, consult
   academic reviews such as [this one](https://arxiv.org/abs/1909.00484).
-- Both ModelingToolkit.jl and Causal.jl use [DifferentialEquations.jl](https://diffeq.sciml.ai/stable/)
+- Both ModelingToolkit.jl and Causal.jl use [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/)
   as the backend solver library.
 - Causal.jl lets one add arbitrary equation systems to a given node, and allow
   the output to effect the next node. This means an SDE may drive an ODE. These

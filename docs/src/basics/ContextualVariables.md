@@ -4,7 +4,7 @@ ModelingToolkit.jl has a system of contextual variable types which allows for
 helping the system transformation machinery do complex manipulations and
 automatic detection. The standard variable definition in ModelingToolkit.jl is
 the `@variable` which is defined by
-[Symbolics.jl](https://github.com/JuliaSymbolics/Symbolics.jl). For example:
+[Symbolics.jl](https://docs.sciml.ai/Symbolics/stable/). For example:
 
 ```julia
 @variables x y(x)
