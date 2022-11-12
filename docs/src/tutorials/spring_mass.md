@@ -157,7 +157,7 @@ parameters(model)
 
 ### Simplifying and solving this system
 
-This system can be solved directly as a DAE using [one of the DAE solvers from DifferentialEquations.jl](https://diffeq.sciml.ai/stable/solvers/dae_solve/). However, we can symbolically simplify the system first beforehand. Running `structural_simplify` eliminates unnecessary variables from the model to give the leanest numerical representation of the system.
+This system can be solved directly as a DAE using [one of the DAE solvers from DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/). However, we can symbolically simplify the system first beforehand. Running `structural_simplify` eliminates unnecessary variables from the model to give the leanest numerical representation of the system.
 
 ```@example component
 sys = structural_simplify(model)

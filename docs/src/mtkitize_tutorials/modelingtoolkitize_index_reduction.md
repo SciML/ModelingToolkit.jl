@@ -52,7 +52,7 @@ In this tutorial we will look at the pendulum system:
 ```
 
 As a good DifferentialEquations.jl user, one would follow
-[the mass matrix DAE tutorial](https://diffeq.sciml.ai/stable/tutorials/dae_example/#Mass-Matrix-Differential-Algebraic-Equations-(DAEs))
+[the mass matrix DAE tutorial](https://docs.sciml.ai/DiffEqDocs/stable/tutorials/dae_example/#Mass-Matrix-Differential-Algebraic-Equations-(DAEs))
 to arrive at code for simulating the model:
 
 ```@example indexred

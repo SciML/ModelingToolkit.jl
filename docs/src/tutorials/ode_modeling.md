@@ -69,7 +69,7 @@ Note that equations in MTK use the tilde character (`~`) as equality sign.
 Also note that the `@named` macro simply ensures that the symbolic name
 matches the name in the REPL. If omitted, you can directly set the `name` keyword.
 
-After construction of the ODE, you can solve it using [DifferentialEquations.jl](https://diffeq.sciml.ai/):
+After construction of the ODE, you can solve it using [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/):
 
 ```julia
 using DifferentialEquations

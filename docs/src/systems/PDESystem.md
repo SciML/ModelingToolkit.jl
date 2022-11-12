@@ -72,12 +72,12 @@ The only functions which act on a PDESystem are the following:
 
 ### NeuralPDE.jl: PhysicsInformedNN
 
-[NeuralPDE.jl](https://github.com/SciML/NeuralPDE.jl) defines the `PhysicsInformedNN`
-discretizer which uses a [DiffEqFlux.jl](https://github.com/SciML/DiffEqFlux.jl)
+[NeuralPDE.jl](https://docs.sciml.ai/NeuralPDE/stable/) defines the `PhysicsInformedNN`
+discretizer which uses a [DiffEqFlux.jl](https://docs.sciml.ai/DiffEqFlux/stable/)
 neural network to solve the differential equation.
 
 ### MethodOfLines.jl: MOLFiniteDifference 
 
-[MethodOfLines.jl](https://github.com/SciML/MethodOfLines.jl) defines the
+[MethodOfLines.jl](https://docs.sciml.ai/MethodOfLines/stable/) defines the
 `MOLFiniteDifference` discretizer which performs a finite difference discretization. 
 Includes support for higher approximation order stencils and nonuniform grids.
