@@ -108,6 +108,12 @@ end
     throw(ArgumentError("$vars are missing from the variable map."))
 end
 
+# FIXME: remove after: https://github.com/SciML/SciMLBase.jl/pull/311
+function SciMLBase.handle_varmap(varmap, sys::AbstractSystem; field = :states, kwargs...)
+    out = varmap_to_vars(varmap, getfield(sys, field); kwargs...)
+    return out
+end
+
 """
 $(SIGNATURES)
 
@@ -117,12 +123,14 @@ user has `ModelingToolkit` loaded.
 function SciMLBase.process_p_u0_symbolic(prob::ODEProblem, p, u0)
     # check if a symbolic remake is possible
     if eltype(p) <: Pair
-        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :ps) || throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." * 
-            " Please use `remake` with the `p` keyword argument as a vector of values, paying attention to parameter order."))
+        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :ps) ||
+            throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
+                                " Please use `remake` with the `p` keyword argument as a vector of values, paying attention to parameter order."))
     end
     if eltype(u0) <: Pair
-        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :states) || throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." * 
-            " Please use `remake` with the `u0` keyword argument as a vector of values, paying attention to state order."))
+        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :states) ||
+            throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
+                                " Please use `remake` with the `u0` keyword argument as a vector of values, paying attention to state order."))
     end
 
     # assemble defaults
