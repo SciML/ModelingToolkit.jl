@@ -391,7 +391,7 @@ function OptimizationProblemExpr(sys::OptimizationSystem, args...; kwargs...)
     OptimizationProblemExpr{true}(sys::OptimizationSystem, args...; kwargs...)
 end
 
-function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0,
+function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
                                       parammap = DiffEqBase.NullParameters();
                                       lb = nothing, ub = nothing,
                                       grad = false,
