@@ -178,13 +178,41 @@ end
 
 hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
 
-function rep_pars_vals!(e::Expr, p)
-    rep_pars_vals!.(e.args, Ref(p))
-    replace!(e.args, p...)
+"""
+    rep_pars_vals!(expr::T, expr_map)
+
+Replaces variable expressions of the form `:some_variable` or `:(getindex, :some_variable, j)` with 
+`x[i]` were `i` is the corresponding index in the state vector. Same for the parameters. The 
+variable/parameter pairs are provided via the `expr_map`.
+
+Expects only expressions where the variables and parameters are of the form `:some_variable` 
+or `:(getindex, :some_variable, j)` or :(some_variable[j]).
+"""
+rep_pars_vals!(expr::T, expr_map) where {T} = expr
+function rep_pars_vals!(expr::Symbol, expr_map)
+    for (f, n) in expr_map
+        isequal(f, expr) && return n
+    end
+    return expr
+end
+function rep_pars_vals!(expr::Expr, expr_map)
+    if (expr.head == :call && expr.args[1] == getindex) || (expr.head == :ref)
+        for (f, n) in expr_map
+            isequal(f, expr) && return n
+        end
+    end
+    Threads.@sync for i in eachindex(expr.args)
+        Threads.@spawn expr.args[i] = rep_pars_vals!(expr.args[i], expr_map)
+    end
+    return expr
 end
 
-function rep_pars_vals!(e, p) end
+"""
+    symbolify!(e)
 
+Ensures that a given expression is fully symbolic, e.g. no function calls.
+"""
+symbolify!(e) = e
 function symbolify!(e::Expr)
     if !(e.args[1] isa Symbol)
         e.args[1] = Symbol(e.args[1])
@@ -193,19 +221,24 @@ function symbolify!(e::Expr)
     return e
 end
 
-function symbolify!(e)
-    return e
-end
+"""
+    expr_map(sys)
 
-function expr_map(sys)
+Make a map from every parameter and state of the given system to an expression indexing its position 
+in the state or parameter vector.
+"""
+function get_expr_map(sys)
     dvs = states(sys)
     ps = parameters(sys)
-    pairs_arr = vcat([toexpr(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)],
-                     [toexpr(_p) => Expr(:ref, :p, i) for (i, _p) in enumerate(ps)])
-    return pairs_arr
+    return vcat([toexpr(_s) => Expr(:ref, :x, i)
+                 for (i, _s) in enumerate(dvs)],
+                [toexpr(_p) => Expr(:ref, :p, i)
+                 for (i, _p) in enumerate(ps)])
 end
 
 """
+    convert_to_expr(eq, sys; expand_expr = false, expr_map = get_expr_map(sys))
+
 Converts the given symbolic expression to a Julia `Expr` and replaces all symbols, i.e. states and 
 parameters with `x[i]` and `p[i]`.
 
@@ -214,13 +247,12 @@ parameters with `x[i]` and `p[i]`.
 - `sys`: Reference to the system holding the parameters and states
 - `expand_expr=false`: If `true` the symbolic expression is expanded first.
 """
-function convert_to_expr(eq, sys; expand_expr = false)
-    pairs_arr = expr_map(sys)
+function convert_to_expr(eq, sys; expand_expr = false, expr_map = get_expr_map(sys))
     if expand_expr
-        eq = expand(eq)
+        eq = Symbolics.expand(eq)
     end
     expr = toexpr(eq)
-    rep_pars_vals!(expr, pairs_arr)
+    rep_pars_vals!(expr, expr_map)
     symbolify!(expr)
     return expr
 end
@@ -240,7 +272,8 @@ Generates an OptimizationProblem from an OptimizationSystem and allows for autom
 symbolically calculating numerical enhancements.
 """
 function DiffEqBase.OptimizationProblem(sys::AbstractOptimizationSystem, args...; kwargs...)
-    DiffEqBase.OptimizationProblem{true}(sys::AbstractOptimizationSystem, args...; kwargs...)
+    DiffEqBase.OptimizationProblem{true}(sys::AbstractOptimizationSystem, args...;
+                                         kwargs...)
 end
 function DiffEqBase.OptimizationProblem{iip}(sys::AbstractOptimizationSystem, u0map,
                                              parammap = DiffEqBase.NullParameters();
@@ -293,7 +326,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::AbstractOptimizationSystem, u0
     f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
                           expression = Val{false})
 
-    obj_expr = convert_to_expr(subs_constants(objective(sys)), sys)
+    expr_map = get_expr_map(sys)
+    obj_expr = convert_to_expr(subs_constants(objective(sys)), sys; expr_map)
     if grad
         grad_oop, grad_iip = generate_gradient(sys, checkbounds = checkbounds,
                                                linenumbers = linenumbers,
@@ -329,7 +363,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::AbstractOptimizationSystem, u0
         cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
         cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
 
-        cons_expr = convert_to_expr.(subs_constants(constraints(cons_sys)), Ref(sys))
+        cons_expr = convert_to_expr.(subs_constants(constraints(cons_sys)), Ref(sys);
+                                     expr_map)
 
         if !haskey(kwargs, :lcons) && !haskey(kwargs, :ucons) # use the symbolically specified bounds
             lcons = lcons_
