@@ -82,6 +82,13 @@ f.f(du, u, p, 0.1)
 @test du == [4, 0, -16]
 @test_throws ArgumentError f.f(u, p, 0.1)
 
+#check sparsity
+f = eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], sparsity = true))
+@test f.sparsity == ModelingToolkit.jacobian_sparsity(de)
+
+f = eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], sparsity = false))
+@test isnothing(f.sparsity)
+
 eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y * t,
     D(z) ~ x * y - β * z * κ]
