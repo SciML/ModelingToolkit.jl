@@ -66,7 +66,7 @@ u0 = [
     x => 1.0
     y => 2.0
 ]
-prob = OptimizationProblem(sys, u0, grad=true, hess=true)
+prob = OptimizationProblem(sys, u0, grad=true, hess=true, cons_j=true, cons_h=true)
 solve(prob, IPNewton())
 ```
 

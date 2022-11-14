@@ -207,6 +207,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              lb = nothing, ub = nothing,
                                              grad = false,
                                              hess = false, sparse = false,
+                                             cons_j = false, cons_h = false,
                                              checkbounds = false,
                                              linenumbers = true, parallel = SerialForm(),
                                              use_union = false,
@@ -308,9 +309,16 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
                                                  linenumbers = linenumbers,
                                                  expression = Val{false})
-        cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
-        cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
-
+        if cons_j
+            _cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+        else
+            _cons_j = nothing
+        end
+        if cons_h
+            _cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+        else
+            _cons_h = nothing
+        end
         cons_expr = toexpr.(subs_constants(constraints(cons_sys)))
         rep_pars_vals!.(cons_expr, Ref(pairs_arr))
 
@@ -344,8 +352,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                                   syms = Symbol.(states(sys)),
                                                   paramsyms = Symbol.(parameters(sys)),
                                                   cons = cons[2],
-                                                  cons_j = cons_j,
-                                                  cons_h = cons_h,
+                                                  cons_j = _cons_j,
+                                                  cons_h = _cons_h,
                                                   cons_jac_prototype = cons_jac_prototype,
                                                   cons_hess_prototype = cons_hess_prototype,
                                                   expr = obj_expr,
@@ -396,6 +404,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
                                       lb = nothing, ub = nothing,
                                       grad = false,
                                       hess = false, sparse = false,
+                                      cons_j = false, cons_h = false,
                                       checkbounds = false,
                                       linenumbers = false, parallel = SerialForm(),
                                       use_union = false,
@@ -477,8 +486,16 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
                                                  linenumbers = linenumbers,
                                                  expression = Val{false})
-        cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
-        cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+        if cons_j
+            _cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+        else
+            _cons_j = nothing
+        end
+        if cons_h
+            _cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+        else
+            _cons_h = nothing
+        end
 
         cons_expr = toexpr.(subs_constants(constraints(cons_sys)))
         rep_pars_vals!.(cons_expr, Ref(pairs_arr))
@@ -517,8 +534,8 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             cons = $cons[1]
             lcons = $lcons
             ucons = $ucons
-            cons_j = $cons_j
-            cons_h = $cons_h
+            cons_j = $_cons_j
+            cons_h = $_cons_h
             syms = $(Symbol.(states(sys)))
             paramsyms = $(Symbol.(parameters(sys)))
             _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
