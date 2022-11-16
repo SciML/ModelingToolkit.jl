@@ -150,7 +150,8 @@ function split_system(ci::ClockInference)
     return tss, inputs, continuous_id
 end
 
-function generate_discrete_affect(syss, inputs, continuous_id, check_bounds = true)
+function generate_discrete_affect(syss, inputs, continuous_id; checkbounds = true,
+                                  eval_module = @__MODULE__, eval_expression = true)
     out = Sym{Any}(:out)
     appended_parameters = parameters(syss[continuous_id])
     param_to_idx = Dict{Any, Int}(reverse(en) for en in enumerate(appended_parameters))
@@ -161,7 +162,7 @@ function generate_discrete_affect(syss, inputs, continuous_id, check_bounds = tr
         i == continuous_id && continue
         subs = get_substitutions(sys)
         assignments = map(s -> Assignment(s.lhs, s.rhs), subs.subs)
-        let_body = SetArray(!check_bounds, out, rhss(equations(sys)))
+        let_body = SetArray(!checkbounds, out, rhss(equations(sys)))
         let_block = Let(assignments, let_body, false)
         needed_cont_to_disc_obs = map(v -> arguments(v)[1], input)
         # TODO: filter the needed ones
@@ -190,27 +191,37 @@ function generate_discrete_affect(syss, inputs, continuous_id, check_bounds = tr
         cont_to_disc_idxs = (offset + 1):(offset += ni)
         input_offset = offset
         disc_range = (offset + 1):(offset += ns)
-        affect! = quote
-            function affect!(integrator, saved_values)
-                @unpack u, p, t = integrator
-                c2d_obs = $cont_to_disc_obs
-                d2c_obs = $disc_to_cont_obs
-                c2d_view = view(p, $cont_to_disc_idxs)
-                d2c_view = view(p, $disc_to_cont_idxs)
-                disc_state = view(p, $disc_range)
-                disc = $disc
-                # Write continuous info to discrete
-                # Write discrete info to continuous
-                copyto!(c2d_view, c2d_obs(integrator.u, p, t))
-                copyto!(d2c_view, d2c_obs(disc_state, p, t))
-                push!(saved_values.t, t)
-                push!(saved_values.saveval, Base.@ntuple $ns i->p[$input_offset + i])
-                disc(disc_state, disc_state, p, t)
-            end
+        save_tuple = Expr(:tuple)
+        for i in 1:ns
+            push!(save_tuple.args, :(p[$(input_offset + i)]))
         end
+        affect! = :(function (integrator, saved_values)
+                        @unpack u, p, t = integrator
+                        c2d_obs = $cont_to_disc_obs
+                        d2c_obs = $disc_to_cont_obs
+                        c2d_view = view(p, $cont_to_disc_idxs)
+                        d2c_view = view(p, $disc_to_cont_idxs)
+                        disc_state = view(p, $disc_range)
+                        disc = $disc
+                        # Write continuous info to discrete
+                        # Write discrete info to continuous
+                        copyto!(c2d_view, c2d_obs(integrator.u, p, t))
+                        copyto!(d2c_view, d2c_obs(disc_state, p, t))
+                        push!(saved_values.t, t)
+                        push!(saved_values.saveval, $save_tuple)
+                        disc(disc_state, disc_state, p, t)
+                    end)
         sv = SavedValues(Float64, NTuple{ns, Float64})
         push!(affect_funs, affect!)
         push!(svs, sv)
     end
-    return map(a -> toexpr(LiteralExpr(a)), affect_funs), svs, appended_parameters
+    if eval_expression
+        affects = map(affect_funs) do a
+            @RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a)))
+        end
+    else
+        affects = map(a -> toexpr(LiteralExpr(a)), affect_funs)
+    end
+    defaults = Dict{Any, Any}(v => 0.0 for v in Iterators.flatten(inputs))
+    return affects, svs, appended_parameters, defaults
 end

@@ -61,12 +61,13 @@ By inference:
 =>   Shift(x, 0, dt) := (Shift(x, -1, dt) + dt) / (1 - dt) # Discrete system
 =#
 
+using ModelingToolkit.SystemStructures
 ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
 tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
-sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
+sss, = SystemStructures._structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
 @test equations(sss) == [D(x) ~ u - x]
-sss, = ModelingToolkit.structural_simplify!(deepcopy(tss[2]), (inputs[2], ()))
+sss, = SystemStructures._structural_simplify!(deepcopy(tss[2]), (inputs[2], ()))
 @test isempty(equations(sss))
 @test observed(sss) == [r ~ 1.0; yd ~ Sample(t, dt)(y); ud ~ kp * (r - yd)]
 
@@ -112,8 +113,8 @@ eqs = [yd ~ Sample(t, dt)(y)
        ]
 @named sys = ODESystem(eqs)
 ci, varmap = infer_clocks(sys)
-tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
-syss = map(i -> ModelingToolkit.structural_simplify!(deepcopy(tss[i]), (inputs[i], ()))[1],
+tss, inputs, continuous_id = ModelingToolkit.split_system(deepcopy(ci))
+syss = map(i -> SystemStructures._structural_simplify!(deepcopy(tss[i]), (inputs[i], ()))[1],
            eachindex(tss))
 sys1, sys2 = syss
 @test length(states(sys2)) == 2
@@ -121,14 +122,22 @@ z, z_t = states(sys2)
 S = Shift(t, 1)
 @test full_equations(sys2) == [S(z) ~ z_t; S(z_t) ~ z + Sample(t, dt)(y)]
 # TODO: set Hold(ud)
-prob = ODEProblem(sys1, [x => 0.0, y => 0.0], (0.0, 1.0), [kp => 1.0, Hold(ud) => 0.0]);
+affects, svs, pp, defaults = ModelingToolkit.generate_discrete_affect(syss, inputs,
+                                                                      continuous_id);
+@set! sys1.ps = pp
+prob = ODEProblem(sys1, [x => 0.0, y => 0.0], (0.0, 1.0), [pp .=> 0.0; kp => 1.0]);
 using OrdinaryDiffEq, DiffEqCallbacks
-exprs, svs, pp = ModelingToolkit.generate_discrete_affect(syss, inputs, 1);
-prob = remake(prob, p = zeros(Float64, length(pp)));
-prob.p[1] = 1.0;
-gen_affect! = Base.Fix2(eval(exprs[1]), svs[1]);
+struct DiscreteSaveAffect{F, S} <: Function
+    f::F
+    s::S
+end
+(d::DiscreteSaveAffect)(args...) = d.f(args..., d.s)
+gen_affect! = DiscreteSaveAffect(affects[1], svs[1]);
 cb = PeriodicCallback(gen_affect!, 0.1);
-sol2 = solve(prob, Tsit5(), callback = cb);
+prob = remake(prob, callback = cb);
+sol2 = solve(prob, Tsit5());
+# For all inputs in parameters, just initialize them to 0.0, and then set them
+# in the callback.
 
 # kp is the only real parameter
 function foo!(du, u, p, t)

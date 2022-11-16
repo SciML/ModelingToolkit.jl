@@ -452,8 +452,49 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
 end
 
 # TODO: clean up
+function merge_io(io, inputs)
+    isempty(inputs) && return io
+    if io === nothing
+        io = (inputs, [])
+    else
+        io = ([inputs; io[1]], io[2])
+    end
+    return io
+end
+
 function structural_simplify!(state::TearingState, io = nothing; simplify = false,
                               check_consistency = true, kwargs...)
+    if state.sys isa ODESystem
+        ci = ModelingToolkit.ClockInference(state)
+        ModelingToolkit.infer_clocks!(ci)
+        tss, inputs, continuous_id = ModelingToolkit.split_system(ci)
+        cont_io = merge_io(io, inputs[continuous_id])
+        sys = _structural_simplify!(tss[continous_id], cont_io; simplify, check_consistency,
+                                    kwargs...)
+        if length(tss) > 1
+            # TODO: rename it to something else
+            discrete_subsystems = Vector{ODESystem}(undef, length(tss))
+            for (i, state) in enumerate(tss)
+                if i == continuous_id
+                    discrete_subsystems[i] = sys
+                    continue
+                end
+                dist_io = merge_io(io, inputs[i])
+                ss = _structural_simplify!(state, dist_io; simplify, check_consistency,
+                                           kwargs...)
+                push!(discrete_subsystems, ss)
+            end
+            @set! sys.discrete_subsystems = discrete_subsystems, inputs, continuous_id
+        end
+    else
+        sys, input_idxs = _structural_simplify!(state, io; simplify, check_consistency,
+                                                kwargs...)
+    end
+    return has_io ? (sys, input_idxs) : sys
+end
+
+function _structural_simplify!(state::TearingState, io; simplify = false,
+                               check_consistency = true, kwargs...)
     has_io = io !== nothing
     has_io && ModelingToolkit.markio!(state, io...)
     state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
@@ -464,8 +505,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
     sys = ModelingToolkit.dummy_derivative(sys, state, ag; simplify)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullstates)
-    ModelingToolkit.invalidate_cache!(sys)
-    return has_io ? (sys, input_idxs) : sys
+    ModelingToolkit.invalidate_cache!(sys), input_idxs
 end
 
 end # module
