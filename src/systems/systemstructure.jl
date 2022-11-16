@@ -469,7 +469,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
         ModelingToolkit.infer_clocks!(ci)
         tss, inputs, continuous_id = ModelingToolkit.split_system(ci)
         cont_io = merge_io(io, inputs[continuous_id])
-        sys = _structural_simplify!(tss[continous_id], cont_io; simplify, check_consistency,
+        sys, input_idxs = _structural_simplify!(tss[continuous_id], cont_io; simplify, check_consistency,
                                     kwargs...)
         if length(tss) > 1
             # TODO: rename it to something else
@@ -490,6 +490,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
         sys, input_idxs = _structural_simplify!(state, io; simplify, check_consistency,
                                                 kwargs...)
     end
+    has_io = io !== nothing
     return has_io ? (sys, input_idxs) : sys
 end
 
