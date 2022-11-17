@@ -147,10 +147,11 @@ function split_system(ci::ClockInference)
         @set! ts_i.structure.eq_to_diff = eq_to_diff
         tss[id] = ts_i
     end
-    return tss, inputs, continuous_id
+    return tss, inputs, continuous_id, id_to_clock
 end
 
-function generate_discrete_affect(syss, inputs, continuous_id; checkbounds = true,
+function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
+                                  checkbounds = true,
                                   eval_module = @__MODULE__, eval_expression = true)
     out = Sym{Any}(:out)
     appended_parameters = parameters(syss[continuous_id])
@@ -158,8 +159,10 @@ function generate_discrete_affect(syss, inputs, continuous_id; checkbounds = tru
     offset = length(appended_parameters)
     affect_funs = []
     svs = []
+    clocks = TimeDomain[]
     for (i, (sys, input)) in enumerate(zip(syss, inputs))
         i == continuous_id && continue
+        push!(clocks, id_to_clock[i])
         subs = get_substitutions(sys)
         assignments = map(s -> Assignment(s.lhs, s.rhs), subs.subs)
         let_body = SetArray(!checkbounds, out, rhss(equations(sys)))
@@ -191,9 +194,9 @@ function generate_discrete_affect(syss, inputs, continuous_id; checkbounds = tru
         cont_to_disc_idxs = (offset + 1):(offset += ni)
         input_offset = offset
         disc_range = (offset + 1):(offset += ns)
-        save_tuple = Expr(:tuple)
+        save_vec = Expr(:ref, :Float64)
         for i in 1:ns
-            push!(save_tuple.args, :(p[$(input_offset + i)]))
+            push!(save_vec.args, :(p[$(input_offset + i)]))
         end
         affect! = :(function (integrator, saved_values)
                         @unpack u, p, t = integrator
@@ -208,10 +211,10 @@ function generate_discrete_affect(syss, inputs, continuous_id; checkbounds = tru
                         copyto!(c2d_view, c2d_obs(integrator.u, p, t))
                         copyto!(d2c_view, d2c_obs(disc_state, p, t))
                         push!(saved_values.t, t)
-                        push!(saved_values.saveval, $save_tuple)
+                        push!(saved_values.saveval, $save_vec)
                         disc(disc_state, disc_state, p, t)
                     end)
-        sv = SavedValues(Float64, NTuple{ns, Float64})
+        sv = SavedValues(Float64, Vector{Float64})
         push!(affect_funs, affect!)
         push!(svs, sv)
     end
@@ -223,5 +226,5 @@ function generate_discrete_affect(syss, inputs, continuous_id; checkbounds = tru
         affects = map(a -> toexpr(LiteralExpr(a)), affect_funs)
     end
     defaults = Dict{Any, Any}(v => 0.0 for v in Iterators.flatten(inputs))
-    return affects, svs, appended_parameters, defaults
+    return affects, clocks, svs, appended_parameters, defaults
 end

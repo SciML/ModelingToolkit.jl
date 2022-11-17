@@ -686,6 +686,12 @@ function DiffEqBase.ODEProblem{false}(sys::AbstractODESystem, args...; kwargs...
     ODEProblem{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
+struct DiscreteSaveAffect{F, S} <: Function
+    f::F
+    s::S
+end
+(d::DiscreteSaveAffect)(args...) = d.f(args..., d.s)
+
 function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = [],
                                                 tspan = get_tspan(sys),
                                                 parammap = DiffEqBase.NullParameters();
@@ -698,13 +704,35 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
                                  has_difference = has_difference,
                                  check_length, kwargs...)
     cbs = process_events(sys; callback, has_difference, kwargs...)
+    if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
+        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
+        discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
+            if clock isa Clock
+                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
+            else
+                error("$clock is not a supported clock type.")
+            end
+        end
+        if cbs === nothing
+            if length(discrete_cbs) == 1
+                cbs = only(discrete_cbs)
+            else
+                cbs = CallbackSet(discrete_cbs...)
+            end
+        else
+            cbs = CallbackSet(cbs, discrete_cbs)
+        end
+    else
+        svs = nothing
+    end
     kwargs = filter_kwargs(kwargs)
     pt = something(get_metadata(sys), StandardODEProblem())
 
     if cbs === nothing
-        ODEProblem{iip}(f, u0, tspan, p, pt; kwargs...)
+        ODEProblem{iip}(f, u0, tspan, p, pt; disc_saved_values = svs, kwargs...)
     else
-        ODEProblem{iip}(f, u0, tspan, p, pt; callback = cbs, kwargs...)
+        ODEProblem{iip}(f, u0, tspan, p, pt; callback = cbs, disc_saved_values = svs,
+                        kwargs...)
     end
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]

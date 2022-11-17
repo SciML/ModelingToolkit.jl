@@ -129,7 +129,7 @@ struct ODESystem <: AbstractODESystem
     """
     discrete_subsystems: a list of discrete subsystems
     """
-    discrete_subsystems::Union{Nothing, Tuple{Vector{ODESystem}, Vector{Any}, Int}}
+    discrete_subsystems::Any
 
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,

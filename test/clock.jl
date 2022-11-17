@@ -112,30 +112,9 @@ eqs = [yd ~ Sample(t, dt)(y)
        =#
        ]
 @named sys = ODESystem(eqs)
-ci, varmap = infer_clocks(sys)
-tss, inputs, continuous_id = ModelingToolkit.split_system(deepcopy(ci))
-syss = map(i -> SystemStructures._structural_simplify!(deepcopy(tss[i]), (inputs[i], ()))[1],
-           eachindex(tss))
-sys1, sys2 = syss
-@test length(states(sys2)) == 2
-z, z_t = states(sys2)
-S = Shift(t, 1)
-@test full_equations(sys2) == [S(z) ~ z_t; S(z_t) ~ z + Sample(t, dt)(y)]
-# TODO: set Hold(ud)
-affects, svs, pp, defaults = ModelingToolkit.generate_discrete_affect(syss, inputs,
-                                                                      continuous_id);
-@set! sys1.ps = pp
-prob = ODEProblem(sys1, [x => 0.0, y => 0.0], (0.0, 1.0), [pp .=> 0.0; kp => 1.0]);
-using OrdinaryDiffEq, DiffEqCallbacks
-struct DiscreteSaveAffect{F, S} <: Function
-    f::F
-    s::S
-end
-(d::DiscreteSaveAffect)(args...) = d.f(args..., d.s)
-gen_affect! = DiscreteSaveAffect(affects[1], svs[1]);
-cb = PeriodicCallback(gen_affect!, 0.1);
-prob = remake(prob, callback = cb);
-sol2 = solve(prob, Tsit5());
+ss = structural_simplify(sys)
+prob = ODEProblem(ss, [x => 0.0, y => 0.0], (0.0, 1.0), [kp => 1.0; z => 0.0; D(z) => 0.0])
+sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 # For all inputs in parameters, just initialize them to 0.0, and then set them
 # in the callback.
 
@@ -153,17 +132,19 @@ function affect!(integrator, saved_values)
     r = 1.0
     ud = kp * (r - yd) + z
     push!(saved_values.t, integrator.t)
-    push!(saved_values.saveval, (integrator.p[3], integrator.p[4]))
+    push!(saved_values.saveval, [integrator.p[4], integrator.p[3]])
     integrator.p[2] = ud
     integrator.p[3] = z + yd
     integrator.p[4] = z_t
     nothing
 end
-saved_values = SavedValues(Float64, Tuple{Float64, Float64});
-cb = PeriodicCallback(Base.Fix2(affect!, saved_values), 0.1);
-prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 0.0, 0.0, 0.0], callback = cb);
-sol = solve(prob, Tsit5());
-@test sol.u ≈ sol2.u
+saved_values = SavedValues(Float64, Vector{Float64});
+cb = PeriodicCallback(Base.Fix2(affect!, saved_values), 0.1)
+prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 0.0, 0.0, 0.0], callback = cb)
+sol2 = solve(prob, Tsit5())
+@test sol.u == sol2.u
+@test saved_values.t == sol.prob.kwargs[:disc_saved_values][1].t
+@test saved_values.saveval == sol.prob.kwargs[:disc_saved_values][1].saveval
 
 @info "Testing multi-rate hybrid system"
 dt = 0.1

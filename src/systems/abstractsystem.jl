@@ -208,7 +208,8 @@ for prop in [:eqs
              :torn_matching
              :tearing_state
              :substitutions
-             :metadata]
+             :metadata
+             :discrete_subsystems]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin

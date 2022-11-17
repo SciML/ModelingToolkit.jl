@@ -467,24 +467,33 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
     if state.sys isa ODESystem
         ci = ModelingToolkit.ClockInference(state)
         ModelingToolkit.infer_clocks!(ci)
-        tss, inputs, continuous_id = ModelingToolkit.split_system(ci)
+        tss, inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
         cont_io = merge_io(io, inputs[continuous_id])
-        sys, input_idxs = _structural_simplify!(tss[continuous_id], cont_io; simplify, check_consistency,
-                                    kwargs...)
+        sys, input_idxs = _structural_simplify!(tss[continuous_id], cont_io; simplify,
+                                                check_consistency,
+                                                kwargs...)
         if length(tss) > 1
             # TODO: rename it to something else
             discrete_subsystems = Vector{ODESystem}(undef, length(tss))
+            # Note that the appended_parameters must agree with
+            # `generate_discrete_affect`!
+            appended_parameters = parameters(sys)
             for (i, state) in enumerate(tss)
                 if i == continuous_id
                     discrete_subsystems[i] = sys
                     continue
                 end
                 dist_io = merge_io(io, inputs[i])
-                ss = _structural_simplify!(state, dist_io; simplify, check_consistency,
-                                           kwargs...)
-                push!(discrete_subsystems, ss)
+                ss, = _structural_simplify!(state, dist_io; simplify, check_consistency,
+                                            kwargs...)
+                append!(appended_parameters, inputs[i], states(ss))
+                discrete_subsystems[i] = ss
             end
-            @set! sys.discrete_subsystems = discrete_subsystems, inputs, continuous_id
+            @set! sys.discrete_subsystems = discrete_subsystems, inputs, continuous_id,
+                                            id_to_clock
+            @set! sys.ps = appended_parameters
+            @set! sys.defaults = merge(ModelingToolkit.defaults(sys),
+                                       Dict(v => 0.0 for v in Iterators.flatten(inputs)))
         end
     else
         sys, input_idxs = _structural_simplify!(state, io; simplify, check_consistency,
