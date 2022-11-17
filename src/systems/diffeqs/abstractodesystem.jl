@@ -728,12 +728,14 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     kwargs = filter_kwargs(kwargs)
     pt = something(get_metadata(sys), StandardODEProblem())
 
-    if cbs === nothing
-        ODEProblem{iip}(f, u0, tspan, p, pt; disc_saved_values = svs, kwargs...)
-    else
-        ODEProblem{iip}(f, u0, tspan, p, pt; callback = cbs, disc_saved_values = svs,
-                        kwargs...)
+    kwargs1 = (;)
+    if cbs !== nothing
+        kwargs1 = merge(kwargs1, (callback = cbs,))
     end
+    if svs !== nothing
+        kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
+    end
+    ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 

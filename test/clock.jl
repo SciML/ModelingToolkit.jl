@@ -1,4 +1,4 @@
-using ModelingToolkit, Test, Setfield
+using ModelingToolkit, Test, Setfield, OrdinaryDiffEq, DiffEqCallbacks
 
 function infer_clocks(sys)
     ts = TearingState(sys)
