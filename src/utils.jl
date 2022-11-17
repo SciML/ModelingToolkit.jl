@@ -858,3 +858,5 @@ function fast_substitute(expr, pair::Pair)
                 symtype(expr);
                 metadata = metadata(expr))
 end
+
+normalize_to_differential(s) = s
