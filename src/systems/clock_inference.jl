@@ -28,6 +28,11 @@ function infer_clocks!(ci::ClockInference)
     @unpack ts, eq_domain, var_domain, inferred = ci
     @unpack fullvars = ts
     @unpack graph = ts.structure
+    if isempty(inferred)
+        fill!(var_domain, Continuous())
+        fill!(eq_domain, Continuous())
+        return ci
+    end
     # TODO: add a graph type to do this lazily
     var_graph = SimpleGraph(ndsts(graph))
     for eq in 𝑠vertices(graph)
