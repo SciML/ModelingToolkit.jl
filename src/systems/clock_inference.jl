@@ -48,7 +48,12 @@ function infer_clocks!(ci::ClockInference)
     for c′ in cc
         c = BitSet(c′)
         idxs = intersect(c, inferred)
-        isempty(idxs) && continue
+        if isempty(idxs)
+            for v in c′
+                var_domain[v] = Continuous()
+            end
+            continue
+        end
         if !allequal(var_domain[i] for i in idxs)
             display(fullvars[c′])
             throw(ClockInferenceException("Clocks are not consistent in connected component $(fullvars[c′])"))
