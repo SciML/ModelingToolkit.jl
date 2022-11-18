@@ -8,7 +8,7 @@ end
 function ClockInference(ts::TearingState)
     @unpack fullvars, structure = ts
     @unpack graph = structure
-    eq_domain = Vector{TimeDomain}(undef, nsrcs(graph))
+    eq_domain = TimeDomain[Continuous() for _ in 1:nsrcs(graph)]
     var_domain = Vector{TimeDomain}(undef, ndsts(graph))
     inferred = BitSet()
     for (i, v) in enumerate(fullvars)
@@ -68,7 +68,6 @@ function infer_clocks!(ci::ClockInference)
         vd = var_domain[v]
         eqs = 𝑑neighbors(graph, v)
         isempty(eqs) && continue
-        #eq = first(eqs)
         for eq in eqs
             eq_domain[eq] = vd
         end
