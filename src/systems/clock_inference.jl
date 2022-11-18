@@ -9,17 +9,15 @@ function ClockInference(ts::TearingState)
     @unpack fullvars, structure = ts
     @unpack graph = structure
     eq_domain = TimeDomain[Continuous() for _ in 1:nsrcs(graph)]
-    var_domain = Vector{TimeDomain}(undef, ndsts(graph))
+    var_domain = TimeDomain[Continuous() for _ in 1:ndsts(graph)]
     inferred = BitSet()
     for (i, v) in enumerate(fullvars)
         d = get_time_domain(v)
         if d isa Union{AbstractClock, Continuous}
             push!(inferred, i)
             dd = d
-        else
-            dd = Inferred()
+            var_domain[i] = dd
         end
-        var_domain[i] = dd
     end
     ClockInference(ts, eq_domain, var_domain, inferred)
 end
@@ -28,11 +26,7 @@ function infer_clocks!(ci::ClockInference)
     @unpack ts, eq_domain, var_domain, inferred = ci
     @unpack fullvars = ts
     @unpack graph = ts.structure
-    if isempty(inferred)
-        fill!(var_domain, Continuous())
-        fill!(eq_domain, Continuous())
-        return ci
-    end
+    isempty(inferred) && return ci
     # TODO: add a graph type to do this lazily
     var_graph = SimpleGraph(ndsts(graph))
     for eq in 𝑠vertices(graph)
@@ -48,12 +42,7 @@ function infer_clocks!(ci::ClockInference)
     for c′ in cc
         c = BitSet(c′)
         idxs = intersect(c, inferred)
-        if isempty(idxs)
-            for v in c′
-                var_domain[v] = Continuous()
-            end
-            continue
-        end
+        isempty(idxs) && continue
         if !allequal(var_domain[i] for i in idxs)
             display(fullvars[c′])
             throw(ClockInferenceException("Clocks are not consistent in connected component $(fullvars[c′])"))
@@ -125,7 +114,6 @@ function split_system(ci::ClockInference)
         @assert cid!==0 "Internal error! Variable $(fullvars[i]) doesn't have a inferred time domain."
         var_to_cid[i] = cid
         v = fullvars[i]
-        #TODO: remove Inferred*
         if istree(v) && (o = operation(v)) isa Operator &&
            input_timedomain(o) != output_timedomain(o)
             push!(input_idxs[cid], i)

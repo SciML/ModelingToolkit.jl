@@ -9,7 +9,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
                           isparameter, isconstant,
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
-                          equations, isirreducible
+                          equations, isirreducible, input_timedomain, TimeDomain
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -285,7 +285,7 @@ function TearingState(sys; quick_cancel = false, check = true)
                !isdifferential(var) && (it = input_timedomain(var)) !== nothing
                 set_incidence = false
                 var = only(arguments(var))
-                var = setmetadata(var, ModelingToolkit.TimeDomain, it)
+                var = setmetadata(var, TimeDomain, it)
                 @goto ANOTHER_VAR
             end
         end
