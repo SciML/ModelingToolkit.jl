@@ -112,10 +112,12 @@ eqs = [yd ~ Sample(t, dt)(y)
        =#
        ]
 @named sys = ODESystem(eqs)
-ss = structural_simplify(sys)
-prob = ODEProblem(ss, [x => 0.0, y => 0.0], (0.0, 1.0),
-                  [kp => 1.0; z => 0.0; z(k + 1) => 0.0])
-sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+ss = structural_simplify(sys);
+if VERSION >= v"1.7"
+    prob = ODEProblem(ss, [x => 0.0, y => 0.0], (0.0, 1.0),
+                      [kp => 1.0; z => 0.0; z(k + 1) => 0.0])
+    sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+end
 # For all inputs in parameters, just initialize them to 0.0, and then set them
 # in the callback.
 

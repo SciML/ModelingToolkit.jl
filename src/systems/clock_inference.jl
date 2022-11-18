@@ -163,6 +163,9 @@ end
 function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
                                   checkbounds = true,
                                   eval_module = @__MODULE__, eval_expression = true)
+    @static if VERSION < v"1.7"
+        error("The `generate_discrete_affect` function requires at least Julia 1.7")
+    end
     out = Sym{Any}(:out)
     appended_parameters = parameters(syss[continuous_id])
     param_to_idx = Dict{Any, Int}(reverse(en) for en in enumerate(appended_parameters))
