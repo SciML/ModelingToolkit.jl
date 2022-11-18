@@ -117,37 +117,37 @@ if VERSION >= v"1.7"
     prob = ODEProblem(ss, [x => 0.0, y => 0.0], (0.0, 1.0),
                       [kp => 1.0; z => 0.0; z(k + 1) => 0.0])
     sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
-end
-# For all inputs in parameters, just initialize them to 0.0, and then set them
-# in the callback.
+    # For all inputs in parameters, just initialize them to 0.0, and then set them
+    # in the callback.
 
-# kp is the only real parameter
-function foo!(du, u, p, t)
-    x = u[1]
-    ud = p[2]
-    du[1] = -x + ud
+    # kp is the only real parameter
+    function foo!(du, u, p, t)
+        x = u[1]
+        ud = p[2]
+        du[1] = -x + ud
+    end
+    function affect!(integrator, saved_values)
+        kp = integrator.p[1]
+        yd = integrator.u[1]
+        z_t = integrator.p[3]
+        z = integrator.p[4]
+        r = 1.0
+        ud = kp * (r - yd) + z
+        push!(saved_values.t, integrator.t)
+        push!(saved_values.saveval, [integrator.p[4], integrator.p[3]])
+        integrator.p[2] = ud
+        integrator.p[3] = z + yd
+        integrator.p[4] = z_t
+        nothing
+    end
+    saved_values = SavedValues(Float64, Vector{Float64})
+    cb = PeriodicCallback(Base.Fix2(affect!, saved_values), 0.1)
+    prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 0.0, 0.0, 0.0], callback = cb)
+    sol2 = solve(prob, Tsit5())
+    @test sol.u == sol2.u
+    @test saved_values.t == sol.prob.kwargs[:disc_saved_values][1].t
+    @test saved_values.saveval == sol.prob.kwargs[:disc_saved_values][1].saveval
 end
-function affect!(integrator, saved_values)
-    kp = integrator.p[1]
-    yd = integrator.u[1]
-    z_t = integrator.p[3]
-    z = integrator.p[4]
-    r = 1.0
-    ud = kp * (r - yd) + z
-    push!(saved_values.t, integrator.t)
-    push!(saved_values.saveval, [integrator.p[4], integrator.p[3]])
-    integrator.p[2] = ud
-    integrator.p[3] = z + yd
-    integrator.p[4] = z_t
-    nothing
-end
-saved_values = SavedValues(Float64, Vector{Float64});
-cb = PeriodicCallback(Base.Fix2(affect!, saved_values), 0.1)
-prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 0.0, 0.0, 0.0], callback = cb)
-sol2 = solve(prob, Tsit5())
-@test sol.u == sol2.u
-@test saved_values.t == sol.prob.kwargs[:disc_saved_values][1].t
-@test saved_values.saveval == sol.prob.kwargs[:disc_saved_values][1].saveval
 
 @info "Testing multi-rate hybrid system"
 dt = 0.1
