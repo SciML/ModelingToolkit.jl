@@ -119,15 +119,42 @@ end
     throw(ArgumentError("$vars are missing from the variable map."))
 end
 
-"""
-$(SIGNATURES)
-
-Intercept the call to `handle_varmap` and convert it to an ordered list if the user has
-  ModelingToolkit loaded, and the problem has a symbolic origin.
-"""
+# FIXME: remove after: https://github.com/SciML/SciMLBase.jl/pull/311
 function SciMLBase.handle_varmap(varmap, sys::AbstractSystem; field = :states, kwargs...)
     out = varmap_to_vars(varmap, getfield(sys, field); kwargs...)
     return out
+end
+
+"""
+$(SIGNATURES)
+
+Intercept the call to `process_p_u0_symbolic` and process symbolic maps of `p` and/or `u0` if the 
+user has `ModelingToolkit` loaded.
+"""
+function SciMLBase.process_p_u0_symbolic(prob::ODEProblem, p, u0)
+    # check if a symbolic remake is possible
+    if eltype(p) <: Pair
+        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :ps) ||
+            throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
+                                " Please use `remake` with the `p` keyword argument as a vector of values, paying attention to parameter order."))
+    end
+    if eltype(u0) <: Pair
+        hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :states) ||
+            throw(ArgumentError("This problem does not support symbolic maps with `remake`, i.e. it does not have a symbolic origin." *
+                                " Please use `remake` with the `u0` keyword argument as a vector of values, paying attention to state order."))
+    end
+
+    # assemble defaults
+    defs = defaults(prob.f.sys)
+    defs = mergedefaults(defs, prob.p, parameters(prob.f.sys))
+    defs = mergedefaults(defs, p, parameters(prob.f.sys))
+    defs = mergedefaults(defs, prob.u0, states(prob.f.sys))
+    defs = mergedefaults(defs, u0, states(prob.f.sys))
+
+    u0 = varmap_to_vars(u0, states(prob.f.sys); defaults = defs, tofloat = true)
+    p = varmap_to_vars(p, parameters(prob.f.sys); defaults = defs)
+
+    return p, u0
 end
 
 struct IsHistory end
