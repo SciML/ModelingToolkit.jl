@@ -8,18 +8,16 @@ end
 function ClockInference(ts::TearingState)
     @unpack fullvars, structure = ts
     @unpack graph = structure
-    eq_domain = Vector{TimeDomain}(undef, nsrcs(graph))
-    var_domain = Vector{TimeDomain}(undef, ndsts(graph))
+    eq_domain = TimeDomain[Continuous() for _ in 1:nsrcs(graph)]
+    var_domain = TimeDomain[Continuous() for _ in 1:ndsts(graph)]
     inferred = BitSet()
     for (i, v) in enumerate(fullvars)
         d = get_time_domain(v)
         if d isa Union{AbstractClock, Continuous}
             push!(inferred, i)
             dd = d
-        else
-            dd = Inferred()
+            var_domain[i] = dd
         end
-        var_domain[i] = dd
     end
     ClockInference(ts, eq_domain, var_domain, inferred)
 end
@@ -28,6 +26,7 @@ function infer_clocks!(ci::ClockInference)
     @unpack ts, eq_domain, var_domain, inferred = ci
     @unpack fullvars = ts
     @unpack graph = ts.structure
+    isempty(inferred) && return ci
     # TODO: add a graph type to do this lazily
     var_graph = SimpleGraph(ndsts(graph))
     for eq in 𝑠vertices(graph)
@@ -58,7 +57,6 @@ function infer_clocks!(ci::ClockInference)
         vd = var_domain[v]
         eqs = 𝑑neighbors(graph, v)
         isempty(eqs) && continue
-        #eq = first(eqs)
         for eq in eqs
             eq_domain[eq] = vd
         end
@@ -116,7 +114,6 @@ function split_system(ci::ClockInference)
         @assert cid!==0 "Internal error! Variable $(fullvars[i]) doesn't have a inferred time domain."
         var_to_cid[i] = cid
         v = fullvars[i]
-        #TODO: remove Inferred*
         if istree(v) && (o = operation(v)) isa Operator &&
            input_timedomain(o) != output_timedomain(o)
             push!(input_idxs[cid], i)
@@ -147,21 +144,28 @@ function split_system(ci::ClockInference)
         @set! ts_i.structure.eq_to_diff = eq_to_diff
         tss[id] = ts_i
     end
-    return tss, inputs, continuous_id
+    return tss, inputs, continuous_id, id_to_clock
 end
 
-function generate_discrete_affect(syss, inputs, continuous_id, check_bounds = true)
+function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
+                                  checkbounds = true,
+                                  eval_module = @__MODULE__, eval_expression = true)
+    @static if VERSION < v"1.7"
+        error("The `generate_discrete_affect` function requires at least Julia 1.7")
+    end
     out = Sym{Any}(:out)
     appended_parameters = parameters(syss[continuous_id])
     param_to_idx = Dict{Any, Int}(reverse(en) for en in enumerate(appended_parameters))
     offset = length(appended_parameters)
     affect_funs = []
     svs = []
+    clocks = TimeDomain[]
     for (i, (sys, input)) in enumerate(zip(syss, inputs))
         i == continuous_id && continue
+        push!(clocks, id_to_clock[i])
         subs = get_substitutions(sys)
         assignments = map(s -> Assignment(s.lhs, s.rhs), subs.subs)
-        let_body = SetArray(!check_bounds, out, rhss(equations(sys)))
+        let_body = SetArray(!checkbounds, out, rhss(equations(sys)))
         let_block = Let(assignments, let_body, false)
         needed_cont_to_disc_obs = map(v -> arguments(v)[1], input)
         # TODO: filter the needed ones
@@ -190,27 +194,37 @@ function generate_discrete_affect(syss, inputs, continuous_id, check_bounds = tr
         cont_to_disc_idxs = (offset + 1):(offset += ni)
         input_offset = offset
         disc_range = (offset + 1):(offset += ns)
-        affect! = quote
-            function affect!(integrator, saved_values)
-                @unpack u, p, t = integrator
-                c2d_obs = $cont_to_disc_obs
-                d2c_obs = $disc_to_cont_obs
-                c2d_view = view(p, $cont_to_disc_idxs)
-                d2c_view = view(p, $disc_to_cont_idxs)
-                disc_state = view(p, $disc_range)
-                disc = $disc
-                # Write continuous info to discrete
-                # Write discrete info to continuous
-                copyto!(c2d_view, c2d_obs(integrator.u, p, t))
-                copyto!(d2c_view, d2c_obs(disc_state, p, t))
-                push!(saved_values.t, t)
-                push!(saved_values.saveval, Base.@ntuple $ns i->p[$input_offset + i])
-                disc(disc_state, disc_state, p, t)
-            end
+        save_vec = Expr(:ref, :Float64)
+        for i in 1:ns
+            push!(save_vec.args, :(p[$(input_offset + i)]))
         end
-        sv = SavedValues(Float64, NTuple{ns, Float64})
+        affect! = :(function (integrator, saved_values)
+                        @unpack u, p, t = integrator
+                        c2d_obs = $cont_to_disc_obs
+                        d2c_obs = $disc_to_cont_obs
+                        c2d_view = view(p, $cont_to_disc_idxs)
+                        d2c_view = view(p, $disc_to_cont_idxs)
+                        disc_state = view(p, $disc_range)
+                        disc = $disc
+                        # Write continuous info to discrete
+                        # Write discrete info to continuous
+                        copyto!(c2d_view, c2d_obs(integrator.u, p, t))
+                        copyto!(d2c_view, d2c_obs(disc_state, p, t))
+                        push!(saved_values.t, t)
+                        push!(saved_values.saveval, $save_vec)
+                        disc(disc_state, disc_state, p, t)
+                    end)
+        sv = SavedValues(Float64, Vector{Float64})
         push!(affect_funs, affect!)
         push!(svs, sv)
     end
-    return map(a -> toexpr(LiteralExpr(a)), affect_funs), svs, appended_parameters
+    if eval_expression
+        affects = map(affect_funs) do a
+            @RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a)))
+        end
+    else
+        affects = map(a -> toexpr(LiteralExpr(a)), affect_funs)
+    end
+    defaults = Dict{Any, Any}(v => 0.0 for v in Iterators.flatten(inputs))
+    return affects, clocks, svs, appended_parameters, defaults
 end

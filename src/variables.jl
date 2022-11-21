@@ -36,6 +36,17 @@ isoutput(x) = isvarkind(VariableOutput, x)
 isirreducible(x) = isvarkind(VariableIrreducible, x)
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
 
+function default_toterm(x)
+    if istree(x) && (op = operation(x)) isa Operator
+        if !(op isa Differential)
+            x = normalize_to_differential(op)(arguments(x)...)
+        end
+        Symbolics.diff2term(x)
+    else
+        x
+    end
+end
+
 """
 $(SIGNATURES)
 
@@ -44,7 +55,7 @@ and creates the array of values in the correct order with default values when
 applicable.
 """
 function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
-                        toterm = Symbolics.diff2term, promotetoconcrete = nothing,
+                        toterm = default_toterm, promotetoconcrete = nothing,
                         tofloat = true, use_union = false)
     varlist = collect(map(unwrap, varlist))
 

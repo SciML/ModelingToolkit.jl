@@ -230,7 +230,7 @@ export @variables, @parameters, @constants
 export @named, @nonamespace, @namespace, extend, compose, complete
 export debug_system
 
-export Continuous, Discrete, sampletime, input_timedomain, output_timedomain
+#export Continuous, Discrete, sampletime, input_timedomain, output_timedomain
 #export has_discrete_domain, has_continuous_domain
 #export is_discrete_domain, is_continuous_domain, is_hybrid_domain
 export Sample, Hold, Shift, ShiftIndex
