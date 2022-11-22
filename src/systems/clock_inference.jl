@@ -169,9 +169,20 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
         let_block = Let(assignments, let_body, false)
         needed_cont_to_disc_obs = map(v -> arguments(v)[1], input)
         # TODO: filter the needed ones
-        needed_disc_to_cont_obs = map(v -> arguments(v)[1], inputs[continuous_id])
+        fullvars = Set{Any}(eq.lhs for eq in observed(sys))
+        for s in states(sys)
+            push!(fullvars, s)
+        end
+        needed_disc_to_cont_obs = []
+        disc_to_cont_idxs = Int[]
+        for v in inputs[continuous_id]
+            vv = arguments(v)[1]
+            if vv in fullvars
+                push!(needed_disc_to_cont_obs, vv)
+                push!(disc_to_cont_idxs, param_to_idx[v])
+            end
+        end
         append!(appended_parameters, input, states(sys))
-        disc_to_cont_idxs = map(Base.Fix1(getindex, param_to_idx), inputs[continuous_id])
         cont_to_disc_obs = build_explicit_observed_function(syss[continuous_id],
                                                             needed_cont_to_disc_obs,
                                                             throw = false,
@@ -198,6 +209,7 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
         for i in 1:ns
             push!(save_vec.args, :(p[$(input_offset + i)]))
         end
+        empty_disc = isempty(disc_range)
         affect! = :(function (integrator, saved_values)
                         @unpack u, p, t = integrator
                         c2d_obs = $cont_to_disc_obs
@@ -212,7 +224,7 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
                         copyto!(d2c_view, d2c_obs(disc_state, p, t))
                         push!(saved_values.t, t)
                         push!(saved_values.saveval, $save_vec)
-                        disc(disc_state, disc_state, p, t)
+                        $empty_disc || disc(disc_state, disc_state, p, t)
                     end)
         sv = SavedValues(Float64, Vector{Float64})
         push!(affect_funs, affect!)
