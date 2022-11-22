@@ -240,3 +240,74 @@ ci, varmap = infer_clocks(cl)
 @test varmap[f.u] == Clock(t, 0.5)
 @test varmap[p.u] == Continuous()
 @test varmap[c.r] == Clock(t, 0.5)
+
+## Multiple clock rates
+@info "Testing multi-rate hybrid system"
+dt = 0.1
+dt2 = 0.2
+@variables t x(t)=0 y(t)=0 u(t)=0 yd1(t)=0 ud1(t)=0 yd2(t)=0 ud2(t)=0
+@parameters kp=1 r=1
+D = Differential(t)
+
+eqs = [
+       # controller (time discrete part `dt=0.1`)
+       yd1 ~ Sample(t, dt)(y)
+       ud1 ~ kp * (r - yd1)
+       # controller (time discrete part `dt=0.2`)
+       yd2 ~ Sample(t, dt2)(y)
+       ud2 ~ kp * (r - yd2)
+
+       # plant (time continuous part)
+       u ~ Hold(ud1) + Hold(ud2)
+       D(x) ~ -x + u
+       y ~ x]
+
+@named cl = ODESystem(eqs, t)
+
+d = Clock(t, dt)
+d2 = Clock(t, dt2)
+
+ci, varmap = infer_clocks(cl)
+@test varmap[yd1] == d
+@test varmap[ud1] == d
+@test varmap[yd2] == d2
+@test varmap[ud2] == d2
+@test varmap[x] == Continuous()
+@test varmap[y] == Continuous()
+@test varmap[u] == Continuous()
+
+ss = structural_simplify(cl)
+
+if VERSION >= v"1.7"
+    prob = ODEProblem(ss, [x => 0.0], (0.0, 1.0), [kp => 1.0])
+    sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+
+    function foo!(dx, x, p, t)
+        kp, ud1, ud2 = p
+        dx[1] = -x[1] + ud1 + ud2
+    end
+
+    function affect1!(integrator)
+        kp = integrator.p[1]
+        y = integrator.u[1]
+        r = 1.0
+        ud1 = kp * (r - y)
+        integrator.p[2] = ud1
+        nothing
+    end
+    function affect2!(integrator)
+        kp = integrator.p[1]
+        y = integrator.u[1]
+        r = 1.0
+        ud2 = kp * (r - y)
+        integrator.p[3] = ud2
+        nothing
+    end
+    cb1 = PeriodicCallback(affect1!, dt)
+    cb2 = PeriodicCallback(affect2!, dt2)
+    cb = CallbackSet(cb1, cb2)
+    prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 0.0, 0.0], callback = cb)
+    sol2 = solve(prob, Tsit5())
+
+    @test sol.u ≈ sol2.u
+end
