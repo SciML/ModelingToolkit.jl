@@ -58,9 +58,11 @@ level1 = ODESystem(Equation[], t, [], []; name = :level1) ∘ level0
 level2 = ODESystem(Equation[], t, [], []; name = :level2) ∘ level1
 level3 = ODESystem(Equation[], t, [], []; name = :level3) ∘ level2
 
-@test isequal(parameters(level3)[1], level2.level1.level0.a)
-@test isequal(parameters(level3)[2], level2.level1.b)
-@test isequal(parameters(level3)[3], level2.c)
-@test isequal(parameters(level3)[4], level2.level0.d)
-@test isequal(parameters(level3)[5], level1.level0.e)
-@test isequal(parameters(level3)[6], f)
+ps = ModelingToolkit.getname.(parameters(level3))
+
+@test isequal(ps[1], :level2₊level1₊level0₊a)
+@test isequal(ps[2], :level2₊level1₊b)
+@test isequal(ps[3], :level2₊c)
+@test isequal(ps[4], :level2₊level0₊d)
+@test isequal(ps[5], :level1₊level0₊e)
+@test isequal(ps[6], :f)
