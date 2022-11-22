@@ -240,3 +240,87 @@ ci, varmap = infer_clocks(cl)
 @test varmap[f.u] == Clock(t, 0.5)
 @test varmap[p.u] == Continuous()
 @test varmap[c.r] == Clock(t, 0.5)
+
+
+## Multiple clock rates
+@info "Testing multi-rate hybrid system"
+dt = 0.1
+dt2 = 0.2
+@variables t x(t)=0 y(t)=0 u(t)=0 r(t)=1 yd1(t)=0 ud1(t)=0 yd2(t)=0 ud2(t)=0
+@parameters kp=1
+D = Differential(t)
+
+eqs = [
+    # controller (time discrete part `dt=0.1`)
+    yd1 ~ Sample(t, dt)(y)
+    ud1 ~ kp * (Sample(t, dt)(r) - yd1)
+    # controller (time discrete part `dt=0.2`)
+    yd2 ~ Sample(t, dt2)(y)
+    ud2 ~ kp * (Sample(t, dt2)(r) - yd2)
+
+    # plant (time continuous part)
+    u ~ Hold(ud1) + Hold(ud2)
+    D(x) ~ -x + u
+    y ~ x
+]
+
+@named cl = ODESystem(eqs, t)
+
+d = Clock(t, dt)
+d2 = Clock(t, dt2)
+
+ci, varmap = infer_clocks(cl)
+@test varmap[yd1] == d
+@test varmap[ud1] == d
+@test varmap[yd2] == d2
+@test varmap[ud2] == d2
+@test varmap[r] == Continuous()
+@test varmap[x] == Continuous()
+@test varmap[y] == Continuous()
+@test varmap[u] == Continuous()
+
+ss = structural_simplify(cl)
+
+prob = ODEProblem(ss, [x=>0.0], (0.0, 1.0), [kp => 1.0])
+sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+
+function foo!(dx, x, p, t)
+    kp, ud1, ud2 = p
+    dx[1] = -x[1] + ud1 + ud2
+end
+
+function affect1!(integrator, saved_values)
+    kp = integrator.p[1]
+    y = integrator.u[1]
+    r = 1.0
+    ud1 = kp * (r - y)
+    push!(saved_values.t, integrator.t)
+    push!(saved_values.saveval, [integrator.p[4]])
+    integrator.p[2] = ud1
+    nothing
+end
+function affect2!(integrator, saved_values)
+    kp = integrator.p[1]
+    y = integrator.u[1]
+    r = 1.0
+    ud2 = kp * (r - y)
+    push!(saved_values.t, integrator.t)
+    push!(saved_values.saveval, [integrator.p[5]])
+    integrator.p[3] = ud2
+    nothing
+end
+saved_values1 = SavedValues(Float64, Vector{Float64})
+saved_values2 = SavedValues(Float64, Vector{Float64})
+cb1 = PeriodicCallback(Base.Fix2(affect1!, saved_values1), dt)
+cb2 = PeriodicCallback(Base.Fix2(affect2!, saved_values2), dt2)
+cb = CallbackSet(cb1, cb2)
+prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 0.0, 0.0, 0.0, 0.0], callback = cb)
+sol2 = solve(prob, Tsit5())
+
+
+@test sol.u == sol2.u
+@test saved_values1.t == sol.prob.kwargs[:disc_saved_values][1].t
+@test saved_values1.saveval == sol.prob.kwargs[:disc_saved_values][1].saveval
+
+@test saved_values2.t == sol.prob.kwargs[:disc_saved_values][2].t
+@test saved_values2.saveval == sol.prob.kwargs[:disc_saved_values][2].saveval
