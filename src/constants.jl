@@ -1,5 +1,5 @@
 import SymbolicUtils: symtype, term, hasmetadata, issym
-struct MTKConstantCtx end
+struct MTKConstantCtx <: Symbolics.AbstractVariableMetadata end
 
 isconstant(x::Num) = isconstant(unwrap(x))
 """ Test whether `x` is a constant-type Sym. """

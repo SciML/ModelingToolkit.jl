@@ -1,5 +1,5 @@
 import SymbolicUtils: symtype, term, hasmetadata, issym
-struct MTKParameterCtx end
+struct MTKParameterCtx <: Symbolics.AbstractVariableMetadata end
 
 function isparameter(x)
     x = unwrap(x)
