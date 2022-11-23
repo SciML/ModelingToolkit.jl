@@ -364,6 +364,16 @@ function ParentScope(sym::Union{Num, Symbolic})
     setmetadata(sym, SymScope, ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
 end
 
+struct DelayParentScope <: SymScope
+    parent::SymScope
+    N::Int
+end
+function DelayParentScope(sym::Union{Num, Symbolic}, N)
+    setmetadata(sym, SymScope,
+                DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
+end
+DelayParentScope(sym::Union{Num, Symbolic}) = DelayParentScope(sym, 1)
+
 struct GlobalScope <: SymScope end
 GlobalScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, GlobalScope())
 
@@ -382,6 +392,15 @@ function renamespace(sys, x)
                 rename(x, renamespace(getname(sys), getname(x)))
             elseif scope isa ParentScope
                 setmetadata(x, SymScope, scope.parent)
+            elseif scope isa DelayParentScope
+                if scope.N > 0
+                    x = setmetadata(x, SymScope,
+                                    DelayParentScope(scope.parent, scope.N - 1))
+                    rename(x, renamespace(getname(sys), getname(x)))
+                else
+                    #rename(x, renamespace(getname(sys), getname(x)))
+                    setmetadata(x, SymScope, scope.parent)
+                end
             else # GlobalScope
                 x
             end

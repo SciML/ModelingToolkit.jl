@@ -44,3 +44,25 @@ end
 @test renamed([:foo :bar :baz], b) == Symbol("foo₊bar₊b")
 @test renamed([:foo :bar :baz], c) == Symbol("foo₊c")
 @test renamed([:foo :bar :baz], d) == :d
+
+@parameters t a b c d e f
+p = [a
+     ParentScope(b)
+     ParentScope(ParentScope(c))
+     DelayParentScope(d)
+     DelayParentScope(e, 2)
+     GlobalScope(f)]
+
+level0 = ODESystem(Equation[], t, [], p; name = :level0)
+level1 = ODESystem(Equation[], t, [], []; name = :level1) ∘ level0
+level2 = ODESystem(Equation[], t, [], []; name = :level2) ∘ level1
+level3 = ODESystem(Equation[], t, [], []; name = :level3) ∘ level2
+
+ps = ModelingToolkit.getname.(parameters(level3))
+
+@test isequal(ps[1], :level2₊level1₊level0₊a)
+@test isequal(ps[2], :level2₊level1₊b)
+@test isequal(ps[3], :level2₊c)
+@test isequal(ps[4], :level2₊level0₊d)
+@test isequal(ps[5], :level1₊level0₊e)
+@test isequal(ps[6], :f)
