@@ -297,7 +297,7 @@ function inputs_to_parameters!(state::TransformationState, io)
     @set! structure.var_to_diff = complete(new_var_to_diff)
     @set! structure.graph = complete(new_graph)
 
-    @set! sys.eqs = map(Base.Fix2(substitute, input_to_parameters), equations(sys))
+    @set! sys.eqs = substitute(equations(sys), input_to_parameters)
     @set! sys.states = setdiff(states(sys), keys(input_to_parameters))
     ps = parameters(sys)
 
