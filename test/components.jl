@@ -78,7 +78,7 @@ let
     tspan = (0.0, 10.0)
 
     prob = ODAEProblem(sys, u0, tspan, params)
-    @test solve(prob, Tsit5()).retcode == :Success
+    @test solve(prob, Tsit5()).retcode == ReturnCode.Success
 end
 
 let
