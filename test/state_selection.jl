@@ -128,9 +128,9 @@ let
     prob1 = ODEProblem(sys, u0, (0.0, 10.0), [])
     prob2 = ODAEProblem(sys, u0, (0.0, 10.0), [])
     prob3 = DAEProblem(sys, D.(states(sys)) .=> 0.0, u0, (0.0, 10.0), [])
-    @test solve(prob1, FBDF()).retcode == :Success
-    @test solve(prob2, FBDF()).retcode == :Success
-    @test solve(prob3, DFBDF()).retcode == :Success
+    @test solve(prob1, FBDF()).retcode == ReturnCode.Success
+    @test solve(prob2, FBDF()).retcode == ReturnCode.Success
+    @test solve(prob3, DFBDF()).retcode == ReturnCode.Success
 end
 
 # 1537
@@ -194,8 +194,8 @@ let
           Ek_3 => 3]
     prob1 = ODEProblem(sys, u0, (0.0, 0.1))
     prob2 = ODAEProblem(sys, u0, (0.0, 0.1))
-    @test solve(prob1, FBDF()).retcode == :Success
-    @test solve(prob2, FBDF()).retcode == :Success
+    @test solve(prob1, FBDF()).retcode == ReturnCode.Success
+    @test solve(prob2, FBDF()).retcode == ReturnCode.Success
 end
 
 let
@@ -281,5 +281,5 @@ let
     @named catapult = ODESystem(eqs, t, vars, params, defaults = defs)
     sys = structural_simplify(catapult)
     prob = ODEProblem(sys, [], (0.0, 0.1), [l_2f => 0.55, damp => 1e7]; jac = true)
-    @test solve(prob, Rodas4()).retcode == :Success
+    @test solve(prob, Rodas4()).retcode == ReturnCode.Success
 end
