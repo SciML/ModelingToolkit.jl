@@ -39,7 +39,7 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 
 using SparseArrays
 
-using NonlinearSolve
+using SimpleNonlinearSolve
 
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export dummy_derivative
