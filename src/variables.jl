@@ -119,19 +119,14 @@ end
     throw(ArgumentError("$vars are missing from the variable map."))
 end
 
-# FIXME: remove after: https://github.com/SciML/SciMLBase.jl/pull/311
-function SciMLBase.handle_varmap(varmap, sys::AbstractSystem; field = :states, kwargs...)
-    out = varmap_to_vars(varmap, getfield(sys, field); kwargs...)
-    return out
-end
-
 """
 $(SIGNATURES)
 
 Intercept the call to `process_p_u0_symbolic` and process symbolic maps of `p` and/or `u0` if the 
 user has `ModelingToolkit` loaded.
 """
-function SciMLBase.process_p_u0_symbolic(prob::ODEProblem, p, u0)
+function SciMLBase.process_p_u0_symbolic(prob::Union{ODEProblem, OptimizationProblem}, p,
+                                         u0)
     # check if a symbolic remake is possible
     if eltype(p) <: Pair
         hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :ps) ||
