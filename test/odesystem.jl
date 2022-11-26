@@ -467,7 +467,7 @@ prob = ODEProblem(sys, [], (0, 1.0))
 sol = solve(prob, Tsit5())
 @test sol[2x[1] + 3x[3] + norm(x)] ≈
       2sol[x[1]] + 3sol[x[3]] + sol[norm(x)]
-@test sol[x + [y, 2y, 3y]] ≈ [sol[x] .+ sol[y]
+@test sol[x .+ [y, 2y, 3y]] ≈ [sol[x] .+ sol[y]
                               sol[x] .+ 2sol[y]
                               sol[x] .+ 3sol[y]]
 
