@@ -137,7 +137,7 @@ end
 # nested constraints
 @testset "nested systems" begin
     @variables x y
-    @parameters a=1
+    @parameters a = 1
     o1 = (x - a)^2
     o2 = (y - 1 / 2)^2
     c1 = [
@@ -155,11 +155,11 @@ end
     @test isequal(equations(sys), (sys1.x - 1)^2 + (sys2.y - 1 / 2)^2)
     @test isequal(states(sys), [sys1.x, sys2.y])
 
-    prob_ = remake(prob, u0=[1.0, 0.0], p=[2.0])
+    prob_ = remake(prob, u0 = [1.0, 0.0], p = [2.0])
     @test isequal(prob_.u0, [1.0, 0.0])
     @test isequal(prob_.p, [2.0])
 
-    prob_ = remake(prob, u0=Dict(sys1.x => 1.0), p=Dict(sys1.a => 2.0))
+    prob_ = remake(prob, u0 = Dict(sys1.x => 1.0), p = Dict(sys1.a => 2.0))
     @test isequal(prob_.u0, [1.0, 0.0])
     @test isequal(prob_.p, [2.0])
 end
