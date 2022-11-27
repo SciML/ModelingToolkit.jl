@@ -229,6 +229,6 @@ testdict = Dict([:test => 1])
     @test prob_.p == [1.1, 1.2, 1.3]
 
     prob_ = remake(prob, u0 = Dict(y => 2.0), p = Dict(a => 2.0))
-    @test_broken prob_.u0 == [1.0, 2.0, 1.0] # TODO: needs a `remake(prob::NonlinearProblem, ...)` in SciMLBase
-    @test_broken prob_.p == [2.0, 1.0, 1.0]
+    @test prob_.u0 == [1.0, 2.0, 1.0]
+    @test prob_.p == [2.0, 1.0, 1.0]
 end
