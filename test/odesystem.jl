@@ -466,8 +466,11 @@ sys = structural_simplify(sys)
 prob = ODEProblem(sys, [], (0, 1.0))
 sol = solve(prob, Tsit5())
 @test sol[2x[1] + 3x[3] + norm(x)] ≈
-      2sol[x[1]] + 3sol[x[3]] + vec(mapslices(norm, hcat(sol[x]...), dims = 2))
-@test sol[x + [y, 2y, 3y]] ≈ sol[x] + [sol[y], 2sol[y], 3sol[y]]
+      2sol[x[1]] + 3sol[x[3]] + sol[norm(x)]
+@test sol[x .+ [y, 2y, 3y]] ≈ map((x...) -> [x...],
+          map((x, y) -> x[1] .+ y, sol[x], sol[y]),
+          map((x, y) -> x[2] .+ 2y, sol[x], sol[y]),
+          map((x, y) -> x[3] .+ 3y, sol[x], sol[y]))
 
 # Mixed Difference Differential equations
 @parameters t a b c d
