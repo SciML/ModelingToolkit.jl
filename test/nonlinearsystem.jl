@@ -189,8 +189,7 @@ eq = [v1 ~ sin(2pi * t * h)
 @named sys = ODESystem(eq)
 @test length(equations(structural_simplify(sys))) == 0
 
-#1504
-let
+@testset "Issue: 1504" begin
     @variables u[1:4]
 
     eqs = [u[1] ~ 1,
@@ -213,3 +212,23 @@ eqs = [0 ~ a * x]
 testdict = Dict([:test => 1])
 @named sys = NonlinearSystem(eqs, [x], [a], metadata = testdict)
 @test get_metadata(sys) == testdict
+
+@testset "Remake" begin
+    @parameters a=1.0 b=1.0 c=1.0
+    @constants h = 1
+    @variables x y z
+
+    eqs = [0 ~ a * (y - x) * h,
+        0 ~ x * (b - z) - y,
+        0 ~ x * y - c * z]
+    @named sys = NonlinearSystem(eqs, [x, y, z], [a, b, c], defaults = Dict(x => 2.0))
+    prob = NonlinearProblem(sys, ones(length(states(sys))))
+
+    prob_ = remake(prob, u0 = [1.0, 2.0, 3.0], p = [1.1, 1.2, 1.3])
+    @test prob_.u0 == [1.0, 2.0, 3.0]
+    @test prob_.p == [1.1, 1.2, 1.3]
+
+    prob_ = remake(prob, u0 = Dict(sys.y => 2.0), p = Dict(sys.a => 2.0))
+    @test_broken prob_.u0 == [1.0, 2.0, 1.0] # TODO: needs a `remake(prob::NonlinearProblem, ...)` in SciMLBase
+    @test_broken prob_.p == [2.0, 1.0, 1.0]
+end

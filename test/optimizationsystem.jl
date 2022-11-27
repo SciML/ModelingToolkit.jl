@@ -152,7 +152,7 @@ end
                              constraints = [sys1.x + sys2.y ~ 2], checks = false)
     prob = OptimizationProblem(sys, [0.0, 0.0])
     @test isequal(constraints(sys), vcat(sys1.x + sys2.y ~ 2, sys1.x ~ 1, sys2.y ~ 1))
-    @test isequal(equations(sys), (sys1.x - 1)^2 + (sys2.y - 1 / 2)^2)
+    @test isequal(equations(sys), (sys1.x - sys1.a)^2 + (sys2.y - 1 / 2)^2)
     @test isequal(states(sys), [sys1.x, sys2.y])
 
     prob_ = remake(prob, u0 = [1.0, 0.0], p = [2.0])
