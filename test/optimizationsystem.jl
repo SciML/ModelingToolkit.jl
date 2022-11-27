@@ -137,7 +137,8 @@ end
 # nested constraints
 @testset "nested systems" begin
     @variables x y
-    o1 = (x - 1)^2
+    @parameters a = 1
+    o1 = (x - a)^2
     o2 = (y - 1 / 2)^2
     c1 = [
         x ~ 1,
@@ -145,15 +146,22 @@ end
     c2 = [
         y ~ 1,
     ]
-    sys1 = OptimizationSystem(o1, [x], [], name = :sys1, constraints = c1)
+    sys1 = OptimizationSystem(o1, [x], [a], name = :sys1, constraints = c1)
     sys2 = OptimizationSystem(o2, [y], [], name = :sys2, constraints = c2)
     sys = OptimizationSystem(0, [], []; name = :sys, systems = [sys1, sys2],
                              constraints = [sys1.x + sys2.y ~ 2], checks = false)
     prob = OptimizationProblem(sys, [0.0, 0.0])
-
     @test isequal(constraints(sys), vcat(sys1.x + sys2.y ~ 2, sys1.x ~ 1, sys2.y ~ 1))
-    @test isequal(equations(sys), (sys1.x - 1)^2 + (sys2.y - 1 / 2)^2)
+    @test isequal(equations(sys), (sys1.x - sys1.a)^2 + (sys2.y - 1 / 2)^2)
     @test isequal(states(sys), [sys1.x, sys2.y])
+
+    prob_ = remake(prob, u0 = [1.0, 0.0], p = [2.0])
+    @test isequal(prob_.u0, [1.0, 0.0])
+    @test isequal(prob_.p, [2.0])
+
+    prob_ = remake(prob, u0 = Dict(sys1.x => 1.0), p = Dict(sys1.a => 2.0))
+    @test isequal(prob_.u0, [1.0, 0.0])
+    @test isequal(prob_.p, [2.0])
 end
 
 @testset "time dependent var" begin
