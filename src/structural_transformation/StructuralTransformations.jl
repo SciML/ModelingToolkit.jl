@@ -27,6 +27,7 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview, complete
+import ModelingToolkit: var_derivative!, var_derivative_graph!
 using Graphs
 using ModelingToolkit.SystemStructures
 using ModelingToolkit.SystemStructures: algeqs, EquationsView

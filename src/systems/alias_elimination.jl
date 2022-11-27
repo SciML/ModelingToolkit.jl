@@ -11,9 +11,7 @@ function alias_eliminate_graph!(state::TransformationState; kwargs...)
     end
 
     @unpack graph, var_to_diff, solvable_graph = state.structure
-    ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(complete(graph),
-                                                                                 complete(var_to_diff),
-                                                                                 mm)
+    ag, mm, complete_ag, complete_mm = alias_eliminate_graph!(state, mm)
     if solvable_graph !== nothing
         for (ei, e) in enumerate(mm.nzrows)
             set_neighbors!(solvable_graph, e, mm.row_cols[ei])
@@ -21,7 +19,7 @@ function alias_eliminate_graph!(state::TransformationState; kwargs...)
         update_graph_neighbors!(solvable_graph, ag)
     end
 
-    return ag, mm, complete_ag, complete_mm, updated_diff_vars
+    return ag, mm, complete_ag, complete_mm
 end
 
 # For debug purposes
@@ -51,22 +49,11 @@ function alias_elimination!(state::TearingState; kwargs...)
     sys = state.sys
     complete!(state.structure)
     graph_orig = copy(state.structure.graph)
-    ag, mm, complete_ag, complete_mm, updated_diff_vars = alias_eliminate_graph!(state;
-                                                                                 kwargs...)
+    ag, mm, complete_ag, complete_mm = alias_eliminate_graph!(state; kwargs...)
     isempty(ag) && return sys, ag
 
     fullvars = state.fullvars
     @unpack var_to_diff, graph, solvable_graph = state.structure
-
-    if !isempty(updated_diff_vars)
-        has_iv(sys) ||
-            error(InvalidSystemException("The system has no independent variable!"))
-        D = Differential(get_iv(sys))
-        for v in updated_diff_vars
-            dv = var_to_diff[v]
-            fullvars[dv] = D(fullvars[v])
-        end
-    end
 
     subs = Dict()
     obs = Equation[]
@@ -328,6 +315,9 @@ function Base.setindex!(ag::AliasGraph, ::Nothing, i::Integer)
 end
 function Base.setindex!(ag::AliasGraph, v::Integer, i::Integer)
     @assert v == 0
+    if i > length(ag.aliasto)
+        resize!(ag.aliasto, i)
+    end
     if ag.aliasto[i] === nothing
         push!(ag.eliminated, i)
     end
@@ -343,6 +333,9 @@ function Base.setindex!(ag::AliasGraph, p::Union{Pair{Int, Int}, Tuple{Int, Int}
         return p
     end
     @assert v != 0 && c in (-1, 1)
+    if i > length(ag.aliasto)
+        resize!(ag.aliasto, i)
+    end
     if ag.aliasto[i] === nothing
         push!(ag.eliminated, i)
     end
@@ -379,6 +372,7 @@ function Graphs.add_edge!(g::WeightedGraph, u, v, w)
     r && (g.dict[canonicalize(u, v)] = w)
     r
 end
+Graphs.add_vertex!(g::WeightedGraph) = add_vertex!(g.graph)
 Graphs.has_edge(g::WeightedGraph, u, v) = has_edge(g.graph, u, v)
 Graphs.ne(g::WeightedGraph) = ne(g.graph)
 Graphs.nv(g::WeightedGraph) = nv(g.graph)
@@ -656,7 +650,8 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig)
     return mm, echelon_mm
 end
 
-function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
+function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatrixCLIL)
+    @unpack graph, var_to_diff = state.structure
     # Step 1: Perform Bareiss factorization on the adjacency matrix of the linear
     #         subsystem of the system we're interested in.
     #
@@ -689,11 +684,23 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     # with a tie breaking strategy, the root variable (in this case `z`) is
     # always uniquely determined. Thus, the result is well-defined.
     dag = AliasGraph(nvars) # alias graph for differentiated variables
-    updated_diff_vars = Int[]
     diff_to_var = invview(var_to_diff)
     processed = falses(nvars)
     g, eqg, zero_vars = equality_diff_graph(ag, var_to_diff)
     dls = DiffLevelState(g, var_to_diff)
+
+    function var_drivative_here!(diff_var)
+        newvar = var_derivative!(state, diff_var)
+        @assert newvar == length(processed)+1
+        push!(processed, true)
+        add_vertex!(g)
+        add_vertex!(eqg)
+        add_edge!(g, diff_var, newvar)
+        add_edge!(g, newvar, diff_var)
+        push!(dls.dists, typemax(Int))
+        return newvar
+    end
+
     is_diff_edge = let var_to_diff = var_to_diff
         (v, w) -> var_to_diff[v] == w || var_to_diff[w] == v
     end
@@ -709,10 +716,12 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         for _ in 1:10_000 # just to make sure that we don't stuck in an infinite loop
             reach₌ = Pair{Int, Int}[]
             # `r` is aliased to its equality aliases
-            r === nothing || for n in neighbors(eqg, r)
-                (n == r || is_diff_edge(r, n)) && continue
-                c = get_weight(eqg, r, n)
-                push!(reach₌, c => n)
+            if r !== nothing
+                for n in neighbors(eqg, r)
+                    (n == r || is_diff_edge(r, n)) && continue
+                    c = get_weight(eqg, r, n)
+                    push!(reach₌, c => n)
+                end
             end
             # `r` is aliased to its previous differentiation level's aliases'
             # derivative
@@ -733,19 +742,12 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
             end
             if r === nothing
                 isempty(reach₌) && break
-                idx = findfirst(x -> x[1] == 1, reach₌)
-                if idx === nothing
-                    c, dr = reach₌[1]
-                    @assert c == -1
-                    dag[dr] = (c, dr)
-                else
-                    c, dr = reach₌[idx]
-                    @assert c == 1
-                end
-                dr in stem_set && break
-                var_to_diff[prev_r] = dr
-                push!(updated_diff_vars, prev_r)
-                prev_r = dr
+                # See example in the box above where D(D(D(z))) doesn't appear
+                # in the original system and needs to added, so we can alias to it.
+                # We do that here.
+                @assert prev_r !== -1
+                prev_r = var_drivative_here!(prev_r)
+                r = nothing
             else
                 prev_r = r
                 r = var_to_diff[r]
@@ -940,7 +942,7 @@ function alias_eliminate_graph!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     end
 
     complete_mm = reduce!(copy(echelon_mm), mm_orig, complete_ag, size(echelon_mm, 1))
-    return ag, mm, complete_ag, complete_mm, updated_diff_vars
+    return ag, mm, complete_ag, complete_mm
 end
 
 function update_graph_neighbors!(graph, ag)
