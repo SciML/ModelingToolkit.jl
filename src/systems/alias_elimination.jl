@@ -650,6 +650,18 @@ function simple_aliases!(ag, graph, var_to_diff, mm_orig)
     return mm, echelon_mm
 end
 
+function var_derivative_here!(state, processed, g, eqg, dls, diff_var)
+    newvar = var_derivative!(state, diff_var)
+    @assert newvar == length(processed) + 1
+    push!(processed, true)
+    add_vertex!(g)
+    add_vertex!(eqg)
+    add_edge!(g, diff_var, newvar)
+    add_edge!(g, newvar, diff_var)
+    push!(dls.dists, typemax(Int))
+    return newvar
+end
+
 function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatrixCLIL)
     @unpack graph, var_to_diff = state.structure
     # Step 1: Perform Bareiss factorization on the adjacency matrix of the linear
@@ -688,18 +700,7 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
     processed = falses(nvars)
     g, eqg, zero_vars = equality_diff_graph(ag, var_to_diff)
     dls = DiffLevelState(g, var_to_diff)
-
-    function var_drivative_here!(diff_var)
-        newvar = var_derivative!(state, diff_var)
-        @assert newvar == length(processed)+1
-        push!(processed, true)
-        add_vertex!(g)
-        add_vertex!(eqg)
-        add_edge!(g, diff_var, newvar)
-        add_edge!(g, newvar, diff_var)
-        push!(dls.dists, typemax(Int))
-        return newvar
-    end
+    original_nvars = length(var_to_diff)
 
     is_diff_edge = let var_to_diff = var_to_diff
         (v, w) -> var_to_diff[v] == w || var_to_diff[w] == v
@@ -746,7 +747,7 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
                 # in the original system and needs to added, so we can alias to it.
                 # We do that here.
                 @assert prev_r !== -1
-                prev_r = var_drivative_here!(prev_r)
+                prev_r = var_derivative_here!(state, processed, g, eqg, dls, prev_r)
                 r = nothing
             else
                 prev_r = r
@@ -808,6 +809,9 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
         for i in 1:(length(stem) - 1)
             r = stem[i]
             for dr in @view stem[(i + 1):end]
+                # We cannot reduce newly introduced variables like `D(D(D(z)))`
+                # in the example box above.
+                dr > original_nvars && continue
                 if has_edge(eqg, r, dr)
                     c = get_weight(eqg, r, dr)
                     dag[dr] = c => r
@@ -815,8 +819,8 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
             end
         end
         # If a non-differentiated variable equals to 0, then we can eliminate
-        # the whole differentiation chain. Otherwise, we can have to keep the
-        # lowest differentiate variable in the differentiation chain.
+        # the whole differentiation chain. Otherwise, we will still have to keep
+        # the lowest differentiated variable in the differentiation chain.
         # E.g.
         # ```
         # D(x) ~ 0
@@ -856,6 +860,7 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
             end
             # reducible after v
             while (v = var_to_diff[v]) !== nothing
+                complete_ag[v] = 0
                 dag[v] = 0
             end
         end
@@ -902,7 +907,8 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
         merged_ag[v] = c => a
     end
     ag = merged_ag
-    mm = reduce!(copy(echelon_mm), mm_orig, ag, size(echelon_mm, 1))
+    echelon_mm = resize_cols(echelon_mm, length(var_to_diff))
+    mm = reduce!(echelon_mm, mm_orig, ag, size(echelon_mm, 1))
 
     # Step 5: Reflect our update decisions back into the graph, and make sure
     # that the RHS of observable variables are defined.

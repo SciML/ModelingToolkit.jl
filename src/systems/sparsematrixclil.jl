@@ -41,6 +41,11 @@ function SparseMatrixCLIL(mm::AbstractMatrix)
     SparseMatrixCLIL(nrows, ncols, Int[1:length(row_cols);], row_cols, row_vals)
 end
 
+function resize_cols(mm::SparseMatrixCLIL, nc)
+    @set! mm.ncols = nc
+    copy(mm)
+end
+
 struct CLILVector{T, Ti} <: AbstractSparseVector{T, Ti}
     vec::SparseVector{T, Ti}
 end
