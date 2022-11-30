@@ -513,7 +513,7 @@ function get_cset_sv(namespace, ex, csets)
         crep = first(c.set)
         current = namespace == crep.sys.namespace
         for (idx_in_set, v) in enumerate(c.set)
-            if isequal(namespaced_var(v), full_name_sv) && (current || !v.isouter)
+            if (current || !v.isouter) && isequal(namespaced_var(v), full_name_sv)
                 return c.set, idx_in_set, v.v
             end
         end
