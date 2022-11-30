@@ -80,7 +80,6 @@ function OptimizationSystem(op, states, ps;
                             metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-
     constraints = value.(scalarize(constraints))
     states′ = value.(scalarize(states))
     ps′ = value.(scalarize(ps))
@@ -199,7 +198,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
 
 Generates an OptimizationProblem from an OptimizationSystem and allows for automatically
 symbolically calculating numerical enhancements.
-                
+
 Certain solvers require setting `cons_j`, `cons_h` to `true` for constrained-optimization problems.
 """
 function DiffEqBase.OptimizationProblem(sys::OptimizationSystem, args...; kwargs...)
@@ -209,9 +208,9 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              parammap = DiffEqBase.NullParameters();
                                              lb = nothing, ub = nothing,
                                              grad = false,
-                                             hess = false, sparse = false,
+                                             hess = false, obj_sparse = false,
                                              cons_j = false, cons_h = false,
-                                             checkbounds = false,
+                                             cons_sparse, checkbounds = false,
                                              linenumbers = true, parallel = SerialForm(),
                                              use_union = false,
                                              kwargs...) where {iip}
@@ -278,7 +277,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     if hess
         hess_oop, hess_iip = generate_hessian(sys, checkbounds = checkbounds,
                                               linenumbers = linenumbers,
-                                              sparse = sparse, parallel = parallel,
+                                              sparse = obj_sparse, parallel = parallel,
                                               expression = Val{false})
         _hess(u, p) = hess_oop(u, p)
         _hess(J, u, p) = (hess_iip(J, u, p); J)
@@ -286,7 +285,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         _hess = nothing
     end
 
-    if sparse
+    if obj_sparse
         hess_prototype = hessian_sparsity(sys)
     else
         hess_prototype = nothing
@@ -313,12 +312,12 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                                  linenumbers = linenumbers,
                                                  expression = Val{false})
         if cons_j
-            _cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+            _cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = cons_sparse)[2]
         else
             _cons_j = nothing
         end
         if cons_h
-            _cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+            _cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = cons_sparse)[2]
         else
             _cons_h = nothing
         end
@@ -339,7 +338,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             ucons = haskey(kwargs, :ucons)
         end
 
-        if sparse
+        if cons_sparse
             cons_jac_prototype = jacobian_sparsity(cons_sys)
             cons_hess_prototype = hessian_sparsity(cons_sys)
         else
@@ -507,7 +506,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             lcons = lcons_
             ucons = ucons_
         else # use the user supplied constraints bounds
-            haskey(kwargs, :lcons) && haskey(kwargs, :ucons) &&
+            !haskey(kwargs, :lcons) && !haskey(kwargs, :ucons) &&
                 throw(ArgumentError("Expected both `ucons` and `lcons` to be supplied"))
             haskey(kwargs, :lcons) && length(kwargs[:lcons]) != length(cstr) &&
                 throw(ArgumentError("Expected `lcons` to be of the same length as the vector of constraints"))
