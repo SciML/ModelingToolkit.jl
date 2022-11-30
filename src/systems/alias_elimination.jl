@@ -743,6 +743,9 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
             end
             if r === nothing
                 isempty(reach₌) && break
+                let stem_set = stem_set
+                    any(x -> x[2] in stem_set, reach₌) && break
+                end
                 # See example in the box above where D(D(D(z))) doesn't appear
                 # in the original system and needs to added, so we can alias to it.
                 # We do that here.
@@ -907,8 +910,9 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
         merged_ag[v] = c => a
     end
     ag = merged_ag
-    echelon_mm = resize_cols(echelon_mm, length(var_to_diff))
-    mm = reduce!(echelon_mm, mm_orig, ag, size(echelon_mm, 1))
+    @set! echelon_mm.ncols = length(var_to_diff)
+    @set! mm_orig.ncols = length(var_to_diff)
+    mm = reduce!(copy(echelon_mm), mm_orig, ag, size(echelon_mm, 1))
 
     # Step 5: Reflect our update decisions back into the graph, and make sure
     # that the RHS of observable variables are defined.
