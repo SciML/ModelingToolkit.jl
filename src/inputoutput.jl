@@ -379,16 +379,13 @@ eqs = [
     connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
     connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
 ]
-if u !== nothing
-    push!(eqs, connect(torque.tau, u.output))
-    return @named model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper, u])
-end
-model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
+model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name=:model)
+model = complete(model)
 model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.inertia2.phi]
 
 # Disturbance model
 @named dmodel = Blocks.StateSpace([0.0], [1.0], [1.0], [0.0]) # An integrating disturbance
-dist = ModelingToolkit.DisturbanceModel(model.torque.tau.u, dmodel)
+@named dist = ModelingToolkit.DisturbanceModel(model.torque.tau.u, dmodel)
 (f_oop, f_ip), augmented_sys, dvs, p = ModelingToolkit.add_input_disturbance(model, dist)
 ```
 `f_oop` will have an extra state corresponding to the integrator in the disturbance model. This state will not be affected by any input, but will affect the dynamics from where it enters, in this case it will affect additively from `model.torque.tau.u`.
@@ -406,14 +403,14 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing)
         if i === nothing
             throw(ArgumentError("Input $(dist.input) indicated in the disturbance model was not found among inputs specified to add_input_disturbance"))
         end
-        all_inputs = copy(inputs)
+        all_inputs = convert(Vector{Any}, copy(inputs))
         all_inputs[i] = u # The input where the disturbance acts is no longer an input, the new input is u
     end
 
     eqs = [dsys.input.u[1] ~ d
            dist.input ~ u + dsys.output.u[1]]
-
-    augmented_sys = ODESystem(eqs, t, systems = [sys, dsys], name = gensym(:outer))
+    augmented_sys = ODESystem(eqs, t, systems = [dsys], name = gensym(:outer))
+    augmented_sys = extend(augmented_sys, sys)
 
     (f_oop, f_ip), dvs, p = generate_control_function(augmented_sys, all_inputs,
                                                       [d])
