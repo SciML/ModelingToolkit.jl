@@ -2,8 +2,7 @@
 
 
 [![Join the chat at https://julialang.zulipchat.com #sciml-bridged](https://img.shields.io/static/v1?label=Zulip&message=chat&color=9558b2&labelColor=389826)](https://julialang.zulipchat.com/#narrow/stream/279055-sciml-bridged)
-[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](http://mtk.sciml.ai/stable/)
-[![Global Docs](https://img.shields.io/badge/docs-SciML-blue.svg)](https://docs.sciml.ai/dev/modules/ModelingToolkit/)
+[![Global Docs](https://img.shields.io/badge/docs-SciML-blue.svg)](https://docs.sciml.ai/ModelingToolkit/stable/)
 
 [![codecov](https://codecov.io/gh/SciML/ModelingToolkit.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/SciML/ModelingToolkit.jl)
 [![Coverage Status](https://coveralls.io/repos/github/SciML/ModelingToolkit.jl/badge.svg?branch=master)](https://coveralls.io/github/SciML/ModelingToolkit.jl?branch=master)
@@ -22,14 +21,14 @@ computations. Automatic transformations, such as index reduction, can be applied
 to the model to make it easier for numerical solvers to handle.
 
 For information on using the package,
-[see the stable documentation](https://mtk.sciml.ai/stable/). Use the
-[in-development documentation](https://mtk.sciml.ai/dev/) for the version of
+[see the stable documentation](https://docs.sciml.ai/ModelingToolkit/stable/). Use the
+[in-development documentation](https://docs.sciml.ai/ModelingToolkit/dev/) for the version of
 the documentation which contains the unreleased features.
 
 ## Standard Library
 
 For a standard library of ModelingToolkit components and blocks, check out the
-[ModelingToolkitStandardLibrary](https://github.com/SciML/ModelingToolkitStandardLibrary.jl)
+[ModelingToolkitStandardLibrary](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/)
 
 ## High-Level Examples
 

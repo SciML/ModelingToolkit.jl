@@ -208,7 +208,8 @@ for prop in [:eqs
              :torn_matching
              :tearing_state
              :substitutions
-             :metadata]
+             :metadata
+             :discrete_subsystems]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin
@@ -363,6 +364,16 @@ function ParentScope(sym::Union{Num, Symbolic})
     setmetadata(sym, SymScope, ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
 end
 
+struct DelayParentScope <: SymScope
+    parent::SymScope
+    N::Int
+end
+function DelayParentScope(sym::Union{Num, Symbolic}, N)
+    setmetadata(sym, SymScope,
+                DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
+end
+DelayParentScope(sym::Union{Num, Symbolic}) = DelayParentScope(sym, 1)
+
 struct GlobalScope <: SymScope end
 GlobalScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, GlobalScope())
 
@@ -373,7 +384,7 @@ function renamespace(sys, x)
     sys === nothing && return x
     x = unwrap(x)
     if x isa Symbolic
-        if isdifferential(x)
+        if istree(x) && operation(x) isa Operator
             return similarterm(x, operation(x), Any[renamespace(sys, only(arguments(x)))])
         end
         let scope = getmetadata(x, SymScope, LocalScope())
@@ -381,6 +392,15 @@ function renamespace(sys, x)
                 rename(x, renamespace(getname(sys), getname(x)))
             elseif scope isa ParentScope
                 setmetadata(x, SymScope, scope.parent)
+            elseif scope isa DelayParentScope
+                if scope.N > 0
+                    x = setmetadata(x, SymScope,
+                                    DelayParentScope(scope.parent, scope.N - 1))
+                    rename(x, renamespace(getname(sys), getname(x)))
+                else
+                    #rename(x, renamespace(getname(sys), getname(x)))
+                    setmetadata(x, SymScope, scope.parent)
+                end
             else # GlobalScope
                 x
             end
@@ -1031,20 +1051,11 @@ This will convert all `inputs` to parameters and allow them to be unconnected, i
 simplification will allow models where `n_states = n_equations - n_inputs`.
 """
 function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
-                             simplify_constants = true, kwargs...)
+                             kwargs...)
     sys = expand_connections(sys)
     sys isa DiscreteSystem && return sys
     state = TearingState(sys)
-    has_io = io !== nothing
-    has_io && markio!(state, io...)
-    state, input_idxs = inputs_to_parameters!(state, io)
-    sys, ag = alias_elimination!(state; kwargs...)
-    check_consistency(state, ag)
-    sys = dummy_derivative(sys, state, ag; simplify)
-    fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
-    @set! sys.observed = topsort_equations(observed(sys), fullstates)
-    invalidate_cache!(sys)
-    return has_io ? (sys, input_idxs) : sys
+    structural_simplify!(state, io; simplify, kwargs...)
 end
 
 function eliminate_constants(sys::AbstractSystem)
@@ -1061,7 +1072,7 @@ end
 
 function io_preprocessing(sys::AbstractSystem, inputs,
                           outputs; simplify = false, kwargs...)
-    sys, input_idxs = structural_simplify(sys, (; inputs, outputs); simplify, kwargs...)
+    sys, input_idxs = structural_simplify(sys, (inputs, outputs); simplify, kwargs...)
 
     eqs = equations(sys)
     alg_start_idx = findfirst(!isdiffeq, eqs)
@@ -1148,8 +1159,8 @@ end
 
 function markio!(state, inputs, outputs; check = true)
     fullvars = state.fullvars
-    inputset = Dict(inputs .=> false)
-    outputset = Dict(outputs .=> false)
+    inputset = Dict{Any, Bool}(i => false for i in inputs)
+    outputset = Dict{Any, Bool}(o => false for o in outputs)
     for (i, v) in enumerate(fullvars)
         if v in keys(inputset)
             v = setio(v, true, false)
@@ -1164,9 +1175,13 @@ function markio!(state, inputs, outputs; check = true)
             fullvars[i] = v
         end
     end
-    check && (all(values(inputset)) ||
-     error("Some specified inputs were not found in system. The following Dict indicates the found variables ",
-           inputset))
+    if check
+        ikeys = keys(filter(!last, inputset))
+        if !isempty(ikeys)
+            error("Some specified inputs were not found in system. The following variables were not found ",
+                  ikeys)
+        end
+    end
     check && (all(values(outputset)) ||
      error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
            outputset))

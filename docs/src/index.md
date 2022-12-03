@@ -62,7 +62,7 @@ before generating code.
 
 For information on how to use the Symbolics.jl CAS system that ModelingToolkit.jl
 is built on, consult the
-[Symbolics.jl documentation](https://github.com/JuliaSymbolics/Symbolics.jl)
+[Symbolics.jl documentation](https://docs.sciml.ai/Symbolics/stable/)
 
 ### Equation Types
 
@@ -72,18 +72,18 @@ is built on, consult the
 - Nonlinear systems
 - Optimization problems
 - Continuous-Time Markov Chains
-- Chemical Reactions (via [Catalyst.jl](https://github.com/SciML/Catalyst.jl))
+- Chemical Reactions (via [Catalyst.jl](https://docs.sciml.ai/Catalyst/stable/))
 - Nonlinear Optimal Control
 
 ## Standard Library
 
 For quick development, ModelingToolkit.jl includes 
-[ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl),
+[ModelingToolkitStandardLibrary.jl](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/),
 a standard library of prebuilt components for the ModelingToolkit ecosystem.
 
 ## Model Import Formats
 
-- [CellMLToolkit.jl](https://github.com/SciML/CellMLToolkit.jl): Import [CellML](https://www.cellml.org/) models into ModelingToolkit
+- [CellMLToolkit.jl](https://docs.sciml.ai/CellMLToolkit/stable/): Import [CellML](https://www.cellml.org/) models into ModelingToolkit
     - Repository of more than a thousand pre-made models
     - Focus on biomedical models in areas such as: Calcium Dynamics,
       Cardiovascular Circulation, Cell Cycle, Cell Migration, Circadian Rhythms,
@@ -91,9 +91,9 @@ a standard library of prebuilt components for the ModelingToolkit ecosystem.
       Hepatology, Immunology, Ion Transport, Mechanical Constitutive Laws,
       Metabolism, Myofilament Mechanics, Neurobiology, pH Regulation, PKPD,
       Protein Modules, Signal Transduction, and Synthetic Biology.
-- [SBMLToolkit.jl](https://github.com/SciML/SBMLToolkit.jl): Import [SBML](http://sbml.org/) models into ModelingToolkit
+- [SBMLToolkit.jl](https://docs.sciml.ai/SBMLToolkit/stable/): Import [SBML](http://sbml.org/) models into ModelingToolkit
     - Uses the robust libsbml library for parsing and transforming the SBML
-- [ReactionNetworkImporters.jl](https://github.com/SciML/ReactionNetworkImporters.jl): Import various models into ModelingToolkit
+- [ReactionNetworkImporters.jl](https://docs.sciml.ai/ReactionNetworkImporters/stable/): Import various models into ModelingToolkit
     - Supports the BioNetGen `.net` file
     - Supports importing networks specified by stoichiometric matrices
 
@@ -103,20 +103,20 @@ Because ModelingToolkit.jl is the core foundation of a equation-based modeling
 ecosystem, there is a large set of libraries adding features to this system.
 Below is an incomplete list of extension libraries one may want to be aware of:
 
-- [Catalyst.jl](https://github.com/SciML/Catalyst.jl): Symbolic representations
+- [Catalyst.jl](https://docs.sciml.ai/Catalyst/stable/): Symbolic representations
   of chemical reactions
     - Symbolically build and represent large systems of chemical reactions
     - Generate code for ODEs, SDEs, continuous-time Markov Chains, and more
     - Simulate the models using the SciML ecosystem with O(1) Gillespie methods
-- [DataDrivenDiffEq.jl](https://github.com/SciML/DataDrivenDiffEq.jl): Automatic
+- [DataDrivenDiffEq.jl](https://docs.sciml.ai/DataDrivenDiffEq/stable/): Automatic
   identification of equations from data
     - Automated construction of ODEs and DAEs from data
     - Representations of Koopman operators and Dynamic Mode Decomposition (DMD)
-- [MomentClosure.jl](https://github.com/augustinas1/MomentClosure.jl): Automatic
+- [MomentClosure.jl](https://docs.sciml.ai/MomentClosure/dev/): Automatic
   transformation of ReactionSystems into deterministic systems
     - Generates ODESystems for the moment closures
     - Allows for geometrically-distributed random reaction rates
-- [ReactionMechanismSimulator.jl](https://github.com/ReactionMechanismGenerator/ReactionMechanismSimulator.jl):
+- [ReactionMechanismSimulator.jl](https://docs.sciml.ai/ReactionMechanismSimulator/stable):
   Simulating and analyzing large chemical reaction mechanisms
     - Ideal gas and dilute liquid phases.
     - Constant T and P and constant V adiabatic ideal gas reactors.
@@ -140,16 +140,16 @@ an `ODEProblem` to then be solved by a numerical ODE solver. Below is a list of
 the solver libraries which are the numerical targets of the ModelingToolkit
 system:
 
-- [DifferentialEquations.jl](https://diffeq.sciml.ai/stable/)
+- [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/)
     - Multi-package interface of high performance numerical solvers for `ODESystem`,
       `SDESystem`, and `JumpSystem`
-- [NonlinearSolve.jl](https://github.com/JuliaComputing/NonlinearSolve.jl)
+- [NonlinearSolve.jl](https://docs.sciml.ai/NonlinearSolve/stable/)
     - High performance numerical solving of `NonlinearSystem`
-- [Optimization.jl](https://github.com/SciML/Optimization.jl)
+- [Optimization.jl](https://docs.sciml.ai/Optimization/stable/)
     - Multi-package interface for numerical solving `OptimizationSystem`
-- [NeuralPDE.jl](https://github.com/SciML/NeuralPDE.jl)
+- [NeuralPDE.jl](https://docs.sciml.ai/NeuralPDE/stable/)
     - Physics-Informed Neural Network (PINN) training on `PDESystem`
-- [MethodOfLines.jl](https://github.com/SciML/MethodOfLines.jl)
+- [MethodOfLines.jl](https://docs.sciml.ai/MethodOfLines/stable/)
     - Automated finite difference method (FDM) discretization of `PDESystem`
 
 ## Contributing
@@ -162,3 +162,58 @@ system:
     - [JuliaDiffEq](https://gitter.im/JuliaDiffEq/Lobby) on Gitter
     - On the Julia Discourse forums (look for the [modelingtoolkit tag](https://discourse.julialang.org/tag/modelingtoolkit)
     - See also [SciML Community page](https://sciml.ai/community/)
+
+## Reproducibility
+```@raw html
+<details><summary>The documentation of this SciML package was built using these direct dependencies,</summary>
+```
+```@example
+using Pkg # hide
+Pkg.status() # hide
+```
+```@raw html
+</details>
+```
+```@raw html
+<details><summary>and using this machine and Julia version.</summary>
+```
+```@example
+using InteractiveUtils # hide
+versioninfo() # hide
+```
+```@raw html
+</details>
+```
+```@raw html
+<details><summary>A more complete overview of all dependencies and their versions is also provided.</summary>
+```
+```@example
+using Pkg # hide
+Pkg.status(;mode = PKGMODE_MANIFEST) # hide
+```
+```@raw html
+</details>
+```
+```@raw html
+You can also download the 
+<a href="
+```
+```@eval
+using TOML
+version = TOML.parse(read("../../Project.toml",String))["version"]
+name = TOML.parse(read("../../Project.toml",String))["name"]
+link = "https://github.com/SciML/"*name*".jl/tree/gh-pages/v"*version*"/assets/Manifest.toml"
+```
+```@raw html
+">manifest</a> file and the
+<a href="
+```
+```@eval
+using TOML
+version = TOML.parse(read("../../Project.toml",String))["version"]
+name = TOML.parse(read("../../Project.toml",String))["name"]
+link = "https://github.com/SciML/"*name*".jl/tree/gh-pages/v"*version*"/assets/Project.toml"
+```
+```@raw html
+">project</a> file.
+```

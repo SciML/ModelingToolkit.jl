@@ -133,7 +133,7 @@ With symbolic parameters, it is possible to set the default value of a parameter
 # ...
 sys = ODESystem(
     # ...
-    # directly in the defauls argument
+    # directly in the defaults argument
     defaults=Pair{Num, Any}[
     x => u,
     y => σ,
@@ -146,12 +146,41 @@ sys.y = u*1.1
 In a hierarchical system, variables of the subsystem get namespaced by the name of the system they are in. This prevents naming clashes, but also enforces that every state and parameter is local to the subsystem it is used in. In some cases it might be desirable to have variables and parameters that are shared between subsystems, or even global. This can be accomplished as follows.
 
 ```julia
-@variables a b c d
+@parameters t a b c d e f
+p = [
+    a #a is a local variable
+    ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
+    ParentScope(ParentScope(c))# ParentScope can be nested
+    DelayParentScope(d) # skips one level before applying ParentScope
+    DelayParentScope(e,2) # second argument allows skipping N levels
+    GlobalScope(f) # global variables will never be namespaced
+]
 
-# a is a local variable
-b = ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
-c = ParentScope(ParentScope(c)) # ParentScope can be nested
-d = GlobalScope(d) # global variables will never be namespaced
+level0 = ODESystem(Equation[],t,[],p; name = :level0)
+level1 = ODESystem(Equation[],t,[],[];name = :level1) ∘ level0
+parameters(level1)
+  #level0₊a
+  #b
+  #c
+  #level0₊d
+  #level0₊e
+  #f
+level2 = ODESystem(Equation[],t,[],[];name = :level2) ∘ level1
+parameters(level2)
+  #level1₊level0₊a
+  #level1₊b
+  #c
+  #level0₊d
+  #level1₊level0₊e
+  #f
+level3 = ODESystem(Equation[],t,[],[];name = :level3) ∘ level2
+parameters(level3)
+  #level2₊level1₊level0₊a
+  #level2₊level1₊b
+  #level2₊c
+  #level2₊level0₊d
+  #level1₊level0₊e
+  #f
 ```
 
 ## Structural Simplify

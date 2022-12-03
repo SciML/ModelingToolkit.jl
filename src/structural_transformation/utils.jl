@@ -76,7 +76,8 @@ function check_consistency(state::TearingState, ag = nothing)
 
     unassigned_var = []
     for (vj, eq) in enumerate(extended_var_eq_matching)
-        if eq === unassigned && (ag === nothing || !haskey(ag, vj))
+        if eq === unassigned && (ag === nothing || !haskey(ag, vj)) &&
+           !isempty(𝑑neighbors(graph, vj))
             push!(unassigned_var, fullvars[vj])
         end
     end
@@ -387,9 +388,9 @@ end
 
 function numerical_nlsolve(f, u0, p)
     prob = NonlinearProblem{false}(f, u0, p)
-    sol = solve(prob, NewtonRaphson())
+    sol = solve(prob, SimpleNewtonRaphson())
     rc = sol.retcode
-    (rc == :DEFAULT || rc == :Default) || nlsolve_failure(rc)
+    (rc == ReturnCode.Success) || nlsolve_failure(rc)
     # TODO: robust initial guess, better debugging info, and residual check
     sol.u
 end

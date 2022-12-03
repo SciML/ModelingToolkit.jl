@@ -122,6 +122,8 @@ function parameters end
 # this has to be included early to deal with depency issues
 include("structural_transformation/bareiss.jl")
 function complete end
+function var_derivative! end
+function var_derivative_graph! end
 include("bipartite_graph.jl")
 using .BipartiteGraphs
 
@@ -200,9 +202,9 @@ export PDESystem
 export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
-export SymScope, LocalScope, ParentScope, GlobalScope
+export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
 export independent_variables, independent_variable, states, parameters, equations, controls,
-       observed, structure, full_equations, objective
+       observed, structure, full_equations
 export structural_simplify, expand_connections, linearize, linearization_function
 export DiscreteSystem, DiscreteProblem
 
@@ -230,7 +232,7 @@ export @variables, @parameters, @constants
 export @named, @nonamespace, @namespace, extend, compose, complete
 export debug_system
 
-export Continuous, Discrete, sampletime, input_timedomain, output_timedomain
+#export Continuous, Discrete, sampletime, input_timedomain, output_timedomain
 #export has_discrete_domain, has_continuous_domain
 #export is_discrete_domain, is_continuous_domain, is_hybrid_domain
 export Sample, Hold, Shift, ShiftIndex

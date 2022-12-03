@@ -9,7 +9,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
                           isparameter, isconstant,
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
-                          equations, isirreducible
+                          equations, isirreducible, input_timedomain, TimeDomain
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -25,9 +25,9 @@ function quick_cancel_expr(expr)
                                                                          kws...))(expr)
 end
 
-export SystemStructure, TransformationState, TearingState
+export SystemStructure, TransformationState, TearingState, structural_simplify!
 export initialize_system_structure, find_linear_equations
-export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq, algeqs
+export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq, algeqs, is_only_discrete
 export dervars_range, diffvars_range, algvars_range
 export DiffGraph, complete!
 
@@ -143,7 +143,9 @@ Base.@kwdef mutable struct SystemStructure
     # or as `torn` to assert that tearing has run.
     graph::BipartiteGraph{Int, Nothing}
     solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
+    only_discrete::Bool
 end
+is_only_discrete(s::SystemStructure) = s.only_discrete
 isdervar(s::SystemStructure, i) = invview(s.var_to_diff)[i] !== nothing
 function isalgvar(s::SystemStructure, i)
     s.var_to_diff[i] === nothing &&
@@ -258,11 +260,32 @@ function TearingState(sys; quick_cancel = false, check = true)
                 idx = addvar!(dvar)
             end
 
+            dvar = var
+            idx = varidx
+            if ModelingToolkit.isoperator(dvar, ModelingToolkit.Shift)
+                if !(idx in dervaridxs)
+                    push!(dervaridxs, idx)
+                end
+                op = operation(dvar)
+                tt = op.t
+                steps = op.steps
+                v = arguments(dvar)[1]
+                for s in (steps - 1):-1:1
+                    sf = Shift(tt, s)
+                    dvar = sf(v)
+                    idx = addvar!(dvar)
+                    if !(idx in dervaridxs)
+                        push!(dervaridxs, idx)
+                    end
+                end
+                idx = addvar!(v)
+            end
+
             if istree(var) && operation(var) isa Symbolics.Operator &&
                !isdifferential(var) && (it = input_timedomain(var)) !== nothing
                 set_incidence = false
                 var = only(arguments(var))
-                var = setmetadata(var, ModelingToolkit.TimeDomain, it)
+                var = setmetadata(var, TimeDomain, it)
                 @goto ANOTHER_VAR
             end
         end
@@ -281,7 +304,7 @@ function TearingState(sys; quick_cancel = false, check = true)
     sorted_fullvars = OrderedSet(fullvars[dervaridxs])
     for dervaridx in dervaridxs
         dervar = fullvars[dervaridx]
-        diffvar = arguments(dervar)[1]
+        diffvar = lower_order_var(dervar)
         if !(diffvar in sorted_fullvars)
             push!(sorted_fullvars, diffvar)
         end
@@ -300,23 +323,11 @@ function TearingState(sys; quick_cancel = false, check = true)
     var_to_diff = DiffGraph(nvars, true)
     for dervaridx in dervaridxs
         dervar = fullvars[dervaridx]
-        diffvar = arguments(dervar)[1]
+        diffvar = lower_order_var(dervar)
         diffvaridx = var2idx[diffvar]
         push!(diffvars, diffvar)
         var_to_diff[diffvaridx] = dervaridx
     end
-
-    #=
-    algvars = setdiff(states(sys), diffvars)
-    for algvar in algvars
-        # it could be that a variable appeared in the states, but never appeared
-        # in the equations.
-        algvaridx = get(var2idx, algvar, 0)
-        #if algvaridx == 0
-        #    check ? throw(InvalidSystemException("The system is missing an equation for $algvar.")) : return nothing
-        #end
-    end
-    =#
 
     graph = BipartiteGraph(neqs, nvars, Val(false))
     for (ie, vars) in enumerate(symbolic_incidence), v in vars
@@ -330,7 +341,23 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     return TearingState(sys, fullvars,
                         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-                                        complete(graph), nothing), Any[])
+                                        complete(graph), nothing, false), Any[])
+end
+
+function lower_order_var(dervar)
+    if isdifferential(dervar)
+        diffvar = arguments(dervar)[1]
+    else # shift
+        s = operation(dervar)
+        step = s.steps - 1
+        vv = arguments(dervar)[1]
+        if step >= 1
+            diffvar = Shift(s.t, step)(vv)
+        else
+            diffvar = vv
+        end
+    end
+    diffvar
 end
 
 using .BipartiteGraphs: Label, BipartiteAdjacencyList
@@ -422,6 +449,73 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
                                                  complete(var_to_diff),
                                                  complete(eq_to_diff),
                                                  complete(ms.var_eq_matching, nsrcs(graph))))
+end
+
+# TODO: clean up
+function merge_io(io, inputs)
+    isempty(inputs) && return io
+    if io === nothing
+        io = (inputs, [])
+    else
+        io = ([inputs; io[1]], io[2])
+    end
+    return io
+end
+
+function structural_simplify!(state::TearingState, io = nothing; simplify = false,
+                              check_consistency = true, kwargs...)
+    if state.sys isa ODESystem
+        ci = ModelingToolkit.ClockInference(state)
+        ModelingToolkit.infer_clocks!(ci)
+        tss, inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
+        cont_io = merge_io(io, inputs[continuous_id])
+        sys, input_idxs = _structural_simplify!(tss[continuous_id], cont_io; simplify,
+                                                check_consistency,
+                                                kwargs...)
+        if length(tss) > 1
+            # TODO: rename it to something else
+            discrete_subsystems = Vector{ODESystem}(undef, length(tss))
+            # Note that the appended_parameters must agree with
+            # `generate_discrete_affect`!
+            appended_parameters = parameters(sys)
+            for (i, state) in enumerate(tss)
+                if i == continuous_id
+                    discrete_subsystems[i] = sys
+                    continue
+                end
+                dist_io = merge_io(io, inputs[i])
+                ss, = _structural_simplify!(state, dist_io; simplify, check_consistency,
+                                            kwargs...)
+                append!(appended_parameters, inputs[i], states(ss))
+                discrete_subsystems[i] = ss
+            end
+            @set! sys.discrete_subsystems = discrete_subsystems, inputs, continuous_id,
+                                            id_to_clock
+            @set! sys.ps = appended_parameters
+            @set! sys.defaults = merge(ModelingToolkit.defaults(sys),
+                                       Dict(v => 0.0 for v in Iterators.flatten(inputs)))
+        end
+    else
+        sys, input_idxs = _structural_simplify!(state, io; simplify, check_consistency,
+                                                kwargs...)
+    end
+    has_io = io !== nothing
+    return has_io ? (sys, input_idxs) : sys
+end
+
+function _structural_simplify!(state::TearingState, io; simplify = false,
+                               check_consistency = true, kwargs...)
+    has_io = io !== nothing
+    has_io && ModelingToolkit.markio!(state, io...)
+    state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
+    sys, ag = ModelingToolkit.alias_elimination!(state; kwargs...)
+    if check_consistency
+        ModelingToolkit.check_consistency(state, ag)
+    end
+    sys = ModelingToolkit.dummy_derivative(sys, state, ag; simplify)
+    fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
+    @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullstates)
+    ModelingToolkit.invalidate_cache!(sys), input_idxs
 end
 
 end # module

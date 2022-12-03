@@ -82,6 +82,13 @@ f.f(du, u, p, 0.1)
 @test du == [4, 0, -16]
 @test_throws ArgumentError f.f(u, p, 0.1)
 
+#check sparsity
+f = eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], sparsity = true))
+@test f.sparsity == ModelingToolkit.jacobian_sparsity(de)
+
+f = eval(ODEFunctionExpr(de, [x, y, z], [σ, ρ, β], sparsity = false))
+@test isnothing(f.sparsity)
+
 eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y * t,
     D(z) ~ x * y - β * z * κ]
@@ -249,6 +256,30 @@ sol_pmap = solve(prob_pmap, Rodas5())
 sol_dpmap = solve(prob_dpmap, Rodas5())
 
 @test sol_pmap.u ≈ sol_dpmap.u
+
+@testset "symbolic remake with nested system" begin
+    function makesys(name)
+        @parameters t a=1.0
+        @variables x(t) = 0.0
+        D = Differential(t)
+        ODESystem([D(x) ~ -a * x]; name)
+    end
+
+    function makecombinedsys()
+        sys1 = makesys(:sys1)
+        sys2 = makesys(:sys2)
+        @parameters t b=1.0
+        ODESystem(Equation[], t, [], [b]; systems = [sys1, sys2], name = :foo)
+    end
+
+    sys = makecombinedsys()
+    @unpack sys1, b = sys
+    prob = ODEProblem(sys, Pair[])
+    prob_new = SciMLBase.remake(prob, p = Dict(sys1.a => 3.0, b => 4.0),
+                                u0 = Dict(sys1.x => 1.0))
+    @test prob_new.p == [4.0, 3.0, 1.0]
+    @test prob_new.u0 == [1.0, 0.0]
+end
 
 # test kwargs
 prob2 = ODEProblem(sys, u0, tspan, p, jac = true)
@@ -435,8 +466,11 @@ sys = structural_simplify(sys)
 prob = ODEProblem(sys, [], (0, 1.0))
 sol = solve(prob, Tsit5())
 @test sol[2x[1] + 3x[3] + norm(x)] ≈
-      2sol[x[1]] + 3sol[x[3]] + vec(mapslices(norm, hcat(sol[x]...), dims = 2))
-@test sol[x + [y, 2y, 3y]] ≈ sol[x] + [sol[y], 2sol[y], 3sol[y]]
+      2sol[x[1]] + 3sol[x[3]] + sol[norm(x)]
+@test sol[x .+ [y, 2y, 3y]] ≈ map((x...) -> [x...],
+          map((x, y) -> x[1] .+ y, sol[x], sol[y]),
+          map((x, y) -> x[2] .+ 2y, sol[x], sol[y]),
+          map((x, y) -> x[3] .+ 3y, sol[x], sol[y]))
 
 # Mixed Difference Differential equations
 @parameters t a b c d

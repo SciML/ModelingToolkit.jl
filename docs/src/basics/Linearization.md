@@ -52,7 +52,7 @@ If the modeled system is actually proper (but MTK failed to find a proper realiz
 
 
 ## Tools for linear analysis
-[ModelingToolkitStandardLibrary](http://mtkstdlib.sciml.ai/dev/API/linear_analysis/) contains a set of [tools for more advanced linear analysis](http://mtkstdlib.sciml.ai/dev/API/linear_analysis/). These can be used to make it easier to work with and analyze causal models, such as control and signal-processing systems. 
+[ModelingToolkitStandardLibrary](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/) contains a set of [tools for more advanced linear analysis](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/API/linear_analysis/). These can be used to make it easier to work with and analyze causal models, such as control and signal-processing systems. 
 
 ```@index
 Pages = ["Linearization.md"]

@@ -157,6 +157,6 @@ for sys in [
 
     prob_auto = ODEProblem(sys, u0, (0.0, 0.5), p)
     sol = solve(prob_auto, FBDF())
-    @test sol.retcode == :Success
+    @test sol.retcode == ReturnCode.Success
     @test norm(sol[x] .^ 2 + sol[y] .^ 2 .- 1) < 1e-2
 end

@@ -154,8 +154,8 @@ function dummy_derivative_graph!(state::TransformationState, jac = nothing,
                                  (ag, diff_va) = (nothing, nothing);
                                  state_priority = nothing, kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
-    var_eq_matching = complete(pantelides!(state, ag))
     complete!(state.structure)
+    var_eq_matching = complete(pantelides!(state, ag))
     dummy_derivative_graph!(state.structure, var_eq_matching, jac, (ag, diff_va),
                             state_priority)
 end

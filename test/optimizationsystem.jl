@@ -42,7 +42,8 @@ using ModelingToolkit: get_metadata
          sys2.b => 9.0
          β => 10.0]
 
-    prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true)
+    prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true, cons_j = true,
+                               cons_h = true)
     @test prob.f.sys === combinedsys
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.minimum < -1e5
@@ -58,35 +59,43 @@ end
     @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
 
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 1.0],
-                               grad = true, hess = true)
+                               grad = true, hess = true, cons_j = true, cons_h = true)
     @test prob.f.sys === sys
     sol = solve(prob, IPNewton())
     @test sol.minimum < 1.0
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.minimum < 1.0
+
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 1.0],
+                               grad = false, hess = false, cons_j = false, cons_h = false)
     sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
     @test sol.minimum < 1.0
 end
 
 @testset "equality constraint" begin
-    @variables x y
+    @variables x y z
     @parameters a b
-    loss = (a - x)^2 + b * (y - x^2)^2
-    cons = [1.0 ~ x^2 + y^2]
-    @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
-    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 1.0],
-                               grad = true, hess = true)
+    loss = (a - x)^2 + b * z^2
+    cons = [1.0 ~ x^2 + y^2
+            z ~ y - x^2]
+    @named sys = OptimizationSystem(loss, [x, y, z], [a, b], constraints = cons)
+    sys = structural_simplify(sys)
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
+                               grad = true, hess = true, cons_j = true, cons_h = true)
     sol = solve(prob, IPNewton())
     @test sol.minimum < 1.0
-    @test sol.u≈[0.808, 0.589] atol=1e-3
+    @test sol.u≈[0.808, -0.064] atol=1e-3
     @test sol[x]^2 + sol[y]^2 ≈ 1.0
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.minimum < 1.0
-    @test sol.u≈[0.808, 0.589] atol=1e-3
+    @test sol.u≈[0.808, -0.064] atol=1e-3
     @test sol[x]^2 + sol[y]^2 ≈ 1.0
+
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
+                               grad = false, hess = false, cons_j = false, cons_h = false)
     sol = solve(prob, AmplNLWriter.Optimizer(Ipopt_jll.amplexe))
     @test sol.minimum < 1.0
-    @test sol.u≈[0.808, 0.589] atol=1e-3
+    @test sol.u≈[0.808, -0.064] atol=1e-3
     @test sol[x]^2 + sol[y]^2 ≈ 1.0
 end
 
@@ -128,7 +137,8 @@ end
 # nested constraints
 @testset "nested systems" begin
     @variables x y
-    o1 = (x - 1)^2
+    @parameters a = 1
+    o1 = (x - a)^2
     o2 = (y - 1 / 2)^2
     c1 = [
         x ~ 1,
@@ -136,15 +146,22 @@ end
     c2 = [
         y ~ 1,
     ]
-    sys1 = OptimizationSystem(o1, [x], [], name = :sys1, constraints = c1)
+    sys1 = OptimizationSystem(o1, [x], [a], name = :sys1, constraints = c1)
     sys2 = OptimizationSystem(o2, [y], [], name = :sys2, constraints = c2)
     sys = OptimizationSystem(0, [], []; name = :sys, systems = [sys1, sys2],
                              constraints = [sys1.x + sys2.y ~ 2], checks = false)
     prob = OptimizationProblem(sys, [0.0, 0.0])
-
     @test isequal(constraints(sys), vcat(sys1.x + sys2.y ~ 2, sys1.x ~ 1, sys2.y ~ 1))
-    @test isequal(equations(sys), (sys1.x - 1)^2 + (sys2.y - 1 / 2)^2)
+    @test isequal(equations(sys), (sys1.x - sys1.a)^2 + (sys2.y - 1 / 2)^2)
     @test isequal(states(sys), [sys1.x, sys2.y])
+
+    prob_ = remake(prob, u0 = [1.0, 0.0], p = [2.0])
+    @test isequal(prob_.u0, [1.0, 0.0])
+    @test isequal(prob_.p, [2.0])
+
+    prob_ = remake(prob, u0 = Dict(sys1.x => 1.0), p = Dict(sys1.a => 2.0))
+    @test isequal(prob_.u0, [1.0, 0.0])
+    @test isequal(prob_.p, [2.0])
 end
 
 @testset "time dependent var" begin
@@ -176,13 +193,14 @@ end
          sys2.b => 9.0
          β => 10.0]
 
-    prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true)
+    prob = OptimizationProblem(combinedsys, u0, p, grad = true, hess = true, cons_j = true,
+                               cons_h = true)
     @test prob.f.sys === combinedsys
     sol = solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.minimum < -1e5
 
     prob = OptimizationProblem(sys2, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
-                               grad = true, hess = true)
+                               grad = true, hess = true, cons_j = true, cons_h = true)
     @test prob.f.sys === sys2
     sol = solve(prob, IPNewton())
     @test sol.minimum < 1.0
@@ -211,7 +229,7 @@ end
                                     ])
 
     prob = OptimizationProblem(sys, [x[1] => 2.0, x[2] => 0.0], [], grad = true,
-                               hess = true)
+                               hess = true, cons_j = true, cons_h = true)
     sol = Optimization.solve(prob, Ipopt.Optimizer(); print_level = 0)
     @test sol.u ≈ [1, 0]
     @test prob.lb == [0.0, 0.0]
@@ -224,8 +242,7 @@ end
     @parameters a b
     loss = (a - x)^2 + b * (y - x^2)^2
     @named sys = OptimizationSystem(loss, [x, y], [a, b, c])
-    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0],
-                               grad = true, hess = true)
+    prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0])
     @test prob.lb == [-Inf, 0.0]
     @test prob.ub == [Inf, Inf]
 end

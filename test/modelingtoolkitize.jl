@@ -289,3 +289,21 @@ prob = ODEProblem(ode_prob_dict, u0, (0.0, 1.0), params)
 sys = modelingtoolkitize(prob)
 @test [ModelingToolkit.defaults(sys)[s] for s in states(sys)] == u0
 @test [ModelingToolkit.defaults(sys)[s] for s in parameters(sys)] == [10, 20]
+@test ModelingToolkit.has_tspan(sys)
+
+@parameters t sig=10 rho=28.0 beta=8 / 3
+@variables x(t)=100 y(t)=1.0 z(t)=1
+D = Differential(t)
+
+eqs = [D(x) ~ sig * (y - x),
+    D(y) ~ x * (rho - z) - y,
+    D(z) ~ x * y - beta * z]
+
+noiseeqs = [0.1 * x,
+    0.1 * y,
+    0.1 * z]
+
+@named sys = SDESystem(eqs, noiseeqs, t, [x, y, z], [sig, rho, beta]; tspan = (0, 1000.0))
+prob = SDEProblem(sys)
+sys = modelingtoolkitize(prob)
+@test ModelingToolkit.has_tspan(sys)

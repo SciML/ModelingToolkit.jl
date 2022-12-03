@@ -263,6 +263,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::AbstractOptimizationSystem,u0m
                                           parammap=DiffEqBase.NullParameters();
                                           grad = false,
                                           hess = false, sparse = false,
+                                          cons_j = false, cons_h = false,
                                           checkbounds = false,
                                           linenumbers = true, parallel=SerialForm(),
                                           kwargs...) where iip
@@ -270,6 +271,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::AbstractOptimizationSystem,u0m
 
 Generates an OptimizationProblem from an OptimizationSystem and allows for automatically
 symbolically calculating numerical enhancements.
+                
+Certain solvers require setting `cons_j`, `cons_h` to `true` for constrained-optimization problems.
 """
 function DiffEqBase.OptimizationProblem(sys::AbstractOptimizationSystem, args...; kwargs...)
     DiffEqBase.OptimizationProblem{true}(sys::AbstractOptimizationSystem, args...;
@@ -280,6 +283,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::AbstractOptimizationSystem, u0
                                              lb = nothing, ub = nothing,
                                              grad = false,
                                              hess = false, sparse = false,
+                                             cons_j = false, cons_h = false,
                                              checkbounds = false,
                                              linenumbers = true, parallel = SerialForm(),
                                              use_union = false,
@@ -355,14 +359,36 @@ function DiffEqBase.OptimizationProblem{iip}(sys::AbstractOptimizationSystem, u0
         hess_prototype = nothing
     end
 
+    observedfun = let sys = sys, dict = Dict()
+        function generated_observed(obsvar, args...)
+            obs = get!(dict, value(obsvar)) do
+                build_explicit_observed_function(sys, obsvar)
+            end
+            if args === ()
+                let obs = obs
+                    (u, p) -> obs(u, p)
+                end
+            else
+                obs(args...)
+            end
+        end
+    end
+
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
                                                  linenumbers = linenumbers,
                                                  expression = Val{false})
-        cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
-        cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
-
+        if cons_j
+            _cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+        else
+            _cons_j = nothing
+        end
+        if cons_h
+            _cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+        else
+            _cons_h = nothing
+        end
         cons_expr = convert_to_expr.(subs_constants(constraints(cons_sys)), Ref(sys);
                                      expr_map)
 
@@ -396,12 +422,13 @@ function DiffEqBase.OptimizationProblem{iip}(sys::AbstractOptimizationSystem, u0
                                                   syms = Symbol.(states(sys)),
                                                   paramsyms = Symbol.(parameters(sys)),
                                                   cons = cons[2],
-                                                  cons_j = cons_j,
-                                                  cons_h = cons_h,
+                                                  cons_j = _cons_j,
+                                                  cons_h = _cons_h,
                                                   cons_jac_prototype = cons_jac_prototype,
                                                   cons_hess_prototype = cons_hess_prototype,
                                                   expr = obj_expr,
-                                                  cons_expr = cons_expr)
+                                                  cons_expr = cons_expr,
+                                                  observed = observedfun)
         OptimizationProblem{iip}(_f, u0, p; lb = lb, ub = ub, int = int,
                                  lcons = lcons, ucons = ucons, kwargs...)
     else
@@ -413,7 +440,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::AbstractOptimizationSystem, u0
                                                   syms = Symbol.(states(sys)),
                                                   paramsyms = Symbol.(parameters(sys)),
                                                   hess_prototype = hess_prototype,
-                                                  expr = obj_expr)
+                                                  expr = obj_expr,
+                                                  observed = observedfun)
         OptimizationProblem{iip}(_f, u0, p; lb = lb, ub = ub, int = int,
                                  kwargs...)
     end
@@ -441,11 +469,12 @@ function OptimizationProblemExpr(sys::AbstractOptimizationSystem, args...; kwarg
     OptimizationProblemExpr{true}(sys::OptimizationSystem, args...; kwargs...)
 end
 
-function OptimizationProblemExpr{iip}(sys::AbstractOptimizationSystem, u0,
+function OptimizationProblemExpr{iip}(sys::AbstractOptimizationSystem, u0map,
                                       parammap = DiffEqBase.NullParameters();
                                       lb = nothing, ub = nothing,
                                       grad = false,
                                       hess = false, sparse = false,
+                                      cons_j = false, cons_h = false,
                                       checkbounds = false,
                                       linenumbers = false, parallel = SerialForm(),
                                       use_union = false,
@@ -520,8 +549,16 @@ function OptimizationProblemExpr{iip}(sys::AbstractOptimizationSystem, u0,
         cons, lcons_, ucons_ = generate_function(cons_sys, checkbounds = checkbounds,
                                                  linenumbers = linenumbers,
                                                  expression = Val{false})
-        cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
-        cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+        if cons_j
+            _cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+        else
+            _cons_j = nothing
+        end
+        if cons_h
+            _cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+        else
+            _cons_h = nothing
+        end
 
         cons_expr = convert_to_expr.(subs_constants(constraints(cons_sys)), Ref(sys))
 
@@ -559,8 +596,8 @@ function OptimizationProblemExpr{iip}(sys::AbstractOptimizationSystem, u0,
             cons = $cons[1]
             lcons = $lcons
             ucons = $ucons
-            cons_j = $cons_j
-            cons_h = $cons_h
+            cons_j = $_cons_j
+            cons_h = $_cons_h
             syms = $(Symbol.(states(sys)))
             paramsyms = $(Symbol.(parameters(sys)))
             _f = OptimizationFunction{iip}(f, SciMLBase.NoAD();
@@ -601,4 +638,33 @@ function OptimizationProblemExpr{iip}(sys::AbstractOptimizationSystem, u0,
             OptimizationProblem{$iip}(_f, u0, p; lb = lb, ub = ub, int = int, kwargs...)
         end
     end
+end
+
+function structural_simplify(sys::OptimizationSystem; kwargs...)
+    sys = flatten(sys)
+    cons = constraints(sys)
+    econs = Equation[]
+    icons = similar(cons, 0)
+    for e in cons
+        if e isa Equation
+            push!(econs, e)
+        else
+            push!(icons, e)
+        end
+    end
+    nlsys = NonlinearSystem(econs, states(sys), parameters(sys); name = :___tmp_nlsystem)
+    snlsys = structural_simplify(nlsys; check_consistency = false, kwargs...)
+    obs = observed(snlsys)
+    subs = Dict(eq.lhs => eq.rhs for eq in observed(snlsys))
+    seqs = equations(snlsys)
+    sizehint!(icons, length(icons) + length(seqs))
+    for eq in seqs
+        push!(icons, substitute(eq, subs))
+    end
+    newsts = setdiff(states(sys), keys(subs))
+    @set! sys.constraints = icons
+    @set! sys.observed = [observed(sys); obs]
+    @set! sys.op = substitute(equations(sys), subs)
+    @set! sys.states = newsts
+    return sys
 end

@@ -4,6 +4,9 @@ using Documenter, ModelingToolkit
 ENV["GKSwstype"] = "100"
 using Plots
 
+cp("./docs/Manifest.toml", "./docs/src/assets/Manifest.toml", force = true)
+cp("./docs/Project.toml", "./docs/src/assets/Project.toml", force = true)
+
 include("pages.jl")
 
 mathengine = MathJax3(Dict(:loader => Dict("load" => ["[tex]/require", "[tex]/mathtools"]),
@@ -31,7 +34,7 @@ makedocs(sitename = "ModelingToolkit.jl",
          format = Documenter.HTML(; analytics = "UA-90474609-3",
                                   assets = ["assets/favicon.ico"],
                                   mathengine,
-                                  canonical = "https://mtk.sciml.ai/stable/",
+                                  canonical = "https://docs.sciml.ai/ModelingToolkit/stable/",
                                   prettyurls = (get(ENV, "CI", nothing) == "true")),
          pages = pages)
 
