@@ -572,6 +572,12 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
     return x
 end
 
+is_state_sym(sys::AbstractSystem, sym) = sym in states(sys)
+state_sym_to_index(sys::AbstractSystem, sym) = findfirst(isequal(sym), states(sys))
+
+is_param_sym(sys::AbstractSystem, sym) = sym in parameters(sys)
+param_sym_to_index(sys::AbstractSystem, sym) = findfirst(isequal(sym), parameters(sys))
+
 struct AbstractSysToExpr
     sys::AbstractSystem
     states::Vector
