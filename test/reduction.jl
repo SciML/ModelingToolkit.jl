@@ -256,7 +256,7 @@ eqs = [a ~ D(w)
 @named sys = ODESystem(eqs, t, vars, [])
 ss = alias_elimination(sys)
 @test equations(ss) == [0 ~ D(D(phi)) - a, 0 ~ sin(t) - D(phi)]
-@test observed(ss) == [w ~ D(phi)]
+@test observed(ss) == [w ~ D(phi), D(w) ~ D(D(phi))]
 
 @variables t x(t) y(t)
 D = Differential(t)

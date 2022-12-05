@@ -122,6 +122,8 @@ function parameters end
 # this has to be included early to deal with depency issues
 include("structural_transformation/bareiss.jl")
 function complete end
+function var_derivative! end
+function var_derivative_graph! end
 include("bipartite_graph.jl")
 using .BipartiteGraphs
 
