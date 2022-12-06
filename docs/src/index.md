@@ -81,6 +81,10 @@ For quick development, ModelingToolkit.jl includes
 [ModelingToolkitStandardLibrary.jl](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/),
 a standard library of prebuilt components for the ModelingToolkit ecosystem.
 
+### Downstream Test List
+
+* [Ai4EComponentLib.jl](https://ai4energy.github.io/Ai4EComponentLib.jl/dev/): A downstream prebuilt component library of Energy and Power Engineering.
+
 ## Model Import Formats
 
 - [CellMLToolkit.jl](https://docs.sciml.ai/CellMLToolkit/stable/): Import [CellML](https://www.cellml.org/) models into ModelingToolkit
