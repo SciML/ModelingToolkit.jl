@@ -26,7 +26,7 @@ jobs:
           - {user: SciML, repo: StructuralIdentifiability.jl, group: All}
           - {user: SciML, repo: ModelingToolkitStandardLibrary.jl}
           - {user: SciML, repo: ModelOrderReduction.jl, group: All}
-          - {user: SciML, repo: Ai4EComponentLib.jl, group: Downstream}
+          - {user: ai4energy, repo: Ai4EComponentLib.jl, group: Downstream}
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v1
