@@ -160,9 +160,13 @@ function RecursiveArrayTools.independent_variables(sys::AbstractSystem)
     end
 end
 
-RecursiveArrayTools.independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
+function RecursiveArrayTools.independent_variables(sys::AbstractTimeDependentSystem)
+    [getfield(sys, :iv)]
+end
 RecursiveArrayTools.independent_variables(sys::AbstractTimeIndependentSystem) = []
-RecursiveArrayTools.independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
+function RecursiveArrayTools.independent_variables(sys::AbstractMultivariateSystem)
+    getfield(sys, :ivs)
+end
 
 iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :complete)
 
@@ -508,7 +512,9 @@ end
 RecursiveArrayTools.states(sys::AbstractSystem, v) = renamespace(sys, v)
 RecursiveArrayTools.parameters(sys::AbstractSystem, v) = toparam(states(sys, v))
 for f in [:states, :parameters]
-    @eval RecursiveArrayTools.$f(sys::AbstractSystem, vs::AbstractArray) = map(v -> $f(sys, v), vs)
+    @eval function RecursiveArrayTools.$f(sys::AbstractSystem, vs::AbstractArray)
+        map(v -> $f(sys, v), vs)
+    end
 end
 
 flatten(sys::AbstractSystem, args...) = sys
@@ -574,11 +580,19 @@ end
 
 RecursiveArrayTools.is_indep_sym(sys::AbstractSystem, sym) = isequal(sym, get_iv(sys))
 
-RecursiveArrayTools.state_sym_to_index(sys::AbstractSystem, sym) = findfirst(isequal(sym), states(sys))
-RecursiveArrayTools.is_state_sym(sys::AbstractSystem, sym) = !isnothing(RecursiveArrayTools.state_sym_to_index(sys, sym))
+function RecursiveArrayTools.state_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(isequal(sym), states(sys))
+end
+function RecursiveArrayTools.is_state_sym(sys::AbstractSystem, sym)
+    !isnothing(RecursiveArrayTools.state_sym_to_index(sys, sym))
+end
 
-RecursiveArrayTools.param_sym_to_index(sys::AbstractSystem, sym) = findfirst(isequal(sym), parameters(sys))
-RecursiveArrayTools.is_param_sym(sys::AbstractSystem, sym) = !isnothing(RecursiveArrayTools.param_sym_to_index(sys, sym))
+function RecursiveArrayTools.param_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(isequal(sym), parameters(sys))
+end
+function RecursiveArrayTools.is_param_sym(sys::AbstractSystem, sym)
+    !isnothing(RecursiveArrayTools.param_sym_to_index(sys, sym))
+end
 
 struct AbstractSysToExpr
     sys::AbstractSystem
