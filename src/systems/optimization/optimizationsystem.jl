@@ -210,7 +210,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              grad = false,
                                              hess = false, obj_sparse = false,
                                              cons_j = false, cons_h = false,
-                                             cons_sparse, checkbounds = false,
+                                             cons_sparse = false, checkbounds = false,
                                              linenumbers = true, parallel = SerialForm(),
                                              use_union = false,
                                              kwargs...) where {iip}

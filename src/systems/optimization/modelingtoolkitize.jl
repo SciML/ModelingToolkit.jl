@@ -19,10 +19,23 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem; num_cons = 0, 
     if DiffEqBase.isinplace(prob) && !isnothing(prob.f.cons)
         lhs = Array{Num}(undef, num_cons)
         prob.f.cons(lhs, vars, params)
+        cons = Union{Equation,Inequality}[]
 
-        if !isnothing(prob.lcons) && !isnothing(prob.ucons)
-            cons = prob.lcons .≲ lhs .≲ prob.ucons
-        else
+        if !isnothing(prob.lcons)
+            for i in 1:num_cons
+                !isinf(prob.lcons[i]) && prob.lcons[i] !== prob.ucons[i] && push!(cons, prob.lcons[i] ≲ lhs[i])
+            end
+        end
+
+        if !isnothing(prob.ucons)
+            for i in 1:num_cons
+                if !isinf(prob.ucons[i])
+                    prob.lcons[i] !== prob.ucons[i] ? push!(cons, lhs[i] ~ prob.ucons[i]) : push!(cons, lhs[i] ≲ prob.ucons[i])
+                end
+            end
+        end
+
+        if (isnothing(prob.lcons) || all(isinf.(prob.lcons))) && (isnothing(prob.ucons) || all(isinf.(prob.ucons)))
             cons = lhs .~ 0.0
         end
     elseif !isnothing(prob.f.cons)

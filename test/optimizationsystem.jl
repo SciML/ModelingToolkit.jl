@@ -246,3 +246,25 @@ end
     @test prob.lb == [-Inf, 0.0]
     @test prob.ub == [Inf, Inf]
 end
+
+@testset "modelingtoolkitize" begin
+    @variables x₁ x₂
+    @parameters α₁ α₂
+    loss = (α₁ - x₁)^2 + α₂ * (x₂ - x₁^2)^2
+    cons = [
+        x₁^2 + x₂^2 ≲ 1.0,
+    ]
+    sys1 = OptimizationSystem(loss, [x₁, x₂], [α₁, α₂], name = :sys1, constraints = cons)
+
+    prob1 = OptimizationProblem(sys1, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
+                               grad = true, hess = true, cons_j = true, cons_h = true)
+
+    sys2 = modelingtoolkitize(prob1, num_cons = 1)
+    prob2 = OptimizationProblem(sys2, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
+                               grad = true, hess = true, cons_j = true, cons_h = true)
+
+    sol1 = Optimization.solve(prob1, Ipopt.Optimizer())
+    sol2 = Optimization.solve(prob2, Ipopt.Optimizer())
+
+    @test sol1.u ≈ sol2.u
+end
