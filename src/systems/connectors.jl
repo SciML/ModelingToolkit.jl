@@ -161,7 +161,7 @@ function Base.:(==)(l1::ConnectionElement, l2::ConnectionElement)
     nameof(l1.sys) == nameof(l2.sys) && isequal(l1.v, l2.v) && l1.isouter == l2.isouter
 end
 namespaced_var(l::ConnectionElement) = states(l, l.v)
-states(l::ConnectionElement, v) = states(copy(l.sys), v)
+RecursiveArrayTools.states(l::ConnectionElement, v) = states(copy(l.sys), v)
 
 struct ConnectionSet
     set::Vector{ConnectionElement} # namespace.sys, var, isouter

@@ -312,9 +312,10 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
         end
     end
 
-    df = DiscreteFunction{true, true}(f; syms = Symbol.(states(sys)),
-                                      indepsym = Symbol(get_iv(sys)),
-                                      paramsyms = Symbol.(ps), sys = sys,
+    df = DiscreteFunction{true, true}(f;
+                                    #     syms = Symbol.(states(sys)),
+                                    #   indepsym = Symbol(get_iv(sys)),
+                                    #   paramsyms = Symbol.(ps), sys = sys,
                                       observed = observedfun)
     DiscreteProblem(df, u0, tspan, p; kwargs...)
 end
@@ -354,9 +355,11 @@ function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing
         u0 = $u0
         p = $p
         tspan = $tspan
-        df = DiscreteFunction{true, true}(f, syms = $(Symbol.(states(sys))),
-                                          indepsym = $(Symbol(get_iv(sys))),
-                                          paramsyms = $(Symbol.(parameters(sys))))
+        df = DiscreteFunction{true, true}(f,
+                                        #     syms = $(Symbol.(states(sys))),
+                                        #   indepsym = $(Symbol(get_iv(sys))),
+                                        #   paramsyms = $(Symbol.(parameters(sys)))
+                                          )
         DiscreteProblem(df, u0, tspan, p)
     end
 end

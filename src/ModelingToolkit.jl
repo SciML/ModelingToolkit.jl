@@ -33,6 +33,8 @@ import FunctionWrappersWrappers
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 using RecursiveArrayTools
+export independent_variables, states, parameters
+# using RecursiveArrayTools
 
 import SymbolicUtils
 import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
@@ -96,28 +98,28 @@ abstract type AbstractODESystem <: AbstractTimeDependentSystem end
 abstract type AbstractMultivariateSystem <: AbstractSystem end
 abstract type AbstractOptimizationSystem <: AbstractTimeIndependentSystem end
 
-"""
-$(TYPEDSIGNATURES)
+# """
+# $(TYPEDSIGNATURES)
 
-Get the set of independent variables for the given system.
-"""
-function independent_variables end
+# Get the set of independent variables for the given system.
+# """
+# function independent_variables end
 
 function independent_variable end
 
-"""
-$(TYPEDSIGNATURES)
+# """
+# $(TYPEDSIGNATURES)
 
-Get the set of states for the given system.
-"""
-function states end
+# Get the set of states for the given system.
+# """
+# function states end
 
-"""
-$(TYPEDSIGNATURES)
+# """
+# $(TYPEDSIGNATURES)
 
-Get the set of parameters variables for the given system.
-"""
-function parameters end
+# Get the set of parameters variables for the given system.
+# """
+# function parameters end
 
 # this has to be included early to deal with depency issues
 include("structural_transformation/bareiss.jl")
@@ -203,7 +205,7 @@ export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
-export independent_variables, independent_variable, states, parameters, equations, controls,
+export independent_variable, equations, controls,
        observed, structure, full_equations
 export structural_simplify, expand_connections, linearize, linearization_function
 export DiscreteSystem, DiscreteProblem

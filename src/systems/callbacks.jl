@@ -35,9 +35,9 @@ FunctionalAffect(; f, sts, pars, ctx = nothing) = FunctionalAffect(f, sts, pars,
 
 func(f::FunctionalAffect) = f.f
 context(a::FunctionalAffect) = a.ctx
-parameters(a::FunctionalAffect) = a.pars
+RecursiveArrayTools.parameters(a::FunctionalAffect) = a.pars
 parameters_syms(a::FunctionalAffect) = a.pars_syms
-states(a::FunctionalAffect) = a.sts
+RecursiveArrayTools.states(a::FunctionalAffect) = a.sts
 states_syms(a::FunctionalAffect) = a.sts_syms
 
 function Base.:(==)(a1::FunctionalAffect, a2::FunctionalAffect)
