@@ -1,17 +1,26 @@
 pages = [
     "Home" => "index.md",
-    "Symbolic Modeling Tutorials" => Any["tutorials/ode_modeling.md",
-                                         "tutorials/spring_mass.md",
-                                         "tutorials/acausal_components.md",
-                                         "tutorials/higher_order.md",
-                                         "tutorials/tearing_parallelism.md",
-                                         "tutorials/nonlinear.md",
-                                         "tutorials/optimization.md",
-                                         "tutorials/stochastic_diffeq.md",
-                                         "tutorials/parameter_identifiability.md"],
-    "ModelingToolkitize Tutorials" => Any["mtkitize_tutorials/modelingtoolkitize.md",
-                                          "mtkitize_tutorials/modelingtoolkitize_index_reduction.md",
-                                          "mtkitize_tutorials/sparse_jacobians.md"],
+    "tutorials/ode_modeling.md",
+    "Tutorials" => Any[
+        "tutorials/acausal_components.md",
+        "tutorials/nonlinear.md",
+        "tutorials/optimization.md",
+        "mtkitize_tutorials/modelingtoolkitize.md",
+        "tutorials/stochastic_diffeq.md",
+        "tutorials/parameter_identifiability.md"
+    ],
+    "Examples" => Any[
+        "Basic Examples" => Any[
+            "tutorials/higher_order.md",
+            "tutorials/spring_mass.md",
+            "mtkitize_tutorials/modelingtoolkitize_index_reduction.md",
+        ],
+        "Advanced Examples" => Any[
+            "tutorials/tearing_parallelism.md",
+            "mtkitize_tutorials/sparse_jacobians.md",
+            "examples/symbolicnumeric_differential.md",
+        ],
+    ],
     "Basics" => Any["basics/AbstractSystem.md",
                     "basics/ContextualVariables.md",
                     "basics/Variable_metadata.md",
