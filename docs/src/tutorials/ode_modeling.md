@@ -1,4 +1,4 @@
-# Composing Ordinary Differential Equations
+# Getting Started with ModelingToolkit.jl
 
 This is an introductory example for the usage of ModelingToolkit (MTK).
 It illustrates the basic user-facing functionality by means of some
@@ -14,7 +14,7 @@ But if you want to just see some code and run, here's an example:
 using ModelingToolkit
 
 @variables t x(t)   # independent and dependent variables
-@parameters τ       # parameters 
+@parameters τ       # parameters
 @constants h = 1    # constants have an assigned value
 D = Differential(t) # define an operator for the differentiation w.r.t. time
 
@@ -44,7 +44,7 @@ first-order lag element:
 ```
 
 Here, ``t`` is the independent variable (time), ``x(t)`` is the (scalar) state
-variable, ``f(t)`` is an external forcing function, and ``\tau`` is a 
+variable, ``f(t)`` is an external forcing function, and ``\tau`` is a
 parameter. In MTK, this system can be modelled as follows. For simplicity, we
 first set the forcing function to a time-independent value.
 
@@ -137,10 +137,10 @@ plot(sol, vars=[x, RHS])
 ```
 
 By default, `structural_simplify` also replaces symbolic `constants` with
-their default values. This allows additional simplifications not possible 
+their default values. This allows additional simplifications not possible
 if using `parameters` (eg, solution of linear equations by dividing out
 the constant's value, which cannot be done for parameters since they may
-be zero). 
+be zero).
 
 ![Simulation result of first-order lag element, with right-hand side](https://user-images.githubusercontent.com/13935112/111958403-7e8d3e00-8aed-11eb-9d18-08b5180a59f9.png)
 
