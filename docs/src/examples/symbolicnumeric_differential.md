@@ -93,8 +93,8 @@ We are nearly there! From this point on, the rest is standard ODE solving proced
 ```@example perturb
 using ModelingToolkit, DifferentialEquations
 
-sys = ODESystem(eqs, t)
-sys = ode_order_lowering(sys)
+@named sys = ODESystem(eqs, t)
+sys = structural_simplify(sys)
 states(sys)
 ```
 
@@ -159,8 +159,8 @@ eqs = [substitute(first(v), subs) ~ substitute(last(v), subs) for v in vals]
 We continue with converting 'eqs' to an `ODEProblem`, solving it, and finally plot the results against the exact solution to the original problem, which is $x(t, \epsilon) = (1 - \epsilon)^{-1/2} e^{-\epsilon t} \sin((1- \epsilon^2)^{1/2}t)$,
 
 ```@example perturb
-sys = ODESystem(eqs, t)
-sys = ode_order_lowering(sys)
+@named sys = ODESystem(eqs, t)
+sys = structural_simplify(sys)
 ```
 
 ```@example perturb
