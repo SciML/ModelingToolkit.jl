@@ -4,7 +4,7 @@
 
 In the previous tutorial, [Mixed Symbolic-Numeric Perturbation Theory](https://symbolics.juliasymbolics.org/stable/examples/perturbation), we discussed how to solve algebraic equations using **Symbolics.jl**. Here, our goal is to extend the method to differential equations. First, we import the following helper functions that were introduced in [Mixed Symbolic/Numerical Methods for Perturbation Theory - Algebraic Equations](@ref perturb_alg):
 
-```@example perturb
+```julia
 using Symbolics, SymbolicUtils
 
 def_taylor(x, ps) = sum([a*x^i for (i,a) in enumerate(ps)])
@@ -44,44 +44,44 @@ As the first ODE example, we have chosen a simple and well-behaved problem, whic
 
 with the initial conditions $x(0) = 0$, and $\dot{x}(0) = 1$. Note that for $\epsilon = 0$, this equation transforms back to the standard one. Let's start with defining the variables
 
-```@example perturb
+```julia
 n = 3
 @variables ϵ t y[1:n](t) ∂∂y[1:n](t)
 ```
 
 Next, we define $x$.
 
-```@example perturb
+```julia
 x = def_taylor(ϵ, y[3:end], y[2])
 ```
 
 We need the second derivative of `x`. It may seem that we can do this using `Differential(t)`; however, this operation needs to wait for a few steps because we need to manipulate the differentials as separate variables. Instead, we define dummy variables `∂∂y` as the placeholder for the second derivatives and define
 
-```@example perturb
+```julia
 ∂∂x = def_taylor(ϵ, ∂∂y[3:end], ∂∂y[2])
 ```
 
 as the second derivative of `x`. After rearrangement, our governing equation is $\ddot{x}(t)(1 + \epsilon x(t))^{-2} + 1 = 0$, or
 
-```@example perturb
+```julia
 eq = ∂∂x * (1 + ϵ*x)^2 + 1
 ```
 
 The next two steps are the same as the ones for algebraic equations (note that we pass `1:n` to `collect_powers` because the zeroth order term is needed here)
 
-```@example perturb
+```julia
 eqs = collect_powers(eq, ϵ, 1:n)
 ```
 
 and,
 
-```@example perturb
+```julia
 vals = solve_coef(eqs, ∂∂y)
 ```
 
 Our system of ODEs is forming. Now is the time to convert `∂∂`s to the correct **Symbolics.jl** form by substitution:
 
-```@example perturb
+```julia
 D = Differential(t)
 subs = Dict(∂∂y[i] => D(D(y[i])) for i in eachindex(y))
 eqs = [substitute(first(v), subs) ~ substitute(last(v), subs) for v in vals]
@@ -89,7 +89,7 @@ eqs = [substitute(first(v), subs) ~ substitute(last(v), subs) for v in vals]
 
 We are nearly there! From this point on, the rest is standard ODE solving procedures. Potentially we can use a symbolic ODE solver to find a closed form solution to this problem. However, **Symbolics.jl** currently does not support this functionality. Instead, we solve the problem numerically. We form an `ODESystem`, lower the order (convert second derivatives to first), generate an `ODEProblem` (after passing the correct initial conditions), and, finally, solve it.
 
-```@example perturb
+```julia
 using ModelingToolkit, DifferentialEquations
 
 @named sys = ODESystem(eqs, t)
@@ -97,7 +97,7 @@ sys = structural_simplify(sys)
 states(sys)
 ```
 
-```@example perturb
+```julia
 # the initial conditions
 # everything is zero except the initial velocity
 u0 = zeros(2n+2)
@@ -109,13 +109,13 @@ sol = solve(prob; dtmax=0.01)
 
 Finally, we calculate the solution to the problem as a function of `ϵ` by substituting the solution to the ODE system back into the defining equation for `x`. Note that `𝜀` is a number, compared to `ϵ`, which is a symbolic variable.
 
-```@example perturb
+```julia
 X = 𝜀 -> sum([𝜀^(i-1) * sol[y[i]] for i in eachindex(y)])
 ```
 
 Using `X`, we can plot the trajectory for a range of $𝜀$s.
 
-```@example perturb
+```julia
 using Plots
 
 plot(sol.t, hcat([X(𝜀) for 𝜀 = 0.0:0.1:0.5]...))
@@ -129,7 +129,7 @@ For the next example, we have chosen a simple example from a very important clas
 
 The goal is to solve $\ddot{x} + 2\epsilon\dot{x} + x = 0$, where the dot signifies time-derivatives and the initial conditions are $x(0) = 0$ and $\dot{x}(0) = 1$. If $\epsilon = 0$, the problem reduces to the simple linear harmonic oscillator with the exact solution $x(t) = \sin(t)$. We follow the same steps as the previous example.
 
-```@example perturb
+```julia
 n = 3
 @variables ϵ t y[1:n](t) ∂y[1:n] ∂∂y[1:n]
 x = def_taylor(ϵ, y[3:end], y[2])
@@ -139,7 +139,7 @@ x = def_taylor(ϵ, y[3:end], y[2])
 
 This time we also need the first derivative terms. Continuing,
 
-```@example perturb
+```julia
 eq = ∂∂x + 2*ϵ*∂x + x
 eqs = collect_powers(eq, ϵ, 0:n)
 vals = solve_coef(eqs, ∂∂y)
@@ -147,7 +147,7 @@ vals = solve_coef(eqs, ∂∂y)
 
 Next, we need to replace `∂`s and `∂∂`s with their **Symbolics.jl** counterparts:
 
-```@example perturb
+```julia
 D = Differential(t)
 subs1 = Dict(∂y[i] => D(y[i]) for i in eachindex(y))
 subs2 = Dict(∂∂y[i] => D(D(y[i])) for i in eachindex(y))
@@ -157,12 +157,12 @@ eqs = [substitute(first(v), subs) ~ substitute(last(v), subs) for v in vals]
 
 We continue with converting 'eqs' to an `ODEProblem`, solving it, and finally plot the results against the exact solution to the original problem, which is $x(t, \epsilon) = (1 - \epsilon)^{-1/2} e^{-\epsilon t} \sin((1- \epsilon^2)^{1/2}t)$,
 
-```@example perturb
+```julia
 @named sys = ODESystem(eqs, t)
 sys = structural_simplify(sys)
 ```
 
-```@example perturb
+```julia
 # the initial conditions
 u0 = zeros(2n+2)
 u0[3] = 1.0   # y₀ˍt
