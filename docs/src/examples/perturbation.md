@@ -1,4 +1,4 @@
-# [Symbolic-Numerical Perturbation Theory for ODEs](@id perturb_diff)
+# [Symbolic-Numeric Perturbation Theory for ODEs](@id perturb_diff)
 
 ## Prelims
 
@@ -38,16 +38,15 @@ In the first two examples, we applied the perturbation method to algebraic probl
 
 As the first ODE example, we have chosen a simple and well-behaved problem, which is a variation of a standard first-year physics problem: what is the trajectory of an object (say, a ball or a rocket) thrown vertically at velocity $v$ from the surface of a planet? Assuming a constant acceleration of gravity, $g$, every burgeoning physicist knows the answer: $x(t) = x(0) + vt - \frac{1}{2}gt^2$. However, what happens if $g$ is not constant? Specifically, $g$ is inversely proportional to the distant from the center of the planet. If $v$ is large and the projectile travels a large fraction of the radius of the planet, the assumption of constant gravity does not hold anymore. However, unless $v$ is large compared to the escape velocity, the correction is usually small. After simplifications and change of variables to dimensionless, the problem becomes
 
-$$
+```math
   \ddot{x}(t) = -\frac{1}{(1 + \epsilon x(t))^2}
-  \,,
-$$
+```
 
 with the initial conditions $x(0) = 0$, and $\dot{x}(0) = 1$. Note that for $\epsilon = 0$, this equation transforms back to the standard one. Let's start with defining the variables
 
 ```@example perturb
 n = 3
-@variables ϵ t y[1:n](t) ∂∂y[1:n]
+@variables ϵ t y[1:n](t) ∂∂y[1:n](t)
 ```
 
 Next, we define $x$.

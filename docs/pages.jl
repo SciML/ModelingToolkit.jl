@@ -12,7 +12,7 @@ pages = [
                                               "examples/modelingtoolkitize_index_reduction.md"],
                       "Advanced Examples" => Any["examples/tearing_parallelism.md",
                                                  "examples/sparse_jacobians.md",
-                                                 "examples/symbolicnumeric_differential.md"]],
+                                                 "examples/perturbation.md"]],
     "Basics" => Any["basics/AbstractSystem.md",
                     "basics/ContextualVariables.md",
                     "basics/Variable_metadata.md",
