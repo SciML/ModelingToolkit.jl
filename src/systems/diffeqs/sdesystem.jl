@@ -520,8 +520,7 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
                           tgrad = tgrad,
                           Wfact = Wfact,
                           Wfact_t = Wfact_t,
-                          mass_matrix = M,
-                          )
+                          mass_matrix = M)
     end
     !linenumbers ? striplines(ex) : ex
 end

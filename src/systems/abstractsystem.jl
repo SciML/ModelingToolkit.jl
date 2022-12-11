@@ -148,7 +148,7 @@ function independent_variable(sys::AbstractSystem)
 end
 
 #Treat the result as a vector of symbols always
-function RecursiveArrayTools.independent_variables(sys::AbstractSystem)
+function SymbolicIndexingInterface.independent_variables(sys::AbstractSystem)
     systype = typeof(sys)
     @warn "Please declare ($systype) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
     if isdefined(sys, :iv)
@@ -160,11 +160,11 @@ function RecursiveArrayTools.independent_variables(sys::AbstractSystem)
     end
 end
 
-function RecursiveArrayTools.independent_variables(sys::AbstractTimeDependentSystem)
+function SymbolicIndexingInterface.independent_variables(sys::AbstractTimeDependentSystem)
     [getfield(sys, :iv)]
 end
-RecursiveArrayTools.independent_variables(sys::AbstractTimeIndependentSystem) = []
-function RecursiveArrayTools.independent_variables(sys::AbstractMultivariateSystem)
+SymbolicIndexingInterface.independent_variables(sys::AbstractTimeIndependentSystem) = []
+function SymbolicIndexingInterface.independent_variables(sys::AbstractMultivariateSystem)
     getfield(sys, :ivs)
 end
 
@@ -466,7 +466,7 @@ function namespace_expr(O, sys, n = nameof(sys))
     end
 end
 
-function RecursiveArrayTools.states(sys::AbstractSystem)
+function SymbolicIndexingInterface.states(sys::AbstractSystem)
     sts = get_states(sys)
     systems = get_systems(sys)
     unique(isempty(systems) ?
@@ -474,7 +474,7 @@ function RecursiveArrayTools.states(sys::AbstractSystem)
            [sts; reduce(vcat, namespace_variables.(systems))])
 end
 
-function RecursiveArrayTools.parameters(sys::AbstractSystem)
+function SymbolicIndexingInterface.parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     systems = get_systems(sys)
     unique(isempty(systems) ? ps : [ps; reduce(vcat, namespace_parameters.(systems))])
@@ -509,10 +509,10 @@ function defaults(sys::AbstractSystem)
     isempty(systems) ? defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
 end
 
-RecursiveArrayTools.states(sys::AbstractSystem, v) = renamespace(sys, v)
-RecursiveArrayTools.parameters(sys::AbstractSystem, v) = toparam(states(sys, v))
+states(sys::AbstractSystem, v) = renamespace(sys, v)
+parameters(sys::AbstractSystem, v) = toparam(states(sys, v))
 for f in [:states, :parameters]
-    @eval function RecursiveArrayTools.$f(sys::AbstractSystem, vs::AbstractArray)
+    @eval function $f(sys::AbstractSystem, vs::AbstractArray)
         map(v -> $f(sys, v), vs)
     end
 end
@@ -578,20 +578,20 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
     return x
 end
 
-RecursiveArrayTools.is_indep_sym(sys::AbstractSystem, sym) = isequal(sym, get_iv(sys))
+SymbolicIndexingInterface.is_indep_sym(sys::AbstractSystem, sym) = isequal(sym, get_iv(sys))
 
-function RecursiveArrayTools.state_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(sym), states(sys))
+function SymbolicIndexingInterface.state_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(isequal(sym), SymbolicIndexingInterface.states(sys))
 end
-function RecursiveArrayTools.is_state_sym(sys::AbstractSystem, sym)
-    !isnothing(RecursiveArrayTools.state_sym_to_index(sys, sym))
+function SymbolicIndexingInterface.is_state_sym(sys::AbstractSystem, sym)
+    !isnothing(SymbolicIndexingInterface.state_sym_to_index(sys, sym))
 end
 
-function RecursiveArrayTools.param_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(sym), parameters(sys))
+function SymbolicIndexingInterface.param_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(isequal(sym), SymbolicIndexingInterface.parameters(sys))
 end
-function RecursiveArrayTools.is_param_sym(sys::AbstractSystem, sym)
-    !isnothing(RecursiveArrayTools.param_sym_to_index(sys, sym))
+function SymbolicIndexingInterface.is_param_sym(sys::AbstractSystem, sym)
+    !isnothing(SymbolicIndexingInterface.param_sym_to_index(sys, sym))
 end
 
 struct AbstractSysToExpr

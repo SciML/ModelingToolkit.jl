@@ -33,9 +33,8 @@ import FunctionWrappersWrappers
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 using RecursiveArrayTools
-export independent_variables, states, parameters
-# using RecursiveArrayTools
 
+import SymbolicIndexingInterface
 import SymbolicUtils
 import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
                       Symbolic, Term, Add, Mul, Pow, Sym, FnType,

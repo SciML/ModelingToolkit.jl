@@ -297,8 +297,7 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = states(sys),
         jac = $_jac
         NonlinearFunction{$iip}(f,
                                 jac = jac,
-                                jac_prototype = $jp_expr,
-                                )
+                                jac_prototype = $jp_expr)
     end
     !linenumbers ? striplines(ex) : ex
 end
