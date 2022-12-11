@@ -2,7 +2,7 @@
 
 ## Prelims
 
-In the previous tutorial, [Mixed Symbolic-Numeric Perturbation Theory](), we discussed how to solve algebraic equations using **Symbolics.jl**. Here, our goal is to extend the method to differential equations. First, we import the following helper functions that were introduced in [Mixed Symbolic/Numerical Methods for Perturbation Theory - Algebraic Equations](@ref perturb_alg):
+In the previous tutorial, [Mixed Symbolic-Numeric Perturbation Theory](https://symbolics.juliasymbolics.org/stable/examples/perturbation), we discussed how to solve algebraic equations using **Symbolics.jl**. Here, our goal is to extend the method to differential equations. First, we import the following helper functions that were introduced in [Mixed Symbolic/Numerical Methods for Perturbation Theory - Algebraic Equations](@ref perturb_alg):
 
 ```@example perturb
 using Symbolics, SymbolicUtils
@@ -46,20 +46,20 @@ $$
 with the initial conditions $x(0) = 0$, and $\dot{x}(0) = 1$. Note that for $\epsilon = 0$, this equation transforms back to the standard one. Let's start with defining the variables
 
 ```@example perturb
-n = 2
-@variables ϵ t y[0:n](t) ∂∂y[0:n]
+n = 3
+@variables ϵ t y[1:n](t) ∂∂y[1:n]
 ```
 
 Next, we define $x$.
 
 ```@example perturb
-x = def_taylor(ϵ, y[2:end], y[1])
+x = def_taylor(ϵ, y[3:end], y[2])
 ```
 
 We need the second derivative of `x`. It may seem that we can do this using `Differential(t)`; however, this operation needs to wait for a few steps because we need to manipulate the differentials as separate variables. Instead, we define dummy variables `∂∂y` as the placeholder for the second derivatives and define
 
 ```@example perturb
-∂∂x = def_taylor(ϵ, ∂∂y[2:end], ∂∂y[1])
+∂∂x = def_taylor(ϵ, ∂∂y[3:end], ∂∂y[2])
 ```
 
 as the second derivative of `x`. After rearrangement, our governing equation is $\ddot{x}(t)(1 + \epsilon x(t))^{-2} + 1 = 0$, or
@@ -68,10 +68,10 @@ as the second derivative of `x`. After rearrangement, our governing equation is 
 eq = ∂∂x * (1 + ϵ*x)^2 + 1
 ```
 
-The next two steps are the same as the ones for algebraic equations (note that we pass `0:n` to `collect_powers` because the zeroth order term is needed here)
+The next two steps are the same as the ones for algebraic equations (note that we pass `1:n` to `collect_powers` because the zeroth order term is needed here)
 
 ```@example perturb
-eqs = collect_powers(eq, ϵ, 0:n)
+eqs = collect_powers(eq, ϵ, 1:n)
 ```
 
 and,
@@ -131,11 +131,11 @@ For the next example, we have chosen a simple example from a very important clas
 The goal is to solve $\ddot{x} + 2\epsilon\dot{x} + x = 0$, where the dot signifies time-derivatives and the initial conditions are $x(0) = 0$ and $\dot{x}(0) = 1$. If $\epsilon = 0$, the problem reduces to the simple linear harmonic oscillator with the exact solution $x(t) = \sin(t)$. We follow the same steps as the previous example.
 
 ```@example perturb
-n = 2
-@variables ϵ t y[0:n](t) ∂y[0:n] ∂∂y[0:n]
-x = def_taylor(ϵ, y[2:end], y[1])
-∂x = def_taylor(ϵ, ∂y[2:end], ∂y[1])
-∂∂x = def_taylor(ϵ, ∂∂y[2:end], ∂∂y[1])
+n = 3
+@variables ϵ t y[1:n](t) ∂y[1:n] ∂∂y[1:n]
+x = def_taylor(ϵ, y[3:end], y[2])
+∂x = def_taylor(ϵ, ∂y[3:end], ∂y[2])
+∂∂x = def_taylor(ϵ, ∂∂y[3:end], ∂∂y[2])
 ```
 
 This time we also need the first derivative terms. Continuing,

@@ -5,19 +5,19 @@ pages = [
         "tutorials/acausal_components.md",
         "tutorials/nonlinear.md",
         "tutorials/optimization.md",
-        "mtkitize_tutorials/modelingtoolkitize.md",
+        "tutorials/modelingtoolkitize.md",
         "tutorials/stochastic_diffeq.md",
         "tutorials/parameter_identifiability.md"
     ],
     "Examples" => Any[
         "Basic Examples" => Any[
-            "tutorials/higher_order.md",
-            "tutorials/spring_mass.md",
-            "mtkitize_tutorials/modelingtoolkitize_index_reduction.md",
+            "examples/higher_order.md",
+            "examples/spring_mass.md",
+            "examples/modelingtoolkitize_index_reduction.md",
         ],
         "Advanced Examples" => Any[
-            "tutorials/tearing_parallelism.md",
-            "mtkitize_tutorials/sparse_jacobians.md",
+            "examples/tearing_parallelism.md",
+            "examples/sparse_jacobians.md",
             "examples/symbolicnumeric_differential.md",
         ],
     ],
