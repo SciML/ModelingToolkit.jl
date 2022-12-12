@@ -311,7 +311,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                     simplify = simplify, sparse = sparse,
                                     expression = Val{eval_expression},
                                     expression_module = eval_module,
-                                    checkbounds = checkbounds, kwargs...)
+                                    checkbounds = checkbounds,
+                                    analytic = nothing, kwargs...)
         jac_oop, jac_iip = eval_expression ?
                            (@RuntimeGeneratedFunction(eval_module, ex) for ex in jac_gen) :
                            jac_gen
@@ -375,11 +376,6 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         nothing
     end
 
-    analytic = if haskey(kwargs, :analytic)
-        kwargs[:analytic]
-    else
-        nothing
-    end
     ODEFunction{iip, specialize}(f;
                                  sys = sys,
                                  jac = _jac === nothing ? nothing : _jac,
