@@ -374,7 +374,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
     else
         nothing
     end
-    ODEFunction{iip, specialize}(f,
+    ODEFunction{iip, specialize}(f;
                                  sys = sys,
                                  jac = _jac === nothing ? nothing : _jac,
                                  tgrad = _tgrad === nothing ? nothing : _tgrad,
@@ -384,7 +384,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                  indepsym = Symbol(get_iv(sys)),
                                  paramsyms = Symbol.(ps),
                                  observed = observedfun,
-                                 sparsity = sparsity ? jacobian_sparsity(sys) : nothing)
+                                 sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
+                                 kwargs...)
 end
 
 """
