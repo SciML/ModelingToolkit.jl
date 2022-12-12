@@ -374,6 +374,12 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
     else
         nothing
     end
+
+    analytic = if haskey(kwargs, :analytic)
+        kwargs[:analytic]
+    else
+        nothing
+    end
     ODEFunction{iip, specialize}(f;
                                  sys = sys,
                                  jac = _jac === nothing ? nothing : _jac,
@@ -385,7 +391,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                  paramsyms = Symbol.(ps),
                                  observed = observedfun,
                                  sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
-                                 kwargs...)
+                                 analytic = analytic)
 end
 
 """
