@@ -275,6 +275,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                                  steady_state = false,
                                                  checkbounds = false,
                                                  sparsity = false,
+                                                 analytic = nothing,
                                                  kwargs...) where {iip, specialize}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
                               expression_module = eval_module, checkbounds = checkbounds,
@@ -311,8 +312,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                     simplify = simplify, sparse = sparse,
                                     expression = Val{eval_expression},
                                     expression_module = eval_module,
-                                    checkbounds = checkbounds,
-                                    analytic = nothing, kwargs...)
+                                    checkbounds = checkbounds, kwargs...)
         jac_oop, jac_iip = eval_expression ?
                            (@RuntimeGeneratedFunction(eval_module, ex) for ex in jac_gen) :
                            jac_gen
