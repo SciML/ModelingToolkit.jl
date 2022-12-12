@@ -380,6 +380,9 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                  tgrad = _tgrad === nothing ? nothing : _tgrad,
                                  mass_matrix = _M,
                                  jac_prototype = jac_prototype,
+                                 syms = Symbol.(states(sys)),
+                                 indepsym = Symbol(get_iv(sys)),
+                                 paramsyms = Symbol.(ps),
                                  observed = observedfun,
                                  sparsity = sparsity ? jacobian_sparsity(sys) : nothing)
 end
@@ -470,6 +473,9 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     DAEFunction{iip}(f,
                      sys = sys,
                      jac = _jac === nothing ? nothing : _jac,
+                     syms = Symbol.(dvs),
+                     indepsym = Symbol(get_iv(sys)),
+                     paramsyms = Symbol.(ps),
                      jac_prototype = jac_prototype,
                      observed = observedfun)
 end
@@ -553,6 +559,9 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
                           tgrad = $tgradsym,
                           mass_matrix = M,
                           jac_prototype = $jp_expr,
+                          syms = $(Symbol.(states(sys))),
+                          indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
+                          paramsyms = $(Symbol.(parameters(sys))),
                           sparsity = $(sparsity ? jacobian_sparsity(sys) : nothing))
     end
     !linenumbers ? striplines(ex) : ex

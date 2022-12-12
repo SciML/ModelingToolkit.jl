@@ -353,9 +353,9 @@ function build_torn_function(sys;
                                                                                                           eqs_idxs,
                                                                                                           states_idxs) :
                                                                nothing,
-                                                    # syms = syms,
-                                                    # paramsyms = Symbol.(parameters(sys)),
-                                                    # indepsym = Symbol(get_iv(sys)),
+                                                    syms = syms,
+                                                    paramsyms = Symbol.(parameters(sys)),
+                                                    indepsym = Symbol(get_iv(sys)),
                                                     observed = observedfun,
                                                     mass_matrix = mass_matrix,
                                                     sys = sys), states

@@ -99,28 +99,7 @@ abstract type AbstractODESystem <: AbstractTimeDependentSystem end
 abstract type AbstractMultivariateSystem <: AbstractSystem end
 abstract type AbstractOptimizationSystem <: AbstractTimeIndependentSystem end
 
-# """
-# $(TYPEDSIGNATURES)
-
-# Get the set of independent variables for the given system.
-# """
-# function independent_variables end
-
 function independent_variable end
-
-# """
-# $(TYPEDSIGNATURES)
-
-# Get the set of states for the given system.
-# """
-# function states end
-
-# """
-# $(TYPEDSIGNATURES)
-
-# Get the set of parameters variables for the given system.
-# """
-# function parameters end
 
 # this has to be included early to deal with depency issues
 include("structural_transformation/bareiss.jl")
