@@ -123,10 +123,6 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
                            has_difference = false,
                            kwargs...)
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
-    if !implicit_dae
-        check_operator_variables(eqs, Differential)
-        check_lhs(eqs, Differential, Set(dvs))
-    end
     # substitute x(t) by just x
     rhss = implicit_dae ? [_iszero(eq.lhs) ? eq.rhs : eq.rhs - eq.lhs for eq in eqs] :
            [eq.rhs for eq in eqs]
@@ -194,19 +190,34 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
     PeriodicCallback(cb_affect!, first(dt))
 end
 
+@noinline function massmatrix_error(eq)
+    error("Only constant mass matrices are currently supported. Faulty equation: $eq.")
+end
 function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
     eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
     dvs = states(sys)
     M = zeros(length(eqs), length(eqs))
     state2idx = Dict(s => i for (i, s) in enumerate(dvs))
+    vars = Set()
     for (i, eq) in enumerate(eqs)
-        if eq.lhs isa Term && operation(eq.lhs) isa Differential
-            st = var_from_nested_derivative(eq.lhs)[1]
+        lhs = eq.lhs
+        if istree(lhs) && operation(lhs) isa Differential
+            st = var_from_nested_derivative(lhs)[1]
             j = state2idx[st]
             M[i, j] = 1
+        elseif _iszero(lhs)
         else
-            _iszero(eq.lhs) ||
-                error("Only semi-explicit constant mass matrices are currently supported. Faulty equation: $eq.")
+            vars!(vars, lhs)
+            for v in vars
+                (istree(v) && operation(v) isa Differential) || continue
+                a, lhs, islinear = Symbolics.linear_expansion(lhs, v)
+                (islinear && a isa Number) || massmatrix_error(eq)
+                st = var_from_nested_derivative(v)[1]
+                j = state2idx[st]
+                M[i, j] = a
+            end
+            _iszero(lhs) || massmatrix_error(eq)
+            empty!(vars)
         end
     end
     M = simplify ? ModelingToolkit.simplify.(M) : M
