@@ -223,7 +223,8 @@ function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map = [], tspan = get_
                               expression_module = eval_module)
     f_oop, _ = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
     f(u, p, iv) = f_oop(u, p, iv)
-    fd = DiscreteFunction(f; syms = Symbol.(dvs), indepsym = Symbol(iv), paramsyms = Symbol.(ps))
+    fd = DiscreteFunction(f; syms = Symbol.(dvs), indepsym = Symbol(iv),
+                          paramsyms = Symbol.(ps))
     DiscreteProblem(fd, u0, tspan, p; kwargs...)
 end
 
