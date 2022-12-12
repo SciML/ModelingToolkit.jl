@@ -35,6 +35,8 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 using RecursiveArrayTools
 
 import SymbolicIndexingInterface
+import SymbolicIndexingInterface: independent_variables, states, parameters
+export independent_variables, states, parameters
 import SymbolicUtils
 import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
                       Symbolic, Term, Add, Mul, Pow, Sym, FnType,
