@@ -148,7 +148,7 @@ function independent_variable(sys::AbstractSystem)
 end
 
 #Treat the result as a vector of symbols always
-function independent_variables(sys::AbstractSystem)
+function SymbolicIndexingInterface.independent_variables(sys::AbstractSystem)
     systype = typeof(sys)
     @warn "Please declare ($systype) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
     if isdefined(sys, :iv)
@@ -160,9 +160,13 @@ function independent_variables(sys::AbstractSystem)
     end
 end
 
-independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
-independent_variables(sys::AbstractTimeIndependentSystem) = []
-independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
+function SymbolicIndexingInterface.independent_variables(sys::AbstractTimeDependentSystem)
+    [getfield(sys, :iv)]
+end
+SymbolicIndexingInterface.independent_variables(sys::AbstractTimeIndependentSystem) = []
+function SymbolicIndexingInterface.independent_variables(sys::AbstractMultivariateSystem)
+    getfield(sys, :ivs)
+end
 
 iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :complete)
 
@@ -462,7 +466,7 @@ function namespace_expr(O, sys, n = nameof(sys))
     end
 end
 
-function states(sys::AbstractSystem)
+function SymbolicIndexingInterface.states(sys::AbstractSystem)
     sts = get_states(sys)
     systems = get_systems(sys)
     unique(isempty(systems) ?
@@ -470,7 +474,7 @@ function states(sys::AbstractSystem)
            [sts; reduce(vcat, namespace_variables.(systems))])
 end
 
-function parameters(sys::AbstractSystem)
+function SymbolicIndexingInterface.parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     systems = get_systems(sys)
     unique(isempty(systems) ? ps : [ps; reduce(vcat, namespace_parameters.(systems))])
@@ -508,7 +512,9 @@ end
 states(sys::AbstractSystem, v) = renamespace(sys, v)
 parameters(sys::AbstractSystem, v) = toparam(states(sys, v))
 for f in [:states, :parameters]
-    @eval $f(sys::AbstractSystem, vs::AbstractArray) = map(v -> $f(sys, v), vs)
+    @eval function $f(sys::AbstractSystem, vs::AbstractArray)
+        map(v -> $f(sys, v), vs)
+    end
 end
 
 flatten(sys::AbstractSystem, args...) = sys
@@ -570,6 +576,22 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
         return operation(x)
     end
     return x
+end
+
+SymbolicIndexingInterface.is_indep_sym(sys::AbstractSystem, sym) = isequal(sym, get_iv(sys))
+
+function SymbolicIndexingInterface.state_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(isequal(sym), SymbolicIndexingInterface.states(sys))
+end
+function SymbolicIndexingInterface.is_state_sym(sys::AbstractSystem, sym)
+    !isnothing(SymbolicIndexingInterface.state_sym_to_index(sys, sym))
+end
+
+function SymbolicIndexingInterface.param_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(isequal(sym), SymbolicIndexingInterface.parameters(sys))
+end
+function SymbolicIndexingInterface.is_param_sym(sys::AbstractSystem, sym)
+    !isnothing(SymbolicIndexingInterface.param_sym_to_index(sys, sym))
 end
 
 struct AbstractSysToExpr

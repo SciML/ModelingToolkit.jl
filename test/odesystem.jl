@@ -930,9 +930,9 @@ let
     # TODO: maybe do not emit x_t
     sys4s = structural_simplify(sys4)
     prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
-    @test string.(prob.f.syms) == ["x(t)", "xˍt(t)"]
-    @test string.(prob.f.paramsyms) == ["pp"]
-    @test string(prob.f.indepsym) == "t"
+    @test string.(states(prob.f.sys)) == ["x(t)", "xˍt(t)"]
+    @test string.(parameters(prob.f.sys)) == ["pp"]
+    @test string.(independent_variables(prob.f.sys)) == ["t"]
 end
 
 let
