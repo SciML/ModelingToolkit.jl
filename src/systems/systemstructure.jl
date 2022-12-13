@@ -37,10 +37,16 @@ struct DiffGraph <: Graphs.AbstractGraph{Int}
     primal_to_diff::Vector{Union{Int, Nothing}}
     diff_to_primal::Union{Nothing, Vector{Union{Int, Nothing}}}
 end
+
 DiffGraph(primal_to_diff::Vector{Union{Int, Nothing}}) = DiffGraph(primal_to_diff, nothing)
 function DiffGraph(n::Integer, with_badj::Bool = false)
     DiffGraph(Union{Int, Nothing}[nothing for _ in 1:n],
               with_badj ? Union{Int, Nothing}[nothing for _ in 1:n] : nothing)
+end
+
+function Base.copy(dg::DiffGraph)
+    DiffGraph(copy(dg.primal_to_diff),
+              dg.diff_to_primal === nothing ? nothing : copy(dg.diff_to_primal))
 end
 
 @noinline function require_complete(dg::DiffGraph)
@@ -145,6 +151,13 @@ Base.@kwdef mutable struct SystemStructure
     solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
     only_discrete::Bool
 end
+
+function Base.copy(structure::SystemStructure)
+    SystemStructure(copy(structure.var_to_diff), copy(structure.eq_to_diff),
+                    copy(structure.graph), copy(structure.solvable_graph),
+                    structure.only_discrete)
+end
+
 is_only_discrete(s::SystemStructure) = s.only_discrete
 isdervar(s::SystemStructure, i) = invview(s.var_to_diff)[i] !== nothing
 function isalgvar(s::SystemStructure, i)
