@@ -15,7 +15,7 @@ We can use the function `parse_expr_to_symbolic` from Symbolics.jl to generate t
 form of the expression:
 
 ```@example parsing 
-Symbolics
+using Symbolics
 eqs = parse_expr_to_symbolic.(ex, (Main,))
 ```
 
