@@ -70,6 +70,86 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
 end
 
 """
+    computed_highest_diff_variables(var_to_diff, ag)
+
+Computes which variables are the "highest-differentiated" for purposes of
+pantelides. Ordinarily this is relatively straightforward. However, in our
+case, there are two complicating  conditions:
+
+  1. We allow variables in the structure graph that don't appear in the
+     system at all. What we are interested in is the highest-differentiated
+     variable that actually appears in the system.
+
+  2. We have an alias graph. The alias graph implicitly contributes an
+     alias equation, so it doesn't actually whitelist any additional variables,
+     but it may change which variable is considered the highest differentiated one.
+     Consider the following situation:
+
+       Vars: x, y
+       Eqs: 0 = f(x)
+       Alias: ẋ = ẏ
+
+    In the absence of the alias, we would consider `x` to be the highest
+    differentiated variable. However, because of the alias (and because there
+    is no alias for `x=y`), we actually need to take `ẋ` as the highest
+    differentiated variable.
+
+This function takes care of these complications are returns a boolean array
+for every variable, indicating whether it is considered "highest-differentiated".
+"""
+function computed_highest_diff_variables(structure, ag::Union{AliasGraph, Nothing})
+    @unpack graph, var_to_diff = structure
+
+    nvars = length(var_to_diff)
+    varwhitelist = falses(nvars)
+    for var in 1:nvars
+        if var_to_diff[var] === nothing && !varwhitelist[var]
+            while isempty(𝑑neighbors(graph, var)) && (ag === nothing || !haskey(ag, var))
+                var′ = invview(var_to_diff)[var]
+                var′ === nothing && break
+                var = var′
+            end
+            if ag !== nothing && haskey(ag, var)
+                (_, stem) = ag[var]
+                stem == 0 && continue
+                # Ascend the stem
+                while isempty(𝑑neighbors(graph, var))
+                    var′ = invview(var_to_diff)[var]
+                    var′ === nothing && break
+                    stem′ = invview(var_to_diff)[var]
+                    # Invariant from alias elimination: Stem is chosen to have
+                    # the highest differentiation order.
+                    @assert stem′ !== nothing
+                    if !haskey(ag, var′) || ag[var′][2] != stem′
+                        varwhitelist[stem] = true
+                        break
+                    end
+                    stem = stem′
+                    var = var′
+                end
+            else
+                varwhitelist[var] = true
+            end
+        end
+    end
+
+    # Remove any variables from the varwhitelist for whom a higher-differentiated
+    # var is already on the whitelist
+    for var in 1:nvars
+        varwhitelist[var] || continue
+        var′ = var
+        while (var′ = var_to_diff[var′]) !== nothing
+            if varwhitelist[var′]
+                varwhitelist[var] = false
+                break
+            end
+        end
+    end
+
+    return varwhitelist
+end
+
+"""
     pantelides!(state::TransformationState; kwargs...)
 
 Perform Pantelides algorithm.
@@ -86,27 +166,7 @@ function pantelides!(state::TransformationState, ag::Union{AliasGraph, Nothing} 
     nnonemptyeqs = count(eq -> !isempty(𝑠neighbors(graph, eq)) && eq_to_diff[eq] === nothing,
                          1:neqs′)
 
-    # Allow matching for the highest differentiated variable that
-    # currently appears in an equation (or implicit equation in a side ag)
-    varwhitelist = falses(nvars)
-    for var in 1:nvars
-        if var_to_diff[var] === nothing && !varwhitelist[var]
-            while isempty(𝑑neighbors(graph, var)) && (ag === nothing || !haskey(ag, var))
-                var′ = invview(var_to_diff)[var]
-                var′ === nothing && break
-                var = var′
-            end
-            if !isempty(𝑑neighbors(graph, var))
-                if ag !== nothing && haskey(ag, var)
-                    # TODO: remove lower diff vars from whitelist
-                    c, a = ag[var]
-                    iszero(c) || (varwhitelist[a] = true)
-                else
-                    varwhitelist[var] = true
-                end
-            end
-        end
-    end
+    varwhitelist = computed_highest_diff_variables(state.structure, ag)
 
     if nnonemptyeqs > count(varwhitelist)
         throw(InvalidSystemException("System is structurally singular"))
