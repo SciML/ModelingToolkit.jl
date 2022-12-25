@@ -59,8 +59,8 @@ end
 Base.size(m::Matching) = Base.size(m.match)
 Base.getindex(m::Matching, i::Integer) = m.match[i]
 Base.iterate(m::Matching, state...) = iterate(m.match, state...)
-function Base.copy(m::Matching)
-    Matching(copy(m.match), m.inv_match === nothing ? nothing : copy(m.inv_match))
+function Base.copy(m::Matching{U}) where {U}
+    Matching{U}(copy(m.match), m.inv_match === nothing ? nothing : copy(m.inv_match))
 end
 function Base.setindex!(m::Matching{U}, v::Union{Integer, U}, i::Integer) where {U}
     if m.inv_match !== nothing
