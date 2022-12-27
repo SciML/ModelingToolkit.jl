@@ -227,6 +227,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             else
                 rank = 0
                 for var in vars
+                    eqcolor .= false
                     # We need `invgraph` here because we are matching from
                     # variables to equations.
                     pathfound = construct_augmenting_path!(rank_matching, invgraph, var,
