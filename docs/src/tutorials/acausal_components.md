@@ -376,5 +376,5 @@ sol[resistor.v]
 or we can plot the timeseries of the resistor's voltage:
 
 ```@example acausal
-plot(sol, vars=[resistor.v])
+plot(sol, idxs=[resistor.v])
 ```

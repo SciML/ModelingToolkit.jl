@@ -197,5 +197,5 @@ sol[mass.pos[1]]
 We can also plot the path of the mass:
 
 ```@example component
-plot(sol, vars = (mass.pos[1], mass.pos[2]))
+plot(sol, idxs = (mass.pos[1], mass.pos[2]))
 ```
