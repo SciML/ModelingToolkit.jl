@@ -32,7 +32,7 @@ traced_sys = modelingtoolkitize(pendulum_prob)
 pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
 prob = ODAEProblem(pendulum_sys, [], tspan)
 sol = solve(prob, Tsit5(),abstol=1e-8,reltol=1e-8)
-plot(sol, vars=states(traced_sys))
+plot(sol, idxs=states(traced_sys))
 ```
 
 ## Explanation
@@ -150,7 +150,7 @@ prob = ODEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Rodas4())
 
 using Plots
-plot(sol, vars=states(traced_sys))
+plot(sol, idxs=states(traced_sys))
 ```
 
 Note that plotting using `states(traced_sys)` is done so that any
@@ -169,7 +169,7 @@ traced_sys = modelingtoolkitize(pendulum_prob)
 pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
 prob = ODAEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Tsit5(),abstol=1e-8,reltol=1e-8)
-plot(sol, vars=states(traced_sys))
+plot(sol, idxs=states(traced_sys))
 ```
 
 And there you go: this has transformed the model from being too hard to

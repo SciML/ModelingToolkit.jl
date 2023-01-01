@@ -70,7 +70,7 @@ prob = ODEProblem(ODEFunction(first_order_idx1_pendulum),
                   [1, 9.8],
                   mass_matrix = calculate_massmatrix(first_order_idx1_pendulum))
 sol = solve(prob, Rodas5());
-#plot(sol, vars=(1, 2))
+#plot(sol, idxs=(1, 2))
 
 new_sys = dae_index_lowering(ModelingToolkit.ode_order_lowering(pendulum2))
 
@@ -83,7 +83,7 @@ prob_auto = ODEProblem(new_sys,
                        (0, 100.0),
                        [1, 9.8])
 sol = solve(prob_auto, Rodas5());
-#plot(sol, vars=(x, y))
+#plot(sol, idxs=(x, y))
 
 # Define some variables
 @parameters t L g
@@ -116,7 +116,7 @@ p = [
 
 prob_auto = ODEProblem(new_sys, u0, (0.0, 10.0), p)
 sol = solve(prob_auto, Rodas5());
-#plot(sol, vars=(D(x), y))
+#plot(sol, idxs=(D(x), y))
 
 let pss_pendulum2 = partial_state_selection(pendulum2)
     @test length(equations(pss_pendulum2)) <= 6
