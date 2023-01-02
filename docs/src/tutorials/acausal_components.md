@@ -1,4 +1,4 @@
-# [Acausal Component-Based Modeling the RC Circuit](@id acausal)
+# [Acausal Component-Based Modeling](@id acausal)
 
 In this tutorial we will build a hierarchical acausal component-based model of
 the RC circuit. The RC circuit is a simple example where we connect a resistor
@@ -14,7 +14,7 @@ equalities before solving. Let's see this in action.
     This tutorial teaches how to build the entire RC circuit from scratch.
     However, to simulate electrical components with more ease, check out the
     [ModelingToolkitStandardLibrary.jl](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/)
-    which includes a 
+    which includes a
     [tutorial for simulating RC circuits with pre-built components](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/tutorials/rc_circuit/)
 
 ## Copy-Paste Example
@@ -376,5 +376,5 @@ sol[resistor.v]
 or we can plot the timeseries of the resistor's voltage:
 
 ```@example acausal
-plot(sol, vars=[resistor.v])
+plot(sol, idxs=[resistor.v])
 ```

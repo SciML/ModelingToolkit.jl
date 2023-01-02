@@ -358,7 +358,7 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     f, u0, p = process_NonlinearProblem(NonlinearFunction{iip}, sys, u0map, parammap;
                                         check_length, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
-    NonlinearProblem{iip}(f, u0, p, pt; kwargs...)
+    NonlinearProblem{iip}(f, u0, p, pt; filter_kwargs(kwargs)...)
 end
 
 """
@@ -393,7 +393,7 @@ function NonlinearProblemExpr{iip}(sys::NonlinearSystem, u0map,
         f = $f
         u0 = $u0
         p = $p
-        NonlinearProblem(f, u0, p; $(kwargs...))
+        NonlinearProblem(f, u0, p; $(filter_kwargs(kwargs)...))
     end
     !linenumbers ? striplines(ex) : ex
 end
