@@ -127,16 +127,22 @@ struct ODESystem <: AbstractODESystem
     """
     complete::Bool
     """
-    discrete_subsystems: a list of discrete subsystems
+    discrete_subsystems: a list of discrete subsystems.
     """
     discrete_subsystems::Any
+    """
+    unknown_states: a list of actual states needed to be solved by solvers. Only
+    used for ODAEProblem.
+    """
+    unknown_states::Union{Nothing, Vector{Any}}
 
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
                        torn_matching, connector_type, preface, cevents,
                        devents, metadata = nothing, tearing_state = nothing,
                        substitutions = nothing, complete = false,
-                       discrete_subsystems = nothing; checks::Union{Bool, Int} = true)
+                       discrete_subsystems = nothing, unknown_states = nothing;
+                       checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -149,7 +155,7 @@ struct ODESystem <: AbstractODESystem
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
             connector_type, preface, cevents, devents, metadata, tearing_state,
-            substitutions, complete, discrete_subsystems)
+            substitutions, complete, discrete_subsystems, unknown_states)
     end
 end
 
