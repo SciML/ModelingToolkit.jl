@@ -297,7 +297,8 @@ function build_torn_function(sys;
                        out,
                        rhss)
 
-    states = fullvars[states_idxs]
+    states = Any[fullvars[i] for i in states_idxs]
+    @set! sys.solver_states = states
     syms = map(Symbol, states)
 
     pre = get_postprocess_fbody(sys)

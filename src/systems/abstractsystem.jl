@@ -213,7 +213,8 @@ for prop in [:eqs
              :tearing_state
              :substitutions
              :metadata
-             :discrete_subsystems]
+             :discrete_subsystems
+             :solver_states]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin
@@ -466,7 +467,7 @@ function namespace_expr(O, sys, n = nameof(sys))
     end
 end
 
-function SymbolicIndexingInterface.states(sys::AbstractSystem)
+function states(sys::AbstractSystem)
     sts = get_states(sys)
     systems = get_systems(sys)
     unique(isempty(systems) ?
@@ -580,8 +581,16 @@ end
 
 SymbolicIndexingInterface.is_indep_sym(sys::AbstractSystem, sym) = isequal(sym, get_iv(sys))
 
+function solver_states(sys::AbstractSystem)
+    sts = states(sys)
+    if has_solver_states(sys)
+        sts = something(get_solver_states(sys), sts)
+    end
+    return sts
+end
+
 function SymbolicIndexingInterface.state_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(sym), SymbolicIndexingInterface.states(sys))
+    findfirst(isequal(sym), solver_states(sys))
 end
 function SymbolicIndexingInterface.is_state_sym(sys::AbstractSystem, sym)
     !isnothing(SymbolicIndexingInterface.state_sym_to_index(sys, sym))
