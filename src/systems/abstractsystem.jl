@@ -214,7 +214,7 @@ for prop in [:eqs
              :substitutions
              :metadata
              :discrete_subsystems
-             :solver_states]
+             :unknown_states]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin
@@ -581,16 +581,21 @@ end
 
 SymbolicIndexingInterface.is_indep_sym(sys::AbstractSystem, sym) = isequal(sym, get_iv(sys))
 
-function solver_states(sys::AbstractSystem)
+"""
+$(SIGNATURES)
+
+Return a list of actual states needed to be solved by solvers.
+"""
+function unknown_states(sys::AbstractSystem)
     sts = states(sys)
-    if has_solver_states(sys)
-        sts = something(get_solver_states(sys), sts)
+    if has_unknown_states(sys)
+        sts = something(get_unknown_states(sys), sts)
     end
     return sts
 end
 
 function SymbolicIndexingInterface.state_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(sym), solver_states(sys))
+    findfirst(isequal(sym), unknown_states(sys))
 end
 function SymbolicIndexingInterface.is_state_sym(sys::AbstractSystem, sym)
     !isnothing(SymbolicIndexingInterface.state_sym_to_index(sys, sym))

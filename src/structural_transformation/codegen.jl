@@ -298,7 +298,7 @@ function build_torn_function(sys;
                        rhss)
 
     states = Any[fullvars[i] for i in states_idxs]
-    @set! sys.solver_states = states
+    @set! sys.unknown_states = states
     syms = map(Symbol, states)
 
     pre = get_postprocess_fbody(sys)
@@ -403,7 +403,7 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
 
     fullvars = state.fullvars
     s = state.structure
-    solver_states = fullvars[is_solver_state_idxs]
+    unknown_states = fullvars[is_solver_state_idxs]
     algvars = fullvars[.!is_solver_state_idxs]
 
     required_algvars = Set(intersect(algvars, vars))
@@ -490,7 +490,7 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
     cpre = get_preprocess_constants([obs[1:maxidx];
                                      isscalar ? ts[1] : MakeArray(ts, output_type)])
     pre2 = x -> pre(cpre(x))
-    ex = Code.toexpr(Func([DestructuredArgs(solver_states, inbounds = !checkbounds)
+    ex = Code.toexpr(Func([DestructuredArgs(unknown_states, inbounds = !checkbounds)
                            DestructuredArgs(parameters(sys), inbounds = !checkbounds)
                            independent_variables(sys)],
                           [],
