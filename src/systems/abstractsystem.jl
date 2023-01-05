@@ -1362,8 +1362,13 @@ end
 
 function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
                    allow_input_derivatives = false,
+                   zero_dummy_der = false,
                    kwargs...)
     lin_fun, ssys = linearization_function(sys, inputs, outputs; kwargs...)
+    if zero_dummy_der
+        dummyder = setdiff(states(ssys), states(sys))
+        op = merge(op, Dict(x => 0.0 for x in dummyder))
+    end
     linearize(ssys, lin_fun; op, t, allow_input_derivatives), ssys
 end
 
