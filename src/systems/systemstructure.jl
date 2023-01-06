@@ -200,6 +200,10 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     extra_eqs::Vector
 end
 
+function Base.show(io::IO, state::TearingState)
+    print(io, "TearingState of ", typeof(state.sys))
+end
+
 struct EquationsView{T} <: AbstractVector{Any}
     ts::TearingState{T}
 end
@@ -386,9 +390,9 @@ Base.size(bgpm::SystemStructurePrintMatrix) = (max(nsrcs(bgpm.bpg), ndsts(bgpm.b
 function compute_diff_label(diff_graph, i)
     di = i - 1 <= length(diff_graph) ? diff_graph[i - 1] : nothing
     ii = i - 1 <= length(invview(diff_graph)) ? invview(diff_graph)[i - 1] : nothing
-    return Label(string(di === nothing ? "" : string(di, '↓'),
+    return Label(string(di === nothing ? "" : string(di, '↑'),
                         di !== nothing && ii !== nothing ? " " : "",
-                        ii === nothing ? "" : string(ii, '↑')))
+                        ii === nothing ? "" : string(ii, '↓')))
 end
 function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
     checkbounds(bgpm, i, j)
@@ -519,11 +523,14 @@ end
 function _structural_simplify!(state::TearingState, io; simplify = false,
                                check_consistency = true, kwargs...)
     has_io = io !== nothing
-    has_io && ModelingToolkit.markio!(state, io...)
+    orig_inputs = Set()
+    if has_io
+        ModelingToolkit.markio!(state, orig_inputs, io...)
+    end
     state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
     sys, ag = ModelingToolkit.alias_elimination!(state; kwargs...)
     if check_consistency
-        ModelingToolkit.check_consistency(state, ag)
+        ModelingToolkit.check_consistency(state, ag, orig_inputs)
     end
     sys = ModelingToolkit.dummy_derivative(sys, state, ag; simplify)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]

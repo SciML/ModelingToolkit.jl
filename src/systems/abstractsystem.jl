@@ -1193,7 +1193,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     return lin_fun, sys
 end
 
-function markio!(state, inputs, outputs; check = true)
+function markio!(state, orig_inputs, inputs, outputs; check = true)
     fullvars = state.fullvars
     inputset = Dict{Any, Bool}(i => false for i in inputs)
     outputset = Dict{Any, Bool}(o => false for o in outputs)
@@ -1207,6 +1207,9 @@ function markio!(state, inputs, outputs; check = true)
             outputset[v] = true
             fullvars[i] = v
         else
+            if isinput(v)
+                push!(orig_inputs, v)
+            end
             v = setio(v, false, false)
             fullvars[i] = v
         end
@@ -1221,7 +1224,7 @@ function markio!(state, inputs, outputs; check = true)
     check && (all(values(outputset)) ||
      error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
            outputset))
-    state
+    state, orig_inputs
 end
 
 """

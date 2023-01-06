@@ -1,6 +1,17 @@
 using ModelingToolkit, Symbolics, Test
 using ModelingToolkit: get_namespace, has_var, inputs, outputs, is_bound, bound_inputs,
-                       unbound_inputs, bound_outputs, unbound_outputs, isinput, isoutput
+                       unbound_inputs, bound_outputs, unbound_outputs, isinput, isoutput,
+                       ExtraVariablesSystemException
+
+@variables t xx(t) some_input(t) [input = true]
+D = Differential(t)
+eqs = [D(xx) ~ some_input]
+@named model = ODESystem(eqs, t)
+@test_throws ExtraVariablesSystemException structural_simplify(model, ((), ()))
+if VERSION >= v"1.8"
+    err = "In particular, the unset input(s) are:\n some_input(t)"
+    @test_throws err structural_simplify(model, ((), ()))
+end
 
 # Test input handling
 @parameters tv
