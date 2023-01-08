@@ -5,7 +5,7 @@ systems. These transformations allow for symbolically changing
 the representation of the model to problems that are easier to
 numerically solve. One simple to demonstrate transformation is the
 `structural_simplify` with does a lot of tricks, one being the
-transformation that sends an Nth order ODE
+transformation that sends a Nth order ODE
 to a 1st order ODE.
 
 To see this, let's define a second order riff on the Lorenz equations.

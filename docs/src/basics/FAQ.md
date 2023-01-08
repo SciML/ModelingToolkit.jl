@@ -46,10 +46,10 @@ such as `@register_symbolic`, are described in detail
 
 ## Using ModelingToolkit with Optimization / Automatic Differentiation
 
-If you are using ModelingToolkit inside of a loss function and are having issues with
+If you are using ModelingToolkit inside a loss function and are having issues with
 mixing MTK with automatic differentiation, getting performance, etc... don't! Instead, use
-MTK outside of the loss function to generate the code, and then use the generated code
-inside of the loss function.
+MTK outside the loss function to generate the code, and then use the generated code
+inside the loss function.
 
 For example, let's say you were building ODEProblems in the loss function like:
 
@@ -62,9 +62,9 @@ end
 ```
 
 Since `ODEProblem` on a MTK `sys` will have to generate code, this will be slower than
-caching the generated code, and will required automatic differentiation to go through the
+caching the generated code, and will require automatic differentiation to go through the
 code generation process itself. All of this is unnecessary. Instead, generate the problem
-once outside of the loss function, and remake the prob inside of the loss function:
+once outside the loss function, and remake the prob inside of the loss function:
 
 ```julia
 prob = ODEProblem(sys, [], [p1 => p[1], p2 => p[2]])
