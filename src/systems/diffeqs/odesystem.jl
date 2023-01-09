@@ -31,7 +31,7 @@ struct ODESystem <: AbstractODESystem
     """The ODEs defining the system."""
     eqs::Vector{Equation}
     """Independent variable."""
-    iv::Sym
+    iv::BasicSymbolic{Real}
     """
     Dependent (state) variables. Must not contain the independent variable.
 

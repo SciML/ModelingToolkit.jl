@@ -572,7 +572,7 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
     #
     # This is done by just making `x` the argument of the function.
     if istree(x) &&
-       operation(x) isa Sym &&
+       issym(operation(x)) &&
        !(length(arguments(x)) == 1 && isequal(arguments(x)[1], get_iv(sys)))
         return operation(x)
     end
@@ -616,7 +616,7 @@ AbstractSysToExpr(sys) = AbstractSysToExpr(sys, states(sys))
 function (f::AbstractSysToExpr)(O)
     !istree(O) && return toexpr(O)
     any(isequal(O), f.states) && return nameof(operation(O))  # variables
-    if isa(operation(O), Sym)
+    if issym(operation(O))
         return build_expr(:call, Any[nameof(operation(O)); f.(arguments(O))])
     end
     return build_expr(:call, Any[operation(O); f.(arguments(O))])
@@ -645,7 +645,7 @@ end
 function round_trip_expr(t, var2name)
     name = get(var2name, t, nothing)
     name !== nothing && return name
-    t isa Sym && return nameof(t)
+    issym(t) && return nameof(t)
     istree(t) || return t
     f = round_trip_expr(operation(t), var2name)
     args = map(Base.Fix2(round_trip_expr, var2name), arguments(t))

@@ -25,7 +25,7 @@ function isparameter(x)
 end
 
 """
-    toparam(s::Sym)
+    toparam(s)
 
 Maps the variable to a paramter.
 """
@@ -41,7 +41,7 @@ end
 toparam(s::Num) = wrap(toparam(value(s)))
 
 """
-    tovar(s::Sym)
+    tovar(s)
 
 Maps the variable to a state.
 """

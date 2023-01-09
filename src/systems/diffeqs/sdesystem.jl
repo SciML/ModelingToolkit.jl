@@ -37,7 +37,7 @@ struct SDESystem <: AbstractODESystem
     """The expressions defining the diffusion term."""
     noiseeqs::AbstractArray
     """Independent variable."""
-    iv::Sym
+    iv::BasicSymbolic{Real}
     """Dependent (state) variables. Must not contain the independent variable."""
     states::Vector
     """Parameter variables. Must not contain the independent variable."""

@@ -4,6 +4,7 @@ using OrdinaryDiffEq, Sundials
 using DiffEqBase, SparseArrays
 using StaticArrays
 using Test
+using SymbolicUtils: issym
 
 using ModelingToolkit: value
 
@@ -324,7 +325,7 @@ using ModelingToolkit
 @variables x(t)
 D = Differential(t)
 @named sys = ODESystem([D(x) ~ a])
-@test equations(sys)[1].rhs isa Sym
+@test issym(equations(sys)[1].rhs)
 
 # issue 708
 @parameters t a
