@@ -9,8 +9,9 @@ illustrate the basic user-facing functionality.
 A much deeper tutorial with forcing functions and sparse Jacobians is below.
 But if you want to just see some code and run, here's an example:
 
-```julia
+```@example ode
 using ModelingToolkit
+
 
 @variables t x(t)   # independent and dependent variables
 @parameters τ       # parameters
@@ -21,15 +22,14 @@ D = Differential(t) # define an operator for the differentiation w.r.t. time
 @named fol = ODESystem([ D(x)  ~ (h - x)/τ])
 
 using DifferentialEquations: solve
-using Plots: plot
 
 prob = ODEProblem(fol, [x => 0.0], (0.0,10.0), [τ => 3.0])
 # parameter `τ` can be assigned a value, but constant `h` cannot
 sol = solve(prob)
+
+using Plots
 plot(sol)
 ```
-
-![Simulation result of first-order lag element, with right-hand side](https://user-images.githubusercontent.com/13935112/111958369-703f2200-8aed-11eb-8bb4-0abe9652e850.png)
 Now let's start digging into MTK!
 
 ## Your very first ODE
@@ -46,7 +46,7 @@ variable, ``f(t)`` is an external forcing function, and ``\tau`` is a
 parameter. In MTK, this system can be modelled as follows. For simplicity, we
 first set the forcing function to a time-independent value.
 
-```julia
+```@example ode2
 using ModelingToolkit
 
 @variables t x(t)  # independent and dependent variables
@@ -56,11 +56,6 @@ D = Differential(t) # define an operator for the differentiation w.r.t. time
 
 # your first ODE, consisting of a single equation, indicated by ~
 @named fol_model = ODESystem(D(x) ~ (h - x)/τ)
-      # Model fol_model with 1 equations
-      # States (1):
-      #   x(t)
-      # Parameters (1):
-      #   τ
 ```
 
 Note that equations in MTK use the tilde character (`~`) as equality sign.
@@ -69,15 +64,13 @@ matches the name in the REPL. If omitted, you can directly set the `name` keywor
 
 After construction of the ODE, you can solve it using [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/):
 
-```julia
+```@example ode2
 using DifferentialEquations
 using Plots
 
 prob = ODEProblem(fol_model, [x => 0.0], (0.0,10.0), [τ => 3.0])
 plot(solve(prob))
 ```
-
-![Simulation result of first-order lag element](https://user-images.githubusercontent.com/13935112/111958369-703f2200-8aed-11eb-8bb4-0abe9652e850.png)
 
 The initial state and the parameter values are specified using a mapping
 from the actual symbolic elements to their values, represented as an array
@@ -88,16 +81,10 @@ of `Pair`s, which are constructed using the `=>` operator.
 You could separate the calculation of the right-hand side, by introducing an
 intermediate variable `RHS`:
 
-```julia
+```@example ode2
 @variables RHS(t)
 @named fol_separate = ODESystem([ RHS  ~ (h - x)/τ,
                                   D(x) ~ RHS ])
-      # Model fol_separate with 2 equations
-      # States (2):
-      #   x(t)
-      #   RHS(t)
-      # Parameters (1):
-      #   τ
 ```
 
 To directly solve this system, you would have to create a Differential-Algebraic
@@ -106,15 +93,13 @@ additional algebraic equation now. However, this DAE system can obviously be
 transformed into the single ODE we used in the first example above. MTK achieves
 this by structural simplification:
 
-```julia
+```@example ode2
 fol_simplified = structural_simplify(fol_separate)
-
 equations(fol_simplified)
-      # 1-element Array{Equation,1}:
-      #  Differential(t)(x(t)) ~ (τ^-1)*(h - x(t))
+```
 
+```@example ode2
 equations(fol_simplified) == equations(fol_model)
-      # true
 ```
 
 You can extract the equations from a system using `equations` (and, in the same
@@ -128,7 +113,7 @@ in a simulation result. The intermediate variable `RHS` therefore can be plotted
 along with the state variable. Note that this has to be requested explicitly,
 through:
 
-```julia
+```@example ode2
 prob = ODEProblem(fol_simplified, [x => 0.0], (0.0,10.0), [τ => 3.0])
 sol = solve(prob)
 plot(sol, vars=[x, RHS])
@@ -140,8 +125,6 @@ when using `parameters` (e.g., solution of linear equations by dividing out
 the constant's value, which cannot be done for parameters, since they may
 be zero).
 
-![Simulation result of first-order lag element, with right-hand side](https://user-images.githubusercontent.com/13935112/111958403-7e8d3e00-8aed-11eb-9d18-08b5180a59f9.png)
-
 Note that the indexing of the solution similarly works via the names, and so
 `sol[x]` gives the time-series for `x`, `sol[x,2:10]` gives the 2nd through 10th
 values of `x` matching `sol.t`, etc. Note that this works even for variables
@@ -152,7 +135,7 @@ which have been eliminated, and thus `sol[RHS]` retrieves the values of `RHS`.
 What if the forcing function (the “external input”) ``f(t)`` is not constant?
 Obviously, one could use an explicit, symbolic function of time:
 
-```julia
+```@example ode2
 @variables f(t)
 @named fol_variable_f = ODESystem([f ~ sin(t), D(x) ~ (f - x)/τ])
 ```
@@ -166,7 +149,7 @@ So, you could, for example, interpolate given the time-series using
 we illustrate this option by a simple lookup ("zero-order hold") of a vector
 of random values:
 
-```julia
+```@example ode2
 value_vector = randn(10)
 f_fun(t) = t >= 10 ? value_vector[end] : value_vector[Int(floor(t))+1]
 @register_symbolic f_fun(t)
@@ -178,15 +161,13 @@ sol = solve(prob)
 plot(sol, vars=[x,f])
 ```
 
-![Simulation result of first-order lag element, step-wise forcing function](https://user-images.githubusercontent.com/13935112/111958424-83ea8880-8aed-11eb-8f42-489f4b44c3bc.png)
-
 ## Building component-based, hierarchical models
 
 Working with simple one-equation systems is already fun, but composing more
 complex systems from simple ones is even more fun. Best practice for such a
 “modeling framework” could be to use factory functions for model components:
 
-```julia
+```@example ode2
 function fol_factory(separate=false;name)
     @parameters τ
     @variables t x(t) f(t) RHS(t)
@@ -202,7 +183,7 @@ end
 Such a factory can then be used to instantiate the same component multiple times,
 but allows for customization:
 
-```julia
+```@example ode2
 @named fol_1 = fol_factory()
 @named fol_2 = fol_factory(true) # has observable RHS
 ```
@@ -212,21 +193,11 @@ Now, these two components can be used as subsystems of a parent system, i.e.
 one level higher in the model hierarchy. The connections between the components
 again are just algebraic relations:
 
-```julia
+```@example ode2
 connections = [ fol_1.f ~ 1.5,
                 fol_2.f ~ fol_1.x ]
 
 connected = compose(ODESystem(connections,name=:connected), fol_1, fol_2)
-      # Model connected with 5 equations
-      # States (5):
-      #   fol_1₊f(t)
-      #   fol_2₊f(t)
-      #   fol_1₊x(t)
-      #   fol_2₊x(t)
-      #   fol_2₊RHS(t)
-      # Parameters (2):
-      #   fol_1₊τ
-      #   fol_2₊τ
 ```
 
 All equations, variables, and parameters are collected, but the structure of the
@@ -236,26 +207,12 @@ hierarchical model is still preserved. This means you can still get information 
 variables and connection equations from the system using structural
 simplification:
 
-```julia
+```@example ode2
 connected_simp = structural_simplify(connected)
-      # Model connected with 2 equations
-      # States (2):
-      #   fol_1₊x(t)
-      #   fol_2₊x(t)
-      # Parameters (2):
-      #   fol_1₊τ
-      #   fol_2₊τ
-      # Incidence matrix:
-      #   [1, 1]  =  ×
-      #   [2, 1]  =  ×
-      #   [2, 2]  =  ×
-      #   [1, 3]  =  ×
-      #   [2, 4]  =  ×
+```
 
+```@example ode2
 full_equations(connected_simp)
-      # 2-element Array{Equation,1}:
-      #  Differential(t)(fol_1₊x(t)) ~ (fol_1₊τ^-1)*(1.5 - fol_1₊x(t))
-      #  Differential(t)(fol_2₊x(t)) ~ (fol_2₊τ^-1)*(fol_1₊x(t) - fol_2₊x(t))
 ```
 As expected, only the two state-derivative equations remain,
 as if you had manually eliminated as many variables as possible from the equations.
@@ -264,7 +221,7 @@ As mentioned above, the hierarchical structure is preserved. So, the
 initial state and the parameter values can be specified accordingly when
 building the `ODEProblem`:
 
-```julia
+```@example ode2
 u0 = [ fol_1.x => -0.5,
        fol_2.x => 1.0 ]
 
@@ -275,8 +232,6 @@ prob = ODEProblem(connected_simp, u0, (0.0,10.0), p)
 plot(solve(prob))
 ```
 
-![Simulation of connected system (two first-order lag elements in series)](https://user-images.githubusercontent.com/13935112/111958439-877e0f80-8aed-11eb-9074-9d35458459a4.png)
-
 More on this topic may be found in [Composing Models and Building Reusable Components](@ref acausal).
 
 ## Defaults
@@ -284,7 +239,7 @@ More on this topic may be found in [Composing Models and Building Reusable Compo
 It is often a good idea to specify reasonable values for the initial state and the
 parameters of a model component. Then, these do not have to be explicitly specified when constructing the `ODEProblem`.
 
-```julia
+```@example ode2
 function unitstep_fol_factory(;name)
     @parameters τ
     @variables t x(t)
@@ -311,21 +266,25 @@ By default, analytical derivatives and sparse matrices, e.g. for the Jacobian, t
 matrix of first partial derivatives, are not used. Let's benchmark this (`prob`
 still is the problem using the `connected_simp` system above):
 
-```julia
+```@example ode2
 using BenchmarkTools
-
-@btime solve($prob, Rodas4());
-      # 251.300 μs (873 allocations: 31.18 KiB)
+@btime solve(prob, Rodas4());
+nothing # hide
 ```
 
 Now have MTK provide sparse, analytical derivatives to the solver. This has to
 be specified during the construction of the `ODEProblem`:
 
-```julia
-prob_an = ODEProblem(connected_simp, u0, (0.0,10.0), p; jac=true, sparse=true)
-
+```@example ode2
+prob_an = ODEProblem(connected_simp, u0, (0.0,10.0), p; jac=true)
 @btime solve($prob_an, Rodas4());
-      # 142.899 μs (1297 allocations: 83.96 KiB)
+nothing # hide
+```
+
+```@example ode2
+prob_an = ODEProblem(connected_simp, u0, (0.0,10.0), p; jac=true, sparse=true)
+@btime solve($prob_an, Rodas4());
+nothing # hide
 ```
 
 The speedup is significant. For this small dense model (3 of 4 entries are
