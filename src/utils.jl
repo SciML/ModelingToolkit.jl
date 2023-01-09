@@ -343,12 +343,13 @@ iv_from_nested_difference(x) = nothing
 
 var_from_nested_difference(x, i = 0) = (nothing, nothing)
 function var_from_nested_difference(x::Symbolic, i = 0)
-    istree(x) && operation(x) isa Difference ? var_from_nested_difference(arguments(x)[1], i + 1) :
+    istree(x) && operation(x) isa Difference ?
+    var_from_nested_difference(arguments(x)[1], i + 1) :
     (x, i)
 end
 
-isvariable(x::Num) = isvariable(value(x))
-function isvariable(x)
+isvariable(x::Num)::Bool = isvariable(value(x))
+function isvariable(x)::Bool
     x isa Symbolic || return false
     p = getparent(x, nothing)
     p === nothing || (x = p)
@@ -369,7 +370,9 @@ v  = ModelingToolkit.vars(D(y) ~ u)
 v == Set([D(y), u])
 ```
 """
-vars(exprs::Symbolic; op = Differential) = istree(exprs) ? vars([exprs]; op = op) : Set([exprs])
+function vars(exprs::Symbolic; op = Differential)
+    istree(exprs) ? vars([exprs]; op = op) : Set([exprs])
+end
 vars(exprs; op = Differential) = foldl((x, y) -> vars!(x, y; op = op), exprs; init = Set())
 vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)

@@ -40,7 +40,9 @@ get_unit(x::Real) = unitless
 get_unit(x::Unitful.Quantity) = screen_unit(Unitful.unit(x))
 get_unit(x::AbstractArray) = map(get_unit, x)
 get_unit(x::Num) = get_unit(value(x))
-get_unit(x::Union{Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithMetadata}) = get_literal_unit(x)
+function get_unit(x::Union{Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithMetadata})
+    get_literal_unit(x)
+end
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
 get_unit(op::Difference, args) = get_unit(args[1]) / get_unit(op.t)
 get_unit(op::typeof(getindex), args) = get_unit(args[1])
