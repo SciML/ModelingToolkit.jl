@@ -4,12 +4,6 @@ Ordinary differential equations are commonly used for modeling real-world proces
 
 We will start by illustrating **local identifiability** in which a parameter is known up to _finitely many values_, and then proceed to determining **global identifiability**, that is, which parameters can be identified _uniquely_.
 
-To install `StructuralIdentifiability.jl`, simply run
-```julia
-using Pkg
-Pkg.add("StructuralIdentifiability")
-```
-
 The package has a standalone data structure for ordinary differential equations, but is also compatible with `ODESystem` type from `ModelingToolkit.jl`.
 
 ## Local Identifiability
@@ -31,7 +25,7 @@ This model describes the biohydrogenation[^1] process[^2] with unknown initial c
 To define the ode system in Julia, we use `ModelingToolkit.jl`.
 
 We first define the parameters, variables, differential equations and the output equations.
-```julia
+```@example SI
 using StructuralIdentifiability, ModelingToolkit
 
 # define parameters and variables
@@ -52,34 +46,20 @@ measured_quantities = [y1 ~ x4, y2 ~ x5]
 
 # define the system
 de = ODESystem(eqs, t, name=:Biohydrogenation)
-
 ```
 
 After that, we are ready to check the system for local identifiability:
-```julia
+```@example SI
 # query local identifiability
 # we pass the ode-system
 local_id_all = assess_local_identifiability(de, measured_quantities=measured_quantities, p=0.99)
-                # [ Info: Preproccessing `ModelingToolkit.ODESystem` object
-                # 6-element Vector{Bool}:
-                #  1
-                #  1
-                #  1
-                #  1
-                #  1
-                #  1
 ```
 We can see that all states (except $x_7$) and all parameters are locally identifiable with probability 0.99. 
 
 Let's try to check specific parameters and their combinations
-```julia
+```@example SI
 to_check = [k5, k7, k10/k9, k5+k6]
 local_id_some = assess_local_identifiability(de, measured_quantities=measured_quantities, funcs_to_check=to_check, p=0.99)
-                # 4-element Vector{Bool}:
-                #  1
-                #  1
-                #  1
-                #  1
 ```
 
 Notice that in this case, everything (except the state variable $x_7$) is locally identifiable, including combinations such as $k_{10}/k_9, k_5+k_6$
@@ -106,7 +86,7 @@ Global identifiability needs information about local identifiability first, but 
 
 __Note__: as of writing this tutorial, UTF-symbols such as Greek characters are not supported by one of the project's dependencies, see [this issue](https://github.com/SciML/StructuralIdentifiability.jl/issues/43).
 
-```julia
+```@example SI2
 using StructuralIdentifiability, ModelingToolkit
 @parameters b c a beta g delta sigma
 @variables t x1(t) x2(t) x3(t) x4(t) y(t) y2(t)
@@ -124,25 +104,16 @@ measured_quantities = [y~x1+x2, y2~x2]
 
 ode = ODESystem(eqs, t, name=:GoodwinOsc)
 
-@time global_id = assess_identifiability(ode, measured_quantities=measured_quantities)
-                    # 30.672594 seconds (100.97 M allocations: 6.219 GiB, 3.15% gc time, 0.01% compilation time)
-                    # Dict{Num, Symbol} with 7 entries:
-                    #   a     => :globally
-                    #   b     => :globally
-                    #   beta  => :globally
-                    #   c     => :globally
-                    #   sigma => :globally
-                    #   g     => :nonidentifiable
-                    #   delta => :globally
+global_id = assess_identifiability(ode, measured_quantities=measured_quantities)
 ```
 We can see that only parameters `a, g` are unidentifiable, and everything else can be uniquely recovered.
 
 Let us consider the same system but with two inputs, and we will find out identifiability with probability `0.9` for parameters `c` and `b`:
 
-```julia
+```@example SI3
 using StructuralIdentifiability, ModelingToolkit
 @parameters b c a beta g delta sigma
-@variables t x1(t) x2(t) x3(t) x4(t) y(t) u1(t) [input=true] u2(t) [input=true]
+@variables t x1(t) x2(t) x3(t) x4(t) y(t) y2(t) u1(t) [input=true] u2(t) [input=true]
 D = Differential(t)
 
 eqs = [
@@ -159,9 +130,6 @@ to_check = [b, c]
 ode = ODESystem(eqs, t, name=:GoodwinOsc)
 
 global_id = assess_identifiability(ode, measured_quantities=measured_quantities, funcs_to_check=to_check, p=0.9)
-            # Dict{Num, Symbol} with 2 entries:
-            #   b => :globally
-            #   c => :globally
 ```
 
 Both parameters `b, c` are globally identifiable with probability `0.9` in this case.
