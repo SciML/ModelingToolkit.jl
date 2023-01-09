@@ -7,11 +7,11 @@
   [Dymola](https://www.3ds.com/products-services/catia/products/dymola/) and
   [OpenModelica](https://openmodelica.org/), which have differing levels of
   performance and can give different results on the same model. Many of the
-  commonly used Modelica compilers are not open source. ModelingToolkit.jl
-  is a language with a single canonical open source implementation.
+  commonly used Modelica compilers are not open-source. ModelingToolkit.jl
+  is a language with a single canonical open-source implementation.
 - All current Modelica compiler implementations are fixed and not extendable
   by the users from the Modelica language itself. For example, the Dymola
-  compiler [shares its symbolic processing pipeline](https://www.claytex.com/tech-blog/model-translation-and-symbolic-manipulation/)
+  compiler [shares its symbolic processing pipeline](https://www.claytex.com/tech-blog/model-translation-and-symbolic-manipulation/),
   which is roughly equivalent to the `dae_index_lowering` and `structural_simplify`
   of ModelingToolkit.jl. ModelingToolkit.jl is an open and hackable transformation
   system which allows users to add new non-standard transformations and control
@@ -34,15 +34,15 @@
   academic reviews such as [this one](https://arxiv.org/abs/1909.00484). In this
   sense, ModelingToolkit.jl is more similar to the Simscape sub-environment.
 - Simulink is used from MATLAB while ModelingToolkit.jl is used from Julia.
-  Thus any user defined functions have the performance of their host language.
+  Thus any user-defined functions have the performance of their host language.
   For information on the performance differences between Julia and MATLAB,
-  consult [open benchmarks](https://julialang.org/benchmarks/) which demonstrate
+  consult [open benchmarks](https://julialang.org/benchmarks/), which demonstrate
   Julia as an order of magnitude or more faster in many cases due to its JIT
   compilation.
-- Simulink uses the MATLAB differential equation solvers while ModelingToolkit.jl
+- Simulink uses the MATLAB differential equation solvers, while ModelingToolkit.jl
   uses [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/). For a systematic
   comparison between the solvers, consult
-  [open benchmarks](https://docs.sciml.ai/SciMLBenchmarksOutput/stable/)
+  [open benchmarks](https://docs.sciml.ai/SciMLBenchmarksOutput/stable/),
   which demonstrate two orders of magnitude performance advantage for the native
   Julia solvers across many benchmark problems.
 - Simulink comes with a Graphical User Interface (GUI), ModelingToolkit.jl
@@ -50,7 +50,7 @@
 - Simulink is a proprietary software, meaning users cannot actively modify or
   extend the software. ModelingToolkit.jl is built in Julia and used in Julia,
   where users can actively extend and modify the software interactively in the
-  REPL and contribute to its open source repositories.
+  REPL and contribute to its open-source repositories.
 - Simulink covers ODE and DAE systems. ModelingToolkit.jl has a much more
   expansive set of system types, including SDEs, PDEs, optimization problems,
   and more.
@@ -72,9 +72,9 @@
   In addition, the DifferentialEquations.jl interface is confederated, meaning
   that any user can dynamically extend the system to add new solvers to the
   interface by defining new dispatches of solve.
-- CASADI's DAEBuilder does not implement efficiency transformations like tearing
+- CASADI's DAEBuilder does not implement efficiency transformations like tearing,
   which are standard in the ModelingToolkit.jl transformation pipeline.
-- CASADI supports special functionality for quadratic programming problems while
+- CASADI supports special functionality for quadratic programming problems, while
   ModelingToolkit only provides nonlinear programming via `OptimizationSystem`.
 - ModelingToolkit.jl integrates with its host language Julia, so Julia code
   can be automatically converted into ModelingToolkit expressions. Users of

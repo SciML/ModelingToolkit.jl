@@ -1,6 +1,6 @@
-# Component-Based Modeling a Spring-Mass System
+# Component-Based Modeling of a Spring-Mass System
 
-In this tutorial we will build a simple component-based model of a spring-mass system. A spring-mass system consists of one or more masses connected by springs. [Hooke's law](https://en.wikipedia.org/wiki/Hooke%27s_law) gives the force exerted by a spring when it is extended or compressed by a given distance. This specifies a differential-equation system where the acceleration of the masses is specified using the forces acting on them.
+In this tutorial, we will build a simple component-based model of a spring-mass system. A spring-mass system consists of one or more masses connected by springs. [Hooke's law](https://en.wikipedia.org/wiki/Hooke%27s_law) gives the force exerted by a spring when it is extended or compressed by a given distance. This specifies a differential-equation system where the acceleration of the masses is specified using the forces acting on them.
 
 ## Copy-Paste Example
 
@@ -58,7 +58,7 @@ plot(sol)
 
 ## Explanation
 ### Building the components
-For each component we use a Julia function that returns an `ODESystem`. At the top, we define the fundamental properties of a `Mass`: it has a mass `m`, a position `pos` and a velocity `v`. We also define that the velocity is the rate of change of position with respect to time.
+For each component, we use a Julia function that returns an `ODESystem`. At the top, we define the fundamental properties of a `Mass`: it has a mass `m`, a position `pos` and a velocity `v`. We also define that the velocity is the rate of change of position with respect to time.
 
 ```@example component
 function Mass(; name, m = 1.0, xy = [0., 0.], u = [0., 0.])
@@ -69,7 +69,7 @@ function Mass(; name, m = 1.0, xy = [0., 0.], u = [0., 0.])
 end
 ```
 
-Note that this is an incompletely specified `ODESystem`. It cannot be simulated on its own since the equations for the velocity `v[1:2](t)` are unknown. Notice the addition of a `name` keyword. This allows us to generate different masses with different names. A `Mass` can now be constructed as:
+Note that this is an incompletely specified `ODESystem`. It cannot be simulated on its own, since the equations for the velocity `v[1:2](t)` are unknown. Notice the addition of a `name` keyword. This allows us to generate different masses with different names. A `Mass` can now be constructed as:
 
 ```@example component
 Mass(name = :mass1)
@@ -81,7 +81,7 @@ Or using the `@named` helper macro
 @named mass1 = Mass()
 ```
 
-Next we build the spring component. It is characterised by the spring constant `k` and the length `l` of the spring when no force is applied to it. The state of a spring is defined by its current length and direction.
+Next, we build the spring component. It is characterized by the spring constant `k` and the length `l` of the spring when no force is applied to it. The state of a spring is defined by its current length and direction.
 
 ```@example component
 function Spring(; name, k = 1e4, l = 1.)

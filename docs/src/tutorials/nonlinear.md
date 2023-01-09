@@ -1,10 +1,10 @@
 # Modeling Nonlinear Systems
 
-In this example we will go one step deeper and showcase the direct function
+In this example, we will go one step deeper and showcase the direct function
 generation capabilities in ModelingToolkit.jl to build nonlinear systems.
-Let's say we wanted to solve for the steady state of the previous ODE. This is
-the nonlinear system defined by where the derivatives are zero. We use (unknown)
-variables for our nonlinear system.
+Let's say we wanted to solve for the steady state of an ODE. This steady state
+is reached when the nonlinear system of differential equations equals zero.
+We use (unknown) variables for our nonlinear system.
 
 ```@example nonlinear
 using ModelingToolkit, NonlinearSolve

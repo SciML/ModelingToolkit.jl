@@ -6,8 +6,7 @@ From the other tutorials you will have learned that ModelingToolkit is a symboli
 with all kinds of goodies, such as the ability to derive analytical expressions for things
 like Jacobians, determine the sparsity of a set of equations, perform index reduction,
 tearing, and other transformations to improve both stability and performance. All of these
-are good things, but all of these require that one has defined the problem in a symbolic
-way.
+are good things, but all of these require that one has defined the problem symbolically.
 
 **But what happens if one wants to use ModelingToolkit functionality on code that is already
 written for DifferentialEquations.jl, NonlinearSolve.jl, Optimization.jl, or beyond?**
@@ -20,13 +19,13 @@ to improve a simulation code before it's passed to the solver.
 !!! note
     `modelingtoolkitize` does have some limitations, i.e. not all codes that work with the
     numerical solvers will work with `modelingtoolkitize`. Namely, it requires the ability
-    to trace the equations with Symbolics.jl `Num` types. Generally a code which is
+    to trace the equations with Symbolics.jl `Num` types. Generally, a code which is
     compatible with forward-mode automatic differentiation is compatible with
     `modelingtoolkitize`.
 
 !!! warn
     `modelingtoolkitize` expressions cannot keep control flow structures (loops), and thus
-    equations with long loops will be translated into large expressions which can increase
+    equations with long loops will be translated into large expressions, which can increase
     the compile time of the equations and reduce the SIMD vectorization achieved by LLVM.
 
 ## Example Usage: Generating an Analytical Jacobian Expression for an ODE Code

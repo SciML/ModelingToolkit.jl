@@ -10,7 +10,7 @@ using Pkg
 Pkg.add("StructuralIdentifiability")
 ```
 
-The package has a standalone data structure for ordinary differential equations but is also compatible with `ODESystem` type from `ModelingToolkit.jl`.
+The package has a standalone data structure for ordinary differential equations, but is also compatible with `ODESystem` type from `ModelingToolkit.jl`.
 
 ## Local Identifiability
 ### Input System
@@ -55,7 +55,7 @@ de = ODESystem(eqs, t, name=:Biohydrogenation)
 
 ```
 
-After that we are ready to check the system for local identifiability:
+After that, we are ready to check the system for local identifiability:
 ```julia
 # query local identifiability
 # we pass the ode-system
@@ -100,7 +100,7 @@ $$\begin{cases}
     y(t) = x_1(t)
 \end{cases}$$
 
-We will run a global identifiability check on this enzyme dynamics[^3] model. We will use the default settings: the probability of correctness will be `p=0.99` and we are interested in identifiability of all possible parameters
+We will run a global identifiability check on this enzyme dynamics[^3] model. We will use the default settings: the probability of correctness will be `p=0.99` and we are interested in identifiability of all possible parameters.
 
 Global identifiability needs information about local identifiability first, but the function we chose here will take care of that extra step for us.
 
@@ -135,9 +135,9 @@ ode = ODESystem(eqs, t, name=:GoodwinOsc)
                     #   g     => :nonidentifiable
                     #   delta => :globally
 ```
-We can see that only parameters `a, g` are unidentifiable and everything else can be uniquely recovered.
+We can see that only parameters `a, g` are unidentifiable, and everything else can be uniquely recovered.
 
-Let us consider the same system but with two inputs and we will try to find out identifiability with probability `0.9` for parameters `c` and `b`:
+Let us consider the same system but with two inputs, and we will find out identifiability with probability `0.9` for parameters `c` and `b`:
 
 ```julia
 using StructuralIdentifiability, ModelingToolkit

@@ -1,13 +1,12 @@
 # Getting Started with ModelingToolkit.jl
 
-This is an introductory example for the usage of ModelingToolkit (MTK).
-It illustrates the basic user-facing functionality by means of some
-examples of Ordinary Differential Equations (ODE). Some references to
-more specific documentation are given at appropriate places.
+This is an introductory tutorial for ModelingToolkit (MTK).
+Some examples of Ordinary Differential Equations (ODE) are used to
+illustrate the basic user-facing functionality.
 
 ## Copy-Pastable Simplified Example
 
-A much deeper tutorial with forcing functions and sparse Jacobians is all below.
+A much deeper tutorial with forcing functions and sparse Jacobians is below.
 But if you want to just see some code and run, here's an example:
 
 ```julia
@@ -36,7 +35,6 @@ Now let's start digging into MTK!
 ## Your very first ODE
 
 Let us start with a minimal example. The system to be modelled is a
-
 first-order lag element:
 
 ```math
@@ -106,7 +104,7 @@ To directly solve this system, you would have to create a Differential-Algebraic
 Equation (DAE) problem, since besides the differential equation, there is an
 additional algebraic equation now. However, this DAE system can obviously be
 transformed into the single ODE we used in the first example above. MTK achieves
-this by means of structural simplification:
+this by structural simplification:
 
 ```julia
 fol_simplified = structural_simplify(fol_separate)
@@ -138,20 +136,20 @@ plot(sol, vars=[x, RHS])
 
 By default, `structural_simplify` also replaces symbolic `constants` with
 their default values. This allows additional simplifications not possible
-if using `parameters` (eg, solution of linear equations by dividing out
-the constant's value, which cannot be done for parameters since they may
+when using `parameters` (e.g., solution of linear equations by dividing out
+the constant's value, which cannot be done for parameters, since they may
 be zero).
 
 ![Simulation result of first-order lag element, with right-hand side](https://user-images.githubusercontent.com/13935112/111958403-7e8d3e00-8aed-11eb-9d18-08b5180a59f9.png)
 
-Note that similarly the indexing of the solution works via the names, and so
-`sol[x]` gives the timeseries for `x`, `sol[x,2:10]` gives the 2nd through 10th
+Note that the indexing of the solution similarly works via the names, and so
+`sol[x]` gives the time-series for `x`, `sol[x,2:10]` gives the 2nd through 10th
 values of `x` matching `sol.t`, etc. Note that this works even for variables
 which have been eliminated, and thus `sol[RHS]` retrieves the values of `RHS`.
 
 ## Specifying a time-variable forcing function
 
-What if the forcing function (the "external input") ``f(t)`` is not constant?
+What if the forcing function (the “external input”) ``f(t)`` is not constant?
 Obviously, one could use an explicit, symbolic function of time:
 
 ```julia
@@ -159,12 +157,11 @@ Obviously, one could use an explicit, symbolic function of time:
 @named fol_variable_f = ODESystem([f ~ sin(t), D(x) ~ (f - x)/τ])
 ```
 
-But often there is time-series data, such as measurement data from an experiment,
-we want to embed as data in the simulation of a PDE, or as a forcing function on
-the right-hand side of an ODE -- is it is the case here. For this, MTK allows to
-"register" arbitrary Julia functions, which are excluded from symbolic
-transformations but are just used as-is. So, you could, for example, interpolate
-a given time series using
+But often this function might not be available in an explicit form.
+Instead the function might be provided as time-series data.
+MTK handles this situation by allowing us to “register” arbitrary Julia functions,
+which are excluded from symbolic transformations, and thus used as-is.
+So, you could, for example, interpolate given the time-series using
 [DataInterpolations.jl](https://github.com/PumasAI/DataInterpolations.jl). Here,
 we illustrate this option by a simple lookup ("zero-order hold") of a vector
 of random values:
@@ -187,7 +184,7 @@ plot(sol, vars=[x,f])
 
 Working with simple one-equation systems is already fun, but composing more
 complex systems from simple ones is even more fun. Best practice for such a
-"modeling framework" could be to use factory functions for model components:
+“modeling framework” could be to use factory functions for model components:
 
 ```julia
 function fol_factory(separate=false;name)
@@ -202,7 +199,7 @@ function fol_factory(separate=false;name)
 end
 ```
 
-Such a factory can then used to instantiate the same component multiple times,
+Such a factory can then be used to instantiate the same component multiple times,
 but allows for customization:
 
 ```julia
@@ -232,8 +229,8 @@ connected = compose(ODESystem(connections,name=:connected), fol_1, fol_2)
       #   fol_2₊τ
 ```
 
-All equations, variables and parameters are collected, but the structure of the
-hierarchical model is still preserved. That is, you can still get information about
+All equations, variables, and parameters are collected, but the structure of the
+hierarchical model is still preserved. This means you can still get information about
 `fol_1` by addressing it by `connected.fol_1`, or its parameter by
 `connected.fol_1.τ`. Before simulation, we again eliminate the algebraic
 variables and connection equations from the system using structural
@@ -263,7 +260,7 @@ full_equations(connected_simp)
 As expected, only the two state-derivative equations remain,
 as if you had manually eliminated as many variables as possible from the equations.
 Some observed variables are not expanded unless `full_equations` is used.
-As mentioned above, the hierarchical structure is preserved though. So the
+As mentioned above, the hierarchical structure is preserved. So, the
 initial state and the parameter values can be specified accordingly when
 building the `ODEProblem`:
 
@@ -284,7 +281,7 @@ More on this topic may be found in [Composing Models and Building Reusable Compo
 
 ## Defaults
 
-Often it is a good idea to specify reasonable values for the initial state and the
+It is often a good idea to specify reasonable values for the initial state and the
 parameters of a model component. Then, these do not have to be explicitly specified when constructing the `ODEProblem`.
 
 ```julia
@@ -306,7 +303,7 @@ state or parameter values, etc.
 
 One advantage of a symbolic toolkit is that derivatives can be calculated
 explicitly, and that the incidence matrix of partial derivatives (the
-"sparsity pattern") can also be explicitly derived. These two facts lead to a
+“sparsity pattern”) can also be explicitly derived. These two facts lead to a
 substantial speedup of all model calculations, e.g. when simulating a model
 over time using an ODE solver.
 
@@ -343,7 +340,7 @@ using the structural information. For more information, see the
 
 Here are some notes that may be helpful during your initial steps with MTK:
 
-* Sometimes, the symbolic engine within MTK is not able to correctly identify the
+* Sometimes, the symbolic engine within MTK cannot correctly identify the
   independent variable (e.g. time) out of all variables. In such a case, you
   usually get an error that some variable(s) is "missing from variable map". In
   most cases, it is then sufficient to specify the independent variable as second
@@ -352,7 +349,7 @@ Here are some notes that may be helpful during your initial steps with MTK:
   separate tutorial. This is for package developers, since the macros are only
   essential for automatic symbolic naming for modelers.
 * Vector-valued parameters and variables are possible. A cleaner, more
-  consistent treatment of these is work in progress, though. Once finished,
+  consistent treatment of these is still a work in progress, however. Once finished,
   this introductory tutorial will also cover this feature.
 
 Where to go next?

@@ -1,6 +1,6 @@
 # Exposing More Parallelism By Tearing Algebraic Equations in ODESystems
 
-Sometimes it can be very non-trivial to parallelize a system. In this tutorial
+Sometimes it can be very non-trivial to parallelize a system. In this tutorial,
 we will demonstrate how to make use of `structural_simplify` to expose more
 parallelism in the solution process and parallelize the resulting simulation.
 
@@ -150,8 +150,8 @@ If you look at the system we defined:
 length(equations(big_rc))
 ```
 
-You see it started as a massive 1051 set of equations. However, after eliminating
-redundancies we arrive at 151 equations:
+You see, it started as a massive 1051 set of equations. However, after eliminating
+redundancies, we arrive at 151 equations:
 
 ```@example tearing
 equations(sys)
@@ -178,7 +178,7 @@ equations, and so the full set of equations must be solved together. That expose
 no parallelism. However, the Block Lower Triangular (BLT) transformation exposes
 independent blocks. This is then further improved by the tearing process, which
 removes 90% of the equations and transforms the nonlinear equations into 50
-independent blocks *which can now all be solved in parallel*. The conclusion
+independent blocks, *which can now all be solved in parallel*. The conclusion
 is that, your attempts to parallelize are neigh: performing parallelism after
 structural simplification greatly improves the problem that can be parallelized,
 so this is better than trying to do it by hand.

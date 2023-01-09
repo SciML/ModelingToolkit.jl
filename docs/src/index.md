@@ -6,9 +6,9 @@ It then mixes ideas from symbolic computational algebra systems with
 causal and acausal equation-based modeling frameworks to give an extendable and
 parallel modeling system. It allows for users to give a high-level description of
 a model for symbolic preprocessing to analyze and enhance the model. Automatic
-transformations, such as index reduction, can be applied to the model before
-solving in order to make it easily handle equations would could not be solved
-when modeled without symbolic intervention.
+symbolic transformations, such as index reduction of differential-algebraic equations,
+make it possible to solve equations that are impossible to solve
+with a purely numeric-based technique.
 
 ## Installation
 
@@ -57,7 +57,7 @@ before generating code.
 - The ability to use the entire Symbolics.jl Computer Algebra System (CAS) as
   part of the modeling process.
 - Import models from common formats like SBML, CellML, BioNetGen, and more.
-- Extendability: the whole system is written in pure Julia, so adding new
+- Extensibility: the whole system is written in pure Julia, so adding new
   functions, simplification rules, and model transformations has no barrier.
 
 For information on how to use the Symbolics.jl CAS system that ModelingToolkit.jl
@@ -99,7 +99,7 @@ a standard library of prebuilt components for the ModelingToolkit ecosystem.
 
 ## Extension Libraries
 
-Because ModelingToolkit.jl is the core foundation of a equation-based modeling
+Because ModelingToolkit.jl is the core foundation of an equation-based modeling
 ecosystem, there is a large set of libraries adding features to this system.
 Below is an incomplete list of extension libraries one may want to be aware of:
 
@@ -133,7 +133,7 @@ Below is an incomplete list of extension libraries one may want to be aware of:
 
 ## Compatible Numerical Solvers
 
-All of the symbolic systems have a direct conversion to a numerical system which
+All of the symbolic systems have a direct conversion to a numerical system, which
 can then be handled through the SciML interfaces. For example, after building a
 model and performing symbolic manipulations, an `ODESystem` can be converted into
 an `ODEProblem` to then be solved by a numerical ODE solver. Below is a list of
@@ -160,7 +160,7 @@ system:
 - There are a few community forums:
     - The #diffeq-bridged channel in the [Julia Slack](https://julialang.org/slack/)
     - [JuliaDiffEq](https://gitter.im/JuliaDiffEq/Lobby) on Gitter
-    - On the Julia Discourse forums (look for the [modelingtoolkit tag](https://discourse.julialang.org/tag/modelingtoolkit)
+    - On the Julia Discourse forums (look for the [modelingtoolkit tag](https://discourse.julialang.org/tag/modelingtoolkit))
     - See also [SciML Community page](https://sciml.ai/community/)
 
 ## Reproducibility

@@ -1,13 +1,13 @@
 # Automated Sparse Analytical Jacobians
 
 In many cases where you have large stiff differential equations, getting a
-sparse Jacobian can be essential for performance. In this tutorial we will show
+sparse Jacobian can be essential for performance. In this tutorial, we will show
 how to use `modelingtoolkitize` to regenerate an `ODEProblem` code with
 the analytical solution to the sparse Jacobian, along with the sparsity
 pattern required by DifferentialEquations.jl's solvers to specialize the solving
 process.
 
-First let's start out with an implementation of the 2-dimensional Brusselator
+First, let's start out with an implementation of the 2-dimensional Brusselator
 partial differential equation discretized using finite differences:
 
 ```@example sparsejac
