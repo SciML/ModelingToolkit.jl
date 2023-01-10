@@ -30,10 +30,10 @@ savefig("obj_fun.png"); nothing # hide
 ![plot of the Rosenbrock function](obj_fun.png)
 
 ### Explanation
-Every optimization problem consists of a set of _optimization variables_. In this case we create two variables. Additionally we assign _box constraints_ for each of them. In the next step we create two parameters for the problem with `@parameters`. While it is not needed to do this it makes it easier to `remake` the problem later with different values for the parameters. The _objective function_ is specified as well and finally everything is used to construct an `OptimizationSystem`.
+Every optimization problem consists of a set of _optimization variables_. In this case, we create two variables. Additionally, we assign _box constraints_ for each of them. In the next step, we create two parameters for the problem with `@parameters`. While it is not needed to do this, it makes it easier to `remake` the problem later with different values for the parameters. The _objective function_ is specified as well and finally, everything is used to construct an `OptimizationSystem`.
 
 ## Building and Solving the Optimization Problem
-Next the actual `OptimizationProblem` can be created. At this stage an initial guess `u0` for the optimization variables needs to be provided via map, using the symbols from before. Concrete values for the parameters of the system can also be provided or changed. However, if the parameters have default values assigned they are used automatically.
+Next, the actual `OptimizationProblem` can be created. At this stage, an initial guess `u0` for the optimization variables needs to be provided via map, using the symbols from before. Concrete values for the parameters of the system can also be provided or changed. However, if the parameters have default values assigned, they are used automatically.
 ```@example rosenbrock_2d
 u0 = [
     x => 1.0
@@ -86,6 +86,6 @@ savefig("obj_fun_c.png"); nothing # hide
 Equality and inequality constraints can be added to the `OptimizationSystem`. An equality constraint can be specified via and `Equation`, e.g., `x^2 + y^2 ~ 1`. While inequality constraints via an `Inequality`, e.g., `x^2 + y^2 ≲ 1`. The syntax is here `\lesssim` and `\gtrsim`.
 
 ## Nested Systems
-Needs more text but it's super cool and auto-parallelizes and sparsifies too.
-Plus you can hierarchically nest systems to have it generate huge
+Needs more text, but it's super cool and auto-parallelizes and sparsifies too.
+Plus, you can hierarchically nest systems to have it generate huge
 optimization problems.

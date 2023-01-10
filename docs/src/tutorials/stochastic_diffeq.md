@@ -7,7 +7,7 @@ which has a deterministic (drift) component and a stochastic (diffusion)
 component. Let's take the Lorenz equation from the first tutorial and extend
 it to have multiplicative noise.
 
-```julia
+```@example SDE
 using ModelingToolkit, StochasticDiffEq
 
 # Define some variables

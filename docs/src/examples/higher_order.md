@@ -4,7 +4,8 @@ ModelingToolkit has a system for transformations of mathematical
 systems. These transformations allow for symbolically changing
 the representation of the model to problems that are easier to
 numerically solve. One simple to demonstrate transformation is the
-`ode_order_lowering` transformation that sends an Nth order ODE
+`structural_simplify` with does a lot of tricks, one being the
+transformation that sends a Nth order ODE
 to a 1st order ODE.
 
 To see this, let's define a second order riff on the Lorenz equations.
@@ -33,7 +34,7 @@ Now let's transform this into the `ODESystem` of first order components.
 We do this by simply calling `ode_order_lowering`:
 
 ```@example orderlowering
-sys = ode_order_lowering(sys)
+sys = structural_simplify(sys)
 ```
 
 Now we can directly numerically solve the lowered system. Note that,
@@ -54,5 +55,5 @@ p  = [σ => 28.0,
 tspan = (0.0,100.0)
 prob = ODEProblem(sys,u0,tspan,p,jac=true)
 sol = solve(prob,Tsit5())
-using Plots; plot(sol,vars=(x,y))
+using Plots; plot(sol,idxs=(x,y))
 ```

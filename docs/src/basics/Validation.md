@@ -6,7 +6,7 @@ ModelingToolkit.jl provides extensive functionality for model validation and uni
 
 Units may assigned with the following syntax. 
 
-```julia
+```@example validation
 using ModelingToolkit, Unitful
 @variables t [unit = u"s"] x(t) [unit = u"m"] g(t) w(t) [unit = "Hz"]
 
@@ -45,21 +45,25 @@ ModelingToolkit.get_unit
 
 Example usage below. Note that `ModelingToolkit` does not force unit conversions to preferred units in the event of nonstandard combinations -- it merely checks that the equations are consistent. 
 
-```julia
+```@example validation
 using ModelingToolkit, Unitful
 @parameters τ [unit = u"ms"]
 @variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 eqs = eqs = [D(E) ~ P - E/τ,
                 0 ~ P       ]
-ModelingToolkit.validate(eqs) #Returns true
-ModelingToolkit.validate(eqs[1]) #Returns true
-ModelingToolkit.get_unit(eqs[1].rhs) #Returns u"kJ ms^-1"
+ModelingToolkit.validate(eqs)
+```
+```@example validation
+ModelingToolkit.validate(eqs[1])
+```
+```@example validation
+ModelingToolkit.get_unit(eqs[1].rhs)
 ```
 
 An example of an inconsistent system: at present, `ModelingToolkit` requires that the units of all terms in an equation or sum to be equal-valued (`ModelingToolkit.equivalent(u1,u2)`), rather that simply dimensionally consistent. In the future, the validation stage may be upgraded to support the insertion of conversion factors into the equations. 
 
-```julia
+```@example validation
 using ModelingToolkit, Unitful
 @parameters τ [unit = u"ms"]
 @variables t [unit = u"ms"] E(t) [unit = u"J"] P(t) [unit = u"MW"]

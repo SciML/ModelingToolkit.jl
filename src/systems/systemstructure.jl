@@ -37,10 +37,16 @@ struct DiffGraph <: Graphs.AbstractGraph{Int}
     primal_to_diff::Vector{Union{Int, Nothing}}
     diff_to_primal::Union{Nothing, Vector{Union{Int, Nothing}}}
 end
+
 DiffGraph(primal_to_diff::Vector{Union{Int, Nothing}}) = DiffGraph(primal_to_diff, nothing)
 function DiffGraph(n::Integer, with_badj::Bool = false)
     DiffGraph(Union{Int, Nothing}[nothing for _ in 1:n],
               with_badj ? Union{Int, Nothing}[nothing for _ in 1:n] : nothing)
+end
+
+function Base.copy(dg::DiffGraph)
+    DiffGraph(copy(dg.primal_to_diff),
+              dg.diff_to_primal === nothing ? nothing : copy(dg.diff_to_primal))
 end
 
 @noinline function require_complete(dg::DiffGraph)
@@ -145,6 +151,13 @@ Base.@kwdef mutable struct SystemStructure
     solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
     only_discrete::Bool
 end
+
+function Base.copy(structure::SystemStructure)
+    SystemStructure(copy(structure.var_to_diff), copy(structure.eq_to_diff),
+                    copy(structure.graph), copy(structure.solvable_graph),
+                    structure.only_discrete)
+end
+
 is_only_discrete(s::SystemStructure) = s.only_discrete
 isdervar(s::SystemStructure, i) = invview(s.var_to_diff)[i] !== nothing
 function isalgvar(s::SystemStructure, i)
@@ -185,6 +198,10 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     fullvars::Vector
     structure::SystemStructure
     extra_eqs::Vector
+end
+
+function Base.show(io::IO, state::TearingState)
+    print(io, "TearingState of ", typeof(state.sys))
 end
 
 struct EquationsView{T} <: AbstractVector{Any}
@@ -373,9 +390,9 @@ Base.size(bgpm::SystemStructurePrintMatrix) = (max(nsrcs(bgpm.bpg), ndsts(bgpm.b
 function compute_diff_label(diff_graph, i)
     di = i - 1 <= length(diff_graph) ? diff_graph[i - 1] : nothing
     ii = i - 1 <= length(invview(diff_graph)) ? invview(diff_graph)[i - 1] : nothing
-    return Label(string(di === nothing ? "" : string(di, '↓'),
+    return Label(string(di === nothing ? "" : string(di, '↑'),
                         di !== nothing && ii !== nothing ? " " : "",
-                        ii === nothing ? "" : string(ii, '↑')))
+                        ii === nothing ? "" : string(ii, '↓')))
 end
 function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
     checkbounds(bgpm, i, j)
@@ -506,11 +523,14 @@ end
 function _structural_simplify!(state::TearingState, io; simplify = false,
                                check_consistency = true, kwargs...)
     has_io = io !== nothing
-    has_io && ModelingToolkit.markio!(state, io...)
+    orig_inputs = Set()
+    if has_io
+        ModelingToolkit.markio!(state, orig_inputs, io...)
+    end
     state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
     sys, ag = ModelingToolkit.alias_elimination!(state; kwargs...)
     if check_consistency
-        ModelingToolkit.check_consistency(state, ag)
+        ModelingToolkit.check_consistency(state, ag, orig_inputs)
     end
     sys = ModelingToolkit.dummy_derivative(sys, state, ag; simplify)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]

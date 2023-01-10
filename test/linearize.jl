@@ -157,3 +157,53 @@ lsys, ssys = linearize(sat, [u], [y]; op = Dict(u => 2))
 @test isempty(lsys.B)
 @test isempty(lsys.C)
 @test lsys.D[] == 0
+
+## Test that dummy_derivatives can be set to zero
+if VERSION >= v"1.8"
+    # The call to Link(; m = 0.2, l = 10, I = 1, g = -9.807) hangs forever on Julia v1.6
+    using LinearAlgebra
+    using ModelingToolkit
+    using ModelingToolkitStandardLibrary
+    using ModelingToolkitStandardLibrary.Blocks
+    using ModelingToolkitStandardLibrary.Mechanical.MultiBody2D
+    using ModelingToolkitStandardLibrary.Mechanical.Translational
+
+    using ControlSystemsMTK
+    using ControlSystemsMTK.ControlSystemsBase: sminreal, minreal, poles
+    connect = ModelingToolkit.connect
+
+    @parameters t
+    D = Differential(t)
+
+    @named link1 = Link(; m = 0.2, l = 10, I = 1, g = -9.807)
+    @named cart = Translational.Mass(; m = 1, s_0 = 0)
+    @named fixed = Fixed()
+    @named force = Force()
+
+    eqs = [connect(link1.TX1, cart.flange)
+           connect(cart.flange, force.flange)
+           connect(link1.TY1, fixed.flange)]
+
+    @show @named model = ODESystem(eqs, t, [], []; systems = [link1, cart, force, fixed])
+    def = ModelingToolkit.defaults(model)
+    def[link1.y1] = 0
+    def[link1.x1] = 10
+    def[link1.A] = -pi / 2
+    def[link1.dA] = 0
+    def[cart.s] = 0
+    def[force.flange.v] = 0
+    lin_outputs = [cart.s, cart.v, link1.A, link1.dA]
+    lin_inputs = [force.f.u]
+
+    @info "named_ss"
+    G = named_ss(model, lin_inputs, lin_outputs, allow_symbolic = true, op = def,
+                 allow_input_derivatives = true, zero_dummy_der = true)
+    G = sminreal(G)
+    @info "minreal"
+    G = minreal(G)
+    @info "poles"
+    ps = poles(G)
+
+    @test minimum(abs, ps) < 1e-6
+    @test minimum(abs, complex(0, 1.3777260367206716) .- ps) < 1e-10
+end

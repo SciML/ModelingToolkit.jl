@@ -148,7 +148,7 @@ function independent_variable(sys::AbstractSystem)
 end
 
 #Treat the result as a vector of symbols always
-function independent_variables(sys::AbstractSystem)
+function SymbolicIndexingInterface.independent_variables(sys::AbstractSystem)
     systype = typeof(sys)
     @warn "Please declare ($systype) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
     if isdefined(sys, :iv)
@@ -160,9 +160,13 @@ function independent_variables(sys::AbstractSystem)
     end
 end
 
-independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
-independent_variables(sys::AbstractTimeIndependentSystem) = []
-independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
+function SymbolicIndexingInterface.independent_variables(sys::AbstractTimeDependentSystem)
+    [getfield(sys, :iv)]
+end
+SymbolicIndexingInterface.independent_variables(sys::AbstractTimeIndependentSystem) = []
+function SymbolicIndexingInterface.independent_variables(sys::AbstractMultivariateSystem)
+    getfield(sys, :ivs)
+end
 
 iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :complete)
 
@@ -209,7 +213,8 @@ for prop in [:eqs
              :tearing_state
              :substitutions
              :metadata
-             :discrete_subsystems]
+             :discrete_subsystems
+             :unknown_states]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin
@@ -470,7 +475,7 @@ function states(sys::AbstractSystem)
            [sts; reduce(vcat, namespace_variables.(systems))])
 end
 
-function parameters(sys::AbstractSystem)
+function SymbolicIndexingInterface.parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     systems = get_systems(sys)
     unique(isempty(systems) ? ps : [ps; reduce(vcat, namespace_parameters.(systems))])
@@ -508,7 +513,9 @@ end
 states(sys::AbstractSystem, v) = renamespace(sys, v)
 parameters(sys::AbstractSystem, v) = toparam(states(sys, v))
 for f in [:states, :parameters]
-    @eval $f(sys::AbstractSystem, vs::AbstractArray) = map(v -> $f(sys, v), vs)
+    @eval function $f(sys::AbstractSystem, vs::AbstractArray)
+        map(v -> $f(sys, v), vs)
+    end
 end
 
 flatten(sys::AbstractSystem, args...) = sys
@@ -570,6 +577,35 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
         return operation(x)
     end
     return x
+end
+
+SymbolicIndexingInterface.is_indep_sym(sys::AbstractSystem, sym) = isequal(sym, get_iv(sys))
+
+"""
+$(SIGNATURES)
+
+Return a list of actual states needed to be solved by solvers.
+"""
+function unknown_states(sys::AbstractSystem)
+    sts = states(sys)
+    if has_unknown_states(sys)
+        sts = something(get_unknown_states(sys), sts)
+    end
+    return sts
+end
+
+function SymbolicIndexingInterface.state_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(isequal(sym), unknown_states(sys))
+end
+function SymbolicIndexingInterface.is_state_sym(sys::AbstractSystem, sym)
+    !isnothing(SymbolicIndexingInterface.state_sym_to_index(sys, sym))
+end
+
+function SymbolicIndexingInterface.param_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(isequal(sym), SymbolicIndexingInterface.parameters(sys))
+end
+function SymbolicIndexingInterface.is_param_sym(sys::AbstractSystem, sym)
+    !isnothing(SymbolicIndexingInterface.param_sym_to_index(sys, sym))
 end
 
 struct AbstractSysToExpr
@@ -1157,7 +1193,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     return lin_fun, sys
 end
 
-function markio!(state, inputs, outputs; check = true)
+function markio!(state, orig_inputs, inputs, outputs; check = true)
     fullvars = state.fullvars
     inputset = Dict{Any, Bool}(i => false for i in inputs)
     outputset = Dict{Any, Bool}(o => false for o in outputs)
@@ -1171,6 +1207,9 @@ function markio!(state, inputs, outputs; check = true)
             outputset[v] = true
             fullvars[i] = v
         else
+            if isinput(v)
+                push!(orig_inputs, v)
+            end
             v = setio(v, false, false)
             fullvars[i] = v
         end
@@ -1185,7 +1224,7 @@ function markio!(state, inputs, outputs; check = true)
     check && (all(values(outputset)) ||
      error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
            outputset))
-    state
+    state, orig_inputs
 end
 
 """
@@ -1326,8 +1365,13 @@ end
 
 function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
                    allow_input_derivatives = false,
+                   zero_dummy_der = false,
                    kwargs...)
     lin_fun, ssys = linearization_function(sys, inputs, outputs; kwargs...)
+    if zero_dummy_der
+        dummyder = setdiff(states(ssys), states(sys))
+        op = merge(op, Dict(x => 0.0 for x in dummyder))
+    end
     linearize(ssys, lin_fun; op, t, allow_input_derivatives), ssys
 end
 
