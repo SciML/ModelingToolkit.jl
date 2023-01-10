@@ -63,17 +63,22 @@ sparseprob = ODEProblem(sys,Pair[],(0.,11.5),jac=true,sparse=true)
 
 Hard? No! How much did that help?
 
-```julia
+```@example sparsejac
 using BenchmarkTools
-@btime solve(prob,save_everystep=false) # 51.714 s (7317 allocations: 70.12 MiB)
-@btime solve(sparseprob,save_everystep=false) # 2.880 s (55533 allocations: 885.09 MiB)
+@btime solve(prob,save_everystep=false);
+return nothing # hide
+```
+```@example sparsejac
+@btime solve(sparseprob,save_everystep=false);
+return nothing # hide
 ```
 
 Notice though that the analytical solution to the Jacobian can be quite expensive.
 Thus in some cases we may only want to get the sparsity pattern. In this case,
 we can simply do:
 
-```julia
+```@example sparsejac
 sparsepatternprob = ODEProblem(sys,Pair[],(0.,11.5),sparse=true)
-@btime solve(sparsepatternprob,save_everystep=false) # 2.880 s (55533 allocations: 885.09 MiB)
+@btime solve(sparsepatternprob,save_everystep=false);
+return nothing # hide
 ```
