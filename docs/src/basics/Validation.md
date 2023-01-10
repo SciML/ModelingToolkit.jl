@@ -78,8 +78,8 @@ In order to validate user-defined types and `register`ed functions, specialize `
 expect an object type, while two-parameter calls expect a function type as the first argument, and a vector of arguments as the 
 second argument.
 
-```julia
-using ModelingToolkit
+```@example validation2
+using ModelingToolkit, Unitful
 # Composite type parameter in registered function
 @parameters t
 D = Differential(t)
@@ -90,10 +90,10 @@ end
 dummycomplex(complex, scalar) = complex.f - scalar
 
 c = NewType(1)
-MT.get_unit(x::NewType) = MT.get_unit(x.f)
-function MT.get_unit(op::typeof(dummycomplex),args)
-    argunits = MT.get_unit.(args)
-    MT.get_unit(-,args)
+ModelingToolkit.get_unit(x::NewType) = ModelingToolkit.get_unit(x.f)
+function ModelingToolkit.get_unit(op::typeof(dummycomplex),args)
+    argunits = ModelingToolkit.get_unit.(args)
+    ModelingToolkit.get_unit(-,args)
 end
 
 sts = @variables a(t)=0 [unit = u"cm"]
@@ -121,14 +121,15 @@ ModelingToolkit.validate(eqs) #Returns false while displaying a warning message
 
 Instead, they should be parameterized:
 
-```julia
+```@example validation3
 using ModelingToolkit, Unitful
 @parameters τ [unit = u"ms"]
 @variables t [unit = u"ms"] E(t) [unit = u"kJ"] P(t) [unit = u"MW"]
 D = Differential(t)
 eqs = [D(E) ~ P - E/τ]
 ModelingToolkit.validate(eqs) #Returns true
-
+```
+```@example validation3
 myfunc(E,τ) = E/τ 
 eqs = [D(E) ~ P - myfunc(E,τ)]
 ModelingToolkit.validate(eqs) #Returns true
