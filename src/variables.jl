@@ -126,7 +126,8 @@ Intercept the call to `process_p_u0_symbolic` and process symbolic maps of `p` a
 user has `ModelingToolkit` loaded.
 """
 function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem,
-                                                     NonlinearProblem, OptimizationProblem},
+                                                     NonlinearProblem, OptimizationProblem,
+                                                     SciMLBase.AbstractOptimizationCache},
                                          p,
                                          u0)
     # check if a symbolic remake is possible
