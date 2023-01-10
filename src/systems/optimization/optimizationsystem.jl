@@ -212,13 +212,16 @@ end
 
 Ensures that a given expression is fully symbolic, e.g. no function calls.
 """
-symbolify!(e) = e
-function symbolify!(e::Expr)
-    if !(e.args[1] isa Symbol)
-        e.args[1] = Symbol(e.args[1])
+symbolify!(expr::T) where {T} = expr
+function symbolify!(expr::Expr)
+    if expr.head == :call && !(expr.args[1] isa Symbol)
+        expr.args[1] = Symbol(expr.args[1])
     end
-    symbolify!.(e.args)
-    return e
+    for i in 1:length(expr.args)
+        i == 1 && expr.head == :call && continue # first arg is the operator
+        expr.args[i] = symbolify!(expr.args[i])
+    end
+    return expr
 end
 
 """
