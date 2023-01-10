@@ -312,12 +312,14 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                                  linenumbers = linenumbers,
                                                  expression = Val{false})
         if cons_j
-            _cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = cons_sparse)[2]
+            _cons_j = generate_jacobian(cons_sys; expression = Val{false},
+                                        sparse = cons_sparse)[2]
         else
             _cons_j = nothing
         end
         if cons_h
-            _cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = cons_sparse)[2]
+            _cons_h = generate_hessian(cons_sys; expression = Val{false},
+                                       sparse = cons_sparse)[2]
         else
             _cons_h = nothing
         end
@@ -597,12 +599,12 @@ function structural_simplify(sys::OptimizationSystem; kwargs...)
     obs = observed(snlsys)
     subs = Dict(eq.lhs => eq.rhs for eq in observed(snlsys))
     seqs = equations(snlsys)
-    sizehint!(icons, length(icons) + length(seqs))
-    for eq in seqs
-        push!(icons, substitute(eq, subs))
+    cons_simplified = Array{eltype(cons), 1}(undef, length(icons) + length(seqs))
+    for (i, eq) in enumerate(Iterators.flatten((seqs, icons)))
+        cons_simplified[i] = substitute(eq, subs)
     end
     newsts = setdiff(states(sys), keys(subs))
-    @set! sys.constraints = icons
+    @set! sys.constraints = cons_simplified
     @set! sys.observed = [observed(sys); obs]
     @set! sys.op = substitute(equations(sys), subs)
     @set! sys.states = newsts

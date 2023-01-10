@@ -77,7 +77,8 @@ end
     @parameters a b
     loss = (a - x)^2 + b * z^2
     cons = [1.0 ~ x^2 + y^2
-            z ~ y - x^2]
+            z ~ y - x^2
+            z^2 + y^2 ≲ 1.0]
     @named sys = OptimizationSystem(loss, [x, y, z], [a, b], constraints = cons)
     sys = structural_simplify(sys)
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
@@ -257,11 +258,11 @@ end
     sys1 = OptimizationSystem(loss, [x₁, x₂], [α₁, α₂], name = :sys1, constraints = cons)
 
     prob1 = OptimizationProblem(sys1, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
-                               grad = true, hess = true, cons_j = true, cons_h = true)
+                                grad = true, hess = true, cons_j = true, cons_h = true)
 
     sys2 = modelingtoolkitize(prob1, num_cons = 1)
     prob2 = OptimizationProblem(sys2, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
-                               grad = true, hess = true, cons_j = true, cons_h = true)
+                                grad = true, hess = true, cons_j = true, cons_h = true)
 
     sol1 = Optimization.solve(prob1, Ipopt.Optimizer())
     sol2 = Optimization.solve(prob2, Ipopt.Optimizer())
