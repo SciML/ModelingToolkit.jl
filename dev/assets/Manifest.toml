@@ -359,9 +359,9 @@ version = "0.4.0"
 
 [[deps.DiffEqBase]]
 deps = ["ArrayInterfaceCore", "ChainRulesCore", "DataStructures", "Distributions", "DocStringExtensions", "FastBroadcast", "ForwardDiff", "FunctionWrappers", "FunctionWrappersWrappers", "LinearAlgebra", "Logging", "MuladdMacro", "Parameters", "PreallocationTools", "Printf", "RecursiveArrayTools", "Reexport", "Requires", "SciMLBase", "Setfield", "SimpleNonlinearSolve", "SparseArrays", "Static", "StaticArrays", "Statistics", "Tricks", "ZygoteRules"]
-git-tree-sha1 = "29777943a9e73c7d6b47d93830038ebdaacc18db"
+git-tree-sha1 = "b410f0b8a52752e1c1723b4316382203f914672c"
 uuid = "2b5f629d-d688-5b77-993f-72d75c75574e"
-version = "6.113.0"
+version = "6.113.1"
 
 [[deps.DiffEqCallbacks]]
 deps = ["DataStructures", "DiffEqBase", "ForwardDiff", "LinearAlgebra", "Markdown", "NLsolve", "Parameters", "RecipesBase", "RecursiveArrayTools", "SciMLBase", "StaticArrays"]
@@ -1487,9 +1487,9 @@ version = "1.30.0"
 
 [[deps.Sparspak]]
 deps = ["Libdl", "LinearAlgebra", "Logging", "OffsetArrays", "Printf", "SparseArrays", "Test"]
-git-tree-sha1 = "2d8eee38ff44389ffcd26ef39b289c2db786f6e5"
+git-tree-sha1 = "4149bb50ccf65bc9c9d55e7001ca7aa4a7649603"
 uuid = "e56a9233-b9d6-4f03-8d0f-1825330902ac"
-version = "0.3.3"
+version = "0.3.4"
 
 [[deps.SpecialFunctions]]
 deps = ["ChainRulesCore", "IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
