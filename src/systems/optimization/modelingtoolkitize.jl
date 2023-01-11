@@ -54,7 +54,7 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem; kwargs...)
         cons = []
     end
 
-    de = OptimizationSystem(eqs, vec(vars), vec(params);
+    de = OptimizationSystem(eqs, vec(vars), vec(toparam.(params));
                             name = gensym(:MTKizedOpt),
                             constraints = cons,
                             kwargs...)
