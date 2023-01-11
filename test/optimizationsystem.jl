@@ -27,7 +27,7 @@ using ModelingToolkit: get_metadata
     generate_gradient(combinedsys)
     generate_hessian(combinedsys)
     hess_sparsity = ModelingToolkit.hessian_sparsity(sys1)
-    sparse_prob = OptimizationProblem(sys1, [x, y], [a, b], grad = true, sparse = true)
+    sparse_prob = OptimizationProblem(sys1, [x, y], [a, b], grad = true, obj_sparse = true)
     @test sparse_prob.f.hess_prototype.rowval == hess_sparsity.rowval
     @test sparse_prob.f.hess_prototype.colptr == hess_sparsity.colptr
 
@@ -260,7 +260,7 @@ end
     prob1 = OptimizationProblem(sys1, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
                                 grad = true, hess = true, cons_j = true, cons_h = true)
 
-    sys2 = modelingtoolkitize(prob1, num_cons = 1)
+    sys2 = modelingtoolkitize(prob1)
     prob2 = OptimizationProblem(sys2, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
                                 grad = true, hess = true, cons_j = true, cons_h = true)
 
