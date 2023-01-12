@@ -208,7 +208,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              parammap = DiffEqBase.NullParameters();
                                              lb = nothing, ub = nothing,
                                              grad = false,
-                                             hess = false, obj_sparse = false,
+                                             hess = false, sparse = false,
                                              cons_j = false, cons_h = false,
                                              cons_sparse = false, checkbounds = false,
                                              linenumbers = true, parallel = SerialForm(),
@@ -277,7 +277,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     if hess
         hess_oop, hess_iip = generate_hessian(sys, checkbounds = checkbounds,
                                               linenumbers = linenumbers,
-                                              sparse = obj_sparse, parallel = parallel,
+                                              sparse = sparse, parallel = parallel,
                                               expression = Val{false})
         _hess(u, p) = hess_oop(u, p)
         _hess(J, u, p) = (hess_iip(J, u, p); J)
@@ -285,7 +285,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         _hess = nothing
     end
 
-    if obj_sparse
+    if sparse
         hess_prototype = hessian_sparsity(sys)
     else
         hess_prototype = nothing
