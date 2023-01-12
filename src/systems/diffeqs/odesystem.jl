@@ -29,7 +29,7 @@ struct ODESystem <: AbstractODESystem
     """
     tag::UInt
     """The ODEs defining the system."""
-    eqs::Vector{Equation}
+    eqs::Any
     """Independent variable."""
     iv::Sym
     """
@@ -159,7 +159,7 @@ struct ODESystem <: AbstractODESystem
     end
 end
 
-function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
+function ODESystem(deqs, iv, dvs, ps;
                    controls = Num[],
                    observed = Equation[],
                    systems = ODESystem[],

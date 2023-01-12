@@ -143,6 +143,7 @@ include("systems/validation.jl")
 include("systems/dependency_graphs.jl")
 include("clock.jl")
 include("discretedomain.jl")
+include("vectorized_eqs.jl")
 include("systems/systemstructure.jl")
 using .SystemStructures
 include("systems/clock_inference.jl")
