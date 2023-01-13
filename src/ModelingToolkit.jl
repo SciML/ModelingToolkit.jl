@@ -134,6 +134,7 @@ include("systems/nonlinear/modelingtoolkitize.jl")
 
 include("systems/optimization/constraints_system.jl")
 include("systems/optimization/optimizationsystem.jl")
+include("systems/optimization/modelingtoolkitize.jl")
 
 include("systems/pde/pdesystem.jl")
 

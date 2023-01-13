@@ -80,7 +80,6 @@ function OptimizationSystem(op, states, ps;
                             metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
-
     constraints = value.(scalarize(constraints))
     states′ = value.(scalarize(states))
     ps′ = value.(scalarize(ps))
@@ -199,7 +198,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
 
 Generates an OptimizationProblem from an OptimizationSystem and allows for automatically
 symbolically calculating numerical enhancements.
-                
+
 Certain solvers require setting `cons_j`, `cons_h` to `true` for constrained-optimization problems.
 """
 function DiffEqBase.OptimizationProblem(sys::OptimizationSystem, args...; kwargs...)
@@ -211,7 +210,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                              grad = false,
                                              hess = false, sparse = false,
                                              cons_j = false, cons_h = false,
-                                             checkbounds = false,
+                                             cons_sparse = false, checkbounds = false,
                                              linenumbers = true, parallel = SerialForm(),
                                              use_union = false,
                                              kwargs...) where {iip}
@@ -313,12 +312,14 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
                                                  linenumbers = linenumbers,
                                                  expression = Val{false})
         if cons_j
-            _cons_j = generate_jacobian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+            _cons_j = generate_jacobian(cons_sys; expression = Val{false},
+                                        sparse = cons_sparse)[2]
         else
             _cons_j = nothing
         end
         if cons_h
-            _cons_h = generate_hessian(cons_sys; expression = Val{false}, sparse = sparse)[2]
+            _cons_h = generate_hessian(cons_sys; expression = Val{false},
+                                       sparse = cons_sparse)[2]
         else
             _cons_h = nothing
         end
@@ -339,7 +340,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             ucons = haskey(kwargs, :ucons)
         end
 
-        if sparse
+        if cons_sparse
             cons_jac_prototype = jacobian_sparsity(cons_sys)
             cons_hess_prototype = hessian_sparsity(cons_sys)
         else
@@ -507,7 +508,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             lcons = lcons_
             ucons = ucons_
         else # use the user supplied constraints bounds
-            haskey(kwargs, :lcons) && haskey(kwargs, :ucons) &&
+            !haskey(kwargs, :lcons) && !haskey(kwargs, :ucons) &&
                 throw(ArgumentError("Expected both `ucons` and `lcons` to be supplied"))
             haskey(kwargs, :lcons) && length(kwargs[:lcons]) != length(cstr) &&
                 throw(ArgumentError("Expected `lcons` to be of the same length as the vector of constraints"))
@@ -598,12 +599,12 @@ function structural_simplify(sys::OptimizationSystem; kwargs...)
     obs = observed(snlsys)
     subs = Dict(eq.lhs => eq.rhs for eq in observed(snlsys))
     seqs = equations(snlsys)
-    sizehint!(icons, length(icons) + length(seqs))
-    for eq in seqs
-        push!(icons, substitute(eq, subs))
+    cons_simplified = Array{eltype(cons), 1}(undef, length(icons) + length(seqs))
+    for (i, eq) in enumerate(Iterators.flatten((seqs, icons)))
+        cons_simplified[i] = substitute(eq, subs)
     end
     newsts = setdiff(states(sys), keys(subs))
-    @set! sys.constraints = icons
+    @set! sys.constraints = cons_simplified
     @set! sys.observed = [observed(sys); obs]
     @set! sys.op = substitute(equations(sys), subs)
     @set! sys.states = newsts
