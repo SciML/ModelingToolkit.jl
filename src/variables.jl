@@ -122,7 +122,7 @@ end
 """
 $(SIGNATURES)
 
-Intercept the call to `process_p_u0_symbolic` and process symbolic maps of `p` and/or `u0` if the 
+Intercept the call to `process_p_u0_symbolic` and process symbolic maps of `p` and/or `u0` if the
 user has `ModelingToolkit` loaded.
 """
 function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem,
@@ -172,7 +172,7 @@ getbounds(x::Num) = getbounds(Symbolics.unwrap(x))
 """
     getbounds(x)
 
-Get the bounds associated with symbolc variable `x`.
+Get the bounds associated with symbolic variable `x`.
 Create parameters with bounds like this
 ```
 @parameters p [bounds=(-1, 1)]
@@ -187,7 +187,7 @@ end
 """
     hasbounds(x)
 
-Determine whether or not symbolic variable `x` has bounds associated with it.
+Determine whether symbolic variable `x` has bounds associated with it.
 See also [`getbounds`](@ref).
 """
 function hasbounds(x)
@@ -204,7 +204,7 @@ isdisturbance(x::Num) = isdisturbance(Symbolics.unwrap(x))
 """
     isdisturbance(x)
 
-Determine whether or not symbolic variable `x` is marked as a disturbance input.
+Determine whether symbolic variable `x` is marked as a disturbance input.
 """
 function isdisturbance(x)
     p = Symbolics.getparent(x, nothing)
@@ -225,7 +225,7 @@ istunable(x::Num, args...) = istunable(Symbolics.unwrap(x), args...)
 """
     istunable(x, default = false)
 
-Determine whether or not symbolic variable `x` is marked as a tunable for an automatic tuning algorithm.
+Determine whether symbolic variable `x` is marked as a tunable for an automatic tuning algorithm.
 
 `default` indicates whether variables without `tunable` metadata are to be considered tunable or not.
 
@@ -249,7 +249,7 @@ getdist(x::Num) = getdist(Symbolics.unwrap(x))
 """
     getdist(x)
 
-Get the probability distribution associated with symbolc variable `x`. If no distribution
+Get the probability distribution associated with symbolic variable `x`. If no distribution
 is associated with `x`, `nothing` is returned.
 Create parameters with associated distributions like this
 ```julia
@@ -269,7 +269,7 @@ end
 """
     hasdist(x)
 
-Determine whether or not symbolic variable `x` has a probability distribution associated with it.
+Determine whether symbolic variable `x` has a probability distribution associated with it.
 """
 function hasdist(x)
     b = getdist(x)
@@ -374,7 +374,7 @@ isintegervar(x::Num) = isintegervar(Symbolics.unwrap(x))
 """
     isintegervar(x)
 
-Determine if a variable is integer.
+Determine if a variable is an integer.
 """
 function isintegervar(x)
     p = Symbolics.getparent(x, nothing)

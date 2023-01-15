@@ -10,8 +10,8 @@ the `@variable` which is defined by
 @variables x y(x)
 ```
 
-This is used for the "normal" variable of a given system, like the states of a
-differential equation or objective function. All of the macros below support
+This is used for the “normal” variable of a given system, like the states of a
+differential equation or objective function. All the macros below support
 the same syntax as `@variables`.
 
 ## Parameters
@@ -28,11 +28,11 @@ Constants are like parameters that:
 - do not show up in the list of parameters of a system.
 
 The intended use-cases for constants are:
-- representing literals (eg, π) symbolically, which results in cleaner
+- representing literals (e.g., π) symbolically, which results in cleaner
     Latexification of equations (avoids turning `d ~ 2π*r` into `d = 6.283185307179586 r`)
 - allowing auto-generated unit conversion factors to live outside the list of
     parameters
-- representing fundamental constants (eg, speed of light `c`) that should never
+- representing fundamental constants (e.g., speed of light `c`) that should never
      be adjusted inadvertently.
 
 ## Wildcard Variable Arguments
@@ -48,7 +48,7 @@ need to be able to write `u(t, 0.0)` to define a boundary condition at `x = 0`.
 
 ## Variable metadata [Experimental/TODO]
 
-In many engineering systems some variables act like "flows" while others do not.
+In many engineering systems, some variables act like “flows” while others do not.
 For example, in circuit models you have current which flows, and the related
 voltage which does not. Or in thermal models you have heat flows. In these cases,
 the `connect` statement enforces conservation of flow between all of the connected

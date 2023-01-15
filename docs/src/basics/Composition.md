@@ -109,7 +109,7 @@ u0 = [
 
 Note that any default values within the given subcomponent will be
 used if no override is provided at construction time. If any values for
-initial conditions or parameters are unspecified an error will be thrown.
+initial conditions or parameters are unspecified, an error will be thrown.
 
 When the model is numerically solved, the solution can be accessed via
 its symbolic values. For example, if `sol` is the `ODESolution`, one
@@ -281,7 +281,7 @@ When modeling, e.g., impacts, saturations or Coulomb friction, the dynamic
 equations are discontinuous in either the state or one of its derivatives. This
 causes the solver to take very small steps around the discontinuity, and
 sometimes leads to early stopping due to `dt <= dt_min`. The correct way to
-handle such dynamics is to tell the solver about the discontinuity by means of a
+handle such dynamics is to tell the solver about the discontinuity by a
 root-finding equation, which can be modeling using [`ODESystem`](@ref)'s event
 support. Please see the tutorial on [Callbacks and Events](@ref events) for
 details and examples.

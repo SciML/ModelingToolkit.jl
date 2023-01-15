@@ -58,7 +58,7 @@ unbound_outputs(sys) = filter(x -> !is_bound(sys, x), outputs(sys))
 """
     is_bound(sys, u)
 
-Determine whether or not input/output variable `u` is "bound" within the system, i.e., if it's to be considered internal to `sys`.
+Determine whether input/output variable `u` is "bound" within the system, i.e., if it's to be considered internal to `sys`.
 A variable/signal is considered bound if it appears in an equation together with variables from other subsystems.
 The typical usecase for this function is to determine whether the input to an IO component is connected to another component,
 or if it remains an external input that the user has to supply before simulating the system.
@@ -111,7 +111,7 @@ end
 """
     same_or_inner_namespace(u, var)
 
-Determine whether or not `var` is in the same namespace as `u`, or a namespace internal to the namespace of `u`.
+Determine whether `var` is in the same namespace as `u`, or a namespace internal to the namespace of `u`.
 Example: `sys.u ~ sys.inner.u` will bind `sys.inner.u`, but `sys.u` remains an unbound, external signal. The namepsaced signal `sys.inner.u` lives in a namspace internal to `sys`.
 """
 function same_or_inner_namespace(u, var)
@@ -149,7 +149,7 @@ end
 """
     has_var(eq, x)
 
-Determine whether or not an equation or expression contains variable `x`.
+Determine whether an equation or expression contains variable `x`.
 """
 function has_var(eq::Equation, x)
     has_var(eq.rhs, x) || has_var(eq.lhs, x)

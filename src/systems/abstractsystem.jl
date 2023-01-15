@@ -29,7 +29,7 @@ function calculate_gradient end
 calculate_jacobian(sys::AbstractSystem)
 ```
 
-Calculate the jacobian matrix of a system.
+Calculate the Jacobian matrix of a system.
 
 Returns a matrix of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
@@ -41,7 +41,7 @@ function calculate_jacobian end
 calculate_control_jacobian(sys::AbstractSystem)
 ```
 
-Calculate the jacobian matrix of a system with respect to the system's controls.
+Calculate the Jacobian matrix of a system with respect to the system's controls.
 
 Returns a matrix of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
@@ -97,7 +97,7 @@ function generate_gradient end
 generate_jacobian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
 ```
 
-Generates a function for the jacobian matrix matrix of a system. Extra arguments control
+Generates a function for the Jacobian matrix of a system. Extra arguments control
 the arguments to the internal [`build_function`](@ref) call.
 """
 function generate_jacobian end
@@ -107,7 +107,7 @@ function generate_jacobian end
 generate_factorized_W(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
 ```
 
-Generates a function for the factorized W-matrix matrix of a system. Extra arguments control
+Generates a function for the factorized W matrix of a system. Extra arguments control
 the arguments to the internal [`build_function`](@ref) call.
 """
 function generate_factorized_W end
@@ -117,7 +117,7 @@ function generate_factorized_W end
 generate_hessian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
 ```
 
-Generates a function for the hessian matrix matrix of a system. Extra arguments control
+Generates a function for the hessian matrix of a system. Extra arguments control
 the arguments to the internal [`build_function`](@ref) call.
 """
 function generate_hessian end
@@ -1124,7 +1124,7 @@ end
 """
     lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, kwargs...)
 
-Return a function that linearizes system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
+Return a function that linearizes the system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
 
 `lin_fun` is a function `(variables, p, t) -> (; f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u)`, i.e., it returns a NamedTuple with the Jacobians of `f,g,h` for the nonlinear `sys` (technically for `simplified_sys`) on the form
 ```math
@@ -1134,7 +1134,7 @@ y = h(x, z, u)
 ```
 where `x` are differential states, `z` algebraic states, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `states(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
 
-The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The states of this system also indicates the order of the states that holds for the linearized matrices.
+The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The states of this system also indicate the order of the states that holds for the linearized matrices.
 
 # Arguments:
 - `sys`: An [`ODESystem`](@ref). This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.

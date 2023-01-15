@@ -21,7 +21,7 @@ for more detail.
 Events involve both a *condition* function (for the zero crossing or truth
 test), and an *affect* function (for determining how to update the system when
 the event occurs). These can both be specified symbolically, but a more [general
-functional affect](@ref func_affects) representation is also allowed as described
+functional affect](@ref func_affects) representation is also allowed, as described
 below.
 
 ## Continuous Events
@@ -35,7 +35,7 @@ In the former, equations that evaluate to 0 will represent conditions that shoul
 be detected by the integrator, for example to force stepping to times of
 discontinuities. The latter allow modeling of events that have an effect on the
 state, where the first entry in the `Pair` is a vector of equations describing
-event conditions, and the second vector of equations describe the effect on the
+event conditions, and the second vector of equations describes the effect on the
 state. Each affect equation must be of the form
 ```julia
 single_state_variable ~ expression_involving_any_variables_or_parameters
@@ -155,7 +155,7 @@ that are provided in the `u` and `p` arguments (implemented as `NamedTuple`s).
 The integrator can also be manipulated more generally to control solution
 behavior, see the [integrator
 interface](https://docs.sciml.ai/DiffEqDocs/stable/basics/integrator/)
-documentation. In affect functions we have that
+documentation. In affect functions, we have that
 ```julia
 function affect!(integ, u, p, ctx)
     # integ.t is the current time
@@ -208,7 +208,7 @@ individual affect should be executed. Here `affect1` and `affect2` are each
 either a vector of one or more symbolic equations, or a functional affect, just
 as for continuous events. As before, for any *one* event the symbolic affect
 equations can either all change states (i.e. variables) or all change
-parameters, but one can not currently mix state and parameter changes within one
+parameters, but one cannot currently mix state and parameter changes within one
 individual event.
 
 ### Example: Injecting cells into a population
@@ -234,7 +234,7 @@ plot(sol)
 
 Notice, with generic discrete events that we want to occur at one or more fixed
 times, we need to also set the `tstops` keyword argument to `solve` to ensure
-the integrator stops at that time. In the next section we show how one can
+the integrator stops at that time. In the next section, we show how one can
 avoid this by using a preset-time callback.
 
 Note that more general logical expressions can be built, for example, suppose we
@@ -252,7 +252,7 @@ plot(sol)
 Since the solution is *not* smaller than half its steady-state value at the
 event time, the event condition now returns false. Here we used logical and,
 `&`, instead of the short-circuiting logical and, `&&`, as currently the latter
-can not be used within symbolic expressions.
+cannot be used within symbolic expressions.
 
 Let's now also add a drug at time `tkill` that turns off production of new
 cells, modeled by setting `α = 0.0`
@@ -275,7 +275,7 @@ plot(sol)
 ```
 
 ### Periodic and preset-time events
-Two important sub-classes of discrete events are periodic and preset-time
+Two important subclasses of discrete events are periodic and preset-time
 events.
 
 A preset-time event is triggered at specific set times, which can be

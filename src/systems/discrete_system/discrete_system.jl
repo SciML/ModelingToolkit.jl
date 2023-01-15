@@ -25,7 +25,7 @@ eqs = [D(x) ~ σ*(y-x),
 """
 struct DiscreteSystem <: AbstractTimeDependentSystem
     """
-    tag: a tag for the system. If two system have the same tag, then they are
+    tag: a tag for the system. If two systems have the same tag, then they are
     structurally identical.
     """
     tag::UInt

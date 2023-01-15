@@ -19,7 +19,7 @@ cons = [x^2 + y^2 ≲ 1]
 """
 struct OptimizationSystem <: AbstractOptimizationSystem
     """
-    tag: a tag for the system. If two system have the same tag, then they are
+    tag: a tag for the system. If two systems have the same tag, then they are
     structurally identical.
     """
     tag::UInt

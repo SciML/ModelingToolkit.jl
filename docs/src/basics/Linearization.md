@@ -28,7 +28,7 @@ eqs = [u ~ kp * (r - y) # P controller
 matrices, simplified_sys = linearize(sys, [r], [y]) # Linearize from r to y
 matrices
 ```
-The named tuple `matrices` contains the matrices of the linear statespace representation, while `simplified_sys` is an `ODESystem` that, amongst other things, indicates the state order in the linear system through
+The named tuple `matrices` contains the matrices of the linear statespace representation, while `simplified_sys` is an `ODESystem` that, among other things, indicates the state order in the linear system through
 ```@example LINEARIZE
 using ModelingToolkit: inputs, outputs
 [states(simplified_sys); inputs(simplified_sys); outputs(simplified_sys)]
