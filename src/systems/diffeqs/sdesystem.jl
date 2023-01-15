@@ -28,7 +28,7 @@ noiseeqs = [0.1*x,
 """
 struct SDESystem <: AbstractODESystem
     """
-    tag: a tag for the system. If two system have the same tag, then they are
+    tag: a tag for the system. If two systems have the same tag, then they are
     structurally identical.
     """
     tag::UInt
@@ -99,7 +99,7 @@ struct SDESystem <: AbstractODESystem
     continuous_events::Vector{SymbolicContinuousCallback}
     """
     discrete_events: A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
-    analog to `SciMLBase.DiscreteCallback` that exectues an affect when a given condition is
+    analog to `SciMLBase.DiscreteCallback` that executes an affect when a given condition is
     true at the end of an integration step.
     """
     discrete_events::Vector{SymbolicDiscreteCallback}

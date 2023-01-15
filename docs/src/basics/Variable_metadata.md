@@ -75,7 +75,7 @@ istunable(Kp)
 
 ## Probability distributions
 A probability distribution may be associated with a parameter to indicate either
-uncertainty about it's value, or as a prior distribution for Bayesian optimization.
+uncertainty about its value, or as a prior distribution for Bayesian optimization.
 
 ```julia
 using Distributions
@@ -88,7 +88,7 @@ getdist(m)
 ```
 
 ## Additional functions
-For systems that contain parameters with metadata like described above have some additional functions defined for convenience.
+For systems that contain parameters with metadata like described above, have some additional functions defined for convenience.
 In the example below, we define a system with tunable parameters and extract bounds vectors
 
 ```@example metadata

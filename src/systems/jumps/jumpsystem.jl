@@ -49,7 +49,7 @@ j₃      = MassActionJump(2*β+γ, [R => 1], [S => 1, R => -1])
 """
 struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
-    tag: a tag for the system. If two system have the same tag, then they are
+    tag: a tag for the system. If two systems have the same tag, then they are
     structurally identical.
     """
     tag::UInt
@@ -82,7 +82,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     connector_type::Any
     """
     discrete_events: A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
-    analog to `SciMLBase.DiscreteCallback` that exectues an affect when a given condition is
+    analog to `SciMLBase.DiscreteCallback` that executes an affect when a given condition is
     true at the end of an integration step. *Note, one must make sure to call
     `reset_aggregated_jumps!(integrator)` if using a custom affect function that changes any
     state value or parameter.*

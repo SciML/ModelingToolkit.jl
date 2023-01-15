@@ -4,7 +4,7 @@ ModelingToolkit.jl provides extensive functionality for model validation and uni
 
 ## Assigning Units 
 
-Units may assigned with the following syntax. 
+Units may be assigned with the following syntax. 
 
 ```@example validation
 using ModelingToolkit, Unitful
@@ -30,7 +30,7 @@ Do not use `quantities` such as  `1u"s"`, `1/u"s"` or `u"1/s"` as these will res
 
 ## Unit Validation & Inspection
 
-Unit validation of equations happens automatically when creating a system. However, for debugging purposes one may wish to validate the equations directly using `validate`.
+Unit validation of equations happens automatically when creating a system. However, for debugging purposes, one may wish to validate the equations directly using `validate`.
 
 ```@docs
 ModelingToolkit.validate
@@ -61,7 +61,7 @@ ModelingToolkit.validate(eqs[1])
 ModelingToolkit.get_unit(eqs[1].rhs)
 ```
 
-An example of an inconsistent system: at present, `ModelingToolkit` requires that the units of all terms in an equation or sum to be equal-valued (`ModelingToolkit.equivalent(u1,u2)`), rather that simply dimensionally consistent. In the future, the validation stage may be upgraded to support the insertion of conversion factors into the equations. 
+An example of an inconsistent system: at present, `ModelingToolkit` requires that the units of all terms in an equation or sum to be equal-valued (`ModelingToolkit.equivalent(u1,u2)`), rather than simply dimensionally consistent. In the future, the validation stage may be upgraded to support the insertion of conversion factors into the equations. 
 
 ```@example validation
 using ModelingToolkit, Unitful

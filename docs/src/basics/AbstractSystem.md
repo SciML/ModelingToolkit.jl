@@ -10,14 +10,14 @@ model manipulation and compilation.
 ### Subtypes
 
 There are three immediate subtypes of `AbstractSystem`, classified by how many independent variables each type has:
-* `AbstractTimeIndependentSystem`: has no independent variable (eg: `NonlinearSystem`)
-* `AbstractTimeDependentSystem`: has a single independent variable (eg: `ODESystem`)
-* `AbstractMultivariateSystem`: may have multiple independent variables (eg: `PDESystem`)
+* `AbstractTimeIndependentSystem`: has no independent variable (e.g.: `NonlinearSystem`)
+* `AbstractTimeDependentSystem`: has a single independent variable (e.g.: `ODESystem`)
+* `AbstractMultivariateSystem`: may have multiple independent variables (e.g.: `PDESystem`)
 
 ## Constructors and Naming
 
 The `AbstractSystem` interface has a consistent method for constructing systems.
-Generally it follows the order of:
+Generally, it follows the order of:
 
 1. Equations
 2. Independent Variables
@@ -28,7 +28,7 @@ All other pieces are handled via keyword arguments. `AbstractSystem`s share the
 same keyword arguments, which are:
 
 - `system`: This is used for specifying subsystems for hierarchical modeling with
-  reusable components. For more information, see the [components page](@ref components)
+  reusable components. For more information, see the [components page](@ref components).
 - Defaults: Keyword arguments like `defaults` are used for specifying default
   values which are used. If a value is not given at the `SciMLProblem` construction
   time, its numerical value will be the default.
@@ -36,7 +36,7 @@ same keyword arguments, which are:
 ## Composition and Accessor Functions
 
 Each `AbstractSystem` has lists of variables in context, such as distinguishing
-parameters vs states. In addition, an `AbstractSystem` also can hold other
+parameters vs states. In addition, an `AbstractSystem` can also hold other
 `AbstractSystem` types. Direct accessing of the values, such as `sys.states`,
 gives the immediate list, while the accessor functions `states(sys)` gives the
 total set, which includes that of all systems held inside.
@@ -118,7 +118,7 @@ patterns via an abstract interpretation without requiring differentiation.
 
 At the end, the system types have `DEProblem` constructors, like `ODEProblem`,
 which allow for directly generating the problem types required for numerical
-methods. The first argument is always the `AbstractSystem`, and the proceeding
+methods. The first argument is always the `AbstractSystem`, and the proceding
 arguments match the argument order of their original constructors. Whenever an
 array would normally be provided, such as `u0` the initial condition of an
 `ODEProblem`, it is instead replaced with a variable map, i.e., an array of

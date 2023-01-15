@@ -20,7 +20,7 @@ eqs = [0 ~ σ*(y-x),
 """
 struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
-    tag: a tag for the system. If two system have the same tag, then they are
+    tag: a tag for the system. If two systems have the same tag, then they are
     structurally identical.
     """
     tag::UInt

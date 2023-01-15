@@ -13,7 +13,7 @@ Notes:
 Example:
 ```julia
 using ModelingToolkit
-@parameters β γ κ η 
+@parameters β γ κ η
 @variables t S(t) I(t) R(t)
 
 rate₁   = β*S*I
@@ -116,7 +116,7 @@ end
 variable_dependencies(sys::AbstractSystem; variables=states(sys), variablestoids=nothing)
 ```
 
-For each variable determine the equations that modify it and return as a [`BipartiteGraph`](@ref).
+For each variable, determine the equations that modify it and return as a [`BipartiteGraph`](@ref).
 
 Notes:
 - Dependencies are returned as a [`BipartiteGraph`](@ref) mapping variable
@@ -165,8 +165,8 @@ Notes:
 - The resulting `SimpleDiGraph` unifies the two sets of vertices (equations
   and then states in the case it comes from [`asgraph`](@ref)), producing one
   ordered set of integer vertices (`SimpleDiGraph` does not support two distinct
-  collections of vertices so they must be merged).
-- `variables` gives the variables that `g` is associated with (usually the
+  collections of vertices, so they must be merged).
+- `variables` gives the variables that `g` are associated with (usually the
   `states` of a system).
 - `equationsfirst` (default is `true`) gives whether the [`BipartiteGraph`](@ref)
   gives a mapping from equations to variables they depend on (`true`), as calculated
