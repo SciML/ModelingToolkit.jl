@@ -172,7 +172,7 @@ end
 
 function namespace_constraints(sys)
     cstrs = constraints(sys)
-    isempty(cstrs) && return Vector{Union{Equation, Inequality}}(undef,0)
+    isempty(cstrs) && return Vector{Union{Equation, Inequality}}(undef, 0)
     map(cstr -> namespace_constraint(cstr, sys), cstrs)
 end
 

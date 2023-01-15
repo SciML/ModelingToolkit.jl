@@ -168,9 +168,9 @@ end
 @testset "nested systems" begin
     @variables x1 x2 x3 x4
     @named sys1 = OptimizationSystem(x1, [x1], [])
-    @named sys2 = OptimizationSystem(x2, [x2], [], systems=[sys1])
-    @named sys3 = OptimizationSystem(x3, [x3], [], systems=[sys2])
-    @named sys4 = OptimizationSystem(x4, [x4], [], systems=[sys3])
+    @named sys2 = OptimizationSystem(x2, [x2], [], systems = [sys1])
+    @named sys3 = OptimizationSystem(x3, [x3], [], systems = [sys2])
+    @named sys4 = OptimizationSystem(x4, [x4], [], systems = [sys3])
 
     @test isequal(equations(sys4), sys3.sys2.sys1.x1 + sys3.sys2.x2 + sys3.x3 + x4)
 end
