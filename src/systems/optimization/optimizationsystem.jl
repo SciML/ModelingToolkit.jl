@@ -143,13 +143,18 @@ function generate_function(sys::OptimizationSystem, vs = states(sys), ps = param
                           conv = AbstractSysToExpr(sys), kwargs...)
 end
 
+function namespace_objective(sys::AbstractSystem)
+    op = objective(sys)
+    namespace_expr(op, sys)
+end
+
 function objective(sys)
     op = get_op(sys)
     systems = get_systems(sys)
     if isempty(systems)
         op
     else
-        op + reduce(+, map(sys_ -> namespace_expr(get_op(sys_), sys_), systems))
+        op + reduce(+, map(sys_ -> namespace_objective(sys_), systems))
     end
 end
 
@@ -166,7 +171,9 @@ function namespace_inequality(ineq::Inequality, sys, n = nameof(sys))
 end
 
 function namespace_constraints(sys)
-    namespace_constraint.(get_constraints(sys), Ref(sys))
+    cstrs = constraints(sys)
+    isempty(cstrs) && return Vector{Union{Equation, Inequality}}(undef,0)
+    map(cstr -> namespace_constraint(cstr, sys), cstrs)
 end
 
 function constraints(sys)
