@@ -1128,9 +1128,11 @@ Return a function that linearizes the system `sys`. The function [`linearize`](@
 
 `lin_fun` is a function `(variables, p, t) -> (; f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u)`, i.e., it returns a NamedTuple with the Jacobians of `f,g,h` for the nonlinear `sys` (technically for `simplified_sys`) on the form
 ```math
-ẋ = f(x, z, u)
-0 = g(x, z, u)
-y = h(x, z, u)
+\\begin{aligned}
+ẋ &= f(x, z, u) \\\\
+0 &= g(x, z, u) \\\\
+y &= h(x, z, u)
+\\end{aligned}
 ```
 where `x` are differential states, `z` algebraic states, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `states(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
 
