@@ -25,26 +25,25 @@ function modelingtoolkitize(prob::DiffEqBase.OptimizationProblem; kwargs...)
 
         if !isnothing(prob.lcons)
             for i in 1:num_cons
-                !isinf(prob.lcons[i]) && prob.lcons[i] !== prob.ucons[i] &&
-                    push!(cons, prob.lcons[i] ≲ lhs[i])
-                if !isinf(prob.ucons[i])
-                    prob.lcons[i] == prob.ucons[i] ? push!(cons, lhs[i] ~ prob.ucons[i]) :
-                    push!(cons, lhs[i] ≲ prob.ucons[i])
+                if !isinf(prob.lcons[i])
+                    if prob.lcons[i] != prob.ucons[i] &&
+                       push!(cons, prob.lcons[i] ≲ lhs[i])
+                    else
+                        push!(cons, lhs[i] ~ prob.ucons[i])
+                    end
                 end
             end
         end
 
         if !isnothing(prob.ucons)
             for i in 1:num_cons
-                if !isinf(prob.ucons[i])
-                    prob.lcons[i] == prob.ucons[i] ? push!(cons, lhs[i] ~ prob.ucons[i]) :
+                if !isinf(prob.ucons[i]) && prob.lcons[i] != prob.ucons[i]
                     push!(cons, lhs[i] ≲ prob.ucons[i])
                 end
             end
         end
-
-        if (isnothing(prob.lcons) || all(isinf.(prob.lcons))) &&
-           (isnothing(prob.ucons) || all(isinf.(prob.ucons)))
+        if (isnothing(prob.lcons) || all(isinf, prob.lcons)) &&
+           (isnothing(prob.ucons) || all(isinf, prob.ucons))
             throw(ArgumentError("Constraints passed have no proper bounds defined.
             Ensure you pass equal bounds (the scalar that the constraint should evaluate to) for equality constraints
             or pass the lower and upper bounds for inequality constraints."))
