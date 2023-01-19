@@ -184,16 +184,91 @@ end
 
 hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
 
-function rep_pars_vals!(e::Expr, p)
-    rep_pars_vals!.(e.args, Ref(p))
-    replace!(e.args, p...)
+"""
+    rep_pars_vals!(expr::T, expr_map)
+
+Replaces variable expressions of the form `:some_variable` or `:(getindex, :some_variable, j)` with 
+`x[i]` were `i` is the corresponding index in the state vector. Same for the parameters. The 
+variable/parameter pairs are provided via the `expr_map`.
+
+Expects only expressions where the variables and parameters are of the form `:some_variable` 
+or `:(getindex, :some_variable, j)` or :(some_variable[j]).
+"""
+rep_pars_vals!(expr::T, expr_map) where {T} = expr
+function rep_pars_vals!(expr::Symbol, expr_map)
+    for (f, n) in expr_map
+        isequal(f, expr) && return n
+    end
+    return expr
+end
+function rep_pars_vals!(expr::Expr, expr_map)
+    if (expr.head == :call && expr.args[1] == getindex) || (expr.head == :ref)
+        for (f, n) in expr_map
+            isequal(f, expr) && return n
+        end
+    end
+    Threads.@sync for i in eachindex(expr.args)
+        Threads.@spawn expr.args[i] = rep_pars_vals!(expr.args[i], expr_map)
+    end
+    return expr
 end
 
-function rep_pars_vals!(e, p) end
+"""
+    symbolify!(e)
+
+Ensures that a given expression is fully symbolic, e.g. no function calls.
+"""
+symbolify!(expr::T) where {T} = expr
+function symbolify!(expr::Expr)
+    if expr.head == :call && !(expr.args[1] isa Symbol)
+        expr.args[1] = Symbol(expr.args[1])
+    end
+    for i in 1:length(expr.args)
+        i == 1 && expr.head == :call && continue # first arg is the operator
+        expr.args[i] = symbolify!(expr.args[i])
+    end
+    return expr
+end
+
+"""
+    expr_map(sys)
+
+Make a map from every parameter and state of the given system to an expression indexing its position 
+in the state or parameter vector.
+"""
+function get_expr_map(sys)
+    dvs = states(sys)
+    ps = parameters(sys)
+    return vcat([toexpr(_s) => Expr(:ref, :x, i)
+                 for (i, _s) in enumerate(dvs)],
+                [toexpr(_p) => Expr(:ref, :p, i)
+                 for (i, _p) in enumerate(ps)])
+end
+
+"""
+    convert_to_expr(eq, sys; expand_expr = false, expr_map = get_expr_map(sys))
+
+Converts the given symbolic expression to a Julia `Expr` and replaces all symbols, i.e. states and 
+parameters with `x[i]` and `p[i]`.
+
+# Arguments:
+- `eq`: Expression to convert
+- `sys`: Reference to the system holding the parameters and states
+- `expand_expr=false`: If `true` the symbolic expression is expanded first.
+"""
+function convert_to_expr(eq, sys; expand_expr = false, expr_map = get_expr_map(sys))
+    if expand_expr
+        eq = Symbolics.expand(eq)
+    end
+    expr = toexpr(eq)
+    rep_pars_vals!(expr, expr_map)
+    symbolify!(expr)
+    return expr
+end
 
 """
 ```julia
-function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
+function DiffEqBase.OptimizationProblem{iip}(sys::AbstractOptimizationSystem,u0map,
                                           parammap=DiffEqBase.NullParameters();
                                           grad = false,
                                           hess = false, sparse = false,
@@ -208,10 +283,11 @@ symbolically calculating numerical enhancements.
 
 Certain solvers require setting `cons_j`, `cons_h` to `true` for constrained-optimization problems.
 """
-function DiffEqBase.OptimizationProblem(sys::OptimizationSystem, args...; kwargs...)
-    DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem, args...; kwargs...)
+function DiffEqBase.OptimizationProblem(sys::AbstractOptimizationSystem, args...; kwargs...)
+    DiffEqBase.OptimizationProblem{true}(sys::AbstractOptimizationSystem, args...;
+                                         kwargs...)
 end
-function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
+function DiffEqBase.OptimizationProblem{iip}(sys::AbstractOptimizationSystem, u0map,
                                              parammap = DiffEqBase.NullParameters();
                                              lb = nothing, ub = nothing,
                                              grad = false,
@@ -263,14 +339,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     f = generate_function(sys, checkbounds = checkbounds, linenumbers = linenumbers,
                           expression = Val{false})
 
-    obj_expr = toexpr(subs_constants(objective(sys)))
-    pairs_arr = if p isa SciMLBase.NullParameters
-        [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)]
-    else
-        vcat([Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)],
-             [Symbol(_p) => p[i] for (i, _p) in enumerate(ps)])
-    end
-    rep_pars_vals!(obj_expr, pairs_arr)
+    expr_map = get_expr_map(sys)
+    obj_expr = convert_to_expr(subs_constants(objective(sys)), sys; expr_map)
     if grad
         grad_oop, grad_iip = generate_gradient(sys, checkbounds = checkbounds,
                                                linenumbers = linenumbers,
@@ -330,8 +400,8 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         else
             _cons_h = nothing
         end
-        cons_expr = toexpr.(subs_constants(constraints(cons_sys)))
-        rep_pars_vals!.(cons_expr, Ref(pairs_arr))
+        cons_expr = convert_to_expr.(subs_constants(constraints(cons_sys)), Ref(sys);
+                                     expr_map)
 
         if !haskey(kwargs, :lcons) && !haskey(kwargs, :ucons) # use the symbolically specified bounds
             lcons = lcons_
@@ -390,7 +460,7 @@ end
 
 """
 ```julia
-function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
+function DiffEqBase.OptimizationProblemExpr{iip}(sys::AbstractOptimizationSystem,
                                           parammap=DiffEqBase.NullParameters();
                                           u0=nothing,
                                           grad = false,
@@ -406,11 +476,11 @@ calculating numerical enhancements.
 """
 struct OptimizationProblemExpr{iip} end
 
-function OptimizationProblemExpr(sys::OptimizationSystem, args...; kwargs...)
+function OptimizationProblemExpr(sys::AbstractOptimizationSystem, args...; kwargs...)
     OptimizationProblemExpr{true}(sys::OptimizationSystem, args...; kwargs...)
 end
 
-function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
+function OptimizationProblemExpr{iip}(sys::AbstractOptimizationSystem, u0map,
                                       parammap = DiffEqBase.NullParameters();
                                       lb = nothing, ub = nothing,
                                       grad = false,
@@ -483,14 +553,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
         hess_prototype = nothing
     end
 
-    obj_expr = toexpr(subs_constants(objective(sys)))
-    pairs_arr = if p isa SciMLBase.NullParameters
-        [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)]
-    else
-        vcat([Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)],
-             [Symbol(_p) => p[i] for (i, _p) in enumerate(ps)])
-    end
-    rep_pars_vals!(obj_expr, pairs_arr)
+    obj_expr = convert_to_expr(subs_constants(objective(sys)), sys)
 
     if length(cstr) > 0
         @named cons_sys = ConstraintsSystem(cstr, dvs, ps)
@@ -508,8 +571,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             _cons_h = nothing
         end
 
-        cons_expr = toexpr.(subs_constants(constraints(cons_sys)))
-        rep_pars_vals!.(cons_expr, Ref(pairs_arr))
+        cons_expr = convert_to_expr.(subs_constants(constraints(cons_sys)), Ref(sys))
 
         if !haskey(kwargs, :lcons) && !haskey(kwargs, :ucons) # use the symbolically specified bounds
             lcons = lcons_
