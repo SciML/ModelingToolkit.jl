@@ -958,10 +958,13 @@ end
 function named_expr(expr)
     if Meta.isexpr(expr, :block)
         newexpr = Expr(:block)
+        names = Expr(:vcat)
         for ex in expr.args
             ex isa LineNumberNode && continue
             push!(newexpr.args, single_named_expr(ex))
+            push!(names.args, ex.args[1])
         end
+        push!(newexpr.args, names)
         newexpr
     else
         single_named_expr(expr)
@@ -979,7 +982,7 @@ end
     @named begin
         y[1:10] = foo(x)
         z = foo(x)
-    end
+    end # returns `[y; z]`
     @named y 1:10 i -> foo(x*i)  # This is not recommended
 
 Pass the LHS name to the model. When it's calling anything that's not an
