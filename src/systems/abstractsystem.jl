@@ -357,16 +357,33 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     end
 end
 
+function apply_to_variables(f::F, ex) where {F}
+    if isvariable(ex)
+        return f(ex)
+    end
+    istree(ex) || return ex
+    similarterm(ex, apply_to_variables(operation(ex)),
+                map(apply_to_variables, arguments(ex)),
+                metadata = metadata(ex))
+end
+
 abstract type SymScope end
 
 struct LocalScope <: SymScope end
-LocalScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, LocalScope())
+function LocalScope(sym::Union{Num, Symbolic})
+    apply_to_variables(sym) do sym
+        setmetadata(sym, SymScope, LocalScope())
+    end
+end
 
 struct ParentScope <: SymScope
     parent::SymScope
 end
 function ParentScope(sym::Union{Num, Symbolic})
-    setmetadata(sym, SymScope, ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+    apply_to_variables(sym) do sym
+        setmetadata(sym, SymScope,
+                    ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+    end
 end
 
 struct DelayParentScope <: SymScope
@@ -374,13 +391,19 @@ struct DelayParentScope <: SymScope
     N::Int
 end
 function DelayParentScope(sym::Union{Num, Symbolic}, N)
-    setmetadata(sym, SymScope,
-                DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
+    apply_to_variables(sym) do sym
+        setmetadata(sym, SymScope,
+                    DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
+    end
 end
 DelayParentScope(sym::Union{Num, Symbolic}) = DelayParentScope(sym, 1)
 
 struct GlobalScope <: SymScope end
-GlobalScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, GlobalScope())
+function GlobalScope(sym::Union{Num, Symbolic})
+    apply_to_variables(sym) do sym
+        setmetadata(sym, SymScope, GlobalScope())
+    end
+end
 
 renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
 
@@ -996,7 +1019,15 @@ end
 
 function default_to_parentscope(v)
     uv = unwrap(v)
-    uv isa Symbolic && !hasmetadata(uv, SymScope) ? ParentScope(v) : v
+    uv isa Symbolic || return v
+    apply_to_variables(v) do sym
+        if !hasmetadata(uv, SymScope)
+            setmetadata(sym, SymScope,
+                        ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+        else
+            sym
+        end
+    end
 end
 
 function _config(expr, namespace)
