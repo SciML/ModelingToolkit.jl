@@ -962,6 +962,39 @@ function _named_idxs(name::Symbol, idxs, call)
     :($name = $map($sym -> $ex, $idxs))
 end
 
+function single_named_expr(expr)
+    name, call = split_assign(expr)
+    if Meta.isexpr(name, :ref)
+        name, idxs = name.args
+        check_name(name)
+        var = gensym(name)
+        ex = quote
+            $var = $(_named(name, call))
+            $name = map(i -> $rename($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
+        end
+        ex
+    else
+        check_name(name)
+        :($name = $(_named(name, call)))
+    end
+end
+
+function named_expr(expr)
+    if Meta.isexpr(expr, :block)
+        newexpr = Expr(:block)
+        names = Expr(:vcat)
+        for ex in expr.args
+            ex isa LineNumberNode && continue
+            push!(newexpr.args, single_named_expr(ex))
+            push!(names.args, ex.args[1])
+        end
+        push!(newexpr.args, names)
+        newexpr
+    else
+        single_named_expr(expr)
+    end
+end
+
 function check_name(name)
     name isa Symbol ||
         throw(Meta.ParseError("The lhs must be a symbol (a) or a ref (a[1:10]). Got $name."))
@@ -970,6 +1003,10 @@ end
 """
     @named y = foo(x)
     @named y[1:10] = foo(x)
+    @named begin
+        y[1:10] = foo(x)
+        z = foo(x)
+    end # returns `[y; z]`
     @named y 1:10 i -> foo(x*i)  # This is not recommended
 
 Pass the LHS name to the model. When it's calling anything that's not an
@@ -998,20 +1035,7 @@ julia> @named y[1:3] = foo(x)
 ```
 """
 macro named(expr)
-    name, call = split_assign(expr)
-    if Meta.isexpr(name, :ref)
-        name, idxs = name.args
-        check_name(name)
-        var = gensym(name)
-        ex = quote
-            $var = $(_named(name, call))
-            $name = map(i -> $rename($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
-        end
-        esc(ex)
-    else
-        check_name(name)
-        esc(:($name = $(_named(name, call))))
-    end
+    esc(named_expr(expr))
 end
 
 macro named(name::Symbol, idxs, call)
