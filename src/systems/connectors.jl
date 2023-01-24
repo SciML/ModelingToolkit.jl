@@ -378,8 +378,29 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
         end
     end
 
+    if !isempty(instream_exprs)
+        # map from a namespaced stream variable to a ConnectionSet
+        expr_cset = Dict()
+        for cset in csets
+            crep = first(cset.set)
+            current = namespace == crep.sys.namespace
+            for v in cset.set
+                if (current || !v.isouter)
+                    expr_cset[namespaced_var(v)] = cset.set
+                end
+            end
+        end
+    end
+
     for ex in instream_exprs
-        cset, idx_in_set, sv = get_cset_sv(namespace, ex, csets)
+        ns_sv = only(arguments(ex))
+        full_name_sv = renamespace(namespace, ns_sv)
+        if haskey(expr_cset, full_name_sv)
+            cset = expr_cset[full_name_sv]
+        else
+            error("$ns_sv is not a variable inside stream connectors")
+        end
+        idx_in_set, sv = get_cset_sv(full_name_sv, cset)
 
         n_inners = n_outers = 0
         for (i, e) in enumerate(cset)
@@ -505,17 +526,10 @@ function get_current_var(namespace, cele, sv)
     states(renamespace(unnamespace(namespace, cele.sys.namespace), cele.sys.sys), sv)
 end
 
-function get_cset_sv(namespace, ex, csets)
-    ns_sv = only(arguments(ex))
-    full_name_sv = renamespace(namespace, ns_sv)
-
-    for c in csets
-        crep = first(c.set)
-        current = namespace == crep.sys.namespace
-        for (idx_in_set, v) in enumerate(c.set)
-            if (current || !v.isouter) && isequal(namespaced_var(v), full_name_sv)
-                return c.set, idx_in_set, v.v
-            end
+function get_cset_sv(full_name_sv, cset)
+    for (idx_in_set, v) in enumerate(cset)
+        if isequal(namespaced_var(v), full_name_sv)
+            return idx_in_set, v.v
         end
     end
     error("$ns_sv is not a variable inside stream connectors")
