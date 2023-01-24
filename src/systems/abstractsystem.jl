@@ -74,7 +74,8 @@ function calculate_hessian end
 
 """
 ```julia
-generate_tgrad(sys::AbstractTimeDependentSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+generate_tgrad(sys::AbstractTimeDependentSystem, dvs = states(sys), ps = parameters(sys),
+               expression = Val{true}; kwargs...)
 ```
 
 Generates a function for the time gradient of a system. Extra arguments control
@@ -84,7 +85,8 @@ function generate_tgrad end
 
 """
 ```julia
-generate_gradient(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+generate_gradient(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+                  expression = Val{true}; kwargs...)
 ```
 
 Generates a function for the gradient of a system. Extra arguments control
@@ -94,7 +96,8 @@ function generate_gradient end
 
 """
 ```julia
-generate_jacobian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
+generate_jacobian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+                  expression = Val{true}; sparse = false, kwargs...)
 ```
 
 Generates a function for the Jacobian matrix of a system. Extra arguments control
@@ -104,7 +107,8 @@ function generate_jacobian end
 
 """
 ```julia
-generate_factorized_W(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
+generate_factorized_W(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+                      expression = Val{true}; sparse = false, kwargs...)
 ```
 
 Generates a function for the factorized W matrix of a system. Extra arguments control
@@ -114,7 +118,8 @@ function generate_factorized_W end
 
 """
 ```julia
-generate_hessian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
+generate_hessian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+                 expression = Val{true}; sparse = false, kwargs...)
 ```
 
 Generates a function for the hessian matrix of a system. Extra arguments control
@@ -124,7 +129,8 @@ function generate_hessian end
 
 """
 ```julia
-generate_function(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+generate_function(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+                  expression = Val{true}; kwargs...)
 ```
 
 Generate a function to evaluate the system's equations.
@@ -1015,6 +1021,7 @@ that namespacing works intuitively when passing a symbolic default into a
 component.
 
 Examples:
+
 ```julia-repl
 julia> using ModelingToolkit
 
@@ -1183,6 +1190,7 @@ end
 Return a function that linearizes the system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
 
 `lin_fun` is a function `(variables, p, t) -> (; f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u)`, i.e., it returns a NamedTuple with the Jacobians of `f,g,h` for the nonlinear `sys` (technically for `simplified_sys`) on the form
+
 ```math
 \\begin{aligned}
 ẋ &= f(x, z, u) \\\\
@@ -1190,16 +1198,18 @@ ẋ &= f(x, z, u) \\\\
 y &= h(x, z, u)
 \\end{aligned}
 ```
+
 where `x` are differential states, `z` algebraic states, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `states(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
 
 The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The states of this system also indicate the order of the states that holds for the linearized matrices.
 
 # Arguments:
-- `sys`: An [`ODESystem`](@ref). This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.
-- `inputs`: A vector of variables that indicate the inputs of the linearized input-output model.
-- `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
-- `simplify`: Apply simplification in tearing.
-- `kwargs`: Are passed on to `find_solvables!`
+
+  - `sys`: An [`ODESystem`](@ref). This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.
+  - `inputs`: A vector of variables that indicate the inputs of the linearized input-output model.
+  - `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
+  - `simplify`: Apply simplification in tearing.
+  - `kwargs`: Are passed on to `find_solvables!`
 
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
@@ -1291,6 +1301,7 @@ end
 
 Return a NamedTuple with the matrices of a linear statespace representation
 on the form
+
 ```math
 \\begin{aligned}
 ẋ &= Ax + Bu\\\\
@@ -1314,7 +1325,9 @@ The implementation and notation follows that of
 ["Linear Analysis Approach for Modelica Models", Allain et al. 2009](https://ep.liu.se/ecp/043/075/ecp09430097.pdf)
 
 # Extended help
+
 This example builds the following feedback interconnection and linearizes it from the input of `F` to the output of `P`.
+
 ```
 
   r ┌─────┐       ┌─────┐     ┌─────┐
@@ -1325,6 +1338,7 @@ This example builds the following feedback interconnection and linearizes it fro
                 │                     │
                 └─────────────────────┘
 ```
+
 ```julia
 using ModelingToolkit
 @variables t
@@ -1339,7 +1353,7 @@ end
 
 function ref_filt(; name)
     @variables x(t)=0 y(t)=0
-    @variables u(t)=0 [input=true]
+    @variables u(t)=0 [input = true]
     D = Differential(t)
     eqs = [D(x) ~ -2 * x + u
            y ~ x]
@@ -1366,7 +1380,7 @@ connections = [f.y ~ c.r # filtered reference to controller reference
 @named cl = ODESystem(connections, t, systems = [f, c, p])
 
 lsys, ssys = linearize(cl, [f.u], [p.x])
-desired_order =  [f.x, p.x]
+desired_order = [f.x, p.x]
 lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
 
 @assert lsys.A == [-2 0; 1 -2]
@@ -1437,6 +1451,7 @@ end
     (; Ã, B̃, C̃, D̃) = similarity_transform(sys, T; unitary=false)
 
 Perform a similarity transform `T : Tx̃ = x` on linear system represented by matrices in NamedTuple `sys` such that
+
 ```
 Ã = T⁻¹AT
 B̃ = T⁻¹ B
@@ -1465,11 +1480,13 @@ end
 
 Permute the state representation of `sys` obtained from [`linearize`](@ref) so that the state order is changed from `old` to `new`
 Example:
+
 ```
 lsys, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
 desired_order = [int.x, der.x] # States that are present in states(ssys)
 lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
 ```
+
 See also [`ModelingToolkit.similarity_transform`](@ref)
 """
 function reorder_states(sys::NamedTuple, old, new)

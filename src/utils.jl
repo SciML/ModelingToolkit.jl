@@ -210,7 +210,9 @@ function check_equations(eqs, iv)
             throw(ArgumentError("Differential w.r.t. variable ($single_iv) other than the independent variable ($iv) are not allowed."))
     end
 end
-"Get all the independent variables with respect to which differentials/differences are taken."
+"""
+Get all the independent variables with respect to which differentials/differences are taken.
+"""
 function collect_ivs_from_nested_operator!(ivs, x, target_op)
     if !istree(x)
         return
@@ -277,7 +279,9 @@ function collect_var_to_name!(vars, xs)
     end
 end
 
-"Throw error when difference/derivative operation occurs in the R.H.S."
+"""
+Throw error when difference/derivative operation occurs in the R.H.S.
+"""
 @noinline function throw_invalid_operator(opvar, eq, op::Type)
     if op === Difference
         optext = "difference"
@@ -289,7 +293,9 @@ end
     throw(InvalidSystemException(msg))
 end
 
-"Check if difference/derivative operation occurs in the R.H.S. of an equation"
+"""
+Check if difference/derivative operation occurs in the R.H.S. of an equation
+"""
 function _check_operator_variables(eq, op::T, expr = eq.rhs) where {T}
     istree(expr) || return nothing
     if operation(expr) isa op
@@ -298,7 +304,9 @@ function _check_operator_variables(eq, op::T, expr = eq.rhs) where {T}
     foreach(expr -> _check_operator_variables(eq, op, expr),
             SymbolicUtils.unsorted_arguments(expr))
 end
-"Check if all the LHS are unique"
+"""
+Check if all the LHS are unique
+"""
 function check_operator_variables(eqs, op::T) where {T}
     ops = Set()
     tmp = Set()
@@ -361,11 +369,14 @@ end
 
 """
     vars(x; op=Differential)
+
 Return a `Set` containing all variables in `x` that appear in
-- differential equations if `op = Differential`
-- difference equations if `op = Differential`
+
+  - differential equations if `op = Differential`
+  - difference equations if `op = Differential`
 
 Example:
+
 ```
 @variables t u(t) y(t)
 D  = Differential(t)
@@ -437,12 +448,14 @@ collect_difference_variables(sys) = collect_operator_variables(sys, Difference)
     collect_applied_operators(x, op)
 
 Return  a `Set` with all applied operators in `x`, example:
+
 ```
 @variables t u(t) y(t)
 D = Differential(t)
 eq = D(y) ~ u
 ModelingToolkit.collect_applied_operators(eq, Differential) == Set([D(y)])
 ```
+
 The difference compared to `collect_operator_variables` is that `collect_operator_variables` returns the variable without the operator applied.
 """
 function collect_applied_operators(x, op)
@@ -504,7 +517,9 @@ function collect_var!(states, parameters, var, iv)
     return nothing
 end
 
-""" Find all the symbolic constants of some equations or terms and return them as a vector. """
+"""
+Find all the symbolic constants of some equations or terms and return them as a vector.
+"""
 function collect_constants(x)
     constants = Symbolics.Sym[]
     collect_constants!(constants, x)
@@ -546,13 +561,17 @@ function collect_constants!(constants, expr::Symbolics.Symbolic)
     end
 end
 
-""" Replace symbolic constants with their literal values """
+"""
+Replace symbolic constants with their literal values
+"""
 function eliminate_constants(eqs, cs)
     cmap = Dict(x => getdefault(x) for x in cs)
     return substitute(eqs, cmap)
 end
 
-""" Create a function preface containing assignments of default values to constants. """
+"""
+Create a function preface containing assignments of default values to constants.
+"""
 function get_preprocess_constants(eqs)
     cs = collect_constants(eqs)
     pre = ex -> Let(Assignment[Assignment(x, getdefault(x)) for x in cs],

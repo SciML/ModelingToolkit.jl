@@ -8,8 +8,8 @@ from the solution. But what if you need to get the index? The following helper
 function will do the trick:
 
 ```julia
-indexof(sym,syms) = findfirst(isequal(sym),syms)
-indexof(σ,parameters(sys))
+indexof(sym, syms) = findfirst(isequal(sym), syms)
+indexof(σ, parameters(sys))
 ```
 
 ## Transforming value maps to arrays
@@ -19,7 +19,7 @@ because symbol ordering is not guaranteed. However, what if you want to get the
 lowered array? You can use the internal function `varmap_to_vars`. For example:
 
 ```julia
-pnew = varmap_to_vars([β=>3.0, c=>10.0, γ=>2.0],parameters(sys))
+pnew = varmap_to_vars([β => 3.0, c => 10.0, γ => 2.0], parameters(sys))
 ```
 
 ## How do I handle `if` statements in my symbolic forms?
@@ -35,7 +35,7 @@ term will be excluded from the model.
 
 If you see the error:
 
-```julia
+```
 ERROR: TypeError: non-boolean (Num) used in boolean context
 ```
 
@@ -57,7 +57,7 @@ For example, let's say you were building ODEProblems in the loss function like:
 function loss(p)
     prob = ODEProblem(sys, [], [p1 => p[1], p2 => p[2]])
     sol = solve(prob, Tsit5())
-    sum(abs2,sol)
+    sum(abs2, sol)
 end
 ```
 
@@ -69,9 +69,9 @@ once outside the loss function, and remake the prob inside the loss function:
 ```julia
 prob = ODEProblem(sys, [], [p1 => p[1], p2 => p[2]])
 function loss(p)
-    remake(prob,p = ...)
+    remake(prob, p = ...)
     sol = solve(prob, Tsit5())
-    sum(abs2,sol)
+    sum(abs2, sol)
 end
 ```
 
@@ -91,8 +91,8 @@ Using this, the fixed index map can be used in the loss function. This would loo
 prob = ODEProblem(sys, [], [p1 => p[1], p2 => p[2]])
 idxs = Int.(ModelingToolkit.varmap_to_vars([p1 => 1, p2 => 2], p))
 function loss(p)
-    remake(prob,p = p[idxs])
+    remake(prob, p = p[idxs])
     sol = solve(prob, Tsit5())
-    sum(abs2,sol)
+    sum(abs2, sol)
 end
 ```

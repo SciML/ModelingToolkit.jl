@@ -289,7 +289,7 @@ end
 
 """
 ```julia
-Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T<:Integer}
+Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T <: Integer}
 ```
 
 Test whether two [`BipartiteGraph`](@ref)s are equal.
@@ -597,14 +597,14 @@ flag, which switches the direction of the induced matching.
 Essentially the graph adapter performs two largely orthogonal functions
 [`Transposed == true` differences are indicated in square brackets]:
 
-1. It pairs an undirected bipartite graph with a matching of the destination vertex.
+ 1. It pairs an undirected bipartite graph with a matching of the destination vertex.
 
     This matching is used to induce an orientation on the otherwise undirected graph:
     Matched edges pass from destination to source [source to desination], all other edges
     pass in the opposite direction.
 
-2. It exposes the graph view obtained by contracting the destination [source] vertices
-   along the matched edges.
+ 2. It exposes the graph view obtained by contracting the destination [source] vertices
+    along the matched edges.
 
 The result of this operation is an induced, directed graph on the source [destination] vertices.
 The resulting graph has a few desirable properties. In particular, this graph

@@ -17,6 +17,7 @@ so, ModelingToolkit analysis passes and transformations can be run as intermedia
 to improve a simulation code before it's passed to the solver.
 
 !!! note
+    
     `modelingtoolkitize` does have some limitations, i.e. not all codes that work with the
     numerical solvers will work with `modelingtoolkitize`. Namely, it requires the ability
     to trace the equations with Symbolics.jl `Num` types. Generally, a code which is
@@ -24,6 +25,7 @@ to improve a simulation code before it's passed to the solver.
     `modelingtoolkitize`.
 
 !!! warn
+    
     `modelingtoolkitize` expressions cannot keep control flow structures (loops), and thus
     equations with long loops will be translated into large expressions, which can increase
     the compile time of the equations and reduce the SIMD vectorization achieved by LLVM.
@@ -35,15 +37,15 @@ defined as an `ODEProblem` for DifferentialEquations.jl:
 
 ```@example mtkize
 using DifferentialEquations, ModelingToolkit
-function rober(du,u,p,t)
-  y₁,y₂,y₃ = u
-  k₁,k₂,k₃ = p
-  du[1] = -k₁*y₁+k₃*y₂*y₃
-  du[2] =  k₁*y₁-k₂*y₂^2-k₃*y₂*y₃
-  du[3] =  k₂*y₂^2
-  nothing
+function rober(du, u, p, t)
+    y₁, y₂, y₃ = u
+    k₁, k₂, k₃ = p
+    du[1] = -k₁ * y₁ + k₃ * y₂ * y₃
+    du[2] = k₁ * y₁ - k₂ * y₂^2 - k₃ * y₂ * y₃
+    du[3] = k₂ * y₂^2
+    nothing
 end
-prob = ODEProblem(rober,[1.0,0.0,0.0],(0.0,1e5),(0.04,3e7,1e4))
+prob = ODEProblem(rober, [1.0, 0.0, 0.0], (0.0, 1e5), (0.04, 3e7, 1e4))
 ```
 
 If we want to get a symbolic representation, we can simply call `modelingtoolkitize`
@@ -56,5 +58,5 @@ sys = modelingtoolkitize(prob)
 Using this, we can symbolically build the Jacobian and then rebuild the ODEProblem:
 
 ```@example mtkize
-prob_jac = ODEProblem(sys,[],(0.0,1e5),jac=true)
+prob_jac = ODEProblem(sys, [], (0.0, 1e5), jac = true)
 ```

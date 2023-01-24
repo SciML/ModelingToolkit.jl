@@ -23,17 +23,19 @@ to ignore such variables when attempting to find the states of a system.
 ## Constants
 
 Constants are like parameters that:
-- always have a default value, which must be assigned when the constants are
+
+  - always have a default value, which must be assigned when the constants are
     declared
-- do not show up in the list of parameters of a system.
+  - do not show up in the list of parameters of a system.
 
 The intended use-cases for constants are:
-- representing literals (e.g., π) symbolically, which results in cleaner
+
+  - representing literals (e.g., π) symbolically, which results in cleaner
     Latexification of equations (avoids turning `d ~ 2π*r` into `d = 6.283185307179586 r`)
-- allowing auto-generated unit conversion factors to live outside the list of
+  - allowing auto-generated unit conversion factors to live outside the list of
     parameters
-- representing fundamental constants (e.g., speed of light `c`) that should never
-     be adjusted inadvertently.
+  - representing fundamental constants (e.g., speed of light `c`) that should never
+    be adjusted inadvertently.
 
 ## Wildcard Variable Arguments
 
@@ -58,7 +60,7 @@ For example, the following specifies that `x` is a 2x2 matrix of flow variables
 with the unit m^3/s:
 
 ```julia
-@variables x[1:2,1:2] [connect = Flow; unit = u"m^3/s"]
+@variables x[1:2, 1:2] [connect = Flow; unit = u"m^3/s"]
 ```
 
 ModelingToolkit defines `connect`, `unit`, `noise`, and `description` keys for
