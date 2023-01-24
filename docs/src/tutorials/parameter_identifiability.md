@@ -7,6 +7,7 @@ We will start by illustrating **local identifiability** in which a parameter is 
 The package has a standalone data structure for ordinary differential equations, but is also compatible with `ODESystem` type from `ModelingToolkit.jl`.
 
 ## Local Identifiability
+
 ### Input System
 
 We will consider the following model:
@@ -22,9 +23,11 @@ y_2 = x_5\end{cases}$$
 This model describes the biohydrogenation[^1] process[^2] with unknown initial conditions.
 
 ### Using the `ODESystem` object
+
 To define the ode system in Julia, we use `ModelingToolkit.jl`.
 
 We first define the parameters, variables, differential equations and the output equations.
+
 ```@example SI
 using StructuralIdentifiability, ModelingToolkit
 
@@ -35,31 +38,36 @@ D = Differential(t)
 
 # define equations
 eqs = [
-    D(x4) ~ - k5 * x4 / (k6 + x4),
-    D(x5) ~ k5 * x4 / (k6 + x4) - k7 * x5/(k8 + x5 + x6),
+    D(x4) ~ -k5 * x4 / (k6 + x4),
+    D(x5) ~ k5 * x4 / (k6 + x4) - k7 * x5 / (k8 + x5 + x6),
     D(x6) ~ k7 * x5 / (k8 + x5 + x6) - k9 * x6 * (k10 - x6) / k10,
-    D(x7) ~ k9 * x6 * (k10 - x6) / k10
+    D(x7) ~ k9 * x6 * (k10 - x6) / k10,
 ]
 
 # define the output functions (quantities that can be measured)
 measured_quantities = [y1 ~ x4, y2 ~ x5]
 
 # define the system
-de = ODESystem(eqs, t, name=:Biohydrogenation)
+de = ODESystem(eqs, t, name = :Biohydrogenation)
 ```
 
 After that, we are ready to check the system for local identifiability:
+
 ```@example SI
 # query local identifiability
 # we pass the ode-system
-local_id_all = assess_local_identifiability(de, measured_quantities=measured_quantities, p=0.99)
+local_id_all = assess_local_identifiability(de, measured_quantities = measured_quantities,
+                                            p = 0.99)
 ```
-We can see that all states (except $x_7$) and all parameters are locally identifiable with probability 0.99. 
+
+We can see that all states (except $x_7$) and all parameters are locally identifiable with probability 0.99.
 
 Let's try to check specific parameters and their combinations
+
 ```@example SI
-to_check = [k5, k7, k10/k9, k5+k6]
-local_id_some = assess_local_identifiability(de, measured_quantities=measured_quantities, funcs_to_check=to_check, p=0.99)
+to_check = [k5, k7, k10 / k9, k5 + k6]
+local_id_some = assess_local_identifiability(de, measured_quantities = measured_quantities,
+                                             funcs_to_check = to_check, p = 0.99)
 ```
 
 Notice that in this case, everything (except the state variable $x_7$) is locally identifiable, including combinations such as $k_{10}/k_9, k_5+k_6$
@@ -73,11 +81,11 @@ In this part tutorial, let us cover an example problem of querying the ODE for g
 Let us consider the following four-dimensional model with two outputs:
 
 $$\begin{cases}
-    x_1'(t) = -b  x_1(t) + \frac{1 }{ c + x_4(t)},\\
-    x_2'(t) = \alpha  x_1(t) - \beta  x_2(t),\\
-    x_3'(t) = \gamma  x_2(t) - \delta  x_3(t),\\
-    x_4'(t) = \sigma  x_4(t)  \frac{(\gamma x_2(t) - \delta x_3(t))}{ x_3(t)},\\
-    y(t) = x_1(t)
+x_1'(t) = -b  x_1(t) + \frac{1 }{ c + x_4(t)},\\
+x_2'(t) = \alpha  x_1(t) - \beta  x_2(t),\\
+x_3'(t) = \gamma  x_2(t) - \delta  x_3(t),\\
+x_4'(t) = \sigma  x_4(t)  \frac{(\gamma x_2(t) - \delta x_3(t))}{ x_3(t)},\\
+y(t) = x_1(t)
 \end{cases}$$
 
 We will run a global identifiability check on this enzyme dynamics[^3] model. We will use the default settings: the probability of correctness will be `p=0.99` and we are interested in identifiability of all possible parameters.
@@ -93,19 +101,19 @@ using StructuralIdentifiability, ModelingToolkit
 D = Differential(t)
 
 eqs = [
-    D(x1) ~ -b * x1 + 1/(c + x4),
+    D(x1) ~ -b * x1 + 1 / (c + x4),
     D(x2) ~ a * x1 - beta * x2,
     D(x3) ~ g * x2 - delta * x3,
-    D(x4) ~ sigma * x4 * (g * x2 - delta * x3)/x3
+    D(x4) ~ sigma * x4 * (g * x2 - delta * x3) / x3,
 ]
 
-measured_quantities = [y~x1+x2, y2~x2]
+measured_quantities = [y ~ x1 + x2, y2 ~ x2]
 
+ode = ODESystem(eqs, t, name = :GoodwinOsc)
 
-ode = ODESystem(eqs, t, name=:GoodwinOsc)
-
-global_id = assess_identifiability(ode, measured_quantities=measured_quantities)
+global_id = assess_identifiability(ode, measured_quantities = measured_quantities)
 ```
+
 We can see that only parameters `a, g` are unidentifiable, and everything else can be uniquely recovered.
 
 Let us consider the same system but with two inputs, and we will find out identifiability with probability `0.9` for parameters `c` and `b`:
@@ -113,35 +121,29 @@ Let us consider the same system but with two inputs, and we will find out identi
 ```@example SI3
 using StructuralIdentifiability, ModelingToolkit
 @parameters b c a beta g delta sigma
-@variables t x1(t) x2(t) x3(t) x4(t) y(t) y2(t) u1(t) [input=true] u2(t) [input=true]
+@variables t x1(t) x2(t) x3(t) x4(t) y(t) y2(t) u1(t) [input = true] u2(t) [input = true]
 D = Differential(t)
 
 eqs = [
-    D(x1) ~ -b * x1 + 1/(c + x4),
+    D(x1) ~ -b * x1 + 1 / (c + x4),
     D(x2) ~ a * x1 - beta * x2 - u1,
     D(x3) ~ g * x2 - delta * x3 + u2,
-    D(x4) ~ sigma * x4 * (g * x2 - delta * x3)/x3
+    D(x4) ~ sigma * x4 * (g * x2 - delta * x3) / x3,
 ]
-measured_quantities = [y~x1+x2, y2~x2]
+measured_quantities = [y ~ x1 + x2, y2 ~ x2]
 
 # check only 2 parameters
 to_check = [b, c]
 
-ode = ODESystem(eqs, t, name=:GoodwinOsc)
+ode = ODESystem(eqs, t, name = :GoodwinOsc)
 
-global_id = assess_identifiability(ode, measured_quantities=measured_quantities, funcs_to_check=to_check, p=0.9)
+global_id = assess_identifiability(ode, measured_quantities = measured_quantities,
+                                   funcs_to_check = to_check, p = 0.9)
 ```
 
 Both parameters `b, c` are globally identifiable with probability `0.9` in this case.
 
-[^1]:
-    > R. Munoz-Tamayo, L. Puillet, J.B. Daniel, D. Sauvant, O. Martin, M. Taghipoor, P. Blavy [*Review: To be or not to be an identifiable model. Is this a relevant question in animal science modelling?*](https://doi.org/10.1017/S1751731117002774), Animal, Vol 12 (4), 701-712, 2018. The model is the ODE system (3) in Supplementary Material 2, initial conditions are assumed to be unknown.
-
-[^2]:
-    > Moate P.J., Boston R.C., Jenkins T.C. and Lean I.J., [*Kinetics of Ruminal Lipolysis of Triacylglycerol and Biohydrogenationof Long-Chain Fatty Acids: New Insights from Old Data*](doi:10.3168/jds.2007-0398), Journal of Dairy Science 91, 731–742, 2008
-
-[^3]:
-    > Goodwin, B.C. [*Oscillatory behavior in enzymatic control processes*](https://doi.org/10.1016/0065-2571(65)90067-1), Advances in Enzyme Regulation, Vol 3 (C), 425-437, 1965
-
-[^4]:
-    > Dong, R., Goodbrake, C., Harrington, H. A., & Pogudin, G. [*Computing input-output projections of dynamical models with applications to structural identifiability*](https://arxiv.org/pdf/2111.00991). arXiv preprint arXiv:2111.00991.
+[^1]: > R. Munoz-Tamayo, L. Puillet, J.B. Daniel, D. Sauvant, O. Martin, M. Taghipoor, P. Blavy [*Review: To be or not to be an identifiable model. Is this a relevant question in animal science modelling?*](https://doi.org/10.1017/S1751731117002774), Animal, Vol 12 (4), 701-712, 2018. The model is the ODE system (3) in Supplementary Material 2, initial conditions are assumed to be unknown.
+[^2]: > Moate P.J., Boston R.C., Jenkins T.C. and Lean I.J., [*Kinetics of Ruminal Lipolysis of Triacylglycerol and Biohydrogenationof Long-Chain Fatty Acids: New Insights from Old Data*](doi:10.3168/jds.2007-0398), Journal of Dairy Science 91, 731–742, 2008
+[^3]: > Goodwin, B.C. [*Oscillatory behavior in enzymatic control processes*](https://doi.org/10.1016/0065-2571(65)90067-1), Advances in Enzyme Regulation, Vol 3 (C), 425-437, 1965
+[^4]: > Dong, R., Goodbrake, C., Harrington, H. A., & Pogudin, G. [*Computing input-output projections of dynamical models with applications to structural identifiability*](https://arxiv.org/pdf/2111.00991). arXiv preprint arXiv:2111.00991.

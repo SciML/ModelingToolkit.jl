@@ -3,8 +3,8 @@
 
 The SparseMatrixCLIL represents a sparse matrix in two distinct ways:
 
-1. As a sparse (in both row and column) n x m matrix
-2. As a row-dense, column-sparse k x m matrix
+ 1. As a sparse (in both row and column) n x m matrix
+ 2. As a row-dense, column-sparse k x m matrix
 
 The data structure keeps a permutation between the row order of the two representations.
 Swapping the rows in one does not affect the other.

@@ -1,37 +1,38 @@
 """
 ```julia
-equation_dependencies(sys::AbstractSystem; variables=states(sys))
+equation_dependencies(sys::AbstractSystem; variables = states(sys))
 ```
 
 Given an `AbstractSystem` calculate for each equation the variables it depends on.
 
 Notes:
-- Variables that are not in `variables` are filtered out.
-- `get_variables!` is used to determine the variables within a given equation.
-- returns a `Vector{Vector{Variable}}()` mapping the index of an equation to the `variables` it depends on.
+
+  - Variables that are not in `variables` are filtered out.
+  - `get_variables!` is used to determine the variables within a given equation.
+  - returns a `Vector{Vector{Variable}}()` mapping the index of an equation to the `variables` it depends on.
 
 Example:
+
 ```julia
 using ModelingToolkit
 @parameters β γ κ η
 @variables t S(t) I(t) R(t)
 
-rate₁   = β*S*I
-rate₂   = γ*I+t
+rate₁ = β * S * I
+rate₂ = γ * I + t
 affect₁ = [S ~ S - 1, I ~ I + 1]
 affect₂ = [I ~ I - 1, R ~ R + 1]
-j₁ = ConstantRateJump(rate₁,affect₁)
-j₂ = VariableRateJump(rate₂,affect₂)
+j₁ = ConstantRateJump(rate₁, affect₁)
+j₂ = VariableRateJump(rate₂, affect₂)
 
 # create a JumpSystem using these jumps
-@named jumpsys = JumpSystem([j₁,j₂], t, [S,I,R], [β,γ])
+@named jumpsys = JumpSystem([j₁, j₂], t, [S, I, R], [β, γ])
 
 # dependency of each jump rate function on state variables
 equation_dependencies(jumpsys)
 
 # dependency of each jump rate function on parameters
-equation_dependencies(jumpsys, variables=parameters(jumpsys))
-
+equation_dependencies(jumpsys, variables = parameters(jumpsys))
 ```
 """
 function equation_dependencies(sys::AbstractSystem; variables = states(sys))
@@ -57,13 +58,16 @@ Convert a collection of equation dependencies, for example as returned by
 `equation_dependencies`, to a [`BipartiteGraph`](@ref).
 
 Notes:
-- `vtois` should provide a `Dict` like mapping from each `Variable` dependency in
-  `eqdeps` to the integer idx of the variable to use in the graph.
+
+  - `vtois` should provide a `Dict` like mapping from each `Variable` dependency in
+    `eqdeps` to the integer idx of the variable to use in the graph.
 
 Example:
 Continuing the example started in [`equation_dependencies`](@ref)
+
 ```julia
-digr = asgraph(equation_dependencies(odesys), Dict(s => i for (i,s) in enumerate(states(odesys))))
+digr = asgraph(equation_dependencies(odesys),
+               Dict(s => i for (i, s) in enumerate(states(odesys))))
 ```
 """
 function asgraph(eqdeps, vtois)
@@ -85,23 +89,25 @@ end
 # could be made to directly generate graph and save memory
 """
 ```julia
-asgraph(sys::AbstractSystem; variables=states(sys),
-                                      variablestoids=Dict(convert(Variable, v) => i for (i,v) in enumerate(variables)))
+asgraph(sys::AbstractSystem; variables = states(sys),
+        variablestoids = Dict(convert(Variable, v) => i for (i, v) in enumerate(variables)))
 ```
 
 Convert an `AbstractSystem` to a [`BipartiteGraph`](@ref) mapping the index of equations
 to the indices of variables they depend on.
 
 Notes:
-- Defaults for kwargs creating a mapping from `equations(sys)` to `states(sys)`
-  they depend on.
-- `variables` should provide the list of variables to use for generating
-  the dependency graph.
-- `variablestoids` should provide `Dict` like mapping from a `Variable` to its
-  `Int` index within `variables`.
+
+  - Defaults for kwargs creating a mapping from `equations(sys)` to `states(sys)`
+    they depend on.
+  - `variables` should provide the list of variables to use for generating
+    the dependency graph.
+  - `variablestoids` should provide `Dict` like mapping from a `Variable` to its
+    `Int` index within `variables`.
 
 Example:
 Continuing the example started in [`equation_dependencies`](@ref)
+
 ```julia
 digr = asgraph(odesys)
 ```
@@ -113,19 +119,22 @@ end
 
 """
 ```julia
-variable_dependencies(sys::AbstractSystem; variables=states(sys), variablestoids=nothing)
+variable_dependencies(sys::AbstractSystem; variables = states(sys),
+                      variablestoids = nothing)
 ```
 
 For each variable, determine the equations that modify it and return as a [`BipartiteGraph`](@ref).
 
 Notes:
-- Dependencies are returned as a [`BipartiteGraph`](@ref) mapping variable
-  indices to the indices of equations that modify them.
-- `variables` denotes the list of variables to determine dependencies for.
-- `variablestoids` denotes a `Dict` mapping `Variable`s to their `Int` index in `variables`.
+
+  - Dependencies are returned as a [`BipartiteGraph`](@ref) mapping variable
+    indices to the indices of equations that modify them.
+  - `variables` denotes the list of variables to determine dependencies for.
+  - `variablestoids` denotes a `Dict` mapping `Variable`s to their `Int` index in `variables`.
 
 Example:
 Continuing the example of [`equation_dependencies`](@ref)
+
 ```julia
 variable_dependencies(odesys)
 ```
@@ -156,25 +165,28 @@ end
 
 """
 ```julia
-asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys), equationsfirst = true)
+asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys),
+          equationsfirst = true)
 ```
 
 Convert a [`BipartiteGraph`](@ref) to a `LightGraph.SimpleDiGraph`.
 
 Notes:
-- The resulting `SimpleDiGraph` unifies the two sets of vertices (equations
-  and then states in the case it comes from [`asgraph`](@ref)), producing one
-  ordered set of integer vertices (`SimpleDiGraph` does not support two distinct
-  collections of vertices, so they must be merged).
-- `variables` gives the variables that `g` are associated with (usually the
-  `states` of a system).
-- `equationsfirst` (default is `true`) gives whether the [`BipartiteGraph`](@ref)
-  gives a mapping from equations to variables they depend on (`true`), as calculated
-  by [`asgraph`](@ref), or whether it gives a mapping from variables to the equations
-  that modify them, as calculated by [`variable_dependencies`](@ref).
+
+  - The resulting `SimpleDiGraph` unifies the two sets of vertices (equations
+    and then states in the case it comes from [`asgraph`](@ref)), producing one
+    ordered set of integer vertices (`SimpleDiGraph` does not support two distinct
+    collections of vertices, so they must be merged).
+  - `variables` gives the variables that `g` are associated with (usually the
+    `states` of a system).
+  - `equationsfirst` (default is `true`) gives whether the [`BipartiteGraph`](@ref)
+    gives a mapping from equations to variables they depend on (`true`), as calculated
+    by [`asgraph`](@ref), or whether it gives a mapping from variables to the equations
+    that modify them, as calculated by [`variable_dependencies`](@ref).
 
 Example:
 Continuing the example in [`asgraph`](@ref)
+
 ```julia
 dg = asdigraph(digr)
 ```
@@ -201,19 +213,22 @@ end
 
 """
 ```julia
-eqeq_dependencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {T <: Integer}
+eqeq_dependencies(eqdeps::BipartiteGraph{T},
+                  vardeps::BipartiteGraph{T}) where {T <: Integer}
 ```
 
 Calculate a `LightGraph.SimpleDiGraph` that maps each equation to equations they depend on.
 
 Notes:
-- The `fadjlist` of the `SimpleDiGraph` maps from an equation to the equations that
-  modify variables it depends on.
-- The `badjlist` of the `SimpleDiGraph` maps from an equation to equations that
-  depend on variables it modifies.
+
+  - The `fadjlist` of the `SimpleDiGraph` maps from an equation to the equations that
+    modify variables it depends on.
+  - The `badjlist` of the `SimpleDiGraph` maps from an equation to equations that
+    depend on variables it modifies.
 
 Example:
 Continuing the example of `equation_dependencies`
+
 ```julia
 eqeqdep = eqeq_dependencies(asgraph(odesys), variable_dependencies(odesys))
 ```
@@ -235,19 +250,24 @@ end
 
 """
 ```julia
-varvar_dependencies(eqdeps::BipartiteGraph{T}, vardeps::BipartiteGraph{T}) where {T <: Integer} = eqeq_dependencies(vardeps, eqdeps)
+function varvar_dependencies(eqdeps::BipartiteGraph{T},
+                             vardeps::BipartiteGraph{T}) where {T <: Integer}
+    eqeq_dependencies(vardeps, eqdeps)
+end
 ```
 
 Calculate a `LightGraph.SimpleDiGraph` that maps each variable to variables they depend on.
 
 Notes:
-- The `fadjlist` of the `SimpleDiGraph` maps from a variable to the variables that
-  depend on it.
-- The `badjlist` of the `SimpleDiGraph` maps from a variable to variables on which
-  it depends.
+
+  - The `fadjlist` of the `SimpleDiGraph` maps from a variable to the variables that
+    depend on it.
+  - The `badjlist` of the `SimpleDiGraph` maps from a variable to variables on which
+    it depends.
 
 Example:
 Continuing the example of `equation_dependencies`
+
 ```julia
 varvardep = varvar_dependencies(asgraph(odesys), variable_dependencies(odesys))
 ```

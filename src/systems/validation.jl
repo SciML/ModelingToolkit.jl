@@ -5,7 +5,9 @@ struct ValidationError <: Exception
     message::String
 end
 
-"Throw exception on invalid unit types, otherwise return argument."
+"""
+Throw exception on invalid unit types, otherwise return argument.
+"""
 function screen_unit(result)
     result isa Unitful.Unitlike ||
         throw(ValidationError("Unit must be a subtype of Unitful.Unitlike, not $(typeof(result))."))
@@ -16,16 +18,18 @@ function screen_unit(result)
     result
 end
 
-"""Test unit equivalence.
+"""
+Test unit equivalence.
 
 Example of implemented behavior:
+
 ```julia
 using ModelingToolkit, Unitful
 MT = ModelingToolkit
 @parameters γ P [unit = u"MW"] E [unit = u"kJ"] τ [unit = u"ms"]
-@test MT.equivalent(u"MW" ,u"kJ/ms") # Understands prefixes
+@test MT.equivalent(u"MW", u"kJ/ms") # Understands prefixes
 @test !MT.equivalent(u"m", u"cm") # Units must be same magnitude
-@test MT.equivalent(MT.get_unit(P^γ), MT.get_unit((E/τ)^γ)) # Handles symbolic exponents
+@test MT.equivalent(MT.get_unit(P^γ), MT.get_unit((E / τ)^γ)) # Handles symbolic exponents
 ```
 """
 equivalent(x, y) = isequal(1 * x, 1 * y)
@@ -36,7 +40,9 @@ const Literal = Union{Sym, Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithM
 const Conditional = Union{typeof(ifelse), typeof(IfElse.ifelse)}
 const Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
 
-"Find the unit of a symbolic item."
+"""
+Find the unit of a symbolic item.
+"""
 get_unit(x::Real) = unitless
 get_unit(x::Unitful.Quantity) = screen_unit(Unitful.unit(x))
 get_unit(x::AbstractArray) = map(get_unit, x)
@@ -131,7 +137,9 @@ function get_unit(x::Symbolic)
     end
 end
 
-"Get unit of term, returning nothing & showing warning instead of throwing errors."
+"""
+Get unit of term, returning nothing & showing warning instead of throwing errors.
+"""
 function safe_get_unit(term, info)
     side = nothing
     try
@@ -242,7 +250,9 @@ function validate(eq::ModelingToolkit.Equation, terms::Vector; info::String = ""
               vcat(["left", "right"], "noise  #" .* string.(1:length(terms))); info)
 end
 
-"Returns true iff units of equations are valid."
+"""
+Returns true iff units of equations are valid.
+"""
 function validate(eqs::Vector; info::String = "")
     all([validate(eqs[idx], info = info * " in eq. #$idx") for idx in 1:length(eqs)])
 end
@@ -259,7 +269,9 @@ function validate(eqs::Vector, term::Symbolic; info::String = "")
 end
 validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term, "") !== nothing
 
-"Throws error if units of equations are invalid."
+"""
+Throws error if units of equations are invalid.
+"""
 function check_units(eqs...)
     validate(eqs...) ||
         throw(ValidationError("Some equations had invalid units. See warnings for details."))

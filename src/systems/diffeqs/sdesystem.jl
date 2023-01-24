@@ -445,9 +445,9 @@ end
 
 """
 ```julia
-function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
-                                     version = nothing, tgrad=false, sparse = false,
-                                     jac = false, Wfact = false, kwargs...) where {iip}
+DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
+                            version = nothing, tgrad = false, sparse = false,
+                            jac = false, Wfact = false, kwargs...) where {iip}
 ```
 
 Create an `SDEFunction` from the [`SDESystem`](@ref). The arguments `dvs` and `ps`
@@ -460,13 +460,13 @@ end
 
 """
 ```julia
-function DiffEqBase.SDEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
-                                     ps = parameters(sys);
-                                     version = nothing, tgrad=false,
-                                     jac = false, Wfact = false,
-                                     skipzeros = true, fillzeros = true,
-                                     sparse = false,
-                                     kwargs...) where {iip}
+DiffEqBase.SDEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                ps = parameters(sys);
+                                version = nothing, tgrad = false,
+                                jac = false, Wfact = false,
+                                skipzeros = true, fillzeros = true,
+                                sparse = false,
+                                kwargs...) where {iip}
 ```
 
 Create a Julia expression for an `SDEFunction` from the [`SDESystem`](@ref).
@@ -560,14 +560,14 @@ end
 
 """
 ```julia
-function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
-                                    version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
-                                    checkbounds = false, sparse = false,
-                                    sparsenoise = sparse,
-                                    skipzeros = true, fillzeros = true,
-                                    linenumbers = true, parallel=SerialForm(),
-                                    kwargs...)
+DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map, tspan, p = parammap;
+                           version = nothing, tgrad = false,
+                           jac = false, Wfact = false,
+                           checkbounds = false, sparse = false,
+                           sparsenoise = sparse,
+                           skipzeros = true, fillzeros = true,
+                           linenumbers = true, parallel = SerialForm(),
+                           kwargs...)
 ```
 
 Generates an SDEProblem from an SDESystem and allows for automatically
@@ -579,13 +579,13 @@ end
 
 """
 ```julia
-function DiffEqBase.SDEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
-                                    checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=SerialForm(),
-                                    kwargs...) where iip
+DiffEqBase.SDEProblemExpr{iip}(sys::AbstractODESystem, u0map, tspan,
+                               parammap = DiffEqBase.NullParameters();
+                               version = nothing, tgrad = false,
+                               jac = false, Wfact = false,
+                               checkbounds = false, sparse = false,
+                               linenumbers = true, parallel = SerialForm(),
+                               kwargs...) where {iip}
 ```
 
 Generates a Julia expression for constructing an ODEProblem from an

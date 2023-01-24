@@ -17,13 +17,13 @@ function pendulum!(du, u, p, t)
     x, dx, y, dy, T = u
     g, L = p
     du[1] = dx
-    du[2] = T*x
+    du[2] = T * x
     du[3] = dy
-    du[4] = T*y - g
+    du[4] = T * y - g
     du[5] = x^2 + y^2 - L^2
     return nothing
 end
-pendulum_fun! = ODEFunction(pendulum!, mass_matrix=Diagonal([1,1,1,1,0]))
+pendulum_fun! = ODEFunction(pendulum!, mass_matrix = Diagonal([1, 1, 1, 1, 0]))
 u0 = [1.0, 0, 0, 0, 0]
 p = [9.8, 1]
 tspan = (0, 10.0)
@@ -31,8 +31,8 @@ pendulum_prob = ODEProblem(pendulum_fun!, u0, tspan, p)
 traced_sys = modelingtoolkitize(pendulum_prob)
 pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
 prob = ODAEProblem(pendulum_sys, [], tspan)
-sol = solve(prob, Tsit5(),abstol=1e-8,reltol=1e-8)
-plot(sol, idxs=states(traced_sys))
+sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
+plot(sol, idxs = states(traced_sys))
 ```
 
 ## Explanation
@@ -60,19 +60,23 @@ using OrdinaryDiffEq, LinearAlgebra
 function pendulum!(du, u, p, t)
     x, dx, y, dy, T = u
     g, L = p
-    du[1] = dx; du[2] = T*x
-    du[3] = dy; du[4] = T*y - g
+    du[1] = dx
+    du[2] = T * x
+    du[3] = dy
+    du[4] = T * y - g
     du[5] = x^2 + y^2 - L^2
 end
-pendulum_fun! = ODEFunction(pendulum!, mass_matrix=Diagonal([1,1,1,1,0]))
-u0 = [1.0, 0, 0, 0, 0]; p = [9.8, 1]; tspan = (0, 10.0)
+pendulum_fun! = ODEFunction(pendulum!, mass_matrix = Diagonal([1, 1, 1, 1, 0]))
+u0 = [1.0, 0, 0, 0, 0];
+p = [9.8, 1];
+tspan = (0, 10.0);
 pendulum_prob = ODEProblem(pendulum_fun!, u0, tspan, p)
-solve(pendulum_prob,Rodas4())
+solve(pendulum_prob, Rodas4())
 ```
 
 However, one will quickly be greeted with the unfortunate message:
 
-```julia
+```
 ┌ Warning: First function call produced NaNs. Exiting.
 └ @ OrdinaryDiffEq C:\Users\accou\.julia\packages\OrdinaryDiffEq\yCczp\src\initdt.jl:76
 ┌ Warning: Automatic dt set the starting dt as NaN, causing instability.
@@ -150,7 +154,7 @@ prob = ODEProblem(pendulum_sys, Pair[], tspan)
 sol = solve(prob, Rodas4())
 
 using Plots
-plot(sol, idxs=states(traced_sys))
+plot(sol, idxs = states(traced_sys))
 ```
 
 Note that plotting using `states(traced_sys)` is done so that any
@@ -168,8 +172,8 @@ be solved via an explicit Runge-Kutta method:
 traced_sys = modelingtoolkitize(pendulum_prob)
 pendulum_sys = structural_simplify(dae_index_lowering(traced_sys))
 prob = ODAEProblem(pendulum_sys, Pair[], tspan)
-sol = solve(prob, Tsit5(),abstol=1e-8,reltol=1e-8)
-plot(sol, idxs=states(traced_sys))
+sol = solve(prob, Tsit5(), abstol = 1e-8, reltol = 1e-8)
+plot(sol, idxs = states(traced_sys))
 ```
 
 And there you go: this has transformed the model from being too hard to

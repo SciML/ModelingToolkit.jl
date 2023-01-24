@@ -12,24 +12,24 @@ But if you want to just see some code and run, here's an example:
 ```@example ode
 using ModelingToolkit
 
-
 @variables t x(t)   # independent and dependent variables
 @parameters τ       # parameters
 @constants h = 1    # constants have an assigned value
 D = Differential(t) # define an operator for the differentiation w.r.t. time
 
 # your first ODE, consisting of a single equation, the equality indicated by ~
-@named fol = ODESystem([ D(x)  ~ (h - x)/τ])
+@named fol = ODESystem([D(x) ~ (h - x) / τ])
 
 using DifferentialEquations: solve
 
-prob = ODEProblem(fol, [x => 0.0], (0.0,10.0), [τ => 3.0])
+prob = ODEProblem(fol, [x => 0.0], (0.0, 10.0), [τ => 3.0])
 # parameter `τ` can be assigned a value, but constant `h` cannot
 sol = solve(prob)
 
 using Plots
 plot(sol)
 ```
+
 Now let's start digging into MTK!
 
 ## Your very first ODE
@@ -55,7 +55,7 @@ using ModelingToolkit
 D = Differential(t) # define an operator for the differentiation w.r.t. time
 
 # your first ODE, consisting of a single equation, indicated by ~
-@named fol_model = ODESystem(D(x) ~ (h - x)/τ)
+@named fol_model = ODESystem(D(x) ~ (h - x) / τ)
 ```
 
 Note that equations in MTK use the tilde character (`~`) as equality sign.
@@ -68,7 +68,7 @@ After construction of the ODE, you can solve it using [DifferentialEquations.jl]
 using DifferentialEquations
 using Plots
 
-prob = ODEProblem(fol_model, [x => 0.0], (0.0,10.0), [τ => 3.0])
+prob = ODEProblem(fol_model, [x => 0.0], (0.0, 10.0), [τ => 3.0])
 plot(solve(prob))
 ```
 
@@ -83,8 +83,8 @@ intermediate variable `RHS`:
 
 ```@example ode2
 @variables RHS(t)
-@named fol_separate = ODESystem([ RHS  ~ (h - x)/τ,
-                                  D(x) ~ RHS ])
+@named fol_separate = ODESystem([RHS ~ (h - x) / τ,
+                                    D(x) ~ RHS])
 ```
 
 To directly solve this system, you would have to create a Differential-Algebraic
@@ -114,9 +114,9 @@ along with the state variable. Note that this has to be requested explicitly,
 through:
 
 ```@example ode2
-prob = ODEProblem(fol_simplified, [x => 0.0], (0.0,10.0), [τ => 3.0])
+prob = ODEProblem(fol_simplified, [x => 0.0], (0.0, 10.0), [τ => 3.0])
 sol = solve(prob)
-plot(sol, vars=[x, RHS])
+plot(sol, vars = [x, RHS])
 ```
 
 By default, `structural_simplify` also replaces symbolic `constants` with
@@ -137,7 +137,7 @@ Obviously, one could use an explicit, symbolic function of time:
 
 ```@example ode2
 @variables f(t)
-@named fol_variable_f = ODESystem([f ~ sin(t), D(x) ~ (f - x)/τ])
+@named fol_variable_f = ODESystem([f ~ sin(t), D(x) ~ (f - x) / τ])
 ```
 
 But often this function might not be available in an explicit form.
@@ -151,14 +151,14 @@ of random values:
 
 ```@example ode2
 value_vector = randn(10)
-f_fun(t) = t >= 10 ? value_vector[end] : value_vector[Int(floor(t))+1]
+f_fun(t) = t >= 10 ? value_vector[end] : value_vector[Int(floor(t)) + 1]
 @register_symbolic f_fun(t)
 
-@named fol_external_f = ODESystem([f ~ f_fun(t), D(x) ~ (f - x)/τ])
-prob = ODEProblem(structural_simplify(fol_external_f), [x => 0.0], (0.0,10.0), [τ => 0.75])
+@named fol_external_f = ODESystem([f ~ f_fun(t), D(x) ~ (f - x) / τ])
+prob = ODEProblem(structural_simplify(fol_external_f), [x => 0.0], (0.0, 10.0), [τ => 0.75])
 
 sol = solve(prob)
-plot(sol, vars=[x,f])
+plot(sol, vars = [x, f])
 ```
 
 ## Building component-based, hierarchical models
@@ -168,15 +168,15 @@ complex systems from simple ones is even more fun. Best practice for such a
 “modeling framework” could be to use factory functions for model components:
 
 ```@example ode2
-function fol_factory(separate=false;name)
+function fol_factory(separate = false; name)
     @parameters τ
     @variables t x(t) f(t) RHS(t)
 
-    eqs = separate ? [RHS ~ (f - x)/τ,
-                      D(x) ~ RHS] :
-                      D(x) ~(f - x)/τ
+    eqs = separate ? [RHS ~ (f - x) / τ,
+        D(x) ~ RHS] :
+          D(x) ~ (f - x) / τ
 
-    ODESystem(eqs;name)
+    ODESystem(eqs; name)
 end
 ```
 
@@ -194,10 +194,10 @@ one level higher in the model hierarchy. The connections between the components
 again are just algebraic relations:
 
 ```@example ode2
-connections = [ fol_1.f ~ 1.5,
-                fol_2.f ~ fol_1.x ]
+connections = [fol_1.f ~ 1.5,
+    fol_2.f ~ fol_1.x]
 
-connected = compose(ODESystem(connections,name=:connected), fol_1, fol_2)
+connected = compose(ODESystem(connections, name = :connected), fol_1, fol_2)
 ```
 
 All equations, variables, and parameters are collected, but the structure of the
@@ -214,6 +214,7 @@ connected_simp = structural_simplify(connected)
 ```@example ode2
 full_equations(connected_simp)
 ```
+
 As expected, only the two state-derivative equations remain,
 as if you had manually eliminated as many variables as possible from the equations.
 Some observed variables are not expanded unless `full_equations` is used.
@@ -222,13 +223,13 @@ initial state and the parameter values can be specified accordingly when
 building the `ODEProblem`:
 
 ```@example ode2
-u0 = [ fol_1.x => -0.5,
-       fol_2.x => 1.0 ]
+u0 = [fol_1.x => -0.5,
+    fol_2.x => 1.0]
 
-p = [ fol_1.τ => 2.0,
-      fol_2.τ => 4.0 ]
+p = [fol_1.τ => 2.0,
+    fol_2.τ => 4.0]
 
-prob = ODEProblem(connected_simp, u0, (0.0,10.0), p)
+prob = ODEProblem(connected_simp, u0, (0.0, 10.0), p)
 plot(solve(prob))
 ```
 
@@ -240,13 +241,13 @@ It is often a good idea to specify reasonable values for the initial state and t
 parameters of a model component. Then, these do not have to be explicitly specified when constructing the `ODEProblem`.
 
 ```@example ode2
-function unitstep_fol_factory(;name)
+function unitstep_fol_factory(; name)
     @parameters τ
     @variables t x(t)
-    ODESystem(D(x) ~ (1 - x)/τ; name, defaults=Dict(x=>0.0, τ=>1.0))
+    ODESystem(D(x) ~ (1 - x) / τ; name, defaults = Dict(x => 0.0, τ => 1.0))
 end
 
-ODEProblem(unitstep_fol_factory(name=:fol),[],(0.0,5.0),[]) |> solve
+ODEProblem(unitstep_fol_factory(name = :fol), [], (0.0, 5.0), []) |> solve
 ```
 
 Note that the defaults can be functions of the other variables, which is then
@@ -276,13 +277,13 @@ Now have MTK provide sparse, analytical derivatives to the solver. This has to
 be specified during the construction of the `ODEProblem`:
 
 ```@example ode2
-prob_an = ODEProblem(connected_simp, u0, (0.0,10.0), p; jac=true)
+prob_an = ODEProblem(connected_simp, u0, (0.0, 10.0), p; jac = true)
 @btime solve($prob_an, Rodas4());
 nothing # hide
 ```
 
 ```@example ode2
-prob_an = ODEProblem(connected_simp, u0, (0.0,10.0), p; jac=true, sparse=true)
+prob_an = ODEProblem(connected_simp, u0, (0.0, 10.0), p; jac = true, sparse = true)
 @btime solve($prob_an, Rodas4());
 nothing # hide
 ```
@@ -299,25 +300,25 @@ using the structural information. For more information, see the
 
 Here are some notes that may be helpful during your initial steps with MTK:
 
-* Sometimes, the symbolic engine within MTK cannot correctly identify the
-  independent variable (e.g. time) out of all variables. In such a case, you
-  usually get an error that some variable(s) is "missing from variable map". In
-  most cases, it is then sufficient to specify the independent variable as second
-  argument to `ODESystem`, e.g. `ODESystem(eqs, t)`.
-* A completely macro-free usage of MTK is possible and is discussed in a
-  separate tutorial. This is for package developers, since the macros are only
-  essential for automatic symbolic naming for modelers.
-* Vector-valued parameters and variables are possible. A cleaner, more
-  consistent treatment of these is still a work in progress, however. Once finished,
-  this introductory tutorial will also cover this feature.
+  - Sometimes, the symbolic engine within MTK cannot correctly identify the
+    independent variable (e.g. time) out of all variables. In such a case, you
+    usually get an error that some variable(s) is "missing from variable map". In
+    most cases, it is then sufficient to specify the independent variable as second
+    argument to `ODESystem`, e.g. `ODESystem(eqs, t)`.
+  - A completely macro-free usage of MTK is possible and is discussed in a
+    separate tutorial. This is for package developers, since the macros are only
+    essential for automatic symbolic naming for modelers.
+  - Vector-valued parameters and variables are possible. A cleaner, more
+    consistent treatment of these is still a work in progress, however. Once finished,
+    this introductory tutorial will also cover this feature.
 
 Where to go next?
 
-* Not sure how MTK relates to similar tools and packages? Read
-  [Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages](@ref).
-* Depending on what you want to do with MTK, have a look at some of the other
-  **Symbolic Modeling Tutorials**.
-* If you want to automatically convert an existing function to a symbolic
-  representation, you might go through the **ModelingToolkitize Tutorials**.
-* To learn more about the inner workings of MTK, consider the sections under
-  **Basics** and **System Types**.
+  - Not sure how MTK relates to similar tools and packages? Read
+    [Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages](@ref).
+  - Depending on what you want to do with MTK, have a look at some of the other
+    **Symbolic Modeling Tutorials**.
+  - If you want to automatically convert an existing function to a symbolic
+    representation, you might go through the **ModelingToolkitize Tutorials**.
+  - To learn more about the inner workings of MTK, consider the sections under
+    **Basics** and **System Types**.

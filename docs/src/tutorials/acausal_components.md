@@ -10,7 +10,7 @@ component variables. We then simplify this to an ODE by eliminating the
 equalities before solving. Let's see this in action.
 
 !!! note
-
+    
     This tutorial teaches how to build the entire RC circuit from scratch.
     However, to simulate electric components with more ease, check out the
     [ModelingToolkitStandardLibrary.jl](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/)
@@ -23,82 +23,78 @@ equalities before solving. Let's see this in action.
 using ModelingToolkit, Plots, DifferentialEquations
 
 @variables t
-@connector function Pin(;name)
+@connector function Pin(; name)
     sts = @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
-    ODESystem(Equation[], t, sts, []; name=name)
+    ODESystem(Equation[], t, sts, []; name = name)
 end
 
-function Ground(;name)
+function Ground(; name)
     @named g = Pin()
     eqs = [g.v ~ 0]
-    compose(ODESystem(eqs, t, [], []; name=name), g)
+    compose(ODESystem(eqs, t, [], []; name = name), g)
 end
 
-function OnePort(;name)
+function OnePort(; name)
     @named p = Pin()
     @named n = Pin()
     sts = @variables v(t)=1.0 i(t)=1.0
-    eqs = [
-           v ~ p.v - n.v
+    eqs = [v ~ p.v - n.v
            0 ~ p.i + n.i
-           i ~ p.i
-          ]
-    compose(ODESystem(eqs, t, sts, []; name=name), p, n)
+           i ~ p.i]
+    compose(ODESystem(eqs, t, sts, []; name = name), p, n)
 end
 
-function Resistor(;name, R = 1.0)
+function Resistor(; name, R = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
-    ps = @parameters R=R
+    ps = @parameters R = R
     eqs = [
-           v ~ i * R
-          ]
-    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
+        v ~ i * R,
+    ]
+    extend(ODESystem(eqs, t, [], ps; name = name), oneport)
 end
 
-function Capacitor(;name, C = 1.0)
+function Capacitor(; name, C = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
-    ps = @parameters C=C
+    ps = @parameters C = C
     D = Differential(t)
     eqs = [
-           D(v) ~ i / C
-          ]
-    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
+        D(v) ~ i / C,
+    ]
+    extend(ODESystem(eqs, t, [], ps; name = name), oneport)
 end
 
-function ConstantVoltage(;name, V = 1.0)
+function ConstantVoltage(; name, V = 1.0)
     @named oneport = OnePort()
     @unpack v = oneport
-    ps = @parameters V=V
+    ps = @parameters V = V
     eqs = [
-           V ~ v
-          ]
-    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
+        V ~ v,
+    ]
+    extend(ODESystem(eqs, t, [], ps; name = name), oneport)
 end
 
 R = 1.0
 C = 1.0
 V = 1.0
-@named resistor = Resistor(R=R)
-@named capacitor = Capacitor(C=C)
-@named source = ConstantVoltage(V=V)
+@named resistor = Resistor(R = R)
+@named capacitor = Capacitor(C = C)
+@named source = ConstantVoltage(V = V)
 @named ground = Ground()
 
-rc_eqs = [
-          connect(source.p, resistor.p)
+rc_eqs = [connect(source.p, resistor.p)
           connect(resistor.n, capacitor.p)
           connect(capacitor.n, source.n)
-          connect(capacitor.n, ground.g)
-         ]
+          connect(capacitor.n, ground.g)]
 
 @named _rc_model = ODESystem(rc_eqs, t)
 @named rc_model = compose(_rc_model,
                           [resistor, capacitor, source, ground])
 sys = structural_simplify(rc_model)
 u0 = [
-      capacitor.v => 0.0
-     ]
+    capacitor.v => 0.0,
+]
 prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Tsit5())
 plot(sol)
@@ -123,9 +119,9 @@ i.e. that currents sum to zero and voltages across the pins are equal.
 default, variables are equal in a connection.
 
 ```@example acausal
-@connector function Pin(;name)
+@connector function Pin(; name)
     sts = @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
-    ODESystem(Equation[], t, sts, []; name=name)
+    ODESystem(Equation[], t, sts, []; name = name)
 end
 ```
 
@@ -138,7 +134,7 @@ names to correspond to duplicates of this topology with unique variables.
 One can then construct a `Pin` like:
 
 ```@example acausal
-Pin(name=:mypin1)
+Pin(name = :mypin1)
 ```
 
 or equivalently, using the `@named` helper macro:
@@ -153,10 +149,10 @@ this component, we generate an `ODESystem` with a `Pin` subcomponent and specify
 that the voltage in such a `Pin` is equal to zero. This gives:
 
 ```@example acausal
-function Ground(;name)
+function Ground(; name)
     @named g = Pin()
     eqs = [g.v ~ 0]
-    compose(ODESystem(eqs, t, [], []; name=name), g)
+    compose(ODESystem(eqs, t, [], []; name = name), g)
 end
 ```
 
@@ -167,16 +163,14 @@ zero, and the current of the component equals to the current of the positive
 pin.
 
 ```@example acausal
-function OnePort(;name)
+function OnePort(; name)
     @named p = Pin()
     @named n = Pin()
     sts = @variables v(t)=1.0 i(t)=1.0
-    eqs = [
-           v ~ p.v - n.v
+    eqs = [v ~ p.v - n.v
            0 ~ p.i + n.i
-           i ~ p.i
-          ]
-    compose(ODESystem(eqs, t, sts, []; name=name), p, n)
+           i ~ p.i]
+    compose(ODESystem(eqs, t, sts, []; name = name), p, n)
 end
 ```
 
@@ -188,14 +182,14 @@ of charge we know that the current in must equal the current out, which means
 zero. This leads to our resistor equations:
 
 ```@example acausal
-function Resistor(;name, R = 1.0)
+function Resistor(; name, R = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
-    ps = @parameters R=R
+    ps = @parameters R = R
     eqs = [
-           v ~ i * R
-          ]
-    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
+        v ~ i * R,
+    ]
+    extend(ODESystem(eqs, t, [], ps; name = name), oneport)
 end
 ```
 
@@ -211,15 +205,15 @@ we can use `@unpack` to avoid the namespacing.
 Using our knowledge of circuits, we similarly construct the `Capacitor`:
 
 ```@example acausal
-function Capacitor(;name, C = 1.0)
+function Capacitor(; name, C = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
-    ps = @parameters C=C
+    ps = @parameters C = C
     D = Differential(t)
     eqs = [
-           D(v) ~ i / C
-          ]
-    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
+        D(v) ~ i / C,
+    ]
+    extend(ODESystem(eqs, t, [], ps; name = name), oneport)
 end
 ```
 
@@ -229,14 +223,14 @@ constant voltage, essentially generating the electric current. We would then
 model this as:
 
 ```@example acausal
-function ConstantVoltage(;name, V = 1.0)
+function ConstantVoltage(; name, V = 1.0)
     @named oneport = OnePort()
     @unpack v = oneport
-    ps = @parameters V=V
+    ps = @parameters V = V
     eqs = [
-           V ~ v
-          ]
-    extend(ODESystem(eqs, t, [], ps; name=name), oneport)
+        V ~ v,
+    ]
+    extend(ODESystem(eqs, t, [], ps; name = name), oneport)
 end
 ```
 
@@ -250,9 +244,9 @@ make all of our parameter values 1. This is done by:
 R = 1.0
 C = 1.0
 V = 1.0
-@named resistor = Resistor(R=R)
-@named capacitor = Capacitor(C=C)
-@named source = ConstantVoltage(V=V)
+@named resistor = Resistor(R = R)
+@named capacitor = Capacitor(C = C)
+@named source = ConstantVoltage(V = V)
 @named ground = Ground()
 ```
 
@@ -262,12 +256,10 @@ to the capacitor, and the negative pin of the capacitor to a junction between
 the source and the ground. This would mean our connection equations are:
 
 ```@example acausal
-rc_eqs = [
-          connect(source.p, resistor.p)
+rc_eqs = [connect(source.p, resistor.p)
           connect(resistor.n, capacitor.p)
           connect(capacitor.n, source.n)
-          connect(capacitor.n, ground.g)
-         ]
+          connect(capacitor.n, ground.g)]
 ```
 
 Finally, we build our four-component model with these connection rules:
@@ -328,10 +320,8 @@ DAE solver](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/#OrdinaryD
 This is done as follows:
 
 ```@example acausal
-u0 = [
-      capacitor.v => 0.0
-      capacitor.p.i => 0.0
-     ]
+u0 = [capacitor.v => 0.0
+      capacitor.p.i => 0.0]
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 plot(sol)
@@ -343,8 +333,8 @@ letter `A`):
 
 ```@example acausal
 u0 = [
-      capacitor.v => 0.0
-     ]
+    capacitor.v => 0.0,
+]
 prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 plot(sol)
@@ -376,5 +366,5 @@ sol[resistor.v]
 or we can plot the timeseries of the resistor's voltage:
 
 ```@example acausal
-plot(sol, idxs=[resistor.v])
+plot(sol, idxs = [resistor.v])
 ```

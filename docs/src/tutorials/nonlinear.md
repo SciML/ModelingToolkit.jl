@@ -13,29 +13,27 @@ using ModelingToolkit, NonlinearSolve
 @parameters σ ρ β
 
 # Define a nonlinear system
-eqs = [0 ~ σ*(y-x),
-       0 ~ x*(ρ-z)-y,
-       0 ~ x*y - β*z]
-@named ns = NonlinearSystem(eqs, [x,y,z], [σ,ρ,β])
+eqs = [0 ~ σ * (y - x),
+    0 ~ x * (ρ - z) - y,
+    0 ~ x * y - β * z]
+@named ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β])
 
 guess = [x => 1.0,
-         y => 0.0,
-         z => 0.0]
+    y => 0.0,
+    z => 0.0]
 
-ps = [
-      σ => 10.0
+ps = [σ => 10.0
       ρ => 26.0
-      β => 8/3
-      ]
+      β => 8 / 3]
 
-prob = NonlinearProblem(ns,guess,ps)
-sol = solve(prob,NewtonRaphson())
+prob = NonlinearProblem(ns, guess, ps)
+sol = solve(prob, NewtonRaphson())
 ```
 
 We can similarly ask to generate the `NonlinearProblem` with the analytical
 Jacobian function:
 
 ```@example nonlinear
-prob = NonlinearProblem(ns,guess,ps,jac=true)
-sol = solve(prob,NewtonRaphson())
+prob = NonlinearProblem(ns, guess, ps, jac = true)
+sol = solve(prob, NewtonRaphson())
 ```

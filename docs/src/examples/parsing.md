@@ -14,7 +14,7 @@ ex = [:(y ~ x)
 We can use the function `parse_expr_to_symbolic` from Symbolics.jl to generate the symbolic
 form of the expression:
 
-```@example parsing 
+```@example parsing
 using Symbolics
 eqs = parse_expr_to_symbolic.(ex, (Main,))
 ```
@@ -27,6 +27,6 @@ using ModelingToolkit, NonlinearSolve
 vars = union(ModelingToolkit.vars.(eqs)...)
 @named ns = NonlinearSystem(eqs, vars, [])
 
-prob = NonlinearProblem(ns,[1.0,1.0,1.0])
-sol = solve(prob,NewtonRaphson())
+prob = NonlinearProblem(ns, [1.0, 1.0, 1.0])
+sol = solve(prob, NewtonRaphson())
 ```

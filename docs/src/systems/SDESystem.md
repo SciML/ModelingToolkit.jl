@@ -7,6 +7,7 @@ SDESystem
 ```
 
 To convert an `ODESystem` to an `SDESystem` directly:
+
 ```
 ode = ODESystem(eqs,t,[x,y,z],[σ,ρ,β])
 sde = SDESystem(ode, noiseeqs)
@@ -14,10 +15,10 @@ sde = SDESystem(ode, noiseeqs)
 
 ## Composition and Accessor Functions
 
-- `get_eqs(sys)` or `equations(sys)`: The equations that define the SDE.
-- `get_states(sys)` or `states(sys)`: The set of states in the SDE.
-- `get_ps(sys)` or `parameters(sys)`: The parameters of the SDE.
-- `get_iv(sys)`: The independent variable of the SDE.
+  - `get_eqs(sys)` or `equations(sys)`: The equations that define the SDE.
+  - `get_states(sys)` or `states(sys)`: The set of states in the SDE.
+  - `get_ps(sys)` or `parameters(sys)`: The parameters of the SDE.
+  - `get_iv(sys)`: The independent variable of the SDE.
 
 ## Transformations
 

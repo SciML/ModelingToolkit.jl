@@ -174,6 +174,7 @@ getbounds(x::Num) = getbounds(Symbolics.unwrap(x))
 
 Get the bounds associated with symbolic variable `x`.
 Create parameters with bounds like this
+
 ```
 @parameters p [bounds=(-1, 1)]
 ```
@@ -230,9 +231,11 @@ Determine whether symbolic variable `x` is marked as a tunable for an automatic 
 `default` indicates whether variables without `tunable` metadata are to be considered tunable or not.
 
 Create a tunable parameter by
+
 ```
 @parameters u [tunable=true]
 ```
+
 See also [`tunable_parameters`](@ref), [`getbounds`](@ref)
 """
 function istunable(x, default = false)
@@ -252,10 +255,11 @@ getdist(x::Num) = getdist(Symbolics.unwrap(x))
 Get the probability distribution associated with symbolic variable `x`. If no distribution
 is associated with `x`, `nothing` is returned.
 Create parameters with associated distributions like this
+
 ```julia
 using Distributions
 d = Normal(0, 1)
-@parameters u [dist=d]
+@parameters u [dist = d]
 hasdist(u) # true
 getdist(u) # retrieve distribution
 ```
@@ -286,9 +290,11 @@ Get all parameters of `sys` that are marked as `tunable`.
 Keyword argument `default` indicates whether variables without `tunable` metadata are to be considered tunable or not.
 
 Create a tunable parameter by
+
 ```
 @parameters u [tunable=true]
 ```
+
 See also [`getbounds`](@ref), [`istunable`](@ref)
 """
 function tunable_parameters(sys, p = parameters(sys); default = false)
@@ -300,6 +306,7 @@ end
 
 Returns a dict with pairs `p => (lb, ub)` mapping parameters of `sys` to lower and upper bounds.
 Create parameters with bounds like this
+
 ```
 @parameters p [bounds=(-1, 1)]
 ```
@@ -315,9 +322,11 @@ end
 
 Return vectors of lower and upper bounds of parameter vector `p`.
 Create parameters with bounds like this
+
 ```
 @parameters p [bounds=(-1, 1)]
 ```
+
 See also [`tunable_parameters`](@ref), [`hasbounds`](@ref)
 """
 function getbounds(p::AbstractVector)

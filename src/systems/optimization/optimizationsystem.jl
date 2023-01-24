@@ -193,14 +193,14 @@ function rep_pars_vals!(e, p) end
 
 """
 ```julia
-function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem,u0map,
-                                          parammap=DiffEqBase.NullParameters();
-                                          grad = false,
-                                          hess = false, sparse = false,
-                                          cons_j = false, cons_h = false,
-                                          checkbounds = false,
-                                          linenumbers = true, parallel=SerialForm(),
-                                          kwargs...) where iip
+DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
+                                    parammap = DiffEqBase.NullParameters();
+                                    grad = false,
+                                    hess = false, sparse = false,
+                                    cons_j = false, cons_h = false,
+                                    checkbounds = false,
+                                    linenumbers = true, parallel = SerialForm(),
+                                    kwargs...) where {iip}
 ```
 
 Generates an OptimizationProblem from an OptimizationSystem and allows for automatically
@@ -390,14 +390,14 @@ end
 
 """
 ```julia
-function DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
-                                          parammap=DiffEqBase.NullParameters();
-                                          u0=nothing,
-                                          grad = false,
-                                          hes = false, sparse = false,
-                                          checkbounds = false,
-                                          linenumbers = true, parallel=SerialForm(),
-                                          kwargs...) where iip
+DiffEqBase.OptimizationProblemExpr{iip}(sys::OptimizationSystem,
+                                        parammap = DiffEqBase.NullParameters();
+                                        u0 = nothing,
+                                        grad = false,
+                                        hes = false, sparse = false,
+                                        checkbounds = false,
+                                        linenumbers = true, parallel = SerialForm(),
+                                        kwargs...) where {iip}
 ```
 
 Generates a Julia expression for an OptimizationProblem from an

@@ -259,9 +259,10 @@ end
 Returns a function `condition(u,p,t)` returning the `condition(cb)`.
 
 Notes
-- `expression = Val{true}`, causes the generated function to be returned as an expression.
-  If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
-- `kwargs` are passed through to `Symbolics.build_function`.
+
+  - `expression = Val{true}`, causes the generated function to be returned as an expression.
+    If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
+  - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
                            expression = Val{true}, kwargs...)
@@ -290,13 +291,14 @@ Returns a function that takes an integrator as argument and modifies the state w
 affect. The generated function has the signature `affect!(integrator)`.
 
 Notes
-- `expression = Val{true}`, causes the generated function to be returned as an expression.
-  If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
-- `outputidxs`, a vector of indices of the output variables which should correspond to
-  `states(sys)`. If provided, checks that the LHS of affect equations are variables are
-  dropped, i.e. it is assumed these indices are correct and affect equations are
-  well-formed.
-- `kwargs` are passed through to `Symbolics.build_function`.
+
+  - `expression = Val{true}`, causes the generated function to be returned as an expression.
+    If  set to `Val{false}` a `RuntimeGeneratedFunction` will be returned.
+  - `outputidxs`, a vector of indices of the output variables which should correspond to
+    `states(sys)`. If provided, checks that the LHS of affect equations are variables are
+    dropped, i.e. it is assumed these indices are correct and affect equations are
+    well-formed.
+  - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothing,
                         expression = Val{true}, checkvars = true,
