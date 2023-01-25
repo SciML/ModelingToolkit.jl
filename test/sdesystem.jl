@@ -584,3 +584,26 @@ end
     @test μ≈μmod atol=2σ
     @test σ > σmod
 end
+
+@variables t
+D = Differential(t)
+sts = @variables x(t) y(t) z(t)
+ps = @parameters σ ρ
+@brownian β η
+
+eqs = [D(x) ~ σ * (y - x) + x * β,
+    D(y) ~ x * (ρ - z) - y + y * β + x * η,
+    D(z) ~ x * y - β * z + (x * z) * β]
+@named sys1 = System(eqs, t)
+sys1 = structural_simplify(sys1)
+
+drift_eqs = [D(x) ~ σ * (y - x),
+    D(y) ~ x * (ρ - z) - y,
+    D(z) ~ x * y]
+
+diffusion_eqs = [x 0
+                 y x
+                 (x * z)-z 0]
+
+sys2 = SDESystem(drift_eqs, diffusion_eqs, t, sts, ps, name = :sys1)
+sys1 == sys2

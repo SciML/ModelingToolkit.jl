@@ -9,7 +9,8 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           value, InvalidSystemException, isdifferential, _iszero,
                           isparameter, isconstant,
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
-                          equations, isirreducible, input_timedomain, TimeDomain
+                          equations, isirreducible, input_timedomain, TimeDomain,
+                          VariableType, getvariabletype
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -30,8 +31,6 @@ export initialize_system_structure, find_linear_equations
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq, algeqs, is_only_discrete
 export dervars_range, diffvars_range, algvars_range
 export DiffGraph, complete!
-
-@enum VariableType::Int8 DIFFERENTIAL_VARIABLE ALGEBRAIC_VARIABLE DERIVATIVE_VARIABLE
 
 struct DiffGraph <: Graphs.AbstractGraph{Int}
     primal_to_diff::Vector{Union{Int, Nothing}}
@@ -149,13 +148,15 @@ Base.@kwdef mutable struct SystemStructure
     # or as `torn` to assert that tearing has run.
     graph::BipartiteGraph{Int, Nothing}
     solvable_graph::Union{BipartiteGraph{Int, Nothing}, Nothing}
+    var_types::Union{Vector{VariableType}, Nothing}
     only_discrete::Bool
 end
 
 function Base.copy(structure::SystemStructure)
+    var_types = structure.var_types === nothing ? nothing : copy(structure.var_types)
     SystemStructure(copy(structure.var_to_diff), copy(structure.eq_to_diff),
                     copy(structure.graph), copy(structure.solvable_graph),
-                    structure.only_discrete)
+                    var_types, structure.only_discrete)
 end
 
 is_only_discrete(s::SystemStructure) = s.only_discrete
@@ -230,9 +231,11 @@ function TearingState(sys; quick_cancel = false, check = true)
     symbolic_incidence = []
     fullvars = []
     var_counter = Ref(0)
-    addvar! = let fullvars = fullvars, var_counter = var_counter
+    var_types = VariableType[]
+    addvar! = let fullvars = fullvars, var_counter = var_counter, var_types = var_types
         var -> begin get!(var2idx, var) do
             push!(fullvars, var)
+            push!(var_types, getvariabletype(var))
             var_counter[] += 1
         end end
     end
@@ -331,7 +334,10 @@ function TearingState(sys; quick_cancel = false, check = true)
             push!(sorted_fullvars, v)
         end
     end
-    fullvars = collect(sorted_fullvars)
+    new_fullvars = collect(sorted_fullvars)
+    sortperm = indexin(new_fullvars, fullvars)
+    fullvars = new_fullvars
+    var_types = var_types[sortperm]
     var2idx = Dict(fullvars .=> eachindex(fullvars))
     dervaridxs = 1:length(dervaridxs)
 
@@ -358,7 +364,8 @@ function TearingState(sys; quick_cancel = false, check = true)
 
     return TearingState(sys, fullvars,
                         SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-                                        complete(graph), nothing, false), Any[])
+                                        complete(graph), nothing, var_types, false),
+                        Any[])
 end
 
 function lower_order_var(dervar)

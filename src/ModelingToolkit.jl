@@ -147,6 +147,7 @@ include("discretedomain.jl")
 include("systems/systemstructure.jl")
 using .SystemStructures
 include("systems/clock_inference.jl")
+include("systems/systems.jl")
 
 include("debugging.jl")
 include("systems/alias_elimination.jl")
@@ -163,6 +164,7 @@ end
 export AbstractTimeDependentSystem, AbstractTimeIndependentSystem,
        AbstractMultivariateSystem
 export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
+export System
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
@@ -211,7 +213,7 @@ export simplify, substitute
 export build_function
 export modelingtoolkitize
 
-export @variables, @parameters, @constants
+export @variables, @parameters, @constants, @brownian
 export @named, @nonamespace, @namespace, extend, compose, complete
 export debug_system
 

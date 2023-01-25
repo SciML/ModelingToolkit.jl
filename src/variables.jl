@@ -390,3 +390,27 @@ function isintegervar(x)
     p === nothing || (x = p)
     return Symbolics.getmetadata(x, VariableInteger, false)
 end
+
+## Brownian
+"""
+    tobrownian(s::Sym)
+
+Maps the brownianiable to a state.
+"""
+tobrownian(s::Symbolic) = setmetadata(s, MTKVariableTypeCtx, BROWNIAN)
+tobrownian(s::Num) = Num(tobrownian(value(s)))
+isbrownian(s) = getvariabletype(s) === BROWNIAN
+
+"""
+$(SIGNATURES)
+
+Define one or more Brownian variables.
+"""
+macro brownian(xs...)
+    all(x -> x isa Symbol || Meta.isexpr(x, :call) && x.args[1] == :$, xs) ||
+        error("@brownian only takes scalar expressions!")
+    Symbolics._parse_vars(:brownian,
+                          Real,
+                          xs,
+                          tobrownian) |> esc
+end
