@@ -77,11 +77,12 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
             _iszero(dvar) && break
             g_row = get(dvar2eq, dvar, 0)
             iszero(g_row) && error("$dvar isn't handled.")
+            g_row > size(g, 1) && continue
             @views copyto!(sorted_g_rows[i, :], g[g_row, :])
         end
 
-        return SDESystem(equations(ode_sys), sorted_g_rows, get_iv(ode_sys),
-                         states(ode_sys), parameters(ode_sys);
+        return SDESystem(full_equations(ode_sys), sorted_g_rows,
+                         get_iv(ode_sys), states(ode_sys), parameters(ode_sys);
                          name = nameof(ode_sys))
     end
 end

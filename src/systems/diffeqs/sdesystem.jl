@@ -558,7 +558,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map = [], tspan = get_tspa
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
     noiseeqs = get_noiseeqs(sys)
-    if noiseeqs isa AbstractVector
+    if noiseeqs isa AbstractVector || size(noiseeqs, 2) == 1
         noise_rate_prototype = nothing
     elseif sparsenoise
         I, J, V = findnz(SparseArrays.sparse(noiseeqs))
