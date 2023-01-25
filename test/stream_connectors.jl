@@ -45,13 +45,6 @@ function AdiabaticStraightPipe(; name,
 
     eqns = Equation[]
 
-    #=
-    push!(eqns, port_a.P ~ port_b.P)
-    push!(eqns, 0 ~ port_a.m_flow + port_b.m_flow)
-    push!(eqns, port_b.h_outflow ~ instream(port_a.h_outflow))
-    push!(eqns, port_a.h_outflow ~ instream(port_b.h_outflow))
-    =#
-
     push!(eqns, connect(port_a, port_b))
     sys = ODESystem(eqns, t, vars, pars; name = name)
     sys = compose(sys, subs)
@@ -101,15 +94,49 @@ end
 @named pipe = AdiabaticStraightPipe()
 @named sink = MassFlowSource_h(m_flow_in = -0.01, h_in = 400e3)
 
-streams_a = [n1m1.port_a, pipe.port_a]
-streams_b = [pipe.port_b, sink.port]
-
 eqns = [connect(n1m1.port_a, pipe.port_a)
         connect(pipe.port_b, sink.port)]
 
 @named sys = ODESystem(eqns, t)
 @named n1m1Test = compose(sys, n1m1, pipe, sink)
 @test_nowarn structural_simplify(n1m1Test)
+@unpack source, port_a = n1m1
+@test sort(equations(expand_connections(n1m1)), by = string) == [0 ~ port_a.m_flow
+       0 ~ source.port1.m_flow - port_a.m_flow
+       source.port1.P ~ port_a.P
+       source.port1.P ~ source.P
+       source.port1.h_outflow ~ port_a.h_outflow
+       source.port1.h_outflow ~ source.h]
+@unpack port_a, port_b = pipe
+@test sort(equations(expand_connections(pipe)), by = string) ==
+      [0 ~ -port_a.m_flow - port_b.m_flow
+       0 ~ port_a.m_flow
+       0 ~ port_b.m_flow
+       port_a.P ~ port_b.P
+       port_a.h_outflow ~ instream(port_b.h_outflow)
+       port_b.h_outflow ~ instream(port_a.h_outflow)]
+@test sort(equations(expand_connections(sys)), by = string) ==
+      [0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
+       0 ~ pipe.port_b.m_flow + sink.port.m_flow
+       n1m1.port_a.P ~ pipe.port_a.P
+       pipe.port_b.P ~ sink.port.P]
+@test sort(equations(expand_connections(n1m1Test)), by = string) ==
+      [0 ~ -pipe.port_a.m_flow - pipe.port_b.m_flow
+       0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
+       0 ~ n1m1.source.port1.m_flow - n1m1.port_a.m_flow
+       0 ~ pipe.port_b.m_flow + sink.port.m_flow
+       n1m1.port_a.P ~ pipe.port_a.P
+       n1m1.source.port1.P ~ n1m1.port_a.P
+       n1m1.source.port1.P ~ n1m1.source.P
+       n1m1.source.port1.h_outflow ~ n1m1.port_a.h_outflow
+       n1m1.source.port1.h_outflow ~ n1m1.source.h
+       pipe.port_a.P ~ pipe.port_b.P
+       pipe.port_a.h_outflow ~ sink.port.h_outflow
+       pipe.port_b.P ~ sink.port.P
+       pipe.port_b.h_outflow ~ n1m1.port_a.h_outflow
+       sink.port.P ~ sink.P
+       sink.port.h_outflow ~ sink.h_in
+       sink.port.m_flow ~ -sink.m_flow_in]
 
 # N1M2 model and test code.
 function N1M2(; name,
@@ -165,9 +192,6 @@ function N2M2(; name,
     @named port_b = TwoPhaseFluidPort()
     @named pipe = AdiabaticStraightPipe()
 
-    streams_a = [port_a, pipe.port_a]
-    streams_b = [pipe.port_b, port_b]
-
     subs = [port_a; port_b; pipe]
 
     eqns = Equation[]
@@ -189,6 +213,18 @@ eqns = [connect(source.port, n2m2.port_a)
 @named sys = ODESystem(eqns, t)
 @named n2m2Test = compose(sys, n2m2, source, sink)
 @test_nowarn structural_simplify(n2m2Test)
+
+# stream var
+@named sp1 = TwoPhaseFluidPort()
+@named sp2 = TwoPhaseFluidPort()
+@named sys = ODESystem([connect(sp1, sp2)], t)
+sys_exp = expand_connections(compose(sys, [sp1, sp2]))
+@test sort(equations(sys_exp), by = string) == [0 ~ -sp1.m_flow - sp2.m_flow
+       0 ~ sp1.m_flow
+       0 ~ sp2.m_flow
+       sp1.P ~ sp2.P
+       sp1.h_outflow ~ ModelingToolkit.instream(sp2.h_outflow)
+       sp2.h_outflow ~ ModelingToolkit.instream(sp1.h_outflow)]
 
 # array var
 @connector function VecPin(; name)
