@@ -460,7 +460,7 @@ fdif!(du, u0, p, t)
     ]
     sys1 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
     sys2 = SDESystem(eqs_short, noiseeqs, t, [x, y, z], [σ, ρ, β], name = :sys1)
-    @test_throws ArgumentError SDESystem([sys2.y ~ sys1.z], t, [], [], [],
+    @test_throws ArgumentError SDESystem([sys2.y ~ sys1.z], [], t, [], [],
                                          systems = [sys1, sys2], name = :foo)
 end
 
@@ -584,82 +584,3 @@ end
     @test μ≈μmod atol=2σ
     @test σ > σmod
 end
-
-@variables t
-D = Differential(t)
-sts = @variables x(t) y(t) z(t)
-ps = @parameters σ ρ
-@brownian β η
-s = 0.001
-β *= s
-η *= s
-
-eqs = [D(x) ~ σ * (y - x) + x * β,
-    D(y) ~ x * (ρ - z) - y + y * β + x * η,
-    D(z) ~ x * y - β * z + (x * z) * β]
-@named sys1 = System(eqs, t)
-sys1 = structural_simplify(sys1)
-
-drift_eqs = [D(x) ~ σ * (y - x),
-    D(y) ~ x * (ρ - z) - y,
-    D(z) ~ x * y]
-
-diffusion_eqs = s * [x 0
-                     y x
-                     (x * z)-z 0]
-
-sys2 = SDESystem(drift_eqs, diffusion_eqs, t, sts, ps, name = :sys1)
-@test sys1 == sys2
-
-prob = SDEProblem(sys1, sts .=> [1.0, 0.0, 0.0],
-                  (0.0, 100.0), ps .=> (10.0, 26.0))
-@test_nowarn solve(prob, LambaEulerHeun(), seed = 1)
-
-@variables t
-D = Differential(t)
-sts = @variables S(t) E(t) I(t) R(t) D1(t) D2(t) β(t) logβ(t)
-ps = @parameters σ ρ γ λ N
-@brownian α
-eqs = Equation[
-               β ~ logβ #exp(logβ)
-               D(logβ) ~ sqrt(0.2) * α
-               D(S) ~ -β * S * I / N
-               E ~ N - (S + I + R + D1 + D2)
-               D(I) ~ σ * E - γ * I
-               D(R) ~ (1 - ρ) * γ * I
-               D(D1) ~ ρ * γ * I - λ * D1
-               D(D2) ~ λ * D1]
-@named mecha_bayes = System(eqs, t)
-mecha_bayes = structural_simplify(mecha_bayes)
-dE = 0.4
-dI = 2.0
-Rh = 3.0
-NN = 1
-using Random
-Random.seed!(1)
-
-E0 = rand(Uniform(0, 0.02NN))
-I0 = rand(Uniform(0, 0.02NN))
-R0 = rand(Uniform(0, 0.02NN))
-D10 = rand(Uniform(0, 0.02NN))
-D20 = rand(Uniform(0, 0.02NN))
-S0 = 1 - (E0 + I0 + R0 + D10 + D20)
-u0 = [
-      S =>  S0
-      E =>  E0
-      I =>  I0
-      R =>  R0
-      D1 => D10
-      D2 => D20
-      β => 0.0
-      logβ => log(rand(Gamma(1, dI / Rh)))
-     ]
-
-p = [N => NN,
-     σ => rand(Gamma(100, 100dE)),
-     ρ => rand(Beta(1, 99)),
-     γ => rand(Gamma(100, 100dI)),
-     λ => rand(Gamma(10, 10*25))]
-prob = SDEProblem(mecha_bayes, u0,
-                  (0.0, 10.0), p)
-@test_nowarn sol = solve(prob, SRIW1(), reltol=1e-3, abstol=1e-3, seed = 1);
