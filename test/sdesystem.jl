@@ -590,6 +590,9 @@ D = Differential(t)
 sts = @variables x(t) y(t) z(t)
 ps = @parameters σ ρ
 @brownian β η
+s = 0.001
+β *= s
+η *= s
 
 eqs = [D(x) ~ σ * (y - x) + x * β,
     D(y) ~ x * (ρ - z) - y + y * β + x * η,
@@ -601,9 +604,13 @@ drift_eqs = [D(x) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y]
 
-diffusion_eqs = [x 0
-                 y x
-                 (x * z)-z 0]
+diffusion_eqs = s * [x 0
+                     y x
+                     (x * z)-z 0]
 
 sys2 = SDESystem(drift_eqs, diffusion_eqs, t, sts, ps, name = :sys1)
-sys1 == sys2
+@test sys1 == sys2
+
+prob = SDEProblem(sys1, sts .=> [1.0, 0.0, 0.0],
+                  (0.0, 100.0), ps .=> (10.0, 26.0))
+@test_nowarn solve(prob, LambaEulerHeun(), seed = 1)
