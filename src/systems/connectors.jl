@@ -395,11 +395,8 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
     for ex in instream_exprs
         ns_sv = only(arguments(ex))
         full_name_sv = renamespace(namespace, ns_sv)
-        if haskey(expr_cset, full_name_sv)
-            cset = expr_cset[full_name_sv]
-        else
-            error("$ns_sv is not a variable inside stream connectors")
-        end
+        cset = get(expr_cset, full_name_sv, nothing)
+        cset === nothing && error("$ns_sv is not a variable inside stream connectors")
         idx_in_set, sv = get_cset_sv(full_name_sv, cset)
 
         n_inners = n_outers = 0
