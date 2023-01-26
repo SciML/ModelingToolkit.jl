@@ -10,65 +10,66 @@ model manipulation and compilation.
 ### Subtypes
 
 There are three immediate subtypes of `AbstractSystem`, classified by how many independent variables each type has:
-* `AbstractTimeIndependentSystem`: has no independent variable (eg: `NonlinearSystem`)
-* `AbstractTimeDependentSystem`: has a single independent variable (eg: `ODESystem`)
-* `AbstractMultivariateSystem`: may have multiple independent variables (eg: `PDESystem`)
+
+  - `AbstractTimeIndependentSystem`: has no independent variable (e.g.: `NonlinearSystem`)
+  - `AbstractTimeDependentSystem`: has a single independent variable (e.g.: `ODESystem`)
+  - `AbstractMultivariateSystem`: may have multiple independent variables (e.g.: `PDESystem`)
 
 ## Constructors and Naming
 
 The `AbstractSystem` interface has a consistent method for constructing systems.
-Generally it follows the order of:
+Generally, it follows the order of:
 
-1. Equations
-2. Independent Variables
-3. Dependent Variables (or States)
-4. Parameters
+ 1. Equations
+ 2. Independent Variables
+ 3. Dependent Variables (or States)
+ 4. Parameters
 
 All other pieces are handled via keyword arguments. `AbstractSystem`s share the
 same keyword arguments, which are:
 
-- `system`: This is used for specifying subsystems for hierarchical modeling with
-  reusable components. For more information, see the [components page](@ref components)
-- Defaults: Keyword arguments like `defaults` are used for specifying default
-  values which are used. If a value is not given at the `SciMLProblem` construction
-  time, its numerical value will be the default.
+  - `system`: This is used for specifying subsystems for hierarchical modeling with
+    reusable components. For more information, see the [components page](@ref components).
+  - Defaults: Keyword arguments like `defaults` are used for specifying default
+    values which are used. If a value is not given at the `SciMLProblem` construction
+    time, its numerical value will be the default.
 
 ## Composition and Accessor Functions
 
 Each `AbstractSystem` has lists of variables in context, such as distinguishing
-parameters vs states. In addition, an `AbstractSystem` also can hold other
+parameters vs states. In addition, an `AbstractSystem` can also hold other
 `AbstractSystem` types. Direct accessing of the values, such as `sys.states`,
 gives the immediate list, while the accessor functions `states(sys)` gives the
 total set, which includes that of all systems held inside.
 
 The values which are common to all `AbstractSystem`s are:
 
-- `equations(sys)`: All equations that define the system and its subsystems.
-- `states(sys)`: All the states in the system and its subsystems.
-- `parameters(sys)`: All parameters of the system and its subsystems.
-- `nameof(sys)`: The name of the current-level system.
-- `get_eqs(sys)`: Equations that define the current-level system.
-- `get_states(sys)`: States that are in the current-level system.
-- `get_ps(sys)`: Parameters that are in the current-level system.
-- `get_systems(sys)`: Subsystems of the current-level system.
+  - `equations(sys)`: All equations that define the system and its subsystems.
+  - `states(sys)`: All the states in the system and its subsystems.
+  - `parameters(sys)`: All parameters of the system and its subsystems.
+  - `nameof(sys)`: The name of the current-level system.
+  - `get_eqs(sys)`: Equations that define the current-level system.
+  - `get_states(sys)`: States that are in the current-level system.
+  - `get_ps(sys)`: Parameters that are in the current-level system.
+  - `get_systems(sys)`: Subsystems of the current-level system.
 
 Optionally, a system could have:
 
-- `observed(sys)`: All observed equations of the system and its subsystems.
-- `get_observed(sys)`: Observed equations of the current-level system.
-- `get_continuous_events(sys)`: `SymbolicContinuousCallback`s of the current-level system.
-- `get_defaults(sys)`: A `Dict` that maps variables into their default values.
-- `independent_variables(sys)`: The independent variables of a system.
-- `get_noiseeqs(sys)`: Noise equations of the current-level system.
-- `get_metadata(sys)`: Any metadata about the system or its origin to be used by downstream packages.
+  - `observed(sys)`: All observed equations of the system and its subsystems.
+  - `get_observed(sys)`: Observed equations of the current-level system.
+  - `get_continuous_events(sys)`: `SymbolicContinuousCallback`s of the current-level system.
+  - `get_defaults(sys)`: A `Dict` that maps variables into their default values.
+  - `independent_variables(sys)`: The independent variables of a system.
+  - `get_noiseeqs(sys)`: Noise equations of the current-level system.
+  - `get_metadata(sys)`: Any metadata about the system or its origin to be used by downstream packages.
 
-Note that if you know a system is an `AbstractTimeDependentSystem` you could use `get_iv` to get the 
+Note that if you know a system is an `AbstractTimeDependentSystem` you could use `get_iv` to get the
 unique independent variable directly, rather than using `independent_variables(sys)[1]`, which is clunky and may cause problems if `sys` is an `AbstractMultivariateSystem` because there may be more than one independent variable. `AbstractTimeIndependentSystem`s do not have a method `get_iv`, and `independent_variables(sys)` will return a size-zero result for such. For an `AbstractMultivariateSystem`, `get_ivs` is equivalent.
 
 A system could also have caches:
 
-- `get_jac(sys)`: The Jacobian of a system.
-- `get_tgrad(sys)`: The gradient with respect to time of a system.
+  - `get_jac(sys)`: The Jacobian of a system.
+  - `get_tgrad(sys)`: The gradient with respect to time of a system.
 
 ## Transformations
 
@@ -118,7 +119,7 @@ patterns via an abstract interpretation without requiring differentiation.
 
 At the end, the system types have `DEProblem` constructors, like `ODEProblem`,
 which allow for directly generating the problem types required for numerical
-methods. The first argument is always the `AbstractSystem`, and the proceeding
+methods. The first argument is always the `AbstractSystem`, and the proceding
 arguments match the argument order of their original constructors. Whenever an
 array would normally be provided, such as `u0` the initial condition of an
 `ODEProblem`, it is instead replaced with a variable map, i.e., an array of

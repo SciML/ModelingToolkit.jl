@@ -28,7 +28,7 @@ noiseeqs = [0.1*x,
 """
 struct SDESystem <: AbstractODESystem
     """
-    tag: a tag for the system. If two system have the same tag, then they are
+    tag: a tag for the system. If two systems have the same tag, then they are
     structurally identical.
     """
     tag::UInt
@@ -99,7 +99,7 @@ struct SDESystem <: AbstractODESystem
     continuous_events::Vector{SymbolicContinuousCallback}
     """
     discrete_events: A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
-    analog to `SciMLBase.DiscreteCallback` that exectues an affect when a given condition is
+    analog to `SciMLBase.DiscreteCallback` that executes an affect when a given condition is
     true at the end of an integration step.
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
@@ -445,9 +445,9 @@ end
 
 """
 ```julia
-function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
-                                     version = nothing, tgrad=false, sparse = false,
-                                     jac = false, Wfact = false, kwargs...) where {iip}
+DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = sys.states, ps = sys.ps;
+                            version = nothing, tgrad = false, sparse = false,
+                            jac = false, Wfact = false, kwargs...) where {iip}
 ```
 
 Create an `SDEFunction` from the [`SDESystem`](@ref). The arguments `dvs` and `ps`
@@ -460,13 +460,13 @@ end
 
 """
 ```julia
-function DiffEqBase.SDEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
-                                     ps = parameters(sys);
-                                     version = nothing, tgrad=false,
-                                     jac = false, Wfact = false,
-                                     skipzeros = true, fillzeros = true,
-                                     sparse = false,
-                                     kwargs...) where {iip}
+DiffEqBase.SDEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+                                ps = parameters(sys);
+                                version = nothing, tgrad = false,
+                                jac = false, Wfact = false,
+                                skipzeros = true, fillzeros = true,
+                                sparse = false,
+                                kwargs...) where {iip}
 ```
 
 Create a Julia expression for an `SDEFunction` from the [`SDESystem`](@ref).
@@ -560,14 +560,14 @@ end
 
 """
 ```julia
-function DiffEqBase.SDEProblem{iip}(sys::SDESystem,u0map,tspan,p=parammap;
-                                    version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
-                                    checkbounds = false, sparse = false,
-                                    sparsenoise = sparse,
-                                    skipzeros = true, fillzeros = true,
-                                    linenumbers = true, parallel=SerialForm(),
-                                    kwargs...)
+DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map, tspan, p = parammap;
+                           version = nothing, tgrad = false,
+                           jac = false, Wfact = false,
+                           checkbounds = false, sparse = false,
+                           sparsenoise = sparse,
+                           skipzeros = true, fillzeros = true,
+                           linenumbers = true, parallel = SerialForm(),
+                           kwargs...)
 ```
 
 Generates an SDEProblem from an SDESystem and allows for automatically
@@ -579,13 +579,13 @@ end
 
 """
 ```julia
-function DiffEqBase.SDEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false, Wfact = false,
-                                    checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=SerialForm(),
-                                    kwargs...) where iip
+DiffEqBase.SDEProblemExpr{iip}(sys::AbstractODESystem, u0map, tspan,
+                               parammap = DiffEqBase.NullParameters();
+                               version = nothing, tgrad = false,
+                               jac = false, Wfact = false,
+                               checkbounds = false, sparse = false,
+                               linenumbers = true, parallel = SerialForm(),
+                               kwargs...) where {iip}
 ```
 
 Generates a Julia expression for constructing an ODEProblem from an

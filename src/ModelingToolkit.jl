@@ -34,6 +34,9 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 
 using RecursiveArrayTools
 
+import SymbolicIndexingInterface
+import SymbolicIndexingInterface: independent_variables, states, parameters
+export independent_variables, states, parameters
 import SymbolicUtils
 import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
                       Symbolic, Term, Add, Mul, Pow, Sym, FnType,
@@ -96,32 +99,13 @@ abstract type AbstractODESystem <: AbstractTimeDependentSystem end
 abstract type AbstractMultivariateSystem <: AbstractSystem end
 abstract type AbstractOptimizationSystem <: AbstractTimeIndependentSystem end
 
-"""
-$(TYPEDSIGNATURES)
-
-Get the set of independent variables for the given system.
-"""
-function independent_variables end
-
 function independent_variable end
-
-"""
-$(TYPEDSIGNATURES)
-
-Get the set of states for the given system.
-"""
-function states end
-
-"""
-$(TYPEDSIGNATURES)
-
-Get the set of parameters variables for the given system.
-"""
-function parameters end
 
 # this has to be included early to deal with depency issues
 include("structural_transformation/bareiss.jl")
 function complete end
+function var_derivative! end
+function var_derivative_graph! end
 include("bipartite_graph.jl")
 using .BipartiteGraphs
 
@@ -150,6 +134,7 @@ include("systems/nonlinear/modelingtoolkitize.jl")
 
 include("systems/optimization/constraints_system.jl")
 include("systems/optimization/optimizationsystem.jl")
+include("systems/optimization/modelingtoolkitize.jl")
 
 include("systems/pde/pdesystem.jl")
 
@@ -201,7 +186,7 @@ export Differential, expand_derivatives, @derivatives
 export Equation, ConstrainedEquation
 export Term, Sym
 export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
-export independent_variables, independent_variable, states, parameters, equations, controls,
+export independent_variable, equations, controls,
        observed, structure, full_equations
 export structural_simplify, expand_connections, linearize, linearization_function
 export DiscreteSystem, DiscreteProblem

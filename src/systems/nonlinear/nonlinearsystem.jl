@@ -20,7 +20,7 @@ eqs = [0 ~ σ*(y-x),
 """
 struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
-    tag: a tag for the system. If two system have the same tag, then they are
+    tag: a tag for the system. If two systems have the same tag, then they are
     structurally identical.
     """
     tag::UInt
@@ -198,12 +198,12 @@ end
 
 """
 ```julia
-function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys),
-                                     ps = parameters(sys);
-                                     version = nothing,
-                                     jac = false,
-                                     sparse = false,
-                                     kwargs...) where {iip}
+SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys),
+                                 ps = parameters(sys);
+                                 version = nothing,
+                                 jac = false,
+                                 sparse = false,
+                                 kwargs...) where {iip}
 ```
 
 Create an `NonlinearFunction` from the [`NonlinearSystem`](@ref). The arguments
@@ -260,7 +260,7 @@ end
 
 """
 ```julia
-function SciMLBase.NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = states(sys),
+SciMLBase.NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = states(sys),
                                      ps = parameters(sys);
                                      version = nothing,
                                      jac = false,
@@ -337,12 +337,12 @@ end
 
 """
 ```julia
-function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem,u0map,
-                                          parammap=DiffEqBase.NullParameters();
-                                          jac = false, sparse=false,
-                                          checkbounds = false,
-                                          linenumbers = true, parallel=SerialForm(),
-                                          kwargs...) where iip
+DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
+                                 parammap = DiffEqBase.NullParameters();
+                                 jac = false, sparse = false,
+                                 checkbounds = false,
+                                 linenumbers = true, parallel = SerialForm(),
+                                 kwargs...) where {iip}
 ```
 
 Generates an NonlinearProblem from a NonlinearSystem and allows for automatically
@@ -358,17 +358,17 @@ function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
     f, u0, p = process_NonlinearProblem(NonlinearFunction{iip}, sys, u0map, parammap;
                                         check_length, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
-    NonlinearProblem{iip}(f, u0, p, pt; kwargs...)
+    NonlinearProblem{iip}(f, u0, p, pt; filter_kwargs(kwargs)...)
 end
 
 """
 ```julia
-function DiffEqBase.NonlinearProblemExpr{iip}(sys::NonlinearSystem,u0map,
-                                          parammap=DiffEqBase.NullParameters();
-                                          jac = false, sparse=false,
-                                          checkbounds = false,
-                                          linenumbers = true, parallel=SerialForm(),
-                                          kwargs...) where iip
+DiffEqBase.NonlinearProblemExpr{iip}(sys::NonlinearSystem, u0map,
+                                     parammap = DiffEqBase.NullParameters();
+                                     jac = false, sparse = false,
+                                     checkbounds = false,
+                                     linenumbers = true, parallel = SerialForm(),
+                                     kwargs...) where {iip}
 ```
 
 Generates a Julia expression for a NonlinearProblem from a
@@ -393,7 +393,7 @@ function NonlinearProblemExpr{iip}(sys::NonlinearSystem, u0map,
         f = $f
         u0 = $u0
         p = $p
-        NonlinearProblem(f, u0, p; $(kwargs...))
+        NonlinearProblem(f, u0, p; $(filter_kwargs(kwargs)...))
     end
     !linenumbers ? striplines(ex) : ex
 end

@@ -29,7 +29,7 @@ function calculate_gradient end
 calculate_jacobian(sys::AbstractSystem)
 ```
 
-Calculate the jacobian matrix of a system.
+Calculate the Jacobian matrix of a system.
 
 Returns a matrix of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
@@ -41,7 +41,7 @@ function calculate_jacobian end
 calculate_control_jacobian(sys::AbstractSystem)
 ```
 
-Calculate the jacobian matrix of a system with respect to the system's controls.
+Calculate the Jacobian matrix of a system with respect to the system's controls.
 
 Returns a matrix of [`Num`](@ref) instances. The result from the first
 call will be cached in the system object.
@@ -74,7 +74,8 @@ function calculate_hessian end
 
 """
 ```julia
-generate_tgrad(sys::AbstractTimeDependentSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+generate_tgrad(sys::AbstractTimeDependentSystem, dvs = states(sys), ps = parameters(sys),
+               expression = Val{true}; kwargs...)
 ```
 
 Generates a function for the time gradient of a system. Extra arguments control
@@ -84,7 +85,8 @@ function generate_tgrad end
 
 """
 ```julia
-generate_gradient(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+generate_gradient(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+                  expression = Val{true}; kwargs...)
 ```
 
 Generates a function for the gradient of a system. Extra arguments control
@@ -94,37 +96,41 @@ function generate_gradient end
 
 """
 ```julia
-generate_jacobian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
+generate_jacobian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+                  expression = Val{true}; sparse = false, kwargs...)
 ```
 
-Generates a function for the jacobian matrix matrix of a system. Extra arguments control
+Generates a function for the Jacobian matrix of a system. Extra arguments control
 the arguments to the internal [`build_function`](@ref) call.
 """
 function generate_jacobian end
 
 """
 ```julia
-generate_factorized_W(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
+generate_factorized_W(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+                      expression = Val{true}; sparse = false, kwargs...)
 ```
 
-Generates a function for the factorized W-matrix matrix of a system. Extra arguments control
+Generates a function for the factorized W matrix of a system. Extra arguments control
 the arguments to the internal [`build_function`](@ref) call.
 """
 function generate_factorized_W end
 
 """
 ```julia
-generate_hessian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; sparse = false, kwargs...)
+generate_hessian(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+                 expression = Val{true}; sparse = false, kwargs...)
 ```
 
-Generates a function for the hessian matrix matrix of a system. Extra arguments control
+Generates a function for the hessian matrix of a system. Extra arguments control
 the arguments to the internal [`build_function`](@ref) call.
 """
 function generate_hessian end
 
 """
 ```julia
-generate_function(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys), expression = Val{true}; kwargs...)
+generate_function(sys::AbstractSystem, dvs = states(sys), ps = parameters(sys),
+                  expression = Val{true}; kwargs...)
 ```
 
 Generate a function to evaluate the system's equations.
@@ -148,7 +154,7 @@ function independent_variable(sys::AbstractSystem)
 end
 
 #Treat the result as a vector of symbols always
-function independent_variables(sys::AbstractSystem)
+function SymbolicIndexingInterface.independent_variables(sys::AbstractSystem)
     systype = typeof(sys)
     @warn "Please declare ($systype) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
     if isdefined(sys, :iv)
@@ -160,9 +166,13 @@ function independent_variables(sys::AbstractSystem)
     end
 end
 
-independent_variables(sys::AbstractTimeDependentSystem) = [getfield(sys, :iv)]
-independent_variables(sys::AbstractTimeIndependentSystem) = []
-independent_variables(sys::AbstractMultivariateSystem) = getfield(sys, :ivs)
+function SymbolicIndexingInterface.independent_variables(sys::AbstractTimeDependentSystem)
+    [getfield(sys, :iv)]
+end
+SymbolicIndexingInterface.independent_variables(sys::AbstractTimeIndependentSystem) = []
+function SymbolicIndexingInterface.independent_variables(sys::AbstractMultivariateSystem)
+    getfield(sys, :ivs)
+end
 
 iscomplete(sys::AbstractSystem) = isdefined(sys, :complete) && getfield(sys, :complete)
 
@@ -209,7 +219,8 @@ for prop in [:eqs
              :tearing_state
              :substitutions
              :metadata
-             :discrete_subsystems]
+             :discrete_subsystems
+             :unknown_states]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin
@@ -352,16 +363,34 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     end
 end
 
+function apply_to_variables(f::F, ex) where {F}
+    ex = value(ex)
+    if isvariable(ex)
+        return f(ex)
+    end
+    istree(ex) || return ex
+    similarterm(ex, apply_to_variables(f, operation(ex)),
+                map(Base.Fix1(apply_to_variables, f), arguments(ex)),
+                metadata = metadata(ex))
+end
+
 abstract type SymScope end
 
 struct LocalScope <: SymScope end
-LocalScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, LocalScope())
+function LocalScope(sym::Union{Num, Symbolic})
+    apply_to_variables(sym) do sym
+        setmetadata(sym, SymScope, LocalScope())
+    end
+end
 
 struct ParentScope <: SymScope
     parent::SymScope
 end
 function ParentScope(sym::Union{Num, Symbolic})
-    setmetadata(sym, SymScope, ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+    apply_to_variables(sym) do sym
+        setmetadata(sym, SymScope,
+                    ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+    end
 end
 
 struct DelayParentScope <: SymScope
@@ -369,13 +398,19 @@ struct DelayParentScope <: SymScope
     N::Int
 end
 function DelayParentScope(sym::Union{Num, Symbolic}, N)
-    setmetadata(sym, SymScope,
-                DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
+    apply_to_variables(sym) do sym
+        setmetadata(sym, SymScope,
+                    DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
+    end
 end
 DelayParentScope(sym::Union{Num, Symbolic}) = DelayParentScope(sym, 1)
 
 struct GlobalScope <: SymScope end
-GlobalScope(sym::Union{Num, Symbolic}) = setmetadata(sym, SymScope, GlobalScope())
+function GlobalScope(sym::Union{Num, Symbolic})
+    apply_to_variables(sym) do sym
+        setmetadata(sym, SymScope, GlobalScope())
+    end
+end
 
 renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
 
@@ -470,7 +505,7 @@ function states(sys::AbstractSystem)
            [sts; reduce(vcat, namespace_variables.(systems))])
 end
 
-function parameters(sys::AbstractSystem)
+function SymbolicIndexingInterface.parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     systems = get_systems(sys)
     unique(isempty(systems) ? ps : [ps; reduce(vcat, namespace_parameters.(systems))])
@@ -508,7 +543,9 @@ end
 states(sys::AbstractSystem, v) = renamespace(sys, v)
 parameters(sys::AbstractSystem, v) = toparam(states(sys, v))
 for f in [:states, :parameters]
-    @eval $f(sys::AbstractSystem, vs::AbstractArray) = map(v -> $f(sys, v), vs)
+    @eval function $f(sys::AbstractSystem, vs::AbstractArray)
+        map(v -> $f(sys, v), vs)
+    end
 end
 
 flatten(sys::AbstractSystem, args...) = sys
@@ -570,6 +607,35 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
         return operation(x)
     end
     return x
+end
+
+SymbolicIndexingInterface.is_indep_sym(sys::AbstractSystem, sym) = isequal(sym, get_iv(sys))
+
+"""
+$(SIGNATURES)
+
+Return a list of actual states needed to be solved by solvers.
+"""
+function unknown_states(sys::AbstractSystem)
+    sts = states(sys)
+    if has_unknown_states(sys)
+        sts = something(get_unknown_states(sys), sts)
+    end
+    return sts
+end
+
+function SymbolicIndexingInterface.state_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(isequal(sym), unknown_states(sys))
+end
+function SymbolicIndexingInterface.is_state_sym(sys::AbstractSystem, sym)
+    !isnothing(SymbolicIndexingInterface.state_sym_to_index(sys, sym))
+end
+
+function SymbolicIndexingInterface.param_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(isequal(sym), SymbolicIndexingInterface.parameters(sys))
+end
+function SymbolicIndexingInterface.is_param_sym(sys::AbstractSystem, sym)
+    !isnothing(SymbolicIndexingInterface.param_sym_to_index(sys, sym))
 end
 
 struct AbstractSysToExpr
@@ -902,6 +968,39 @@ function _named_idxs(name::Symbol, idxs, call)
     :($name = $map($sym -> $ex, $idxs))
 end
 
+function single_named_expr(expr)
+    name, call = split_assign(expr)
+    if Meta.isexpr(name, :ref)
+        name, idxs = name.args
+        check_name(name)
+        var = gensym(name)
+        ex = quote
+            $var = $(_named(name, call))
+            $name = map(i -> $rename($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
+        end
+        ex
+    else
+        check_name(name)
+        :($name = $(_named(name, call)))
+    end
+end
+
+function named_expr(expr)
+    if Meta.isexpr(expr, :block)
+        newexpr = Expr(:block)
+        names = Expr(:vcat)
+        for ex in expr.args
+            ex isa LineNumberNode && continue
+            push!(newexpr.args, single_named_expr(ex))
+            push!(names.args, ex.args[1])
+        end
+        push!(newexpr.args, names)
+        newexpr
+    else
+        single_named_expr(expr)
+    end
+end
+
 function check_name(name)
     name isa Symbol ||
         throw(Meta.ParseError("The lhs must be a symbol (a) or a ref (a[1:10]). Got $name."))
@@ -910,6 +1009,10 @@ end
 """
     @named y = foo(x)
     @named y[1:10] = foo(x)
+    @named begin
+        y[1:10] = foo(x)
+        z = foo(x)
+    end # returns `[y; z]`
     @named y 1:10 i -> foo(x*i)  # This is not recommended
 
 Pass the LHS name to the model. When it's calling anything that's not an
@@ -918,6 +1021,7 @@ that namespacing works intuitively when passing a symbolic default into a
 component.
 
 Examples:
+
 ```julia-repl
 julia> using ModelingToolkit
 
@@ -938,20 +1042,7 @@ julia> @named y[1:3] = foo(x)
 ```
 """
 macro named(expr)
-    name, call = split_assign(expr)
-    if Meta.isexpr(name, :ref)
-        name, idxs = name.args
-        check_name(name)
-        var = gensym(name)
-        ex = quote
-            $var = $(_named(name, call))
-            $name = map(i -> $rename($var, Symbol($(Meta.quot(name)), :_, i)), $idxs)
-        end
-        esc(ex)
-    else
-        check_name(name)
-        esc(:($name = $(_named(name, call))))
-    end
+    esc(named_expr(expr))
 end
 
 macro named(name::Symbol, idxs, call)
@@ -960,7 +1051,15 @@ end
 
 function default_to_parentscope(v)
     uv = unwrap(v)
-    uv isa Symbolic && !hasmetadata(uv, SymScope) ? ParentScope(v) : v
+    uv isa Symbolic || return v
+    apply_to_variables(v) do sym
+        if !hasmetadata(uv, SymScope)
+            setmetadata(sym, SymScope,
+                        ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+        else
+            sym
+        end
+    end
 end
 
 function _config(expr, namespace)
@@ -1088,24 +1187,29 @@ end
 """
     lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, kwargs...)
 
-Return a function that linearizes system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
+Return a function that linearizes the system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
 
 `lin_fun` is a function `(variables, p, t) -> (; f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u)`, i.e., it returns a NamedTuple with the Jacobians of `f,g,h` for the nonlinear `sys` (technically for `simplified_sys`) on the form
+
 ```math
-ẋ = f(x, z, u)
-0 = g(x, z, u)
-y = h(x, z, u)
+\\begin{aligned}
+ẋ &= f(x, z, u) \\\\
+0 &= g(x, z, u) \\\\
+y &= h(x, z, u)
+\\end{aligned}
 ```
+
 where `x` are differential states, `z` algebraic states, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `states(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
 
-The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The states of this system also indicates the order of the states that holds for the linearized matrices.
+The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The states of this system also indicate the order of the states that holds for the linearized matrices.
 
 # Arguments:
-- `sys`: An [`ODESystem`](@ref). This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.
-- `inputs`: A vector of variables that indicate the inputs of the linearized input-output model.
-- `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
-- `simplify`: Apply simplification in tearing.
-- `kwargs`: Are passed on to `find_solvables!`
+
+  - `sys`: An [`ODESystem`](@ref). This function will automatically apply simplification passes on `sys` and return the resulting `simplified_sys`.
+  - `inputs`: A vector of variables that indicate the inputs of the linearized input-output model.
+  - `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
+  - `simplify`: Apply simplification in tearing.
+  - `kwargs`: Are passed on to `find_solvables!`
 
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
@@ -1157,7 +1261,7 @@ function linearization_function(sys::AbstractSystem, inputs,
     return lin_fun, sys
 end
 
-function markio!(state, inputs, outputs; check = true)
+function markio!(state, orig_inputs, inputs, outputs; check = true)
     fullvars = state.fullvars
     inputset = Dict{Any, Bool}(i => false for i in inputs)
     outputset = Dict{Any, Bool}(o => false for o in outputs)
@@ -1171,6 +1275,9 @@ function markio!(state, inputs, outputs; check = true)
             outputset[v] = true
             fullvars[i] = v
         else
+            if isinput(v)
+                push!(orig_inputs, v)
+            end
             v = setio(v, false, false)
             fullvars[i] = v
         end
@@ -1185,7 +1292,7 @@ function markio!(state, inputs, outputs; check = true)
     check && (all(values(outputset)) ||
      error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
            outputset))
-    state
+    state, orig_inputs
 end
 
 """
@@ -1194,6 +1301,7 @@ end
 
 Return a NamedTuple with the matrices of a linear statespace representation
 on the form
+
 ```math
 \\begin{aligned}
 ẋ &= Ax + Bu\\\\
@@ -1217,7 +1325,9 @@ The implementation and notation follows that of
 ["Linear Analysis Approach for Modelica Models", Allain et al. 2009](https://ep.liu.se/ecp/043/075/ecp09430097.pdf)
 
 # Extended help
+
 This example builds the following feedback interconnection and linearizes it from the input of `F` to the output of `P`.
+
 ```
 
   r ┌─────┐       ┌─────┐     ┌─────┐
@@ -1228,6 +1338,7 @@ This example builds the following feedback interconnection and linearizes it fro
                 │                     │
                 └─────────────────────┘
 ```
+
 ```julia
 using ModelingToolkit
 @variables t
@@ -1242,7 +1353,7 @@ end
 
 function ref_filt(; name)
     @variables x(t)=0 y(t)=0
-    @variables u(t)=0 [input=true]
+    @variables u(t)=0 [input = true]
     D = Differential(t)
     eqs = [D(x) ~ -2 * x + u
            y ~ x]
@@ -1269,7 +1380,7 @@ connections = [f.y ~ c.r # filtered reference to controller reference
 @named cl = ODESystem(connections, t, systems = [f, c, p])
 
 lsys, ssys = linearize(cl, [f.u], [p.x])
-desired_order =  [f.x, p.x]
+desired_order = [f.x, p.x]
 lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
 
 @assert lsys.A == [-2 0; 1 -2]
@@ -1326,8 +1437,13 @@ end
 
 function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
                    allow_input_derivatives = false,
+                   zero_dummy_der = false,
                    kwargs...)
     lin_fun, ssys = linearization_function(sys, inputs, outputs; kwargs...)
+    if zero_dummy_der
+        dummyder = setdiff(states(ssys), states(sys))
+        op = merge(op, Dict(x => 0.0 for x in dummyder))
+    end
     linearize(ssys, lin_fun; op, t, allow_input_derivatives), ssys
 end
 
@@ -1335,6 +1451,7 @@ end
     (; Ã, B̃, C̃, D̃) = similarity_transform(sys, T; unitary=false)
 
 Perform a similarity transform `T : Tx̃ = x` on linear system represented by matrices in NamedTuple `sys` such that
+
 ```
 Ã = T⁻¹AT
 B̃ = T⁻¹ B
@@ -1363,11 +1480,13 @@ end
 
 Permute the state representation of `sys` obtained from [`linearize`](@ref) so that the state order is changed from `old` to `new`
 Example:
+
 ```
 lsys, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
 desired_order = [int.x, der.x] # States that are present in states(ssys)
 lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
 ```
+
 See also [`ModelingToolkit.similarity_transform`](@ref)
 """
 function reorder_states(sys::NamedTuple, old, new)

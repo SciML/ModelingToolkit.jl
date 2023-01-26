@@ -59,8 +59,8 @@ end
 Base.size(m::Matching) = Base.size(m.match)
 Base.getindex(m::Matching, i::Integer) = m.match[i]
 Base.iterate(m::Matching, state...) = iterate(m.match, state...)
-function Base.copy(m::Matching)
-    Matching(copy(m.match), m.inv_match === nothing ? nothing : copy(m.inv_match))
+function Base.copy(m::Matching{U}) where {U}
+    Matching{U}(copy(m.match), m.inv_match === nothing ? nothing : copy(m.inv_match))
 end
 function Base.setindex!(m::Matching{U}, v::Union{Integer, U}, i::Integer) where {U}
     if m.inv_match !== nothing
@@ -289,7 +289,7 @@ end
 
 """
 ```julia
-Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T<:Integer}
+Base.isequal(bg1::BipartiteGraph{T}, bg2::BipartiteGraph{T}) where {T <: Integer}
 ```
 
 Test whether two [`BipartiteGraph`](@ref)s are equal.
@@ -597,14 +597,14 @@ flag, which switches the direction of the induced matching.
 Essentially the graph adapter performs two largely orthogonal functions
 [`Transposed == true` differences are indicated in square brackets]:
 
-1. It pairs an undirected bipartite graph with a matching of the destination vertex.
+ 1. It pairs an undirected bipartite graph with a matching of the destination vertex.
 
     This matching is used to induce an orientation on the otherwise undirected graph:
     Matched edges pass from destination to source [source to desination], all other edges
     pass in the opposite direction.
 
-2. It exposes the graph view obtained by contracting the destination [source] vertices
-   along the matched edges.
+ 2. It exposes the graph view obtained by contracting the destination [source] vertices
+    along the matched edges.
 
 The result of this operation is an induced, directed graph on the source [destination] vertices.
 The resulting graph has a few desirable properties. In particular, this graph

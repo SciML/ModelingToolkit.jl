@@ -1,4 +1,6 @@
 using ModelingToolkit
+using ModelingToolkit: SymScope
+using Symbolics: arguments, value
 using Test
 
 @parameters t
@@ -12,6 +14,9 @@ d = GlobalScope(d)
 LocalScope(e.val)
 ParentScope(e.val)
 GlobalScope(e.val)
+
+ie = ParentScope(1 / e)
+@test getmetadata(arguments(value(ie))[2], SymScope) === ParentScope(LocalScope())
 
 eqs = [0 ~ a
        0 ~ b

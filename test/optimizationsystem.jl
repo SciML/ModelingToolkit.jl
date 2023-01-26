@@ -77,7 +77,8 @@ end
     @parameters a b
     loss = (a - x)^2 + b * z^2
     cons = [1.0 ~ x^2 + y^2
-            z ~ y - x^2]
+            z ~ y - x^2
+            z^2 + y^2 ≲ 1.0]
     @named sys = OptimizationSystem(loss, [x, y, z], [a, b], constraints = cons)
     sys = structural_simplify(sys)
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0, z => 0.0], [a => 1.0, b => 1.0],
@@ -137,7 +138,8 @@ end
 # nested constraints
 @testset "nested systems" begin
     @variables x y
-    o1 = (x - 1)^2
+    @parameters a = 1
+    o1 = (x - a)^2
     o2 = (y - 1 / 2)^2
     c1 = [
         x ~ 1,
@@ -145,15 +147,32 @@ end
     c2 = [
         y ~ 1,
     ]
-    sys1 = OptimizationSystem(o1, [x], [], name = :sys1, constraints = c1)
+    sys1 = OptimizationSystem(o1, [x], [a], name = :sys1, constraints = c1)
     sys2 = OptimizationSystem(o2, [y], [], name = :sys2, constraints = c2)
     sys = OptimizationSystem(0, [], []; name = :sys, systems = [sys1, sys2],
                              constraints = [sys1.x + sys2.y ~ 2], checks = false)
     prob = OptimizationProblem(sys, [0.0, 0.0])
-
     @test isequal(constraints(sys), vcat(sys1.x + sys2.y ~ 2, sys1.x ~ 1, sys2.y ~ 1))
-    @test isequal(equations(sys), (sys1.x - 1)^2 + (sys2.y - 1 / 2)^2)
+    @test isequal(equations(sys), (sys1.x - sys1.a)^2 + (sys2.y - 1 / 2)^2)
     @test isequal(states(sys), [sys1.x, sys2.y])
+
+    prob_ = remake(prob, u0 = [1.0, 0.0], p = [2.0])
+    @test isequal(prob_.u0, [1.0, 0.0])
+    @test isequal(prob_.p, [2.0])
+
+    prob_ = remake(prob, u0 = Dict(sys1.x => 1.0), p = Dict(sys1.a => 2.0))
+    @test isequal(prob_.u0, [1.0, 0.0])
+    @test isequal(prob_.p, [2.0])
+end
+
+@testset "nested systems" begin
+    @variables x1 x2 x3 x4
+    @named sys1 = OptimizationSystem(x1, [x1], [])
+    @named sys2 = OptimizationSystem(x2, [x2], [], systems = [sys1])
+    @named sys3 = OptimizationSystem(x3, [x3], [], systems = [sys2])
+    @named sys4 = OptimizationSystem(x4, [x4], [], systems = [sys3])
+
+    @test isequal(equations(sys4), sys3.sys2.sys1.x1 + sys3.sys2.x2 + sys3.x3 + x4)
 end
 
 @testset "time dependent var" begin
@@ -237,4 +256,26 @@ end
     prob = OptimizationProblem(sys, [x => 0.0, y => 0.0], [a => 1.0, b => 100.0])
     @test prob.lb == [-Inf, 0.0]
     @test prob.ub == [Inf, Inf]
+end
+
+@testset "modelingtoolkitize" begin
+    @variables x₁ x₂
+    @parameters α₁ α₂
+    loss = (α₁ - x₁)^2 + α₂ * (x₂ - x₁^2)^2
+    cons = [
+        x₁^2 + x₂^2 ≲ 1.0,
+    ]
+    sys1 = OptimizationSystem(loss, [x₁, x₂], [α₁, α₂], name = :sys1, constraints = cons)
+
+    prob1 = OptimizationProblem(sys1, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
+                                grad = true, hess = true, cons_j = true, cons_h = true)
+
+    sys2 = modelingtoolkitize(prob1)
+    prob2 = OptimizationProblem(sys2, [x₁ => 0.0, x₂ => 0.0], [α₁ => 1.0, α₂ => 100.0],
+                                grad = true, hess = true, cons_j = true, cons_h = true)
+
+    sol1 = Optimization.solve(prob1, Ipopt.Optimizer())
+    sol2 = Optimization.solve(prob2, Ipopt.Optimizer())
+
+    @test sol1.u ≈ sol2.u
 end

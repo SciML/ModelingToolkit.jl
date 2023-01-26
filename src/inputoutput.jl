@@ -58,7 +58,7 @@ unbound_outputs(sys) = filter(x -> !is_bound(sys, x), outputs(sys))
 """
     is_bound(sys, u)
 
-Determine whether or not input/output variable `u` is "bound" within the system, i.e., if it's to be considered internal to `sys`.
+Determine whether input/output variable `u` is "bound" within the system, i.e., if it's to be considered internal to `sys`.
 A variable/signal is considered bound if it appears in an equation together with variables from other subsystems.
 The typical usecase for this function is to determine whether the input to an IO component is connected to another component,
 or if it remains an external input that the user has to supply before simulating the system.
@@ -111,7 +111,7 @@ end
 """
     same_or_inner_namespace(u, var)
 
-Determine whether or not `var` is in the same namespace as `u`, or a namespace internal to the namespace of `u`.
+Determine whether `var` is in the same namespace as `u`, or a namespace internal to the namespace of `u`.
 Example: `sys.u ~ sys.inner.u` will bind `sys.inner.u`, but `sys.u` remains an unbound, external signal. The namepsaced signal `sys.inner.u` lives in a namspace internal to `sys`.
 """
 function same_or_inner_namespace(u, var)
@@ -149,7 +149,7 @@ end
 """
     has_var(eq, x)
 
-Determine whether or not an equation or expression contains variable `x`.
+Determine whether an equation or expression contains variable `x`.
 """
 function has_var(eq::Equation, x)
     has_var(eq.rhs, x) || has_var(eq.lhs, x)
@@ -169,16 +169,19 @@ has_var(ex, x) = x ∈ Set(get_variables(ex))
         )
 
 For a system `sys` with inputs (as determined by [`unbound_inputs`](@ref) or user specified), generate a function with additional input argument `in`
+
 ```
 f_oop : (x,u,p,t)      -> rhs
 f_ip  : (xout,x,u,p,t) -> nothing
 ```
+
 The return values also include the remaining states and parameters, in the order they appear as arguments to `f`.
 
 If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with distrubance inputs, but the distrubance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require state variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
 See [`add_input_disturbance`](@ref) for a higher-level interface to this functionality.
 
 # Example
+
 ```
 using ModelingToolkit: generate_control_function, varmap_to_vars, defaults
 f, dvs, ps = generate_control_function(sys, expression=Val{false}, simplify=false)
@@ -193,9 +196,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
                                    implicit_dae = false,
                                    simplify = false,
                                    kwargs...)
-    if isempty(inputs)
-        error("No unbound inputs were found in system.")
-    end
+    isempty(inputs) && @warn("No unbound inputs were found in system.")
 
     if disturbance_inputs !== nothing
         # add to inputs for the purposes of io processing
@@ -297,7 +298,8 @@ function inputs_to_parameters!(state::TransformationState, io)
     @set! structure.var_to_diff = complete(new_var_to_diff)
     @set! structure.graph = complete(new_graph)
 
-    @set! sys.eqs = map(Base.Fix2(substitute, input_to_parameters), equations(sys))
+    @set! sys.eqs = isempty(input_to_parameters) ? equations(sys) :
+                    fast_substitute(equations(sys), input_to_parameters)
     @set! sys.states = setdiff(states(sys), keys(input_to_parameters))
     ps = parameters(sys)
 
@@ -327,8 +329,9 @@ end
 The structure represents a model of a disturbance, along with the input variable that is affected by the disturbance. See [`add_input_disturbance`](@ref) for additional details and an example.
 
 # Fields:
-- `input`: The variable affected by the disturbance.
-- `model::M`: A model of the disturbance. This is typically an `ODESystem`, but type that implements [`ModelingToolkit.get_disturbance_system`](@ref)`(dist::DisturbanceModel) -> ::ODESystem` is supported.
+
+  - `input`: The variable affected by the disturbance.
+  - `model::M`: A model of the disturbance. This is typically an `ODESystem`, but type that implements [`ModelingToolkit.get_disturbance_system`](@ref)`(dist::DisturbanceModel) -> ::ODESystem` is supported.
 """
 struct DisturbanceModel{M}
     input::Any
@@ -354,7 +357,9 @@ The generated dynamics functions `(f_oop, f_ip)` will preserve any state and dyn
 For MIMO systems, all inputs to the system has to be specified in the argument `inputs`
 
 # Example
+
 The example below builds a double-mass model and adds an integrating disturbance to the input
+
 ```julia
 using ModelingToolkit
 using ModelingToolkitStandardLibrary
@@ -365,8 +370,8 @@ t = ModelingToolkitStandardLibrary.Blocks.t
 # Parameters
 m1 = 1
 m2 = 1
-k  = 1000 # Spring stiffness
-c  = 10   # Damping coefficient
+k = 1000 # Spring stiffness
+c = 10   # Damping coefficient
 
 @named inertia1 = Inertia(; J = m1)
 @named inertia2 = Inertia(; J = m2)
@@ -374,23 +379,20 @@ c  = 10   # Damping coefficient
 @named damper = Damper(; d = c)
 @named torque = Torque()
 
-eqs = [
-    connect(torque.flange, inertia1.flange_a)
-    connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-    connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
-]
-if u !== nothing
-    push!(eqs, connect(torque.tau, u.output))
-    return @named model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper, u])
-end
-model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
+eqs = [connect(torque.flange, inertia1.flange_a)
+       connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+       connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
+model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
+                  name = :model)
+model = complete(model)
 model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.inertia2.phi]
 
 # Disturbance model
 @named dmodel = Blocks.StateSpace([0.0], [1.0], [1.0], [0.0]) # An integrating disturbance
-dist = ModelingToolkit.DisturbanceModel(model.torque.tau.u, dmodel)
+@named dist = ModelingToolkit.DisturbanceModel(model.torque.tau.u, dmodel)
 (f_oop, f_ip), augmented_sys, dvs, p = ModelingToolkit.add_input_disturbance(model, dist)
 ```
+
 `f_oop` will have an extra state corresponding to the integrator in the disturbance model. This state will not be affected by any input, but will affect the dynamics from where it enters, in this case it will affect additively from `model.torque.tau.u`.
 """
 function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing)
@@ -406,14 +408,14 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing)
         if i === nothing
             throw(ArgumentError("Input $(dist.input) indicated in the disturbance model was not found among inputs specified to add_input_disturbance"))
         end
-        all_inputs = copy(inputs)
+        all_inputs = convert(Vector{Any}, copy(inputs))
         all_inputs[i] = u # The input where the disturbance acts is no longer an input, the new input is u
     end
 
     eqs = [dsys.input.u[1] ~ d
            dist.input ~ u + dsys.output.u[1]]
-
-    augmented_sys = ODESystem(eqs, t, systems = [sys, dsys], name = gensym(:outer))
+    augmented_sys = ODESystem(eqs, t, systems = [dsys], name = gensym(:outer))
+    augmented_sys = extend(augmented_sys, sys)
 
     (f_oop, f_ip), dvs, p = generate_control_function(augmented_sys, all_inputs,
                                                       [d])

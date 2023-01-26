@@ -1,6 +1,17 @@
 using ModelingToolkit, Symbolics, Test
 using ModelingToolkit: get_namespace, has_var, inputs, outputs, is_bound, bound_inputs,
-                       unbound_inputs, bound_outputs, unbound_outputs, isinput, isoutput
+                       unbound_inputs, bound_outputs, unbound_outputs, isinput, isoutput,
+                       ExtraVariablesSystemException
+
+@variables t xx(t) some_input(t) [input = true]
+D = Differential(t)
+eqs = [D(xx) ~ some_input]
+@named model = ODESystem(eqs, t)
+@test_throws ExtraVariablesSystemException structural_simplify(model, ((), ()))
+if VERSION >= v"1.8"
+    err = "In particular, the unset input(s) are:\n some_input(t)"
+    @test_throws err structural_simplify(model, ((), ()))
+end
 
 # Test input handling
 @parameters tv
@@ -258,6 +269,7 @@ function SystemModel(u = nothing; name = :model)
 end
 
 model = SystemModel() # Model with load disturbance
+model = complete(model)
 model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.inertia2.phi]
 
 @named dmodel = Blocks.StateSpace([0.0], [1.0], [1.0], [0.0]) # An integrating disturbance
@@ -328,8 +340,8 @@ B = [1.0 0; 0 1.0]
 @named model = Blocks.StateSpace(A, B, C)
 @named integrator = Blocks.StateSpace([-0.001;;], [1.0;;], [1.0;;], [0.0;;])
 
-ins = collect(model.input.u)
-outs = collect(model.output.u)
+ins = collect(complete(model).input.u)
+outs = collect(complete(model).output.u)
 
 disturbed_input = ins[1]
 @named dist_integ = DisturbanceModel(disturbed_input, integrator)
@@ -342,7 +354,7 @@ augmented_sys = complete(augmented_sys)
 matrices, ssys = linearize(augmented_sys,
                            [
                                augmented_sys.u,
-                               augmented_sys.model.input.u[2],
+                               augmented_sys.input.u[2],
                                augmented_sys.d,
                            ], outs)
 @test matrices.A ≈ [A [1; 0]; zeros(1, 2) -0.001]

@@ -17,14 +17,14 @@ of `decay2` is the value of the state variable `x`.
 ```@example composition
 using ModelingToolkit
 
-function decay(;name)
-  @parameters t a
-  @variables x(t) f(t)
-  D = Differential(t)
-  ODESystem([
-      D(x) ~ -a*x + f
-    ];
-    name=name)
+function decay(; name)
+    @parameters t a
+    @variables x(t) f(t)
+    D = Differential(t)
+    ODESystem([
+                  D(x) ~ -a * x + f,
+              ];
+              name = name)
 end
 
 @named decay1 = decay()
@@ -32,10 +32,8 @@ end
 
 @parameters t
 D = Differential(t)
-connected = compose(ODESystem([
-                        decay2.f ~ decay1.x
-                        D(decay1.f) ~ 0
-                      ], t; name=:connected), decay1, decay2)
+connected = compose(ODESystem([decay2.f ~ decay1.x
+                               D(decay1.f) ~ 0], t; name = :connected), decay1, decay2)
 
 equations(connected)
 
@@ -53,15 +51,11 @@ equations(simplified_sys)
 Now we can solve the system:
 
 ```@example composition
-x0 = [
-  decay1.x => 1.0
-  decay1.f => 0.0
-  decay2.x => 1.0
-]
-p = [
-  decay1.a => 0.1
-  decay2.a => 0.2
-]
+x0 = [decay1.x => 1.0
+      decay1.f => 0.0
+      decay2.x => 1.0]
+p = [decay1.a => 0.1
+     decay2.a => 0.2]
 
 using DifferentialEquations
 prob = ODEProblem(simplified_sys, x0, (0.0, 100.0), p)
@@ -76,7 +70,7 @@ subsystems. A model is the composition of itself and its subsystems.
 For example, if we have:
 
 ```julia
-@named sys = compose(ODESystem(eqs,indepvar,states,ps),subsys)
+@named sys = compose(ODESystem(eqs, indepvar, states, ps), subsys)
 ```
 
 the `equations` of `sys` is the concatenation of `get_eqs(sys)` and
@@ -101,15 +95,13 @@ this is done, the initial conditions and parameters must be specified
 in their namespaced form. For example:
 
 ```julia
-u0 = [
-  x => 2.0
-  subsys.x => 2.0
-]
+u0 = [x => 2.0
+      subsys.x => 2.0]
 ```
 
 Note that any default values within the given subcomponent will be
 used if no override is provided at construction time. If any values for
-initial conditions or parameters are unspecified an error will be thrown.
+initial conditions or parameters are unspecified, an error will be thrown.
 
 When the model is numerically solved, the solution can be accessed via
 its symbolic values. For example, if `sol` is the `ODESolution`, one
@@ -132,55 +124,51 @@ With symbolic parameters, it is possible to set the default value of a parameter
 ```julia
 # ...
 sys = ODESystem(
-    # ...
-    # directly in the defaults argument
-    defaults=Pair{Num, Any}[
-    x => u,
-    y => σ,
-    z => u-0.1,
-])
+                # ...
+                # directly in the defaults argument
+                defaults = Pair{Num, Any}[x => u,
+                                          y => σ,
+                                          z => u - 0.1])
 # by assigning to the parameter
-sys.y = u*1.1
+sys.y = u * 1.1
 ```
 
 In a hierarchical system, variables of the subsystem get namespaced by the name of the system they are in. This prevents naming clashes, but also enforces that every state and parameter is local to the subsystem it is used in. In some cases it might be desirable to have variables and parameters that are shared between subsystems, or even global. This can be accomplished as follows.
 
 ```julia
 @parameters t a b c d e f
-p = [
-    a #a is a local variable
-    ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
-    ParentScope(ParentScope(c))# ParentScope can be nested
-    DelayParentScope(d) # skips one level before applying ParentScope
-    DelayParentScope(e,2) # second argument allows skipping N levels
-    GlobalScope(f) # global variables will never be namespaced
-]
+p = [a #a is a local variable
+     ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
+     ParentScope(ParentScope(c))# ParentScope can be nested
+     DelayParentScope(d) # skips one level before applying ParentScope
+     DelayParentScope(e, 2) # second argument allows skipping N levels
+     GlobalScope(f)]
 
-level0 = ODESystem(Equation[],t,[],p; name = :level0)
-level1 = ODESystem(Equation[],t,[],[];name = :level1) ∘ level0
+level0 = ODESystem(Equation[], t, [], p; name = :level0)
+level1 = ODESystem(Equation[], t, [], []; name = :level1) ∘ level0
 parameters(level1)
-  #level0₊a
-  #b
-  #c
-  #level0₊d
-  #level0₊e
-  #f
-level2 = ODESystem(Equation[],t,[],[];name = :level2) ∘ level1
+#level0₊a
+#b
+#c
+#level0₊d
+#level0₊e
+#f
+level2 = ODESystem(Equation[], t, [], []; name = :level2) ∘ level1
 parameters(level2)
-  #level1₊level0₊a
-  #level1₊b
-  #c
-  #level0₊d
-  #level1₊level0₊e
-  #f
-level3 = ODESystem(Equation[],t,[],[];name = :level3) ∘ level2
+#level1₊level0₊a
+#level1₊b
+#c
+#level0₊d
+#level1₊level0₊e
+#f
+level3 = ODESystem(Equation[], t, [], []; name = :level3) ∘ level2
 parameters(level3)
-  #level2₊level1₊level0₊a
-  #level2₊level1₊b
-  #level2₊c
-  #level2₊level0₊d
-  #level1₊level0₊e
-  #f
+#level2₊level1₊level0₊a
+#level2₊level1₊b
+#level2₊c
+#level2₊level0₊d
+#level1₊level0₊e
+#f
 ```
 
 ## Structural Simplify
@@ -213,27 +201,25 @@ D = Differential(t)
 
 @variables S(t), I(t), R(t)
 N = S + I + R
-@parameters β,γ
+@parameters β, γ
 
-@named seqn = ODESystem([D(S) ~ -β*S*I/N])
-@named ieqn = ODESystem([D(I) ~ β*S*I/N-γ*I])
-@named reqn = ODESystem([D(R) ~ γ*I])
+@named seqn = ODESystem([D(S) ~ -β * S * I / N])
+@named ieqn = ODESystem([D(I) ~ β * S * I / N - γ * I])
+@named reqn = ODESystem([D(R) ~ γ * I])
 
 sir = compose(ODESystem([
-                    S ~ ieqn.S,
-                    I ~ seqn.I,
-                    R ~ ieqn.R,
-                    ieqn.S ~ seqn.S,
-                    seqn.I ~ ieqn.I,
-                    seqn.R ~ reqn.R,
-                    ieqn.R ~ reqn.R,
-                    reqn.I ~ ieqn.I], t, [S,I,R], [β,γ],
-                    defaults = [
-                        seqn.β => β
-                        ieqn.β => β
-                        ieqn.γ => γ
-                        reqn.γ => γ
-                    ], name=:sir), seqn, ieqn, reqn)
+                            S ~ ieqn.S,
+                            I ~ seqn.I,
+                            R ~ ieqn.R,
+                            ieqn.S ~ seqn.S,
+                            seqn.I ~ ieqn.I,
+                            seqn.R ~ reqn.R,
+                            ieqn.R ~ reqn.R,
+                            reqn.I ~ ieqn.I], t, [S, I, R], [β, γ],
+                        defaults = [seqn.β => β
+                                    ieqn.β => β
+                                    ieqn.γ => γ
+                                    reqn.γ => γ], name = :sir), seqn, ieqn, reqn)
 ```
 
 Note that the states are forwarded by an equality relationship, while
@@ -251,17 +237,15 @@ equations(sireqn_simple)
 ## User Code
 
 u0 = [seqn.S => 990.0,
-      ieqn.I => 10.0,
-      reqn.R => 0.0]
+    ieqn.I => 10.0,
+    reqn.R => 0.0]
 
-p = [
-    β => 0.5
-    γ => 0.25
-]
+p = [β => 0.5
+     γ => 0.25]
 
-tspan = (0.0,40.0)
-prob = ODEProblem(sireqn_simple,u0,tspan,p,jac=true)
-sol = solve(prob,Tsit5())
+tspan = (0.0, 40.0)
+prob = ODEProblem(sireqn_simple, u0, tspan, p, jac = true)
+sol = solve(prob, Tsit5())
 sol[reqn.R]
 ```
 
@@ -277,11 +261,12 @@ solving. In summary: these problems are structurally modified, but could be
 more efficient and more stable.
 
 ## Components with discontinuous dynamics
+
 When modeling, e.g., impacts, saturations or Coulomb friction, the dynamic
 equations are discontinuous in either the state or one of its derivatives. This
 causes the solver to take very small steps around the discontinuity, and
 sometimes leads to early stopping due to `dt <= dt_min`. The correct way to
-handle such dynamics is to tell the solver about the discontinuity by means of a
+handle such dynamics is to tell the solver about the discontinuity by a
 root-finding equation, which can be modeling using [`ODESystem`](@ref)'s event
 support. Please see the tutorial on [Callbacks and Events](@ref events) for
 details and examples.
