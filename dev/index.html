@@ -33,10 +33,10 @@ Info Packages marked with ⌅ have new versions available but compatibility cons
 Commit 17cfb8e65ea (2023-01-08 06:45 UTC)
 Platform Info:
   OS: Linux (x86_64-linux-gnu)
-  CPU: 2 × Intel(R) Xeon(R) CPU E5-2673 v3 @ 2.40GHz
+  CPU: 2 × Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
   WORD_SIZE: 64
   LIBM: libopenlibm
-  LLVM: libLLVM-13.0.1 (ORCJIT, haswell)
+  LLVM: libLLVM-13.0.1 (ORCJIT, icelake-server)
   Threads: 1 on 2 virtual cores</code></pre></details><details><summary>A more complete overview of all dependencies and their versions is also provided.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Status `~/work/ModelingToolkit.jl/ModelingToolkit.jl/docs/Manifest.toml`
   [a4c015fc] ANSIColoredPrinters v0.0.1
   [c3fe647b] AbstractAlgebra v0.27.8
@@ -52,7 +52,7 @@ Platform Info:
   [dd5226c6] ArrayInterfaceStaticArraysCore v0.1.3
   [4c555306] ArrayLayouts v0.8.18
   [15f4f7f2] AutoHashEquals v0.2.0
-  [aae01518] BandedMatrices v0.17.9
+  [aae01518] BandedMatrices v0.17.10
   [198e06fe] BangBang v0.3.37
   [9718e550] Baselet v0.1.1
   [6e4b80f9] BenchmarkTools v1.3.2
@@ -61,11 +61,11 @@ Platform Info:
   [62783981] BitTwiddlingConvenienceFunctions v0.1.5
   [764a87c0] BoundaryValueDiffEq v2.11.0
   [fa961155] CEnum v0.4.2
-  [2a0fbf3d] CPUSummary v0.2.1
+  [2a0fbf3d] CPUSummary v0.2.2
   [00ebfdb7] CSTParser v3.3.6
   [49dc2e85] Calculus v0.5.1
   [d360d2e6] ChainRulesCore v1.15.7
-  [9e997f8a] ChangesOfVariables v0.1.4
+  [9e997f8a] ChangesOfVariables v0.1.5
   [fb6a15b2] CloseOpenIntervals v0.1.11
   [944b1d66] CodecZlib v0.7.1
   [35d6a980] ColorSchemes v3.20.0
@@ -127,7 +127,7 @@ Platform Info:
   [0b43b601] Groebner v0.2.11
   [d5909c97] GroupsCore v0.4.0
   [cd3eb016] HTTP v1.7.4
-  [3e5b6fbb] HostCPUFeatures v0.1.13
+  [3e5b6fbb] HostCPUFeatures v0.1.14
   [34004b35] HypergeometricFunctions v0.3.11
   [b5f81e59] IOCapture v0.2.2
   [615f187c] IfElse v0.1.1
@@ -150,15 +150,15 @@ Platform Info:
   [ba0b0d4f] Krylov v0.9.0
   [0b1a1467] KrylovKit v0.6.0
   [b964fa9f] LaTeXStrings v1.3.0
-  [2ee39098] LabelledArrays v1.12.5
+  [2ee39098] LabelledArrays v1.13.0
   [984bce1d] LambertW v0.4.6
   [23fbe1c1] Latexify v0.15.18
-  [10f19ff3] LayoutPointers v0.1.12
+  [10f19ff3] LayoutPointers v0.1.13
   [1d6d02ad] LeftChildRightSiblingTrees v0.2.0
   [2d8b4e74] LevyArea v1.0.0
   [d3d80556] LineSearches v7.2.0
   [7ed4a6bd] LinearSolve v1.34.1
-  [2ab3a3ac] LogExpFunctions v0.3.19
+  [2ab3a3ac] LogExpFunctions v0.3.20
   [e6f89c97] LoggingExtras v1.0.0
   [bdcacae8] LoopVectorization v0.12.148
   [1914dd2f] MacroTools v0.5.10
@@ -189,11 +189,11 @@ Platform Info:
   [69de0a69] Parsers v2.5.3
   [b98c9c47] Pipe v1.3.0
   [ccf2f8ad] PlotThemes v3.1.0
-  [995b91a9] PlotUtils v1.3.2
+  [995b91a9] PlotUtils v1.3.3
   [91a5bcdd] Plots v1.38.2
   [e409e4f3] PoissonRandom v0.4.3
-  [f517fe37] Polyester v0.7.1
-  [1d0040c9] PolyesterWeave v0.2.0
+  [f517fe37] Polyester v0.7.2
+  [1d0040c9] PolyesterWeave v0.2.1
   [85a6dd25] PositiveFactorizations v0.2.4
   [d236fae5] PreallocationTools v0.4.8
   [21216c6a] Preferences v1.3.0
@@ -240,7 +240,7 @@ Platform Info:
   [4c63d2b9] StatsFuns v1.1.1
   [9672c7b4] SteadyStateDiffEq v1.11.0
   [789caeaf] StochasticDiffEq v6.57.4
-  [7792a7ef] StrideArraysCore v0.4.5
+  [7792a7ef] StrideArraysCore v0.4.6
   [220ca800] StructuralIdentifiability v0.4.5
   [c3572dad] Sundials v4.12.0
   [2efcf032] SymbolicIndexingInterface v0.2.1
@@ -252,7 +252,7 @@ Platform Info:
 ⌅ [8ea1fca8] TermInterface v0.2.3
   [5d786b92] TerminalLoggers v0.1.6
   [98d24dd4] TestSetExtensions v2.0.0
-  [8290d209] ThreadingUtilities v0.5.0
+  [8290d209] ThreadingUtilities v0.5.1
   [ac1d9e8a] ThreadsX v0.1.11
   [a759f4b9] TimerOutputs v0.5.22
   [0796e94c] Tokenize v0.5.25
@@ -394,4 +394,4 @@ Platform Info:
   [3f19e933] p7zip_jll v17.4.0+0
 Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated -m`</code></pre></details>You can also download the 
 <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.42.0/assets/Manifest.toml">manifest</a> file and the
-<a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.42.0/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Wednesday 25 January 2023 22:34">Wednesday 25 January 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+<a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.42.0/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Thursday 26 January 2023 19:44">Thursday 26 January 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
