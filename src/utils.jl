@@ -879,3 +879,17 @@ function fast_substitute(expr, pair::Pair)
 end
 
 normalize_to_differential(s) = s
+
+safe_unwrap(x) = x
+safe_unwrap(x::Num) = unwrap(x)
+
+function has_symbolic_elements(idxs)
+    (idxs !== nothing) && any(i -> (i isa Symbolics.Symbolic), safe_unwrap.(idxs))
+end
+
+function partition_ints(idxs)
+    idxs = safe_unwrap.(idxs)
+    syms = filter(i -> (i isa Symbolics.Symbolic), idxs)
+    ints = filter(i -> i isa Integer, setdiff(idxs, syms))
+    return syms, ints
+end

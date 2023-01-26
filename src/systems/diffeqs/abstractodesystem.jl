@@ -700,6 +700,7 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
                                                 parammap = DiffEqBase.NullParameters();
                                                 callback = nothing,
                                                 check_length = true,
+                                                save_idxs = nothing,
                                                 kwargs...) where {iip, specialize}
     has_difference = any(isdifferenceeq, equations(sys))
     f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
@@ -728,6 +729,12 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     else
         svs = nothing
     end
+    if has_symbolic_elements(save_idxs)
+        sym_idxs, int_idxs = partition_ints(save_idxs)
+        sym_idxs = unique(vcat(sym_idxs, equation_dependencies(sys)))
+        save_idxs = unique(vcat(state_sym_to_index.((sys,), save_idxs), int_idxs))
+    end
+
     kwargs = filter_kwargs(kwargs)
     pt = something(get_metadata(sys), StandardODEProblem())
 
@@ -737,6 +744,9 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     end
     if svs !== nothing
         kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
+    end
+    if save_idxs !== nothing
+        kwargs1 = merge(kwargs1, (save_idxs = save_idxs,))
     end
     ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
 end
