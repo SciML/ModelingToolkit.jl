@@ -550,7 +550,7 @@ end
 
 flatten(sys::AbstractSystem, args...) = sys
 
-function equations(sys::ModelingToolkit.AbstractSystem)
+function equations(sys::AbstractSystem)
     eqs = get_eqs(sys)
     systems = get_systems(sys)
     if isempty(systems)
@@ -564,7 +564,7 @@ function equations(sys::ModelingToolkit.AbstractSystem)
     end
 end
 
-function preface(sys::ModelingToolkit.AbstractSystem)
+function preface(sys::AbstractSystem)
     has_preface(sys) || return nothing
     pre = get_preface(sys)
     systems = get_systems(sys)
