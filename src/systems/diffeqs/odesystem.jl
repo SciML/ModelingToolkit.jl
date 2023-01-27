@@ -437,6 +437,13 @@ function convert_system(::Type{<:ODESystem}, sys, t; name = nameof(sys))
                      checks = false)
 end
 
+function Symbolics.substitute(sys::ODESystem, rules::Union{Vector{<:Pair}, Dict})
+    rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
+                       collect(rules)))
+    eqs = fast_substitute(equations(sys), rules)
+    ODESystem(eqs, get_iv(sys); name = nameof(sys))
+end
+
 """
 $(SIGNATURES)
 

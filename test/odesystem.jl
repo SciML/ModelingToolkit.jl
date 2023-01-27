@@ -12,6 +12,7 @@ using ModelingToolkit: value
 @constants κ = 1
 @variables x(t) y(t) z(t)
 D = Differential(t)
+@parameters k
 
 # Define a differential equation
 eqs = [D(x) ~ σ * (y - x),
@@ -20,6 +21,12 @@ eqs = [D(x) ~ σ * (y - x),
 
 ModelingToolkit.toexpr.(eqs)[1]
 @named de = ODESystem(eqs; defaults = Dict(x => 1))
+subed = substitute(de, [σ => k])
+@test isequal(sort(parameters(subed), by = string), [k, β, ρ])
+@test isequal(equations(subed),
+              [D(x) ~ k * (y - x)
+               D(y) ~ (ρ - z) * x - y
+               D(z) ~ x * y - β * κ * z])
 @named des[1:3] = ODESystem(eqs)
 @test length(unique(x -> ModelingToolkit.get_tag(x), des)) == 1
 @test eval(toexpr(de)) == de
