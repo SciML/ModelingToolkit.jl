@@ -442,4 +442,21 @@ function Symbolics.substitute(sys::ODESystem, rules::Union{Vector{<:Pair}, Dict}
                        collect(rules)))
     eqs = fast_substitute(equations(sys), rules)
     ODESystem(eqs, get_iv(sys); name = nameof(sys))
+
+"""
+$(SIGNATURES)
+
+Add accumulation variables for `vars`.
+"""
+function add_accumulations(sys::ODESystem, vars = states(sys))
+    eqs = get_eqs(sys)
+    accs = filter(x -> startswith(string(x), "accumulation_"), states(sys))
+    if !isempty(accs)
+        error("$accs variable names start with \"accumulation_\"")
+    end
+    avars = [rename(v, Symbol(:accumulation_, getname(v))) for v in vars]
+    D = Differential(get_iv(sys))
+    @set! sys.eqs = [eqs; Equation[D(a) ~ v for (a, v) in zip(avars, vars)]]
+    @set! sys.states = [get_states(sys); avars]
+    @set! sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
 end
