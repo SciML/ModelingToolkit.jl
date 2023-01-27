@@ -442,6 +442,7 @@ function Symbolics.substitute(sys::ODESystem, rules::Union{Vector{<:Pair}, Dict}
                        collect(rules)))
     eqs = fast_substitute(equations(sys), rules)
     ODESystem(eqs, get_iv(sys); name = nameof(sys))
+end
 
 """
 $(SIGNATURES)
