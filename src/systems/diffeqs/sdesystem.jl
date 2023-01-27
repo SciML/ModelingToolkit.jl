@@ -134,7 +134,7 @@ struct SDESystem <: AbstractODESystem
     end
 end
 
-function SDESystem(deqs::AbstractVector{<:Equation}, neqs, iv, dvs, ps;
+function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dvs, ps;
                    controls = Num[],
                    observed = Num[],
                    systems = SDESystem[],
@@ -188,6 +188,19 @@ end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
     SDESystem(equations(sys), neqs, get_iv(sys), states(sys), parameters(sys); kwargs...)
+end
+
+function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
+    sys1 === sys2 && return true
+    iv1 = get_iv(sys1)
+    iv2 = get_iv(sys2)
+    isequal(iv1, iv2) &&
+        isequal(nameof(sys1), nameof(sys2)) &&
+        isequal(get_eqs(sys1), get_eqs(sys2)) &&
+        isequal(get_noiseeqs(sys1), get_noiseeqs(sys2)) &&
+        _eq_unordered(get_states(sys1), get_states(sys2)) &&
+        _eq_unordered(get_ps(sys1), get_ps(sys2)) &&
+        all(s1 == s2 for (s1, s2) in zip(get_systems(sys1), get_systems(sys2)))
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = states(sys),
