@@ -163,8 +163,9 @@ end
 
 export AbstractTimeDependentSystem, AbstractTimeIndependentSystem,
        AbstractMultivariateSystem
-export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system
-export System
+
+export ODESystem, ODEFunction, ODEFunctionExpr, ODEProblemExpr, convert_system,
+       add_accumulations, System
 export DAEFunctionExpr, DAEProblemExpr
 export SDESystem, SDEFunction, SDEFunctionExpr, SDEProblemExpr
 export SystemStructure
