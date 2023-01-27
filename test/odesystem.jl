@@ -331,6 +331,15 @@ D = Differential(t)
 @variables x(t) y(t) z(t)
 D = Differential(t)
 @named sys = ODESystem([D(x) ~ y, 0 ~ x + z, 0 ~ x - y], t, [z, y, x], [])
+asys = add_accumulations(sys)
+@variables accumulation_x(t) accumulation_y(t) accumulation_z(t)
+eqs = [0 ~ x + z
+       0 ~ x - y
+       D(accumulation_x) ~ x
+       D(accumulation_y) ~ y
+       D(accumulation_z) ~ z
+       D(x) ~ y]
+@test sort(equations(asys), by = string) == eqs
 sys2 = ode_order_lowering(sys)
 M = ModelingToolkit.calculate_massmatrix(sys2)
 @test M == Diagonal([1, 0, 0])
