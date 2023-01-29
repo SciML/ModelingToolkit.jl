@@ -104,11 +104,20 @@ function computed_highest_diff_variables(structure, ag::Union{AliasGraph, Nothin
     varwhitelist = falses(nvars)
     for var in 1:nvars
         if var_to_diff[var] === nothing && !varwhitelist[var]
+            # This variable is structurally highest-differentiated, but may not actually appear in the
+            # system (complication 1 above). Ascend the differentiation graph to find the highest
+            # differentiated variable that does appear in the system or the alias graph).
             while isempty(𝑑neighbors(graph, var)) && (ag === nothing || !haskey(ag, var))
                 var′ = invview(var_to_diff)[var]
                 var′ === nothing && break
                 var = var′
             end
+            # If we don't have an alias graph, we are done. If we do have an alias graph, we may
+            # have to keep going along the stem, for as long as our differentiation path
+            # matches that of the stem (see complication 2 above). Note that we may end up
+            # whitelisting multiple differentiation levels of the stem here from different
+            # starting points that all map to the same stem. We clean that up in a post-processing
+            # pass below.
             if ag !== nothing && haskey(ag, var)
                 (_, stem) = ag[var]
                 stem == 0 && continue
@@ -134,7 +143,7 @@ function computed_highest_diff_variables(structure, ag::Union{AliasGraph, Nothin
     end
 
     # Remove any variables from the varwhitelist for whom a higher-differentiated
-    # var is already on the whitelist
+    # var is already on the whitelist.
     for var in 1:nvars
         varwhitelist[var] || continue
         var′ = var
