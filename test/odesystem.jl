@@ -12,6 +12,7 @@ using ModelingToolkit: value
 @constants κ = 1
 @variables x(t) y(t) z(t)
 D = Differential(t)
+@parameters k
 
 # Define a differential equation
 eqs = [D(x) ~ σ * (y - x),
@@ -20,6 +21,12 @@ eqs = [D(x) ~ σ * (y - x),
 
 ModelingToolkit.toexpr.(eqs)[1]
 @named de = ODESystem(eqs; defaults = Dict(x => 1))
+subed = substitute(de, [σ => k])
+@test isequal(sort(parameters(subed), by = string), [k, β, ρ])
+@test isequal(equations(subed),
+              [D(x) ~ k * (y - x)
+               D(y) ~ (ρ - z) * x - y
+               D(z) ~ x * y - β * κ * z])
 @named des[1:3] = ODESystem(eqs)
 @test length(unique(x -> ModelingToolkit.get_tag(x), des)) == 1
 @test eval(toexpr(de)) == de
@@ -331,6 +338,15 @@ D = Differential(t)
 @variables x(t) y(t) z(t)
 D = Differential(t)
 @named sys = ODESystem([D(x) ~ y, 0 ~ x + z, 0 ~ x - y], t, [z, y, x], [])
+asys = add_accumulations(sys)
+@variables accumulation_x(t) accumulation_y(t) accumulation_z(t)
+eqs = [0 ~ x + z
+       0 ~ x - y
+       D(accumulation_x) ~ x
+       D(accumulation_y) ~ y
+       D(accumulation_z) ~ z
+       D(x) ~ y]
+@test sort(equations(asys), by = string) == eqs
 sys2 = ode_order_lowering(sys)
 M = ModelingToolkit.calculate_massmatrix(sys2)
 @test M == Diagonal([1, 0, 0])

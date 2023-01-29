@@ -24,7 +24,7 @@ eqs = [D(x) ~ σ*(y-x),
 """
 struct ODESystem <: AbstractODESystem
     """
-    tag: a tag for the system. If two system have the same tag, then they are
+    tag: a tag for the system. If two systems have the same tag, then they are
     structurally identical.
     """
     tag::UInt
@@ -106,7 +106,7 @@ struct ODESystem <: AbstractODESystem
     continuous_events::Vector{SymbolicContinuousCallback}
     """
     discrete_events: A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
-    analog to `SciMLBase.DiscreteCallback` that exectues an affect when a given condition is
+    analog to `SciMLBase.DiscreteCallback` that executes an affect when a given condition is
     true at the end of an integration step.
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
@@ -127,16 +127,22 @@ struct ODESystem <: AbstractODESystem
     """
     complete::Bool
     """
-    discrete_subsystems: a list of discrete subsystems
+    discrete_subsystems: a list of discrete subsystems.
     """
     discrete_subsystems::Any
+    """
+    unknown_states: a list of actual states needed to be solved by solvers. Only
+    used for ODAEProblem.
+    """
+    unknown_states::Union{Nothing, Vector{Any}}
 
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
                        torn_matching, connector_type, preface, cevents,
                        devents, metadata = nothing, tearing_state = nothing,
                        substitutions = nothing, complete = false,
-                       discrete_subsystems = nothing; checks::Union{Bool, Int} = true)
+                       discrete_subsystems = nothing, unknown_states = nothing;
+                       checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -149,7 +155,7 @@ struct ODESystem <: AbstractODESystem
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
             connector_type, preface, cevents, devents, metadata, tearing_state,
-            substitutions, complete, discrete_subsystems)
+            substitutions, complete, discrete_subsystems, unknown_states)
     end
 end
 
@@ -429,4 +435,29 @@ function convert_system(::Type{<:ODESystem}, sys, t; name = nameof(sys))
     defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
     return ODESystem(neweqs, t, newsts, parameters(sys); defaults = defs, name = name,
                      checks = false)
+end
+
+function Symbolics.substitute(sys::ODESystem, rules::Union{Vector{<:Pair}, Dict})
+    rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
+                       collect(rules)))
+    eqs = fast_substitute(equations(sys), rules)
+    ODESystem(eqs, get_iv(sys); name = nameof(sys))
+end
+
+"""
+$(SIGNATURES)
+
+Add accumulation variables for `vars`.
+"""
+function add_accumulations(sys::ODESystem, vars = states(sys))
+    eqs = get_eqs(sys)
+    accs = filter(x -> startswith(string(x), "accumulation_"), states(sys))
+    if !isempty(accs)
+        error("$accs variable names start with \"accumulation_\"")
+    end
+    avars = [rename(v, Symbol(:accumulation_, getname(v))) for v in vars]
+    D = Differential(get_iv(sys))
+    @set! sys.eqs = [eqs; Equation[D(a) ~ v for (a, v) in zip(avars, vars)]]
+    @set! sys.states = [get_states(sys); avars]
+    @set! sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
 end

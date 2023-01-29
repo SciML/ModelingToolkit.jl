@@ -238,12 +238,12 @@ end
 
 """
 ```julia
-function DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
-                                     ps = parameters(sys);
-                                     version = nothing, tgrad=false,
-                                     jac = false,
-                                     sparse = false,
-                                     kwargs...) where {iip}
+DiffEqBase.ODEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+                            ps = parameters(sys);
+                            version = nothing, tgrad = false,
+                            jac = false,
+                            sparse = false,
+                            kwargs...) where {iip}
 ```
 
 Create an `ODEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and `ps`
@@ -275,6 +275,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                                  steady_state = false,
                                                  checkbounds = false,
                                                  sparsity = false,
+                                                 analytic = nothing,
                                                  kwargs...) where {iip, specialize}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
                               expression_module = eval_module, checkbounds = checkbounds,
@@ -374,7 +375,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
     else
         nothing
     end
-    ODEFunction{iip, specialize}(f,
+
+    ODEFunction{iip, specialize}(f;
                                  sys = sys,
                                  jac = _jac === nothing ? nothing : _jac,
                                  tgrad = _tgrad === nothing ? nothing : _tgrad,
@@ -384,17 +386,18 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                  indepsym = Symbol(get_iv(sys)),
                                  paramsyms = Symbol.(ps),
                                  observed = observedfun,
-                                 sparsity = sparsity ? jacobian_sparsity(sys) : nothing)
+                                 sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
+                                 analytic = analytic)
 end
 
 """
 ```julia
-function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
-                                     ps = parameters(sys);
-                                     version = nothing, tgrad=false,
-                                     jac = false,
-                                     sparse = false,
-                                     kwargs...) where {iip}
+DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+                            ps = parameters(sys);
+                            version = nothing, tgrad = false,
+                            jac = false,
+                            sparse = false,
+                            kwargs...) where {iip}
 ```
 
 Create an `DAEFunction` from the [`ODESystem`](@ref). The arguments `dvs` and
@@ -482,12 +485,12 @@ end
 
 """
 ```julia
-function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
-                                     ps = parameters(sys);
-                                     version = nothing, tgrad=false,
-                                     jac = false,
-                                     sparse = false,
-                                     kwargs...) where {iip}
+ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+                     ps = parameters(sys);
+                     version = nothing, tgrad = false,
+                     jac = false,
+                     sparse = false,
+                     kwargs...) where {iip}
 ```
 
 Create a Julia expression for an `ODEFunction` from the [`ODESystem`](@ref).
@@ -616,12 +619,12 @@ end
 
 """
 ```julia
-function DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
-                                     ps = parameters(sys);
-                                     version = nothing, tgrad=false,
-                                     jac = false,
-                                     sparse = false,
-                                     kwargs...) where {iip}
+DAEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
+                     ps = parameters(sys);
+                     version = nothing, tgrad = false,
+                     jac = false,
+                     sparse = false,
+                     kwargs...) where {iip}
 ```
 
 Create a Julia expression for an `ODEFunction` from the [`ODESystem`](@ref).
@@ -661,14 +664,14 @@ end
 
 """
 ```julia
-function DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false,
-                                    checkbounds = false, sparse = false,
-                                    simplify=false,
-                                    linenumbers = true, parallel=SerialForm(),
-                                    kwargs...) where iip
+DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
+                           parammap = DiffEqBase.NullParameters();
+                           version = nothing, tgrad = false,
+                           jac = false,
+                           checkbounds = false, sparse = false,
+                           simplify = false,
+                           linenumbers = true, parallel = SerialForm(),
+                           kwargs...) where {iip}
 ```
 
 Generates an ODEProblem from an ODESystem and allows for automatically
@@ -741,14 +744,14 @@ get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 
 """
 ```julia
-function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem,du0map,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false,
-                                    checkbounds = false, sparse = false,
-                                    simplify=false,
-                                    linenumbers = true, parallel=SerialForm(),
-                                    kwargs...) where iip
+DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan,
+                           parammap = DiffEqBase.NullParameters();
+                           version = nothing, tgrad = false,
+                           jac = false,
+                           checkbounds = false, sparse = false,
+                           simplify = false,
+                           linenumbers = true, parallel = SerialForm(),
+                           kwargs...) where {iip}
 ```
 
 Generates a DAEProblem from an ODESystem and allows for automatically
@@ -783,15 +786,15 @@ end
 
 """
 ```julia
-function ODEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false,
-                                    checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=SerialForm(),
-                                    skipzeros=true, fillzeros=true,
-                                    simplify=false,
-                                    kwargs...) where iip
+ODEProblemExpr{iip}(sys::AbstractODESystem, u0map, tspan,
+                    parammap = DiffEqBase.NullParameters();
+                    version = nothing, tgrad = false,
+                    jac = false,
+                    checkbounds = false, sparse = false,
+                    linenumbers = true, parallel = SerialForm(),
+                    skipzeros = true, fillzeros = true,
+                    simplify = false,
+                    kwargs...) where {iip}
 ```
 
 Generates a Julia expression for constructing an ODEProblem from an
@@ -825,15 +828,15 @@ end
 
 """
 ```julia
-function DAEProblemExpr{iip}(sys::AbstractODESystem,u0map,tspan,
-                                    parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false,
-                                    checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=SerialForm(),
-                                    skipzeros=true, fillzeros=true,
-                                    simplify=false,
-                                    kwargs...) where iip
+DAEProblemExpr{iip}(sys::AbstractODESystem, u0map, tspan,
+                    parammap = DiffEqBase.NullParameters();
+                    version = nothing, tgrad = false,
+                    jac = false,
+                    checkbounds = false, sparse = false,
+                    linenumbers = true, parallel = SerialForm(),
+                    skipzeros = true, fillzeros = true,
+                    simplify = false,
+                    kwargs...) where {iip}
 ```
 
 Generates a Julia expression for constructing a DAEProblem from an
@@ -874,14 +877,15 @@ end
 
 """
 ```julia
-function SciMLBase.SteadyStateProblem(sys::AbstractODESystem,u0map,
-                                    parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false,
-                                    checkbounds = false, sparse = false,
-                                    linenumbers = true, parallel=SerialForm(),
-                                    kwargs...) where iip
+SciMLBase.SteadyStateProblem(sys::AbstractODESystem, u0map,
+                             parammap = DiffEqBase.NullParameters();
+                             version = nothing, tgrad = false,
+                             jac = false,
+                             checkbounds = false, sparse = false,
+                             linenumbers = true, parallel = SerialForm(),
+                             kwargs...) where {iip}
 ```
+
 Generates an SteadyStateProblem from an ODESystem and allows for automatically
 symbolically calculating numerical enhancements.
 """
@@ -901,15 +905,16 @@ end
 
 """
 ```julia
-function SciMLBase.SteadyStateProblemExpr(sys::AbstractODESystem,u0map,
-                                    parammap=DiffEqBase.NullParameters();
-                                    version = nothing, tgrad=false,
-                                    jac = false,
-                                    checkbounds = false, sparse = false,
-                                    skipzeros=true, fillzeros=true,
-                                    linenumbers = true, parallel=SerialForm(),
-                                    kwargs...) where iip
+SciMLBase.SteadyStateProblemExpr(sys::AbstractODESystem, u0map,
+                                 parammap = DiffEqBase.NullParameters();
+                                 version = nothing, tgrad = false,
+                                 jac = false,
+                                 checkbounds = false, sparse = false,
+                                 skipzeros = true, fillzeros = true,
+                                 linenumbers = true, parallel = SerialForm(),
+                                 kwargs...) where {iip}
 ```
+
 Generates a Julia expression for building a SteadyStateProblem from
 an ODESystem and allows for automatically symbolically calculating
 numerical enhancements.
