@@ -5,6 +5,7 @@ struct VariableInput end
 struct VariableOutput end
 struct VariableIrreducible end
 struct VariableStatePriority end
+struct VariableMisc end
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
 Symbolics.option_to_metadata_type(::Val{:noise}) = VariableNoiseType
@@ -12,6 +13,7 @@ Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
 Symbolics.option_to_metadata_type(::Val{:state_priority}) = VariableStatePriority
+Symbolics.option_to_metadata_type(::Val{:misc}) = VariableMisc
 
 abstract type AbstractConnectType end
 struct Equality <: AbstractConnectType end # Equality connection

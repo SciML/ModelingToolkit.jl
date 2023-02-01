@@ -264,3 +264,7 @@ end
 @test isequal(x, (i = 12, name = :x))
 @test isequal(y, [(i = 13, name = Symbol(:y_, i)) for i in 1:3])
 @test isequal(xys, [x; y])
+
+@variables x [misc = "wow"]
+@test SymbolicUtils.getmetadata(Symbolics.unwrap(x), ModelingToolkit.VariableMisc,
+                                nothing) == "wow"
