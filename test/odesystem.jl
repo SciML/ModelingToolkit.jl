@@ -348,6 +348,14 @@ eqs = [0 ~ x + z
        D(accumulation_z) ~ z
        D(x) ~ y]
 @test sort(equations(asys), by = string) == eqs
+@variables ac(t)
+asys = add_accumulations(sys, [ac => (x + y)^2])
+eqs = [0 ~ x + z
+       0 ~ x - y
+       D(ac) ~ (x + y)^2
+       D(x) ~ y]
+@test sort(equations(asys), by = string) == eqs
+
 sys2 = ode_order_lowering(sys)
 M = ModelingToolkit.calculate_massmatrix(sys2)
 @test M == Diagonal([1, 0, 0])

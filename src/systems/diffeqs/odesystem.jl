@@ -455,14 +455,30 @@ $(SIGNATURES)
 Add accumulation variables for `vars`.
 """
 function add_accumulations(sys::ODESystem, vars = states(sys))
-    eqs = get_eqs(sys)
-    accs = filter(x -> startswith(string(x), "accumulation_"), states(sys))
-    if !isempty(accs)
-        error("$accs variable names start with \"accumulation_\"")
-    end
     avars = [rename(v, Symbol(:accumulation_, getname(v))) for v in vars]
+    add_accumulations(sys, avars .=> vars)
+end
+
+"""
+$(SIGNATURES)
+
+Add accumulation variables for `vars`. `vars` is a vector of pairs in the form
+of
+
+```julia
+[cumulative_var1 => x + y, cumulative_var2 => x^2]
+```
+Then, cumulative variables `cumulative_var1` and `cumulative_var2` that computes
+the comulative `x + y` and `x^2` would be added to `sys`.
+"""
+function add_accumulations(sys::ODESystem, vars::Vector{<:Pair})
+    eqs = get_eqs(sys)
+    avars = map(first, vars)
+    if (ints = intersect(avars, states(sys)); !isempty(ints))
+        error("$ints already exist in the system!")
+    end
     D = Differential(get_iv(sys))
-    @set! sys.eqs = [eqs; Equation[D(a) ~ v for (a, v) in zip(avars, vars)]]
+    @set! sys.eqs = [eqs; Equation[D(a) ~ v[2] for (a, v) in zip(avars, vars)]]
     @set! sys.states = [get_states(sys); avars]
     @set! sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
 end
