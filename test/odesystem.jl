@@ -261,6 +261,7 @@ for p in [prob_pmap, prob_dpmap]
 end
 sol_pmap = solve(prob_pmap, Rodas5())
 sol_dpmap = solve(prob_dpmap, Rodas5())
+@test all(isequal(0.05), sol_pmap.(0:10:100, idxs = k₁))
 
 @test sol_pmap.u ≈ sol_dpmap.u
 
