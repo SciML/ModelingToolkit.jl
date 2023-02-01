@@ -321,6 +321,8 @@ function build_explicit_observed_function(sys, ts;
 
     sts = Set(states(sys))
     observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
+    param_set = Set(parameters(sys))
+    param_set_ns = Set(states(sys, p) for p in parameters(sys))
     namespaced_to_obs = Dict(states(sys, x.lhs) => x.lhs for x in obs)
     namespaced_to_sts = Dict(states(sys, x) => x for x in states(sys))
 
@@ -329,6 +331,9 @@ function build_explicit_observed_function(sys, ts;
     subs = Dict()
     maxidx = 0
     for s in dep_vars
+        if s in param_set || s in param_set_ns
+            continue
+        end
         idx = get(observed_idx, s, nothing)
         if idx !== nothing
             idx > maxidx && (maxidx = idx)
