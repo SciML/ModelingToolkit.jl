@@ -268,3 +268,6 @@ end
 @variables x [misc = "wow"]
 @test SymbolicUtils.getmetadata(Symbolics.unwrap(x), ModelingToolkit.VariableMisc,
                                 nothing) == "wow"
+@parameters x [misc = "wow"]
+@test SymbolicUtils.getmetadata(Symbolics.unwrap(x), ModelingToolkit.VariableMisc,
+                                nothing) == "wow"
