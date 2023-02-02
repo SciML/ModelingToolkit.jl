@@ -366,11 +366,11 @@ function build_explicit_observed_function(sys, ts;
         rhs = eq.rhs
         push!(obsexprs, lhs ← rhs)
     end
-    #! Get only saved states here
-    if save_idxs !== nothing
-        savedstates = states(sys)[save_idxs]
+
+    savedstates = if save_idxs !== nothing
+        states(sys)[save_idxs]
     else
-        savedstates = states(sys)
+        states(sys)
     end
     dvs = DestructuredArgs(savedstates, inbounds = !checkbounds)
     ps = DestructuredArgs(parameters(sys), inbounds = !checkbounds)

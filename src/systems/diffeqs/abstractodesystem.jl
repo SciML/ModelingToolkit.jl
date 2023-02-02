@@ -368,6 +368,12 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         end
     end
 
+    savedstates = if save_idxs !== nothing
+        states(sys)[save_idxs]
+    else
+        states(sys)
+    end
+
     jac_prototype = if sparse
         uElType = u0 === nothing ? Float64 : eltype(u0)
         if jac
@@ -385,7 +391,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                  tgrad = _tgrad === nothing ? nothing : _tgrad,
                                  mass_matrix = _M,
                                  jac_prototype = jac_prototype,
-                                 syms = Symbol.(states(sys)),
+                                 syms = Symbol.(savedstates),
                                  indepsym = Symbol(get_iv(sys)),
                                  paramsyms = Symbol.(ps),
                                  observed = observedfun,
@@ -610,7 +616,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     check_eqs_u0(eqs, dvs, u0; kwargs...)
 
     f = constructor(sys, dvs, ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
-                    checkbounds = checkbounds, p = p, save_idxs = save_idxs,
+                    checkbounds = checkbounds, p = p,
                     linenumbers = linenumbers, parallel = parallel, simplify = simplify,
                     sparse = sparse, eval_expression = eval_expression, kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
@@ -708,7 +714,7 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if has_symbolic_elements(save_idxs)
         sym_idxs, int_idxs = partition_ints(save_idxs)
         sym_idxs = unique(vcat(sym_idxs, equation_dependencies(sys)))
-        save_idxs = unique(vcat(state_sym_to_index.((sys,), save_idxs), int_idxs))
+        save_idxs = unique(vcat(SymbolicIndexingInterface.state_sym_to_index.((sys,), save_idxs), int_idxs))
     end
     has_difference = any(isdifferenceeq, equations(sys))
     f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
