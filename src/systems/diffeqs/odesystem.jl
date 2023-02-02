@@ -300,6 +300,7 @@ function build_explicit_observed_function(sys, ts;
                                           expression = false,
                                           output_type = Array,
                                           checkbounds = true,
+                                          save_idxs = nothing,
                                           throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
@@ -365,8 +366,13 @@ function build_explicit_observed_function(sys, ts;
         rhs = eq.rhs
         push!(obsexprs, lhs ← rhs)
     end
-
-    dvs = DestructuredArgs(states(sys), inbounds = !checkbounds)
+    #! Get only saved states here
+    if save_idxs !== nothing
+        savedstates = states(sys)[save_idxs]
+    else
+        savedstates = states(sys)
+    end
+    dvs = DestructuredArgs(savedstates, inbounds = !checkbounds)
     ps = DestructuredArgs(parameters(sys), inbounds = !checkbounds)
     args = [dvs, ps, ivs...]
     pre = get_postprocess_fbody(sys)

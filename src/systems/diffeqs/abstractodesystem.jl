@@ -276,6 +276,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                                  checkbounds = false,
                                                  sparsity = false,
                                                  analytic = nothing,
+                                                 save_idxs = nothing,
                                                  kwargs...) where {iip, specialize}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
                               expression_module = eval_module, checkbounds = checkbounds,
@@ -337,7 +338,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         let sys = sys, dict = Dict()
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
-                    build_explicit_observed_function(sys, obsvar)
+                    build_explicit_observed_function(sys, obsvar; save_idxs = save_idxs)
                 end
                 if args === ()
                     let obs = obs
@@ -352,7 +353,9 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         let sys = sys, dict = Dict()
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
-                    build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
+                    build_explicit_observed_function(sys, obsvar;
+                                                     save_idxs = save_idxs,
+                                                     checkbounds = checkbounds)
                 end
                 if args === ()
                     let obs = obs
@@ -607,7 +610,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     check_eqs_u0(eqs, dvs, u0; kwargs...)
 
     f = constructor(sys, dvs, ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
-                    checkbounds = checkbounds, p = p,
+                    checkbounds = checkbounds, p = p, save_idxs = save_idxs,
                     linenumbers = linenumbers, parallel = parallel, simplify = simplify,
                     sparse = sparse, eval_expression = eval_expression, kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
@@ -702,11 +705,16 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
                                                 check_length = true,
                                                 save_idxs = nothing,
                                                 kwargs...) where {iip, specialize}
+    if has_symbolic_elements(save_idxs)
+        sym_idxs, int_idxs = partition_ints(save_idxs)
+        sym_idxs = unique(vcat(sym_idxs, equation_dependencies(sys)))
+        save_idxs = unique(vcat(state_sym_to_index.((sys,), save_idxs), int_idxs))
+    end
     has_difference = any(isdifferenceeq, equations(sys))
     f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
                                  t = tspan !== nothing ? tspan[1] : tspan,
                                  has_difference = has_difference,
-                                 check_length, kwargs...)
+                                 check_length, save_idxs = save_idxs, kwargs...)
     cbs = process_events(sys; callback, has_difference, kwargs...)
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
         affects, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
@@ -728,11 +736,6 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         end
     else
         svs = nothing
-    end
-    if has_symbolic_elements(save_idxs)
-        sym_idxs, int_idxs = partition_ints(save_idxs)
-        sym_idxs = unique(vcat(sym_idxs, equation_dependencies(sys)))
-        save_idxs = unique(vcat(state_sym_to_index.((sys,), save_idxs), int_idxs))
     end
 
     kwargs = filter_kwargs(kwargs)
