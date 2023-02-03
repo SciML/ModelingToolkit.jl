@@ -1,4 +1,4 @@
-using ModelingToolkit, OrdinaryDiffEq, Test, NonlinearSolve
+using ModelingToolkit, OrdinaryDiffEq, Test, NonlinearSolve, LinearAlgebra
 using ModelingToolkit: topsort_equations
 
 @variables t x(t) y(t) z(t) k(t)
@@ -246,6 +246,19 @@ eqs = [D(x) ~ σ * (y - x)
 lorenz1 = ODESystem(eqs, t, name = :lorenz1)
 lorenz1_reduced = structural_simplify(lorenz1)
 @test z in Set(parameters(lorenz1_reduced))
+
+# #2064
+@variables t
+vars = @variables x(t) y(t) z(t)
+D = Differential(t)
+eqs = [D(x) ~ x
+       D(y) ~ y
+       D(z) ~ t]
+@named model = ODESystem(eqs)
+sys = structural_simplify(model)
+Js = ModelingToolkit.jacobian_sparsity(sys)
+@test size(Js) == (3, 3)
+@test Js == Diagonal([1, 1, 0])
 
 # MWE for #1722
 @variables t
