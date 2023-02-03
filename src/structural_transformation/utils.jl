@@ -165,8 +165,7 @@ function sorted_incidence_matrix(ts::TransformationState, val = true; only_algeq
             push!(J, j)
         end
     end
-    #sparse(I, J, val, nsrcs(g), ndsts(g))
-    sparse(I, J, val)
+    sparse(I, J, val, nsrcs(g), ndsts(g))
 end
 
 ###
@@ -369,14 +368,16 @@ end
 function torn_system_jacobian_sparsity(sys)
     state = get_tearing_state(sys)
     state isa TearingState || return nothing
-    graph = state.structure.graph
-    fullvars = state.fullvars
+    @unpack structure = state
+    @unpack graph, var_to_diff = structure
 
-    states_idxs = findall(!isdifferential, fullvars)
-    var2idx = Dict{Int, Int}(v => i for (i, v) in enumerate(states_idxs))
+    neqs = nsrcs(graph)
+    nsts = ndsts(graph)
+    states_idxs = findall(!Base.Fix1(isdervar, structure), 1:nsts)
+    var2idx = uneven_invmap(nsts, states_idxs)
     I = Int[]
     J = Int[]
-    for ieq in 𝑠vertices(graph)
+    for ieq in 1:neqs
         for ivar in 𝑠neighbors(graph, ieq)
             nivar = get(var2idx, ivar, 0)
             nivar == 0 && continue
@@ -384,7 +385,7 @@ function torn_system_jacobian_sparsity(sys)
             push!(J, nivar)
         end
     end
-    return sparse(I, J, true)
+    return sparse(I, J, true, neqs, neqs)
 end
 
 ###
