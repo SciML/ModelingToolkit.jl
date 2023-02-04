@@ -28,7 +28,7 @@ eqs = [D(S) ~ S - infection * h,
 @named sys = DiscreteSystem(eqs, t, [S, I, R], [c, nsteps, δt, β, γ]; controls = [β, γ])
 syss = structural_simplify(sys)
 @test syss == syss
-df = NonlinearFunction(sys)
+df = DiscreteFunction(sys)
 
 # iip
 du = zeros(3)
