@@ -318,21 +318,21 @@ function SciMLBase.DiscreteFunction{false}(sys::DiscreteSystem, args...; kwargs.
     DiscreteFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
 end
 
-function SciMLBase.DiscreteFunction{iip,specialize}(sys::DiscreteSystem,
-                                                    dvs = states(sys),
-                                                    ps = parameters(sys),
-                                                    u0 = nothing;
-                                                    version = nothing,
-                                                    p = nothing,
-                                                    t = nothing,
-                                                    eval_expression = true,
-                                                    eval_module = @__MODULE__,
-                                                    analytic = nothing,
-                                                    simplify = false,
-                                                    kwargs...) where {iip, specialize}
-
-    f_gen = generate_function(sys, dvs, ps; expression=Val{eval_expression}, kwargs...)
-    f_oop, f_iip = eval_expression ? (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen) : f_gen
+function SciMLBase.DiscreteFunction{iip, specialize}(sys::DiscreteSystem,
+                                                     dvs = states(sys),
+                                                     ps = parameters(sys),
+                                                     u0 = nothing;
+                                                     version = nothing,
+                                                     p = nothing,
+                                                     t = nothing,
+                                                     eval_expression = true,
+                                                     eval_module = @__MODULE__,
+                                                     analytic = nothing,
+                                                     simplify = false,
+                                                     kwargs...) where {iip, specialize}
+    f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
+                              expression_module = eval_module, kwargs...)
+    f_oop, f_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in f_gen) : f_gen
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
 
@@ -343,7 +343,7 @@ function SciMLBase.DiscreteFunction{iip,specialize}(sys::DiscreteSystem,
         f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
     end
 
-    observedfun = let sys=sys, dict=Dict()
+    observedfun = let sys = sys, dict = Dict()
         function generate_observed(obsvar, u, p, t)
             obs = get!(dict, value(obsvar)) do
                 build_explicit_observed_function(sys, obsvar)
@@ -351,8 +351,6 @@ function SciMLBase.DiscreteFunction{iip,specialize}(sys::DiscreteSystem,
             obs(u, p, t)
         end
     end
-
-
 
     DiscreteFunction{iip, specialize}(f;
                                       sys = sys,

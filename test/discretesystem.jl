@@ -30,6 +30,13 @@ syss = structural_simplify(sys)
 @test syss == syss
 df = NonlinearFunction(sys)
 
+# iip
+du = zeros(3)
+u = collect(1:3)
+p = collect(1:3)
+df.f(du, u, p, 0)
+@test du == [0.0, 1.0, 5.0]
+
 # Problem
 u0 = [S => 990.0, I => 10.0, R => 0.0]
 p = [β => 0.05, c => 10.0, γ => 0.25, δt => 0.1, nsteps => 400]
