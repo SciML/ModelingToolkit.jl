@@ -332,7 +332,8 @@ function SciMLBase.DiscreteFunction{iip, specialize}(sys::DiscreteSystem,
                                                      kwargs...) where {iip, specialize}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
                               expression_module = eval_module, kwargs...)
-    f_oop, f_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in f_gen) : f_gen
+    f_oop, f_iip = eval_expression ?
+                   (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen) : f_gen
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
 
