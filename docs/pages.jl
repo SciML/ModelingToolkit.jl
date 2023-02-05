@@ -28,6 +28,7 @@ pages = [
                           "systems/JumpSystem.md",
                           "systems/NonlinearSystem.md",
                           "systems/OptimizationSystem.md",
+                          "systems/DiscreteSystem.md",
                           "systems/PDESystem.md"],
     "comparison.md",
     "internals.md",
