@@ -192,7 +192,8 @@ export SymScope, LocalScope, ParentScope, DelayParentScope, GlobalScope
 export independent_variable, equations, controls,
        observed, structure, full_equations
 export structural_simplify, expand_connections, linearize, linearization_function
-export DiscreteSystem, DiscreteProblem, DiscreteFunction
+export DiscreteSystem, DiscreteProblem, DiscreteProblemExpr, DiscreteFunction,
+       DiscreteFunctionExpr
 
 export calculate_jacobian, generate_jacobian, generate_function
 export calculate_control_jacobian, generate_control_jacobian

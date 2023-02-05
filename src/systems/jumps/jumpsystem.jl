@@ -340,10 +340,12 @@ tspan = (0.0, 250.0)
 dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 ```
 """
-function DiscreteProblemExpr(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
-                             parammap = DiffEqBase.NullParameters();
-                             use_union = false,
-                             kwargs...)
+struct DiscreteProblemExpr{iip} end
+
+function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
+                                  parammap = DiffEqBase.NullParameters();
+                                  use_union = false,
+                                  kwargs...) where {iip}
     dvs = states(sys)
     ps = parameters(sys)
     defs = defaults(sys)

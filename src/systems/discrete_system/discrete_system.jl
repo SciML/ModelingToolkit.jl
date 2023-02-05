@@ -361,3 +361,96 @@ function SciMLBase.DiscreteFunction{iip, specialize}(sys::DiscreteSystem,
                                       observed = observedfun,
                                       analytic = analytic)
 end
+
+"""
+```julia
+    DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
+                                     ps = parameters(sys);
+                                     version = nothing,
+                                     kwargs...) where {iip}
+```
+
+Create a Julia expression for an `DiscreteFunction` from the [`DiscreteSystem`](@ref).
+The arguments `dvs` and `ps` are used to set the order of the dependent
+variable and parameter vectors, respectively.
+"""
+struct DiscreteFunctionExpr{iip} end
+struct DiscreteFunctionClosure{O, I} <: Function
+    f_oop::O
+    f_iip::I
+end
+(f::DiscreteFunctionClosure)(u, p, t) = f.f_oop(u, p, t)
+(f::DiscreteFunctionClosure)(du, u, p, t) = f.f_iip(du, u, p, t)
+
+function DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
+                                   ps = parameters(sys), u0 = nothing;
+                                   version = nothing, p = nothing,
+                                   linenumbers = false,
+                                   simplify = false,
+                                   kwargs...) where {iip}
+    f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
+
+    fsym = gensym(:f)
+    _f = :($fsym = $DiscreteFunctionClosure($f_oop, $f_iip))
+
+    ex = quote
+        $_f
+        DiscreteFunction{$iip}($fsym,
+                               syms = $(Symbol.(states(sys))),
+                               indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
+                               paramsyms = $(Symbol.(parameters(sys))))
+    end
+    !linenumbers ? striplines(ex) : ex
+end
+
+function DiscreteFunctionExpr(sys::DiscreteSystem, args...; kwargs...)
+    DiscreteFunctionExpr{true}(sys, args...; kwargs...)
+end
+
+function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, parammap;
+                                 version = nothing,
+                                 linenumbers = true, parallel = SerialForm(),
+                                 eval_expression = true,
+                                 use_union = false,
+                                 kwargs...)
+    eqs = equations(sys)
+    dvs = states(sys)
+    ps = parameters(sys)
+
+    defs = defaults(sys)
+    defs = mergedefaults(defs, parammap, ps)
+    defs = mergedefaults(defs, u0map, dvs)
+
+    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
+    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = !use_union, use_union)
+
+    check_eqs_u0(eqs, dvs, u0; kwargs...)
+
+    f = constructor(sys, dvs, ps, u0;
+                    linenumbers = linenumbers, parallel = parallel,
+                    syms = Symbol.(dvs), paramsyms = Symbol.(ps),
+                    eval_expression = eval_expression, kwargs...)
+    return f, u0, p
+end
+
+function DiscreteProblemExpr(sys::DiscreteSystem, args...; kwargs...)
+    DiscreteProblemExpr{true}(sys, args...; kwargs...)
+end
+
+function DiscreteProblemExpr{iip}(sys::DiscreteSystem, u0map, tspan,
+                                  parammap = DiffEqBase.NullParameters();
+                                  check_length = true,
+                                  kwargs...) where {iip}
+    f, u0, p = process_DiscreteProblem(DiscreteFunctionExpr{iip}, sys, u0map, parammap;
+                                       check_length, kwargs...)
+    linenumbers = get(kwargs, :linenumbers, true)
+
+    ex = quote
+        f = $f
+        u0 = $u0
+        p = $p
+        tspan = $tspan
+        DiscreteProblem(f, u0, tspan, p; $(filter_kwargs(kwargs)...))
+    end
+    !linenumbers ? striplines(ex) : ex
+end
