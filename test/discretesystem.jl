@@ -28,6 +28,17 @@ eqs = [D(S) ~ S - infection * h,
 @named sys = DiscreteSystem(eqs, t, [S, I, R], [c, nsteps, δt, β, γ]; controls = [β, γ])
 syss = structural_simplify(sys)
 @test syss == syss
+df = DiscreteFunction(sys)
+
+# iip
+du = zeros(3)
+u = collect(1:3)
+p = collect(1:5)
+df.f(du, u, p, 0)
+@test du ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
+
+# oop
+@test df.f(u, p, 0) ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
 
 # Problem
 u0 = [S => 990.0, I => 10.0, R => 0.0]

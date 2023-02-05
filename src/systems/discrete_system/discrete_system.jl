@@ -293,3 +293,71 @@ function generate_function(sys::DiscreteSystem, dvs = states(sys), ps = paramete
     pre, sol_states = get_substitutions_and_solved_states(sys)
     build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states, kwargs...)
 end
+
+"""
+```julia
+SciMLBase.DiscreteFunction{iip}(sys::DiscreteSystem, dvs=states(sys),
+                                ps=parameters(sys);
+                                version=nothing,
+                                kwargs...) where {iip}
+```
+
+Create a `DiscreteFunction` from the [`DiscreteSystem`](@ref). The arguments
+`dvs` and `ps` are used to set the order of the dependent variable and parameter
+vectors, respectively.
+"""
+function SciMLBase.DiscreteFunction(sys::DiscreteSystem, args...; kwargs...)
+    DiscreteFunction{true}(sys, args...; kwargs...)
+end
+
+function SciMLBase.DiscreteFunction{true}(sys::DiscreteSystem, args...; kwargs...)
+    DiscreteFunction{true, SciMLBase.AutoSpecialize}(sys, args...; kwargs...)
+end
+
+function SciMLBase.DiscreteFunction{false}(sys::DiscreteSystem, args...; kwargs...)
+    DiscreteFunction{false, SciMLBase.FullSpecialize}(sys, args...; kwargs...)
+end
+
+function SciMLBase.DiscreteFunction{iip, specialize}(sys::DiscreteSystem,
+                                                     dvs = states(sys),
+                                                     ps = parameters(sys),
+                                                     u0 = nothing;
+                                                     version = nothing,
+                                                     p = nothing,
+                                                     t = nothing,
+                                                     eval_expression = true,
+                                                     eval_module = @__MODULE__,
+                                                     analytic = nothing,
+                                                     simplify = false,
+                                                     kwargs...) where {iip, specialize}
+    f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
+                              expression_module = eval_module, kwargs...)
+    f_oop, f_iip = eval_expression ?
+                   (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen) : f_gen
+    f(u, p, t) = f_oop(u, p, t)
+    f(du, u, p, t) = f_iip(du, u, p, t)
+
+    if specialize === SciMLBase.FunctionWrapperSpecialize && iip
+        if u0 === nothing || p === nothing || t === nothing
+            error("u0, p, and t must be specified for FunctionWrapperSpecialize on DiscreteFunction.")
+        end
+        f = SciMLBase.wrapfun_iip(f, (u0, u0, p, t))
+    end
+
+    observedfun = let sys = sys, dict = Dict()
+        function generate_observed(obsvar, u, p, t)
+            obs = get!(dict, value(obsvar)) do
+                build_explicit_observed_function(sys, obsvar)
+            end
+            obs(u, p, t)
+        end
+    end
+
+    DiscreteFunction{iip, specialize}(f;
+                                      sys = sys,
+                                      syms = Symbol.(states(sys)),
+                                      indepsym = Symbol(get_iv(sys)),
+                                      paramsyms = Symbol.(ps),
+                                      observed = observedfun,
+                                      analytic = analytic)
+end
