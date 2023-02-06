@@ -165,7 +165,7 @@ function sorted_incidence_matrix(ts::TransformationState, val = true; only_algeq
             push!(J, j)
         end
     end
-    sparse(I, J, val, nsrcs(g), ndsts(g))
+    sparse(I, J, val, nsrcs(graph), ndsts(graph))
 end
 
 ###
