@@ -23,6 +23,7 @@ using SafeTestsets, Test
 @safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
 @safetestset "Constraints Test" begin include("constraints.jl") end
 @safetestset "Reduction Test" begin include("reduction.jl") end
+@safetestset "ODAEProblem Test" begin include("odaeproblem.jl") end
 @safetestset "Components Test" begin include("components.jl") end
 @safetestset "print_tree" begin include("print_tree.jl") end
 @safetestset "Error Handling" begin include("error_handling.jl") end
