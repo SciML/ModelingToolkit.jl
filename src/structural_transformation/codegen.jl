@@ -114,12 +114,12 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
         tmp = [init_assignments]
         # `deps[init_assignments]` gives the dependency of `init_assignments`
         while true
-            next_assignments = reduce(vcat, deps[init_assignments])
+            next_assignments = unique(reduce(vcat, deps[init_assignments]))
             isempty(next_assignments) && break
             init_assignments = next_assignments
             push!(tmp, init_assignments)
         end
-        needed_assignments_idxs = reduce(vcat, unique(reverse(tmp)))
+        needed_assignments_idxs = unique(reduce(vcat, reverse(tmp)))
         needed_assignments = assignments[needed_assignments_idxs]
     end
 
