@@ -85,7 +85,7 @@ See also [`has_discrete_domain`](@ref)
 """
 function is_discrete_domain(x)
     issym(x) && return getmetadata(x, TimeDomain, false) isa Discrete
-    has_discrete_domain(x) && !has_continuous_domain(x)
+    !has_discrete_domain(x) && has_continuous_domain(x)
 end
 
 struct ClockInferenceException <: Exception
@@ -113,3 +113,4 @@ struct Clock <: AbstractClock
 end
 
 sampletime(c) = isdefined(c, :dt) ? c.dt : nothing
+Base.:(==)(c1::Clock, c2::Clock) = isequal(c1.t, c2.t) && c1.dt == c2.dt
