@@ -45,7 +45,8 @@ Matching{U}(v::V) where {U, V <: AbstractVector} = Matching{U, V}(v, nothing)
 function Matching{U}(v::V, iv::Union{V, Nothing}) where {U, V <: AbstractVector}
     Matching{U, V}(v, iv)
 end
-function Matching(v::V) where {U, V <: AbstractVector{Union{U, Int}}}
+function Matching(v::V) where {V <: AbstractVector{Union{<:Any, Int}}}
+    U = eltype(V).a # try to avoid unbounding the arg here
     Matching{@isdefined(U) ? U : Unassigned, V}(v, nothing)
 end
 function Matching(m::Int)
