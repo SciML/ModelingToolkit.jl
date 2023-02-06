@@ -257,3 +257,17 @@ foo(i; name) = (; i, name)
 @test isequal(goo, [(i = 10, name = Symbol(:goo_, i)) for i in 1:3])
 @named koo 1:3 i->foo(10i)
 @test isequal(koo, [(i = 10i, name = Symbol(:koo_, i)) for i in 1:3])
+xys = @named begin
+    x = foo(12)
+    y[1:3] = foo(13)
+end
+@test isequal(x, (i = 12, name = :x))
+@test isequal(y, [(i = 13, name = Symbol(:y_, i)) for i in 1:3])
+@test isequal(xys, [x; y])
+
+@variables x [misc = "wow"]
+@test SymbolicUtils.getmetadata(Symbolics.unwrap(x), ModelingToolkit.VariableMisc,
+                                nothing) == "wow"
+@parameters x [misc = "wow"]
+@test SymbolicUtils.getmetadata(Symbolics.unwrap(x), ModelingToolkit.VariableMisc,
+                                nothing) == "wow"

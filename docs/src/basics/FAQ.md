@@ -8,8 +8,8 @@ from the solution. But what if you need to get the index? The following helper
 function will do the trick:
 
 ```julia
-indexof(sym,syms) = findfirst(isequal(sym),syms)
-indexof(σ,parameters(sys))
+indexof(sym, syms) = findfirst(isequal(sym), syms)
+indexof(σ, parameters(sys))
 ```
 
 ## Transforming value maps to arrays
@@ -19,7 +19,7 @@ because symbol ordering is not guaranteed. However, what if you want to get the
 lowered array? You can use the internal function `varmap_to_vars`. For example:
 
 ```julia
-pnew = varmap_to_vars([β=>3.0, c=>10.0, γ=>2.0],parameters(sys))
+pnew = varmap_to_vars([β => 3.0, c => 10.0, γ => 2.0], parameters(sys))
 ```
 
 ## How do I handle `if` statements in my symbolic forms?
@@ -27,7 +27,7 @@ pnew = varmap_to_vars([β=>3.0, c=>10.0, γ=>2.0],parameters(sys))
 For statements that are in the `if then else` form, use `IfElse.ifelse` from the
 [IfElse.jl](https://github.com/SciML/IfElse.jl) package to represent the code in a
 functional form. For handling direct `if` statements, you can use equivalent boolean
-mathematical expressions. For example `if x > 0 ...` can be implemented as just
+mathematical expressions. For example, `if x > 0 ...` can be implemented as just
 `(x > 0) * `, where if `x <= 0` then the boolean will evaluate to `0` and thus the
 term will be excluded from the model.
 
@@ -35,7 +35,7 @@ term will be excluded from the model.
 
 If you see the error:
 
-```julia
+```
 ERROR: TypeError: non-boolean (Num) used in boolean context
 ```
 
@@ -46,10 +46,10 @@ such as `@register_symbolic`, are described in detail
 
 ## Using ModelingToolkit with Optimization / Automatic Differentiation
 
-If you are using ModelingToolkit inside of a loss function and are having issues with
-mixing MTK with automatic differentiation, getting performance, etc... don't! Instead, use
-MTK outside of the loss function to generate the code, and then use the generated code
-inside of the loss function.
+If you are using ModelingToolkit inside a loss function and are having issues with
+mixing MTK with automatic differentiation, getting performance, etc… don't! Instead, use
+MTK outside the loss function to generate the code, and then use the generated code
+inside the loss function.
 
 For example, let's say you were building ODEProblems in the loss function like:
 
@@ -57,21 +57,21 @@ For example, let's say you were building ODEProblems in the loss function like:
 function loss(p)
     prob = ODEProblem(sys, [], [p1 => p[1], p2 => p[2]])
     sol = solve(prob, Tsit5())
-    sum(abs2,sol)
+    sum(abs2, sol)
 end
 ```
 
 Since `ODEProblem` on a MTK `sys` will have to generate code, this will be slower than
-caching the generated code, and will required automatic differentiation to go through the
+caching the generated code, and will require automatic differentiation to go through the
 code generation process itself. All of this is unnecessary. Instead, generate the problem
-once outside of the loss function, and remake the prob inside of the loss function:
+once outside the loss function, and remake the prob inside the loss function:
 
 ```julia
 prob = ODEProblem(sys, [], [p1 => p[1], p2 => p[2]])
 function loss(p)
-    remake(prob,p = ...)
+    remake(prob, p = ...)
     sol = solve(prob, Tsit5())
-    sum(abs2,sol)
+    sum(abs2, sol)
 end
 ```
 
@@ -91,8 +91,8 @@ Using this, the fixed index map can be used in the loss function. This would loo
 prob = ODEProblem(sys, [], [p1 => p[1], p2 => p[2]])
 idxs = Int.(ModelingToolkit.varmap_to_vars([p1 => 1, p2 => 2], p))
 function loss(p)
-    remake(prob,p = p[idxs])
+    remake(prob, p = p[idxs])
     sol = solve(prob, Tsit5())
-    sum(abs2,sol)
+    sum(abs2, sol)
 end
 ```

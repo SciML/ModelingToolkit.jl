@@ -12,19 +12,28 @@ function BipartiteGraphs.maximal_matching(s::SystemStructure, eqfilter = eq -> t
     maximal_matching(s.graph, eqfilter, varfilter)
 end
 
-function error_reporting(state, bad_idxs, n_highest_vars, iseqs)
+function error_reporting(state, bad_idxs, n_highest_vars, iseqs, orig_inputs)
     io = IOBuffer()
+    neqs = length(equations(state))
     if iseqs
         error_title = "More equations than variables, here are the potential extra equation(s):\n"
         out_arr = equations(state)[bad_idxs]
     else
         error_title = "More variables than equations, here are the potential extra variable(s):\n"
         out_arr = state.fullvars[bad_idxs]
+        unset_inputs = intersect(out_arr, orig_inputs)
+        n_missing_eqs = n_highest_vars - neqs
+        n_unset_inputs = length(unset_inputs)
+        if n_unset_inputs > 0
+            println(io, "In particular, the unset input(s) are:")
+            Base.print_array(io, unset_inputs)
+            println(io)
+            println(io, "The rest of potentially unset variable(s) are:")
+        end
     end
 
     Base.print_array(io, out_arr)
     msg = String(take!(io))
-    neqs = length(equations(state))
     if iseqs
         throw(ExtraEquationsSystemException("The system is unbalanced. There are " *
                                             "$n_highest_vars highest order derivative variables "
@@ -43,7 +52,7 @@ end
 ###
 ### Structural check
 ###
-function check_consistency(state::TearingState, ag = nothing)
+function check_consistency(state::TearingState, ag, orig_inputs)
     fullvars = state.fullvars
     @unpack graph, var_to_diff = state.structure
     n_highest_vars = count(v -> var_to_diff[v] === nothing &&
@@ -64,7 +73,7 @@ function check_consistency(state::TearingState, ag = nothing)
         else
             bad_idxs = findall(isequal(unassigned), var_eq_matching)
         end
-        error_reporting(state, bad_idxs, n_highest_vars, iseqs)
+        error_reporting(state, bad_idxs, n_highest_vars, iseqs, orig_inputs)
     end
 
     # This is defined to check if Pantelides algorithm terminates. For more
@@ -156,8 +165,7 @@ function sorted_incidence_matrix(ts::TransformationState, val = true; only_algeq
             push!(J, j)
         end
     end
-    #sparse(I, J, val, nsrcs(g), ndsts(g))
-    sparse(I, J, val)
+    sparse(I, J, val, nsrcs(g), ndsts(g))
 end
 
 ###
@@ -360,14 +368,16 @@ end
 function torn_system_jacobian_sparsity(sys)
     state = get_tearing_state(sys)
     state isa TearingState || return nothing
-    graph = state.structure.graph
-    fullvars = state.fullvars
+    @unpack structure = state
+    @unpack graph, var_to_diff = structure
 
-    states_idxs = findall(!isdifferential, fullvars)
-    var2idx = Dict{Int, Int}(v => i for (i, v) in enumerate(states_idxs))
+    neqs = nsrcs(graph)
+    nsts = ndsts(graph)
+    states_idxs = findall(!Base.Fix1(isdervar, structure), 1:nsts)
+    var2idx = uneven_invmap(nsts, states_idxs)
     I = Int[]
     J = Int[]
-    for ieq in 𝑠vertices(graph)
+    for ieq in 1:neqs
         for ivar in 𝑠neighbors(graph, ieq)
             nivar = get(var2idx, ivar, 0)
             nivar == 0 && continue
@@ -375,7 +385,7 @@ function torn_system_jacobian_sparsity(sys)
             push!(J, nivar)
         end
     end
-    return sparse(I, J, true)
+    return sparse(I, J, true, neqs, neqs)
 end
 
 ###

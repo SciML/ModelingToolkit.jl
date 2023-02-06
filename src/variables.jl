@@ -5,6 +5,7 @@ struct VariableInput end
 struct VariableOutput end
 struct VariableIrreducible end
 struct VariableStatePriority end
+struct VariableMisc end
 Symbolics.option_to_metadata_type(::Val{:unit}) = VariableUnit
 Symbolics.option_to_metadata_type(::Val{:connect}) = VariableConnectType
 Symbolics.option_to_metadata_type(::Val{:noise}) = VariableNoiseType
@@ -12,6 +13,7 @@ Symbolics.option_to_metadata_type(::Val{:input}) = VariableInput
 Symbolics.option_to_metadata_type(::Val{:output}) = VariableOutput
 Symbolics.option_to_metadata_type(::Val{:irreducible}) = VariableIrreducible
 Symbolics.option_to_metadata_type(::Val{:state_priority}) = VariableStatePriority
+Symbolics.option_to_metadata_type(::Val{:misc}) = VariableMisc
 
 abstract type AbstractConnectType end
 struct Equality <: AbstractConnectType end # Equality connection
@@ -122,11 +124,12 @@ end
 """
 $(SIGNATURES)
 
-Intercept the call to `process_p_u0_symbolic` and process symbolic maps of `p` and/or `u0` if the 
+Intercept the call to `process_p_u0_symbolic` and process symbolic maps of `p` and/or `u0` if the
 user has `ModelingToolkit` loaded.
 """
 function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem,
-                                                     NonlinearProblem, OptimizationProblem},
+                                                     NonlinearProblem, OptimizationProblem,
+                                                     SciMLBase.AbstractOptimizationCache},
                                          p,
                                          u0)
     # check if a symbolic remake is possible
@@ -171,8 +174,9 @@ getbounds(x::Num) = getbounds(Symbolics.unwrap(x))
 """
     getbounds(x)
 
-Get the bounds associated with symbolc variable `x`.
+Get the bounds associated with symbolic variable `x`.
 Create parameters with bounds like this
+
 ```
 @parameters p [bounds=(-1, 1)]
 ```
@@ -186,7 +190,7 @@ end
 """
     hasbounds(x)
 
-Determine whether or not symbolic variable `x` has bounds associated with it.
+Determine whether symbolic variable `x` has bounds associated with it.
 See also [`getbounds`](@ref).
 """
 function hasbounds(x)
@@ -203,7 +207,7 @@ isdisturbance(x::Num) = isdisturbance(Symbolics.unwrap(x))
 """
     isdisturbance(x)
 
-Determine whether or not symbolic variable `x` is marked as a disturbance input.
+Determine whether symbolic variable `x` is marked as a disturbance input.
 """
 function isdisturbance(x)
     p = Symbolics.getparent(x, nothing)
@@ -224,14 +228,16 @@ istunable(x::Num, args...) = istunable(Symbolics.unwrap(x), args...)
 """
     istunable(x, default = false)
 
-Determine whether or not symbolic variable `x` is marked as a tunable for an automatic tuning algorithm.
+Determine whether symbolic variable `x` is marked as a tunable for an automatic tuning algorithm.
 
 `default` indicates whether variables without `tunable` metadata are to be considered tunable or not.
 
 Create a tunable parameter by
+
 ```
 @parameters u [tunable=true]
 ```
+
 See also [`tunable_parameters`](@ref), [`getbounds`](@ref)
 """
 function istunable(x, default = false)
@@ -248,13 +254,14 @@ getdist(x::Num) = getdist(Symbolics.unwrap(x))
 """
     getdist(x)
 
-Get the probability distribution associated with symbolc variable `x`. If no distribution
+Get the probability distribution associated with symbolic variable `x`. If no distribution
 is associated with `x`, `nothing` is returned.
 Create parameters with associated distributions like this
+
 ```julia
 using Distributions
 d = Normal(0, 1)
-@parameters u [dist=d]
+@parameters u [dist = d]
 hasdist(u) # true
 getdist(u) # retrieve distribution
 ```
@@ -268,7 +275,7 @@ end
 """
     hasdist(x)
 
-Determine whether or not symbolic variable `x` has a probability distribution associated with it.
+Determine whether symbolic variable `x` has a probability distribution associated with it.
 """
 function hasdist(x)
     b = getdist(x)
@@ -285,9 +292,11 @@ Get all parameters of `sys` that are marked as `tunable`.
 Keyword argument `default` indicates whether variables without `tunable` metadata are to be considered tunable or not.
 
 Create a tunable parameter by
+
 ```
 @parameters u [tunable=true]
 ```
+
 See also [`getbounds`](@ref), [`istunable`](@ref)
 """
 function tunable_parameters(sys, p = parameters(sys); default = false)
@@ -299,6 +308,7 @@ end
 
 Returns a dict with pairs `p => (lb, ub)` mapping parameters of `sys` to lower and upper bounds.
 Create parameters with bounds like this
+
 ```
 @parameters p [bounds=(-1, 1)]
 ```
@@ -314,9 +324,11 @@ end
 
 Return vectors of lower and upper bounds of parameter vector `p`.
 Create parameters with bounds like this
+
 ```
 @parameters p [bounds=(-1, 1)]
 ```
+
 See also [`tunable_parameters`](@ref), [`hasbounds`](@ref)
 """
 function getbounds(p::AbstractVector)
@@ -373,10 +385,34 @@ isintegervar(x::Num) = isintegervar(Symbolics.unwrap(x))
 """
     isintegervar(x)
 
-Determine if a variable is integer.
+Determine if a variable is an integer.
 """
 function isintegervar(x)
     p = Symbolics.getparent(x, nothing)
     p === nothing || (x = p)
     return Symbolics.getmetadata(x, VariableInteger, false)
+end
+
+## Brownian
+"""
+    tobrownian(s::Sym)
+
+Maps the brownianiable to a state.
+"""
+tobrownian(s::Symbolic) = setmetadata(s, MTKVariableTypeCtx, BROWNIAN)
+tobrownian(s::Num) = Num(tobrownian(value(s)))
+isbrownian(s) = getvariabletype(s) === BROWNIAN
+
+"""
+$(SIGNATURES)
+
+Define one or more Brownian variables.
+"""
+macro brownian(xs...)
+    all(x -> x isa Symbol || Meta.isexpr(x, :call) && x.args[1] == :$, xs) ||
+        error("@brownian only takes scalar expressions!")
+    Symbolics._parse_vars(:brownian,
+                          Real,
+                          xs,
+                          tobrownian) |> esc
 end

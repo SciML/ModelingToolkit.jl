@@ -149,6 +149,7 @@ hashold(O) = recursive_hasoperator(Hold, O)
 The `ShiftIndex` operator allows you to index a signal and obtain a shifted discrete-time signal. If the signal is continuous-time, the signal is sampled before shifting.
 
 # Examples
+
 ```
 julia> @variables t x(t);
 

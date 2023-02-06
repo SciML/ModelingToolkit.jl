@@ -24,7 +24,7 @@ eqs = [D(x) ~ σ*(y-x),
 """
 struct ODESystem <: AbstractODESystem
     """
-    tag: a tag for the system. If two system have the same tag, then they are
+    tag: a tag for the system. If two systems have the same tag, then they are
     structurally identical.
     """
     tag::UInt
@@ -106,7 +106,7 @@ struct ODESystem <: AbstractODESystem
     continuous_events::Vector{SymbolicContinuousCallback}
     """
     discrete_events: A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
-    analog to `SciMLBase.DiscreteCallback` that exectues an affect when a given condition is
+    analog to `SciMLBase.DiscreteCallback` that executes an affect when a given condition is
     true at the end of an integration step.
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
@@ -321,6 +321,8 @@ function build_explicit_observed_function(sys, ts;
 
     sts = Set(states(sys))
     observed_idx = Dict(x.lhs => i for (i, x) in enumerate(obs))
+    param_set = Set(parameters(sys))
+    param_set_ns = Set(states(sys, p) for p in parameters(sys))
     namespaced_to_obs = Dict(states(sys, x.lhs) => x.lhs for x in obs)
     namespaced_to_sts = Dict(states(sys, x) => x for x in states(sys))
 
@@ -329,6 +331,9 @@ function build_explicit_observed_function(sys, ts;
     subs = Dict()
     maxidx = 0
     for s in dep_vars
+        if s in param_set || s in param_set_ns
+            continue
+        end
         idx = get(observed_idx, s, nothing)
         if idx !== nothing
             idx > maxidx && (maxidx = idx)
@@ -435,4 +440,45 @@ function convert_system(::Type{<:ODESystem}, sys, t; name = nameof(sys))
     defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
     return ODESystem(neweqs, t, newsts, parameters(sys); defaults = defs, name = name,
                      checks = false)
+end
+
+function Symbolics.substitute(sys::ODESystem, rules::Union{Vector{<:Pair}, Dict})
+    rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
+                       collect(rules)))
+    eqs = fast_substitute(equations(sys), rules)
+    ODESystem(eqs, get_iv(sys); name = nameof(sys))
+end
+
+"""
+$(SIGNATURES)
+
+Add accumulation variables for `vars`.
+"""
+function add_accumulations(sys::ODESystem, vars = states(sys))
+    avars = [rename(v, Symbol(:accumulation_, getname(v))) for v in vars]
+    add_accumulations(sys, avars .=> vars)
+end
+
+"""
+$(SIGNATURES)
+
+Add accumulation variables for `vars`. `vars` is a vector of pairs in the form
+of
+
+```julia
+[cumulative_var1 => x + y, cumulative_var2 => x^2]
+```
+Then, cumulative variables `cumulative_var1` and `cumulative_var2` that computes
+the comulative `x + y` and `x^2` would be added to `sys`.
+"""
+function add_accumulations(sys::ODESystem, vars::Vector{<:Pair})
+    eqs = get_eqs(sys)
+    avars = map(first, vars)
+    if (ints = intersect(avars, states(sys)); !isempty(ints))
+        error("$ints already exist in the system!")
+    end
+    D = Differential(get_iv(sys))
+    @set! sys.eqs = [eqs; Equation[D(a) ~ v[2] for (a, v) in zip(avars, vars)]]
+    @set! sys.states = [get_states(sys); avars]
+    @set! sys.defaults = merge(get_defaults(sys), Dict(a => 0.0 for a in avars))
 end

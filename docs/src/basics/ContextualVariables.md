@@ -10,8 +10,8 @@ the `@variable` which is defined by
 @variables x y(x)
 ```
 
-This is used for the "normal" variable of a given system, like the states of a
-differential equation or objective function. All of the macros below support
+This is used for the “normal” variable of a given system, like the states of a
+differential equation or objective function. All the macros below support
 the same syntax as `@variables`.
 
 ## Parameters
@@ -23,17 +23,19 @@ to ignore such variables when attempting to find the states of a system.
 ## Constants
 
 Constants are like parameters that:
-- always have a default value, which must be assigned when the constants are
+
+  - always have a default value, which must be assigned when the constants are
     declared
-- do not show up in the list of parameters of a system.
+  - do not show up in the list of parameters of a system.
 
 The intended use-cases for constants are:
-- representing literals (eg, π) symbolically, which results in cleaner
+
+  - representing literals (e.g., π) symbolically, which results in cleaner
     Latexification of equations (avoids turning `d ~ 2π*r` into `d = 6.283185307179586 r`)
-- allowing auto-generated unit conversion factors to live outside the list of
+  - allowing auto-generated unit conversion factors to live outside the list of
     parameters
-- representing fundamental constants (eg, speed of light `c`) that should never
-     be adjusted inadvertently.
+  - representing fundamental constants (e.g., speed of light `c`) that should never
+    be adjusted inadvertently.
 
 ## Wildcard Variable Arguments
 
@@ -48,7 +50,7 @@ need to be able to write `u(t, 0.0)` to define a boundary condition at `x = 0`.
 
 ## Variable metadata [Experimental/TODO]
 
-In many engineering systems some variables act like "flows" while others do not.
+In many engineering systems, some variables act like “flows” while others do not.
 For example, in circuit models you have current which flows, and the related
 voltage which does not. Or in thermal models you have heat flows. In these cases,
 the `connect` statement enforces conservation of flow between all of the connected
@@ -58,7 +60,7 @@ For example, the following specifies that `x` is a 2x2 matrix of flow variables
 with the unit m^3/s:
 
 ```julia
-@variables x[1:2,1:2] [connect = Flow; unit = u"m^3/s"]
+@variables x[1:2, 1:2] [connect = Flow; unit = u"m^3/s"]
 ```
 
 ModelingToolkit defines `connect`, `unit`, `noise`, and `description` keys for

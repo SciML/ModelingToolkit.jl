@@ -8,7 +8,7 @@ propagation from a given initial distribution density.
 
 For example, if ``u'=p*u`` and `p` follows a probability distribution
 ``f(p)``, then the probability density of a future value with a given
-choice of ``p`` is computed by setting the inital `trJ = f(p)`, and
+choice of ``p`` is computed by setting the initial `trJ = f(p)`, and
 the final value of `trJ` is the probability of ``u(t)``.
 
 Example:

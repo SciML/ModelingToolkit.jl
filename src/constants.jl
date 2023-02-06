@@ -2,7 +2,9 @@ import SymbolicUtils: symtype, term, hasmetadata, issym
 struct MTKConstantCtx end
 
 isconstant(x::Num) = isconstant(unwrap(x))
-""" Test whether `x` is a constant-type Sym. """
+"""
+Test whether `x` is a constant-type Sym.
+"""
 function isconstant(x)
     x = unwrap(x)
     x isa Symbolic && getmetadata(x, MTKConstantCtx, false)

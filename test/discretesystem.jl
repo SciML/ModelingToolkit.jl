@@ -29,6 +29,22 @@ eqs = [D(S) ~ S - infection * h,
 syss = structural_simplify(sys)
 @test syss == syss
 
+for df in [
+    DiscreteFunction(sys, [S, I, R], [c, nsteps, δt, β, γ]),
+    eval(DiscreteFunctionExpr(sys, [S, I, R], [c, nsteps, δt, β, γ])),
+]
+
+    # iip
+    du = zeros(3)
+    u = collect(1:3)
+    p = collect(1:5)
+    df.f(du, u, p, 0)
+    @test du ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
+
+    # oop
+    @test df.f(u, p, 0) ≈ [0.01831563888873422, 0.9816849729159067, 4.999999388195359]
+end
+
 # Problem
 u0 = [S => 990.0, I => 10.0, R => 0.0]
 p = [β => 0.05, c => 10.0, γ => 0.25, δt => 0.1, nsteps => 400]

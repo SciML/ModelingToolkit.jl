@@ -50,6 +50,7 @@ end
 
 """
     has_discrete_domain(x)
+
 true if `x` contains discrete signals (`x` may or may not contain continuous-domain signals). `x` may be an expression or equation.
 See also [`is_discrete_domain`](@ref)
 """
@@ -60,6 +61,7 @@ end
 
 """
     has_continuous_domain(x)
+
 true if `x` contains continuous signals (`x` may or may not contain discrete-domain signals). `x` may be an expression or equation.
 See also [`is_continuous_domain`](@ref)
 """
@@ -70,12 +72,14 @@ end
 
 """
     is_hybrid_domain(x)
+
 true if `x` contains both discrete and continuous-domain signals. `x` may be an expression or equation.
 """
 is_hybrid_domain(x) = has_discrete_domain(x) && has_continuous_domain(x)
 
 """
     is_discrete_domain(x)
+
 true if `x` contains only discrete-domain signals.
 See also [`has_discrete_domain`](@ref)
 """
