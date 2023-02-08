@@ -13,23 +13,14 @@ const InferredDomain = Union{Inferred, InferredDiscrete}
 Symbolics.option_to_metadata_type(::Val{:timedomain}) = TimeDomain
 
 """
-    is_continuous_domain(x::Sym)
-
-Determine if variable `x` is a continuous-time variable.
+    is_continuous_domain(x)
+true if `x` contains only continuous-domain signals.
+See also [`has_continuous_domain`](@ref)
 """
-is_continuous_domain(x::Sym) = getmetadata(x, TimeDomain, false) isa Continuous
-
-"""
-    is_discrete_domain(x::Sym)
-
-Determine if variable `x` is a discrete-time variable.
-"""
-is_discrete_domain(x::Sym) = getmetadata(x, TimeDomain, false) isa Discrete
-
-# is_discrete_domain(x::Sym) = isvarkind(Discrete, x)
-
-has_continuous_domain(x::Sym) = is_continuous_domain(x)
-has_discrete_domain(x::Sym) = is_discrete_domain(x)
+function is_continuous_domain(x)
+    issym(x) && return getmetadata(x, TimeDomain, false) isa Continuous
+    !has_discrete_domain(x) && has_continuous_domain(x)
+end
 
 function get_time_domain(x)
     if istree(x) && operation(x) isa Operator
@@ -41,11 +32,10 @@ end
 get_time_domain(x::Num) = get_time_domain(value(x))
 
 """
-    has_time_domain(x::Sym)
-
+    has_time_domain(x)
 Determine if variable `x` has a time-domain attributed to it.
 """
-function has_time_domain(x::Union{Sym, Term})
+function has_time_domain(x::Symbolic)
     # getmetadata(x, Continuous, nothing) !== nothing ||
     # getmetadata(x, Discrete,   nothing) !== nothing
     getmetadata(x, TimeDomain, nothing) !== nothing
@@ -64,7 +54,10 @@ end
 true if `x` contains discrete signals (`x` may or may not contain continuous-domain signals). `x` may be an expression or equation.
 See also [`is_discrete_domain`](@ref)
 """
-has_discrete_domain(x) = hasshift(x) || hassample(x) || hashold(x)
+function has_discrete_domain(x)
+    issym(x) && return is_discrete_domain(x)
+    hasshift(x) || hassample(x) || hashold(x)
+end
 
 """
     has_continuous_domain(x)
@@ -72,7 +65,10 @@ has_discrete_domain(x) = hasshift(x) || hassample(x) || hashold(x)
 true if `x` contains continuous signals (`x` may or may not contain discrete-domain signals). `x` may be an expression or equation.
 See also [`is_continuous_domain`](@ref)
 """
-has_continuous_domain(x) = hasderiv(x) || hasdiff(x) || hassample(x) || hashold(x)
+function has_continuous_domain(x)
+    issym(x) && return is_continuous_domain(x)
+    hasderiv(x) || hasdiff(x) || hassample(x) || hashold(x)
+end
 
 """
     is_hybrid_domain(x)
@@ -87,15 +83,10 @@ is_hybrid_domain(x) = has_discrete_domain(x) && has_continuous_domain(x)
 true if `x` contains only discrete-domain signals.
 See also [`has_discrete_domain`](@ref)
 """
-is_discrete_domain(x) = has_discrete_domain(x) && !has_continuous_domain(x)
-
-"""
-    is_continuous_domain(x)
-
-true if `x` contains only continuous-domain signals.
-See also [`has_continuous_domain`](@ref)
-"""
-is_continuous_domain(x) = !has_discrete_domain(x) && has_continuous_domain(x)
+function is_discrete_domain(x)
+    issym(x) && return getmetadata(x, TimeDomain, false) isa Discrete
+    !has_discrete_domain(x) && has_continuous_domain(x)
+end
 
 struct ClockInferenceException <: Exception
     msg::Any
@@ -122,3 +113,4 @@ struct Clock <: AbstractClock
 end
 
 sampletime(c) = isdefined(c, :dt) ? c.dt : nothing
+Base.:(==)(c1::Clock, c2::Clock) = isequal(c1.t, c2.t) && c1.dt == c2.dt

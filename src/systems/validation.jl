@@ -36,7 +36,6 @@ equivalent(x, y) = isequal(1 * x, 1 * y)
 const unitless = Unitful.unit(1)
 
 #For dispatching get_unit
-const Literal = Union{Sym, Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithMetadata}
 const Conditional = Union{typeof(ifelse), typeof(IfElse.ifelse)}
 const Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
 
@@ -47,12 +46,16 @@ get_unit(x::Real) = unitless
 get_unit(x::Unitful.Quantity) = screen_unit(Unitful.unit(x))
 get_unit(x::AbstractArray) = map(get_unit, x)
 get_unit(x::Num) = get_unit(value(x))
-get_unit(x::Literal) = screen_unit(getmetadata(x, VariableUnit, unitless))
+function get_unit(x::Union{Symbolics.ArrayOp, Symbolics.Arr, Symbolics.CallWithMetadata})
+    get_literal_unit(x)
+end
 get_unit(op::Differential, args) = get_unit(args[1]) / get_unit(op.x)
 get_unit(op::Difference, args) = get_unit(args[1]) / get_unit(op.t)
 get_unit(op::typeof(getindex), args) = get_unit(args[1])
 get_unit(x::SciMLBase.NullParameters) = unitless
 get_unit(op::typeof(instream), args) = get_unit(args[1])
+
+get_literal_unit(x) = screen_unit(getmetadata(x, VariableUnit, unitless))
 
 function get_unit(op, args) # Fallback
     result = op(1 .* get_unit.(args)...)
@@ -73,28 +76,6 @@ function get_unit(op::Integral, args)
         unit *= get_unit(op.domain.variables)
     end
     return get_unit(args[1]) * unit
-end
-
-function get_unit(x::Pow)
-    pargs = arguments(x)
-    base, expon = get_unit.(pargs)
-    @assert expon isa Unitful.DimensionlessUnits
-    if base == unitless
-        unitless
-    else
-        pargs[2] isa Number ? base^pargs[2] : (1 * base)^pargs[2]
-    end
-end
-
-function get_unit(x::Add)
-    terms = get_unit.(arguments(x))
-    firstunit = terms[1]
-    for other in terms[2:end]
-        termlist = join(map(repr, terms), ", ")
-        equivalent(other, firstunit) ||
-            throw(ValidationError(", in sum $x, units [$termlist] do not match."))
-    end
-    return firstunit
 end
 
 function get_unit(op::Conditional, args)
@@ -122,11 +103,31 @@ function get_unit(op::Comparison, args)
 end
 
 function get_unit(x::Symbolic)
-    if SymbolicUtils.istree(x)
+    if issym(x)
+        get_literal_unit(x)
+    elseif isadd(x)
+        terms = get_unit.(arguments(x))
+        firstunit = terms[1]
+        for other in terms[2:end]
+            termlist = join(map(repr, terms), ", ")
+            equivalent(other, firstunit) ||
+                throw(ValidationError(", in sum $x, units [$termlist] do not match."))
+        end
+        return firstunit
+    elseif ispow(x)
+        pargs = arguments(x)
+        base, expon = get_unit.(pargs)
+        @assert expon isa Unitful.DimensionlessUnits
+        if base == unitless
+            unitless
+        else
+            pargs[2] isa Number ? base^pargs[2] : (1 * base)^pargs[2]
+        end
+    elseif istree(x)
         op = operation(x)
-        if op isa Sym || (op isa Term && operation(op) isa Term) # Dependent variables, not function calls
+        if issym(op) || (istree(op) && istree(operation(op))) # Dependent variables, not function calls
             return screen_unit(getmetadata(x, VariableUnit, unitless)) # Like x(t) or x[i]
-        elseif op isa Term && !(operation(op) isa Term)
+        elseif istree(op) && !istree(operation(op))
             gp = getmetadata(x, Symbolics.GetindexParent, nothing) # Like x[1](t)
             return screen_unit(getmetadata(gp, VariableUnit, unitless))
         end  # Actual function calls:

@@ -32,7 +32,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """The differential equations defining the discrete system."""
     eqs::Vector{Equation}
     """Independent variable."""
-    iv::Sym
+    iv::BasicSymbolic{Real}
     """Dependent (state) variables. Must not contain the independent variable."""
     states::Vector
     """Parameter variables. Must not contain the independent variable."""

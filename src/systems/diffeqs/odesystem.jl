@@ -31,7 +31,7 @@ struct ODESystem <: AbstractODESystem
     """The ODEs defining the system."""
     eqs::Vector{Equation}
     """Independent variable."""
-    iv::Sym
+    iv::BasicSymbolic{Real}
     """
     Dependent (state) variables. Must not contain the independent variable.
 
@@ -422,7 +422,7 @@ function convert_system(::Type{<:ODESystem}, sys, t; name = nameof(sys))
                 newsts[i] = s
                 continue
             end
-            ns = similarterm(s, operation(s), (t,); metadata = SymbolicUtils.metadata(s))
+            ns = similarterm(s, operation(s), Any[t]; metadata = SymbolicUtils.metadata(s))
             newsts[i] = ns
             varmap[s] = ns
         else

@@ -419,25 +419,27 @@ function renamespace(sys, x)
     sys === nothing && return x
     x = unwrap(x)
     if x isa Symbolic
+        T = typeof(x)
         if istree(x) && operation(x) isa Operator
-            return similarterm(x, operation(x), Any[renamespace(sys, only(arguments(x)))])
+            return similarterm(x, operation(x),
+                               Any[renamespace(sys, only(arguments(x)))])::T
         end
         let scope = getmetadata(x, SymScope, LocalScope())
             if scope isa LocalScope
-                rename(x, renamespace(getname(sys), getname(x)))
+                rename(x, renamespace(getname(sys), getname(x)))::T
             elseif scope isa ParentScope
-                setmetadata(x, SymScope, scope.parent)
+                setmetadata(x, SymScope, scope.parent)::T
             elseif scope isa DelayParentScope
                 if scope.N > 0
                     x = setmetadata(x, SymScope,
                                     DelayParentScope(scope.parent, scope.N - 1))
-                    rename(x, renamespace(getname(sys), getname(x)))
+                    rename(x, renamespace(getname(sys), getname(x)))::T
                 else
                     #rename(x, renamespace(getname(sys), getname(x)))
-                    setmetadata(x, SymScope, scope.parent)
+                    setmetadata(x, SymScope, scope.parent)::T
                 end
             else # GlobalScope
-                x
+                x::T
             end
         end
     elseif x isa AbstractSystem
@@ -453,9 +455,8 @@ namespace_controls(sys::AbstractSystem) = controls(sys, controls(sys))
 
 function namespace_defaults(sys)
     defs = defaults(sys)
-    Dict((isparameter(k) ? parameters(sys, k) : states(sys, k)) => namespace_expr(defs[k],
-                                                                                  sys)
-         for k in keys(defs))
+    Dict((isparameter(k) ? parameters(sys, k) : states(sys, k)) => namespace_expr(v, sys)
+         for (k, v) in pairs(defs))
 end
 
 function namespace_equations(sys::AbstractSystem)
@@ -484,14 +485,19 @@ function namespace_expr(O, sys, n = nameof(sys))
     elseif isvariable(O)
         renamespace(n, O)
     elseif istree(O)
-        renamed = map(a -> namespace_expr(a, sys, n), arguments(O))
+        T = typeof(O)
         if symtype(operation(O)) <: FnType
-            renamespace(n, O)
+            renamespace(n, O)::T
         else
-            similarterm(O, operation(O), renamed)
+            renamed = let sys = sys, n = n, T = T
+                map(a -> namespace_expr(a, sys, n)::Any, arguments(O))
+            end
+            similarterm(O, operation(O), renamed)::T
         end
     elseif O isa Array
-        map(o -> namespace_expr(o, sys, n), O)
+        let sys = sys, n = n
+            map(o -> namespace_expr(o, sys, n), O)
+        end
     else
         O
     end
@@ -602,7 +608,7 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
     #
     # This is done by just making `x` the argument of the function.
     if istree(x) &&
-       operation(x) isa Sym &&
+       issym(operation(x)) &&
        !(length(arguments(x)) == 1 && isequal(arguments(x)[1], get_iv(sys)))
         return operation(x)
     end
@@ -646,7 +652,7 @@ AbstractSysToExpr(sys) = AbstractSysToExpr(sys, states(sys))
 function (f::AbstractSysToExpr)(O)
     !istree(O) && return toexpr(O)
     any(isequal(O), f.states) && return nameof(operation(O))  # variables
-    if isa(operation(O), Sym)
+    if issym(operation(O))
         return build_expr(:call, Any[nameof(operation(O)); f.(arguments(O))])
     end
     return build_expr(:call, Any[operation(O); f.(arguments(O))])
@@ -675,7 +681,7 @@ end
 function round_trip_expr(t, var2name)
     name = get(var2name, t, nothing)
     name !== nothing && return name
-    t isa Sym && return nameof(t)
+    issym(t) && return nameof(t)
     istree(t) || return t
     f = round_trip_expr(operation(t), var2name)
     args = map(Base.Fix2(round_trip_expr, var2name), arguments(t))

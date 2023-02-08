@@ -200,7 +200,7 @@ function calculate_massmatrix(sys::AbstractODESystem; simplify = false)
     M = zeros(length(eqs), length(eqs))
     state2idx = Dict(s => i for (i, s) in enumerate(dvs))
     for (i, eq) in enumerate(eqs)
-        if eq.lhs isa Term && operation(eq.lhs) isa Differential
+        if istree(eq.lhs) && operation(eq.lhs) isa Differential
             st = var_from_nested_derivative(eq.lhs)[1]
             j = state2idx[st]
             M[i, j] = 1
