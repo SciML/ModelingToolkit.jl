@@ -328,6 +328,7 @@ function build_explicit_observed_function(sys, ts;
 
     # FIXME: This is a rather rough estimate of dependencies. We assume
     # the expression depends on everything before the `maxidx`.
+    # ?
     subs = Dict()
     maxidx = 0
     for s in dep_vars
