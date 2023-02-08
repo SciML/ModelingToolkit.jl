@@ -517,7 +517,7 @@ function controls(sys::AbstractSystem)
     isempty(systems) ? ctrls : [ctrls; reduce(vcat, namespace_controls.(systems))]
 end
 
-function observed(sys::AbstractSystem)
+function SymbolicIndexingInterface.observed(sys::AbstractSystem)
     obs = get_observed(sys)
     systems = get_systems(sys)
     [obs;
@@ -636,6 +636,37 @@ function SymbolicIndexingInterface.param_sym_to_index(sys::AbstractSystem, sym)
 end
 function SymbolicIndexingInterface.is_param_sym(sys::AbstractSystem, sym)
     !isnothing(SymbolicIndexingInterface.param_sym_to_index(sys, sym))
+end
+
+function SymbolicIndexingInterface.observed_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(isequal(sym), SymbolicIndexingInterface.observed(sys))
+end
+function SymbolicIndexingInterface.is_observed_sym(sys::AbstractSystem, sym)
+    !isnothing(SymbolicIndexingInterface.obvserved_sym_to_index(sys, sym))
+end
+
+function SymbolicIndexingInterface.get_state_dependencies(sys::AbstractSystem, sym)
+    obs = observed(sys)
+    lhss = map(obs) do eq
+        eq.lhs
+    end
+    sts = states(sys)
+    i = observed_sym_to_index(sys, sym)
+    if isnothing(i)
+        return []
+    end
+
+    eq = obs[i]
+    varss = vars(eq)
+    out = mapreduce(vcat, varss, init = []) do u
+        if any(isequal(u), lhss)
+            get_state_dependencies(sys, u)
+        else
+            [u]
+        end
+    end |> unique
+
+    return filter(x -> any(isequal(x), sts), out)
 end
 
 struct AbstractSysToExpr
