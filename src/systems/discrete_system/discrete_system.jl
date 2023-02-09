@@ -71,6 +71,10 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     """
     metadata::Any
     """
+    gui_metadata: metadata for MTK GUI.
+    """
+    gui_metadata::Union{Nothing, GUIMetadata}
+    """
     tearing_state: cache for intermediate tearing state
     """
     tearing_state::Any
@@ -87,7 +91,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
                             observed,
                             name,
                             systems, defaults, preface, connector_type,
-                            metadata = nothing,
+                            metadata = nothing, gui_metadata = nothing,
                             tearing_state = nothing, substitutions = nothing,
                             complete = false; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
@@ -100,7 +104,8 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
         new(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, name,
             systems,
             defaults,
-            preface, connector_type, metadata, tearing_state, substitutions, complete)
+            preface, connector_type, metadata, gui_metadata,
+            tearing_state, substitutions, complete)
     end
 end
 
@@ -121,6 +126,7 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
                         preface = nothing,
                         connector_type = nothing,
                         metadata = nothing,
+                        gui_metadata = nothing,
                         kwargs...)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
@@ -148,7 +154,7 @@ function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
     end
     DiscreteSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
                    eqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, name, systems,
-                   defaults, preface, connector_type, metadata, kwargs...)
+                   defaults, preface, connector_type, metadata, gui_metadata, kwargs...)
 end
 
 function DiscreteSystem(eqs, iv = nothing; kwargs...)

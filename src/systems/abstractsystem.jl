@@ -1,5 +1,12 @@
 const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
 
+struct GUIMetadata
+    icon_name::String
+    layout::Any
+end
+
+GUIMetadata(icon_name) = GUIMetadata(icon_name, nothing)
+
 """
 ```julia
 calculate_tgrad(sys::AbstractTimeDependentSystem)
@@ -219,6 +226,7 @@ for prop in [:eqs
              :tearing_state
              :substitutions
              :metadata
+             :gui_metadata
              :discrete_subsystems
              :unknown_states]
     fname1 = Symbol(:get_, prop)
