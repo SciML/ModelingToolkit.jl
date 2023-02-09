@@ -226,6 +226,7 @@ for prop in [:eqs
              :tearing_state
              :substitutions
              :metadata
+             :gui_metadata
              :discrete_subsystems
              :unknown_states]
     fname1 = Symbol(:get_, prop)
