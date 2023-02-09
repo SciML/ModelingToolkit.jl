@@ -363,14 +363,15 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     end
 end
 
-function apply_to_variables(f::F, ex) where {F}
-    ex = value(ex)
+apply_to_variables(f::F, ex) where {F} = _apply_to_variables(f, ex)
+apply_to_variables(f::F, ex::Num) where {F} = wrap(_apply_to_variables(f, unwrap(ex)))
+function _apply_to_variables(f::F, ex) where {F}
     if isvariable(ex)
         return f(ex)
     end
     istree(ex) || return ex
-    similarterm(ex, apply_to_variables(f, operation(ex)),
-                map(Base.Fix1(apply_to_variables, f), arguments(ex)),
+    similarterm(ex, _apply_to_variables(f, operation(ex)),
+                map(Base.Fix1(_apply_to_variables, f), arguments(ex)),
                 metadata = metadata(ex))
 end
 
