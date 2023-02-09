@@ -49,20 +49,25 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     """
     metadata::Any
     """
+    gui_metadata: metadata for MTK GUI.
+    """
+    gui_metadata::Union{Nothing, GUIMetadata}
+    """
     complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
     complete::Bool
 
     function OptimizationSystem(tag, op, states, ps, var_to_name, observed,
                                 constraints, name, systems, defaults, metadata = nothing,
-                                complete = false; checks::Union{Bool, Int} = true)
+                                gui_metadata = nothing, complete = false;
+                                checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             unwrap(op) isa Symbolic && check_units(op)
             check_units(observed)
             all_dimensionless([states; ps]) || check_units(constraints)
         end
         new(tag, op, states, ps, var_to_name, observed,
-            constraints, name, systems, defaults, metadata, complete)
+            constraints, name, systems, defaults, metadata, gui_metadata, complete)
     end
 end
 
@@ -77,7 +82,8 @@ function OptimizationSystem(op, states, ps;
                             name = nothing,
                             systems = OptimizationSystem[],
                             checks = true,
-                            metadata = nothing)
+                            metadata = nothing,
+                            gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     constraints = value.(scalarize(constraints))
@@ -105,7 +111,8 @@ function OptimizationSystem(op, states, ps;
                        op′, states′, ps′, var_to_name,
                        observed,
                        constraints,
-                       name, systems, defaults, metadata; checks = checks)
+                       name, systems, defaults, metadata, gui_metadata;
+                       checks = checks)
 end
 
 function calculate_gradient(sys::OptimizationSystem)

@@ -60,6 +60,10 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     """
     metadata::Any
     """
+    gui_metadata: metadata for MTK GUI.
+    """
+    gui_metadata::Union{Nothing, GUIMetadata}
+    """
     tearing_state: cache for intermediate tearing state
     """
     tearing_state::Any
@@ -75,13 +79,14 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     function NonlinearSystem(tag, eqs, states, ps, var_to_name, observed, jac, name,
                              systems,
                              defaults, connector_type, metadata = nothing,
+                             gui_metadata = nothing,
                              tearing_state = nothing, substitutions = nothing,
                              complete = false; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([states; ps]) || check_units(eqs)
         end
         new(tag, eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
-            connector_type, metadata, tearing_state, substitutions, complete)
+            connector_type, metadata, gui_metadata, tearing_state, substitutions, complete)
     end
 end
 
@@ -96,7 +101,8 @@ function NonlinearSystem(eqs, states, ps;
                          continuous_events = nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
                          discrete_events = nothing,   # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
                          checks = true,
-                         metadata = nothing)
+                         metadata = nothing,
+                         gui_metadata = nothing)
     continuous_events === nothing || isempty(continuous_events) ||
         throw(ArgumentError("NonlinearSystem does not accept `continuous_events`, you provided $continuous_events"))
     discrete_events === nothing || isempty(discrete_events) ||
@@ -132,7 +138,7 @@ function NonlinearSystem(eqs, states, ps;
 
     NonlinearSystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
                     eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
-                    connector_type, metadata, checks = checks)
+                    connector_type, metadata, gui_metadata, checks = checks)
 end
 
 function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = false)
