@@ -93,7 +93,23 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
         end
+
         eqs = eqs isa Vector ? eqs : [eqs]
+
+        if !isnothing(analytic)
+            if analytic isa Vector{<:Pair}
+                analytic = Dict(analytic)
+            elseif analytic isa Dict
+                analytic = analytic # do nothing
+            else
+                try  # try to convert to a dict
+                    analytic = Dict([dvs[1] => analytic])
+                catch e
+                    throw(ArgumentError("analytic must be a dictionary or vector of pairs, or a single function for the single variable case."))
+                end
+            end
+        end
+
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
             name, metadata, gui_metadata)
     end
