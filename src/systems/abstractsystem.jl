@@ -1,11 +1,11 @@
 const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
 
 struct GUIMetadata
-    icon_name::String
+    type::String
     layout::Any
 end
 
-GUIMetadata(icon_name) = GUIMetadata(icon_name, nothing)
+GUIMetadata(type) = GUIMetadata(type, nothing)
 
 """
 ```julia
