@@ -5,7 +5,7 @@ struct GUIMetadata
     layout::Any
 end
 
-GUIMetadata(icon_name) = GUIMetadata(icon_name, nothing)
+GUIMetadata(type) = GUIMetadata(type, nothing)
 
 """
 ```julia
