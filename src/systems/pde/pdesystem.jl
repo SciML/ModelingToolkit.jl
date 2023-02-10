@@ -61,9 +61,11 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     """
     systems::Vector
     """
-    analytic: A dictionary of analytic solutions to the system, keys being dependent
-    variables and values being the analytic solution with the same number of arguments,
-    in the same order, as the dependent variables.
+    analytic: A dictionary or vector of pairs of analytic solutions to the system, keys
+    being dependent variables and values being the analytic solution with the same argument
+    signature, and an optional keyword argument ps, which takes a dictionary of parameter
+    symbols to values.
+    e.g. `analytic = Dict(u(x, t) => (x, t; ps = [1, 1, 1]) -> ps[A]*sin(ps[k]*x + ps[c"]*t))`
     """
     analytic::Any
     """
