@@ -93,13 +93,18 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
     metadata::Any
     """
+    gui_metadata: metadata for MTK GUI.
+    """
+    gui_metadata::Union{Nothing, GUIMetadata}
+    """
     complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
     complete::Bool
 
     function JumpSystem{U}(tag, ap::U, iv, states, ps, var_to_name, observed, name, systems,
                            defaults, connector_type, devents,
-                           metadata = nothing, complete = false;
+                           metadata = nothing, gui_metadata = nothing,
+                           complete = false;
                            checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
             check_variables(states, iv)
@@ -109,7 +114,7 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             all_dimensionless([states; ps; iv]) || check_units(ap, iv)
         end
         new{U}(tag, ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
-               connector_type, devents, metadata, complete)
+               connector_type, devents, metadata, gui_metadata, complete)
     end
 end
 
@@ -125,6 +130,7 @@ function JumpSystem(eqs, iv, states, ps;
                     continuous_events = nothing,
                     discrete_events = nothing,
                     metadata = nothing,
+                    gui_metadata = nothing,
                     kwargs...)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
@@ -163,7 +169,7 @@ function JumpSystem(eqs, iv, states, ps;
 
     JumpSystem{typeof(ap)}(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
                            ap, value(iv), states, ps, var_to_name, observed, name, systems,
-                           defaults, connector_type, disc_callbacks, metadata,
+                           defaults, connector_type, disc_callbacks, metadata, gui_metadata,
                            checks = checks)
 end
 

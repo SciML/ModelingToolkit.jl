@@ -1,5 +1,12 @@
 const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
 
+struct GUIMetadata
+    type::String
+    layout::Any
+end
+
+GUIMetadata(type) = GUIMetadata(type, nothing)
+
 """
 ```julia
 calculate_tgrad(sys::AbstractTimeDependentSystem)
@@ -219,6 +226,7 @@ for prop in [:eqs
              :tearing_state
              :substitutions
              :metadata
+             :gui_metadata
              :discrete_subsystems
              :unknown_states]
     fname1 = Symbol(:get_, prop)
@@ -363,14 +371,15 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     end
 end
 
-function apply_to_variables(f::F, ex) where {F}
-    ex = value(ex)
+apply_to_variables(f::F, ex) where {F} = _apply_to_variables(f, ex)
+apply_to_variables(f::F, ex::Num) where {F} = wrap(_apply_to_variables(f, unwrap(ex)))
+function _apply_to_variables(f::F, ex) where {F}
     if isvariable(ex)
         return f(ex)
     end
     istree(ex) || return ex
-    similarterm(ex, apply_to_variables(f, operation(ex)),
-                map(Base.Fix1(apply_to_variables, f), arguments(ex)),
+    similarterm(ex, _apply_to_variables(f, operation(ex)),
+                map(Base.Fix1(_apply_to_variables, f), arguments(ex)),
                 metadata = metadata(ex))
 end
 

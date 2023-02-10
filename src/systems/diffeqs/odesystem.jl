@@ -115,6 +115,10 @@ struct ODESystem <: AbstractODESystem
     """
     metadata::Any
     """
+    gui_metadata: metadata for MTK GUI.
+    """
+    gui_metadata::Union{Nothing, GUIMetadata}
+    """
     tearing_state: cache for intermediate tearing state
     """
     tearing_state::Any
@@ -139,7 +143,8 @@ struct ODESystem <: AbstractODESystem
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
                        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
                        torn_matching, connector_type, preface, cevents,
-                       devents, metadata = nothing, tearing_state = nothing,
+                       devents, metadata = nothing, gui_metadata = nothing,
+                       tearing_state = nothing,
                        substitutions = nothing, complete = false,
                        discrete_subsystems = nothing, unknown_states = nothing;
                        checks::Union{Bool, Int} = true)
@@ -154,8 +159,9 @@ struct ODESystem <: AbstractODESystem
         end
         new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
-            connector_type, preface, cevents, devents, metadata, tearing_state,
-            substitutions, complete, discrete_subsystems, unknown_states)
+            connector_type, preface, cevents, devents, metadata, gui_metadata,
+            tearing_state, substitutions, complete, discrete_subsystems,
+            unknown_states)
     end
 end
 
@@ -173,7 +179,8 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
                    continuous_events = nothing,
                    discrete_events = nothing,
                    checks = true,
-                   metadata = nothing)
+                   metadata = nothing,
+                   gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = scalarize(deqs)
@@ -211,7 +218,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
               deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
               ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
               connector_type, preface, cont_callbacks, disc_callbacks,
-              metadata, checks = checks)
+              metadata, gui_metadata, checks = checks)
 end
 
 function ODESystem(eqs, iv = nothing; kwargs...)

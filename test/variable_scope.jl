@@ -9,6 +9,7 @@ using Test
 b = ParentScope(b)
 c = ParentScope(ParentScope(c))
 d = GlobalScope(d)
+@test all(x -> x isa Num, [b, c, d])
 
 # ensure it works on Term too
 LocalScope(e.val)

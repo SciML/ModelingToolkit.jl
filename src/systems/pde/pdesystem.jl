@@ -74,6 +74,10 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     metadata: metadata for the system, to be used by downstream packages.
     """
     metadata::Any
+    """
+    gui_metadata: metadata for MTK GUI.
+    """
+    gui_metadata::Union{Nothing, GUIMetadata}
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
                                    ps = SciMLBase.NullParameters();
                                    defaults = Dict(),
@@ -81,6 +85,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                                    connector_type = nothing,
                                    metadata = nothing,
                                    analytic = nothing,
+                                   gui_metadata = nothing,
                                    checks::Union{Bool, Int} = true,
                                    name)
         if checks == true || (checks & CheckUnits) > 0
@@ -88,7 +93,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         end
         eqs = eqs isa Vector ? eqs : [eqs]
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
-            name, metadata)
+            name, metadata, gui_metadata)
     end
 end
 
