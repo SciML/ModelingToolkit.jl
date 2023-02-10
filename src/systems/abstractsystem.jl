@@ -1,7 +1,7 @@
 const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
 
 struct GUIMetadata
-    icon_name::String
+    type::String
     layout::Any
 end
 
