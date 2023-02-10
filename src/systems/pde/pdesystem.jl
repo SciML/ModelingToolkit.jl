@@ -61,6 +61,12 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     """
     systems::Vector
     """
+    analytic: A dictionary of analytic solutions to the system, keys being dependent
+    variables and values being the analytic solution with the same number of arguments,
+    in the same order, as the dependent variables.
+    """
+    analytic::Any
+    """
     name: the name of the system
     """
     name::Symbol
@@ -74,14 +80,15 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                                    systems = [],
                                    connector_type = nothing,
                                    metadata = nothing,
+                                   analytic = nothing,
                                    checks::Union{Bool, Int} = true,
                                    name)
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
         end
         eqs = eqs isa Vector ? eqs : [eqs]
-        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, name,
-            metadata)
+        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
+            name, metadata)
     end
 end
 
