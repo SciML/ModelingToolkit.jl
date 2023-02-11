@@ -1,5 +1,6 @@
 using SafeTestsets, Test
 
+@safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "AliasGraph Test" begin include("alias.jl") end
 @safetestset "Linear Algebra Test" begin include("linalg.jl") end
 @safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
@@ -31,7 +32,6 @@ using SafeTestsets, Test
 @safetestset "State Selection Test" begin include("state_selection.jl") end
 @safetestset "Symbolic Event Test" begin include("symbolic_events.jl") end
 @safetestset "Stream Connnect Test" begin include("stream_connectors.jl") end
-@safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "Lowering Integration Test" begin include("lowering_solving.jl") end
 @safetestset "Test Big System Usage" begin include("bigsystem.jl") end
 @safetestset "Depdendency Graph Test" begin include("dep_graphs.jl") end
