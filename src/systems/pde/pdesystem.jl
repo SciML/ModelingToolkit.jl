@@ -62,12 +62,15 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     systems::Vector
     """
     analytic: A vector of explicit symbolic expressions for the analytic solutions of each
-    dependent variable.
+    dependent variable. e.g. `analytic = [u(t, x) ~ a*sin(c*t) * cos(k*x)]`
     """
     analytic::Any
     """
     analytic_func: A vector of functions for the analytic solutions of each dependent
-    variable. Will be generated from `analytic` if not provided.
+    variable. Will be generated from `analytic` if not provided. Should have the same
+    argument signature as the variable, and an optional `ps` keyword argument, which takes
+    the parameter values in the order you specified them in `ps`.
+    e.g. `analytic_func = [u(t, x) => (t, x; ps = ones(3)) -> ps[1]*sin(ps[2]*t) * cos(ps[3]*x)]`
     """
     analytic_func::Any
     """
