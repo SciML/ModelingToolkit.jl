@@ -112,10 +112,10 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                 analytic_func = map(analytic) do eq
                     args = arguments(eq.lhs)
                     p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
-                    kwargs = :ps ← p
+                    kwargs = :ps ← DestructuredArgs(p, inbounds = !checkbounds)
                     ex = Func(args, kwargs, eq.rhs) |> toexpr
                     eq.lhs => @RuntimeGeneratedFunction(ex)
-                end
+                end |> Dict
             else
                 analytic_func = analytic_func isa Vector ? analytic_func : [analytic_func]
                 if length(analytic_func) != length(dvs)
