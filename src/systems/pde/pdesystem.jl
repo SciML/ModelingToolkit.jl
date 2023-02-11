@@ -112,7 +112,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                 analytic_func = map(analytic) do eq
                     args = arguments(eq.lhs)
                     p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
-                    kwargs = :ps ← get(p, ones(length(p)))
+                    kwargs = :ps ← p
                     ex = Func(args, kwargs, eq.rhs) |> toexpr
                     eq.lhs => @RuntimeGeneratedFunction(ex)
                 end
