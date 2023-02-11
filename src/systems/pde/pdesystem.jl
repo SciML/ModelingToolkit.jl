@@ -61,13 +61,15 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     """
     systems::Vector
     """
-    analytic: A dictionary or vector of pairs of analytic solutions to the system, keys
-    being dependent variables and values being the analytic solution with the same argument
-    signature, and an optional keyword argument ps, which takes a dictionary of parameter
-    symbols to values.
-    e.g. `analytic = Dict(u(x, t) => (x, t; ps = [1, 1, 1]) -> ps[A]*sin(ps[k]*x + ps[c"]*t))`
+    analytic: A vector of explicit symbolic expressions for the analytic solutions of each
+    dependent variable.
     """
     analytic::Any
+    """
+    analytic_func: A vector of functions for the analytic solutions of each dependent
+    variable. Will be generated from `analytic` if not provided.
+    """
+    analytic_func::Any
     """
     name: the name of the system
     """
@@ -87,6 +89,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                                    connector_type = nothing,
                                    metadata = nothing,
                                    analytic = nothing,
+                                   analytic_func = nothing,
                                    gui_metadata = nothing,
                                    checks::Union{Bool, Int} = true,
                                    name)
@@ -97,21 +100,24 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         eqs = eqs isa Vector ? eqs : [eqs]
 
         if !isnothing(analytic)
-            if analytic isa Vector{<:Pair}
-                analytic = Dict(analytic)
-            elseif analytic isa Dict
-                analytic = analytic # do nothing
-            else
-                try  # try to convert to a dict
-                    analytic = Dict([dvs[1] => analytic])
-                catch e
-                    throw(ArgumentError("analytic must be a dictionary or vector of pairs, or a single function for the single variable case."))
+            analytic = analytic isa Vector ? analytic : [analytic]
+            if length(analytic) != length(dvs)
+                throw(ArgumentError("The number of analytic solutions must match the number of dependent variables"))
+            end
+
+            if isnothing(analytic_func)
+                analytic_func = map(analytic) do eq
+                    args = arguments(eq.lhs)
+                    p = map(a -> a.first, ps)
+                    kwargs = :ps ← get(p, ones(length(p)))
+                    ex = Func(args, kwargs, eq.rhs) |> toexpr
+                    eq.lhs => @RuntimeGeneratedFunction(ex)
                 end
             end
         end
 
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
-            name, metadata, gui_metadata)
+            analytic_func, name, metadata, gui_metadata)
     end
 end
 
