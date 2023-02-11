@@ -117,7 +117,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                     eq.lhs => @RuntimeGeneratedFunction(ex)
                 end
             else
-                analytic_func = analytic_func isa Vector ? analytic_func : [analytic_func]
+                analytic_func = Dict(analytic_func isa Vector ? analytic_func : [analytic_func])
                 if length(analytic_func) != length(dvs)
                     throw(ArgumentError("The number of analytic functions must match the number of dependent variables"))
                 end
