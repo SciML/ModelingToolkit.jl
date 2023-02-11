@@ -14,7 +14,7 @@ domains = [t ∈ (0.0, 1.0),
     x ∈ (0.0, 1.0)]
 
 analytic = [u(t, x) ~ -h * x * (x - 1) * sin(x) * exp(-2 * h * t)]
-analytic_function = (t, x; ps = []) -> -h * x * (x - 1) * sin(x) * exp(-2 * h * t)
+analytic_function = (t, x; ps = [1]) -> -ps[1] * x * (x - 1) * sin(x) * exp(-2 * ps[1] * t)
 
 @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u], analytic = analytic)
 @show pdesys
@@ -25,4 +25,4 @@ dx = 0:0.1:1
 dt = 0:0.1:1
 
 # Test generated analytic_func
-@test all(pdesys.analytic_func[u(t,x)](T, X) ≈ analytic_function(T, X) for T in dt, X in dx)
+@test all(pdesys.analytic_func[u(t,x)](T, X; ps = [2]) ≈ analytic_function(T, X; ps = [2]) for T in dt, X in dx)
