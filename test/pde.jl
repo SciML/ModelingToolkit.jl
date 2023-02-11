@@ -25,4 +25,5 @@ dx = 0:0.1:1
 dt = 0:0.1:1
 
 # Test generated analytic_func
-@test all(pdesys.analytic_func[u(t,x)](T, X; ps = [2]) ≈ analytic_function(T, X; ps = [2]) for T in dt, X in dx)
+@test all(pdesys.analytic_func[u(t, x)](T, X; ps = [2]) ≈ analytic_function(T, X; ps = [2])
+          for T in dt, X in dx)
