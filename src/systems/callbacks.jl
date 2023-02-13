@@ -146,61 +146,29 @@ function continuous_events(sys::AbstractSystem)
 end
 
 #################################### discrete events #####################################
-struct SymbolicIterativeCallback
-    "`time_choice(integrator, states, params, ctx)` returns next time step or `nothing`."
-    time_choice :: Any
+abstract type AbstractSpecialCallback end
 
-    """
-    `user_affect!(integrator, states, params, ctx)` is a function that receives 
-    the integrator and named tuples `states` for the state variables and `params` for the parameters.
-    Within the function body, the value of system state `v` can be accessed via 
-    `integrator.u[states.v]`, the value of a parameter `q` via `integrator.p[params.q]` and 
-    the current time via `integrator.t`.
-    `ctx` is any context passed to `user_affect!` as the `ctx` argument.
-    """
-    user_affect! :: Any
-
-    "If `initial_affect==true`, then the affect is applied to the integrator before any
-    time steps have been taken."
-    initial_affect :: Bool
-
-    function SymbolicIterativeCallback(time_choice, user_affect!, initial_affect::Bool=false)
-        _time_choice = scalarize_affects(time_choice)
-        _user_affect! = scalarize_affects(user_affect!)
-        return new(_time_choice, _user_affect!, initial_affect)
-    end
-end
-
-struct SymbolicIterativeCondition end
-
-struct SymbolicIterativeAffect{F<:FunctionalAffect, W<:FunctionalAffect}
-    time_choice :: W
-    affect!_function :: F
-    initial_affect :: Bool
-end
-
-struct SymbolicDiscreteCallback
+struct SymbolicDiscreteCallback{T<:Union{Nothing, AbstractSpecialCallback}}
     # condition can be one of:
     #   Δt::Real - Periodic with period Δt
     #   Δts::Vector{Real} - events trigger in this times (Preset)
     #   condition::Vector{Equation} - event triggered when condition is true
-    #   condition::SymbolicIterativeCondition
-    
-    #   TODO we could also allow for `condition::FunctionalCondition`, where `FunctionalCondition`
-    #   is similar to `FunctionalAffect`. 
-    #   In the end, such a `FunctionalCondition` would have to be compiled to a function 
-    #   `condition(u, t, integrator)` with signature suitable for a `DiscreteCallback`.
-    #   Such a construct could also have been used for `SymbolicIterativeCallback`, but as 
-    #   the condition is so simple in that case (does not depend on `u` or `integrator`), it
-    #   is left as a task for the future. (Additionally: How would we use a Base.RefValue in 
-    #   an `FunctionalCondition` / symbolic expression?)
     condition::Any
     affects::Any
 
-    function SymbolicDiscreteCallback(condition, affects=NULL_AFFECT)
+    # The field `wrapped` allows to inject callbacks of custom symbolic callback types 
+    # into the vector provided for the `discrete_events` keyword argument of system constructors.
+    # By default, if some `scb:: AbstractSpecialCallback` is encountered, then 
+    # `condition` and `affects` are set to nothing by the outer constructor.
+    # Therefore, `generate_discrete_callback` has to use `T` for dispatch and implement its 
+    # own logic for compilation of `scb` into a `DiscreteCallback`.
+    wrapped::T
+
+    function SymbolicDiscreteCallback(condition, affects=NULL_AFFECT, wrapped::T=nothing) where T
         c = scalarize_condition(condition)
         a = scalarize_affects(affects)
-        new(c, a)
+        # TODO warn about effects of `wrapped` if its not `nothing`?
+        new{T}(c, a, wrapped)
     end # Default affect to nothing
 end
 
@@ -224,12 +192,7 @@ scalarize_affects(affects::FunctionalAffect) = affects
 
 SymbolicDiscreteCallback(p::Pair) = SymbolicDiscreteCallback(p[1], p[2])
 SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback) = cb # passthrough
-function SymbolicDiscreteCallback(sic::SymbolicIterativeCallback)
-    return SymbolicDiscreteCallback( 
-        SymbolicIterativeCondition(),
-        SymbolicIterativeAffect(sic.time_choice, sic.user_affect!, sic.initial_affect),
-    )
-end
+SymbolicDiscreteCallback(scb::AbstractSpecialCallback) = SymbolicDiscreteCallback(nothing, nothing, scb)
 
 function Base.show(io::IO, db::SymbolicDiscreteCallback)
     println(io, "condition: ", db.condition)
@@ -241,6 +204,10 @@ function Base.show(io::IO, db::SymbolicDiscreteCallback)
         for affect in db.affects
             println(io, "  ", affect)
         end
+    end
+    if !isnothing(db.wrapped)
+        println(io, "wrapper for:")
+        println(io, db.wrapped)
     end
 end
 
@@ -274,7 +241,7 @@ SymbolicDiscreteCallbacks(cbs::Vector) = SymbolicDiscreteCallback.(cbs)
 SymbolicDiscreteCallbacks(cb::SymbolicDiscreteCallback) = [cb]
 SymbolicDiscreteCallbacks(cbs::Vector{<:SymbolicDiscreteCallback}) = cbs
 SymbolicDiscreteCallbacks(::Nothing) = SymbolicDiscreteCallback[]
-SymbolicDiscreteCallbacks(sic::SymbolicIterativeCallback)=[sic,]
+SymbolicDiscreteCallbacks(sbc::AbstractSpecialCallback)=[SymbolicDiscreteCallback(sbc),]
 
 function discrete_events(sys::AbstractSystem)
     obs = get_discrete_events(sys)
@@ -520,24 +487,10 @@ function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! =
         return generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr!,
                                        kwargs...)
     else
-        if cb.condition isa SymbolicIterativeCondition && cb.affect isa SymbolicIterativeAffect
-            aff_struct = affects(cb)
-            time_choice = compile_affect(
-                aff_struct.time_choice, sys, dvs, ps;
-                expression = Val{false}, postprocess_affect_expr!, kwargs... 
-            )
-            user_affect! = compile_affect(
-                aff_struct.user_affect!, sys, dvs, ps;
-                expression = Val{false}, postprocess_affect_expr!, kwargs... 
-            )
-            return DiffEqCallbacks.IterativeCallback(
-                time_choice, user_affect!; initial_affect = aff_struct.initial_affect)
-        else
-            c = compile_condition(cb, sys, dvs, ps; expression = Val{false}, kwargs...)
-            as = compile_affect(affects(cb), sys, dvs, ps; expression = Val{false},
-                                postprocess_affect_expr!, kwargs...)
-            return DiscreteCallback(c, as)
-        end
+        c = compile_condition(cb, sys, dvs, ps; expression = Val{false}, kwargs...)
+        as = compile_affect(affects(cb), sys, dvs, ps; expression = Val{false},
+                            postprocess_affect_expr!, kwargs...)
+        return DiscreteCallback(c, as)
     end
 end
 
@@ -575,4 +528,75 @@ function process_events(sys; callback = nothing, has_difference = false, kwargs.
     cb = merge_cb(contin_cb, difference_cb)
     cb = merge_cb(cb, callback)
     (discrete_cb === nothing) ? cb : CallbackSet(cb, discrete_cb...)
+end
+
+################################# special discrete callbacks ####################################
+"""
+    SymbolicIterativeCallback(time_choice_tuple, user_affect!_tuple, initial_affect=false)
+
+Define an iterative Callback based on the arguments `time_choice_tuple` and `user_affect!_tuple`.
+
+# Arguments
+- `time_choice_tuple` is a tuple of the form `(time_choice, vec_of_states, vec_of_params, ctx)`
+- `user_affect!_tuple` is a tuple of the form `(user_affect!, vec_of_states, vec_of_params, ctx)`
+- `initial_affact::Bool=false` indicates whether or not to apply the affect at `t0`.
+
+Both `time_choice` and `user_affect!` should have signatures `(integrator, sys_states, sys_params, ctx)`.
+Within the respective function body, the value of a system state `v` can then be accessed by
+`integrator.u[sys_states.v]`. It works the same for parameters. The time is `integrator.t`.
+Both functions are compiled to suit the requirements of their counterparts for 
+`DiffEqCallbacks.IterativeCallback`.
+
+See also [`DiffEqCallbacks.IterativeCallback`](@ref).
+"""
+struct SymbolicIterativeCallback <: AbstractSpecialCallback
+    time_choice :: Any 
+    user_affect! :: Any
+
+    initial_affect :: Bool
+
+    function SymbolicIterativeCallback(time_choice, user_affect!, initial_affect::Bool=false)
+        _time_choice = scalarize_affects(time_choice)
+        _user_affect! = scalarize_affects(user_affect!)
+        return new(_time_choice, _user_affect!, initial_affect)
+    end
+end
+
+function generate_discrete_callback(
+    cb::DiscreteCallback{T}, sys, dvs, ps; 
+    postprocess_affect_expr! = nothing, kwargs...
+) where T<:SymbolicIterativeCallback
+
+    aff_struct = affects(cb)
+    time_choice = compile_affect(
+        aff_struct.time_choice, sys, dvs, ps;
+        expression = Val{false}, postprocess_affect_expr!, kwargs... 
+    )
+    user_affect! = compile_affect(
+        aff_struct.user_affect!, sys, dvs, ps;
+        expression = Val{false}, postprocess_affect_expr!, kwargs... 
+    )
+    return DiffEqCallbacks.IterativeCallback(
+        time_choice, user_affect!; initial_affect = aff_struct.initial_affect)
+end
+
+struct SymbolicPeriodicCallback <: AbstractSpecialCallback
+    affect::Any
+    del_t::Real
+
+    function SymbolicPeriodicCallback(affect, del_t)
+        _affect = scalarize_affects(affect)
+        return new(_affect, del_t)
+    end
+end
+
+function generate_discrete_callback(
+    cb::DiscreteCallback{T}, sys, dvs, ps; 
+    postprocess_affect_expr! = nothing, kwargs...
+) where T<:SymbolicPeriodicCallback
+
+    cond = cb.del_t
+    as = compile_affect(wb.affect, sys, dvs, ps; expression = Val{false},
+                        postprocess_affect_expr!, kwargs...)
+    return PeriodicCallback(as, cond)
 end
