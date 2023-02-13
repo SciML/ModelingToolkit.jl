@@ -1,6 +1,5 @@
 using SafeTestsets, Test
 
-@safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "AliasGraph Test" begin include("alias.jl") end
 @safetestset "Linear Algebra Test" begin include("linalg.jl") end
 @safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
@@ -21,6 +20,7 @@ using SafeTestsets, Test
 @safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
 @safetestset "SDESystem Test" begin include("sdesystem.jl") end
 @safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
+@safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
 @safetestset "Constraints Test" begin include("constraints.jl") end
 @safetestset "Reduction Test" begin include("reduction.jl") end
