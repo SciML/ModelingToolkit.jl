@@ -146,6 +146,8 @@ function continuous_events(sys::AbstractSystem)
 end
 
 #################################### discrete events #####################################
+
+"Abstract super type to conveniently inject custom symbolic callbacks."
 abstract type AbstractSpecialCallback end
 
 struct SymbolicDiscreteCallback{T<:Union{Nothing, AbstractSpecialCallback}}
@@ -537,8 +539,8 @@ end
 Define an iterative Callback based on the arguments `time_choice_tuple` and `user_affect!_tuple`.
 
 # Arguments
-- `time_choice_tuple` is a tuple of the form `(time_choice, vec_of_states, vec_of_params, ctx)`
-- `user_affect!_tuple` is a tuple of the form `(user_affect!, vec_of_states, vec_of_params, ctx)`
+- `time_choice_tuple` is a (optionally named) tuple of the form `(time_choice, sts, pars, ctx)`
+- `user_affect!_tuple` is a tuple of the form `(user_affect!, sts, pars, ctx)`
 - `initial_affact::Bool=false` indicates whether or not to apply the affect at `t0`.
 
 Both `time_choice` and `user_affect!` should have signatures `(integrator, sys_states, sys_params, ctx)`.
@@ -581,10 +583,10 @@ function generate_discrete_callback(
 end
 
 struct SymbolicPeriodicCallback <: AbstractSpecialCallback
-    affect::Any
     del_t::Real
-
-    function SymbolicPeriodicCallback(affect, del_t)
+    affect::Any
+    
+    function SymbolicPeriodicCallback(del_t, affect)
         _affect = scalarize_affects(affect)
         return new(_affect, del_t)
     end
