@@ -61,6 +61,19 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     """
     systems::Vector
     """
+    analytic: A vector of explicit symbolic expressions for the analytic solutions of each
+    dependent variable. e.g. `analytic = [u(t, x) ~ a*sin(c*t) * cos(k*x)]`
+    """
+    analytic::Any
+    """
+    analytic_func: A vector of functions for the analytic solutions of each dependent
+    variable. Will be generated from `analytic` if not provided. Should have the same
+    argument signature as the variable, and a `ps` argument as the last argument,
+    which takes an indexable of parameter values in the order you specified them in `ps`.
+    e.g. `analytic_func = [u(t, x) => (ps, t, x) -> ps[1]*sin(ps[2]*t) * cos(ps[3]*x)]`
+    """
+    analytic_func::Any
+    """
     name: the name of the system
     """
     name::Symbol
@@ -78,15 +91,40 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                                    systems = [],
                                    connector_type = nothing,
                                    metadata = nothing,
+                                   analytic = nothing,
+                                   analytic_func = nothing,
                                    gui_metadata = nothing,
                                    checks::Union{Bool, Int} = true,
                                    name)
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
         end
+
         eqs = eqs isa Vector ? eqs : [eqs]
-        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, name,
-            metadata, gui_metadata)
+
+        if !isnothing(analytic)
+            analytic = analytic isa Vector ? analytic : [analytic]
+            if length(analytic) != length(dvs)
+                throw(ArgumentError("The number of analytic solutions must match the number of dependent variables"))
+            end
+
+            if isnothing(analytic_func)
+                analytic_func = map(analytic) do eq
+                    args = arguments(eq.lhs)
+                    p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
+                    args = vcat(DestructuredArgs(p), args)
+                    ex = Func(args, [], eq.rhs) |> toexpr
+                    eq.lhs => @RuntimeGeneratedFunction(ex)
+                end
+            end
+        end
+
+        if !isnothing(analytic_func)
+            analytic_func = analytic_func isa Dict ? analytic_func : analytic_func |> Dict
+        end
+
+        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
+            analytic_func, name, metadata, gui_metadata)
     end
 end
 

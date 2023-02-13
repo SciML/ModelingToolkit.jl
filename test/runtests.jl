@@ -20,6 +20,7 @@ using SafeTestsets, Test
 @safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
 @safetestset "SDESystem Test" begin include("sdesystem.jl") end
 @safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
+@safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
 @safetestset "Constraints Test" begin include("constraints.jl") end
 @safetestset "Reduction Test" begin include("reduction.jl") end
@@ -31,7 +32,6 @@ using SafeTestsets, Test
 @safetestset "State Selection Test" begin include("state_selection.jl") end
 @safetestset "Symbolic Event Test" begin include("symbolic_events.jl") end
 @safetestset "Stream Connnect Test" begin include("stream_connectors.jl") end
-@safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "Lowering Integration Test" begin include("lowering_solving.jl") end
 @safetestset "Test Big System Usage" begin include("bigsystem.jl") end
 @safetestset "Depdendency Graph Test" begin include("dep_graphs.jl") end
