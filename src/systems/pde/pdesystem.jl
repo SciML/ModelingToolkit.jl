@@ -70,7 +70,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     variable. Will be generated from `analytic` if not provided. Should have the same
     argument signature as the variable, and a `ps` argument as the last argument,
     which takes an indexable of parameter values in the order you specified them in `ps`.
-    e.g. `analytic_func = [u(t, x) => (t, x, ps) -> ps[1]*sin(ps[2]*t) * cos(ps[3]*x)]`
+    e.g. `analytic_func = [u(t, x) => (ps, t, x) -> ps[1]*sin(ps[2]*t) * cos(ps[3]*x)]`
     """
     analytic_func::Any
     """
@@ -112,7 +112,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                 analytic_func = map(analytic) do eq
                     args = arguments(eq.lhs)
                     p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
-                    args = vcat(args, DestructuredArgs(p))
+                    args = vcat(DestructuredArgs(p), args)
                     ex = Func(args, [], eq.rhs) |> toexpr
                     eq.lhs => @RuntimeGeneratedFunction(ex)
                 end |> Dict
