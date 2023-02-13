@@ -112,15 +112,11 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                 analytic_func = map(analytic) do eq
                     args = arguments(eq.lhs)
                     p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
-                    kwargs = :ps ← DestructuredArgs(p)
-                    ex = Func(args, kwargs, eq.rhs) |> toexpr
+                    args = vcat(args, DestructuredArgs(p))
+                    ex = Func(args, [], eq.rhs) |> toexpr
                     eq.lhs => @RuntimeGeneratedFunction(ex)
                 end |> Dict
             else
-                analytic_func = analytic_func isa Vector ? analytic_func : [analytic_func]
-                if length(analytic_func) != length(dvs)
-                    throw(ArgumentError("The number of analytic functions must match the number of dependent variables"))
-                end
                 analytic_func = Dict(analytic_func)
             end
         end
