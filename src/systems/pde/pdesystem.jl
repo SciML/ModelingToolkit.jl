@@ -115,10 +115,12 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                     args = vcat(DestructuredArgs(p), args)
                     ex = Func(args, [], eq.rhs) |> toexpr
                     eq.lhs => @RuntimeGeneratedFunction(ex)
-                end |> Dict
-            else
-                analytic_func = Dict(analytic_func)
+                end
             end
+        end
+
+        if !isnothing(analytic_func)
+            analytic_func = analytic_func isa Dict ? analytic_func : analytic_func |> Dict
         end
 
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
