@@ -148,9 +148,9 @@ end
 #################################### discrete events #####################################
 
 "Abstract super type to conveniently inject custom symbolic callbacks."
-abstract type SpecialDiscreteCallback end
+abstract type AbstractSpecialDiscreteCallback end
 
-struct SymbolicDiscreteCallback{T<:Union{Nothing, SpecialDiscreteCallback}}
+struct SymbolicDiscreteCallback{T<:Union{Nothing, AbstractSpecialDiscreteCallback}}
     # condition can be one of:
     #   Δt::Real - Periodic with period Δt
     #   Δts::Vector{Real} - events trigger in this times (Preset)
@@ -160,7 +160,7 @@ struct SymbolicDiscreteCallback{T<:Union{Nothing, SpecialDiscreteCallback}}
 
     # The field `wrapped` allows to inject callbacks of custom symbolic callback types 
     # into the vector provided for the `discrete_events` keyword argument of system constructors.
-    # By default, if some `sdcb:: SpecialDiscreteCallback` is encountered, then 
+    # By default, if some `sdcb:: AbstractSpecialDiscreteCallback` is encountered, then 
     # `condition` and `affects` are set to nothing by the outer constructor.
     # Therefore, `generate_discrete_callback` has to use `T` for dispatch and implement its 
     # own logic for compilation of `sdcb` into a `DiscreteCallback`.
@@ -194,7 +194,8 @@ scalarize_affects(affects::FunctionalAffect) = affects
 
 SymbolicDiscreteCallback(p::Pair) = SymbolicDiscreteCallback(p[1], p[2])
 SymbolicDiscreteCallback(cb::SymbolicDiscreteCallback) = cb # passthrough
-SymbolicDiscreteCallback(sdcb::SpecialDiscreteCallback) = SymbolicDiscreteCallback(nothing, nothing, sdcb)
+SymbolicDiscreteCallback(sdcb::AbstractSpecialDiscreteCallback) = SymbolicDiscreteCallback(
+                                                                    nothing, nothing, sdcb)
 
 function Base.show(io::IO, db::SymbolicDiscreteCallback)
     println(io, "condition: ", db.condition)
@@ -244,7 +245,7 @@ SymbolicDiscreteCallbacks(cbs::Vector) = SymbolicDiscreteCallback.(cbs)
 SymbolicDiscreteCallbacks(cb::SymbolicDiscreteCallback) = [cb]
 SymbolicDiscreteCallbacks(cbs::Vector{<:SymbolicDiscreteCallback}) = cbs
 SymbolicDiscreteCallbacks(::Nothing) = SymbolicDiscreteCallback[]
-SymbolicDiscreteCallbacks(sbc::SpecialDiscreteCallback)=[SymbolicDiscreteCallback(sbc),]
+SymbolicDiscreteCallbacks(sbc::AbstractSpecialDiscreteCallback)=[SymbolicDiscreteCallback(sbc),]
 
 function discrete_events(sys::AbstractSystem)
     obs = get_discrete_events(sys)
@@ -537,14 +538,17 @@ end
 """
     SymbolicIterativeCallback(time_choice_tuple, user_affect!_tuple, initial_affect=false)
 
-Define an iterative Callback based on the arguments `time_choice_tuple` and `user_affect!_tuple`.
+Define an iterative Callback based on the arguments `time_choice_tuple` and 
+`user_affect!_tuple`.
 
 # Arguments
-- `time_choice_tuple` is a (optionally named) tuple of the form `(time_choice, sts, pars, ctx)`
-- `user_affect!_tuple` is a tuple of the form `(user_affect!, sts, pars, ctx)`
+- `time_choice_tuple` is a (optionally named) tuple of the form   
+   `(time_choice, sts, pars, ctx)`.
+- `user_affect!_tuple` is a tuple of the form `(user_affect!, sts, pars, ctx)`.
 - `initial_affect::Bool=false` indicates whether or not to apply the affect at `t0`.
 
-Both `time_choice` and `user_affect!` should have signatures `(integrator, sys_states, sys_params, ctx)`.
+Both `time_choice` and `user_affect!` should have signatures 
+`(integrator, sys_states, sys_params, ctx)`.
 Within the respective function body, the value of a system state `v` can then be accessed by
 `integrator.u[sys_states.v]`. It works the same for parameters. The time is `integrator.t`.
 Both functions are compiled to suit the requirements of their counterparts for 
@@ -613,7 +617,7 @@ Interpolation: specialized 4th order "free" interpolation
 
 See also [`DiffEqCallbacks.IterativeCallback`](@ref).
 """
-struct SymbolicIterativeCallback <: SpecialDiscreteCallback
+struct SymbolicIterativeCallback <: AbstractSpecialDiscreteCallback
     time_choice :: Any 
     user_affect! :: Any
 
@@ -626,21 +630,16 @@ struct SymbolicIterativeCallback <: SpecialDiscreteCallback
     end
 end
 
-function generate_discrete_callback(
-    cb::SymbolicDiscreteCallback{T}, sys, dvs, ps; 
-    postprocess_affect_expr! = nothing, kwargs...
-) where T<:SymbolicIterativeCallback
+function generate_discrete_callback(cb::SymbolicDiscreteCallback{T}, sys, dvs, ps; 
+                                    postprocess_affect_expr! = nothing, kwargs...
+                                    ) where T<:SymbolicIterativeCallback
 
-    time_choice = compile_affect(
-        cb.wrapped.time_choice, sys, dvs, ps;
-        expression = Val{false}, postprocess_affect_expr!, kwargs... 
-    )
-    user_affect! = compile_affect(
-        cb.wrapped.user_affect!, sys, dvs, ps;
-        expression = Val{false}, postprocess_affect_expr!, kwargs... 
-    )
-    return DiffEqCallbacks.IterativeCallback(
-        time_choice, user_affect!; initial_affect = cb.wrapped.initial_affect)
+    time_choice = compile_affect(cb.wrapped.time_choice, sys, dvs, ps; expression=Val{false}, 
+                                postprocess_affect_expr!, kwargs...)
+    user_affect! = compile_affect(cb.wrapped.user_affect!, sys, dvs, ps; 
+                                expression=Val{false}, postprocess_affect_expr!, kwargs...)
+    return DiffEqCallbacks.IterativeCallback(time_choice, user_affect!; 
+                                            initial_affect=cb.wrapped.initial_affect)
 end
 
 """
@@ -710,7 +709,7 @@ Interpolation: specialized 4th order "free" interpolation
 
 See also [`DiffEqCallbacks.PeriodicCallback`](@ref).
 """
-struct SymbolicPeriodicCallback <: SpecialDiscreteCallback
+struct SymbolicPeriodicCallback <: AbstractSpecialDiscreteCallback
     del_t::Real
     affect::Any
     
@@ -722,18 +721,15 @@ struct SymbolicPeriodicCallback <: SpecialDiscreteCallback
     end
 end
 
-function generate_discrete_callback(
-    cb::SymbolicDiscreteCallback{T}, sys, dvs, ps; 
-    postprocess_affect_expr! = nothing, kwargs...
-) where T<:SymbolicPeriodicCallback
+function generate_discrete_callback(cb::SymbolicDiscreteCallback{T}, sys, dvs, ps; 
+                                    postprocess_affect_expr! = nothing, kwargs...
+                                    ) where T<:SymbolicPeriodicCallback
 
     spc = cb.wrapped
-    cond = spc.del_t
-    aff = compile_affect(spc.affect, sys, dvs, ps; expression = Val{false},
-                        postprocess_affect_expr!, kwargs...)
-    return PeriodicCallback(
-        aff, cond; initial_affect=spc.initial_affect, final_affect=spc.final_affect
-    )
+    aff = compile_affect(spc.affect, sys, dvs, ps; 
+                        expression=Val{false}, postprocess_affect_expr!, kwargs...)
+    return PeriodicCallback(aff, spc.del_t; 
+                            initial_affect=spc.initial_affect, final_affect=spc.final_affect)
 end
 
 """
@@ -798,7 +794,7 @@ Interpolation: specialized 4th order "free" interpolation
 
 See also [`DiffEqCallbacks.PresetTimeCallback`](@ref).
 """
-struct SymbolicPresetTimeCallback <: SpecialDiscreteCallback
+struct SymbolicPresetTimeCallback <: AbstractSpecialDiscreteCallback
     tstops::Any # allow for iterators too (?)
     user_affect!::Any
     filter_tstops::Bool
@@ -809,15 +805,13 @@ struct SymbolicPresetTimeCallback <: SpecialDiscreteCallback
     end
 end
 
-function generate_discrete_callback(
-    cb::SymbolicDiscreteCallback{T}, sys, dvs, ps; 
-    postprocess_affect_expr! = nothing, kwargs...
-) where T<:SymbolicPresetTimeCallback
+function generate_discrete_callback(cb::SymbolicDiscreteCallback{T}, sys, dvs, ps; 
+                                    postprocess_affect_expr! = nothing, kwargs...
+                                    ) where T<:SymbolicPresetTimeCallback
 
     sptc = cb.wrapped
-    aff = compile_affect(sptc.user_affect!, sys, dvs, ps; expression = Val{false},
-                        postprocess_affect_expr!, kwargs...)
-    return DiffEqCallbacks.PresetTimeCallback(
-        sptc.tstops, aff; filter_tstops=sptc.filter_tstops
-    )
+    aff = compile_affect(sptc.user_affect!, sys, dvs, ps; 
+                        expression=Val{false}, postprocess_affect_expr!, kwargs...)
+    return DiffEqCallbacks.PresetTimeCallback(sptc.tstops, aff; 
+                                                filter_tstops=sptc.filter_tstops)
 end
