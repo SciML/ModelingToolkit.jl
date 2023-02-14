@@ -151,9 +151,13 @@ of one or more equations, an affect is defined as a `tuple`:
 [x ~ 0] => (affect!, [v, x], [p, q], ctx)
 ```
 
-where, `affect!` is a Julia function with the signature: `affect!(integ, u, p, ctx)`; `[u,v]` and `[p,q]` are the symbolic states (variables) and parameters
-that are accessed by `affect!`, respectively; and `ctx` is any context that is
-passed to `affect!` as the `ctx` argument.
+where `affect!` is a Julia function with the signature: `affect!(integ, sts, pars, ctx)`; `stats` and `pars` are the symbolic states (variables) and parameters
+that are accessed by `affect!`, respectively — in this case,
+we make the states `[v, x]` and the parameters `[p, q]` available.
+Additionally, `ctx` is any context that is passed to `affect!` as the `ctx` argument. 
+As you can see below, in simple cases, we might wish to ignore
+contexts and simply use `nothing` in the tuple.
+Otherwise, it is useful to avoid global variables in the definition of the affect.
 
 `affect!` receives a [DifferentialEquations.jl
 integrator](https://docs.sciml.ai/DiffEqDocs/stable/basics/integrator/)
@@ -340,4 +344,31 @@ one must still use a vector
 
 ```julia
 discrete_events = [[2.0] => [v ~ -v]]
+```
+
+### Discrete generalized functional affects
+
+As with [continuous events](@ref func_affects), we can also define more complicated
+events with generalized functional affects by providing tuples
+like
+
+```julia
+condition => (affect!, [v, x], [p, q], ctx)
+```
+
+* If `condition` is a `Real`, then the affect is applied periodically.
+* If `condition` is a `Vector{<:Real}`, then the affect is applied at preset times.
+* If `condition` is some symbolic expression, then the affect is applied,  
+  if it evaluates to `true`. Care has to be taken by providing `tstops` to `solve`.
+
+There are also two special discrete Callback structures exploiting this more general
+mechanism behind the scenes. `ModelingToolkit.SymbolicPeriodicCallback` provides just an 
+alternative syntax for periodic events, while `ModelingToolkit.SymbolicIterativeCallback` 
+is similar to `DiffEqCallbacks.IterativeCallback`:
+A `time_choice` function can be provided to iteratively determine time steps for events 
+without having to deal with `tstops`.
+
+```@docs
+ModelingToolkit.SymbolicPeriodicCallback
+ModelingToolkit.SymbolicIterativeCallback
 ```
