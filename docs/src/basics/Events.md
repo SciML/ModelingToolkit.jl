@@ -371,5 +371,6 @@ without having to deal with `tstops`.
 
 ```@docs
 ModelingToolkit.SymbolicPeriodicCallback
+ModelingToolkit.SymbolicPresetTimeCallback
 ModelingToolkit.SymbolicIterativeCallback
 ```
