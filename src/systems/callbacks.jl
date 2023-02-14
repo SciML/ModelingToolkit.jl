@@ -556,7 +556,7 @@ Both functions are compiled to suit the requirements of their counterparts for
 
 # Example
 Below, we model the growth of some population with size ``N(t)``.
-If we start with ``N(0) = 0``, then the population will to approximate
+If we start with ``N(0) = 0``, then the population will approximate
 ``α`` in the limit, i.e., ``N(t) ↗ α`` for ``t → ∞``.
 With some calculus, we find that ``N(t) ≈ 50`` at ``t = \\ln(2)``.
 At this point in time, we decide to inject ``M = 60`` individuals
@@ -663,7 +663,7 @@ The affect is applied at times `tspan[1]`, `tspan[1] + Δt`, `tspan[1] + 2*Δt`,
 
 # Example
 Below, we model the growth of some population with size ``N(t)``.
-If we start with ``N(0) = 0``, then the population will to approximate
+If we start with ``N(0) = 0``, then the population will approximate
 ``α`` in the limit, i.e., ``N(t) ↗ α`` for ``t → ∞``.
 But we now imagine some periodic event afflicting our population.
 If at that point in time, the population is too big, it is reduced by 
@@ -750,7 +750,7 @@ Define a Callback with preset times based on the arguments `tstops::Vector{Real}
 
 # Example
 Below, we model the growth of some population with size ``N(t)``.
-If we start with ``N(0) = 0``, then the population will to approximate
+If we start with ``N(0) = 0``, then the population will approximate
 ``α`` in the limit, i.e., ``N(t) ↗ α`` for ``t → ∞``.
 At preset times we want to check if ``N(t) > 70`.
 If that is the case, we substract ``m=20``:
