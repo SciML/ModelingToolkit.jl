@@ -324,7 +324,7 @@ bb_sol = solve(bb_prob, Tsit5())
     # At ``t₂ = t₁ + ln(2) = 2 ln(2)`` the population will roughly be
     # N(t) = 0.5 (N1+M-α) * exp(t1) * exp(-t) + α
     t2 = 2 * t1
-    N2 = (N1+50-100) * exp(t1) * exp(-t2) + 100
+    N2 = (N1 + 50 - 100) * exp(t1) * exp(-t2) + 100
 
     time_choice_history = Float64[]
     solution_history = Float64[]
@@ -336,7 +336,7 @@ bb_sol = solve(bb_prob, Tsit5())
         tnext = if N <= 50
             t1
         elseif t < t2
-            t2 
+            t2
         elseif t <= 15
             t + 1
         else
@@ -364,7 +364,7 @@ bb_sol = solve(bb_prob, Tsit5())
             @test abs(N - N2) <= 1e-3
             integ.u[sts.N] += m
         else
-            if N > α - m 
+            if N > α - m
                 integ.u[sts.N] += m
             else
                 integ.u[sts.N] += M
@@ -372,14 +372,12 @@ bb_sol = solve(bb_prob, Tsit5())
         end
     end
 
-    cb = ModelingToolkit.SymbolicIterativeCallback(
-        (time_choice, [N], [], nothing),
-        (user_affect!, [N], [α, m, M], nothing),
-    )
+    cb = ModelingToolkit.SymbolicIterativeCallback((time_choice, [N], [], nothing),
+                                                   (user_affect!, [N], [α, m, M], nothing))
 
     @test cb.initial_affect == false
-   
-    @named osys = ODESystem(eqs, t, [N], [α, m, M]; discrete_events=[cb])
+
+    @named osys = ODESystem(eqs, t, [N], [α, m, M]; discrete_events = [cb])
 
     @test ModelingToolkit.has_discrete_events(osys)
     @test length(ModelingToolkit.get_discrete_events(osys)) == 1
@@ -388,7 +386,8 @@ bb_sol = solve(bb_prob, Tsit5())
     oprob = ODEProblem(osys, u0, tspan)
     sol = solve(oprob, Tsit5())
 
-    @test all( abs( first(sol(t))-_N ) <= 1e-3 for (t,_N)=zip(time_choice_history, solution_history) )
+    @test all(abs(first(sol(t)) - _N) <= 1e-3
+              for (t, _N) in zip(time_choice_history, solution_history))
 
     # Now: `initial_affect = true`
     function time_choice2(integ, sts, pars, ctx)
@@ -396,18 +395,16 @@ bb_sol = solve(bb_prob, Tsit5())
     end
 
     function user_affect!2(integ, sts, pars, ctx)
-        integ.u[ sts.N ] += integ.p[ pars.M ]
+        integ.u[sts.N] += integ.p[pars.M]
     end
 
-    cb2 = ModelingToolkit.SymbolicIterativeCallback(
-        (time_choice2, [], [], nothing),
-        (user_affect!2, [N], [M], nothing),
-        true
-    )
+    cb2 = ModelingToolkit.SymbolicIterativeCallback((time_choice2, [], [], nothing),
+                                                    (user_affect!2, [N], [M], nothing),
+                                                    true)
     @test cb2.initial_affect == true
-   
-    @named osys2 = ODESystem(eqs, t, [N], [α, m, M]; discrete_events=[cb2])
-    
+
+    @named osys2 = ODESystem(eqs, t, [N], [α, m, M]; discrete_events = [cb2])
+
     @test ModelingToolkit.has_discrete_events(osys2)
     @test length(ModelingToolkit.get_discrete_events(osys2)) == 1
     @test only(ModelingToolkit.get_discrete_events(osys2)).wrapped == cb2
@@ -424,7 +421,7 @@ end
     Dt = Differential(t)
     eqs = [Dt(N) ~ α - N]
 
-    del_t = log(2)/2
+    del_t = log(2) / 2
 
     u0 = [N => 0.0]
     tspan = (0.0, 20.0)
@@ -433,23 +430,21 @@ end
 
     function user_affect!(integ, sts, pars, ctx)
         push!(T, integ.t)
-        N = integ.u[ sts.N ]
+        N = integ.u[sts.N]
         if N > 70
-            integ.u[ sts.N ] -= integ.p[ pars.m ]
+            integ.u[sts.N] -= integ.p[pars.m]
         end
     end
 
     # define discrete symbolic callback
-    cb = ModelingToolkit.SymbolicPeriodicCallback(
-        del_t, (user_affect!, [N], [m], nothing)
-    )
+    cb = ModelingToolkit.SymbolicPeriodicCallback(del_t, (user_affect!, [N], [m], nothing))
 
     @test cb.initial_affect == false
     @test cb.final_affect == false
 
     # setup system, problem, and solve:
-    @named osys = ODESystem(eqs, t, [N], [α, m]; discrete_events=[cb])
-    
+    @named osys = ODESystem(eqs, t, [N], [α, m]; discrete_events = [cb])
+
     @test ModelingToolkit.has_discrete_events(osys)
     @test length(ModelingToolkit.get_discrete_events(osys)) == 1
     @test only(ModelingToolkit.get_discrete_events(osys)).wrapped == cb
@@ -480,26 +475,25 @@ end
 
     function user_affect!(integ, sts, pars, ctx)
         push!(T, integ.t)
-        N = integ.u[ sts.N ]
+        N = integ.u[sts.N]
         if N > 70
-            integ.u[ sts.N ] -= integ.p[ pars.m ]
+            integ.u[sts.N] -= integ.p[pars.m]
         end
     end
 
     # define discrete symbolic callback
-    cb = ModelingToolkit.SymbolicPresetTimeCallback(
-        tstops, (user_affect!, [N], [m], nothing)
-    )
+    cb = ModelingToolkit.SymbolicPresetTimeCallback(tstops,
+                                                    (user_affect!, [N], [m], nothing))
 
-    @test cb.filter_tstops == true 
+    @test cb.filter_tstops == true
 
     # setup system, problem, and solve:
-    @named osys = ODESystem(eqs, t, [N], [α, m]; discrete_events=[cb])
+    @named osys = ODESystem(eqs, t, [N], [α, m]; discrete_events = [cb])
 
     @test ModelingToolkit.has_discrete_events(osys)
     @test length(ModelingToolkit.get_discrete_events(osys)) == 1
     @test only(ModelingToolkit.get_discrete_events(osys)).wrapped == cb
-    
+
     oprob = ODEProblem(osys, u0, tspan)
     sol = solve(oprob, Tsit5())
 

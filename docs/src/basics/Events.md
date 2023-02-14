@@ -154,7 +154,7 @@ of one or more equations, an affect is defined as a `tuple`:
 where `affect!` is a Julia function with the signature: `affect!(integ, sts, pars, ctx)`; `stats` and `pars` are the symbolic states (variables) and parameters
 that are accessed by `affect!`, respectively — in this case,
 we make the states `[v, x]` and the parameters `[p, q]` available.
-Additionally, `ctx` is any context that is passed to `affect!` as the `ctx` argument. 
+Additionally, `ctx` is any context that is passed to `affect!` as the `ctx` argument.
 As you can see below, in simple cases, we might wish to ignore
 contexts and simply use `nothing` in the tuple.
 Otherwise, it is useful to avoid global variables in the definition of the affect.
@@ -356,17 +356,17 @@ like
 condition => (affect!, [v, x], [p, q], ctx)
 ```
 
-* If `condition` is a `Real`, then the affect is applied periodically.
-* If `condition` is a `Vector{<:Real}`, then the affect is applied at preset times.
-* If `condition` is some symbolic expression, then the affect is applied,  
-  if it evaluates to `true`. Care has to be taken by providing `tstops` to `solve`.
+  - If `condition` is a `Real`, then the affect is applied periodically.
+  - If `condition` is a `Vector{<:Real}`, then the affect is applied at preset times.
+  - If `condition` is some symbolic expression, then the affect is applied,
+    if it evaluates to `true`. Care has to be taken by providing `tstops` to `solve`.
 
 There are also three special discrete Callback structures exploiting this more general
-mechanism behind the scenes. `ModelingToolkit.SymbolicPeriodicCallback` and 
-`ModelingToolkit.SymbolicPresetTimeCallback` just provide an alternative syntax for periodic 
-and timed events respectively, while `ModelingToolkit.SymbolicIterativeCallback` 
+mechanism behind the scenes. `ModelingToolkit.SymbolicPeriodicCallback` and
+`ModelingToolkit.SymbolicPresetTimeCallback` just provide an alternative syntax for periodic
+and timed events respectively, while `ModelingToolkit.SymbolicIterativeCallback`
 is similar to `DiffEqCallbacks.IterativeCallback`:
-A `time_choice` function can be provided to iteratively determine time steps for events 
+A `time_choice` function can be provided to iteratively determine time steps for events
 without having to deal with `tstops`.
 
 ```@docs
