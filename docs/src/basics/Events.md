@@ -361,9 +361,10 @@ condition => (affect!, [v, x], [p, q], ctx)
 * If `condition` is some symbolic expression, then the affect is applied,  
   if it evaluates to `true`. Care has to be taken by providing `tstops` to `solve`.
 
-There are also two special discrete Callback structures exploiting this more general
-mechanism behind the scenes. `ModelingToolkit.SymbolicPeriodicCallback` provides just an 
-alternative syntax for periodic events, while `ModelingToolkit.SymbolicIterativeCallback` 
+There are also three special discrete Callback structures exploiting this more general
+mechanism behind the scenes. `ModelingToolkit.SymbolicPeriodicCallback` and 
+`ModelingToolkit.SymbolicPresetTimeCallback` just provide an alternative syntax for periodic 
+and timed events respectively, while `ModelingToolkit.SymbolicIterativeCallback` 
 is similar to `DiffEqCallbacks.IterativeCallback`:
 A `time_choice` function can be provided to iteratively determine time steps for events 
 without having to deal with `tstops`.
