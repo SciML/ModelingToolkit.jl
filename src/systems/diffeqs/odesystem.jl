@@ -372,7 +372,9 @@ function build_explicit_observed_function(sys, ts;
         push!(obsexprs, lhs ← rhs)
     end
 
-    dvs = DestructuredArgs(states(sys), inbounds = !checkbounds)
+    statedeps = mapreduce(x -> get_state_dependencies(sys, x.lhs), vcat, obs) |> unique
+
+    dvs = DestructuredArgs(statedeps, inbounds = !checkbounds)
     ps = DestructuredArgs(parameters(sys), inbounds = !checkbounds)
     args = [dvs, ps, ivs...]
     pre = get_postprocess_fbody(sys)

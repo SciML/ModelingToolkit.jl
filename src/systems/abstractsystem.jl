@@ -522,7 +522,7 @@ function SymbolicIndexingInterface.observed(sys::AbstractSystem)
     systems = get_systems(sys)
     [obs;
      reduce(vcat,
-            (map(o -> namespace_equation(o, s), observed(s)) for s in systems),
+            (map(o -> namespace_equation(o, s), SII.observed(s)) for s in systems),
             init = Equation[])]
 end
 
@@ -600,7 +600,7 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
     # but is `x(t-1)` or something like that, pass in `x` as a callable function rather
     # than pass in a value in place of x(t).
     #
-    # This is done by just making `x` the argument of the function.
+    # This is*-+ done by just making `x` the argument of the function.
     if istree(x) &&
        operation(x) isa Sym &&
        !(length(arguments(x)) == 1 && isequal(arguments(x)[1], get_iv(sys)))
@@ -667,6 +667,30 @@ function SymbolicIndexingInterface.get_state_dependencies(sys::AbstractSystem, s
     end |> unique
 
     return filter(x -> any(isequal(x), sts), out)
+end
+
+function SymbolicIndexingInterface.get_observed_dependencies(sys::AbstractSystem, sym)
+    obs = observed(sys)
+    lhss = map(obs) do eq
+        eq.lhs
+    end
+
+    i = observed_sym_to_index(sys, sym)
+    if isnothing(i)
+        return []
+    end
+
+    eq = obs[i]
+    varss = vars(eq)
+    out = mapreduce(vcat, varss, init = []) do u
+        if any(isequal(u), lhss)
+            [u]
+        else
+            []
+        end
+    end |> unique
+
+    return out
 end
 
 struct AbstractSysToExpr
