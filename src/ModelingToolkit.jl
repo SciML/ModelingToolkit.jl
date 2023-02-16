@@ -42,8 +42,9 @@ import SymbolicIndexingInterface: independent_variables, states, parameters, obs
 export independent_variables, states, parameters, observed
 import SymbolicUtils
 import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
-                      Symbolic, Term, Add, Mul, Pow, Sym, FnType,
-                      @rule, Rewriters, substitute, metadata
+                      Symbolic, isadd, ismul, ispow, issym, FnType,
+                      @rule, Rewriters, substitute, metadata, BasicSymbolic,
+                      Sym, Term
 using SymbolicUtils.Code
 import SymbolicUtils.Code: toexpr
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint

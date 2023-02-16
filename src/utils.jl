@@ -26,11 +26,8 @@ function detime_dvs(op)
     end
 end
 
-function retime_dvs(op::Sym, dvs, iv)
-    Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
-end
-
 function retime_dvs(op, dvs, iv)
+    issym(op) && return Sym{FnType{Tuple{symtype(iv)}, Real}}(nameof(op))(iv)
     istree(op) ?
     similarterm(op, operation(op), retime_dvs.(arguments(op), (dvs,), (iv,))) :
     op
@@ -345,22 +342,22 @@ isdiffeq(eq) = isdifferential(eq.lhs)
 isdifference(expr) = isoperator(expr, Difference)
 isdifferenceeq(eq) = isdifference(eq.lhs)
 
-function iv_from_nested_difference(x::Term)
+function iv_from_nested_difference(x::Symbolic)
+    istree(x) || return x
     operation(x) isa Difference ? iv_from_nested_difference(arguments(x)[1]) :
     arguments(x)[1]
 end
-iv_from_nested_difference(x::Sym) = x
 iv_from_nested_difference(x) = nothing
 
 var_from_nested_difference(x, i = 0) = (nothing, nothing)
-function var_from_nested_difference(x::Term, i = 0)
-    operation(x) isa Difference ? var_from_nested_difference(arguments(x)[1], i + 1) :
+function var_from_nested_difference(x::Symbolic, i = 0)
+    istree(x) && operation(x) isa Difference ?
+    var_from_nested_difference(arguments(x)[1], i + 1) :
     (x, i)
 end
-var_from_nested_difference(x::Sym, i = 0) = (x, i)
 
-isvariable(x::Num) = isvariable(value(x))
-function isvariable(x)
+isvariable(x::Num)::Bool = isvariable(value(x))
+function isvariable(x)::Bool
     x isa Symbolic || return false
     p = getparent(x, nothing)
     p === nothing || (x = p)
@@ -384,8 +381,9 @@ v  = ModelingToolkit.vars(D(y) ~ u)
 v == Set([D(y), u])
 ```
 """
-vars(x::Sym; op = Differential) = Set([x])
-vars(exprs::Symbolic; op = Differential) = vars([exprs]; op = op)
+function vars(exprs::Symbolic; op = Differential)
+    istree(exprs) ? vars([exprs]; op = op) : Set([exprs])
+end
 vars(exprs; op = Differential) = foldl((x, y) -> vars!(x, y; op = op), exprs; init = Set())
 vars(eq::Equation; op = Differential) = vars!(Set(), eq; op = op)
 function vars!(vars, eq::Equation; op = Differential)
@@ -461,7 +459,7 @@ The difference compared to `collect_operator_variables` is that `collect_operato
 function collect_applied_operators(x, op)
     v = vars(x, op = op)
     filter(v) do x
-        x isa Sym && return false
+        issym(x) && return false
         istree(x) && return operation(x) isa op
         false
     end
@@ -480,7 +478,7 @@ function find_derivatives!(vars, expr, f)
 end
 
 function collect_vars!(states, parameters, expr, iv)
-    if expr isa Sym
+    if issym(expr)
         collect_var!(states, parameters, expr, iv)
     else
         for var in vars(expr)
@@ -494,7 +492,7 @@ function collect_vars!(states, parameters, expr, iv)
 end
 
 function collect_vars_difference!(states, parameters, expr, iv)
-    if expr isa Sym
+    if issym(expr)
         collect_var!(states, parameters, expr, iv)
     else
         for var in vars(expr)
@@ -521,7 +519,7 @@ end
 Find all the symbolic constants of some equations or terms and return them as a vector.
 """
 function collect_constants(x)
-    constants = Symbolics.Sym[]
+    constants = BasicSymbolic[]
     collect_constants!(constants, x)
     return constants
 end
@@ -544,9 +542,9 @@ end
 
 collect_constants!(constants, x::Num) = collect_constants!(constants, unwrap(x))
 collect_constants!(constants, x::Real) = nothing
-collect_constants(n::Nothing) = Symbolics.Sym[]
+collect_constants(n::Nothing) = BasicSymbolic[]
 
-function collect_constants!(constants, expr::Symbolics.Symbolic)
+function collect_constants!(constants, expr::Symbolic)
     if issym(expr) && isconstant(expr)
         push!(constants, expr)
     else

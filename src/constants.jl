@@ -11,11 +11,11 @@ function isconstant(x)
 end
 
 """
-    toconstant(s::Sym)
+    toconstant(s)
 
 Maps the parameter to a constant. The parameter must have a default.
 """
-function toconstant(s::Sym)
+function toconstant(s)
     hasmetadata(s, Symbolics.VariableDefaultValue) ||
         throw(ArgumentError("Constant `$(s)` must be assigned a default value."))
     setmetadata(s, MTKConstantCtx, true)
