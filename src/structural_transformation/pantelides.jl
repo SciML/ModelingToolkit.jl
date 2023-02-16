@@ -125,7 +125,7 @@ function computed_highest_diff_variables(structure, ag::Union{AliasGraph, Nothin
                 while isempty(𝑑neighbors(graph, var))
                     var′ = invview(var_to_diff)[var]
                     var′ === nothing && break
-                    stem′ = invview(var_to_diff)[var]
+                    stem′ = invview(var_to_diff)[stem]
                     # Invariant from alias elimination: Stem is chosen to have
                     # the highest differentiation order.
                     @assert stem′ !== nothing
