@@ -625,21 +625,21 @@ function unknown_states(sys::AbstractSystem)
 end
 
 function SymbolicIndexingInterface.state_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(sym), unknown_states(sys))
+    findfirst(isequal(sym), unknown_states(sys)) |> safe_unwrap
 end
 function SymbolicIndexingInterface.is_state_sym(sys::AbstractSystem, sym)
     !isnothing(SymbolicIndexingInterface.state_sym_to_index(sys, sym))
 end
 
 function SymbolicIndexingInterface.param_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(sym), SymbolicIndexingInterface.parameters(sys))
+    findfirst(isequal(sym), SymbolicIndexingInterface.parameters(sys)) |> safe_unwrap
 end
 function SymbolicIndexingInterface.is_param_sym(sys::AbstractSystem, sym)
     !isnothing(SymbolicIndexingInterface.param_sym_to_index(sys, sym))
 end
 
 function SymbolicIndexingInterface.observed_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(sym), SymbolicIndexingInterface.observed(sys))
+    findfirst(isequal(sym), SymbolicIndexingInterface.observed(sys)) |> safe_unwrap
 end
 function SymbolicIndexingInterface.is_observed_sym(sys::AbstractSystem, sym)
     !isnothing(SymbolicIndexingInterface.obvserved_sym_to_index(sys, sym))

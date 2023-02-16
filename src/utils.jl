@@ -879,3 +879,5 @@ function fast_substitute(expr, pair::Pair)
 end
 
 normalize_to_differential(s) = s
+
+safe_unwrap(x) = x isa Num ? unwrap(x) : x

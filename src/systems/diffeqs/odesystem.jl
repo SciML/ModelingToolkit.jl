@@ -372,7 +372,7 @@ function build_explicit_observed_function(sys, ts;
         push!(obsexprs, lhs ← rhs)
     end
 
-    statedeps = mapreduce(x -> get_state_dependencies(sys, x.lhs), vcat, obs) |> unique
+    statedeps = get_deps_of_observed(sys)
 
     dvs = DestructuredArgs(statedeps, inbounds = !checkbounds)
     ps = DestructuredArgs(parameters(sys), inbounds = !checkbounds)
