@@ -29,7 +29,7 @@ end
 """
     toparam(s)
 
-Maps the variable to a paramter.
+Maps the variable to a parameter.
 """
 function toparam(s)
     if s isa Symbolics.Arr
