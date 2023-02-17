@@ -202,7 +202,7 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
             p1 = Base.Checked.checked_mul(pivot, ci)
             p2 = Base.Checked.checked_mul(coeff, ck)
             ci = exactdiv(p1 - p2, last_pivot)
-            if ci != 0
+            if !iszero(ci)
                 push!(tmp_incidence, v)
                 push!(tmp_coeffs, ci)
             end
