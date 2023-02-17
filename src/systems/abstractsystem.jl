@@ -654,17 +654,19 @@ function SymbolicIndexingInterface.is_param_sym(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.observed_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(sym), SymbolicIndexingInterface.observed(sys)) |> safe_unwrap
+    findfirst(isequal(safe_unwrap(sym)), getfield.(observed(sys), (:lhs,))) |>
+    safe_unwrap
+end
+function SymbolicIndexingInterface.observed_sym_to_index(sys::AbstractSystem, sym::Equation)
+    findfirst(isequal(sym), observed(sys)) |>
+    safe_unwrap
 end
 function SymbolicIndexingInterface.is_observed_sym(sys::AbstractSystem, sym)
-    !isnothing(SymbolicIndexingInterface.obvserved_sym_to_index(sys, sym))
+    !isnothing(SymbolicIndexingInterface.observed_sym_to_index(sys, sym))
 end
 
 function SymbolicIndexingInterface.get_state_dependencies(sys::AbstractSystem, sym)
     obs = observed(sys)
-    lhss = map(obs) do eq
-        eq.lhs
-    end
     sts = states(sys)
     i = observed_sym_to_index(sys, sym)
     if isnothing(i)
@@ -672,9 +674,9 @@ function SymbolicIndexingInterface.get_state_dependencies(sys::AbstractSystem, s
     end
 
     eq = obs[i]
-    varss = vars(eq)
+    varss = vars(eq.rhs)
     out = mapreduce(vcat, varss, init = []) do u
-        if any(isequal(u), lhss)
+        if is_observed_sym(sys, u)
             get_state_dependencies(sys, u)
         else
             [u]
@@ -686,9 +688,6 @@ end
 
 function SymbolicIndexingInterface.get_observed_dependencies(sys::AbstractSystem, sym)
     obs = observed(sys)
-    lhss = map(obs) do eq
-        eq.lhs
-    end
 
     i = observed_sym_to_index(sys, sym)
     if isnothing(i)
@@ -696,9 +695,9 @@ function SymbolicIndexingInterface.get_observed_dependencies(sys::AbstractSystem
     end
 
     eq = obs[i]
-    varss = vars(eq)
+    varss = vars(eq.rhs)
     out = mapreduce(vcat, varss, init = []) do u
-        if any(isequal(u), lhss)
+        if is_observed_sym(sys, u)
             [u]
         else
             []

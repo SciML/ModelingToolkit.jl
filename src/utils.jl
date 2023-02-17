@@ -878,4 +878,4 @@ end
 
 normalize_to_differential(s) = s
 
-safe_unwrap(x) = x isa Num ? unwrap(x) : x
+safe_unwrap(x) = x isa Num ? x.val : x

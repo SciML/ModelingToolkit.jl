@@ -38,7 +38,7 @@ import SymbolicIndexingInterface
 
 import SymbolicIndexingInterface: independent_variables, states, parameters, observed,
                                   observed_sym_to_index, get_state_dependencies,
-                                  get_deps_of_observed
+                                  get_deps_of_observed, is_observed_sym
 export independent_variables, states, parameters, observed
 import SymbolicUtils
 import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
