@@ -226,7 +226,6 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
 end
 
 function build_torn_function(sys;
-                             expression = false,
                              jacobian_sparsity = true,
                              checkbounds = false,
                              max_inlining_size = nothing,
@@ -317,50 +316,46 @@ function build_torn_function(sys;
                                                    funbody,
                                                    false))),
                                      sol_states)
-    if expression
-        expr, states
-    else
-        observedfun = let state = state,
-            dict = Dict(),
-            is_solver_state_idxs = insorted.(1:length(fullvars), (states_idxs,)),
-            assignments = assignments,
-            deps = (deps, invdeps),
-            sol_states = sol_states,
-            var2assignment = var2assignment
+    observedfun = let state = state,
+        dict = Dict(),
+        is_solver_state_idxs = insorted.(1:length(fullvars), (states_idxs,)),
+        assignments = assignments,
+        deps = (deps, invdeps),
+        sol_states = sol_states,
+        var2assignment = var2assignment
 
-            function generated_observed(obsvar, args...)
-                obs = get!(dict, value(obsvar)) do
-                    build_observed_function(state, obsvar, var_eq_matching, var_sccs,
-                                            is_solver_state_idxs, assignments, deps,
-                                            sol_states, var2assignment,
-                                            checkbounds = checkbounds)
+        function generated_observed(obsvar, args...)
+            obs = get!(dict, value(obsvar)) do
+                build_observed_function(state, obsvar, var_eq_matching, var_sccs,
+                                        is_solver_state_idxs, assignments, deps,
+                                        sol_states, var2assignment,
+                                        checkbounds = checkbounds)
+            end
+            if args === ()
+                let obs = obs
+                    (u, p, t) -> obs(u, p, t)
                 end
-                if args === ()
-                    let obs = obs
-                        (u, p, t) -> obs(u, p, t)
-                    end
-                else
-                    obs(args...)
-                end
+            else
+                obs(args...)
             end
         end
-
-        ODEFunction{true, SciMLBase.AutoSpecialize}(@RuntimeGeneratedFunction(expr),
-                                                    sparsity = jacobian_sparsity ?
-                                                               torn_system_with_nlsolve_jacobian_sparsity(state,
-                                                                                                          var_eq_matching,
-                                                                                                          var_sccs,
-                                                                                                          nlsolve_scc_idxs,
-                                                                                                          eqs_idxs,
-                                                                                                          states_idxs) :
-                                                               nothing,
-                                                    syms = syms,
-                                                    paramsyms = Symbol.(parameters(sys)),
-                                                    indepsym = Symbol(get_iv(sys)),
-                                                    observed = observedfun,
-                                                    mass_matrix = mass_matrix,
-                                                    sys = sys), states
     end
+
+    ODEFunction{true, SciMLBase.AutoSpecialize}(@RuntimeGeneratedFunction(expr),
+                                                sparsity = jacobian_sparsity ?
+                                                           torn_system_with_nlsolve_jacobian_sparsity(state,
+                                                                                                      var_eq_matching,
+                                                                                                      var_sccs,
+                                                                                                      nlsolve_scc_idxs,
+                                                                                                      eqs_idxs,
+                                                                                                      states_idxs) :
+                                                           nothing,
+                                                syms = syms,
+                                                paramsyms = Symbol.(parameters(sys)),
+                                                indepsym = Symbol(get_iv(sys)),
+                                                observed = observedfun,
+                                                mass_matrix = mass_matrix,
+                                                sys = sys), states
 end
 
 """
@@ -386,7 +381,6 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
                                  deps,
                                  sol_states,
                                  var2assignment;
-                                 expression = false,
                                  output_type = Array,
                                  checkbounds = true)
     is_not_prepended_assignment = trues(length(assignments))
@@ -490,18 +484,34 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
     cpre = get_preprocess_constants([obs[1:maxidx];
                                      isscalar ? ts[1] : MakeArray(ts, output_type)])
     pre2 = x -> pre(cpre(x))
-    ex = Code.toexpr(Func([DestructuredArgs(unknown_states, inbounds = !checkbounds)
-                           DestructuredArgs(parameters(sys), inbounds = !checkbounds)
-                           independent_variables(sys)],
-                          [],
-                          pre2(Let([collect(Iterators.flatten(solves))
-                                    assignments[is_not_prepended_assignment]
-                                    map(eq -> eq.lhs ← eq.rhs, obs[1:maxidx])
-                                    subs],
-                                   isscalar ? ts[1] : MakeArray(ts, output_type),
-                                   false))), sol_states)
+    fun_args = [DestructuredArgs(unknown_states, inbounds = !checkbounds)
+                DestructuredArgs(parameters(sys), inbounds = !checkbounds)
+                independent_variables(sys)]
+    ex_oop = Code.toexpr(Func(fun_args,
+                              [],
+                              pre2(Let([collect(Iterators.flatten(solves))
+                                        assignments[is_not_prepended_assignment]
+                                        map(eq -> eq.lhs ← eq.rhs, obs[1:maxidx])
+                                        subs],
+                                       isscalar ? ts[1] : MakeArray(ts, output_type),
+                                       false))), sol_states)
 
-    expression ? ex : @RuntimeGeneratedFunction(ex)
+    out = Sym{Any}(Symbol("######out######"))
+    ex_iip = Code.toexpr(Func([out; fun_args],
+                              [],
+                              pre2(Let([collect(Iterators.flatten(solves))
+                                        assignments[is_not_prepended_assignment]
+                                        map(eq -> eq.lhs ← eq.rhs, obs[1:maxidx])
+                                        subs],
+                                       SetArray(ts),
+                                       false))), sol_states)
+
+    let oop = @RuntimeGeneratedFunction(ex_oop),
+        iip = @RuntimeGeneratedFunction(ex_iip),
+        n = length(fun_args)
+
+        obs_fun(x...) = length(x) == n ? oop(x...) : iip(x...)
+    end
 end
 
 """
