@@ -537,7 +537,7 @@ function SymbolicIndexingInterface.observed(sys::AbstractSystem)
     systems = get_systems(sys)
     [obs;
      reduce(vcat,
-            (map(o -> namespace_equation(o, s), SII.observed(s)) for s in systems),
+            (map(o -> namespace_equation(o, s), observed(s)) for s in systems),
             init = Equation[])]
 end
 
@@ -1281,7 +1281,7 @@ function linearization_function(sys::AbstractSystem, inputs,
                 uf = SciMLBase.UJacobianWrapper(fun, t, p)
                 fg_xz = ForwardDiff.jacobian(uf, u)
                 h_xz = ForwardDiff.jacobian(let p = p, t = t
-                                                xz -> h(xz, p, t)
+                                                xz -> h(xz, p, t) #! signature must change
                                             end, u)
                 pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
                 fg_u = jacobian_wrt_vars(pf, p, input_idxs, chunk)
