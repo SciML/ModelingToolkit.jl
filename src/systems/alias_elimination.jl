@@ -1,8 +1,6 @@
 using SymbolicUtils: Rewriters
 using Graphs.Experimental.Traversals
 
-const KEEP = typemin(Int)
-
 function alias_eliminate_graph!(state::TransformationState; kwargs...)
     mm = linear_subsys_adjmat!(state; kwargs...)
     if size(mm, 1) == 0
@@ -225,8 +223,10 @@ the `constraint`.
         vertices = eadj[i]
         if constraint(length(vertices))
             for (j, v) in enumerate(vertices)
-                (mask === nothing || mask[v]) &&
+                if (mask === nothing || mask[v])
+                    iszero(M.row_vals[i][j]) && error("zero found in sparse matrix")
                     return (CartesianIndex(i, v), M.row_vals[i][j])
+                end
             end
         end
     end
@@ -240,8 +240,8 @@ end
     for i in range
         row = @view M[i, :]
         if constraint(count(!iszero, row))
+            iszero(val) && continue
             for (v, val) in enumerate(row)
-                iszero(val) && continue
                 if mask === nothing || mask[v]
                     return CartesianIndex(i, v), val
                 end
@@ -554,7 +554,15 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     end
     solvable_variables = findall(is_linear_variables)
 
-    return mm, solvable_variables, do_bareiss!(mm, mm_orig, is_linear_variables)
+    local bar
+    try
+        bar = do_bareiss!(mm, mm_orig, is_linear_variables)
+    catch
+        mm = changetype(BigInt, mm_orig)
+        bar = do_bareiss!(mm, mm_orig, is_linear_variables)
+    end
+
+    return mm, solvable_variables, bar
 end
 
 function do_bareiss!(M, Mold, is_linear_variables)
@@ -589,6 +597,7 @@ function do_bareiss!(M, Mold, is_linear_variables)
     end
     bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
                    bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
+
     rank2, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
     rank1 = something(rank1r[], rank2)
     (rank1, rank2, pivots)
@@ -996,7 +1005,7 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
         alias = get(ag, var, nothing)
         if alias === nothing
             nirreducible += 1
-            alias_candidate = val => var
+            alias_candidate = Int(val) => var
             continue
         end
         (coeff, alias_var) = alias
@@ -1016,7 +1025,7 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
                 # We're relying on `var` being produced in sorted order here.
                 nirreducible += !(alias_candidate isa Pair) ||
                                 alias_var != alias_candidate[2]
-                alias_candidate = new_coeff => alias_var
+                alias_candidate = Int(new_coeff) => alias_var
             end
         end
     end
@@ -1050,7 +1059,7 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
         else
             d, r = divrem(alias_val, pivot_val)
             if r == 0 && (d == 1 || d == -1)
-                alias_candidate = -d => alias_var
+                alias_candidate = Int(-d) => alias_var
             else
                 return false
             end
