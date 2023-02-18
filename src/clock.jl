@@ -14,6 +14,7 @@ Symbolics.option_to_metadata_type(::Val{:timedomain}) = TimeDomain
 
 """
     is_continuous_domain(x)
+
 true if `x` contains only continuous-domain signals.
 See also [`has_continuous_domain`](@ref)
 """
@@ -33,6 +34,7 @@ get_time_domain(x::Num) = get_time_domain(value(x))
 
 """
     has_time_domain(x)
+
 Determine if variable `x` has a time-domain attributed to it.
 """
 function has_time_domain(x::Symbolic)
