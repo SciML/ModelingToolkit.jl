@@ -329,7 +329,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
     elseif u0 === nothing || M === I
         M
     else
-        ArrayInterfaceCore.restructure(u0 .* u0', M)
+        ArrayInterface.restructure(u0 .* u0', M)
     end
 
     obs = observed(sys)
@@ -548,7 +548,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     elseif u0 === nothing || M === I
         M
     else
-        ArrayInterfaceCore.restructure(u0 .* u0', M)
+        ArrayInterface.restructure(u0 .* u0', M)
     end
 
     jp_expr = sparse ? :($similar($(get_jac(sys)[]), Float64)) : :nothing

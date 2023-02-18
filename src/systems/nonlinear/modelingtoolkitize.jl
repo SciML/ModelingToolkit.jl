@@ -9,18 +9,18 @@ function modelingtoolkitize(prob::NonlinearProblem; kwargs...)
 
     _vars = reshape([variable(:x, i) for i in eachindex(prob.u0)], size(prob.u0))
 
-    vars = prob.u0 isa Number ? _vars : ArrayInterfaceCore.restructure(prob.u0, _vars)
+    vars = prob.u0 isa Number ? _vars : ArrayInterface.restructure(prob.u0, _vars)
     params = if has_p
         _params = define_params(p)
         p isa Number ? _params[1] :
         (p isa Tuple || p isa NamedTuple ? _params :
-         ArrayInterfaceCore.restructure(p, _params))
+         ArrayInterface.restructure(p, _params))
     else
         []
     end
 
     if DiffEqBase.isinplace(prob)
-        rhs = ArrayInterfaceCore.restructure(prob.u0, similar(vars, Num))
+        rhs = ArrayInterface.restructure(prob.u0, similar(vars, Num))
         prob.f(rhs, vars, params)
     else
         rhs = prob.f(vars, params)
