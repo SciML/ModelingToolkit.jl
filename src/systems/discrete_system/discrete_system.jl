@@ -302,9 +302,9 @@ end
 
 """
 ```julia
-SciMLBase.DiscreteFunction{iip}(sys::DiscreteSystem, dvs=states(sys),
-                                ps=parameters(sys);
-                                version=nothing,
+SciMLBase.DiscreteFunction{iip}(sys::DiscreteSystem, dvs = states(sys),
+                                ps = parameters(sys);
+                                version = nothing,
                                 kwargs...) where {iip}
 ```
 
@@ -370,10 +370,10 @@ end
 
 """
 ```julia
-    DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
-                                     ps = parameters(sys);
-                                     version = nothing,
-                                     kwargs...) where {iip}
+DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
+                          ps = parameters(sys);
+                          version = nothing,
+                          kwargs...) where {iip}
 ```
 
 Create a Julia expression for an `DiscreteFunction` from the [`DiscreteSystem`](@ref).

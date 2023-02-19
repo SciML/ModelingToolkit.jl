@@ -59,7 +59,7 @@ Input derivatives appeared in expressions (-g_z\g_u != 0)
 
 This means that to simulate this system, some order of derivatives of the input is required. To allow `linearize` to proceed in this situation, one may pass the keyword argument `allow_input_derivatives = true`, in which case the resulting model will have twice as many inputs, ``2n_u``, where the last ``n_u`` inputs correspond to ``\dot u``.
 
-If the modeled system is actually proper (but MTK failed to find a proper realization), further numerical simplification can be applied to the resulting statespace system to obtain a proper form. Such simplification is currently available in the experimental package [ControlSystemsMTK](https://github.com/baggepinnen/ControlSystemsMTK.jl#internals-transformation-of-non-proper-models-to-proper-statespace-form).
+If the modeled system is actually proper (but MTK failed to find a proper realization), further numerical simplification can be applied to the resulting statespace system to obtain a proper form. Such simplification is currently available in the package [ControlSystemsMTK](https://juliacontrol.github.io/ControlSystemsMTK.jl/dev/#Internals:-Transformation-of-non-proper-models-to-proper-statespace-form).
 
 ## Tools for linear analysis
 

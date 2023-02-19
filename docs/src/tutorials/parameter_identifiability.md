@@ -144,6 +144,6 @@ global_id = assess_identifiability(ode, measured_quantities = measured_quantitie
 Both parameters `b, c` are globally identifiable with probability `0.9` in this case.
 
 [^1]: > R. Munoz-Tamayo, L. Puillet, J.B. Daniel, D. Sauvant, O. Martin, M. Taghipoor, P. Blavy [*Review: To be or not to be an identifiable model. Is this a relevant question in animal science modelling?*](https://doi.org/10.1017/S1751731117002774), Animal, Vol 12 (4), 701-712, 2018. The model is the ODE system (3) in Supplementary Material 2, initial conditions are assumed to be unknown.
-[^2]: > Moate P.J., Boston R.C., Jenkins T.C. and Lean I.J., [*Kinetics of Ruminal Lipolysis of Triacylglycerol and Biohydrogenationof Long-Chain Fatty Acids: New Insights from Old Data*](doi:10.3168/jds.2007-0398), Journal of Dairy Science 91, 731–742, 2008
+[^2]: > Moate P.J., Boston R.C., Jenkins T.C. and Lean I.J., [*Kinetics of Ruminal Lipolysis of Triacylglycerol and Biohydrogenationof Long-Chain Fatty Acids: New Insights from Old Data*](https://doi.org/10.3168/jds.2007-0398), Journal of Dairy Science 91, 731–742, 2008
 [^3]: > Goodwin, B.C. [*Oscillatory behavior in enzymatic control processes*](https://doi.org/10.1016/0065-2571(65)90067-1), Advances in Enzyme Regulation, Vol 3 (C), 425-437, 1965
 [^4]: > Dong, R., Goodbrake, C., Harrington, H. A., & Pogudin, G. [*Computing input-output projections of dynamical models with applications to structural identifiability*](https://arxiv.org/pdf/2111.00991). arXiv preprint arXiv:2111.00991.
