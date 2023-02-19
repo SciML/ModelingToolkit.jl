@@ -48,7 +48,7 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
 AbstractTrees = "0.3, 0.4"
-ArrayInterface = "7"
+ArrayInterface = "6, 7"
 Combinatorics = "1"
 Compat = "3.42, 4"
 ConstructionBase = "1"
