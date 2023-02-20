@@ -13,12 +13,12 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
 
     _vars = define_vars(prob.u0, t)
 
-    vars = prob.u0 isa Number ? _vars : ArrayInterfaceCore.restructure(prob.u0, _vars)
+    vars = prob.u0 isa Number ? _vars : ArrayInterface.restructure(prob.u0, _vars)
     params = if has_p
         _params = define_params(p)
         p isa Number ? _params[1] :
         (p isa Tuple || p isa NamedTuple || p isa AbstractDict ? _params :
-         ArrayInterfaceCore.restructure(p, _params))
+         ArrayInterface.restructure(p, _params))
     else
         []
     end
@@ -43,7 +43,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     end
 
     if DiffEqBase.isinplace(prob)
-        rhs = ArrayInterfaceCore.restructure(prob.u0, similar(vars, Num))
+        rhs = ArrayInterface.restructure(prob.u0, similar(vars, Num))
         fill!(rhs, 0)
         if prob.f isa ODEFunction &&
            prob.f.f isa FunctionWrappersWrappers.FunctionWrappersWrapper
@@ -168,12 +168,12 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
 
     _vars = define_vars(prob.u0, t)
 
-    vars = prob.u0 isa Number ? _vars : ArrayInterfaceCore.restructure(prob.u0, _vars)
+    vars = prob.u0 isa Number ? _vars : ArrayInterface.restructure(prob.u0, _vars)
     params = if has_p
         _params = define_params(p)
         p isa Number ? _params[1] :
         (p isa Tuple || p isa NamedTuple ? _params :
-         ArrayInterfaceCore.restructure(p, _params))
+         ArrayInterface.restructure(p, _params))
     else
         []
     end
