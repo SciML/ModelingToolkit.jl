@@ -36,7 +36,8 @@ using RecursiveArrayTools
 
 import SymbolicIndexingInterface
 
-import SymbolicIndexingInterface: independent_variables, states, parameters, observed,
+import SymbolicIndexingInterface: independent_variables, states, state_sym_to_index,
+                                  parameters, observed,
                                   observed_sym_to_index, get_state_dependencies,
                                   get_deps_of_observed, is_observed_sym
 export independent_variables, states, parameters, observed

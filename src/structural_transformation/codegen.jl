@@ -480,6 +480,8 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
         solves = []
     end
 
+    unknown_state_deps = get_deps_of_observed(unknown_states, obs)
+
     subs = []
     for sym in vars
         eqidx = get(observed_idx, sym, nothing)
@@ -490,7 +492,7 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
     cpre = get_preprocess_constants([obs[1:maxidx];
                                      isscalar ? ts[1] : MakeArray(ts, output_type)])
     pre2 = x -> pre(cpre(x))
-    ex = Code.toexpr(Func([DestructuredArgs(unknown_states, inbounds = !checkbounds)
+    ex = Code.toexpr(Func([DestructuredArgs(unknown_state_deps, inbounds = !checkbounds)
                            DestructuredArgs(parameters(sys), inbounds = !checkbounds)
                            independent_variables(sys)],
                           [],

@@ -658,17 +658,26 @@ function SymbolicIndexingInterface.observed_sym_to_index(sys::AbstractSystem, sy
     safe_unwrap
 end
 function SymbolicIndexingInterface.observed_sym_to_index(sys::AbstractSystem, sym::Equation)
-    findfirst(isequal(sym), observed(sys)) |>
-    safe_unwrap
+    findfirst(isequal(sym), observed(sys)) |> safe_unwrap
 end
 function SymbolicIndexingInterface.is_observed_sym(sys::AbstractSystem, sym)
     !isnothing(SymbolicIndexingInterface.observed_sym_to_index(sys, sym))
 end
 
-function SymbolicIndexingInterface.get_state_dependencies(sys::AbstractSystem, sym)
-    obs = observed(sys)
-    sts = states(sys)
-    i = observed_sym_to_index(sys, sym)
+function SymbolicIndexingInterface.get_deps_of_observed(sts, obs::AbstractArray{<:Equation})
+    deps = mapreduce(vcat, obs, init = []) do eq
+        get_state_dependencies(sts, obs, eq.lhs)
+    end |> unique
+
+    return deps
+end
+
+function SymbolicIndexingInterface.get_state_dependencies(sts, obs, sym)
+    s2i = (sym) -> findfirst(isequal(safe_unwrap(sym)), getfield.(obs, (:lhs,))) |>
+                   safe_unwrap
+
+    i = s2i(sym)
+
     if isnothing(i)
         return []
     end
@@ -676,14 +685,20 @@ function SymbolicIndexingInterface.get_state_dependencies(sys::AbstractSystem, s
     eq = obs[i]
     varss = vars(eq.rhs)
     out = mapreduce(vcat, varss, init = []) do u
-        if is_observed_sym(sys, u)
-            get_state_dependencies(sys, u)
+        if !isnothing(s2i(u))
+            get_state_dependencies(sts, obs, u)
         else
             [u]
         end
     end |> unique
 
     return filter(x -> any(isequal(x), sts), out)
+end
+
+function SymbolicIndexingInterface.get_state_dependencies(sys::AbstractSystem, sym)
+    obs = observed(sys)
+    sts = states(sys)
+    return get_state_dependencies(sts, obs, sym)
 end
 
 function SymbolicIndexingInterface.get_observed_dependencies(sys::AbstractSystem, sym)
@@ -1272,6 +1287,8 @@ function linearization_function(sys::AbstractSystem, inputs,
         sts = states(sys),
         fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys),
         h = build_explicit_observed_function(sys, outputs),
+        deps = get_deps_of_observed(sys)
+        dep_idxs = state_sym_to_index.((sys,), deps)
         chunk = ForwardDiff.Chunk(input_idxs)
 
         function (u, p, t)
@@ -1281,7 +1298,7 @@ function linearization_function(sys::AbstractSystem, inputs,
                 uf = SciMLBase.UJacobianWrapper(fun, t, p)
                 fg_xz = ForwardDiff.jacobian(uf, u)
                 h_xz = ForwardDiff.jacobian(let p = p, t = t
-                                                xz -> h(xz, p, t) #! signature must change
+                                                (xz) -> h(xz[dep_idxs], p, t) #! signature must change
                                             end, u)
                 pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
                 fg_u = jacobian_wrt_vars(pf, p, input_idxs, chunk)
@@ -1291,8 +1308,8 @@ function linearization_function(sys::AbstractSystem, inputs,
                 fg_xz = zeros(0, 0)
                 h_xz = fg_u = zeros(0, length(inputs))
             end
-            hp = let u = u, t = t
-                p -> h(u, p, t)
+            hp = let u = u[dep_idxs], t = t
+                p -> h(u, p, t) #! signature must change
             end
             h_u = jacobian_wrt_vars(hp, p, input_idxs, chunk)
             (f_x = fg_xz[diff_idxs, diff_idxs],

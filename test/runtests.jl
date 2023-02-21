@@ -1,5 +1,6 @@
 using SafeTestsets, Test
 
+@safetestset "Linearization Tests" begin include("linearize.jl") end
 @safetestset "AliasGraph Test" begin include("alias.jl") end
 @safetestset "Linear Algebra Test" begin include("linalg.jl") end
 @safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
@@ -9,7 +10,6 @@ using SafeTestsets, Test
 @safetestset "Simplify Test" begin include("simplify.jl") end
 @safetestset "Direct Usage Test" begin include("direct.jl") end
 @safetestset "System Linearity Test" begin include("linearity.jl") end
-@safetestset "Linearization Tests" begin include("linearize.jl") end
 @safetestset "Input Output Test" begin include("input_output_handling.jl") end
 @safetestset "Clock Test" begin include("clock.jl") end
 @safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
