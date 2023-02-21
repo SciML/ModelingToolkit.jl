@@ -325,7 +325,7 @@ function Base.setindex!(ag::AliasGraph, v::Integer, i::Integer)
     return 0 => 0
 end
 
-function Base.setindex!(ag::AliasGraph, p::Union{Pair{Int, Int}, Tuple{Int, Int}},
+function Base.setindex!(ag::AliasGraph, p::Union{Pair{<:Integer, Int}, Tuple{<:Integer, Int}},
                         i::Integer)
     (c, v) = p
     if c == 0 || v == 0
@@ -530,7 +530,7 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
     return linear_variables
 end
 
-function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
+function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL{T, Ti}) where {T, Ti}
     mm = copy(mm_orig)
     linear_equations_set = BitSet(mm_orig.nzrows)
 
@@ -559,7 +559,7 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
         bar = do_bareiss!(mm, mm_orig, is_linear_variables)
     catch e
         e isa OverflowError || rethrow(e)
-        mm = changetype(BigInt, mm_orig)
+        mm = convert(SparseMatrixCLIL{BigInt, Ti}, mm_orig)
         bar = do_bareiss!(mm, mm_orig, is_linear_variables)
     end
 
@@ -993,7 +993,7 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
     nirreducible = 0
     # When this row only as the pivot element, the pivot is zero by homogeneity
     # of the linear system.
-    alias_candidate::Union{Int, Pair{Int, Int}} = 0
+    alias_candidate::Union{Int, Pair{eltype(adj_row), Int}} = 0
 
     # N.B.: Assumes that the non-zeros iterator is robust to modification
     # of the underlying array datastructure.
@@ -1006,7 +1006,7 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
         alias = get(ag, var, nothing)
         if alias === nothing
             nirreducible += 1
-            alias_candidate = Int(val) => var
+            alias_candidate = val => var
             continue
         end
         (coeff, alias_var) = alias
@@ -1026,7 +1026,7 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
                 # We're relying on `var` being produced in sorted order here.
                 nirreducible += !(alias_candidate isa Pair) ||
                                 alias_var != alias_candidate[2]
-                alias_candidate = Int(new_coeff) => alias_var
+                alias_candidate = new_coeff => alias_var
             end
         end
     end
@@ -1060,7 +1060,7 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
         else
             d, r = divrem(alias_val, pivot_val)
             if r == 0 && (d == 1 || d == -1)
-                alias_candidate = Int(-d) => alias_var
+                alias_candidate = -d => alias_var
             else
                 return false
             end
