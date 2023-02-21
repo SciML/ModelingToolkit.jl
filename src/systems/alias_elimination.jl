@@ -557,7 +557,8 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     local bar
     try
         bar = do_bareiss!(mm, mm_orig, is_linear_variables)
-    catch
+    catch e
+        e isa OverflowError || rethrow(e)
         mm = changetype(BigInt, mm_orig)
         bar = do_bareiss!(mm, mm_orig, is_linear_variables)
     end

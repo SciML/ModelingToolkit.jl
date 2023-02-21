@@ -124,8 +124,8 @@ function bareiss_update!(zero!, M::StridedMatrix, k, swapto, pivot,
             M[j, i], r = divrem(M[j, i] * pivot - M[j, k] * Mki, prev_pivot)
             flag = flag | r
         end
-        iszero(flag) || error("Overflow occurred")
     end
+    iszero(flag) || error("Overflow occurred")
     zero!(M, (k + 1):size(M, 1), k)
 end
 
