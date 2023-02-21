@@ -55,15 +55,12 @@ rc_eqs = [connect(c.output, source.V)
 @named rc_model = ODESystem(rc_eqs, t, systems = [strip, c, source, ground])
 sys = structural_simplify(rc_model)
 
-@show ModelingToolkit.observed(sys)
-
 ref_prob = ODEProblem(sys, [], (0, 10))
 prob = ODAEProblem(sys, [], (0, 10))
 
-ref_sol = solve(ref_prob, Tsit5())
-@test_nowarn sol = solve(prob, Tsit5())
+ref_sol = solve(ref_prob, FBDF(), saveat = 1.0)
+@test_nowarn solve(prob, Tsit5())
+sol = solve(prob, Tsit5(), saveat = 1.0)
 
-
-
-# test that the observed variables are correct
-@test sol[strip₊St_1₊r₊n₊v] ≈ sol[strip₊St_1₊r₊n₊v]
+# test observed
+@test sol[observed(sys)[1].lhs] ≈ ref_sol[observed(sys)[1].lhs] atol = 0.001

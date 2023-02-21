@@ -42,6 +42,8 @@ using SparseArrays
 
 using SimpleNonlinearSolve
 
+import SymbolicIndexingInterface: get_deps_of_observed
+
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export dummy_derivative
 export build_torn_function, build_observed_function, ODAEProblem
