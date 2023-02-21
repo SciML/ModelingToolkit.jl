@@ -224,7 +224,6 @@ the `constraint`.
         if constraint(length(vertices))
             for (j, v) in enumerate(vertices)
                 if (mask === nothing || mask[v])
-                    iszero(M.row_vals[i][j]) && error("zero found in sparse matrix")
                     return (CartesianIndex(i, v), M.row_vals[i][j])
                 end
             end
@@ -240,7 +239,6 @@ end
     for i in range
         row = @view M[i, :]
         if constraint(count(!iszero, row))
-            iszero(val) && continue
             for (v, val) in enumerate(row)
                 if mask === nothing || mask[v]
                     return CartesianIndex(i, v), val
