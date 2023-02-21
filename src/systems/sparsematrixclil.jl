@@ -35,7 +35,7 @@ function swaprows!(S::SparseMatrixCLIL, i, j)
     swap!(S.row_vals, i, j)
 end
 
-function convert(::Type{SparseMatrixCLIL{T, Ti}}, S::SparseMatrixCLIL) where {T, Ti}
+function Base.convert(::Type{SparseMatrixCLIL{T, Ti}}, S::SparseMatrixCLIL) where {T, Ti}
     return SparseMatrixCLIL(S.nparentrows,
                             S.ncols,
                             copy.(S.nzrows),
