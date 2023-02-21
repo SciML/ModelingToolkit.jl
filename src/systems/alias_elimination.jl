@@ -323,7 +323,8 @@ function Base.setindex!(ag::AliasGraph, v::Integer, i::Integer)
     return 0 => 0
 end
 
-function Base.setindex!(ag::AliasGraph, p::Union{Pair{<:Integer, Int}, Tuple{<:Integer, Int}},
+function Base.setindex!(ag::AliasGraph,
+                        p::Union{Pair{<:Integer, Int}, Tuple{<:Integer, Int}},
                         i::Integer)
     (c, v) = p
     if c == 0 || v == 0
