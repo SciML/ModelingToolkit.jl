@@ -1,6 +1,7 @@
 using SafeTestsets, Test
 
-@safetestset "Linearization Tests" begin include("linearize.jl") end
+@safetestset "ODAEProblem Test" begin include("odaeproblem.jl") end
+@safetestset "ODESystem Test" begin include("odesystem.jl") end
 @safetestset "AliasGraph Test" begin include("alias.jl") end
 @safetestset "Linear Algebra Test" begin include("linalg.jl") end
 @safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
@@ -10,10 +11,10 @@ using SafeTestsets, Test
 @safetestset "Simplify Test" begin include("simplify.jl") end
 @safetestset "Direct Usage Test" begin include("direct.jl") end
 @safetestset "System Linearity Test" begin include("linearity.jl") end
+@safetestset "Linearization Tests" begin include("linearize.jl") end
 @safetestset "Input Output Test" begin include("input_output_handling.jl") end
 @safetestset "Clock Test" begin include("clock.jl") end
 @safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
-@safetestset "ODESystem Test" begin include("odesystem.jl") end
 @safetestset "Unitful Quantities Test" begin include("units.jl") end
 @safetestset "LabelledArrays Test" begin include("labelledarrays.jl") end
 @safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
@@ -24,7 +25,6 @@ using SafeTestsets, Test
 @safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
 @safetestset "Constraints Test" begin include("constraints.jl") end
 @safetestset "Reduction Test" begin include("reduction.jl") end
-@safetestset "ODAEProblem Test" begin include("odaeproblem.jl") end
 @safetestset "Components Test" begin include("components.jl") end
 @safetestset "print_tree" begin include("print_tree.jl") end
 @safetestset "Error Handling" begin include("error_handling.jl") end

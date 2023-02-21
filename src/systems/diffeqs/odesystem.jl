@@ -307,7 +307,8 @@ function build_explicit_observed_function(sys, ts;
                                           expression = false,
                                           output_type = Array,
                                           checkbounds = true,
-                                          throw = true)
+                                          throw = true,
+                                          dense_states = false)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
     end
@@ -379,7 +380,7 @@ function build_explicit_observed_function(sys, ts;
         push!(obsexprs, lhs ← rhs)
     end
 
-    statedeps = safe_unwrap.(get_deps_of_observed(sys))
+    statedeps = dense_states ? states(sys) : safe_unwrap.(get_deps_of_observed(sys))
 
     dvs = DestructuredArgs(statedeps, inbounds = !checkbounds)
     ps = DestructuredArgs(parameters(sys), inbounds = !checkbounds)

@@ -388,7 +388,8 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
                                  var2assignment;
                                  expression = false,
                                  output_type = Array,
-                                 checkbounds = true)
+                                 checkbounds = true,
+                                 dense_states = false)
     is_not_prepended_assignment = trues(length(assignments))
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
@@ -480,7 +481,7 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
         solves = []
     end
 
-    unknown_state_deps = get_deps_of_observed(unknown_states, obs)
+    unknown_state_deps = dense_states ? unknown_states : get_deps_of_observed(unknown_states, obs)
 
     subs = []
     for sym in vars

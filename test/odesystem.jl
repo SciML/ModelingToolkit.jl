@@ -607,7 +607,7 @@ RHS2 = RHS
 using SymbolicIndexingInterface
 using SymbolicIndexingInterface: get_state_dependencies
 
-@test isequal(get_state_dependencies(fol, observed(fol)[1]), x)
+@test isequal(get_state_dependencies(fol, observed(fol)[1]), [x])
 
 #1413 and 1389
 @parameters t α β
