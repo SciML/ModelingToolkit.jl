@@ -213,12 +213,14 @@ end
 struct HighlightInt
     i::Int
     highlight::Symbol
-    underline::Bool
+    match::Bool
 end
 Base.typeinfo_implicit(::Type{HighlightInt}) = true
 function Base.show(io::IO, hi::HighlightInt)
-    if hi.underline
-        printstyled(io, hi.i, color = hi.highlight, underline = true)
+    if hi.match
+        printstyled(io, "(", color = hi.highlight)
+        printstyled(io, hi.i, color = hi.highlight)
+        printstyled(io, ")", color = hi.highlight)
     else
         printstyled(io, hi.i, color = hi.highlight)
     end
@@ -227,6 +229,8 @@ end
 function Base.show(io::IO, l::BipartiteAdjacencyList)
     if l.match === true
         printstyled(io, "∫ ")
+    else
+        printstyled(io, "  ")
     end
     if l.u === nothing
         printstyled(io, '⋅', color = :light_black)
