@@ -123,9 +123,11 @@ function alias_elimination!(state::TearingState; kwargs...)
 
     lineqs = BitSet(mm.nzrows)
     eqs_to_update = BitSet()
+    nvs_orig = ndsts(graph_orig)
     for k in keys(ag)
         # We need to update `D(D(x))` when we subsitute `D(x)` as well.
         while true
+            k > nvs_orig && break
             for ieq in 𝑑neighbors(graph_orig, k)
                 ieq in lineqs && continue
                 new_eq = old_to_new_eq[ieq]
