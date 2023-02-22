@@ -12,7 +12,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           equations, isirreducible, input_timedomain, TimeDomain,
                           VariableType, getvariabletype
 using ..BipartiteGraphs
-import ..BipartiteGraphs: invview, complete
+import ..BipartiteGraphs: invview, complete, HighlightInt
 using Graphs
 using UnPack
 using Setfield
@@ -386,14 +386,14 @@ end
 
 using .BipartiteGraphs: Label, BipartiteAdjacencyList
 struct SystemStructurePrintMatrix <:
-       AbstractMatrix{Union{Label, Int, BipartiteAdjacencyList}}
+       AbstractMatrix{Union{Label, BipartiteAdjacencyList}}
     bpg::BipartiteGraph
     highlight_graph::BipartiteGraph
     var_to_diff::DiffGraph
     eq_to_diff::DiffGraph
     var_eq_matching::Union{Matching, Nothing}
 end
-Base.size(bgpm::SystemStructurePrintMatrix) = (max(nsrcs(bgpm.bpg), ndsts(bgpm.bpg)) + 1, 5)
+Base.size(bgpm::SystemStructurePrintMatrix) = (max(nsrcs(bgpm.bpg), ndsts(bgpm.bpg)) + 1, 7)
 function compute_diff_label(diff_graph, i)
     di = i - 1 <= length(diff_graph) ? diff_graph[i - 1] : nothing
     ii = i - 1 <= length(invview(diff_graph)) ? invview(diff_graph)[i - 1] : nothing
@@ -404,13 +404,18 @@ end
 function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
     checkbounds(bgpm, i, j)
     if i <= 1
-        return (Label.(("#", "∂ₜ", "eq", "∂ₜ", "v")))[j]
+        return (Label.(("#", "∂ₜ", "eq", "", "#", "∂ₜ", "v")))[j]
+    elseif j == 4
+        colors = Base.text_colors
+        return Label("|", :light_black)
     elseif j == 2
         return compute_diff_label(bgpm.eq_to_diff, i)
-    elseif j == 4
+    elseif j == 6
         return compute_diff_label(bgpm.var_to_diff, i)
     elseif j == 1
-        return i - 1
+        return Label((i - 1 <= length(bgpm.eq_to_diff)) ? string(i - 1) : "")
+    elseif j == 5
+        return Label((i - 1 <= length(bgpm.var_to_diff)) ? string(i - 1) : "")
     elseif j == 3
         return BipartiteAdjacencyList(i - 1 <= nsrcs(bgpm.bpg) ?
                                       𝑠neighbors(bgpm.bpg, i - 1) : nothing,
@@ -421,7 +426,7 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
                                       bgpm.var_eq_matching !== nothing &&
                                       (i - 1 <= length(invview(bgpm.var_eq_matching))) ?
                                       invview(bgpm.var_eq_matching)[i - 1] : unassigned)
-    elseif j == 5
+    elseif j == 7
         match = unassigned
         if bgpm.var_eq_matching !== nothing && i - 1 <= length(bgpm.var_eq_matching)
             match = bgpm.var_eq_matching[i - 1]

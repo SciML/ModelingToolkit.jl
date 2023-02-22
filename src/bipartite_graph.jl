@@ -212,21 +212,21 @@ end
 
 struct HighlightInt
     i::Int
-    highlight::Union{Symbol, Nothing}
+    highlight::Symbol
+    underline::Bool
 end
 Base.typeinfo_implicit(::Type{HighlightInt}) = true
-
 function Base.show(io::IO, hi::HighlightInt)
-    if hi.highlight !== nothing
-        printstyled(io, hi.i, color = hi.highlight)
+    if hi.underline
+        printstyled(io, hi.i, color = hi.highlight, underline = true)
     else
-        print(io, hi.i)
+        printstyled(io, hi.i, color = hi.highlight)
     end
 end
 
 function Base.show(io::IO, l::BipartiteAdjacencyList)
     if l.match === true
-        printstyled(io, "∫ ", color = :light_blue, bold = true)
+        printstyled(io, "∫ ")
     end
     if l.u === nothing
         printstyled(io, '⋅', color = :light_black)
@@ -238,17 +238,18 @@ function Base.show(io::IO, l::BipartiteAdjacencyList)
         match = l.match
         isa(match, Bool) && (match = unassigned)
         function choose_color(i)
-            i in l.highligh_u ? (i == match ? :light_yellow : :green) :
-            (i == match ? :yellow : nothing)
+            i in l.highligh_u ? :default : :light_black
         end
         if !isempty(setdiff(l.highligh_u, l.u))
             # Only for debugging, shouldn't happen in practice
-            print(io, map(union(l.u, l.highligh_u)) do i
-                      HighlightInt(i, !(i in l.u) ? :light_red : choose_color(i))
+            print(io,
+                  map(union(l.u, l.highligh_u)) do i
+                      HighlightInt(i, !(i in l.u) ? :light_red : choose_color(i),
+                                   i == match)
                   end)
         else
             print(io, map(l.u) do i
-                      HighlightInt(i, choose_color(i))
+                      HighlightInt(i, choose_color(i), i == match)
                   end)
         end
     end
@@ -256,8 +257,11 @@ end
 
 struct Label
     s::String
+    c::Symbol
 end
-Base.show(io::IO, l::Label) = print(io, l.s)
+Label(s::AbstractString) = Label(s, :nothing)
+Label(x::Integer) = Label(string(x))
+Base.show(io::IO, l::Label) = printstyled(io, l.s, color = l.c)
 
 struct BipartiteGraphPrintMatrix <:
        AbstractMatrix{Union{Label, Int, BipartiteAdjacencyList}}
