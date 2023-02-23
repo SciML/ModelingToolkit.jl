@@ -188,7 +188,7 @@ function isframe(sys)
 end
 
 "Return orienation object of a multibody frame."
-function ori(sys::ODESystem)
+function ori(sys)
     if sys.metadata isa Dict && (O = get(sys.metadata, :orientation, nothing)) !== nothing
         return O
     else
