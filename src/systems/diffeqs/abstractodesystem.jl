@@ -570,6 +570,22 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     !linenumbers ? striplines(ex) : ex
 end
 
+function get_u0_p(sys, u0map, parammap; tofloat, use_union)
+    eqs = equations(sys)
+    dvs = states(sys)
+    ps = parameters(sys)
+    iv = get_iv(sys)
+
+    defs = defaults(sys)
+    defs = mergedefaults(defs, parammap, ps)
+    defs = mergedefaults(defs, u0map, dvs)
+
+    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
+    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
+    p = p === nothing ? SciMLBase.NullParameters() : p
+    u0, p, defs
+end
+
 function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
                            implicit_dae = false, du0map = nothing,
                            version = nothing, tgrad = false,
@@ -586,13 +602,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ps = parameters(sys)
     iv = get_iv(sys)
 
-    defs = defaults(sys)
-    defs = mergedefaults(defs, parammap, ps)
-    defs = mergedefaults(defs, u0map, dvs)
-
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
-    p = p === nothing ? SciMLBase.NullParameters() : p
+    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
 
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
