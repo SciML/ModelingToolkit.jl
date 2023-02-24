@@ -1386,9 +1386,9 @@ lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
 function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives = false,
                    p = DiffEqBase.NullParameters())
     x0 = merge(defaults(sys), op)
-    f, u0, p = process_DEProblem(ODEFunction{true}, sys, x0, p)
+    u0, p2, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
 
-    linres = lin_fun(u0, p, t)
+    linres = lin_fun(u0, p2, t)
     f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u = linres
 
     nx, nu = size(f_u)
