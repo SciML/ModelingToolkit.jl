@@ -570,6 +570,11 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     !linenumbers ? striplines(ex) : ex
 end
 
+"""
+    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
+
+Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point. 
+"""
 function get_u0_p(sys, u0map, parammap; tofloat, use_union)
     eqs = equations(sys)
     dvs = states(sys)
