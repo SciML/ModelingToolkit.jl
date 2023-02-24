@@ -11,6 +11,7 @@ NonlinearSystem
   - `get_eqs(sys)` or `equations(sys)`: The equations that define the nonlinear system.
   - `get_states(sys)` or `states(sys)`: The set of states in the nonlinear system.
   - `get_ps(sys)` or `parameters(sys)`: The parameters of the nonlinear system.
+  - `get_u0_p(sys, u0map, parammap)` Numeric arrays for the initial condition and parameters given `var => value` maps.
 
 ## Transformations
 

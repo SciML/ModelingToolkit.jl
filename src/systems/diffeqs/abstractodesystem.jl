@@ -571,15 +571,14 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 end
 
 """
-    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
+    u0, p, defs = get_u0_p(sys, u0map, parammap; use_union=false, tofloat=!use_union)
 
 Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point. 
 """
-function get_u0_p(sys, u0map, parammap; tofloat, use_union)
+function get_u0_p(sys, u0map, parammap; use_union = false, tofloat = !use_union)
     eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
-    iv = get_iv(sys)
 
     defs = defaults(sys)
     defs = mergedefaults(defs, parammap, ps)

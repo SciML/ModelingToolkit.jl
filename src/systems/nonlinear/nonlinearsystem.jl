@@ -320,6 +320,7 @@ function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, para
                                   linenumbers = true, parallel = SerialForm(),
                                   eval_expression = true,
                                   use_union = false,
+                                  tofloat = !use_union,
                                   kwargs...)
     eqs = equations(sys)
     dvs = states(sys)
