@@ -275,6 +275,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                                  steady_state = false,
                                                  checkbounds = false,
                                                  sparsity = false,
+                                                 dense_output = true,
                                                  analytic = nothing,
                                                  kwargs...) where {iip, specialize}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
@@ -337,7 +338,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         let sys = sys, dict = Dict()
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
-                    build_explicit_observed_function(sys, obsvar)
+                    build_explicit_observed_function(sys, obsvar;
+                                                     dense_output = dense_output)
                 end
                 if args === ()
                     let obs = obs
@@ -352,7 +354,8 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         let sys = sys, dict = Dict()
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
-                    build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
+                    build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds,
+                                                     dense_output = dense_output)
                 end
                 if args === ()
                     let obs = obs
@@ -685,6 +688,7 @@ DiffEqBase.ODEProblem{iip}(sys::AbstractODESystem, u0map, tspan,
                            checkbounds = false, sparse = false,
                            simplify = false,
                            linenumbers = true, parallel = SerialForm(),
+                           dense_output = true,
                            kwargs...) where {iip}
 ```
 
@@ -714,12 +718,13 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
                                                 parammap = DiffEqBase.NullParameters();
                                                 callback = nothing,
                                                 check_length = true,
+                                                dense_output = true,
                                                 kwargs...) where {iip, specialize}
     has_difference = any(isdifferenceeq, equations(sys))
     f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
                                  t = tspan !== nothing ? tspan[1] : tspan,
                                  has_difference = has_difference,
-                                 check_length, kwargs...)
+                                 check_length, dense_output = dense_output, kwargs...)
     cbs = process_events(sys; callback, has_difference, kwargs...)
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
         affects, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
@@ -752,7 +757,8 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if svs !== nothing
         kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
     end
-    ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1..., kwargs...)
+    ODEProblem{iip}(f, u0, tspan, p, pt; dense_output = dense_output, kwargs1...,
+                    kwargs...)
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
 

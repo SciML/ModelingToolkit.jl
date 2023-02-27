@@ -1037,10 +1037,10 @@ end
                                                e => 1.0]))
     sys = structural_simplify(sys)
     prob = ODEProblem(sys, [], (0, 1.0))
-    prob_sym = ODEProblem(sys, [], (0, 1.0), save_idxs = [a, c, e])
+    prob_sym = ODEProblem(sys, [], (0, 1.0), dense_output = false)
 
     sol = solve(prob, Tsit5())
-    sol_sym = solve(prob_sym, Tsit5())
+    sol_sym = solve(prob_sym, Tsit5(), save_idxs = [a, c, e])
 
     @test sol_sym[a] ≈ sol[a]
     @test sol_sym[c] ≈ sol[c]
@@ -1072,10 +1072,10 @@ end
                                                e => 1.0]))
     sys = structural_simplify(sys)
     prob = ODEProblem(sys, [], (0, 1.0))
-    prob_sym = ODEProblem(sys, [], (0, 1.0), save_idxs = [a, c, b])
+    prob_sym = ODEProblem(sys, [], (0, 1.0), dense_output = false)
 
     sol = solve(prob, Tsit5())
-    sol_sym = solve(prob_sym, Tsit5())
+    sol_sym = solve(prob_sym, Tsit5(), save_idxs = [a, c, b])
 
     @test sol_sym[a] ≈ sol[a]
     @test sol_sym[b] ≈ sol[b]

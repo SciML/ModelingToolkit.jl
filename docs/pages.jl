@@ -21,6 +21,7 @@ pages = [
                     "basics/Events.md",
                     "basics/Linearization.md",
                     "basics/Validation.md",
+                    "basics/saving_syms.md"
                     "basics/DependencyGraphs.md",
                     "basics/FAQ.md"],
     "System Types" => Any["systems/ODESystem.md",

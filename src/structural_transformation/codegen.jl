@@ -230,6 +230,7 @@ function build_torn_function(sys;
                              jacobian_sparsity = true,
                              checkbounds = false,
                              max_inlining_size = nothing,
+                             dense_output = true,
                              kw...)
     max_inlining_size = something(max_inlining_size, MAX_INLINE_NLSOLVE_SIZE)
     rhss = []
@@ -333,6 +334,7 @@ function build_torn_function(sys;
                     build_observed_function(state, obsvar, var_eq_matching, var_sccs,
                                             is_solver_state_idxs, assignments, deps,
                                             sol_states, var2assignment,
+                                            dense_output = dense_output,
                                             checkbounds = checkbounds)
                 end
                 if args === ()
@@ -389,7 +391,7 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
                                  expression = false,
                                  output_type = Array,
                                  checkbounds = true,
-                                 dense_states = false)
+                                 dense_output = true)
     is_not_prepended_assignment = trues(length(assignments))
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
@@ -481,7 +483,7 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
         solves = []
     end
 
-    unknown_state_deps = dense_states ? unknown_states :
+    unknown_state_deps = dense_output ? unknown_states :
                          get_deps_of_observed(unknown_states, obs)
 
     subs = []
@@ -532,6 +534,7 @@ function ODAEProblem{iip}(sys,
                           parammap = DiffEqBase.NullParameters();
                           callback = nothing,
                           use_union = false,
+                          dense_output = true,
                           check = true,
                           kwargs...) where {iip}
     eqs = equations(sys)
@@ -551,8 +554,9 @@ function ODAEProblem{iip}(sys,
 
     kwargs = filter_kwargs(kwargs)
     if cbs === nothing
-        ODEProblem{iip}(fun, u0, tspan, p; kwargs...)
+        ODEProblem{iip}(fun, u0, tspan, p; dense_output = dense_output, kwargs...)
     else
-        ODEProblem{iip}(fun, u0, tspan, p; callback = cbs, kwargs...)
+        ODEProblem{iip}(fun, u0, tspan, p; dense_output = dense_output, callback = cbs,
+                        kwargs...)
     end
 end

@@ -631,7 +631,7 @@ $(SIGNATURES)
 
 Return a list of actual states needed to be solved by solvers.
 """
-function unknown_states(sys::AbstractSystem)
+function SymbolicIndexingInterface.unknown_states(sys::AbstractSystem)
     sts = states(sys)
     if has_unknown_states(sys)
         sts = something(get_unknown_states(sys), sts)
@@ -640,7 +640,7 @@ function unknown_states(sys::AbstractSystem)
 end
 
 function SymbolicIndexingInterface.state_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(sym), unknown_states(sys)) |> safe_unwrap
+    findfirst(isequal(safe_unwrap(sym)), unknown_states(sys)) |> safe_unwrap
 end
 function SymbolicIndexingInterface.is_state_sym(sys::AbstractSystem, sym)
     !isnothing(SymbolicIndexingInterface.state_sym_to_index(sys, sym))
@@ -680,6 +680,7 @@ function SymbolicIndexingInterface.get_deps_of_observed(sts, obs::AbstractArray{
 end
 
 function SymbolicIndexingInterface.get_state_dependencies(sts, obs, sym)
+    sym = safe_unwrap(sym)
     i = observed_sym_to_index(obs, sym)
     if isnothing(i)
         return []
@@ -700,7 +701,7 @@ end
 
 function SymbolicIndexingInterface.get_state_dependencies(sys::AbstractSystem, sym)
     obs = observed(sys)
-    sts = states(sys)
+    sts = unknown_states(sys)
     return get_state_dependencies(sts, obs, sym)
 end
 
