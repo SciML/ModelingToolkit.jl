@@ -1290,7 +1290,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         input_idxs = input_idxs,
         sts = states(sys),
         fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys),
-        h = build_explicit_observed_function(sys, outputs; dense_states = true),
+        h = build_explicit_observed_function(sys, outputs; dense_output = true),
         chunk = ForwardDiff.Chunk(input_idxs)
 
         function (u, p, t)
