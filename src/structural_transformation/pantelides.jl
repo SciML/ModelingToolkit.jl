@@ -76,18 +76,18 @@ Computes which variables are the "highest-differentiated" for purposes of
 pantelides. Ordinarily this is relatively straightforward. However, in our
 case, there are two complicating  conditions:
 
-  1. We allow variables in the structure graph that don't appear in the
-     system at all. What we are interested in is the highest-differentiated
-     variable that actually appears in the system.
+ 1. We allow variables in the structure graph that don't appear in the
+    system at all. What we are interested in is the highest-differentiated
+    variable that actually appears in the system.
 
-  2. We have an alias graph. The alias graph implicitly contributes an
-     alias equation, so it doesn't actually whitelist any additional variables,
-     but it may change which variable is considered the highest differentiated one.
-     Consider the following situation:
+ 2. We have an alias graph. The alias graph implicitly contributes an
+    alias equation, so it doesn't actually whitelist any additional variables,
+    but it may change which variable is considered the highest differentiated one.
+    Consider the following situation:
 
-       Vars: x, y
-       Eqs: 0 = f(x)
-       Alias: ẋ = ẏ
+    Vars: x, y
+    Eqs: 0 = f(x)
+    Alias: ẋ = ẏ
 
     In the absence of the alias, we would consider `x` to be the highest
     differentiated variable. However, because of the alias (and because there
@@ -125,7 +125,7 @@ function computed_highest_diff_variables(structure, ag::Union{AliasGraph, Nothin
                 while isempty(𝑑neighbors(graph, var))
                     var′ = invview(var_to_diff)[var]
                     var′ === nothing && break
-                    stem′ = invview(var_to_diff)[var]
+                    stem′ = invview(var_to_diff)[stem]
                     # Invariant from alias elimination: Stem is chosen to have
                     # the highest differentiation order.
                     @assert stem′ !== nothing

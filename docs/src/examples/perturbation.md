@@ -2,7 +2,7 @@
 
 ## Prelims
 
-In the previous tutorial, [Mixed Symbolic-Numeric Perturbation Theory](https://symbolics.juliasymbolics.org/stable/examples/perturbation), we discussed how to solve algebraic equations using **Symbolics.jl**. Here, our goal is to extend the method to differential equations. First, we import the following helper functions that were introduced in [Mixed Symbolic/Numerical Methods for Perturbation Theory - Algebraic Equations](@ref perturb_alg):
+In the previous tutorial, [Mixed Symbolic-Numeric Perturbation Theory](https://symbolics.juliasymbolics.org/stable/examples/perturbation/), we discussed how to solve algebraic equations using **Symbolics.jl**. Here, our goal is to extend the method to differential equations. First, we import the following helper functions that were introduced in [Mixed Symbolic/Numerical Methods for Perturbation Theory - Algebraic Equations](@ref perturb_alg):
 
 ```julia
 using Symbolics, SymbolicUtils

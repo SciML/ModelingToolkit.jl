@@ -29,9 +29,18 @@ function Base.copy(S::SparseMatrixCLIL{T, Ti}) where {T, Ti}
                      map(copy, S.row_vals))
 end
 function swaprows!(S::SparseMatrixCLIL, i, j)
+    i == j && return
     swap!(S.nzrows, i, j)
     swap!(S.row_cols, i, j)
     swap!(S.row_vals, i, j)
+end
+
+function Base.convert(::Type{SparseMatrixCLIL{T, Ti}}, S::SparseMatrixCLIL) where {T, Ti}
+    return SparseMatrixCLIL(S.nparentrows,
+                            S.ncols,
+                            copy.(S.nzrows),
+                            copy.(S.row_cols),
+                            [T.(row) for row in S.row_vals])
 end
 
 function SparseMatrixCLIL(mm::AbstractMatrix)
@@ -59,6 +68,7 @@ function Base.setindex!(S::SparseMatrixCLIL, v::CLILVector, i::Integer, c::Colon
     if v.vec.n != S.ncols
         throw(BoundsError(v, 1:(S.ncols)))
     end
+    any(iszero, v.vec.nzval) && error("setindex failed")
     S.row_cols[i] = copy(v.vec.nzind)
     S.row_vals[i] = copy(v.vec.nzval)
     return v
@@ -91,7 +101,7 @@ function Base.iterate(nzp::NonZerosPairs{<:CLILVector}, (idx, col))
         idx = length(col)
     end
     oldcol = nzind[idx]
-    if col !== oldcol
+    if col != oldcol
         # The vector was changed since the last iteration. Find our
         # place in the vector again.
         tail = col > oldcol ? (@view nzind[(idx + 1):end]) : (@view nzind[1:idx])
@@ -189,13 +199,14 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
             v == vpivot && continue
             ck = getcoeff(kvars, kcoeffs, v)
             ci = getcoeff(ivars, icoeffs, v)
-            ci = (pivot * ci - coeff * ck) ÷ last_pivot
-            if ci !== 0
+            p1 = Base.Checked.checked_mul(pivot, ci)
+            p2 = Base.Checked.checked_mul(coeff, ck)
+            ci = exactdiv(Base.Checked.checked_sub(p1, p2), last_pivot)
+            if !iszero(ci)
                 push!(tmp_incidence, v)
                 push!(tmp_coeffs, ci)
             end
         end
-
         eadj[ei] = tmp_incidence
         old_cadj[ei] = tmp_coeffs
     end

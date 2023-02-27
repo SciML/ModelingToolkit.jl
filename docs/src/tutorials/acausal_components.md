@@ -113,7 +113,7 @@ At the top, we start with defining the fundamental qualities of an electric
 circuit component. At every input and output pin, a circuit component has
 two values: the current at the pin and the voltage. Thus we define the `Pin`
 component (connector) to simply be the values there. Whenever two `Pin`s in a
-circuit are connected together, the system satisfies [Kirchhoff's laws](https: //en.wikipedia.org/wiki/Kirchhoff%27s_circuit_laws),
+circuit are connected together, the system satisfies [Kirchhoff's laws](https://en.wikipedia.org/wiki/Kirchhoff%27s_circuit_laws),
 i.e. that currents sum to zero and voltages across the pins are equal.
 `[connect = Flow]` informs MTK that currents ought to sum to zero, and by
 default, variables are equal in a connection.

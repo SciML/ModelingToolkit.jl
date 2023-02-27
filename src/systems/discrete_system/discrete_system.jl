@@ -302,9 +302,9 @@ end
 
 """
 ```julia
-SciMLBase.DiscreteFunction{iip}(sys::DiscreteSystem, dvs=states(sys),
-                                ps=parameters(sys);
-                                version=nothing,
+SciMLBase.DiscreteFunction{iip}(sys::DiscreteSystem, dvs = states(sys),
+                                ps = parameters(sys);
+                                version = nothing,
                                 kwargs...) where {iip}
 ```
 
@@ -370,10 +370,10 @@ end
 
 """
 ```julia
-    DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
-                                     ps = parameters(sys);
-                                     version = nothing,
-                                     kwargs...) where {iip}
+DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
+                          ps = parameters(sys);
+                          version = nothing,
+                          kwargs...) where {iip}
 ```
 
 Create a Julia expression for an `DiscreteFunction` from the [`DiscreteSystem`](@ref).
@@ -418,17 +418,13 @@ function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, paramm
                                  linenumbers = true, parallel = SerialForm(),
                                  eval_expression = true,
                                  use_union = false,
+                                 tofloat = !use_union,
                                  kwargs...)
     eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
 
-    defs = defaults(sys)
-    defs = mergedefaults(defs, parammap, ps)
-    defs = mergedefaults(defs, u0map, dvs)
-
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat = !use_union, use_union)
+    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
 
     check_eqs_u0(eqs, dvs, u0; kwargs...)
 

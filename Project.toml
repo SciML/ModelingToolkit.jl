@@ -5,7 +5,7 @@ version = "8.47.0"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
-ArrayInterfaceCore = "30b0a656-2188-435a-8636-2ec0e6a096e2"
+ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 Compat = "34da2185-b29b-5c13-b0c7-acf172513d20"
 ConstructionBase = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
@@ -49,7 +49,7 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
 AbstractTrees = "0.3, 0.4"
-ArrayInterfaceCore = "0.1.1"
+ArrayInterface = "6, 7"
 Combinatorics = "1"
 Compat = "3.42, 4"
 ConstructionBase = "1"

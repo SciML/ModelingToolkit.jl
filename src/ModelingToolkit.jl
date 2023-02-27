@@ -10,7 +10,7 @@ using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap
 using Distributed
 using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
 using InteractiveUtils
-using Latexify, Unitful, ArrayInterfaceCore
+using Latexify, Unitful, ArrayInterface
 using MacroTools
 @reexport using UnPack
 using Setfield, ConstructionBase

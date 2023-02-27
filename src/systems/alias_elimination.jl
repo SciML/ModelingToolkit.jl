@@ -1,8 +1,6 @@
 using SymbolicUtils: Rewriters
 using Graphs.Experimental.Traversals
 
-const KEEP = typemin(Int)
-
 function alias_eliminate_graph!(state::TransformationState; kwargs...)
     mm = linear_subsys_adjmat!(state; kwargs...)
     if size(mm, 1) == 0
@@ -125,9 +123,11 @@ function alias_elimination!(state::TearingState; kwargs...)
 
     lineqs = BitSet(mm.nzrows)
     eqs_to_update = BitSet()
+    nvs_orig = ndsts(graph_orig)
     for k in keys(ag)
         # We need to update `D(D(x))` when we subsitute `D(x)` as well.
         while true
+            k > nvs_orig && break
             for ieq in 𝑑neighbors(graph_orig, k)
                 ieq in lineqs && continue
                 new_eq = old_to_new_eq[ieq]
@@ -225,8 +225,9 @@ the `constraint`.
         vertices = eadj[i]
         if constraint(length(vertices))
             for (j, v) in enumerate(vertices)
-                (mask === nothing || mask[v]) &&
+                if (mask === nothing || mask[v])
                     return (CartesianIndex(i, v), M.row_vals[i][j])
+                end
             end
         end
     end
@@ -241,7 +242,6 @@ end
         row = @view M[i, :]
         if constraint(count(!iszero, row))
             for (v, val) in enumerate(row)
-                iszero(val) && continue
                 if mask === nothing || mask[v]
                     return CartesianIndex(i, v), val
                 end
@@ -325,7 +325,8 @@ function Base.setindex!(ag::AliasGraph, v::Integer, i::Integer)
     return 0 => 0
 end
 
-function Base.setindex!(ag::AliasGraph, p::Union{Pair{Int, Int}, Tuple{Int, Int}},
+function Base.setindex!(ag::AliasGraph,
+                        p::Union{Pair{<:Integer, Int}, Tuple{<:Integer, Int}},
                         i::Integer)
     (c, v) = p
     if c == 0 || v == 0
@@ -530,7 +531,7 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
     return linear_variables
 end
 
-function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
+function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL{T, Ti}) where {T, Ti}
     mm = copy(mm_orig)
     linear_equations_set = BitSet(mm_orig.nzrows)
 
@@ -554,7 +555,16 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL)
     end
     solvable_variables = findall(is_linear_variables)
 
-    return mm, solvable_variables, do_bareiss!(mm, mm_orig, is_linear_variables)
+    local bar
+    try
+        bar = do_bareiss!(mm, mm_orig, is_linear_variables)
+    catch e
+        e isa OverflowError || rethrow(e)
+        mm = convert(SparseMatrixCLIL{BigInt, Ti}, mm_orig)
+        bar = do_bareiss!(mm, mm_orig, is_linear_variables)
+    end
+
+    return mm, solvable_variables, bar
 end
 
 function do_bareiss!(M, Mold, is_linear_variables)
@@ -589,6 +599,7 @@ function do_bareiss!(M, Mold, is_linear_variables)
     end
     bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
                    bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
+
     rank2, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
     rank1 = something(rank1r[], rank2)
     (rank1, rank2, pivots)
@@ -983,7 +994,7 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
     nirreducible = 0
     # When this row only as the pivot element, the pivot is zero by homogeneity
     # of the linear system.
-    alias_candidate::Union{Int, Pair{Int, Int}} = 0
+    alias_candidate::Union{Int, Pair{eltype(adj_row), Int}} = 0
 
     # N.B.: Assumes that the non-zeros iterator is robust to modification
     # of the underlying array datastructure.

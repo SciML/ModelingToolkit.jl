@@ -22,7 +22,8 @@ mathengine = MathJax3(Dict(:loader => Dict("load" => ["[tex]/require", "[tex]/ma
 makedocs(sitename = "ModelingToolkit.jl",
          authors = "Chris Rackauckas",
          modules = [ModelingToolkit],
-         clean = true, doctest = false,
+         clean = true, doctest = false, linkcheck = true,
+         linkcheck_ignore = ["https://epubs.siam.org/doi/10.1137/0903023"],
          strict = [
              :doctest,
              :linkcheck,

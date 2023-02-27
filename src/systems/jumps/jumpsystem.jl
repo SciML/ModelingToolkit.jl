@@ -33,7 +33,7 @@ $(FIELDS)
 # Example
 
 ```julia
-using ModelingToolkit
+using ModelingToolkit, JumpProcesses
 
 @parameters β γ
 @variables t S(t) I(t) R(t)

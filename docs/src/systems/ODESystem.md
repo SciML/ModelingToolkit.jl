@@ -12,6 +12,7 @@ ODESystem
   - `get_states(sys)` or `states(sys)`: The set of states in the ODE.
   - `get_ps(sys)` or `parameters(sys)`: The parameters of the ODE.
   - `get_iv(sys)`: The independent variable of the ODE.
+  - `get_u0_p(sys, u0map, parammap)` Numeric arrays for the initial condition and parameters given `var => value` maps.
 
 ## Transformations
 

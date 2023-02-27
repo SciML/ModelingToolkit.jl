@@ -436,7 +436,7 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
     end
 
     M = calculate_massmatrix(sys)
-    _M = (u0 === nothing || M == I) ? M : ArrayInterfaceCore.restructure(u0 .* u0', M)
+    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
 
     obs = observed(sys)
     observedfun = let sys = sys, dict = Dict()
@@ -527,7 +527,7 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
 
     M = calculate_massmatrix(sys)
 
-    _M = (u0 === nothing || M == I) ? M : ArrayInterfaceCore.restructure(u0 .* u0', M)
+    _M = (u0 === nothing || M == I) ? M : ArrayInterface.restructure(u0 .* u0', M)
 
     ex = quote
         f = $f

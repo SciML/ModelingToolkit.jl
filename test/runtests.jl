@@ -3,6 +3,7 @@ using SafeTestsets, Test
 @safetestset "ODAEProblem Test" begin include("odaeproblem.jl") end
 @safetestset "ODESystem Test" begin include("odesystem.jl") end
 @safetestset "AliasGraph Test" begin include("alias.jl") end
+@safetestset "Pantelides Test" begin include("pantelides.jl") end
 @safetestset "Linear Algebra Test" begin include("linalg.jl") end
 @safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
 @safetestset "Variable Scope Tests" begin include("variable_scope.jl") end
