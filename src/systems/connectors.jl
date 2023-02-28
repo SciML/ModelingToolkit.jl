@@ -6,32 +6,8 @@ function get_connection_type(s)
     getmetadata(s, VariableConnectType, Equality)
 end
 
-function with_connector_type(expr)
-    @assert expr isa Expr && (expr.head == :function || (expr.head == :(=) &&
-              expr.args[1] isa Expr &&
-              expr.args[1].head == :call))
-
-    sig = expr.args[1]
-    body = expr.args[2]
-
-    fname = sig.args[1]
-    args = sig.args[2:end]
-
-    quote
-        function $fname($(args...))
-            function f()
-                $body
-            end
-            res = f()
-            $isdefined(res, :connector_type) &&
-                $getfield(res, :connector_type) === nothing ?
-            $Setfield.@set!(res.connector_type=$connector_type(res)) : res
-        end
-    end
-end
-
 macro connector(expr)
-    esc(with_connector_type(expr))
+    esc(component_post_processing(expr, true))
 end
 
 abstract type AbstractConnectorType end
