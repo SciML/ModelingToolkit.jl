@@ -1,5 +1,6 @@
 using Test
 using ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkit: get_gui_metadata
 using ModelingToolkit.BipartiteGraphs
 using ModelingToolkit.StructuralTransformations
 include("../examples/rc_model.jl")
@@ -33,7 +34,9 @@ function check_rc_sol(sol)
           sol[source.p.v] - sol[capacitor.p.v]
 end
 
-include("../examples/rc_model.jl")
+@named pin = Pin()
+@test get_gui_metadata(pin).type == :Pin
+@test get_gui_metadata(rc_model.resistor).type == :Resistor
 
 completed_rc_model = complete(rc_model)
 @test isequal(completed_rc_model.resistor.n.i, resistor.n.i)

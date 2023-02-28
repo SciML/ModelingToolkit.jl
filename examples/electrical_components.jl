@@ -7,13 +7,13 @@ using ModelingToolkit, OrdinaryDiffEq
     ODESystem(Equation[], t, sts, []; name = name)
 end
 
-function Ground(; name)
+@component function Ground(; name)
     @named g = Pin()
     eqs = [g.v ~ 0]
     compose(ODESystem(eqs, t, [], []; name = name), g)
 end
 
-function OnePort(; name)
+@component function OnePort(; name)
     @named p = Pin()
     @named n = Pin()
     sts = @variables v(t)=1.0 i(t)=1.0
@@ -23,7 +23,7 @@ function OnePort(; name)
     compose(ODESystem(eqs, t, sts, []; name = name), p, n)
 end
 
-function Resistor(; name, R = 1.0)
+@component function Resistor(; name, R = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
     ps = @parameters R = R
@@ -33,7 +33,7 @@ function Resistor(; name, R = 1.0)
     extend(ODESystem(eqs, t, [], ps; name = name), oneport)
 end
 
-function Capacitor(; name, C = 1.0)
+@component function Capacitor(; name, C = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
     ps = @parameters C = C
@@ -44,7 +44,7 @@ function Capacitor(; name, C = 1.0)
     extend(ODESystem(eqs, t, [], ps; name = name), oneport)
 end
 
-function ConstantVoltage(; name, V = 1.0)
+@component function ConstantVoltage(; name, V = 1.0)
     @named oneport = OnePort()
     @unpack v = oneport
     ps = @parameters V = V
@@ -54,7 +54,7 @@ function ConstantVoltage(; name, V = 1.0)
     extend(ODESystem(eqs, t, [], ps; name = name), oneport)
 end
 
-function Inductor(; name, L = 1.0)
+@component function Inductor(; name, L = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
     ps = @parameters L = L
@@ -70,7 +70,7 @@ end
     ODESystem(Equation[], t, [T, Q_flow], [], name = name)
 end
 
-function HeatingResistor(; name, R = 1.0, TAmbient = 293.15, alpha = 1.0)
+@component function HeatingResistor(; name, R = 1.0, TAmbient = 293.15, alpha = 1.0)
     @named p = Pin()
     @named n = Pin()
     @named h = HeatPort()
@@ -85,7 +85,7 @@ function HeatingResistor(; name, R = 1.0, TAmbient = 293.15, alpha = 1.0)
                       name = name), p, n, h)
 end
 
-function HeatCapacitor(; name, rho = 8050, V = 1, cp = 460, TAmbient = 293.15)
+@component function HeatCapacitor(; name, rho = 8050, V = 1, cp = 460, TAmbient = 293.15)
     @parameters rho=rho V=V cp=cp
     C = rho * V * cp
     @named h = HeatPort()
