@@ -13,6 +13,7 @@ end
 abstract type AbstractConnectorType end
 struct StreamConnector <: AbstractConnectorType end
 struct RegularConnector <: AbstractConnectorType end
+struct DomainConnector <: AbstractConnectorType end
 
 function connector_type(sys::AbstractSystem)
     sts = get_states(sys)
@@ -31,7 +32,10 @@ function connector_type(sys::AbstractSystem)
         end
     end
     (n_stream > 0 && n_flow > 1) &&
-        error("There are multiple flow variables in $(nameof(sys))!")
+        error("There are multiple flow variables in the stream connector $(nameof(sys))!")
+    if n_flow == 1 && length(sts) == 1
+        return DomainConnector()
+    end
     if n_flow != n_regular
         @warn "$(nameof(sys)) contains $n_flow flow variables, yet $n_regular regular " *
               "(non-flow, non-stream, non-input, non-output) variables. " *
@@ -40,6 +44,8 @@ function connector_type(sys::AbstractSystem)
     end
     n_stream > 0 ? StreamConnector() : RegularConnector()
 end
+
+is_domain_connector(s) = isconnector(s) && get_connector_type(s) === DomainConnector()
 
 get_systems(c::Connection) = c.systems
 
@@ -117,12 +123,14 @@ function generate_isouter(sys::AbstractSystem)
 end
 
 struct LazyNamespace
-    namespace::Union{Nothing, Symbol}
+    namespace::Union{Nothing, AbstractSystem}
     sys::Any
 end
 
-Base.copy(l::LazyNamespace) = renamespace(l.namespace, l.sys)
-Base.nameof(l::LazyNamespace) = renamespace(l.namespace, nameof(l.sys))
+_getname(::Nothing) = nothing
+_getname(sys) = nameof(sys)
+Base.copy(l::LazyNamespace) = renamespace(_getname(l.namespace), l.sys)
+Base.nameof(l::LazyNamespace) = renamespace(_getname(l.namespace), nameof(l.sys))
 
 struct ConnectionElement
     sys::LazyNamespace
@@ -173,7 +181,22 @@ function ori(sys)
 end
 
 function connection2set!(connectionsets, namespace, ss, isouter)
-    nn = map(nameof, ss)
+    regular_ss = []
+    domain_ss = nothing
+    for s in ss
+        if is_domain_connector(s)
+            if domain_ss === nothing
+                domain_ss = s
+            else
+                names = join(string(map(name, ss)), ",")
+                error("connect($names) contains multiple source domain connectors. There can only be one!")
+            end
+        else
+            push!(regular_ss, s)
+        end
+    end
+    @assert !isempty(regular_ss)
+    ss = regular_ss
     s1 = first(ss)
     sts1v = states(s1)
     if isframe(s1) # Multibody
@@ -200,7 +223,11 @@ function connection2set!(connectionsets, namespace, ss, isouter)
         end
     end
     for cset in csets
-        vtype = get_connection_type(first(cset).v)
+        v = first(cset).v
+        vtype = get_connection_type(v)
+        if domain_ss !== nothing && vtype === Flow && (dv = only(states(domain_ss)); isequal(v, dv))
+            push!(cset, T(LazyNamespace(namespace, domain_ss), dv, false))
+        end
         for k in 2:length(cset)
             vtype === get_connection_type(cset[k].v) || connection_error(ss)
         end
@@ -227,8 +254,8 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, find, rep
     for eq in eqs′
         lhs = eq.lhs
         rhs = eq.rhs
-        if find !== nothing && find(rhs, namespace)
-            neweq, extra_state = replace(rhs, namespace)
+        if find !== nothing && find(rhs, _getname(namespace))
+            neweq, extra_state = replace(rhs, _getname(namespace))
             if extra_state isa AbstractArray
                 append!(extra_states, unwrap.(extra_state))
             elseif extra_state !== nothing
@@ -263,7 +290,7 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, find, rep
         @set! sys.states = [get_states(sys); extra_states]
     end
     @set! sys.systems = map(s -> generate_connection_set!(connectionsets, s, find, replace,
-                                                          renamespace(namespace, nameof(s))),
+                                                          renamespace(namespace, s)),
                             subsys)
     @set! sys.eqs = eqs
 end
@@ -299,6 +326,53 @@ function Base.merge(csets::AbstractVector{<:ConnectionSet})
         end
     end
     mcsets
+end
+
+struct SystemDomainGraph{C<:AbstractVector{<:ConnectionSet}} <: Graphs.AbstractGraph{Int}
+    id2cset::Vector{NTuple{2, Int}}
+    cset2id::Vector{Vector{Int}}
+    csets::C
+    sys2cset::IdDict{Any, NTuple{2, Int}}
+    outne::Vector{Union{Nothing, Vector{Int}}}
+end
+
+Graphs.nv(g::SystemDomainGraph) = length(g.id2cset)
+function Graphs.outneighbors(g::SystemDomainGraph, n::Int)
+    i, j = g.id2cset[n]
+    for s in g.csets[i].set
+        is_domain_connector(s.sys.sys) && continue
+        ts = TearingState(s.sys.namespace)
+        var2idx = Dict(reverse(en) for en in enumerate(ts.fullvars))
+        display(var2idx)
+        vidx = get(var2idx, s.v, 0)
+        @show vidx
+        iszero(vidx) && continue
+        @show s.v
+        @show nameof(s.sys.namespace)
+    end
+    ids = copy(g.cset2id[i])
+end
+function SystemDomainGraph(csets::AbstractVector{<:ConnectionSet})
+    id2cset = NTuple{2, Int}[]
+    cset2id = Vector{Int}[]
+    sys2cset = IdDict{Any, NTuple{2, Int}}()
+    for (i, c) in enumerate(csets)
+        cset2id′ = Int[]
+        for (j, s) in enumerate(c.set)
+            ij = (i, j)
+            sys2cset[s] = ij
+            push!(id2cset, ij)
+            push!(cset2id′, length(id2cset))
+            is_domain_connector(s.sys.sys) && @show length(id2cset)
+        end
+        push!(cset2id, cset2id′)
+    end
+    outne = Vector{Union{Nothing, Vector{Int}}}(undef, length(id2cset))
+    SystemDomainGraph(id2cset, cset2id, csets, sys2cset, outne)
+end
+
+function propagate_domain(csets::AbstractVector{<:ConnectionSet})
+    csets[1]
 end
 
 function generate_connection_equations_and_stream_connections(csets::AbstractVector{
