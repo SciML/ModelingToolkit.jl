@@ -1130,10 +1130,8 @@ function component_post_processing(expr, isconnector)
 
     quote
         function $fname($(args...))
-            function f()
-                $body
-            end
-            res = f()
+            # we need to create a closure to escape explicit return in `body`.
+            res = (() -> $body)()
             if $isdefined(res, :gui_metadata) && $getfield(res, :gui_metadata) === nothing
                 name = $(Meta.quot(fname))
                 if $isconnector
