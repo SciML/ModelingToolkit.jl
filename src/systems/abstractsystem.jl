@@ -647,7 +647,7 @@ function SymbolicIndexingInterface.is_state_sym(sys::AbstractSystem, sym)
 end
 
 function SymbolicIndexingInterface.param_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(sym), SymbolicIndexingInterface.parameters(sys)) |> safe_unwrap
+    findfirst(isequal((safe_unwrap(sym)), SymbolicIndexingInterface.parameters(sys)) |> safe_unwrap
 end
 function SymbolicIndexingInterface.is_param_sym(sys::AbstractSystem, sym)
     !isnothing(SymbolicIndexingInterface.param_sym_to_index(sys, sym))
@@ -724,6 +724,28 @@ function SymbolicIndexingInterface.get_observed_dependencies(sys::AbstractSystem
     end |> unique
 
     return out
+end
+
+function operations(ex; ignore = [])
+    if istree(ex)
+        op = operation(ex)
+        if !any(isequal(op), ignore)
+            return vcat(operations.(arguments(ex), ignore = ignore)..., op)
+        end
+    end
+    return []
+end
+
+function SymbolicIndexingInterface.convert_to_getindex(A::SciMLBase.AbstractSciMLSolution, expr, is...)
+    ex_vars = vars(expr)
+    var_rules = [@rule v => A[v, is...] for v in ex_vars]
+
+    ex_ops = operations(expr, ignore = vcat(operation.(ex_vars), getindex))
+    op_rules = [@rule op(~~a) => broadcast(op, ~a...)for op in ex_ops]
+
+    ch = Chain(vcat(var_rules, op_rules))
+    ex = ch(ex)
+    return ex
 end
 
 struct AbstractSysToExpr
