@@ -1,7 +1,7 @@
 const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
 
 struct GUIMetadata
-    type::String
+    type::Symbol
     layout::Any
 end
 
@@ -1188,6 +1188,38 @@ Rewrite `@namespace a.b.c` to
 """
 macro namespace(expr)
     esc(_config(expr, true))
+end
+
+function component_post_processing(expr, isconnector)
+    @assert expr isa Expr && (expr.head == :function || (expr.head == :(=) &&
+              expr.args[1] isa Expr &&
+              expr.args[1].head == :call))
+
+    sig = expr.args[1]
+    body = expr.args[2]
+
+    fname = sig.args[1]
+    args = sig.args[2:end]
+
+    quote
+        function $fname($(args...))
+            # we need to create a closure to escape explicit return in `body`.
+            res = (() -> $body)()
+            if $isdefined(res, :gui_metadata) && $getfield(res, :gui_metadata) === nothing
+                name = $(Meta.quot(fname))
+                if $isconnector
+                    $Setfield.@set!(res.connector_type=$connector_type(res))
+                end
+                $Setfield.@set!(res.gui_metadata=$GUIMetadata(name))
+            else
+                res
+            end
+        end
+    end
+end
+
+macro component(expr)
+    esc(component_post_processing(expr, false))
 end
 
 """

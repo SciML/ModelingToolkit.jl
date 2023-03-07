@@ -548,7 +548,8 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL{T, Ti}) wher
     is_linear_variables = is_algebraic.(1:length(var_to_diff))
     for i in 𝑠vertices(graph)
         # only consider linear algebraic equations
-        (i in linear_equations_set && all(is_algebraic, 𝑠neighbors(graph, i))) && continue
+        (i in linear_equations_set && all(is_algebraic, 𝑠neighbors(graph, i))) &&
+            continue
         for j in 𝑠neighbors(graph, i)
             is_linear_variables[j] = false
         end
@@ -956,11 +957,14 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
 
     if needs_update
         mm = reduce!(copy(echelon_mm), mm_orig, ag, size(echelon_mm, 1))
-        for (ei, e) in enumerate(mm.nzrows)
-            set_neighbors!(graph, e, mm.row_cols[ei])
-        end
-        update_graph_neighbors!(graph, ag)
     end
+    # applying new `ag` to `mm` might lead to linear dependence, so we have to
+    # re-run Bareiss.
+    mm, = aag_bareiss!(graph, var_to_diff, mm)
+    for (ei, e) in enumerate(mm.nzrows)
+        set_neighbors!(graph, e, mm.row_cols[ei])
+    end
+    update_graph_neighbors!(graph, ag)
 
     complete_mm = reduce!(copy(echelon_mm), mm_orig, complete_ag, size(echelon_mm, 1))
     return ag, mm, complete_ag, complete_mm
