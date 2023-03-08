@@ -4,9 +4,9 @@ ModelingToolkit has a system for transformations of mathematical
 systems. These transformations allow for symbolically changing
 the representation of the model to problems that are easier to
 numerically solve. One simple to demonstrate transformation is the
-`structural_simplify` with does a lot of tricks, one being the
-transformation that sends a Nth order ODE
-to a 1st order ODE.
+`structural_simplify`, which does a lot of tricks, one being the
+transformation that turns an Nth order ODE into N
+coupled 1st order ODEs.
 
 To see this, let's define a second order riff on the Lorenz equations.
 We utilize the derivative operator twice here to define the second order:
