@@ -26,7 +26,7 @@ eqs = [D(D(x)) ~ σ * (y - x),
 ```
 
 Note that we could've used an alternative syntax for 2nd order, i.e.
-`D = Differential(t)^2` and then `E(x)` would be the second derivative,
+`D = Differential(t)^2` and then `D(x)` would be the second derivative,
 and this syntax extends to `N`-th order. Also, we can use `*` or `∘` to compose
 `Differential`s, like `Differential(t) * Differential(x)`.
 
