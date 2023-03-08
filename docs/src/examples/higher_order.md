@@ -34,7 +34,7 @@ Now let's transform this into the `ODESystem` of first order components.
 We do this by simply calling `ode_order_lowering`:
 
 ```@example orderlowering
-sys = structural_simplify(sys)
+sys = ode_order_lowering(sys)
 ```
 
 Now we can directly numerically solve the lowered system. Note that,
