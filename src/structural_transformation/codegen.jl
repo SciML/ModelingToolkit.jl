@@ -534,7 +534,6 @@ function ODAEProblem{iip}(sys,
                           parammap = DiffEqBase.NullParameters();
                           callback = nothing,
                           use_union = false,
-                          dense_output = true,
                           check = true,
                           kwargs...) where {iip}
     eqs = equations(sys)
@@ -551,12 +550,11 @@ function ODAEProblem{iip}(sys,
 
     has_difference = any(isdifferenceeq, eqs)
     cbs = process_events(sys; callback, has_difference, kwargs...)
-
     kwargs = filter_kwargs(kwargs)
     if cbs === nothing
-        ODEProblem{iip}(fun, u0, tspan, p; dense_output = dense_output, kwargs...)
+        ODEProblem{iip}(fun, u0, tspan, p; kwargs...)
     else
-        ODEProblem{iip}(fun, u0, tspan, p; dense_output = dense_output, callback = cbs,
+        ODEProblem{iip}(fun, u0, tspan, p; callback = cbs,
                         kwargs...)
     end
 end

@@ -878,4 +878,4 @@ end
 
 normalize_to_differential(s) = s
 
-safe_unwrap(x) = x isa Num ? unwrap(x) : x
+SymbolicIndexingInterface.safe_unwrap(x::Num) = unwrap(x)

@@ -161,7 +161,7 @@ function independent_variable(sys::AbstractSystem)
 end
 
 #Treat the result as a vector of symbols always
-function SymbolicIndexingInterface.independent_variables(sys::AbstractSystem)
+function SII.independent_variables(sys::AbstractSystem)
     systype = typeof(sys)
     @warn "Please declare ($systype) as a subtype of `AbstractTimeDependentSystem`, `AbstractTimeIndependentSystem` or `AbstractMultivariateSystem`."
     if isdefined(sys, :iv)
@@ -173,11 +173,11 @@ function SymbolicIndexingInterface.independent_variables(sys::AbstractSystem)
     end
 end
 
-function SymbolicIndexingInterface.independent_variables(sys::AbstractTimeDependentSystem)
+function SII.independent_variables(sys::AbstractTimeDependentSystem)
     [getfield(sys, :iv)]
 end
-SymbolicIndexingInterface.independent_variables(sys::AbstractTimeIndependentSystem) = []
-function SymbolicIndexingInterface.independent_variables(sys::AbstractMultivariateSystem)
+SII.independent_variables(sys::AbstractTimeIndependentSystem) = []
+function SII.independent_variables(sys::AbstractMultivariateSystem)
     getfield(sys, :ivs)
 end
 
@@ -512,7 +512,7 @@ function namespace_expr(O, sys, n = nameof(sys))
     end
 end
 
-function states(sys::AbstractSystem)
+function SII.states(sys::AbstractSystem)
     sts = get_states(sys)
     systems = get_systems(sys)
     unique(isempty(systems) ?
@@ -520,7 +520,20 @@ function states(sys::AbstractSystem)
            [sts; reduce(vcat, namespace_variables.(systems))])
 end
 
-function SymbolicIndexingInterface.parameters(sys::AbstractSystem)
+"""
+$(SIGNATURES)
+
+Return a list of actual states needed to be solved by solvers.
+"""
+function SII.unknown_states(sys::AbstractSystem)
+    sts = something(get_unknown_states(sys), get_states(sys))
+    systems = get_systems(sys)
+    return unique(isempty(systems) ?
+                  sts :
+                  [sts; reduce(vcat, SII.unknown_states.(systems))])
+end
+
+function SII.parameters(sys::AbstractSystem)
     ps = get_ps(sys)
     systems = get_systems(sys)
     unique(isempty(systems) ? ps : [ps; reduce(vcat, namespace_parameters.(systems))])
@@ -532,7 +545,7 @@ function controls(sys::AbstractSystem)
     isempty(systems) ? ctrls : [ctrls; reduce(vcat, namespace_controls.(systems))]
 end
 
-function SymbolicIndexingInterface.observed(sys::AbstractSystem)
+function SII.observed(sys::AbstractSystem)
     obs = get_observed(sys)
     systems = get_systems(sys)
     [obs;
@@ -624,54 +637,45 @@ function time_varying_as_func(x, sys::AbstractTimeDependentSystem)
     return x
 end
 
-SymbolicIndexingInterface.is_indep_sym(sys::AbstractSystem, sym) = isequal(sym, get_iv(sys))
+###
+### SymbolicIndexingInterface
+###
 
-"""
-$(SIGNATURES)
+SII.is_indep_sym(sys::AbstractSystem, sym) = isequal(sym, get_iv(sys))
 
-Return a list of actual states needed to be solved by solvers.
-"""
-function SymbolicIndexingInterface.unknown_states(sys::AbstractSystem)
-    sts = states(sys)
-    if has_unknown_states(sys)
-        sts = something(get_unknown_states(sys), sts)
-    end
-    return sts
+function SII.state_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(isequal(SII.safe_unwrap(sym)), SII.unknown_states(sys)) |> safe_unwrap
+end
+function SII.is_state_sym(sys::AbstractSystem, sym)
+    !isnothing(SII.state_sym_to_index(sys, sym))
 end
 
-function SymbolicIndexingInterface.state_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(safe_unwrap(sym)), unknown_states(sys)) |> safe_unwrap
+function SII.param_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(isequal((SII.safe_unwrap(sym))), parameters(sys)) |> safe_unwrap
 end
-function SymbolicIndexingInterface.is_state_sym(sys::AbstractSystem, sym)
-    !isnothing(SymbolicIndexingInterface.state_sym_to_index(sys, sym))
-end
-
-function SymbolicIndexingInterface.param_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal((safe_unwrap(sym)), SymbolicIndexingInterface.parameters(sys)) |> safe_unwrap
-end
-function SymbolicIndexingInterface.is_param_sym(sys::AbstractSystem, sym)
-    !isnothing(SymbolicIndexingInterface.param_sym_to_index(sys, sym))
+function SII.is_param_sym(sys::AbstractSystem, sym)
+    !isnothing(SII.param_sym_to_index(sys, sym))
 end
 
-function SymbolicIndexingInterface.observed_sym_to_index(sys::AbstractSystem, sym)
-    findfirst(isequal(safe_unwrap(sym)), getfield.(observed(sys), (:lhs,))) |>
+function SII.observed_sym_to_index(sys::AbstractSystem, sym)
+    findfirst(o -> isequal(SII.safe_unwrap(sym), o.lhs), observed(sys)) |>
     safe_unwrap
 end
-function SymbolicIndexingInterface.observed_sym_to_index(sys::AbstractSystem, sym::Equation)
-    findfirst(isequal(sym), observed(sys)) |> safe_unwrap
+function SII.observed_sym_to_index(sys::AbstractSystem, sym::Equation)
+    findfirst(isequal(SII.safe_unwrap(sym)), observed(sys)) |> safe_unwrap
 end
-function SymbolicIndexingInterface.observed_sym_to_index(obs::AbstractArray{<:Equation}, sym)
-    findfirst(isequal(safe_unwrap(sym)), getfield.(obs, (:lhs,))) |>
+function SII.observed_sym_to_index(obs::AbstractArray{<:Equation}, sym)
+    findfirst(o -> isequal(SII.safe_unwrap(sym), o.lhs), obs) |>
     safe_unwrap
 end
-function SymbolicIndexingInterface.observed_sym_to_index(obs::AbstractArray{<:Equation}, sym::Equation)
-    findfirst(isequal(sym), obs) |> safe_unwrap
+function SII.observed_sym_to_index(obs::AbstractArray{<:Equation}, sym::Equation)
+    findfirst(isequal(SII.safe_unwrap(sym)), obs) |> safe_unwrap
 end
-function SymbolicIndexingInterface.is_observed_sym(sys::AbstractSystem, sym)
-    !isnothing(SymbolicIndexingInterface.observed_sym_to_index(sys, sym))
+function SII.is_observed_sym(sys::AbstractSystem, sym)
+    !isnothing(SII.observed_sym_to_index(sys, sym))
 end
 
-function SymbolicIndexingInterface.get_deps_of_observed(sts, obs::AbstractArray{<:Equation})
+function SII.get_deps_of_observed(sts, obs::AbstractArray{<:Equation})
     deps = mapreduce(vcat, obs, init = []) do eq
         get_state_dependencies(sts, obs, eq.lhs)
     end |> unique
@@ -679,8 +683,9 @@ function SymbolicIndexingInterface.get_deps_of_observed(sts, obs::AbstractArray{
     return deps
 end
 
-function SymbolicIndexingInterface.get_state_dependencies(sts, obs, sym)
-    sym = safe_unwrap(sym)
+# ! this is broken vvvvvv
+function SII.get_state_dependencies(sts, obs, sym)
+    sym = SII.safe_unwrap(sym)
     i = observed_sym_to_index(obs, sym)
     if isnothing(i)
         return []
@@ -699,14 +704,14 @@ function SymbolicIndexingInterface.get_state_dependencies(sts, obs, sym)
     return filter(x -> any(isequal(x), sts), out)
 end
 
-function SymbolicIndexingInterface.get_state_dependencies(sys::AbstractSystem, sym)
-    obs = observed(sys)
-    sts = unknown_states(sys)
+function SII.get_state_dependencies(sys::AbstractSystem, sym)
+    obs = SII.observed(sys)
+    sts = SII.unknown_states(sys)
     return get_state_dependencies(sts, obs, sym)
 end
 
-function SymbolicIndexingInterface.get_observed_dependencies(sys::AbstractSystem, sym)
-    obs = observed(sys)
+function SII.get_observed_dependencies(sys::AbstractSystem, sym)
+    obs = SII.observed(sys)
 
     i = observed_sym_to_index(sys, sym)
     if isnothing(i)
@@ -726,27 +731,43 @@ function SymbolicIndexingInterface.get_observed_dependencies(sys::AbstractSystem
     return out
 end
 
-function operations(ex; ignore = [])
+function operations(ex)
     if istree(ex)
         op = operation(ex)
-        if !any(isequal(op), ignore)
-            return vcat(operations.(arguments(ex), ignore = ignore)..., op)
-        end
+        return vcat(operations.(arguments(ex))..., op)
     end
     return []
 end
 
-function SymbolicIndexingInterface.convert_to_getindex(A::SciMLBase.AbstractSciMLSolution, expr, is...)
+"""
+Must be defined here because it needs Symbolics
+"""
+function SII.convert_to_getindex(A::SciMLBase.AbstractSciMLSolution, expr, is...)
+    expr = scalarize(expr)
     ex_vars = vars(expr)
+
     var_rules = [@rule v => A[v, is...] for v in ex_vars]
+    ex_ops = operations(expr)
+    ignore = vcat(operation.(ex_vars), getindex)
+    ex_ops = filter(x -> !any(isequal(x), ignore), ex_ops)
+    op_rules = [@rule $(op)(~~a) => broadcast(op, ~a...) for op in ex_ops]
 
-    ex_ops = operations(expr, ignore = vcat(operation.(ex_vars), getindex))
-    op_rules = [@rule op(~~a) => broadcast(op, ~a...)for op in ex_ops]
-
-    ch = Chain(vcat(var_rules, op_rules))
-    ex = ch(ex)
+    ch = Postwalk(Chain([var_rules; op_rules]))
+    ex = ch(expr)
     return ex
 end
+
+function SII.is_symbolic_expr(ex::SymbolicUtils.Symbolic)
+    ex_vars = vars(ex)
+    if istree(ex)
+        return !any(isequal(ex), ex_vars)
+    end
+    return false
+end
+
+###
+### System to Expr
+###
 
 struct AbstractSysToExpr
     sys::AbstractSystem
@@ -1354,7 +1375,7 @@ function linearization_function(sys::AbstractSystem, inputs,
                 uf = SciMLBase.UJacobianWrapper(fun, t, p)
                 fg_xz = ForwardDiff.jacobian(uf, u)
                 h_xz = ForwardDiff.jacobian(let p = p, t = t
-                                                (xz) -> h(xz, p, t) #! signature must change
+                                                (xz) -> h(xz, p, t)
                                             end, u)
                 pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
                 fg_u = jacobian_wrt_vars(pf, p, input_idxs, chunk)
@@ -1365,7 +1386,7 @@ function linearization_function(sys::AbstractSystem, inputs,
                 h_xz = fg_u = zeros(0, length(inputs))
             end
             hp = let u = u, t = t
-                p -> h(u, p, t) #! signature must change
+                p -> h(u, p, t)
             end
             h_u = jacobian_wrt_vars(hp, p, input_idxs, chunk)
             (f_x = fg_xz[diff_idxs, diff_idxs],

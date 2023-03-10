@@ -63,4 +63,5 @@ ref_sol = solve(ref_prob, FBDF(), saveat = 1.0)
 sol = solve(prob, Tsit5(), saveat = 1.0)
 
 # test observed
-@test sol[observed(sys)[1].lhs] ≈ ref_sol[observed(sys)[1].lhs] atol = 0.001
+
+@test sol[observed(sys)[1].lhs]≈ref_sol[observed(sys)[1].lhs] atol=0.001

@@ -275,7 +275,6 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
                                                  steady_state = false,
                                                  checkbounds = false,
                                                  sparsity = false,
-                                                 dense_output = true,
                                                  analytic = nothing,
                                                  kwargs...) where {iip, specialize}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
@@ -338,8 +337,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         let sys = sys, dict = Dict()
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
-                    build_explicit_observed_function(sys, obsvar;
-                                                     dense_output = dense_output)
+                    build_explicit_observed_function(sys, obsvar)
                 end
                 if args === ()
                     let obs = obs
@@ -354,8 +352,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         let sys = sys, dict = Dict()
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
-                    build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds,
-                                                     dense_output = dense_output)
+                    build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
                 end
                 if args === ()
                     let obs = obs
@@ -576,7 +573,7 @@ end
 """
     u0, p, defs = get_u0_p(sys, u0map, parammap; use_union=false, tofloat=!use_union)
 
-Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point. 
+Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point.
 """
 function get_u0_p(sys, u0map, parammap; use_union = false, tofloat = !use_union)
     eqs = equations(sys)
@@ -757,7 +754,7 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     if svs !== nothing
         kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
     end
-    ODEProblem{iip}(f, u0, tspan, p, pt; dense_output = dense_output, kwargs1...,
+    ODEProblem{iip}(f, u0, tspan, p, pt; kwargs1...,
                     kwargs...)
 end
 get_callback(prob::ODEProblem) = prob.kwargs[:callback]
