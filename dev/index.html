@@ -19,10 +19,10 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
   [961ee093] ModelingToolkit v8.48.1 `~/work/ModelingToolkit.jl/ModelingToolkit.jl`
   [8913a72c] NonlinearSolve v1.5.0
   [429524aa] Optim v1.7.4
-  [7f7a1694] Optimization v3.12.0
+  [7f7a1694] Optimization v3.12.1
   [36348300] OptimizationOptimJL v0.1.5
   [1dea7af3] OrdinaryDiffEq v6.49.0
-  [91a5bcdd] Plots v1.38.6
+  [91a5bcdd] Plots v1.38.7
   [789caeaf] StochasticDiffEq v6.58.0
   [220ca800] StructuralIdentifiability v0.4.7
   [d1185830] SymbolicUtils v1.0.3
@@ -32,17 +32,17 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
 Commit 17cfb8e65ea (2023-01-08 06:45 UTC)
 Platform Info:
   OS: Linux (x86_64-linux-gnu)
-  CPU: 2 × Intel(R) Xeon(R) CPU E5-2673 v3 @ 2.40GHz
+  CPU: 2 × Intel(R) Xeon(R) Platinum 8272CL CPU @ 2.60GHz
   WORD_SIZE: 64
   LIBM: libopenlibm
-  LLVM: libLLVM-13.0.1 (ORCJIT, haswell)
+  LLVM: libLLVM-13.0.1 (ORCJIT, skylake-avx512)
   Threads: 1 on 2 virtual cores</code></pre></details><details><summary>A more complete overview of all dependencies and their versions is also provided.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Status `~/work/ModelingToolkit.jl/ModelingToolkit.jl/docs/Manifest.toml`
   [a4c015fc] ANSIColoredPrinters v0.0.1
 ⌅ [c3fe647b] AbstractAlgebra v0.27.10
   [1520ce14] AbstractTrees v0.4.4
   [79e6a3ab] Adapt v3.6.1
   [ec485272] ArnoldiMethod v0.2.0
-  [4fba245c] ArrayInterface v7.2.0
+  [4fba245c] ArrayInterface v7.2.1
   [30b0a656] ArrayInterfaceCore v0.1.29
   [4c555306] ArrayLayouts v0.8.18
   [aae01518] BandedMatrices v0.17.16
@@ -78,15 +78,15 @@ Platform Info:
   [864edb3b] DataStructures v0.18.13
   [e2d170a0] DataValueInterfaces v1.0.0
   [ab62b9b5] DeepDiffs v1.2.0
-  [bcd4f6db] DelayDiffEq v5.41.0
+  [bcd4f6db] DelayDiffEq v5.41.1
   [b429d917] DensityInterface v0.4.0
-  [2b5f629d] DiffEqBase v6.121.1
+  [2b5f629d] DiffEqBase v6.122.1
   [459566f4] DiffEqCallbacks v2.26.0
   [77a26b50] DiffEqNoiseProcess v5.16.0
   [163ba53b] DiffResults v1.1.0
   [b552c78f] DiffRules v1.13.0
   [0c46a032] DifferentialEquations v7.7.0
-  [b4f34e82] Distances v0.10.7
+  [b4f34e82] Distances v0.10.8
   [31c24e10] Distributions v0.25.86
   [ffbed154] DocStringExtensions v0.9.3
   [e30172f5] Documenter v0.27.24
@@ -95,7 +95,7 @@ Platform Info:
   [7c1d4256] DynamicPolynomials v0.4.6
   [4e289a0a] EnumX v1.0.4
   [d4d017d3] ExponentialUtilities v1.24.0
-  [e2ba6199] ExprTools v0.1.8
+  [e2ba6199] ExprTools v0.1.9
   [c87230d0] FFMPEG v0.4.1
   [7034ab61] FastBroadcast v0.2.5
   [9aa1b823] FastClosures v0.3.2
@@ -167,7 +167,7 @@ Platform Info:
   [6fe1bfb0] OffsetArrays v1.12.9
   [4d8831e6] OpenSSL v1.3.3
   [429524aa] Optim v1.7.4
-  [7f7a1694] Optimization v3.12.0
+  [7f7a1694] Optimization v3.12.1
   [36348300] OptimizationOptimJL v0.1.5
   [bac558e1] OrderedCollections v1.4.1
   [1dea7af3] OrdinaryDiffEq v6.49.0
@@ -177,7 +177,7 @@ Platform Info:
   [b98c9c47] Pipe v1.3.0
   [ccf2f8ad] PlotThemes v3.1.0
   [995b91a9] PlotUtils v1.3.4
-  [91a5bcdd] Plots v1.38.6
+  [91a5bcdd] Plots v1.38.7
   [e409e4f3] PoissonRandom v0.4.3
   [f517fe37] Polyester v0.7.3
   [1d0040c9] PolyesterWeave v0.2.1
@@ -203,15 +203,16 @@ Platform Info:
   [7e49a35a] RuntimeGeneratedFunctions v0.5.5
   [94e857df] SIMDTypes v0.1.0
   [476501e8] SLEEFPirates v0.6.38
-  [0bca4576] SciMLBase v1.89.0
+  [0bca4576] SciMLBase v1.90.0
   [e9a6253c] SciMLNLSolve v0.1.3
   [c0aeaf25] SciMLOperators v0.2.0
-  [6c6a2e73] Scratch v1.1.1
+  [6c6a2e73] Scratch v1.2.0
   [efcf1570] Setfield v1.1.1
   [992d4aef] Showoff v1.0.3
   [777ac1f9] SimpleBufferStream v1.1.0
-  [727e6d20] SimpleNonlinearSolve v0.1.13
+  [727e6d20] SimpleNonlinearSolve v0.1.14
   [699a6c99] SimpleTraits v0.9.4
+  [ce78b400] SimpleUnPack v1.1.0
   [66db9d55] SnoopPrecompile v1.0.3
   [a2af1166] SortingAlgorithms v1.1.0
   [47a9eef4] SparseDiffTools v1.31.0
@@ -251,7 +252,7 @@ Platform Info:
   [1986cc42] Unitful v1.12.4
   [a7c27f48] Unityper v0.1.2
   [41fe7b60] Unzip v0.2.0
-  [3d5dd08c] VectorizationBase v0.21.60
+  [3d5dd08c] VectorizationBase v0.21.61
   [19fa3120] VertexSafeGraphs v0.2.0
   [700de1a5] ZygoteRules v0.2.2
   [e21ec000] Antic_jll v0.201.500+0
@@ -379,4 +380,4 @@ Platform Info:
   [3f19e933] p7zip_jll v17.4.0+0
 Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated -m`</code></pre></details>You can also download the 
 <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.48.1/assets/Manifest.toml">manifest</a> file and the
-<a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.48.1/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Monday 6 March 2023 14:12">Monday 6 March 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+<a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.48.1/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Friday 10 March 2023 17:32">Friday 10 March 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
