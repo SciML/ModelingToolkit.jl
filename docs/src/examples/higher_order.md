@@ -31,10 +31,10 @@ and this syntax extends to `N`-th order. Also, we can use `*` or `∘` to compos
 `Differential`s, like `Differential(t) * Differential(x)`.
 
 Now let's transform this into the `ODESystem` of first order components.
-We do this by simply calling `ode_order_lowering`:
+We do this by calling `structural_simplify`:
 
 ```@example orderlowering
-sys = ode_order_lowering(sys)
+sys = structural_simplify(sys)
 ```
 
 Now we can directly numerically solve the lowered system. Note that,
