@@ -13,6 +13,14 @@ function gen_quoted_kwargs(kwargs)
     kwargparam
 end
 
+function SII.unknown_states(sys::ODESystem)
+    sts = something(get_unknown_states(sys), get_states(sys))
+    systems = get_systems(sys)
+    return unique(isempty(systems) ?
+                  sts :
+                  [sts; reduce(vcat, SII.unknown_states.(systems))])
+end
+
 function calculate_tgrad(sys::AbstractODESystem;
                          simplify = false)
     isempty(get_tgrad(sys)[]) || return get_tgrad(sys)[]  # use cached tgrad, if possible

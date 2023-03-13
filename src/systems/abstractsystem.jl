@@ -525,13 +525,7 @@ $(SIGNATURES)
 
 Return a list of actual states needed to be solved by solvers.
 """
-function SII.unknown_states(sys::AbstractSystem)
-    sts = something(get_unknown_states(sys), get_states(sys))
-    systems = get_systems(sys)
-    return unique(isempty(systems) ?
-                  sts :
-                  [sts; reduce(vcat, SII.unknown_states.(systems))])
-end
+SII.unknown_states(sys::AbstractSystem) = SII.states(sys)
 
 function SII.parameters(sys::AbstractSystem)
     ps = get_ps(sys)

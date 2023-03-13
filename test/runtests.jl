@@ -1,25 +1,5 @@
 using SafeTestsets, Test
 
-@safetestset "ODESystem Test" begin include("odesystem.jl") end
-@safetestset "ODAEProblem Test" begin include("odaeproblem.jl") end
-@safetestset "AliasGraph Test" begin include("alias.jl") end
-@safetestset "Pantelides Test" begin include("pantelides.jl") end
-@safetestset "Linear Algebra Test" begin include("linalg.jl") end
-@safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
-@safetestset "Variable Scope Tests" begin include("variable_scope.jl") end
-@safetestset "Symbolic Parameters Test" begin include("symbolic_parameters.jl") end
-@safetestset "Parsing Test" begin include("variable_parsing.jl") end
-@safetestset "Simplify Test" begin include("simplify.jl") end
-@safetestset "Direct Usage Test" begin include("direct.jl") end
-@safetestset "System Linearity Test" begin include("linearity.jl") end
-@safetestset "Linearization Tests" begin include("linearize.jl") end
-@safetestset "Input Output Test" begin include("input_output_handling.jl") end
-@safetestset "Clock Test" begin include("clock.jl") end
-@safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
-@safetestset "Unitful Quantities Test" begin include("units.jl") end
-@safetestset "LabelledArrays Test" begin include("labelledarrays.jl") end
-@safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
-@safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
 @safetestset "SDESystem Test" begin include("sdesystem.jl") end
 @safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
 @safetestset "PDE Construction Test" begin include("pde.jl") end
@@ -50,5 +30,25 @@ println("Last test requires gcc available in the path!")
 @safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 @safetestset "FuncAffect Test" begin include("funcaffect.jl") end
 @safetestset "Constants Test" begin include("constants.jl") end
+@safetestset "ODESystem Test" begin include("odesystem.jl") end
+@safetestset "ODAEProblem Test" begin include("odaeproblem.jl") end
+@safetestset "AliasGraph Test" begin include("alias.jl") end
+@safetestset "Pantelides Test" begin include("pantelides.jl") end
+@safetestset "Linear Algebra Test" begin include("linalg.jl") end
+@safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
+@safetestset "Variable Scope Tests" begin include("variable_scope.jl") end
+@safetestset "Symbolic Parameters Test" begin include("symbolic_parameters.jl") end
+@safetestset "Parsing Test" begin include("variable_parsing.jl") end
+@safetestset "Simplify Test" begin include("simplify.jl") end
+@safetestset "Direct Usage Test" begin include("direct.jl") end
+@safetestset "System Linearity Test" begin include("linearity.jl") end
+@safetestset "Linearization Tests" begin include("linearize.jl") end
+@safetestset "Input Output Test" begin include("input_output_handling.jl") end
+@safetestset "Clock Test" begin include("clock.jl") end
+@safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
+@safetestset "Unitful Quantities Test" begin include("units.jl") end
+@safetestset "LabelledArrays Test" begin include("labelledarrays.jl") end
+@safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
+@safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
 # Reference tests go Last
 @safetestset "Latexify recipes Test" begin include("latexify.jl") end
