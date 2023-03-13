@@ -4,9 +4,9 @@ ModelingToolkit has a system for transformations of mathematical
 systems. These transformations allow for symbolically changing
 the representation of the model to problems that are easier to
 numerically solve. One simple to demonstrate transformation is the
-`structural_simplify` with does a lot of tricks, one being the
-transformation that sends a Nth order ODE
-to a 1st order ODE.
+`structural_simplify`, which does a lot of tricks, one being the
+transformation that turns an Nth order ODE into N
+coupled 1st order ODEs.
 
 To see this, let's define a second order riff on the Lorenz equations.
 We utilize the derivative operator twice here to define the second order:
@@ -26,12 +26,12 @@ eqs = [D(D(x)) ~ σ * (y - x),
 ```
 
 Note that we could've used an alternative syntax for 2nd order, i.e.
-`D = Differential(t)^2` and then `E(x)` would be the second derivative,
+`D = Differential(t)^2` and then `D(x)` would be the second derivative,
 and this syntax extends to `N`-th order. Also, we can use `*` or `∘` to compose
 `Differential`s, like `Differential(t) * Differential(x)`.
 
 Now let's transform this into the `ODESystem` of first order components.
-We do this by simply calling `ode_order_lowering`:
+We do this by calling `structural_simplify`:
 
 ```@example orderlowering
 sys = structural_simplify(sys)
