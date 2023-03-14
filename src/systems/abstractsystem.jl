@@ -1287,6 +1287,28 @@ function linearization_function(sys::AbstractSystem, inputs,
     return lin_fun, sys
 end
 
+function linearize_symbolic(sys::AbstractSystem, inputs,
+                            outputs; simplify = false,
+                            kwargs...)
+    sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
+                                                             kwargs...)
+    sts = states(sys)
+    t = get_iv(sys)
+    p = parameters(sys)
+
+    fun = generate_function(sys, sts, p; expression = Val{false})[1]
+    dx = fun(sts, p, t)
+
+    A = Symbolics.jacobian(dx, sts)
+    B = Symbolics.jacobian(dx, inputs)
+
+    h = build_explicit_observed_function(sys, outputs)
+    y = h(sts, p, t)
+    C = Symbolics.jacobian(y, sts)
+    D = Symbolics.jacobian(y, inputs)
+    (; A, B, C, D), sys
+end
+
 function markio!(state, orig_inputs, inputs, outputs; check = true)
     fullvars = state.fullvars
     inputset = Dict{Any, Bool}(i => false for i in inputs)
