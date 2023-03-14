@@ -12,7 +12,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           equations, isirreducible, input_timedomain, TimeDomain,
                           VariableType, getvariabletype
 using ..BipartiteGraphs
-import ..BipartiteGraphs: invview, complete, HighlightInt
+import ..BipartiteGraphs: invview, complete
 using Graphs
 using UnPack
 using Setfield
@@ -393,6 +393,11 @@ struct SystemStructurePrintMatrix <:
     eq_to_diff::DiffGraph
     var_eq_matching::Union{Matching, Nothing}
 end
+
+"""
+Create a SystemStructurePrintMatrix to display the contents
+of the provided SystemStructure.
+"""
 function SystemStructurePrintMatrix(s::SystemStructure)
     return SystemStructurePrintMatrix(complete(s.graph),
                                       complete(s.solvable_graph),
@@ -469,6 +474,10 @@ struct MatchedSystemStructure
     var_eq_matching::Matching
 end
 
+"""
+Create a SystemStructurePrintMatrix to display the contents
+of the provided MatchedSystemStructure.
+"""
 function SystemStructurePrintMatrix(ms::MatchedSystemStructure)
     return SystemStructurePrintMatrix(complete(ms.structure.graph),
                                       complete(ms.structure.solvable_graph),

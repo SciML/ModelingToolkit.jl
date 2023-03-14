@@ -5,6 +5,20 @@ using ModelingToolkit.BipartiteGraphs: Label, BipartiteAdjacencyList, unassigned
 using ModelingToolkit.SystemStructures: SystemStructure, MatchedSystemStructure,
                                         SystemStructurePrintMatrix, HighlightInt
 
+"""
+A utility struct for displaying the difference between two HighlightInts.
+
+# Example
+```julia
+using ModelingToolkit, DeepDiffs
+
+old_i = HighlightInt(1, :default, true)
+new_i = HighlightInt(2, :default, false)
+diff = HighlightIntDiff(new_i, old_i)
+
+show(diff)
+```
+"""
 struct HighlightIntDiff
     new::HighlightInt
     old::HighlightInt
@@ -26,6 +40,21 @@ function Base.show(io::IO, d::HighlightIntDiff)
     (d.new.match || d.old.match) && printstyled(io, ")", color = p_color)
 end
 
+"""
+A utility struct for displaying the difference between two
+BipartiteAdjacencyList's.
+
+# Example
+```julia
+using ModelingToolkit, DeepDiffs
+
+old = BipartiteAdjacencyList(...)
+new = BipartiteAdjacencyList(...)
+diff = BipartiteAdjacencyListDiff(new, old)
+
+show(diff)
+```
+"""
 struct BipartiteAdjacencyListDiff
     new::BipartiteAdjacencyList
     old::BipartiteAdjacencyList
@@ -77,6 +106,21 @@ function Base.show(io::IO, l::BipartiteAdjacencyListDiff)
     end
 end
 
+"""
+A utility struct for displaying the difference between two Labels
+in git-style red/green highlighting.
+
+# Example
+```julia
+using ModelingToolkit, DeepDiffs
+
+old = Label("before")
+new = Label("after")
+diff = LabelDiff(new, old)
+
+show(diff)
+```
+"""
 struct LabelDiff
     new::Label
     old::Label
@@ -91,17 +135,25 @@ function Base.show(io::IO, l::LabelDiff)
     end
 end
 
+"""
+A utility struct for displaying the difference between two
+(Matched)SystemStructure's in git-style red/green highlighting.
+
+# Example
+```julia
+using ModelingToolkit, DeepDiffs
+
+old = SystemStructurePrintMatrix(...)
+new = SystemStructurePrintMatrix(...)
+diff = SystemStructureDiffPrintMatrix(new, old)
+
+show(diff)
+```
+"""
 struct SystemStructureDiffPrintMatrix <:
        AbstractMatrix{Union{LabelDiff, BipartiteAdjacencyListDiff}}
     new::SystemStructurePrintMatrix
     old::SystemStructurePrintMatrix
-end
-
-function DeepDiffs.deepdiff(old::Union{MatchedSystemStructure, SystemStructure},
-                            new::Union{MatchedSystemStructure, SystemStructure})
-    new_sspm = SystemStructurePrintMatrix(new)
-    old_sspm = SystemStructurePrintMatrix(old)
-    Base.print_matrix(stdout, SystemStructureDiffPrintMatrix(new_sspm, old_sspm))
 end
 
 function Base.size(ssdpm::SystemStructureDiffPrintMatrix)
@@ -121,6 +173,13 @@ function Base.getindex(ssdpm::SystemStructureDiffPrintMatrix, i::Integer, j::Int
         (i <= size(ssdpm.old, 1)) && (old = ssdpm.old[i, j])
         LabelDiff(new, old)
     end
+end
+
+function DeepDiffs.deepdiff(old::Union{MatchedSystemStructure, SystemStructure},
+                            new::Union{MatchedSystemStructure, SystemStructure})
+    new_sspm = SystemStructurePrintMatrix(new)
+    old_sspm = SystemStructurePrintMatrix(old)
+    Base.print_matrix(stdout, SystemStructureDiffPrintMatrix(new_sspm, old_sspm))
 end
 
 end # module
