@@ -405,30 +405,31 @@ function SystemStructurePrintMatrix(s::SystemStructure)
                                       complete(s.eq_to_diff),
                                       nothing)
 end
-Base.size(bgpm::SystemStructurePrintMatrix) = (max(nsrcs(bgpm.bpg), ndsts(bgpm.bpg)) + 1, 7)
-function compute_diff_label(diff_graph, i)
+Base.size(bgpm::SystemStructurePrintMatrix) = (max(nsrcs(bgpm.bpg), ndsts(bgpm.bpg)) + 1, 9)
+function compute_diff_label(diff_graph, i, symbol)
     di = i - 1 <= length(diff_graph) ? diff_graph[i - 1] : nothing
-    ii = i - 1 <= length(invview(diff_graph)) ? invview(diff_graph)[i - 1] : nothing
-    return Label(string(di === nothing ? "" : string(di, '↑'),
-                        di !== nothing && ii !== nothing ? " " : "",
-                        ii === nothing ? "" : string(ii, '↓')))
+    return di === nothing ? Label("") : Label(string(di, symbol))
 end
 function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
     checkbounds(bgpm, i, j)
     if i <= 1
-        return (Label.(("#", "∂ₜ", "  eq", "", "#", "∂ₜ", "  v")))[j]
-    elseif j == 4
+        return (Label.(("#", "∂ₜ", " ", "  eq", "", "#", "∂ₜ", " ", "  v")))[j]
+    elseif j == 5
         colors = Base.text_colors
         return Label("|", :light_black)
     elseif j == 2
-        return compute_diff_label(bgpm.eq_to_diff, i)
-    elseif j == 6
-        return compute_diff_label(bgpm.var_to_diff, i)
+        return compute_diff_label(bgpm.eq_to_diff, i, '↑')
+    elseif j == 3
+        return compute_diff_label(invview(bgpm.eq_to_diff), i, '↓')
+    elseif j == 7
+        return compute_diff_label(bgpm.var_to_diff, i, '↑')
+    elseif j == 8
+        return compute_diff_label(invview(bgpm.var_to_diff), i, '↓')
     elseif j == 1
         return Label((i - 1 <= length(bgpm.eq_to_diff)) ? string(i - 1) : "")
-    elseif j == 5
+    elseif j == 6
         return Label((i - 1 <= length(bgpm.var_to_diff)) ? string(i - 1) : "")
-    elseif j == 3
+    elseif j == 4
         return BipartiteAdjacencyList(i - 1 <= nsrcs(bgpm.bpg) ?
                                       𝑠neighbors(bgpm.bpg, i - 1) : nothing,
                                       bgpm.highlight_graph !== nothing &&
@@ -438,7 +439,7 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
                                       bgpm.var_eq_matching !== nothing &&
                                       (i - 1 <= length(invview(bgpm.var_eq_matching))) ?
                                       invview(bgpm.var_eq_matching)[i - 1] : unassigned)
-    elseif j == 7
+    elseif j == 9
         match = unassigned
         if bgpm.var_eq_matching !== nothing && i - 1 <= length(bgpm.var_eq_matching)
             match = bgpm.var_eq_matching[i - 1]

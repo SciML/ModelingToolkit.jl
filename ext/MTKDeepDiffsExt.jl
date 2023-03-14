@@ -1,9 +1,10 @@
 module MTKDeepDiffsExt
 
 using DeepDiffs, ModelingToolkit
-using ModelingToolkit.BipartiteGraphs: Label, BipartiteAdjacencyList, unassigned
+using ModelingToolkit.BipartiteGraphs: Label, BipartiteAdjacencyList, unassigned,
+                                       HighlightInt
 using ModelingToolkit.SystemStructures: SystemStructure, MatchedSystemStructure,
-                                        SystemStructurePrintMatrix, HighlightInt
+                                        SystemStructurePrintMatrix
 
 """
 A utility struct for displaying the difference between two HighlightInts.
@@ -162,7 +163,7 @@ end
 
 function Base.getindex(ssdpm::SystemStructureDiffPrintMatrix, i::Integer, j::Integer)
     checkbounds(ssdpm, i, j)
-    if i > 1 && (j == 3 || j == 7)
+    if i > 1 && (j == 4 || j == 9)
         old = new = BipartiteAdjacencyList(nothing, nothing, unassigned)
         (i <= size(ssdpm.new, 1)) && (new = ssdpm.new[i, j])
         (i <= size(ssdpm.old, 1)) && (old = ssdpm.old[i, j])
