@@ -187,12 +187,14 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
                                                             needed_cont_to_disc_obs,
                                                             throw = false,
                                                             expression = true,
-                                                            output_type = SVector)
+                                                            output_type = SVector,
+                                                            dense_output = true)
         @set! sys.ps = appended_parameters
         disc_to_cont_obs = build_explicit_observed_function(sys, needed_disc_to_cont_obs,
                                                             throw = false,
                                                             expression = true,
-                                                            output_type = SVector)
+                                                            output_type = SVector,
+                                                            dense_output = true)
         ni = length(input)
         ns = length(states(sys))
         disc = Func([

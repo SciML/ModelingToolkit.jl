@@ -353,7 +353,7 @@ function SciMLBase.DiscreteFunction{iip, specialize}(sys::DiscreteSystem,
     observedfun = let sys = sys, dict = Dict()
         function generate_observed(obsvar, u, p, t)
             obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar)
+                build_explicit_observed_function(sys, obsvar, dense_output = true)
             end
             obs(u, p, t)
         end

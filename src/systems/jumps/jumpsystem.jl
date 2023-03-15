@@ -313,7 +313,8 @@ function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, 
     observedfun = let sys = sys, dict = Dict()
         function generated_observed(obsvar, u, p, t)
             obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
+                build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds,
+                                                 dense_output = true)
             end
             obs(u, p, t)
         end

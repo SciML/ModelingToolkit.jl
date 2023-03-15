@@ -9,8 +9,6 @@ using SafeTestsets, Test
 @safetestset "Components Test" begin include("components.jl") end
 @safetestset "print_tree" begin include("print_tree.jl") end
 @safetestset "Error Handling" begin include("error_handling.jl") end
-@safetestset "StructuralTransformations" begin include("structural_transformation/runtests.jl") end
-@safetestset "State Selection Test" begin include("state_selection.jl") end
 @safetestset "Symbolic Event Test" begin include("symbolic_events.jl") end
 @safetestset "Stream Connnect Test" begin include("stream_connectors.jl") end
 @safetestset "Lowering Integration Test" begin include("lowering_solving.jl") end
@@ -50,5 +48,7 @@ println("Last test requires gcc available in the path!")
 @safetestset "LabelledArrays Test" begin include("labelledarrays.jl") end
 @safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
 @safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
+@safetestset "State Selection Test" begin include("state_selection.jl") end
+@safetestset "StructuralTransformations" begin include("structural_transformation/runtests.jl") end
 # Reference tests go Last
 @safetestset "Latexify recipes Test" begin include("latexify.jl") end

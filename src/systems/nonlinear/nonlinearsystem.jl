@@ -247,7 +247,7 @@ function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys
     observedfun = let sys = sys, dict = Dict()
         function generated_observed(obsvar, u, p)
             obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar)
+                build_explicit_observed_function(sys, obsvar, dense_output = true)
             end
             obs(u, p)
         end

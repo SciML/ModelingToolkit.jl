@@ -308,7 +308,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
     observedfun = let sys = sys, dict = Dict()
         function generated_observed(obsvar, args...)
             obs = get!(dict, value(obsvar)) do
-                build_explicit_observed_function(sys, obsvar)
+                build_explicit_observed_function(sys, obsvar, dense_output = true)
             end
             if args === ()
                 let obs = obs
