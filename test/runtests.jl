@@ -1,5 +1,6 @@
 using SafeTestsets, Test
 
+@safetestset "SDESystem Test" begin include("sdesystem.jl") end
 @safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
 @safetestset "PDE Construction Test" begin include("pde.jl") end
 @safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
@@ -49,6 +50,5 @@ println("Last test requires gcc available in the path!")
 @safetestset "LabelledArrays Test" begin include("labelledarrays.jl") end
 @safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
 @safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
-@safetestset "SDESystem Test" begin include("sdesystem.jl") end
 # Reference tests go Last
 @safetestset "Latexify recipes Test" begin include("latexify.jl") end
