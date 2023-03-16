@@ -25,7 +25,6 @@ println("Last test requires gcc available in the path!")
 @safetestset "C Compilation Test" begin include("ccompile.jl") end
 @testset "Serialization" begin include("serialization.jl") end
 @safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
-@safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 @safetestset "FuncAffect Test" begin include("funcaffect.jl") end
 @safetestset "Constants Test" begin include("constants.jl") end
 @safetestset "ODESystem Test" begin include("odesystem.jl") end
@@ -50,5 +49,6 @@ println("Last test requires gcc available in the path!")
 @safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
 @safetestset "State Selection Test" begin include("state_selection.jl") end
 @safetestset "StructuralTransformations" begin include("structural_transformation/runtests.jl") end
+@safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
 # Reference tests go Last
 @safetestset "Latexify recipes Test" begin include("latexify.jl") end
