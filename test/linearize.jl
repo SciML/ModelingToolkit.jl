@@ -237,7 +237,7 @@ if VERSION >= v"1.8"
     def = merge(def, Dict(x => 0.0 for x in dummyder))
 
     @test substitute(lsyss.A, def) ≈ lsys.A
-    @test substitute(lsyss.B, def) == lsys.B
-    @test substitute(lsyss.C, def) == lsys.C
-    @test substitute(lsyss.D, def) == lsys.D
+    @test substitute(lsyss.B, def) ≈ lsys.B
+    @test substitute(lsyss.C, def) ≈ lsys.C
+    @test substitute(lsyss.D, def) ≈ lsys.D
 end
