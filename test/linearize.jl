@@ -68,15 +68,22 @@ connections = [f.y ~ c.r # filtered reference to controller reference
 
 @named cl = ODESystem(connections, t, systems = [f, c, p])
 
-lsys, ssys = linearize(cl, [f.u], [p.x])
+lsys0, ssys = linearize(cl, [f.u], [p.x])
 desired_order = [f.x, p.x]
-lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
+lsys = ModelingToolkit.reorder_states(lsys0, states(ssys), desired_order)
 
 @test lsys.A == [-2 0; 1 -2]
 @test lsys.B == reshape([1, 0], 2, 1)
 @test lsys.C == [0 1]
 @test lsys.D[] == 0
 
+## Symbolic linearization
+lsyss, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
+
+@test substitute(lsyss.A, ModelingToolkit.defaults(cl)) == lsys.A
+@test substitute(lsyss.B, ModelingToolkit.defaults(cl)) == lsys.B
+@test substitute(lsyss.C, ModelingToolkit.defaults(cl)) == lsys.C
+@test substitute(lsyss.D, ModelingToolkit.defaults(cl)) == lsys.D
 ##
 using ModelingToolkitStandardLibrary.Blocks: LimPID
 k = 400
@@ -86,15 +93,23 @@ Nd = 10
 @named pid = LimPID(; k, Ti, Td, Nd)
 
 @unpack reference, measurement, ctr_output = pid
-lsys, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
+lsys0, ssys = linearize(pid, [reference.u, measurement.u], [ctr_output.u])
 @unpack int, der = pid
 desired_order = [int.x, der.x]
-lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
+lsys = ModelingToolkit.reorder_states(lsys0, states(ssys), desired_order)
 
 @test lsys.A == [0 0; 0 -10]
 @test lsys.B == [2 -2; 10 -10]
 @test lsys.C == [400 -4000]
 @test lsys.D == [4400 -4400]
+
+lsyss, _ = ModelingToolkit.linearize_symbolic(pid, [reference.u, measurement.u],
+                                              [ctr_output.u])
+
+@test substitute(lsyss.A, ModelingToolkit.defaults(pid)) == lsys.A
+@test substitute(lsyss.B, ModelingToolkit.defaults(pid)) == lsys.B
+@test substitute(lsyss.C, ModelingToolkit.defaults(pid)) == lsys.C
+@test substitute(lsyss.D, ModelingToolkit.defaults(pid)) == lsys.D
 
 # Test with the reverse desired state order as well to verify that similarity transform and reoreder_states really works
 lsys = ModelingToolkit.reorder_states(lsys, states(ssys), reverse(desired_order))
@@ -150,6 +165,12 @@ lsys, ssys = linearize(sat, [u], [y])
 @test isempty(lsys.B)
 @test isempty(lsys.C)
 @test lsys.D[] == 1
+
+@test_skip lsyss, _ = ModelingToolkit.linearize_symbolic(sat, [u], [y]) # Code gen replaces ifelse with if statements causing symbolic evaluation to fail
+# @test substitute(lsyss.A, ModelingToolkit.defaults(sat)) == lsys.A
+# @test substitute(lsyss.B, ModelingToolkit.defaults(sat)) == lsys.B
+# @test substitute(lsyss.C, ModelingToolkit.defaults(sat)) == lsys.C
+# @test substitute(lsyss.D, ModelingToolkit.defaults(sat)) == lsys.D
 
 # outside the linear region the derivative is 0
 lsys, ssys = linearize(sat, [u], [y]; op = Dict(u => 2))

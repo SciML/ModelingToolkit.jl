@@ -1397,6 +1397,35 @@ function linearization_function(sys::AbstractSystem, inputs,
     return lin_fun, sys
 end
 
+"""
+    (; A, B, C, D), simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs; simplify = false, kwargs)
+
+Similar to [`linearize`](@ref), but returns symbolic matrices `A,B,C,D` rather than numeric. While `linearize` uses ForwardDiff to perform the linearization, this function uses `Symbolics.jacobian`.
+
+See [`linearize`](@ref) for a description of the arguments.
+"""
+function linearize_symbolic(sys::AbstractSystem, inputs,
+                            outputs; simplify = false,
+                            kwargs...)
+    sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
+                                                             kwargs...)
+    sts = states(sys)
+    t = get_iv(sys)
+    p = parameters(sys)
+
+    fun = generate_function(sys, sts, p; expression = Val{false})[1]
+    dx = fun(sts, p, t)
+
+    A = Symbolics.jacobian(dx, sts)
+    B = Symbolics.jacobian(dx, inputs)
+
+    h = build_explicit_observed_function(sys, outputs)
+    y = h(sts, p, t)
+    C = Symbolics.jacobian(y, sts)
+    D = Symbolics.jacobian(y, inputs)
+    (; A, B, C, D), sys
+end
+
 function markio!(state, orig_inputs, inputs, outputs; check = true)
     fullvars = state.fullvars
     inputset = Dict{Any, Bool}(i => false for i in inputs)
@@ -1453,7 +1482,7 @@ the default values of `sys` are used.
 
 If `allow_input_derivatives = false`, an error will be thrown if input derivatives (``u̇``) appear as inputs in the linearized equations. If input derivatives are allowed, the returned `B` matrix will be of double width, corresponding to the input `[u; u̇]`.
 
-See also [`linearization_function`](@ref) which provides a lower-level interface, and [`ModelingToolkit.reorder_states`](@ref).
+See also [`linearization_function`](@ref) which provides a lower-level interface, [`linearize_symbolic`](@ref) and [`ModelingToolkit.reorder_states`](@ref).
 
 See extended help for an example.
 
@@ -1515,14 +1544,19 @@ connections = [f.y ~ c.r # filtered reference to controller reference
 
 @named cl = ODESystem(connections, t, systems = [f, c, p])
 
-lsys, ssys = linearize(cl, [f.u], [p.x])
+lsys0, ssys = linearize(cl, [f.u], [p.x])
 desired_order = [f.x, p.x]
-lsys = ModelingToolkit.reorder_states(lsys, states(ssys), desired_order)
+lsys = ModelingToolkit.reorder_states(lsys0, states(ssys), desired_order)
 
 @assert lsys.A == [-2 0; 1 -2]
 @assert lsys.B == [1; 0;;]
 @assert lsys.C == [0 1]
 @assert lsys.D[] == 0
+
+## Symbolic linearization
+lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
+
+@assert substitute(lsys_sym.A, ModelingToolkit.defaults(cl)) == lsys.A
 ```
 """
 function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives = false,
