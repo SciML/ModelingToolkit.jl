@@ -475,11 +475,13 @@ function domain_defaults(domain_csets)
     for (s, mods) in domain_csets
         s_def = defaults(s.sys.sys)
         for m in mods
+            ns_s_def = Dict(states(m.sys.sys, n) => n for (n, v) in s_def)
             for p in parameters(m.sys.namespace)
-                if haskey(s_def, p)
+                d_p = get(ns_s_def, p, nothing)
+                if d_p !== nothing
                     def[parameters(m.sys.namespace, p)] = parameters(s.sys.namespace,
                                                                      parameters(s.sys.sys,
-                                                                                p))
+                                                                                d_p))
                 end
             end
         end
