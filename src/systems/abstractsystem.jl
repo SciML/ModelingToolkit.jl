@@ -555,8 +555,8 @@ function defaults(sys::AbstractSystem)
     isempty(systems) ? defs : mapfoldr(namespace_defaults, merge, systems; init = defs)
 end
 
-states(sys::AbstractSystem, v) = renamespace(sys, v)
-parameters(sys::AbstractSystem, v) = toparam(states(sys, v))
+states(sys::Union{AbstractSystem, Nothing}, v) = renamespace(sys, v)
+parameters(sys::Union{AbstractSystem, Nothing}, v) = toparam(states(sys, v))
 for f in [:states, :parameters]
     @eval function $f(sys::AbstractSystem, vs::AbstractArray)
         map(v -> $f(sys, v), vs)
@@ -806,7 +806,7 @@ end
 # TODO: what about inputs?
 function n_extra_equations(sys::AbstractSystem)
     isconnector(sys) && return length(get_states(sys))
-    sys, csets = generate_connection_set(sys)
+    sys, (csets, _) = generate_connection_set(sys)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     n_outer_stream_variables = 0
     for cset in instream_csets
