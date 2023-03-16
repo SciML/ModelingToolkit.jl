@@ -1225,7 +1225,7 @@ y &= h(x, z, u)
 \\end{aligned}
 ```
 
-where `x` are differential states, `z` algebraic states, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `states(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
+where `x` are differential state variables, `z` algebraic variables, `u` inputs and `y` outputs. To obtain a linear statespace representation, see [`linearize`](@ref). The input argument `variables` is a vector defining the operating point, corresponding to `states(simplified_sys)` and `p` is a vector corresponding to the parameters of `simplified_sys`. Note: all variables in `inputs` have been converted to parameters in `simplified_sys`.
 
 The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occurring input or output variables replaced with the variables provided in arguments `inputs` and `outputs`. The states of this system also indicate the order of the states that holds for the linearized matrices.
 
@@ -1288,14 +1288,25 @@ function linearization_function(sys::AbstractSystem, inputs,
 end
 
 """
-    (; A, B, C, D), simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs; simplify = false, kwargs)
+    (; A, B, C, D), simplified_sys = linearize_symbolic(sys::AbstractSystem, inputs, outputs; simplify = false, allow_input_derivatives = false, kwargs...)
 
 Similar to [`linearize`](@ref), but returns symbolic matrices `A,B,C,D` rather than numeric. While `linearize` uses ForwardDiff to perform the linearization, this function uses `Symbolics.jacobian`.
 
 See [`linearize`](@ref) for a description of the arguments.
+
+# Extended help
+The named tuple returned as the first argument additionally contains the jacobians `f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u` of
+```math
+\\begin{aligned}
+ẋ &= f(x, z, u) \\\\
+0 &= g(x, z, u) \\\\
+y &= h(x, z, u)
+\\end{aligned}
+```
+where `x` are differential state variables, `z` algebraic variables, `u` inputs and `y` outputs.
 """
 function linearize_symbolic(sys::AbstractSystem, inputs,
-                            outputs; simplify = false,
+                            outputs; simplify = false, allow_input_derivatives = false,
                             kwargs...)
     sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
                                                              kwargs...)
@@ -1306,14 +1317,56 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
     fun = generate_function(sys, sts, p; expression = Val{false})[1]
     dx = fun(sts, p, t)
 
-    A = Symbolics.jacobian(dx, sts)
-    B = Symbolics.jacobian(dx, inputs)
-
     h = build_explicit_observed_function(sys, outputs)
     y = h(sts, p, t)
-    C = Symbolics.jacobian(y, sts)
-    D = Symbolics.jacobian(y, inputs)
-    (; A, B, C, D), sys
+
+    fg_xz = Symbolics.jacobian(dx, sts)
+    fg_u = Symbolics.jacobian(dx, inputs)
+    h_xz = Symbolics.jacobian(y, sts)
+    h_u = Symbolics.jacobian(y, inputs)
+    f_x = fg_xz[diff_idxs, diff_idxs]
+    f_z = fg_xz[diff_idxs, alge_idxs]
+    g_x = fg_xz[alge_idxs, diff_idxs]
+    g_z = fg_xz[alge_idxs, alge_idxs]
+    f_u = fg_u[diff_idxs, :]
+    g_u = fg_u[alge_idxs, :]
+    h_x = h_xz[:, diff_idxs]
+    h_z = h_xz[:, alge_idxs]
+
+    nx, nu = size(f_u)
+    nz = size(f_z, 2)
+    ny = size(h_x, 1)
+
+    D = h_u
+
+    if isempty(g_z) # ODE
+        A = f_x
+        B = f_u
+        C = h_x
+    else
+        gz = lu(g_z; check = false)
+        issuccess(gz) ||
+            error("g_z not invertible, this indicates that the DAE is of index > 1.")
+        gzgx = -(gz \ g_x)
+        A = [f_x f_z
+             gzgx*f_x gzgx*f_z]
+        B = [f_u
+             gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
+
+        C = [h_x h_z]
+        Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
+        if !iszero(Bs)
+            if !allow_input_derivatives
+                der_inds = findall(vec(any(!iszero, Bs, dims = 1)))
+                @show typeof(der_inds)
+                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(ModelingToolkit.inputs(sys)[der_inds]). Call `linear_statespace` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
+            end
+            B = [B [zeros(nx, nu); Bs]]
+            D = [D zeros(ny, nu)]
+        end
+    end
+
+    (; A, B, C, D, f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u), sys
 end
 
 function markio!(state, orig_inputs, inputs, outputs; check = true)

@@ -205,7 +205,7 @@ if VERSION >= v"1.8"
            connect(cart.flange, force.flange)
            connect(link1.TY1, fixed.flange)]
 
-    @show @named model = ODESystem(eqs, t, [], []; systems = [link1, cart, force, fixed])
+    @named model = ODESystem(eqs, t, [], []; systems = [link1, cart, force, fixed])
     def = ModelingToolkit.defaults(model)
     def[link1.y1] = 0
     def[link1.x1] = 10
@@ -227,4 +227,17 @@ if VERSION >= v"1.8"
 
     @test minimum(abs, ps) < 1e-6
     @test minimum(abs, complex(0, 1.3777260367206716) .- ps) < 1e-10
+
+    lsys, syss = linearize(model, lin_inputs, lin_outputs, allow_symbolic = true, op = def,
+                           allow_input_derivatives = true, zero_dummy_der = true)
+    lsyss, sysss = ModelingToolkit.linearize_symbolic(model, lin_inputs, lin_outputs;
+                                                      allow_input_derivatives = true)
+
+    dummyder = setdiff(states(sysss), states(model))
+    def = merge(def, Dict(x => 0.0 for x in dummyder))
+
+    @test substitute(lsyss.A, def) ≈ lsys.A
+    @test substitute(lsyss.B, def) == lsys.B
+    @test substitute(lsyss.C, def) == lsys.C
+    @test substitute(lsyss.D, def) == lsys.D
 end
