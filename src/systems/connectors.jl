@@ -197,8 +197,27 @@ function connection2set!(connectionsets, namespace, ss, isouter)
             push!(regular_ss, s)
         end
     end
+    T = ConnectionElement
     @assert !isempty(regular_ss)
     ss = regular_ss
+    # domain connections don't generate any equations
+    if domain_ss !== nothing
+        cset = ConnectionElement[]
+        dv = only(states(domain_ss))
+        for (i, s) in enumerate(ss)
+            sts = states(s)
+            io = isouter(s)
+            for (j, v) in enumerate(sts)
+                vtype = get_connection_type(v)
+                (vtype === Flow && isequal(v, dv)) || continue
+                push!(cset, T(LazyNamespace(namespace, domain_ss), dv, false))
+                push!(cset, T(LazyNamespace(namespace, s), v, io))
+            end
+        end
+        @assert length(cset) > 0
+        push!(connectionsets, ConnectionSet(cset))
+        return connectionsets
+    end
     s1 = first(ss)
     sts1v = states(s1)
     if isframe(s1) # Multibody
@@ -207,7 +226,6 @@ function connection2set!(connectionsets, namespace, ss, isouter)
         sts1v = [sts1v; orientation_vars]
     end
     sts1 = Set(sts1v)
-    T = ConnectionElement
     num_statevars = length(sts1)
     csets = [T[] for _ in 1:num_statevars] # Add 9 orientation variables if connection is between multibody frames
     for (i, s) in enumerate(ss)
@@ -241,7 +259,11 @@ end
 function generate_connection_set(sys::AbstractSystem, find = nothing, replace = nothing)
     connectionsets = ConnectionSet[]
     sys = generate_connection_set!(connectionsets, sys, find, replace)
-    sys, merge(connectionsets)
+    domain_free_connectionsets = filter(connectionsets) do cset
+        !any(s -> is_domain_connector(s.sys.sys), cset.set)
+    end
+    _, domainset = merge(connectionsets, true)
+    sys, (merge(domain_free_connectionsets), domainset)
 end
 
 function generate_connection_set!(connectionsets, sys::AbstractSystem, find, replace,
@@ -298,7 +320,7 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, find, rep
     @set! sys.eqs = eqs
 end
 
-function Base.merge(csets::AbstractVector{<:ConnectionSet})
+function Base.merge(csets::AbstractVector{<:ConnectionSet}, domain = false)
     mcsets = ConnectionSet[]
     ele2idx = Dict{ConnectionElement, Int}()
     cacheset = Set{ConnectionElement}()
@@ -329,6 +351,7 @@ function Base.merge(csets::AbstractVector{<:ConnectionSet})
         end
     end
     csets = mcsets
+    domain || return csets
     g, roots = rooted_system_domain_graph(csets)
     domain_csets = []
     root_ijs = Set(g.id2cset[r] for r in roots)
