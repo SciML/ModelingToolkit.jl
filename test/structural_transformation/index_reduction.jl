@@ -148,7 +148,7 @@ for sys in [
         D(D(y)) => 0.0,
         x => sqrt(2) / 2,
         y => sqrt(2) / 2,
-        T => 0.0,
+        T => g / sqrt(2),
     ]
     p = [
         L => 1.0,
