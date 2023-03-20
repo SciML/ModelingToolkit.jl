@@ -13,6 +13,7 @@ end
 abstract type AbstractConnectorType end
 struct StreamConnector <: AbstractConnectorType end
 struct RegularConnector <: AbstractConnectorType end
+struct DomainConnector <: AbstractConnectorType end
 
 function connector_type(sys::AbstractSystem)
     sts = get_states(sys)
@@ -31,7 +32,10 @@ function connector_type(sys::AbstractSystem)
         end
     end
     (n_stream > 0 && n_flow > 1) &&
-        error("There are multiple flow variables in $(nameof(sys))!")
+        error("There are multiple flow variables in the stream connector $(nameof(sys))!")
+    if n_flow == 1 && length(sts) == 1
+        return DomainConnector()
+    end
     if n_flow != n_regular
         @warn "$(nameof(sys)) contains $n_flow flow variables, yet $n_regular regular " *
               "(non-flow, non-stream, non-input, non-output) variables. " *
@@ -40,6 +44,8 @@ function connector_type(sys::AbstractSystem)
     end
     n_stream > 0 ? StreamConnector() : RegularConnector()
 end
+
+is_domain_connector(s) = isconnector(s) && get_connector_type(s) === DomainConnector()
 
 get_systems(c::Connection) = c.systems
 
@@ -117,18 +123,21 @@ function generate_isouter(sys::AbstractSystem)
 end
 
 struct LazyNamespace
-    namespace::Union{Nothing, Symbol}
+    namespace::Union{Nothing, AbstractSystem}
     sys::Any
 end
 
-Base.copy(l::LazyNamespace) = renamespace(l.namespace, l.sys)
-Base.nameof(l::LazyNamespace) = renamespace(l.namespace, nameof(l.sys))
+_getname(::Nothing) = nothing
+_getname(sys) = nameof(sys)
+Base.copy(l::LazyNamespace) = renamespace(_getname(l.namespace), l.sys)
+Base.nameof(l::LazyNamespace) = renamespace(_getname(l.namespace), nameof(l.sys))
 
 struct ConnectionElement
     sys::LazyNamespace
     v::Any
     isouter::Bool
 end
+Base.nameof(l::ConnectionElement) = renamespace(nameof(l.sys), getname(l.v))
 function Base.hash(l::ConnectionElement, salt::UInt)
     hash(nameof(l.sys)) ⊻ hash(l.v) ⊻ hash(l.isouter) ⊻ salt
 end
@@ -142,6 +151,7 @@ states(l::ConnectionElement, v) = states(copy(l.sys), v)
 struct ConnectionSet
     set::Vector{ConnectionElement} # namespace.sys, var, isouter
 end
+Base.copy(c::ConnectionSet) = ConnectionSet(copy(c.set))
 
 function Base.show(io::IO, c::ConnectionSet)
     print(io, "<")
@@ -173,7 +183,41 @@ function ori(sys)
 end
 
 function connection2set!(connectionsets, namespace, ss, isouter)
-    nn = map(nameof, ss)
+    regular_ss = []
+    domain_ss = nothing
+    for s in ss
+        if is_domain_connector(s)
+            if domain_ss === nothing
+                domain_ss = s
+            else
+                names = join(string(map(name, ss)), ",")
+                error("connect($names) contains multiple source domain connectors. There can only be one!")
+            end
+        else
+            push!(regular_ss, s)
+        end
+    end
+    T = ConnectionElement
+    @assert !isempty(regular_ss)
+    ss = regular_ss
+    # domain connections don't generate any equations
+    if domain_ss !== nothing
+        cset = ConnectionElement[]
+        dv = only(states(domain_ss))
+        for (i, s) in enumerate(ss)
+            sts = states(s)
+            io = isouter(s)
+            for (j, v) in enumerate(sts)
+                vtype = get_connection_type(v)
+                (vtype === Flow && isequal(v, dv)) || continue
+                push!(cset, T(LazyNamespace(namespace, domain_ss), dv, false))
+                push!(cset, T(LazyNamespace(namespace, s), v, io))
+            end
+        end
+        @assert length(cset) > 0
+        push!(connectionsets, ConnectionSet(cset))
+        return connectionsets
+    end
     s1 = first(ss)
     sts1v = states(s1)
     if isframe(s1) # Multibody
@@ -182,7 +226,6 @@ function connection2set!(connectionsets, namespace, ss, isouter)
         sts1v = [sts1v; orientation_vars]
     end
     sts1 = Set(sts1v)
-    T = ConnectionElement
     num_statevars = length(sts1)
     csets = [T[] for _ in 1:num_statevars] # Add 9 orientation variables if connection is between multibody frames
     for (i, s) in enumerate(ss)
@@ -200,7 +243,12 @@ function connection2set!(connectionsets, namespace, ss, isouter)
         end
     end
     for cset in csets
-        vtype = get_connection_type(first(cset).v)
+        v = first(cset).v
+        vtype = get_connection_type(v)
+        if domain_ss !== nothing && vtype === Flow &&
+           (dv = only(states(domain_ss)); isequal(v, dv))
+            push!(cset, T(LazyNamespace(namespace, domain_ss), dv, false))
+        end
         for k in 2:length(cset)
             vtype === get_connection_type(cset[k].v) || connection_error(ss)
         end
@@ -211,7 +259,11 @@ end
 function generate_connection_set(sys::AbstractSystem, find = nothing, replace = nothing)
     connectionsets = ConnectionSet[]
     sys = generate_connection_set!(connectionsets, sys, find, replace)
-    sys, merge(connectionsets)
+    domain_free_connectionsets = filter(connectionsets) do cset
+        !any(s -> is_domain_connector(s.sys.sys), cset.set)
+    end
+    _, domainset = merge(connectionsets, true)
+    sys, (merge(domain_free_connectionsets), domainset)
 end
 
 function generate_connection_set!(connectionsets, sys::AbstractSystem, find, replace,
@@ -227,8 +279,8 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, find, rep
     for eq in eqs′
         lhs = eq.lhs
         rhs = eq.rhs
-        if find !== nothing && find(rhs, namespace)
-            neweq, extra_state = replace(rhs, namespace)
+        if find !== nothing && find(rhs, _getname(namespace))
+            neweq, extra_state = replace(rhs, _getname(namespace))
             if extra_state isa AbstractArray
                 append!(extra_states, unwrap.(extra_state))
             elseif extra_state !== nothing
@@ -263,12 +315,12 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, find, rep
         @set! sys.states = [get_states(sys); extra_states]
     end
     @set! sys.systems = map(s -> generate_connection_set!(connectionsets, s, find, replace,
-                                                          renamespace(namespace, nameof(s))),
+                                                          renamespace(namespace, s)),
                             subsys)
     @set! sys.eqs = eqs
 end
 
-function Base.merge(csets::AbstractVector{<:ConnectionSet})
+function Base.merge(csets::AbstractVector{<:ConnectionSet}, domain = false)
     mcsets = ConnectionSet[]
     ele2idx = Dict{ConnectionElement, Int}()
     cacheset = Set{ConnectionElement}()
@@ -298,7 +350,94 @@ function Base.merge(csets::AbstractVector{<:ConnectionSet})
             empty!(cacheset)
         end
     end
-    mcsets
+    csets = mcsets
+    domain || return csets
+    g, roots = rooted_system_domain_graph(csets)
+    domain_csets = []
+    root_ijs = Set(g.id2cset[r] for r in roots)
+    for r in roots
+        nh = neighborhood(g, r, Inf)
+        sources_idxs = intersect(nh, roots)
+        # TODO: error reporting when length(sources_idxs) > 1
+        length(sources_idxs) > 1 && error()
+        i′, j′ = g.id2cset[r]
+        source = csets[i′].set[j′]
+        domain = source => []
+        push!(domain_csets, domain)
+        # get unique cset indices that `r` is (implicitly) connected to.
+        idxs = BitSet(g.id2cset[i][1] for i in nh)
+        for i in idxs
+            for (j, ele) in enumerate(csets[i].set)
+                (i, j) == (i′, j′) && continue
+                if (i, j) in root_ijs
+                    error("Domain source $(nameof(source)) and $(nameof(ele)) are connected!")
+                end
+                push!(domain[2], ele)
+            end
+        end
+    end
+    csets, domain_csets
+end
+
+struct SystemDomainGraph{C <: AbstractVector{<:ConnectionSet}} <: Graphs.AbstractGraph{Int}
+    id2cset::Vector{NTuple{2, Int}}
+    cset2id::Vector{Vector{Int}}
+    csets::C
+    sys2id::Dict{Symbol, Int}
+    outne::Vector{Union{Nothing, Vector{Int}}}
+end
+
+Graphs.nv(g::SystemDomainGraph) = length(g.id2cset)
+function Graphs.outneighbors(g::SystemDomainGraph, n::Int)
+    i, j = g.id2cset[n]
+    ids = copy(g.cset2id[i])
+    visited = BitSet(n)
+    for s in g.csets[i].set
+        sys = s.sys.sys
+        is_domain_connector(s.sys.sys) && continue
+        ts = TearingState(s.sys.namespace)
+        graph = ts.structure.graph
+        mm = linear_subsys_adjmat!(ts)
+        lineqs = BitSet(mm.nzrows)
+        var2idx = Dict(reverse(en) for en in enumerate(ts.fullvars))
+        vidx = get(var2idx, states(sys, s.v), 0)
+        iszero(vidx) && continue
+        ies = 𝑑neighbors(graph, vidx)
+        for ie in ies
+            ie in lineqs || continue
+            for iv in 𝑠neighbors(graph, ie)
+                iv == vidx && continue
+                fv = ts.fullvars[iv]
+                vtype = get_connection_type(fv)
+                @assert vtype === Flow
+                n′ = g.sys2id[renamespace(_getname(s.sys.namespace), getname(fv))]
+                n′ in visited && continue
+                push!(visited, n′)
+                append!(ids, g.cset2id[g.id2cset[n′][1]])
+            end
+        end
+    end
+    ids
+end
+function rooted_system_domain_graph(csets::AbstractVector{<:ConnectionSet})
+    id2cset = NTuple{2, Int}[]
+    cset2id = Vector{Int}[]
+    sys2id = Dict{Symbol, Int}()
+    roots = BitSet()
+    for (i, c) in enumerate(csets)
+        cset2id′ = Int[]
+        for (j, s) in enumerate(c.set)
+            ij = (i, j)
+            push!(id2cset, ij)
+            n = length(id2cset)
+            push!(cset2id′, n)
+            sys2id[nameof(s)] = n
+            is_domain_connector(s.sys.sys) && push!(roots, n)
+        end
+        push!(cset2id, cset2id′)
+    end
+    outne = Vector{Union{Nothing, Vector{Int}}}(undef, length(id2cset))
+    SystemDomainGraph(id2cset, cset2id, csets, sys2id, outne), roots
 end
 
 function generate_connection_equations_and_stream_connections(csets::AbstractVector{
@@ -331,13 +470,34 @@ function generate_connection_equations_and_stream_connections(csets::AbstractVec
     eqs, stream_connections
 end
 
+function domain_defaults(domain_csets)
+    def = Dict()
+    for (s, mods) in domain_csets
+        s_def = defaults(s.sys.sys)
+        for m in mods
+            ns_s_def = Dict(states(m.sys.sys, n) => n for (n, v) in s_def)
+            for p in parameters(m.sys.namespace)
+                d_p = get(ns_s_def, p, nothing)
+                if d_p !== nothing
+                    def[parameters(m.sys.namespace, p)] = parameters(s.sys.namespace,
+                                                                     parameters(s.sys.sys,
+                                                                                d_p))
+                end
+            end
+        end
+    end
+    def
+end
+
 function expand_connections(sys::AbstractSystem, find = nothing, replace = nothing;
                             debug = false, tol = 1e-10)
-    sys, csets = generate_connection_set(sys, find, replace)
+    sys, (csets, domain_csets) = generate_connection_set(sys, find, replace)
+    d_defs = domain_defaults(domain_csets)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     _sys = expand_instream(instream_csets, sys; debug = debug, tol = tol)
     sys = flatten(sys, true)
     @set! sys.eqs = [equations(_sys); ceqs]
+    @set! sys.defaults = merge(get_defaults(sys), d_defs)
 end
 
 function unnamespace(root, namespace)
@@ -387,7 +547,7 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
         expr_cset = Dict()
         for cset in csets
             crep = first(cset.set)
-            current = namespace == crep.sys.namespace
+            current = namespace == _getname(crep.sys.namespace)
             for v in cset.set
                 if (current || !v.isouter)
                     expr_cset[namespaced_var(v)] = cset.set
@@ -445,7 +605,8 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
 
     # additional equations
     additional_eqs = Equation[]
-    csets = filter(cset -> any(e -> e.sys.namespace === namespace, cset.set), csets)
+    csets = filter(cset -> any(e -> _getname(e.sys.namespace) === namespace, cset.set),
+                   csets)
     for cset′ in csets
         cset = cset′.set
         connectors = Vector{Any}(undef, length(cset))
@@ -524,7 +685,8 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
 end
 
 function get_current_var(namespace, cele, sv)
-    states(renamespace(unnamespace(namespace, cele.sys.namespace), cele.sys.sys), sv)
+    states(renamespace(unnamespace(namespace, _getname(cele.sys.namespace)), cele.sys.sys),
+           sv)
 end
 
 function get_cset_sv(full_name_sv, cset)
