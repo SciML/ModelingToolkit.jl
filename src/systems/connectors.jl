@@ -524,7 +524,7 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
     subsys = get_systems(sys)
 
     if debug
-        @info "Expanding" namespace
+        @info "Expanding" namespace 
     end
 
     sub = Dict()
@@ -547,7 +547,7 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
         expr_cset = Dict()
         for cset in csets
             crep = first(cset.set)
-            current = namespace == crep.sys.namespace
+            current = namespace == _getname(crep.sys.namespace)
             for v in cset.set
                 if (current || !v.isouter)
                     expr_cset[namespaced_var(v)] = cset.set
@@ -605,7 +605,7 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
 
     # additional equations
     additional_eqs = Equation[]
-    csets = filter(cset -> any(e -> e.sys.namespace === namespace, cset.set), csets)
+    csets = filter(cset -> any(e -> _getname(e.sys.namespace) === namespace, cset.set), csets)
     for cset′ in csets
         cset = cset′.set
         connectors = Vector{Any}(undef, length(cset))
@@ -684,7 +684,7 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
 end
 
 function get_current_var(namespace, cele, sv)
-    states(renamespace(unnamespace(namespace, cele.sys.namespace), cele.sys.sys), sv)
+    states(renamespace(unnamespace(namespace, _getname(cele.sys.namespace)), cele.sys.sys), sv)
 end
 
 function get_cset_sv(full_name_sv, cset)
