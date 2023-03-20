@@ -262,6 +262,13 @@ function generate_connection_set(sys::AbstractSystem, find = nothing, replace = 
     domain_free_connectionsets = filter(connectionsets) do cset
         !any(s -> is_domain_connector(s.sys.sys), cset.set)
     end
+
+    #   Calling merge(connectionsets, true) 
+    #   needs to run with sys expanded equations, if we have more connectionsets then domain_free, then a domain exits, run again...
+    if length(connectionsets) > length(domain_free_connectionsets)
+        # connectionsets_ = ConnectionSet[]
+        sys = generate_connection_set!(connectionsets, sys, find, replace)
+    end
     _, domainset = merge(connectionsets, true)
     sys, (merge(domain_free_connectionsets), domainset)
 end
