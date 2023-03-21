@@ -346,7 +346,7 @@ function StepSource(; P, name)
 
     # equations ---------------------------
     eqs = [
-        H.p ~ ifelse(t < 0.1, 0, p_int),
+        H.p ~ ModelingToolkit.ifelse(t < 0.1, 0, p_int),
     ]
 
     ODESystem(eqs, t, vars, pars; name, systems)
