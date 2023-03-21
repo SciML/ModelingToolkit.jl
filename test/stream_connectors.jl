@@ -28,9 +28,7 @@ end
     vars = @variables begin m_flow(t), [connect = Flow] end
 
     # equations ---------------------------
-    eqs = Equation[
-        m_flow ~ 0
-    ]
+    eqs = Equation[m_flow ~ 0]
 
     ODESystem(eqs, t, vars, pars; name)
 end
@@ -332,7 +330,7 @@ end
 
     # equations ---------------------------
     eqs = [
-        dm ~ 0
+        dm ~ 0,
     ]
 
     ODESystem(eqs, t, vars, pars; name)
