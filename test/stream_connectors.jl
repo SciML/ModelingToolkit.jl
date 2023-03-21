@@ -28,7 +28,9 @@ end
     vars = @variables begin m_flow(t), [connect = Flow] end
 
     # equations ---------------------------
-    eqs = Equation[]
+    eqs = Equation[
+        m_flow ~ 0
+    ]
 
     ODESystem(eqs, t, vars, pars; name)
 end
@@ -156,6 +158,7 @@ eqns = [connect(fluid, n1m1.port_a)
        0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
        0 ~ n1m1.source.port1.m_flow - n1m1.port_a.m_flow
        0 ~ pipe.port_b.m_flow + sink.port.m_flow
+       fluid.m_flow ~ 0
        n1m1.port_a.P ~ pipe.port_a.P
        n1m1.source.port1.P ~ n1m1.port_a.P
        n1m1.source.port1.P ~ n1m1.source.P
@@ -328,7 +331,9 @@ end
     vars = @variables begin dm(t), [connect = Flow] end
 
     # equations ---------------------------
-    eqs = Equation[]
+    eqs = [
+        dm ~ 0
+    ]
 
     ODESystem(eqs, t, vars, pars; name)
 end
