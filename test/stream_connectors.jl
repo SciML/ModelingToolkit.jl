@@ -374,6 +374,8 @@ function Pipe(; P, R, name)
 end
 
 function StaticVolume(; P, V, name)
+    D = Differential(t)
+
     pars = @parameters begin
         p_int = P
         vol = V
