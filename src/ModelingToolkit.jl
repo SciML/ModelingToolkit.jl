@@ -227,4 +227,6 @@ export debug_system
 export Sample, Hold, Shift, ShiftIndex
 export Clock #, InferredDiscrete,
 
+export Interval, infimum, supremum
+
 end # module
