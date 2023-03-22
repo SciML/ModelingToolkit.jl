@@ -36,7 +36,7 @@ function connector_type(sys::AbstractSystem)
     if n_flow == 1 && length(sts) == 1
         return DomainConnector()
     end
-    if n_flow != n_regular
+    if n_flow != n_regular && !isframe(sys) # Frames are consistently overdetermined
         @warn "$(nameof(sys)) contains $n_flow flow variables, yet $n_regular regular " *
               "(non-flow, non-stream, non-input, non-output) variables. " *
               "This could lead to imbalanced model that are difficult to debug. " *
@@ -182,6 +182,15 @@ function ori(sys)
     end
 end
 
+function residue(O1, O2)
+    # https://github.com/modelica/ModelicaStandardLibrary/blob/master/Modelica/Mechanics/MultiBody/Frames/Orientation.mo
+    R1 = O1.R
+    R2 = O2.R
+    [atan(cross(R1[1, :], R1[2, :]) ⋅ R2[2, :], R1[1, :] ⋅ R2[1, :])
+     atan(-cross(R1[1, :], R1[2, :]) ⋅ R2[1, :], R1[2, :] ⋅ R2[2, :])
+     atan(R1[2, :] ⋅ R2[1, :], R1[3, :] ⋅ R2[3, :])]
+end
+
 function connection2set!(connectionsets, namespace, ss, isouter)
     regular_ss = []
     domain_ss = nothing
@@ -220,9 +229,12 @@ function connection2set!(connectionsets, namespace, ss, isouter)
     end
     s1 = first(ss)
     sts1v = states(s1)
-    if isframe(s1) # Multibody
+    _isframe = isframe(s1)
+    if _isframe # Multibody
         O = ori(s1)
-        orientation_vars = Symbolics.unwrap.(collect(vec(O.R)))
+        orientation_vars = [(Symbolics.unwrap.(collect(vec(O.R))));
+                            # renamespace.(namespace, Symbolics.unwrap.(collect(vec(O.w))));
+                            ]
         sts1v = [sts1v; orientation_vars]
     end
     sts1 = Set(sts1v)
@@ -230,9 +242,12 @@ function connection2set!(connectionsets, namespace, ss, isouter)
     csets = [T[] for _ in 1:num_statevars] # Add 9 orientation variables if connection is between multibody frames
     for (i, s) in enumerate(ss)
         sts = states(s)
-        if isframe(s) # Multibody
+        if _isframe # Multibody
+            isframe(s) || connection_error(ss)
             O = ori(s)
-            orientation_vars = Symbolics.unwrap.(vec(O.R))
+            orientation_vars = [(Symbolics.unwrap.(vec(O.R)));
+                                # renamespace.(namespace, Symbolics.unwrap.(vec(O.w)));
+                                ]
             sts = [sts; orientation_vars]
         end
         i != 1 && ((num_statevars == length(sts) && all(Base.Fix2(in, sts1), sts)) ||
