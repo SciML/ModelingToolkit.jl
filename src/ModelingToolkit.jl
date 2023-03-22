@@ -226,5 +226,5 @@ export debug_system
 #export is_discrete_domain, is_continuous_domain, is_hybrid_domain
 export Sample, Hold, Shift, ShiftIndex
 export Clock #, InferredDiscrete,
-
+export Interval, infimum, supremum
 end # module
