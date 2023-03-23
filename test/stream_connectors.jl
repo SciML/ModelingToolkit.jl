@@ -294,9 +294,7 @@ sys_ = expand_connections(n1m1Test)
 sys_defs = ModelingToolkit.defaults(sys_)
 csys = complete(n1m1Test)
 @test Symbol(sys_defs[csys.pipe.port_a.rho]) == Symbol(csys.fluid.rho)
-
-#TODO: This test fails...Is the AdiabaticStraightPipe really a valid component?
-# @test Symbol(sys_defs[csys.pipe.port_b.rho]) == Symbol(csys.fluid.rho)
+@test Symbol(sys_defs[csys.pipe.port_b.rho]) == Symbol(csys.fluid.rho)
 
 # Testing the domain feature with non-stream system...
 
