@@ -262,6 +262,7 @@ function generate_connection_set(sys::AbstractSystem, find = nothing, replace = 
     domain_free_connectionsets = filter(connectionsets) do cset
         !any(s -> is_domain_connector(s.sys.sys), cset.set)
     end
+
     _, domainset = merge(connectionsets, true)
     sys, (merge(domain_free_connectionsets), domainset)
 end
@@ -395,7 +396,7 @@ function Graphs.outneighbors(g::SystemDomainGraph, n::Int)
     for s in g.csets[i].set
         sys = s.sys.sys
         is_domain_connector(s.sys.sys) && continue
-        ts = TearingState(s.sys.namespace)
+        ts = TearingState(expand_connections(s.sys.namespace))
         graph = ts.structure.graph
         mm = linear_subsys_adjmat!(ts)
         lineqs = BitSet(mm.nzrows)
