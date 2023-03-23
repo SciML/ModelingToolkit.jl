@@ -1,7 +1,8 @@
 const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
 
+get_component_type(x::AbstractSystem) = get_gui_metadata(x).type
 struct GUIMetadata
-    type::Symbol
+    type::GlobalRef
     layout::Any
 end
 
@@ -1137,7 +1138,7 @@ function component_post_processing(expr, isconnector)
                 if $isconnector
                     $Setfield.@set!(res.connector_type=$connector_type(res))
                 end
-                $Setfield.@set!(res.gui_metadata=$GUIMetadata(name))
+                $Setfield.@set!(res.gui_metadata=$GUIMetadata($GlobalRef(@__MODULE__, name)))
             else
                 res
             end
