@@ -430,9 +430,13 @@ function rooted_system_domain_graph(csets::AbstractVector{<:ConnectionSet})
         for (j, s) in enumerate(c.set)
             ij = (i, j)
             push!(id2cset, ij)
-            n = length(id2cset)
+            if !haskey(sys2id, nameof(s))
+                n = length(id2cset)
+                sys2id[nameof(s)] = n
+            else
+                n = sys2id[nameof(s)]
+            end
             push!(cset2id′, n)
-            sys2id[nameof(s)] = n
             is_domain_connector(s.sys.sys) && push!(roots, n)
         end
         push!(cset2id, cset2id′)

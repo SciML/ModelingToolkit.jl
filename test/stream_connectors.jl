@@ -402,30 +402,26 @@ function PipeBase(; P, R, name)
 end
 
 function Pipe(; P, R, name)
-
     pars = @parameters begin
         p_int = P
-        resistance=R
+        resistance = R
     end
 
     vars = []
 
     systems = @named begin
-        HA = HydraulicPort(; P=p_int)
-        HB = HydraulicPort(; P=p_int)
-        p12 = PipeBase(; P=p_int, R=resistance)
-        v1 = StaticVolume(; P=p_int, V=0.01)
-        v2 = StaticVolume(; P=p_int, V=0.01)
+        HA = HydraulicPort(; P = p_int)
+        HB = HydraulicPort(; P = p_int)
+        p12 = PipeBase(; P = p_int, R = resistance)
+        v1 = StaticVolume(; P = p_int, V = 0.01)
+        v2 = StaticVolume(; P = p_int, V = 0.01)
     end
 
-    eqs = [
-           connect(v1.H, p12.HA, HA)
+    eqs = [connect(v1.H, p12.HA, HA)
            connect(v2.H, p12.HB, HB)]
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
-
-
 
 function TwoFluidSystem(; name)
     pars = []
