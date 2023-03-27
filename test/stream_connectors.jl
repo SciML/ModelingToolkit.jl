@@ -350,27 +350,6 @@ function StepSource(; P, name)
     ODESystem(eqs, t, vars, pars; name, systems)
 end
 
-function Pipe(; P, R, name)
-    pars = @parameters begin
-        p_int = P
-        resistance = R
-    end
-
-    vars = []
-
-    # nodes -------------------------------
-    systems = @named begin
-        HA = HydraulicPort(; P = p_int)
-        HB = HydraulicPort(; P = p_int)
-    end
-
-    # equations ---------------------------
-    eqs = [HA.p - HB.p ~ HA.dm * resistance / HA.viscosity
-           0 ~ HA.dm + HB.dm]
-
-    ODESystem(eqs, t, vars, pars; name, systems)
-end
-
 function StaticVolume(; P, V, name)
     D = Differential(t)
 
@@ -400,6 +379,53 @@ function StaticVolume(; P, V, name)
     ODESystem(eqs, t, vars, pars; name, systems,
               defaults = [vrho => rho_0 * (1 + p_int / H.bulk)])
 end
+
+function PipeBase(; P, R, name)
+    pars = @parameters begin
+        p_int = P
+        resistance = R
+    end
+
+    vars = []
+
+    # nodes -------------------------------
+    systems = @named begin
+        HA = HydraulicPort(; P = p_int)
+        HB = HydraulicPort(; P = p_int)
+    end
+
+    # equations ---------------------------
+    eqs = [HA.p - HB.p ~ HA.dm * resistance / HA.viscosity
+           0 ~ HA.dm + HB.dm]
+
+    ODESystem(eqs, t, vars, pars; name, systems)
+end
+
+function Pipe(; P, R, name)
+
+    pars = @parameters begin
+        p_int = P
+        resistance=R
+    end
+
+    vars = []
+
+    systems = @named begin
+        HA = HydraulicPort(; P=p_int)
+        HB = HydraulicPort(; P=p_int)
+        p12 = PipeBase(; P=p_int, R=resistance)
+        v1 = StaticVolume(; P=p_int, V=0.01)
+        v2 = StaticVolume(; P=p_int, V=0.01)
+    end
+
+    eqs = [
+           connect(v1.H, p12.HA, HA)
+           connect(v2.H, p12.HB, HB)]
+
+    ODESystem(eqs, t, vars, pars; name, systems)
+end
+
+
 
 function TwoFluidSystem(; name)
     pars = []
