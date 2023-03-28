@@ -1,5 +1,5 @@
 using ModelingToolkit, SparseArrays, Test, Optimization, OptimizationOptimJL,
-      OptimizationMOI, Ipopt, AmplNLWriter.Ipopt_jll, OptimizationMOI
+      OptimizationMOI, Ipopt, Ipopt_jll, OptimizationMOI
 using ModelingToolkit: get_metadata
 
 @testset "basic" begin
