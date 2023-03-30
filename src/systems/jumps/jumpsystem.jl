@@ -199,9 +199,8 @@ function assemble_vrj(js, vrj, statetoid)
     rate = @RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate))
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [statetoid[var] for var in outputvars]
-    # affect = @RuntimeGeneratedFunction(generate_affect_function(js, vrj.affect!,
-    #                                                             outputidxs))
-    affect = eval(generate_affect_function(js, vrj.affect!, outputidxs))
+    affect = @RuntimeGeneratedFunction(generate_affect_function(js, vrj.affect!,
+                                                                outputidxs))
     VariableRateJump(rate, affect)
 end
 
@@ -217,13 +216,12 @@ function assemble_vrj_expr(js, vrj, statetoid)
     end
 end
 
-function assemble_crj(js, crj, statetoid)
+function assemble_crj(js, crj, statetoid; eval_jump_affects = false)
     rate = @RuntimeGeneratedFunction(generate_rate_function(js, crj.rate))
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = [statetoid[var] for var in outputvars]
-    # affect = @RuntimeGeneratedFunction(generate_affect_function(js, crj.affect!,
-    #                                                             outputidxs))
-    affect = eval(generate_affect_function(js, crj.affect!, outputidxs))
+    affectfunex = generate_affect_function(js, crj.affect!, outputidxs)
+    affect = eval_jump_affects ? eval(affectfunex) : @RuntimeGeneratedFunction(affectfunex)
     ConstantRateJump(rate, affect)
 end
 
@@ -388,7 +386,7 @@ sol = solve(jprob, SSAStepper())
 ```
 """
 function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = nothing,
-                                   kwargs...)
+                                   eval_jump_affects = false, kwargs...)
     statetoid = Dict(value(state) => i for (i, state) in enumerate(states(js)))
     eqs = equations(js)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
@@ -398,7 +396,7 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = 
 
     majpmapper = JumpSysMajParamMapper(js, p; jseqs = eqs, rateconsttype = invttype)
     majs = isempty(eqs.x[1]) ? nothing : assemble_maj(eqs.x[1], statetoid, majpmapper)
-    crjs = ConstantRateJump[assemble_crj(js, j, statetoid) for j in eqs.x[2]]
+    crjs = ConstantRateJump[assemble_crj(js, j, statetoid; eval_jump_affects) for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]
     ((prob isa DiscreteProblem) && !isempty(vrjs)) &&
         error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
