@@ -396,7 +396,8 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = 
 
     majpmapper = JumpSysMajParamMapper(js, p; jseqs = eqs, rateconsttype = invttype)
     majs = isempty(eqs.x[1]) ? nothing : assemble_maj(eqs.x[1], statetoid, majpmapper)
-    crjs = ConstantRateJump[assemble_crj(js, j, statetoid; eval_jump_affects) for j in eqs.x[2]]
+    crjs = ConstantRateJump[assemble_crj(js, j, statetoid; eval_jump_affects)
+                            for j in eqs.x[2]]
     vrjs = VariableRateJump[assemble_vrj(js, j, statetoid) for j in eqs.x[3]]
     ((prob isa DiscreteProblem) && !isempty(vrjs)) &&
         error("Use continuous problems such as an ODEProblem or a SDEProblem with VariableRateJumps")
