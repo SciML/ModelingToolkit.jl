@@ -199,8 +199,9 @@ function assemble_vrj(js, vrj, statetoid)
     rate = @RuntimeGeneratedFunction(generate_rate_function(js, vrj.rate))
     outputvars = (value(affect.lhs) for affect in vrj.affect!)
     outputidxs = [statetoid[var] for var in outputvars]
-    affect = @RuntimeGeneratedFunction(generate_affect_function(js, vrj.affect!,
-                                                                outputidxs))
+    # affect = @RuntimeGeneratedFunction(generate_affect_function(js, vrj.affect!,
+    #                                                             outputidxs))
+    affect = eval(generate_affect_function(js, vrj.affect!, outputidxs))
     VariableRateJump(rate, affect)
 end
 
@@ -220,8 +221,9 @@ function assemble_crj(js, crj, statetoid)
     rate = @RuntimeGeneratedFunction(generate_rate_function(js, crj.rate))
     outputvars = (value(affect.lhs) for affect in crj.affect!)
     outputidxs = [statetoid[var] for var in outputvars]
-    affect = @RuntimeGeneratedFunction(generate_affect_function(js, crj.affect!,
-                                                                outputidxs))
+    # affect = @RuntimeGeneratedFunction(generate_affect_function(js, crj.affect!,
+    #                                                             outputidxs))
+    affect = eval(generate_affect_function(js, crj.affect!, outputidxs))
     ConstantRateJump(rate, affect)
 end
 
