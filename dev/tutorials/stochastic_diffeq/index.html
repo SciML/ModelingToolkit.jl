@@ -35,7 +35,7 @@ parammap = [
 prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
 sol = solve(prob, SOSRI())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
 Interpolation: 1st order linear
-t: 17650-element Vector{Float64}:
+t: 18021-element Vector{Float64}:
    0.0
    0.0007146315987816352
    0.0008575579185379623
@@ -43,37 +43,37 @@ t: 17650-element Vector{Float64}:
    0.0011992411517054316
    0.0014027436655772332
    0.00163168399368301
-   0.0018881176797775905
-   0.0021694425070367153
-   0.0024743720937232885
+   0.001887967621487522
+   0.002168860534243313
+   0.002472941846610015
    ⋮
-  99.9539521022925
-  99.95825083628525
-  99.96308691202707
-  99.96852749723662
-  99.97436576431927
-  99.98060671195108
-  99.98703597084685
-  99.99426888710458
+  99.92572470586109
+  99.9336999918596
+  99.94267218860792
+  99.95276590994978
+  99.96412134645936
+  99.97601299034179
+  99.9854085014475
+  99.99597845144142
  100.0
-u: 17650-element Vector{Vector{Float64}}:
+u: 18021-element Vector{Vector{Float64}}:
  [1.0, 0.0, 0.0]
- [0.9968446104733639, 0.0016548218725354075, 5.876809465471768e-7]
- [0.9948288901073878, 0.0019836532832799114, 8.450421916296481e-7]
- [0.9914918791319854, 0.0023567071643547538, 1.186109715835754e-6]
- [0.9888608025410272, 0.0027734216503891374, 1.6399090082241097e-6]
- [0.9863111449016283, 0.0032458053970560313, 2.2314279806483637e-6]
- [0.9825651541337038, 0.0037779312512405136, 3.004695668086555e-6]
- [0.9780474154805068, 0.004364739516195509, 4.005638514471066e-6]
- [0.9755844193814927, 0.005009327573775647, 5.273629564038368e-6]
- [0.9705088575004459, 0.005691007903936906, 6.802204234202668e-6]
+ [0.9950702169660546, 0.00166531765815652, 5.876173509099047e-7]
+ [0.993992383505415, 0.0019932290724822264, 8.448797968435841e-7]
+ [0.9939995000553402, 0.002366155575003845, 1.1891125838772062e-6]
+ [0.9906078137981678, 0.0027805337703637385, 1.642497669628036e-6]
+ [0.9884333585577593, 0.0032402451424807187, 2.241563606168579e-6]
+ [0.9881088425541211, 0.00375814336950526, 3.0179483795964613e-6]
+ [0.9874910977756041, 0.004345276705084235, 4.0209567314124305e-6]
+ [0.9861187825894311, 0.004995840049288972, 5.291159174957299e-6]
+ [0.9855747475496588, 0.0056870098229119025, 6.828048929231276e-6]
  ⋮
- [6.0453072985267, 6.067960608205156, 1.3643631889799142]
- [5.986545342837345, 6.025873664273272, 1.3625476231592024]
- [6.014532386277012, 5.9475395446129635, 1.3521660881801632]
- [5.998322457662148, 5.994664538881807, 1.3529905969792972]
- [5.954878167146516, 6.047901513630877, 1.3571115933440876]
- [6.003671087766458, 6.015166557266622, 1.3656798797221879]
- [5.981631041490865, 6.052001741263035, 1.3702143601408665]
- [5.846154174452116, 6.07629345933801, 1.3615258406584838]
- [5.8852923845298495, 6.029819939448779, 1.3533197125534089]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../modelingtoolkitize/">« Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a><a class="docs-footer-nextpage" href="../parameter_identifiability/">Parameter Identifiability in ODE Models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Saturday 1 April 2023 19:13">Saturday 1 April 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ [6.111431071707335, 5.964080850758262, 1.413804535168617]
+ [6.113330633257563, 6.017615982173035, 1.3972006353155109]
+ [6.079853671552622, 6.066053325256319, 1.3982006707608208]
+ [6.034975960296859, 5.959404749473265, 1.3943487917253266]
+ [5.976453304695414, 6.0336999546770995, 1.4235244211596325]
+ [6.066818203894718, 6.121053313780083, 1.420857034578761]
+ [6.093840814447098, 6.168582936569748, 1.4153295734923874]
+ [6.129932645412694, 6.1896210470576865, 1.440679202344395]
+ [6.131170552735359, 6.1765011743946285, 1.4364651379614957]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../modelingtoolkitize/">« Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a><a class="docs-footer-nextpage" href="../parameter_identifiability/">Parameter Identifiability in ODE Models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Saturday 1 April 2023 19:49">Saturday 1 April 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
