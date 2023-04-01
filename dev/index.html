@@ -26,26 +26,26 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
   [789caeaf] StochasticDiffEq v6.60.0
   [220ca800] StructuralIdentifiability v0.4.7
   [d1185830] SymbolicUtils v1.0.4
-  [0c5d862f] Symbolics v5.1.0
+  [0c5d862f] Symbolics v5.2.0
   [1986cc42] Unitful v1.12.4
   [37e2e46d] LinearAlgebra</code></pre></details><details><summary>and using this machine and Julia version.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Julia Version 1.8.5
 Commit 17cfb8e65ea (2023-01-08 06:45 UTC)
 Platform Info:
   OS: Linux (x86_64-linux-gnu)
-  CPU: 2 × Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz
+  CPU: 2 × Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
   WORD_SIZE: 64
   LIBM: libopenlibm
-  LLVM: libLLVM-13.0.1 (ORCJIT, skylake-avx512)
+  LLVM: libLLVM-13.0.1 (ORCJIT, broadwell)
   Threads: 1 on 2 virtual cores</code></pre></details><details><summary>A more complete overview of all dependencies and their versions is also provided.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Status `~/work/ModelingToolkit.jl/ModelingToolkit.jl/docs/Manifest.toml`
   [a4c015fc] ANSIColoredPrinters v0.0.1
 ⌅ [c3fe647b] AbstractAlgebra v0.27.10
   [1520ce14] AbstractTrees v0.4.4
   [79e6a3ab] Adapt v3.6.1
   [ec485272] ArnoldiMethod v0.2.0
-  [4fba245c] ArrayInterface v7.4.2
+  [4fba245c] ArrayInterface v7.4.3
   [30b0a656] ArrayInterfaceCore v0.1.29
-  [4c555306] ArrayLayouts v0.8.18
-  [aae01518] BandedMatrices v0.17.17
+⌃ [4c555306] ArrayLayouts v0.8.18
+⌃ [aae01518] BandedMatrices v0.17.18
   [6e4b80f9] BenchmarkTools v1.3.2
   [e2ed5e7c] Bijections v0.1.4
   [d1d4a3ce] BitFlags v0.1.7
@@ -90,7 +90,7 @@ Platform Info:
   [31c24e10] Distributions v0.25.86
   [ffbed154] DocStringExtensions v0.9.3
   [e30172f5] Documenter v0.27.24
-⌅ [5b8099bc] DomainSets v0.5.15
+  [5b8099bc] DomainSets v0.6.6
   [fa6b7ba4] DualNumbers v0.6.8
   [7c1d4256] DynamicPolynomials v0.4.6
   [4e289a0a] EnumX v1.0.4
@@ -100,7 +100,7 @@ Platform Info:
   [7034ab61] FastBroadcast v0.2.5
   [9aa1b823] FastClosures v0.3.2
   [29a986be] FastLapackInterface v1.2.9
-  [1a297f60] FillArrays v0.13.11
+⌅ [1a297f60] FillArrays v0.13.11
   [6a86dc24] FiniteDiff v2.19.0
   [53c48c17] FixedPointNumbers v0.8.4
   [59287772] Formatting v0.4.2
@@ -113,17 +113,17 @@ Platform Info:
   [c27321d9] Glob v1.3.1
   [86223c79] Graphs v1.8.0
   [42e2da0e] Grisu v1.0.2
-⌅ [0b43b601] Groebner v0.2.11
+  [0b43b601] Groebner v0.3.2
   [d5909c97] GroupsCore v0.4.0
   [cd3eb016] HTTP v1.7.4
   [3e5b6fbb] HostCPUFeatures v0.1.14
-  [34004b35] HypergeometricFunctions v0.3.13
+  [34004b35] HypergeometricFunctions v0.3.14
   [b5f81e59] IOCapture v0.2.2
   [615f187c] IfElse v0.1.1
   [d25df0c9] Inflate v0.1.3
   [83e8ac13] IniFile v0.5.1
   [18e54dd8] IntegerMathUtils v0.1.0
-⌅ [8197267c] IntervalSets v0.7.3
+  [8197267c] IntervalSets v0.7.4
   [3587e190] InverseFunctions v0.1.8
   [92d709cd] IrrationalConstants v0.2.2
   [c8e1da08] IterTools v1.4.0
@@ -146,7 +146,7 @@ Platform Info:
   [1d6d02ad] LeftChildRightSiblingTrees v0.2.0
   [2d8b4e74] LevyArea v1.0.0
   [d3d80556] LineSearches v7.2.0
-  [7ed4a6bd] LinearSolve v1.41.0
+  [7ed4a6bd] LinearSolve v1.41.1
   [2ab3a3ac] LogExpFunctions v0.3.23
   [e6f89c97] LoggingExtras v1.0.0
   [bdcacae8] LoopVectorization v0.12.155
@@ -169,7 +169,7 @@ Platform Info:
   [429524aa] Optim v1.7.4
   [7f7a1694] Optimization v3.13.0
   [36348300] OptimizationOptimJL v0.1.5
-  [bac558e1] OrderedCollections v1.5.0
+  [bac558e1] OrderedCollections v1.6.0
   [1dea7af3] OrdinaryDiffEq v6.49.4
   [90014a1f] PDMats v0.11.17
   [d96e819e] Parameters v0.12.3
@@ -193,7 +193,7 @@ Platform Info:
   [e6cf234a] RandomNumbers v1.5.3
   [3cdcf5f2] RecipesBase v1.3.3
   [01d81517] RecipesPipeline v0.6.11
-  [731186ca] RecursiveArrayTools v2.38.1
+  [731186ca] RecursiveArrayTools v2.38.3
   [f2c3362d] RecursiveFactorization v0.2.18
   [189a3867] Reexport v1.2.2
   [05181044] RelocatableFolders v1.0.0
@@ -203,7 +203,7 @@ Platform Info:
   [7e49a35a] RuntimeGeneratedFunctions v0.5.6
   [94e857df] SIMDTypes v0.1.0
   [476501e8] SLEEFPirates v0.6.38
-  [0bca4576] SciMLBase v1.91.4
+  [0bca4576] SciMLBase v1.91.6
   [e9a6253c] SciMLNLSolve v0.1.4
   [c0aeaf25] SciMLOperators v0.2.0
   [6c6a2e73] Scratch v1.2.0
@@ -232,7 +232,7 @@ Platform Info:
   [c3572dad] Sundials v4.16.0
   [2efcf032] SymbolicIndexingInterface v0.2.2
   [d1185830] SymbolicUtils v1.0.4
-  [0c5d862f] Symbolics v5.1.0
+  [0c5d862f] Symbolics v5.2.0
   [3783bdb8] TableTraits v1.0.1
   [bd369af6] Tables v1.10.1
   [62fd8b95] TensorCore v0.1.1
@@ -378,6 +378,6 @@ Platform Info:
   [8e850b90] libblastrampoline_jll v5.1.1+0
   [8e850ede] nghttp2_jll v1.48.0+0
   [3f19e933] p7zip_jll v17.4.0+0
-Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated -m`</code></pre></details>You can also download the 
+Info Packages marked with ⌃ and ⌅ have new versions available, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated -m`</code></pre></details>You can also download the 
 <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.50.0/assets/Manifest.toml">manifest</a> file and the
-<a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.50.0/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Thursday 30 March 2023 01:57">Thursday 30 March 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+<a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.50.0/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Saturday 1 April 2023 19:13">Saturday 1 April 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
