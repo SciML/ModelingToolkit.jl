@@ -3,114 +3,101 @@
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
   gtag('config', 'UA-90474609-3', {'page_path': location.pathname + location.search + location.hash});
-</script><script data-outdated-warner src="../../assets/warner.js"></script><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/examples/tearing_parallelism/"/><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../../tutorials/acausal_components/">Acausal Component-Based Modeling</a></li><li><a class="tocitem" href="../../tutorials/nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../../tutorials/optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../../tutorials/modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li><a class="tocitem" href="../../tutorials/stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../../tutorials/parameter_identifiability/">Parameter Identifiability in ODE Models</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="../modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="../parsing/">Parsing Expressions into Solvable Systems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox" checked/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li class="is-active"><a class="tocitem" href>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a><ul class="internal"><li><a class="tocitem" href="#The-Component-Library"><span>The Component Library</span></a></li><li><a class="tocitem" href="#The-Model"><span>The Model</span></a></li><li><a class="tocitem" href="#What-Happened?"><span>What Happened?</span></a></li></ul></li><li><a class="tocitem" href="../sparse_jacobians/">Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="../perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="../../basics/Variable_metadata/">Symbolic metadata</a></li><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="../../basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li><a class="is-disabled">Advanced Examples</a></li><li class="is-active"><a href>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/examples/tearing_parallelism.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems"><a class="docs-heading-anchor" href="#Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a><a id="Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems-1"></a><a class="docs-heading-anchor-permalink" href="#Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems" title="Permalink"></a></h1><p>Sometimes it can be very non-trivial to parallelize a system. In this tutorial, we will demonstrate how to make use of <code>structural_simplify</code> to expose more parallelism in the solution process and parallelize the resulting simulation.</p><h2 id="The-Component-Library"><a class="docs-heading-anchor" href="#The-Component-Library">The Component Library</a><a id="The-Component-Library-1"></a><a class="docs-heading-anchor-permalink" href="#The-Component-Library" title="Permalink"></a></h2><p>The following tutorial will use the following set of components describing electrical circuits:</p><pre><code class="language-julia hljs">using ModelingToolkit, OrdinaryDiffEq
+</script><script data-outdated-warner src="../../assets/warner.js"></script><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/examples/tearing_parallelism/"/><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../../tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../../tutorials/acausal_components/">Acausal Component-Based Modeling</a></li><li><a class="tocitem" href="../../tutorials/nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../../tutorials/optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../../tutorials/modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li><a class="tocitem" href="../../tutorials/stochastic_diffeq/">Modeling with Stochasticity</a></li><li><a class="tocitem" href="../../tutorials/parameter_identifiability/">Parameter Identifiability in ODE Models</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="../modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="../parsing/">Parsing Expressions into Solvable Systems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox" checked/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li class="is-active"><a class="tocitem" href>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a><ul class="internal"><li><a class="tocitem" href="#The-Component-Library"><span>The Component Library</span></a></li><li><a class="tocitem" href="#The-Model"><span>The Model</span></a></li><li><a class="tocitem" href="#What-Happened?"><span>What Happened?</span></a></li></ul></li><li><a class="tocitem" href="../sparse_jacobians/">Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="../perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="../../basics/Variable_metadata/">Symbolic metadata</a></li><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="../../basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/DiscreteSystem/">DiscreteSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li><a class="is-disabled">Advanced Examples</a></li><li class="is-active"><a href>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/examples/tearing_parallelism.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems"><a class="docs-heading-anchor" href="#Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a><a id="Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems-1"></a><a class="docs-heading-anchor-permalink" href="#Exposing-More-Parallelism-By-Tearing-Algebraic-Equations-in-ODESystems" title="Permalink"></a></h1><p>Sometimes it can be very non-trivial to parallelize a system. In this tutorial, we will demonstrate how to make use of <code>structural_simplify</code> to expose more parallelism in the solution process and parallelize the resulting simulation.</p><h2 id="The-Component-Library"><a class="docs-heading-anchor" href="#The-Component-Library">The Component Library</a><a id="The-Component-Library-1"></a><a class="docs-heading-anchor-permalink" href="#The-Component-Library" title="Permalink"></a></h2><p>The following tutorial will use the following set of components describing electrical circuits:</p><pre><code class="language-julia hljs">using ModelingToolkit, OrdinaryDiffEq
 
 # Basic electric components
 @variables t
 const D = Differential(t)
-@connector function Pin(;name)
+@connector function Pin(; name)
     @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
-    ODESystem(Equation[], t, [v, i], [], name=name)
+    ODESystem(Equation[], t, [v, i], [], name = name)
 end
 
-function Ground(;name)
+function Ground(; name)
     @named g = Pin()
     eqs = [g.v ~ 0]
-    compose(ODESystem(eqs, t, [], [], name=name), g)
+    compose(ODESystem(eqs, t, [], [], name = name), g)
 end
 
-function ConstantVoltage(;name, V = 1.0)
+function ConstantVoltage(; name, V = 1.0)
     val = V
     @named p = Pin()
     @named n = Pin()
-    @parameters V=V
-    eqs = [
-           V ~ p.v - n.v
-           0 ~ p.i + n.i
-          ]
-    compose(ODESystem(eqs, t, [], [V], name=name), p, n)
+    @parameters V = V
+    eqs = [V ~ p.v - n.v
+           0 ~ p.i + n.i]
+    compose(ODESystem(eqs, t, [], [V], name = name), p, n)
 end
 
-@connector function HeatPort(;name)
+@connector function HeatPort(; name)
     @variables T(t)=293.15 Q_flow(t)=0.0 [connect = Flow]
-    ODESystem(Equation[], t, [T, Q_flow], [], name=name)
+    ODESystem(Equation[], t, [T, Q_flow], [], name = name)
 end
 
-function HeatingResistor(;name, R=1.0, TAmbient=293.15, alpha=1.0)
+function HeatingResistor(; name, R = 1.0, TAmbient = 293.15, alpha = 1.0)
     @named p = Pin()
     @named n = Pin()
     @named h = HeatPort()
     @variables v(t) RTherm(t)
     @parameters R=R TAmbient=TAmbient alpha=alpha
-    eqs = [
-           RTherm ~ R*(1 + alpha*(h.T - TAmbient))
+    eqs = [RTherm ~ R * (1 + alpha * (h.T - TAmbient))
            v ~ p.i * RTherm
            h.Q_flow ~ -v * p.i # -LossPower
            v ~ p.v - n.v
-           0 ~ p.i + n.i
-          ]
-    compose(ODESystem(
-        eqs, t, [v, RTherm], [R, TAmbient, alpha],
-        name=name,
-    ), p, n, h)
+           0 ~ p.i + n.i]
+    compose(ODESystem(eqs, t, [v, RTherm], [R, TAmbient, alpha],
+                      name = name), p, n, h)
 end
 
-function HeatCapacitor(;name, rho=8050, V=1, cp=460, TAmbient=293.15)
+function HeatCapacitor(; name, rho = 8050, V = 1, cp = 460, TAmbient = 293.15)
     @parameters rho=rho V=V cp=cp
-    C = rho*V*cp
+    C = rho * V * cp
     @named h = HeatPort()
     eqs = [
-           D(h.T) ~ h.Q_flow / C
-          ]
-    compose(ODESystem(
-        eqs, t, [], [rho, V, cp],
-        name=name,
-    ), h)
+        D(h.T) ~ h.Q_flow / C,
+    ]
+    compose(ODESystem(eqs, t, [], [rho, V, cp],
+                      name = name), h)
 end
 
-function Capacitor(;name, C = 1.0)
+function Capacitor(; name, C = 1.0)
     @named p = Pin()
     @named n = Pin()
-    @variables v(t)=0.0
-    @parameters C=C
-    eqs = [
-           v ~ p.v - n.v
+    @variables v(t) = 0.0
+    @parameters C = C
+    eqs = [v ~ p.v - n.v
            0 ~ p.i + n.i
-           D(v) ~ p.i / C
-          ]
-    compose(ODESystem(
-        eqs, t, [v], [C],
-        name=name
-    ), p, n)
+           D(v) ~ p.i / C]
+    compose(ODESystem(eqs, t, [v], [C],
+                      name = name), p, n)
 end
 
 function parallel_rc_model(i; name, source, ground, R, C)
-    resistor = HeatingResistor(name=Symbol(:resistor, i), R=R)
-    capacitor = Capacitor(name=Symbol(:capacitor, i), C=C)
-    heat_capacitor = HeatCapacitor(name=Symbol(:heat_capacitor, i))
+    resistor = HeatingResistor(name = Symbol(:resistor, i), R = R)
+    capacitor = Capacitor(name = Symbol(:capacitor, i), C = C)
+    heat_capacitor = HeatCapacitor(name = Symbol(:heat_capacitor, i))
 
-    rc_eqs = [
-              connect(source.p, resistor.p)
+    rc_eqs = [connect(source.p, resistor.p)
               connect(resistor.n, capacitor.p)
               connect(capacitor.n, source.n, ground.g)
-              connect(resistor.h, heat_capacitor.h)
-             ]
+              connect(resistor.h, heat_capacitor.h)]
 
-    compose(ODESystem(rc_eqs, t, name=Symbol(name, i)),
+    compose(ODESystem(rc_eqs, t, name = Symbol(name, i)),
             [resistor, capacitor, source, ground, heat_capacitor])
 end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">parallel_rc_model (generic function with 1 method)</code></pre><h2 id="The-Model"><a class="docs-heading-anchor" href="#The-Model">The Model</a><a id="The-Model-1"></a><a class="docs-heading-anchor-permalink" href="#The-Model" title="Permalink"></a></h2><p>Assuming that the components are defined, our model is 50 resistors and capacitors connected in parallel. Thus following the <a href="../../tutorials/acausal_components/#acausal">acausal components tutorial</a>, we can connect a bunch of RC components as follows:</p><pre><code class="language-julia hljs">V = 2.0
-@named source = ConstantVoltage(V=V)
+@named source = ConstantVoltage(V = V)
 @named ground = Ground()
 N = 50
-Rs = 10 .^range(0, stop=-4, length=N)
-Cs = 10 .^range(-3, stop=0, length=N)
+Rs = 10 .^ range(0, stop = -4, length = N)
+Cs = 10 .^ range(-3, stop = 0, length = N)
 rc_systems = map(1:N) do i
-    parallel_rc_model(i; name=:rc, source=source, ground=ground, R=Rs[i], C=Cs[i])
+    parallel_rc_model(i; name = :rc, source = source, ground = ground, R = Rs[i], C = Cs[i])
 end;
-@variables E(t)=0.0
+@variables E(t) = 0.0
 eqs = [
-       D(E) ~ sum(((i, sys),)-&gt;getproperty(sys, Symbol(:resistor, i)).h.Q_flow, enumerate(rc_systems))
-      ]
+    D(E) ~ sum(((i, sys),) -&gt; getproperty(sys, Symbol(:resistor, i)).h.Q_flow,
+               enumerate(rc_systems)),
+]
 @named _big_rc = ODESystem(eqs, t, [E], [])
 @named big_rc = compose(_big_rc, rc_systems)</code></pre><p class="math-container">\[ \begin{equation}
 \left[
@@ -1023,49 +1010,49 @@ rc50_{+}ground_{+}g_{+}v\left( t \right) = 0 \\
 \frac{\mathrm{d} rc50_{+}heat_{capacitor50_{+}h_{+}T}\left( t \right)}{\mathrm{d}t} =&amp; \frac{rc50_{+}heat_{capacitor50_{+}h_{+}Q\_flow}\left( t \right)}{rc50_{+}heat_{capacitor50_{+}V} rc50_{+}heat_{capacitor50_{+}cp} rc50_{+}heat_{capacitor50_{+}rho}} \\
 0 =&amp;  - rc1_{+}resistor1_{+}v\left( t \right) + rc1_{+}capacitor1_{+}p_{+}i\left( t \right) rc1_{+}resistor1_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc2_{+}resistor2_{+}v\left( t \right) + rc2_{+}capacitor2_{+}p_{+}i\left( t \right) rc2_{+}resistor2_{+}RTherm\left( t \right) \\
-0 =&amp; rc3_{+}capacitor3_{+}p_{+}i\left( t \right) rc3_{+}resistor3_{+}RTherm\left( t \right) - rc3_{+}resistor3_{+}v\left( t \right) \\
-0 =&amp; rc4_{+}capacitor4_{+}p_{+}i\left( t \right) rc4_{+}resistor4_{+}RTherm\left( t \right) - rc4_{+}resistor4_{+}v\left( t \right) \\
-0 =&amp; rc5_{+}capacitor5_{+}p_{+}i\left( t \right) rc5_{+}resistor5_{+}RTherm\left( t \right) - rc5_{+}resistor5_{+}v\left( t \right) \\
-0 =&amp; rc6_{+}capacitor6_{+}p_{+}i\left( t \right) rc6_{+}resistor6_{+}RTherm\left( t \right) - rc6_{+}resistor6_{+}v\left( t \right) \\
-0 =&amp;  - rc7_{+}resistor7_{+}v\left( t \right) + rc7_{+}capacitor7_{+}p_{+}i\left( t \right) rc7_{+}resistor7_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc8_{+}resistor8_{+}v\left( t \right) + rc8_{+}capacitor8_{+}p_{+}i\left( t \right) rc8_{+}resistor8_{+}RTherm\left( t \right) \\
-0 =&amp; rc9_{+}capacitor9_{+}p_{+}i\left( t \right) rc9_{+}resistor9_{+}RTherm\left( t \right) - rc9_{+}resistor9_{+}v\left( t \right) \\
-0 =&amp;  - rc10_{+}resistor10_{+}v\left( t \right) + rc10_{+}capacitor10_{+}p_{+}i\left( t \right) rc10_{+}resistor10_{+}RTherm\left( t \right) \\
+0 =&amp;  - rc3_{+}resistor3_{+}v\left( t \right) + rc3_{+}capacitor3_{+}p_{+}i\left( t \right) rc3_{+}resistor3_{+}RTherm\left( t \right) \\
+0 =&amp;  - rc4_{+}resistor4_{+}v\left( t \right) + rc4_{+}capacitor4_{+}p_{+}i\left( t \right) rc4_{+}resistor4_{+}RTherm\left( t \right) \\
+0 =&amp;  - rc5_{+}resistor5_{+}v\left( t \right) + rc5_{+}capacitor5_{+}p_{+}i\left( t \right) rc5_{+}resistor5_{+}RTherm\left( t \right) \\
+0 =&amp;  - rc6_{+}resistor6_{+}v\left( t \right) + rc6_{+}capacitor6_{+}p_{+}i\left( t \right) rc6_{+}resistor6_{+}RTherm\left( t \right) \\
+0 =&amp; rc7_{+}capacitor7_{+}p_{+}i\left( t \right) rc7_{+}resistor7_{+}RTherm\left( t \right) - rc7_{+}resistor7_{+}v\left( t \right) \\
+0 =&amp; rc8_{+}capacitor8_{+}p_{+}i\left( t \right) rc8_{+}resistor8_{+}RTherm\left( t \right) - rc8_{+}resistor8_{+}v\left( t \right) \\
+0 =&amp;  - rc9_{+}resistor9_{+}v\left( t \right) + rc9_{+}capacitor9_{+}p_{+}i\left( t \right) rc9_{+}resistor9_{+}RTherm\left( t \right) \\
+0 =&amp; rc10_{+}capacitor10_{+}p_{+}i\left( t \right) rc10_{+}resistor10_{+}RTherm\left( t \right) - rc10_{+}resistor10_{+}v\left( t \right) \\
 0 =&amp;  - rc11_{+}resistor11_{+}v\left( t \right) + rc11_{+}capacitor11_{+}p_{+}i\left( t \right) rc11_{+}resistor11_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc12_{+}resistor12_{+}v\left( t \right) + rc12_{+}capacitor12_{+}p_{+}i\left( t \right) rc12_{+}resistor12_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc13_{+}resistor13_{+}v\left( t \right) + rc13_{+}capacitor13_{+}p_{+}i\left( t \right) rc13_{+}resistor13_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc14_{+}resistor14_{+}v\left( t \right) + rc14_{+}capacitor14_{+}p_{+}i\left( t \right) rc14_{+}resistor14_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc15_{+}resistor15_{+}v\left( t \right) + rc15_{+}capacitor15_{+}p_{+}i\left( t \right) rc15_{+}resistor15_{+}RTherm\left( t \right) \\
-0 =&amp; rc16_{+}capacitor16_{+}p_{+}i\left( t \right) rc16_{+}resistor16_{+}RTherm\left( t \right) - rc16_{+}resistor16_{+}v\left( t \right) \\
+0 =&amp; rc14_{+}capacitor14_{+}p_{+}i\left( t \right) rc14_{+}resistor14_{+}RTherm\left( t \right) - rc14_{+}resistor14_{+}v\left( t \right) \\
+0 =&amp; rc15_{+}capacitor15_{+}p_{+}i\left( t \right) rc15_{+}resistor15_{+}RTherm\left( t \right) - rc15_{+}resistor15_{+}v\left( t \right) \\
+0 =&amp;  - rc16_{+}resistor16_{+}v\left( t \right) + rc16_{+}capacitor16_{+}p_{+}i\left( t \right) rc16_{+}resistor16_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc17_{+}resistor17_{+}v\left( t \right) + rc17_{+}capacitor17_{+}p_{+}i\left( t \right) rc17_{+}resistor17_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc18_{+}resistor18_{+}v\left( t \right) + rc18_{+}capacitor18_{+}p_{+}i\left( t \right) rc18_{+}resistor18_{+}RTherm\left( t \right) \\
+0 =&amp; rc18_{+}capacitor18_{+}p_{+}i\left( t \right) rc18_{+}resistor18_{+}RTherm\left( t \right) - rc18_{+}resistor18_{+}v\left( t \right) \\
 0 =&amp;  - rc19_{+}resistor19_{+}v\left( t \right) + rc19_{+}capacitor19_{+}p_{+}i\left( t \right) rc19_{+}resistor19_{+}RTherm\left( t \right) \\
 0 =&amp; rc20_{+}capacitor20_{+}p_{+}i\left( t \right) rc20_{+}resistor20_{+}RTherm\left( t \right) - rc20_{+}resistor20_{+}v\left( t \right) \\
-0 =&amp;  - rc21_{+}resistor21_{+}v\left( t \right) + rc21_{+}capacitor21_{+}p_{+}i\left( t \right) rc21_{+}resistor21_{+}RTherm\left( t \right) \\
+0 =&amp; rc21_{+}capacitor21_{+}p_{+}i\left( t \right) rc21_{+}resistor21_{+}RTherm\left( t \right) - rc21_{+}resistor21_{+}v\left( t \right) \\
 0 =&amp; rc22_{+}capacitor22_{+}p_{+}i\left( t \right) rc22_{+}resistor22_{+}RTherm\left( t \right) - rc22_{+}resistor22_{+}v\left( t \right) \\
 0 =&amp; rc23_{+}capacitor23_{+}p_{+}i\left( t \right) rc23_{+}resistor23_{+}RTherm\left( t \right) - rc23_{+}resistor23_{+}v\left( t \right) \\
-0 =&amp;  - rc24_{+}resistor24_{+}v\left( t \right) + rc24_{+}capacitor24_{+}p_{+}i\left( t \right) rc24_{+}resistor24_{+}RTherm\left( t \right) \\
+0 =&amp; rc24_{+}capacitor24_{+}p_{+}i\left( t \right) rc24_{+}resistor24_{+}RTherm\left( t \right) - rc24_{+}resistor24_{+}v\left( t \right) \\
 0 =&amp; rc25_{+}capacitor25_{+}p_{+}i\left( t \right) rc25_{+}resistor25_{+}RTherm\left( t \right) - rc25_{+}resistor25_{+}v\left( t \right) \\
-0 =&amp;  - rc26_{+}resistor26_{+}v\left( t \right) + rc26_{+}capacitor26_{+}p_{+}i\left( t \right) rc26_{+}resistor26_{+}RTherm\left( t \right) \\
-0 =&amp; rc27_{+}capacitor27_{+}p_{+}i\left( t \right) rc27_{+}resistor27_{+}RTherm\left( t \right) - rc27_{+}resistor27_{+}v\left( t \right) \\
+0 =&amp; rc26_{+}capacitor26_{+}p_{+}i\left( t \right) rc26_{+}resistor26_{+}RTherm\left( t \right) - rc26_{+}resistor26_{+}v\left( t \right) \\
+0 =&amp;  - rc27_{+}resistor27_{+}v\left( t \right) + rc27_{+}capacitor27_{+}p_{+}i\left( t \right) rc27_{+}resistor27_{+}RTherm\left( t \right) \\
 0 =&amp; rc28_{+}capacitor28_{+}p_{+}i\left( t \right) rc28_{+}resistor28_{+}RTherm\left( t \right) - rc28_{+}resistor28_{+}v\left( t \right) \\
-0 =&amp; rc29_{+}capacitor29_{+}p_{+}i\left( t \right) rc29_{+}resistor29_{+}RTherm\left( t \right) - rc29_{+}resistor29_{+}v\left( t \right) \\
+0 =&amp;  - rc29_{+}resistor29_{+}v\left( t \right) + rc29_{+}capacitor29_{+}p_{+}i\left( t \right) rc29_{+}resistor29_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc30_{+}resistor30_{+}v\left( t \right) + rc30_{+}capacitor30_{+}p_{+}i\left( t \right) rc30_{+}resistor30_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc31_{+}resistor31_{+}v\left( t \right) + rc31_{+}capacitor31_{+}p_{+}i\left( t \right) rc31_{+}resistor31_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc32_{+}resistor32_{+}v\left( t \right) + rc32_{+}capacitor32_{+}p_{+}i\left( t \right) rc32_{+}resistor32_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc33_{+}resistor33_{+}v\left( t \right) + rc33_{+}capacitor33_{+}p_{+}i\left( t \right) rc33_{+}resistor33_{+}RTherm\left( t \right) \\
+0 =&amp; rc31_{+}capacitor31_{+}p_{+}i\left( t \right) rc31_{+}resistor31_{+}RTherm\left( t \right) - rc31_{+}resistor31_{+}v\left( t \right) \\
+0 =&amp; rc32_{+}capacitor32_{+}p_{+}i\left( t \right) rc32_{+}resistor32_{+}RTherm\left( t \right) - rc32_{+}resistor32_{+}v\left( t \right) \\
+0 =&amp; rc33_{+}capacitor33_{+}p_{+}i\left( t \right) rc33_{+}resistor33_{+}RTherm\left( t \right) - rc33_{+}resistor33_{+}v\left( t \right) \\
 0 =&amp;  - rc34_{+}resistor34_{+}v\left( t \right) + rc34_{+}capacitor34_{+}p_{+}i\left( t \right) rc34_{+}resistor34_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc35_{+}resistor35_{+}v\left( t \right) + rc35_{+}capacitor35_{+}p_{+}i\left( t \right) rc35_{+}resistor35_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc36_{+}resistor36_{+}v\left( t \right) + rc36_{+}capacitor36_{+}p_{+}i\left( t \right) rc36_{+}resistor36_{+}RTherm\left( t \right) \\
+0 =&amp; rc35_{+}capacitor35_{+}p_{+}i\left( t \right) rc35_{+}resistor35_{+}RTherm\left( t \right) - rc35_{+}resistor35_{+}v\left( t \right) \\
+0 =&amp; rc36_{+}capacitor36_{+}p_{+}i\left( t \right) rc36_{+}resistor36_{+}RTherm\left( t \right) - rc36_{+}resistor36_{+}v\left( t \right) \\
 0 =&amp; rc37_{+}capacitor37_{+}p_{+}i\left( t \right) rc37_{+}resistor37_{+}RTherm\left( t \right) - rc37_{+}resistor37_{+}v\left( t \right) \\
-0 =&amp; rc38_{+}capacitor38_{+}p_{+}i\left( t \right) rc38_{+}resistor38_{+}RTherm\left( t \right) - rc38_{+}resistor38_{+}v\left( t \right) \\
+0 =&amp;  - rc38_{+}resistor38_{+}v\left( t \right) + rc38_{+}capacitor38_{+}p_{+}i\left( t \right) rc38_{+}resistor38_{+}RTherm\left( t \right) \\
 0 =&amp; rc39_{+}capacitor39_{+}p_{+}i\left( t \right) rc39_{+}resistor39_{+}RTherm\left( t \right) - rc39_{+}resistor39_{+}v\left( t \right) \\
-0 =&amp; rc40_{+}capacitor40_{+}p_{+}i\left( t \right) rc40_{+}resistor40_{+}RTherm\left( t \right) - rc40_{+}resistor40_{+}v\left( t \right) \\
-0 =&amp;  - rc41_{+}resistor41_{+}v\left( t \right) + rc41_{+}capacitor41_{+}p_{+}i\left( t \right) rc41_{+}resistor41_{+}RTherm\left( t \right) \\
-0 =&amp; rc42_{+}capacitor42_{+}p_{+}i\left( t \right) rc42_{+}resistor42_{+}RTherm\left( t \right) - rc42_{+}resistor42_{+}v\left( t \right) \\
+0 =&amp;  - rc40_{+}resistor40_{+}v\left( t \right) + rc40_{+}capacitor40_{+}p_{+}i\left( t \right) rc40_{+}resistor40_{+}RTherm\left( t \right) \\
+0 =&amp; rc41_{+}capacitor41_{+}p_{+}i\left( t \right) rc41_{+}resistor41_{+}RTherm\left( t \right) - rc41_{+}resistor41_{+}v\left( t \right) \\
+0 =&amp;  - rc42_{+}resistor42_{+}v\left( t \right) + rc42_{+}capacitor42_{+}p_{+}i\left( t \right) rc42_{+}resistor42_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc43_{+}resistor43_{+}v\left( t \right) + rc43_{+}capacitor43_{+}p_{+}i\left( t \right) rc43_{+}resistor43_{+}RTherm\left( t \right) \\
 0 =&amp; rc44_{+}capacitor44_{+}p_{+}i\left( t \right) rc44_{+}resistor44_{+}RTherm\left( t \right) - rc44_{+}resistor44_{+}v\left( t \right) \\
-0 =&amp; rc45_{+}capacitor45_{+}p_{+}i\left( t \right) rc45_{+}resistor45_{+}RTherm\left( t \right) - rc45_{+}resistor45_{+}v\left( t \right) \\
+0 =&amp;  - rc45_{+}resistor45_{+}v\left( t \right) + rc45_{+}capacitor45_{+}p_{+}i\left( t \right) rc45_{+}resistor45_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc46_{+}resistor46_{+}v\left( t \right) + rc46_{+}capacitor46_{+}p_{+}i\left( t \right) rc46_{+}resistor46_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc47_{+}resistor47_{+}v\left( t \right) + rc47_{+}capacitor47_{+}p_{+}i\left( t \right) rc47_{+}resistor47_{+}RTherm\left( t \right) \\
 0 =&amp; rc48_{+}capacitor48_{+}p_{+}i\left( t \right) rc48_{+}resistor48_{+}RTherm\left( t \right) - rc48_{+}resistor48_{+}v\left( t \right) \\
@@ -1176,49 +1163,49 @@ rc50_{+}ground_{+}g_{+}v\left( t \right) = 0 \\
 \frac{\mathrm{d} rc50_{+}heat_{capacitor50_{+}h_{+}T}\left( t \right)}{\mathrm{d}t} =&amp; \frac{rc50_{+}heat_{capacitor50_{+}h_{+}Q\_flow}\left( t \right)}{rc50_{+}heat_{capacitor50_{+}V} rc50_{+}heat_{capacitor50_{+}cp} rc50_{+}heat_{capacitor50_{+}rho}} \\
 0 =&amp;  - rc1_{+}resistor1_{+}v\left( t \right) + rc1_{+}capacitor1_{+}p_{+}i\left( t \right) rc1_{+}resistor1_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc2_{+}resistor2_{+}v\left( t \right) + rc2_{+}capacitor2_{+}p_{+}i\left( t \right) rc2_{+}resistor2_{+}RTherm\left( t \right) \\
-0 =&amp; rc3_{+}capacitor3_{+}p_{+}i\left( t \right) rc3_{+}resistor3_{+}RTherm\left( t \right) - rc3_{+}resistor3_{+}v\left( t \right) \\
-0 =&amp; rc4_{+}capacitor4_{+}p_{+}i\left( t \right) rc4_{+}resistor4_{+}RTherm\left( t \right) - rc4_{+}resistor4_{+}v\left( t \right) \\
-0 =&amp; rc5_{+}capacitor5_{+}p_{+}i\left( t \right) rc5_{+}resistor5_{+}RTherm\left( t \right) - rc5_{+}resistor5_{+}v\left( t \right) \\
-0 =&amp; rc6_{+}capacitor6_{+}p_{+}i\left( t \right) rc6_{+}resistor6_{+}RTherm\left( t \right) - rc6_{+}resistor6_{+}v\left( t \right) \\
-0 =&amp;  - rc7_{+}resistor7_{+}v\left( t \right) + rc7_{+}capacitor7_{+}p_{+}i\left( t \right) rc7_{+}resistor7_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc8_{+}resistor8_{+}v\left( t \right) + rc8_{+}capacitor8_{+}p_{+}i\left( t \right) rc8_{+}resistor8_{+}RTherm\left( t \right) \\
-0 =&amp; rc9_{+}capacitor9_{+}p_{+}i\left( t \right) rc9_{+}resistor9_{+}RTherm\left( t \right) - rc9_{+}resistor9_{+}v\left( t \right) \\
-0 =&amp;  - rc10_{+}resistor10_{+}v\left( t \right) + rc10_{+}capacitor10_{+}p_{+}i\left( t \right) rc10_{+}resistor10_{+}RTherm\left( t \right) \\
+0 =&amp;  - rc3_{+}resistor3_{+}v\left( t \right) + rc3_{+}capacitor3_{+}p_{+}i\left( t \right) rc3_{+}resistor3_{+}RTherm\left( t \right) \\
+0 =&amp;  - rc4_{+}resistor4_{+}v\left( t \right) + rc4_{+}capacitor4_{+}p_{+}i\left( t \right) rc4_{+}resistor4_{+}RTherm\left( t \right) \\
+0 =&amp;  - rc5_{+}resistor5_{+}v\left( t \right) + rc5_{+}capacitor5_{+}p_{+}i\left( t \right) rc5_{+}resistor5_{+}RTherm\left( t \right) \\
+0 =&amp;  - rc6_{+}resistor6_{+}v\left( t \right) + rc6_{+}capacitor6_{+}p_{+}i\left( t \right) rc6_{+}resistor6_{+}RTherm\left( t \right) \\
+0 =&amp; rc7_{+}capacitor7_{+}p_{+}i\left( t \right) rc7_{+}resistor7_{+}RTherm\left( t \right) - rc7_{+}resistor7_{+}v\left( t \right) \\
+0 =&amp; rc8_{+}capacitor8_{+}p_{+}i\left( t \right) rc8_{+}resistor8_{+}RTherm\left( t \right) - rc8_{+}resistor8_{+}v\left( t \right) \\
+0 =&amp;  - rc9_{+}resistor9_{+}v\left( t \right) + rc9_{+}capacitor9_{+}p_{+}i\left( t \right) rc9_{+}resistor9_{+}RTherm\left( t \right) \\
+0 =&amp; rc10_{+}capacitor10_{+}p_{+}i\left( t \right) rc10_{+}resistor10_{+}RTherm\left( t \right) - rc10_{+}resistor10_{+}v\left( t \right) \\
 0 =&amp;  - rc11_{+}resistor11_{+}v\left( t \right) + rc11_{+}capacitor11_{+}p_{+}i\left( t \right) rc11_{+}resistor11_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc12_{+}resistor12_{+}v\left( t \right) + rc12_{+}capacitor12_{+}p_{+}i\left( t \right) rc12_{+}resistor12_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc13_{+}resistor13_{+}v\left( t \right) + rc13_{+}capacitor13_{+}p_{+}i\left( t \right) rc13_{+}resistor13_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc14_{+}resistor14_{+}v\left( t \right) + rc14_{+}capacitor14_{+}p_{+}i\left( t \right) rc14_{+}resistor14_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc15_{+}resistor15_{+}v\left( t \right) + rc15_{+}capacitor15_{+}p_{+}i\left( t \right) rc15_{+}resistor15_{+}RTherm\left( t \right) \\
-0 =&amp; rc16_{+}capacitor16_{+}p_{+}i\left( t \right) rc16_{+}resistor16_{+}RTherm\left( t \right) - rc16_{+}resistor16_{+}v\left( t \right) \\
+0 =&amp; rc14_{+}capacitor14_{+}p_{+}i\left( t \right) rc14_{+}resistor14_{+}RTherm\left( t \right) - rc14_{+}resistor14_{+}v\left( t \right) \\
+0 =&amp; rc15_{+}capacitor15_{+}p_{+}i\left( t \right) rc15_{+}resistor15_{+}RTherm\left( t \right) - rc15_{+}resistor15_{+}v\left( t \right) \\
+0 =&amp;  - rc16_{+}resistor16_{+}v\left( t \right) + rc16_{+}capacitor16_{+}p_{+}i\left( t \right) rc16_{+}resistor16_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc17_{+}resistor17_{+}v\left( t \right) + rc17_{+}capacitor17_{+}p_{+}i\left( t \right) rc17_{+}resistor17_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc18_{+}resistor18_{+}v\left( t \right) + rc18_{+}capacitor18_{+}p_{+}i\left( t \right) rc18_{+}resistor18_{+}RTherm\left( t \right) \\
+0 =&amp; rc18_{+}capacitor18_{+}p_{+}i\left( t \right) rc18_{+}resistor18_{+}RTherm\left( t \right) - rc18_{+}resistor18_{+}v\left( t \right) \\
 0 =&amp;  - rc19_{+}resistor19_{+}v\left( t \right) + rc19_{+}capacitor19_{+}p_{+}i\left( t \right) rc19_{+}resistor19_{+}RTherm\left( t \right) \\
 0 =&amp; rc20_{+}capacitor20_{+}p_{+}i\left( t \right) rc20_{+}resistor20_{+}RTherm\left( t \right) - rc20_{+}resistor20_{+}v\left( t \right) \\
-0 =&amp;  - rc21_{+}resistor21_{+}v\left( t \right) + rc21_{+}capacitor21_{+}p_{+}i\left( t \right) rc21_{+}resistor21_{+}RTherm\left( t \right) \\
+0 =&amp; rc21_{+}capacitor21_{+}p_{+}i\left( t \right) rc21_{+}resistor21_{+}RTherm\left( t \right) - rc21_{+}resistor21_{+}v\left( t \right) \\
 0 =&amp; rc22_{+}capacitor22_{+}p_{+}i\left( t \right) rc22_{+}resistor22_{+}RTherm\left( t \right) - rc22_{+}resistor22_{+}v\left( t \right) \\
 0 =&amp; rc23_{+}capacitor23_{+}p_{+}i\left( t \right) rc23_{+}resistor23_{+}RTherm\left( t \right) - rc23_{+}resistor23_{+}v\left( t \right) \\
-0 =&amp;  - rc24_{+}resistor24_{+}v\left( t \right) + rc24_{+}capacitor24_{+}p_{+}i\left( t \right) rc24_{+}resistor24_{+}RTherm\left( t \right) \\
+0 =&amp; rc24_{+}capacitor24_{+}p_{+}i\left( t \right) rc24_{+}resistor24_{+}RTherm\left( t \right) - rc24_{+}resistor24_{+}v\left( t \right) \\
 0 =&amp; rc25_{+}capacitor25_{+}p_{+}i\left( t \right) rc25_{+}resistor25_{+}RTherm\left( t \right) - rc25_{+}resistor25_{+}v\left( t \right) \\
-0 =&amp;  - rc26_{+}resistor26_{+}v\left( t \right) + rc26_{+}capacitor26_{+}p_{+}i\left( t \right) rc26_{+}resistor26_{+}RTherm\left( t \right) \\
-0 =&amp; rc27_{+}capacitor27_{+}p_{+}i\left( t \right) rc27_{+}resistor27_{+}RTherm\left( t \right) - rc27_{+}resistor27_{+}v\left( t \right) \\
+0 =&amp; rc26_{+}capacitor26_{+}p_{+}i\left( t \right) rc26_{+}resistor26_{+}RTherm\left( t \right) - rc26_{+}resistor26_{+}v\left( t \right) \\
+0 =&amp;  - rc27_{+}resistor27_{+}v\left( t \right) + rc27_{+}capacitor27_{+}p_{+}i\left( t \right) rc27_{+}resistor27_{+}RTherm\left( t \right) \\
 0 =&amp; rc28_{+}capacitor28_{+}p_{+}i\left( t \right) rc28_{+}resistor28_{+}RTherm\left( t \right) - rc28_{+}resistor28_{+}v\left( t \right) \\
-0 =&amp; rc29_{+}capacitor29_{+}p_{+}i\left( t \right) rc29_{+}resistor29_{+}RTherm\left( t \right) - rc29_{+}resistor29_{+}v\left( t \right) \\
+0 =&amp;  - rc29_{+}resistor29_{+}v\left( t \right) + rc29_{+}capacitor29_{+}p_{+}i\left( t \right) rc29_{+}resistor29_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc30_{+}resistor30_{+}v\left( t \right) + rc30_{+}capacitor30_{+}p_{+}i\left( t \right) rc30_{+}resistor30_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc31_{+}resistor31_{+}v\left( t \right) + rc31_{+}capacitor31_{+}p_{+}i\left( t \right) rc31_{+}resistor31_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc32_{+}resistor32_{+}v\left( t \right) + rc32_{+}capacitor32_{+}p_{+}i\left( t \right) rc32_{+}resistor32_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc33_{+}resistor33_{+}v\left( t \right) + rc33_{+}capacitor33_{+}p_{+}i\left( t \right) rc33_{+}resistor33_{+}RTherm\left( t \right) \\
+0 =&amp; rc31_{+}capacitor31_{+}p_{+}i\left( t \right) rc31_{+}resistor31_{+}RTherm\left( t \right) - rc31_{+}resistor31_{+}v\left( t \right) \\
+0 =&amp; rc32_{+}capacitor32_{+}p_{+}i\left( t \right) rc32_{+}resistor32_{+}RTherm\left( t \right) - rc32_{+}resistor32_{+}v\left( t \right) \\
+0 =&amp; rc33_{+}capacitor33_{+}p_{+}i\left( t \right) rc33_{+}resistor33_{+}RTherm\left( t \right) - rc33_{+}resistor33_{+}v\left( t \right) \\
 0 =&amp;  - rc34_{+}resistor34_{+}v\left( t \right) + rc34_{+}capacitor34_{+}p_{+}i\left( t \right) rc34_{+}resistor34_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc35_{+}resistor35_{+}v\left( t \right) + rc35_{+}capacitor35_{+}p_{+}i\left( t \right) rc35_{+}resistor35_{+}RTherm\left( t \right) \\
-0 =&amp;  - rc36_{+}resistor36_{+}v\left( t \right) + rc36_{+}capacitor36_{+}p_{+}i\left( t \right) rc36_{+}resistor36_{+}RTherm\left( t \right) \\
+0 =&amp; rc35_{+}capacitor35_{+}p_{+}i\left( t \right) rc35_{+}resistor35_{+}RTherm\left( t \right) - rc35_{+}resistor35_{+}v\left( t \right) \\
+0 =&amp; rc36_{+}capacitor36_{+}p_{+}i\left( t \right) rc36_{+}resistor36_{+}RTherm\left( t \right) - rc36_{+}resistor36_{+}v\left( t \right) \\
 0 =&amp; rc37_{+}capacitor37_{+}p_{+}i\left( t \right) rc37_{+}resistor37_{+}RTherm\left( t \right) - rc37_{+}resistor37_{+}v\left( t \right) \\
-0 =&amp; rc38_{+}capacitor38_{+}p_{+}i\left( t \right) rc38_{+}resistor38_{+}RTherm\left( t \right) - rc38_{+}resistor38_{+}v\left( t \right) \\
+0 =&amp;  - rc38_{+}resistor38_{+}v\left( t \right) + rc38_{+}capacitor38_{+}p_{+}i\left( t \right) rc38_{+}resistor38_{+}RTherm\left( t \right) \\
 0 =&amp; rc39_{+}capacitor39_{+}p_{+}i\left( t \right) rc39_{+}resistor39_{+}RTherm\left( t \right) - rc39_{+}resistor39_{+}v\left( t \right) \\
-0 =&amp; rc40_{+}capacitor40_{+}p_{+}i\left( t \right) rc40_{+}resistor40_{+}RTherm\left( t \right) - rc40_{+}resistor40_{+}v\left( t \right) \\
-0 =&amp;  - rc41_{+}resistor41_{+}v\left( t \right) + rc41_{+}capacitor41_{+}p_{+}i\left( t \right) rc41_{+}resistor41_{+}RTherm\left( t \right) \\
-0 =&amp; rc42_{+}capacitor42_{+}p_{+}i\left( t \right) rc42_{+}resistor42_{+}RTherm\left( t \right) - rc42_{+}resistor42_{+}v\left( t \right) \\
+0 =&amp;  - rc40_{+}resistor40_{+}v\left( t \right) + rc40_{+}capacitor40_{+}p_{+}i\left( t \right) rc40_{+}resistor40_{+}RTherm\left( t \right) \\
+0 =&amp; rc41_{+}capacitor41_{+}p_{+}i\left( t \right) rc41_{+}resistor41_{+}RTherm\left( t \right) - rc41_{+}resistor41_{+}v\left( t \right) \\
+0 =&amp;  - rc42_{+}resistor42_{+}v\left( t \right) + rc42_{+}capacitor42_{+}p_{+}i\left( t \right) rc42_{+}resistor42_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc43_{+}resistor43_{+}v\left( t \right) + rc43_{+}capacitor43_{+}p_{+}i\left( t \right) rc43_{+}resistor43_{+}RTherm\left( t \right) \\
 0 =&amp; rc44_{+}capacitor44_{+}p_{+}i\left( t \right) rc44_{+}resistor44_{+}RTherm\left( t \right) - rc44_{+}resistor44_{+}v\left( t \right) \\
-0 =&amp; rc45_{+}capacitor45_{+}p_{+}i\left( t \right) rc45_{+}resistor45_{+}RTherm\left( t \right) - rc45_{+}resistor45_{+}v\left( t \right) \\
+0 =&amp;  - rc45_{+}resistor45_{+}v\left( t \right) + rc45_{+}capacitor45_{+}p_{+}i\left( t \right) rc45_{+}resistor45_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc46_{+}resistor46_{+}v\left( t \right) + rc46_{+}capacitor46_{+}p_{+}i\left( t \right) rc46_{+}resistor46_{+}RTherm\left( t \right) \\
 0 =&amp;  - rc47_{+}resistor47_{+}v\left( t \right) + rc47_{+}capacitor47_{+}p_{+}i\left( t \right) rc47_{+}resistor47_{+}RTherm\left( t \right) \\
 0 =&amp; rc48_{+}capacitor48_{+}p_{+}i\left( t \right) rc48_{+}resistor48_{+}RTherm\left( t \right) - rc48_{+}resistor48_{+}v\left( t \right) \\
@@ -1228,18 +1215,20 @@ rc50_{+}ground_{+}g_{+}v\left( t \right) = 0 \\
  \]</p><p>That&#39;s not all though. In addition, the tearing process has turned the sets of nonlinear equations into separate blocks and constructed a DAG for the dependencies between the blocks. We can use the bipartite graph functionality to dig in and investigate what this means:</p><pre><code class="language-julia hljs">using ModelingToolkit.BipartiteGraphs
 ts = TearingState(expand_connections(big_rc))
 inc_org = BipartiteGraphs.incidence_matrix(ts.structure.graph)
-blt_org = StructuralTransformations.sorted_incidence_matrix(ts, only_algeqs=true, only_algvars=true)
-blt_reduced = StructuralTransformations.sorted_incidence_matrix(ModelingToolkit.get_tearing_state(sys), only_algeqs=true, only_algvars=true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">50×50 SparseArrays.SparseMatrixCSC{Bool, Int64} with 50 stored entries:
-⠑⢄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠑⢄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠑⢄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠑⢄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠑⢄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠑⢄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠑⢄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠑⢄⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠑⢄⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠑⢄⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠑⢄⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠑⢄⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠑</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/110589027-d4ec9b00-8143-11eb-8880-651da986504d.PNG" alt/></p><p>The figure on the left is the original incidence matrix of the algebraic equations. Notice that the original formulation of the model has dependencies between different equations, and so the full set of equations must be solved together. That exposes no parallelism. However, the Block Lower Triangular (BLT) transformation exposes independent blocks. This is then further improved by the tearing process, which removes 90% of the equations and transforms the nonlinear equations into 50 independent blocks, <em>which can now all be solved in parallel</em>. The conclusion is that, your attempts to parallelize are neigh: performing parallelism after structural simplification greatly improves the problem that can be parallelized, so this is better than trying to do it by hand.</p><p>After performing this, you can construct the <code>ODEProblem</code>/<code>ODAEProblem</code> and set <code>parallel_form</code> to use the exposed parallelism in multithreaded function constructions, but this showcases why <code>structural_simplify</code> is so important to that process.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../parsing/">« Parsing Expressions into Solvable Systems</a><a class="docs-footer-nextpage" href="../sparse_jacobians/">Automated Sparse Analytical Jacobians »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Tuesday 24 January 2023 08:59">Tuesday 24 January 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+blt_org = StructuralTransformations.sorted_incidence_matrix(ts, only_algeqs = true,
+                                                            only_algvars = true)
+blt_reduced = StructuralTransformations.sorted_incidence_matrix(ModelingToolkit.get_tearing_state(sys),
+                                                                only_algeqs = true,
+                                                                only_algvars = true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">151×252 SparseArrays.SparseMatrixCSC{Bool, Int64} with 50 stored entries:
+⠑⢤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠑⢤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠑⢤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠙⢦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/110589027-d4ec9b00-8143-11eb-8880-651da986504d.PNG" alt/></p><p>The figure on the left is the original incidence matrix of the algebraic equations. Notice that the original formulation of the model has dependencies between different equations, and so the full set of equations must be solved together. That exposes no parallelism. However, the Block Lower Triangular (BLT) transformation exposes independent blocks. This is then further improved by the tearing process, which removes 90% of the equations and transforms the nonlinear equations into 50 independent blocks, <em>which can now all be solved in parallel</em>. The conclusion is that, your attempts to parallelize are neigh: performing parallelism after structural simplification greatly improves the problem that can be parallelized, so this is better than trying to do it by hand.</p><p>After performing this, you can construct the <code>ODEProblem</code>/<code>ODAEProblem</code> and set <code>parallel_form</code> to use the exposed parallelism in multithreaded function constructions, but this showcases why <code>structural_simplify</code> is so important to that process.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../parsing/">« Parsing Expressions into Solvable Systems</a><a class="docs-footer-nextpage" href="../sparse_jacobians/">Automated Sparse Analytical Jacobians »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Monday 3 April 2023 10:14">Monday 3 April 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
