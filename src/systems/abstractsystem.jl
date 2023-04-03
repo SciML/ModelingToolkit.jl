@@ -1406,8 +1406,9 @@ end
 
 function set_priorities!(state, priorities)
     fullvars = state.fullvars
+    prio_dict = Dict(priorities)
     for (i, v) in enumerate(fullvars)
-        p = get(priorities, v, nothing)
+        p = get(prio_dict, v, nothing)
         p === nothing && continue
         v = setmetadata(v, VariableStatePriority, p)
         fullvars[i] = v
