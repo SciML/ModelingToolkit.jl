@@ -126,10 +126,20 @@ function computed_highest_diff_variables(structure, ag::Union{AliasGraph, Nothin
                     var′ = invview(var_to_diff)[var]
                     var′ === nothing && break
                     stem′ = invview(var_to_diff)[stem]
+                    avar′ = haskey(ag, var′) ? ag[var′][2] : nothing
+                    if avar′ == stem || var′ == stem
+                        # If we have a self-loop in the stem, we could have the
+                        # var′ also alias to the original stem. In that case, the
+                        # derivative of the stem is highest differentiated, because of the loop
+                        dstem = var_to_diff[stem]
+                        @assert dstem !== nothing
+                        varwhitelist[dstem] = true
+                        break
+                    end
                     # Invariant from alias elimination: Stem is chosen to have
                     # the highest differentiation order.
                     @assert stem′ !== nothing
-                    if !haskey(ag, var′) || ag[var′][2] != stem′
+                    if avar′ != stem′
                         varwhitelist[stem] = true
                         break
                     end
