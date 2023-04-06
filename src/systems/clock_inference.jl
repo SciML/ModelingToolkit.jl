@@ -1,22 +1,21 @@
-struct ClockInference
-    ts::TearingState
+struct ClockInference{S}
+    ts::S
     eq_domain::Vector{TimeDomain}
     var_domain::Vector{TimeDomain}
     inferred::BitSet
 end
 
-function ClockInference(ts::TearingState)
-    @unpack fullvars, structure = ts
+function ClockInference(ts::TransformationState)
+    @unpack structure = ts
     @unpack graph = structure
     eq_domain = TimeDomain[Continuous() for _ in 1:nsrcs(graph)]
     var_domain = TimeDomain[Continuous() for _ in 1:ndsts(graph)]
     inferred = BitSet()
-    for (i, v) in enumerate(fullvars)
+    for (i, v) in enumerate(get_fullvars(ts))
         d = get_time_domain(v)
-        if d isa Union{AbstractClock, Continuous}
+        if is_concrete_time_domain(d)
             push!(inferred, i)
-            dd = d
-            var_domain[i] = dd
+            var_domain[i] = d
         end
     end
     ClockInference(ts, eq_domain, var_domain, inferred)
@@ -24,8 +23,8 @@ end
 
 function infer_clocks!(ci::ClockInference)
     @unpack ts, eq_domain, var_domain, inferred = ci
-    @unpack fullvars = ts
     @unpack graph = ts.structure
+    fullvars = get_fullvars(ts)
     isempty(inferred) && return ci
     # TODO: add a graph type to do this lazily
     var_graph = SimpleGraph(ndsts(graph))
@@ -78,7 +77,7 @@ end
 
 function split_system(ci::ClockInference)
     @unpack ts, eq_domain, var_domain, inferred = ci
-    @unpack fullvars = ts
+    fullvars = get_fullvars(ts)
     @unpack graph, var_to_diff = ts.structure
     continuous_id = Ref(0)
     clock_to_id = Dict{TimeDomain, Int}()

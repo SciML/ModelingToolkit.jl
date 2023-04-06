@@ -31,6 +31,7 @@ export initialize_system_structure, find_linear_equations
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq, algeqs, is_only_discrete
 export dervars_range, diffvars_range, algvars_range
 export DiffGraph, complete!
+export get_fullvars
 
 struct DiffGraph <: Graphs.AbstractGraph{Int}
     primal_to_diff::Vector{Union{Int, Nothing}}
@@ -138,6 +139,8 @@ end
 abstract type TransformationState{T} end
 abstract type AbstractTearingState{T} <: TransformationState{T} end
 
+get_fullvars(ts::TransformationState) = ts.fullvars
+
 Base.@kwdef mutable struct SystemStructure
     # Maps the (index of) a variable to the (index of) the variable describing
     # its derivative.
@@ -200,6 +203,8 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
     structure::SystemStructure
     extra_eqs::Vector
 end
+
+TransformationState(sys::AbstractSystem) = TearingState(sys)
 
 function Base.show(io::IO, state::TearingState)
     print(io, "TearingState of ", typeof(state.sys))
