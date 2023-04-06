@@ -23,10 +23,11 @@ julia> Δ = Shift(t)
 """
 struct Shift <: Operator
     """Fixed Shift"""
-    t::Any
+    t::Union{Nothing, Symbolic}
     steps::Int
     Shift(t, steps = 1) = new(value(t), steps)
 end
+Shift(steps::Int) = new(nothing, steps)
 normalize_to_differential(s::Shift) = Differential(s.t)^s.steps
 function (D::Shift)(x, allow_zero = false)
     !allow_zero && D.steps == 0 && return x
@@ -38,7 +39,7 @@ function (D::Shift)(x::Num, allow_zero = false)
     if istree(vt)
         op = operation(vt)
         if op isa Shift
-            if isequal(D.t, op.t)
+            if D.t === nothing || isequal(D.t, op.t)
                 arg = arguments(vt)[1]
                 newsteps = D.steps + op.steps
                 return Num(newsteps == 0 ? arg : Shift(D.t, newsteps)(arg))
@@ -75,7 +76,7 @@ Represents a sample operator. A discrete-time signal is created by sampling a co
 
 # Constructors
 `Sample(clock::TimeDomain = InferredDiscrete())`
-`Sample(t, dt::Real)`
+`Sample([t], dt::Real)`
 
 `Sample(x::Num)`, with a single argument, is shorthand for `Sample()(x)`.
 

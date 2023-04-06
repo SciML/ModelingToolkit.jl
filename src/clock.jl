@@ -7,9 +7,6 @@ struct Inferred <: TimeDomain end
 struct InferredDiscrete <: AbstractDiscrete end
 struct Continuous <: TimeDomain end
 
-const UnknownDomain = Union{Nothing, Inferred, InferredDiscrete}
-const InferredDomain = Union{Inferred, InferredDiscrete}
-
 Symbolics.option_to_metadata_type(::Val{:timedomain}) = TimeDomain
 
 """
@@ -101,18 +98,27 @@ end
 abstract type AbstractClock <: AbstractDiscrete end
 
 """
-Clock <: AbstractClock
-Clock(t; dt)
+    Clock <: AbstractClock
+    Clock([t]; dt)
+
 The default periodic clock with independent variables `t` and tick interval `dt`.
 If `dt` is left unspecified, it will be inferred (if possible).
 """
 struct Clock <: AbstractClock
     "Independent variable"
-    t::Any
+    t::Union{Nothing, Symbolic}
     "Period"
-    dt::Any
-    Clock(t, dt = nothing) = new(value(t), dt)
+    dt::Union{Nothing, Float64}
+    Clock(t::Union{Num, Symbolic}, dt = nothing) = new(value(t), dt)
+    Clock(t::Nothing, dt = nothing) = new(t, dt)
 end
+Clock(dt::Real) = Clock(nothing, dt)
+Clock() = Clock(nothing, nothing)
 
 sampletime(c) = isdefined(c, :dt) ? c.dt : nothing
-Base.:(==)(c1::Clock, c2::Clock) = isequal(c1.t, c2.t) && c1.dt == c2.dt
+Base.hash(c::Clock, seed::UInt) = hash(c.dt, seed ⊻ 0x953d7a9a18874b90)
+function Base.:(==)(c1::Clock, c2::Clock)
+    ((c1.t === nothing || c2.t === nothing) || isequal(c1.t, c2.t)) && c1.dt == c2.dt
+end
+
+is_concrete_time_domain(x) = x isa Union{AbstractClock, Continuous}

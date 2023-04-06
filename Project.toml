@@ -46,12 +46,6 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
-[weakdeps]
-DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
-
-[extensions]
-MTKDeepDiffsExt = "DeepDiffs"
-
 [compat]
 AbstractTrees = "0.3, 0.4"
 ArrayInterface = "6, 7"
@@ -90,6 +84,9 @@ UnPack = "0.1, 1.0"
 Unitful = "1.1"
 julia = "1.6"
 
+[extensions]
+MTKDeepDiffsExt = "DeepDiffs"
+
 [extras]
 AmplNLWriter = "7c4d4715-977e-5154-bfe0-e096adeac482"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
@@ -116,3 +113,6 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["AmplNLWriter", "BenchmarkTools", "ControlSystemsMTK", "NonlinearSolve", "ForwardDiff", "Ipopt", "Ipopt_jll", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OptimizationMOI", "OrdinaryDiffEq", "Random", "ReferenceTests", "SafeTestsets", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials"]
+
+[weakdeps]
+DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
