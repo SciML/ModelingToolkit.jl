@@ -70,7 +70,7 @@ end
 begin
     """
        Vars: x, y, z
-       Eqs: 0 = f(x,y,z)
+       Eqs: 0 = f(x,y)
        Alias: y = -z, ẏ = z
     """
     n_vars = 4
@@ -81,7 +81,7 @@ begin
     # Alias: z = -1 * y
     ag[4] = -1 => 2
 
-    # 0 = f(x)
+    # 0 = f(x,y)
     graph = complete(BipartiteGraph([Int[],Int[],Int[1,2]], n_vars))
 
     # [x, ẋ, y, ẏ]
