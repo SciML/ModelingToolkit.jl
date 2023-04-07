@@ -31,7 +31,7 @@ begin
     varwhitelist = computed_highest_diff_variables(structure, ag)
 
     # Correct answer is: ẋ
-    @assert varwhitelist == Bool[0, 1, 0, 0]
+    @test varwhitelist == Bool[0, 1, 0, 0]
 end
 
 begin
@@ -63,5 +63,37 @@ begin
     varwhitelist = computed_highest_diff_variables(structure, ag)
 
     # Correct answer is: ẋ
-    @assert varwhitelist == Bool[0, 1, 0, 0, 0, 0]
+    @test varwhitelist == Bool[0, 1, 0, 0, 0, 0]
+end
+
+
+begin
+    """
+       Vars: x, y, z
+       Eqs: 0 = f(x,y,z)
+       Alias: y = -z, ẏ = z
+    """
+    n_vars = 4
+    ag = AliasGraph(n_vars)
+
+    # Alias: z = 1 * ẏ
+    ag[3] = 1 => 2
+    # Alias: z = -1 * y
+    ag[4] = -1 => 2
+
+    # 0 = f(x)
+    graph = complete(BipartiteGraph([Int[],Int[],Int[1,2]], n_vars))
+
+    # [x, ẋ, y, ẏ]
+    var_to_diff = DiffGraph([nothing, 4, nothing, nothing], # primal_to_diff
+                            [nothing, nothing, nothing, 2]) # diff_to_primal
+
+    # [f(x)]
+    eq_to_diff = DiffGraph([nothing, nothing, nothing], # primal_to_diff
+                           [nothing, nothing, nothing]) # diff_to_primal
+    structure = SystemStructure(var_to_diff, eq_to_diff, graph, nothing, nothing, false)
+    varwhitelist = computed_highest_diff_variables(structure, ag)
+
+    # Correct answer is: ẋ
+    @test varwhitelist == Bool[1, 0, 0, 1]
 end
