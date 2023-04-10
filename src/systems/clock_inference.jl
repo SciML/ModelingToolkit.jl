@@ -67,7 +67,7 @@ end
 function resize_or_push!(v, val, idx)
     n = length(v)
     if idx > n
-        for i in (n + 1):idx
+        for _ in (n + 1):idx
             push!(v, Int[])
         end
         resize!(v, idx)
@@ -75,10 +75,10 @@ function resize_or_push!(v, val, idx)
     push!(v[idx], val)
 end
 
-function split_system(ci::ClockInference)
+function split_system(ci::ClockInference{S}) where {S}
     @unpack ts, eq_domain, var_domain, inferred = ci
     fullvars = get_fullvars(ts)
-    @unpack graph, var_to_diff = ts.structure
+    @unpack graph = ts.structure
     continuous_id = Ref(0)
     clock_to_id = Dict{TimeDomain, Int}()
     id_to_clock = TimeDomain[]
@@ -121,26 +121,10 @@ function split_system(ci::ClockInference)
         resize_or_push!(cid_to_var, i, cid)
     end
 
-    eqs = equations(ts)
-    tss = similar(cid_to_eq, TearingState)
+    tss = similar(cid_to_eq, S)
     for (id, ieqs) in enumerate(cid_to_eq)
-        vars = cid_to_var[id]
-        ts_i = ts
-        fadj = Vector{Int}[]
-        eqs_i = Equation[]
-        eq_to_diff = DiffGraph(length(ieqs))
-        ne = 0
-        for (j, eq_i) in enumerate(ieqs)
-            vars = copy(graph.fadjlist[eq_i])
-            ne += length(vars)
-            push!(fadj, vars)
-            push!(eqs_i, eqs[eq_i])
-            eq_to_diff[j] = ts_i.structure.eq_to_diff[eq_i]
-        end
-        @set! ts_i.structure.graph = complete(BipartiteGraph(ne, fadj, ndsts(graph)))
+        ts_i = system_subset(ts, ieqs)
         @set! ts_i.structure.only_discrete = id != continuous_id
-        @set! ts_i.sys.eqs = eqs_i
-        @set! ts_i.structure.eq_to_diff = eq_to_diff
         tss[id] = ts_i
     end
     return tss, inputs, continuous_id, id_to_clock
