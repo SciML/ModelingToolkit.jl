@@ -66,7 +66,6 @@ begin
     @test varwhitelist == Bool[0, 1, 0, 0, 0, 0]
 end
 
-
 begin
     """
        Vars: x, y, z
@@ -82,7 +81,7 @@ begin
     ag[4] = -1 => 2
 
     # 0 = f(x,y)
-    graph = complete(BipartiteGraph([Int[],Int[],Int[1,2]], n_vars))
+    graph = complete(BipartiteGraph([Int[], Int[], Int[1, 2]], n_vars))
 
     # [x, ẋ, y, ẏ]
     var_to_diff = DiffGraph([nothing, 4, nothing, nothing], # primal_to_diff
