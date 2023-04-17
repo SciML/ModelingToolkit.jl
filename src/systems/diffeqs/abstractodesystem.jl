@@ -575,7 +575,7 @@ end
 
 Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point. 
 """
-function get_u0_p(sys, u0map, parammap; use_union = false, tofloat = !use_union)
+function get_u0_p(sys, u0map, parammap; use_union = false, tofloat = !use_union, zero_missing = true)
     eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
@@ -584,6 +584,13 @@ function get_u0_p(sys, u0map, parammap; use_union = false, tofloat = !use_union)
     defs = mergedefaults(defs, parammap, ps)
     defs = mergedefaults(defs, u0map, dvs)
 
+    if zero_missing
+        dummyder = setdiff(states(sys), keys(defs))
+        for var in dummyder
+            @warn "No initial condition given for $var, assuming $var=0."
+        end
+        u0map = merge(Dict(u0map), Dict(x => 0.0 for x in dummyder))
+    end
     u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
