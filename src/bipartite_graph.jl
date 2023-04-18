@@ -228,7 +228,7 @@ end
 
 function Base.show(io::IO, l::BipartiteAdjacencyList)
     if l.match === true
-        printstyled(io, "∫ ")
+        printstyled(io, "∫ ", color = :cyan)
     else
         printstyled(io, "  ")
     end
@@ -242,7 +242,17 @@ function Base.show(io::IO, l::BipartiteAdjacencyList)
         match = l.match
         isa(match, Bool) && (match = unassigned)
         function choose_color(i)
-            i in l.highligh_u ? :default : :light_black
+            solvable = i in l.highligh_u
+            matched = i == match
+            if !matched && solvable
+                :default
+            elseif !matched && !solvable
+                :light_black
+            elseif matched && solvable
+                :light_yellow
+            elseif matched && !solvable
+                :yellow
+            end
         end
         if !isempty(setdiff(l.highligh_u, l.u))
             # Only for debugging, shouldn't happen in practice
