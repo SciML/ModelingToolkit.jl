@@ -507,11 +507,14 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
     printstyled(io, "\n\nLegend: ")
     printstyled(io, "Solvable")
     print(io, " | ")
+    printstyled(io, "(Solvable + Matched)", color = :light_yellow)
+    print(io, " | ")
     printstyled(io, "Unsolvable", color = :light_black)
     print(io, " | ")
-    printstyled(io, "(Matched)")
+    printstyled(io, "(Unsolvable + Matched)", color = :yellow)
     print(io, " | ")
-    printstyled(io, " ∫ SelectedState ")
+    printstyled(io, " ∫", color = :cyan)
+    printstyled(io, " SelectedState")
 end
 
 # TODO: clean up
