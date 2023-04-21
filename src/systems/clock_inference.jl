@@ -197,16 +197,20 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
                         @unpack u, p, t = integrator
                         c2d_obs = $cont_to_disc_obs
                         d2c_obs = $disc_to_cont_obs
+                        # Like Sample
                         c2d_view = view(p, $cont_to_disc_idxs)
+                        # Like Hold
                         d2c_view = view(p, $disc_to_cont_idxs)
                         disc_state = view(p, $disc_range)
                         disc = $disc
-                        # Write continuous info to discrete
-                        # Write discrete info to continuous
+                        # Write continuous into to discrete: handles `Sample`
                         copyto!(c2d_view, c2d_obs(integrator.u, p, t))
+                        # Write discrete into to continuous
+                        # get old discrete states
                         copyto!(d2c_view, d2c_obs(disc_state, p, t))
                         push!(saved_values.t, t)
                         push!(saved_values.saveval, $save_vec)
+                        # update discrete states
                         $empty_disc || disc(disc_state, disc_state, p, t)
                     end)
         sv = SavedValues(Float64, Vector{Float64})
