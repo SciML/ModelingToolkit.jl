@@ -92,7 +92,7 @@ nothing; # hide
 
 ### Explanation
 
-Equality and inequality constraints can be added to the `OptimizationSystem`. An equality constraint can be specified via and `Equation`, e.g., `x^2 + y^2 ~ 1`. While inequality constraints via an `Inequality`, e.g., `x^2 + y^2 ≲ 1`. The syntax is here `\lesssim` and `\gtrsim`.
+Equality and inequality constraints can be added to the `OptimizationSystem`. An equality constraint can be specified via an `Equation`, e.g., `x^2 + y^2 ~ 1`. While inequality constraints via an `Inequality`, e.g., `x^2 + y^2 ≲ 1`. The syntax is here `\lesssim` and `\gtrsim`.
 
 ## Nested Systems
 
