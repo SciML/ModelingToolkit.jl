@@ -31,7 +31,7 @@ export initialize_system_structure, find_linear_equations
 export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq, algeqs, is_only_discrete
 export dervars_range, diffvars_range, algvars_range
 export DiffGraph, complete!
-export get_fullvars
+export get_fullvars, system_subset
 
 struct DiffGraph <: Graphs.AbstractGraph{Int}
     primal_to_diff::Vector{Union{Int, Nothing}}
@@ -205,6 +205,28 @@ mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
 end
 
 TransformationState(sys::AbstractSystem) = TearingState(sys)
+function system_subset(ts::TearingState, ieqs::Vector{Int})
+    eqs = equations(ts)
+    @set! ts.sys.eqs = eqs[ieqs]
+    @set! ts.structure = system_subset(ts.structure, ieqs)
+    ts
+end
+
+function system_subset(structure::SystemStructure, ieqs::Vector{Int})
+    @unpack graph, eq_to_diff = structure
+    fadj = Vector{Int}[]
+    eq_to_diff = DiffGraph(length(ieqs))
+    ne = 0
+    for (j, eq_i) in enumerate(ieqs)
+        ivars = copy(graph.fadjlist[eq_i])
+        ne += length(ivars)
+        push!(fadj, ivars)
+        eq_to_diff[j] = structure.eq_to_diff[eq_i]
+    end
+    @set! structure.graph = complete(BipartiteGraph(ne, fadj, ndsts(graph)))
+    @set! structure.eq_to_diff = eq_to_diff
+    structure
+end
 
 function Base.show(io::IO, state::TearingState)
     print(io, "TearingState of ", typeof(state.sys))
