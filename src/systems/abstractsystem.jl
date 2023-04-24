@@ -238,6 +238,8 @@ for prop in [:eqs
     end
 end
 
+has_equations(::AbstractSystem) = true
+
 const EMPTY_TGRAD = Vector{Num}(undef, 0)
 const EMPTY_JAC = Matrix{Num}(undef, 0, 0)
 function invalidate_cache!(sys::AbstractSystem)

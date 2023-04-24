@@ -12,15 +12,21 @@ function BipartiteGraphs.maximal_matching(s::SystemStructure, eqfilter = eq -> t
     maximal_matching(s.graph, eqfilter, varfilter)
 end
 
+n_concrete_eqs(state::TransformationState) = n_concrete_eqs(state.structure)
+n_concrete_eqs(structure::SystemStructure) = n_concrete_eqs(structure.graph)
+function n_concrete_eqs(graph::BipartiteGraph)
+    neqs = count(e -> !isempty(𝑠neighbors(graph, e)), 𝑠vertices(graph))
+end
+
 function error_reporting(state, bad_idxs, n_highest_vars, iseqs, orig_inputs)
     io = IOBuffer()
-    neqs = length(equations(state))
+    neqs = n_concrete_eqs(state)
     if iseqs
         error_title = "More equations than variables, here are the potential extra equation(s):\n"
-        out_arr = equations(state)[bad_idxs]
+        out_arr = has_equations(state) ? equations(state)[bad_idxs] : bad_idxs
     else
         error_title = "More variables than equations, here are the potential extra variable(s):\n"
-        out_arr = state.fullvars[bad_idxs]
+        out_arr = get_fullvars(state)[bad_idxs]
         unset_inputs = intersect(out_arr, orig_inputs)
         n_missing_eqs = n_highest_vars - neqs
         n_unset_inputs = length(unset_inputs)
@@ -52,14 +58,14 @@ end
 ###
 ### Structural check
 ###
-function check_consistency(state::TearingState, ag, orig_inputs)
-    fullvars = state.fullvars
+function check_consistency(state::TransformationState, ag, orig_inputs)
+    fullvars = get_fullvars(state)
+    neqs = n_concrete_eqs(state)
     @unpack graph, var_to_diff = state.structure
     n_highest_vars = count(v -> var_to_diff[v] === nothing &&
                                     !isempty(𝑑neighbors(graph, v)) &&
                                     (ag === nothing || !haskey(ag, v) || ag[v] != v),
                            vertices(var_to_diff))
-    neqs = nsrcs(graph)
     is_balanced = n_highest_vars == neqs
 
     if neqs > 0 && !is_balanced

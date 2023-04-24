@@ -10,7 +10,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           isparameter, isconstant,
                           independent_variables, SparseMatrixCLIL, AbstractSystem,
                           equations, isirreducible, input_timedomain, TimeDomain,
-                          VariableType, getvariabletype
+                          VariableType, getvariabletype, has_equations
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -140,6 +140,7 @@ abstract type TransformationState{T} end
 abstract type AbstractTearingState{T} <: TransformationState{T} end
 
 get_fullvars(ts::TransformationState) = ts.fullvars
+has_equations(::TransformationState) = true
 
 Base.@kwdef mutable struct SystemStructure
     # Maps the (index of) a variable to the (index of) the variable describing
