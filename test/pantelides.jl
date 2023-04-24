@@ -96,3 +96,32 @@ begin
     # Correct answer is: ẋ
     @test varwhitelist == Bool[1, 0, 0, 1]
 end
+
+begin
+    """
+       Vars: y
+       Eqs: 0 = f(y)
+       Alias: y =  ̈y
+    """
+    n_vars = 3
+    ag = AliasGraph(n_vars)
+
+    # Alias: z = 1 *  ̈y
+    ag[3] = 1 => 1
+
+    # 0 = f(x,y)
+    graph = complete(BipartiteGraph([Int[]], n_vars))
+
+    # [y, ẏ,  ̈y]
+    var_to_diff = DiffGraph([2, 3, nothing], # primal_to_diff
+                            [nothing, 1, 2]) # diff_to_primal
+
+    # [f(x)]
+    eq_to_diff = DiffGraph([nothing], # primal_to_diff
+                           [nothing]) # diff_to_primal
+    structure = SystemStructure(var_to_diff, eq_to_diff, graph, nothing, nothing, false)
+    varwhitelist = computed_highest_diff_variables(structure, ag)
+
+    # Correct answer is: ẋ
+    @test varwhitelist == Bool[0, 1, 0]
+end
