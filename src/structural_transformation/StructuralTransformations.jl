@@ -23,7 +23,7 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
                        IncrementalCycleTracker, add_edge_checked!, topological_sort,
                        invalidate_cache!, Substitutions, get_or_construct_tearing_state,
                        AliasGraph, filter_kwargs, lower_varname, setio, SparseMatrixCLIL,
-                       fast_substitute
+                       fast_substitute, get_fullvars, has_equations
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview, complete

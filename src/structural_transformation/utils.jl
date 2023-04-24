@@ -14,13 +14,13 @@ end
 
 function error_reporting(state, bad_idxs, n_highest_vars, iseqs, orig_inputs)
     io = IOBuffer()
-    neqs = length(equations(state))
+    neqs = length(ndsts(state.structure.graph))
     if iseqs
         error_title = "More equations than variables, here are the potential extra equation(s):\n"
-        out_arr = equations(state)[bad_idxs]
+        out_arr = has_equations(state) ? equations(state)[bad_idxs] : bad_idxs
     else
         error_title = "More variables than equations, here are the potential extra variable(s):\n"
-        out_arr = state.fullvars[bad_idxs]
+        out_arr = get_fullvars(state)[bad_idxs]
         unset_inputs = intersect(out_arr, orig_inputs)
         n_missing_eqs = n_highest_vars - neqs
         n_unset_inputs = length(unset_inputs)
@@ -52,8 +52,8 @@ end
 ###
 ### Structural check
 ###
-function check_consistency(state::TearingState, ag, orig_inputs)
-    fullvars = state.fullvars
+function check_consistency(state::TransformationState, ag, orig_inputs)
+    fullvars = get_fullvars(state)
     @unpack graph, var_to_diff = state.structure
     n_highest_vars = count(v -> var_to_diff[v] === nothing &&
                                     !isempty(𝑑neighbors(graph, v)) &&
