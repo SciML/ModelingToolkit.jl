@@ -263,8 +263,7 @@ function generate_connection_set(sys::AbstractSystem, find = nothing, replace = 
         !any(s -> is_domain_connector(s.sys.sys), cset.set)
     end
 
-    _, domainset = merge(connectionsets, true)
-    sys, (merge(domain_free_connectionsets), domainset)
+    sys, (merge(domain_free_connectionsets), connectionsets)
 end
 
 function generate_connection_set!(connectionsets, sys::AbstractSystem, find, replace,
@@ -321,7 +320,7 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, find, rep
     @set! sys.eqs = eqs
 end
 
-function Base.merge(csets::AbstractVector{<:ConnectionSet}, domain = false)
+function Base.merge(csets::AbstractVector{<:ConnectionSet})
     mcsets = ConnectionSet[]
     ele2idx = Dict{ConnectionElement, Int}()
     cacheset = Set{ConnectionElement}()
@@ -351,36 +350,13 @@ function Base.merge(csets::AbstractVector{<:ConnectionSet}, domain = false)
             empty!(cacheset)
         end
     end
-    csets = mcsets
-    domain || return csets
-    g, roots = rooted_system_domain_graph(csets)
-    domain_csets = []
-    root_ijs = Set(g.id2cset[r] for r in roots)
-    for r in roots
-        nh = neighborhood(g, r, Inf)
-        sources_idxs = intersect(nh, roots)
-        # TODO: error reporting when length(sources_idxs) > 1
-        length(sources_idxs) > 1 && error()
-        i′, j′ = g.id2cset[r]
-        source = csets[i′].set[j′]
-        domain = source => []
-        push!(domain_csets, domain)
-        # get unique cset indices that `r` is (implicitly) connected to.
-        idxs = BitSet(g.id2cset[i][1] for i in nh)
-        for i in idxs
-            for (j, ele) in enumerate(csets[i].set)
-                (i, j) == (i′, j′) && continue
-                if (i, j) in root_ijs
-                    error("Domain source $(nameof(source)) and $(nameof(ele)) are connected!")
-                end
-                push!(domain[2], ele)
-            end
-        end
-    end
-    csets, domain_csets
+    mcsets
 end
 
-struct SystemDomainGraph{C <: AbstractVector{<:ConnectionSet}} <: Graphs.AbstractGraph{Int}
+struct SystemDomainGraph{T, C <: AbstractVector{<:ConnectionSet}} <:
+       Graphs.AbstractGraph{Int}
+    ts::T
+    lineqs::BitSet
     id2cset::Vector{NTuple{2, Int}}
     cset2id::Vector{Vector{Int}}
     csets::C
@@ -392,17 +368,18 @@ Graphs.nv(g::SystemDomainGraph) = length(g.id2cset)
 function Graphs.outneighbors(g::SystemDomainGraph, n::Int)
     i, j = g.id2cset[n]
     ids = copy(g.cset2id[i])
+    @unpack ts, lineqs = g
+    @unpack fullvars, structure = ts
+    @unpack graph = structure
     visited = BitSet(n)
     for s in g.csets[i].set
+        s.sys.namespace === nothing && continue
         sys = s.sys.sys
-        is_domain_connector(s.sys.sys) && continue
-        ts = TearingState(expand_connections(s.sys.namespace))
-        graph = ts.structure.graph
-        mm = linear_subsys_adjmat!(ts)
-        lineqs = BitSet(mm.nzrows)
+        is_domain_connector(sys) && continue
         var2idx = Dict(reverse(en) for en in enumerate(ts.fullvars))
-        vidx = get(var2idx, states(sys, s.v), 0)
+        vidx = get(var2idx, states(s.sys.namespace, states(sys, s.v)), 0)
         iszero(vidx) && continue
+        ppp = string(fullvars[vidx]) == "valve₊port_a₊dm(t)"
         ies = 𝑑neighbors(graph, vidx)
         for ie in ies
             ie in lineqs || continue
@@ -410,8 +387,8 @@ function Graphs.outneighbors(g::SystemDomainGraph, n::Int)
                 iv == vidx && continue
                 fv = ts.fullvars[iv]
                 vtype = get_connection_type(fv)
-                @assert vtype === Flow
-                n′ = g.sys2id[renamespace(_getname(s.sys.namespace), getname(fv))]
+                vtype === Flow || continue
+                n′ = g.sys2id[getname(fv)]
                 n′ in visited && continue
                 push!(visited, n′)
                 append!(ids, g.cset2id[g.id2cset[n′][1]])
@@ -420,7 +397,7 @@ function Graphs.outneighbors(g::SystemDomainGraph, n::Int)
     end
     ids
 end
-function rooted_system_domain_graph(csets::AbstractVector{<:ConnectionSet})
+function rooted_system_domain_graph!(ts, csets::AbstractVector{<:ConnectionSet})
     id2cset = NTuple{2, Int}[]
     cset2id = Vector{Int}[]
     sys2id = Dict{Symbol, Int}()
@@ -442,7 +419,9 @@ function rooted_system_domain_graph(csets::AbstractVector{<:ConnectionSet})
         push!(cset2id, cset2id′)
     end
     outne = Vector{Union{Nothing, Vector{Int}}}(undef, length(id2cset))
-    SystemDomainGraph(id2cset, cset2id, csets, sys2id, outne), roots
+    mm = linear_subsys_adjmat!(ts)
+    lineqs = BitSet(mm.nzrows)
+    SystemDomainGraph(ts, lineqs, id2cset, cset2id, csets, sys2id, outne), roots
 end
 
 function generate_connection_equations_and_stream_connections(csets::AbstractVector{
@@ -475,7 +454,39 @@ function generate_connection_equations_and_stream_connections(csets::AbstractVec
     eqs, stream_connections
 end
 
-function domain_defaults(domain_csets)
+function domain_defaults(sys, domain_csets)
+    csets = merge(domain_csets)
+    g, roots = rooted_system_domain_graph!(TearingState(sys), csets)
+    # a simple way to make `_g` bidirectional
+    simple_g = SimpleGraph(nv(g))
+    for v in 1:nv(g), n in neighbors(g, v)
+        add_edge!(simple_g, v => n)
+    end
+    domain_csets = []
+    root_ijs = Set(g.id2cset[r] for r in roots)
+    Main._a[] = simple_g, deepcopy(g)
+    for r in roots
+        nh = neighborhood(simple_g, r, Inf)
+        sources_idxs = intersect(nh, roots)
+        # TODO: error reporting when length(sources_idxs) > 1
+        length(sources_idxs) > 1 && error()
+        i′, j′ = g.id2cset[r]
+        source = csets[i′].set[j′]
+        domain = source => []
+        push!(domain_csets, domain)
+        # get unique cset indices that `r` is (implicitly) connected to.
+        idxs = BitSet(g.id2cset[i][1] for i in nh)
+        for i in idxs
+            for (j, ele) in enumerate(csets[i].set)
+                (i, j) == (i′, j′) && continue
+                if (i, j) in root_ijs
+                    error("Domain source $(nameof(source)) and $(nameof(ele)) are connected!")
+                end
+                push!(domain[2], ele)
+            end
+        end
+    end
+
     def = Dict()
     for (s, mods) in domain_csets
         s_def = defaults(s.sys.sys)
@@ -497,11 +508,11 @@ end
 function expand_connections(sys::AbstractSystem, find = nothing, replace = nothing;
                             debug = false, tol = 1e-10)
     sys, (csets, domain_csets) = generate_connection_set(sys, find, replace)
-    d_defs = domain_defaults(domain_csets)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     _sys = expand_instream(instream_csets, sys; debug = debug, tol = tol)
     sys = flatten(sys, true)
     @set! sys.eqs = [equations(_sys); ceqs]
+    d_defs = domain_defaults(sys, domain_csets)
     @set! sys.defaults = merge(get_defaults(sys), d_defs)
 end
 
