@@ -127,7 +127,7 @@ function computed_highest_diff_variables(structure, ag::Union{AliasGraph, Nothin
                 loop_found = false
                 var′ = invview(var_to_diff)[var]
                 while var′ !== nothing
-                    if var′ === stem || haskey(ag, var′) && ag[var′][2] == stem
+                    if var′ === stem || (haskey(ag, var′) && ag[var′][2] == stem)
                         dstem = var_to_diff[stem]
                         @assert dstem !== nothing
                         varwhitelist[dstem] = true
