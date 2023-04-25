@@ -1756,3 +1756,30 @@ Base.:(∘)(sys1::AbstractSystem, sys2::AbstractSystem) = compose(sys1, sys2)
 function UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where {p}
     getproperty(sys, p; namespace = false)
 end
+
+"""
+    missing_variable_defaults(sys::AbstractSystem, default = 0.0)
+
+returns a `Vector{Pair}` of variables set to `default` which are missing from `get_defaults(sys)`.  The `default` argument can be a single value or vector to set the missing defaults respectively.  
+"""
+function missing_variable_defaults(sys::AbstractSystem, default = 0.0)
+    varmap = get_defaults(sys)
+    varmap = Dict(Symbolics.diff2term(value(k)) => value(varmap[k]) for k in keys(varmap))
+    missingvars = setdiff(states(sys), keys(varmap))
+    ds = Pair[]
+
+    n = length(missingvars)
+
+    defaults = if default isa Vector
+        @assert length(default)==n "`default` size ($(length(default))) should match the number of missing variables: $n"
+        default
+    else
+        default * ones(typeof(default), n)
+    end
+
+    for (i, missingvar) in enumerate(missingvars)
+        push!(ds, missingvar => defaults[i])
+    end
+
+    return ds
+end

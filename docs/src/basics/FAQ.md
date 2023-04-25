@@ -96,3 +96,36 @@ function loss(p)
     sum(abs2, sol)
 end
 ```
+
+# ERROR: ArgumentError: SymbolicUtils.BasicSymbolic{Real}[xˍt(t)] are missing from the variable map.
+
+This error can come up after running `structural_simplify` on a system that generates dummy derivatives (i.e. variables with `ˍt`).  For example, here even though all the variables are defined with initial values, the `ODEProblem` generation will throw an error that defaults are missing from the variable map.
+
+```
+@variables t
+sts = @variables x1(t)=0.0 x2(t)=0.0 x3(t)=0.0 x4(t)=0.0
+D = Differential(t)
+eqs = [x1 + x2 + 1 ~ 0
+       x1 + x2 + x3 + 2 ~ 0
+       x1 + D(x3) + x4 + 3 ~ 0
+       2 * D(D(x1)) + D(D(x2)) + D(D(x3)) + D(x4) + 4 ~ 0]
+@named sys = ODESystem(eqs, t)
+sys = structural_simplify(sys)
+prob = ODEProblem(sys, [], (0,1))
+```
+
+We can solve this problem by using the `missing_variable_defaults()` function
+
+```
+prob = ODEProblem(sys, ModelingToolkit.missing_variable_defaults(sys), (0,1))
+```
+
+This function provides 0 for the default values, which is a safe assumption for dummy derivatives of most models.  However, the 2nd arument allows for a different default value or values to be used if needed.
+
+```
+julia> ModelingToolkit.missing_variable_defaults(sys, [1,2,3])
+3-element Vector{Pair}:
+  x1ˍt(t) => 1
+ x2ˍtt(t) => 2
+ x3ˍtt(t) => 3
+```
