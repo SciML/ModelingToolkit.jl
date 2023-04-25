@@ -101,18 +101,18 @@ begin
     """
        Vars: y
        Eqs: 0 = f(y)
-       Alias: y =  ̈y
+       Alias: y = ÿ
     """
     n_vars = 3
     ag = AliasGraph(n_vars)
 
-    # Alias: z = 1 *  ̈y
+    # Alias: z = 1 * ÿ
     ag[3] = 1 => 1
 
-    # 0 = f(x,y)
+    # 0 = f(y)
     graph = complete(BipartiteGraph([Int[]], n_vars))
 
-    # [y, ẏ,  ̈y]
+    # [y, ẏ, ÿ]
     var_to_diff = DiffGraph([2, 3, nothing], # primal_to_diff
                             [nothing, 1, 2]) # diff_to_primal
 
@@ -122,6 +122,6 @@ begin
     structure = SystemStructure(var_to_diff, eq_to_diff, graph, nothing, nothing, false)
     varwhitelist = computed_highest_diff_variables(structure, ag)
 
-    # Correct answer is: ẋ
+    # Correct answer is: ẏ
     @test varwhitelist == Bool[0, 1, 0]
 end
