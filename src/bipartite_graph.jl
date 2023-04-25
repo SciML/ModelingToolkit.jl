@@ -251,7 +251,7 @@ function Base.show(io::IO, l::BipartiteAdjacencyList)
             elseif matched && solvable
                 :light_yellow
             elseif matched && !solvable
-                :yellow
+                :magenta
             end
         end
         if !isempty(setdiff(l.highligh_u, l.u))
