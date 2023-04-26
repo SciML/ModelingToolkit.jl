@@ -121,25 +121,33 @@ function computed_highest_diff_variables(structure, ag::Union{AliasGraph, Nothin
             if ag !== nothing && haskey(ag, var)
                 (_, stem) = ag[var]
                 stem == 0 && continue
+                # If we have a self-loop in the stem, we could have the
+                # var′ also alias to the original stem. In that case, the
+                # derivative of the stem is highest differentiated, because of the loop
+                loop_found = false
+                var′ = invview(var_to_diff)[var]
+                while var′ !== nothing
+                    if var′ == stem || (haskey(ag, var′) && ag[var′][2] == stem)
+                        dstem = var_to_diff[stem]
+                        @assert dstem !== nothing
+                        varwhitelist[dstem] = true
+                        loop_found = true
+                        break
+                    end
+                    var′ = invview(var_to_diff)[var′]
+                end
+                loop_found && continue
                 # Ascend the stem
                 while isempty(𝑑neighbors(graph, var))
                     var′ = invview(var_to_diff)[var]
                     var′ === nothing && break
-                    stem′ = invview(var_to_diff)[stem]
-                    avar′ = haskey(ag, var′) ? ag[var′][2] : nothing
-                    if avar′ == stem || var′ == stem
-                        # If we have a self-loop in the stem, we could have the
-                        # var′ also alias to the original stem. In that case, the
-                        # derivative of the stem is highest differentiated, because of the loop
-                        dstem = var_to_diff[stem]
-                        @assert dstem !== nothing
-                        varwhitelist[dstem] = true
-                        break
-                    end
+                    loop_found = false
+                    cvar = var′
                     # Invariant from alias elimination: Stem is chosen to have
                     # the highest differentiation order.
+                    stem′ = invview(var_to_diff)[stem]
                     @assert stem′ !== nothing
-                    if avar′ != stem′
+                    if !haskey(ag, var′) || (ag[var′][2] != stem′)
                         varwhitelist[stem] = true
                         break
                     end
