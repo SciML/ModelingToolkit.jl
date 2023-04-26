@@ -464,7 +464,6 @@ function domain_defaults(sys, domain_csets)
     end
     domain_csets = []
     root_ijs = Set(g.id2cset[r] for r in roots)
-    Main._a[] = simple_g, deepcopy(g)
     for r in roots
         nh = neighborhood(simple_g, r, Inf)
         sources_idxs = intersect(nh, roots)
