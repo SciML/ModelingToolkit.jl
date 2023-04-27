@@ -1756,16 +1756,3 @@ Base.:(∘)(sys1::AbstractSystem, sys2::AbstractSystem) = compose(sys1, sys2)
 function UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where {p}
     getproperty(sys, p; namespace = false)
 end
-
-function dummy_derivative_defaults(sys::AbstractSystem)
-    varmap = get_defaults(sys)
-    varmap = Dict(Symbolics.diff2term(value(k)) => value(varmap[k]) for k in keys(varmap))
-    missingvars = setdiff(states(sys), keys(varmap))
-    ds = Pair[]
-    for missingvar in missingvars
-        println(":::: adding missing state initialization $missingvar")
-        push!(ds, missingvar => 0.0)
-    end
-
-    return ds
-end
