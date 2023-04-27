@@ -379,7 +379,6 @@ function Graphs.outneighbors(g::SystemDomainGraph, n::Int)
         var2idx = Dict(reverse(en) for en in enumerate(ts.fullvars))
         vidx = get(var2idx, states(s.sys.namespace, states(sys, s.v)), 0)
         iszero(vidx) && continue
-        ppp = string(fullvars[vidx]) == "valve₊port_a₊dm(t)"
         ies = 𝑑neighbors(graph, vidx)
         for ie in ies
             ie in lineqs || continue
@@ -388,7 +387,8 @@ function Graphs.outneighbors(g::SystemDomainGraph, n::Int)
                 fv = ts.fullvars[iv]
                 vtype = get_connection_type(fv)
                 vtype === Flow || continue
-                n′ = g.sys2id[getname(fv)]
+                n′ = get(g.sys2id, getname(fv), nothing)
+                n′ === nothing && continue
                 n′ in visited && continue
                 push!(visited, n′)
                 append!(ids, g.cset2id[g.id2cset[n′][1]])
