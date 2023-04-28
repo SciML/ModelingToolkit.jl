@@ -19,7 +19,7 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
   [961ee093] ModelingToolkit v8.55.0 `~/work/ModelingToolkit.jl/ModelingToolkit.jl`
   [8913a72c] NonlinearSolve v1.6.0
   [429524aa] Optim v1.7.5
-  [7f7a1694] Optimization v3.14.0
+  [7f7a1694] Optimization v3.14.1
   [36348300] OptimizationOptimJL v0.1.8
   [1dea7af3] OrdinaryDiffEq v6.50.0
   [91a5bcdd] Plots v1.38.10
@@ -32,10 +32,10 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
 Commit 17cfb8e65ea (2023-01-08 06:45 UTC)
 Platform Info:
   OS: Linux (x86_64-linux-gnu)
-  CPU: 2 × Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz
+  CPU: 2 × Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
   WORD_SIZE: 64
   LIBM: libopenlibm
-  LLVM: libLLVM-13.0.1 (ORCJIT, skylake-avx512)
+  LLVM: libLLVM-13.0.1 (ORCJIT, icelake-server)
   Threads: 1 on 2 virtual cores</code></pre></details><details><summary>A more complete overview of all dependencies and their versions is also provided.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Status `~/work/ModelingToolkit.jl/ModelingToolkit.jl/docs/Manifest.toml`
   [a4c015fc] ANSIColoredPrinters v0.0.1
   [c3fe647b] AbstractAlgebra v0.29.4
@@ -95,6 +95,8 @@ Platform Info:
   [fa6b7ba4] DualNumbers v0.6.8
   [7c1d4256] DynamicPolynomials v0.4.6
   [4e289a0a] EnumX v1.0.4
+⌅ [7da242da] Enzyme v0.11.0
+  [f151be2c] EnzymeCore v0.3.0
   [d4d017d3] ExponentialUtilities v1.24.0
   [e2ba6199] ExprTools v0.1.9
   [c87230d0] FFMPEG v0.4.1
@@ -109,7 +111,8 @@ Platform Info:
   [069b7b12] FunctionWrappers v1.1.3
   [77dc65aa] FunctionWrappersWrappers v0.1.3
   [46192b85] GPUArraysCore v0.1.4
-  [28b8d3ca] GR v0.72.2
+  [61eb1bfa] GPUCompiler v0.19.3
+  [28b8d3ca] GR v0.72.4
   [c145ed77] GenericSchur v0.5.3
   [c27321d9] Glob v1.3.1
   [86223c79] Graphs v1.8.0
@@ -137,6 +140,7 @@ Platform Info:
   [ef3ab10e] KLU v0.4.0
   [ba0b0d4f] Krylov v0.9.0
   [0b1a1467] KrylovKit v0.6.0
+  [929cbde3] LLVM v5.0.0
   [b964fa9f] LaTeXStrings v1.3.0
   [2ee39098] LabelledArrays v1.14.0
   [984bce1d] LambertW v0.4.6
@@ -162,12 +166,13 @@ Platform Info:
   [d41bc354] NLSolversBase v7.8.3
   [2774e3e8] NLsolve v4.5.1
   [77ba4419] NaNMath v1.0.2
-  [2edaba10] Nemo v0.33.7
+  [2edaba10] Nemo v0.33.8
   [8913a72c] NonlinearSolve v1.6.0
+⌅ [d8793406] ObjectFile v0.3.7
   [6fe1bfb0] OffsetArrays v1.12.9
   [4d8831e6] OpenSSL v1.4.0
   [429524aa] Optim v1.7.5
-  [7f7a1694] Optimization v3.14.0
+  [7f7a1694] Optimization v3.14.1
   [36348300] OptimizationOptimJL v0.1.8
   [bac558e1] OrderedCollections v1.6.0
   [1dea7af3] OrdinaryDiffEq v6.50.0
@@ -183,7 +188,7 @@ Platform Info:
   [1d0040c9] PolyesterWeave v0.2.1
   [85a6dd25] PositiveFactorizations v0.2.4
   [d236fae5] PreallocationTools v0.4.12
-  [aea7be01] PrecompileTools v1.0.1
+  [aea7be01] PrecompileTools v1.0.2
   [21216c6a] Preferences v1.3.0
   [27ebfcd6] Primes v0.5.3
   [33c8b6b6] ProgressLogging v0.1.4
@@ -192,9 +197,9 @@ Platform Info:
   [74087812] Random123 v1.6.1
   [fb686558] RandomExtensions v0.4.3
   [e6cf234a] RandomNumbers v1.5.3
-  [3cdcf5f2] RecipesBase v1.3.3
-  [01d81517] RecipesPipeline v0.6.11
-  [731186ca] RecursiveArrayTools v2.38.3
+  [3cdcf5f2] RecipesBase v1.3.4
+  [01d81517] RecipesPipeline v0.6.12
+  [731186ca] RecursiveArrayTools v2.38.4
   [f2c3362d] RecursiveFactorization v0.2.18
   [189a3867] Reexport v1.2.2
   [05181044] RelocatableFolders v1.0.0
@@ -221,7 +226,7 @@ Platform Info:
   [276daf66] SpecialFunctions v2.2.0
   [aedffcd0] Static v0.8.6
   [0d7ed370] StaticArrayInterface v1.4.0
-  [90137ffa] StaticArrays v1.5.21
+  [90137ffa] StaticArrays v1.5.22
   [1e83bf80] StaticArraysCore v1.4.0
   [82ae8749] StatsAPI v1.6.0
   [2913bbd2] StatsBase v0.33.21
@@ -229,6 +234,7 @@ Platform Info:
   [9672c7b4] SteadyStateDiffEq v1.14.0
   [789caeaf] StochasticDiffEq v6.60.0
   [7792a7ef] StrideArraysCore v0.4.13
+  [53d494c1] StructIO v0.3.0
   [220ca800] StructuralIdentifiability v0.4.9
   [c3572dad] Sundials v4.16.0
   [2efcf032] SymbolicIndexingInterface v0.2.2
@@ -261,6 +267,7 @@ Platform Info:
   [6e34b625] Bzip2_jll v1.0.8+0
   [83423d85] Cairo_jll v1.16.1+1
   [fcfa6d1b] Calcium_jll v0.401.100+0
+⌅ [7cc45869] Enzyme_jll v0.0.53+0
   [2e619515] Expat_jll v2.4.8+0
   [b22a6f82] FFMPEG_jll v4.4.2+2
   [e134572f] FLINT_jll v200.900.5+0
@@ -268,7 +275,7 @@ Platform Info:
   [d7e528f0] FreeType2_jll v2.10.4+0
   [559328eb] FriBidi_jll v1.0.10+0
   [0656b61e] GLFW_jll v3.3.8+0
-  [d2c73de3] GR_jll v0.72.2+0
+  [d2c73de3] GR_jll v0.72.4+0
   [78b55507] Gettext_jll v0.21.0+0
   [7746bdde] Glib_jll v2.74.0+2
   [3b182d85] Graphite2_jll v1.3.14+0
@@ -276,6 +283,7 @@ Platform Info:
   [aacddb02] JpegTurbo_jll v2.1.91+0
   [c1c5ebd0] LAME_jll v3.100.1+0
   [88015f11] LERC_jll v3.0.0+1
+  [dad2f222] LLVMExtra_jll v0.0.21+0
   [dd4b983a] LZO_jll v2.10.1+0
 ⌅ [e9f186c6] Libffi_jll v3.2.2+1
   [d4300ac3] Libgcrypt_jll v1.8.7+0
@@ -339,6 +347,7 @@ Platform Info:
   [7b1f6079] FileWatching
   [9fa8497b] Future
   [b77e0a4c] InteractiveUtils
+  [4af54fe1] LazyArtifacts
   [b27032c2] LibCURL v0.6.3
   [76f85450] LibGit2
   [8f399da3] Libdl
@@ -381,4 +390,4 @@ Platform Info:
   [3f19e933] p7zip_jll v17.4.0+0
 Info Packages marked with ⌃ and ⌅ have new versions available, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated -m`</code></pre></details>You can also download the 
 <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.55.0/assets/Manifest.toml">manifest</a> file and the
-<a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.55.0/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Thursday 27 April 2023 19:41">Thursday 27 April 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+<a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.55.0/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Friday 28 April 2023 22:26">Friday 28 April 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
