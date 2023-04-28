@@ -357,6 +357,7 @@ struct SystemDomainGraph{T, C <: AbstractVector{<:ConnectionSet}} <:
        Graphs.AbstractGraph{Int}
     ts::T
     lineqs::BitSet
+    var2idx::Dict{Any, Int}
     id2cset::Vector{NTuple{2, Int}}
     cset2id::Vector{Vector{Int}}
     csets::C
@@ -368,7 +369,7 @@ Graphs.nv(g::SystemDomainGraph) = length(g.id2cset)
 function Graphs.outneighbors(g::SystemDomainGraph, n::Int)
     i, j = g.id2cset[n]
     ids = copy(g.cset2id[i])
-    @unpack ts, lineqs = g
+    @unpack ts, lineqs, var2idx = g
     @unpack fullvars, structure = ts
     @unpack graph = structure
     visited = BitSet(n)
@@ -376,7 +377,6 @@ function Graphs.outneighbors(g::SystemDomainGraph, n::Int)
         s.sys.namespace === nothing && continue
         sys = s.sys.sys
         is_domain_connector(sys) && continue
-        var2idx = Dict(reverse(en) for en in enumerate(ts.fullvars))
         vidx = get(var2idx, states(s.sys.namespace, states(sys, s.v)), 0)
         iszero(vidx) && continue
         ies = 𝑑neighbors(graph, vidx)
@@ -421,7 +421,8 @@ function rooted_system_domain_graph!(ts, csets::AbstractVector{<:ConnectionSet})
     outne = Vector{Union{Nothing, Vector{Int}}}(undef, length(id2cset))
     mm = linear_subsys_adjmat!(ts)
     lineqs = BitSet(mm.nzrows)
-    SystemDomainGraph(ts, lineqs, id2cset, cset2id, csets, sys2id, outne), roots
+    var2idx = Dict{Any, Int}(reverse(en) for en in enumerate(ts.fullvars))
+    SystemDomainGraph(ts, lineqs, var2idx, id2cset, cset2id, csets, sys2id, outne), roots
 end
 
 function generate_connection_equations_and_stream_connections(csets::AbstractVector{
