@@ -1770,15 +1770,16 @@ function missing_variable_defaults(sys::AbstractSystem, default = 0.0)
 
     n = length(missingvars)
 
-    defaults = if default isa Vector
+    if default isa Vector
         @assert length(default)==n "`default` size ($(length(default))) should match the number of missing variables: $n"
-        default
-    else
-        default * ones(typeof(default), n)
     end
 
     for (i, missingvar) in enumerate(missingvars)
-        push!(ds, missingvar => defaults[i])
+        if default isa Vector
+            push!(ds, missingvar => default[i])
+        else
+            push!(ds, missingvar => default)
+        end
     end
 
     return ds
