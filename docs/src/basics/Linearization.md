@@ -15,7 +15,7 @@ y &= Cx + Du
 \end{aligned}
 ```
 
-The `linearize` function expects the user to specify the inputs ``u`` and the outputs ``u`` using the syntax shown in the example below:
+The `linearize` function expects the user to specify the inputs ``u`` and the outputs ``u`` using the syntax shown in the example below. The system model is *not* supposed to be simplified before calling `linearize`:
 
 ## Example
 
@@ -43,11 +43,14 @@ using ModelingToolkit: inputs, outputs
 
 ## Operating point
 
-The operating point to linearize around can be specified with the keyword argument `op` like this: `op = Dict(x => 1, r => 2)`.
+The operating point to linearize around can be specified with the keyword argument `op` like this: `op = Dict(x => 1, r => 2)`. The operating point may include specification of state variables, input variables and parameters. For variables that are not specified in `op`, the default value specified in the model will be used if available, if no value is specified, an error is thrown.
 
 ## Batch linearization and algebraic variables
 
 If linearization is to be performed around multiple operating points, the simplification of the system has to be carried out a single time only. To facilitate this, the lower-level function [`ModelingToolkit.linearization_function`](@ref) is available. This function further allows you to obtain separate Jacobians for the differential and algebraic parts of the model. For ODE models without algebraic equations, the statespace representation above is available from the output of `linearization_function` as `A, B, C, D = f_x, f_u, h_x, h_u`.
+
+## Symbolic linearization
+The function [`ModelingToolkit.linearize_symbolic`](@ref) works simiar to [`ModelingToolkit.linearize`](@ref) but returns symbolic rather than numeric Jacobians. Symbolic linearization have several limitations and no all systems that can be linearized numerically can be linearized symbolically.
 
 ## Input derivatives
 
@@ -65,11 +68,14 @@ If the modeled system is actually proper (but MTK failed to find a proper realiz
 
 [ModelingToolkitStandardLibrary](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/) contains a set of [tools for more advanced linear analysis](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/API/linear_analysis/). These can be used to make it easier to work with and analyze causal models, such as control and signal-processing systems.
 
+## Docstrings
+
 ```@index
 Pages = ["Linearization.md"]
 ```
 
 ```@docs
 linearize
+ModelingToolkit.linearize_symbolic
 ModelingToolkit.linearization_function
 ```
