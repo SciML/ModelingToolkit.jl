@@ -853,6 +853,18 @@ let
 
     @named sys = ODESystem(eqs, t, u, ps)
     @test_nowarn simpsys = structural_simplify(sys)
+
+    sys = structural_simplify(sys)
+
+    u0 = ModelingToolkit.missing_variable_defaults(sys)
+    u0_expected = Pair[s => 0.0 for s in states(sys)]
+    @test string(u0) == string(u0_expected)
+
+    u0 = ModelingToolkit.missing_variable_defaults(sys, [1, 2])
+    u0_expected = Pair[s => i for (i, s) in enumerate(states(sys))]
+    @test string(u0) == string(u0_expected)
+
+    @test_nowarn ODEProblem(sys, u0, (0, 1))
 end
 
 # https://github.com/SciML/ModelingToolkit.jl/issues/1583
