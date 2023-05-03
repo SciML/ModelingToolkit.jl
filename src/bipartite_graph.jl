@@ -734,6 +734,73 @@ end
 Graphs.has_edge(g::DiCMOBiGraph{true}, a, b) = a in inneighbors(g, b)
 Graphs.has_edge(g::DiCMOBiGraph{false}, a, b) = b in outneighbors(g, a)
 
+"""
+    struct ResidualCMOGraph
+
+For a bipartite graph and matching on the graph's destination vertices, this
+wrapper exposes the induced graph on the destination vertices formed by those
+destination and source vertices that are left unmatched. In particular, two
+(destination) vertices a and b are neighbors if they are both unassigned and
+there is some unassigned source vertex `s` such that `s` is a neighbor (in the
+bipartite graph) of both `a` and `b`.
+
+# Hypergraph interpreation
+
+Refer to the hypergraph interpretation of the DiCMOBiGraph. Now consider the
+hypergraph left over after removing all edges that are oriented by the mapping.
+This graph is the undirected graph obtained by replacing all hyper edges by the
+maximal undirected graph on the vertices that are members of the original hyper
+edge.
+
+# Nota Bene
+
+1. For technical reasons, the `vertices` function includes even those vertices
+   vertices that are assigned in the original hypergraph, even though they
+   are conceptually not part of the graph.
+2. This graph is not strict. In particular, multi edges between vertices are
+   allowed and common.
+"""
+struct ResidualCMOGraph{I, G<:BipartiteGraph{I}, M <: Matching} <: Graphs.AbstractGraph{I}
+    graph::G
+    matching::M
+    function ResidualCMOGraph{I, G, M}(g::G, m::M) where {I, G<:BipartiteGraph{I}, M}
+        require_complete(g)
+        require_complete(m)
+        new{I, G, M}(g, m)
+    end
+end
+ResidualCMOGraph(g::G, m::M) where {I, G<:BipartiteGraph{I}, M} = ResidualCMOGraph{I, G, M}(g, m)
+
+invview(rcg::ResidualCMOGraph) = ResidualCMOGraph(invview(rcg.graph), invview(rcg.matching))
+
+Graphs.is_directed(::Type{<:ResidualCMOGraph}) = false
+Graphs.nv(rcg::ResidualCMOGraph) = ndsts(rcg.graph)
+Graphs.vertices(rcg::ResidualCMOGraph) = 𝑑vertices(rcg.graph)
+function Graphs.neighbors(rcg::ResidualCMOGraph, v::Integer)
+    rcg.matching[v] !== unassigned && return ()
+    Iterators.filter(
+        vdst->rcg.matching[vdst] === unassigned,
+        Iterators.flatten(rcg.graph.fadjlist[vsrc] for
+            vsrc in rcg.graph.badjlist[v] if
+            invview(rcg.matching)[vsrc] === unassigned))
+end
+
+# TODO: Fix the function in Graphs to do this instead
+function Graphs.neighborhood(rcg::ResidualCMOGraph, v::Integer)
+    worklist = Int[v]
+    ns = BitSet()
+    while !isempty(worklist)
+        v′ = popfirst!(worklist)
+        for n in neighbors(rcg, v′)
+            if !(n in ns)
+                push!(ns, n)
+                push!(worklist, n)
+            end
+        end
+    end
+    return ns
+end
+
 # Condensation Graphs
 abstract type AbstractCondensationGraph <: AbstractGraph{Int} end
 function (T::Type{<:AbstractCondensationGraph})(g, sccs::Vector{Union{Int, Vector{Int}}})

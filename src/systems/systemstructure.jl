@@ -12,7 +12,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
                           equations, isirreducible, input_timedomain, TimeDomain,
                           VariableType, getvariabletype, has_equations
 using ..BipartiteGraphs
-import ..BipartiteGraphs: invview, complete
+import ..BipartiteGraphs: invview, complete, ResidualCMOGraph
 using Graphs
 using UnPack
 using Setfield
@@ -609,5 +609,7 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullstates)
     ModelingToolkit.invalidate_cache!(sys), input_idxs
 end
+
+ResidualCMOGraph(mss::MatchedSystemStructure) = ResidualCMOGraph(mss.structure.graph, mss.var_eq_matching)
 
 end # module
