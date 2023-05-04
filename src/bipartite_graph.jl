@@ -760,16 +760,18 @@ edge.
 2. This graph is not strict. In particular, multi edges between vertices are
    allowed and common.
 """
-struct ResidualCMOGraph{I, G<:BipartiteGraph{I}, M <: Matching} <: Graphs.AbstractGraph{I}
+struct ResidualCMOGraph{I, G <: BipartiteGraph{I}, M <: Matching} <: Graphs.AbstractGraph{I}
     graph::G
     matching::M
-    function ResidualCMOGraph{I, G, M}(g::G, m::M) where {I, G<:BipartiteGraph{I}, M}
+    function ResidualCMOGraph{I, G, M}(g::G, m::M) where {I, G <: BipartiteGraph{I}, M}
         require_complete(g)
         require_complete(m)
         new{I, G, M}(g, m)
     end
 end
-ResidualCMOGraph(g::G, m::M) where {I, G<:BipartiteGraph{I}, M} = ResidualCMOGraph{I, G, M}(g, m)
+function ResidualCMOGraph(g::G, m::M) where {I, G <: BipartiteGraph{I}, M}
+    ResidualCMOGraph{I, G, M}(g, m)
+end
 
 invview(rcg::ResidualCMOGraph) = ResidualCMOGraph(invview(rcg.graph), invview(rcg.matching))
 
@@ -778,11 +780,12 @@ Graphs.nv(rcg::ResidualCMOGraph) = ndsts(rcg.graph)
 Graphs.vertices(rcg::ResidualCMOGraph) = 𝑑vertices(rcg.graph)
 function Graphs.neighbors(rcg::ResidualCMOGraph, v::Integer)
     rcg.matching[v] !== unassigned && return ()
-    Iterators.filter(
-        vdst->rcg.matching[vdst] === unassigned,
-        Iterators.flatten(rcg.graph.fadjlist[vsrc] for
-            vsrc in rcg.graph.badjlist[v] if
-            invview(rcg.matching)[vsrc] === unassigned))
+    Iterators.filter(vdst -> rcg.matching[vdst] === unassigned,
+                     Iterators.flatten(rcg.graph.fadjlist[vsrc]
+                                       for
+                                       vsrc in rcg.graph.badjlist[v]
+                                       if
+                                       invview(rcg.matching)[vsrc] === unassigned))
 end
 
 # TODO: Fix the function in Graphs to do this instead
