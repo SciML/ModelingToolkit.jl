@@ -885,8 +885,8 @@ function chain_flatten_array_variables(dvs)
             name = operation(arguments(dv)[1])
             args = arguments(arguments(dv)[1])
             idxs = arguments(dv)[2:end]
-            fullname = string(name)*"_"*string(idxs)
-            newop = (@variables $(fullname)(..))[1]
+            fullname = Symbol(string(name)*"_"*string(idxs))
+            newop = (@variables $fullname(..))[1]
             push!(rs, @rule getindex(name(~~args), idxs...) => newop(~args...))
         end
     end

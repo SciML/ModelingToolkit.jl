@@ -103,16 +103,16 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
         end
-        eqs = Symbolics.scalarize(eqs)
-        bcs = Symbolics.scalarize(bcs)
-        ivs = Symbolics.scalarize(ivs)
-        dvs = Symbolics.scalarize(dvs)
-        ps = Symbolics.scalarize(ps)
         eqs = eqs isa Vector ? eqs : [eqs]
         bcs = bcs isa Vector ? bcs : [bcs]
         ivs = ivs isa Vector ? ivs : [ivs]
         dvs = dvs isa Vector ? dvs : [dvs]
         ps = ps isa Vector ? ps : [ps]
+        eqs = mapreduce(Symbolics.scalarize, vcat, eqs, init = Equation[])
+        bcs = mapreduce(Symbolics.scalarize, vcat, bcs, init = Equation[])
+        ivs = Symbolics.scalarize(ivs)
+        dvs = Symbolics.scalarize(dvs)
+        ps = Symbolics.scalarize(ps)
 
         ch = chain_flatten_array_variables(dvs)
         baddvs = filter(dvs) do u
