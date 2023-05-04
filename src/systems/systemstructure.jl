@@ -416,7 +416,7 @@ using .BipartiteGraphs: Label, BipartiteAdjacencyList
 struct SystemStructurePrintMatrix <:
        AbstractMatrix{Union{Label, BipartiteAdjacencyList}}
     bpg::BipartiteGraph
-    highlight_graph::BipartiteGraph
+    highlight_graph::Union{Nothing, BipartiteGraph}
     var_to_diff::DiffGraph
     eq_to_diff::DiffGraph
     var_eq_matching::Union{Matching, Nothing}
@@ -428,6 +428,7 @@ of the provided SystemStructure.
 """
 function SystemStructurePrintMatrix(s::SystemStructure)
     return SystemStructurePrintMatrix(complete(s.graph),
+                                      s.solvable_graph === nothing ? nothing :
                                       complete(s.solvable_graph),
                                       complete(s.var_to_diff),
                                       complete(s.eq_to_diff),

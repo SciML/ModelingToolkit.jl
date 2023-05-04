@@ -47,8 +47,16 @@ function alias_elimination!(state::TearingState; kwargs...)
     sys = state.sys
     complete!(state.structure)
     graph_orig = copy(state.structure.graph)
-    ag, mm, complete_ag, complete_mm = alias_eliminate_graph!(state; kwargs...)
+    _, _, ag, mm = alias_eliminate_graph!(state; kwargs...)
     isempty(ag) && return sys, ag
+
+    s = state.structure
+    for g in (s.graph, s.solvable_graph)
+        for (ei, e) in enumerate(mm.nzrows)
+            set_neighbors!(g, e, mm.row_cols[ei])
+        end
+        update_graph_neighbors!(g, ag)
+    end
 
     fullvars = state.fullvars
     @unpack var_to_diff, graph, solvable_graph = state.structure
@@ -103,6 +111,7 @@ function alias_elimination!(state::TearingState; kwargs...)
         idx += 1
         old_to_new_eq[i] = idx
     end
+
     n_new_eqs = idx
 
     old_to_new_var = Vector{Int}(undef, ndsts(graph))
@@ -165,6 +174,26 @@ function alias_elimination!(state::TearingState; kwargs...)
         set_neighbors!(new_solvable_graph, ieq, 𝑠neighbors(solvable_graph, i))
         new_eq_to_diff[ieq] = eq_to_diff[i]
     end
+
+    # Put back required equations from the alias graph
+    for (v, (coeff, alias)) in pairs(ag)
+        ∫v = invview(var_to_diff)[v]
+        while ∫v !== nothing
+            if ∫v == alias
+                push!(eqs, fullvars[v] ~ coeff * fullvars[alias])
+                ne = add_vertex!(new_graph, SRC)
+                add_vertex!(new_solvable_graph, SRC)
+                add_edge!(new_graph, ne, v)
+                add_edge!(new_graph, ne, alias)
+                add_edge!(new_solvable_graph, ne, v)
+                add_edge!(new_solvable_graph, ne, alias)
+                add_vertex!(new_eq_to_diff)
+                break
+            end
+            ∫v = invview(var_to_diff)[∫v]
+        end
+    end
+
     # update DiffGraph
     new_var_to_diff = DiffGraph(length(var_to_diff))
     for v in 1:length(var_to_diff)
@@ -674,6 +703,14 @@ function var_derivative_here!(state, processed, g, eqg, dls, diff_var)
     return newvar
 end
 
+function collect_reach!(reach₌, eqg, r, c = 1)
+    for n in neighbors(eqg, r)
+        n == r && continue
+        c′ = get_weight(eqg, r, n)
+        push!(reach₌, c * c′ => n)
+    end
+end
+
 function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatrixCLIL)
     @unpack graph, var_to_diff = state.structure
     # Step 1: Perform Bareiss factorization on the adjacency matrix of the linear
@@ -714,12 +751,10 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
     dls = DiffLevelState(g, var_to_diff)
     original_nvars = length(var_to_diff)
 
-    is_diff_edge = let var_to_diff = var_to_diff
-        (v, w) -> var_to_diff[v] == w || var_to_diff[w] == v
-    end
     diff_aliases = Vector{Pair{Int, Int}}[]
     stems = Vector{Int}[]
     stem_set = BitSet()
+    all_reachable = BitSet()
     for (v, dv) in enumerate(var_to_diff)
         processed[v] && continue
         (dv === nothing && diff_to_var[v] === nothing) && continue
@@ -730,11 +765,8 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
             reach₌ = Pair{Int, Int}[]
             # `r` is aliased to its equality aliases
             if r !== nothing
-                for n in neighbors(eqg, r)
-                    (n == r || is_diff_edge(r, n)) && continue
-                    c = get_weight(eqg, r, n)
-                    push!(reach₌, c => n)
-                end
+                push!(all_reachable, r)
+                collect_reach!(reach₌, eqg, r)
             end
             # `r` is aliased to its previous differentiation level's aliases'
             # derivative
@@ -746,12 +778,23 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
                     push!(reach₌, c => da)
                     # `r` is aliased to its previous differentiation level's
                     # aliases' derivative's equality aliases
-                    r === nothing || for n in neighbors(eqg, da)
-                        (n == da || n == prev_r || is_diff_edge(prev_r, n)) && continue
-                        c′ = get_weight(eqg, da, n)
-                        push!(reach₌, c * c′ => n)
-                    end
+                    collect_reach!(reach₌, eqg, da, c)
                 end
+            end
+            # Filter our of the reach any variables whose anti-derivatives are in the reach
+            # (i.e. diff edges)
+            filter!(reach₌) do (c, a)
+                a in all_reachable && return false
+                return true
+            end
+            reach₌set = Set(x[2] for x in reach₌)
+            filter!(reach₌) do (c, a)
+                da = invview(var_to_diff)[a]
+                while da !== nothing
+                    da in reach₌set && return false
+                    da = invview(var_to_diff)[da]
+                end
+                return true
             end
             if r === nothing
                 isempty(reach₌) && break
@@ -773,6 +816,7 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
             push!(stem, prev_r)
             push!(diff_aliases, reach₌)
             for (c, v) in reach₌
+                push!(all_reachable, v)
                 v == prev_r && continue
                 add_edge!(eqg, v, prev_r, c)
             end
@@ -826,7 +870,6 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
             for dr in @view stem[(i + 1):end]
                 # We cannot reduce newly introduced variables like `D(D(D(z)))`
                 # in the example box above.
-                dr > original_nvars && continue
                 if has_edge(eqg, r, dr)
                     c = get_weight(eqg, r, dr)
                     dag[dr] = c => r

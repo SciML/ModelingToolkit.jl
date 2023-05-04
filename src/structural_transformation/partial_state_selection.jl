@@ -248,6 +248,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             vars = [diff_to_var[var] for var in vars if diff_to_var[var] !== nothing]
         end
     end
+
     if diff_va !== nothing
         # differentiated alias
         n_dummys = length(dummy_derivatives)
