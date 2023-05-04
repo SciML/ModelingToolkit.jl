@@ -877,3 +877,18 @@ function fast_substitute(expr, pair::Pair)
 end
 
 normalize_to_differential(s) = s
+
+function chain_flatten_array_variables(dvs)
+    rs = []
+    for dv in dvs
+        if isequal(operation(dv), getindex)
+            name = operation(arguments(dv)[1])
+            args = arguments(arguments(dv)[1])
+            idxs = arguments(dv)[2:end]
+            fullname = string(name)*"_"*string(idxs)
+            newop = (@variables $(fullname)(..))[1]
+            push!(rs, @rule getindex(name(~~args), idxs...) => newop(~args...))
+        end
+    end
+    return rs
+end

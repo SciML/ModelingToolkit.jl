@@ -85,6 +85,10 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     gui_metadata: metadata for MTK GUI.
     """
     gui_metadata::Union{Nothing, GUIMetadata}
+    """
+    replacedvars: a dictionary of variables that have been replaced by other variables for compatibility
+    """
+    replacedvars::Dict
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
                                    ps = SciMLBase.NullParameters();
                                    defaults = Dict(),
@@ -99,8 +103,28 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
         end
-
+        eqs = Symbolics.scalarize(eqs)
+        bcs = Symbolics.scalarize(bcs)
+        ivs = Symbolics.scalarize(ivs)
+        dvs = Symbolics.scalarize(dvs)
+        ps = Symbolics.scalarize(ps)
         eqs = eqs isa Vector ? eqs : [eqs]
+        bcs = bcs isa Vector ? bcs : [bcs]
+        ivs = ivs isa Vector ? ivs : [ivs]
+        dvs = dvs isa Vector ? dvs : [dvs]
+        ps = ps isa Vector ? ps : [ps]
+
+        ch = chain_flatten_array_variables(dvs)
+        baddvs = filter(dvs) do u
+            isequal(operation(u), getindex)
+        end
+        _replacedvars = map(baddvs) do u
+            u => ch(u)
+        end |> Dict
+        merge!(replacedvars, _replacedvars)
+        eqs = map(ch, eqs)
+        bcs = map(ch, bcs)
+        dvs = map(ch, dvs)
 
         if !isnothing(analytic)
             analytic = analytic isa Vector ? analytic : [analytic]
@@ -124,7 +148,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         end
 
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
-            analytic_func, name, metadata, gui_metadata)
+            analytic_func, name, metadata, gui_metadata, replacedvars)
     end
 end
 
