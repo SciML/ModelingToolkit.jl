@@ -23,163 +23,163 @@ eq  = Dtt(u(t,x)) ~ C^2*Dxx(u(t,x))
 
 # Initial and boundary conditions
 bcs = [u(t,0) ~ 0.,# for all t > 0
-       u(t,1) ~ 0.,# for all t > 0
-       u(0,x) ~ x*(1. - x), #for all 0 < x < 1
-       Dt(u(0,x)) ~ 0. ] #for all  0 < x < 1]
+	   u(t,1) ~ 0.,# for all t > 0
+	   u(0,x) ~ x*(1. - x), #for all 0 < x < 1
+	   Dt(u(0,x)) ~ 0. ] #for all  0 < x < 1]
 
 # Space and time domains
 domains = [t ∈ (0.0,1.0),
-           x ∈ (0.0,1.0)]
+		   x ∈ (0.0,1.0)]
 
 @named pde_system = PDESystem(eq,bcs,domains,[t,x],[u])
 ```
 """
 struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
-    "The equations which define the PDE"
-    eqs::Vector{Equation}
-    "The boundary conditions"
-    bcs::Vector{Equation}
-    "The domain for the independent variables."
-    domain::Any
-    "The independent variables"
-    ivs::Any
-    "The dependent variables"
-    dvs::Any
-    "The parameters"
-    ps::Any
-    """
-    defaults: The default values to use when initial conditions and/or
-    parameters are not supplied in `ODEProblem`.
-    """
-    defaults::Dict
-    """
-    type: type of the system
-    """
-    connector_type::Any
-    """
-    systems: The internal systems. These are required to have unique names.
-    """
-    systems::Vector
-    """
-    analytic: A vector of explicit symbolic expressions for the analytic solutions of each
-    dependent variable. e.g. `analytic = [u(t, x) ~ a*sin(c*t) * cos(k*x)]`
-    """
-    analytic::Any
-    """
-    analytic_func: A vector of functions for the analytic solutions of each dependent
-    variable. Will be generated from `analytic` if not provided. Should have the same
-    argument signature as the variable, and a `ps` argument as the last argument,
-    which takes an indexable of parameter values in the order you specified them in `ps`.
-    e.g. `analytic_func = [u(t, x) => (ps, t, x) -> ps[1]*sin(ps[2]*t) * cos(ps[3]*x)]`
-    """
-    analytic_func::Any
-    """
-    name: the name of the system
-    """
-    name::Symbol
-    """
-    metadata: metadata for the system, to be used by downstream packages.
-    """
-    metadata::Any
-    """
-    gui_metadata: metadata for MTK GUI.
-    """
-    gui_metadata::Union{Nothing, GUIMetadata}
-    """
-    replacedvars: a dictionary of variables that have been replaced by other variables for compatibility
-    """
-    replaced_vars::Dict
-    @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
-                                   ps = SciMLBase.NullParameters();
-                                   defaults = Dict(),
-                                   systems = [],
-                                   connector_type = nothing,
-                                   metadata = nothing,
-                                   analytic = nothing,
-                                   analytic_func = nothing,
-                                   gui_metadata = nothing,
-                                   replaced_vars = Dict(),
-                                   checks::Union{Bool, Int} = true,
-                                   name)
-        if checks == true || (checks & CheckUnits) > 0
-            all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
-        end
-        eqs = eqs isa Vector ? eqs : [eqs]
-        bcs = bcs isa Vector ? bcs : [bcs]
-        ivs = ivs isa Vector ? ivs : [ivs]
-        dvs = dvs isa Vector ? dvs : [dvs]
-        ps = ps isa Vector ? ps : [ps]
-        eqs = mapreduce(Symbolics.scalarize, vcat, eqs, init = Equation[])
-        bcs = mapreduce(Symbolics.scalarize, vcat, bcs, init = Equation[])
-        ivs = Symbolics.scalarize(ivs)
-        dvs = Symbolics.scalarize(dvs)
-        ps = Symbolics.scalarize(ps)
+	"The equations which define the PDE"
+	eqs::Vector{Equation}
+	"The boundary conditions"
+	bcs::Vector{Equation}
+	"The domain for the independent variables."
+	domain::Any
+	"The independent variables"
+	ivs::Any
+	"The dependent variables"
+	dvs::Any
+	"The parameters"
+	ps::Any
+	"""
+	defaults: The default values to use when initial conditions and/or
+	parameters are not supplied in `ODEProblem`.
+	"""
+	defaults::Dict
+	"""
+	type: type of the system
+	"""
+	connector_type::Any
+	"""
+	systems: The internal systems. These are required to have unique names.
+	"""
+	systems::Vector
+	"""
+	analytic: A vector of explicit symbolic expressions for the analytic solutions of each
+	dependent variable. e.g. `analytic = [u(t, x) ~ a*sin(c*t) * cos(k*x)]`
+	"""
+	analytic::Any
+	"""
+	analytic_func: A vector of functions for the analytic solutions of each dependent
+	variable. Will be generated from `analytic` if not provided. Should have the same
+	argument signature as the variable, and a `ps` argument as the last argument,
+	which takes an indexable of parameter values in the order you specified them in `ps`.
+	e.g. `analytic_func = [u(t, x) => (ps, t, x) -> ps[1]*sin(ps[2]*t) * cos(ps[3]*x)]`
+	"""
+	analytic_func::Any
+	"""
+	name: the name of the system
+	"""
+	name::Symbol
+	"""
+	metadata: metadata for the system, to be used by downstream packages.
+	"""
+	metadata::Any
+	"""
+	gui_metadata: metadata for MTK GUI.
+	"""
+	gui_metadata::Union{Nothing, GUIMetadata}
+	"""
+	replacedvars: a dictionary of variables that have been replaced by other variables for compatibility
+	"""
+	replaced_vars::Dict
+	@add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
+		ps = SciMLBase.NullParameters();
+		defaults = Dict(),
+		systems = [],
+		connector_type = nothing,
+		metadata = nothing,
+		analytic = nothing,
+		analytic_func = nothing,
+		gui_metadata = nothing,
+		replaced_vars = Dict(),
+		checks::Union{Bool, Int} = true,
+		name)
+		if checks == true || (checks & CheckUnits) > 0
+			all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
+		end
+		eqs = eqs isa Vector ? eqs : [eqs]
+		bcs = bcs isa Vector ? bcs : [bcs]
+		ivs = ivs isa Vector ? ivs : [ivs]
+		dvs = dvs isa Vector ? dvs : [dvs]
+		ps = ps isa Vector ? ps : [ps]
+		eqs = mapreduce(Symbolics.scalarize, vcat, eqs, init = Equation[])
+		bcs = mapreduce(Symbolics.scalarize, vcat, bcs, init = Equation[])
+		ivs = Symbolics.scalarize(ivs)
+		dvs = Symbolics.scalarize(dvs)
+		ps = Symbolics.scalarize(ps)
 
-        ch = chain_flatten_array_variables(dvs)
-        safe_ch(x) = safe_unwrap(x) |> ch
-        baddvs = filter(dvs) do u
-            isequal(operation(safe_unwrap(u)), getindex)
-        end
-        _replacedvars = map(baddvs) do u
-            u => Num(safe_ch(u))
-        end |> Dict
-        merge!(replaced_vars, _replacedvars)
+		ch = chain_flatten_array_variables(dvs)
+		safe_ch(x) = safe_unwrap(x) |> ch
+		baddvs = filter(dvs) do u
+			isequal(operation(safe_unwrap(u)), getindex)
+		end
+		_replacedvars = map(baddvs) do u
+			u => Num(safe_ch(u))
+		end |> Dict
+		merge!(replaced_vars, _replacedvars)
 
-        eqs = apply_lhs_rhs(ch, eqs)
-        bcs = apply_lhs_rhs(ch, bcs)
-        dvs = map(safe_ch, dvs)
+		eqs = apply_lhs_rhs(ch, eqs)
+		bcs = apply_lhs_rhs(ch, bcs)
+		dvs = map(safe_ch, dvs)
 
-        if !isnothing(analytic)
-            analytic = analytic isa Vector ? analytic : [analytic]
-            if length(analytic) != length(dvs)
-                throw(ArgumentError("The number of analytic solutions must match the number of dependent variables"))
-            end
+		if !isnothing(analytic)
+			analytic = analytic isa Vector ? analytic : [analytic]
+			if length(analytic) != length(dvs)
+				throw(ArgumentError("The number of analytic solutions must match the number of dependent variables"))
+			end
 
-            if isnothing(analytic_func)
-                analytic_func = map(analytic) do eq
-                    args = arguments(eq.lhs)
-                    p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
-                    args = vcat(DestructuredArgs(p), args)
-                    ex = Func(args, [], eq.rhs) |> toexpr
-                    eq.lhs => @RuntimeGeneratedFunction(ex)
-                end
-            end
-        end
+			if isnothing(analytic_func)
+				analytic_func = map(analytic) do eq
+					args = arguments(eq.lhs)
+					p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
+					args = vcat(DestructuredArgs(p), args)
+					ex = Func(args, [], eq.rhs) |> toexpr
+					eq.lhs => @RuntimeGeneratedFunction(ex)
+				end
+			end
+		end
 
-        if !isnothing(analytic_func)
-            analytic_func = analytic_func isa Dict ? analytic_func : analytic_func |> Dict
-        end
+		if !isnothing(analytic_func)
+			analytic_func = analytic_func isa Dict ? analytic_func : analytic_func |> Dict
+		end
 
-        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
-            analytic_func, name, metadata, gui_metadata, replaced_vars)
-    end
+		new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
+			analytic_func, name, metadata, gui_metadata, replaced_vars)
+	end
 end
 
 function Base.getproperty(x::PDESystem, sym::Symbol)
-    if sym == :indvars
-        return getfield(x, :ivs)
-        Base.depwarn("`sys.indvars` is deprecated, please use `get_ivs(sys)`", :getproperty,
-                     force = true)
+	if sym == :indvars
+		return getfield(x, :ivs)
+		Base.depwarn("`sys.indvars` is deprecated, please use `get_ivs(sys)`", :getproperty,
+			force = true)
 
-    elseif sym == :depvars
-        return getfield(x, :dvs)
-        Base.depwarn("`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty,
-                     force = true)
+	elseif sym == :depvars
+		return getfield(x, :dvs)
+		Base.depwarn("`sys.depvars` is deprecated, please use `get_dvs(sys)`", :getproperty,
+			force = true)
 
-    else
-        return getfield(x, sym)
-    end
+	else
+		return getfield(x, sym)
+	end
 end
 
 Base.summary(prob::PDESystem) = string(nameof(typeof(prob)))
 function Base.show(io::IO, ::MIME"text/plain", sys::PDESystem)
-    println(io, summary(sys))
-    println(io, "Equations: ", get_eqs(sys))
-    println(io, "Boundary Conditions: ", get_bcs(sys))
-    println(io, "Domain: ", get_domain(sys))
-    println(io, "Dependent Variables: ", get_dvs(sys))
-    println(io, "Independent Variables: ", get_ivs(sys))
-    println(io, "Parameters: ", get_ps(sys))
-    print(io, "Default Parameter Values", get_defaults(sys))
-    return nothing
+	println(io, summary(sys))
+	println(io, "Equations: ", get_eqs(sys))
+	println(io, "Boundary Conditions: ", get_bcs(sys))
+	println(io, "Domain: ", get_domain(sys))
+	println(io, "Dependent Variables: ", get_dvs(sys))
+	println(io, "Independent Variables: ", get_ivs(sys))
+	println(io, "Parameters: ", get_ps(sys))
+	print(io, "Default Parameter Values", get_defaults(sys))
+	return nothing
 end
