@@ -1,4 +1,4 @@
-using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
+using ModelingToolkit, DiffEqBase, LinearAlgebra, Test, Symbolics, SymbolicUtils, DomainSets
 
 # Define some variables
 @parameters t x
@@ -16,7 +16,7 @@ domains = [t ∈ (0.0, 1.0),
 analytic = [u(t, x) ~ -h * x * (x - 1) * sin(x) * exp(-2 * h * t)]
 analytic_function = (ps, t, x) -> -ps[1] * x * (x - 1) * sin(x) * exp(-2 * ps[1] * t)
 
-@named pdesys = PDESystem(eq, bcs, domains, [t, x], [u], [h => 1], analytic = analytic)
+@named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [h => 1], analytic = analytic)
 @show pdesys
 
 @test all(isequal.(independent_variables(pdesys), [t, x]))
@@ -53,16 +53,20 @@ dt = 0:0.1:1
             x ∈ Interval(0.0, 1.0)]
 
     # PDE system
-
-    @named pdesys = PDESystem(eqs, bcs_collected, domains, [t, x], [u(t, x)[i] for i in 1:n_comp], params)
+    dvs = [u(t, x)[i] for i in 1:n_comp]
+    @show dvs
+    @named pdesys = PDESystem(eqs, bcs_collected, domains, [t, x], dvs, params)
 
     # Test that the system is correctly constructed
-    varname1 = Symbol("u_[1]")
-    varname2 = Symbol("u_[2]")
+    varname1 = Symbol("u_Any[1]")
+    varname2 = Symbol("u_Any[2]")
+
 
     vars = @variables $varname1(..), $varname2(..)
+    testeqs = [Dt(v(t, x)) ~ Dxx(v(t, x))*p[i] for (i, v) in enumerate(vars)]
     for i in 1:n_comp
         @test isequal(vars[i](t, x), pdesys.dvs[i])
+        @test isequal(testeqs[i], pdesys.eqs[i])
     end
 
 end

@@ -36,9 +36,9 @@ domains = [t ∈ (0.0,1.0),
 """
 struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     "The equations which define the PDE"
-    eqs::Any
+    eqs::Vector{Equation}
     "The boundary conditions"
-    bcs::Any
+    bcs::Vector{Equation}
     "The domain for the independent variables."
     domain::Any
     "The independent variables"
@@ -88,7 +88,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     """
     replacedvars: a dictionary of variables that have been replaced by other variables for compatibility
     """
-    replacedvars::Dict
+    replaced_vars::Dict
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
                                    ps = SciMLBase.NullParameters();
                                    defaults = Dict(),
@@ -98,6 +98,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                                    analytic = nothing,
                                    analytic_func = nothing,
                                    gui_metadata = nothing,
+                                   replaced_vars = Dict(),
                                    checks::Union{Bool, Int} = true,
                                    name)
         if checks == true || (checks & CheckUnits) > 0
@@ -115,16 +116,18 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         ps = Symbolics.scalarize(ps)
 
         ch = chain_flatten_array_variables(dvs)
+        safe_ch(x) = safe_unwrap(x) |> ch
         baddvs = filter(dvs) do u
-            isequal(operation(u), getindex)
+            isequal(operation(safe_unwrap(u)), getindex)
         end
         _replacedvars = map(baddvs) do u
-            u => ch(u)
+            u => Num(safe_ch(u))
         end |> Dict
-        merge!(replacedvars, _replacedvars)
-        eqs = map(ch, eqs)
-        bcs = map(ch, bcs)
-        dvs = map(ch, dvs)
+        merge!(replaced_vars, _replacedvars)
+
+        eqs = apply_lhs_rhs(ch, eqs)
+        bcs = apply_lhs_rhs(ch, bcs)
+        dvs = map(safe_ch, dvs)
 
         if !isnothing(analytic)
             analytic = analytic isa Vector ? analytic : [analytic]
@@ -148,7 +151,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         end
 
         new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
-            analytic_func, name, metadata, gui_metadata, replacedvars)
+            analytic_func, name, metadata, gui_metadata, replaced_vars)
     end
 end
 

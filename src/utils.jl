@@ -878,17 +878,27 @@ end
 
 normalize_to_differential(s) = s
 
+safe_unwrap(x) = x
+safe_unwrap(x::Num) = unwrap(x)
+
 function chain_flatten_array_variables(dvs)
     rs = []
     for dv in dvs
+        dv = safe_unwrap(dv)
         if isequal(operation(dv), getindex)
             name = operation(arguments(dv)[1])
             args = arguments(arguments(dv)[1])
             idxs = arguments(dv)[2:end]
             fullname = Symbol(string(name)*"_"*string(idxs))
             newop = (@variables $fullname(..))[1]
-            push!(rs, @rule getindex(name(~~args), idxs...) => newop(~args...))
+            push!(rs, @rule getindex($(name)(~~a), idxs...) => newop(~a...))
         end
     end
-    return rs
+    return isempty(rs) ? identity : Prewalk(Chain(rs))
+end
+
+function apply_lhs_rhs(f, eqs)
+    map(eqs) do eq
+        f(eq.lhs) ~ f(eq.rhs)
+    end
 end
