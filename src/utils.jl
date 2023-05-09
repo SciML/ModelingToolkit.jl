@@ -882,8 +882,7 @@ safe_unwrap(x) = x
 safe_unwrap(x::Num) = unwrap(x)
 
 function chain_flatten_array_variables(dvs)
-	rs = []
-	for dv in dvs
+	rs = map(dvs) do dv
 		dv = safe_unwrap(dv)
 		if isequal(operation(dv), getindex)
 			name = operation(arguments(dv)[1])
@@ -891,7 +890,7 @@ function chain_flatten_array_variables(dvs)
 			idxs = arguments(dv)[2:end]
 			fullname = Symbol(string(name) * "_" * string(idxs))
 			newop = (@variables $fullname(..))[1]
-			push!(rs, @rule getindex($(name)(~~a), idxs...) => newop(~a...))
+			@rule getindex($(name)(~~a), idxs...) => newop(~a...)
 		end
 	end
 	return isempty(rs) ? identity : Prewalk(Chain(rs))
