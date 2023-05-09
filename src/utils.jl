@@ -882,7 +882,8 @@ safe_unwrap(x) = x
 safe_unwrap(x::Num) = unwrap(x)
 
 function chain_flatten_array_variables(dvs)
-	rs = map(dvs) do dv
+	rs = []
+	for dv in dvs
 		dv = safe_unwrap(dv)
 		if isequal(operation(dv), getindex)
 			name = operation(arguments(dv)[1])
