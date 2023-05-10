@@ -38,7 +38,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
 	"The equations which define the PDE"
 	eqs::Vector{Equation}
 	"The boundary conditions"
-	bcs::Vector{Equation}
+	bcs::Vector
 	"The domain for the independent variables."
 	domain::Any
 	"The independent variables"
@@ -85,10 +85,6 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
 	gui_metadata: metadata for MTK GUI.
 	"""
 	gui_metadata::Union{Nothing, GUIMetadata}
-	"""
-	replacedvars: a dictionary of variables that have been replaced by other variables for compatibility
-	"""
-	replaced_vars::Dict
 	@add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
 		ps = SciMLBase.NullParameters();
 		defaults = Dict(),
@@ -98,7 +94,6 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
 		analytic = nothing,
 		analytic_func = nothing,
 		gui_metadata = nothing,
-		replaced_vars = Dict(),
 		checks::Union{Bool, Int} = true,
 		name)
 		if checks == true || (checks & CheckUnits) > 0
@@ -110,7 +105,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
 		dvs = dvs isa Vector ? dvs : [dvs]
 		ps = ps isa Vector ? ps : [ps]
 		eqs = mapreduce(Symbolics.scalarize, vcat, eqs, init = Equation[])
-		bcs = mapreduce(Symbolics.scalarize, vcat, bcs, init = Equation[])
+		bcs = mapreduce(Symbolics.scalarize, vcat, bcs, init = [])
 		ivs = Symbolics.scalarize(ivs)
 		dvs = Symbolics.scalarize(dvs)
 		ps = Symbolics.scalarize(ps)
@@ -137,7 +132,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
 		end
 
 		new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
-			analytic_func, name, metadata, gui_metadata, replaced_vars)
+			analytic_func, name, metadata, gui_metadata)
 	end
 end
 
