@@ -143,6 +143,9 @@ end
     V = M[(k + 1):end, (k + 1):end]
     V .= exactdiv.(V .* pivot .- M[(k + 1):end, k] * M[k, (k + 1):end]', prev_pivot)
     zero!(M, (k + 1):size(M, 1), k)
+    if M isa AbstractSparseMatrixCSC
+        dropzeros!(M)
+    end
 end
 
 function bareiss_update_virtual_colswap!(zero!, M::AbstractMatrix, k, swapto, pivot,
