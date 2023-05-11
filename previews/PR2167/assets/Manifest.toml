@@ -1512,9 +1512,9 @@ version = "0.1.6"
 
 [[deps.SciMLOperators]]
 deps = ["ArrayInterface", "DocStringExtensions", "Lazy", "LinearAlgebra", "Setfield", "SparseArrays", "StaticArraysCore", "Tricks"]
-git-tree-sha1 = "d4b254372887d7cbad20ef34021cd69cb0e1d05f"
+git-tree-sha1 = "16196c45c17c480d1ab31952ac1481c71b76d171"
 uuid = "c0aeaf25-5076-4817-a8d5-81caf7dfa961"
-version = "0.2.4"
+version = "0.2.5"
 
 [[deps.Scratch]]
 deps = ["Dates"]
