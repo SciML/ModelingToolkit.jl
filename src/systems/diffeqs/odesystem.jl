@@ -304,7 +304,6 @@ Build the observed function assuming the observed equations are all explicit,
 i.e. there are no cycles.
 """
 function build_explicit_observed_function(sys, ts;
-                                          expression = false,
                                           output_type = Array,
                                           checkbounds = true,
                                           throw = true)
@@ -380,14 +379,25 @@ function build_explicit_observed_function(sys, ts;
 
     dvs = DestructuredArgs(states(sys), inbounds = !checkbounds)
     ps = DestructuredArgs(parameters(sys), inbounds = !checkbounds)
-    args = [dvs, ps, ivs...]
+    fun_args = [dvs, ps, ivs...]
     pre = get_postprocess_fbody(sys)
 
-    ex = Func(args, [],
-              pre(Let(obsexprs,
-                      isscalar ? ts[1] : MakeArray(ts, output_type),
-                      false))) |> toexpr
-    expression ? ex : @RuntimeGeneratedFunction(ex)
+    ex_oop = Func(fun_args, [],
+                  pre(Let(obsexprs,
+                          isscalar ? ts[1] : MakeArray(ts, output_type),
+                          false))) |> toexpr
+
+    out = Sym{Any}(Symbol("######out######"))
+    ex_iip = Func([out; fun_args], [],
+                  pre(Let(obsexprs,
+                          SetArray(false, out, ts),
+                          false))) |> toexpr
+    let oop = @RuntimeGeneratedFunction(ex_oop),
+        iip = @RuntimeGeneratedFunction(ex_iip),
+        n = length(fun_args)
+
+        (x...) -> length(x) == n ? oop(x...) : iip(x...)
+    end
 end
 
 function _eq_unordered(a, b)
