@@ -984,7 +984,13 @@ function locally_structure_simplify!(adj_row, pivot_var, ag)
     end
 
     if pivot_var === nothing
-        if iszero(nirreducible)
+        if iszero(nirreducible) #|| nirreducible == 1
+            zero!(adj_row)
+        elseif nirreducible == 1
+            ks = [k for (k, v) in pairs(nonzerosmap(adj_row)) if !iszero(v)]
+            if length(ks) == 1
+                ag[first(ks)] = 0
+            end
             zero!(adj_row)
         else
             dropzeros!(adj_row)
