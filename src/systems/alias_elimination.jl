@@ -669,9 +669,9 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
     #         x   -->   D(x)
     #         ⇓          ⇑
     #         ⇓         x_t   -->   D(x_t)
-    #         ⇓               |---------------|
+    #         ⇓                |---------------|
     # z --> D(z)  --> D(D(z))  |--> D(D(D(z))) |
-    #         ⇑               |---------------|
+    #         ⇑                |---------------|
     # k --> D(k)
     #
     # where `-->` is an edge in `var_to_diff`, `⇒` is an edge in `ag`, and the
