@@ -93,13 +93,64 @@ function get_var(mod::Module, b)
     b isa Symbol ? getproperty(mod, b) : b
 end
 macro model(name::Symbol, expr)
-    model_macro(name, expr)
+    model_macro(@__MODULE__, name, expr)
 end
-function model_macro(name, expr)
+function model_macro(mod, name, expr)
+    exprs = Expr(:block)
     for arg in expr.args
         arg isa LineNumberNode && continue
-        arg.head == :macrocall && compose
+        arg.head == :macrocall || error("$arg is not valid syntax. Expected a macro call.")
+        parse_model!(exprs.args, mod, arg)
     end
+    exprs
+end
+function parse_model!(exprs, mod, arg)
+    mname = arg.args[1]
+    vs = Num[]
+    dict = Dict{Symbol, Any}()
+    body = arg.args[end]
+    if mname == Symbol("@components")
+        parse_components!(exprs, dict, body)
+    elseif mname == Symbol("@variables")
+        parse_variables!(exprs, vs, dict, mod, body)
+    elseif mname == Symbol("@equations")
+        parse_equations!(exprs, dict, body)
+    else
+        error("$mname is not handled.")
+    end
+end
+function parse_components!(exprs, dict, body)
+    comps = Pair{String, String}[]
+    comp_name = Symbol("#___comp___")
+    for arg in body.args
+        arg isa LineNumberNode && continue
+        MLStyle.@match arg begin
+            Expr(:(=), a, b) => begin
+                push!(comps, String(a) => readable_code(b))
+                push!(exprs, arg)
+            end
+            _ => error("`@components` only takes assignment expressions. Got $arg")
+        end
+    end
+    dict[:components] = comps
+end
+function parse_variables!(exprs, vs, dict, mod, body)
+    for arg in body.args
+        arg isa LineNumberNode && continue
+        v = Num(parse_variable_def!(dict, mod, arg))
+        push!(vs, v)
+        push!(exprs, :($(getname(v)) = $v))
+    end
+end
+function parse_equations!(exprs, dict, body)
+    eqs = :(Equation[])
+    for arg in body.args
+        arg isa LineNumberNode && continue
+        push!(eqs.args, arg)
+    end
+    # TODO: does this work with TOML?
+    dict[:equations] = readable_code.(@view eqs.args[2:end])
+    push!(exprs, :(var"#___eqs___" = $eqs))
 end
 
 abstract type AbstractConnectorType end
