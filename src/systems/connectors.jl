@@ -10,6 +10,98 @@ macro connector(expr)
     esc(component_post_processing(expr, true))
 end
 
+macro connector(name::Symbol, body)
+    esc(connector_macro((@__MODULE__), name, body))
+end
+
+using MLStyle
+function connector_macro(mod, name, body)
+    if !Meta.isexpr(body, :block)
+        err = """
+        connector body must be a block! It should be in the form of
+        ```
+        @connector Pin begin
+            v(t) = 1
+            (i(t) = 1), [connect = Flow]
+        end
+        ```
+        """
+        error(err)
+    end
+    vs = Num[]
+    dict = Dict{Symbol, Any}()
+    for arg in body.args
+        arg isa LineNumberNode && continue
+        push!(vs, Num(parse_variable_def!(dict, mod, arg)))
+    end
+    iv = get(dict, :independent_variable, nothing)
+    if iv ===  nothing
+        error("$name doesn't have a independent variable")
+    end
+    ODESystem(Equation[], iv, vs, []; name)
+end
+
+function parse_variable_def!(dict, mod, arg)
+    MLStyle.@match arg begin
+        ::Symbol => generate_var(arg)
+        Expr(:call, a, b) => generate_var!(dict, a, set_iv!(dict, b))
+        Expr(:(=), a, b) => setdefault(parse_variable_def!(dict, mod, a), parse_default(mod, b))
+        Expr(:tuple, a, b) => set_var_metadata(parse_variable_def!(dict, mod, a), parse_metadata(mod, b))
+        _ => error("$arg cannot be parsed")
+    end
+end
+
+generate_var(a) = Symbolics.variable(a)
+function generate_var!(dict, a, b)
+    iv = generate_var(b)
+    prev_iv = get!(dict, :independent_variable) do
+        iv
+    end
+    @assert isequal(iv, prev_iv)
+    Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Real}, Real})(iv)
+end
+function set_iv!(dict, b)
+    prev_b = get!(dict, :independent_variable_name) do
+        b
+    end
+    if prev_b != b
+        error("Conflicting independent variable $prev_b and $b")
+    end
+    b
+end
+function parse_default(mod, a)
+    a = Base.remove_linenums!(deepcopy(a))
+    MLStyle.@match a begin
+        Expr(:block, a) => get_var(mod, a)
+        _ => error("Cannot parse default $a")
+    end
+end
+function parse_metadata(mod, a)
+    MLStyle.@match a begin
+        Expr(:vect, eles...) => map(Base.Fix1(parse_metadata, mod), eles)
+        Expr(:(=), a, b) => Symbolics.option_to_metadata_type(Val(a)) => get_var(mod, b)
+        _ => error("Cannot parse metadata $a")
+    end
+end
+function set_var_metadata(a, ms)
+    for (m, v) in ms
+        a = setmetadata(a, m, v)
+    end
+    a
+end
+function get_var(mod::Module, b)
+    b isa Symbol ? getproperty(mod, b) : b
+end
+macro model(name::Symbol, expr)
+    model_macro(name, expr)
+end
+function model_macro(name, expr)
+    for arg in expr.args
+        arg isa LineNumberNode && continue
+        arg.head == :macrocall && compose
+    end
+end
+
 abstract type AbstractConnectorType end
 struct StreamConnector <: AbstractConnectorType end
 struct RegularConnector <: AbstractConnectorType end

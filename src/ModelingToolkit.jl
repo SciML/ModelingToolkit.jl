@@ -181,7 +181,7 @@ export JumpProblem, DiscreteProblem
 export NonlinearSystem, OptimizationSystem, ConstraintsSystem
 export alias_elimination, flatten
 export connect, @connector, Connection, Flow, Stream, instream
-export @component
+export @component, @model
 export isinput, isoutput, getbounds, hasbounds, isdisturbance, istunable, getdist, hasdist,
        tunable_parameters, isirreducible, getdescription, hasdescription, isbinaryvar,
        isintegervar
