@@ -67,8 +67,7 @@ prob = ODEProblem(ODEFunction(first_order_idx1_pendulum),
                   #  [x, y, w, z, xˍt, yˍt, T]
                   [1, 0, 0, 0, 0, 0, 0.0],# 0, 0, 0, 0],
                   (0, 10.0),
-                  [1, 9.8],
-                  mass_matrix = calculate_massmatrix(first_order_idx1_pendulum))
+                  [1, 9.8])
 sol = solve(prob, Rodas5());
 #plot(sol, idxs=(1, 2))
 
