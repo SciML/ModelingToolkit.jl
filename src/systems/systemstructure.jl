@@ -196,6 +196,7 @@ function complete!(s::SystemStructure)
     if s.solvable_graph !== nothing
         s.solvable_graph = complete(s.solvable_graph)
     end
+    s
 end
 
 mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}

@@ -47,7 +47,7 @@ function alias_elimination!(state::TearingState; kwargs...)
     sys = state.sys
     complete!(state.structure)
     graph_orig = copy(state.structure.graph)
-    _, _, ag, mm = alias_eliminate_graph!(state; kwargs...)
+    ag, mm, = alias_eliminate_graph!(state; kwargs...)
     isempty(ag) && return sys, ag
 
     s = state.structure
@@ -71,7 +71,7 @@ function alias_elimination!(state::TearingState; kwargs...)
         lhs = fullvars[v]
         rhs = iszero(coeff) ? 0 : coeff * fullvars[alias]
         subs[lhs] = rhs
-        v != alias && push!(obs, lhs ~ rhs)
+        push!(obs, lhs ~ rhs)
         if coeff == -1
             # if `alias` is like -D(x)
             diff_to_var[alias] === nothing && continue
@@ -173,25 +173,6 @@ function alias_elimination!(state::TearingState; kwargs...)
         set_neighbors!(new_graph, ieq, 𝑠neighbors(graph, i))
         set_neighbors!(new_solvable_graph, ieq, 𝑠neighbors(solvable_graph, i))
         new_eq_to_diff[ieq] = eq_to_diff[i]
-    end
-
-    # Put back required equations from the alias graph
-    for (v, (coeff, alias)) in pairs(ag)
-        ∫v = invview(var_to_diff)[v]
-        while ∫v !== nothing
-            if ∫v == alias
-                push!(eqs, fullvars[v] ~ coeff * fullvars[alias])
-                ne = add_vertex!(new_graph, SRC)
-                add_vertex!(new_solvable_graph, SRC)
-                add_edge!(new_graph, ne, v)
-                add_edge!(new_graph, ne, alias)
-                add_edge!(new_solvable_graph, ne, v)
-                add_edge!(new_solvable_graph, ne, alias)
-                add_vertex!(new_eq_to_diff)
-                break
-            end
-            ∫v = invview(var_to_diff)[∫v]
-        end
     end
 
     # update DiffGraph
@@ -940,76 +921,39 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
         (processed[v] || (!iszero(a) && processed[a])) && continue
         complete_ag[v] = c => a
     end
-    for (v, (c, a)) in dag
-        # D(x) ~ D(y) cannot be removed if x and y are not aliases
-        if v != a && !iszero(a)
-            vv = v
-            aa = a
-            while true
-                vv′ = vv
-                vv = diff_to_var[vv]
-                vv === nothing && break
-                if !(haskey(dag, vv) && dag[vv][2] == diff_to_var[aa])
-                    push!(removed_aliases, vv′)
-                    @goto SKIP_merged_ag
-                end
-            end
-        end
-        merged_ag[v] = c => a
-        @label SKIP_merged_ag
-        push!(removed_aliases, a)
-    end
-    for (v, (c, a)) in ag
-        (processed[v] || (!iszero(a) && processed[a])) && continue
-        v in removed_aliases && continue
-        merged_ag[v] = c => a
-    end
-    ag = merged_ag
     @set! echelon_mm.ncols = length(var_to_diff)
     @set! mm_orig.ncols = length(var_to_diff)
-    mm = reduce!(copy(echelon_mm), mm_orig, ag, size(echelon_mm, 1))
-
-    # Step 5: Reflect our update decisions back into the graph, and make sure
-    # that the RHS of observable variables are defined.
-    for (ei, e) in enumerate(mm.nzrows)
-        set_neighbors!(graph, e, mm.row_cols[ei])
-    end
-    update_graph_neighbors!(graph, ag)
-    finalag = AliasGraph(nvars)
-    # RHS or its derivaitves must still exist in the system to be valid aliases.
-    needs_update = false
-    function contains_v_or_dv(var_to_diff, graph, v)
-        counter = 0
-        while true
-            isempty(𝑑neighbors(graph, v)) || return true
-            v = var_to_diff[v]
-            v === nothing && return false
-            counter += 1
-            counter > 10_000 &&
-                error("Internal error: there's an infinite loop in the `var_to_diff` graph.")
-        end
-    end
-    for (v, (c, a)) in ag
-        if iszero(a) || contains_v_or_dv(var_to_diff, graph, a)
-            finalag[v] = c => a
-        else
-            needs_update = true
-        end
-    end
-    ag = finalag
-
-    if needs_update
-        mm = reduce!(copy(echelon_mm), mm_orig, ag, size(echelon_mm, 1))
-    end
-    # applying new `ag` to `mm` might lead to linear dependence, so we have to
-    # re-run Bareiss.
-    mm, = aag_bareiss!(graph, var_to_diff, mm)
-    for (ei, e) in enumerate(mm.nzrows)
-        set_neighbors!(graph, e, mm.row_cols[ei])
-    end
-    update_graph_neighbors!(graph, ag)
-
     complete_mm = reduce!(copy(echelon_mm), mm_orig, complete_ag, size(echelon_mm, 1))
+    is_all_zero_or_alias = let ag = complete_ag, var_to_diff = var_to_diff
+        v -> begin
+            haskey(ag, v) || return false
+            a = ag[v][2]
+            all_zero = all_alias = true
+            while v !== nothing
+                if (all_zero &= (haskey(ag, v) && iszero(ag[v][1])))
+                    all_alias = false
+                elseif (all_alias &= (haskey(ag, v) && a == ag[v][2]))
+                    all_zero = false
+                    a === nothing && return false
+                    a = invview(var_to_diff)[a]
+                else
+                    return false
+                end
+                v = invview(var_to_diff)[v]
+            end
+            !all_alias || a === nothing
+        end
+    end
+    is_algebraic = let var_to_diff = var_to_diff
+        v -> invview(var_to_diff)[v] === nothing
+    end
+    for (v, (c, a)) in complete_ag
+        if (is_algebraic(v) && (iszero(c) || is_algebraic(a))) || is_all_zero_or_alias(v)
+            merged_ag[v] = c => a
+        end
+    end
+    ag = merged_ag
+    mm = reduce!(copy(echelon_mm), mm_orig, ag, size(echelon_mm, 1))
     return ag, mm, complete_ag, complete_mm
 end
 
