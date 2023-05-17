@@ -296,6 +296,16 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
     isdervar = let diff_to_var = diff_to_var
         var -> diff_to_var[var] !== nothing
     end
+    var_order = let diff_to_var = diff_to_var
+        dv -> begin
+            order = 0
+            while (dv′ = diff_to_var[dv]) !== nothing
+                order += 1
+                dv = dv′
+            end
+            order, dv
+        end
+    end
 
     #retear = BitSet()
     # There are three cases where we want to generate new variables to convert
@@ -369,16 +379,10 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
                 @goto FOUND_DUMMY_EQ
             end
         end
-        x = fullvars[v]
         dx = fullvars[dv]
         # add `x_t`
-        x_t = diff2term(unwrap(D(x)))
-        order = 0
-        v_ = dv
-        while (v_ = diff_to_var[v_]) !== nothing
-            order += 1
-        end
-        x_t = lower_varname(x, iv, order)
+        order, lv = var_order(dv)
+        x_t = lower_varname(fullvars[lv], iv, order)
         push!(fullvars, x_t)
         v_t = length(fullvars)
         v_t_idx = add_vertex!(var_to_diff)
@@ -424,6 +428,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
     toporder = topological_sort(DiCMOBiGraph{false}(graph, var_eq_matching))
     eqs = Iterators.reverse(toporder)
     total_sub = Dict()
+    idep = iv
     for ieq in eqs
         iv = eq_var_matching[ieq]
         if is_solvable(ieq, iv)
@@ -431,9 +436,11 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
             # convert it into the mass matrix form.
             # We cannot solve the differential variable like D(x)
             if isdervar(iv)
-                eq = ModelingToolkit.fixpoint_sub(fullvars[iv], total_sub) ~ ModelingToolkit.fixpoint_sub(Symbolics.solve_for(neweqs[ieq],
-                                                                                                                              fullvars[iv]),
-                                                                                                          total_sub)
+                order, lv = var_order(iv)
+                dx = D(lower_varname(fullvars[lv], idep, order - 1))
+                eq = dx ~ ModelingToolkit.fixpoint_sub(Symbolics.solve_for(neweqs[ieq],
+                                                                           fullvars[iv]),
+                                                       total_sub)
                 for e in 𝑑neighbors(graph, iv)
                     e == ieq && continue
                     for v in 𝑠neighbors(graph, e)
