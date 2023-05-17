@@ -169,13 +169,15 @@ end
 
 "Return true if the system is a 3D multibody frame, otherwise return false."
 function isframe(sys)
-    sys.metadata isa Dict || return false
-    get(sys.metadata, :frame, false)
+    (has_metadata(sys) && (md = get_metadata(sys)) isa Dict) || return false
+    get(md, :frame, false)
 end
 
 "Return orienation object of a multibody frame."
 function ori(sys)
-    if sys.metadata isa Dict && (O = get(sys.metadata, :orientation, nothing)) !== nothing
+    @assert has_metadata(sys)
+    md = get_metadata(sys)
+    if md isa Dict && (O = get(md, :orientation, nothing)) !== nothing
         return O
     else
         error("System $(sys.name) does not have an orientation object.")

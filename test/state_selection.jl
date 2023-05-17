@@ -250,7 +250,8 @@ let
             D(dw) => ddw]
 
     # equations ------------------------------------------------------------------
-    flow(x, dp) = K1 * abs(dp) * abs(x) + K2 * sqrt(abs(dp)) * abs(x) + K3 * abs(dp) * x^2
+    # sqrt -> log as a hack
+    flow(x, dp) = K1 * abs(dp) * abs(x) + K2 * log(abs(dp)) * abs(x) + K3 * abs(dp) * x^2
     xm = xf / x_f_fullscale
     Δp1 = p_s - p1
     Δp2 = p2
