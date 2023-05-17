@@ -503,21 +503,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
         varsperm[v] = i
     end
 
-    if isempty(solved_equations)
-        deps = Vector{Int}[]
-    else
-        subgraph = substitution_graph(graph, solved_equations, solved_variables,
-                                      var_eq_matching)
-        toporder = topological_sort_by_dfs(subgraph)
-        # TODO: FIXME
-        #subeqs = subeqs[toporder]
-        # Find the dependency of solved variables. We will need this for ODAEProblem
-        invtoporder = invperm(toporder)
-        deps = [Int[invtoporder[n]
-                    for n in neighborhood(subgraph, j, Inf, dir = :in) if n != j]
-                for j in toporder]
-    end
-
+    deps = Vector{Int}[i == 1 ? Int[] : collect(1:(i - 1))
+                       for i in 1:length(solved_equations)]
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
     graph = contract_variables(graph, var_eq_matching, varsperm, eqsperm,

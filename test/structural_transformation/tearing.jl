@@ -173,7 +173,7 @@ prob.f(du, u, pr, tt)
 
 # test the initial guess is respected
 @named sys = ODESystem(eqs, t, defaults = Dict(z => Inf))
-infprob = ODAEProblem(tearing(sys), [x => 1.0], (0, 1.0), [p => 0.2])
+infprob = ODAEProblem(structural_simplify(sys), [x => 1.0], (0, 1.0), [p => 0.2])
 @test_throws DomainError infprob.f(du, u, pr, tt)
 
 sol1 = solve(prob, Tsit5())
