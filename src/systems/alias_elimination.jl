@@ -10,11 +10,13 @@ function alias_eliminate_graph!(state::TransformationState; kwargs...)
 
     @unpack graph, var_to_diff, solvable_graph = state.structure
     ag, mm, complete_ag, complete_mm = alias_eliminate_graph!(state, mm)
-    if solvable_graph !== nothing
+    s = state.structure
+    for g in (s.graph, s.solvable_graph)
+        g === nothing && continue
         for (ei, e) in enumerate(mm.nzrows)
-            set_neighbors!(solvable_graph, e, mm.row_cols[ei])
+            set_neighbors!(g, e, mm.row_cols[ei])
         end
-        update_graph_neighbors!(solvable_graph, ag)
+        update_graph_neighbors!(g, ag)
     end
 
     return ag, mm, complete_ag, complete_mm
@@ -48,15 +50,7 @@ function alias_elimination!(state::TearingState; kwargs...)
     complete!(state.structure)
     graph_orig = copy(state.structure.graph)
     ag, mm, = alias_eliminate_graph!(state; kwargs...)
-    isempty(ag) && return sys, ag
-
-    s = state.structure
-    for g in (s.graph, s.solvable_graph)
-        for (ei, e) in enumerate(mm.nzrows)
-            set_neighbors!(g, e, mm.row_cols[ei])
-        end
-        update_graph_neighbors!(g, ag)
-    end
+    isempty(ag) && return sys, ag, mm
 
     fullvars = state.fullvars
     @unpack var_to_diff, graph, solvable_graph = state.structure
@@ -114,22 +108,6 @@ function alias_elimination!(state::TearingState; kwargs...)
 
     n_new_eqs = idx
 
-    old_to_new_var = Vector{Int}(undef, ndsts(graph))
-    idx = 0
-    for i in eachindex(old_to_new_var)
-        if haskey(ag, i)
-            old_to_new_var[i] = -1
-        else
-            idx += 1
-            old_to_new_var[i] = idx
-        end
-    end
-    n_new_vars = idx
-    #for d in dels
-    #    set_neighbors!(graph, d, ())
-    #    set_neighbors!(solvable_graph, d, ())
-    #end
-
     lineqs = BitSet(mm.nzrows)
     eqs_to_update = BitSet()
     nvs_orig = ndsts(graph_orig)
@@ -151,6 +129,14 @@ function alias_elimination!(state::TearingState; kwargs...)
         eq = eqs[ieq]
         eqs[ieq] = fast_substitute(eq, subs)
     end
+    @set! mm.nparentrows = nsrcs(graph)
+    @set! mm.row_cols = eltype(mm.row_cols)[mm.row_cols[i]
+                                            for (i, eq) in enumerate(mm.nzrows)
+                                            if old_to_new_eq[eq] > 0]
+    @set! mm.row_vals = eltype(mm.row_vals)[mm.row_vals[i]
+                                            for (i, eq) in enumerate(mm.nzrows)
+                                            if old_to_new_eq[eq] > 0]
+    @set! mm.nzrows = Int[old_to_new_eq[eq] for eq in mm.nzrows if old_to_new_eq[eq] > 0]
 
     for old_ieq in to_expand
         ieq = old_to_new_eq[old_ieq]
@@ -186,38 +172,12 @@ function alias_elimination!(state::TearingState; kwargs...)
     state.structure.eq_to_diff = new_eq_to_diff
     state.structure.var_to_diff = new_var_to_diff
 
-    #=
-    new_graph = BipartiteGraph(n_new_eqs, n_new_vars)
-    new_solvable_graph = BipartiteGraph(n_new_eqs, n_new_vars)
-    new_eq_to_diff = DiffGraph(n_new_eqs)
-    eq_to_diff = state.structure.eq_to_diff
-    new_var_to_diff = DiffGraph(n_new_vars)
-    var_to_diff = state.structure.var_to_diff
-    for (i, ieq) in enumerate(old_to_new_eq)
-        ieq > 0 || continue
-        set_neighbors!(new_graph, ieq, [old_to_new_var[v] for v in 𝑠neighbors(graph, i) if old_to_new_var[v] > 0])
-        set_neighbors!(new_solvable_graph, ieq, [old_to_new_var[v] for v in 𝑠neighbors(solvable_graph, i) if old_to_new_var[v] > 0])
-        new_eq_to_diff[ieq] = eq_to_diff[i]
-    end
-    new_fullvars = Vector{Any}(undef, n_new_vars)
-    for (i, iv) in enumerate(old_to_new_var)
-        iv > 0 || continue
-        new_var_to_diff[iv] = var_to_diff[i]
-        new_fullvars[iv] = fullvars[i]
-    end
-    state.structure.graph = new_graph
-    state.structure.solvable_graph = new_solvable_graph
-    state.structure.eq_to_diff = complete(new_eq_to_diff)
-    state.structure.var_to_diff = complete(new_var_to_diff)
-    state.fullvars = new_fullvars
-    =#
-
     sys = state.sys
     @set! sys.eqs = eqs
     @set! sys.states = newstates
     @set! sys.observed = [observed(sys); obs]
     state.sys = sys
-    return invalidate_cache!(sys), ag
+    return invalidate_cache!(sys), ag, mm
 end
 
 """
