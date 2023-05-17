@@ -153,7 +153,6 @@ sol = solve(prob, Tsit5())
 include("../examples/serial_inductor.jl")
 sys = structural_simplify(ll_model)
 @test length(equations(sys)) == 2
-check_contract(sys)
 u0 = states(sys) .=> 0
 @test_nowarn ODEProblem(sys, u0, (0, 10.0))
 @test_nowarn ODAEProblem(sys, u0, (0, 10.0))

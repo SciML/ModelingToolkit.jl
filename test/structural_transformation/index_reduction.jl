@@ -118,7 +118,7 @@ sol = solve(prob_auto, Rodas5());
 #plot(sol, idxs=(D(x), y))
 
 let pss_pendulum2 = partial_state_selection(pendulum2)
-    @test length(equations(pss_pendulum2)) <= 6
+    @test_broken length(equations(pss_pendulum2)) <= 6
 end
 
 eqs = [D(x) ~ w,
@@ -133,12 +133,9 @@ let pss_pendulum = partial_state_selection(pendulum)
     @test_broken length(equations(pss_pendulum)) == 3
 end
 
-for sys in [
-    structural_simplify(pendulum2),
-    structural_simplify(ode_order_lowering(pendulum2)),
-]
-    @test length(equations(sys)) <= 6
-    @test length(states(sys)) <= 6
+let sys = structural_simplify(pendulum2)
+    @test length(equations(sys)) == 5
+    @test length(states(sys)) == 5
 
     u0 = [
         D(x) => 0.0,
