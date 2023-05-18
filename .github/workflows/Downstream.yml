@@ -29,7 +29,6 @@ jobs:
           - {user: SciML, repo: MethodOfLines.jl, group: Interface}
           - {user: SciML, repo: MethodOfLines.jl, group: 2D_Diffusion}
           - {user: SciML, repo: MethodOfLines.jl, group: DAE}
-          - {user: ai4energy, repo: Ai4EComponentLib.jl, group: Downstream}
     steps:
       - uses: actions/checkout@v3
       - uses: julia-actions/setup-julia@v1
