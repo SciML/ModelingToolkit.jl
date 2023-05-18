@@ -215,7 +215,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     end
     inputs = map(x -> time_varying_as_func(value(x), sys), inputs)
 
-    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
+    eqs = [eq for eq in full_equations(sys) if !isdifferenceeq(eq)]
     if disturbance_inputs !== nothing
         # Set all disturbance *inputs* to zero (we just want to keep the disturbance state)
         subs = Dict(disturbance_inputs .=> 0)
@@ -238,8 +238,8 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         ddvs = map(Differential(get_iv(sys)), dvs)
         args = (ddvs, args...)
     end
-    pre, sol_states = get_substitutions_and_solved_states(sys)
-    f = build_function(rhss, args...; postprocess_fbody = pre, states = sol_states,
+    process = get_postprocess_fbody(sys)
+    f = build_function(rhss, args...; postprocess_fbody = process,
                        expression = Val{false}, kwargs...)
     (; f, dvs, ps, io_sys = sys)
 end

@@ -62,10 +62,13 @@ function check_consistency(state::TransformationState, ag, orig_inputs)
     fullvars = get_fullvars(state)
     neqs = n_concrete_eqs(state)
     @unpack graph, var_to_diff = state.structure
-    n_highest_vars = count(v -> var_to_diff[v] === nothing &&
-                                    !isempty(𝑑neighbors(graph, v)) &&
-                                    (ag === nothing || !haskey(ag, v) || ag[v] != v),
-                           vertices(var_to_diff))
+    highest_vars = computed_highest_diff_variables(complete!(state.structure), ag)
+    n_highest_vars = 0
+    for (v, h) in enumerate(highest_vars)
+        h || continue
+        isempty(𝑑neighbors(graph, v)) && continue
+        n_highest_vars += 1
+    end
     is_balanced = n_highest_vars == neqs
 
     if neqs > 0 && !is_balanced

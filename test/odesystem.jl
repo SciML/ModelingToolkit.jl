@@ -941,17 +941,10 @@ let
     @named connected = ODESystem(connections)
     @named sys_con = compose(connected, sys, ctrl)
 
-    sys_alias = alias_elimination(sys_con)
-    D = Differential(t)
-    true_eqs = [0 ~ ctrl.u - sys.u
-                0 ~ D(D(sys.x)) - ctrl.u
-                0 ~ ctrl.kv * D(sys.x) + ctrl.kx * sys.x - ctrl.u]
-    @test isequal(full_equations(sys_alias), true_eqs)
-
     sys_simp = structural_simplify(sys_con)
     D = Differential(t)
-    true_eqs = [D(sys.x) ~ ctrl.v
-                D(ctrl.v) ~ ctrl.kv * ctrl.v + ctrl.kx * sys.x]
+    true_eqs = [D(sys.x) ~ sys.v
+                D(sys.v) ~ ctrl.kv * sys.v + ctrl.kx * sys.x]
     @test isequal(full_equations(sys_simp), true_eqs)
 end
 
@@ -962,13 +955,9 @@ let
     @parameters pp = -1
     der = Differential(t)
     @named sys4 = ODESystem([der(x) ~ -y; der(y) ~ 1 + pp * y + x], t)
-    as = alias_elimination(sys4)
-    @test length(equations(as)) == 1
-    @test isequal(equations(as)[1].lhs, -der(der(x)))
-    # TODO: maybe do not emit x_t
     sys4s = structural_simplify(sys4)
     prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
-    @test string.(states(prob.f.sys)) == ["x(t)", "xˍt(t)"]
+    @test string.(states(prob.f.sys)) == ["x(t)", "y(t)"]
     @test string.(parameters(prob.f.sys)) == ["pp"]
     @test string.(independent_variables(prob.f.sys)) == ["t"]
 end

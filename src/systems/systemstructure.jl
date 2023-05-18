@@ -196,6 +196,7 @@ function complete!(s::SystemStructure)
     if s.solvable_graph !== nothing
         s.solvable_graph = complete(s.solvable_graph)
     end
+    s
 end
 
 mutable struct TearingState{T <: AbstractSystem} <: AbstractTearingState{T}
@@ -416,7 +417,7 @@ using .BipartiteGraphs: Label, BipartiteAdjacencyList
 struct SystemStructurePrintMatrix <:
        AbstractMatrix{Union{Label, BipartiteAdjacencyList}}
     bpg::BipartiteGraph
-    highlight_graph::BipartiteGraph
+    highlight_graph::Union{Nothing, BipartiteGraph}
     var_to_diff::DiffGraph
     eq_to_diff::DiffGraph
     var_eq_matching::Union{Matching, Nothing}
@@ -428,6 +429,7 @@ of the provided SystemStructure.
 """
 function SystemStructurePrintMatrix(s::SystemStructure)
     return SystemStructurePrintMatrix(complete(s.graph),
+                                      s.solvable_graph === nothing ? nothing :
                                       complete(s.solvable_graph),
                                       complete(s.var_to_diff),
                                       complete(s.eq_to_diff),
@@ -600,11 +602,11 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
         ModelingToolkit.markio!(state, orig_inputs, io...)
     end
     state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
-    sys, ag = ModelingToolkit.alias_elimination!(state; kwargs...)
+    sys, ag, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
     if check_consistency
         ModelingToolkit.check_consistency(state, ag, orig_inputs)
     end
-    sys = ModelingToolkit.dummy_derivative(sys, state, ag; simplify)
+    sys = ModelingToolkit.dummy_derivative(sys, state, ag; simplify, mm)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullstates)
     ModelingToolkit.invalidate_cache!(sys), input_idxs

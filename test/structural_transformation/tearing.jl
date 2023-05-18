@@ -158,9 +158,9 @@ eqs = [D(x) ~ z * h
        0 ~ x - y
        0 ~ sin(z) + y - p * t]
 @named daesys = ODESystem(eqs, t)
-newdaesys = tearing(daesys)
-@test equations(newdaesys) == [D(x) ~ h * z; 0 ~ y + sin(z) - p * t]
-@test equations(tearing_substitution(newdaesys)) == [D(x) ~ h * z; 0 ~ x + sin(z) - p * t]
+newdaesys = structural_simplify(daesys)
+@test equations(newdaesys) == [D(x) ~ z; 0 ~ x + sin(z) - p * t]
+@test equations(tearing_substitution(newdaesys)) == [D(x) ~ z; 0 ~ x + sin(z) - p * t]
 @test isequal(states(newdaesys), [x, z])
 prob = ODAEProblem(newdaesys, [x => 1.0], (0, 1.0), [p => 0.2])
 du = [0.0];
@@ -173,7 +173,7 @@ prob.f(du, u, pr, tt)
 
 # test the initial guess is respected
 @named sys = ODESystem(eqs, t, defaults = Dict(z => Inf))
-infprob = ODAEProblem(tearing(sys), [x => 1.0], (0, 1.0), [p => 0.2])
+infprob = ODAEProblem(structural_simplify(sys), [x => 1.0], (0, 1.0), [p => 0.2])
 @test_throws DomainError infprob.f(du, u, pr, tt)
 
 sol1 = solve(prob, Tsit5())

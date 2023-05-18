@@ -70,7 +70,7 @@ sss, = SystemStructures._structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
 @test equations(sss) == [D(x) ~ u - x]
 sss, = SystemStructures._structural_simplify!(deepcopy(tss[2]), (inputs[2], ()))
 @test isempty(equations(sss))
-@test observed(sss) == [r ~ 1.0; yd ~ Sample(t, dt)(y); ud ~ kp * (r - yd)]
+@test observed(sss) == [yd ~ Sample(t, dt)(y); r ~ 1.0; ud ~ kp * (r - yd)]
 
 d = Clock(t, dt)
 # Note that TearingState reorders the equations
@@ -135,7 +135,7 @@ if VERSION >= v"1.7"
         r = 1.0
         ud = kp * (r - yd) + z
         push!(saved_values.t, integrator.t)
-        push!(saved_values.saveval, [integrator.p[4], integrator.p[3]])
+        push!(saved_values.saveval, [integrator.p[3], integrator.p[4]])
         integrator.p[2] = ud
         integrator.p[3] = z + yd
         integrator.p[4] = z_t
