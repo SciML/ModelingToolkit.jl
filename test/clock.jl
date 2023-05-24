@@ -67,7 +67,7 @@ ci, varmap = infer_clocks(sys)
 eqmap = ci.eq_domain
 tss, inputs = ModelingToolkit.split_system(deepcopy(ci))
 sss, = SystemStructures._structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
-@test equations(sss) == [D(x) ~ u - x]
+@test equations(sss) == [D(x) ~ u - y]
 sss, = SystemStructures._structural_simplify!(deepcopy(tss[2]), (inputs[2], ()))
 @test isempty(equations(sss))
 @test observed(sss) == [yd ~ Sample(t, dt)(y); r ~ 1.0; ud ~ kp * (r - yd)]

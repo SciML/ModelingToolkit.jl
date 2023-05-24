@@ -217,7 +217,7 @@ function check_diff_graph(var_to_diff, fullvars)
 end
 =#
 
-function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
+function tearing_reassemble(state::TearingState, var_eq_matching;
                             simplify = false, mm = nothing)
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
@@ -494,7 +494,6 @@ function tearing_reassemble(state::TearingState, var_eq_matching, ag = nothing;
         error("Tearing internal error: lowering DAE into semi-implicit ODE failed!")
     end
     solved_variables_set = BitSet(solved_variables)
-    ag === nothing || union!(solved_variables_set, keys(ag))
     invvarsperm = [diff_vars;
                    setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
                             solved_variables_set)]
@@ -608,7 +607,7 @@ end
 Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
-function dummy_derivative(sys, state = TearingState(sys), ag = nothing; simplify = false,
+function dummy_derivative(sys, state = TearingState(sys); simplify = false,
                           mm = nothing, kwargs...)
     jac = let state = state
         (eqs, vars) -> begin
@@ -631,7 +630,7 @@ function dummy_derivative(sys, state = TearingState(sys), ag = nothing; simplify
             p
         end
     end
-    var_eq_matching = dummy_derivative_graph!(state, jac, (ag, nothing); state_priority,
+    var_eq_matching = dummy_derivative_graph!(state, jac; state_priority,
                                               kwargs...)
-    tearing_reassemble(state, var_eq_matching, ag; simplify, mm)
+    tearing_reassemble(state, var_eq_matching; simplify, mm)
 end

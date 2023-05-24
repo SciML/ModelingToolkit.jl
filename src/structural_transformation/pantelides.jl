@@ -70,34 +70,20 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
 end
 
 """
-    computed_highest_diff_variables(var_to_diff, ag)
+    computed_highest_diff_variables(var_to_diff)
 
 Computes which variables are the "highest-differentiated" for purposes of
 pantelides. Ordinarily this is relatively straightforward. However, in our
-case, there are two complicating  conditions:
+case, there is one complicating condition:
 
- 1. We allow variables in the structure graph that don't appear in the
+    We allow variables in the structure graph that don't appear in the
     system at all. What we are interested in is the highest-differentiated
     variable that actually appears in the system.
-
- 2. We have an alias graph. The alias graph implicitly contributes an
-    alias equation, so it doesn't actually whitelist any additional variables,
-    but it may change which variable is considered the highest differentiated one.
-    Consider the following situation:
-
-    Vars: x, y
-    Eqs: 0 = f(x)
-    Alias: ẋ = ẏ
-
-    In the absence of the alias, we would consider `x` to be the highest
-    differentiated variable. However, because of the alias (and because there
-    is no alias for `x=y`), we actually need to take `ẋ` as the highest
-    differentiated variable.
 
 This function takes care of these complications are returns a boolean array
 for every variable, indicating whether it is considered "highest-differentiated".
 """
-function computed_highest_diff_variables(structure, ag::Union{AliasGraph, Nothing})
+function computed_highest_diff_variables(structure)
     @unpack graph, var_to_diff = structure
 
     nvars = length(var_to_diff)
@@ -107,56 +93,12 @@ function computed_highest_diff_variables(structure, ag::Union{AliasGraph, Nothin
             # This variable is structurally highest-differentiated, but may not actually appear in the
             # system (complication 1 above). Ascend the differentiation graph to find the highest
             # differentiated variable that does appear in the system or the alias graph).
-            while isempty(𝑑neighbors(graph, var)) && (ag === nothing || !haskey(ag, var))
+            while isempty(𝑑neighbors(graph, var))
                 var′ = invview(var_to_diff)[var]
                 var′ === nothing && break
                 var = var′
             end
-            # If we don't have an alias graph, we are done. If we do have an alias graph, we may
-            # have to keep going along the stem, for as long as our differentiation path
-            # matches that of the stem (see complication 2 above). Note that we may end up
-            # whitelisting multiple differentiation levels of the stem here from different
-            # starting points that all map to the same stem. We clean that up in a post-processing
-            # pass below.
-            if ag !== nothing && haskey(ag, var)
-                (_, stem) = ag[var]
-                stem == 0 && continue
-                # If we have a self-loop in the stem, we could have the
-                # var′ also alias to the original stem. In that case, the
-                # derivative of the stem is highest differentiated, because of the loop
-                loop_found = false
-                var′ = invview(var_to_diff)[var]
-                while var′ !== nothing
-                    if var′ == stem || (haskey(ag, var′) && ag[var′][2] == stem)
-                        dstem = var_to_diff[stem]
-                        @assert dstem !== nothing
-                        varwhitelist[dstem] = true
-                        loop_found = true
-                        break
-                    end
-                    var′ = invview(var_to_diff)[var′]
-                end
-                loop_found && continue
-                # Ascend the stem
-                while isempty(𝑑neighbors(graph, var))
-                    var′ = invview(var_to_diff)[var]
-                    var′ === nothing && break
-                    loop_found = false
-                    cvar = var′
-                    # Invariant from alias elimination: Stem is chosen to have
-                    # the highest differentiation order.
-                    stem′ = invview(var_to_diff)[stem]
-                    @assert stem′ !== nothing
-                    if !haskey(ag, var′) || (ag[var′][2] != stem′)
-                        varwhitelist[stem] = true
-                        break
-                    end
-                    stem = stem′
-                    var = var′
-                end
-            else
-                varwhitelist[var] = true
-            end
+            varwhitelist[var] = true
         end
     end
 
@@ -181,8 +123,7 @@ end
 
 Perform Pantelides algorithm.
 """
-function pantelides!(state::TransformationState, ag::Union{AliasGraph, Nothing} = nothing;
-                     finalize = true, maxiters = 8000)
+function pantelides!(state::TransformationState; finalize = true, maxiters = 8000)
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = state.structure
     neqs = nsrcs(graph)
     nvars = nv(var_to_diff)
@@ -193,7 +134,7 @@ function pantelides!(state::TransformationState, ag::Union{AliasGraph, Nothing} 
     nnonemptyeqs = count(eq -> !isempty(𝑠neighbors(graph, eq)) && eq_to_diff[eq] === nothing,
                          1:neqs′)
 
-    varwhitelist = computed_highest_diff_variables(state.structure, ag)
+    varwhitelist = computed_highest_diff_variables(state.structure)
 
     if nnonemptyeqs > count(varwhitelist)
         throw(InvalidSystemException("System is structurally singular"))

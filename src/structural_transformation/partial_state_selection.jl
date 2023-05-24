@@ -1,7 +1,6 @@
-function partial_state_selection_graph!(state::TransformationState;
-                                        ag::Union{AliasGraph, Nothing} = nothing)
+function partial_state_selection_graph!(state::TransformationState)
     find_solvables!(state; allow_symbolic = true)
-    var_eq_matching = complete(pantelides!(state, ag))
+    var_eq_matching = complete(pantelides!(state))
     complete!(state.structure)
     partial_state_selection_graph!(state.structure, var_eq_matching)
 end
@@ -150,14 +149,12 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
     var_eq_matching
 end
 
-function dummy_derivative_graph!(state::TransformationState, jac = nothing,
-                                 (ag, diff_va) = (nothing, nothing);
+function dummy_derivative_graph!(state::TransformationState, jac = nothing;
                                  state_priority = nothing, kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     complete!(state.structure)
-    var_eq_matching = complete(pantelides!(state, ag))
-    dummy_derivative_graph!(state.structure, var_eq_matching, jac, (ag, diff_va),
-                            state_priority)
+    var_eq_matching = complete(pantelides!(state))
+    dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority)
 end
 
 function compute_diff_level(diff_to_x)
@@ -178,7 +175,7 @@ function compute_diff_level(diff_to_x)
 end
 
 function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac,
-                                 (ag, diff_va), state_priority)
+                                 state_priority)
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
@@ -249,61 +246,14 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         end
     end
 
-    if diff_va !== nothing
-        # differentiated alias
-        n_dummys = length(dummy_derivatives)
-        needed = count(x -> x isa Int, diff_to_eq) - n_dummys
-        n = 0
-        for v in diff_va
-            c, a = ag[v]
-            n += 1
-            push!(dummy_derivatives, iszero(c) ? v : a)
-            needed == n && break
-            continue
-        end
-    end
-
     if (n_diff_eqs = count(!isnothing, diff_to_eq)) !=
        (n_dummys = length(dummy_derivatives))
         @warn "The number of dummy derivatives ($n_dummys) does not match the number of differentiated equations ($n_diff_eqs)."
     end
     dummy_derivatives_set = BitSet(dummy_derivatives)
 
-    irreducible_set = BitSet()
-    if ag !== nothing
-        function isreducible(x)
-            # `k` is reducible if all lower differentiated variables are.
-            isred = true
-            while isred
-                if x in dummy_derivatives_set
-                    break
-                end
-                x = diff_to_var[x]
-                x === nothing && break
-                # We deliberately do not check `isempty(𝑑neighbors(graph, x))`
-                # because when `D(x)` appears in the alias graph, and `x`
-                # doesn't appear in any equations nor in the alias graph, `D(x)`
-                # is not reducible. Consider the system `D(x) ~ 0`.
-                if !haskey(ag, x)
-                    isred = false
-                end
-            end
-            isred
-        end
-        for (k, (c, v)) in ag
-            isreducible(k) || push!(irreducible_set, k)
-            iszero(c) && continue
-            isempty(𝑑neighbors(graph, v)) || push!(irreducible_set, v)
-        end
-    end
-
-    is_not_present_non_rec = let graph = graph, irreducible_set = irreducible_set
-        v -> begin
-            not_in_eqs = isempty(𝑑neighbors(graph, v))
-            ag === nothing && return not_in_eqs
-            isirreducible = v in irreducible_set
-            return not_in_eqs && !isirreducible
-        end
+    is_not_present_non_rec = let graph = graph
+        v -> isempty(𝑑neighbors(graph, v))
     end
 
     is_not_present = let var_to_diff = var_to_diff
@@ -330,11 +280,8 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     # We can eliminate variables that are not a selected state (differential
     # variables). Selected states are differentiated variables that are not
     # dummy derivatives.
-    can_eliminate = let var_to_diff = var_to_diff, ag = ag
+    can_eliminate = let var_to_diff = var_to_diff
         v -> begin
-            if ag !== nothing
-                haskey(ag, v) && return false
-            end
             dv = var_to_diff[v]
             dv === nothing && return true
             is_some_diff(dv) || return true

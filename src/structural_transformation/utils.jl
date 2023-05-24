@@ -58,11 +58,11 @@ end
 ###
 ### Structural check
 ###
-function check_consistency(state::TransformationState, ag, orig_inputs)
+function check_consistency(state::TransformationState, orig_inputs)
     fullvars = get_fullvars(state)
     neqs = n_concrete_eqs(state)
     @unpack graph, var_to_diff = state.structure
-    highest_vars = computed_highest_diff_variables(complete!(state.structure), ag)
+    highest_vars = computed_highest_diff_variables(complete!(state.structure))
     n_highest_vars = 0
     for (v, h) in enumerate(highest_vars)
         h || continue
@@ -89,13 +89,11 @@ function check_consistency(state::TransformationState, ag, orig_inputs)
     # details, check the equation (15) of the original paper.
     extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist;
                                                         map(collect, edges(var_to_diff))])
-    extended_var_eq_matching = maximal_matching(extended_graph, eq -> true,
-                                                v -> ag === nothing || !haskey(ag, v))
+    extended_var_eq_matching = maximal_matching(extended_graph)
 
     unassigned_var = []
     for (vj, eq) in enumerate(extended_var_eq_matching)
-        if eq === unassigned && (ag === nothing || !haskey(ag, vj)) &&
-           !isempty(𝑑neighbors(graph, vj))
+        if eq === unassigned && !isempty(𝑑neighbors(graph, vj))
             push!(unassigned_var, fullvars[vj])
         end
     end
