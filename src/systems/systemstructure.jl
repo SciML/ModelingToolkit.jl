@@ -602,11 +602,11 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
         ModelingToolkit.markio!(state, orig_inputs, io...)
     end
     state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
-    sys, ag, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
+    sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
     if check_consistency
-        ModelingToolkit.check_consistency(state, ag, orig_inputs)
+        ModelingToolkit.check_consistency(state, nothing, orig_inputs)
     end
-    sys = ModelingToolkit.dummy_derivative(sys, state, ag; simplify, mm)
+    sys = ModelingToolkit.dummy_derivative(sys, state, nothing; simplify, mm)
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullstates)
     ModelingToolkit.invalidate_cache!(sys), input_idxs

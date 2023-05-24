@@ -4,22 +4,20 @@ using Graphs.Experimental.Traversals
 function alias_eliminate_graph!(state::TransformationState; kwargs...)
     mm = linear_subsys_adjmat!(state; kwargs...)
     if size(mm, 1) == 0
-        ag = AliasGraph(ndsts(state.structure.graph))
-        return ag, mm, ag, mm, BitSet() # No linear subsystems
+        return mm # No linear subsystems
     end
 
     @unpack graph, var_to_diff, solvable_graph = state.structure
-    ag, mm, complete_ag, complete_mm = alias_eliminate_graph!(state, mm)
+    mm = alias_eliminate_graph!(state, mm)
     s = state.structure
     for g in (s.graph, s.solvable_graph)
         g === nothing && continue
         for (ei, e) in enumerate(mm.nzrows)
             set_neighbors!(g, e, mm.row_cols[ei])
         end
-        update_graph_neighbors!(g, ag)
     end
 
-    return ag, mm, complete_ag, complete_mm
+    return mm
 end
 
 # For debug purposes
@@ -49,8 +47,7 @@ function alias_elimination!(state::TearingState; kwargs...)
     sys = state.sys
     complete!(state.structure)
     graph_orig = copy(state.structure.graph)
-    ag, mm, = alias_eliminate_graph!(state; kwargs...)
-    isempty(ag) && return sys, ag, mm
+    mm = alias_eliminate_graph!(state; kwargs...)
 
     fullvars = state.fullvars
     @unpack var_to_diff, graph, solvable_graph = state.structure
@@ -61,20 +58,6 @@ function alias_elimination!(state::TearingState; kwargs...)
     # D(y) appears in the equation, so that D(-D(x)) becomes -D(D(x)).
     to_expand = Int[]
     diff_to_var = invview(var_to_diff)
-    for (v, (coeff, alias)) in pairs(ag)
-        lhs = fullvars[v]
-        rhs = iszero(coeff) ? 0 : coeff * fullvars[alias]
-        subs[lhs] = rhs
-        push!(obs, lhs ~ rhs)
-        if coeff == -1
-            # if `alias` is like -D(x)
-            diff_to_var[alias] === nothing && continue
-            # if `v` is like y, and D(y) also exists
-            (dv = var_to_diff[v]) === nothing && continue
-            # all equations that contains D(y) needs to be expanded.
-            append!(to_expand, 𝑑neighbors(graph, dv))
-        end
-    end
 
     dels = Int[]
     eqs = collect(equations(state))
@@ -111,20 +94,6 @@ function alias_elimination!(state::TearingState; kwargs...)
     lineqs = BitSet(mm.nzrows)
     eqs_to_update = BitSet()
     nvs_orig = ndsts(graph_orig)
-    for k in keys(ag)
-        # We need to update `D(D(x))` when we subsitute `D(x)` as well.
-        while true
-            k > nvs_orig && break
-            for ieq in 𝑑neighbors(graph_orig, k)
-                ieq in lineqs && continue
-                new_eq = old_to_new_eq[ieq]
-                new_eq < 1 && continue
-                push!(eqs_to_update, new_eq)
-            end
-            k = var_to_diff[k]
-            k === nothing && break
-        end
-    end
     for ieq in eqs_to_update
         eq = eqs[ieq]
         eqs[ieq] = fast_substitute(eq, subs)
@@ -145,11 +114,6 @@ function alias_elimination!(state::TearingState; kwargs...)
 
     newstates = []
     diff_to_var = invview(var_to_diff)
-    for j in eachindex(fullvars)
-        if !(j in keys(ag))
-            diff_to_var[j] === nothing && push!(newstates, fullvars[j])
-        end
-    end
     new_graph = BipartiteGraph(n_new_eqs, ndsts(graph))
     new_solvable_graph = BipartiteGraph(n_new_eqs, ndsts(graph))
     new_eq_to_diff = DiffGraph(n_new_eqs)
@@ -164,7 +128,6 @@ function alias_elimination!(state::TearingState; kwargs...)
     # update DiffGraph
     new_var_to_diff = DiffGraph(length(var_to_diff))
     for v in 1:length(var_to_diff)
-        (haskey(ag, v)) && continue
         new_var_to_diff[v] = var_to_diff[v]
     end
     state.structure.graph = new_graph
@@ -174,10 +137,8 @@ function alias_elimination!(state::TearingState; kwargs...)
 
     sys = state.sys
     @set! sys.eqs = eqs
-    @set! sys.states = newstates
-    @set! sys.observed = [observed(sys); obs]
     state.sys = sys
-    return invalidate_cache!(sys), ag, mm
+    return invalidate_cache!(sys), mm
 end
 
 """
@@ -586,7 +547,8 @@ function lss(mm, ag, pivots)
     end
 end
 
-function reduce!(mm, mm_orig, ag, rank2, pivots = nothing)
+#function reduce!(mm, mm_orig, ag, rank2, pivots = nothing)
+function reduce!(ils, rank2, pivots)
     lss! = lss(mm, ag, pivots)
     # Step 2.1: Go backwards, collecting eliminated variables and substituting
     #         alias as we go.
@@ -616,20 +578,20 @@ function reduce!(mm, mm_orig, ag, rank2, pivots = nothing)
     return mm
 end
 
-function simple_aliases!(ag, graph, var_to_diff, mm_orig)
-    echelon_mm, solvable_variables, (rank1, rank2, pivots) = aag_bareiss!(graph,
-                                                                          var_to_diff,
-                                                                          mm_orig)
+function simple_aliases!(ils, graph, var_to_diff)
+    ils, solvable_variables, (rank1, rank2, pivots) = aag_bareiss!(graph,
+                                                                   var_to_diff,
+                                                                   ils)
 
-    # Step 2: Simplify the system using the Bareiss factorization
-    rk1vars = BitSet(@view pivots[1:rank1])
-    for v in solvable_variables
-        v in rk1vars && continue
-        ag[v] = 0
-    end
+    ## Step 2: Simplify the system using the Bareiss factorization
+    #rk1vars = BitSet(@view pivots[1:rank1])
+    #for v in solvable_variables
+    #    v in rk1vars && continue
+    #    ag[v] = 0
+    #end
 
-    mm = reduce!(copy(echelon_mm), mm_orig, ag, rank2, pivots)
-    return mm, echelon_mm
+    #return reduce!(ils, rank2, pivots)
+    return ils
 end
 
 function var_derivative_here!(state, processed, g, eqg, dls, diff_var)
@@ -652,26 +614,37 @@ function collect_reach!(reach₌, eqg, r, c = 1)
     end
 end
 
-function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatrixCLIL)
+function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLIL)
     @unpack graph, var_to_diff = state.structure
     # Step 1: Perform Bareiss factorization on the adjacency matrix of the linear
     #         subsystem of the system we're interested in.
     #
-    nvars = ndsts(graph)
-    ag = AliasGraph(nvars)
-    complete_ag = AliasGraph(nvars)
-    mm, echelon_mm = simple_aliases!(ag, graph, var_to_diff, mm_orig)
+    return simple_aliases!(ils, graph, var_to_diff)
 
+    #=
+    # Maybe just Pantelides?
     # Step 3: Handle differentiated variables
     # At this point, `var_to_diff` and `ag` form a tree structure like the
     # following:
     #
+    # D(z) = x
+    # D(x) = x_t
+    # D(D(z)) = z^2
+    #
+    # D(z) = x
+    # D(x) = x_t
+    # D(D(z)) = z^2
+    # eq\var D(D(z)) D(x) x_t
+    # 1
+    # 2                    1
+    # 3       1
+    # 4       1       1
     #         x   -->   D(x)
     #         ⇓          ⇑
     #         ⇓         x_t   -->   D(x_t)
-    #         ⇓               |---------------|
+    #         ⇓                |---------------|
     # z --> D(z)  --> D(D(z))  |--> D(D(D(z))) |
-    #         ⇑               |---------------|
+    #         ⇑                |---------------|
     # k --> D(k)
     #
     # where `-->` is an edge in `var_to_diff`, `⇒` is an edge in `ag`, and the
@@ -840,6 +813,12 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
         # x := 0
         # y := 0
         # ```
+        # x ~ 0
+        # D(z) ~ D(x)
+        # eq\var   D(z)   D(x)
+        # 1
+        # 2         1       1
+        # 1'                1
         for v in zero_vars
             for a in Iterators.flatten((v, outneighbors(eqg, v)))
                 while true
@@ -915,6 +894,7 @@ function alias_eliminate_graph!(state::TransformationState, mm_orig::SparseMatri
     ag = merged_ag
     mm = reduce!(copy(echelon_mm), mm_orig, ag, size(echelon_mm, 1))
     return ag, mm, complete_ag, complete_mm
+    =#
 end
 
 function update_graph_neighbors!(graph, ag)
@@ -933,14 +913,9 @@ function exactdiv(a::Integer, b)
     return d
 end
 
-function locally_structure_simplify!(adj_row, pivot_var, ag)
-    # If `pivot_var === nothing`, then we only apply `ag` to `adj_row`
-    if pivot_var === nothing
-        pivot_val = nothing
-    else
-        pivot_val = adj_row[pivot_var]
-        iszero(pivot_val) && return false
-    end
+function locally_structure_simplify!(adj_row, pivot_var)
+    pivot_val = adj_row[pivot_var]
+    iszero(pivot_val) && return false
 
     nirreducible = 0
     # When this row only as the pivot element, the pivot is zero by homogeneity
