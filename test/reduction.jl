@@ -287,23 +287,14 @@ new_sys = alias_elimination(sys)
 new_sys = alias_elimination(sys)
 @test isempty(observed(new_sys))
 
-#@variables t x(t) y(t) a(t) b(t)
-#D = Differential(t)
-#eqs = [x ~ 0
-#       D(x) ~ y
-#       a ~ b + y]
-#@named sys = ODESystem(eqs, t, [x, y, a, b], [])
-#ss = alias_elimination(sys)
-## a and b will be set to 0
-#@test isempty(equations(ss))
-#@test sort(observed(ss), by = string) == ([D(x), a, b, x, y] .~ 0)
-
 eqs = [x ~ 0
        D(x) ~ x + y]
 @named sys = ODESystem(eqs, t, [x, y], [])
 ss = structural_simplify(sys)
 @test isempty(equations(ss))
-#@test sort(observed(ss), by = string) == ([D(x), x, y] .~ 0)
+@test sort(string.(observed(ss))) == ["x(t) ~ 0.0"
+                                      "xˍt(t) ~ 0.0"
+                                      "y(t) ~ xˍt(t)"]
 
 eqs = [D(D(x)) ~ -x]
 @named sys = ODESystem(eqs, t, [x], [])
@@ -311,25 +302,3 @@ ss = alias_elimination(sys)
 @test length(equations(ss)) == length(states(ss)) == 1
 ss = structural_simplify(sys)
 @test length(equations(ss)) == length(states(ss)) == 2
-
-@variables t
-vars = @variables x(t) y(t) k(t) z(t) zₜ(t) ddx(t)
-D = Differential(t)
-eqs = [D(D(x)) ~ ddx
-       ddx ~ y
-       D(x) ~ z
-       D(z) ~ zₜ
-       D(zₜ) ~ sin(t)
-       D(x) ~ D(k)
-       D(D(D(x))) ~ sin(t)]
-@named sys = ODESystem(eqs, t, vars, [])
-state = TearingState(sys);
-ag, mm, complete_ag, complete_mm = ModelingToolkit.alias_eliminate_graph!(state)
-fullvars = state.fullvars
-aliases = []
-for (v, (c, a)) in complete_ag
-    push!(aliases, fullvars[v] => c == 0 ? 0 : c * fullvars[a])
-end
-ref_aliases = [D(k) => D(x); z => D(x); D(z) => D(D(x)); zₜ => D(D(x)); ddx => D(D(x));
-               y => D(D(x)); D(zₜ) => D(D(D(x)))]
-@test Set(aliases) == Set(ref_aliases)

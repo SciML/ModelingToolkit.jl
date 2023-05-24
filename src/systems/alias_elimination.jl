@@ -61,6 +61,7 @@ function alias_elimination!(state::TearingState; kwargs...)
 
     dels = Int[]
     eqs = collect(equations(state))
+    resize!(eqs, nsrcs(graph))
     for (ei, e) in enumerate(mm.nzrows)
         vs = 𝑠neighbors(graph, e)
         if isempty(vs)
@@ -578,17 +579,25 @@ function reduce!(ils, rank2, pivots)
     return mm
 end
 
-function simple_aliases!(ils, graph, var_to_diff)
+function simple_aliases!(ils, graph, solvable_graph, eq_to_diff, var_to_diff)
     ils, solvable_variables, (rank1, rank2, pivots) = aag_bareiss!(graph,
                                                                    var_to_diff,
                                                                    ils)
 
     ## Step 2: Simplify the system using the Bareiss factorization
-    #rk1vars = BitSet(@view pivots[1:rank1])
-    #for v in solvable_variables
-    #    v in rk1vars && continue
-    #    ag[v] = 0
-    #end
+    rk1vars = BitSet(@view pivots[1:rank1])
+    for v in solvable_variables
+        v in rk1vars && continue
+        @set! ils.nparentrows += 1
+        push!(ils.nzrows, ils.nparentrows)
+        push!(ils.row_cols, [v])
+        push!(ils.row_vals, [convert(eltype(ils), 1)])
+        add_vertex!(graph, SRC)
+        add_vertex!(solvable_graph, SRC)
+        add_edge!(graph, ils.nparentrows, v)
+        add_edge!(solvable_graph, ils.nparentrows, v)
+        add_vertex!(eq_to_diff)
+    end
 
     #return reduce!(ils, rank2, pivots)
     return ils
@@ -615,11 +624,11 @@ function collect_reach!(reach₌, eqg, r, c = 1)
 end
 
 function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLIL)
-    @unpack graph, var_to_diff = state.structure
+    @unpack graph, solvable_graph, var_to_diff, eq_to_diff = state.structure
     # Step 1: Perform Bareiss factorization on the adjacency matrix of the linear
     #         subsystem of the system we're interested in.
     #
-    return simple_aliases!(ils, graph, var_to_diff)
+    return simple_aliases!(ils, graph, solvable_graph, eq_to_diff, var_to_diff)
 
     #=
     # Maybe just Pantelides?
