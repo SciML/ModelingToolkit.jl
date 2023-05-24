@@ -93,7 +93,7 @@ function get_var(mod::Module, b)
     b isa Symbol ? getproperty(mod, b) : b
 end
 macro model(name::Symbol, expr)
-    model_macro(@__MODULE__, name, expr)
+    esc(model_macro(@__MODULE__, name, expr))
 end
 function model_macro(mod, name, expr)
     exprs = Expr(:block)
@@ -126,8 +126,12 @@ function parse_components!(exprs, dict, body)
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
             Expr(:(=), a, b) => begin
+                arg = deepcopy(arg)
+                b = deepcopy(arg.args[2])
+                push!(b.args, Expr(:kw, :name, Meta.quot(a)))
+                arg.args[2] = b
                 push!(comps, String(a) => readable_code(b))
-                push!(exprs, arg)
+                push!(exprs, @show arg)
             end
             _ => error("`@components` only takes assignment expressions. Got $arg")
         end
