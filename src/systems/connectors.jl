@@ -14,6 +14,12 @@ macro connector(name::Symbol, body)
     esc(connector_macro((@__MODULE__), name, body))
 end
 
+struct Model{F, S}
+    f::F
+    structure::S
+end
+(m::Model)(args...; kw...) = m.f(args...; kw...)
+
 using MLStyle
 function connector_macro(mod, name, body)
     if !Meta.isexpr(body, :block)
@@ -32,33 +38,55 @@ function connector_macro(mod, name, body)
     dict = Dict{Symbol, Any}()
     for arg in body.args
         arg isa LineNumberNode && continue
-        push!(vs, Num(parse_variable_def!(dict, mod, arg)))
+        push!(vs, Num(parse_variable_def!(dict, mod, arg, :variables)))
     end
     iv = get(dict, :independent_variable, nothing)
-    if iv ===  nothing
+    if iv === nothing
         error("$name doesn't have a independent variable")
     end
-    ODESystem(Equation[], iv, vs, []; name)
+    quote
+        $name = $Model((; name) -> $ODESystem($(Equation[]), $iv, $vs, $([]); name), $dict)
+    end
 end
 
-function parse_variable_def!(dict, mod, arg)
+function parse_variable_def!(dict, mod, arg, varclass)
     MLStyle.@match arg begin
-        ::Symbol => generate_var(arg)
-        Expr(:call, a, b) => generate_var!(dict, a, set_iv!(dict, b))
-        Expr(:(=), a, b) => setdefault(parse_variable_def!(dict, mod, a), parse_default(mod, b))
-        Expr(:tuple, a, b) => set_var_metadata(parse_variable_def!(dict, mod, a), parse_metadata(mod, b))
+        ::Symbol => generate_var(arg, varclass)
+        Expr(:call, a, b) => generate_var!(dict, a, set_iv!(dict, b), varclass)
+        Expr(:(=), a, b) => begin
+            var = parse_variable_def!(dict, mod, a, varclass)
+            def = parse_default(mod, b)
+            dict[varclass][getname(var)][:default] = def
+            setdefault(var, def)
+        end
+        Expr(:tuple, a, b) => begin
+            var = parse_variable_def!(dict, mod, a, varclass)
+            meta = parse_metadata(mod, b)
+            if (ct = get(meta, VariableConnectType, nothing)) !== nothing
+                dict[varclass][getname(var)][:connection_type] = nameof(ct)
+            end
+            set_var_metadata(var, meta)
+        end
         _ => error("$arg cannot be parsed")
     end
 end
 
 generate_var(a) = Symbolics.variable(a)
-function generate_var!(dict, a, b)
+function generate_var!(dict, a, b, varclass)
     iv = generate_var(b)
     prev_iv = get!(dict, :independent_variable) do
         iv
     end
     @assert isequal(iv, prev_iv)
-    Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Real}, Real})(iv)
+    vd = get!(dict, varclass) do
+        Dict{Symbol, Dict{Symbol, Any}}()
+    end
+    vd[a] = Dict{Symbol, Any}()
+    var = Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Real}, Real})(iv)
+    if varclass == :parameters
+        var = toparam(var)
+    end
+    var
 end
 function set_iv!(dict, b)
     prev_b = get!(dict, :independent_variable_name) do
@@ -78,7 +106,7 @@ function parse_default(mod, a)
 end
 function parse_metadata(mod, a)
     MLStyle.@match a begin
-        Expr(:vect, eles...) => map(Base.Fix1(parse_metadata, mod), eles)
+        Expr(:vect, eles...) => Dict(parse_metadata(mod, e) for e in eles)
         Expr(:(=), a, b) => Symbolics.option_to_metadata_type(Val(a)) => get_var(mod, b)
         _ => error("Cannot parse metadata $a")
     end
@@ -97,22 +125,29 @@ macro model(name::Symbol, expr)
 end
 function model_macro(mod, name, expr)
     exprs = Expr(:block)
+    dict = Dict{Symbol, Any}()
     for arg in expr.args
         arg isa LineNumberNode && continue
         arg.head == :macrocall || error("$arg is not valid syntax. Expected a macro call.")
-        parse_model!(exprs.args, mod, arg)
+        parse_model!(exprs.args, dict, mod, arg)
     end
-    exprs
+    iv = get(dict, :independent_variable, nothing)
+    if iv === nothing
+        error("$name doesn't have a independent variable")
+    end
+    push!(exprs.args,
+          :($ODESystem(var"#___eqs___", $iv, var"#___vs___", $([]);
+                       systems = var"#___comps___", name)))
+    :($name = $Model((; name) -> $exprs, $dict))
 end
-function parse_model!(exprs, mod, arg)
+function parse_model!(exprs, dict, mod, arg)
     mname = arg.args[1]
     vs = Num[]
-    dict = Dict{Symbol, Any}()
     body = arg.args[end]
     if mname == Symbol("@components")
         parse_components!(exprs, dict, body)
     elseif mname == Symbol("@variables")
-        parse_variables!(exprs, vs, dict, mod, body)
+        parse_variables!(exprs, vs, dict, mod, body, :variables)
     elseif mname == Symbol("@equations")
         parse_equations!(exprs, dict, body)
     else
@@ -120,31 +155,41 @@ function parse_model!(exprs, mod, arg)
     end
 end
 function parse_components!(exprs, dict, body)
+    expr = Expr(:block)
+    push!(exprs, expr)
     comps = Pair{String, String}[]
-    comp_name = Symbol("#___comp___")
+    names = Symbol[]
     for arg in body.args
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
             Expr(:(=), a, b) => begin
+                push!(names, a)
                 arg = deepcopy(arg)
                 b = deepcopy(arg.args[2])
                 push!(b.args, Expr(:kw, :name, Meta.quot(a)))
                 arg.args[2] = b
                 push!(comps, String(a) => readable_code(b))
-                push!(exprs, @show arg)
+                push!(expr.args, arg)
             end
             _ => error("`@components` only takes assignment expressions. Got $arg")
         end
     end
+    push!(expr.args, :(var"#___comps___" = [$(names...)]))
     dict[:components] = comps
 end
-function parse_variables!(exprs, vs, dict, mod, body)
+function parse_variables!(exprs, vs, dict, mod, body, varclass)
+    expr = Expr(:block)
+    push!(exprs, expr)
+    names = Symbol[]
     for arg in body.args
         arg isa LineNumberNode && continue
-        v = Num(parse_variable_def!(dict, mod, arg))
+        v = Num(parse_variable_def!(dict, mod, arg, varclass))
         push!(vs, v)
-        push!(exprs, :($(getname(v)) = $v))
+        name = getname(v)
+        push!(names, name)
+        push!(expr.args, :($name = $v))
     end
+    push!(expr.args, :(var"#___vs___" = [$(names...)]))
 end
 function parse_equations!(exprs, dict, body)
     eqs = :(Equation[])
