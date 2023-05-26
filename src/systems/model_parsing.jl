@@ -204,7 +204,7 @@ function parse_extend!(exprs, ext, dict, body)
             end
             ext[] = a
             push!(b.args, Expr(:kw, :name, Meta.quot(a)))
-            dict[:extend] = [Symbol.(vars.args), a, readable_code(b)]
+            dict[:extend] = [Symbol.(vars.args), a, b.args[1]]
             push!(expr.args, :($a = $b))
             if vars !== nothing
                 push!(expr.args, :(@unpack $vars = $a))
