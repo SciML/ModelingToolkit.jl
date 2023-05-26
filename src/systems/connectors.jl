@@ -56,7 +56,7 @@ end
 function parse_variable_def!(dict, mod, arg, varclass)
     MLStyle.@match arg begin
         ::Symbol => generate_var!(dict, arg, varclass)
-        Expr(:call, a, b) => generate_var!(dict, a, set_iv!(dict, b), varclass)
+        Expr(:call, a, b) => generate_var!(dict, a, b, varclass)
         Expr(:(=), a, b) => begin
             var = parse_variable_def!(dict, mod, a, varclass)
             def = parse_default(mod, b)
@@ -105,15 +105,6 @@ function generate_var!(dict, a, b, varclass)
         var = toparam(var)
     end
     var
-end
-function set_iv!(dict, b)
-    prev_b = get!(dict, :independent_variable_name) do
-        b
-    end
-    if prev_b != b
-        error("Conflicting independent variable $prev_b and $b")
-    end
-    b
 end
 function parse_default(mod, a)
     a = Base.remove_linenums!(deepcopy(a))
@@ -189,17 +180,17 @@ end
 function parse_components!(exprs, cs, dict, body)
     expr = Expr(:block)
     push!(exprs, expr)
-    comps = Pair{String, String}[]
+    comps = Vector{String}[]
     for arg in body.args
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
             Expr(:(=), a, b) => begin
                 push!(cs, a)
+                push!(comps, [String(a), String(b.args[1])])
                 arg = deepcopy(arg)
                 b = deepcopy(arg.args[2])
                 push!(b.args, Expr(:kw, :name, Meta.quot(a)))
                 arg.args[2] = b
-                push!(comps, String(a) => readable_code(b))
                 push!(expr.args, arg)
             end
             _ => error("`@components` only takes assignment expressions. Got $arg")
@@ -224,7 +215,7 @@ function parse_extend!(exprs, ext, dict, body)
             end
             ext[] = a
             push!(b.args, Expr(:kw, :name, Meta.quot(a)))
-            dict[:extend] = Symbol.(vars.args), a, readable_code(b)
+            dict[:extend] = [Symbol.(vars.args), a, readable_code(b)]
             push!(expr.args, :($a = $b))
             if vars !== nothing
                 push!(expr.args, :(@unpack $vars = $a))
