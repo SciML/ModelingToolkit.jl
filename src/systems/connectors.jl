@@ -45,7 +45,11 @@ function connector_macro(mod, name, body)
         error("$name doesn't have a independent variable")
     end
     quote
-        $name = $Model((; name) -> $ODESystem($(Equation[]), $iv, $vs, $([]); name), $dict)
+        $name = $Model((; name) -> begin
+                           var"#___sys___" = $ODESystem($(Equation[]), $iv, $vs, $([]);
+                                                        name)
+                           $Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))
+                       end, $dict)
     end
 end
 
@@ -79,7 +83,7 @@ function generate_var(a, varclass)
     var
 end
 function generate_var!(dict, a, varclass)
-    var = generate_var(a, :variables)
+    var = generate_var(a, varclass)
     vd = get!(dict, varclass) do
         Dict{Symbol, Dict{Symbol, Any}}()
     end
@@ -116,6 +120,7 @@ function parse_default(mod, a)
     MLStyle.@match a begin
         Expr(:block, a) => get_var(mod, a)
         ::Symbol => get_var(mod, a)
+        ::Number => a
         _ => error("Cannot parse default $a")
     end
 end
@@ -142,28 +147,35 @@ function model_macro(mod, name, expr)
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}()
     comps = Symbol[]
+    ext = Ref{Any}(nothing)
     vs = Symbol[]
     ps = Symbol[]
     eqs = Expr[]
     for arg in expr.args
         arg isa LineNumberNode && continue
         arg.head == :macrocall || error("$arg is not valid syntax. Expected a macro call.")
-        parse_model!(exprs.args, comps, eqs, vs, ps, dict, mod, arg)
+        parse_model!(exprs.args, comps, ext, eqs, vs, ps, dict, mod, arg)
     end
     iv = get(dict, :independent_variable, nothing)
     if iv === nothing
         iv = dict[:independent_variable] = variable(:t)
     end
-    push!(exprs.args,
-          :($ODESystem($Equation[$(eqs...)], $iv, [$(vs...)], [$(ps...)];
-                       systems = [$(comps...)], name)))
+    sys = :($ODESystem($Equation[$(eqs...)], $iv, [$(vs...)], [$(ps...)];
+                       systems = [$(comps...)], name))
+    if ext[] === nothing
+        push!(exprs.args, sys)
+    else
+        push!(exprs.args, :($extend($sys, $(ext[]))))
+    end
     :($name = $Model((; name) -> $exprs, $dict))
 end
-function parse_model!(exprs, comps, eqs, vs, ps, dict, mod, arg)
+function parse_model!(exprs, comps, ext, eqs, vs, ps, dict, mod, arg)
     mname = arg.args[1]
     body = arg.args[end]
     if mname == Symbol("@components")
         parse_components!(exprs, comps, dict, body)
+    elseif mname == Symbol("@extend")
+        parse_extend!(exprs, ext, dict, body)
     elseif mname == Symbol("@variables")
         parse_variables!(exprs, vs, dict, mod, body, :variables)
     elseif mname == Symbol("@parameters")
@@ -195,12 +207,39 @@ function parse_components!(exprs, cs, dict, body)
     end
     dict[:components] = comps
 end
+function parse_extend!(exprs, ext, dict, body)
+    expr = Expr(:block)
+    push!(exprs, expr)
+    body = deepcopy(body)
+    MLStyle.@match body begin
+        Expr(:(=), a, b) => begin
+            vars = nothing
+            if Meta.isexpr(b, :(=))
+                vars = a
+                if !Meta.isexpr(vars, :tuple)
+                    error("`@extend` destructuring only takes an tuple as LHS. Got $body")
+                end
+                a, b = b.args
+                vars, a, b
+            end
+            ext[] = a
+            push!(b.args, Expr(:kw, :name, Meta.quot(a)))
+            dict[:extend] = Symbol.(vars.args), a, readable_code(b)
+            push!(expr.args, :($a = $b))
+            if vars !== nothing
+                push!(expr.args, :(@unpack $vars = $a))
+            end
+        end
+        _ => error("`@extend` only takes an assignment expression. Got $body")
+    end
+end
 function parse_variables!(exprs, vs, dict, mod, body, varclass)
     expr = Expr(:block)
     push!(exprs, expr)
     for arg in body.args
         arg isa LineNumberNode && continue
-        v = Num(parse_variable_def!(dict, mod, arg, varclass))
+        vv = parse_variable_def!(dict, mod, arg, varclass)
+        v = Num(vv)
         name = getname(v)
         push!(vs, name)
         push!(expr.args, :($name = $v))
