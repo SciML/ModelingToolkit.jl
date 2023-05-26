@@ -25,6 +25,7 @@ using SafeTestsets, Test
 @safetestset "Reduction Test" begin include("reduction.jl") end
 @safetestset "ODAEProblem Test" begin include("odaeproblem.jl") end
 @safetestset "Components Test" begin include("components.jl") end
+@safetestset "Model Parsing Test" begin include("model_parsing.jl") end
 @safetestset "print_tree" begin include("print_tree.jl") end
 @safetestset "Error Handling" begin include("error_handling.jl") end
 @safetestset "StructuralTransformations" begin include("structural_transformation/runtests.jl") end
