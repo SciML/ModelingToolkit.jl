@@ -118,6 +118,7 @@ include("utils.jl")
 include("domains.jl")
 
 include("systems/abstractsystem.jl")
+include("systems/model_parsing.jl")
 include("systems/connectors.jl")
 include("systems/callbacks.jl")
 
