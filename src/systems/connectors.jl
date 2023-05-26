@@ -11,7 +11,7 @@ macro connector(expr)
 end
 
 macro connector(name::Symbol, body)
-    esc(connector_macro((@__MODULE__), name, body))
+    esc(connector_macro(__module__, name, body))
 end
 
 struct Model{F, S}
@@ -51,7 +51,7 @@ end
 
 function parse_variable_def!(dict, mod, arg, varclass)
     MLStyle.@match arg begin
-        ::Symbol => generate_var(arg, varclass)
+        ::Symbol => generate_var!(dict, arg, varclass)
         Expr(:call, a, b) => generate_var!(dict, a, set_iv!(dict, b), varclass)
         Expr(:(=), a, b) => begin
             var = parse_variable_def!(dict, mod, a, varclass)
@@ -71,9 +71,23 @@ function parse_variable_def!(dict, mod, arg, varclass)
     end
 end
 
-generate_var(a) = Symbolics.variable(a)
+function generate_var(a, varclass)
+    var = Symbolics.variable(a)
+    if varclass == :parameters
+        var = toparam(var)
+    end
+    var
+end
+function generate_var!(dict, a, varclass)
+    var = generate_var(a, :variables)
+    vd = get!(dict, varclass) do
+        Dict{Symbol, Dict{Symbol, Any}}()
+    end
+    vd[a] = Dict{Symbol, Any}()
+    var
+end
 function generate_var!(dict, a, b, varclass)
-    iv = generate_var(b)
+    iv = generate_var(b, :variables)
     prev_iv = get!(dict, :independent_variable) do
         iv
     end
@@ -101,6 +115,7 @@ function parse_default(mod, a)
     a = Base.remove_linenums!(deepcopy(a))
     MLStyle.@match a begin
         Expr(:block, a) => get_var(mod, a)
+        ::Symbol => get_var(mod, a)
         _ => error("Cannot parse default $a")
     end
 end
@@ -121,49 +136,53 @@ function get_var(mod::Module, b)
     b isa Symbol ? getproperty(mod, b) : b
 end
 macro model(name::Symbol, expr)
-    esc(model_macro(@__MODULE__, name, expr))
+    esc(model_macro(__module__, name, expr))
 end
 function model_macro(mod, name, expr)
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}()
+    comps = Symbol[]
+    vs = Symbol[]
+    ps = Symbol[]
+    eqs = Expr[]
     for arg in expr.args
         arg isa LineNumberNode && continue
         arg.head == :macrocall || error("$arg is not valid syntax. Expected a macro call.")
-        parse_model!(exprs.args, dict, mod, arg)
+        parse_model!(exprs.args, comps, eqs, vs, ps, dict, mod, arg)
     end
     iv = get(dict, :independent_variable, nothing)
     if iv === nothing
-        error("$name doesn't have a independent variable")
+        iv = dict[:independent_variable] = variable(:t)
     end
     push!(exprs.args,
-          :($ODESystem(var"#___eqs___", $iv, var"#___vs___", $([]);
-                       systems = var"#___comps___", name)))
+          :($ODESystem($Equation[$(eqs...)], $iv, [$(vs...)], [$(ps...)];
+                       systems = [$(comps...)], name)))
     :($name = $Model((; name) -> $exprs, $dict))
 end
-function parse_model!(exprs, dict, mod, arg)
+function parse_model!(exprs, comps, eqs, vs, ps, dict, mod, arg)
     mname = arg.args[1]
-    vs = Num[]
     body = arg.args[end]
     if mname == Symbol("@components")
-        parse_components!(exprs, dict, body)
+        parse_components!(exprs, comps, dict, body)
     elseif mname == Symbol("@variables")
         parse_variables!(exprs, vs, dict, mod, body, :variables)
+    elseif mname == Symbol("@parameters")
+        parse_variables!(exprs, ps, dict, mod, body, :parameters)
     elseif mname == Symbol("@equations")
-        parse_equations!(exprs, dict, body)
+        parse_equations!(exprs, eqs, dict, body)
     else
         error("$mname is not handled.")
     end
 end
-function parse_components!(exprs, dict, body)
+function parse_components!(exprs, cs, dict, body)
     expr = Expr(:block)
     push!(exprs, expr)
     comps = Pair{String, String}[]
-    names = Symbol[]
     for arg in body.args
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
             Expr(:(=), a, b) => begin
-                push!(names, a)
+                push!(cs, a)
                 arg = deepcopy(arg)
                 b = deepcopy(arg.args[2])
                 push!(b.args, Expr(:kw, :name, Meta.quot(a)))
@@ -174,32 +193,26 @@ function parse_components!(exprs, dict, body)
             _ => error("`@components` only takes assignment expressions. Got $arg")
         end
     end
-    push!(expr.args, :(var"#___comps___" = [$(names...)]))
     dict[:components] = comps
 end
 function parse_variables!(exprs, vs, dict, mod, body, varclass)
     expr = Expr(:block)
     push!(exprs, expr)
-    names = Symbol[]
     for arg in body.args
         arg isa LineNumberNode && continue
         v = Num(parse_variable_def!(dict, mod, arg, varclass))
-        push!(vs, v)
         name = getname(v)
-        push!(names, name)
+        push!(vs, name)
         push!(expr.args, :($name = $v))
     end
-    push!(expr.args, :(var"#___vs___" = [$(names...)]))
 end
-function parse_equations!(exprs, dict, body)
-    eqs = :(Equation[])
+function parse_equations!(exprs, eqs, dict, body)
     for arg in body.args
         arg isa LineNumberNode && continue
-        push!(eqs.args, arg)
+        push!(eqs, arg)
     end
     # TODO: does this work with TOML?
-    dict[:equations] = readable_code.(@view eqs.args[2:end])
-    push!(exprs, :(var"#___eqs___" = $eqs))
+    dict[:equations] = readable_code.(eqs)
 end
 
 abstract type AbstractConnectorType end
