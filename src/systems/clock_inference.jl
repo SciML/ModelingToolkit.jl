@@ -75,6 +75,11 @@ function resize_or_push!(v, val, idx)
     push!(v[idx], val)
 end
 
+function is_time_domain_conversion(v)
+    istree(v) && (o = operation(v)) isa Operator &&
+    input_timedomain(o) != output_timedomain(o)
+end
+
 function split_system(ci::ClockInference{S}) where {S}
     @unpack ts, eq_domain, var_domain, inferred = ci
     fullvars = get_fullvars(ts)
@@ -113,8 +118,7 @@ function split_system(ci::ClockInference{S}) where {S}
         @assert cid!==0 "Internal error! Variable $(fullvars[i]) doesn't have a inferred time domain."
         var_to_cid[i] = cid
         v = fullvars[i]
-        if istree(v) && (o = operation(v)) isa Operator &&
-           input_timedomain(o) != output_timedomain(o)
+        if is_time_domain_conversion(v)
             push!(input_idxs[cid], i)
             push!(inputs[cid], fullvars[i])
         end
