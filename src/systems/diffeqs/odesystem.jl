@@ -387,7 +387,7 @@ function build_explicit_observed_function(sys, ts;
               pre(Let(obsexprs,
                       isscalar ? ts[1] : MakeArray(ts, output_type),
                       false))) |> toexpr
-    expression ? ex : @RuntimeGeneratedFunction(ex)
+    expression ? ex : drop_expr(@RuntimeGeneratedFunction(ex))
 end
 
 function _eq_unordered(a, b)

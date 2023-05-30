@@ -354,7 +354,8 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         # applied user-provided function to the generated expression
         if postprocess_affect_expr! !== nothing
             postprocess_affect_expr!(rf_ip, integ)
-            (expression == Val{false}) && (return @RuntimeGeneratedFunction(rf_ip))
+            (expression == Val{false}) &&
+                (return drop_expr(@RuntimeGeneratedFunction(rf_ip)))
         end
         rf_ip
     end
