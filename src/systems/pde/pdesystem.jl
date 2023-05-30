@@ -85,55 +85,55 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
 	gui_metadata: metadata for MTK GUI.
 	"""
 	gui_metadata::Union{Nothing, GUIMetadata}
-	 @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
-                                   ps = SciMLBase.NullParameters();
-                                   defaults = Dict(),
-                                   systems = [],
-                                   connector_type = nothing,
-                                   metadata = nothing,
-                                   analytic = nothing,
-                                   analytic_func = nothing,
-                                   gui_metadata = nothing,
-                                   checks::Union{Bool, Int} = true,
-                                   name)
-        if checks == true || (checks & CheckUnits) > 0
-            all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
-        end
+	@add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
+		ps = SciMLBase.NullParameters();
+		defaults = Dict(),
+		systems = [],
+		connector_type = nothing,
+		metadata = nothing,
+		analytic = nothing,
+		analytic_func = nothing,
+		gui_metadata = nothing,
+		checks::Union{Bool, Int} = true,
+		name)
+		if checks == true || (checks & CheckUnits) > 0
+			all_dimensionless([dvs; ivs; ps]) || check_units(eqs)
+		end
 
-        eqs = eqs isa Vector ? eqs : [eqs]
+		eqs = eqs isa Vector ? eqs : [eqs]
 		bcs = bcs isa Vector ? bcs : [bcs]
 		ivs = ivs isa Vector ? ivs : [ivs]
 		dvs = dvs isa Vector ? dvs : [dvs]
-		ps = ps isa Vector ? ps : [ps]
+		ps = (ps isa Vector) | (ps isa SciMLBase.NullParameters) ? ps : [ps]
 		eqs = mapreduce(Symbolics.scalarize, vcat, eqs, init = Equation[])
 		bcs = mapreduce(Symbolics.scalarize, vcat, bcs, init = [])
 		ivs = Symbolics.scalarize(ivs)
 		dvs = Symbolics.scalarize(dvs)
 		ps = Symbolics.scalarize(ps)
-        if !isnothing(analytic)
-            analytic = analytic isa Vector ? analytic : [analytic]
-            if length(analytic) != length(dvs)
-                throw(ArgumentError("The number of analytic solutions must match the number of dependent variables"))
-            end
+		if !isnothing(analytic)
+			analytic = analytic isa Vector ? analytic : [analytic]
+			if length(analytic) != length(dvs)
+				throw(ArgumentError("The number of analytic solutions must match the number of dependent variables"))
+			end
 
-            if isnothing(analytic_func)
-                analytic_func = map(analytic) do eq
-                    args = arguments(eq.lhs)
-                    p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
-                    args = vcat(DestructuredArgs(p), args)
-                    ex = Func(args, [], eq.rhs) |> toexpr
-                    eq.lhs => @RuntimeGeneratedFunction(ex)
-                end
-            end
-        end
+			if isnothing(analytic_func)
+				analytic_func = map(analytic) do eq
+					args = arguments(eq.lhs)
+					p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
+					args = vcat(DestructuredArgs(p), args)
+					ex = Func(args, [], eq.rhs) |> toexpr
+					eq.lhs => @RuntimeGeneratedFunction(ex)
+				end
+			end
+		end
 
-        if !isnothing(analytic_func)
-            analytic_func = analytic_func isa Dict ? analytic_func : analytic_func |> Dict
-        end
+		if !isnothing(analytic_func)
+			analytic_func = analytic_func isa Dict ? analytic_func : analytic_func |> Dict
+		end
 
-        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
-            analytic_func, name, metadata, gui_metadata)
-    end
+		new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
+			analytic_func, name, metadata, gui_metadata)
+	end
 end
 
 function Base.getproperty(x::PDESystem, sym::Symbol)
