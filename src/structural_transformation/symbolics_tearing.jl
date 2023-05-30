@@ -583,10 +583,10 @@ Tear the nonlinear equations in system. When `simplify=true`, we simplify the
 new residual equations after tearing. End users are encouraged to call [`structural_simplify`](@ref)
 instead, which calls this function internally.
 """
-function tearing(sys::AbstractSystem; simplify = false)
-    state = TearingState(sys)
+function tearing(sys::AbstractSystem, state = TearingState(sys); mm = nothing,
+                 simplify = false, kwargs...)
     var_eq_matching = tearing(state)
-    invalidate_cache!(tearing_reassemble(state, var_eq_matching; simplify = simplify))
+    invalidate_cache!(tearing_reassemble(state, var_eq_matching; mm, simplify))
 end
 
 """

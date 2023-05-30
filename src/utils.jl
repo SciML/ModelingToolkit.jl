@@ -845,13 +845,14 @@ end
 
 # Symbolics needs to call unwrap on the substitution rules, but most of the time
 # we don't want to do that in MTK.
-function fast_substitute(eq::Equation, subs)
-    fast_substitute(eq.lhs, subs) ~ fast_substitute(eq.rhs, subs)
+const Eq = Union{Equation, Inequality}
+function fast_substitute(eq::T, subs) where {T <: Eq}
+    T(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs))
 end
-function fast_substitute(eq::Equation, subs::Pair)
-    fast_substitute(eq.lhs, subs) ~ fast_substitute(eq.rhs, subs)
+function fast_substitute(eq::T, subs::Pair) where {T <: Eq}
+    T(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs))
 end
-fast_substitute(eqs::AbstractArray{Equation}, subs) = fast_substitute.(eqs, (subs,))
+fast_substitute(eqs::AbstractArray{<:Eq}, subs) = fast_substitute.(eqs, (subs,))
 fast_substitute(a, b) = substitute(a, b)
 function fast_substitute(expr, pair::Pair)
     a, b = pair

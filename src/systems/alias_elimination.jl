@@ -468,10 +468,10 @@ function observed2graph(eqs, states)
 end
 
 function fixpoint_sub(x, dict)
-    y = substitute(x, dict)
+    y = fast_substitute(x, dict)
     while !isequal(x, y)
         y = x
-        x = substitute(y, dict)
+        x = fast_substitute(y, dict)
     end
 
     return x
