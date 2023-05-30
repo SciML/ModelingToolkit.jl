@@ -101,6 +101,15 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         end
 
         eqs = eqs isa Vector ? eqs : [eqs]
+		bcs = bcs isa Vector ? bcs : [bcs]
+		ivs = ivs isa Vector ? ivs : [ivs]
+		dvs = dvs isa Vector ? dvs : [dvs]
+		ps = (ps isa Vector) | (ps isa SciMLBase.NullParameters) ? ps : [ps]
+		eqs = mapreduce(Symbolics.scalarize, vcat, eqs, init = Equation[])
+		bcs = mapreduce(Symbolics.scalarize, vcat, bcs, init = [])
+		ivs = Symbolics.scalarize(ivs)
+		dvs = Symbolics.scalarize(dvs)
+		ps = Symbolics.scalarize(ps)
 
         if !isnothing(analytic)
             analytic = analytic isa Vector ? analytic : [analytic]
