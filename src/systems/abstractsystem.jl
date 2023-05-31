@@ -1373,7 +1373,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
 end
 
 function markio!(state, orig_inputs, inputs, outputs; check = true)
-    fullvars = state.fullvars
+    fullvars = get_fullvars(state)
     inputset = Dict{Any, Bool}(i => false for i in inputs)
     outputset = Dict{Any, Bool}(o => false for o in outputs)
     for (i, v) in enumerate(fullvars)

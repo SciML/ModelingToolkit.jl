@@ -77,7 +77,7 @@ end
 
 function is_time_domain_conversion(v)
     istree(v) && (o = operation(v)) isa Operator &&
-    input_timedomain(o) != output_timedomain(o)
+        input_timedomain(o) != output_timedomain(o)
 end
 
 function split_system(ci::ClockInference{S}) where {S}
@@ -160,6 +160,8 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
         for s in states(sys)
             push!(fullvars, s)
         end
+        @show needed_cont_to_disc_obs, fullvars
+        @show inputs[continuous_id]
         needed_disc_to_cont_obs = []
         disc_to_cont_idxs = Int[]
         for v in inputs[continuous_id]
