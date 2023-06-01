@@ -225,7 +225,7 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
     end
     if eval_expression
         affects = map(affect_funs) do a
-            @RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a)))
+            drop_expr(@RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a))))
         end
     else
         affects = map(a -> toexpr(LiteralExpr(a)), affect_funs)

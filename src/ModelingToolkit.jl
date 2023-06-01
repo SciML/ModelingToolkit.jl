@@ -18,6 +18,7 @@ using JumpProcesses
 using DataStructures
 using SpecialFunctions, NaNMath
 using RuntimeGeneratedFunctions
+using RuntimeGeneratedFunctions: drop_expr
 using Base.Threads
 using DiffEqCallbacks
 using Graphs

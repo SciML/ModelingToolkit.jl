@@ -227,7 +227,7 @@ function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map = [], tspan = get_
 
     f_gen = generate_function(sys; expression = Val{eval_expression},
                               expression_module = eval_module)
-    f_oop, _ = (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen)
+    f_oop, _ = (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
     f(u, p, iv) = f_oop(u, p, iv)
     fd = DiscreteFunction(f; syms = Symbol.(dvs), indepsym = Symbol(iv),
                           paramsyms = Symbol.(ps), sys = sys)
@@ -339,7 +339,8 @@ function SciMLBase.DiscreteFunction{iip, specialize}(sys::DiscreteSystem,
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
                               expression_module = eval_module, kwargs...)
     f_oop, f_iip = eval_expression ?
-                   (@RuntimeGeneratedFunction(eval_module, ex) for ex in f_gen) : f_gen
+                   (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
+                   f_gen
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
 

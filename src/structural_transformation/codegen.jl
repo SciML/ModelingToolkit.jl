@@ -219,7 +219,7 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
     end
 
     nlsolve_expr = Assignment[preassignments
-                              fname ← @RuntimeGeneratedFunction(f)
+                              fname ← drop_expr(@RuntimeGeneratedFunction(f))
                               DestructuredArgs(vars, inbounds = !checkbounds) ← solver_call]
 
     nlsolve_expr
@@ -345,7 +345,7 @@ function build_torn_function(sys;
             end
         end
 
-        ODEFunction{true, SciMLBase.AutoSpecialize}(@RuntimeGeneratedFunction(expr),
+        ODEFunction{true, SciMLBase.AutoSpecialize}(drop_expr(@RuntimeGeneratedFunction(expr)),
                                                     sparsity = jacobian_sparsity ?
                                                                torn_system_with_nlsolve_jacobian_sparsity(state,
                                                                                                           var_eq_matching,
@@ -501,7 +501,7 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
                                    isscalar ? ts[1] : MakeArray(ts, output_type),
                                    false))), sol_states)
 
-    expression ? ex : @RuntimeGeneratedFunction(ex)
+    expression ? ex : drop_expr(@RuntimeGeneratedFunction(ex))
 end
 
 """

@@ -34,7 +34,8 @@ using ModelingToolkit.SystemStructures: algeqs, EquationsView
 
 using ModelingToolkit.DiffEqBase
 using ModelingToolkit.StaticArrays
-using ModelingToolkit: @RuntimeGeneratedFunction, RuntimeGeneratedFunctions
+using RuntimeGeneratedFunctions: @RuntimeGeneratedFunction, RuntimeGeneratedFunctions,
+                                 drop_expr
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 

@@ -554,14 +554,15 @@ function merge_io(io, inputs)
 end
 
 function structural_simplify!(state::TearingState, io = nothing; simplify = false,
-                              check_consistency = true, kwargs...)
+                              check_consistency = true, fully_determined = true,
+                              kwargs...)
     if state.sys isa ODESystem
         ci = ModelingToolkit.ClockInference(state)
         ModelingToolkit.infer_clocks!(ci)
         tss, inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
         cont_io = merge_io(io, inputs[continuous_id])
         sys, input_idxs = _structural_simplify!(tss[continuous_id], cont_io; simplify,
-                                                check_consistency,
+                                                check_consistency, fully_determined,
                                                 kwargs...)
         if length(tss) > 1
             # TODO: rename it to something else
@@ -576,7 +577,7 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
                 end
                 dist_io = merge_io(io, inputs[i])
                 ss, = _structural_simplify!(state, dist_io; simplify, check_consistency,
-                                            kwargs...)
+                                            fully_determined, kwargs...)
                 append!(appended_parameters, inputs[i], states(ss))
                 discrete_subsystems[i] = ss
             end
@@ -588,14 +589,16 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
         end
     else
         sys, input_idxs = _structural_simplify!(state, io; simplify, check_consistency,
-                                                kwargs...)
+                                                fully_determined, kwargs...)
     end
     has_io = io !== nothing
     return has_io ? (sys, input_idxs) : sys
 end
 
 function _structural_simplify!(state::TearingState, io; simplify = false,
-                               check_consistency = true, kwargs...)
+                               check_consistency = true, fully_determined = true,
+                               kwargs...)
+    check_consistency &= fully_determined
     has_io = io !== nothing
     orig_inputs = Set()
     if has_io
@@ -606,7 +609,11 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     if check_consistency
         ModelingToolkit.check_consistency(state, orig_inputs)
     end
-    sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm)
+    if fully_determined
+        sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm, check_consistency)
+    else
+        sys = ModelingToolkit.tearing(sys, state; simplify, mm, check_consistency)
+    end
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullstates)
     ModelingToolkit.invalidate_cache!(sys), input_idxs
