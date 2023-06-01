@@ -846,12 +846,13 @@ end
 # Symbolics needs to call unwrap on the substitution rules, but most of the time
 # we don't want to do that in MTK.
 const Eq = Union{Equation, Inequality}
-function fast_substitute(eq::Inequality, subs)
-    Inequality(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs),
-               eq.relational_op)
-end
-function fast_substitute(eq::Equation, subs)
-    Equation(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs))
+function fast_substitute(eq::Eq, subs)
+    if eq isa Inequality
+        Inequality(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs),
+                   eq.relational_op)
+    else
+        Equation(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs))
+    end
 end
 function fast_substitute(eq::T, subs::Pair) where {T <: Eq}
     T(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs))
