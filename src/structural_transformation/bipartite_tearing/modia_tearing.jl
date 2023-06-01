@@ -75,7 +75,8 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
     @unpack graph, solvable_graph = structure
     var_eq_matching = maximal_matching(graph, eqfilter, varfilter, U)
     var_eq_matching = complete(var_eq_matching,
-                               maximum(x -> x isa Int ? x : 0, var_eq_matching))
+                               max(length(var_eq_matching),
+                                   maximum(x -> x isa Int ? x : 0, var_eq_matching)))
     var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, var_eq_matching)
     vargraph = DiCMOBiGraph{true}(graph)
     ict = IncrementalCycleTracker(vargraph; dir = :in)
