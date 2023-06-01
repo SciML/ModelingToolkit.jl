@@ -262,11 +262,11 @@ function TearingState(sys; quick_cancel = false, check = true)
     var_counter = Ref(0)
     var_types = VariableType[]
     addvar! = let fullvars = fullvars, var_counter = var_counter, var_types = var_types
-        var -> begin get!(var2idx, var) do
+        var -> get!(var2idx, var) do
             push!(fullvars, var)
             push!(var_types, getvariabletype(var))
             var_counter[] += 1
-        end end
+        end
     end
 
     vars = OrderedSet()

@@ -12,10 +12,12 @@ using ModelingToolkit, Unitful
 
 @variables(t, [unit = u"s"], x(t), [unit = u"m"], g(t), w(t), [unit = "Hz"])
 
-@variables(begin t, [unit = u"s"],
-                 x(t), [unit = u"m"],
-                 g(t),
-                 w(t), [unit = "Hz"] end)
+@variables(begin
+               t, [unit = u"s"],
+               x(t), [unit = u"m"],
+               g(t),
+               w(t), [unit = "Hz"]
+           end)
 
 # Simultaneously set default value (use plain numbers, not quantities)
 @variables x=10 [unit = u"m"]

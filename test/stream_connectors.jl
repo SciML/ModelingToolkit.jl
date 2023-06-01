@@ -25,7 +25,9 @@ end
         viscosity = V
     end
 
-    vars = @variables begin m_flow(t), [connect = Flow] end
+    vars = @variables begin
+        m_flow(t), [connect = Flow]
+    end
 
     # equations ---------------------------
     eqs = Equation[m_flow ~ 0]
@@ -41,7 +43,9 @@ function MassFlowSource_h(; name,
         m_flow_in = m_flow_in
     end
 
-    vars = @variables begin P(t) end
+    vars = @variables begin
+        P(t)
+    end
 
     @named port = TwoPhaseFluidPort()
 
@@ -324,7 +328,9 @@ end
         viscosity = V
     end
 
-    vars = @variables begin dm(t), [connect = Flow] end
+    vars = @variables begin
+        dm(t), [connect = Flow]
+    end
 
     # equations ---------------------------
     eqs = [
@@ -335,12 +341,16 @@ end
 end
 
 function StepSource(; P, name)
-    pars = @parameters begin p_int = P end
+    pars = @parameters begin
+        p_int = P
+    end
 
     vars = []
 
     # nodes -------------------------------
-    systems = @named begin H = HydraulicPort(; P = p_int) end
+    systems = @named begin
+        H = HydraulicPort(; P = p_int)
+    end
 
     # equations ---------------------------
     eqs = [
@@ -365,7 +375,9 @@ function StaticVolume(; P, V, name)
     end
 
     # nodes -------------------------------
-    systems = @named begin H = HydraulicPort(; P = p_int) end
+    systems = @named begin
+        H = HydraulicPort(; P = p_int)
+    end
 
     # fluid props ------------------------
     rho_0 = H.rho
