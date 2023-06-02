@@ -23,7 +23,7 @@ end
 
 function infer_clocks!(ci::ClockInference)
     @unpack ts, eq_domain, var_domain, inferred = ci
-    @unpack graph = ts.structure
+    @unpack var_to_diff, graph = ts.structure
     fullvars = get_fullvars(ts)
     isempty(inferred) && return ci
     # TODO: add a graph type to do this lazily
@@ -35,6 +35,11 @@ function infer_clocks!(ci::ClockInference)
             for v in vs
                 add_edge!(var_graph, fv, v)
             end
+        end
+    end
+    for v in vertices(var_to_diff)
+        if (v′ = var_to_diff[v]) !== nothing
+            add_edge!(var_graph, v, v′)
         end
     end
     cc = connected_components(var_graph)
@@ -160,8 +165,6 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
         for s in states(sys)
             push!(fullvars, s)
         end
-        @show needed_cont_to_disc_obs, fullvars
-        @show inputs[continuous_id]
         needed_disc_to_cont_obs = []
         disc_to_cont_idxs = Int[]
         for v in inputs[continuous_id]
