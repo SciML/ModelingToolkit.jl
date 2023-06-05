@@ -1,5 +1,7 @@
 using ModelingToolkit, Test
 
+ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
+
 @connector RealInput begin
     u(t), [input = true]
 end
@@ -24,6 +26,7 @@ D = Differential(t)
 @connector Pin begin
     v(t) = 0                  # Potential at the pin [V]
     i(t), [connect = Flow]    # Current flowing into the pin [A]
+    @icon "pin.png"
 end
 
 @model OnePort begin
@@ -35,6 +38,7 @@ end
         v(t)
         i(t)
     end
+    @icon "oneport.png"
     @equations begin
         v ~ p.v - n.v
         0 ~ p.i + n.i
@@ -46,15 +50,33 @@ end
     @components begin
         g = Pin()
     end
+    @icon "ground.svg"
     @equations begin
         g.v ~ 0
     end
 end
 
+resistor_log = "$(@__DIR__)/logo/resistor.svg"
 @model Resistor begin
     @extend v, i = oneport = OnePort()
     @parameters begin
         R = 1
+    end
+    @icon begin
+        """<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="30">
+  <path d="M10 15
+l15 0
+l2.5 -5
+l5 10
+l5 -10
+l5 10
+l5 -10
+l5 10
+l2.5 -5
+l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></path>
+</svg>
+"""
     end
     @equations begin
         v ~ i * R
@@ -65,6 +87,9 @@ end
     @extend v, i = oneport = OnePort()
     @parameters begin
         C = 1
+    end
+    @icon begin
+        read(joinpath(ENV["MTK_ICONS_DIR"], "capacitor.svg"), String)
     end
     @equations begin
         D(v) ~ i / C
@@ -97,4 +122,12 @@ end
     end
 end
 @named rc = RC()
+
+@test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
+      read(joinpath(ENV["MTK_ICONS_DIR"], "resistor.svg"), String)
+@test get_gui_metadata(rc.capacitor).layout ==
+      read(joinpath(ENV["MTK_ICONS_DIR"], "capacitor.svg"), String)
+@test get_gui_metadata(rc.ground).layout == joinpath(ENV["MTK_ICONS_DIR"], "ground.svg")
+@test OnePort.structure[:icon] == joinpath(ENV["MTK_ICONS_DIR"], "oneport.png")
+
 @test length(equations(structural_simplify(rc))) == 1
