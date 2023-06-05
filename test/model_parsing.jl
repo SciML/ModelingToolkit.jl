@@ -1,4 +1,6 @@
 using ModelingToolkit, Test
+using ModelingToolkit: get_gui_metadata
+using URIs: URI
 
 ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
 
@@ -50,7 +52,9 @@ end
     @components begin
         g = Pin()
     end
-    @icon "ground.svg"
+    @icon begin
+        read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
+    end
     @equations begin
         g.v ~ 0
     end
@@ -88,9 +92,7 @@ end
     @parameters begin
         C = 1
     end
-    @icon begin
-        read(joinpath(ENV["MTK_ICONS_DIR"], "capacitor.svg"), String)
-    end
+    @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
     @equations begin
         D(v) ~ i / C
     end
@@ -125,9 +127,13 @@ end
 
 @test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
       read(joinpath(ENV["MTK_ICONS_DIR"], "resistor.svg"), String)
+@test get_gui_metadata(rc.ground).layout ==
+      read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
 @test get_gui_metadata(rc.capacitor).layout ==
-      read(joinpath(ENV["MTK_ICONS_DIR"], "capacitor.svg"), String)
-@test get_gui_metadata(rc.ground).layout == joinpath(ENV["MTK_ICONS_DIR"], "ground.svg")
-@test OnePort.structure[:icon] == joinpath(ENV["MTK_ICONS_DIR"], "oneport.png")
+      URI("https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg")
+@test OnePort.structure[:icon] ==
+      URI("file:///" * abspath(ENV["MTK_ICONS_DIR"], "oneport.png"))
+@test ModelingToolkit.get_gui_metadata(rc.resistor.p).layout == Pin.structure[:icon] ==
+      URI("file:///" * abspath(ENV["MTK_ICONS_DIR"], "pin.png"))
 
 @test length(equations(structural_simplify(rc))) == 1

@@ -30,6 +30,7 @@ using Combinatorics
 import IfElse
 import Distributions
 import FunctionWrappersWrappers
+using URIs: URI
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
