@@ -22,7 +22,7 @@ u0 = [
 ns = NonlinearSystem(eqs, [x, y, z], [σ, ρ, β], name = :ns, defaults = [par; u0])
 ns.y = u * 1.1
 resolved = ModelingToolkit.varmap_to_vars(Dict(), parameters(ns),
-                                          defaults = ModelingToolkit.defaults(ns))
+    defaults = ModelingToolkit.defaults(ns))
 @test resolved == [1, 0.1 + 1, (0.1 + 1) * 1.1]
 
 prob = NonlinearProblem(ns, [u => 1.0], Pair[])
@@ -36,7 +36,7 @@ top.b = ns.σ * 0.5
 top.ns.x = u * 0.5
 
 res = ModelingToolkit.varmap_to_vars(Dict(), parameters(top),
-                                     defaults = ModelingToolkit.defaults(top))
+    defaults = ModelingToolkit.defaults(top))
 @test res == [0.5, 1, 0.1 + 1, (0.1 + 1) * 1.1]
 
 prob = NonlinearProblem(top, [states(ns, u) => 1.0, a => 1.0], [])
@@ -50,12 +50,12 @@ prob = NonlinearProblem(top, [states(ns, u) => 1.0, a => 1.0])
 
 # test initial conditions and parameters at the problem level
 pars = @parameters(begin
-                       x0
-                       t
-                   end)
+    x0
+    t
+end)
 vars = @variables(begin
-                      x(t)
-                  end)
+    x(t)
+end)
 der = Differential(t)
 eqs = [der(x) ~ x]
 @named sys = ODESystem(eqs, t, vars, [x0])

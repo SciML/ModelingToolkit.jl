@@ -60,11 +60,11 @@ has_functional_affect(cb) = affects(cb) isa FunctionalAffect
 namespace_affect(affect, s) = namespace_equation(affect, s)
 function namespace_affect(affect::FunctionalAffect, s)
     FunctionalAffect(func(affect),
-                     renamespace.((s,), states(affect)),
-                     states_syms(affect),
-                     renamespace.((s,), parameters(affect)),
-                     parameters_syms(affect),
-                     context(affect))
+        renamespace.((s,), states(affect)),
+        states_syms(affect),
+        renamespace.((s,), parameters(affect)),
+        parameters_syms(affect),
+        context(affect))
 end
 
 #################################### continuous events #####################################
@@ -129,7 +129,7 @@ namespace_affects(af::FunctionalAffect, s) = namespace_affect(af, s)
 
 function namespace_callback(cb::SymbolicContinuousCallback, s)::SymbolicContinuousCallback
     SymbolicContinuousCallback(namespace_equation.(equations(cb), (s,)),
-                               namespace_affects(affects(cb), s))
+        namespace_affects(affects(cb), s))
 end
 
 function continuous_events(sys::AbstractSystem)
@@ -138,10 +138,10 @@ function continuous_events(sys::AbstractSystem)
 
     systems = get_systems(sys)
     cbs = [obs;
-           reduce(vcat,
-                  (map(o -> namespace_callback(o, s), continuous_events(s))
-                   for s in systems),
-                  init = SymbolicContinuousCallback[])]
+        reduce(vcat,
+        (map(o -> namespace_callback(o, s), continuous_events(s))
+         for s in systems),
+        init = SymbolicContinuousCallback[])]
     filter(!isempty, cbs)
 end
 
@@ -232,9 +232,9 @@ function discrete_events(sys::AbstractSystem)
     obs = get_discrete_events(sys)
     systems = get_systems(sys)
     cbs = [obs;
-           reduce(vcat,
-                  (map(o -> namespace_callback(o, s), discrete_events(s)) for s in systems),
-                  init = SymbolicDiscreteCallback[])]
+        reduce(vcat,
+        (map(o -> namespace_callback(o, s), discrete_events(s)) for s in systems),
+        init = SymbolicDiscreteCallback[])]
     cbs
 end
 
@@ -243,14 +243,14 @@ end
 # handles ensuring that affect! functions work with integrator arguments
 function add_integrator_header(integrator = gensym(:MTKIntegrator), out = :u)
     expr -> Func([DestructuredArgs(expr.args, integrator, inds = [:u, :p, :t])], [],
-                 expr.body),
+        expr.body),
     expr -> Func([DestructuredArgs(expr.args, integrator, inds = [out, :u, :p, :t])], [],
-                 expr.body)
+        expr.body)
 end
 
 function condition_header(integrator = gensym(:MTKIntegrator))
     expr -> Func([expr.args[1], expr.args[2],
-                     DestructuredArgs(expr.args[3:end], integrator, inds = [:p])], [], expr.body)
+            DestructuredArgs(expr.args[3:end], integrator, inds = [:p])], [], expr.body)
 end
 
 """
@@ -265,7 +265,7 @@ Notes
   - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
-                           expression = Val{true}, kwargs...)
+    expression = Val{true}, kwargs...)
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
     p = map(x -> time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
@@ -276,7 +276,7 @@ function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
         condit = substitute(condit, cmap)
     end
     build_function(condit, u, t, p; expression, wrap_code = condition_header(),
-                   kwargs...)
+        kwargs...)
 end
 
 function compile_affect(cb::SymbolicContinuousCallback, args...; kwargs...)
@@ -301,8 +301,8 @@ Notes
   - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothing,
-                        expression = Val{true}, checkvars = true,
-                        postprocess_affect_expr! = nothing, kwargs...)
+    expression = Val{true}, checkvars = true,
+    postprocess_affect_expr! = nothing, kwargs...)
     if isempty(eqs)
         if expression == Val{true}
             return :((args...) -> ())
@@ -320,7 +320,7 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
             length(update_vars) == length(unique(update_vars)) == length(eqs) ||
                 error("affected variables not unique, each state can only be affected by one equation for a single `root_eqs => affects` pair.")
             alleq = all(isequal(isparameter(first(update_vars))),
-                        Iterators.map(isparameter, update_vars))
+                Iterators.map(isparameter, update_vars))
             if !isparameter(first(lhss)) && alleq
                 stateind = Dict(reverse(en) for en in enumerate(dvs))
                 update_inds = map(sym -> stateind[sym], update_vars)
@@ -347,10 +347,10 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         getexpr = (postprocess_affect_expr! === nothing) ? expression : Val{true}
         pre = get_preprocess_constants(rhss)
         rf_oop, rf_ip = build_function(rhss, u, p, t; expression = getexpr,
-                                       wrap_code = add_integrator_header(integ, outvar),
-                                       outputidxs = update_inds,
-                                       postprocess_fbody = pre,
-                                       kwargs...)
+            wrap_code = add_integrator_header(integ, outvar),
+            outputidxs = update_inds,
+            postprocess_fbody = pre,
+            kwargs...)
         # applied user-provided function to the generated expression
         if postprocess_affect_expr! !== nothing
             postprocess_affect_expr!(rf_ip, integ)
@@ -362,14 +362,14 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
 end
 
 function generate_rootfinding_callback(sys::AbstractODESystem, dvs = states(sys),
-                                       ps = parameters(sys); kwargs...)
+    ps = parameters(sys); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
     generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
 end
 
 function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states(sys),
-                                       ps = parameters(sys); kwargs...)
+    ps = parameters(sys); kwargs...)
     eqs = map(cb -> cb.eqs, cbs)
     num_eqs = length.(eqs)
     (isempty(eqs) || sum(num_eqs) == 0) && return nothing
@@ -389,7 +389,7 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states
     t = get_iv(sys)
     pre = get_preprocess_constants(rhss)
     rf_oop, rf_ip = build_function(rhss, u, p, t; expression = Val{false},
-                                   postprocess_fbody = pre, kwargs...)
+        postprocess_fbody = pre, kwargs...)
 
     affect_functions = map(cbs) do cb # Keep affect function separate
         eq_aff = affects(cb)
@@ -415,7 +415,7 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states
         # since there may be different number of conditions and affects,
         # we build a map that translates the condition eq. number to the affect number
         eq_ind2affect = reduce(vcat,
-                               [fill(i, num_eqs[i]) for i in eachindex(affect_functions)])
+            [fill(i, num_eqs[i]) for i in eachindex(affect_functions)])
         @assert length(eq_ind2affect) == length(eqs)
         @assert maximum(eq_ind2affect) == length(affect_functions)
 
@@ -454,10 +454,10 @@ function compile_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
 end
 
 function generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr! = nothing,
-                                 kwargs...)
+    kwargs...)
     cond = condition(cb)
     as = compile_affect(affects(cb), sys, dvs, ps; expression = Val{false},
-                        postprocess_affect_expr!, kwargs...)
+        postprocess_affect_expr!, kwargs...)
     if cond isa AbstractVector
         # Preset Time
         return PresetTimeCallback(cond, as)
@@ -468,20 +468,20 @@ function generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr! = no
 end
 
 function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! = nothing,
-                                    kwargs...)
+    kwargs...)
     if is_timed_condition(cb)
         return generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr!,
-                                       kwargs...)
+            kwargs...)
     else
         c = compile_condition(cb, sys, dvs, ps; expression = Val{false}, kwargs...)
         as = compile_affect(affects(cb), sys, dvs, ps; expression = Val{false},
-                            postprocess_affect_expr!, kwargs...)
+            postprocess_affect_expr!, kwargs...)
         return DiscreteCallback(c, as)
     end
 end
 
 function generate_discrete_callbacks(sys::AbstractSystem, dvs = states(sys),
-                                     ps = parameters(sys); kwargs...)
+    ps = parameters(sys); kwargs...)
     has_discrete_events(sys) || return nothing
     symcbs = discrete_events(sys)
     isempty(symcbs) && return nothing

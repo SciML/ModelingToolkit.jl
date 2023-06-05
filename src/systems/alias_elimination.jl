@@ -29,7 +29,7 @@ function aag_bareiss(sys::AbstractSystem)
 end
 
 function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true);
-                     callback = _ -> nothing) where {descend}
+    callback = _ -> nothing) where {descend}
     g = descend ? invview(var_to_diff) : var_to_diff
     callback(v)
     while (v′ = g[v]) !== nothing
@@ -102,10 +102,10 @@ function alias_elimination!(state::TearingState; kwargs...)
     @set! mm.nparentrows = nsrcs(graph)
     @set! mm.row_cols = eltype(mm.row_cols)[mm.row_cols[i]
                                             for (i, eq) in enumerate(mm.nzrows)
-                                            if old_to_new_eq[eq] > 0]
+                                                if old_to_new_eq[eq] > 0]
     @set! mm.row_vals = eltype(mm.row_vals)[mm.row_vals[i]
                                             for (i, eq) in enumerate(mm.nzrows)
-                                            if old_to_new_eq[eq] > 0]
+                                                if old_to_new_eq[eq] > 0]
     @set! mm.nzrows = Int[old_to_new_eq[eq] for eq in mm.nzrows if old_to_new_eq[eq] > 0]
 
     for old_ieq in to_expand
@@ -149,9 +149,9 @@ Find the first linear variable such that `𝑠neighbors(adj, i)[j]` is true give
 the `constraint`.
 """
 @inline function find_first_linear_variable(M::SparseMatrixCLIL,
-                                            range,
-                                            mask,
-                                            constraint)
+    range,
+    mask,
+    constraint)
     eadj = M.row_cols
     for i in range
         vertices = eadj[i]
@@ -167,9 +167,9 @@ the `constraint`.
 end
 
 @inline function find_first_linear_variable(M::AbstractMatrix,
-                                            range,
-                                            mask,
-                                            constraint)
+    range,
+    mask,
+    constraint)
     for i in range
         row = @view M[i, :]
         if constraint(count(!iszero, row))
@@ -332,7 +332,7 @@ function do_bareiss!(M, Mold, is_linear_variables)
         end
     end
     bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
-                   bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
+        bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
 
     rank2, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
     rank1 = something(rank1r[], rank2)
@@ -341,8 +341,8 @@ end
 
 function simple_aliases!(ils, graph, solvable_graph, eq_to_diff, var_to_diff)
     ils, solvable_variables, (rank1, rank2, pivots) = aag_bareiss!(graph,
-                                                                   var_to_diff,
-                                                                   ils)
+        var_to_diff,
+        ils)
 
     ## Step 2: Simplify the system using the Bareiss factorization
     rk1vars = BitSet(@view pivots[1:rank1])

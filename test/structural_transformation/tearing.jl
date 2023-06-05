@@ -51,15 +51,15 @@ find_solvables!(state)
 int2var = Dict(eachindex(fullvars) .=> fullvars)
 graph2vars(graph) = map(is -> Set(map(i -> int2var[i], is)), graph.fadjlist)
 @test graph2vars(graph) == [Set([u1, u5])
-       Set([u1, u2])
-       Set([u1, u3, u2])
-       Set([u4, u3, u2])
-       Set([u4, u1, u5])]
+    Set([u1, u2])
+    Set([u1, u3, u2])
+    Set([u4, u3, u2])
+    Set([u4, u1, u5])]
 @test graph2vars(solvable_graph) == [Set([u1])
-                                     Set([u2])
-                                     Set([u3])
-                                     Set([u4])
-                                     Set([u5])]
+    Set([u2])
+    Set([u3])
+    Set([u4])
+    Set([u5])]
 
 state = TearingState(tearing(sys))
 let sss = state.structure
@@ -104,10 +104,10 @@ let state = TearingState(sys)
     torn_matching = tearing(state)
     S = StructuralTransformations.reordered_matrix(sys, torn_matching)
     @test S == [1 0 0 0 1
-                1 1 0 0 0
-                1 1 1 0 0
-                0 1 1 1 0
-                1 0 0 1 1]
+        1 1 0 0 0
+        1 1 1 0 0
+        0 1 1 1 0
+        1 0 0 1 1]
 end
 
 # unknowns: u5
@@ -140,8 +140,8 @@ eqs = [
 @named nlsys = NonlinearSystem(eqs, [x, y, z], [])
 let (mm, _, _) = ModelingToolkit.aag_bareiss(nlsys)
     @test mm == [-1 1 0;
-                 0 -1 -1;
-                 0 0 0]
+        0 -1 -1;
+        0 0 0]
 end
 
 newsys = tearing(nlsys)
@@ -155,8 +155,8 @@ using ModelingToolkit, OrdinaryDiffEq, BenchmarkTools
 @variables x(t) y(t) z(t)
 D = Differential(t)
 eqs = [D(x) ~ z * h
-       0 ~ x - y
-       0 ~ sin(z) + y - p * t]
+    0 ~ x - y
+    0 ~ sin(z) + y - p * t]
 @named daesys = ODESystem(eqs, t)
 newdaesys = structural_simplify(daesys)
 @test equations(newdaesys) == [D(x) ~ z; 0 ~ y + sin(z) - p * t]
@@ -178,9 +178,9 @@ infprob = ODAEProblem(structural_simplify(sys), [x => 1.0], (0, 1.0), [p => 0.2]
 
 sol1 = solve(prob, Tsit5())
 sol2 = solve(ODEProblem{false}((u, p, t) -> [-asin(u[1] - pr * t)],
-                               [1.0],
-                               (0, 1.0),
-                               0.2), Tsit5(), tstops = sol1.t, adaptive = false)
+        [1.0],
+        (0, 1.0),
+        0.2), Tsit5(), tstops = sol1.t, adaptive = false)
 @test Array(sol1)≈Array(sol2) atol=1e-5
 
 @test sol1[x] == first.(sol1.u)
@@ -197,8 +197,8 @@ function Translational_Mass(; name, m = 1.0)
     ps = @parameters m = m
     D = Differential(t)
     eqs = [D(s) ~ v
-           D(v) ~ a
-           m * a ~ 0.0]
+        D(v) ~ a
+        m * a ~ 0.0]
     ODESystem(eqs, t, sts, ps; name = name)
 end
 
@@ -209,14 +209,14 @@ ms_eqs = []
 
 @named _ms_model = ODESystem(ms_eqs, t)
 @named ms_model = compose(_ms_model,
-                          [mass])
+    [mass])
 
 calculate_jacobian(ms_model)
 calculate_tgrad(ms_model)
 
 # Mass starts with velocity = 1
 u0 = [mass.s => 0.0
-      mass.v => 1.0]
+    mass.v => 1.0]
 
 sys = structural_simplify(ms_model)
 @test ModelingToolkit.get_jac(sys)[] === ModelingToolkit.EMPTY_JAC

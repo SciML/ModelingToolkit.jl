@@ -57,8 +57,8 @@ and creates the array of values in the correct order with default values when
 applicable.
 """
 function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
-                        toterm = default_toterm, promotetoconcrete = nothing,
-                        tofloat = true, use_union = false)
+    toterm = default_toterm, promotetoconcrete = nothing,
+    tofloat = true, use_union = false)
     varlist = collect(map(unwrap, varlist))
 
     # Edge cases where one of the arguments is effectively empty.
@@ -82,7 +82,7 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
     vals = if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
         varmap = todict(varmap)
         _varmap_to_vars(varmap, varlist; defaults = defaults, check = check,
-                        toterm = toterm)
+            toterm = toterm)
     else # plain array-like initialization
         varmap
     end
@@ -98,12 +98,12 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
         (vals...,)
     else
         SymbolicUtils.Code.create_array(container_type, eltype(vals), Val{1}(),
-                                        Val(length(vals)), vals...)
+            Val(length(vals)), vals...)
     end
 end
 
 function _varmap_to_vars(varmap::Dict, varlist; defaults = Dict(), check = false,
-                         toterm = Symbolics.diff2term)
+    toterm = Symbolics.diff2term)
     varmap = merge(defaults, varmap) # prefers the `varmap`
     varmap = Dict(toterm(value(k)) => value(varmap[k]) for k in keys(varmap))
     # resolve symbolic parameter expressions
@@ -128,10 +128,10 @@ Intercept the call to `process_p_u0_symbolic` and process symbolic maps of `p` a
 user has `ModelingToolkit` loaded.
 """
 function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem,
-                                                     NonlinearProblem, OptimizationProblem,
-                                                     SciMLBase.AbstractOptimizationCache},
-                                         p,
-                                         u0)
+        NonlinearProblem, OptimizationProblem,
+        SciMLBase.AbstractOptimizationCache},
+    p,
+    u0)
     # check if a symbolic remake is possible
     if eltype(p) <: Pair
         hasproperty(prob.f, :sys) && hasfield(typeof(prob.f.sys), :ps) ||
@@ -163,7 +163,7 @@ ishistory(x::Symbolic) = getmetadata(x, IsHistory, false)
 hist(x, t) = wrap(hist(unwrap(x), t))
 function hist(x::Symbolic, t)
     setmetadata(toparam(similarterm(x, operation(x), [unwrap(t)], metadata = metadata(x))),
-                IsHistory, true)
+        IsHistory, true)
 end
 
 ## Bounds ======================================================================
@@ -412,7 +412,7 @@ macro brownian(xs...)
     all(x -> x isa Symbol || Meta.isexpr(x, :call) && x.args[1] == :$, xs) ||
         error("@brownian only takes scalar expressions!")
     Symbolics._parse_vars(:brownian,
-                          Real,
-                          xs,
-                          tobrownian) |> esc
+        Real,
+        xs,
+        tobrownian) |> esc
 end

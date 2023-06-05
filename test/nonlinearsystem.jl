@@ -100,10 +100,10 @@ lorenz1 = lorenz(:lorenz1)
 @test_throws ArgumentError NonlinearProblem(lorenz1, zeros(5))
 lorenz2 = lorenz(:lorenz2)
 @named connected = NonlinearSystem([s ~ a + lorenz1.x
-                                    lorenz2.y ~ s * h
-                                    lorenz1.F ~ lorenz2.u
-                                    lorenz2.F ~ lorenz1.u], [s, a], [],
-                                   systems = [lorenz1, lorenz2])
+        lorenz2.y ~ s * h
+        lorenz1.F ~ lorenz2.u
+        lorenz2.F ~ lorenz1.u], [s, a], [],
+    systems = [lorenz1, lorenz2])
 @test_nowarn alias_elimination(connected)
 
 # system promotion
@@ -143,7 +143,7 @@ np = NonlinearProblem(ns, [0, 0, 0], [1, 2, 3], jac = true, sparse = true)
         sys1 = makesys(:sys1)
         sys2 = makesys(:sys1)
         @test_throws ArgumentError NonlinearSystem([sys2.f ~ sys1.x, sys1.f ~ 0], [], [],
-                                                   systems = [sys1, sys2], name = :foo)
+            systems = [sys1, sys2], name = :foo)
     end
     issue819()
 end
@@ -164,7 +164,7 @@ end
     @named sys3 = extend(sys1, sys2)
 
     @test isequal(union(Set(parameters(sys1)), Set(parameters(sys2))),
-                  Set(parameters(sys3)))
+        Set(parameters(sys3)))
     @test isequal(union(Set(states(sys1)), Set(states(sys2))), Set(states(sys3)))
     @test isequal(union(Set(equations(sys1)), Set(equations(sys2))), Set(equations(sys3)))
 end
@@ -173,7 +173,7 @@ end
 @variables t x(t) RHS(t)
 @parameters τ
 @named fol = NonlinearSystem([0 ~ (1 - x * h) / τ], [x], [τ];
-                             observed = [RHS ~ (1 - x) / τ])
+    observed = [RHS ~ (1 - x) / τ])
 @test isequal(RHS, @nonamespace fol.RHS)
 RHS2 = RHS
 @unpack RHS = fol
@@ -183,9 +183,9 @@ RHS2 = RHS
 @variables t
 @variables v1(t) v2(t) i1(t) i2(t)
 eq = [v1 ~ sin(2pi * t * h)
-      v1 - v2 ~ i1
-      v2 ~ i2
-      i1 ~ i2]
+    v1 - v2 ~ i1
+    v2 ~ i2
+    i1 ~ i2]
 @named sys = ODESystem(eq)
 @test length(equations(structural_simplify(sys))) == 0
 

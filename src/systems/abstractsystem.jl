@@ -157,7 +157,7 @@ Base.nameof(sys::AbstractSystem) = getfield(sys, :name)
 #Deprecated
 function independent_variable(sys::AbstractSystem)
     Base.depwarn("`independent_variable` is deprecated. Use `get_iv` or `independent_variables` instead.",
-                 :independent_variable)
+        :independent_variable)
     isdefined(sys, :iv) ? getfield(sys, :iv) : nothing
 end
 
@@ -195,41 +195,41 @@ function complete(sys::AbstractSystem)
 end
 
 for prop in [:eqs
-             :tag
-             :noiseeqs
-             :iv
-             :states
-             :ps
-             :tspan
-             :var_to_name
-             :ctrls
-             :defaults
-             :observed
-             :tgrad
-             :jac
-             :ctrl_jac
-             :Wfact
-             :Wfact_t
-             :systems
-             :structure
-             :op
-             :constraints
-             :controls
-             :loss
-             :bcs
-             :domain
-             :ivs
-             :dvs
-             :connector_type
-             :connections
-             :preface
-             :torn_matching
-             :tearing_state
-             :substitutions
-             :metadata
-             :gui_metadata
-             :discrete_subsystems
-             :unknown_states]
+    :tag
+    :noiseeqs
+    :iv
+    :states
+    :ps
+    :tspan
+    :var_to_name
+    :ctrls
+    :defaults
+    :observed
+    :tgrad
+    :jac
+    :ctrl_jac
+    :Wfact
+    :Wfact_t
+    :systems
+    :structure
+    :op
+    :constraints
+    :controls
+    :loss
+    :bcs
+    :domain
+    :ivs
+    :dvs
+    :connector_type
+    :connections
+    :preface
+    :torn_matching
+    :tearing_state
+    :substitutions
+    :metadata
+    :gui_metadata
+    :discrete_subsystems
+    :unknown_states]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin
@@ -275,8 +275,8 @@ end
         end
         kwarg = :($(Expr(:kw, :checks, false))) # Inputs should already be checked
         return Expr(:block,
-                    Expr(:meta, :inline),
-                    Expr(:call, :(constructorof($obj)), args..., kwarg))
+            Expr(:meta, :inline),
+            Expr(:call, :(constructorof($obj)), args..., kwarg))
     else
         error("This should never happen. Trying to set $(typeof(obj)) with $patch.")
     end
@@ -312,7 +312,7 @@ function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
     systems = get_systems(sys)
     if isdefined(sys, name)
         Base.depwarn("`sys.name` like `sys.$name` is deprecated. Use getters like `get_$name` instead.",
-                     "sys.$name")
+            "sys.$name")
         return getfield(sys, name)
     elseif !isempty(systems)
         i = findfirst(x -> nameof(x) == name, systems)
@@ -362,12 +362,12 @@ function Base.setproperty!(sys::AbstractSystem, prop::Symbol, val)
     # We use this weird syntax because `parameters` and `states` calls are
     # potentially expensive.
     if (params = parameters(sys);
-        idx = findfirst(s -> getname(s) == prop, params);
-        idx !== nothing)
+    idx = findfirst(s -> getname(s) == prop, params);
+    idx !== nothing)
         get_defaults(sys)[params[idx]] = value(val)
     elseif (sts = states(sys);
-            idx = findfirst(s -> getname(s) == prop, sts);
-            idx !== nothing)
+    idx = findfirst(s -> getname(s) == prop, sts);
+    idx !== nothing)
         get_defaults(sys)[sts[idx]] = value(val)
     else
         setfield!(sys, prop, val)
@@ -382,8 +382,8 @@ function _apply_to_variables(f::F, ex) where {F}
     end
     istree(ex) || return ex
     similarterm(ex, _apply_to_variables(f, operation(ex)),
-                map(Base.Fix1(_apply_to_variables, f), arguments(ex)),
-                metadata = metadata(ex))
+        map(Base.Fix1(_apply_to_variables, f), arguments(ex)),
+        metadata = metadata(ex))
 end
 
 abstract type SymScope end
@@ -401,7 +401,7 @@ end
 function ParentScope(sym::Union{Num, Symbolic})
     apply_to_variables(sym) do sym
         setmetadata(sym, SymScope,
-                    ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+            ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
     end
 end
 
@@ -412,7 +412,7 @@ end
 function DelayParentScope(sym::Union{Num, Symbolic}, N)
     apply_to_variables(sym) do sym
         setmetadata(sym, SymScope,
-                    DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
+            DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
     end
 end
 DelayParentScope(sym::Union{Num, Symbolic}) = DelayParentScope(sym, 1)
@@ -434,7 +434,7 @@ function renamespace(sys, x)
         T = typeof(x)
         if istree(x) && operation(x) isa Operator
             return similarterm(x, operation(x),
-                               Any[renamespace(sys, only(arguments(x)))])::T
+                Any[renamespace(sys, only(arguments(x)))])::T
         end
         let scope = getmetadata(x, SymScope, LocalScope())
             if scope isa LocalScope
@@ -444,7 +444,7 @@ function renamespace(sys, x)
             elseif scope isa DelayParentScope
                 if scope.N > 0
                     x = setmetadata(x, SymScope,
-                                    DelayParentScope(scope.parent, scope.N - 1))
+                        DelayParentScope(scope.parent, scope.N - 1))
                     rename(x, renamespace(getname(sys), getname(x)))::T
                 else
                     #rename(x, renamespace(getname(sys), getname(x)))
@@ -539,9 +539,9 @@ function observed(sys::AbstractSystem)
     obs = get_observed(sys)
     systems = get_systems(sys)
     [obs;
-     reduce(vcat,
-            (map(o -> namespace_equation(o, s), observed(s)) for s in systems),
-            init = Equation[])]
+        reduce(vcat,
+        (map(o -> namespace_equation(o, s), observed(s)) for s in systems),
+        init = Equation[])]
 end
 
 Base.@deprecate default_u0(x) defaults(x) false
@@ -575,9 +575,9 @@ function equations(sys::AbstractSystem)
         return eqs
     else
         eqs = Equation[eqs;
-                       reduce(vcat,
-                              namespace_equations.(get_systems(sys));
-                              init = Equation[])]
+            reduce(vcat,
+            namespace_equations.(get_systems(sys));
+            init = Equation[])]
         return eqs
     end
 end
@@ -715,7 +715,7 @@ function round_trip_eq(eq::Equation, var2name)
         call
     else
         Expr(:call, (~), round_trip_expr(eq.lhs, var2name),
-             round_trip_expr(eq.rhs, var2name))
+            round_trip_expr(eq.rhs, var2name))
     end
 end
 
@@ -781,12 +781,12 @@ function toexpr(sys::AbstractSystem)
         ivname = gensym(:iv)
         push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
         push!(stmt,
-              :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name,
-                           name = $name, checks = false)))
+            :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name,
+                name = $name, checks = false)))
     elseif sys isa NonlinearSystem
         push!(stmt,
-              :($NonlinearSystem($eqs_name, $stsname, $psname; defaults = $defs_name,
-                                 name = $name, checks = false)))
+            :($NonlinearSystem($eqs_name, $stsname, $psname; defaults = $defs_name,
+                name = $name, checks = false)))
     end
 
     striplines(expr) # keeping the line numbers is never helpful
@@ -872,7 +872,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
             if val !== nothing
                 print(io, " [defaults to ")
                 show(IOContext(io, :compact => true, :limit => true,
-                               :displaysize => (1, displaysize(io)[2])), val)
+                        :displaysize => (1, displaysize(io)[2])), val)
                 print(io, "]")
             end
             description = getdescription(s)
@@ -898,7 +898,7 @@ function Base.show(io::IO, mime::MIME"text/plain", sys::AbstractSystem)
             if val !== nothing
                 print(io, " [defaults to ")
                 show(IOContext(io, :compact => true, :limit => true,
-                               :displaysize => (1, displaysize(io)[2])), val)
+                        :displaysize => (1, displaysize(io)[2])), val)
                 print(io, "]")
             end
             description = getdescription(s)
@@ -1073,7 +1073,7 @@ function default_to_parentscope(v)
     apply_to_variables(v) do sym
         if !hasmetadata(uv, SymScope)
             setmetadata(sym, SymScope,
-                        ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
+                ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
         else
             sym
         end
@@ -1199,7 +1199,7 @@ function eliminate_constants(sys::AbstractSystem)
 end
 
 function io_preprocessing(sys::AbstractSystem, inputs,
-                          outputs; simplify = false, kwargs...)
+    outputs; simplify = false, kwargs...)
     sys, input_idxs = structural_simplify(sys, (inputs, outputs); simplify, kwargs...)
 
     eqs = equations(sys)
@@ -1243,10 +1243,10 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
 function linearization_function(sys::AbstractSystem, inputs,
-                                outputs; simplify = false,
-                                kwargs...)
+    outputs; simplify = false,
+    kwargs...)
     sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
-                                                             kwargs...)
+        kwargs...)
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
@@ -1262,8 +1262,8 @@ function linearization_function(sys::AbstractSystem, inputs,
                 uf = SciMLBase.UJacobianWrapper(fun, t, p)
                 fg_xz = ForwardDiff.jacobian(uf, u)
                 h_xz = ForwardDiff.jacobian(let p = p, t = t
-                                                xz -> h(xz, p, t)
-                                            end, u)
+                        xz -> h(xz, p, t)
+                    end, u)
                 pf = SciMLBase.ParamJacobianWrapper(fun, t, u)
                 fg_u = jacobian_wrt_vars(pf, p, input_idxs, chunk)
             else
@@ -1277,14 +1277,14 @@ function linearization_function(sys::AbstractSystem, inputs,
             end
             h_u = jacobian_wrt_vars(hp, p, input_idxs, chunk)
             (f_x = fg_xz[diff_idxs, diff_idxs],
-             f_z = fg_xz[diff_idxs, alge_idxs],
-             g_x = fg_xz[alge_idxs, diff_idxs],
-             g_z = fg_xz[alge_idxs, alge_idxs],
-             f_u = fg_u[diff_idxs, :],
-             g_u = fg_u[alge_idxs, :],
-             h_x = h_xz[:, diff_idxs],
-             h_z = h_xz[:, alge_idxs],
-             h_u = h_u)
+                f_z = fg_xz[diff_idxs, alge_idxs],
+                g_x = fg_xz[alge_idxs, diff_idxs],
+                g_z = fg_xz[alge_idxs, alge_idxs],
+                f_u = fg_u[diff_idxs, :],
+                g_u = fg_u[alge_idxs, :],
+                h_x = h_xz[:, diff_idxs],
+                h_z = h_xz[:, alge_idxs],
+                h_u = h_u)
         end
     end
     return lin_fun, sys
@@ -1309,10 +1309,10 @@ y &= h(x, z, u)
 where `x` are differential state variables, `z` algebraic variables, `u` inputs and `y` outputs.
 """
 function linearize_symbolic(sys::AbstractSystem, inputs,
-                            outputs; simplify = false, allow_input_derivatives = false,
-                            kwargs...)
+    outputs; simplify = false, allow_input_derivatives = false,
+    kwargs...)
     sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
-                                                             kwargs...)
+        kwargs...)
     sts = states(sys)
     t = get_iv(sys)
     p = parameters(sys)
@@ -1352,9 +1352,9 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
             error("g_z not invertible, this indicates that the DAE is of index > 1.")
         gzgx = -(gz \ g_x)
         A = [f_x f_z
-             gzgx*f_x gzgx*f_z]
+            gzgx*f_x gzgx*f_z]
         B = [f_u
-             gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
+            gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
 
         C = [h_x h_z]
         Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
@@ -1397,12 +1397,12 @@ function markio!(state, orig_inputs, inputs, outputs; check = true)
         ikeys = keys(filter(!last, inputset))
         if !isempty(ikeys)
             error("Some specified inputs were not found in system. The following variables were not found ",
-                  ikeys)
+                ikeys)
         end
     end
     check && (all(values(outputset)) ||
      error("Some specified outputs were not found in system. The following Dict indicates the found variables ",
-           outputset))
+        outputset))
     state, orig_inputs
 end
 
@@ -1506,7 +1506,7 @@ lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 ```
 """
 function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives = false,
-                   p = DiffEqBase.NullParameters())
+    p = DiffEqBase.NullParameters())
     x0 = merge(defaults(sys), op)
     u0, p2, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
 
@@ -1532,9 +1532,9 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
             error("g_z not invertible, this indicates that the DAE is of index > 1.")
         gzgx = -(gz \ g_x)
         A = [f_x f_z
-             gzgx*f_x gzgx*f_z]
+            gzgx*f_x gzgx*f_z]
         B = [f_u
-             gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
+            gzgx * f_u] # The cited paper has zeros in the bottom block, see derivation in https://github.com/SciML/ModelingToolkit.jl/pull/1691 for the correct formula
 
         C = [h_x h_z]
         Bs = -(gz \ g_u) # This equation differ from the cited paper, the paper is likely wrong since their equaiton leads to a dimension mismatch.
@@ -1552,9 +1552,9 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
 end
 
 function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
-                   allow_input_derivatives = false,
-                   zero_dummy_der = false,
-                   kwargs...)
+    allow_input_derivatives = false,
+    zero_dummy_der = false,
+    kwargs...)
     lin_fun, ssys = linearization_function(sys, inputs, outputs; kwargs...)
     if zero_dummy_der
         dummyder = setdiff(states(ssys), states(sys))
@@ -1724,10 +1724,10 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
 
     if length(ivs) == 0
         T(eqs, sts, ps, observed = obs, defaults = defs, name = name, systems = syss,
-          continuous_events = cevs, discrete_events = devs)
+            continuous_events = cevs, discrete_events = devs)
     elseif length(ivs) == 1
         T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name,
-          systems = syss, continuous_events = cevs, discrete_events = devs)
+            systems = syss, continuous_events = cevs, discrete_events = devs)
     end
 end
 

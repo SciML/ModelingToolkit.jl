@@ -12,7 +12,7 @@ function brusselator_2d_loop(du, u, p, t)
         i, j = Tuple(I)
         x, y = xyd_brusselator[I[1]], xyd_brusselator[I[2]]
         ip1, im1, jp1, jm1 = limit(i + 1, N), limit(i - 1, N), limit(j + 1, N),
-                             limit(j - 1, N)
+        limit(j - 1, N)
         du[i, j, 1] = alpha * (u[im1, j, 1] + u[ip1, j, 1] + u[i, jp1, 1] + u[i, jm1, 1] -
                        4u[i, j, 1]) +
                       B + u[i, j, 1]^2 * u[i, j, 2] - (A + 1) * u[i, j, 1] +
@@ -41,7 +41,7 @@ u0 = init_brusselator_2d(xyd_brusselator)
 
 # Test with 3-tensor inputs
 prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
-                                     u0, (0.0, 11.5), p)
+    u0, (0.0, 11.5), p)
 
 modelingtoolkitize(prob_ode_brusselator_2d)
 
@@ -76,9 +76,9 @@ i₀ = 0.075 # fraction of initial infected people in every age class
 
 ## regional contact matrix
 regional_all_contact_matrix = [3.45536 0.485314 0.506389 0.123002;
-                               0.597721 2.11738 0.911374 0.323385;
-                               0.906231 1.35041 1.60756 0.67411;
-                               0.237902 0.432631 0.726488 0.979258] # 4x4 contact matrix
+    0.597721 2.11738 0.911374 0.323385;
+    0.906231 1.35041 1.60756 0.67411;
+    0.237902 0.432631 0.726488 0.979258] # 4x4 contact matrix
 
 ## regional population stratified by age
 N = [723208, 874150, 1330993, 1411928] # array of 4 elements, each of which representing the absolute amount of population in the corresponding age class.
