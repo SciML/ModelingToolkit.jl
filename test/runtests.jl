@@ -37,14 +37,18 @@ using SafeTestsets, Test
 @safetestset "Depdendency Graph Test" include("dep_graphs.jl")
 @safetestset "Function Registration Test" include("function_registration.jl")
 @safetestset "Precompiled Modules Test" include("precompile_test.jl")
-@testset "Distributed Test" include("distributed.jl")
+@testset "Distributed Test" begin
+    include("distributed.jl")
+end
 @safetestset "Variable Utils Test" include("variable_utils.jl")
 @safetestset "Variable Metadata Test" include("test_variable_metadata.jl")
 @safetestset "DAE Jacobians Test" include("dae_jacobian.jl")
 @safetestset "Jacobian Sparsity" include("jacobiansparsity.jl")
 println("Last test requires gcc available in the path!")
 @safetestset "C Compilation Test" include("ccompile.jl")
-@testset "Serialization" include("serialization.jl")
+@testset "Serialization" begin
+    include("serialization.jl")
+end
 @safetestset "Modelingtoolkitize Test" include("modelingtoolkitize.jl")
 @safetestset "OptimizationSystem Test" include("optimizationsystem.jl")
 @safetestset "FuncAffect Test" include("funcaffect.jl")
