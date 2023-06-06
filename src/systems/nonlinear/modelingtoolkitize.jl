@@ -39,9 +39,9 @@ function modelingtoolkitize(prob::NonlinearProblem; kwargs...)
     default_p = has_p ? Dict(params .=> vec(collect(prob.p))) : Dict()
 
     de = NonlinearSystem(eqs, sts, params,
-                         defaults = merge(default_u0, default_p);
-                         name = gensym(:MTKizedNonlinProb),
-                         kwargs...)
+        defaults = merge(default_u0, default_p);
+        name = gensym(:MTKizedNonlinProb),
+        kwargs...)
 
     de
 end

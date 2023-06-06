@@ -94,7 +94,7 @@ function full_equations(sys::AbstractSystem; simplify = false)
     neweqs = map(equations(sys)) do eq
         if istree(eq.lhs) && operation(eq.lhs) isa Union{Shift, Differential}
             return tearing_sub(eq.lhs, solved, simplify) ~ tearing_sub(eq.rhs, solved,
-                                                                       simplify)
+                simplify)
         else
             if !(eq.lhs isa Number && eq.lhs == 0)
                 eq = 0 ~ eq.rhs - eq.lhs
@@ -138,7 +138,7 @@ function solve_equation(eq, var, simplify)
 end
 
 function substitute_vars!(structure, subs, cache = Int[], callback! = nothing;
-                          exclude = ())
+    exclude = ())
     @unpack graph, solvable_graph = structure
     for su in subs
         su === nothing && continue
@@ -163,7 +163,7 @@ function substitute_vars!(structure, subs, cache = Int[], callback! = nothing;
 end
 
 function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F,
-                             var_to_diff) where {F}
+    var_to_diff) where {F}
     eq = neweqs[ieq]
     if !(eq.lhs isa Number && eq.lhs == 0)
         eq = 0 ~ eq.rhs - eq.lhs
@@ -218,7 +218,7 @@ end
 =#
 
 function tearing_reassemble(state::TearingState, var_eq_matching;
-                            simplify = false, mm = nothing)
+    simplify = false, mm = nothing)
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
 
@@ -373,7 +373,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
             if length(nzs) == 2 &&
                (abs(nzs[1]) == 1 && nzs[1] == -nzs[2]) &&
                (v_t = rvs[1] == dv ? rvs[2] : rvs[1];
-                diff_to_var[v_t] === nothing)
+               diff_to_var[v_t] === nothing)
                 @assert dv in rvs
                 dummy_eq = eq
                 @goto FOUND_DUMMY_EQ
@@ -439,8 +439,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
                 order, lv = var_order(iv)
                 dx = D(lower_varname(fullvars[lv], idep, order - 1))
                 eq = dx ~ ModelingToolkit.fixpoint_sub(Symbolics.solve_for(neweqs[ieq],
-                                                                           fullvars[iv]),
-                                                       total_sub)
+                        fullvars[iv]),
+                    total_sub)
                 for e in 𝑑neighbors(graph, iv)
                     e == ieq && continue
                     for v in 𝑠neighbors(graph, e)
@@ -467,7 +467,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
                 rhs = -b / a
                 neweq = var ~ ModelingToolkit.fixpoint_sub(simplify ?
                                                            Symbolics.simplify(rhs) : rhs,
-                                                           total_sub)
+                    total_sub)
                 push!(subeqs, neweq)
                 push!(solved_equations, ieq)
                 push!(solved_variables, iv)
@@ -495,8 +495,8 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     end
     solved_variables_set = BitSet(solved_variables)
     invvarsperm = [diff_vars;
-                   setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
-                            solved_variables_set)]
+        setdiff!(setdiff(1:ndsts(graph), diff_vars_set),
+        solved_variables_set)]
     varsperm = zeros(Int, ndsts(graph))
     for (i, v) in enumerate(invvarsperm)
         varsperm[v] = i
@@ -507,7 +507,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     # Contract the vertices in the structure graph to make the structure match
     # the new reality of the system we've just created.
     graph = contract_variables(graph, var_eq_matching, varsperm, eqsperm,
-                               length(solved_variables), length(solved_variables_set))
+        length(solved_variables), length(solved_variables_set))
 
     # Update system
     new_var_to_diff = complete(DiffGraph(length(invvarsperm)))
@@ -542,7 +542,7 @@ function tearing_reassemble(state::TearingState, var_eq_matching;
     @set! sys.eqs = neweqs
     @set! sys.states = Any[v
                            for (i, v) in enumerate(fullvars)
-                           if diff_to_var[i] === nothing && ispresent(i)]
+                               if diff_to_var[i] === nothing && ispresent(i)]
     @set! sys.substitutions = Substitutions(subeqs, deps)
 
     obs_sub = dummy_sub
@@ -565,8 +565,8 @@ function tearing(state::TearingState; kwargs...)
     algvars = BitSet(findall(v -> isalgvar(state.structure, v), 1:ndsts(graph)))
     aeqs = algeqs(state.structure)
     var_eq_matching′ = tear_graph_modia(state.structure;
-                                        varfilter = var -> var in algvars,
-                                        eqfilter = eq -> eq in aeqs)
+        varfilter = var -> var in algvars,
+        eqfilter = eq -> eq in aeqs)
     var_eq_matching = Matching{Union{Unassigned, SelectedState}}(var_eq_matching′)
     for var in 1:ndsts(graph)
         if isdiffvar(state.structure, var)
@@ -584,7 +584,7 @@ new residual equations after tearing. End users are encouraged to call [`structu
 instead, which calls this function internally.
 """
 function tearing(sys::AbstractSystem, state = TearingState(sys); mm = nothing,
-                 simplify = false, kwargs...)
+    simplify = false, kwargs...)
     var_eq_matching = tearing(state)
     invalidate_cache!(tearing_reassemble(state, var_eq_matching; mm, simplify))
 end
@@ -608,7 +608,7 @@ Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
 function dummy_derivative(sys, state = TearingState(sys); simplify = false,
-                          mm = nothing, kwargs...)
+    mm = nothing, kwargs...)
     jac = let state = state
         (eqs, vars) -> begin
             symeqs = EquationsView(state)[eqs]
@@ -631,6 +631,6 @@ function dummy_derivative(sys, state = TearingState(sys); simplify = false,
         end
     end
     var_eq_matching = dummy_derivative_graph!(state, jac; state_priority,
-                                              kwargs...)
+        kwargs...)
     tearing_reassemble(state, var_eq_matching; simplify, mm)
 end

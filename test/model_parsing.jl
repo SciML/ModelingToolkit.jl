@@ -1,11 +1,21 @@
 using ModelingToolkit, Test
 
-@connector RealInput begin u(t), [input = true] end
-@connector RealOutput begin u(t), [output = true] end
+@connector RealInput begin
+    u(t), [input = true]
+end
+@connector RealOutput begin
+    u(t), [output = true]
+end
 @model Constant begin
-    @components begin output = RealOutput() end
-    @parameters begin k, [description = "Constant output value of block"] end
-    @equations begin output.u ~ k end
+    @components begin
+        output = RealOutput()
+    end
+    @parameters begin
+        k, [description = "Constant output value of block"]
+    end
+    @equations begin
+        output.u ~ k
+    end
 end
 
 @variables t
@@ -33,26 +43,42 @@ end
 end
 
 @model Ground begin
-    @components begin g = Pin() end
-    @equations begin g.v ~ 0 end
+    @components begin
+        g = Pin()
+    end
+    @equations begin
+        g.v ~ 0
+    end
 end
 
 @model Resistor begin
     @extend v, i = oneport = OnePort()
-    @parameters begin R = 1 end
-    @equations begin v ~ i * R end
+    @parameters begin
+        R = 1
+    end
+    @equations begin
+        v ~ i * R
+    end
 end
 
 @model Capacitor begin
     @extend v, i = oneport = OnePort()
-    @parameters begin C = 1 end
-    @equations begin D(v) ~ i / C end
+    @parameters begin
+        C = 1
+    end
+    @equations begin
+        D(v) ~ i / C
+    end
 end
 
 @model Voltage begin
     @extend v, i = oneport = OnePort()
-    @components begin V = RealInput() end
-    @equations begin v ~ V.u end
+    @components begin
+        V = RealInput()
+    end
+    @equations begin
+        v ~ V.u
+    end
 end
 
 @model RC begin

@@ -11,19 +11,19 @@ using SymbolicUtils: similarterm, istree
 
 using ModelingToolkit
 using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Differential,
-                       states, equations, vars, Symbolic, diff2term, value,
-                       operation, arguments, Sym, Term, simplify, solve_for,
-                       isdiffeq, isdifferential, isirreducible,
-                       empty_substitutions, get_substitutions,
-                       get_tearing_state, get_iv, independent_variables,
-                       has_tearing_state, defaults, InvalidSystemException,
-                       ExtraEquationsSystemException,
-                       ExtraVariablesSystemException,
-                       get_postprocess_fbody, vars!,
-                       IncrementalCycleTracker, add_edge_checked!, topological_sort,
-                       invalidate_cache!, Substitutions, get_or_construct_tearing_state,
-                       filter_kwargs, lower_varname, setio, SparseMatrixCLIL,
-                       fast_substitute, get_fullvars, has_equations
+    states, equations, vars, Symbolic, diff2term, value,
+    operation, arguments, Sym, Term, simplify, solve_for,
+    isdiffeq, isdifferential, isirreducible,
+    empty_substitutions, get_substitutions,
+    get_tearing_state, get_iv, independent_variables,
+    has_tearing_state, defaults, InvalidSystemException,
+    ExtraEquationsSystemException,
+    ExtraVariablesSystemException,
+    get_postprocess_fbody, vars!,
+    IncrementalCycleTracker, add_edge_checked!, topological_sort,
+    invalidate_cache!, Substitutions, get_or_construct_tearing_state,
+    filter_kwargs, lower_varname, setio, SparseMatrixCLIL,
+    fast_substitute, get_fullvars, has_equations
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview, complete
@@ -34,8 +34,9 @@ using ModelingToolkit.SystemStructures: algeqs, EquationsView
 
 using ModelingToolkit.DiffEqBase
 using ModelingToolkit.StaticArrays
-using RuntimeGeneratedFunctions: @RuntimeGeneratedFunction, RuntimeGeneratedFunctions,
-                                 drop_expr
+using RuntimeGeneratedFunctions: @RuntimeGeneratedFunction,
+    RuntimeGeneratedFunctions,
+    drop_expr
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
@@ -46,8 +47,9 @@ using SimpleNonlinearSolve
 export tearing, partial_state_selection, dae_index_lowering, check_consistency
 export dummy_derivative
 export build_torn_function, build_observed_function, ODAEProblem
-export sorted_incidence_matrix, pantelides!, tearing_reassemble, find_solvables!,
-       linear_subsys_adjmat!
+export sorted_incidence_matrix,
+    pantelides!, tearing_reassemble, find_solvables!,
+    linear_subsys_adjmat!
 export tearing_assignments, tearing_substitution
 export torn_system_jacobian_sparsity
 export full_equations

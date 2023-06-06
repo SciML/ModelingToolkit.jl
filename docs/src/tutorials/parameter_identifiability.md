@@ -57,7 +57,7 @@ After that, we are ready to check the system for local identifiability:
 # query local identifiability
 # we pass the ode-system
 local_id_all = assess_local_identifiability(de, measured_quantities = measured_quantities,
-                                            p = 0.99)
+    p = 0.99)
 ```
 
 We can see that all states (except $x_7$) and all parameters are locally identifiable with probability 0.99.
@@ -67,7 +67,7 @@ Let's try to check specific parameters and their combinations
 ```@example SI
 to_check = [k5, k7, k10 / k9, k5 + k6]
 local_id_some = assess_local_identifiability(de, measured_quantities = measured_quantities,
-                                             funcs_to_check = to_check, p = 0.99)
+    funcs_to_check = to_check, p = 0.99)
 ```
 
 Notice that in this case, everything (except the state variable $x_7$) is locally identifiable, including combinations such as $k_{10}/k_9, k_5+k_6$
@@ -138,7 +138,7 @@ to_check = [b, c]
 ode = ODESystem(eqs, t, name = :GoodwinOsc)
 
 global_id = assess_identifiability(ode, measured_quantities = measured_quantities,
-                                   funcs_to_check = to_check, p = 0.9)
+    funcs_to_check = to_check, p = 0.9)
 ```
 
 Both parameters `b, c` are globally identifiable with probability `0.9` in this case.

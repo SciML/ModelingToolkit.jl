@@ -30,9 +30,9 @@ Define one or more constants.
 """
 macro constants(xs...)
     Symbolics._parse_vars(:constants,
-                          Real,
-                          xs,
-                          toconstant) |> esc
+        Real,
+        xs,
+        toconstant) |> esc
 end
 
 """

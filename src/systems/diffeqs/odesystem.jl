@@ -141,13 +141,13 @@ struct ODESystem <: AbstractODESystem
     unknown_states::Union{Nothing, Vector{Any}}
 
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
-                       jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
-                       torn_matching, connector_type, preface, cevents,
-                       devents, metadata = nothing, gui_metadata = nothing,
-                       tearing_state = nothing,
-                       substitutions = nothing, complete = false,
-                       discrete_subsystems = nothing, unknown_states = nothing;
-                       checks::Union{Bool, Int} = true)
+        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
+        torn_matching, connector_type, preface, cevents,
+        devents, metadata = nothing, gui_metadata = nothing,
+        tearing_state = nothing,
+        substitutions = nothing, complete = false,
+        discrete_subsystems = nothing, unknown_states = nothing;
+        checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -166,21 +166,21 @@ struct ODESystem <: AbstractODESystem
 end
 
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
-                   controls = Num[],
-                   observed = Equation[],
-                   systems = ODESystem[],
-                   tspan = nothing,
-                   name = nothing,
-                   default_u0 = Dict(),
-                   default_p = Dict(),
-                   defaults = _merge(Dict(default_u0), Dict(default_p)),
-                   connector_type = nothing,
-                   preface = nothing,
-                   continuous_events = nothing,
-                   discrete_events = nothing,
-                   checks = true,
-                   metadata = nothing,
-                   gui_metadata = nothing)
+    controls = Num[],
+    observed = Equation[],
+    systems = ODESystem[],
+    tspan = nothing,
+    name = nothing,
+    default_u0 = Dict(),
+    default_p = Dict(),
+    defaults = _merge(Dict(default_u0), Dict(default_p)),
+    connector_type = nothing,
+    preface = nothing,
+    continuous_events = nothing,
+    discrete_events = nothing,
+    checks = true,
+    metadata = nothing,
+    gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = scalarize(deqs)
@@ -193,7 +193,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
 
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
-                     :ODESystem, force = true)
+            :ODESystem, force = true)
     end
     defaults = todict(defaults)
     defaults = Dict{Any, Any}(value(k) => value(v) for (k, v) in pairs(defaults))
@@ -215,10 +215,10 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     cont_callbacks = SymbolicContinuousCallbacks(continuous_events)
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
     ODESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-              deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
-              ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
-              connector_type, preface, cont_callbacks, disc_callbacks,
-              metadata, gui_metadata, checks = checks)
+        deqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
+        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, nothing,
+        connector_type, preface, cont_callbacks, disc_callbacks,
+        metadata, gui_metadata, checks = checks)
 end
 
 function ODESystem(eqs, iv = nothing; kwargs...)
@@ -261,7 +261,7 @@ function ODESystem(eqs, iv = nothing; kwargs...)
     algevars = setdiff(allstates, diffvars)
     # the orders here are very important!
     return ODESystem(Equation[diffeq; algeeq; compressed_eqs], iv,
-                     collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
+        collect(Iterators.flatten((diffvars, algevars))), ps; kwargs...)
 end
 
 # NOTE: equality does not check cached Jacobian
@@ -283,15 +283,15 @@ function flatten(sys::ODESystem, noeqs = false)
         return sys
     else
         return ODESystem(noeqs ? Equation[] : equations(sys),
-                         get_iv(sys),
-                         states(sys),
-                         parameters(sys),
-                         observed = observed(sys),
-                         continuous_events = continuous_events(sys),
-                         discrete_events = discrete_events(sys),
-                         defaults = defaults(sys),
-                         name = nameof(sys),
-                         checks = false)
+            get_iv(sys),
+            states(sys),
+            parameters(sys),
+            observed = observed(sys),
+            continuous_events = continuous_events(sys),
+            discrete_events = discrete_events(sys),
+            defaults = defaults(sys),
+            name = nameof(sys),
+            checks = false)
     end
 end
 
@@ -304,10 +304,10 @@ Build the observed function assuming the observed equations are all explicit,
 i.e. there are no cycles.
 """
 function build_explicit_observed_function(sys, ts;
-                                          expression = false,
-                                          output_type = Array,
-                                          checkbounds = true,
-                                          throw = true)
+    expression = false,
+    output_type = Array,
+    checkbounds = true,
+    throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
     end
@@ -384,9 +384,9 @@ function build_explicit_observed_function(sys, ts;
     pre = get_postprocess_fbody(sys)
 
     ex = Func(args, [],
-              pre(Let(obsexprs,
-                      isscalar ? ts[1] : MakeArray(ts, output_type),
-                      false))) |> toexpr
+        pre(Let(obsexprs,
+            isscalar ? ts[1] : MakeArray(ts, output_type),
+            false))) |> toexpr
     expression ? ex : drop_expr(@RuntimeGeneratedFunction(ex))
 end
 
@@ -446,12 +446,12 @@ function convert_system(::Type{<:ODESystem}, sys, t; name = nameof(sys))
     neweqs = map(sub, equations(sys))
     defs = Dict(sub(k) => sub(v) for (k, v) in defaults(sys))
     return ODESystem(neweqs, t, newsts, parameters(sys); defaults = defs, name = name,
-                     checks = false)
+        checks = false)
 end
 
 function Symbolics.substitute(sys::ODESystem, rules::Union{Vector{<:Pair}, Dict})
     rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
-                       collect(rules)))
+        collect(rules)))
     eqs = fast_substitute(equations(sys), rules)
     ODESystem(eqs, get_iv(sys); name = nameof(sys))
 end

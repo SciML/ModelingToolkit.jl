@@ -57,7 +57,7 @@ Define one or more known parameters.
 """
 macro parameters(xs...)
     Symbolics._parse_vars(:parameters,
-                          Real,
-                          xs,
-                          toparam) |> esc
+        Real,
+        xs,
+        toparam) |> esc
 end

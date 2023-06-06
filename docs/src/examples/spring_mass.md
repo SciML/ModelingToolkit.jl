@@ -26,7 +26,7 @@ end
 
 function connect_spring(spring, a, b)
     [spring.x ~ norm(scalarize(a .- b))
-     scalarize(spring.dir .~ scalarize(a .- b))]
+        scalarize(spring.dir .~ scalarize(a .- b))]
 end
 
 function spring_force(spring)
@@ -43,7 +43,7 @@ g = [0.0, -9.81]
 @named spring = Spring(k = k, l = l)
 
 eqs = [connect_spring(spring, mass.pos, center)
-       scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]
+    scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]
 
 @named _model = ODESystem(eqs, t, [spring.x; spring.dir; mass.pos], [])
 @named model = compose(_model, mass, spring)
@@ -96,7 +96,7 @@ We now define functions that help construct the equations for a mass-spring syst
 ```@example component
 function connect_spring(spring, a, b)
     [spring.x ~ norm(scalarize(a .- b))
-     scalarize(spring.dir .~ scalarize(a .- b))]
+        scalarize(spring.dir .~ scalarize(a .- b))]
 end
 ```
 
@@ -125,7 +125,7 @@ We can now create the equations describing this system, by connecting `spring` t
 
 ```@example component
 eqs = [connect_spring(spring, mass.pos, center)
-       scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]
+    scalarize(D.(mass.v) .~ spring_force(spring) / mass.m .+ g)]
 ```
 
 Finally, we can build the model using these equations and components.

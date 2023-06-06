@@ -28,7 +28,7 @@ function ascend_dg_all(xs, dg, level, maxlevel)
 end
 
 function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
-                          inv_varlevel, inv_eqlevel)
+    inv_varlevel, inv_eqlevel)
     @unpack eq_to_diff, var_to_diff, graph, solvable_graph = structure
 
     # var_eq_matching is a maximal matching on the top-differentiated variables.
@@ -48,15 +48,15 @@ function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
         maxlevel = level = maximum(map(x -> inv_eqlevel[x], eqs))
         old_level_vars = ()
         ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph,
-                                                         complete(Matching(ndsts(graph))));
-                                      dir = :in)
+                complete(Matching(ndsts(graph))));
+            dir = :in)
         while level >= 0
             to_tear_eqs_toplevel = filter(eq -> inv_eqlevel[eq] >= level, eqs)
             to_tear_eqs = ascend_dg(to_tear_eqs_toplevel, invview(eq_to_diff), level)
 
             to_tear_vars_toplevel = filter(var -> inv_varlevel[var] >= level, vars)
             to_tear_vars = ascend_dg_all(to_tear_vars_toplevel, invview(var_to_diff), level,
-                                         maxlevel)
+                maxlevel)
 
             if old_level_vars !== ()
                 # Inherit constraints from previous level.
@@ -85,7 +85,7 @@ function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
             filter!(var -> ict.graph.matching[var] === unassigned, to_tear_vars)
             filter!(eq -> invview(ict.graph.matching)[eq] === unassigned, to_tear_eqs)
             tearEquations!(ict, solvable_graph.fadjlist, to_tear_eqs, BitSet(to_tear_vars),
-                           nothing)
+                nothing)
             for var in to_tear_vars
                 var_eq_matching[var] = unassigned
             end
@@ -143,14 +143,14 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
     end
 
     var_eq_matching = pss_graph_modia!(structure,
-                                       complete(var_eq_matching), varlevel, inv_varlevel,
-                                       inv_eqlevel)
+        complete(var_eq_matching), varlevel, inv_varlevel,
+        inv_eqlevel)
 
     var_eq_matching
 end
 
 function dummy_derivative_graph!(state::TransformationState, jac = nothing;
-                                 state_priority = nothing, kwargs...)
+    state_priority = nothing, kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     complete!(state.structure)
     var_eq_matching = complete(pantelides!(state))
@@ -175,7 +175,7 @@ function compute_diff_level(diff_to_x)
 end
 
 function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac,
-                                 state_priority)
+    state_priority)
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
@@ -228,7 +228,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
                     # We need `invgraph` here because we are matching from
                     # variables to equations.
                     pathfound = construct_augmenting_path!(rank_matching, invgraph, var,
-                                                           Base.Fix2(in, eqs_set), eqcolor)
+                        Base.Fix2(in, eqs_set), eqcolor)
                     pathfound || continue
                     push!(dummy_derivatives, var)
                     rank += 1
@@ -290,8 +290,8 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     end
 
     var_eq_matching = tear_graph_modia(structure, isdiffed,
-                                       Union{Unassigned, SelectedState};
-                                       varfilter = can_eliminate)
+        Union{Unassigned, SelectedState};
+        varfilter = can_eliminate)
     for v in eachindex(var_eq_matching)
         is_not_present(v) && continue
         dv = var_to_diff[v]

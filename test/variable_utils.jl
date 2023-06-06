@@ -17,8 +17,8 @@ new = (((1 / β - 1) + δ) / γ)^(1 / (γ - 1))
 
 # Continuous
 using ModelingToolkit: isdifferential, isdifference, vars, difference_vars,
-                       collect_difference_variables, collect_differential_variables,
-                       collect_ivs
+    collect_difference_variables, collect_differential_variables,
+    collect_ivs
 @variables t u(t) y(t)
 D = Differential(t)
 eq = D(y) ~ u

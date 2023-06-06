@@ -15,16 +15,16 @@ lorenz2 = ODESystem(eqs, pins = [F], observed = aliases, name = :lorenz2)
 connections = [lorenz1.F ~ lorenz2.u,
     lorenz2.F ~ lorenz1.u]
 connected = ODESystem(Equation[], t, [], [], observed = connections,
-                      systems = [lorenz1, lorenz2])
+    systems = [lorenz1, lorenz2])
 
 sys = connected
 
 @variables lorenz1₊F lorenz2₊F
 @test pins(connected) == Variable[lorenz1₊F, lorenz2₊F]
 @test isequal(observed(connected),
-              [connections...,
-                  lorenz1.u ~ lorenz1.x + lorenz1.y - lorenz1.z,
-                  lorenz2.u ~ lorenz2.x + lorenz2.y - lorenz2.z])
+    [connections...,
+        lorenz1.u ~ lorenz1.x + lorenz1.y - lorenz1.z,
+        lorenz2.u ~ lorenz2.x + lorenz2.y - lorenz2.z])
 
 collapsed_eqs = [
     D(lorenz1.x) ~ (lorenz1.σ * (lorenz1.y - lorenz1.x) +

@@ -299,7 +299,7 @@ function _check_operator_variables(eq, op::T, expr = eq.rhs) where {T}
         throw_invalid_operator(expr, eq, op)
     end
     foreach(expr -> _check_operator_variables(eq, op, expr),
-            SymbolicUtils.unsorted_arguments(expr))
+        SymbolicUtils.unsorted_arguments(expr))
 end
 """
 Check if all the LHS are unique
@@ -573,7 +573,7 @@ Create a function preface containing assignments of default values to constants.
 function get_preprocess_constants(eqs)
     cs = collect_constants(eqs)
     pre = ex -> Let(Assignment[Assignment(x, getdefault(x)) for x in cs],
-                    ex, false)
+        ex, false)
     return pre
 end
 
@@ -640,11 +640,11 @@ function get_substitutions_and_solved_states(sys; no_postprocess = false)
         sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
         if no_postprocess
             pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex,
-                            false)
+                false)
         else
             process = get_postprocess_fbody(sys)
             pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs],
-                            process(ex), false)
+                process(ex), false)
         end
     end
     return pre, sol_states
@@ -767,7 +767,7 @@ struct StatefulPreOrderDFS{T} <: AbstractSimpleTreeIter{T}
     t::T
 end
 function Base.iterate(it::StatefulPreOrderDFS,
-                      state = (eltype(it)[it.t], reverse_buffer(it)))
+    state = (eltype(it)[it.t], reverse_buffer(it)))
     stack, rev_buff = state
     isempty(stack) && return nothing
     t = pop!(stack)
@@ -780,7 +780,7 @@ struct StatefulPostOrderDFS{T} <: AbstractSimpleTreeIter{T}
     t::T
 end
 function Base.iterate(it::StatefulPostOrderDFS,
-                      state = (eltype(it)[it.t], falses(1), reverse_buffer(it)))
+    state = (eltype(it)[it.t], falses(1), reverse_buffer(it)))
     isempty(state[2]) && return nothing
     vstack, sstack, rev_buff = state
     while true
@@ -835,7 +835,7 @@ end
 function fold_constants(ex)
     if istree(ex)
         similarterm(ex, operation(ex), map(fold_constants, arguments(ex)),
-                    symtype(ex); metadata = metadata(ex))
+            symtype(ex); metadata = metadata(ex))
     elseif issym(ex) && isconstant(ex)
         getdefault(ex)
     else
@@ -849,7 +849,7 @@ const Eq = Union{Equation, Inequality}
 function fast_substitute(eq::Eq, subs)
     if eq isa Inequality
         Inequality(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs),
-                   eq.relational_op)
+            eq.relational_op)
     else
         Equation(fast_substitute(eq.lhs, subs), fast_substitute(eq.rhs, subs))
     end
@@ -876,10 +876,10 @@ function fast_substitute(expr, pair::Pair)
     canfold[] && return op(args...)
 
     similarterm(expr,
-                op,
-                args,
-                symtype(expr);
-                metadata = metadata(expr))
+        op,
+        args,
+        symtype(expr);
+        metadata = metadata(expr))
 end
 
 normalize_to_differential(s) = s

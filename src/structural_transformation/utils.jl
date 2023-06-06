@@ -8,7 +8,7 @@
 Find equation-variable maximal bipartite matching. `s.graph` is a bipartite graph.
 """
 function BipartiteGraphs.maximal_matching(s::SystemStructure, eqfilter = eq -> true,
-                                          varfilter = v -> true)
+    varfilter = v -> true)
     maximal_matching(s.graph, eqfilter, varfilter)
 end
 
@@ -88,7 +88,7 @@ function check_consistency(state::TransformationState, orig_inputs)
     # This is defined to check if Pantelides algorithm terminates. For more
     # details, check the equation (15) of the original paper.
     extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist;
-                                                        map(collect, edges(var_to_diff))])
+        map(collect, edges(var_to_diff))])
     extended_var_eq_matching = maximal_matching(extended_graph)
 
     unassigned_var = []
@@ -124,14 +124,14 @@ assume that the ``i``-th variable is assigned to the ``i``-th equation.
 """
 function find_var_sccs(g::BipartiteGraph, assign = nothing)
     cmog = DiCMOBiGraph{true}(g,
-                              Matching(assign === nothing ? Base.OneTo(nsrcs(g)) : assign))
+        Matching(assign === nothing ? Base.OneTo(nsrcs(g)) : assign))
     sccs = Graphs.strongly_connected_components(cmog)
     foreach(sort!, sccs)
     return sccs
 end
 
 function sorted_incidence_matrix(ts::TransformationState, val = true; only_algeqs = false,
-                                 only_algvars = false)
+    only_algvars = false)
     var_eq_matching, var_scc = algebraic_variables_scc(ts)
     s = ts.structure
     graph = ts.structure.graph
@@ -180,8 +180,8 @@ end
 ###
 
 function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = nothing;
-                            may_be_zero = false,
-                            allow_symbolic = false, allow_parameter = true, kwargs...)
+    may_be_zero = false,
+    allow_symbolic = false, allow_parameter = true, kwargs...)
     fullvars = state.fullvars
     @unpack graph, solvable_graph = state.structure
     eq = equations(state)[ieq]
@@ -277,8 +277,8 @@ function linear_subsys_adjmat!(state::TransformationState; kwargs...)
     end
 
     mm = SparseMatrixCLIL(nsrcs(graph),
-                          ndsts(graph),
-                          linear_equations, eadj, cadj)
+        ndsts(graph),
+        linear_equations, eadj, cadj)
     return mm
 end
 
