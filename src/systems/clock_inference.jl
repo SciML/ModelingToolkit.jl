@@ -23,7 +23,7 @@ end
 
 function infer_clocks!(ci::ClockInference)
     @unpack ts, eq_domain, var_domain, inferred = ci
-    @unpack graph = ts.structure
+    @unpack var_to_diff, graph = ts.structure
     fullvars = get_fullvars(ts)
     isempty(inferred) && return ci
     # TODO: add a graph type to do this lazily
@@ -35,6 +35,11 @@ function infer_clocks!(ci::ClockInference)
             for v in vs
                 add_edge!(var_graph, fv, v)
             end
+        end
+    end
+    for v in vertices(var_to_diff)
+        if (v′ = var_to_diff[v]) !== nothing
+            add_edge!(var_graph, v, v′)
         end
     end
     cc = connected_components(var_graph)
@@ -75,6 +80,11 @@ function resize_or_push!(v, val, idx)
     push!(v[idx], val)
 end
 
+function is_time_domain_conversion(v)
+    istree(v) && (o = operation(v)) isa Operator &&
+        input_timedomain(o) != output_timedomain(o)
+end
+
 function split_system(ci::ClockInference{S}) where {S}
     @unpack ts, eq_domain, var_domain, inferred = ci
     fullvars = get_fullvars(ts)
@@ -113,8 +123,7 @@ function split_system(ci::ClockInference{S}) where {S}
         @assert cid!==0 "Internal error! Variable $(fullvars[i]) doesn't have a inferred time domain."
         var_to_cid[i] = cid
         v = fullvars[i]
-        if istree(v) && (o = operation(v)) isa Operator &&
-           input_timedomain(o) != output_timedomain(o)
+        if is_time_domain_conversion(v)
             push!(input_idxs[cid], i)
             push!(inputs[cid], fullvars[i])
         end
