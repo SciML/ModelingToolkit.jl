@@ -25,7 +25,7 @@ function ConstantVoltage(; name, V = 1.0)
     @named n = Pin()
     @parameters V = V
     eqs = [V ~ p.v - n.v
-           0 ~ p.i + n.i]
+        0 ~ p.i + n.i]
     compose(ODESystem(eqs, t, [], [V], name = name), p, n)
 end
 
@@ -41,12 +41,12 @@ function HeatingResistor(; name, R = 1.0, TAmbient = 293.15, alpha = 1.0)
     @variables v(t) RTherm(t)
     @parameters R=R TAmbient=TAmbient alpha=alpha
     eqs = [RTherm ~ R * (1 + alpha * (h.T - TAmbient))
-           v ~ p.i * RTherm
-           h.Q_flow ~ -v * p.i # -LossPower
-           v ~ p.v - n.v
-           0 ~ p.i + n.i]
+        v ~ p.i * RTherm
+        h.Q_flow ~ -v * p.i # -LossPower
+        v ~ p.v - n.v
+        0 ~ p.i + n.i]
     compose(ODESystem(eqs, t, [v, RTherm], [R, TAmbient, alpha],
-                      name = name), p, n, h)
+            name = name), p, n, h)
 end
 
 function HeatCapacitor(; name, rho = 8050, V = 1, cp = 460, TAmbient = 293.15)
@@ -57,7 +57,7 @@ function HeatCapacitor(; name, rho = 8050, V = 1, cp = 460, TAmbient = 293.15)
         D(h.T) ~ h.Q_flow / C,
     ]
     compose(ODESystem(eqs, t, [], [rho, V, cp],
-                      name = name), h)
+            name = name), h)
 end
 
 function Capacitor(; name, C = 1.0)
@@ -66,10 +66,10 @@ function Capacitor(; name, C = 1.0)
     @variables v(t) = 0.0
     @parameters C = C
     eqs = [v ~ p.v - n.v
-           0 ~ p.i + n.i
-           D(v) ~ p.i / C]
+        0 ~ p.i + n.i
+        D(v) ~ p.i / C]
     compose(ODESystem(eqs, t, [v], [C],
-                      name = name), p, n)
+            name = name), p, n)
 end
 
 function parallel_rc_model(i; name, source, ground, R, C)
@@ -78,12 +78,12 @@ function parallel_rc_model(i; name, source, ground, R, C)
     heat_capacitor = HeatCapacitor(name = Symbol(:heat_capacitor, i))
 
     rc_eqs = [connect(source.p, resistor.p)
-              connect(resistor.n, capacitor.p)
-              connect(capacitor.n, source.n, ground.g)
-              connect(resistor.h, heat_capacitor.h)]
+        connect(resistor.n, capacitor.p)
+        connect(capacitor.n, source.n, ground.g)
+        connect(resistor.h, heat_capacitor.h)]
 
     compose(ODESystem(rc_eqs, t, name = Symbol(name, i)),
-            [resistor, capacitor, source, ground, heat_capacitor])
+        [resistor, capacitor, source, ground, heat_capacitor])
 end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">parallel_rc_model (generic function with 1 method)</code></pre><h2 id="The-Model"><a class="docs-heading-anchor" href="#The-Model">The Model</a><a id="The-Model-1"></a><a class="docs-heading-anchor-permalink" href="#The-Model" title="Permalink"></a></h2><p>Assuming that the components are defined, our model is 50 resistors and capacitors connected in parallel. Thus following the <a href="../../tutorials/acausal_components/#acausal">acausal components tutorial</a>, we can connect a bunch of RC components as follows:</p><pre><code class="language-julia hljs">V = 2.0
 @named source = ConstantVoltage(V = V)
 @named ground = Ground()
@@ -96,7 +96,7 @@ end;
 @variables E(t) = 0.0
 eqs = [
     D(E) ~ sum(((i, sys),) -&gt; getproperty(sys, Symbol(:resistor, i)).h.Q_flow,
-               enumerate(rc_systems)),
+        enumerate(rc_systems)),
 ]
 @named _big_rc = ODESystem(eqs, t, [E], [])
 @named big_rc = compose(_big_rc, rc_systems)</code></pre><p class="math-container">\[ \begin{equation}
@@ -1216,10 +1216,10 @@ rc50_{+}ground_{+}g_{+}v\left( t \right) = 0 \\
 ts = TearingState(expand_connections(big_rc))
 inc_org = BipartiteGraphs.incidence_matrix(ts.structure.graph)
 blt_org = StructuralTransformations.sorted_incidence_matrix(ts, only_algeqs = true,
-                                                            only_algvars = true)
+    only_algvars = true)
 blt_reduced = StructuralTransformations.sorted_incidence_matrix(ModelingToolkit.get_tearing_state(sys),
-                                                                only_algeqs = true,
-                                                                only_algvars = true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">151×252 SparseArrays.SparseMatrixCSC{Bool, Int64} with 50 stored entries:
+    only_algeqs = true,
+    only_algvars = true)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">151×252 SparseArrays.SparseMatrixCSC{Bool, Int64} with 50 stored entries:
 ⎡⠑⢤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎤
 ⎢⠀⠀⠑⢤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
 ⎢⠀⠀⠀⠀⠑⢤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
@@ -1231,4 +1231,4 @@ blt_reduced = StructuralTransformations.sorted_incidence_matrix(ModelingToolkit.
 ⎢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
 ⎢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
 ⎢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎥
-⎣⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎦</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/110589027-d4ec9b00-8143-11eb-8880-651da986504d.PNG" alt/></p><p>The figure on the left is the original incidence matrix of the algebraic equations. Notice that the original formulation of the model has dependencies between different equations, and so the full set of equations must be solved together. That exposes no parallelism. However, the Block Lower Triangular (BLT) transformation exposes independent blocks. This is then further improved by the tearing process, which removes 90% of the equations and transforms the nonlinear equations into 50 independent blocks, <em>which can now all be solved in parallel</em>. The conclusion is that, your attempts to parallelize are neigh: performing parallelism after structural simplification greatly improves the problem that can be parallelized, so this is better than trying to do it by hand.</p><p>After performing this, you can construct the <code>ODEProblem</code>/<code>ODAEProblem</code> and set <code>parallel_form</code> to use the exposed parallelism in multithreaded function constructions, but this showcases why <code>structural_simplify</code> is so important to that process.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../parsing/">« Parsing Expressions into Solvable Systems</a><a class="docs-footer-nextpage" href="../sparse_jacobians/">Automated Sparse Analytical Jacobians »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Thursday 1 June 2023 23:47">Thursday 1 June 2023</span>. Using Julia version 1.9.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+⎣⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⎦</code></pre><p><img src="https://user-images.githubusercontent.com/1814174/110589027-d4ec9b00-8143-11eb-8880-651da986504d.PNG" alt/></p><p>The figure on the left is the original incidence matrix of the algebraic equations. Notice that the original formulation of the model has dependencies between different equations, and so the full set of equations must be solved together. That exposes no parallelism. However, the Block Lower Triangular (BLT) transformation exposes independent blocks. This is then further improved by the tearing process, which removes 90% of the equations and transforms the nonlinear equations into 50 independent blocks, <em>which can now all be solved in parallel</em>. The conclusion is that, your attempts to parallelize are neigh: performing parallelism after structural simplification greatly improves the problem that can be parallelized, so this is better than trying to do it by hand.</p><p>After performing this, you can construct the <code>ODEProblem</code>/<code>ODAEProblem</code> and set <code>parallel_form</code> to use the exposed parallelism in multithreaded function constructions, but this showcases why <code>structural_simplify</code> is so important to that process.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../parsing/">« Parsing Expressions into Solvable Systems</a><a class="docs-footer-nextpage" href="../sparse_jacobians/">Automated Sparse Analytical Jacobians »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Tuesday 6 June 2023 02:00">Tuesday 6 June 2023</span>. Using Julia version 1.9.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
