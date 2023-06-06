@@ -11,7 +11,7 @@ function brusselator_2d_loop(du, u, p, t)
         i, j = Tuple(I)
         x, y = xyd_brusselator[I[1]], xyd_brusselator[I[2]]
         ip1, im1, jp1, jm1 = limit(i + 1, N), limit(i - 1, N), limit(j + 1, N),
-                             limit(j - 1, N)
+        limit(j - 1, N)
         du[i, j, 1] = alpha * (u[im1, j, 1] + u[ip1, j, 1] + u[i, jp1, 1] + u[i, jm1, 1] -
                        4u[i, j, 1]) +
                       B + u[i, j, 1]^2 * u[i, j, 2] - (A + 1) * u[i, j, 1] +
@@ -39,7 +39,7 @@ end
 
 u0 = init_brusselator_2d(xyd_brusselator)
 prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
-                                     u0, (0.0, 11.5), p)
+    u0, (0.0, 11.5), p)
 sys = modelingtoolkitize(prob_ode_brusselator_2d)
 
 # test sparse jacobian pattern only.
@@ -73,7 +73,7 @@ f = DiffEqBase.ODEFunction(sys, u0 = nothing, sparse = true, jac = false)
 # test when u0 is not Float64
 u0 = similar(init_brusselator_2d(xyd_brusselator), Float32)
 prob_ode_brusselator_2d = ODEProblem(brusselator_2d_loop,
-                                     u0, (0.0, 11.5), p)
+    u0, (0.0, 11.5), p)
 sys = modelingtoolkitize(prob_ode_brusselator_2d)
 
 prob = ODEProblem(sys, u0, (0, 11.5), sparse = true, jac = false)

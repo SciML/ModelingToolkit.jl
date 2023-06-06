@@ -269,7 +269,7 @@ function generate_connection_set(sys::AbstractSystem, find = nothing, replace = 
 end
 
 function generate_connection_set!(connectionsets, sys::AbstractSystem, find, replace,
-                                  namespace = nothing)
+    namespace = nothing)
     subsys = get_systems(sys)
 
     isouter = generate_isouter(sys)
@@ -317,8 +317,8 @@ function generate_connection_set!(connectionsets, sys::AbstractSystem, find, rep
         @set! sys.states = [get_states(sys); extra_states]
     end
     @set! sys.systems = map(s -> generate_connection_set!(connectionsets, s, find, replace,
-                                                          renamespace(namespace, s)),
-                            subsys)
+            renamespace(namespace, s)),
+        subsys)
     @set! sys.eqs = eqs
 end
 
@@ -428,8 +428,8 @@ function rooted_system_domain_graph!(ts, csets::AbstractVector{<:ConnectionSet})
 end
 
 function generate_connection_equations_and_stream_connections(csets::AbstractVector{
-                                                                                    <:ConnectionSet
-                                                                                    })
+    <:ConnectionSet,
+})
     eqs = Equation[]
     stream_connections = ConnectionSet[]
 
@@ -498,8 +498,8 @@ function domain_defaults(sys, domain_csets)
                 d_p = get(ns_s_def, p, nothing)
                 if d_p !== nothing
                     def[parameters(m.sys.namespace, p)] = parameters(s.sys.namespace,
-                                                                     parameters(s.sys.sys,
-                                                                                d_p))
+                        parameters(s.sys.sys,
+                            d_p))
                 end
             end
         end
@@ -508,7 +508,7 @@ function domain_defaults(sys, domain_csets)
 end
 
 function expand_connections(sys::AbstractSystem, find = nothing, replace = nothing;
-                            debug = false, tol = 1e-10)
+    debug = false, tol = 1e-10)
     sys, (csets, domain_csets) = generate_connection_set(sys, find, replace)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     _sys = expand_instream(instream_csets, sys; debug = debug, tol = tol)
@@ -532,13 +532,13 @@ function unnamespace(root, namespace)
 end
 
 function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSystem,
-                         namespace = nothing, prevnamespace = nothing; debug = false,
-                         tol = 1e-8)
+    namespace = nothing, prevnamespace = nothing; debug = false,
+    tol = 1e-8)
     subsys = get_systems(sys)
     # post order traversal
     @set! sys.systems = map(s -> expand_instream(csets, s,
-                                                 renamespace(namespace, nameof(s)),
-                                                 namespace; debug, tol), subsys)
+            renamespace(namespace, nameof(s)),
+            namespace; debug, tol), subsys)
     subsys = get_systems(sys)
 
     if debug
@@ -616,7 +616,7 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
                 outersvs = [get_current_var(namespace, s, sv) for s in cset if s.isouter]
 
                 sub[ex] = term(instream_rt, Val(length(innerfvs)), Val(length(outerfvs)),
-                               innerfvs..., innersvs..., outerfvs..., outersvs...)
+                    innerfvs..., innersvs..., outerfvs..., outersvs...)
             end
         end
     end
@@ -624,7 +624,7 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
     # additional equations
     additional_eqs = Equation[]
     csets = filter(cset -> any(e -> _getname(e.sys.namespace) === namespace, cset.set),
-                   csets)
+        csets)
     for cset′ in csets
         cset = cset′.set
         connectors = Vector{Any}(undef, length(cset))
@@ -704,7 +704,7 @@ end
 
 function get_current_var(namespace, cele, sv)
     states(renamespace(unnamespace(namespace, _getname(cele.sys.namespace)), cele.sys.sys),
-           sv)
+        sv)
 end
 
 function get_cset_sv(full_name_sv, cset)
@@ -718,7 +718,7 @@ end
 
 # instream runtime
 @generated function _instream_split(::Val{inner_n}, ::Val{outer_n},
-                                    vars::NTuple{N, Any}) where {inner_n, outer_n, N}
+    vars::NTuple{N, Any}) where {inner_n, outer_n, N}
     #instream_rt(innerfvs..., innersvs..., outerfvs..., outersvs...)
     ret = Expr(:tuple)
     # mj.c.m_flow
@@ -734,7 +734,7 @@ end
 end
 
 function instream_rt(ins::Val{inner_n}, outs::Val{outer_n},
-                     vars::Vararg{Any, N}) where {inner_n, outer_n, N}
+    vars::Vararg{Any, N}) where {inner_n, outer_n, N}
     @assert N == 2 * (inner_n + outer_n)
 
     # inner: mj.c.m_flow

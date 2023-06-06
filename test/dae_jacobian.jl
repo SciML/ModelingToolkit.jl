@@ -18,13 +18,13 @@ function testjac_jac(J, du, u, p, gamma, t) #Explicit Jacobian
 end
 
 testjac_f = DAEFunction(testjac, jac = testjac_jac,
-                        jac_prototype = sparse([1, 2, 1, 2], [1, 1, 2, 2], zeros(4)))
+    jac_prototype = sparse([1, 2, 1, 2], [1, 1, 2, 2], zeros(4)))
 
 prob1 = DAEProblem(testjac_f,
-                   [0.5, -2.0],
-                   ones(2),
-                   (0.0, 10.0),
-                   differential_vars = [true, true])
+    [0.5, -2.0],
+    ones(2),
+    (0.0, 10.0),
+    differential_vars = [true, true])
 sol1 = solve(prob1, IDA(linear_solver = :KLU))
 
 # Now MTK style solution with generated Jacobian

@@ -34,10 +34,10 @@ function connector_macro(mod, name, body)
     end
     quote
         $name = $Model((; name) -> begin
-                           var"#___sys___" = $ODESystem($(Equation[]), $iv, $vs, $([]);
-                                                        name)
-                           $Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))
-                       end, $dict)
+                var"#___sys___" = $ODESystem($(Equation[]), $iv, $vs, $([]);
+                    name)
+                $Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))
+            end, $dict)
     end
 end
 
@@ -141,7 +141,7 @@ function model_macro(mod, name, expr)
         iv = dict[:independent_variable] = variable(:t)
     end
     sys = :($ODESystem($Equation[$(eqs...)], $iv, [$(vs...)], [$(ps...)];
-                       systems = [$(comps...)], name))
+        systems = [$(comps...)], name))
     if ext[] === nothing
         push!(exprs.args, sys)
     else

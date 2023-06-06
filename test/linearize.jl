@@ -7,8 +7,8 @@ using ModelingToolkit, Test
 D = Differential(t)
 
 eqs = [u ~ kp * (r - y)
-       D(x) ~ -x + u
-       y ~ x]
+    D(x) ~ -x + u
+    y ~ x]
 
 @named sys = ODESystem(eqs, t)
 
@@ -36,7 +36,7 @@ function plant(; name)
     @variables u(t)=0 y(t)=0
     D = Differential(t)
     eqs = [D(x) ~ -x + u
-           y ~ x]
+        y ~ x]
     ODESystem(eqs, t; name = name)
 end
 
@@ -45,7 +45,7 @@ function filt_(; name)
     @variables u(t)=0 [input = true]
     D = Differential(t)
     eqs = [D(x) ~ -2 * x + u
-           y ~ x]
+        y ~ x]
     ODESystem(eqs, t, name = name)
 end
 
@@ -63,8 +63,8 @@ end
 @named p = plant()
 
 connections = [f.y ~ c.r # filtered reference to controller reference
-               c.u ~ p.u # controller output to plant input
-               p.y ~ c.y]
+    c.u ~ p.u # controller output to plant input
+    p.y ~ c.y]
 
 @named cl = ODESystem(connections, t, systems = [f, c, p])
 
@@ -104,7 +104,7 @@ lsys = ModelingToolkit.reorder_states(lsys0, states(ssys), desired_order)
 @test lsys.D == [4400 -4400]
 
 lsyss, _ = ModelingToolkit.linearize_symbolic(pid, [reference.u, measurement.u],
-                                              [ctr_output.u])
+    [ctr_output.u])
 
 @test substitute(lsyss.A, ModelingToolkit.defaults(pid)) == lsys.A
 @test substitute(lsyss.B, ModelingToolkit.defaults(pid)) == lsys.B
@@ -122,25 +122,25 @@ lsys = ModelingToolkit.reorder_states(lsys, states(ssys), reverse(desired_order)
 ## Test that there is a warning when input is misspecified
 if VERSION >= v"1.8"
     @test_throws "Some specified inputs were not found" linearize(pid,
-                                                                  [
-                                                                      pid.reference.u,
-                                                                      pid.measurement.u,
-                                                                  ], [ctr_output.u])
+        [
+            pid.reference.u,
+            pid.measurement.u,
+        ], [ctr_output.u])
     @test_throws "Some specified outputs were not found" linearize(pid,
-                                                                   [
-                                                                       reference.u,
-                                                                       measurement.u,
-                                                                   ],
-                                                                   [pid.ctr_output.u])
+        [
+            reference.u,
+            measurement.u,
+        ],
+        [pid.ctr_output.u])
 else # v1.6 does not have the feature to match error message
     @test_throws ErrorException linearize(pid,
-                                          [
-                                              pid.reference.u,
-                                              pid.measurement.u,
-                                          ], [ctr_output.u])
+        [
+            pid.reference.u,
+            pid.measurement.u,
+        ], [ctr_output.u])
     @test_throws ErrorException linearize(pid,
-                                          [reference.u, measurement.u],
-                                          [pid.ctr_output.u])
+        [reference.u, measurement.u],
+        [pid.ctr_output.u])
 end
 
 ## Test operating points
@@ -202,8 +202,8 @@ if VERSION >= v"1.8"
     @named force = Force()
 
     eqs = [connect(link1.TX1, cart.flange)
-           connect(cart.flange, force.flange)
-           connect(link1.TY1, fixed.flange)]
+        connect(cart.flange, force.flange)
+        connect(link1.TY1, fixed.flange)]
 
     @named model = ODESystem(eqs, t, [], []; systems = [link1, cart, force, fixed])
     def = ModelingToolkit.defaults(model)
@@ -218,7 +218,7 @@ if VERSION >= v"1.8"
 
     @info "named_ss"
     G = named_ss(model, lin_inputs, lin_outputs, allow_symbolic = true, op = def,
-                 allow_input_derivatives = true, zero_dummy_der = true)
+        allow_input_derivatives = true, zero_dummy_der = true)
     G = sminreal(G)
     @info "minreal"
     G = minreal(G)
@@ -229,9 +229,9 @@ if VERSION >= v"1.8"
     @test minimum(abs, complex(0, 1.3777260367206716) .- ps) < 1e-10
 
     lsys, syss = linearize(model, lin_inputs, lin_outputs, allow_symbolic = true, op = def,
-                           allow_input_derivatives = true, zero_dummy_der = true)
+        allow_input_derivatives = true, zero_dummy_der = true)
     lsyss, sysss = ModelingToolkit.linearize_symbolic(model, lin_inputs, lin_outputs;
-                                                      allow_input_derivatives = true)
+        allow_input_derivatives = true)
 
     dummyder = setdiff(states(sysss), states(model))
     def = merge(def, Dict(x => 0.0 for x in dummyder))

@@ -10,7 +10,7 @@ function try_assign_eq!(ict::IncrementalCycleTracker, vj::Integer, eq::Integer)
 end
 
 function try_assign_eq!(ict::IncrementalCycleTracker, vars, v_active, eq::Integer,
-                        condition::F = _ -> true) where {F}
+    condition::F = _ -> true) where {F}
     G = ict.graph
     for vj in vars
         (vj in v_active && G.matching[vj] === unassigned && condition(vj)) || continue
@@ -20,7 +20,7 @@ function try_assign_eq!(ict::IncrementalCycleTracker, vars, v_active, eq::Intege
 end
 
 function tearEquations!(ict::IncrementalCycleTracker, Gsolvable, es::Vector{Int},
-                        v_active::BitSet, isder′::F) where {F}
+    v_active::BitSet, isder′::F) where {F}
     check_der = isder′ !== nothing
     if check_der
         has_der = Ref(false)
@@ -49,7 +49,7 @@ function tearEquations!(ict::IncrementalCycleTracker, Gsolvable, es::Vector{Int}
 end
 
 function tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, eqs, vars,
-                                 isder::F) where {F}
+    isder::F) where {F}
     tearEquations!(ict, solvable_graph.fadjlist, eqs, vars, isder)
     for var in vars
         var_eq_matching[var] = ict.graph.matching[var]
@@ -58,9 +58,9 @@ function tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, eqs, vars
 end
 
 function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
-                          ::Type{U} = Unassigned;
-                          varfilter::F2 = v -> true,
-                          eqfilter::F3 = eq -> true) where {F, U, F2, F3}
+    ::Type{U} = Unassigned;
+    varfilter::F2 = v -> true,
+    eqfilter::F3 = eq -> true) where {F, U, F2, F3}
     # It would be possible here to simply iterate over all variables and attempt to
     # use tearEquations! to produce a matching that greedily selects the minimal
     # number of torn variables. However, we can do this process faster if we first
@@ -75,8 +75,8 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
     @unpack graph, solvable_graph = structure
     var_eq_matching = maximal_matching(graph, eqfilter, varfilter, U)
     var_eq_matching = complete(var_eq_matching,
-                               max(length(var_eq_matching),
-                                   maximum(x -> x isa Int ? x : 0, var_eq_matching)))
+        max(length(var_eq_matching),
+            maximum(x -> x isa Int ? x : 0, var_eq_matching)))
     var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, var_eq_matching)
     vargraph = DiCMOBiGraph{true}(graph)
     ict = IncrementalCycleTracker(vargraph; dir = :in)
@@ -94,8 +94,8 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
             var_eq_matching[var] = unassigned
         end
         tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, ieqs,
-                                filtered_vars,
-                                isder)
+            filtered_vars,
+            isder)
 
         # clear cache
         vargraph.ne = 0

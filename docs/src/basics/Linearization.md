@@ -26,8 +26,8 @@ using ModelingToolkit
 D = Differential(t)
 
 eqs = [u ~ kp * (r - y) # P controller
-       D(x) ~ -x + u    # First-order plant
-       y ~ x]           # Output equation
+    D(x) ~ -x + u    # First-order plant
+    y ~ x]           # Output equation
 
 @named sys = ODESystem(eqs, t)
 matrices, simplified_sys = linearize(sys, [r], [y]) # Linearize from r to y

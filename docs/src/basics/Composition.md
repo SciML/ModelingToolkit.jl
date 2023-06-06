@@ -22,9 +22,9 @@ function decay(; name)
     @variables x(t) f(t)
     D = Differential(t)
     ODESystem([
-                  D(x) ~ -a * x + f,
-              ];
-              name = name)
+            D(x) ~ -a * x + f,
+        ];
+        name = name)
 end
 
 @named decay1 = decay()
@@ -33,7 +33,7 @@ end
 @parameters t
 D = Differential(t)
 connected = compose(ODESystem([decay2.f ~ decay1.x
-                               D(decay1.f) ~ 0], t; name = :connected), decay1, decay2)
+            D(decay1.f) ~ 0], t; name = :connected), decay1, decay2)
 
 equations(connected)
 
@@ -52,10 +52,10 @@ Now we can solve the system:
 
 ```@example composition
 x0 = [decay1.x => 1.0
-      decay1.f => 0.0
-      decay2.x => 1.0]
+    decay1.f => 0.0
+    decay2.x => 1.0]
 p = [decay1.a => 0.1
-     decay2.a => 0.2]
+    decay2.a => 0.2]
 
 using DifferentialEquations
 prob = ODEProblem(simplified_sys, x0, (0.0, 100.0), p)
@@ -96,7 +96,7 @@ in their namespaced form. For example:
 
 ```julia
 u0 = [x => 2.0
-      subsys.x => 2.0]
+    subsys.x => 2.0]
 ```
 
 Note that any default values within the given subcomponent will be
@@ -124,11 +124,11 @@ With symbolic parameters, it is possible to set the default value of a parameter
 ```julia
 # ...
 sys = ODESystem(
-                # ...
-                # directly in the defaults argument
-                defaults = Pair{Num, Any}[x => u,
-                                          y => σ,
-                                          z => u - 0.1])
+# ...
+# directly in the defaults argument
+    defaults = Pair{Num, Any}[x => u,
+    y => σ,
+    z => u - 0.1])
 # by assigning to the parameter
 sys.y = u * 1.1
 ```
@@ -138,11 +138,11 @@ In a hierarchical system, variables of the subsystem get namespaced by the name 
 ```julia
 @parameters t a b c d e f
 p = [a #a is a local variable
-     ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
-     ParentScope(ParentScope(c))# ParentScope can be nested
-     DelayParentScope(d) # skips one level before applying ParentScope
-     DelayParentScope(e, 2) # second argument allows skipping N levels
-     GlobalScope(f)]
+    ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
+    ParentScope(ParentScope(c))# ParentScope can be nested
+    DelayParentScope(d) # skips one level before applying ParentScope
+    DelayParentScope(e, 2) # second argument allows skipping N levels
+    GlobalScope(f)]
 
 level0 = ODESystem(Equation[], t, [], p; name = :level0)
 level1 = ODESystem(Equation[], t, [], []; name = :level1) ∘ level0
@@ -208,18 +208,18 @@ N = S + I + R
 @named reqn = ODESystem([D(R) ~ γ * I])
 
 sir = compose(ODESystem([
-                            S ~ ieqn.S,
-                            I ~ seqn.I,
-                            R ~ ieqn.R,
-                            ieqn.S ~ seqn.S,
-                            seqn.I ~ ieqn.I,
-                            seqn.R ~ reqn.R,
-                            ieqn.R ~ reqn.R,
-                            reqn.I ~ ieqn.I], t, [S, I, R], [β, γ],
-                        defaults = [seqn.β => β
-                                    ieqn.β => β
-                                    ieqn.γ => γ
-                                    reqn.γ => γ], name = :sir), seqn, ieqn, reqn)
+            S ~ ieqn.S,
+            I ~ seqn.I,
+            R ~ ieqn.R,
+            ieqn.S ~ seqn.S,
+            seqn.I ~ ieqn.I,
+            seqn.R ~ reqn.R,
+            ieqn.R ~ reqn.R,
+            reqn.I ~ ieqn.I], t, [S, I, R], [β, γ],
+        defaults = [seqn.β => β
+            ieqn.β => β
+            ieqn.γ => γ
+            reqn.γ => γ], name = :sir), seqn, ieqn, reqn)
 ```
 
 Note that the states are forwarded by an equality relationship, while
@@ -241,7 +241,7 @@ u0 = [seqn.S => 990.0,
     reqn.R => 0.0]
 
 p = [β => 0.5
-     γ => 0.25]
+    γ => 0.25]
 
 tspan = (0.0, 40.0)
 prob = ODEProblem(sireqn_simple, u0, tspan, p, jac = true)

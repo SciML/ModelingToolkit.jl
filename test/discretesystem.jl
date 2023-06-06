@@ -110,8 +110,8 @@ D2 = Difference(t; dt = 2)
 @test ModelingToolkit.is_delay_var(Symbolics.value(t), Symbolics.value(y(t - 1)))
 @test !ModelingToolkit.is_delay_var(Symbolics.value(t), Symbolics.value(z))
 @test_throws ErrorException ModelingToolkit.get_delay_val(Symbolics.value(t),
-                                                          Symbolics.arguments(Symbolics.value(x(t +
-                                                                                                2)))[1])
+    Symbolics.arguments(Symbolics.value(x(t +
+                                          2)))[1])
 @test_throws ErrorException z(t)
 
 # Equations
@@ -129,9 +129,9 @@ eqs2, max_delay = ModelingToolkit.linearize_eqs(sys; return_max_delay = true)
 @test max_delay[Symbolics.operation(Symbolics.value(y(t)))] ≈ 2
 
 linearized_eqs = [eqs
-                  x(t - 3.0) ~ x(t - 1.5)
-                  x(t - 1.5) ~ x(t)
-                  y(t - 2.0) ~ y(t)]
+    x(t - 3.0) ~ x(t - 1.5)
+    x(t - 1.5) ~ x(t)
+    y(t - 2.0) ~ y(t)]
 @test all(eqs2 .== linearized_eqs)
 
 # observed variable handling
@@ -186,8 +186,8 @@ RHS2 = RHS
     defs = Dict{Any, Any}(s => v for (s, v) in zip(ss, vv))
 
     preface = [Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:u)), us))
-               Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:p)), ps))
-               Assignment(buffer, term(wf, t))]
+        Assignment(dummy_var, SetArray(true, term(getfield, wf, Meta.quot(:p)), ps))
+        Assignment(buffer, term(wf, t))]
     eqs = map(1:length(us)) do i
         Δ(us[i]) ~ dummy_identity(buffer[i], us[i])
     end

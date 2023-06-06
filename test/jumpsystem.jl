@@ -166,7 +166,7 @@ sol = solve(jprob, SSAStepper());
     sys1 = JumpSystem([maj1, maj2], t, [S], [β, γ], name = :sys1)
     sys2 = JumpSystem([maj1, maj2], t, [S], [β, γ], name = :sys1)
     @test_throws ArgumentError JumpSystem([sys1.γ ~ sys2.γ], t, [], [],
-                                          systems = [sys1, sys2], name = :foo)
+        systems = [sys1, sys2], name = :foo)
 end
 
 # test if param mapper is setup correctly for callbacks
@@ -189,7 +189,7 @@ function paffect!(integrator)
     reset_aggregated_jumps!(integrator)
 end
 sol = solve(jprob, SSAStepper(), tstops = [1000.0],
-            callback = DiscreteCallback(pcondit, paffect!))
+    callback = DiscreteCallback(pcondit, paffect!))
 @test sol[1, end] == 100
 
 # observed variable handling

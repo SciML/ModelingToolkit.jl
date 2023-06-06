@@ -1,10 +1,12 @@
 module MTKDeepDiffsExt
 
 using DeepDiffs, ModelingToolkit
-using ModelingToolkit.BipartiteGraphs: Label, BipartiteAdjacencyList, unassigned,
-                                       HighlightInt
-using ModelingToolkit.SystemStructures: SystemStructure, MatchedSystemStructure,
-                                        SystemStructurePrintMatrix
+using ModelingToolkit.BipartiteGraphs: Label,
+    BipartiteAdjacencyList, unassigned,
+    HighlightInt
+using ModelingToolkit.SystemStructures: SystemStructure,
+    MatchedSystemStructure,
+    SystemStructurePrintMatrix
 
 """
 A utility struct for displaying the difference between two HighlightInts.
@@ -63,8 +65,8 @@ end
 
 function Base.show(io::IO, l::BipartiteAdjacencyListDiff)
     print(io,
-          LabelDiff(Label(l.new.match === true ? "∫ " : ""),
-                    Label(l.old.match === true ? "∫ " : "")))
+        LabelDiff(Label(l.new.match === true ? "∫ " : ""),
+            Label(l.old.match === true ? "∫ " : "")))
     (l.new.match !== true && l.old.match !== true) && print(io, "  ")
 
     new_nonempty = isnothing(l.new.u) ? nothing : !isempty(l.new.u)
@@ -79,29 +81,29 @@ function Base.show(io::IO, l::BipartiteAdjacencyListDiff)
         old_items = Dict(i => HighlightInt(i, :nothing, i === l.old.match) for i in l.old.u)
 
         highlighted = union(map(intersect(l.new.u, l.old.u)) do i
-                                HighlightIntDiff(new_items[i], old_items[i])
-                            end,
-                            map(setdiff(l.new.u, l.old.u)) do i
-                                HighlightInt(new_items[i].i, :light_green,
-                                             new_items[i].match)
-                            end,
-                            map(setdiff(l.old.u, l.new.u)) do i
-                                HighlightInt(old_items[i].i, :light_red,
-                                             old_items[i].match)
-                            end)
+                HighlightIntDiff(new_items[i], old_items[i])
+            end,
+            map(setdiff(l.new.u, l.old.u)) do i
+                HighlightInt(new_items[i].i, :light_green,
+                    new_items[i].match)
+            end,
+            map(setdiff(l.old.u, l.new.u)) do i
+                HighlightInt(old_items[i].i, :light_red,
+                    old_items[i].match)
+            end)
         print(IOContext(io, :typeinfo => typeof(highlighted)), highlighted)
     elseif new_nonempty === true
         printstyled(io, map(l.new.u) do i
-                        HighlightInt(i, :nothing, i === l.new.match)
-                    end, color = :light_green)
+                HighlightInt(i, :nothing, i === l.new.match)
+            end, color = :light_green)
     elseif old_nonempty === true
         printstyled(io, map(l.old.u) do i
-                        HighlightInt(i, :nothing, i === l.old.match)
-                    end, color = :light_red)
+                HighlightInt(i, :nothing, i === l.old.match)
+            end, color = :light_red)
     elseif old_nonempty !== nothing || new_nonempty !== nothing
         print(io,
-              LabelDiff(Label(new_nonempty === false ? "∅" : "", :light_black),
-                        Label(old_nonempty === false ? "∅" : "", :light_black)))
+            LabelDiff(Label(new_nonempty === false ? "∅" : "", :light_black),
+                Label(old_nonempty === false ? "∅" : "", :light_black)))
     else
         printstyled(io, '⋅', color = :light_black)
     end
@@ -177,7 +179,7 @@ function Base.getindex(ssdpm::SystemStructureDiffPrintMatrix, i::Integer, j::Int
 end
 
 function DeepDiffs.deepdiff(old::Union{MatchedSystemStructure, SystemStructure},
-                            new::Union{MatchedSystemStructure, SystemStructure})
+    new::Union{MatchedSystemStructure, SystemStructure})
     new_sspm = SystemStructurePrintMatrix(new)
     old_sspm = SystemStructurePrintMatrix(old)
     Base.print_matrix(stdout, SystemStructureDiffPrintMatrix(new_sspm, old_sspm))

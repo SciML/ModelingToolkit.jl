@@ -18,9 +18,9 @@ function outputs(sys)
     rhss = [eq.rhs for eq in o]
     lhss = [eq.lhs for eq in o]
     unique([filter(isoutput, states(sys))
-            filter(isoutput, parameters(sys))
-            filter(x -> istree(x) && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
-            filter(x -> istree(x) && isoutput(x), lhss)])
+        filter(isoutput, parameters(sys))
+        filter(x -> istree(x) && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
+        filter(x -> istree(x) && isoutput(x), lhss)])
 end
 
 """
@@ -192,10 +192,10 @@ f[1](x, inputs, p, t)
 ```
 """
 function generate_control_function(sys::AbstractODESystem, inputs = unbound_inputs(sys),
-                                   disturbance_inputs = disturbances(sys);
-                                   implicit_dae = false,
-                                   simplify = false,
-                                   kwargs...)
+    disturbance_inputs = disturbances(sys);
+    implicit_dae = false,
+    simplify = false,
+    kwargs...)
     isempty(inputs) && @warn("No unbound inputs were found in system.")
 
     if disturbance_inputs !== nothing
@@ -240,7 +240,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     end
     process = get_postprocess_fbody(sys)
     f = build_function(rhss, args...; postprocess_fbody = process,
-                       expression = Val{false}, kwargs...)
+        expression = Val{false}, kwargs...)
     (; f, dvs, ps, io_sys = sys)
 end
 
@@ -413,11 +413,11 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing)
     end
 
     eqs = [dsys.input.u[1] ~ d
-           dist.input ~ u + dsys.output.u[1]]
+        dist.input ~ u + dsys.output.u[1]]
     augmented_sys = ODESystem(eqs, t, systems = [dsys], name = gensym(:outer))
     augmented_sys = extend(augmented_sys, sys)
 
     (f_oop, f_ip), dvs, p = generate_control_function(augmented_sys, all_inputs,
-                                                      [d])
+        [d])
     (f_oop, f_ip), augmented_sys, dvs, p
 end
