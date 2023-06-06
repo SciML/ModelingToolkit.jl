@@ -15,7 +15,7 @@ y &= Cx + Du
 \end{aligned}
 ```
 
-The `linearize` function expects the user to specify the inputs ``u`` and the outputs ``u`` using the syntax shown in the example below. The system model is *not* supposed to be simplified before calling `linearize`:
+The `linearize` function expects the user to specify the inputs ``u`` and the outputs ``y`` using the syntax shown in the example below. The system model is *not* supposed to be simplified before calling `linearize`:
 
 ## Example
 
