@@ -70,7 +70,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
 end
 
 """
-    computed_highest_diff_variables(var_to_diff)
+    computed_highest_diff_variables(structure)
 
 Computes which variables are the "highest-differentiated" for purposes of
 pantelides. Ordinarily this is relatively straightforward. However, in our
