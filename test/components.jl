@@ -159,6 +159,12 @@ u0 = states(sys) .=> 0
 prob = DAEProblem(sys, Differential(t).(states(sys)) .=> 0, u0, (0, 0.5))
 @test_nowarn sol = solve(prob, DFBDF())
 
+sys2 = structural_simplify(ll2_model)
+@test length(equations(sys2)) == 3
+u0 = states(sys) .=> 0
+prob = ODEProblem(sys, u0, (0, 10.0))
+@test_nowarn sol = solve(prob, FBDF())
+
 @variables t x1(t) x2(t) x3(t) x4(t)
 D = Differential(t)
 @named sys1_inner = ODESystem([D(x1) ~ x1], t)
