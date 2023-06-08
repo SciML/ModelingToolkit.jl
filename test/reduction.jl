@@ -294,7 +294,7 @@ ss = structural_simplify(sys)
 @test isempty(equations(ss))
 @test sort(string.(observed(ss))) == ["x(t) ~ 0.0"
     "xˍt(t) ~ 0.0"
-    "y(t) ~ xˍt(t)"]
+    "y(t) ~ xˍt(t) - x(t)"]
 
 eqs = [D(D(x)) ~ -x]
 @named sys = ODESystem(eqs, t, [x], [])
