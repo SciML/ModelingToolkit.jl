@@ -32,7 +32,7 @@ function connector_macro(mod, name, body)
             parse_icon!(icon, dict, dict, arg.args[end])
             continue
         end
-        push!(vs, Num(parse_variable_def!(dict, mod, arg, :variables)))
+        push!(vs, Num(parse_variable_def!(dict, mod, arg, :variables, kwargs)))
     end
     iv = get(dict, :independent_variable, nothing)
     if iv === nothing
@@ -49,18 +49,19 @@ function connector_macro(mod, name, body)
     end
 end
 
-function parse_variable_def!(dict, mod, arg, varclass)
+function parse_variable_def!(dict, mod, arg, varclass, kwargs)
     MLStyle.@match arg begin
         ::Symbol => generate_var!(dict, arg, varclass)
         Expr(:call, a, b) => generate_var!(dict, a, b, varclass)
         Expr(:(=), a, b) => begin
-            var = parse_variable_def!(dict, mod, a, varclass)
-            def = parse_default(mod, b)
+            var = parse_variable_def!(dict, mod, a, varclass, kwargs)
+            def = parse_default(mod, b, kwargs)
             dict[varclass][getname(var)][:default] = def
-            setdefault(var, def)
+            var = setdefault(var, def)
+            var
         end
         Expr(:tuple, a, b) => begin
-            var = parse_variable_def!(dict, mod, a, varclass)
+            var = parse_variable_def!(dict, mod, a, varclass, kwargs)
             meta = parse_metadata(mod, b)
             if (ct = get(meta, VariableConnectType, nothing)) !== nothing
                 dict[varclass][getname(var)][:connection_type] = nameof(ct)
@@ -102,10 +103,16 @@ function generate_var!(dict, a, b, varclass)
     end
     var
 end
-function parse_default(mod, a)
+
+function set_kwargs!(kwargs, a)
+    push!(kwargs, a)
+    return a
+end
+
+function parse_default(mod, a, kwargs)
     a = Base.remove_linenums!(deepcopy(a))
     MLStyle.@match a begin
-        Expr(:block, a) => get_var(mod, a)
+        Expr(:block, a) => set_kwargs!(kwargs, a)
         ::Symbol => get_var(mod, a)
         ::Number => a
         _ => error("Cannot parse default $a")
@@ -141,10 +148,11 @@ function model_macro(mod, name, expr)
     ps = Symbol[]
     eqs = Expr[]
     icon = Ref{Union{String, URI}}()
+    kwargs = []
     for arg in expr.args
         arg isa LineNumberNode && continue
         arg.head == :macrocall || error("$arg is not valid syntax. Expected a macro call.")
-        parse_model!(exprs.args, comps, ext, eqs, vs, ps, icon, dict, mod, arg)
+        parse_model!(exprs.args, comps, ext, eqs, vs, ps, icon, dict, mod, arg, kwargs)
     end
     iv = get(dict, :independent_variable, nothing)
     if iv === nothing
@@ -159,10 +167,11 @@ function model_macro(mod, name, expr)
     else
         push!(exprs.args, :($extend($sys, $(ext[]))))
     end
-    :($name = $Model((; name) -> $exprs, $dict))
+    @info "Exprs: $exprs"
+    :($name = $Model((; name, kwargs...) -> $exprs, $dict))
 end
 
-function parse_model!(exprs, comps, ext, eqs, vs, ps, icon, dict, mod, arg)
+function parse_model!(exprs, comps, ext, eqs, vs, ps, icon, dict, mod, arg, kwargs)
     mname = arg.args[1]
     body = arg.args[end]
     if mname == Symbol("@components")
@@ -170,9 +179,9 @@ function parse_model!(exprs, comps, ext, eqs, vs, ps, icon, dict, mod, arg)
     elseif mname == Symbol("@extend")
         parse_extend!(exprs, ext, dict, body)
     elseif mname == Symbol("@variables")
-        parse_variables!(exprs, vs, dict, mod, body, :variables)
+        parse_variables!(exprs, vs, dict, mod, body, :variables, kwargs)
     elseif mname == Symbol("@parameters")
-        parse_variables!(exprs, ps, dict, mod, body, :parameters)
+        parse_variables!(exprs, ps, dict, mod, body, :parameters, kwargs)
     elseif mname == Symbol("@equations")
         parse_equations!(exprs, eqs, dict, body)
     elseif mname == Symbol("@icon")
@@ -231,12 +240,12 @@ function parse_extend!(exprs, ext, dict, body)
     end
 end
 
-function parse_variables!(exprs, vs, dict, mod, body, varclass)
+function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs)
     expr = Expr(:block)
     push!(exprs, expr)
     for arg in body.args
         arg isa LineNumberNode && continue
-        vv = parse_variable_def!(dict, mod, arg, varclass)
+        vv = parse_variable_def!(dict, mod, arg, varclass, kwargs)
         v = Num(vv)
         name = getname(v)
         push!(vs, name)
