@@ -516,6 +516,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
     sparse = false, simplify = false,
     steady_state = false,
     sparsity = false,
+    observedfun_exp = nothing,
     kwargs...) where {iip}
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
 
@@ -567,7 +568,8 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
             syms = $(Symbol.(states(sys))),
             indepsym = $(QuoteNode(Symbol(get_iv(sys)))),
             paramsyms = $(Symbol.(parameters(sys))),
-            sparsity = $(sparsity ? jacobian_sparsity(sys) : nothing))
+            sparsity = $(sparsity ? jacobian_sparsity(sys) : nothing),
+            observed = $observedfun_exp)
     end
     !linenumbers ? striplines(ex) : ex
 end
