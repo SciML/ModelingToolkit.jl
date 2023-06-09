@@ -54,6 +54,7 @@ export tearing_assignments, tearing_substitution
 export torn_system_jacobian_sparsity
 export full_equations
 export but_ordered_incidence, lowest_order_variable_mask, highest_order_variable_mask
+export computed_highest_diff_variables
 
 include("utils.jl")
 include("pantelides.jl")

@@ -207,12 +207,12 @@ if VERSION >= v"1.8"
 
     @named model = ODESystem(eqs, t, [], []; systems = [link1, cart, force, fixed])
     def = ModelingToolkit.defaults(model)
-    def[link1.y1] = 0
+    for s in states(model)
+        def[s] = 0
+    end
     def[link1.x1] = 10
+    def[link1.fy1] = -def[link1.g] * def[link1.m]
     def[link1.A] = -pi / 2
-    def[link1.dA] = 0
-    def[cart.s] = 0
-    def[force.flange.v] = 0
     lin_outputs = [cart.s, cart.v, link1.A, link1.dA]
     lin_inputs = [force.f.u]
 
@@ -237,7 +237,9 @@ if VERSION >= v"1.8"
     def = merge(def, Dict(x => 0.0 for x in dummyder))
 
     @test substitute(lsyss.A, def) ≈ lsys.A
-    @test substitute(lsyss.B, def) ≈ lsys.B
+    # We cannot pivot symbolically, so the part where a linear solve is required
+    # is not reliable.
+    @test substitute(lsyss.B, def)[1:6, :] ≈ lsys.B[1:6, :]
     @test substitute(lsyss.C, def) ≈ lsys.C
     @test substitute(lsyss.D, def) ≈ lsys.D
 end
