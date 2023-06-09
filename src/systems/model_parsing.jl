@@ -72,6 +72,37 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs)
     end
 end
 
+function for_keyword_queue()
+    # These args contain potential keywords
+    # Handle it along with vars without defaults
+end
+
+# Takes in args and populates kw and var definition exprs.
+# This should be modified to handle the other cases (i.e they should use existing
+# methods)
+function parse_variables_with_kw!(exprs, dict, mod, body, varclass, kwargs)
+    expr = if varclass == :parameters
+        :(ps = @parameters begin
+        end)
+    elseif varclass == :variables
+        :(vs = @variables begin
+        end)
+    end
+
+    for arg in body.args
+        arg isa LineNumberNode && continue
+        MLStyle.@match arg begin
+
+            Expr(:(=), a, b) => begin
+                def = Base.remove_linenums!(b).args[end]
+                push!(expr.args[end].args[end].args, :($a = $def))
+                push!(kwargs, def)
+            end
+        end
+    end
+    push!(exprs, expr)
+end
+
 function generate_var(a, varclass)
     var = Symbolics.variable(a)
     if varclass == :parameters
@@ -104,15 +135,10 @@ function generate_var!(dict, a, b, varclass)
     var
 end
 
-function set_kwargs!(kwargs, a)
-    push!(kwargs, a)
-    return a
-end
-
 function parse_default(mod, a, kwargs)
     a = Base.remove_linenums!(deepcopy(a))
     MLStyle.@match a begin
-        Expr(:block, a) => set_kwargs!(kwargs, a)
+        Expr(:block, a) => get_var(mod, a)
         ::Symbol => get_var(mod, a)
         ::Number => a
         _ => error("Cannot parse default $a")
@@ -132,7 +158,7 @@ function set_var_metadata(a, ms)
     a
 end
 function get_var(mod::Module, b)
-    b isa Symbol ? getproperty(mod, b) : b
+    b isa Symbol ? getproperty(mod, b) : for_keyword_queue()
 end
 
 macro model(name::Symbol, expr)
@@ -144,15 +170,13 @@ function model_macro(mod, name, expr)
     dict = Dict{Symbol, Any}()
     comps = Symbol[]
     ext = Ref{Any}(nothing)
-    vs = Symbol[]
-    ps = Symbol[]
     eqs = Expr[]
     icon = Ref{Union{String, URI}}()
     kwargs = []
     for arg in expr.args
         arg isa LineNumberNode && continue
         arg.head == :macrocall || error("$arg is not valid syntax. Expected a macro call.")
-        parse_model!(exprs.args, comps, ext, eqs, vs, ps, icon, dict, mod, arg, kwargs)
+        parse_model!(exprs.args, comps, ext, eqs, icon, dict, mod, arg, kwargs)
     end
     iv = get(dict, :independent_variable, nothing)
     if iv === nothing
@@ -160,18 +184,18 @@ function model_macro(mod, name, expr)
     end
     gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
                    nothing
-    sys = :($ODESystem($Equation[$(eqs...)], $iv, [$(vs...)], [$(ps...)];
+    sys = :($ODESystem($Equation[$(eqs...)],  $iv, vs, ps;
         systems = [$(comps...)], name, gui_metadata = $gui_metadata))
     if ext[] === nothing
         push!(exprs.args, sys)
     else
         push!(exprs.args, :($extend($sys, $(ext[]))))
     end
-    @info "Exprs: $exprs"
-    :($name = $Model((; name, kwargs...) -> $exprs, $dict))
+
+    :($name = $Model((; name, $(kwargs...)) -> $exprs, $dict))
 end
 
-function parse_model!(exprs, comps, ext, eqs, vs, ps, icon, dict, mod, arg, kwargs)
+function parse_model!(exprs, comps, ext, eqs, icon, dict, mod, arg, kwargs)
     mname = arg.args[1]
     body = arg.args[end]
     if mname == Symbol("@components")
@@ -179,9 +203,9 @@ function parse_model!(exprs, comps, ext, eqs, vs, ps, icon, dict, mod, arg, kwar
     elseif mname == Symbol("@extend")
         parse_extend!(exprs, ext, dict, body)
     elseif mname == Symbol("@variables")
-        parse_variables!(exprs, vs, dict, mod, body, :variables, kwargs)
+        parse_variables_with_kw!(exprs, dict, mod, body, :variables, kwargs)
     elseif mname == Symbol("@parameters")
-        parse_variables!(exprs, ps, dict, mod, body, :parameters, kwargs)
+        parse_variables_with_kw!(exprs, dict, mod, body, :parameters, kwargs)
     elseif mname == Symbol("@equations")
         parse_equations!(exprs, eqs, dict, body)
     elseif mname == Symbol("@icon")
