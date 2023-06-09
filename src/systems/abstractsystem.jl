@@ -767,14 +767,19 @@ function toexpr(sys::AbstractSystem)
     psname = gensym(:ps)
     ps = parameters(sys)
     push_vars!(stmt, psname, Symbol("@parameters"), ps)
+    obs = observed(sys)
+    obsvars = [o.lhs for o in obs]
+    obsvarsname = gensym(:obs)
+    push_vars!(stmt, obsvarsname, Symbol("@variables"), obsvars)
 
     var2name = Dict{Any, Symbol}()
-    for v in Iterators.flatten((sts, ps))
+    for v in Iterators.flatten((sts, ps, obsvars))
         var2name[v] = getname(v)
     end
 
-    eqs_name = push_eqs!(stmt, equations(sys), var2name)
+    eqs_name = push_eqs!(stmt, full_equations(sys), var2name)
     defs_name = push_defaults!(stmt, defaults(sys), var2name)
+    obs_name = push_eqs!(stmt, obs, var2name)
 
     if sys isa ODESystem
         iv = get_iv(sys)
@@ -782,10 +787,12 @@ function toexpr(sys::AbstractSystem)
         push!(stmt, :($ivname = (@variables $(getname(iv)))[1]))
         push!(stmt,
             :($ODESystem($eqs_name, $ivname, $stsname, $psname; defaults = $defs_name,
+                observed = $obs_name,
                 name = $name, checks = false)))
     elseif sys isa NonlinearSystem
         push!(stmt,
             :($NonlinearSystem($eqs_name, $stsname, $psname; defaults = $defs_name,
+                observed = $obs_name,
                 name = $name, checks = false)))
     end
 
