@@ -118,7 +118,7 @@ sol = solve(prob_auto, Rodas5());
 #plot(sol, idxs=(D(x), y))
 
 let pss_pendulum2 = partial_state_selection(pendulum2)
-    @test_broken length(equations(pss_pendulum2)) <= 6
+    @test length(equations(pss_pendulum2)) <= 6
 end
 
 eqs = [D(x) ~ w,
