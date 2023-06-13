@@ -157,31 +157,12 @@ function dummy_derivative_graph!(state::TransformationState, jac = nothing;
     dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority)
 end
 
-function compute_diff_level(diff_to_x)
-    nxs = length(diff_to_x)
-    xlevel = zeros(Int, nxs)
-    maxlevel = 0
-    for i in 1:nxs
-        level = 0
-        x = i
-        while diff_to_x[x] !== nothing
-            x = diff_to_x[x]
-            level += 1
-        end
-        maxlevel = max(maxlevel, level)
-        xlevel[i] = level
-    end
-    return xlevel, maxlevel
-end
-
 function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac,
     state_priority)
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
     invgraph = invview(graph)
-
-    eqlevel, _ = compute_diff_level(diff_to_eq)
 
     var_sccs = find_var_sccs(graph, var_eq_matching)
     eqcolor = falses(nsrcs(graph))
@@ -193,6 +174,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     next_var_idxs = Int[]
     new_eqs = Int[]
     new_vars = Int[]
+    eqs_set = BitSet()
     for vars in var_sccs
         empty!(eqs)
         for var in vars
@@ -202,8 +184,6 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             push!(eqs, eq)
         end
         isempty(eqs) && continue
-        maxlevel = maximum(Base.Fix1(getindex, eqlevel), eqs)
-        iszero(maxlevel) && continue
 
         rank_matching = Matching(nvars)
         isfirst = true
@@ -219,15 +199,13 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             end
             J = is_all_small_int ? Int.(unwrap.(_J)) : nothing
         end
-        for level in maxlevel:-1:1
+        while true
             nrows = length(eqs)
             iszero(nrows) && break
-            eqs_set = BitSet(eqs)
 
             if state_priority !== nothing && isfirst
                 sort!(vars, by = state_priority)
             end
-            isfirst = false
             # TODO: making the algorithm more robust
             # 1. If the Jacobian is a integer matrix, use Bareiss to check
             # linear independence. (done)
@@ -237,7 +215,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             #
             # 3. If the Jacobian is a polynomial matrix, use Gröbner basis (?)
             if J !== nothing
-                if level < maxlevel
+                if !isfirst
                     J = J[next_eq_idxs, next_var_idxs]
                 end
                 N = ModelingToolkit.nullspace(J; col_order) # modifies col_order
@@ -246,6 +224,8 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
                     push!(dummy_derivatives, vars[col_order[i]])
                 end
             else
+                empty!(eqs_set)
+                union!(eqs_set, eqs)
                 rank = 0
                 for var in vars
                     eqcolor .= false
@@ -261,7 +241,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
                 fill!(rank_matching, unassigned)
             end
             if rank != nrows
-                @warn "The DAE system is structurally singular!"
+                @warn "The DAE system is singular!"
             end
 
             # prepare the next iteration
@@ -293,6 +273,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             end
             eqs, new_eqs = new_eqs, eqs
             vars, new_vars = new_vars, vars
+            isfirst = false
         end
     end
 
