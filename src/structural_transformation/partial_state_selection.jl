@@ -188,16 +188,38 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     dummy_derivatives = Int[]
     col_order = Int[]
     nvars = ndsts(graph)
+    eqs = Int[]
+    next_eq_idxs = Int[]
+    next_var_idxs = Int[]
+    new_eqs = Int[]
+    new_vars = Int[]
     for vars in var_sccs
-        eqs = [var_eq_matching[var] for var in vars if var_eq_matching[var] !== unassigned]
+        empty!(eqs)
+        for var in vars
+            eq = var_eq_matching[var]
+            eq isa Int || continue
+            diff_to_eq[eq] === nothing && continue
+            push!(eqs, eq)
+        end
         isempty(eqs) && continue
         maxlevel = maximum(Base.Fix1(getindex, eqlevel), eqs)
         iszero(maxlevel) && continue
 
         rank_matching = Matching(nvars)
         isfirst = true
-        for _ in maxlevel:-1:1
-            eqs = filter(eq -> diff_to_eq[eq] !== nothing, eqs)
+        if jac === nothing
+            J = nothing
+        else
+            _J = jac(eqs, vars)
+            # only accecpt small intergers to avoid overflow
+            is_all_small_int = all(_J) do x′
+                x = unwrap(x′)
+                x isa Number || return false
+                isinteger(x) && typemin(Int8) <= x <= typemax(Int8)
+            end
+            J = is_all_small_int ? Int.(unwrap.(_J)) : nothing
+        end
+        for level in maxlevel:-1:1
             nrows = length(eqs)
             iszero(nrows) && break
             eqs_set = BitSet(eqs)
@@ -214,8 +236,10 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             # state selection.)
             #
             # 3. If the Jacobian is a polynomial matrix, use Gröbner basis (?)
-            if jac !== nothing && (_J = jac(eqs, vars); all(x -> unwrap(x) isa Integer, _J))
-                J = Int.(unwrap.(_J))
+            if J !== nothing
+                if level < maxlevel
+                    J = J[next_eq_idxs, next_var_idxs]
+                end
                 N = ModelingToolkit.nullspace(J; col_order) # modifies col_order
                 rank = length(col_order) - size(N, 2)
                 for i in 1:rank
@@ -241,8 +265,34 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             end
 
             # prepare the next iteration
-            eqs = map(eq -> diff_to_eq[eq], eqs)
-            vars = [diff_to_var[var] for var in vars if diff_to_var[var] !== nothing]
+            if J !== nothing
+                empty!(next_eq_idxs)
+                empty!(next_var_idxs)
+            end
+            empty!(new_eqs)
+            empty!(new_vars)
+            for (i, eq) in enumerate(eqs)
+                ∫eq = diff_to_eq[eq]
+                # descend by one diff level, but the next iteration of equations
+                # must still be differentiated
+                ∫eq === nothing && continue
+                ∫∫eq = diff_to_eq[∫eq]
+                ∫∫eq === nothing && continue
+                if J !== nothing
+                    push!(next_eq_idxs, i)
+                end
+                push!(new_eqs, ∫eq)
+            end
+            for (i, var) in enumerate(vars)
+                ∫var = diff_to_var[var]
+                ∫var === nothing && continue
+                if J !== nothing
+                    push!(next_var_idxs, i)
+                end
+                push!(new_vars, ∫var)
+            end
+            eqs, new_eqs = new_eqs, eqs
+            vars, new_vars = new_vars, vars
         end
     end
 
