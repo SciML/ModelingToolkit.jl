@@ -175,23 +175,6 @@ function dummy_derivative_graph!(state::TransformationState, jac = nothing;
     dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority)
 end
 
-function compute_diff_level(diff_to_x)
-    nxs = length(diff_to_x)
-    xlevel = zeros(Int, nxs)
-    maxlevel = 0
-    for i in 1:nxs
-        level = 0
-        x = i
-        while diff_to_x[x] !== nothing
-            x = diff_to_x[x]
-            level += 1
-        end
-        maxlevel = max(maxlevel, level)
-        xlevel[i] = level
-    end
-    return xlevel, maxlevel
-end
-
 function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac,
     state_priority)
     @unpack eq_to_diff, var_to_diff, graph = structure
@@ -199,31 +182,48 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
     diff_to_var = invview(var_to_diff)
     invgraph = invview(graph)
 
-    eqlevel, _ = compute_diff_level(diff_to_eq)
-
     var_sccs = find_var_sccs(graph, var_eq_matching)
     eqcolor = falses(nsrcs(graph))
     dummy_derivatives = Int[]
     col_order = Int[]
     nvars = ndsts(graph)
+    eqs = Int[]
+    next_eq_idxs = Int[]
+    next_var_idxs = Int[]
+    new_eqs = Int[]
+    new_vars = Int[]
+    eqs_set = BitSet()
     for vars in var_sccs
-        eqs = [var_eq_matching[var] for var in vars if var_eq_matching[var] !== unassigned]
+        empty!(eqs)
+        for var in vars
+            eq = var_eq_matching[var]
+            eq isa Int || continue
+            diff_to_eq[eq] === nothing && continue
+            push!(eqs, eq)
+        end
         isempty(eqs) && continue
-        maxlevel = maximum(Base.Fix1(getindex, eqlevel), eqs)
-        iszero(maxlevel) && continue
 
         rank_matching = Matching(nvars)
         isfirst = true
-        for _ in maxlevel:-1:1
-            eqs = filter(eq -> diff_to_eq[eq] !== nothing, eqs)
+        if jac === nothing
+            J = nothing
+        else
+            _J = jac(eqs, vars)
+            # only accecpt small intergers to avoid overflow
+            is_all_small_int = all(_J) do x′
+                x = unwrap(x′)
+                x isa Number || return false
+                isinteger(x) && typemin(Int8) <= x <= typemax(Int8)
+            end
+            J = is_all_small_int ? Int.(unwrap.(_J)) : nothing
+        end
+        while true
             nrows = length(eqs)
             iszero(nrows) && break
-            eqs_set = BitSet(eqs)
 
             if state_priority !== nothing && isfirst
                 sort!(vars, by = state_priority)
             end
-            isfirst = false
             # TODO: making the algorithm more robust
             # 1. If the Jacobian is a integer matrix, use Bareiss to check
             # linear independence. (done)
@@ -232,14 +232,18 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             # state selection.)
             #
             # 3. If the Jacobian is a polynomial matrix, use Gröbner basis (?)
-            if jac !== nothing && (_J = jac(eqs, vars); all(x -> unwrap(x) isa Integer, _J))
-                J = Int.(unwrap.(_J))
+            if J !== nothing
+                if !isfirst
+                    J = J[next_eq_idxs, next_var_idxs]
+                end
                 N = ModelingToolkit.nullspace(J; col_order) # modifies col_order
                 rank = length(col_order) - size(N, 2)
                 for i in 1:rank
                     push!(dummy_derivatives, vars[col_order[i]])
                 end
             else
+                empty!(eqs_set)
+                union!(eqs_set, eqs)
                 rank = 0
                 for var in vars
                     eqcolor .= false
@@ -255,12 +259,39 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
                 fill!(rank_matching, unassigned)
             end
             if rank != nrows
-                @warn "The DAE system is structurally singular!"
+                @warn "The DAE system is singular!"
             end
 
             # prepare the next iteration
-            eqs = map(eq -> diff_to_eq[eq], eqs)
-            vars = [diff_to_var[var] for var in vars if diff_to_var[var] !== nothing]
+            if J !== nothing
+                empty!(next_eq_idxs)
+                empty!(next_var_idxs)
+            end
+            empty!(new_eqs)
+            empty!(new_vars)
+            for (i, eq) in enumerate(eqs)
+                ∫eq = diff_to_eq[eq]
+                # descend by one diff level, but the next iteration of equations
+                # must still be differentiated
+                ∫eq === nothing && continue
+                ∫∫eq = diff_to_eq[∫eq]
+                ∫∫eq === nothing && continue
+                if J !== nothing
+                    push!(next_eq_idxs, i)
+                end
+                push!(new_eqs, ∫eq)
+            end
+            for (i, var) in enumerate(vars)
+                ∫var = diff_to_var[var]
+                ∫var === nothing && continue
+                if J !== nothing
+                    push!(next_var_idxs, i)
+                end
+                push!(new_vars, ∫var)
+            end
+            eqs, new_eqs = new_eqs, eqs
+            vars, new_vars = new_vars, vars
+            isfirst = false
         end
     end
 
