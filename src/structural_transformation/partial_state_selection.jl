@@ -27,36 +27,40 @@ function ascend_dg_all(xs, dg, level, maxlevel)
     return r
 end
 
-function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
+function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varlevel,
     inv_varlevel, inv_eqlevel)
     @unpack eq_to_diff, var_to_diff, graph, solvable_graph = structure
 
     # var_eq_matching is a maximal matching on the top-differentiated variables.
     # Find Strongly connected components. Note that after pantelides, we expect
     # a balanced system, so a maximal matching should be possible.
-    var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, var_eq_matching)
-    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(var_eq_matching)
+    var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, maximal_top_matching)
+    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(ndsts(graph))
     for vars in var_sccs
         # TODO: We should have a way to not have the scc code look at unassigned vars.
-        if length(vars) == 1 && varlevel[vars[1]] != 0
+        if length(vars) == 1 && maximal_top_matching[vars[1]] === unassigned
             continue
         end
 
         # Now proceed level by level from lowest to highest and tear the graph.
-        eqs = [var_eq_matching[var] for var in vars if var_eq_matching[var] !== unassigned]
+        eqs = [maximal_top_matching[var]
+               for var in vars if maximal_top_matching[var] !== unassigned]
         isempty(eqs) && continue
-        maxlevel = level = maximum(map(x -> inv_eqlevel[x], eqs))
+        maxeqlevel = maximum(map(x -> inv_eqlevel[x], eqs))
+        maxvarlevel = level = maximum(map(x -> inv_varlevel[x], vars))
         old_level_vars = ()
         ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph,
                 complete(Matching(ndsts(graph))));
             dir = :in)
+
         while level >= 0
             to_tear_eqs_toplevel = filter(eq -> inv_eqlevel[eq] >= level, eqs)
             to_tear_eqs = ascend_dg(to_tear_eqs_toplevel, invview(eq_to_diff), level)
 
             to_tear_vars_toplevel = filter(var -> inv_varlevel[var] >= level, vars)
-            to_tear_vars = ascend_dg_all(to_tear_vars_toplevel, invview(var_to_diff), level,
-                maxlevel)
+            to_tear_vars = ascend_dg(to_tear_vars_toplevel, invview(var_to_diff), level)
+
+            assigned_eqs = Int[]
 
             if old_level_vars !== ()
                 # Inherit constraints from previous level.
@@ -66,45 +70,59 @@ function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
                 removed_eqs = Int[]
                 removed_vars = Int[]
                 for var in old_level_vars
-                    old_assign = ict.graph.matching[var]
-                    if !isa(old_assign, Int) ||
-                       ict.graph.matching[var_to_diff[var]] !== unassigned
+                    old_assign = var_eq_matching[var]
+                    if isa(old_assign, SelectedState)
+                        push!(removed_vars, var)
+                        continue
+                    elseif !isa(old_assign, Int) ||
+                           ict.graph.matching[var_to_diff[var]] !== unassigned
                         continue
                     end
                     # Make sure the ict knows about this edge, so it doesn't accidentally introduce
                     # a cycle.
-                    ok = try_assign_eq!(ict, var_to_diff[var], eq_to_diff[old_assign])
+                    assgned_eq = eq_to_diff[old_assign]
+                    ok = try_assign_eq!(ict, var_to_diff[var], assgned_eq)
                     @assert ok
-                    var_eq_matching[var_to_diff[var]] = eq_to_diff[old_assign]
+                    var_eq_matching[var_to_diff[var]] = assgned_eq
                     push!(removed_eqs, eq_to_diff[ict.graph.matching[var]])
                     push!(removed_vars, var_to_diff[var])
+                    push!(removed_vars, var)
                 end
                 to_tear_eqs = setdiff(to_tear_eqs, removed_eqs)
                 to_tear_vars = setdiff(to_tear_vars, removed_vars)
             end
-            filter!(var -> ict.graph.matching[var] === unassigned, to_tear_vars)
-            filter!(eq -> invview(ict.graph.matching)[eq] === unassigned, to_tear_eqs)
             tearEquations!(ict, solvable_graph.fadjlist, to_tear_eqs, BitSet(to_tear_vars),
                 nothing)
+
             for var in to_tear_vars
-                var_eq_matching[var] = unassigned
+                @assert var_eq_matching[var] === unassigned
+                assgned_eq = ict.graph.matching[var]
+                var_eq_matching[var] = assgned_eq
+                isa(assgned_eq, Int) && push!(assigned_eqs, assgned_eq)
             end
-            for var in to_tear_vars
-                var_eq_matching[var] = ict.graph.matching[var]
+
+            if level != 0
+                remaining_vars = collect(v for v in to_tear_vars
+                                             if var_eq_matching[v] === unassigned)
+                if !isempty(remaining_vars)
+                    remaining_eqs = setdiff(to_tear_eqs, assigned_eqs)
+                    nlsolve_matching = maximal_matching(graph,
+                        Base.Fix2(in, remaining_eqs),
+                        Base.Fix2(in, remaining_vars))
+                    for var in remaining_vars
+                        if nlsolve_matching[var] === unassigned &&
+                           var_eq_matching[var] === unassigned
+                            var_eq_matching[var] = SelectedState()
+                        end
+                    end
+                end
             end
+
             old_level_vars = to_tear_vars
             level -= 1
         end
     end
-    for var in 1:ndsts(graph)
-        dv = var_to_diff[var]
-        # If `var` is not algebraic (not differentiated nor a dummy derivative),
-        # then it's a SelectedState
-        if !(dv === nothing || (varlevel[dv] !== 0 && var_eq_matching[dv] === unassigned))
-            var_eq_matching[var] = SelectedState()
-        end
-    end
-    return var_eq_matching
+    return complete(var_eq_matching)
 end
 
 struct SelectedState end
