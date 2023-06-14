@@ -935,6 +935,32 @@ function split_assign(expr)
     name, call = expr.args
 end
 
+varname_fix!(s) = return
+
+function varname_fix!(expr::Expr)
+    for arg in expr.args
+        MLStyle.@match arg begin
+            ::Symbol => continue
+            Expr(:kw, a) => varname_sanitization!(arg)
+            Expr(:parameters, a...) => begin
+                for _arg in arg.args
+                    varname_sanitization!(_arg)
+                end
+            end
+            _ => @debug "skipping variable sanitization of $arg"
+        end
+    end
+end
+
+varname_sanitization!(a) = return
+
+function varname_sanitization!(expr::Expr)
+    var_splits = split(string(expr.args[1]), ".")
+    if length(var_splits) > 1
+        expr.args[1] = Symbol(join(var_splits, "__"))
+    end
+end
+
 function _named(name, call, runtime = false)
     has_kw = false
     call isa Expr || throw(Meta.ParseError("The rhs must be an Expr. Got $call."))
@@ -947,6 +973,8 @@ function _named(name, call, runtime = false)
             has_kw = true
         end
     end
+
+    varname_fix!(call)
 
     if !has_kw
         param = Expr(:parameters)

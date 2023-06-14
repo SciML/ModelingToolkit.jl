@@ -8,8 +8,6 @@ struct Model{F, S}
 end
 (m::Model)(args...; kw...) = m.f(args...; kw...)
 
-using MLStyle
-
 function connector_macro(mod, name, body)
     if !Meta.isexpr(body, :block)
         err = """
@@ -82,10 +80,10 @@ end
 # methods)
 function parse_variables_with_kw!(exprs, dict, mod, body, varclass, kwargs)
     expr = if varclass == :parameters
-        :(ps = @parameters begin
+        :(pss = @parameters begin
         end)
     elseif varclass == :variables
-        :(vs = @variables begin
+        :(vss = @variables begin
         end)
     end
 
@@ -97,9 +95,12 @@ function parse_variables_with_kw!(exprs, dict, mod, body, varclass, kwargs)
                 def = Base.remove_linenums!(b).args[end]
                 push!(expr.args[end].args[end].args, :($a = $def))
                 push!(kwargs, def)
+                @info "\nIn $varclass $kwargs for arg: $arg"
             end
+            _ => "got $arg"
         end
     end
+    dict[:kwargs] = kwargs
     push!(exprs, expr)
 end
 
@@ -173,6 +174,8 @@ function model_macro(mod, name, expr)
     eqs = Expr[]
     icon = Ref{Union{String, URI}}()
     kwargs = []
+    vs, vss = [], []
+    ps, pss = [], []
     for arg in expr.args
         arg isa LineNumberNode && continue
         arg.head == :macrocall || error("$arg is not valid syntax. Expected a macro call.")
@@ -184,14 +187,14 @@ function model_macro(mod, name, expr)
     end
     gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
                    nothing
-    sys = :($ODESystem($Equation[$(eqs...)],  $iv, vs, ps;
+    sys = :($ODESystem($Equation[$(eqs...)], $iv, [], [$(ps...); pss...];
         systems = [$(comps...)], name, gui_metadata = $gui_metadata))
     if ext[] === nothing
         push!(exprs.args, sys)
     else
         push!(exprs.args, :($extend($sys, $(ext[]))))
     end
-
+@info "\nexprs $exprs final kwargs: $kwargs"
     :($name = $Model((; name, $(kwargs...)) -> $exprs, $dict))
 end
 
@@ -199,7 +202,7 @@ function parse_model!(exprs, comps, ext, eqs, icon, dict, mod, arg, kwargs)
     mname = arg.args[1]
     body = arg.args[end]
     if mname == Symbol("@components")
-        parse_components!(exprs, comps, dict, body)
+        parse_components!(exprs, comps, dict, body, kwargs)
     elseif mname == Symbol("@extend")
         parse_extend!(exprs, ext, dict, body)
     elseif mname == Symbol("@variables")
@@ -215,18 +218,64 @@ function parse_model!(exprs, comps, ext, eqs, icon, dict, mod, arg, kwargs)
     end
 end
 
-function parse_components!(exprs, cs, dict, body)
+function var_rename(compname, varname::Expr, arglist)
+    @info typeof(varname)
+    compname = Symbol(compname, :__, varname.args[1])
+    push!(arglist, Expr(:(=), compname, varname.args[2]))
+    @info "$(typeof(varname)) | the arglist @220 is $arglist"
+    return Expr(:kw, varname, compname)
+end
+
+function var_rename(compname, varname, arglist)
+    compname = Symbol(compname, :__, varname)
+    push!(arglist, :($compname))
+    @info "$(typeof(varname)) | the arglist @229 is $arglist"
+    return  Expr(:kw, varname, compname)
+end
+
+function component_args!(compname, comparg, arglist, varnamed)
+    for arg in comparg.args
+        arg isa LineNumberNode && continue
+        MLStyle.@match arg begin
+            Expr(:parameters, a, b) => begin
+                component_args!(compname, arg, arglist, varnamed)
+            end
+            Expr(:parameters, Expr) => begin
+                # push!(varnamed , var_rename(compname, a, arglist))
+                push!(varnamed , var_rename.(Ref(compname), arg.args, Ref(arglist)))
+            end
+            Expr(:parameters, a) => begin
+                # push!(varnamed , var_rename(compname, a, arglist))
+                for a_arg in a.args
+                    push!(varnamed , var_rename(compname, a_arg, arglist))
+                end
+            end
+            Expr(:kw, a, b) => begin
+                push!(varnamed , var_rename(compname, a, arglist))
+            end
+            ::Symbol =>  continue
+            _ => @info "got $arg"
+        end
+    end
+end
+
+function parse_components!(exprs, cs, dict, body, kwargs)
     expr = Expr(:block)
     push!(exprs, expr)
     comps = Vector{String}[]
+    varnamed = []
     for arg in body.args
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
             Expr(:(=), a, b) => begin
                 push!(cs, a)
+                component_args!(a, b, kwargs, varnamed)
                 push!(comps, [String(a), String(b.args[1])])
                 arg = deepcopy(arg)
                 b = deepcopy(arg.args[2])
+
+                b.args[2] = varnamed[1][1]
+
                 push!(b.args, Expr(:kw, :name, Meta.quot(a)))
                 arg.args[2] = b
                 push!(expr.args, arg)
