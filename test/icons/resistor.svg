@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="30">
+  <path d="M10 15
+l15 0
+l2.5 -5
+l5 10
+l5 -10
+l5 10
+l5 -10
+l5 10
+l2.5 -5
+l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></path>
+</svg>

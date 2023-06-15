@@ -9,6 +9,7 @@ end
 (m::Model)(args...; kw...) = m.f(args...; kw...)
 
 using MLStyle
+
 function connector_macro(mod, name, body)
     if !Meta.isexpr(body, :block)
         err = """
@@ -23,19 +24,26 @@ function connector_macro(mod, name, body)
         error(err)
     end
     vs = Num[]
+    icon = Ref{Union{String, URI}}()
     dict = Dict{Symbol, Any}()
     for arg in body.args
         arg isa LineNumberNode && continue
+        if arg.head == :macrocall && arg.args[1] == Symbol("@icon")
+            parse_icon!(icon, dict, dict, arg.args[end])
+            continue
+        end
         push!(vs, Num(parse_variable_def!(dict, mod, arg, :variables)))
     end
     iv = get(dict, :independent_variable, nothing)
     if iv === nothing
         error("$name doesn't have a independent variable")
     end
+    gui_metadata = isassigned(icon) ? GUIMetadata(GlobalRef(mod, name), icon[]) :
+                   nothing
     quote
         $name = $Model((; name) -> begin
                 var"#___sys___" = $ODESystem($(Equation[]), $iv, $vs, $([]);
-                    name)
+                    name, gui_metadata = $gui_metadata)
                 $Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))
             end, $dict)
     end
@@ -123,6 +131,7 @@ end
 macro model(name::Symbol, expr)
     esc(model_macro(__module__, name, expr))
 end
+
 function model_macro(mod, name, expr)
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}()
@@ -131,17 +140,20 @@ function model_macro(mod, name, expr)
     vs = Symbol[]
     ps = Symbol[]
     eqs = Expr[]
+    icon = Ref{Union{String, URI}}()
     for arg in expr.args
         arg isa LineNumberNode && continue
         arg.head == :macrocall || error("$arg is not valid syntax. Expected a macro call.")
-        parse_model!(exprs.args, comps, ext, eqs, vs, ps, dict, mod, arg)
+        parse_model!(exprs.args, comps, ext, eqs, vs, ps, icon, dict, mod, arg)
     end
     iv = get(dict, :independent_variable, nothing)
     if iv === nothing
         iv = dict[:independent_variable] = variable(:t)
     end
+    gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
+                   nothing
     sys = :($ODESystem($Equation[$(eqs...)], $iv, [$(vs...)], [$(ps...)];
-        systems = [$(comps...)], name))
+        systems = [$(comps...)], name, gui_metadata = $gui_metadata))
     if ext[] === nothing
         push!(exprs.args, sys)
     else
@@ -149,7 +161,8 @@ function model_macro(mod, name, expr)
     end
     :($name = $Model((; name) -> $exprs, $dict))
 end
-function parse_model!(exprs, comps, ext, eqs, vs, ps, dict, mod, arg)
+
+function parse_model!(exprs, comps, ext, eqs, vs, ps, icon, dict, mod, arg)
     mname = arg.args[1]
     body = arg.args[end]
     if mname == Symbol("@components")
@@ -162,10 +175,13 @@ function parse_model!(exprs, comps, ext, eqs, vs, ps, dict, mod, arg)
         parse_variables!(exprs, ps, dict, mod, body, :parameters)
     elseif mname == Symbol("@equations")
         parse_equations!(exprs, eqs, dict, body)
+    elseif mname == Symbol("@icon")
+        parse_icon!(icon, dict, mod, body)
     else
         error("$mname is not handled.")
     end
 end
+
 function parse_components!(exprs, cs, dict, body)
     expr = Expr(:block)
     push!(exprs, expr)
@@ -187,6 +203,7 @@ function parse_components!(exprs, cs, dict, body)
     end
     dict[:components] = comps
 end
+
 function parse_extend!(exprs, ext, dict, body)
     expr = Expr(:block)
     push!(exprs, expr)
@@ -213,6 +230,7 @@ function parse_extend!(exprs, ext, dict, body)
         _ => error("`@extend` only takes an assignment expression. Got $body")
     end
 end
+
 function parse_variables!(exprs, vs, dict, mod, body, varclass)
     expr = Expr(:block)
     push!(exprs, expr)
@@ -225,6 +243,7 @@ function parse_variables!(exprs, vs, dict, mod, body, varclass)
         push!(expr.args, :($name = $v))
     end
 end
+
 function parse_equations!(exprs, eqs, dict, body)
     for arg in body.args
         arg isa LineNumberNode && continue
@@ -232,4 +251,31 @@ function parse_equations!(exprs, eqs, dict, body)
     end
     # TODO: does this work with TOML?
     dict[:equations] = readable_code.(eqs)
+end
+
+function parse_icon!(icon, dict, mod, body::String)
+    icon_dir = get(ENV, "MTK_ICONS_DIR", joinpath(DEPOT_PATH[1], "mtk_icons"))
+    dict[:icon] = icon[] = if isfile(body)
+        URI("file:///" * abspath(body))
+    elseif (iconpath = joinpath(icon_dir, body); isfile(iconpath))
+        URI("file:///" * abspath(iconpath))
+    elseif try
+        Base.isvalid(URI(body))
+    catch e
+        false
+    end
+        URI(body)
+    else
+        error("$body is not a valid icon")
+    end
+end
+
+function parse_icon!(icon, dict, mod, body::Expr)
+    _icon = body.args[end]
+    dict[:icon] = icon[] = MLStyle.@match _icon begin
+        ::Symbol => get_var(mod, _icon)
+        ::String => _icon
+        Expr(:call, read, a...) => eval(_icon)
+        _ => error("$_icon isn't a valid icon")
+    end
 end

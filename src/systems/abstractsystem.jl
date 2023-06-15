@@ -1707,7 +1707,8 @@ $(TYPEDSIGNATURES)
 extend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
 by default.
 """
-function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys))
+function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys),
+    gui_metadata = get_gui_metadata(sys))
     T = SciMLBase.parameterless_type(basesys)
     ivs = independent_variables(basesys)
     if !(sys isa T)
@@ -1731,10 +1732,11 @@ function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nam
 
     if length(ivs) == 0
         T(eqs, sts, ps, observed = obs, defaults = defs, name = name, systems = syss,
-            continuous_events = cevs, discrete_events = devs)
+            continuous_events = cevs, discrete_events = devs, gui_metadata = gui_metadata)
     elseif length(ivs) == 1
         T(eqs, ivs[1], sts, ps, observed = obs, defaults = defs, name = name,
-            systems = syss, continuous_events = cevs, discrete_events = devs)
+            systems = syss, continuous_events = cevs, discrete_events = devs,
+            gui_metadata = gui_metadata)
     end
 end
 
@@ -1767,7 +1769,7 @@ end
 """
     missing_variable_defaults(sys::AbstractSystem, default = 0.0)
 
-returns a `Vector{Pair}` of variables set to `default` which are missing from `get_defaults(sys)`.  The `default` argument can be a single value or vector to set the missing defaults respectively.  
+returns a `Vector{Pair}` of variables set to `default` which are missing from `get_defaults(sys)`.  The `default` argument can be a single value or vector to set the missing defaults respectively.
 """
 function missing_variable_defaults(sys::AbstractSystem, default = 0.0)
     varmap = get_defaults(sys)
