@@ -22,7 +22,7 @@ to ignore such variables when attempting to find the states of a system.
 
 ## Constants
 
-Constants are like parameters that:
+Constants, defined by e.g. `@constants myconst1` are like parameters that:
 
   - always have a default value, which must be assigned when the constants are
     declared
