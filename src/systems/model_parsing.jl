@@ -178,8 +178,13 @@ function model_macro(mod, name, expr)
     ps, pss = [], []
     for arg in expr.args
         arg isa LineNumberNode && continue
-        arg.head == :macrocall || error("$arg is not valid syntax. Expected a macro call.")
-        parse_model!(exprs.args, comps, ext, eqs, icon, dict, mod, arg, kwargs)
+        if arg.head == :macrocall
+            parse_model!(exprs.args, comps, ext, eqs, icon, vs, varexpr, ps, parexpr, dict, mod, arg, kwargs)
+        elseif arg.head == :block
+            push!(exprs.args, arg)
+        else
+            error("$arg is not valid syntax. Expected a macro call.")
+        end
     end
     iv = get(dict, :independent_variable, nothing)
     if iv === nothing
@@ -194,11 +199,10 @@ function model_macro(mod, name, expr)
     else
         push!(exprs.args, :($extend($sys, $(ext[]))))
     end
-@info "\nexprs $exprs final kwargs: $kwargs"
     :($name = $Model((; name, $(kwargs...)) -> $exprs, $dict))
 end
 
-function parse_model!(exprs, comps, ext, eqs, icon, dict, mod, arg, kwargs)
+function parse_model!(exprs, comps, ext, eqs, icon, vs, varexpr, ps, parexpr, dict, mod, arg, kwargs)
     mname = arg.args[1]
     body = arg.args[end]
     if mname == Symbol("@components")
@@ -218,47 +222,7 @@ function parse_model!(exprs, comps, ext, eqs, icon, dict, mod, arg, kwargs)
     end
 end
 
-function var_rename(compname, varname::Expr, arglist)
-    @info typeof(varname)
-    compname = Symbol(compname, :__, varname.args[1])
-    push!(arglist, Expr(:(=), compname, varname.args[2]))
-    @info "$(typeof(varname)) | the arglist @220 is $arglist"
-    return Expr(:kw, varname, compname)
-end
-
-function var_rename(compname, varname, arglist)
-    compname = Symbol(compname, :__, varname)
-    push!(arglist, :($compname))
-    @info "$(typeof(varname)) | the arglist @229 is $arglist"
-    return  Expr(:kw, varname, compname)
-end
-
-function component_args!(compname, comparg, arglist, varnamed)
-    for arg in comparg.args
-        arg isa LineNumberNode && continue
-        MLStyle.@match arg begin
-            Expr(:parameters, a, b) => begin
-                component_args!(compname, arg, arglist, varnamed)
-            end
-            Expr(:parameters, Expr) => begin
-                # push!(varnamed , var_rename(compname, a, arglist))
-                push!(varnamed , var_rename.(Ref(compname), arg.args, Ref(arglist)))
-            end
-            Expr(:parameters, a) => begin
-                # push!(varnamed , var_rename(compname, a, arglist))
-                for a_arg in a.args
-                    push!(varnamed , var_rename(compname, a_arg, arglist))
-                end
-            end
-            Expr(:kw, a, b) => begin
-                push!(varnamed , var_rename(compname, a, arglist))
-            end
-            ::Symbol =>  continue
-            _ => @info "got $arg"
-        end
-    end
-end
-
+# components
 function parse_components!(exprs, cs, dict, body, kwargs)
     expr = Expr(:block)
     push!(exprs, expr)
@@ -269,16 +233,16 @@ function parse_components!(exprs, cs, dict, body, kwargs)
         MLStyle.@match arg begin
             Expr(:(=), a, b) => begin
                 push!(cs, a)
-                component_args!(a, b, kwargs, varnamed)
                 push!(comps, [String(a), String(b.args[1])])
                 arg = deepcopy(arg)
                 b = deepcopy(arg.args[2])
 
-                b.args[2] = varnamed[1][1]
+                component_args!(a, b, expr, kwargs)
 
                 push!(b.args, Expr(:kw, :name, Meta.quot(a)))
                 arg.args[2] = b
                 push!(expr.args, arg)
+                @info "\n\nExpr $expr, b: $b\n\n"
             end
             _ => error("`@components` only takes assignment expressions. Got $arg")
         end
@@ -286,6 +250,46 @@ function parse_components!(exprs, cs, dict, body, kwargs)
     dict[:components] = comps
 end
 
+function var_rename(compname, varname)
+    compname = Symbol(compname, :__, varname)
+end
+
+function component_args!(a, b, expr, kwargs)
+    for i in 1:lastindex(b.args)
+        arg = b.args[i]
+        MLStyle.@match arg begin
+            ::Symbol => begin
+                if b.head == :parameters
+                    _v = varname2(a, arg)
+                    push!(kwargs, _v)
+                    b.args[i] = Expr(:kw, arg, _v)
+                end
+                continue
+            end
+            Expr(:parameters, x...) => begin
+                component_args!(a, arg, expr, kwargs)
+            end
+            Expr(:kw, x) => begin
+                _v = varname2(a, x)
+                b.args[i] = Expr(:kw, x, _v)
+                push!(kwargs, _v)
+            end
+            Expr(:kw, x, y::Number) => begin
+                _v = varname2(a, x)
+                b.args[i] = Expr(:kw, x, _v)
+                push!(kwargs, Expr(:kw, _v, y))
+            end
+            Expr(:kw, x, y) => begin
+                _v = varname2(a, x)
+                push!(expr.args, :($y = $_v))
+                push!(kwargs, Expr(:kw, _v, y))
+            end
+            _ => "Got this: $arg"
+        end
+    end
+end
+
+#
 function parse_extend!(exprs, ext, dict, body)
     expr = Expr(:block)
     push!(exprs, expr)
