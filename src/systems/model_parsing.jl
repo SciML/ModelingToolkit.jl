@@ -79,17 +79,17 @@ function parse_variables_with_kw!(exprs, var, dict, mod, body, varexpr, varclass
             Expr(:(=), a, b::Symbol) => begin
                 isdefined(mod, b) ?
                     parse_variables!(exprs, var, dict, mod, arg, varclass, kwargs) :
-                    push!(kwargs, b)
+                    push!(varexpr.args[end].args[end].args, arg)
             end
             Expr(:(=), a, b) => begin
-                def = Base.remove_linenums!(b).args[end]
+                def = Base.remove_linenums!(b)
                 MLStyle.@match def begin
                     Expr(:tuple, x::Symbol, y) || x::Symbol => begin
-                        push!(varexpr.args[end].args[end].args, :($a = $def))
-                        push!(kwargs, x)
+                        push!(varexpr.args[end].args[end].args, :($a = $(def.args[end])))
                     end
-                    Expr(:tuple, x::Number, y) => parse_variables!(exprs, var, dict, mod, arg, varclass, kwargs)
+                    Expr(:tuple, x::Number, y) => (@info "111"; parse_variables!(exprs, var, dict, mod, arg, varclass, kwargs))
                     ::Number => parse_variables!(exprs, var, dict, mod, arg, varclass, kwargs)
+                    ::Expr => push!(varexpr.args[end].args[end].args, :($a = $(def.args[end])))
                     _ => @info "Got $def"
                 end
             end
@@ -166,7 +166,21 @@ macro model(name::Symbol, expr)
     esc(model_macro(__module__, name, expr))
 end
 
-function model_macro(mod, name, expr)
+@inline is_kwarg(::Symbol) = false
+@inline is_kwarg(e::Expr) = (e.head == :parameters)
+
+macro model(fcall::Expr, expr)
+    fcall.head == :call || "Couldn't comprehend the model $arg"
+
+    arglist, kwargs = if lastindex(fcall.args) > 1 && is_kwarg(fcall.args[2])
+        (lastindex(fcall.args) > 2 ? (@info 1; Set(fcall.args[3:end])) : (@info 2; Set())), Set(fcall.args[2].args)
+    else
+        Set(), Set(fcall.args[2:end])
+    end
+    esc(model_macro(__module__, fcall.args[1], expr; arglist, kwargs))
+end
+
+function model_macro(mod, name, expr; arglist = Set([]), kwargs = Set([]))
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}()
     comps = Symbol[]
@@ -179,7 +193,7 @@ function model_macro(mod, name, expr)
         end)
     varexpr = :(vss = @variables begin
         end)
-    kwargs = []
+
     for arg in expr.args
         arg isa LineNumberNode && continue
         if arg.head == :macrocall
@@ -208,7 +222,8 @@ function model_macro(mod, name, expr)
     else
         push!(exprs.args, :($extend($sys, $(ext[]))))
     end
-    :($name = $Model((; name, $(kwargs...)) -> $exprs, $dict))
+
+    :($name = $Model(($(arglist...); name, $(kwargs...)) -> $exprs, $dict))
 end
 
 function parse_model!(exprs, comps, ext, eqs, icon, vs, varexpr, ps, parexpr, dict, mod, arg, kwargs)
@@ -261,7 +276,8 @@ function _rename(compname, varname)
 end
 
 function component_args!(a, b, expr, kwargs)
-    for i in 2:lastindex(b.args)
+    start = b.head == :parameters ? 1 : 2
+    for i in start:lastindex(b.args)
         arg = b.args[i]
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
