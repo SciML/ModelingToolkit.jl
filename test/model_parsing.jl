@@ -25,11 +25,14 @@ end
 @variables t
 D = Differential(t)
 
-@connector Pin begin
-    v(t) = 0                  # Potential at the pin [V]
+@connector Pin(; v_start = 0) begin
+    v(t) = v_start                  # Potential at the pin [V]
     i(t), [connect = Flow]    # Current flowing into the pin [A]
     @icon "pin.png"
 end
+
+@named p = Pin(; v_start = π)
+@test getdefault(p.v) == π
 
 @model OnePort begin
     @components begin

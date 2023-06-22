@@ -1,14 +1,33 @@
-macro connector(name::Symbol, body)
-    esc(connector_macro(__module__, name, body))
-end
-
 struct Model{F, S}
     f::F
     structure::S
 end
 (m::Model)(args...; kw...) = m.f(args...; kw...)
 
-function connector_macro(mod, name, body)
+for f in (:connector, :model)
+    @eval begin
+        macro $f(name::Symbol, body)
+            esc($(Symbol(f, :_macro))(__module__, name, body))
+        end
+
+        macro $f(fcall::Expr, body)
+            fcall.head == :call || "Couldn't comprehend the $f $arg"
+
+            arglist, kwargs = if lastindex(fcall.args) > 1 && is_kwarg(fcall.args[2])
+                (lastindex(fcall.args) > 2 ? Set(fcall.args[3:end]) : Set()),
+                Set(fcall.args[2].args)
+            else
+                Set(), Set(fcall.args[2:end])
+            end
+            esc($(Symbol(f, :_macro))(__module__, fcall.args[1], body; arglist, kwargs))
+        end
+    end
+end
+
+@inline is_kwarg(::Symbol) = false
+@inline is_kwarg(e::Expr) = (e.head == :parameters)
+
+function connector_macro(mod, name, body; arglist = Set([]), kwargs = Set([]))
     if !Meta.isexpr(body, :block)
         err = """
         connector body must be a block! It should be in the form of
@@ -21,16 +40,17 @@ function connector_macro(mod, name, body)
         """
         error(err)
     end
-    vs = Num[]
+    vs = []
     icon = Ref{Union{String, URI}}()
     dict = Dict{Symbol, Any}()
+    expr = Expr(:block)
     for arg in body.args
         arg isa LineNumberNode && continue
         if arg.head == :macrocall && arg.args[1] == Symbol("@icon")
             parse_icon!(icon, dict, dict, arg.args[end])
             continue
         end
-        push!(vs, Num(parse_variable_def!(dict, mod, arg, :variables)))
+        parse_variable_arg!(expr, vs, dict, mod, arg, :variables)
     end
     iv = get(dict, :independent_variable, nothing)
     if iv === nothing
@@ -39,8 +59,9 @@ function connector_macro(mod, name, body)
     gui_metadata = isassigned(icon) ? GUIMetadata(GlobalRef(mod, name), icon[]) :
                    nothing
     quote
-        $name = $Model((; name) -> begin
-                var"#___sys___" = $ODESystem($(Equation[]), $iv, $vs, $([]);
+        $name = $Model(($(arglist...); name, $(kwargs...)) -> begin
+                $expr
+                var"#___sys___" = $ODESystem($(Equation[]), $iv, [$(vs...)], $([]);
                     name, gui_metadata = $gui_metadata)
                 $Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))
             end, $dict)
@@ -145,25 +166,6 @@ end
 
 function get_var(mod::Module, b)
     b isa Symbol ? getproperty(mod, b) : b
-end
-
-macro model(name::Symbol, expr)
-    esc(model_macro(__module__, name, expr))
-end
-
-@inline is_kwarg(::Symbol) = false
-@inline is_kwarg(e::Expr) = (e.head == :parameters)
-
-macro model(fcall::Expr, expr)
-    fcall.head == :call || "Couldn't comprehend the model $arg"
-
-    arglist, kwargs = if lastindex(fcall.args) > 1 && is_kwarg(fcall.args[2])
-        (lastindex(fcall.args) > 2 ? Set(fcall.args[3:end]) : Set()),
-        Set(fcall.args[2].args)
-    else
-        Set(), Set(fcall.args[2:end])
-    end
-    esc(model_macro(__module__, fcall.args[1], expr; arglist, kwargs))
 end
 
 function model_macro(mod, name, expr; arglist = Set([]), kwargs = Set([]))
@@ -324,7 +326,8 @@ function parse_variable_arg!(expr, vs, dict, mod, arg, varclass)
     v = Num(vv)
     name = getname(v)
     push!(vs, name)
-    def === nothing ? push!(expr.args, :($name = $v)) : push!(expr.args, :($name = $setdefault($v, $def)))
+    def === nothing ? push!(expr.args, :($name = $v)) :
+    push!(expr.args, :($name = $setdefault($v, $def)))
 end
 
 function parse_variables!(exprs, vs, dict, mod, body, varclass)
