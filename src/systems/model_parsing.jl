@@ -48,68 +48,36 @@ function connector_macro(mod, name, body)
 end
 
 function parse_variable_def!(dict, mod, arg, varclass)
+    arg isa LineNumberNode && return
     MLStyle.@match arg begin
-        ::Symbol => generate_var!(dict, arg, varclass)
-        Expr(:call, a, b) => generate_var!(dict, a, b, varclass)
+        ::Symbol => (generate_var!(dict, arg, varclass), nothing)
+        Expr(:call, a, b) => (generate_var!(dict, a, b, varclass), nothing)
         Expr(:(=), a, b) => begin
-            var = parse_variable_def!(dict, mod, a, varclass)
+            var, _ = parse_variable_def!(dict, mod, a, varclass)
             def, meta = parse_default(mod, b)
             dict[varclass][getname(var)][:default] = def
-            var = setdefault(var, def)
+            if typeof(def) != Symbol
+                var = setdefault(var, def)
+                def = nothing
+            end
             if !isnothing(meta)
                 if (ct = get(meta, VariableConnectType, nothing)) !== nothing
                     dict[varclass][getname(var)][:connection_type] = nameof(ct)
                 end
                 var = set_var_metadata(var, meta)
             end
-            var
+            (var, def)
         end
         Expr(:tuple, a, b) => begin
-            var = parse_variable_def!(dict, mod, a, varclass)
+            var, _ = parse_variable_def!(dict, mod, a, varclass)
             meta = parse_metadata(mod, b)
             if (ct = get(meta, VariableConnectType, nothing)) !== nothing
                 dict[varclass][getname(var)][:connection_type] = nameof(ct)
             end
-            set_var_metadata(var, meta)
+            (set_var_metadata(var, meta), nothing)
         end
         _ => error("$arg cannot be parsed")
     end
-end
-
-function parse_variables_with_kw!(exprs, var, dict, mod, body, varexpr, varclass, kwargs)
-    for arg in body.args
-        arg isa LineNumberNode && continue
-        MLStyle.@match arg begin
-            ::Symbol || Expr(:tuple, a, b) || Expr(:call, a, b) || Expr(:(=), a, b::Number) => begin
-                parse_variables!(exprs, var, dict, mod, arg, varclass)
-            end
-            Expr(:(=), a, b::Symbol) => begin
-                isdefined(mod, b) ?
-                parse_variables!(exprs, var, dict, mod, arg, varclass) :
-                push!(varexpr.args[end].args[end].args, arg)
-            end
-            Expr(:(=), a, b) => begin
-                def = Base.remove_linenums!(b)
-                MLStyle.@match def begin
-                    Expr(:tuple, x::Symbol, y) => begin
-                        isdefined(mod, x) ?
-                        parse_variables!(exprs, var, dict, mod, arg, varclass) :
-                        push!(varexpr.args[end].args[end].args, arg)
-                    end
-                    ::Symbol => push!(varexpr.args[end].args[end].args,
-                        :($a = $(def.args[end])))
-                    ::Number || Expr(:tuple, x::Number, y) => begin
-                        parse_variables!(exprs, var, dict, mod, arg, varclass)
-                    end
-                    ::Expr => push!(varexpr.args[end].args[end].args,
-                        :($a = $(def.args[end])))
-                    _ => error("Got $def")
-                end
-            end
-            _ => error("Could not parse this $varclass definition $arg")
-        end
-    end
-    dict[:kwargs] = kwargs
 end
 
 function generate_var(a, varclass)
@@ -155,8 +123,7 @@ function parse_default(mod, a)
             meta = parse_metadata(mod, y)
             (def, meta)
         end
-        ::Symbol => (get_var(mod, a), nothing)
-        ::Number => (a, nothing)
+        ::Symbol || ::Number => (a, nothing)
         _ => error("Cannot parse default $a")
     end
 end
@@ -208,14 +175,12 @@ function model_macro(mod, name, expr; arglist = Set([]), kwargs = Set([]))
     icon = Ref{Union{String, URI}}()
     vs = []
     ps = []
-    parexpr = :(pss = @parameters begin end)
-    varexpr = :(vss = @variables begin end)
 
     for arg in expr.args
         arg isa LineNumberNode && continue
         if arg.head == :macrocall
-            parse_model!(exprs.args, comps, ext, eqs, icon, vs, varexpr, ps,
-                parexpr, dict, mod, arg, kwargs)
+            parse_model!(exprs.args, comps, ext, eqs, icon, vs, ps,
+                dict, mod, arg, kwargs)
         elseif arg.head == :block
             push!(exprs.args, arg)
         else
@@ -227,13 +192,10 @@ function model_macro(mod, name, expr; arglist = Set([]), kwargs = Set([]))
         iv = dict[:independent_variable] = variable(:t)
     end
 
-    push!(exprs.args, varexpr)
-    push!(exprs.args, parexpr)
-
     gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
                    nothing
 
-    sys = :($ODESystem($Equation[$(eqs...)], $iv, [$(vs...), vss...], [$(ps...), pss...];
+    sys = :($ODESystem($Equation[$(eqs...)], $iv, [$(vs...)], [$(ps...)];
         systems = [$(comps...)], name, gui_metadata = $gui_metadata))
     if ext[] === nothing
         push!(exprs.args, sys)
@@ -244,7 +206,7 @@ function model_macro(mod, name, expr; arglist = Set([]), kwargs = Set([]))
     :($name = $Model(($(arglist...); name, $(kwargs...)) -> $exprs, $dict))
 end
 
-function parse_model!(exprs, comps, ext, eqs, icon, vs, varexpr, ps, parexpr, dict,
+function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, dict,
     mod, arg, kwargs)
     mname = arg.args[1]
     body = arg.args[end]
@@ -253,9 +215,9 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, varexpr, ps, parexpr, di
     elseif mname == Symbol("@extend")
         parse_extend!(exprs, ext, dict, body)
     elseif mname == Symbol("@variables")
-        parse_variables_with_kw!(exprs, vs, dict, mod, body, varexpr, :variables, kwargs)
+        parse_variables!(exprs, vs, dict, mod, body, :variables)
     elseif mname == Symbol("@parameters")
-        parse_variables_with_kw!(exprs, ps, dict, mod, body, parexpr, :parameters, kwargs)
+        parse_variables!(exprs, ps, dict, mod, body, :parameters)
     elseif mname == Symbol("@equations")
         parse_equations!(exprs, eqs, dict, body)
     elseif mname == Symbol("@icon")
@@ -357,15 +319,21 @@ function parse_extend!(exprs, ext, dict, body)
     end
 end
 
-function parse_variables!(exprs, vs, dict, mod, arg, varclass)
-    expr = Expr(:block)
-    push!(exprs, expr)
-    arg isa LineNumberNode && return
-    vv = parse_variable_def!(dict, mod, arg, varclass)
+function parse_variable_arg!(expr, vs, dict, mod, arg, varclass)
+    vv, def = parse_variable_def!(dict, mod, arg, varclass)
     v = Num(vv)
     name = getname(v)
     push!(vs, name)
-    push!(expr.args, :($name = $v))
+    def === nothing ? push!(expr.args, :($name = $v)) : push!(expr.args, :($name = $setdefault($v, $def)))
+end
+
+function parse_variables!(exprs, vs, dict, mod, body, varclass)
+    expr = Expr(:block)
+    push!(exprs, expr)
+    for arg in body.args
+        arg isa LineNumberNode && continue
+        parse_variable_arg!(expr, vs, dict, mod, arg, varclass)
+    end
 end
 
 function parse_equations!(exprs, eqs, dict, body)
