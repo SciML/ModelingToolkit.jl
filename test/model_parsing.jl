@@ -1,5 +1,5 @@
 using ModelingToolkit, Test
-using ModelingToolkit: get_gui_metadata
+using ModelingToolkit: get_gui_metadata, VariableDescription, getdefault
 using URIs: URI
 
 ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
@@ -26,10 +26,13 @@ end
 D = Differential(t)
 
 @connector Pin begin
-    v(t) = 0                  # Potential at the pin [V]
+    v(t)                  # Potential at the pin [V]
     i(t), [connect = Flow]    # Current flowing into the pin [A]
     @icon "pin.png"
 end
+
+@named p = Pin(; v = π)
+@test getdefault(p.v) == π
 
 @model OnePort begin
     @components begin
@@ -64,7 +67,7 @@ resistor_log = "$(@__DIR__)/logo/resistor.svg"
 @model Resistor begin
     @extend v, i = oneport = OnePort()
     @parameters begin
-        R = 1
+        R
     end
     @icon begin
         """<?xml version="1.0" encoding="UTF-8"?>
@@ -90,7 +93,7 @@ end
 @model Capacitor begin
     @extend v, i = oneport = OnePort()
     @parameters begin
-        C = 1
+        C
     end
     @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
     @equations begin
@@ -110,10 +113,10 @@ end
 
 @model RC begin
     @components begin
-        resistor = Resistor()
-        capacitor = Capacitor()
+        resistor = Resistor(; R)
+        capacitor = Capacitor(; C = 10)
         source = Voltage()
-        constant = Constant()
+        constant = Constant(; k = 1)
         ground = Ground()
     end
     @equations begin
@@ -123,7 +126,11 @@ end
         connect(capacitor.n, source.n, ground.g)
     end
 end
-@named rc = RC()
+
+@named rc = RC(; resistor.R = 20)
+@test getdefault(rc.resistor.R) == 20
+@test getdefault(rc.capacitor.C) == 10
+@test getdefault(rc.constant.k) == 1
 
 @test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
       read(joinpath(ENV["MTK_ICONS_DIR"], "resistor.svg"), String)
@@ -137,3 +144,41 @@ end
       URI("file:///" * abspath(ENV["MTK_ICONS_DIR"], "pin.png"))
 
 @test length(equations(structural_simplify(rc))) == 1
+
+@model MockModel begin
+    @parameters begin
+        a
+        b(t)
+        cval
+        jval
+        kval
+        c(t) = cval + jval
+        d = 2
+        e, [description = "e"]
+        f = 3, [description = "f"]
+        h(t), [description = "h(t)"]
+        i(t) = 4, [description = "i(t)"]
+        j(t) = jval, [description = "j(t)"]
+        k = kval, [description = "k"]
+    end
+end
+
+kval = 5
+@named model = MockModel(; kval, cval = 1)
+
+@test hasmetadata(model.e, VariableDescription)
+@test hasmetadata(model.f, VariableDescription)
+@test hasmetadata(model.h, VariableDescription)
+@test hasmetadata(model.i, VariableDescription)
+@test hasmetadata(model.j, VariableDescription)
+@test hasmetadata(model.k, VariableDescription)
+
+model = complete(model)
+@test getdefault(model.cval) == 1
+@test isequal(getdefault(model.c), model.cval + model.jval)
+@test getdefault(model.d) == 2
+@test_throws KeyError getdefault(model.e)
+@test getdefault(model.f) == 3
+@test getdefault(model.i) == 4
+@test isequal(getdefault(model.j), model.jval)
+@test isequal(getdefault(model.k), model.kval)

@@ -49,6 +49,8 @@ import SymbolicUtils.Code: toexpr
 import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
 import JuliaFormatter
 
+using MLStyle
+
 using Reexport
 using Symbolics: degree
 @reexport using Symbolics
