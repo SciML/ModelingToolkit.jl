@@ -10,12 +10,12 @@ end
 @connector RealOutput begin
     u(t), [output = true]
 end
-@model Constant(; k = 1) begin
+@model Constant begin
     @components begin
         output = RealOutput()
     end
     @parameters begin
-        k = k, [description = "Constant output value of block"]
+        k, [description = "Constant output value of block"]
     end
     @equations begin
         output.u ~ k
@@ -25,13 +25,13 @@ end
 @variables t
 D = Differential(t)
 
-@connector Pin(; v_start = 0) begin
-    v(t) = v_start                  # Potential at the pin [V]
+@connector Pin begin
+    v(t)                  # Potential at the pin [V]
     i(t), [connect = Flow]    # Current flowing into the pin [A]
     @icon "pin.png"
 end
 
-@named p = Pin(; v_start = π)
+@named p = Pin(; v = π)
 @test getdefault(p.v) == π
 
 @model OnePort begin
@@ -64,10 +64,10 @@ end
 end
 
 resistor_log = "$(@__DIR__)/logo/resistor.svg"
-@model Resistor(; R = 1) begin
+@model Resistor begin
     @extend v, i = oneport = OnePort()
     @parameters begin
-        R = R
+        R
     end
     @icon begin
         """<?xml version="1.0" encoding="UTF-8"?>
@@ -90,10 +90,10 @@ l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></pat
     end
 end
 
-@model Capacitor(; C = 1) begin
+@model Capacitor begin
     @extend v, i = oneport = OnePort()
     @parameters begin
-        C = C
+        C
     end
     @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
     @equations begin
@@ -116,7 +116,7 @@ end
         resistor = Resistor(; R)
         capacitor = Capacitor(; C = 10)
         source = Voltage()
-        constant = Constant()
+        constant = Constant(; k = 1)
         ground = Ground()
     end
     @equations begin
@@ -145,33 +145,39 @@ end
 
 @test length(equations(structural_simplify(rc))) == 1
 
-@model MockModel(; cval, gval, jval = 6) begin
+@model MockModel begin
     @parameters begin
         a
         b(t)
-        c(t) = cval
+        cval
+        jval
+        kval
+        c(t) = cval + cval
         d = 2
         e, [description = "e"]
         f = 3, [description = "f"]
-        g = gval, [description = "g"]
         h(t), [description = "h(t)"]
-        i(t) = 5, [description = "i(t)"]
+        i(t) = 4, [description = "i(t)"]
         j(t) = jval, [description = "j(t)"]
+        k = kval, [description = "k"]
     end
 end
 
-@named model = MockModel(cval = 1, gval = 4)
+kval = 5
+@named model = MockModel(; kval, cval = 1)
 
 @test hasmetadata(model.e, VariableDescription)
 @test hasmetadata(model.f, VariableDescription)
-@test hasmetadata(model.g, VariableDescription)
 @test hasmetadata(model.h, VariableDescription)
 @test hasmetadata(model.i, VariableDescription)
 @test hasmetadata(model.j, VariableDescription)
+@test hasmetadata(model.k, VariableDescription)
 
-@test getdefault(model.c) == 1
+@test getdefault(model.cval) == 1
+@test getdefault(model.c) == 2
 @test getdefault(model.d) == 2
+@test_throws KeyError getdefault(model.e)
 @test getdefault(model.f) == 3
-@test getdefault(model.g) == 4
-@test getdefault(model.i) == 5
-@test getdefault(model.j) == 6
+@test getdefault(model.i) == 4
+@test getdefault(model.j) == :jval
+@test getdefault(model.k) == kval
