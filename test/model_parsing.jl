@@ -152,7 +152,7 @@ end
         cval
         jval
         kval
-        c(t) = cval + cval
+        c(t) = cval + jval
         d = 2
         e, [description = "e"]
         f = 3, [description = "f"]
@@ -173,11 +173,12 @@ kval = 5
 @test hasmetadata(model.j, VariableDescription)
 @test hasmetadata(model.k, VariableDescription)
 
+model = complete(model)
 @test getdefault(model.cval) == 1
-@test getdefault(model.c) == 2
+@test isequal(getdefault(model.c), model.cval + model.jval)
 @test getdefault(model.d) == 2
 @test_throws KeyError getdefault(model.e)
 @test getdefault(model.f) == 3
 @test getdefault(model.i) == 4
-@test getdefault(model.j) == :jval
-@test getdefault(model.k) == kval
+@test isequal(getdefault(model.j), model.jval)
+@test isequal(getdefault(model.k), model.kval)

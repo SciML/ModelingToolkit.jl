@@ -61,13 +61,13 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, def = nothing)
     arg isa LineNumberNode && return
     MLStyle.@match arg begin
         a::Symbol => begin
-            push!(kwargs, Expr(:kw, a, def))
+            push!(kwargs, Expr(:kw, a, nothing))
             var = generate_var!(dict, a, varclass)
             dict[:kwargs][getname(var)] = def
             (var, nothing)
         end
         Expr(:call, a, b) => begin
-            push!(kwargs, Expr(:kw, a, def))
+            push!(kwargs, Expr(:kw, a, nothing))
             var = generate_var!(dict, a, b, varclass)
             dict[:kwargs][getname(var)] = def
             (var, nothing)
@@ -77,14 +77,6 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, def = nothing)
             def, meta = parse_default(mod, b)
             var, _ = parse_variable_def!(dict, mod, a, varclass, kwargs, def)
             dict[varclass][getname(var)][:default] = def
-            if typeof(def) != Symbol
-                var = setdefault(var, def)
-                def = nothing
-            else
-                def in [keys(dict[:kwargs])...;] ||
-                    error("$def is not a known parameter or variable")
-                var = setdefault(var, def)
-            end
             if !isnothing(meta)
                 if (ct = get(meta, VariableConnectType, nothing)) !== nothing
                     dict[varclass][getname(var)][:connection_type] = nameof(ct)
@@ -94,12 +86,12 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, def = nothing)
             (var, def)
         end
         Expr(:tuple, a, b) => begin
-            var, _ = parse_variable_def!(dict, mod, a, varclass, kwargs)
+            var, def = parse_variable_def!(dict, mod, a, varclass, kwargs)
             meta = parse_metadata(mod, b)
             if (ct = get(meta, VariableConnectType, nothing)) !== nothing
                 dict[varclass][getname(var)][:connection_type] = nameof(ct)
             end
-            (set_var_metadata(var, meta), nothing)
+            (set_var_metadata(var, meta), def)
         end
         _ => error("$arg cannot be parsed")
     end
@@ -336,11 +328,12 @@ function parse_extend!(exprs, ext, dict, body)
 end
 
 function parse_variable_arg!(expr, vs, dict, mod, arg, varclass, kwargs)
-    vv, _ = parse_variable_def!(dict, mod, arg, varclass, kwargs)
+    vv, def = parse_variable_def!(dict, mod, arg, varclass, kwargs)
     v = Num(vv)
     name = getname(v)
     push!(vs, name)
-    push!(expr.args, :($name = $name === nothing ? $vv : $setdefault($vv, $name)))
+    push!(expr.args,
+        :($name = $name === nothing ? $setdefault($vv, $def) : $setdefault($vv, $name)))
 end
 
 function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs)
