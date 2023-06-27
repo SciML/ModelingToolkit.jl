@@ -127,15 +127,32 @@ t = ModelingToolkitStandardLibrary.Mechanical.Rotational.t
 @named spring = Spring(; c = 10)
 @named damper = Damper(; d = 3)
 @named torque = Torque()
+@variables y(t) = 0
 eqs = [connect(torque.flange, inertia1.flange_a)
     connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
-    connect(inertia2.flange_a, spring.flange_b, damper.flange_b)]
+    connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
+    y ~ inertia2.w + torque.tau.u]
 model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper],
     name = :name)
 model_outputs = [inertia1.w, inertia2.w, inertia1.phi, inertia2.phi]
 model_inputs = [torque.tau.u]
 matrices, ssys = linearize(model, model_inputs, model_outputs)
 @test length(ModelingToolkit.outputs(ssys)) == 4
+
+if VERSION >= v"1.8" # :opaque_closure not supported before
+    matrices, ssys = linearize(model, model_inputs, [y])
+    A, B, C, D = matrices
+    obsf = ModelingToolkit.build_explicit_observed_function(ssys,
+        [y],
+        inputs = [torque.tau.u],
+        drop_expr = identity)
+    x = randn(size(A, 1))
+    u = randn(size(B, 2))
+    p = getindex.(Ref(ModelingToolkit.defaults(ssys)), parameters(ssys))
+    y1 = obsf(x, u, p, 0)
+    y2 = C * x + D * u
+    @test y1[] ≈ y2[]
+end
 
 ## Code generation with unbound inputs
 

@@ -304,9 +304,11 @@ Build the observed function assuming the observed equations are all explicit,
 i.e. there are no cycles.
 """
 function build_explicit_observed_function(sys, ts;
+    inputs = nothing,
     expression = false,
     output_type = Array,
     checkbounds = true,
+    drop_expr = drop_expr,
     throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
@@ -378,9 +380,18 @@ function build_explicit_observed_function(sys, ts;
         push!(obsexprs, lhs ← rhs)
     end
 
+    pars = parameters(sys)
+    if inputs !== nothing
+        pars = setdiff(pars, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
+    end
+    ps = DestructuredArgs(pars, inbounds = !checkbounds)
     dvs = DestructuredArgs(states(sys), inbounds = !checkbounds)
-    ps = DestructuredArgs(parameters(sys), inbounds = !checkbounds)
-    args = [dvs, ps, ivs...]
+    if inputs === nothing
+        args = [dvs, ps, ivs...]
+    else
+        ipts = DestructuredArgs(inputs, inbounds = !checkbounds)
+        args = [dvs, ipts, ps, ivs...]
+    end
     pre = get_postprocess_fbody(sys)
 
     ex = Func(args, [],
