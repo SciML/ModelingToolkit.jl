@@ -137,7 +137,7 @@ model_inputs = [torque.tau.u]
 matrices, ssys = linearize(model, model_inputs, model_outputs)
 @test length(ModelingToolkit.outputs(ssys)) == 4
 
-(; A, B, C, D) = matrices
+A, B, C, D = matrices
 obsf = ModelingToolkit.build_explicit_observed_function(ssys,
     [inertia2.w],
     inputs = [torque.tau.u],
