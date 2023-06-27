@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Modeling with Stochasticity · ModelingToolkit.jl</title><script async src="https://www.googletagmanager.com/gtag/js?id=UA-90474609-3"></script><script>  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'UA-90474609-3', {'page_path': location.pathname + location.search + location.hash});
+</script><script data-outdated-warner src="../../assets/warner.js"></script><link rel="canonical" href="https://docs.sciml.ai/ModelingToolkit/stable/tutorials/stochastic_diffeq/"/><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="ModelingToolkit.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">ModelingToolkit.jl</a></span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><a class="tocitem" href="../ode_modeling/">Getting Started with ModelingToolkit.jl</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../acausal_components/">Acausal Component-Based Modeling</a></li><li><a class="tocitem" href="../nonlinear/">Modeling Nonlinear Systems</a></li><li><a class="tocitem" href="../optimization/">Modeling Optimization Problems</a></li><li><a class="tocitem" href="../modelingtoolkitize/">Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a></li><li class="is-active"><a class="tocitem" href>Modeling with Stochasticity</a></li><li><a class="tocitem" href="../parameter_identifiability/">Parameter Identifiability in ODE Models</a></li></ul></li><li><span class="tocitem">Examples</span><ul><li><input class="collapse-toggle" id="menuitem-4-1" type="checkbox"/><label class="tocitem" for="menuitem-4-1"><span class="docs-label">Basic Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/higher_order/">Automatic Transformation of Nth Order ODEs to 1st Order ODEs</a></li><li><a class="tocitem" href="../../examples/spring_mass/">Component-Based Modeling of a Spring-Mass System</a></li><li><a class="tocitem" href="../../examples/modelingtoolkitize_index_reduction/">Automated Index Reduction of DAEs</a></li><li><a class="tocitem" href="../../examples/parsing/">Parsing Expressions into Solvable Systems</a></li></ul></li><li><input class="collapse-toggle" id="menuitem-4-2" type="checkbox"/><label class="tocitem" for="menuitem-4-2"><span class="docs-label">Advanced Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../../examples/tearing_parallelism/">Exposing More Parallelism By Tearing Algebraic Equations in ODESystems</a></li><li><a class="tocitem" href="../../examples/sparse_jacobians/">Automated Sparse Analytical Jacobians</a></li><li><a class="tocitem" href="../../examples/perturbation/">Symbolic-Numeric Perturbation Theory for ODEs</a></li></ul></li></ul></li><li><span class="tocitem">Basics</span><ul><li><a class="tocitem" href="../../basics/AbstractSystem/">The AbstractSystem Interface</a></li><li><a class="tocitem" href="../../basics/ContextualVariables/">Contextual Variable Types</a></li><li><a class="tocitem" href="../../basics/Variable_metadata/">Symbolic metadata</a></li><li><a class="tocitem" href="../../basics/Composition/">Composing Models and Building Reusable Components</a></li><li><a class="tocitem" href="../../basics/Events/">Event Handling and Callback Functions</a></li><li><a class="tocitem" href="../../basics/Linearization/">Linearization</a></li><li><a class="tocitem" href="../../basics/Validation/">Model Validation and Units</a></li><li><a class="tocitem" href="../../basics/DependencyGraphs/">Dependency Graphs</a></li><li><a class="tocitem" href="../../basics/FAQ/">Frequently Asked Questions</a></li></ul></li><li><span class="tocitem">System Types</span><ul><li><a class="tocitem" href="../../systems/ODESystem/">ODESystem</a></li><li><a class="tocitem" href="../../systems/SDESystem/">SDESystem</a></li><li><a class="tocitem" href="../../systems/JumpSystem/">JumpSystem</a></li><li><a class="tocitem" href="../../systems/NonlinearSystem/">NonlinearSystem</a></li><li><a class="tocitem" href="../../systems/OptimizationSystem/">OptimizationSystem</a></li><li><a class="tocitem" href="../../systems/DiscreteSystem/">DiscreteSystem</a></li><li><a class="tocitem" href="../../systems/PDESystem/">PDESystem</a></li></ul></li><li><a class="tocitem" href="../../comparison/">Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages</a></li><li><a class="tocitem" href="../../internals/">Internal Details</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Modeling with Stochasticity</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Modeling with Stochasticity</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/ModelingToolkit.jl/blob/master/docs/src/tutorials/stochastic_diffeq.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Modeling-with-Stochasticity"><a class="docs-heading-anchor" href="#Modeling-with-Stochasticity">Modeling with Stochasticity</a><a id="Modeling-with-Stochasticity-1"></a><a class="docs-heading-anchor-permalink" href="#Modeling-with-Stochasticity" title="Permalink"></a></h1><p>All models with <code>ODESystem</code> are deterministic. <code>SDESystem</code> adds another element to the model: randomness. This is a <a href="https://en.wikipedia.org/wiki/Stochastic_differential_equation">stochastic differential equation</a> which has a deterministic (drift) component and a stochastic (diffusion) component. Let&#39;s take the Lorenz equation from the first tutorial and extend it to have multiplicative noise.</p><pre><code class="language-julia hljs">using ModelingToolkit, StochasticDiffEq
+
+# Define some variables
+@parameters σ ρ β
+@variables t x(t) y(t) z(t)
+D = Differential(t)
+
+eqs = [D(x) ~ σ * (y - x),
+    D(y) ~ x * (ρ - z) - y,
+    D(z) ~ x * y - β * z]
+
+noiseeqs = [0.1 * x,
+    0.1 * y,
+    0.1 * z]
+
+@named de = SDESystem(eqs, noiseeqs, t, [x, y, z], [σ, ρ, β])
+
+u0map = [
+    x =&gt; 1.0,
+    y =&gt; 0.0,
+    z =&gt; 0.0,
+]
+
+parammap = [
+    σ =&gt; 10.0,
+    β =&gt; 26.0,
+    ρ =&gt; 2.33,
+]
+
+prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
+sol = solve(prob, SOSRI())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
+Interpolation: 1st order linear
+t: 17610-element Vector{Float64}:
+   0.0
+   0.0007146315987816352
+   0.0008575579185379623
+   0.0010183500282638302
+   0.0011992411517054316
+   0.0014027436655772332
+   0.00163168399368301
+   0.0018882120276128094
+   0.002169597095369891
+   0.002474293713801733
+   ⋮
+  99.94668804623352
+  99.95561741608327
+  99.96425423199514
+  99.97065058385785
+  99.9778464797034
+  99.98446127982697
+  99.99051175431144
+  99.996969012447
+ 100.0
+u: 17610-element Vector{Vector{Float64}}:
+ [1.0, 0.0, 0.0]
+ [0.9904455265820455, 0.0016571251971257022, 5.852665455650564e-7]
+ [0.9894635404161352, 0.0019877128382123914, 8.400417011244216e-7]
+ [0.9862488032860651, 0.002356493902015441, 1.180736737256887e-6]
+ [0.9831928248349892, 0.0027677929963763883, 1.6283706020133548e-6]
+ [0.9815007487777289, 0.003239521089086404, 2.2201116274264464e-6]
+ [0.9793041932180382, 0.003768933234974899, 2.995826266071403e-6]
+ [0.9793807293145915, 0.0043548268751424785, 3.990207870810003e-6]
+ [0.9778911827217331, 0.005001438724136111, 5.249341500403485e-6]
+ [0.9733693558388283, 0.005684838152808165, 6.812221883949614e-6]
+ ⋮
+ [5.561368753916636, 5.655644710226891, 1.204086699017365]
+ [5.627588247816803, 5.7765860349969, 1.209392278749297]
+ [5.623011377291728, 5.743496628880493, 1.2176468566275405]
+ [5.577838828485976, 5.756012760497234, 1.2189045972114114]
+ [5.526391166008759, 5.806722763591922, 1.213606556625786]
+ [5.546177896290458, 5.835527310799549, 1.2373527017582546]
+ [5.576579541406752, 5.796658567563838, 1.2436484189250112]
+ [5.671794601388978, 5.851084905765038, 1.2536173421027126]
+ [5.6357469092051256, 5.811407963544946, 1.2634076155660894]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../modelingtoolkitize/">« Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a><a class="docs-footer-nextpage" href="../parameter_identifiability/">Parameter Identifiability in ODE Models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Tuesday 27 June 2023 17:15">Tuesday 27 June 2023</span>. Using Julia version 1.9.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
