@@ -5,9 +5,9 @@ manifest_format = "2.0"
 project_hash = "2d91be362d37c7a27c5ce540734a0a9dd365c3e0"
 
 [[deps.ADTypes]]
-git-tree-sha1 = "891771fcf2db8427453eed9eee66847fda5abcc3"
+git-tree-sha1 = "e58c18d2312749847a74f5be80bb0fa53da102bd"
 uuid = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
-version = "0.1.4"
+version = "0.1.5"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
