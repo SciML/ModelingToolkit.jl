@@ -137,6 +137,15 @@ model_inputs = [torque.tau.u]
 matrices, ssys = linearize(model, model_inputs, model_outputs)
 @test length(ModelingToolkit.outputs(ssys)) == 4
 
+(; A, B, C, D) = matrices
+obsf = ModelingToolkit.build_explicit_observed_function(ssys, [inertia2.w], inputs = [torque.tau.u], drop_expr = identity)
+x = randn(size(A, 1))
+u = randn(size(B, 2))
+p = getindex.(Ref(ModelingToolkit.defaults(ssys)), parameters(ssys))
+y1 = obsf(x, u, p, 0)
+y2 = C * x + D * u
+@test y1[] ≈ y2[2]
+
 ## Code generation with unbound inputs
 
 @variables t x(t)=0 u(t)=0 [input = true]
