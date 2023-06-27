@@ -308,6 +308,7 @@ function build_explicit_observed_function(sys, ts;
     expression = false,
     output_type = Array,
     checkbounds = true,
+    drop_expr = drop_expr,
     throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]

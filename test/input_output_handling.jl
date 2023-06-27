@@ -138,7 +138,10 @@ matrices, ssys = linearize(model, model_inputs, model_outputs)
 @test length(ModelingToolkit.outputs(ssys)) == 4
 
 (; A, B, C, D) = matrices
-obsf = ModelingToolkit.build_explicit_observed_function(ssys, [inertia2.w], inputs = [torque.tau.u], drop_expr = identity)
+obsf = ModelingToolkit.build_explicit_observed_function(ssys,
+    [inertia2.w],
+    inputs = [torque.tau.u],
+    drop_expr = identity)
 x = randn(size(A, 1))
 u = randn(size(B, 2))
 p = getindex.(Ref(ModelingToolkit.defaults(ssys)), parameters(ssys))
