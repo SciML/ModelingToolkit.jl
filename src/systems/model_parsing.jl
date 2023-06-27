@@ -4,7 +4,7 @@ struct Model{F, S}
 end
 (m::Model)(args...; kw...) = m.f(args...; kw...)
 
-for f in (:connector, :system)
+for f in (:connector, :mtkmodel)
     @eval begin
         macro $f(name::Symbol, body)
             esc($(Symbol(f, :_macro))(__module__, name, body))
@@ -173,7 +173,7 @@ function get_var(mod::Module, b)
     b isa Symbol ? getproperty(mod, b) : b
 end
 
-function system_macro(mod, name, expr; arglist = Set([]), kwargs = Set([]))
+function mtkmodel_macro(mod, name, expr; arglist = Set([]), kwargs = Set([]))
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}()
     dict[:kwargs] = Dict{Symbol, Any}()
