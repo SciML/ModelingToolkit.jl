@@ -10,7 +10,7 @@ end
 @connector RealOutput begin
     u(t), [output = true]
 end
-@model Constant begin
+@mtkmodel Constant begin
     @components begin
         output = RealOutput()
     end
@@ -34,7 +34,7 @@ end
 @named p = Pin(; v = π)
 @test getdefault(p.v) == π
 
-@model OnePort begin
+@mtkmodel OnePort begin
     @components begin
         p = Pin()
         n = Pin()
@@ -51,7 +51,7 @@ end
     end
 end
 
-@model Ground begin
+@mtkmodel Ground begin
     @components begin
         g = Pin()
     end
@@ -64,7 +64,7 @@ end
 end
 
 resistor_log = "$(@__DIR__)/logo/resistor.svg"
-@model Resistor begin
+@mtkmodel Resistor begin
     @extend v, i = oneport = OnePort()
     @parameters begin
         R
@@ -90,7 +90,7 @@ l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></pat
     end
 end
 
-@model Capacitor begin
+@mtkmodel Capacitor begin
     @extend v, i = oneport = OnePort()
     @parameters begin
         C
@@ -101,7 +101,7 @@ end
     end
 end
 
-@model Voltage begin
+@mtkmodel Voltage begin
     @extend v, i = oneport = OnePort()
     @components begin
         V = RealInput()
@@ -111,7 +111,7 @@ end
     end
 end
 
-@model RC begin
+@mtkmodel RC begin
     @components begin
         resistor = Resistor(; R)
         capacitor = Capacitor(; C = 10)
@@ -145,7 +145,7 @@ end
 
 @test length(equations(structural_simplify(rc))) == 1
 
-@model MockModel begin
+@mtkmodel MockModel begin
     @parameters begin
         a
         b(t)
