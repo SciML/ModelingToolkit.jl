@@ -283,7 +283,7 @@ function component_args!(a, b, expr, kwargs)
             Expr(:kw, x) => begin
                 _v = _rename(a, x)
                 b.args[i] = Expr(:kw, x, _v)
-                push!(kwargs, _v)
+                push!(kwargs, _v, nothing)
             end
             Expr(:kw, x, y::Number) => begin
                 _v = _rename(a, x)
@@ -292,8 +292,12 @@ function component_args!(a, b, expr, kwargs)
             end
             Expr(:kw, x, y) => begin
                 _v = _rename(a, x)
-                push!(expr.args, :($y = $_v))
-                push!(kwargs, Expr(:kw, _v, y))
+                push!(expr.args, :($_v = $y))
+                def = Expr(:kw)
+                push!(def.args, x)
+                push!(def.args, :($getdefault($_v)))
+                b.args[i] = def
+                push!(kwargs, Expr(:kw, _v, nothing))
             end
             _ => error("Could not parse $arg of component $a")
         end
