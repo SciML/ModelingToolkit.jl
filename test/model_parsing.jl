@@ -91,10 +91,13 @@ l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></pat
 end
 
 @mtkmodel Capacitor begin
-    @extend v, i = oneport = OnePort()
     @parameters begin
         C
     end
+    @variables begin
+        v = 0.0
+    end
+    @extend v, i = oneport = OnePort(; v = v)
     @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
     @equations begin
         D(v) ~ i / C

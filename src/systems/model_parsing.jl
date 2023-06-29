@@ -221,7 +221,7 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, dict,
     if mname == Symbol("@components")
         parse_components!(exprs, comps, dict, body, kwargs)
     elseif mname == Symbol("@extend")
-        parse_extend!(exprs, ext, dict, body)
+        parse_extend!(exprs, ext, dict, body, kwargs)
     elseif mname == Symbol("@variables")
         parse_variables!(exprs, vs, dict, mod, body, :variables, kwargs)
     elseif mname == Symbol("@parameters")
@@ -304,7 +304,7 @@ function component_args!(a, b, expr, kwargs)
     end
 end
 
-function parse_extend!(exprs, ext, dict, body)
+function parse_extend!(exprs, ext, dict, body, kwargs)
     expr = Expr(:block)
     push!(exprs, expr)
     body = deepcopy(body)
@@ -317,6 +317,7 @@ function parse_extend!(exprs, ext, dict, body)
                     error("`@extend` destructuring only takes an tuple as LHS. Got $body")
                 end
                 a, b = b.args
+                component_args!(a, b, expr, kwargs)
                 vars, a, b
             end
             ext[] = a
