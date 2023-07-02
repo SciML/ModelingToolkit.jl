@@ -15,7 +15,7 @@ end
 @inline is_kwarg(::Symbol) = false
 @inline is_kwarg(e::Expr) = (e.head == :parameters)
 
-function connector_macro(mod, name, body; arglist = Set([]), kwargs = Set([]))
+function connector_macro(mod, name, body)
     if !Meta.isexpr(body, :block)
         err = """
         connector body must be a block! It should be in the form of
@@ -29,6 +29,7 @@ function connector_macro(mod, name, body; arglist = Set([]), kwargs = Set([]))
         error(err)
     end
     vs = []
+    kwargs = []
     icon = Ref{Union{String, URI}}()
     dict = Dict{Symbol, Any}()
     dict[:kwargs] = Dict{Symbol, Any}()
@@ -48,7 +49,7 @@ function connector_macro(mod, name, body; arglist = Set([]), kwargs = Set([]))
     gui_metadata = isassigned(icon) ? GUIMetadata(GlobalRef(mod, name), icon[]) :
                    nothing
     quote
-        $name = $Model(($(arglist...); name, $(kwargs...)) -> begin
+        $name = $Model((; name, $(kwargs...)) -> begin
                 $expr
                 var"#___sys___" = $ODESystem($(Equation[]), $iv, [$(vs...)], $([]);
                     name, gui_metadata = $gui_metadata)
@@ -173,7 +174,7 @@ function get_var(mod::Module, b)
     b isa Symbol ? getproperty(mod, b) : b
 end
 
-function mtkmodel_macro(mod, name, expr; arglist = Set([]), kwargs = Set([]))
+function mtkmodel_macro(mod, name, expr)
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}()
     dict[:kwargs] = Dict{Symbol, Any}()
@@ -183,6 +184,7 @@ function mtkmodel_macro(mod, name, expr; arglist = Set([]), kwargs = Set([]))
     icon = Ref{Union{String, URI}}()
     vs = []
     ps = []
+    kwargs = []
 
     for arg in expr.args
         arg isa LineNumberNode && continue
@@ -211,7 +213,7 @@ function mtkmodel_macro(mod, name, expr; arglist = Set([]), kwargs = Set([]))
         push!(exprs.args, :($extend($sys, $(ext[]))))
     end
 
-    :($name = $Model(($(arglist...); name, $(kwargs...)) -> $exprs, $dict))
+    :($name = $Model((; name, $(kwargs...)) -> $exprs, $dict))
 end
 
 function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, dict,
@@ -272,32 +274,18 @@ function component_args!(a, b, expr, kwargs)
         arg = b.args[i]
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
-            ::Symbol => begin
-                _v = _rename(a, arg)
-                push!(kwargs, _v)
-                b.args[i] = Expr(:kw, arg, _v)
+            x::Symbol || Expr(:kw, x) => begin
+                _v = _rename(a, x)
+                b.args[i] = Expr(:kw, x, _v)
+                push!(kwargs, Expr(:kw, _v, nothing))
             end
             Expr(:parameters, x...) => begin
                 component_args!(a, arg, expr, kwargs)
             end
-            Expr(:kw, x) => begin
-                _v = _rename(a, x)
-                b.args[i] = Expr(:kw, x, _v)
-                push!(kwargs, _v, nothing)
-            end
-            Expr(:kw, x, y::Number) => begin
+            Expr(:kw, x, y) => begin
                 _v = _rename(a, x)
                 b.args[i] = Expr(:kw, x, _v)
                 push!(kwargs, Expr(:kw, _v, y))
-            end
-            Expr(:kw, x, y) => begin
-                _v = _rename(a, x)
-                push!(expr.args, :($_v = $y))
-                def = Expr(:kw)
-                push!(def.args, x)
-                push!(def.args, :($getdefault($_v)))
-                b.args[i] = def
-                push!(kwargs, Expr(:kw, _v, nothing))
             end
             _ => error("Could not parse $arg of component $a")
         end
