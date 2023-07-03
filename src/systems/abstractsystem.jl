@@ -941,7 +941,7 @@ function varname_fix!(expr::Expr)
     for arg in expr.args
         MLStyle.@match arg begin
             ::Symbol => continue
-            Expr(:kw, a) => varname_sanitization!(arg)
+            Expr(:kw, a...) || Expr(:kw, a) => varname_sanitization!(arg)
             Expr(:parameters, a...) => begin
                 for _arg in arg.args
                     varname_sanitization!(_arg)

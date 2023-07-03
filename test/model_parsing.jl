@@ -91,10 +91,13 @@ l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></pat
 end
 
 @mtkmodel Capacitor begin
-    @extend v, i = oneport = OnePort()
     @parameters begin
         C
     end
+    @variables begin
+        v = 0.0
+    end
+    @extend v, i = oneport = OnePort(; v = v)
     @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
     @equations begin
         D(v) ~ i / C
@@ -182,3 +185,30 @@ model = complete(model)
 @test getdefault(model.i) == 4
 @test isequal(getdefault(model.j), model.jval)
 @test isequal(getdefault(model.k), model.kval)
+
+@mtkmodel A begin
+    @parameters begin
+        p
+    end
+    @components begin
+        b = B(i = p, j = 1 / p, k = 1)
+    end
+end
+
+@mtkmodel B begin
+    @parameters begin
+        i
+        j
+        k
+    end
+end
+
+@named a = A(p = 10)
+getdefault(a.b.i) == 10
+getdefault(a.b.j) == 0.1
+getdefault(a.b.k) == 1
+
+@named a = A(p = 10, b.i = 20, b.j = 30, b.k = 40)
+getdefault(a.b.i) == 20
+getdefault(a.b.j) == 30
+getdefault(a.b.k) == 40
