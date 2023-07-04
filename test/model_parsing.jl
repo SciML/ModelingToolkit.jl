@@ -97,15 +97,15 @@ end
     @parameters begin
         C
     end
-    @variables begin
-        v = 0.0
-    end
-    @extend v, i = oneport = OnePort(; v = v)
+    @extend v, i = oneport = OnePort(; v = 0.0)
     @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
     @equations begin
         D(v) ~ i / C
     end
 end
+
+@named capacitor = Capacitor(C = 10, oneport.v = 10.0)
+@test getdefault(capacitor.v) == 10.0
 
 @mtkmodel Voltage begin
     @extend v, i = oneport = OnePort()
@@ -136,6 +136,7 @@ end
 @named rc = RC(; resistor.R = 20)
 @test getdefault(rc.resistor.R) == 20
 @test getdefault(rc.capacitor.C) == 10
+@test getdefault(rc.capacitor.v) == 0.0
 @test getdefault(rc.constant.k) == 1
 
 @test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
