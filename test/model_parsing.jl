@@ -33,6 +33,7 @@ end
 
 @named p = Pin(; v = π)
 @test getdefault(p.v) == π
+@test Pin.isconnector == true
 
 @mtkmodel OnePort begin
     @components begin
@@ -50,6 +51,8 @@ end
         i ~ p.i
     end
 end
+
+@test OnePort.isconnector == false
 
 @mtkmodel Ground begin
     @components begin

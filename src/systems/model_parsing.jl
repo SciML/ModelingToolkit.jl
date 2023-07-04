@@ -1,6 +1,7 @@
 struct Model{F, S}
     f::F
     structure::S
+    isconnector::Bool
 end
 (m::Model)(args...; kw...) = m.f(args...; kw...)
 
@@ -54,7 +55,7 @@ function connector_macro(mod, name, body)
                 var"#___sys___" = $ODESystem($(Equation[]), $iv, [$(vs...)], $([]);
                     name, gui_metadata = $gui_metadata)
                 $Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))
-            end, $dict)
+            end, $dict, true)
     end
 end
 
@@ -213,7 +214,7 @@ function mtkmodel_macro(mod, name, expr)
         push!(exprs.args, :($extend($sys, $(ext[]))))
     end
 
-    :($name = $Model((; name, $(kwargs...)) -> $exprs, $dict))
+    :($name = $Model((; name, $(kwargs...)) -> $exprs, $dict, false))
 end
 
 function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, dict,
