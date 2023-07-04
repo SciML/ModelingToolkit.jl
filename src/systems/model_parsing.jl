@@ -241,13 +241,13 @@ end
 function parse_components!(exprs, cs, dict, body, kwargs)
     expr = Expr(:block)
     push!(exprs, expr)
-    comps = Vector{String}[]
+    comps = Vector{Symbol}[]
     for arg in body.args
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
             Expr(:(=), a, b) => begin
                 push!(cs, a)
-                push!(comps, [String(a), String(b.args[1])])
+                push!(comps, [a, b.args[1]])
                 arg = deepcopy(arg)
                 b = deepcopy(arg.args[2])
 
