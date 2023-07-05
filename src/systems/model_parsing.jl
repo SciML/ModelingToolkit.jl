@@ -60,6 +60,22 @@ function connector_macro(mod, name, body)
 end
 
 function parse_variable_def!(dict, mod, arg, varclass, kwargs, def = nothing)
+    metatypes = [(:connection_type, VariableConnectType),
+        (:description, VariableDescription),
+        (:unit, VariableUnit),
+        (:bounds, VariableBounds),
+        (:noise, VariableNoiseType),
+        (:input, VariableInput),
+        (:output, VariableOutput),
+        (:irreducible, VariableIrreducible),
+        (:state_priority, VariableStatePriority),
+        (:misc, VariableMisc),
+        (:disturbance, VariableDisturbance),
+        (:tunable, VariableTunable),
+        (:dist, VariableDistribution),
+        (:binary, VariableBinary),
+        (:integer, VariableInteger)]
+
     arg isa LineNumberNode && return
     MLStyle.@match arg begin
         a::Symbol => begin
@@ -79,9 +95,12 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, def = nothing)
             def, meta = parse_default(mod, b)
             var, _ = parse_variable_def!(dict, mod, a, varclass, kwargs, def)
             dict[varclass][getname(var)][:default] = def
-            if !isnothing(meta)
-                if (ct = get(meta, VariableConnectType, nothing)) !== nothing
-                    dict[varclass][getname(var)][:connection_type] = nameof(ct)
+            if meta !== nothing
+                for (type, key) in metatypes
+                    if (mt = get(meta, key, nothing)) !== nothing
+                        key == VariableConnectType && (mt = nameof(mt))
+                        dict[varclass][getname(var)][type] = mt
+                    end
                 end
                 var = set_var_metadata(var, meta)
             end
@@ -90,8 +109,14 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, def = nothing)
         Expr(:tuple, a, b) => begin
             var, def = parse_variable_def!(dict, mod, a, varclass, kwargs)
             meta = parse_metadata(mod, b)
-            if (ct = get(meta, VariableConnectType, nothing)) !== nothing
-                dict[varclass][getname(var)][:connection_type] = nameof(ct)
+            if meta !== nothing
+                for (type, key) in metatypes
+                    if (mt = get(meta, key, nothing)) !== nothing
+                        key == VariableConnectType && (mt = nameof(mt))
+                        dict[varclass][getname(var)][type] = mt
+                    end
+                end
+                var = set_var_metadata(var, meta)
             end
             (set_var_metadata(var, meta), def)
         end
