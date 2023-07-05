@@ -1,6 +1,7 @@
 struct Model{F, S}
     f::F
     structure::S
+    isconnector::Bool
 end
 (m::Model)(args...; kw...) = m.f(args...; kw...)
 
@@ -54,11 +55,27 @@ function connector_macro(mod, name, body)
                 var"#___sys___" = $ODESystem($(Equation[]), $iv, [$(vs...)], $([]);
                     name, gui_metadata = $gui_metadata)
                 $Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))
-            end, $dict)
+            end, $dict, true)
     end
 end
 
 function parse_variable_def!(dict, mod, arg, varclass, kwargs, def = nothing)
+    metatypes = [(:connection_type, VariableConnectType),
+        (:description, VariableDescription),
+        (:unit, VariableUnit),
+        (:bounds, VariableBounds),
+        (:noise, VariableNoiseType),
+        (:input, VariableInput),
+        (:output, VariableOutput),
+        (:irreducible, VariableIrreducible),
+        (:state_priority, VariableStatePriority),
+        (:misc, VariableMisc),
+        (:disturbance, VariableDisturbance),
+        (:tunable, VariableTunable),
+        (:dist, VariableDistribution),
+        (:binary, VariableBinary),
+        (:integer, VariableInteger)]
+
     arg isa LineNumberNode && return
     MLStyle.@match arg begin
         a::Symbol => begin
@@ -78,9 +95,12 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, def = nothing)
             def, meta = parse_default(mod, b)
             var, _ = parse_variable_def!(dict, mod, a, varclass, kwargs, def)
             dict[varclass][getname(var)][:default] = def
-            if !isnothing(meta)
-                if (ct = get(meta, VariableConnectType, nothing)) !== nothing
-                    dict[varclass][getname(var)][:connection_type] = nameof(ct)
+            if meta !== nothing
+                for (type, key) in metatypes
+                    if (mt = get(meta, key, nothing)) !== nothing
+                        key == VariableConnectType && (mt = nameof(mt))
+                        dict[varclass][getname(var)][type] = mt
+                    end
                 end
                 var = set_var_metadata(var, meta)
             end
@@ -89,8 +109,14 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, def = nothing)
         Expr(:tuple, a, b) => begin
             var, def = parse_variable_def!(dict, mod, a, varclass, kwargs)
             meta = parse_metadata(mod, b)
-            if (ct = get(meta, VariableConnectType, nothing)) !== nothing
-                dict[varclass][getname(var)][:connection_type] = nameof(ct)
+            if meta !== nothing
+                for (type, key) in metatypes
+                    if (mt = get(meta, key, nothing)) !== nothing
+                        key == VariableConnectType && (mt = nameof(mt))
+                        dict[varclass][getname(var)][type] = mt
+                    end
+                end
+                var = set_var_metadata(var, meta)
             end
             (set_var_metadata(var, meta), def)
         end
@@ -213,7 +239,7 @@ function mtkmodel_macro(mod, name, expr)
         push!(exprs.args, :($extend($sys, $(ext[]))))
     end
 
-    :($name = $Model((; name, $(kwargs...)) -> $exprs, $dict))
+    :($name = $Model((; name, $(kwargs...)) -> $exprs, $dict, false))
 end
 
 function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, dict,
@@ -240,13 +266,13 @@ end
 function parse_components!(exprs, cs, dict, body, kwargs)
     expr = Expr(:block)
     push!(exprs, expr)
-    comps = Vector{String}[]
+    comps = Vector{Symbol}[]
     for arg in body.args
         arg isa LineNumberNode && continue
         MLStyle.@match arg begin
             Expr(:(=), a, b) => begin
                 push!(cs, a)
-                push!(comps, [String(a), String(b.args[1])])
+                push!(comps, [a, b.args[1]])
                 arg = deepcopy(arg)
                 b = deepcopy(arg.args[2])
 

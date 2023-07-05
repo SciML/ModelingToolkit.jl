@@ -33,6 +33,7 @@ end
 
 @named p = Pin(; v = π)
 @test getdefault(p.v) == π
+@test Pin.isconnector == true
 
 @mtkmodel OnePort begin
     @components begin
@@ -50,6 +51,8 @@ end
         i ~ p.i
     end
 end
+
+@test OnePort.isconnector == false
 
 @mtkmodel Ground begin
     @components begin
@@ -94,15 +97,15 @@ end
     @parameters begin
         C
     end
-    @variables begin
-        v = 0.0
-    end
-    @extend v, i = oneport = OnePort(; v = v)
+    @extend v, i = oneport = OnePort(; v = 0.0)
     @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
     @equations begin
         D(v) ~ i / C
     end
 end
+
+@named capacitor = Capacitor(C = 10, oneport.v = 10.0)
+@test getdefault(capacitor.v) == 10.0
 
 @mtkmodel Voltage begin
     @extend v, i = oneport = OnePort()
@@ -133,6 +136,7 @@ end
 @named rc = RC(; resistor.R = 20)
 @test getdefault(rc.resistor.R) == 20
 @test getdefault(rc.capacitor.C) == 10
+@test getdefault(rc.capacitor.v) == 0.0
 @test getdefault(rc.constant.k) == 1
 
 @test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
@@ -212,3 +216,18 @@ getdefault(a.b.k) == 1
 getdefault(a.b.i) == 20
 getdefault(a.b.j) == 30
 getdefault(a.b.k) == 40
+
+metadata = Dict(:description => "Variable to test metadata in the Model.structure",
+    :input => true, :bounds => :((-1, 1)), :connection_type => :Flow, :integer => true,
+    :binary => false, :tunable => false, :disturbance => true, :dist => :(Normal(1, 1)))
+
+@connector MockMeta begin
+    m(t),
+    [description = "Variable to test metadata in the Model.structure",
+        input = true, bounds = (-1, 1), connect = Flow, integer = true,
+        binary = false, tunable = false, disturbance = true, dist = Normal(1, 1)]
+end
+
+for (k, v) in metadata
+    @test MockMeta.structure[:variables][:m][k] == v
+end
