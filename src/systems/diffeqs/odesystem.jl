@@ -25,7 +25,7 @@ eqs = [D(x) ~ σ*(y-x),
 struct ODESystem <: AbstractODESystem
     """
     tag: a tag for the system. If two systems have the same tag, then they are
-    structurally ide, sym_to_stringntical.
+    structurally identical.
     """
     tag::UInt
     """The ODEs defining the system."""
