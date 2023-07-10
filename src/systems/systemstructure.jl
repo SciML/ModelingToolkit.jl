@@ -253,6 +253,7 @@ end
 function TearingState(sys; quick_cancel = false, check = true)
     sys = flatten(sys)
     ivs = independent_variables(sys)
+    iv = only(ivs)
     eqs = copy(equations(sys))
     neqs = length(eqs)
     dervaridxs = OrderedSet{Int}()
@@ -287,10 +288,15 @@ function TearingState(sys; quick_cancel = false, check = true)
         isalgeq = true
         statevars = []
         for var in vars
+            if istree(var) && !ModelingToolkit.isoperator(var, Symbolics.Operator)
+                args = arguments(var)
+                length(args) == 1 || continue
+                isequal(args[1], iv) || continue
+            end
             set_incidence = true
             @label ANOTHER_VAR
             _var, _ = var_from_nested_derivative(var)
-            any(isequal(_var), ivs) && continue
+            isequal(_var, iv) && continue
             if isparameter(_var) ||
                (istree(_var) && isparameter(operation(_var)) || isconstant(_var))
                 continue
