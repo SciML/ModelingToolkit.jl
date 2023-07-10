@@ -143,7 +143,7 @@ struct ODESystem <: AbstractODESystem
     """
     maps states to indices in the parameter vector.
     """
-    sym_to_index::Dict{Num, Int}
+    sym_to_index::Dict{Any, Int}
 
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
         jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
@@ -152,7 +152,7 @@ struct ODESystem <: AbstractODESystem
         tearing_state = nothing,
         substitutions = nothing, complete = false,
         discrete_subsystems = nothing, unknown_states = nothing,
-        sym_to_index = Dict{Num, Int}();
+        sym_to_index = Dict{Any, Int}();
         checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
