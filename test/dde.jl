@@ -1,4 +1,4 @@
-using ModelingToolkit, DelayDiffEq
+using ModelingToolkit, DelayDiffEq, Test
 p0 = 0.2;
 q0 = 0.3;
 v0 = 1;
@@ -33,12 +33,10 @@ eqs = [D(x₀) ~ (v0 / (1 + beta0 * (x₂(t - tau)^2))) * (p0 - q0) * x₀ - d0 
             (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (p1 - q1) * x₁ - d1 * x₁
     D(x₂(t)) ~ (v1 / (1 + beta1 * (x₂(t - tau)^2))) * (1 - p1 + q1) * x₁ - d2 * x₂(t)]
 @named sys = System(eqs)
-h(p, t) = ones(3)
-tspan = (0.0, 10.0)
 prob = DDEProblem(sys,
     [x₀ => 1.0, x₁ => 1.0, x₂(t) => 1.0],
     h,
     tspan,
     constant_lags = [tau])
-alg = MethodOfSteps(Tsit5())
-sol = solve(prob, alg)
+sol_mtk = solve(prob, alg)
+@test Array(sol_mtk) ≈ Array(sol)

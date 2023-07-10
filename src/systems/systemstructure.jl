@@ -288,11 +288,7 @@ function TearingState(sys; quick_cancel = false, check = true)
         isalgeq = true
         statevars = []
         for var in vars
-            if istree(var) && !ModelingToolkit.isoperator(var, Symbolics.Operator)
-                args = arguments(var)
-                length(args) == 1 || continue
-                isequal(args[1], iv) || continue
-            end
+            ModelingToolkit.isdelay(var, iv) && continue
             set_incidence = true
             @label ANOTHER_VAR
             _var, _ = var_from_nested_derivative(var)

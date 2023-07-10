@@ -181,6 +181,7 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     checks = true,
     metadata = nothing,
     gui_metadata = nothing)
+    dvs = filter(x -> !isdelay(x, iv), dvs)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = scalarize(deqs)
@@ -257,6 +258,10 @@ function ODESystem(eqs, iv = nothing; kwargs...)
         else
             push!(algeeq, eq)
         end
+    end
+    for v in allstates
+        isdelay(v, iv) || continue
+        collect_vars!(allstates, ps, arguments(v)[1], iv)
     end
     algevars = setdiff(allstates, diffvars)
     # the orders here are very important!
