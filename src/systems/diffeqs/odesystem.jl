@@ -25,7 +25,7 @@ eqs = [D(x) ~ σ*(y-x),
 struct ODESystem <: AbstractODESystem
     """
     tag: a tag for the system. If two systems have the same tag, then they are
-    structurally identical.
+    structurally ide, sym_to_stringntical.
     """
     tag::UInt
     """The ODEs defining the system."""
@@ -140,13 +140,19 @@ struct ODESystem <: AbstractODESystem
     """
     unknown_states::Union{Nothing, Vector{Any}}
 
+    """
+    maps states to indices in the parameter vector.
+    """
+    sym_to_index::Dict{Num, Int}
+
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
         jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
         torn_matching, connector_type, preface, cevents,
         devents, metadata = nothing, gui_metadata = nothing,
         tearing_state = nothing,
         substitutions = nothing, complete = false,
-        discrete_subsystems = nothing, unknown_states = nothing;
+        discrete_subsystems = nothing, unknown_states = nothing,
+        sym_to_index = Dict{Num, Int}();
         checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
@@ -157,12 +163,24 @@ struct ODESystem <: AbstractODESystem
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([dvs; ps; iv]) || check_units(deqs)
         end
-        new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
+
+        self = new(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
             connector_type, preface, cevents, devents, metadata, gui_metadata,
             tearing_state, substitutions, complete, discrete_subsystems,
-            unknown_states)
+            unknown_states, sym_to_index)
+        fill_unknown_states!(self)
     end
+end
+
+function fill_unknown_states!(sys::ODESystem)
+    us = unknown_states(sys)
+    sym_to_index = sys.sym_to_index
+    sizehint!(sym_to_index, length(us))
+    for (i, p) in enumerate(us)
+        sym_to_index[p] = i
+    end
+    return sys
 end
 
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;

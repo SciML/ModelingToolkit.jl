@@ -643,6 +643,9 @@ function unknown_states(sys::AbstractSystem)
 end
 
 function SymbolicIndexingInterface.state_sym_to_index(sys::AbstractSystem, sym)
+    if hasfield(typeof(sys), :sym_to_index)
+        return get(getfield(sys, :sym_to_index), sym, nothing)
+    end
     findfirst(isequal(sym), unknown_states(sys))
 end
 function SymbolicIndexingInterface.is_state_sym(sys::AbstractSystem, sym)
