@@ -159,6 +159,7 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
 end
 
 function isdelay(var, iv)
+    iv === nothing && return false
     isvariable(var) || return false
     if istree(var) && !ModelingToolkit.isoperator(var, Symbolics.Operator)
         args = arguments(var)
