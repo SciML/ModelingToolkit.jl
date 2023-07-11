@@ -1500,9 +1500,9 @@ version = "0.6.39"
 
 [[deps.SciMLBase]]
 deps = ["ADTypes", "ArrayInterface", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "PrecompileTools", "Preferences", "RecipesBase", "RecursiveArrayTools", "Reexport", "RuntimeGeneratedFunctions", "SciMLOperators", "StaticArraysCore", "Statistics", "SymbolicIndexingInterface", "Tables", "TruncatedStacktraces"]
-git-tree-sha1 = "a22a12db91f6a921e28a7ae39a9546eed93fd92e"
+git-tree-sha1 = "8251ee4b3e4dde75ea0c2a251d167a60631800a3"
 uuid = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
-version = "1.93.0"
+version = "1.93.1"
 
 [[deps.SciMLNLSolve]]
 deps = ["DiffEqBase", "LineSearches", "NLsolve", "Reexport", "SciMLBase"]
@@ -1877,9 +1877,9 @@ version = "1.6.3"
 
 [[deps.Unityper]]
 deps = ["ConstructionBase"]
-git-tree-sha1 = "3c5b3965ec39bf805875215480050ba6bb302057"
+git-tree-sha1 = "7c7a5d1387719bc7aff7c7d78dc233fffa750be9"
 uuid = "a7c27f48-0311-42f6-a7f8-2c11e75eb415"
-version = "0.1.3"
+version = "0.1.4"
 
 [[deps.Unzip]]
 git-tree-sha1 = "ca0969166a028236229f63514992fc073799bb78"
