@@ -651,7 +651,12 @@ end
 
 Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point.
 """
-function get_u0_p(sys, u0map, parammap; use_union = false, tofloat = !use_union)
+function get_u0_p(sys,
+    u0map,
+    parammap;
+    use_union = false,
+    tofloat = !use_union,
+    symbolic_u0 = false)
     eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
@@ -660,7 +665,11 @@ function get_u0_p(sys, u0map, parammap; use_union = false, tofloat = !use_union)
     defs = mergedefaults(defs, parammap, ps)
     defs = mergedefaults(defs, u0map, dvs)
 
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
+    if symbolic_u0
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
+    else
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
+    end
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
     u0, p, defs
@@ -676,13 +685,14 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     eval_expression = true,
     use_union = false,
     tofloat = !use_union,
+    symbolic_u0 = false,
     kwargs...)
     eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
     iv = get_iv(sys)
 
-    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
+    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union, symbolic_u0)
 
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
@@ -874,11 +884,14 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     end
 end
 
+function generate_history(sys::AbstractODESystem, u0; kwargs...)
+    build_function(u0, parameters(sys), get_iv(sys); expression = Val{false}, kwargs...)
+end
+
 function DiffEqBase.DDEProblem(sys::AbstractODESystem, args...; kwargs...)
     DDEProblem{true}(sys, args...; kwargs...)
 end
 function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
-    h = (u, p) -> zeros(length(states(sts))),
     tspan = get_tspan(sys),
     parammap = DiffEqBase.NullParameters();
     callback = nothing,
@@ -888,7 +901,11 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     f, u0, p = process_DEProblem(DDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         has_difference = has_difference,
+        symbolic_u0 = true,
         check_length, kwargs...)
+    h_oop, h_iip = generate_history(sys, u0)
+    h = h_oop
+    u0 = h(p, tspan[1])
     cbs = process_events(sys; callback, has_difference, kwargs...)
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
         affects, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
