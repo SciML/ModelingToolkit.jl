@@ -253,7 +253,7 @@ end
 function TearingState(sys; quick_cancel = false, check = true)
     sys = flatten(sys)
     ivs = independent_variables(sys)
-    iv = only(ivs)
+    iv = length(ivs) == 1 ? ivs[1] : nothing
     eqs = copy(equations(sys))
     neqs = length(eqs)
     dervaridxs = OrderedSet{Int}()
@@ -292,7 +292,7 @@ function TearingState(sys; quick_cancel = false, check = true)
             set_incidence = true
             @label ANOTHER_VAR
             _var, _ = var_from_nested_derivative(var)
-            isequal(_var, iv) && continue
+            any(isequal(_var), ivs) && continue
             if isparameter(_var) ||
                (istree(_var) && isparameter(operation(_var)) || isconstant(_var))
                 continue
