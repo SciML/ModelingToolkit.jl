@@ -169,14 +169,14 @@ function isdelay(var, iv)
     return false
 end
 const DDE_HISTORY_FUN = Sym{Symbolics.FnType{Tuple{Any, <:Real}, Vector{Real}}}(:___history___)
-function delay_to_function(sys::AbstractODESystem)
-    delay_to_function(full_equations(sys),
+function delay_to_function(sys::AbstractODESystem, eqs = full_equations(sys))
+    delay_to_function(eqs,
         get_iv(sys),
         Dict{Any, Int}(operation(s) => i for (i, s) in enumerate(states(sys))),
         parameters(sys),
         DDE_HISTORY_FUN)
 end
-function delay_to_function(eqs::Vector{<:Equation}, iv, sts, ps, h)
+function delay_to_function(eqs::Vector, iv, sts, ps, h)
     delay_to_function.(eqs, (iv,), (sts,), (ps,), (h,))
 end
 function delay_to_function(eq::Equation, iv, sts, ps, h)
@@ -548,10 +548,40 @@ function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
-    f(u, p, h, t) = f_oop(u, p, h, t)
-    f(du, u, p, h, t) = f_iip(du, u, p, h, t)
+    f(u, h, p, t) = f_oop(u, h, p, t)
+    f(du, u, h, p, t) = f_iip(du, u, h, p, t)
 
     DDEFunction{iip}(f,
+        sys = sys,
+        syms = Symbol.(dvs),
+        indepsym = Symbol(get_iv(sys)),
+        paramsyms = Symbol.(ps))
+end
+
+function DiffEqBase.SDDEFunction(sys::AbstractODESystem, args...; kwargs...)
+    SDDEFunction{true}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+    ps = parameters(sys), u0 = nothing;
+    eval_module = @__MODULE__,
+    checkbounds = false,
+    kwargs...) where {iip}
+    f_gen = generate_function(sys, dvs, ps; isdde = true,
+        expression = Val{true},
+        expression_module = eval_module, checkbounds = checkbounds,
+        kwargs...)
+    f_oop, f_iip = (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
+    g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
+        isdde = true, kwargs...)
+    @show g_gen[2]
+    g_oop, g_iip = (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in g_gen)
+    f(u, h, p, t) = f_oop(u, h, p, t)
+    f(du, u, h, p, t) = f_iip(du, u, h, p, t)
+    g(u, h, p, t) = g_oop(u, h, p, t)
+    g(du, u, h, p, t) = g_iip(du, u, h, p, t)
+
+    SDDEFunction{iip}(f, g,
         sys = sys,
         syms = Symbol.(dvs),
         indepsym = Symbol(get_iv(sys)),
@@ -939,6 +969,72 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
         kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
     end
     DDEProblem{iip}(f, u0, h, tspan, p; kwargs1..., kwargs...)
+end
+
+function DiffEqBase.SDDEProblem(sys::AbstractODESystem, args...; kwargs...)
+    SDDEProblem{true}(sys, args...; kwargs...)
+end
+function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
+    tspan = get_tspan(sys),
+    parammap = DiffEqBase.NullParameters();
+    callback = nothing,
+    check_length = true,
+    sparsenoise = nothing,
+    kwargs...) where {iip}
+    has_difference = any(isdifferenceeq, equations(sys))
+    f, u0, p = process_DEProblem(SDDEFunction{iip}, sys, u0map, parammap;
+        t = tspan !== nothing ? tspan[1] : tspan,
+        has_difference = has_difference,
+        symbolic_u0 = true,
+        check_length, kwargs...)
+    h_oop, h_iip = generate_history(sys, u0)
+    h(out, p, t) = h_iip(out, p, t)
+    h(p, t) = h_oop(p, t)
+    u0 = h(p, tspan[1])
+    cbs = process_events(sys; callback, has_difference, kwargs...)
+    if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
+        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
+        discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
+            if clock isa Clock
+                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
+            else
+                error("$clock is not a supported clock type.")
+            end
+        end
+        if cbs === nothing
+            if length(discrete_cbs) == 1
+                cbs = only(discrete_cbs)
+            else
+                cbs = CallbackSet(discrete_cbs...)
+            end
+        else
+            cbs = CallbackSet(cbs, discrete_cbs)
+        end
+    else
+        svs = nothing
+    end
+    kwargs = filter_kwargs(kwargs)
+
+    kwargs1 = (;)
+    if cbs !== nothing
+        kwargs1 = merge(kwargs1, (callback = cbs,))
+    end
+    if svs !== nothing
+        kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
+    end
+
+    noiseeqs = get_noiseeqs(sys)
+    sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
+    if noiseeqs isa AbstractVector
+        noise_rate_prototype = nothing
+    elseif sparsenoise
+        I, J, V = findnz(SparseArrays.sparse(noiseeqs))
+        noise_rate_prototype = SparseArrays.sparse(I, J, zero(eltype(u0)))
+    else
+        noise_rate_prototype = zeros(eltype(u0), size(noiseeqs))
+    end
+    SDDEProblem{iip}(f, f.g, u0, h, tspan, p; noise_rate_prototype =
+        noise_rate_prototype, kwargs1..., kwargs...)
 end
 
 """

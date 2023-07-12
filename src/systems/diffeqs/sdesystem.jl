@@ -210,11 +210,18 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = states(sys),
-    ps = parameters(sys); kwargs...)
-    return build_function(get_noiseeqs(sys),
-        map(x -> time_varying_as_func(value(x), sys), dvs),
-        map(x -> time_varying_as_func(value(x), sys), ps),
-        get_iv(sys); kwargs...)
+    ps = parameters(sys); isdde = false, kwargs...)
+    eqs = get_noiseeqs(sys)
+    if isdde
+        eqs = delay_to_function(sys, eqs)
+    end
+    u = map(x -> time_varying_as_func(value(x), sys), dvs)
+    p = map(x -> time_varying_as_func(value(x), sys), ps)
+    if isdde
+        return build_function(eqs, u, DDE_HISTORY_FUN, p, get_iv(sys); kwargs...)
+    else
+        return build_function(eqs, u, p, get_iv(sys); kwargs...)
+    end
 end
 
 """
