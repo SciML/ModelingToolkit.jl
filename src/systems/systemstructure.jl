@@ -253,6 +253,7 @@ end
 function TearingState(sys; quick_cancel = false, check = true)
     sys = flatten(sys)
     ivs = independent_variables(sys)
+    iv = length(ivs) == 1 ? ivs[1] : nothing
     eqs = copy(equations(sys))
     neqs = length(eqs)
     dervaridxs = OrderedSet{Int}()
@@ -287,6 +288,7 @@ function TearingState(sys; quick_cancel = false, check = true)
         isalgeq = true
         statevars = []
         for var in vars
+            ModelingToolkit.isdelay(var, iv) && continue
             set_incidence = true
             @label ANOTHER_VAR
             _var, _ = var_from_nested_derivative(var)

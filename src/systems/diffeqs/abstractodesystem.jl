@@ -120,9 +120,14 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
     implicit_dae = false,
     ddvs = implicit_dae ? map(Differential(get_iv(sys)), dvs) :
            nothing,
+    isdde = false,
     has_difference = false,
     kwargs...)
-    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
+    if isdde
+        eqs = delay_to_function(sys)
+    else
+        eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
+    end
     if !implicit_dae
         check_operator_variables(eqs, Differential)
         check_lhs(eqs, Differential, Set(dvs))
@@ -136,15 +141,59 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
     p = map(x -> time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
-    pre, sol_states = get_substitutions_and_solved_states(sys,
-        no_postprocess = has_difference)
-
-    if implicit_dae
-        build_function(rhss, ddvs, u, p, t; postprocess_fbody = pre, states = sol_states,
-            kwargs...)
+    if isdde
+        build_function(rhss, u, DDE_HISTORY_FUN, p, t; kwargs...)
     else
-        build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states,
-            kwargs...)
+        pre, sol_states = get_substitutions_and_solved_states(sys,
+            no_postprocess = has_difference)
+
+        if implicit_dae
+            build_function(rhss, ddvs, u, p, t; postprocess_fbody = pre,
+                states = sol_states,
+                kwargs...)
+        else
+            build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states,
+                kwargs...)
+        end
+    end
+end
+
+function isdelay(var, iv)
+    iv === nothing && return false
+    isvariable(var) || return false
+    if istree(var) && !ModelingToolkit.isoperator(var, Symbolics.Operator)
+        args = arguments(var)
+        length(args) == 1 || return false
+        isequal(args[1], iv) || return true
+    end
+    return false
+end
+const DDE_HISTORY_FUN = Sym{Symbolics.FnType{Tuple{Any, <:Real}, Vector{Real}}}(:___history___)
+function delay_to_function(sys::AbstractODESystem)
+    delay_to_function(full_equations(sys),
+        get_iv(sys),
+        Dict{Any, Int}(operation(s) => i for (i, s) in enumerate(states(sys))),
+        parameters(sys),
+        DDE_HISTORY_FUN)
+end
+function delay_to_function(eqs::Vector{<:Equation}, iv, sts, ps, h)
+    delay_to_function.(eqs, (iv,), (sts,), (ps,), (h,))
+end
+function delay_to_function(eq::Equation, iv, sts, ps, h)
+    delay_to_function(eq.lhs, iv, sts, ps, h) ~ delay_to_function(eq.rhs, iv, sts, ps, h)
+end
+function delay_to_function(expr, iv, sts, ps, h)
+    if isdelay(expr, iv)
+        v = operation(expr)
+        time = arguments(expr)[1]
+        idx = sts[v]
+        return term(getindex, h(Sym{Any}(:ˍ₋arg3), time), idx, type = Real) # BIG BIG HACK
+    elseif istree(expr)
+        return similarterm(expr,
+            operation(expr),
+            map(x -> delay_to_function(x, iv, sts, ps, h), arguments(expr)))
+    else
+        return expr
     end
 end
 
@@ -485,6 +534,30 @@ function DiffEqBase.DAEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
         observed = observedfun)
 end
 
+function DiffEqBase.DDEFunction(sys::AbstractODESystem, args...; kwargs...)
+    DDEFunction{true}(sys, args...; kwargs...)
+end
+
+function DiffEqBase.DDEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
+    ps = parameters(sys), u0 = nothing;
+    eval_module = @__MODULE__,
+    checkbounds = false,
+    kwargs...) where {iip}
+    f_gen = generate_function(sys, dvs, ps; isdde = true,
+        expression = Val{true},
+        expression_module = eval_module, checkbounds = checkbounds,
+        kwargs...)
+    f_oop, f_iip = (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
+    f(u, p, h, t) = f_oop(u, p, h, t)
+    f(du, u, p, h, t) = f_iip(du, u, p, h, t)
+
+    DDEFunction{iip}(f,
+        sys = sys,
+        syms = Symbol.(dvs),
+        indepsym = Symbol(get_iv(sys)),
+        paramsyms = Symbol.(ps))
+end
+
 """
 ```julia
 ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
@@ -577,9 +650,14 @@ end
 """
     u0, p, defs = get_u0_p(sys, u0map, parammap; use_union=false, tofloat=!use_union)
 
-Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point. 
+Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point.
 """
-function get_u0_p(sys, u0map, parammap; use_union = false, tofloat = !use_union)
+function get_u0_p(sys,
+    u0map,
+    parammap;
+    use_union = false,
+    tofloat = !use_union,
+    symbolic_u0 = false)
     eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
@@ -588,7 +666,11 @@ function get_u0_p(sys, u0map, parammap; use_union = false, tofloat = !use_union)
     defs = mergedefaults(defs, parammap, ps)
     defs = mergedefaults(defs, u0map, dvs)
 
-    u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
+    if symbolic_u0
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
+    else
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
+    end
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
     u0, p, defs
@@ -604,13 +686,14 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     eval_expression = true,
     use_union = false,
     tofloat = !use_union,
+    symbolic_u0 = false,
     kwargs...)
     eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
     iv = get_iv(sys)
 
-    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union)
+    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union, symbolic_u0)
 
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
@@ -800,6 +883,62 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
         DAEProblem{iip}(f, du0, u0, tspan, p; differential_vars = differential_vars,
             kwargs...)
     end
+end
+
+function generate_history(sys::AbstractODESystem, u0; kwargs...)
+    build_function(u0, parameters(sys), get_iv(sys); expression = Val{false}, kwargs...)
+end
+
+function DiffEqBase.DDEProblem(sys::AbstractODESystem, args...; kwargs...)
+    DDEProblem{true}(sys, args...; kwargs...)
+end
+function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
+    tspan = get_tspan(sys),
+    parammap = DiffEqBase.NullParameters();
+    callback = nothing,
+    check_length = true,
+    kwargs...) where {iip}
+    has_difference = any(isdifferenceeq, equations(sys))
+    f, u0, p = process_DEProblem(DDEFunction{iip}, sys, u0map, parammap;
+        t = tspan !== nothing ? tspan[1] : tspan,
+        has_difference = has_difference,
+        symbolic_u0 = true,
+        check_length, kwargs...)
+    h_oop, h_iip = generate_history(sys, u0)
+    h = h_oop
+    u0 = h(p, tspan[1])
+    cbs = process_events(sys; callback, has_difference, kwargs...)
+    if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
+        affects, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
+        discrete_cbs = map(affects, clocks, svs) do affect, clock, sv
+            if clock isa Clock
+                PeriodicCallback(DiscreteSaveAffect(affect, sv), clock.dt)
+            else
+                error("$clock is not a supported clock type.")
+            end
+        end
+        if cbs === nothing
+            if length(discrete_cbs) == 1
+                cbs = only(discrete_cbs)
+            else
+                cbs = CallbackSet(discrete_cbs...)
+            end
+        else
+            cbs = CallbackSet(cbs, discrete_cbs)
+        end
+    else
+        svs = nothing
+    end
+    kwargs = filter_kwargs(kwargs)
+
+    kwargs1 = (;)
+    if cbs !== nothing
+        kwargs1 = merge(kwargs1, (callback = cbs,))
+    end
+    if svs !== nothing
+        kwargs1 = merge(kwargs1, (disc_saved_values = svs,))
+    end
+    DDEProblem{iip}(f, u0, h, tspan, p; kwargs1..., kwargs...)
 end
 
 """

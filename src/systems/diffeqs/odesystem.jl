@@ -187,9 +187,10 @@ function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
     @assert all(control -> any(isequal.(control, ps)), controls) "All controls must also be parameters."
 
     iv′ = value(scalarize(iv))
-    dvs′ = value.(scalarize(dvs))
     ps′ = value.(scalarize(ps))
     ctrl′ = value.(scalarize(controls))
+    dvs′ = value.(scalarize(dvs))
+    dvs′ = filter(x -> !isdelay(x, iv), dvs′)
 
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
@@ -257,6 +258,10 @@ function ODESystem(eqs, iv = nothing; kwargs...)
         else
             push!(algeeq, eq)
         end
+    end
+    for v in allstates
+        isdelay(v, iv) || continue
+        collect_vars!(allstates, ps, arguments(v)[1], iv)
     end
     algevars = setdiff(allstates, diffvars)
     # the orders here are very important!
