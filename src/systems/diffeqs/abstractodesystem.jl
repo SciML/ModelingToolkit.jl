@@ -574,7 +574,6 @@ function DiffEqBase.SDDEFunction{iip}(sys::AbstractODESystem, dvs = states(sys),
     f_oop, f_iip = (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen)
     g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{true},
         isdde = true, kwargs...)
-    @show g_gen[2]
     g_oop, g_iip = (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in g_gen)
     f(u, h, p, t) = f_oop(u, h, p, t)
     f(du, u, h, p, t) = f_iip(du, u, h, p, t)

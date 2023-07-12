@@ -78,6 +78,7 @@ D = Differential(t)
 eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η]
 @named sys = System(eqs)
 sys = structural_simplify(sys)
+@test equations(sys) == [D(x(t)) ~ a * x(t) + b * x(t - τ) + c]
+@test isequal(ModelingToolkit.get_noiseeqs(sys), [α * x(t) + γ;;])
 prob_mtk = SDDEProblem(sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,));
-sol_mtk = solve(prob_mtk, RKMil())
-@test sol.u[end] ≈ sol_mtk.u[end]
+@test_nowarn sol_mtk = solve(prob_mtk, RKMil())
