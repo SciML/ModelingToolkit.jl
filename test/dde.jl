@@ -49,3 +49,36 @@ prob2 = DDEProblem(sys,
     constant_lags = [tau])
 sol2_mtk = solve(prob2, alg, reltol = 1e-7, abstol = 1e-10)
 @test sol2_mtk.u[end] ≈ sol2.u[end]
+
+using StochasticDelayDiffEq
+function hayes_modelf(du, u, h, p, t)
+    τ, a, b, c, α, β, γ = p
+    du .= a .* u .+ b .* h(p, t - τ) .+ c
+end
+function hayes_modelg(du, u, h, p, t)
+    τ, a, b, c, α, β, γ = p
+    du .= α .* u .+ γ
+end
+h(p, t) = (ones(1) .+ t);
+tspan = (0.0, 10.0)
+
+pmul = [1.0,
+    -4.0, -2.0, 10.0,
+    -1.3, -1.2, 1.1]
+
+prob = SDDEProblem(hayes_modelf, hayes_modelg, [1.0], h, tspan, pmul;
+    constant_lags = (pmul[1],));
+sol = solve(prob, RKMil())
+
+@variables t x(..)
+@parameters a=-4.0 b=-2.0 c=10.0 α=-1.3 β=-1.2 γ=1.1
+D = Differential(t)
+@brownian η
+τ = 1.0
+eqs = [D(x(t)) ~ a * x(t) + b * x(t - τ) + c + (α * x(t) + γ) * η]
+@named sys = System(eqs)
+sys = structural_simplify(sys)
+@test equations(sys) == [D(x(t)) ~ a * x(t) + b * x(t - τ) + c]
+@test isequal(ModelingToolkit.get_noiseeqs(sys), [α * x(t) + γ;;])
+prob_mtk = SDDEProblem(sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,));
+@test_nowarn sol_mtk = solve(prob_mtk, RKMil())
