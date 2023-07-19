@@ -377,7 +377,7 @@ c = 10   # Damping coefficient
 @named inertia2 = Inertia(; J = m2)
 @named spring = Spring(; c = k)
 @named damper = Damper(; d = c)
-@named torque = Torque()
+@named torque = Torque(; use_support = false)
 
 eqs = [connect(torque.flange, inertia1.flange_a)
        connect(inertia1.flange_b, spring.flange_a, damper.flange_a)

@@ -126,7 +126,7 @@ t = ModelingToolkitStandardLibrary.Mechanical.Rotational.t
 @named inertia2 = Inertia(; J = 1)
 @named spring = Spring(; c = 10)
 @named damper = Damper(; d = 3)
-@named torque = Torque()
+@named torque = Torque(; use_support = false)
 @variables y(t) = 0
 eqs = [connect(torque.flange, inertia1.flange_a)
     connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
@@ -264,7 +264,7 @@ c = 10   # Damping coefficient
 @named inertia2 = Rotational.Inertia(; J = m2)
 @named spring = Rotational.Spring(; c = k)
 @named damper = Rotational.Damper(; d = c)
-@named torque = Rotational.Torque()
+@named torque = Rotational.Torque(; use_support = false)
 
 function SystemModel(u = nothing; name = :model)
     eqs = [connect(torque.flange, inertia1.flange_a)

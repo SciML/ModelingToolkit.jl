@@ -197,7 +197,7 @@ if VERSION >= v"1.8"
     D = Differential(t)
 
     @named link1 = Link(; m = 0.2, l = 10, I = 1, g = -9.807)
-    @named cart = Translational.Mass(; m = 1, s_0 = 0)
+    @named cart = Translational.Mass(; m = 1, s = 0)
     @named fixed = Fixed()
     @named force = Force()
 
