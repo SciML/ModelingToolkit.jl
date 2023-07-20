@@ -32,10 +32,10 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
 Commit e4ee485e909 (2023-07-05 09:39 UTC)
 Platform Info:
   OS: Linux (x86_64-linux-gnu)
-  CPU: 2 × Intel(R) Xeon(R) CPU E5-2673 v3 @ 2.40GHz
+  CPU: 2 × Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
   WORD_SIZE: 64
   LIBM: libopenlibm
-  LLVM: libLLVM-14.0.6 (ORCJIT, haswell)
+  LLVM: libLLVM-14.0.6 (ORCJIT, icelake-server)
   Threads: 1 on 2 virtual cores</code></pre></details><details><summary>A more complete overview of all dependencies and their versions is also provided.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Status `~/work/ModelingToolkit.jl/ModelingToolkit.jl/docs/Manifest.toml`
   [47edcb42] ADTypes v0.1.5
   [a4c015fc] ANSIColoredPrinters v0.0.1
@@ -45,8 +45,8 @@ Platform Info:
   [ec485272] ArnoldiMethod v0.2.0
   [4fba245c] ArrayInterface v7.4.11
   [30b0a656] ArrayInterfaceCore v0.1.29
-  [4c555306] ArrayLayouts v1.0.11
-  [aae01518] BandedMatrices v0.17.30
+  [4c555306] ArrayLayouts v1.0.12
+  [aae01518] BandedMatrices v0.17.31
   [6e4b80f9] BenchmarkTools v1.3.2
   [e2ed5e7c] Bijections v0.1.4
   [d1d4a3ce] BitFlags v0.1.7
@@ -58,7 +58,7 @@ Platform Info:
   [49dc2e85] Calculus v0.5.1
   [d360d2e6] ChainRulesCore v1.16.0
   [fb6a15b2] CloseOpenIntervals v0.1.12
-  [944b1d66] CodecZlib v0.7.1
+  [944b1d66] CodecZlib v0.7.2
   [35d6a980] ColorSchemes v3.21.0
   [3da002f7] ColorTypes v0.11.4
   [c3611d14] ColorVectorSpace v0.9.10
@@ -71,7 +71,7 @@ Platform Info:
   [b152e2b5] CompositeTypes v0.1.3
   [f0e56b4a] ConcurrentUtilities v2.2.1
   [88cd18e8] ConsoleProgressMonitor v0.1.2
-  [187b0558] ConstructionBase v1.5.2
+  [187b0558] ConstructionBase v1.5.3
   [d38c429a] Contour v0.6.2
   [adafc99b] CpuId v0.3.1
   [a8cc5b0e] Crayons v4.1.1
@@ -81,7 +81,7 @@ Platform Info:
   [ab62b9b5] DeepDiffs v1.2.0
   [bcd4f6db] DelayDiffEq v5.42.0
   [8bb1440f] DelimitedFiles v1.9.1
-  [2b5f629d] DiffEqBase v6.126.0
+  [2b5f629d] DiffEqBase v6.127.0
   [459566f4] DiffEqCallbacks v2.26.1
   [77a26b50] DiffEqNoiseProcess v5.17.2
   [163ba53b] DiffResults v1.1.0
@@ -102,7 +102,7 @@ Platform Info:
   [7034ab61] FastBroadcast v0.2.5
   [9aa1b823] FastClosures v0.3.2
   [29a986be] FastLapackInterface v2.0.0
-  [1a297f60] FillArrays v1.4.0
+  [1a297f60] FillArrays v1.4.2
   [6a86dc24] FiniteDiff v2.21.1
   [53c48c17] FixedPointNumbers v0.8.4
   [59287772] Formatting v0.4.2
@@ -110,7 +110,7 @@ Platform Info:
   [069b7b12] FunctionWrappers v1.1.3
   [77dc65aa] FunctionWrappersWrappers v0.1.3
   [46192b85] GPUArraysCore v0.1.5
-  [28b8d3ca] GR v0.72.7
+  [28b8d3ca] GR v0.72.9
   [c145ed77] GenericSchur v0.5.3
   [c27321d9] Glob v1.3.1
   [86223c79] Graphs v1.8.0
@@ -119,7 +119,7 @@ Platform Info:
   [d5909c97] GroupsCore v0.4.0
   [cd3eb016] HTTP v1.9.14
   [3e5b6fbb] HostCPUFeatures v0.1.15
-  [34004b35] HypergeometricFunctions v0.3.18
+  [34004b35] HypergeometricFunctions v0.3.21
   [b5f81e59] IOCapture v0.2.3
   [615f187c] IfElse v0.1.1
   [d25df0c9] Inflate v0.1.3
@@ -132,9 +132,9 @@ Platform Info:
   [692b3bcd] JLLWrappers v1.4.1
   [682c06a0] JSON v0.21.4
   [98e50ef6] JuliaFormatter v1.0.34
-  [ccbc3e58] JumpProcesses v9.6.4
+  [ccbc3e58] JumpProcesses v9.7.2
   [ef3ab10e] KLU v0.4.0
-  [ba0b0d4f] Krylov v0.9.1
+  [ba0b0d4f] Krylov v0.9.2
   [b964fa9f] LaTeXStrings v1.3.0
   [2ee39098] LabelledArrays v1.14.0
   [984bce1d] LambertW v0.4.6
@@ -144,10 +144,10 @@ Platform Info:
   [1d6d02ad] LeftChildRightSiblingTrees v0.2.0
   [2d8b4e74] LevyArea v1.0.0
   [d3d80556] LineSearches v7.2.0
-  [7ed4a6bd] LinearSolve v2.3.0
+  [7ed4a6bd] LinearSolve v2.4.1
   [2ab3a3ac] LogExpFunctions v0.3.24
   [e6f89c97] LoggingExtras v1.0.0
-  [bdcacae8] LoopVectorization v0.12.163
+  [bdcacae8] LoopVectorization v0.12.164
   [d8e11817] MLStyle v0.4.17
   [1914dd2f] MacroTools v0.5.10
   [d125e4d3] ManualMemory v0.1.8
@@ -171,6 +171,7 @@ Platform Info:
   [bac558e1] OrderedCollections v1.6.0
   [1dea7af3] OrdinaryDiffEq v6.53.3
   [90014a1f] PDMats v0.11.17
+  [65ce6f38] PackageExtensionCompat v1.0.0
   [d96e819e] Parameters v0.12.3
   [69de0a69] Parsers v2.7.1
   [b98c9c47] Pipe v1.3.0
@@ -184,7 +185,7 @@ Platform Info:
   [d236fae5] PreallocationTools v0.4.12
   [aea7be01] PrecompileTools v1.1.2
   [21216c6a] Preferences v1.4.0
-  [27ebfcd6] Primes v0.5.3
+  [27ebfcd6] Primes v0.5.4
   [33c8b6b6] ProgressLogging v0.1.4
   [92933f4c] ProgressMeter v1.7.2
   [1fd47b50] QuadGK v2.8.2
@@ -203,14 +204,14 @@ Platform Info:
 ⌅ [7e49a35a] RuntimeGeneratedFunctions v0.5.9
   [94e857df] SIMDTypes v0.1.0
   [476501e8] SLEEFPirates v0.6.39
-  [0bca4576] SciMLBase v1.93.2
+  [0bca4576] SciMLBase v1.93.3
   [e9a6253c] SciMLNLSolve v0.1.8
-  [c0aeaf25] SciMLOperators v0.3.3
+  [c0aeaf25] SciMLOperators v0.3.5
   [6c6a2e73] Scratch v1.2.0
   [efcf1570] Setfield v1.1.1
   [992d4aef] Showoff v1.0.3
   [777ac1f9] SimpleBufferStream v1.1.0
-  [727e6d20] SimpleNonlinearSolve v0.1.16
+  [727e6d20] SimpleNonlinearSolve v0.1.17
   [699a6c99] SimpleTraits v0.9.4
   [ce78b400] SimpleUnPack v1.1.0
   [66db9d55] SnoopPrecompile v1.0.3
@@ -220,8 +221,8 @@ Platform Info:
   [276daf66] SpecialFunctions v2.3.0
   [aedffcd0] Static v0.8.7
   [0d7ed370] StaticArrayInterface v1.4.0
-  [90137ffa] StaticArrays v1.6.0
-  [1e83bf80] StaticArraysCore v1.4.1
+  [90137ffa] StaticArrays v1.6.2
+  [1e83bf80] StaticArraysCore v1.4.2
   [82ae8749] StatsAPI v1.6.0
   [2913bbd2] StatsBase v0.34.0
   [4c63d2b9] StatsFuns v1.3.0
@@ -251,7 +252,7 @@ Platform Info:
   [1cfade01] UnicodeFun v0.4.1
   [1986cc42] Unitful v1.15.0
   [45397f5d] UnitfulLatexify v1.6.3
-  [a7c27f48] Unityper v0.1.4
+  [a7c27f48] Unityper v0.1.5
   [41fe7b60] Unzip v0.2.0
   [3d5dd08c] VectorizationBase v0.21.64
   [19fa3120] VertexSafeGraphs v0.2.0
@@ -263,12 +264,12 @@ Platform Info:
   [fcfa6d1b] Calcium_jll v0.401.100+0
   [2e619515] Expat_jll v2.5.0+0
   [b22a6f82] FFMPEG_jll v4.4.2+2
-  [e134572f] FLINT_jll v200.900.6+0
+  [e134572f] FLINT_jll v200.900.7+0
   [a3f928ae] Fontconfig_jll v2.13.93+0
   [d7e528f0] FreeType2_jll v2.13.1+0
   [559328eb] FriBidi_jll v1.0.10+0
   [0656b61e] GLFW_jll v3.3.8+0
-  [d2c73de3] GR_jll v0.72.7+0
+  [d2c73de3] GR_jll v0.72.9+0
   [78b55507] Gettext_jll v0.21.0+0
   [7746bdde] Glib_jll v2.74.0+2
   [3b182d85] Graphite2_jll v1.3.14+0
@@ -284,7 +285,7 @@ Platform Info:
   [7add5ba3] Libgpg_error_jll v1.42.0+0
   [94ce4f54] Libiconv_jll v1.16.1+2
   [4b2f31a3] Libmount_jll v2.35.0+0
-⌅ [89763e89] Libtiff_jll v4.4.0+0
+  [89763e89] Libtiff_jll v4.5.1+1
   [38a345b3] Libuuid_jll v2.36.0+0
   [e7412a2a] Ogg_jll v1.3.5+1
 ⌅ [656ef2d0] OpenBLAS32_jll v0.3.21+0
@@ -292,13 +293,14 @@ Platform Info:
   [efe28fd5] OpenSpecFun_jll v0.5.5+0
   [91d4177d] Opus_jll v1.3.2+0
   [30392449] Pixman_jll v0.42.2+0
-  [ea2cea3b] Qt5Base_jll v5.15.3+2
+  [c0090381] Qt6Base_jll v6.4.2+3
   [f50d1b31] Rmath_jll v0.4.0+0
 ⌅ [fb77eaff] Sundials_jll v5.2.1+0
   [a2964d1f] Wayland_jll v1.21.0+0
   [2381bf8a] Wayland_protocols_jll v1.25.0+0
   [02c8fc9c] XML2_jll v2.10.3+0
   [aed1982a] XSLT_jll v1.1.34+0
+  [ffd25f8a] XZ_jll v5.4.3+1
   [4f6342f7] Xorg_libX11_jll v1.8.6+0
   [0c0b7dd1] Xorg_libXau_jll v1.0.11+0
   [935fb764] Xorg_libXcursor_jll v1.2.0+4
@@ -381,4 +383,4 @@ Platform Info:
   [3f19e933] p7zip_jll v17.4.0+0
 Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated -m`</code></pre></details>You can also download the 
 <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.62.0/assets/Manifest.toml">manifest</a> file and the
-<a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.62.0/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Thursday 13 July 2023 03:10">Thursday 13 July 2023</span>. Using Julia version 1.9.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+<a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.62.0/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Thursday 20 July 2023 17:05">Thursday 20 July 2023</span>. Using Julia version 1.9.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
