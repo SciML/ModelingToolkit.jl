@@ -48,7 +48,8 @@ function connector_macro(mod, name, body)
         error("$name doesn't have a independent variable")
     end
     gui_metadata = isassigned(icon) ? GUIMetadata(GlobalRef(mod, name), icon[]) :
-                   nothing
+                   GUIMetadata(GlobalRef(mod, name))
+
     quote
         $name = $Model((; name, $(kwargs...)) -> begin
                 $expr
@@ -229,7 +230,7 @@ function mtkmodel_macro(mod, name, expr)
     end
 
     gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
-                   nothing
+                   GUIMetadata(GlobalRef(mod, name))
 
     sys = :($ODESystem($Equation[$(eqs...)], $iv, [$(vs...)], [$(ps...)];
         systems = [$(comps...)], name, gui_metadata = $gui_metadata)) #, defaults = $defaults))
