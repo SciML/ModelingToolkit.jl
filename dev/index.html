@@ -32,10 +32,10 @@ Pkg.add(&quot;ModelingToolkit&quot;)</code></pre><h2 id="Citation"><a class="doc
 Commit e4ee485e909 (2023-07-05 09:39 UTC)
 Platform Info:
   OS: Linux (x86_64-linux-gnu)
-  CPU: 2 × Intel(R) Xeon(R) CPU E5-2673 v3 @ 2.40GHz
+  CPU: 2 × Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
   WORD_SIZE: 64
   LIBM: libopenlibm
-  LLVM: libLLVM-14.0.6 (ORCJIT, haswell)
+  LLVM: libLLVM-14.0.6 (ORCJIT, broadwell)
   Threads: 1 on 2 virtual cores</code></pre></details><details><summary>A more complete overview of all dependencies and their versions is also provided.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Status `~/work/ModelingToolkit.jl/ModelingToolkit.jl/docs/Manifest.toml`
   [47edcb42] ADTypes v0.1.5
   [a4c015fc] ANSIColoredPrinters v0.0.1
@@ -45,8 +45,8 @@ Platform Info:
   [ec485272] ArnoldiMethod v0.2.0
   [4fba245c] ArrayInterface v7.4.11
   [30b0a656] ArrayInterfaceCore v0.1.29
-  [4c555306] ArrayLayouts v1.0.12
-  [aae01518] BandedMatrices v0.17.31
+  [4c555306] ArrayLayouts v1.0.13
+  [aae01518] BandedMatrices v0.17.32
   [6e4b80f9] BenchmarkTools v1.3.2
   [e2ed5e7c] Bijections v0.1.4
   [d1d4a3ce] BitFlags v0.1.7
@@ -59,9 +59,9 @@ Platform Info:
   [d360d2e6] ChainRulesCore v1.16.0
   [fb6a15b2] CloseOpenIntervals v0.1.12
   [944b1d66] CodecZlib v0.7.2
-  [35d6a980] ColorSchemes v3.21.0
+  [35d6a980] ColorSchemes v3.22.0
   [3da002f7] ColorTypes v0.11.4
-  [c3611d14] ColorVectorSpace v0.9.10
+  [c3611d14] ColorVectorSpace v0.10.0
   [5ae59095] Colors v0.12.10
   [861a8166] Combinatorics v1.0.2
   [a80b9123] CommonMark v0.8.12
@@ -87,7 +87,7 @@ Platform Info:
   [163ba53b] DiffResults v1.1.0
   [b552c78f] DiffRules v1.15.1
   [0c46a032] DifferentialEquations v7.8.0
-  [b4f34e82] Distances v0.10.8
+  [b4f34e82] Distances v0.10.9
   [31c24e10] Distributions v0.25.98
   [ffbed154] DocStringExtensions v0.9.3
   [e30172f5] Documenter v0.27.25
@@ -99,7 +99,7 @@ Platform Info:
   [d4d017d3] ExponentialUtilities v1.24.0
   [e2ba6199] ExprTools v0.1.9
   [c87230d0] FFMPEG v0.4.1
-  [7034ab61] FastBroadcast v0.2.5
+  [7034ab61] FastBroadcast v0.2.6
   [9aa1b823] FastClosures v0.3.2
   [29a986be] FastLapackInterface v2.0.0
   [1a297f60] FillArrays v1.4.2
@@ -168,7 +168,7 @@ Platform Info:
   [429524aa] Optim v1.7.6
   [7f7a1694] Optimization v3.15.2
   [36348300] OptimizationOptimJL v0.1.9
-  [bac558e1] OrderedCollections v1.6.0
+  [bac558e1] OrderedCollections v1.6.2
   [1dea7af3] OrdinaryDiffEq v6.53.3
   [90014a1f] PDMats v0.11.17
   [65ce6f38] PackageExtensionCompat v1.0.0
@@ -179,7 +179,7 @@ Platform Info:
   [995b91a9] PlotUtils v1.3.5
   [91a5bcdd] Plots v1.38.16
   [e409e4f3] PoissonRandom v0.4.4
-  [f517fe37] Polyester v0.7.3
+  [f517fe37] Polyester v0.7.5
   [1d0040c9] PolyesterWeave v0.2.1
   [85a6dd25] PositiveFactorizations v0.2.4
   [d236fae5] PreallocationTools v0.4.12
@@ -204,14 +204,14 @@ Platform Info:
 ⌅ [7e49a35a] RuntimeGeneratedFunctions v0.5.9
   [94e857df] SIMDTypes v0.1.0
   [476501e8] SLEEFPirates v0.6.39
-  [0bca4576] SciMLBase v1.93.3
+  [0bca4576] SciMLBase v1.93.4
   [e9a6253c] SciMLNLSolve v0.1.8
   [c0aeaf25] SciMLOperators v0.3.5
   [6c6a2e73] Scratch v1.2.0
   [efcf1570] Setfield v1.1.1
   [992d4aef] Showoff v1.0.3
   [777ac1f9] SimpleBufferStream v1.1.0
-  [727e6d20] SimpleNonlinearSolve v0.1.17
+  [727e6d20] SimpleNonlinearSolve v0.1.18
   [699a6c99] SimpleTraits v0.9.4
   [ce78b400] SimpleUnPack v1.1.0
   [66db9d55] SnoopPrecompile v1.0.3
@@ -219,7 +219,7 @@ Platform Info:
   [47a9eef4] SparseDiffTools v2.4.1
   [e56a9233] Sparspak v0.3.9
   [276daf66] SpecialFunctions v2.3.0
-  [aedffcd0] Static v0.8.7
+  [aedffcd0] Static v0.8.8
   [0d7ed370] StaticArrayInterface v1.4.0
   [90137ffa] StaticArrays v1.6.2
   [1e83bf80] StaticArraysCore v1.4.2
@@ -383,4 +383,4 @@ Platform Info:
   [3f19e933] p7zip_jll v17.4.0+0
 Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated -m`</code></pre></details>You can also download the 
 <a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.63.0/assets/Manifest.toml">manifest</a> file and the
-<a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.63.0/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Thursday 20 July 2023 18:38">Thursday 20 July 2023</span>. Using Julia version 1.9.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+<a href="https://github.com/SciML/ModelingToolkit.jl/tree/gh-pages/v8.63.0/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/ode_modeling/">Getting Started with ModelingToolkit.jl »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Monday 24 July 2023 15:19">Monday 24 July 2023</span>. Using Julia version 1.9.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
