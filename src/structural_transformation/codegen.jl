@@ -197,9 +197,9 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
     f = Func([DestructuredArgs(vars, inbounds = !checkbounds)
             DestructuredArgs(params, inbounds = !checkbounds)],
         [],
-        pre(Let(needed_assignments[inner_idxs],
+        Let(vcat(pre, needed_assignments[inner_idxs]),
             funex,
-            false))) |> SymbolicUtils.Code.toexpr
+            false)) |> SymbolicUtils.Code.toexpr
 
     # solver call contains code to call the root-finding solver on the function f
     solver_call = LiteralExpr(quote
