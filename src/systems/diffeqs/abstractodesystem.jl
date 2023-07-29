@@ -84,14 +84,14 @@ function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = paramete
     simplify = false, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     pre = get_preprocess_constants(tgrad)
-    return build_function(tgrad, dvs, ps, get_iv(sys); postprocess_fbody = pre, kwargs...)
+    return build_function(tgrad, dvs, ps, get_iv(sys); preface = pre, kwargs...)
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
     simplify = false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     pre = get_preprocess_constants(jac)
-    return build_function(jac, dvs, ps, get_iv(sys); postprocess_fbody = pre, kwargs...)
+    return build_function(jac, dvs, ps, get_iv(sys); preface = pre, kwargs...)
 end
 
 function generate_control_jacobian(sys::AbstractODESystem, dvs = states(sys),
@@ -113,7 +113,7 @@ function generate_dae_jacobian(sys::AbstractODESystem, dvs = states(sys),
     jac = ˍ₋gamma * jac_du + jac_u
     pre = get_preprocess_constants(jac)
     return build_function(jac, derivatives, dvs, ps, ˍ₋gamma, get_iv(sys);
-        postprocess_fbody = pre, kwargs...)
+        preface = pre, kwargs...)
 end
 
 function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
@@ -215,11 +215,11 @@ function generate_difference_cb(sys::ODESystem, dvs = states(sys), ps = paramete
         d.update ? eq.rhs : eq.rhs + v
     end
 
-    pre = get_postprocess_fbody(sys)
+    pre = get_preface_vec(sys)
     cpre = get_preprocess_constants(body)
-    pre2 = x -> pre(cpre(x))
+    pre2 = vcat(pre, cpre)
     f_oop, f_iip = build_function(body, u, p, t; expression = Val{false},
-        postprocess_fbody = pre2, kwargs...)
+        preface = pre2, kwargs...)
 
     cb_affect! = let f_oop = f_oop, f_iip = f_iip
         function cb_affect!(integ)

@@ -162,7 +162,7 @@ function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = paramete
     sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     pre = get_preprocess_constants(jac)
-    return build_function(jac, vs, ps; postprocess_fbody = pre, kwargs...)
+    return build_function(jac, vs, ps; preface = pre, kwargs...)
 end
 
 function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = false)
@@ -180,7 +180,7 @@ function generate_hessian(sys::NonlinearSystem, vs = states(sys), ps = parameter
     sparse = false, simplify = false, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     pre = get_preprocess_constants(hess)
-    return build_function(hess, vs, ps; postprocess_fbody = pre, kwargs...)
+    return build_function(hess, vs, ps; preface = pre, kwargs...)
 end
 
 function generate_function(sys::NonlinearSystem, dvs = states(sys), ps = parameters(sys);
@@ -188,7 +188,7 @@ function generate_function(sys::NonlinearSystem, dvs = states(sys), ps = paramet
     rhss = [deq.rhs for deq in equations(sys)]
     pre, sol_states = get_substitutions_and_solved_states(sys)
 
-    return build_function(rhss, value.(dvs), value.(ps); postprocess_fbody = pre,
+    return build_function(rhss, value.(dvs), value.(ps); preface = pre,
         states = sol_states, kwargs...)
 end
 

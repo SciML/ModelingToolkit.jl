@@ -297,7 +297,7 @@ function generate_function(sys::DiscreteSystem, dvs = states(sys), ps = paramete
 
     build_function(rhss, u, p, t; kwargs...)
     pre, sol_states = get_substitutions_and_solved_states(sys)
-    build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states, kwargs...)
+    build_function(rhss, u, p, t; preface = pre, states = sol_states, kwargs...)
 end
 
 """

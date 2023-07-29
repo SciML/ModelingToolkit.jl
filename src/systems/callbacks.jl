@@ -349,7 +349,7 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
         rf_oop, rf_ip = build_function(rhss, u, p, t; expression = getexpr,
             wrap_code = add_integrator_header(integ, outvar),
             outputidxs = update_inds,
-            postprocess_fbody = pre,
+            preface = pre,
             kwargs...)
         # applied user-provided function to the generated expression
         if postprocess_affect_expr! !== nothing
@@ -389,7 +389,7 @@ function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states
     t = get_iv(sys)
     pre = get_preprocess_constants(rhss)
     rf_oop, rf_ip = build_function(rhss, u, p, t; expression = Val{false},
-        postprocess_fbody = pre, kwargs...)
+        preface = pre, kwargs...)
 
     affect_functions = map(cbs) do cb # Keep affect function separate
         eq_aff = affects(cb)

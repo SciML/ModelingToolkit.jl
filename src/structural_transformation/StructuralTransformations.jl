@@ -19,7 +19,7 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
     has_tearing_state, defaults, InvalidSystemException,
     ExtraEquationsSystemException,
     ExtraVariablesSystemException,
-    get_postprocess_fbody, vars!,
+    get_preface_vec, vars!,
     IncrementalCycleTracker, add_edge_checked!, topological_sort,
     invalidate_cache!, Substitutions, get_or_construct_tearing_state,
     filter_kwargs, lower_varname, setio, SparseMatrixCLIL,

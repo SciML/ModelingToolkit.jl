@@ -231,15 +231,12 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     p = map(x -> time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
 
-    # pre = has_difference ? (ex -> ex) : get_postprocess_fbody(sys)
-
     args = (u, inputs, p, t)
     if implicit_dae
         ddvs = map(Differential(get_iv(sys)), dvs)
         args = (ddvs, args...)
     end
-    process = get_postprocess_fbody(sys)
-    f = build_function(rhss, args...; postprocess_fbody = process,
+    f = build_function(rhss, args...; preface = get_preface_vec(sys),
         expression = Val{false}, kwargs...)
     (; f, dvs, ps, io_sys = sys)
 end

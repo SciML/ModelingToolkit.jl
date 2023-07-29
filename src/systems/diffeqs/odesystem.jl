@@ -397,12 +397,12 @@ function build_explicit_observed_function(sys, ts;
         ipts = DestructuredArgs(inputs, inbounds = !checkbounds)
         args = [dvs, ipts, ps, ivs...]
     end
-    pre = get_postprocess_fbody(sys)
+    pre = get_preface_vec(sys)
 
     ex = Func(args, [],
-        pre(Let(obsexprs,
+              Let(vcat(pre, obsexprs),
             isscalar ? ts[1] : MakeArray(ts, output_type),
-            false))) |> toexpr
+            false)) |> toexpr
     expression ? ex : drop_expr(@RuntimeGeneratedFunction(ex))
 end
 

@@ -123,7 +123,7 @@ function generate_gradient(sys::OptimizationSystem, vs = states(sys), ps = param
     kwargs...)
     grad = calculate_gradient(sys)
     pre = get_preprocess_constants(grad)
-    return build_function(grad, vs, ps; postprocess_fbody = pre,
+    return build_function(grad, vs, ps; preface = pre,
         conv = AbstractSysToExpr(sys), kwargs...)
 end
 
@@ -139,7 +139,7 @@ function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parame
         hess = calculate_hessian(sys)
     end
     pre = get_preprocess_constants(hess)
-    return build_function(hess, vs, ps; postprocess_fbody = pre,
+    return build_function(hess, vs, ps; preface = pre,
         conv = AbstractSysToExpr(sys), kwargs...)
 end
 

@@ -572,12 +572,10 @@ Create a function preface containing assignments of default values to constants.
 """
 function get_preprocess_constants(eqs)
     cs = collect_constants(eqs)
-    pre = ex -> Let(Assignment[Assignment(x, getdefault(x)) for x in cs],
-        ex, false)
-    return pre
+    Assignment[Assignment(x, getdefault(x)) for x in cs]
 end
 
-function get_preface(sys)
+function get_preface_vec(sys)
     has_preface(sys) && (pre = preface(sys); pre !== nothing) ? pre : []
 end
 
@@ -622,7 +620,7 @@ function get_substitutions_and_solved_states(sys; no_postprocess = false)
     cmap, cs = get_cmap(sys)
     if empty_substitutions(sys) && isempty(cs)
         sol_states = Code.LazyState()
-        assignments = no_postprocess ? [] : get_postprocess_fbody(sys)
+        assignments = no_postprocess ? [] : get_preface_vec(sys)
     else # Have to do some work
         if !empty_substitutions(sys)
             @unpack subs = get_substitutions(sys)
@@ -634,8 +632,7 @@ function get_substitutions_and_solved_states(sys; no_postprocess = false)
         if no_postprocess
             assignments = Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs]
         else
-            process = get_postprocess_fbody(sys)
-            assignments = vcat(assignments,
+            assignments = vcat(get_preface_vec(sys),
                                Assignment[Assignment(eq.lhs, eq.rhs)
                                           for eq in subs])
         end

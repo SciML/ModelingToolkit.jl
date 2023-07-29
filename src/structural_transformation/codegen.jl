@@ -301,9 +301,9 @@ function build_torn_function(sys;
     @set! sys.unknown_states = states
     syms = map(Symbol, states)
 
-    pre = get_postprocess_fbody(sys)
+    pre = get_preface_vec(sys)
     cpre = get_preprocess_constants(rhss)
-    pre2 = x -> pre(cpre(x))
+    pre2 = vcat(pre, cpre)
 
     expr = SymbolicUtils.Code.toexpr(Func([out
                 DestructuredArgs(states,
@@ -312,10 +312,10 @@ function build_torn_function(sys;
                 inbounds = !checkbounds)
                 independent_variables(sys)],
             [],
-            pre2(Let([torn_expr;
+            Let([pre2; torn_expr;
                     assignments[is_not_prepended_assignment]],
                 funbody,
-                false))),
+                false)),
         sol_states)
     if expression
         expr, states
@@ -490,17 +490,17 @@ function build_observed_function(state, ts, var_eq_matching, var_sccs,
     pre = get_postprocess_fbody(sys)
     cpre = get_preprocess_constants([obs[1:maxidx];
         isscalar ? ts[1] : MakeArray(ts, output_type)])
-    pre2 = x -> pre(cpre(x))
+    pre2 = vcat(pre, cpre)
     ex = Code.toexpr(Func([DestructuredArgs(unknown_states, inbounds = !checkbounds)
                 DestructuredArgs(parameters(sys), inbounds = !checkbounds)
                 independent_variables(sys)],
             [],
-            pre2(Let([collect(Iterators.flatten(solves))
+            Let(vcat(pre2, [collect(Iterators.flatten(solves))
                     assignments[is_not_prepended_assignment]
                     map(eq -> eq.lhs ← eq.rhs, obs[1:maxidx])
-                    subs],
+                    subs]),
                 isscalar ? ts[1] : MakeArray(ts, output_type),
-                false))), sol_states)
+                false)), sol_states)
 
     expression ? ex : drop_expr(@RuntimeGeneratedFunction(ex))
 end
