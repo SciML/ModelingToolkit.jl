@@ -168,15 +168,15 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
 end
 
 function dummy_derivative_graph!(state::TransformationState, jac = nothing;
-    state_priority = nothing, kwargs...)
+    state_priority = nothing, log = Val(false), kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     complete!(state.structure)
     var_eq_matching = complete(pantelides!(state))
-    dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority)
+    dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, log)
 end
 
 function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac,
-    state_priority)
+    state_priority, ::Val{log} = Val(false)) where {log}
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
@@ -338,7 +338,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         end
     end
 
-    var_eq_matching = tear_graph_modia(structure, isdiffed,
+    var_eq_matching, full_var_eq_matching = tear_graph_modia(structure, isdiffed,
         Union{Unassigned, SelectedState};
         varfilter = can_eliminate)
     for v in eachindex(var_eq_matching)
@@ -348,5 +348,10 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         var_eq_matching[v] = SelectedState()
     end
 
-    return var_eq_matching
+    if log
+        candidates = can_eliminate.(1:ndsts(graph))
+        return var_eq_matching, full_var_eq_matching, candidates
+    else
+        return var_eq_matching
+    end
 end
