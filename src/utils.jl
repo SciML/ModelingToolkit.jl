@@ -577,15 +577,8 @@ function get_preprocess_constants(eqs)
     return pre
 end
 
-function get_postprocess_fbody(sys)
-    if has_preface(sys) && (pre = preface(sys); pre !== nothing)
-        pre_ = let pre = pre
-            ex -> Let(pre, ex, false)
-        end
-    else
-        pre_ = ex -> ex
-    end
-    return pre_
+function get_preface(sys)
+    has_preface(sys) && (pre = preface(sys); pre !== nothing) ? pre : []
 end
 
 """
@@ -629,7 +622,7 @@ function get_substitutions_and_solved_states(sys; no_postprocess = false)
     cmap, cs = get_cmap(sys)
     if empty_substitutions(sys) && isempty(cs)
         sol_states = Code.LazyState()
-        pre = no_postprocess ? (ex -> ex) : get_postprocess_fbody(sys)
+        assignments = no_postprocess ? [] : get_postprocess_fbody(sys)
     else # Have to do some work
         if !empty_substitutions(sys)
             @unpack subs = get_substitutions(sys)
@@ -639,15 +632,15 @@ function get_substitutions_and_solved_states(sys; no_postprocess = false)
         subs = [cmap; subs] # The constants need to go first
         sol_states = Code.NameState(Dict(eq.lhs => Symbol(eq.lhs) for eq in subs))
         if no_postprocess
-            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs], ex,
-                false)
+            assignments = Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs]
         else
             process = get_postprocess_fbody(sys)
-            pre = ex -> Let(Assignment[Assignment(eq.lhs, eq.rhs) for eq in subs],
-                process(ex), false)
+            assignments = vcat(assignments,
+                               Assignment[Assignment(eq.lhs, eq.rhs)
+                                          for eq in subs])
         end
     end
-    return pre, sol_states
+    return assignments, sol_states
 end
 
 function mergedefaults(defaults, varmap, vars)

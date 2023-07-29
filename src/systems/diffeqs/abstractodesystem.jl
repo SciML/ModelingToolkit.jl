@@ -148,11 +148,11 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
             no_postprocess = has_difference)
 
         if implicit_dae
-            build_function(rhss, ddvs, u, p, t; postprocess_fbody = pre,
+            build_function(rhss, ddvs, u, p, t; preface = pre,
                 states = sol_states,
                 kwargs...)
         else
-            build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states,
+            build_function(rhss, u, p, t; preface = pre, states = sol_states,
                 kwargs...)
         end
     end
