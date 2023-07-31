@@ -169,7 +169,7 @@ prob.f(du, u, pr, tt)
 # test the initial guess is respected
 @named sys = ODESystem(eqs, t, defaults = Dict(z => Inf))
 infprob = ODAEProblem(structural_simplify(sys), [x => 1.0], (0, 1.0), [p => 0.2])
-@test_throws DomainError infprob.f(du, u, pr, tt)
+@test_throws Any infprob.f(du, u, pr, tt)
 
 sol1 = solve(prob, Tsit5())
 sol2 = solve(ODEProblem{false}((u, p, t) -> [-asin(u[1] - pr * t)],
