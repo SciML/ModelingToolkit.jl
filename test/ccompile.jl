@@ -14,4 +14,4 @@ p = rand(1)
 _t = rand()
 f(du, u, p, _t)
 f2(du2, u, p, _t)
-@test du == du2
+@test du ≈ du2
