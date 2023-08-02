@@ -666,7 +666,10 @@ end
     throw(ArgumentError("$vars are either missing from the variable map or missing from the system's states/parameters list."))
 end
 
-function promote_to_concrete(vs; tofloat = true, use_union = false)
+function promote_to_concrete(vs;
+    type::Union{Type{K}, Nothing} = nothing,
+    tofloat = type === nothing,
+    use_union = false) where {K}
     if isempty(vs)
         return vs
     end
@@ -693,16 +696,20 @@ function promote_to_concrete(vs; tofloat = true, use_union = false)
                 I = promote_type(I, E)
             end
         end
-        if tofloat && !has_array
-            C = float(C)
-        elseif has_array || (use_union && has_int && C !== I)
-            if has_array
-                C = Union{C, array_T}
+        if type === nothing
+            if tofloat && !has_array
+                C = float(C)
+            elseif has_array || (use_union && has_int && C !== I)
+                if has_array
+                    C = Union{C, array_T}
+                end
+                if has_int
+                    C = Union{C, I}
+                end
+                return copyto!(similar(vs, C), vs)
             end
-            if has_int
-                C = Union{C, I}
-            end
-            return copyto!(similar(vs, C), vs)
+        else
+            C = K
         end
         convert.(C, vs)
     end

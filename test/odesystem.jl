@@ -1012,3 +1012,37 @@ let
     prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
     @test !isnothing(prob.f.sys)
 end
+
+# p_type
+let
+    # needs ModelingToolkitStandardLibrary > v2.1.0
+    using ModelingToolkitStandardLibrary.Blocks: SampledData, Parameter, Integrator
+
+    dt = 4e-4
+    t_end = 10.0
+    time = 0:dt:t_end
+    x = @. time^2 + 1.0
+
+    @parameters t
+    D = Differential(t)
+
+    vars = @variables y(t)=1 dy(t)=0 ddy(t)=0
+    @named src = SampledData(Float64)
+    @named int = Integrator()
+    @named iosys = ODESystem([y ~ src.output.u
+            D(y) ~ dy
+            D(dy) ~ ddy
+            connect(src.output, int.input)],
+        t,
+        systems = [int, src])
+    sys = structural_simplify(iosys)
+    s = complete(iosys)
+    prob = ODEProblem(sys,
+        [],
+        (0.0, t_end),
+        [s.src.buffer => Parameter(x, dt)];
+        p_type = Parameter{Float64})
+
+    @test eltype(prob.p) == Parameter{Float64}
+    @test eltype(prob.u0) == Float64
+end

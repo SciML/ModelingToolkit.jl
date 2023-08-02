@@ -58,7 +58,7 @@ applicable.
 """
 function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
     toterm = default_toterm, promotetoconcrete = nothing,
-    tofloat = true, use_union = false)
+    tofloat = true, use_union = false, kwargs...)
     varlist = collect(map(unwrap, varlist))
 
     # Edge cases where one of the arguments is effectively empty.
@@ -89,7 +89,7 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
 
     promotetoconcrete === nothing && (promotetoconcrete = container_type <: AbstractArray)
     if promotetoconcrete
-        vals = promote_to_concrete(vals; tofloat = tofloat, use_union = use_union)
+        vals = promote_to_concrete(vals; tofloat, use_union, kwargs...)
     end
 
     if isempty(vals)
