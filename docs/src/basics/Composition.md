@@ -137,12 +137,15 @@ In a hierarchical system, variables of the subsystem get namespaced by the name 
 
 ```julia
 @parameters t a b c d e f
-p = [a #a is a local variable
-    ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
-    ParentScope(ParentScope(c))# ParentScope can be nested
-    DelayParentScope(d) # skips one level before applying ParentScope
-    DelayParentScope(e, 2) # second argument allows skipping N levels
-    GlobalScope(f)]
+
+# a is a local variable
+b = ParentScope(b) # b is a variable that belongs to one level up in the hierarchy
+c = ParentScope(ParentScope(c)) # ParentScope can be nested
+d = DelayParentScope(d) # skips one level before applying ParentScope
+e = DelayParentScope(e, 2) # second argument allows skipping N levels
+f = GlobalScope(f)
+
+p = [a, b, c, d, e, f]
 
 level0 = ODESystem(Equation[], t, [], p; name = :level0)
 level1 = ODESystem(Equation[], t, [], []; name = :level1) ∘ level0
