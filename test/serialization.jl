@@ -11,13 +11,13 @@ for prob in [
     eval(ModelingToolkit.ODEProblemExpr{false}(sys, nothing, nothing,
         SciMLBase.NullParameters())),
 ]
-    _fn = tempname()
+    _fn = tempname() * ".jld"
 
     open(_fn, "w") do f
         serialize(f, prob)
     end
 
-    _cmd = "using ModelingToolkit, Serialization; deserialize(\"$_fn\")"
+    _cmd = "using ModelingToolkit, Serialization; deserialize(raw\"$_fn\")"
 
     run(`$(Base.julia_cmd()) -e $(_cmd)`)
 end

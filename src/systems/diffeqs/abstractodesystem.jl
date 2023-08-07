@@ -677,9 +677,9 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 end
 
 """
-    u0, p, defs = get_u0_p(sys, u0map, parammap; use_union=false, tofloat=!use_union)
+    u0, p, defs = get_u0_p(sys, u0map, parammap; p_type = nothing, use_union=false, tofloat=!use_union & p_type === nothing)
 
-Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point.
+Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point.  Use `p_type` to specify the element type the parameter vector should be converted to.    
 """
 function get_u0_p(sys,
     u0map,
@@ -716,7 +716,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     eval_expression = true,
     p_type = nothing,
     use_union = false,
-    tofloat = !use_union & isnothing(p_type),
+    tofloat = !use_union & p_type === nothing,
     symbolic_u0 = false,
     kwargs...)
     eqs = equations(sys)
