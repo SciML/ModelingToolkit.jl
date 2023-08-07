@@ -716,7 +716,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     eval_expression = true,
     p_type = nothing,
     use_union = false,
-    tofloat = !use_union & p_type === nothing,
+    tofloat = !use_union & (p_type === nothing),
     symbolic_u0 = false,
     kwargs...)
     eqs = equations(sys)
