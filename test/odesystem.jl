@@ -1042,4 +1042,9 @@ let
 
     @test eltype(prob.p) == Parameter{Float64}
     @test eltype(prob.u0) == Float64
+
+    defs = ModelingToolkit.defaults(iosys)
+    ps = parameters(iosys)
+    pv = ModelingToolkit.varmap_to_vars(defs, ps; tofloat = false)
+    @test eltype(pv) == Parameter{Float64}
 end
