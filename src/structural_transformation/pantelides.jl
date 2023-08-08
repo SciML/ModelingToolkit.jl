@@ -61,8 +61,8 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
 
     final_vars = unique(filter(x -> !(operation(x) isa Differential), fullvars))
     final_eqs = map(identity,
-                    filter(x -> value(x.lhs) !== nothing,
-                           out_eqs[sort(filter(x -> x !== unassigned, var_eq_matching))]))
+        filter(x -> value(x.lhs) !== nothing,
+            out_eqs[sort(filter(x -> x !== unassigned, var_eq_matching))]))
 
     @set! sys.eqs = final_eqs
     @set! sys.states = final_vars
@@ -70,7 +70,7 @@ function pantelides_reassemble(state::TearingState, var_eq_matching)
 end
 
 """
-    computed_highest_diff_variables(var_to_diff)
+    computed_highest_diff_variables(structure)
 
 Computes which variables are the "highest-differentiated" for purposes of
 pantelides. Ordinarily this is relatively straightforward. However, in our
@@ -132,7 +132,7 @@ function pantelides!(state::TransformationState; finalize = true, maxiters = 800
     var_eq_matching = Matching(nvars)
     neqs′ = neqs
     nnonemptyeqs = count(eq -> !isempty(𝑠neighbors(graph, eq)) && eq_to_diff[eq] === nothing,
-                         1:neqs′)
+        1:neqs′)
 
     varwhitelist = computed_highest_diff_variables(state.structure)
 
@@ -157,7 +157,7 @@ function pantelides!(state::TransformationState; finalize = true, maxiters = 800
             resize!(ecolor, neqs)
             fill!(ecolor, false)
             pathfound = construct_augmenting_path!(var_eq_matching, graph, eq′,
-                                                   v -> varwhitelist[v], vcolor, ecolor)
+                v -> varwhitelist[v], vcolor, ecolor)
             pathfound && break # terminating condition
             if is_only_discrete(state.structure)
                 error("The discrete system has high structural index. This is not supported.")

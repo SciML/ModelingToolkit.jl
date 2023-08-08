@@ -35,9 +35,9 @@ pendulum = ODESystem(eqs, t, [x, y, w, z, T], [L, g], name = :pendulum)
 state = TearingState(pendulum)
 @unpack graph, var_to_diff = state.structure
 @test StructuralTransformations.maximal_matching(graph, eq -> true,
-                                                 v -> var_to_diff[v] === nothing) ==
+    v -> var_to_diff[v] === nothing) ==
       map(x -> x == 0 ? StructuralTransformations.unassigned : x,
-          [1, 2, 3, 4, 0, 0, 0, 0, 0])
+    [1, 2, 3, 4, 0, 0, 0, 0, 0])
 
 using ModelingToolkit
 @parameters t L g
@@ -64,23 +64,23 @@ first_order_idx1_pendulum = ode_order_lowering(idx1_pendulum)
 using OrdinaryDiffEq
 using LinearAlgebra
 prob = ODEProblem(ODEFunction(first_order_idx1_pendulum),
-                  #  [x, y, w, z, xˍt, yˍt, T]
-                  [1, 0, 0, 0, 0, 0, 0.0],# 0, 0, 0, 0],
-                  (0, 10.0),
-                  [1, 9.8])
+    #  [x, y, w, z, xˍt, yˍt, T]
+    [1, 0, 0, 0, 0, 0, 0.0],# 0, 0, 0, 0],
+    (0, 10.0),
+    [1, 9.8])
 sol = solve(prob, Rodas5());
 #plot(sol, idxs=(1, 2))
 
 new_sys = dae_index_lowering(ModelingToolkit.ode_order_lowering(pendulum2))
 
 prob_auto = ODEProblem(new_sys,
-                       [D(x) => 0,
-                           D(y) => 0,
-                           x => 1,
-                           y => 0,
-                           T => 0.0],
-                       (0, 100.0),
-                       [1, 9.8])
+    [D(x) => 0,
+        D(y) => 0,
+        x => 1,
+        y => 0,
+        T => 0.0],
+    (0, 100.0),
+    [1, 9.8])
 sol = solve(prob_auto, Rodas5());
 #plot(sol, idxs=(x, y))
 
@@ -118,7 +118,7 @@ sol = solve(prob_auto, Rodas5());
 #plot(sol, idxs=(D(x), y))
 
 let pss_pendulum2 = partial_state_selection(pendulum2)
-    @test_broken length(equations(pss_pendulum2)) <= 6
+    @test length(equations(pss_pendulum2)) <= 6
 end
 
 eqs = [D(x) ~ w,

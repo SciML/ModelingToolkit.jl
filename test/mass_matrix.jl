@@ -12,8 +12,8 @@ eqs = [D(y[1]) ~ -k[1] * y[1] + k[3] * y[2] * y[3],
 @test_throws ArgumentError ODESystem(eqs, y[1])
 M = calculate_massmatrix(sys)
 @test M == [1 0 0
-            0 1 0
-            0 0 0]
+    0 1 0
+    0 0 0]
 
 f = ODEFunction(sys)
 prob_mm = ODEProblem(f, [1.0, 0.0, 0.0], (0.0, 1e5), (0.04, 3e7, 1e4))
@@ -30,7 +30,7 @@ end
 f = ODEFunction(rober, mass_matrix = M)
 prob_mm2 = ODEProblem(f, [1.0, 0.0, 0.0], (0.0, 1e5), (0.04, 3e7, 1e4))
 sol2 = solve(prob_mm2, Rodas5(), reltol = 1e-8, abstol = 1e-8, tstops = sol.t,
-             adaptive = false)
+    adaptive = false)
 
 # MTK expression are canonicalized, so the floating point numbers are slightly
 # different

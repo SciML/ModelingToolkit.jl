@@ -8,18 +8,18 @@ canonequal(a, b) = isequal(simplify(a), simplify(b))
 @parameters t σ ρ β
 @variables x y z
 @test isequal((Differential(z) * Differential(y) * Differential(x))(t),
-              Differential(z)(Differential(y)(Differential(x)(t))))
+    Differential(z)(Differential(y)(Differential(x)(t))))
 
 @test canonequal(ModelingToolkit.derivative(sin(cos(x)), x),
-                 -sin(x) * cos(cos(x)))
+    -sin(x) * cos(cos(x)))
 
 @register_symbolic no_der(x)
 @test canonequal(ModelingToolkit.derivative([sin(cos(x)), hypot(x, no_der(x))], x),
-                 [
-                     -sin(x) * cos(cos(x)),
-                     x / hypot(x, no_der(x)) +
-                     no_der(x) * Differential(x)(no_der(x)) / hypot(x, no_der(x)),
-                 ])
+    [
+        -sin(x) * cos(cos(x)),
+        x / hypot(x, no_der(x)) +
+        no_der(x) * Differential(x)(no_der(x)) / hypot(x, no_der(x)),
+    ])
 
 @register_symbolic intfun(x)::Int
 @test ModelingToolkit.symtype(intfun(x)) === Int
@@ -29,8 +29,8 @@ eqs = [σ * (y - x),
     x * y - β * z]
 
 simpexpr = [:($(*)(σ, $(+)(y, $(*)(-1, x))))
-            :($(+)($(*)(x, $(+)(ρ, $(*)(-1, z))), $(*)(-1, y)))
-            :($(+)($(*)(x, y), $(*)(-1, z, β)))]
+    :($(+)($(*)(x, $(+)(ρ, $(*)(-1, z))), $(*)(-1, y)))
+    :($(+)($(*)(x, y), $(*)(-1, z, β)))]
 
 σ, β, ρ = 2 // 3, 3 // 4, 4 // 5
 x, y, z = 6 // 7, 7 // 8, 8 // 9
@@ -116,7 +116,7 @@ Jiip(J2, [1.0, 2.0, 3.0], [1.0, 2.0, 3.0], 1.0)
 s∂ = sparse(∂)
 @test nnz(s∂) == 8
 Joop, Jiip = eval.(ModelingToolkit.build_function(s∂, [x, y, z], [σ, ρ, β], t,
-                                                  linenumbers = true))
+    linenumbers = true))
 J = Joop([1.0, 2.0, 3.0], [1.0, 2.0, 3.0], 1.0)
 @test length(nonzeros(s∂)) == 8
 J2 = copy(J)
@@ -145,7 +145,7 @@ function test_worldage()
         x * (ρ - z) - y,
         x * y - β * z]
     f, f_iip = ModelingToolkit.build_function(eqs, [x, y, z], [σ, ρ, β];
-                                              expression = Val{false})
+        expression = Val{false})
     out = [1.0, 2, 3]
     o1 = f([1.0, 2, 3], [1.0, 2, 3])
     f_iip(out, [1.0, 2, 3], [1.0, 2, 3])
@@ -199,7 +199,7 @@ let
 
     @test isequal(expand_derivatives(D(foo(t))), D(foo(t)))
     @test isequal(expand_derivatives(D(sin(t) * foo(t))),
-                  cos(t) * foo(t) + sin(t) * D(foo(t)))
+        cos(t) * foo(t) + sin(t) * D(foo(t)))
 end
 
 foo(; kw...) = kw
@@ -267,7 +267,7 @@ end
 
 @variables x [misc = "wow"]
 @test SymbolicUtils.getmetadata(Symbolics.unwrap(x), ModelingToolkit.VariableMisc,
-                                nothing) == "wow"
+    nothing) == "wow"
 @parameters x [misc = "wow"]
 @test SymbolicUtils.getmetadata(Symbolics.unwrap(x), ModelingToolkit.VariableMisc,
-                                nothing) == "wow"
+    nothing) == "wow"

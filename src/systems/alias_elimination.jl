@@ -29,7 +29,7 @@ function aag_bareiss(sys::AbstractSystem)
 end
 
 function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true);
-                     callback = _ -> nothing) where {descend}
+    callback = _ -> nothing) where {descend}
     g = descend ? invview(var_to_diff) : var_to_diff
     callback(v)
     while (v′ = g[v]) !== nothing
@@ -102,10 +102,10 @@ function alias_elimination!(state::TearingState; kwargs...)
     @set! mm.nparentrows = nsrcs(graph)
     @set! mm.row_cols = eltype(mm.row_cols)[mm.row_cols[i]
                                             for (i, eq) in enumerate(mm.nzrows)
-                                            if old_to_new_eq[eq] > 0]
+                                                if old_to_new_eq[eq] > 0]
     @set! mm.row_vals = eltype(mm.row_vals)[mm.row_vals[i]
                                             for (i, eq) in enumerate(mm.nzrows)
-                                            if old_to_new_eq[eq] > 0]
+                                                if old_to_new_eq[eq] > 0]
     @set! mm.nzrows = Int[old_to_new_eq[eq] for eq in mm.nzrows if old_to_new_eq[eq] > 0]
 
     for old_ieq in to_expand
@@ -149,9 +149,9 @@ Find the first linear variable such that `𝑠neighbors(adj, i)[j]` is true give
 the `constraint`.
 """
 @inline function find_first_linear_variable(M::SparseMatrixCLIL,
-                                            range,
-                                            mask,
-                                            constraint)
+    range,
+    mask,
+    constraint)
     eadj = M.row_cols
     for i in range
         vertices = eadj[i]
@@ -167,9 +167,9 @@ the `constraint`.
 end
 
 @inline function find_first_linear_variable(M::AbstractMatrix,
-                                            range,
-                                            mask,
-                                            constraint)
+    range,
+    mask,
+    constraint)
     for i in range
         row = @view M[i, :]
         if constraint(count(!iszero, row))
@@ -264,7 +264,8 @@ function find_linear_variables(graph, linear_equations, var_to_diff, irreducible
     return linear_variables
 end
 
-function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL{T, Ti}) where {T, Ti}
+function aag_bareiss!(structure, mm_orig::SparseMatrixCLIL{T, Ti}) where {T, Ti}
+    @unpack graph, var_to_diff = structure
     mm = copy(mm_orig)
     linear_equations_set = BitSet(mm_orig.nzrows)
 
@@ -279,6 +280,7 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL{T, Ti}) wher
         v -> var_to_diff[v] === nothing === invview(var_to_diff)[v]
     end
     is_linear_variables = is_algebraic.(1:length(var_to_diff))
+    is_highest_diff = computed_highest_diff_variables(structure)
     for i in 𝑠vertices(graph)
         # only consider linear algebraic equations
         (i in linear_equations_set && all(is_algebraic, 𝑠neighbors(graph, i))) &&
@@ -291,24 +293,30 @@ function aag_bareiss!(graph, var_to_diff, mm_orig::SparseMatrixCLIL{T, Ti}) wher
 
     local bar
     try
-        bar = do_bareiss!(mm, mm_orig, is_linear_variables)
+        bar = do_bareiss!(mm, mm_orig, is_linear_variables, is_highest_diff)
     catch e
         e isa OverflowError || rethrow(e)
         mm = convert(SparseMatrixCLIL{BigInt, Ti}, mm_orig)
-        bar = do_bareiss!(mm, mm_orig, is_linear_variables)
+        bar = do_bareiss!(mm, mm_orig, is_linear_variables, is_highest_diff)
     end
 
     return mm, solvable_variables, bar
 end
 
-function do_bareiss!(M, Mold, is_linear_variables)
+function do_bareiss!(M, Mold, is_linear_variables, is_highest_diff)
     rank1r = Ref{Union{Nothing, Int}}(nothing)
+    rank2r = Ref{Union{Nothing, Int}}(nothing)
     find_pivot = let rank1r = rank1r
         (M, k) -> begin
             if rank1r[] === nothing
                 r = find_masked_pivot(is_linear_variables, M, k)
                 r !== nothing && return r
                 rank1r[] = k - 1
+            end
+            if rank2r[] === nothing
+                r = find_masked_pivot(is_highest_diff, M, k)
+                r !== nothing && return r
+                rank2r[] = k - 1
             end
             # TODO: It would be better to sort the variables by
             # derivative order here to enable more elimination
@@ -332,17 +340,21 @@ function do_bareiss!(M, Mold, is_linear_variables)
         end
     end
     bareiss_ops = ((M, i, j) -> nothing, myswaprows!,
-                   bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
+        bareiss_update_virtual_colswap_mtk!, bareiss_zero!)
 
-    rank2, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
+    rank3, = bareiss!(M, bareiss_ops; find_pivot = find_and_record_pivot)
+    rank2 = something(rank2r[], rank3)
     rank1 = something(rank1r[], rank2)
-    (rank1, rank2, pivots)
+    (rank1, rank2, rank3, pivots)
 end
 
-function simple_aliases!(ils, graph, solvable_graph, eq_to_diff, var_to_diff)
-    ils, solvable_variables, (rank1, rank2, pivots) = aag_bareiss!(graph,
-                                                                   var_to_diff,
-                                                                   ils)
+function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLIL)
+    @unpack structure = state
+    @unpack graph, solvable_graph, var_to_diff, eq_to_diff = state.structure
+    # Step 1: Perform Bareiss factorization on the adjacency matrix of the linear
+    #         subsystem of the system we're interested in.
+    #
+    ils, solvable_variables, (rank1, rank2, rank3, pivots) = aag_bareiss!(structure, ils)
 
     ## Step 2: Simplify the system using the Bareiss factorization
     rk1vars = BitSet(@view pivots[1:rank1])
@@ -360,14 +372,6 @@ function simple_aliases!(ils, graph, solvable_graph, eq_to_diff, var_to_diff)
     end
 
     return ils
-end
-
-function alias_eliminate_graph!(state::TransformationState, ils::SparseMatrixCLIL)
-    @unpack graph, solvable_graph, var_to_diff, eq_to_diff = state.structure
-    # Step 1: Perform Bareiss factorization on the adjacency matrix of the linear
-    #         subsystem of the system we're interested in.
-    #
-    return simple_aliases!(ils, graph, solvable_graph, eq_to_diff, var_to_diff)
 end
 
 function exactdiv(a::Integer, b)
@@ -468,10 +472,10 @@ function observed2graph(eqs, states)
 end
 
 function fixpoint_sub(x, dict)
-    y = substitute(x, dict)
+    y = fast_substitute(x, dict)
     while !isequal(x, y)
         y = x
-        x = substitute(y, dict)
+        x = fast_substitute(y, dict)
     end
 
     return x

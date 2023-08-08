@@ -1,6 +1,7 @@
 using ModelingToolkit, OrdinaryDiffEq, StochasticDiffEq, JumpProcesses, Test
-using ModelingToolkit: SymbolicContinuousCallback, SymbolicContinuousCallbacks, NULL_AFFECT,
-                       get_callback
+using ModelingToolkit: SymbolicContinuousCallback,
+    SymbolicContinuousCallbacks, NULL_AFFECT,
+    get_callback
 using StableRNGs
 rng = StableRNG(12345)
 
@@ -126,9 +127,9 @@ fsys = flatten(sys)
 @test getfield(sys2, :continuous_events)[] ==
       SymbolicContinuousCallback(Equation[x ~ 2], NULL_AFFECT)
 @test all(ModelingToolkit.continuous_events(sys2) .== [
-              SymbolicContinuousCallback(Equation[x ~ 2], NULL_AFFECT),
-              SymbolicContinuousCallback(Equation[sys.x ~ 1], NULL_AFFECT),
-          ])
+    SymbolicContinuousCallback(Equation[x ~ 2], NULL_AFFECT),
+    SymbolicContinuousCallback(Equation[sys.x ~ 1], NULL_AFFECT),
+])
 
 @test isequal(equations(getfield(sys2, :continuous_events))[1], x ~ 2)
 @test length(ModelingToolkit.continuous_events(sys2)) == 2
@@ -203,7 +204,7 @@ root_eqs = [x ~ 0]
 affect = [v ~ -v]
 
 @named ball = ODESystem([D(x) ~ v
-                         D(v) ~ -9.8], t, continuous_events = root_eqs => affect)
+        D(v) ~ -9.8], t, continuous_events = root_eqs => affect)
 
 @test getfield(ball, :continuous_events)[] ==
       SymbolicContinuousCallback(Equation[x ~ 0], Equation[v ~ -v])
@@ -222,12 +223,12 @@ sol = solve(prob, Tsit5())
 D = Differential(t)
 
 continuous_events = [[x ~ 0] => [vx ~ -vx]
-                     [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
+    [y ~ -1.5, y ~ 1.5] => [vy ~ -vy]]
 
 @named ball = ODESystem([D(x) ~ vx
-                         D(y) ~ vy
-                         D(vx) ~ -9.8
-                         D(vy) ~ -0.01vy], t; continuous_events)
+        D(y) ~ vy
+        D(vx) ~ -9.8
+        D(vy) ~ -0.01vy], t; continuous_events)
 
 ball = structural_simplify(ball)
 
@@ -262,9 +263,9 @@ continuous_events = [
 ]
 
 @named ball = ODESystem([D(x) ~ vx
-                         D(y) ~ vy
-                         D(vx) ~ -1
-                         D(vy) ~ 0], t; continuous_events)
+        D(y) ~ vy
+        D(vx) ~ -1
+        D(vy) ~ 0], t; continuous_events)
 
 ball = structural_simplify(ball)
 
@@ -283,8 +284,8 @@ sol = solve(prob, Tsit5())
 # tests that it works for ODAESystem
 @variables vs(t) v(t) vmeasured(t)
 eq = [vs ~ sin(2pi * t)
-      D(v) ~ vs - v
-      D(vmeasured) ~ 0.0]
+    D(v) ~ vs - v
+    D(vmeasured) ~ 0.0]
 ev = [sin(20pi * t) ~ 0.0] => [vmeasured ~ v]
 @named sys = ODESystem(eq, continuous_events = ev)
 sys = structural_simplify(sys)
@@ -319,7 +320,7 @@ function SpringDamper(; name, k = false, c = false)
     spring = Spring(; name = :spring, k)
     damper = Damper(; name = :damper, c)
     compose(ODESystem(Equation[], t; name),
-            spring, damper)
+        spring, damper)
 end
 connect_sd(sd, m1, m2) = [sd.spring.x ~ m1.pos - m2.pos, sd.damper.vel ~ m1.vel - m2.vel]
 sd_force(sd) = -sd.spring.k * sd.spring.x - sd.damper.c * sd.damper.vel
@@ -328,8 +329,8 @@ sd_force(sd) = -sd.spring.k * sd.spring.x - sd.damper.c * sd.damper.vel
 @named sd = SpringDamper(; k = 1000, c = 10)
 function Model(u, d = 0)
     eqs = [connect_sd(sd, mass1, mass2)
-           Dₜ(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
-           Dₜ(mass2.vel) ~ (-sd_force(sd) + d) / mass2.m]
+        Dₜ(mass1.vel) ~ (sd_force(sd) + u) / mass1.m
+        Dₜ(mass2.vel) ~ (-sd_force(sd) + d) / mass2.m]
     @named _model = ODESystem(eqs, t; observed = [y ~ mass2.pos])
     @named model = compose(_model, mass1, mass2, sd)
 end
@@ -339,7 +340,7 @@ sys = structural_simplify(model)
 
 let
     function testsol(osys, u0, p, tspan; tstops = Float64[], skipparamtest = false,
-                     kwargs...)
+        kwargs...)
         oprob = ODEProblem(osys, u0, tspan, p; kwargs...)
         sol = solve(oprob, Tsit5(); tstops = tstops, abstol = 1e-10, reltol = 1e-10)
         @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-6)
@@ -406,14 +407,14 @@ let
     affect3 = [k ~ 0.0]
     cb3 = cond3 => affect3
     @named osys7 = ODESystem(eqs, t, [A], [k, t1, t2], discrete_events = [cb1, cb2‵‵‵],
-                             continuous_events = [cb3])
+        continuous_events = [cb3])
     sol = testsol(osys7, u0, p, (0.0, 10.0); tstops = [1.0, 2.0], skipparamtest = true)
     @test isapprox(sol(10.0)[1], 0.1; atol = 1e-10, rtol = 1e-10)
 end
 
 let
     function testsol(ssys, u0, p, tspan; tstops = Float64[], skipparamtest = false,
-                     kwargs...)
+        kwargs...)
         sprob = SDEProblem(ssys, u0, tspan, p; kwargs...)
         sol = solve(sprob, RI5(); tstops = tstops, abstol = 1e-10, reltol = 1e-10)
         @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-4)
@@ -435,7 +436,7 @@ let
     ∂ₜ = Differential(t)
     eqs = [∂ₜ(A) ~ -k * A]
     @named ssys = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
-                            discrete_events = [cb1, cb2])
+        discrete_events = [cb1, cb2])
     u0 = [A => 1.0]
     p = [k => 0.0, t1 => 1.0, t2 => 2.0]
     tspan = (0.0, 4.0)
@@ -445,7 +446,7 @@ let
     affect1a = [A ~ A + 1, B ~ A]
     cb1a = cond1a => affect1a
     @named ssys1 = SDESystem(eqs, Equation[], t, [A, B], [k, t1, t2],
-                             discrete_events = [cb1a, cb2])
+        discrete_events = [cb1a, cb2])
     u0′ = [A => 1.0, B => 0.0]
     sol = testsol(ssys1, u0′, p, tspan; tstops = [1.0, 2.0], check_length = false)
     @test sol(1.0000001, idxs = 2) == 2.0
@@ -458,7 +459,7 @@ let
 
     # mixing discrete affects
     @named ssys3 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
-                             discrete_events = [cb1, cb2‵])
+        discrete_events = [cb1, cb2‵])
     testsol(ssys3, u0, p, tspan; tstops = [1.0])
 
     # mixing with a func affect
@@ -468,16 +469,16 @@ let
     end
     cb2‵‵ = [2.0] => (affect!, [], [k], nothing)
     @named ssys4 = SDESystem(eqs, Equation[], t, [A], [k, t1],
-                             discrete_events = [cb1, cb2‵‵])
+        discrete_events = [cb1, cb2‵‵])
     testsol(ssys4, u0, p, tspan; tstops = [1.0])
 
     # mixing with symbolic condition in the func affect
     cb2‵‵‵ = (t == t2) => (affect!, [], [k], nothing)
     @named ssys5 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
-                             discrete_events = [cb1, cb2‵‵‵])
+        discrete_events = [cb1, cb2‵‵‵])
     testsol(ssys5, u0, p, tspan; tstops = [1.0, 2.0])
     @named ssys6 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
-                             discrete_events = [cb2‵‵‵, cb1])
+        discrete_events = [cb2‵‵‵, cb1])
     testsol(ssys6, u0, p, tspan; tstops = [1.0, 2.0])
 
     # mix a continuous event too
@@ -485,15 +486,15 @@ let
     affect3 = [k ~ 0.0]
     cb3 = cond3 => affect3
     @named ssys7 = SDESystem(eqs, Equation[], t, [A], [k, t1, t2],
-                             discrete_events = [cb1, cb2‵‵‵],
-                             continuous_events = [cb3])
+        discrete_events = [cb1, cb2‵‵‵],
+        continuous_events = [cb3])
     sol = testsol(ssys7, u0, p, (0.0, 10.0); tstops = [1.0, 2.0], skipparamtest = true)
     @test isapprox(sol(10.0)[1], 0.1; atol = 1e-10, rtol = 1e-10)
 end
 
 let rng = rng
     function testsol(jsys, u0, p, tspan; tstops = Float64[], skipparamtest = false,
-                     N = 40000, kwargs...)
+        N = 40000, kwargs...)
         dprob = DiscreteProblem(jsys, u0, tspan, p)
         jprob = JumpProblem(jsys, dprob, Direct(); kwargs...)
         sol = solve(jprob, SSAStepper(); tstops = tstops)

@@ -78,10 +78,10 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
     end
 
     de = ODESystem(eqs, t, sts, params,
-                   defaults = merge(default_u0, default_p);
-                   name = gensym(:MTKizedODE),
-                   tspan = prob.tspan,
-                   kwargs...)
+        defaults = merge(default_u0, default_p);
+        name = gensym(:MTKizedODE),
+        tspan = prob.tspan,
+        kwargs...)
 
     de
 end
@@ -211,9 +211,9 @@ function modelingtoolkitize(prob::DiffEqBase.SDEProblem; kwargs...)
     end
 
     de = SDESystem(deqs, neqs, t, Vector(vec(vars)), params;
-                   name = gensym(:MTKizedSDE),
-                   tspan = prob.tspan,
-                   kwargs...)
+        name = gensym(:MTKizedSDE),
+        tspan = prob.tspan,
+        kwargs...)
 
     de
 end

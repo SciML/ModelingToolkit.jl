@@ -15,7 +15,7 @@ y &= Cx + Du
 \end{aligned}
 ```
 
-The `linearize` function expects the user to specify the inputs ``u`` and the outputs ``u`` using the syntax shown in the example below. The system model is *not* supposed to be simplified before calling `linearize`:
+The `linearize` function expects the user to specify the inputs ``u`` and the outputs ``y`` using the syntax shown in the example below. The system model is *not* supposed to be simplified before calling `linearize`:
 
 ## Example
 
@@ -26,8 +26,8 @@ using ModelingToolkit
 D = Differential(t)
 
 eqs = [u ~ kp * (r - y) # P controller
-       D(x) ~ -x + u    # First-order plant
-       y ~ x]           # Output equation
+    D(x) ~ -x + u    # First-order plant
+    y ~ x]           # Output equation
 
 @named sys = ODESystem(eqs, t)
 matrices, simplified_sys = linearize(sys, [r], [y]) # Linearize from r to y

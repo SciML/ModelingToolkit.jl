@@ -6,11 +6,11 @@ using SymbolicUtils: istree, operation, arguments, Symbolic
 using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
 import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
-                          value, InvalidSystemException, isdifferential, _iszero,
-                          isparameter, isconstant,
-                          independent_variables, SparseMatrixCLIL, AbstractSystem,
-                          equations, isirreducible, input_timedomain, TimeDomain,
-                          VariableType, getvariabletype, has_equations
+    value, InvalidSystemException, isdifferential, _iszero,
+    isparameter, isconstant,
+    independent_variables, SparseMatrixCLIL, AbstractSystem,
+    equations, isirreducible, input_timedomain, TimeDomain,
+    VariableType, getvariabletype, has_equations
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -20,10 +20,10 @@ using SparseArrays
 
 function quick_cancel_expr(expr)
     Rewriters.Postwalk(quick_cancel,
-                       similarterm = (x, f, args; kws...) -> similarterm(x, f, args,
-                                                                         SymbolicUtils.symtype(x);
-                                                                         metadata = SymbolicUtils.metadata(x),
-                                                                         kws...))(expr)
+        similarterm = (x, f, args; kws...) -> similarterm(x, f, args,
+            SymbolicUtils.symtype(x);
+            metadata = SymbolicUtils.metadata(x),
+            kws...))(expr)
 end
 
 export SystemStructure, TransformationState, TearingState, structural_simplify!
@@ -41,12 +41,12 @@ end
 DiffGraph(primal_to_diff::Vector{Union{Int, Nothing}}) = DiffGraph(primal_to_diff, nothing)
 function DiffGraph(n::Integer, with_badj::Bool = false)
     DiffGraph(Union{Int, Nothing}[nothing for _ in 1:n],
-              with_badj ? Union{Int, Nothing}[nothing for _ in 1:n] : nothing)
+        with_badj ? Union{Int, Nothing}[nothing for _ in 1:n] : nothing)
 end
 
 function Base.copy(dg::DiffGraph)
     DiffGraph(copy(dg.primal_to_diff),
-              dg.diff_to_primal === nothing ? nothing : copy(dg.diff_to_primal))
+        dg.diff_to_primal === nothing ? nothing : copy(dg.diff_to_primal))
 end
 
 @noinline function require_complete(dg::DiffGraph)
@@ -159,8 +159,8 @@ end
 function Base.copy(structure::SystemStructure)
     var_types = structure.var_types === nothing ? nothing : copy(structure.var_types)
     SystemStructure(copy(structure.var_to_diff), copy(structure.eq_to_diff),
-                    copy(structure.graph), copy(structure.solvable_graph),
-                    var_types, structure.only_discrete)
+        copy(structure.graph), copy(structure.solvable_graph),
+        var_types, structure.only_discrete)
 end
 
 is_only_discrete(s::SystemStructure) = s.only_discrete
@@ -185,8 +185,8 @@ end
 
 function algeqs(s::SystemStructure)
     BitSet(findall(map(1:nsrcs(s.graph)) do eq
-                       all(v -> !isdervar(s, v), 𝑠neighbors(s.graph, eq))
-                   end))
+        all(v -> !isdervar(s, v), 𝑠neighbors(s.graph, eq))
+    end))
 end
 
 function complete!(s::SystemStructure)
@@ -253,6 +253,7 @@ end
 function TearingState(sys; quick_cancel = false, check = true)
     sys = flatten(sys)
     ivs = independent_variables(sys)
+    iv = length(ivs) == 1 ? ivs[1] : nothing
     eqs = copy(equations(sys))
     neqs = length(eqs)
     dervaridxs = OrderedSet{Int}()
@@ -262,11 +263,11 @@ function TearingState(sys; quick_cancel = false, check = true)
     var_counter = Ref(0)
     var_types = VariableType[]
     addvar! = let fullvars = fullvars, var_counter = var_counter, var_types = var_types
-        var -> begin get!(var2idx, var) do
+        var -> get!(var2idx, var) do
             push!(fullvars, var)
             push!(var_types, getvariabletype(var))
             var_counter[] += 1
-        end end
+        end
     end
 
     vars = OrderedSet()
@@ -287,6 +288,7 @@ function TearingState(sys; quick_cancel = false, check = true)
         isalgeq = true
         statevars = []
         for var in vars
+            ModelingToolkit.isdelay(var, iv) && continue
             set_incidence = true
             @label ANOTHER_VAR
             _var, _ = var_from_nested_derivative(var)
@@ -392,9 +394,9 @@ function TearingState(sys; quick_cancel = false, check = true)
     eq_to_diff = DiffGraph(nsrcs(graph))
 
     return TearingState(sys, fullvars,
-                        SystemStructure(complete(var_to_diff), complete(eq_to_diff),
-                                        complete(graph), nothing, var_types, false),
-                        Any[])
+        SystemStructure(complete(var_to_diff), complete(eq_to_diff),
+            complete(graph), nothing, var_types, false),
+        Any[])
 end
 
 function lower_order_var(dervar)
@@ -429,11 +431,11 @@ of the provided SystemStructure.
 """
 function SystemStructurePrintMatrix(s::SystemStructure)
     return SystemStructurePrintMatrix(complete(s.graph),
-                                      s.solvable_graph === nothing ? nothing :
-                                      complete(s.solvable_graph),
-                                      complete(s.var_to_diff),
-                                      complete(s.eq_to_diff),
-                                      nothing)
+        s.solvable_graph === nothing ? nothing :
+        complete(s.solvable_graph),
+        complete(s.var_to_diff),
+        complete(s.eq_to_diff),
+        nothing)
 end
 Base.size(bgpm::SystemStructurePrintMatrix) = (max(nsrcs(bgpm.bpg), ndsts(bgpm.bpg)) + 1, 9)
 function compute_diff_label(diff_graph, i, symbol)
@@ -462,13 +464,13 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
     elseif j == 4
         return BipartiteAdjacencyList(i - 1 <= nsrcs(bgpm.bpg) ?
                                       𝑠neighbors(bgpm.bpg, i - 1) : nothing,
-                                      bgpm.highlight_graph !== nothing &&
-                                      i - 1 <= nsrcs(bgpm.highlight_graph) ?
-                                      Set(𝑠neighbors(bgpm.highlight_graph, i - 1)) :
-                                      nothing,
-                                      bgpm.var_eq_matching !== nothing &&
-                                      (i - 1 <= length(invview(bgpm.var_eq_matching))) ?
-                                      invview(bgpm.var_eq_matching)[i - 1] : unassigned)
+            bgpm.highlight_graph !== nothing &&
+            i - 1 <= nsrcs(bgpm.highlight_graph) ?
+            Set(𝑠neighbors(bgpm.highlight_graph, i - 1)) :
+            nothing,
+            bgpm.var_eq_matching !== nothing &&
+            (i - 1 <= length(invview(bgpm.var_eq_matching))) ?
+            invview(bgpm.var_eq_matching)[i - 1] : unassigned)
     elseif j == 9
         match = unassigned
         if bgpm.var_eq_matching !== nothing && i - 1 <= length(bgpm.var_eq_matching)
@@ -477,10 +479,10 @@ function Base.getindex(bgpm::SystemStructurePrintMatrix, i::Integer, j::Integer)
         end
         return BipartiteAdjacencyList(i - 1 <= ndsts(bgpm.bpg) ?
                                       𝑑neighbors(bgpm.bpg, i - 1) : nothing,
-                                      bgpm.highlight_graph !== nothing &&
-                                      i - 1 <= ndsts(bgpm.highlight_graph) ?
-                                      Set(𝑑neighbors(bgpm.highlight_graph, i - 1)) :
-                                      nothing, match)
+            bgpm.highlight_graph !== nothing &&
+            i - 1 <= ndsts(bgpm.highlight_graph) ?
+            Set(𝑑neighbors(bgpm.highlight_graph, i - 1)) :
+            nothing, match)
     else
         @assert false
     end
@@ -490,8 +492,8 @@ function Base.show(io::IO, mime::MIME"text/plain", s::SystemStructure)
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = s
     if !get(io, :limit, true) || !get(io, :mtk_limit, true)
         print(io, "SystemStructure with ", length(s.graph.fadjlist), " equations and ",
-              isa(s.graph.badjlist, Int) ? s.graph.badjlist : length(s.graph.badjlist),
-              " variables\n")
+            isa(s.graph.badjlist, Int) ? s.graph.badjlist : length(s.graph.badjlist),
+            " variables\n")
         Base.print_matrix(io, SystemStructurePrintMatrix(s))
     else
         S = incidence_matrix(s.graph, Num(Sym{Real}(:×)))
@@ -511,11 +513,11 @@ of the provided MatchedSystemStructure.
 """
 function SystemStructurePrintMatrix(ms::MatchedSystemStructure)
     return SystemStructurePrintMatrix(complete(ms.structure.graph),
-                                      complete(ms.structure.solvable_graph),
-                                      complete(ms.structure.var_to_diff),
-                                      complete(ms.structure.eq_to_diff),
-                                      complete(ms.var_eq_matching,
-                                               nsrcs(ms.structure.graph)))
+        complete(ms.structure.solvable_graph),
+        complete(ms.structure.var_to_diff),
+        complete(ms.structure.eq_to_diff),
+        complete(ms.var_eq_matching,
+            nsrcs(ms.structure.graph)))
 end
 
 function Base.copy(ms::MatchedSystemStructure)
@@ -526,8 +528,8 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
     s = ms.structure
     @unpack graph, solvable_graph, var_to_diff, eq_to_diff = s
     print(io, "Matched SystemStructure with ", length(graph.fadjlist), " equations and ",
-          isa(graph.badjlist, Int) ? graph.badjlist : length(graph.badjlist),
-          " variables\n")
+        isa(graph.badjlist, Int) ? graph.badjlist : length(graph.badjlist),
+        " variables\n")
     Base.print_matrix(io, SystemStructurePrintMatrix(ms))
     printstyled(io, "\n\nLegend: ")
     printstyled(io, "Solvable")
@@ -554,15 +556,16 @@ function merge_io(io, inputs)
 end
 
 function structural_simplify!(state::TearingState, io = nothing; simplify = false,
-                              check_consistency = true, kwargs...)
+    check_consistency = true, fully_determined = true,
+    kwargs...)
     if state.sys isa ODESystem
         ci = ModelingToolkit.ClockInference(state)
         ModelingToolkit.infer_clocks!(ci)
         tss, inputs, continuous_id, id_to_clock = ModelingToolkit.split_system(ci)
         cont_io = merge_io(io, inputs[continuous_id])
         sys, input_idxs = _structural_simplify!(tss[continuous_id], cont_io; simplify,
-                                                check_consistency,
-                                                kwargs...)
+            check_consistency, fully_determined,
+            kwargs...)
         if length(tss) > 1
             # TODO: rename it to something else
             discrete_subsystems = Vector{ODESystem}(undef, length(tss))
@@ -576,26 +579,28 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
                 end
                 dist_io = merge_io(io, inputs[i])
                 ss, = _structural_simplify!(state, dist_io; simplify, check_consistency,
-                                            kwargs...)
+                    fully_determined, kwargs...)
                 append!(appended_parameters, inputs[i], states(ss))
                 discrete_subsystems[i] = ss
             end
             @set! sys.discrete_subsystems = discrete_subsystems, inputs, continuous_id,
-                                            id_to_clock
+            id_to_clock
             @set! sys.ps = appended_parameters
             @set! sys.defaults = merge(ModelingToolkit.defaults(sys),
-                                       Dict(v => 0.0 for v in Iterators.flatten(inputs)))
+                Dict(v => 0.0 for v in Iterators.flatten(inputs)))
         end
     else
         sys, input_idxs = _structural_simplify!(state, io; simplify, check_consistency,
-                                                kwargs...)
+            fully_determined, kwargs...)
     end
     has_io = io !== nothing
     return has_io ? (sys, input_idxs) : sys
 end
 
 function _structural_simplify!(state::TearingState, io; simplify = false,
-                               check_consistency = true, kwargs...)
+    check_consistency = true, fully_determined = true,
+    kwargs...)
+    check_consistency &= fully_determined
     has_io = io !== nothing
     orig_inputs = Set()
     if has_io
@@ -606,7 +611,11 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     if check_consistency
         ModelingToolkit.check_consistency(state, orig_inputs)
     end
-    sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm)
+    if fully_determined
+        sys = ModelingToolkit.dummy_derivative(sys, state; simplify, mm, check_consistency)
+    else
+        sys = ModelingToolkit.tearing(sys, state; simplify, mm, check_consistency)
+    end
     fullstates = [map(eq -> eq.lhs, observed(sys)); states(sys)]
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullstates)
     ModelingToolkit.invalidate_cache!(sys), input_idxs

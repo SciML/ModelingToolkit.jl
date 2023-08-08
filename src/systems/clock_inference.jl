@@ -23,7 +23,7 @@ end
 
 function infer_clocks!(ci::ClockInference)
     @unpack ts, eq_domain, var_domain, inferred = ci
-    @unpack graph = ts.structure
+    @unpack var_to_diff, graph = ts.structure
     fullvars = get_fullvars(ts)
     isempty(inferred) && return ci
     # TODO: add a graph type to do this lazily
@@ -35,6 +35,11 @@ function infer_clocks!(ci::ClockInference)
             for v in vs
                 add_edge!(var_graph, fv, v)
             end
+        end
+    end
+    for v in vertices(var_to_diff)
+        if (v′ = var_to_diff[v]) !== nothing
+            add_edge!(var_graph, v, v′)
         end
     end
     cc = connected_components(var_graph)
@@ -75,6 +80,11 @@ function resize_or_push!(v, val, idx)
     push!(v[idx], val)
 end
 
+function is_time_domain_conversion(v)
+    istree(v) && (o = operation(v)) isa Operator &&
+        input_timedomain(o) != output_timedomain(o)
+end
+
 function split_system(ci::ClockInference{S}) where {S}
     @unpack ts, eq_domain, var_domain, inferred = ci
     fullvars = get_fullvars(ts)
@@ -113,8 +123,7 @@ function split_system(ci::ClockInference{S}) where {S}
         @assert cid!==0 "Internal error! Variable $(fullvars[i]) doesn't have a inferred time domain."
         var_to_cid[i] = cid
         v = fullvars[i]
-        if istree(v) && (o = operation(v)) isa Operator &&
-           input_timedomain(o) != output_timedomain(o)
+        if is_time_domain_conversion(v)
             push!(input_idxs[cid], i)
             push!(inputs[cid], fullvars[i])
         end
@@ -131,8 +140,8 @@ function split_system(ci::ClockInference{S}) where {S}
 end
 
 function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
-                                  checkbounds = true,
-                                  eval_module = @__MODULE__, eval_expression = true)
+    checkbounds = true,
+    eval_module = @__MODULE__, eval_expression = true)
     @static if VERSION < v"1.7"
         error("The `generate_discrete_affect` function requires at least Julia 1.7")
     end
@@ -167,24 +176,24 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
         end
         append!(appended_parameters, input, states(sys))
         cont_to_disc_obs = build_explicit_observed_function(syss[continuous_id],
-                                                            needed_cont_to_disc_obs,
-                                                            throw = false,
-                                                            expression = true,
-                                                            output_type = SVector)
+            needed_cont_to_disc_obs,
+            throw = false,
+            expression = true,
+            output_type = SVector)
         @set! sys.ps = appended_parameters
         disc_to_cont_obs = build_explicit_observed_function(sys, needed_disc_to_cont_obs,
-                                                            throw = false,
-                                                            expression = true,
-                                                            output_type = SVector)
+            throw = false,
+            expression = true,
+            output_type = SVector)
         ni = length(input)
         ns = length(states(sys))
         disc = Func([
-                        out,
-                        DestructuredArgs(states(sys)),
-                        DestructuredArgs(appended_parameters),
-                        get_iv(sys),
-                    ], [],
-                    let_block)
+                out,
+                DestructuredArgs(states(sys)),
+                DestructuredArgs(appended_parameters),
+                get_iv(sys),
+            ], [],
+            let_block)
         cont_to_disc_idxs = (offset + 1):(offset += ni)
         input_offset = offset
         disc_range = (offset + 1):(offset += ns)
@@ -194,32 +203,32 @@ function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
         end
         empty_disc = isempty(disc_range)
         affect! = :(function (integrator, saved_values)
-                        @unpack u, p, t = integrator
-                        c2d_obs = $cont_to_disc_obs
-                        d2c_obs = $disc_to_cont_obs
-                        # Like Sample
-                        c2d_view = view(p, $cont_to_disc_idxs)
-                        # Like Hold
-                        d2c_view = view(p, $disc_to_cont_idxs)
-                        disc_state = view(p, $disc_range)
-                        disc = $disc
-                        # Write continuous into to discrete: handles `Sample`
-                        copyto!(c2d_view, c2d_obs(integrator.u, p, t))
-                        # Write discrete into to continuous
-                        # get old discrete states
-                        copyto!(d2c_view, d2c_obs(disc_state, p, t))
-                        push!(saved_values.t, t)
-                        push!(saved_values.saveval, $save_vec)
-                        # update discrete states
-                        $empty_disc || disc(disc_state, disc_state, p, t)
-                    end)
+            @unpack u, p, t = integrator
+            c2d_obs = $cont_to_disc_obs
+            d2c_obs = $disc_to_cont_obs
+            # Like Sample
+            c2d_view = view(p, $cont_to_disc_idxs)
+            # Like Hold
+            d2c_view = view(p, $disc_to_cont_idxs)
+            disc_state = view(p, $disc_range)
+            disc = $disc
+            # Write continuous into to discrete: handles `Sample`
+            copyto!(c2d_view, c2d_obs(integrator.u, p, t))
+            # Write discrete into to continuous
+            # get old discrete states
+            copyto!(d2c_view, d2c_obs(disc_state, p, t))
+            push!(saved_values.t, t)
+            push!(saved_values.saveval, $save_vec)
+            # update discrete states
+            $empty_disc || disc(disc_state, disc_state, p, t)
+        end)
         sv = SavedValues(Float64, Vector{Float64})
         push!(affect_funs, affect!)
         push!(svs, sv)
     end
     if eval_expression
         affects = map(affect_funs) do a
-            @RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a)))
+            drop_expr(@RuntimeGeneratedFunction(eval_module, toexpr(LiteralExpr(a))))
         end
     else
         affects = map(a -> toexpr(LiteralExpr(a)), affect_funs)

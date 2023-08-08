@@ -25,7 +25,9 @@ end
         viscosity = V
     end
 
-    vars = @variables begin m_flow(t), [connect = Flow] end
+    vars = @variables begin
+        m_flow(t), [connect = Flow]
+    end
 
     # equations ---------------------------
     eqs = Equation[m_flow ~ 0]
@@ -34,14 +36,16 @@ end
 end
 
 function MassFlowSource_h(; name,
-                          h_in = 420e3,
-                          m_flow_in = -0.01)
+    h_in = 420e3,
+    m_flow_in = -0.01)
     pars = @parameters begin
         h_in = h_in
         m_flow_in = m_flow_in
     end
 
-    vars = @variables begin P(t) end
+    vars = @variables begin
+        P(t)
+    end
 
     @named port = TwoPhaseFluidPort()
 
@@ -58,7 +62,7 @@ end
 
 # Simplified components.
 function AdiabaticStraightPipe(; name,
-                               kwargs...)
+    kwargs...)
     vars = []
     pars = []
 
@@ -75,8 +79,8 @@ function AdiabaticStraightPipe(; name,
 end
 
 function SmallBoundary_Ph(; name,
-                          P_in = 1e6,
-                          h_in = 400e3)
+    P_in = 1e6,
+    h_in = 400e3)
     vars = []
 
     pars = @parameters begin
@@ -98,9 +102,9 @@ end
 
 # N1M1 model and test code.
 function N1M1(; name,
-              P_in = 1e6,
-              h_in = 400e3,
-              kwargs...)
+    P_in = 1e6,
+    h_in = 400e3,
+    kwargs...)
     @named port_a = TwoPhaseFluidPort()
     @named source = SmallBoundary_Ph(P_in = P_in, h_in = h_in)
 
@@ -120,61 +124,61 @@ end
 @named sink = MassFlowSource_h(m_flow_in = -0.01, h_in = 400e3)
 
 eqns = [connect(n1m1.port_a, pipe.port_a)
-        connect(pipe.port_b, sink.port)]
+    connect(pipe.port_b, sink.port)]
 
 @named sys = ODESystem(eqns, t)
 
 eqns = [connect(fluid, n1m1.port_a)
-        connect(n1m1.port_a, pipe.port_a)
-        connect(pipe.port_b, sink.port)]
+    connect(n1m1.port_a, pipe.port_a)
+    connect(pipe.port_b, sink.port)]
 
 @named n1m1Test = ODESystem(eqns, t, [], []; systems = [fluid, n1m1, pipe, sink])
 
 @test_nowarn structural_simplify(n1m1Test)
 @unpack source, port_a = n1m1
 @test sort(equations(expand_connections(n1m1)), by = string) == [0 ~ port_a.m_flow
-       0 ~ source.port1.m_flow - port_a.m_flow
-       source.port1.P ~ port_a.P
-       source.port1.P ~ source.P
-       source.port1.h_outflow ~ port_a.h_outflow
-       source.port1.h_outflow ~ source.h]
+    0 ~ source.port1.m_flow - port_a.m_flow
+    source.port1.P ~ port_a.P
+    source.port1.P ~ source.P
+    source.port1.h_outflow ~ port_a.h_outflow
+    source.port1.h_outflow ~ source.h]
 @unpack port_a, port_b = pipe
 @test sort(equations(expand_connections(pipe)), by = string) ==
       [0 ~ -port_a.m_flow - port_b.m_flow
-       0 ~ port_a.m_flow
-       0 ~ port_b.m_flow
-       port_a.P ~ port_b.P
-       port_a.h_outflow ~ instream(port_b.h_outflow)
-       port_b.h_outflow ~ instream(port_a.h_outflow)]
+    0 ~ port_a.m_flow
+    0 ~ port_b.m_flow
+    port_a.P ~ port_b.P
+    port_a.h_outflow ~ instream(port_b.h_outflow)
+    port_b.h_outflow ~ instream(port_a.h_outflow)]
 @test sort(equations(expand_connections(sys)), by = string) ==
       [0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
-       0 ~ pipe.port_b.m_flow + sink.port.m_flow
-       n1m1.port_a.P ~ pipe.port_a.P
-       pipe.port_b.P ~ sink.port.P]
+    0 ~ pipe.port_b.m_flow + sink.port.m_flow
+    n1m1.port_a.P ~ pipe.port_a.P
+    pipe.port_b.P ~ sink.port.P]
 @test sort(equations(expand_connections(n1m1Test)), by = string) ==
       [0 ~ -pipe.port_a.m_flow - pipe.port_b.m_flow
-       0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
-       0 ~ n1m1.source.port1.m_flow - n1m1.port_a.m_flow
-       0 ~ pipe.port_b.m_flow + sink.port.m_flow
-       fluid.m_flow ~ 0
-       n1m1.port_a.P ~ pipe.port_a.P
-       n1m1.source.port1.P ~ n1m1.port_a.P
-       n1m1.source.port1.P ~ n1m1.source.P
-       n1m1.source.port1.h_outflow ~ n1m1.port_a.h_outflow
-       n1m1.source.port1.h_outflow ~ n1m1.source.h
-       pipe.port_a.P ~ pipe.port_b.P
-       pipe.port_a.h_outflow ~ sink.port.h_outflow
-       pipe.port_b.P ~ sink.port.P
-       pipe.port_b.h_outflow ~ n1m1.port_a.h_outflow
-       sink.port.P ~ sink.P
-       sink.port.h_outflow ~ sink.h_in
-       sink.port.m_flow ~ -sink.m_flow_in]
+    0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
+    0 ~ n1m1.source.port1.m_flow - n1m1.port_a.m_flow
+    0 ~ pipe.port_b.m_flow + sink.port.m_flow
+    fluid.m_flow ~ 0
+    n1m1.port_a.P ~ pipe.port_a.P
+    n1m1.source.port1.P ~ n1m1.port_a.P
+    n1m1.source.port1.P ~ n1m1.source.P
+    n1m1.source.port1.h_outflow ~ n1m1.port_a.h_outflow
+    n1m1.source.port1.h_outflow ~ n1m1.source.h
+    pipe.port_a.P ~ pipe.port_b.P
+    pipe.port_a.h_outflow ~ sink.port.h_outflow
+    pipe.port_b.P ~ sink.port.P
+    pipe.port_b.h_outflow ~ n1m1.port_a.h_outflow
+    sink.port.P ~ sink.P
+    sink.port.h_outflow ~ sink.h_in
+    sink.port.m_flow ~ -sink.m_flow_in]
 
 # N1M2 model and test code.
 function N1M2(; name,
-              P_in = 1e6,
-              h_in = 400e3,
-              kwargs...)
+    P_in = 1e6,
+    h_in = 400e3,
+    kwargs...)
     @named port_a = TwoPhaseFluidPort()
     @named port_b = TwoPhaseFluidPort()
 
@@ -196,7 +200,7 @@ end
 @named sink2 = MassFlowSource_h(m_flow_in = -0.01, h_in = 400e3)
 
 eqns = [connect(n1m2.port_a, sink1.port)
-        connect(n1m2.port_b, sink2.port)]
+    connect(n1m2.port_b, sink2.port)]
 
 @named sys = ODESystem(eqns, t)
 @named n1m2Test = compose(sys, n1m2, sink1, sink2)
@@ -209,9 +213,9 @@ eqns = [connect(n1m2.port_a, sink1.port)
 @named sink2 = MassFlowSource_h(m_flow_in = -0.01, h_in = 400e3)
 
 eqns = [connect(n1m2.port_a, pipe1.port_a)
-        connect(pipe1.port_b, sink1.port)
-        connect(n1m2.port_b, pipe2.port_a)
-        connect(pipe2.port_b, sink2.port)]
+    connect(pipe1.port_b, sink1.port)
+    connect(n1m2.port_b, pipe2.port_a)
+    connect(pipe2.port_b, sink2.port)]
 
 @named sys = ODESystem(eqns, t)
 @named n1m2AltTest = compose(sys, n1m2, pipe1, pipe2, sink1, sink2)
@@ -219,7 +223,7 @@ eqns = [connect(n1m2.port_a, pipe1.port_a)
 
 # N2M2 model and test code.
 function N2M2(; name,
-              kwargs...)
+    kwargs...)
     @named port_a = TwoPhaseFluidPort()
     @named port_b = TwoPhaseFluidPort()
     @named pipe = AdiabaticStraightPipe()
@@ -240,7 +244,7 @@ end
 @named sink = SmallBoundary_Ph(P_in = 1e6, h_in = 400e3)
 
 eqns = [connect(source.port, n2m2.port_a)
-        connect(n2m2.port_b, sink.port1)]
+    connect(n2m2.port_b, sink.port1)]
 
 @named sys = ODESystem(eqns, t)
 @named n2m2Test = compose(sys, n2m2, source, sink)
@@ -252,11 +256,11 @@ eqns = [connect(source.port, n2m2.port_a)
 @named sys = ODESystem([connect(sp1, sp2)], t)
 sys_exp = expand_connections(compose(sys, [sp1, sp2]))
 @test sort(equations(sys_exp), by = string) == [0 ~ -sp1.m_flow - sp2.m_flow
-       0 ~ sp1.m_flow
-       0 ~ sp2.m_flow
-       sp1.P ~ sp2.P
-       sp1.h_outflow ~ ModelingToolkit.instream(sp2.h_outflow)
-       sp2.h_outflow ~ ModelingToolkit.instream(sp1.h_outflow)]
+    0 ~ sp1.m_flow
+    0 ~ sp2.m_flow
+    sp1.P ~ sp2.P
+    sp1.h_outflow ~ ModelingToolkit.instream(sp2.h_outflow)
+    sp2.h_outflow ~ ModelingToolkit.instream(sp1.h_outflow)]
 
 # array var
 @connector function VecPin(; name)
@@ -271,14 +275,14 @@ end
 @named simple = ODESystem([connect(vp1, vp2, vp3)], t)
 sys = expand_connections(compose(simple, [vp1, vp2, vp3]))
 @test sort(equations(sys), by = string) == sort([0 .~ collect(vp1.i)
-            0 .~ collect(vp2.i)
-            0 .~ collect(vp3.i)
-            vp1.v[1] ~ vp2.v[1]
-            vp1.v[2] ~ vp2.v[2]
-            vp1.v[1] ~ vp3.v[1]
-            vp1.v[2] ~ vp3.v[2]
-            0 ~ -vp1.i[1] - vp2.i[1] - vp3.i[1]
-            0 ~ -vp1.i[2] - vp2.i[2] - vp3.i[2]], by = string)
+        0 .~ collect(vp2.i)
+        0 .~ collect(vp3.i)
+        vp1.v[1] ~ vp2.v[1]
+        vp1.v[2] ~ vp2.v[2]
+        vp1.v[1] ~ vp3.v[1]
+        vp1.v[2] ~ vp3.v[2]
+        0 ~ -vp1.i[1] - vp2.i[1] - vp3.i[1]
+        0 ~ -vp1.i[2] - vp2.i[2] - vp3.i[2]], by = string)
 
 @connector function VectorHeatPort(; name, N = 100, T0 = 0.0, Q0 = 0.0)
     @variables (T(t))[1:N]=T0 (Q(t))[1:N]=Q0 [connect = Flow]
@@ -324,7 +328,9 @@ end
         viscosity = V
     end
 
-    vars = @variables begin dm(t), [connect = Flow] end
+    vars = @variables begin
+        dm(t), [connect = Flow]
+    end
 
     # equations ---------------------------
     eqs = [
@@ -335,12 +341,16 @@ end
 end
 
 function StepSource(; P, name)
-    pars = @parameters begin p_int = P end
+    pars = @parameters begin
+        p_int = P
+    end
 
     vars = []
 
     # nodes -------------------------------
-    systems = @named begin H = HydraulicPort(; P = p_int) end
+    systems = @named begin
+        H = HydraulicPort(; P = p_int)
+    end
 
     # equations ---------------------------
     eqs = [
@@ -365,19 +375,21 @@ function StaticVolume(; P, V, name)
     end
 
     # nodes -------------------------------
-    systems = @named begin H = HydraulicPort(; P = p_int) end
+    systems = @named begin
+        H = HydraulicPort(; P = p_int)
+    end
 
     # fluid props ------------------------
     rho_0 = H.rho
 
     # equations ---------------------------
     eqs = [D(vrho) ~ drho
-           vrho ~ rho_0 * (1 + p / H.bulk)
-           H.p ~ p
-           H.dm ~ drho * V]
+        vrho ~ rho_0 * (1 + p / H.bulk)
+        H.p ~ p
+        H.dm ~ drho * V]
 
     ODESystem(eqs, t, vars, pars; name, systems,
-              defaults = [vrho => rho_0 * (1 + p_int / H.bulk)])
+        defaults = [vrho => rho_0 * (1 + p_int / H.bulk)])
 end
 
 function PipeBase(; P, R, name)
@@ -396,7 +408,7 @@ function PipeBase(; P, R, name)
 
     # equations ---------------------------
     eqs = [HA.p - HB.p ~ HA.dm * resistance / HA.viscosity
-           0 ~ HA.dm + HB.dm]
+        0 ~ HA.dm + HB.dm]
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
@@ -418,7 +430,7 @@ function Pipe(; P, R, name)
     end
 
     eqs = [connect(v1.H, p12.HA, HA)
-           connect(v2.H, p12.HB, HB)]
+        connect(v2.H, p12.HB, HB)]
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
@@ -442,11 +454,11 @@ function TwoFluidSystem(; name)
 
     # equations ---------------------------
     eqs = [connect(fluid_a, source_a.H)
-           connect(source_a.H, pipe_a.HA)
-           connect(pipe_a.HB, volume_a.H)
-           connect(fluid_b, source_b.H)
-           connect(source_b.H, pipe_b.HA)
-           connect(pipe_b.HB, volume_b.H)]
+        connect(source_a.H, pipe_a.HA)
+        connect(pipe_a.HB, volume_a.H)
+        connect(fluid_b, source_b.H)
+        connect(source_b.H, pipe_b.HA)
+        connect(pipe_b.HB, volume_b.H)]
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
@@ -481,10 +493,10 @@ function OneFluidSystem(; name)
 
     # equations ---------------------------
     eqs = [connect(fluid, source_a.H, source_b.H)
-           connect(source_a.H, pipe_a.HA)
-           connect(pipe_a.HB, volume_a.H)
-           connect(source_b.H, pipe_b.HA)
-           connect(pipe_b.HB, volume_b.H)]
+        connect(source_a.H, pipe_a.HA)
+        connect(pipe_a.HB, volume_a.H)
+        connect(source_b.H, pipe_b.HA)
+        connect(pipe_b.HB, volume_b.H)]
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end

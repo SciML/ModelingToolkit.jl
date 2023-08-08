@@ -39,8 +39,8 @@ end
     @named n = Pin()
     sts = @variables v(t)=1.0 i(t)=1.0
     eqs = [v ~ p.v - n.v
-           0 ~ p.i + n.i
-           i ~ p.i]
+        0 ~ p.i + n.i
+        i ~ p.i]
     compose(ODESystem(eqs, t, sts, []; name = name), p, n)
 end
 
@@ -84,13 +84,13 @@ V = 1.0
 @named ground = Ground()
 
 rc_eqs = [connect(source.p, resistor.p)
-          connect(resistor.n, capacitor.p)
-          connect(capacitor.n, source.n)
-          connect(capacitor.n, ground.g)]
+    connect(resistor.n, capacitor.p)
+    connect(capacitor.n, source.n)
+    connect(capacitor.n, ground.g)]
 
 @named _rc_model = ODESystem(rc_eqs, t)
 @named rc_model = compose(_rc_model,
-                          [resistor, capacitor, source, ground])
+    [resistor, capacitor, source, ground])
 sys = structural_simplify(rc_model)
 u0 = [
     capacitor.v => 0.0,
@@ -168,8 +168,8 @@ pin.
     @named n = Pin()
     sts = @variables v(t)=1.0 i(t)=1.0
     eqs = [v ~ p.v - n.v
-           0 ~ p.i + n.i
-           i ~ p.i]
+        0 ~ p.i + n.i
+        i ~ p.i]
     compose(ODESystem(eqs, t, sts, []; name = name), p, n)
 end
 ```
@@ -257,9 +257,9 @@ the source and the ground. This would mean our connection equations are:
 
 ```@example acausal
 rc_eqs = [connect(source.p, resistor.p)
-          connect(resistor.n, capacitor.p)
-          connect(capacitor.n, source.n)
-          connect(capacitor.n, ground.g)]
+    connect(resistor.n, capacitor.p)
+    connect(capacitor.n, source.n)
+    connect(capacitor.n, ground.g)]
 ```
 
 Finally, we build our four-component model with these connection rules:
@@ -267,7 +267,7 @@ Finally, we build our four-component model with these connection rules:
 ```@example acausal
 @named _rc_model = ODESystem(rc_eqs, t)
 @named rc_model = compose(_rc_model,
-                          [resistor, capacitor, source, ground])
+    [resistor, capacitor, source, ground])
 ```
 
 Note that we can also specify the subsystems in a vector. This model is acausal
@@ -321,7 +321,7 @@ This is done as follows:
 
 ```@example acausal
 u0 = [capacitor.v => 0.0
-      capacitor.p.i => 0.0]
+    capacitor.p.i => 0.0]
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 plot(sol)

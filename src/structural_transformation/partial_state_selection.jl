@@ -27,36 +27,40 @@ function ascend_dg_all(xs, dg, level, maxlevel)
     return r
 end
 
-function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
-                          inv_varlevel, inv_eqlevel)
+function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varlevel,
+    inv_varlevel, inv_eqlevel)
     @unpack eq_to_diff, var_to_diff, graph, solvable_graph = structure
 
     # var_eq_matching is a maximal matching on the top-differentiated variables.
     # Find Strongly connected components. Note that after pantelides, we expect
     # a balanced system, so a maximal matching should be possible.
-    var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, var_eq_matching)
-    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(var_eq_matching)
+    var_sccs::Vector{Union{Vector{Int}, Int}} = find_var_sccs(graph, maximal_top_matching)
+    var_eq_matching = Matching{Union{Unassigned, SelectedState}}(ndsts(graph))
     for vars in var_sccs
         # TODO: We should have a way to not have the scc code look at unassigned vars.
-        if length(vars) == 1 && varlevel[vars[1]] != 0
+        if length(vars) == 1 && maximal_top_matching[vars[1]] === unassigned
             continue
         end
 
         # Now proceed level by level from lowest to highest and tear the graph.
-        eqs = [var_eq_matching[var] for var in vars if var_eq_matching[var] !== unassigned]
+        eqs = [maximal_top_matching[var]
+               for var in vars if maximal_top_matching[var] !== unassigned]
         isempty(eqs) && continue
-        maxlevel = level = maximum(map(x -> inv_eqlevel[x], eqs))
+        maxeqlevel = maximum(map(x -> inv_eqlevel[x], eqs))
+        maxvarlevel = level = maximum(map(x -> inv_varlevel[x], vars))
         old_level_vars = ()
         ict = IncrementalCycleTracker(DiCMOBiGraph{true}(graph,
-                                                         complete(Matching(ndsts(graph))));
-                                      dir = :in)
+                complete(Matching(ndsts(graph))));
+            dir = :in)
+
         while level >= 0
             to_tear_eqs_toplevel = filter(eq -> inv_eqlevel[eq] >= level, eqs)
             to_tear_eqs = ascend_dg(to_tear_eqs_toplevel, invview(eq_to_diff), level)
 
             to_tear_vars_toplevel = filter(var -> inv_varlevel[var] >= level, vars)
-            to_tear_vars = ascend_dg_all(to_tear_vars_toplevel, invview(var_to_diff), level,
-                                         maxlevel)
+            to_tear_vars = ascend_dg(to_tear_vars_toplevel, invview(var_to_diff), level)
+
+            assigned_eqs = Int[]
 
             if old_level_vars !== ()
                 # Inherit constraints from previous level.
@@ -66,45 +70,59 @@ function pss_graph_modia!(structure::SystemStructure, var_eq_matching, varlevel,
                 removed_eqs = Int[]
                 removed_vars = Int[]
                 for var in old_level_vars
-                    old_assign = ict.graph.matching[var]
-                    if !isa(old_assign, Int) ||
-                       ict.graph.matching[var_to_diff[var]] !== unassigned
+                    old_assign = var_eq_matching[var]
+                    if isa(old_assign, SelectedState)
+                        push!(removed_vars, var)
+                        continue
+                    elseif !isa(old_assign, Int) ||
+                           ict.graph.matching[var_to_diff[var]] !== unassigned
                         continue
                     end
                     # Make sure the ict knows about this edge, so it doesn't accidentally introduce
                     # a cycle.
-                    ok = try_assign_eq!(ict, var_to_diff[var], eq_to_diff[old_assign])
+                    assgned_eq = eq_to_diff[old_assign]
+                    ok = try_assign_eq!(ict, var_to_diff[var], assgned_eq)
                     @assert ok
-                    var_eq_matching[var_to_diff[var]] = eq_to_diff[old_assign]
+                    var_eq_matching[var_to_diff[var]] = assgned_eq
                     push!(removed_eqs, eq_to_diff[ict.graph.matching[var]])
                     push!(removed_vars, var_to_diff[var])
+                    push!(removed_vars, var)
                 end
                 to_tear_eqs = setdiff(to_tear_eqs, removed_eqs)
                 to_tear_vars = setdiff(to_tear_vars, removed_vars)
             end
-            filter!(var -> ict.graph.matching[var] === unassigned, to_tear_vars)
-            filter!(eq -> invview(ict.graph.matching)[eq] === unassigned, to_tear_eqs)
             tearEquations!(ict, solvable_graph.fadjlist, to_tear_eqs, BitSet(to_tear_vars),
-                           nothing)
+                nothing)
+
             for var in to_tear_vars
-                var_eq_matching[var] = unassigned
+                @assert var_eq_matching[var] === unassigned
+                assgned_eq = ict.graph.matching[var]
+                var_eq_matching[var] = assgned_eq
+                isa(assgned_eq, Int) && push!(assigned_eqs, assgned_eq)
             end
-            for var in to_tear_vars
-                var_eq_matching[var] = ict.graph.matching[var]
+
+            if level != 0
+                remaining_vars = collect(v for v in to_tear_vars
+                                             if var_eq_matching[v] === unassigned)
+                if !isempty(remaining_vars)
+                    remaining_eqs = setdiff(to_tear_eqs, assigned_eqs)
+                    nlsolve_matching = maximal_matching(graph,
+                        Base.Fix2(in, remaining_eqs),
+                        Base.Fix2(in, remaining_vars))
+                    for var in remaining_vars
+                        if nlsolve_matching[var] === unassigned &&
+                           var_eq_matching[var] === unassigned
+                            var_eq_matching[var] = SelectedState()
+                        end
+                    end
+                end
             end
+
             old_level_vars = to_tear_vars
             level -= 1
         end
     end
-    for var in 1:ndsts(graph)
-        dv = var_to_diff[var]
-        # If `var` is not algebraic (not differentiated nor a dummy derivative),
-        # then it's a SelectedState
-        if !(dv === nothing || (varlevel[dv] !== 0 && var_eq_matching[dv] === unassigned))
-            var_eq_matching[var] = SelectedState()
-        end
-    end
-    return var_eq_matching
+    return complete(var_eq_matching)
 end
 
 struct SelectedState end
@@ -143,69 +161,69 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
     end
 
     var_eq_matching = pss_graph_modia!(structure,
-                                       complete(var_eq_matching), varlevel, inv_varlevel,
-                                       inv_eqlevel)
+        complete(var_eq_matching), varlevel, inv_varlevel,
+        inv_eqlevel)
 
     var_eq_matching
 end
 
 function dummy_derivative_graph!(state::TransformationState, jac = nothing;
-                                 state_priority = nothing, kwargs...)
+    state_priority = nothing, log = Val(false), kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     complete!(state.structure)
     var_eq_matching = complete(pantelides!(state))
-    dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority)
-end
-
-function compute_diff_level(diff_to_x)
-    nxs = length(diff_to_x)
-    xlevel = zeros(Int, nxs)
-    maxlevel = 0
-    for i in 1:nxs
-        level = 0
-        x = i
-        while diff_to_x[x] !== nothing
-            x = diff_to_x[x]
-            level += 1
-        end
-        maxlevel = max(maxlevel, level)
-        xlevel[i] = level
-    end
-    return xlevel, maxlevel
+    dummy_derivative_graph!(state.structure, var_eq_matching, jac, state_priority, log)
 end
 
 function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac,
-                                 state_priority)
+    state_priority, ::Val{log} = Val(false)) where {log}
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)
     invgraph = invview(graph)
-
-    eqlevel, _ = compute_diff_level(diff_to_eq)
 
     var_sccs = find_var_sccs(graph, var_eq_matching)
     eqcolor = falses(nsrcs(graph))
     dummy_derivatives = Int[]
     col_order = Int[]
     nvars = ndsts(graph)
+    eqs = Int[]
+    next_eq_idxs = Int[]
+    next_var_idxs = Int[]
+    new_eqs = Int[]
+    new_vars = Int[]
+    eqs_set = BitSet()
     for vars in var_sccs
-        eqs = [var_eq_matching[var] for var in vars if var_eq_matching[var] !== unassigned]
+        empty!(eqs)
+        for var in vars
+            eq = var_eq_matching[var]
+            eq isa Int || continue
+            diff_to_eq[eq] === nothing && continue
+            push!(eqs, eq)
+        end
         isempty(eqs) && continue
-        maxlevel = maximum(Base.Fix1(getindex, eqlevel), eqs)
-        iszero(maxlevel) && continue
 
         rank_matching = Matching(nvars)
         isfirst = true
-        for _ in maxlevel:-1:1
-            eqs = filter(eq -> diff_to_eq[eq] !== nothing, eqs)
+        if jac === nothing
+            J = nothing
+        else
+            _J = jac(eqs, vars)
+            # only accecpt small intergers to avoid overflow
+            is_all_small_int = all(_J) do x′
+                x = unwrap(x′)
+                x isa Number || return false
+                isinteger(x) && typemin(Int8) <= x <= typemax(Int8)
+            end
+            J = is_all_small_int ? Int.(unwrap.(_J)) : nothing
+        end
+        while true
             nrows = length(eqs)
             iszero(nrows) && break
-            eqs_set = BitSet(eqs)
 
             if state_priority !== nothing && isfirst
                 sort!(vars, by = state_priority)
             end
-            isfirst = false
             # TODO: making the algorithm more robust
             # 1. If the Jacobian is a integer matrix, use Bareiss to check
             # linear independence. (done)
@@ -214,21 +232,25 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             # state selection.)
             #
             # 3. If the Jacobian is a polynomial matrix, use Gröbner basis (?)
-            if jac !== nothing && (_J = jac(eqs, vars); all(x -> unwrap(x) isa Integer, _J))
-                J = Int.(unwrap.(_J))
+            if J !== nothing
+                if !isfirst
+                    J = J[next_eq_idxs, next_var_idxs]
+                end
                 N = ModelingToolkit.nullspace(J; col_order) # modifies col_order
                 rank = length(col_order) - size(N, 2)
                 for i in 1:rank
                     push!(dummy_derivatives, vars[col_order[i]])
                 end
             else
+                empty!(eqs_set)
+                union!(eqs_set, eqs)
                 rank = 0
                 for var in vars
                     eqcolor .= false
                     # We need `invgraph` here because we are matching from
                     # variables to equations.
                     pathfound = construct_augmenting_path!(rank_matching, invgraph, var,
-                                                           Base.Fix2(in, eqs_set), eqcolor)
+                        Base.Fix2(in, eqs_set), eqcolor)
                     pathfound || continue
                     push!(dummy_derivatives, var)
                     rank += 1
@@ -237,12 +259,39 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
                 fill!(rank_matching, unassigned)
             end
             if rank != nrows
-                @warn "The DAE system is structurally singular!"
+                @warn "The DAE system is singular!"
             end
 
             # prepare the next iteration
-            eqs = map(eq -> diff_to_eq[eq], eqs)
-            vars = [diff_to_var[var] for var in vars if diff_to_var[var] !== nothing]
+            if J !== nothing
+                empty!(next_eq_idxs)
+                empty!(next_var_idxs)
+            end
+            empty!(new_eqs)
+            empty!(new_vars)
+            for (i, eq) in enumerate(eqs)
+                ∫eq = diff_to_eq[eq]
+                # descend by one diff level, but the next iteration of equations
+                # must still be differentiated
+                ∫eq === nothing && continue
+                ∫∫eq = diff_to_eq[∫eq]
+                ∫∫eq === nothing && continue
+                if J !== nothing
+                    push!(next_eq_idxs, i)
+                end
+                push!(new_eqs, ∫eq)
+            end
+            for (i, var) in enumerate(vars)
+                ∫var = diff_to_var[var]
+                ∫var === nothing && continue
+                if J !== nothing
+                    push!(next_var_idxs, i)
+                end
+                push!(new_vars, ∫var)
+            end
+            eqs, new_eqs = new_eqs, eqs
+            vars, new_vars = new_vars, vars
+            isfirst = false
         end
     end
 
@@ -289,9 +338,9 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         end
     end
 
-    var_eq_matching = tear_graph_modia(structure, isdiffed,
-                                       Union{Unassigned, SelectedState};
-                                       varfilter = can_eliminate)
+    var_eq_matching, full_var_eq_matching = tear_graph_modia(structure, isdiffed,
+        Union{Unassigned, SelectedState};
+        varfilter = can_eliminate)
     for v in eachindex(var_eq_matching)
         is_not_present(v) && continue
         dv = var_to_diff[v]
@@ -299,5 +348,10 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
         var_eq_matching[v] = SelectedState()
     end
 
-    return var_eq_matching
+    if log
+        candidates = can_eliminate.(1:ndsts(graph))
+        return var_eq_matching, full_var_eq_matching, candidates
+    else
+        return var_eq_matching
+    end
 end

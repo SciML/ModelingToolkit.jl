@@ -22,7 +22,7 @@ function masked_cumsum!(A::Vector)
 end
 
 function contract_variables(graph::BipartiteGraph, var_eq_matching::Matching,
-                            var_rename, eq_rename, nelim_eq, nelim_var)
+    var_rename, eq_rename, nelim_eq, nelim_var)
     dig = DiCMOBiGraph{true}(graph, var_eq_matching)
 
     # Update bipartite graph
@@ -60,9 +60,9 @@ function algebraic_variables_scc(state::TearingState)
     # skip over differential equations
     algvars = BitSet(findall(v -> isalgvar(state.structure, v), 1:ndsts(graph)))
     algeqs = BitSet(findall(map(1:nsrcs(graph)) do eq
-                                all(v -> !isdervar(state.structure, v),
-                                    𝑠neighbors(graph, eq))
-                            end))
+        all(v -> !isdervar(state.structure, v),
+            𝑠neighbors(graph, eq))
+    end))
     var_eq_matching = complete(maximal_matching(graph, e -> e in algeqs, v -> v in algvars))
     var_sccs = find_var_sccs(complete(graph), var_eq_matching)
 

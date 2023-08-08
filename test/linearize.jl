@@ -7,8 +7,8 @@ using ModelingToolkit, Test
 D = Differential(t)
 
 eqs = [u ~ kp * (r - y)
-       D(x) ~ -x + u
-       y ~ x]
+    D(x) ~ -x + u
+    y ~ x]
 
 @named sys = ODESystem(eqs, t)
 
@@ -36,7 +36,7 @@ function plant(; name)
     @variables u(t)=0 y(t)=0
     D = Differential(t)
     eqs = [D(x) ~ -x + u
-           y ~ x]
+        y ~ x]
     ODESystem(eqs, t; name = name)
 end
 
@@ -45,7 +45,7 @@ function filt_(; name)
     @variables u(t)=0 [input = true]
     D = Differential(t)
     eqs = [D(x) ~ -2 * x + u
-           y ~ x]
+        y ~ x]
     ODESystem(eqs, t, name = name)
 end
 
@@ -63,8 +63,8 @@ end
 @named p = plant()
 
 connections = [f.y ~ c.r # filtered reference to controller reference
-               c.u ~ p.u # controller output to plant input
-               p.y ~ c.y]
+    c.u ~ p.u # controller output to plant input
+    p.y ~ c.y]
 
 @named cl = ODESystem(connections, t, systems = [f, c, p])
 
@@ -104,7 +104,7 @@ lsys = ModelingToolkit.reorder_states(lsys0, states(ssys), desired_order)
 @test lsys.D == [4400 -4400]
 
 lsyss, _ = ModelingToolkit.linearize_symbolic(pid, [reference.u, measurement.u],
-                                              [ctr_output.u])
+    [ctr_output.u])
 
 @test substitute(lsyss.A, ModelingToolkit.defaults(pid)) == lsys.A
 @test substitute(lsyss.B, ModelingToolkit.defaults(pid)) == lsys.B
@@ -122,25 +122,25 @@ lsys = ModelingToolkit.reorder_states(lsys, states(ssys), reverse(desired_order)
 ## Test that there is a warning when input is misspecified
 if VERSION >= v"1.8"
     @test_throws "Some specified inputs were not found" linearize(pid,
-                                                                  [
-                                                                      pid.reference.u,
-                                                                      pid.measurement.u,
-                                                                  ], [ctr_output.u])
+        [
+            pid.reference.u,
+            pid.measurement.u,
+        ], [ctr_output.u])
     @test_throws "Some specified outputs were not found" linearize(pid,
-                                                                   [
-                                                                       reference.u,
-                                                                       measurement.u,
-                                                                   ],
-                                                                   [pid.ctr_output.u])
+        [
+            reference.u,
+            measurement.u,
+        ],
+        [pid.ctr_output.u])
 else # v1.6 does not have the feature to match error message
     @test_throws ErrorException linearize(pid,
-                                          [
-                                              pid.reference.u,
-                                              pid.measurement.u,
-                                          ], [ctr_output.u])
+        [
+            pid.reference.u,
+            pid.measurement.u,
+        ], [ctr_output.u])
     @test_throws ErrorException linearize(pid,
-                                          [reference.u, measurement.u],
-                                          [pid.ctr_output.u])
+        [reference.u, measurement.u],
+        [pid.ctr_output.u])
 end
 
 ## Test operating points
@@ -197,28 +197,28 @@ if VERSION >= v"1.8"
     D = Differential(t)
 
     @named link1 = Link(; m = 0.2, l = 10, I = 1, g = -9.807)
-    @named cart = Translational.Mass(; m = 1, s_0 = 0)
+    @named cart = Translational.Mass(; m = 1, s = 0)
     @named fixed = Fixed()
     @named force = Force()
 
     eqs = [connect(link1.TX1, cart.flange)
-           connect(cart.flange, force.flange)
-           connect(link1.TY1, fixed.flange)]
+        connect(cart.flange, force.flange)
+        connect(link1.TY1, fixed.flange)]
 
     @named model = ODESystem(eqs, t, [], []; systems = [link1, cart, force, fixed])
     def = ModelingToolkit.defaults(model)
-    def[link1.y1] = 0
+    for s in states(model)
+        def[s] = 0
+    end
     def[link1.x1] = 10
+    def[link1.fy1] = -def[link1.g] * def[link1.m]
     def[link1.A] = -pi / 2
-    def[link1.dA] = 0
-    def[cart.s] = 0
-    def[force.flange.v] = 0
     lin_outputs = [cart.s, cart.v, link1.A, link1.dA]
     lin_inputs = [force.f.u]
 
     @info "named_ss"
     G = named_ss(model, lin_inputs, lin_outputs, allow_symbolic = true, op = def,
-                 allow_input_derivatives = true, zero_dummy_der = true)
+        allow_input_derivatives = true, zero_dummy_der = true)
     G = sminreal(G)
     @info "minreal"
     G = minreal(G)
@@ -229,15 +229,17 @@ if VERSION >= v"1.8"
     @test minimum(abs, complex(0, 1.3777260367206716) .- ps) < 1e-10
 
     lsys, syss = linearize(model, lin_inputs, lin_outputs, allow_symbolic = true, op = def,
-                           allow_input_derivatives = true, zero_dummy_der = true)
+        allow_input_derivatives = true, zero_dummy_der = true)
     lsyss, sysss = ModelingToolkit.linearize_symbolic(model, lin_inputs, lin_outputs;
-                                                      allow_input_derivatives = true)
+        allow_input_derivatives = true)
 
     dummyder = setdiff(states(sysss), states(model))
     def = merge(def, Dict(x => 0.0 for x in dummyder))
 
     @test substitute(lsyss.A, def) ≈ lsys.A
-    @test substitute(lsyss.B, def) ≈ lsys.B
+    # We cannot pivot symbolically, so the part where a linear solve is required
+    # is not reliable.
+    @test substitute(lsyss.B, def)[1:6, :] ≈ lsys.B[1:6, :]
     @test substitute(lsyss.C, def) ≈ lsys.C
     @test substitute(lsyss.D, def) ≈ lsys.D
 end
