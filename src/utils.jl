@@ -666,10 +666,7 @@ end
     throw(ArgumentError("$vars are either missing from the variable map or missing from the system's states/parameters list."))
 end
 
-function promote_to_concrete(vs;
-    type::Union{Type{K}, Nothing} = nothing,
-    tofloat = type === nothing,
-    use_union = false) where {K}
+function promote_to_concrete(vs; tofloat = true, use_union = false)
     if isempty(vs)
         return vs
     end
@@ -683,34 +680,43 @@ function promote_to_concrete(vs;
         I = Int8
         has_int = false
         has_array = false
+        has_Parameter = false
         array_T = nothing
         for v in vs
             if v isa AbstractArray
                 has_array = true
                 array_T = typeof(v)
+                C = promote_type(C, eltype(v))
             end
-            E = eltype(v)
-            C = promote_type(C, E)
-            if E <: Integer
+            if eltype(v) <: Integer
                 has_int = true
-                I = promote_type(I, E)
+                I = promote_type(I, eltype(v))
+            end
+            if v isa Parameter{<:Number}
+                @assert !use_union "a vector `Union` with `Parameter{T}` is not supported"
+                @assert tofloat "`Parameter{T}` type will convert all single values to float, `tofloat` must be true"
+
+                if !has_Parameter
+                    C = typeof(v)
+                else
+                    @assert C==typeof(v) "mixing element `T` type when using `Parameter{T}` is not allowed"
+                end
+                has_Parameter = true
             end
         end
-        if type === nothing
-            if tofloat && !has_array
-                C = float(C)
-            elseif has_array || (use_union && has_int && C !== I)
-                if has_array
-                    C = Union{C, array_T}
-                end
-                if has_int
-                    C = Union{C, I}
-                end
-                return copyto!(similar(vs, C), vs)
+
+        if tofloat && !has_array && !has_Parameter
+            C = float(C)
+        elseif has_array || (use_union && has_int && C !== I)
+            if has_array
+                C = Union{C, array_T}
             end
-        else
-            C = K
+            if has_int
+                C = Union{C, I}
+            end
+            return copyto!(similar(vs, C), vs)
         end
+
         convert.(C, vs)
     end
 end

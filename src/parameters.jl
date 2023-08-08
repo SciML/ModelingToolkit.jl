@@ -61,3 +61,83 @@ macro parameters(xs...)
         xs,
         toparam) |> esc
 end
+
+struct Parameter{T <: Real}
+    data::Vector{T}
+    ref::T
+    circular_buffer::Bool
+end
+
+Parameter(data::Vector{T}, ref::T) where {T <: Real} = Parameter(data, ref, true)
+Parameter(x::Parameter) = x
+function Parameter(x::T; tofloat = true) where {T <: Real}
+    if tofloat
+        x = float(x)
+        P = typeof(x)
+    else
+        P = T
+    end
+
+    return Parameter(P[], x)
+end
+
+function Base.isequal(x::Parameter, y::Parameter)
+    b0 = length(x.data) == length(y.data)
+    if b0
+        b1 = all(x.data .== y.data)
+        b2 = x.ref == y.ref
+        return b1 & b2
+    else
+        return false
+    end
+end
+
+Base.:*(x::Number, y::Parameter) = x * y.ref
+Base.:*(y::Parameter, x::Number) = Base.:*(x, y)
+Base.:*(x::Parameter, y::Parameter) = x.ref * y.ref
+
+Base.:/(x::Number, y::Parameter) = x / y.ref
+Base.:/(y::Parameter, x::Number) = y.ref / x
+Base.:/(x::Parameter, y::Parameter) = x.ref / y.ref
+
+Base.:+(x::Number, y::Parameter) = x + y.ref
+Base.:+(y::Parameter, x::Number) = Base.:+(x, y)
+Base.:+(x::Parameter, y::Parameter) = x.ref + y.ref
+
+Base.:-(y::Parameter) = -y.ref
+Base.:-(x::Number, y::Parameter) = x - y.ref
+Base.:-(y::Parameter, x::Number) = y.ref - x
+Base.:-(x::Parameter, y::Parameter) = x.ref - y.ref
+
+Base.:^(x::Number, y::Parameter) = Base.:^(x, y.ref)
+Base.:^(y::Parameter, x::Number) = Base.:^(y.ref, x)
+Base.:^(x::Parameter, y::Parameter) = Base.:^(x.ref, y.ref)
+
+Base.isless(x::Parameter, y::Number) = Base.isless(x.ref, y)
+Base.isless(y::Number, x::Parameter) = Base.isless(y, x.ref)
+
+Base.copy(x::Parameter{T}) where {T} = Parameter{T}(copy(x.data), x.ref)
+
+Base.ifelse(c::Bool, x::Parameter, y::Parameter) = ifelse(c, x.ref, y.ref)
+Base.ifelse(c::Bool, x::Parameter, y::Number) = ifelse(c, x.ref, y)
+Base.ifelse(c::Bool, x::Number, y::Parameter) = ifelse(c, x, y.ref)
+Base.max(x::Number, y::Parameter) = max(x, y.ref)
+Base.max(x::Parameter, y::Number) = max(x.ref, y)
+Base.max(x::Parameter, y::Parameter) = max(x.ref, y.ref)
+
+Base.min(x::Number, y::Parameter) = min(x, y.ref)
+Base.min(x::Parameter, y::Number) = min(x.ref, y)
+Base.min(x::Parameter, y::Parameter) = min(x.ref, y.ref)
+
+function Base.show(io::IO, m::MIME"text/plain", p::Parameter)
+    if !isempty(p.data)
+        print(io, p.data)
+    else
+        print(io, p.ref)
+    end
+end
+
+Base.convert(::Type{T}, x::Parameter{T}) where {T <: Real} = x.ref
+function Base.convert(::Type{<:Parameter{T}}, x::Number) where {T <: Real}
+    Parameter{T}(T[], x, true)
+end

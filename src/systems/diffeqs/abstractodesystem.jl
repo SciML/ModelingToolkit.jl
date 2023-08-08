@@ -684,9 +684,8 @@ Take dictionaries with initial conditions and parameters and convert them to num
 function get_u0_p(sys,
     u0map,
     parammap;
-    p_type = nothing,
     use_union = false,
-    tofloat = !use_union & p_type === nothing,
+    tofloat = !use_union,
     symbolic_u0 = false)
     eqs = equations(sys)
     dvs = states(sys)
@@ -701,7 +700,7 @@ function get_u0_p(sys,
     else
         u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
     end
-    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union, type = p_type)
+    p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
     u0, p, defs
 end
@@ -714,9 +713,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     simplify = false,
     linenumbers = true, parallel = SerialForm(),
     eval_expression = true,
-    p_type = nothing,
     use_union = false,
-    tofloat = !use_union & (p_type === nothing),
+    tofloat = !use_union,
     symbolic_u0 = false,
     kwargs...)
     eqs = equations(sys)
@@ -724,7 +722,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ps = parameters(sys)
     iv = get_iv(sys)
 
-    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union, symbolic_u0, p_type)
+    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union, symbolic_u0)
 
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
