@@ -694,10 +694,11 @@ function promote_to_concrete(vs; tofloat = true, use_union = false)
             end
             if v isa Parameter{<:Number}
                 @assert !use_union "a vector `Union` with `Parameter{T}` is not supported"
-                @assert tofloat "`Parameter{T}` type will convert all single values to float, `tofloat` must be true"
-
                 if !has_Parameter
                     C = typeof(v)
+                    if !tofloat
+                        @warn "use of `Parameter{T}` type will convert all single values to floats, however `tofloat=false`"
+                    end
                 else
                     @assert C==typeof(v) "mixing element `T` type when using `Parameter{T}` is not allowed"
                 end
