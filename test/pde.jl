@@ -1,4 +1,5 @@
-using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
+using ModelingToolkit, DiffEqBase, LinearAlgebra, Test, DomainSets
+using Symbolics: scalarize
 
 # Define some variables
 @parameters t x
@@ -8,16 +9,15 @@ Dt = Differential(t)
 Dxx = Differential(x)^2
 eq = Dt(u(t, x)) ~ h * Dxx(u(t, x))
 bcs = [u(0, x) ~ -h * x * (x - 1) * sin(x),
-    u(t, 0) ~ 0, u(t, 1) ~ 0]
+	u(t, 0) ~ 0, u(t, 1) ~ 0]
 
 domains = [t ∈ (0.0, 1.0),
-    x ∈ (0.0, 1.0)]
+	x ∈ (0.0, 1.0)]
 
 analytic = [u(t, x) ~ -h * x * (x - 1) * sin(x) * exp(-2 * h * t)]
 analytic_function = (ps, t, x) -> -ps[1] * x * (x - 1) * sin(x) * exp(-2 * ps[1] * t)
 
-@named pdesys = PDESystem(eq, bcs, domains, [t, x], [u], [h => 1], analytic = analytic)
-@show pdesys
+@named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [h => 1], analytic = analytic)
 
 @test all(isequal.(independent_variables(pdesys), [t, x]))
 
@@ -26,4 +26,17 @@ dt = 0:0.1:1
 
 # Test generated analytic_func
 @test all(pdesys.analytic_func[u(t, x)]([2], disct, discx) ≈
-          analytic_function([2], disct, discx) for disct in dt, discx in dx)
+		  analytic_function([2], disct, discx) for disct in dt, discx in dx)
+
+@parameters x[1:3]
+@variables u(x...)[1:3]
+
+Dx = Differential(x[1])
+
+eqs = Dx.(u) .~ 0
+
+bcs = u .~ 0
+
+domains = x .∈ fill(Interval(0.0, 1.0), 3)
+
+@named pdesys = PDESystem(eqs, bcs, domains, x, u)
