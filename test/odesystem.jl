@@ -1013,10 +1013,9 @@ let
     @test !isnothing(prob.f.sys)
 end
 
-# p_type
+# Parameter type
 let
-    # needs ModelingToolkitStandardLibrary > v2.1.0
-    using ModelingToolkitStandardLibrary.Blocks: SampledData, Parameter, Integrator
+    using ModelingToolkit: Parameter
 
     dt = 4e-4
     t_end = 10.0
@@ -1026,22 +1025,20 @@ let
     @parameters t
     D = Differential(t)
 
-    vars = @variables y(t)=1 dy(t)=0 ddy(t)=0
-    @named src = SampledData(Float64)
-    @named int = Integrator()
-    @named iosys = ODESystem([y ~ src.output.u
+    vars = @variables y(t)=1.0 dy(t)=0 ddy(t)=0
+    pars = @parameters begin
+        par1 = 1
+        par2 = 2.0
+        par3 = Parameter(rand(10), 1e-4)
+        par4 = Parameter(rand(5), 1e-4, false)
+    end
+
+    @named iosys = ODESystem([0 ~ y
             D(y) ~ dy
-            D(dy) ~ ddy
-            connect(src.output, int.input)],
-        t,
-        systems = [int, src])
-    sys = structural_simplify(iosys)
-    s = complete(iosys)
-    prob = ODEProblem(sys,
-        [],
-        (0.0, t_end),
-        [s.src.buffer => Parameter(x, dt)];
-        p_type = Parameter{Float64})
+            D(dy) ~ ddy],
+        t, vars, pars)
+
+    prob = ODEProblem(iosys, [], (0.0, t_end))
 
     @test eltype(prob.p) == Parameter{Float64}
     @test eltype(prob.u0) == Float64
