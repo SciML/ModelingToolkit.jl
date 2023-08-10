@@ -192,7 +192,7 @@ function connection2set!(connectionsets, namespace, ss, isouter)
             if domain_ss === nothing
                 domain_ss = s
             else
-                names = join(string(map(name, ss)), ",")
+                names = join(map(string ∘ nameof, ss), ",")
                 error("connect($names) contains multiple source domain connectors. There can only be one!")
             end
         else
