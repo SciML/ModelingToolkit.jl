@@ -107,7 +107,7 @@ end
     end
 end
 
-@named capacitor = Capacitor(C = 10, oneport.v = 10.0)
+@named capacitor = Capacitor(C = 10, v = 10.0)
 @test getdefault(capacitor.v) == 10.0
 
 @mtkmodel Voltage begin
@@ -132,6 +132,7 @@ end
         constant = Constant(; k = 1)
         ground = Ground()
     end
+
     @equations begin
         connect(constant.output, source.V)
         connect(source.p, resistor.p)

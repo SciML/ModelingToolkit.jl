@@ -296,8 +296,49 @@ function component_args!(a, b, dict, expr, varexpr, kwargs)
     end
 end
 
+function extend_args!(a, b, dict, expr, kwargs, varexpr, has_param = false)
+    # Whenever `b` is a function call, skip the first arg aka the function name.
+    # Whenver it is a kwargs list, include it.
+    start = b.head == :call ? 2 : 1
+    for i in start:lastindex(b.args)
+        arg = b.args[i]
+        arg isa LineNumberNode && continue
+        MLStyle.@match arg begin
+            x::Symbol => begin
+                if b.head != :parameters
+                    if has_param
+                        popat!(b.args, i)
+                        push!(b.args[2].args, x)
+                    else
+                        b.args[i] = Expr(:parameters, x)
+                    end
+                end
+                push!(kwargs, Expr(:kw, x, nothing))
+                dict[:kwargs][x] = nothing
+            end
+            Expr(:kw, x) => begin
+                push!(kwargs, Expr(:kw, x, nothing))
+                dict[:kwargs][x] = nothing
+            end
+            Expr(:kw, x, y) => begin
+                b.args[i] = Expr(:kw, x, x)
+                push!(varexpr.args, :($x = $x === nothing ? $y : $x))
+                push!(kwargs, Expr(:kw, x, nothing))
+                dict[:kwargs][x] = nothing
+            end
+            Expr(:parameters, x...) => begin
+                has_param = true
+                extend_args!(a, arg, dict, expr, kwargs, varexpr, has_param)
+            end
+            _ => error("Could not parse $arg of component $a")
+        end
+    end
+end
+
 function parse_extend!(exprs, ext, dict, body, kwargs)
     expr = Expr(:block)
+    varexpr = Expr(:block)
+    push!(exprs, varexpr)
     push!(exprs, expr)
     body = deepcopy(body)
     MLStyle.@match body begin
@@ -309,13 +350,15 @@ function parse_extend!(exprs, ext, dict, body, kwargs)
                     error("`@extend` destructuring only takes an tuple as LHS. Got $body")
                 end
                 a, b = b.args
-                component_args!(a, b, expr, kwargs)
+                extend_args!(a, b, dict, expr, kwargs, varexpr)
                 vars, a, b
             end
             ext[] = a
             push!(b.args, Expr(:kw, :name, Meta.quot(a)))
-            dict[:extend] = [Symbol.(vars.args), a, b.args[1]]
             push!(expr.args, :($a = $b))
+
+            dict[:extend] = [Symbol.(vars.args), a, b.args[1]]
+
             if vars !== nothing
                 push!(expr.args, :(@unpack $vars = $a))
             end
