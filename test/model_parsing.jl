@@ -1,5 +1,6 @@
 using ModelingToolkit, Test
-using ModelingToolkit: get_gui_metadata, VariableDescription, getdefault, RegularConnector
+using ModelingToolkit: get_gui_metadata,
+    VariableDescription, getdefault, RegularConnector, get_ps
 using URIs: URI
 using Distributions
 using Unitful
@@ -120,9 +121,13 @@ end
 end
 
 @mtkmodel RC begin
+    @parameters begin
+        R_val = 10
+        C_val = 5
+    end
     @components begin
-        resistor = Resistor(; R)
-        capacitor = Capacitor(; C = 10)
+        resistor = Resistor(; R = R_val)
+        capacitor = Capacitor(; C = C_val)
         source = Voltage()
         constant = Constant(; k = 1)
         ground = Ground()
@@ -135,9 +140,10 @@ end
     end
 end
 
-@named rc = RC(; resistor.R = 20)
-@test getdefault(rc.resistor.R) == 20
-@test getdefault(rc.capacitor.C) == 10
+@named rc = RC(; R_val = 20)
+params = ModelingToolkit.get_ps(rc)
+@test isequal(getdefault(rc.resistor.R), params[1])
+@test isequal(getdefault(rc.capacitor.C), params[2])
 @test getdefault(rc.capacitor.v) == 0.0
 @test getdefault(rc.constant.k) == 1
 
@@ -210,14 +216,15 @@ end
 end
 
 @named a = A(p = 10)
-getdefault(a.b.i) == 10
-getdefault(a.b.j) == 0.1
-getdefault(a.b.k) == 1
+params = get_ps(a)
+@test isequal(getdefault(a.b.i), params[1])
+@test isequal(getdefault(a.b.j), 1 / params[1])
+@test getdefault(a.b.k) == 1
 
 @named a = A(p = 10, b.i = 20, b.j = 30, b.k = 40)
-getdefault(a.b.i) == 20
-getdefault(a.b.j) == 30
-getdefault(a.b.k) == 40
+@test getdefault(a.b.i) == 20
+@test getdefault(a.b.j) == 30
+@test getdefault(a.b.k) == 40
 
 metadata = Dict(:description => "Variable to test metadata in the Model.structure",
     :input => true, :bounds => (-1, 1), :connection_type => :Flow, :integer => true,

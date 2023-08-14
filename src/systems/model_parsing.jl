@@ -236,7 +236,8 @@ end
 
 function parse_components!(exprs, cs, dict, body, kwargs)
     expr = Expr(:block)
-    push!(exprs, expr)
+    varexpr = Expr(:block)
+    push!(exprs, varexpr)
     comps = Vector{Symbol}[]
     for arg in body.args
         arg isa LineNumberNode && continue
@@ -247,15 +248,17 @@ function parse_components!(exprs, cs, dict, body, kwargs)
                 arg = deepcopy(arg)
                 b = deepcopy(arg.args[2])
 
-                component_args!(a, b, expr, kwargs)
+                component_args!(a, b, dict, expr, varexpr, kwargs)
 
-                push!(b.args, Expr(:kw, :name, Meta.quot(a)))
                 arg.args[2] = b
                 push!(expr.args, arg)
             end
             _ => error("`@components` only takes assignment expressions. Got $arg")
         end
     end
+
+    push!(exprs, :(@named $expr))
+
     dict[:components] = comps
 end
 
@@ -263,7 +266,7 @@ function _rename(compname, varname)
     compname = Symbol(compname, :__, varname)
 end
 
-function component_args!(a, b, expr, kwargs)
+function component_args!(a, b, dict, expr, varexpr, kwargs)
     # Whenever `b` is a function call, skip the first arg aka the function name.
     # Whenever it is a kwargs list, include it.
     start = b.head == :call ? 2 : 1
@@ -274,15 +277,19 @@ function component_args!(a, b, expr, kwargs)
             x::Symbol || Expr(:kw, x) => begin
                 _v = _rename(a, x)
                 b.args[i] = Expr(:kw, x, _v)
+                push!(varexpr.args, :((@isdefined $x) && ($_v = $x)))
                 push!(kwargs, Expr(:kw, _v, nothing))
+                dict[:kwargs][_v] = nothing
             end
             Expr(:parameters, x...) => begin
-                component_args!(a, arg, expr, kwargs)
+                component_args!(a, arg, dict, expr, varexpr, kwargs)
             end
             Expr(:kw, x, y) => begin
                 _v = _rename(a, x)
                 b.args[i] = Expr(:kw, x, _v)
-                push!(kwargs, Expr(:kw, _v, y))
+                push!(varexpr.args, :($_v = $_v === nothing ? $y : $_v))
+                push!(kwargs, Expr(:kw, _v, nothing))
+                dict[:kwargs][_v] = nothing
             end
             _ => error("Could not parse $arg of component $a")
         end
