@@ -279,17 +279,17 @@ function check_units(eqs...)
 end
 all_dimensionless(states) = all(x -> safe_get_unit(x, "") in (unitless, nothing), states)
 
-using DynamicQuantities: @us_str
-const UNITLESS_UNIT = us"1"
+using DynamicQuantities: @us_str, expand_units, DynamicQuantities, SymbolicDimensions
+const UNITLESS_UNIT = DynamicQuantities.Quantity(1, SymbolicDimensions)
 const UNITLESS_SI = expand_units(UNITLESS_UNIT)
-const N_UNIT_DIMS = nfields(dimension(UNITLESS_SI))
+const N_UNIT_DIMS = nfields(DynamicQuantities.dimension(UNITLESS_SI))
 function _get_unit(x)
     getmetadata(ModelingToolkit.unwrap(x), ModelingToolkit.VariableUnit, UNITLESS_UNIT)
 end
 
 function buckingham_pi(vals)
     us = _get_unit.(vals)
-    M = [convert(Rational, getfield(dimension(expand_units(u)), p))
+    M = [convert(Rational, getfield(DynamicQuantities.dimension(expand_units(u)), p))
          for u in us, p in 1:N_UNIT_DIMS]
     s = lcm(denominator.(M))
     Mt = convert.(Int, isone(s) ? M' : M' * s)
@@ -297,5 +297,5 @@ function buckingham_pi(vals)
     for c in eachcol(coeffs)
         c .= c .÷ gcd(c)
     end
-    permutedims(prod(vals .^ coeffs, dims = 1))
+    vec(prod(vals .^ coeffs, dims = 1))
 end
