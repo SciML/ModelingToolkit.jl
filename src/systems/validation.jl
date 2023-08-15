@@ -287,6 +287,44 @@ function _get_unit(x)
     getmetadata(ModelingToolkit.unwrap(x), ModelingToolkit.VariableUnit, UNITLESS_UNIT)
 end
 
+"""
+    buckingham_pi(vals)
+
+Compute dimensionless quantities using the Buckingham pi approach. It takes
+symbolic units `us""` from `DynamicQuantities`.
+
+Examples:
+
+```julia-repl
+julia> using ModelingToolkit; using DynamicQuantities: @us_str
+
+julia> vals1 = @variables begin
+           ρ, [unit = us"g/m^3"]
+           μ, [unit = us"g/m/s"]
+           u, [unit = us"m/s"]
+           ℓ, [unit = us"m"]
+       end;
+
+julia> vals2 = @variables begin
+           ℓ, [unit = us"m"]
+           g, [unit = 9.8us"m/s^2"]
+           m, [unit = us"g"]
+           T, [unit = us"s"]
+           v, [unit = us"m/s"]
+           θ
+       end;
+
+julia> ModelingToolkit.buckingham_pi(vals1)
+1-element Vector{Num}:
+ μ / (u*ρ*ℓ)
+
+julia> ModelingToolkit.buckingham_pi(vals2)
+3-element Vector{Num}:
+ (g*(T^2)) / ℓ
+ (v^2) / (g*ℓ)
+             θ
+```
+"""
 function buckingham_pi(vals)
     us = _get_unit.(vals)
     M = [convert(Rational, getfield(DynamicQuantities.dimension(expand_units(u)), p))
