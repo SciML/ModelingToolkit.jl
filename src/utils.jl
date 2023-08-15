@@ -243,6 +243,10 @@ end
 
 hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
 getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))
+function getdefaulttype(v)
+    def = value(getmetadata(unwrap(v), Symbolics.VariableDefaultValue, nothing))
+    def === nothing ? Float64 : typeof(def)
+end
 function setdefault(v, val)
     val === nothing ? v : setmetadata(v, Symbolics.VariableDefaultValue, value(val))
 end

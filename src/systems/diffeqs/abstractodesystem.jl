@@ -152,8 +152,9 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
                 states = sol_states,
                 kwargs...)
         else
-            build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states,
+            fun = build_function(rhss, u, p..., t; postprocess_fbody = pre, states = sol_states,
                 kwargs...)
+            fun[1], :((out, u, p, t)->$(fun[2])(out, u, p..., t))
         end
     end
 end
@@ -723,6 +724,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     iv = get_iv(sys)
 
     u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union, symbolic_u0)
+    split_ps, split_idxs = split_parameters_by_type(p)
+    split_sym_ps = Base.Fix1(getindex, parameters(sys)).(split_idxs)
 
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
@@ -736,11 +739,12 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
 
     check_eqs_u0(eqs, dvs, u0; kwargs...)
 
-    f = constructor(sys, dvs, ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
-        checkbounds = checkbounds, p = p,
+    f = constructor(sys, dvs, split_sym_ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
+        checkbounds = checkbounds, p = split_ps,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
-        sparse = sparse, eval_expression = eval_expression, kwargs...)
-    implicit_dae ? (f, du0, u0, p) : (f, u0, p)
+        sparse = sparse, eval_expression = eval_expression,
+        kwargs...)
+    implicit_dae ? (f, du0, u0, split_ps) : (f, u0, split_ps)
 end
 
 function ODEFunctionExpr(sys::AbstractODESystem, args...; kwargs...)

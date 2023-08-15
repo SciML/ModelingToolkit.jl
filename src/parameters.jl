@@ -61,3 +61,29 @@ macro parameters(xs...)
         xs,
         toparam) |> esc
 end
+
+function split_parameters_by_type(ps)
+    by = let set = Dict{Any, Int}(), counter = Ref(1)
+        x -> begin
+            t = typeof(x)
+            get!(set, typeof(x)) do
+                if t == Float64
+                    1
+                else
+                    counter[] += 1
+                end
+            end
+        end
+    end
+    idxs = by.(ps)
+    split_idxs = [Int[]]
+    for (i, idx) in enumerate(idxs)
+        if idx > length(split_idxs)
+            push!(split_idxs, Int[])
+        end
+        push!(split_idxs[idx], i)
+    end
+    tighten_types = x -> identity.(x)
+    split_ps = tighten_types.(Base.Fix1(getindex, ps).(split_idxs))
+    (split_ps...,), split_idxs
+end
