@@ -297,7 +297,7 @@ function generate_connection_set!(connectionsets, domain_csets,
         else
             if lhs isa Number || lhs isa Symbolic
                 push!(eqs, eq) # split connections and equations
-            elseif lhs isa Connect
+            elseif lhs isa Connection
                 if get_systems(lhs) === :domain
                     connection2set!(domain_csets, namespace, get_systems(rhs), isouter)
                 else
@@ -327,7 +327,8 @@ function generate_connection_set!(connectionsets, domain_csets,
     if !isempty(extra_states)
         @set! sys.states = [get_states(sys); extra_states]
     end
-    @set! sys.systems = map(s -> generate_connection_set!(connectionsets, s, find, replace,
+    @set! sys.systems = map(s -> generate_connection_set!(connectionsets, domain_csets, s,
+            find, replace,
             renamespace(namespace, s)),
         subsys)
     @set! sys.eqs = eqs
@@ -401,6 +402,7 @@ function domain_defaults(sys, domain_csets)
     for c in domain_csets
         cset = c.set
         idx = findfirst(s -> is_domain_connector(s.sys.sys), cset)
+        idx === nothing && continue
         s = cset[idx]
         for (j, m) in enumerate(cset)
             if j == idx
