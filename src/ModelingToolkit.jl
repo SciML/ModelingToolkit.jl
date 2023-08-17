@@ -55,6 +55,7 @@ using Reexport
 using Symbolics: degree
 @reexport using Symbolics
 export @derivatives
+export domain_connect
 using Symbolics: _parse_vars, value, @derivatives, get_variables,
     exprs_occur_in, solve_for, build_expr, unwrap, wrap,
     VariableSource, getname, variable, Connection, connect,
