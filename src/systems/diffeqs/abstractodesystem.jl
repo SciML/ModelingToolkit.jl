@@ -729,7 +729,6 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     use_union = true,
     tofloat = true,
     symbolic_u0 = false,
-    # split_parameters = true,
     kwargs...)
     eqs = equations(sys)
     dvs = states(sys)
@@ -743,13 +742,11 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         use_union,
         symbolic_u0)
 
-    # if split_parameters
     p, split_idxs = split_parameters_by_type(p)
     if p isa Tuple
         ps = Base.Fix1(getindex, parameters(sys)).(split_idxs)
         ps = (ps...,) #if p is Tuple, ps should be Tuple
     end
-    # end
 
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
