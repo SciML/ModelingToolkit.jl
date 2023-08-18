@@ -734,18 +734,23 @@ let
     u0map = [A => 1.0]
     pmap = (k1 => 1.0, k2 => 1)
     tspan = (0.0, 1.0)
-    prob = ODEProblem(sys, u0map, tspan, pmap)
-    @test prob.p === Tuple([(Dict(pmap))[k] for k in values(parameters(sys))])
+    prob = ODEProblem(sys, u0map, tspan, pmap; tofloat=false)
+
+    @test prob.p == ([1], [1.0]) #Tuple([(Dict(pmap))[k] for k in values(parameters(sys))])
 
     pmap = [k1 => 1, k2 => 1]
     tspan = (0.0, 1.0)
     prob = ODEProblem(sys, u0map, tspan, pmap)
     @test eltype(prob.p) === Float64
+    
+    prob = ODEProblem(sys, u0map, tspan, pmap; tofloat=false)
+    @test eltype(prob.p) === Int
 
-    pmap = Pair{Any, Union{Int, Float64}}[k1 => 1, k2 => 1.0]
-    tspan = (0.0, 1.0)
-    prob = ODEProblem(sys, u0map, tspan, pmap, use_union = true)
-    @test eltype(prob.p) === Union{Float64, Int}
+    # No longer supported, Tuple used instead
+    # pmap = Pair{Any, Union{Int, Float64}}[k1 => 1, k2 => 1.0]
+    # tspan = (0.0, 1.0)
+    # prob = ODEProblem(sys, u0map, tspan, pmap, use_union = true)
+    # @test eltype(prob.p) === Union{Float64, Int}
 end
 
 let

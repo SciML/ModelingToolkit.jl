@@ -122,7 +122,6 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
            nothing,
     isdde = false,
     has_difference = false,
-    split_parameters = false,
     kwargs...)
     if isdde
         eqs = delay_to_function(sys)
@@ -152,12 +151,14 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
             build_function(rhss, ddvs, u, p, t; postprocess_fbody = pre,
                 states = sol_states,
                 kwargs...)
-        elseif split_parameters
-            build_function(rhss, u, p..., t; postprocess_fbody = pre, states = sol_states,
-                kwargs...)
         else
-            build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states,
+            if p isa Tuple
+                build_function(rhss, u, p..., t; postprocess_fbody = pre, states = sol_states,
+                    kwargs...)
+            else
+                build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states,
                 kwargs...)
+            end
         end
     end
 end
@@ -329,15 +330,14 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
     checkbounds = false,
     sparsity = false,
     analytic = nothing,
-    split_parameters = false,
     kwargs...) where {iip, specialize}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
-        expression_module = eval_module, checkbounds = checkbounds, split_parameters,
+        expression_module = eval_module, checkbounds = checkbounds, 
         kwargs...)
     f_oop, f_iip = eval_expression ?
                    (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
                    f_gen
-    if split_parameters
+    if p isa Tuple
         g(u, p, t) = f_oop(u, p..., t)
         g(du, u, p, t) = f_iip(du, u, p..., t)
         f = g
@@ -696,9 +696,8 @@ Take dictionaries with initial conditions and parameters and convert them to num
 function get_u0_p(sys,
     u0map,
     parammap;
-    use_union = false,
-    tofloat = !use_union,
-    split_parameters = false,
+    use_union = true,
+    tofloat = true,
     symbolic_u0 = false)
     eqs = equations(sys)
     dvs = states(sys)
@@ -711,7 +710,7 @@ function get_u0_p(sys,
     if symbolic_u0
         u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = false, use_union = false)
     else
-        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = !split_parameters)
+        u0 = varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
     end
     p = varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
     p = p === nothing ? SciMLBase.NullParameters() : p
@@ -726,10 +725,10 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     simplify = false,
     linenumbers = true, parallel = SerialForm(),
     eval_expression = true,
-    use_union = false,
-    tofloat = !use_union,
+    use_union = true,
+    tofloat = true,
     symbolic_u0 = false,
-    split_parameters = false,
+    # split_parameters = true,
     kwargs...)
     eqs = equations(sys)
     dvs = states(sys)
@@ -741,12 +740,15 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         parammap;
         tofloat,
         use_union,
-        symbolic_u0,
-        split_parameters)
-    if split_parameters
+        symbolic_u0)
+
+    # if split_parameters
         p, split_idxs = split_parameters_by_type(p)
-        ps = Base.Fix1(getindex, parameters(sys)).(split_idxs)
-    end
+        if p isa Tuple
+            ps = Base.Fix1(getindex, parameters(sys)).(split_idxs)
+            ps = (ps...,) #if p is Tuple, ps should be Tuple
+        end
+    # end
 
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
@@ -763,7 +765,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     f = constructor(sys, dvs, ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
         checkbounds = checkbounds, p = p,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
-        sparse = sparse, eval_expression = eval_expression, split_parameters,
+        sparse = sparse, eval_expression = eval_expression, 
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end
