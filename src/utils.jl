@@ -670,7 +670,7 @@ end
     throw(ArgumentError("$vars are either missing from the variable map or missing from the system's states/parameters list."))
 end
 
-function promote_to_concrete(vs; tofloat = true, use_union = false)
+function promote_to_concrete(vs; tofloat = true, use_union = true)
     if isempty(vs)
         return vs
     end

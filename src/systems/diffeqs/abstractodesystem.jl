@@ -153,11 +153,12 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
                 kwargs...)
         else
             if p isa Tuple
-                build_function(rhss, u, p..., t; postprocess_fbody = pre, states = sol_states,
+                build_function(rhss, u, p..., t; postprocess_fbody = pre,
+                    states = sol_states,
                     kwargs...)
             else
                 build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states,
-                kwargs...)
+                    kwargs...)
             end
         end
     end
@@ -332,7 +333,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
     analytic = nothing,
     kwargs...) where {iip, specialize}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
-        expression_module = eval_module, checkbounds = checkbounds, 
+        expression_module = eval_module, checkbounds = checkbounds,
         kwargs...)
     f_oop, f_iip = eval_expression ?
                    (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
@@ -689,7 +690,7 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 end
 
 """
-    u0, p, defs = get_u0_p(sys, u0map, parammap; use_union=false, tofloat=!use_union)
+    u0, p, defs = get_u0_p(sys, u0map, parammap; use_union=true, tofloat=true)
 
 Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point.
 """
@@ -743,11 +744,11 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         symbolic_u0)
 
     # if split_parameters
-        p, split_idxs = split_parameters_by_type(p)
-        if p isa Tuple
-            ps = Base.Fix1(getindex, parameters(sys)).(split_idxs)
-            ps = (ps...,) #if p is Tuple, ps should be Tuple
-        end
+    p, split_idxs = split_parameters_by_type(p)
+    if p isa Tuple
+        ps = Base.Fix1(getindex, parameters(sys)).(split_idxs)
+        ps = (ps...,) #if p is Tuple, ps should be Tuple
+    end
     # end
 
     if implicit_dae && du0map !== nothing
@@ -765,7 +766,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     f = constructor(sys, dvs, ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
         checkbounds = checkbounds, p = p,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
-        sparse = sparse, eval_expression = eval_expression, 
+        sparse = sparse, eval_expression = eval_expression,
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end

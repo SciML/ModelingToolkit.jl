@@ -66,7 +66,7 @@ function find_types(array)
     by = let set = Dict{Any, Int}(), counter = Ref(0)
         x -> begin
             # t = typeof(x)
-            
+
             get!(set, typeof(x)) do
                 # if t == Float64
                 #     1
@@ -79,16 +79,14 @@ function find_types(array)
     return by.(array)
 end
 
-
 function split_parameters_by_type(ps)
-
     if ps === SciMLBase.NullParameters()
-        return Float64[],[] #use Float64 to avoid Any type warning
+        return Float64[], [] #use Float64 to avoid Any type warning
     else
         by = let set = Dict{Any, Int}(), counter = Ref(0)
-            x -> begin     
+            x -> begin
                 get!(set, typeof(x)) do
-                    counter[] += 1                    
+                    counter[] += 1
                 end
             end
         end
@@ -103,7 +101,7 @@ function split_parameters_by_type(ps)
         tighten_types = x -> identity.(x)
         split_ps = tighten_types.(Base.Fix1(getindex, ps).(split_idxs))
         if length(split_ps) == 1  #Tuple not needed, only 1 type
-            return split_ps[1], split_idxs 
+            return split_ps[1], split_idxs
         else
             return (split_ps...,), split_idxs
         end

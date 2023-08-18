@@ -2,8 +2,6 @@ using ModelingToolkit, Test
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq
 
-
-
 # ------------------------ Mixed Single Values and Vector
 
 dt = 4e-4
@@ -14,11 +12,10 @@ x = @. time^2 + 1.0
 @parameters t
 D = Differential(t)
 
-get_value(data, t, dt) = data[round(Int, t/dt+1)]
+get_value(data, t, dt) = data[round(Int, t / dt + 1)]
 @register_symbolic get_value(data, t, dt)
 
-
-function Sampled(; name, data=Float64[], dt=0.0)
+function Sampled(; name, data = Float64[], dt = 0.0)
     pars = @parameters begin
         data = data
         dt = dt
@@ -30,7 +27,7 @@ function Sampled(; name, data=Float64[], dt=0.0)
     end
 
     eqs = [
-        output.u ~ get_value(data, t, dt)
+        output.u ~ get_value(data, t, dt),
     ]
 
     return ODESystem(eqs, t, vars, pars; name, systems,
@@ -54,15 +51,13 @@ prob = ODEProblem(sys, [], (0.0, t_end), [s.src.data => x])
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 
-
 # ------------------------ Mixed Type Converted to float (default behavior)
 
 vars = @variables y(t)=1 dy(t)=0 ddy(t)=0
 pars = @parameters a=1.0 b=2.0 c=3
-eqs = [
-    D(y) ~ dy*a
-    D(dy) ~ ddy*b
-    ddy ~ sin(t)*c]
+eqs = [D(y) ~ dy * a
+    D(dy) ~ ddy * b
+    ddy ~ sin(t) * c]
 
 @named sys = ODESystem(eqs, t, vars, pars)
 sys = structural_simplify(sys)
@@ -74,14 +69,10 @@ prob = ODEProblem(sys, [], tspan, [])
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 
-
 # ------------------------ Mixed Type Conserved
 
-prob = ODEProblem(sys, [], tspan, []; tofloat=false)
+prob = ODEProblem(sys, [], tspan, []; tofloat = false)
 
 @test prob.p isa Tuple{Vector{Float64}, Vector{Int64}}
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
-
-
-
