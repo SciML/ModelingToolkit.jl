@@ -76,3 +76,23 @@ prob = ODEProblem(sys, [], tspan, []; tofloat = false)
 @test prob.p isa Tuple{Vector{Float64}, Vector{Int64}}
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
+
+
+
+# -------------------------  Observables
+
+@named c = Sine(; frequency = 1)
+@named absb = Abs(;)
+@named int = Integrator(; k = 1)
+@named model = ODESystem([
+        connect(c.output, absb.input),
+        connect(absb.output, int.input),
+    ],
+    t,
+    systems = [int, absb, c])
+sys = structural_simplify(model)
+prob = ODEProblem(sys, Pair[int.x => 0.0], (0.0, 1.0))
+sol = solve(prob, Rodas4())
+@test isequal(unbound_inputs(sys), [])
+@test sol.retcode == Success
+sol[absb.output.u]
