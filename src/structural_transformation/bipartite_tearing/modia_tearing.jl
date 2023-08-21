@@ -65,7 +65,8 @@ end
 function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
     ::Type{U} = Unassigned;
     varfilter::F2 = v -> true,
-    eqfilter::F3 = eq -> true) where {F, U, F2, F3}
+    eqfilter::F3 = eq -> true,
+    state_priority::F4 = nothing) where {F, U, F2, F3, F4}
     # It would be possible here to simply iterate over all variables and attempt to
     # use tearEquations! to produce a matching that greedily selects the minimal
     # number of torn variables. However, we can do this process faster if we first
@@ -98,6 +99,9 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
                 end
             end
             var_eq_matching[var] = unassigned
+        end
+        if state_priority === nothing
+            sort(filtered_vars, by = state_priority)
         end
         tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, ieqs,
             filtered_vars,
