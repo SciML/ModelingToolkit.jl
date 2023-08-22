@@ -1,3 +1,4 @@
+using OrdinaryDiffEq
 const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
 
 get_component_type(x::AbstractSystem) = get_gui_metadata(x).type
@@ -1294,6 +1295,9 @@ function linearization_function(sys::AbstractSystem, inputs,
             if u !== nothing # Handle systems without states
                 length(sts) == length(u) ||
                     error("Number of state variables ($(length(sts))) does not match the number of input states ($(length(u)))")
+                prob = ODEProblem(fun, u, (t, t + 1), p)
+                integ = init(prob, Rodas5P())
+                u = integ.u
                 uf = SciMLBase.UJacobianWrapper(fun, t, p)
                 fg_xz = ForwardDiff.jacobian(uf, u)
                 h_xz = ForwardDiff.jacobian(let p = p, t = t
