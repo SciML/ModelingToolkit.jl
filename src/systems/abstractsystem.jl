@@ -1453,8 +1453,8 @@ function markio!(state, orig_inputs, inputs, outputs; check = true)
 end
 
 """
-    (; A, B, C, D), simplified_sys = linearize(sys, inputs, outputs;    t=0.0, op = Dict(), allow_input_derivatives = false, kwargs...)
-    (; A, B, C, D)                 = linearize(simplified_sys, lin_fun; t=0.0, op = Dict(), allow_input_derivatives = false)
+    (; A, B, C, D), simplified_sys = linearize(sys, inputs, outputs;    t=0.0, op = Dict(), allow_input_derivatives = false, zero_dummy_der=false, kwargs...)
+    (; A, B, C, D)                 = linearize(simplified_sys, lin_fun; t=0.0, op = Dict(), allow_input_derivatives = false, zero_dummy_der=false)
 
 Return a NamedTuple with the matrices of a linear statespace representation
 on the form
@@ -1473,6 +1473,8 @@ while the second signature expects the outputs of [`linearization_function`](@re
 the default values of `sys` are used.
 
 If `allow_input_derivatives = false`, an error will be thrown if input derivatives (``u̇``) appear as inputs in the linearized equations. If input derivatives are allowed, the returned `B` matrix will be of double width, corresponding to the input `[u; u̇]`.
+
+`zero_dummy_der` can be set to automatically set the operating point to zero for all dummy derivatives.
 
 See also [`linearization_function`](@ref) which provides a lower-level interface, [`linearize_symbolic`](@ref) and [`ModelingToolkit.reorder_states`](@ref).
 
