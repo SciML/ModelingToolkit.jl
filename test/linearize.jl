@@ -187,7 +187,7 @@ if VERSION >= v"1.8"
     using ModelingToolkitStandardLibrary
     using ModelingToolkitStandardLibrary.Blocks
     using ModelingToolkitStandardLibrary.Mechanical.MultiBody2D
-    using ModelingToolkitStandardLibrary.Mechanical.Translational
+    using ModelingToolkitStandardLibrary.Mechanical.TranslationalPosition
 
     using ControlSystemsMTK
     using ControlSystemsMTK.ControlSystemsBase: sminreal, minreal, poles
@@ -197,9 +197,9 @@ if VERSION >= v"1.8"
     D = Differential(t)
 
     @named link1 = Link(; m = 0.2, l = 10, I = 1, g = -9.807)
-    @named cart = Translational.Mass(; m = 1, s = 0)
+    @named cart = TranslationalPosition.Mass(; m = 1, s = 0)
     @named fixed = Fixed()
-    @named force = Force()
+    @named force = Force(use_support = false)
 
     eqs = [connect(link1.TX1, cart.flange)
         connect(cart.flange, force.flange)
@@ -207,12 +207,10 @@ if VERSION >= v"1.8"
 
     @named model = ODESystem(eqs, t, [], []; systems = [link1, cart, force, fixed])
     def = ModelingToolkit.defaults(model)
-    for s in states(model)
-        def[s] = 0
-    end
-    def[link1.x1] = 10
-    def[link1.fy1] = -def[link1.g] * def[link1.m]
+    def[cart.s] = 10
+    def[cart.v] = 0
     def[link1.A] = -pi / 2
+    def[link1.dA] = 0
     lin_outputs = [cart.s, cart.v, link1.A, link1.dA]
     lin_inputs = [force.f.u]
 
@@ -235,11 +233,12 @@ if VERSION >= v"1.8"
 
     dummyder = setdiff(states(sysss), states(model))
     def = merge(def, Dict(x => 0.0 for x in dummyder))
+    def[link1.fy1] = -def[link1.g] * def[link1.m]
 
     @test substitute(lsyss.A, def) ≈ lsys.A
     # We cannot pivot symbolically, so the part where a linear solve is required
     # is not reliable.
-    @test substitute(lsyss.B, def)[1:6, :] ≈ lsys.B[1:6, :]
+    @test substitute(lsyss.B, def)[1:6, 1] ≈ lsys.B[1:6, 1]
     @test substitute(lsyss.C, def) ≈ lsys.C
     @test substitute(lsyss.D, def) ≈ lsys.D
 end
