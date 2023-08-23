@@ -687,7 +687,6 @@ function get_u0_p(sys,
     use_union = false,
     tofloat = !use_union,
     symbolic_u0 = false)
-    eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
 

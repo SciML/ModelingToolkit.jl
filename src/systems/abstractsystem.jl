@@ -1250,7 +1250,7 @@ function io_preprocessing(sys::AbstractSystem, inputs,
 end
 
 """
-    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, kwargs...)
+    lin_fun, simplified_sys = linearization_function(sys::AbstractSystem, inputs, outputs; simplify = false, initialize = true, kwargs...)
 
 Return a function that linearizes the system `sys`. The function [`linearize`](@ref) provides a higher-level and easier to use interface.
 
@@ -1274,12 +1274,14 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
   - `inputs`: A vector of variables that indicate the inputs of the linearized input-output model.
   - `outputs`: A vector of variables that indicate the outputs of the linearized input-output model.
   - `simplify`: Apply simplification in tearing.
+  - `initialize`: If true, a check is performed to ensure that the operating point is consistent (satisfies algebraic equations). If the op is not consistent, initialization is performed.
   - `kwargs`: Are passed on to `find_solvables!`
 
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
 function linearization_function(sys::AbstractSystem, inputs,
     outputs; simplify = false,
+    initialize = true,
     kwargs...)
     sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
         kwargs...)
@@ -1295,9 +1297,14 @@ function linearization_function(sys::AbstractSystem, inputs,
             if u !== nothing # Handle systems without states
                 length(sts) == length(u) ||
                     error("Number of state variables ($(length(sts))) does not match the number of input states ($(length(u)))")
-                prob = ODEProblem(fun, u, (t, t + 1), p)
-                integ = init(prob, Rodas5P())
-                u = integ.u
+                if initialize && !isempty(alge_idxs) # This is expensive and can be omitted if the user knows that the system is already initialized
+                    residual = fun(u, p, t)
+                    if norm(residual[alge_idxs]) > √(eps(eltype(residual)))
+                        prob = ODEProblem(fun, u, (t, t + 1), p)
+                        integ = init(prob, Rodas5P())
+                        u = integ.u
+                    end
+                end
                 uf = SciMLBase.UJacobianWrapper(fun, t, p)
                 fg_xz = ForwardDiff.jacobian(uf, u)
                 h_xz = ForwardDiff.jacobian(let p = p, t = t
@@ -1401,7 +1408,7 @@ function linearize_symbolic(sys::AbstractSystem, inputs,
             if !allow_input_derivatives
                 der_inds = findall(vec(any(!iszero, Bs, dims = 1)))
                 @show typeof(der_inds)
-                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(ModelingToolkit.inputs(sys)[der_inds]). Call `linear_statespace` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
+                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(ModelingToolkit.inputs(sys)[der_inds]). Call `linearize_symbolic` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
             end
             B = [B [zeros(nx, nu); Bs]]
             D = [D zeros(ny, nu)]
@@ -1580,7 +1587,7 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
         if !iszero(Bs)
             if !allow_input_derivatives
                 der_inds = findall(vec(any(!=(0), Bs, dims = 1)))
-                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(inputs(sys)[der_inds]). Call `linear_statespace` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
+                error("Input derivatives appeared in expressions (-g_z\\g_u != 0), the following inputs appeared differentiated: $(inputs(sys)[der_inds]). Call `linearize` with keyword argument `allow_input_derivatives = true` to allow this and have the returned `B` matrix be of double width ($(2nu)), where the last $nu inputs are the derivatives of the first $nu inputs.")
             end
             B = [B [zeros(nx, nu); Bs]]
             D = [D zeros(ny, nu)]
