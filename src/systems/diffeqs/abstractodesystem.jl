@@ -831,6 +831,8 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     check_length = true,
     kwargs...) where {iip, specialize}
     has_difference = any(isdifferenceeq, equations(sys))
+    u0map = symmap_to_varmap(sys, u0map)
+    parammap = symmap_to_varmap(sys, parammap)
     f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         has_difference = has_difference,
@@ -902,6 +904,8 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     sts = states(sys)
     differential_vars = map(Base.Fix2(in, diffvars), sts)
     kwargs = filter_kwargs(kwargs)
+    u0map = symmap_to_varmap(sys, u0map)
+    parammap = symmap_to_varmap(sys, parammap)
 
     if has_difference
         DAEProblem{iip}(f, du0, u0, tspan, p;
@@ -927,6 +931,8 @@ function DiffEqBase.DDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     check_length = true,
     kwargs...) where {iip}
     has_difference = any(isdifferenceeq, equations(sys))
+    u0map = symmap_to_varmap(sys, u0map)
+    parammap = symmap_to_varmap(sys, parammap)
     f, u0, p = process_DEProblem(DDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         has_difference = has_difference,
@@ -980,6 +986,8 @@ function DiffEqBase.SDDEProblem{iip}(sys::AbstractODESystem, u0map = [],
     sparsenoise = nothing,
     kwargs...) where {iip}
     has_difference = any(isdifferenceeq, equations(sys))
+    u0map = symmap_to_varmap(sys, u0map)
+    parammap = symmap_to_varmap(sys, parammap)
     f, u0, p = process_DEProblem(SDDEFunction{iip}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         has_difference = has_difference,
@@ -1147,6 +1155,8 @@ end
 function DiffEqBase.SteadyStateProblem{iip}(sys::AbstractODESystem, u0map,
     parammap = SciMLBase.NullParameters();
     check_length = true, kwargs...) where {iip}
+    u0map = symmap_to_varmap(sys, u0map)
+    parammap = symmap_to_varmap(sys, parammap)
     f, u0, p = process_DEProblem(ODEFunction{iip}, sys, u0map, parammap;
         steady_state = true,
         check_length, kwargs...)
@@ -1176,6 +1186,8 @@ function SteadyStateProblemExpr{iip}(sys::AbstractODESystem, u0map,
     parammap = SciMLBase.NullParameters();
     check_length = true,
     kwargs...) where {iip}
+    u0map = symmap_to_varmap(sys, u0map)
+    parammap = symmap_to_varmap(sys, parammap)
     f, u0, p = process_DEProblem(ODEFunctionExpr{iip}, sys, u0map, parammap;
         steady_state = true,
         check_length, kwargs...)

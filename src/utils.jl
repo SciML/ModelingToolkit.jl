@@ -883,3 +883,58 @@ function fast_substitute(expr, pair::Pair)
 end
 
 normalize_to_differential(s) = s
+
+
+### Taken from Catalyst (by Torkel) to enable handling of sys.x and :x form in input maps. Initial implementation by Sam ###
+# If a amp of inptu values (u0 or p) is given in a map form (e.g. [x => 1.0]) but x is not a vairbale but either of the type [:x => 1.0] or [sys.x =>], this converts it to the correct form.
+function symmap_to_varmap(sys, symmap::Tuple)
+    if all(p -> p isa Pair{Symbol}, symmap)
+        return ((_symbol_to_var(sys, sym) => val for (sym, val) in symmap)...,)
+    else  # if not all entries map a symbol to value pass through
+        return symmap
+    end
+end
+
+function symmap_to_varmap(sys, symmap::AbstractArray{Pair{Symbol, T}}) where {T}
+    [_symbol_to_var(sys, sym) => val for (sym, val) in symmap]
+end
+
+function symmap_to_varmap(sys, symmap::Dict{Symbol, T}) where {T}
+    Dict(_symbol_to_var(sys, sym) => val for (sym, val) in symmap)
+end
+
+# convert symbol of the form :sys.a.b.c to a symbolic a.b.c
+function _symbol_to_var(sys, sym)
+    if hasproperty(sys, sym)
+        var = getproperty(sys, sym, namespace = false)
+    else
+        strs = split(String(sym), "₊")   # need to check if this should be split of not!!!
+        if length(strs) > 1
+            var = getproperty(sys, Symbol(strs[1]), namespace = false)
+            for str in view(strs, 2:length(strs))
+                var = getproperty(var, Symbol(str), namespace = true)
+            end
+        else
+            throw(ArgumentError("System $(nameof(sys)): variable $sym does not exist"))
+        end
+    end
+    var
+end
+
+# Handles stuff like sys.x => 1.0 (same as sys₊x(t) => 1.0). This part was directly added by Torkel
+function symmap_to_varmap(sys, symmap::AbstractArray{Pair{Num, T}}) where {T} 
+    [_num_to_num(sys, sym) => val for (sym, val) in symmap]
+end
+function symmap_to_varmap(sys, symmap::Dict{Symbol, T}) where {T}
+    Dict(_num_to_num(sys, sym) => val for (sym, val) in symmap)
+end
+
+function _num_to_num(sys, sym)
+    if occursin("$(sys.name)₊", String(Symbol(sym)))
+        return _symbol_to_var(sys,Symbol(split(split(String(Symbol(sym)), "$(sys.name)₊")[2],"(")[1]))
+    end
+    return sym
+end
+
+# don't permute any other types and let varmap_to_vars handle erroring
+symmap_to_varmap(sys, symmap) = symmap
