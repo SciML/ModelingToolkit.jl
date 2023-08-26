@@ -568,6 +568,8 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map = [], tspan = get_tspa
     parammap = DiffEqBase.NullParameters();
     sparsenoise = nothing, check_length = true,
     callback = nothing, kwargs...) where {iip}
+    u0map = symmap_to_varmap(sys, u0map)
+    parammap = symmap_to_varmap(sys, parammap)
     f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; check_length,
         kwargs...)
     cbs = process_events(sys; callback)

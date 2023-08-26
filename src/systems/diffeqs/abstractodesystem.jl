@@ -896,6 +896,8 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     parammap = DiffEqBase.NullParameters();
     check_length = true, kwargs...) where {iip}
     has_difference = any(isdifferenceeq, equations(sys))
+    u0map = symmap_to_varmap(sys, u0map)
+    parammap = symmap_to_varmap(sys, parammap)
     f, du0, u0, p = process_DEProblem(DAEFunction{iip}, sys, u0map, parammap;
         implicit_dae = true, du0map = du0map,
         has_difference = has_difference, check_length,
