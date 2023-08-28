@@ -1,14 +1,16 @@
 using ModelingToolkit, Test
 using ModelingToolkit: get_gui_metadata, VariableDescription, getdefault
 using URIs: URI
+using Distributions
+using Unitful
 
 ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
 
 @connector RealInput begin
-    u(t), [input = true]
+    u(t), [input = true, unit = u"V"]
 end
 @connector RealOutput begin
-    u(t), [output = true]
+    u(t), [output = true, unit = u"V"]
 end
 @mtkmodel Constant begin
     @components begin
@@ -22,12 +24,12 @@ end
     end
 end
 
-@variables t
+@variables t [unit = u"s"]
 D = Differential(t)
 
 @connector Pin begin
-    v(t)                  # Potential at the pin [V]
-    i(t), [connect = Flow]    # Current flowing into the pin [A]
+    v(t), [unit = u"V"]                    # Potential at the pin [V]
+    i(t), [connect = Flow, unit = u"A"]    # Current flowing into the pin [A]
     @icon "pin.png"
 end
 
@@ -41,8 +43,8 @@ end
         n = Pin()
     end
     @variables begin
-        v(t)
-        i(t)
+        v(t), [unit = u"V"]
+        i(t), [unit = u"A"]
     end
     @icon "oneport.png"
     @equations begin
@@ -70,7 +72,7 @@ resistor_log = "$(@__DIR__)/logo/resistor.svg"
 @mtkmodel Resistor begin
     @extend v, i = oneport = OnePort()
     @parameters begin
-        R
+        R, [unit = u"Ω"]
     end
     @icon begin
         """<?xml version="1.0" encoding="UTF-8"?>
@@ -95,7 +97,7 @@ end
 
 @mtkmodel Capacitor begin
     @parameters begin
-        C
+        C, [unit = u"F"]
     end
     @extend v, i = oneport = OnePort(; v = 0.0)
     @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
@@ -218,8 +220,8 @@ getdefault(a.b.j) == 30
 getdefault(a.b.k) == 40
 
 metadata = Dict(:description => "Variable to test metadata in the Model.structure",
-    :input => true, :bounds => :((-1, 1)), :connection_type => :Flow, :integer => true,
-    :binary => false, :tunable => false, :disturbance => true, :dist => :(Normal(1, 1)))
+    :input => true, :bounds => (-1, 1), :connection_type => :Flow, :integer => true,
+    :binary => false, :tunable => false, :disturbance => true, :dist => Normal(1, 1))
 
 @connector MockMeta begin
     m(t),
