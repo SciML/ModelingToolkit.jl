@@ -34,7 +34,7 @@ else
     function Base.swapcols!(A::AbstractSparseMatrixCSC, i, j)
         i == j && return
 
-        # For simplicitly, let i denote the smaller of the two columns
+        # For simplicity, let i denote the smaller of the two columns
         j < i && @swap(i, j)
 
         colptr = getcolptr(A)
@@ -72,7 +72,7 @@ else
         return nothing
     end
     function swaprows!(A::AbstractSparseMatrixCSC, i, j)
-        # For simplicitly, let i denote the smaller of the two rows
+        # For simplicity, let i denote the smaller of the two rows
         j < i && @swap(i, j)
 
         rows = rowvals(A)
@@ -184,7 +184,7 @@ const bareiss_virtcolswap = ((M, i, j) -> nothing, swaprows!,
 Perform Bareiss's fraction-free row-reduction algorithm on the matrix `M`.
 Optionally, a specific pivoting method may be specified.
 
-swap_strategy is an optional argument that determines how the swapping of rows and coulmns is performed.
+swap_strategy is an optional argument that determines how the swapping of rows and columns is performed.
 bareiss_colswap (the default) swaps the columns and rows normally.
 bareiss_virtcolswap pretends to swap the columns which can be faster for sparse matrices.
 """

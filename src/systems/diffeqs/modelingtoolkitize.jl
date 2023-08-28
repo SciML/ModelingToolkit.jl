@@ -37,7 +37,7 @@ function modelingtoolkitize(prob::DiffEqBase.ODEProblem; kwargs...)
             elseif v in var_set
                 D(v)
             else
-                error("Non-permuation mass matrix is not supported.")
+                error("Non-permutation mass matrix is not supported.")
             end
         end
     end

@@ -170,7 +170,7 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
     pivot_equal = pivot_equal_optimization && abs(pivot) == abs(last_pivot)
 
     for ei in (k + 1):size(M, 1)
-        # elimate `v`
+        # eliminate `v`
         coeff = 0
         ivars = eadj[ei]
         vj = findfirst(isequal(vpivot), ivars)

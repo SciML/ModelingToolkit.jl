@@ -301,7 +301,7 @@ end
 
 function component_args!(a, b, expr, kwargs)
     # Whenever `b` is a function call, skip the first arg aka the function name.
-    # Whenver it is a kwargs list, include it.
+    # Whenever it is a kwargs list, include it.
     start = b.head == :call ? 2 : 1
     for i in start:lastindex(b.args)
         arg = b.args[i]
