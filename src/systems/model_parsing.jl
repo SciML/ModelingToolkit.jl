@@ -198,7 +198,13 @@ function set_var_metadata(a, ms)
 end
 
 function get_var(mod::Module, b)
-    b isa Symbol ? getproperty(mod, b) : b
+    if b isa Symbol
+        getproperty(mod, b)
+    elseif b isa Expr
+        Core.eval(mod, b)
+    else
+        b
+    end
 end
 
 function mtkmodel_macro(mod, name, expr)
