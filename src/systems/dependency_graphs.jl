@@ -22,8 +22,8 @@ rate₁ = β * S * I
 rate₂ = γ * I + t
 affect₁ = [S ~ S - 1, I ~ I + 1]
 affect₂ = [I ~ I - 1, R ~ R + 1]
-j₁ = ConstantRateJump(rate₁, affect₁)
-j₂ = VariableRateJump(rate₂, affect₂)
+j₁ = ModelingToolkit.ConstantRateJump(rate₁, affect₁)
+j₂ = ModelingToolkit.VariableRateJump(rate₂, affect₂)
 
 # create a JumpSystem using these jumps
 @named jumpsys = JumpSystem([j₁, j₂], t, [S, I, R], [β, γ])
@@ -66,8 +66,8 @@ Example:
 Continuing the example started in [`equation_dependencies`](@ref)
 
 ```julia
-digr = asgraph(equation_dependencies(odesys),
-               Dict(s => i for (i, s) in enumerate(states(odesys))))
+digr = asgraph(equation_dependencies(jumpsys),
+               Dict(s => i for (i, s) in enumerate(states(jumpsys))))
 ```
 """
 function asgraph(eqdeps, vtois)
@@ -109,7 +109,7 @@ Example:
 Continuing the example started in [`equation_dependencies`](@ref)
 
 ```julia
-digr = asgraph(odesys)
+digr = asgraph(jumpsys)
 ```
 """
 function asgraph(sys::AbstractSystem; variables = states(sys),
@@ -136,7 +136,7 @@ Example:
 Continuing the example of [`equation_dependencies`](@ref)
 
 ```julia
-variable_dependencies(odesys)
+variable_dependencies(jumpsys)
 ```
 """
 function variable_dependencies(sys::AbstractSystem; variables = states(sys),
@@ -188,7 +188,7 @@ Example:
 Continuing the example in [`asgraph`](@ref)
 
 ```julia
-dg = asdigraph(digr)
+dg = asdigraph(digr, jumpsys)
 ```
 """
 function asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys),
@@ -230,7 +230,7 @@ Example:
 Continuing the example of `equation_dependencies`
 
 ```julia
-eqeqdep = eqeq_dependencies(asgraph(odesys), variable_dependencies(odesys))
+eqeqdep = eqeq_dependencies(asgraph(jumpsys), variable_dependencies(jumpsys))
 ```
 """
 function eqeq_dependencies(eqdeps::BipartiteGraph{T},
@@ -269,7 +269,7 @@ Example:
 Continuing the example of `equation_dependencies`
 
 ```julia
-varvardep = varvar_dependencies(asgraph(odesys), variable_dependencies(odesys))
+varvardep = varvar_dependencies(asgraph(jumpsys), variable_dependencies(jumpsys))
 ```
 """
 function varvar_dependencies(eqdeps::BipartiteGraph{T},
