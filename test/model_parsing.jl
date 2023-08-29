@@ -121,15 +121,16 @@ end
 end
 
 @mtkmodel RC begin
-    @parameters begin
+    @structural_parameters begin
         R_val = 10
-        C_val = 5
+        C_val = 10
+        k_val = 10
     end
     @components begin
         resistor = Resistor(; R = R_val)
         capacitor = Capacitor(; C = C_val)
         source = Voltage()
-        constant = Constant(; k = 1)
+        constant = Constant(; k = k_val)
         ground = Ground()
     end
 
@@ -141,12 +142,17 @@ end
     end
 end
 
-@named rc = RC(; R_val = 20)
-params = ModelingToolkit.get_ps(rc)
-@test isequal(getdefault(rc.resistor.R), params[1])
-@test isequal(getdefault(rc.capacitor.C), params[2])
+C_val = 20
+R_val = 20
+res__R = 100
+@named rc = RC(; C_val, R_val, resistor.R = res__R)
+# Test that `resistor.R` overrides `R_val` in the argument.
+@test getdefault(rc.resistor.R) == res__R != R_val
+# Test that `C_val` passed via argument is set as default of C.
+@test getdefault(rc.capacitor.C) == C_val
+# Test that `k`'s default value is unchanged.
+@test getdefault(rc.constant.k) == RC.structure[:kwargs][:k_val]
 @test getdefault(rc.capacitor.v) == 0.0
-@test getdefault(rc.constant.k) == 1
 
 @test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
       read(joinpath(ENV["MTK_ICONS_DIR"], "resistor.svg"), String)
@@ -177,10 +183,14 @@ params = ModelingToolkit.get_ps(rc)
         j(t) = jval, [description = "j(t)"]
         k = kval, [description = "k"]
     end
+    @structural_parameters begin
+        l = 1
+        func
+    end
 end
 
 kval = 5
-@named model = MockModel(; kval, cval = 1)
+@named model = MockModel(; kval, cval = 1, func = identity)
 
 @test hasmetadata(model.e, VariableDescription)
 @test hasmetadata(model.f, VariableDescription)

@@ -22,15 +22,13 @@ function _model_macro(mod, name, expr, isconnector)
     ext = Ref{Any}(nothing)
     eqs = Expr[]
     icon = Ref{Union{String, URI}}()
-    vs = []
-    ps = []
-    kwargs = []
+    kwargs, ps, sps, vs, = [], [], [], []
 
     for arg in expr.args
         arg isa LineNumberNode && continue
         if arg.head == :macrocall
             parse_model!(exprs.args, comps, ext, eqs, icon, vs, ps,
-                dict, mod, arg, kwargs)
+                sps, dict, mod, arg, kwargs)
         elseif arg.head == :block
             push!(exprs.args, arg)
         elseif isconnector
@@ -213,8 +211,8 @@ function get_var(mod::Module, b)
     end
 end
 
-function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, dict,
-    mod, arg, kwargs)
+function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
+    dict, mod, arg, kwargs)
     mname = arg.args[1]
     body = arg.args[end]
     if mname == Symbol("@components")
@@ -225,12 +223,32 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, dict,
         parse_variables!(exprs, vs, dict, mod, body, :variables, kwargs)
     elseif mname == Symbol("@parameters")
         parse_variables!(exprs, ps, dict, mod, body, :parameters, kwargs)
+    elseif mname == Symbol("@structural_parameters")
+        parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
     elseif mname == Symbol("@equations")
         parse_equations!(exprs, eqs, dict, body)
     elseif mname == Symbol("@icon")
         parse_icon!(icon, dict, mod, body)
     else
         error("$mname is not handled.")
+    end
+end
+
+function parse_structural_parameters!(exprs, sps, dict, mod, body, kwargs)
+    Base.remove_linenums!(body)
+    for arg in body.args
+        MLStyle.@match arg begin
+            Expr(:(=), a, b) => begin
+                push!(sps, a)
+                push!(kwargs, Expr(:kw, a, b))
+                dict[:kwargs][a] = b
+            end
+            a => begin
+                push!(sps, a)
+                push!(kwargs, a)
+                dict[:kwargs][a] = nothing
+            end
+        end
     end
 end
 
