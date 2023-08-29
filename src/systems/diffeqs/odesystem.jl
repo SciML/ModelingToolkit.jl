@@ -492,7 +492,7 @@ of
 [cumulative_var1 => x + y, cumulative_var2 => x^2]
 ```
 Then, cumulative variables `cumulative_var1` and `cumulative_var2` that computes
-the comulative `x + y` and `x^2` would be added to `sys`.
+the cumulative `x + y` and `x^2` would be added to `sys`.
 """
 function add_accumulations(sys::ODESystem, vars::Vector{<:Pair})
     eqs = get_eqs(sys)

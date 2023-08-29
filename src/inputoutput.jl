@@ -112,13 +112,13 @@ end
     same_or_inner_namespace(u, var)
 
 Determine whether `var` is in the same namespace as `u`, or a namespace internal to the namespace of `u`.
-Example: `sys.u ~ sys.inner.u` will bind `sys.inner.u`, but `sys.u` remains an unbound, external signal. The namepsaced signal `sys.inner.u` lives in a namspace internal to `sys`.
+Example: `sys.u ~ sys.inner.u` will bind `sys.inner.u`, but `sys.u` remains an unbound, external signal. The namespaced signal `sys.inner.u` lives in a namespace internal to `sys`.
 """
 function same_or_inner_namespace(u, var)
     nu = get_namespace(u)
     nv = get_namespace(var)
     nu == nv ||           # namespaces are the same
-        startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namepsace to nu
+        startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
         occursin('₊', string(getname(var))) &&
             !occursin('₊', string(getname(u))) # or u is top level but var is internal
 end
@@ -127,7 +127,7 @@ function inner_namespace(u, var)
     nu = get_namespace(u)
     nv = get_namespace(var)
     nu == nv && return false
-    startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namepsace to nu
+    startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
         occursin('₊', string(getname(var))) &&
             !occursin('₊', string(getname(u))) # or u is top level but var is internal
 end
@@ -177,7 +177,7 @@ f_ip  : (xout,x,u,p,t) -> nothing
 
 The return values also include the remaining states and parameters, in the order they appear as arguments to `f`.
 
-If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with distrubance inputs, but the distrubance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require state variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
+If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require state variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
 See [`add_input_disturbance`](@ref) for a higher-level interface to this functionality.
 
 # Example
