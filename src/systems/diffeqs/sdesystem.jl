@@ -117,12 +117,12 @@ struct SDESystem <: AbstractODESystem
     complete::Bool
 
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
-                       tgrad,
-                       jac,
-                       ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-                       cevents, devents, metadata = nothing, gui_metadata = nothing,
-                       complete = false;
-                       checks::Union{Bool, Int} = true)
+        tgrad,
+        jac,
+        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
+        cevents, devents, metadata = nothing, gui_metadata = nothing,
+        complete = false;
+        checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -140,20 +140,20 @@ struct SDESystem <: AbstractODESystem
 end
 
 function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dvs, ps;
-                   controls = Num[],
-                   observed = Num[],
-                   systems = SDESystem[],
-                   tspan = nothing,
-                   default_u0 = Dict(),
-                   default_p = Dict(),
-                   defaults = _merge(Dict(default_u0), Dict(default_p)),
-                   name = nothing,
-                   connector_type = nothing,
-                   checks = true,
-                   continuous_events = nothing,
-                   discrete_events = nothing,
-                   metadata = nothing,
-                   gui_metadata = nothing)
+    controls = Num[],
+    observed = Num[],
+    systems = SDESystem[],
+    tspan = nothing,
+    default_u0 = Dict(),
+    default_p = Dict(),
+    defaults = _merge(Dict(default_u0), Dict(default_p)),
+    name = nothing,
+    connector_type = nothing,
+    checks = true,
+    continuous_events = nothing,
+    discrete_events = nothing,
+    metadata = nothing,
+    gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = scalarize(deqs)
@@ -168,7 +168,7 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     end
     if !(isempty(default_u0) && isempty(default_p))
         Base.depwarn("`default_u0` and `default_p` are deprecated. Use `defaults` instead.",
-                     :SDESystem, force = true)
+            :SDESystem, force = true)
     end
     defaults = todict(defaults)
     defaults = Dict(value(k) => value(v) for (k, v) in pairs(defaults))
@@ -187,9 +187,9 @@ function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dv
     disc_callbacks = SymbolicDiscreteCallbacks(discrete_events)
 
     SDESystem(Threads.atomic_add!(SYSTEM_COUNT, UInt(1)),
-              deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
-              ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-              cont_callbacks, disc_callbacks, metadata, gui_metadata; checks = checks)
+        deqs, neqs, iv′, dvs′, ps′, tspan, var_to_name, ctrl′, observed, tgrad, jac,
+        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
+        cont_callbacks, disc_callbacks, metadata, gui_metadata; checks = checks)
 end
 
 function SDESystem(sys::ODESystem, neqs; kwargs...)
@@ -210,17 +210,24 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = states(sys),
-                                     ps = parameters(sys); kwargs...)
-    return build_function(get_noiseeqs(sys),
-                          map(x -> time_varying_as_func(value(x), sys), dvs),
-                          map(x -> time_varying_as_func(value(x), sys), ps),
-                          get_iv(sys); kwargs...)
+    ps = parameters(sys); isdde = false, kwargs...)
+    eqs = get_noiseeqs(sys)
+    if isdde
+        eqs = delay_to_function(sys, eqs)
+    end
+    u = map(x -> time_varying_as_func(value(x), sys), dvs)
+    p = map(x -> time_varying_as_func(value(x), sys), ps)
+    if isdde
+        return build_function(eqs, u, DDE_HISTORY_FUN, p, get_iv(sys); kwargs...)
+    else
+        return build_function(eqs, u, p, get_iv(sys); kwargs...)
+    end
 end
 
 """
 $(TYPEDSIGNATURES)
 
-Choose correction_factor=-1//2 (1//2) to converte Ito -> Stratonovich (Stratonovich->Ito).
+Choose correction_factor=-1//2 (1//2) to convert Ito -> Stratonovich (Stratonovich->Ito).
 """
 function stochastic_integral_transform(sys::SDESystem, correction_factor)
     name = nameof(sys)
@@ -229,7 +236,7 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
         eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[i]
                     for i in eachindex(states(sys))]...)
         de = ODESystem(eqs, get_iv(sys), states(sys), parameters(sys), name = name,
-                       checks = false)
+            checks = false)
 
         jac = calculate_jacobian(de, sparse = false, simplify = false)
         ∇σσ′ = simplify.(jac * get_noiseeqs(sys))
@@ -242,7 +249,7 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
         eqs = vcat([equations(sys)[i].lhs ~ get_noiseeqs(sys)[i]
                     for i in eachindex(states(sys))]...)
         de = ODESystem(eqs, get_iv(sys), states(sys), parameters(sys), name = name,
-                       checks = false)
+            checks = false)
 
         jac = calculate_jacobian(de, sparse = false, simplify = false)
         ∇σσ′ = simplify.(jac * get_noiseeqs(sys)[:, 1])
@@ -251,7 +258,7 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
                                                                       (k - 1) * dimstate)]
                         for i in eachindex(states(sys))]...)
             de = ODESystem(eqs, get_iv(sys), states(sys), parameters(sys), name = name,
-                           checks = false)
+                checks = false)
 
             jac = calculate_jacobian(de, sparse = false, simplify = false)
             ∇σσ′ = ∇σσ′ + simplify.(jac * get_noiseeqs(sys)[:, k])
@@ -263,7 +270,7 @@ function stochastic_integral_transform(sys::SDESystem, correction_factor)
     end
 
     SDESystem(deqs, get_noiseeqs(sys), get_iv(sys), states(sys), parameters(sys),
-              name = name, checks = false)
+        name = name, checks = false)
 end
 
 """
@@ -322,7 +329,7 @@ simmod = solve(ensemble_probmod,EM(),dt=dt,trajectories=numtraj)
 function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
     name = nameof(sys)
 
-    # register new varible θ corresponding to 1D correction process θ(t)
+    # register new variable θ corresponding to 1D correction process θ(t)
     t = get_iv(sys)
     D = Differential(t)
     @variables θ(t), weight(t)
@@ -370,25 +377,27 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
 
     # return modified SDE System
     SDESystem(deqs, noiseeqs, get_iv(sys), state, parameters(sys);
-              defaults = Dict(θ => θ0), observed = [weight ~ θ / θ0],
-              name = name, checks = false)
+        defaults = Dict(θ => θ0), observed = [weight ~ θ / θ0],
+        name = name, checks = false)
 end
 
 function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
-                                     ps = parameters(sys),
-                                     u0 = nothing;
-                                     version = nothing, tgrad = false, sparse = false,
-                                     jac = false, Wfact = false, eval_expression = true,
-                                     checkbounds = false,
-                                     kwargs...) where {iip}
+    ps = parameters(sys),
+    u0 = nothing;
+    version = nothing, tgrad = false, sparse = false,
+    jac = false, Wfact = false, eval_expression = true,
+    checkbounds = false,
+    kwargs...) where {iip}
     dvs = scalarize.(dvs)
     ps = scalarize.(ps)
 
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression}, kwargs...)
-    f_oop, f_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in f_gen) : f_gen
+    f_oop, f_iip = eval_expression ?
+                   (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in f_gen) : f_gen
     g_gen = generate_diffusion_function(sys, dvs, ps; expression = Val{eval_expression},
-                                        kwargs...)
-    g_oop, g_iip = eval_expression ? (@RuntimeGeneratedFunction(ex) for ex in g_gen) : g_gen
+        kwargs...)
+    g_oop, g_iip = eval_expression ?
+                   (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in g_gen) : g_gen
 
     f(u, p, t) = f_oop(u, p, t)
     f(du, u, p, t) = f_iip(du, u, p, t)
@@ -397,9 +406,9 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
 
     if tgrad
         tgrad_gen = generate_tgrad(sys, dvs, ps; expression = Val{eval_expression},
-                                   kwargs...)
+            kwargs...)
         tgrad_oop, tgrad_iip = eval_expression ?
-                               (@RuntimeGeneratedFunction(ex) for ex in tgrad_gen) :
+                               (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tgrad_gen) :
                                tgrad_gen
         _tgrad(u, p, t) = tgrad_oop(u, p, t)
         _tgrad(J, u, p, t) = tgrad_iip(J, u, p, t)
@@ -409,9 +418,10 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
 
     if jac
         jac_gen = generate_jacobian(sys, dvs, ps; expression = Val{eval_expression},
-                                    sparse = sparse, kwargs...)
+            sparse = sparse, kwargs...)
         jac_oop, jac_iip = eval_expression ?
-                           (@RuntimeGeneratedFunction(ex) for ex in jac_gen) : jac_gen
+                           (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in jac_gen) :
+                           jac_gen
         _jac(u, p, t) = jac_oop(u, p, t)
         _jac(J, u, p, t) = jac_iip(J, u, p, t)
     else
@@ -420,12 +430,12 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
 
     if Wfact
         tmp_Wfact, tmp_Wfact_t = generate_factorized_W(sys, dvs, ps, true;
-                                                       expression = Val{true}, kwargs...)
+            expression = Val{true}, kwargs...)
         Wfact_oop, Wfact_iip = eval_expression ?
-                               (@RuntimeGeneratedFunction(ex) for ex in tmp_Wfact) :
+                               (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tmp_Wfact) :
                                tmp_Wfact
         Wfact_oop_t, Wfact_iip_t = eval_expression ?
-                                   (@RuntimeGeneratedFunction(ex) for ex in tmp_Wfact_t) :
+                                   (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in tmp_Wfact_t) :
                                    tmp_Wfact_t
         _Wfact(u, p, dtgamma, t) = Wfact_oop(u, p, dtgamma, t)
         _Wfact(W, u, p, dtgamma, t) = Wfact_iip(W, u, p, dtgamma, t)
@@ -450,16 +460,16 @@ function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
 
     sts = states(sys)
     SDEFunction{iip}(f, g,
-                     sys = sys,
-                     jac = _jac === nothing ? nothing : _jac,
-                     tgrad = _tgrad === nothing ? nothing : _tgrad,
-                     Wfact = _Wfact === nothing ? nothing : _Wfact,
-                     Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
-                     mass_matrix = _M,
-                     syms = Symbol.(states(sys)),
-                     indepsym = Symbol(get_iv(sys)),
-                     paramsyms = Symbol.(ps),
-                     observed = observedfun)
+        sys = sys,
+        jac = _jac === nothing ? nothing : _jac,
+        tgrad = _tgrad === nothing ? nothing : _tgrad,
+        Wfact = _Wfact === nothing ? nothing : _Wfact,
+        Wfact_t = _Wfact_t === nothing ? nothing : _Wfact_t,
+        mass_matrix = _M,
+        syms = Symbol.(states(sys)),
+        indepsym = Symbol(get_iv(sys)),
+        paramsyms = Symbol.(ps),
+        observed = observedfun)
 end
 
 """
@@ -495,11 +505,11 @@ variable and parameter vectors, respectively.
 struct SDEFunctionExpr{iip} end
 
 function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
-                              ps = parameters(sys), u0 = nothing;
-                              version = nothing, tgrad = false,
-                              jac = false, Wfact = false,
-                              sparse = false, linenumbers = false,
-                              kwargs...) where {iip}
+    ps = parameters(sys), u0 = nothing;
+    version = nothing, tgrad = false,
+    jac = false, Wfact = false,
+    sparse = false, linenumbers = false,
+    kwargs...) where {iip}
     idx = iip ? 2 : 1
     f = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]
     g = generate_diffusion_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]
@@ -511,14 +521,14 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
 
     if jac
         _jac = generate_jacobian(sys, dvs, ps; sparse = sparse, expression = Val{true},
-                                 kwargs...)[idx]
+            kwargs...)[idx]
     else
         _jac = :nothing
     end
 
     if Wfact
         tmp_Wfact, tmp_Wfact_t = generate_factorized_W(sys, dvs, ps; expression = Val{true},
-                                                       kwargs...)
+            kwargs...)
         _Wfact = tmp_Wfact[idx]
         _Wfact_t = tmp_Wfact_t[idx]
     else
@@ -538,14 +548,14 @@ function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
         Wfact_t = $_Wfact_t
         M = $_M
         SDEFunction{$iip}(f, g,
-                          jac = jac,
-                          tgrad = tgrad,
-                          Wfact = Wfact,
-                          Wfact_t = Wfact_t,
-                          mass_matrix = M,
-                          syms = $(Symbol.(states(sys))),
-                          indepsym = $(Symbol(get_iv(sys))),
-                          paramsyms = $(Symbol.(parameters(sys))))
+            jac = jac,
+            tgrad = tgrad,
+            Wfact = Wfact,
+            Wfact_t = Wfact_t,
+            mass_matrix = M,
+            syms = $(Symbol.(states(sys))),
+            indepsym = $(Symbol(get_iv(sys))),
+            paramsyms = $(Symbol.(parameters(sys))))
     end
     !linenumbers ? striplines(ex) : ex
 end
@@ -555,11 +565,11 @@ function SDEFunctionExpr(sys::SDESystem, args...; kwargs...)
 end
 
 function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map = [], tspan = get_tspan(sys),
-                                    parammap = DiffEqBase.NullParameters();
-                                    sparsenoise = nothing, check_length = true,
-                                    callback = nothing, kwargs...) where {iip}
+    parammap = DiffEqBase.NullParameters();
+    sparsenoise = nothing, check_length = true,
+    callback = nothing, kwargs...) where {iip}
     f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; check_length,
-                                 kwargs...)
+        kwargs...)
     cbs = process_events(sys; callback)
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
@@ -574,7 +584,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map = [], tspan = get_tspa
     end
 
     SDEProblem{iip}(f, f.g, u0, tspan, p; callback = cbs,
-                    noise_rate_prototype = noise_rate_prototype, kwargs...)
+        noise_rate_prototype = noise_rate_prototype, kwargs...)
 end
 
 """
@@ -614,11 +624,11 @@ numerical enhancements.
 struct SDEProblemExpr{iip} end
 
 function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
-                             parammap = DiffEqBase.NullParameters();
-                             sparsenoise = nothing, check_length = true,
-                             kwargs...) where {iip}
+    parammap = DiffEqBase.NullParameters();
+    sparsenoise = nothing, check_length = true,
+    kwargs...) where {iip}
     f, u0, p = process_DEProblem(SDEFunctionExpr{iip}, sys, u0map, parammap; check_length,
-                                 kwargs...)
+        kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)
     sparsenoise === nothing && (sparsenoise = get(kwargs, :sparse, false))
 
@@ -639,7 +649,7 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
         p = $p
         noise_rate_prototype = $noise_rate_prototype
         SDEProblem(f, f.g, u0, tspan, p; noise_rate_prototype = noise_rate_prototype,
-                   $(kwargs...))
+            $(kwargs...))
     end
     !linenumbers ? striplines(ex) : ex
 end

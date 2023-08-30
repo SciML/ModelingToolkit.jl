@@ -29,7 +29,7 @@ using Plots
 x = -2:0.01:2
 y = -1:0.01:3
 contour(x, y, (x, y) -> (1 - x)^2 + 100 * (y - x^2)^2, fill = true, color = :viridis,
-        ratio = :equal, xlims = (-2, 2))
+    ratio = :equal, xlims = (-2, 2))
 savefig("obj_fun.png");
 nothing; # hide
 ```
@@ -46,9 +46,9 @@ Next, the actual `OptimizationProblem` can be created. At this stage, an initial
 
 ```@example rosenbrock_2d
 u0 = [x => 1.0
-      y => 2.0]
+    y => 2.0]
 p = [a => 1.0
-     b => 100.0]
+    b => 100.0]
 
 prob = OptimizationProblem(sys, u0, p, grad = true, hess = true)
 solve(prob, GradientDescent())
@@ -70,7 +70,7 @@ cons = [
 ]
 @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
 u0 = [x => 1.0
-      y => 2.0]
+    y => 2.0]
 prob = OptimizationProblem(sys, u0, grad = true, hess = true, cons_j = true, cons_h = true)
 solve(prob, IPNewton())
 ```
@@ -82,7 +82,7 @@ using Plots
 x = -2:0.01:2
 y = -1:0.01:3
 contour(x, y, (x, y) -> (1 - x)^2 + 100 * (y - x^2)^2, fill = true, color = :viridis,
-        ratio = :equal, xlims = (-2, 2))
+    ratio = :equal, xlims = (-2, 2))
 contour!(x, y, (x, y) -> x^2 + y^2, levels = [1], color = :lightblue, line = 4)
 savefig("obj_fun_c.png");
 nothing; # hide
@@ -92,7 +92,7 @@ nothing; # hide
 
 ### Explanation
 
-Equality and inequality constraints can be added to the `OptimizationSystem`. An equality constraint can be specified via and `Equation`, e.g., `x^2 + y^2 ~ 1`. While inequality constraints via an `Inequality`, e.g., `x^2 + y^2 ≲ 1`. The syntax is here `\lesssim` and `\gtrsim`.
+Equality and inequality constraints can be added to the `OptimizationSystem`. An equality constraint can be specified via an `Equation`, e.g., `x^2 + y^2 ~ 1`. While inequality constraints via an `Inequality`, e.g., `x^2 + y^2 ≲ 1`. The syntax is here `\lesssim` and `\gtrsim`.
 
 ## Nested Systems
 

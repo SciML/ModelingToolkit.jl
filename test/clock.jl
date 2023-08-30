@@ -15,13 +15,13 @@ D = Differential(t)
 # u(n + 1) := f(u(n))
 
 eqs = [yd ~ Sample(t, dt)(y)
-       ud ~ kp * (r - yd)
-       r ~ 1.0
+    ud ~ kp * (r - yd)
+    r ~ 1.0
 
-       # plant (time continuous part)
-       u ~ Hold(ud)
-       D(x) ~ -x + u
-       y ~ x]
+# plant (time continuous part)
+    u ~ Hold(ud)
+    D(x) ~ -x + u
+    y ~ x]
 @named sys = ODESystem(eqs)
 # compute equation and variables' time domains
 #TODO: test linearize
@@ -54,7 +54,7 @@ By inference:
 =#
 
 #=
-     D(x) ~ Shift(x, 0, dt) + 1 # this should never meet with continous variables
+     D(x) ~ Shift(x, 0, dt) + 1 # this should never meet with continuous variables
 =>   (Shift(x, 0, dt) - Shift(x, -1, dt))/dt ~ Shift(x, 0, dt) + 1
 =>   Shift(x, 0, dt) - Shift(x, -1, dt) ~ Shift(x, 0, dt) * dt + dt
 =>   Shift(x, 0, dt) - Shift(x, 0, dt) * dt ~ Shift(x, -1, dt) + dt
@@ -70,7 +70,7 @@ sss, = SystemStructures._structural_simplify!(deepcopy(tss[1]), (inputs[1], ()))
 @test equations(sss) == [D(x) ~ u - x]
 sss, = SystemStructures._structural_simplify!(deepcopy(tss[2]), (inputs[2], ()))
 @test isempty(equations(sss))
-@test observed(sss) == [r ~ 1.0; yd ~ Sample(t, dt)(y); ud ~ kp * (r - yd)]
+@test observed(sss) == [yd ~ Sample(t, dt)(y); r ~ 1.0; ud ~ kp * (r - yd)]
 
 d = Clock(t, dt)
 # Note that TearingState reorders the equations
@@ -97,26 +97,26 @@ d = Clock(t, dt)
 k = ShiftIndex(d)
 
 eqs = [yd ~ Sample(t, dt)(y)
-       ud ~ kp * (r - yd) + z(k)
-       r ~ 1.0
+    ud ~ kp * (r - yd) + z(k)
+    r ~ 1.0
 
-       # plant (time continuous part)
-       u ~ Hold(ud)
-       D(x) ~ -x + u
-       y ~ x
-       z(k + 2) ~ z(k) + yd
-       #=
-       z(k + 2) ~ z(k) + yd
-       =>
-       z′(k + 1) ~ z(k) + yd
-       z(k + 1)  ~ z′(k)
-       =#
-       ]
+# plant (time continuous part)
+    u ~ Hold(ud)
+    D(x) ~ -x + u
+    y ~ x
+    z(k + 2) ~ z(k) + yd
+#=
+z(k + 2) ~ z(k) + yd
+=>
+z′(k + 1) ~ z(k) + yd
+z(k + 1)  ~ z′(k)
+=#
+]
 @named sys = ODESystem(eqs)
 ss = structural_simplify(sys);
 if VERSION >= v"1.7"
     prob = ODEProblem(ss, [x => 0.0, y => 0.0], (0.0, 1.0),
-                      [kp => 1.0; z => 0.0; z(k + 1) => 0.0])
+        [kp => 1.0; z => 0.0; z(k + 1) => 0.0])
     sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
     # For all inputs in parameters, just initialize them to 0.0, and then set them
     # in the callback.
@@ -135,7 +135,7 @@ if VERSION >= v"1.7"
         r = 1.0
         ud = kp * (r - yd) + z
         push!(saved_values.t, integrator.t)
-        push!(saved_values.saveval, [integrator.p[4], integrator.p[3]])
+        push!(saved_values.saveval, [integrator.p[3], integrator.p[4]])
         integrator.p[2] = ud
         integrator.p[3] = z + yd
         integrator.p[4] = z_t
@@ -158,16 +158,16 @@ dt2 = 0.2
 D = Differential(t)
 
 eqs = [
-       # controller (time discrete part `dt=0.1`)
-       yd1 ~ Sample(t, dt)(y)
-       ud1 ~ kp * (Sample(t, dt)(r) - yd1)
-       yd2 ~ Sample(t, dt2)(y)
-       ud2 ~ kp * (Sample(t, dt2)(r) - yd2)
+# controller (time discrete part `dt=0.1`)
+    yd1 ~ Sample(t, dt)(y)
+    ud1 ~ kp * (Sample(t, dt)(r) - yd1)
+    yd2 ~ Sample(t, dt2)(y)
+    ud2 ~ kp * (Sample(t, dt2)(r) - yd2)
 
-       # plant (time continuous part)
-       u ~ Hold(ud1) + Hold(ud2)
-       D(x) ~ -x + u
-       y ~ x]
+# plant (time continuous part)
+    u ~ Hold(ud1) + Hold(ud2)
+    D(x) ~ -x + u
+    y ~ x]
 @named sys = ODESystem(eqs)
 ci, varmap = infer_clocks(sys)
 
@@ -197,7 +197,7 @@ function plant(; name)
     @variables x(t)=1 u(t)=0 y(t)=0
     D = Differential(t)
     eqs = [D(x) ~ -x + u
-           y ~ x]
+        y ~ x]
     ODESystem(eqs, t; name = name)
 end
 
@@ -205,7 +205,7 @@ function filt(; name)
     @variables x(t)=0 u(t)=0 y(t)=0
     a = 1 / exp(dt)
     eqs = [x(k + 1) ~ a * x + (1 - a) * u(k)
-           y ~ x]
+        y ~ x]
     ODESystem(eqs, t, name = name)
 end
 
@@ -213,7 +213,7 @@ function controller(kp; name)
     @variables y(t)=0 r(t)=0 ud(t)=0 yd(t)=0
     @parameters kp = kp
     eqs = [yd ~ Sample(y)
-           ud ~ kp * (r - yd)]
+        ud ~ kp * (r - yd)]
     ODESystem(eqs, t; name = name)
 end
 
@@ -222,9 +222,9 @@ end
 @named p = plant()
 
 connections = [f.u ~ -1#(t >= 1)  # step input
-               f.y ~ c.r # filtered reference to controller reference
-               Hold(c.ud) ~ p.u # controller output to plant input
-               p.y ~ c.y]
+    f.y ~ c.r # filtered reference to controller reference
+    Hold(c.ud) ~ p.u # controller output to plant input
+    p.y ~ c.y]
 
 @named cl = ODESystem(connections, t, systems = [f, c, p])
 
@@ -250,17 +250,17 @@ dt2 = 0.2
 D = Differential(t)
 
 eqs = [
-       # controller (time discrete part `dt=0.1`)
-       yd1 ~ Sample(t, dt)(y)
-       ud1 ~ kp * (r - yd1)
-       # controller (time discrete part `dt=0.2`)
-       yd2 ~ Sample(t, dt2)(y)
-       ud2 ~ kp * (r - yd2)
+# controller (time discrete part `dt=0.1`)
+    yd1 ~ Sample(t, dt)(y)
+    ud1 ~ kp * (r - yd1)
+# controller (time discrete part `dt=0.2`)
+    yd2 ~ Sample(t, dt2)(y)
+    ud2 ~ kp * (r - yd2)
 
-       # plant (time continuous part)
-       u ~ Hold(ud1) + Hold(ud2)
-       D(x) ~ -x + u
-       y ~ x]
+# plant (time continuous part)
+    u ~ Hold(ud1) + Hold(ud2)
+    D(x) ~ -x + u
+    y ~ x]
 
 @named cl = ODESystem(eqs, t)
 

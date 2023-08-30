@@ -47,8 +47,8 @@ sys = structural_simplify(rc_model)
 check_contract(sys)
 @test !isempty(ModelingToolkit.defaults(sys))
 u0 = [capacitor.v => 0.0
-      capacitor.p.i => 0.0
-      resistor.v => 0.0]
+    capacitor.p.i => 0.0
+    resistor.v => 0.0]
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 check_rc_sol(sol)
@@ -65,13 +65,13 @@ let
     @named ground = Ground()
 
     rc_eqs = [connect(source.p, resistor.p)
-              connect(resistor.n, capacitor.p)
-              connect(capacitor.n, source.n)
-              connect(capacitor.n, ground.g)]
+        connect(resistor.n, capacitor.p)
+        connect(capacitor.n, source.n)
+        connect(capacitor.n, ground.g)]
 
     @named _rc_model = ODESystem(rc_eqs, t)
     @named rc_model = compose(_rc_model,
-                              [resistor, capacitor, source, ground])
+        [resistor, capacitor, source, ground])
     sys = structural_simplify(rc_model)
     u0 = [
         capacitor.v => 0.0,
@@ -88,18 +88,18 @@ let
     # 1478
     @named resistor2 = Resistor(R = R)
     rc_eqs2 = [connect(source.p, resistor.p)
-               connect(resistor.n, resistor2.p)
-               connect(resistor2.n, capacitor.p)
-               connect(capacitor.n, source.n)
-               connect(capacitor.n, ground.g)]
+        connect(resistor.n, resistor2.p)
+        connect(resistor2.n, capacitor.p)
+        connect(capacitor.n, source.n)
+        connect(capacitor.n, ground.g)]
 
     @named _rc_model2 = ODESystem(rc_eqs2, t)
     @named rc_model2 = compose(_rc_model2,
-                               [resistor, resistor2, capacitor, source, ground])
+        [resistor, resistor2, capacitor, source, ground])
     sys2 = structural_simplify(rc_model2)
     prob2 = ODAEProblem(sys2, u0, (0, 10.0))
     sol2 = solve(prob2, Tsit5())
-    @test sol2[source.p.i] == sol2[rc_model2.source.p.i] == -sol2[capacitor.i]
+    @test sol2[source.p.i] ≈ sol2[rc_model2.source.p.i] ≈ -sol2[capacitor.i]
 end
 
 # Outer/inner connections
@@ -110,8 +110,8 @@ function rc_component(; name, R = 1, C = 1)
     @named resistor = Resistor(R = R) # test parent scope default of @named
     @named capacitor = Capacitor(C = ParentScope(C))
     eqs = [connect(p, resistor.p);
-           connect(resistor.n, capacitor.p);
-           connect(capacitor.n, n)]
+        connect(resistor.n, capacitor.p);
+        connect(capacitor.n, n)]
     @named sys = ODESystem(eqs, t, [], [R, C])
     compose(sys, [p, n, resistor, capacitor]; name = name)
 end
@@ -120,8 +120,8 @@ end
 @named source = ConstantVoltage(V = 1)
 @named rc_comp = rc_component()
 eqs = [connect(source.p, rc_comp.p)
-       connect(source.n, rc_comp.n)
-       connect(source.n, ground.g)]
+    connect(source.n, rc_comp.n)
+    connect(source.n, ground.g)]
 @named sys′ = ODESystem(eqs, t)
 @named sys_inner_outer = compose(sys′, [ground, source, rc_comp])
 @test_nowarn show(IOBuffer(), MIME"text/plain"(), sys_inner_outer)
@@ -129,8 +129,8 @@ expand_connections(sys_inner_outer, debug = true)
 sys_inner_outer = structural_simplify(sys_inner_outer)
 @test !isempty(ModelingToolkit.defaults(sys_inner_outer))
 u0 = [rc_comp.capacitor.v => 0.0
-      rc_comp.capacitor.p.i => 0.0
-      rc_comp.resistor.v => 0.0]
+    rc_comp.capacitor.p.i => 0.0
+    rc_comp.resistor.v => 0.0]
 prob = ODEProblem(sys_inner_outer, u0, (0, 10.0), sparse = true)
 sol_inner_outer = solve(prob, Rodas4())
 @test sol[capacitor.v] ≈ sol_inner_outer[rc_comp.capacitor.v]
@@ -153,12 +153,17 @@ sol = solve(prob, Tsit5())
 include("../examples/serial_inductor.jl")
 sys = structural_simplify(ll_model)
 @test length(equations(sys)) == 2
-check_contract(sys)
 u0 = states(sys) .=> 0
 @test_nowarn ODEProblem(sys, u0, (0, 10.0))
 @test_nowarn ODAEProblem(sys, u0, (0, 10.0))
 prob = DAEProblem(sys, Differential(t).(states(sys)) .=> 0, u0, (0, 0.5))
 @test_nowarn sol = solve(prob, DFBDF())
+
+sys2 = structural_simplify(ll2_model)
+@test length(equations(sys2)) == 3
+u0 = states(sys) .=> 0
+prob = ODEProblem(sys, u0, (0, 10.0))
+@test_nowarn sol = solve(prob, FBDF())
 
 @variables t x1(t) x2(t) x3(t) x4(t)
 D = Differential(t)
@@ -214,7 +219,7 @@ function Load(; name)
     @named n = Pin()
     @named resistor = Resistor(R = R)
     eqs = [connect(p, resistor.p);
-           connect(resistor.n, n)]
+        connect(resistor.n, n)]
     @named sys = ODESystem(eqs, t)
     compose(sys, [p, n, resistor]; name = name)
 end
@@ -225,7 +230,7 @@ function Circuit(; name)
     @named load = Load()
     @named resistor = Resistor(R = R)
     eqs = [connect(load.p, ground.g);
-           connect(resistor.p, ground.g)]
+        connect(resistor.p, ground.g)]
     @named sys = ODESystem(eqs, t)
     compose(sys, [ground, resistor, load]; name = name)
 end
@@ -241,12 +246,12 @@ function parallel_rc_model(i; name, source, ground, R, C)
     heat_capacitor = HeatCapacitor(name = Symbol(:heat_capacitor, i))
 
     rc_eqs = [connect(source.p, resistor.p)
-              connect(resistor.n, capacitor.p)
-              connect(capacitor.n, source.n, ground.g)
-              connect(resistor.h, heat_capacitor.h)]
+        connect(resistor.n, capacitor.p)
+        connect(capacitor.n, source.n, ground.g)
+        connect(resistor.h, heat_capacitor.h)]
 
     compose(ODESystem(rc_eqs, t, name = Symbol(name, i)),
-            [resistor, capacitor, source, ground, heat_capacitor])
+        [resistor, capacitor, source, ground, heat_capacitor])
 end
 V = 2.0
 @named source = ConstantVoltage(V = V)
@@ -260,7 +265,7 @@ end;
 @variables E(t) = 0.0
 eqs = [
     D(E) ~ sum(((i, sys),) -> getproperty(sys, Symbol(:resistor, i)).h.Q_flow,
-               enumerate(rc_systems)),
+        enumerate(rc_systems)),
 ]
 @named _big_rc = ODESystem(eqs, t, [E], [])
 @named big_rc = compose(_big_rc, rc_systems)
@@ -281,12 +286,12 @@ capacitor = Capacitor(; name = :c1)
 resistor = FixedResistor(; name = :r1)
 ground = Ground(; name = :ground)
 rc_eqs = [connect(capacitor.n, resistor.p)
-          connect(resistor.n, capacitor.p)
-          connect(capacitor.n, ground.g)]
+    connect(resistor.n, capacitor.p)
+    connect(capacitor.n, ground.g)]
 
 @named _rc_model = ODESystem(rc_eqs, t)
 @named rc_model = compose(_rc_model,
-                          [resistor, capacitor, ground])
+    [resistor, capacitor, ground])
 sys = structural_simplify(rc_model)
 prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Tsit5())

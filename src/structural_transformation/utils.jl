@@ -8,19 +8,25 @@
 Find equation-variable maximal bipartite matching. `s.graph` is a bipartite graph.
 """
 function BipartiteGraphs.maximal_matching(s::SystemStructure, eqfilter = eq -> true,
-                                          varfilter = v -> true)
+    varfilter = v -> true)
     maximal_matching(s.graph, eqfilter, varfilter)
+end
+
+n_concrete_eqs(state::TransformationState) = n_concrete_eqs(state.structure)
+n_concrete_eqs(structure::SystemStructure) = n_concrete_eqs(structure.graph)
+function n_concrete_eqs(graph::BipartiteGraph)
+    neqs = count(e -> !isempty(𝑠neighbors(graph, e)), 𝑠vertices(graph))
 end
 
 function error_reporting(state, bad_idxs, n_highest_vars, iseqs, orig_inputs)
     io = IOBuffer()
-    neqs = length(equations(state))
+    neqs = n_concrete_eqs(state)
     if iseqs
         error_title = "More equations than variables, here are the potential extra equation(s):\n"
-        out_arr = equations(state)[bad_idxs]
+        out_arr = has_equations(state) ? equations(state)[bad_idxs] : bad_idxs
     else
         error_title = "More variables than equations, here are the potential extra variable(s):\n"
-        out_arr = state.fullvars[bad_idxs]
+        out_arr = get_fullvars(state)[bad_idxs]
         unset_inputs = intersect(out_arr, orig_inputs)
         n_missing_eqs = n_highest_vars - neqs
         n_unset_inputs = length(unset_inputs)
@@ -52,14 +58,17 @@ end
 ###
 ### Structural check
 ###
-function check_consistency(state::TearingState, ag, orig_inputs)
-    fullvars = state.fullvars
+function check_consistency(state::TransformationState, orig_inputs)
+    fullvars = get_fullvars(state)
+    neqs = n_concrete_eqs(state)
     @unpack graph, var_to_diff = state.structure
-    n_highest_vars = count(v -> var_to_diff[v] === nothing &&
-                                    !isempty(𝑑neighbors(graph, v)) &&
-                                    (ag === nothing || !haskey(ag, v) || ag[v] != v),
-                           vertices(var_to_diff))
-    neqs = nsrcs(graph)
+    highest_vars = computed_highest_diff_variables(complete!(state.structure))
+    n_highest_vars = 0
+    for (v, h) in enumerate(highest_vars)
+        h || continue
+        isempty(𝑑neighbors(graph, v)) && continue
+        n_highest_vars += 1
+    end
     is_balanced = n_highest_vars == neqs
 
     if neqs > 0 && !is_balanced
@@ -79,14 +88,12 @@ function check_consistency(state::TearingState, ag, orig_inputs)
     # This is defined to check if Pantelides algorithm terminates. For more
     # details, check the equation (15) of the original paper.
     extended_graph = (@set graph.fadjlist = Vector{Int}[graph.fadjlist;
-                                                        map(collect, edges(var_to_diff))])
-    extended_var_eq_matching = maximal_matching(extended_graph, eq -> true,
-                                                v -> ag === nothing || !haskey(ag, v))
+        map(collect, edges(var_to_diff))])
+    extended_var_eq_matching = maximal_matching(extended_graph)
 
     unassigned_var = []
     for (vj, eq) in enumerate(extended_var_eq_matching)
-        if eq === unassigned && (ag === nothing || !haskey(ag, vj)) &&
-           !isempty(𝑑neighbors(graph, vj))
+        if eq === unassigned && !isempty(𝑑neighbors(graph, vj))
             push!(unassigned_var, fullvars[vj])
         end
     end
@@ -117,14 +124,14 @@ assume that the ``i``-th variable is assigned to the ``i``-th equation.
 """
 function find_var_sccs(g::BipartiteGraph, assign = nothing)
     cmog = DiCMOBiGraph{true}(g,
-                              Matching(assign === nothing ? Base.OneTo(nsrcs(g)) : assign))
+        Matching(assign === nothing ? Base.OneTo(nsrcs(g)) : assign))
     sccs = Graphs.strongly_connected_components(cmog)
     foreach(sort!, sccs)
     return sccs
 end
 
 function sorted_incidence_matrix(ts::TransformationState, val = true; only_algeqs = false,
-                                 only_algvars = false)
+    only_algvars = false)
     var_eq_matching, var_scc = algebraic_variables_scc(ts)
     s = ts.structure
     graph = ts.structure.graph
@@ -173,8 +180,8 @@ end
 ###
 
 function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = nothing;
-                            may_be_zero = false,
-                            allow_symbolic = false, allow_parameter = true, kwargs...)
+    may_be_zero = false,
+    allow_symbolic = false, allow_parameter = true, kwargs...)
     fullvars = state.fullvars
     @unpack graph, solvable_graph = state.structure
     eq = equations(state)[ieq]
@@ -270,8 +277,8 @@ function linear_subsys_adjmat!(state::TransformationState; kwargs...)
     end
 
     mm = SparseMatrixCLIL(nsrcs(graph),
-                          ndsts(graph),
-                          linear_equations, eadj, cadj)
+        ndsts(graph),
+        linear_equations, eadj, cadj)
     return mm
 end
 

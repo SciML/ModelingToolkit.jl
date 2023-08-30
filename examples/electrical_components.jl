@@ -18,8 +18,8 @@ end
     @named n = Pin()
     sts = @variables v(t)=1.0 i(t)=1.0
     eqs = [v ~ p.v - n.v
-           0 ~ p.i + n.i
-           i ~ p.i]
+        0 ~ p.i + n.i
+        i ~ p.i]
     compose(ODESystem(eqs, t, sts, []; name = name), p, n)
 end
 
@@ -77,12 +77,12 @@ end
     @variables v(t) RTherm(t)
     @parameters R=R TAmbient=TAmbient alpha=alpha
     eqs = [RTherm ~ R * (1 + alpha * (h.T - TAmbient))
-           v ~ p.i * RTherm
-           h.Q_flow ~ -v * p.i # -LossPower
-           v ~ p.v - n.v
-           0 ~ p.i + n.i]
+        v ~ p.i * RTherm
+        h.Q_flow ~ -v * p.i # -LossPower
+        v ~ p.v - n.v
+        0 ~ p.i + n.i]
     compose(ODESystem(eqs, t, [v, RTherm], [R, TAmbient, alpha],
-                      name = name), p, n, h)
+            name = name), p, n, h)
 end
 
 @component function HeatCapacitor(; name, rho = 8050, V = 1, cp = 460, TAmbient = 293.15)
@@ -94,5 +94,5 @@ end
         D(h.T) ~ h.Q_flow / C,
     ]
     compose(ODESystem(eqs, t, [], [rho, V, cp],
-                      name = name), h)
+            name = name), h)
 end

@@ -18,9 +18,9 @@ function outputs(sys)
     rhss = [eq.rhs for eq in o]
     lhss = [eq.lhs for eq in o]
     unique([filter(isoutput, states(sys))
-            filter(isoutput, parameters(sys))
-            filter(x -> istree(x) && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
-            filter(x -> istree(x) && isoutput(x), lhss)])
+        filter(isoutput, parameters(sys))
+        filter(x -> istree(x) && isoutput(x), rhss) # observed can return equations with complicated expressions, we are only looking for single Terms
+        filter(x -> istree(x) && isoutput(x), lhss)])
 end
 
 """
@@ -112,13 +112,13 @@ end
     same_or_inner_namespace(u, var)
 
 Determine whether `var` is in the same namespace as `u`, or a namespace internal to the namespace of `u`.
-Example: `sys.u ~ sys.inner.u` will bind `sys.inner.u`, but `sys.u` remains an unbound, external signal. The namepsaced signal `sys.inner.u` lives in a namspace internal to `sys`.
+Example: `sys.u ~ sys.inner.u` will bind `sys.inner.u`, but `sys.u` remains an unbound, external signal. The namespaced signal `sys.inner.u` lives in a namespace internal to `sys`.
 """
 function same_or_inner_namespace(u, var)
     nu = get_namespace(u)
     nv = get_namespace(var)
     nu == nv ||           # namespaces are the same
-        startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namepsace to nu
+        startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
         occursin('₊', string(getname(var))) &&
             !occursin('₊', string(getname(u))) # or u is top level but var is internal
 end
@@ -127,7 +127,7 @@ function inner_namespace(u, var)
     nu = get_namespace(u)
     nv = get_namespace(var)
     nu == nv && return false
-    startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namepsace to nu
+    startswith(nv, nu) || # or nv starts with nu, i.e., nv is an inner namespace to nu
         occursin('₊', string(getname(var))) &&
             !occursin('₊', string(getname(u))) # or u is top level but var is internal
 end
@@ -177,7 +177,7 @@ f_ip  : (xout,x,u,p,t) -> nothing
 
 The return values also include the remaining states and parameters, in the order they appear as arguments to `f`.
 
-If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with distrubance inputs, but the distrubance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require state variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
+If `disturbance_inputs` is an array of variables, the generated dynamics function will preserve any state and dynamics associated with disturbance inputs, but the disturbance inputs themselves will not be included as inputs to the generated function. The use case for this is to generate dynamics for state observers that estimate the influence of unmeasured disturbances, and thus require state variables for the disturbance model, but without disturbance inputs since the disturbances are not available for measurement.
 See [`add_input_disturbance`](@ref) for a higher-level interface to this functionality.
 
 # Example
@@ -192,10 +192,10 @@ f[1](x, inputs, p, t)
 ```
 """
 function generate_control_function(sys::AbstractODESystem, inputs = unbound_inputs(sys),
-                                   disturbance_inputs = disturbances(sys);
-                                   implicit_dae = false,
-                                   simplify = false,
-                                   kwargs...)
+    disturbance_inputs = disturbances(sys);
+    implicit_dae = false,
+    simplify = false,
+    kwargs...)
     isempty(inputs) && @warn("No unbound inputs were found in system.")
 
     if disturbance_inputs !== nothing
@@ -215,7 +215,7 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
     end
     inputs = map(x -> time_varying_as_func(value(x), sys), inputs)
 
-    eqs = [eq for eq in equations(sys) if !isdifferenceeq(eq)]
+    eqs = [eq for eq in full_equations(sys) if !isdifferenceeq(eq)]
     if disturbance_inputs !== nothing
         # Set all disturbance *inputs* to zero (we just want to keep the disturbance state)
         subs = Dict(disturbance_inputs .=> 0)
@@ -238,9 +238,9 @@ function generate_control_function(sys::AbstractODESystem, inputs = unbound_inpu
         ddvs = map(Differential(get_iv(sys)), dvs)
         args = (ddvs, args...)
     end
-    pre, sol_states = get_substitutions_and_solved_states(sys)
-    f = build_function(rhss, args...; postprocess_fbody = pre, states = sol_states,
-                       expression = Val{false}, kwargs...)
+    process = get_postprocess_fbody(sys)
+    f = build_function(rhss, args...; postprocess_fbody = process,
+        expression = Val{false}, kwargs...)
     (; f, dvs, ps, io_sys = sys)
 end
 
@@ -377,7 +377,7 @@ c = 10   # Damping coefficient
 @named inertia2 = Inertia(; J = m2)
 @named spring = Spring(; c = k)
 @named damper = Damper(; d = c)
-@named torque = Torque()
+@named torque = Torque(; use_support = false)
 
 eqs = [connect(torque.flange, inertia1.flange_a)
        connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
@@ -413,11 +413,11 @@ function add_input_disturbance(sys, dist::DisturbanceModel, inputs = nothing)
     end
 
     eqs = [dsys.input.u[1] ~ d
-           dist.input ~ u + dsys.output.u[1]]
+        dist.input ~ u + dsys.output.u[1]]
     augmented_sys = ODESystem(eqs, t, systems = [dsys], name = gensym(:outer))
     augmented_sys = extend(augmented_sys, sys)
 
     (f_oop, f_ip), dvs, p = generate_control_function(augmented_sys, all_inputs,
-                                                      [d])
+        [d])
     (f_oop, f_ip), augmented_sys, dvs, p
 end

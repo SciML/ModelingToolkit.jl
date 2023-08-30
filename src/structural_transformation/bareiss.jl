@@ -34,7 +34,7 @@ else
     function Base.swapcols!(A::AbstractSparseMatrixCSC, i, j)
         i == j && return
 
-        # For simplicitly, let i denote the smaller of the two columns
+        # For simplicity, let i denote the smaller of the two columns
         j < i && @swap(i, j)
 
         colptr = getcolptr(A)
@@ -72,7 +72,7 @@ else
         return nothing
     end
     function swaprows!(A::AbstractSparseMatrixCSC, i, j)
-        # For simplicitly, let i denote the smaller of the two rows
+        # For simplicity, let i denote the smaller of the two rows
         j < i && @swap(i, j)
 
         rows = rowvals(A)
@@ -115,7 +115,7 @@ else
 end
 
 function bareiss_update!(zero!, M::StridedMatrix, k, swapto, pivot,
-                         prev_pivot::Base.BitInteger)
+    prev_pivot::Base.BitInteger)
     flag = zero(prev_pivot)
     prev_pivot = Base.MultiplicativeInverses.SignedMultiplicativeInverse(prev_pivot)
     @inbounds for i in (k + 1):size(M, 2)
@@ -143,10 +143,13 @@ end
     V = M[(k + 1):end, (k + 1):end]
     V .= exactdiv.(V .* pivot .- M[(k + 1):end, k] * M[k, (k + 1):end]', prev_pivot)
     zero!(M, (k + 1):size(M, 1), k)
+    if M isa AbstractSparseMatrixCSC
+        dropzeros!(M)
+    end
 end
 
 function bareiss_update_virtual_colswap!(zero!, M::AbstractMatrix, k, swapto, pivot,
-                                         prev_pivot)
+    prev_pivot)
     if prev_pivot isa Base.BitInteger
         prev_pivot = Base.MultiplicativeInverses.SignedMultiplicativeInverse(prev_pivot)
     end
@@ -173,7 +176,7 @@ end
 
 const bareiss_colswap = (Base.swapcols!, swaprows!, bareiss_update!, bareiss_zero!)
 const bareiss_virtcolswap = ((M, i, j) -> nothing, swaprows!,
-                             bareiss_update_virtual_colswap!, bareiss_zero!)
+    bareiss_update_virtual_colswap!, bareiss_zero!)
 
 """
     bareiss!(M, [swap_strategy])
@@ -181,12 +184,12 @@ const bareiss_virtcolswap = ((M, i, j) -> nothing, swaprows!,
 Perform Bareiss's fraction-free row-reduction algorithm on the matrix `M`.
 Optionally, a specific pivoting method may be specified.
 
-swap_strategy is an optional argument that determines how the swapping of rows and coulmns is performed.
+swap_strategy is an optional argument that determines how the swapping of rows and columns is performed.
 bareiss_colswap (the default) swaps the columns and rows normally.
 bareiss_virtcolswap pretends to swap the columns which can be faster for sparse matrices.
 """
 function bareiss!(M::AbstractMatrix{T}, swap_strategy = bareiss_colswap;
-                  find_pivot = find_pivot_any, column_pivots = nothing) where {T}
+    find_pivot = find_pivot_any, column_pivots = nothing) where {T}
     swapcols!, swaprows!, update!, zero! = swap_strategy
     prev = one(eltype(M))
     n = size(M, 1)
@@ -249,7 +252,7 @@ end
 ###
 ### https://github.com/Nemocas/AbstractAlgebra.jl/blob/4803548c7a945f3f7bd8c63f8bb7c79fac92b11a/LICENSE.md
 function reduce_echelon!(A::AbstractMatrix{T}, rank, d,
-                         pivots_cache = zeros(Int, size(A, 2))) where {T}
+    pivots_cache = zeros(Int, size(A, 2))) where {T}
     m, n = size(A)
     isreduced = true
     @inbounds for i in 1:rank
@@ -315,7 +318,7 @@ function reduce_echelon!(A::AbstractMatrix{T}, rank, d,
 end
 
 function reduced_echelon_nullspace(rank, A::AbstractMatrix{T},
-                                   pivots_cache = zeros(Int, size(A, 2))) where {T}
+    pivots_cache = zeros(Int, size(A, 2))) where {T}
     n = size(A, 2)
     nullity = n - rank
     U = zeros(T, n, nullity)

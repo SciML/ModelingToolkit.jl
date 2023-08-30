@@ -84,7 +84,7 @@ intermediate variable `RHS`:
 ```@example ode2
 @variables RHS(t)
 @named fol_separate = ODESystem([RHS ~ (h - x) / τ,
-                                    D(x) ~ RHS])
+    D(x) ~ RHS])
 ```
 
 To directly solve this system, you would have to create a Differential-Algebraic

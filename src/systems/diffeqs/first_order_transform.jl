@@ -102,5 +102,5 @@ function dae_order_lowering(eqs, iv, states)
     end
 
     return ([diff_eqs; substitute.(eqs, (subs,))],
-            vcat(collect(diff_vars), setdiff(states, diff_vars)))
+        vcat(collect(diff_vars), setdiff(states, diff_vars)))
 end

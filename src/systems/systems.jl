@@ -1,5 +1,5 @@
 function System(eqs::AbstractVector{<:Equation}, iv = nothing, args...; name = nothing,
-                kw...)
+    kw...)
     ODESystem(eqs, iv, args...; name, checks = false)
 end
 
@@ -17,7 +17,7 @@ This will convert all `inputs` to parameters and allow them to be unconnected, i
 simplification will allow models where `n_states = n_equations - n_inputs`.
 """
 function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
-                             kwargs...)
+    kwargs...)
     sys = expand_connections(sys)
     sys isa DiscreteSystem && return sys
     state = TearingState(sys)
@@ -66,7 +66,8 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
         @set! sys.eqs = new_eqs
         @set! sys.states = [v
                             for (i, v) in enumerate(fullvars)
-                            if !iszero(new_idxs[i]) && invview(var_to_diff)[i] === nothing]
+                                if !iszero(new_idxs[i]) &&
+                                   invview(var_to_diff)[i] === nothing]
         # TODO: IO is not handled.
         ode_sys = structural_simplify(sys, io; simplify, kwargs...)
         eqs = equations(ode_sys)
@@ -82,7 +83,7 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
         end
 
         return SDESystem(full_equations(ode_sys), sorted_g_rows,
-                         get_iv(ode_sys), states(ode_sys), parameters(ode_sys);
-                         name = nameof(ode_sys))
+            get_iv(ode_sys), states(ode_sys), parameters(ode_sys);
+            name = nameof(ode_sys))
     end
 end

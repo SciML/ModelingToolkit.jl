@@ -26,7 +26,7 @@ end
 Base.size(S::SparseMatrixCLIL) = (length(S.nzrows), S.ncols)
 function Base.copy(S::SparseMatrixCLIL{T, Ti}) where {T, Ti}
     SparseMatrixCLIL(S.nparentrows, S.ncols, copy(S.nzrows), map(copy, S.row_cols),
-                     map(copy, S.row_vals))
+        map(copy, S.row_vals))
 end
 function swaprows!(S::SparseMatrixCLIL, i, j)
     i == j && return
@@ -37,10 +37,10 @@ end
 
 function Base.convert(::Type{SparseMatrixCLIL{T, Ti}}, S::SparseMatrixCLIL) where {T, Ti}
     return SparseMatrixCLIL(S.nparentrows,
-                            S.ncols,
-                            copy.(S.nzrows),
-                            copy.(S.row_cols),
-                            [T.(row) for row in S.row_vals])
+        S.ncols,
+        copy.(S.nzrows),
+        copy.(S.row_cols),
+        [T.(row) for row in S.row_vals])
 end
 
 function SparseMatrixCLIL(mm::AbstractMatrix)
@@ -130,7 +130,7 @@ end
 nonzerosmap(a::CLILVector) = NonZeros(a)
 
 function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swapto, pivot,
-                                             last_pivot; pivot_equal_optimization = true)
+    last_pivot; pivot_equal_optimization = true)
     # for ei in nzrows(>= k)
     eadj = M.row_cols
     old_cadj = M.row_vals
@@ -170,7 +170,7 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
     pivot_equal = pivot_equal_optimization && abs(pivot) == abs(last_pivot)
 
     for ei in (k + 1):size(M, 1)
-        # elimate `v`
+        # eliminate `v`
         coeff = 0
         ivars = eadj[ei]
         vj = findfirst(isequal(vpivot), ivars)
@@ -213,7 +213,7 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
 end
 
 function bareiss_update_virtual_colswap_mtk!(zero!, M::AbstractMatrix, k, swapto, pivot,
-                                             last_pivot; pivot_equal_optimization = true)
+    last_pivot; pivot_equal_optimization = true)
     if pivot_equal_optimization
         error("MTK pivot micro-optimization not implemented for `$(typeof(M))`.
             Turn off the optimization for debugging or use a different matrix type.")

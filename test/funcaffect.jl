@@ -10,7 +10,7 @@ eqs = [D(u) ~ -u]
 affect1!(integ, u, p, ctx) = integ.u[u.u] += 10
 
 @named sys = ODESystem(eqs, t, [u], [],
-                       discrete_events = [[4.0] => (affect1!, [u], [], nothing)])
+    discrete_events = [[4.0] => (affect1!, [u], [], nothing)])
 prob = ODEProblem(sys, [u => 10.0], (0, 10.0))
 sol = solve(prob, Tsit5())
 i4 = findfirst(==(4.0), sol[:t])
@@ -18,19 +18,19 @@ i4 = findfirst(==(4.0), sol[:t])
 
 # callback
 cb = ModelingToolkit.SymbolicDiscreteCallback(t == zr,
-                                              (f = affect1!, sts = [], pars = [],
-                                               ctx = [1]))
+    (f = affect1!, sts = [], pars = [],
+        ctx = [1]))
 cb1 = ModelingToolkit.SymbolicDiscreteCallback(t == zr, (affect1!, [], [], [1]))
 @test ModelingToolkit.affects(cb) isa ModelingToolkit.FunctionalAffect
 @test cb == cb1
 @test ModelingToolkit.SymbolicDiscreteCallback(cb) === cb # passthrough
 @test hash(cb) == hash(cb1)
 ModelingToolkit.generate_discrete_callback(cb, sys, ModelingToolkit.get_variables(sys),
-                                           ModelingToolkit.get_ps(sys));
+    ModelingToolkit.get_ps(sys));
 
 cb = ModelingToolkit.SymbolicContinuousCallback([t ~ zr],
-                                                (f = affect1!, sts = [], pars = [],
-                                                 ctx = [1]))
+    (f = affect1!, sts = [], pars = [],
+        ctx = [1]))
 cb1 = ModelingToolkit.SymbolicContinuousCallback([t ~ zr], (affect1!, [], [], [1]))
 @test cb == cb1
 @test ModelingToolkit.SymbolicContinuousCallback(cb) === cb # passthrough
@@ -38,9 +38,9 @@ cb1 = ModelingToolkit.SymbolicContinuousCallback([t ~ zr], (affect1!, [], [], [1
 
 # named tuple
 sys1 = ODESystem(eqs, t, [u], [], name = :sys,
-                 discrete_events = [
-                     [4.0] => (f = affect1!, sts = [u], pars = [], ctx = nothing),
-                 ])
+    discrete_events = [
+        [4.0] => (f = affect1!, sts = [u], pars = [], ctx = nothing),
+    ])
 @test sys == sys1
 
 # has_functional_affect
@@ -51,7 +51,7 @@ de = de[1]
 @test ModelingToolkit.has_functional_affect(de)
 
 sys2 = ODESystem(eqs, t, [u], [], name = :sys,
-                 discrete_events = [[4.0] => [u ~ -u * h]])
+    discrete_events = [[4.0] => [u ~ -u * h]])
 @test !ModelingToolkit.has_functional_affect(ModelingToolkit.get_discrete_events(sys2)[1])
 
 # context
@@ -61,7 +61,7 @@ function affect2!(integ, u, p, ctx)
 end
 ctx1 = [10.0]
 @named sys = ODESystem(eqs, t, [u], [],
-                       discrete_events = [[4.0, 8.0] => (affect2!, [u], [], ctx1)])
+    discrete_events = [[4.0, 8.0] => (affect2!, [u], [], ctx1)])
 prob = ODEProblem(sys, [u => 10.0], (0, 10.0))
 sol = solve(prob, Tsit5())
 i4 = findfirst(==(4.0), sol[:t])
@@ -78,7 +78,7 @@ end
 
 @parameters a = 10.0
 @named sys = ODESystem(eqs, t, [u], [a],
-                       discrete_events = [[4.0, 8.0] => (affect3!, [u], [a], nothing)])
+    discrete_events = [[4.0, 8.0] => (affect3!, [u], [a], nothing)])
 prob = ODEProblem(sys, [u => 10.0], (0, 10.0))
 
 sol = solve(prob, Tsit5())
@@ -94,9 +94,9 @@ function affect3!(integ, u, p, ctx)
 end
 
 @named sys = ODESystem(eqs, t, [u], [a],
-                       discrete_events = [
-                           [4.0, 8.0] => (affect3!, [u], [a => :b], nothing),
-                       ])
+    discrete_events = [
+        [4.0, 8.0] => (affect3!, [u], [a => :b], nothing),
+    ])
 prob = ODEProblem(sys, [u => 10.0], (0, 10.0))
 
 sol = solve(prob, Tsit5())
@@ -108,15 +108,15 @@ i8 = findfirst(==(8.0), sol[:t])
 # same name
 @variables v(t)
 @test_throws ErrorException ODESystem(eqs, t, [u], [a],
-                                      discrete_events = [
-                                          [4.0, 8.0] => (affect3!, [u, v => :u], [a],
-                                                         nothing),
-                                      ]; name = :sys)
+    discrete_events = [
+        [4.0, 8.0] => (affect3!, [u, v => :u], [a],
+            nothing),
+    ]; name = :sys)
 
 @test_nowarn ODESystem(eqs, t, [u], [a],
-                       discrete_events = [
-                           [4.0, 8.0] => (affect3!, [u], [a => :u], nothing),
-                       ]; name = :sys)
+    discrete_events = [
+        [4.0, 8.0] => (affect3!, [u], [a => :u], nothing),
+    ]; name = :sys)
 
 @named resistor = ODESystem(D(v) ~ v, t, [v], [])
 
@@ -127,8 +127,8 @@ function affect4!(integ, u, p, ctx)
     @test u.resistor₊v == 1
 end
 s1 = compose(ODESystem(Equation[], t, [], [], name = :s1,
-                       discrete_events = 1.0 => (affect4!, [resistor.v], [], ctx)),
-             resistor)
+        discrete_events = 1.0 => (affect4!, [resistor.v], [], ctx)),
+    resistor)
 s2 = structural_simplify(s1)
 prob = ODEProblem(s2, [resistor.v => 10.0], (0, 2.01))
 sol = solve(prob, Tsit5())
@@ -142,16 +142,16 @@ function affect5!(integ, u, p, ctx)
 end
 
 @named rc_model = ODESystem(rc_eqs, t,
-                            continuous_events = [
-                                [capacitor.v ~ 0.3] => (affect5!, [capacitor.v],
-                                                        [capacitor.C => :C], nothing),
-                            ])
+    continuous_events = [
+        [capacitor.v ~ 0.3] => (affect5!, [capacitor.v],
+            [capacitor.C => :C], nothing),
+    ])
 rc_model = compose(rc_model, [resistor, capacitor, source, ground])
 
 sys = structural_simplify(rc_model)
 u0 = [capacitor.v => 0.0
-      capacitor.p.i => 0.0
-      resistor.v => 0.0]
+    capacitor.p.i => 0.0
+    resistor.v => 0.0]
 
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
@@ -173,24 +173,24 @@ function Capacitor2(; name, C = 1.0)
         D(v) ~ i / C,
     ]
     extend(ODESystem(eqs, t, [], ps; name = name,
-                     continuous_events = [[v ~ 0.3] => (affect6!, [v], [C], nothing)]),
-           oneport)
+            continuous_events = [[v ~ 0.3] => (affect6!, [v], [C], nothing)]),
+        oneport)
 end
 
 @named capacitor2 = Capacitor2(C = C)
 
 rc_eqs2 = [connect(source.p, resistor.p)
-           connect(resistor.n, capacitor2.p)
-           connect(capacitor2.n, source.n)
-           connect(capacitor2.n, ground.g)]
+    connect(resistor.n, capacitor2.p)
+    connect(capacitor2.n, source.n)
+    connect(capacitor2.n, ground.g)]
 
 @named rc_model2 = ODESystem(rc_eqs2, t)
 rc_model2 = compose(rc_model2, [resistor, capacitor2, source, ground])
 
 sys2 = structural_simplify(rc_model2)
 u0 = [capacitor2.v => 0.0
-      capacitor2.p.i => 0.0
-      resistor.v => 0.0]
+    capacitor2.p.i => 0.0
+    resistor.v => 0.0]
 
 prob2 = ODEProblem(sys2, u0, (0, 10.0))
 sol2 = solve(prob2, Rodas4())
@@ -213,7 +213,7 @@ function Ball(; name, g = 9.8, anti_gravity_time = 1.0)
     sts = @variables x(t), v(t)
     eqs = [D(x) ~ v, D(v) ~ g]
     ODESystem(eqs, t, sts, pars; name = name,
-              discrete_events = [[anti_gravity_time] => (affect7!, [], [g], a7_ctx)])
+        discrete_events = [[anti_gravity_time] => (affect7!, [], [g], a7_ctx)])
 end
 
 @named ball1 = Ball(anti_gravity_time = 1.0)
@@ -226,7 +226,7 @@ balls = compose(balls, [ball1, ball2])
 @test length(ModelingToolkit.affects(ModelingToolkit.discrete_events(balls))) == 2
 
 prob = ODEProblem(balls, [ball1.x => 10.0, ball1.v => 0, ball2.x => 10.0, ball2.v => 0],
-                  (0, 3.0))
+    (0, 3.0))
 sol = solve(prob, Tsit5())
 
 @test a7_count == 2
@@ -264,16 +264,16 @@ sol_ = solve(prob_, Tsit5(), callback = cb_)
 sts = @variables y(t), v(t)
 par = @parameters g = 9.8
 bb_eqs = [D(y) ~ v
-          D(v) ~ -g]
+    D(v) ~ -g]
 
 function bb_affect!(integ, u, p, ctx)
     integ.u[u.v] = -integ.u[u.v]
 end
 
 @named bb_model = ODESystem(bb_eqs, t, sts, par,
-                            continuous_events = [
-                                [y ~ zr] => (bb_affect!, [v], [], nothing),
-                            ])
+    continuous_events = [
+        [y ~ zr] => (bb_affect!, [v], [], nothing),
+    ])
 
 bb_sys = structural_simplify(bb_model)
 @test ModelingToolkit.affects(ModelingToolkit.continuous_events(bb_sys)) isa

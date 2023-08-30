@@ -1,54 +1,57 @@
 using SafeTestsets, Test
 
-@safetestset "AliasGraph Test" begin include("alias.jl") end
-@safetestset "Pantelides Test" begin include("pantelides.jl") end
-@safetestset "Linear Algebra Test" begin include("linalg.jl") end
-@safetestset "AbstractSystem Test" begin include("abstractsystem.jl") end
-@safetestset "Variable Scope Tests" begin include("variable_scope.jl") end
-@safetestset "Symbolic Parameters Test" begin include("symbolic_parameters.jl") end
-@safetestset "Parsing Test" begin include("variable_parsing.jl") end
-@safetestset "Simplify Test" begin include("simplify.jl") end
-@safetestset "Direct Usage Test" begin include("direct.jl") end
-@safetestset "System Linearity Test" begin include("linearity.jl") end
-@safetestset "Linearization Tests" begin include("linearize.jl") end
-@safetestset "Input Output Test" begin include("input_output_handling.jl") end
-@safetestset "Clock Test" begin include("clock.jl") end
-@safetestset "DiscreteSystem Test" begin include("discretesystem.jl") end
-@safetestset "ODESystem Test" begin include("odesystem.jl") end
-@safetestset "Unitful Quantities Test" begin include("units.jl") end
-@safetestset "LabelledArrays Test" begin include("labelledarrays.jl") end
-@safetestset "Mass Matrix Test" begin include("mass_matrix.jl") end
-@safetestset "SteadyStateSystem Test" begin include("steadystatesystems.jl") end
-@safetestset "SDESystem Test" begin include("sdesystem.jl") end
-@safetestset "NonlinearSystem Test" begin include("nonlinearsystem.jl") end
-@safetestset "PDE Construction Test" begin include("pde.jl") end
-@safetestset "JumpSystem Test" begin include("jumpsystem.jl") end
-@safetestset "Constraints Test" begin include("constraints.jl") end
-@safetestset "Reduction Test" begin include("reduction.jl") end
-@safetestset "ODAEProblem Test" begin include("odaeproblem.jl") end
-@safetestset "Components Test" begin include("components.jl") end
-@safetestset "print_tree" begin include("print_tree.jl") end
-@safetestset "Error Handling" begin include("error_handling.jl") end
-@safetestset "StructuralTransformations" begin include("structural_transformation/runtests.jl") end
-@safetestset "State Selection Test" begin include("state_selection.jl") end
-@safetestset "Symbolic Event Test" begin include("symbolic_events.jl") end
-@safetestset "Stream Connnect Test" begin include("stream_connectors.jl") end
-@safetestset "Lowering Integration Test" begin include("lowering_solving.jl") end
-@safetestset "Test Big System Usage" begin include("bigsystem.jl") end
-@safetestset "Depdendency Graph Test" begin include("dep_graphs.jl") end
-@safetestset "Function Registration Test" begin include("function_registration.jl") end
-@safetestset "Precompiled Modules Test" begin include("precompile_test.jl") end
-@testset "Distributed Test" begin include("distributed.jl") end
-@safetestset "Variable Utils Test" begin include("variable_utils.jl") end
-@safetestset "Variable Metadata Test" begin include("test_variable_metadata.jl") end
-@safetestset "DAE Jacobians Test" begin include("dae_jacobian.jl") end
-@safetestset "Jacobian Sparsity" begin include("jacobiansparsity.jl") end
+@safetestset "Linear Algebra Test" include("linalg.jl")
+@safetestset "AbstractSystem Test" include("abstractsystem.jl")
+@safetestset "Variable Scope Tests" include("variable_scope.jl")
+@safetestset "Symbolic Parameters Test" include("symbolic_parameters.jl")
+@safetestset "Parsing Test" include("variable_parsing.jl")
+@safetestset "Simplify Test" include("simplify.jl")
+@safetestset "Direct Usage Test" include("direct.jl")
+@safetestset "System Linearity Test" include("linearity.jl")
+@safetestset "Linearization Tests" include("linearize.jl")
+@safetestset "Input Output Test" include("input_output_handling.jl")
+@safetestset "Clock Test" include("clock.jl")
+@safetestset "DiscreteSystem Test" include("discretesystem.jl")
+@safetestset "ODESystem Test" include("odesystem.jl")
+@safetestset "Unitful Quantities Test" include("units.jl")
+@safetestset "LabelledArrays Test" include("labelledarrays.jl")
+@safetestset "Mass Matrix Test" include("mass_matrix.jl")
+@safetestset "SteadyStateSystem Test" include("steadystatesystems.jl")
+@safetestset "SDESystem Test" include("sdesystem.jl")
+@safetestset "NonlinearSystem Test" include("nonlinearsystem.jl")
+@safetestset "PDE Construction Test" include("pde.jl")
+@safetestset "JumpSystem Test" include("jumpsystem.jl")
+@safetestset "Constraints Test" include("constraints.jl")
+@safetestset "Reduction Test" include("reduction.jl")
+@safetestset "ODAEProblem Test" include("odaeproblem.jl")
+@safetestset "Components Test" include("components.jl")
+@safetestset "Model Parsing Test" include("model_parsing.jl")
+@safetestset "print_tree" include("print_tree.jl")
+@safetestset "Error Handling" include("error_handling.jl")
+@safetestset "StructuralTransformations" include("structural_transformation/runtests.jl")
+@safetestset "State Selection Test" include("state_selection.jl")
+@safetestset "Symbolic Event Test" include("symbolic_events.jl")
+@safetestset "Stream Connect Test" include("stream_connectors.jl")
+@safetestset "Lowering Integration Test" include("lowering_solving.jl")
+@safetestset "Test Big System Usage" include("bigsystem.jl")
+@safetestset "Dependency Graph Test" include("dep_graphs.jl")
+@safetestset "Function Registration Test" include("function_registration.jl")
+@safetestset "Precompiled Modules Test" include("precompile_test.jl")
+@testset "Distributed Test" begin
+    include("distributed.jl")
+end
+@safetestset "Variable Utils Test" include("variable_utils.jl")
+@safetestset "Variable Metadata Test" include("test_variable_metadata.jl")
+@safetestset "DAE Jacobians Test" include("dae_jacobian.jl")
+@safetestset "Jacobian Sparsity" include("jacobiansparsity.jl")
 println("Last test requires gcc available in the path!")
-@safetestset "C Compilation Test" begin include("ccompile.jl") end
-@testset "Serialization" begin include("serialization.jl") end
-@safetestset "Modelingtoolkitize Test" begin include("modelingtoolkitize.jl") end
-@safetestset "OptimizationSystem Test" begin include("optimizationsystem.jl") end
-@safetestset "FuncAffect Test" begin include("funcaffect.jl") end
-@safetestset "Constants Test" begin include("constants.jl") end
+@safetestset "C Compilation Test" include("ccompile.jl")
+@testset "Serialization" begin
+    include("serialization.jl")
+end
+@safetestset "Modelingtoolkitize Test" include("modelingtoolkitize.jl")
+@safetestset "OptimizationSystem Test" include("optimizationsystem.jl")
+@safetestset "FuncAffect Test" include("funcaffect.jl")
+@safetestset "Constants Test" include("constants.jl")
 # Reference tests go Last
-@safetestset "Latexify recipes Test" begin include("latexify.jl") end
+@safetestset "Latexify recipes Test" include("latexify.jl")
