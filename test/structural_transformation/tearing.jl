@@ -256,7 +256,10 @@ end
 cart = Cart(init_pos = 0.0, init_vel = 1.0, mass = 0.5)
 cont = PDController(kp = 1.0, kd = 0.5)
 controlled_cart = ControlledCart(; cart, cont)
-s1 = states(structural_simplify(controlled_cart))
+# Test that our state priorities are respected
+s1 = states(structural_simplify(controlled_cart,
+    priorities = [cont.x => 2, cart.vel => 2]))
 s2 = states(structural_simplify(controlled_cart,
     priorities = [cart.pos => 2, cart.vel => 2]))
-@test_broken Set(s1) != Set(s2)
+@test Set(s1) == Set([cont.x, cart.vel])
+@test Set(s2) == Set([cart.pos, cart.vel])
