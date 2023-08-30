@@ -230,7 +230,7 @@ function Cart(; init_pos, init_vel, mass, name = :cart)
     @parameters mass = mass
 
     eqs = [D(pos) ~ vel
-           D(vel) ~ f / mass]
+        D(vel) ~ f / mass]
 
     return ODESystem(eqs; name)
 end
@@ -248,8 +248,8 @@ end
 
 function ControlledCart(; cart, cont, name = :sys)
     eqs = [cart.pos ~ cont.x
-           cart.vel ~ cont.v
-           cart.f ~ cont.f]
+        cart.vel ~ cont.v
+        cart.f ~ cont.f]
     return ODESystem(eqs; name, systems = [cart, cont])
 end
 
@@ -258,5 +258,5 @@ cont = PDController(kp = 1.0, kd = 0.5)
 controlled_cart = ControlledCart(; cart, cont)
 s1 = states(structural_simplify(controlled_cart))
 s2 = states(structural_simplify(controlled_cart,
-                                priorities = [cart.pos => 2, cart.vel => 2]))
+    priorities = [cart.pos => 2, cart.vel => 2]))
 @test_broken Set(s1) != Set(s2)
