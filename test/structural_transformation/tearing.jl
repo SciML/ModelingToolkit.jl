@@ -256,10 +256,15 @@ end
 cart = Cart(init_pos = 0.0, init_vel = 1.0, mass = 0.5)
 cont = PDController(kp = 1.0, kd = 0.5)
 controlled_cart = ControlledCart(; cart, cont)
+@variables z(t) k(t)
+eqs = [z ~ k;
+    sqrt(z) ~ abs(cont.x)]
+@named alge = ODESystem(eqs, t);
+controlled_cart = extend(controlled_cart, alge)
 # Test that our state priorities are respected
 s1 = states(structural_simplify(controlled_cart,
-    priorities = [cont.x => 2, cart.vel => 2]))
+    priorities = [k => 2]))
 s2 = states(structural_simplify(controlled_cart,
-    priorities = [cart.pos => 2, cart.vel => 2]))
-@test Set(s1) == Set([cont.x, cart.vel])
-@test Set(s2) == Set([cart.pos, cart.vel])
+    priorities = [z => 2]))
+@test Set(s1) == Set([cart.pos, cart.vel, k])
+@test Set(s2) == Set([cart.pos, cart.vel, z])

@@ -1,6 +1,31 @@
 # This code is derived from the Modia project and is licensed as follows:
 # https://github.com/ModiaSim/Modia.jl/blob/b61daad643ef7edd0c1ccce6bf462c6acfb4ad1a/LICENSE
 
+struct OrderedBitSet <: AbstractSet{Int}
+    bitset::BitSet
+    order::Vector{Int}
+end
+OrderedBitSet() = OrderedBitSet(BitSet(), Int[])
+Base.iterate(o::OrderedBitSet) = Base.iterate(o.order)
+Base.iterate(o::OrderedBitSet, state) = Base.iterate(o.order, state)
+Base.in(a::Int, o::OrderedBitSet) = a in o.bitset
+function Base.push!(o::OrderedBitSet, a::Int)
+    if !(a in o.bitset)
+        push!(o.bitset, a)
+        push!(o.order, a)
+    end
+    o
+end
+function Base.empty!(o::OrderedBitSet)
+    empty!(o.bitset)
+    empty!(o.order)
+    o
+end
+function Base.sort!(o::OrderedBitSet; kw...)
+    sort!(o.order; kw...)
+    o
+end
+
 function try_assign_eq!(ict::IncrementalCycleTracker, vj::Integer, eq::Integer)
     G = ict.graph
     add_edge_checked!(ict, Iterators.filter(!=(vj), 𝑠neighbors(G.graph, eq)), vj) do G
@@ -20,7 +45,7 @@ function try_assign_eq!(ict::IncrementalCycleTracker, vars, v_active, eq::Intege
 end
 
 function tearEquations!(ict::IncrementalCycleTracker, Gsolvable, es::Vector{Int},
-    v_active::BitSet, isder′::F) where {F}
+    v_active::OrderedBitSet, isder′::F) where {F}
     check_der = isder′ !== nothing
     if check_der
         has_der = Ref(false)
@@ -54,10 +79,13 @@ function tearEquations!(ict::IncrementalCycleTracker, Gsolvable, es::Vector{Int}
 end
 
 function tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, eqs, vars,
-    isder::F) where {F}
+    isder::F, solved_eq) where {F}
     tearEquations!(ict, solvable_graph.fadjlist, eqs, vars, isder)
     for var in vars
-        var_eq_matching[var] = ict.graph.matching[var]
+        eq = var_eq_matching[var] = ict.graph.matching[var]
+        if eq isa Int
+            push!(solved_eq, eq)
+        end
     end
     return nothing
 end
@@ -65,7 +93,8 @@ end
 function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
     ::Type{U} = Unassigned;
     varfilter::F2 = v -> true,
-    eqfilter::F3 = eq -> true) where {F, U, F2, F3}
+    eqfilter::F3 = eq -> true,
+    state_priority::F4 = nothing) where {F, U, F2, F3, F4}
     # It would be possible here to simply iterate over all variables and attempt to
     # use tearEquations! to produce a matching that greedily selects the minimal
     # number of torn variables. However, we can do this process faster if we first
@@ -88,20 +117,29 @@ function tear_graph_modia(structure::SystemStructure, isder::F = nothing,
     ict = IncrementalCycleTracker(vargraph; dir = :in)
 
     ieqs = Int[]
-    filtered_vars = BitSet()
+    filtered_vars = OrderedBitSet()
+    solved_eq = BitSet()
+    if state_priority !== nothing
+        sort!(var_sccs, by = Base.Fix1(sum, state_priority))
+    end
     for vars in var_sccs
         for var in vars
             if varfilter(var)
                 push!(filtered_vars, var)
-                if var_eq_matching[var] !== unassigned
-                    push!(ieqs, var_eq_matching[var])
+                for eq in 𝑑neighbors(graph, var)
+                    if !(eq in solved_eq)
+                        push!(ieqs, eq)
+                    end
                 end
             end
             var_eq_matching[var] = unassigned
         end
+        if state_priority !== nothing
+            sort!(filtered_vars, by = state_priority)
+        end
         tear_graph_block_modia!(var_eq_matching, ict, solvable_graph, ieqs,
             filtered_vars,
-            isder)
+            isder, solved_eq)
 
         # clear cache
         vargraph.ne = 0
