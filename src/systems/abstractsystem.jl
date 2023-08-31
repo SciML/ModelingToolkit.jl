@@ -501,9 +501,10 @@ function namespace_expr(O, sys, n = nameof(sys))
             map(a -> namespace_expr(a, sys, n)::Any, arguments(O))
         end
         if isvariable(O)
-            similarterm(O, renamespace(n, operation(O)), renamed)::T
+            similarterm(O, renamespace(n, operation(O)), renamed,
+                        metadata = metadata(O))::T
         else
-            similarterm(O, operation(O), renamed)::T
+            similarterm(O, operation(O), renamed, metadata = metadata(O))::T
         end
     elseif isvariable(O)
         renamespace(n, O)
