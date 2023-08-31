@@ -425,7 +425,7 @@ function GlobalScope(sym::Union{Num, Symbolic})
     end
 end
 
-renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
+renamespace(sys, eq::Equation) = @show namespace_equation(eq, sys)
 
 renamespace(names::AbstractVector, x) = foldr(renamespace, names, init = x)
 function renamespace(sys, x)
@@ -434,7 +434,7 @@ function renamespace(sys, x)
     if x isa Symbolic
         T = typeof(x)
         if istree(x) && operation(x) isa Operator
-            return similarterm(x, operation(x),
+            return similarterm(x, renamespace.(sys,operation(x)),
                 Any[renamespace(sys, only(arguments(x)))])::T
         end
         let scope = getmetadata(x, SymScope, LocalScope())
@@ -495,18 +495,18 @@ function namespace_expr(O, sys, n = nameof(sys))
     O = unwrap(O)
     if any(isequal(O), ivs)
         return O
-    elseif isvariable(O)
-        renamespace(n, O)
     elseif istree(O)
         T = typeof(O)
-        if symtype(operation(O)) <: FnType
-            renamespace(n, O)::T
+        renamed = let sys = sys, n = n, T = T
+            map(a -> namespace_expr(a, sys, n)::Any, arguments(O))
+        end
+        if isvariable(O)
+            similarterm(O, renamespace(n, operation(O)), renamed)::T
         else
-            renamed = let sys = sys, n = n, T = T
-                map(a -> namespace_expr(a, sys, n)::Any, arguments(O))
-            end
             similarterm(O, operation(O), renamed)::T
         end
+    elseif isvariable(O)
+        renamespace(n, O)
     elseif O isa Array
         let sys = sys, n = n
             map(o -> namespace_expr(o, sys, n), O)
