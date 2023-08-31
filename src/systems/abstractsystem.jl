@@ -425,7 +425,7 @@ function GlobalScope(sym::Union{Num, Symbolic})
     end
 end
 
-renamespace(sys, eq::Equation) = @show namespace_equation(eq, sys)
+renamespace(sys, eq::Equation) = namespace_equation(eq, sys)
 
 renamespace(names::AbstractVector, x) = foldr(renamespace, names, init = x)
 function renamespace(sys, x)
@@ -434,7 +434,7 @@ function renamespace(sys, x)
     if x isa Symbolic
         T = typeof(x)
         if istree(x) && operation(x) isa Operator
-            return similarterm(x, renamespace.(sys,operation(x)),
+            return similarterm(x, operation(x),
                 Any[renamespace(sys, only(arguments(x)))])::T
         end
         let scope = getmetadata(x, SymScope, LocalScope())
