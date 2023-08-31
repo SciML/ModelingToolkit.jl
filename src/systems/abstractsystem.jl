@@ -196,6 +196,7 @@ function complete(sys::AbstractSystem)
 end
 
 for prop in [:eqs
+    :energies
     :tag
     :noiseeqs
     :iv

@@ -37,6 +37,8 @@ domains = [t ∈ (0.0,1.0),
 struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     "The equations which define the PDE"
     eqs::Any
+    "The energy functions"
+    energies::Any
     "The boundary conditions"
     bcs::Any
     "The domain for the independent variables."
@@ -85,7 +87,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     gui_metadata: metadata for MTK GUI.
     """
     gui_metadata::Union{Nothing, GUIMetadata}
-    @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
+    @add_kwonly function PDESystem(eqs, energies, bcs, domain, ivs, dvs,
         ps = SciMLBase.NullParameters();
         defaults = Dict(),
         systems = [],
@@ -101,6 +103,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         end
 
         eqs = eqs isa Vector ? eqs : [eqs]
+        energies = energies isa Vector ? energies : [energies]
 
         if !isnothing(analytic)
             analytic = analytic isa Vector ? analytic : [analytic]
@@ -123,7 +126,8 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
             analytic_func = analytic_func isa Dict ? analytic_func : analytic_func |> Dict
         end
 
-        new(eqs, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems, analytic,
+        new(eqs, energies, bcs, domain, ivs, dvs, ps, defaults, connector_type, systems,
+            analytic,
             analytic_func, name, metadata, gui_metadata)
     end
 end
@@ -149,6 +153,7 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PDESystem)
     println(io, summary(sys))
     println(io, "Equations: ", get_eqs(sys))
     println(io, "Boundary Conditions: ", get_bcs(sys))
+    println(io, "Energies: ", get_energies(sys))
     println(io, "Domain: ", get_domain(sys))
     println(io, "Dependent Variables: ", get_dvs(sys))
     println(io, "Independent Variables: ", get_ivs(sys))
