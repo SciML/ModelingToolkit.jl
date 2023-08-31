@@ -1,5 +1,5 @@
 using ModelingToolkit, Test
-using ModelingToolkit: get_gui_metadata, VariableDescription, getdefault
+using ModelingToolkit: get_gui_metadata, VariableDescription, getdefault, RegularConnector
 using URIs: URI
 using Distributions
 using Unitful
@@ -232,4 +232,42 @@ end
 
 for (k, v) in metadata
     @test MockMeta.structure[:variables][:m][k] == v
+end
+
+@testset "Connector with parameters, equations..." begin
+    @connector A begin
+        @extend (e,) = extended_e = E()
+        @icon "pin.png"
+        @parameters begin
+            p
+        end
+        @variables begin
+            v(t)
+        end
+        @components begin
+            cc = C()
+        end
+        @equations begin
+            e ~ 0
+        end
+    end
+
+    @connector C begin
+        c(t)
+    end
+
+    @connector E begin
+        e(t)
+    end
+
+    @named aa = A()
+    @test aa.connector_type == RegularConnector()
+
+    @test A.isconnector == true
+
+    @test A.structure[:parameters] == Dict(:p => Dict())
+    @test A.structure[:extend] == [[:e], :extended_e, :E]
+    @test A.structure[:equations] == ["e ~ 0"]
+    @test A.structure[:kwargs] == Dict(:p => nothing, :v => nothing)
+    @test A.structure[:components] == [[:cc, :C]]
 end

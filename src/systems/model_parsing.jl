@@ -6,58 +6,64 @@ end
 (m::Model)(args...; kw...) = m.f(args...; kw...)
 
 for f in (:connector, :mtkmodel)
+    isconnector = f == :connector ? true : false
     @eval begin
         macro $f(name::Symbol, body)
-            esc($(Symbol(f, :_macro))(__module__, name, body))
+            esc($(:_model_macro)(__module__, name, body, $isconnector))
         end
     end
 end
 
-@inline is_kwarg(::Symbol) = false
-@inline is_kwarg(e::Expr) = (e.head == :parameters)
-
-function connector_macro(mod, name, body)
-    if !Meta.isexpr(body, :block)
-        err = """
-        connector body must be a block! It should be in the form of
-        ```
-        @connector Pin begin
-            v(t) = 1
-            (i(t) = 1), [connect = Flow]
-        end
-        ```
-        """
-        error(err)
-    end
-    vs = []
-    kwargs = []
-    icon = Ref{Union{String, URI}}()
+function _model_macro(mod, name, expr, isconnector)
+    exprs = Expr(:block)
     dict = Dict{Symbol, Any}()
     dict[:kwargs] = Dict{Symbol, Any}()
-    expr = Expr(:block)
-    for arg in body.args
+    comps = Symbol[]
+    ext = Ref{Any}(nothing)
+    eqs = Expr[]
+    icon = Ref{Union{String, URI}}()
+    vs = []
+    ps = []
+    kwargs = []
+
+    for arg in expr.args
         arg isa LineNumberNode && continue
-        if arg.head == :macrocall && arg.args[1] == Symbol("@icon")
-            parse_icon!(icon, dict, dict, arg.args[end])
-            continue
+        if arg.head == :macrocall
+            parse_model!(exprs.args, comps, ext, eqs, icon, vs, ps,
+                dict, mod, arg, kwargs)
+        elseif arg.head == :block
+            push!(exprs.args, arg)
+        elseif isconnector
+            # Connectors can have variables listed without `@variables` prefix or
+            # begin block.
+            parse_variable_arg!(exprs, vs, dict, mod, arg, :variables, kwargs)
+        else
+            error("$arg is not valid syntax. Expected a macro call.")
         end
-        parse_variable_arg!(expr, vs, dict, mod, arg, :variables, kwargs)
     end
+
     iv = get(dict, :independent_variable, nothing)
     if iv === nothing
-        error("$name doesn't have a independent variable")
+        iv = dict[:independent_variable] = variable(:t)
     end
-    gui_metadata = isassigned(icon) ? GUIMetadata(GlobalRef(mod, name), icon[]) :
+
+    gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
                    GUIMetadata(GlobalRef(mod, name))
 
-    quote
-        $name = $Model((; name, $(kwargs...)) -> begin
-                $expr
-                var"#___sys___" = $ODESystem($(Equation[]), $iv, [$(vs...)], $([]);
-                    name, gui_metadata = $gui_metadata)
-                $Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))
-            end, $dict, true)
+    sys = :($ODESystem($Equation[$(eqs...)], $iv, [$(vs...)], [$(ps...)];
+        name, systems = [$(comps...)], gui_metadata = $gui_metadata))
+
+    if ext[] === nothing
+        push!(exprs.args, :(var"#___sys___" = $sys))
+    else
+        push!(exprs.args, :(var"#___sys___" = $extend($sys, $(ext[]))))
     end
+
+    isconnector && push!(exprs.args,
+        :($Setfield.@set!(var"#___sys___".connector_type=$connector_type(var"#___sys___"))))
+
+    f = :($(Symbol(:__, name, :__))(; name, $(kwargs...)) = $exprs)
+    :($name = $Model($f, $dict, $isconnector))
 end
 
 function parse_variable_def!(dict, mod, arg, varclass, kwargs, def = nothing)
@@ -205,48 +211,6 @@ function get_var(mod::Module, b)
     else
         b
     end
-end
-
-function mtkmodel_macro(mod, name, expr)
-    exprs = Expr(:block)
-    dict = Dict{Symbol, Any}()
-    dict[:kwargs] = Dict{Symbol, Any}()
-    comps = Symbol[]
-    ext = Ref{Any}(nothing)
-    eqs = Expr[]
-    icon = Ref{Union{String, URI}}()
-    vs = []
-    ps = []
-    kwargs = []
-
-    for arg in expr.args
-        arg isa LineNumberNode && continue
-        if arg.head == :macrocall
-            parse_model!(exprs.args, comps, ext, eqs, icon, vs, ps,
-                dict, mod, arg, kwargs)
-        elseif arg.head == :block
-            push!(exprs.args, arg)
-        else
-            error("$arg is not valid syntax. Expected a macro call.")
-        end
-    end
-    iv = get(dict, :independent_variable, nothing)
-    if iv === nothing
-        iv = dict[:independent_variable] = variable(:t)
-    end
-
-    gui_metadata = isassigned(icon) > 0 ? GUIMetadata(GlobalRef(mod, name), icon[]) :
-                   GUIMetadata(GlobalRef(mod, name))
-
-    sys = :($ODESystem($Equation[$(eqs...)], $iv, [$(vs...)], [$(ps...)];
-        systems = [$(comps...)], name, gui_metadata = $gui_metadata)) #, defaults = $defaults))
-    if ext[] === nothing
-        push!(exprs.args, sys)
-    else
-        push!(exprs.args, :($extend($sys, $(ext[]))))
-    end
-
-    :($name = $Model((; name, $(kwargs...)) -> $exprs, $dict, false))
 end
 
 function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, dict,
