@@ -663,20 +663,6 @@ function SymbolicIndexingInterface.is_param_sym(sys::AbstractSystem, sym)
     !isnothing(SymbolicIndexingInterface.param_sym_to_index(sys, sym))
 end
 
-struct AbstractSysToExpr
-    sys::AbstractSystem
-    states::Vector
-end
-AbstractSysToExpr(sys) = AbstractSysToExpr(sys, states(sys))
-function (f::AbstractSysToExpr)(O)
-    !istree(O) && return toexpr(O)
-    any(isequal(O), f.states) && return nameof(operation(O))  # variables
-    if issym(operation(O))
-        return build_expr(:call, Any[nameof(operation(O)); f.(arguments(O))])
-    end
-    return build_expr(:call, Any[operation(O); f.(arguments(O))])
-end
-
 ###
 ### System utils
 ###
