@@ -472,15 +472,18 @@ function namespace_defaults(sys)
          for (k, v) in pairs(defs))
 end
 
-function namespace_equations(sys::AbstractSystem)
+function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sys))
     eqs = equations(sys)
     isempty(eqs) && return Equation[]
-    map(eq -> namespace_equation(eq, sys), eqs)
+    map(eq -> namespace_equation(eq, sys; ivs), eqs)
 end
 
-function namespace_equation(eq::Equation, sys, n = nameof(sys))
-    _lhs = namespace_expr(eq.lhs, sys, n)
-    _rhs = namespace_expr(eq.rhs, sys, n)
+function namespace_equation(eq::Equation,
+    sys,
+    n = nameof(sys);
+    ivs = independent_variables(sys))
+    _lhs = namespace_expr(eq.lhs, sys, n; ivs)
+    _rhs = namespace_expr(eq.rhs, sys, n; ivs)
     _lhs ~ _rhs
 end
 
@@ -490,22 +493,21 @@ function namespace_assignment(eq::Assignment, sys)
     Assignment(_lhs, _rhs)
 end
 
-function namespace_expr(O, sys, n = nameof(sys))
-    ivs = independent_variables(sys)
+function namespace_expr(O, sys, n = nameof(sys); ivs = independent_variables(sys))
     O = unwrap(O)
     if any(isequal(O), ivs)
         return O
     elseif istree(O)
         T = typeof(O)
         renamed = let sys = sys, n = n, T = T
-            map(a -> namespace_expr(a, sys, n)::Any, arguments(O))
+            map(a -> namespace_expr(a, sys, n; ivs)::Any, arguments(O))
         end
         if isvariable(O)
             # Use renamespace so the scope is correct, and make sure to use the
             # metadata from the rescoped variable
             rescoped = renamespace(n, O)
             similarterm(O, operation(rescoped), renamed,
-                        metadata = metadata(rescoped))::T
+                metadata = metadata(rescoped))::T
         else
             similarterm(O, operation(O), renamed, metadata = metadata(O))::T
         end
@@ -513,7 +515,7 @@ function namespace_expr(O, sys, n = nameof(sys))
         renamespace(n, O)
     elseif O isa Array
         let sys = sys, n = n
-            map(o -> namespace_expr(o, sys, n), O)
+            map(o -> namespace_expr(o, sys, n; ivs), O)
         end
     else
         O
@@ -659,20 +661,6 @@ function SymbolicIndexingInterface.param_sym_to_index(sys::AbstractSystem, sym)
 end
 function SymbolicIndexingInterface.is_param_sym(sys::AbstractSystem, sym)
     !isnothing(SymbolicIndexingInterface.param_sym_to_index(sys, sym))
-end
-
-struct AbstractSysToExpr
-    sys::AbstractSystem
-    states::Vector
-end
-AbstractSysToExpr(sys) = AbstractSysToExpr(sys, states(sys))
-function (f::AbstractSysToExpr)(O)
-    !istree(O) && return toexpr(O)
-    any(isequal(O), f.states) && return nameof(operation(O))  # variables
-    if issym(operation(O))
-        return build_expr(:call, Any[nameof(operation(O)); f.(arguments(O))])
-    end
-    return build_expr(:call, Any[operation(O); f.(arguments(O))])
 end
 
 ###

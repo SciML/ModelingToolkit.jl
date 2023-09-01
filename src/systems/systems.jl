@@ -1,6 +1,6 @@
 function System(eqs::AbstractVector{<:Equation}, iv = nothing, args...; name = nothing,
     kw...)
-    ODESystem(eqs, iv, args...; name, checks = false)
+    ODESystem(eqs, iv, args...; name, kw..., checks = false)
 end
 
 """

@@ -181,7 +181,6 @@ function generate_rate_function(js::JumpSystem, rate)
     end
     rf = build_function(rate, states(js), parameters(js),
         get_iv(js),
-        conv = states_to_sym(states(js)),
         expression = Val{true})
 end
 
