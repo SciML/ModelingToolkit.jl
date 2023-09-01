@@ -472,7 +472,7 @@ function namespace_defaults(sys)
          for (k, v) in pairs(defs))
 end
 
-function namespace_equations(sys::AbstractSystem, ivs = nothing)
+function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sys))
     eqs = equations(sys)
     isempty(eqs) && return Equation[]
     map(eq -> namespace_equation(eq, sys; ivs), eqs)
