@@ -505,7 +505,7 @@ function namespace_expr(O, sys, n = nameof(sys))
             # metadata from the rescoped variable
             rescoped = renamespace(n, O)
             similarterm(O, operation(rescoped), renamed,
-                        metadata = metadata(rescoped))::T
+                metadata = metadata(rescoped))::T
         else
             similarterm(O, operation(O), renamed, metadata = metadata(O))::T
         end
