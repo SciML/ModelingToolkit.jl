@@ -495,18 +495,22 @@ function namespace_expr(O, sys, n = nameof(sys))
     O = unwrap(O)
     if any(isequal(O), ivs)
         return O
-    elseif isvariable(O)
-        renamespace(n, O)
     elseif istree(O)
         T = typeof(O)
-        if symtype(operation(O)) <: FnType
-            renamespace(n, O)::T
-        else
-            renamed = let sys = sys, n = n, T = T
-                map(a -> namespace_expr(a, sys, n)::Any, arguments(O))
-            end
-            similarterm(O, operation(O), renamed)::T
+        renamed = let sys = sys, n = n, T = T
+            map(a -> namespace_expr(a, sys, n)::Any, arguments(O))
         end
+        if isvariable(O)
+            # Use renamespace so the scope is correct, and make sure to use the
+            # metadata from the rescoped variable
+            rescoped = renamespace(n, O)
+            similarterm(O, operation(rescoped), renamed,
+                        metadata = metadata(rescoped))::T
+        else
+            similarterm(O, operation(O), renamed, metadata = metadata(O))::T
+        end
+    elseif isvariable(O)
+        renamespace(n, O)
     elseif O isa Array
         let sys = sys, n = n
             map(o -> namespace_expr(o, sys, n), O)
