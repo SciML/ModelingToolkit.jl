@@ -1416,7 +1416,12 @@ function markio!(state, orig_inputs, inputs, outputs; check = true)
     outputset = Dict{Any, Bool}(o => false for o in outputs)
     for (i, v) in enumerate(fullvars)
         if v in keys(inputset)
-            v = setio(v, true, false)
+            if v in keys(outputset)
+                v = setio(v, true, true)
+                outputset[v] = true
+            else
+                v = setio(v, true, false)
+            end
             inputset[v] = true
             fullvars[i] = v
         elseif v in keys(outputset)
