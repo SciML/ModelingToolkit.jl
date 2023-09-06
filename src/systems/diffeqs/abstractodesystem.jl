@@ -829,13 +829,14 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     parammap = DiffEqBase.NullParameters();
     callback = nothing,
     check_length = true,
+    check_ic = true,
     kwargs...) where {iip, specialize}
     has_difference = any(isdifferenceeq, equations(sys))
     f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         has_difference = has_difference,
         check_length, kwargs...)
-    if !isempty(u0map) # Check that user-provided initial conditions are repsected, otherwise error
+    if check_ic && !isempty(u0map) # Check that user-provided initial conditions are repsected, otherwise error
         # y = f.observed.obs.contents(u0, p, tspan[1])
         obsvars = [eq.lhs for eq in getfield(sys, :observed)]
         y = [f.observed(var, u0, p, tspan[1]) for var in obsvars]

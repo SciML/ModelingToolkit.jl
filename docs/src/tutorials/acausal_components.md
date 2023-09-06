@@ -323,7 +323,7 @@ This is done as follows:
 u0 = [capacitor.v => 0.0]
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
-plot(sol, idxs=[capacitor.v, capacitor.p.i])
+plot(sol, idxs = [capacitor.v, capacitor.p.i])
 ```
 
 Since we have run `structural_simplify`, MTK can numerically solve all the
@@ -336,7 +336,7 @@ u0 = [
 ]
 prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
-plot(sol, idxs=[capacitor.v, capacitor.p.i])
+plot(sol, idxs = [capacitor.v, capacitor.p.i])
 ```
 
 Notice that this solves the whole system by only solving for one variable!
