@@ -28,6 +28,7 @@ using SafeTestsets, Test
 @safetestset "Model Parsing Test" include("model_parsing.jl")
 @safetestset "print_tree" include("print_tree.jl")
 @safetestset "Error Handling" include("error_handling.jl")
+@safetestset "initial condition" include("initial_condition.jl")
 @safetestset "StructuralTransformations" include("structural_transformation/runtests.jl")
 @safetestset "State Selection Test" include("state_selection.jl")
 @safetestset "Symbolic Event Test" include("symbolic_events.jl")
