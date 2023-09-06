@@ -843,10 +843,10 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
         for (var, val) in u0map
             i = get(obsmap, var, nothing)
             i === nothing && continue
-            val ≈ y[i] || error("The user-provided initial condition for $var = $val is conflicting with another initial condition ($(y[i])) that takes precedent.")
+            val ≈ y[i] ||
+                error("The user-provided initial condition for $var = $val is conflicting with another initial condition ($(y[i])) that takes precedent.")
         end
     end
-
 
     cbs = process_events(sys; callback, has_difference, kwargs...)
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
