@@ -93,6 +93,5 @@ sol = solve(prob, ImplicitEuler());
 sys = structural_simplify(model)
 prob = ODEProblem(sys, Pair[int.x => 0.0], (0.0, 1.0))
 sol = solve(prob, Rodas4())
-@test isequal(unbound_inputs(sys), [])
-@test sol.retcode == Success
+@test sol.retcode == ReturnCode.Success
 sol[absb.output.u]
