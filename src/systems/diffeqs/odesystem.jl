@@ -314,7 +314,7 @@ function build_explicit_observed_function(sys, ts;
     output_type = Array,
     checkbounds = true,
     drop_expr = drop_expr,
-    ps = paramteres(sys),
+    ps = parameters(sys),
     throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
