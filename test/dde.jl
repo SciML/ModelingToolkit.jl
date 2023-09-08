@@ -82,3 +82,31 @@ sys = structural_simplify(sys)
 @test isequal(ModelingToolkit.get_noiseeqs(sys), [α * x(t) + γ;;])
 prob_mtk = SDDEProblem(sys, [x(t) => 1.0 + t], tspan; constant_lags = (τ,));
 @test_nowarn sol_mtk = solve(prob_mtk, RKMil())
+
+@variables t
+D = Differential(t)
+@parameters x(..) a
+
+function oscillator(; name, k = 1.0, τ = 0.01)
+    @parameters k=k τ=τ
+    @variables x(..)=0.1 y(t)=0.1 jcn(t)=0.0 delx(t)
+    eqs = [D(x(t)) ~ y,
+        D(y) ~ -k * x(t - τ) + jcn,
+        delx ~ x(t - τ)]
+    return System(eqs; name = name)
+end
+
+systems = @named begin
+    osc1 = oscillator(k = 1.0, τ = 0.01)
+    osc2 = oscillator(k = 2.0, τ = 0.04)
+end
+eqs = [osc1.jcn ~ osc2.delx,
+    osc2.jcn ~ osc1.delx]
+@named coupledOsc = System(eqs, t)
+@named coupledOsc = compose(coupledOsc, systems)
+@named coupledOsc2 = System(eqs, t; systems)
+for coupledOsc in [coupledOsc, coupledOsc2]
+    local sys = structural_simplify(coupledOsc)
+    @test length(equations(sys)) == 4
+    @test length(states(sys)) == 4
+end

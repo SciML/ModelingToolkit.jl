@@ -106,7 +106,7 @@ abstract type AbstractOptimizationSystem <: AbstractTimeIndependentSystem end
 
 function independent_variable end
 
-# this has to be included early to deal with depency issues
+# this has to be included early to deal with dependency issues
 include("structural_transformation/bareiss.jl")
 function complete end
 function var_derivative! end

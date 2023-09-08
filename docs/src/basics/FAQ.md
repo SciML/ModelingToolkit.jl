@@ -120,7 +120,7 @@ We can solve this problem by using the `missing_variable_defaults()` function
 prob = ODEProblem(sys, ModelingToolkit.missing_variable_defaults(sys), (0,1))
 ```
 
-This function provides 0 for the default values, which is a safe assumption for dummy derivatives of most models.  However, the 2nd arument allows for a different default value or values to be used if needed.
+This function provides 0 for the default values, which is a safe assumption for dummy derivatives of most models.  However, the 2nd argument allows for a different default value or values to be used if needed.
 
 ```
 julia> ModelingToolkit.missing_variable_defaults(sys, [1,2,3])

@@ -32,10 +32,10 @@ using SafeTestsets, Test
 @safetestset "StructuralTransformations" include("structural_transformation/runtests.jl")
 @safetestset "State Selection Test" include("state_selection.jl")
 @safetestset "Symbolic Event Test" include("symbolic_events.jl")
-@safetestset "Stream Connnect Test" include("stream_connectors.jl")
+@safetestset "Stream Connect Test" include("stream_connectors.jl")
 @safetestset "Lowering Integration Test" include("lowering_solving.jl")
 @safetestset "Test Big System Usage" include("bigsystem.jl")
-@safetestset "Depdendency Graph Test" include("dep_graphs.jl")
+@safetestset "Dependency Graph Test" include("dep_graphs.jl")
 @safetestset "Function Registration Test" include("function_registration.jl")
 @safetestset "Precompiled Modules Test" include("precompile_test.jl")
 @testset "Distributed Test" begin

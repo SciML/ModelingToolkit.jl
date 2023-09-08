@@ -209,7 +209,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
             J = nothing
         else
             _J = jac(eqs, vars)
-            # only accecpt small intergers to avoid overflow
+            # only accept small integers to avoid overflow
             is_all_small_int = all(_J) do x′
                 x = unwrap(x′)
                 x isa Number || return false

@@ -50,30 +50,6 @@ end
 
 @deprecate substitute_expr!(expr, s) substitute(expr, s)
 
-function states_to_sym(states::Set)
-    function _states_to_sym(O)
-        if O isa Equation
-            Expr(:(=), _states_to_sym(O.lhs), _states_to_sym(O.rhs))
-        elseif istree(O)
-            op = operation(O)
-            args = arguments(O)
-            if issym(op)
-                O in states && return tosymbol(O)
-                # dependent variables
-                return build_expr(:call, Any[nameof(op); _states_to_sym.(args)])
-            else
-                canonical, O = canonicalexpr(O)
-                return canonical ? O : build_expr(:call, Any[op; _states_to_sym.(args)])
-            end
-        elseif O isa Num
-            return _states_to_sym(value(O))
-        else
-            return toexpr(O)
-        end
-    end
-end
-states_to_sym(states) = states_to_sym(Set(states))
-
 function todict(d)
     eltype(d) <: Pair || throw(ArgumentError("The variable-value mapping must be a Dict."))
     d isa Dict ? d : Dict(d)
