@@ -397,32 +397,64 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
 
     obs = observed(sys)
     observedfun = if steady_state
-        let sys = sys, dict = Dict()
+        let sys = sys, dict = Dict(), ps = ps
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
                     build_explicit_observed_function(sys, obsvar)
                 end
                 if args === ()
                     let obs = obs
-                        (u, p, t = Inf) -> obs(u, p, t)
+                        (u, p, t = Inf) -> if ps isa Tuple
+                            obs(u, p..., t)
+                        else
+                            obs(u, p, t)
+                        end
                     end
                 else
-                    length(args) == 2 ? obs(args..., Inf) : obs(args...)
+                    if ps isa Tuple
+                        if length(args) == 2
+                            u, p = args
+                            obs(u, p..., Inf)
+                        else
+                            u, p, t = args
+                            obs(u, p..., t)
+                        end
+                    else
+                        if length(args) == 2
+                            u, p = args
+                            obs(u, p, Inf)
+                        else
+                            u, p, t = args
+                            obs(u, p, t)
+                        end
+                    end
                 end
             end
         end
     else
-        let sys = sys, dict = Dict()
+        let sys = sys, dict = Dict(), ps = ps
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
-                    build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
+                    build_explicit_observed_function(sys,
+                        obsvar;
+                        checkbounds = checkbounds,
+                        ps)
                 end
                 if args === ()
                     let obs = obs
-                        (u, p, t) -> obs(u, p, t)
+                        (u, p, t) -> if ps isa Tuple
+                            obs(u, p..., t)
+                        else
+                            obs(u, p, t)
+                        end
                     end
                 else
-                    obs(args...)
+                    if ps isa Tuple # split parameters
+                        u, p, t = args
+                        obs(u, p..., t)
+                    else
+                        obs(args...)
+                    end
                 end
             end
         end

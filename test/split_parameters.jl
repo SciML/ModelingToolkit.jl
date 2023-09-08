@@ -59,8 +59,8 @@ eqs = [D(y) ~ dy * a
     D(dy) ~ ddy * b
     ddy ~ sin(t) * c]
 
-@named sys = ODESystem(eqs, t, vars, pars)
-sys = structural_simplify(sys)
+@named model = ODESystem(eqs, t, vars, pars)
+sys = structural_simplify(model)
 
 tspan = (0.0, t_end)
 prob = ODEProblem(sys, [], tspan, [])
@@ -76,8 +76,7 @@ prob = ODEProblem(sys, [], tspan, []; tofloat = false)
 @test prob.p isa Tuple{Vector{Float64}, Vector{Int64}}
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
-
-
+sol[states(model)]
 
 # -------------------------  Observables
 
