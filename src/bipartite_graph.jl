@@ -618,7 +618,7 @@ Essentially the graph adapter performs two largely orthogonal functions
  1. It pairs an undirected bipartite graph with a matching of the destination vertex.
 
     This matching is used to induce an orientation on the otherwise undirected graph:
-    Matched edges pass from destination to source [source to desination], all other edges
+    Matched edges pass from destination to source [source to destination], all other edges
     pass in the opposite direction.
 
  2. It exposes the graph view obtained by contracting the destination [source] vertices
@@ -632,7 +632,7 @@ graph is acyclic.
 # Hypergraph interpretation
 
 Consider the bipartite graph `B` as the incidence graph of some hypergraph `H`.
-Note that a maching `M` on `B` in the above sense is equivalent to determining
+Note that a matching `M` on `B` in the above sense is equivalent to determining
 an (1,n)-orientation on the hypergraph (i.e. each directed hyperedge has exactly
 one head, but any arbitrary number of tails). In this setting, this is simply
 the graph formed by expanding each directed hyperedge into `n` ordinary edges
@@ -685,7 +685,7 @@ function Base.iterate(c::CMONeighbors{false}, (l, state...))
         r === nothing && return nothing
         # If this is a matched edge, skip it, it's reversed in the induced
         # directed graph. Otherwise, if there is no matching for this destination
-        # edge, also skip it, since it got delted in the contraction.
+        # edge, also skip it, since it got deleted in the contraction.
         vsrc = c.g.matching[r[1]]
         if vsrc === c.v || !isa(vsrc, Int)
             state = (r[2],)

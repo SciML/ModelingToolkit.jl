@@ -200,7 +200,7 @@ count_nonzeros(a::CLILVector) = nnz(a)
 
 # Linear variables are highest order differentiated variables that only appear
 # in linear equations with only linear variables. Also, if a variable's any
-# derivaitves is nonlinear, then all of them are not linear variables.
+# derivatives is nonlinear, then all of them are not linear variables.
 function find_linear_variables(graph, linear_equations, var_to_diff, irreducibles)
     stack = Int[]
     linear_variables = falses(length(var_to_diff))
@@ -273,7 +273,7 @@ function aag_bareiss!(structure, mm_orig::SparseMatrixCLIL{T, Ti}) where {T, Ti}
     # linear algebraic equations can be set to 0.
     #
     # For all the other variables, we can update the original system with
-    # Bareiss'ed coefficients as Gaussian elimination is nullspace perserving
+    # Bareiss'ed coefficients as Gaussian elimination is nullspace preserving
     # and we are only working on linear homogeneous subsystem.
 
     is_algebraic = let var_to_diff = var_to_diff
