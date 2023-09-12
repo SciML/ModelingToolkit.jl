@@ -3,7 +3,7 @@ $(DocStringExtensions.README)
 """
 module ModelingToolkit
 using PrecompileTools, Reexport
-@recompile_invalidations begin 
+@recompile_invalidations begin
     using DocStringExtensions
     using Compat
     using AbstractTrees
