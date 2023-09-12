@@ -1831,3 +1831,21 @@ function missing_variable_defaults(sys::AbstractSystem, default = 0.0)
 
     return ds
 end
+
+keytype(::Type{<:Pair{T, V}}) where {T, V} = T
+function Symbolics.substitute(sys::AbstractSystem, rules::Union{Vector{<:Pair}, Dict})
+    if keytype(eltype(rules)) <: Symbol
+        dict = todict(rules)
+        systems = get_systems(sys)
+        # post-walk to avoid infinite recursion
+        @set! sys.systems = map(Base.Fix2(substitute, dict), systems)
+        something(get(rules, nameof(sys), nothing), sys)
+    elseif sys isa ODESystem
+        rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
+            collect(rules)))
+        eqs = fast_substitute(equations(sys), rules)
+        ODESystem(eqs, get_iv(sys); name = nameof(sys))
+    else
+        error("substituting symbols is not supported for $(typeof(sys))")
+    end
+end
