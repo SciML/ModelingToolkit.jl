@@ -386,9 +386,8 @@ function build_explicit_observed_function(sys, ts;
         push!(obsexprs, lhs ← rhs)
     end
 
-    pars = parameters(sys)
     if inputs !== nothing
-        pars = setdiff(pars, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
+        ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
     end
     if ps isa Tuple
         ps = DestructuredArgs.(ps, inbounds = !checkbounds)
