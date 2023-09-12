@@ -1,6 +1,25 @@
+"""
+$(TYPEDEF)
+
+ModelingToolkit component or connector with metadata
+
+# Fields
+$(FIELDS)
+"""
 struct Model{F, S}
+    """The constructor that returns ODESystem."""
     f::F
+    """
+    The dictionary with metadata like keyword arguements (:kwargs), base
+    system this Model extends (:extend), sub-components of the Model (:components),
+    variables (:variables), parameters (:parameters), structural parameters
+    (:structural_parameters) and equations (:equations).
+    """
     structure::S
+    """
+    This flag is `true` when the Model is a connector and is `false` when it is
+    a component
+    """
     isconnector::Bool
 end
 (m::Model)(args...; kw...) = m.f(args...; kw...)
