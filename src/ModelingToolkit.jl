@@ -2,75 +2,79 @@
 $(DocStringExtensions.README)
 """
 module ModelingToolkit
-using DocStringExtensions
-using Compat
-using AbstractTrees
-using DiffEqBase, SciMLBase, ForwardDiff, Reexport
-using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap
-using Distributed
-using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
-using InteractiveUtils
-using Latexify, Unitful, ArrayInterface
-using MacroTools
-@reexport using UnPack
-using Setfield, ConstructionBase
-using JumpProcesses
-using DataStructures
-using SpecialFunctions, NaNMath
-using RuntimeGeneratedFunctions
-using RuntimeGeneratedFunctions: drop_expr
-using Base.Threads
-using DiffEqCallbacks
-using Graphs
-import MacroTools: splitdef, combinedef, postwalk, striplines
-import Libdl
-using DocStringExtensions
-using Base: RefValue
-using Combinatorics
-import IfElse
-import Distributions
-import FunctionWrappersWrappers
-using URIs: URI
+using PrecompileTools, Reexport
+@recompile_invalidations begin 
+    using DocStringExtensions
+    using Compat
+    using AbstractTrees
+    using DiffEqBase, SciMLBase, ForwardDiff
+    using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap
+    using Distributed
+    using StaticArrays, LinearAlgebra, SparseArrays, LabelledArrays
+    using InteractiveUtils
+    using Latexify, Unitful, ArrayInterface
+    using MacroTools
+    using Setfield, ConstructionBase
+    using JumpProcesses
+    using DataStructures
+    using SpecialFunctions, NaNMath
+    using RuntimeGeneratedFunctions
+    using RuntimeGeneratedFunctions: drop_expr
+    using Base.Threads
+    using DiffEqCallbacks
+    using Graphs
+    import MacroTools: splitdef, combinedef, postwalk, striplines
+    import Libdl
+    using DocStringExtensions
+    using Base: RefValue
+    using Combinatorics
+    import IfElse
+    import Distributions
+    import FunctionWrappersWrappers
+    using URIs: URI
 
+    using RecursiveArrayTools
+
+    import SymbolicIndexingInterface
+    import SymbolicIndexingInterface: independent_variables, states, parameters
+    export independent_variables, states, parameters
+    import SymbolicUtils
+    import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
+        Symbolic, isadd, ismul, ispow, issym, FnType,
+        @rule, Rewriters, substitute, metadata, BasicSymbolic,
+        Sym, Term
+    using SymbolicUtils.Code
+    import SymbolicUtils.Code: toexpr
+    import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
+    import JuliaFormatter
+
+    using MLStyle
+
+    using Reexport
+    using Symbolics: degree
+    @reexport using Symbolics
+    using Symbolics: _parse_vars, value, @derivatives, get_variables,
+        exprs_occur_in, solve_for, build_expr, unwrap, wrap,
+        VariableSource, getname, variable, Connection, connect,
+        NAMESPACE_SEPARATOR
+    import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
+        jacobian_sparsity, isaffine, islinear, _iszero, _isone,
+        tosymbol, lower_varname, diff2term, var_from_nested_derivative,
+        BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
+        ParallelForm, SerialForm, MultithreadedForm, build_function,
+        rhss, lhss, prettify_expr, gradient,
+        jacobian, hessian, derivative, sparsejacobian, sparsehessian,
+        substituter, scalarize, getparent
+
+    import DiffEqBase: @add_kwonly
+
+    import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
+
+    @reexport using UnPack
+end
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-using RecursiveArrayTools
-
-import SymbolicIndexingInterface
-import SymbolicIndexingInterface: independent_variables, states, parameters
-export independent_variables, states, parameters
-import SymbolicUtils
-import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
-    Symbolic, isadd, ismul, ispow, issym, FnType,
-    @rule, Rewriters, substitute, metadata, BasicSymbolic,
-    Sym, Term
-using SymbolicUtils.Code
-import SymbolicUtils.Code: toexpr
-import SymbolicUtils.Rewriters: Chain, Postwalk, Prewalk, Fixpoint
-import JuliaFormatter
-
-using MLStyle
-
-using Reexport
-using Symbolics: degree
-@reexport using Symbolics
 export @derivatives
-using Symbolics: _parse_vars, value, @derivatives, get_variables,
-    exprs_occur_in, solve_for, build_expr, unwrap, wrap,
-    VariableSource, getname, variable, Connection, connect,
-    NAMESPACE_SEPARATOR
-import Symbolics: rename, get_variables!, _solve, hessian_sparsity,
-    jacobian_sparsity, isaffine, islinear, _iszero, _isone,
-    tosymbol, lower_varname, diff2term, var_from_nested_derivative,
-    BuildTargets, JuliaTarget, StanTarget, CTarget, MATLABTarget,
-    ParallelForm, SerialForm, MultithreadedForm, build_function,
-    rhss, lhss, prettify_expr, gradient,
-    jacobian, hessian, derivative, sparsejacobian, sparsehessian,
-    substituter, scalarize, getparent
-
-import DiffEqBase: @add_kwonly
-
-import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 
 for fun in [:toexpr]
     @eval begin
