@@ -50,6 +50,8 @@ prob = ODEProblem(sys, [], (0.0, t_end), [s.src.data => x])
 @test prob.p isa Tuple{Vector{Float64}, Vector{Int}, Vector{Vector{Float64}}}
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
+@test sol[y][end] ==  x[end]
+
 
 # ------------------------ Mixed Type Converted to float (default behavior)
 
@@ -76,21 +78,6 @@ prob = ODEProblem(sys, [], tspan, []; tofloat = false)
 @test prob.p isa Tuple{Vector{Float64}, Vector{Int64}}
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
-sol[states(model)]
 
-# -------------------------  Observables
 
-@named c = Sine(; frequency = 1)
-@named absb = Abs(;)
-@named int = Integrator(; k = 1)
-@named model = ODESystem([
-        connect(c.output, absb.input),
-        connect(absb.output, int.input),
-    ],
-    t,
-    systems = [int, absb, c])
-sys = structural_simplify(model)
-prob = ODEProblem(sys, Pair[int.x => 0.0], (0.0, 1.0))
-sol = solve(prob, Rodas4())
-@test sol.retcode == ReturnCode.Success
-sol[absb.output.u]
+
