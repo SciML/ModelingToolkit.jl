@@ -50,8 +50,7 @@ prob = ODEProblem(sys, [], (0.0, t_end), [s.src.data => x])
 @test prob.p isa Tuple{Vector{Float64}, Vector{Int}, Vector{Vector{Float64}}}
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
-@test sol[y][end] ==  x[end]
-
+@test sol[y][end] == x[end]
 
 # ------------------------ Mixed Type Converted to float (default behavior)
 
@@ -78,6 +77,3 @@ prob = ODEProblem(sys, [], tspan, []; tofloat = false)
 @test prob.p isa Tuple{Vector{Float64}, Vector{Int64}}
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
-
-
-
