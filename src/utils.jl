@@ -660,6 +660,7 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
         I = Int8
         has_int = false
         has_array = false
+        has_bool = false
         array_T = nothing
         for v in vs
             if v isa AbstractArray
@@ -672,6 +673,9 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
                 has_int = true
                 I = promote_type(I, E)
             end
+            if E <: Bool
+                has_bool = true
+            end
         end
         if tofloat && !has_array
             C = float(C)
@@ -681,6 +685,9 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
             end
             if has_int
                 C = Union{C, I}
+            end
+            if has_bool
+                C = Union{C, Bool}
             end
             return copyto!(similar(vs, C), vs)
         end
