@@ -114,7 +114,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
 					p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
 					args = vcat(DestructuredArgs(p), args)
 					ex = Func(args, [], eq.rhs) |> toexpr
-					eq.lhs => drop_expr(RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, ex))
+					eq.lhs => drop_expr(@RuntimeGeneratedFunction(@__MODULE__, ex))
 				end
 			end
 		end
