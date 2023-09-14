@@ -650,6 +650,11 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
     if isempty(vs)
         return vs
     end
+    if vs isa Tuple #special rule, if vs is a Tuple, preserve types, container converted to Array
+        tofloat = false
+        use_union = true
+        vs = Any[vs...]
+    end
     T = eltype(vs)
     if Base.isconcretetype(T) && (!tofloat || T === float(T)) # nothing to do
         vs
