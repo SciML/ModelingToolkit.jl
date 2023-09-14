@@ -97,10 +97,6 @@ However, as `p2` isn't listed in the model definition, its default can't be modi
 
 ```julia
 julia> @named model_c1 = ModelC(; model_a.k1 = 1);
-# or as
-
-julia> model_c2 = ModelC(; name = :model_c, model_a__k1 = 1);
-
 ```
 
 And as `k2` isn't listed in the sub-component definition of `ModelC`, its default value can't be modified by users.
