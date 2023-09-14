@@ -152,9 +152,9 @@ version = "0.4.2"
 
 [[deps.CPUSummary]]
 deps = ["CpuId", "IfElse", "PrecompileTools", "Static"]
-git-tree-sha1 = "89e0654ed8c7aebad6d5ad235d6242c2d737a928"
+git-tree-sha1 = "601f7e7b3d36f18790e2caf83a882d88e9b71ff1"
 uuid = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
-version = "0.2.3"
+version = "0.2.4"
 
 [[deps.CSTParser]]
 deps = ["Tokenize"]
@@ -801,9 +801,9 @@ version = "2.1.91+0"
 
 [[deps.JuliaFormatter]]
 deps = ["CSTParser", "CommonMark", "DataStructures", "Glob", "Pkg", "PrecompileTools", "Tokenize"]
-git-tree-sha1 = "680fb31c8b8e2cf482f48e55d8fa01ccc4469e04"
+git-tree-sha1 = "2aa8cb5410821365a87f326631d7f6ce07db8882"
 uuid = "98e50ef6-434e-11e9-1051-2b60c6c9e899"
-version = "1.0.35"
+version = "1.0.36"
 
 [[deps.JumpProcesses]]
 deps = ["ArrayInterface", "DataStructures", "DiffEqBase", "DocStringExtensions", "FunctionWrappers", "Graphs", "LinearAlgebra", "Markdown", "PoissonRandom", "Random", "RandomNumbers", "RecursiveArrayTools", "Reexport", "SciMLBase", "StaticArrays", "TreeViews", "UnPack"]
