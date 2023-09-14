@@ -528,7 +528,8 @@ function ODAEProblem{iip}(sys,
     tspan,
     parammap = DiffEqBase.NullParameters();
     callback = nothing,
-    use_union = false,
+    use_union = true,
+    tofloat = true,
     check = true,
     kwargs...) where {iip}
     eqs = equations(sys)
@@ -540,8 +541,7 @@ function ODAEProblem{iip}(sys,
     defs = ModelingToolkit.mergedefaults(defs, parammap, ps)
     defs = ModelingToolkit.mergedefaults(defs, u0map, dvs)
     u0 = ModelingToolkit.varmap_to_vars(u0map, dvs; defaults = defs, tofloat = true)
-    p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults = defs, tofloat = !use_union,
-        use_union)
+    p = ModelingToolkit.varmap_to_vars(parammap, ps; defaults = defs, tofloat, use_union)
 
     has_difference = any(isdifferenceeq, eqs)
     cbs = process_events(sys; callback, has_difference, kwargs...)

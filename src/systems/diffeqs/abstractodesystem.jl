@@ -152,8 +152,14 @@ function generate_function(sys::AbstractODESystem, dvs = states(sys), ps = param
                 states = sol_states,
                 kwargs...)
         else
-            build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states,
-                kwargs...)
+            if p isa Tuple
+                build_function(rhss, u, p..., t; postprocess_fbody = pre,
+                    states = sol_states,
+                    kwargs...)
+            else
+                build_function(rhss, u, p, t; postprocess_fbody = pre, states = sol_states,
+                    kwargs...)
+            end
         end
     end
 end
@@ -332,8 +338,15 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
     f_oop, f_iip = eval_expression ?
                    (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in f_gen) :
                    f_gen
-    f(u, p, t) = f_oop(u, p, t)
-    f(du, u, p, t) = f_iip(du, u, p, t)
+    if p isa Tuple
+        g(u, p, t) = f_oop(u, p..., t)
+        g(du, u, p, t) = f_iip(du, u, p..., t)
+        f = g
+    else
+        k(u, p, t) = f_oop(u, p, t)
+        k(du, u, p, t) = f_iip(du, u, p, t)
+        f = k
+    end
 
     if specialize === SciMLBase.FunctionWrapperSpecialize && iip
         if u0 === nothing || p === nothing || t === nothing
@@ -384,32 +397,64 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
 
     obs = observed(sys)
     observedfun = if steady_state
-        let sys = sys, dict = Dict()
+        let sys = sys, dict = Dict(), ps = ps
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
                     build_explicit_observed_function(sys, obsvar)
                 end
                 if args === ()
                     let obs = obs
-                        (u, p, t = Inf) -> obs(u, p, t)
+                        (u, p, t = Inf) -> if ps isa Tuple
+                            obs(u, p..., t)
+                        else
+                            obs(u, p, t)
+                        end
                     end
                 else
-                    length(args) == 2 ? obs(args..., Inf) : obs(args...)
+                    if ps isa Tuple
+                        if length(args) == 2
+                            u, p = args
+                            obs(u, p..., Inf)
+                        else
+                            u, p, t = args
+                            obs(u, p..., t)
+                        end
+                    else
+                        if length(args) == 2
+                            u, p = args
+                            obs(u, p, Inf)
+                        else
+                            u, p, t = args
+                            obs(u, p, t)
+                        end
+                    end
                 end
             end
         end
     else
-        let sys = sys, dict = Dict()
+        let sys = sys, dict = Dict(), ps = ps
             function generated_observed(obsvar, args...)
                 obs = get!(dict, value(obsvar)) do
-                    build_explicit_observed_function(sys, obsvar; checkbounds = checkbounds)
+                    build_explicit_observed_function(sys,
+                        obsvar;
+                        checkbounds = checkbounds,
+                        ps)
                 end
                 if args === ()
                     let obs = obs
-                        (u, p, t) -> obs(u, p, t)
+                        (u, p, t) -> if ps isa Tuple
+                            obs(u, p..., t)
+                        else
+                            obs(u, p, t)
+                        end
                     end
                 else
-                    obs(args...)
+                    if ps isa Tuple # split parameters
+                        u, p, t = args
+                        obs(u, p..., t)
+                    else
+                        obs(args...)
+                    end
                 end
             end
         end
@@ -677,15 +722,15 @@ function ODEFunctionExpr{iip}(sys::AbstractODESystem, dvs = states(sys),
 end
 
 """
-    u0, p, defs = get_u0_p(sys, u0map, parammap; use_union=false, tofloat=!use_union)
+    u0, p, defs = get_u0_p(sys, u0map, parammap; use_union=true, tofloat=true)
 
 Take dictionaries with initial conditions and parameters and convert them to numeric arrays `u0` and `p`. Also return the merged dictionary `defs` containing the entire operating point.
 """
 function get_u0_p(sys,
     u0map,
     parammap;
-    use_union = false,
-    tofloat = !use_union,
+    use_union = true,
+    tofloat = true,
     symbolic_u0 = false)
     dvs = states(sys)
     ps = parameters(sys)
@@ -712,8 +757,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     simplify = false,
     linenumbers = true, parallel = SerialForm(),
     eval_expression = true,
-    use_union = false,
-    tofloat = !use_union,
+    use_union = true,
+    tofloat = true,
     symbolic_u0 = false,
     kwargs...)
     eqs = equations(sys)
@@ -721,7 +766,18 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     ps = parameters(sys)
     iv = get_iv(sys)
 
-    u0, p, defs = get_u0_p(sys, u0map, parammap; tofloat, use_union, symbolic_u0)
+    u0, p, defs = get_u0_p(sys,
+        u0map,
+        parammap;
+        tofloat,
+        use_union,
+        symbolic_u0)
+
+    p, split_idxs = split_parameters_by_type(p)
+    if p isa Tuple
+        ps = Base.Fix1(getindex, parameters(sys)).(split_idxs)
+        ps = (ps...,) #if p is Tuple, ps should be Tuple
+    end
 
     if implicit_dae && du0map !== nothing
         ddvs = map(Differential(iv), dvs)
@@ -738,7 +794,8 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     f = constructor(sys, dvs, ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
         checkbounds = checkbounds, p = p,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
-        sparse = sparse, eval_expression = eval_expression, kwargs...)
+        sparse = sparse, eval_expression = eval_expression,
+        kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end
 

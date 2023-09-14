@@ -314,6 +314,7 @@ function build_explicit_observed_function(sys, ts;
     output_type = Array,
     checkbounds = true,
     drop_expr = drop_expr,
+    ps = parameters(sys),
     throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
@@ -385,17 +386,20 @@ function build_explicit_observed_function(sys, ts;
         push!(obsexprs, lhs ← rhs)
     end
 
-    pars = parameters(sys)
     if inputs !== nothing
-        pars = setdiff(pars, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
+        ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
     end
-    ps = DestructuredArgs(pars, inbounds = !checkbounds)
+    if ps isa Tuple
+        ps = DestructuredArgs.(ps, inbounds = !checkbounds)
+    else
+        ps = (DestructuredArgs(ps, inbounds = !checkbounds),)
+    end
     dvs = DestructuredArgs(states(sys), inbounds = !checkbounds)
     if inputs === nothing
-        args = [dvs, ps, ivs...]
+        args = [dvs, ps..., ivs...]
     else
         ipts = DestructuredArgs(inputs, inbounds = !checkbounds)
-        args = [dvs, ipts, ps, ivs...]
+        args = [dvs, ipts, ps..., ivs...]
     end
     pre = get_postprocess_fbody(sys)
 

@@ -219,6 +219,10 @@ end
 
 hasdefault(v) = hasmetadata(v, Symbolics.VariableDefaultValue)
 getdefault(v) = value(getmetadata(v, Symbolics.VariableDefaultValue))
+function getdefaulttype(v)
+    def = value(getmetadata(unwrap(v), Symbolics.VariableDefaultValue, nothing))
+    def === nothing ? Float64 : typeof(def)
+end
 function setdefault(v, val)
     val === nothing ? v : setmetadata(v, Symbolics.VariableDefaultValue, value(val))
 end
@@ -642,9 +646,14 @@ end
     throw(ArgumentError("$vars are either missing from the variable map or missing from the system's states/parameters list."))
 end
 
-function promote_to_concrete(vs; tofloat = true, use_union = false)
+function promote_to_concrete(vs; tofloat = true, use_union = true)
     if isempty(vs)
         return vs
+    end
+    if vs isa Tuple #special rule, if vs is a Tuple, preserve types, container converted to Array
+        tofloat = false
+        use_union = true
+        vs = Any[vs...]
     end
     T = eltype(vs)
     if Base.isconcretetype(T) && (!tofloat || T === float(T)) # nothing to do
@@ -656,6 +665,7 @@ function promote_to_concrete(vs; tofloat = true, use_union = false)
         I = Int8
         has_int = false
         has_array = false
+        has_bool = false
         array_T = nothing
         for v in vs
             if v isa AbstractArray
@@ -668,6 +678,9 @@ function promote_to_concrete(vs; tofloat = true, use_union = false)
                 has_int = true
                 I = promote_type(I, E)
             end
+            if E <: Bool
+                has_bool = true
+            end
         end
         if tofloat && !has_array
             C = float(C)
@@ -677,6 +690,9 @@ function promote_to_concrete(vs; tofloat = true, use_union = false)
             end
             if has_int
                 C = Union{C, I}
+            end
+            if has_bool
+                C = Union{C, Bool}
             end
             return copyto!(similar(vs, C), vs)
         end
