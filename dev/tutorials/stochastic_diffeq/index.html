@@ -35,7 +35,7 @@ parammap = [
 prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
 sol = solve(prob, SOSRI())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
 Interpolation: 1st order linear
-t: 18409-element Vector{Float64}:
+t: 17999-element Vector{Float64}:
    0.0
    0.0007146315987816352
    0.0008575579185379623
@@ -43,37 +43,37 @@ t: 18409-element Vector{Float64}:
    0.0011992411517054316
    0.0014027436655772332
    0.00163168399368301
-   0.0018883245007567813
-   0.0021700134733949874
-   0.002475054549915861
+   0.0018881301321289389
+   0.002169358976113379
+   0.0024740165646698208
    ⋮
-  99.96018847434875
-  99.96497541708821
-  99.9699069859271
-  99.9752697944734
-  99.98015354725037
-  99.98564776912445
-  99.99133903665063
-  99.99774171261757
+  99.92632054101799
+  99.93613502134188
+  99.94501580107551
+  99.95479674918255
+  99.96580031580297
+  99.97682822976745
+  99.98510543124752
+  99.99441728291261
  100.0
-u: 18409-element Vector{Vector{Float64}}:
+u: 17999-element Vector{Vector{Float64}}:
  [1.0, 0.0, 0.0]
- [0.9902082049161778, 0.0016590501673894738, 5.845580730615401e-7]
- [0.9881458240590147, 0.001988596406626886, 8.394565690410824e-7]
- [0.9856752490510073, 0.0023543209130727602, 1.1812579158671332e-6]
- [0.9812416160410248, 0.0027673326813792, 1.6333531209560538e-6]
- [0.9787290943337839, 0.0032360934561913722, 2.219361328428267e-6]
- [0.9748910851841378, 0.0037618667236575666, 2.989181976341124e-6]
- [0.9753949041694921, 0.004339113401185254, 3.974940756203569e-6]
- [0.9714048077101034, 0.004975974456324569, 5.220640686404171e-6]
- [0.9716966810987877, 0.005666418116500436, 6.748094873511241e-6]
+ [0.9897911469015753, 0.001654972608974284, 5.836264222411896e-7]
+ [0.9877752580555104, 0.0019875054711425712, 8.393910543792088e-7]
+ [0.9859157080114033, 0.0023600616113880176, 1.1843805117551728e-6]
+ [0.9838940117103724, 0.0027689455175086367, 1.6336948736392997e-6]
+ [0.9821445317217885, 0.003228614444181705, 2.2239640439272397e-6]
+ [0.9822427945902724, 0.0037448988138252402, 2.9967220264058623e-6]
+ [0.9796259697129759, 0.0043264205786396216, 3.98138552401171e-6]
+ [0.9781764571481577, 0.004965399298763752, 5.231076536858585e-6]
+ [0.9758422430996183, 0.005648690432171664, 6.775112329979053e-6]
  ⋮
- [5.660913006483141, 5.280744185696594, 1.1600066953327957]
- [5.583235776248752, 5.3443392448835505, 1.1607668537581524]
- [5.656269959430721, 5.297663868324766, 1.1545072573077784]
- [5.5906000733486785, 5.331543012804509, 1.1596386431871915]
- [5.596069768645926, 5.338496473882257, 1.1454805548691502]
- [5.556476768820704, 5.455855010776096, 1.1501116415675467]
- [5.561090711087089, 5.392525326780761, 1.146302953488495]
- [5.515058471787641, 5.350420143007313, 1.158719063263784]
- [5.481181890902744, 5.369536923369404, 1.159194598245951]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../modelingtoolkitize/">« Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a><a class="docs-footer-nextpage" href="../parameter_identifiability/">Parameter Identifiability in ODE Models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Thursday 14 September 2023 21:58">Thursday 14 September 2023</span>. Using Julia version 1.9.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ [6.197778348816011, 6.102503454770318, 1.4650904032552445]
+ [6.114456614049026, 6.111046853385466, 1.4604274249563454]
+ [6.109241447402765, 6.192563331111706, 1.4582923545328568]
+ [6.080491394694384, 6.1503978800389305, 1.4480837730204832]
+ [5.977884857625799, 5.9889100924936285, 1.4263906922702823]
+ [5.992698253125809, 6.119391568594898, 1.415839658801622]
+ [6.062627309302781, 6.144306354885238, 1.4264861515224945]
+ [6.115699484529185, 6.099879005975575, 1.4217829161386513]
+ [6.126664756525736, 6.1283558104155516, 1.4118003749942483]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../modelingtoolkitize/">« Modelingtoolkitize: Automatically Translating Numerical to Symbolic Code</a><a class="docs-footer-nextpage" href="../parameter_identifiability/">Parameter Identifiability in ODE Models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Thursday 14 September 2023 23:06">Thursday 14 September 2023</span>. Using Julia version 1.9.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
