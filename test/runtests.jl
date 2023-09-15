@@ -32,6 +32,7 @@ using SafeTestsets, Test
 @safetestset "State Selection Test" include("state_selection.jl")
 @safetestset "Symbolic Event Test" include("symbolic_events.jl")
 @safetestset "Stream Connnect Test" include("stream_connectors.jl")
+@safetestset "Domain Connnect Test" include("domain_connectors.jl")
 @safetestset "Lowering Integration Test" include("lowering_solving.jl")
 @safetestset "Test Big System Usage" include("bigsystem.jl")
 @safetestset "Depdendency Graph Test" include("dep_graphs.jl")

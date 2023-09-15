@@ -128,7 +128,7 @@ eqns = [connect(n1m1.port_a, pipe.port_a)
 
 @named sys = ODESystem(eqns, t)
 
-eqns = [connect(fluid, n1m1.port_a)
+eqns = [domain_connect(fluid, n1m1.port_a)
     connect(n1m1.port_a, pipe.port_a)
     connect(pipe.port_b, sink.port)]
 
