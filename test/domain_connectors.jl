@@ -150,3 +150,4 @@ function System(; name)
 end
 
 @named odesys = System()
+sys = structural_simplify(odesys)
