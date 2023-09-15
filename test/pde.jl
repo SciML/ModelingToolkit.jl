@@ -5,10 +5,12 @@ using ModelingToolkit, DiffEqBase, LinearAlgebra, Test
 @constants h = 1
 @variables u(..)
 Dt = Differential(t)
-Dxx = Differential(x)^2
+Dx = Differential(x)
+Dxx = (Dx)^2
 eq = Dt(u(t, x)) ~ h * Dxx(u(t, x))
 bcs = [u(0, x) ~ -h * x * (x - 1) * sin(x),
     u(t, 0) ~ 0, u(t, 1) ~ 0]
+energies = [(Dx(u(t, x)))^2]
 
 domains = [t ∈ (0.0, 1.0),
     x ∈ (0.0, 1.0)]
@@ -27,3 +29,29 @@ dt = 0:0.1:1
 # Test generated analytic_func
 @test all(pdesys.analytic_func[u(t, x)]([2], disct, discx) ≈
           analytic_function([2], disct, discx) for disct in dt, discx in dx)
+
+# Test with energies
+@named pdesys = PDESystem(eq,
+    bcs,
+    domains,
+    [t, x],
+    [u],
+    [h => 1],
+    energies = energies,
+    analytic = analytic)
+@show pdesys
+
+@test all(isequal.(independent_variables(pdesys), [t, x]))
+
+# Test with explicit empty energies
+@named pdesys = PDESystem(eq,
+    bcs,
+    domains,
+    [t, x],
+    [u],
+    [h => 1],
+    energies = [],
+    analytic = analytic)
+@show pdesys
+
+@test all(isequal.(independent_variables(pdesys), [t, x]))

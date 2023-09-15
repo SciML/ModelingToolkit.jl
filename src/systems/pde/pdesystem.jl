@@ -87,9 +87,10 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
     gui_metadata: metadata for MTK GUI.
     """
     gui_metadata::Union{Nothing, GUIMetadata}
-    @add_kwonly function PDESystem(eqs, energies, bcs, domain, ivs, dvs,
+    @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
         ps = SciMLBase.NullParameters();
         defaults = Dict(),
+        energies = [],
         systems = [],
         connector_type = nothing,
         metadata = nothing,
