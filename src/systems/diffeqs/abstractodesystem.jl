@@ -84,14 +84,37 @@ function generate_tgrad(sys::AbstractODESystem, dvs = states(sys), ps = paramete
     simplify = false, kwargs...)
     tgrad = calculate_tgrad(sys, simplify = simplify)
     pre = get_preprocess_constants(tgrad)
-    return build_function(tgrad, dvs, ps, get_iv(sys); postprocess_fbody = pre, kwargs...)
+    if ps isa Tuple
+        return build_function(tgrad,
+            dvs,
+            ps...,
+            get_iv(sys);
+            postprocess_fbody = pre,
+            kwargs...)
+    else
+        return build_function(tgrad,
+            dvs,
+            ps,
+            get_iv(sys);
+            postprocess_fbody = pre,
+            kwargs...)
+    end
 end
 
 function generate_jacobian(sys::AbstractODESystem, dvs = states(sys), ps = parameters(sys);
     simplify = false, sparse = false, kwargs...)
     jac = calculate_jacobian(sys; simplify = simplify, sparse = sparse)
     pre = get_preprocess_constants(jac)
-    return build_function(jac, dvs, ps, get_iv(sys); postprocess_fbody = pre, kwargs...)
+    if ps isa Tuple
+        return build_function(jac,
+            dvs,
+            ps...,
+            get_iv(sys);
+            postprocess_fbody = pre,
+            kwargs...)
+    else
+        return build_function(jac, dvs, ps, get_iv(sys); postprocess_fbody = pre, kwargs...)
+    end
 end
 
 function generate_control_jacobian(sys::AbstractODESystem, dvs = states(sys),
@@ -364,8 +387,15 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         tgrad_oop, tgrad_iip = eval_expression ?
                                (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in tgrad_gen) :
                                tgrad_gen
-        _tgrad(u, p, t) = tgrad_oop(u, p, t)
-        _tgrad(J, u, p, t) = tgrad_iip(J, u, p, t)
+        if p isa Tuple
+            __tgrad(u, p, t) = tgrad_oop(u, p..., t)
+            __tgrad(J, u, p, t) = tgrad_iip(J, u, p..., t)
+            _tgrad = __tgrad
+        else
+            ___tgrad(u, p, t) = tgrad_oop(u, p, t)
+            ___tgrad(J, u, p, t) = tgrad_iip(J, u, p, t)
+            _tgrad = ___tgrad
+        end
     else
         _tgrad = nothing
     end
@@ -379,8 +409,15 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         jac_oop, jac_iip = eval_expression ?
                            (drop_expr(@RuntimeGeneratedFunction(eval_module, ex)) for ex in jac_gen) :
                            jac_gen
-        _jac(u, p, t) = jac_oop(u, p, t)
-        _jac(J, u, p, t) = jac_iip(J, u, p, t)
+        if p isa Tuple
+            __jac(u, p, t) = jac_oop(u, p..., t)
+            __jac(J, u, p, t) = jac_iip(J, u, p..., t)
+            _jac = __jac
+        else
+            ___jac(u, p, t) = jac_oop(u, p, t)
+            ___jac(J, u, p, t) = jac_iip(J, u, p, t)
+            _jac = ___jac
+        end
     else
         _jac = nothing
     end
