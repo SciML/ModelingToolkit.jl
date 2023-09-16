@@ -268,8 +268,10 @@ function generate_connection_set(sys::AbstractSystem, find = nothing, replace = 
     connectionsets = ConnectionSet[]
     domain_csets = ConnectionSet[]
     sys = generate_connection_set!(connectionsets, domain_csets, sys, find, replace)
+    csets = merge(connectionsets)
+    domain_csets = merge([csets; domain_csets], true)
 
-    sys, (merge(connectionsets), merge([connectionsets; domain_csets]))
+    sys, (csets, domain_csets)
 end
 
 function generate_connection_set!(connectionsets, domain_csets,
@@ -313,6 +315,7 @@ function generate_connection_set!(connectionsets, domain_csets,
     T = ConnectionElement
     for s in subsys
         isconnector(s) || continue
+        is_domain_connector(s) && continue
         for v in states(s)
             Flow === get_connection_type(v) || continue
             push!(connectionsets, ConnectionSet([T(LazyNamespace(namespace, s), v, false)]))
@@ -334,18 +337,35 @@ function generate_connection_set!(connectionsets, domain_csets,
     @set! sys.eqs = eqs
 end
 
-function Base.merge(csets::AbstractVector{<:ConnectionSet})
+function Base.merge(csets::AbstractVector{<:ConnectionSet}, allouter = false)
+    csets, merged = partial_merge(csets, allouter)
+    while merged
+        csets, merged = partial_merge(csets)
+    end
+    csets
+end
+
+function partial_merge(csets::AbstractVector{<:ConnectionSet}, allouter = false)
     mcsets = ConnectionSet[]
     ele2idx = Dict{ConnectionElement, Int}()
     cacheset = Set{ConnectionElement}()
-    for cset in csets
+    merged = false
+    for (j, cset) in enumerate(csets)
+        if allouter
+            cset = ConnectionSet(map(cset.set) do e
+                @set! e.isouter = true
+            end)
+        end
         idx = nothing
         for e in cset.set
             idx = get(ele2idx, e, nothing)
-            idx !== nothing && break
+            if idx !== nothing
+                merged = true
+                break
+            end
         end
         if idx === nothing
-            push!(mcsets, cset)
+            push!(mcsets, copy(cset))
             for e in cset.set
                 ele2idx[e] = length(mcsets)
             end
@@ -364,7 +384,7 @@ function Base.merge(csets::AbstractVector{<:ConnectionSet})
             empty!(cacheset)
         end
     end
-    mcsets
+    mcsets, merged
 end
 
 function generate_connection_equations_and_stream_connections(csets::AbstractVector{
@@ -576,7 +596,7 @@ function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSy
             s_inners = (s for s in cset if !s.isouter)
             s_outers = (s for s in cset if s.isouter)
             for (q, oscq) in enumerate(s_outers)
-                sq += sum(s -> max(-states(s, fv), 0), s_inners)
+                sq += sum(s -> max(-states(s, fv), 0), s_inners, init = 0)
                 for (k, s) in enumerate(s_outers)
                     k == q && continue
                     f = states(s.sys.sys, fv)
