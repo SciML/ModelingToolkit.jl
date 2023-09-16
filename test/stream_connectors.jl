@@ -408,7 +408,8 @@ function PipeBase(; P, R, name)
 
     # equations ---------------------------
     eqs = [HA.p - HB.p ~ HA.dm * resistance / HA.viscosity
-        0 ~ HA.dm + HB.dm]
+        0 ~ HA.dm + HB.dm
+        domain_connect(HA, HB)]
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
