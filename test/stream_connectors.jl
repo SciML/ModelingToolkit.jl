@@ -128,7 +128,7 @@ eqns = [connect(n1m1.port_a, pipe.port_a)
 
 @named sys = ODESystem(eqns, t)
 
-eqns = [connect(fluid, n1m1.port_a)
+eqns = [domain_connect(fluid, n1m1.port_a)
     connect(n1m1.port_a, pipe.port_a)
     connect(pipe.port_b, sink.port)]
 
@@ -408,7 +408,8 @@ function PipeBase(; P, R, name)
 
     # equations ---------------------------
     eqs = [HA.p - HB.p ~ HA.dm * resistance / HA.viscosity
-        0 ~ HA.dm + HB.dm]
+        0 ~ HA.dm + HB.dm
+        domain_connect(HA, HB)]
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
