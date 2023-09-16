@@ -299,14 +299,10 @@ function generate_connection_set!(connectionsets, domain_csets,
         else
             if lhs isa Number || lhs isa Symbolic
                 push!(eqs, eq) # split connections and equations
-            elseif lhs isa Connection
-                if get_systems(lhs) === :domain
-                    connection2set!(domain_csets, namespace, get_systems(rhs), isouter)
-                else
-                    push!(cts, get_systems(rhs))
-                end
+            elseif lhs isa Connection && get_systems(lhs) === :domain
+                connection2set!(domain_csets, namespace, get_systems(rhs), isouter)
             else
-                error("$eq is not a legal equation!")
+                push!(cts, get_systems(rhs))
             end
         end
     end
