@@ -17,7 +17,7 @@ eqs2 = [0 ~ x * y - k,
     D(z) ~ x * y - β * z]
 @named sys2 = ODESystem(eqs2, t, [x, y, z, k], parameters(sys′))
 sys2 = ode_order_lowering(sys2)
-# test equation/varible ordering
+# test equation/variable ordering
 ModelingToolkit.calculate_massmatrix(sys2) == Diagonal([1, 1, 1, 1, 0])
 
 u0 = [D(x) => 2.0,

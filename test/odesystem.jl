@@ -734,18 +734,28 @@ let
     u0map = [A => 1.0]
     pmap = (k1 => 1.0, k2 => 1)
     tspan = (0.0, 1.0)
+    prob = ODEProblem(sys, u0map, tspan, pmap; tofloat = false)
+    @test prob.p == ([1], [1.0]) #Tuple([(Dict(pmap))[k] for k in values(parameters(sys))])
+
     prob = ODEProblem(sys, u0map, tspan, pmap)
-    @test prob.p === Tuple([(Dict(pmap))[k] for k in values(parameters(sys))])
+    @test prob.p isa Vector{Float64}
 
     pmap = [k1 => 1, k2 => 1]
     tspan = (0.0, 1.0)
     prob = ODEProblem(sys, u0map, tspan, pmap)
     @test eltype(prob.p) === Float64
 
-    pmap = Pair{Any, Union{Int, Float64}}[k1 => 1, k2 => 1.0]
-    tspan = (0.0, 1.0)
-    prob = ODEProblem(sys, u0map, tspan, pmap, use_union = true)
-    @test eltype(prob.p) === Union{Float64, Int}
+    prob = ODEProblem(sys, u0map, tspan, pmap; tofloat = false)
+    @test eltype(prob.p) === Int
+
+    prob = ODEProblem(sys, u0map, tspan, pmap)
+    @test prob.p isa Vector{Float64}
+
+    # No longer supported, Tuple used instead
+    # pmap = Pair{Any, Union{Int, Float64}}[k1 => 1, k2 => 1.0]
+    # tspan = (0.0, 1.0)
+    # prob = ODEProblem(sys, u0map, tspan, pmap, use_union = true)
+    # @test eltype(prob.p) === Union{Float64, Int}
 end
 
 let
@@ -1012,3 +1022,22 @@ let
     prob = ODAEProblem(sys4s, [x => 1.0, D(x) => 1.0], (0, 1.0))
     @test !isnothing(prob.f.sys)
 end
+
+@parameters t
+# SYS 1:
+vars_sub1 = @variables s1(t)
+@named sub = ODESystem(Equation[], t, vars_sub1, [])
+
+vars1 = @variables x1(t)
+@named sys1 = ODESystem(Equation[], t, vars1, [], systems = [sub])
+@named sys2 = ODESystem(Equation[], t, vars1, [], systems = [sys1, sub])
+
+# SYS 2: Extension to SYS 1
+vars_sub2 = @variables s2(t)
+@named partial_sub = ODESystem(Equation[], t, vars_sub2, [])
+@named sub = extend(partial_sub, sub)
+
+new_sys2 = complete(substitute(sys2, Dict(:sub => sub)))
+Set(states(new_sys2)) == Set([new_sys2.x1, new_sys2.sys1.x1,
+    new_sys2.sys1.sub.s1, new_sys2.sys1.sub.s2,
+    new_sys2.sub.s1, new_sys2.sub.s2])

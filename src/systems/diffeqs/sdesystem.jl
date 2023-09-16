@@ -227,7 +227,7 @@ end
 """
 $(TYPEDSIGNATURES)
 
-Choose correction_factor=-1//2 (1//2) to converte Ito -> Stratonovich (Stratonovich->Ito).
+Choose correction_factor=-1//2 (1//2) to convert Ito -> Stratonovich (Stratonovich->Ito).
 """
 function stochastic_integral_transform(sys::SDESystem, correction_factor)
     name = nameof(sys)
@@ -329,7 +329,7 @@ simmod = solve(ensemble_probmod,EM(),dt=dt,trajectories=numtraj)
 function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
     name = nameof(sys)
 
-    # register new varible θ corresponding to 1D correction process θ(t)
+    # register new variable θ corresponding to 1D correction process θ(t)
     t = get_iv(sys)
     D = Differential(t)
     @variables θ(t), weight(t)

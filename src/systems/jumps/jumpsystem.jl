@@ -1,6 +1,6 @@
 const JumpType = Union{VariableRateJump, ConstantRateJump, MassActionJump}
 
-# modifies the expression representating an affect function to
+# modifies the expression representing an affect function to
 # call reset_aggregated_jumps!(integrator).
 # assumes iip
 function _reset_aggregator!(expr, integrator)
@@ -181,7 +181,6 @@ function generate_rate_function(js::JumpSystem, rate)
     end
     rf = build_function(rate, states(js), parameters(js),
         get_iv(js),
-        conv = states_to_sym(states(js)),
         expression = Val{true})
 end
 
@@ -391,7 +390,7 @@ function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = 
     eqs = equations(js)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
 
-    # handling parameter substition and empty param vecs
+    # handling parameter substitution and empty param vecs
     p = (prob.p isa DiffEqBase.NullParameters || prob.p === nothing) ? Num[] : prob.p
 
     majpmapper = JumpSysMajParamMapper(js, p; jseqs = eqs, rateconsttype = invttype)

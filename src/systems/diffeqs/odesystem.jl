@@ -314,6 +314,7 @@ function build_explicit_observed_function(sys, ts;
     output_type = Array,
     checkbounds = true,
     drop_expr = drop_expr,
+    ps = parameters(sys),
     throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
@@ -385,17 +386,20 @@ function build_explicit_observed_function(sys, ts;
         push!(obsexprs, lhs ← rhs)
     end
 
-    pars = parameters(sys)
     if inputs !== nothing
-        pars = setdiff(pars, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
+        ps = setdiff(ps, inputs) # Inputs have been converted to parameters by io_preprocessing, remove those from the parameter list
     end
-    ps = DestructuredArgs(pars, inbounds = !checkbounds)
+    if ps isa Tuple
+        ps = DestructuredArgs.(ps, inbounds = !checkbounds)
+    else
+        ps = (DestructuredArgs(ps, inbounds = !checkbounds),)
+    end
     dvs = DestructuredArgs(states(sys), inbounds = !checkbounds)
     if inputs === nothing
-        args = [dvs, ps, ivs...]
+        args = [dvs, ps..., ivs...]
     else
         ipts = DestructuredArgs(inputs, inbounds = !checkbounds)
-        args = [dvs, ipts, ps, ivs...]
+        args = [dvs, ipts, ps..., ivs...]
     end
     pre = get_postprocess_fbody(sys)
 
@@ -465,13 +469,6 @@ function convert_system(::Type{<:ODESystem}, sys, t; name = nameof(sys))
         checks = false)
 end
 
-function Symbolics.substitute(sys::ODESystem, rules::Union{Vector{<:Pair}, Dict})
-    rules = todict(map(r -> Symbolics.unwrap(r[1]) => Symbolics.unwrap(r[2]),
-        collect(rules)))
-    eqs = fast_substitute(equations(sys), rules)
-    ODESystem(eqs, get_iv(sys); name = nameof(sys))
-end
-
 """
 $(SIGNATURES)
 
@@ -492,7 +489,7 @@ of
 [cumulative_var1 => x + y, cumulative_var2 => x^2]
 ```
 Then, cumulative variables `cumulative_var1` and `cumulative_var2` that computes
-the comulative `x + y` and `x^2` would be added to `sys`.
+the cumulative `x + y` and `x^2` would be added to `sys`.
 """
 function add_accumulations(sys::ODESystem, vars::Vector{<:Pair})
     eqs = get_eqs(sys)

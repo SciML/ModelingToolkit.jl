@@ -33,7 +33,7 @@ setoutput(x, v) = setmetadata(x, VariableOutput, v)
 setio(x, i, o) = setoutput(setinput(x, i), o)
 isinput(x) = isvarkind(VariableInput, x)
 isoutput(x) = isvarkind(VariableOutput, x)
-# Before the solvability check, we already have handled IO varibales, so
+# Before the solvability check, we already have handled IO variables, so
 # irreducibility is independent from IO.
 isirreducible(x) = isvarkind(VariableIrreducible, x)
 state_priority(x) = convert(Float64, getmetadata(x, VariableStatePriority, 0.0))::Float64
@@ -58,7 +58,7 @@ applicable.
 """
 function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
     toterm = default_toterm, promotetoconcrete = nothing,
-    tofloat = true, use_union = false)
+    tofloat = true, use_union = true)
     varlist = collect(map(unwrap, varlist))
 
     # Edge cases where one of the arguments is effectively empty.
@@ -75,9 +75,10 @@ function varmap_to_vars(varmap, varlist; defaults = Dict(), check = true,
         end
     end
 
-    T = typeof(varmap)
-    # We respect the input type
-    container_type = T <: Dict ? Array : T
+    # T = typeof(varmap)
+    # We respect the input type (feature removed, not needed with Tuple support)
+    # container_type = T <: Union{Dict,Tuple} ? Array : T
+    container_type = Array
 
     vals = if eltype(varmap) <: Pair # `varmap` is a dict or an array of pairs
         varmap = todict(varmap)

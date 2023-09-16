@@ -54,7 +54,7 @@ By inference:
 =#
 
 #=
-     D(x) ~ Shift(x, 0, dt) + 1 # this should never meet with continous variables
+     D(x) ~ Shift(x, 0, dt) + 1 # this should never meet with continuous variables
 =>   (Shift(x, 0, dt) - Shift(x, -1, dt))/dt ~ Shift(x, 0, dt) + 1
 =>   Shift(x, 0, dt) - Shift(x, -1, dt) ~ Shift(x, 0, dt) * dt + dt
 =>   Shift(x, 0, dt) - Shift(x, 0, dt) * dt ~ Shift(x, -1, dt) + dt

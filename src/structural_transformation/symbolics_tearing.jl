@@ -103,7 +103,7 @@ function full_equations(sys::AbstractSystem; simplify = false)
             if rhs isa Symbolic
                 return 0 ~ rhs
             else # a number
-                error("tearing failled because the system is singular")
+                error("tearing failed because the system is singular")
             end
         end
         eq
@@ -194,7 +194,7 @@ function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F,
         return (new_lhs ~ new_rhs), invview(var_to_diff)[dervar]
     else # a number
         if abs(rhs) > 100eps(float(rhs))
-            @warn "The equation $eq is not consistent. It simplifed to 0 == $rhs."
+            @warn "The equation $eq is not consistent. It simplified to 0 == $rhs."
         end
         return nothing
     end
