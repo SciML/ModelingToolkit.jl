@@ -404,8 +404,12 @@ function domain_defaults(sys, domain_csets)
         idx = findfirst(s -> is_domain_connector(s.sys.sys), cset)
         idx === nothing && continue
         s = cset[idx]
+        root = s.sys
+        s_def = defaults(root.sys)
         for (j, m) in enumerate(cset)
             if j == idx
+                continue
+            elseif is_domain_connector(m.sys.sys)
                 error("Domain sources $(nameof(root)) and $(nameof(m)) are connected!")
             else
                 ns_s_def = Dict(states(m.sys.sys, n) => n for (n, v) in s_def)
