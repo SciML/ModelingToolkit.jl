@@ -10,10 +10,6 @@ D = Differential(t)
         ρ
         β
         μ
-        n
-        let_gas
-        ρ_gas
-        p_gas
     end
 
     vars = @variables begin
@@ -150,4 +146,16 @@ function System(; name)
 end
 
 @named odesys = System()
+esys = ModelingToolkit.expand_connections(odesys)
+@test length(equations(esys)) == length(states(esys))
+
+csys = complete(odesys)
+
 sys = structural_simplify(odesys)
+@test length(equations(sys)) == length(states(sys))
+
+sys_defs = ModelingToolkit.defaults(sys)
+@test Symbol(sys_defs[csys.vol.port.ρ]) == Symbol(csys.fluid.ρ)
+
+
+@test_nowarn structural_simplify(one_fluid_system)
