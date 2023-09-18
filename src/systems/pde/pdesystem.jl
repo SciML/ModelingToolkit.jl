@@ -94,6 +94,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         analytic = nothing,
         analytic_func = nothing,
         gui_metadata = nothing,
+		eval_module = @__MODULE__,
         checks::Union{Bool, Int} = true,
         name)
         if checks == true || (checks & CheckUnits) > 0
@@ -114,7 +115,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
 					p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
 					args = vcat(DestructuredArgs(p), args)
 					ex = Func(args, [], eq.rhs) |> toexpr
-					eq.lhs => drop_expr(@RuntimeGeneratedFunction(@__MODULE__, ex))
+					eq.lhs => drop_expr(@RuntimeGeneratedFunction(eval_module, ex))
 				end
 			end
 		end
