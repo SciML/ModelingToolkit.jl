@@ -120,7 +120,8 @@ sys = structural_simplify(odesys)
 ModelingToolkit.defaults(sys)[complete(odesys).vol.port.ρ]
 ```
 
-If we have a more complicated system, for example a hydraulic actuator, with a separated fluid on both sides of the piston, it's possible we might have 2 separate domain networks.  In this case we can connect 2 separate fluids, or the same fluid, to both networks.  
+## Multiple Domain Networks
+If we have a more complicated system, for example a hydraulic actuator, with a separated fluid on both sides of the piston, it's possible we might have 2 separate domain networks.  In this case we can connect 2 separate fluids, or the same fluid, to both networks.  First a simple actuator is defined with 2 ports.
 
 ```@example domain
 @component function Actuator(; p_int, mass, area, name)
@@ -151,7 +152,11 @@ If we have a more complicated system, for example a hydraulic actuator, with a s
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
+```
 
+A system with 2 different fluids is defined and connected to each separate domain network.
+
+```@example domain
 @component function ActuatorSystem2(; name)
     systems = @named begin
         src_a = FixedPressure(; p=200e5)
@@ -165,6 +170,7 @@ end
     eqs = [
         connect(fluid_a, src_a.port)
         connect(fluid_b, src_b.port)
+
         connect(src_a.port, act.port_a)
         connect(src_b.port, act.port_b)
     ]
@@ -176,8 +182,11 @@ end
 
 design2 = ODESystemDesign(actsys2, path);
 ModelingToolkitDesigner.view(design2, false)
+```
 
+After running `structural_simplify()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfer with the mathmatical equations of the system, since no states are connected.  
 
+```@example domain
 @component function ActuatorSystem1(; name)
     systems = @named begin
         src_a = FixedPressure(; p=200e5)
@@ -204,3 +213,24 @@ design1 = ODESystemDesign(actsys1, path);
 ModelingToolkitDesigner.view(design1, false)
 ```
 
+## Special Connection Cases (`domain_connect()`)
+When defining a component with more than 1 connector of the same domain but are not connected with `connect()`, it is necessary to still communicate to ModelingToolkit.jl that the connectors are of the same domain network.  This can be done using the `domain_connect()` function, which explicitly only connects the doamin network and not the states.  For example, a hydraulic valve will have 2 connectors, which transmit the same fluid, but the states of the connectors are kepts separate and defined by equation.  
+
+```@example domain
+@component function Valve(; name)
+    pars = @parameters K = 0.1
+
+    systems = @named begin 
+        port_a = HydraulicPort(; p_int) 
+        port_b = HydraulicPort(; p_int) 
+    end
+
+    eqs = [
+        domain_connect(port_a, port_b)
+        port_a.dm ~ (port_a.p - port_b.p)*K
+        0 ~ port_a.dm + port_b.dm
+    ]
+
+    ODESystem(eqs, t, [], pars; systems, name)
+end
+```
