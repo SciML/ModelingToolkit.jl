@@ -115,7 +115,7 @@ ModelingToolkitDesigner.view(design, false)
 
 To see how the domain works, we can examine the set parameter values for each of the ports `src.port` and `vol.port`.  First we assemble the system using `structural_simplify()` and then check the default value of `vol.port.ρ`, whichs points to the setter value `fluid₊ρ`.  Likewise, `src.port.ρ`, will also point to the setter value `fluid₊ρ`.  Therefore, there is now only 1 defined density value `fluid₊ρ` which sets the density for the connected network.  
 
-```@example domain
+```@repl
 sys = structural_simplify(odesys)
 ModelingToolkit.defaults(sys)[complete(odesys).vol.port.ρ]
 ```
@@ -214,11 +214,14 @@ ModelingToolkitDesigner.view(design1, false)
 ```
 
 ## Special Connection Cases (`domain_connect()`)
-When defining a component with more than 1 connector of the same domain but are not connected with `connect()`, it is necessary to still communicate to ModelingToolkit.jl that the connectors are of the same domain network.  This can be done using the [`domain_connect()`](@ref) function, which explicitly only connects the domain network and not the states.  For example, a hydraulic valve component will have 2 connectors, which transmit the same fluid, but the states of the connectors are kepts separate and defined by equation.  
+In some cases a component will be defined with 2 connectors of the same domain, but they are not connected.  For example the `Restrictor` defined here gives equations to define the behavior of how the 2 connectors `port_a` and `port_b` are physcially connected.
 
 ```@example domain
-@component function Valve(; name)
-    pars = @parameters K = 0.1
+@component function Restrictor(; name, p_int)
+    pars = @parameters begin
+         K = 0.1
+         p_int = p_int
+    end
 
     systems = @named begin 
         port_a = HydraulicPort(; p_int) 
@@ -226,7 +229,6 @@ When defining a component with more than 1 connector of the same domain but are 
     end
 
     eqs = [
-        domain_connect(port_a, port_b)
         port_a.dm ~ (port_a.p - port_b.p)*K
         0 ~ port_a.dm + port_b.dm
     ]
@@ -234,3 +236,75 @@ When defining a component with more than 1 connector of the same domain but are 
     ODESystem(eqs, t, [], pars; systems, name)
 end
 ```
+
+Adding the `Restrictor` to the original system example will cause a break in the domain network, since a `connect(port_a, port_b)` is not defined.  
+
+```@example domain
+@component function RestrictorSystem(; name)
+    systems = @named begin
+        src = FixedPressure(; p=200e5)
+        res = Restrictor(; p_int=200e5)
+        vol = FixedVolume(; vol=0.1, p_int=200e5)
+
+        fluid = HydraulicFluid(; density=876)
+    end
+
+    eqs = [
+        connect(fluid, src.port)
+        connect(src.port, res.port_a)
+        connect(res.port_b, vol.port)
+    ]
+
+    ODESystem(eqs, t, [], []; systems, name)
+end
+
+@named ressys = RestrictorSystem()
+sys = structural_simplify(ressys)
+
+design = ODESystemDesign(ressys, path);
+ModelingToolkitDesigner.view(design, false)
+```
+
+When `structural_simplify()` is applied to this system it can be seen that the defaults are missing for `res.port_b` and `vol.port`.
+
+```@repl
+ModelingToolkit.defaults(sys)[complete(ressys).res.port_a.ρ]
+ModelingToolkit.defaults(sys)[complete(ressys).res.port_b.ρ]
+ModelingToolkit.defaults(sys)[complete(ressys).vol.port.ρ]
+```
+
+To ensure that the `Restrictor` component does not disrupt the domain network, the [`domain_connect()`](@ref) function can be used, which explicitly only connects the domain network and not the states.
+
+```@example domain
+@component function Restrictor(; name, p_int)
+    pars = @parameters begin
+         K = 0.1
+         p_int = p_int
+    end
+
+    systems = @named begin 
+        port_a = HydraulicPort(; p_int) 
+        port_b = HydraulicPort(; p_int) 
+    end
+
+    eqs = [
+        domain_connect(port_a, port_b) # <-- connect the domain network
+        port_a.dm ~ (port_a.p - port_b.p)*K
+        0 ~ port_a.dm + port_b.dm
+    ]
+
+    ODESystem(eqs, t, [], pars; systems, name)
+end
+
+@named ressys = RestrictorSystem()
+sys = structural_simplify(ressys)
+```
+
+Now that the `Restrictor` component is properly defined using `domain_connect()`, the defaults for `res.port_b` and `vol.port` are properly defined.
+
+```@repl
+ModelingToolkit.defaults(sys)[complete(ressys).res.port_a.ρ]
+ModelingToolkit.defaults(sys)[complete(ressys).res.port_b.ρ]
+ModelingToolkit.defaults(sys)[complete(ressys).vol.port.ρ]
+```
+
