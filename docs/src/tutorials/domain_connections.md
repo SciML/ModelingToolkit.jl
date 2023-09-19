@@ -1,5 +1,7 @@
 # [Domains](@id domains)
+
 ## Basics
+
 A domain in ModelingToolkit.jl is a network of connected components that share properties of the medium in the network.  For example, a collection of hydraulic components connected together will have a fluid medium.  Using the domain feature, one only needs to define and set the fluid medium properties once, in one component, rather than at each component.  The way this works in ModelingToolkit.jl is by defining a connector (with Through/Flow and Across variables) with parameters defining the medium of the domain.  Then a second connector is defined, with the same parameters, and the same Through/Flow variable, which acts as the setter.  For example, a hydraulic domain may have a hydraulic connector, `HydraulicPort`, that defines a fluid medium with density (`ρ`), viscosity (`μ`), and a bulk modulus (`β`), a through/flow variable mass flow (`dm`) and an across variable pressure (`p`).
 
 ```@example domain
@@ -55,7 +57,9 @@ Now, we can connect a `HydraulicFluid` component to any `HydraulicPort` connecto
 ```@example domain
 @component function FixedPressure(; p, name)
     pars = @parameters p = p
-    systems = @named begin port = HydraulicPort(; p_int = p) end
+    systems = @named begin
+        port = HydraulicPort(; p_int = p)
+    end
 
     eqs = [port.p ~ p]
 
@@ -68,7 +72,9 @@ end
         vol = vol
     end
 
-    systems = @named begin port = HydraulicPort(; p_int) end
+    systems = @named begin
+        port = HydraulicPort(; p_int)
+    end
 
     vars = @variables begin
         rho(t) = port.ρ
@@ -86,21 +92,20 @@ end
     ODESystem(eqs, t, vars, pars; name, systems)
 end
 ```
+
 When the system is defined we can generate a fluid component and connect it to the system.  Here `fluid` is connected to the `src.port`, but it could also be connected to `vol.port`, any connection in the network is fine.  Note: we can visualize the system using `ModelingToolkitDesigner.jl`, where a dashed line is used to show the `fluid` connection to represent a domain connection that is only transporting parameters and not states.
 
 ```@example domain
 @component function System(; name)
     systems = @named begin
-        src = FixedPressure(; p=200e5)
-        vol = FixedVolume(; vol=0.1, p_int=200e5)
+        src = FixedPressure(; p = 200e5)
+        vol = FixedVolume(; vol = 0.1, p_int = 200e5)
 
-        fluid = HydraulicFluid(; density=876)
+        fluid = HydraulicFluid(; density = 876)
     end
 
-    eqs = [
-        connect(fluid, src.port)
-        connect(src.port, vol.port)
-    ]
+    eqs = [connect(fluid, src.port)
+        connect(src.port, vol.port)]
 
     ODESystem(eqs, t, [], []; systems, name)
 end
@@ -108,12 +113,12 @@ end
 @named odesys = System()
 
 using ModelingToolkitDesigner
-path = joinpath(@__DIR__, "domain_connections") 
+path = joinpath(@__DIR__, "domain_connections")
 design = ODESystemDesign(odesys, path);
 ModelingToolkitDesigner.view(design, false)
 ```
 
-To see how the domain works, we can examine the set parameter values for each of the ports `src.port` and `vol.port`.  First we assemble the system using `structural_simplify()` and then check the default value of `vol.port.ρ`, whichs points to the setter value `fluid₊ρ`.  Likewise, `src.port.ρ`, will also point to the setter value `fluid₊ρ`.  Therefore, there is now only 1 defined density value `fluid₊ρ` which sets the density for the connected network.  
+To see how the domain works, we can examine the set parameter values for each of the ports `src.port` and `vol.port`.  First we assemble the system using `structural_simplify()` and then check the default value of `vol.port.ρ`, whichs points to the setter value `fluid₊ρ`.  Likewise, `src.port.ρ`, will also point to the setter value `fluid₊ρ`.  Therefore, there is now only 1 defined density value `fluid₊ρ` which sets the density for the connected network.
 
 ```@repl
 sys = structural_simplify(odesys)
@@ -121,6 +126,7 @@ ModelingToolkit.defaults(sys)[complete(odesys).vol.port.ρ]
 ```
 
 ## Multiple Domain Networks
+
 If we have a more complicated system, for example a hydraulic actuator, with a separated fluid on both sides of the piston, it's possible we might have 2 separate domain networks.  In this case we can connect 2 separate fluids, or the same fluid, to both networks.  First a simple actuator is defined with 2 ports.
 
 ```@example domain
@@ -131,9 +137,9 @@ If we have a more complicated system, for example a hydraulic actuator, with a s
         area = area
     end
 
-    systems = @named begin 
-        port_a = HydraulicPort(; p_int) 
-        port_b = HydraulicPort(; p_int) 
+    systems = @named begin
+        port_a = HydraulicPort(; p_int)
+        port_b = HydraulicPort(; p_int)
     end
 
     vars = @variables begin
@@ -142,13 +148,11 @@ If we have a more complicated system, for example a hydraulic actuator, with a s
         ddx(t) = 0
     end
 
-    eqs = [
-        D(x) ~ dx
+    eqs = [D(x) ~ dx
         D(dx) ~ ddx
-        mass*ddx ~ (port_a.p - port_b.p)*area
-        port_a.dm ~ +(port_a.ρ)*dx*area
-        port_b.dm ~ -(port_b.ρ)*dx*area
-    ]
+        mass * ddx ~ (port_a.p - port_b.p) * area
+        port_a.dm ~ +(port_a.ρ) * dx * area
+        port_b.dm ~ -(port_b.ρ) * dx * area]
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
@@ -159,21 +163,18 @@ A system with 2 different fluids is defined and connected to each separate domai
 ```@example domain
 @component function ActuatorSystem2(; name)
     systems = @named begin
-        src_a = FixedPressure(; p=200e5)
-        src_b = FixedPressure(; p=200e5)
-        act = Actuator(; p_int=200e5, mass=1000, area=0.1)
+        src_a = FixedPressure(; p = 200e5)
+        src_b = FixedPressure(; p = 200e5)
+        act = Actuator(; p_int = 200e5, mass = 1000, area = 0.1)
 
-        fluid_a = HydraulicFluid(; density=876)
-        fluid_b = HydraulicFluid(; density=999)
+        fluid_a = HydraulicFluid(; density = 876)
+        fluid_b = HydraulicFluid(; density = 999)
     end
 
-    eqs = [
-        connect(fluid_a, src_a.port)
+    eqs = [connect(fluid_a, src_a.port)
         connect(fluid_b, src_b.port)
-
         connect(src_a.port, act.port_a)
-        connect(src_b.port, act.port_b)
-    ]
+        connect(src_b.port, act.port_b)]
 
     ODESystem(eqs, t, [], []; systems, name)
 end
@@ -184,25 +185,22 @@ design2 = ODESystemDesign(actsys2, path);
 ModelingToolkitDesigner.view(design2, false)
 ```
 
-After running `structural_simplify()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfer with the mathmatical equations of the system, since no states are connected.  
+After running `structural_simplify()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfer with the mathmatical equations of the system, since no states are connected.
 
 ```@example domain
 @component function ActuatorSystem1(; name)
     systems = @named begin
-        src_a = FixedPressure(; p=200e5)
-        src_b = FixedPressure(; p=200e5)
-        act = Actuator(; p_int=200e5, mass=1000, area=0.1)
+        src_a = FixedPressure(; p = 200e5)
+        src_b = FixedPressure(; p = 200e5)
+        act = Actuator(; p_int = 200e5, mass = 1000, area = 0.1)
 
-        fluid = HydraulicFluid(; density=876)
+        fluid = HydraulicFluid(; density = 876)
     end
 
-    eqs = [
-        connect(fluid, src_a.port)
+    eqs = [connect(fluid, src_a.port)
         connect(fluid, src_b.port)
-
         connect(src_a.port, act.port_a)
-        connect(src_b.port, act.port_b)
-    ]
+        connect(src_b.port, act.port_b)]
 
     ODESystem(eqs, t, [], []; systems, name)
 end
@@ -214,46 +212,43 @@ ModelingToolkitDesigner.view(design1, false)
 ```
 
 ## Special Connection Cases (`domain_connect()`)
+
 In some cases a component will be defined with 2 connectors of the same domain, but they are not connected.  For example the `Restrictor` defined here gives equations to define the behavior of how the 2 connectors `port_a` and `port_b` are physcially connected.
 
 ```@example domain
 @component function Restrictor(; name, p_int)
     pars = @parameters begin
-         K = 0.1
-         p_int = p_int
+        K = 0.1
+        p_int = p_int
     end
 
-    systems = @named begin 
-        port_a = HydraulicPort(; p_int) 
-        port_b = HydraulicPort(; p_int) 
+    systems = @named begin
+        port_a = HydraulicPort(; p_int)
+        port_b = HydraulicPort(; p_int)
     end
 
-    eqs = [
-        port_a.dm ~ (port_a.p - port_b.p)*K
-        0 ~ port_a.dm + port_b.dm
-    ]
+    eqs = [port_a.dm ~ (port_a.p - port_b.p) * K
+        0 ~ port_a.dm + port_b.dm]
 
     ODESystem(eqs, t, [], pars; systems, name)
 end
 ```
 
-Adding the `Restrictor` to the original system example will cause a break in the domain network, since a `connect(port_a, port_b)` is not defined.  
+Adding the `Restrictor` to the original system example will cause a break in the domain network, since a `connect(port_a, port_b)` is not defined.
 
 ```@example domain
 @component function RestrictorSystem(; name)
     systems = @named begin
-        src = FixedPressure(; p=200e5)
-        res = Restrictor(; p_int=200e5)
-        vol = FixedVolume(; vol=0.1, p_int=200e5)
+        src = FixedPressure(; p = 200e5)
+        res = Restrictor(; p_int = 200e5)
+        vol = FixedVolume(; vol = 0.1, p_int = 200e5)
 
-        fluid = HydraulicFluid(; density=876)
+        fluid = HydraulicFluid(; density = 876)
     end
 
-    eqs = [
-        connect(fluid, src.port)
+    eqs = [connect(fluid, src.port)
         connect(src.port, res.port_a)
-        connect(res.port_b, vol.port)
-    ]
+        connect(res.port_b, vol.port)]
 
     ODESystem(eqs, t, [], []; systems, name)
 end
@@ -278,20 +273,18 @@ To ensure that the `Restrictor` component does not disrupt the domain network, t
 ```@example domain
 @component function Restrictor(; name, p_int)
     pars = @parameters begin
-         K = 0.1
-         p_int = p_int
+        K = 0.1
+        p_int = p_int
     end
 
-    systems = @named begin 
-        port_a = HydraulicPort(; p_int) 
-        port_b = HydraulicPort(; p_int) 
+    systems = @named begin
+        port_a = HydraulicPort(; p_int)
+        port_b = HydraulicPort(; p_int)
     end
 
-    eqs = [
-        domain_connect(port_a, port_b) # <-- connect the domain network
-        port_a.dm ~ (port_a.p - port_b.p)*K
-        0 ~ port_a.dm + port_b.dm
-    ]
+    eqs = [domain_connect(port_a, port_b) # <-- connect the domain network
+        port_a.dm ~ (port_a.p - port_b.p) * K
+        0 ~ port_a.dm + port_b.dm]
 
     ODESystem(eqs, t, [], pars; systems, name)
 end
@@ -307,4 +300,3 @@ ModelingToolkit.defaults(sys)[complete(ressys).res.port_a.ρ]
 ModelingToolkit.defaults(sys)[complete(ressys).res.port_b.ρ]
 ModelingToolkit.defaults(sys)[complete(ressys).vol.port.ρ]
 ```
-
