@@ -733,6 +733,8 @@ end
 
 Graphs.has_edge(g::DiCMOBiGraph{true}, a, b) = a in inneighbors(g, b)
 Graphs.has_edge(g::DiCMOBiGraph{false}, a, b) = b in outneighbors(g, a)
+# This definition is required for `induced_subgraph` to work
+(::Type{<:DiCMOBiGraph})(n::Integer) = SimpleDiGraph(n)
 
 # Condensation Graphs
 abstract type AbstractCondensationGraph <: AbstractGraph{Int} end
