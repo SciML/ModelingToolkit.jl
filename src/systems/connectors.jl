@@ -1,3 +1,8 @@
+"""
+    domain_connect(sys1, sys2, syss...)
+
+Adds a domain only connection equation, through and across state equations are not generated.
+"""
 function domain_connect(sys1, sys2, syss...)
     syss = (sys1, sys2, syss...)
     length(unique(nameof, syss)) == length(syss) || error("connect takes distinct systems!")

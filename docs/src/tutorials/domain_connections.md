@@ -214,7 +214,7 @@ ModelingToolkitDesigner.view(design1, false)
 ```
 
 ## Special Connection Cases (`domain_connect()`)
-When defining a component with more than 1 connector of the same domain but are not connected with `connect()`, it is necessary to still communicate to ModelingToolkit.jl that the connectors are of the same domain network.  This can be done using the `domain_connect()` function, which explicitly only connects the doamin network and not the states.  For example, a hydraulic valve will have 2 connectors, which transmit the same fluid, but the states of the connectors are kepts separate and defined by equation.  
+When defining a component with more than 1 connector of the same domain but are not connected with `connect()`, it is necessary to still communicate to ModelingToolkit.jl that the connectors are of the same domain network.  This can be done using the [`domain_connect()`](@ref) function, which explicitly only connects the domain network and not the states.  For example, a hydraulic valve component will have 2 connectors, which transmit the same fluid, but the states of the connectors are kepts separate and defined by equation.  
 
 ```@example domain
 @component function Valve(; name)
