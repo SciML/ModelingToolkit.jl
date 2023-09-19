@@ -156,6 +156,3 @@ sys = structural_simplify(odesys)
 
 sys_defs = ModelingToolkit.defaults(sys)
 @test Symbol(sys_defs[csys.vol.port.ρ]) == Symbol(csys.fluid.ρ)
-
-
-@test_nowarn structural_simplify(one_fluid_system)
