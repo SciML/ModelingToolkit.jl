@@ -120,7 +120,7 @@ path = joinpath(dirname(pathof(ModelingToolkit)),
     "..",
     "docs",
     "src",
-    "tutorials",
+    "assets",
     "domain_connections")
 design = ODESystemDesign(odesys, path);
 ModelingToolkitDesigner.view(design, false)
