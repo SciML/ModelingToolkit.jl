@@ -116,7 +116,12 @@ end
 @named odesys = System()
 
 using ModelingToolkitDesigner
-path = joinpath(dirname(pathof(ModelingToolkit)), "..", "docs", "src", "tutorials", "domain_connections")
+path = joinpath(dirname(pathof(ModelingToolkit)),
+    "..",
+    "docs",
+    "src",
+    "tutorials",
+    "domain_connections")
 design = ODESystemDesign(odesys, path);
 ModelingToolkitDesigner.view(design, false)
 ```
