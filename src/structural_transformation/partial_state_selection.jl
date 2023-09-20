@@ -340,7 +340,7 @@ function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, ja
 
     var_eq_matching, full_var_eq_matching = tear_graph_modia(structure, isdiffed,
         Union{Unassigned, SelectedState};
-        varfilter = can_eliminate)
+        varfilter = can_eliminate, state_priority)
     for v in eachindex(var_eq_matching)
         is_not_present(v) && continue
         dv = var_to_diff[v]

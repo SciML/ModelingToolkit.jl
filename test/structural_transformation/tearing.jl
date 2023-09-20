@@ -219,3 +219,52 @@ sys = structural_simplify(ms_model)
 prob_complex = ODAEProblem(sys, u0, (0, 1.0))
 sol = solve(prob_complex, Tsit5())
 @test all(sol[mass.v] .== 1)
+
+## Test priorities
+@parameters t
+D = Differential(t)
+
+function Cart(; init_pos, init_vel, mass, name = :cart)
+    @variables pos(t)=init_pos vel(t)=init_vel
+    @variables f(t)
+    @parameters mass = mass
+
+    eqs = [D(pos) ~ vel
+        D(vel) ~ f / mass]
+
+    return ODESystem(eqs; name)
+end
+
+function PDController(; kp = 0, kd = 0, name = :controller)
+    @variables x(t) v(t) f(t)
+    @parameters kp=kp kd=kd
+
+    eqs = [
+        f ~ -kp * x - kd * v,
+    ]
+
+    return ODESystem(eqs; name)
+end
+
+function ControlledCart(; cart, cont, name = :sys)
+    eqs = [cart.pos ~ cont.x
+        cart.vel ~ cont.v
+        cart.f ~ cont.f]
+    return ODESystem(eqs; name, systems = [cart, cont])
+end
+
+cart = Cart(init_pos = 0.0, init_vel = 1.0, mass = 0.5)
+cont = PDController(kp = 1.0, kd = 0.5)
+controlled_cart = ControlledCart(; cart, cont)
+@variables z(t) k(t)
+eqs = [z ~ k;
+    sqrt(z) ~ abs(cont.x)]
+@named alge = ODESystem(eqs, t);
+controlled_cart = extend(controlled_cart, alge)
+# Test that our state priorities are respected
+s1 = states(structural_simplify(controlled_cart,
+    priorities = [k => 2]))
+s2 = states(structural_simplify(controlled_cart,
+    priorities = [z => 2]))
+@test Set(s1) == Set([cart.pos, cart.vel, k])
+@test Set(s2) == Set([cart.pos, cart.vel, z])

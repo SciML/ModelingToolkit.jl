@@ -599,13 +599,14 @@ end
 
 function _structural_simplify!(state::TearingState, io; simplify = false,
     check_consistency = true, fully_determined = true,
-    kwargs...)
+    priorities = Dict(), kwargs...)
     check_consistency &= fully_determined
     has_io = io !== nothing
     orig_inputs = Set()
     if has_io
         ModelingToolkit.markio!(state, orig_inputs, io...)
     end
+    isempty(priorities) || ModelingToolkit.set_priorities!(state, priorities)
     state, input_idxs = ModelingToolkit.inputs_to_parameters!(state, io)
     sys, mm = ModelingToolkit.alias_elimination!(state; kwargs...)
     if check_consistency
