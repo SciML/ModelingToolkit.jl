@@ -24,6 +24,7 @@ D = Differential(t)
 
     ODESystem(Equation[], t, vars, pars; name, defaults = [dm => 0])
 end
+nothing #hide
 ```
 
 The fluid medium setter for `HydralicPort` may be defined as `HydraulicFluid` with the same parameters and through/flow variable.  But now, the parameters can be set through the function keywords.
@@ -50,6 +51,7 @@ The fluid medium setter for `HydralicPort` may be defined as `HydraulicFluid` wi
 
     ODESystem(eqs, t, vars, pars; name, defaults = [dm => 0])
 end
+nothing #hide
 ```
 
 Now, we can connect a `HydraulicFluid` component to any `HydraulicPort` connector, and the parameters of all `HydraulicPort`'s in the network will be automatically set.  Let's consider a simple example, connecting a pressure source component to a volume component.  Note that we don't need to define density for the volume component, it's supplied by the `HydraulicPort` (`port.ρ`).
@@ -91,6 +93,7 @@ end
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
+nothing #hide
 ```
 
 When the system is defined we can generate a fluid component and connect it to the system.  Here `fluid` is connected to the `src.port`, but it could also be connected to `vol.port`, any connection in the network is fine.  Note: we can visualize the system using `ModelingToolkitDesigner.jl`, where a dashed line is used to show the `fluid` connection to represent a domain connection that is only transporting parameters and not states.
@@ -113,14 +116,14 @@ end
 @named odesys = System()
 
 using ModelingToolkitDesigner
-path = joinpath(@__DIR__, "domain_connections")
+path = joinpath(dirname(pathof(ModelingToolkit)), "..", "docs", "src", "tutorials", "domain_connections")
 design = ODESystemDesign(odesys, path);
 ModelingToolkitDesigner.view(design, false)
 ```
 
 To see how the domain works, we can examine the set parameter values for each of the ports `src.port` and `vol.port`.  First we assemble the system using `structural_simplify()` and then check the default value of `vol.port.ρ`, whichs points to the setter value `fluid₊ρ`.  Likewise, `src.port.ρ`, will also point to the setter value `fluid₊ρ`.  Therefore, there is now only 1 defined density value `fluid₊ρ` which sets the density for the connected network.
 
-```@repl
+```@repl domain
 sys = structural_simplify(odesys)
 ModelingToolkit.defaults(sys)[complete(odesys).vol.port.ρ]
 ```
@@ -156,6 +159,7 @@ If we have a more complicated system, for example a hydraulic actuator, with a s
 
     ODESystem(eqs, t, vars, pars; name, systems)
 end
+nothing #hide
 ```
 
 A system with 2 different fluids is defined and connected to each separate domain network.
@@ -232,6 +236,7 @@ In some cases a component will be defined with 2 connectors of the same domain, 
 
     ODESystem(eqs, t, [], pars; systems, name)
 end
+nothing #hide
 ```
 
 Adding the `Restrictor` to the original system example will cause a break in the domain network, since a `connect(port_a, port_b)` is not defined.
@@ -262,7 +267,7 @@ ModelingToolkitDesigner.view(design, false)
 
 When `structural_simplify()` is applied to this system it can be seen that the defaults are missing for `res.port_b` and `vol.port`.
 
-```@repl
+```@repl domain
 ModelingToolkit.defaults(sys)[complete(ressys).res.port_a.ρ]
 ModelingToolkit.defaults(sys)[complete(ressys).res.port_b.ρ]
 ModelingToolkit.defaults(sys)[complete(ressys).vol.port.ρ]
@@ -291,11 +296,12 @@ end
 
 @named ressys = RestrictorSystem()
 sys = structural_simplify(ressys)
+nothing #hide
 ```
 
 Now that the `Restrictor` component is properly defined using `domain_connect()`, the defaults for `res.port_b` and `vol.port` are properly defined.
 
-```@repl
+```@repl domain
 ModelingToolkit.defaults(sys)[complete(ressys).res.port_a.ρ]
 ModelingToolkit.defaults(sys)[complete(ressys).res.port_b.ρ]
 ModelingToolkit.defaults(sys)[complete(ressys).vol.port.ρ]
