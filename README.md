@@ -38,8 +38,8 @@ for the numerical integrator, and solve it.
 ```julia
 using DifferentialEquations, ModelingToolkit
 
-@parameters t σ ρ β
-@variables x(t) y(t) z(t)
+@parameters σ ρ β
+@variables t x(t) y(t) z(t)
 D = Differential(t)
 
 eqs = [D(D(x)) ~ σ * (y - x),
@@ -76,8 +76,8 @@ Equation (DAE):
 ```julia
 using DifferentialEquations, ModelingToolkit
 
-@parameters t σ ρ β
-@variables x(t) y(t) z(t)
+@parameters σ ρ β
+@variables t x(t) y(t) z(t)
 D = Differential(t)
 
 eqs = [D(x) ~ σ * (y - x),
