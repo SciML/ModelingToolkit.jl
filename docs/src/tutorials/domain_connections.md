@@ -114,17 +114,22 @@ When the system is defined we can generate a fluid component and connect it to t
 end
 
 @named odesys = System()
-
-using ModelingToolkitDesigner
-path = joinpath(dirname(pathof(ModelingToolkit)),
-    "..",
-    "docs",
-    "src",
-    "assets",
-    "domain_connections")
-design = ODESystemDesign(odesys, path);
-ModelingToolkitDesigner.view(design, false)
+nothing #hide
 ```
+
+```@setup domain
+# code to generate diagrams...
+# using ModelingToolkitDesigner 
+# path = raw"C:\Work\Assets\ModelingToolkit.jl\domain_connections" 
+# design = ODESystemDesign(odesys, path); 
+
+# using CairoMakie
+# CairoMakie.set_theme!(Theme(;fontsize=12))
+# fig = ModelingToolkitDesigner.view(design, false)
+# save(joinpath(path, "odesys.svg"), fig; resolution=(300,300))
+```
+
+![odesys](https://github.com/SciML/ModelingToolkit.jl/assets/40798837/d19fbcf4-781c-4743-87b7-30bed348ff98)
 
 To see how the domain works, we can examine the set parameter values for each of the ports `src.port` and `vol.port`.  First we assemble the system using `structural_simplify()` and then check the default value of `vol.port.ρ`, whichs points to the setter value `fluid₊ρ`.  Likewise, `src.port.ρ`, will also point to the setter value `fluid₊ρ`.  Therefore, there is now only 1 defined density value `fluid₊ρ` which sets the density for the connected network.
 
@@ -189,10 +194,16 @@ A system with 2 different fluids is defined and connected to each separate domai
 end
 
 @named actsys2 = ActuatorSystem2()
-
-design2 = ODESystemDesign(actsys2, path);
-ModelingToolkitDesigner.view(design2, false)
+nothing #hide
 ```
+
+```@setup domain
+# design = ODESystemDesign(actsys2, path);
+# fig = ModelingToolkitDesigner.view(design, false)
+# save(joinpath(path, "actsys2.svg"), fig; resolution=(500,300))
+```
+
+![actsys2](https://github.com/SciML/ModelingToolkit.jl/assets/40798837/8ed50035-f6ac-48cb-a585-1ef415154a02)
 
 After running `structural_simplify()` on `actsys2`, the defaults will show that `act.port_a.ρ` points to `fluid_a₊ρ` and `act.port_b.ρ` points to `fluid_b₊ρ`.  This is a special case, in most cases a hydraulic system will have only 1 fluid, however this simple system has 2 separate domain networks.  Therefore, we can connect a single fluid to both networks.  This does not interfer with the mathmatical equations of the system, since no states are connected.
 
@@ -215,10 +226,16 @@ After running `structural_simplify()` on `actsys2`, the defaults will show that 
 end
 
 @named actsys1 = ActuatorSystem1()
-
-design1 = ODESystemDesign(actsys1, path);
-ModelingToolkitDesigner.view(design1, false)
+nothing #hide
 ```
+
+```@setup domain
+# design = ODESystemDesign(actsys1, path);
+# fig = ModelingToolkitDesigner.view(design, false)
+# save(joinpath(path, "actsys1.svg"), fig; resolution=(500,300))
+```
+
+![actsys1](https://github.com/SciML/ModelingToolkit.jl/assets/40798837/054404eb-dbb7-4b85-95c0-c9503d0c4d00)
 
 ## Special Connection Cases (`domain_connect()`)
 
@@ -265,10 +282,16 @@ end
 
 @named ressys = RestrictorSystem()
 sys = structural_simplify(ressys)
-
-design = ODESystemDesign(ressys, path);
-ModelingToolkitDesigner.view(design, false)
+nothing #hide
 ```
+
+```@setup domain
+# design = ODESystemDesign(ressys, path);
+# fig = ModelingToolkitDesigner.view(design, false)
+# save(joinpath(path, "ressys.svg"), fig; resolution=(500,300))
+```
+
+![ressys](https://github.com/SciML/ModelingToolkit.jl/assets/40798837/3740f0e2-7324-4c1f-af8b-eba02cfece81)
 
 When `structural_simplify()` is applied to this system it can be seen that the defaults are missing for `res.port_b` and `vol.port`.
 
