@@ -15,7 +15,6 @@ jobs:
       - uses: julia-actions/setup-julia@latest
         with:
           version: '1'
-      - name: Headless server graphics drivers
       - run: sudo apt-get update && sudo apt-get install -y xorg-dev mesa-utils xvfb libgl1 freeglut3-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
       - name: Install dependencies
         run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
