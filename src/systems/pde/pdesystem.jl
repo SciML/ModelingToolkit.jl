@@ -94,7 +94,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
         analytic = nothing,
         analytic_func = nothing,
         gui_metadata = nothing,
-		eval_module = @__MODULE__,
+        eval_module = @__MODULE__,
         checks::Union{Bool, Int} = true,
         name)
         if checks == true || (checks & CheckUnits) > 0
@@ -109,16 +109,16 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
                 throw(ArgumentError("The number of analytic solutions must match the number of dependent variables"))
             end
 
-			if isnothing(analytic_func)
-				analytic_func = map(analytic) do eq
-					args = arguments(eq.lhs)
-					p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
-					args = vcat(DestructuredArgs(p), args)
-					ex = Func(args, [], eq.rhs) |> toexpr
-					eq.lhs => drop_expr(@RuntimeGeneratedFunction(eval_module, ex))
-				end
-			end
-		end
+            if isnothing(analytic_func)
+                analytic_func = map(analytic) do eq
+                    args = arguments(eq.lhs)
+                    p = ps isa SciMLBase.NullParameters ? [] : map(a -> a.first, ps)
+                    args = vcat(DestructuredArgs(p), args)
+                    ex = Func(args, [], eq.rhs) |> toexpr
+                    eq.lhs => drop_expr(@RuntimeGeneratedFunction(eval_module, ex))
+                end
+            end
+        end
 
         if !isnothing(analytic_func)
             analytic_func = analytic_func isa Dict ? analytic_func : analytic_func |> Dict
