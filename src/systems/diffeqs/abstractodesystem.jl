@@ -797,6 +797,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     use_union = true,
     tofloat = true,
     symbolic_u0 = false,
+    u0_constructor = identity,
     kwargs...)
     eqs = equations(sys)
     dvs = states(sys)
@@ -809,6 +810,9 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
         tofloat,
         use_union,
         symbolic_u0)
+    if u0 !== nothing
+        u0 = u0_constructor(u0)
+    end
 
     p, split_idxs = split_parameters_by_type(p)
     if p isa Tuple

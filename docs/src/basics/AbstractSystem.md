@@ -56,10 +56,12 @@ The values which are common to all `AbstractSystem`s are:
 Optionally, a system could have:
 
   - `observed(sys)`: All observed equations of the system and its subsystems.
+  - `independent_variables(sys)`: The independent variables of a system.
+  - `defaults(sys)`: A `Dict` that maps variables/parameters into their default values for the system and its subsystems.
   - `get_observed(sys)`: Observed equations of the current-level system.
   - `get_continuous_events(sys)`: `SymbolicContinuousCallback`s of the current-level system.
-  - `get_defaults(sys)`: A `Dict` that maps variables into their default values.
-  - `independent_variables(sys)`: The independent variables of a system.
+  - `get_defaults(sys)`: A `Dict` that maps variables into their default values
+    for the current-level system.
   - `get_noiseeqs(sys)`: Noise equations of the current-level system.
   - `get_metadata(sys)`: Any metadata about the system or its origin to be used by downstream packages.
 

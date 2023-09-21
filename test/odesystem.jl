@@ -438,6 +438,8 @@ prob = ODEProblem(sys)
 sol = solve(prob, Tsit5())
 @test sol.t[end] == tspan[end]
 @test sum(abs, sol[end]) < 1
+prob = ODEProblem{false}(sys; u0_constructor = x -> SVector(x...))
+@test prob.u0 isa SVector
 
 # check_eqs_u0 kwarg test
 @parameters t
