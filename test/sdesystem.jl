@@ -25,10 +25,10 @@ f = eval(generate_diffusion_function(de)[1])
 @test f(ones(3), rand(3), nothing) == 0.1ones(3)
 
 f = SDEFunction(de)
-prob = SDEProblem(SDEFunction(de), f.g, [1.0, 0.0, 0.0], (0.0, 100.0), (10.0, 26.0, 2.33))
+prob = SDEProblem(SDEFunction(de), [1.0, 0.0, 0.0], (0.0, 100.0), (10.0, 26.0, 2.33))
 sol = solve(prob, SRIW1(), seed = 1)
 
-probexpr = SDEProblem(SDEFunction(de), f.g, [1.0, 0.0, 0.0], (0.0, 100.0),
+probexpr = SDEProblem(SDEFunction(de), [1.0, 0.0, 0.0], (0.0, 100.0),
     (10.0, 26.0, 2.33))
 solexpr = solve(eval(probexpr), SRIW1(), seed = 1)
 
@@ -55,7 +55,7 @@ f(du, [1, 2, 3.0], [0.1, 0.2, 0.3], nothing)
     0.2 0.3 0.01*3]
 
 f = SDEFunction(de)
-prob = SDEProblem(SDEFunction(de), f.g, [1.0, 0.0, 0.0], (0.0, 100.0), (10.0, 26.0, 2.33),
+prob = SDEProblem(SDEFunction(de), [1.0, 0.0, 0.0], (0.0, 100.0), (10.0, 26.0, 2.33),
     noise_rate_prototype = zeros(3, 3))
 sol = solve(prob, EM(), dt = 0.001)
 
