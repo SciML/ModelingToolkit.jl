@@ -25,7 +25,7 @@ makedocs(sitename = "ModelingToolkit.jl",
     clean = true, doctest = false, linkcheck = true,
     warnonly = [:docs_block, :missing_docs, :cross_references],
     linkcheck_ignore = ["https://epubs.siam.org/doi/10.1137/0903023"],
-    format = Documenter.HTML(; analytics = "UA-90474609-3",
+    format = Documenter.HTML(;
         assets = ["assets/favicon.ico"],
         mathengine,
         canonical = "https://docs.sciml.ai/ModelingToolkit/stable/",
