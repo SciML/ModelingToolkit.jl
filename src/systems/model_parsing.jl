@@ -83,7 +83,8 @@ function _model_macro(mod, name, expr, isconnector)
     :($name = $Model($f, $dict, $isconnector))
 end
 
-function parse_variable_def!(dict, mod, arg, varclass, kwargs, def = nothing)
+function parse_variable_def!(dict, mod, arg, varclass, kwargs;
+    def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
     metatypes = [(:connection_type, VariableConnectType),
         (:description, VariableDescription),
         (:unit, VariableUnit),
@@ -104,20 +105,20 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, def = nothing)
     MLStyle.@match arg begin
         a::Symbol => begin
             push!(kwargs, Expr(:kw, a, nothing))
-            var = generate_var!(dict, a, varclass)
+            var = generate_var!(dict, a, varclass; indices)
             dict[:kwargs][getname(var)] = def
-            (var, nothing)
+            (var, def)
         end
         Expr(:call, a, b) => begin
             push!(kwargs, Expr(:kw, a, nothing))
-            var = generate_var!(dict, a, b, varclass)
+            var = generate_var!(dict, a, b, varclass; indices)
             dict[:kwargs][getname(var)] = def
-            (var, nothing)
+            (var, def)
         end
         Expr(:(=), a, b) => begin
             Base.remove_linenums!(b)
             def, meta = parse_default(mod, b)
-            var, _ = parse_variable_def!(dict, mod, a, varclass, kwargs, def)
+            var, def = parse_variable_def!(dict, mod, a, varclass, kwargs; def)
             dict[varclass][getname(var)][:default] = def
             if meta !== nothing
                 for (type, key) in metatypes
@@ -142,31 +143,37 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs, def = nothing)
                 end
                 var = set_var_metadata(var, meta)
             end
-            (set_var_metadata(var, meta), def)
+            (var, def)
+        end
+        Expr(:ref, a, b...) => begin
+            parse_variable_def!(dict, mod, a, varclass, kwargs;
+                def, indices = [eval.(b)...])
         end
         _ => error("$arg cannot be parsed")
     end
 end
 
-function generate_var(a, varclass)
-    var = Symbolics.variable(a)
+function generate_var(a, varclass;
+    indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+    var = indices === nothing ? Symbolics.variable(a) : first(@variables $a[indices...])
     if varclass == :parameters
         var = toparam(var)
     end
     var
 end
 
-function generate_var!(dict, a, varclass)
-    #var = generate_var(Symbol("#", a), varclass)
-    var = generate_var(a, varclass)
+function generate_var!(dict, a, varclass;
+    indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
     vd = get!(dict, varclass) do
         Dict{Symbol, Dict{Symbol, Any}}()
     end
     vd[a] = Dict{Symbol, Any}()
-    var
+    indices !== nothing && (vd[a][:size] = Tuple(lastindex.(indices)))
+    generate_var(a, varclass; indices)
 end
 
-function generate_var!(dict, a, b, varclass)
+function generate_var!(dict, a, b, varclass;
+    indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
     iv = generate_var(b, :variables)
     prev_iv = get!(dict, :independent_variable) do
         iv
@@ -176,7 +183,12 @@ function generate_var!(dict, a, b, varclass)
         Dict{Symbol, Dict{Symbol, Any}}()
     end
     vd[a] = Dict{Symbol, Any}()
-    var = Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Real}, Real})(iv)
+    var = if indices === nothing
+        Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Real}, Real})(iv)
+    else
+        vd[a][:size] = Tuple(lastindex.(indices))
+        first(@variables $a(iv)[indices...])
+    end
     if varclass == :parameters
         var = toparam(var)
     end
@@ -215,7 +227,7 @@ end
 
 function set_var_metadata(a, ms)
     for (m, v) in ms
-        a = setmetadata(a, m, v)
+        a = wrap(set_scalar_metadata(unwrap(a), m, v))
     end
     a
 end
@@ -433,11 +445,12 @@ end
 
 function parse_variable_arg!(expr, vs, dict, mod, arg, varclass, kwargs)
     vv, def = parse_variable_def!(dict, mod, arg, varclass, kwargs)
-    v = Num(vv)
-    name = getname(v)
-    push!(vs, name)
+    name = getname(vv)
     push!(expr.args,
-        :($name = $name === nothing ? $setdefault($vv, $def) : $setdefault($vv, $name)))
+        :($name = $name === nothing ?
+                  $setdefault($vv, $def) :
+                  $setdefault($vv, $name)))
+    vv isa Num ? push!(vs, name) : push!(vs, :($name...))
 end
 
 function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs)
