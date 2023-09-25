@@ -583,7 +583,7 @@ function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map = [], tspan = get_tspa
         noise_rate_prototype = zeros(eltype(u0), size(noiseeqs))
     end
 
-    SDEProblem{iip}(f, u0, tspan, p; callback = cbs,
+    SDEProblem{iip}(f, f.g, u0, tspan, p; callback = cbs,
         noise_rate_prototype = noise_rate_prototype, kwargs...)
 end
 
@@ -648,7 +648,7 @@ function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
         tspan = $tspan
         p = $p
         noise_rate_prototype = $noise_rate_prototype
-        SDEProblem(f, u0, tspan, p; noise_rate_prototype = noise_rate_prototype,
+        SDEProblem(f, f.g, u0, tspan, p; noise_rate_prototype = noise_rate_prototype,
             $(kwargs...))
     end
     !linenumbers ? striplines(ex) : ex
