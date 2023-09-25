@@ -2,6 +2,34 @@ using ModelingToolkit, Test
 using ModelingToolkitStandardLibrary.Blocks
 using OrdinaryDiffEq
 
+
+x = [1, 2.0, false, [1,2,3], Parameter(1.0)]
+
+y = ModelingToolkit.promote_to_concrete(x)
+@test eltype(y) == Union{Float64, Parameter{Float64}, Vector{Int64}}
+
+y = ModelingToolkit.promote_to_concrete(x; tofloat=false)
+@test eltype(y) == Union{Bool, Float64, Int64, Parameter{Float64}, Vector{Int64}}
+
+
+x = [1, 2.0, false, [1,2,3]]
+y = ModelingToolkit.promote_to_concrete(x)
+@test eltype(y) == Union{Float64, Vector{Int64}}
+
+x = Any[1, 2.0, false]
+y = ModelingToolkit.promote_to_concrete(x; tofloat=false)
+@test eltype(y) == Union{Bool, Float64, Int64}
+
+y = ModelingToolkit.promote_to_concrete(x; use_union=false)
+@test eltype(y) == Float64
+
+x = Float16[1., 2., 3.]
+y = ModelingToolkit.promote_to_concrete(x)
+@test eltype(y) == Float16
+
+
+
+
 # ------------------------ Mixed Single Values and Vector
 
 dt = 4e-4
