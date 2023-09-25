@@ -77,3 +77,76 @@ prob = ODEProblem(sys, [], tspan, []; tofloat = false)
 @test prob.p isa Tuple{Vector{Float64}, Vector{Int64}}
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
+
+
+
+
+
+
+# ------------------------- Bug
+using ModelingToolkit, LinearAlgebra
+using ModelingToolkitStandardLibrary.Mechanical.Rotational
+using ModelingToolkitStandardLibrary.Blocks
+using ModelingToolkitStandardLibrary.Blocks: t
+using ModelingToolkit: connect
+
+"A wrapper function to make symbolic indexing easier"
+function wr(sys)
+    ODESystem(Equation[], ModelingToolkit.get_iv(sys), systems=[sys], name=:a_wrapper)
+end
+indexof(sym,syms) = findfirst(isequal(sym),syms)
+
+# Parameters
+m1 = 1.
+m2 = 1.
+k = 10. # Spring stiffness
+c = 3.  # Damping coefficient
+
+@named inertia1 = Inertia(; J = m1)
+@named inertia2 = Inertia(; J = m2)
+@named spring = Spring(; c = k)
+@named damper = Damper(; d = c)
+@named torque = Torque(use_support=false)
+
+function SystemModel(u=nothing; name=:model)
+    eqs = [
+        connect(torque.flange, inertia1.flange_a)
+        connect(inertia1.flange_b, spring.flange_a, damper.flange_a)
+        connect(inertia2.flange_a, spring.flange_b, damper.flange_b)
+    ]
+    if u !== nothing
+        push!(eqs, connect(torque.tau, u.output))
+        return @named model = ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper, u])
+    end
+    ODESystem(eqs, t; systems = [torque, inertia1, inertia2, spring, damper], name)
+end
+
+
+model = SystemModel() # Model with load disturbance
+@named d = Step(start_time=1., duration=10., offset=0., height=1.) # Disturbance
+model_outputs = [model.inertia1.w, model.inertia2.w, model.inertia1.phi, model.inertia2.phi] # This is the state realization we want to control
+inputs = [model.torque.tau.u]
+matrices, ssys = ModelingToolkit.linearize(wr(model), inputs, model_outputs)
+
+# Design state-feedback gain using LQR
+# Define cost matrices
+x_costs = [
+    model.inertia1.w =>   1.
+    model.inertia2.w =>   1.
+    model.inertia1.phi => 1.
+    model.inertia2.phi => 1.
+]
+L = randn(1,4) # Post-multiply by `C` to get the correct input to the controller
+@named state_feedback = MatrixGain(K=-L) # Build negative feedback into the feedback matrix
+@named add = Add(;k1=1., k2=1.) # To add the control signal and the disturbance
+
+connections = [
+    [state_feedback.input.u[i] ~ model_outputs[i] for i in 1:4]
+    connect(d.output, :d, add.input1)
+    connect(add.input2, state_feedback.output)
+    connect(add.output, :u, model.torque.tau)
+]
+closed_loop = ODESystem(connections, t, systems=[model, state_feedback, add, d], name=:closed_loop)
+S = get_sensitivity(closed_loop, :u)
+
+
