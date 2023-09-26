@@ -1277,9 +1277,18 @@ function linearization_function(sys::AbstractSystem, inputs,
     initialize = true,
     op = Dict(),
     p = DiffEqBase.NullParameters(),
+    zero_dummy_der = false,
     kwargs...)
-    sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
+    ssys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs;
+        simplify,
         kwargs...)
+    if zero_dummy_der
+        dummyder = setdiff(states(ssys), states(sys))
+        defs = Dict(x => 0.0 for x in dummyder)
+        @set! ssys.defaults = merge(defs, defaults(ssys))
+        op = merge(defs, op)
+    end
+    sys = ssys
     x0 = merge(defaults(sys), op)
     u0, p, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
     p, split_idxs = split_parameters_by_type(p)
@@ -1612,11 +1621,12 @@ function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
     allow_input_derivatives = false,
     zero_dummy_der = false,
     kwargs...)
-    if zero_dummy_der
-        dummyder = setdiff(states(ssys), states(sys))
-        op = merge(op, Dict(x => 0.0 for x in dummyder))
-    end
-    lin_fun, ssys = linearization_function(sys, inputs, outputs; op, kwargs...)
+    lin_fun, ssys = linearization_function(sys,
+        inputs,
+        outputs;
+        zero_dummy_der,
+        op,
+        kwargs...)
     linearize(ssys, lin_fun; op, t, allow_input_derivatives), ssys
 end
 
