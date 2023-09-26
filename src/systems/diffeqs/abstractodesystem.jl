@@ -354,6 +354,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
     checkbounds = false,
     sparsity = false,
     analytic = nothing,
+    split_idxs = nothing,
     kwargs...) where {iip, specialize}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
         expression_module = eval_module, checkbounds = checkbounds,
@@ -508,6 +509,7 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         nothing
     end
 
+    @set! sys.split_idxs = split_idxs
     ODEFunction{iip, specialize}(f;
         sys = sys,
         jac = _jac === nothing ? nothing : _jac,
@@ -765,7 +767,7 @@ Take dictionaries with initial conditions and parameters and convert them to num
 """
 function get_u0_p(sys,
     u0map,
-    parammap;
+    parammap = nothing;
     use_union = true,
     tofloat = true,
     symbolic_u0 = false)
@@ -773,7 +775,9 @@ function get_u0_p(sys,
     ps = parameters(sys)
 
     defs = defaults(sys)
-    defs = mergedefaults(defs, parammap, ps)
+    if parammap !== nothing
+        defs = mergedefaults(defs, parammap, ps)
+    end
     defs = mergedefaults(defs, u0map, dvs)
 
     if symbolic_u0
@@ -835,7 +839,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     f = constructor(sys, dvs, ps, u0; ddvs = ddvs, tgrad = tgrad, jac = jac,
         checkbounds = checkbounds, p = p,
         linenumbers = linenumbers, parallel = parallel, simplify = simplify,
-        sparse = sparse, eval_expression = eval_expression,
+        sparse = sparse, eval_expression = eval_expression, split_idxs,
         kwargs...)
     implicit_dae ? (f, du0, u0, p) : (f, u0, p)
 end

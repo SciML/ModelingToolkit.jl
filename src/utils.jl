@@ -661,7 +661,7 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
     else
         sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.istree(x), vs)
         isempty(sym_vs) || throw_missingvars_in_sys(sym_vs)
-        
+
         C = nothing
         for v in vs
             E = typeof(v)
@@ -676,7 +676,7 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
             if use_union
                 C = Union{C, E}
             else
-                @assert C == E "`promote_to_concrete` can't make type $E uniform with $C"
+                @assert C==E "`promote_to_concrete` can't make type $E uniform with $C"
                 C = E
             end
         end
@@ -686,7 +686,7 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
             if (vs[i] isa Number) & tofloat
                 y[i] = float(vs[i]) #needed because copyto! can't convert Int to Float automatically
             else
-                y[i] = vs[i] 
+                y[i] = vs[i]
             end
         end
 

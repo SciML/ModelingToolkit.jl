@@ -139,6 +139,10 @@ struct ODESystem <: AbstractODESystem
     used for ODAEProblem.
     """
     unknown_states::Union{Nothing, Vector{Any}}
+    """
+    split_idxs: a vector of vectors of indices for the split parameters.
+    """
+    split_idxs::Union{Nothing, Vector{Vector{Int}}}
 
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
         jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
@@ -146,8 +150,8 @@ struct ODESystem <: AbstractODESystem
         devents, metadata = nothing, gui_metadata = nothing,
         tearing_state = nothing,
         substitutions = nothing, complete = false,
-        discrete_subsystems = nothing, unknown_states = nothing;
-        checks::Union{Bool, Int} = true)
+        discrete_subsystems = nothing, unknown_states = nothing,
+        split_idxs = nothing; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -161,7 +165,7 @@ struct ODESystem <: AbstractODESystem
             ctrl_jac, Wfact, Wfact_t, name, systems, defaults, torn_matching,
             connector_type, preface, cevents, devents, metadata, gui_metadata,
             tearing_state, substitutions, complete, discrete_subsystems,
-            unknown_states)
+            unknown_states, split_idxs)
     end
 end
 
