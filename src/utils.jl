@@ -670,13 +670,13 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
                     E = float(E)
                 end
             end
+            if C === nothing
+                C = E
+            end
             if use_union
-                if C === nothing
-                    C = E
-                else
-                    C = Union{C, E}
-                end
+                C = Union{C, E}
             else
+                @assert C == E "`promote_to_concrete` can't make type $E uniform with $C"
                 C = E
             end
         end
@@ -684,9 +684,9 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
         y = similar(vs, C)
         for i in eachindex(vs)
             if (vs[i] isa Number) & tofloat
-                y[i] = float(vs[i])
+                y[i] = float(vs[i]) #needed because copyto! can't convert Int to Float automatically
             else
-                y[i] = vs[i]
+                y[i] = vs[i] 
             end
         end
 
