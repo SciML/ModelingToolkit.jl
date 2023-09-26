@@ -74,11 +74,27 @@ eqs = [y ~ src.output.u
 @named sys = ODESystem(eqs, t, vars, []; systems = [int, src])
 s = complete(sys)
 sys = structural_simplify(sys)
-prob = ODEProblem(sys, [], (0.0, t_end), [s.src.data => x])
+prob = ODEProblem(sys, [], (0.0, t_end), [s.src.data => x]; tofloat=false)
 @test prob.p isa Tuple{Vector{Float64}, Vector{Int}, Vector{Vector{Float64}}}
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 @test sol[y][end] == x[end]
+
+#TODO: remake becomes more complicated now, how to improve?
+defs = ModelingToolkit.defaults(sys)
+defs[s.src.data] = 2x
+p′ = ModelingToolkit.varmap_to_vars(defs, parameters(sys); tofloat=false)
+p′, = ModelingToolkit.split_parameters_by_type(p′) #NOTE: we need to ensure this is called now before calling remake()
+prob′ = remake(prob; p=p′)
+sol = solve(prob′, ImplicitEuler());
+@test sol.retcode == ReturnCode.Success
+@test sol[y][end] == 2x[end]
+
+prob′′ = remake(prob; p=[s.src.data => x])
+@test prob′′.p isa Tuple
+
+
+
 
 # ------------------------ Mixed Type Converted to float (default behavior)
 
