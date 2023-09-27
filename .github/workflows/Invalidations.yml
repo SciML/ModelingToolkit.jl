@@ -2,6 +2,8 @@ name: Invalidations
 
 on:
   pull_request:
+    paths-ignore:
+        - 'docs/**'
 
 concurrency:
   # Skip intermediate builds: always.
@@ -30,7 +32,7 @@ jobs:
     - uses: julia-actions/julia-buildpkg@v1
     - uses: julia-actions/julia-invalidations@v1
       id: invs_default
-    
+
     - name: Report invalidation counts
       run: |
         echo "Invalidations on default branch: ${{ steps.invs_default.outputs.total }} (${{ steps.invs_default.outputs.deps }} via deps)" >> $GITHUB_STEP_SUMMARY
