@@ -67,6 +67,7 @@ using PrecompileTools, Reexport
         substituter, scalarize, getparent
 
     import DiffEqBase: @add_kwonly
+    import OrdinaryDiffEq
 
     import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 
