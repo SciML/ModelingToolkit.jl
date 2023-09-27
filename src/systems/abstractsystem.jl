@@ -1800,10 +1800,6 @@ function compose(syss...; name = nameof(first(syss)))
 end
 Base.:(∘)(sys1::AbstractSystem, sys2::AbstractSystem) = compose(sys1, sys2)
 
-function UnPack.unpack(sys::ModelingToolkit.AbstractSystem, ::Val{p}) where {p}
-    getproperty(sys, p; namespace = false)
-end
-
 """
     missing_variable_defaults(sys::AbstractSystem, default = 0.0)
 

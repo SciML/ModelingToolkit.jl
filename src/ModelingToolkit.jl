@@ -70,7 +70,7 @@ using PrecompileTools, Reexport
 
     import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
 
-    @reexport using UnPack
+    @reexport using SimpleUnPack
 end
 RuntimeGeneratedFunctions.init(@__MODULE__)
 

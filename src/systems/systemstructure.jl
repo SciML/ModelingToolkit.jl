@@ -14,7 +14,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
-using UnPack
+using SimpleUnPack
 using Setfield
 using SparseArrays
 

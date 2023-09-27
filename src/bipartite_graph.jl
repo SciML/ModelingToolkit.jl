@@ -11,7 +11,7 @@ export 𝑠vertices, 𝑑vertices, has_𝑠vertex, has_𝑑vertex, 𝑠neighbors
     delete_srcs!, delete_dsts!
 
 using DocStringExtensions
-using UnPack
+using SimpleUnPack
 using SparseArrays
 using Graphs
 using Setfield

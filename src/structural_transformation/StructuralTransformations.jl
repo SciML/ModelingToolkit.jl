@@ -1,7 +1,7 @@
 module StructuralTransformations
 
 using Setfield: @set!, @set
-using UnPack: @unpack
+using SimpleUnPack: @unpack
 
 using Symbolics: unwrap, linear_expansion
 using SymbolicUtils
