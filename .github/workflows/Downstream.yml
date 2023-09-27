@@ -7,6 +7,12 @@ on:
     paths-ignore:
         - 'docs/**'
 
+concurrency:
+  # Skip intermediate builds: always, but for the master branch and tags.
+  # Cancel intermediate builds: always, but for the master branch and tags.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' && github.refs != 'refs/tags/*' }}
+
 jobs:
   test:
     name: ${{ matrix.package.repo }}/${{ matrix.package.group }}/${{ matrix.julia-version }}
