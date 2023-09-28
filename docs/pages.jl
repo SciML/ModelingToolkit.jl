@@ -21,6 +21,7 @@ pages = [
         "basics/Composition.md",
         "basics/Events.md",
         "basics/Linearization.md",
+        "basics/MTKModel_Connector.md",
         "basics/Validation.md",
         "basics/DependencyGraphs.md",
         "basics/FAQ.md"],
