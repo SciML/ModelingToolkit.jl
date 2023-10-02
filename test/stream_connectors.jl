@@ -157,8 +157,8 @@ eqns = [domain_connect(fluid, n1m1.port_a)
     pipe.port_b.P ~ sink.port.P]
 @test sort(equations(expand_connections(n1m1Test)), by = string) ==
       [0 ~ -pipe.port_a.m_flow - pipe.port_b.m_flow
-    0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
     0 ~ n1m1.source.port1.m_flow - n1m1.port_a.m_flow
+    0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
     0 ~ pipe.port_b.m_flow + sink.port.m_flow
     fluid.m_flow ~ 0
     n1m1.port_a.P ~ pipe.port_a.P
