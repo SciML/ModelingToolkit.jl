@@ -320,11 +320,10 @@ DAE solver](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/#OrdinaryD
 This is done as follows:
 
 ```@example acausal
-u0 = [capacitor.v => 0.0
-    capacitor.p.i => 0.0]
+u0 = [capacitor.v => 0.0]
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
-plot(sol)
+plot(sol, idxs = [capacitor.v, capacitor.p.i])
 ```
 
 Since we have run `structural_simplify`, MTK can numerically solve all the
@@ -337,7 +336,7 @@ u0 = [
 ]
 prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
-plot(sol)
+plot(sol, idxs = [capacitor.v, capacitor.p.i])
 ```
 
 Notice that this solves the whole system by only solving for one variable!

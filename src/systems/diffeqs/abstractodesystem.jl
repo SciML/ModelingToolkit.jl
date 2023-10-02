@@ -927,12 +927,26 @@ function DiffEqBase.ODEProblem{iip, specialize}(sys::AbstractODESystem, u0map = 
     parammap = DiffEqBase.NullParameters();
     callback = nothing,
     check_length = true,
+    check_ic = true,
     kwargs...) where {iip, specialize}
     has_difference = any(isdifferenceeq, equations(sys))
     f, u0, p = process_DEProblem(ODEFunction{iip, specialize}, sys, u0map, parammap;
         t = tspan !== nothing ? tspan[1] : tspan,
         has_difference = has_difference,
         check_length, kwargs...)
+    if check_ic && !isempty(u0map) # Check that user-provided initial conditions are repsected, otherwise error
+        # y = f.observed.obs.contents(u0, p, tspan[1])
+        obsvars = [eq.lhs for eq in getfield(sys, :observed)]
+        y = [f.observed(var, u0, p, tspan[1]) for var in obsvars]
+        obsmap = Dict(obsvars .=> eachindex(obsvars))
+        for (var, val) in u0map
+            i = get(obsmap, var, nothing)
+            i === nothing && continue
+            val ≈ y[i] ||
+                error("The user-provided initial condition for $var = $val is conflicting with another initial condition ($(y[i])) that takes precedent.")
+        end
+    end
+
     cbs = process_events(sys; callback, has_difference, kwargs...)
     if has_discrete_subsystems(sys) && (dss = get_discrete_subsystems(sys)) !== nothing
         affects, clocks, svs = ModelingToolkit.generate_discrete_affect(dss...)
