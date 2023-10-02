@@ -8,6 +8,12 @@ on:
     tags: '*'
   pull_request:
 
+concurrency:
+  # Skip intermediate builds: always, but for the master branch and tags.
+  # Cancel intermediate builds: always, but for the master branch and tags.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' && github.refs != 'refs/tags/*'}}
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}

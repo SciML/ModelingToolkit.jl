@@ -1,4 +1,3 @@
-using OrdinaryDiffEq
 const SYSTEM_COUNT = Threads.Atomic{UInt}(0)
 
 get_component_type(x::AbstractSystem) = get_gui_metadata(x).type
@@ -1314,7 +1313,7 @@ function linearization_function(sys::AbstractSystem, inputs,
                     residual = fun(u, p, t)
                     if norm(residual[alge_idxs]) > √(eps(eltype(residual)))
                         prob = ODEProblem(fun, u, (t, t + 1), p)
-                        integ = init(prob, Rodas5P())
+                        integ = init(prob, OrdinaryDiffEq.Rodas5P())
                         u = integ.u
                     end
                 end

@@ -1,8 +1,8 @@
-## Defining components with `@mtkmodel`
+# Defining components with `@mtkmodel`
 
 `@mtkmodel` is a convenience macro to define ModelingToolkit components. It returns `ModelingToolkit.Model`, which includes a constructor that returns an ODESystem, a `structure` dictionary with metadata and flag `isconnector` which is set to `false`.
 
-### What can an MTK-Model definition have?
+## What can an MTK-Model definition have?
 
 `@mtkmodel` definition contains begin blocks of
 
@@ -52,7 +52,7 @@ end
 end
 ```
 
-#### `@parameters` and `@variables` begin block
+### `@parameters` and `@variables` begin block
 
   - Parameters and variables are declared with respective begin blocks.
   - Variables must be functions of an independent variable.
@@ -67,12 +67,12 @@ julia > ModelingToolkit.getdefault(model_c.v)
 2.0
 ```
 
-#### `@structural_parameters` begin block
+### `@structural_parameters` begin block
 
   - This block is for non symbolic input arguements. These are for inputs that usually are not meant to be part of components; but influence how they are defined. One can list inputs like boolean flags, functions etc... here.
   - Whenever default values are specified, unlike parameters/variables, they are reflected in the keyword argument list.
 
-#### `@extend` block
+### `@extend` block
 
 To extend a partial system,
 
@@ -88,7 +88,7 @@ julia> @named model_c = ModelC(; p1 = 2.0)
 
 However, as `p2` isn't listed in the model definition, its default can't be modified by users.
 
-#### `@components` begin block
+### `@components` begin block
 
   - Declare the subcomponents within `@components` begin block.
   - The arguments in these subcomponents are promoted as keyword arguments as `subcomponent_name__argname` with `nothing` as default value.
@@ -102,7 +102,7 @@ julia> @named model_c1 = ModelC(; model_a.k1 = 1);
 
 And as `k2` isn't listed in the sub-component definition of `ModelC`, its default value can't be modified by users.
 
-#### `@equations` begin block
+### `@equations` begin block
 
   - List all the equations here
 
@@ -130,10 +130,7 @@ end
 `@connector`s accepts begin blocks of `@components`, `@equations`, `@extend`, `@parameters`, `@structural_parameters`, `@variables`. These keywords mean the same as described above for `@mtkmodel`.
 
 !!! note
-    
     For more examples of usage, checkout [ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl/)
-
-* * *
 
 ### What's a `structure` dictionary?
 
