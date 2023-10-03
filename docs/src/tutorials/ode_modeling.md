@@ -9,21 +9,34 @@ illustrate the basic user-facing functionality.
 A much deeper tutorial with forcing functions and sparse Jacobians is below.
 But if you want to just see some code and run, here's an example:
 
-```@example ode
+```@example first-mtkmodel
 using ModelingToolkit
 
-@variables t x(t)   # independent and dependent variables
-@parameters τ       # parameters
-@constants h = 1    # constants have an assigned value
-D = Differential(t) # define an operator for the differentiation w.r.t. time
+@variables t
+D = Differential(t)
 
-# your first ODE, consisting of a single equation, the equality indicated by ~
-@named fol = ODESystem([D(x) ~ (h - x) / τ])
+@mtkmodel FOL begin
+    @parameters begin
+        τ # parameters
+    end
+    @variables begin
+        x(t) # dependent variables
+    end
+    @structural_parameters begin
+        h = 1
+    end
+    @equations begin
+        D(x) ~ (h - x) / τ
+    end
+end
 
 using DifferentialEquations: solve
 
-prob = ODEProblem(fol, [x => 0.0], (0.0, 10.0), [τ => 3.0])
-# parameter `τ` can be assigned a value, but constant `h` cannot
+@named fol = FOL()
+fol = complete(fol)
+
+prob = ODEProblem(fol, [fol.x => 0.0], (0.0, 10.0), [fol.τ => 3.0])
+# parameter `τ` can be assigned a value, but structural parameter `h` cannot'.
 sol = solve(prob)
 
 using Plots
@@ -43,13 +56,73 @@ first-order lag element:
 
 Here, ``t`` is the independent variable (time), ``x(t)`` is the (scalar) state
 variable, ``f(t)`` is an external forcing function, and ``\tau`` is a
-parameter. In MTK, this system can be modelled as follows. For simplicity, we
-first set the forcing function to a time-independent value.
+parameter.
+In MTK, this system can be modelled as follows. For simplicity, we
+first set the forcing function to a time-independent value ``h``. And the
+independent variable ``t`` is automatically added by ``@mtkmodel``.
 
 ```@example ode2
 using ModelingToolkit
 
-@variables t x(t)  # independent and dependent variables
+@variables t
+D = Differential(t)
+
+@mtkmodel FOL begin
+    @parameters begin
+        τ # parameters
+    end
+    @variables begin
+        x(t) # dependent variables
+    end
+    @structural_parameters begin
+        h = 1
+    end
+    @equations begin
+        D(x) ~ (h - x) / τ
+    end
+end
+
+@named fol_incomplete = FOL()
+fol = complete(fol_incomplete)
+```
+
+Note that equations in MTK use the tilde character (`~`) as equality sign.
+
+`@named` creates an instance of `FOL` named as `fol`. Before creating an
+ODEProblem with `fol` run `complete`. Once the system is complete, it will no
+longer namespace its subsystems or variables. This is necessary to correctly pass
+the intial values of states and parameters to the ODEProblem.
+
+```julia
+julia> fol_incomplete.x
+fol_incomplete₊x(t)
+
+julia> fol.x
+x(t)
+```
+
+After construction of the ODE, you can solve it using [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/):
+
+```@example ode2
+using DifferentialEquations
+using Plots
+
+prob = ODEProblem(fol, [fol.x => 0.0], (0.0, 10.0), [fol.τ => 3.0])
+plot(solve(prob))
+```
+
+The initial state and the parameter values are specified using a mapping
+from the actual symbolic elements to their values, represented as an array
+of `Pair`s, which are constructed using the `=>` operator.
+
+## Non-DSL way of defining an ODESystem
+
+Using `@mtkmodel` is the preferred way of defining ODEs with MTK. However, let us
+look at how we can define the same system without `@mtkmodel`. This is useful for
+defining PDESystem etc.
+
+```@example first-mtkmodel
+@variables t x(t)   # independent and dependent variables
 @parameters τ       # parameters
 @constants h = 1    # constants
 D = Differential(t) # define an operator for the differentiation w.r.t. time
@@ -58,33 +131,35 @@ D = Differential(t) # define an operator for the differentiation w.r.t. time
 @named fol_model = ODESystem(D(x) ~ (h - x) / τ)
 ```
 
-Note that equations in MTK use the tilde character (`~`) as equality sign.
-Also note that the `@named` macro simply ensures that the symbolic name
-matches the name in the REPL. If omitted, you can directly set the `name` keyword.
-
-After construction of the ODE, you can solve it using [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/):
-
-```@example ode2
-using DifferentialEquations
-using Plots
-
-prob = ODEProblem(fol_model, [x => 0.0], (0.0, 10.0), [τ => 3.0])
-plot(solve(prob))
-```
-
-The initial state and the parameter values are specified using a mapping
-from the actual symbolic elements to their values, represented as an array
-of `Pair`s, which are constructed using the `=>` operator.
-
 ## Algebraic relations and structural simplification
 
 You could separate the calculation of the right-hand side, by introducing an
 intermediate variable `RHS`:
 
 ```@example ode2
-@variables RHS(t)
-@named fol_separate = ODESystem([RHS ~ (h - x) / τ,
-    D(x) ~ RHS])
+using ModelingToolkit
+
+@mtkmodel FOL begin
+    @parameters begin
+        τ # parameters
+    end
+    @variables begin
+        x(t) # dependent variables
+        RHS(t)
+    end
+    @structural_parameters begin
+        h = 1
+    end
+    begin
+        D = Differential(t)
+    end
+    @equations begin
+        RHS ~ (h - x) / τ
+        D(x) ~ RHS
+    end
+end
+
+@named fol_separate = FOL()
 ```
 
 To directly solve this system, you would have to create a Differential-Algebraic
@@ -94,12 +169,12 @@ transformed into the single ODE we used in the first example above. MTK achieves
 this by structural simplification:
 
 ```@example ode2
-fol_simplified = structural_simplify(fol_separate)
+fol_simplified = structural_simplify(complete(fol_separate))
 equations(fol_simplified)
 ```
 
 ```@example ode2
-equations(fol_simplified) == equations(fol_model)
+equations(fol_simplified) == equations(fol)
 ```
 
 You can extract the equations from a system using `equations` (and, in the same
@@ -114,9 +189,12 @@ along with the state variable. Note that this has to be requested explicitly,
 through:
 
 ```@example ode2
-prob = ODEProblem(fol_simplified, [x => 0.0], (0.0, 10.0), [τ => 3.0])
+prob = ODEProblem(fol_simplified,
+    [fol_simplified.x => 0.0],
+    (0.0, 10.0),
+    [fol_simplified.τ => 3.0])
 sol = solve(prob)
-plot(sol, vars = [x, RHS])
+plot(sol, vars = [fol_simplified.x, fol_simplified.RHS])
 ```
 
 By default, `structural_simplify` also replaces symbolic `constants` with
@@ -136,8 +214,27 @@ What if the forcing function (the “external input”) ``f(t)`` is not constant
 Obviously, one could use an explicit, symbolic function of time:
 
 ```@example ode2
-@variables f(t)
-@named fol_variable_f = ODESystem([f ~ sin(t), D(x) ~ (f - x) / τ])
+@mtkmodel FOL begin
+    @parameters begin
+        τ # parameters
+    end
+    @variables begin
+        x(t) # dependent variables
+        f(t)
+    end
+    @structural_parameters begin
+        h = 1
+    end
+    begin
+        D = Differential(t)
+    end
+    @equations begin
+        f ~ sin(t)
+        D(x) ~ (f - x) / τ
+    end
+end
+
+@named fol_variable_f = FOL()
 ```
 
 But often this function might not be available in an explicit form.
@@ -154,11 +251,35 @@ value_vector = randn(10)
 f_fun(t) = t >= 10 ? value_vector[end] : value_vector[Int(floor(t)) + 1]
 @register_symbolic f_fun(t)
 
-@named fol_external_f = ODESystem([f ~ f_fun(t), D(x) ~ (f - x) / τ])
-prob = ODEProblem(structural_simplify(fol_external_f), [x => 0.0], (0.0, 10.0), [τ => 0.75])
+@mtkmodel FOLExternalFunction begin
+    @parameters begin
+        τ # parameters
+    end
+    @variables begin
+        x(t) # dependent variables
+        f(t)
+    end
+    @structural_parameters begin
+        h = 1
+    end
+    begin
+        D = Differential(t)
+    end
+    @equations begin
+        f ~ f_fun(t)
+        D(x) ~ (f - x) / τ
+    end
+end
+
+@named fol_external_f = FOLExternalFunction()
+fol_external_f = complete(fol_external_f)
+prob = ODEProblem(structural_simplify(fol_external_f),
+    [fol_external_f.x => 0.0],
+    (0.0, 10.0),
+    [fol_external_f.τ => 0.75])
 
 sol = solve(prob)
-plot(sol, vars = [x, f])
+plot(sol, vars = [fol_external_f.x, fol_external_f.f])
 ```
 
 ## Building component-based, hierarchical models
@@ -235,19 +356,43 @@ plot(solve(prob))
 
 More on this topic may be found in [Composing Models and Building Reusable Components](@ref acausal).
 
-## Defaults
+## Inital Guess
 
 It is often a good idea to specify reasonable values for the initial state and the
 parameters of a model component. Then, these do not have to be explicitly specified when constructing the `ODEProblem`.
 
 ```@example ode2
-function unitstep_fol_factory(; name)
+@mtkmodel UnitstepFOLFactory begin
+    @parameters begin
+        τ = 1.0
+    end
+    @variables begin
+        x(t) = 0.0
+    end
+    @equations begin
+        D(x) ~ (1 - x) / τ
+    end
+end
+```
+
+While defining the model `UnitstepFOLFactory`, an initial guess of 0.0 is assigned to `x(t)` and 1.0 to `τ`.
+Additionaly, these initial guesses can be modified while creating instances of `UnitstepFOLFactory` by passing arguements.
+
+```@example ode2
+@named fol = UnitstepFOLFactory(; x = 0.1)
+sol = ODEProblem(fol, [], (0.0, 5.0), []) |> solve
+```
+
+In non-DSL definitions, one can pass `defaults` dictionary to set the initial guess of the symbolic variables.
+
+```@example ode3
+using ModelingToolkit
+
+function UnitstepFOLFactory(; name)
     @parameters τ
     @variables t x(t)
     ODESystem(D(x) ~ (1 - x) / τ; name, defaults = Dict(x => 0.0, τ => 1.0))
 end
-
-ODEProblem(unitstep_fol_factory(name = :fol), [], (0.0, 5.0), []) |> solve
 ```
 
 Note that the defaults can be functions of the other variables, which is then
@@ -316,6 +461,8 @@ Where to go next?
 
   - Not sure how MTK relates to similar tools and packages? Read
     [Comparison of ModelingToolkit vs Equation-Based and Block Modeling Languages](@ref).
+  - For a more detailed explanation of `@mtkmodel` checkout
+    [Defining components with `@mtkmodel` and connectors with `@connectors`](@ref mtkmodel_connector)
   - Depending on what you want to do with MTK, have a look at some of the other
     **Symbolic Modeling Tutorials**.
   - If you want to automatically convert an existing function to a symbolic
