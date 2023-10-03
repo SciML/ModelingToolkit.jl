@@ -1,6 +1,23 @@
-# Defining components with `@mtkmodel`
+# [Defining components with `@mtkmodel` and connectors with `@connectors`](@id mtkmodel-connectors)
 
-`@mtkmodel` is a convenience macro to define ModelingToolkit components. It returns `ModelingToolkit.Model`, which includes a constructor that returns an ODESystem, a `structure` dictionary with metadata and flag `isconnector` which is set to `false`.
+## MTK Model
+
+MTK represents components and connectors with `Model`.
+
+```@docs
+ModelingToolkit.Model
+```
+
+## Components
+
+Components are models from various domains. These models contain states and their
+equations.
+
+### [Defining components with `@mtkmodel`](@id mtkmodel)
+
+`@mtkmodel` is a convenience macro to define components. It returns
+`ModelingToolkit.Model`, which includes a constructor that returns the ODESystem, a
+`structure` dictionary with metadata, and flag `isconnector` which is set to `false`.
 
 ## What can an MTK-Model definition have?
 
