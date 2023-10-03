@@ -1,4 +1,4 @@
-# [Defining components with `@mtkmodel` and connectors with `@connectors`](@id mtkmodel-connectors)
+# [Components and Connectors](@id mtkmodel_connector)
 
 ## MTK Model
 
@@ -73,9 +73,9 @@ end
 
   - Parameters and variables are declared with respective begin blocks.
   - Variables must be functions of an independent variable.
-  - Optionally, default values and metadata can be specified for these parameters and variables. See `ModelB` in the above example.
+  - Optionally, initial guess and metadata can be specified for these parameters and variables. See `ModelB` in the above example.
   - Along with creating parameters and variables, keyword arguments of same name with default value `nothing` are created.
-  - Whenever a parameter or variable has default value, for example `v(t) = 0.0`, a symbolic variable named `v` with default value 0.0 and a keyword argument `v`, with default value `nothing` are created. <br> This way, users can optionally pass new value of `v` while creating a component.
+  - Whenever a parameter or variable has initial value, for example `v(t) = 0.0`, a symbolic variable named `v` with initial value 0.0 and a keyword argument `v`, with default value `nothing` are created. <br> This way, users can optionally pass new value of `v` while creating a component.
 
 ```julia
 julia > @named model_c = ModelC(; v = 2.0);
@@ -89,7 +89,7 @@ julia > ModelingToolkit.getdefault(model_c.v)
   - This block is for non symbolic input arguements. These are for inputs that usually are not meant to be part of components; but influence how they are defined. One can list inputs like boolean flags, functions etc... here.
   - Whenever default values are specified, unlike parameters/variables, they are reflected in the keyword argument list.
 
-### `@extend` block
+#### `@extend` begin block
 
 To extend a partial system,
 
@@ -103,7 +103,8 @@ julia> @named model_c = ModelC(; p1 = 2.0)
 
 ```
 
-However, as `p2` isn't listed in the model definition, its default can't be modified by users.
+However, as `p2` isn't listed in the model definition, its initial guess can't
+specified while creating an instance of `ModelC`.
 
 ### `@components` begin block
 
@@ -127,13 +128,26 @@ And as `k2` isn't listed in the sub-component definition of `ModelC`, its defaul
 
   - Any other Julia operations can be included with dedicated begin blocks.
 
-## Defining connectors with `@connector`
+## Connectors
 
-`@connector` returns `ModelingToolkit.Model`. It includes a constructor that returns a connector ODESystem, a `structure` dictionary with metadata and flag `isconnector` which is set to `true`.
+Connectors are special models that can be used to connect different components together.
+MTK provides 3 distinct connectors:
+
+  - `DomainConnector`: A connector which has only one state which is of `Flow` type,
+    specified by `[connect = Flow]`.
+  - `StreamConnector`: A connector which has atleast one stream variable, specified by
+    `[connect = Stream]`. A `StreamConnector` must have exactly one flow variable.
+  - `RegularConnector`: Connectors that don't fall under above categories.
+
+### [Defining connectors with `@connector`](@id connector)
+
+`@connector` returns `ModelingToolkit.Model`. It includes a constructor that returns
+a connector ODESystem, a `structure` dictionary with metadata, and flag `isconnector`
+which is set to `true`.
 
 A simple connector can be defined with syntax similar to following example:
 
-```julia
+```@example connector
 using ModelingToolkit
 
 @connector Pin begin
@@ -142,17 +156,47 @@ using ModelingToolkit
 end
 ```
 
-  - Variables (as function of independent variable) are listed out in the definition. These variables can optionally have default values and metadata like `descrption`, `connect` and so on.
+Variables (as functions of independent variable) are listed out in the definition. These variables can optionally have initial values and metadata like `description`, `connect` and so on. For more details on setting metadata, check out [Symbolic Metadata](@id symbolic_metadata).
 
-`@connector`s accepts begin blocks of `@components`, `@equations`, `@extend`, `@parameters`, `@structural_parameters`, `@variables`. These keywords mean the same as described above for `@mtkmodel`.
+Similar to `@mtkmodel`, `@connector` accepts begin blocks of `@components`, `@equations`, `@extend`, `@parameters`, `@structural_parameters`, `@variables`. These keywords mean the same as described above for `@mtkmodel`.
+For example, the following `HydraulicFluid` connector is defined with parameters, variables and equations.
+
+```@example connector
+@connector HydraulicFluid begin
+    @parameters begin
+        ρ = 997
+        β = 2.09e9
+        μ = 0.0010016
+        n = 1
+        let_gas = 1
+        ρ_gas = 0.0073955
+        p_gas = -1000
+    end
+    @variables begin
+        dm(t) = 0.0, [connect = Flow]
+    end
+    @equations begin
+        dm ~ 0
+    end
+end
+```
 
 !!! note
     
     For more examples of usage, checkout [ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl/)
 
-### What's a `structure` dictionary?
+## More on `Model.structure`
 
-For components defined with `@mtkmodel` or `@connector`, a dictionary with metadata is created. It lists `:components` (sub-component list), `:extend` (the extended states and base system), `:parameters`, `:variables`, ``:kwargs`` (list of keyword arguments), `:independent_variable`, `:equations`.
+`structure` stores metadata that describes composition of a model. It includes:
+
+  - `:components`: List of sub-components in the form of [[name, sub_component_name],...].
+  - `:extend`: The list of extended states, name given to the base system, and name of the base system.
+  - `:structural_parameters`: Dictionary of structural parameters mapped to their default values.
+  - `:parameters`: Dictionary of symbolic parameters mapped to their metadata.
+  - `:variables`: Dictionary of symbolic variables mapped to their metadata.
+  - `:kwargs`: Dictionary of keyword arguments mapped to their default values.
+  - `:independent_variable`: Independent variable, which is added while generating the Model.
+  - `:equations`: List of equations (represented as strings).
 
 For example, the structure of `ModelC` is:
 
