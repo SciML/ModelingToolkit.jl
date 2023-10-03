@@ -156,7 +156,7 @@ using ModelingToolkit
 end
 ```
 
-Variables (as functions of independent variable) are listed out in the definition. These variables can optionally have initial values and metadata like `description`, `connect` and so on. For more details on setting metadata, check out [Symbolic Metadata](@id symbolic_metadata).
+Variables (as functions of independent variable) are listed out in the definition. These variables can optionally have initial values and metadata like `description`, `connect` and so on. For more details on setting metadata, check out [Symbolic Metadata](@ref symbolic_metadata).
 
 Similar to `@mtkmodel`, `@connector` accepts begin blocks of `@components`, `@equations`, `@extend`, `@parameters`, `@structural_parameters`, `@variables`. These keywords mean the same as described above for `@mtkmodel`.
 For example, the following `HydraulicFluid` connector is defined with parameters, variables and equations.

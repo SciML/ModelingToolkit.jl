@@ -10,7 +10,7 @@ component variables. We then simplify this to an ODE by eliminating the
 equalities before solving. Let's see this in action.
 
 !!! note
-
+    
     This tutorial teaches how to build the entire RC circuit from scratch.
     However, to simulate electric components with more ease, check out the
     [ModelingToolkitStandardLibrary.jl](https://docs.sciml.ai/ModelingToolkitStandardLibrary/stable/)
