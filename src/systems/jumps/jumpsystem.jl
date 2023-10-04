@@ -293,7 +293,7 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
     parammap = DiffEqBase.NullParameters();
     checkbounds = false,
-    use_union = false,
+    use_union = true,
     kwargs...)
     dvs = states(sys)
     ps = parameters(sys)
