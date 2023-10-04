@@ -136,29 +136,30 @@ eqns = [domain_connect(fluid, n1m1.port_a)
 
 @test_nowarn structural_simplify(n1m1Test)
 @unpack source, port_a = n1m1
-@test sort(equations(expand_connections(n1m1)), by = string) == [0 ~ port_a.m_flow
+ssort(eqs) = sort(eqs, by = string)
+@test ssort(equations(expand_connections(n1m1))) == ssort([0 ~ port_a.m_flow
     0 ~ source.port1.m_flow - port_a.m_flow
     source.port1.P ~ port_a.P
     source.port1.P ~ source.P
     source.port1.h_outflow ~ port_a.h_outflow
-    source.port1.h_outflow ~ source.h]
+    source.port1.h_outflow ~ source.h])
 @unpack port_a, port_b = pipe
-@test sort(equations(expand_connections(pipe)), by = string) ==
-      [0 ~ -port_a.m_flow - port_b.m_flow
+@test ssort(equations(expand_connections(pipe))) ==
+      ssort([0 ~ -port_a.m_flow - port_b.m_flow
     0 ~ port_a.m_flow
     0 ~ port_b.m_flow
     port_a.P ~ port_b.P
     port_a.h_outflow ~ instream(port_b.h_outflow)
-    port_b.h_outflow ~ instream(port_a.h_outflow)]
-@test sort(equations(expand_connections(sys)), by = string) ==
-      [0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
+    port_b.h_outflow ~ instream(port_a.h_outflow)])
+@test ssort(equations(expand_connections(sys))) ==
+      ssort([0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
     0 ~ pipe.port_b.m_flow + sink.port.m_flow
     n1m1.port_a.P ~ pipe.port_a.P
-    pipe.port_b.P ~ sink.port.P]
-@test sort(equations(expand_connections(n1m1Test)), by = string) ==
-      [0 ~ -pipe.port_a.m_flow - pipe.port_b.m_flow
-    0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
+    pipe.port_b.P ~ sink.port.P])
+@test ssort(equations(expand_connections(n1m1Test))) ==
+      ssort([0 ~ -pipe.port_a.m_flow - pipe.port_b.m_flow
     0 ~ n1m1.source.port1.m_flow - n1m1.port_a.m_flow
+    0 ~ n1m1.port_a.m_flow + pipe.port_a.m_flow
     0 ~ pipe.port_b.m_flow + sink.port.m_flow
     fluid.m_flow ~ 0
     n1m1.port_a.P ~ pipe.port_a.P
@@ -172,7 +173,7 @@ eqns = [domain_connect(fluid, n1m1.port_a)
     pipe.port_b.h_outflow ~ n1m1.port_a.h_outflow
     sink.port.P ~ sink.P
     sink.port.h_outflow ~ sink.h_in
-    sink.port.m_flow ~ -sink.m_flow_in]
+    sink.port.m_flow ~ -sink.m_flow_in])
 
 # N1M2 model and test code.
 function N1M2(; name,
@@ -255,12 +256,12 @@ eqns = [connect(source.port, n2m2.port_a)
 @named sp2 = TwoPhaseFluidPort()
 @named sys = ODESystem([connect(sp1, sp2)], t)
 sys_exp = expand_connections(compose(sys, [sp1, sp2]))
-@test sort(equations(sys_exp), by = string) == [0 ~ -sp1.m_flow - sp2.m_flow
+@test ssort(equations(sys_exp)) == ssort([0 ~ -sp1.m_flow - sp2.m_flow
     0 ~ sp1.m_flow
     0 ~ sp2.m_flow
     sp1.P ~ sp2.P
     sp1.h_outflow ~ ModelingToolkit.instream(sp2.h_outflow)
-    sp2.h_outflow ~ ModelingToolkit.instream(sp1.h_outflow)]
+    sp2.h_outflow ~ ModelingToolkit.instream(sp1.h_outflow)])
 
 # array var
 @connector function VecPin(; name)
@@ -274,15 +275,15 @@ end
 
 @named simple = ODESystem([connect(vp1, vp2, vp3)], t)
 sys = expand_connections(compose(simple, [vp1, vp2, vp3]))
-@test sort(equations(sys), by = string) == sort([0 .~ collect(vp1.i)
-        0 .~ collect(vp2.i)
-        0 .~ collect(vp3.i)
-        vp1.v[1] ~ vp2.v[1]
-        vp1.v[2] ~ vp2.v[2]
-        vp1.v[1] ~ vp3.v[1]
-        vp1.v[2] ~ vp3.v[2]
-        0 ~ -vp1.i[1] - vp2.i[1] - vp3.i[1]
-        0 ~ -vp1.i[2] - vp2.i[2] - vp3.i[2]], by = string)
+@test ssort(equations(sys)) == ssort([0 .~ collect(vp1.i)
+    0 .~ collect(vp2.i)
+    0 .~ collect(vp3.i)
+    vp1.v[1] ~ vp2.v[1]
+    vp1.v[2] ~ vp2.v[2]
+    vp1.v[1] ~ vp3.v[1]
+    vp1.v[2] ~ vp3.v[2]
+    0 ~ -vp1.i[1] - vp2.i[1] - vp3.i[1]
+    0 ~ -vp1.i[2] - vp2.i[2] - vp3.i[2]])
 
 @connector function VectorHeatPort(; name, N = 100, T0 = 0.0, Q0 = 0.0)
     @variables (T(t))[1:N]=T0 (Q(t))[1:N]=Q0 [connect = Flow]

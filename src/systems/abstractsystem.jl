@@ -229,7 +229,8 @@ for prop in [:eqs
     :metadata
     :gui_metadata
     :discrete_subsystems
-    :unknown_states]
+    :unknown_states
+    :split_idxs]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin
@@ -1273,14 +1274,34 @@ See also [`linearize`](@ref) which provides a higher-level interface.
 function linearization_function(sys::AbstractSystem, inputs,
     outputs; simplify = false,
     initialize = true,
+    op = Dict(),
+    p = DiffEqBase.NullParameters(),
+    zero_dummy_der = false,
     kwargs...)
-    sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
+    ssys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs;
+        simplify,
         kwargs...)
+    if zero_dummy_der
+        dummyder = setdiff(states(ssys), states(sys))
+        defs = Dict(x => 0.0 for x in dummyder)
+        @set! ssys.defaults = merge(defs, defaults(ssys))
+        op = merge(defs, op)
+    end
+    sys = ssys
+    x0 = merge(defaults(sys), op)
+    u0, p, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
+    p, split_idxs = split_parameters_by_type(p)
+    ps = parameters(sys)
+    if p isa Tuple
+        ps = Base.Fix1(getindex, ps).(split_idxs)
+        ps = (ps...,) #if p is Tuple, ps should be Tuple
+    end
+
     lin_fun = let diff_idxs = diff_idxs,
         alge_idxs = alge_idxs,
         input_idxs = input_idxs,
         sts = states(sys),
-        fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys),
+        fun = ODEFunction{true, SciMLBase.FullSpecialize}(sys, states(sys), ps; p = p),
         h = build_explicit_observed_function(sys, outputs),
         chunk = ForwardDiff.Chunk(input_idxs)
 
@@ -1599,11 +1620,12 @@ function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
     allow_input_derivatives = false,
     zero_dummy_der = false,
     kwargs...)
-    lin_fun, ssys = linearization_function(sys, inputs, outputs; kwargs...)
-    if zero_dummy_der
-        dummyder = setdiff(states(ssys), states(sys))
-        op = merge(op, Dict(x => 0.0 for x in dummyder))
-    end
+    lin_fun, ssys = linearization_function(sys,
+        inputs,
+        outputs;
+        zero_dummy_der,
+        op,
+        kwargs...)
     linearize(ssys, lin_fun; op, t, allow_input_derivatives), ssys
 end
 

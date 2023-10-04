@@ -23,7 +23,8 @@ eqs = [D(x) ~ σ * (y - x),
 ModelingToolkit.toexpr.(eqs)[1]
 @named de = ODESystem(eqs; defaults = Dict(x => 1))
 subed = substitute(de, [σ => k])
-@test isequal(sort(parameters(subed), by = string), [k, β, ρ])
+ssort(eqs) = sort(eqs, by = string)
+@test isequal(ssort(parameters(subed)), [k, β, ρ])
 @test isequal(equations(subed),
     [D(x) ~ k * (y - x)
         D(y) ~ (ρ - z) * x - y
@@ -241,7 +242,7 @@ p2 = (k₁ => 0.04,
     k₃ => 1e4)
 tspan = (0.0, 100000.0)
 prob1 = ODEProblem(sys, u0, tspan, p)
-@test prob1.f.sys === sys
+@test prob1.f.sys == sys
 prob12 = ODEProblem(sys, u0, tspan, [0.04, 3e7, 1e4])
 prob13 = ODEProblem(sys, u0, tspan, (0.04, 3e7, 1e4))
 prob14 = ODEProblem(sys, u0, tspan, p2)
@@ -348,14 +349,14 @@ eqs = [0 ~ x + z
     D(accumulation_y) ~ y
     D(accumulation_z) ~ z
     D(x) ~ y]
-@test sort(equations(asys), by = string) == eqs
+@test ssort(equations(asys)) == ssort(eqs)
 @variables ac(t)
 asys = add_accumulations(sys, [ac => (x + y)^2])
 eqs = [0 ~ x + z
     0 ~ x - y
     D(ac) ~ (x + y)^2
     D(x) ~ y]
-@test sort(equations(asys), by = string) == eqs
+@test ssort(equations(asys)) == ssort(eqs)
 
 sys2 = ode_order_lowering(sys)
 M = ModelingToolkit.calculate_massmatrix(sys2)

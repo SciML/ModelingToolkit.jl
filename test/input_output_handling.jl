@@ -124,8 +124,8 @@ using ModelingToolkitStandardLibrary.Mechanical.Rotational
 t = ModelingToolkitStandardLibrary.Mechanical.Rotational.t
 @named inertia1 = Inertia(; J = 1)
 @named inertia2 = Inertia(; J = 1)
-@named spring = Spring(; c = 10)
-@named damper = Damper(; d = 3)
+@named spring = Rotational.Spring(; c = 10)
+@named damper = Rotational.Damper(; d = 3)
 @named torque = Torque(; use_support = false)
 @variables y(t) = 0
 eqs = [connect(torque.flange, inertia1.flange_a)

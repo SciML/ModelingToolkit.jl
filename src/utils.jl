@@ -657,46 +657,40 @@ function promote_to_concrete(vs; tofloat = true, use_union = true)
     end
     T = eltype(vs)
     if Base.isconcretetype(T) && (!tofloat || T === float(T)) # nothing to do
-        vs
+        return vs
     else
         sym_vs = filter(x -> SymbolicUtils.issym(x) || SymbolicUtils.istree(x), vs)
         isempty(sym_vs) || throw_missingvars_in_sys(sym_vs)
-        C = typeof(first(vs))
-        I = Int8
-        has_int = false
-        has_array = false
-        has_bool = false
-        array_T = nothing
+
+        C = nothing
         for v in vs
-            if v isa AbstractArray
-                has_array = true
-                array_T = typeof(v)
+            E = typeof(v)
+            if E <: Number
+                if tofloat
+                    E = float(E)
+                end
             end
-            E = eltype(v)
-            C = promote_type(C, E)
-            if E <: Integer
-                has_int = true
-                I = promote_type(I, E)
+            if C === nothing
+                C = E
             end
-            if E <: Bool
-                has_bool = true
+            if use_union
+                C = Union{C, E}
+            else
+                @assert C==E "`promote_to_concrete` can't make type $E uniform with $C"
+                C = E
             end
         end
-        if tofloat && !has_array
-            C = float(C)
-        elseif has_array || (use_union && has_int && C !== I)
-            if has_array
-                C = Union{C, array_T}
+
+        y = similar(vs, C)
+        for i in eachindex(vs)
+            if (vs[i] isa Number) & tofloat
+                y[i] = float(vs[i]) #needed because copyto! can't convert Int to Float automatically
+            else
+                y[i] = vs[i]
             end
-            if has_int
-                C = Union{C, I}
-            end
-            if has_bool
-                C = Union{C, Bool}
-            end
-            return copyto!(similar(vs, C), vs)
         end
-        convert.(C, vs)
+
+        return y
     end
 end
 

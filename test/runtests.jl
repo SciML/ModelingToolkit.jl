@@ -56,4 +56,6 @@ end
 @safetestset "FuncAffect Test" include("funcaffect.jl")
 @safetestset "Constants Test" include("constants.jl")
 # Reference tests go Last
-@safetestset "Latexify recipes Test" include("latexify.jl")
+if VERSION >= v"1.9"
+    @safetestset "Latexify recipes Test" include("latexify.jl")
+end

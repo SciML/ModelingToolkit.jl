@@ -145,15 +145,23 @@ function SciMLBase.process_p_u0_symbolic(prob::Union{SciMLBase.AbstractDEProblem
                                 " Please use `remake` with the `u0` keyword argument as a vector of values, paying attention to state order."))
     end
 
-    # assemble defaults
-    defs = defaults(prob.f.sys)
-    defs = mergedefaults(defs, prob.p, parameters(prob.f.sys))
-    defs = mergedefaults(defs, p, parameters(prob.f.sys))
-    defs = mergedefaults(defs, prob.u0, states(prob.f.sys))
-    defs = mergedefaults(defs, u0, states(prob.f.sys))
-
-    u0 = varmap_to_vars(u0, states(prob.f.sys); defaults = defs, tofloat = true)
-    p = varmap_to_vars(p, parameters(prob.f.sys); defaults = defs)
+    sys = prob.f.sys
+    defs = defaults(sys)
+    ps = parameters(sys)
+    if has_split_idxs(sys) && (split_idxs = get_split_idxs(sys)) !== nothing
+        for (i, idxs) in enumerate(split_idxs)
+            defs = mergedefaults(defs, prob.p[i], ps[idxs])
+        end
+    else
+        # assemble defaults
+        defs = defaults(sys)
+        defs = mergedefaults(defs, prob.p, ps)
+    end
+    defs = mergedefaults(defs, p, ps)
+    sts = states(sys)
+    defs = mergedefaults(defs, prob.u0, sts)
+    defs = mergedefaults(defs, u0, sts)
+    u0, p, defs = get_u0_p(sys, defs)
 
     return p, u0
 end

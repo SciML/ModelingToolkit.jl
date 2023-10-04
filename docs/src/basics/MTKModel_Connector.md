@@ -130,6 +130,7 @@ end
 `@connector`s accepts begin blocks of `@components`, `@equations`, `@extend`, `@parameters`, `@structural_parameters`, `@variables`. These keywords mean the same as described above for `@mtkmodel`.
 
 !!! note
+    
     For more examples of usage, checkout [ModelingToolkitStandardLibrary.jl](https://github.com/SciML/ModelingToolkitStandardLibrary.jl/)
 
 ### What's a `structure` dictionary?
