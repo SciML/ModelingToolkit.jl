@@ -6,32 +6,28 @@ println("BifurcationKit extension loaded")
 
 # Imports
 using ModelingToolkit, Setfield
-import BifurcationKit: BifurcationProblem
+import BifurcationKit
 
 ### Creates BifurcationProblem Overloads ###
 
-# When input is a NonlinearProblem.
-function BifurcationKit.BifurcationProblem(nprob::NonlinearProblem, u0, p, bif_par, args...; plot_variable=nothing, record_from_solution=record_sol_default, kwargs...)
-    # check if jac does nto exist and modify.
-    F = nprob.f.f
-    J = nprob.f.jac.f
+# When input is a NonlinearSystem.
+function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem, u0_guess, p_start, bif_par, args...; plot_var=nothing, record_from_solution=BifurcationKit.record_sol_default, kwargs...)
+    # Creates F and J functions.
+    ofun = NonlinearFunction(nsys; jac=true)
+    F = ofun.f
+    J = ofun.jac
 
+    # Computes bifurcation parameter and plot var indexes.
     bif_idx = findfirst(isequal(bif_par), parameters(nsys))
-    if isnothing(plot_variable) 
-        plot_idx = findfirst(isequal(plot_variable), variables(nsys))
+    if !isnothing(plot_var) 
+        plot_idx = findfirst(isequal(plot_var), states(nsys))
         record_from_solution = (x, p) -> x[plot_idx]
     end
-    return BifurcationProblem(F, u0, p, (@lens _[bif_idx]), args...; record_from_solution = record_from_solution, J = J, kwargs...)
-end
 
-# When input is a NonlinearSystem.
-function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem, u0, p, args...; kwargs...)
-    return BifurcationProblem(NonlinearProblem(nsys, u0, p; jac=true), args...; kwargs...)
-end
+    # Converts the input state guess.
+    u0_guess = ModelingToolkit.varmap_to_vars(u0_guess, states(nsys))
 
-# When input is a ODEProblem.
-function BifurcationKit.BifurcationProblem(oprob::ODEProblem, u0, p, args...; kwargs...)
-    return BifurcationProblem(convert(NonlinearProblem, oprob), args...; kwargs...)
+    return BifurcationKit.BifurcationProblem(F, u0_guess, [p_start], (@lens _[1]), args...; record_from_solution = record_from_solution, J = J, kwargs...)
 end
 
 # When input is a ODESystem.
