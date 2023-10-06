@@ -1,7 +1,5 @@
-module SystemStructures
-
 using DataStructures
-using Symbolics: linear_expansion, unwrap
+using Symbolics: linear_expansion, unwrap, Connection
 using SymbolicUtils: istree, operation, arguments, Symbolic
 using SymbolicUtils: quick_cancel, similarterm
 using ..ModelingToolkit
@@ -10,7 +8,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
     isparameter, isconstant,
     independent_variables, SparseMatrixCLIL, AbstractSystem,
     equations, isirreducible, input_timedomain, TimeDomain,
-    VariableType, getvariabletype, has_equations
+    VariableType, getvariabletype, has_equations, ODESystem
 using ..BipartiteGraphs
 import ..BipartiteGraphs: invview, complete
 using Graphs
@@ -27,8 +25,7 @@ function quick_cancel_expr(expr)
 end
 
 export SystemStructure, TransformationState, TearingState, structural_simplify!
-export initialize_system_structure, find_linear_equations
-export isdiffvar, isdervar, isalgvar, isdiffeq, isalgeq, algeqs, is_only_discrete
+export isdiffvar, isdervar, isalgvar, isdiffeq, algeqs, is_only_discrete
 export dervars_range, diffvars_range, algvars_range
 export DiffGraph, complete!
 export get_fullvars, system_subset
@@ -620,5 +617,3 @@ function _structural_simplify!(state::TearingState, io; simplify = false,
     @set! sys.observed = ModelingToolkit.topsort_equations(observed(sys), fullstates)
     ModelingToolkit.invalidate_cache!(sys), input_idxs
 end
-
-end # module
