@@ -51,8 +51,8 @@ using PrecompileTools, Reexport
     using MLStyle
 
     using Reexport
+    using Symbolics
     using Symbolics: degree
-    @reexport using Symbolics
     using Symbolics: _parse_vars, value, @derivatives, get_variables,
         exprs_occur_in, solve_for, build_expr, unwrap, wrap,
         VariableSource, getname, variable, Connection, connect,
@@ -70,9 +70,10 @@ using PrecompileTools, Reexport
     import OrdinaryDiffEq
 
     import Graphs: SimpleDiGraph, add_edge!, incidence_matrix
-
-    @reexport using UnPack
 end
+
+@reexport using Symbolics
+@reexport using UnPack
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 export @derivatives
@@ -156,7 +157,6 @@ include("systems/dependency_graphs.jl")
 include("clock.jl")
 include("discretedomain.jl")
 include("systems/systemstructure.jl")
-using .SystemStructures
 include("systems/clock_inference.jl")
 include("systems/systems.jl")
 
@@ -170,6 +170,14 @@ include("inputoutput.jl")
 for S in subtypes(ModelingToolkit.AbstractSystem)
     S = nameof(S)
     @eval convert_system(::Type{<:$S}, sys::$S) = sys
+end
+
+PrecompileTools.@compile_workload begin
+    using ModelingToolkit
+    @variables t x(t)
+    D = Differential(t)
+    @named sys = ODESystem([D(x) ~ -x])
+    prob = ODEProblem(structural_simplify(sys), [x => 30.0], (0, 100), [], jac = true)
 end
 
 export AbstractTimeDependentSystem,

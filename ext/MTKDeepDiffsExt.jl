@@ -4,7 +4,7 @@ using DeepDiffs, ModelingToolkit
 using ModelingToolkit.BipartiteGraphs: Label,
     BipartiteAdjacencyList, unassigned,
     HighlightInt
-using ModelingToolkit.SystemStructures: SystemStructure,
+using ModelingToolkit: SystemStructure,
     MatchedSystemStructure,
     SystemStructurePrintMatrix
 

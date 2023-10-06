@@ -23,14 +23,18 @@ using ModelingToolkit: ODESystem, AbstractSystem, var_from_nested_derivative, Di
     IncrementalCycleTracker, add_edge_checked!, topological_sort,
     invalidate_cache!, Substitutions, get_or_construct_tearing_state,
     filter_kwargs, lower_varname, setio, SparseMatrixCLIL,
-    fast_substitute, get_fullvars, has_equations
+    fast_substitute, get_fullvars, has_equations, observed
 
 using ModelingToolkit.BipartiteGraphs
 import .BipartiteGraphs: invview, complete
 import ModelingToolkit: var_derivative!, var_derivative_graph!
 using Graphs
-using ModelingToolkit.SystemStructures
-using ModelingToolkit.SystemStructures: algeqs, EquationsView
+using ModelingToolkit: algeqs, EquationsView,
+    SystemStructure, TransformationState, TearingState, structural_simplify!,
+    isdiffvar, isdervar, isalgvar, isdiffeq, algeqs, is_only_discrete,
+    dervars_range, diffvars_range, algvars_range,
+    DiffGraph, complete!,
+    get_fullvars, system_subset
 
 using ModelingToolkit.DiffEqBase
 using ModelingToolkit.StaticArrays
