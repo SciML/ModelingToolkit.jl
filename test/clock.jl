@@ -279,7 +279,7 @@ ci, varmap = infer_clocks(cl)
 ss = structural_simplify(cl)
 
 if VERSION >= v"1.7"
-    prob = ODEProblem(ss, [x => 0.0], (0.0, 1.0), [kp => 1.0])
+    prob = ODEProblem(ss, [x => 0.0], (0.0, 1.0), [kp => 1.0], tofloat = true)
     sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 
     function foo!(dx, x, p, t)

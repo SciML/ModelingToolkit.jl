@@ -114,6 +114,7 @@ function split_parameters_by_type(ps)
             end
             if idx != 0 && idx != 1
                 split_ps[idx], split_ps[1] = split_ps[1], split_ps[idx]
+                split_idxs[idx], split_idxs[1] = split_idxs[1], split_idxs[idx]
             end
             return (split_ps...,), split_idxs
         end
