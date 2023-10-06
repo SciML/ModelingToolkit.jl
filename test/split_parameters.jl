@@ -188,5 +188,6 @@ S = get_sensitivity(closed_loop, :u)
 @variables t
 @parameters a b c
 @named s = ODESystem(Equation[], t, [], [a, b, c])
-prob = ODEProblem(s, nothing, (0.0, 1.0), Pair[a => 1, b => 1, c => 1.0])
-@test prob.p == ([1.0], [1, 1])
+prob = ODEProblem(s, nothing, (0.0, 1.0), Pair[a => 1, b => 2, c => 3.0])
+@test prob.p == ([3.0], [1, 2])
+@test prob.p isa Tuple{Vector{Float64}, Vector{Int}}
