@@ -769,7 +769,7 @@ function get_u0_p(sys,
     u0map,
     parammap = nothing;
     use_union = true,
-    tofloat = true,
+    tofloat = false,
     symbolic_u0 = false)
     dvs = states(sys)
     ps = parameters(sys)
@@ -799,7 +799,7 @@ function process_DEProblem(constructor, sys::AbstractODESystem, u0map, parammap;
     linenumbers = true, parallel = SerialForm(),
     eval_expression = true,
     use_union = true,
-    tofloat = true,
+    tofloat = false,
     symbolic_u0 = false,
     u0_constructor = identity,
     kwargs...)

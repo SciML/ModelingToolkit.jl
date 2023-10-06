@@ -102,7 +102,7 @@ sys = structural_simplify(model)
 tspan = (0.0, t_end)
 prob = ODEProblem(sys, [], tspan, [])
 
-@test prob.p isa Vector{Float64}
+@test prob.p isa Tuple{Vector{Float64}, Vector{Int}}
 sol = solve(prob, ImplicitEuler());
 @test sol.retcode == ReturnCode.Success
 
@@ -184,3 +184,9 @@ connections = [[state_feedback.input.u[i] ~ model_outputs[i] for i in 1:4]
     connect(add.output, :u, model.torque.tau)]
 @named closed_loop = ODESystem(connections, t, systems = [model, state_feedback, add, d])
 S = get_sensitivity(closed_loop, :u)
+
+@variables t
+@parameters a b c
+@named s = ODESystem(Equation[], t, [], [a, b, c])
+prob = ODEProblem(s, nothing, (0.0, 1.0), Pair[a => 1, b => 1, c => 1.0])
+@test prob.p == ([1.0], [1, 1])

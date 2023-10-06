@@ -103,6 +103,18 @@ function split_parameters_by_type(ps)
         if length(split_ps) == 1  #Tuple not needed, only 1 type
             return split_ps[1], split_idxs
         else
+            T = Float16
+            idx = 0
+            for (i, p) in enumerate(split_ps)
+                E = eltype(p)
+                if E == promote_type(T, E)
+                    T = E
+                    idx = i
+                end
+            end
+            if idx != 0 && idx != 1
+                split_ps[idx], split_ps[1] = split_ps[1], split_ps[idx]
+            end
             return (split_ps...,), split_idxs
         end
     end
