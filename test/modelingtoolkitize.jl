@@ -304,6 +304,6 @@ noiseeqs = [0.1 * x,
     0.1 * z]
 
 @named sys = SDESystem(eqs, noiseeqs, t, [x, y, z], [sig, rho, beta]; tspan = (0, 1000.0))
-prob = SDEProblem(sys)
+prob = SDEProblem(sys; tofloat = true)
 sys = modelingtoolkitize(prob)
 @test ModelingToolkit.has_tspan(sys)
