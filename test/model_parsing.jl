@@ -101,7 +101,7 @@ l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></pat
         @parameters begin
             C, [unit = u"F"]
         end
-        @extend v, i = oneport = OnePort(; v = 0.0)
+        @extend oneport = OnePort(; v = 0.0)
         @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
         @equations begin
             D(v) ~ i / C
