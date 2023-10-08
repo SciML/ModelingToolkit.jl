@@ -115,13 +115,17 @@ struct SDESystem <: AbstractODESystem
     complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
     complete::Bool
+    """
+    parent: the hierarchical parent system before simplification.
+    """
+    parent::Any
 
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
         tgrad,
         jac,
         ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
         cevents, devents, metadata = nothing, gui_metadata = nothing,
-        complete = false;
+        complete = false, parent = nothing;
         checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
@@ -135,7 +139,7 @@ struct SDESystem <: AbstractODESystem
         new(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad, jac,
             ctrl_jac,
             Wfact, Wfact_t, name, systems, defaults, connector_type, cevents, devents,
-            metadata, gui_metadata, complete)
+            metadata, gui_metadata, complete, parent)
     end
 end
 

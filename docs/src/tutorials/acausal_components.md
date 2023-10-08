@@ -24,8 +24,8 @@ using ModelingToolkit, Plots, DifferentialEquations
 
 @variables t
 @connector Pin begin
-    v(t) = 1.0
-    i(t) = 1.0, [connect = Flow]
+    v(t)
+    i(t), [connect = Flow]
 end
 
 @mtkmodel Ground begin
@@ -43,8 +43,8 @@ end
         n = Pin()
     end
     @variables begin
-        v(t) = 1.0
-        i(t) = 1.0
+        v(t)
+        i(t)
     end
     @equations begin
         v ~ p.v - n.v
@@ -56,7 +56,7 @@ end
 @mtkmodel Resistor begin
     @extend v, i = oneport = OnePort()
     @parameters begin
-        R = 1.0
+        R = 1.0 # Sets the default resistance
     end
     @equations begin
         v ~ i * R
@@ -100,13 +100,11 @@ end
     end
 end
 
-@named rc_model = RCModel(resistor.R = 2.0)
-rc_model = complete(rc_model)
-sys = structural_simplify(rc_model)
+@mtkbuild rc_model = RCModel(resistor.R = 2.0)
 u0 = [
     rc_model.capacitor.v => 0.0,
 ]
-prob = ODAEProblem(sys, u0, (0, 10.0))
+prob = ODAEProblem(rc_model, u0, (0, 10.0))
 sol = solve(prob, Tsit5())
 plot(sol)
 ```
@@ -131,8 +129,8 @@ default, variables are equal in a connection.
 
 ```@example acausal
 @connector Pin begin
-    v(t) = 1.0
-    i(t) = 1.0, [connect = Flow]
+    v(t)
+    i(t), [connect = Flow]
 end
 ```
 
@@ -175,8 +173,8 @@ pin.
         n = Pin()
     end
     @variables begin
-        v(t) = 1.0
-        i(t) = 1.0
+        v(t)
+        i(t)
     end
     @equations begin
         v ~ p.v - n.v
@@ -276,7 +274,7 @@ We can create a RCModel component with `@named`. And using `subcomponent_name.pa
 the parameters or defaults values of variables of subcomponents.
 
 ```@example acausal
-@named rc_model = RCModel(resistor.R = 2.0)
+@mtkbuild rc_model = RCModel(resistor.R = 2.0)
 ```
 
 This model is acausal because we have not specified anything about the causality of the model. We have
@@ -300,26 +298,15 @@ and the parameters are:
 parameters(rc_model)
 ```
 
-## Simplifying and Solving this System
-
-This system could be solved directly as a DAE using [one of the DAE solvers
-from DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/).
-However, let's take a second to symbolically simplify the system before doing the
-solve. Although we can use ODE solvers that handle mass matrices to solve the
-above system directly, we want to run the `structural_simplify` function first,
-as it eliminates many unnecessary variables to build the leanest numerical
-representation of the system. Let's see what it does here:
+The observed equations are:
 
 ```@example acausal
-sys = structural_simplify(rc_model)
-equations(sys)
+observed(rc_model)
 ```
 
-```@example acausal
-states(sys)
-```
+## Solving this System
 
-After structural simplification, we are left with a system of only two equations
+We are left with a system of only two equations
 with two state variables. One of the equations is a differential equation,
 while the other is an algebraic equation. We can then give the values for the
 initial conditions of our states, and solve the system by converting it to
@@ -331,12 +318,12 @@ This is done as follows:
 u0 = [rc_model.capacitor.v => 0.0
     rc_model.capacitor.p.i => 0.0]
 
-prob = ODEProblem(sys, u0, (0, 10.0))
+prob = ODEProblem(rc_model, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 plot(sol)
 ```
 
-Since we have run `structural_simplify`, MTK can numerically solve all the
+MTK can numerically solve all the
 unreduced algebraic equations using the `ODAEProblem` (note the
 letter `A`):
 
@@ -344,7 +331,7 @@ letter `A`):
 u0 = [
     rc_model.capacitor.v => 0.0,
 ]
-prob = ODAEProblem(sys, u0, (0, 10.0))
+prob = ODAEProblem(rc_model, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 plot(sol)
 ```
@@ -357,7 +344,7 @@ like `structural_simplify` simply change state variables into observables which 
 defined by `observed` equations.
 
 ```@example acausal
-observed(sys)
+observed(rc_model)
 ```
 
 These are explicit algebraic equations which can then be used to reconstruct
