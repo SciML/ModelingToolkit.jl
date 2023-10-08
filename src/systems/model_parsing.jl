@@ -386,7 +386,7 @@ function parse_extend!(exprs, ext, dict, mod, body, kwargs)
                     error("`@extend` destructuring only takes an tuple as LHS. Got $body")
                 end
                 a, b = b.args
-            else
+            elseif Meta.isexpr(b, :call)
                 if (model = getproperty(mod, b.args[1])) isa Model
                     _vars = keys(get(model.structure, :variables, Dict()))
                     _vars = union(_vars, keys(get(model.structure, :parameters, Dict())))
