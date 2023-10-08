@@ -230,7 +230,8 @@ for prop in [:eqs
     :gui_metadata
     :discrete_subsystems
     :unknown_states
-    :split_idxs]
+    :split_idxs
+    :parent]
     fname1 = Symbol(:get_, prop)
     fname2 = Symbol(:has_, prop)
     @eval begin
@@ -307,6 +308,9 @@ function Base.propertynames(sys::AbstractSystem; private = false)
 end
 
 function Base.getproperty(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
+    if has_parent(sys) && (parent = get_parent(sys); parent !== nothing)
+        sys = parent
+    end
     wrap(getvar(sys, name; namespace = namespace))
 end
 function getvar(sys::AbstractSystem, name::Symbol; namespace = !iscomplete(sys))
@@ -1178,6 +1182,15 @@ end
 
 macro component(expr)
     esc(component_post_processing(expr, false))
+end
+
+macro mtkbuild(expr)
+    named_expr = ModelingToolkit.named_expr(expr)
+    name = named_expr.args[1]
+    esc(quote
+        $named_expr
+        $name = $structural_simplify($name)
+    end)
 end
 
 """

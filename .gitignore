@@ -4,3 +4,5 @@
 Manifest.toml
 .vscode
 .vscode/*
+docs/src/assets/Project.toml
+docs/src/assets/Manifest.toml

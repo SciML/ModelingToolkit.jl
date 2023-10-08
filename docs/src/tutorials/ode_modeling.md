@@ -1,8 +1,17 @@
 # Getting Started with ModelingToolkit.jl
 
-This is an introductory tutorial for ModelingToolkit (MTK).
-Some examples of Ordinary Differential Equations (ODE) are used to
-illustrate the basic user-facing functionality.
+This is an introductory tutorial for ModelingToolkit (MTK). We will demonstrate
+the basics of the package by demonstrating how to define and simulate simple
+Ordinary Differential Equation (ODE) systems.
+
+## Installing ModelingToolkit
+
+To install ModelingToolkit, use the Julia package manager. This can be done as follows:
+
+```julia
+using Pkg
+Pkg.add("ModelingToolkit")
+```
 
 ## Copy-Pastable Simplified Example
 
@@ -22,21 +31,14 @@ D = Differential(t)
     @variables begin
         x(t) # dependent variables
     end
-    @structural_parameters begin
-        h = 1
-    end
     @equations begin
-        D(x) ~ (h - x) / τ
+        D(x) ~ (1 - x) / τ
     end
 end
 
 using DifferentialEquations: solve
-
-@named fol = FOL()
-fol = complete(fol)
-
+@mtkbuild fol = FOL()
 prob = ODEProblem(fol, [fol.x => 0.0], (0.0, 10.0), [fol.τ => 3.0])
-# parameter `τ` can be assigned a value, but structural parameter `h` cannot'.
 sol = solve(prob)
 
 using Plots
@@ -58,7 +60,7 @@ Here, ``t`` is the independent variable (time), ``x(t)`` is the (scalar) state
 variable, ``f(t)`` is an external forcing function, and ``\tau`` is a
 parameter.
 In MTK, this system can be modelled as follows. For simplicity, we
-first set the forcing function to a time-independent value ``h``. And the
+first set the forcing function to a time-independent value ``1``. And the
 independent variable ``t`` is automatically added by ``@mtkmodel``.
 
 ```@example ode2
@@ -74,32 +76,17 @@ D = Differential(t)
     @variables begin
         x(t) # dependent variables
     end
-    @structural_parameters begin
-        h = 1
-    end
     @equations begin
-        D(x) ~ (h - x) / τ
+        D(x) ~ (1 - x) / τ
     end
 end
 
-@named fol_incomplete = FOL()
-fol = complete(fol_incomplete)
+@mtkbuild fol = FOL()
 ```
 
 Note that equations in MTK use the tilde character (`~`) as equality sign.
 
-`@named` creates an instance of `FOL` named as `fol`. Before creating an
-ODEProblem with `fol` run `complete`. Once the system is complete, it will no
-longer namespace its subsystems or variables. This is necessary to correctly pass
-the intial values of states and parameters to the ODEProblem.
-
-```julia
-julia> fol_incomplete.x
-fol_incomplete₊x(t)
-
-julia> fol.x
-x(t)
-```
+`@mtkbuild` creates an instance of `FOL` named as `fol`.
 
 After construction of the ODE, you can solve it using [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/):
 
@@ -114,22 +101,6 @@ plot(solve(prob))
 The initial state and the parameter values are specified using a mapping
 from the actual symbolic elements to their values, represented as an array
 of `Pair`s, which are constructed using the `=>` operator.
-
-## Non-DSL way of defining an ODESystem
-
-Using `@mtkmodel` is the preferred way of defining ODEs with MTK. However, let us
-look at how we can define the same system without `@mtkmodel`. This is useful for
-defining PDESystem etc.
-
-```@example first-mtkmodel
-@variables t x(t)   # independent and dependent variables
-@parameters τ       # parameters
-@constants h = 1    # constants
-D = Differential(t) # define an operator for the differentiation w.r.t. time
-
-# your first ODE, consisting of a single equation, indicated by ~
-@named fol_model = ODESystem(D(x) ~ (h - x) / τ)
-```
 
 ## Algebraic relations and structural simplification
 
@@ -147,46 +118,40 @@ using ModelingToolkit
         x(t) # dependent variables
         RHS(t)
     end
-    @structural_parameters begin
-        h = 1
-    end
     begin
         D = Differential(t)
     end
     @equations begin
-        RHS ~ (h - x) / τ
+        RHS ~ (1 - x) / τ
         D(x) ~ RHS
     end
 end
 
-@named fol_separate = FOL()
+@mtkbuild fol = FOL()
 ```
 
-To directly solve this system, you would have to create a Differential-Algebraic
-Equation (DAE) problem, since besides the differential equation, there is an
-additional algebraic equation now. However, this DAE system can obviously be
-transformed into the single ODE we used in the first example above. MTK achieves
-this by structural simplification:
+You can look at the equations by using the command `equations`:
 
 ```@example ode2
-fol_simplified = structural_simplify(complete(fol_separate))
-equations(fol_simplified)
+equations(fol)
 ```
+
+Notice that there is only one equation in this system, `Differential(t)(x(t)) ~ RHS(t)`.
+The other equation was removed from the system and was transformed into an `observed`
+variable. Observed equations are variables which can be computed on-demand but are not
+necessary for the solution of the system, and thus MTK tracks it separately. One can
+check the observed equations via the `observed` function:
 
 ```@example ode2
-equations(fol_simplified) == equations(fol)
+observed(fol)
 ```
 
-You can extract the equations from a system using `equations` (and, in the same
-way, `states` and `parameters`). The simplified equation is exactly the same
-as the original one, so the simulation performance will also be the same.
-However, there is one difference. MTK does keep track of the eliminated
-algebraic variables as "observables" (see
-[Observables and Variable Elimination](@ref)).
-That means, MTK still knows how to calculate them out of the information available
+For more information on this process, see [Observables and Variable Elimination](@ref).
+
+MTK still knows how to calculate them out of the information available
 in a simulation result. The intermediate variable `RHS` therefore can be plotted
-along with the state variable. Note that this has to be requested explicitly,
-through:
+along with the state variable. Note that this has to be requested explicitly
+like as follows:
 
 ```@example ode2
 prob = ODEProblem(fol_simplified,
@@ -197,16 +162,26 @@ sol = solve(prob)
 plot(sol, vars = [fol_simplified.x, fol_simplified.RHS])
 ```
 
-By default, `structural_simplify` also replaces symbolic `constants` with
-their default values. This allows additional simplifications not possible
-when using `parameters` (e.g., solution of linear equations by dividing out
-the constant's value, which cannot be done for parameters, since they may
-be zero).
+## Named Indexing of Solutions
 
-Note that the indexing of the solution similarly works via the names, and so
-`sol[x]` gives the time-series for `x`, `sol[x,2:10]` gives the 2nd through 10th
-values of `x` matching `sol.t`, etc. Note that this works even for variables
-which have been eliminated, and thus `sol[RHS]` retrieves the values of `RHS`.
+Note that the indexing of the solution similarly works via the names, and so to get
+the time series for `x`, one would do:
+
+```@example ode2
+sol[fol.x]
+```
+
+or to get the second value in the time series for `x`:
+
+```@example ode2
+sol[fol.x, 2]
+```
+
+Similarly, the time series for `RHS` can be retrieved using the same indexing:
+
+```@example ode2
+sol[fol.RHS]
+```
 
 ## Specifying a time-variable forcing function
 
@@ -221,9 +196,6 @@ Obviously, one could use an explicit, symbolic function of time:
     @variables begin
         x(t) # dependent variables
         f(t)
-    end
-    @structural_parameters begin
-        h = 1
     end
     begin
         D = Differential(t)
@@ -445,14 +417,9 @@ using the structural information. For more information, see the
 
 Here are some notes that may be helpful during your initial steps with MTK:
 
-  - Sometimes, the symbolic engine within MTK cannot correctly identify the
-    independent variable (e.g. time) out of all variables. In such a case, you
-    usually get an error that some variable(s) is "missing from variable map". In
-    most cases, it is then sufficient to specify the independent variable as second
-    argument to `ODESystem`, e.g. `ODESystem(eqs, t)`.
-  - A completely macro-free usage of MTK is possible and is discussed in a
-    separate tutorial. This is for package developers, since the macros are only
-    essential for automatic symbolic naming for modelers.
+  - The `@mtkmodel` macro is for high-level usage of MTK. However, in many cases you
+    may need to programmatically generate `ODESystem`s. If that's the case, check out
+    the [Programmatically Generating and Scripting ODESystems Tutorial](@ref programmatically).
   - Vector-valued parameters and variables are possible. A cleaner, more
     consistent treatment of these is still a work in progress, however. Once finished,
     this introductory tutorial will also cover this feature.
