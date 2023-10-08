@@ -1,4 +1,4 @@
-# Symbolic metadata
+# [Symbolic Metadata](@id symbolic_metadata)
 
 It is possible to add metadata to symbolic variables, the metadata will be displayed when calling help on a variable.
 
@@ -37,6 +37,22 @@ help?> u
   ModelingToolkit.VariableDescription: This is my input
 
   Symbolics.VariableSource: (:variables, :u)
+```
+
+## Connect
+
+Variables in connectors can have `connect` metadata which describes the type of connections.
+
+`Flow` is used for variables that represent physical quantities that "flow" ex:
+current in a resistor. These variables sum up to zero in connections.
+
+`Stream` can be specified for variables that flow bi-directionally.
+
+```@example connect
+using ModelingToolkit
+
+@variables t, i(t) [connect = Flow]
+@variables k(t) [connect = Stream]
 ```
 
 ## Input or output

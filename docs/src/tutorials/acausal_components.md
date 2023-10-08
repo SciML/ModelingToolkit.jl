@@ -23,77 +23,88 @@ equalities before solving. Let's see this in action.
 using ModelingToolkit, Plots, DifferentialEquations
 
 @variables t
-@connector function Pin(; name)
-    sts = @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
-    ODESystem(Equation[], t, sts, []; name = name)
+@connector Pin begin
+    v(t) = 1.0
+    i(t) = 1.0, [connect = Flow]
 end
 
-@component function Ground(; name)
-    @named g = Pin()
-    eqs = [g.v ~ 0]
-    compose(ODESystem(eqs, t, [], []; name = name), g)
+@mtkmodel Ground begin
+    @components begin
+        g = Pin()
+    end
+    @equations begin
+        g.v ~ 0
+    end
 end
 
-@component function OnePort(; name)
-    @named p = Pin()
-    @named n = Pin()
-    sts = @variables v(t)=1.0 i(t)=1.0
-    eqs = [v ~ p.v - n.v
+@mtkmodel OnePort begin
+    @components begin
+        p = Pin()
+        n = Pin()
+    end
+    @variables begin
+        v(t) = 1.0
+        i(t) = 1.0
+    end
+    @equations begin
+        v ~ p.v - n.v
         0 ~ p.i + n.i
-        i ~ p.i]
-    compose(ODESystem(eqs, t, sts, []; name = name), p, n)
+        i ~ p.i
+    end
 end
 
-@component function Resistor(; name, R = 1.0)
-    @named oneport = OnePort()
-    @unpack v, i = oneport
-    ps = @parameters R = R
-    eqs = [
-        v ~ i * R,
-    ]
-    extend(ODESystem(eqs, t, [], ps; name = name), oneport)
+@mtkmodel Resistor begin
+    @extend v, i = oneport = OnePort()
+    @parameters begin
+        R = 1.0
+    end
+    @equations begin
+        v ~ i * R
+    end
 end
 
-@component function Capacitor(; name, C = 1.0)
-    @named oneport = OnePort()
-    @unpack v, i = oneport
-    ps = @parameters C = C
-    D = Differential(t)
-    eqs = [
-        D(v) ~ i / C,
-    ]
-    extend(ODESystem(eqs, t, [], ps; name = name), oneport)
+D = Differential(t)
+
+@mtkmodel Capacitor begin
+    @extend v, i = oneport = OnePort()
+    @parameters begin
+        C = 1.0
+    end
+    @equations begin
+        D(v) ~ i / C
+    end
 end
 
-@component function ConstantVoltage(; name, V = 1.0)
-    @named oneport = OnePort()
-    @unpack v = oneport
-    ps = @parameters V = V
-    eqs = [
-        V ~ v,
-    ]
-    extend(ODESystem(eqs, t, [], ps; name = name), oneport)
+@mtkmodel ConstantVoltage begin
+    @extend (v,) = oneport = OnePort()
+    @parameters begin
+        V = 1.0
+    end
+    @equations begin
+        V ~ v
+    end
 end
 
-R = 1.0
-C = 1.0
-V = 1.0
-@named resistor = Resistor(R = R)
-@named capacitor = Capacitor(C = C)
-@named source = ConstantVoltage(V = V)
-@named ground = Ground()
+@mtkmodel RCModel begin
+    @components begin
+        resistor = Resistor(R = 1.0)
+        capacitor = Capacitor(C = 1.0)
+        source = ConstantVoltage(V = 1.0)
+        ground = Ground()
+    end
+    @equations begin
+        connect(source.p, resistor.p)
+        connect(resistor.n, capacitor.p)
+        connect(capacitor.n, source.n)
+        connect(capacitor.n, ground.g)
+    end
+end
 
-rc_eqs = [connect(source.p, resistor.p)
-    connect(resistor.n, capacitor.p)
-    connect(capacitor.n, source.n)
-    connect(capacitor.n, ground.g)]
-
-@named _rc_model = ODESystem(rc_eqs, t)
-@named rc_model = compose(_rc_model,
-    [resistor, capacitor, source, ground])
+@named rc_model = RCModel(resistor.R = 2.0)
+rc_model = complete(rc_model)
 sys = structural_simplify(rc_model)
 u0 = [
-    capacitor.v => 0.0,
+    rc_model.capacitor.v => 0.0,
 ]
 prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Tsit5())
@@ -108,7 +119,7 @@ We wish to build the following RC circuit by building individual components and 
 
 ### Building the Component Library
 
-For each of our components, we use a Julia function which emits an `ODESystem`.
+For each of our components, we use ModelingToolkit `Model` that emits an `ODESystem`.
 At the top, we start with defining the fundamental qualities of an electric
 circuit component. At every input and output pin, a circuit component has
 two values: the current at the pin and the voltage. Thus we define the `Pin`
@@ -119,40 +130,35 @@ i.e. that currents sum to zero and voltages across the pins are equal.
 default, variables are equal in a connection.
 
 ```@example acausal
-@connector function Pin(; name)
-    sts = @variables v(t)=1.0 i(t)=1.0 [connect = Flow]
-    ODESystem(Equation[], t, sts, []; name = name)
+@connector Pin begin
+    v(t) = 1.0
+    i(t) = 1.0, [connect = Flow]
 end
 ```
 
 Note that this is an incompletely specified ODESystem: it cannot be simulated
 on its own because the equations for `v(t)` and `i(t)` are unknown. Instead,
 this just gives a common syntax for receiving this pair with some default
-values. Notice that in a component, we define the `name` as a keyword argument:
-this is because later we will generate different `Pin` objects with different
-names to correspond to duplicates of this topology with unique variables.
-One can then construct a `Pin` like:
-
-```@example acausal
-Pin(name = :mypin1)
-```
-
-or equivalently, using the `@named` helper macro:
+values.
+One can then construct a `Pin` using the `@named` helper macro:
 
 ```@example acausal
 @named mypin1 = Pin()
 ```
 
 Next, we build our ground node. A ground node is just a pin that is connected
-to a constant voltage reservoir, typically taken to be `V=0`. Thus to define
+to a constant voltage reservoir, typically taken to be `V = 0`. Thus to define
 this component, we generate an `ODESystem` with a `Pin` subcomponent and specify
 that the voltage in such a `Pin` is equal to zero. This gives:
 
 ```@example acausal
-@component function Ground(; name)
-    @named g = Pin()
-    eqs = [g.v ~ 0]
-    compose(ODESystem(eqs, t, [], []; name = name), g)
+@mtkmodel Ground begin
+    @components begin
+        g = Pin()
+    end
+    @equations begin
+        g.v ~ 0
+    end
 end
 ```
 
@@ -163,14 +169,20 @@ zero, and the current of the component equals to the current of the positive
 pin.
 
 ```@example acausal
-@component function OnePort(; name)
-    @named p = Pin()
-    @named n = Pin()
-    sts = @variables v(t)=1.0 i(t)=1.0
-    eqs = [v ~ p.v - n.v
+@mtkmodel OnePort begin
+    @components begin
+        p = Pin()
+        n = Pin()
+    end
+    @variables begin
+        v(t) = 1.0
+        i(t) = 1.0
+    end
+    @equations begin
+        v ~ p.v - n.v
         0 ~ p.i + n.i
-        i ~ p.i]
-    compose(ODESystem(eqs, t, sts, []; name = name), p, n)
+        i ~ p.i
+    end
 end
 ```
 
@@ -182,38 +194,37 @@ of charge we know that the current in must equal the current out, which means
 zero. This leads to our resistor equations:
 
 ```@example acausal
-@component function Resistor(; name, R = 1.0)
-    @named oneport = OnePort()
-    @unpack v, i = oneport
-    ps = @parameters R = R
-    eqs = [
-        v ~ i * R,
-    ]
-    extend(ODESystem(eqs, t, [], ps; name = name), oneport)
+@mtkmodel Resistor begin
+    @extend v, i = oneport = OnePort()
+    @parameters begin
+        R = 1.0
+    end
+    @equations begin
+        v ~ i * R
+    end
 end
 ```
 
 Notice that we have created this system with a default parameter `R` for the
 resistor's resistance. By doing so, if the resistance of this resistor is not
 overridden by a higher level default or overridden at `ODEProblem` construction
-time, this will be the value of the resistance. Also, note the use of `@unpack`
-and `extend`. For the `Resistor`, we want to simply inherit `OnePort`'s
-equations and states and extend them with a new equation. ModelingToolkit makes
-a new namespaced variable `oneport₊v(t)` when using the syntax `oneport.v`, and
-we can use `@unpack` to avoid the namespacing.
+time, this will be the value of the resistance. Also, note the use of `@extend`.
+For the `Resistor`, we want to simply inherit `OnePort`'s
+equations and states and extend them with a new equation. Note that `v`, `i` are not namespaced as `oneport.v` or `oneport.i`.
 
 Using our knowledge of circuits, we similarly construct the `Capacitor`:
 
 ```@example acausal
-@component function Capacitor(; name, C = 1.0)
-    @named oneport = OnePort()
-    @unpack v, i = oneport
-    ps = @parameters C = C
-    D = Differential(t)
-    eqs = [
-        D(v) ~ i / C,
-    ]
-    extend(ODESystem(eqs, t, [], ps; name = name), oneport)
+D = Differential(t)
+
+@mtkmodel Capacitor begin
+    @extend v, i = oneport = OnePort()
+    @parameters begin
+        C = 1.0
+    end
+    @equations begin
+        D(v) ~ i / C
+    end
 end
 ```
 
@@ -223,55 +234,52 @@ constant voltage, essentially generating the electric current. We would then
 model this as:
 
 ```@example acausal
-@component function ConstantVoltage(; name, V = 1.0)
-    @named oneport = OnePort()
-    @unpack v = oneport
-    ps = @parameters V = V
-    eqs = [
-        V ~ v,
-    ]
-    extend(ODESystem(eqs, t, [], ps; name = name), oneport)
+@mtkmodel ConstantVoltage begin
+    @extend (v,) = oneport = OnePort()
+    @parameters begin
+        V = 1.0
+    end
+    @equations begin
+        V ~ v
+    end
 end
 ```
+
+Note that as we are extending only `v` from `OnePort`, it is explicitly specified as a tuple.
 
 ### Connecting and Simulating Our Electric Circuit
 
 Now we are ready to simulate our circuit. Let's build our four components:
 a `resistor`, `capacitor`, `source`, and `ground` term. For simplicity, we will
-make all of our parameter values 1. This is done by:
+make all of our parameter values 1.0. As `resistor`, `capacitor`, `source` lists
+`R`, `C`, `V` in their argument list, they are promoted as arguments of RCModel as
+`resistor.R`, `capacitor.C`, `source.V`
 
 ```@example acausal
-R = 1.0
-C = 1.0
-V = 1.0
-@named resistor = Resistor(R = R)
-@named capacitor = Capacitor(C = C)
-@named source = ConstantVoltage(V = V)
-@named ground = Ground()
+@mtkmodel RCModel begin
+    @components begin
+        resistor = Resistor(R = 1.0)
+        capacitor = Capacitor(C = 1.0)
+        source = ConstantVoltage(V = 1.0)
+        ground = Ground()
+    end
+    @equations begin
+        connect(source.p, resistor.p)
+        connect(resistor.n, capacitor.p)
+        connect(capacitor.n, source.n)
+        connect(capacitor.n, ground.g)
+    end
+end
 ```
 
-Subsequently, we will connect the pieces of our circuit together. Let's connect the
-positive pin of the resistor to the source, the negative pin of the resistor
-to the capacitor, and the negative pin of the capacitor to a junction between
-the source and the ground. This would mean our connection equations are:
+We can create a RCModel component with `@named`. And using `subcomponent_name.parameter` we can set
+the parameters or defaults values of variables of subcomponents.
 
 ```@example acausal
-rc_eqs = [connect(source.p, resistor.p)
-    connect(resistor.n, capacitor.p)
-    connect(capacitor.n, source.n)
-    connect(capacitor.n, ground.g)]
+@named rc_model = RCModel(resistor.R = 2.0)
 ```
 
-Finally, we build our four-component model with these connection rules:
-
-```@example acausal
-@named _rc_model = ODESystem(rc_eqs, t)
-@named rc_model = compose(_rc_model,
-    [resistor, capacitor, source, ground])
-```
-
-Note that we can also specify the subsystems in a vector. This model is acausal
-because we have not specified anything about the causality of the model. We have
+This model is acausal because we have not specified anything about the causality of the model. We have
 simply specified what is true about each of the variables. This forms a system
 of differential-algebraic equations (DAEs) which define the evolution of each
 state of the system. The equations are:
@@ -320,8 +328,9 @@ DAE solver](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/#OrdinaryD
 This is done as follows:
 
 ```@example acausal
-u0 = [capacitor.v => 0.0
-    capacitor.p.i => 0.0]
+u0 = [rc_model.capacitor.v => 0.0
+    rc_model.capacitor.p.i => 0.0]
+
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 plot(sol)
@@ -333,7 +342,7 @@ letter `A`):
 
 ```@example acausal
 u0 = [
-    capacitor.v => 0.0,
+    rc_model.capacitor.v => 0.0,
 ]
 prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
@@ -344,8 +353,8 @@ Notice that this solves the whole system by only solving for one variable!
 
 However, what if we wanted to plot the timeseries of a different variable? Do
 not worry, that information was not thrown away! Instead, transformations
-like `structural_simplify` simply change state variables into `observed`
-variables. Let's see what our observed variables are:
+like `structural_simplify` simply change state variables into observables which are
+defined by `observed` equations.
 
 ```@example acausal
 observed(sys)
@@ -360,11 +369,11 @@ The solution object can be accessed via its symbols. For example, let's retrieve
 the voltage of the resistor over time:
 
 ```@example acausal
-sol[resistor.v]
+sol[rc_model.resistor.v]
 ```
 
 or we can plot the timeseries of the resistor's voltage:
 
 ```@example acausal
-plot(sol, idxs = [resistor.v])
+plot(sol, idxs = [rc_model.resistor.v])
 ```
