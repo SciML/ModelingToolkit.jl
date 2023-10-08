@@ -86,7 +86,7 @@ end
 
 Note that equations in MTK use the tilde character (`~`) as equality sign.
 
-`@mtkbuild` creates an instance of `FOL` named as `fol`. 
+`@mtkbuild` creates an instance of `FOL` named as `fol`.
 
 After construction of the ODE, you can solve it using [DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/):
 
@@ -174,7 +174,7 @@ sol[fol.x]
 or to get the second value in the time series for `x`:
 
 ```@example ode2
-sol[fol.x,2]
+sol[fol.x, 2]
 ```
 
 Similarly, the time series for `RHS` can be retrieved using the same indexing:

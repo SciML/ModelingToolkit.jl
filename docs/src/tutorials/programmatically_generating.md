@@ -21,7 +21,7 @@ using Symbolics
 @variables t x(t) y(t) # Define variables
 D = Differential(t) # Define a differential operator
 eqs = [D(x) ~ y
-       D(y) ~ x] # Define an array of equations
+    D(y) ~ x] # Define an array of equations
 ```
 
 ## The Non-DSL (non-`@mtkmodel`) Way of Defining an ODESystem
@@ -77,7 +77,7 @@ a = :c
 b = only(@variables($a))
 ```
 
-In this example, `@variables($a)` created a variable named `c`, and set this variable to `b`. 
+In this example, `@variables($a)` created a variable named `c`, and set this variable to `b`.
 
 Variables are not the only thing with names. For example, when you build a system, it knows its name
 that name is used in the namespacing. In the standard usage, again the Julia variable and the
