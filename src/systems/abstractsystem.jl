@@ -1180,6 +1180,15 @@ macro component(expr)
     esc(component_post_processing(expr, false))
 end
 
+macro mtkbuild(expr)
+    named_expr = ModelingToolkit.named_expr(expr)
+    name = named_expr.args[1]
+    esc(quote
+        $named_expr
+        $name = complete(structural_simplify($name))
+    end)
+end
+
 """
 $(SIGNATURES)
 

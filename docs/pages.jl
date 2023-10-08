@@ -5,6 +5,7 @@ pages = [
         "tutorials/nonlinear.md",
         "tutorials/optimization.md",
         "tutorials/modelingtoolkitize.md",
+        "tutorials/programmatically_generating.md",
         "tutorials/stochastic_diffeq.md",
         "tutorials/parameter_identifiability.md",
         "tutorials/domain_connections.md"],
