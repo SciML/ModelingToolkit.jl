@@ -243,9 +243,8 @@ f_fun(t) = t >= 10 ? value_vector[end] : value_vector[Int(floor(t)) + 1]
     end
 end
 
-@named fol_external_f = FOLExternalFunction()
-fol_external_f = complete(fol_external_f)
-prob = ODEProblem(structural_simplify(fol_external_f),
+@mtkbuild fol_external_f = FOLExternalFunction()
+prob = ODEProblem(fol_external_f,
     [fol_external_f.x => 0.0],
     (0.0, 10.0),
     [fol_external_f.τ => 0.75])
