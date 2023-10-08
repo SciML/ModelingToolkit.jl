@@ -318,7 +318,7 @@ This is done as follows:
 u0 = [rc_model.capacitor.v => 0.0
     rc_model.capacitor.p.i => 0.0]
 
-prob = ODEProblem(sys, u0, (0, 10.0))
+prob = ODEProblem(rc_model, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 plot(sol)
 ```
@@ -331,7 +331,7 @@ letter `A`):
 u0 = [
     rc_model.capacitor.v => 0.0,
 ]
-prob = ODAEProblem(sys, u0, (0, 10.0))
+prob = ODAEProblem(rc_model, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
 plot(sol)
 ```
@@ -344,7 +344,7 @@ like `structural_simplify` simply change state variables into observables which 
 defined by `observed` equations.
 
 ```@example acausal
-observed(sys)
+observed(rc_model)
 ```
 
 These are explicit algebraic equations which can then be used to reconstruct
