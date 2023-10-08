@@ -104,8 +104,8 @@ end
 u0 = [
     rc_model.capacitor.v => 0.0,
 ]
-prob = ODAEProblem(rc_model, u0, (0, 10.0))
-sol = solve(prob, Tsit5())
+prob = ODEProblem(rc_model, u0, (0, 10.0))
+sol = solve(prob)
 plot(sol)
 ```
 
@@ -319,24 +319,9 @@ u0 = [rc_model.capacitor.v => 0.0
     rc_model.capacitor.p.i => 0.0]
 
 prob = ODEProblem(rc_model, u0, (0, 10.0))
-sol = solve(prob, Rodas4())
+sol = solve(prob)
 plot(sol)
 ```
-
-MTK can numerically solve all the
-unreduced algebraic equations using the `ODAEProblem` (note the
-letter `A`):
-
-```@example acausal
-u0 = [
-    rc_model.capacitor.v => 0.0,
-]
-prob = ODAEProblem(rc_model, u0, (0, 10.0))
-sol = solve(prob, Rodas4())
-plot(sol)
-```
-
-Notice that this solves the whole system by only solving for one variable!
 
 However, what if we wanted to plot the timeseries of a different variable? Do
 not worry, that information was not thrown away! Instead, transformations
