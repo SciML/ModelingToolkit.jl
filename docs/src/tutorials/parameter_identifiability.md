@@ -31,24 +31,40 @@ We first define the parameters, variables, differential equations and the output
 ```@example SI
 using StructuralIdentifiability, ModelingToolkit
 
-# define parameters and variables
-@variables t x4(t) x5(t) x6(t) x7(t) y1(t) y2(t)
-@parameters k5 k6 k7 k8 k9 k10
+@variables t
 D = Differential(t)
 
-# define equations
-eqs = [
-    D(x4) ~ -k5 * x4 / (k6 + x4),
-    D(x5) ~ k5 * x4 / (k6 + x4) - k7 * x5 / (k8 + x5 + x6),
-    D(x6) ~ k7 * x5 / (k8 + x5 + x6) - k9 * x6 * (k10 - x6) / k10,
-    D(x7) ~ k9 * x6 * (k10 - x6) / k10,
-]
-
-# define the output functions (quantities that can be measured)
-measured_quantities = [y1 ~ x4, y2 ~ x5]
+@mtkmodel Biohydrogenation begin
+    @variables begin
+        x4(t)
+        x5(t)
+        x6(t)
+        x7(t)
+        y1(t), [output = true]
+        y2(t), [output = true]
+    end
+    @parameters begin
+        k5
+        k6
+        k7
+        k8
+        k9
+        k10
+    end
+    # define equations
+    @equations begin
+        D(x4) ~ -k5 * x4 / (k6 + x4)
+        D(x5) ~ k5 * x4 / (k6 + x4) - k7 * x5 / (k8 + x5 + x6)
+        D(x6) ~ k7 * x5 / (k8 + x5 + x6) - k9 * x6 * (k10 - x6) / k10
+        D(x7) ~ k9 * x6 * (k10 - x6) / k10
+        y1 ~ x4
+        y2 ~ x5
+    end
+end
 
 # define the system
-de = ODESystem(eqs, t, name = :Biohydrogenation)
+@named de = Biohydrogenation()
+de = complete(de)
 ```
 
 After that, we are ready to check the system for local identifiability:
@@ -56,8 +72,7 @@ After that, we are ready to check the system for local identifiability:
 ```@example SI
 # query local identifiability
 # we pass the ode-system
-local_id_all = assess_local_identifiability(de, measured_quantities = measured_quantities,
-    p = 0.99)
+local_id_all = assess_local_identifiability(de, p = 0.99)
 ```
 
 We can see that all states (except $x_7$) and all parameters are locally identifiable with probability 0.99.
@@ -65,9 +80,8 @@ We can see that all states (except $x_7$) and all parameters are locally identif
 Let's try to check specific parameters and their combinations
 
 ```@example SI
-to_check = [k5, k7, k10 / k9, k5 + k6]
-local_id_some = assess_local_identifiability(de, measured_quantities = measured_quantities,
-    funcs_to_check = to_check, p = 0.99)
+to_check = [de.k5, de.k7, de.k10 / de.k9, de.k5 + de.k6]
+local_id_some = assess_local_identifiability(de, funcs_to_check = to_check, p = 0.99)
 ```
 
 Notice that in this case, everything (except the state variable $x_7$) is locally identifiable, including combinations such as $k_{10}/k_9, k_5+k_6$
@@ -92,26 +106,43 @@ We will run a global identifiability check on this enzyme dynamics[^3] model. We
 
 Global identifiability needs information about local identifiability first, but the function we chose here will take care of that extra step for us.
 
-__Note__: as of writing this tutorial, UTF-symbols such as Greek characters are not supported by one of the project's dependencies, see [this issue](https://github.com/SciML/StructuralIdentifiability.jl/issues/43).
-
 ```@example SI2
 using StructuralIdentifiability, ModelingToolkit
-@parameters b c a beta g delta sigma
-@variables t x1(t) x2(t) x3(t) x4(t) y(t) y2(t)
+
+@variables t
 D = Differential(t)
 
-eqs = [
-    D(x1) ~ -b * x1 + 1 / (c + x4),
-    D(x2) ~ a * x1 - beta * x2,
-    D(x3) ~ g * x2 - delta * x3,
-    D(x4) ~ sigma * x4 * (g * x2 - delta * x3) / x3,
-]
+@mtkmodel GoodwinOsc begin
+    @parameters begin
+        b
+        c
+        α
+        β
+        γ
+        δ
+        σ
+    end
+    @variables begin
+        x1(t)
+        x2(t)
+        x3(t)
+        x4(t)
+        y(t), [output = true]
+        y2(t), [output = true]
+    end
+    @equations begin
+        D(x1) ~ -b * x1 + 1 / (c + x4)
+        D(x2) ~ α * x1 - β * x2
+        D(x3) ~ γ * x2 - δ * x3
+        D(x4) ~ σ * x4 * (γ * x2 - δ * x3) / x3
+        y ~ x1 + x2
+        y2 ~ x2
+    end
+end
 
-measured_quantities = [y ~ x1 + x2, y2 ~ x2]
+@named ode = GoodwinOsc()
 
-ode = ODESystem(eqs, t, name = :GoodwinOsc)
-
-global_id = assess_identifiability(ode, measured_quantities = measured_quantities)
+global_id = assess_identifiability(ode)
 ```
 
 We can see that only parameters `a, g` are unidentifiable, and everything else can be uniquely recovered.
@@ -120,25 +151,47 @@ Let us consider the same system but with two inputs, and we will find out identi
 
 ```@example SI3
 using StructuralIdentifiability, ModelingToolkit
-@parameters b c a beta g delta sigma
-@variables t x1(t) x2(t) x3(t) x4(t) y(t) y2(t) u1(t) [input = true] u2(t) [input = true]
+
+@variables t
 D = Differential(t)
 
-eqs = [
-    D(x1) ~ -b * x1 + 1 / (c + x4),
-    D(x2) ~ a * x1 - beta * x2 - u1,
-    D(x3) ~ g * x2 - delta * x3 + u2,
-    D(x4) ~ sigma * x4 * (g * x2 - delta * x3) / x3,
-]
-measured_quantities = [y ~ x1 + x2, y2 ~ x2]
+@mtkmodel GoodwinOscillator begin
+    @parameters begin
+        b
+        c
+        α
+        β
+        γ
+        δ
+        σ
+    end
+    @variables begin
+        x1(t)
+        x2(t)
+        x3(t)
+        x4(t)
+        y(t), [output = true]
+        y2(t), [output = true]
+        u1(t), [input = true]
+        u2(t), [input = true]
+    end
+    @equations begin
+        D(x1) ~ -b * x1 + 1 / (c + x4)
+        D(x2) ~ α * x1 - β * x2 - u1
+        D(x3) ~ γ * x2 - δ * x3 + u2
+        D(x4) ~ σ * x4 * (γ * x2 - δ * x3) / x3
+        y ~ x1 + x2
+        y2 ~ x2
+    end
+end
+
+@named ode = GoodwinOscillator()
+ode = complete(ode)
 
 # check only 2 parameters
-to_check = [b, c]
+to_check = [ode.b, ode.c]
 
-ode = ODESystem(eqs, t, name = :GoodwinOsc)
-
-global_id = assess_identifiability(ode, measured_quantities = measured_quantities,
-    funcs_to_check = to_check, p = 0.9)
+global_id = assess_identifiability(ode, funcs_to_check = to_check, p = 0.9)
 ```
 
 Both parameters `b, c` are globally identifiable with probability `0.9` in this case.

@@ -1,6 +1,6 @@
 using ModelingToolkit, Test
 using ModelingToolkit: get_gui_metadata,
-    VariableDescription, getdefault, RegularConnector, get_ps
+    VariableDescription, getdefault, RegularConnector, get_ps, getname
 using URIs: URI
 using Distributions
 using Unitful
@@ -146,7 +146,11 @@ l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></pat
     C_val = 20
     R_val = 20
     res__R = 100
-    @named rc = RC(; C_val, R_val, resistor.R = res__R)
+    @mtkbuild rc = RC(; C_val, R_val, resistor.R = res__R)
+    resistor = getproperty(rc, :resistor; namespace = false)
+    @test getname(rc.resistor) === getname(resistor)
+    @test getname(rc.resistor.R) === getname(resistor.R)
+    @test getname(rc.resistor.v) === getname(resistor.v)
     # Test that `resistor.R` overrides `R_val` in the argument.
     @test getdefault(rc.resistor.R) == res__R != R_val
     # Test that `C_val` passed via argument is set as default of C.
@@ -166,7 +170,7 @@ l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></pat
     @test ModelingToolkit.get_gui_metadata(rc.resistor.p).layout == Pin.structure[:icon] ==
           URI("file:///" * abspath(ENV["MTK_ICONS_DIR"], "pin.png"))
 
-    @test length(equations(structural_simplify(rc))) == 1
+    @test length(equations(rc)) == 1
 end
 
 @testset "Parameters and Structural parameters in various modes" begin

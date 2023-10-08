@@ -86,6 +86,10 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
     complete::Bool
+    """
+    parent: the hierarchical parent system before simplification.
+    """
+    parent::Any
 
     function DiscreteSystem(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name, ctrls,
         observed,
@@ -93,7 +97,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
         systems, defaults, preface, connector_type,
         metadata = nothing, gui_metadata = nothing,
         tearing_state = nothing, substitutions = nothing,
-        complete = false; checks::Union{Bool, Int} = true)
+        complete = false, parent = nothing; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -105,7 +109,7 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
             systems,
             defaults,
             preface, connector_type, metadata, gui_metadata,
-            tearing_state, substitutions, complete)
+            tearing_state, substitutions, complete, parent)
     end
 end
 

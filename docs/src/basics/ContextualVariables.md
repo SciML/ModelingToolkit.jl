@@ -48,7 +48,7 @@ for which its arguments must be specified each time it is used. This is useful w
 PDEs for example, where one may need to use `u(t, x)` in the equations, but will
 need to be able to write `u(t, 0.0)` to define a boundary condition at `x = 0`.
 
-## Variable metadata [Experimental/TODO]
+## Variable metadata
 
 In many engineering systems, some variables act like “flows” while others do not.
 For example, in circuit models you have current which flows, and the related
@@ -69,15 +69,17 @@ the metadata. One can get and set metadata by
 ```julia
 julia> @variables x [unit = u"m^3/s"];
 
-julia> hasmetadata(x, Symbolics.option_to_metadata_type(Val(:unit)))
+julia> hasmetadata(x, VariableUnit)
 true
 
-julia> getmetadata(x, Symbolics.option_to_metadata_type(Val(:unit)))
+julia> ModelingToolkit.get_unit(x)
 m³ s⁻¹
 
-julia> x = setmetadata(x, Symbolics.option_to_metadata_type(Val(:unit)), u"m/s")
+julia> x = setmetadata(x, VariableUnit, u"m/s")
 x
 
-julia> getmetadata(x, Symbolics.option_to_metadata_type(Val(:unit)))
+julia> ModelingToolkit.get_unit(x)
 m s⁻¹
 ```
+
+See [Symbolic Metadata](@ref symbolic_metadata) for more details on variable metadata.

@@ -75,18 +75,23 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
     complete::Bool
+    """
+    parent: the hierarchical parent system before simplification.
+    """
+    parent::Any
 
     function NonlinearSystem(tag, eqs, states, ps, var_to_name, observed, jac, name,
         systems,
         defaults, connector_type, metadata = nothing,
         gui_metadata = nothing,
         tearing_state = nothing, substitutions = nothing,
-        complete = false; checks::Union{Bool, Int} = true)
+        complete = false, parent = nothing; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([states; ps]) || check_units(eqs)
         end
         new(tag, eqs, states, ps, var_to_name, observed, jac, name, systems, defaults,
-            connector_type, metadata, gui_metadata, tearing_state, substitutions, complete)
+            connector_type, metadata, gui_metadata, tearing_state, substitutions, complete,
+            parent)
     end
 end
 

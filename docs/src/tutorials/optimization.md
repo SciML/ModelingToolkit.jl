@@ -69,8 +69,8 @@ cons = [
     x^2 + y^2 ≲ 1,
 ]
 @named sys = OptimizationSystem(loss, [x, y], [a, b], constraints = cons)
-u0 = [x => 1.0
-    y => 2.0]
+u0 = [x => 0.14
+    y => 0.14]
 prob = OptimizationProblem(sys, u0, grad = true, hess = true, cons_j = true, cons_h = true)
 solve(prob, IPNewton())
 ```
