@@ -999,6 +999,7 @@ function DiffEqBase.DAEProblem{iip}(sys::AbstractODESystem, du0map, u0map, tspan
     f, du0, u0, p = process_DEProblem(DAEFunction{iip}, sys, u0map, parammap;
         implicit_dae = true, du0map = du0map,
         has_difference = has_difference, check_length,
+        tofloat = get(kwargs, :tofloat, true),
         kwargs...)
     diffvars = collect_differential_variables(sys)
     sts = states(sys)

@@ -128,7 +128,7 @@ let
         D(supply_pipe.fluid_port_a.m) => 0.0]
     prob1 = ODEProblem(sys, u0, (0.0, 10.0), [])
     prob2 = ODAEProblem(sys, u0, (0.0, 10.0), [])
-    prob3 = DAEProblem(sys, D.(states(sys)) .=> 0.0, u0, (0.0, 10.0), [], tofloat = true)
+    prob3 = DAEProblem(sys, D.(states(sys)) .=> 0.0, u0, (0.0, 10.0), [])
     @test solve(prob1, FBDF()).retcode == ReturnCode.Success
     #@test solve(prob2, FBDF()).retcode == ReturnCode.Success
     @test solve(prob3, DFBDF()).retcode == ReturnCode.Success
