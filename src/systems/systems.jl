@@ -18,9 +18,20 @@ simplification will allow models where `n_states = n_equations - n_inputs`.
 """
 function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
     kwargs...)
-    newsys = __structural_simplify(sys, io; simplify, kwargs...)
+    newsys′ = __structural_simplify(sys, io; simplify, kwargs...)
+    if newsys′ isa Tuple
+        @assert length(newsys′) == 2
+        newsys = newsys′[1]
+    else
+        newsys = newsys′
+    end
     @set! newsys.parent = complete(sys)
-    return complete(newsys)
+    newsys = complete(newsys)
+    if newsys′ isa Tuple
+        return newsys, newsys′[2]
+    else
+        return newsys
+    end
 end
 function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
     kwargs...)
