@@ -102,7 +102,7 @@ end
 
 @mtkbuild rc_model = RCModel(resistor.R = 2.0)
 u0 = [
-    rc_model.capacitor₊v => 0.0,
+    rc_model.capacitor.v => 0.0,
 ]
 prob = ODAEProblem(rc_model, u0, (0, 10.0))
 sol = solve(prob, Tsit5())
@@ -315,8 +315,8 @@ DAE solver](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/#OrdinaryD
 This is done as follows:
 
 ```@example acausal
-u0 = [rc_model.capacitor₊v => 0.0
-    rc_model.capacitor₊p₊i => 0.0]
+u0 = [rc_model.capacitor.v => 0.0
+    rc_model.capacitor.p.i => 0.0]
 
 prob = ODEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
@@ -329,7 +329,7 @@ letter `A`):
 
 ```@example acausal
 u0 = [
-    rc_model.capacitor₊v => 0.0,
+    rc_model.capacitor.v => 0.0,
 ]
 prob = ODAEProblem(sys, u0, (0, 10.0))
 sol = solve(prob, Rodas4())
@@ -356,11 +356,11 @@ The solution object can be accessed via its symbols. For example, let's retrieve
 the voltage of the resistor over time:
 
 ```@example acausal
-sol[rc_model.resistor₊v]
+sol[rc_model.resistor.v]
 ```
 
 or we can plot the timeseries of the resistor's voltage:
 
 ```@example acausal
-plot(sol, idxs = [rc_model.resistor₊v])
+plot(sol, idxs = [rc_model.resistor.v])
 ```
