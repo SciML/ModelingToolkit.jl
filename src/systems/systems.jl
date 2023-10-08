@@ -18,6 +18,12 @@ simplification will allow models where `n_states = n_equations - n_inputs`.
 """
 function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
     kwargs...)
+    newsys = __structural_simplify(sys, io; simplify, kwargs...)
+    @set! newsys.parent = complete(sys)
+    return complete(newsys)
+end
+function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
+    kwargs...)
     sys = expand_connections(sys)
     sys isa DiscreteSystem && return sys
     state = TearingState(sys)

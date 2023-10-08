@@ -56,10 +56,14 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
     complete::Bool
+    """
+    parent: the hierarchical parent system before simplification.
+    """
+    parent::Any
 
     function OptimizationSystem(tag, op, states, ps, var_to_name, observed,
         constraints, name, systems, defaults, metadata = nothing,
-        gui_metadata = nothing, complete = false;
+        gui_metadata = nothing, complete = false, parent = nothing;
         checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             unwrap(op) isa Symbolic && check_units(op)
@@ -67,7 +71,8 @@ struct OptimizationSystem <: AbstractOptimizationSystem
             all_dimensionless([states; ps]) || check_units(constraints)
         end
         new(tag, op, states, ps, var_to_name, observed,
-            constraints, name, systems, defaults, metadata, gui_metadata, complete)
+            constraints, name, systems, defaults, metadata, gui_metadata, complete,
+            parent)
     end
 end
 
