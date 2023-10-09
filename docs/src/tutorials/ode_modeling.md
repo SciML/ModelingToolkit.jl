@@ -154,12 +154,12 @@ along with the state variable. Note that this has to be requested explicitly
 like as follows:
 
 ```@example ode2
-prob = ODEProblem(fol_simplified,
-    [fol_simplified.x => 0.0],
+prob = ODEProblem(fol,
+    [fol.x => 0.0],
     (0.0, 10.0),
-    [fol_simplified.τ => 3.0])
+    [fol.τ => 3.0])
 sol = solve(prob)
-plot(sol, vars = [fol_simplified.x, fol_simplified.RHS])
+plot(sol, vars = [fol.x, fol.RHS])
 ```
 
 ## Named Indexing of Solutions
