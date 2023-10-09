@@ -100,7 +100,7 @@ end
     @parameters begin
         C, [unit = u"F"]
     end
-    @extend oneport = OnePort(; v = 0.0)
+    @extend OnePort(; v = 0.0)
     @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
     @equations begin
         D(v) ~ i / C

@@ -372,6 +372,28 @@ function extend_args!(a, b, dict, expr, kwargs, varexpr, has_param = false)
     end
 end
 
+const EMPTY_DICT = Dict()
+const EMPTY_VoVoSYMBOL = Vector{Symbol}[]
+
+function Base.names(model::Model)
+    vars = keys(get(model.structure, :variables, EMPTY_DICT))
+    vars = union(vars, keys(get(model.structure, :parameters, EMPTY_DICT)))
+    vars = union(vars,
+        map(first, get(model.structure, :components, EMPTY_VoVoSYMBOL)))
+    collect(vars)
+end
+
+function _parse_extend!(ext, a, b, dict, expr, kwargs, varexpr, vars)
+    extend_args!(a, b, dict, expr, kwargs, varexpr)
+    ext[] = a
+    push!(b.args, Expr(:kw, :name, Meta.quot(a)))
+    push!(expr.args, :($a = $b))
+
+    dict[:extend] = [Symbol.(vars.args), a, b.args[1]]
+
+    push!(expr.args, :(@unpack $vars = $a))
+end
+
 function parse_extend!(exprs, ext, dict, mod, body, kwargs)
     expr = Expr(:block)
     varexpr = Expr(:block)
@@ -386,33 +408,27 @@ function parse_extend!(exprs, ext, dict, mod, body, kwargs)
                     error("`@extend` destructuring only takes an tuple as LHS. Got $body")
                 end
                 a, b = b.args
-            elseif Meta.isexpr(b, :call)
-                if (model = getproperty(mod, b.args[1])) isa Model
-                    _vars = keys(get(model.structure, :variables, Dict()))
-                    _vars = union(_vars, keys(get(model.structure, :parameters, Dict())))
-                    _vars = union(_vars,
-                        map(first, get(model.structure, :components, Vector{Symbol}[])))
-                    vars = Expr(:tuple)
-                    append!(vars.args, collect(_vars))
-                else
-                    error("Cannot infer the exact `Model` that `@extend $(body)` refers." *
-                          " Please specify the names that it brings into scope by:" *
-                          " `@extend a, b = oneport = OnePort()`.")
-                end
+                _parse_extend!(ext, a, b, dict, expr, kwargs, varexpr, vars)
+            else
+                error("When explicitly destructing in `@extend` please use the syntax: `@extend a, b = oneport = OnePort()`.")
             end
-            extend_args!(a, b, dict, expr, kwargs, varexpr)
-            ext[] = a
-            push!(b.args, Expr(:kw, :name, Meta.quot(a)))
-            push!(expr.args, :($a = $b))
-
-            dict[:extend] = [Symbol.(vars.args), a, b.args[1]]
-
-            if vars !== nothing
-                push!(expr.args, :(@unpack $vars = $a))
+        end
+        Expr(:call, a′, _...) => begin
+            a = Symbol(Symbol("#mtkmodel"), :__anonymous__, a′)
+            b = body
+            if (model = getproperty(mod, b.args[1])) isa Model
+                vars = Expr(:tuple)
+                append!(vars.args, names(model))
+                _parse_extend!(ext, a, b, dict, expr, kwargs, varexpr, vars)
+            else
+                error("Cannot infer the exact `Model` that `@extend $(body)` refers." *
+                      " Please specify the names that it brings into scope by:" *
+                      " `@extend a, b = oneport = OnePort()`.")
             end
         end
         _ => error("`@extend` only takes an assignment expression. Got $body")
     end
+    return nothing
 end
 
 function parse_variable_arg!(expr, vs, dict, mod, arg, varclass, kwargs)
