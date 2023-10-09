@@ -237,7 +237,7 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
     if mname == Symbol("@components")
         parse_components!(exprs, comps, dict, body, kwargs)
     elseif mname == Symbol("@extend")
-        parse_extend!(exprs, ext, dict, body, kwargs)
+        parse_extend!(exprs, ext, dict, mod, body, kwargs)
     elseif mname == Symbol("@variables")
         parse_variables!(exprs, vs, dict, mod, body, :variables, kwargs)
     elseif mname == Symbol("@parameters")
@@ -372,7 +372,7 @@ function extend_args!(a, b, dict, expr, kwargs, varexpr, has_param = false)
     end
 end
 
-function parse_extend!(exprs, ext, dict, body, kwargs)
+function parse_extend!(exprs, ext, dict, mod, body, kwargs)
     expr = Expr(:block)
     varexpr = Expr(:block)
     push!(exprs, varexpr)
@@ -380,16 +380,27 @@ function parse_extend!(exprs, ext, dict, body, kwargs)
     body = deepcopy(body)
     MLStyle.@match body begin
         Expr(:(=), a, b) => begin
-            vars = nothing
             if Meta.isexpr(b, :(=))
                 vars = a
                 if !Meta.isexpr(vars, :tuple)
                     error("`@extend` destructuring only takes an tuple as LHS. Got $body")
                 end
                 a, b = b.args
-                extend_args!(a, b, dict, expr, kwargs, varexpr)
-                vars, a, b
+            elseif Meta.isexpr(b, :call)
+                if (model = getproperty(mod, b.args[1])) isa Model
+                    _vars = keys(get(model.structure, :variables, Dict()))
+                    _vars = union(_vars, keys(get(model.structure, :parameters, Dict())))
+                    _vars = union(_vars,
+                        map(first, get(model.structure, :components, Vector{Symbol}[])))
+                    vars = Expr(:tuple)
+                    append!(vars.args, collect(_vars))
+                else
+                    error("Cannot infer the exact `Model` that `@extend $(body)` refers." *
+                          " Please specify the names that it brings into scope by:" *
+                          " `@extend a, b = oneport = OnePort()`.")
+                end
             end
+            extend_args!(a, b, dict, expr, kwargs, varexpr)
             ext[] = a
             push!(b.args, Expr(:kw, :name, Meta.quot(a)))
             push!(expr.args, :($a = $b))

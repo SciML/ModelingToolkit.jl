@@ -7,77 +7,76 @@ using Unitful
 
 ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
 
-@testset "Comprehensive Test of Parsing Models (with an RC Circuit)" begin
-    @connector RealInput begin
-        u(t), [input = true, unit = u"V"]
+@connector RealInput begin
+    u(t), [input = true, unit = u"V"]
+end
+@connector RealOutput begin
+    u(t), [output = true, unit = u"V"]
+end
+@mtkmodel Constant begin
+    @components begin
+        output = RealOutput()
     end
-    @connector RealOutput begin
-        u(t), [output = true, unit = u"V"]
+    @parameters begin
+        k, [description = "Constant output value of block"]
     end
-    @mtkmodel Constant begin
-        @components begin
-            output = RealOutput()
-        end
-        @parameters begin
-            k, [description = "Constant output value of block"]
-        end
-        @equations begin
-            output.u ~ k
-        end
+    @equations begin
+        output.u ~ k
     end
+end
 
-    @variables t [unit = u"s"]
-    D = Differential(t)
+@variables t [unit = u"s"]
+D = Differential(t)
 
-    @connector Pin begin
-        v(t), [unit = u"V"]                    # Potential at the pin [V]
-        i(t), [connect = Flow, unit = u"A"]    # Current flowing into the pin [A]
-        @icon "pin.png"
+@connector Pin begin
+    v(t), [unit = u"V"]                    # Potential at the pin [V]
+    i(t), [connect = Flow, unit = u"A"]    # Current flowing into the pin [A]
+    @icon "pin.png"
+end
+
+@named p = Pin(; v = π)
+@test getdefault(p.v) == π
+@test Pin.isconnector == true
+
+@mtkmodel OnePort begin
+    @components begin
+        p = Pin()
+        n = Pin()
     end
-
-    @named p = Pin(; v = π)
-    @test getdefault(p.v) == π
-    @test Pin.isconnector == true
-
-    @mtkmodel OnePort begin
-        @components begin
-            p = Pin()
-            n = Pin()
-        end
-        @variables begin
-            v(t), [unit = u"V"]
-            i(t), [unit = u"A"]
-        end
-        @icon "oneport.png"
-        @equations begin
-            v ~ p.v - n.v
-            0 ~ p.i + n.i
-            i ~ p.i
-        end
+    @variables begin
+        v(t), [unit = u"V"]
+        i(t), [unit = u"A"]
     end
-
-    @test OnePort.isconnector == false
-
-    @mtkmodel Ground begin
-        @components begin
-            g = Pin()
-        end
-        @icon begin
-            read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
-        end
-        @equations begin
-            g.v ~ 0
-        end
+    @icon "oneport.png"
+    @equations begin
+        v ~ p.v - n.v
+        0 ~ p.i + n.i
+        i ~ p.i
     end
+end
 
-    resistor_log = "$(@__DIR__)/logo/resistor.svg"
-    @mtkmodel Resistor begin
-        @extend v, i = oneport = OnePort()
-        @parameters begin
-            R, [unit = u"Ω"]
-        end
-        @icon begin
-            """<?xml version="1.0" encoding="UTF-8"?>
+@test OnePort.isconnector == false
+
+@mtkmodel Ground begin
+    @components begin
+        g = Pin()
+    end
+    @icon begin
+        read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
+    end
+    @equations begin
+        g.v ~ 0
+    end
+end
+
+resistor_log = "$(@__DIR__)/logo/resistor.svg"
+@mtkmodel Resistor begin
+    @extend v, i = oneport = OnePort()
+    @parameters begin
+        R, [unit = u"Ω"]
+    end
+    @icon begin
+        """<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="80" height="30">
   <path d="M10 15
 l15 0
@@ -91,87 +90,86 @@ l2.5 -5
 l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></path>
 </svg>
 """
-        end
-        @equations begin
-            v ~ i * R
-        end
     end
-
-    @mtkmodel Capacitor begin
-        @parameters begin
-            C, [unit = u"F"]
-        end
-        @extend v, i = oneport = OnePort(; v = 0.0)
-        @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
-        @equations begin
-            D(v) ~ i / C
-        end
+    @equations begin
+        v ~ i * R
     end
-
-    @named capacitor = Capacitor(C = 10, v = 10.0)
-    @test getdefault(capacitor.v) == 10.0
-
-    @mtkmodel Voltage begin
-        @extend v, i = oneport = OnePort()
-        @components begin
-            V = RealInput()
-        end
-        @equations begin
-            v ~ V.u
-        end
-    end
-
-    @mtkmodel RC begin
-        @structural_parameters begin
-            R_val = 10
-            C_val = 10
-            k_val = 10
-        end
-        @components begin
-            resistor = Resistor(; R = R_val)
-            capacitor = Capacitor(; C = C_val)
-            source = Voltage()
-            constant = Constant(; k = k_val)
-            ground = Ground()
-        end
-
-        @equations begin
-            connect(constant.output, source.V)
-            connect(source.p, resistor.p)
-            connect(resistor.n, capacitor.p)
-            connect(capacitor.n, source.n, ground.g)
-        end
-    end
-
-    C_val = 20
-    R_val = 20
-    res__R = 100
-    @mtkbuild rc = RC(; C_val, R_val, resistor.R = res__R)
-    resistor = getproperty(rc, :resistor; namespace = false)
-    @test getname(rc.resistor) === getname(resistor)
-    @test getname(rc.resistor.R) === getname(resistor.R)
-    @test getname(rc.resistor.v) === getname(resistor.v)
-    # Test that `resistor.R` overrides `R_val` in the argument.
-    @test getdefault(rc.resistor.R) == res__R != R_val
-    # Test that `C_val` passed via argument is set as default of C.
-    @test getdefault(rc.capacitor.C) == C_val
-    # Test that `k`'s default value is unchanged.
-    @test getdefault(rc.constant.k) == RC.structure[:kwargs][:k_val]
-    @test getdefault(rc.capacitor.v) == 0.0
-
-    @test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
-          read(joinpath(ENV["MTK_ICONS_DIR"], "resistor.svg"), String)
-    @test get_gui_metadata(rc.ground).layout ==
-          read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
-    @test get_gui_metadata(rc.capacitor).layout ==
-          URI("https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg")
-    @test OnePort.structure[:icon] ==
-          URI("file:///" * abspath(ENV["MTK_ICONS_DIR"], "oneport.png"))
-    @test ModelingToolkit.get_gui_metadata(rc.resistor.p).layout == Pin.structure[:icon] ==
-          URI("file:///" * abspath(ENV["MTK_ICONS_DIR"], "pin.png"))
-
-    @test length(equations(rc)) == 1
 end
+
+@mtkmodel Capacitor begin
+    @parameters begin
+        C, [unit = u"F"]
+    end
+    @extend oneport = OnePort(; v = 0.0)
+    @icon "https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg"
+    @equations begin
+        D(v) ~ i / C
+    end
+end
+
+@named capacitor = Capacitor(C = 10, v = 10.0)
+@test getdefault(capacitor.v) == 10.0
+
+@mtkmodel Voltage begin
+    @extend v, i = oneport = OnePort()
+    @components begin
+        V = RealInput()
+    end
+    @equations begin
+        v ~ V.u
+    end
+end
+
+@mtkmodel RC begin
+    @structural_parameters begin
+        R_val = 10
+        C_val = 10
+        k_val = 10
+    end
+    @components begin
+        resistor = Resistor(; R = R_val)
+        capacitor = Capacitor(; C = C_val)
+        source = Voltage()
+        constant = Constant(; k = k_val)
+        ground = Ground()
+    end
+
+    @equations begin
+        connect(constant.output, source.V)
+        connect(source.p, resistor.p)
+        connect(resistor.n, capacitor.p)
+        connect(capacitor.n, source.n, ground.g)
+    end
+end
+
+C_val = 20
+R_val = 20
+res__R = 100
+@mtkbuild rc = RC(; C_val, R_val, resistor.R = res__R)
+resistor = getproperty(rc, :resistor; namespace = false)
+@test getname(rc.resistor) === getname(resistor)
+@test getname(rc.resistor.R) === getname(resistor.R)
+@test getname(rc.resistor.v) === getname(resistor.v)
+# Test that `resistor.R` overrides `R_val` in the argument.
+@test getdefault(rc.resistor.R) == res__R != R_val
+# Test that `C_val` passed via argument is set as default of C.
+@test getdefault(rc.capacitor.C) == C_val
+# Test that `k`'s default value is unchanged.
+@test getdefault(rc.constant.k) == RC.structure[:kwargs][:k_val]
+@test getdefault(rc.capacitor.v) == 0.0
+
+@test get_gui_metadata(rc.resistor).layout == Resistor.structure[:icon] ==
+      read(joinpath(ENV["MTK_ICONS_DIR"], "resistor.svg"), String)
+@test get_gui_metadata(rc.ground).layout ==
+      read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
+@test get_gui_metadata(rc.capacitor).layout ==
+      URI("https://upload.wikimedia.org/wikipedia/commons/7/78/Capacitor_symbol.svg")
+@test OnePort.structure[:icon] ==
+      URI("file:///" * abspath(ENV["MTK_ICONS_DIR"], "oneport.png"))
+@test ModelingToolkit.get_gui_metadata(rc.resistor.p).layout == Pin.structure[:icon] ==
+      URI("file:///" * abspath(ENV["MTK_ICONS_DIR"], "pin.png"))
+
+@test length(equations(rc)) == 1
 
 @testset "Parameters and Structural parameters in various modes" begin
     @mtkmodel MockModel begin
