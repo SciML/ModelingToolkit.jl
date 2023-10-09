@@ -54,7 +54,7 @@ end
 end
 
 @mtkmodel Resistor begin
-    @extend oneport = OnePort()
+    @extend OnePort()
     @parameters begin
         R = 1.0 # Sets the default resistance
     end
@@ -66,7 +66,7 @@ end
 D = Differential(t)
 
 @mtkmodel Capacitor begin
-    @extend v, i = oneport = OnePort()
+    @extend OnePort()
     @parameters begin
         C = 1.0
     end
@@ -76,7 +76,7 @@ D = Differential(t)
 end
 
 @mtkmodel ConstantVoltage begin
-    @extend oneport = OnePort()
+    @extend OnePort()
     @parameters begin
         V = 1.0
     end
@@ -193,7 +193,7 @@ zero. This leads to our resistor equations:
 
 ```@example acausal
 @mtkmodel Resistor begin
-    @extend oneport = OnePort()
+    @extend OnePort()
     @parameters begin
         R = 1.0
     end
@@ -216,7 +216,7 @@ Using our knowledge of circuits, we similarly construct the `Capacitor`:
 D = Differential(t)
 
 @mtkmodel Capacitor begin
-    @extend oneport = OnePort()
+    @extend OnePort()
     @parameters begin
         C = 1.0
     end
@@ -233,7 +233,7 @@ model this as:
 
 ```@example acausal
 @mtkmodel ConstantVoltage begin
-    @extend oneport = OnePort()
+    @extend OnePort()
     @parameters begin
         V = 1.0
     end
