@@ -19,7 +19,7 @@ equations.
 `ModelingToolkit.Model`, which includes a constructor that returns the ODESystem, a
 `structure` dictionary with metadata, and flag `isconnector` which is set to `false`.
 
-## What can an MTK-Model definition have?
+### What can an MTK-Model definition have?
 
 `@mtkmodel` definition contains begin blocks of
 
@@ -59,7 +59,7 @@ end
     @variables begin
         v(t) = v_var
     end
-    @extend p1, p2 = model_b = ModelB(; p1)
+    @extend ModelB(; p1)
     @components begin
         model_a = ModelA(; k_array)
     end
@@ -69,7 +69,7 @@ end
 end
 ```
 
-### `@parameters` and `@variables` begin block
+#### `@parameters` and `@variables` begin block
 
   - Parameters and variables are declared with respective begin blocks.
   - Variables must be functions of an independent variable.
@@ -84,29 +84,23 @@ julia> ModelingToolkit.getdefault(model_c.v)
 2.0
 ```
 
-### `@structural_parameters` begin block
+#### `@structural_parameters` begin block
 
   - This block is for non symbolic input arguements. These are for inputs that usually are not meant to be part of components; but influence how they are defined. One can list inputs like boolean flags, functions etc... here.
   - Whenever default values are specified, unlike parameters/variables, they are reflected in the keyword argument list.
 
 #### `@extend` begin block
 
-To extend a partial system,
-
-  - List the variables to unpack. If there is a single variable, explicitly specify it as a tuple.
-  - Give a name to the base system
-  - List the kwargs of the base system that should be listed as kwargs of the main component.
-  - Note that in above example, `p1` is promoted as an argument of `ModelC`. Users can set the value of `p1` as
+  - Partial systems can be extended in a higher system as `@extend PartialSystem(; kwargs)`.
+  - Keyword arguments pf partial system in the `@extend` definition are added as the keyword arguments of the base system.
+  - Note that in above example, `p1` is promoted as an argument of `ModelC`. Users can set the value of `p1`. However, as `p2` isn't listed in the model definition, its initial guess can't be specified while creating an instance of `ModelC`.
 
 ```julia
 julia> @mtkbuild model_c2 = ModelC(; p1 = 2.0)
 
 ```
 
-However, as `p2` isn't listed in the model definition, its initial guess can't
-specified while creating an instance of `ModelC`.
-
-### `@components` begin block
+#### `@components` begin block
 
   - Declare the subcomponents within `@components` begin block.
   - The arguments in these subcomponents are promoted as keyword arguments as `subcomponent_name__argname` with `nothing` as default value.
@@ -131,7 +125,7 @@ getdefault(model_c4.model_a.k_array[2])
 # 3.0
 ```
 
-### `@equations` begin block
+#### `@equations` begin block
 
   - List all the equations here
 
