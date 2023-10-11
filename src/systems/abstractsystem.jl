@@ -1282,6 +1282,9 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
   - `initialize`: If true, a check is performed to ensure that the operating point is consistent (satisfies algebraic equations). If the op is not consistent, initialization is performed.
   - `kwargs`: Are passed on to `find_solvables!`
 
+!!! note "Un-simplified system"
+    This function expects `sys` to be un-simplified, i.e., `structural_simplify` or `@mtkbuild` should not be called on the system before passing it into this function.
+
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
 function linearization_function(sys::AbstractSystem, inputs,
@@ -1367,6 +1370,9 @@ end
 Similar to [`linearize`](@ref), but returns symbolic matrices `A,B,C,D` rather than numeric. While `linearize` uses ForwardDiff to perform the linearization, this function uses `Symbolics.jacobian`.
 
 See [`linearize`](@ref) for a description of the arguments.
+
+!!! note "Un-simplified system"
+    This function expects `sys` to be un-simplified, i.e., `structural_simplify` or `@mtkbuild` should not be called on the system before passing it into this function.
 
 # Extended help
 The named tuple returned as the first argument additionally contains the jacobians `f_x, f_z, g_x, g_z, f_u, g_u, h_x, h_z, h_u` of
@@ -1507,6 +1513,9 @@ If `allow_input_derivatives = false`, an error will be thrown if input derivativ
 `zero_dummy_der` can be set to automatically set the operating point to zero for all dummy derivatives.
 
 See also [`linearization_function`](@ref) which provides a lower-level interface, [`linearize_symbolic`](@ref) and [`ModelingToolkit.reorder_states`](@ref).
+
+!!! note "Un-simplified system"
+    This function expects `sys` to be un-simplified, i.e., `structural_simplify` or `@mtkbuild` should not be called on the system before passing it into this function.
 
 See extended help for an example.
 
