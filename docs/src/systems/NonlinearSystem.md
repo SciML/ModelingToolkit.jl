@@ -15,7 +15,7 @@ NonlinearSystem
 
 ## Transformations
 
-```@docs
+```@docs; canonical=false
 structural_simplify
 alias_elimination
 tearing
@@ -23,14 +23,14 @@ tearing
 
 ## Analyses
 
-```@docs
+```@docs; canonical=false
 ModelingToolkit.isaffine
 ModelingToolkit.islinear
 ```
 
 ## Applicable Calculation and Generation Functions
 
-```julia
+```@docs; canonical=false
 calculate_jacobian
 generate_jacobian
 jacobian_sparsity

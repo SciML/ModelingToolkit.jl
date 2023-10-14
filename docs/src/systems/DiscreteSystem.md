@@ -23,7 +23,7 @@ DiscreteSystem
 
 ```@docs
 DiscreteFunction(sys::ModelingToolkit.DiscreteSystem, args...)
-DiscreteProblem(sys::ModelingToolkit.DiscreteSystem, args...)
+DiscreteProblem(sys::ModelingToolkit.DiscreteSystem, u0map, tspan)
 ```
 
 ## Expression Constructors

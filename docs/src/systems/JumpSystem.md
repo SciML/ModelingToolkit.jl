@@ -15,7 +15,7 @@ JumpSystem
 
 ## Transformations
 
-```@docs
+```@docs; canonical=false
 structural_simplify
 ```
 
@@ -23,7 +23,9 @@ structural_simplify
 
 ## Problem Constructors
 
+```@docs; canonical=false
+DiscreteProblem(sys::ModelingToolkit.DiscreteSystem, u0map, tspan)
+```
 ```@docs
-SciMLBase.DiscreteProblem(sys::JumpSystem,args...)
-JumpProcesses.JumpProblem(sys::JumpSystem,args...)
+JumpProblem(sys::JumpSystem, prob, aggregator)
 ```

@@ -35,7 +35,7 @@ ModelingToolkit.isaffine
 
 ## Applicable Calculation and Generation Functions
 
-```julia
+```@docs; canonical=false
 calculate_jacobian
 calculate_tgrad
 calculate_factorized_W
@@ -56,7 +56,7 @@ SteadyStateProblem(sys::ModelingToolkit.AbstractODESystem, args...)
 ## Torn Problem Constructors
 
 ```@docs
-ODAEProblem(sys::ModelingToolkit.AbstractODESystem, args...)
+ODAEProblem
 ```
 
 ## Expression Constructors
