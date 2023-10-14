@@ -55,5 +55,6 @@ end
 @safetestset "OptimizationSystem Test" include("optimizationsystem.jl")
 @safetestset "FuncAffect Test" include("funcaffect.jl")
 @safetestset "Constants Test" include("constants.jl")
+@safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")
 # Reference tests go Last
 @safetestset "Latexify recipes Test" include("latexify.jl")

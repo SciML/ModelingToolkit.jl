@@ -7,6 +7,7 @@ pages = [
         "tutorials/modelingtoolkitize.md",
         "tutorials/stochastic_diffeq.md",
         "tutorials/parameter_identifiability.md",
+        "tutorials/bifurcation_diagram_computation.md",
         "tutorials/domain_connections.md"],
     "Examples" => Any["Basic Examples" => Any["examples/higher_order.md",
             "examples/spring_mass.md",
