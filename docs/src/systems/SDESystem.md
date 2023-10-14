@@ -22,17 +22,19 @@ sde = SDESystem(ode, noiseeqs)
 
 ## Transformations
 
-```@docs
+```@docs; canonical=false
 structural_simplify
 alias_elimination
-Girsanov_transform
+```
+```@docs
+ModelingToolkit.Girsanov_transform
 ```
 
 ## Analyses
 
 ## Applicable Calculation and Generation Functions
 
-```julia
+```@docs; canonical=false
 calculate_jacobian
 calculate_tgrad
 calculate_factorized_W
