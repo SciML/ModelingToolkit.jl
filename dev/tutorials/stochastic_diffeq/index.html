@@ -31,7 +31,7 @@ parammap = [
 prob = SDEProblem(de, u0map, (0.0, 100.0), parammap)
 sol = solve(prob, SOSRI())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
 Interpolation: 1st order linear
-t: 17989-element Vector{Float64}:
+t: 18892-element Vector{Float64}:
    0.0
    0.0007146315987816352
    0.0008575579185379623
@@ -39,37 +39,37 @@ t: 17989-element Vector{Float64}:
    0.0011992411517054316
    0.0014027436655772332
    0.00163168399368301
-   0.0018879391122648029
-   0.002168928586903875
-   0.002473232440318417
+   0.001887965090303379
+   0.002168889523001627
+   0.002472962132028212
    ⋮
-  99.92864579569591
-  99.93885785296312
-  99.95034641738873
-  99.95997656515266
-  99.96927751176263
-  99.97974107669884
-  99.98911320998876
-  99.99851627108059
+  99.95867708296544
+  99.96368575313404
+  99.96878220571203
+  99.97374563557479
+  99.97866894132792
+  99.9842076603002
+  99.9901259507594
+  99.99678402752602
  100.0
-u: 17989-element Vector{Vector{Float64}}:
+u: 18892-element Vector{Vector{Float64}}:
  [1.0, 0.0, 0.0]
- [0.9931610246373189, 0.001660396761109596, 5.855125135085198e-7]
- [0.9914252682003276, 0.0019938622557866873, 8.415094582952517e-7]
- [0.9907607290750488, 0.0023650218546854397, 1.18420651391395e-6]
- [0.9887533540838704, 0.0027787490659190324, 1.6408234570638048e-6]
- [0.9879870035995575, 0.003246893754880249, 2.240259419648452e-6]
- [0.9867336831430762, 0.0037657044337463443, 3.0205784250191365e-6]
- [0.9843786224371981, 0.0043484430724228754, 4.027317747451525e-6]
- [0.9819749340195337, 0.004979461085776176, 5.274800029652531e-6]
- [0.9815222015623677, 0.0056728747013735535, 6.8149900799620025e-6]
+ [0.9957021661466882, 0.001659826883123804, 5.884852710292522e-7]
+ [0.9937807341962117, 0.0019931833898189084, 8.452379746675347e-7]
+ [0.9905993548244936, 0.0023648679611457195, 1.1908173812451813e-6]
+ [0.988863484822456, 0.002778245293696789, 1.644295836139071e-6]
+ [0.9882729009361079, 0.003249106264796756, 2.2415762643969816e-6]
+ [0.9873048639127907, 0.0037805017952538215, 3.0204571794596042e-6]
+ [0.9877027434420756, 0.004375587596810387, 4.0294788276569305e-6]
+ [0.985013559156651, 0.005012284412231597, 5.299364766472167e-6]
+ [0.9824224454154211, 0.005729905955815289, 6.859072549899653e-6]
  ⋮
- [5.801864886099195, 5.732637166047849, 1.2945651291452274]
- [5.783879850615016, 5.721751683377502, 1.2942267329876795]
- [5.873271474826664, 5.693979570534268, 1.3158076351517747]
- [5.8605134715595195, 5.814450845840808, 1.295353912883918]
- [5.89418716517448, 5.810940133268665, 1.287127828980436]
- [5.878608354861628, 5.824160031829119, 1.2949277735033422]
- [5.9445399257142, 5.862698590242396, 1.285267590665984]
- [6.031767460144897, 5.763540861266858, 1.302402471948509]
- [6.021871225106552, 5.747621566381766, 1.3083520454184348]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../programmatically_generating/">« Programmatically Generating and Scripting ODESystems</a><a class="docs-footer-nextpage" href="../parameter_identifiability/">Parameter Identifiability in ODE Models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="auto">Automatic (OS)</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.1.0 on <span class="colophon-date" title="Monday 9 October 2023 09:37">Monday 9 October 2023</span>. Using Julia version 1.9.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+ [5.4990917510766, 5.685988404599573, 1.1655197663295207]
+ [5.513442183827157, 5.680846376425604, 1.1698861331632588]
+ [5.5287059245812875, 5.715899213519064, 1.1741287865143946]
+ [5.494272787080898, 5.668670863507659, 1.1869103193109356]
+ [5.537557402666282, 5.6413717558002565, 1.180646424493626]
+ [5.4799868268795935, 5.5848791782232174, 1.1698738202885004]
+ [5.544238205599837, 5.6156280087845305, 1.1770584974313567]
+ [5.466634758500074, 5.569248268537797, 1.1764794777633782]
+ [5.497910447478059, 5.5848516701132835, 1.1671511241945995]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../programmatically_generating/">« Programmatically Generating and Scripting ODESystems</a><a class="docs-footer-nextpage" href="../parameter_identifiability/">Parameter Identifiability in ODE Models »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="auto">Automatic (OS)</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.1.1 on <span class="colophon-date" title="Saturday 14 October 2023 10:15">Saturday 14 October 2023</span>. Using Julia version 1.9.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
