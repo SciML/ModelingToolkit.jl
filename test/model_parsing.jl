@@ -313,3 +313,60 @@ end
     @test A.structure[:kwargs] == Dict(:p => nothing, :v => nothing)
     @test A.structure[:components] == [[:cc, :C]]
 end
+
+@testset "Conditional components, equations and parameters" begin
+    @mtkmodel C begin
+        @parameters begin
+            val
+        end
+    end
+
+    # Conditional statements inside @components, @equations
+    # Conditional default value
+    @mtkmodel A begin
+        @parameters begin
+            eq
+        end
+        @structural_parameters begin
+            eq_flag = true
+            c_flag = 1
+        end
+        @parameters begin
+            eq = eq_flag ? 1 : 2
+        end
+        @components begin
+            c0 = C(; val = 0)
+            if c_flag == 1
+                c = C(; val = 1)
+            elseif c_flag == 2
+                c = C(; val = 2)
+            else
+                c = C(; val = 3)
+            end
+        end
+        @equations begin
+            eq ~ 0
+            if eq_flag isa Int
+                eq ~ 1
+            elseif eq_flag
+                eq ~ 2
+            else
+                eq ~ 3
+            end
+        end
+    end
+
+    @mtkbuild a1 = A(eq_flag = 1)
+    @test getdefault(a1.c.val) == 1
+    @test all([a1.eq ~ 0, a1.eq ~ 1] .∈ [equations(a1)])
+
+    @mtkbuild a2 = A(c_flag = 2)
+    @test getdefault(a2.c.val) == 2
+    @test all([a2.eq ~ 0, a2.eq ~ 2] .∈ [equations(a2)])
+
+    @test all(:comp0 .∈ [nameof.(a1.systems), nameof.(a2.systems)])
+
+    @mtkbuild a3 = A(eq_flag = false, c_flag = 3)
+    @test getdefault(a3.c.val) == 3
+    @test all([a3.eq ~ 0, a3.eq ~ 3] .∈ [equations(a3)])
+end
