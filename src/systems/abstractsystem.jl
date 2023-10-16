@@ -1285,12 +1285,14 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
 function linearization_function(sys::AbstractSystem, inputs,
-        outputs; simplify = false,
-        initialize = true,
-        op = Dict(),
-        p = DiffEqBase.NullParameters(),
-        zero_dummy_der = false,
-        kwargs...)
+    outputs; simplify = false,
+    initialize = true,
+    op = Dict(),
+    p = DiffEqBase.NullParameters(),
+    zero_dummy_der = false,
+    kwargs...)
+    inputs isa AbstractVector || (inputs = [inputs])
+    outputs isa AbstractVector || (outputs = [outputs])
     ssys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs;
         simplify,
         kwargs...)
@@ -1584,7 +1586,7 @@ lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 ```
 """
 function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives = false,
-        p = DiffEqBase.NullParameters())
+    p = DiffEqBase.NullParameters(), kwargs...)
     x0 = merge(defaults(sys), op)
     u0, p2, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
 
