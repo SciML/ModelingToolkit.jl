@@ -356,17 +356,82 @@ end
         end
     end
 
-    @mtkbuild a1 = A(eq_flag = 1)
+    @named a1 = A(eq_flag = 1)
+    a1 = complete(a1)
     @test getdefault(a1.c.val) == 1
     @test all([a1.eq ~ 0, a1.eq ~ 1] .∈ [equations(a1)])
+    a1 = complete(a1)
 
-    @mtkbuild a2 = A(c_flag = 2)
+    @named a2 = A(c_flag = 2)
+    a2 = complete(a2)
     @test getdefault(a2.c.val) == 2
     @test all([a2.eq ~ 0, a2.eq ~ 2] .∈ [equations(a2)])
 
     @test all(:comp0 .∈ [nameof.(a1.systems), nameof.(a2.systems)])
 
-    @mtkbuild a3 = A(eq_flag = false, c_flag = 3)
+    @named a3 = A(eq_flag = false, c_flag = 3)
+    a3 = complete(a3)
     @test getdefault(a3.c.val) == 3
     @test all([a3.eq ~ 0, a3.eq ~ 3] .∈ [equations(a3)])
+
+    @mtkmodel B begin
+        @structural_parameters begin
+            condition = 2
+        end
+        @parameters begin
+            a0
+            a1
+            a2
+            a3
+        end
+
+        @components begin
+            c0 = C()
+        end
+
+        @equations begin
+            a0 ~ 0
+        end
+
+        if condition == 1
+            @equations begin
+                a1 ~ 0
+            end
+            @components begin
+                c1 = C()
+            end
+        elseif condition == 2
+            @equations begin
+                a2 ~ 0
+            end
+            @components begin
+                c2 = C()
+            end
+        else
+            @equations begin
+                a3 ~ 0
+            end
+            @components begin
+                c3 = C()
+            end
+        end
+    end
+
+    @named b1 = B(condition = 1)
+    b1 = complete(b1)
+    @named b2 = B(condition = 2)
+    b2 = complete(b2)
+    @named b3 = B(condition = 10)
+    b3 = complete(b3)
+
+    @test nameof.(b1.systems) == [:c1, :c0]
+    @test nameof.(b2.systems) == [:c2, :c0]
+    @test nameof.(b3.systems) == [:c3, :c0]
+
+    @test Equation[b1.a1 ~ 0
+        b1.a0 ~ 0] == equations(b1)
+    @test Equation[b2.a2 ~ 0
+        b1.a0 ~ 0] == equations(b2)
+    @test Equation[b3.a3 ~ 0
+        b1.a0 ~ 0] == equations(b3)
 end
