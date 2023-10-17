@@ -51,9 +51,11 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [weakdeps]
+BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
 DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
 
 [extensions]
+MTKBifurcationKitExt = "BifurcationKit"
 MTKDeepDiffsExt = "DeepDiffs"
 
 [compat]
@@ -101,6 +103,7 @@ julia = "1.6"
 [extras]
 AmplNLWriter = "7c4d4715-977e-5154-bfe0-e096adeac482"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
 ControlSystemsMTK = "687d7614-c7e5-45fc-bfc3-9ee385575c88"
 DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
@@ -123,4 +126,4 @@ Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["AmplNLWriter", "BenchmarkTools", "ControlSystemsMTK", "NonlinearSolve", "ForwardDiff", "Ipopt", "Ipopt_jll", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OptimizationMOI", "Random", "ReferenceTests", "SafeTestsets", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "StochasticDelayDiffEq"]
+test = ["AmplNLWriter", "BenchmarkTools", "BifurcationKit",, "ControlSystemsMTK", "NonlinearSolve", "ForwardDiff", "Ipopt", "Ipopt_jll", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OptimizationMOI", "Random", "ReferenceTests", "SafeTestsets", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "StochasticDelayDiffEq"]
