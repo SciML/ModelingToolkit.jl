@@ -1,7 +1,5 @@
 module MTKBifurcationKitExt
 
-println("BifurcationKit extension loaded")
-
 ### Preparations ###
 
 # Imports
