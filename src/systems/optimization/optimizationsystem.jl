@@ -349,7 +349,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
             lcons = lcons_
             ucons = ucons_
         else # use the user supplied constraints bounds
-            haskey(kwargs, :lcons) && haskey(kwargs, :ucons) &&
+            (haskey(kwargs, :lcons) ⊻ haskey(kwargs, :ucons)) &&
                 throw(ArgumentError("Expected both `ucons` and `lcons` to be supplied"))
             haskey(kwargs, :lcons) && length(kwargs[:lcons]) != length(cstr) &&
                 throw(ArgumentError("Expected `lcons` to be of the same length as the vector of constraints"))
@@ -527,7 +527,7 @@ function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
             lcons = lcons_
             ucons = ucons_
         else # use the user supplied constraints bounds
-            !haskey(kwargs, :lcons) && !haskey(kwargs, :ucons) &&
+            (haskey(kwargs, :lcons) ⊻ haskey(kwargs, :ucons)) &&
                 throw(ArgumentError("Expected both `ucons` and `lcons` to be supplied"))
             haskey(kwargs, :lcons) && length(kwargs[:lcons]) != length(cstr) &&
                 throw(ArgumentError("Expected `lcons` to be of the same length as the vector of constraints"))
