@@ -49,7 +49,7 @@ j₃      = MassActionJump(2*β+γ, [R => 1], [S => 1, R => -1])
 """
 struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     """
-    tag: a tag for the system. If two systems have the same tag, then they are
+    A tag for the system. If two systems have the same tag, then they are
     structurally identical.
     """
     tag::UInt
@@ -66,38 +66,39 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     ps::Vector
     """Array variables."""
     var_to_name::Any
+    """Observed states."""
     observed::Vector{Equation}
-    """The name of the system. . These are required to have unique names."""
+    """The name of the system."""
     name::Symbol
-    """The internal systems."""
+    """The internal systems. These are required to have unique names."""
     systems::Vector{JumpSystem}
     """
-    defaults: The default values to use when initial conditions and/or
+    The default values to use when initial conditions and/or
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
     """
-    type: type of the system
+    Type of the system.
     """
     connector_type::Any
     """
-    discrete_events: A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
+    A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
     analog to `SciMLBase.DiscreteCallback` that executes an affect when a given condition is
-    true at the end of an integration step. *Note, one must make sure to call
+    true at the end of an integration step. Note, one must make sure to call
     `reset_aggregated_jumps!(integrator)` if using a custom affect function that changes any
-    state value or parameter.*
+    state value or parameter.
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
-    metadata: metadata for the system, to be used by downstream packages.
+    Metadata for the system, to be used by downstream packages.
     """
     metadata::Any
     """
-    gui_metadata: metadata for MTK GUI.
+    Metadata for MTK GUI.
     """
     gui_metadata::Union{Nothing, GUIMetadata}
     """
-    complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    If a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
     complete::Bool
 
