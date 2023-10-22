@@ -19,7 +19,7 @@ cons = [x^2 + y^2 ≲ 1]
 """
 struct OptimizationSystem <: AbstractOptimizationSystem
     """
-    tag: a tag for the system. If two systems have the same tag, then they are
+    A tag for the system. If two systems have the same tag, then they are
     structurally identical.
     """
     tag::UInt
@@ -35,9 +35,9 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     observed::Vector{Equation}
     """List of constraint equations of the system."""
     constraints::Vector{Union{Equation, Inequality}}
-    """The unique name of the system."""
+    """The name of the system."""
     name::Symbol
-    """The internal systems."""
+    """The internal systems. These are required to have unique names."""
     systems::Vector{OptimizationSystem}
     """
     The default values to use when initial guess and/or
@@ -45,19 +45,19 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     """
     defaults::Dict
     """
-    metadata: metadata for the system, to be used by downstream packages.
+    Metadata for the system, to be used by downstream packages.
     """
     metadata::Any
     """
-    gui_metadata: metadata for MTK GUI.
+    Metadata for MTK GUI.
     """
     gui_metadata::Union{Nothing, GUIMetadata}
     """
-    complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    If a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
     complete::Bool
     """
-    parent: the hierarchical parent system before simplification.
+    The hierarchical parent system before simplification.
     """
     parent::Any
 

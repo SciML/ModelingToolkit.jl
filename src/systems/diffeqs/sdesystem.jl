@@ -28,7 +28,7 @@ noiseeqs = [0.1*x,
 """
 struct SDESystem <: AbstractODESystem
     """
-    tag: a tag for the system. If two systems have the same tag, then they are
+    A tag for the system. If two systems have the same tag, then they are
     structurally identical.
     """
     tag::UInt
@@ -66,57 +66,57 @@ struct SDESystem <: AbstractODESystem
     """
     ctrl_jac::RefValue{Any}
     """
-    `Wfact` matrix. Note: this field will not be defined until
+    Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
     """
     Wfact::RefValue
     """
-    `Wfact_t` matrix. Note: this field will not be defined until
+    Note: this field will not be defined until
     [`generate_factorized_W`](@ref) is called on the system.
     """
     Wfact_t::RefValue
     """
-    Name: the name of the system
+    The name of the system.
     """
     name::Symbol
     """
-    Systems: the internal systems. These are required to have unique names.
+    The internal systems. These are required to have unique names.
     """
     systems::Vector{SDESystem}
     """
-    defaults: The default values to use when initial conditions and/or
+    The default values to use when initial conditions and/or
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
     """
-    type: type of the system
+    Type of the system.
     """
     connector_type::Any
     """
-    continuous_events: A `Vector{SymbolicContinuousCallback}` that model events.
+    A `Vector{SymbolicContinuousCallback}` that model events.
     The integrator will use root finding to guarantee that it steps at each zero crossing.
     """
     continuous_events::Vector{SymbolicContinuousCallback}
     """
-    discrete_events: A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
+    A `Vector{SymbolicDiscreteCallback}` that models events. Symbolic
     analog to `SciMLBase.DiscreteCallback` that executes an affect when a given condition is
     true at the end of an integration step.
     """
     discrete_events::Vector{SymbolicDiscreteCallback}
     """
-    metadata: metadata for the system, to be used by downstream packages.
+    Metadata for the system, to be used by downstream packages.
     """
     metadata::Any
     """
-    gui_metadata: metadata for MTK GUI.
+    Metadata for MTK GUI.
     """
     gui_metadata::Union{Nothing, GUIMetadata}
     """
-    complete: if a model `sys` is complete, then `sys.x` no longer performs namespacing.
+    If a model `sys` is complete, then `sys.x` no longer performs namespacing.
     """
     complete::Bool
     """
-    parent: the hierarchical parent system before simplification.
+    The hierarchical parent system before simplification.
     """
     parent::Any
 

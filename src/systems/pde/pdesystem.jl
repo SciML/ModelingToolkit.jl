@@ -35,54 +35,54 @@ domains = [t ∈ (0.0,1.0),
 ```
 """
 struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
-    "The equations which define the PDE"
+    "The equations which define the PDE."
     eqs::Any
-    "The boundary conditions"
+    "The boundary conditions."
     bcs::Any
     "The domain for the independent variables."
     domain::Any
-    "The independent variables"
+    "The independent variables."
     ivs::Any
-    "The dependent variables"
+    "The dependent variables."
     dvs::Any
-    "The parameters"
+    "The parameters."
     ps::Any
     """
-    defaults: The default values to use when initial conditions and/or
+    The default values to use when initial conditions and/or
     parameters are not supplied in `ODEProblem`.
     """
     defaults::Dict
     """
-    type: type of the system
+    Type of the system.
     """
     connector_type::Any
     """
-    systems: The internal systems. These are required to have unique names.
+    The internal systems. These are required to have unique names.
     """
     systems::Vector
     """
-    analytic: A vector of explicit symbolic expressions for the analytic solutions of each
-    dependent variable. e.g. `analytic = [u(t, x) ~ a*sin(c*t) * cos(k*x)]`
+    A vector of explicit symbolic expressions for the analytic solutions of each
+    dependent variable. e.g. `analytic = [u(t, x) ~ a*sin(c*t) * cos(k*x)]`.
     """
     analytic::Any
     """
-    analytic_func: A vector of functions for the analytic solutions of each dependent
+    A vector of functions for the analytic solutions of each dependent
     variable. Will be generated from `analytic` if not provided. Should have the same
     argument signature as the variable, and a `ps` argument as the last argument,
     which takes an indexable of parameter values in the order you specified them in `ps`.
-    e.g. `analytic_func = [u(t, x) => (ps, t, x) -> ps[1]*sin(ps[2]*t) * cos(ps[3]*x)]`
+    e.g. `analytic_func = [u(t, x) => (ps, t, x) -> ps[1]*sin(ps[2]*t) * cos(ps[3]*x)]`.
     """
     analytic_func::Any
     """
-    name: the name of the system
+    The name of the system.
     """
     name::Symbol
     """
-    metadata: metadata for the system, to be used by downstream packages.
+    Metadata for the system, to be used by downstream packages.
     """
     metadata::Any
     """
-    gui_metadata: metadata for MTK GUI.
+    Metadata for MTK GUI.
     """
     gui_metadata::Union{Nothing, GUIMetadata}
     @add_kwonly function PDESystem(eqs, bcs, domain, ivs, dvs,
