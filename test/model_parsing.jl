@@ -315,40 +315,39 @@ end
 end
 
 @testset "Conditional components, equations and parameters" begin
-    @mtkmodel C begin
-        @parameters begin
-            val
-        end
-    end
+    @mtkmodel C begin end
 
     # Conditional statements inside @components, @equations
-    # Conditional default value
-    @mtkmodel A begin
-        @parameters begin
-            eq
-        end
+    # Conditional default value of parameters and variables
+    @mtkmodel InsideTheBlock begin
         @structural_parameters begin
-            eq_flag = true
-            c_flag = 1
+            flag = 1
         end
         @parameters begin
-            eq = eq_flag ? 1 : 2
+            eq = flag == 1 ? 1 : 0
+            if flag == 1
+                a1
+            elseif flag == 2
+                a2
+            else
+                a3
+            end
         end
         @components begin
-            c0 = C(; val = 0)
-            if c_flag == 1
-                c = C(; val = 1)
-            elseif c_flag == 2
-                c = C(; val = 2)
+            sys0 = C()
+            if flag == 1
+                sys1 = C()
+            elseif flag == 2
+                sys2 = C()
             else
-                c = C(; val = 3)
+                sys3 = C()
             end
         end
         @equations begin
             eq ~ 0
-            if eq_flag isa Int
+            if flag == 1
                 eq ~ 1
-            elseif eq_flag
+            elseif flag == 2
                 eq ~ 2
             else
                 eq ~ 3
@@ -356,82 +355,91 @@ end
         end
     end
 
-    @named a1 = A(eq_flag = 1)
-    a1 = complete(a1)
-    @test getdefault(a1.c.val) == 1
-    @test all([a1.eq ~ 0, a1.eq ~ 1] .∈ [equations(a1)])
-    a1 = complete(a1)
+    @named in_sys_1 = InsideTheBlock()
+    in_sys_1 = complete(in_sys_1)
+    @named in_sys_2 = InsideTheBlock(flag = 2)
+    in_sys_2 = complete(in_sys_2)
+    @named in_sys_3 = InsideTheBlock(flag = 3)
+    in_sys_3 = complete(in_sys_3)
 
-    @named a2 = A(c_flag = 2)
-    a2 = complete(a2)
-    @test getdefault(a2.c.val) == 2
-    @test all([a2.eq ~ 0, a2.eq ~ 2] .∈ [equations(a2)])
+    @test nameof.(parameters(in_sys_1)) == [:a1, :eq]
+    @test nameof.(parameters(in_sys_2)) == [:a2, :eq]
+    @test nameof.(parameters(in_sys_3)) == [:a3, :eq]
 
-    @test all(:comp0 .∈ [nameof.(a1.systems), nameof.(a2.systems)])
+    @test nameof.(in_sys_1.systems) == [:sys1, :sys0]
+    @test nameof.(in_sys_2.systems) == [:sys2, :sys0]
+    @test nameof.(in_sys_3.systems) == [:sys3, :sys0]
 
-    @named a3 = A(eq_flag = false, c_flag = 3)
-    a3 = complete(a3)
-    @test getdefault(a3.c.val) == 3
-    @test all([a3.eq ~ 0, a3.eq ~ 3] .∈ [equations(a3)])
+    @test all([in_sys_1.eq ~ 0, in_sys_1.eq ~ 1] .∈ [equations(in_sys_1)])
+    @test all([in_sys_2.eq ~ 0, in_sys_2.eq ~ 2] .∈ [equations(in_sys_2)])
+    @test all([in_sys_3.eq ~ 0, in_sys_3.eq ~ 3] .∈ [equations(in_sys_3)])
 
-    @mtkmodel B begin
+    @test getdefault(in_sys_1.eq) == 1
+    @test getdefault(in_sys_2.eq) == 0
+
+    # Branching statement outside the begin blocks
+    @mtkmodel OutsideTheBlock begin
         @structural_parameters begin
             condition = 2
         end
         @parameters begin
             a0
-            a1
-            a2
-            a3
         end
-
         @components begin
-            c0 = C()
+            sys0 = C()
         end
-
         @equations begin
             a0 ~ 0
         end
 
         if condition == 1
+            @parameters begin
+                a1
+            end
             @equations begin
                 a1 ~ 0
             end
             @components begin
-                c1 = C()
+                sys1 = C()
             end
         elseif condition == 2
+            @parameters begin
+                a2
+            end
             @equations begin
                 a2 ~ 0
             end
             @components begin
-                c2 = C()
+                sys2 = C()
             end
         else
+            @parameters begin
+                a3
+            end
             @equations begin
                 a3 ~ 0
             end
             @components begin
-                c3 = C()
+                sys3 = C()
             end
         end
     end
 
-    @named b1 = B(condition = 1)
-    b1 = complete(b1)
-    @named b2 = B(condition = 2)
-    b2 = complete(b2)
-    @named b3 = B(condition = 10)
-    b3 = complete(b3)
+    @named out_sys_1 = OutsideTheBlock(condition = 1)
+    out_sys_1 = complete(out_sys_1)
+    @named out_sys_2 = OutsideTheBlock(condition = 2)
+    out_sys_2 = complete(out_sys_2)
+    @named out_sys_3 = OutsideTheBlock(condition = 10)
+    out_sys_3 = complete(out_sys_3)
 
-    @test nameof.(b1.systems) == [:c1, :c0]
-    @test nameof.(b2.systems) == [:c2, :c0]
-    @test nameof.(b3.systems) == [:c3, :c0]
+    @test nameof.(out_sys_1.systems) == [:sys1, :sys0]
+    @test nameof.(out_sys_2.systems) == [:sys2, :sys0]
+    @test nameof.(out_sys_3.systems) == [:sys3, :sys0]
 
-    @test Equation[b1.a1 ~ 0
-        b1.a0 ~ 0] == equations(b1)
-    @test Equation[b2.a2 ~ 0
-        b1.a0 ~ 0] == equations(b2)
-    @test Equation[b3.a3 ~ 0
-        b1.a0 ~ 0] == equations(b3)
+    @test Equation[out_sys_1.a1 ~ 0
+        out_sys_1.a0 ~ 0] == equations(out_sys_1)
+    @test Equation[out_sys_2.a2 ~ 0
+        out_sys_1.a0 ~ 0] == equations(out_sys_2)
+    @test Equation[out_sys_3.a3 ~ 0
+        out_sys_1.a0 ~ 0] == equations(out_sys_3)
 end
