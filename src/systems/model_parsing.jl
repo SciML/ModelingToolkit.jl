@@ -491,17 +491,16 @@ function handle_y_vars(y, dict, mod, varclass, kwargs)
     conditional_y_expr, conditional_dict
 end
 
-function handle_if_x_equations!(ifexpr, condition, x)
+function handle_if_x_equations!(condition, dict, ifexpr, x)
     push!(ifexpr.args, condition, :(push!(equations, $(x.args...))))
     # push!(dict[:equations], [:if, readable_code(condition), readable_code.(x.args)])
     readable_code.(x.args)
 end
-
 function handle_if_y_equations!(ifexpr, y, dict)
     if y.head == :elseif
         elseifexpr = Expr(:elseif)
         eq_entry = [:elseif, readable_code.(y.args[1].args)...]
-        push!(eq_entry, handle_if_x_equations!(elseifexpr, y.args[1], y.args[2]))
+        push!(eq_entry, handle_if_x_equations!(y.args[1], dict, elseifexpr, y.args[2]))
         get(y.args, 3, nothing) !== nothing &&
             push!(eq_entry, handle_if_y_equations!(elseifexpr, y.args[3], dict))
         push!(ifexpr.args, elseifexpr)
@@ -511,7 +510,6 @@ function handle_if_y_equations!(ifexpr, y, dict)
         readable_code.(y.args)
     end
 end
-
 function parse_equations!(exprs, eqs, dict, body)
     dict[:equations] = []
     Base.remove_linenums!(body)
@@ -519,22 +517,23 @@ function parse_equations!(exprs, eqs, dict, body)
         MLStyle.@match arg begin
             Expr(:if, condition, x) => begin
                 ifexpr = Expr(:if)
-                eq_entry = handle_if_x_equations!(ifexpr, condition, x)
+                eq_entry = handle_if_x_equations!(condition, dict, ifexpr, x)
                 push!(exprs, ifexpr)
-                push!(dict[:equations], [:if, condition, eq_entry])
+                push!(dict[:equations], (:if, condition, eq_entry))
             end
             Expr(:if, condition, x, y) => begin
                 ifexpr = Expr(:if)
-                xeq_entry = handle_if_x_equations!(ifexpr, condition, x)
+                xeq_entry = handle_if_x_equations!(condition, dict, ifexpr, x)
                 yeq_entry = handle_if_y_equations!(ifexpr, y, dict)
                 push!(exprs, ifexpr)
-                push!(dict[:equations], [:if, condition, xeq_entry, yeq_entry])
+                push!(dict[:equations], (:if, condition, xeq_entry, yeq_entry))
             end
-            _ => push!(eqs, arg)
+            _ => begin
+                push!(eqs, arg)
+                push!(dict[:equations], readable_code.(eqs)...)
+            end
         end
     end
-    # TODO: does this work with TOML?
-    push!(dict[:equations], readable_code.(eqs)...)
 end
 
 function parse_icon!(icon, dict, body::String)
