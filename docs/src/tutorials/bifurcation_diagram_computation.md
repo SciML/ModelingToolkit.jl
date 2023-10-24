@@ -87,7 +87,6 @@ opts_br = ContinuationPar(dsmin = 0.001, dsmax = 0.05, ds = 0.01,
 	detect_bifurcation = 3, n_inversion = 4, tol_bisection_eigenvalue = 1e-8, dsmin_bisection = 1e-9)
 
 bf = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside=true)
-using Plots
 plot(bf; putspecialptlegend=false, markersize=2, plotfold=false, xguide="μ", yguide = "x")
 ```
 Here, the value of `x` in the steady state does not change, however, at `μ=0` a Hopf bifurcation occur and the steady state turn unstable.
