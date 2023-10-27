@@ -19,7 +19,7 @@ equations.
 `ModelingToolkit.Model`, which includes a constructor that returns the ODESystem, a
 `structure` dictionary with metadata, and flag `isconnector` which is set to `false`.
 
-## What can an MTK-Model definition have?
+### What can an MTK-Model definition have?
 
 `@mtkmodel` definition contains begin blocks of
 
@@ -37,8 +37,8 @@ using ModelingToolkit
 
 @mtkmodel ModelA begin
     @parameters begin
-        k1
-        k2
+        k
+        k_array[1:2]
     end
 end
 
@@ -59,17 +59,17 @@ end
     @variables begin
         v(t) = v_var
     end
-    @extend p1, p2 = model_b = ModelB(; p1)
+    @extend ModelB(; p1)
     @components begin
-        model_a = ModelA(; k1)
+        model_a = ModelA(; k_array)
     end
     @equations begin
-        model_a.k1 ~ f(v)
+        model_a.k ~ f(v)
     end
 end
 ```
 
-### `@parameters` and `@variables` begin block
+#### `@parameters` and `@variables` begin block
 
   - Parameters and variables are declared with respective begin blocks.
   - Variables must be functions of an independent variable.
@@ -78,49 +78,54 @@ end
   - Whenever a parameter or variable has initial value, for example `v(t) = 0.0`, a symbolic variable named `v` with initial value 0.0 and a keyword argument `v`, with default value `nothing` are created. <br> This way, users can optionally pass new value of `v` while creating a component.
 
 ```julia
-julia > @named model_c = ModelC(; v = 2.0);
+julia> @mtkbuild model_c1 = ModelC(; v = 2.0);
 
-julia > ModelingToolkit.getdefault(model_c.v)
+julia> ModelingToolkit.getdefault(model_c.v)
 2.0
 ```
 
-### `@structural_parameters` begin block
+#### `@structural_parameters` begin block
 
   - This block is for non symbolic input arguements. These are for inputs that usually are not meant to be part of components; but influence how they are defined. One can list inputs like boolean flags, functions etc... here.
   - Whenever default values are specified, unlike parameters/variables, they are reflected in the keyword argument list.
 
 #### `@extend` begin block
 
-To extend a partial system,
-
-  - List the variables to unpack. If there is a single variable, explicitly specify it as a tuple.
-  - Give a name to the base system
-  - List the kwargs of the base system that should be listed as kwargs of the main component.
-  - Note that in above example, `p1` is promoted as an argument of `ModelC`. Users can set the value of `p1` as
+  - Partial systems can be extended in a higher system as `@extend PartialSystem(; kwargs)`.
+  - Keyword arguments pf partial system in the `@extend` definition are added as the keyword arguments of the base system.
+  - Note that in above example, `p1` is promoted as an argument of `ModelC`. Users can set the value of `p1`. However, as `p2` isn't listed in the model definition, its initial guess can't be specified while creating an instance of `ModelC`.
 
 ```julia
-julia> @named model_c = ModelC(; p1 = 2.0)
+julia> @mtkbuild model_c2 = ModelC(; p1 = 2.0)
 
 ```
 
-However, as `p2` isn't listed in the model definition, its initial guess can't
-specified while creating an instance of `ModelC`.
-
-### `@components` begin block
+#### `@components` begin block
 
   - Declare the subcomponents within `@components` begin block.
   - The arguments in these subcomponents are promoted as keyword arguments as `subcomponent_name__argname` with `nothing` as default value.
   - Whenever components are created with `@named` macro, these can be accessed with `.` operator as `subcomponent_name.argname`
-  - In the above example, `k1` of `model_a` can be set in following ways:
+  - In the above example, as `k` of `model_a` isn't listed while defining the sub-component in `ModelC`, its default value can't be modified by users. While `k_array` can be set as:
 
-```julia
-julia> @named model_c1 = ModelC(; model_a.k1 = 1);
+```@example mtkmodel-example
+using ModelingToolkit: getdefault
 
+@mtkbuild model_c3 = ModelC(; model_a.k_array = [1.0, 2.0])
+
+getdefault(model_c3.model_a.k_array[1])
+# 1.0
+getdefault(model_c3.model_a.k_array[2])
+# 2.0
+
+@mtkbuild model_c4 = ModelC(model_a.k_array = 3.0)
+
+getdefault(model_c4.model_a.k_array[1])
+# 3.0
+getdefault(model_c4.model_a.k_array[2])
+# 3.0
 ```
 
-And as `k2` isn't listed in the sub-component definition of `ModelC`, its default value can't be modified by users.
-
-### `@equations` begin block
+#### `@equations` begin block
 
   - List all the equations here
 
@@ -192,8 +197,10 @@ end
   - `:components`: List of sub-components in the form of [[name, sub_component_name],...].
   - `:extend`: The list of extended states, name given to the base system, and name of the base system.
   - `:structural_parameters`: Dictionary of structural parameters mapped to their default values.
-  - `:parameters`: Dictionary of symbolic parameters mapped to their metadata.
-  - `:variables`: Dictionary of symbolic variables mapped to their metadata.
+  - `:parameters`: Dictionary of symbolic parameters mapped to their metadata. For
+    parameter arrays, length is added to the metadata as `:size`.
+  - `:variables`: Dictionary of symbolic variables mapped to their metadata. For
+    variable arrays, length is added to the metadata as `:size`.
   - `:kwargs`: Dictionary of keyword arguments mapped to their default values.
   - `:independent_variable`: Independent variable, which is added while generating the Model.
   - `:equations`: List of equations (represented as strings).
@@ -204,8 +211,8 @@ For example, the structure of `ModelC` is:
 julia> ModelC.structure
 Dict{Symbol, Any} with 6 entries:
   :components           => [[:model_a, :ModelA]]
-  :variables            => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var))
-  :kwargs               => Dict{Symbol, Any}(:f=>:sin, :v=>:v_var, :p1=>nothing, :model_a__k1=>nothing)
+  :variables            => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var), :v_array=>Dict(:size=>(4,)))
+  :kwargs               => Dict{Symbol, Any}(:f=>:sin, :v=>:v_var, :v_array=>nothing, :model_a__k_array=>nothing, :p1=>nothing)
   :independent_variable => t
   :extend               => Any[[:p1, :p2], :model_b, :ModelB]
   :equations            => ["model_a.k1 ~ f(v)"]

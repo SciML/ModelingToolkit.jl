@@ -157,7 +157,8 @@ u0 = states(sys) .=> 0
 @test_nowarn ODEProblem(sys, u0, (0, 10.0))
 @test_nowarn ODAEProblem(sys, u0, (0, 10.0))
 prob = DAEProblem(sys, Differential(t).(states(sys)) .=> 0, u0, (0, 0.5))
-@test_nowarn sol = solve(prob, DFBDF())
+sol = solve(prob, DFBDF())
+@test sol.retcode == SciMLBase.ReturnCode.Success
 
 sys2 = structural_simplify(ll2_model)
 @test length(equations(sys2)) == 3

@@ -26,6 +26,7 @@ sde = SDESystem(ode, noiseeqs)
 structural_simplify
 alias_elimination
 ```
+
 ```@docs
 ModelingToolkit.Girsanov_transform
 ```

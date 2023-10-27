@@ -224,7 +224,7 @@ function getdefaulttype(v)
     def === nothing ? Float64 : typeof(def)
 end
 function setdefault(v, val)
-    val === nothing ? v : setmetadata(v, Symbolics.VariableDefaultValue, value(val))
+    val === nothing ? v : wrap(setdefaultval(unwrap(v), value(val)))
 end
 
 function process_variables!(var_to_name, defs, vars)
