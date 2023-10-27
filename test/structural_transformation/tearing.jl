@@ -27,17 +27,15 @@ io = IOBuffer()
 show(io, MIME"text/plain"(), state.structure)
 prt = String(take!(io))
 
-if VERSION >= v"1.6"
-    @test occursin("Incidence matrix:", prt)
-    @test occursin("×", prt)
-    @test occursin("⋅", prt)
+@test occursin("Incidence matrix:", prt)
+@test occursin("×", prt)
+@test occursin("⋅", prt)
 
-    buff = IOBuffer()
-    io = IOContext(buff, :mtk_limit => false)
-    show(io, MIME"text/plain"(), state.structure)
-    prt = String(take!(buff))
-    @test occursin("SystemStructure", prt)
-end
+buff = IOBuffer()
+io = IOContext(buff, :mtk_limit => false)
+show(io, MIME"text/plain"(), state.structure)
+prt = String(take!(buff))
+@test occursin("SystemStructure", prt)
 
 # u1 = f1(u5)
 # u2 = f2(u1)

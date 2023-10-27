@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        julia-version: [1,1.6]
+        julia-version: [1]
         os: [ubuntu-latest]
         package:
           - {user: SciML, repo: SciMLBase.jl, group: Downstream}
