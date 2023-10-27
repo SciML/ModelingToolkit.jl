@@ -18,6 +18,7 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: true
       matrix:
         julia-version: [1]
         julia-arch: [x86]
