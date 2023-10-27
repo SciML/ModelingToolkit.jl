@@ -5,7 +5,7 @@ module ModelingToolkit
 using PrecompileTools, Reexport
 @recompile_invalidations begin
     using DocStringExtensions
-    using Compat
+        using Compat
     using AbstractTrees
     using DiffEqBase, SciMLBase, ForwardDiff
     using SciMLBase: StandardODEProblem, StandardNonlinearProblem, handle_varmap
