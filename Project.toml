@@ -98,7 +98,7 @@ Symbolics = "5.0"
 URIs = "1"
 UnPack = "0.1, 1.0"
 Unitful = "1.1"
-julia = "1.6"
+julia = "1.9"
 
 [extras]
 AmplNLWriter = "7c4d4715-977e-5154-bfe0-e096adeac482"
