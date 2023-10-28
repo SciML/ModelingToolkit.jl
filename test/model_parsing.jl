@@ -1,6 +1,7 @@
 using ModelingToolkit, Test
 using ModelingToolkit: get_gui_metadata,
-    VariableDescription, getdefault, RegularConnector, get_ps, getname
+    get_ps, getdefault, getname, scalarize,
+    VariableDescription, RegularConnector
 using URIs: URI
 using Distributions
 using Unitful
@@ -175,27 +176,38 @@ resistor = getproperty(rc, :resistor; namespace = false)
     @mtkmodel MockModel begin
         @parameters begin
             a
+            a2[1:2]
             b(t)
+            b2(t)[1:2]
             cval
             jval
             kval
             c(t) = cval + jval
             d = 2
+            d2[1:2] = 2
             e, [description = "e"]
+            e2[1:2], [description = "e2"]
             f = 3, [description = "f"]
             h(t), [description = "h(t)"]
+            h2(t)[1:2], [description = "h2(t)"]
             i(t) = 4, [description = "i(t)"]
             j(t) = jval, [description = "j(t)"]
             k = kval, [description = "k"]
+            l(t)[1:2, 1:3] = 2, [description = "l is more than 1D"]
         end
         @structural_parameters begin
-            l = 1
+            m = 1
             func
         end
     end
 
     kval = 5
-    @named model = MockModel(; kval, cval = 1, func = identity)
+    @named model = MockModel(; b2 = 3, kval, cval = 1, func = identity)
+
+    @test lastindex(parameters(model)) == 29
+
+    @test all(getdescription.([model.e2...]) .== "e2")
+    @test all(getdescription.([model.h2...]) .== "h2(t)")
 
     @test hasmetadata(model.e, VariableDescription)
     @test hasmetadata(model.f, VariableDescription)
@@ -203,6 +215,10 @@ resistor = getproperty(rc, :resistor; namespace = false)
     @test hasmetadata(model.i, VariableDescription)
     @test hasmetadata(model.j, VariableDescription)
     @test hasmetadata(model.k, VariableDescription)
+    @test all(collect(hasmetadata.(model.l, ModelingToolkit.VariableDescription)))
+
+    @test all(lastindex.([model.a2, model.b2, model.d2, model.e2, model.h2]) .== 2)
+    @test size(model.l) == MockModel.structure[:parameters][:l][:size] == (2, 3)
 
     model = complete(model)
     @test getdefault(model.cval) == 1
@@ -211,6 +227,8 @@ resistor = getproperty(rc, :resistor; namespace = false)
     @test_throws KeyError getdefault(model.e)
     @test getdefault(model.f) == 3
     @test getdefault(model.i) == 4
+    @test all(getdefault.(scalarize(model.b2)) .== 3)
+    @test all(getdefault.(scalarize(model.l)) .== 2)
     @test isequal(getdefault(model.j), model.jval)
     @test isequal(getdefault(model.k), model.kval)
 end

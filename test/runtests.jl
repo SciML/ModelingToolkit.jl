@@ -59,4 +59,4 @@ end
 if VERSION >= v"1.9"
     @safetestset "Latexify recipes Test" include("latexify.jl")
 end
-@safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl.jl")
+@safetestset "BifurcationKit Extension Test" include("extensions/bifurcationkit.jl")

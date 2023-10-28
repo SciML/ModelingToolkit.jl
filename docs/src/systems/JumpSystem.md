@@ -26,6 +26,7 @@ structural_simplify
 ```@docs; canonical=false
 DiscreteProblem(sys::ModelingToolkit.DiscreteSystem, u0map, tspan)
 ```
+
 ```@docs
 JumpProblem(sys::JumpSystem, prob, aggregator)
 ```
