@@ -340,7 +340,7 @@ sys = structural_simplify(model)
 
 let
     function testsol(osys, u0, p, tspan; tstops = Float64[], skipparamtest = false,
-        kwargs...)
+            kwargs...)
         oprob = ODEProblem(osys, u0, tspan, p; kwargs...)
         sol = solve(oprob, Tsit5(); tstops = tstops, abstol = 1e-10, reltol = 1e-10)
         @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-6)
@@ -414,7 +414,7 @@ end
 
 let
     function testsol(ssys, u0, p, tspan; tstops = Float64[], skipparamtest = false,
-        kwargs...)
+            kwargs...)
         sprob = SDEProblem(ssys, u0, tspan, p; kwargs...)
         sol = solve(sprob, RI5(); tstops = tstops, abstol = 1e-10, reltol = 1e-10)
         @test isapprox(sol(1.0000000001)[1] - sol(0.999999999)[1], 1.0; rtol = 1e-4)
@@ -494,7 +494,7 @@ end
 
 let rng = rng
     function testsol(jsys, u0, p, tspan; tstops = Float64[], skipparamtest = false,
-        N = 40000, kwargs...)
+            N = 40000, kwargs...)
         dprob = DiscreteProblem(jsys, u0, tspan, p)
         jprob = JumpProblem(jsys, dprob, Direct(); kwargs...)
         sol = solve(jprob, SSAStepper(); tstops = tstops)

@@ -753,7 +753,7 @@ struct StatefulPreOrderDFS{T} <: AbstractSimpleTreeIter{T}
     t::T
 end
 function Base.iterate(it::StatefulPreOrderDFS,
-    state = (eltype(it)[it.t], reverse_buffer(it)))
+        state = (eltype(it)[it.t], reverse_buffer(it)))
     stack, rev_buff = state
     isempty(stack) && return nothing
     t = pop!(stack)
@@ -766,7 +766,7 @@ struct StatefulPostOrderDFS{T} <: AbstractSimpleTreeIter{T}
     t::T
 end
 function Base.iterate(it::StatefulPostOrderDFS,
-    state = (eltype(it)[it.t], falses(1), reverse_buffer(it)))
+        state = (eltype(it)[it.t], falses(1), reverse_buffer(it)))
     isempty(state[2]) && return nothing
     vstack, sstack, rev_buff = state
     while true

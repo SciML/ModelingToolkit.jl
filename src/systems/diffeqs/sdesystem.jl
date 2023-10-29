@@ -121,12 +121,12 @@ struct SDESystem <: AbstractODESystem
     parent::Any
 
     function SDESystem(tag, deqs, neqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed,
-        tgrad,
-        jac,
-        ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
-        cevents, devents, metadata = nothing, gui_metadata = nothing,
-        complete = false, parent = nothing;
-        checks::Union{Bool, Int} = true)
+            tgrad,
+            jac,
+            ctrl_jac, Wfact, Wfact_t, name, systems, defaults, connector_type,
+            cevents, devents, metadata = nothing, gui_metadata = nothing,
+            complete = false, parent = nothing;
+            checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -144,20 +144,20 @@ struct SDESystem <: AbstractODESystem
 end
 
 function SDESystem(deqs::AbstractVector{<:Equation}, neqs::AbstractArray, iv, dvs, ps;
-    controls = Num[],
-    observed = Num[],
-    systems = SDESystem[],
-    tspan = nothing,
-    default_u0 = Dict(),
-    default_p = Dict(),
-    defaults = _merge(Dict(default_u0), Dict(default_p)),
-    name = nothing,
-    connector_type = nothing,
-    checks = true,
-    continuous_events = nothing,
-    discrete_events = nothing,
-    metadata = nothing,
-    gui_metadata = nothing)
+        controls = Num[],
+        observed = Num[],
+        systems = SDESystem[],
+        tspan = nothing,
+        default_u0 = Dict(),
+        default_p = Dict(),
+        defaults = _merge(Dict(default_u0), Dict(default_p)),
+        name = nothing,
+        connector_type = nothing,
+        checks = true,
+        continuous_events = nothing,
+        discrete_events = nothing,
+        metadata = nothing,
+        gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = scalarize(deqs)
@@ -214,7 +214,7 @@ function Base.:(==)(sys1::SDESystem, sys2::SDESystem)
 end
 
 function generate_diffusion_function(sys::SDESystem, dvs = states(sys),
-    ps = parameters(sys); isdde = false, kwargs...)
+        ps = parameters(sys); isdde = false, kwargs...)
     eqs = get_noiseeqs(sys)
     if isdde
         eqs = delay_to_function(sys, eqs)
@@ -386,12 +386,12 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
 end
 
 function DiffEqBase.SDEFunction{iip}(sys::SDESystem, dvs = states(sys),
-    ps = parameters(sys),
-    u0 = nothing;
-    version = nothing, tgrad = false, sparse = false,
-    jac = false, Wfact = false, eval_expression = true,
-    checkbounds = false,
-    kwargs...) where {iip}
+        ps = parameters(sys),
+        u0 = nothing;
+        version = nothing, tgrad = false, sparse = false,
+        jac = false, Wfact = false, eval_expression = true,
+        checkbounds = false,
+        kwargs...) where {iip}
     dvs = scalarize.(dvs)
     ps = scalarize.(ps)
 
@@ -509,11 +509,11 @@ variable and parameter vectors, respectively.
 struct SDEFunctionExpr{iip} end
 
 function SDEFunctionExpr{iip}(sys::SDESystem, dvs = states(sys),
-    ps = parameters(sys), u0 = nothing;
-    version = nothing, tgrad = false,
-    jac = false, Wfact = false,
-    sparse = false, linenumbers = false,
-    kwargs...) where {iip}
+        ps = parameters(sys), u0 = nothing;
+        version = nothing, tgrad = false,
+        jac = false, Wfact = false,
+        sparse = false, linenumbers = false,
+        kwargs...) where {iip}
     idx = iip ? 2 : 1
     f = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]
     g = generate_diffusion_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]
@@ -569,9 +569,9 @@ function SDEFunctionExpr(sys::SDESystem, args...; kwargs...)
 end
 
 function DiffEqBase.SDEProblem{iip}(sys::SDESystem, u0map = [], tspan = get_tspan(sys),
-    parammap = DiffEqBase.NullParameters();
-    sparsenoise = nothing, check_length = true,
-    callback = nothing, kwargs...) where {iip}
+        parammap = DiffEqBase.NullParameters();
+        sparsenoise = nothing, check_length = true,
+        callback = nothing, kwargs...) where {iip}
     f, u0, p = process_DEProblem(SDEFunction{iip}, sys, u0map, parammap; check_length,
         kwargs...)
     cbs = process_events(sys; callback)
@@ -628,9 +628,9 @@ numerical enhancements.
 struct SDEProblemExpr{iip} end
 
 function SDEProblemExpr{iip}(sys::SDESystem, u0map, tspan,
-    parammap = DiffEqBase.NullParameters();
-    sparsenoise = nothing, check_length = true,
-    kwargs...) where {iip}
+        parammap = DiffEqBase.NullParameters();
+        sparsenoise = nothing, check_length = true,
+        kwargs...) where {iip}
     f, u0, p = process_DEProblem(SDEFunctionExpr{iip}, sys, u0map, parammap; check_length,
         kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)

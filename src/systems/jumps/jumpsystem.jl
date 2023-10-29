@@ -103,10 +103,10 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
     complete::Bool
 
     function JumpSystem{U}(tag, ap::U, iv, states, ps, var_to_name, observed, name, systems,
-        defaults, connector_type, devents,
-        metadata = nothing, gui_metadata = nothing,
-        complete = false;
-        checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
+            defaults, connector_type, devents,
+            metadata = nothing, gui_metadata = nothing,
+            complete = false;
+            checks::Union{Bool, Int} = true) where {U <: ArrayPartition}
         if checks == true || (checks & CheckComponents) > 0
             check_variables(states, iv)
             check_parameters(ps, iv)
@@ -120,19 +120,19 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
 end
 
 function JumpSystem(eqs, iv, states, ps;
-    observed = Equation[],
-    systems = JumpSystem[],
-    default_u0 = Dict(),
-    default_p = Dict(),
-    defaults = _merge(Dict(default_u0), Dict(default_p)),
-    name = nothing,
-    connector_type = nothing,
-    checks = true,
-    continuous_events = nothing,
-    discrete_events = nothing,
-    metadata = nothing,
-    gui_metadata = nothing,
-    kwargs...)
+        observed = Equation[],
+        systems = JumpSystem[],
+        default_u0 = Dict(),
+        default_p = Dict(),
+        defaults = _merge(Dict(default_u0), Dict(default_p)),
+        name = nothing,
+        connector_type = nothing,
+        checks = true,
+        continuous_events = nothing,
+        discrete_events = nothing,
+        metadata = nothing,
+        gui_metadata = nothing,
+        kwargs...)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     eqs = scalarize(eqs)
@@ -292,10 +292,10 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 ```
 """
 function DiffEqBase.DiscreteProblem(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
-    parammap = DiffEqBase.NullParameters();
-    checkbounds = false,
-    use_union = true,
-    kwargs...)
+        parammap = DiffEqBase.NullParameters();
+        checkbounds = false,
+        use_union = true,
+        kwargs...)
     dvs = states(sys)
     ps = parameters(sys)
 
@@ -349,9 +349,9 @@ dprob = DiscreteProblem(js, u₀map, tspan, parammap)
 struct DiscreteProblemExpr{iip} end
 
 function DiscreteProblemExpr{iip}(sys::JumpSystem, u0map, tspan::Union{Tuple, Nothing},
-    parammap = DiffEqBase.NullParameters();
-    use_union = false,
-    kwargs...) where {iip}
+        parammap = DiffEqBase.NullParameters();
+        use_union = false,
+        kwargs...) where {iip}
     dvs = states(sys)
     ps = parameters(sys)
     defs = defaults(sys)
@@ -386,7 +386,7 @@ sol = solve(jprob, SSAStepper())
 ```
 """
 function JumpProcesses.JumpProblem(js::JumpSystem, prob, aggregator; callback = nothing,
-    kwargs...)
+        kwargs...)
     statetoid = Dict(value(state) => i for (i, state) in enumerate(states(js)))
     eqs = equations(js)
     invttype = prob.tspan[1] === nothing ? Float64 : typeof(1 / prob.tspan[2])
@@ -473,7 +473,7 @@ function JumpSysMajParamMapper(js::JumpSystem, p; jseqs = nothing, rateconsttype
 end
 
 function updateparams!(ratemap::JumpSysMajParamMapper{U, V, W},
-    params) where {U <: AbstractArray, V <: AbstractArray, W}
+        params) where {U <: AbstractArray, V <: AbstractArray, W}
     for (i, p) in enumerate(params)
         sympar = ratemap.sympars[i]
         ratemap.subdict[sympar] = p
@@ -482,17 +482,17 @@ function updateparams!(ratemap::JumpSysMajParamMapper{U, V, W},
 end
 
 function updateparams!(::JumpSysMajParamMapper{U, V, W},
-    params::Nothing) where {U <: AbstractArray, V <: AbstractArray, W}
+        params::Nothing) where {U <: AbstractArray, V <: AbstractArray, W}
     nothing
 end
 
 # create the initial parameter vector for use in a MassActionJump
 function (ratemap::JumpSysMajParamMapper{
-    U,
-    V,
-    W,
-})(params) where {U <: AbstractArray,
-    V <: AbstractArray, W}
+        U,
+        V,
+        W,
+    })(params) where {U <: AbstractArray,
+        V <: AbstractArray, W}
     updateparams!(ratemap, params)
     [convert(W, value(substitute(paramexpr, ratemap.subdict)))
      for paramexpr in ratemap.paramexprs]
@@ -500,9 +500,9 @@ end
 
 # update a maj with parameter vectors
 function (ratemap::JumpSysMajParamMapper{U, V, W})(maj::MassActionJump, newparams;
-    scale_rates,
-    kwargs...) where {U <: AbstractArray,
-    V <: AbstractArray, W}
+        scale_rates,
+        kwargs...) where {U <: AbstractArray,
+        V <: AbstractArray, W}
     updateparams!(ratemap, newparams)
     for i in 1:get_num_majumps(maj)
         maj.scaled_rates[i] = convert(W,

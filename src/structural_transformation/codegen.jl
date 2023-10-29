@@ -5,7 +5,7 @@ using ModelingToolkit: isdifferenceeq, process_events, get_preprocess_constants
 const MAX_INLINE_NLSOLVE_SIZE = 8
 
 function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_sccs,
-    nlsolve_scc_idxs, eqs_idxs, states_idxs)
+        nlsolve_scc_idxs, eqs_idxs, states_idxs)
     graph = state.structure.graph
 
     # The sparsity pattern of `nlsolve(f, u, p)` w.r.t `p` is difficult to
@@ -97,7 +97,7 @@ function torn_system_with_nlsolve_jacobian_sparsity(state, var_eq_matching, var_
 end
 
 function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDict,
-    assignments, (deps, invdeps), var2assignment; checkbounds = true)
+        assignments, (deps, invdeps), var2assignment; checkbounds = true)
     isempty(vars) && throw(ArgumentError("vars may not be empty"))
     length(eqs) == length(vars) ||
         throw(ArgumentError("vars must be of the same length as the number of equations to find the roots of"))
@@ -226,11 +226,11 @@ function gen_nlsolve!(is_not_prepended_assignment, eqs, vars, u0map::AbstractDic
 end
 
 function build_torn_function(sys;
-    expression = false,
-    jacobian_sparsity = true,
-    checkbounds = false,
-    max_inlining_size = nothing,
-    kw...)
+        expression = false,
+        jacobian_sparsity = true,
+        checkbounds = false,
+        max_inlining_size = nothing,
+        kw...)
     max_inlining_size = something(max_inlining_size, MAX_INLINE_NLSOLVE_SIZE)
     rhss = []
     eqs = equations(sys)
@@ -382,14 +382,14 @@ function find_solve_sequence(sccs, vars)
 end
 
 function build_observed_function(state, ts, var_eq_matching, var_sccs,
-    is_solver_state_idxs,
-    assignments,
-    deps,
-    sol_states,
-    var2assignment;
-    expression = false,
-    output_type = Array,
-    checkbounds = true)
+        is_solver_state_idxs,
+        assignments,
+        deps,
+        sol_states,
+        var2assignment;
+        expression = false,
+        output_type = Array,
+        checkbounds = true)
     is_not_prepended_assignment = trues(length(assignments))
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
@@ -524,14 +524,14 @@ struct ODAEProblem{iip} end
 ODAEProblem(args...; kw...) = ODAEProblem{true}(args...; kw...)
 
 function ODAEProblem{iip}(sys,
-    u0map,
-    tspan,
-    parammap = DiffEqBase.NullParameters();
-    callback = nothing,
-    use_union = true,
-    tofloat = true,
-    check = true,
-    kwargs...) where {iip}
+        u0map,
+        tspan,
+        parammap = DiffEqBase.NullParameters();
+        callback = nothing,
+        use_union = true,
+        tofloat = true,
+        check = true,
+        kwargs...) where {iip}
     eqs = equations(sys)
     check && ModelingToolkit.check_operator_variables(eqs, Differential)
     fun, dvs = build_torn_function(sys; kwargs...)

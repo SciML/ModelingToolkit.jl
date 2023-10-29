@@ -179,7 +179,7 @@ function Base.getindex(ssdpm::SystemStructureDiffPrintMatrix, i::Integer, j::Int
 end
 
 function DeepDiffs.deepdiff(old::Union{MatchedSystemStructure, SystemStructure},
-    new::Union{MatchedSystemStructure, SystemStructure})
+        new::Union{MatchedSystemStructure, SystemStructure})
     new_sspm = SystemStructurePrintMatrix(new)
     old_sspm = SystemStructurePrintMatrix(old)
     Base.print_matrix(stdout, SystemStructureDiffPrintMatrix(new_sspm, old_sspm))

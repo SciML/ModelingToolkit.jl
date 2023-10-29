@@ -8,7 +8,7 @@
 Find equation-variable maximal bipartite matching. `s.graph` is a bipartite graph.
 """
 function BipartiteGraphs.maximal_matching(s::SystemStructure, eqfilter = eq -> true,
-    varfilter = v -> true)
+        varfilter = v -> true)
     maximal_matching(s.graph, eqfilter, varfilter)
 end
 
@@ -131,7 +131,7 @@ function find_var_sccs(g::BipartiteGraph, assign = nothing)
 end
 
 function sorted_incidence_matrix(ts::TransformationState, val = true; only_algeqs = false,
-    only_algvars = false)
+        only_algvars = false)
     var_eq_matching, var_scc = algebraic_variables_scc(ts)
     s = ts.structure
     graph = ts.structure.graph
@@ -180,8 +180,8 @@ end
 ###
 
 function find_eq_solvables!(state::TearingState, ieq, to_rm = Int[], coeffs = nothing;
-    may_be_zero = false,
-    allow_symbolic = false, allow_parameter = true, kwargs...)
+        may_be_zero = false,
+        allow_symbolic = false, allow_parameter = true, kwargs...)
     fullvars = state.fullvars
     @unpack graph, solvable_graph = state.structure
     eq = equations(state)[ieq]

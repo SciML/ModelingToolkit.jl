@@ -10,14 +10,14 @@ import BifurcationKit
 
 # When input is a NonlinearSystem.
 function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
-    u0_bif,
-    ps,
-    bif_par,
-    args...;
-    plot_var = nothing,
-    record_from_solution = BifurcationKit.record_sol_default,
-    jac = true,
-    kwargs...)
+        u0_bif,
+        ps,
+        bif_par,
+        args...;
+        plot_var = nothing,
+        record_from_solution = BifurcationKit.record_sol_default,
+        jac = true,
+        kwargs...)
     # Creates F and J functions.
     ofun = NonlinearFunction(nsys; jac = jac)
     F = ofun.f

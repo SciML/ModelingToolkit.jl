@@ -36,8 +36,8 @@ end
 end
 
 function MassFlowSource_h(; name,
-    h_in = 420e3,
-    m_flow_in = -0.01)
+        h_in = 420e3,
+        m_flow_in = -0.01)
     pars = @parameters begin
         h_in = h_in
         m_flow_in = m_flow_in
@@ -62,7 +62,7 @@ end
 
 # Simplified components.
 function AdiabaticStraightPipe(; name,
-    kwargs...)
+        kwargs...)
     vars = []
     pars = []
 
@@ -79,8 +79,8 @@ function AdiabaticStraightPipe(; name,
 end
 
 function SmallBoundary_Ph(; name,
-    P_in = 1e6,
-    h_in = 400e3)
+        P_in = 1e6,
+        h_in = 400e3)
     vars = []
 
     pars = @parameters begin
@@ -102,9 +102,9 @@ end
 
 # N1M1 model and test code.
 function N1M1(; name,
-    P_in = 1e6,
-    h_in = 400e3,
-    kwargs...)
+        P_in = 1e6,
+        h_in = 400e3,
+        kwargs...)
     @named port_a = TwoPhaseFluidPort()
     @named source = SmallBoundary_Ph(P_in = P_in, h_in = h_in)
 
@@ -177,9 +177,9 @@ ssort(eqs) = sort(eqs, by = string)
 
 # N1M2 model and test code.
 function N1M2(; name,
-    P_in = 1e6,
-    h_in = 400e3,
-    kwargs...)
+        P_in = 1e6,
+        h_in = 400e3,
+        kwargs...)
     @named port_a = TwoPhaseFluidPort()
     @named port_b = TwoPhaseFluidPort()
 
@@ -224,7 +224,7 @@ eqns = [connect(n1m2.port_a, pipe1.port_a)
 
 # N2M2 model and test code.
 function N2M2(; name,
-    kwargs...)
+        kwargs...)
     @named port_a = TwoPhaseFluidPort()
     @named port_b = TwoPhaseFluidPort()
     @named pipe = AdiabaticStraightPipe()

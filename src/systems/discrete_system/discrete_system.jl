@@ -92,12 +92,12 @@ struct DiscreteSystem <: AbstractTimeDependentSystem
     parent::Any
 
     function DiscreteSystem(tag, discreteEqs, iv, dvs, ps, tspan, var_to_name, ctrls,
-        observed,
-        name,
-        systems, defaults, preface, connector_type,
-        metadata = nothing, gui_metadata = nothing,
-        tearing_state = nothing, substitutions = nothing,
-        complete = false, parent = nothing; checks::Union{Bool, Int} = true)
+            observed,
+            name,
+            systems, defaults, preface, connector_type,
+            metadata = nothing, gui_metadata = nothing,
+            tearing_state = nothing, substitutions = nothing,
+            complete = false, parent = nothing; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -119,19 +119,19 @@ end
 Constructs a DiscreteSystem.
 """
 function DiscreteSystem(eqs::AbstractVector{<:Equation}, iv, dvs, ps;
-    controls = Num[],
-    observed = Num[],
-    systems = DiscreteSystem[],
-    tspan = nothing,
-    name = nothing,
-    default_u0 = Dict(),
-    default_p = Dict(),
-    defaults = _merge(Dict(default_u0), Dict(default_p)),
-    preface = nothing,
-    connector_type = nothing,
-    metadata = nothing,
-    gui_metadata = nothing,
-    kwargs...)
+        controls = Num[],
+        observed = Num[],
+        systems = DiscreteSystem[],
+        tspan = nothing,
+        name = nothing,
+        default_u0 = Dict(),
+        default_p = Dict(),
+        defaults = _merge(Dict(default_u0), Dict(default_p)),
+        preface = nothing,
+        connector_type = nothing,
+        metadata = nothing,
+        gui_metadata = nothing,
+        kwargs...)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     eqs = scalarize(eqs)
@@ -208,11 +208,11 @@ end
 Generates an DiscreteProblem from an DiscreteSystem.
 """
 function SciMLBase.DiscreteProblem(sys::DiscreteSystem, u0map = [], tspan = get_tspan(sys),
-    parammap = SciMLBase.NullParameters();
-    eval_module = @__MODULE__,
-    eval_expression = true,
-    use_union = false,
-    kwargs...)
+        parammap = SciMLBase.NullParameters();
+        eval_module = @__MODULE__,
+        eval_expression = true,
+        use_union = false,
+        kwargs...)
     dvs = states(sys)
     ps = parameters(sys)
     eqs = equations(sys)
@@ -290,7 +290,7 @@ function get_delay_val(iv, x)
 end
 
 function generate_function(sys::DiscreteSystem, dvs = states(sys), ps = parameters(sys);
-    kwargs...)
+        kwargs...)
     eqs = equations(sys)
     check_operator_variables(eqs, Difference)
     rhss = [eq.rhs for eq in eqs]
@@ -329,17 +329,17 @@ function SciMLBase.DiscreteFunction{false}(sys::DiscreteSystem, args...; kwargs.
 end
 
 function SciMLBase.DiscreteFunction{iip, specialize}(sys::DiscreteSystem,
-    dvs = states(sys),
-    ps = parameters(sys),
-    u0 = nothing;
-    version = nothing,
-    p = nothing,
-    t = nothing,
-    eval_expression = true,
-    eval_module = @__MODULE__,
-    analytic = nothing,
-    simplify = false,
-    kwargs...) where {iip, specialize}
+        dvs = states(sys),
+        ps = parameters(sys),
+        u0 = nothing;
+        version = nothing,
+        p = nothing,
+        t = nothing,
+        eval_expression = true,
+        eval_module = @__MODULE__,
+        analytic = nothing,
+        simplify = false,
+        kwargs...) where {iip, specialize}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression},
         expression_module = eval_module, kwargs...)
     f_oop, f_iip = eval_expression ?
@@ -394,11 +394,11 @@ end
 (f::DiscreteFunctionClosure)(du, u, p, t) = f.f_iip(du, u, p, t)
 
 function DiscreteFunctionExpr{iip}(sys::DiscreteSystem, dvs = states(sys),
-    ps = parameters(sys), u0 = nothing;
-    version = nothing, p = nothing,
-    linenumbers = false,
-    simplify = false,
-    kwargs...) where {iip}
+        ps = parameters(sys), u0 = nothing;
+        version = nothing, p = nothing,
+        linenumbers = false,
+        simplify = false,
+        kwargs...) where {iip}
     f_oop, f_iip = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)
 
     fsym = gensym(:f)
@@ -419,12 +419,12 @@ function DiscreteFunctionExpr(sys::DiscreteSystem, args...; kwargs...)
 end
 
 function process_DiscreteProblem(constructor, sys::DiscreteSystem, u0map, parammap;
-    version = nothing,
-    linenumbers = true, parallel = SerialForm(),
-    eval_expression = true,
-    use_union = false,
-    tofloat = !use_union,
-    kwargs...)
+        version = nothing,
+        linenumbers = true, parallel = SerialForm(),
+        eval_expression = true,
+        use_union = false,
+        tofloat = !use_union,
+        kwargs...)
     eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
@@ -445,9 +445,9 @@ function DiscreteProblemExpr(sys::DiscreteSystem, args...; kwargs...)
 end
 
 function DiscreteProblemExpr{iip}(sys::DiscreteSystem, u0map, tspan,
-    parammap = DiffEqBase.NullParameters();
-    check_length = true,
-    kwargs...) where {iip}
+        parammap = DiffEqBase.NullParameters();
+        check_length = true,
+        kwargs...) where {iip}
     f, u0, p = process_DiscreteProblem(DiscreteFunctionExpr{iip}, sys, u0map, parammap;
         check_length, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)

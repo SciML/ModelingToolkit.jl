@@ -21,10 +21,10 @@ D = Differential(t)
 end
 
 @connector function HydraulicFluid(;
-    density = 997,
-    bulk_modulus = 2.09e9,
-    viscosity = 0.0010016,
-    name)
+        density = 997,
+        bulk_modulus = 2.09e9,
+        viscosity = 0.0010016,
+        name)
     pars = @parameters begin
         ρ = density
         β = bulk_modulus

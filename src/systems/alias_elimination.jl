@@ -29,7 +29,7 @@ function aag_bareiss(sys::AbstractSystem)
 end
 
 function extreme_var(var_to_diff, v, level = nothing, ::Val{descend} = Val(true);
-    callback = _ -> nothing) where {descend}
+        callback = _ -> nothing) where {descend}
     g = descend ? invview(var_to_diff) : var_to_diff
     callback(v)
     while (v′ = g[v]) !== nothing
@@ -149,9 +149,9 @@ Find the first linear variable such that `𝑠neighbors(adj, i)[j]` is true give
 the `constraint`.
 """
 @inline function find_first_linear_variable(M::SparseMatrixCLIL,
-    range,
-    mask,
-    constraint)
+        range,
+        mask,
+        constraint)
     eadj = M.row_cols
     for i in range
         vertices = eadj[i]
@@ -167,9 +167,9 @@ the `constraint`.
 end
 
 @inline function find_first_linear_variable(M::AbstractMatrix,
-    range,
-    mask,
-    constraint)
+        range,
+        mask,
+        constraint)
     for i in range
         row = @view M[i, :]
         if constraint(count(!iszero, row))

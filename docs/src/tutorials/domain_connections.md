@@ -31,10 +31,10 @@ The fluid medium setter for `HydralicPort` may be defined as `HydraulicFluid` wi
 
 ```@example domain
 @connector function HydraulicFluid(;
-    density = 997,
-    bulk_modulus = 2.09e9,
-    viscosity = 0.0010016,
-    name)
+        density = 997,
+        bulk_modulus = 2.09e9,
+        viscosity = 0.0010016,
+        name)
     pars = @parameters begin
         ρ = density
         β = bulk_modulus

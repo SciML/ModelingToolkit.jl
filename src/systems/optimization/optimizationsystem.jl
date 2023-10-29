@@ -62,9 +62,9 @@ struct OptimizationSystem <: AbstractOptimizationSystem
     parent::Any
 
     function OptimizationSystem(tag, op, states, ps, var_to_name, observed,
-        constraints, name, systems, defaults, metadata = nothing,
-        gui_metadata = nothing, complete = false, parent = nothing;
-        checks::Union{Bool, Int} = true)
+            constraints, name, systems, defaults, metadata = nothing,
+            gui_metadata = nothing, complete = false, parent = nothing;
+            checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             unwrap(op) isa Symbolic && check_units(op)
             check_units(observed)
@@ -79,16 +79,16 @@ end
 equations(sys::AbstractOptimizationSystem) = objective(sys) # needed for Base.show
 
 function OptimizationSystem(op, states, ps;
-    observed = [],
-    constraints = [],
-    default_u0 = Dict(),
-    default_p = Dict(),
-    defaults = _merge(Dict(default_u0), Dict(default_p)),
-    name = nothing,
-    systems = OptimizationSystem[],
-    checks = true,
-    metadata = nothing,
-    gui_metadata = nothing)
+        observed = [],
+        constraints = [],
+        default_u0 = Dict(),
+        default_p = Dict(),
+        defaults = _merge(Dict(default_u0), Dict(default_p)),
+        name = nothing,
+        systems = OptimizationSystem[],
+        checks = true,
+        metadata = nothing,
+        gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     constraints = value.(scalarize(constraints))
@@ -125,7 +125,7 @@ function calculate_gradient(sys::OptimizationSystem)
 end
 
 function generate_gradient(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
-    kwargs...)
+        kwargs...)
     grad = calculate_gradient(sys)
     pre = get_preprocess_constants(grad)
     return build_function(grad, vs, ps; postprocess_fbody = pre,
@@ -137,7 +137,7 @@ function calculate_hessian(sys::OptimizationSystem)
 end
 
 function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
-    sparse = false, kwargs...)
+        sparse = false, kwargs...)
     if sparse
         hess = sparsehessian(objective(sys), states(sys))
     else
@@ -149,7 +149,7 @@ function generate_hessian(sys::OptimizationSystem, vs = states(sys), ps = parame
 end
 
 function generate_function(sys::OptimizationSystem, vs = states(sys), ps = parameters(sys);
-    kwargs...)
+        kwargs...)
     eqs = subs_constants(objective(sys))
     return build_function(eqs, vs, ps;
         kwargs...)
@@ -224,15 +224,15 @@ function DiffEqBase.OptimizationProblem(sys::OptimizationSystem, args...; kwargs
     DiffEqBase.OptimizationProblem{true}(sys::OptimizationSystem, args...; kwargs...)
 end
 function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
-    parammap = DiffEqBase.NullParameters();
-    lb = nothing, ub = nothing,
-    grad = false,
-    hess = false, sparse = false,
-    cons_j = false, cons_h = false,
-    cons_sparse = false, checkbounds = false,
-    linenumbers = true, parallel = SerialForm(),
-    use_union = false,
-    kwargs...) where {iip}
+        parammap = DiffEqBase.NullParameters();
+        lb = nothing, ub = nothing,
+        grad = false,
+        hess = false, sparse = false,
+        cons_j = false, cons_h = false,
+        cons_sparse = false, checkbounds = false,
+        linenumbers = true, parallel = SerialForm(),
+        use_union = false,
+        kwargs...) where {iip}
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
         Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
             :OptimizationProblem, force = true)
@@ -423,15 +423,15 @@ function OptimizationProblemExpr(sys::OptimizationSystem, args...; kwargs...)
 end
 
 function OptimizationProblemExpr{iip}(sys::OptimizationSystem, u0map,
-    parammap = DiffEqBase.NullParameters();
-    lb = nothing, ub = nothing,
-    grad = false,
-    hess = false, sparse = false,
-    cons_j = false, cons_h = false,
-    checkbounds = false,
-    linenumbers = false, parallel = SerialForm(),
-    use_union = false,
-    kwargs...) where {iip}
+        parammap = DiffEqBase.NullParameters();
+        lb = nothing, ub = nothing,
+        grad = false,
+        hess = false, sparse = false,
+        cons_j = false, cons_h = false,
+        checkbounds = false,
+        linenumbers = false, parallel = SerialForm(),
+        use_union = false,
+        kwargs...) where {iip}
     if haskey(kwargs, :lcons) || haskey(kwargs, :ucons)
         Base.depwarn("`lcons` and `ucons` are deprecated. Specify constraints directly instead.",
             :OptimizationProblem, force = true)
