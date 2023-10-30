@@ -37,8 +37,6 @@ function _model_macro(mod, name, expr, isconnector)
     exprs = Expr(:block)
     dict = Dict{Symbol, Any}()
     dict[:kwargs] = Dict{Symbol, Any}()
-    dict[:parameters] = Any[Dict{Symbol, Dict{Symbol, Any}}()]
-    dict[:variables] = Any[Dict{Symbol, Dict{Symbol, Any}}()]
     comps = Symbol[]
     ext = Ref{Any}(nothing)
     eqs = Expr[]
@@ -109,7 +107,7 @@ function _model_macro(mod, name, expr, isconnector)
 end
 
 function parse_variable_def!(dict, mod, arg, varclass, kwargs;
-    def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+        def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
     metatypes = [(:connection_type, VariableConnectType),
         (:description, VariableDescription),
         (:unit, VariableUnit),
@@ -144,12 +142,16 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
             Base.remove_linenums!(b)
             def, meta = parse_default(mod, b)
             var, def = parse_variable_def!(dict, mod, a, varclass, kwargs; def)
-            dict[varclass][1][getname(var)][:default] = def
+            dict[varclass][getname(var)][:default] = def
             if meta !== nothing
                 for (type, key) in metatypes
                     if (mt = get(meta, key, nothing)) !== nothing
                         key == VariableConnectType && (mt = nameof(mt))
-                        dict[varclass][1][getname(var)][type] = mt
+                        if dict[varclass] isa Vector
+                            dict[varclass][1][getname(var)][type] = mt
+                        else
+                            dict[varclass][getname(var)][type] = mt
+                        end
                     end
                 end
                 var = set_var_metadata(var, meta)
@@ -163,7 +165,12 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
                 for (type, key) in metatypes
                     if (mt = get(meta, key, nothing)) !== nothing
                         key == VariableConnectType && (mt = nameof(mt))
-                        dict[varclass][1][getname(var)][type] = mt
+                        # @info dict 164
+                        if dict[varclass] isa Vector
+                            dict[varclass][1][getname(var)][type] = mt
+                        else
+                            dict[varclass][getname(var)][type] = mt
+                        end
                     end
                 end
                 var = set_var_metadata(var, meta)
@@ -185,7 +192,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
 end
 
 function generate_var(a, varclass;
-    indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
     var = indices === nothing ? Symbolics.variable(a) : first(@variables $a[indices...])
     if varclass == :parameters
         var = toparam(var)
@@ -194,21 +201,27 @@ function generate_var(a, varclass;
 end
 
 function generate_var!(dict, a, varclass;
-    indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
-    vd = first(dict[varclass])
+        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+    vd = get!(dict, varclass) do
+        Dict{Symbol, Dict{Symbol, Any}}()
+    end
+    vd isa Vector && (vd = first(vd))
     vd[a] = Dict{Symbol, Any}()
     indices !== nothing && (vd[a][:size] = Tuple(lastindex.(indices)))
     generate_var(a, varclass; indices)
 end
 
 function generate_var!(dict, a, b, varclass;
-    indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
     iv = generate_var(b, :variables)
     prev_iv = get!(dict, :independent_variable) do
         iv
     end
-    @assert isequal(iv, prev_iv)
-    vd = first(dict[varclass])
+    @assert isequal(iv, prev_iv) "Multiple independent variables are used in the model"
+    vd = get!(dict, varclass) do
+        Dict{Symbol, Dict{Symbol, Any}}()
+    end
+    vd isa Vector && (vd = first(vd))
     vd[a] = Dict{Symbol, Any}()
     var = if indices === nothing
         Symbolics.variable(a, T = SymbolicUtils.FnType{Tuple{Real}, Real})(iv)
@@ -271,7 +284,7 @@ function get_var(mod::Module, b)
 end
 
 function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
-    dict, mod, arg, kwargs)
+        dict, mod, arg, kwargs)
     mname = arg.args[1]
     body = arg.args[end]
     if mname == Symbol("@components")
@@ -435,6 +448,57 @@ function handle_conditional_vars!(arg, conditional_branch, mod, varclass, kwargs
     conditional_dict
 end
 
+function prune_conditional_dict!(conditional_tuple::Tuple)
+    prune_conditional_dict!.(collect(conditional_tuple))
+end
+function prune_conditional_dict!(conditional_dict::Dict)
+    for k in [:parameters, :variables]
+        length(conditional_dict[k]) == 1 && isempty(first(conditional_dict[k])) &&
+            delete!(conditional_dict, k)
+    end
+    isempty(conditional_dict[:kwargs]) && delete!(conditional_dict, :kwargs)
+end
+prune_conditional_dict!(_) = return nothing
+
+function get_conditional_dict!(conditional_dict, conditional_y_tuple::Tuple)
+    k = get_conditional_dict!.(Ref(conditional_dict), collect(conditional_y_tuple))
+    push_something!(conditional_dict,
+        k...)
+    conditional_dict
+end
+
+function get_conditional_dict!(conditional_dict::Dict, conditional_y_tuple::Dict)
+    merge!(conditional_dict[:kwargs], conditional_y_tuple[:kwargs])
+    for key in [:parameters, :variables]
+        merge!(conditional_dict[key][1], conditional_y_tuple[key][1])
+    end
+    conditional_dict
+end
+
+get_conditional_dict!(a, b) = (return nothing)
+
+function push_conditional_dict!(dict, condition, conditional_dict,
+        conditional_y_tuple, varclass)
+    vd = get!(dict, varclass) do
+        Dict{Symbol, Dict{Symbol, Any}}()
+    end
+    for k in keys(conditional_dict[varclass][1])
+        vd[k] = copy(conditional_dict[varclass][1][k])
+        vd[k][:condition] = (:if, condition, conditional_dict, conditional_y_tuple)
+    end
+    conditional_y_dict = Dict(:kwargs => Dict(),
+        :parameters => Any[Dict{Symbol, Dict{Symbol, Any}}()],
+        :variables => Any[Dict{Symbol, Dict{Symbol, Any}}()])
+    get_conditional_dict!(conditional_y_dict, conditional_y_tuple)
+
+    prune_conditional_dict!(conditional_y_dict)
+    prune_conditional_dict!(conditional_dict)
+    !isempty(conditional_y_dict) && for k in keys(conditional_y_dict[varclass][1])
+        vd[k] = copy(conditional_y_dict[varclass][1][k])
+        vd[k][:condition] = (:if, condition, conditional_dict, conditional_y_tuple)
+    end
+end
+
 function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs)
     expr = Expr(:block)
     push!(exprs, expr)
@@ -449,7 +513,7 @@ function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs)
                     varclass,
                     kwargs)
                 push!(expr.args, conditional_expr)
-                push!(dict[varclass], (:if, condition, conditional_dict, nothing))
+                push_conditional_dict!(dict, condition, conditional_dict, nothing, varclass)
             end
             Expr(:if, condition, x, y) => begin
                 conditional_expr = Expr(:if, condition, Expr(:block))
@@ -458,15 +522,18 @@ function parse_variables!(exprs, vs, dict, mod, body, varclass, kwargs)
                     mod,
                     varclass,
                     kwargs)
-                conditional_y_expr, conditional_y_dict = handle_y_vars(y,
+                conditional_y_expr, conditional_y_tuple = handle_y_vars(y,
                     conditional_dict,
                     mod,
                     varclass,
                     kwargs)
                 push!(conditional_expr.args, conditional_y_expr)
                 push!(expr.args, conditional_expr)
-                push!(dict[varclass],
-                    (:if, condition, conditional_dict, conditional_y_dict))
+                push_conditional_dict!(dict,
+                    condition,
+                    conditional_dict,
+                    conditional_y_tuple,
+                    varclass)
             end
             _ => parse_variable_arg!(exprs, vs, dict, mod, arg, varclass, kwargs)
         end
@@ -492,10 +559,11 @@ function handle_y_vars(y, dict, mod, varclass, kwargs)
 end
 
 function handle_if_x_equations!(condition, dict, ifexpr, x)
-    push!(ifexpr.args, condition, :(push!(equations, $(x.args...))))
-    # push!(dict[:equations], [:if, readable_code(condition), readable_code.(x.args)])
-    readable_code.(x.args)
+            push!(ifexpr.args, condition, :(push!(equations, $(x.args...))))
+            # push!(dict[:equations], [:if, readable_code(condition), readable_code.(x.args)])
+readable_code.(x.args)
 end
+
 function handle_if_y_equations!(ifexpr, y, dict)
     if y.head == :elseif
         elseifexpr = Expr(:elseif)
@@ -506,10 +574,11 @@ function handle_if_y_equations!(ifexpr, y, dict)
         push!(ifexpr.args, elseifexpr)
         (eq_entry...,)
     else
-        push!(ifexpr.args, :(push!(equations, $(y.args...))))
-        readable_code.(y.args)
+                    push!(ifexpr.args, :(push!(equations, $(y.args...))))
+                readable_code.(y.args)
     end
 end
+
 function parse_equations!(exprs, eqs, dict, body)
     dict[:equations] = []
     Base.remove_linenums!(body)
@@ -699,6 +768,7 @@ end
 # Handle top level branching
 push_something!(v, ::Nothing) = v
 push_something!(v, x) = push!(v, x)
+push_something!(v::Dict, x::Dict) = merge!(v, x)
 push_something!(v, x...) = push_something!.(Ref(v), x)
 
 define_blocks(branch) = [Expr(branch), Expr(branch), Expr(branch), Expr(branch)]
@@ -737,6 +807,8 @@ function parse_top_level_branch(condition, x, y = nothing, branch = :if)
         for i in 1:lastindex(yblocks)
             if lastindex(blocks[i].args) == 1
                 push_something!(blocks[i].args, Expr(:block), yblocks[i])
+            elseif lastindex(blocks[i].args) == 0
+                blocks[i] = yblocks[i]
             else
                 push_something!(blocks[i].args, yblocks[i])
             end
@@ -744,14 +816,14 @@ function parse_top_level_branch(condition, x, y = nothing, branch = :if)
     end
 
     for i in 1:lastindex(blocks)
-        isempty(blocks[i].args) && (blocks[i] = nothing)
+        blocks[i] !== nothing && isempty(blocks[i].args) && (blocks[i] = nothing)
     end
 
     return blocks
 end
 
-function parse_conditional_model_statements(comps, dict, eqs, exprs, kwargs, mod, ps, vs,
-    component_blk, equations_blk, parameter_blk, variable_blk)
+function parse_conditional_model_statements(comps, dict, eqs, exprs, kwargs, mod,
+        ps, vs, component_blk, equations_blk, parameter_blk, variable_blk)
     parameter_blk !== nothing &&
         parse_variables!(exprs.args, ps, dict, mod, :(begin
                 $parameter_blk
