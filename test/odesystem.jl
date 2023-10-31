@@ -1044,3 +1044,26 @@ new_sys2 = complete(substitute(sys2, Dict(:sub => sub)))
 Set(states(new_sys2)) == Set([new_sys2.x1, new_sys2.sys1.x1,
     new_sys2.sys1.sub.s1, new_sys2.sys1.sub.s2,
     new_sys2.sub.s1, new_sys2.sub.s2])
+
+let # Issue https://github.com/SciML/ModelingToolkit.jl/issues/2322
+    @parameters a=10 b=a / 10 c=a / 20
+
+    @variables t
+    Dt = Differential(t)
+
+    @variables x(t)=1 z(t)
+
+    eqs = [Dt(x) ~ -b * (x - z),
+        0 ~ z - c * x]
+
+    sys = ODESystem(eqs, t; name = :kjshdf)
+
+    sys_simp = structural_simplify(sys)
+
+    @test a ∈ keys(ModelingToolkit.defaults(sys_simp))
+
+    tspan = (0.0, 1)
+    prob = ODEProblem(sys_simp, [], tspan)
+    sol = solve(prob, Rodas4())
+    @test sol(1)[]≈0.6065307685451087 rtol=1e-4
+end
