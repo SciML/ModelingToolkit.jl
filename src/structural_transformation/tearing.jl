@@ -22,7 +22,7 @@ function masked_cumsum!(A::Vector)
 end
 
 function contract_variables(graph::BipartiteGraph, var_eq_matching::Matching,
-    var_rename, eq_rename, nelim_eq, nelim_var)
+        var_rename, eq_rename, nelim_eq, nelim_var)
     dig = DiCMOBiGraph{true}(graph, var_eq_matching)
 
     # Update bipartite graph

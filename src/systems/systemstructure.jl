@@ -553,8 +553,8 @@ function merge_io(io, inputs)
 end
 
 function structural_simplify!(state::TearingState, io = nothing; simplify = false,
-    check_consistency = true, fully_determined = true,
-    kwargs...)
+        check_consistency = true, fully_determined = true,
+        kwargs...)
     if state.sys isa ODESystem
         ci = ModelingToolkit.ClockInference(state)
         ModelingToolkit.infer_clocks!(ci)
@@ -595,8 +595,8 @@ function structural_simplify!(state::TearingState, io = nothing; simplify = fals
 end
 
 function _structural_simplify!(state::TearingState, io; simplify = false,
-    check_consistency = true, fully_determined = true,
-    kwargs...)
+        check_consistency = true, fully_determined = true,
+        kwargs...)
     check_consistency &= fully_determined
     has_io = io !== nothing
     orig_inputs = Set()

@@ -280,7 +280,7 @@ function generate_connection_set(sys::AbstractSystem, find = nothing, replace = 
 end
 
 function generate_connection_set!(connectionsets, domain_csets,
-    sys::AbstractSystem, find, replace, namespace = nothing)
+        sys::AbstractSystem, find, replace, namespace = nothing)
     subsys = get_systems(sys)
 
     isouter = generate_isouter(sys)
@@ -389,8 +389,8 @@ function partial_merge(csets::AbstractVector{<:ConnectionSet}, allouter = false)
 end
 
 function generate_connection_equations_and_stream_connections(csets::AbstractVector{
-    <:ConnectionSet,
-})
+        <:ConnectionSet,
+    })
     eqs = Equation[]
     stream_connections = ConnectionSet[]
 
@@ -449,7 +449,7 @@ function domain_defaults(sys, domain_csets)
 end
 
 function expand_connections(sys::AbstractSystem, find = nothing, replace = nothing;
-    debug = false, tol = 1e-10)
+        debug = false, tol = 1e-10)
     sys, (csets, domain_csets) = generate_connection_set(sys, find, replace)
     ceqs, instream_csets = generate_connection_equations_and_stream_connections(csets)
     _sys = expand_instream(instream_csets, sys; debug = debug, tol = tol)
@@ -473,8 +473,8 @@ function unnamespace(root, namespace)
 end
 
 function expand_instream(csets::AbstractVector{<:ConnectionSet}, sys::AbstractSystem,
-    namespace = nothing, prevnamespace = nothing; debug = false,
-    tol = 1e-8)
+        namespace = nothing, prevnamespace = nothing; debug = false,
+        tol = 1e-8)
     subsys = get_systems(sys)
     # post order traversal
     @set! sys.systems = map(s -> expand_instream(csets, s,
@@ -659,7 +659,7 @@ end
 
 # instream runtime
 @generated function _instream_split(::Val{inner_n}, ::Val{outer_n},
-    vars::NTuple{N, Any}) where {inner_n, outer_n, N}
+        vars::NTuple{N, Any}) where {inner_n, outer_n, N}
     #instream_rt(innerfvs..., innersvs..., outerfvs..., outersvs...)
     ret = Expr(:tuple)
     # mj.c.m_flow
@@ -675,7 +675,7 @@ end
 end
 
 function instream_rt(ins::Val{inner_n}, outs::Val{outer_n},
-    vars::Vararg{Any, N}) where {inner_n, outer_n, N}
+        vars::Vararg{Any, N}) where {inner_n, outer_n, N}
     @assert N == 2 * (inner_n + outer_n)
 
     # inner: mj.c.m_flow

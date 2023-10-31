@@ -483,9 +483,9 @@ function namespace_equations(sys::AbstractSystem, ivs = independent_variables(sy
 end
 
 function namespace_equation(eq::Equation,
-    sys,
-    n = nameof(sys);
-    ivs = independent_variables(sys))
+        sys,
+        n = nameof(sys);
+        ivs = independent_variables(sys))
     _lhs = namespace_expr(eq.lhs, sys, n; ivs)
     _rhs = namespace_expr(eq.rhs, sys, n; ivs)
     _lhs ~ _rhs
@@ -1240,7 +1240,7 @@ function eliminate_constants(sys::AbstractSystem)
 end
 
 function io_preprocessing(sys::AbstractSystem, inputs,
-    outputs; simplify = false, kwargs...)
+        outputs; simplify = false, kwargs...)
     sys, input_idxs = structural_simplify(sys, (inputs, outputs); simplify, kwargs...)
 
     eqs = equations(sys)
@@ -1285,12 +1285,12 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
 function linearization_function(sys::AbstractSystem, inputs,
-    outputs; simplify = false,
-    initialize = true,
-    op = Dict(),
-    p = DiffEqBase.NullParameters(),
-    zero_dummy_der = false,
-    kwargs...)
+        outputs; simplify = false,
+        initialize = true,
+        op = Dict(),
+        p = DiffEqBase.NullParameters(),
+        zero_dummy_der = false,
+        kwargs...)
     ssys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs;
         simplify,
         kwargs...)
@@ -1380,8 +1380,8 @@ y &= h(x, z, u)
 where `x` are differential state variables, `z` algebraic variables, `u` inputs and `y` outputs.
 """
 function linearize_symbolic(sys::AbstractSystem, inputs,
-    outputs; simplify = false, allow_input_derivatives = false,
-    kwargs...)
+        outputs; simplify = false, allow_input_derivatives = false,
+        kwargs...)
     sys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs; simplify,
         kwargs...)
     sts = states(sys)
@@ -1584,7 +1584,7 @@ lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 ```
 """
 function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives = false,
-    p = DiffEqBase.NullParameters())
+        p = DiffEqBase.NullParameters())
     x0 = merge(defaults(sys), op)
     u0, p2, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
 
@@ -1630,9 +1630,9 @@ function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives =
 end
 
 function linearize(sys, inputs, outputs; op = Dict(), t = 0.0,
-    allow_input_derivatives = false,
-    zero_dummy_der = false,
-    kwargs...)
+        allow_input_derivatives = false,
+        zero_dummy_der = false,
+        kwargs...)
     lin_fun, ssys = linearization_function(sys,
         inputs,
         outputs;
@@ -1780,7 +1780,7 @@ extend the `basesys` with `sys`, the resulting system would inherit `sys`'s name
 by default.
 """
 function extend(sys::AbstractSystem, basesys::AbstractSystem; name::Symbol = nameof(sys),
-    gui_metadata = get_gui_metadata(sys))
+        gui_metadata = get_gui_metadata(sys))
     T = SciMLBase.parameterless_type(basesys)
     ivs = independent_variables(basesys)
     if !(sys isa T)

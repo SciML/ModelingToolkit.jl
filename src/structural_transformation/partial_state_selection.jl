@@ -28,7 +28,7 @@ function ascend_dg_all(xs, dg, level, maxlevel)
 end
 
 function pss_graph_modia!(structure::SystemStructure, maximal_top_matching, varlevel,
-    inv_varlevel, inv_eqlevel)
+        inv_varlevel, inv_eqlevel)
     @unpack eq_to_diff, var_to_diff, graph, solvable_graph = structure
 
     # var_eq_matching is a maximal matching on the top-differentiated variables.
@@ -168,7 +168,7 @@ function partial_state_selection_graph!(structure::SystemStructure, var_eq_match
 end
 
 function dummy_derivative_graph!(state::TransformationState, jac = nothing;
-    state_priority = nothing, log = Val(false), kwargs...)
+        state_priority = nothing, log = Val(false), kwargs...)
     state.structure.solvable_graph === nothing && find_solvables!(state; kwargs...)
     complete!(state.structure)
     var_eq_matching = complete(pantelides!(state))
@@ -176,7 +176,7 @@ function dummy_derivative_graph!(state::TransformationState, jac = nothing;
 end
 
 function dummy_derivative_graph!(structure::SystemStructure, var_eq_matching, jac = nothing,
-    state_priority = nothing, ::Val{log} = Val(false)) where {log}
+        state_priority = nothing, ::Val{log} = Val(false)) where {log}
     @unpack eq_to_diff, var_to_diff, graph = structure
     diff_to_eq = invview(eq_to_diff)
     diff_to_var = invview(var_to_diff)

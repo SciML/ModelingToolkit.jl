@@ -138,7 +138,7 @@ function solve_equation(eq, var, simplify)
 end
 
 function substitute_vars!(structure, subs, cache = Int[], callback! = nothing;
-    exclude = ())
+        exclude = ())
     @unpack graph, solvable_graph = structure
     for su in subs
         su === nothing && continue
@@ -163,7 +163,7 @@ function substitute_vars!(structure, subs, cache = Int[], callback! = nothing;
 end
 
 function to_mass_matrix_form(neweqs, ieq, graph, fullvars, isdervar::F,
-    var_to_diff) where {F}
+        var_to_diff) where {F}
     eq = neweqs[ieq]
     if !(eq.lhs isa Number && eq.lhs == 0)
         eq = 0 ~ eq.rhs - eq.lhs
@@ -218,7 +218,7 @@ end
 =#
 
 function tearing_reassemble(state::TearingState, var_eq_matching;
-    simplify = false, mm = nothing)
+        simplify = false, mm = nothing)
     @unpack fullvars, sys, structure = state
     @unpack solvable_graph, var_to_diff, eq_to_diff, graph = structure
 
@@ -584,7 +584,7 @@ new residual equations after tearing. End users are encouraged to call [`structu
 instead, which calls this function internally.
 """
 function tearing(sys::AbstractSystem, state = TearingState(sys); mm = nothing,
-    simplify = false, kwargs...)
+        simplify = false, kwargs...)
     var_eq_matching = tearing(state)
     invalidate_cache!(tearing_reassemble(state, var_eq_matching; mm, simplify))
 end
@@ -608,7 +608,7 @@ Perform index reduction and use the dummy derivative technique to ensure that
 the system is balanced.
 """
 function dummy_derivative(sys, state = TearingState(sys); simplify = false,
-    mm = nothing, kwargs...)
+        mm = nothing, kwargs...)
     jac = let state = state
         (eqs, vars) -> begin
             symeqs = EquationsView(state)[eqs]

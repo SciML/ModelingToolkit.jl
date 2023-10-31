@@ -149,13 +149,13 @@ struct ODESystem <: AbstractODESystem
     parent::Any
 
     function ODESystem(tag, deqs, iv, dvs, ps, tspan, var_to_name, ctrls, observed, tgrad,
-        jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
-        torn_matching, connector_type, preface, cevents,
-        devents, metadata = nothing, gui_metadata = nothing,
-        tearing_state = nothing,
-        substitutions = nothing, complete = false,
-        discrete_subsystems = nothing, unknown_states = nothing,
-        split_idxs = nothing, parent = nothing; checks::Union{Bool, Int} = true)
+            jac, ctrl_jac, Wfact, Wfact_t, name, systems, defaults,
+            torn_matching, connector_type, preface, cevents,
+            devents, metadata = nothing, gui_metadata = nothing,
+            tearing_state = nothing,
+            substitutions = nothing, complete = false,
+            discrete_subsystems = nothing, unknown_states = nothing,
+            split_idxs = nothing, parent = nothing; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckComponents) > 0
             check_variables(dvs, iv)
             check_parameters(ps, iv)
@@ -174,21 +174,21 @@ struct ODESystem <: AbstractODESystem
 end
 
 function ODESystem(deqs::AbstractVector{<:Equation}, iv, dvs, ps;
-    controls = Num[],
-    observed = Equation[],
-    systems = ODESystem[],
-    tspan = nothing,
-    name = nothing,
-    default_u0 = Dict(),
-    default_p = Dict(),
-    defaults = _merge(Dict(default_u0), Dict(default_p)),
-    connector_type = nothing,
-    preface = nothing,
-    continuous_events = nothing,
-    discrete_events = nothing,
-    checks = true,
-    metadata = nothing,
-    gui_metadata = nothing)
+        controls = Num[],
+        observed = Equation[],
+        systems = ODESystem[],
+        tspan = nothing,
+        name = nothing,
+        default_u0 = Dict(),
+        default_p = Dict(),
+        defaults = _merge(Dict(default_u0), Dict(default_p)),
+        connector_type = nothing,
+        preface = nothing,
+        continuous_events = nothing,
+        discrete_events = nothing,
+        checks = true,
+        metadata = nothing,
+        gui_metadata = nothing)
     name === nothing &&
         throw(ArgumentError("The `name` keyword must be provided. Please consider using the `@named` macro"))
     deqs = scalarize(deqs)
@@ -317,13 +317,13 @@ Build the observed function assuming the observed equations are all explicit,
 i.e. there are no cycles.
 """
 function build_explicit_observed_function(sys, ts;
-    inputs = nothing,
-    expression = false,
-    output_type = Array,
-    checkbounds = true,
-    drop_expr = drop_expr,
-    ps = parameters(sys),
-    throw = true)
+        inputs = nothing,
+        expression = false,
+        output_type = Array,
+        checkbounds = true,
+        drop_expr = drop_expr,
+        ps = parameters(sys),
+        throw = true)
     if (isscalar = !(ts isa AbstractVector))
         ts = [ts]
     end

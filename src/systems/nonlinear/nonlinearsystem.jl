@@ -82,11 +82,11 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
     parent::Any
 
     function NonlinearSystem(tag, eqs, states, ps, var_to_name, observed, jac, name,
-        systems,
-        defaults, connector_type, metadata = nothing,
-        gui_metadata = nothing,
-        tearing_state = nothing, substitutions = nothing,
-        complete = false, parent = nothing; checks::Union{Bool, Int} = true)
+            systems,
+            defaults, connector_type, metadata = nothing,
+            gui_metadata = nothing,
+            tearing_state = nothing, substitutions = nothing,
+            complete = false, parent = nothing; checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([states; ps]) || check_units(eqs)
         end
@@ -97,18 +97,18 @@ struct NonlinearSystem <: AbstractTimeIndependentSystem
 end
 
 function NonlinearSystem(eqs, states, ps;
-    observed = [],
-    name = nothing,
-    default_u0 = Dict(),
-    default_p = Dict(),
-    defaults = _merge(Dict(default_u0), Dict(default_p)),
-    systems = NonlinearSystem[],
-    connector_type = nothing,
-    continuous_events = nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
-    discrete_events = nothing,   # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
-    checks = true,
-    metadata = nothing,
-    gui_metadata = nothing)
+        observed = [],
+        name = nothing,
+        default_u0 = Dict(),
+        default_p = Dict(),
+        defaults = _merge(Dict(default_u0), Dict(default_p)),
+        systems = NonlinearSystem[],
+        connector_type = nothing,
+        continuous_events = nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
+        discrete_events = nothing,   # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
+        checks = true,
+        metadata = nothing,
+        gui_metadata = nothing)
     continuous_events === nothing || isempty(continuous_events) ||
         throw(ArgumentError("NonlinearSystem does not accept `continuous_events`, you provided $continuous_events"))
     discrete_events === nothing || isempty(discrete_events) ||
@@ -165,7 +165,7 @@ function calculate_jacobian(sys::NonlinearSystem; sparse = false, simplify = fal
 end
 
 function generate_jacobian(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys);
-    sparse = false, simplify = false, kwargs...)
+        sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     pre = get_preprocess_constants(jac)
     return build_function(jac, vs, ps; postprocess_fbody = pre, kwargs...)
@@ -183,14 +183,14 @@ function calculate_hessian(sys::NonlinearSystem; sparse = false, simplify = fals
 end
 
 function generate_hessian(sys::NonlinearSystem, vs = states(sys), ps = parameters(sys);
-    sparse = false, simplify = false, kwargs...)
+        sparse = false, simplify = false, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     pre = get_preprocess_constants(hess)
     return build_function(hess, vs, ps; postprocess_fbody = pre, kwargs...)
 end
 
 function generate_function(sys::NonlinearSystem, dvs = states(sys), ps = parameters(sys);
-    kwargs...)
+        kwargs...)
     rhss = [deq.rhs for deq in equations(sys)]
     pre, sol_states = get_substitutions_and_solved_states(sys)
 
@@ -227,12 +227,12 @@ function SciMLBase.NonlinearFunction(sys::NonlinearSystem, args...; kwargs...)
 end
 
 function SciMLBase.NonlinearFunction{iip}(sys::NonlinearSystem, dvs = states(sys),
-    ps = parameters(sys), u0 = nothing;
-    version = nothing,
-    jac = false,
-    eval_expression = true,
-    sparse = false, simplify = false,
-    kwargs...) where {iip}
+        ps = parameters(sys), u0 = nothing;
+        version = nothing,
+        jac = false,
+        eval_expression = true,
+        sparse = false, simplify = false,
+        kwargs...) where {iip}
     f_gen = generate_function(sys, dvs, ps; expression = Val{eval_expression}, kwargs...)
     f_oop, f_iip = eval_expression ?
                    (drop_expr(@RuntimeGeneratedFunction(ex)) for ex in f_gen) : f_gen
@@ -289,12 +289,12 @@ variable and parameter vectors, respectively.
 struct NonlinearFunctionExpr{iip} end
 
 function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = states(sys),
-    ps = parameters(sys), u0 = nothing;
-    version = nothing, tgrad = false,
-    jac = false,
-    linenumbers = false,
-    sparse = false, simplify = false,
-    kwargs...) where {iip}
+        ps = parameters(sys), u0 = nothing;
+        version = nothing, tgrad = false,
+        jac = false,
+        linenumbers = false,
+        sparse = false, simplify = false,
+        kwargs...) where {iip}
     idx = iip ? 2 : 1
     f = generate_function(sys, dvs, ps; expression = Val{true}, kwargs...)[idx]
 
@@ -321,15 +321,15 @@ function NonlinearFunctionExpr{iip}(sys::NonlinearSystem, dvs = states(sys),
 end
 
 function process_NonlinearProblem(constructor, sys::NonlinearSystem, u0map, parammap;
-    version = nothing,
-    jac = false,
-    checkbounds = false, sparse = false,
-    simplify = false,
-    linenumbers = true, parallel = SerialForm(),
-    eval_expression = true,
-    use_union = false,
-    tofloat = !use_union,
-    kwargs...)
+        version = nothing,
+        jac = false,
+        checkbounds = false, sparse = false,
+        simplify = false,
+        linenumbers = true, parallel = SerialForm(),
+        eval_expression = true,
+        use_union = false,
+        tofloat = !use_union,
+        kwargs...)
     eqs = equations(sys)
     dvs = states(sys)
     ps = parameters(sys)
@@ -363,8 +363,8 @@ function DiffEqBase.NonlinearProblem(sys::NonlinearSystem, args...; kwargs...)
 end
 
 function DiffEqBase.NonlinearProblem{iip}(sys::NonlinearSystem, u0map,
-    parammap = DiffEqBase.NullParameters();
-    check_length = true, kwargs...) where {iip}
+        parammap = DiffEqBase.NullParameters();
+        check_length = true, kwargs...) where {iip}
     f, u0, p = process_NonlinearProblem(NonlinearFunction{iip}, sys, u0map, parammap;
         check_length, kwargs...)
     pt = something(get_metadata(sys), StandardNonlinearProblem())
@@ -392,9 +392,9 @@ function NonlinearProblemExpr(sys::NonlinearSystem, args...; kwargs...)
 end
 
 function NonlinearProblemExpr{iip}(sys::NonlinearSystem, u0map,
-    parammap = DiffEqBase.NullParameters();
-    check_length = true,
-    kwargs...) where {iip}
+        parammap = DiffEqBase.NullParameters();
+        check_length = true,
+        kwargs...) where {iip}
     f, u0, p = process_NonlinearProblem(NonlinearFunctionExpr{iip}, sys, u0map, parammap;
         check_length, kwargs...)
     linenumbers = get(kwargs, :linenumbers, true)

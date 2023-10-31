@@ -113,7 +113,7 @@ digr = asgraph(jumpsys)
 ```
 """
 function asgraph(sys::AbstractSystem; variables = states(sys),
-    variablestoids = Dict(v => i for (i, v) in enumerate(variables)))
+        variablestoids = Dict(v => i for (i, v) in enumerate(variables)))
     asgraph(equation_dependencies(sys, variables = variables), variablestoids)
 end
 
@@ -140,7 +140,7 @@ variable_dependencies(jumpsys)
 ```
 """
 function variable_dependencies(sys::AbstractSystem; variables = states(sys),
-    variablestoids = nothing)
+        variablestoids = nothing)
     eqs = equations(sys)
     vtois = isnothing(variablestoids) ? Dict(v => i for (i, v) in enumerate(variables)) :
             variablestoids
@@ -192,7 +192,7 @@ dg = asdigraph(digr, jumpsys)
 ```
 """
 function asdigraph(g::BipartiteGraph, sys::AbstractSystem; variables = states(sys),
-    equationsfirst = true)
+        equationsfirst = true)
     neqs = length(equations(sys))
     nvars = length(variables)
     fadjlist = deepcopy(g.fadjlist)
@@ -234,7 +234,7 @@ eqeqdep = eqeq_dependencies(asgraph(jumpsys), variable_dependencies(jumpsys))
 ```
 """
 function eqeq_dependencies(eqdeps::BipartiteGraph{T},
-    vardeps::BipartiteGraph{T}) where {T <: Integer}
+        vardeps::BipartiteGraph{T}) where {T <: Integer}
     g = SimpleDiGraph{T}(length(eqdeps.fadjlist))
 
     for (eqidx, sidxs) in enumerate(vardeps.badjlist)
@@ -273,6 +273,6 @@ varvardep = varvar_dependencies(asgraph(jumpsys), variable_dependencies(jumpsys)
 ```
 """
 function varvar_dependencies(eqdeps::BipartiteGraph{T},
-    vardeps::BipartiteGraph{T}) where {T <: Integer}
+        vardeps::BipartiteGraph{T}) where {T <: Integer}
     eqeq_dependencies(vardeps, eqdeps)
 end

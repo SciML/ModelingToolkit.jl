@@ -130,7 +130,7 @@ end
 nonzerosmap(a::CLILVector) = NonZeros(a)
 
 function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swapto, pivot,
-    last_pivot; pivot_equal_optimization = true)
+        last_pivot; pivot_equal_optimization = true)
     # for ei in nzrows(>= k)
     eadj = M.row_cols
     old_cadj = M.row_vals
@@ -213,7 +213,7 @@ function bareiss_update_virtual_colswap_mtk!(zero!, M::SparseMatrixCLIL, k, swap
 end
 
 function bareiss_update_virtual_colswap_mtk!(zero!, M::AbstractMatrix, k, swapto, pivot,
-    last_pivot; pivot_equal_optimization = true)
+        last_pivot; pivot_equal_optimization = true)
     if pivot_equal_optimization
         error("MTK pivot micro-optimization not implemented for `$(typeof(M))`.
             Turn off the optimization for debugging or use a different matrix type.")

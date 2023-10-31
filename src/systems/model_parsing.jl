@@ -84,7 +84,7 @@ function _model_macro(mod, name, expr, isconnector)
 end
 
 function parse_variable_def!(dict, mod, arg, varclass, kwargs;
-    def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+        def = nothing, indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
     metatypes = [(:connection_type, VariableConnectType),
         (:description, VariableDescription),
         (:unit, VariableUnit),
@@ -154,7 +154,7 @@ function parse_variable_def!(dict, mod, arg, varclass, kwargs;
 end
 
 function generate_var(a, varclass;
-    indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
     var = indices === nothing ? Symbolics.variable(a) : first(@variables $a[indices...])
     if varclass == :parameters
         var = toparam(var)
@@ -163,7 +163,7 @@ function generate_var(a, varclass;
 end
 
 function generate_var!(dict, a, varclass;
-    indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
     vd = get!(dict, varclass) do
         Dict{Symbol, Dict{Symbol, Any}}()
     end
@@ -173,7 +173,7 @@ function generate_var!(dict, a, varclass;
 end
 
 function generate_var!(dict, a, b, varclass;
-    indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
+        indices::Union{Vector{UnitRange{Int}}, Nothing} = nothing)
     iv = generate_var(b, :variables)
     prev_iv = get!(dict, :independent_variable) do
         iv
@@ -243,7 +243,7 @@ function get_var(mod::Module, b)
 end
 
 function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
-    dict, mod, arg, kwargs)
+        dict, mod, arg, kwargs)
     mname = arg.args[1]
     body = arg.args[end]
     if mname == Symbol("@components")

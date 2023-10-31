@@ -71,11 +71,11 @@ struct ConstraintsSystem <: AbstractTimeIndependentSystem
     substitutions::Any
 
     function ConstraintsSystem(tag, constraints, states, ps, var_to_name, observed, jac,
-        name,
-        systems,
-        defaults, connector_type, metadata = nothing,
-        tearing_state = nothing, substitutions = nothing;
-        checks::Union{Bool, Int} = true)
+            name,
+            systems,
+            defaults, connector_type, metadata = nothing,
+            tearing_state = nothing, substitutions = nothing;
+            checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
             all_dimensionless([states; ps]) || check_units(constraints)
         end
@@ -88,17 +88,17 @@ end
 equations(sys::ConstraintsSystem) = constraints(sys) # needed for Base.show
 
 function ConstraintsSystem(constraints, states, ps;
-    observed = [],
-    name = nothing,
-    default_u0 = Dict(),
-    default_p = Dict(),
-    defaults = _merge(Dict(default_u0), Dict(default_p)),
-    systems = ConstraintsSystem[],
-    connector_type = nothing,
-    continuous_events = nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
-    discrete_events = nothing,   # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
-    checks = true,
-    metadata = nothing)
+        observed = [],
+        name = nothing,
+        default_u0 = Dict(),
+        default_p = Dict(),
+        defaults = _merge(Dict(default_u0), Dict(default_p)),
+        systems = ConstraintsSystem[],
+        connector_type = nothing,
+        continuous_events = nothing, # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
+        discrete_events = nothing,   # this argument is only required for ODESystems, but is added here for the constructor to accept it without error
+        checks = true,
+        metadata = nothing)
     continuous_events === nothing || isempty(continuous_events) ||
         throw(ArgumentError("ConstraintsSystem does not accept `continuous_events`, you provided $continuous_events"))
     discrete_events === nothing || isempty(discrete_events) ||
@@ -153,7 +153,7 @@ function calculate_jacobian(sys::ConstraintsSystem; sparse = false, simplify = f
 end
 
 function generate_jacobian(sys::ConstraintsSystem, vs = states(sys), ps = parameters(sys);
-    sparse = false, simplify = false, kwargs...)
+        sparse = false, simplify = false, kwargs...)
     jac = calculate_jacobian(sys, sparse = sparse, simplify = simplify)
     return build_function(jac, vs, ps; kwargs...)
 end
@@ -170,13 +170,13 @@ function calculate_hessian(sys::ConstraintsSystem; sparse = false, simplify = fa
 end
 
 function generate_hessian(sys::ConstraintsSystem, vs = states(sys), ps = parameters(sys);
-    sparse = false, simplify = false, kwargs...)
+        sparse = false, simplify = false, kwargs...)
     hess = calculate_hessian(sys, sparse = sparse, simplify = simplify)
     return build_function(hess, vs, ps; kwargs...)
 end
 
 function generate_function(sys::ConstraintsSystem, dvs = states(sys), ps = parameters(sys);
-    kwargs...)
+        kwargs...)
     lhss = generate_canonical_form_lhss(sys)
     pre, sol_states = get_substitutions_and_solved_states(sys)
 

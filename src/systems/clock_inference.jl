@@ -140,8 +140,8 @@ function split_system(ci::ClockInference{S}) where {S}
 end
 
 function generate_discrete_affect(syss, inputs, continuous_id, id_to_clock;
-    checkbounds = true,
-    eval_module = @__MODULE__, eval_expression = true)
+        checkbounds = true,
+        eval_module = @__MODULE__, eval_expression = true)
     @static if VERSION < v"1.7"
         error("The `generate_discrete_affect` function requires at least Julia 1.7")
     end

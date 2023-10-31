@@ -192,10 +192,10 @@ f[1](x, inputs, p, t)
 ```
 """
 function generate_control_function(sys::AbstractODESystem, inputs = unbound_inputs(sys),
-    disturbance_inputs = disturbances(sys);
-    implicit_dae = false,
-    simplify = false,
-    kwargs...)
+        disturbance_inputs = disturbances(sys);
+        implicit_dae = false,
+        simplify = false,
+        kwargs...)
     isempty(inputs) && @warn("No unbound inputs were found in system.")
 
     if disturbance_inputs !== nothing

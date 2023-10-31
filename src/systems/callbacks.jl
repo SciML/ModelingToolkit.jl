@@ -265,7 +265,7 @@ Notes
   - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_condition(cb::SymbolicDiscreteCallback, sys, dvs, ps;
-    expression = Val{true}, kwargs...)
+        expression = Val{true}, kwargs...)
     u = map(x -> time_varying_as_func(value(x), sys), dvs)
     p = map(x -> time_varying_as_func(value(x), sys), ps)
     t = get_iv(sys)
@@ -301,8 +301,8 @@ Notes
   - `kwargs` are passed through to `Symbolics.build_function`.
 """
 function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothing,
-    expression = Val{true}, checkvars = true,
-    postprocess_affect_expr! = nothing, kwargs...)
+        expression = Val{true}, checkvars = true,
+        postprocess_affect_expr! = nothing, kwargs...)
     if isempty(eqs)
         if expression == Val{true}
             return :((args...) -> ())
@@ -362,14 +362,14 @@ function compile_affect(eqs::Vector{Equation}, sys, dvs, ps; outputidxs = nothin
 end
 
 function generate_rootfinding_callback(sys::AbstractODESystem, dvs = states(sys),
-    ps = parameters(sys); kwargs...)
+        ps = parameters(sys); kwargs...)
     cbs = continuous_events(sys)
     isempty(cbs) && return nothing
     generate_rootfinding_callback(cbs, sys, dvs, ps; kwargs...)
 end
 
 function generate_rootfinding_callback(cbs, sys::AbstractODESystem, dvs = states(sys),
-    ps = parameters(sys); kwargs...)
+        ps = parameters(sys); kwargs...)
     eqs = map(cb -> cb.eqs, cbs)
     num_eqs = length.(eqs)
     (isempty(eqs) || sum(num_eqs) == 0) && return nothing
@@ -454,7 +454,7 @@ function compile_affect(affect::FunctionalAffect, sys, dvs, ps; kwargs...)
 end
 
 function generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr! = nothing,
-    kwargs...)
+        kwargs...)
     cond = condition(cb)
     as = compile_affect(affects(cb), sys, dvs, ps; expression = Val{false},
         postprocess_affect_expr!, kwargs...)
@@ -468,7 +468,7 @@ function generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr! = no
 end
 
 function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! = nothing,
-    kwargs...)
+        kwargs...)
     if is_timed_condition(cb)
         return generate_timed_callback(cb, sys, dvs, ps; postprocess_affect_expr!,
             kwargs...)
@@ -481,7 +481,7 @@ function generate_discrete_callback(cb, sys, dvs, ps; postprocess_affect_expr! =
 end
 
 function generate_discrete_callbacks(sys::AbstractSystem, dvs = states(sys),
-    ps = parameters(sys); kwargs...)
+        ps = parameters(sys); kwargs...)
     has_discrete_events(sys) || return nothing
     symcbs = discrete_events(sys)
     isempty(symcbs) && return nothing

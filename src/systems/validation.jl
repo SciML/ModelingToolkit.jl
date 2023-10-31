@@ -212,8 +212,8 @@ function _validate(conn::Connection; info::String = "")
 end
 
 function validate(jump::Union{ModelingToolkit.VariableRateJump,
-        ModelingToolkit.ConstantRateJump}, t::Symbolic;
-    info::String = "")
+            ModelingToolkit.ConstantRateJump}, t::Symbolic;
+        info::String = "")
     newinfo = replace(info, "eq." => "jump")
     _validate([jump.rate, 1 / t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units
         validate(jump.affect!, info = newinfo)
@@ -243,7 +243,7 @@ function validate(eq::ModelingToolkit.Equation; info::String = "")
     end
 end
 function validate(eq::ModelingToolkit.Equation,
-    term::Union{Symbolic, Unitful.Quantity, Num}; info::String = "")
+        term::Union{Symbolic, Unitful.Quantity, Num}; info::String = "")
     _validate([eq.lhs, eq.rhs, term], ["left", "right", "noise"]; info)
 end
 function validate(eq::ModelingToolkit.Equation, terms::Vector; info::String = "")

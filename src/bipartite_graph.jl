@@ -169,13 +169,13 @@ mutable struct BipartiteGraph{I <: Integer, M} <: Graphs.AbstractGraph{I}
     metadata::M
 end
 function BipartiteGraph(ne::Integer, fadj::AbstractVector,
-    badj::Union{AbstractVector, Integer} = maximum(maximum, fadj);
-    metadata = nothing)
+        badj::Union{AbstractVector, Integer} = maximum(maximum, fadj);
+        metadata = nothing)
     BipartiteGraph(ne, fadj, badj, metadata)
 end
 function BipartiteGraph(fadj::AbstractVector,
-    badj::Union{AbstractVector, Integer} = maximum(maximum, fadj);
-    metadata = nothing)
+        badj::Union{AbstractVector, Integer} = maximum(maximum, fadj);
+        metadata = nothing)
     BipartiteGraph(mapreduce(length, +, fadj; init = 0), fadj, badj, metadata)
 end
 
@@ -325,7 +325,7 @@ $(SIGNATURES)
 Build an empty `BipartiteGraph` with `nsrcs` sources and `ndsts` destinations.
 """
 function BipartiteGraph(nsrcs::T, ndsts::T, backedge::Val{B} = Val(true);
-    metadata = nothing) where {T, B}
+        metadata = nothing) where {T, B}
     fadjlist = map(_ -> T[], 1:nsrcs)
     badjlist = B ? map(_ -> T[], 1:ndsts) : ndsts
     BipartiteGraph(0, fadjlist, badjlist, metadata)
@@ -359,11 +359,11 @@ end
 has_𝑠vertex(g::BipartiteGraph, v::Integer) = v in 𝑠vertices(g)
 has_𝑑vertex(g::BipartiteGraph, v::Integer) = v in 𝑑vertices(g)
 function 𝑠neighbors(g::BipartiteGraph, i::Integer,
-    with_metadata::Val{M} = Val(false)) where {M}
+        with_metadata::Val{M} = Val(false)) where {M}
     M ? zip(g.fadjlist[i], g.metadata[i]) : g.fadjlist[i]
 end
 function 𝑑neighbors(g::BipartiteGraph, j::Integer,
-    with_metadata::Val{M} = Val(false)) where {M}
+        with_metadata::Val{M} = Val(false)) where {M}
     require_complete(g)
     M ? zip(g.badjlist[j], (g.metadata[i][j] for i in g.badjlist[j])) : g.badjlist[j]
 end
@@ -389,7 +389,7 @@ Try to construct an augmenting path in matching and if such a path is found,
 update the matching accordingly.
 """
 function construct_augmenting_path!(matching::Matching, g::BipartiteGraph, vsrc, dstfilter,
-    dcolor = falses(ndsts(g)), scolor = nothing)
+        dcolor = falses(ndsts(g)), scolor = nothing)
     scolor === nothing || (scolor[vsrc] = true)
 
     # if a `vdst` is unassigned and the edge `vsrc <=> vdst` exists
@@ -421,7 +421,7 @@ vertices, subject to the constraint that vertices for which `srcfilter` or `dstf
 return `false` may not be matched.
 """
 function maximal_matching(g::BipartiteGraph, srcfilter = vsrc -> true,
-    dstfilter = vdst -> true, ::Type{U} = Unassigned) where {U}
+        dstfilter = vdst -> true, ::Type{U} = Unassigned) where {U}
     matching = Matching{U}(ndsts(g))
     foreach(Iterators.filter(srcfilter, 𝑠vertices(g))) do vsrc
         construct_augmenting_path!(matching, g, vsrc, dstfilter)
@@ -550,7 +550,7 @@ Base.length(it::BipartiteEdgeIter) = ne(it.g)
 Base.eltype(it::BipartiteEdgeIter) = edgetype(it.g)
 
 function Base.iterate(it::BipartiteEdgeIter{SRC, <:BipartiteGraph{T}},
-    state = (1, 1, SRC)) where {T}
+        state = (1, 1, SRC)) where {T}
     @unpack g = it
     neqs = nsrcs(g)
     neqs == 0 && return nothing
@@ -572,7 +572,7 @@ function Base.iterate(it::BipartiteEdgeIter{SRC, <:BipartiteGraph{T}},
 end
 
 function Base.iterate(it::BipartiteEdgeIter{DST, <:BipartiteGraph{T}},
-    state = (1, 1, DST)) where {T}
+        state = (1, 1, DST)) where {T}
     @unpack g = it
     nvars = ndsts(g)
     nvars == 0 && return nothing
@@ -644,7 +644,7 @@ mutable struct DiCMOBiGraph{Transposed, I, G <: BipartiteGraph{I}, M <: Matching
     ne::Union{Missing, Int}
     matching::M
     function DiCMOBiGraph{Transposed}(g::G, ne::Union{Missing, Int},
-        m::M) where {Transposed, I, G <: BipartiteGraph{I}, M}
+            m::M) where {Transposed, I, G <: BipartiteGraph{I}, M}
         new{Transposed, I, G, M}(g, ne, m)
     end
 end
@@ -671,7 +671,7 @@ struct CMONeighbors{Transposed, V}
     g::DiCMOBiGraph{Transposed}
     v::V
     function CMONeighbors{Transposed}(g::DiCMOBiGraph{Transposed},
-        v::V) where {Transposed, V}
+            v::V) where {Transposed, V}
         new{Transposed, V}(g, v)
     end
 end

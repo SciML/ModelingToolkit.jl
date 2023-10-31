@@ -1,5 +1,5 @@
 function System(eqs::AbstractVector{<:Equation}, iv = nothing, args...; name = nothing,
-    kw...)
+        kw...)
     ODESystem(eqs, iv, args...; name, kw..., checks = false)
 end
 
@@ -17,7 +17,7 @@ This will convert all `inputs` to parameters and allow them to be unconnected, i
 simplification will allow models where `n_states = n_equations - n_inputs`.
 """
 function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
-    kwargs...)
+        kwargs...)
     newsys′ = __structural_simplify(sys, io; simplify, kwargs...)
     if newsys′ isa Tuple
         @assert length(newsys′) == 2
@@ -34,7 +34,7 @@ function structural_simplify(sys::AbstractSystem, io = nothing; simplify = false
     end
 end
 function __structural_simplify(sys::AbstractSystem, io = nothing; simplify = false,
-    kwargs...)
+        kwargs...)
     sys = expand_connections(sys)
     sys isa DiscreteSystem && return sys
     state = TearingState(sys)
