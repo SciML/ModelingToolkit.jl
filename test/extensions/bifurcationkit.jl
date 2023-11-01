@@ -46,7 +46,7 @@ end
 # Lotka–Volterra model, checks exact position of bifurcation variable and bifurcation points.
 # Checks using ODESystem input.
 let 
-    # Ceates a Lotka–Volterra model.
+    # Creates a Lotka–Volterra model.
     @parameters α a b
     @variables t x(t) y(t) z(t)
     D = Differential(t)
