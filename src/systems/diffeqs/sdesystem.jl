@@ -343,7 +343,7 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
     grad = Symbolics.gradient(u, states(sys))
 
     noiseeqs = get_noiseeqs(sys)
-    if typeof(noiseeqs) <: Vector
+    if noiseeqs isa Vector
         d = simplify.(-(noiseeqs .* grad) / u)
         drift_correction = noiseeqs .* d
     else
@@ -366,7 +366,7 @@ function Girsanov_transform(sys::SDESystem, u; θ0 = 1.0)
 
     noiseqsθ = θ * d
 
-    if typeof(noiseeqs) <: Vector
+    if noiseeqs isa Vector
         m = size(noiseeqs)
         if m == 1
             push!(noiseeqs, noiseqsθ)
