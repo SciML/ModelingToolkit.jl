@@ -492,6 +492,10 @@ function collect_var!(states, parameters, var, iv)
     elseif !isconstant(var)
         push!(states, var)
     end
+    # Add also any parameters that appear only as defaults in the var
+    if hasdefault(var)
+        collect_vars!(states, parameters, getdefault(var), iv)
+    end
     return nothing
 end
 
