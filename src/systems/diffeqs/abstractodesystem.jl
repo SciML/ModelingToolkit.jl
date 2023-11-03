@@ -516,9 +516,9 @@ function DiffEqBase.ODEFunction{iip, specialize}(sys::AbstractODESystem, dvs = s
         tgrad = _tgrad === nothing ? nothing : _tgrad,
         mass_matrix = _M,
         jac_prototype = jac_prototype,
-        syms = Symbol.(states(sys)),
+        syms = collect(Symbol.(states(sys))),
         indepsym = Symbol(get_iv(sys)),
-        paramsyms = Symbol.(ps),
+        paramsyms = collect(Symbol.(ps)),
         observed = observedfun,
         sparsity = sparsity ? jacobian_sparsity(sys) : nothing,
         analytic = analytic)

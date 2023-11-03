@@ -35,8 +35,7 @@ using PrecompileTools, Reexport
 
     using RecursiveArrayTools
 
-    import SymbolicIndexingInterface
-    import SymbolicIndexingInterface: independent_variables, states, parameters
+    using SymbolicIndexingInterface
     export independent_variables, states, parameters
     import SymbolicUtils
     import SymbolicUtils: istree, arguments, operation, similarterm, promote_symtype,
