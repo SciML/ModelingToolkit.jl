@@ -26,6 +26,13 @@ lsys, ssys = linearize(sys, [r], [r])
 @test lsys.C[] == 0
 @test lsys.D[] == 1
 
+lsys, ssys = linearize(sys, r, r) # Test allow scalars
+
+@test lsys.A[] == -2
+@test lsys.B[] == 1
+@test lsys.C[] == 0
+@test lsys.D[] == 1
+
 ##
 ```
 

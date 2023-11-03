@@ -1291,6 +1291,8 @@ function linearization_function(sys::AbstractSystem, inputs,
         p = DiffEqBase.NullParameters(),
         zero_dummy_der = false,
         kwargs...)
+    inputs isa AbstractVector || (inputs = [inputs])
+    outputs isa AbstractVector || (outputs = [outputs])
     ssys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs;
         simplify,
         kwargs...)
@@ -1486,7 +1488,7 @@ end
     (; A, B, C, D), simplified_sys = linearize(sys, inputs, outputs;    t=0.0, op = Dict(), allow_input_derivatives = false, zero_dummy_der=false, kwargs...)
     (; A, B, C, D)                 = linearize(simplified_sys, lin_fun; t=0.0, op = Dict(), allow_input_derivatives = false, zero_dummy_der=false)
 
-Return a NamedTuple with the matrices of a linear statespace representation
+Linearize `sys` between `inputs` and `outputs`, both vectors of variables. Return a NamedTuple with the matrices of a linear statespace representation
 on the form
 
 ```math
