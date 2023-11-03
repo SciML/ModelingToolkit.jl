@@ -1285,12 +1285,12 @@ The `simplified_sys` has undergone [`structural_simplify`](@ref) and had any occ
 See also [`linearize`](@ref) which provides a higher-level interface.
 """
 function linearization_function(sys::AbstractSystem, inputs,
-    outputs; simplify = false,
-    initialize = true,
-    op = Dict(),
-    p = DiffEqBase.NullParameters(),
-    zero_dummy_der = false,
-    kwargs...)
+        outputs; simplify = false,
+        initialize = true,
+        op = Dict(),
+        p = DiffEqBase.NullParameters(),
+        zero_dummy_der = false,
+        kwargs...)
     inputs isa AbstractVector || (inputs = [inputs])
     outputs isa AbstractVector || (outputs = [outputs])
     ssys, diff_idxs, alge_idxs, input_idxs = io_preprocessing(sys, inputs, outputs;
@@ -1488,7 +1488,7 @@ end
     (; A, B, C, D), simplified_sys = linearize(sys, inputs, outputs;    t=0.0, op = Dict(), allow_input_derivatives = false, zero_dummy_der=false, kwargs...)
     (; A, B, C, D)                 = linearize(simplified_sys, lin_fun; t=0.0, op = Dict(), allow_input_derivatives = false, zero_dummy_der=false)
 
-Return a NamedTuple with the matrices of a linear statespace representation
+Linearize `sys` between `inputs` and `outputs`, both vectors of variables. Return a NamedTuple with the matrices of a linear statespace representation
 on the form
 
 ```math
@@ -1586,7 +1586,7 @@ lsys_sym, _ = ModelingToolkit.linearize_symbolic(cl, [f.u], [p.x])
 ```
 """
 function linearize(sys, lin_fun; t = 0.0, op = Dict(), allow_input_derivatives = false,
-    p = DiffEqBase.NullParameters(), kwargs...)
+        p = DiffEqBase.NullParameters())
     x0 = merge(defaults(sys), op)
     u0, p2, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
 
