@@ -26,6 +26,7 @@ equations.
   - `@components`: for listing sub-components of the system
   - `@equations`: for the list of equations
   - `@extend`: for extending a base system and unpacking its states
+  - `@icon` : for embedding the model icon
   - `@parameters`: for specifying the symbolic parameters
   - `@structural_parameters`: for specifying non-symbolic parameters
   - `@variables`: for specifing the states
@@ -50,6 +51,7 @@ end
 end
 
 @mtkmodel ModelC begin
+    @icon "https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png"
     @structural_parameters begin
         f = sin
     end
@@ -58,6 +60,7 @@ end
     end
     @variables begin
         v(t) = v_var
+        v_array(t)[1:2, 1:3]
     end
     @extend ModelB(; p1)
     @components begin
@@ -68,6 +71,41 @@ end
     end
 end
 ```
+
+#### `@icon`
+
+An icon can be embedded in 3 ways:
+
+  - URI
+  - Path to a valid image-file.<br>
+    It can be an absolute path. Or, a path relative to an icon directory; which is
+    `DEPOT_PATH[1]/mtk_icons` by default and can be changed by setting
+    `ENV["MTK_ICONS_DIR"]`.<br>
+    Internally, it is saved in the _File URI_ scheme.
+
+```julia
+@mtkmodel WithPathtoIcon begin
+    @icon "/home/user/.julia/dev/mtk_icons/icon.png"
+    # Rest of the model definition
+end
+```
+
+  - Inlined SVG.
+
+```julia
+@mtkmodel WithInlinedSVGIcon begin
+    @icon """<svg height="100" width="100">
+    <circle cx="50" cy="50" r="40" stroke="green" fill="none" stroke-width="3"/>
+    </svg>
+    """
+    # Rest of the model definition
+end
+```
+
+#### `@structural_parameters` begin block
+
+  - This block is for non symbolic input arguements. These are for inputs that usually are not meant to be part of components; but influence how they are defined. One can list inputs like boolean flags, functions etc... here.
+  - Whenever default values are specified, unlike parameters/variables, they are reflected in the keyword argument list.
 
 #### `@parameters` and `@variables` begin block
 
@@ -80,14 +118,9 @@ end
 ```julia
 julia> @mtkbuild model_c1 = ModelC(; v = 2.0);
 
-julia> ModelingToolkit.getdefault(model_c.v)
+julia> ModelingToolkit.getdefault(model_c1.v)
 2.0
 ```
-
-#### `@structural_parameters` begin block
-
-  - This block is for non symbolic input arguements. These are for inputs that usually are not meant to be part of components; but influence how they are defined. One can list inputs like boolean flags, functions etc... here.
-  - Whenever default values are specified, unlike parameters/variables, they are reflected in the keyword argument list.
 
 #### `@extend` begin block
 
@@ -209,11 +242,12 @@ For example, the structure of `ModelC` is:
 
 ```julia
 julia> ModelC.structure
-Dict{Symbol, Any} with 6 entries:
+Dict{Symbol, Any} with 7 entries:
   :components           => [[:model_a, :ModelA]]
-  :variables            => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var), :v_array=>Dict(:size=>(4,)))
+  :variables            => Dict{Symbol, Dict{Symbol, Any}}(:v=>Dict(:default=>:v_var), :v_array=>Dict(:size=>(2, 3)))
+  :icon                 => URI("https://github.com/SciML/SciMLDocs/blob/main/docs/src/assets/logo.png")
   :kwargs               => Dict{Symbol, Any}(:f=>:sin, :v=>:v_var, :v_array=>nothing, :model_a__k_array=>nothing, :p1=>nothing)
   :independent_variable => t
-  :extend               => Any[[:p1, :p2], :model_b, :ModelB]
-  :equations            => ["model_a.k1 ~ f(v)"]
+  :extend               => Any[[:p2, :p1], Symbol("#mtkmodel__anonymous__ModelB"), :ModelB]
+  :equations            => ["model_a.k ~ f(v)"]
 ```
