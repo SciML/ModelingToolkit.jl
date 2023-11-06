@@ -24,10 +24,10 @@ struct ObservableRecordFromSolution{S, T}
     subs_vals::T
 
     function ObservableRecordFromSolution(nsys::NonlinearSystem,
-        plot_var,
-        bif_idx,
-        u0_vals,
-        p_vals) where {S, T}
+            plot_var,
+            bif_idx,
+            u0_vals,
+            p_vals) where {S, T}
         obs_eqs = observed(nsys)
         target_obs_idx = findfirst(isequal(plot_var, eq.lhs) for eq in observed(nsys))
         state_end_idxs = length(states(nsys))
@@ -80,14 +80,14 @@ end
 
 # When input is a NonlinearSystem.
 function BifurcationKit.BifurcationProblem(nsys::NonlinearSystem,
-    u0_bif,
-    ps,
-    bif_par,
-    args...;
-    plot_var = nothing,
-    record_from_solution = BifurcationKit.record_sol_default,
-    jac = true,
-    kwargs...)
+        u0_bif,
+        ps,
+        bif_par,
+        args...;
+        plot_var = nothing,
+        record_from_solution = BifurcationKit.record_sol_default,
+        jac = true,
+        kwargs...)
     # Creates F and J functions.
     ofun = NonlinearFunction(nsys; jac = jac)
     F = ofun.f
