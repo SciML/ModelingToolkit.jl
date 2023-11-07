@@ -1,19 +1,20 @@
 using BifurcationKit, ModelingToolkit, Test
 
-# Checks pitchfork diagram and that there are the correct number of branches (a main one and two children)
+# Simple pitchfork diagram, compares solution to native BifurcationKit, checks they are identical.
+# Checks using `jac=false` option.
 let
+    # Creates model.
     @variables t x(t) y(t)
     @parameters μ α
     eqs = [0 ~ μ * x - x^3 + α * y,
         0 ~ -y]
     @named nsys = NonlinearSystem(eqs, [x, y], [μ, α])
 
+    # Creates BifurcationProblem 
     bif_par = μ
     p_start = [μ => -1.0, α => 1.0]
     u0_guess = [x => 1.0, y => 1.0]
     plot_var = x
-
-    using BifurcationKit
     bprob = BifurcationProblem(nsys,
         u0_guess,
         p_start,
@@ -21,15 +22,115 @@ let
         plot_var = plot_var,
         jac = false)
 
+    # Conputes bifurcation diagram.
     p_span = (-4.0, 6.0)
+    opts_br = ContinuationPar(max_steps = 500, p_min = p_span[1], p_max = p_span[2])
+    bif_dia = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = true)
+
+    # Computes bifurcation diagram using BifurcationKit directly (without going through MTK).
+    function f_BK(u, p)
+        x, y = u
+        μ, α = p
+        return [μ * x - x^3 + α * y, -y]
+    end
+    bprob_BK = BifurcationProblem(f_BK,
+        [1.0, 1.0],
+        [-1.0, 1.0],
+        (@lens _[1]);
+        record_from_solution = (x, p) -> x[1])
+    bif_dia_BK = bifurcationdiagram(bprob_BK,
+        PALC(),
+        2,
+        (args...) -> opts_br;
+        bothside = true)
+
+    # Compares results.
+    @test getfield.(bif_dia.γ.branch, :x) ≈ getfield.(bif_dia_BK.γ.branch, :x)
+    @test getfield.(bif_dia.γ.branch, :param) ≈ getfield.(bif_dia_BK.γ.branch, :param)
+    @test bif_dia.γ.specialpoint[1].x == bif_dia_BK.γ.specialpoint[1].x
+    @test bif_dia.γ.specialpoint[1].param == bif_dia_BK.γ.specialpoint[1].param
+    @test bif_dia.γ.specialpoint[1].type == bif_dia_BK.γ.specialpoint[1].type
+end
+
+# Lotka–Volterra model, checks exact position of bifurcation variable and bifurcation points.
+# Checks using ODESystem input.
+let
+    # Creates a Lotka–Volterra model.
+    @parameters α a b
+    @variables t x(t) y(t) z(t)
+    D = Differential(t)
+    eqs = [D(x) ~ -x + a * y + x^2 * y,
+        D(y) ~ b - a * y - x^2 * y]
+    @named sys = ODESystem(eqs)
+
+    # Creates BifurcationProblem
+    bprob = BifurcationProblem(sys,
+        [x => 1.5, y => 1.0],
+        [a => 0.1, b => 0.5],
+        b;
+        plot_var = x)
+
+    # Computes bifurcation diagram.
+    p_span = (0.0, 2.0)
+    opt_newton = NewtonPar(tol = 1e-9, max_iterations = 2000)
+    opts_br = ContinuationPar(dsmax = 0.05,
+        max_steps = 500,
+        newton_options = opt_newton,
+        p_min = p_span[1],
+        p_max = p_span[2],
+        n_inversion = 4)
+    bif_dia = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = true)
+
+    # Tests that the diagram has the correct values (x = b)
+    all([b.x ≈ b.param for b in bif_dia.γ.branch])
+
+    # Tests that we get two Hopf bifurcations at the correct positions.
+    hopf_points = sort(getfield.(filter(sp -> sp.type == :hopf, bif_dia.γ.specialpoint),
+            :x);
+        by = x -> x[1])
+    @test length(hopf_points) == 2
+    @test hopf_points[1] ≈ [0.41998733080424205, 1.5195495712453098]
+    @test hopf_points[2] ≈ [0.7899715592573977, 1.0910379583813192]
+end
+
+# Simple fold bifurcation model, checks exact position of bifurcation variable and bifurcation points.
+# Checks that default parameter values are accounted for.
+# Checks that observables (that depend on other observables, as in this case) are accounted for.
+let
+    # Creates model, and uses `structural_simplify` to generate observables.
+    @parameters μ p=2
+    @variables t x(t) y(t) z(t)
+    D = Differential(t)
+    eqs = [0 ~ μ - x^3 + 2x^2,
+        0 ~ p * μ - y,
+        0 ~ y - z]
+    @named nsys = NonlinearSystem(eqs, [x, y, z], [μ, p])
+    nsys = structural_simplify(nsys)
+
+    # Creates BifurcationProblem.
+    bif_par = μ
+    p_start = [μ => 1.0]
+    u0_guess = [x => 1.0, y => 0.1, z => 0.1]
+    plot_var = x
+    bprob = BifurcationProblem(nsys, u0_guess, p_start, bif_par; plot_var = plot_var)
+
+    # Computes bifurcation diagram.
+    p_span = (-4.3, 12.0)
     opt_newton = NewtonPar(tol = 1e-9, max_iterations = 20)
-    opts_br = ContinuationPar(dsmin = 0.001, dsmax = 0.05, ds = 0.01,
-        max_steps = 100, nev = 2, newton_options = opt_newton,
-        p_min = p_span[1], p_max = p_span[2],
-        detect_bifurcation = 3, n_inversion = 4, tol_bisection_eigenvalue = 1e-8,
-        dsmin_bisection = 1e-9)
+    opts_br = ContinuationPar(dsmax = 0.05,
+        max_steps = 500,
+        newton_options = opt_newton,
+        p_min = p_span[1],
+        p_max = p_span[2],
+        n_inversion = 4)
+    bif_dia = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = true)
 
-    bf = bifurcationdiagram(bprob, PALC(), 2, (args...) -> opts_br; bothside = true)
+    # Tests that the diagram has the correct values (x = b)
+    all([b.x ≈ 2 * b.param for b in bif_dia.γ.branch])
 
-    @test length(bf.child) == 2
+    # Tests that we get two fold bifurcations at the correct positions.
+    fold_points = sort(getfield.(filter(sp -> sp.type == :bp, bif_dia.γ.specialpoint),
+        :param))
+    @test length(fold_points) == 2
+    @test fold_points ≈ [-1.1851851706940317, -5.6734983580551894e-6] # test that they occur at the correct parameter values).
 end
