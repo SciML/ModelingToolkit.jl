@@ -259,7 +259,8 @@ function parse_model!(exprs, comps, ext, eqs, icon, vs, ps, sps,
     elseif mname == Symbol("@equations")
         parse_equations!(exprs, eqs, dict, body)
     elseif mname == Symbol("@icon")
-        parse_icon!(icon, dict, mod, body)
+        isassigned(icon) && error("This model has more than one icon.")
+        parse_icon!(icon, dict, body)
     else
         error("$mname is not handled.")
     end
@@ -471,7 +472,7 @@ function parse_equations!(exprs, eqs, dict, body)
     dict[:equations] = readable_code.(eqs)
 end
 
-function parse_icon!(icon, dict, mod, body::String)
+function parse_icon!(icon, dict, body::String)
     icon_dir = get(ENV, "MTK_ICONS_DIR", joinpath(DEPOT_PATH[1], "mtk_icons"))
     dict[:icon] = icon[] = if isfile(body)
         URI("file:///" * abspath(body))
@@ -483,17 +484,13 @@ function parse_icon!(icon, dict, mod, body::String)
         false
     end
         URI(body)
+    elseif (_body = lstrip(body); startswith(_body, r"<\?xml|<svg"))
+        String(_body) # With Julia-1.10 promoting `SubString{String}` to `String` can be dropped.
     else
-        error("$body is not a valid icon")
+        error("\n$body is not a valid icon")
     end
 end
 
-function parse_icon!(icon, dict, mod, body::Expr)
-    _icon = body.args[end]
-    dict[:icon] = icon[] = MLStyle.@match _icon begin
-        ::Symbol => get_var(mod, _icon)
-        ::String => _icon
-        Expr(:call, read, a...) => eval(_icon)
-        _ => error("$_icon isn't a valid icon")
-    end
+function parse_icon!(icon, dict, body::Expr)
+    parse_icon!(icon, dict, eval(body))
 end

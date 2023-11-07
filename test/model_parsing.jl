@@ -62,9 +62,7 @@ end
     @components begin
         g = Pin()
     end
-    @icon begin
-        read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
-    end
+    @icon read(abspath(ENV["MTK_ICONS_DIR"], "ground.svg"), String)
     @equations begin
         g.v ~ 0
     end
@@ -76,10 +74,9 @@ resistor_log = "$(@__DIR__)/logo/resistor.svg"
     @parameters begin
         R, [unit = u"Ω"]
     end
-    @icon begin
-        """<?xml version="1.0" encoding="UTF-8"?>
+    @icon """<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="80" height="30">
-  <path d="M10 15
+<path d="M10 15
 l15 0
 l2.5 -5
 l5 10
@@ -91,7 +88,6 @@ l2.5 -5
 l15 0" stroke="black" stroke-width="1" stroke-linejoin="bevel" fill="none"></path>
 </svg>
 """
-    end
     @equations begin
         v ~ i * R
     end
