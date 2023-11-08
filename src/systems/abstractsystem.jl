@@ -1703,6 +1703,9 @@ end
 end
 
 function Base.show(io::IO, ::MIME"text/latex", x::AbstractSystem)
+    if length(equations(sys)) > 50
+        return Base.show(io::IO, ::MIME"text/plain", x)
+    end
     print(io, "\$\$ " * latexify(x) * " \$\$")
 end
 
