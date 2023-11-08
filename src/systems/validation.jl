@@ -1,9 +1,11 @@
+module UnitfulUnitCheck
+
+using .ModelingToolkit, Symbolics, SciMLBase
+using .ModelingToolkit: ValidationError
+const MT = ModelingToolkit
+
 Base.:*(x::Union{Num, Symbolic}, y::Unitful.AbstractQuantity) = x * y
 Base.:/(x::Union{Num, Symbolic}, y::Unitful.AbstractQuantity) = x / y
-
-struct ValidationError <: Exception
-    message::String
-end
 
 """
 Throw exception on invalid unit types, otherwise return argument.
@@ -60,7 +62,11 @@ get_literal_unit(x) = screen_unit(getmetadata(x, VariableUnit, unitless))
 function get_unit(op, args) # Fallback
     result = op(1 .* get_unit.(args)...)
     try
-        unit(result)
+        if result isa DQ.AbstractQuantity
+            oneunit(result)
+        else
+            unit(result)
+        end
     catch
         throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
     end
@@ -211,15 +217,15 @@ function _validate(conn::Connection; info::String = "")
     valid
 end
 
-function validate(jump::Union{ModelingToolkit.VariableRateJump,
-            ModelingToolkit.ConstantRateJump}, t::Symbolic;
+function validate(jump::Union{MT.VariableRateJump,
+            MT.ConstantRateJump}, t::Symbolic;
         info::String = "")
     newinfo = replace(info, "eq." => "jump")
     _validate([jump.rate, 1 / t], ["rate", "1/t"], info = newinfo) && # Assuming the rate is per time units
         validate(jump.affect!, info = newinfo)
 end
 
-function validate(jump::ModelingToolkit.MassActionJump, t::Symbolic; info::String = "")
+function validate(jump::MT.MassActionJump, t::Symbolic; info::String = "")
     left_symbols = [x[1] for x in jump.reactant_stoch] #vector of pairs of symbol,int -> vector symbols
     net_symbols = [x[1] for x in jump.net_stoch]
     all_symbols = vcat(left_symbols, net_symbols)
@@ -235,18 +241,18 @@ function validate(jumps::ArrayPartition{<:Union{Any, Vector{<:JumpType}}}, t::Sy
     all([validate(jumps.x[idx], t, info = labels[idx]) for idx in 1:3])
 end
 
-function validate(eq::ModelingToolkit.Equation; info::String = "")
+function validate(eq::MT.Equation; info::String = "")
     if typeof(eq.lhs) == Connection
         _validate(eq.rhs; info)
     else
         _validate([eq.lhs, eq.rhs], ["left", "right"]; info)
     end
 end
-function validate(eq::ModelingToolkit.Equation,
+function validate(eq::MT.Equation,
         term::Union{Symbolic, Unitful.Quantity, Num}; info::String = "")
     _validate([eq.lhs, eq.rhs, term], ["left", "right", "noise"]; info)
 end
-function validate(eq::ModelingToolkit.Equation, terms::Vector; info::String = "")
+function validate(eq::MT.Equation, terms::Vector; info::String = "")
     _validate(vcat([eq.lhs, eq.rhs], terms),
         vcat(["left", "right"], "noise  #" .* string.(1:length(terms))); info)
 end
@@ -273,8 +279,10 @@ validate(term::Symbolics.SymbolicUtils.Symbolic) = safe_get_unit(term, "") !== n
 """
 Throws error if units of equations are invalid.
 """
-function check_units(eqs...)
+function MT.check_units(::Val{:Unitful}, eqs...)
     validate(eqs...) ||
         throw(ValidationError("Some equations had invalid units. See warnings for details."))
 end
 all_dimensionless(states) = all(x -> safe_get_unit(x, "") in (unitless, nothing), states)
+
+end # module

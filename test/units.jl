@@ -1,4 +1,4 @@
-using ModelingToolkit, Unitful, OrdinaryDiffEq, JumpProcesses, IfElse
+using ModelingToolkit, OrdinaryDiffEq, JumpProcesses, IfElse
 using Test
 MT = ModelingToolkit
 @parameters τ [unit = u"ms"] γ
