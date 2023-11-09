@@ -7,7 +7,16 @@ end
 
 check_units(::Nothing, _...) = true
 
-__get_literal_unit(x) = getmetadata(x, VariableUnit, nothing)
+function __get_literal_unit(x)
+    if x isa Pair
+        x = x[1]
+    end
+    if !(x isa Union{Num, Symbolic})
+        return nothing
+    end
+    v = value(x)
+    getmetadata(v, VariableUnit, nothing)
+end
 function __get_scalar_unit_type(v)
     u = __get_literal_unit(v)
     if u isa DQ.AbstractQuantity

@@ -99,7 +99,7 @@ struct PDESystem <: ModelingToolkit.AbstractMultivariateSystem
             name)
         if checks == true || (checks & CheckUnits) > 0
             u = __get_unit_type(dvs, ivs, ps)
-            check_units(u, deqs)
+            check_units(u, eqs)
         end
 
         eqs = eqs isa Vector ? eqs : [eqs]
