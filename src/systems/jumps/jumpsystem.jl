@@ -112,7 +112,8 @@ struct JumpSystem{U <: ArrayPartition} <: AbstractTimeDependentSystem
             check_parameters(ps, iv)
         end
         if checks == true || (checks & CheckUnits) > 0
-            all_dimensionless([states; ps; iv]) || check_units(ap, iv)
+            u = __get_unit_type(states, ps, iv)
+            check_units(u, ap, iv)
         end
         new{U}(tag, ap, iv, states, ps, var_to_name, observed, name, systems, defaults,
             connector_type, devents, metadata, gui_metadata, complete)

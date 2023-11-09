@@ -1,7 +1,9 @@
 module UnitfulUnitCheck
 
-using .ModelingToolkit, Symbolics, SciMLBase
-using .ModelingToolkit: ValidationError
+using ..ModelingToolkit, Symbolics, SciMLBase, Unitful, IfElse, RecursiveArrayTools
+using ..ModelingToolkit: ValidationError,
+    ModelingToolkit, Connection, instream, JumpType, VariableUnit, get_systems
+using Symbolics: Symbolic, value, issym, isadd, ismul, ispow
 const MT = ModelingToolkit
 
 Base.:*(x::Union{Num, Symbolic}, y::Unitful.AbstractQuantity) = x * y
@@ -62,11 +64,7 @@ get_literal_unit(x) = screen_unit(getmetadata(x, VariableUnit, unitless))
 function get_unit(op, args) # Fallback
     result = op(1 .* get_unit.(args)...)
     try
-        if result isa DQ.AbstractQuantity
-            oneunit(result)
-        else
-            unit(result)
-        end
+        unit(result)
     catch
         throw(ValidationError("Unable to get unit for operation $op with arguments $args."))
     end
@@ -283,6 +281,5 @@ function MT.check_units(::Val{:Unitful}, eqs...)
     validate(eqs...) ||
         throw(ValidationError("Some equations had invalid units. See warnings for details."))
 end
-all_dimensionless(states) = all(x -> safe_get_unit(x, "") in (unitless, nothing), states)
 
 end # module

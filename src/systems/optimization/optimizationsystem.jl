@@ -68,7 +68,8 @@ struct OptimizationSystem <: AbstractOptimizationSystem
         if checks == true || (checks & CheckUnits) > 0
             unwrap(op) isa Symbolic && check_units(op)
             check_units(observed)
-            all_dimensionless([states; ps]) || check_units(constraints)
+            u = __get_unit_type(states, ps)
+            check_units(u, constraints)
         end
         new(tag, op, states, ps, var_to_name, observed,
             constraints, name, systems, defaults, metadata, gui_metadata, complete,

@@ -1,4 +1,4 @@
-import DynamicQuantities
+import DynamicQuantities, Unitful
 const DQ = DynamicQuantities
 
 struct ValidationError <: Exception
@@ -8,14 +8,26 @@ end
 check_units(::Nothing, _...) = true
 
 __get_literal_unit(x) = getmetadata(x, VariableUnit, nothing)
+function __get_scalar_unit_type(v)
+    u = __get_literal_unit(v)
+    if u isa DQ.AbstractQuantity
+        return Val(:DynamicQuantities)
+    elseif u isa Unitful.Unitlike
+        return Val(:Unitful)
+    end
+    return nothing
+end
 function __get_unit_type(vs′...)
-    vs = Iterators.flatten(vs′)
-    for v in vs
-        u = __get_literal_unit(v)
-        if u isa DQ.AbstractQuantity
-            return Val(:Unitful)
+    for vs in vs′
+        if vs isa AbstractVector
+            for v in vs
+                u = __get_scalar_unit_type(v)
+                u === nothing || return u
+            end
         else
-            return Val(:DynamicQuantities)
+            v = vs
+            u = __get_scalar_unit_type(v)
+            u === nothing || return u
         end
     end
     return nothing
@@ -38,5 +50,3 @@ function screen_units(result)
         end
     end
 end
-
-

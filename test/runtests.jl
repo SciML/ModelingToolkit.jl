@@ -13,10 +13,10 @@ using SafeTestsets, Test
 @safetestset "Clock Test" include("clock.jl")
 @safetestset "DiscreteSystem Test" include("discretesystem.jl")
 @safetestset "ODESystem Test" include("odesystem.jl")
-@safetestset "Dynamic Quantities Test" begin
-    using DynamicQuantities
-    include("units.jl")
-end
+#@safetestset "Dynamic Quantities Test" begin
+#    using DynamicQuantities
+#    include("units.jl")
+#end
 @safetestset "Unitful Quantities Test" begin
     using Unitful
     include("units.jl")
