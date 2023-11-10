@@ -10,7 +10,7 @@ import ..ModelingToolkit: isdiffeq, var_from_nested_derivative, vars!, flatten,
     equations, isirreducible, input_timedomain, TimeDomain,
     VariableType, getvariabletype, has_equations, ODESystem
 using ..BipartiteGraphs
-import ..BipartiteGraphs: invview, complete
+import ..BipartiteGraphs: invview, complete, ResidualCMOGraph
 using Graphs
 using UnPack
 using Setfield
@@ -539,6 +539,128 @@ function Base.show(io::IO, mime::MIME"text/plain", ms::MatchedSystemStructure)
     print(io, " | ")
     printstyled(io, " ∫", color = :cyan)
     printstyled(io, " SelectedState")
+end
+
+function ResidualCMOGraph(mss::MatchedSystemStructure)
+    ResidualCMOGraph(mss.structure.graph, mss.var_eq_matching)
+end
+function DiCMOBiGraph{Transposed}(mss::MatchedSystemStructure) where {Transposed}
+    DiCMOBiGraph{Transposed}(mss.structure.graph, mss.var_eq_matching)
+end
+
+function Base.show(io::IO, mime::MIME"text/vnd.graphviz", mss::MatchedSystemStructure;
+                   var_label = u -> string(u))
+    tearing_components = filter(x -> length(x) != 1,
+                                connected_components(ResidualCMOGraph(mss)))
+    tear_to_components = Dict(Iterators.flatten((c => i for c in comp)
+                                                for (i, comp) in enumerate(tearing_components)))
+    dig = DiCMOBiGraph{true}(mss)
+
+    constraint_ccs = let di = SimpleDiGraph(nv(dig))
+        for e in edges(dig)
+            add_edge!(di, src(e), dst(e))
+        end
+        for c in tearing_components
+            for (a, b) in zip(c, circshift(c, 1))
+                add_edge!(di, a, b)
+            end
+        end
+        for (eq, m) in enumerate(invview(dig.matching))
+            if eq > nsrcs(dig.graph)
+                continue
+            end
+            m === unassigned || continue
+            nodes = collect(𝑠neighbors(dig.graph, eq))
+            if isempty(nodes)
+                continue
+            end
+            # Find component that this gets assigned to (N.B: must be unique, otherwise the two components should be one)
+            cs = collect(tear_to_components[v]
+                         for v in nodes if haskey(tear_to_components, v))
+            if isempty(cs)
+                continue
+            end
+
+            cidx = first(cs)
+            nodes = filter(n -> !haskey(tear_to_components, n), nodes)
+            isempty(nodes) && continue
+            for n in nodes
+                add_edge!(di, n, first(tearing_components[cidx]))
+            end
+        end
+        filter(x -> length(x) != 1, strongly_connected_components(di))
+    end
+
+    print(io, """strict digraph {
+        compound=true;
+        rankdir=BT;
+        layout=dot;
+    """)
+    for (i, (constrc, tearc)) in enumerate(zip(constraint_ccs, tearing_components))
+        # The dashed block represents the nodes that have to be evaulated in the nonlinear solve loop
+        println(io, "\tsubgraph cluster_", i, " { style=dashed;")
+        println(io, "\t\t", join(setdiff(constrc, tearc), ';'), ";")
+        # The solid block represents the states that the nonlinear solver has to make guesses for
+        println(io, "\t\tsubgraph cluster_", i, "_tear { style=solid; ")
+        println(io, "\t\t\t", join(tearc, ';'), ";")
+        println(io, "\t\t}")
+        println(io, "\t}")
+    end
+
+    function is_state(u)
+        a = mss.var_eq_matching[u]
+        return a !== unassigned && !isa(a, Int)
+    end
+    function is_dstate(u)
+        du = invview(mss.structure.var_to_diff)[u]
+        if du === nothing
+            return false
+        end
+        return is_state(du)
+    end
+
+    for u in Graphs.vertices(dig)
+        in_nbrs = Graphs.inneighbors(dig, u)
+        out_nbrs = Graphs.outneighbors(dig, u)
+        if is_state(u)
+            print(io,
+                  "\t$(string(u)) [style=filled, fillcolor=\"#008000\",label=\"$(var_label(u))\"];")
+        elseif is_dstate(u)
+            print(io,
+                  "\t$(string(u)) [style=filled, fillcolor=\"#FF0000\",label=\"$(var_label(u))\"];")
+        else
+            # Skip non-selected states that have no outward connections
+            if length(out_nbrs) == 0 && length(in_nbrs) == 0
+                continue
+            end
+            print(io, "\t", u, "[label=\"", var_label(u), "\"];")
+        end
+        if length(out_nbrs) > 0
+            println(io, "\t" * string(u) * " -> {" * join(out_nbrs, ',') * "};")
+        end
+    end
+    # Draw unassigned equations
+    for (eq, m) in enumerate(invview(dig.matching))
+        if eq > nsrcs(dig.graph)
+            continue
+        end
+        m === unassigned || continue
+        nodes = collect(𝑠neighbors(mss.structure.graph, eq))
+        if isempty(nodes)
+            continue
+        end
+        # Find component that this gets assigned to (N.B: must be unique, otherwise the two components should be one)
+        cs = collect(tear_to_components[v] for v in nodes if haskey(tear_to_components, v))
+        if isempty(cs)
+            continue
+        end
+        cidx = first(cs)
+        nodes = filter(n -> !haskey(tear_to_components, n), nodes)
+        isempty(nodes) && continue
+        println(io, "\t{", join(nodes, ','), "} -> ", first(tearing_components[cidx]),
+                " [lhead=cluster_", cidx, "_tear, color=orange];")
+    end
+    print(io, "}")
 end
 
 # TODO: clean up
