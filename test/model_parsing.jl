@@ -4,7 +4,7 @@ using ModelingToolkit: get_gui_metadata,
     VariableDescription, RegularConnector
 using URIs: URI
 using Distributions
-using Unitful
+using DynamicQuantities, OrdinaryDiffEq
 
 ENV["MTK_ICONS_DIR"] = "$(@__DIR__)/icons"
 
@@ -143,6 +143,10 @@ C_val = 20
 R_val = 20
 res__R = 100
 @mtkbuild rc = RC(; C_val, R_val, resistor.R = res__R)
+prob = ODEProblem(rc, [], (0, 1e9))
+sol = solve(prob, Rodas5P())
+defs = ModelingToolkit.defaults(rc)
+@test sol[rc.capacitor.v, end] ≈ defs[rc.constant.k]
 resistor = getproperty(rc, :resistor; namespace = false)
 @test getname(rc.resistor) === getname(resistor)
 @test getname(rc.resistor.R) === getname(resistor.R)
