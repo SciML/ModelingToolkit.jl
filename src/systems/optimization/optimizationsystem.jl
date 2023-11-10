@@ -66,9 +66,9 @@ struct OptimizationSystem <: AbstractOptimizationSystem
             gui_metadata = nothing, complete = false, parent = nothing;
             checks::Union{Bool, Int} = true)
         if checks == true || (checks & CheckUnits) > 0
-            unwrap(op) isa Symbolic && check_units(op)
-            check_units(observed)
             u = __get_unit_type(states, ps)
+            unwrap(op) isa Symbolic && check_units(u, op)
+            check_units(u, observed)
             check_units(u, constraints)
         end
         new(tag, op, states, ps, var_to_name, observed,
