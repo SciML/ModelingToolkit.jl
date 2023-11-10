@@ -2,7 +2,8 @@ module UnitfulUnitCheck
 
 using ..ModelingToolkit, Symbolics, SciMLBase, Unitful, IfElse, RecursiveArrayTools
 using ..ModelingToolkit: ValidationError,
-    ModelingToolkit, Connection, instream, JumpType, VariableUnit, get_systems
+    ModelingToolkit, Connection, instream, JumpType, VariableUnit, get_systems,
+    Conditional, Comparison
 using Symbolics: Symbolic, value, issym, isadd, ismul, ispow
 const MT = ModelingToolkit
 
@@ -38,10 +39,6 @@ MT = ModelingToolkit
 """
 equivalent(x, y) = isequal(1 * x, 1 * y)
 const unitless = Unitful.unit(1)
-
-#For dispatching get_unit
-const Conditional = Union{typeof(ifelse), typeof(IfElse.ifelse)}
-const Comparison = Union{typeof.([==, !=, ≠, <, <=, ≤, >, >=, ≥])...}
 
 """
 Find the unit of a symbolic item.
