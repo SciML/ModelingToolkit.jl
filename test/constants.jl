@@ -1,6 +1,7 @@
 using ModelingToolkit, OrdinaryDiffEq, Unitful
 using Test
 MT = ModelingToolkit
+UMT = ModelingToolkit.UnitfulUnitCheck
 
 @constants a = 1
 @test_throws MT.ArgumentError @constants b
@@ -25,7 +26,7 @@ simp = structural_simplify(sys)
 
 #Constant with units
 @constants β=1 [unit = u"m/s"]
-MT.get_unit(β)
+UMT.get_unit(β)
 @test MT.isconstant(β)
 @variables t [unit = u"s"] x(t) [unit = u"m"]
 D = Differential(t)
