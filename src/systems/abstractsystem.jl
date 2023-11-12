@@ -394,7 +394,7 @@ end
 abstract type SymScope end
 
 struct LocalScope <: SymScope end
-function LocalScope(sym::Union{Num, Symbolic})
+function LocalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num, N}}) where N
     apply_to_variables(sym) do sym
         setmetadata(sym, SymScope, LocalScope())
     end
@@ -403,7 +403,7 @@ end
 struct ParentScope <: SymScope
     parent::SymScope
 end
-function ParentScope(sym::Union{Num, Symbolic})
+function ParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num, N}}) where N
     apply_to_variables(sym) do sym
         setmetadata(sym, SymScope,
             ParentScope(getmetadata(value(sym), SymScope, LocalScope())))
@@ -414,16 +414,16 @@ struct DelayParentScope <: SymScope
     parent::SymScope
     N::Int
 end
-function DelayParentScope(sym::Union{Num, Symbolic}, N)
+function DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num, M}}, N) where M
     apply_to_variables(sym) do sym
         setmetadata(sym, SymScope,
             DelayParentScope(getmetadata(value(sym), SymScope, LocalScope()), N))
     end
 end
-DelayParentScope(sym::Union{Num, Symbolic}) = DelayParentScope(sym, 1)
+DelayParentScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num, N}}) where N = DelayParentScope(sym, 1)
 
 struct GlobalScope <: SymScope end
-function GlobalScope(sym::Union{Num, Symbolic})
+function GlobalScope(sym::Union{Num, Symbolic, Symbolics.Arr{Num, N}}) where N
     apply_to_variables(sym) do sym
         setmetadata(sym, SymScope, GlobalScope())
     end
