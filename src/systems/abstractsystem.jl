@@ -503,8 +503,13 @@ function namespace_expr(O, sys, n = nameof(sys); ivs = independent_variables(sys
         return O
     elseif istree(O)
         T = typeof(O)
+        op = operation(O)
+        args = arguments(O)
+        if op == getindex && hasmetadata(O, SymScope)
+            args[1] = setmetadata(args[1], SymScope, getmetadata(O, SymScope))
+        end
         renamed = let sys = sys, n = n, T = T
-            map(a -> namespace_expr(a, sys, n; ivs)::Any, arguments(O))
+            map(a -> namespace_expr(a, sys, n; ivs)::Any, args)
         end
         if isvariable(O)
             # Use renamespace so the scope is correct, and make sure to use the
