@@ -75,8 +75,8 @@ ps = ModelingToolkit.getname.(parameters(level3))
 
 @parameters xx[1:2]
 arr_p = [ParentScope(xx[1]), xx[2]]
-arr0 = ODESystem(Equation[], t, [], arr_p; name=:arr0)
-arr1 = ODESystem(Equation[], t, [], []; name=:arr1) ∘ arr0
+arr0 = ODESystem(Equation[], t, [], arr_p; name = :arr0)
+arr1 = ODESystem(Equation[], t, [], []; name = :arr1) ∘ arr0
 arr_ps = ModelingToolkit.getname.(parameters(arr1))
 @test isequal(arr_ps[1], Symbol("xx"))
 @test isequal(arr_ps[2], Symbol("arr0₊xx"))
