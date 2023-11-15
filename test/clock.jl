@@ -115,7 +115,7 @@ z(k + 1)  ~ z′(k)
 ss = structural_simplify(sys);
 if VERSION >= v"1.7"
     prob = ODEProblem(ss, [x => 0.0, y => 0.0], (0.0, 1.0),
-        [kp => 1.0; z => 0.0; z(k + 1) => 0.0])
+        [kp => 1.0; z => 2.0; z(k + 1) => 3.0])
     sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
     # For all inputs in parameters, just initialize them to 0.0, and then set them
     # in the callback.
@@ -142,7 +142,7 @@ if VERSION >= v"1.7"
     end
     saved_values = SavedValues(Float64, Vector{Float64})
     cb = PeriodicCallback(Base.Fix2(affect!, saved_values), 0.1)
-    prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 0.0, 0.0, 0.0], callback = cb)
+    prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 0.0, 3.0, 2.0], callback = cb)
     sol2 = solve(prob, Tsit5())
     @test sol.u == sol2.u
     @test saved_values.t == sol.prob.kwargs[:disc_saved_values][1].t
@@ -309,4 +309,129 @@ if VERSION >= v"1.7"
     sol2 = solve(prob, Tsit5())
 
     @test sol.u ≈ sol2.u
+end
+
+##
+@info "Testing hybrid system with components"
+using ModelingToolkitStandardLibrary.Blocks
+
+dt = 0.05
+@variables t
+d = Clock(t, dt)
+k = ShiftIndex(d)
+
+@mtkmodel DiscretePI begin
+    @components begin
+        input = RealInput()
+        output = RealOutput()
+    end
+    @parameters begin
+        kp = 1, [description = "Proportional gain"]
+        ki = 1, [description = "Integral gain"]
+    end
+    @variables begin
+        x(t) = 0, [description = "Integral state"]
+        u(t)
+        y(t)
+    end
+    @equations begin
+        x(k + 1) ~ x(k) + ki * u
+        output.u ~ y
+        input.u ~ u
+        y ~ x(k) + kp * u
+    end
+end
+
+@mtkmodel Sampler begin
+    @components begin
+        input = RealInput()
+        output = RealOutput()
+    end
+    @equations begin
+        output.u ~ Sample(t, dt)(input.u)
+    end
+end
+
+@mtkmodel Holder begin
+    @components begin
+        input = RealInput()
+        output = RealOutput()
+    end
+    @equations begin
+        output.u ~ Hold(input.u)
+    end
+end
+
+@mtkmodel ClosedLoop begin
+    @components begin
+        plant = FirstOrder(k = 0.3, T = 1)
+        sampler = Sampler()
+        holder = Holder()
+        controller = DiscretePI(kp = 2, ki = 2)
+        feedback = Feedback()
+        ref = Constant(k = 0.5)
+    end
+    @equations begin
+        connect(ref.output, feedback.input1)
+        connect(feedback.output, controller.input)
+        connect(controller.output, holder.input)
+        connect(holder.output, plant.input)
+        connect(plant.output, sampler.input)
+        connect(sampler.output, feedback.input2)
+    end
+end
+
+@named model = ClosedLoop()
+model = complete(model)
+
+ci, varmap = infer_clocks(expand_connections(model))
+
+@test varmap[model.plant.input.u] == Continuous()
+@test varmap[model.plant.u] == Continuous()
+@test varmap[model.plant.x] == Continuous()
+@test varmap[model.plant.y] == Continuous()
+@test varmap[model.plant.output.u] == Continuous()
+@test varmap[model.holder.output.u] == Continuous()
+@test varmap[model.sampler.input.u] == Continuous()
+@test varmap[model.controller.u] == d
+@test varmap[model.holder.input.u] == d
+@test varmap[model.controller.output.u] == d
+@test varmap[model.controller.y] == d
+@test varmap[model.feedback.input1.u] == d
+@test varmap[model.ref.output.u] == d
+@test varmap[model.controller.input.u] == d
+@test varmap[model.controller.x] == d
+@test varmap[model.sampler.output.u] == d
+@test varmap[model.feedback.output.u] == d
+@test varmap[model.feedback.input2.u] == d
+
+ssys = structural_simplify(model)
+
+timevec = 0:(d.dt):20
+
+if VERSION >= v"1.7"
+    using ControlSystems
+    P = c2d(tf(0.3, [1, 1]), d.dt)
+    C = ControlSystems.ss([1], [2], [1], [2], d.dt)
+
+    # Test the output of the continuous partition
+    G = feedback(P * C)
+    res = lsim(G, (x, t) -> [0.5], timevec)
+    y = res.y[:]
+
+    prob = ODEProblem(ssys,
+        [model.plant.x => 0.0],
+        (0.0, 20.0),
+        [model.controller.kp => 2.0; model.controller.ki => 2.0])
+    sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+    @test sol(timevec, idxs = model.plant.output.u)≈y rtol=1e-10 # The output of the continuous partition is delayed exactly one sample
+    # plot([sol(timevec .+ 1e-12, idxs=model.plant.output.u)  y])
+
+    # Test the output of the discrete partition
+    G = feedback(C, P)
+    res = lsim(G, (x, t) -> [0.5], timevec)
+    y = res.y[:]
+
+    @test sol(timevec .+ 1e-10, idxs = model.controller.output.u)≈y rtol=1e-10
+    # plot([sol(timevec .+ 1e-12, idxs=model.controller.output.u)  y])
 end
