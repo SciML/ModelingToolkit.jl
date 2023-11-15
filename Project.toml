@@ -92,8 +92,8 @@ RecursiveArrayTools = "2.3"
 Reexport = "0.2, 1"
 RuntimeGeneratedFunctions = "0.5.9"
 SciMLBase = "2.0.1"
-Setfield = "0.7, 0.8, 1"
 Serialization = "1"
+Setfield = "0.7, 0.8, 1"
 SimpleNonlinearSolve = "0.1.0"
 SparseArrays = "1"
 SpecialFunctions = "0.7, 0.8, 0.9, 0.10, 1.0, 2"
@@ -110,6 +110,7 @@ julia = "1.9"
 AmplNLWriter = "7c4d4715-977e-5154-bfe0-e096adeac482"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 BifurcationKit = "0f109fa4-8a5d-4b75-95aa-f515264e7665"
+ControlSystemsBase = "aaaaaaaa-a6ca-5380-bf3e-84a91bcd477e"
 ControlSystemsMTK = "687d7614-c7e5-45fc-bfc3-9ee385575c88"
 DeepDiffs = "ab62b9b5-e342-54a8-a765-a90f495de1a6"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
@@ -132,4 +133,4 @@ Sundials = "c3572dad-4567-51f8-b174-8c6c989267f4"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["AmplNLWriter", "BenchmarkTools", "BifurcationKit", "ControlSystemsMTK", "NonlinearSolve", "ForwardDiff", "Ipopt", "Ipopt_jll", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OptimizationMOI", "Random", "ReferenceTests", "SafeTestsets", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "StochasticDelayDiffEq"]
+test = ["AmplNLWriter", "BenchmarkTools", "BifurcationKit", "ControlSystemsBase", "ControlSystemsMTK", "NonlinearSolve", "ForwardDiff", "Ipopt", "Ipopt_jll", "ModelingToolkitStandardLibrary", "Optimization", "OptimizationOptimJL", "OptimizationMOI", "Random", "ReferenceTests", "SafeTestsets", "StableRNGs", "Statistics", "SteadyStateDiffEq", "Test", "StochasticDiffEq", "Sundials", "StochasticDelayDiffEq"]
