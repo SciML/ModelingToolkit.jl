@@ -428,8 +428,7 @@ prob = ODEProblem(ssys,
     (0.0, 10.0),
     [model.controller.kp => 2.0; model.controller.ki => 2.0])
 
-@test_broken prob.p[9] == 1 # constant output * kp issue https://github.com/SciML/ModelingToolkit.jl/issues/2356
-prob.p[9] = 1 # constant output * kp
+@test prob.p[9] == 1 # constant output * kp issue https://github.com/SciML/ModelingToolkit.jl/issues/2356
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 # plot([sol(timevec .+ 1e-12, idxs=model.plant.output.u)  y])
 
