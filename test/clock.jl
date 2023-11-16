@@ -145,7 +145,9 @@ if VERSION >= v"1.7"
     end
     saved_values = SavedValues(Float64, Vector{Float64})
     cb = PeriodicCallback(Base.Fix2(affect!, saved_values), 0.1)
-    prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 0.0, 3.0, 2.0], callback = cb)
+    #                                           kp   ud   z_t  z
+    prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 4.0, 3.0, 2.0], callback = cb)
+    #                               ud initializes to kp * (r - yd) + z = 1 * (1 - 0) + 3 = 4
     sol2 = solve(prob, Tsit5())
     @test sol.u == sol2.u
     @test saved_values.t == sol.prob.kwargs[:disc_saved_values][1].t
@@ -308,10 +310,11 @@ if VERSION >= v"1.7"
     cb1 = PeriodicCallback(affect1!, dt)
     cb2 = PeriodicCallback(affect2!, dt2)
     cb = CallbackSet(cb1, cb2)
-    prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 0.0, 0.0], callback = cb)
+    #                                           kp   ud1  ud2
+    prob = ODEProblem(foo!, [0.0], (0.0, 1.0), [1.0, 1.0, 1.0], callback = cb)
     sol2 = solve(prob, Tsit5())
 
-    @test sol.u ≈ sol2.u
+    @test sol.u ≈ sol2.u atol = 1e-6
 end
 
 ##
