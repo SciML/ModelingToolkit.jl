@@ -1,7 +1,6 @@
 using ModelingToolkit, Test
-using ModelingToolkit: get_gui_metadata,
-    get_ps, getdefault, getname, scalarize,
-    VariableDescription, RegularConnector
+using ModelingToolkit: get_gui_metadata, get_systems, get_connector_type,
+    get_ps, getdefault, getname, scalarize, VariableDescription, RegularConnector
 using URIs: URI
 using Distributions
 using Unitful
@@ -303,7 +302,7 @@ end
     end
 
     @named aa = A()
-    @test aa.connector_type == RegularConnector()
+    @test get_connector_type(aa) == RegularConnector()
 
     @test A.isconnector == true
 
@@ -314,7 +313,7 @@ end
     @test A.structure[:components] == [[:cc, :C]]
 end
 
-@testset "Conditional components, equations and parameters" begin
+@testset "Conditional statements inside the blocks" begin
     @mtkmodel C begin end
 
     # Conditional statements inside @components, @equations
@@ -326,21 +325,21 @@ end
         @parameters begin
             eq = flag == 1 ? 1 : 0
             if flag == 1
-                a1
+                if_parameter
             elseif flag == 2
-                a2
+                elseif_parameter
             else
-                a3
+                else_parameter
             end
         end
         @components begin
-            sys0 = C()
+            default_sys = C()
             if flag == 1
-                sys1 = C()
+                if_sys = C()
             elseif flag == 2
-                sys2 = C()
+                elseif_sys = C()
             else
-                sys3 = C()
+                else_sys = C()
             end
         end
         @equations begin
@@ -352,94 +351,160 @@ end
             else
                 eq ~ 3
             end
+            flag == 1 ? eq ~ 4 : eq ~ 5
         end
     end
 
-    @named in_sys_1 = InsideTheBlock()
-    in_sys_1 = complete(in_sys_1)
-    @named in_sys_2 = InsideTheBlock(flag = 2)
-    in_sys_2 = complete(in_sys_2)
-    @named in_sys_3 = InsideTheBlock(flag = 3)
-    in_sys_3 = complete(in_sys_3)
+    @named if_in_sys = InsideTheBlock()
+    if_in_sys = complete(if_in_sys)
+    @named elseif_in_sys = InsideTheBlock(flag = 2)
+    elseif_in_sys = complete(elseif_in_sys)
+    @named else_in_sys = InsideTheBlock(flag = 3)
+    else_in_sys = complete(else_in_sys)
 
-    @test nameof.(parameters(in_sys_1)) == [:a1, :eq]
-    @test nameof.(parameters(in_sys_2)) == [:a2, :eq]
-    @test nameof.(parameters(in_sys_3)) == [:a3, :eq]
+    @test nameof.(parameters(if_in_sys)) == [:if_parameter, :eq]
+    @test nameof.(parameters(elseif_in_sys)) == [:elseif_parameter, :eq]
+    @test nameof.(parameters(else_in_sys)) == [:else_parameter, :eq]
 
-    @test nameof.(in_sys_1.systems) == [:sys1, :sys0]
-    @test nameof.(in_sys_2.systems) == [:sys2, :sys0]
-    @test nameof.(in_sys_3.systems) == [:sys3, :sys0]
+    @test nameof.(get_systems(if_in_sys)) == [:if_sys, :default_sys]
+    @test nameof.(get_systems(elseif_in_sys)) == [:elseif_sys, :default_sys]
+    @test nameof.(get_systems(else_in_sys)) == [:else_sys, :default_sys]
 
-    @test all([in_sys_1.eq ~ 0, in_sys_1.eq ~ 1] .∈ [equations(in_sys_1)])
-    @test all([in_sys_2.eq ~ 0, in_sys_2.eq ~ 2] .∈ [equations(in_sys_2)])
-    @test all([in_sys_3.eq ~ 0, in_sys_3.eq ~ 3] .∈ [equations(in_sys_3)])
+    @test all([
+        if_in_sys.eq ~ 0,
+        if_in_sys.eq ~ 1,
+        if_in_sys.eq ~ 4,
+    ] .∈ [equations(if_in_sys)])
+    @test all([
+        elseif_in_sys.eq ~ 0,
+        elseif_in_sys.eq ~ 2,
+        elseif_in_sys.eq ~ 5,
+    ] .∈ [equations(elseif_in_sys)])
+    @test all([
+        else_in_sys.eq ~ 0,
+        else_in_sys.eq ~ 3,
+        else_in_sys.eq ~ 5,
+    ] .∈ [equations(else_in_sys)])
 
-    @test getdefault(in_sys_1.eq) == 1
-    @test getdefault(in_sys_2.eq) == 0
+    @test getdefault(if_in_sys.eq) == 1
+    @test getdefault(elseif_in_sys.eq) == 0
+end
+
+@testset "Conditional statements outside the blocks" begin
+    @mtkmodel C begin end
 
     # Branching statement outside the begin blocks
     @mtkmodel OutsideTheBlock begin
         @structural_parameters begin
-            condition = 2
+            condition = 0
         end
+
         @parameters begin
-            a0
+            default_parameter
         end
         @components begin
-            sys0 = C()
+            default_sys = C()
         end
         @equations begin
-            a0 ~ 0
+            default_parameter ~ 0
         end
 
         if condition == 1
             @parameters begin
-                a1
+                if_parameter
             end
             @equations begin
-                a1 ~ 0
+                if_parameter ~ 0
             end
             @components begin
-                sys1 = C()
+                if_sys = C()
             end
         elseif condition == 2
             @parameters begin
-                a2
+                elseif_parameter
             end
             @equations begin
-                a2 ~ 0
+                elseif_parameter ~ 0
             end
             @components begin
-                sys2 = C()
+                elseif_sys = C()
             end
         else
             @parameters begin
-                a3
+                else_parameter
             end
             @equations begin
-                a3 ~ 0
+                else_parameter ~ 0
             end
             @components begin
-                sys3 = C()
+                else_sys = C()
             end
         end
     end
 
-    @named out_sys_1 = OutsideTheBlock(condition = 1)
-    out_sys_1 = complete(out_sys_1)
-    @named out_sys_2 = OutsideTheBlock(condition = 2)
-    out_sys_2 = complete(out_sys_2)
-    @named out_sys_3 = OutsideTheBlock(condition = 10)
-    out_sys_3 = complete(out_sys_3)
+    @named if_out_sys = OutsideTheBlock(condition = 1)
+    if_out_sys = complete(if_out_sys)
+    @named elseif_out_sys = OutsideTheBlock(condition = 2)
+    elseif_out_sys = complete(elseif_out_sys)
+    @named else_out_sys = OutsideTheBlock(condition = 10)
+    else_out_sys = complete(else_out_sys)
+    @named ternary_out_sys = OutsideTheBlock(condition = 4)
+    else_out_sys = complete(else_out_sys)
 
-    @test nameof.(out_sys_1.systems) == [:sys1, :sys0]
-    @test nameof.(out_sys_2.systems) == [:sys2, :sys0]
-    @test nameof.(out_sys_3.systems) == [:sys3, :sys0]
+    @test nameof.(parameters(if_out_sys)) == [:if_parameter, :default_parameter]
+    @test nameof.(parameters(elseif_out_sys)) == [:elseif_parameter, :default_parameter]
+    @test nameof.(parameters(else_out_sys)) == [:else_parameter, :default_parameter]
 
-    @test Equation[out_sys_1.a1 ~ 0
-        out_sys_1.a0 ~ 0] == equations(out_sys_1)
-    @test Equation[out_sys_2.a2 ~ 0
-        out_sys_1.a0 ~ 0] == equations(out_sys_2)
-    @test Equation[out_sys_3.a3 ~ 0
-        out_sys_1.a0 ~ 0] == equations(out_sys_3)
+    @test nameof.(get_systems(if_out_sys)) == [:if_sys, :default_sys]
+    @test nameof.(get_systems(elseif_out_sys)) == [:elseif_sys, :default_sys]
+    @test nameof.(get_systems(else_out_sys)) == [:else_sys, :default_sys]
+
+    @test Equation[if_out_sys.if_parameter ~ 0
+        if_out_sys.default_parameter ~ 0] == equations(if_out_sys)
+    @test Equation[elseif_out_sys.elseif_parameter ~ 0
+        elseif_out_sys.default_parameter ~ 0] == equations(elseif_out_sys)
+    @test Equation[else_out_sys.else_parameter ~ 0
+        else_out_sys.default_parameter ~ 0] == equations(else_out_sys)
+
+    @mtkmodel TernaryBranchingOutsideTheBlock begin
+        @structural_parameters begin
+            condition = true
+        end
+        condition ? begin
+            @parameters begin
+                ternary_parameter_true
+            end
+            @equations begin
+                ternary_parameter_true ~ 0
+            end
+            @components begin
+                ternary_sys_true = C()
+            end
+        end : begin
+            @parameters begin
+                ternary_parameter_false
+            end
+            @equations begin
+                ternary_parameter_false ~ 0
+            end
+            @components begin
+                ternary_sys_false = C()
+            end
+        end
+    end
+
+    @named ternary_true = TernaryBranchingOutsideTheBlock()
+    ternary_true = complete(ternary_true)
+
+    @named ternary_false = TernaryBranchingOutsideTheBlock(condition = false)
+    ternary_false = complete(ternary_false)
+
+    @test nameof.(parameters(ternary_true)) == [:ternary_parameter_true]
+    @test nameof.(parameters(ternary_false)) == [:ternary_parameter_false]
+
+    @test nameof.(get_systems(ternary_true)) == [:ternary_sys_true]
+    @test nameof.(get_systems(ternary_false)) == [:ternary_sys_false]
+
+    @test Equation[ternary_true.ternary_parameter_true ~ 0] == equations(ternary_true)
+    @test Equation[ternary_false.ternary_parameter_false ~ 0] == equations(ternary_false)
 end

@@ -559,9 +559,14 @@ function handle_y_vars(y, dict, mod, varclass, kwargs)
 end
 
 function handle_if_x_equations!(condition, dict, ifexpr, x)
-            push!(ifexpr.args, condition, :(push!(equations, $(x.args...))))
-            # push!(dict[:equations], [:if, readable_code(condition), readable_code.(x.args)])
-readable_code.(x.args)
+    if Meta.isexpr(x, :block)
+        push!(ifexpr.args, condition, :(push!(equations, $(x.args...))))
+        return readable_code.(x.args)
+    else
+        push!(ifexpr.args, condition, :(push!(equations, $x)))
+        return readable_code(x)
+    end
+    # push!(dict[:equations], [:if, readable_code(condition), readable_code.(x.args)])
 end
 
 function handle_if_y_equations!(ifexpr, y, dict)
@@ -574,8 +579,12 @@ function handle_if_y_equations!(ifexpr, y, dict)
         push!(ifexpr.args, elseifexpr)
         (eq_entry...,)
     else
-                    push!(ifexpr.args, :(push!(equations, $(y.args...))))
-                readable_code.(y.args)
+        if Meta.isexpr(y, :block)
+            push!(ifexpr.args, :(push!(equations, $(y.args...))))
+        else
+            push!(ifexpr.args, :(push!(equations, $(y))))
+        end
+        readable_code.(y.args)
     end
 end
 
