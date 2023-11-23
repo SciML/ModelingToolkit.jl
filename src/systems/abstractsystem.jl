@@ -1303,7 +1303,7 @@ function linearization_function(sys::AbstractSystem, inputs,
         op = merge(defs, op)
     end
     sys = ssys
-    x0 = merge(defaults(sys), op)
+    x0 = merge(defaults(sys), Dict(missing_variable_defaults(sys)), op)
     u0, p, _ = get_u0_p(sys, x0, p; use_union = false, tofloat = true)
     p, split_idxs = split_parameters_by_type(p)
     ps = parameters(sys)
