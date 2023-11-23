@@ -196,13 +196,6 @@ end
 
 hessian_sparsity(sys::OptimizationSystem) = hessian_sparsity(get_op(sys), states(sys))
 
-function rep_pars_vals!(e::Expr, p)
-    rep_pars_vals!.(e.args, Ref(p))
-    replace!(e.args, p...)
-end
-
-function rep_pars_vals!(e, p) end
-
 """
 ```julia
 DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
@@ -276,13 +269,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         expression = Val{false})
 
     obj_expr = toexpr(subs_constants(objective(sys)))
-    pairs_arr = if p isa SciMLBase.NullParameters
-        [Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)]
-    else
-        vcat([Symbol(_s) => Expr(:ref, :x, i) for (i, _s) in enumerate(dvs)],
-            [Symbol(_p) => p[i] for (i, _p) in enumerate(ps)])
-    end
-    rep_pars_vals!(obj_expr, pairs_arr)
+    
     if grad
         grad_oop, grad_iip = generate_gradient(sys, checkbounds = checkbounds,
             linenumbers = linenumbers,
@@ -342,8 +329,7 @@ function DiffEqBase.OptimizationProblem{iip}(sys::OptimizationSystem, u0map,
         else
             _cons_h = nothing
         end
-        cons_expr = toexpr.(subs_constants(constraints(cons_sys)))
-        rep_pars_vals!.(cons_expr, Ref(pairs_arr))
+        cons_expr = subs_constants(constraints(cons_sys))
 
         if !haskey(kwargs, :lcons) && !haskey(kwargs, :ucons) # use the symbolically specified bounds
             lcons = lcons_
