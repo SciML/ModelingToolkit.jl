@@ -345,11 +345,17 @@ k = ShiftIndex(d)
         y(t)
     end
     @equations begin
-        x(k) ~ x(k - 1) + ki * u(k)
+        x(k) ~ x(k-1) + ki * u(k)
         output.u(k) ~ y(k)
         input.u(k) ~ u(k)
-        y(k) ~ x(k - 1) + kp * u(k)
+        y(k) ~ x(k) + kp * u(k)
     end
+    # @equations begin
+    #     x(k+1) ~ x(k) + ki * u(k)
+    #     output.u(k) ~ y(k)
+    #     input.u(k) ~ u(k)
+    #     y(k) ~ x(k) + kp * u(k)
+    # end
 end
 
 @mtkmodel Sampler begin
@@ -391,7 +397,7 @@ end
     end
 end
 
-##
+#
 @named model = ClosedLoop()
 model = complete(model)
 
@@ -470,3 +476,192 @@ y = res.y[:]
     # y ~ x(k-1) + kp * u
     # Instead. This should be equivalent to the above, but gve me an error when I tried
 end
+
+
+
+
+
+
+
+## More discrete tests
+dt = 1
+@variables t
+d = Clock(t, dt)
+k = ShiftIndex(d)
+D = Differential(t)
+sample = Sample(d)
+
+# ==============================================================================
+## Only discrete, Direct term through the integrator to the output
+# ==============================================================================
+
+@mtkmodel DiscTest1 begin
+    @variables begin
+        x(t) = 0
+        u(t)
+        y(t)
+    end
+    @equations begin
+        u ~ 1
+        x(k) ~ x(k-1) + u(k)
+        y(k) ~ x(k)   + u(k)
+    end
+end
+
+@named model = DiscTest1()
+model = complete(model)
+ssys = structural_simplify(model) # BoundsError: attempt to access 1-element Vector{Vector{Any}} at index [0]
+prob = ODEProblem(ssys, [], (0.0, 10.0))
+sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+# plot(sol)
+
+# ==============================================================================
+## Discrete and continuous are independent, direct term through integrator
+# ==============================================================================
+
+@mtkmodel DiscTest2 begin
+    @variables begin
+        x(t) = 0
+        xc(t) = 1
+        u(t)
+        y(t)
+    end
+    @equations begin
+        u ~ 1#sample(xc)
+        x(k) ~ x(k-1) + u(k)
+        y(k) ~ x(k)   + u(k)
+        D(xc) ~ Hold(y)
+    end
+end
+
+@named model = DiscTest2()
+model = complete(model)
+ssys = structural_simplify(model)
+prob = ODEProblem(ssys, [], (0.0, 10.0))
+sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+sol.prob.kwargs[:disc_saved_values][1].saveval
+# plot(sol)
+
+correct_x_solution = 1:11 # Should start at 1, since at time t = 0, we have the equation x(k) ~ x(k-1) + u(k) = 0 + 1 = 1
+@test reduce(vcat, sol.prob.kwargs[:disc_saved_values][1].saveval) == correct_x_solution # Wrong in multiple ways
+
+# ==============================================================================
+## Discrete and continuous are independent, no direct term through integrator
+# ==============================================================================
+
+@mtkmodel DiscTest3 begin
+    @variables begin
+        x(t) = 0
+        xc(t) = 1
+        u(t)
+        y(t)
+    end
+    @equations begin
+        u ~ 1
+        x(k) ~ x(k-1) + u(k)
+        y(k) ~ x(k-1) + u(k)
+        D(xc) ~ -1
+    end
+end
+
+@named model = DiscTest3()
+model = complete(model)
+ssys = structural_simplify(model)
+prob = ODEProblem(ssys, [], (0.0, 10.0)) # Error: syntax: function argument name not unique:
+sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+sol.prob.kwargs[:disc_saved_values][1].saveval
+
+# Compare to exact solution from ControlSystems
+res = step(CS.ss([1], [1], [1], [1], 1), 10)
+@test reduce(vcat, sol.prob.kwargs[:disc_saved_values][1].saveval) == res.x[:] 
+# plot(sol)
+
+
+# ==============================================================================
+## Discrete influences continuous
+# ==============================================================================
+
+@mtkmodel DiscTest4 begin
+    @variables begin
+        x(t) = 0
+        xc(t) = 1
+        u(t)
+        y(t)
+    end
+    @equations begin
+        u ~ 1#sample(xc)
+        x(k) ~ x(k-1) + u(k)
+        y(k) ~ x(k-1) + u(k)
+        D(xc) ~ Hold(y)
+    end
+end
+
+@named model = DiscTest4()
+model = complete(model)
+ssys = structural_simplify(model)
+prob = ODEProblem(ssys, [], (0.0, 10.0))
+sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+sol.prob.kwargs[:disc_saved_values][1].saveval
+
+# Compare to exact solution from ControlSystems
+res = step(CS.ss([1], [1], [1], [1], 1), 10)
+@test reduce(vcat, sol.prob.kwargs[:disc_saved_values][1].saveval) == res.x[:] # Wrong lenth of array and also completely wrong solution
+# plot(sol)
+
+
+# ==============================================================================
+## Index past values of u
+# ==============================================================================
+
+@mtkmodel DiscTest5 begin
+    @variables begin
+        x(t) = 0
+        xc(t) = 1
+        u(t)
+        y(t)
+    end
+    @equations begin
+        u ~ 1
+        x(k) ~ x(k-1) + u(k-1)
+        y(k) ~ x(k-1) + u(k)
+        D(xc) ~ Hold(y)
+    end
+end
+
+@named model = DiscTest5()
+model = complete(model)
+ssys = structural_simplify(model) # ERROR: The discrete system has high structural index. This is not supported.
+prob = ODEProblem(ssys, [], (0.0, 10.0))
+sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+sol.prob.kwargs[:disc_saved_values][1].saveval
+
+
+# ==============================================================================
+## Assign future values of y using future values of x
+# ==============================================================================
+
+@mtkmodel DiscTest6 begin
+    @variables begin
+        x(t) = 0
+        xc(t) = 1
+        u(t)
+        y(t) = 0
+    end
+    @equations begin
+        u ~ 1
+        x(k+1) ~ x(k) + u(k)
+        y(k+1) ~ x(k+1) + u(k)
+        D(xc) ~ Hold(y)
+    end
+end
+
+@named model = DiscTest6()
+model = complete(model)
+ssys = structural_simplify(model) # ERROR: The discrete system has high structural index. This is not supported.
+prob = ODEProblem(ssys, [], (0.0, 10.0))
+sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+sv = sol.prob.kwargs[:disc_saved_values][1].saveval
+
+@test sv[1] == [0,0]
+@test sv[2] == [1,2]
+@test sv[3] == [2,3]
