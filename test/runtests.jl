@@ -55,6 +55,7 @@ end
 @safetestset "OptimizationSystem Test" include("optimizationsystem.jl")
 @safetestset "FuncAffect Test" include("funcaffect.jl")
 @safetestset "Constants Test" include("constants.jl")
+@safetestset "Inverse Models Test" include("inversemodel.jl")
 # Reference tests go Last
 if VERSION >= v"1.9"
     @safetestset "Latexify recipes Test" include("latexify.jl")
