@@ -663,13 +663,46 @@ end
 
 @named model = DiscTest6()
 model = complete(model)
-ssys = structural_simplify(model) # ERROR: The discrete system has high structural index. This is not supported.
+ssys = structural_simplify(model) 
 prob = ODEProblem(ssys, [], (0.0, 10.0))
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 sv = sol.prob.kwargs[:disc_saved_values][1].saveval
 
 # x will be 0:10, y starts at 0 due to initial condition, then equal to x + u = (1:10) .+ 1 making it jump to 2
-@test_broken sol(0:10, idxs=model.y) == [0; 2:11] 
+@test_broken sol(0:10, idxs=model.y) == [0; 2:11] # Tests below seem to work, so this broken test is mostly realted to storing result in the solution
 @test sv[1] == [0,0]
 @test sv[2] == [1,2]
 @test sv[3] == [2,3]
+
+
+# ==============================================================================
+## Initial condition tests
+# ==============================================================================
+
+@mtkmodel DiscTest7 begin
+    @variables begin
+        x(t) = 0
+        u(t)
+        y(t) = 0
+    end
+    @equations begin
+        u ~ 1
+        x(k) ~ x(k-1) + u(k-1)
+        y(k) ~ x(k-1) + u(k)
+    end
+end
+
+@named model = DiscTest7()
+model = complete(model)
+ssys = structural_simplify(model) 
+
+# Test initial condition x
+prob = ODEProblem(ssys, [model.x(k-1) => -1], (0.0, 10.0))
+sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+@test_broken sol(0:10, idxs=model.y) == 0:10 # start at 0 due to x(-1) = -1 and direct term from u to y
+
+# Test initial condition u
+# The initial condition for u overrides the equation for u at u(-1)
+prob = ODEProblem(ssys, [model.u(k-1) => -1], (0.0, 10.0))
+sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
+@test_broken sol(0:10, idxs=model.y) == [1; 0:9] # start at x(-1) + u(0) = 0 + 1, next value is x(0) + u(1) = -1 + 1, then x(1) + u(2) = 1 + 1 and then increment by 1 each time
