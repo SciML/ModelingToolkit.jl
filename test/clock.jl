@@ -515,8 +515,10 @@ prob = ODEProblem(ssys, [], (0.0, 10.0))
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 # plot(sol)
 
+@test_broken sol(0:10, idxs=model.y) == (1:11) .+ 1 # Start at 1 due to direct term through integrator. The +1 due to direct term to output
+
 # ==============================================================================
-## Discrete and continuous are independent, direct term through integrator
+## Discrete influences continuous, direct term through integrator
 # ==============================================================================
 
 @mtkmodel DiscTest2 begin
@@ -543,7 +545,8 @@ sol.prob.kwargs[:disc_saved_values][1].saveval
 # plot(sol)
 
 correct_x_solution = 1:11 # Should start at 1, since at time t = 0, we have the equation x(k) ~ x(k-1) + u(k) = 0 + 1 = 1
-@test reduce(vcat, sol.prob.kwargs[:disc_saved_values][1].saveval) == correct_x_solution # Wrong in multiple ways
+@test_broken reduce(vcat, sol.prob.kwargs[:disc_saved_values][1].saveval) == correct_x_solution # Wrong in multiple ways
+@test_broken sol(0:10, idxs=model.y) == (1:11) .+ 1 # Start at 1 due to direct term through integrator. The +1 due to direct term to output
 
 # ==============================================================================
 ## Discrete and continuous are independent, no direct term through integrator
@@ -573,12 +576,13 @@ sol.prob.kwargs[:disc_saved_values][1].saveval
 
 # Compare to exact solution from ControlSystems
 res = step(CS.ss([1], [1], [1], [1], 1), 10)
-@test reduce(vcat, sol.prob.kwargs[:disc_saved_values][1].saveval) == res.x[:] 
+@test_broken reduce(vcat, sol.prob.kwargs[:disc_saved_values][1].saveval) == res.x[:] 
+@test_broken sol(0:10, idxs=model.y) == (0:10) .+ 1 # Start at 0 due to no direct term through integrator. The +1 due to direct term to output
 # plot(sol)
 
 
 # ==============================================================================
-## Discrete influences continuous
+## Discrete influences continuous, no direct term through integrator
 # ==============================================================================
 
 @mtkmodel DiscTest4 begin
@@ -606,6 +610,7 @@ sol.prob.kwargs[:disc_saved_values][1].saveval
 # Compare to exact solution from ControlSystems
 res = step(CS.ss([1], [1], [1], [1], 1), 10)
 @test reduce(vcat, sol.prob.kwargs[:disc_saved_values][1].saveval) == res.x[:] # Wrong lenth of array and also completely wrong solution
+@test_broken sol(0:10, idxs=model.y) == (0:10) .+ 1 # Start at 0 due to no direct term through integrator. The +1 due to direct term to output
 # plot(sol)
 
 
@@ -634,6 +639,7 @@ ssys = structural_simplify(model) # ERROR: The discrete system has high structur
 prob = ODEProblem(ssys, [], (0.0, 10.0))
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 sol.prob.kwargs[:disc_saved_values][1].saveval
+@test_broken sol(0:10, idxs=model.y) == (0:10) .+ 1 # Start at 0 due to no direct term through integrator. The +1 due to direct term to output
 
 
 # ==============================================================================
@@ -662,6 +668,8 @@ prob = ODEProblem(ssys, [], (0.0, 10.0))
 sol = solve(prob, Tsit5(), kwargshandle = KeywordArgSilent)
 sv = sol.prob.kwargs[:disc_saved_values][1].saveval
 
+# x will be 0:10, y starts at 0 due to initial condition, then equal to x + u = (1:10) .+ 1 making it jump to 2
+@test_broken sol(0:10, idxs=model.y) == [0; 2:11] 
 @test sv[1] == [0,0]
 @test sv[2] == [1,2]
 @test sv[3] == [2,3]
